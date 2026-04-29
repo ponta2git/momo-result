@@ -12,6 +12,39 @@ uv run momo-ocr batch --input-dir ../../ocr_samples --report ./out/accuracy-repo
 
 Real game screenshots are expected to live in the repository-root `ocr_samples/` directory, which is ignored by git. CI fixtures must be synthetic and license-safe.
 
+## API queue producer contract
+
+`apps/api` owns the Redis Streams producer side. It must create the durable OCR job row first, then enqueue one stream message. Redis is delivery only; the worker always verifies the DB job state before processing.
+
+Required stream fields:
+
+```json
+{
+  "jobId": "uuid",
+  "draftId": "uuid",
+  "imageId": "uuid",
+  "imagePath": "/tmp/momo-result/uploads/image.jpg",
+  "requestedImageType": "auto | total_assets | revenue | incident_log",
+  "attempt": "1",
+  "enqueuedAt": "2026-04-29T10:00:00Z"
+}
+```
+
+Optional OCR hints are encoded as a single `ocrHintsJson` string field so the stream contract stays flat and backward-compatible:
+
+```json
+{
+  "gameTitle": "桃鉄2",
+  "layoutFamily": "momotetsu_2",
+  "knownPlayerAliases": [
+    { "memberId": "member-ponta", "aliases": ["ぽんた", "ぽんた社長"] }
+  ],
+  "computerPlayerAliases": ["さくま", "さくま社長"]
+}
+```
+
+These values are hints only. `requestedImageType` may come from the upload slot or manual UI selection; `gameTitle`/`layoutFamily` may select parser profiles; aliases may improve name matching. The worker must still return raw OCR values, warnings, and draft data for user review instead of treating hints as authoritative results.
+
 ## Development commands
 
 ```sh

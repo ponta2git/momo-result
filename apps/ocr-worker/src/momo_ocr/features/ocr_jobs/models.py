@@ -17,6 +17,20 @@ class OcrJobStatus(StrEnum):
 
 
 @dataclass(frozen=True)
+class PlayerAliasHint:
+    member_id: str
+    aliases: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class OcrJobHints:
+    game_title: str | None = None
+    layout_family: str | None = None
+    known_player_aliases: tuple[PlayerAliasHint, ...] = ()
+    computer_player_aliases: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class OcrJobMessage:
     job_id: str
     draft_id: str
@@ -25,6 +39,7 @@ class OcrJobMessage:
     requested_screen_type: ScreenType
     attempt: int
     enqueued_at: str
+    hints: OcrJobHints
 
 
 @dataclass(frozen=True)

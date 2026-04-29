@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
+from momo_ocr.features.ocr_domain.models import ScreenType
 from momo_ocr.features.ocr_jobs.models import OcrJobMessage
 from momo_ocr.features.ocr_jobs.queue_contract import parse_job_message, to_stream_payload
-from momo_ocr.features.screen_detection.models import ImageType
 from momo_ocr.shared.errors import OcrError
 
 
@@ -24,7 +24,7 @@ def test_parse_job_message_uses_api_contract_keys() -> None:
     )
 
     assert message.job_id == "job-1"
-    assert message.requested_image_type == ImageType.TOTAL_ASSETS
+    assert message.requested_screen_type == ScreenType.TOTAL_ASSETS
     assert message.attempt == 2
 
 
@@ -35,7 +35,7 @@ def test_job_message_round_trips_to_api_payload_keys() -> None:
             draft_id="draft-1",
             image_id="image-1",
             image_path=Path("/tmp/sample.jpg"),
-            requested_image_type=ImageType.REVENUE,
+            requested_screen_type=ScreenType.REVENUE,
             attempt=1,
             enqueued_at="2026-04-29T10:00:00Z",
         )
@@ -50,7 +50,7 @@ def test_job_message_round_trips_to_api_payload_keys() -> None:
         "attempt": "1",
         "enqueuedAt": "2026-04-29T10:00:00Z",
     }
-    assert parse_job_message(payload).requested_image_type == ImageType.REVENUE
+    assert parse_job_message(payload).requested_screen_type == ScreenType.REVENUE
 
 
 def test_parse_job_message_rejects_missing_required_keys() -> None:

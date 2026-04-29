@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from momo_ocr.features.ocr_domain.models import ScreenType
 from momo_ocr.features.ocr_jobs.models import OcrJobMessage
-from momo_ocr.features.screen_detection.models import ImageType
 from momo_ocr.shared.errors import FailureCode, OcrError
 
 STREAM_PAYLOAD_KEYS = {
@@ -24,7 +24,7 @@ def parse_job_message(payload: dict[str, str]) -> OcrJobMessage:
         raise OcrError(FailureCode.QUEUE_FAILURE, f"OCR queue message is missing keys: {missing}")
 
     try:
-        requested_image_type = ImageType(payload["requestedImageType"])
+        requested_screen_type = ScreenType(payload["requestedImageType"])
     except ValueError as exc:
         raise OcrError(
             FailureCode.QUEUE_FAILURE,
@@ -35,7 +35,8 @@ def parse_job_message(payload: dict[str, str]) -> OcrJobMessage:
         attempt = int(payload["attempt"])
     except ValueError as exc:
         raise OcrError(
-            FailureCode.QUEUE_FAILURE, "OCR queue message attempt must be an integer."
+            FailureCode.QUEUE_FAILURE,
+            "OCR queue message attempt must be an integer.",
         ) from exc
 
     if attempt < 1:
@@ -46,7 +47,7 @@ def parse_job_message(payload: dict[str, str]) -> OcrJobMessage:
         draft_id=payload["draftId"],
         image_id=payload["imageId"],
         image_path=Path(payload["imagePath"]),
-        requested_image_type=requested_image_type,
+        requested_screen_type=requested_screen_type,
         attempt=attempt,
         enqueued_at=payload["enqueuedAt"],
     )
@@ -58,7 +59,7 @@ def to_stream_payload(message: OcrJobMessage) -> dict[str, str]:
         "draftId": message.draft_id,
         "imageId": message.image_id,
         "imagePath": str(message.image_path),
-        "requestedImageType": message.requested_image_type.value,
+        "requestedImageType": message.requested_screen_type.value,
         "attempt": str(message.attempt),
         "enqueuedAt": message.enqueued_at,
     }

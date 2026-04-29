@@ -4,20 +4,20 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
-from momo_ocr.features.ocr_results.models import (
-    ImageType,
+from momo_ocr.features.ocr_domain.models import (
     OcrDraftPayload,
     OcrWarning,
+    ScreenType,
     WarningCode,
     WarningSeverity,
 )
 
 
 @dataclass(frozen=True)
-class ParseContext:
+class ScreenParseContext:
     image_path: Path
-    requested_image_type: ImageType
-    detected_image_type: ImageType
+    requested_screen_type: ScreenType
+    detected_screen_type: ScreenType
     profile_id: str
     debug_dir: Path | None
     include_raw_text: bool
@@ -26,30 +26,30 @@ class ParseContext:
 
 class ScreenParser(Protocol):
     @property
-    def image_type(self) -> ImageType:
+    def screen_type(self) -> ScreenType:
         raise NotImplementedError
 
-    def parse(self, context: ParseContext) -> OcrDraftPayload:
+    def parse(self, context: ScreenParseContext) -> OcrDraftPayload:
         raise NotImplementedError
 
 
 @dataclass(frozen=True)
 class ParserRegistry:
-    parsers: dict[ImageType, ScreenParser]
+    parsers: dict[ScreenType, ScreenParser]
 
-    def get(self, image_type: ImageType) -> ScreenParser:
-        return self.parsers[image_type]
+    def get(self, screen_type: ScreenType) -> ScreenParser:
+        return self.parsers[screen_type]
 
 
-def pending_parser_payload(context: ParseContext, *, parser_name: str) -> OcrDraftPayload:
+def not_calibrated_payload(context: ScreenParseContext, *, parser_name: str) -> OcrDraftPayload:
     parser_warning = OcrWarning(
         code=WarningCode.PARSER_NOT_IMPLEMENTED,
         message=f"{parser_name} is wired but not calibrated yet.",
         severity=WarningSeverity.INFO,
     )
     return OcrDraftPayload(
-        requested_image_type=context.requested_image_type,
-        detected_image_type=context.detected_image_type,
+        requested_screen_type=context.requested_screen_type,
+        detected_screen_type=context.detected_screen_type,
         profile_id=context.profile_id,
         category_payload={
             "status": "pending_parser",

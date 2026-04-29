@@ -21,7 +21,7 @@ def analyze_directory(
     results = [
         analyze_image(
             image_path=image,
-            requested_image_type="auto",
+            requested_screen_type="auto",
             debug_dir=(debug_dir / image.stem) if debug_dir is not None else None,
             include_raw_text=False,
         )

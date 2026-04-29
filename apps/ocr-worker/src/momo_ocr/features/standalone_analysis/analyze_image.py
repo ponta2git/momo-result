@@ -2,18 +2,19 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from momo_ocr.features.ocr_results.models import (
+from momo_ocr.app.composition import default_parser_registry, default_text_recognition_engine
+from momo_ocr.features.ocr_domain.models import (
     OcrWarning,
+    ScreenType,
     WarningCode,
     WarningSeverity,
 )
-from momo_ocr.features.ocr_results.parsing import ParseContext
-from momo_ocr.features.ocr_results.registry import default_parser_registry
-from momo_ocr.features.screen_detection.classifier import detect_screen_type
-from momo_ocr.features.screen_detection.models import ImageType
+from momo_ocr.features.ocr_results.parsing import ScreenParseContext
+from momo_ocr.features.screen_detection.classifier import classify_screen_type, detection_failure
+from momo_ocr.features.screen_detection.title_evidence import recognize_title_evidence
 from momo_ocr.features.standalone_analysis.report import AnalysisResult
 from momo_ocr.features.temp_images.storage import resolve_local_image
-from momo_ocr.features.temp_images.validation import read_image_metadata
+from momo_ocr.features.temp_images.validation import open_decoded_image, read_image_metadata
 from momo_ocr.shared.errors import OcrError
 from momo_ocr.shared.time import record_duration_ms
 
@@ -21,13 +22,14 @@ from momo_ocr.shared.time import record_duration_ms
 def analyze_image(
     *,
     image_path: Path,
-    requested_image_type: str,
+    requested_screen_type: str,
     debug_dir: Path | None,
     include_raw_text: bool,
 ) -> AnalysisResult:
     timings: dict[str, float] = {}
     metadata = None
     detection = None
+    requested_type = ScreenType(requested_screen_type)
 
     try:
         with record_duration_ms(timings, "validate_image"):
@@ -35,7 +37,18 @@ def analyze_image(
             metadata = read_image_metadata(resolved_path, enforce_size_limit=False)
 
         with record_duration_ms(timings, "detect_screen"):
-            detection = detect_screen_type(resolved_path, ImageType(requested_image_type))
+            if requested_type == ScreenType.AUTO:
+                try:
+                    image = open_decoded_image(resolved_path)
+                    evidence = recognize_title_evidence(image, default_text_recognition_engine())
+                    detection = classify_screen_type(requested_type, evidence)
+                except OcrError as exc:
+                    detection = detection_failure(
+                        requested_type,
+                        message=f"Screen type detection failed: {exc.message}",
+                    )
+            else:
+                detection = classify_screen_type(requested_type, {})
 
         warnings = list(detection.warnings)
         if debug_dir is not None:
@@ -55,10 +68,10 @@ def analyze_image(
         else:
             parser = default_parser_registry().get(detection.detected_type)
             parsed = parser.parse(
-                ParseContext(
+                ScreenParseContext(
                     image_path=resolved_path,
-                    requested_image_type=ImageType(requested_image_type),
-                    detected_image_type=detection.detected_type,
+                    requested_screen_type=requested_type,
+                    detected_screen_type=detection.detected_type,
                     profile_id=detection.profile_id,
                     debug_dir=debug_dir,
                     include_raw_text=include_raw_text,

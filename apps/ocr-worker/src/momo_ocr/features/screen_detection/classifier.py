@@ -1,32 +1,24 @@
 from __future__ import annotations
 
-from pathlib import Path
+from collections.abc import Mapping
 
-from PIL import Image
-
-from momo_ocr.features.image_processing.geometry import Size, scale_profile_rect_to_image
-from momo_ocr.features.image_processing.roi import crop_roi
-from momo_ocr.features.ocr_results.models import OcrWarning, WarningCode, WarningSeverity
-from momo_ocr.features.screen_detection.models import DetectionResult, ImageType
+from momo_ocr.features.ocr_domain.models import (
+    OcrWarning,
+    ScreenType,
+    WarningCode,
+    WarningSeverity,
+)
+from momo_ocr.features.screen_detection.models import ScreenDetectionResult
 from momo_ocr.features.screen_detection.profiles import PROFILES, LayoutProfile
-from momo_ocr.features.temp_images.validation import open_decoded_image
-from momo_ocr.features.text_recognition.engine import TextRecognitionEngine
-from momo_ocr.features.text_recognition.postprocess import normalize_ocr_text
-from momo_ocr.features.text_recognition.tesseract import TesseractEngine
-from momo_ocr.shared.errors import OcrError
-
-TITLE_OCR_VARIANTS = ((2, 6), (3, 6), (3, 7))
 
 
-def detect_screen_type(
-    path: Path,
-    requested_type: ImageType,
-    *,
-    engine: TextRecognitionEngine | None = None,
-) -> DetectionResult:
-    if requested_type != ImageType.AUTO:
+def classify_screen_type(
+    requested_type: ScreenType,
+    evidence_by_type: Mapping[ScreenType, str],
+) -> ScreenDetectionResult:
+    if requested_type != ScreenType.AUTO:
         profile = PROFILES[requested_type]
-        return DetectionResult(
+        return ScreenDetectionResult(
             requested_type=requested_type,
             detected_type=requested_type,
             profile_id=profile.id,
@@ -34,36 +26,17 @@ def detect_screen_type(
             warnings=[],
         )
 
-    ocr_engine = engine if engine is not None else TesseractEngine()
-    try:
-        image = open_decoded_image(path)
-        evidence_by_type = _recognize_title_evidence(image, ocr_engine)
-    except OcrError as exc:
-        return DetectionResult(
-            requested_type=requested_type,
-            detected_type=None,
-            profile_id=None,
-            confidence=0.0,
-            warnings=[
-                OcrWarning(
-                    code=WarningCode.AUTO_DETECTION_UNCALIBRATED,
-                    message=f"Image type auto-detection failed: {exc.message}",
-                    severity=WarningSeverity.WARNING,
-                )
-            ],
-        )
-
     detected_type, confidence = _score_evidence(evidence_by_type)
     if detected_type is None:
-        return DetectionResult(
+        return ScreenDetectionResult(
             requested_type=requested_type,
             detected_type=None,
             profile_id=None,
             confidence=0.0,
             warnings=[
                 OcrWarning(
-                    code=WarningCode.AUTO_DETECTION_UNCALIBRATED,
-                    message="Image type auto-detection could not match known title keywords.",
+                    code=WarningCode.SCREEN_TYPE_UNDETECTED,
+                    message="Screen type detection could not match known title keywords.",
                     severity=WarningSeverity.WARNING,
                 )
             ],
@@ -71,7 +44,7 @@ def detect_screen_type(
         )
 
     profile = PROFILES[detected_type]
-    return DetectionResult(
+    return ScreenDetectionResult(
         requested_type=requested_type,
         detected_type=detected_type,
         profile_id=profile.id,
@@ -81,38 +54,29 @@ def detect_screen_type(
     )
 
 
-def _recognize_title_evidence(
-    image: Image.Image,
-    engine: TextRecognitionEngine,
-) -> dict[ImageType, str]:
-    evidence: dict[ImageType, str] = {}
-    image_size = Size(width=image.width, height=image.height)
-    for image_type, profile in PROFILES.items():
-        title_rect = scale_profile_rect_to_image(profile.title_roi, image_size)
-        title_image = crop_roi(image, title_rect)
-        evidence[image_type] = _recognize_title_variants(title_image, engine)
-    return evidence
+def detection_failure(requested_type: ScreenType, *, message: str) -> ScreenDetectionResult:
+    return ScreenDetectionResult(
+        requested_type=requested_type,
+        detected_type=None,
+        profile_id=None,
+        confidence=0.0,
+        warnings=[
+            OcrWarning(
+                code=WarningCode.SCREEN_TYPE_DETECTION_FAILED,
+                message=message,
+                severity=WarningSeverity.WARNING,
+            )
+        ],
+    )
 
 
-def _recognize_title_variants(image: Image.Image, engine: TextRecognitionEngine) -> str:
-    snippets: list[str] = []
-    for scale_factor, psm in TITLE_OCR_VARIANTS:
-        scaled = image.resize(
-            (image.width * scale_factor, image.height * scale_factor),
-            Image.Resampling.LANCZOS,
-        )
-        recognized = engine.recognize(scaled, psm=psm)
-        text = normalize_ocr_text(recognized.text)
-        if text and text not in snippets:
-            snippets.append(text)
-    return " | ".join(snippets)
-
-
-def _score_evidence(evidence_by_type: dict[ImageType, str]) -> tuple[ImageType | None, float]:
+def _score_evidence(evidence_by_type: Mapping[ScreenType, str]) -> tuple[ScreenType | None, float]:
     scored = [
-        (image_type, _score_profile_keywords(PROFILES[image_type], evidence))
-        for image_type, evidence in evidence_by_type.items()
+        (screen_type, _score_profile_keywords(PROFILES[screen_type], evidence))
+        for screen_type, evidence in evidence_by_type.items()
     ]
+    if not scored:
+        return None, 0.0
     best_type, best_score = max(scored, key=lambda item: item[1])
     if best_score <= 0.0:
         return None, 0.0

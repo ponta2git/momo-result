@@ -33,7 +33,7 @@ def main() -> None:
     if args.command == "analyze":
         result = analyze_image(
             image_path=args.image,
-            requested_image_type=args.type,
+            requested_screen_type=args.type,
             debug_dir=args.debug_dir,
             include_raw_text=args.include_raw_text,
         )

@@ -13,7 +13,7 @@ def test_analyze_image_returns_metadata_and_pending_parser_result(tmp_path: Path
 
     result = analyze_image(
         image_path=image_path,
-        requested_image_type="total_assets",
+        requested_screen_type="total_assets",
         debug_dir=None,
         include_raw_text=False,
     )

@@ -4,8 +4,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from momo_ocr.features.ocr_results.models import OcrDraftPayload, OcrWarning
-from momo_ocr.features.screen_detection.models import ImageType
+from momo_ocr.features.ocr_domain.models import OcrDraftPayload, OcrWarning, ScreenType
 from momo_ocr.shared.errors import OcrFailure
 
 
@@ -23,7 +22,7 @@ class OcrJobMessage:
     draft_id: str
     image_id: str
     image_path: Path
-    requested_image_type: ImageType
+    requested_screen_type: ScreenType
     attempt: int
     enqueued_at: str
 
@@ -34,8 +33,8 @@ class OcrJobRecord:
     draft_id: str
     image_id: str
     image_path: Path
-    requested_image_type: ImageType
-    detected_image_type: ImageType | None
+    requested_screen_type: ScreenType
+    detected_screen_type: ScreenType | None
     status: OcrJobStatus
     attempt_count: int
     worker_id: str | None

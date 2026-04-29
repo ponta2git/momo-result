@@ -8,7 +8,7 @@ from momo_ocr.features.standalone_analysis.analyze_image import analyze_image
 from momo_ocr.features.text_recognition.engine import FakeTextRecognitionEngine
 
 
-def test_analyze_image_returns_metadata_and_pending_parser_result(tmp_path: Path) -> None:
+def test_analyze_image_returns_metadata_and_parser_result(tmp_path: Path) -> None:
     image_path = tmp_path / "assets.jpg"
     Image.new("RGB", (1920, 1080), color="white").save(image_path, format="JPEG")
 
@@ -17,6 +17,7 @@ def test_analyze_image_returns_metadata_and_pending_parser_result(tmp_path: Path
         requested_screen_type="total_assets",
         debug_dir=None,
         include_raw_text=False,
+        text_engine=FakeTextRecognitionEngine("ぽんた社長 1万円"),
     )
 
     assert result.failure_code is None
@@ -25,7 +26,7 @@ def test_analyze_image_returns_metadata_and_pending_parser_result(tmp_path: Path
     assert result.detection is not None
     assert result.detection.profile_id == "full-hd-total-assets-v1"
     assert result.result is not None
-    assert result.result.category_payload["status"] == "pending_parser"
+    assert result.result.category_payload["status"] == "parsed"
 
 
 def test_analyze_image_can_use_fake_engine_for_auto_detection(tmp_path: Path) -> None:

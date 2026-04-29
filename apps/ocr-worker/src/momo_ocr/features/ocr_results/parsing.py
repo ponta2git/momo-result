@@ -11,6 +11,7 @@ from momo_ocr.features.ocr_domain.models import (
     WarningCode,
     WarningSeverity,
 )
+from momo_ocr.features.text_recognition.engine import TextRecognitionEngine
 
 
 @dataclass(frozen=True)
@@ -21,6 +22,7 @@ class ScreenParseContext:
     profile_id: str
     debug_dir: Path | None
     include_raw_text: bool
+    text_engine: TextRecognitionEngine
     warnings: list[OcrWarning] = field(default_factory=list)
 
 

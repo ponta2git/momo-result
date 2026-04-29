@@ -2,8 +2,27 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from momo_ocr.features.ocr_domain.models import OcrDraftPayload, ScreenType
-from momo_ocr.features.ocr_results.parsing import ScreenParseContext, not_calibrated_payload
+from momo_ocr.features.image_processing.geometry import Size, scale_profile_rect_to_image
+from momo_ocr.features.image_processing.roi import crop_roi
+from momo_ocr.features.ocr_domain.models import (
+    OcrDraftPayload,
+    OcrField,
+    OcrWarning,
+    PlayerResultDraft,
+    ScreenType,
+    WarningCode,
+)
+from momo_ocr.features.ocr_results.parsing import ScreenParseContext
+from momo_ocr.features.ocr_results.ranked_rows import (
+    extract_player_name_candidate,
+    prepare_ranked_row_image,
+    recognize_ranked_row_text,
+    save_debug_ranked_row,
+)
+from momo_ocr.features.temp_images.validation import open_decoded_image
+from momo_ocr.features.total_assets.models import TotalAssetRow
+from momo_ocr.features.total_assets.postprocess import parse_man_yen
+from momo_ocr.features.total_assets.profile import ROW_PROFILES
 
 
 @dataclass(frozen=True)
@@ -11,4 +30,102 @@ class TotalAssetsParser:
     screen_type: ScreenType = ScreenType.TOTAL_ASSETS
 
     def parse(self, context: ScreenParseContext) -> OcrDraftPayload:
-        return not_calibrated_payload(context, parser_name="total_assets")
+        image = open_decoded_image(context.image_path)
+        image_size = Size(width=image.width, height=image.height)
+        rows: list[TotalAssetRow] = []
+        players: list[PlayerResultDraft] = []
+        warnings = list(context.warnings)
+        raw_snippets: dict[str, str] = {}
+
+        debug_dir = context.debug_dir / "total_assets" if context.debug_dir is not None else None
+        if debug_dir is not None:
+            debug_dir.mkdir(parents=True, exist_ok=True)
+
+        for row_profile in ROW_PROFILES:
+            row_image = crop_roi(
+                image,
+                scale_profile_rect_to_image(row_profile.row_roi, image_size),
+            )
+            prepared_row = prepare_ranked_row_image(row_image)
+            if debug_dir is not None:
+                save_debug_ranked_row(
+                    row_image=row_image,
+                    prepared_row=prepared_row,
+                    debug_dir=debug_dir,
+                    rank=row_profile.rank,
+                )
+
+            recognized_row = recognize_ranked_row_text(
+                prepared_row,
+                text_engine=context.text_engine,
+            )
+            row_warnings = _row_warnings(rank=row_profile.rank, raw_text=recognized_row.text)
+            warnings.extend(row_warnings)
+            raw_snippets[f"rank_{row_profile.rank}"] = recognized_row.text
+
+            raw_player_name = extract_player_name_candidate(recognized_row.text)
+            amount_man_yen = parse_man_yen(recognized_row.text)
+            rows.append(
+                TotalAssetRow(
+                    rank=row_profile.rank,
+                    raw_player_name=raw_player_name,
+                    amount_man_yen=amount_man_yen,
+                    confidence=recognized_row.confidence,
+                    warnings=[warning.code.value for warning in row_warnings],
+                )
+            )
+            players.append(
+                PlayerResultDraft(
+                    raw_player_name=OcrField(
+                        value=raw_player_name,
+                        raw_text=recognized_row.text,
+                        confidence=recognized_row.confidence,
+                    ),
+                    rank=OcrField(
+                        value=row_profile.rank,
+                        raw_text=str(row_profile.rank),
+                        confidence=1.0,
+                    ),
+                    total_assets_man_yen=OcrField(
+                        value=amount_man_yen,
+                        raw_text=recognized_row.text,
+                        confidence=recognized_row.confidence,
+                    ),
+                )
+            )
+
+        return OcrDraftPayload(
+            requested_screen_type=context.requested_screen_type,
+            detected_screen_type=context.detected_screen_type,
+            profile_id=context.profile_id,
+            players=players,
+            category_payload={
+                "status": "parsed",
+                "parser": "total_assets",
+                "rows": rows,
+                "include_raw_text": context.include_raw_text,
+            },
+            warnings=warnings,
+            raw_snippets=raw_snippets if context.include_raw_text else None,
+        )
+
+
+def _row_warnings(*, rank: int, raw_text: str) -> list[OcrWarning]:
+    warnings: list[OcrWarning] = []
+    if extract_player_name_candidate(raw_text) is None:
+        warnings.append(
+            OcrWarning(
+                code=WarningCode.UNKNOWN_PLAYER_ALIAS,
+                message=f"Could not read player name for total-assets rank {rank}.",
+                field_path=f"players[{rank - 1}].raw_player_name",
+            )
+        )
+    if parse_man_yen(raw_text) is None:
+        warnings.append(
+            OcrWarning(
+                code=WarningCode.MISSING_AMOUNT,
+                message=f"Could not read total assets for rank {rank}.",
+                field_path=f"players[{rank - 1}].total_assets_man_yen",
+            )
+        )
+    return warnings

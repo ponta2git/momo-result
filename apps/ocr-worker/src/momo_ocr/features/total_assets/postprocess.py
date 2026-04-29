@@ -1,6 +1,5 @@
 from __future__ import annotations
 
+from momo_ocr.features.ocr_domain.money import parse_man_yen
 
-def parse_man_yen(value: str) -> int | None:
-    digits = "".join(char for char in value if char.isdigit() or char == "-")
-    return int(digits) if digits else None
+__all__ = ["parse_man_yen"]

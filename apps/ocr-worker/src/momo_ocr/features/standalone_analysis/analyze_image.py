@@ -85,6 +85,7 @@ def analyze_image(
                     profile_id=detection.profile_id,
                     debug_dir=debug_dir,
                     include_raw_text=include_raw_text,
+                    text_engine=engine,
                     warnings=warnings,
                 )
             )

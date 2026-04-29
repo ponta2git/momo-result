@@ -18,6 +18,7 @@ from momo_ocr.features.ocr_domain.models import (
     WarningCode,
 )
 from momo_ocr.features.ocr_results.parsing import ScreenParseContext
+from momo_ocr.features.player_order.detector import apply_player_order_to_column_players
 from momo_ocr.features.temp_images.validation import open_decoded_image
 from momo_ocr.features.text_recognition.models import RecognitionConfig, RecognitionField
 from momo_ocr.features.text_recognition.postprocess import normalize_ocr_text
@@ -75,6 +76,7 @@ class IncidentLogParser:
                 )
 
         players = [PlayerResultDraft(incidents=counts) for counts in player_counts]
+        players = apply_player_order_to_column_players(players, context.player_order_detection)
         rows = [
             IncidentLogRow(
                 raw_player_name=None,
@@ -102,6 +104,7 @@ class IncidentLogParser:
                 "parser": "incident_log",
                 "incident_names": MVP_INCIDENT_NAMES,
                 "rows": rows,
+                "player_order": context.player_order_detection,
                 "include_raw_text": context.include_raw_text,
             },
             warnings=warnings,

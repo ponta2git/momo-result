@@ -10,6 +10,8 @@ from momo_ocr.features.ocr_domain.models import (
     WarningSeverity,
 )
 from momo_ocr.features.ocr_results.parsing import ParserRegistry, ScreenParseContext
+from momo_ocr.features.player_order.detector import detect_player_order
+from momo_ocr.features.player_order.models import PlayerOrderDetection
 from momo_ocr.features.screen_detection.classifier import classify_screen_type, detection_failure
 from momo_ocr.features.screen_detection.title_evidence import recognize_title_evidence
 from momo_ocr.features.standalone_analysis.report import AnalysisResult
@@ -32,6 +34,7 @@ def analyze_image(
     timings: dict[str, float] = {}
     metadata = None
     detection = None
+    player_order_detection: PlayerOrderDetection | None = None
     requested_type = ScreenType(requested_screen_type)
     engine = text_engine if text_engine is not None else default_text_recognition_engine()
     registry = parser_registry if parser_registry is not None else default_parser_registry()
@@ -59,7 +62,16 @@ def analyze_image(
             else:
                 detection = classify_screen_type(requested_type, {})
 
+        with record_duration_ms(timings, "detect_player_order"):
+            image = open_decoded_image(resolved_path)
+            player_order_detection = detect_player_order(
+                image,
+                text_engine=engine,
+                debug_dir=debug_dir / "player_order" if debug_dir is not None else None,
+            )
+
         warnings = list(detection.warnings)
+        warnings.extend(player_order_detection.warnings)
         if debug_dir is not None:
             debug_dir.mkdir(parents=True, exist_ok=True)
             warnings.append(
@@ -86,6 +98,7 @@ def analyze_image(
                     debug_dir=debug_dir,
                     include_raw_text=include_raw_text,
                     text_engine=engine,
+                    player_order_detection=player_order_detection,
                     warnings=warnings,
                 )
             )

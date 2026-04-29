@@ -19,6 +19,7 @@ from momo_ocr.features.ocr_results.ranked_rows import (
     recognize_ranked_row_text,
     save_debug_ranked_row,
 )
+from momo_ocr.features.player_order.detector import apply_player_order_to_ranked_players
 from momo_ocr.features.revenue.models import RevenueRow
 from momo_ocr.features.revenue.postprocess import parse_man_yen
 from momo_ocr.features.revenue.profile import ROW_PROFILES
@@ -95,6 +96,7 @@ class RevenueParser:
                 )
             )
 
+        players = apply_player_order_to_ranked_players(players, context.player_order_detection)
         return OcrDraftPayload(
             requested_screen_type=context.requested_screen_type,
             detected_screen_type=context.detected_screen_type,
@@ -104,6 +106,7 @@ class RevenueParser:
                 "status": "parsed",
                 "parser": "revenue",
                 "rows": rows,
+                "player_order": context.player_order_detection,
                 "include_raw_text": context.include_raw_text,
             },
             warnings=warnings,

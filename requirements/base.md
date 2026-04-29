@@ -17,17 +17,17 @@
 
 ---
 
-## 2. summit アプリとの連携
+## 2. summit アプリ・momo-db との連携
 
-`~/Documents/codes/summit` にある summit アプリと連携する。
+`~/Documents/codes/summit` にある summit アプリと、`~/Documents/codes/momo-db` にある DB 管理リポジトリ（`@momo/db` パッケージ）と連携する。
 
-- summit アプリのDBに相乗りする。
-- summit アプリの `src/db/schema.ts` に共有スキーマを追記し、本アプリはそれを参照する。
-- 将来的にスキーマ管理だけを別リポジトリまたは別パッケージに分離する可能性がある。
+- DBスキーマと migration の正本は momo-db リポジトリに集約する。
+- summit アプリと本アプリは `"@momo/db": "file:../momo-db"` 相当の参照で同じ Neon PostgreSQL スキーマを共有する。
+- momo-db の `members`、`held_events`、`held_event_participants`、`app_sessions` などを契約として参照する。
 - summit アプリの以下の情報を共有する。
-  - 固定4名のメンバー情報
-  - 実開催履歴 `held_events`
-- 本アプリ側でも開催履歴を作成できるが、開催履歴の正本は summit 共有の `held_events` に集約する。
+  - 固定4名のメンバー情報（`members`）
+  - 実開催履歴（`held_events`）。summit が作成した held_event は Discord 出席 session に紐づく。
+- 本アプリ側でも開催履歴を作成できる。本アプリ作成分は summit の出席 session に紐づかない（`held_events.session_id` が NULL）。
 - 1つの `held_events` には、第1試合、第2試合のように複数の桃鉄1年勝負の試合結果を紐づけられる。
 - 試合番号は同じ `held_events` 内で自動採番し、必要に応じて手動変更できる。
 - 結果作成時は開催履歴を選択し、その中に第n試合を追加する。開催履歴が存在しない場合は、本アプリから新規作成できる。

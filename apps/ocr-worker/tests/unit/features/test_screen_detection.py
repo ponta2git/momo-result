@@ -32,6 +32,33 @@ def test_classify_screen_type_uses_title_ocr_evidence() -> None:
     assert result.evidence_text == "総資産"
 
 
+def test_classify_screen_type_uses_incident_table_keywords() -> None:
+    result = classify_screen_type(
+        ScreenType.AUTO,
+        {
+            ScreenType.TOTAL_ASSETS: "",
+            ScreenType.REVENUE: "",
+            ScreenType.INCIDENT_LOG: "目的地 プラス駅 マイナス駅 カード駅",
+        },
+    )
+
+    assert result.detected_type == ScreenType.INCIDENT_LOG
+    assert result.profile_id == "full-hd-incident-log-v1"
+
+
+def test_classify_screen_type_uses_revenue_title_fragment() -> None:
+    result = classify_screen_type(
+        ScreenType.AUTO,
+        {
+            ScreenType.TOTAL_ASSETS: "",
+            ScreenType.REVENUE: "tt 額 1年",
+            ScreenType.INCIDENT_LOG: "",
+        },
+    )
+
+    assert result.detected_type == ScreenType.REVENUE
+
+
 def test_classify_screen_type_returns_warning_when_title_is_unknown() -> None:
     result = classify_screen_type(
         ScreenType.AUTO,

@@ -19,6 +19,7 @@ from momo_ocr.features.total_assets.postprocess import parse_man_yen
 
 def test_parse_man_yen_handles_oku_and_man_units() -> None:
     assert parse_man_yen("3億8480万円 | 7") == 38480
+    assert parse_man_yen("2億円") == 20000
     assert parse_man_yen("2190万口") == 2190
     assert parse_man_yen("-120万円") == -120
 

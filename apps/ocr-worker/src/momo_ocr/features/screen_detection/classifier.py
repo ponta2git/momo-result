@@ -11,6 +11,9 @@ from momo_ocr.features.ocr_domain.models import (
 from momo_ocr.features.screen_detection.models import ScreenDetectionResult
 from momo_ocr.features.screen_detection.profiles import PROFILES, LayoutProfile
 
+MIN_DETECTION_SCORE = 0.45
+MIN_TABLE_KEYWORD_HITS = 2
+
 
 def classify_screen_type(
     requested_type: ScreenType,
@@ -78,7 +81,7 @@ def _score_evidence(evidence_by_type: Mapping[ScreenType, str]) -> tuple[ScreenT
     if not scored:
         return None, 0.0
     best_type, best_score = max(scored, key=lambda item: item[1])
-    if best_score <= 0.0:
+    if best_score < MIN_DETECTION_SCORE:
         return None, 0.0
     return best_type, best_score
 
@@ -87,6 +90,10 @@ def _score_profile_keywords(profile: LayoutProfile, evidence: str) -> float:
     compact = evidence.replace(" ", "")
     if any(keyword in compact for keyword in profile.title_keywords):
         return 1.0
-    if all(fragment in compact for fragment in profile.title_fragments):
-        return 0.75
-    return 0.0
+    table_hits = sum(1 for keyword in profile.table_keywords if keyword in compact)
+    if table_hits >= MIN_TABLE_KEYWORD_HITS:
+        return min(0.9, 0.55 + (table_hits * 0.08))
+    fragment_hits = sum(1 for fragment in profile.title_fragments if fragment in compact)
+    if not profile.title_fragments or fragment_hits == 0:
+        return 0.0
+    return 0.45 + (0.3 * (fragment_hits / len(profile.title_fragments)))

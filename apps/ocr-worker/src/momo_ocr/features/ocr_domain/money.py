@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-MONEY_TEXT_RE = re.compile(r"[-−]?\s*(?:\d+\s*億)?\s*\d+\s*(?:万\s*)?[円口]")
+MONEY_TEXT_RE = re.compile(r"[-−]?\s*(?:(?:\d+\s*億\s*)?(?:\d+\s*(?:万\s*)?)|\d+\s*億\s*)[円口]")
 
 
 def parse_man_yen(value: str) -> int | None:
@@ -13,6 +13,8 @@ def parse_man_yen(value: str) -> int | None:
         sign = -1 if amount_text.lstrip().startswith(("-", "−")) else 1
         oku_match = re.search(r"(\d+)\s*億", amount_text)
         man_match = re.search(r"(\d+)\s*万", amount_text)
+        if oku_match is not None and man_match is None:
+            return sign * int(oku_match.group(1)) * 10000
         if man_match is not None:
             oku = int(oku_match.group(1)) if oku_match is not None else 0
             man = int(man_match.group(1))

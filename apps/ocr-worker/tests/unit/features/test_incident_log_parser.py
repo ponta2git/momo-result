@@ -57,10 +57,12 @@ def test_incident_log_parser_extracts_fixed_incident_counts(tmp_path: Path) -> N
             debug_dir=debug_dir,
             include_raw_text=True,
             text_engine=engine,
+            layout_family_hint="world",
         )
     )
 
     assert payload.category_payload["status"] == "parsed"
+    assert payload.category_payload["layout_profile_id"] == "full-hd-incident-log-v1"
     assert len(payload.players) == 4
     assert payload.players[0].incidents["目的地"].value == 0
     assert payload.players[3].incidents["目的地"].value == 1
@@ -86,11 +88,54 @@ def test_incident_log_parser_warns_for_unreadable_count(tmp_path: Path) -> None:
             debug_dir=None,
             include_raw_text=False,
             text_engine=engine,
+            layout_family_hint="world",
         )
     )
 
     assert payload.players[0].incidents["目的地"].value is None
     assert {warning.code.value for warning in payload.warnings} == {"MISSING_INCIDENT_COUNT"}
+
+
+def test_incident_log_parser_uses_compact_layout_hint(tmp_path: Path) -> None:
+    image_path = tmp_path / "incident.jpg"
+    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    engine = SequenceTextRecognitionEngine(["0"] * 48)
+
+    payload = IncidentLogParser().parse(
+        ScreenParseContext(
+            image_path=image_path,
+            requested_screen_type=ScreenType.INCIDENT_LOG,
+            detected_screen_type=ScreenType.INCIDENT_LOG,
+            profile_id="full-hd-incident-log-v1",
+            debug_dir=None,
+            include_raw_text=False,
+            text_engine=engine,
+            layout_family_hint="momotetsu_2",
+        )
+    )
+
+    assert payload.category_payload["layout_profile_id"] == "full-hd-incident-log-compact-v1"
+
+
+def test_incident_log_parser_auto_selects_profile_with_fewer_missing_counts(tmp_path: Path) -> None:
+    image_path = tmp_path / "incident.jpg"
+    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    engine = SequenceTextRecognitionEngine(([""] * 48) + (["0"] * 48))
+
+    payload = IncidentLogParser().parse(
+        ScreenParseContext(
+            image_path=image_path,
+            requested_screen_type=ScreenType.INCIDENT_LOG,
+            detected_screen_type=ScreenType.INCIDENT_LOG,
+            profile_id="full-hd-incident-log-v1",
+            debug_dir=None,
+            include_raw_text=False,
+            text_engine=engine,
+        )
+    )
+
+    assert payload.category_payload["layout_profile_id"] == "full-hd-incident-log-compact-v1"
+    assert {warning.code.value for warning in payload.warnings} == set()
 
 
 class SequenceTextRecognitionEngine(TextRecognitionEngine):

@@ -24,6 +24,7 @@ class ScreenParseContext:
     debug_dir: Path | None
     include_raw_text: bool
     text_engine: TextRecognitionEngine
+    layout_family_hint: str | None = None
     player_order_detection: PlayerOrderDetection | None = None
     warnings: list[OcrWarning] = field(default_factory=list)
 

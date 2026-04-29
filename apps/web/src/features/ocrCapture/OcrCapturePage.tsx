@@ -1,5 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { cancelOcrJob, createOcrJob, getOcrDraft, uploadImage } from "@/features/ocrCapture/api";
 import type { OcrDraftResponse } from "@/features/ocrCapture/api";
 import { CaptureRail } from "@/features/ocrCapture/CaptureRail";
@@ -85,6 +86,7 @@ function keepImageOnly(slot: CaptureSlotState): CaptureSlotState {
 }
 
 export function OcrCapturePage() {
+  const navigate = useNavigate();
   const [setup, setSetup] = useState<SetupFormValues>(defaultSetupValues);
   const [slots, setSlots] = useState<CaptureSlotState[]>(() => createInitialSlots());
   const [drafts, setDrafts] = useState<Partial<Record<SlotKind, OcrDraftResponse>>>({});
@@ -204,6 +206,19 @@ export function OcrCapturePage() {
           draftId: job.draftId,
           status: status === "unknown" ? "queued" : status,
         });
+        try {
+          const draft = await getOcrDraft(job.draftId);
+          setDraft(slot.kind, draft);
+        } catch (error) {
+          updateSlot({
+            ...uploadingSlot,
+            imageId: upload.imageId,
+            jobId: job.jobId,
+            draftId: job.draftId,
+            status: status === "unknown" ? "queued" : status,
+            transportError: normalizeUnknownApiError(error),
+          });
+        }
       } catch (error) {
         updateSlot({
           ...uploadingSlot,
@@ -212,7 +227,9 @@ export function OcrCapturePage() {
         });
       }
     }
-    setNotice("OCR依頼を送信しました。完了すると各分類に下書きが表示されます。");
+    setNotice(
+      "OCR依頼を送信し、手入力用の下書きを保存しました。ワーカー未接続でも「下書きを確認する」から確認画面へ進めます。",
+    );
   }
 
   function handleClear(kind: SlotKind) {
@@ -306,6 +323,15 @@ export function OcrCapturePage() {
     (slot) => slot.file && ["selected", "failed", "cancelled"].includes(slot.status),
   ).length;
   const hasWorkingSlot = slots.some((slot) => isWorkingStatus(slot.status));
+  const draftCount = Object.keys(drafts).length;
+
+  function handleReviewDrafts() {
+    const params = new URLSearchParams();
+    if (drafts.total_assets?.draftId) params.set("totalAssets", drafts.total_assets.draftId);
+    if (drafts.revenue?.draftId) params.set("revenue", drafts.revenue.draftId);
+    if (drafts.incident_log?.draftId) params.set("incidentLog", drafts.incident_log.draftId);
+    navigate(`/review/${Date.now().toString(36)}?${params.toString()}`);
+  }
 
   return (
     <main className="mx-auto max-w-[1440px] px-4 py-8 sm:px-6 lg:px-8">
@@ -450,6 +476,9 @@ export function OcrCapturePage() {
             disabled={ocrReadyCount === 0 || hasWorkingSlot || uploadMutation.isPending}
           >
             OCRにかけて下書き保存
+          </Button>
+          <Button variant="secondary" onClick={handleReviewDrafts} disabled={draftCount === 0}>
+            下書きを確認する
           </Button>
           <Button variant="secondary" onClick={handleReset}>
             撮影画像を全消去して次の試合へ

@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 import { http, HttpResponse } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { OcrCapturePage } from "@/features/ocrCapture/OcrCapturePage";
@@ -23,7 +24,9 @@ describe("OcrCapturePage", () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <OcrCapturePage />
+        <MemoryRouter>
+          <OcrCapturePage />
+        </MemoryRouter>
       </QueryClientProvider>,
     );
 
@@ -65,7 +68,9 @@ describe("OcrCapturePage", () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <OcrCapturePage />
+        <MemoryRouter>
+          <OcrCapturePage />
+        </MemoryRouter>
       </QueryClientProvider>,
     );
 
@@ -87,5 +92,43 @@ describe("OcrCapturePage", () => {
       },
       { imageId: "image-2", requestedImageType: "revenue", ocrHints: expect.any(Object) },
     ]);
+  });
+
+  it("enables review after the queued draft is saved even without a running worker", async () => {
+    window.localStorage.setItem("momoresult.devUser", "ponta");
+    server.use(
+      http.get("/api/ocr-jobs/:jobId", ({ params }) =>
+        HttpResponse.json({
+          jobId: params.jobId,
+          draftId: "draft-queued",
+          imageId: "image-1",
+          imagePath: "/tmp/ignored.png",
+          requestedImageType: "total_assets",
+          detectedImageType: null,
+          status: "queued",
+          attemptCount: 1,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        }),
+      ),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <OcrCapturePage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    const reviewButton = screen.getByRole("button", { name: "下書きを確認する" });
+    expect(reviewButton).toBeDisabled();
+
+    const input = await screen.findByLabelText("撮影台の画像をアップロード");
+    await userEvent.upload(input, new File(["image"], "assets.png", { type: "image/png" }));
+    await userEvent.click(screen.getByRole("button", { name: "OCRにかけて下書き保存" }));
+
+    await waitFor(() => expect(screen.getByText("OCRドラフト JSON を表示")).toBeInTheDocument());
+    expect(reviewButton).toBeEnabled();
   });
 });

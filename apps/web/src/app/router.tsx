@@ -11,6 +11,10 @@ export const router = createBrowserRouter([
     element: <App />,
   },
   {
+    path: "/review/:matchSessionId",
+    element: <App />,
+  },
+  {
     path: "*",
     element: <Navigate to="/ocr/new" replace />,
   },

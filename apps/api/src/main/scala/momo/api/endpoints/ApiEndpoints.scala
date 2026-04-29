@@ -12,5 +12,9 @@ object ApiEndpoints:
       OcrJobEndpoints.create,
       OcrJobEndpoints.get,
       OcrJobEndpoints.cancel,
-      OcrDraftEndpoints.get
+      OcrDraftEndpoints.get,
+      OcrDraftEndpoints.listByIds,
+      HeldEventsEndpoints.list,
+      HeldEventsEndpoints.create,
+      MatchesEndpoints.confirm
     )

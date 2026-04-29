@@ -14,3 +14,12 @@ object OcrDraftEndpoints:
       .errorOut(CommonEndpoint.errorOut)
       .out(jsonBody[OcrDraftResponse])
       .tag("ocr")
+
+  val listByIds: PublicEndpoint[(String, Option[String]), ErrorInfo, OcrDraftListResponse, Any] =
+    endpoint.get
+      .in("api" / "ocr-drafts")
+      .in(query[String]("ids"))
+      .in(header[Option[String]]("X-Dev-User"))
+      .errorOut(CommonEndpoint.errorOut)
+      .out(jsonBody[OcrDraftListResponse])
+      .tag("ocr")

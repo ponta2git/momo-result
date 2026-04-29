@@ -43,6 +43,19 @@ class OcrJobMessage:
 
 
 @dataclass(frozen=True)
+class PulledJob:
+    """A queue delivery wrapping a parsed message with the consumer ack handle.
+
+    The ``delivery_tag`` is opaque to the runner and is passed back to the
+    consumer to acknowledge or negatively acknowledge the delivery once a
+    terminal status has been persisted.
+    """
+
+    message: OcrJobMessage
+    delivery_tag: str
+
+
+@dataclass(frozen=True)
 class OcrJobRecord:
     job_id: str
     draft_id: str

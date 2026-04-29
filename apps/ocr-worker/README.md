@@ -31,6 +31,8 @@ Default is `all`. Report holdout accuracy separately when documenting tuning out
 
 ## API queue producer contract
 
+For the full contract — DB schema, status transitions, failure codes, ack semantics, idempotency rules, and compatibility policy — see [`docs/api-contract.md`](docs/api-contract.md). The summary below is a quick reference.
+
 `apps/api` owns the Redis Streams producer side. It must create the durable OCR job row first, then enqueue one stream message. Redis is delivery only; the worker always verifies the DB job state before processing.
 
 Required stream fields:

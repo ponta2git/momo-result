@@ -10,6 +10,10 @@ from momo_ocr.features.ocr_domain.models import (
     WarningSeverity,
 )
 from momo_ocr.features.ocr_results.parsing import ParserRegistry, ScreenParseContext
+from momo_ocr.features.ocr_results.ranked_rows import (
+    DEFAULT_ALIAS_RESOLVER,
+    PlayerAliasResolver,
+)
 from momo_ocr.features.player_order.detector import detect_player_order
 from momo_ocr.features.player_order.models import PlayerOrderDetection
 from momo_ocr.features.screen_detection.classifier import classify_screen_type, detection_failure
@@ -32,6 +36,7 @@ def analyze_image(  # noqa: PLR0913
     text_engine: TextRecognitionEngine | None = None,
     parser_registry: ParserRegistry | None = None,
     layout_family_hint: str | None = None,
+    alias_resolver: PlayerAliasResolver | None = None,
 ) -> AnalysisResult:
     timings: dict[str, float] = {}
     metadata = None
@@ -42,6 +47,9 @@ def analyze_image(  # noqa: PLR0913
     registry = parser_registry if parser_registry is not None else default_parser_registry()
     resolved_layout_family_hint = layout_family_hint or detect_layout_family_from_filename(
         image_path,
+    )
+    resolved_alias_resolver = (
+        alias_resolver if alias_resolver is not None else DEFAULT_ALIAS_RESOLVER
     )
 
     try:
@@ -106,6 +114,7 @@ def analyze_image(  # noqa: PLR0913
                     player_order_detection=player_order_detection,
                     warnings=warnings,
                     layout_family_hint=resolved_layout_family_hint,
+                    alias_resolver=resolved_alias_resolver,
                 )
             )
 

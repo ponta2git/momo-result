@@ -7,16 +7,10 @@ import {
 } from "@/features/ocrCapture/captureState";
 
 describe("captureState", () => {
-  it("uses auto for uploads and slot kind for camera captures", () => {
-    expect(
-      requestedImageTypeForSlot({ kind: "total_assets", source: "upload", forcedKind: false }),
-    ).toBe("auto");
-    expect(
-      requestedImageTypeForSlot({ kind: "revenue", source: "camera", forcedKind: false }),
-    ).toBe("revenue");
-    expect(
-      requestedImageTypeForSlot({ kind: "incident_log", source: "upload", forcedKind: true }),
-    ).toBe("incident_log");
+  it("uses the final classification tray as the OCR image type hint", () => {
+    expect(requestedImageTypeForSlot({ kind: "total_assets" })).toBe("total_assets");
+    expect(requestedImageTypeForSlot({ kind: "revenue" })).toBe("revenue");
+    expect(requestedImageTypeForSlot({ kind: "incident_log" })).toBe("incident_log");
   });
 
   it("validates image type and size before upload", () => {

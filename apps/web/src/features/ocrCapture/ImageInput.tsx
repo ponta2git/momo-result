@@ -43,7 +43,7 @@ export function ImageInput({ slotLabel, onSelect, onValidationError }: ImageInpu
         }}
       />
       <Button variant="secondary" onClick={() => inputRef.current?.click()}>
-        アップロード
+        単体画像を追加
       </Button>
     </div>
   );

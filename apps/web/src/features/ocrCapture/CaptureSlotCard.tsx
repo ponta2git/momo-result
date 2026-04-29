@@ -1,8 +1,9 @@
-import type { CaptureSlotState, InputSource } from "@/features/ocrCapture/captureState";
-import { CameraCapture } from "@/features/ocrCapture/CameraCapture";
-import { ImageInput } from "@/features/ocrCapture/ImageInput";
+import type { DragEvent } from "react";
+import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
 import { DraftPreview } from "@/features/ocrCapture/DraftPreview";
 import type { OcrDraftResponse } from "@/features/ocrCapture/api";
+import type { SlotKind } from "@/shared/api/enums";
+import { parseSlotKind } from "@/shared/api/enums";
 import { Button } from "@/shared/ui/Button";
 import { Card } from "@/shared/ui/Card";
 import { StatusBadge } from "@/shared/ui/StatusBadge";
@@ -12,11 +13,17 @@ type CaptureSlotCardProps = {
   label: string;
   accentClass: string;
   draft?: OcrDraftResponse | undefined;
-  onSelect: (file: File, source: InputSource) => void;
+  index: number;
+  total: number;
   onClear: () => void;
-  onForceKind: () => void;
-  onValidationError: (message: string) => void;
+  onDropImage: (sourceKind: SlotKind, targetKind: SlotKind) => void;
+  onMoveImage: (direction: -1 | 1) => void;
   onManualRefresh: () => void;
+};
+
+const sourceLabels = {
+  camera: "撮影",
+  upload: "単体追加",
 };
 
 export function CaptureSlotCard({
@@ -24,55 +31,95 @@ export function CaptureSlotCard({
   label,
   accentClass,
   draft,
-  onSelect,
+  index,
+  total,
   onClear,
-  onForceKind,
-  onValidationError,
+  onDropImage,
+  onMoveImage,
   onManualRefresh,
 }: CaptureSlotCardProps) {
   const mismatch = slot.detectedKind && slot.detectedKind !== slot.kind;
+  const hasImage = Boolean(slot.previewUrl);
+
+  function handleDragStart(event: DragEvent<HTMLDivElement>) {
+    if (!hasImage) {
+      return;
+    }
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", slot.kind);
+  }
+
+  function handleDrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    const sourceKind = parseSlotKind(event.dataTransfer.getData("text/plain"));
+    if (sourceKind) {
+      onDropImage(sourceKind, slot.kind);
+    }
+  }
 
   return (
-    <Card className="relative overflow-hidden">
+    <Card
+      className="relative overflow-hidden"
+      onDragOver={(event) => {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+      }}
+      onDrop={handleDrop}
+    >
       <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${accentClass}`} />
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-xs font-black tracking-[0.28em] text-ink-300 uppercase">
-            Capture Slot
+            Classification Tray
           </p>
           <h2 className="mt-1 text-2xl font-black">{label}</h2>
+          <p className="mt-1 text-sm text-ink-300">
+            ここに置いた画像は「{label}」としてOCRへ送ります。
+          </p>
         </div>
         <StatusBadge status={slot.status} />
       </div>
 
       {slot.previewUrl ? (
-        <img
-          src={slot.previewUrl}
-          alt={`${label}プレビュー`}
-          className="mt-4 aspect-video w-full rounded-2xl border border-white/10 object-cover"
-        />
+        <div
+          className="mt-4 cursor-grab rounded-2xl border border-white/10 bg-black/20 p-2 active:cursor-grabbing"
+          draggable
+          onDragStart={handleDragStart}
+        >
+          <img
+            src={slot.previewUrl}
+            alt={`${label}プレビュー`}
+            className="aspect-video w-full rounded-xl object-cover"
+          />
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 px-1 text-xs text-ink-300">
+            <span>{slot.source ? `${sourceLabels[slot.source]}した画像` : "配置済み画像"}</span>
+            <span>ドラッグして別の分類へ移動</span>
+          </div>
+        </div>
       ) : (
         <div className="mt-4 grid aspect-video place-items-center rounded-2xl border border-dashed border-white/15 bg-white/[0.03] text-sm text-ink-300">
-          {label} の画像を投入
+          撮影した画像をここへドロップ
         </div>
       )}
 
       <div className="mt-4 flex flex-wrap gap-2">
-        <ImageInput slotLabel={label} onSelect={onSelect} onValidationError={onValidationError} />
         <Button variant="secondary" onClick={onClear} disabled={slot.status === "empty"}>
           削除
         </Button>
-        <Button variant={slot.forcedKind ? "primary" : "secondary"} onClick={onForceKind}>
-          {slot.forcedKind ? "種別固定中" : "この種別で固定"}
+        <Button
+          variant="secondary"
+          onClick={() => onMoveImage(-1)}
+          disabled={!hasImage || index === 0}
+        >
+          左へ
         </Button>
-      </div>
-
-      <div className="mt-4">
-        <CameraCapture
-          slotLabel={label}
-          onSelect={onSelect}
-          onValidationError={onValidationError}
-        />
+        <Button
+          variant="secondary"
+          onClick={() => onMoveImage(1)}
+          disabled={!hasImage || index === total - 1}
+        >
+          右へ
+        </Button>
       </div>
 
       {mismatch ? (
@@ -81,7 +128,7 @@ export function CaptureSlotCard({
           role="alert"
         >
           OCR判定は <strong>{slot.detectedKind}</strong>{" "}
-          でした。必要なら正しいスロットへ移動するか、このスロットで種別固定して再実行してください。
+          でした。画像を正しい分類へ移動してから、もう一度「OCRにかけて下書き保存」を実行してください。
         </div>
       ) : null}
 

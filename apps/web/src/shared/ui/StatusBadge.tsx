@@ -15,12 +15,25 @@ const toneByStatus: Record<string, string> = {
   cancelled: "border-slate-300/40 bg-slate-400/10 text-slate-100",
 };
 
+const labelByStatus: Record<string, string> = {
+  empty: "未配置",
+  selected: "OCR待ち",
+  uploading: "画像送信中",
+  uploaded: "送信済み",
+  queueing: "OCR依頼中",
+  queued: "OCR待機中",
+  running: "OCR実行中",
+  succeeded: "下書き保存済み",
+  failed: "要確認",
+  cancelled: "キャンセル済み",
+};
+
 export function StatusBadge({ status }: StatusBadgeProps) {
   return (
     <span
       className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold tracking-wide ${toneByStatus[status] ?? toneByStatus.empty}`}
     >
-      {status}
+      {labelByStatus[status] ?? status}
     </span>
   );
 }

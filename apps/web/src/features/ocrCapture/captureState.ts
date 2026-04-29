@@ -20,7 +20,6 @@ export type SlotStatus =
 export type CaptureSlotState = {
   kind: SlotKind;
   source?: InputSource | undefined;
-  forcedKind: boolean;
   file?: File | undefined;
   previewUrl?: string | undefined;
   cameraStream?: MediaStream | undefined;
@@ -43,7 +42,6 @@ export const slotDefinitions: Array<{ kind: SlotKind; label: string; accentClass
 export function createInitialSlot(kind: SlotKind): CaptureSlotState {
   return {
     kind,
-    forcedKind: false,
     status: "empty",
     pollAttempts: 0,
   };
@@ -54,12 +52,9 @@ export function createInitialSlots(): CaptureSlotState[] {
 }
 
 export function requestedImageTypeForSlot(
-  slot: Pick<CaptureSlotState, "kind" | "source" | "forcedKind">,
+  slot: Pick<CaptureSlotState, "kind">,
 ): RequestedImageType {
-  if (slot.forcedKind || slot.source === "camera") {
-    return slot.kind;
-  }
-  return "auto";
+  return slot.kind;
 }
 
 export function detectedKindFromResponse(value: unknown): SlotKind | undefined {

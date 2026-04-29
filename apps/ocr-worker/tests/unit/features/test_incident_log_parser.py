@@ -16,6 +16,10 @@ from momo_ocr.features.text_recognition.models import (
     RecognizedText,
 )
 
+PRIMARY_RECOGNITIONS_PER_CELL = 2
+RECOGNITIONS_PER_CELL_WITH_FALLBACK = 8
+INCIDENT_CELL_COUNT = 24
+
 
 def test_parse_count_handles_common_ocr_aliases() -> None:
     assert parse_count("0") == 0
@@ -39,14 +43,7 @@ def test_incident_log_parser_extracts_fixed_incident_counts(tmp_path: Path) -> N
         [0, 2, 0, 0],
         [0, 0, 0, 0],
     ]
-    engine = SequenceTextRecognitionEngine(
-        [
-            str(count)
-            for incident_counts in counts_by_incident
-            for count in incident_counts
-            for _ in range(2)
-        ]
-    )
+    engine = SequenceTextRecognitionEngine(_primary_texts_for_counts(counts_by_incident))
 
     payload = IncidentLogParser().parse(
         ScreenParseContext(
@@ -77,7 +74,9 @@ def test_incident_log_parser_extracts_fixed_incident_counts(tmp_path: Path) -> N
 def test_incident_log_parser_warns_for_unreadable_count(tmp_path: Path) -> None:
     image_path = tmp_path / "incident.jpg"
     Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
-    engine = SequenceTextRecognitionEngine([""] * 48)
+    engine = SequenceTextRecognitionEngine(
+        [""] * INCIDENT_CELL_COUNT * RECOGNITIONS_PER_CELL_WITH_FALLBACK
+    )
 
     payload = IncidentLogParser().parse(
         ScreenParseContext(
@@ -99,7 +98,9 @@ def test_incident_log_parser_warns_for_unreadable_count(tmp_path: Path) -> None:
 def test_incident_log_parser_uses_compact_layout_hint(tmp_path: Path) -> None:
     image_path = tmp_path / "incident.jpg"
     Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
-    engine = SequenceTextRecognitionEngine(["0"] * 48)
+    engine = SequenceTextRecognitionEngine(
+        ["0"] * INCIDENT_CELL_COUNT * PRIMARY_RECOGNITIONS_PER_CELL
+    )
 
     payload = IncidentLogParser().parse(
         ScreenParseContext(
@@ -120,7 +121,10 @@ def test_incident_log_parser_uses_compact_layout_hint(tmp_path: Path) -> None:
 def test_incident_log_parser_auto_selects_profile_with_fewer_missing_counts(tmp_path: Path) -> None:
     image_path = tmp_path / "incident.jpg"
     Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
-    engine = SequenceTextRecognitionEngine(([""] * 48) + (["0"] * 48))
+    engine = SequenceTextRecognitionEngine(
+        ([""] * INCIDENT_CELL_COUNT * RECOGNITIONS_PER_CELL_WITH_FALLBACK)
+        + (["0"] * INCIDENT_CELL_COUNT * PRIMARY_RECOGNITIONS_PER_CELL)
+    )
 
     payload = IncidentLogParser().parse(
         ScreenParseContext(
@@ -136,6 +140,99 @@ def test_incident_log_parser_auto_selects_profile_with_fewer_missing_counts(tmp_
 
     assert payload.category_payload["layout_profile_id"] == "full-hd-incident-log-compact-v1"
     assert {warning.code.value for warning in payload.warnings} == set()
+
+
+def test_incident_log_parser_fallback_preprocessing_repairs_suspicious_digit_noise(
+    tmp_path: Path,
+) -> None:
+    image_path = tmp_path / "incident.jpg"
+    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    engine = SequenceTextRecognitionEngine(
+        ["23", "23", "2", "2", "20", "20", "1", "1"]
+        + (["0"] * (INCIDENT_CELL_COUNT - 1) * PRIMARY_RECOGNITIONS_PER_CELL)
+    )
+
+    payload = IncidentLogParser().parse(
+        ScreenParseContext(
+            image_path=image_path,
+            requested_screen_type=ScreenType.INCIDENT_LOG,
+            detected_screen_type=ScreenType.INCIDENT_LOG,
+            profile_id="full-hd-incident-log-v1",
+            debug_dir=None,
+            include_raw_text=True,
+            text_engine=engine,
+            layout_family_hint="world",
+        )
+    )
+
+    assert payload.players[0].incidents["目的地"].value == 2
+    assert payload.raw_snippets is not None
+    assert payload.raw_snippets["目的地_player_1"] == "23 | 2 | 20 | 1"
+
+
+def test_incident_log_parser_uses_stricter_ginji_cell_fallback(tmp_path: Path) -> None:
+    image_path = tmp_path / "incident.jpg"
+    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    # First 20 non-Ginji cells are zero, then first Ginji cell has primary 3 and fallback 0.
+    engine = SequenceTextRecognitionEngine(
+        (["0"] * 20 * PRIMARY_RECOGNITIONS_PER_CELL)
+        + ["3", "3", "0", "0", "6", "6", "1", "1"]
+        + (["0"] * 3 * PRIMARY_RECOGNITIONS_PER_CELL)
+    )
+
+    payload = IncidentLogParser().parse(
+        ScreenParseContext(
+            image_path=image_path,
+            requested_screen_type=ScreenType.INCIDENT_LOG,
+            detected_screen_type=ScreenType.INCIDENT_LOG,
+            profile_id="full-hd-incident-log-v1",
+            debug_dir=None,
+            include_raw_text=True,
+            text_engine=engine,
+            layout_family_hint="world",
+        )
+    )
+
+    assert payload.players[0].incidents["スリの銀次"].value == 0
+
+
+def test_incident_log_parser_warns_for_domain_implausible_counts(tmp_path: Path) -> None:
+    image_path = tmp_path / "incident.jpg"
+    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    counts_by_incident = [
+        [4, 0, 0, 0],
+        [4, 0, 0, 0],
+        [4, 0, 0, 0],
+        [4, 0, 0, 0],
+        [0, 0, 0, 0],
+        [2, 1, 0, 0],
+    ]
+    engine = SequenceTextRecognitionEngine(_primary_texts_for_counts(counts_by_incident))
+
+    payload = IncidentLogParser().parse(
+        ScreenParseContext(
+            image_path=image_path,
+            requested_screen_type=ScreenType.INCIDENT_LOG,
+            detected_screen_type=ScreenType.INCIDENT_LOG,
+            profile_id="full-hd-incident-log-v1",
+            debug_dir=None,
+            include_raw_text=False,
+            text_engine=engine,
+            layout_family_hint="world",
+        )
+    )
+
+    warning_codes = [warning.code.value for warning in payload.warnings]
+    assert warning_codes == ["SUSPICIOUS_INCIDENT_COUNT", "SUSPICIOUS_INCIDENT_COUNT"]
+
+
+def _primary_texts_for_counts(counts_by_incident: list[list[int]]) -> list[str]:
+    return [
+        str(count)
+        for incident_counts in counts_by_incident
+        for count in incident_counts
+        for _ in range(PRIMARY_RECOGNITIONS_PER_CELL)
+    ]
 
 
 class SequenceTextRecognitionEngine(TextRecognitionEngine):

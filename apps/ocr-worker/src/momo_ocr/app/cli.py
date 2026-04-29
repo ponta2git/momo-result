@@ -6,7 +6,10 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from momo_ocr.features.standalone_analysis.analyze_image import analyze_image
-from momo_ocr.features.standalone_analysis.batch_calibration import analyze_directory
+from momo_ocr.features.standalone_analysis.batch_calibration import (
+    EVALUATION_SET_CHOICES,
+    analyze_directory,
+)
 from momo_ocr.features.standalone_analysis.report import AnalysisResult, BatchReport
 from momo_ocr.features.text_recognition.engine import (
     FakeTextRecognitionEngine,
@@ -37,6 +40,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     batch.add_argument("--report", type=Path)
     batch.add_argument("--debug-dir", type=Path)
     batch.add_argument("--include-raw-text", action="store_true")
+    batch.add_argument(
+        "--evaluation-set",
+        default="all",
+        choices=EVALUATION_SET_CHOICES,
+        help=(
+            "Which slice of input-dir to analyze: 'train' (top-level files only), "
+            "'holdout' (input-dir/holdout/ only), or 'all' (default; both)."
+        ),
+    )
     _add_engine_options(batch)
 
     args = parser.parse_args(argv)
@@ -64,6 +76,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             debug_dir=args.debug_dir,
             text_engine=text_engine,
             include_raw_text=args.include_raw_text,
+            evaluation_set=args.evaluation_set,
         )
         if args.report is not None:
             write_json(args.report, report)

@@ -14,6 +14,7 @@ from momo_ocr.features.player_order.detector import detect_player_order
 from momo_ocr.features.player_order.models import PlayerOrderDetection
 from momo_ocr.features.screen_detection.classifier import classify_screen_type, detection_failure
 from momo_ocr.features.screen_detection.title_evidence import recognize_title_evidence
+from momo_ocr.features.standalone_analysis.layout_family import detect_layout_family_from_filename
 from momo_ocr.features.standalone_analysis.report import AnalysisResult
 from momo_ocr.features.temp_images.storage import resolve_local_image
 from momo_ocr.features.temp_images.validation import open_decoded_image, read_image_metadata
@@ -22,7 +23,7 @@ from momo_ocr.shared.errors import OcrError
 from momo_ocr.shared.time import record_duration_ms
 
 
-def analyze_image(
+def analyze_image(  # noqa: PLR0913
     *,
     image_path: Path,
     requested_screen_type: str,
@@ -30,6 +31,7 @@ def analyze_image(
     include_raw_text: bool,
     text_engine: TextRecognitionEngine | None = None,
     parser_registry: ParserRegistry | None = None,
+    layout_family_hint: str | None = None,
 ) -> AnalysisResult:
     timings: dict[str, float] = {}
     metadata = None
@@ -38,6 +40,9 @@ def analyze_image(
     requested_type = ScreenType(requested_screen_type)
     engine = text_engine if text_engine is not None else default_text_recognition_engine()
     registry = parser_registry if parser_registry is not None else default_parser_registry()
+    resolved_layout_family_hint = layout_family_hint or detect_layout_family_from_filename(
+        image_path,
+    )
 
     try:
         with record_duration_ms(timings, "validate_image"):
@@ -100,6 +105,7 @@ def analyze_image(
                     text_engine=engine,
                     player_order_detection=player_order_detection,
                     warnings=warnings,
+                    layout_family_hint=resolved_layout_family_hint,
                 )
             )
 

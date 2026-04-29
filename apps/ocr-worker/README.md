@@ -12,6 +12,23 @@ uv run momo-ocr batch --input-dir ../../ocr_samples --report ./out/accuracy-repo
 
 Real game screenshots are expected to live in the repository-root `ocr_samples/` directory, which is ignored by git. CI fixtures must be synthetic and license-safe.
 
+### Holdout convention for accuracy reporting
+
+To prevent overfitting during OCR tuning, `ocr_samples/` follows a simple holdout convention:
+
+- Top-level files in `ocr_samples/` form the **train** set used for calibration.
+- Files placed under `ocr_samples/holdout/` form the **holdout** set and must not influence calibration decisions.
+
+The `momo-ocr batch` command exposes this with `--evaluation-set`:
+
+```sh
+uv run momo-ocr batch --input-dir ../../ocr_samples --evaluation-set train   --report ./out/train-report.json
+uv run momo-ocr batch --input-dir ../../ocr_samples --evaluation-set holdout --report ./out/holdout-report.json
+uv run momo-ocr batch --input-dir ../../ocr_samples --evaluation-set all     --report ./out/all-report.json
+```
+
+Default is `all`. Report holdout accuracy separately when documenting tuning outcomes; the holdout slice is the one that reflects generalization.
+
 ## API queue producer contract
 
 `apps/api` owns the Redis Streams producer side. It must create the durable OCR job row first, then enqueue one stream message. Redis is delivery only; the worker always verifies the DB job state before processing.

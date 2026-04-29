@@ -78,15 +78,18 @@ class TesseractEngine(TextRecognitionEngine):
                 "Tesseract timeout must be a positive number of seconds.",
             )
 
-        with tempfile.NamedTemporaryFile(suffix=".png") as image_file:
-            image.save(image_file.name)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            image_path = Path(tmpdir) / "input.png"
+            output_base = Path(tmpdir) / "out"
+            image.save(image_path)
             command = _build_tesseract_command(
                 executable_path=Path(executable_path),
-                image_path=Path(image_file.name),
+                image_path=image_path,
+                output_base=output_base,
                 config=effective_config,
             )
             try:
-                completed = subprocess.run(  # noqa: S603
+                subprocess.run(  # noqa: S603
                     command,
                     check=True,
                     capture_output=True,
@@ -107,9 +110,14 @@ class TesseractEngine(TextRecognitionEngine):
                     retryable=False,
                 ) from exc
 
-        raw_text = completed.stdout.strip()
+            txt_path = output_base.with_suffix(".txt")
+            tsv_path = output_base.with_suffix(".tsv")
+            raw_text = txt_path.read_text(encoding="utf-8").strip() if txt_path.exists() else ""
+            tsv_stdout = tsv_path.read_text(encoding="utf-8") if tsv_path.exists() else ""
+
+        _, confidence = _parse_tesseract_tsv(tsv_stdout)
         processed_text = _apply_postprocessors(raw_text, effective_config)
-        return RecognizedText(text=processed_text, confidence=None, raw_text=raw_text)
+        return RecognizedText(text=processed_text, confidence=confidence, raw_text=raw_text)
 
     def _resolve_config(
         self,
@@ -146,9 +154,10 @@ def _build_tesseract_command(
     *,
     executable_path: Path,
     image_path: Path,
+    output_base: Path,
     config: RecognitionConfig,
 ) -> list[str]:
-    command = [str(executable_path), str(image_path), "stdout"]
+    command = [str(executable_path), str(image_path), str(output_base)]
     if config.language is not None:
         command.extend(["-l", config.language])
     if config.oem is not None:
@@ -157,7 +166,76 @@ def _build_tesseract_command(
         command.extend(["--psm", str(config.psm)])
     for key, value in sorted(config.variables.items()):
         command.extend(["-c", f"{key}={value}"])
+    command.extend(["txt", "tsv"])
     return command
+
+
+_TSV_WORD_LEVEL = "5"
+
+
+def _parse_tesseract_tsv(stdout: str) -> tuple[str, float | None]:
+    """Parse tesseract TSV stdout into text and aggregated word confidence.
+
+    Tesseract's TSV output has one row per detection level. Word-level
+    rows (level == 5) carry both the recognized text and a per-word
+    confidence in 0-100 (with -1 used for non-word entries). We
+    reconstruct the text by inserting newlines between distinct
+    block/par/line tuples to keep PSM 6/11 multi-line layouts faithful,
+    and compute the mean of positive confidences as the row score.
+    """
+    lines = stdout.splitlines()
+    if not lines:
+        return "", None
+    indices = _resolve_tsv_indices(lines[0])
+    if indices is None:
+        return stdout.strip(), None
+
+    parts: list[str] = []
+    confidences: list[float] = []
+    last_line_key: tuple[str, str, str] | None = None
+    for raw in lines[1:]:
+        word_row = _parse_word_row(raw, indices)
+        if word_row is None:
+            continue
+        word, line_key, conf_value = word_row
+        if last_line_key is not None and line_key != last_line_key:
+            parts.append("\n")
+        elif parts:
+            parts.append(" ")
+        parts.append(word)
+        last_line_key = line_key
+        if conf_value is not None and conf_value >= 0:
+            confidences.append(conf_value)
+
+    text = "".join(parts).strip()
+    confidence = sum(confidences) / len(confidences) / 100.0 if confidences else None
+    return text, confidence
+
+
+def _resolve_tsv_indices(header_line: str) -> dict[str, int] | None:
+    header = header_line.split("\t")
+    keys = ("level", "block_num", "par_num", "line_num", "conf", "text")
+    try:
+        return {key: header.index(key) for key in keys}
+    except ValueError:
+        return None
+
+
+def _parse_word_row(
+    raw: str, indices: dict[str, int]
+) -> tuple[str, tuple[str, str, str], float | None] | None:
+    cells = raw.split("\t") if raw else []
+    if len(cells) <= indices["text"] or cells[indices["level"]] != _TSV_WORD_LEVEL:
+        return None
+    word = cells[indices["text"]]
+    if not word:
+        return None
+    line_key = (cells[indices["block_num"]], cells[indices["par_num"]], cells[indices["line_num"]])
+    try:
+        conf_value: float | None = float(cells[indices["conf"]])
+    except ValueError:
+        conf_value = None
+    return word, line_key, conf_value
 
 
 def _apply_postprocessors(text: str, config: RecognitionConfig) -> str:

@@ -11,6 +11,10 @@ from momo_ocr.features.ocr_domain.models import (
     WarningCode,
     WarningSeverity,
 )
+from momo_ocr.features.ocr_results.ranked_rows import (
+    DEFAULT_ALIAS_RESOLVER,
+    PlayerAliasResolver,
+)
 from momo_ocr.features.player_order.models import PlayerOrderDetection
 from momo_ocr.features.text_recognition.engine import TextRecognitionEngine
 
@@ -26,6 +30,7 @@ class ScreenParseContext:
     text_engine: TextRecognitionEngine
     layout_family_hint: str | None = None
     player_order_detection: PlayerOrderDetection | None = None
+    alias_resolver: PlayerAliasResolver = DEFAULT_ALIAS_RESOLVER
     warnings: list[OcrWarning] = field(default_factory=list)
 
 

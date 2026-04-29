@@ -19,6 +19,11 @@ from momo_ocr.features.text_recognition.models import (
 
 def test_parse_man_yen_handles_zero_yen_revenue() -> None:
     assert parse_man_yen("1億5800万円") == 15800
+    assert parse_man_yen("1億5700万円 | NO11 社長 148570044") == 15700
+    assert (
+        parse_man_yen("オータカ社長 6300万円 | オータカ社長 8300万円 | オータカ社長 8300万円")
+        == 8300
+    )
     assert parse_man_yen("9100万円") == 9100
     assert parse_man_yen("0円") == 0
 
@@ -30,21 +35,17 @@ def test_revenue_parser_extracts_ranked_players_and_amounts(tmp_path: Path) -> N
     engine = SequenceTextRecognitionEngine(
         [
             "] 《 NO1 1社長 1億5800万円 | 6",
-            "寺w4.11 ドー | & 148580059 | NO1 1 社長",
+            "寺w4.11 ドー | & 148580059 | NO1 1 社長 1億5800万円",
             "GQ NO1 1社長 1億5800万円 |",
-            "| OY Not me 1億5800万円 |",
             "ぽんた社長 9100万円",
             "ぽんた社長 9100万円",
             "QR ぽんた社長 9100万円 |",
-            "4 | a ぽんた社長 9100万円 |",
-            "に 5000万円 回",
+            "に Ad おたか社長 5000万円 回",
             "Ad おたか社長 5000万円",
-            "ee 5000万円 還",
-            "トム 人 | Od おーたか社長 5000万円 上",
-            "A いいLゅ一守恒 0円",
-            "A い_ゅ社長 0円",
-            "A いいLゅ一守恒 0円",
-            "A い_ゅ社長 0円",
+            "ee おたか社長 5000万円 還",
+            "A いーゆー社長 0円",
+            "A いーゆー社長 0円",
+            "A いーゆー社長 0円",
         ]
     )
 
@@ -63,10 +64,10 @@ def test_revenue_parser_extracts_ranked_players_and_amounts(tmp_path: Path) -> N
     assert payload.category_payload["status"] == "parsed"
     assert [player.rank.value for player in payload.players] == [1, 2, 3, 4]
     assert [player.raw_player_name.value for player in payload.players] == [
-        "NO1 1 社長",
+        "NO11社長",
         "ぽんた社長",
-        "おーたか社長",
-        "いーゅ社長",
+        "オータカ社長",
+        "いーゆー社長",
     ]
     assert [player.revenue_man_yen.value for player in payload.players] == [
         15800,
@@ -75,14 +76,14 @@ def test_revenue_parser_extracts_ranked_players_and_amounts(tmp_path: Path) -> N
         0,
     ]
     assert payload.raw_snippets is not None
-    assert payload.raw_snippets["rank_4"] == "A いいLゅ一守恒 0円 | A い_ゅ社長 0円"
+    assert payload.raw_snippets["rank_4"] == "A いーゆー社長 0円"
     assert (debug_dir / "revenue" / "rank_1_row_prepared.png").exists()
 
 
 def test_revenue_parser_warns_for_unreadable_row(tmp_path: Path) -> None:
     image_path = tmp_path / "revenue.jpg"
     Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
-    engine = SequenceTextRecognitionEngine(["unknown"] * 16)
+    engine = SequenceTextRecognitionEngine(["unknown"] * 36)
 
     payload = RevenueParser().parse(
         ScreenParseContext(

@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageOps
 
 from momo_ocr.features.image_processing.geometry import Rect, Size, scale_profile_rect_to_image
 from momo_ocr.features.image_processing.roi import crop_roi
 from momo_ocr.features.ocr_domain.models import ScreenType
+from momo_ocr.features.ocr_results.ranked_rows import _otsu_binarize
 from momo_ocr.features.screen_detection.profiles import PROFILES
 from momo_ocr.features.text_recognition.engine import TextRecognitionEngine
 from momo_ocr.features.text_recognition.models import RecognitionField
@@ -18,6 +19,9 @@ SUPPLEMENTAL_EVIDENCE_ROIS = (
     ("header_mid", Rect(x=120, y=0, width=1350, height=255)),
     ("table_wide", Rect(x=0, y=255, width=1920, height=630)),
 )
+
+_HIRAGANA_KATAKANA_RANGE = (0x3040, 0x30FF)
+_CJK_UNIFIED_RANGE = (0x4E00, 0x9FFF)
 
 
 def recognize_title_evidence(
@@ -63,18 +67,58 @@ def _recognize_title_variants(
     debug_prefix: str,
 ) -> str:
     snippets: list[str] = []
-    for scale_factor, psm in TITLE_OCR_VARIANTS:
-        scaled = image.resize(
-            (image.width * scale_factor, image.height * scale_factor),
-            Image.Resampling.LANCZOS,
-        )
-        if debug_dir is not None:
-            scaled.save(debug_dir / f"{debug_prefix}_title_scale{scale_factor}_psm{psm}.png")
-        recognized = engine.recognize(scaled, field=RecognitionField.TITLE, psm=psm)
-        text = normalize_ocr_text(recognized.text)
-        if text:
-            snippets.append(text)
+    preprocessed_variants = _title_preprocessing_variants(image)
+    for variant_label, variant_image in preprocessed_variants:
+        variant_snippets: list[str] = []
+        for scale_factor, psm in TITLE_OCR_VARIANTS:
+            scaled = variant_image.resize(
+                (variant_image.width * scale_factor, variant_image.height * scale_factor),
+                Image.Resampling.LANCZOS,
+            )
+            if debug_dir is not None:
+                scaled.save(
+                    debug_dir
+                    / f"{debug_prefix}_title_{variant_label}_scale{scale_factor}_psm{psm}.png",
+                )
+            recognized = engine.recognize(scaled, field=RecognitionField.TITLE, psm=psm)
+            text = normalize_ocr_text(recognized.text)
+            if text:
+                variant_snippets.append(text)
+        snippets.extend(variant_snippets)
+        # Lazy variant evaluation: if the base preprocessing already produced
+        # CJK title evidence, skip the heavier OTSU/invert variants. Stylized
+        # banners (e.g. 桃鉄2) typically need fallbacks; clean banners
+        # (e.g. 令和/ワールド) succeed at base and do not benefit from them.
+        if variant_label == "base" and _has_cjk(variant_snippets):
+            break
     return _join_unique_snippets(snippets)
+
+
+def _has_cjk(snippets: list[str]) -> bool:
+    hira_lo, hira_hi = _HIRAGANA_KATAKANA_RANGE
+    cjk_lo, cjk_hi = _CJK_UNIFIED_RANGE
+    for snippet in snippets:
+        for char in snippet:
+            code = ord(char)
+            if hira_lo <= code <= hira_hi or cjk_lo <= code <= cjk_hi:
+                return True
+    return False
+
+
+def _title_preprocessing_variants(image: Image.Image) -> tuple[tuple[str, Image.Image], ...]:
+    """Return preprocessing variants that help OCR read stylized title banners.
+
+    The base image is always tried first. OTSU binarization is added because
+    decorative title banners (e.g. Momotetsu 2 striped backgrounds) defeat
+    Tesseract's default adaptive thresholding. Inverted variants help dark
+    banners with light text.
+    """
+    grayscale = ImageOps.grayscale(image)
+    return (
+        ("base", image),
+        ("otsu", _otsu_binarize(image)),
+        ("invert", ImageOps.invert(grayscale)),
+    )
 
 
 def _recognize_supplemental_evidence(

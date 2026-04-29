@@ -14,6 +14,7 @@ from momo_ocr.features.ocr_domain.models import (
 )
 from momo_ocr.features.ocr_results.parsing import ScreenParseContext
 from momo_ocr.features.ocr_results.ranked_rows import (
+    PlayerAliasResolver,
     extract_player_name_candidate,
     prepare_ranked_row_image,
     recognize_ranked_row_text,
@@ -61,11 +62,17 @@ class RevenueParser:
                 text_engine=context.text_engine,
                 fallback_image=row_image,
             )
-            row_warnings = _row_warnings(rank=row_profile.rank, raw_text=recognized_row.text)
+            row_warnings = _row_warnings(
+                rank=row_profile.rank,
+                raw_text=recognized_row.text,
+                alias_resolver=context.alias_resolver,
+            )
             warnings.extend(row_warnings)
             raw_snippets[f"rank_{row_profile.rank}"] = recognized_row.text
 
-            raw_player_name = extract_player_name_candidate(recognized_row.text)
+            raw_player_name = extract_player_name_candidate(
+                recognized_row.text, alias_resolver=context.alias_resolver
+            )
             amount_man_yen = parse_man_yen(recognized_row.text)
             rows.append(
                 RevenueRow(
@@ -114,9 +121,14 @@ class RevenueParser:
         )
 
 
-def _row_warnings(*, rank: int, raw_text: str) -> list[OcrWarning]:
+def _row_warnings(
+    *,
+    rank: int,
+    raw_text: str,
+    alias_resolver: PlayerAliasResolver,
+) -> list[OcrWarning]:
     warnings: list[OcrWarning] = []
-    if extract_player_name_candidate(raw_text) is None:
+    if extract_player_name_candidate(raw_text, alias_resolver=alias_resolver) is None:
         warnings.append(
             OcrWarning(
                 code=WarningCode.UNKNOWN_PLAYER_ALIAS,

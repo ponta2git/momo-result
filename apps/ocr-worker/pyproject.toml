@@ -1,0 +1,94 @@
+[project]
+name = "momo-ocr"
+version = "0.1.0"
+description = "OCR worker for momo-result"
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+  "opencv-python-headless>=4.12.0.88",
+  "pillow>=12.0.0",
+]
+
+[project.scripts]
+momo-ocr = "momo_ocr.main:main"
+
+[dependency-groups]
+dev = [
+  "mypy>=1.19.0",
+  "pytest>=9.0.2",
+  "ruff>=0.14.9",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+fix = true
+show-fixes = true
+
+[tool.ruff.format]
+docstring-code-format = true
+line-ending = "lf"
+quote-style = "double"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+  # Project docs and tests should explain behavior, not satisfy boilerplate docstring quotas.
+  "D",
+  # Ruff formatter owns comma and quote layout.
+  "COM812",
+  "ISC001",
+  # With `from __future__ import annotations`, these create noisy import churn
+  # without improving correctness for this small worker.
+  "TC001",
+  "TC002",
+  "TC003",
+  # Japanese user-facing messages are expected in OCR/domain code.
+  "RUF001",
+  "RUF002",
+  "RUF003",
+]
+fixable = ["ALL"]
+unfixable = [
+  # Do not remove commented-out code automatically; it may hide useful calibration notes.
+  "ERA001",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+  "PLR2004",
+  "S101",
+  "S108",
+]
+
+[tool.ruff.lint.pylint]
+max-args = 6
+max-branches = 8
+max-returns = 4
+max-statements = 40
+
+[tool.ruff.lint.flake8-annotations]
+allow-star-arg-any = false
+mypy-init-return = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = [
+  "--strict-config",
+  "--strict-markers",
+]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+warn_unreachable = true
+warn_unused_configs = true
+show_error_codes = true
+pretty = true
+files = ["src", "tests"]

@@ -1,2 +1,9 @@
 samples
+ocr_samples/
 **/.DS_Store
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+**/.ruff_cache/
+apps/ocr-worker/out/
+apps/ocr-worker/local-expected/

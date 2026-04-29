@@ -33,10 +33,30 @@ export type CaptureSlotState = {
   pollAttempts: number;
 };
 
-export const slotDefinitions: Array<{ kind: SlotKind; label: string; accentClass: string }> = [
-  { kind: "total_assets", label: "総資産", accentClass: "from-rail-blue/70 to-sky-300/20" },
-  { kind: "revenue", label: "収益", accentClass: "from-rail-gold/70 to-yellow-300/20" },
-  { kind: "incident_log", label: "事件簿", accentClass: "from-rail-magenta/70 to-fuchsia-300/20" },
+export const slotDefinitions: Array<{
+  kind: SlotKind;
+  label: string;
+  stationLabel: string;
+  accentClass: string;
+}> = [
+  {
+    kind: "total_assets",
+    label: "総資産",
+    stationLabel: "01",
+    accentClass: "from-rail-blue/70 via-rail-blue/35 to-transparent",
+  },
+  {
+    kind: "revenue",
+    label: "収益",
+    stationLabel: "02",
+    accentClass: "from-rail-gold/75 via-rail-gold/35 to-transparent",
+  },
+  {
+    kind: "incident_log",
+    label: "事件簿",
+    stationLabel: "03",
+    accentClass: "from-rail-magenta/70 via-rail-magenta/30 to-transparent",
+  },
 ];
 
 export function createInitialSlot(kind: SlotKind): CaptureSlotState {

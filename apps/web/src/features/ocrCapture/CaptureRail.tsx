@@ -33,6 +33,7 @@ export function CaptureRail({
             key={definition.kind}
             slot={slot}
             label={definition.label}
+            stationLabel={definition.stationLabel}
             accentClass={definition.accentClass}
             draft={drafts[definition.kind]}
             index={index}

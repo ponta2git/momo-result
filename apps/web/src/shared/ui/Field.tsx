@@ -11,7 +11,7 @@ type FieldProps = {
 export function Field({ label, htmlFor, children, error, hint }: FieldProps) {
   return (
     <div>
-      <label htmlFor={htmlFor} className="text-sm font-bold text-white">
+      <label htmlFor={htmlFor} className="text-sm font-bold text-ink-100">
         {label}
       </label>
       <div className="mt-2">{children}</div>

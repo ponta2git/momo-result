@@ -72,7 +72,7 @@ describe("OcrCapturePage", () => {
     const input = await screen.findByLabelText("撮影台の画像をアップロード");
     await userEvent.upload(input, new File(["first"], "first.png", { type: "image/png" }));
     await userEvent.upload(input, new File(["second"], "second.png", { type: "image/png" }));
-    await userEvent.click(screen.getAllByRole("button", { name: "右へ" })[0]!);
+    await userEvent.click(screen.getAllByRole("button", { name: "次の分類へ" })[0]!);
     expect(screen.getByAltText("総資産プレビュー")).toHaveAttribute("src", "blob:second.png");
     expect(screen.getByAltText("収益プレビュー")).toHaveAttribute("src", "blob:first.png");
 

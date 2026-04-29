@@ -6,15 +6,18 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 const variantClasses = {
-  primary: "bg-rail-gold text-night-950 shadow-lg shadow-rail-gold/20 hover:bg-yellow-300",
-  secondary: "border border-white/15 bg-white/[0.06] text-white hover:bg-white/[0.12]",
-  danger: "border border-red-300/40 bg-red-950/50 text-red-50 hover:bg-red-900/60",
+  primary:
+    "border border-rail-gold/70 bg-rail-gold text-night-950 shadow-[0_8px_24px_rgb(234_193_91/0.16)] hover:bg-paper-100 active:bg-rail-gold/90",
+  secondary:
+    "border border-line-soft bg-night-800/80 text-ink-100 hover:border-white/18 hover:bg-night-700/80 active:bg-night-800",
+  danger:
+    "border border-red-300/35 bg-red-950/42 text-red-50 hover:border-red-200/50 hover:bg-red-900/55",
 };
 
 export function Button({ children, className = "", variant = "primary", ...props }: ButtonProps) {
   return (
     <button
-      className={`inline-flex items-center justify-center rounded-full px-4 py-2 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${variantClasses[variant]} ${className}`}
+      className={`inline-flex items-center justify-center rounded-full px-4 py-2 text-sm font-bold transition duration-150 disabled:cursor-not-allowed disabled:opacity-45 ${variantClasses[variant]} ${className}`}
       type="button"
       {...props}
     >

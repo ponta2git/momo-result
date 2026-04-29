@@ -313,9 +313,9 @@ export function OcrCapturePage() {
       <header className="grid gap-6 lg:grid-cols-[1fr_22rem] lg:items-end">
         <div>
           <p className="font-display text-sm tracking-[0.55em] text-rail-gold uppercase">
-            Midnight Command Rail
+            Result Capture Desk
           </p>
-          <h1 className="mt-4 max-w-4xl text-4xl font-black tracking-tight text-white sm:text-6xl">
+          <h1 className="mt-4 max-w-4xl text-4xl font-black tracking-tight text-ink-100 sm:text-6xl">
             桃鉄OCR取り込みコンソール
           </h1>
           <p className="mt-4 max-w-2xl text-base leading-7 text-ink-300">
@@ -324,6 +324,29 @@ export function OcrCapturePage() {
         </div>
         <DevUserPicker force={authError?.status === 401} />
       </header>
+
+      <nav
+        className="mt-8 rounded-[1.75rem] border border-line-soft bg-night-900/58 px-4 py-3"
+        aria-label="OCR取り込みの流れ"
+      >
+        <ol className="grid gap-3 text-sm text-ink-200 sm:grid-cols-3">
+          {[
+            ["01", "撮影台", "キャプチャーボードから静止画を作る"],
+            ["02", "分類トレイ", "3枚を正しいホームへ並べる"],
+            ["03", "OCR下書き", "明示ボタンで保存する"],
+          ].map(([step, title, description]) => (
+            <li key={step} className="flex items-center gap-3">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-line-strong bg-rail-gold/10 font-display text-xs text-rail-gold">
+                {step}
+              </span>
+              <span>
+                <span className="block font-bold text-ink-100">{title}</span>
+                <span className="block text-xs text-ink-400">{description}</span>
+              </span>
+            </li>
+          ))}
+        </ol>
+      </nav>
 
       {authError ? (
         <div
@@ -342,7 +365,9 @@ export function OcrCapturePage() {
       <Card className="mt-8">
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-xs font-bold tracking-[0.3em] text-ink-300 uppercase">Setup</p>
+            <p className="text-xs font-bold tracking-[0.3em] text-ink-300 uppercase">
+              Match Context
+            </p>
             <h2 className="mt-1 text-2xl font-black">試合コンテキスト</h2>
           </div>
           {authQuery.data ? (
@@ -379,12 +404,21 @@ export function OcrCapturePage() {
               />
             </div>
           </div>
-          <div className="rounded-[1.5rem] border border-white/10 bg-black/20 p-4">
-            <h3 className="text-lg font-black">次の操作</h3>
-            <ol className="mt-3 space-y-3 text-sm leading-6 text-ink-200">
-              <li>1. 3枚を撮影して分類トレイへ置く</li>
-              <li>2. 画像をドラッグして「総資産 → 収益 → 事件簿」に合わせる</li>
-              <li>3. 下のボタンでOCR命令と下書き保存を実行する</li>
+          <div className="rounded-[1.5rem] border border-line-soft bg-capture-black/34 p-4">
+            <h3 className="text-lg font-black">運転手順</h3>
+            <ol className="mt-4 space-y-4 text-sm leading-6 text-ink-200">
+              {[
+                ["撮影", "3枚を撮影して分類トレイへ置く"],
+                ["入替", "画像をドラッグして総資産 → 収益 → 事件簿に合わせる"],
+                ["保存", "OCR命令と下書き保存を明示実行する"],
+              ].map(([label, text]) => (
+                <li key={label} className="grid grid-cols-[3.5rem_1fr] gap-3">
+                  <span className="rounded-full border border-rail-gold/30 bg-rail-gold/10 px-3 py-1 text-center text-xs font-bold text-rail-gold">
+                    {label}
+                  </span>
+                  <span>{text}</span>
+                </li>
+              ))}
             </ol>
             <div className="mt-5 flex flex-wrap gap-2">
               <ImageInput
@@ -407,7 +441,10 @@ export function OcrCapturePage() {
             OCR送信時は、画像が置かれているトレイ名を画像種別ヒントとして送ります。
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-full border border-line-soft bg-night-900/72 px-3 py-2 text-sm font-bold text-ink-200">
+            OCR待ち {ocrReadyCount}/3
+          </span>
           <Button
             onClick={handleStartOcr}
             disabled={ocrReadyCount === 0 || hasWorkingSlot || uploadMutation.isPending}

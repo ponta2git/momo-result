@@ -11,6 +11,7 @@ import { StatusBadge } from "@/shared/ui/StatusBadge";
 type CaptureSlotCardProps = {
   slot: CaptureSlotState;
   label: string;
+  stationLabel: string;
   accentClass: string;
   draft?: OcrDraftResponse | undefined;
   index: number;
@@ -29,6 +30,7 @@ const sourceLabels = {
 export function CaptureSlotCard({
   slot,
   label,
+  stationLabel,
   accentClass,
   draft,
   index,
@@ -68,11 +70,18 @@ export function CaptureSlotCard({
     >
       <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${accentClass}`} />
       <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-xs font-black tracking-[0.28em] text-ink-300 uppercase">
-            Classification Tray
-          </p>
-          <h2 className="mt-1 text-2xl font-black">{label}</h2>
+        <div className="min-w-0">
+          <div className="flex items-center gap-3">
+            <span className="grid h-10 w-10 place-items-center rounded-full border border-line-strong bg-rail-gold/12 font-display text-sm text-rail-gold">
+              {stationLabel}
+            </span>
+            <div>
+              <p className="text-xs font-black tracking-[0.28em] text-ink-300 uppercase">
+                Classification Station
+              </p>
+              <h2 className="mt-0.5 text-2xl font-black">{label}</h2>
+            </div>
+          </div>
           <p className="mt-1 text-sm text-ink-300">
             ここに置いた画像は「{label}」としてOCRへ送ります。
           </p>
@@ -82,7 +91,7 @@ export function CaptureSlotCard({
 
       {slot.previewUrl ? (
         <div
-          className="mt-4 cursor-grab rounded-2xl border border-white/10 bg-black/20 p-2 active:cursor-grabbing"
+          className="mt-4 cursor-grab rounded-2xl border border-line-soft bg-capture-black/58 p-2 active:cursor-grabbing"
           draggable
           onDragStart={handleDragStart}
         >
@@ -97,8 +106,12 @@ export function CaptureSlotCard({
           </div>
         </div>
       ) : (
-        <div className="mt-4 grid aspect-video place-items-center rounded-2xl border border-dashed border-white/15 bg-white/[0.03] text-sm text-ink-300">
-          撮影した画像をここへドロップ
+        <div className="mt-4 grid aspect-video place-items-center rounded-2xl border border-dashed border-line-soft bg-capture-black/38 px-4 text-center text-sm text-ink-300">
+          <span>
+            撮影した画像をここへドロップ
+            <br />
+            <span className="text-xs text-ink-400">空きホーム</span>
+          </span>
         </div>
       )}
 
@@ -111,14 +124,14 @@ export function CaptureSlotCard({
           onClick={() => onMoveImage(-1)}
           disabled={!hasImage || index === 0}
         >
-          左へ
+          前の分類へ
         </Button>
         <Button
           variant="secondary"
           onClick={() => onMoveImage(1)}
           disabled={!hasImage || index === total - 1}
         >
-          右へ
+          次の分類へ
         </Button>
       </div>
 

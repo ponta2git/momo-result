@@ -131,7 +131,7 @@ export function CameraCapture({ slotLabel, onSelect, onValidationError }: Camera
 
   return (
     <div className="space-y-3">
-      <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/30">
+      <div className="overflow-hidden rounded-2xl border border-line-soft bg-capture-black/70">
         <video
           ref={videoRef}
           className="aspect-video w-full object-cover"
@@ -146,15 +146,15 @@ export function CameraCapture({ slotLabel, onSelect, onValidationError }: Camera
         <Button variant="secondary" onClick={startCamera} disabled={starting}>
           {starting ? "起動中…" : active ? "カメラ再開" : "カメラ開始"}
         </Button>
-        <Button variant="secondary" onClick={capture} disabled={!active}>
-          撮影
+        <Button onClick={capture} disabled={!active}>
+          静止画を撮影
         </Button>
         <Button variant="secondary" onClick={stop} disabled={!active}>
           停止
         </Button>
       </div>
       <p className="text-xs text-ink-300">
-        EXIF orientation はこの薄切りでは未対応です。横向き画像は後続で補正します。
+        撮影した画像は、空いている分類トレイへ左から順に入ります。
       </p>
     </div>
   );

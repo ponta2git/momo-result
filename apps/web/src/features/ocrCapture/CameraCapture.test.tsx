@@ -82,19 +82,19 @@ describe("CameraCapture", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "撮影" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "静止画を撮影" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "停止" })).toBeDisabled();
 
     await user.click(screen.getByRole("button", { name: "カメラ開始" }));
 
-    expect(screen.getByRole("button", { name: "撮影" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "静止画を撮影" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "停止" })).toBeEnabled();
 
     await user.click(screen.getByRole("button", { name: "停止" }));
 
     expect(track.stop).toHaveBeenCalled();
     expect(pauseSpy).toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: "撮影" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "静止画を撮影" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "停止" })).toBeDisabled();
   });
 
@@ -114,7 +114,7 @@ describe("CameraCapture", () => {
 
     await user.click(screen.getByRole("button", { name: "カメラ開始" }));
     setVideoReady(false);
-    await user.click(screen.getByRole("button", { name: "撮影" }));
+    await user.click(screen.getByRole("button", { name: "静止画を撮影" }));
 
     expect(onSelect).not.toHaveBeenCalled();
     expect(onValidationError).toHaveBeenCalledWith(expect.stringContaining("カメラの準備"));
@@ -154,7 +154,7 @@ describe("CameraCapture", () => {
     render(<CameraCapture slotLabel="総資産" onSelect={onSelect} onValidationError={vi.fn()} />);
 
     await user.click(screen.getByRole("button", { name: "カメラ開始" }));
-    await user.click(screen.getByRole("button", { name: "撮影" }));
+    await user.click(screen.getByRole("button", { name: "静止画を撮影" }));
 
     expect(onSelect).toHaveBeenCalledTimes(1);
     const [file, source] = onSelect.mock.calls[0]!;

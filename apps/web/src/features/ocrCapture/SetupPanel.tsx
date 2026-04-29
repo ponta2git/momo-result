@@ -16,7 +16,8 @@ type SetupPanelProps = {
   onChange: (value: SetupFormValues) => void;
 };
 
-const selectClass = "w-full rounded-2xl border border-white/10 bg-night-950 px-4 py-3 text-white";
+const selectClass =
+  "w-full rounded-2xl border border-line-soft bg-capture-black/45 px-4 py-3 text-ink-100 transition hover:border-white/18";
 
 export function SetupPanel({ value, onChange }: SetupPanelProps) {
   const selectedGame = useMemo(() => findGameTitle(value.gameTitleId), [value.gameTitleId]);

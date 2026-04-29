@@ -21,7 +21,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     if (this.state.error) {
       return (
         <main className="mx-auto max-w-3xl px-6 py-16">
-          <div className="rounded-3xl border border-red-300/40 bg-red-950/50 p-8 shadow-2xl">
+          <div className="rounded-3xl border border-red-300/35 bg-red-950/42 p-8 shadow-[0_20px_70px_rgb(0_0_0/0.18)]">
             <p className="text-sm font-bold tracking-[0.35em] text-red-200 uppercase">
               Application Error
             </p>

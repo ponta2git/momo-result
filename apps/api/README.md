@@ -35,7 +35,7 @@ sbt apiOpenApiCheck
 | `HTTP_HOST` | `0.0.0.0` | bind host |
 | `HTTP_PORT` | `8080` | bind port |
 | `IMAGE_TMP_DIR` | `/tmp/momo-result/uploads` | OCR Worker と共有する一時画像ディレクトリ |
-| `DEV_MEMBER_IDS` | `ponta,member-2,member-3,member-4` 相当 | 開発用ログイン可能ID |
+| `DEV_MEMBER_IDS` | `ponta,akane-mami,otaka,eu` 相当 | 開発用ログイン可能ID（固定4名: ぽんた / あかねまみ / おーたか / いーゆー） |
 
 `APP_ENV=prod` では開発用認証は拒否されます。
 
@@ -43,7 +43,7 @@ sbt apiOpenApiCheck
 
 ```sh
 cd apps/api
-APP_ENV=dev DEV_MEMBER_IDS=ponta,member-2,member-3,member-4 sbt run
+APP_ENV=dev DEV_MEMBER_IDS=ponta,akane-mami,otaka,eu sbt run
 ```
 
 例:

@@ -42,6 +42,6 @@ object AppConfig:
           devMemberIds = env
             .get("DEV_MEMBER_IDS")
             .map(_.split(",").iterator.map(_.trim).filter(_.nonEmpty).toList)
-            .getOrElse(List("ponta", "member-2", "member-3", "member-4"))
+            .getOrElse(List("ponta", "akane-mami", "otaka", "eu"))
         )
       }

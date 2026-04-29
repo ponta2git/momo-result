@@ -22,7 +22,7 @@ final class HttpAppSpec extends CatsEffectSuite:
         httpHost = "127.0.0.1",
         httpPort = 0,
         imageTmpDir = dir,
-        devMemberIds = List("ponta", "member-2", "member-3", "member-4")
+        devMemberIds = List("ponta", "akane-mami", "otaka", "eu")
       )
       HttpApp.resource[IO](config)
     }

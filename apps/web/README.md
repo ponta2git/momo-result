@@ -20,6 +20,8 @@ Vite proxies `/api`, `/healthz`, and `/openapi.yaml` to `http://localhost:8080`,
 
 The review screen can continue with missing draft categories; those fields become manual-entry values. Final confirmation still requires a selected held event and valid fixed-four-player result.
 
+In Vite dev mode, `/ocr/new` also shows `サンプル下書きで確認`. This opens `/review/dev-sample?sample=1` with local fixture OCR payloads so the merge/review UI can be checked without a running OCR worker or valid result screenshots.
+
 ## Dev user
 
 The API dev auth header is resolved in this order:

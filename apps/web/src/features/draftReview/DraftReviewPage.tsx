@@ -12,6 +12,7 @@ import { mergeDrafts } from "@/features/draftReview/mergeDrafts";
 import type { DraftByKind, ReviewPlayer } from "@/features/draftReview/mergeDrafts";
 import { confirmMatchSchema, toConfirmMatchRequest } from "@/features/draftReview/schema";
 import type { ConfirmMatchFormValues } from "@/features/draftReview/schema";
+import { createSampleDraftMap } from "@/features/draftReview/sampleDrafts";
 import {
   findGameTitle,
   fixedMembers,
@@ -30,7 +31,12 @@ import { LiveRegion } from "@/shared/ui/LiveRegion";
 
 const inputClass =
   "w-full rounded-2xl border border-line-soft bg-capture-black/45 px-3 py-2 text-sm text-ink-100 transition hover:border-white/18";
+const inputAttentionClass =
+  "w-full rounded-2xl border border-rail-magenta/55 bg-rail-magenta/10 px-3 py-2 text-sm text-ink-100 transition hover:border-rail-magenta/70";
+const inputMissingClass =
+  "w-full rounded-2xl border border-rail-gold/55 bg-rail-gold/10 px-3 py-2 text-sm text-ink-100 transition hover:border-rail-gold/70";
 const labelClass = "text-xs font-bold tracking-[0.22em] text-ink-300 uppercase";
+const confidenceThresholdLow = 0.85;
 
 const incidentColumns = [
   ["destination", "目的地"],
@@ -118,6 +124,26 @@ function draftsByKind(
   ) as DraftByKind;
 }
 
+function confidenceInputClass(confidence: number | null | undefined): string {
+  if (confidence == null) {
+    return inputMissingClass;
+  }
+  if (confidence < confidenceThresholdLow) {
+    return inputAttentionClass;
+  }
+  return inputClass;
+}
+
+function confidenceLabel(confidence: number | null | undefined): string {
+  if (confidence == null) {
+    return "手入力";
+  }
+  if (confidence < confidenceThresholdLow) {
+    return `低信頼 ${(confidence * 100).toFixed(0)}%`;
+  }
+  return `OCR ${(confidence * 100).toFixed(0)}%`;
+}
+
 type ConfirmDialogProps = {
   values: ConfirmMatchFormValues;
   heldEvent?: HeldEventResponse | undefined;
@@ -173,6 +199,7 @@ export function DraftReviewPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const ids = useMemo(() => draftIdsFromParams(searchParams), [searchParams]);
+  const useSampleDrafts = import.meta.env.DEV && searchParams.get("sample") === "1";
   const idList = useMemo(() => slotKinds.flatMap((kind) => (ids[kind] ? [ids[kind]] : [])), [ids]);
   const [notice, setNotice] = useState("");
   const [validationMessage, setValidationMessage] = useState("");
@@ -215,7 +242,7 @@ export function DraftReviewPage() {
   const draftsQuery = useQuery({
     queryKey: ["ocr-drafts-bulk", idList.join(",")],
     queryFn: () => getOcrDraftsBulk(idList),
-    enabled: idList.length > 0,
+    enabled: !useSampleDrafts && idList.length > 0,
     retry: false,
   });
   const createEventMutation = useMutation({
@@ -240,10 +267,14 @@ export function DraftReviewPage() {
   });
 
   const draftMap = useMemo(
-    () => draftsByKind(ids, draftsQuery.data?.items),
-    [draftsQuery.data?.items, ids],
+    () => (useSampleDrafts ? createSampleDraftMap() : draftsByKind(ids, draftsQuery.data?.items)),
+    [draftsQuery.data?.items, ids, useSampleDrafts],
   );
   const merged = useMemo(() => mergeDrafts(draftMap), [draftMap]);
+  const originalByMember = useMemo(
+    () => new Map(merged.players.map((player) => [player.memberId, player])),
+    [merged.players],
+  );
   const selectedGame =
     gameTitles.find((gameTitle) => gameTitle.displayName === values.gameTitle) ??
     findGameTitle(defaultSetupValues.gameTitleId);
@@ -256,10 +287,31 @@ export function DraftReviewPage() {
     : undefined;
 
   useEffect(() => {
-    if (draftsQuery.isSuccess) {
+    if (draftsQuery.isSuccess || useSampleDrafts) {
       setValues((current) => ({ ...current, players: merged.players.map(toFormPlayer) }));
     }
-  }, [draftsQuery.isSuccess, merged.players]);
+  }, [draftsQuery.isSuccess, merged.players, useSampleDrafts]);
+
+  const readiness = confirmMatchSchema.safeParse(values);
+  const readinessIssues = readiness.success
+    ? []
+    : readiness.error.issues.map((issue) => issue.message);
+  const missingDraftCount = slotKinds.filter((kind) => !draftMap[kind]).length;
+  const attentionCount = merged.players.reduce((count, player) => {
+    const confidenceValues = [
+      player.confidence.rank,
+      player.confidence.totalAssets,
+      player.confidence.revenue,
+      ...Object.values(player.confidence.incidents),
+    ];
+    return (
+      count +
+      confidenceValues.filter(
+        (confidence) => confidence == null || confidence < confidenceThresholdLow,
+      ).length +
+      player.warnings.length
+    );
+  }, missingDraftCount);
 
   function patchValue(patch: Partial<ConfirmMatchFormValues>) {
     setValues((current) => ({ ...current, ...patch }));
@@ -329,6 +381,11 @@ export function DraftReviewPage() {
           <p className="mt-4 max-w-2xl text-base leading-7 text-ink-300">
             3つの下書きを1試合分にまとめ、開催履歴・順位・金額・事件簿を同じ画面で確認して確定します。
           </p>
+          {useSampleDrafts ? (
+            <p className="mt-3 inline-flex rounded-full border border-rail-gold/35 bg-rail-gold/10 px-3 py-1 text-sm font-bold text-rail-gold">
+              開発用サンプル下書きで表示中
+            </p>
+          ) : null}
         </div>
         <DevUserPicker force={authError?.status === 401} />
       </header>
@@ -357,6 +414,34 @@ export function DraftReviewPage() {
           <p className="mt-1">{error?.detail}</p>
         </div>
       ))}
+
+      <section className="mt-8 grid gap-3 md:grid-cols-3" aria-label="確認ステータス">
+        <div className="rounded-[1.5rem] border border-line-soft bg-night-900/72 p-4">
+          <p className={labelClass}>Required</p>
+          <p className="mt-1 text-2xl font-black text-ink-100">
+            {readiness.success ? "確定可能" : `${readinessIssues.length}件確認`}
+          </p>
+          <p className="mt-2 text-sm leading-6 text-ink-300">
+            {readiness.success
+              ? "開催履歴、4人全員、順位、プレー順が揃っています。"
+              : readinessIssues.slice(0, 2).join(" / ")}
+          </p>
+        </div>
+        <div className="rounded-[1.5rem] border border-rail-magenta/25 bg-rail-magenta/10 p-4">
+          <p className={labelClass}>Review Hints</p>
+          <p className="mt-1 text-2xl font-black text-pink-50">修正推奨 {attentionCount}</p>
+          <p className="mt-2 text-sm leading-6 text-pink-100/90">
+            金色は手入力、桃色は低信頼度です。セルを直接編集してください。
+          </p>
+        </div>
+        <div className="rounded-[1.5rem] border border-rail-gold/25 bg-rail-gold/10 p-4">
+          <p className={labelClass}>Missing Drafts</p>
+          <p className="mt-1 text-2xl font-black text-yellow-50">{missingDraftCount}カテゴリ</p>
+          <p className="mt-2 text-sm leading-6 text-yellow-100/90">
+            下書きがない分類は0/初期値で始め、手入力で確定できます。
+          </p>
+        </div>
+      </section>
 
       <section className="mt-8 grid gap-6 xl:grid-cols-[minmax(22rem,0.8fr)_minmax(0,1.2fr)]">
         <Card>
@@ -468,6 +553,11 @@ export function DraftReviewPage() {
                       判定: {draft.detectedImageType}
                     </span>
                   ) : null}
+                  {!draft ? (
+                    <span className="mt-3 inline-flex rounded-full border border-rail-gold/30 bg-rail-gold/10 px-3 py-1 text-xs font-bold text-rail-gold">
+                      手入力
+                    </span>
+                  ) : null}
                 </div>
               );
             })}
@@ -573,26 +663,50 @@ export function DraftReviewPage() {
                   </select>
                 </td>
                 {(["playOrder", "rank", "totalAssetsManYen", "revenueManYen"] as const).map(
-                  (key) => (
-                    <td key={key} className="px-2 py-3">
-                      <input
-                        className={inputClass}
-                        min={key === "playOrder" || key === "rank" ? 1 : 0}
-                        max={key === "playOrder" || key === "rank" ? 4 : undefined}
-                        type="number"
-                        value={player[key]}
-                        onChange={(event) =>
-                          patchPlayer(playerIndex, { [key]: Number(event.target.value) })
-                        }
-                      />
-                    </td>
-                  ),
+                  (key) => {
+                    const original = originalByMember.get(player.memberId);
+                    const confidence =
+                      key === "rank"
+                        ? original?.confidence.rank
+                        : key === "totalAssetsManYen"
+                          ? original?.confidence.totalAssets
+                          : key === "revenueManYen"
+                            ? original?.confidence.revenue
+                            : 1;
+                    return (
+                      <td key={key} className="px-2 py-3">
+                        <input
+                          aria-label={`${memberName(player.memberId)} ${key}`}
+                          className={confidenceInputClass(confidence)}
+                          min={key === "playOrder" || key === "rank" ? 1 : 0}
+                          max={key === "playOrder" || key === "rank" ? 4 : undefined}
+                          title={confidenceLabel(confidence)}
+                          type="number"
+                          value={player[key]}
+                          onChange={(event) =>
+                            patchPlayer(playerIndex, { [key]: Number(event.target.value) })
+                          }
+                        />
+                        {key !== "playOrder" ? (
+                          <p className="mt-1 text-[0.68rem] text-ink-400">
+                            {confidenceLabel(confidence)}
+                          </p>
+                        ) : null}
+                      </td>
+                    );
+                  },
                 )}
-                {incidentColumns.map(([key]) => (
+                {incidentColumns.map(([key, label]) => (
                   <td key={key} className="px-2 py-3 last:rounded-r-2xl">
                     <input
-                      className={inputClass}
+                      aria-label={`${memberName(player.memberId)} ${key}`}
+                      className={confidenceInputClass(
+                        originalByMember.get(player.memberId)?.confidence.incidents[label],
+                      )}
                       min={0}
+                      title={confidenceLabel(
+                        originalByMember.get(player.memberId)?.confidence.incidents[label],
+                      )}
                       type="number"
                       value={player.incidents[key]}
                       onChange={(event) =>
@@ -621,7 +735,10 @@ export function DraftReviewPage() {
           <p className="text-sm text-ink-300">
             開催履歴・4人全員・順位1〜4・プレー順1〜4が揃うと確定できます。
           </p>
-          <Button onClick={handlePreConfirm} disabled={confirmMutation.isPending}>
+          <Button
+            onClick={handlePreConfirm}
+            disabled={confirmMutation.isPending || !readiness.success}
+          >
             確定前チェックへ進む
           </Button>
         </div>

@@ -3,9 +3,9 @@ package momo.api.http
 import cats.effect.IO
 import cats.effect.Resource
 import io.circe.Json
+import momo.api.MomoCatsEffectSuite
 import momo.api.config.AppConfig
 import momo.api.config.AppEnv
-import munit.CatsEffectSuite
 import org.http4s.Method
 import org.http4s.Request
 import org.http4s.Status
@@ -14,7 +14,7 @@ import org.http4s.implicits.*
 
 import java.nio.file.Files
 
-final class HttpAppSpec extends CatsEffectSuite:
+final class HttpAppSpec extends MomoCatsEffectSuite:
   private def app =
     Resource.eval(IO.blocking(Files.createTempDirectory("momo-api-http"))).flatMap { dir =>
       val config = AppConfig(

@@ -3,16 +3,16 @@ package momo.api.usecases
 import cats.effect.IO
 import io.circe.Json
 import momo.api.adapters.InMemoryOcrDraftsRepository
+import momo.api.MomoCatsEffectSuite
 import momo.api.domain.OcrDraft
 import momo.api.domain.ScreenType
 import momo.api.domain.ids.*
 import momo.api.errors.AppError
-import munit.CatsEffectSuite
 import sttp.model.StatusCode
 
 import java.time.Instant
 
-final class GetOcrDraftsBulkSpec extends CatsEffectSuite:
+final class GetOcrDraftsBulkSpec extends MomoCatsEffectSuite:
   private val timestamp = Instant.parse("2026-04-29T11:40:16Z")
 
   private def draft(id: String, jobId: String): OcrDraft =

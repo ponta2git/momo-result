@@ -333,6 +333,10 @@ export function OcrCapturePage() {
     navigate(`/review/${Date.now().toString(36)}?${params.toString()}`);
   }
 
+  function handleSampleReview() {
+    navigate(`/review/dev-sample?sample=1`);
+  }
+
   return (
     <main className="mx-auto max-w-[1440px] px-4 py-8 sm:px-6 lg:px-8">
       <LiveRegion message={notice || uploadMutation.status} />
@@ -480,6 +484,11 @@ export function OcrCapturePage() {
           <Button variant="secondary" onClick={handleReviewDrafts} disabled={draftCount === 0}>
             下書きを確認する
           </Button>
+          {import.meta.env.DEV ? (
+            <Button variant="secondary" onClick={handleSampleReview}>
+              サンプル下書きで確認
+            </Button>
+          ) : null}
           <Button variant="secondary" onClick={handleReset}>
             撮影画像を全消去して次の試合へ
           </Button>

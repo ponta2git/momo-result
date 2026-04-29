@@ -5,15 +5,15 @@ import momo.api.adapters.InMemoryOcrDraftsRepository
 import momo.api.adapters.InMemoryOcrJobsRepository
 import momo.api.adapters.InMemoryQueueProducer
 import momo.api.adapters.LocalFsImageStore
+import momo.api.MomoCatsEffectSuite
 import momo.api.domain.OcrJobHints
 import momo.api.domain.ids.*
 import momo.api.errors.AppError
-import munit.CatsEffectSuite
 
 import java.nio.file.Files
 import java.time.Instant
 
-final class CreateOcrJobSpec extends CatsEffectSuite:
+final class CreateOcrJobSpec extends MomoCatsEffectSuite:
   private val pngBytes: Array[Byte] =
     Array[Byte](0x89.toByte, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)
 

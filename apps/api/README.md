@@ -15,6 +15,8 @@ Scala 3 / sbt / Tapir / http4s / Cats Effect による API サーバーです。
 
 Discord OAuth、PostgreSQL/Redis の本物アダプタは次フェーズで実装します。
 
+CIでは stale class 起因のハングを避けるため、`clean Test/compile` を実行してからテストします。Cats Effect 系のMUnitテストは共通 `MomoCatsEffectSuite` で30秒タイムアウトを設定しています。
+
 ## 開発コマンド
 
 ```sh

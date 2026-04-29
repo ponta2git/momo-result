@@ -3,9 +3,9 @@ package momo.api.http
 import cats.effect.IO
 import cats.effect.Resource
 import io.circe.Json
+import momo.api.MomoCatsEffectSuite
 import momo.api.config.AppConfig
 import momo.api.config.AppEnv
-import munit.CatsEffectSuite
 import org.http4s.Header
 import org.http4s.Method
 import org.http4s.Request
@@ -16,7 +16,7 @@ import org.typelevel.ci.CIString
 
 import java.nio.file.Files
 
-final class HeldEventsAndMatchesSpec extends CatsEffectSuite:
+final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite:
   private def app =
     Resource.eval(IO.blocking(Files.createTempDirectory("momo-api-held"))).flatMap { dir =>
       val config = AppConfig(

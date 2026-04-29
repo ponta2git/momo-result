@@ -31,4 +31,23 @@ describe("DraftReviewPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "確定前チェックへ進む" }));
     expect(screen.getAllByText("開催履歴を選択してください").length).toBeGreaterThan(0);
   });
+
+  it("renders the development sample drafts without OCR worker data", async () => {
+    window.localStorage.setItem("momoresult.devUser", "ponta");
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/review/dev-sample?sample=1"]}>
+          <Routes>
+            <Route path="/review/:matchSessionId" element={<DraftReviewPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("開発用サンプル下書きで表示中")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("あかねまみ")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("15420")).toBeInTheDocument();
+    expect(screen.getByText(/修正推奨/)).toBeInTheDocument();
+  });
 });

@@ -17,6 +17,7 @@ on:
 jobs:
   web:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
@@ -27,9 +28,16 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+        timeout-minutes: 5
       - run: pnpm --filter web generate:api
+        timeout-minutes: 2
       - run: pnpm --filter web format:check
+        timeout-minutes: 2
       - run: pnpm --filter web lint
+        timeout-minutes: 2
       - run: pnpm --filter web typecheck
+        timeout-minutes: 5
       - run: pnpm --filter web test:run
+        timeout-minutes: 5
       - run: pnpm --filter web build
+        timeout-minutes: 5

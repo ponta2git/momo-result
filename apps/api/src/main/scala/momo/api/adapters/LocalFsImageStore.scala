@@ -59,7 +59,7 @@ final class LocalFsImageStore[F[_]: Sync](root: Path) extends ImageStore[F]:
           Right(imageType)
 
 object LocalFsImageStore:
-  val MaxBytes = 500 * 1024
+  val MaxBytes = 3 * 1024 * 1024
 
   final case class ImageType(mediaType: String, extension: String)
 

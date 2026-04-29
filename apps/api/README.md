@@ -8,7 +8,7 @@ Scala 3 / sbt / Tapir / http4s / Cats Effect による API サーバーです。
 - `GET /openapi.yaml`
 - 開発用スタブ認証 `X-Dev-User`
 - 開発用 CSRF `X-CSRF-Token: dev`
-- 一時画像保存（PNG/JPEG/WebP、500KB上限、マジックバイト検証）
+- 一時画像保存（PNG/JPEG/WebP、3MB上限、マジックバイト検証）
 - OCRジョブ作成、取得、キャンセル
 - OCRドラフト取得
 - インメモリのジョブ・ドラフト・キュープロデューサ

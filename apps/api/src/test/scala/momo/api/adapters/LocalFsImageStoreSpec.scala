@@ -36,7 +36,7 @@ final class LocalFsImageStoreSpec extends CatsEffectSuite:
     }
   }
 
-  test("rejects images larger than 500KB") {
+  test("rejects images larger than 3MB") {
     IO.blocking(Files.createTempDirectory("momo-api-image-store")).flatMap { dir =>
       val store = LocalFsImageStore[IO](dir)
       val tooLarge = Array.fill[Byte](LocalFsImageStore.MaxBytes + 1)(0.toByte)

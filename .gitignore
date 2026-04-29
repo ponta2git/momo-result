@@ -13,3 +13,5 @@ apps/ocr-worker/local-expected/
 .vscode/
 **/target/
 **/metals.sbt
+node_modules
+*.tsbuildinfo

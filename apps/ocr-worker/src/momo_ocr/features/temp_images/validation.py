@@ -10,7 +10,7 @@ from momo_ocr.features.temp_images.models import ImageMetadata
 from momo_ocr.shared.errors import FailureCode, OcrError
 
 ALLOWED_FORMATS = {"JPEG", "PNG", "WEBP"}
-MAX_IMAGE_BYTES = 500 * 1024
+MAX_IMAGE_BYTES = 3 * 1024 * 1024
 
 
 def read_image_metadata(path: Path, *, enforce_size_limit: bool = True) -> ImageMetadata:
@@ -21,7 +21,7 @@ def read_image_metadata(path: Path, *, enforce_size_limit: bool = True) -> Image
 
     size_bytes = path.stat().st_size
     if enforce_size_limit and size_bytes > MAX_IMAGE_BYTES:
-        raise OcrError(FailureCode.IMAGE_TOO_LARGE, "Image exceeds the 500KB upload limit.")
+        raise OcrError(FailureCode.IMAGE_TOO_LARGE, "Image exceeds the 3MB upload limit.")
 
     try:
         with Image.open(path) as image:

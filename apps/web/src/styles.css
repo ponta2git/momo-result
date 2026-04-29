@@ -1,0 +1,39 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --font-display: "Dela Gothic One", "Zen Kaku Gothic New", sans-serif;
+  --color-night-950: #070a12;
+  --color-night-900: #0b1020;
+  --color-night-800: #11182b;
+  --color-rail-blue: #38bdf8;
+  --color-rail-gold: #f6c453;
+  --color-rail-magenta: #e879f9;
+  --color-ink-100: #f5f7fb;
+  --color-ink-300: #c7d2fe;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background:
+    radial-gradient(circle at 20% 10%, rgb(56 189 248 / 18%), transparent 28rem),
+    radial-gradient(circle at 80% 0%, rgb(232 121 249 / 12%), transparent 30rem),
+    linear-gradient(135deg, #070a12 0%, #0b1020 58%, #101827 100%);
+  color: var(--color-ink-100);
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+*:focus-visible {
+  outline: 3px solid var(--color-rail-gold);
+  outline-offset: 3px;
+}

@@ -17,7 +17,7 @@ DBマイグレーションの正本は MVP 期間中 summit 側にある（`AGEN
 | 責務 | 所在 |
 | --- | --- |
 | Discord OAuth、固定4名の認可、CSRF、API公開 | API |
-| 画像アップロード受け取り（500KB制限・形式検証）、一時パス生成 | API |
+| 画像アップロード受け取り（3MB制限・形式検証）、一時パス生成 | API |
 | `ocr_jobs` 行の作成（status=`queued`）、Redis Streams への投入 | API（プロデューサ） |
 | キャンセル要求（`cancelled` への遷移要求） | API |
 | 一時画像の物理ファイル管理（書き込み）と存続保証 | API |
@@ -218,7 +218,7 @@ queued ──► running ──► succeeded
 ## 5. 一時画像規約
 
 - API は `imagePath` に **ワーカーから読める絶対パス**を渡す。同一 Fly VM 内ファイルシステム共有が前提（supervisord 配下の同居プロセス）。
-- 上限 500KB / PNG・JPEG・WebP（`AGENTS.md` §6.2）。検証は API 側責務。
+- 上限 3MB / PNG・JPEG・WebP（`AGENTS.md` §6.2）。検証は API 側責務。
 - ワーカーは終端遷移後に **best-effort で削除** する（成功/失敗/キャンセル問わず）。削除失敗はジョブ失敗にしない（ログに残すのみ）。
 - VM 再起動等で画像が消えた場合、ワーカーは `TEMP_IMAGE_MISSING` で `failed` 終端させ、`retryable=false` / `user_action=「画像を再アップロードしてください」` を返す。
 - API 側は **OCR 完了前のユーザー再ダウンロード**用に画像を保持する（要求）。完了後はサーバから消去し恒久保存しない。
@@ -235,7 +235,7 @@ API はこの enum を**そのまま**保存・分岐する（不明なコード
 | `TEMP_IMAGE_MISSING` | 一時画像が消えた／VM再起動 | false | 「画像を再アップロード」 |
 | `INVALID_IMAGE` | バイト列破損 | false | 「画像を再アップロード」 |
 | `UNSUPPORTED_IMAGE_FORMAT` | 形式違反 | false | 「PNG/JPEG/WebP のみ可」 |
-| `IMAGE_TOO_LARGE` | 500KB 超 | false | 「画像サイズを縮小して再アップロード」 |
+| `IMAGE_TOO_LARGE` | 3MB 超 | false | 「画像サイズを縮小して再アップロード」 |
 | `DECODE_FAILED` | OpenCV/Pillow デコード失敗 | false | 「画像を再アップロード」 |
 | `CATEGORY_UNDETECTED` | 画像種別が判別できない | false | 「画像種別を手動指定」 |
 | `LAYOUT_UNSUPPORTED` | 未対応レイアウト | false | 「対応作品か確認、手入力に切替」 |

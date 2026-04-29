@@ -82,7 +82,7 @@ MVPでは、Discord OAuthログイン、固定4名だけの仲間内運用、開
 - Use SameSite=Lax cookies and require CSRF tokens for state-changing APIs.
 - Never commit secrets.
 - Do not log OAuth tokens, session IDs, CSRF tokens, image content, or secrets.
-- Validate upload type and size; allowed formats are PNG/JPEG/WebP and max size is 500KB per image.
+- Validate upload type and size; allowed formats are PNG/JPEG/WebP and max size is 3MB per image.
 - Add light rate limiting for login, image upload, and CSV/TSV download.
 - Do not swallow failures. Surface user-actionable errors.
 - Physical deletion is allowed only with explicit confirmation.

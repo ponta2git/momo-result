@@ -1,0 +1,65 @@
+import sbt.*
+import sbt.Keys.*
+
+ThisBuild / scalaVersion := "3.3.6"
+ThisBuild / semanticdbEnabled := true
+
+lazy val apiOpenApi = taskKey[File]("Generate OpenAPI from Tapir endpoint definitions")
+lazy val apiOpenApiCheck = taskKey[Unit]("Check that openapi.yaml can be generated")
+
+lazy val root = (project in file("."))
+  .settings(
+    name := "momo-result-api",
+    organization := "momo",
+    scalacOptions ++= Seq(
+      "-deprecation",
+      "-feature",
+      "-unchecked"
+    ),
+    Compile / run / mainClass := Some("momo.api.Main"),
+    Compile / run / fork := true,
+    Compile / run / javaOptions += "-Dcats.effect.warnOnNonMainThreadDetected=false",
+    libraryDependencies ++= {
+      val catsEffectVersion = "3.5.7"
+      val circeVersion = "0.14.10"
+      val doobieVersion = "1.0.0-RC6"
+      val http4sVersion = "0.23.30"
+      val munitCatsEffectVersion = "2.0.0"
+      val munitVersion = "1.0.2"
+      val tapirVersion = "1.11.13"
+
+      Seq(
+        "org.typelevel" %% "cats-effect" % catsEffectVersion,
+        "org.http4s" %% "http4s-ember-server" % http4sVersion,
+        "org.http4s" %% "http4s-dsl" % http4sVersion,
+        "org.http4s" %% "http4s-circe" % http4sVersion,
+        "com.softwaremill.sttp.tapir" %% "tapir-core" % tapirVersion,
+        "com.softwaremill.sttp.tapir" %% "tapir-json-circe" % tapirVersion,
+        "com.softwaremill.sttp.tapir" %% "tapir-http4s-server" % tapirVersion,
+        "com.softwaremill.sttp.tapir" %% "tapir-swagger-ui-bundle" % tapirVersion,
+        "com.softwaremill.sttp.tapir" %% "tapir-openapi-docs" % tapirVersion,
+        "io.circe" %% "circe-core" % circeVersion,
+        "io.circe" %% "circe-generic" % circeVersion,
+        "io.circe" %% "circe-parser" % circeVersion,
+        "org.tpolecat" %% "doobie-core" % doobieVersion,
+        "org.scalameta" %% "munit" % munitVersion % Test,
+        "org.typelevel" %% "munit-cats-effect" % munitCatsEffectVersion % Test
+      )
+    },
+    apiOpenApi := {
+      val output = baseDirectory.value / "openapi.yaml"
+      val result = (Compile / runner).value.run(
+        "momo.api.openapi.OpenApiMain",
+        (Compile / fullClasspath).value.files,
+        Seq(output.getAbsolutePath),
+        streams.value.log
+      )
+      result.failed.foreach(error => throw error)
+      output
+    },
+    apiOpenApiCheck := {
+      val output = apiOpenApi.value
+      if (!output.exists()) sys.error(s"OpenAPI was not generated: ${output.getAbsolutePath}")
+      ()
+    }
+  )

@@ -1,0 +1,679 @@
+{
+  "openapi" : "3.1.0",
+  "info" : {
+    "title" : "Momo Result API",
+    "version" : "0.1.0"
+  },
+  "paths" : {
+    "/healthz" : {
+      "get" : {
+        "tags" : [
+          "health"
+        ],
+        "operationId" : "getHealthz",
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/openapi.yaml" : {
+      "get" : {
+        "tags" : [
+          "openapi"
+        ],
+        "operationId" : "getOpenapi.yaml",
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/me" : {
+      "get" : {
+        "tags" : [
+          "auth"
+        ],
+        "operationId" : "getApiAuthMe",
+        "parameters" : [
+          {
+            "name" : "X-Dev-User",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AuthMeResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/uploads/images" : {
+      "post" : {
+        "tags" : [
+          "uploads"
+        ],
+        "operationId" : "postApiUploadsImages",
+        "parameters" : [
+          {
+            "name" : "X-Dev-User",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "multipart/form-data" : {
+              "schema" : {
+                "type" : "string",
+                "format" : "binary"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UploadImageResponse"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: body",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ocr-jobs" : {
+      "post" : {
+        "tags" : [
+          "ocr"
+        ],
+        "operationId" : "postApiOcr-jobs",
+        "parameters" : [
+          {
+            "name" : "X-Dev-User",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateOcrJobRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CreateOcrJobResponse"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: body",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ocr-jobs/{jobId}" : {
+      "get" : {
+        "tags" : [
+          "ocr"
+        ],
+        "operationId" : "getApiOcr-jobsJobid",
+        "parameters" : [
+          {
+            "name" : "jobId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-Dev-User",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OcrJobResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete" : {
+        "tags" : [
+          "ocr"
+        ],
+        "operationId" : "deleteApiOcr-jobsJobid",
+        "parameters" : [
+          {
+            "name" : "jobId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-Dev-User",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CancelOcrJobResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ocr-drafts/{draftId}" : {
+      "get" : {
+        "tags" : [
+          "ocr"
+        ],
+        "operationId" : "getApiOcr-draftsDraftid",
+        "parameters" : [
+          {
+            "name" : "draftId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-Dev-User",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OcrDraftResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "AuthMeResponse" : {
+        "title" : "AuthMeResponse",
+        "type" : "object",
+        "required" : [
+          "memberId",
+          "displayName"
+        ],
+        "properties" : {
+          "memberId" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          }
+        }
+      },
+      "CancelOcrJobResponse" : {
+        "title" : "CancelOcrJobResponse",
+        "type" : "object",
+        "required" : [
+          "jobId",
+          "status"
+        ],
+        "properties" : {
+          "jobId" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        }
+      },
+      "CreateOcrJobRequest" : {
+        "title" : "CreateOcrJobRequest",
+        "type" : "object",
+        "required" : [
+          "imageId",
+          "requestedImageType"
+        ],
+        "properties" : {
+          "imageId" : {
+            "type" : "string"
+          },
+          "requestedImageType" : {
+            "type" : "string"
+          },
+          "ocrHints" : {
+            "$ref" : "#/components/schemas/OcrJobHints"
+          }
+        }
+      },
+      "CreateOcrJobResponse" : {
+        "title" : "CreateOcrJobResponse",
+        "type" : "object",
+        "required" : [
+          "jobId",
+          "draftId",
+          "status"
+        ],
+        "properties" : {
+          "jobId" : {
+            "type" : "string"
+          },
+          "draftId" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        }
+      },
+      "HealthResponse" : {
+        "title" : "HealthResponse",
+        "type" : "object",
+        "required" : [
+          "status"
+        ],
+        "properties" : {
+          "status" : {
+            "type" : "string"
+          }
+        }
+      },
+      "OcrDraftResponse" : {
+        "title" : "OcrDraftResponse",
+        "type" : "object",
+        "required" : [
+          "draftId",
+          "jobId",
+          "requestedImageType",
+          "payloadJson",
+          "warningsJson",
+          "timingsMsJson",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties" : {
+          "draftId" : {
+            "type" : "string"
+          },
+          "jobId" : {
+            "type" : "string"
+          },
+          "requestedImageType" : {
+            "type" : "string"
+          },
+          "detectedImageType" : {
+            "type" : "string"
+          },
+          "profileId" : {
+            "type" : "string"
+          },
+          "payloadJson" : {
+            
+          },
+          "warningsJson" : {
+            
+          },
+          "timingsMsJson" : {
+            
+          },
+          "createdAt" : {
+            "type" : "string"
+          },
+          "updatedAt" : {
+            "type" : "string"
+          }
+        }
+      },
+      "OcrFailureResponse" : {
+        "title" : "OcrFailureResponse",
+        "type" : "object",
+        "required" : [
+          "code",
+          "message",
+          "retryable"
+        ],
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "retryable" : {
+            "type" : "boolean"
+          },
+          "userAction" : {
+            "type" : "string"
+          }
+        }
+      },
+      "OcrJobHints" : {
+        "title" : "OcrJobHints",
+        "type" : "object",
+        "properties" : {
+          "gameTitle" : {
+            "type" : "string"
+          },
+          "layoutFamily" : {
+            "type" : "string"
+          },
+          "knownPlayerAliases" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/PlayerAliasHint"
+            }
+          },
+          "computerPlayerAliases" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "OcrJobResponse" : {
+        "title" : "OcrJobResponse",
+        "type" : "object",
+        "required" : [
+          "jobId",
+          "draftId",
+          "imageId",
+          "imagePath",
+          "requestedImageType",
+          "status",
+          "attemptCount",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties" : {
+          "jobId" : {
+            "type" : "string"
+          },
+          "draftId" : {
+            "type" : "string"
+          },
+          "imageId" : {
+            "type" : "string"
+          },
+          "imagePath" : {
+            "type" : "string"
+          },
+          "requestedImageType" : {
+            "type" : "string"
+          },
+          "detectedImageType" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "attemptCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "failure" : {
+            "$ref" : "#/components/schemas/OcrFailureResponse"
+          },
+          "createdAt" : {
+            "type" : "string"
+          },
+          "updatedAt" : {
+            "type" : "string"
+          }
+        }
+      },
+      "PlayerAliasHint" : {
+        "title" : "PlayerAliasHint",
+        "type" : "object",
+        "required" : [
+          "memberId"
+        ],
+        "properties" : {
+          "memberId" : {
+            "type" : "string"
+          },
+          "aliases" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "ProblemDetails" : {
+        "title" : "ProblemDetails",
+        "type" : "object",
+        "required" : [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "code"
+        ],
+        "properties" : {
+          "type" : {
+            "type" : "string"
+          },
+          "title" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "detail" : {
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          }
+        }
+      },
+      "UploadImageResponse" : {
+        "title" : "UploadImageResponse",
+        "type" : "object",
+        "required" : [
+          "imageId",
+          "imagePath",
+          "mediaType",
+          "sizeBytes"
+        ],
+        "properties" : {
+          "imageId" : {
+            "type" : "string"
+          },
+          "imagePath" : {
+            "type" : "string"
+          },
+          "mediaType" : {
+            "type" : "string"
+          },
+          "sizeBytes" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      }
+    }
+  }
+}

@@ -7,3 +7,9 @@ ocr_samples/
 **/.ruff_cache/
 apps/ocr-worker/out/
 apps/ocr-worker/local-expected/
+.bloop/
+.metals/
+.scala-build/
+.vscode/
+**/target/
+**/metals.sbt

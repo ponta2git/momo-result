@@ -17,7 +17,7 @@ final class LocalFsImageStore[F[_]: Sync](root: Path) extends ImageStore[F]:
       bytes: Array[Byte],
   ): F[Either[AppError, StoredImage]] = validate(bytes, contentType).traverse { imageType =>
     for
-      id <- momo.api.domain.IdGenerator.uuidV7[F].map(ImageId(_))
+      id <- momo.api.domain.IdGenerator.next[F].map(ImageId(_))
       _ <- Sync[F].blocking(Files.createDirectories(root))
       path = root.resolve(s"${id.value}.${imageType.extension}").toAbsolutePath.normalize()
       _ <- Sync[F].blocking(Files.write(path, bytes))

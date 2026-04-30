@@ -19,8 +19,8 @@ object Database:
       user = config.user,
       pass = config.password,
       connectEC = scala.concurrent.ExecutionContext.global,
-    ).evalTap { xa =>
-      xa.configure { ds =>
+    ).evalTap { transactor =>
+      transactor.configure { ds =>
         Async[F].delay {
           ds.setMaximumPoolSize(config.poolSize)
           ds.setPoolName("momo-result-api")

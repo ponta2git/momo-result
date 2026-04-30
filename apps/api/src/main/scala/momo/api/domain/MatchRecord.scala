@@ -10,14 +10,11 @@ final case class IncidentCounts(
     cardShop: Int,
     suriNoGinji: Int,
 ):
-  def asMap: Map[String, Int] = IncidentCounts.toMap(this)
-
   /**
-   * Yields (`incident_masters.id`, count) pairs in the order matching
-   * `IncidentCounts.incidentMasterIds`. Used by the matches repository to insert the 6 required
-   * `match_incidents` rows per player.
+   * Pairs each count with its `incident_masters.id` in the canonical order. Used by the matches
+   * repository to insert the 6 required `match_incidents` rows per player.
    */
-  def asIncidentMasterIdMap: List[(String, Int)] = List(
+  def entriesByMasterId: List[(String, Int)] = List(
     IncidentCounts.IdDestination -> destination,
     IncidentCounts.IdPlusStation -> plusStation,
     IncidentCounts.IdMinusStation -> minusStation,
@@ -37,20 +34,6 @@ object IncidentCounts:
   val IdCardStation = "incident_card_station"
   val IdCardShop = "incident_card_shop"
   val IdSuriNoGinji = "incident_suri_no_ginji"
-
-  val incidentMasterIds: List[String] =
-    List(IdDestination, IdPlusStation, IdMinusStation, IdCardStation, IdCardShop, IdSuriNoGinji)
-
-  val keys: List[String] = List("目的地", "プラス駅", "マイナス駅", "カード駅", "カード売り場", "スリの銀次")
-
-  def toMap(c: IncidentCounts): Map[String, Int] = Map(
-    "目的地" -> c.destination,
-    "プラス駅" -> c.plusStation,
-    "マイナス駅" -> c.minusStation,
-    "カード駅" -> c.cardStation,
-    "カード売り場" -> c.cardShop,
-    "スリの銀次" -> c.suriNoGinji,
-  )
 
 final case class PlayerResult(
     memberId: String,

@@ -1,4 +1,4 @@
-package momo.api.repositories.doobie
+package momo.api.repositories.postgres
 
 import cats.effect.MonadCancelThrow
 import cats.syntax.all.*
@@ -14,7 +14,7 @@ import momo.api.repositories.MatchesRepository
  * Persists `matches` along with their dependent `match_players` (4 rows) and `match_incidents` (4 ×
  * 6 = 24 rows) atomically in a single connection.
  */
-final class DoobieMatchesRepository[F[_]: MonadCancelThrow](xa: Transactor[F])
+final class PostgresMatchesRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends MatchesRepository[F]:
 
   private type MatchRow = (
@@ -134,7 +134,7 @@ final class DoobieMatchesRepository[F[_]: MonadCancelThrow](xa: Transactor[F])
          VALUES (?, ?, ?, ?, ?, ?, ?)""").updateMany(playerRows)
 
     val incidentRows: List[(String, String, String, Int, Instant)] = record.players.flatMap { p =>
-      p.incidents.asIncidentMasterIdMap.map { case (incidentId, count) =>
+      p.incidents.entriesByMasterId.map { case (incidentId, count) =>
         (record.id, p.memberId, incidentId, count, record.createdAt)
       }
     }
@@ -143,7 +143,7 @@ final class DoobieMatchesRepository[F[_]: MonadCancelThrow](xa: Transactor[F])
          (match_id, member_id, incident_master_id, count, created_at)
          VALUES (?, ?, ?, ?, ?)""").updateMany(incidentRows)
 
-    (insertMatch *> insertPlayers *> insertIncidents).void.transact(xa)
+    (insertMatch *> insertPlayers *> insertIncidents).void.transact(transactor)
 
   override def find(id: String): F[Option[MatchRecord]] =
     val program: ConnectionIO[Option[MatchRecord]] = (selectMatch ++ fr"WHERE id = $id")
@@ -151,7 +151,7 @@ final class DoobieMatchesRepository[F[_]: MonadCancelThrow](xa: Transactor[F])
         case None => Option.empty[MatchRecord].pure[ConnectionIO]
         case Some(row) => loadPlayers(id).map(players => Some(toRecord(row, players)))
       }
-    program.transact(xa)
+    program.transact(transactor)
 
   override def listByHeldEvent(heldEventId: String): F[List[MatchRecord]] =
     val program: ConnectionIO[List[MatchRecord]] =
@@ -161,19 +161,19 @@ final class DoobieMatchesRepository[F[_]: MonadCancelThrow](xa: Transactor[F])
           .query[MatchRow].to[List]
         out <- rows.traverse(r => loadPlayers(r._1).map(p => toRecord(r, p)))
       yield out
-    program.transact(xa)
+    program.transact(transactor)
 
   override def existsMatchNo(heldEventId: String, matchNoInEvent: Int): F[Boolean] = sql"""
       SELECT EXISTS (
         SELECT 1 FROM matches
         WHERE held_event_id = $heldEventId AND match_no_in_event = $matchNoInEvent
       )
-    """.query[Boolean].unique.transact(xa)
+    """.query[Boolean].unique.transact(transactor)
 
   override def maxMatchNo(heldEventId: String): F[Int] = sql"""
       SELECT COALESCE(MAX(match_no_in_event), 0)
       FROM matches WHERE held_event_id = $heldEventId
-    """.query[Int].unique.transact(xa)
+    """.query[Int].unique.transact(transactor)
 
   override def countByHeldEvents(heldEventIds: List[String]): F[Map[String, Int]] =
     if heldEventIds.isEmpty then Map.empty[String, Int].pure[F]
@@ -185,7 +185,7 @@ final class DoobieMatchesRepository[F[_]: MonadCancelThrow](xa: Transactor[F])
           WHERE held_event_id = ANY($ids)
           GROUP BY held_event_id
         """.query[(String, Int)].to[List]
-      q.transact(xa).map { rows =>
+      q.transact(transactor).map { rows =>
         val seen = rows.toMap
         heldEventIds.map(id => id -> seen.getOrElse(id, 0)).toMap
       }

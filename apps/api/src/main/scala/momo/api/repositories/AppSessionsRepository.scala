@@ -18,8 +18,8 @@ final case class AppSession(
 )
 
 /**
- * Skeleton repository introduced in the Doobie phase. The Discord OAuth flow that consumes it lands
- * in a later phase. For MVP, only `find` and `upsert` are needed by tests; lifecycle (revoke,
+ * Skeleton repository for the Discord OAuth session aggregate. The OAuth flow that consumes it
+ * lands in a later phase. For MVP, only `find` and `upsert` are needed by tests; lifecycle (revoke,
  * prune) follows OAuth.
  */
 trait AppSessionsRepository[F[_]]:

@@ -20,23 +20,24 @@ object ids:
   object MemberId:
     def apply(value: String): MemberId = value
 
-  extension (value: JobId)
+  extension (id: JobId)
     @targetName("jobIdValue")
-    def value: String = value
-  extension (value: DraftId)
+    def value: String = id
+  extension (id: DraftId)
     @targetName("draftIdValue")
-    def value: String = value
-  extension (value: ImageId)
+    def value: String = id
+  extension (id: ImageId)
     @targetName("imageIdValue")
-    def value: String = value
-  extension (value: MemberId)
+    def value: String = id
+  extension (id: MemberId)
     @targetName("memberIdValue")
-    def value: String = value
+    def value: String = id
 
 object IdGenerator:
   private val random = SecureRandom()
 
-  def uuidV7[F[_]: Sync]: F[String] = Sync[F].delay {
+  /** Time-ordered random identifier (UUIDv7). */
+  def next[F[_]: Sync]: F[String] = Sync[F].delay {
     val now = System.currentTimeMillis()
     val randA = random.nextInt(0x1000)
     val randB = random.nextLong() & 0x3fffffffffffffffL

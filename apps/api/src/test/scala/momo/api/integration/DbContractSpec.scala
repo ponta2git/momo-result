@@ -12,7 +12,7 @@ final class DbContractSpec extends IntegrationSuite:
   test("members table is seeded with the four MVP players"):
     val program = sql"""
       SELECT id, display_name FROM members ORDER BY id
-    """.query[(String, String)].to[List].transact(xa)
+    """.query[(String, String)].to[List].transact(transactor)
     program.map { rows =>
       val ids = rows.map(_._1).toSet
       assertEquals(
@@ -25,7 +25,7 @@ final class DbContractSpec extends IntegrationSuite:
   test("incident_masters has the 6 fixed incident IDs"):
     val program = sql"""
       SELECT id FROM incident_masters ORDER BY display_order
-    """.query[String].to[List].transact(xa)
+    """.query[String].to[List].transact(transactor)
     program.map { ids =>
       assertEquals(
         ids,
@@ -46,7 +46,7 @@ final class DbContractSpec extends IntegrationSuite:
       FROM information_schema.columns
       WHERE table_schema = 'public' AND table_name = 'matches'
       ORDER BY ordinal_position
-    """.query[String].to[List].transact(xa)
+    """.query[String].to[List].transact(transactor)
     program.map { cols =>
       val expected = Set(
         "id",
@@ -76,16 +76,16 @@ final class DbContractSpec extends IntegrationSuite:
       WHERE table_schema = 'public'
         AND table_name = 'held_events'
         AND column_name = 'session_id'
-    """.query[String].unique.transact(xa)
+    """.query[String].unique.transact(transactor)
     program.map(v => assertEquals(v, "YES"))
 
-  test("ocr_jobs has the failure_* triplet used by DoobieOcrJobsRepository"):
+  test("ocr_jobs has the failure_* triplet used by the PostgreSQL job repository"):
     val program = sql"""
       SELECT column_name
       FROM information_schema.columns
       WHERE table_schema = 'public' AND table_name = 'ocr_jobs'
         AND column_name IN ('failure_code','failure_message','failure_retryable','failure_user_action')
-    """.query[String].to[List].transact(xa)
+    """.query[String].to[List].transact(transactor)
     program.map { cols =>
       assertEquals(
         cols.toSet,

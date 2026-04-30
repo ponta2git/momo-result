@@ -1,4 +1,4 @@
-package momo.api.repositories.doobie
+package momo.api.repositories.postgres
 
 import doobie.Meta
 import java.nio.file.{Path, Paths}
@@ -6,10 +6,10 @@ import momo.api.domain.{FailureCode, OcrJobStatus, ScreenType}
 import momo.api.domain.ids.*
 
 /**
- * Shared `Meta` instances for opaque IDs, enums, and other custom types used by the Doobie
- * repositories. Keeping them in one place avoids accidental divergence between repos.
+ * Shared database type mappings for opaque IDs, enums, and other custom types used by the
+ * PostgreSQL repositories. Keeping them in one place avoids accidental divergence between repos.
  */
-object DoobieMeta:
+object PostgresMeta:
   given Meta[JobId] = Meta[String].imap(JobId.apply)(_.value)
   given Meta[DraftId] = Meta[String].imap(DraftId.apply)(_.value)
   given Meta[ImageId] = Meta[String].imap(ImageId.apply)(_.value)

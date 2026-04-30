@@ -3,9 +3,9 @@ package momo.api.integration
 import cats.effect.IO
 import java.time.Instant
 import momo.api.domain.*
-import momo.api.repositories.doobie.*
+import momo.api.repositories.postgres.*
 
-final class DoobieMatchesRepositorySpec extends IntegrationSuite:
+final class PostgresMatchesRepositorySpec extends IntegrationSuite:
 
   private val now = Instant.parse("2026-04-30T00:00:00Z")
   private val gameTitleId = "title_world"
@@ -13,11 +13,11 @@ final class DoobieMatchesRepositorySpec extends IntegrationSuite:
   private val seasonMasterId = "season_2024_spring"
   private val heldEventId = "held_2026_04_30"
 
-  private def gameTitles = new DoobieGameTitlesRepository[IO](xa)
-  private def mapMasters = new DoobieMapMastersRepository[IO](xa)
-  private def seasonMasters = new DoobieSeasonMastersRepository[IO](xa)
-  private def heldEvents = new DoobieHeldEventsRepository[IO](xa)
-  private def matches = new DoobieMatchesRepository[IO](xa)
+  private def gameTitles = new PostgresGameTitlesRepository[IO](transactor)
+  private def mapMasters = new PostgresMapMastersRepository[IO](transactor)
+  private def seasonMasters = new PostgresSeasonMastersRepository[IO](transactor)
+  private def heldEvents = new PostgresHeldEventsRepository[IO](transactor)
+  private def matches = new PostgresMatchesRepository[IO](transactor)
 
   /** Insert a complete prerequisite graph: game/map/season/held_event. */
   private def seedPrereqs: IO[Unit] =
@@ -160,4 +160,4 @@ final class DoobieMatchesRepositorySpec extends IntegrationSuite:
       yield e
     program
       .map(result => assert(result.isLeft, s"expected duplicate match_no to fail, got $result"))
-end DoobieMatchesRepositorySpec
+end PostgresMatchesRepositorySpec

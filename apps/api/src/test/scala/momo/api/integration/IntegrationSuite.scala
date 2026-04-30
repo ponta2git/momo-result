@@ -42,5 +42,5 @@ abstract class IntegrationSuite extends CatsEffectSuite:
       import cats.effect.unsafe.implicits.global
       dbFixture().cleanup().unsafeRunSync()
 
-  protected def xa: doobie.Transactor[IO] = dbFixture().xa
+  protected def transactor: doobie.Transactor[IO] = dbFixture().transactor
 end IntegrationSuite

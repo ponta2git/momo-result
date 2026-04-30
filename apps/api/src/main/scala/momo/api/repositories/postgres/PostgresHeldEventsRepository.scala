@@ -1,4 +1,4 @@
-package momo.api.repositories.doobie
+package momo.api.repositories.postgres
 
 import cats.effect.MonadCancelThrow
 import cats.syntax.all.*
@@ -16,7 +16,7 @@ import momo.api.repositories.HeldEventsRepository
  * `held_date_iso` は表示用日付として `start_at` を Asia/Tokyo に変換した `LocalDate` で埋める。`heldAt` だけが Scala
  * 側のドメインで保持される。
  */
-final class DoobieHeldEventsRepository[F[_]: MonadCancelThrow](xa: Transactor[F])
+final class PostgresHeldEventsRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends HeldEventsRepository[F]:
 
   private val Jst = ZoneId.of("Asia/Tokyo")
@@ -29,15 +29,15 @@ final class DoobieHeldEventsRepository[F[_]: MonadCancelThrow](xa: Transactor[F]
     }
     val order = fr"ORDER BY start_at DESC, id DESC"
     val lim = fr"LIMIT ${math.max(limit, 0)}"
-    (base ++ where ++ order ++ lim).query[HeldEvent].to[List].transact(xa)
+    (base ++ where ++ order ++ lim).query[HeldEvent].to[List].transact(transactor)
 
   override def find(id: String): F[Option[HeldEvent]] = sql"""
       SELECT id, start_at FROM held_events WHERE id = $id
-    """.query[HeldEvent].option.transact(xa)
+    """.query[HeldEvent].option.transact(transactor)
 
   override def create(event: HeldEvent): F[Unit] =
     val heldDateIso: LocalDate = event.heldAt.atZone(Jst).toLocalDate
     sql"""
       INSERT INTO held_events (id, session_id, held_date_iso, start_at, created_at)
       VALUES (${event.id}, NULL, $heldDateIso, ${event.heldAt}, ${event.heldAt})
-    """.update.run.void.transact(xa)
+    """.update.run.void.transact(transactor)

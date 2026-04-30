@@ -68,7 +68,7 @@ object IntegrationDb:
    * momo-db migration `0009_seed_members.sql`) and `incident_masters` (seeded by drizzle
    * migration). Order respects FK dependencies; using TRUNCATE ... CASCADE keeps it terse.
    */
-  def truncateAppTables(xa: Transactor[IO]): IO[Unit] = sql"""
+  def truncateAppTables(transactor: Transactor[IO]): IO[Unit] = sql"""
       TRUNCATE TABLE
         match_incidents,
         match_players,
@@ -83,15 +83,17 @@ object IntegrationDb:
         game_titles,
         app_sessions
       RESTART IDENTITY CASCADE
-    """.update.run.void.transact(xa)
+    """.update.run.void.transact(transactor)
 
   /**
    * Suite-wide fixture combining a transactor with auto-cleanup before each test. Suites
    * instantiate via [[withDb]] in their `munitFixtures`.
    */
-  final class DbFixture(val xa: HikariTransactor[IO], release: IO[Unit]):
-    def cleanup(): IO[Unit] = truncateAppTables(xa)
+  final class DbFixture(val transactor: HikariTransactor[IO], release: IO[Unit]):
+    def cleanup(): IO[Unit] = truncateAppTables(transactor)
     def close(): IO[Unit] = release
 
-  def acquire: IO[DbFixture] = transactor.allocated.map { case (xa, rel) => new DbFixture(xa, rel) }
+  def acquire: IO[DbFixture] = transactor.allocated.map { case (transactor, release) =>
+    new DbFixture(transactor, release)
+  }
 end IntegrationDb

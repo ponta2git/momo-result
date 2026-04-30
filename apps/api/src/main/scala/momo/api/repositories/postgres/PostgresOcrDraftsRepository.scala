@@ -1,4 +1,4 @@
-package momo.api.repositories.doobie
+package momo.api.repositories.postgres
 
 import cats.effect.MonadCancelThrow
 import cats.syntax.all.*
@@ -10,10 +10,10 @@ import io.circe.Json
 import java.time.Instant
 import momo.api.domain.{OcrDraft, ScreenType}
 import momo.api.domain.ids.*
-import momo.api.repositories.doobie.DoobieMeta.given
+import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.repositories.OcrDraftsRepository
 
-final class DoobieOcrDraftsRepository[F[_]: MonadCancelThrow](xa: Transactor[F])
+final class PostgresOcrDraftsRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends OcrDraftsRepository[F]:
 
   private type Row = (
@@ -54,11 +54,11 @@ final class DoobieOcrDraftsRepository[F[_]: MonadCancelThrow](xa: Transactor[F])
         ${draft.payloadJson}, ${draft.warningsJson}, ${draft.timingsMsJson},
         ${draft.createdAt}, ${draft.updatedAt}
       )
-    """.update.run.void.transact(xa)
+    """.update.run.void.transact(transactor)
 
   override def find(draftId: DraftId): F[Option[OcrDraft]] = sql"""
       SELECT id, job_id, requested_screen_type, detected_screen_type, profile_id,
              payload_json, warnings_json, timings_ms_json, created_at, updated_at
       FROM ocr_drafts
       WHERE id = $draftId
-    """.query[Row].option.map(_.map(toDraft)).transact(xa)
+    """.query[Row].option.map(_.map(toDraft)).transact(transactor)

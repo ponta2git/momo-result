@@ -1,4 +1,4 @@
-package momo.api.repositories.doobie
+package momo.api.repositories.postgres
 
 import cats.effect.MonadCancelThrow
 import cats.syntax.all.*
@@ -9,10 +9,10 @@ import java.nio.file.Path
 import java.time.Instant
 import momo.api.domain.{FailureCode, OcrFailure, OcrJob, OcrJobStatus, ScreenType}
 import momo.api.domain.ids.*
-import momo.api.repositories.doobie.DoobieMeta.given
+import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.repositories.OcrJobsRepository
 
-final class DoobieOcrJobsRepository[F[_]: MonadCancelThrow](xa: Transactor[F])
+final class PostgresOcrJobsRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends OcrJobsRepository[F]:
 
   private type Row = (
@@ -84,10 +84,10 @@ final class DoobieOcrJobsRepository[F[_]: MonadCancelThrow](xa: Transactor[F])
         ${job.startedAt}, ${job.finishedAt}, ${job.durationMs},
         ${job.createdAt}, ${job.updatedAt}
       )
-    """.update.run.void.transact(xa)
+    """.update.run.void.transact(transactor)
 
   override def find(jobId: JobId): F[Option[OcrJob]] = (selectAll ++ fr"WHERE id = $jobId")
-    .query[Row].option.map(_.map(toJob)).transact(xa)
+    .query[Row].option.map(_.map(toJob)).transact(transactor)
 
   override def markFailed(jobId: JobId, failure: OcrFailure, now: Instant): F[Unit] = sql"""
       UPDATE ocr_jobs SET
@@ -99,7 +99,7 @@ final class DoobieOcrJobsRepository[F[_]: MonadCancelThrow](xa: Transactor[F])
         finished_at = $now,
         updated_at = $now
       WHERE id = $jobId
-    """.update.run.void.transact(xa)
+    """.update.run.void.transact(transactor)
 
   override def cancelQueued(jobId: JobId, now: Instant): F[Boolean] = sql"""
       UPDATE ocr_jobs SET
@@ -107,4 +107,4 @@ final class DoobieOcrJobsRepository[F[_]: MonadCancelThrow](xa: Transactor[F])
         finished_at = $now,
         updated_at = $now
       WHERE id = $jobId AND status = ${OcrJobStatus.Queued}
-    """.update.run.map(_ > 0).transact(xa)
+    """.update.run.map(_ > 0).transact(transactor)

@@ -1061,11 +1061,10 @@
         "required" : [
           "heldEventId",
           "matchNoInEvent",
-          "gameTitle",
-          "layoutFamily",
-          "seasonId",
+          "gameTitleId",
+          "seasonMasterId",
           "ownerMemberId",
-          "mapName",
+          "mapMasterId",
           "playedAt",
           "draftIds"
         ],
@@ -1077,19 +1076,16 @@
             "type" : "integer",
             "format" : "int32"
           },
-          "gameTitle" : {
+          "gameTitleId" : {
             "type" : "string"
           },
-          "layoutFamily" : {
-            "type" : "string"
-          },
-          "seasonId" : {
+          "seasonMasterId" : {
             "type" : "string"
           },
           "ownerMemberId" : {
             "type" : "string"
           },
-          "mapName" : {
+          "mapMasterId" : {
             "type" : "string"
           },
           "playedAt" : {
@@ -1155,13 +1151,9 @@
         "title" : "CreateHeldEventRequest",
         "type" : "object",
         "required" : [
-          "name",
           "heldAt"
         ],
         "properties" : {
-          "name" : {
-            "type" : "string"
-          },
           "heldAt" : {
             "type" : "string"
           }
@@ -1316,15 +1308,11 @@
         "type" : "object",
         "required" : [
           "id",
-          "name",
           "heldAt",
           "matchCount"
         ],
         "properties" : {
           "id" : {
-            "type" : "string"
-          },
-          "name" : {
             "type" : "string"
           },
           "heldAt" : {

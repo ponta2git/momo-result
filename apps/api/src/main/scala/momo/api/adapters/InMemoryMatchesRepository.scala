@@ -29,6 +29,15 @@ final class InMemoryMatchesRepository[F[_]: Sync] private (
       if nums.isEmpty then 0 else nums.max
     }
 
+  override def countByHeldEvents(heldEventIds: List[String]): F[Map[String, Int]] =
+    ref.get.map { m =>
+      val ids = heldEventIds.toSet
+      val counts = m.values
+        .filter(r => ids.contains(r.heldEventId))
+        .groupMapReduce(_.heldEventId)(_ => 1)(_ + _)
+      heldEventIds.map(id => id -> counts.getOrElse(id, 0)).toMap
+    }
+
 object InMemoryMatchesRepository:
   def create[F[_]: Sync]: F[InMemoryMatchesRepository[F]] =
     Ref.of[F, Map[String, MatchRecord]](Map.empty).map(new InMemoryMatchesRepository(_))

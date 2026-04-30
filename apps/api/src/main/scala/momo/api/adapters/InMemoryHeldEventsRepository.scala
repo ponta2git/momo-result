@@ -14,7 +14,7 @@ final class InMemoryHeldEventsRepository[F[_]: Sync] private (
       val filtered = query match
         case Some(q) if q.trim.nonEmpty =>
           val lower = q.toLowerCase
-          events.values.filter(e => e.name.toLowerCase.contains(lower))
+          events.values.filter(e => e.id.toLowerCase.contains(lower))
         case _ => events.values
       filtered.toList.sortBy(_.heldAt).reverse.take(math.max(limit, 0))
     }
@@ -24,13 +24,6 @@ final class InMemoryHeldEventsRepository[F[_]: Sync] private (
 
   override def create(event: HeldEvent): F[Unit] =
     ref.update(_ + (event.id -> event))
-
-  override def incrementMatchCount(id: String): F[Unit] =
-    ref.update { m =>
-      m.get(id) match
-        case Some(e) => m + (id -> e.copy(matchCount = e.matchCount + 1))
-        case None    => m
-    }
 
 object InMemoryHeldEventsRepository:
   def create[F[_]: Sync]: F[InMemoryHeldEventsRepository[F]] =

@@ -74,7 +74,6 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite:
         .putHeaders(authHeaders*)
         .withEntity(
           Json.obj(
-            "name" -> Json.fromString("第1回大会"),
             "heldAt" -> Json.fromString("2024-01-01T00:00:00Z")
           )
         )
@@ -95,14 +94,13 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite:
     }
   }
 
-  test("POST /api/held-events with blank name returns 422") {
+  test("POST /api/held-events with invalid heldAt returns 422") {
     app.use { httpApp =>
       val req = Request[IO](Method.POST, uri"/api/held-events")
         .putHeaders(authHeaders*)
         .withEntity(
           Json.obj(
-            "name" -> Json.fromString("   "),
-            "heldAt" -> Json.fromString("2024-01-01T00:00:00Z")
+            "heldAt" -> Json.fromString("not-an-instant")
           )
         )
       httpApp.run(req).map { res =>
@@ -160,7 +158,6 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite:
           .putHeaders(authHeaders*)
           .withEntity(
             Json.obj(
-              "name" -> Json.fromString("test"),
               "heldAt" -> Json.fromString("2024-01-01T00:00:00Z")
             )
           )

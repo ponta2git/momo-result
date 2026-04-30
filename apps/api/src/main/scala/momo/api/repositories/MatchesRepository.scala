@@ -8,3 +8,4 @@ trait MatchesRepository[F[_]]:
   def listByHeldEvent(heldEventId: String): F[List[MatchRecord]]
   def existsMatchNo(heldEventId: String, matchNoInEvent: Int): F[Boolean]
   def maxMatchNo(heldEventId: String): F[Int]
+  def countByHeldEvents(heldEventIds: List[String]): F[Map[String, Int]]

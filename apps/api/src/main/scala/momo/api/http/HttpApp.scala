@@ -121,7 +121,7 @@ object HttpApp:
         val getOcrDraft = GetOcrDraft[F](drafts)
         val getOcrDraftsBulk = GetOcrDraftsBulk[F](drafts)
         val cancelOcrJob = CancelOcrJob[F](jobs, nowF)
-        val listHeldEvents = ListHeldEvents[F](heldEvents)
+        val listHeldEvents = ListHeldEvents[F](heldEvents, matches)
         val createHeldEvent = CreateHeldEvent[F](heldEvents, IdGenerator.uuidV7[F])
         val confirmMatch = ConfirmMatch[F](
           heldEvents = heldEvents,
@@ -307,7 +307,7 @@ object HttpApp:
             case Left(error) => Async[F].pure(Left(error))
             case Right(_) =>
               listHeldEvents.run(q, limit).map { items =>
-                Right(HeldEventListResponse(items.map(HeldEventResponse.from)))
+                Right(HeldEventListResponse(items.map((e, c) => HeldEventResponse.from(e, c))))
               }
           }
         },
@@ -316,9 +316,9 @@ object HttpApp:
             case Left(error) => Async[F].pure(Left(error))
             case Right(_) =>
               createHeldEvent
-                .run(CreateHeldEventCommand(request.name, request.heldAt))
+                .run(CreateHeldEventCommand(request.heldAt))
                 .map {
-                  case Right(event) => Right(HeldEventResponse.from(event))
+                  case Right(event) => Right(HeldEventResponse.from(event, 0))
                   case Left(error)  => Left(toProblem(error))
                 }
           }

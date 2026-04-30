@@ -8,24 +8,21 @@ import java.time.format.DateTimeFormatter
 
 final case class HeldEventResponse(
     id: String,
-    name: String,
     heldAt: String,
     matchCount: Int
 ) derives Codec.AsObject
 
 object HeldEventResponse:
-  def from(e: HeldEvent): HeldEventResponse =
+  def from(e: HeldEvent, matchCount: Int): HeldEventResponse =
     HeldEventResponse(
       id = e.id,
-      name = e.name,
       heldAt = DateTimeFormatter.ISO_INSTANT.format(e.heldAt),
-      matchCount = e.matchCount
+      matchCount = matchCount
     )
 
 final case class HeldEventListResponse(items: List[HeldEventResponse]) derives Codec.AsObject
 
 final case class CreateHeldEventRequest(
-    name: String,
     heldAt: String
 ) derives Codec.AsObject
 

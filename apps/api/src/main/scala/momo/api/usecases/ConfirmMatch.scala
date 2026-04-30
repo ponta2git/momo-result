@@ -92,7 +92,6 @@ final class ConfirmMatch[F[_]: MonadThrow](
       createdAt <- EitherT.liftF(now)
       record = toRecord(id, createdAt, playedAt, title.layoutFamily, createdBy.value, req)
       _ <- EitherT.liftF(matches.create(record))
-      _ <- EitherT.liftF(heldEvents.incrementMatchCount(req.heldEventId))
     yield record).value
 
 object ConfirmMatch:

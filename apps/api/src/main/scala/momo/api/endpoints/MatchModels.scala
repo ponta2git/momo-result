@@ -80,11 +80,10 @@ final case class ConfirmMatchDraftIds(
 final case class ConfirmMatchRequest(
     heldEventId: String,
     matchNoInEvent: Int,
-    gameTitle: String,
-    layoutFamily: String,
-    seasonId: String,
+    gameTitleId: String,
+    seasonMasterId: String,
     ownerMemberId: String,
-    mapName: String,
+    mapMasterId: String,
     playedAt: String,
     draftIds: ConfirmMatchDraftIds,
     players: List[PlayerResultRequest]

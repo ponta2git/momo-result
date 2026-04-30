@@ -3,11 +3,17 @@ package momo.api.http
 import cats.effect.Async
 import cats.effect.Resource
 import cats.syntax.all.*
+import momo.api.adapters.InMemoryGameTitlesRepository
 import momo.api.adapters.InMemoryHeldEventsRepository
+import momo.api.adapters.InMemoryIncidentMastersRepository
+import momo.api.adapters.InMemoryMapMastersRepository
 import momo.api.adapters.InMemoryMatchesRepository
+import momo.api.adapters.InMemoryMemberAliasesRepository
+import momo.api.adapters.InMemoryMembersRepository
 import momo.api.adapters.InMemoryOcrDraftsRepository
 import momo.api.adapters.InMemoryOcrJobsRepository
 import momo.api.adapters.InMemoryQueueProducer
+import momo.api.adapters.InMemorySeasonMastersRepository
 import momo.api.adapters.LocalFsImageStore
 import momo.api.auth.MemberRoster
 import momo.api.config.AppConfig
@@ -55,7 +61,20 @@ import sttp.tapir.server.http4s.Http4sServerInterpreter
 import java.time.Instant
 
 object HttpApp:
+  /** Test-only handle so specs can seed master tables without exposing
+    * real HTTP master endpoints (those land in section D).
+    */
+  final case class Wired[F[_]](
+      app: Http4sApp[F],
+      gameTitles: momo.api.repositories.GameTitlesRepository[F],
+      mapMasters: momo.api.repositories.MapMastersRepository[F],
+      seasonMasters: momo.api.repositories.SeasonMastersRepository[F]
+  )
+
   def resource[F[_]: Async](config: AppConfig): Resource[F, Http4sApp[F]] =
+    wired[F](config).map(_.app)
+
+  def wired[F[_]: Async](config: AppConfig): Resource[F, Wired[F]] =
     Resource.eval {
       for
         jobs <- InMemoryOcrJobsRepository.create[F]
@@ -63,6 +82,9 @@ object HttpApp:
         queue <- InMemoryQueueProducer.create[F]
         heldEvents <- InMemoryHeldEventsRepository.create[F]
         matches <- InMemoryMatchesRepository.create[F]
+        gameTitles <- InMemoryGameTitlesRepository.create[F]
+        mapMasters <- InMemoryMapMastersRepository.create[F]
+        seasonMasters <- InMemorySeasonMastersRepository.create[F]
       yield
         val imageStore = LocalFsImageStore[F](config.imageTmpDir)
         val roster = MemberRoster.dev(config.devMemberIds)
@@ -84,13 +106,15 @@ object HttpApp:
         val confirmMatch = ConfirmMatch[F](
           heldEvents = heldEvents,
           matches = matches,
+          gameTitles = gameTitles,
+          mapMasters = mapMasters,
+          seasonMasters = seasonMasters,
           now = Async[F].delay(Instant.now()),
           nextId = IdGenerator.uuidV7[F],
-          allowedMemberIds = config.devMemberIds.toSet,
-          allowedLayoutFamilies = Set("momotetsu_2", "world", "reiwa")
+          allowedMemberIds = config.devMemberIds.toSet
         )
 
-        build(
+        val app = build(
           config = config,
           roster = roster,
           uploadImage = uploadImage,
@@ -103,6 +127,7 @@ object HttpApp:
           createHeldEvent = createHeldEvent,
           confirmMatch = confirmMatch
         )
+        Wired(app, gameTitles, mapMasters, seasonMasters)
     }
 
   private def build[F[_]: Async](
@@ -264,8 +289,8 @@ object HttpApp:
         MatchesEndpoints.confirm.serverLogic { case (devUser, csrfToken, request) =>
           authorizeMutation(devUser, csrfToken).flatMap {
             case Left(error) => Async[F].pure(Left(error))
-            case Right(_) =>
-              confirmMatch.run(request).map {
+            case Right(member) =>
+              confirmMatch.run(request, member.memberId).map {
                 case Right(record) =>
                   Right(
                     ConfirmMatchResponse(

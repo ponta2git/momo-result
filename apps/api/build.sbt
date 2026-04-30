@@ -42,6 +42,9 @@ lazy val root = (project in file("."))
         "io.circe" %% "circe-generic" % circeVersion,
         "io.circe" %% "circe-parser" % circeVersion,
         "org.tpolecat" %% "doobie-core" % doobieVersion,
+        "org.tpolecat" %% "doobie-postgres" % doobieVersion,
+        "org.tpolecat" %% "doobie-postgres-circe" % doobieVersion,
+        "org.tpolecat" %% "doobie-hikari" % doobieVersion,
         "org.scalameta" %% "munit" % munitVersion % Test,
         "org.typelevel" %% "munit-cats-effect" % munitCatsEffectVersion % Test
       )

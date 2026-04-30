@@ -12,7 +12,39 @@ final case class IncidentCounts(
 ):
   def asMap: Map[String, Int] = IncidentCounts.toMap(this)
 
+  /** Yields (`incident_masters.id`, count) pairs in the order matching
+    * `IncidentCounts.incidentMasterIds`. Used by the matches repository
+    * to insert the 6 required `match_incidents` rows per player.
+    */
+  def asIncidentMasterIdMap: List[(String, Int)] = List(
+    IncidentCounts.IdDestination -> destination,
+    IncidentCounts.IdPlusStation -> plusStation,
+    IncidentCounts.IdMinusStation -> minusStation,
+    IncidentCounts.IdCardStation -> cardStation,
+    IncidentCounts.IdCardShop -> cardShop,
+    IncidentCounts.IdSuriNoGinji -> suriNoGinji
+  )
+
 object IncidentCounts:
+  /** Stable IDs of the 6 fixed `incident_masters` rows. Must match the
+    * seed in momo-db/drizzle/0008_foamy_nekra.sql.
+    */
+  val IdDestination = "incident_destination"
+  val IdPlusStation = "incident_plus_station"
+  val IdMinusStation = "incident_minus_station"
+  val IdCardStation = "incident_card_station"
+  val IdCardShop = "incident_card_shop"
+  val IdSuriNoGinji = "incident_suri_no_ginji"
+
+  val incidentMasterIds: List[String] = List(
+    IdDestination,
+    IdPlusStation,
+    IdMinusStation,
+    IdCardStation,
+    IdCardShop,
+    IdSuriNoGinji
+  )
+
   val keys: List[String] = List(
     "目的地",
     "プラス駅",
@@ -44,15 +76,17 @@ final case class MatchRecord(
     id: String,
     heldEventId: String,
     matchNoInEvent: Int,
-    gameTitle: String,
+    gameTitleId: String,
     layoutFamily: String,
-    seasonId: String,
+    seasonMasterId: String,
     ownerMemberId: String,
-    mapName: String,
+    mapMasterId: String,
     playedAt: Instant,
     totalAssetsDraftId: Option[String],
     revenueDraftId: Option[String],
     incidentLogDraftId: Option[String],
     players: List[PlayerResult],
+    createdByMemberId: String,
     createdAt: Instant
 )
+

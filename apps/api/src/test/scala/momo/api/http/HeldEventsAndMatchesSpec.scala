@@ -17,7 +17,11 @@ import org.typelevel.ci.CIString
 import java.nio.file.Files
 
 final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite:
-  private def app =
+  import cats.effect.unsafe.implicits.global as _
+  import momo.api.domain.{GameTitle, MapMaster, SeasonMaster}
+  import java.time.Instant
+
+  private def app: Resource[IO, org.http4s.HttpApp[IO]] =
     Resource.eval(IO.blocking(Files.createTempDirectory("momo-api-held"))).flatMap { dir =>
       val config = AppConfig(
         appEnv = AppEnv.Test,
@@ -26,7 +30,14 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite:
         imageTmpDir = dir,
         devMemberIds = List("ponta", "akane-mami", "otaka", "eu")
       )
-      HttpApp.resource[IO](config)
+      HttpApp.wired[IO](config).evalTap { w =>
+        val now = Instant.parse("2024-01-01T00:00:00Z")
+        for
+          _ <- w.gameTitles.create(GameTitle("title_world", "桃太郎電鉄ワールド", "world", 1, now))
+          _ <- w.mapMasters.create(MapMaster("map_east", "title_world", "東日本編", 1, now))
+          _ <- w.seasonMasters.create(SeasonMaster("season_2024_spring", "title_world", "2024-spring", 1, now))
+        yield ()
+      }.map(_.app)
     }
 
   private def authHeaders: List[Header.ToRaw] =
@@ -124,11 +135,10 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite:
     Json.obj(
       "heldEventId" -> Json.fromString(heldEventId),
       "matchNoInEvent" -> Json.fromInt(matchNo),
-      "gameTitle" -> Json.fromString("桃太郎電鉄ワールド"),
-      "layoutFamily" -> Json.fromString("world"),
-      "seasonId" -> Json.fromString("2024-spring"),
+      "gameTitleId" -> Json.fromString("title_world"),
+      "seasonMasterId" -> Json.fromString("season_2024_spring"),
       "ownerMemberId" -> Json.fromString("ponta"),
-      "mapName" -> Json.fromString("東日本編"),
+      "mapMasterId" -> Json.fromString("map_east"),
       "playedAt" -> Json.fromString("2024-01-01T20:00:00Z"),
       "draftIds" -> Json.obj(
         "totalAssets" -> Json.Null,

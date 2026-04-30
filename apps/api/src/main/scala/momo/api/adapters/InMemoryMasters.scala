@@ -25,6 +25,8 @@ final class InMemoryGameTitlesRepository[F[_]: Sync] private (
     ref.get.map(_.values.toList.sortBy(t => (t.displayOrder, t.createdAt, t.id)))
   override def find(id: String): F[Option[GameTitle]] = ref.get.map(_.get(id))
   override def create(title: GameTitle): F[Unit] = ref.update(_ + (title.id -> title))
+  override def nextDisplayOrder: F[Int] =
+    ref.get.map(_.values.map(_.displayOrder).maxOption.getOrElse(0) + 1)
 
 object InMemoryGameTitlesRepository:
   def create[F[_]: Sync]: F[InMemoryGameTitlesRepository[F]] =

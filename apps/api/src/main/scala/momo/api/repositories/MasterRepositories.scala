@@ -6,6 +6,7 @@ trait GameTitlesRepository[F[_]]:
   def list: F[List[GameTitle]]
   def find(id: String): F[Option[GameTitle]]
   def create(title: GameTitle): F[Unit]
+  def nextDisplayOrder: F[Int]
 
 trait MapMastersRepository[F[_]]:
   def list(gameTitleId: Option[String]): F[List[MapMaster]]

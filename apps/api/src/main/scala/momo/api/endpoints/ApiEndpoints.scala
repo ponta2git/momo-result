@@ -16,5 +16,12 @@ object ApiEndpoints:
       OcrDraftEndpoints.listByIds,
       HeldEventsEndpoints.list,
       HeldEventsEndpoints.create,
-      MatchesEndpoints.confirm
+      MatchesEndpoints.confirm,
+      GameTitlesEndpoints.list,
+      GameTitlesEndpoints.create,
+      MapMastersEndpoints.list,
+      MapMastersEndpoints.create,
+      SeasonMastersEndpoints.list,
+      SeasonMastersEndpoints.create,
+      IncidentMastersEndpoints.list
     )

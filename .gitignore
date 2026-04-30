@@ -15,3 +15,4 @@ apps/ocr-worker/local-expected/
 **/metals.sbt
 node_modules
 *.tsbuildinfo
+copilot-session-*.md

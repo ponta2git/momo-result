@@ -630,6 +630,380 @@
           }
         }
       }
+    },
+    "/api/game-titles" : {
+      "get" : {
+        "tags" : [
+          "masters"
+        ],
+        "operationId" : "getApiGame-titles",
+        "parameters" : [
+          {
+            "name" : "X-Dev-User",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/GameTitleListResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post" : {
+        "tags" : [
+          "masters"
+        ],
+        "operationId" : "postApiGame-titles",
+        "parameters" : [
+          {
+            "name" : "X-Dev-User",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateGameTitleRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/GameTitleResponse"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: body",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/map-masters" : {
+      "get" : {
+        "tags" : [
+          "masters"
+        ],
+        "operationId" : "getApiMap-masters",
+        "parameters" : [
+          {
+            "name" : "gameTitleId",
+            "in" : "query",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-Dev-User",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MapMasterListResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post" : {
+        "tags" : [
+          "masters"
+        ],
+        "operationId" : "postApiMap-masters",
+        "parameters" : [
+          {
+            "name" : "X-Dev-User",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateMapMasterRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MapMasterResponse"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: body",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/season-masters" : {
+      "get" : {
+        "tags" : [
+          "masters"
+        ],
+        "operationId" : "getApiSeason-masters",
+        "parameters" : [
+          {
+            "name" : "gameTitleId",
+            "in" : "query",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-Dev-User",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SeasonMasterListResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post" : {
+        "tags" : [
+          "masters"
+        ],
+        "operationId" : "postApiSeason-masters",
+        "parameters" : [
+          {
+            "name" : "X-Dev-User",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateSeasonMasterRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SeasonMasterResponse"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: body",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/incident-masters" : {
+      "get" : {
+        "tags" : [
+          "masters"
+        ],
+        "operationId" : "getApiIncident-masters",
+        "parameters" : [
+          {
+            "name" : "X-Dev-User",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/IncidentMasterListResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components" : {
@@ -757,6 +1131,26 @@
           }
         }
       },
+      "CreateGameTitleRequest" : {
+        "title" : "CreateGameTitleRequest",
+        "type" : "object",
+        "required" : [
+          "id",
+          "name",
+          "layoutFamily"
+        ],
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "layoutFamily" : {
+            "type" : "string"
+          }
+        }
+      },
       "CreateHeldEventRequest" : {
         "title" : "CreateHeldEventRequest",
         "type" : "object",
@@ -769,6 +1163,26 @@
             "type" : "string"
           },
           "heldAt" : {
+            "type" : "string"
+          }
+        }
+      },
+      "CreateMapMasterRequest" : {
+        "title" : "CreateMapMasterRequest",
+        "type" : "object",
+        "required" : [
+          "id",
+          "gameTitleId",
+          "name"
+        ],
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "gameTitleId" : {
+            "type" : "string"
+          },
+          "name" : {
             "type" : "string"
           }
         }
@@ -808,6 +1222,67 @@
             "type" : "string"
           },
           "status" : {
+            "type" : "string"
+          }
+        }
+      },
+      "CreateSeasonMasterRequest" : {
+        "title" : "CreateSeasonMasterRequest",
+        "type" : "object",
+        "required" : [
+          "id",
+          "gameTitleId",
+          "name"
+        ],
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "gameTitleId" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          }
+        }
+      },
+      "GameTitleListResponse" : {
+        "title" : "GameTitleListResponse",
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/GameTitleResponse"
+            }
+          }
+        }
+      },
+      "GameTitleResponse" : {
+        "title" : "GameTitleResponse",
+        "type" : "object",
+        "required" : [
+          "id",
+          "name",
+          "layoutFamily",
+          "displayOrder",
+          "createdAt"
+        ],
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "layoutFamily" : {
+            "type" : "string"
+          },
+          "displayOrder" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "createdAt" : {
             "type" : "string"
           }
         }
@@ -896,6 +1371,84 @@
           "suriNoGinji" : {
             "type" : "integer",
             "format" : "int32"
+          }
+        }
+      },
+      "IncidentMasterListResponse" : {
+        "title" : "IncidentMasterListResponse",
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/IncidentMasterResponse"
+            }
+          }
+        }
+      },
+      "IncidentMasterResponse" : {
+        "title" : "IncidentMasterResponse",
+        "type" : "object",
+        "required" : [
+          "id",
+          "key",
+          "displayName",
+          "displayOrder"
+        ],
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "key" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "displayOrder" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "MapMasterListResponse" : {
+        "title" : "MapMasterListResponse",
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/MapMasterResponse"
+            }
+          }
+        }
+      },
+      "MapMasterResponse" : {
+        "title" : "MapMasterResponse",
+        "type" : "object",
+        "required" : [
+          "id",
+          "gameTitleId",
+          "name",
+          "displayOrder",
+          "createdAt"
+        ],
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "gameTitleId" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "displayOrder" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "createdAt" : {
+            "type" : "string"
           }
         }
       },
@@ -1134,6 +1687,47 @@
             "type" : "string"
           },
           "code" : {
+            "type" : "string"
+          }
+        }
+      },
+      "SeasonMasterListResponse" : {
+        "title" : "SeasonMasterListResponse",
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/SeasonMasterResponse"
+            }
+          }
+        }
+      },
+      "SeasonMasterResponse" : {
+        "title" : "SeasonMasterResponse",
+        "type" : "object",
+        "required" : [
+          "id",
+          "gameTitleId",
+          "name",
+          "displayOrder",
+          "createdAt"
+        ],
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "gameTitleId" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "displayOrder" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "createdAt" : {
             "type" : "string"
           }
         }

@@ -24,11 +24,20 @@ import momo.api.endpoints.AuthMeResponse
 import momo.api.endpoints.CancelOcrJobResponse
 import momo.api.endpoints.ConfirmMatchResponse
 import momo.api.endpoints.CreateOcrJobResponse
+import momo.api.endpoints.GameTitleListResponse
+import momo.api.endpoints.GameTitleResponse
+import momo.api.endpoints.GameTitlesEndpoints
 import momo.api.endpoints.HealthEndpoints
 import momo.api.endpoints.HeldEventListResponse
 import momo.api.endpoints.HeldEventResponse
 import momo.api.endpoints.HeldEventsEndpoints
 import momo.api.endpoints.IncidentCountsResponse
+import momo.api.endpoints.IncidentMasterListResponse
+import momo.api.endpoints.IncidentMasterResponse
+import momo.api.endpoints.IncidentMastersEndpoints
+import momo.api.endpoints.MapMasterListResponse
+import momo.api.endpoints.MapMasterResponse
+import momo.api.endpoints.MapMastersEndpoints
 import momo.api.endpoints.MatchesEndpoints
 import momo.api.endpoints.OcrDraftEndpoints
 import momo.api.endpoints.OcrDraftListResponse
@@ -37,16 +46,25 @@ import momo.api.endpoints.OcrJobEndpoints
 import momo.api.endpoints.OcrJobResponse
 import momo.api.endpoints.OpenApiEndpoints
 import momo.api.endpoints.PlayerResultResponse
+import momo.api.endpoints.SeasonMasterListResponse
+import momo.api.endpoints.SeasonMasterResponse
+import momo.api.endpoints.SeasonMastersEndpoints
 import momo.api.endpoints.UploadEndpoints
 import momo.api.endpoints.UploadImageResponse
 import momo.api.errors.AppError
 import momo.api.openapi.OpenApiGenerator
 import momo.api.usecases.CancelOcrJob
 import momo.api.usecases.ConfirmMatch
+import momo.api.usecases.CreateGameTitle
+import momo.api.usecases.CreateGameTitleCommand
 import momo.api.usecases.CreateHeldEvent
 import momo.api.usecases.CreateHeldEventCommand
+import momo.api.usecases.CreateMapMaster
+import momo.api.usecases.CreateMapMasterCommand
 import momo.api.usecases.CreateOcrJob
 import momo.api.usecases.CreateOcrJobCommand
+import momo.api.usecases.CreateSeasonMaster
+import momo.api.usecases.CreateSeasonMasterCommand
 import momo.api.usecases.GetOcrDraft
 import momo.api.usecases.GetOcrDraftsBulk
 import momo.api.usecases.GetOcrJob
@@ -85,22 +103,24 @@ object HttpApp:
         gameTitles <- InMemoryGameTitlesRepository.create[F]
         mapMasters <- InMemoryMapMastersRepository.create[F]
         seasonMasters <- InMemorySeasonMastersRepository.create[F]
+        incidentMasters <- InMemoryIncidentMastersRepository.create[F]
       yield
         val imageStore = LocalFsImageStore[F](config.imageTmpDir)
         val roster = MemberRoster.dev(config.devMemberIds)
         val uploadImage = UploadImage[F](imageStore)
+        val nowF = Async[F].delay(Instant.now())
         val createOcrJob = CreateOcrJob[F](
           imageStore = imageStore,
           jobs = jobs,
           drafts = drafts,
           queue = queue,
-          now = Async[F].delay(Instant.now()),
+          now = nowF,
           nextId = IdGenerator.uuidV7[F]
         )
         val getOcrJob = GetOcrJob[F](jobs)
         val getOcrDraft = GetOcrDraft[F](drafts)
         val getOcrDraftsBulk = GetOcrDraftsBulk[F](drafts)
-        val cancelOcrJob = CancelOcrJob[F](jobs, Async[F].delay(Instant.now()))
+        val cancelOcrJob = CancelOcrJob[F](jobs, nowF)
         val listHeldEvents = ListHeldEvents[F](heldEvents)
         val createHeldEvent = CreateHeldEvent[F](heldEvents, IdGenerator.uuidV7[F])
         val confirmMatch = ConfirmMatch[F](
@@ -109,10 +129,13 @@ object HttpApp:
           gameTitles = gameTitles,
           mapMasters = mapMasters,
           seasonMasters = seasonMasters,
-          now = Async[F].delay(Instant.now()),
+          now = nowF,
           nextId = IdGenerator.uuidV7[F],
           allowedMemberIds = config.devMemberIds.toSet
         )
+        val createGameTitle = CreateGameTitle[F](gameTitles, nowF)
+        val createMapMaster = CreateMapMaster[F](gameTitles, mapMasters, nowF)
+        val createSeasonMaster = CreateSeasonMaster[F](gameTitles, seasonMasters, nowF)
 
         val app = build(
           config = config,
@@ -125,7 +148,14 @@ object HttpApp:
           cancelOcrJob = cancelOcrJob,
           listHeldEvents = listHeldEvents,
           createHeldEvent = createHeldEvent,
-          confirmMatch = confirmMatch
+          confirmMatch = confirmMatch,
+          gameTitles = gameTitles,
+          mapMasters = mapMasters,
+          seasonMasters = seasonMasters,
+          incidentMasters = incidentMasters,
+          createGameTitle = createGameTitle,
+          createMapMaster = createMapMaster,
+          createSeasonMaster = createSeasonMaster
         )
         Wired(app, gameTitles, mapMasters, seasonMasters)
     }
@@ -141,7 +171,14 @@ object HttpApp:
       cancelOcrJob: CancelOcrJob[F],
       listHeldEvents: ListHeldEvents[F],
       createHeldEvent: CreateHeldEvent[F],
-      confirmMatch: ConfirmMatch[F]
+      confirmMatch: ConfirmMatch[F],
+      gameTitles: momo.api.repositories.GameTitlesRepository[F],
+      mapMasters: momo.api.repositories.MapMastersRepository[F],
+      seasonMasters: momo.api.repositories.SeasonMastersRepository[F],
+      incidentMasters: momo.api.repositories.IncidentMastersRepository[F],
+      createGameTitle: CreateGameTitle[F],
+      createMapMaster: CreateMapMaster[F],
+      createSeasonMaster: CreateSeasonMaster[F]
   ): Http4sApp[F] =
     def toProblem(error: AppError): ProblemDetails.ErrorInfo =
       ProblemDetails.from(error)
@@ -303,6 +340,76 @@ object HttpApp:
                   )
                 case Left(error) => Left(toProblem(error))
               }
+          }
+        },
+        GameTitlesEndpoints.list.serverLogic { devUser =>
+          authenticate(devUser).flatMap {
+            case Left(error) => Async[F].pure(Left(error))
+            case Right(_) =>
+              gameTitles.list.map(items => Right(GameTitleListResponse(items.map(GameTitleResponse.from))))
+          }
+        },
+        GameTitlesEndpoints.create.serverLogic { case (devUser, csrfToken, request) =>
+          authorizeMutation(devUser, csrfToken).flatMap {
+            case Left(error) => Async[F].pure(Left(error))
+            case Right(_) =>
+              createGameTitle
+                .run(CreateGameTitleCommand(request.id, request.name, request.layoutFamily))
+                .map {
+                  case Right(t)    => Right(GameTitleResponse.from(t))
+                  case Left(error) => Left(toProblem(error))
+                }
+          }
+        },
+        MapMastersEndpoints.list.serverLogic { case (gameTitleId, devUser) =>
+          authenticate(devUser).flatMap {
+            case Left(error) => Async[F].pure(Left(error))
+            case Right(_) =>
+              mapMasters.list(gameTitleId).map(items =>
+                Right(MapMasterListResponse(items.map(MapMasterResponse.from)))
+              )
+          }
+        },
+        MapMastersEndpoints.create.serverLogic { case (devUser, csrfToken, request) =>
+          authorizeMutation(devUser, csrfToken).flatMap {
+            case Left(error) => Async[F].pure(Left(error))
+            case Right(_) =>
+              createMapMaster
+                .run(CreateMapMasterCommand(request.id, request.gameTitleId, request.name))
+                .map {
+                  case Right(m)    => Right(MapMasterResponse.from(m))
+                  case Left(error) => Left(toProblem(error))
+                }
+          }
+        },
+        SeasonMastersEndpoints.list.serverLogic { case (gameTitleId, devUser) =>
+          authenticate(devUser).flatMap {
+            case Left(error) => Async[F].pure(Left(error))
+            case Right(_) =>
+              seasonMasters.list(gameTitleId).map(items =>
+                Right(SeasonMasterListResponse(items.map(SeasonMasterResponse.from)))
+              )
+          }
+        },
+        SeasonMastersEndpoints.create.serverLogic { case (devUser, csrfToken, request) =>
+          authorizeMutation(devUser, csrfToken).flatMap {
+            case Left(error) => Async[F].pure(Left(error))
+            case Right(_) =>
+              createSeasonMaster
+                .run(CreateSeasonMasterCommand(request.id, request.gameTitleId, request.name))
+                .map {
+                  case Right(s)    => Right(SeasonMasterResponse.from(s))
+                  case Left(error) => Left(toProblem(error))
+                }
+          }
+        },
+        IncidentMastersEndpoints.list.serverLogic { devUser =>
+          authenticate(devUser).flatMap {
+            case Left(error) => Async[F].pure(Left(error))
+            case Right(_) =>
+              incidentMasters.list.map(items =>
+                Right(IncidentMasterListResponse(items.map(IncidentMasterResponse.from)))
+              )
           }
         }
       )

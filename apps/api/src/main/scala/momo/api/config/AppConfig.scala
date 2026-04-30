@@ -2,10 +2,13 @@ package momo.api.config
 
 import cats.syntax.all.*
 import cats.MonadThrow
+import java.net.URI
 import java.nio.file.Path
 import scala.concurrent.duration.*
 
 final case class DatabaseConfig(jdbcUrl: String, user: String, password: String, poolSize: Int)
+
+final case class RedisConfig(url: String, stream: String, group: String)
 
 final case class AuthConfig(
     discordClientId: Option[String],
@@ -31,6 +34,7 @@ final case class AppConfig(
     devMemberIds: List[String],
     auth: AuthConfig = AuthConfig.defaults(AppEnv.Dev),
     database: Option[DatabaseConfig] = None,
+    redis: Option[RedisConfig] = None,
 )
 
 enum AppEnv derives CanEqual:
@@ -52,20 +56,22 @@ object AppConfig:
     val rawAppEnv = env.getOrElse("APP_ENV", "dev")
     AppEnv.fromString(rawAppEnv).leftMap(new IllegalArgumentException(_)).liftTo[F].flatMap {
       appEnv =>
-        (loadDatabase[F](env, appEnv), loadAuth[F](env, appEnv)).mapN { (database, auth) =>
-          AppConfig(
-            appEnv = appEnv,
-            httpHost = env.getOrElse("HTTP_HOST", "0.0.0.0"),
-            httpPort = env.get("HTTP_PORT").flatMap(_.toIntOption).getOrElse(8080),
-            imageTmpDir = Path.of(env.getOrElse("IMAGE_TMP_DIR", "/tmp/momo-result/uploads"))
-              .toAbsolutePath,
-            devMemberIds = env.get("DEV_MEMBER_IDS")
-              .map(_.split(",").iterator.map(_.trim).filter(_.nonEmpty).toList)
-              .getOrElse(DefaultDevMemberIds),
-            auth = auth,
-            database = database,
-          )
-        }
+        (loadDatabase[F](env, appEnv), loadRedis[F](env, appEnv), loadAuth[F](env, appEnv))
+          .mapN { (database, redis, auth) =>
+            AppConfig(
+              appEnv = appEnv,
+              httpHost = env.getOrElse("HTTP_HOST", "0.0.0.0"),
+              httpPort = env.get("HTTP_PORT").flatMap(_.toIntOption).getOrElse(8080),
+              imageTmpDir = Path.of(env.getOrElse("IMAGE_TMP_DIR", "/tmp/momo-result/uploads"))
+                .toAbsolutePath,
+              devMemberIds = env.get("DEV_MEMBER_IDS")
+                .map(_.split(",").iterator.map(_.trim).filter(_.nonEmpty).toList)
+                .getOrElse(DefaultDevMemberIds),
+              auth = auth,
+              database = database,
+              redis = redis,
+            )
+          }
     }
 
   private def loadDatabase[F[_]: MonadThrow](
@@ -78,11 +84,30 @@ object AppConfig:
         MonadThrow[F]
           .raiseError(new IllegalArgumentException("DATABASE_URL is required in prod APP_ENV"))
       case None => MonadThrow[F].pure(None)
-      case Some(jdbcUrl) => MonadThrow[F].pure(Some(DatabaseConfig(
+      case Some(rawUrl) =>
+        val (jdbcUrl, urlUser, urlPassword) = toJdbcUrl(rawUrl)
+        MonadThrow[F].pure(Some(DatabaseConfig(
           jdbcUrl = jdbcUrl,
-          user = env.getOrElse("DATABASE_USER", ""),
-          password = env.getOrElse("DATABASE_PASSWORD", ""),
+          user = urlUser.orElse(env.get("DATABASE_USER").filter(_.nonEmpty)).getOrElse(""),
+          password = urlPassword.orElse(env.get("DATABASE_PASSWORD").filter(_.nonEmpty))
+            .getOrElse(""),
           poolSize = env.get("DB_POOL_SIZE").flatMap(_.toIntOption).getOrElse(8),
+        )))
+
+  private def loadRedis[F[_]: MonadThrow](
+      env: Map[String, String],
+      appEnv: AppEnv,
+  ): F[Option[RedisConfig]] =
+    val urlOpt = env.get("REDIS_URL").filter(_.nonEmpty)
+    urlOpt match
+      case None if appEnv == AppEnv.Prod =>
+        MonadThrow[F]
+          .raiseError(new IllegalArgumentException("REDIS_URL is required in prod APP_ENV"))
+      case None => MonadThrow[F].pure(None)
+      case Some(url) => MonadThrow[F].pure(Some(RedisConfig(
+          url = url,
+          stream = env.getOrElse("OCR_REDIS_STREAM", "momo:ocr:jobs"),
+          group = env.getOrElse("OCR_REDIS_GROUP", "momo-ocr-workers"),
         )))
 
   private def loadAuth[F[_]: MonadThrow](env: Map[String, String], appEnv: AppEnv): F[AuthConfig] =
@@ -127,6 +152,29 @@ object AppConfig:
         s"Missing required production auth config: ${missing.mkString(", ")}"
       ))
     else MonadThrow[F].pure(config)
+
+  /**
+   * Convert a postgres:// or postgresql:// URL to a JDBC URL, extracting embedded credentials.
+   * Returns (jdbcUrl, userOption, passwordOption).
+   * Already-prefixed jdbc:postgresql:// URLs are passed through unchanged.
+   */
+  private[config] def toJdbcUrl(raw: String): (String, Option[String], Option[String]) =
+    if raw.startsWith("jdbc:") then (raw, None, None)
+    else
+      val normalized = raw.replaceFirst("^postgres(ql)?://", "postgresql://")
+      val uri         = URI.create(normalized)
+      val userInfo    = Option(uri.getUserInfo)
+      val (user, pass) = userInfo match
+        case None => (None, None)
+        case Some(info) =>
+          val parts = info.split(":", 2)
+          (Some(parts(0)).filter(_.nonEmpty), if parts.length > 1 then Some(parts(1)) else None)
+      val host    = Option(uri.getHost).getOrElse("localhost")
+      val port    = if uri.getPort > 0 then s":${uri.getPort}" else ""
+      val path    = Option(uri.getRawPath).getOrElse("")
+      val query   = Option(uri.getRawQuery).map(q => s"?$q").getOrElse("")
+      val jdbcUrl = s"jdbc:postgresql://$host$port$path$query"
+      (jdbcUrl, user, pass)
 
 object AuthConfig:
   def defaults(appEnv: AppEnv): AuthConfig = AuthConfig(

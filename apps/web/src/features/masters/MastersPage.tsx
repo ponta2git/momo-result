@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { layoutFamilies } from "@/shared/api/enums";
 import type { LayoutFamily } from "@/shared/api/enums";
@@ -158,6 +158,13 @@ function ScopedMasterSection({
 }) {
   const queryClient = useQueryClient();
   const [selectedGameTitleId, setSelectedGameTitleId] = useState<string>(gameTitles[0]?.id ?? "");
+  useEffect(() => {
+    if (gameTitles.length === 0) return;
+    const exists = gameTitles.some((gt) => gt.id === selectedGameTitleId);
+    if (!exists) {
+      setSelectedGameTitleId(gameTitles[0]!.id);
+    }
+  }, [gameTitles, selectedGameTitleId]);
   const { data } = useQuery({
     queryKey: ["masters", queryKey, selectedGameTitleId],
     queryFn: () => listFn(selectedGameTitleId || undefined),

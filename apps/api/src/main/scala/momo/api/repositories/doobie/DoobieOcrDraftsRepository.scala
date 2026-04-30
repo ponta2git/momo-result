@@ -7,13 +7,11 @@ import doobie.implicits.*
 import doobie.postgres.circe.jsonb.implicits.*
 import doobie.postgres.implicits.*
 import io.circe.Json
-import momo.api.domain.OcrDraft
-import momo.api.domain.ScreenType
-import momo.api.domain.ids.*
-import momo.api.repositories.OcrDraftsRepository
-import momo.api.repositories.doobie.DoobieMeta.given
-
 import java.time.Instant
+import momo.api.domain.{OcrDraft, ScreenType}
+import momo.api.domain.ids.*
+import momo.api.repositories.doobie.DoobieMeta.given
+import momo.api.repositories.OcrDraftsRepository
 
 final class DoobieOcrDraftsRepository[F[_]: MonadCancelThrow](xa: Transactor[F])
     extends OcrDraftsRepository[F]:
@@ -28,25 +26,23 @@ final class DoobieOcrDraftsRepository[F[_]: MonadCancelThrow](xa: Transactor[F])
       Json,
       Json,
       Instant,
-      Instant
+      Instant,
   )
 
-  private def toDraft(r: Row): OcrDraft =
-    OcrDraft(
-      id = r._1,
-      jobId = r._2,
-      requestedScreenType = r._3,
-      detectedScreenType = r._4,
-      profileId = r._5,
-      payloadJson = r._6,
-      warningsJson = r._7,
-      timingsMsJson = r._8,
-      createdAt = r._9,
-      updatedAt = r._10
-    )
+  private def toDraft(r: Row): OcrDraft = OcrDraft(
+    id = r._1,
+    jobId = r._2,
+    requestedScreenType = r._3,
+    detectedScreenType = r._4,
+    profileId = r._5,
+    payloadJson = r._6,
+    warningsJson = r._7,
+    timingsMsJson = r._8,
+    createdAt = r._9,
+    updatedAt = r._10,
+  )
 
-  override def create(draft: OcrDraft): F[Unit] =
-    sql"""
+  override def create(draft: OcrDraft): F[Unit] = sql"""
       INSERT INTO ocr_drafts (
         id, job_id,
         requested_screen_type, detected_screen_type, profile_id,
@@ -60,8 +56,7 @@ final class DoobieOcrDraftsRepository[F[_]: MonadCancelThrow](xa: Transactor[F])
       )
     """.update.run.void.transact(xa)
 
-  override def find(draftId: DraftId): F[Option[OcrDraft]] =
-    sql"""
+  override def find(draftId: DraftId): F[Option[OcrDraft]] = sql"""
       SELECT id, job_id, requested_screen_type, detected_screen_type, profile_id,
              payload_json, warnings_json, timings_ms_json, created_at, updated_at
       FROM ocr_drafts

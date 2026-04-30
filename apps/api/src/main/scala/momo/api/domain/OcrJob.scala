@@ -1,11 +1,10 @@
 package momo.api.domain
 
-import momo.api.domain.ids.*
-
 import java.nio.file.Path
 import java.time.Instant
+import momo.api.domain.ids.*
 
-enum OcrJobStatus(val wire: String):
+enum OcrJobStatus(val wire: String) derives CanEqual:
   case Queued extends OcrJobStatus("queued")
   case Running extends OcrJobStatus("running")
   case Succeeded extends OcrJobStatus("succeeded")
@@ -16,7 +15,7 @@ final case class OcrFailure(
     code: FailureCode,
     message: String,
     retryable: Boolean,
-    userAction: Option[String]
+    userAction: Option[String],
 )
 
 final case class OcrJob(
@@ -34,5 +33,5 @@ final case class OcrJob(
     finishedAt: Option[Instant],
     durationMs: Option[Int],
     createdAt: Instant,
-    updatedAt: Instant
+    updatedAt: Instant,
 )

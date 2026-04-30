@@ -5,23 +5,19 @@ import cats.syntax.all.*
 import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
-import momo.api.repositories.AppSession
-import momo.api.repositories.AppSessionsRepository
-
 import java.time.Instant
+import momo.api.repositories.{AppSession, AppSessionsRepository}
 
 final class DoobieAppSessionsRepository[F[_]: MonadCancelThrow](xa: Transactor[F])
     extends AppSessionsRepository[F]:
 
-  override def find(id: String): F[Option[AppSession]] =
-    sql"""
+  override def find(id: String): F[Option[AppSession]] = sql"""
       SELECT id, member_id, csrf_secret, created_at, last_seen_at, expires_at
       FROM app_sessions
       WHERE id = $id
     """.query[AppSession].option.transact(xa)
 
-  override def upsert(session: AppSession): F[Unit] =
-    sql"""
+  override def upsert(session: AppSession): F[Unit] = sql"""
       INSERT INTO app_sessions
         (id, member_id, csrf_secret, created_at, last_seen_at, expires_at)
       VALUES
@@ -34,12 +30,9 @@ final class DoobieAppSessionsRepository[F[_]: MonadCancelThrow](xa: Transactor[F
         expires_at   = EXCLUDED.expires_at
     """.update.run.void.transact(xa)
 
-  override def delete(id: String): F[Unit] =
-    sql"DELETE FROM app_sessions WHERE id = $id".update.run.void.transact(xa)
+  override def delete(id: String): F[Unit] = sql"DELETE FROM app_sessions WHERE id = $id".update.run
+    .void.transact(xa)
 
   override def touchLastSeen(id: String, lastSeenAt: Instant): F[Unit] =
-    sql"UPDATE app_sessions SET last_seen_at = $lastSeenAt WHERE id = $id"
-      .update
-      .run
-      .void
+    sql"UPDATE app_sessions SET last_seen_at = $lastSeenAt WHERE id = $id".update.run.void
       .transact(xa)

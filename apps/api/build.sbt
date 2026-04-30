@@ -1,8 +1,15 @@
 import sbt.*
 import sbt.Keys.*
 
-ThisBuild / scalaVersion := "3.3.6"
+ThisBuild / scalaVersion := "3.8.3"
 ThisBuild / semanticdbEnabled := true
+ThisBuild / semanticdbVersion := scalafixSemanticdb.revision
+
+addCommandAlias("apiFormat", "scalafmtAll")
+addCommandAlias("apiFormatCheck", "scalafmtCheckAll")
+addCommandAlias("apiLint", "scalafixAll --check")
+addCommandAlias("apiFix", "scalafixAll")
+addCommandAlias("apiQuality", "apiFormatCheck; apiLint; Test / compile; apiOpenApiCheck")
 
 lazy val apiOpenApi = taskKey[File]("Generate OpenAPI from Tapir endpoint definitions")
 lazy val apiOpenApiCheck = taskKey[Unit]("Check that openapi.yaml can be generated")
@@ -13,8 +20,16 @@ lazy val root = (project in file("."))
     organization := "momo",
     scalacOptions ++= Seq(
       "-deprecation",
+      "-encoding",
+      "UTF-8",
+      "-explain",
       "-feature",
-      "-unchecked"
+      "-unchecked",
+      "-Wunused:all",
+      "-Wvalue-discard",
+      "-Wnonunit-statement",
+      "-Werror",
+      "-language:strictEquality"
     ),
     Compile / run / mainClass := Some("momo.api.Main"),
     Compile / run / fork := true,
@@ -22,13 +37,13 @@ lazy val root = (project in file("."))
     Test / parallelExecution := false,
     Test / fork := false,
     libraryDependencies ++= {
-      val catsEffectVersion = "3.5.7"
-      val circeVersion = "0.14.10"
-      val doobieVersion = "1.0.0-RC6"
-      val http4sVersion = "0.23.30"
-      val munitCatsEffectVersion = "2.0.0"
-      val munitVersion = "1.0.2"
-      val tapirVersion = "1.11.13"
+      val catsEffectVersion = "3.7.0"
+      val circeVersion = "0.14.15"
+      val doobieVersion = "1.0.0-RC12"
+      val http4sVersion = "0.23.34"
+      val munitCatsEffectVersion = "2.2.0"
+      val munitVersion = "1.3.0"
+      val tapirVersion = "1.13.17"
 
       Seq(
         "org.typelevel" %% "cats-effect" % catsEffectVersion,

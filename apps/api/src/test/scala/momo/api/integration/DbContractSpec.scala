@@ -2,12 +2,11 @@ package momo.api.integration
 
 import cats.effect.IO
 import doobie.implicits.*
-import doobie.postgres.implicits.*
 
-/** Lightweight smoke test that the local Postgres exposes the columns and
-  * seeded rows the API expects. If this fails, the migrations in `momo-db`
-  * have drifted from the API's contract.
-  */
+/**
+ * Lightweight smoke test that the local Postgres exposes the columns and seeded rows the API
+ * expects. If this fails, the migrations in `momo-db` have drifted from the API's contract.
+ */
 final class DbContractSpec extends IntegrationSuite:
 
   test("members table is seeded with the four MVP players"):
@@ -19,7 +18,7 @@ final class DbContractSpec extends IntegrationSuite:
       assertEquals(
         ids,
         Set("member_ponta", "member_akane_mami", "member_otaka", "member_eu"),
-        s"unexpected members: $rows"
+        s"unexpected members: $rows",
       )
     }
 
@@ -36,8 +35,8 @@ final class DbContractSpec extends IntegrationSuite:
           "incident_minus_station",
           "incident_card_station",
           "incident_card_shop",
-          "incident_suri_no_ginji"
-        )
+          "incident_suri_no_ginji",
+        ),
       )
     }
 
@@ -64,7 +63,7 @@ final class DbContractSpec extends IntegrationSuite:
         "incident_log_draft_id",
         "created_by_member_id",
         "created_at",
-        "updated_at"
+        "updated_at",
       )
       val missing = expected -- cols.toSet
       assert(missing.isEmpty, s"matches is missing columns: $missing (have $cols)")
@@ -90,7 +89,7 @@ final class DbContractSpec extends IntegrationSuite:
     program.map { cols =>
       assertEquals(
         cols.toSet,
-        Set("failure_code", "failure_message", "failure_retryable", "failure_user_action")
+        Set("failure_code", "failure_message", "failure_retryable", "failure_user_action"),
       )
     }
 end DbContractSpec

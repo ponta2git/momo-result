@@ -1,11 +1,9 @@
 package momo.api.integration
 
 import cats.effect.IO
-import cats.syntax.all.*
+import java.time.Instant
 import momo.api.domain.*
 import momo.api.repositories.doobie.*
-
-import java.time.Instant
 
 final class DoobieMatchesRepositorySpec extends IntegrationSuite:
 
@@ -26,9 +24,7 @@ final class DoobieMatchesRepositorySpec extends IntegrationSuite:
     for
       _ <- gameTitles.create(GameTitle(gameTitleId, "桃太郎電鉄ワールド", "world", 1, now))
       _ <- mapMasters.create(MapMaster(mapMasterId, gameTitleId, "東日本編", 1, now))
-      _ <- seasonMasters.create(
-        SeasonMaster(seasonMasterId, gameTitleId, "2024-spring", 1, now)
-      )
+      _ <- seasonMasters.create(SeasonMaster(seasonMasterId, gameTitleId, "2024-spring", 1, now))
       _ <- heldEvents.create(HeldEvent(heldEventId, now))
     yield ()
 
@@ -38,48 +34,62 @@ final class DoobieMatchesRepositorySpec extends IntegrationSuite:
       rank: Int,
       totalAssets: Int,
       revenue: Int,
-      destination: Int = 0,
-      plusStation: Int = 0
-  ): PlayerResult =
-    PlayerResult(
-      memberId = memberId,
-      playOrder = playOrder,
-      rank = rank,
-      totalAssetsManYen = totalAssets,
-      revenueManYen = revenue,
-      incidents = IncidentCounts(
-        destination = destination,
-        plusStation = plusStation,
-        minusStation = 0,
-        cardStation = 0,
-        cardShop = 0,
-        suriNoGinji = 0
-      )
-    )
+  ): PlayerResult = playerWithIncidents(
+    memberId = memberId,
+    playOrder = playOrder,
+    rank = rank,
+    totalAssets = totalAssets,
+    revenue = revenue,
+    destination = 0,
+    plusStation = 0,
+  )
 
-  private def sampleMatch(id: String, matchNo: Int): MatchRecord =
-    MatchRecord(
-      id = id,
-      heldEventId = heldEventId,
-      matchNoInEvent = matchNo,
-      gameTitleId = gameTitleId,
-      layoutFamily = "world",
-      seasonMasterId = seasonMasterId,
-      ownerMemberId = "member_ponta",
-      mapMasterId = mapMasterId,
-      playedAt = now,
-      totalAssetsDraftId = None,
-      revenueDraftId = None,
-      incidentLogDraftId = None,
-      players = List(
-        player("member_ponta", 1, 1, 12000, 3000, destination = 5, plusStation = 2),
-        player("member_akane_mami", 2, 2, 9000, 1500),
-        player("member_otaka", 3, 3, 6500, 800),
-        player("member_eu", 4, 4, 4000, 200)
-      ),
-      createdByMemberId = "member_ponta",
-      createdAt = now
-    )
+  private def playerWithIncidents(
+      memberId: String,
+      playOrder: Int,
+      rank: Int,
+      totalAssets: Int,
+      revenue: Int,
+      destination: Int,
+      plusStation: Int,
+  ): PlayerResult = PlayerResult(
+    memberId = memberId,
+    playOrder = playOrder,
+    rank = rank,
+    totalAssetsManYen = totalAssets,
+    revenueManYen = revenue,
+    incidents = IncidentCounts(
+      destination = destination,
+      plusStation = plusStation,
+      minusStation = 0,
+      cardStation = 0,
+      cardShop = 0,
+      suriNoGinji = 0,
+    ),
+  )
+
+  private def sampleMatch(id: String, matchNo: Int): MatchRecord = MatchRecord(
+    id = id,
+    heldEventId = heldEventId,
+    matchNoInEvent = matchNo,
+    gameTitleId = gameTitleId,
+    layoutFamily = "world",
+    seasonMasterId = seasonMasterId,
+    ownerMemberId = "member_ponta",
+    mapMasterId = mapMasterId,
+    playedAt = now,
+    totalAssetsDraftId = None,
+    revenueDraftId = None,
+    incidentLogDraftId = None,
+    players = List(
+      playerWithIncidents("member_ponta", 1, 1, 12000, 3000, destination = 5, plusStation = 2),
+      player("member_akane_mami", 2, 2, 9000, 1500),
+      player("member_otaka", 3, 3, 6500, 800),
+      player("member_eu", 4, 4, 4000, 200),
+    ),
+    createdByMemberId = "member_ponta",
+    createdAt = now,
+  )
 
   test("create persists matches + 4 players + 24 incident rows atomically"):
     val rec = sampleMatch("match_001", 1)
@@ -142,12 +152,12 @@ final class DoobieMatchesRepositorySpec extends IntegrationSuite:
   test("duplicate match_no_in_event for same held_event raises"):
     val rec1 = sampleMatch("match_001", 1)
     val rec2 = sampleMatch("match_002", 1)
-    val program = for
-      _ <- seedPrereqs
-      _ <- matches.create(rec1)
-      e <- matches.create(rec2).attempt
-    yield e
-    program.map { result =>
-      assert(result.isLeft, s"expected duplicate match_no to fail, got $result")
-    }
+    val program =
+      for
+        _ <- seedPrereqs
+        _ <- matches.create(rec1)
+        e <- matches.create(rec2).attempt
+      yield e
+    program
+      .map(result => assert(result.isLeft, s"expected duplicate match_no to fail, got $result"))
 end DoobieMatchesRepositorySpec

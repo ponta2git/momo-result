@@ -5,17 +5,12 @@ import cats.syntax.all.*
 import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
-import momo.api.domain.FailureCode
-import momo.api.domain.OcrFailure
-import momo.api.domain.OcrJob
-import momo.api.domain.OcrJobStatus
-import momo.api.domain.ScreenType
-import momo.api.domain.ids.*
-import momo.api.repositories.OcrJobsRepository
-import momo.api.repositories.doobie.DoobieMeta.given
-
 import java.nio.file.Path
 import java.time.Instant
+import momo.api.domain.{FailureCode, OcrFailure, OcrJob, OcrJobStatus, ScreenType}
+import momo.api.domain.ids.*
+import momo.api.repositories.doobie.DoobieMeta.given
+import momo.api.repositories.OcrJobsRepository
 
 final class DoobieOcrJobsRepository[F[_]: MonadCancelThrow](xa: Transactor[F])
     extends OcrJobsRepository[F]:
@@ -38,13 +33,12 @@ final class DoobieOcrJobsRepository[F[_]: MonadCancelThrow](xa: Transactor[F])
       Option[Instant],
       Option[Int],
       Instant,
-      Instant
+      Instant,
   )
 
   private def toJob(r: Row): OcrJob =
     val failure = (r._10, r._11, r._12) match
-      case (Some(code), Some(msg), Some(retry)) =>
-        Some(OcrFailure(code, msg, retry, r._13))
+      case (Some(code), Some(msg), Some(retry)) => Some(OcrFailure(code, msg, retry, r._13))
       case _ => None
     OcrJob(
       id = r._1,
@@ -61,11 +55,10 @@ final class DoobieOcrJobsRepository[F[_]: MonadCancelThrow](xa: Transactor[F])
       finishedAt = r._15,
       durationMs = r._16,
       createdAt = r._17,
-      updatedAt = r._18
+      updatedAt = r._18,
     )
 
-  private val selectAll =
-    fr"""SELECT
+  private val selectAll = fr"""SELECT
            id, draft_id, image_id, image_path,
            requested_screen_type, detected_screen_type,
            status, attempt_count, worker_id,
@@ -74,8 +67,7 @@ final class DoobieOcrJobsRepository[F[_]: MonadCancelThrow](xa: Transactor[F])
            created_at, updated_at
          FROM ocr_jobs"""
 
-  override def create(job: OcrJob): F[Unit] =
-    sql"""
+  override def create(job: OcrJob): F[Unit] = sql"""
       INSERT INTO ocr_jobs (
         id, draft_id, image_id, image_path,
         requested_screen_type, detected_screen_type,
@@ -94,11 +86,10 @@ final class DoobieOcrJobsRepository[F[_]: MonadCancelThrow](xa: Transactor[F])
       )
     """.update.run.void.transact(xa)
 
-  override def find(jobId: JobId): F[Option[OcrJob]] =
-    (selectAll ++ fr"WHERE id = $jobId").query[Row].option.map(_.map(toJob)).transact(xa)
+  override def find(jobId: JobId): F[Option[OcrJob]] = (selectAll ++ fr"WHERE id = $jobId")
+    .query[Row].option.map(_.map(toJob)).transact(xa)
 
-  override def markFailed(jobId: JobId, failure: OcrFailure, now: Instant): F[Unit] =
-    sql"""
+  override def markFailed(jobId: JobId, failure: OcrFailure, now: Instant): F[Unit] = sql"""
       UPDATE ocr_jobs SET
         status = ${OcrJobStatus.Failed},
         failure_code = ${failure.code},
@@ -110,8 +101,7 @@ final class DoobieOcrJobsRepository[F[_]: MonadCancelThrow](xa: Transactor[F])
       WHERE id = $jobId
     """.update.run.void.transact(xa)
 
-  override def cancelQueued(jobId: JobId, now: Instant): F[Boolean] =
-    sql"""
+  override def cancelQueued(jobId: JobId, now: Instant): F[Boolean] = sql"""
       UPDATE ocr_jobs SET
         status = ${OcrJobStatus.Cancelled},
         finished_at = $now,

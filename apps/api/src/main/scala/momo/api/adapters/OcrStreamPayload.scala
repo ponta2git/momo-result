@@ -1,15 +1,12 @@
 package momo.api.adapters
 
-import io.circe.Json
-import io.circe.Printer
+import io.circe.{Json, Printer}
 import io.circe.syntax.*
-import momo.api.domain.OcrJobHints
-import momo.api.domain.ScreenType
-import momo.api.domain.ids.*
-
 import java.nio.file.Path
-import java.time.Instant
 import java.time.format.DateTimeFormatter
+import java.time.Instant
+import momo.api.domain.{OcrJobHints, ScreenType}
+import momo.api.domain.ids.*
 
 final case class OcrStreamPayload(fields: Map[String, String])
 
@@ -18,8 +15,7 @@ object OcrStreamPayload:
     Set("jobId", "draftId", "imageId", "imagePath", "requestedImageType", "attempt", "enqueuedAt")
   val HintsKey = "ocrHintsJson"
 
-  private val printer: Printer =
-    Printer.noSpaces.copy(dropNullValues = true, sortKeys = true)
+  private val printer: Printer = Printer.noSpaces.copy(dropNullValues = true, sortKeys = true)
 
   def build(
       jobId: JobId,
@@ -29,7 +25,7 @@ object OcrStreamPayload:
       requestedScreenType: ScreenType,
       attempt: Int,
       enqueuedAt: Instant,
-      hints: OcrJobHints
+      hints: OcrJobHints,
   ): OcrStreamPayload =
     val base = Map(
       "jobId" -> jobId.value,
@@ -38,7 +34,7 @@ object OcrStreamPayload:
       "imagePath" -> imagePath.toString,
       "requestedImageType" -> requestedScreenType.wire,
       "attempt" -> attempt.toString,
-      "enqueuedAt" -> DateTimeFormatter.ISO_INSTANT.format(enqueuedAt)
+      "enqueuedAt" -> DateTimeFormatter.ISO_INSTANT.format(enqueuedAt),
     )
 
     val withHints =
@@ -47,7 +43,7 @@ object OcrStreamPayload:
 
     OcrStreamPayload(withHints)
 
-  def fieldsAsJson(payload: OcrStreamPayload): Json =
-    Json.obj(
-      payload.fields.toSeq.sortBy(_._1).map { case (key, value) => key -> Json.fromString(value) }*
-    )
+  def fieldsAsJson(payload: OcrStreamPayload): Json = Json
+    .obj(payload.fields.toSeq.sortBy(_._1).map { case (key, value) =>
+      key -> Json.fromString(value)
+    }*)

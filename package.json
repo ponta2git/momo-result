@@ -3,6 +3,12 @@
   "private": true,
   "packageManager": "pnpm@10.10.0",
   "scripts": {
+    "api:fix": "cd apps/api && sbt apiFix",
+    "api:format": "cd apps/api && sbt apiFormat",
+    "api:format:check": "cd apps/api && sbt apiFormatCheck",
+    "api:lint": "cd apps/api && sbt apiLint",
+    "api:quality": "cd apps/api && sbt apiQuality",
+    "api:test": "cd apps/api && sbt test",
     "web:dev": "pnpm --filter web dev",
     "web:build": "pnpm --filter web build",
     "web:test": "pnpm --filter web test:run",

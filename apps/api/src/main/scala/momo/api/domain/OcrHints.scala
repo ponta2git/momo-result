@@ -8,10 +8,7 @@ final case class OcrJobHints(
     gameTitle: Option[String] = None,
     layoutFamily: Option[String] = None,
     knownPlayerAliases: List[PlayerAliasHint] = Nil,
-    computerPlayerAliases: List[String] = Nil
+    computerPlayerAliases: List[String] = Nil,
 ) derives Codec.AsObject:
-  def isEmpty: Boolean =
-    gameTitle.isEmpty &&
-      layoutFamily.isEmpty &&
-      knownPlayerAliases.isEmpty &&
-      computerPlayerAliases.isEmpty
+  def isEmpty: Boolean = gameTitle.isEmpty && layoutFamily.isEmpty && knownPlayerAliases.isEmpty &&
+    computerPlayerAliases.isEmpty

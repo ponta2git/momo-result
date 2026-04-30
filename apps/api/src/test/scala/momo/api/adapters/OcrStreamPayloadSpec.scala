@@ -1,14 +1,11 @@
 package momo.api.adapters
 
 import io.circe.Json
-import momo.api.domain.OcrJobHints
-import momo.api.domain.PlayerAliasHint
-import momo.api.domain.ScreenType
-import momo.api.domain.ids.*
-import munit.FunSuite
-
 import java.nio.file.Path
 import java.time.Instant
+import momo.api.domain.{OcrJobHints, PlayerAliasHint, ScreenType}
+import momo.api.domain.ids.*
+import munit.FunSuite
 
 final class OcrStreamPayloadSpec extends FunSuite:
   test("builds the exact Redis Streams payload expected by the OCR worker without hints") {
@@ -20,7 +17,7 @@ final class OcrStreamPayloadSpec extends FunSuite:
       requestedScreenType = ScreenType.TotalAssets,
       attempt = 1,
       enqueuedAt = Instant.parse("2026-04-29T11:40:16Z"),
-      hints = OcrJobHints()
+      hints = OcrJobHints(),
     )
 
     assertEquals(
@@ -32,8 +29,8 @@ final class OcrStreamPayloadSpec extends FunSuite:
         "imagePath" -> "/tmp/momo-result/uploads/image-1.png",
         "requestedImageType" -> "total_assets",
         "attempt" -> "1",
-        "enqueuedAt" -> "2026-04-29T11:40:16Z"
-      )
+        "enqueuedAt" -> "2026-04-29T11:40:16Z",
+      ),
     )
   }
 
@@ -50,13 +47,13 @@ final class OcrStreamPayloadSpec extends FunSuite:
         gameTitle = Some("桃太郎電鉄ワールド"),
         layoutFamily = Some("world"),
         knownPlayerAliases = List(PlayerAliasHint("member-1", List("ぽんた", "PONTA"))),
-        computerPlayerAliases = List("さくま", "サクマ")
-      )
+        computerPlayerAliases = List("さくま", "サクマ"),
+      ),
     )
 
     assertEquals(
       payload.fields(OcrStreamPayload.HintsKey),
-      """{"computerPlayerAliases":["さくま","サクマ"],"gameTitle":"桃太郎電鉄ワールド","knownPlayerAliases":[{"aliases":["ぽんた","PONTA"],"memberId":"member-1"}],"layoutFamily":"world"}"""
+      """{"computerPlayerAliases":["さくま","サクマ"],"gameTitle":"桃太郎電鉄ワールド","knownPlayerAliases":[{"aliases":["ぽんた","PONTA"],"memberId":"member-1"}],"layoutFamily":"world"}""",
     )
   }
 

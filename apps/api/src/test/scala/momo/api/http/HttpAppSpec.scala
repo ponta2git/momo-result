@@ -1,28 +1,23 @@
 package momo.api.http
 
-import cats.effect.IO
-import cats.effect.Resource
+import cats.effect.{IO, Resource}
 import io.circe.Json
+import java.nio.file.Files
+import momo.api.config.{AppConfig, AppEnv}
 import momo.api.MomoCatsEffectSuite
-import momo.api.config.AppConfig
-import momo.api.config.AppEnv
-import org.http4s.Method
-import org.http4s.Request
-import org.http4s.Status
+import org.http4s.{Method, Request, Status}
 import org.http4s.circe.*
 import org.http4s.implicits.*
 
-import java.nio.file.Files
-
 final class HttpAppSpec extends MomoCatsEffectSuite:
-  private def app =
-    Resource.eval(IO.blocking(Files.createTempDirectory("momo-api-http"))).flatMap { dir =>
+  private def app = Resource.eval(IO.blocking(Files.createTempDirectory("momo-api-http")))
+    .flatMap { dir =>
       val config = AppConfig(
         appEnv = AppEnv.Test,
         httpHost = "127.0.0.1",
         httpPort = 0,
         imageTmpDir = dir,
-        devMemberIds = List("ponta", "akane-mami", "otaka", "eu")
+        devMemberIds = List("ponta", "akane-mami", "otaka", "eu"),
       )
       HttpApp.resource[IO](config)
     }
@@ -55,22 +50,17 @@ final class HttpAppSpec extends MomoCatsEffectSuite:
     app.use { httpApp =>
       val request = Request[IO](Method.POST, uri"/api/ocr-jobs")
         .putHeaders(org.http4s.Header.Raw(org.typelevel.ci.CIString("X-Dev-User"), "ponta"))
-        .withEntity(
-          Json.obj(
-            "imageId" -> Json.fromString("missing"),
-            "requestedImageType" -> Json.fromString("auto")
-          )
-        )
-      httpApp.run(request).map { response =>
-        assertEquals(response.status, Status.Forbidden)
-      }
+        .withEntity(Json.obj(
+          "imageId" -> Json.fromString("missing"),
+          "requestedImageType" -> Json.fromString("auto"),
+        ))
+      httpApp.run(request).map(response => assertEquals(response.status, Status.Forbidden))
     }
   }
 
   test("protected endpoint without auth header returns 401") {
     app.use { httpApp =>
-      httpApp.run(Request[IO](Method.GET, uri"/api/auth/me")).map { response =>
-        assertEquals(response.status, Status.Unauthorized)
-      }
+      httpApp.run(Request[IO](Method.GET, uri"/api/auth/me"))
+        .map(response => assertEquals(response.status, Status.Unauthorized))
     }
   }

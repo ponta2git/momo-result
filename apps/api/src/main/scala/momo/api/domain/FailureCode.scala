@@ -1,6 +1,6 @@
 package momo.api.domain
 
-enum FailureCode(val wire: String, val retryable: Boolean):
+enum FailureCode(val wire: String, val retryable: Boolean) derives CanEqual:
   case TempImageMissing extends FailureCode("TEMP_IMAGE_MISSING", false)
   case InvalidImage extends FailureCode("INVALID_IMAGE", false)
   case UnsupportedImageFormat extends FailureCode("UNSUPPORTED_IMAGE_FORMAT", false)
@@ -15,5 +15,4 @@ enum FailureCode(val wire: String, val retryable: Boolean):
   case QueueFailure extends FailureCode("QUEUE_FAILURE", false)
 
 object FailureCode:
-  def fromWire(value: String): Option[FailureCode] =
-    values.find(_.wire == value)
+  def fromWire(value: String): Option[FailureCode] = values.find(_.wire == value)

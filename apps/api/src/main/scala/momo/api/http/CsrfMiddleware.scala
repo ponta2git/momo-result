@@ -10,13 +10,12 @@ object CsrfMiddleware:
 
   def validate[F[_]: Applicative](
       appEnv: AppEnv,
-      token: Option[String]
+      token: Option[String],
   ): F[Either[AppError, Unit]] =
-    val result =
-      appEnv match
-        case AppEnv.Dev | AppEnv.Test if token.contains(DevToken) => Right(())
-        case AppEnv.Dev | AppEnv.Test =>
-          Left(AppError.Forbidden("Development CSRF token is required. Use X-CSRF-Token: dev."))
-        case AppEnv.Prod =>
-          Left(AppError.Forbidden("CSRF validation is not configured for production yet."))
+    val result = appEnv match
+      case AppEnv.Dev | AppEnv.Test if token.contains(DevToken) => Right(())
+      case AppEnv.Dev | AppEnv.Test =>
+        Left(AppError.Forbidden("Development CSRF token is required. Use X-CSRF-Token: dev."))
+      case AppEnv.Prod =>
+        Left(AppError.Forbidden("CSRF validation is not configured for production yet."))
     Applicative[F].pure(result)

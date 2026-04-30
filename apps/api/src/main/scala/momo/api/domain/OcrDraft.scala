@@ -1,9 +1,8 @@
 package momo.api.domain
 
 import io.circe.Json
-import momo.api.domain.ids.*
-
 import java.time.Instant
+import momo.api.domain.ids.*
 
 final case class OcrDraft(
     id: DraftId,
@@ -15,5 +14,5 @@ final case class OcrDraft(
     warningsJson: Json,
     timingsMsJson: Json,
     createdAt: Instant,
-    updatedAt: Instant
+    updatedAt: Instant,
 )

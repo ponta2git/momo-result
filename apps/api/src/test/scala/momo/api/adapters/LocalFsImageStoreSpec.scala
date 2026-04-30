@@ -1,10 +1,9 @@
 package momo.api.adapters
 
 import cats.effect.IO
+import java.nio.file.Files
 import momo.api.errors.AppError
 import momo.api.MomoCatsEffectSuite
-
-import java.nio.file.Files
 
 final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:
   private val pngBytes: Array[Byte] =
@@ -14,12 +13,10 @@ final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:
     IO.blocking(Files.createTempDirectory("momo-api-image-store")).flatMap { dir =>
       val store = LocalFsImageStore[IO](dir)
       store.save(Some("sample.png"), Some("image/png"), pngBytes).flatMap {
-        case Right(image) =>
-          IO.blocking(Files.exists(image.path)).assertEquals(true) *>
+        case Right(image) => IO.blocking(Files.exists(image.path)).assertEquals(true) *>
             IO(assertEquals(image.mediaType, "image/png")) *>
             IO(assertEquals(image.sizeBytes, pngBytes.length.toLong))
-        case Left(error) =>
-          fail(s"expected image to be stored: $error")
+        case Left(error) => fail(s"expected image to be stored: $error")
       }
     }
   }
@@ -28,10 +25,8 @@ final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:
     IO.blocking(Files.createTempDirectory("momo-api-image-store")).flatMap { dir =>
       val store = LocalFsImageStore[IO](dir)
       store.save(Some("sample.txt"), Some("text/plain"), Array[Byte](1, 2, 3)).map {
-        case Left(error: AppError.UnsupportedMediaType) =>
-          assert(error.detail.contains("PNG"))
-        case other =>
-          fail(s"expected unsupported media type, got $other")
+        case Left(error: AppError.UnsupportedMediaType) => assert(error.detail.contains("PNG"))
+        case other => fail(s"expected unsupported media type, got $other")
       }
     }
   }
@@ -43,8 +38,7 @@ final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:
       store.save(Some("large.png"), Some("image/png"), tooLarge).map {
         case Left(error: AppError.PayloadTooLarge) =>
           assert(error.detail.contains(LocalFsImageStore.MaxBytes.toString))
-        case other =>
-          fail(s"expected payload too large, got $other")
+        case other => fail(s"expected payload too large, got $other")
       }
     }
   }

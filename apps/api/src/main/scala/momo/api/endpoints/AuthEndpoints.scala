@@ -6,6 +6,10 @@ import sttp.tapir.generic.auto.*
 import sttp.tapir.json.circe.*
 
 object AuthEndpoints:
-  val me: PublicEndpoint[Option[String], ErrorInfo, AuthMeResponse, Any] = endpoint.get
-    .in("api" / "auth" / "me").in(header[Option[String]]("X-Dev-User"))
-    .errorOut(CommonEndpoint.errorOut).out(jsonBody[AuthMeResponse]).tag("auth")
+  val me: PublicEndpoint[Option[String], ErrorInfo, AuthMeResponse, Any] = endpoint
+    .get
+    .in("api" / "auth" / "me")
+    .in(header[Option[String]]("X-Dev-User"))
+    .errorOut(CommonEndpoint.errorOut)
+    .out(jsonBody[AuthMeResponse])
+    .tag("auth")

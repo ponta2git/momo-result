@@ -17,7 +17,24 @@ import momo.api.adapters.InMemorySeasonMastersRepository
 import momo.api.adapters.LocalFsImageStore
 import momo.api.auth.MemberRoster
 import momo.api.config.AppConfig
+import momo.api.db.Database
 import momo.api.domain.IdGenerator
+import momo.api.repositories.GameTitlesRepository
+import momo.api.repositories.HeldEventsRepository
+import momo.api.repositories.IncidentMastersRepository
+import momo.api.repositories.MapMastersRepository
+import momo.api.repositories.MatchesRepository
+import momo.api.repositories.OcrDraftsRepository
+import momo.api.repositories.OcrJobsRepository
+import momo.api.repositories.SeasonMastersRepository
+import momo.api.repositories.doobie.DoobieGameTitlesRepository
+import momo.api.repositories.doobie.DoobieHeldEventsRepository
+import momo.api.repositories.doobie.DoobieIncidentMastersRepository
+import momo.api.repositories.doobie.DoobieMapMastersRepository
+import momo.api.repositories.doobie.DoobieMatchesRepository
+import momo.api.repositories.doobie.DoobieOcrDraftsRepository
+import momo.api.repositories.doobie.DoobieOcrJobsRepository
+import momo.api.repositories.doobie.DoobieSeasonMastersRepository
 import momo.api.domain.ids.*
 import momo.api.endpoints.AuthEndpoints
 import momo.api.endpoints.AuthMeResponse
@@ -92,73 +109,131 @@ object HttpApp:
   def resource[F[_]: Async](config: AppConfig): Resource[F, Http4sApp[F]] =
     wired[F](config).map(_.app)
 
+  /** Build all dependencies. When `config.database` is set we use Doobie
+    * repositories backed by HikariCP; otherwise we wire up InMemory adapters
+    * (used by tests and the early dev environment).
+    */
   def wired[F[_]: Async](config: AppConfig): Resource[F, Wired[F]] =
-    Resource.eval {
-      for
-        jobs <- InMemoryOcrJobsRepository.create[F]
-        drafts <- InMemoryOcrDraftsRepository.create[F]
-        queue <- InMemoryQueueProducer.create[F]
-        heldEvents <- InMemoryHeldEventsRepository.create[F]
-        matches <- InMemoryMatchesRepository.create[F]
-        gameTitles <- InMemoryGameTitlesRepository.create[F]
-        mapMasters <- InMemoryMapMastersRepository.create[F]
-        seasonMasters <- InMemorySeasonMastersRepository.create[F]
-        incidentMasters <- InMemoryIncidentMastersRepository.create[F]
-      yield
-        val imageStore = LocalFsImageStore[F](config.imageTmpDir)
-        val roster = MemberRoster.dev(config.devMemberIds)
-        val uploadImage = UploadImage[F](imageStore)
-        val nowF = Async[F].delay(Instant.now())
-        val createOcrJob = CreateOcrJob[F](
-          imageStore = imageStore,
-          jobs = jobs,
-          drafts = drafts,
-          queue = queue,
-          now = nowF,
-          nextId = IdGenerator.uuidV7[F]
-        )
-        val getOcrJob = GetOcrJob[F](jobs)
-        val getOcrDraft = GetOcrDraft[F](drafts)
-        val getOcrDraftsBulk = GetOcrDraftsBulk[F](drafts)
-        val cancelOcrJob = CancelOcrJob[F](jobs, nowF)
-        val listHeldEvents = ListHeldEvents[F](heldEvents, matches)
-        val createHeldEvent = CreateHeldEvent[F](heldEvents, IdGenerator.uuidV7[F])
-        val confirmMatch = ConfirmMatch[F](
-          heldEvents = heldEvents,
-          matches = matches,
-          gameTitles = gameTitles,
-          mapMasters = mapMasters,
-          seasonMasters = seasonMasters,
-          now = nowF,
-          nextId = IdGenerator.uuidV7[F],
-          allowedMemberIds = config.devMemberIds.toSet
-        )
-        val createGameTitle = CreateGameTitle[F](gameTitles, nowF)
-        val createMapMaster = CreateMapMaster[F](gameTitles, mapMasters, nowF)
-        val createSeasonMaster = CreateSeasonMaster[F](gameTitles, seasonMasters, nowF)
+    config.database match
+      case Some(db) =>
+        Database.transactor[F](db).evalMap { xa =>
+          for
+            queue <- InMemoryQueueProducer.create[F]
+          yield
+            val jobs: OcrJobsRepository[F] = DoobieOcrJobsRepository[F](xa)
+            val drafts: OcrDraftsRepository[F] = DoobieOcrDraftsRepository[F](xa)
+            val heldEvents: HeldEventsRepository[F] = DoobieHeldEventsRepository[F](xa)
+            val matches: MatchesRepository[F] = DoobieMatchesRepository[F](xa)
+            val gameTitles: GameTitlesRepository[F] = DoobieGameTitlesRepository[F](xa)
+            val mapMasters: MapMastersRepository[F] = DoobieMapMastersRepository[F](xa)
+            val seasonMasters: SeasonMastersRepository[F] =
+              DoobieSeasonMastersRepository[F](xa)
+            val incidentMasters: IncidentMastersRepository[F] =
+              DoobieIncidentMastersRepository[F](xa)
+            assemble(
+              config = config,
+              queue = queue,
+              jobs = jobs,
+              drafts = drafts,
+              heldEvents = heldEvents,
+              matches = matches,
+              gameTitles = gameTitles,
+              mapMasters = mapMasters,
+              seasonMasters = seasonMasters,
+              incidentMasters = incidentMasters
+            )
+        }
+      case None =>
+        Resource.eval {
+          for
+            jobs <- InMemoryOcrJobsRepository.create[F]
+            drafts <- InMemoryOcrDraftsRepository.create[F]
+            queue <- InMemoryQueueProducer.create[F]
+            heldEvents <- InMemoryHeldEventsRepository.create[F]
+            matches <- InMemoryMatchesRepository.create[F]
+            gameTitles <- InMemoryGameTitlesRepository.create[F]
+            mapMasters <- InMemoryMapMastersRepository.create[F]
+            seasonMasters <- InMemorySeasonMastersRepository.create[F]
+            incidentMasters <- InMemoryIncidentMastersRepository.create[F]
+          yield assemble(
+            config = config,
+            queue = queue,
+            jobs = jobs,
+            drafts = drafts,
+            heldEvents = heldEvents,
+            matches = matches,
+            gameTitles = gameTitles,
+            mapMasters = mapMasters,
+            seasonMasters = seasonMasters,
+            incidentMasters = incidentMasters
+          )
+        }
 
-        val app = build(
-          config = config,
-          roster = roster,
-          uploadImage = uploadImage,
-          createOcrJob = createOcrJob,
-          getOcrJob = getOcrJob,
-          getOcrDraft = getOcrDraft,
-          getOcrDraftsBulk = getOcrDraftsBulk,
-          cancelOcrJob = cancelOcrJob,
-          listHeldEvents = listHeldEvents,
-          createHeldEvent = createHeldEvent,
-          confirmMatch = confirmMatch,
-          gameTitles = gameTitles,
-          mapMasters = mapMasters,
-          seasonMasters = seasonMasters,
-          incidentMasters = incidentMasters,
-          createGameTitle = createGameTitle,
-          createMapMaster = createMapMaster,
-          createSeasonMaster = createSeasonMaster
-        )
-        Wired(app, gameTitles, mapMasters, seasonMasters)
-    }
+  private def assemble[F[_]: Async](
+      config: AppConfig,
+      queue: momo.api.repositories.QueueProducer[F],
+      jobs: OcrJobsRepository[F],
+      drafts: OcrDraftsRepository[F],
+      heldEvents: HeldEventsRepository[F],
+      matches: MatchesRepository[F],
+      gameTitles: GameTitlesRepository[F],
+      mapMasters: MapMastersRepository[F],
+      seasonMasters: SeasonMastersRepository[F],
+      incidentMasters: IncidentMastersRepository[F]
+  ): Wired[F] =
+    val imageStore = LocalFsImageStore[F](config.imageTmpDir)
+    val roster = MemberRoster.dev(config.devMemberIds)
+    val uploadImage = UploadImage[F](imageStore)
+    val nowF = Async[F].delay(Instant.now())
+    val createOcrJob = CreateOcrJob[F](
+      imageStore = imageStore,
+      jobs = jobs,
+      drafts = drafts,
+      queue = queue,
+      now = nowF,
+      nextId = IdGenerator.uuidV7[F]
+    )
+    val getOcrJob = GetOcrJob[F](jobs)
+    val getOcrDraft = GetOcrDraft[F](drafts)
+    val getOcrDraftsBulk = GetOcrDraftsBulk[F](drafts)
+    val cancelOcrJob = CancelOcrJob[F](jobs, nowF)
+    val listHeldEvents = ListHeldEvents[F](heldEvents, matches)
+    val createHeldEvent = CreateHeldEvent[F](heldEvents, IdGenerator.uuidV7[F])
+    val confirmMatch = ConfirmMatch[F](
+      heldEvents = heldEvents,
+      matches = matches,
+      gameTitles = gameTitles,
+      mapMasters = mapMasters,
+      seasonMasters = seasonMasters,
+      now = nowF,
+      nextId = IdGenerator.uuidV7[F],
+      allowedMemberIds = config.devMemberIds.toSet
+    )
+    val createGameTitle = CreateGameTitle[F](gameTitles, nowF)
+    val createMapMaster = CreateMapMaster[F](gameTitles, mapMasters, nowF)
+    val createSeasonMaster = CreateSeasonMaster[F](gameTitles, seasonMasters, nowF)
+
+    val app = build(
+      config = config,
+      roster = roster,
+      uploadImage = uploadImage,
+      createOcrJob = createOcrJob,
+      getOcrJob = getOcrJob,
+      getOcrDraft = getOcrDraft,
+      getOcrDraftsBulk = getOcrDraftsBulk,
+      cancelOcrJob = cancelOcrJob,
+      listHeldEvents = listHeldEvents,
+      createHeldEvent = createHeldEvent,
+      confirmMatch = confirmMatch,
+      gameTitles = gameTitles,
+      mapMasters = mapMasters,
+      seasonMasters = seasonMasters,
+      incidentMasters = incidentMasters,
+      createGameTitle = createGameTitle,
+      createMapMaster = createMapMaster,
+      createSeasonMaster = createSeasonMaster
+    )
+    Wired(app, gameTitles, mapMasters, seasonMasters)
 
   private def build[F[_]: Async](
       config: AppConfig,

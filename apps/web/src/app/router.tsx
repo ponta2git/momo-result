@@ -15,6 +15,10 @@ export const router = createBrowserRouter([
     element: <App />,
   },
   {
+    path: "/admin/masters",
+    element: <App />,
+  },
+  {
     path: "*",
     element: <Navigate to="/ocr/new" replace />,
   },

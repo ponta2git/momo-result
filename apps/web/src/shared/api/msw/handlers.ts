@@ -1,6 +1,63 @@
 import { http, HttpResponse } from "msw";
 
 const now = "2026-01-01T00:00:00.000Z";
+
+type GameTitleRecord = {
+  id: string;
+  name: string;
+  layoutFamily: string;
+  displayOrder: number;
+  createdAt: string;
+};
+type ScopedMasterRecord = {
+  id: string;
+  gameTitleId: string;
+  name: string;
+  displayOrder: number;
+  createdAt: string;
+};
+type IncidentRecord = {
+  id: string;
+  key: string;
+  displayName: string;
+  displayOrder: number;
+};
+
+const gameTitlesStore: GameTitleRecord[] = [
+  {
+    id: "gt_momotetsu_2",
+    name: "桃太郎電鉄2",
+    layoutFamily: "momotetsu_2",
+    displayOrder: 1,
+    createdAt: now,
+  },
+];
+const mapMastersStore: ScopedMasterRecord[] = [
+  {
+    id: "map_east",
+    gameTitleId: "gt_momotetsu_2",
+    name: "東日本編",
+    displayOrder: 1,
+    createdAt: now,
+  },
+];
+const seasonMastersStore: ScopedMasterRecord[] = [
+  {
+    id: "season_current",
+    gameTitleId: "gt_momotetsu_2",
+    name: "今シーズン",
+    displayOrder: 1,
+    createdAt: now,
+  },
+];
+const incidentMastersSeed: IncidentRecord[] = [
+  { id: "incident_destination", key: "destination", displayName: "目的地", displayOrder: 1 },
+  { id: "incident_plus_station", key: "plusStation", displayName: "プラス駅", displayOrder: 2 },
+  { id: "incident_minus_station", key: "minusStation", displayName: "マイナス駅", displayOrder: 3 },
+  { id: "incident_card_station", key: "cardStation", displayName: "カード駅", displayOrder: 4 },
+  { id: "incident_card_shop", key: "cardShop", displayName: "カード売り場", displayOrder: 5 },
+  { id: "incident_suri_no_ginji", key: "suriNoGinji", displayName: "スリの銀次", displayOrder: 6 },
+];
 const playerField = (value: unknown, confidence = 0.96) => ({
   value,
   raw_text: value == null ? null : String(value),
@@ -143,37 +200,78 @@ export const handlers = [
       createdAt: now,
     }),
   ),
-  http.get("/api/game-titles", () => HttpResponse.json({ items: [] })),
-  http.post("/api/game-titles", async () =>
+  http.get("/api/game-titles", () =>
     HttpResponse.json({
-      id: "gt-1",
-      name: "stub",
-      layoutFamily: "momotetsu_2",
-      displayOrder: 1,
-      createdAt: now,
+      items: gameTitlesStore.map((item) => ({ ...item })),
     }),
   ),
-  http.get("/api/map-masters", () => HttpResponse.json({ items: [] })),
-  http.post("/api/map-masters", async () =>
-    HttpResponse.json({
-      id: "map-1",
-      gameTitleId: "gt-1",
-      name: "stub",
-      displayOrder: 1,
+  http.post("/api/game-titles", async ({ request }) => {
+    const body = (await request.json()) as {
+      id: string;
+      name: string;
+      layoutFamily: string;
+    };
+    const created = {
+      id: body.id,
+      name: body.name,
+      layoutFamily: body.layoutFamily,
+      displayOrder: gameTitlesStore.length + 1,
       createdAt: now,
-    }),
-  ),
-  http.get("/api/season-masters", () => HttpResponse.json({ items: [] })),
-  http.post("/api/season-masters", async () =>
-    HttpResponse.json({
-      id: "season-1",
-      gameTitleId: "gt-1",
-      name: "stub",
-      displayOrder: 1,
+    };
+    gameTitlesStore.push(created);
+    return HttpResponse.json(created);
+  }),
+  http.get("/api/map-masters", ({ request }) => {
+    const url = new URL(request.url);
+    const gameTitleId = url.searchParams.get("gameTitleId");
+    const items = gameTitleId
+      ? mapMastersStore.filter((item) => item.gameTitleId === gameTitleId)
+      : mapMastersStore;
+    return HttpResponse.json({ items: items.map((item) => ({ ...item })) });
+  }),
+  http.post("/api/map-masters", async ({ request }) => {
+    const body = (await request.json()) as {
+      id: string;
+      gameTitleId: string;
+      name: string;
+    };
+    const created = {
+      id: body.id,
+      gameTitleId: body.gameTitleId,
+      name: body.name,
+      displayOrder: mapMastersStore.length + 1,
       createdAt: now,
-    }),
+    };
+    mapMastersStore.push(created);
+    return HttpResponse.json(created);
+  }),
+  http.get("/api/season-masters", ({ request }) => {
+    const url = new URL(request.url);
+    const gameTitleId = url.searchParams.get("gameTitleId");
+    const items = gameTitleId
+      ? seasonMastersStore.filter((item) => item.gameTitleId === gameTitleId)
+      : seasonMastersStore;
+    return HttpResponse.json({ items: items.map((item) => ({ ...item })) });
+  }),
+  http.post("/api/season-masters", async ({ request }) => {
+    const body = (await request.json()) as {
+      id: string;
+      gameTitleId: string;
+      name: string;
+    };
+    const created = {
+      id: body.id,
+      gameTitleId: body.gameTitleId,
+      name: body.name,
+      displayOrder: seasonMastersStore.length + 1,
+      createdAt: now,
+    };
+    seasonMastersStore.push(created);
+    return HttpResponse.json(created);
+  }),
+  http.get("/api/incident-masters", () =>
+    HttpResponse.json({ items: incidentMastersSeed.map((item) => ({ ...item })) }),
   ),
-  http.get("/api/incident-masters", () => HttpResponse.json({ items: [] })),
   http.delete("/api/ocr-jobs/:jobId", ({ params }) =>
     HttpResponse.json({
       jobId: params.jobId,

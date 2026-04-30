@@ -14,12 +14,14 @@ import { confirmMatchSchema, toConfirmMatchRequest } from "@/features/draftRevie
 import type { ConfirmMatchFormValues } from "@/features/draftReview/schema";
 import { createSampleDraftMap } from "@/features/draftReview/sampleDrafts";
 import {
-  findGameTitle,
   fixedMembers,
-  gameTitles,
-  seasons,
 } from "@/features/ocrCapture/localMasters";
 import { defaultSetupValues } from "@/features/ocrCapture/schema";
+import {
+  listGameTitles,
+  listMapMasters,
+  listSeasonMasters,
+} from "@/shared/api/masters";
 import type { SlotKind } from "@/shared/api/enums";
 import { slotKinds } from "@/shared/api/enums";
 import { getAuthMe } from "@/shared/api/client";
@@ -290,14 +292,13 @@ export function DraftReviewPage() {
     heldAt: toLocalDateTime(new Date().toISOString()),
   });
   const [values, setValues] = useState<ConfirmMatchFormValues>(() => {
-    const gameTitle = findGameTitle(defaultSetupValues.gameTitleId);
     return {
       heldEventId: "",
       matchNoInEvent: 1,
-      gameTitleId: gameTitle.id,
-      seasonMasterId: defaultSetupValues.seasonId,
+      gameTitleId: "",
+      seasonMasterId: "",
       ownerMemberId: defaultSetupValues.ownerMemberId,
-      mapMasterId: defaultSetupValues.mapName,
+      mapMasterId: "",
       playedAt: new Date().toISOString(),
       draftIds: Object.fromEntries(
         [
@@ -318,6 +319,20 @@ export function DraftReviewPage() {
   const heldEventsQuery = useQuery({
     queryKey: ["held-events"],
     queryFn: () => listHeldEvents("", 10),
+  });
+  const gameTitlesQuery = useQuery({
+    queryKey: ["masters", "game-titles"],
+    queryFn: listGameTitles,
+  });
+  const mapMastersQuery = useQuery({
+    queryKey: ["masters", "map-masters", values.gameTitleId],
+    queryFn: () => listMapMasters(values.gameTitleId || undefined),
+    enabled: Boolean(values.gameTitleId),
+  });
+  const seasonMastersQuery = useQuery({
+    queryKey: ["masters", "season-masters", values.gameTitleId],
+    queryFn: () => listSeasonMasters(values.gameTitleId || undefined),
+    enabled: Boolean(values.gameTitleId),
   });
   const draftsQuery = useQuery({
     queryKey: ["ocr-drafts-bulk", idList.join(",")],
@@ -355,9 +370,9 @@ export function DraftReviewPage() {
     () => new Map(merged.players.map((player) => [player.memberId, player])),
     [merged.players],
   );
-  const selectedGame =
-    gameTitles.find((gameTitle) => gameTitle.id === values.gameTitleId) ??
-    findGameTitle(defaultSetupValues.gameTitleId);
+  const gameTitleItems = gameTitlesQuery.data?.items ?? [];
+  const mapMasterItems = mapMastersQuery.data?.items ?? [];
+  const seasonMasterItems = seasonMastersQuery.data?.items ?? [];
   const heldEvents = heldEventsQuery.data?.items ?? [];
   const selectedHeldEvent = heldEvents.find((event) => event.id === values.heldEventId);
   const authError = authQuery.error ? normalizeUnknownApiError(authQuery.error) : undefined;
@@ -365,6 +380,37 @@ export function DraftReviewPage() {
   const confirmError = confirmMutation.error
     ? normalizeUnknownApiError(confirmMutation.error)
     : undefined;
+
+  useEffect(() => {
+    const first = gameTitleItems[0];
+    if (!values.gameTitleId && first) {
+      setValues((current) => ({ ...current, gameTitleId: first.id }));
+    }
+  }, [gameTitleItems, values.gameTitleId]);
+
+  useEffect(() => {
+    const first = mapMasterItems[0];
+    if (
+      values.gameTitleId &&
+      !values.mapMasterId &&
+      first &&
+      first.gameTitleId === values.gameTitleId
+    ) {
+      setValues((current) => ({ ...current, mapMasterId: first.id }));
+    }
+  }, [mapMasterItems, values.gameTitleId, values.mapMasterId]);
+
+  useEffect(() => {
+    const first = seasonMasterItems[0];
+    if (
+      values.gameTitleId &&
+      !values.seasonMasterId &&
+      first &&
+      first.gameTitleId === values.gameTitleId
+    ) {
+      setValues((current) => ({ ...current, seasonMasterId: first.id }));
+    }
+  }, [seasonMasterItems, values.gameTitleId, values.seasonMasterId]);
 
   useEffect(() => {
     if (draftsQuery.isSuccess || useSampleDrafts) {
@@ -443,12 +489,10 @@ export function DraftReviewPage() {
   }
 
   function handleGameTitleChange(gameTitleId: string) {
-    const gameTitle =
-      gameTitles.find((candidate) => candidate.id === gameTitleId) ??
-      findGameTitle(defaultSetupValues.gameTitleId);
     patchValue({
-      gameTitleId: gameTitle.id,
-      mapMasterId: gameTitle.maps[0] ?? "",
+      gameTitleId,
+      mapMasterId: "",
+      seasonMasterId: "",
     });
   }
 
@@ -486,6 +530,15 @@ export function DraftReviewPage() {
           </div>
         ) : null}
       </div>
+      {gameTitleItems.length === 0 && gameTitlesQuery.isSuccess ? (
+        <div className="mt-4 rounded-[1.25rem] border border-rail-gold/55 bg-rail-gold/10 p-4 text-sm text-ink-100">
+          作品マスタが未登録です。
+          <Link className="ml-2 underline hover:text-rail-gold" to="/admin/masters">
+            マスタ管理画面
+          </Link>
+          で追加してください。
+        </div>
+      ) : null}
 
       <div className="mt-5 grid gap-4 lg:grid-cols-12">
         <label className="grid gap-2 lg:col-span-5">
@@ -540,9 +593,10 @@ export function DraftReviewPage() {
             value={values.gameTitleId}
             onChange={(event) => handleGameTitleChange(event.target.value)}
           >
-            {gameTitles.map((gameTitle) => (
+            <option value="">選択してください</option>
+            {gameTitleItems.map((gameTitle) => (
               <option key={gameTitle.id} value={gameTitle.id}>
-                {gameTitle.displayName}
+                {gameTitle.name}
               </option>
             ))}
           </select>
@@ -554,10 +608,12 @@ export function DraftReviewPage() {
             className={inputClass}
             value={values.seasonMasterId}
             onChange={(event) => patchValue({ seasonMasterId: event.target.value })}
+            disabled={!values.gameTitleId}
           >
-            {seasons.map((season) => (
+            <option value="">選択してください</option>
+            {seasonMasterItems.map((season) => (
               <option key={season.id} value={season.id}>
-                {season.displayName}
+                {season.name}
               </option>
             ))}
           </select>
@@ -569,10 +625,12 @@ export function DraftReviewPage() {
             className={inputClass}
             value={values.mapMasterId}
             onChange={(event) => patchValue({ mapMasterId: event.target.value })}
+            disabled={!values.gameTitleId}
           >
-            {selectedGame.maps.map((mapName) => (
-              <option key={mapName} value={mapName}>
-                {mapName}
+            <option value="">選択してください</option>
+            {mapMasterItems.map((mapMaster) => (
+              <option key={mapMaster.id} value={mapMaster.id}>
+                {mapMaster.name}
               </option>
             ))}
           </select>

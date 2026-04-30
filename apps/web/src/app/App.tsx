@@ -3,11 +3,19 @@ import { useLocation } from "react-router-dom";
 import { ErrorBoundary } from "@/app/ErrorBoundary";
 import { queryClient } from "@/app/queryClient";
 import { DraftReviewPage } from "@/features/draftReview/DraftReviewPage";
+import { MastersPage } from "@/features/masters/MastersPage";
 import { OcrCapturePage } from "@/features/ocrCapture/OcrCapturePage";
 
 export function App() {
   const location = useLocation();
-  const page = location.pathname.startsWith("/review/") ? <DraftReviewPage /> : <OcrCapturePage />;
+  let page;
+  if (location.pathname.startsWith("/review/")) {
+    page = <DraftReviewPage />;
+  } else if (location.pathname.startsWith("/admin/masters")) {
+    page = <MastersPage />;
+  } else {
+    page = <OcrCapturePage />;
+  }
 
   return (
     <QueryClientProvider client={queryClient}>

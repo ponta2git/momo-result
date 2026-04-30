@@ -19,6 +19,8 @@ lazy val root = (project in file("."))
     Compile / run / mainClass := Some("momo.api.Main"),
     Compile / run / fork := true,
     Compile / run / javaOptions += "-Dcats.effect.warnOnNonMainThreadDetected=false",
+    Test / parallelExecution := false,
+    Test / fork := false,
     libraryDependencies ++= {
       val catsEffectVersion = "3.5.7"
       val circeVersion = "0.14.10"

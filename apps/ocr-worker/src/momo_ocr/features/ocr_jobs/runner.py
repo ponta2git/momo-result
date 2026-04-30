@@ -21,6 +21,7 @@ integration shape.
 from __future__ import annotations
 
 import logging
+import os
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -176,10 +177,13 @@ def _process_delivery(deps: JobRunnerDependencies, delivery: PulledJob) -> OcrJo
         return OcrJobStatus.CANCELLED
 
     started = time.monotonic()
+    # DEBUG: MOMO_OCR_DEBUG_DIR が設定されていればジョブ別に ROI/前処理画像を吐く。
+    # 環境変数を外せば完全に無効化される opt-in モード。
+    debug_dir = _resolve_debug_dir(message.job_id)
     analysis = deps.analyze(
         image_path=message.image_path,
         requested_screen_type=message.requested_screen_type.value,
-        debug_dir=None,
+        debug_dir=debug_dir,
         include_raw_text=False,
         layout_family_hint=message.hints.layout_family,
         alias_resolver=_alias_resolver_from_hints(message.hints),
@@ -244,6 +248,26 @@ def _process_delivery(deps: JobRunnerDependencies, delivery: PulledJob) -> OcrJo
         ),
     )
     return OcrJobStatus.SUCCEEDED
+
+
+def _resolve_debug_dir(job_id: object) -> Path | None:
+    """Return a per-job debug directory when MOMO_OCR_DEBUG_DIR is set.
+
+    DEBUG: opt-in。環境変数が未設定/空なら `None` を返し、本番パイプラインに
+    一切の副作用を与えない。設定時は ``<base>/<job_id>/`` を返す。
+    """
+
+    base = os.environ.get("MOMO_OCR_DEBUG_DIR", "").strip()
+    if not base:
+        return None
+    safe_id = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in str(job_id))
+    debug_dir = Path(base).expanduser() / safe_id
+    try:
+        debug_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        logger.warning("Failed to create MOMO_OCR_DEBUG_DIR=%s; disabling debug dump", debug_dir)
+        return None
+    return debug_dir
 
 
 def _alias_resolver_from_hints(hints: OcrJobHints) -> PlayerAliasResolver:

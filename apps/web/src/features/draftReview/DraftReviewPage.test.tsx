@@ -101,7 +101,7 @@ describe("DraftReviewPage", () => {
     expect(screen.getByText("OCR読み取り状況を確認")).toBeInTheDocument();
     expect(screen.getByDisplayValue("あかねまみ")).toBeInTheDocument();
     expect(screen.getByDisplayValue("15420")).toBeInTheDocument();
-    expect(screen.getByText(/確認セル/)).toBeInTheDocument();
+    expect(screen.getByText(/緑=高信頼OCR/)).toBeInTheDocument();
   });
 
   it("allows clearing and retyping numeric result cells without prefixing zero", async () => {

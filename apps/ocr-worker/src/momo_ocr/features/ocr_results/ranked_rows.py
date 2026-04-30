@@ -9,13 +9,14 @@ from unicodedata import normalize
 
 from PIL import Image, ImageEnhance, ImageOps
 
+from momo_ocr.features.image_processing.preprocessing import otsu_binarize
 from momo_ocr.features.ocr_domain.money import MONEY_TEXT_RE
 from momo_ocr.features.text_recognition.engine import TextRecognitionEngine
 from momo_ocr.features.text_recognition.models import RecognitionConfig, RecognitionField
 from momo_ocr.features.text_recognition.postprocess import normalize_ocr_text
 
 MIN_NOISE_PREFIX_TOKENS = 2
-ROW_OCR_PSMS = (6, 7, 11)
+ROW_OCR_PSMS = (6, 7)
 # Minimum normalized alias surface length. NFKC + lowercasing reduces
 # canonical names like ``NO11社長`` to 5 characters. Aliases shorter than
 # this (e.g. ``た社長``) are rejected because they are too easy to match
@@ -116,33 +117,8 @@ def _is_inverted_text(image: Image.Image) -> bool:
 
 
 def _otsu_binarize(image: Image.Image) -> Image.Image:
-    """Return a binarized variant using Otsu's threshold on a grayscale image."""
-    gray = ImageOps.grayscale(image)
-    histogram = gray.histogram()[:256]
-    total = sum(histogram)
-    if total == 0:
-        return gray
-    sum_total = sum(i * histogram[i] for i in range(256))
-    sum_b = 0.0
-    weight_b = 0
-    max_var = 0.0
-    threshold = 127
-    for i in range(256):
-        weight_b += histogram[i]
-        if weight_b == 0:
-            continue
-        weight_f = total - weight_b
-        if weight_f == 0:
-            break
-        sum_b += i * histogram[i]
-        mean_b = sum_b / weight_b
-        mean_f = (sum_total - sum_b) / weight_f
-        between = weight_b * weight_f * (mean_b - mean_f) ** 2
-        if between > max_var:
-            max_var = between
-            threshold = i
-    binarized = gray.point(lambda value, threshold=threshold: 255 if value > threshold else 0)
-    return binarized.convert("L")
+    """Backwards-compatible wrapper around the shared Otsu utility."""
+    return otsu_binarize(image)
 
 
 def prepare_ranked_row_image_variants(image: Image.Image) -> tuple[Image.Image, ...]:
@@ -193,7 +169,10 @@ def recognize_ranked_row_text(
     if not _has_money_and_name(snippets):
         _try_variants(secondary_variants, text_engine, snippets, confidences)
 
-    confidence = min(confidences) if confidences else None
+    # Variants are independent attempts at the same row. Use max instead of
+    # min so a single failed preprocessing pass (confidence ~ 0) does not
+    # erase the confidence of a successful one.
+    confidence = max(confidences) if confidences else None
     return RankedRowOcrResult(text=" | ".join(snippets), confidence=confidence)
 
 

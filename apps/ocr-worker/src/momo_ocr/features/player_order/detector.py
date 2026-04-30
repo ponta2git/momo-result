@@ -232,11 +232,19 @@ def _recognize_slot_name(
         if cleaned is not None:
             candidates.append((cleaned, recognized.confidence))
 
-    for candidate, confidence in candidates:
-        if "社長" in candidate and not _is_name_noise(candidate):
-            return candidate, confidence
+    # Prefer the highest-confidence candidate that contains 社長, then any
+    # 社長-bearing candidate, then the highest-confidence candidate overall.
+    # Falling back to "first PSM wins" can let a noisy low-confidence read
+    # (e.g. PSM 7 misreading a player avatar) override a clean PSM 6/13 read.
+    sho_cho_candidates = [
+        (name, confidence)
+        for name, confidence in candidates
+        if "社長" in name and not _is_name_noise(name)
+    ]
+    if sho_cho_candidates:
+        return max(sho_cho_candidates, key=lambda item: item[1] or 0.0)
     if candidates:
-        return candidates[0]
+        return max(candidates, key=lambda item: item[1] or 0.0)
     return None, None
 
 

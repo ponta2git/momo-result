@@ -58,7 +58,7 @@ class TotalAssetsParser:
                 )
 
             recognized_row = recognize_ranked_row_text(
-                prepared_row,
+                row_image,
                 text_engine=context.text_engine,
                 fallback_image=row_image,
             )

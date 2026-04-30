@@ -36,14 +36,10 @@ def test_revenue_parser_extracts_ranked_players_and_amounts(tmp_path: Path) -> N
         [
             "] 《 NO1 1社長 1億5800万円 | 6",
             "寺w4.11 ドー | & 148580059 | NO1 1 社長 1億5800万円",
-            "GQ NO1 1社長 1億5800万円 |",
             "ぽんた社長 9100万円",
             "ぽんた社長 9100万円",
-            "QR ぽんた社長 9100万円 |",
             "に Ad おたか社長 5000万円 回",
             "Ad おたか社長 5000万円",
-            "ee おたか社長 5000万円 還",
-            "A いーゆー社長 0円",
             "A いーゆー社長 0円",
             "A いーゆー社長 0円",
         ]
@@ -83,7 +79,7 @@ def test_revenue_parser_extracts_ranked_players_and_amounts(tmp_path: Path) -> N
 def test_revenue_parser_warns_for_unreadable_row(tmp_path: Path) -> None:
     image_path = tmp_path / "revenue.jpg"
     Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
-    engine = SequenceTextRecognitionEngine(["unknown"] * 36)
+    engine = SequenceTextRecognitionEngine(["unknown"] * 24)
 
     payload = RevenueParser().parse(
         ScreenParseContext(

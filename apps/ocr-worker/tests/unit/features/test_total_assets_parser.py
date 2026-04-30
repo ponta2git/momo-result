@@ -48,16 +48,12 @@ def test_total_assets_parser_extracts_ranked_players_and_amounts(tmp_path: Path)
         [
             "| 《 NO1 1 社長 3億8480万円 | 7",
             "| 《 NO1 1 社長 3億8480万円 | 7",
-            "| 《 NO1 1 社長 3億8480万円 | 7",
             "\\ Wee) | O® おーたか社長 3億6080万円 年",
             "\\ Wee) | O® おーたか社長 3億6080万円 年",
-            "\\ Wee) | O® おーたか社長 3億6080万円 年",
-            "OW ぽんた社長 2億4460万円",
             "OW ぽんた社長 2億4460万円",
             "OW ぽんた社長 2億4460万円",
             "| Guy ei VQ ... 2190万円 |",
             "| Ad いーゆー社長 2190万円 |",
-            "| Guy ei VQ ... 2190万円 |",
         ]
     )
 
@@ -95,7 +91,7 @@ def test_total_assets_parser_extracts_ranked_players_and_amounts(tmp_path: Path)
 def test_total_assets_parser_warns_for_unreadable_row(tmp_path: Path) -> None:
     image_path = tmp_path / "assets.jpg"
     Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
-    engine = SequenceTextRecognitionEngine(["unknown"] * 36)
+    engine = SequenceTextRecognitionEngine(["unknown"] * 24)
 
     payload = TotalAssetsParser().parse(
         ScreenParseContext(

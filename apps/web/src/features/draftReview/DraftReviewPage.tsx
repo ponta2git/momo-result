@@ -30,12 +30,12 @@ const inputClass =
 const memberSelectClass = `${inputClass} min-w-[11rem]`;
 const numericInputClass = `${inputClass} min-w-[7rem] text-right tabular-nums`;
 const shortNumericInputClass = `${inputClass} min-w-[5.5rem] text-center tabular-nums`;
-const inputAttentionClass =
-  "w-full rounded-2xl border border-rail-magenta/55 bg-rail-magenta/10 px-3 py-2 text-sm text-ink-100 transition hover:border-rail-magenta/70";
+const inputHighConfidenceClass =
+  "w-full rounded-2xl border border-emerald-400/55 bg-emerald-400/10 px-3 py-2 text-sm text-ink-100 transition hover:border-emerald-400/70";
 const inputMissingClass =
   "w-full rounded-2xl border border-rail-gold/55 bg-rail-gold/10 px-3 py-2 text-sm text-ink-100 transition hover:border-rail-gold/70";
 const labelClass = "text-xs font-bold tracking-[0.22em] text-ink-300 uppercase";
-const confidenceThresholdLow = 0.85;
+const confidenceThresholdHigh = 0.9;
 
 const incidentColumns = [
   ["destination", "目的地"],
@@ -82,6 +82,29 @@ function toFormPlayer(player: ReviewPlayer): ConfirmMatchFormValues["players"][n
   };
 }
 
+// DEBUG: 修正用の表の中身を TSV 化する。動作確認用、後で消す。
+function buildPlayersTsv(players: ConfirmMatchFormValues["players"]): string {
+  const header = [
+    "memberId",
+    "memberName",
+    "playOrder",
+    "rank",
+    "totalAssetsManYen",
+    "revenueManYen",
+    ...incidentColumns.map(([, label]) => label),
+  ];
+  const rows = players.map((player) => [
+    player.memberId,
+    memberName(player.memberId),
+    String(player.playOrder ?? ""),
+    String(player.rank ?? ""),
+    String(player.totalAssetsManYen ?? ""),
+    String(player.revenueManYen ?? ""),
+    ...incidentColumns.map(([key]) => String(player.incidents[key] ?? "")),
+  ]);
+  return [header, ...rows].map((row) => row.join("\t")).join("\n");
+}
+
 function emptyPlayers(): ConfirmMatchFormValues["players"] {
   return fixedMembers.map((member, index) => ({
     memberId: member.memberId,
@@ -124,7 +147,7 @@ function draftsByKind(
 }
 
 type FieldState = {
-  tone: "ocr" | "lowConfidence" | "manual";
+  tone: "ocr" | "highConfidence" | "manual";
   label: string;
 };
 
@@ -136,21 +159,18 @@ function fieldState(
   if (originalValue !== undefined && currentValue !== originalValue) {
     return { tone: "manual", label: "手修正" };
   }
-  if (confidence == null) {
-    return { tone: "manual", label: "手入力" };
+  if (confidence != null && confidence >= confidenceThresholdHigh) {
+    return { tone: "highConfidence", label: "OCR" };
   }
-  if (confidence < confidenceThresholdLow) {
-    return { tone: "lowConfidence", label: `OCR要確認 ${(confidence * 100).toFixed(0)}%` };
-  }
-  return { tone: "ocr", label: `OCR ${(confidence * 100).toFixed(0)}%` };
+  return { tone: "ocr", label: "OCR" };
 }
 
 function stateInputClass(state: FieldState): string {
   if (state.tone === "manual") {
     return inputMissingClass;
   }
-  if (state.tone === "lowConfidence") {
-    return inputAttentionClass;
+  if (state.tone === "highConfidence") {
+    return inputHighConfidenceClass;
   }
   return inputClass;
 }
@@ -364,10 +384,9 @@ export function DraftReviewPage() {
     [draftsQuery.data?.items, ids, useSampleDrafts],
   );
   const merged = useMemo(() => mergeDrafts(draftMap), [draftMap]);
-  const originalByMember = useMemo(
-    () => new Map(merged.players.map((player) => [player.memberId, player])),
-    [merged.players],
-  );
+  // OCR 由来の値は「行 (プレイヤー位置)」に紐付くので、メンバードロップダウン変更後でも
+  // 行ごとの原本を保持できるよう、memberId ではなくインデックスで参照する。
+  const originalByIndex = merged.players;
   const gameTitleItems = gameTitlesQuery.data?.items ?? [];
   const mapMasterItems = mapMastersQuery.data?.items ?? [];
   const seasonMasterItems = seasonMastersQuery.data?.items ?? [];
@@ -431,33 +450,6 @@ export function DraftReviewPage() {
   const nextAction = readiness.success
     ? "確定前チェックへ進めます"
     : (readinessIssues[0] ?? "入力内容を確認してください");
-  const attentionCount = values.players.reduce((count, player) => {
-    const original = originalByMember.get(player.memberId);
-    const playOrderConfidence = draftMap.total_assets ? 1 : null;
-    const states = [
-      fieldState(player.playOrder, original?.playOrder, playOrderConfidence),
-      fieldState(player.rank, original?.rank, original?.confidence.rank),
-      fieldState(
-        player.totalAssetsManYen,
-        original?.totalAssetsManYen,
-        original?.confidence.totalAssets,
-      ),
-      fieldState(player.revenueManYen, original?.revenueManYen, original?.confidence.revenue),
-      ...incidentColumns.map(([key, label]) =>
-        fieldState(
-          player.incidents[key],
-          original?.incidents[label],
-          original?.confidence.incidents[label],
-        ),
-      ),
-    ];
-    return (
-      count +
-      states.filter((state) => state.tone !== "ocr").length +
-      (original?.warnings.length ?? 0)
-    );
-  }, merged.warnings.length);
-
   function patchValue(patch: Partial<ConfirmMatchFormValues>) {
     setValues((current) => ({ ...current, ...patch }));
   }
@@ -483,6 +475,39 @@ export function DraftReviewPage() {
           ? { ...player, incidents: { ...player.incidents, [incidentKey]: value } }
           : player,
       ),
+    }));
+  }
+
+  function handlePlayOrderChange(playerIndex: number, nextPlayOrder: number) {
+    // play_order を変えたら事件簿の値も追従させる。
+    // 事件簿画面は列位置 (= play_order) で並ぶため、メンバーや順位ではなく play_order で
+    // 紐付けるのが唯一の正解。手修正済みの値があっても OCR の該当列に再同期させる。
+    const lookup = merged.incidentByPlayOrder.get(nextPlayOrder);
+    setValues((current) => ({
+      ...current,
+      players: current.players.map((player, index) => {
+        if (index !== playerIndex) {
+          return player;
+        }
+        const nextIncidents = lookup
+          ? {
+              destination: lookup.counts["目的地"],
+              plusStation: lookup.counts["プラス駅"],
+              minusStation: lookup.counts["マイナス駅"],
+              cardStation: lookup.counts["カード駅"],
+              cardShop: lookup.counts["カード売り場"],
+              suriNoGinji: lookup.counts["スリの銀次"],
+            }
+          : {
+              destination: 0,
+              plusStation: 0,
+              minusStation: 0,
+              cardStation: 0,
+              cardShop: 0,
+              suriNoGinji: 0,
+            };
+        return { ...player, playOrder: nextPlayOrder, incidents: nextIncidents };
+      }),
     }));
   }
 
@@ -693,10 +718,27 @@ export function DraftReviewPage() {
           </p>
         </div>
         <div className="rounded-[1.25rem] border border-line-soft bg-capture-black/28 px-4 py-3 text-sm text-ink-300">
-          <p className="font-bold text-ink-100">確認セル {attentionCount}</p>
-          <p className="mt-1 text-xs leading-5 text-ink-400">
-            桃色=OCR要確認 / 金色=手入力・手修正
+          <p className="text-xs leading-5 text-ink-400">
+            緑=高信頼OCR / 金色=OCR結果と異なる
           </p>
+          {/* DEBUG: 表の中身を TSV でコピー。動作確認用、後で消す。 */}
+          <button
+            type="button"
+            className="mt-2 rounded-md border border-line-soft bg-night-900/72 px-2 py-1 text-xs text-ink-200 hover:bg-night-900"
+            onClick={() => {
+              const tsv = buildPlayersTsv(values.players);
+              if (typeof navigator !== "undefined" && navigator.clipboard) {
+                void navigator.clipboard.writeText(tsv).catch(() => {
+                  console.log(tsv);
+                });
+              } else {
+                console.log(tsv);
+              }
+              console.log("[debug] players TSV:\n" + tsv);
+            }}
+          >
+            TSVコピー (debug)
+          </button>
         </div>
       </div>
       <details className="mt-5 rounded-[1.5rem] border border-line-soft bg-capture-black/28 p-4">
@@ -730,7 +772,7 @@ export function DraftReviewPage() {
           })}
         </div>
         {merged.warnings.length ? (
-          <div className="mt-4 rounded-[1.5rem] border border-rail-magenta/30 bg-rail-magenta/10 p-4 text-sm text-pink-50">
+          <div className="mt-4 rounded-[1.5rem] border border-rail-gold/30 bg-rail-gold/10 p-4 text-sm text-ink-100">
             {merged.warnings.join(" / ")}
           </div>
         ) : null}
@@ -779,7 +821,7 @@ export function DraftReviewPage() {
                 </td>
                 {(["playOrder", "rank", "totalAssetsManYen", "revenueManYen"] as const).map(
                   (key) => {
-                    const original = originalByMember.get(player.memberId);
+                    const original = originalByIndex[playerIndex];
                     const playOrderConfidence = draftMap.total_assets ? 1 : null;
                     const confidence =
                       key === "playOrder"
@@ -809,20 +851,14 @@ export function DraftReviewPage() {
                           max={isShortNumber ? 4 : undefined}
                           title={state.label}
                           value={player[key]}
-                          onValueChange={(value) => patchPlayer(playerIndex, { [key]: value })}
+                          onValueChange={(value) =>
+                            key === "playOrder"
+                              ? handlePlayOrderChange(playerIndex, value)
+                              : patchPlayer(playerIndex, { [key]: value })
+                          }
                         />
-                        {key !== "playOrder" ? (
-                          <p
-                            className={`mt-1 text-[0.68rem] ${
-                              state.tone === "manual"
-                                ? "text-rail-gold"
-                                : state.tone === "lowConfidence"
-                                  ? "text-pink-100"
-                                  : "text-ink-400"
-                            }`}
-                          >
-                            {state.label}
-                          </p>
+                        {key !== "playOrder" && state.tone === "manual" ? (
+                          <p className="mt-1 text-[0.68rem] text-rail-gold">{state.label}</p>
                         ) : null}
                       </td>
                     );
@@ -831,11 +867,15 @@ export function DraftReviewPage() {
                 {incidentColumns.map(([key, label]) => (
                   <td key={key} className="px-2 py-3 last:rounded-r-2xl">
                     {(() => {
-                      const original = originalByMember.get(player.memberId);
+                      // 事件簿の「原本」は player の現在の play_order に対応する列の OCR 値。
+                      // ここを originalByIndex[playerIndex].incidents にしてしまうと、
+                      // total_assets 側の play_order 解決が外れたときに別の列の値と比較されて
+                      // 「手修正」が誤発火する。
+                      const incidentLookup = merged.incidentByPlayOrder.get(player.playOrder);
                       const state = fieldState(
                         player.incidents[key],
-                        original?.incidents[label],
-                        original?.confidence.incidents[label],
+                        incidentLookup?.counts[label],
+                        incidentLookup?.confidence[label],
                       );
                       return (
                         <NumericCell

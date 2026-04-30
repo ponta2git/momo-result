@@ -24,6 +24,10 @@ class IncidentLogProfile:
 
 
 _CELL_XS = (878, 1148, 1418, 1680)
+# compact (桃鉄2) でも default (桃鉄ワールド) でも、数字は列の左寄せに収まり
+# 右側 20px 以上は cell 間の余白 + 隣接セルの色境界 / 黒 separator になる。
+# debug dump (019ddde5-...) で width=118 が「13」「45」「435」など spurious
+# trailing 文字を引き起こすことを確認したため、両プロファイルとも 98px に統一。
 _CELL_WIDTH = 98
 _CELL_HEIGHT = 75
 

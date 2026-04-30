@@ -4,8 +4,20 @@ import re
 from collections import Counter
 from dataclasses import dataclass
 
+# Negative-sign character class: ASCII hyphen-minus, U+2212 minus, U+30FC katakana
+# prolonged sound mark (ー), U+4E00 ideographic one (一), en/em dashes, and
+# U+2010 hyphen. Tesseract frequently confuses the in-game minus glyph with
+# ー or 一 because they share the same horizontal-stroke shape, which causes
+# revenue values like "-2万円" to be parsed as positive without this list.
+# To avoid swallowing the trailing ー of player names like "おーたか" or
+# "いーゆー", the sign character must not be preceded by a letter
+# (kana/CJK/latin). It is allowed at start-of-string or after whitespace,
+# digits, or punctuation.
+_MINUS_SIGN_CHARS = "-−ー一–—‐"
+_MINUS_LOOKBEHIND = r"(?<![ぁ-んァ-ヴ一-龥A-Za-z])"
 MONEY_TEXT_RE = re.compile(
-    r"[-−]?\s*(?:(?:\d+\s*億\s*)?(?:\d+\s*万\s*)|\d+\s*億\s*|\d+\s*)[円口幅]"
+    _MINUS_LOOKBEHIND + r"[" + _MINUS_SIGN_CHARS + r"]?\s*"
+    r"(?:(?:\d+\s*億\s*)?(?:\d+\s*万\s*)|\d+\s*億\s*|\d+\s*)[円口幅]"
 )
 DIGIT_FALLBACK_RE = re.compile(r"(?<!\d)(\d{5,8})(?!\d)")
 LONG_DIGIT_FALLBACK_LENGTH = 7
@@ -50,7 +62,7 @@ def _unit_candidates(value: str) -> list[MoneyCandidate]:
     candidates: list[MoneyCandidate] = []
     for match in MONEY_TEXT_RE.finditer(value):
         amount_text = match.group(0)
-        sign = -1 if amount_text.lstrip().startswith(("-", "−")) else 1
+        sign = -1 if amount_text.lstrip().startswith(tuple(_MINUS_SIGN_CHARS)) else 1
         oku_match = re.search(r"(\d+)\s*億", amount_text)
         man_match = re.search(r"(\d+)\s*万", amount_text)
         digits = "".join(char for char in amount_text if char.isdigit())

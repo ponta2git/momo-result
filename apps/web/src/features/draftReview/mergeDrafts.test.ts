@@ -53,7 +53,7 @@ describe("mergeDrafts", () => {
     });
 
     expect(merged.players[0]).toMatchObject({
-      memberId: "akane-mami",
+      memberId: "member_akane_mami",
       playOrder: 2,
       rank: 1,
       totalAssetsManYen: 1200,

@@ -1,11 +1,8 @@
 import { z } from "zod";
-import { fixedMembers, gameTitles, seasons } from "@/features/ocrCapture/localMasters";
+import { fixedMembers } from "@/features/ocrCapture/localMasters";
 import type { components } from "@/shared/api/generated";
-import { layoutFamilies } from "@/shared/api/enums";
 
 const memberIds = fixedMembers.map((member) => member.memberId) as [string, ...string[]];
-const seasonIds = seasons.map((season) => season.id);
-const gameTitleNames = gameTitles.map((gameTitle) => gameTitle.displayName);
 
 const incidentSchema = z.object({
   destination: z.number().int().min(0),
@@ -20,8 +17,8 @@ const playerSchema = z.object({
   memberId: z.enum(memberIds),
   playOrder: z.number().int().min(1).max(4),
   rank: z.number().int().min(1).max(4),
-  totalAssetsManYen: z.number().int().min(0),
-  revenueManYen: z.number().int().min(0),
+  totalAssetsManYen: z.number().int(),
+  revenueManYen: z.number().int(),
   incidents: incidentSchema,
 });
 
@@ -29,15 +26,10 @@ export const confirmMatchSchema = z
   .object({
     heldEventId: z.string().min(1, "開催履歴を選択してください"),
     matchNoInEvent: z.number().int().min(1, "試合番号は1以上です"),
-    gameTitle: z.string().refine((value) => gameTitleNames.includes(value), {
-      message: "作品を選択してください",
-    }),
-    layoutFamily: z.enum(layoutFamilies),
-    seasonId: z.string().refine((value) => seasonIds.includes(value), {
-      message: "シーズンを選択してください",
-    }),
+    gameTitleId: z.string().min(1, "作品を選択してください"),
+    seasonMasterId: z.string().min(1, "シーズンを選択してください"),
     ownerMemberId: z.enum(memberIds),
-    mapName: z.string().min(1, "マップを選択してください"),
+    mapMasterId: z.string().min(1, "マップを選択してください"),
     playedAt: z.string().min(1, "開催日時を入力してください"),
     draftIds: z.object({
       totalAssets: z.string().optional(),

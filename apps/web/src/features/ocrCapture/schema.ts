@@ -20,5 +20,5 @@ export const defaultSetupValues: SetupFormValues = {
   gameTitleId: "momotetsu_2",
   seasonId: "season-current",
   mapName: "東日本編",
-  ownerMemberId: "ponta",
+  ownerMemberId: "member_ponta",
 };

@@ -46,10 +46,10 @@ describe("DraftReviewPage", () => {
     );
 
     expect(await screen.findByText("一覧にない開催履歴を追加")).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("例: 2026-04-29 定例会")).not.toBeVisible();
+    expect(screen.getByRole("button", { name: "作成して選択" })).not.toBeVisible();
 
     await userEvent.click(screen.getByText("一覧にない開催履歴を追加"));
-    expect(screen.getByPlaceholderText("例: 2026-04-29 定例会")).toBeVisible();
+    expect(screen.getByRole("button", { name: "作成して選択" })).toBeVisible();
   });
 
   it("shows review notices as dismissible top toast", async () => {
@@ -67,11 +67,10 @@ describe("DraftReviewPage", () => {
 
     await screen.findByText("一覧にない開催履歴を追加");
     await userEvent.click(screen.getByText("一覧にない開催履歴を追加"));
-    await userEvent.type(screen.getByPlaceholderText("例: 2026-04-29 定例会"), "追加開催");
     await userEvent.click(screen.getByRole("button", { name: "作成して選択" }));
 
     const toast = await screen.findByRole("status");
-    expect(toast).toHaveTextContent(/開催履歴「作成した開催」/);
+    expect(toast).toHaveTextContent(/開催履歴/);
     await userEvent.click(within(toast).getByRole("button", { name: "閉じる" }));
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });

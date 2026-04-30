@@ -19,18 +19,17 @@ describe("draft review api", () => {
     window.localStorage.setItem("momoresult.devUser", "ponta");
 
     await expect(
-      createHeldEvent({ name: "作成", heldAt: "2026-01-01T00:00:00.000Z" }),
+      createHeldEvent({ heldAt: "2026-01-01T00:00:00.000Z" }),
     ).resolves.toMatchObject({ id: "held-created" });
 
     await expect(
       confirmMatch({
         heldEventId: "held-1",
         matchNoInEvent: 1,
-        gameTitle: "桃太郎電鉄2",
-        layoutFamily: "momotetsu_2",
-        seasonId: "season-current",
-        ownerMemberId: "ponta",
-        mapName: "東日本編",
+        gameTitleId: "momotetsu_2",
+        seasonMasterId: "season-current",
+        ownerMemberId: "member_ponta",
+        mapMasterId: "map-east",
         playedAt: "2026-01-01T00:00:00.000Z",
         draftIds: {},
         players: [],

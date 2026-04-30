@@ -14,7 +14,7 @@ const draftPayload = {
   players: [
     {
       raw_player_name: playerField("ぽんた"),
-      member_id: "ponta",
+      member_id: "member_ponta",
       play_order: playerField(1),
       rank: playerField(1),
       total_assets_man_yen: playerField(1000),
@@ -122,7 +122,6 @@ export const handlers = [
       items: [
         {
           id: "held-1",
-          name: "2026-01-01 定例会",
           heldAt: now,
           matchCount: 0,
         },
@@ -132,7 +131,6 @@ export const handlers = [
   http.post("/api/held-events", async () =>
     HttpResponse.json({
       id: "held-created",
-      name: "作成した開催",
       heldAt: now,
       matchCount: 0,
     }),
@@ -145,6 +143,37 @@ export const handlers = [
       createdAt: now,
     }),
   ),
+  http.get("/api/game-titles", () => HttpResponse.json({ items: [] })),
+  http.post("/api/game-titles", async () =>
+    HttpResponse.json({
+      id: "gt-1",
+      name: "stub",
+      layoutFamily: "momotetsu_2",
+      displayOrder: 1,
+      createdAt: now,
+    }),
+  ),
+  http.get("/api/map-masters", () => HttpResponse.json({ items: [] })),
+  http.post("/api/map-masters", async () =>
+    HttpResponse.json({
+      id: "map-1",
+      gameTitleId: "gt-1",
+      name: "stub",
+      displayOrder: 1,
+      createdAt: now,
+    }),
+  ),
+  http.get("/api/season-masters", () => HttpResponse.json({ items: [] })),
+  http.post("/api/season-masters", async () =>
+    HttpResponse.json({
+      id: "season-1",
+      gameTitleId: "gt-1",
+      name: "stub",
+      displayOrder: 1,
+      createdAt: now,
+    }),
+  ),
+  http.get("/api/incident-masters", () => HttpResponse.json({ items: [] })),
   http.delete("/api/ocr-jobs/:jobId", ({ params }) =>
     HttpResponse.json({
       jobId: params.jobId,

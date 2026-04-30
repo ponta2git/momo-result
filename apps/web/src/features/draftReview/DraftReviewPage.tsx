@@ -241,7 +241,9 @@ function ConfirmDialog({ values, heldEvent, onCancel, onConfirm, pending }: Conf
         <dl className="mt-5 grid gap-3 text-sm text-ink-200">
           <div className="flex justify-between gap-4">
             <dt className="text-ink-400">開催履歴</dt>
-            <dd className="font-bold text-ink-100">{heldEvent?.name ?? values.heldEventId}</dd>
+            <dd className="font-bold text-ink-100">
+              {heldEvent ? new Date(heldEvent.heldAt).toLocaleString() : values.heldEventId}
+            </dd>
           </div>
           <div className="flex justify-between gap-4">
             <dt className="text-ink-400">試合番号</dt>
@@ -250,7 +252,7 @@ function ConfirmDialog({ values, heldEvent, onCancel, onConfirm, pending }: Conf
           <div className="flex justify-between gap-4">
             <dt className="text-ink-400">作品 / マップ</dt>
             <dd>
-              {values.gameTitle} / {values.mapName}
+              {values.gameTitleId} / {values.mapMasterId}
             </dd>
           </div>
           <div className="flex justify-between gap-4">
@@ -285,7 +287,6 @@ export function DraftReviewPage() {
   const [validationMessage, setValidationMessage] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [eventDraft, setEventDraft] = useState({
-    name: "",
     heldAt: toLocalDateTime(new Date().toISOString()),
   });
   const [values, setValues] = useState<ConfirmMatchFormValues>(() => {
@@ -293,11 +294,10 @@ export function DraftReviewPage() {
     return {
       heldEventId: "",
       matchNoInEvent: 1,
-      gameTitle: gameTitle.displayName,
-      layoutFamily: gameTitle.layoutFamily,
-      seasonId: defaultSetupValues.seasonId,
+      gameTitleId: gameTitle.id,
+      seasonMasterId: defaultSetupValues.seasonId,
       ownerMemberId: defaultSetupValues.ownerMemberId,
-      mapName: defaultSetupValues.mapName,
+      mapMasterId: defaultSetupValues.mapName,
       playedAt: new Date().toISOString(),
       draftIds: Object.fromEntries(
         [
@@ -334,7 +334,7 @@ export function DraftReviewPage() {
         matchNoInEvent: event.matchCount + 1,
         playedAt: event.heldAt,
       }));
-      setNotice(`開催履歴「${event.name}」を作成して選択しました。`);
+      setNotice(`開催履歴（${new Date(event.heldAt).toLocaleString()}）を作成して選択しました。`);
     },
   });
   const confirmMutation = useMutation({
@@ -356,7 +356,7 @@ export function DraftReviewPage() {
     [merged.players],
   );
   const selectedGame =
-    gameTitles.find((gameTitle) => gameTitle.displayName === values.gameTitle) ??
+    gameTitles.find((gameTitle) => gameTitle.id === values.gameTitleId) ??
     findGameTitle(defaultSetupValues.gameTitleId);
   const heldEvents = heldEventsQuery.data?.items ?? [];
   const selectedHeldEvent = heldEvents.find((event) => event.id === values.heldEventId);
@@ -442,14 +442,13 @@ export function DraftReviewPage() {
     }));
   }
 
-  function handleGameTitleChange(displayName: string) {
+  function handleGameTitleChange(gameTitleId: string) {
     const gameTitle =
-      gameTitles.find((candidate) => candidate.displayName === displayName) ??
+      gameTitles.find((candidate) => candidate.id === gameTitleId) ??
       findGameTitle(defaultSetupValues.gameTitleId);
     patchValue({
-      gameTitle: gameTitle.displayName,
-      layoutFamily: gameTitle.layoutFamily,
-      mapName: gameTitle.maps[0] ?? "",
+      gameTitleId: gameTitle.id,
+      mapMasterId: gameTitle.maps[0] ?? "",
     });
   }
 
@@ -480,7 +479,9 @@ export function DraftReviewPage() {
         </div>
         {selectedHeldEvent ? (
           <div className="rounded-[1.25rem] border border-line-soft bg-capture-black/28 px-4 py-3 text-sm text-ink-300">
-            <p className="font-bold text-ink-100">{selectedHeldEvent.name}</p>
+            <p className="font-bold text-ink-100">
+              {new Date(selectedHeldEvent.heldAt).toLocaleString()}
+            </p>
             <p className="mt-1 text-xs text-ink-400">第{values.matchNoInEvent}試合として保存</p>
           </div>
         ) : null}
@@ -504,7 +505,7 @@ export function DraftReviewPage() {
             <option value="">選択してください</option>
             {heldEvents.map((event) => (
               <option key={event.id} value={event.id}>
-                {event.name}（{new Date(event.heldAt).toLocaleString()} / {event.matchCount}試合）
+                {new Date(event.heldAt).toLocaleString()}（{event.matchCount}試合）
               </option>
             ))}
           </select>
@@ -536,11 +537,11 @@ export function DraftReviewPage() {
           <span className={labelClass}>作品</span>
           <select
             className={inputClass}
-            value={values.gameTitle}
+            value={values.gameTitleId}
             onChange={(event) => handleGameTitleChange(event.target.value)}
           >
             {gameTitles.map((gameTitle) => (
-              <option key={gameTitle.id} value={gameTitle.displayName}>
+              <option key={gameTitle.id} value={gameTitle.id}>
                 {gameTitle.displayName}
               </option>
             ))}
@@ -551,8 +552,8 @@ export function DraftReviewPage() {
           <span className={labelClass}>シーズン</span>
           <select
             className={inputClass}
-            value={values.seasonId}
-            onChange={(event) => patchValue({ seasonId: event.target.value })}
+            value={values.seasonMasterId}
+            onChange={(event) => patchValue({ seasonMasterId: event.target.value })}
           >
             {seasons.map((season) => (
               <option key={season.id} value={season.id}>
@@ -566,8 +567,8 @@ export function DraftReviewPage() {
           <span className={labelClass}>マップ</span>
           <select
             className={inputClass}
-            value={values.mapName}
-            onChange={(event) => patchValue({ mapName: event.target.value })}
+            value={values.mapMasterId}
+            onChange={(event) => patchValue({ mapMasterId: event.target.value })}
           >
             {selectedGame.maps.map((mapName) => (
               <option key={mapName} value={mapName}>
@@ -597,18 +598,10 @@ export function DraftReviewPage() {
         <summary className="cursor-pointer text-xs font-bold tracking-[0.18em] text-ink-400 uppercase transition hover:text-ink-200">
           一覧にない開催履歴を追加
         </summary>
-        <div className="mt-3 grid gap-3 rounded-[1.25rem] border border-line-soft bg-capture-black/24 p-3 md:grid-cols-[1fr_14rem_auto] md:items-end">
-          <p className="text-xs leading-5 text-ink-400 md:col-span-3">
+        <div className="mt-3 grid gap-3 rounded-[1.25rem] border border-line-soft bg-capture-black/24 p-3 md:grid-cols-[1fr_auto] md:items-end">
+          <p className="text-xs leading-5 text-ink-400 md:col-span-2">
             通常はsummit側で作成済みの開催履歴を選びます。見つからない場合だけ追加してください。
           </p>
-          <input
-            className={inputClass}
-            placeholder="例: 2026-04-29 定例会"
-            value={eventDraft.name}
-            onChange={(event) =>
-              setEventDraft((current) => ({ ...current, name: event.target.value }))
-            }
-          />
           <input
             className={inputClass}
             type="datetime-local"
@@ -619,10 +612,9 @@ export function DraftReviewPage() {
           />
           <Button
             variant="secondary"
-            disabled={!eventDraft.name.trim() || createEventMutation.isPending}
+            disabled={!eventDraft.heldAt || createEventMutation.isPending}
             onClick={() =>
               createEventMutation.mutate({
-                name: eventDraft.name,
                 heldAt: toIsoFromLocal(eventDraft.heldAt),
               })
             }

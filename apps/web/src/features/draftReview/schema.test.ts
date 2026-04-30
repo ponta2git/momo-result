@@ -4,16 +4,15 @@ import { confirmMatchSchema } from "@/features/draftReview/schema";
 const valid = {
   heldEventId: "held-1",
   matchNoInEvent: 1,
-  gameTitle: "桃太郎電鉄2",
-  layoutFamily: "momotetsu_2",
-  seasonId: "season-current",
-  ownerMemberId: "ponta",
-  mapName: "東日本編",
+  gameTitleId: "momotetsu_2",
+  seasonMasterId: "season-current",
+  ownerMemberId: "member_ponta",
+  mapMasterId: "map-east",
   playedAt: "2026-01-01T00:00:00.000Z",
   draftIds: {},
   players: [
     {
-      memberId: "ponta",
+      memberId: "member_ponta",
       playOrder: 1,
       rank: 1,
       totalAssetsManYen: 100,
@@ -28,7 +27,7 @@ const valid = {
       },
     },
     {
-      memberId: "akane-mami",
+      memberId: "member_akane_mami",
       playOrder: 2,
       rank: 2,
       totalAssetsManYen: 90,
@@ -43,7 +42,7 @@ const valid = {
       },
     },
     {
-      memberId: "otaka",
+      memberId: "member_otaka",
       playOrder: 3,
       rank: 3,
       totalAssetsManYen: 80,
@@ -58,7 +57,7 @@ const valid = {
       },
     },
     {
-      memberId: "eu",
+      memberId: "member_eu",
       playOrder: 4,
       rank: 4,
       totalAssetsManYen: 70,

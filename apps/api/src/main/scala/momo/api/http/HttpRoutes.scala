@@ -3,23 +3,26 @@ package momo.api.http
 import cats.effect.Async
 import cats.syntax.all.*
 import java.time.format.DateTimeFormatter
-import momo.api.auth.MemberRoster
+import momo.api.auth.{
+  CsrfTokenService, DiscordOAuthClient, LoginRateLimiter, MemberRoster, OAuthStateCodec,
+  SessionService,
+}
 import momo.api.config.AppConfig
 import momo.api.domain.OcrJobHints
 import momo.api.endpoints.{
-  AuthEndpoints, AuthMeResponse, CancelOcrJobResponse, ConfirmMatchRequest, ConfirmMatchResponse,
-  CreateOcrJobResponse, GameTitleListResponse, GameTitleResponse, GameTitlesEndpoints,
-  HealthEndpoints, HeldEventListResponse, HeldEventResponse, HeldEventsEndpoints,
-  IncidentMasterListResponse, IncidentMasterResponse, IncidentMastersEndpoints,
-  MapMasterListResponse, MapMasterResponse, MapMastersEndpoints, MatchesEndpoints,
-  OcrDraftEndpoints, OcrDraftListResponse, OcrDraftResponse, OcrJobEndpoints, OcrJobResponse,
-  OpenApiEndpoints, SeasonMasterListResponse, SeasonMasterResponse, SeasonMastersEndpoints,
-  UploadEndpoints, UploadImageResponse,
+  CancelOcrJobResponse, ConfirmMatchRequest, ConfirmMatchResponse, CreateOcrJobResponse,
+  GameTitleListResponse, GameTitleResponse, GameTitlesEndpoints, HealthEndpoints,
+  HeldEventListResponse, HeldEventResponse, HeldEventsEndpoints, IncidentMasterListResponse,
+  IncidentMasterResponse, IncidentMastersEndpoints, MapMasterListResponse, MapMasterResponse,
+  MapMastersEndpoints, MatchesEndpoints, OcrDraftEndpoints, OcrDraftListResponse, OcrDraftResponse,
+  OcrJobEndpoints, OcrJobResponse, OpenApiEndpoints, SeasonMasterListResponse, SeasonMasterResponse,
+  SeasonMastersEndpoints, UploadEndpoints, UploadImageResponse,
 }
 import momo.api.errors.AppError
 import momo.api.openapi.OpenApiGenerator
 import momo.api.repositories.{
-  GameTitlesRepository, IncidentMastersRepository, MapMastersRepository, SeasonMastersRepository,
+  GameTitlesRepository, IncidentMastersRepository, MapMastersRepository, MembersRepository,
+  SeasonMastersRepository,
 }
 import momo.api.usecases.{
   CancelOcrJob, ConfirmMatch, CreateGameTitle, CreateGameTitleCommand, CreateHeldEvent,
@@ -27,8 +30,8 @@ import momo.api.usecases.{
   CreateOcrJobCommand, CreateSeasonMaster, CreateSeasonMasterCommand, GetOcrDraft, GetOcrDraftsBulk,
   GetOcrJob, ListHeldEvents, UploadImage,
 }
+import org.http4s.{HttpApp as Http4sApp, HttpRoutes as Http4sRoutes}
 import org.http4s.server.Router
-import org.http4s.HttpApp as Http4sApp
 import sttp.tapir.server.http4s.Http4sServerInterpreter
 import sttp.tapir.server.ServerEndpoint
 
@@ -52,6 +55,12 @@ object HttpRoutes:
       createGameTitle: CreateGameTitle[F],
       createMapMaster: CreateMapMaster[F],
       createSeasonMaster: CreateSeasonMaster[F],
+      members: MembersRepository[F],
+      oauthClient: DiscordOAuthClient[F],
+      sessionService: SessionService[F],
+      csrfTokenService: CsrfTokenService,
+      oauthStateCodec: OAuthStateCodec[F],
+      loginRateLimiter: LoginRateLimiter[F],
   )
 
   def routes[F[_]: Async](deps: Dependencies[F]): Http4sApp[F] =
@@ -63,15 +72,10 @@ object HttpRoutes:
         onSuccess: A => B
     ): F[Either[ProblemDetails.ErrorInfo, B]] = result.map(_.leftMap(toProblem).map(onSuccess))
 
-    val routes = Http4sServerInterpreter[F]().toRoutes(List[ServerEndpoint[Any, F]](
+    val tapirRoutes = Http4sServerInterpreter[F]().toRoutes(List[ServerEndpoint[Any, F]](
       HealthEndpoints.health
         .serverLogicSuccess(_ => Async[F].pure(HealthEndpoints.HealthResponse("ok"))),
       OpenApiEndpoints.yaml.serverLogicSuccess(_ => Async[F].pure(OpenApiGenerator.yaml)),
-      AuthEndpoints.me.serverLogic { devUser =>
-        security.authorizeRead(devUser)(member =>
-          Async[F].pure(Right(AuthMeResponse(member.memberId.value, member.displayName)))
-        )
-      },
       UploadEndpoints.uploadImage.serverLogic { case (devUser, csrfToken, parts) =>
         security.authorizeMutation(devUser, csrfToken) { _ =>
           MultipartUpload.file(parts) match
@@ -193,7 +197,23 @@ object HttpRoutes:
       },
     ))
 
-    Router("/" -> routes).orNotFound
+    val protectedRoutes =
+      ProductionSessionMiddleware[F](deps.config, deps.sessionService, deps.csrfTokenService)(
+        tapirRoutes.orNotFound
+      )
+
+    val authRoutes = AuthHttpRoutes.routes[F](
+      config = deps.config,
+      oauth = deps.oauthClient,
+      stateCodec = deps.oauthStateCodec,
+      sessions = deps.sessionService,
+      csrf = deps.csrfTokenService,
+      members = deps.members,
+      rateLimiter = deps.loginRateLimiter,
+    )
+
+    Router("/" -> (authRoutes <+> Http4sRoutes.of[F](request => protectedRoutes.run(request))))
+      .orNotFound
 
   private def toConfirmMatchCommand(request: ConfirmMatchRequest): ConfirmMatch.Command =
     ConfirmMatch.Command(

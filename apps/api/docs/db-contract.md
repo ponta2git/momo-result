@@ -22,6 +22,15 @@
 
 ## `app_sessions`
 
+Discord OAuth 完了後の server-side session を保持する。session id と `csrf_secret` は秘匿情報として扱い、ログに出力しない。
+
+MVP の認証スライスでは以下を前提にする。
+
+- OAuth user は `members.user_id`（Discord user id）で固定4名に照合する。
+- `csrf_secret` は `/api/auth/me` で返す `csrfToken` として使い、状態変更APIの `X-CSRF-Token` と照合する。
+- `expires_at` は session TTL（初期値30日）で更新し、認証成功時に `last_seen_at` とともに延長する。
+- 期限切れ session の削除ジョブは後続 `session-expiry-prune` で扱う。
+
 ```sql
 CREATE TABLE app_sessions (
   id text PRIMARY KEY,

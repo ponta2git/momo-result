@@ -3,23 +3,28 @@ package momo.api.http
 import cats.effect.{Async, Clock, Resource}
 import cats.syntax.all.*
 import momo.api.adapters.{
-  InMemoryGameTitlesRepository, InMemoryHeldEventsRepository, InMemoryIncidentMastersRepository,
-  InMemoryMapMastersRepository, InMemoryMatchesRepository, InMemoryOcrDraftsRepository,
-  InMemoryOcrJobsRepository, InMemoryQueueProducer, InMemorySeasonMastersRepository,
-  LocalFsImageStore,
+  InMemoryAppSessionsRepository, InMemoryGameTitlesRepository, InMemoryHeldEventsRepository,
+  InMemoryIncidentMastersRepository, InMemoryMapMastersRepository, InMemoryMatchesRepository,
+  InMemoryMembersRepository, InMemoryOcrDraftsRepository, InMemoryOcrJobsRepository,
+  InMemoryQueueProducer, InMemorySeasonMastersRepository, LocalFsImageStore,
 }
-import momo.api.auth.MemberRoster
+import momo.api.auth.{
+  CsrfTokenService, JavaDiscordOAuthClient, LoginRateLimiter, MemberRoster, OAuthStateCodec,
+  SessionService,
+}
 import momo.api.config.AppConfig
 import momo.api.db.Database
-import momo.api.domain.IdGenerator
+import momo.api.domain.{IdGenerator, Member}
 import momo.api.repositories.{
-  GameTitlesRepository, HeldEventsRepository, IncidentMastersRepository, MapMastersRepository,
-  MatchesRepository, OcrDraftsRepository, OcrJobsRepository, SeasonMastersRepository,
+  AppSessionsRepository, GameTitlesRepository, HeldEventsRepository, IncidentMastersRepository,
+  MapMastersRepository, MatchesRepository, MembersRepository, OcrDraftsRepository,
+  OcrJobsRepository, SeasonMastersRepository,
 }
 import momo.api.repositories.postgres.{
-  PostgresGameTitlesRepository, PostgresHeldEventsRepository, PostgresIncidentMastersRepository,
-  PostgresMapMastersRepository, PostgresMatchesRepository, PostgresOcrDraftsRepository,
-  PostgresOcrJobsRepository, PostgresSeasonMastersRepository,
+  PostgresAppSessionsRepository, PostgresGameTitlesRepository, PostgresHeldEventsRepository,
+  PostgresIncidentMastersRepository, PostgresMapMastersRepository, PostgresMatchesRepository,
+  PostgresMembersRepository, PostgresOcrDraftsRepository, PostgresOcrJobsRepository,
+  PostgresSeasonMastersRepository,
 }
 import momo.api.usecases.{
   CancelOcrJob, ConfirmMatch, CreateGameTitle, CreateHeldEvent, CreateMapMaster, CreateOcrJob,
@@ -46,11 +51,13 @@ object HttpApp:
   def wired[F[_]: Async](config: AppConfig): Resource[F, Wired[F]] = config.database match
     case Some(db) => Resource.eval(Async[F].executionContext).flatMap { connectExecutionContext =>
         Database.transactor[F](db, connectExecutionContext).evalMap { transactor =>
-          for queue <- InMemoryQueueProducer.create[F] yield
+          InMemoryQueueProducer.create[F].flatMap { queue =>
             val jobs: OcrJobsRepository[F] = PostgresOcrJobsRepository[F](transactor)
             val drafts: OcrDraftsRepository[F] = PostgresOcrDraftsRepository[F](transactor)
             val heldEvents: HeldEventsRepository[F] = PostgresHeldEventsRepository[F](transactor)
             val matches: MatchesRepository[F] = PostgresMatchesRepository[F](transactor)
+            val appSessions: AppSessionsRepository[F] = PostgresAppSessionsRepository[F](transactor)
+            val members: MembersRepository[F] = PostgresMembersRepository[F](transactor)
             val gameTitles: GameTitlesRepository[F] = PostgresGameTitlesRepository[F](transactor)
             val mapMasters: MapMastersRepository[F] = PostgresMapMastersRepository[F](transactor)
             val seasonMasters: SeasonMastersRepository[F] =
@@ -64,11 +71,14 @@ object HttpApp:
               drafts = drafts,
               heldEvents = heldEvents,
               matches = matches,
+              appSessions = appSessions,
+              members = members,
               gameTitles = gameTitles,
               mapMasters = mapMasters,
               seasonMasters = seasonMasters,
               incidentMasters = incidentMasters,
             )
+          }
         }
       }
     case None => Resource.eval {
@@ -78,22 +88,28 @@ object HttpApp:
           queue <- InMemoryQueueProducer.create[F]
           heldEvents <- InMemoryHeldEventsRepository.create[F]
           matches <- InMemoryMatchesRepository.create[F]
+          appSessions <- InMemoryAppSessionsRepository.create[F]
+          members <- InMemoryMembersRepository
+            .create[F](config.devMemberIds.map(id => Member(id, id, id, java.time.Instant.EPOCH)))
           gameTitles <- InMemoryGameTitlesRepository.create[F]
           mapMasters <- InMemoryMapMastersRepository.create[F]
           seasonMasters <- InMemorySeasonMastersRepository.create[F]
           incidentMasters <- InMemoryIncidentMastersRepository.create[F]
-        yield assemble(
-          config = config,
-          queue = queue,
-          jobs = jobs,
-          drafts = drafts,
-          heldEvents = heldEvents,
-          matches = matches,
-          gameTitles = gameTitles,
-          mapMasters = mapMasters,
-          seasonMasters = seasonMasters,
-          incidentMasters = incidentMasters,
-        )
+          wired <- assemble(
+            config = config,
+            queue = queue,
+            jobs = jobs,
+            drafts = drafts,
+            heldEvents = heldEvents,
+            matches = matches,
+            appSessions = appSessions,
+            members = members,
+            gameTitles = gameTitles,
+            mapMasters = mapMasters,
+            seasonMasters = seasonMasters,
+            incidentMasters = incidentMasters,
+          )
+        yield wired
       }
 
   private def assemble[F[_]: Async](
@@ -103,15 +119,21 @@ object HttpApp:
       drafts: OcrDraftsRepository[F],
       heldEvents: HeldEventsRepository[F],
       matches: MatchesRepository[F],
+      appSessions: AppSessionsRepository[F],
+      members: MembersRepository[F],
       gameTitles: GameTitlesRepository[F],
       mapMasters: MapMastersRepository[F],
       seasonMasters: SeasonMastersRepository[F],
       incidentMasters: IncidentMastersRepository[F],
-  ): Wired[F] =
+  ): F[Wired[F]] =
     val imageStore = LocalFsImageStore[F](config.imageTmpDir)
     val roster = MemberRoster.dev(config.devMemberIds)
     val uploadImage = UploadImage[F](imageStore)
     val nowF = Clock[F].realTimeInstant
+    val sessionService = SessionService[F](appSessions, members, config.auth, nowF)
+    val csrfTokenService = CsrfTokenService()
+    val oauthStateCodec = OAuthStateCodec[F](config.auth, nowF)
+    val oauthClient = JavaDiscordOAuthClient[F](config.auth)
     val createOcrJob = CreateOcrJob[F](
       imageStore = imageStore,
       jobs = jobs,
@@ -140,24 +162,32 @@ object HttpApp:
     val createMapMaster = CreateMapMaster[F](gameTitles, mapMasters, nowF)
     val createSeasonMaster = CreateSeasonMaster[F](gameTitles, seasonMasters, nowF)
 
-    val app = HttpRoutes.routes(HttpRoutes.Dependencies(
-      config = config,
-      roster = roster,
-      uploadImage = uploadImage,
-      createOcrJob = createOcrJob,
-      getOcrJob = getOcrJob,
-      getOcrDraft = getOcrDraft,
-      getOcrDraftsBulk = getOcrDraftsBulk,
-      cancelOcrJob = cancelOcrJob,
-      listHeldEvents = listHeldEvents,
-      createHeldEvent = createHeldEvent,
-      confirmMatch = confirmMatch,
-      gameTitles = gameTitles,
-      mapMasters = mapMasters,
-      seasonMasters = seasonMasters,
-      incidentMasters = incidentMasters,
-      createGameTitle = createGameTitle,
-      createMapMaster = createMapMaster,
-      createSeasonMaster = createSeasonMaster,
-    ))
-    Wired(app, gameTitles, mapMasters, seasonMasters)
+    LoginRateLimiter.create[F](config.auth.rateLimitPerMinute, nowF).map { loginRateLimiter =>
+      val app = HttpRoutes.routes(HttpRoutes.Dependencies(
+        config = config,
+        roster = roster,
+        uploadImage = uploadImage,
+        createOcrJob = createOcrJob,
+        getOcrJob = getOcrJob,
+        getOcrDraft = getOcrDraft,
+        getOcrDraftsBulk = getOcrDraftsBulk,
+        cancelOcrJob = cancelOcrJob,
+        listHeldEvents = listHeldEvents,
+        createHeldEvent = createHeldEvent,
+        confirmMatch = confirmMatch,
+        gameTitles = gameTitles,
+        mapMasters = mapMasters,
+        seasonMasters = seasonMasters,
+        incidentMasters = incidentMasters,
+        createGameTitle = createGameTitle,
+        createMapMaster = createMapMaster,
+        createSeasonMaster = createSeasonMaster,
+        members = members,
+        oauthClient = oauthClient,
+        sessionService = sessionService,
+        csrfTokenService = csrfTokenService,
+        oauthStateCodec = oauthStateCodec,
+        loginRateLimiter = loginRateLimiter,
+      ))
+      Wired(app, gameTitles, mapMasters, seasonMasters)
+    }

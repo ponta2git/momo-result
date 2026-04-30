@@ -5,40 +5,79 @@ import { useEffect } from "react";
 import { setupSchema } from "@/features/ocrCapture/schema";
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
 import { fixedMembers } from "@/features/ocrCapture/localMasters";
-import {
-  listGameTitles,
-  listMapMasters,
-  listSeasonMasters,
-} from "@/shared/api/masters";
+import { listGameTitles, listMapMasters, listSeasonMasters } from "@/shared/api/masters";
+import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { Field } from "@/shared/ui/Field";
 
 type SetupPanelProps = {
   value: SetupFormValues;
   onChange: (value: SetupFormValues) => void;
+  enabled?: boolean;
+  authMemberId?: string | undefined;
 };
 
 const selectClass =
   "w-full rounded-2xl border border-line-soft bg-capture-black/45 px-4 py-3 text-ink-100 transition hover:border-white/18";
 
-export function SetupPanel({ value, onChange }: SetupPanelProps) {
+function queryErrorMessage(error: unknown): string | undefined {
+  if (!error) {
+    return undefined;
+  }
+  const normalized = normalizeUnknownApiError(error);
+  return normalized.status === 401
+    ? "ログイン後にマスタを読み込めます。"
+    : normalized.detail || normalized.title;
+}
+
+export function SetupPanel({ value, onChange, enabled = true, authMemberId }: SetupPanelProps) {
+  const authScope = authMemberId ?? "anonymous";
   const gameTitlesQuery = useQuery({
-    queryKey: ["masters", "game-titles"],
+    queryKey: ["masters", "game-titles", authScope],
     queryFn: listGameTitles,
+    enabled,
   });
   const mapMastersQuery = useQuery({
-    queryKey: ["masters", "map-masters", value.gameTitleId],
+    queryKey: ["masters", "map-masters", authScope, value.gameTitleId],
     queryFn: () => listMapMasters(value.gameTitleId || undefined),
-    enabled: Boolean(value.gameTitleId),
+    enabled: enabled && Boolean(value.gameTitleId),
   });
   const seasonMastersQuery = useQuery({
-    queryKey: ["masters", "season-masters", value.gameTitleId],
+    queryKey: ["masters", "season-masters", authScope, value.gameTitleId],
     queryFn: () => listSeasonMasters(value.gameTitleId || undefined),
-    enabled: Boolean(value.gameTitleId),
+    enabled: enabled && Boolean(value.gameTitleId),
   });
 
   const gameTitles = gameTitlesQuery.data?.items ?? [];
   const mapMasters = mapMastersQuery.data?.items ?? [];
   const seasonMasters = seasonMastersQuery.data?.items ?? [];
+  const gameTitlesError = queryErrorMessage(gameTitlesQuery.error);
+  const mapMastersError = queryErrorMessage(mapMastersQuery.error);
+  const seasonMastersError = queryErrorMessage(seasonMastersQuery.error);
+  const gameTitlesPlaceholder = !enabled
+    ? "ログイン後に読み込みます"
+    : gameTitlesQuery.isError
+      ? "読み込みに失敗"
+      : gameTitlesQuery.isLoading
+        ? "読み込み中…"
+        : "未登録";
+  const seasonMastersPlaceholder = !enabled
+    ? "ログイン後に読み込みます"
+    : !value.gameTitleId
+      ? "作品を選択してください"
+      : seasonMastersQuery.isError
+        ? "読み込みに失敗"
+        : seasonMastersQuery.isLoading
+          ? "読み込み中…"
+          : "未登録";
+  const mapMastersPlaceholder = !enabled
+    ? "ログイン後に読み込みます"
+    : !value.gameTitleId
+      ? "作品を選択してください"
+      : mapMastersQuery.isError
+        ? "読み込みに失敗"
+        : mapMastersQuery.isLoading
+          ? "読み込み中…"
+          : "未登録";
 
   const [form, fields] = useForm({
     id: "ocr-setup",
@@ -104,10 +143,10 @@ export function SetupPanel({ value, onChange }: SetupPanelProps) {
             })
           }
           className={selectClass}
-          disabled={gameTitles.length === 0}
+          disabled={!enabled || gameTitles.length === 0}
         >
           {gameTitles.length === 0 ? (
-            <option value="">読み込み中…</option>
+            <option value="">{gameTitlesPlaceholder}</option>
           ) : (
             gameTitles.map((gameTitle) => (
               <option key={gameTitle.id} value={gameTitle.id}>
@@ -116,6 +155,11 @@ export function SetupPanel({ value, onChange }: SetupPanelProps) {
             ))
           )}
         </select>
+        {gameTitlesError ? (
+          <p className="mt-1 text-sm text-red-200" role="alert">
+            {gameTitlesError}
+          </p>
+        ) : null}
       </Field>
 
       <Field
@@ -130,10 +174,10 @@ export function SetupPanel({ value, onChange }: SetupPanelProps) {
           value={value.seasonMasterId}
           onChange={(event) => patchValue({ seasonMasterId: event.target.value })}
           className={selectClass}
-          disabled={seasonMasters.length === 0}
+          disabled={!enabled || seasonMasters.length === 0}
         >
           {seasonMasters.length === 0 ? (
-            <option value="">未登録</option>
+            <option value="">{seasonMastersPlaceholder}</option>
           ) : (
             seasonMasters.map((season) => (
               <option key={season.id} value={season.id}>
@@ -142,23 +186,24 @@ export function SetupPanel({ value, onChange }: SetupPanelProps) {
             ))
           )}
         </select>
+        {seasonMastersError ? (
+          <p className="mt-1 text-sm text-red-200" role="alert">
+            {seasonMastersError}
+          </p>
+        ) : null}
       </Field>
 
-      <Field
-        label="マップ"
-        htmlFor={fields.mapMasterId.id}
-        error={fields.mapMasterId.errors?.[0]}
-      >
+      <Field label="マップ" htmlFor={fields.mapMasterId.id} error={fields.mapMasterId.errors?.[0]}>
         <select
           id={fields.mapMasterId.id}
           name={fields.mapMasterId.name}
           value={value.mapMasterId}
           onChange={(event) => patchValue({ mapMasterId: event.target.value })}
           className={selectClass}
-          disabled={mapMasters.length === 0}
+          disabled={!enabled || mapMasters.length === 0}
         >
           {mapMasters.length === 0 ? (
-            <option value="">未登録</option>
+            <option value="">{mapMastersPlaceholder}</option>
           ) : (
             mapMasters.map((mapMaster) => (
               <option key={mapMaster.id} value={mapMaster.id}>
@@ -167,6 +212,11 @@ export function SetupPanel({ value, onChange }: SetupPanelProps) {
             ))
           )}
         </select>
+        {mapMastersError ? (
+          <p className="mt-1 text-sm text-red-200" role="alert">
+            {mapMastersError}
+          </p>
+        ) : null}
       </Field>
 
       <Field

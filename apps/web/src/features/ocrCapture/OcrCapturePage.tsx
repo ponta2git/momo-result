@@ -20,7 +20,7 @@ import { defaultSetupValues } from "@/features/ocrCapture/schema";
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
 import { SetupPanel } from "@/features/ocrCapture/SetupPanel";
 import { useOcrJobPolling } from "@/features/ocrCapture/useOcrJobPolling";
-import { DevUserPicker } from "@/shared/auth/DevUserPicker";
+import { AuthPanel } from "@/shared/auth/AuthPanel";
 import type { SlotKind } from "@/shared/api/enums";
 import { parseLayoutFamily, parseOcrJobStatus } from "@/shared/api/enums";
 import { listGameTitles } from "@/shared/api/masters";
@@ -99,10 +99,13 @@ export function OcrCapturePage() {
     queryFn: getAuthMe,
     retry: false,
   });
+  const authReady = authQuery.isSuccess;
+  const authMemberId = authQuery.data?.memberId;
 
   const gameTitlesQuery = useQuery({
-    queryKey: ["masters", "game-titles"],
+    queryKey: ["masters", "game-titles", authMemberId ?? "anonymous"],
     queryFn: listGameTitles,
+    enabled: authReady,
   });
 
   const hints = useMemo(() => {
@@ -362,7 +365,7 @@ export function OcrCapturePage() {
             1つの撮影台で画像を集め、総資産・収益・事件簿の分類トレイへ並べてからOCR下書きを保存します。
           </p>
         </div>
-        <DevUserPicker force={authError?.status === 401} />
+        <AuthPanel auth={authQuery.data} forceDevPicker={authError?.status === 401} />
       </header>
 
       <nav
@@ -414,7 +417,12 @@ export function OcrCapturePage() {
             <p className="text-sm text-ink-300">ログイン中: {authQuery.data.displayName}</p>
           ) : null}
         </div>
-        <SetupPanel value={setup} onChange={setSetup} />
+        <SetupPanel
+          value={setup}
+          onChange={setSetup}
+          enabled={authReady}
+          authMemberId={authMemberId}
+        />
       </Card>
 
       {notice ? (

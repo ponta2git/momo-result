@@ -41,6 +41,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite:
         response.as[Json].map { body =>
           assertEquals(response.status, Status.Ok)
           assertEquals(body.hcursor.get[String]("memberId"), Right("ponta"))
+          assertEquals(body.hcursor.get[String]("csrfToken"), Right("dev"))
         }
       }
     }
@@ -62,5 +63,22 @@ final class HttpAppSpec extends MomoCatsEffectSuite:
     app.use { httpApp =>
       httpApp.run(Request[IO](Method.GET, uri"/api/auth/me"))
         .map(response => assertEquals(response.status, Status.Unauthorized))
+    }
+  }
+
+  test("prod protected endpoint rejects external X-Dev-User without session cookie") {
+    Resource.eval(IO.blocking(Files.createTempDirectory("momo-api-prod-http"))).flatMap { dir =>
+      val config = AppConfig(
+        appEnv = AppEnv.Prod,
+        httpHost = "127.0.0.1",
+        httpPort = 0,
+        imageTmpDir = dir,
+        devMemberIds = List("ponta", "akane-mami", "otaka", "eu"),
+      )
+      HttpApp.resource[IO](config)
+    }.use { httpApp =>
+      val request = Request[IO](Method.GET, uri"/api/held-events")
+        .putHeaders(org.http4s.Header.Raw(org.typelevel.ci.CIString("X-Dev-User"), "ponta"))
+      httpApp.run(request).map(response => assertEquals(response.status, Status.Unauthorized))
     }
   }

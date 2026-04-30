@@ -45,6 +45,11 @@ object AppError:
     val code = "CONFLICT"
     val title = "Conflict"
 
+  final case class TooManyRequests(detail: String) extends AppError:
+    val status: StatusCode = StatusCode.TooManyRequests
+    val code = "TOO_MANY_REQUESTS"
+    val title = "Too Many Requests"
+
   final case class Internal(detail: String) extends AppError:
     val status: StatusCode = StatusCode.InternalServerError
     val code = "INTERNAL_ERROR"

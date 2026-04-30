@@ -13,6 +13,7 @@ type ApiRequestOptions = {
 };
 
 const mutatingMethods = new Set<HttpMethod>(["POST", "PUT", "PATCH", "DELETE"]);
+let csrfToken: string | undefined;
 
 export type ApiErrorLike = NormalizedApiError;
 
@@ -40,7 +41,11 @@ function buildHeaders(method: HttpMethod, options: ApiRequestOptions): Headers {
   }
 
   if (mutatingMethods.has(method)) {
-    headers.set("X-CSRF-Token", "dev");
+    if (devUser) {
+      headers.set("X-CSRF-Token", "dev");
+    } else if (csrfToken) {
+      headers.set("X-CSRF-Token", csrfToken);
+    }
   }
 
   if (options.body !== undefined && !headers.has("Content-Type")) {
@@ -88,5 +93,12 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
 export type AuthMeResponse = components["schemas"]["AuthMeResponse"];
 
 export async function getAuthMe(): Promise<AuthMeResponse> {
-  return apiRequest<AuthMeResponse>("/api/auth/me");
+  const response = await apiRequest<AuthMeResponse>("/api/auth/me");
+  csrfToken = response.csrfToken ?? undefined;
+  return response;
+}
+
+export async function logout(): Promise<void> {
+  await apiRequest<void>("/api/auth/logout", { method: "POST" });
+  csrfToken = undefined;
 }

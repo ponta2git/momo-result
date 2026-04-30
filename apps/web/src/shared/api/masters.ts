@@ -20,9 +20,7 @@ export async function listGameTitles(): Promise<GameTitleListResponse> {
   return apiRequest<GameTitleListResponse>("/api/game-titles");
 }
 
-export async function createGameTitle(
-  request: CreateGameTitleRequest,
-): Promise<GameTitleResponse> {
+export async function createGameTitle(request: CreateGameTitleRequest): Promise<GameTitleResponse> {
   return apiRequest<GameTitleResponse>("/api/game-titles", {
     method: "POST",
     body: request,
@@ -36,9 +34,7 @@ export async function listMapMasters(gameTitleId?: string): Promise<MapMasterLis
   return apiRequest<MapMasterListResponse>(path);
 }
 
-export async function createMapMaster(
-  request: CreateMapMasterRequest,
-): Promise<MapMasterResponse> {
+export async function createMapMaster(request: CreateMapMasterRequest): Promise<MapMasterResponse> {
   return apiRequest<MapMasterResponse>("/api/map-masters", {
     method: "POST",
     body: request,

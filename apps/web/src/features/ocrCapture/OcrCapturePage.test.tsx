@@ -16,7 +16,28 @@ type OcrJobRequestBody = {
 describe("OcrCapturePage", () => {
   afterEach(() => {
     queryClient.clear();
+    window.localStorage.clear();
     vi.restoreAllMocks();
+  });
+
+  it("reloads protected master selects after selecting a dev user", async () => {
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <OcrCapturePage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findAllByRole("option", { name: "ログイン後に読み込みます" })).toHaveLength(
+      3,
+    );
+    expect(screen.getByLabelText("作品")).toBeDisabled();
+
+    await userEvent.selectOptions(screen.getByLabelText("Dev User"), "member_ponta");
+
+    await waitFor(() => expect(screen.getByLabelText("作品")).toBeEnabled());
+    expect(screen.getByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
   });
 
   it("uploads an image, creates a job, polls to success, and shows the draft", async () => {

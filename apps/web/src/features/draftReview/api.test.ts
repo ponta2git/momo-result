@@ -18,9 +18,9 @@ describe("draft review api", () => {
   it("creates held event and confirms match", async () => {
     window.localStorage.setItem("momoresult.devUser", "ponta");
 
-    await expect(
-      createHeldEvent({ heldAt: "2026-01-01T00:00:00.000Z" }),
-    ).resolves.toMatchObject({ id: "held-created" });
+    await expect(createHeldEvent({ heldAt: "2026-01-01T00:00:00.000Z" })).resolves.toMatchObject({
+      id: "held-created",
+    });
 
     await expect(
       confirmMatch({

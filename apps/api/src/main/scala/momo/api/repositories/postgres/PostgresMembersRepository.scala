@@ -21,3 +21,9 @@ final class PostgresMembersRepository[F[_]: MonadCancelThrow](transactor: Transa
       FROM members
       WHERE id = $id
     """.query[Member].option.transact(transactor)
+
+  override def findByDiscordUserId(userId: String): F[Option[Member]] = sql"""
+      SELECT id, user_id, display_name, created_at
+      FROM members
+      WHERE user_id = $userId
+    """.query[Member].option.transact(transactor)

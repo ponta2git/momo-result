@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useId } from "react";
 import { fixedMembers } from "@/features/ocrCapture/localMasters";
 import { useDevUser } from "@/shared/auth/useDevUser";
@@ -8,6 +9,7 @@ type DevUserPickerProps = {
 
 export function DevUserPicker({ force = false }: DevUserPickerProps) {
   const id = useId();
+  const queryClient = useQueryClient();
   const { devUser, setDevUser, lockedByEnv } = useDevUser();
 
   if (!import.meta.env.DEV && !force) {
@@ -25,7 +27,10 @@ export function DevUserPicker({ force = false }: DevUserPickerProps) {
       <select
         id={id}
         value={devUser}
-        onChange={(event) => setDevUser(event.target.value)}
+        onChange={(event) => {
+          setDevUser(event.target.value);
+          void queryClient.invalidateQueries();
+        }}
         disabled={lockedByEnv}
         className="mt-2 w-full rounded-xl border border-line-soft bg-capture-black/45 px-3 py-2 text-sm text-ink-100"
       >

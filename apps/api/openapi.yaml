@@ -45,6 +45,121 @@
         }
       }
     },
+    "/api/auth/login" : {
+      "get" : {
+        "tags" : [
+          "auth"
+        ],
+        "description" : "Start Discord OAuth login.",
+        "operationId" : "getApiAuthLogin",
+        "responses" : {
+          "302" : {
+            "description" : "",
+            "headers" : {
+              "Location" : {
+                "required" : true,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/callback" : {
+      "get" : {
+        "tags" : [
+          "auth"
+        ],
+        "description" : "Complete Discord OAuth login.",
+        "operationId" : "getApiAuthCallback",
+        "parameters" : [
+          {
+            "name" : "code",
+            "in" : "query",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "state",
+            "in" : "query",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "302" : {
+            "description" : "",
+            "headers" : {
+              "Location" : {
+                "required" : true,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/logout" : {
+      "post" : {
+        "tags" : [
+          "auth"
+        ],
+        "operationId" : "postApiAuthLogout",
+        "parameters" : [
+          {
+            "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "204" : {
+            "description" : ""
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/auth/me" : {
       "get" : {
         "tags" : [
@@ -1020,6 +1135,9 @@
             "type" : "string"
           },
           "displayName" : {
+            "type" : "string"
+          },
+          "csrfToken" : {
             "type" : "string"
           }
         }

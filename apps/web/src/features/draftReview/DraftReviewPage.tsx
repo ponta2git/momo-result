@@ -13,20 +13,14 @@ import type { DraftByKind, ReviewPlayer } from "@/features/draftReview/mergeDraf
 import { confirmMatchSchema, toConfirmMatchRequest } from "@/features/draftReview/schema";
 import type { ConfirmMatchFormValues } from "@/features/draftReview/schema";
 import { createSampleDraftMap } from "@/features/draftReview/sampleDrafts";
-import {
-  fixedMembers,
-} from "@/features/ocrCapture/localMasters";
+import { fixedMembers } from "@/features/ocrCapture/localMasters";
 import { defaultSetupValues } from "@/features/ocrCapture/schema";
-import {
-  listGameTitles,
-  listMapMasters,
-  listSeasonMasters,
-} from "@/shared/api/masters";
+import { listGameTitles, listMapMasters, listSeasonMasters } from "@/shared/api/masters";
 import type { SlotKind } from "@/shared/api/enums";
 import { slotKinds } from "@/shared/api/enums";
 import { getAuthMe } from "@/shared/api/client";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
-import { DevUserPicker } from "@/shared/auth/DevUserPicker";
+import { AuthPanel } from "@/shared/auth/AuthPanel";
 import { Button } from "@/shared/ui/Button";
 import { Card } from "@/shared/ui/Card";
 import { LiveRegion } from "@/shared/ui/LiveRegion";
@@ -316,28 +310,32 @@ export function DraftReviewPage() {
     queryFn: getAuthMe,
     retry: false,
   });
+  const authReady = authQuery.isSuccess;
+  const authMemberId = authQuery.data?.memberId ?? "anonymous";
   const heldEventsQuery = useQuery({
-    queryKey: ["held-events"],
+    queryKey: ["held-events", authMemberId],
     queryFn: () => listHeldEvents("", 10),
+    enabled: authReady,
   });
   const gameTitlesQuery = useQuery({
-    queryKey: ["masters", "game-titles"],
+    queryKey: ["masters", "game-titles", authMemberId],
     queryFn: listGameTitles,
+    enabled: authReady,
   });
   const mapMastersQuery = useQuery({
-    queryKey: ["masters", "map-masters", values.gameTitleId],
+    queryKey: ["masters", "map-masters", authMemberId, values.gameTitleId],
     queryFn: () => listMapMasters(values.gameTitleId || undefined),
-    enabled: Boolean(values.gameTitleId),
+    enabled: authReady && Boolean(values.gameTitleId),
   });
   const seasonMastersQuery = useQuery({
-    queryKey: ["masters", "season-masters", values.gameTitleId],
+    queryKey: ["masters", "season-masters", authMemberId, values.gameTitleId],
     queryFn: () => listSeasonMasters(values.gameTitleId || undefined),
-    enabled: Boolean(values.gameTitleId),
+    enabled: authReady && Boolean(values.gameTitleId),
   });
   const draftsQuery = useQuery({
-    queryKey: ["ocr-drafts-bulk", idList.join(",")],
+    queryKey: ["ocr-drafts-bulk", authMemberId, idList.join(",")],
     queryFn: () => getOcrDraftsBulk(idList),
-    enabled: !useSampleDrafts && idList.length > 0,
+    enabled: authReady && !useSampleDrafts && idList.length > 0,
     retry: false,
   });
   const createEventMutation = useMutation({
@@ -880,7 +878,7 @@ export function DraftReviewPage() {
             </p>
           ) : null}
         </div>
-        <DevUserPicker force={authError?.status === 401} />
+        <AuthPanel auth={authQuery.data} forceDevPicker={authError?.status === 401} />
       </header>
 
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3">

@@ -6,6 +6,9 @@ object ApiEndpoints:
   val all: List[AnyEndpoint] = List(
     HealthEndpoints.health,
     OpenApiEndpoints.yaml,
+    AuthEndpoints.login,
+    AuthEndpoints.callback,
+    AuthEndpoints.logout,
     AuthEndpoints.me,
     UploadEndpoints.uploadImage,
     OcrJobEndpoints.create,

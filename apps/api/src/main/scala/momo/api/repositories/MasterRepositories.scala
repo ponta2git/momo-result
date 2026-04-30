@@ -30,3 +30,4 @@ trait MemberAliasesRepository[F[_]]:
 trait MembersRepository[F[_]]:
   def list: F[List[momo.api.domain.Member]]
   def find(id: String): F[Option[momo.api.domain.Member]]
+  def findByDiscordUserId(userId: String): F[Option[momo.api.domain.Member]]

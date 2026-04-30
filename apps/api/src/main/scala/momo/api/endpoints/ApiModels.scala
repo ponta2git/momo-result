@@ -5,7 +5,8 @@ import java.time.format.DateTimeFormatter
 import momo.api.domain.{OcrDraft, OcrJob, OcrJobHints, StoredImage}
 import momo.api.domain.ids.*
 
-final case class AuthMeResponse(memberId: String, displayName: String) derives Codec.AsObject
+final case class AuthMeResponse(memberId: String, displayName: String, csrfToken: Option[String])
+    derives Codec.AsObject
 
 final case class UploadImageResponse(
     imageId: String,

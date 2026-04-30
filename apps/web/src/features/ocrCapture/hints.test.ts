@@ -3,24 +3,31 @@ import { buildOcrHints } from "@/features/ocrCapture/hints";
 
 describe("buildOcrHints", () => {
   it("uses the canonical layout families and does not include result context fields", () => {
-    expect(buildOcrHints({ gameTitleId: "momotetsu_2" })).toMatchObject({
+    expect(
+      buildOcrHints({ gameTitleName: "桃太郎電鉄2", layoutFamily: "momotetsu_2" }),
+    ).toMatchObject({
+      gameTitle: "桃太郎電鉄2",
       layoutFamily: "momotetsu_2",
     });
-    expect(buildOcrHints({ gameTitleId: "world" })).toMatchObject({
+    expect(
+      buildOcrHints({ gameTitleName: "桃太郎電鉄ワールド", layoutFamily: "world" }),
+    ).toMatchObject({
       layoutFamily: "world",
     });
-    expect(buildOcrHints({ gameTitleId: "reiwa" })).toMatchObject({
+    expect(buildOcrHints({ gameTitleName: "令和", layoutFamily: "reiwa" })).toMatchObject({
       layoutFamily: "reiwa",
     });
 
-    const hints = buildOcrHints({ gameTitleId: "momotetsu_2" });
+    const hints = buildOcrHints({ gameTitleName: "桃太郎電鉄2", layoutFamily: "momotetsu_2" });
     expect(hints).not.toHaveProperty("season");
     expect(hints).not.toHaveProperty("map");
     expect(hints).not.toHaveProperty("owner");
   });
 
   it("builds known player aliases for the fixed four members", () => {
-    const aliases = buildOcrHints({ gameTitleId: "momotetsu_2" }).knownPlayerAliases ?? [];
+    const aliases =
+      buildOcrHints({ gameTitleName: "桃太郎電鉄2", layoutFamily: "momotetsu_2" })
+        .knownPlayerAliases ?? [];
 
     expect(aliases.map((alias) => alias.memberId)).toEqual([
       "member_ponta",
@@ -37,8 +44,23 @@ describe("buildOcrHints", () => {
   });
 
   it("sends computer aliases only for the Reiwa layout family", () => {
-    expect(buildOcrHints({ gameTitleId: "reiwa" }).computerPlayerAliases).toEqual(["さくま"]);
-    expect(buildOcrHints({ gameTitleId: "momotetsu_2" }).computerPlayerAliases).toEqual([]);
-    expect(buildOcrHints({ gameTitleId: "world" }).computerPlayerAliases).toEqual([]);
+    expect(
+      buildOcrHints({ gameTitleName: "令和", layoutFamily: "reiwa" }).computerPlayerAliases,
+    ).toEqual(["さくま"]);
+    expect(
+      buildOcrHints({ gameTitleName: "桃太郎電鉄2", layoutFamily: "momotetsu_2" })
+        .computerPlayerAliases,
+    ).toEqual([]);
+    expect(
+      buildOcrHints({ gameTitleName: "ワールド", layoutFamily: "world" }).computerPlayerAliases,
+    ).toEqual([]);
+  });
+
+  it("falls back to empty hints when the game title is not yet resolved", () => {
+    const hints = buildOcrHints({});
+    expect(hints.gameTitle).toBeUndefined();
+    expect(hints.layoutFamily).toBeUndefined();
+    expect(hints.computerPlayerAliases).toEqual([]);
+    expect(hints.knownPlayerAliases?.length).toBe(4);
   });
 });

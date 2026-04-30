@@ -22,7 +22,8 @@ import { SetupPanel } from "@/features/ocrCapture/SetupPanel";
 import { useOcrJobPolling } from "@/features/ocrCapture/useOcrJobPolling";
 import { DevUserPicker } from "@/shared/auth/DevUserPicker";
 import type { SlotKind } from "@/shared/api/enums";
-import { parseOcrJobStatus } from "@/shared/api/enums";
+import { parseLayoutFamily, parseOcrJobStatus } from "@/shared/api/enums";
+import { listGameTitles } from "@/shared/api/masters";
 import { getAuthMe } from "@/shared/api/client";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { Button } from "@/shared/ui/Button";
@@ -99,10 +100,19 @@ export function OcrCapturePage() {
     retry: false,
   });
 
-  const hints = useMemo(
-    () => buildOcrHints({ gameTitleId: setup.gameTitleId }),
-    [setup.gameTitleId],
-  );
+  const gameTitlesQuery = useQuery({
+    queryKey: ["masters", "game-titles"],
+    queryFn: listGameTitles,
+  });
+
+  const hints = useMemo(() => {
+    const selected = gameTitlesQuery.data?.items?.find((item) => item.id === setup.gameTitleId);
+    const input: { gameTitleName?: string; layoutFamily?: "momotetsu_2" | "world" | "reiwa" } = {};
+    if (selected?.name) input.gameTitleName = selected.name;
+    const lf = parseLayoutFamily(selected?.layoutFamily);
+    if (lf) input.layoutFamily = lf;
+    return buildOcrHints(input);
+  }, [gameTitlesQuery.data, setup.gameTitleId]);
 
   const uploadMutation = useMutation({
     mutationFn: async ({ slot, file }: { slot: CaptureSlotState; file: File }) => {

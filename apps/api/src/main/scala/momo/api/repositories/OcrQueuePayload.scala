@@ -1,4 +1,4 @@
-package momo.api.adapters
+package momo.api.repositories
 
 import io.circe.{Json, Printer}
 import io.circe.syntax.*
@@ -8,9 +8,9 @@ import java.time.Instant
 import momo.api.domain.{OcrJobHints, ScreenType}
 import momo.api.domain.ids.*
 
-final case class OcrStreamPayload(fields: Map[String, String])
+final case class OcrQueuePayload(fields: Map[String, String])
 
-object OcrStreamPayload:
+object OcrQueuePayload:
   val RequiredKeys: Set[String] =
     Set("jobId", "draftId", "imageId", "imagePath", "requestedImageType", "attempt", "enqueuedAt")
   val HintsKey = "ocrHintsJson"
@@ -26,7 +26,7 @@ object OcrStreamPayload:
       attempt: Int,
       enqueuedAt: Instant,
       hints: OcrJobHints,
-  ): OcrStreamPayload =
+  ): OcrQueuePayload =
     val base = Map(
       "jobId" -> jobId.value,
       "draftId" -> draftId.value,
@@ -41,9 +41,9 @@ object OcrStreamPayload:
       if hints.isEmpty then base
       else base + (HintsKey -> printer.print(hints.asJson.deepDropNullValues))
 
-    OcrStreamPayload(withHints)
+    OcrQueuePayload(withHints)
 
-  def fieldsAsJson(payload: OcrStreamPayload): Json = Json
+  def fieldsAsJson(payload: OcrQueuePayload): Json = Json
     .obj(payload.fields.toSeq.sortBy(_._1).map { case (key, value) =>
       key -> Json.fromString(value)
     }*)

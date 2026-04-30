@@ -1,4 +1,4 @@
-package momo.api.adapters
+package momo.api.repositories
 
 import io.circe.Json
 import java.nio.file.Path
@@ -7,9 +7,9 @@ import momo.api.domain.{OcrJobHints, PlayerAliasHint, ScreenType}
 import momo.api.domain.ids.*
 import munit.FunSuite
 
-final class OcrStreamPayloadSpec extends FunSuite:
+final class OcrQueuePayloadSpec extends FunSuite:
   test("builds the exact Redis Streams payload expected by the OCR worker without hints") {
-    val payload = OcrStreamPayload.build(
+    val payload = OcrQueuePayload.build(
       jobId = JobId("job-1"),
       draftId = DraftId("draft-1"),
       imageId = ImageId("image-1"),
@@ -35,7 +35,7 @@ final class OcrStreamPayloadSpec extends FunSuite:
   }
 
   test("serializes hints as compact sorted UTF-8 JSON") {
-    val payload = OcrStreamPayload.build(
+    val payload = OcrQueuePayload.build(
       jobId = JobId("job-2"),
       draftId = DraftId("draft-2"),
       imageId = ImageId("image-2"),
@@ -52,13 +52,13 @@ final class OcrStreamPayloadSpec extends FunSuite:
     )
 
     assertEquals(
-      payload.fields(OcrStreamPayload.HintsKey),
+      payload.fields(OcrQueuePayload.HintsKey),
       """{"computerPlayerAliases":["さくま","サクマ"],"gameTitle":"桃太郎電鉄ワールド","knownPlayerAliases":[{"aliases":["ぽんた","PONTA"],"memberId":"member-1"}],"layoutFamily":"world"}""",
     )
   }
 
   test("fieldsAsJson is deterministic by key order") {
-    val json = OcrStreamPayload.fieldsAsJson(OcrStreamPayload(Map("b" -> "2", "a" -> "1")))
+    val json = OcrQueuePayload.fieldsAsJson(OcrQueuePayload(Map("b" -> "2", "a" -> "1")))
 
     assertEquals(json, Json.obj("a" -> Json.fromString("1"), "b" -> Json.fromString("2")))
   }

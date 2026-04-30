@@ -1,8 +1,7 @@
 package momo.api.http
 
-import cats.effect.{Async, Resource}
+import cats.effect.{Async, Clock, Resource}
 import cats.syntax.all.*
-import java.time.Instant
 import momo.api.adapters.{
   InMemoryGameTitlesRepository, InMemoryHeldEventsRepository, InMemoryIncidentMastersRepository,
   InMemoryMapMastersRepository, InMemoryMatchesRepository, InMemoryOcrDraftsRepository,
@@ -45,30 +44,32 @@ object HttpApp:
    * HikariCP; otherwise we wire up InMemory adapters (used by tests and the early dev environment).
    */
   def wired[F[_]: Async](config: AppConfig): Resource[F, Wired[F]] = config.database match
-    case Some(db) => Database.transactor[F](db).evalMap { transactor =>
-        for queue <- InMemoryQueueProducer.create[F] yield
-          val jobs: OcrJobsRepository[F] = PostgresOcrJobsRepository[F](transactor)
-          val drafts: OcrDraftsRepository[F] = PostgresOcrDraftsRepository[F](transactor)
-          val heldEvents: HeldEventsRepository[F] = PostgresHeldEventsRepository[F](transactor)
-          val matches: MatchesRepository[F] = PostgresMatchesRepository[F](transactor)
-          val gameTitles: GameTitlesRepository[F] = PostgresGameTitlesRepository[F](transactor)
-          val mapMasters: MapMastersRepository[F] = PostgresMapMastersRepository[F](transactor)
-          val seasonMasters: SeasonMastersRepository[F] =
-            PostgresSeasonMastersRepository[F](transactor)
-          val incidentMasters: IncidentMastersRepository[F] =
-            PostgresIncidentMastersRepository[F](transactor)
-          assemble(
-            config = config,
-            queue = queue,
-            jobs = jobs,
-            drafts = drafts,
-            heldEvents = heldEvents,
-            matches = matches,
-            gameTitles = gameTitles,
-            mapMasters = mapMasters,
-            seasonMasters = seasonMasters,
-            incidentMasters = incidentMasters,
-          )
+    case Some(db) => Resource.eval(Async[F].executionContext).flatMap { connectExecutionContext =>
+        Database.transactor[F](db, connectExecutionContext).evalMap { transactor =>
+          for queue <- InMemoryQueueProducer.create[F] yield
+            val jobs: OcrJobsRepository[F] = PostgresOcrJobsRepository[F](transactor)
+            val drafts: OcrDraftsRepository[F] = PostgresOcrDraftsRepository[F](transactor)
+            val heldEvents: HeldEventsRepository[F] = PostgresHeldEventsRepository[F](transactor)
+            val matches: MatchesRepository[F] = PostgresMatchesRepository[F](transactor)
+            val gameTitles: GameTitlesRepository[F] = PostgresGameTitlesRepository[F](transactor)
+            val mapMasters: MapMastersRepository[F] = PostgresMapMastersRepository[F](transactor)
+            val seasonMasters: SeasonMastersRepository[F] =
+              PostgresSeasonMastersRepository[F](transactor)
+            val incidentMasters: IncidentMastersRepository[F] =
+              PostgresIncidentMastersRepository[F](transactor)
+            assemble(
+              config = config,
+              queue = queue,
+              jobs = jobs,
+              drafts = drafts,
+              heldEvents = heldEvents,
+              matches = matches,
+              gameTitles = gameTitles,
+              mapMasters = mapMasters,
+              seasonMasters = seasonMasters,
+              incidentMasters = incidentMasters,
+            )
+        }
       }
     case None => Resource.eval {
         for
@@ -110,7 +111,7 @@ object HttpApp:
     val imageStore = LocalFsImageStore[F](config.imageTmpDir)
     val roster = MemberRoster.dev(config.devMemberIds)
     val uploadImage = UploadImage[F](imageStore)
-    val nowF = Async[F].delay(Instant.now())
+    val nowF = Clock[F].realTimeInstant
     val createOcrJob = CreateOcrJob[F](
       imageStore = imageStore,
       jobs = jobs,

@@ -3,7 +3,7 @@ package momo.api.http
 import cats.effect.Async
 import cats.syntax.all.*
 import java.time.format.DateTimeFormatter
-import momo.api.auth.{AuthenticatedMember, MemberRoster}
+import momo.api.auth.MemberRoster
 import momo.api.config.AppConfig
 import momo.api.domain.OcrJobHints
 import momo.api.endpoints.{
@@ -29,7 +29,6 @@ import momo.api.usecases.{
 }
 import org.http4s.server.Router
 import org.http4s.HttpApp as Http4sApp
-import sttp.model.Part
 import sttp.tapir.server.http4s.Http4sServerInterpreter
 import sttp.tapir.server.ServerEndpoint
 
@@ -64,13 +63,6 @@ object HttpRoutes:
         onSuccess: A => B
     ): F[Either[ProblemDetails.ErrorInfo, B]] = result.map(_.leftMap(toProblem).map(onSuccess))
 
-    def extractFile(
-        parts: Seq[Part[Array[Byte]]]
-    ): Either[AppError, (Option[String], Option[String], Array[Byte])] = parts
-      .find(_.name == "file")
-      .map(part => (part.fileName, part.contentType.map(_.toString), part.body))
-      .toRight(AppError.ValidationFailed("Multipart field 'file' is required."))
-
     val routes = Http4sServerInterpreter[F]().toRoutes(List[ServerEndpoint[Any, F]](
       HealthEndpoints.health
         .serverLogicSuccess(_ => Async[F].pure(HealthEndpoints.HealthResponse("ok"))),
@@ -82,10 +74,11 @@ object HttpRoutes:
       },
       UploadEndpoints.uploadImage.serverLogic { case (devUser, csrfToken, parts) =>
         security.authorizeMutation(devUser, csrfToken) { _ =>
-          extractFile(parts) match
+          MultipartUpload.file(parts) match
             case Left(error) => Async[F].pure(Left(toProblem(error)))
-            case Right((fileName, contentType, bytes)) =>
-              respond(deps.uploadImage.run(fileName, contentType, bytes))(UploadImageResponse.from)
+            case Right(upload) => respond(
+                deps.uploadImage.run(upload.fileName, upload.contentType, upload.bytes)
+              )(UploadImageResponse.from)
         }
       },
       OcrJobEndpoints.create.serverLogic { case (devUser, csrfToken, request) =>
@@ -234,29 +227,3 @@ object HttpRoutes:
         )
       ),
     )
-
-  private final class EndpointSecurity[F[_]: Async](config: AppConfig, roster: MemberRoster):
-    private def toProblem(error: AppError): ProblemDetails.ErrorInfo = ProblemDetails.from(error)
-
-    def authorizeRead[A](devUser: Option[String])(
-        authorized: AuthenticatedMember => F[Either[ProblemDetails.ErrorInfo, A]]
-    ): F[Either[ProblemDetails.ErrorInfo, A]] = authenticate(devUser).flatMap {
-      case Left(error) => Async[F].pure(Left(error))
-      case Right(member) => authorized(member)
-    }
-
-    def authorizeMutation[A](devUser: Option[String], csrfToken: Option[String])(
-        authorized: AuthenticatedMember => F[Either[ProblemDetails.ErrorInfo, A]]
-    ): F[Either[ProblemDetails.ErrorInfo, A]] = authorizeRead(devUser) { member =>
-      CsrfMiddleware.validate(config.appEnv, csrfToken).map(_.leftMap(toProblem)).flatMap {
-        case Left(error) => Async[F].pure(Left(error))
-        case Right(_) => authorized(member)
-      }
-    }
-
-    private def authenticate(
-        devUser: Option[String]
-    ): F[Either[ProblemDetails.ErrorInfo, AuthenticatedMember]] = devUser match
-      case Some(value) => DevAuthMiddleware.authenticate(config.appEnv, roster, value)
-          .map(_.leftMap(toProblem))
-      case None => Async[F].pure(Left(toProblem(AppError.Unauthorized())))

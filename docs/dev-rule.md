@@ -34,15 +34,28 @@ DBマイグレーションは `momo-db` リポジトリ側で管理する（`doc
 
 ## 2. 開発サーバー起動
 
-各アプリは言語ごとのdevコマンドで直接起動する。
+各アプリは言語ごとのdevコマンドで直接起動する。ScalaとPythonは `.env` を自動読み込みしないため、起動前に `source .env` が必要。
+
+```sh
+# API（apps/api ディレクトリで）
+set -a; source .env; set +a
+sbt run
+
+# OCR worker（apps/ocr-worker ディレクトリで）
+set -a; source .env; set +a
+uv run python -m momo_ocr worker
+
+# Web（apps/web ディレクトリで）
+pnpm dev
+```
+
+起動順序の依存: `docker compose up -d`（Redis）→ api → ocr-worker → web
 
 | アプリ | コマンド | 作業ディレクトリ |
 |---|---|---|
 | web | `pnpm dev` | `apps/web` |
-| api | `sbt run` | `apps/api` |
-| ocr-worker | `uv run python -m momo_ocr` | `apps/ocr-worker` |
-
-起動順序の依存: DB/Redis → api → ocr-worker → web
+| api | `set -a; source .env; set +a && sbt run` | `apps/api` |
+| ocr-worker | `set -a; source .env; set +a && uv run python -m momo_ocr worker` | `apps/ocr-worker` |
 
 ## 3. Git・コミット規約
 

@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 import argparse
+import signal
 import sys
+import threading
 from collections.abc import Sequence
 from pathlib import Path
 
+from momo_ocr.app.composition import production_job_runner_dependencies
+from momo_ocr.app.config import load_worker_config
+from momo_ocr.app.worker_process import WorkerLoopConfig, run_worker_process
 from momo_ocr.features.standalone_analysis.analyze_image import analyze_image
 from momo_ocr.features.standalone_analysis.batch_calibration import (
     EVALUATION_SET_CHOICES,
@@ -51,6 +56,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     _add_engine_options(batch)
 
+    worker = subparsers.add_parser("worker", help="Run the Redis/Postgres OCR worker")
+    worker.add_argument(
+        "--idle-sleep-seconds",
+        default=None,
+        type=float,
+        help="Override idle sleep interval for the worker loop.",
+    )
+
     args = parser.parse_args(argv)
 
     if args.command == "analyze":
@@ -84,6 +97,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             sys.stdout.write(f"{report.to_json()}\n")
         return _batch_exit_code(report)
 
+    if args.command == "worker":
+        return _run_worker(args)
+
     message = f"Unhandled command: {args.command}"
     raise AssertionError(message)
 
@@ -104,6 +120,31 @@ def _build_text_engine(args: argparse.Namespace) -> TextRecognitionEngine:
         return TesseractEngine()
     message = f"Unhandled OCR engine: {args.ocr_engine}"
     raise AssertionError(message)
+
+
+def _run_worker(args: argparse.Namespace) -> int:
+    shutdown_event = threading.Event()
+
+    def request_shutdown(_signum: int, _frame: object) -> None:
+        shutdown_event.set()
+
+    signal.signal(signal.SIGTERM, request_shutdown)
+    signal.signal(signal.SIGINT, request_shutdown)
+
+    config = load_worker_config()
+    deps = production_job_runner_dependencies(config)
+    loop_config = (
+        WorkerLoopConfig(idle_sleep_seconds=args.idle_sleep_seconds)
+        if args.idle_sleep_seconds is not None
+        else None
+    )
+    try:
+        run_worker_process(deps, shutdown_event=shutdown_event, config=loop_config)
+    finally:
+        close = getattr(deps.consumer, "close", None)
+        if callable(close):
+            close()
+    return 0
 
 
 def _analysis_exit_code(result: AnalysisResult) -> int:

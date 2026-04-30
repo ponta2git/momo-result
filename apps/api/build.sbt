@@ -43,7 +43,9 @@ lazy val root = (project in file("."))
       val http4sVersion = "0.23.34"
       val munitCatsEffectVersion = "2.2.0"
       val munitVersion = "1.3.0"
+      val redis4catsVersion = "1.7.2"
       val tapirVersion = "1.13.17"
+      val testcontainersVersion = "1.21.3"
 
       Seq(
         "org.typelevel" %% "cats-effect" % catsEffectVersion,
@@ -62,7 +64,9 @@ lazy val root = (project in file("."))
         "org.tpolecat" %% "doobie-postgres" % doobieVersion,
         "org.tpolecat" %% "doobie-postgres-circe" % doobieVersion,
         "org.tpolecat" %% "doobie-hikari" % doobieVersion,
+        "dev.profunktor" %% "redis4cats-effects" % redis4catsVersion,
         "org.scalameta" %% "munit" % munitVersion % Test,
+        "org.testcontainers" % "testcontainers" % testcontainersVersion % Test,
         "org.typelevel" %% "munit-cats-effect" % munitCatsEffectVersion % Test
       )
     },

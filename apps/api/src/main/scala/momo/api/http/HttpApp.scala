@@ -6,7 +6,7 @@ import momo.api.adapters.{
   InMemoryAppSessionsRepository, InMemoryGameTitlesRepository, InMemoryHeldEventsRepository,
   InMemoryIncidentMastersRepository, InMemoryMapMastersRepository, InMemoryMatchesRepository,
   InMemoryMembersRepository, InMemoryOcrDraftsRepository, InMemoryOcrJobsRepository,
-  InMemoryQueueProducer, InMemorySeasonMastersRepository, LocalFsImageStore,
+  InMemoryQueueProducer, InMemorySeasonMastersRepository, LocalFsImageStore, RedisQueueProducer,
 }
 import momo.api.auth.{
   CsrfTokenService, JavaDiscordOAuthClient, LoginRateLimiter, MemberRoster, OAuthStateCodec,
@@ -50,8 +50,8 @@ object HttpApp:
    */
   def wired[F[_]: Async](config: AppConfig): Resource[F, Wired[F]] = config.database match
     case Some(db) => Resource.eval(Async[F].executionContext).flatMap { connectExecutionContext =>
-        Database.transactor[F](db, connectExecutionContext).evalMap { transactor =>
-          InMemoryQueueProducer.create[F].flatMap { queue =>
+        (Database.transactor[F](db, connectExecutionContext), queueResource[F](config)).tupled
+          .evalMap { (transactor, queue) =>
             val jobs: OcrJobsRepository[F] = PostgresOcrJobsRepository[F](transactor)
             val drafts: OcrDraftsRepository[F] = PostgresOcrDraftsRepository[F](transactor)
             val heldEvents: HeldEventsRepository[F] = PostgresHeldEventsRepository[F](transactor)
@@ -79,13 +79,11 @@ object HttpApp:
               incidentMasters = incidentMasters,
             )
           }
-        }
       }
-    case None => Resource.eval {
+    case None => queueResource[F](config).evalMap { queue =>
         for
           jobs <- InMemoryOcrJobsRepository.create[F]
           drafts <- InMemoryOcrDraftsRepository.create[F]
-          queue <- InMemoryQueueProducer.create[F]
           heldEvents <- InMemoryHeldEventsRepository.create[F]
           matches <- InMemoryMatchesRepository.create[F]
           appSessions <- InMemoryAppSessionsRepository.create[F]
@@ -111,6 +109,12 @@ object HttpApp:
           )
         yield wired
       }
+
+  private def queueResource[F[_]: Async](
+      config: AppConfig
+  ): Resource[F, momo.api.repositories.QueueProducer[F]] = config.redis match
+    case Some(redis) => RedisQueueProducer.resource[F](redis).widen
+    case None => Resource.eval(InMemoryQueueProducer.create[F]).widen
 
   private def assemble[F[_]: Async](
       config: AppConfig,

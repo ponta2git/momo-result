@@ -37,10 +37,10 @@ DBマイグレーションの正本は MVP 期間中 summit 側にある（`AGEN
 
 ### 2.1 ストリーム構造
 
-- ストリーム名: `ocr-jobs`（コンシューマグループ: `ocr-workers`）。MVP では同時実行数 1（直列）。
+- ストリーム名: `momo:ocr:jobs`（コンシューマグループ: `momo-ocr-workers`）。MVP では同時実行数 1（直列）。
 - 投入方式: `XADD`。各メッセージは平坦な文字列フィールドのマップ。
 - ack: ワーカーが DB の終端遷移（`succeeded`/`failed`/`cancelled`）を永続化した**後にのみ** `XACK`。
-- nack: 例外時はワーカーが ack せず PEL（pending entries list）に残す。次サイクルまたは再起動後に同じ `job_id` で再配送される。**冪等性は DB のステータス遷移で担保**するのが規約（後述）。
+- nack: MVPでは即時nackを実装しない。ackされなかった配送は PEL（pending entries list）に残り、後続の再配送/claim 方針は `ocr-timeout-retry-dlq` で確定する。**冪等性は DB のステータス遷移で担保**するのが規約（後述）。
 - 最大配送回数 / dead-letter: MVP 未確定（`AGENTS.md` §6.3）。実測後に値を決め、本書を更新する。
 
 ### 2.2 ペイロードフィールド
@@ -144,7 +144,7 @@ queued ──► running ──► succeeded
 ### 排他
 
 - ワーカーは `get_for_update` 相当のロックでレコードを取得し、`running` 遷移と `attempt_count` インクリメントを **同一トランザクション**内で行うことを期待する。
-- 実装: 現在は `InMemoryOcrJobRepository` だが、Postgres アダプタは `SELECT ... FOR UPDATE` か `UPDATE ... WHERE status = 'queued' RETURNING *` パターンで実装する想定（Phase 26）。
+- 実装: `PostgresOcrJobRepository` は `SELECT ... FOR UPDATE` で現状を確認し、`running` 遷移は `UPDATE ... WHERE status = 'queued'` によって `attempt_count` インクリメントと同時にclaimする。終端遷移は `queued`/`running` のみを対象にし、終端済みジョブの二重配送は ack して破棄する。
 
 ---
 
@@ -289,7 +289,8 @@ API 側で前提にしてよい性質:
 | ワーカー単体 | `tests/unit/features/test_ocr_job_runner.py` | ライフサイクル、ack順序、エラー分類、ヒント伝播 |
 | ワーカー結合（OCR本体） | `tests/golden/` 等 | 実画像→ドラフト |
 | 契約テスト（API↔ワーカー） | API側 + ワーカーの `queue_contract.py` | `to_stream_payload`/`parse_job_message` の往復、必須キー、ヒント JSON スキーマ |
-| API 結合 | API リポジトリ | `ocr_jobs` 行作成→`XADD`→終端ステータス監視→ドラフト読み出し |
+| API 結合 | API リポジトリ / `RedisQueueProducerSpec` | `ocr_jobs` 行作成→`XADD`→終端ステータス監視→ドラフト読み出し |
+| ワーカー結合 | `tests/integration/` | Redis Streams consumer、Postgres repository/result writer、Redis→worker→Postgres smoke |
 | E2E | Playwright | アップロード→OCR完了→確定までの主要フロー |
 
 API 側で実施してほしいこと:
@@ -301,6 +302,7 @@ API 側で実施してほしいこと:
 ## 11. 互換性とバージョニング
 
 - メッセージスキーマ（§2）と DB スキーマ（§3, §4）はワーカーの `models.py` と `queue_contract.py` を**正本**として運用する。
+- 本物アダプタ実装は API 側 `RedisQueueProducer`、ワーカー側 `RedisOcrJobConsumer` / `PostgresOcrJobRepository` / `PostgresOcrResultWriter` を参照する。
 - 後方互換: 追加フィールド（メッセージ・JSON・DB列）は OK。デフォルト値で既存実装が壊れないこと。
 - 後方非互換: 既存フィールドの意味/型変更、削除、enum 値削除は API/ワーカー/summit 同時デプロイで対応する。デプロイ順は **summit マイグレーション → ワーカー → API**。
 - ワーカーリリースには本書の改訂を必須とする。
@@ -310,7 +312,6 @@ API 側で実施してほしいこと:
 ## 12. 未確定事項（要追従）
 
 - OCR タイムアウト値・最大再配送回数（実測待ち）
-- Postgres / Redis の本物アダプタ実装（Phase 26 で着手）
 - DLQ（dead-letter queue）方針
 - API 側のキャンセル UI と再投入の UX
 - `ocr_drafts.payload_json` を OpenAPI に載せる際のフィールド命名（snake_case / camelCase）

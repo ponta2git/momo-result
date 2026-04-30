@@ -1,13 +1,21 @@
 from __future__ import annotations
 
+import logging
 from collections import deque
 from collections.abc import Mapping
 from dataclasses import dataclass
 from threading import Lock
-from typing import Protocol
+from typing import Any, Protocol, cast
 
+from redis import Redis
+from redis.exceptions import ResponseError
+
+from momo_ocr.app.config import WorkerConfig
 from momo_ocr.features.ocr_jobs.models import PulledJob
 from momo_ocr.features.ocr_jobs.queue_contract import parse_job_message
+from momo_ocr.shared.errors import OcrError
+
+logger = logging.getLogger(__name__)
 
 
 class OcrJobConsumer(Protocol):
@@ -87,3 +95,96 @@ class InMemoryOcrJobConsumer:
     def pending(self) -> int:
         with self._lock:
             return len(self._deliveries)
+
+
+class RedisOcrJobConsumer:
+    """Redis Streams-backed OCR job consumer.
+
+    Invalid queue messages are acknowledged and dropped inside ``pull`` so the
+    worker does not enter an infinite redelivery loop for malformed payloads.
+    """
+
+    def __init__(
+        self,
+        redis_client: Redis,
+        *,
+        stream: str,
+        group: str,
+        consumer_name: str,
+        block_ms: int = 1000,
+    ) -> None:
+        self._redis = redis_client
+        self._stream = stream
+        self._group = group
+        self._consumer_name = consumer_name
+        self._block_ms = block_ms
+        self._ensure_group()
+
+    @classmethod
+    def from_config(cls, config: WorkerConfig) -> RedisOcrJobConsumer:
+        if config.redis_url is None:
+            msg = "REDIS_URL is required to create RedisOcrJobConsumer."
+            raise ValueError(msg)
+        client = Redis.from_url(config.redis_url, decode_responses=True)
+        return cls(
+            client,
+            stream=config.redis_stream,
+            group=config.redis_group,
+            consumer_name=config.worker_id,
+        )
+
+    def pull(self) -> PulledJob | None:
+        raw_deliveries = self._redis.xreadgroup(
+            groupname=self._group,
+            consumername=self._consumer_name,
+            streams={self._stream: ">"},
+            count=1,
+            block=self._block_ms,
+        )
+        if not raw_deliveries:
+            return None
+
+        message_id, fields = _first_stream_message(raw_deliveries)
+        try:
+            message = parse_job_message(fields)
+        except OcrError:
+            logger.exception(
+                "Dropping malformed OCR queue message",
+                extra={"delivery_tag": message_id},
+            )
+            self.ack(message_id)
+            return None
+        return PulledJob(message=message, delivery_tag=message_id)
+
+    def ack(self, delivery_tag: str) -> None:
+        self._redis.xack(self._stream, self._group, delivery_tag)
+
+    def nack(self, delivery_tag: str) -> None:
+        msg = (
+            "Redis Streams does not support immediate nack; delivery "
+            f"{delivery_tag} remains pending until it is claimed."
+        )
+        raise NotImplementedError(msg)
+
+    def close(self) -> None:
+        self._redis.close()
+
+    def _ensure_group(self) -> None:
+        try:
+            self._redis.xgroup_create(
+                name=self._stream,
+                groupname=self._group,
+                id="0",
+                mkstream=True,
+            )
+        except ResponseError as exc:
+            if "BUSYGROUP" not in str(exc):
+                raise
+
+
+def _first_stream_message(raw_deliveries: object) -> tuple[str, dict[str, str]]:
+    deliveries = cast("list[tuple[str, list[tuple[str, dict[str, Any]]]]]", raw_deliveries)
+    _, messages = deliveries[0]
+    message_id, raw_fields = messages[0]
+    fields = {str(key): str(value) for key, value in raw_fields.items()}
+    return message_id, fields

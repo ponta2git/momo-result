@@ -1,16 +1,32 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
+from pathlib import Path
 from threading import Lock
 from typing import Protocol
 
+import psycopg
+from psycopg.rows import TupleRow
+
+from momo_ocr.features.ocr_domain.models import ScreenType
 from momo_ocr.features.ocr_jobs.lifecycle import ensure_transition_allowed
 from momo_ocr.features.ocr_jobs.models import (
     OcrJobExecutionResult,
     OcrJobRecord,
     OcrJobStatus,
 )
-from momo_ocr.shared.errors import FailureCode, OcrError
+from momo_ocr.shared.errors import FailureCode, OcrError, OcrFailure
+
+_SELECT_JOB_FOR_UPDATE = """
+    SELECT
+      id, draft_id, image_id, image_path,
+      requested_screen_type, detected_screen_type,
+      status, attempt_count, worker_id,
+      failure_code, failure_message, failure_retryable, failure_user_action
+    FROM ocr_jobs
+    WHERE id = %s
+    FOR UPDATE
+"""
 
 
 class OcrJobRepository(Protocol):
@@ -110,3 +126,151 @@ class InMemoryOcrJobRepository:
                 failure=result.failure,
             )
             self.completions[job_id] = result
+
+
+class PostgresOcrJobRepository:
+    def __init__(self, conninfo: str) -> None:
+        self._conninfo = conninfo
+
+    def get_for_update(self, job_id: str) -> OcrJobRecord | None:
+        with self._connect() as conn, conn.transaction():
+            row = conn.execute(
+                _SELECT_JOB_FOR_UPDATE,
+                (job_id,),
+            ).fetchone()
+            return _row_to_record(row)
+
+    def transition_to_running(self, job_id: str, *, worker_id: str) -> None:
+        with self._connect() as conn, conn.transaction():
+            updated = conn.execute(
+                """
+                UPDATE ocr_jobs SET
+                  status = 'running',
+                  worker_id = %s,
+                  attempt_count = attempt_count + 1,
+                  started_at = COALESCE(started_at, now()),
+                  updated_at = now()
+                WHERE id = %s AND status = 'queued'
+                """,
+                (worker_id, job_id),
+            ).rowcount
+            if updated == 1:
+                return
+            current = _select_status(conn, job_id)
+            if current is None:
+                raise OcrError(
+                    FailureCode.DB_WRITE_FAILED,
+                    f"OCR job {job_id} is not present; cannot transition to running.",
+                    retryable=True,
+                )
+            ensure_transition_allowed(current, OcrJobStatus.RUNNING)
+            raise OcrError(
+                FailureCode.DB_WRITE_FAILED,
+                f"OCR job {job_id} was not claimed for running.",
+                retryable=True,
+            )
+
+    def complete(self, job_id: str, result: OcrJobExecutionResult) -> None:
+        self._terminal_transition(job_id, result, expected=OcrJobStatus.SUCCEEDED)
+
+    def transition_to_failed_terminal(self, job_id: str, result: OcrJobExecutionResult) -> None:
+        if result.status not in {OcrJobStatus.FAILED, OcrJobStatus.CANCELLED}:
+            raise OcrError(
+                FailureCode.DB_WRITE_FAILED,
+                f"Failed-terminal transition received non-failure status: {result.status.value}.",
+            )
+        self._terminal_transition(job_id, result, expected=result.status)
+
+    def get_status(self, job_id: str) -> OcrJobStatus | None:
+        with self._connect() as conn:
+            return _select_status(conn, job_id)
+
+    def _terminal_transition(
+        self,
+        job_id: str,
+        result: OcrJobExecutionResult,
+        *,
+        expected: OcrJobStatus,
+    ) -> None:
+        detected_screen_type = (
+            result.draft_payload.detected_screen_type.value
+            if result.draft_payload is not None
+            and result.draft_payload.detected_screen_type is not None
+            else None
+        )
+        failure = result.failure
+        with self._connect() as conn, conn.transaction():
+            current = _select_status(conn, job_id)
+            if current is None:
+                raise OcrError(
+                    FailureCode.DB_WRITE_FAILED,
+                    f"OCR job {job_id} is not present; cannot complete.",
+                    retryable=True,
+                )
+            ensure_transition_allowed(current, expected)
+            updated = conn.execute(
+                """
+                UPDATE ocr_jobs SET
+                  status = %s,
+                  detected_screen_type = COALESCE(%s, detected_screen_type),
+                  failure_code = %s,
+                  failure_message = %s,
+                  failure_retryable = %s,
+                  failure_user_action = %s,
+                  finished_at = now(),
+                  duration_ms = %s,
+                  updated_at = now()
+                WHERE id = %s AND status IN ('queued', 'running')
+                """,
+                (
+                    expected.value,
+                    detected_screen_type,
+                    failure.code.value if failure is not None else None,
+                    failure.message if failure is not None else None,
+                    failure.retryable if failure is not None else None,
+                    failure.user_action if failure is not None else None,
+                    round(result.duration_ms),
+                    job_id,
+                ),
+            ).rowcount
+            if updated != 1:
+                raise OcrError(
+                    FailureCode.DB_WRITE_FAILED,
+                    f"OCR job {job_id} terminal transition did not update exactly one row.",
+                    retryable=True,
+                )
+
+    def _connect(self) -> psycopg.Connection[TupleRow]:
+        return psycopg.connect(self._conninfo)
+
+
+def _select_status(conn: psycopg.Connection[TupleRow], job_id: str) -> OcrJobStatus | None:
+    row = conn.execute("SELECT status FROM ocr_jobs WHERE id = %s", (job_id,)).fetchone()
+    if row is None:
+        return None
+    return OcrJobStatus(str(row[0]))
+
+
+def _row_to_record(row: TupleRow | None) -> OcrJobRecord | None:
+    if row is None:
+        return None
+    failure = None
+    if row[9] is not None and row[10] is not None and row[11] is not None:
+        failure = OcrFailure(
+            code=FailureCode(str(row[9])),
+            message=str(row[10]),
+            retryable=bool(row[11]),
+            user_action=None if row[12] is None else str(row[12]),
+        )
+    return OcrJobRecord(
+        job_id=str(row[0]),
+        draft_id=str(row[1]),
+        image_id=str(row[2]),
+        image_path=Path(str(row[3])),
+        requested_screen_type=ScreenType(str(row[4])),
+        detected_screen_type=None if row[5] is None else ScreenType(str(row[5])),
+        status=OcrJobStatus(str(row[6])),
+        attempt_count=int(row[7]),
+        worker_id=None if row[8] is None else str(row[8]),
+        failure=failure,
+    )

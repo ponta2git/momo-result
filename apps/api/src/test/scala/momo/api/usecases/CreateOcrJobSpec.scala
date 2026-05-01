@@ -39,6 +39,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
           case head :: tail => tail -> head
           case Nil => Nil -> "unexpected"
         },
+        requestIdLookup = IO.pure(Some("test-req-id")),
       )
       created <- usecase
         .run(CreateOcrJobCommand(image.imageId.value, "total_assets", OcrJobHints()))
@@ -51,4 +52,5 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
       assertEquals(foundDraft.map(_.id), Some(created.draft.id))
       assertEquals(published.map(_.fields("jobId")), Vector("job-1"))
       assertEquals(published.head.fields("requestedImageType"), "total_assets")
+      assertEquals(published.head.fields.get("requestId"), Some("test-req-id"))
   }

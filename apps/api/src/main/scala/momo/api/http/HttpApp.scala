@@ -145,6 +145,7 @@ object HttpApp:
       queue = queue,
       now = nowF,
       nextId = IdGenerator.next[F],
+      requestIdLookup = RequestIdMiddleware.lookup[F],
     )
     val getOcrJob = GetOcrJob[F](jobs)
     val getOcrDraft = GetOcrDraft[F](drafts)

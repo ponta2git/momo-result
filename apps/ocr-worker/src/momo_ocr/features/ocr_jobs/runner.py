@@ -96,6 +96,9 @@ def run_one_job(deps: JobRunnerDependencies) -> JobRunOutcome:
         return JobRunOutcome(pulled=False, job_id=None, status=None, duration_ms=0.0)
 
     job_id = delivery.message.job_id
+    log_extra: dict[str, str] = {"job_id": job_id}
+    if delivery.message.request_id:
+        log_extra["request_id"] = delivery.message.request_id
     started = time.monotonic()
     try:
         outcome_status = run_pipeline(deps, delivery)
@@ -103,7 +106,7 @@ def run_one_job(deps: JobRunnerDependencies) -> JobRunOutcome:
         record_terminal_failure(deps, delivery.message, exc.to_failure())
         outcome_status = OcrJobStatus.FAILED
     except Exception as exc:
-        logger.exception("Unhandled error in OCR job runner", extra={"job_id": job_id})
+        logger.exception("Unhandled error in OCR job runner", extra=log_extra)
         failure = OcrFailure(
             code=FailureCode.PARSER_FAILED,
             message=f"Unexpected runner error: {type(exc).__name__}: {exc}",

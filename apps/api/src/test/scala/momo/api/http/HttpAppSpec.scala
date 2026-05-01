@@ -66,6 +66,44 @@ final class HttpAppSpec extends MomoCatsEffectSuite:
     }
   }
 
+  test("X-Request-Id is generated when not provided and echoed in the response") {
+    app.use { httpApp =>
+      httpApp.run(Request[IO](Method.GET, uri"/healthz")).map { response =>
+        val header = response.headers.get(org.typelevel.ci.CIString("X-Request-Id"))
+        assert(header.isDefined, "expected X-Request-Id header to be present")
+        val value = header.get.head.value
+        assert(value.matches("^[A-Za-z0-9_-]{1,64}$"), s"expected UUID-like id, got: $value")
+      }
+    }
+  }
+
+  test("X-Request-Id from the client is preserved when it matches the safe pattern") {
+    app.use { httpApp =>
+      val request = Request[IO](Method.GET, uri"/healthz")
+        .putHeaders(org.http4s.Header.Raw(org.typelevel.ci.CIString("X-Request-Id"), "abc-123_DEF"))
+      httpApp.run(request).map { response =>
+        val header = response.headers.get(org.typelevel.ci.CIString("X-Request-Id"))
+        assertEquals(header.map(_.head.value), Some("abc-123_DEF"))
+      }
+    }
+  }
+
+  test("malicious X-Request-Id values are replaced with a generated id") {
+    app.use { httpApp =>
+      val request = Request[IO](Method.GET, uri"/healthz").putHeaders(org.http4s.Header
+        .Raw(org.typelevel.ci.CIString("X-Request-Id"), "bad value with spaces\nand newline"))
+      httpApp.run(request).map { response =>
+        val value = response.headers.get(org.typelevel.ci.CIString("X-Request-Id"))
+          .map(_.head.value).getOrElse("")
+        assert(
+          value != "bad value with spaces\nand newline",
+          "unsafe X-Request-Id should not be echoed verbatim",
+        )
+        assert(value.matches("^[A-Za-z0-9_-]{1,64}$"))
+      }
+    }
+  }
+
   test("prod protected endpoint rejects external X-Dev-User without session cookie") {
     Resource.eval(IO.blocking(Files.createTempDirectory("momo-api-prod-http"))).flatMap { dir =>
       val config = AppConfig(

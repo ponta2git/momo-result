@@ -57,6 +57,46 @@ final class OcrQueuePayloadSpec extends FunSuite:
     )
   }
 
+  test("includes requestId when provided and omits it when empty/None") {
+    val basePayload = OcrQueuePayload.build(
+      jobId = JobId("job-3"),
+      draftId = DraftId("draft-3"),
+      imageId = ImageId("image-3"),
+      imagePath = Path.of("/tmp/momo-result/uploads/image-3.png"),
+      requestedScreenType = ScreenType.TotalAssets,
+      attempt = 1,
+      enqueuedAt = Instant.parse("2026-04-29T11:40:16Z"),
+      hints = OcrJobHints(),
+    )
+    assertEquals(basePayload.fields.get(OcrQueuePayload.RequestIdKey), None)
+
+    val withId = OcrQueuePayload.build(
+      jobId = JobId("job-3"),
+      draftId = DraftId("draft-3"),
+      imageId = ImageId("image-3"),
+      imagePath = Path.of("/tmp/momo-result/uploads/image-3.png"),
+      requestedScreenType = ScreenType.TotalAssets,
+      attempt = 1,
+      enqueuedAt = Instant.parse("2026-04-29T11:40:16Z"),
+      hints = OcrJobHints(),
+      requestId = Some("abc-123_DEF"),
+    )
+    assertEquals(withId.fields.get(OcrQueuePayload.RequestIdKey), Some("abc-123_DEF"))
+
+    val withEmpty = OcrQueuePayload.build(
+      jobId = JobId("job-3"),
+      draftId = DraftId("draft-3"),
+      imageId = ImageId("image-3"),
+      imagePath = Path.of("/tmp/momo-result/uploads/image-3.png"),
+      requestedScreenType = ScreenType.TotalAssets,
+      attempt = 1,
+      enqueuedAt = Instant.parse("2026-04-29T11:40:16Z"),
+      hints = OcrJobHints(),
+      requestId = Some(""),
+    )
+    assertEquals(withEmpty.fields.get(OcrQueuePayload.RequestIdKey), None)
+  }
+
   test("fieldsAsJson is deterministic by key order") {
     val json = OcrQueuePayload.fieldsAsJson(OcrQueuePayload(Map("b" -> "2", "a" -> "1")))
 

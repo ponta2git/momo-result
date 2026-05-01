@@ -14,6 +14,7 @@ object OcrQueuePayload:
   val RequiredKeys: Set[String] =
     Set("jobId", "draftId", "imageId", "imagePath", "requestedImageType", "attempt", "enqueuedAt")
   val HintsKey = "ocrHintsJson"
+  val RequestIdKey = "requestId"
 
   private val printer: Printer = Printer.noSpaces.copy(dropNullValues = true, sortKeys = true)
 
@@ -26,6 +27,7 @@ object OcrQueuePayload:
       attempt: Int,
       enqueuedAt: Instant,
       hints: OcrJobHints,
+      requestId: Option[String] = None,
   ): OcrQueuePayload =
     val base = Map(
       "jobId" -> jobId.value,
@@ -41,7 +43,11 @@ object OcrQueuePayload:
       if hints.isEmpty then base
       else base + (HintsKey -> printer.print(hints.asJson.deepDropNullValues))
 
-    OcrQueuePayload(withHints)
+    val withRequestId = requestId.filter(_.nonEmpty) match
+      case Some(id) => withHints + (RequestIdKey -> id)
+      case None => withHints
+
+    OcrQueuePayload(withRequestId)
 
   def fieldsAsJson(payload: OcrQueuePayload): Json = Json
     .obj(payload.fields.toSeq.sortBy(_._1).map { case (key, value) =>

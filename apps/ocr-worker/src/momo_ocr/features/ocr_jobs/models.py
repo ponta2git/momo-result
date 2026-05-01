@@ -40,6 +40,7 @@ class OcrJobMessage:
     attempt: int
     enqueued_at: str
     hints: OcrJobHints
+    request_id: str | None = None
 
 
 @dataclass(frozen=True)

@@ -138,3 +138,54 @@ def test_parse_job_message_rejects_invalid_alias_hint_shape() -> None:
 
     assert error.value.code.value == "QUEUE_FAILURE"
     assert "knownPlayerAliases[0].aliases" in error.value.message
+
+
+def test_request_id_round_trips_when_set() -> None:
+    payload = to_stream_payload(
+        OcrJobMessage(
+            job_id="job-1",
+            draft_id="draft-1",
+            image_id="image-1",
+            image_path=Path("/tmp/sample.jpg"),
+            requested_screen_type=ScreenType.TOTAL_ASSETS,
+            attempt=1,
+            enqueued_at="2026-04-29T10:00:00Z",
+            hints=OcrJobHints(),
+            request_id="abc-123_DEF",
+        )
+    )
+    assert payload["requestId"] == "abc-123_DEF"
+    assert parse_job_message(payload).request_id == "abc-123_DEF"
+
+
+def test_request_id_is_omitted_when_absent() -> None:
+    payload = to_stream_payload(
+        OcrJobMessage(
+            job_id="job-1",
+            draft_id="draft-1",
+            image_id="image-1",
+            image_path=Path("/tmp/sample.jpg"),
+            requested_screen_type=ScreenType.TOTAL_ASSETS,
+            attempt=1,
+            enqueued_at="2026-04-29T10:00:00Z",
+            hints=OcrJobHints(),
+        )
+    )
+    assert "requestId" not in payload
+    assert parse_job_message(payload).request_id is None
+
+
+def test_invalid_request_id_is_dropped_on_parse() -> None:
+    parsed = parse_job_message(
+        {
+            "jobId": "job-1",
+            "draftId": "draft-1",
+            "imageId": "image-1",
+            "imagePath": "/tmp/sample.jpg",
+            "requestedImageType": "total_assets",
+            "attempt": "1",
+            "enqueuedAt": "2026-04-29T10:00:00Z",
+            "requestId": "bad value with spaces",
+        }
+    )
+    assert parsed.request_id is None

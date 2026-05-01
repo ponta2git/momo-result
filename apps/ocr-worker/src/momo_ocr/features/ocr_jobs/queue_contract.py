@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Mapping
 from pathlib import Path
 from typing import cast
@@ -19,6 +20,8 @@ REQUIRED_STREAM_PAYLOAD_KEYS = {
     "enqueuedAt",
 }
 OCR_HINTS_KEY = "ocrHintsJson"
+REQUEST_ID_KEY = "requestId"
+REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 
 def parse_job_message(payload: Mapping[str, str]) -> OcrJobMessage:
@@ -55,6 +58,7 @@ def parse_job_message(payload: Mapping[str, str]) -> OcrJobMessage:
         attempt=attempt,
         enqueued_at=payload["enqueuedAt"],
         hints=_parse_hints(payload.get(OCR_HINTS_KEY)),
+        request_id=_parse_request_id(payload.get(REQUEST_ID_KEY)),
     )
 
 
@@ -76,7 +80,19 @@ def to_stream_payload(message: OcrJobMessage) -> dict[str, str]:
             separators=(",", ":"),
             sort_keys=True,
         )
+    if message.request_id and REQUEST_ID_PATTERN.match(message.request_id):
+        payload[REQUEST_ID_KEY] = message.request_id
     return payload
+
+
+def _parse_request_id(raw: str | None) -> str | None:
+    if raw is None or raw == "":
+        return None
+    if not REQUEST_ID_PATTERN.match(raw):
+        # Drop malformed values rather than fail the job; the API generates
+        # safe ids itself, so this only protects against tampering.
+        return None
+    return raw
 
 
 def _parse_hints(raw_hints: str | None) -> OcrJobHints:

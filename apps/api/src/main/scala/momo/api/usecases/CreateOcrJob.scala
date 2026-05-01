@@ -27,6 +27,7 @@ final class CreateOcrJob[F[_]: MonadThrow](
     queue: QueueProducer[F],
     now: F[Instant],
     nextId: F[String],
+    requestIdLookup: F[Option[String]],
 ):
   import CreateOcrJob.*
 
@@ -38,10 +39,19 @@ final class CreateOcrJob[F[_]: MonadThrow](
     createdAt <- EitherT.liftF(now)
     jobId <- EitherT.liftF(nextId.map(JobId(_)))
     draftId <- EitherT.liftF(nextId.map(DraftId(_)))
+    requestId <- EitherT.liftF(requestIdLookup)
     draft = initialDraft(draftId, jobId, screenType, createdAt)
     job = queuedJob(jobId, draftId, imageId, image.path, screenType, createdAt)
-    payload =
-      queuePayload(jobId, draftId, imageId, image.path, screenType, createdAt, command.ocrHints)
+    payload = queuePayload(
+      jobId,
+      draftId,
+      imageId,
+      image.path,
+      screenType,
+      createdAt,
+      command.ocrHints,
+      requestId,
+    )
     _ <- EitherT.liftF(drafts.create(draft))
     _ <- EitherT.liftF(jobs.create(job))
     published <- EitherT(queue.publish(payload).attempt.flatMap {
@@ -116,6 +126,7 @@ object CreateOcrJob:
       screenType: ScreenType,
       enqueuedAt: Instant,
       hints: OcrJobHints,
+      requestId: Option[String],
   ): OcrQueuePayload = OcrQueuePayload.build(
     jobId = jobId,
     draftId = draftId,
@@ -125,6 +136,7 @@ object CreateOcrJob:
     attempt = 1,
     enqueuedAt = enqueuedAt,
     hints = hints,
+    requestId = requestId,
   )
 
   private def queueFailure(error: Throwable): OcrFailure = OcrFailure(

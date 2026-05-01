@@ -73,6 +73,10 @@ unfixable = [
   "S101",
   "S108",
 ]
+# `scripts/eval_accuracy.py` is the standalone evaluator entry-point. It is not
+# a package member, so the implicit-namespace-package check (INP001) does not
+# apply. The actual implementation lives in the sibling `eval_lib/` package.
+"scripts/eval_accuracy.py" = ["INP001"]
 
 [tool.ruff.lint.pylint]
 max-args = 6

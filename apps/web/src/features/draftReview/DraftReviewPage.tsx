@@ -82,29 +82,6 @@ function toFormPlayer(player: ReviewPlayer): ConfirmMatchFormValues["players"][n
   };
 }
 
-// DEBUG: 修正用の表の中身を TSV 化する。動作確認用、後で消す。
-function buildPlayersTsv(players: ConfirmMatchFormValues["players"]): string {
-  const header = [
-    "memberId",
-    "memberName",
-    "playOrder",
-    "rank",
-    "totalAssetsManYen",
-    "revenueManYen",
-    ...incidentColumns.map(([, label]) => label),
-  ];
-  const rows = players.map((player) => [
-    player.memberId,
-    memberName(player.memberId),
-    String(player.playOrder ?? ""),
-    String(player.rank ?? ""),
-    String(player.totalAssetsManYen ?? ""),
-    String(player.revenueManYen ?? ""),
-    ...incidentColumns.map(([key]) => String(player.incidents[key] ?? "")),
-  ]);
-  return [header, ...rows].map((row) => row.join("\t")).join("\n");
-}
-
 function emptyPlayers(): ConfirmMatchFormValues["players"] {
   return fixedMembers.map((member, index) => ({
     memberId: member.memberId,
@@ -721,24 +698,6 @@ export function DraftReviewPage() {
           <p className="text-xs leading-5 text-ink-400">
             緑=高信頼OCR / 金色=OCR結果と異なる
           </p>
-          {/* DEBUG: 表の中身を TSV でコピー。動作確認用、後で消す。 */}
-          <button
-            type="button"
-            className="mt-2 rounded-md border border-line-soft bg-night-900/72 px-2 py-1 text-xs text-ink-200 hover:bg-night-900"
-            onClick={() => {
-              const tsv = buildPlayersTsv(values.players);
-              if (typeof navigator !== "undefined" && navigator.clipboard) {
-                void navigator.clipboard.writeText(tsv).catch(() => {
-                  console.log(tsv);
-                });
-              } else {
-                console.log(tsv);
-              }
-              console.log("[debug] players TSV:\n" + tsv);
-            }}
-          >
-            TSVコピー (debug)
-          </button>
         </div>
       </div>
       <details className="mt-5 rounded-[1.5rem] border border-line-soft bg-capture-black/28 p-4">

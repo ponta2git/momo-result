@@ -158,8 +158,6 @@ private[http] object AuthHttpRoutes:
       httpOnly = true,
     )
 
-    def clientKey(request: Request[F]): String = request.headers.get(CIString("X-Forwarded-For"))
-      .map(_.head.value.split(",").head.trim).filter(_.nonEmpty)
-      .getOrElse(request.remoteAddr.fold("unknown")(_.toString))
+    def clientKey(request: Request[F]): String = ClientIp.of(request)
 
     routes

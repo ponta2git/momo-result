@@ -22,9 +22,10 @@ from momo_ocr.features.text_recognition.engine import (
     TextRecognitionEngine,
 )
 from momo_ocr.features.text_recognition.tesseract import TesseractEngine
+from momo_ocr.features.text_recognition.tesserocr_engine import TesserocrEngine
 from momo_ocr.shared.json import write_json
 
-ENGINE_CHOICES = ("tesseract", "fake")
+ENGINE_CHOICES = ("tesseract", "tesserocr", "fake")
 SCREEN_TYPE_CHOICES = ("auto", "total_assets", "revenue", "incident_log")
 
 
@@ -121,6 +122,8 @@ def _build_text_engine(args: argparse.Namespace) -> TextRecognitionEngine:
         return FakeTextRecognitionEngine(args.fake_text)
     if args.ocr_engine == "tesseract":
         return TesseractEngine()
+    if args.ocr_engine == "tesserocr":
+        return TesserocrEngine()
     message = f"Unhandled OCR engine: {args.ocr_engine}"
     raise AssertionError(message)
 

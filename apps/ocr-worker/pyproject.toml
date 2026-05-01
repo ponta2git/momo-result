@@ -11,6 +11,11 @@ dependencies = [
   "redis>=5.0.0",
 ]
 
+[project.optional-dependencies]
+inproc = [
+  "tesserocr>=2.7.0",
+]
+
 [project.scripts]
 momo-ocr = "momo_ocr.main:main"
 

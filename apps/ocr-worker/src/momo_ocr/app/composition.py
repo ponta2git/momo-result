@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -14,7 +15,9 @@ from momo_ocr.features.ocr_results.parsing import ParserRegistry
 from momo_ocr.features.revenue.parser import RevenueParser
 from momo_ocr.features.text_recognition.engine import TextRecognitionEngine
 from momo_ocr.features.text_recognition.tesseract import TesseractEngine
+from momo_ocr.features.text_recognition.tesserocr_engine import TesserocrEngine
 from momo_ocr.features.total_assets.parser import TotalAssetsParser
+from momo_ocr.shared.errors import FailureCode, OcrError
 
 if TYPE_CHECKING:
     from momo_ocr.features.ocr_jobs.runner import JobRunnerDependencies
@@ -30,8 +33,34 @@ def default_parser_registry() -> ParserRegistry:
     )
 
 
+_ENV_OCR_ENGINE = "MOMO_OCR_ENGINE"
+_VALID_ENGINES = ("subprocess", "tesserocr")
+
+
 def default_text_recognition_engine() -> TextRecognitionEngine:
-    return TesseractEngine()
+    return text_recognition_engine_from_env(os.environ.get(_ENV_OCR_ENGINE))
+
+
+def text_recognition_engine_from_env(value: str | None) -> TextRecognitionEngine:
+    """Build the engine selected by ``MOMO_OCR_ENGINE``.
+
+    ``value`` is the raw env value (``None``/empty falls back to the default).
+    Default is ``tesserocr`` after Phase C canary eval matched subprocess
+    accuracy exactly (489/504 = 97.02%) while cutting per-image latency by
+    ~85% (p50 5370ms→830ms). Set ``MOMO_OCR_ENGINE=subprocess`` to revert.
+    """
+    name = (value or "tesserocr").strip().lower()
+    if name == "subprocess":
+        return TesseractEngine()
+    if name == "tesserocr":
+        return TesserocrEngine()
+    msg = f"Unknown {_ENV_OCR_ENGINE}={value!r}; expected one of {_VALID_ENGINES}."
+    raise OcrError(
+        FailureCode.OCR_ENGINE_UNAVAILABLE,
+        msg,
+        retryable=False,
+        user_action=f"Set {_ENV_OCR_ENGINE} to 'subprocess' or 'tesserocr'.",
+    )
 
 
 def redis_consumer_from_config(config: WorkerConfig) -> RedisOcrJobConsumer:

@@ -58,12 +58,17 @@ def production_job_runner_dependencies(config: WorkerConfig) -> JobRunnerDepende
     require_production_config(config)
     consumer = redis_consumer_from_config(config)
     repository = postgres_repository_from_config(config)
+    # Construct one TesseractEngine for the entire worker process so we
+    # pay shutil.which() and field-config setup exactly once. The runner
+    # then re-uses this instance for every job.
+    text_engine = default_text_recognition_engine()
     return JobRunnerDependencies(
         consumer=consumer,
         repository=repository,
         result_writer=postgres_writer_from_config(config),
         cancellation=RepositoryCancellationChecker(repository),
         worker_id=config.worker_id,
+        text_engine=text_engine,
     )
 
 

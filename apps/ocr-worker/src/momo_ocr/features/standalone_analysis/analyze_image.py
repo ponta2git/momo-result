@@ -43,6 +43,9 @@ def analyze_image(  # noqa: PLR0913
     detection = None
     player_order_detection: PlayerOrderDetection | None = None
     requested_type = ScreenType(requested_screen_type)
+    # Engine and registry construction are intentionally cheap; in the
+    # production worker, the runner injects long-lived instances so this
+    # default branch only fires for one-off CLI / eval invocations.
     engine = text_engine if text_engine is not None else default_text_recognition_engine()
     registry = parser_registry if parser_registry is not None else default_parser_registry()
     resolved_layout_family_hint = layout_family_hint or detect_layout_family_from_filename(
@@ -57,12 +60,17 @@ def analyze_image(  # noqa: PLR0913
             resolved_path = resolve_local_image(image_path)
             metadata = read_image_metadata(resolved_path, enforce_size_limit=False)
 
+        # Decode the image exactly once for the entire analyze pipeline.
+        # Screen detection, player-order detection, and the screen parser
+        # all read from this single decoded RGB Image instance via
+        # ScreenParseContext.image.
+        decoded_image = open_decoded_image(resolved_path)
+
         with record_duration_ms(timings, "detect_screen"):
             if requested_type == ScreenType.AUTO:
                 try:
-                    image = open_decoded_image(resolved_path)
                     evidence = recognize_title_evidence(
-                        image,
+                        decoded_image,
                         engine,
                         debug_dir=debug_dir / "screen_detection" if debug_dir is not None else None,
                     )
@@ -76,9 +84,8 @@ def analyze_image(  # noqa: PLR0913
                 detection = classify_screen_type(requested_type, {})
 
         with record_duration_ms(timings, "detect_player_order"):
-            image = open_decoded_image(resolved_path)
             player_order_detection = detect_player_order(
-                image,
+                decoded_image,
                 text_engine=engine,
                 debug_dir=debug_dir / "player_order" if debug_dir is not None else None,
             )
@@ -115,6 +122,7 @@ def analyze_image(  # noqa: PLR0913
                     warnings=warnings,
                     layout_family_hint=resolved_layout_family_hint,
                     alias_resolver=resolved_alias_resolver,
+                    image=decoded_image,
                 )
             )
 

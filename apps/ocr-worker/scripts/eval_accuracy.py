@@ -53,12 +53,14 @@ _PKG_SRC = Path(__file__).resolve().parents[1] / "src"
 if str(_PKG_SRC) not in sys.path:
     sys.path.insert(0, str(_PKG_SRC))
 
+from momo_ocr.app.composition import default_text_recognition_engine  # noqa: E402
 from momo_ocr.features.ocr_domain.models import (  # noqa: E402
     OcrDraftPayload,
     PlayerResultDraft,
 )
 from momo_ocr.features.standalone_analysis.analyze_image import analyze_image  # noqa: E402
 from momo_ocr.features.standalone_analysis.report import AnalysisResult  # noqa: E402
+from momo_ocr.features.text_recognition.engine import TextRecognitionEngine  # noqa: E402
 
 SLOT_PREFIX_TO_TYPE: dict[str, str] = {
     "01": "total_assets",
@@ -327,6 +329,7 @@ def _evaluate_one(
     expected_players: list[ExpectedPlayer] | None,
     debug_dir: Path | None,
     repeat: int,
+    text_engine: TextRecognitionEngine,
 ) -> ImageEval:
     durations: list[float] = []
     last: AnalysisResult | None = None
@@ -337,6 +340,7 @@ def _evaluate_one(
             requested_screen_type=meta.screen_type,
             debug_dir=debug_dir,
             include_raw_text=False,
+            text_engine=text_engine,
         )
         durations.append((time.perf_counter() - started) * 1000.0)
 
@@ -390,6 +394,21 @@ def _evaluate_one(
     return eval_record
 
 
+def _percentile(values: list[float], p: float) -> float | None:
+    """Return the linear-interpolated p-th percentile (0..100) of ``values``."""
+    if not values:
+        return None
+    s = sorted(values)
+    if len(s) == 1:
+        return s[0]
+    k = (len(s) - 1) * (p / 100.0)
+    f = int(k)
+    c = min(f + 1, len(s) - 1)
+    if f == c:
+        return s[f]
+    return s[f] + (s[c] - s[f]) * (k - f)
+
+
 def _aggregate(records: list[ImageEval]) -> dict[str, Any]:
     total = sum(r.field_total for r in records)
     correct = sum(r.field_correct for r in records)
@@ -420,6 +439,9 @@ def _aggregate(records: list[ImageEval]) -> dict[str, Any]:
             "min": min(durations) if durations else None,
             "max": max(durations) if durations else None,
             "mean": (sum(durations) / len(durations)) if durations else None,
+            "p50": _percentile(durations, 50),
+            "p95": _percentile(durations, 95),
+            "p99": _percentile(durations, 99),
         },
         "failures": [r.file for r in records if r.failure is not None or r.field_total == 0],
     }
@@ -504,6 +526,10 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     records: list[ImageEval] = []
+    # Instantiate the text recognition engine exactly once for the entire
+    # eval run so we do not pay shutil.which() and engine setup costs per
+    # image. This mirrors the production worker's engine lifecycle.
+    text_engine = default_text_recognition_engine()
     for meta in files:
         debug_dir = _resolve_debug_dir(meta, args.mode, args.debug_dir)
         record = _evaluate_one(
@@ -511,6 +537,7 @@ def main(argv: list[str] | None = None) -> int:
             expected_players=answers.get(meta.match_no),
             debug_dir=debug_dir,
             repeat=args.repeat if args.mode == "timing" else 1,
+            text_engine=text_engine,
         )
         records.append(record)
         if not args.summary_only:

@@ -24,7 +24,7 @@ import logging
 import os
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from momo_ocr.features.ocr_domain.models import OcrDraftPayload, OcrWarning
@@ -47,6 +47,10 @@ from momo_ocr.features.ocr_results.ranked_rows import (
 from momo_ocr.features.standalone_analysis.analyze_image import analyze_image
 from momo_ocr.features.standalone_analysis.report import AnalysisResult
 from momo_ocr.features.temp_images.cleanup import delete_if_exists
+from momo_ocr.features.text_recognition.engine import (
+    FakeTextRecognitionEngine,
+    TextRecognitionEngine,
+)
 from momo_ocr.shared.errors import FailureCode, OcrError, OcrFailure
 
 logger = logging.getLogger(__name__)
@@ -63,6 +67,12 @@ class JobRunnerDependencies:
     in-memory fakes in tests and against real Redis/Postgres adapters in
     production. The ``analyze`` callable defaults to the real OCR pipeline
     but is overridable for fast unit tests.
+
+    ``text_engine`` is the long-lived OCR engine instance. Wiring a single
+    engine into the runner ensures we do not pay engine-construction or
+    PATH-resolution costs per job. The default ``FakeTextRecognitionEngine``
+    keeps unit tests that override ``analyze`` with a no-op friendly to
+    construct without standing up Tesseract.
     """
 
     consumer: OcrJobConsumer
@@ -72,6 +82,7 @@ class JobRunnerDependencies:
     worker_id: str
     analyze: AnalyzeImageFn = analyze_image
     delete_image: Callable[[Path], bool] = delete_if_exists
+    text_engine: TextRecognitionEngine = field(default_factory=FakeTextRecognitionEngine)
 
 
 @dataclass(frozen=True)
@@ -185,6 +196,7 @@ def _process_delivery(deps: JobRunnerDependencies, delivery: PulledJob) -> OcrJo
         requested_screen_type=message.requested_screen_type.value,
         debug_dir=debug_dir,
         include_raw_text=False,
+        text_engine=deps.text_engine,
         layout_family_hint=message.hints.layout_family,
         alias_resolver=_alias_resolver_from_hints(message.hints),
     )

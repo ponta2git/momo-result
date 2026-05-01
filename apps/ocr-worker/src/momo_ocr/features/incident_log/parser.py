@@ -68,7 +68,11 @@ class IncidentLogParser:
     screen_type: ScreenType = ScreenType.INCIDENT_LOG
 
     def parse(self, context: ScreenParseContext) -> OcrDraftPayload:
-        image = open_decoded_image(context.image_path)
+        image = (
+            context.image
+            if context.image is not None
+            else open_decoded_image(context.image_path)
+        )
         image_size = Size(width=image.width, height=image.height)
         debug_dir = context.debug_dir / "incident_log" if context.debug_dir is not None else None
         if debug_dir is not None:

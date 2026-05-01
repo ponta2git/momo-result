@@ -32,7 +32,11 @@ class TotalAssetsParser:
     screen_type: ScreenType = ScreenType.TOTAL_ASSETS
 
     def parse(self, context: ScreenParseContext) -> OcrDraftPayload:
-        image = open_decoded_image(context.image_path)
+        image = (
+            context.image
+            if context.image is not None
+            else open_decoded_image(context.image_path)
+        )
         image_size = Size(width=image.width, height=image.height)
         rows: list[TotalAssetRow] = []
         players: list[PlayerResultDraft] = []

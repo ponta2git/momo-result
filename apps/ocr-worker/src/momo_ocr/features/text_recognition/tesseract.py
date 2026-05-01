@@ -52,6 +52,13 @@ class TesseractEngine(TextRecognitionEngine):
         self.executable = executable
         self.default_config = default_config
         self.field_configs = field_configs
+        # Cache the resolved executable path at construction so the hot
+        # recognize() loop does not pay shutil.which() PATH-walk overhead.
+        # We tolerate a missing binary at construction (no raise) so unit
+        # tests that never call recognize() can still instantiate the
+        # engine; the missing-binary error is raised lazily below.
+        resolved = shutil.which(executable)
+        self._executable_path: str | None = resolved
 
     def recognize(
         self,
@@ -61,7 +68,7 @@ class TesseractEngine(TextRecognitionEngine):
         psm: int | None = None,
         config: RecognitionConfig | None = None,
     ) -> RecognizedText:
-        executable_path = shutil.which(self.executable)
+        executable_path = self._executable_path
         if executable_path is None:
             raise OcrError(
                 FailureCode.OCR_ENGINE_UNAVAILABLE,

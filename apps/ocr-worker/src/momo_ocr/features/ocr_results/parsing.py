@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
+from PIL import Image
+
 from momo_ocr.features.ocr_domain.models import (
     OcrDraftPayload,
     OcrWarning,
@@ -32,6 +34,11 @@ class ScreenParseContext:
     player_order_detection: PlayerOrderDetection | None = None
     alias_resolver: PlayerAliasResolver = DEFAULT_ALIAS_RESOLVER
     warnings: list[OcrWarning] = field(default_factory=list)
+    # Pre-decoded RGB image to avoid re-decoding the same file across
+    # parser stages. Optional for backwards compatibility with tests that
+    # only pass image_path; production callers (analyze_image / runner)
+    # populate this so parsers reuse the single decode.
+    image: Image.Image | None = None
 
 
 class ScreenParser(Protocol):

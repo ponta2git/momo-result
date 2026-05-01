@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from typing import cast
 
+import pytest
 from redis import Redis
 
+from momo_ocr.app.config import WorkerConfig
+from momo_ocr.features.ocr_jobs import consumer as consumer_module
 from momo_ocr.features.ocr_jobs.consumer import RedisOcrJobConsumer
 
 
@@ -74,3 +77,34 @@ def test_redis_consumer_acks_and_drops_malformed_delivery() -> None:
 
     assert pulled is None
     assert redis.acked == [("momo:ocr:jobs", "momo-ocr-workers", "1-0")]
+
+
+def test_redis_consumer_from_config_enables_health_check_and_keepalive(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``from_config`` must wire keepalive + periodic PING.
+
+    Fly.io <-> Upstash NAT silently drops idle TCP sessions, which would
+    otherwise leave ``XREADGROUP`` blocking forever on the dead socket.
+    """
+    captured: dict[str, object] = {}
+
+    class _StubRedis:
+        @classmethod
+        def from_url(cls, url: str, **kwargs: object) -> _StubRedis:
+            captured["url"] = url
+            captured.update(kwargs)
+            return cls()
+
+        def xgroup_create(self, **_kwargs: object) -> None:
+            pass
+
+    monkeypatch.setattr(consumer_module, "Redis", _StubRedis)
+
+    config = WorkerConfig(redis_url="redis://example:6379/0", worker_id="w-1")
+    RedisOcrJobConsumer.from_config(config)
+
+    assert captured["url"] == "redis://example:6379/0"
+    assert captured["decode_responses"] is True
+    assert captured["health_check_interval"] == 30
+    assert captured["socket_keepalive"] is True

@@ -1,0 +1,12 @@
+- Root infra: `docker compose up -d`
+- Web dev: `pnpm dev` in `apps/web`
+- Web build: `pnpm build` in `apps/web`
+- Web typecheck: `pnpm typecheck` in `apps/web`
+- Web test: `pnpm test` or `pnpm test:run` in `apps/web`
+- Web lint: `pnpm lint` in `apps/web`
+- Web format check: `pnpm format:check` in `apps/web`
+- API dev: `set -a; source .env; set +a && sbt run` in `apps/api`
+- API checks: `sbt scalafmtCheck`, `sbt scalafix`, `sbt test` in `apps/api`
+- OCR worker dev: `set -a; source .env; set +a && uv run python -m momo_ocr worker` in `apps/ocr-worker`
+- OCR worker checks: `uv run ruff format --check .`, `uv run ruff check .`, `uv run pytest` in `apps/ocr-worker`
+- Useful shell tools on Darwin: `git`, `ls`, `cd`, `rg`, `find`, `sed`, `sort`.

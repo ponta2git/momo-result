@@ -1,0 +1,8 @@
+- Purpose: Web app to capture Momotetsu match result screenshots, run OCR, review/edit drafts, confirm match records, and export CSV/TSV. It integrates with shared summit/momo-db data.
+- Monorepo structure: `apps/web` (React/Vite SPA), `apps/api` (Scala 3 API server), `apps/ocr-worker` (Python OCR worker), `docs/` requirements and rules.
+- Key docs: `docs/requirements/base.md` is the business source of truth, `docs/architecture.md` covers stack and implementation rules, `docs/dev-rule.md` and `docs/test-rule.md` define local commands and quality gates.
+- Frontend routes currently present: OCR capture, draft review, masters admin, matches list/detail/edit, exports.
+- Auth model: Discord OAuth in production, dev user picker in development.
+- Backend/API stack: Scala 3, Tapir, http4s, Cats Effect, Doobie.
+- OCR worker stack: Python 3.12+, uv, Tesseract, OpenCV/Pillow, pytest.
+- DB/infra: Neon PostgreSQL shared with summit app, Upstash Redis Streams, Fly.io deployment.

@@ -1,0 +1,12 @@
+- Follow root `AGENTS.md`: read only necessary docs, derive the next executable unit of work, keep reports concise, stop and ask if scope expands or design decisions are required.
+- Architecture conventions from `docs/architecture.md`:
+  - Web: React/Vite SPA, React Router, TanStack Query, Tailwind CSS, Conform + Zod for forms.
+  - API types should come from generated OpenAPI types; HTTP client is a thin `fetch` wrapper.
+  - Mutations should explicitly handle validation, pending, and error UI.
+  - Important destructive/confirming actions need explicit confirmation UI.
+- Code style observed:
+  - TypeScript/TSX with functional React components and hooks.
+  - Shared UI primitives under `apps/web/src/shared/ui`.
+  - Feature-oriented folders under `apps/web/src/features/*`.
+  - Domain labels are Japanese in UI, while code identifiers stay English.
+- Testing conventions from `docs/test-rule.md`: web uses Vitest + Testing Library; API uses MUnit; OCR worker uses pytest; E2E smoke should exist via Playwright.

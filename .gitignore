@@ -17,5 +17,6 @@ node_modules
 *.tsbuildinfo
 copilot-session-*.md
 docs/mvp-todos.md
+docs/frontend-rebuild/
 .env
 **/.env

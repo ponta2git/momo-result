@@ -402,3 +402,84 @@ def test_hints_are_merged_into_alias_resolver_passed_to_analyze() -> None:
     # that here so the substring match runs against comparable forms.
     canonical = resolver.resolve(_normalize_name_for_match("PONTAプレイヤー"))
     assert canonical == "ぽんた社長"
+
+
+class _ToggleAfterFirstCallCancellation:
+    """Cancellation appears only after ``threshold`` is_cancelled calls.
+
+    Used to simulate a CANCELLED status that becomes visible *between*
+    ``transition_to_running`` and ``analyze`` so we can pin the
+    post-running cancellation phase.
+    """
+
+    def __init__(self, job_id: str, *, threshold: int = 2) -> None:
+        self._job_id = job_id
+        self._threshold = threshold
+        self._calls = 0
+
+    def is_cancelled(self, job_id: str) -> bool:
+        if job_id != self._job_id:
+            return False
+        self._calls += 1
+        return self._calls >= self._threshold
+
+
+def test_post_running_cancellation_is_honoured_before_analyze() -> None:
+    consumer = InMemoryOcrJobConsumer()
+    repository = InMemoryOcrJobRepository()
+    payload = _make_payload()
+    _seed_record(repository, payload)
+    consumer.enqueue(payload, delivery_tag="d1")
+    cancellation = _ToggleAfterFirstCallCancellation("job-1", threshold=2)
+
+    deps = _make_deps(
+        consumer=consumer,
+        repository=repository,
+        result_writer=InMemoryOcrResultWriter(),
+        cancellation=cancellation,
+        analyze=lambda **_: pytest.fail(
+            "analyze must not run when cancellation appears post-running"
+        ),
+    )
+
+    outcome = run_one_job(deps)
+
+    # State machine invariant: even if the pre-running check passed
+    # (first is_cancelled returned False), the post-running check
+    # observes cancellation and aborts before analyze.
+    assert outcome.status is OcrJobStatus.CANCELLED
+    record = repository.records["job-1"]
+    assert record.status is OcrJobStatus.CANCELLED
+    # Ack still happens after the terminal status is recorded.
+    assert consumer.acked == ["d1"]
+
+
+def test_ack_runs_only_after_terminal_status_is_persisted() -> None:
+    """Invariant: the queue ack must observe a terminal repository status."""
+    consumer = InMemoryOcrJobConsumer()
+    repository = InMemoryOcrJobRepository()
+    payload = _make_payload()
+    _seed_record(repository, payload)
+    consumer.enqueue(payload, delivery_tag="d1")
+
+    observed_status_at_ack: list[OcrJobStatus | None] = []
+    original_ack = consumer.ack
+
+    def spy_ack(delivery_tag: str) -> None:
+        observed_status_at_ack.append(repository.records["job-1"].status)
+        original_ack(delivery_tag)
+
+    consumer.ack = spy_ack  # type: ignore[method-assign]
+
+    deps = _make_deps(
+        consumer=consumer,
+        repository=repository,
+        result_writer=InMemoryOcrResultWriter(),
+        cancellation=InMemoryCancellationChecker(),
+        analyze=lambda **_: _success_analysis(),
+    )
+
+    outcome = run_one_job(deps)
+
+    assert outcome.status is OcrJobStatus.SUCCEEDED
+    assert observed_status_at_ack == [OcrJobStatus.SUCCEEDED]

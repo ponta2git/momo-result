@@ -56,9 +56,7 @@ def run_pipeline(deps: JobRunnerDependencies, delivery: PulledJob) -> OcrJobStat
     return _phase_execute(deps, message)
 
 
-def _phase_lookup_record(
-    deps: JobRunnerDependencies, delivery: PulledJob
-) -> OcrJobStatus | None:
+def _phase_lookup_record(deps: JobRunnerDependencies, delivery: PulledJob) -> OcrJobStatus | None:
     """Look up the canonical job record; return a terminal status if not runnable."""
     message = delivery.message
     record = deps.repository.get_for_update(message.job_id)
@@ -83,9 +81,7 @@ def _phase_pre_run_cancellation(
 ) -> OcrJobStatus | None:
     if not deps.cancellation.is_cancelled(message.job_id):
         return None
-    deps.repository.transition_to_failed_terminal(
-        message.job_id, _cancelled_result()
-    )
+    deps.repository.transition_to_failed_terminal(message.job_id, _cancelled_result())
     return OcrJobStatus.CANCELLED
 
 
@@ -95,9 +91,7 @@ def _phase_post_running_cancellation(
     """Honour cancellation that arrived between transition_to_running and OCR start."""
     if not deps.cancellation.is_cancelled(message.job_id):
         return None
-    deps.repository.transition_to_failed_terminal(
-        message.job_id, _cancelled_result()
-    )
+    deps.repository.transition_to_failed_terminal(message.job_id, _cancelled_result())
     return OcrJobStatus.CANCELLED
 
 

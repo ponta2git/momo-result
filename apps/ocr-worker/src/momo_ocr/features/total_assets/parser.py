@@ -33,9 +33,7 @@ class TotalAssetsParser:
 
     def parse(self, context: ScreenParseContext) -> OcrDraftPayload:
         image = (
-            context.image
-            if context.image is not None
-            else open_decoded_image(context.image_path)
+            context.image if context.image is not None else open_decoded_image(context.image_path)
         )
         image_size = Size(width=image.width, height=image.height)
         rows: list[TotalAssetRow] = []

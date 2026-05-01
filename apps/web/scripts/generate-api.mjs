@@ -24,8 +24,10 @@ try {
   try {
     await generate(cache);
   } catch (fallbackError) {
+    /* oxlint-disable no-console */
     console.error("openapi-typescript failed for both YAML and JSON fallback.");
     console.error(fallbackError);
+    /* oxlint-enable no-console */
     throw error;
   }
 }

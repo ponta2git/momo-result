@@ -19,6 +19,18 @@ export const router = createBrowserRouter([
     element: <App />,
   },
   {
+    path: "/matches",
+    element: <App />,
+  },
+  {
+    path: "/matches/:matchId",
+    element: <App />,
+  },
+  {
+    path: "/matches/:matchId/edit",
+    element: <App />,
+  },
+  {
     path: "*",
     element: <Navigate to="/ocr/new" replace />,
   },

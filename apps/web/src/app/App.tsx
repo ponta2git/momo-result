@@ -4,6 +4,9 @@ import { ErrorBoundary } from "@/app/ErrorBoundary";
 import { queryClient } from "@/app/queryClient";
 import { DraftReviewPage } from "@/features/draftReview/DraftReviewPage";
 import { MastersPage } from "@/features/masters/MastersPage";
+import { MatchDetailPage } from "@/features/matches/MatchDetailPage";
+import { MatchEditPage } from "@/features/matches/MatchEditPage";
+import { MatchesListPage } from "@/features/matches/MatchesListPage";
 import { OcrCapturePage } from "@/features/ocrCapture/OcrCapturePage";
 
 export function App() {
@@ -13,6 +16,12 @@ export function App() {
     page = <DraftReviewPage />;
   } else if (location.pathname.startsWith("/admin/masters")) {
     page = <MastersPage />;
+  } else if (/^\/matches\/[^/]+\/edit$/.test(location.pathname)) {
+    page = <MatchEditPage />;
+  } else if (/^\/matches\/[^/]+$/.test(location.pathname)) {
+    page = <MatchDetailPage />;
+  } else if (location.pathname === "/matches" || location.pathname.startsWith("/matches?")) {
+    page = <MatchesListPage />;
   } else {
     page = <OcrCapturePage />;
   }

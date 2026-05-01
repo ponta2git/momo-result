@@ -679,6 +679,87 @@
       }
     },
     "/api/matches" : {
+      "get" : {
+        "tags" : [
+          "matches"
+        ],
+        "operationId" : "getApiMatches",
+        "parameters" : [
+          {
+            "name" : "heldEventId",
+            "in" : "query",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "gameTitleId",
+            "in" : "query",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "seasonMasterId",
+            "in" : "query",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "limit",
+            "in" : "query",
+            "required" : false,
+            "schema" : {
+              "type" : "integer",
+              "format" : "int32"
+            }
+          },
+          {
+            "name" : "X-Dev-User",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MatchListResponse"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: query parameter limit",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
       "post" : {
         "tags" : [
           "matches"
@@ -729,6 +810,182 @@
               "text/plain" : {
                 "schema" : {
                   "type" : "string"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/matches/{matchId}" : {
+      "get" : {
+        "tags" : [
+          "matches"
+        ],
+        "operationId" : "getApiMatchesMatchid",
+        "parameters" : [
+          {
+            "name" : "matchId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-Dev-User",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MatchDetailResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put" : {
+        "tags" : [
+          "matches"
+        ],
+        "operationId" : "putApiMatchesMatchid",
+        "parameters" : [
+          {
+            "name" : "matchId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-Dev-User",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateMatchRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MatchDetailResponse"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: body",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete" : {
+        "tags" : [
+          "matches"
+        ],
+        "operationId" : "deleteApiMatchesMatchid",
+        "parameters" : [
+          {
+            "name" : "matchId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-Dev-User",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DeleteMatchResponse"
                 }
               }
             }
@@ -1356,6 +1613,22 @@
           }
         }
       },
+      "DeleteMatchResponse" : {
+        "title" : "DeleteMatchResponse",
+        "type" : "object",
+        "required" : [
+          "matchId",
+          "deleted"
+        ],
+        "properties" : {
+          "matchId" : {
+            "type" : "string"
+          },
+          "deleted" : {
+            "type" : "boolean"
+          }
+        }
+      },
       "GameTitleListResponse" : {
         "title" : "GameTitleListResponse",
         "type" : "object",
@@ -1480,6 +1753,44 @@
           }
         }
       },
+      "IncidentCountsResponse" : {
+        "title" : "IncidentCountsResponse",
+        "type" : "object",
+        "required" : [
+          "destination",
+          "plusStation",
+          "minusStation",
+          "cardStation",
+          "cardShop",
+          "suriNoGinji"
+        ],
+        "properties" : {
+          "destination" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "plusStation" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "minusStation" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "cardStation" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "cardShop" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "suriNoGinji" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
       "IncidentMasterListResponse" : {
         "title" : "IncidentMasterListResponse",
         "type" : "object",
@@ -1555,6 +1866,159 @@
           },
           "createdAt" : {
             "type" : "string"
+          }
+        }
+      },
+      "MatchDetailResponse" : {
+        "title" : "MatchDetailResponse",
+        "type" : "object",
+        "required" : [
+          "matchId",
+          "heldEventId",
+          "matchNoInEvent",
+          "gameTitleId",
+          "layoutFamily",
+          "seasonMasterId",
+          "ownerMemberId",
+          "mapMasterId",
+          "playedAt",
+          "createdByMemberId",
+          "createdAt"
+        ],
+        "properties" : {
+          "matchId" : {
+            "type" : "string"
+          },
+          "heldEventId" : {
+            "type" : "string"
+          },
+          "matchNoInEvent" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "gameTitleId" : {
+            "type" : "string"
+          },
+          "layoutFamily" : {
+            "type" : "string"
+          },
+          "seasonMasterId" : {
+            "type" : "string"
+          },
+          "ownerMemberId" : {
+            "type" : "string"
+          },
+          "mapMasterId" : {
+            "type" : "string"
+          },
+          "playedAt" : {
+            "type" : "string"
+          },
+          "totalAssetsDraftId" : {
+            "type" : "string"
+          },
+          "revenueDraftId" : {
+            "type" : "string"
+          },
+          "incidentLogDraftId" : {
+            "type" : "string"
+          },
+          "players" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/PlayerResultResponse"
+            }
+          },
+          "createdByMemberId" : {
+            "type" : "string"
+          },
+          "createdAt" : {
+            "type" : "string"
+          }
+        }
+      },
+      "MatchListResponse" : {
+        "title" : "MatchListResponse",
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/MatchSummaryResponse"
+            }
+          }
+        }
+      },
+      "MatchRankEntry" : {
+        "title" : "MatchRankEntry",
+        "type" : "object",
+        "required" : [
+          "memberId",
+          "rank",
+          "playOrder"
+        ],
+        "properties" : {
+          "memberId" : {
+            "type" : "string"
+          },
+          "rank" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "playOrder" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "MatchSummaryResponse" : {
+        "title" : "MatchSummaryResponse",
+        "type" : "object",
+        "required" : [
+          "matchId",
+          "heldEventId",
+          "matchNoInEvent",
+          "gameTitleId",
+          "seasonMasterId",
+          "mapMasterId",
+          "ownerMemberId",
+          "playedAt",
+          "createdAt"
+        ],
+        "properties" : {
+          "matchId" : {
+            "type" : "string"
+          },
+          "heldEventId" : {
+            "type" : "string"
+          },
+          "matchNoInEvent" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "gameTitleId" : {
+            "type" : "string"
+          },
+          "seasonMasterId" : {
+            "type" : "string"
+          },
+          "mapMasterId" : {
+            "type" : "string"
+          },
+          "ownerMemberId" : {
+            "type" : "string"
+          },
+          "playedAt" : {
+            "type" : "string"
+          },
+          "createdAt" : {
+            "type" : "string"
+          },
+          "ranks" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/MatchRankEntry"
+            }
           }
         }
       },
@@ -1768,6 +2232,42 @@
           }
         }
       },
+      "PlayerResultResponse" : {
+        "title" : "PlayerResultResponse",
+        "type" : "object",
+        "required" : [
+          "memberId",
+          "playOrder",
+          "rank",
+          "totalAssetsManYen",
+          "revenueManYen",
+          "incidents"
+        ],
+        "properties" : {
+          "memberId" : {
+            "type" : "string"
+          },
+          "playOrder" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "rank" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "totalAssetsManYen" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "revenueManYen" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "incidents" : {
+            "$ref" : "#/components/schemas/IncidentCountsResponse"
+          }
+        }
+      },
       "ProblemDetails" : {
         "title" : "ProblemDetails",
         "type" : "object",
@@ -1835,6 +2335,53 @@
           },
           "createdAt" : {
             "type" : "string"
+          }
+        }
+      },
+      "UpdateMatchRequest" : {
+        "title" : "UpdateMatchRequest",
+        "type" : "object",
+        "required" : [
+          "heldEventId",
+          "matchNoInEvent",
+          "gameTitleId",
+          "seasonMasterId",
+          "ownerMemberId",
+          "mapMasterId",
+          "playedAt",
+          "draftIds"
+        ],
+        "properties" : {
+          "heldEventId" : {
+            "type" : "string"
+          },
+          "matchNoInEvent" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "gameTitleId" : {
+            "type" : "string"
+          },
+          "seasonMasterId" : {
+            "type" : "string"
+          },
+          "ownerMemberId" : {
+            "type" : "string"
+          },
+          "mapMasterId" : {
+            "type" : "string"
+          },
+          "playedAt" : {
+            "type" : "string"
+          },
+          "draftIds" : {
+            "$ref" : "#/components/schemas/ConfirmMatchDraftIds"
+          },
+          "players" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/PlayerResultRequest"
+            }
           }
         }
       },

@@ -28,7 +28,8 @@ import momo.api.repositories.postgres.{
 }
 import momo.api.usecases.{
   CancelOcrJob, ConfirmMatch, CreateGameTitle, CreateHeldEvent, CreateMapMaster, CreateOcrJob,
-  CreateSeasonMaster, GetOcrDraft, GetOcrDraftsBulk, GetOcrJob, ListHeldEvents, UploadImage,
+  CreateSeasonMaster, DeleteMatch, GetMatch, GetOcrDraft, GetOcrDraftsBulk, GetOcrJob,
+  ListHeldEvents, ListMatches, UpdateMatch, UploadImage,
 }
 import org.http4s.HttpApp as Http4sApp
 
@@ -163,6 +164,18 @@ object HttpApp:
       nextId = IdGenerator.next[F],
       allowedMemberIds = config.devMemberIds.toSet,
     )
+    val listMatches = ListMatches[F](matches)
+    val getMatch = GetMatch[F](matches)
+    val updateMatch = UpdateMatch[F](
+      heldEvents = heldEvents,
+      matches = matches,
+      gameTitles = gameTitles,
+      mapMasters = mapMasters,
+      seasonMasters = seasonMasters,
+      now = nowF,
+      allowedMemberIds = config.devMemberIds.toSet,
+    )
+    val deleteMatch = DeleteMatch[F](matches)
     val createGameTitle = CreateGameTitle[F](gameTitles, nowF)
     val createMapMaster = CreateMapMaster[F](gameTitles, mapMasters, nowF)
     val createSeasonMaster = CreateSeasonMaster[F](gameTitles, seasonMasters, nowF)
@@ -180,6 +193,10 @@ object HttpApp:
         listHeldEvents = listHeldEvents,
         createHeldEvent = createHeldEvent,
         confirmMatch = confirmMatch,
+        listMatches = listMatches,
+        getMatch = getMatch,
+        updateMatch = updateMatch,
+        deleteMatch = deleteMatch,
         gameTitles = gameTitles,
         mapMasters = mapMasters,
         seasonMasters = seasonMasters,

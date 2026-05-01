@@ -11,24 +11,26 @@ import momo.api.config.AppConfig
 import momo.api.domain.OcrJobHints
 import momo.api.endpoints.{
   CancelOcrJobResponse, ConfirmMatchRequest, ConfirmMatchResponse, CreateOcrJobResponse,
-  GameTitleListResponse, GameTitleResponse, GameTitlesEndpoints, HealthEndpoints,
-  HeldEventListResponse, HeldEventResponse, HeldEventsEndpoints, IncidentMasterListResponse,
-  IncidentMasterResponse, IncidentMastersEndpoints, MapMasterListResponse, MapMasterResponse,
-  MapMastersEndpoints, MatchesEndpoints, OcrDraftEndpoints, OcrDraftListResponse, OcrDraftResponse,
-  OcrJobEndpoints, OcrJobResponse, OpenApiEndpoints, SeasonMasterListResponse, SeasonMasterResponse,
-  SeasonMastersEndpoints, UploadEndpoints, UploadImageResponse,
+  DeleteMatchResponse, GameTitleListResponse, GameTitleResponse, GameTitlesEndpoints,
+  HealthEndpoints, HeldEventListResponse, HeldEventResponse, HeldEventsEndpoints,
+  IncidentMasterListResponse, IncidentMasterResponse, IncidentMastersEndpoints,
+  MapMasterListResponse, MapMasterResponse, MapMastersEndpoints, MatchDetailResponse,
+  MatchListResponse, MatchSummaryResponse, MatchesEndpoints, OcrDraftEndpoints,
+  OcrDraftListResponse, OcrDraftResponse, OcrJobEndpoints, OcrJobResponse, OpenApiEndpoints,
+  SeasonMasterListResponse, SeasonMasterResponse, SeasonMastersEndpoints, UpdateMatchRequest,
+  UploadEndpoints, UploadImageResponse,
 }
 import momo.api.errors.AppError
 import momo.api.openapi.OpenApiGenerator
 import momo.api.repositories.{
-  GameTitlesRepository, IncidentMastersRepository, MapMastersRepository, MembersRepository,
-  SeasonMastersRepository,
+  GameTitlesRepository, IncidentMastersRepository, MapMastersRepository, MatchesRepository,
+  MembersRepository, SeasonMastersRepository,
 }
 import momo.api.usecases.{
   CancelOcrJob, ConfirmMatch, CreateGameTitle, CreateGameTitleCommand, CreateHeldEvent,
   CreateHeldEventCommand, CreateMapMaster, CreateMapMasterCommand, CreateOcrJob,
-  CreateOcrJobCommand, CreateSeasonMaster, CreateSeasonMasterCommand, GetOcrDraft, GetOcrDraftsBulk,
-  GetOcrJob, ListHeldEvents, UploadImage,
+  CreateOcrJobCommand, CreateSeasonMaster, CreateSeasonMasterCommand, DeleteMatch, GetMatch,
+  GetOcrDraft, GetOcrDraftsBulk, GetOcrJob, ListHeldEvents, ListMatches, UpdateMatch, UploadImage,
 }
 import org.http4s.{HttpApp as Http4sApp, HttpRoutes as Http4sRoutes}
 import org.http4s.server.Router
@@ -48,6 +50,10 @@ object HttpRoutes:
       listHeldEvents: ListHeldEvents[F],
       createHeldEvent: CreateHeldEvent[F],
       confirmMatch: ConfirmMatch[F],
+      listMatches: ListMatches[F],
+      getMatch: GetMatch[F],
+      updateMatch: UpdateMatch[F],
+      deleteMatch: DeleteMatch[F],
       gameTitles: GameTitlesRepository[F],
       mapMasters: MapMastersRepository[F],
       seasonMasters: SeasonMastersRepository[F],
@@ -147,6 +153,34 @@ object HttpRoutes:
           )
         }
       },
+      MatchesEndpoints.list.serverLogic {
+        case (heldEventId, gameTitleId, seasonMasterId, limit, devUser) => security
+            .authorizeRead(devUser) { _ =>
+              deps.listMatches.run(MatchesRepository.ListFilter(
+                heldEventId = heldEventId,
+                gameTitleId = gameTitleId,
+                seasonMasterId = seasonMasterId,
+                limit = limit,
+              )).map(items => Right(MatchListResponse(items.map(MatchSummaryResponse.from))))
+            }
+      },
+      MatchesEndpoints.get.serverLogic { case (matchId, devUser) =>
+        security.authorizeRead(devUser) { _ =>
+          respond(deps.getMatch.run(matchId))(MatchDetailResponse.from)
+        }
+      },
+      MatchesEndpoints.update.serverLogic { case (matchId, devUser, csrfToken, request) =>
+        security.authorizeMutation(devUser, csrfToken) { _ =>
+          respond(
+            deps.updateMatch.run(matchId, toUpdateMatchCommand(request))
+          )(MatchDetailResponse.from)
+        }
+      },
+      MatchesEndpoints.delete.serverLogic { case (matchId, devUser, csrfToken) =>
+        security.authorizeMutation(devUser, csrfToken) { _ =>
+          respond(deps.deleteMatch.run(matchId))(_ => DeleteMatchResponse(matchId, deleted = true))
+        }
+      },
       GameTitlesEndpoints.list.serverLogic { devUser =>
         security.authorizeRead(devUser) { _ =>
           deps.gameTitles.list
@@ -231,21 +265,40 @@ object HttpRoutes:
         revenue = request.draftIds.revenue,
         incidentLog = request.draftIds.incidentLog,
       ),
-      players = request.players.map(player =>
-        momo.api.domain.PlayerResult(
-          memberId = player.memberId,
-          playOrder = player.playOrder,
-          rank = player.rank,
-          totalAssetsManYen = player.totalAssetsManYen,
-          revenueManYen = player.revenueManYen,
-          incidents = momo.api.domain.IncidentCounts(
-            destination = player.incidents.destination,
-            plusStation = player.incidents.plusStation,
-            minusStation = player.incidents.minusStation,
-            cardStation = player.incidents.cardStation,
-            cardShop = player.incidents.cardShop,
-            suriNoGinji = player.incidents.suriNoGinji,
-          ),
-        )
-      ),
+      players = request.players.map(toPlayerResult),
     )
+
+  private def toUpdateMatchCommand(request: UpdateMatchRequest): UpdateMatch.Command = UpdateMatch
+    .Command(
+      heldEventId = request.heldEventId,
+      matchNoInEvent = request.matchNoInEvent,
+      gameTitleId = request.gameTitleId,
+      seasonMasterId = request.seasonMasterId,
+      ownerMemberId = request.ownerMemberId,
+      mapMasterId = request.mapMasterId,
+      playedAt = request.playedAt,
+      draftRefs = ConfirmMatch.DraftRefs(
+        totalAssets = request.draftIds.totalAssets,
+        revenue = request.draftIds.revenue,
+        incidentLog = request.draftIds.incidentLog,
+      ),
+      players = request.players.map(toPlayerResult),
+    )
+
+  private def toPlayerResult(
+      player: momo.api.endpoints.PlayerResultRequest
+  ): momo.api.domain.PlayerResult = momo.api.domain.PlayerResult(
+    memberId = player.memberId,
+    playOrder = player.playOrder,
+    rank = player.rank,
+    totalAssetsManYen = player.totalAssetsManYen,
+    revenueManYen = player.revenueManYen,
+    incidents = momo.api.domain.IncidentCounts(
+      destination = player.incidents.destination,
+      plusStation = player.incidents.plusStation,
+      minusStation = player.incidents.minusStation,
+      cardStation = player.incidents.cardStation,
+      cardShop = player.incidents.cardShop,
+      suriNoGinji = player.incidents.suriNoGinji,
+    ),
+  )

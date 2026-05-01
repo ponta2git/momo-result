@@ -155,24 +155,24 @@ object AppConfig:
 
   /**
    * Convert a postgres:// or postgresql:// URL to a JDBC URL, extracting embedded credentials.
-   * Returns (jdbcUrl, userOption, passwordOption).
-   * Already-prefixed jdbc:postgresql:// URLs are passed through unchanged.
+   * Returns (jdbcUrl, userOption, passwordOption). Already-prefixed jdbc:postgresql:// URLs are
+   * passed through unchanged.
    */
   private[config] def toJdbcUrl(raw: String): (String, Option[String], Option[String]) =
     if raw.startsWith("jdbc:") then (raw, None, None)
     else
       val normalized = raw.replaceFirst("^postgres(ql)?://", "postgresql://")
-      val uri         = URI.create(normalized)
-      val userInfo    = Option(uri.getUserInfo)
+      val uri = URI.create(normalized)
+      val userInfo = Option(uri.getUserInfo)
       val (user, pass) = userInfo match
         case None => (None, None)
         case Some(info) =>
           val parts = info.split(":", 2)
           (Some(parts(0)).filter(_.nonEmpty), if parts.length > 1 then Some(parts(1)) else None)
-      val host    = Option(uri.getHost).getOrElse("localhost")
-      val port    = if uri.getPort > 0 then s":${uri.getPort}" else ""
-      val path    = Option(uri.getRawPath).getOrElse("")
-      val query   = Option(uri.getRawQuery).map(q => s"?$q").getOrElse("")
+      val host = Option(uri.getHost).getOrElse("localhost")
+      val port = if uri.getPort > 0 then s":${uri.getPort}" else ""
+      val path = Option(uri.getRawPath).getOrElse("")
+      val query = Option(uri.getRawQuery).map(q => s"?$q").getOrElse("")
       val jdbcUrl = s"jdbc:postgresql://$host$port$path$query"
       (jdbcUrl, user, pass)
 

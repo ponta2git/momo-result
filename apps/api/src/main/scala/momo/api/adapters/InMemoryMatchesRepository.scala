@@ -9,13 +9,36 @@ final class InMemoryMatchesRepository[F[_]: Sync] private (ref: Ref[F, Map[Strin
     extends MatchesRepository[F]:
   override def create(record: MatchRecord): F[Unit] = ref.update(_ + (record.id -> record))
 
+  override def update(record: MatchRecord, updatedAt: java.time.Instant): F[Unit] = ref
+    .update(_ + (record.id -> record))
+
+  override def delete(id: String): F[Boolean] = ref
+    .modify(m => if m.contains(id) then (m - id, true) else (m, false))
+
   override def find(id: String): F[Option[MatchRecord]] = ref.get.map(_.get(id))
+
+  override def list(filter: MatchesRepository.ListFilter): F[List[MatchRecord]] = ref.get.map { m =>
+    val filtered = m.values.filter { r =>
+      filter.heldEventId.forall(_ == r.heldEventId) &&
+      filter.gameTitleId.forall(_ == r.gameTitleId) &&
+      filter.seasonMasterId.forall(_ == r.seasonMasterId)
+    }.toList.sortBy(r => (-r.playedAt.toEpochMilli, -r.createdAt.toEpochMilli))
+    filter.limit.fold(filtered)(filtered.take)
+  }
 
   override def listByHeldEvent(heldEventId: String): F[List[MatchRecord]] = ref.get
     .map(_.values.filter(_.heldEventId == heldEventId).toList.sortBy(_.matchNoInEvent))
 
   override def existsMatchNo(heldEventId: String, matchNoInEvent: Int): F[Boolean] = ref.get
     .map(_.values.exists(r => r.heldEventId == heldEventId && r.matchNoInEvent == matchNoInEvent))
+
+  override def existsMatchNoExcept(
+      heldEventId: String,
+      matchNoInEvent: Int,
+      excludeMatchId: String,
+  ): F[Boolean] = ref.get.map(_.values.exists(r =>
+    r.heldEventId == heldEventId && r.matchNoInEvent == matchNoInEvent && r.id != excludeMatchId
+  ))
 
   override def maxMatchNo(heldEventId: String): F[Int] = ref.get.map { m =>
     val nums = m.values.filter(_.heldEventId == heldEventId).map(_.matchNoInEvent)

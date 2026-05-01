@@ -5,6 +5,7 @@ import cats.syntax.all.*
 import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
+import doobie.util.fragments
 import doobie.util.update.Update
 import java.time.Instant
 import momo.api.domain.{IncidentCounts, MatchRecord, PlayerResult}
@@ -100,7 +101,10 @@ final class PostgresMatchesRepository[F[_]: MonadCancelThrow](transactor: Transa
         )
       }
 
-  override def create(record: MatchRecord): F[Unit] =
+  override def create(record: MatchRecord): F[Unit] = insertAll(record, record.createdAt).void
+    .transact(transactor)
+
+  private def insertAll(record: MatchRecord, updatedAt: Instant): ConnectionIO[Unit] =
     val insertMatch = sql"""
         INSERT INTO matches (
           id, held_event_id, match_no_in_event,
@@ -113,7 +117,7 @@ final class PostgresMatchesRepository[F[_]: MonadCancelThrow](transactor: Transa
           ${record.gameTitleId}, ${record.layoutFamily}, ${record.seasonMasterId},
           ${record.ownerMemberId}, ${record.mapMasterId}, ${record.playedAt},
           ${record.totalAssetsDraftId}, ${record.revenueDraftId}, ${record.incidentLogDraftId},
-          ${record.createdByMemberId}, ${record.createdAt}, ${record.createdAt}
+          ${record.createdByMemberId}, ${record.createdAt}, $updatedAt
         )
       """.update.run
 
@@ -143,7 +147,14 @@ final class PostgresMatchesRepository[F[_]: MonadCancelThrow](transactor: Transa
          (match_id, member_id, incident_master_id, count, created_at)
          VALUES (?, ?, ?, ?, ?)""").updateMany(incidentRows)
 
-    (insertMatch *> insertPlayers *> insertIncidents).void.transact(transactor)
+    (insertMatch *> insertPlayers *> insertIncidents).void
+
+  override def update(record: MatchRecord, updatedAt: Instant): F[Unit] =
+    val deleteMatch = sql"DELETE FROM matches WHERE id = ${record.id}".update.run
+    (deleteMatch *> insertAll(record, updatedAt)).void.transact(transactor)
+
+  override def delete(id: String): F[Boolean] = sql"DELETE FROM matches WHERE id = $id".update.run
+    .map(_ > 0).transact(transactor)
 
   override def find(id: String): F[Option[MatchRecord]] =
     val program: ConnectionIO[Option[MatchRecord]] = (selectMatch ++ fr"WHERE id = $id")
@@ -169,6 +180,35 @@ final class PostgresMatchesRepository[F[_]: MonadCancelThrow](transactor: Transa
         WHERE held_event_id = $heldEventId AND match_no_in_event = $matchNoInEvent
       )
     """.query[Boolean].unique.transact(transactor)
+
+  override def existsMatchNoExcept(
+      heldEventId: String,
+      matchNoInEvent: Int,
+      excludeMatchId: String,
+  ): F[Boolean] = sql"""
+      SELECT EXISTS (
+        SELECT 1 FROM matches
+        WHERE held_event_id = $heldEventId
+          AND match_no_in_event = $matchNoInEvent
+          AND id <> $excludeMatchId
+      )
+    """.query[Boolean].unique.transact(transactor)
+
+  override def list(filter: MatchesRepository.ListFilter): F[List[MatchRecord]] =
+    val conditions = List(
+      filter.heldEventId.map(id => fr"held_event_id = $id"),
+      filter.gameTitleId.map(id => fr"game_title_id = $id"),
+      filter.seasonMasterId.map(id => fr"season_master_id = $id"),
+    ).flatten
+    val where = fragments.whereAndOpt(conditions)
+    val limit = filter.limit.map(n => fr"LIMIT $n").getOrElse(Fragment.empty)
+    val program: ConnectionIO[List[MatchRecord]] =
+      for
+        rows <- (selectMatch ++ where ++ fr"ORDER BY played_at DESC, created_at DESC" ++ limit)
+          .query[MatchRow].to[List]
+        out <- rows.traverse(r => loadPlayers(r._1).map(p => toRecord(r, p)))
+      yield out
+    program.transact(transactor)
 
   override def maxMatchNo(heldEventId: String): F[Int] = sql"""
       SELECT COALESCE(MAX(match_no_in_event), 0)

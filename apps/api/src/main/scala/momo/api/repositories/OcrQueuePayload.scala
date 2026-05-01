@@ -27,7 +27,7 @@ object OcrQueuePayload:
       attempt: Int,
       enqueuedAt: Instant,
       hints: OcrJobHints,
-      requestId: Option[String] = None,
+      requestId: Option[String],
   ): OcrQueuePayload =
     val base = Map(
       "jobId" -> jobId.value,

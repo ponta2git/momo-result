@@ -18,6 +18,7 @@ final class OcrQueuePayloadSpec extends FunSuite:
       attempt = 1,
       enqueuedAt = Instant.parse("2026-04-29T11:40:16Z"),
       hints = OcrJobHints(),
+      requestId = None,
     )
 
     assertEquals(
@@ -49,6 +50,7 @@ final class OcrQueuePayloadSpec extends FunSuite:
         knownPlayerAliases = List(PlayerAliasHint("member-1", List("ぽんた", "PONTA"))),
         computerPlayerAliases = List("さくま", "サクマ"),
       ),
+      requestId = None,
     )
 
     assertEquals(
@@ -67,6 +69,7 @@ final class OcrQueuePayloadSpec extends FunSuite:
       attempt = 1,
       enqueuedAt = Instant.parse("2026-04-29T11:40:16Z"),
       hints = OcrJobHints(),
+      requestId = None,
     )
     assertEquals(basePayload.fields.get(OcrQueuePayload.RequestIdKey), None)
 

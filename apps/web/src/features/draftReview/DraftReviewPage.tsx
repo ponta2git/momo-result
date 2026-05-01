@@ -695,9 +695,7 @@ export function DraftReviewPage() {
           </p>
         </div>
         <div className="rounded-[1.25rem] border border-line-soft bg-capture-black/28 px-4 py-3 text-sm text-ink-300">
-          <p className="text-xs leading-5 text-ink-400">
-            緑=高信頼OCR / 金色=OCR結果と異なる
-          </p>
+          <p className="text-xs leading-5 text-ink-400">緑=高信頼OCR / 金色=OCR結果と異なる</p>
         </div>
       </div>
       <details className="mt-5 rounded-[1.5rem] border border-line-soft bg-capture-black/28 p-4">

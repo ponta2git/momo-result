@@ -159,8 +159,7 @@ function byPlayOrder(payload: OcrDraftPayload | undefined): Map<number, OcrPlaye
   const entries = new Map<number, OcrPlayerEntry>();
   payload?.players.forEach((entry, index) => {
     const declared = entry.play_order?.value;
-    const order =
-      typeof declared === "number" && Number.isFinite(declared) ? declared : index + 1;
+    const order = typeof declared === "number" && Number.isFinite(declared) ? declared : index + 1;
     if (!entries.has(order)) {
       entries.set(order, entry);
     }

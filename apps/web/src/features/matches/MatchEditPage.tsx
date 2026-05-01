@@ -1,10 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import {
-  confirmMatchSchema,
-  toConfirmMatchRequest,
-} from "@/features/draftReview/schema";
+import { confirmMatchSchema, toConfirmMatchRequest } from "@/features/draftReview/schema";
 import type { ConfirmMatchFormValues } from "@/features/draftReview/schema";
 import { getMatch, updateMatch } from "@/features/matches/api";
 import type { MatchDetailResponse } from "@/features/matches/api";
@@ -134,10 +131,13 @@ export function MatchEditPage() {
 
   const updateMutation = useMutation({
     mutationFn: (request: ConfirmMatchFormValues) =>
-      updateMatch(matchId, toConfirmMatchRequest({
-        ...request,
-        playedAt: toIsoFromLocal(request.playedAt),
-      })),
+      updateMatch(
+        matchId,
+        toConfirmMatchRequest({
+          ...request,
+          playedAt: toIsoFromLocal(request.playedAt),
+        }),
+      ),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["match", matchId] });
       await queryClient.invalidateQueries({ queryKey: ["matches"] });
@@ -170,10 +170,7 @@ export function MatchEditPage() {
     setValues((prev) => (prev ? { ...prev, [key]: value } : prev));
   }
 
-  function setPlayer(
-    index: number,
-    update: Partial<ConfirmMatchFormValues["players"][number]>,
-  ) {
+  function setPlayer(index: number, update: Partial<ConfirmMatchFormValues["players"][number]>) {
     setValues((prev) => {
       if (!prev) return prev;
       const players = prev.players.map((p, i) => (i === index ? { ...p, ...update } : p));
@@ -260,9 +257,7 @@ export function MatchEditPage() {
               type="number"
               min={1}
               value={v.matchNoInEvent}
-              onChange={(e) =>
-                setField("matchNoInEvent", Number.parseInt(e.target.value, 10) || 0)
-              }
+              onChange={(e) => setField("matchNoInEvent", Number.parseInt(e.target.value, 10) || 0)}
             />
           </label>
           <label className="flex flex-col gap-1">
@@ -317,10 +312,7 @@ export function MatchEditPage() {
               className={inputClass}
               value={v.ownerMemberId}
               onChange={(e) =>
-                setField(
-                  "ownerMemberId",
-                  e.target.value as ConfirmMatchFormValues["ownerMemberId"],
-                )
+                setField("ownerMemberId", e.target.value as ConfirmMatchFormValues["ownerMemberId"])
               }
             >
               {fixedMembers.map((m) => (

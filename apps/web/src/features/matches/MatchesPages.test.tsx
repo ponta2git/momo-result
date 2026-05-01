@@ -18,21 +18,14 @@ describe("MatchesListPage", () => {
         <MemoryRouter initialEntries={["/matches"]}>
           <Routes>
             <Route path="/matches" element={<MatchesListPage />} />
-            <Route
-              path="/matches/:matchId"
-              element={<p>detail-page</p>}
-            />
+            <Route path="/matches/:matchId" element={<p>detail-page</p>} />
           </Routes>
         </MemoryRouter>
       </QueryClientProvider>,
     );
 
-    expect(
-      await screen.findByRole("heading", { name: "確定済み試合一覧" }),
-    ).toBeInTheDocument();
-    await waitFor(() =>
-      expect(screen.getByRole("link", { name: "詳細" })).toBeInTheDocument(),
-    );
+    expect(await screen.findByRole("heading", { name: "確定済み試合一覧" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("link", { name: "詳細" })).toBeInTheDocument());
   });
 });
 
@@ -54,15 +47,11 @@ describe("MatchDetailPage", () => {
     );
 
     await waitFor(() =>
-      expect(
-        screen.getByRole("heading", { name: /試合詳細/ }),
-      ).toBeInTheDocument(),
+      expect(screen.getByRole("heading", { name: /試合詳細/ })).toBeInTheDocument(),
     );
 
     await userEvent.click(screen.getByRole("button", { name: "削除" }));
-    expect(
-      screen.getByRole("heading", { name: "試合を削除しますか？" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "試合を削除しますか？" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "削除する" })).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "キャンセル" }));

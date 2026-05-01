@@ -212,10 +212,10 @@ object HttpRoutes:
       rateLimiter = deps.loginRateLimiter,
     )
 
-    RequestIdMiddleware[F](
+    RequestIdMiddleware[F](SecurityHeadersMiddleware[F](deps.config.appEnv)(
       Router("/" -> (authRoutes <+> Http4sRoutes.of[F](request => protectedRoutes.run(request))))
         .orNotFound
-    )
+    ))
 
   private def toConfirmMatchCommand(request: ConfirmMatchRequest): ConfirmMatch.Command =
     ConfirmMatch.Command(

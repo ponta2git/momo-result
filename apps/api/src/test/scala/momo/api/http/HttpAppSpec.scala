@@ -66,6 +66,45 @@ final class HttpAppSpec extends MomoCatsEffectSuite:
     }
   }
 
+  test("security headers baseline is present on responses (non-prod)") {
+    app.use { httpApp =>
+      httpApp.run(Request[IO](Method.GET, uri"/healthz")).map { response =>
+        def header(name: String): Option[String] = response.headers
+          .get(org.typelevel.ci.CIString(name)).map(_.head.value)
+        assertEquals(header("X-Content-Type-Options"), Some("nosniff"))
+        assertEquals(header("X-Frame-Options"), Some("DENY"))
+        assertEquals(header("Referrer-Policy"), Some("no-referrer"))
+        assert(header("Permissions-Policy").exists(_.contains("camera=()")))
+        val csp = header("Content-Security-Policy").getOrElse("")
+        assert(csp.contains("default-src 'self'"), s"missing default-src in $csp")
+        assert(csp.contains("frame-ancestors 'none'"), s"missing frame-ancestors in $csp")
+        assert(csp.contains("object-src 'none'"), s"missing object-src in $csp")
+        assertEquals(header("Strict-Transport-Security"), None, "HSTS must not be set outside prod")
+      }
+    }
+  }
+
+  test("HSTS is set on prod responses") {
+    Resource.eval(IO.blocking(Files.createTempDirectory("momo-api-prod-hsts"))).flatMap { dir =>
+      val config = AppConfig(
+        appEnv = AppEnv.Prod,
+        httpHost = "127.0.0.1",
+        httpPort = 0,
+        imageTmpDir = dir,
+        devMemberIds = List("ponta", "akane-mami", "otaka", "eu"),
+      )
+      HttpApp.resource[IO](config)
+    }.use { httpApp =>
+      httpApp.run(Request[IO](Method.GET, uri"/healthz")).map { response =>
+        val hsts = response.headers.get(org.typelevel.ci.CIString("Strict-Transport-Security"))
+        assert(hsts.isDefined, "expected HSTS header in prod")
+        val value = hsts.get.head.value
+        assert(value.contains("max-age=31536000"), s"unexpected HSTS value: $value")
+        assert(value.contains("includeSubDomains"), s"unexpected HSTS value: $value")
+      }
+    }
+  }
+
   test("X-Request-Id is generated when not provided and echoed in the response") {
     app.use { httpApp =>
       httpApp.run(Request[IO](Method.GET, uri"/healthz")).map { response =>
@@ -90,8 +129,10 @@ final class HttpAppSpec extends MomoCatsEffectSuite:
 
   test("malicious X-Request-Id values are replaced with a generated id") {
     app.use { httpApp =>
-      val request = Request[IO](Method.GET, uri"/healthz").putHeaders(org.http4s.Header
-        .Raw(org.typelevel.ci.CIString("X-Request-Id"), "bad value with spaces\nand newline"))
+      val request = Request[IO](Method.GET, uri"/healthz").putHeaders(
+        org.http4s.Header
+          .Raw(org.typelevel.ci.CIString("X-Request-Id"), "bad value with spaces\nand newline")
+      )
       httpApp.run(request).map { response =>
         val value = response.headers.get(org.typelevel.ci.CIString("X-Request-Id"))
           .map(_.head.value).getOrElse("")

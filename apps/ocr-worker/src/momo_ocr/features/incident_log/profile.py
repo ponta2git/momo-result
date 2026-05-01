@@ -24,30 +24,35 @@ class IncidentLogProfile:
 
 
 _CELL_XS = (878, 1148, 1418, 1680)
-# compact (桃鉄2) でも default (桃鉄ワールド) でも、数字は列の左寄せに収まり
-# 右側 20px 以上は cell 間の余白 + 隣接セルの色境界 / 黒 separator になる。
-# debug dump (019ddde5-...) で width=118 が「13」「45」「435」など spurious
-# trailing 文字を引き起こすことを確認したため、両プロファイルとも 98px に統一。
-_CELL_WIDTH = 98
+# 桃鉄ワールド (default) は cell 右側 20px 程度の余白で 98px に収まる。
+# 桃鉄2 (compact) は緑シェブロン (V 字尖端) 形状のセル背景で、
+# right edge の三角ノッチが二値化後に縦棒状の残渣となり OCR から digit と
+# 誤認される (例: "1" → "11", "2" → "23") 現象が order=4 の cell で多発する。
+# このため compact プロファイルだけ右端を ~20px 削り、シェブロン尖端を ROI
+# 外に追い出す。compact の「2 桁値」の最大幅を確認した上で 78px は安全側。
+_DEFAULT_CELL_WIDTH = 98
+_COMPACT_CELL_WIDTH = 88
 _CELL_HEIGHT = 75
 
 
-def _build_row_profile(*, incident_name: str, y: int) -> IncidentRowProfile:
+def _build_row_profile(
+    *, incident_name: str, y: int, cell_width: int = _DEFAULT_CELL_WIDTH
+) -> IncidentRowProfile:
     return IncidentRowProfile(
         incident_name=incident_name,
         cell_rois=cast(
             "tuple[Rect, Rect, Rect, Rect]",
-            tuple(Rect(x=x, y=y, width=_CELL_WIDTH, height=_CELL_HEIGHT) for x in _CELL_XS),
+            tuple(Rect(x=x, y=y, width=cell_width, height=_CELL_HEIGHT) for x in _CELL_XS),
         ),
     )
 
 
 DEFAULT_ROW_PROFILES = tuple(
-    _build_row_profile(incident_name=incident_name, y=y)
+    _build_row_profile(incident_name=incident_name, y=y, cell_width=_DEFAULT_CELL_WIDTH)
     for incident_name, y in zip(MVP_INCIDENT_NAMES, (330, 420, 510, 600, 690, 780), strict=True)
 )
 COMPACT_ROW_PROFILES = tuple(
-    _build_row_profile(incident_name=incident_name, y=y)
+    _build_row_profile(incident_name=incident_name, y=y, cell_width=_COMPACT_CELL_WIDTH)
     for incident_name, y in zip(MVP_INCIDENT_NAMES, (360, 450, 540, 630, 720, 810), strict=True)
 )
 

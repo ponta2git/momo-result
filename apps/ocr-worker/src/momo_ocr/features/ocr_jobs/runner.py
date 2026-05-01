@@ -179,7 +179,7 @@ def _process_delivery(deps: JobRunnerDependencies, delivery: PulledJob) -> OcrJo
     started = time.monotonic()
     # DEBUG: MOMO_OCR_DEBUG_DIR が設定されていればジョブ別に ROI/前処理画像を吐く。
     # 環境変数を外せば完全に無効化される opt-in モード。
-    debug_dir = _resolve_debug_dir(message.job_id)
+    debug_dir = _resolve_debug_dir(message.job_id, message.image_path)
     analysis = deps.analyze(
         image_path=message.image_path,
         requested_screen_type=message.requested_screen_type.value,
@@ -250,24 +250,30 @@ def _process_delivery(deps: JobRunnerDependencies, delivery: PulledJob) -> OcrJo
     return OcrJobStatus.SUCCEEDED
 
 
-def _resolve_debug_dir(job_id: object) -> Path | None:
+def _resolve_debug_dir(job_id: object, image_path: Path) -> Path | None:
     """Return a per-job debug directory when MOMO_OCR_DEBUG_DIR is set.
 
     DEBUG: opt-in。環境変数が未設定/空なら `None` を返し、本番パイプラインに
-    一切の副作用を与えない。設定時は ``<base>/<job_id>/`` を返す。
+    一切の副作用を与えない。設定時は ``<base>/<image_stem>__<job_id>/`` を返し、
+    ファイル名から該当画像のディレクトリを特定しやすくする。
     """
 
     base = os.environ.get("MOMO_OCR_DEBUG_DIR", "").strip()
     if not base:
         return None
-    safe_id = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in str(job_id))
-    debug_dir = Path(base).expanduser() / safe_id
+    safe_id = _sanitize_debug_segment(str(job_id))
+    safe_stem = _sanitize_debug_segment(image_path.stem) or "image"
+    debug_dir = Path(base).expanduser() / f"{safe_stem}__{safe_id}"
     try:
         debug_dir.mkdir(parents=True, exist_ok=True)
     except OSError:
         logger.warning("Failed to create MOMO_OCR_DEBUG_DIR=%s; disabling debug dump", debug_dir)
         return None
     return debug_dir
+
+
+def _sanitize_debug_segment(value: str) -> str:
+    return "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in value)
 
 
 def _alias_resolver_from_hints(hints: OcrJobHints) -> PlayerAliasResolver:

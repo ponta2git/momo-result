@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import signal
 import sys
 import threading
@@ -68,10 +69,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "analyze":
         text_engine = _build_text_engine(args)
+        debug_dir = _resolve_analyze_debug_dir(args.debug_dir, args.image)
         result = analyze_image(
             image_path=args.image,
             requested_screen_type=args.type,
-            debug_dir=args.debug_dir,
+            debug_dir=debug_dir,
             include_raw_text=args.include_raw_text,
             text_engine=text_engine,
         )
@@ -83,10 +85,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "batch":
         text_engine = _build_text_engine(args)
+        debug_dir = _resolve_batch_debug_dir(args.debug_dir)
         report = analyze_directory(
             input_dir=args.input_dir,
             expected_dir=args.expected_dir,
-            debug_dir=args.debug_dir,
+            debug_dir=debug_dir,
             text_engine=text_engine,
             include_raw_text=args.include_raw_text,
             evaluation_set=args.evaluation_set,
@@ -157,3 +160,36 @@ def _batch_exit_code(report: BatchReport) -> int:
     if any(_analysis_exit_code(result) != 0 for result in report.results):
         return 1
     return 0
+
+
+def _resolve_analyze_debug_dir(explicit: Path | None, image_path: Path) -> Path | None:
+    """Return the effective debug dir for `analyze`.
+
+    Priority: `--debug-dir` > `MOMO_OCR_DEBUG_DIR` env var. When the env var is
+    used, the per-image subdir is `<base>/<image_stem>/` so the caller can map
+    debug artifacts back to the input image. Returns ``None`` when neither is
+    set, leaving the analyzer in production-equivalent (no-debug) mode.
+    """
+
+    if explicit is not None:
+        return explicit
+    base = os.environ.get("MOMO_OCR_DEBUG_DIR", "").strip()
+    if not base:
+        return None
+    return Path(base).expanduser() / image_path.stem
+
+
+def _resolve_batch_debug_dir(explicit: Path | None) -> Path | None:
+    """Return the effective debug dir base for `batch`.
+
+    `analyze_directory` already creates per-image subdirs under the supplied
+    base, so we only need to surface the env var when no explicit path was
+    given.
+    """
+
+    if explicit is not None:
+        return explicit
+    base = os.environ.get("MOMO_OCR_DEBUG_DIR", "").strip()
+    if not base:
+        return None
+    return Path(base).expanduser()

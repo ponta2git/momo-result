@@ -1,5 +1,6 @@
 import "@testing-library/jest-dom/vitest";
 import { afterAll, afterEach, beforeAll } from "vitest";
+
 import { server } from "@/shared/api/msw/server";
 
 if (!URL.createObjectURL) {

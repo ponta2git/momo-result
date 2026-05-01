@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import { CameraCapture } from "@/features/ocrCapture/CameraCapture";
 
 type FakeTrack = { stop: ReturnType<typeof vi.fn>; readyState: "live" | "ended" };

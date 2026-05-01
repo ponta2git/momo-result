@@ -1,6 +1,6 @@
-import type { components } from "@/shared/api/generated";
 import type { RequestedImageType, SlotKind } from "@/shared/api/enums";
 import { parseSlotKind } from "@/shared/api/enums";
+import type { components } from "@/shared/api/generated";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
 
 export type InputSource = "upload" | "camera";

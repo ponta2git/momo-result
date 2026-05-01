@@ -11,6 +11,7 @@
     "test": "vitest",
     "test:run": "vitest run",
     "lint": "oxlint .",
+    "lint:fix": "oxlint . --fix",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "generate:api": "node ./scripts/generate-api.mjs"

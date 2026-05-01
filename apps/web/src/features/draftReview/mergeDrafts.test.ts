@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { mergeDrafts } from "@/features/draftReview/mergeDrafts";
+
 import type { OcrDraftResponse } from "@/features/draftReview/api";
+import { mergeDrafts } from "@/features/draftReview/mergeDrafts";
 
 const field = <T>(value: T, confidence = 0.96) => ({
   value,

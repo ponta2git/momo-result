@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import { apiDownload, apiRequest, getAuthMe } from "@/shared/api/client";
 
 function requireInit(init: RequestInit | undefined): RequestInit {

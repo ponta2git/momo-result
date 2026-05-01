@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it } from "vitest";
+
 import { queryClient } from "@/app/queryClient";
 import { MatchDetailPage } from "@/features/matches/MatchDetailPage";
 import { MatchesListPage } from "@/features/matches/MatchesListPage";

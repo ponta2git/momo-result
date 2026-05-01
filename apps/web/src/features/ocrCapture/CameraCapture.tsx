@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+
 import type { InputSource } from "@/features/ocrCapture/captureState";
 import { validateImageFile } from "@/features/ocrCapture/captureState";
 import { Button } from "@/shared/ui/Button";
@@ -131,7 +132,7 @@ export function CameraCapture({ slotLabel, onSelect, onValidationError }: Camera
 
   return (
     <div className="space-y-3">
-      <div className="overflow-hidden rounded-2xl border border-line-soft bg-capture-black/70">
+      <div className="border-line-soft bg-capture-black/70 overflow-hidden rounded-2xl border">
         <video
           ref={videoRef}
           className="aspect-video w-full object-cover"
@@ -153,7 +154,7 @@ export function CameraCapture({ slotLabel, onSelect, onValidationError }: Camera
           停止
         </Button>
       </div>
-      <p className="text-xs text-ink-300">
+      <p className="text-ink-300 text-xs">
         撮影した画像は、空いている分類トレイへ左から順に入ります。
       </p>
     </div>

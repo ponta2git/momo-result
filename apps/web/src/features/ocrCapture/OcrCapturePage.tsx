@@ -1,8 +1,10 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+
 import { cancelOcrJob, createOcrJob, getOcrDraft, uploadImage } from "@/features/ocrCapture/api";
 import type { OcrDraftResponse } from "@/features/ocrCapture/api";
+import { CameraCapture } from "@/features/ocrCapture/CameraCapture";
 import { CaptureRail } from "@/features/ocrCapture/CaptureRail";
 import {
   createInitialSlot,
@@ -14,18 +16,17 @@ import {
 } from "@/features/ocrCapture/captureState";
 import type { CaptureSlotState, InputSource } from "@/features/ocrCapture/captureState";
 import { buildOcrHints } from "@/features/ocrCapture/hints";
-import { CameraCapture } from "@/features/ocrCapture/CameraCapture";
 import { ImageInput } from "@/features/ocrCapture/ImageInput";
 import { defaultSetupValues } from "@/features/ocrCapture/schema";
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
 import { SetupPanel } from "@/features/ocrCapture/SetupPanel";
 import { useOcrJobPolling } from "@/features/ocrCapture/useOcrJobPolling";
-import { AuthPanel } from "@/shared/auth/AuthPanel";
+import { getAuthMe } from "@/shared/api/client";
 import type { SlotKind } from "@/shared/api/enums";
 import { parseLayoutFamily, parseOcrJobStatus } from "@/shared/api/enums";
 import { listGameTitles } from "@/shared/api/masters";
-import { getAuthMe } from "@/shared/api/client";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
+import { AuthPanel } from "@/shared/auth/AuthPanel";
 import { Button } from "@/shared/ui/Button";
 import { Card } from "@/shared/ui/Card";
 import { LiveRegion } from "@/shared/ui/LiveRegion";
@@ -355,13 +356,13 @@ export function OcrCapturePage() {
       <LiveRegion message={notice || uploadMutation.status} />
       <header className="grid gap-6 lg:grid-cols-[1fr_22rem] lg:items-end">
         <div>
-          <p className="font-display text-sm tracking-[0.55em] text-rail-gold uppercase">
+          <p className="font-display text-rail-gold text-sm tracking-[0.55em] uppercase">
             Result Capture Desk
           </p>
-          <h1 className="mt-4 max-w-4xl text-4xl font-black tracking-tight text-ink-100 sm:text-6xl">
+          <h1 className="text-ink-100 mt-4 max-w-4xl text-4xl font-black tracking-tight sm:text-6xl">
             桃鉄OCR取り込みコンソール
           </h1>
-          <p className="mt-4 max-w-2xl text-base leading-7 text-ink-300">
+          <p className="text-ink-300 mt-4 max-w-2xl text-base leading-7">
             1つの撮影台で画像を集め、総資産・収益・事件簿の分類トレイへ並べてからOCR下書きを保存します。
           </p>
         </div>
@@ -369,22 +370,22 @@ export function OcrCapturePage() {
       </header>
 
       <nav
-        className="mt-8 rounded-[1.75rem] border border-line-soft bg-night-900/58 px-4 py-3"
+        className="border-line-soft bg-night-900/58 mt-8 rounded-[1.75rem] border px-4 py-3"
         aria-label="OCR取り込みの流れ"
       >
-        <ol className="grid gap-3 text-sm text-ink-200 sm:grid-cols-3">
+        <ol className="text-ink-200 grid gap-3 text-sm sm:grid-cols-3">
           {[
             ["01", "撮影台", "キャプチャーボードから静止画を作る"],
             ["02", "分類トレイ", "3枚を正しいホームへ並べる"],
             ["03", "OCR下書き", "明示ボタンで保存する"],
           ].map(([step, title, description]) => (
             <li key={step} className="flex items-center gap-3">
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-line-strong bg-rail-gold/10 font-display text-xs text-rail-gold">
+              <span className="border-line-strong bg-rail-gold/10 font-display text-rail-gold grid h-9 w-9 shrink-0 place-items-center rounded-full border text-xs">
                 {step}
               </span>
               <span>
-                <span className="block font-bold text-ink-100">{title}</span>
-                <span className="block text-xs text-ink-400">{description}</span>
+                <span className="text-ink-100 block font-bold">{title}</span>
+                <span className="text-ink-400 block text-xs">{description}</span>
               </span>
             </li>
           ))}
@@ -408,13 +409,13 @@ export function OcrCapturePage() {
       <Card className="mt-8">
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-xs font-bold tracking-[0.3em] text-ink-300 uppercase">
+            <p className="text-ink-300 text-xs font-bold tracking-[0.3em] uppercase">
               Match Context
             </p>
             <h2 className="mt-1 text-2xl font-black">試合コンテキスト</h2>
           </div>
           {authQuery.data ? (
-            <p className="text-sm text-ink-300">ログイン中: {authQuery.data.displayName}</p>
+            <p className="text-ink-300 text-sm">ログイン中: {authQuery.data.displayName}</p>
           ) : null}
         </div>
         <SetupPanel
@@ -427,7 +428,7 @@ export function OcrCapturePage() {
 
       {notice ? (
         <div
-          className="mt-6 rounded-3xl border border-rail-gold/25 bg-rail-gold/10 p-4 text-sm text-yellow-50"
+          className="border-rail-gold/25 bg-rail-gold/10 mt-6 rounded-3xl border p-4 text-sm text-yellow-50"
           role="status"
         >
           {notice}
@@ -437,11 +438,11 @@ export function OcrCapturePage() {
       <Card className="mt-8 overflow-hidden">
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)]">
           <div>
-            <p className="text-xs font-black tracking-[0.3em] text-rail-gold uppercase">
+            <p className="text-rail-gold text-xs font-black tracking-[0.3em] uppercase">
               Capture Deck
             </p>
             <h2 className="mt-1 text-2xl font-black">撮影台</h2>
-            <p className="mt-2 text-sm leading-6 text-ink-300">
+            <p className="text-ink-300 mt-2 text-sm leading-6">
               撮影すると、空いている分類トレイへ左から順に画像を置きます。順番が違ったら、下の分類トレイでドラッグして入れ替えてください。
             </p>
             <div className="mt-5">
@@ -452,16 +453,16 @@ export function OcrCapturePage() {
               />
             </div>
           </div>
-          <div className="rounded-[1.5rem] border border-line-soft bg-capture-black/34 p-4">
+          <div className="border-line-soft bg-capture-black/34 rounded-[1.5rem] border p-4">
             <h3 className="text-lg font-black">運転手順</h3>
-            <ol className="mt-4 space-y-4 text-sm leading-6 text-ink-200">
+            <ol className="text-ink-200 mt-4 space-y-4 text-sm leading-6">
               {[
                 ["撮影", "3枚を撮影して分類トレイへ置く"],
                 ["入替", "画像をドラッグして総資産 → 収益 → 事件簿に合わせる"],
                 ["保存", "OCR命令と下書き保存を明示実行する"],
               ].map(([label, text]) => (
                 <li key={label} className="grid grid-cols-[3.5rem_1fr] gap-3">
-                  <span className="rounded-full border border-rail-gold/30 bg-rail-gold/10 px-3 py-1 text-center text-xs font-bold text-rail-gold">
+                  <span className="border-rail-gold/30 bg-rail-gold/10 text-rail-gold rounded-full border px-3 py-1 text-center text-xs font-bold">
                     {label}
                   </span>
                   <span>{text}</span>
@@ -474,7 +475,7 @@ export function OcrCapturePage() {
                 onSelect={handleAddImage}
                 onValidationError={handleValidationError}
               />
-              <p className="basis-full text-xs text-ink-400">
+              <p className="text-ink-400 basis-full text-xs">
                 ZIPの一括アップロードは別UIで後続実装します。ここは単体画像の退避導線です。
               </p>
             </div>
@@ -484,13 +485,13 @@ export function OcrCapturePage() {
 
       <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-bold text-rail-gold">分類トレイ: 総資産 → 収益 → 事件簿</p>
-          <p className="mt-1 text-sm text-ink-300">
+          <p className="text-rail-gold text-sm font-bold">分類トレイ: 総資産 → 収益 → 事件簿</p>
+          <p className="text-ink-300 mt-1 text-sm">
             OCR送信時は、画像が置かれているトレイ名を画像種別ヒントとして送ります。
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-full border border-line-soft bg-night-900/72 px-3 py-2 text-sm font-bold text-ink-200">
+          <span className="border-line-soft bg-night-900/72 text-ink-200 rounded-full border px-3 py-2 text-sm font-bold">
             OCR待ち {ocrReadyCount}/3
           </span>
           <Button

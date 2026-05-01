@@ -1,16 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+
+import { listHeldEvents } from "@/features/draftReview/api";
 import { confirmMatchSchema, toConfirmMatchRequest } from "@/features/draftReview/schema";
 import type { ConfirmMatchFormValues } from "@/features/draftReview/schema";
 import { getMatch, updateMatch } from "@/features/matches/api";
 import type { MatchDetailResponse } from "@/features/matches/api";
 import { fixedMembers } from "@/features/ocrCapture/localMasters";
 import { listGameTitles, listMapMasters, listSeasonMasters } from "@/shared/api/masters";
-import { listHeldEvents } from "@/features/draftReview/api";
+import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { Button } from "@/shared/ui/Button";
 import { Card } from "@/shared/ui/Card";
-import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 
 const inputClass =
   "w-full rounded-2xl border border-line-soft bg-capture-black/45 px-3 py-2 text-sm text-ink-100";
@@ -150,7 +151,7 @@ export function MatchEditPage() {
   });
 
   if (matchQuery.isLoading || !values) {
-    return <p className="p-8 text-ink-200">読み込み中...</p>;
+    return <p className="text-ink-200 p-8">読み込み中...</p>;
   }
   if (matchQuery.isError) {
     return (
@@ -211,11 +212,11 @@ export function MatchEditPage() {
         <div>
           <Link
             to={`/matches/${encodeURIComponent(matchId)}`}
-            className="text-sm text-rail-gold hover:underline"
+            className="text-rail-gold text-sm hover:underline"
           >
             ← 詳細に戻る
           </Link>
-          <h1 className="text-2xl font-bold text-ink-50">試合を編集</h1>
+          <h1 className="text-ink-50 text-2xl font-bold">試合を編集</h1>
         </div>
       </header>
 
@@ -335,10 +336,10 @@ export function MatchEditPage() {
       </Card>
 
       <Card>
-        <h2 className="mb-3 text-lg font-bold text-ink-50">プレイヤー結果</h2>
+        <h2 className="text-ink-50 mb-3 text-lg font-bold">プレイヤー結果</h2>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="text-left text-ink-300">
+            <thead className="text-ink-300 text-left">
               <tr>
                 <th>メンバー</th>
                 <th>プレー順</th>
@@ -352,7 +353,7 @@ export function MatchEditPage() {
             </thead>
             <tbody>
               {v.players.map((p, i) => (
-                <tr key={i} className="border-t border-line-soft">
+                <tr key={i} className="border-line-soft border-t">
                   <td>
                     <select
                       aria-label={`player-${i}-member`}

@@ -1,11 +1,12 @@
+import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router-dom";
 import { http, HttpResponse } from "msw";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { OcrCapturePage } from "@/features/ocrCapture/OcrCapturePage";
+
 import { queryClient } from "@/app/queryClient";
+import { OcrCapturePage } from "@/features/ocrCapture/OcrCapturePage";
 import { server } from "@/shared/api/msw/server";
 
 type OcrJobRequestBody = {

@@ -1,7 +1,8 @@
 import type { DragEvent } from "react";
+
+import type { OcrDraftResponse } from "@/features/ocrCapture/api";
 import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
 import { DraftPreview } from "@/features/ocrCapture/DraftPreview";
-import type { OcrDraftResponse } from "@/features/ocrCapture/api";
 import type { SlotKind } from "@/shared/api/enums";
 import { parseSlotKind } from "@/shared/api/enums";
 import { Button } from "@/shared/ui/Button";
@@ -72,17 +73,17 @@ export function CaptureSlotCard({
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-3">
-            <span className="grid h-10 w-10 place-items-center rounded-full border border-line-strong bg-rail-gold/12 font-display text-sm text-rail-gold">
+            <span className="border-line-strong bg-rail-gold/12 font-display text-rail-gold grid h-10 w-10 place-items-center rounded-full border text-sm">
               {stationLabel}
             </span>
             <div>
-              <p className="text-xs font-black tracking-[0.28em] text-ink-300 uppercase">
+              <p className="text-ink-300 text-xs font-black tracking-[0.28em] uppercase">
                 Classification Station
               </p>
               <h2 className="mt-0.5 text-2xl font-black">{label}</h2>
             </div>
           </div>
-          <p className="mt-1 text-sm text-ink-300">
+          <p className="text-ink-300 mt-1 text-sm">
             ここに置いた画像は「{label}」としてOCRへ送ります。
           </p>
         </div>
@@ -91,7 +92,7 @@ export function CaptureSlotCard({
 
       {slot.previewUrl ? (
         <div
-          className="mt-4 cursor-grab rounded-2xl border border-line-soft bg-capture-black/58 p-2 active:cursor-grabbing"
+          className="border-line-soft bg-capture-black/58 mt-4 cursor-grab rounded-2xl border p-2 active:cursor-grabbing"
           draggable
           onDragStart={handleDragStart}
         >
@@ -100,17 +101,17 @@ export function CaptureSlotCard({
             alt={`${label}プレビュー`}
             className="aspect-video w-full rounded-xl object-cover"
           />
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 px-1 text-xs text-ink-300">
+          <div className="text-ink-300 mt-2 flex flex-wrap items-center justify-between gap-2 px-1 text-xs">
             <span>{slot.source ? `${sourceLabels[slot.source]}した画像` : "配置済み画像"}</span>
             <span>ドラッグして別の分類へ移動</span>
           </div>
         </div>
       ) : (
-        <div className="mt-4 grid aspect-video place-items-center rounded-2xl border border-dashed border-line-soft bg-capture-black/38 px-4 text-center text-sm text-ink-300">
+        <div className="border-line-soft bg-capture-black/38 text-ink-300 mt-4 grid aspect-video place-items-center rounded-2xl border border-dashed px-4 text-center text-sm">
           <span>
             撮影した画像をここへドロップ
             <br />
-            <span className="text-xs text-ink-400">空きホーム</span>
+            <span className="text-ink-400 text-xs">空きホーム</span>
           </span>
         </div>
       )}
@@ -137,7 +138,7 @@ export function CaptureSlotCard({
 
       {mismatch ? (
         <div
-          className="mt-4 rounded-2xl border border-rail-gold/30 bg-rail-gold/10 p-3 text-sm text-yellow-50"
+          className="border-rail-gold/30 bg-rail-gold/10 mt-4 rounded-2xl border p-3 text-sm text-yellow-50"
           role="alert"
         >
           OCR判定は <strong>{slot.detectedKind}</strong>{" "}
@@ -166,7 +167,7 @@ export function CaptureSlotCard({
       ) : null}
 
       {slot.pollAttempts >= 15 && !["succeeded", "failed", "cancelled"].includes(slot.status) ? (
-        <div className="mt-4 rounded-2xl border border-rail-gold/30 bg-rail-gold/10 p-3 text-sm text-yellow-50">
+        <div className="border-rail-gold/30 bg-rail-gold/10 mt-4 rounded-2xl border p-3 text-sm text-yellow-50">
           Worker未接続の可能性があります。
           <Button className="ml-3" variant="secondary" onClick={onManualRefresh}>
             手動で再取得

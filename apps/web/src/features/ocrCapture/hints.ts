@@ -1,6 +1,6 @@
-import type { components } from "@/shared/api/generated";
 import { computerAliasesFor, fixedMembers } from "@/features/ocrCapture/localMasters";
 import type { LayoutFamily } from "@/shared/api/enums";
+import type { components } from "@/shared/api/generated";
 
 export type OcrHints = components["schemas"]["OcrJobHints"];
 

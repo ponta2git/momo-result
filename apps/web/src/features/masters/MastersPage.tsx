@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+
 import { layoutFamilies } from "@/shared/api/enums";
 import type { LayoutFamily } from "@/shared/api/enums";
 import {
@@ -38,7 +39,7 @@ function ErrorNotice({ error }: { error: unknown }) {
   if (!error) return null;
   const normalized = normalizeUnknownApiError(error);
   return (
-    <p role="alert" className="text-xs text-rail-magenta">
+    <p role="alert" className="text-rail-magenta text-xs">
       {normalized.detail || normalized.title}
     </p>
   );
@@ -71,15 +72,15 @@ function GameTitlesSection() {
       </header>
       <ul className="mt-4 grid gap-2">
         {items.length === 0 ? (
-          <li className="text-sm text-ink-400">まだ登録されていません。</li>
+          <li className="text-ink-400 text-sm">まだ登録されていません。</li>
         ) : (
           items.map((item: GameTitleResponse) => (
             <li
               key={item.id}
-              className="flex items-center justify-between rounded-2xl border border-line-soft bg-capture-black/24 px-3 py-2 text-sm"
+              className="border-line-soft bg-capture-black/24 flex items-center justify-between rounded-2xl border px-3 py-2 text-sm"
             >
-              <span className="font-bold text-ink-100">{item.name}</span>
-              <span className="text-xs text-ink-400">
+              <span className="text-ink-100 font-bold">{item.name}</span>
+              <span className="text-ink-400 text-xs">
                 {item.layoutFamily} / {item.id}
               </span>
             </li>
@@ -187,7 +188,7 @@ function ScopedMasterSection({
         <h2 className="mt-1 text-xl font-black">{title}</h2>
       </header>
       {gameTitles.length === 0 ? (
-        <p className="mt-4 text-sm text-ink-400">先に作品マスタを追加してください。</p>
+        <p className="text-ink-400 mt-4 text-sm">先に作品マスタを追加してください。</p>
       ) : (
         <>
           <label className="mt-4 grid gap-2 md:max-w-sm">
@@ -206,15 +207,15 @@ function ScopedMasterSection({
           </label>
           <ul className="mt-4 grid gap-2">
             {items.length === 0 ? (
-              <li className="text-sm text-ink-400">この作品にはまだ登録がありません。</li>
+              <li className="text-ink-400 text-sm">この作品にはまだ登録がありません。</li>
             ) : (
               items.map((item) => (
                 <li
                   key={item.id}
-                  className="flex items-center justify-between rounded-2xl border border-line-soft bg-capture-black/24 px-3 py-2 text-sm"
+                  className="border-line-soft bg-capture-black/24 flex items-center justify-between rounded-2xl border px-3 py-2 text-sm"
                 >
-                  <span className="font-bold text-ink-100">{item.name}</span>
-                  <span className="text-xs text-ink-400">{item.id}</span>
+                  <span className="text-ink-100 font-bold">{item.name}</span>
+                  <span className="text-ink-400 text-xs">{item.id}</span>
                 </li>
               ))
             )}
@@ -264,18 +265,18 @@ function IncidentMastersSection() {
         <p className={labelClass}>Incident Masters</p>
         <h2 className="mt-1 text-xl font-black">事件簿マスタ（読み取り専用）</h2>
       </header>
-      <p className="mt-2 text-xs text-ink-400">MVP では 6 項目固定。追加・編集はできません。</p>
+      <p className="text-ink-400 mt-2 text-xs">MVP では 6 項目固定。追加・編集はできません。</p>
       <ul className="mt-4 grid gap-2">
         {items.length === 0 ? (
-          <li className="text-sm text-ink-400">読み込み中…</li>
+          <li className="text-ink-400 text-sm">読み込み中…</li>
         ) : (
           items.map((item: IncidentMasterResponse) => (
             <li
               key={item.id}
-              className="flex items-center justify-between rounded-2xl border border-line-soft bg-capture-black/24 px-3 py-2 text-sm"
+              className="border-line-soft bg-capture-black/24 flex items-center justify-between rounded-2xl border px-3 py-2 text-sm"
             >
-              <span className="font-bold text-ink-100">{item.displayName}</span>
-              <span className="text-xs text-ink-400">{item.key}</span>
+              <span className="text-ink-100 font-bold">{item.displayName}</span>
+              <span className="text-ink-400 text-xs">{item.key}</span>
             </li>
           ))
         )}
@@ -297,11 +298,11 @@ export function MastersPage() {
         <div>
           <p className={labelClass}>Admin</p>
           <h1 className="mt-1 text-3xl font-black">マスタ管理</h1>
-          <p className="mt-2 text-sm text-ink-400">
+          <p className="text-ink-400 mt-2 text-sm">
             作品・マップ・シーズン・事件簿のマスタを管理します。
           </p>
         </div>
-        <Link className="text-sm text-ink-300 underline hover:text-ink-100" to="/ocr/new">
+        <Link className="text-ink-300 hover:text-ink-100 text-sm underline" to="/ocr/new">
           取り込みコンソールへ戻る
         </Link>
       </div>

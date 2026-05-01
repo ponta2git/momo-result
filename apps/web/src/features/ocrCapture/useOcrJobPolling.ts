@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+
 import { getOcrJob } from "@/features/ocrCapture/api";
 import { isTerminalJobStatus } from "@/shared/api/enums";
 

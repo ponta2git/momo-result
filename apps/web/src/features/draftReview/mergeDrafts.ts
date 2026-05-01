@@ -1,6 +1,3 @@
-import type { components } from "@/shared/api/generated";
-import { fixedMembers } from "@/features/ocrCapture/localMasters";
-import type { SlotKind } from "@/shared/api/enums";
 import { incidentNames, parseOcrDraftPayload } from "@/features/draftReview/ocrPayload";
 import type {
   IncidentName,
@@ -8,6 +5,9 @@ import type {
   OcrField,
   OcrPlayerEntry,
 } from "@/features/draftReview/ocrPayload";
+import { fixedMembers } from "@/features/ocrCapture/localMasters";
+import type { SlotKind } from "@/shared/api/enums";
+import type { components } from "@/shared/api/generated";
 
 export type DraftByKind = Partial<Record<SlotKind, components["schemas"]["OcrDraftResponse"]>>;
 

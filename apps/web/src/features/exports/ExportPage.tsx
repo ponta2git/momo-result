@@ -1,13 +1,14 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+
 import { listHeldEvents } from "@/features/draftReview/api";
 import { exportMatches } from "@/features/exports/api";
 import type { ExportFormat, ExportScope } from "@/features/exports/api";
 import { listMatches } from "@/features/matches/api";
+import type { ApiDownloadResult } from "@/shared/api/client";
 import { listSeasonMasters } from "@/shared/api/masters";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
-import type { ApiDownloadResult } from "@/shared/api/client";
 import { Button } from "@/shared/ui/Button";
 import { Card } from "@/shared/ui/Card";
 
@@ -119,19 +120,19 @@ export function ExportPage() {
     <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-8">
       <header className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
-          <Link to="/matches" className="text-sm text-rail-gold hover:underline">
+          <Link to="/matches" className="text-rail-gold text-sm hover:underline">
             ← 試合一覧へ
           </Link>
-          <p className="mt-4 text-xs font-bold tracking-[0.24em] text-rail-gold uppercase">
+          <p className="text-rail-gold mt-4 text-xs font-bold tracking-[0.24em] uppercase">
             Export Gate
           </p>
-          <h1 className="mt-1 text-3xl font-black text-ink-50">CSV / TSV 出力</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-ink-300">
+          <h1 className="text-ink-50 mt-1 text-3xl font-black">CSV / TSV 出力</h1>
+          <p className="text-ink-300 mt-2 max-w-2xl text-sm leading-6">
             確定済み試合を、集計用の固定列順で書き出します。駅の改札で範囲を切るように、
             全体・シーズン・開催・試合の単位を選んでダウンロードします。
           </p>
         </div>
-        <div className="rounded-2xl border border-line-soft bg-capture-black/35 px-4 py-3 text-sm text-ink-200">
+        <div className="border-line-soft bg-capture-black/35 text-ink-200 rounded-2xl border px-4 py-3 text-sm">
           <span className="text-ink-400">出力対象</span>{" "}
           {scope === "all"
             ? "全試合"
@@ -145,7 +146,7 @@ export function ExportPage() {
 
       <Card>
         <div className="grid gap-5 md:grid-cols-[14rem_1fr]">
-          <section className="rounded-3xl border border-line-soft bg-capture-black/30 p-4">
+          <section className="border-line-soft bg-capture-black/30 rounded-3xl border p-4">
             <p className={labelClass}>File Type</p>
             <div className="mt-3 grid grid-cols-2 gap-2">
               {(["csv", "tsv"] as const).map((candidate) => (
@@ -234,8 +235,8 @@ export function ExportPage() {
           </section>
         </div>
 
-        <div className="mt-6 flex flex-col gap-3 border-t border-line-soft pt-5 md:flex-row md:items-center md:justify-between">
-          <p className="text-sm text-ink-300">
+        <div className="border-line-soft mt-6 flex flex-col gap-3 border-t pt-5 md:flex-row md:items-center md:justify-between">
+          <p className="text-ink-300 text-sm">
             列順は要求仕様のCSV/TSV出力に固定。資産・収益は万円単位の整数で出力します。
           </p>
           <Button
@@ -247,7 +248,7 @@ export function ExportPage() {
           </Button>
         </div>
         {normalizedError ? (
-          <p role="alert" className="mt-4 text-sm text-rail-magenta">
+          <p role="alert" className="text-rail-magenta mt-4 text-sm">
             {normalizedError.detail || normalizedError.title}
           </p>
         ) : null}

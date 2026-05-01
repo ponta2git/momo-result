@@ -1,14 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { useSearchParams } from "react-router-dom";
-import { fixedMembers } from "@/features/ocrCapture/localMasters";
-import { listMatches } from "@/features/matches/api";
-import type { ListMatchesQuery, MatchSummaryResponse } from "@/features/matches/api";
-import { listGameTitles, listSeasonMasters } from "@/shared/api/masters";
-import type { GameTitleResponse, SeasonMasterResponse } from "@/shared/api/masters";
+import { Link, useSearchParams } from "react-router-dom";
+
 import { listHeldEvents } from "@/features/draftReview/api";
 import type { HeldEventResponse } from "@/features/draftReview/api";
+import { listMatches } from "@/features/matches/api";
+import type { ListMatchesQuery, MatchSummaryResponse } from "@/features/matches/api";
+import { fixedMembers } from "@/features/ocrCapture/localMasters";
+import { listGameTitles, listSeasonMasters } from "@/shared/api/masters";
+import type { GameTitleResponse, SeasonMasterResponse } from "@/shared/api/masters";
 import { Button } from "@/shared/ui/Button";
 import { Card } from "@/shared/ui/Card";
 
@@ -103,7 +103,7 @@ export function MatchesListPage() {
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-8">
       <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-ink-50">確定済み試合一覧</h1>
+        <h1 className="text-ink-50 text-2xl font-bold">確定済み試合一覧</h1>
         <Link to="/exports">
           <Button variant="secondary">CSV/TSV出力</Button>
         </Link>
@@ -176,7 +176,7 @@ export function MatchesListPage() {
           <p className="text-ink-300">該当する試合がありません</p>
         ) : (
           <table className="w-full text-sm">
-            <thead className="text-left text-ink-300">
+            <thead className="text-ink-300 text-left">
               <tr>
                 <th className="py-2">開催 / #</th>
                 <th>作品</th>
@@ -215,19 +215,19 @@ function MatchRow({
   gameTitleName: string | undefined;
   seasonName: string | undefined;
 }) {
-  const ranked = [...(match.ranks ?? [])].sort((a, b) => a.rank - b.rank);
+  const ranked = [...(match.ranks ?? [])].toSorted((a, b) => a.rank - b.rank);
   return (
-    <tr className="border-t border-line-soft">
+    <tr className="border-line-soft border-t">
       <td className="py-2">
         <div>{heldEvent ? formatDate(heldEvent.heldAt) : match.heldEventId}</div>
-        <div className="text-xs text-ink-300">#{match.matchNoInEvent}</div>
+        <div className="text-ink-300 text-xs">#{match.matchNoInEvent}</div>
       </td>
       <td>{gameTitleName ?? match.gameTitleId}</td>
       <td>{seasonName ?? match.seasonMasterId}</td>
       <td className="text-xs">
         {ranked.map((r, idx) => `${idx + 1}: ${memberName(r.memberId)}`).join(" / ")}
       </td>
-      <td className="text-xs text-ink-300">{formatDate(match.createdAt)}</td>
+      <td className="text-ink-300 text-xs">{formatDate(match.createdAt)}</td>
       <td>
         <Link
           to={`/matches/${encodeURIComponent(match.matchId)}`}

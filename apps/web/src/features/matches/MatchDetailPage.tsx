@@ -1,13 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+
+import { listHeldEvents } from "@/features/draftReview/api";
 import { deleteMatch, getMatch } from "@/features/matches/api";
 import { fixedMembers } from "@/features/ocrCapture/localMasters";
 import { listGameTitles, listMapMasters, listSeasonMasters } from "@/shared/api/masters";
-import { listHeldEvents } from "@/features/draftReview/api";
+import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { Button } from "@/shared/ui/Button";
 import { Card } from "@/shared/ui/Card";
-import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 
 const incidentColumns = [
   ["destination", "目的地"],
@@ -76,7 +77,7 @@ export function MatchDetailPage() {
   });
 
   if (matchQuery.isLoading) {
-    return <p className="p-8 text-ink-200">読み込み中...</p>;
+    return <p className="text-ink-200 p-8">読み込み中...</p>;
   }
   if (matchQuery.isError || !matchQuery.data) {
     return (
@@ -95,16 +96,16 @@ export function MatchDetailPage() {
   const season = (seasonsQuery.data?.items ?? []).find((s) => s.id === m.seasonMasterId);
   const map = (mapsQuery.data?.items ?? []).find((mm) => mm.id === m.mapMasterId);
 
-  const players = [...(m.players ?? [])].sort((a, b) => a.playOrder - b.playOrder);
+  const players = [...(m.players ?? [])].toSorted((a, b) => a.playOrder - b.playOrder);
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-8">
       <header className="flex items-center justify-between">
         <div>
-          <Link to="/matches" className="text-sm text-rail-gold hover:underline">
+          <Link to="/matches" className="text-rail-gold text-sm hover:underline">
             ← 一覧へ
           </Link>
-          <h1 className="text-2xl font-bold text-ink-50">試合詳細 #{m.matchNoInEvent}</h1>
+          <h1 className="text-ink-50 text-2xl font-bold">試合詳細 #{m.matchNoInEvent}</h1>
         </div>
         <div className="flex gap-2">
           <Link to={`/exports?matchId=${encodeURIComponent(m.matchId)}`}>
@@ -163,10 +164,10 @@ export function MatchDetailPage() {
       </Card>
 
       <Card>
-        <h2 className="mb-3 text-lg font-bold text-ink-50">プレイヤー結果</h2>
+        <h2 className="text-ink-50 mb-3 text-lg font-bold">プレイヤー結果</h2>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="text-left text-ink-300">
+            <thead className="text-ink-300 text-left">
               <tr>
                 <th className="py-2">プレー順</th>
                 <th>メンバー</th>
@@ -182,7 +183,7 @@ export function MatchDetailPage() {
             </thead>
             <tbody>
               {players.map((p) => (
-                <tr key={p.memberId} className="border-t border-line-soft">
+                <tr key={p.memberId} className="border-line-soft border-t">
                   <td className="py-2">{p.playOrder}</td>
                   <td>{memberName(p.memberId)}</td>
                   <td className="text-right">{p.rank}</td>
@@ -237,10 +238,10 @@ function DeleteConfirmModal({
       aria-labelledby="delete-confirm-title"
     >
       <Card className="w-full max-w-md">
-        <h2 id="delete-confirm-title" className="text-lg font-bold text-ink-50">
+        <h2 id="delete-confirm-title" className="text-ink-50 text-lg font-bold">
           試合を削除しますか？
         </h2>
-        <p className="mt-2 text-sm text-ink-200">
+        <p className="text-ink-200 mt-2 text-sm">
           試合番号 #{matchNo} を完全に削除します。この操作は取り消せません。
         </p>
         <div className="mt-4 flex justify-end gap-2">

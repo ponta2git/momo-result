@@ -1,5 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useId } from "react";
+
 import { fixedMembers } from "@/features/ocrCapture/localMasters";
 import { useDevUser } from "@/shared/auth/useDevUser";
 
@@ -17,10 +18,10 @@ export function DevUserPicker({ force = false }: DevUserPickerProps) {
   }
 
   return (
-    <div className="rounded-2xl border border-line-soft bg-night-900/72 px-4 py-3 backdrop-blur">
+    <div className="border-line-soft bg-night-900/72 rounded-2xl border px-4 py-3 backdrop-blur">
       <label
         htmlFor={id}
-        className="block text-xs font-bold tracking-[0.24em] text-ink-300 uppercase"
+        className="text-ink-300 block text-xs font-bold tracking-[0.24em] uppercase"
       >
         Dev User
       </label>
@@ -32,7 +33,7 @@ export function DevUserPicker({ force = false }: DevUserPickerProps) {
           void queryClient.invalidateQueries();
         }}
         disabled={lockedByEnv}
-        className="mt-2 w-full rounded-xl border border-line-soft bg-capture-black/45 px-3 py-2 text-sm text-ink-100"
+        className="border-line-soft bg-capture-black/45 text-ink-100 mt-2 w-full rounded-xl border px-3 py-2 text-sm"
       >
         <option value="">未選択</option>
         {fixedMembers.map((member) => (
@@ -42,7 +43,7 @@ export function DevUserPicker({ force = false }: DevUserPickerProps) {
         ))}
       </select>
       {lockedByEnv ? (
-        <p className="mt-2 text-xs text-ink-300">VITE_DEV_USER で固定されています。</p>
+        <p className="text-ink-300 mt-2 text-xs">VITE_DEV_USER で固定されています。</p>
       ) : null}
     </div>
   );

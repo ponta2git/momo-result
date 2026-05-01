@@ -1,5 +1,5 @@
-import type { components } from "@/shared/api/generated";
 import { apiRequest } from "@/shared/api/client";
+import type { components } from "@/shared/api/generated";
 
 export type GameTitleResponse = components["schemas"]["GameTitleResponse"];
 export type GameTitleListResponse = components["schemas"]["GameTitleListResponse"];

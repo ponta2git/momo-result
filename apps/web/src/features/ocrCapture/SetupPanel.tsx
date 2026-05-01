@@ -2,9 +2,10 @@ import { getFormProps, useForm } from "@conform-to/react";
 import { parseWithZod } from "@conform-to/zod/v4";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
+
+import { fixedMembers } from "@/features/ocrCapture/localMasters";
 import { setupSchema } from "@/features/ocrCapture/schema";
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
-import { fixedMembers } from "@/features/ocrCapture/localMasters";
 import { listGameTitles, listMapMasters, listSeasonMasters } from "@/shared/api/masters";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { Field } from "@/shared/ui/Field";

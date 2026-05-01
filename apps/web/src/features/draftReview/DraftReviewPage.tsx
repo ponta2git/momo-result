@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+
 import {
   confirmMatch,
   createHeldEvent,
@@ -10,15 +11,15 @@ import {
 import type { HeldEventResponse, OcrDraftResponse } from "@/features/draftReview/api";
 import { mergeDrafts } from "@/features/draftReview/mergeDrafts";
 import type { DraftByKind, ReviewPlayer } from "@/features/draftReview/mergeDrafts";
+import { createSampleDraftMap } from "@/features/draftReview/sampleDrafts";
 import { confirmMatchSchema, toConfirmMatchRequest } from "@/features/draftReview/schema";
 import type { ConfirmMatchFormValues } from "@/features/draftReview/schema";
-import { createSampleDraftMap } from "@/features/draftReview/sampleDrafts";
 import { fixedMembers } from "@/features/ocrCapture/localMasters";
 import { defaultSetupValues } from "@/features/ocrCapture/schema";
-import { listGameTitles, listMapMasters, listSeasonMasters } from "@/shared/api/masters";
+import { getAuthMe } from "@/shared/api/client";
 import type { SlotKind } from "@/shared/api/enums";
 import { slotKinds } from "@/shared/api/enums";
-import { getAuthMe } from "@/shared/api/client";
+import { listGameTitles, listMapMasters, listSeasonMasters } from "@/shared/api/masters";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { AuthPanel } from "@/shared/auth/AuthPanel";
 import { Button } from "@/shared/ui/Button";
@@ -227,14 +228,14 @@ type ConfirmDialogProps = {
 
 function ConfirmDialog({ values, heldEvent, onCancel, onConfirm, pending }: ConfirmDialogProps) {
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-capture-black/70 p-4">
-      <div className="w-full max-w-xl rounded-[2rem] border border-line-soft bg-night-900 p-6">
-        <p className="text-xs font-black tracking-[0.32em] text-rail-gold uppercase">Final Check</p>
+    <div className="bg-capture-black/70 fixed inset-0 z-50 grid place-items-center p-4">
+      <div className="border-line-soft bg-night-900 w-full max-w-xl rounded-[2rem] border p-6">
+        <p className="text-rail-gold text-xs font-black tracking-[0.32em] uppercase">Final Check</p>
         <h2 className="mt-2 text-2xl font-black">この内容で確定しますか？</h2>
-        <dl className="mt-5 grid gap-3 text-sm text-ink-200">
+        <dl className="text-ink-200 mt-5 grid gap-3 text-sm">
           <div className="flex justify-between gap-4">
             <dt className="text-ink-400">開催履歴</dt>
-            <dd className="font-bold text-ink-100">
+            <dd className="text-ink-100 font-bold">
               {heldEvent ? new Date(heldEvent.heldAt).toLocaleString() : values.heldEventId}
             </dd>
           </div>
@@ -517,23 +518,23 @@ export function DraftReviewPage() {
         <div>
           <p className={labelClass}>Match Setup</p>
           <h2 className="mt-1 text-2xl font-black">記録先と試合条件</h2>
-          <p className="mt-2 text-sm text-ink-400">
+          <p className="text-ink-400 mt-2 text-sm">
             この結果をどの開催履歴・作品として保存するかだけ先に決めます。結果の確認と手修正は次の表で行います。
           </p>
         </div>
         {selectedHeldEvent ? (
-          <div className="rounded-[1.25rem] border border-line-soft bg-capture-black/28 px-4 py-3 text-sm text-ink-300">
-            <p className="font-bold text-ink-100">
+          <div className="border-line-soft bg-capture-black/28 text-ink-300 rounded-[1.25rem] border px-4 py-3 text-sm">
+            <p className="text-ink-100 font-bold">
               {new Date(selectedHeldEvent.heldAt).toLocaleString()}
             </p>
-            <p className="mt-1 text-xs text-ink-400">第{values.matchNoInEvent}試合として保存</p>
+            <p className="text-ink-400 mt-1 text-xs">第{values.matchNoInEvent}試合として保存</p>
           </div>
         ) : null}
       </div>
       {gameTitleItems.length === 0 && gameTitlesQuery.isSuccess ? (
-        <div className="mt-4 rounded-[1.25rem] border border-rail-gold/55 bg-rail-gold/10 p-4 text-sm text-ink-100">
+        <div className="border-rail-gold/55 bg-rail-gold/10 text-ink-100 mt-4 rounded-[1.25rem] border p-4 text-sm">
           作品マスタが未登録です。
-          <Link className="ml-2 underline hover:text-rail-gold" to="/admin/masters">
+          <Link className="hover:text-rail-gold ml-2 underline" to="/admin/masters">
             マスタ管理画面
           </Link>
           で追加してください。
@@ -652,12 +653,12 @@ export function DraftReviewPage() {
         </label>
       </div>
 
-      <details className="mt-4 border-t border-line-soft/70 pt-3">
-        <summary className="cursor-pointer text-xs font-bold tracking-[0.18em] text-ink-400 uppercase transition hover:text-ink-200">
+      <details className="border-line-soft/70 mt-4 border-t pt-3">
+        <summary className="text-ink-400 hover:text-ink-200 cursor-pointer text-xs font-bold tracking-[0.18em] uppercase transition">
           一覧にない開催履歴を追加
         </summary>
-        <div className="mt-3 grid gap-3 rounded-[1.25rem] border border-line-soft bg-capture-black/24 p-3 md:grid-cols-[1fr_auto] md:items-end">
-          <p className="text-xs leading-5 text-ink-400 md:col-span-2">
+        <div className="border-line-soft bg-capture-black/24 mt-3 grid gap-3 rounded-[1.25rem] border p-3 md:grid-cols-[1fr_auto] md:items-end">
+          <p className="text-ink-400 text-xs leading-5 md:col-span-2">
             通常はsummit側で作成済みの開催履歴を選びます。見つからない場合だけ追加してください。
           </p>
           <input
@@ -690,16 +691,16 @@ export function DraftReviewPage() {
         <div>
           <p className={labelClass}>Player Results</p>
           <h2 className="mt-1 text-2xl font-black">4人分の結果を確認・手修正</h2>
-          <p className="mt-2 text-sm text-ink-400">
+          <p className="text-ink-400 mt-2 text-sm">
             順位・金額・事件簿をここで確認します。画面幅が足りない場合は、この表だけ横にスクロールできます。
           </p>
         </div>
-        <div className="rounded-[1.25rem] border border-line-soft bg-capture-black/28 px-4 py-3 text-sm text-ink-300">
-          <p className="text-xs leading-5 text-ink-400">緑=高信頼OCR / 金色=OCR結果と異なる</p>
+        <div className="border-line-soft bg-capture-black/28 text-ink-300 rounded-[1.25rem] border px-4 py-3 text-sm">
+          <p className="text-ink-400 text-xs leading-5">緑=高信頼OCR / 金色=OCR結果と異なる</p>
         </div>
       </div>
-      <details className="mt-5 rounded-[1.5rem] border border-line-soft bg-capture-black/28 p-4">
-        <summary className="cursor-pointer text-sm font-bold text-ink-100">
+      <details className="border-line-soft bg-capture-black/28 mt-5 rounded-[1.5rem] border p-4">
+        <summary className="text-ink-100 cursor-pointer text-sm font-bold">
           OCR読み取り状況を確認
         </summary>
         <div className="mt-4 grid gap-3 md:grid-cols-3">
@@ -713,14 +714,14 @@ export function DraftReviewPage() {
             return (
               <div
                 key={kind}
-                className="rounded-[1.25rem] border border-line-soft bg-night-900/72 p-4"
+                className="border-line-soft bg-night-900/72 rounded-[1.25rem] border p-4"
               >
-                <p className="text-sm font-black text-ink-100">{labels[kind]}</p>
-                <p className="mt-2 text-xs leading-5 text-ink-400">
+                <p className="text-ink-100 text-sm font-black">{labels[kind]}</p>
+                <p className="text-ink-400 mt-2 text-xs leading-5">
                   {draft ? "OCR下書きから表へ反映済み" : "OCR下書きなし。金色セルを手入力します。"}
                 </p>
                 {draft?.detectedImageType ? (
-                  <span className="mt-3 inline-flex rounded-full border border-line-soft px-3 py-1 text-xs text-ink-300">
+                  <span className="border-line-soft text-ink-300 mt-3 inline-flex rounded-full border px-3 py-1 text-xs">
                     判定: {draft.detectedImageType}
                   </span>
                 ) : null}
@@ -729,7 +730,7 @@ export function DraftReviewPage() {
           })}
         </div>
         {merged.warnings.length ? (
-          <div className="mt-4 rounded-[1.5rem] border border-rail-gold/30 bg-rail-gold/10 p-4 text-sm text-ink-100">
+          <div className="border-rail-gold/30 bg-rail-gold/10 text-ink-100 mt-4 rounded-[1.5rem] border p-4 text-sm">
             {merged.warnings.join(" / ")}
           </div>
         ) : null}
@@ -746,7 +747,7 @@ export function DraftReviewPage() {
               <col key={label} className="w-[8rem]" />
             ))}
           </colgroup>
-          <thead className="text-xs tracking-[0.18em] text-ink-400 uppercase">
+          <thead className="text-ink-400 text-xs tracking-[0.18em] uppercase">
             <tr>
               <th className="px-2 py-2">メンバー</th>
               <th className="px-2 py-2">順</th>
@@ -815,7 +816,7 @@ export function DraftReviewPage() {
                           }
                         />
                         {key !== "playOrder" && state.tone === "manual" ? (
-                          <p className="mt-1 text-[0.68rem] text-rail-gold">{state.label}</p>
+                          <p className="text-rail-gold mt-1 text-[0.68rem]">{state.label}</p>
                         ) : null}
                       </td>
                     );
@@ -860,17 +861,17 @@ export function DraftReviewPage() {
       <LiveRegion message={notice || validationMessage} />
       <header className="grid gap-6 lg:grid-cols-[1fr_22rem] lg:items-end">
         <div>
-          <p className="font-display text-sm tracking-[0.55em] text-rail-gold uppercase">
+          <p className="font-display text-rail-gold text-sm tracking-[0.55em] uppercase">
             Draft Review Desk
           </p>
-          <h1 className="mt-4 max-w-4xl text-4xl font-black tracking-tight text-ink-100 sm:text-6xl">
+          <h1 className="text-ink-100 mt-4 max-w-4xl text-4xl font-black tracking-tight sm:text-6xl">
             OCR下書き確認
           </h1>
-          <p className="mt-4 max-w-2xl text-base leading-7 text-ink-300">
+          <p className="text-ink-300 mt-4 max-w-2xl text-base leading-7">
             3つの下書きを1試合分にまとめ、開催履歴・順位・金額・事件簿を同じ画面で確認して確定します。
           </p>
           {useSampleDrafts ? (
-            <p className="mt-3 inline-flex rounded-full border border-rail-gold/35 bg-rail-gold/10 px-3 py-1 text-sm font-bold text-rail-gold">
+            <p className="border-rail-gold/35 bg-rail-gold/10 text-rail-gold mt-3 inline-flex rounded-full border px-3 py-1 text-sm font-bold">
               開発用サンプル下書きで表示中
             </p>
           ) : null}
@@ -880,13 +881,13 @@ export function DraftReviewPage() {
 
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
         <Link
-          className="text-sm font-bold text-rail-gold underline-offset-4 hover:underline"
+          className="text-rail-gold text-sm font-bold underline-offset-4 hover:underline"
           to="/ocr/new"
         >
           ← 取り込みコンソールへ戻る
         </Link>
         {authQuery.data ? (
-          <span className="rounded-full border border-line-soft bg-night-900/72 px-3 py-2 text-sm text-ink-300">
+          <span className="border-line-soft bg-night-900/72 text-ink-300 rounded-full border px-3 py-2 text-sm">
             ログイン中: {authQuery.data.displayName}
           </span>
         ) : null}
@@ -905,13 +906,13 @@ export function DraftReviewPage() {
 
       {notice ? (
         <div
-          className="fixed top-4 right-4 left-4 z-40 rounded-[1.25rem] border border-rail-gold/30 bg-night-900/95 p-4 text-sm text-yellow-50 shadow-[0_18px_60px_rgb(0_0_0/0.28)] backdrop-blur sm:left-auto sm:w-[24rem]"
+          className="border-rail-gold/30 bg-night-900/95 fixed top-4 right-4 left-4 z-40 rounded-[1.25rem] border p-4 text-sm text-yellow-50 shadow-[0_18px_60px_rgb(0_0_0/0.28)] backdrop-blur sm:left-auto sm:w-[24rem]"
           role="status"
         >
           <div className="flex items-start justify-between gap-3">
             <p className="leading-6">{notice}</p>
             <button
-              className="rounded-full border border-line-soft px-2 py-0.5 text-xs text-ink-300 transition hover:text-ink-100"
+              className="border-line-soft text-ink-300 hover:text-ink-100 rounded-full border px-2 py-0.5 text-xs transition"
               type="button"
               onClick={() => setNotice("")}
             >
@@ -927,16 +928,16 @@ export function DraftReviewPage() {
 
       {validationMessage ? (
         <div
-          className="mt-6 rounded-3xl border border-rail-gold/25 bg-rail-gold/10 p-4 text-sm text-yellow-50"
+          className="border-rail-gold/25 bg-rail-gold/10 mt-6 rounded-3xl border p-4 text-sm text-yellow-50"
           role="status"
         >
           {validationMessage}
         </div>
       ) : null}
 
-      <div className="sticky bottom-4 mt-8 rounded-[2rem] border border-line-soft bg-night-900/92 p-4 backdrop-blur">
+      <div className="border-line-soft bg-night-900/92 sticky bottom-4 mt-8 rounded-[2rem] border p-4 backdrop-blur">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-ink-300">
+          <p className="text-ink-300 text-sm">
             {readiness.success ? "確定前チェックへ進めます。" : nextAction}
           </p>
           <Button

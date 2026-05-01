@@ -42,6 +42,8 @@ lazy val root = (project in file("."))
       val doobieVersion = "1.0.0-RC12"
       val http4sVersion = "0.23.34"
       val logbackVersion = "1.5.18"
+      val logstashEncoderVersion = "8.0"
+      val janinoVersion = "3.1.12"
       val munitCatsEffectVersion = "2.2.0"
       val munitVersion = "1.3.0"
       val redis4catsVersion = "1.7.2"
@@ -67,6 +69,8 @@ lazy val root = (project in file("."))
         "org.tpolecat" %% "doobie-hikari" % doobieVersion,
         "dev.profunktor" %% "redis4cats-effects" % redis4catsVersion,
         "ch.qos.logback" % "logback-classic" % logbackVersion,
+        "net.logstash.logback" % "logstash-logback-encoder" % logstashEncoderVersion,
+        "org.codehaus.janino" % "janino" % janinoVersion,
         "org.scalameta" %% "munit" % munitVersion % Test,
         "org.testcontainers" % "testcontainers" % testcontainersVersion % Test,
         "org.typelevel" %% "munit-cats-effect" % munitCatsEffectVersion % Test

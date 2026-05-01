@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Test logback configuration: human-readable pattern, WARN-only at root
+  to keep test output focused on test failures.
+-->
+<configuration>
+  <appender name="TEXT" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%d{HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <logger name="org.http4s" level="WARN" />
+  <logger name="com.zaxxer.hikari" level="WARN" />
+  <logger name="io.lettuce" level="WARN" />
+  <logger name="dev.profunktor.redis4cats" level="WARN" />
+
+  <root level="WARN">
+    <appender-ref ref="TEXT" />
+  </root>
+</configuration>

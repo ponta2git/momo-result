@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Logback configuration for the momo-result API.
+
+  Output format is selected by the MOMO_LOG_FORMAT environment variable:
+    - "json"  : single-line JSON via LogstashEncoder (default; required in prod)
+    - "text"  : human-readable pattern (recommended for local dev)
+
+  Log level can be overridden via the MOMO_LOG_LEVEL environment variable
+  (default: INFO). Library noise is tuned to WARN.
+
+  The <if> element requires the Janino library (declared in build.sbt).
+-->
+<configuration>
+  <variable name="MOMO_LOG_FORMAT" value="${MOMO_LOG_FORMAT:-json}" />
+  <variable name="MOMO_LOG_LEVEL" value="${MOMO_LOG_LEVEL:-INFO}" />
+
+  <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+      <includeMdcKeyName>request_id</includeMdcKeyName>
+      <includeMdcKeyName>session_id</includeMdcKeyName>
+      <includeMdcKeyName>member_id</includeMdcKeyName>
+      <includeMdcKeyName>job_id</includeMdcKeyName>
+      <includeMdcKeyName>image_type</includeMdcKeyName>
+      <includeContext>false</includeContext>
+      <timeZone>UTC</timeZone>
+      <fieldNames>
+        <timestamp>@timestamp</timestamp>
+        <message>message</message>
+        <thread>thread</thread>
+        <logger>logger</logger>
+        <level>level</level>
+        <levelValue>[ignore]</levelValue>
+        <version>[ignore]</version>
+      </fieldNames>
+      <customFields>{"app":"momo-result-api"}</customFields>
+    </encoder>
+  </appender>
+
+  <appender name="TEXT" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%d{HH:mm:ss.SSS} %-5level [%thread] %logger{36} %mdc - %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <!-- Library noise reduction. -->
+  <logger name="org.http4s" level="WARN" />
+  <logger name="com.zaxxer.hikari" level="WARN" />
+  <logger name="io.lettuce" level="WARN" />
+  <logger name="dev.profunktor.redis4cats" level="WARN" />
+
+  <root level="${MOMO_LOG_LEVEL}">
+    <if condition='property("MOMO_LOG_FORMAT").equalsIgnoreCase("text")'>
+      <then>
+        <appender-ref ref="TEXT" />
+      </then>
+      <else>
+        <appender-ref ref="JSON" />
+      </else>
+    </if>
+  </root>
+</configuration>

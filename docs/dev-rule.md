@@ -22,6 +22,13 @@
 - 本番は `fly secrets set`、CI は GitHub Actions secrets で管理する。
 - Secretsをログに出力しない。
 
+#### apiのログ出力形式
+
+- `MOMO_LOG_FORMAT=json`（デフォルト）: 1行JSON（`@timestamp`/`level`/`logger`/`thread`/`message`/MDC各種）。本番必須。
+- `MOMO_LOG_FORMAT=text`: 人間可読のpattern出力。ローカル開発向け（`.env.example` のデフォルト）。
+- `MOMO_LOG_LEVEL`（デフォルト `INFO`）でルートレベルを上書き可能。
+- 設定は `apps/api/src/main/resources/logback.xml`。テストは `logback-test.xml`（WARN固定、人間可読）。
+
 ### 1.3 ローカルDB・Redis起動
 
 Docker Compose でPostgreSQL と Redis のみ起動する。

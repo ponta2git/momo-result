@@ -194,6 +194,9 @@ def _run_variant(
     snippets: list[str],
     confidences: list[float],
 ) -> None:
+    # PSM 6 (uniform block) と PSM 7 (single line) は性能特性が補完的なので、
+    # ここでは fast-path であっても両 PSM を回す。PSM 7 が PSM 6 で読めなかった
+    # money/name を補うケースが eval で実測される (TA/REV ~1.8pt の差)。
     for psm in ROW_OCR_PSMS:
         recognized = text_engine.recognize(
             candidate_image,

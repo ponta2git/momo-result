@@ -21,6 +21,7 @@ from momo_ocr.features.incident_log.voting import (
     vote_count,
 )
 from momo_ocr.features.ocr_results.parsing import ScreenParseContext
+from momo_ocr.features.text_recognition.fast_path import is_fast_path_enabled
 from momo_ocr.features.text_recognition.models import RecognitionConfig, RecognitionField
 from momo_ocr.features.text_recognition.postprocess import normalize_ocr_text
 
@@ -28,6 +29,10 @@ COUNT_OCR_PSMS = (10, 13)
 # 「|」「l」「i」のみで構成された OCR text は罫線の縦棒由来である可能性が高い。
 # Tesseract の confidence がこの閾値未満の場合はノイズ扱いとし、digit 候補から外す。
 PIPE_NOISE_CONFIDENCE_THRESHOLD = 0.6
+# Fast-path confidence threshold for skipping fallback variants / later PSMs.
+# 0.85 は eval で primary が plausible digit を返したケースの下位 5% にほぼ
+# 一致し、これ以上の数値は false-confident な誤読が増える。
+FAST_PATH_CONFIDENCE_THRESHOLD = 0.85
 
 
 def prepare_count_cell_image(image: Image.Image) -> Image.Image:
@@ -62,7 +67,11 @@ def recognize_count_cell(
     All variants are evaluated and combined via :func:`voting.select_count_recognition`
     so that primary's framing-noise misreads (e.g. ``"lo" → 10``) can be
     corrected by the fallback variants. Early-return is intentionally
-    avoided.
+    avoided in the default path.
+
+    When ``MOMO_OCR_FAST_PATH=1`` is set, fallback variants are skipped if
+    the primary variant produced a plausible (≤ ``max_plausible_count``)
+    digit count with confidence ≥ :data:`FAST_PATH_CONFIDENCE_THRESHOLD`.
     """
     max_count = max_plausible_cell_count(incident_name)
     primary_image = prepare_count_cell_image(image)
@@ -81,6 +90,18 @@ def recognize_count_cell(
     primary = _recognize_count_cell_image(context, primary_image, debug_sink=primary_sink)
     if debug_sink is not None and primary_sink is not None:
         debug_sink["variants"].append(primary_sink)
+
+    # Fast-path: skip fallback variants when primary already returned a
+    # plausible high-confidence digit count. The plausibility cap rejects
+    # framing-noise misreads that would otherwise short-circuit on a wrong
+    # value (e.g. 10 → "lo" on the ginji column whose plausible cap is 2).
+    if (
+        is_fast_path_enabled()
+        and primary.count is not None
+        and primary.count <= max_count
+        and (primary.confidence or 0.0) >= FAST_PATH_CONFIDENCE_THRESHOLD
+    ):
+        return primary
 
     fallback_results: list[CountRecognitionResult] = []
     for label, variant_image in variant_specs[1:]:
@@ -107,6 +128,7 @@ def _recognize_count_cell_image(
     # 旧実装は raw_text を " | " で連結して parse_count に渡していたが、
     # parse_count は reversed で最後の候補を優先するため "0 | lo" → 10 の
     # ような後勝ち誤読が起きていた。
+    fast_path = is_fast_path_enabled()
     attempts: list[PsmAttempt] = []
     snippets: list[str] = []
     for psm in COUNT_OCR_PSMS:
@@ -124,15 +146,14 @@ def _recognize_count_cell_image(
             snippets.append(text)
         parsed = parse_count(text) if text else None
         # 罫線由来の縦棒ノイズを digit と取り違えるのを避ける。
+        is_pipe_noise = bool(text) and is_pure_pipe_noise(text)
         if (
             parsed is not None
-            and is_pure_pipe_noise(text)
+            and is_pipe_noise
             and (recognized.confidence or 0.0) < PIPE_NOISE_CONFIDENCE_THRESHOLD
         ):
             parsed = None
-        attempts.append(
-            PsmAttempt(text=text, count=parsed, confidence=recognized.confidence)
-        )
+        attempts.append(PsmAttempt(text=text, count=parsed, confidence=recognized.confidence))
         if debug_sink is not None:
             debug_sink["psm_attempts"].append(
                 {
@@ -142,6 +163,16 @@ def _recognize_count_cell_image(
                     "confidence": recognized.confidence,
                 }
             )
+        # Fast-path: skip the remaining PSMs once a plausible high-confidence
+        # digit read has been observed. Pipe-noise reads are explicitly
+        # excluded so framing-bar misreads ("|||" → 11) cannot short-circuit.
+        if (
+            fast_path
+            and parsed is not None
+            and not is_pipe_noise
+            and (recognized.confidence or 0.0) >= FAST_PATH_CONFIDENCE_THRESHOLD
+        ):
+            break
     chosen_count, chosen_confidence = vote_count(attempts)
     if debug_sink is not None:
         debug_sink["chosen_count"] = chosen_count

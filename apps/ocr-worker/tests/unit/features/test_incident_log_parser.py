@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from pathlib import Path
 
+import pytest
 from PIL import Image
 
 from momo_ocr.features.incident_log.parser import IncidentLogParser
@@ -361,3 +362,130 @@ def test_incident_log_parser_prefers_digit_text_over_zero_alias_noise(
     )
 
     assert payload.players[0].incidents["目的地"].value == 3
+
+
+def test_incident_log_parser_fast_path_skips_fallback_variants_and_psm(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Fast-path: primary variant + PSM 10 が plausible digit を高 conf で返したら
+    # fallback variant も PSM 13 もスキップする。1 セルにつき OCR 呼び出し 1 回。
+    monkeypatch.setenv("MOMO_OCR_FAST_PATH", "1")
+    image_path = tmp_path / "incident.jpg"
+    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    # 1 OCR call per cell × 24 cells = 24 calls.
+    engine = CountingTextRecognitionEngine(
+        [("0", 0.9)] * INCIDENT_CELL_COUNT * RECOGNITIONS_PER_CELL_WITH_FALLBACK
+    )
+
+    IncidentLogParser().parse(
+        ScreenParseContext(
+            image_path=image_path,
+            requested_screen_type=ScreenType.INCIDENT_LOG,
+            detected_screen_type=ScreenType.INCIDENT_LOG,
+            profile_id="full-hd-incident-log-v1",
+            debug_dir=None,
+            include_raw_text=False,
+            text_engine=engine,
+            layout_family_hint="world",
+        )
+    )
+    assert engine.call_count == INCIDENT_CELL_COUNT
+
+
+def test_incident_log_parser_fast_path_disabled_evaluates_all_variants(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("MOMO_OCR_FAST_PATH", raising=False)
+    image_path = tmp_path / "incident.jpg"
+    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    engine = CountingTextRecognitionEngine(
+        [("0", 0.9)] * INCIDENT_CELL_COUNT * RECOGNITIONS_PER_CELL_WITH_FALLBACK
+    )
+
+    IncidentLogParser().parse(
+        ScreenParseContext(
+            image_path=image_path,
+            requested_screen_type=ScreenType.INCIDENT_LOG,
+            detected_screen_type=ScreenType.INCIDENT_LOG,
+            profile_id="full-hd-incident-log-v1",
+            debug_dir=None,
+            include_raw_text=False,
+            text_engine=engine,
+            layout_family_hint="world",
+        )
+    )
+    assert engine.call_count == INCIDENT_CELL_COUNT * RECOGNITIONS_PER_CELL_WITH_FALLBACK
+
+
+def test_incident_log_parser_fast_path_skips_subsequent_profiles_when_complete(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # layout hint なしだと world + compact 両 profile を試行する。fast-path 有効で
+    # 1 profile 目が missing_count==0 を返したら 2 profile 目はスキップ。
+    monkeypatch.setenv("MOMO_OCR_FAST_PATH", "1")
+    image_path = tmp_path / "incident.jpg"
+    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    # First profile fully resolves (24 cells × 1 call each under fast-path).
+    engine = CountingTextRecognitionEngine(
+        [("0", 0.9)] * INCIDENT_CELL_COUNT * RECOGNITIONS_PER_CELL_WITH_FALLBACK * 2
+    )
+
+    IncidentLogParser().parse(
+        ScreenParseContext(
+            image_path=image_path,
+            requested_screen_type=ScreenType.INCIDENT_LOG,
+            detected_screen_type=ScreenType.INCIDENT_LOG,
+            profile_id="full-hd-incident-log-v1",
+            debug_dir=None,
+            include_raw_text=False,
+            text_engine=engine,
+        )
+    )
+    # Only the first profile should have been evaluated (1 OCR call per cell).
+    assert engine.call_count == INCIDENT_CELL_COUNT
+
+
+def test_incident_log_parser_fast_path_continues_on_low_confidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Below FAST_PATH_CONFIDENCE_THRESHOLD (0.85), short-circuit must not engage:
+    # full PSM × variant exploration runs as in the default path.
+    monkeypatch.setenv("MOMO_OCR_FAST_PATH", "1")
+    image_path = tmp_path / "incident.jpg"
+    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    engine = CountingTextRecognitionEngine(
+        [("0", 0.5)] * INCIDENT_CELL_COUNT * RECOGNITIONS_PER_CELL_WITH_FALLBACK
+    )
+
+    IncidentLogParser().parse(
+        ScreenParseContext(
+            image_path=image_path,
+            requested_screen_type=ScreenType.INCIDENT_LOG,
+            detected_screen_type=ScreenType.INCIDENT_LOG,
+            profile_id="full-hd-incident-log-v1",
+            debug_dir=None,
+            include_raw_text=False,
+            text_engine=engine,
+            layout_family_hint="world",
+        )
+    )
+    assert engine.call_count == INCIDENT_CELL_COUNT * RECOGNITIONS_PER_CELL_WITH_FALLBACK
+
+
+class CountingTextRecognitionEngine(TextRecognitionEngine):
+    def __init__(self, items: Sequence[tuple[str, float]]) -> None:
+        self._items = list(items)
+        self.call_count = 0
+
+    def recognize(
+        self,
+        image: Image.Image,
+        *,
+        field: RecognitionField = RecognitionField.GENERIC,
+        psm: int | None = None,
+        config: RecognitionConfig | None = None,
+    ) -> RecognizedText:
+        del image, field, psm, config
+        text, confidence = self._items.pop(0)
+        self.call_count += 1
+        return RecognizedText(text=text, confidence=confidence)

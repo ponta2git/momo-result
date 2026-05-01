@@ -31,6 +31,10 @@ export const router = createBrowserRouter([
     element: <App />,
   },
   {
+    path: "/exports",
+    element: <App />,
+  },
+  {
     path: "*",
     element: <Navigate to="/ocr/new" replace />,
   },

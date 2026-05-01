@@ -11,9 +11,9 @@ import momo.api.config.AppConfig
 import momo.api.domain.OcrJobHints
 import momo.api.endpoints.{
   CancelOcrJobResponse, ConfirmMatchRequest, ConfirmMatchResponse, CreateOcrJobResponse,
-  DeleteMatchResponse, GameTitleListResponse, GameTitleResponse, GameTitlesEndpoints,
-  HealthEndpoints, HeldEventListResponse, HeldEventResponse, HeldEventsEndpoints,
-  IncidentMasterListResponse, IncidentMasterResponse, IncidentMastersEndpoints,
+  DeleteMatchResponse, ExportEndpoints, GameTitleListResponse, GameTitleResponse,
+  GameTitlesEndpoints, HealthEndpoints, HeldEventListResponse, HeldEventResponse,
+  HeldEventsEndpoints, IncidentMasterListResponse, IncidentMasterResponse, IncidentMastersEndpoints,
   MapMasterListResponse, MapMasterResponse, MapMastersEndpoints, MatchDetailResponse,
   MatchListResponse, MatchSummaryResponse, MatchesEndpoints, OcrDraftEndpoints,
   OcrDraftListResponse, OcrDraftResponse, OcrJobEndpoints, OcrJobResponse, OpenApiEndpoints,
@@ -29,8 +29,9 @@ import momo.api.repositories.{
 import momo.api.usecases.{
   CancelOcrJob, ConfirmMatch, CreateGameTitle, CreateGameTitleCommand, CreateHeldEvent,
   CreateHeldEventCommand, CreateMapMaster, CreateMapMasterCommand, CreateOcrJob,
-  CreateOcrJobCommand, CreateSeasonMaster, CreateSeasonMasterCommand, DeleteMatch, GetMatch,
-  GetOcrDraft, GetOcrDraftsBulk, GetOcrJob, ListHeldEvents, ListMatches, UpdateMatch, UploadImage,
+  CreateOcrJobCommand, CreateSeasonMaster, CreateSeasonMasterCommand, DeleteMatch, ExportMatches,
+  GetMatch, GetOcrDraft, GetOcrDraftsBulk, GetOcrJob, ListHeldEvents, ListMatches, UpdateMatch,
+  UploadImage,
 }
 import org.http4s.{HttpApp as Http4sApp, HttpRoutes as Http4sRoutes}
 import org.http4s.server.Router
@@ -50,6 +51,7 @@ object HttpRoutes:
       listHeldEvents: ListHeldEvents[F],
       createHeldEvent: CreateHeldEvent[F],
       confirmMatch: ConfirmMatch[F],
+      exportMatches: ExportMatches[F],
       listMatches: ListMatches[F],
       getMatch: GetMatch[F],
       updateMatch: UpdateMatch[F],
@@ -140,6 +142,15 @@ object HttpRoutes:
             deps.createHeldEvent.run(CreateHeldEventCommand(request.heldAt))
           )(event => HeldEventResponse.from(event, 0))
         }
+      },
+      ExportEndpoints.matches.serverLogic {
+        case (format, seasonMasterId, heldEventId, matchId, devUser) => security
+            .authorizeRead(devUser) { _ =>
+              deps.exportMatches.run(format, seasonMasterId, heldEventId, matchId).map(
+                _.leftMap(toProblem)
+                  .map(file => (file.contentDisposition, file.contentType, file.body))
+              )
+            }
       },
       MatchesEndpoints.confirm.serverLogic { case (devUser, csrfToken, request) =>
         security.authorizeMutation(devUser, csrfToken) { member =>

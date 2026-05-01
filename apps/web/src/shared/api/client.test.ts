@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { apiRequest, getAuthMe } from "@/shared/api/client";
+import { apiDownload, apiRequest, getAuthMe } from "@/shared/api/client";
 
 function requireInit(init: RequestInit | undefined): RequestInit {
   if (!init) {
@@ -68,5 +68,51 @@ describe("apiRequest", () => {
     const init = requireInit(calls[0]?.[1]);
     const headers = init.headers as Headers;
     expect(headers.has("Content-Type")).toBe(false);
+  });
+
+  it("downloads non-JSON files with dev auth and filename metadata", async () => {
+    window.localStorage.setItem("momoresult.devUser", "ponta");
+    const fetchMock = vi.fn(
+      async () =>
+        new Response("a,b\n", {
+          headers: {
+            "Content-Type": "text/csv; charset=utf-8",
+            "Content-Disposition": 'attachment; filename="momo-results-all.csv"',
+          },
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await apiDownload("/api/exports/matches?format=csv");
+
+    const calls = fetchMock.mock.calls as unknown as Array<[RequestInfo | URL, RequestInit]>;
+    const init = requireInit(calls[0]?.[1]);
+    const headers = init.headers as Headers;
+    expect(headers.get("X-Dev-User")).toBe("ponta");
+    expect(result.fileName).toBe("momo-results-all.csv");
+    expect(result.contentType).toContain("text/csv");
+    await expect(result.blob.text()).resolves.toBe("a,b\n");
+  });
+
+  it("normalizes problem responses during file download", async () => {
+    const fetchMock = vi.fn(async () =>
+      Response.json(
+        {
+          type: "about:blank",
+          title: "Validation Failed",
+          status: 422,
+          detail: "format must be one of: csv, tsv.",
+          code: "VALIDATION_FAILED",
+        },
+        { status: 422 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(apiDownload("/api/exports/matches?format=x")).rejects.toMatchObject({
+      status: 422,
+      detail: "format must be one of: csv, tsv.",
+      code: "VALIDATION_FAILED",
+    });
   });
 });

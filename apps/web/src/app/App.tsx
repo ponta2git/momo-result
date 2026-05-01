@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import { ErrorBoundary } from "@/app/ErrorBoundary";
 import { queryClient } from "@/app/queryClient";
 import { DraftReviewPage } from "@/features/draftReview/DraftReviewPage";
+import { ExportPage } from "@/features/exports/ExportPage";
 import { MastersPage } from "@/features/masters/MastersPage";
 import { MatchDetailPage } from "@/features/matches/MatchDetailPage";
 import { MatchEditPage } from "@/features/matches/MatchEditPage";
@@ -14,6 +15,8 @@ export function App() {
   let page;
   if (location.pathname.startsWith("/review/")) {
     page = <DraftReviewPage />;
+  } else if (location.pathname.startsWith("/exports")) {
+    page = <ExportPage />;
   } else if (location.pathname.startsWith("/admin/masters")) {
     page = <MastersPage />;
   } else if (/^\/matches\/[^/]+\/edit$/.test(location.pathname)) {

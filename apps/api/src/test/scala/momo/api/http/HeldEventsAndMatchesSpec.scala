@@ -5,7 +5,7 @@ import io.circe.Json
 import java.nio.file.Files
 import momo.api.config.{AppConfig, AppEnv}
 import momo.api.MomoCatsEffectSuite
-import org.http4s.{Header, Method, Request, Status}
+import org.http4s.{Header, Method, Request, Status, Uri}
 import org.http4s.circe.*
 import org.http4s.implicits.*
 import org.typelevel.ci.CIString
@@ -186,5 +186,87 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite:
             .withEntity(confirmBody(id, 1))
         )
       yield assertEquals(second.status, Status.Conflict)
+    }
+  }
+
+  test("GET /api/exports/matches downloads CSV for confirmed matches") {
+    app.use { httpApp =>
+      for
+        id <- createEvent(httpApp)
+        create <- httpApp.run(
+          Request[IO](Method.POST, uri"/api/matches").putHeaders(authHeaders*)
+            .withEntity(confirmBody(id, 1))
+        )
+        _ = assertEquals(create.status, Status.Ok)
+        _ <- create.as[Json]
+        exportRes <- httpApp
+          .run(Request[IO](Method.GET, uri"/api/exports/matches?format=csv").putHeaders(readHeader))
+        body <- exportRes.as[String]
+      yield
+        assertEquals(exportRes.status, Status.Ok)
+        val disposition = exportRes.headers.get(CIString("Content-Disposition")).map(_.head.value)
+        assertEquals(disposition, Some("attachment; filename=\"momo-results-all.csv\""))
+        val contentType = exportRes.headers.get(CIString("Content-Type")).map(_.head.value)
+          .getOrElse("")
+        assert(contentType.contains("text/csv"), s"unexpected content type: $contentType")
+        val lines = body.split("\r\n", -1).toList
+        assertEquals(
+          lines.head,
+          "シーズン,シーズンNo.,オーナー,マップ,対戦日,対戦No.,プレー順,プレーヤー名,順位,総資産,収益,目的地,プラス駅,マイナス駅,カード駅,カード売り場,スリの銀次",
+        )
+        assertEquals(lines(1), "2024-spring,1,ponta,東日本編,2024-01-02,1,1,ponta,1,100,50,1,0,0,0,0,0")
+        assertEquals(lines.size, 6)
+    }
+  }
+
+  test("GET /api/exports/matches supports TSV and match scope") {
+    app.use { httpApp =>
+      for
+        id <- createEvent(httpApp)
+        create <- httpApp.run(
+          Request[IO](Method.POST, uri"/api/matches").putHeaders(authHeaders*)
+            .withEntity(confirmBody(id, 1))
+        )
+        createBody <- create.as[Json]
+        matchId = createBody.hcursor.get[String]("matchId").toOption.get
+        exportRes <- httpApp.run(
+          Request[IO](
+            Method.GET,
+            Uri.unsafeFromString(s"/api/exports/matches?format=tsv&matchId=$matchId"),
+          ).putHeaders(readHeader)
+        )
+        body <- exportRes.as[String]
+      yield
+        assertEquals(exportRes.status, Status.Ok)
+        assertEquals(
+          exportRes.headers.get(CIString("Content-Disposition")).map(_.head.value),
+          Some(s"""attachment; filename="momo-results-match-$matchId.tsv""""),
+        )
+        assert(body.linesIterator.next().contains("\t"), "TSV header should use tab delimiter")
+        assert(body.contains("2024-spring\t1\tponta\t東日本編"))
+    }
+  }
+
+  test("GET /api/exports/matches validates format and scope") {
+    app.use { httpApp =>
+      val invalidFormat = Request[IO](Method.GET, uri"/api/exports/matches?format=x")
+        .putHeaders(readHeader)
+      val multiScope =
+        Request[IO](Method.GET, uri"/api/exports/matches?format=csv&seasonMasterId=a&heldEventId=b")
+          .putHeaders(readHeader)
+      for
+        r1 <- httpApp.run(invalidFormat)
+        r2 <- httpApp.run(multiScope)
+      yield
+        assertEquals(r1.status, Status.UnprocessableContent)
+        assertEquals(r2.status, Status.UnprocessableContent)
+    }
+  }
+
+  test("GET /api/exports/matches returns 404 for unknown match scope") {
+    app.use { httpApp =>
+      val req = Request[IO](Method.GET, uri"/api/exports/matches?format=csv&matchId=missing")
+        .putHeaders(readHeader)
+      httpApp.run(req).map(res => assertEquals(res.status, Status.NotFound))
     }
   }

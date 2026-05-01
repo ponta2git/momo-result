@@ -104,6 +104,9 @@ export function MatchesListPage() {
     <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-8">
       <header className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-ink-50">確定済み試合一覧</h1>
+        <Link to="/exports">
+          <Button variant="secondary">CSV/TSV出力</Button>
+        </Link>
       </header>
       <Card>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -222,9 +225,7 @@ function MatchRow({
       <td>{gameTitleName ?? match.gameTitleId}</td>
       <td>{seasonName ?? match.seasonMasterId}</td>
       <td className="text-xs">
-        {ranked
-          .map((r, idx) => `${idx + 1}: ${memberName(r.memberId)}`)
-          .join(" / ")}
+        {ranked.map((r, idx) => `${idx + 1}: ${memberName(r.memberId)}`).join(" / ")}
       </td>
       <td className="text-xs text-ink-300">{formatDate(match.createdAt)}</td>
       <td>

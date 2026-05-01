@@ -104,11 +104,12 @@ export function MatchDetailPage() {
           <Link to="/matches" className="text-sm text-rail-gold hover:underline">
             ← 一覧へ
           </Link>
-          <h1 className="text-2xl font-bold text-ink-50">
-            試合詳細 #{m.matchNoInEvent}
-          </h1>
+          <h1 className="text-2xl font-bold text-ink-50">試合詳細 #{m.matchNoInEvent}</h1>
         </div>
         <div className="flex gap-2">
+          <Link to={`/exports?matchId=${encodeURIComponent(m.matchId)}`}>
+            <Button variant="secondary">この試合を出力</Button>
+          </Link>
           <Link to={`/matches/${encodeURIComponent(m.matchId)}/edit`}>
             <Button>編集</Button>
           </Link>
@@ -188,9 +189,7 @@ export function MatchDetailPage() {
                   <td className="text-right tabular-nums">
                     {p.totalAssetsManYen.toLocaleString()}
                   </td>
-                  <td className="text-right tabular-nums">
-                    {p.revenueManYen.toLocaleString()}
-                  </td>
+                  <td className="text-right tabular-nums">{p.revenueManYen.toLocaleString()}</td>
                   {incidentColumns.map(([key]) => (
                     <td key={key} className="text-right tabular-nums">
                       {p.incidents[key]}

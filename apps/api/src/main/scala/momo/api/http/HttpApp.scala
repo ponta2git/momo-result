@@ -28,8 +28,8 @@ import momo.api.repositories.postgres.{
 }
 import momo.api.usecases.{
   CancelOcrJob, ConfirmMatch, CreateGameTitle, CreateHeldEvent, CreateMapMaster, CreateOcrJob,
-  CreateSeasonMaster, DeleteMatch, GetMatch, GetOcrDraft, GetOcrDraftsBulk, GetOcrJob,
-  ListHeldEvents, ListMatches, UpdateMatch, UploadImage,
+  CreateSeasonMaster, DeleteMatch, ExportMatches, GetMatch, GetOcrDraft, GetOcrDraftsBulk,
+  GetOcrJob, ListHeldEvents, ListMatches, UpdateMatch, UploadImage,
 }
 import org.http4s.HttpApp as Http4sApp
 
@@ -165,6 +165,7 @@ object HttpApp:
       allowedMemberIds = config.devMemberIds.toSet,
     )
     val listMatches = ListMatches[F](matches)
+    val exportMatches = ExportMatches[F](matches, members, mapMasters, seasonMasters)
     val getMatch = GetMatch[F](matches)
     val updateMatch = UpdateMatch[F](
       heldEvents = heldEvents,
@@ -193,6 +194,7 @@ object HttpApp:
         listHeldEvents = listHeldEvents,
         createHeldEvent = createHeldEvent,
         confirmMatch = confirmMatch,
+        exportMatches = exportMatches,
         listMatches = listMatches,
         getMatch = getMatch,
         updateMatch = updateMatch,

@@ -12,6 +12,12 @@ type ApiRequestOptions = {
   signal?: AbortSignal;
 };
 
+export type ApiDownloadResult = {
+  blob: Blob;
+  fileName: string;
+  contentType: string;
+};
+
 const mutatingMethods = new Set<HttpMethod>(["POST", "PUT", "PATCH", "DELETE"]);
 let csrfToken: string | undefined;
 
@@ -88,6 +94,50 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
   } catch (error) {
     throw normalizeUnknownApiError(error);
   }
+}
+
+export async function apiDownload(
+  path: string,
+  options: Pick<ApiRequestOptions, "headers" | "signal"> = {},
+): Promise<ApiDownloadResult> {
+  const headers = buildHeaders("GET", options);
+
+  try {
+    const init: RequestInit = {
+      method: "GET",
+      headers,
+      credentials: "include",
+    };
+    if (options.signal !== undefined) {
+      init.signal = options.signal;
+    }
+    const response = await fetch(path, init);
+
+    if (!response.ok) {
+      throw await normalizeApiErrorResponse(response);
+    }
+
+    const blob = await response.blob();
+    return {
+      blob,
+      fileName: fileNameFromDisposition(response.headers.get("Content-Disposition")),
+      contentType: response.headers.get("Content-Type") ?? blob.type,
+    };
+  } catch (error) {
+    throw normalizeUnknownApiError(error);
+  }
+}
+
+function fileNameFromDisposition(disposition: string | null): string {
+  if (!disposition) {
+    return "momo-results.csv";
+  }
+  const quoted = /filename="([^"]+)"/.exec(disposition);
+  if (quoted?.[1]) {
+    return quoted[1];
+  }
+  const plain = /filename=([^;]+)/.exec(disposition);
+  return plain?.[1]?.trim() || "momo-results.csv";
 }
 
 export type AuthMeResponse = components["schemas"]["AuthMeResponse"];

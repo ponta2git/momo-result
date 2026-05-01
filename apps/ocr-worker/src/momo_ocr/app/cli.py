@@ -8,7 +8,7 @@ import threading
 from collections.abc import Sequence
 from pathlib import Path
 
-from momo_ocr.app.composition import production_job_runner_dependencies
+from momo_ocr.app.composition import production_worker_runtime
 from momo_ocr.app.config import load_worker_config
 from momo_ocr.app.worker_process import WorkerLoopConfig, run_worker_process
 from momo_ocr.features.standalone_analysis.analyze_image import analyze_image
@@ -138,18 +138,16 @@ def _run_worker(args: argparse.Namespace) -> int:
     signal.signal(signal.SIGINT, request_shutdown)
 
     config = load_worker_config()
-    deps = production_job_runner_dependencies(config)
+    runtime = production_worker_runtime(config)
     loop_config = (
         WorkerLoopConfig(idle_sleep_seconds=args.idle_sleep_seconds)
         if args.idle_sleep_seconds is not None
         else None
     )
     try:
-        run_worker_process(deps, shutdown_event=shutdown_event, config=loop_config)
+        run_worker_process(runtime.deps, shutdown_event=shutdown_event, config=loop_config)
     finally:
-        close = getattr(deps.consumer, "close", None)
-        if callable(close):
-            close()
+        runtime.close()
     return 0
 
 

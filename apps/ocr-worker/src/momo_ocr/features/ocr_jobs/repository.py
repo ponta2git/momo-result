@@ -7,6 +7,7 @@ from typing import Protocol
 
 import psycopg
 from psycopg.rows import TupleRow
+from psycopg_pool import ConnectionPool
 
 from momo_ocr.features.ocr_domain.models import ScreenType
 from momo_ocr.features.ocr_jobs.lifecycle import ensure_transition_allowed
@@ -129,11 +130,20 @@ class InMemoryOcrJobRepository:
 
 
 class PostgresOcrJobRepository:
-    def __init__(self, conninfo: str) -> None:
-        self._conninfo = conninfo
+    """Postgres adapter that serves every call from a shared connection pool.
+
+    The pool is owned by the caller (typically the worker composition root)
+    so multiple repositories / writers can share a single set of warm
+    connections. We never open a connection per call: that pattern caused
+    one TLS+auth round-trip per state transition (≈6 per job) which is
+    expensive against Neon and unfriendly to its connection cap.
+    """
+
+    def __init__(self, pool: ConnectionPool) -> None:
+        self._pool = pool
 
     def get_for_update(self, job_id: str) -> OcrJobRecord | None:
-        with self._connect() as conn, conn.transaction():
+        with self._pool.connection() as conn, conn.transaction():
             row = conn.execute(
                 _SELECT_JOB_FOR_UPDATE,
                 (job_id,),
@@ -141,7 +151,7 @@ class PostgresOcrJobRepository:
             return _row_to_record(row)
 
     def transition_to_running(self, job_id: str, *, worker_id: str) -> None:
-        with self._connect() as conn, conn.transaction():
+        with self._pool.connection() as conn, conn.transaction():
             updated = conn.execute(
                 """
                 UPDATE ocr_jobs SET
@@ -182,7 +192,7 @@ class PostgresOcrJobRepository:
         self._terminal_transition(job_id, result, expected=result.status)
 
     def get_status(self, job_id: str) -> OcrJobStatus | None:
-        with self._connect() as conn:
+        with self._pool.connection() as conn:
             return _select_status(conn, job_id)
 
     def _terminal_transition(
@@ -199,7 +209,7 @@ class PostgresOcrJobRepository:
             else None
         )
         failure = result.failure
-        with self._connect() as conn, conn.transaction():
+        with self._pool.connection() as conn, conn.transaction():
             current = _select_status(conn, job_id)
             if current is None:
                 raise OcrError(
@@ -239,9 +249,6 @@ class PostgresOcrJobRepository:
                     f"OCR job {job_id} terminal transition did not update exactly one row.",
                     retryable=True,
                 )
-
-    def _connect(self) -> psycopg.Connection[TupleRow]:
-        return psycopg.connect(self._conninfo)
 
 
 def _select_status(conn: psycopg.Connection[TupleRow], job_id: str) -> OcrJobStatus | None:

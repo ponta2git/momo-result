@@ -5,6 +5,7 @@ from pathlib import Path
 import psycopg
 import pytest
 from psycopg.types.json import Jsonb
+from psycopg_pool import ConnectionPool
 from redis import Redis
 from redis.typing import EncodableT
 from testcontainers.postgres import PostgresContainer  # type: ignore[import-untyped]
@@ -68,18 +69,20 @@ def test_redis_to_worker_to_postgres_smoke() -> None:
             consumer_name="worker-it",
             block_ms=100,
         )
-        repository = PostgresOcrJobRepository(conninfo)
-        deps = JobRunnerDependencies(
-            consumer=consumer,
-            repository=repository,
-            result_writer=PostgresOcrResultWriter(conninfo),
-            cancellation=RepositoryCancellationChecker(repository),
-            worker_id="worker-it",
-            analyze=_fake_success_analysis,
-            delete_image=lambda _path: True,
-        )
+        repository: PostgresOcrJobRepository
+        with ConnectionPool(conninfo, min_size=1, max_size=2, open=True) as pool:
+            repository = PostgresOcrJobRepository(pool)
+            deps = JobRunnerDependencies(
+                consumer=consumer,
+                repository=repository,
+                result_writer=PostgresOcrResultWriter(pool),
+                cancellation=RepositoryCancellationChecker(repository),
+                worker_id="worker-it",
+                analyze=_fake_success_analysis,
+                delete_image=lambda _path: True,
+            )
 
-        outcome = run_one_job(deps)
+            outcome = run_one_job(deps)
 
         assert outcome.status is OcrJobStatus.SUCCEEDED
         with psycopg.connect(conninfo) as conn:

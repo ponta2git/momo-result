@@ -6,6 +6,7 @@ from contextlib import contextmanager
 import psycopg
 import pytest
 from psycopg.types.json import Jsonb
+from psycopg_pool import ConnectionPool
 from testcontainers.postgres import PostgresContainer  # type: ignore[import-untyped]
 
 from momo_ocr.features.ocr_domain.models import OcrDraftPayload, ScreenType
@@ -21,27 +22,28 @@ def test_postgres_repository_transitions_job_lifecycle() -> None:
     with _postgres_conninfo() as conninfo:
         _create_schema(conninfo)
         _insert_job(conninfo, job_id="job-1", draft_id="draft-1")
-        repository = PostgresOcrJobRepository(conninfo)
+        with ConnectionPool(conninfo, min_size=1, max_size=2, open=True) as pool:
+            repository = PostgresOcrJobRepository(pool)
 
-        record = repository.get_for_update("job-1")
-        assert record is not None
-        assert record.status is OcrJobStatus.QUEUED
+            record = repository.get_for_update("job-1")
+            assert record is not None
+            assert record.status is OcrJobStatus.QUEUED
 
-        repository.transition_to_running("job-1", worker_id="worker-it")
-        repository.complete(
-            "job-1",
-            OcrJobExecutionResult(
-                status=OcrJobStatus.SUCCEEDED,
-                draft_payload=OcrDraftPayload(
-                    requested_screen_type=ScreenType.TOTAL_ASSETS,
-                    detected_screen_type=ScreenType.TOTAL_ASSETS,
-                    profile_id="total-assets-test",
+            repository.transition_to_running("job-1", worker_id="worker-it")
+            repository.complete(
+                "job-1",
+                OcrJobExecutionResult(
+                    status=OcrJobStatus.SUCCEEDED,
+                    draft_payload=OcrDraftPayload(
+                        requested_screen_type=ScreenType.TOTAL_ASSETS,
+                        detected_screen_type=ScreenType.TOTAL_ASSETS,
+                        profile_id="total-assets-test",
+                    ),
+                    failure=None,
+                    warnings=[],
+                    duration_ms=12.4,
                 ),
-                failure=None,
-                warnings=[],
-                duration_ms=12.4,
-            ),
-        )
+            )
 
         with psycopg.connect(conninfo) as conn:
             row = conn.execute(
@@ -57,34 +59,35 @@ def test_postgres_result_writer_upserts_one_draft_per_job() -> None:
     with _postgres_conninfo() as conninfo:
         _create_schema(conninfo)
         _insert_job(conninfo, job_id="job-1", draft_id="draft-1")
-        writer = PostgresOcrResultWriter(conninfo)
+        with ConnectionPool(conninfo, min_size=1, max_size=2, open=True) as pool:
+            writer = PostgresOcrResultWriter(pool)
 
-        writer.persist(
-            OcrResultRecord(
-                job_id="job-1",
-                draft_id="draft-1",
-                payload=OcrDraftPayload(
-                    requested_screen_type=ScreenType.REVENUE,
-                    detected_screen_type=ScreenType.REVENUE,
-                    profile_id="revenue-test",
-                ),
-                warnings=(),
-                timings_ms={"total": 8.0},
+            writer.persist(
+                OcrResultRecord(
+                    job_id="job-1",
+                    draft_id="draft-1",
+                    payload=OcrDraftPayload(
+                        requested_screen_type=ScreenType.REVENUE,
+                        detected_screen_type=ScreenType.REVENUE,
+                        profile_id="revenue-test",
+                    ),
+                    warnings=(),
+                    timings_ms={"total": 8.0},
+                )
             )
-        )
-        writer.persist(
-            OcrResultRecord(
-                job_id="job-1",
-                draft_id="draft-1",
-                payload=OcrDraftPayload(
-                    requested_screen_type=ScreenType.REVENUE,
-                    detected_screen_type=ScreenType.REVENUE,
-                    profile_id="revenue-test-2",
-                ),
-                warnings=(),
-                timings_ms={"total": 9.0},
+            writer.persist(
+                OcrResultRecord(
+                    job_id="job-1",
+                    draft_id="draft-1",
+                    payload=OcrDraftPayload(
+                        requested_screen_type=ScreenType.REVENUE,
+                        detected_screen_type=ScreenType.REVENUE,
+                        profile_id="revenue-test-2",
+                    ),
+                    warnings=(),
+                    timings_ms={"total": 9.0},
+                )
             )
-        )
 
         with psycopg.connect(conninfo) as conn:
             row = conn.execute(

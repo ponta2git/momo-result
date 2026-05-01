@@ -4,9 +4,8 @@ from dataclasses import dataclass, field
 from threading import Lock
 from typing import Protocol
 
-import psycopg
-from psycopg.rows import TupleRow
 from psycopg.types.json import Jsonb
+from psycopg_pool import ConnectionPool
 
 from momo_ocr.features.ocr_domain.models import OcrDraftPayload, OcrWarning
 from momo_ocr.shared.json import to_jsonable
@@ -50,8 +49,10 @@ class InMemoryOcrResultWriter:
 
 
 class PostgresOcrResultWriter:
-    def __init__(self, conninfo: str) -> None:
-        self._conninfo = conninfo
+    """Pool-backed adapter; the pool is owned by the composition root."""
+
+    def __init__(self, pool: ConnectionPool) -> None:
+        self._pool = pool
 
     def persist(self, record: OcrResultRecord) -> None:
         detected_screen_type = (
@@ -59,7 +60,7 @@ class PostgresOcrResultWriter:
             if record.payload.detected_screen_type is not None
             else None
         )
-        with self._connect() as conn, conn.transaction():
+        with self._pool.connection() as conn, conn.transaction():
             conn.execute(
                 """
                 INSERT INTO ocr_drafts (
@@ -94,6 +95,3 @@ class PostgresOcrResultWriter:
                     Jsonb(to_jsonable(record.timings_ms)),
                 ),
             )
-
-    def _connect(self) -> psycopg.Connection[TupleRow]:
-        return psycopg.connect(self._conninfo)

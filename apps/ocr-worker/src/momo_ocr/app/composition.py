@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+from psycopg_pool import ConnectionPool
 
 from momo_ocr.app.config import WorkerConfig, require_production_config
 from momo_ocr.features.incident_log.parser import IncidentLogParser
@@ -67,38 +70,82 @@ def redis_consumer_from_config(config: WorkerConfig) -> RedisOcrJobConsumer:
     return RedisOcrJobConsumer.from_config(config)
 
 
-def postgres_repository_from_config(config: WorkerConfig) -> PostgresOcrJobRepository:
+# Pool sizing: a single worker process serializes job processing, so 1 active
+# connection covers steady-state. `max_size=2` leaves headroom for the
+# cancellation poll path that may fire concurrently with the runner. Neon's
+# pooler handles further multiplexing on the server side, so keeping our
+# client pool small is a feature, not a limitation.
+_POOL_MIN_SIZE = 1
+_POOL_MAX_SIZE = 2
+# Neon scales compute to zero when idle. Closing idle conns aggressively
+# avoids "stale connection" surprises on cold-start without paying TLS
+# handshake cost on every job.
+_POOL_MAX_IDLE_SECONDS = 60.0
+
+
+def production_pool_from_config(config: WorkerConfig) -> ConnectionPool:
     if config.database_url is None:
-        msg = "OCR_DATABASE_URL or DATABASE_URL is required for the Postgres OCR repository."
+        msg = "OCR_DATABASE_URL or DATABASE_URL is required for the Postgres connection pool."
         raise ValueError(msg)
-    return PostgresOcrJobRepository(_with_sslmode_require(config.database_url))
+    conninfo = _with_sslmode_require(config.database_url)
+    return ConnectionPool(
+        conninfo,
+        min_size=_POOL_MIN_SIZE,
+        max_size=_POOL_MAX_SIZE,
+        max_idle=_POOL_MAX_IDLE_SECONDS,
+        # Open eagerly so a misconfigured DSN fails fast at startup, not on
+        # the first delivered job.
+        open=True,
+    )
 
 
-def postgres_writer_from_config(config: WorkerConfig) -> PostgresOcrResultWriter:
-    if config.database_url is None:
-        msg = "OCR_DATABASE_URL or DATABASE_URL is required for the Postgres OCR result writer."
-        raise ValueError(msg)
-    return PostgresOcrResultWriter(_with_sslmode_require(config.database_url))
+@dataclass(frozen=True)
+class WorkerRuntime:
+    """Process-wide resources backing one worker run.
+
+    Owns the lifecycle of pool + consumer; `close()` is idempotent and
+    safe to call from a `finally` block. The pool is shared between
+    repository and writer so a job uses a single warm connection across
+    its 5–6 state transitions instead of opening one per call.
+    """
+
+    deps: JobRunnerDependencies
+    pool: ConnectionPool
+
+    def close(self) -> None:
+        consumer_close = getattr(self.deps.consumer, "close", None)
+        if callable(consumer_close):
+            consumer_close()
+        self.pool.close()
 
 
-def production_job_runner_dependencies(config: WorkerConfig) -> JobRunnerDependencies:
+def production_worker_runtime(config: WorkerConfig) -> WorkerRuntime:
     from momo_ocr.features.ocr_jobs.runner import JobRunnerDependencies  # noqa: PLC0415
 
     require_production_config(config)
-    consumer = redis_consumer_from_config(config)
-    repository = postgres_repository_from_config(config)
-    # Construct one TesseractEngine for the entire worker process so we
-    # pay shutil.which() and field-config setup exactly once. The runner
-    # then re-uses this instance for every job.
-    text_engine = default_text_recognition_engine()
-    return JobRunnerDependencies(
-        consumer=consumer,
-        repository=repository,
-        result_writer=postgres_writer_from_config(config),
-        cancellation=RepositoryCancellationChecker(repository),
-        worker_id=config.worker_id,
-        text_engine=text_engine,
-    )
+    pool = production_pool_from_config(config)
+    try:
+        consumer = redis_consumer_from_config(config)
+        repository = PostgresOcrJobRepository(pool)
+        writer = PostgresOcrResultWriter(pool)
+        # Construct one TesseractEngine for the entire worker process so we
+        # pay shutil.which() and field-config setup exactly once. The runner
+        # then re-uses this instance for every job.
+        text_engine = default_text_recognition_engine()
+        deps = JobRunnerDependencies(
+            consumer=consumer,
+            repository=repository,
+            result_writer=writer,
+            cancellation=RepositoryCancellationChecker(repository),
+            worker_id=config.worker_id,
+            text_engine=text_engine,
+        )
+    except BaseException:
+        # If anything between pool creation and runtime assembly fails we
+        # must release the eagerly-opened pool so the process exits cleanly.
+        pool.close()
+        raise
+    return WorkerRuntime(deps=deps, pool=pool)
 
 
 def _with_sslmode_require(database_url: str) -> str:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -24,6 +25,9 @@ from momo_ocr.shared.errors import FailureCode, OcrError
 
 if TYPE_CHECKING:
     from momo_ocr.features.ocr_jobs.runner import JobRunnerDependencies
+
+
+logger = logging.getLogger(__name__)
 
 
 def default_parser_registry() -> ParserRegistry:
@@ -103,19 +107,35 @@ def production_pool_from_config(config: WorkerConfig) -> ConnectionPool:
 class WorkerRuntime:
     """Process-wide resources backing one worker run.
 
-    Owns the lifecycle of pool + consumer; `close()` is idempotent and
-    safe to call from a `finally` block. The pool is shared between
-    repository and writer so a job uses a single warm connection across
-    its 5–6 state transitions instead of opening one per call.
+    Owns the lifecycle of pool + consumer + text engine; `close()` is
+    idempotent and safe to call from a `finally` block. The pool is
+    shared between repository and writer so a job uses a single warm
+    connection across its 5–6 state transitions instead of opening one
+    per call. The text engine caches PyTessBaseAPI handles and must be
+    `End()`-ed at shutdown to release Tesseract's native resources
+    deterministically (otherwise we leak them until interpreter exit).
     """
 
     deps: JobRunnerDependencies
     pool: ConnectionPool
 
     def close(self) -> None:
-        consumer_close = getattr(self.deps.consumer, "close", None)
-        if callable(consumer_close):
-            consumer_close()
+        # Close in reverse order of acquisition: text engine (per-process
+        # native handles) → consumer (Redis socket) → DB pool. Each step
+        # is wrapped so a failure in one resource still releases the
+        # others; otherwise a flaky shutdown could leak Postgres
+        # connections that count against Neon's tenant cap.
+        for closeable in (self.deps.text_engine, self.deps.consumer):
+            close_fn = getattr(closeable, "close", None)
+            if not callable(close_fn):
+                continue
+            try:
+                close_fn()
+            except Exception:
+                logger.exception(
+                    "Failed to close worker resource cleanly; continuing shutdown.",
+                    extra={"resource": type(closeable).__name__},
+                )
         self.pool.close()
 
 

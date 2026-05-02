@@ -3,6 +3,8 @@
 @theme {
   --font-sans: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif;
   --font-display: "Dela Gothic One", "Zen Kaku Gothic New", sans-serif;
+  --font-momo-ui: "Noto Sans JP", "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --font-momo-heading: "M PLUS Rounded 1c", "Noto Sans JP", "Zen Kaku Gothic New", sans-serif;
   --color-night-950: #070b11;
   --color-night-900: #0b1320;
   --color-night-800: #121c2b;
@@ -25,6 +27,50 @@
   --shadow-momo-float: 0 18px 60px rgb(0 0 0 / 0.28);
   --spacing-momo-page-x: 1rem;
   --spacing-momo-page-y: 2rem;
+
+  --momo-mist-50: #f5f8f7;
+  --momo-white: #ffffff;
+  --momo-board-100: #eaf3f5;
+  --momo-board-200: #d7e8ec;
+  --momo-ink-900: #20252b;
+  --momo-ink-700: #3a424c;
+  --momo-ink-500: #59616b;
+  --momo-ink-300: #8a949e;
+  --momo-line: rgb(32 37 43 / 0.12);
+  --momo-line-strong: rgb(32 37 43 / 0.22);
+  --momo-station-blue: #2676b8;
+  --momo-route-green: #4da66d;
+  --momo-ticket-yellow: #f2c94c;
+  --momo-alert-orange: #e36b2c;
+  --momo-danger-red: #d64545;
+  --momo-night-900: #172033;
+
+  --color-canvas: var(--momo-mist-50);
+  --color-surface: var(--momo-white);
+  --color-surface-subtle: var(--momo-board-100);
+  --color-surface-selected: var(--momo-board-200);
+  --color-text-primary: var(--momo-ink-900);
+  --color-text-secondary: var(--momo-ink-500);
+  --color-text-muted: var(--momo-ink-300);
+  --color-border: var(--momo-line);
+  --color-border-strong: var(--momo-line-strong);
+  --color-action: var(--momo-station-blue);
+  --color-success: var(--momo-route-green);
+  --color-warning: var(--momo-ticket-yellow);
+  --color-review: var(--momo-alert-orange);
+  --color-danger: var(--momo-danger-red);
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  --z-base: 0;
+  --z-sticky: 20;
+  --z-dropdown: 40;
+  --z-toast: 60;
+  --z-dialog: 80;
+  --z-tooltip: 90;
 }
 
 html {
@@ -116,4 +162,34 @@ select {
 
 @utility momo-numeric {
   font-variant-numeric: tabular-nums;
+}
+
+@utility momo-ui-surface {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+}
+
+@utility momo-ui-control {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+@utility momo-safe-top {
+  top: max(env(safe-area-inset-top), 0px);
+}
+
+@utility momo-safe-right {
+  right: max(env(safe-area-inset-right), 0px);
+}
+
+@utility momo-safe-bottom {
+  bottom: max(env(safe-area-inset-bottom), 0px);
 }

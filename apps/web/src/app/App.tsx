@@ -10,6 +10,8 @@ import { MatchDetailPage } from "@/features/matches/MatchDetailPage";
 import { MatchEditPage } from "@/features/matches/MatchEditPage";
 import { MatchesListPage } from "@/features/matches/MatchesListPage";
 import { OcrCapturePage } from "@/features/ocrCapture/OcrCapturePage";
+import { DialogHost } from "@/shared/ui/feedback/DialogHost";
+import { ToastHost } from "@/shared/ui/feedback/ToastHost";
 
 export function App() {
   const location = useLocation();
@@ -32,7 +34,10 @@ export function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ErrorBoundary>{page}</ErrorBoundary>
+      <DialogHost>
+        <ErrorBoundary>{page}</ErrorBoundary>
+        <ToastHost />
+      </DialogHost>
     </QueryClientProvider>
   );
 }

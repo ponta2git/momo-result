@@ -27,6 +27,7 @@ final case class CreateOcrJobRequest(
     imageId: String,
     requestedImageType: String,
     ocrHints: Option[OcrJobHints] = None,
+    matchDraftId: Option[String] = None,
 ) derives Codec.AsObject
 
 final case class CreateOcrJobResponse(jobId: String, draftId: String, status: String)

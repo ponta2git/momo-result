@@ -8,14 +8,17 @@ import momo.api.domain.{MatchRecord, PlayerResult}
 import momo.api.domain.ids.{MemberId, *}
 import momo.api.errors.AppError
 import momo.api.repositories.{
-  GameTitlesRepository, HeldEventsRepository, MapMastersRepository, MatchesRepository,
-  SeasonMastersRepository,
+  GameTitlesRepository, HeldEventsRepository, MapMastersRepository, MatchConfirmationRepository,
+  MatchDraftsRepository, MatchesRepository, SeasonMastersRepository,
 }
 import scala.util.Try
 
 final class ConfirmMatch[F[_]: MonadThrow](
     heldEvents: HeldEventsRepository[F],
     matches: MatchesRepository[F],
+    matchDrafts: MatchDraftsRepository[F],
+    confirmations: MatchConfirmationRepository[F],
+    sourceImageRetention: SourceImageRetentionService[F],
     gameTitles: GameTitlesRepository[F],
     mapMasters: MapMastersRepository[F],
     seasonMasters: SeasonMastersRepository[F],
@@ -75,7 +78,21 @@ final class ConfirmMatch[F[_]: MonadThrow](
     id <- EitherT.liftF(nextId)
     createdAt <- EitherT.liftF(now)
     record = toMatchRecord(id, createdAt, playedAt, title.layoutFamily, createdBy.value, command)
-    _ <- EitherT.liftF(matches.create(record))
+    maybeDraft <- command.matchDraftId match
+      case None => EitherT.rightT[F, AppError](Option.empty[momo.api.domain.MatchDraft])
+      case Some(draftId) => EitherT(
+          matchDrafts.find(draftId).map(_.toRight(AppError.NotFound("match draft", draftId)))
+        ).flatMap { draft =>
+          EitherT.fromEither[F](validateDraftForConfirm(draft, command.draftRefs))
+            .map(_ => Some(draft))
+        }
+    saved <- EitherT.liftF(confirmations.confirm(record, maybeDraft.map(_.id), createdAt))
+    _ <- EitherT.fromEither[F](
+      Either.cond(saved, (), AppError.Conflict("Failed to confirm match from the draft."))
+    )
+    _ <- maybeDraft match
+      case None => EitherT.rightT[F, AppError](())
+      case Some(draft) => EitherT.liftF(sourceImageRetention.markForCleanup(draft.id, createdAt))
   yield record).value
 
 object ConfirmMatch:
@@ -93,6 +110,7 @@ object ConfirmMatch:
       ownerMemberId: String,
       mapMasterId: String,
       playedAt: String,
+      matchDraftId: Option[String],
       draftRefs: DraftRefs,
       players: List[PlayerResult],
   )
@@ -121,3 +139,26 @@ object ConfirmMatch:
     createdByMemberId = createdByMemberId,
     createdAt = createdAt,
   )
+
+  private def validateDraftForConfirm(
+      draft: momo.api.domain.MatchDraft,
+      draftRefs: DraftRefs,
+  ): Either[AppError, Unit] =
+    val allowedStatuses = Set(
+      momo.api.domain.MatchDraftStatus.DraftReady,
+      momo.api.domain.MatchDraftStatus.NeedsReview,
+      momo.api.domain.MatchDraftStatus.OcrFailed,
+    )
+    if !allowedStatuses.contains(draft.status) then
+      Left(AppError.Conflict(s"match draft in status=${draft.status.wire} cannot be confirmed."))
+    else if draft.totalAssetsDraftId != draftRefs.totalAssets then
+      Left(
+        AppError.ValidationFailed("draftIds.totalAssets does not match the match draft snapshot.")
+      )
+    else if draft.revenueDraftId != draftRefs.revenue then
+      Left(AppError.ValidationFailed("draftIds.revenue does not match the match draft snapshot."))
+    else if draft.incidentLogDraftId != draftRefs.incidentLog then
+      Left(
+        AppError.ValidationFailed("draftIds.incidentLog does not match the match draft snapshot.")
+      )
+    else Right(())

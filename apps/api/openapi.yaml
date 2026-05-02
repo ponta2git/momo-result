@@ -774,6 +774,325 @@
         }
       }
     },
+    "/api/match-drafts" : {
+      "post" : {
+        "tags" : [
+          "match-drafts"
+        ],
+        "operationId" : "postApiMatch-drafts",
+        "parameters" : [
+          {
+            "name" : "X-Dev-User",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateMatchDraftRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MatchDraftResponse"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: body",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/match-drafts/{draftId}" : {
+      "patch" : {
+        "tags" : [
+          "match-drafts"
+        ],
+        "operationId" : "patchApiMatch-draftsDraftid",
+        "parameters" : [
+          {
+            "name" : "draftId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-Dev-User",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateMatchDraftRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MatchDraftResponse"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: body",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/match-drafts/{draftId}/cancel" : {
+      "post" : {
+        "tags" : [
+          "match-drafts"
+        ],
+        "operationId" : "postApiMatch-draftsDraftidCancel",
+        "parameters" : [
+          {
+            "name" : "draftId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-Dev-User",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CancelMatchDraftResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/match-drafts/{draftId}/source-images" : {
+      "get" : {
+        "tags" : [
+          "match-drafts"
+        ],
+        "operationId" : "getApiMatch-draftsDraftidSource-images",
+        "parameters" : [
+          {
+            "name" : "draftId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-Dev-User",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MatchDraftSourceImageListResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/match-drafts/{draftId}/source-images/{kind}" : {
+      "get" : {
+        "tags" : [
+          "match-drafts"
+        ],
+        "operationId" : "getApiMatch-draftsDraftidSource-imagesKind",
+        "parameters" : [
+          {
+            "name" : "draftId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "kind",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-Dev-User",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "headers" : {
+              "Cache-Control" : {
+                "required" : true,
+                "schema" : {
+                  "type" : "string"
+                }
+              },
+              "X-Content-Type-Options" : {
+                "required" : true,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "content" : {
+              "application/octet-stream" : {
+                "schema" : {
+                  "type" : "string",
+                  "format" : "binary"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/matches" : {
       "get" : {
         "tags" : [
@@ -799,6 +1118,22 @@
           },
           {
             "name" : "seasonMasterId",
+            "in" : "query",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "status",
+            "in" : "query",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "kind",
             "in" : "query",
             "required" : false,
             "schema" : {
@@ -1495,6 +1830,22 @@
           }
         }
       },
+      "CancelMatchDraftResponse" : {
+        "title" : "CancelMatchDraftResponse",
+        "type" : "object",
+        "required" : [
+          "matchDraftId",
+          "status"
+        ],
+        "properties" : {
+          "matchDraftId" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        }
+      },
       "CancelOcrJobResponse" : {
         "title" : "CancelOcrJobResponse",
         "type" : "object",
@@ -1540,6 +1891,9 @@
           "draftIds"
         ],
         "properties" : {
+          "matchDraftId" : {
+            "type" : "string"
+          },
           "heldEventId" : {
             "type" : "string"
           },
@@ -1650,6 +2004,40 @@
           }
         }
       },
+      "CreateMatchDraftRequest" : {
+        "title" : "CreateMatchDraftRequest",
+        "type" : "object",
+        "properties" : {
+          "heldEventId" : {
+            "type" : "string"
+          },
+          "matchNoInEvent" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "gameTitleId" : {
+            "type" : "string"
+          },
+          "layoutFamily" : {
+            "type" : "string"
+          },
+          "seasonMasterId" : {
+            "type" : "string"
+          },
+          "ownerMemberId" : {
+            "type" : "string"
+          },
+          "mapMasterId" : {
+            "type" : "string"
+          },
+          "playedAt" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        }
+      },
       "CreateOcrJobRequest" : {
         "title" : "CreateOcrJobRequest",
         "type" : "object",
@@ -1666,6 +2054,9 @@
           },
           "ocrHints" : {
             "$ref" : "#/components/schemas/OcrJobHints"
+          },
+          "matchDraftId" : {
+            "type" : "string"
           }
         }
       },
@@ -2033,6 +2424,65 @@
           }
         }
       },
+      "MatchDraftResponse" : {
+        "title" : "MatchDraftResponse",
+        "type" : "object",
+        "required" : [
+          "matchDraftId",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties" : {
+          "matchDraftId" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "createdAt" : {
+            "type" : "string"
+          },
+          "updatedAt" : {
+            "type" : "string"
+          }
+        }
+      },
+      "MatchDraftSourceImageListResponse" : {
+        "title" : "MatchDraftSourceImageListResponse",
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/MatchDraftSourceImageResponse"
+            }
+          }
+        }
+      },
+      "MatchDraftSourceImageResponse" : {
+        "title" : "MatchDraftSourceImageResponse",
+        "type" : "object",
+        "required" : [
+          "kind",
+          "createdAt",
+          "imageUrl"
+        ],
+        "properties" : {
+          "kind" : {
+            "type" : "string"
+          },
+          "contentType" : {
+            "type" : "string"
+          },
+          "createdAt" : {
+            "type" : "string"
+          },
+          "imageUrl" : {
+            "type" : "string"
+          }
+        }
+      },
       "MatchListResponse" : {
         "title" : "MatchListResponse",
         "type" : "object",
@@ -2071,18 +2521,26 @@
         "title" : "MatchSummaryResponse",
         "type" : "object",
         "required" : [
-          "matchId",
-          "heldEventId",
-          "matchNoInEvent",
-          "gameTitleId",
-          "seasonMasterId",
-          "mapMasterId",
-          "ownerMemberId",
-          "playedAt",
-          "createdAt"
+          "kind",
+          "id",
+          "status",
+          "createdAt",
+          "updatedAt"
         ],
         "properties" : {
+          "kind" : {
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "string"
+          },
           "matchId" : {
+            "type" : "string"
+          },
+          "matchDraftId" : {
+            "type" : "string"
+          },
+          "status" : {
             "type" : "string"
           },
           "heldEventId" : {
@@ -2108,6 +2566,9 @@
             "type" : "string"
           },
           "createdAt" : {
+            "type" : "string"
+          },
+          "updatedAt" : {
             "type" : "string"
           },
           "ranks" : {
@@ -2430,6 +2891,40 @@
             "format" : "int32"
           },
           "createdAt" : {
+            "type" : "string"
+          }
+        }
+      },
+      "UpdateMatchDraftRequest" : {
+        "title" : "UpdateMatchDraftRequest",
+        "type" : "object",
+        "properties" : {
+          "heldEventId" : {
+            "type" : "string"
+          },
+          "matchNoInEvent" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "gameTitleId" : {
+            "type" : "string"
+          },
+          "layoutFamily" : {
+            "type" : "string"
+          },
+          "seasonMasterId" : {
+            "type" : "string"
+          },
+          "ownerMemberId" : {
+            "type" : "string"
+          },
+          "mapMasterId" : {
+            "type" : "string"
+          },
+          "playedAt" : {
+            "type" : "string"
+          },
+          "status" : {
             "type" : "string"
           }
         }

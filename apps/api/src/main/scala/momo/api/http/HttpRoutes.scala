@@ -3,6 +3,7 @@ package momo.api.http
 import cats.effect.Async
 import cats.syntax.all.*
 import java.time.format.DateTimeFormatter
+import java.time.Instant
 import momo.api.auth.{
   CsrfTokenService, DiscordOAuthClient, LoginRateLimiter, MemberRoster, OAuthStateCodec,
   SessionService,
@@ -10,28 +11,30 @@ import momo.api.auth.{
 import momo.api.config.AppConfig
 import momo.api.domain.OcrJobHints
 import momo.api.endpoints.{
-  CancelOcrJobResponse, ConfirmMatchRequest, ConfirmMatchResponse, CreateOcrJobResponse,
-  DeleteMatchResponse, ExportEndpoints, GameTitleListResponse, GameTitleResponse,
-  GameTitlesEndpoints, HealthEndpoints, HeldEventListResponse, HeldEventResponse,
+  CancelMatchDraftResponse, CancelOcrJobResponse, ConfirmMatchRequest, ConfirmMatchResponse,
+  CreateOcrJobResponse, DeleteMatchResponse, ExportEndpoints, GameTitleListResponse,
+  GameTitleResponse, GameTitlesEndpoints, HealthEndpoints, HeldEventListResponse, HeldEventResponse,
   HeldEventsEndpoints, IncidentMasterListResponse, IncidentMasterResponse, IncidentMastersEndpoints,
   MapMasterListResponse, MapMasterResponse, MapMastersEndpoints, MatchDetailResponse,
-  MatchListResponse, MatchSummaryResponse, MatchesEndpoints, OcrDraftEndpoints,
-  OcrDraftListResponse, OcrDraftResponse, OcrJobEndpoints, OcrJobResponse, OpenApiEndpoints,
-  SeasonMasterListResponse, SeasonMasterResponse, SeasonMastersEndpoints, UpdateMatchRequest,
-  UploadEndpoints, UploadImageResponse,
+  MatchDraftEndpoints, MatchDraftResponse, MatchDraftSourceImageListResponse,
+  MatchDraftSourceImageResponse, MatchListResponse, MatchSummaryResponse, MatchesEndpoints,
+  OcrDraftEndpoints, OcrDraftListResponse, OcrDraftResponse, OcrJobEndpoints, OcrJobResponse,
+  OpenApiEndpoints, SeasonMasterListResponse, SeasonMasterResponse, SeasonMastersEndpoints,
+  UpdateMatchRequest, UploadEndpoints, UploadImageResponse,
 }
 import momo.api.errors.AppError
 import momo.api.openapi.OpenApiGenerator
 import momo.api.repositories.{
-  GameTitlesRepository, IncidentMastersRepository, MapMastersRepository, MatchesRepository,
-  MembersRepository, SeasonMastersRepository,
+  GameTitlesRepository, IncidentMastersRepository, MapMastersRepository, MembersRepository,
+  SeasonMastersRepository,
 }
 import momo.api.usecases.{
-  CancelOcrJob, ConfirmMatch, CreateGameTitle, CreateGameTitleCommand, CreateHeldEvent,
-  CreateHeldEventCommand, CreateMapMaster, CreateMapMasterCommand, CreateOcrJob,
-  CreateOcrJobCommand, CreateSeasonMaster, CreateSeasonMasterCommand, DeleteMatch, ExportMatches,
-  GetMatch, GetOcrDraft, GetOcrDraftsBulk, GetOcrJob, ListHeldEvents, ListMatches, UpdateMatch,
-  UploadImage,
+  CancelMatchDraft, CancelOcrJob, ConfirmMatch, CreateGameTitle, CreateGameTitleCommand,
+  CreateHeldEvent, CreateHeldEventCommand, CreateMapMaster, CreateMapMasterCommand,
+  CreateMatchDraft, CreateMatchDraftCommand, CreateOcrJob, CreateOcrJobCommand, CreateSeasonMaster,
+  CreateSeasonMasterCommand, DeleteMatch, ExportMatches, GetMatch, GetMatchDraftSourceImages,
+  GetOcrDraft, GetOcrDraftsBulk, GetOcrJob, ListHeldEvents, ListMatches, ListMatchesCommand,
+  UpdateMatch, UpdateMatchDraft, UpdateMatchDraftCommand, UploadImage,
 }
 import org.http4s.{HttpApp as Http4sApp, HttpRoutes as Http4sRoutes}
 import org.http4s.server.Router
@@ -50,6 +53,10 @@ object HttpRoutes:
       cancelOcrJob: CancelOcrJob[F],
       listHeldEvents: ListHeldEvents[F],
       createHeldEvent: CreateHeldEvent[F],
+      createMatchDraft: CreateMatchDraft[F],
+      updateMatchDraft: UpdateMatchDraft[F],
+      cancelMatchDraft: CancelMatchDraft[F],
+      getMatchDraftSourceImages: GetMatchDraftSourceImages[F],
       confirmMatch: ConfirmMatch[F],
       exportMatches: ExportMatches[F],
       listMatches: ListMatches[F],
@@ -99,6 +106,7 @@ object HttpRoutes:
             imageId = request.imageId,
             requestedImageType = request.requestedImageType,
             ocrHints = request.ocrHints.getOrElse(OcrJobHints()),
+            matchDraftId = request.matchDraftId,
           )))(created =>
             CreateOcrJobResponse(
               jobId = created.job.id.value,
@@ -143,6 +151,72 @@ object HttpRoutes:
           )(event => HeldEventResponse.from(event, 0))
         }
       },
+      MatchDraftEndpoints.create.serverLogic { case (devUser, csrfToken, request) =>
+        security.authorizeMutation(devUser, csrfToken) { member =>
+          parseInstantOption(request.playedAt).flatMap {
+            case Left(error) => Async[F].pure(Left(toProblem(error)))
+            case Right(playedAt) =>
+              respond(deps.createMatchDraft.run(
+                CreateMatchDraftCommand(
+                  heldEventId = request.heldEventId,
+                  matchNoInEvent = request.matchNoInEvent,
+                  gameTitleId = request.gameTitleId,
+                  layoutFamily = request.layoutFamily,
+                  seasonMasterId = request.seasonMasterId,
+                  ownerMemberId = request.ownerMemberId,
+                  mapMasterId = request.mapMasterId,
+                  playedAt = playedAt,
+                  status = request.status,
+                ),
+                member.memberId,
+              ))(MatchDraftResponse.from)
+          }
+        }
+      },
+      MatchDraftEndpoints.update.serverLogic { case (draftId, devUser, csrfToken, request) =>
+        security.authorizeMutation(devUser, csrfToken) { member =>
+          parseInstantOption(request.playedAt).flatMap {
+            case Left(error) => Async[F].pure(Left(toProblem(error)))
+            case Right(playedAt) =>
+              respond(deps.updateMatchDraft.run(
+                draftId,
+                UpdateMatchDraftCommand(
+                  heldEventId = request.heldEventId,
+                  matchNoInEvent = request.matchNoInEvent,
+                  gameTitleId = request.gameTitleId,
+                  layoutFamily = request.layoutFamily,
+                  seasonMasterId = request.seasonMasterId,
+                  ownerMemberId = request.ownerMemberId,
+                  mapMasterId = request.mapMasterId,
+                  playedAt = playedAt,
+                  status = request.status,
+                ),
+                member.memberId,
+              ))(MatchDraftResponse.from)
+          }
+        }
+      },
+      MatchDraftEndpoints.cancel.serverLogic { case (draftId, devUser, csrfToken) =>
+        security.authorizeMutation(devUser, csrfToken) { member =>
+          respond(
+            deps.cancelMatchDraft.run(draftId, member.memberId)
+          )(_ => CancelMatchDraftResponse(matchDraftId = draftId, status = "cancelled"))
+        }
+      },
+      MatchDraftEndpoints.listSourceImages.serverLogic { case (draftId, devUser) =>
+        security.authorizeRead(devUser) { member =>
+          respond(deps.getMatchDraftSourceImages.list(draftId, member.memberId))(items =>
+            MatchDraftSourceImageListResponse(items.map(MatchDraftSourceImageResponse.from))
+          )
+        }
+      },
+      MatchDraftEndpoints.getSourceImage.serverLogic { case (draftId, kind, devUser) =>
+        security.authorizeRead(devUser) { member =>
+          respond(
+            deps.getMatchDraftSourceImages.stream(draftId, kind, member.memberId)
+          )(image => ("private, no-store", "nosniff", image.bytes))
+        }
+      },
       ExportEndpoints.matches.serverLogic {
         case (format, seasonMasterId, heldEventId, matchId, devUser) => security
             .authorizeRead(devUser) { _ =>
@@ -165,14 +239,16 @@ object HttpRoutes:
         }
       },
       MatchesEndpoints.list.serverLogic {
-        case (heldEventId, gameTitleId, seasonMasterId, limit, devUser) => security
+        case (heldEventId, gameTitleId, seasonMasterId, status, kind, limit, devUser) => security
             .authorizeRead(devUser) { _ =>
-              deps.listMatches.run(MatchesRepository.ListFilter(
+              respond(deps.listMatches.run(ListMatchesCommand(
                 heldEventId = heldEventId,
                 gameTitleId = gameTitleId,
                 seasonMasterId = seasonMasterId,
+                status = status,
+                kind = kind,
                 limit = limit,
-              )).map(items => Right(MatchListResponse(items.map(MatchSummaryResponse.from))))
+              )))(items => MatchListResponse(items.map(MatchSummaryResponse.from)))
             }
       },
       MatchesEndpoints.get.serverLogic { case (matchId, devUser) =>
@@ -271,6 +347,7 @@ object HttpRoutes:
       ownerMemberId = request.ownerMemberId,
       mapMasterId = request.mapMasterId,
       playedAt = request.playedAt,
+      matchDraftId = request.matchDraftId,
       draftRefs = ConfirmMatch.DraftRefs(
         totalAssets = request.draftIds.totalAssets,
         revenue = request.draftIds.revenue,
@@ -313,3 +390,11 @@ object HttpRoutes:
       suriNoGinji = player.incidents.suriNoGinji,
     ),
   )
+
+  private def parseInstantOption[F[_]: Async](
+      value: Option[String]
+  ): F[Either[AppError, Option[Instant]]] = value match
+    case None => Async[F].pure(Right(None))
+    case Some(raw) => Either.catchOnly[Exception](Instant.parse(raw))
+        .leftMap(_ => AppError.ValidationFailed("playedAt must be ISO8601 instant.")).map(Some(_))
+        .pure[F]

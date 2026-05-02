@@ -2,7 +2,7 @@ package momo.api.repositories.postgres
 
 import doobie.Meta
 import java.nio.file.{Path, Paths}
-import momo.api.domain.{FailureCode, OcrJobStatus, ScreenType}
+import momo.api.domain.{FailureCode, MatchDraftStatus, OcrJobStatus, ScreenType}
 import momo.api.domain.ids.*
 
 /**
@@ -23,6 +23,9 @@ object PostgresMeta:
   given Meta[OcrJobStatus] = Meta[String].tiemap(s =>
     OcrJobStatus.values.find(_.wire == s).toRight(s"unknown ocr_job status=$s")
   )(_.wire)
+
+  given Meta[MatchDraftStatus] = Meta[String]
+    .tiemap(s => MatchDraftStatus.fromWire(s).toRight(s"unknown match_draft status=$s"))(_.wire)
 
   given Meta[FailureCode] = Meta[String]
     .tiemap(s => FailureCode.fromWire(s).toRight(s"unknown failure_code=$s"))(_.wire)

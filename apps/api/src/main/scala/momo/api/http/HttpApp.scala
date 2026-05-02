@@ -4,9 +4,11 @@ import cats.effect.{Async, Clock, Resource}
 import cats.syntax.all.*
 import momo.api.adapters.{
   InMemoryAppSessionsRepository, InMemoryGameTitlesRepository, InMemoryHeldEventsRepository,
-  InMemoryIncidentMastersRepository, InMemoryMapMastersRepository, InMemoryMatchesRepository,
-  InMemoryMembersRepository, InMemoryOcrDraftsRepository, InMemoryOcrJobsRepository,
-  InMemoryQueueProducer, InMemorySeasonMastersRepository, LocalFsImageStore, RedisQueueProducer,
+  InMemoryIncidentMastersRepository, InMemoryMapMastersRepository,
+  InMemoryMatchConfirmationRepository, InMemoryMatchDraftsRepository, InMemoryMatchListRepository,
+  InMemoryMatchesRepository, InMemoryMembersRepository, InMemoryOcrDraftsRepository,
+  InMemoryOcrJobsRepository, InMemoryQueueProducer, InMemorySeasonMastersRepository,
+  LocalFsImageStore, RedisQueueProducer,
 }
 import momo.api.auth.{
   CsrfTokenService, JavaDiscordOAuthClient, LoginRateLimiter, MemberRoster, OAuthStateCodec,
@@ -17,19 +19,22 @@ import momo.api.db.Database
 import momo.api.domain.{IdGenerator, Member}
 import momo.api.repositories.{
   AppSessionsRepository, GameTitlesRepository, HeldEventsRepository, IncidentMastersRepository,
-  MapMastersRepository, MatchesRepository, MembersRepository, OcrDraftsRepository,
-  OcrJobsRepository, SeasonMastersRepository,
+  MapMastersRepository, MatchConfirmationRepository, MatchDraftsRepository, MatchListRepository,
+  MatchesRepository, MembersRepository, OcrDraftsRepository, OcrJobsRepository,
+  SeasonMastersRepository,
 }
 import momo.api.repositories.postgres.{
   PostgresAppSessionsRepository, PostgresGameTitlesRepository, PostgresHeldEventsRepository,
-  PostgresIncidentMastersRepository, PostgresMapMastersRepository, PostgresMatchesRepository,
-  PostgresMembersRepository, PostgresOcrDraftsRepository, PostgresOcrJobsRepository,
-  PostgresSeasonMastersRepository,
+  PostgresIncidentMastersRepository, PostgresMapMastersRepository,
+  PostgresMatchConfirmationRepository, PostgresMatchDraftsRepository, PostgresMatchListRepository,
+  PostgresMatchesRepository, PostgresMembersRepository, PostgresOcrDraftsRepository,
+  PostgresOcrJobsRepository, PostgresSeasonMastersRepository,
 }
 import momo.api.usecases.{
-  CancelOcrJob, ConfirmMatch, CreateGameTitle, CreateHeldEvent, CreateMapMaster, CreateOcrJob,
-  CreateSeasonMaster, DeleteMatch, ExportMatches, GetMatch, GetOcrDraft, GetOcrDraftsBulk,
-  GetOcrJob, ListHeldEvents, ListMatches, UpdateMatch, UploadImage,
+  CancelMatchDraft, CancelOcrJob, ConfirmMatch, CreateGameTitle, CreateHeldEvent, CreateMapMaster,
+  CreateMatchDraft, CreateOcrJob, CreateSeasonMaster, DeleteMatch, ExportMatches, GetMatch,
+  GetMatchDraftSourceImages, GetOcrDraft, GetOcrDraftsBulk, GetOcrJob, ListHeldEvents, ListMatches,
+  SourceImageRetentionService, UpdateMatch, UpdateMatchDraft, UploadImage,
 }
 import org.http4s.HttpApp as Http4sApp
 
@@ -57,6 +62,10 @@ object HttpApp:
             val drafts: OcrDraftsRepository[F] = PostgresOcrDraftsRepository[F](transactor)
             val heldEvents: HeldEventsRepository[F] = PostgresHeldEventsRepository[F](transactor)
             val matches: MatchesRepository[F] = PostgresMatchesRepository[F](transactor)
+            val matchDrafts: MatchDraftsRepository[F] = PostgresMatchDraftsRepository[F](transactor)
+            val matchList: MatchListRepository[F] = PostgresMatchListRepository[F](transactor)
+            val matchConfirmation: MatchConfirmationRepository[F] =
+              PostgresMatchConfirmationRepository[F](transactor)
             val appSessions: AppSessionsRepository[F] = PostgresAppSessionsRepository[F](transactor)
             val members: MembersRepository[F] = PostgresMembersRepository[F](transactor)
             val gameTitles: GameTitlesRepository[F] = PostgresGameTitlesRepository[F](transactor)
@@ -72,6 +81,9 @@ object HttpApp:
               drafts = drafts,
               heldEvents = heldEvents,
               matches = matches,
+              matchDrafts = matchDrafts,
+              matchList = matchList,
+              matchConfirmation = matchConfirmation,
               appSessions = appSessions,
               members = members,
               gameTitles = gameTitles,
@@ -87,6 +99,9 @@ object HttpApp:
           drafts <- InMemoryOcrDraftsRepository.create[F]
           heldEvents <- InMemoryHeldEventsRepository.create[F]
           matches <- InMemoryMatchesRepository.create[F]
+          matchDrafts <- InMemoryMatchDraftsRepository.create[F]
+          matchList = InMemoryMatchListRepository[F](matches, matchDrafts)
+          matchConfirmation = InMemoryMatchConfirmationRepository[F](matches, matchDrafts)
           appSessions <- InMemoryAppSessionsRepository.create[F]
           members <- InMemoryMembersRepository
             .create[F](config.devMemberIds.map(id => Member(id, id, id, java.time.Instant.EPOCH)))
@@ -101,6 +116,9 @@ object HttpApp:
             drafts = drafts,
             heldEvents = heldEvents,
             matches = matches,
+            matchDrafts = matchDrafts,
+            matchList = matchList,
+            matchConfirmation = matchConfirmation,
             appSessions = appSessions,
             members = members,
             gameTitles = gameTitles,
@@ -124,6 +142,9 @@ object HttpApp:
       drafts: OcrDraftsRepository[F],
       heldEvents: HeldEventsRepository[F],
       matches: MatchesRepository[F],
+      matchDrafts: MatchDraftsRepository[F],
+      matchList: MatchListRepository[F],
+      matchConfirmation: MatchConfirmationRepository[F],
       appSessions: AppSessionsRepository[F],
       members: MembersRepository[F],
       gameTitles: GameTitlesRepository[F],
@@ -143,6 +164,7 @@ object HttpApp:
       imageStore = imageStore,
       jobs = jobs,
       drafts = drafts,
+      matchDrafts = matchDrafts,
       queue = queue,
       now = nowF,
       nextId = IdGenerator.next[F],
@@ -154,9 +176,32 @@ object HttpApp:
     val cancelOcrJob = CancelOcrJob[F](jobs, nowF)
     val listHeldEvents = ListHeldEvents[F](heldEvents, matches)
     val createHeldEvent = CreateHeldEvent[F](heldEvents, IdGenerator.next[F])
+    val sourceImageRetention = SourceImageRetentionService[F](matchDrafts)
+    val createMatchDraft = CreateMatchDraft[F](
+      heldEvents = heldEvents,
+      gameTitles = gameTitles,
+      mapMasters = mapMasters,
+      seasonMasters = seasonMasters,
+      matchDrafts = matchDrafts,
+      now = nowF,
+      nextId = IdGenerator.next[F],
+    )
+    val updateMatchDraft = UpdateMatchDraft[F](
+      heldEvents = heldEvents,
+      gameTitles = gameTitles,
+      mapMasters = mapMasters,
+      seasonMasters = seasonMasters,
+      matchDrafts = matchDrafts,
+      now = nowF,
+    )
+    val cancelMatchDraft = CancelMatchDraft[F](matchDrafts, sourceImageRetention, nowF)
+    val getMatchDraftSourceImages = GetMatchDraftSourceImages[F](matchDrafts, imageStore)
     val confirmMatch = ConfirmMatch[F](
       heldEvents = heldEvents,
       matches = matches,
+      matchDrafts = matchDrafts,
+      confirmations = matchConfirmation,
+      sourceImageRetention = sourceImageRetention,
       gameTitles = gameTitles,
       mapMasters = mapMasters,
       seasonMasters = seasonMasters,
@@ -164,7 +209,7 @@ object HttpApp:
       nextId = IdGenerator.next[F],
       allowedMemberIds = config.devMemberIds.toSet,
     )
-    val listMatches = ListMatches[F](matches)
+    val listMatches = ListMatches[F](matchList)
     val exportMatches = ExportMatches[F](matches, members, mapMasters, seasonMasters)
     val getMatch = GetMatch[F](matches)
     val updateMatch = UpdateMatch[F](
@@ -193,6 +238,10 @@ object HttpApp:
         cancelOcrJob = cancelOcrJob,
         listHeldEvents = listHeldEvents,
         createHeldEvent = createHeldEvent,
+        createMatchDraft = createMatchDraft,
+        updateMatchDraft = updateMatchDraft,
+        cancelMatchDraft = cancelMatchDraft,
+        getMatchDraftSourceImages = getMatchDraftSourceImages,
         confirmMatch = confirmMatch,
         exportMatches = exportMatches,
         listMatches = listMatches,

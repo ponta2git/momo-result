@@ -18,7 +18,15 @@ object MatchesEndpoints:
     .out(jsonBody[ConfirmMatchResponse])
     .tag("matches")
 
-  type ListInput = (Option[String], Option[String], Option[String], Option[Int], Option[String])
+  type ListInput = (
+      Option[String],
+      Option[String],
+      Option[String],
+      Option[String],
+      Option[String],
+      Option[Int],
+      Option[String],
+  )
 
   val list: PublicEndpoint[ListInput, ErrorInfo, MatchListResponse, Any] = endpoint
     .get
@@ -26,6 +34,8 @@ object MatchesEndpoints:
     .in(query[Option[String]]("heldEventId"))
     .in(query[Option[String]]("gameTitleId"))
     .in(query[Option[String]]("seasonMasterId"))
+    .in(query[Option[String]]("status"))
+    .in(query[Option[String]]("kind"))
     .in(query[Option[Int]]("limit"))
     .in(header[Option[String]]("X-Dev-User"))
     .errorOut(CommonEndpoint.errorOut)

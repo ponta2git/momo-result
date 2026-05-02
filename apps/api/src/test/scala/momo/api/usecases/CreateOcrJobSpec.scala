@@ -4,7 +4,8 @@ import cats.effect.IO
 import java.nio.file.Files
 import java.time.Instant
 import momo.api.adapters.{
-  InMemoryOcrDraftsRepository, InMemoryOcrJobsRepository, InMemoryQueueProducer, LocalFsImageStore,
+  InMemoryMatchDraftsRepository, InMemoryOcrDraftsRepository, InMemoryOcrJobsRepository,
+  InMemoryQueueProducer, LocalFsImageStore,
 }
 import momo.api.domain.ids.*
 import momo.api.domain.OcrJobHints
@@ -27,12 +28,14 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         .flatMap(fromAppEither)
       jobs <- InMemoryOcrJobsRepository.create[IO]
       drafts <- InMemoryOcrDraftsRepository.create[IO]
+      matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
       queue <- InMemoryQueueProducer.create[IO]
       ids <- IO.ref(List("job-1", "draft-1"))
       usecase = CreateOcrJob[IO](
         imageStore = imageStore,
         jobs = jobs,
         drafts = drafts,
+        matchDrafts = matchDrafts,
         queue = queue,
         now = IO.pure(Instant.parse("2026-04-29T11:40:16Z")),
         nextId = ids.modify {
@@ -42,7 +45,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         requestIdLookup = IO.pure(Some("test-req-id")),
       )
       created <- usecase
-        .run(CreateOcrJobCommand(image.imageId.value, "total_assets", OcrJobHints()))
+        .run(CreateOcrJobCommand(image.imageId.value, "total_assets", OcrJobHints(), None))
         .flatMap(fromAppEither)
       foundJob <- jobs.find(created.job.id)
       foundDraft <- drafts.find(created.draft.id)

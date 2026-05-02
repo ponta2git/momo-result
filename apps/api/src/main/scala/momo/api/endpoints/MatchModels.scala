@@ -2,7 +2,7 @@ package momo.api.endpoints
 
 import io.circe.Codec
 import java.time.format.DateTimeFormatter
-import momo.api.domain.HeldEvent
+import momo.api.domain.{HeldEvent, MatchListItem}
 import sttp.tapir.Schema
 
 final case class HeldEventResponse(id: String, heldAt: String, matchCount: Int)
@@ -68,6 +68,7 @@ final case class ConfirmMatchDraftIds(
 ) derives Codec.AsObject
 
 final case class ConfirmMatchRequest(
+    matchDraftId: Option[String],
     heldEventId: String,
     matchNoInEvent: Int,
     gameTitleId: String,
@@ -99,15 +100,20 @@ final case class UpdateMatchRequest(
 ) derives Codec.AsObject
 
 final case class MatchSummaryResponse(
-    matchId: String,
-    heldEventId: String,
-    matchNoInEvent: Int,
-    gameTitleId: String,
-    seasonMasterId: String,
-    mapMasterId: String,
-    ownerMemberId: String,
-    playedAt: String,
+    kind: String,
+    id: String,
+    matchId: Option[String],
+    matchDraftId: Option[String],
+    status: String,
+    heldEventId: Option[String],
+    matchNoInEvent: Option[Int],
+    gameTitleId: Option[String],
+    seasonMasterId: Option[String],
+    mapMasterId: Option[String],
+    ownerMemberId: Option[String],
+    playedAt: Option[String],
     createdAt: String,
+    updatedAt: String,
     ranks: List[MatchRankEntry],
 ) derives Codec.AsObject
 
@@ -134,18 +140,22 @@ final case class MatchDetailResponse(
 ) derives Codec.AsObject
 
 object MatchSummaryResponse:
-  import momo.api.domain.MatchRecord
-  def from(r: MatchRecord): MatchSummaryResponse = MatchSummaryResponse(
-    matchId = r.id,
-    heldEventId = r.heldEventId,
-    matchNoInEvent = r.matchNoInEvent,
-    gameTitleId = r.gameTitleId,
-    seasonMasterId = r.seasonMasterId,
-    mapMasterId = r.mapMasterId,
-    ownerMemberId = r.ownerMemberId,
-    playedAt = DateTimeFormatter.ISO_INSTANT.format(r.playedAt),
-    createdAt = DateTimeFormatter.ISO_INSTANT.format(r.createdAt),
-    ranks = r.players.sortBy(_.playOrder)
+  def from(item: MatchListItem): MatchSummaryResponse = MatchSummaryResponse(
+    kind = item.kind.wire,
+    id = item.id,
+    matchId = item.matchId,
+    matchDraftId = item.matchDraftId,
+    status = item.status,
+    heldEventId = item.heldEventId,
+    matchNoInEvent = item.matchNoInEvent,
+    gameTitleId = item.gameTitleId,
+    seasonMasterId = item.seasonMasterId,
+    mapMasterId = item.mapMasterId,
+    ownerMemberId = item.ownerMemberId,
+    playedAt = item.playedAt.map(DateTimeFormatter.ISO_INSTANT.format),
+    createdAt = DateTimeFormatter.ISO_INSTANT.format(item.createdAt),
+    updatedAt = DateTimeFormatter.ISO_INSTANT.format(item.updatedAt),
+    ranks = item.ranks
       .map(p => MatchRankEntry(memberId = p.memberId, rank = p.rank, playOrder = p.playOrder)),
   )
 

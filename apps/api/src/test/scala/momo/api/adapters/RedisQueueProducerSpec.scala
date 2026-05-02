@@ -5,6 +5,7 @@ import dev.profunktor.redis4cats.data.RedisCodec
 import dev.profunktor.redis4cats.effect.Log.NoOp.*
 import dev.profunktor.redis4cats.Redis
 import io.lettuce.core.Range
+import java.util.UUID
 import java.util
 import momo.api.config.RedisConfig
 import momo.api.repositories.OcrQueuePayload
@@ -12,7 +13,6 @@ import momo.api.MomoCatsEffectSuite
 import org.testcontainers.containers.GenericContainer
 import org.testcontainers.utility.DockerImageName
 import scala.jdk.CollectionConverters.*
-import scala.util.control.NonFatal
 
 final class RedisQueueProducerSpec extends MomoCatsEffectSuite:
   test("publishes OCR payload fields to the configured Redis stream"):
@@ -37,14 +37,16 @@ final class RedisQueueProducerSpec extends MomoCatsEffectSuite:
       "attempt" -> "1",
       "enqueuedAt" -> "2026-04-29T10:00:00Z",
     ))
-    redisContainer.use { container =>
-      val redisUrl = s"redis://${container.getHost}:${container.getMappedPort(6379)}"
-      val config = RedisConfig(redisUrl, "momo:ocr:jobs", "momo-ocr-workers")
+    redisUrlResource.use { redisUrl =>
+      val streamName = s"momo:ocr:jobs:test:${UUID.randomUUID().toString}"
+      val config = RedisConfig(redisUrl, streamName, "momo-ocr-workers")
       RedisQueueProducer.resource[IO](config).use { producer =>
         producer.publish(payload).flatMap { _ =>
           Redis[IO].simple(redisUrl, RedisCodec.Utf8).use { commands =>
-            commands.unsafe(_.xrange("momo:ocr:jobs", Range.unbounded[String]())).map { messages =>
-              val body: util.Map[String, String] = messages.asScala.head.getBody
+            commands.unsafe(_.xrange(streamName, Range.unbounded[String]())).map { messages =>
+              val rows = messages.asScala.toList
+              assert(rows.nonEmpty, s"expected at least 1 message in stream=$streamName")
+              val body: util.Map[String, String] = rows.head.getBody
               assertEquals(body, payload.fields.asJava)
             }
           }
@@ -57,8 +59,23 @@ final class RedisQueueProducerSpec extends MomoCatsEffectSuite:
       IO.blocking {
         val container = new GenericContainer(DockerImageName.parse("redis:7-alpine"))
         container.addExposedPort(6379)
-        try container.start()
-        catch case NonFatal(error) => assume(false, s"Docker is not available: ${error.getMessage}")
+        container.start()
         container
       }
     }(container => IO.blocking(container.stop()))
+
+  private def redisUrlResource: cats.effect.Resource[IO, String] =
+    redisContainer.map(container =>
+      s"redis://${container.getHost}:${container.getMappedPort(6379)}"
+    ).handleErrorWith { containerError =>
+      val fallback = sys.env.getOrElse("MOMO_TEST_REDIS_URL", "redis://127.0.0.1:6379")
+      cats.effect.Resource.eval(
+        Redis[IO].simple(fallback, RedisCodec.Utf8).use(_.ping).attempt.flatMap {
+          case Right(_) => IO.pure(fallback)
+          case Left(fallbackError) => IO.raiseError(new RuntimeException(
+              s"Redis test setup failed. Testcontainers: ${containerError.getMessage}. " +
+                s"Fallback $fallback: ${fallbackError.getMessage}"
+            ))
+        }
+      )
+    }

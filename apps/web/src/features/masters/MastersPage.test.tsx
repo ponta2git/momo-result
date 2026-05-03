@@ -1,15 +1,18 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
+import { http, HttpResponse } from "msw";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { queryClient } from "@/app/queryClient";
+import { masterQueryKeys } from "@/features/masters/masterApi";
 import {
   createDraftReviewHandoffPayload,
   saveMasterHandoff,
 } from "@/features/masters/masterReturnHandoff";
 import { MastersPage } from "@/features/masters/MastersPage";
+import { server } from "@/shared/api/msw/server";
 
 function renderPage(entry = "/admin/masters") {
   return render(
@@ -113,5 +116,39 @@ describe("MastersPage", () => {
       "href",
       expect.stringContaining("handoffId="),
     );
+  });
+
+  it("does not show cached load error after remount while refetch is running", async () => {
+    window.localStorage.setItem("momoresult.devUser", "ponta");
+    await queryClient
+      .fetchQuery({
+        queryKey: masterQueryKeys.gameTitles("ponta"),
+        queryFn: async () => {
+          throw new Error("cached load error");
+        },
+      })
+      .catch(() => undefined);
+
+    server.use(
+      http.get("/api/game-titles", async () => {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        return HttpResponse.json({
+          items: [
+            {
+              id: "gt_recovered",
+              name: "復旧済み作品",
+              layoutFamily: "momotetsu_2",
+              displayOrder: 1,
+              createdAt: "2026-01-01T00:00:00.000Z",
+            },
+          ],
+        });
+      }),
+    );
+
+    renderPage();
+
+    expect(screen.queryByText("作品マスタの読み込みに失敗しました")).not.toBeInTheDocument();
+    expect(await screen.findByText("復旧済み作品")).toBeInTheDocument();
   });
 });

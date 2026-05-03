@@ -119,8 +119,12 @@ final class PostgresMatchListRepository[F[_]: MonadCancelThrow](transactor: Tran
       case None => List.empty[MatchListItem].pure[F]
       case Some(selectQuery) =>
         val limit = filter.limit.map(v => fr"LIMIT $v").getOrElse(Fragment.empty)
-        val ordered = selectQuery ++
-          fr"ORDER BY COALESCE(played_at, updated_at) DESC, updated_at DESC, created_at DESC" ++
+        val ordered = fr"SELECT * FROM (" ++
+          selectQuery ++
+          fr""") AS combined
+              ORDER BY COALESCE(combined.played_at, combined.updated_at) DESC,
+                       combined.updated_at DESC,
+                       combined.created_at DESC""" ++
           limit
         for
           rows <- ordered.query[Row].to[List].transact(transactor)

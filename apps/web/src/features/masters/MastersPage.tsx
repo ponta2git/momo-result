@@ -47,6 +47,13 @@ function errorMessage(error: unknown): string | undefined {
   return normalized.detail || normalized.title;
 }
 
+function shouldShowQueryError(query: {
+  error: unknown;
+  isFetching: boolean;
+}): boolean {
+  return Boolean(query.error && !query.isFetching);
+}
+
 export function MastersPage() {
   const auth = useAuth();
   const authScope = auth.auth?.memberId ?? "anonymous";
@@ -232,22 +239,22 @@ export function MastersPage() {
         />
       ) : null}
 
-      {gameTitlesQuery.error ? (
+      {auth.isAuthenticated && shouldShowQueryError(gameTitlesQuery) ? (
         <Notice tone="danger" title="作品マスタの読み込みに失敗しました">
           {errorMessage(gameTitlesQuery.error)}
         </Notice>
       ) : null}
-      {mapMastersQuery.error ? (
+      {auth.isAuthenticated && shouldShowQueryError(mapMastersQuery) ? (
         <Notice tone="danger" title="マップマスタの読み込みに失敗しました">
           {errorMessage(mapMastersQuery.error)}
         </Notice>
       ) : null}
-      {seasonMastersQuery.error ? (
+      {auth.isAuthenticated && shouldShowQueryError(seasonMastersQuery) ? (
         <Notice tone="danger" title="シーズンマスタの読み込みに失敗しました">
           {errorMessage(seasonMastersQuery.error)}
         </Notice>
       ) : null}
-      {incidentMastersQuery.error ? (
+      {auth.isAuthenticated && shouldShowQueryError(incidentMastersQuery) ? (
         <Notice tone="danger" title="事件簿マスタの読み込みに失敗しました">
           {errorMessage(incidentMastersQuery.error)}
         </Notice>

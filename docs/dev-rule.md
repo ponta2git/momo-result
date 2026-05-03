@@ -31,13 +31,20 @@
 
 ### 1.3 ローカルDB・Redis起動
 
-Docker Compose でPostgreSQL と Redis のみ起動する。
+Redis はこのリポジトリの Docker Compose で起動する。
 
 ```sh
 docker compose up -d
 ```
 
-DBマイグレーションは `momo-db` リポジトリ側で管理する（`docs/db-rule.md` 参照）。
+PostgreSQL は `momo-db` リポジトリの Docker Compose で起動し、migration も `momo-db` 側で適用する（`docs/db-rule.md` 参照）。
+
+```sh
+pnpm --dir ../momo-db db:up
+pnpm --dir ../momo-db db:migrate
+```
+
+DB-backed API を検証する前に、接続先DBへ migration が適用済みであることを確認する。`momo-db` に migration が存在することと、ローカルDBに適用済みであることは別である。
 
 ## 2. 開発サーバー起動
 
@@ -56,7 +63,7 @@ uv run python -m momo_ocr worker
 pnpm dev
 ```
 
-起動順序の依存: `docker compose up -d`（Redis）→ api → ocr-worker → web
+起動順序の依存: `docker compose up -d`（Redis）→ `pnpm --dir ../momo-db db:up`（PostgreSQL）→ `pnpm --dir ../momo-db db:migrate` → api → ocr-worker → web
 
 | アプリ | コマンド | 作業ディレクトリ |
 |---|---|---|
@@ -105,3 +112,17 @@ type: `feat` / `fix` / `refactor` / `test` / `chore` / `docs`
 | ocr-worker test | `uv run pytest` | `apps/ocr-worker` |
 
 既存のスクリプトやMakefileがある場合はそちらを優先する。
+
+### 4.1 DB-backed API変更時の検証
+
+PostgreSQL repository、Doobie query、DB table/column、migration前提に触れた場合は、通常のapi testに加えてDB契約と該当Repositoryを実DBで確認する。
+
+```sh
+pnpm --dir ../momo-db db:up
+pnpm --dir ../momo-db db:migrate
+cd apps/api
+sbt "testOnly momo.api.integration.DbContractSpec"
+sbt "testOnly <該当するPostgresRepositorySpec>"
+```
+
+検証結果を報告するときは、実行したspec名を明示する。DB未起動によりintegration testがskipされた場合は、DB動作は未検証として扱う。

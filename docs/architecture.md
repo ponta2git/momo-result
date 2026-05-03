@@ -87,6 +87,8 @@ apps/
 - サーバーデータ管理にはTanStack Queryを使う。
 - Suspenseを標準採用し、Error BoundaryとQueryErrorResetBoundaryを画面設計に含める。
 - mutation、フォーム保存、バリデーションエラー、ユーザー操作中状態はSuspense任せにせず明示的に扱う。
+- TanStack Queryのページ単位エラー表示では、`query.error` だけで失敗表示を確定しない。
+  認証や `enabled` の前提、`isFetching` / `fetchStatus` などの取得状態を合わせて、再取得中の過去エラーを現在の致命的な失敗として表示しない。
 
 ### 3.2 フォーム
 

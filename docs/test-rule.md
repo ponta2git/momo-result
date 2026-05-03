@@ -25,6 +25,17 @@ MVPでも以下のテストを実装対象に含める。
 | web component/page | UI表示、フォーム操作、APIエラー表示を確認する | Vitest + Testing Library |
 | E2E smoke | 主要フローが結合状態で破綻しないことを確認する | Playwright |
 
+### web component/page の追加確認
+
+TanStack Queryを使うページでAPIエラー表示を追加・変更する場合は、表示したい失敗状態を明示する。
+
+- ページ単位の読み込み失敗表示は、`query.error` や `isError` の有無だけを根拠にしない。
+- 認証後に有効化されるqueryは、エラー表示側も認証・`enabled` 前提とずれないようにする。
+- キャッシュ済みエラー、remount、refetch中、refetch成功後のうち、変更対象に該当する状態を
+  Vitest + Testing Library + MSWで検証する。
+- 再取得中は過去エラーを隠す仕様なら、cached error -> remount -> delayed success のように、
+  失敗した実行経路を通るテストを追加する。
+
 ## 3. DB-backed APIの必須検証
 
 DB-backed API を変更するときは、該当Endpointに対応するPostgreSQL repository pathを実DBで実行する。

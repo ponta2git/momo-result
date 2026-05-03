@@ -60,6 +60,27 @@
 - テストレイヤの責務: `docs/test-rule.md`
 - DB-backed API変更時の検証: `docs/dev-rule.md`
 
+### Frontend / TanStack Query error visibility
+
+該当条件:
+
+- `apps/web` のTanStack Queryを使うページでAPIエラー表示を追加・変更する。
+- `query.error`、`isError`、`isFetching`、`enabled`、認証状態を使ってUI表示を分岐する。
+- 一時的なAPI失敗後のremount、refetch、復旧表示に触れる。
+
+思い出すこと:
+
+- `query.error` があることは、現在の読み込みが致命的に失敗していることと同義ではない。
+- 認証後に有効化されるqueryは、エラー表示側も認証・`enabled` 前提と合わせる。
+- APIエラー表示の回帰テストは、必要に応じて cached error -> remount -> refetch success のような
+  query lifecycleを直接通す。
+
+参照:
+
+- TanStack Queryエラー表示の実装規約: `docs/architecture.md`
+- web component/pageのテスト責務: `docs/test-rule.md`
+- 元の事象: `docs/post-mortem/2026-05-03-frontend-masters-query-error-visibility.md`
+
 ### Cross-repo schema dependency
 
 該当条件:

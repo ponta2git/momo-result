@@ -89,6 +89,9 @@ apps/
 - mutation、フォーム保存、バリデーションエラー、ユーザー操作中状態はSuspense任せにせず明示的に扱う。
 - TanStack Queryのページ単位エラー表示では、`query.error` だけで失敗表示を確定しない。
   認証や `enabled` の前提、`isFetching` / `fetchStatus` などの取得状態を合わせて、再取得中の過去エラーを現在の致命的な失敗として表示しない。
+- TanStack Queryの `queryKey` はAPIリソース名だけでなく、キャッシュに保存するデータ形状の同一性を表す。
+  同じbackend resourceでも、生APIレスポンス（例: `{ items: [...] }`）とfeature-localに整形した配列・ViewModelを同じkeyに保存しない。
+  共有したい場合は単一のcanonical cached shapeを決め、派生は `select` またはrender直前の純粋変換で行う。
 
 ### 3.2 フォーム
 

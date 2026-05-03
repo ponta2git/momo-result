@@ -35,6 +35,9 @@ TanStack Queryを使うページでAPIエラー表示を追加・変更する場
   Vitest + Testing Library + MSWで検証する。
 - 再取得中は過去エラーを隠す仕様なら、cached error -> remount -> delayed success のように、
   失敗した実行経路を通るテストを追加する。
+- 同じbackend resourceを複数画面で読むqueryを追加・変更する場合は、Query Keyが保存データ形状を共有してよいか確認する。
+  生APIレスポンスとfeature-localに整形した配列・ViewModelが混在し得る場合は、衝突するcache shapeをseedするか、
+  実際の画面遷移順を通すテストを追加する。
 
 フォーム・フィルタ・select/input の状態更新を追加・変更する場合は、少なくとも変更した代表操作を
 Testing Library の user-event で実行する。

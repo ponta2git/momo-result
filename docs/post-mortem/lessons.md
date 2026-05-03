@@ -81,6 +81,26 @@
 - web component/pageのテスト責務: `docs/test-rule.md`
 - 元の事象: `docs/post-mortem/2026-05-03-frontend-masters-query-error-visibility.md`
 
+### Frontend / TanStack Query cache shape
+
+該当条件:
+
+- `apps/web` でTanStack Queryの `queryKey`、`queryFn`、API wrapper、query dataの整形処理を追加・変更する。
+- 同じbackend resourceを複数画面・複数featureから読む。
+- ある画面では `{ items: [...] }` のような生APIレスポンス、別画面では配列やViewModelなど整形済みデータを使う。
+
+思い出すこと:
+
+- Query KeyはAPIリソース名ではなく、runtime cache valueの同一性を表す。
+- 同じkeyに異なるshapeを保存すると、TypeScript上は正しく見えても別画面遷移後にruntime crashし得る。
+- 共有resourceのquery変更では、別画面が先にcacheへ入れたshapeをseedするテストを検討する。
+
+参照:
+
+- TanStack Query cache shapeの実装規約: `docs/architecture.md`
+- web component/pageのquery cacheテスト責務: `docs/test-rule.md`
+- 元の事象: `docs/post-mortem/2026-05-03-frontend-masters-query-key-shape-collision.md`
+
 ### Frontend / form interaction execution path
 
 該当条件:

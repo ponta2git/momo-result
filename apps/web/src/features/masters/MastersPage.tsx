@@ -47,10 +47,7 @@ function errorMessage(error: unknown): string | undefined {
   return normalized.detail || normalized.title;
 }
 
-function shouldShowQueryError(query: {
-  error: unknown;
-  isFetching: boolean;
-}): boolean {
+function shouldShowQueryError(query: { error: unknown; isFetching: boolean }): boolean {
   return Boolean(query.error && !query.isFetching);
 }
 

@@ -84,6 +84,62 @@ const draftPayload = {
   raw_snippets: null,
 };
 
+const matchListStore = [
+  {
+    kind: "match_draft",
+    id: "draft-running-1",
+    matchDraftId: "draft-running-1",
+    status: "ocr_running",
+    heldEventId: "held-1",
+    matchNoInEvent: 2,
+    gameTitleId: "gt_momotetsu_2",
+    seasonMasterId: "season_current",
+    mapMasterId: "map_east",
+    ownerMemberId: "member_ponta",
+    playedAt: now,
+    createdAt: now,
+    updatedAt: "2026-01-02T01:00:00.000Z",
+    ranks: [],
+  },
+  {
+    kind: "match_draft",
+    id: "draft-review-1",
+    matchDraftId: "draft-review-1",
+    status: "needs_review",
+    heldEventId: "held-1",
+    matchNoInEvent: 3,
+    gameTitleId: "gt_momotetsu_2",
+    seasonMasterId: "season_current",
+    mapMasterId: "map_east",
+    ownerMemberId: "member_ponta",
+    playedAt: now,
+    createdAt: now,
+    updatedAt: "2026-01-02T02:00:00.000Z",
+    ranks: [],
+  },
+  {
+    kind: "match",
+    id: "match-1",
+    matchId: "match-1",
+    status: "confirmed",
+    heldEventId: "held-1",
+    matchNoInEvent: 1,
+    gameTitleId: "gt_momotetsu_2",
+    seasonMasterId: "season_current",
+    mapMasterId: "map_east",
+    ownerMemberId: "member_ponta",
+    playedAt: now,
+    createdAt: now,
+    updatedAt: now,
+    ranks: [
+      { memberId: "member_ponta", rank: 1, playOrder: 1 },
+      { memberId: "member_akane_mami", rank: 2, playOrder: 2 },
+      { memberId: "member_otaka", rank: 3, playOrder: 3 },
+      { memberId: "member_eu", rank: 4, playOrder: 4 },
+    ],
+  },
+];
+
 export const handlers = [
   http.get("/api/auth/me", ({ request }) => {
     const devUser = request.headers.get("X-Dev-User");
@@ -200,29 +256,38 @@ export const handlers = [
       createdAt: now,
     }),
   ),
-  http.get("/api/matches", () =>
-    HttpResponse.json({
-      items: [
-        {
-          matchId: "match-1",
-          heldEventId: "held-1",
-          matchNoInEvent: 1,
-          gameTitleId: "gt_momotetsu_2",
-          seasonMasterId: "season_one",
-          mapMasterId: "map_east",
-          ownerMemberId: "member_ponta",
-          playedAt: now,
-          createdAt: now,
-          ranks: [
-            { memberId: "member_ponta", rank: 1, playOrder: 1 },
-            { memberId: "member_akane_mami", rank: 2, playOrder: 2 },
-            { memberId: "member_otaka", rank: 3, playOrder: 3 },
-            { memberId: "member_eu", rank: 4, playOrder: 4 },
-          ],
-        },
-      ],
-    }),
-  ),
+  http.get("/api/matches", ({ request }) => {
+    const url = new URL(request.url);
+    const heldEventId = url.searchParams.get("heldEventId");
+    const gameTitleId = url.searchParams.get("gameTitleId");
+    const seasonMasterId = url.searchParams.get("seasonMasterId");
+    const status = url.searchParams.get("status");
+    const kind = url.searchParams.get("kind");
+
+    const items = matchListStore.filter((item) => {
+      if (heldEventId && item.heldEventId !== heldEventId) return false;
+      if (gameTitleId && item.gameTitleId !== gameTitleId) return false;
+      if (seasonMasterId && item.seasonMasterId !== seasonMasterId) return false;
+      if (kind && item.kind !== kind) return false;
+
+      if (!status || status === "all") return true;
+      if (status === "confirmed") return item.status === "confirmed";
+      if (status === "ocr_running") return item.status === "ocr_running";
+      if (status === "needs_review") return item.status === "needs_review";
+      if (status === "pre_confirm") {
+        return (
+          item.status === "ocr_failed" ||
+          item.status === "draft_ready" ||
+          item.status === "needs_review"
+        );
+      }
+      if (status === "incomplete") return item.status !== "confirmed";
+
+      return true;
+    });
+
+    return HttpResponse.json({ items });
+  }),
   http.get("/api/matches/:matchId", ({ params }) =>
     HttpResponse.json({
       matchId: params.matchId,
@@ -230,7 +295,7 @@ export const handlers = [
       matchNoInEvent: 1,
       gameTitleId: "gt_momotetsu_2",
       layoutFamily: "momotetsu_2",
-      seasonMasterId: "season_one",
+      seasonMasterId: "season_current",
       ownerMemberId: "member_ponta",
       mapMasterId: "map_east",
       playedAt: now,
@@ -325,7 +390,7 @@ export const handlers = [
       matchNoInEvent: 1,
       gameTitleId: "gt_momotetsu_2",
       layoutFamily: "momotetsu_2",
-      seasonMasterId: "season_one",
+      seasonMasterId: "season_current",
       ownerMemberId: "member_ponta",
       mapMasterId: "map_east",
       playedAt: now,

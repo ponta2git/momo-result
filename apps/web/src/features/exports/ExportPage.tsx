@@ -65,7 +65,7 @@ export function ExportPage() {
   });
   const matchesQuery = useQuery({
     queryKey: ["matches", "export"],
-    queryFn: () => listMatches(),
+    queryFn: () => listMatches({ status: "confirmed" }),
   });
 
   useEffect(() => {
@@ -76,7 +76,7 @@ export function ExportPage() {
       setHeldEventId(heldEventsQuery.data?.items?.[0]?.id ?? "");
     }
     if (scope === "match" && !matchId) {
-      setMatchId(matchesQuery.data?.items?.[0]?.matchId ?? "");
+      setMatchId(matchesQuery.data?.items?.find((item) => item.matchId)?.matchId ?? "");
     }
   }, [
     heldEventId,
@@ -223,12 +223,14 @@ export function ExportPage() {
                   value={matchId}
                   onChange={(event) => setMatchId(event.target.value)}
                 >
-                  {(matchesQuery.data?.items ?? []).map((match) => (
-                    <option key={match.matchId} value={match.matchId}>
-                      {heldEventsById.get(match.heldEventId) ?? match.heldEventId} / #
-                      {match.matchNoInEvent}
-                    </option>
-                  ))}
+                  {(matchesQuery.data?.items ?? [])
+                    .filter((match) => Boolean(match.matchId))
+                    .map((match) => (
+                      <option key={match.id} value={match.matchId}>
+                        {heldEventsById.get(match.heldEventId ?? "") ?? match.heldEventId} / #
+                        {match.matchNoInEvent}
+                      </option>
+                    ))}
                 </select>
               </label>
             ) : null}

@@ -25,8 +25,10 @@ describe("MatchesListPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("heading", { name: "確定済み試合一覧" })).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByRole("link", { name: "詳細" })).toBeInTheDocument());
+    expect(await screen.findByRole("heading", { name: "試合" })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getAllByRole("link", { name: "詳細を見る" }).length).toBeGreaterThan(0),
+    );
   });
 });
 

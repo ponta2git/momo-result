@@ -54,7 +54,7 @@ describe("app routing", () => {
     window.localStorage.setItem("momoresult.devUser", "ponta");
     const { router } = renderApp("/");
 
-    expect(await screen.findByRole("heading", { name: "確定済み試合一覧" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "試合" })).toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/matches");
     expect(screen.getByRole("button", { name: "ログアウト" })).toBeInTheDocument();
   });
@@ -71,7 +71,7 @@ describe("app routing", () => {
     window.localStorage.setItem("momoresult.devUser", "ponta");
     const { router } = renderApp("/login");
 
-    expect(await screen.findByRole("heading", { name: "確定済み試合一覧" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "試合" })).toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/matches");
   });
 

@@ -11,6 +11,8 @@ export type ListMatchesQuery = {
   heldEventId?: string;
   gameTitleId?: string;
   seasonMasterId?: string;
+  status?: "all" | "confirmed" | "incomplete" | "needs_review" | "ocr_running" | "pre_confirm";
+  kind?: "match" | "match_draft";
   limit?: number;
 };
 
@@ -19,6 +21,8 @@ export async function listMatches(query: ListMatchesQuery = {}): Promise<MatchLi
   if (query.heldEventId) params.set("heldEventId", query.heldEventId);
   if (query.gameTitleId) params.set("gameTitleId", query.gameTitleId);
   if (query.seasonMasterId) params.set("seasonMasterId", query.seasonMasterId);
+  if (query.status) params.set("status", query.status);
+  if (query.kind) params.set("kind", query.kind);
   if (query.limit !== undefined) params.set("limit", String(query.limit));
   const qs = params.toString();
   return apiRequest<MatchListResponse>(`/api/matches${qs ? `?${qs}` : ""}`);

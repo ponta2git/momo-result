@@ -81,6 +81,25 @@
 - web component/pageのテスト責務: `docs/test-rule.md`
 - 元の事象: `docs/post-mortem/2026-05-03-frontend-masters-query-error-visibility.md`
 
+### Frontend / form interaction execution path
+
+該当条件:
+
+- `apps/web` の form、filter、select、input、button のイベントハンドラを追加・変更する。
+- `setState((current) => ...)` の updater 内で event や DOM node を参照している。
+- レンダリングテストはあるが、変更した入力操作を user-event で実行していない。
+
+思い出すこと:
+
+- React event 由来の値は handler 内で同期的に退避し、state updater 内では退避済みの値だけを使う。
+- UIが表示されることと、ユーザー操作の実行経路が壊れていないことは別である。
+- 代表的な form/filter 操作は Testing Library + user-event で直接通す。
+
+参照:
+
+- web component/page の入力操作テスト責務: `docs/test-rule.md`
+- 元の事象: `docs/post-mortem/2026-05-03-frontend-matches-filter-event-currenttarget.md`
+
 ### Cross-repo schema dependency
 
 該当条件:

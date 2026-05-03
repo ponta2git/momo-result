@@ -30,6 +30,29 @@ describe("MatchesListPage", () => {
       expect(screen.getAllByRole("link", { name: "詳細を見る" }).length).toBeGreaterThan(0),
     );
   });
+
+  it("updates held-event filter without crashing", async () => {
+    window.localStorage.setItem("momoresult.devUser", "ponta");
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches"]}>
+          <Routes>
+            <Route path="/matches" element={<MatchesListPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "試合" })).toBeInTheDocument();
+    const heldEventSelect = screen.getAllByLabelText("開催")[0] as HTMLSelectElement;
+    await waitFor(() => expect(heldEventSelect.options.length).toBeGreaterThan(1));
+
+    await userEvent.selectOptions(heldEventSelect, "held-1");
+    await userEvent.click(screen.getByRole("button", { name: "絞り込む" }));
+
+    expect(screen.getByRole("heading", { name: "試合" })).toBeInTheDocument();
+  });
 });
 
 describe("MatchDetailPage", () => {

@@ -36,6 +36,13 @@ TanStack Queryを使うページでAPIエラー表示を追加・変更する場
 - 再取得中は過去エラーを隠す仕様なら、cached error -> remount -> delayed success のように、
   失敗した実行経路を通るテストを追加する。
 
+フォーム・フィルタ・select/input の状態更新を追加・変更する場合は、少なくとも変更した代表操作を
+Testing Library の user-event で実行する。
+
+- `onChange` / `onSubmit` / `onClick` の実行経路は、レンダリング確認だけで代用しない。
+- React event の値を state updater 内で読む実装を避け、必要な値は handler 内で先に退避する。
+- PC用とモバイル用で同じ入力UIを二重に持つ場合は、どちらの実行経路を検証したかを明確にする。
+
 ## 3. DB-backed APIの必須検証
 
 DB-backed API を変更するときは、該当Endpointに対応するPostgreSQL repository pathを実DBで実行する。

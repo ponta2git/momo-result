@@ -6,6 +6,10 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { queryClient } from "@/app/queryClient";
 import { DraftReviewPage } from "@/features/draftReview/DraftReviewPage";
+import {
+  createDraftReviewHandoffPayload,
+  saveMasterHandoff,
+} from "@/features/masters/masterReturnHandoff";
 
 describe("DraftReviewPage", () => {
   afterEach(() => {
@@ -127,5 +131,105 @@ describe("DraftReviewPage", () => {
     await userEvent.type(rankInput, "03");
     expect(rankInput).toHaveValue("3");
     expect(screen.getByText("手修正")).toBeInTheDocument();
+  });
+
+  it("restores form values after returning from master management with handoffId", async () => {
+    window.localStorage.setItem("momoresult.devUser", "ponta");
+
+    const handoffId = saveMasterHandoff(
+      createDraftReviewHandoffPayload({
+        matchSessionId: "session-1",
+        returnTo: "/review/session-1?sample=1",
+        values: {
+          draftIds: {},
+          gameTitleId: "gt_momotetsu_2",
+          heldEventId: "held-2",
+          mapMasterId: "map_east",
+          matchNoInEvent: 9,
+          ownerMemberId: "member_ponta",
+          playedAt: "2026-02-02T02:02:00.000Z",
+          players: [
+            {
+              incidents: {
+                cardShop: 3,
+                cardStation: 2,
+                destination: 1,
+                minusStation: 5,
+                plusStation: 4,
+                suriNoGinji: 6,
+              },
+              memberId: "member_ponta",
+              playOrder: 1,
+              rank: 4,
+              revenueManYen: 777,
+              totalAssetsManYen: 8888,
+            },
+            {
+              incidents: {
+                cardShop: 0,
+                cardStation: 0,
+                destination: 0,
+                minusStation: 0,
+                plusStation: 0,
+                suriNoGinji: 0,
+              },
+              memberId: "member_akane_mami",
+              playOrder: 2,
+              rank: 1,
+              revenueManYen: 111,
+              totalAssetsManYen: 2222,
+            },
+            {
+              incidents: {
+                cardShop: 0,
+                cardStation: 0,
+                destination: 0,
+                minusStation: 0,
+                plusStation: 0,
+                suriNoGinji: 0,
+              },
+              memberId: "member_otaka",
+              playOrder: 3,
+              rank: 2,
+              revenueManYen: 333,
+              totalAssetsManYen: 4444,
+            },
+            {
+              incidents: {
+                cardShop: 0,
+                cardStation: 0,
+                destination: 0,
+                minusStation: 0,
+                plusStation: 0,
+                suriNoGinji: 0,
+              },
+              memberId: "member_eu",
+              playOrder: 4,
+              rank: 3,
+              revenueManYen: 555,
+              totalAssetsManYen: 6666,
+            },
+          ],
+          seasonMasterId: "season_current",
+        },
+      }),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={[`/review/session-1?sample=1&handoffId=${handoffId}`]}>
+          <Routes>
+            <Route path="/review/:matchSessionId" element={<DraftReviewPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(
+      (await screen.findAllByText("マスタ管理から戻ったため、入力内容を復元しました。")).length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByLabelText("試合番号")).toHaveValue("9");
+    expect(screen.getByLabelText("ぽんた rank")).toHaveValue("4");
+    expect(screen.getByDisplayValue("777")).toBeInTheDocument();
   });
 });

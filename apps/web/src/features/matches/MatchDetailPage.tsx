@@ -96,8 +96,7 @@ export function MatchDetailPage() {
   const season = (seasonsQuery.data?.items ?? []).find((s) => s.id === m.seasonMasterId);
   const map = (mapsQuery.data?.items ?? []).find((mm) => mm.id === m.mapMasterId);
 
-  // oxlint-disable-next-line unicorn/no-array-sort: tsconfig currently targets ES2022.
-  const players = [...(m.players ?? [])].sort((a, b) => a.playOrder - b.playOrder);
+  const players = (m.players ?? []).toSorted((a, b) => a.playOrder - b.playOrder);
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-8">

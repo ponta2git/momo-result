@@ -215,8 +215,7 @@ function MatchRow({
   gameTitleName: string | undefined;
   seasonName: string | undefined;
 }) {
-  // oxlint-disable-next-line unicorn/no-array-sort: tsconfig currently targets ES2022.
-  const ranked = [...(match.ranks ?? [])].sort((a, b) => a.rank - b.rank);
+  const ranked = (match.ranks ?? []).toSorted((a, b) => a.rank - b.rank);
   return (
     <tr className="border-line-soft border-t">
       <td className="py-2">

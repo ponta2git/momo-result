@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import {
   confirmMatch,
@@ -14,6 +14,16 @@ import type { DraftByKind, ReviewPlayer } from "@/features/draftReview/mergeDraf
 import { createSampleDraftMap } from "@/features/draftReview/sampleDrafts";
 import { confirmMatchSchema, toConfirmMatchRequest } from "@/features/draftReview/schema";
 import type { ConfirmMatchFormValues } from "@/features/draftReview/schema";
+import {
+  buildMasterRoute,
+  clearHandoffIdFromSearch,
+  createDraftReviewHandoffPayload,
+  loadMasterHandoff,
+  removeMasterHandoff,
+  sanitizeReturnTo,
+  saveMasterHandoff,
+} from "@/features/masters/masterReturnHandoff";
+import type { DraftReviewHandoffValues } from "@/features/masters/masterReturnHandoff";
 import { fixedMembers } from "@/features/ocrCapture/localMasters";
 import { defaultSetupValues } from "@/features/ocrCapture/schema";
 import { getAuthMe } from "@/shared/api/client";
@@ -99,6 +109,38 @@ function emptyPlayers(): ConfirmMatchFormValues["players"] {
       suriNoGinji: 0,
     },
   }));
+}
+
+function toDraftReviewHandoffValues(values: ConfirmMatchFormValues): DraftReviewHandoffValues {
+  return {
+    draftIds: {
+      incidentLog: values.draftIds.incidentLog,
+      revenue: values.draftIds.revenue,
+      totalAssets: values.draftIds.totalAssets,
+    },
+    gameTitleId: values.gameTitleId,
+    heldEventId: values.heldEventId,
+    mapMasterId: values.mapMasterId,
+    matchNoInEvent: values.matchNoInEvent,
+    ownerMemberId: values.ownerMemberId,
+    playedAt: values.playedAt,
+    players: values.players.map((player) => ({
+      incidents: {
+        cardShop: player.incidents.cardShop,
+        cardStation: player.incidents.cardStation,
+        destination: player.incidents.destination,
+        minusStation: player.incidents.minusStation,
+        plusStation: player.incidents.plusStation,
+        suriNoGinji: player.incidents.suriNoGinji,
+      },
+      memberId: player.memberId,
+      playOrder: player.playOrder,
+      rank: player.rank,
+      revenueManYen: player.revenueManYen,
+      totalAssetsManYen: player.totalAssetsManYen,
+    })),
+    seasonMasterId: values.seasonMasterId,
+  };
 }
 
 function draftIdsFromParams(searchParams: URLSearchParams): Partial<Record<SlotKind, string>> {
@@ -272,6 +314,8 @@ function ConfirmDialog({ values, heldEvent, onCancel, onConfirm, pending }: Conf
 }
 
 export function DraftReviewPage() {
+  const { matchSessionId = "" } = useParams<{ matchSessionId: string }>();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const ids = useMemo(() => draftIdsFromParams(searchParams), [searchParams]);
@@ -280,6 +324,7 @@ export function DraftReviewPage() {
   const [notice, setNotice] = useState("");
   const [validationMessage, setValidationMessage] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [hasRestoredHandoff, setHasRestoredHandoff] = useState(false);
   const [eventDraft, setEventDraft] = useState({
     heldAt: toLocalDateTime(new Date().toISOString()),
   });
@@ -302,6 +347,11 @@ export function DraftReviewPage() {
       players: emptyPlayers(),
     };
   });
+  const returnSearchParams = useMemo(() => clearHandoffIdFromSearch(searchParams), [searchParams]);
+  const returnSearch = returnSearchParams.toString();
+  const reviewReturnTo = sanitizeReturnTo(
+    `${location.pathname}${returnSearch ? `?${returnSearch}` : ""}`,
+  );
 
   const authQuery = useQuery({
     queryKey: ["auth-me"],
@@ -408,10 +458,39 @@ export function DraftReviewPage() {
   }, [seasonMasterItems, values.gameTitleId, values.seasonMasterId]);
 
   useEffect(() => {
-    if (draftsQuery.isSuccess || useSampleDrafts) {
+    if ((draftsQuery.isSuccess || useSampleDrafts) && !hasRestoredHandoff) {
       setValues((current) => ({ ...current, players: merged.players.map(toFormPlayer) }));
     }
-  }, [draftsQuery.isSuccess, merged.players, useSampleDrafts]);
+  }, [draftsQuery.isSuccess, hasRestoredHandoff, merged.players, useSampleDrafts]);
+
+  useEffect(() => {
+    const handoffId = searchParams.get("handoffId");
+    if (!handoffId || !reviewReturnTo) {
+      return;
+    }
+    const payload = loadMasterHandoff({
+      expectedReturnTo: reviewReturnTo,
+      handoffId,
+    });
+    if (payload?.source === "draftReview" && payload.matchSessionId === matchSessionId) {
+      setValues((current) => ({
+        ...current,
+        ...payload.values,
+      }));
+      setHasRestoredHandoff(true);
+      setNotice("マスタ管理から戻ったため、入力内容を復元しました。");
+    } else {
+      setNotice("マスタ管理から戻りましたが、入力内容を復元できませんでした。");
+    }
+    removeMasterHandoff(handoffId);
+    navigate(
+      {
+        pathname: location.pathname,
+        search: returnSearch ? `?${returnSearch}` : "",
+      },
+      { replace: true },
+    );
+  }, [location.pathname, matchSessionId, navigate, reviewReturnTo, returnSearch, searchParams]);
 
   useEffect(() => {
     if (!notice) {
@@ -512,6 +591,20 @@ export function DraftReviewPage() {
     confirmMutation.mutate(toConfirmMatchRequest(parsed));
   }
 
+  function handleOpenMastersFromMissingTitle() {
+    if (!reviewReturnTo) {
+      navigate("/admin/masters");
+      return;
+    }
+    const payload = createDraftReviewHandoffPayload({
+      matchSessionId,
+      returnTo: reviewReturnTo,
+      values: toDraftReviewHandoffValues(values),
+    });
+    const handoffId = saveMasterHandoff(payload);
+    navigate(buildMasterRoute(reviewReturnTo, handoffId));
+  }
+
   const matchSetupSection = (
     <Card className="mt-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -534,9 +627,13 @@ export function DraftReviewPage() {
       {gameTitleItems.length === 0 && gameTitlesQuery.isSuccess ? (
         <div className="border-rail-gold/55 bg-rail-gold/10 text-ink-100 mt-4 rounded-[1.25rem] border p-4 text-sm">
           作品マスタが未登録です。
-          <Link className="hover:text-rail-gold ml-2 underline" to="/admin/masters">
+          <button
+            className="hover:text-rail-gold ml-2 cursor-pointer underline"
+            type="button"
+            onClick={handleOpenMastersFromMissingTitle}
+          >
             マスタ管理画面
-          </Link>
+          </button>
           で追加してください。
         </div>
       ) : null}

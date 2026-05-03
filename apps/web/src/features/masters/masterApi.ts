@@ -32,12 +32,12 @@ function byIncidentOrder(a: IncidentMasterResponse, b: IncidentMasterResponse): 
 }
 
 export const masterQueryKeys = {
-  gameTitles: (authScope: string) => ["masters", "game-titles", authScope] as const,
-  incidentMasters: (authScope: string) => ["masters", "incident-masters", authScope] as const,
+  gameTitles: (authScope: string) => ["masters-admin", "game-titles", authScope] as const,
+  incidentMasters: (authScope: string) => ["masters-admin", "incident-masters", authScope] as const,
   mapMasters: (authScope: string, gameTitleId: string) =>
-    ["masters", "map-masters", authScope, gameTitleId || "none"] as const,
+    ["masters-admin", "map-masters", authScope, gameTitleId || "none"] as const,
   seasonMasters: (authScope: string, gameTitleId: string) =>
-    ["masters", "season-masters", authScope, gameTitleId || "none"] as const,
+    ["masters-admin", "season-masters", authScope, gameTitleId || "none"] as const,
 };
 
 export async function fetchGameTitles(): Promise<GameTitleResponse[]> {

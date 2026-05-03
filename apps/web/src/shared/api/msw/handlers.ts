@@ -248,6 +248,20 @@ export const handlers = [
       matchCount: 0,
     }),
   ),
+  http.post("/api/match-drafts", async () =>
+    HttpResponse.json({
+      matchDraftId: "draft-created-1",
+      status: "ocr_running",
+      createdAt: now,
+      updatedAt: now,
+    }),
+  ),
+  http.post("/api/match-drafts/:draftId/cancel", ({ params }) =>
+    HttpResponse.json({
+      matchDraftId: params.draftId,
+      status: "cancelled",
+    }),
+  ),
   http.post("/api/matches", async () =>
     HttpResponse.json({
       matchId: "match-1",

@@ -2,7 +2,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { queryClient } from "@/app/queryClient";
@@ -11,13 +11,38 @@ import { server } from "@/shared/api/msw/server";
 
 type OcrJobRequestBody = {
   imageId: string;
+  matchDraftId?: string;
+  ocrHints?: unknown;
   requestedImageType: string;
 };
+
+type MatchDraftRequestBody = {
+  gameTitleId?: string;
+  layoutFamily?: string;
+  mapMasterId?: string;
+  ownerMemberId?: string;
+  seasonMasterId?: string;
+  status?: string;
+};
+
+function renderCaptureRoute() {
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={["/ocr/new"]}>
+        <Routes>
+          <Route path="/ocr/new" element={<OcrCapturePage />} />
+          <Route path="/matches" element={<p>matches-page</p>} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
 
 describe("OcrCapturePage", () => {
   afterEach(() => {
     queryClient.clear();
     window.localStorage.clear();
+    window.sessionStorage.clear();
     vi.restoreAllMocks();
   });
 
@@ -35,28 +60,70 @@ describe("OcrCapturePage", () => {
     );
     expect(screen.getByLabelText("作品")).toBeDisabled();
 
-    await userEvent.selectOptions(screen.getByLabelText("Dev User"), "member_ponta");
+    await userEvent.selectOptions(await screen.findByLabelText("Dev User"), "member_ponta");
 
     await waitFor(() => expect(screen.getByLabelText("作品")).toBeEnabled());
     expect(screen.getByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
   });
 
-  it("uploads an image, creates a job, polls to success, and shows the draft", async () => {
+  it("creates a match draft, starts OCR jobs, and returns to matches", async () => {
     window.localStorage.setItem("momoresult.devUser", "ponta");
+    const createdDrafts: MatchDraftRequestBody[] = [];
+    const createdJobs: OcrJobRequestBody[] = [];
 
-    render(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
-          <OcrCapturePage />
-        </MemoryRouter>
-      </QueryClientProvider>,
+    server.use(
+      http.post("/api/match-drafts", async ({ request }) => {
+        createdDrafts.push((await request.json()) as MatchDraftRequestBody);
+        return HttpResponse.json({
+          matchDraftId: "draft-created-1",
+          status: "ocr_running",
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        });
+      }),
+      http.post("/api/ocr-jobs", async ({ request }) => {
+        const body = (await request.json()) as OcrJobRequestBody;
+        createdJobs.push(body);
+        return HttpResponse.json({
+          jobId: "job-1",
+          draftId: "draft-1",
+          status: "queued",
+        });
+      }),
     );
 
+    renderCaptureRoute();
+
+    expect(await screen.findByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
     const input = await screen.findByLabelText("撮影台の画像をアップロード");
     await userEvent.upload(input, new File(["image"], "assets.png", { type: "image/png" }));
-    await userEvent.click(screen.getByRole("button", { name: "OCRにかけて下書き保存" }));
+    await userEvent.click(screen.getByRole("button", { name: "OCRを開始して試合一覧へ" }));
 
-    await waitFor(() => expect(screen.getByText("OCRドラフト JSON を表示")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("matches-page")).toBeInTheDocument());
+    const localStorageValues = Array.from({ length: window.localStorage.length }, (_, index) => {
+      const key = window.localStorage.key(index);
+      return key ? `${key}:${window.localStorage.getItem(key)}` : "";
+    }).join("\n");
+    expect(localStorageValues).not.toContain("image-1");
+    expect(localStorageValues).not.toContain("blob:");
+    expect(window.sessionStorage.length).toBe(0);
+    expect(createdDrafts).toEqual([
+      expect.objectContaining({
+        gameTitleId: "gt_momotetsu_2",
+        layoutFamily: "momotetsu_2",
+        mapMasterId: "map_east",
+        ownerMemberId: "member_ponta",
+        seasonMasterId: "season_current",
+        status: "ocr_running",
+      }),
+    ]);
+    expect(createdJobs).toEqual([
+      expect.objectContaining({
+        imageId: "image-1",
+        matchDraftId: "draft-created-1",
+        requestedImageType: "total_assets",
+      }),
+    ]);
   });
 
   it("uses the final tray position as the OCR image type hint", async () => {
@@ -88,14 +155,9 @@ describe("OcrCapturePage", () => {
       }),
     );
 
-    render(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
-          <OcrCapturePage />
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
+    renderCaptureRoute();
 
+    expect(await screen.findByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
     const input = await screen.findByLabelText("撮影台の画像をアップロード");
     await userEvent.upload(input, new File(["first"], "first.png", { type: "image/png" }));
     await userEvent.upload(input, new File(["second"], "second.png", { type: "image/png" }));
@@ -103,54 +165,69 @@ describe("OcrCapturePage", () => {
     expect(screen.getByAltText("総資産プレビュー")).toHaveAttribute("src", "blob:second.png");
     expect(screen.getByAltText("収益プレビュー")).toHaveAttribute("src", "blob:first.png");
 
-    await userEvent.click(screen.getByRole("button", { name: "OCRにかけて下書き保存" }));
+    await userEvent.click(screen.getByRole("button", { name: "OCRを開始して試合一覧へ" }));
 
     await waitFor(() => expect(createdJobs).toHaveLength(2));
     expect(createdJobs).toEqual([
       {
         imageId: "image-1",
+        matchDraftId: "draft-created-1",
         requestedImageType: "total_assets",
         ocrHints: expect.any(Object),
       },
-      { imageId: "image-2", requestedImageType: "revenue", ocrHints: expect.any(Object) },
+      {
+        imageId: "image-2",
+        matchDraftId: "draft-created-1",
+        requestedImageType: "revenue",
+        ocrHints: expect.any(Object),
+      },
     ]);
   });
 
-  it("enables review after the queued draft is saved even without a running worker", async () => {
+  it("cancels the created match draft when no OCR job is created", async () => {
     window.localStorage.setItem("momoresult.devUser", "ponta");
+    const cancelledDraftIds: string[] = [];
+
     server.use(
-      http.get("/api/ocr-jobs/:jobId", ({ params }) =>
-        HttpResponse.json({
-          jobId: params.jobId,
-          draftId: "draft-queued",
-          imageId: "image-1",
-          imagePath: "/tmp/ignored.png",
-          requestedImageType: "total_assets",
-          detectedImageType: null,
-          status: "queued",
-          attemptCount: 1,
-          createdAt: "2026-01-01T00:00:00.000Z",
-          updatedAt: "2026-01-01T00:00:00.000Z",
-        }),
+      http.post("/api/ocr-jobs", async () =>
+        HttpResponse.json(
+          {
+            type: "about:blank",
+            title: "OCR job creation failed",
+            status: 500,
+            detail: "worker queue unavailable",
+            code: "OCR_JOB_FAILED",
+          },
+          { status: 500 },
+        ),
       ),
+      http.post("/api/match-drafts/:draftId/cancel", ({ params }) => {
+        cancelledDraftIds.push(String(params.draftId));
+        return HttpResponse.json({
+          matchDraftId: params.draftId,
+          status: "cancelled",
+        });
+      }),
     );
 
-    render(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
-          <OcrCapturePage />
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
+    renderCaptureRoute();
 
-    const reviewButton = screen.getByRole("button", { name: "下書きを確認する" });
-    expect(reviewButton).toBeDisabled();
+    expect(await screen.findByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
+    const input = await screen.findByLabelText("撮影台の画像をアップロード");
+    await userEvent.upload(input, new File(["image"], "assets.png", { type: "image/png" }));
+    await userEvent.click(screen.getByRole("button", { name: "OCRを開始して試合一覧へ" }));
+
+    await waitFor(() => expect(cancelledDraftIds).toEqual(["draft-created-1"]));
+    expect(screen.queryByText("matches-page")).not.toBeInTheDocument();
+  });
+
+  it("does not expose a direct review action for OCR-running drafts", async () => {
+    window.localStorage.setItem("momoresult.devUser", "ponta");
+    renderCaptureRoute();
 
     const input = await screen.findByLabelText("撮影台の画像をアップロード");
     await userEvent.upload(input, new File(["image"], "assets.png", { type: "image/png" }));
-    await userEvent.click(screen.getByRole("button", { name: "OCRにかけて下書き保存" }));
 
-    await waitFor(() => expect(screen.getByText("OCRドラフト JSON を表示")).toBeInTheDocument());
-    expect(reviewButton).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "下書きを確認する" })).not.toBeInTheDocument();
   });
 });

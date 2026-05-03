@@ -5,8 +5,7 @@ import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
 import { DraftPreview } from "@/features/ocrCapture/DraftPreview";
 import type { SlotKind } from "@/shared/api/enums";
 import { parseSlotKind } from "@/shared/api/enums";
-import { Button } from "@/shared/ui/Button";
-import { Card } from "@/shared/ui/Card";
+import { Button } from "@/shared/ui/actions/Button";
 import { StatusBadge } from "@/shared/ui/StatusBadge";
 
 type CaptureSlotCardProps = {
@@ -61,8 +60,8 @@ export function CaptureSlotCard({
   }
 
   return (
-    <Card
-      className="relative overflow-hidden"
+    <section
+      className="relative overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
       onDragOver={(event) => {
         event.preventDefault();
         event.dataTransfer.dropEffect = "move";
@@ -73,18 +72,18 @@ export function CaptureSlotCard({
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-3">
-            <span className="border-line-strong bg-rail-gold/12 font-display text-rail-gold grid h-10 w-10 place-items-center rounded-full border text-sm">
+            <span className="grid h-10 w-10 place-items-center rounded-full border border-[var(--color-action)]/40 bg-[var(--color-action)]/10 text-sm font-semibold text-[var(--color-action)]">
               {stationLabel}
             </span>
             <div>
-              <p className="text-ink-300 text-xs font-black tracking-[0.28em] uppercase">
-                Classification Station
-              </p>
-              <h2 className="mt-0.5 text-2xl font-black">{label}</h2>
+              <p className="text-xs font-semibold text-[var(--color-text-secondary)]">OCR種別</p>
+              <h2 className="mt-0.5 text-lg font-semibold text-[var(--color-text-primary)]">
+                {label}
+              </h2>
             </div>
           </div>
-          <p className="text-ink-300 mt-1 text-sm">
-            ここに置いた画像は「{label}」としてOCRへ送ります。
+          <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+            このホームの画像は「{label}」として送信します。
           </p>
         </div>
         <StatusBadge status={slot.status} />
@@ -92,26 +91,26 @@ export function CaptureSlotCard({
 
       {slot.previewUrl ? (
         <div
-          className="border-line-soft bg-capture-black/58 mt-4 cursor-grab rounded-2xl border p-2 active:cursor-grabbing"
+          className="mt-4 cursor-grab rounded-[var(--radius-md)] border border-[var(--color-border)] bg-slate-950 p-2 active:cursor-grabbing"
           draggable
           onDragStart={handleDragStart}
         >
           <img
             src={slot.previewUrl}
             alt={`${label}プレビュー`}
-            className="aspect-video w-full rounded-xl object-cover"
+            className="aspect-video w-full rounded-[var(--radius-sm)] object-contain"
           />
-          <div className="text-ink-300 mt-2 flex flex-wrap items-center justify-between gap-2 px-1 text-xs">
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 px-1 text-xs text-slate-200">
             <span>{slot.source ? `${sourceLabels[slot.source]}した画像` : "配置済み画像"}</span>
             <span>ドラッグして別の分類へ移動</span>
           </div>
         </div>
       ) : (
-        <div className="border-line-soft bg-capture-black/38 text-ink-300 mt-4 grid aspect-video place-items-center rounded-2xl border border-dashed px-4 text-center text-sm">
+        <div className="mt-4 grid aspect-video place-items-center rounded-[var(--radius-md)] border border-dashed border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-4 text-center text-sm text-[var(--color-text-secondary)]">
           <span>
-            撮影した画像をここへドロップ
+            {label}画像をここへ配置
             <br />
-            <span className="text-ink-400 text-xs">空きホーム</span>
+            <span className="text-xs">空きホーム</span>
           </span>
         </div>
       )}
@@ -138,7 +137,7 @@ export function CaptureSlotCard({
 
       {mismatch ? (
         <div
-          className="border-rail-gold/30 bg-rail-gold/10 mt-4 rounded-2xl border p-3 text-sm text-yellow-50"
+          className="mt-4 rounded-[var(--radius-md)] border border-[var(--color-warning)]/60 bg-[var(--color-warning)]/20 p-3 text-sm text-[var(--color-text-primary)]"
           role="alert"
         >
           OCR判定は <strong>{slot.detectedKind}</strong>{" "}
@@ -148,7 +147,7 @@ export function CaptureSlotCard({
 
       {slot.transportError ? (
         <div
-          className="mt-4 rounded-2xl border border-red-300/30 bg-red-950/40 p-3 text-sm text-red-50"
+          className="mt-4 rounded-[var(--radius-md)] border border-[var(--color-danger)]/45 bg-[var(--color-danger)]/10 p-3 text-sm text-[var(--color-text-primary)]"
           role="alert"
         >
           <strong>{slot.transportError.title}</strong>
@@ -158,7 +157,7 @@ export function CaptureSlotCard({
 
       {slot.jobFailure ? (
         <div
-          className="mt-4 rounded-2xl border border-red-300/30 bg-red-950/40 p-3 text-sm text-red-50"
+          className="mt-4 rounded-[var(--radius-md)] border border-[var(--color-danger)]/45 bg-[var(--color-danger)]/10 p-3 text-sm text-[var(--color-text-primary)]"
           role="alert"
         >
           <strong>{slot.jobFailure.code}</strong>
@@ -167,7 +166,7 @@ export function CaptureSlotCard({
       ) : null}
 
       {slot.pollAttempts >= 15 && !["succeeded", "failed", "cancelled"].includes(slot.status) ? (
-        <div className="border-rail-gold/30 bg-rail-gold/10 mt-4 rounded-2xl border p-3 text-sm text-yellow-50">
+        <div className="mt-4 rounded-[var(--radius-md)] border border-[var(--color-warning)]/60 bg-[var(--color-warning)]/20 p-3 text-sm text-[var(--color-text-primary)]">
           Worker未接続の可能性があります。
           <Button className="ml-3" variant="secondary" onClick={onManualRefresh}>
             手動で再取得
@@ -176,6 +175,6 @@ export function CaptureSlotCard({
       ) : null}
 
       <DraftPreview draft={draft} />
-    </Card>
+    </section>
   );
 }

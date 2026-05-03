@@ -3,16 +3,24 @@ type StatusBadgeProps = {
 };
 
 const toneByStatus: Record<string, string> = {
-  empty: "border-line-soft bg-white/[0.035] text-ink-300",
-  selected: "border-rail-blue/35 bg-rail-blue/10 text-sky-100",
-  uploading: "border-rail-blue/35 bg-rail-blue/10 text-sky-100",
-  uploaded: "border-rail-blue/35 bg-rail-blue/10 text-sky-100",
-  queueing: "border-rail-gold/38 bg-rail-gold/10 text-yellow-100",
-  queued: "border-rail-gold/38 bg-rail-gold/10 text-yellow-100",
-  running: "border-rail-magenta/34 bg-rail-magenta/10 text-fuchsia-100",
-  succeeded: "border-route-green/40 bg-route-green/12 text-emerald-100",
-  failed: "border-red-300/34 bg-red-400/10 text-red-100",
-  cancelled: "border-ink-400/35 bg-ink-400/10 text-ink-200",
+  empty:
+    "border-[var(--color-border)] bg-[var(--color-surface-subtle)] text-[var(--color-text-secondary)]",
+  selected:
+    "border-[var(--color-action)]/45 bg-[var(--color-action)]/10 text-[var(--color-action)]",
+  uploading:
+    "border-[var(--color-action)]/45 bg-[var(--color-action)]/10 text-[var(--color-action)]",
+  uploaded:
+    "border-[var(--color-action)]/45 bg-[var(--color-action)]/10 text-[var(--color-action)]",
+  queueing:
+    "border-[var(--color-warning)]/60 bg-[var(--color-warning)]/20 text-[var(--color-text-primary)]",
+  queued:
+    "border-[var(--color-warning)]/60 bg-[var(--color-warning)]/20 text-[var(--color-text-primary)]",
+  running: "border-[var(--color-action)]/45 bg-[var(--color-action)]/10 text-[var(--color-action)]",
+  succeeded:
+    "border-[var(--color-success)]/50 bg-[var(--color-success)]/12 text-[var(--color-text-primary)]",
+  failed: "border-[var(--color-danger)]/45 bg-[var(--color-danger)]/10 text-[var(--color-danger)]",
+  cancelled:
+    "border-[var(--color-border)] bg-[var(--color-surface-subtle)] text-[var(--color-text-secondary)]",
 };
 
 const labelByStatus: Record<string, string> = {

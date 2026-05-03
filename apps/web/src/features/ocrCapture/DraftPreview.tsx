@@ -10,11 +10,11 @@ export function DraftPreview({ draft }: DraftPreviewProps) {
   }
 
   return (
-    <details className="mt-4 rounded-2xl border border-emerald-300/20 bg-emerald-400/5 p-3">
-      <summary className="cursor-pointer text-sm font-bold text-emerald-100">
+    <details className="mt-4 rounded-[var(--radius-md)] border border-[var(--color-success)]/45 bg-[var(--color-success)]/10 p-3">
+      <summary className="cursor-pointer text-sm font-semibold text-[var(--color-text-primary)]">
         OCRドラフト JSON を表示
       </summary>
-      <pre className="mt-3 max-h-56 overflow-auto rounded-xl bg-black/40 p-3 text-xs text-emerald-50">
+      <pre className="mt-3 max-h-56 overflow-auto rounded-[var(--radius-sm)] bg-slate-950 p-3 text-xs text-slate-100">
         {JSON.stringify(
           {
             draftId: draft.draftId,

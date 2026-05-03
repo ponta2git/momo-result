@@ -18,7 +18,7 @@ type SetupPanelProps = {
 };
 
 const selectClass =
-  "w-full rounded-2xl border border-line-soft bg-capture-black/45 px-4 py-3 text-ink-100 transition hover:border-white/18";
+  "w-full rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] transition hover:bg-[var(--color-surface-subtle)] disabled:cursor-not-allowed disabled:opacity-60";
 
 function queryErrorMessage(error: unknown): string | undefined {
   if (!error) {
@@ -157,7 +157,7 @@ export function SetupPanel({ value, onChange, enabled = true, authMemberId }: Se
           )}
         </select>
         {gameTitlesError ? (
-          <p className="mt-1 text-sm text-red-200" role="alert">
+          <p className="mt-1 text-sm text-[var(--color-danger)]" role="alert">
             {gameTitlesError}
           </p>
         ) : null}
@@ -188,7 +188,7 @@ export function SetupPanel({ value, onChange, enabled = true, authMemberId }: Se
           )}
         </select>
         {seasonMastersError ? (
-          <p className="mt-1 text-sm text-red-200" role="alert">
+          <p className="mt-1 text-sm text-[var(--color-danger)]" role="alert">
             {seasonMastersError}
           </p>
         ) : null}
@@ -214,7 +214,7 @@ export function SetupPanel({ value, onChange, enabled = true, authMemberId }: Se
           )}
         </select>
         {mapMastersError ? (
-          <p className="mt-1 text-sm text-red-200" role="alert">
+          <p className="mt-1 text-sm text-[var(--color-danger)]" role="alert">
             {mapMastersError}
           </p>
         ) : null}

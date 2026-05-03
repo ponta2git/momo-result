@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 
 import type { InputSource } from "@/features/ocrCapture/captureState";
 import { validateImageFile } from "@/features/ocrCapture/captureState";
-import { Button } from "@/shared/ui/Button";
+import { Button } from "@/shared/ui/actions/Button";
 
 type ImageInputProps = {
   slotLabel: string;

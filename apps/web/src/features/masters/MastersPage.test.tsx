@@ -151,4 +151,24 @@ describe("MastersPage", () => {
     expect(screen.queryByText("作品マスタの読み込みに失敗しました")).not.toBeInTheDocument();
     expect(await screen.findByText("復旧済み作品")).toBeInTheDocument();
   });
+
+  it("does not reuse list-response cache entries from OCR setup queries", async () => {
+    window.localStorage.setItem("momoresult.devUser", "ponta");
+    queryClient.setQueryData(["masters", "game-titles", "ponta"], {
+      items: [
+        {
+          id: "gt_cached_response",
+          name: "別画面キャッシュ",
+          layoutFamily: "momotetsu_2",
+          displayOrder: 1,
+          createdAt: "2026-01-01T00:00:00.000Z",
+        },
+      ],
+    });
+
+    renderPage();
+
+    expect(await screen.findByRole("heading", { name: "マスタ管理" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText("別画面キャッシュ")).not.toBeInTheDocument());
+  });
 });

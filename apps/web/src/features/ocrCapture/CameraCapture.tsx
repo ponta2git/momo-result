@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { InputSource } from "@/features/ocrCapture/captureState";
 import { validateImageFile } from "@/features/ocrCapture/captureState";
-import { Button } from "@/shared/ui/Button";
+import { Button } from "@/shared/ui/actions/Button";
 
 type CameraCaptureProps = {
   slotLabel: string;
@@ -23,6 +23,7 @@ export function CameraCapture({ slotLabel, onSelect, onValidationError }: Camera
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const startingRef = useRef(false);
   const [active, setActive] = useState(false);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +47,7 @@ export function CameraCapture({ slotLabel, onSelect, onValidationError }: Camera
   }, []);
 
   async function startCamera() {
-    if (starting) {
+    if (startingRef.current) {
       return;
     }
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -54,6 +55,7 @@ export function CameraCapture({ slotLabel, onSelect, onValidationError }: Camera
       return;
     }
 
+    startingRef.current = true;
     setStarting(true);
     try {
       stopStream(streamRef.current);
@@ -91,6 +93,7 @@ export function CameraCapture({ slotLabel, onSelect, onValidationError }: Camera
       setActive(false);
       setError(caught instanceof Error ? caught.message : "カメラを開始できませんでした。");
     } finally {
+      startingRef.current = false;
       setStarting(false);
     }
   }
@@ -132,7 +135,7 @@ export function CameraCapture({ slotLabel, onSelect, onValidationError }: Camera
 
   return (
     <div className="space-y-3">
-      <div className="border-line-soft bg-capture-black/70 overflow-hidden rounded-2xl border">
+      <div className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-slate-950">
         <video
           ref={videoRef}
           className="aspect-video w-full object-cover"
@@ -142,10 +145,10 @@ export function CameraCapture({ slotLabel, onSelect, onValidationError }: Camera
         />
         <canvas ref={canvasRef} className="hidden" />
       </div>
-      {error ? <p className="text-sm text-red-200">{error}</p> : null}
+      {error ? <p className="text-sm text-[var(--color-danger)]">{error}</p> : null}
       <div className="flex flex-wrap gap-2">
-        <Button variant="secondary" onClick={startCamera} disabled={starting}>
-          {starting ? "起動中…" : active ? "カメラ再開" : "カメラ開始"}
+        <Button variant="secondary" onClick={startCamera} disabled={starting || active}>
+          {starting ? "起動中…" : active ? "カメラ使用中" : "カメラ開始"}
         </Button>
         <Button onClick={capture} disabled={!active}>
           静止画を撮影
@@ -154,7 +157,7 @@ export function CameraCapture({ slotLabel, onSelect, onValidationError }: Camera
           停止
         </Button>
       </div>
-      <p className="text-ink-300 text-xs">
+      <p className="text-xs text-[var(--color-text-secondary)]">
         撮影した画像は、空いている分類トレイへ左から順に入ります。
       </p>
     </div>

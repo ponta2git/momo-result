@@ -23,16 +23,18 @@ export function AuthPanel({ auth, forceDevPicker = false }: AuthPanelProps) {
   }
 
   return (
-    <div className="border-line-soft bg-night-900/72 rounded-2xl border px-4 py-3 backdrop-blur">
-      <p className="text-ink-300 text-xs font-bold tracking-[0.24em] uppercase">Account</p>
+    <div className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
+      <p className="text-xs font-semibold text-[var(--color-text-secondary)]">Account</p>
       {auth ? (
         <div className="mt-2 flex items-center justify-between gap-3">
-          <p className="text-ink-100 text-sm font-bold">{auth.displayName}</p>
+          <p className="text-sm font-semibold text-[var(--color-text-primary)]">
+            {auth.displayName}
+          </p>
           <button
             type="button"
             onClick={() => logoutMutation.mutate()}
             disabled={logoutMutation.isPending}
-            className="border-line-soft text-ink-100 hover:border-rail-gold rounded-xl border px-3 py-2 text-sm font-bold disabled:opacity-60"
+            className="rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-2 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-surface-subtle)] disabled:opacity-60"
           >
             ログアウト
           </button>
@@ -40,7 +42,7 @@ export function AuthPanel({ auth, forceDevPicker = false }: AuthPanelProps) {
       ) : (
         <a
           href="/api/auth/login"
-          className="bg-rail-gold text-night-950 hover:bg-rail-gold/90 mt-2 inline-flex rounded-xl px-4 py-2 text-sm font-black"
+          className="mt-2 inline-flex rounded-[var(--radius-sm)] bg-[var(--color-action)] px-4 py-2 text-sm font-semibold text-white hover:bg-[#205f92]"
         >
           Discordでログイン
         </a>

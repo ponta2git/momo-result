@@ -18,10 +18,10 @@ export function DevUserPicker({ force = false }: DevUserPickerProps) {
   }
 
   return (
-    <div className="border-line-soft bg-night-900/72 rounded-2xl border px-4 py-3 backdrop-blur">
+    <div className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
       <label
         htmlFor={id}
-        className="text-ink-300 block text-xs font-bold tracking-[0.24em] uppercase"
+        className="block text-xs font-semibold text-[var(--color-text-secondary)]"
       >
         Dev User
       </label>
@@ -33,7 +33,7 @@ export function DevUserPicker({ force = false }: DevUserPickerProps) {
           void queryClient.invalidateQueries();
         }}
         disabled={lockedByEnv}
-        className="border-line-soft bg-capture-black/45 text-ink-100 mt-2 w-full rounded-xl border px-3 py-2 text-sm"
+        className="mt-2 w-full rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)]"
       >
         <option value="">未選択</option>
         {fixedMembers.map((member) => (
@@ -43,7 +43,9 @@ export function DevUserPicker({ force = false }: DevUserPickerProps) {
         ))}
       </select>
       {lockedByEnv ? (
-        <p className="text-ink-300 mt-2 text-xs">VITE_DEV_USER で固定されています。</p>
+        <p className="mt-2 text-xs text-[var(--color-text-secondary)]">
+          VITE_DEV_USER で固定されています。
+        </p>
       ) : null}
     </div>
   );

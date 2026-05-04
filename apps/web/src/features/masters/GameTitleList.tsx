@@ -10,12 +10,14 @@ const selectClass =
   "w-full min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)]";
 const labelClass = "text-xs font-semibold text-[var(--color-text-secondary)]";
 
+type GameTitleListItem = GameTitleResponse & { pending?: boolean };
+
 type GameTitleListProps = {
   createAction: (formData: FormData) => void | Promise<void>;
   createError?: string | undefined;
   createFormKey?: string | number | undefined;
   defaultLayoutFamily: LayoutFamily;
-  items: GameTitleResponse[];
+  items: GameTitleListItem[];
   onSelect: (id: string) => void;
   selectedGameTitleId: string;
 };
@@ -64,6 +66,7 @@ export function GameTitleList({
         <ul className="mt-3 grid gap-2">
           {items.map((item) => {
             const isSelected = item.id === selectedGameTitleId;
+            const isPending = item.pending === true;
             return (
               <li key={item.id}>
                 <button
@@ -71,12 +74,15 @@ export function GameTitleList({
                     isSelected
                       ? "border-[var(--color-action)]/60 bg-[var(--color-action)]/12"
                       : "border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-surface-subtle)]"
-                  }`}
+                  } ${isPending ? "opacity-60" : ""}`}
                   type="button"
+                  disabled={isPending}
+                  aria-busy={isPending || undefined}
                   onClick={() => onSelect(item.id)}
                 >
                   <p className="line-clamp-2 text-sm font-semibold text-[var(--color-text-primary)]">
                     {item.name}
+                    {isPending ? <span className="ml-2 text-xs font-normal text-[var(--color-text-secondary)]">(追加中…)</span> : null}
                   </p>
                   <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
                     {item.layoutFamily}

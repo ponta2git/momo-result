@@ -2,6 +2,8 @@ import { MasterCreateForm } from "@/features/masters/MasterCreateForm";
 import type { MapMasterResponse, SeasonMasterResponse } from "@/shared/api/masters";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 
+type ScopedMasterItem = (MapMasterResponse | SeasonMasterResponse) & { pending?: boolean };
+
 type ScopedMasterPanelProps = {
   createAction: (formData: FormData) => void | Promise<void>;
   createError?: string | undefined;
@@ -9,7 +11,7 @@ type ScopedMasterPanelProps = {
   disabledReason?: string | undefined;
   emptyDescription: string;
   itemLabel: string;
-  items: MapMasterResponse[] | SeasonMasterResponse[];
+  items: ScopedMasterItem[];
   selectedGameTitleName?: string | undefined;
   title: string;
 };
@@ -43,17 +45,24 @@ export function ScopedMasterPanel({
         <EmptyState className="mt-3" title="登録がありません" description={emptyDescription} />
       ) : (
         <ul className="mt-3 grid gap-2">
-          {items.map((item) => (
-            <li
-              key={item.id}
-              className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-2"
-            >
-              <p className="line-clamp-2 text-sm font-semibold text-[var(--color-text-primary)]">
-                {item.name}
-              </p>
-              <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">{item.id}</p>
-            </li>
-          ))}
+          {items.map((item) => {
+            const isPending = item.pending === true;
+            return (
+              <li
+                key={item.id}
+                className={`rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-2 ${
+                  isPending ? "opacity-60" : ""
+                }`}
+                aria-busy={isPending || undefined}
+              >
+                <p className="line-clamp-2 text-sm font-semibold text-[var(--color-text-primary)]">
+                  {item.name}
+                  {isPending ? <span className="ml-2 text-xs font-normal text-[var(--color-text-secondary)]">(追加中…)</span> : null}
+                </p>
+                <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">{item.id}</p>
+              </li>
+            );
+          })}
         </ul>
       )}
 

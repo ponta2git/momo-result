@@ -1,5 +1,12 @@
 import { useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { useActionState, useEffect, useMemo, useState, useTransition } from "react";
+import {
+  useActionState,
+  useEffect,
+  useMemo,
+  useOptimistic,
+  useState,
+  useTransition,
+} from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import {
@@ -109,6 +116,25 @@ export function MastersPage() {
   const mapMasters = useMemo(() => mapMastersQuery.data ?? [], [mapMastersQuery.data]);
   const seasonMasters = useMemo(() => seasonMastersQuery.data ?? [], [seasonMastersQuery.data]);
 
+  type OptimisticGameTitle = (typeof gameTitles)[number] & { pending?: boolean };
+  type OptimisticMap = (typeof mapMasters)[number] & { pending?: boolean };
+  type OptimisticSeason = (typeof seasonMasters)[number] & { pending?: boolean };
+
+  const [optimisticGameTitles, addOptimisticGameTitle] = useOptimistic<
+    OptimisticGameTitle[],
+    OptimisticGameTitle
+  >(gameTitles, (state, item) => [...state, item]);
+
+  const [optimisticMapMasters, addOptimisticMapMaster] = useOptimistic<
+    OptimisticMap[],
+    OptimisticMap
+  >(mapMasters, (state, item) => [...state, item]);
+
+  const [optimisticSeasonMasters, addOptimisticSeasonMaster] = useOptimistic<
+    OptimisticSeason[],
+    OptimisticSeason
+  >(seasonMasters, (state, item) => [...state, item]);
+
   useEffect(() => {
     if (gameTitles.length === 0) {
       setSelectedGameTitleId("");
@@ -126,12 +152,12 @@ export function MastersPage() {
   const viewModel = useMemo(
     () =>
       buildMasterViewModel({
-        gameTitles,
-        mapMasters,
-        seasonMasters,
+        gameTitles: optimisticGameTitles,
+        mapMasters: optimisticMapMasters,
+        seasonMasters: optimisticSeasonMasters,
         selectedGameTitleId,
       }),
-    [gameTitles, mapMasters, seasonMasters, selectedGameTitleId],
+    [optimisticGameTitles, optimisticMapMasters, optimisticSeasonMasters, selectedGameTitleId],
   );
 
   type CreateState = { error?: string | undefined; version: number };
@@ -146,9 +172,18 @@ export function MastersPage() {
       return { ...prev, error: "作品名を入力してください" };
     }
     const layoutFamily = normalizeLayoutFamily(String(formData.get("layoutFamily") ?? ""));
+    const draftId = createGameTitleId(name);
+    addOptimisticGameTitle({
+      id: draftId,
+      layoutFamily,
+      name,
+      displayOrder: optimisticGameTitles.length,
+      createdAt: new Date().toISOString(),
+      pending: true,
+    });
     try {
       const created = await postGameTitle({
-        id: createGameTitleId(name),
+        id: draftId,
         layoutFamily,
         name,
       });
@@ -170,9 +205,18 @@ export function MastersPage() {
       if (!isNameValid(name) || !viewModel.selectedGameTitleId) {
         return { ...prev, error: "マップ名を入力してください" };
       }
+      const draftId = createMapMasterId(name);
+      addOptimisticMapMaster({
+        id: draftId,
+        gameTitleId: viewModel.selectedGameTitleId,
+        name,
+        displayOrder: viewModel.selectedMapMasters.length,
+        createdAt: new Date().toISOString(),
+        pending: true,
+      });
       try {
         await postMapMaster({
-          id: createMapMasterId(name),
+          id: draftId,
           gameTitleId: viewModel.selectedGameTitleId,
           name,
         });
@@ -197,9 +241,18 @@ export function MastersPage() {
     if (!isNameValid(name) || !viewModel.selectedGameTitleId) {
       return { ...prev, error: "シーズン名を入力してください" };
     }
+    const draftId = createSeasonMasterId(name);
+    addOptimisticSeasonMaster({
+      id: draftId,
+      gameTitleId: viewModel.selectedGameTitleId,
+      name,
+      displayOrder: viewModel.selectedSeasonMasters.length,
+      createdAt: new Date().toISOString(),
+      pending: true,
+    });
     try {
       await postSeasonMaster({
-        id: createSeasonMasterId(name),
+        id: draftId,
         gameTitleId: viewModel.selectedGameTitleId,
         name,
       });
@@ -271,7 +324,7 @@ export function MastersPage() {
       ) : null}
 
       <MasterRelationBoard
-        gameTitles={gameTitles}
+        gameTitles={optimisticGameTitles}
         selectedGameTitleId={viewModel.selectedGameTitleId}
         selectedGameTitleName={viewModel.selectedGameTitle?.name}
         onSelectGameTitle={setSelectedGameTitleId}

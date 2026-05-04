@@ -9,23 +9,26 @@ import type {
   SeasonMasterResponse,
 } from "@/shared/api/masters";
 
+type GameTitleListItem = GameTitleResponse & { pending?: boolean };
+type ScopedMasterListItem = (MapMasterResponse | SeasonMasterResponse) & { pending?: boolean };
+
 type MasterRelationBoardProps = {
   gameTitleCreateAction: (formData: FormData) => void | Promise<void>;
   gameTitleCreateError?: string | undefined;
   gameTitleCreateFormKey?: string | number | undefined;
   gameTitleDefaultLayoutFamily: LayoutFamily;
-  gameTitles: GameTitleResponse[];
+  gameTitles: GameTitleListItem[];
   incidentMasters: IncidentMasterResponse[];
   mapCreateAction: (formData: FormData) => void | Promise<void>;
   mapCreateError?: string | undefined;
   mapCreateFormKey?: string | number | undefined;
-  mapMasters: MapMasterResponse[];
+  mapMasters: ScopedMasterListItem[];
   onSelectGameTitle: (id: string) => void;
   scopedDisabledReason?: string | undefined;
   seasonCreateAction: (formData: FormData) => void | Promise<void>;
   seasonCreateError?: string | undefined;
   seasonCreateFormKey?: string | number | undefined;
-  seasonMasters: SeasonMasterResponse[];
+  seasonMasters: ScopedMasterListItem[];
   selectedGameTitleId: string;
   selectedGameTitleName?: string | undefined;
 };

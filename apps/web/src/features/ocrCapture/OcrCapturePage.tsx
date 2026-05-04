@@ -11,6 +11,7 @@ import {
   uploadImage,
 } from "@/features/ocrCapture/api";
 import type { OcrDraftResponse } from "@/features/ocrCapture/api";
+import { authQueryOptions } from "@/features/auth/authQueries";
 import { CameraCapture } from "@/features/ocrCapture/CameraCapture";
 import { CaptureRail } from "@/features/ocrCapture/CaptureRail";
 import { invalidateMatchCaches } from "@/features/matches/queryKeys";
@@ -29,7 +30,6 @@ import { defaultSetupValues, setupSchema } from "@/features/ocrCapture/schema";
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
 import { SetupPanel } from "@/features/ocrCapture/SetupPanel";
 import { useOcrJobPolling } from "@/features/ocrCapture/useOcrJobPolling";
-import { getAuthMe } from "@/shared/api/client";
 import type { SlotKind } from "@/shared/api/enums";
 import type { SlotMap } from "@/shared/lib/slotMap";
 import { useDistinctMarkerEffect } from "@/shared/lib/useDistinctMarkerEffect";
@@ -139,8 +139,7 @@ export function OcrCapturePage() {
   const slotsRef = useRef(slots);
 
   const authQuery = useQuery({
-    queryKey: ["auth-me"],
-    queryFn: getAuthMe,
+    ...authQueryOptions(),
     retry: false,
   });
   const authReady = authQuery.isSuccess;

@@ -139,6 +139,27 @@
 - momo-db / summitアプリ・共有DBとの関係: `docs/db-rule.md`
 - ローカルDB・Redis起動: `docs/dev-rule.md`
 
+## React 19.2 / TanStack Query 5: `use(promise)` と Suspense
+
+教訓:
+
+- `use(promise)` は render 時にプロミスをアンラップする API で、Suspense と組む。一見魅力的だが、データ取得経路が既に TanStack Query で集約されている場合は採用すべきでない。
+  - キャッシュ・dedup・retry・401/403 正規化を失う。
+  - 同じデータを参照する別コンポーネントが各自プロミスを生成してしまう。
+- 単発プロミス（poll callback 内の `getOcrDraft(...)`、sessionStorage 復元など）は render 時に存在しないため `use()` 不適合。
+- `<form action>` + `useActionState` では、optimistic 更新は action 内で `addOptimistic*` を同期的に呼んでから `await` すること。await 後に呼ぶと transition が解決済みで反映されない。
+- `useFormStatus` は同じ `<form>` の子コンポーネント内でのみ pending を読める。submit ボタンと cancel ボタンを同居させる場合、cancel は `type="button"` を明示する。
+- `<Context>` 直接利用 / Provider 撤去は createContext を自前で持つ場合のみ意味がある。外部ライブラリの Provider（QueryClientProvider 等）には適用できない。
+
+思い出すこと:
+
+- 「最新 API があるから使う」ではなく、副次的複雑さを減らす目的に対し正味で得かを評価する。
+- 採否の根拠を残す（特に「採用しない」結論）。
+
+参照:
+
+- 全面ブラッシュアップ計画: `~/.copilot/session-state/<id>/plan.md`
+
 ## 最終報告に含めること
 
 該当する教訓があった場合、最終報告では次を短く述べる。

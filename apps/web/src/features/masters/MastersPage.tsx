@@ -1,5 +1,5 @@
-import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { useActionState, useEffect, useMemo, useState, useTransition } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import {
@@ -82,12 +82,6 @@ export function MastersPage() {
     : "missing";
 
   const [selectedGameTitleId, setSelectedGameTitleId] = useState("");
-  const [gameTitleDraft, setGameTitleDraft] = useState({
-    layoutFamily: normalizeLayoutFamily(""),
-    name: "",
-  });
-  const [mapDraftName, setMapDraftName] = useState("");
-  const [seasonDraftName, setSeasonDraftName] = useState("");
 
   const gameTitlesQuery = useSuspenseQuery({
     queryKey: masterQueryKeys.gameTitles(authScope),
@@ -140,88 +134,93 @@ export function MastersPage() {
     [gameTitles, mapMasters, seasonMasters, selectedGameTitleId],
   );
 
-  const createGameTitleMutation = useMutation({
-    mutationFn: postGameTitle,
-    onSuccess(created) {
+  type CreateState = { error?: string | undefined; version: number };
+  const initialCreateState: CreateState = { version: 0 };
+
+  const [gameTitleCreateState, gameTitleCreateAction, gameTitleCreatePending] = useActionState<
+    CreateState,
+    FormData
+  >(async (prev, formData) => {
+    const name = normalizeName(String(formData.get("name") ?? ""));
+    if (!isNameValid(name)) {
+      return { ...prev, error: "作品名を入力してください" };
+    }
+    const layoutFamily = normalizeLayoutFamily(String(formData.get("layoutFamily") ?? ""));
+    try {
+      const created = await postGameTitle({
+        id: createGameTitleId(name),
+        layoutFamily,
+        name,
+      });
       setSelectedGameTitleId(created.id);
-      setGameTitleDraft({ layoutFamily: normalizeLayoutFamily(""), name: "" });
-      void invalidateMasterResourceCaches(
+      await invalidateMasterResourceCaches(
         queryClient,
         masterQueryKeys.gameTitles(authScope),
         "game-titles",
       );
-    },
-  });
+      return { error: undefined, version: prev.version + 1 };
+    } catch (error) {
+      return { ...prev, error: errorMessage(error) ?? "作品の追加に失敗しました" };
+    }
+  }, initialCreateState);
 
-  const createMapMutation = useMutation({
-    mutationFn: postMapMaster,
-    onSuccess() {
-      setMapDraftName("");
-      void invalidateMasterResourceCaches(
-        queryClient,
-        masterQueryKeys.mapMasters(authScope, selectedGameTitleId),
-        "map-masters",
-      );
+  const [mapCreateState, mapCreateAction, mapCreatePending] = useActionState<CreateState, FormData>(
+    async (prev, formData) => {
+      const name = normalizeName(String(formData.get("name") ?? ""));
+      if (!isNameValid(name) || !viewModel.selectedGameTitleId) {
+        return { ...prev, error: "マップ名を入力してください" };
+      }
+      try {
+        await postMapMaster({
+          id: createMapMasterId(name),
+          gameTitleId: viewModel.selectedGameTitleId,
+          name,
+        });
+        await invalidateMasterResourceCaches(
+          queryClient,
+          masterQueryKeys.mapMasters(authScope, viewModel.selectedGameTitleId),
+          "map-masters",
+        );
+        return { error: undefined, version: prev.version + 1 };
+      } catch (error) {
+        return { ...prev, error: errorMessage(error) ?? "マップの追加に失敗しました" };
+      }
     },
-  });
+    initialCreateState,
+  );
 
-  const createSeasonMutation = useMutation({
-    mutationFn: postSeasonMaster,
-    onSuccess() {
-      setSeasonDraftName("");
-      void invalidateMasterResourceCaches(
+  const [seasonCreateState, seasonCreateAction, seasonCreatePending] = useActionState<
+    CreateState,
+    FormData
+  >(async (prev, formData) => {
+    const name = normalizeName(String(formData.get("name") ?? ""));
+    if (!isNameValid(name) || !viewModel.selectedGameTitleId) {
+      return { ...prev, error: "シーズン名を入力してください" };
+    }
+    try {
+      await postSeasonMaster({
+        id: createSeasonMasterId(name),
+        gameTitleId: viewModel.selectedGameTitleId,
+        name,
+      });
+      await invalidateMasterResourceCaches(
         queryClient,
-        masterQueryKeys.seasonMasters(authScope, selectedGameTitleId),
+        masterQueryKeys.seasonMasters(authScope, viewModel.selectedGameTitleId),
         "season-masters",
       );
-    },
-  });
+      return { error: undefined, version: prev.version + 1 };
+    } catch (error) {
+      return { ...prev, error: errorMessage(error) ?? "シーズンの追加に失敗しました" };
+    }
+  }, initialCreateState);
 
   const hasPendingMutation =
-    createGameTitleMutation.isPending ||
-    createMapMutation.isPending ||
-    createSeasonMutation.isPending;
+    gameTitleCreatePending || mapCreatePending || seasonCreatePending;
 
   const returnDestination =
     returnTo && handoffStatus === "available" && handoffId
       ? appendHandoffIdToReturnTo(returnTo, handoffId)
       : returnTo;
-
-  function handleCreateGameTitle() {
-    const name = normalizeName(gameTitleDraft.name);
-    if (!isNameValid(name)) {
-      return;
-    }
-    createGameTitleMutation.mutate({
-      id: createGameTitleId(name),
-      layoutFamily: normalizeLayoutFamily(gameTitleDraft.layoutFamily),
-      name,
-    });
-  }
-
-  function handleCreateMap() {
-    const name = normalizeName(mapDraftName);
-    if (!isNameValid(name) || !viewModel.selectedGameTitleId) {
-      return;
-    }
-    createMapMutation.mutate({
-      id: createMapMasterId(name),
-      gameTitleId: viewModel.selectedGameTitleId,
-      name,
-    });
-  }
-
-  function handleCreateSeason() {
-    const name = normalizeName(seasonDraftName);
-    if (!isNameValid(name) || !viewModel.selectedGameTitleId) {
-      return;
-    }
-    createSeasonMutation.mutate({
-      id: createSeasonMasterId(name),
-      gameTitleId: viewModel.selectedGameTitleId,
-      name,
-    });
-  }
 
   return (
     <PageFrame className={sectionClass}>
@@ -276,25 +275,18 @@ export function MastersPage() {
         selectedGameTitleId={viewModel.selectedGameTitleId}
         selectedGameTitleName={viewModel.selectedGameTitle?.name}
         onSelectGameTitle={setSelectedGameTitleId}
-        gameTitleCreateValue={gameTitleDraft}
-        onChangeGameTitleCreateValue={(patch) =>
-          setGameTitleDraft((current) => ({ ...current, ...patch }))
-        }
-        onCreateGameTitle={handleCreateGameTitle}
-        gameTitleCreatePending={createGameTitleMutation.isPending}
-        gameTitleCreateError={errorMessage(createGameTitleMutation.error)}
+        gameTitleCreateAction={gameTitleCreateAction}
+        gameTitleCreateError={gameTitleCreateState.error}
+        gameTitleCreateFormKey={gameTitleCreateState.version}
+        gameTitleDefaultLayoutFamily={normalizeLayoutFamily("")}
         mapMasters={viewModel.selectedMapMasters}
-        mapCreateValue={mapDraftName}
-        onChangeMapCreateValue={setMapDraftName}
-        onCreateMap={handleCreateMap}
-        mapCreatePending={createMapMutation.isPending}
-        mapCreateError={errorMessage(createMapMutation.error)}
+        mapCreateAction={mapCreateAction}
+        mapCreateError={mapCreateState.error}
+        mapCreateFormKey={mapCreateState.version}
         seasonMasters={viewModel.selectedSeasonMasters}
-        seasonCreateValue={seasonDraftName}
-        onChangeSeasonCreateValue={setSeasonDraftName}
-        onCreateSeason={handleCreateSeason}
-        seasonCreatePending={createSeasonMutation.isPending}
-        seasonCreateError={errorMessage(createSeasonMutation.error)}
+        seasonCreateAction={seasonCreateAction}
+        seasonCreateError={seasonCreateState.error}
+        seasonCreateFormKey={seasonCreateState.version}
         scopedDisabledReason={viewModel.scopedDisabledReason}
         incidentMasters={incidentMastersQuery.data}
       />

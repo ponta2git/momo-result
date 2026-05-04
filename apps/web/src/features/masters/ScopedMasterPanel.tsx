@@ -3,15 +3,13 @@ import type { MapMasterResponse, SeasonMasterResponse } from "@/shared/api/maste
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 
 type ScopedMasterPanelProps = {
+  createAction: (formData: FormData) => void | Promise<void>;
   createError?: string | undefined;
-  createPending?: boolean;
-  createValue: string;
+  createFormKey?: string | number | undefined;
   disabledReason?: string | undefined;
   emptyDescription: string;
   itemLabel: string;
   items: MapMasterResponse[] | SeasonMasterResponse[];
-  onChangeCreateValue: (value: string) => void;
-  onCreate: () => void;
   selectedGameTitleName?: string | undefined;
   title: string;
 };
@@ -19,15 +17,13 @@ type ScopedMasterPanelProps = {
 const labelClass = "text-xs font-semibold text-[var(--color-text-secondary)]";
 
 export function ScopedMasterPanel({
+  createAction,
   createError,
-  createPending = false,
-  createValue,
+  createFormKey,
   disabledReason,
   emptyDescription,
   itemLabel,
   items,
-  onChangeCreateValue,
-  onCreate,
   selectedGameTitleName,
   title,
 }: ScopedMasterPanelProps) {
@@ -63,15 +59,13 @@ export function ScopedMasterPanel({
 
       <div className="mt-4">
         <MasterCreateForm
-          label="名称"
-          value={createValue}
-          onChange={onChangeCreateValue}
-          onSubmit={onCreate}
-          submitLabel="追加"
-          isPending={createPending}
-          error={createError}
+          action={createAction}
           disabled={Boolean(disabledReason)}
           disabledReason={disabledReason}
+          error={createError}
+          formKey={createFormKey}
+          label="名称"
+          submitLabel="追加"
         />
       </div>
     </section>

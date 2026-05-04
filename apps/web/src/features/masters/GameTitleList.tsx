@@ -1,3 +1,5 @@
+import { useFormStatus } from "react-dom";
+
 import { layoutFamilies } from "@/shared/api/enums";
 import type { LayoutFamily } from "@/shared/api/enums";
 import type { GameTitleResponse } from "@/shared/api/masters";
@@ -9,26 +11,36 @@ const selectClass =
 const labelClass = "text-xs font-semibold text-[var(--color-text-secondary)]";
 
 type GameTitleListProps = {
+  createAction: (formData: FormData) => void | Promise<void>;
   createError?: string | undefined;
-  createPending?: boolean;
-  createValue: {
-    layoutFamily: LayoutFamily;
-    name: string;
-  };
+  createFormKey?: string | number | undefined;
+  defaultLayoutFamily: LayoutFamily;
   items: GameTitleResponse[];
-  onChangeCreateValue: (patch: Partial<{ layoutFamily: LayoutFamily; name: string }>) => void;
-  onCreate: () => void;
   onSelect: (id: string) => void;
   selectedGameTitleId: string;
 };
 
+function CreateButton() {
+  const { pending } = useFormStatus();
+  return (
+    <Button
+      disabled={pending}
+      pending={pending}
+      pendingLabel="追加中"
+      type="submit"
+      variant="primary"
+    >
+      作品を追加
+    </Button>
+  );
+}
+
 export function GameTitleList({
+  createAction,
   createError,
-  createPending = false,
-  createValue,
+  createFormKey,
+  defaultLayoutFamily,
   items,
-  onChangeCreateValue,
-  onCreate,
   onSelect,
   selectedGameTitleId,
 }: GameTitleListProps) {
@@ -76,37 +88,20 @@ export function GameTitleList({
         </ul>
       )}
 
-      <form
-        className="mt-4 grid gap-2"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (!createValue.name.trim()) {
-            return;
-          }
-          onCreate();
-        }}
-      >
+      <form action={createAction} className="mt-4 grid gap-2" key={createFormKey}>
         <label className="grid gap-1">
           <span className={labelClass}>作品名</span>
           <input
             className={selectClass}
+            name="name"
             placeholder="例: 桃太郎電鉄2"
-            value={createValue.name}
-            onChange={(event) => onChangeCreateValue({ name: event.target.value })}
+            type="text"
           />
         </label>
 
         <label className="grid gap-1">
           <span className={labelClass}>Layout Family</span>
-          <select
-            className={selectClass}
-            value={createValue.layoutFamily}
-            onChange={(event) =>
-              onChangeCreateValue({
-                layoutFamily: event.target.value as LayoutFamily,
-              })
-            }
-          >
+          <select className={selectClass} defaultValue={defaultLayoutFamily} name="layoutFamily">
             {layoutFamilies.map((family) => (
               <option key={family} value={family}>
                 {family}
@@ -118,15 +113,7 @@ export function GameTitleList({
           </p>
         </label>
 
-        <Button
-          type="submit"
-          pending={createPending}
-          pendingLabel="追加中"
-          variant="primary"
-          disabled={!createValue.name.trim()}
-        >
-          作品を追加
-        </Button>
+        <CreateButton />
 
         {createError ? (
           <p className="text-sm text-[var(--color-danger)]" role="alert">

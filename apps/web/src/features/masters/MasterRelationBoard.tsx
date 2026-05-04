@@ -10,54 +10,42 @@ import type {
 } from "@/shared/api/masters";
 
 type MasterRelationBoardProps = {
+  gameTitleCreateAction: (formData: FormData) => void | Promise<void>;
   gameTitleCreateError?: string | undefined;
-  gameTitleCreatePending?: boolean;
-  gameTitleCreateValue: { layoutFamily: LayoutFamily; name: string };
+  gameTitleCreateFormKey?: string | number | undefined;
+  gameTitleDefaultLayoutFamily: LayoutFamily;
   gameTitles: GameTitleResponse[];
   incidentMasters: IncidentMasterResponse[];
+  mapCreateAction: (formData: FormData) => void | Promise<void>;
   mapCreateError?: string | undefined;
-  mapCreatePending?: boolean;
-  mapCreateValue: string;
+  mapCreateFormKey?: string | number | undefined;
   mapMasters: MapMasterResponse[];
-  onChangeGameTitleCreateValue: (
-    patch: Partial<{ layoutFamily: LayoutFamily; name: string }>,
-  ) => void;
-  onChangeMapCreateValue: (value: string) => void;
-  onChangeSeasonCreateValue: (value: string) => void;
-  onCreateGameTitle: () => void;
-  onCreateMap: () => void;
-  onCreateSeason: () => void;
   onSelectGameTitle: (id: string) => void;
   scopedDisabledReason?: string | undefined;
+  seasonCreateAction: (formData: FormData) => void | Promise<void>;
   seasonCreateError?: string | undefined;
-  seasonCreatePending?: boolean;
-  seasonCreateValue: string;
+  seasonCreateFormKey?: string | number | undefined;
   seasonMasters: SeasonMasterResponse[];
   selectedGameTitleId: string;
   selectedGameTitleName?: string | undefined;
 };
 
 export function MasterRelationBoard({
+  gameTitleCreateAction,
   gameTitleCreateError,
-  gameTitleCreatePending = false,
-  gameTitleCreateValue,
+  gameTitleCreateFormKey,
+  gameTitleDefaultLayoutFamily,
   gameTitles,
   incidentMasters,
+  mapCreateAction,
   mapCreateError,
-  mapCreatePending = false,
-  mapCreateValue,
+  mapCreateFormKey,
   mapMasters,
-  onChangeGameTitleCreateValue,
-  onChangeMapCreateValue,
-  onChangeSeasonCreateValue,
-  onCreateGameTitle,
-  onCreateMap,
-  onCreateSeason,
   onSelectGameTitle,
   scopedDisabledReason,
+  seasonCreateAction,
   seasonCreateError,
-  seasonCreatePending = false,
-  seasonCreateValue,
+  seasonCreateFormKey,
   seasonMasters,
   selectedGameTitleId,
   selectedGameTitleName,
@@ -65,14 +53,13 @@ export function MasterRelationBoard({
   return (
     <section className="grid gap-4 xl:grid-cols-[minmax(16rem,1fr)_minmax(18rem,1fr)_minmax(18rem,1fr)]">
       <GameTitleList
-        items={gameTitles}
-        selectedGameTitleId={selectedGameTitleId}
-        onSelect={onSelectGameTitle}
-        createValue={gameTitleCreateValue}
-        onChangeCreateValue={onChangeGameTitleCreateValue}
-        onCreate={onCreateGameTitle}
-        createPending={gameTitleCreatePending}
+        createAction={gameTitleCreateAction}
         createError={gameTitleCreateError}
+        createFormKey={gameTitleCreateFormKey}
+        defaultLayoutFamily={gameTitleDefaultLayoutFamily}
+        items={gameTitles}
+        onSelect={onSelectGameTitle}
+        selectedGameTitleId={selectedGameTitleId}
       />
 
       <ScopedMasterPanel
@@ -81,11 +68,9 @@ export function MasterRelationBoard({
         items={mapMasters}
         selectedGameTitleName={selectedGameTitleName}
         emptyDescription="この作品に紐づくマップを追加してください。"
-        createValue={mapCreateValue}
-        onChangeCreateValue={onChangeMapCreateValue}
-        onCreate={onCreateMap}
-        createPending={mapCreatePending}
+        createAction={mapCreateAction}
         createError={mapCreateError}
+        createFormKey={mapCreateFormKey}
         disabledReason={scopedDisabledReason}
       />
 
@@ -95,11 +80,9 @@ export function MasterRelationBoard({
         items={seasonMasters}
         selectedGameTitleName={selectedGameTitleName}
         emptyDescription="この作品に紐づくシーズンを追加してください。"
-        createValue={seasonCreateValue}
-        onChangeCreateValue={onChangeSeasonCreateValue}
-        onCreate={onCreateSeason}
-        createPending={seasonCreatePending}
+        createAction={seasonCreateAction}
         createError={seasonCreateError}
+        createFormKey={seasonCreateFormKey}
         disabledReason={scopedDisabledReason}
       />
 

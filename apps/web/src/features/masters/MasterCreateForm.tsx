@@ -1,67 +1,79 @@
+import { useFormStatus } from "react-dom";
+
 import { Button } from "@/shared/ui/actions/Button";
 
 type MasterCreateFormProps = {
+  action: (formData: FormData) => void | Promise<void>;
   actionLabel?: string;
   disabled?: boolean;
   disabledReason?: string | undefined;
   error?: string | undefined;
-  isPending?: boolean;
+  formKey?: string | number | undefined;
+  inputName?: string;
   label: string;
-  onSubmit: () => void;
   placeholder?: string;
   submitLabel?: string;
-  value: string;
-  onChange: (value: string) => void;
 };
 
 const inputClass =
   "w-full min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)]";
 const labelClass = "text-xs font-semibold text-[var(--color-text-secondary)]";
 
+function SubmitButton({
+  disabled,
+  label,
+  pendingLabel,
+}: {
+  disabled: boolean;
+  label: string;
+  pendingLabel: string;
+}) {
+  const { pending } = useFormStatus();
+  return (
+    <Button
+      disabled={disabled || pending}
+      pending={pending}
+      pendingLabel={pendingLabel}
+      type="submit"
+      variant="primary"
+    >
+      {label}
+    </Button>
+  );
+}
+
 export function MasterCreateForm({
+  action,
   actionLabel = "追加",
   disabled = false,
   disabledReason,
   error,
-  isPending = false,
+  formKey,
+  inputName = "name",
   label,
-  onSubmit,
   placeholder,
   submitLabel,
-  value,
-  onChange,
 }: MasterCreateFormProps) {
-  const canSubmit = value.trim().length > 0 && !disabled;
+  const buttonLabel = submitLabel ?? actionLabel;
+  const pendingLabel = submitLabel ? `${submitLabel}中` : `${actionLabel}中`;
 
   return (
     <form
+      action={action}
       className="grid gap-2 md:grid-cols-[1fr_auto] md:items-end"
-      onSubmit={(event) => {
-        event.preventDefault();
-        if (!canSubmit) {
-          return;
-        }
-        onSubmit();
-      }}
+      key={formKey}
     >
       <label className="grid gap-1">
         <span className={labelClass}>{label}</span>
         <input
           className={inputClass}
+          disabled={disabled}
+          name={inputName}
           placeholder={placeholder}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
+          type="text"
         />
       </label>
-      <Button
-        pending={isPending}
-        pendingLabel={submitLabel ? `${submitLabel}中` : `${actionLabel}中`}
-        type="submit"
-        variant="primary"
-        disabled={!canSubmit}
-      >
-        {submitLabel ?? actionLabel}
-      </Button>
+      <SubmitButton disabled={disabled} label={buttonLabel} pendingLabel={pendingLabel} />
       {error ? (
         <p className="text-sm text-[var(--color-danger)] md:col-span-2" role="alert">
           {error}

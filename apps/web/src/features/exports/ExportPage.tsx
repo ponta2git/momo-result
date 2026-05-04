@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
@@ -24,7 +24,6 @@ import type { ExportDownloadResultView } from "@/features/exports/exportViewMode
 import { ExportWorkspace } from "@/features/exports/ExportWorkspace";
 import { listMatches } from "@/features/matches/api";
 import { listSeasonMasters } from "@/shared/api/masters";
-import { shouldShowBlockingQueryError } from "@/shared/api/queryErrorState";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
 type ExportPageProps = {
@@ -42,15 +41,15 @@ export function ExportPage({
   const [downloadStartedAt, setDownloadStartedAt] = useState<number | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
 
-  const seasonsQuery = useQuery({
+  const seasonsQuery = useSuspenseQuery({
     queryFn: () => listSeasonMasters(),
     queryKey: ["season-masters", "exports"],
   });
-  const heldEventsQuery = useQuery({
+  const heldEventsQuery = useSuspenseQuery({
     queryFn: () => listHeldEvents("", 100),
     queryKey: ["held-events", "exports"],
   });
-  const matchesQuery = useQuery({
+  const matchesQuery = useSuspenseQuery({
     queryFn: () => listMatches({ kind: "match", limit: 100, status: "confirmed" }),
     queryKey: ["matches", "exports", { kind: "match", status: "confirmed" }],
   });
@@ -98,28 +97,11 @@ export function ExportPage({
         : urlState.scope === "match"
           ? matchCandidates
           : [];
-  const candidateLoading =
-    urlState.scope === "season"
-      ? seasonsQuery.isLoading
-      : urlState.scope === "heldEvent"
-        ? heldEventsQuery.isLoading
-        : urlState.scope === "match"
-          ? matchesQuery.isLoading || heldEventsQuery.isLoading
-          : false;
-  const candidateError =
-    urlState.scope === "season"
-      ? shouldShowBlockingQueryError(seasonsQuery)
-      : urlState.scope === "heldEvent"
-        ? shouldShowBlockingQueryError(heldEventsQuery)
-        : urlState.scope === "match"
-          ? shouldShowBlockingQueryError(matchesQuery) ||
-            shouldShowBlockingQueryError(heldEventsQuery)
-          : false;
 
   const candidateView = buildCandidateView({
     candidates,
-    error: candidateError,
-    loading: candidateLoading,
+    error: false,
+    loading: false,
     scope: urlState.scope,
     selectedId: selectedIdForScope(urlState, urlState.scope),
   });

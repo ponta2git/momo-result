@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { AlertTriangle, Download, PenSquare, RefreshCw, ScanLine } from "lucide-react";
 import { useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -23,7 +23,6 @@ import { listGameTitles, listMapMasters, listSeasonMasters } from "@/shared/api/
 import {
   isInitialQueryLoading,
   shouldShowBlockingQueryError,
-  shouldShowQueryError,
 } from "@/shared/api/queryErrorState";
 import { Button } from "@/shared/ui/actions/Button";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
@@ -47,19 +46,19 @@ export function MatchesListPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const search = parseMatchListSearchParams(searchParams);
 
-  const heldEventsQuery = useQuery({
+  const heldEventsQuery = useSuspenseQuery({
     queryFn: () => listHeldEvents("", 100),
     queryKey: ["held-events", "matches-list"],
   });
-  const gameTitlesQuery = useQuery({
+  const gameTitlesQuery = useSuspenseQuery({
     queryFn: () => listGameTitles(),
     queryKey: ["game-titles", "matches-list"],
   });
-  const seasonsQuery = useQuery({
+  const seasonsQuery = useSuspenseQuery({
     queryFn: () => listSeasonMasters(),
     queryKey: ["season-masters", "matches-list"],
   });
-  const mapsQuery = useQuery({
+  const mapsQuery = useSuspenseQuery({
     queryFn: () => listMapMasters(),
     queryKey: ["map-masters", "matches-list"],
   });
@@ -82,10 +81,10 @@ export function MatchesListPage() {
 
   const lookupMaps = useMemo(() => {
     return {
-      gameTitlesById: new Map((gameTitlesQuery.data?.items ?? []).map((item) => [item.id, item])),
-      heldEventsById: new Map((heldEventsQuery.data?.items ?? []).map((item) => [item.id, item])),
-      mapsById: new Map((mapsQuery.data?.items ?? []).map((item) => [item.id, item])),
-      seasonsById: new Map((seasonsQuery.data?.items ?? []).map((item) => [item.id, item])),
+      gameTitlesById: new Map((gameTitlesQuery.data.items ?? []).map((item) => [item.id, item])),
+      heldEventsById: new Map((heldEventsQuery.data.items ?? []).map((item) => [item.id, item])),
+      mapsById: new Map((mapsQuery.data.items ?? []).map((item) => [item.id, item])),
+      seasonsById: new Map((seasonsQuery.data.items ?? []).map((item) => [item.id, item])),
     };
   }, [gameTitlesQuery.data, heldEventsQuery.data, mapsQuery.data, seasonsQuery.data]);
 
@@ -98,17 +97,6 @@ export function MatchesListPage() {
     const views = toMatchListItemViews(matchesSummaryQuery.data?.items ?? [], lookupMaps);
     return summarizeMatchList(views);
   }, [lookupMaps, matchesSummaryQuery.data]);
-  const selectionErrors = {
-    ...(shouldShowQueryError(gameTitlesQuery)
-      ? { gameTitles: "作品候補の読み込みに失敗しました。" }
-      : {}),
-    ...(shouldShowQueryError(heldEventsQuery)
-      ? { heldEvents: "開催候補の読み込みに失敗しました。" }
-      : {}),
-    ...(shouldShowQueryError(seasonsQuery)
-      ? { seasons: "シーズン候補の読み込みに失敗しました。" }
-      : {}),
-  };
 
   const hasFilters = hasMatchListFilters(search);
   const showMatchesLoading = isInitialQueryLoading(matchesQuery);
@@ -162,13 +150,12 @@ export function MatchesListPage() {
 
       <MatchesListFilters
         key={buildMatchListSearchParams(search).toString()}
-        gameTitles={gameTitlesQuery.data?.items ?? []}
-        heldEvents={heldEventsQuery.data?.items ?? []}
+        gameTitles={gameTitlesQuery.data.items ?? []}
+        heldEvents={heldEventsQuery.data.items ?? []}
         initialSearch={search}
         onApply={(nextSearch) => setSearchParams(buildMatchListSearchParams(nextSearch))}
         onClear={() => setSearchParams(new URLSearchParams())}
-        seasons={seasonsQuery.data?.items ?? []}
-        selectionErrors={selectionErrors}
+        seasons={seasonsQuery.data.items ?? []}
       />
 
       <section className="grid gap-4">

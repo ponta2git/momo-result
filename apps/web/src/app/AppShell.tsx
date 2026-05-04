@@ -1,12 +1,16 @@
-import { Outlet } from "react-router-dom";
+import { Suspense } from "react";
+import { Outlet, useLocation } from "react-router-dom";
 
 import { useAuth } from "@/shared/auth/useAuth";
 import { DialogHost } from "@/shared/ui/feedback/DialogHost";
+import { RouteErrorBoundary } from "@/shared/ui/feedback/RouteErrorBoundary";
+import { RouteSuspenseFallback } from "@/shared/ui/feedback/RouteSuspenseFallback";
 import { ToastHost } from "@/shared/ui/feedback/ToastHost";
 import { GlobalNav } from "@/shared/ui/layout/GlobalNav";
 
 export function AppShell() {
   const auth = useAuth();
+  const location = useLocation();
 
   return (
     <DialogHost>
@@ -26,7 +30,11 @@ export function AppShell() {
         className="mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-[75rem] flex-col gap-4 px-3 py-4 sm:px-4 sm:py-6"
         id="main-content"
       >
-        <Outlet />
+        <RouteErrorBoundary resetKey={location.pathname}>
+          <Suspense fallback={<RouteSuspenseFallback />}>
+            <Outlet />
+          </Suspense>
+        </RouteErrorBoundary>
       </main>
       <ToastHost />
     </DialogHost>

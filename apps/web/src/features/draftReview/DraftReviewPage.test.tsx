@@ -104,8 +104,8 @@ describe("DraftReviewPage", () => {
     ).toBeTruthy();
     expect(screen.getByText(/この結果をどの開催履歴・作品として保存するか/)).toBeInTheDocument();
     expect(screen.getByText("OCR読み取り状況を確認")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("あかねまみ")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("15420")).toBeInTheDocument();
+    expect(await screen.findByDisplayValue("あかねまみ")).toBeInTheDocument();
+    expect(await screen.findByDisplayValue("15420")).toBeInTheDocument();
     expect(screen.getByText(/緑=高信頼OCR/)).toBeInTheDocument();
   });
 

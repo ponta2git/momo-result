@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
@@ -8,7 +8,6 @@ import { invalidateMatchCaches, matchKeys } from "@/features/matches/queryKeys";
 import { fixedMembers } from "@/features/ocrCapture/localMasters";
 import { listGameTitles, listMapMasters, listSeasonMasters } from "@/shared/api/masters";
 import { formatApiError } from "@/shared/api/problemDetails";
-import { isInitialQueryLoading, shouldShowBlockingQueryError } from "@/shared/api/queryErrorState";
 import { Button } from "@/shared/ui/actions/Button";
 import { Card } from "@/shared/ui/layout/Card";
 
@@ -43,25 +42,24 @@ export function MatchDetailPage() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const matchQuery = useQuery({
+  const matchQuery = useSuspenseQuery({
     queryKey: matchKeys.matchDetail(matchId),
     queryFn: () => getMatch(matchId),
-    enabled: matchId.length > 0,
   });
 
-  const heldEventsQuery = useQuery({
+  const heldEventsQuery = useSuspenseQuery({
     queryKey: ["held-events", "all"],
     queryFn: () => listHeldEvents("", 100),
   });
-  const gameTitlesQuery = useQuery({
+  const gameTitlesQuery = useSuspenseQuery({
     queryKey: ["game-titles"],
     queryFn: () => listGameTitles(),
   });
-  const seasonsQuery = useQuery({
+  const seasonsQuery = useSuspenseQuery({
     queryKey: ["season-masters", "all"],
     queryFn: () => listSeasonMasters(),
   });
-  const mapsQuery = useQuery({
+  const mapsQuery = useSuspenseQuery({
     queryKey: ["map-masters", "all"],
     queryFn: () => listMapMasters(),
   });
@@ -77,10 +75,7 @@ export function MatchDetailPage() {
     },
   });
 
-  if (isInitialQueryLoading(matchQuery)) {
-    return <p className="p-8 text-[var(--color-text-secondary)]">読み込み中...</p>;
-  }
-  if (shouldShowBlockingQueryError(matchQuery) || !matchQuery.data) {
+  if (!matchQuery.data) {
     return (
       <div className="p-8">
         <p className="text-[var(--color-danger)]">試合が見つかりませんでした</p>

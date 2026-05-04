@@ -1,5 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
-import type { UseQueryResult } from "@tanstack/react-query";
+import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import type { UseQueryResult, UseSuspenseQueryResult } from "@tanstack/react-query";
 import { useMemo } from "react";
 
 import { isOcrRunning } from "@/features/matches/draftStatus";
@@ -40,8 +40,8 @@ export type MatchWorkspaceQueriesParams = {
 
 export type MatchWorkspaceQueries = {
   draftDetailQuery: UseQueryResult<MatchDraftDetailResponse, Error>;
-  gameTitlesQuery: ReturnType<typeof useQuery<Awaited<ReturnType<typeof listGameTitles>>>>;
-  heldEventsQuery: ReturnType<typeof useQuery<Awaited<ReturnType<typeof listHeldEvents>>>>;
+  gameTitlesQuery: UseSuspenseQueryResult<Awaited<ReturnType<typeof listGameTitles>>, Error>;
+  heldEventsQuery: UseSuspenseQueryResult<Awaited<ReturnType<typeof listHeldEvents>>, Error>;
   legacyIds: SlotMap<string>;
   mapMastersQuery: ReturnType<typeof useQuery<Awaited<ReturnType<typeof listMapMasters>>>>;
   matchDetailQuery: UseQueryResult<Awaited<ReturnType<typeof getMatch>>, Error>;
@@ -81,12 +81,12 @@ export function useMatchWorkspaceQueries(
 
   const legacyIds = useMemo(() => draftIdsFromParams(searchParams), [searchParams]);
 
-  const heldEventsQuery = useQuery({
+  const heldEventsQuery = useSuspenseQuery({
     queryKey: ["held-events", "workspace"],
     queryFn: () => listHeldEvents("", 100),
   });
 
-  const gameTitlesQuery = useQuery({
+  const gameTitlesQuery = useSuspenseQuery({
     queryKey: ["masters", "game-titles", "workspace"],
     queryFn: () => listGameTitles(),
   });
@@ -153,8 +153,6 @@ export function useMatchWorkspaceQueries(
   const isOcrRunningBlocked = mode !== "edit" && isOcrRunning(reviewStatus);
   const refreshingReviewStatus = draftDetailQuery.isFetching || ocrDraftsQuery.isFetching;
   const baseErrors = [
-    heldEventsQuery,
-    gameTitlesQuery,
     mapMastersQuery,
     seasonMastersQuery,
     draftDetailQuery,

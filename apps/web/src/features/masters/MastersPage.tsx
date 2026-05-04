@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
@@ -83,28 +83,26 @@ export function MastersPage() {
   const [mapDraftName, setMapDraftName] = useState("");
   const [seasonDraftName, setSeasonDraftName] = useState("");
 
-  const gameTitlesQuery = useQuery({
+  const gameTitlesQuery = useSuspenseQuery({
     queryKey: masterQueryKeys.gameTitles(authScope),
     queryFn: fetchGameTitles,
-    enabled: auth.isAuthenticated,
   });
 
   const mapMastersQuery = useQuery({
     queryKey: masterQueryKeys.mapMasters(authScope, selectedGameTitleId),
     queryFn: () => fetchMapMasters(selectedGameTitleId),
-    enabled: auth.isAuthenticated && Boolean(selectedGameTitleId),
+    enabled: Boolean(selectedGameTitleId),
   });
 
   const seasonMastersQuery = useQuery({
     queryKey: masterQueryKeys.seasonMasters(authScope, selectedGameTitleId),
     queryFn: () => fetchSeasonMasters(selectedGameTitleId),
-    enabled: auth.isAuthenticated && Boolean(selectedGameTitleId),
+    enabled: Boolean(selectedGameTitleId),
   });
 
-  const incidentMastersQuery = useQuery({
+  const incidentMastersQuery = useSuspenseQuery({
     queryKey: masterQueryKeys.incidentMasters(authScope),
     queryFn: fetchIncidentMasters,
-    enabled: auth.isAuthenticated,
   });
 
   const gameTitles = useMemo(() => gameTitlesQuery.data ?? [], [gameTitlesQuery.data]);
@@ -256,11 +254,6 @@ export function MastersPage() {
         />
       ) : null}
 
-      {auth.isAuthenticated && shouldShowQueryError(gameTitlesQuery) ? (
-        <Notice tone="danger" title="作品マスタの読み込みに失敗しました">
-          {errorMessage(gameTitlesQuery.error)}
-        </Notice>
-      ) : null}
       {auth.isAuthenticated && shouldShowQueryError(mapMastersQuery) ? (
         <Notice tone="danger" title="マップマスタの読み込みに失敗しました">
           {errorMessage(mapMastersQuery.error)}
@@ -269,11 +262,6 @@ export function MastersPage() {
       {auth.isAuthenticated && shouldShowQueryError(seasonMastersQuery) ? (
         <Notice tone="danger" title="シーズンマスタの読み込みに失敗しました">
           {errorMessage(seasonMastersQuery.error)}
-        </Notice>
-      ) : null}
-      {auth.isAuthenticated && shouldShowQueryError(incidentMastersQuery) ? (
-        <Notice tone="danger" title="事件簿マスタの読み込みに失敗しました">
-          {errorMessage(incidentMastersQuery.error)}
         </Notice>
       ) : null}
 
@@ -302,7 +290,7 @@ export function MastersPage() {
         seasonCreatePending={createSeasonMutation.isPending}
         seasonCreateError={errorMessage(createSeasonMutation.error)}
         scopedDisabledReason={viewModel.scopedDisabledReason}
-        incidentMasters={incidentMastersQuery.data ?? []}
+        incidentMasters={incidentMastersQuery.data}
       />
 
       {hasInvalidReturnTo ? (

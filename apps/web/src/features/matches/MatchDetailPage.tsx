@@ -2,12 +2,13 @@ import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-q
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
-import { listHeldEvents } from "@/shared/api/heldEvents";
-import { deleteMatch, getMatch } from "@/features/matches/api";
-import { invalidateMatchCaches, matchKeys } from "@/features/matches/queryKeys";
 import { fixedMembers } from "@/features/auth/members";
+import { deleteMatch, getMatch } from "@/features/matches/api";
+import { invalidateMatchAndDraftCaches, matchKeys } from "@/features/matches/queryKeys";
+import { listHeldEvents } from "@/shared/api/heldEvents";
 import { listGameTitles, listMapMasters, listSeasonMasters } from "@/shared/api/masters";
 import { formatApiError } from "@/shared/api/problemDetails";
+import { heldEventKeys } from "@/shared/api/queryKeys";
 import { Button } from "@/shared/ui/actions/Button";
 import { Card } from "@/shared/ui/layout/Card";
 
@@ -43,12 +44,12 @@ export function MatchDetailPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const matchQuery = useSuspenseQuery({
-    queryKey: matchKeys.matchDetail(matchId),
+    queryKey: matchKeys.detail(matchId),
     queryFn: () => getMatch(matchId),
   });
 
   const heldEventsQuery = useSuspenseQuery({
-    queryKey: ["held-events", "all"],
+    queryKey: heldEventKeys.scope("all"),
     queryFn: () => listHeldEvents("", 100),
   });
   const gameTitlesQuery = useSuspenseQuery({
@@ -67,7 +68,7 @@ export function MatchDetailPage() {
   const deleteMutation = useMutation({
     mutationFn: () => deleteMatch(matchId),
     onSuccess: async () => {
-      await invalidateMatchCaches(queryClient);
+      await invalidateMatchAndDraftCaches(queryClient);
       navigate("/matches", { replace: true });
     },
     onError: (error) => {

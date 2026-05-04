@@ -2,7 +2,6 @@ import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
-import { listHeldEvents } from "@/shared/api/heldEvents";
 import {
   DEFAULT_EXPORT_SLOW_THRESHOLD_MS,
   DEFAULT_EXPORT_TIMEOUT_MS,
@@ -23,7 +22,10 @@ import {
 import type { ExportDownloadResultView } from "@/features/exports/exportViewModel";
 import { ExportWorkspace } from "@/features/exports/ExportWorkspace";
 import { listMatches } from "@/features/matches/api";
+import { matchKeys } from "@/features/matches/queryKeys";
+import { listHeldEvents } from "@/shared/api/heldEvents";
 import { listSeasonMasters } from "@/shared/api/masters";
+import { heldEventKeys } from "@/shared/api/queryKeys";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
 type ExportPageProps = {
@@ -47,11 +49,11 @@ export function ExportPage({
   });
   const heldEventsQuery = useSuspenseQuery({
     queryFn: () => listHeldEvents("", 100),
-    queryKey: ["held-events", "exports"],
+    queryKey: heldEventKeys.scope("exports"),
   });
   const matchesQuery = useSuspenseQuery({
     queryFn: () => listMatches({ kind: "match", limit: 100, status: "confirmed" }),
-    queryKey: ["matches", "exports", { kind: "match", status: "confirmed" }],
+    queryKey: matchKeys.exports({ kind: "match", status: "confirmed" }),
   });
 
   const seasonCandidates = useMemo<ExportCandidate[]>(

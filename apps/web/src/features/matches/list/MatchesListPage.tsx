@@ -3,7 +3,6 @@ import { AlertTriangle, Download, PenSquare, RefreshCw, ScanLine } from "lucide-
 import { useDeferredValue, useMemo, useTransition } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
-import { listHeldEvents } from "@/shared/api/heldEvents";
 import { MatchesListFilters } from "@/features/matches/list/MatchesListFilters";
 import { MatchesTable } from "@/features/matches/list/MatchesTable";
 import { MatchesWorkQueueSummary } from "@/features/matches/list/MatchesWorkQueueSummary";
@@ -20,8 +19,11 @@ import {
   toMatchListItemViews,
 } from "@/features/matches/list/matchListViewModel";
 import { MatchMobileCard } from "@/features/matches/list/MatchMobileCard";
+import { matchKeys } from "@/features/matches/queryKeys";
+import { listHeldEvents } from "@/shared/api/heldEvents";
 import { listGameTitles, listMapMasters, listSeasonMasters } from "@/shared/api/masters";
 import { isInitialQueryLoading, shouldShowBlockingQueryError } from "@/shared/api/queryErrorState";
+import { heldEventKeys } from "@/shared/api/queryKeys";
 import { Button } from "@/shared/ui/actions/Button";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
@@ -59,7 +61,7 @@ export function MatchesListPage() {
 
   const heldEventsQuery = useSuspenseQuery({
     queryFn: () => listHeldEvents("", 100),
-    queryKey: ["held-events", "matches-list"],
+    queryKey: heldEventKeys.scope("matches-list"),
   });
   const gameTitlesQuery = useSuspenseQuery({
     queryFn: () => listGameTitles(),
@@ -76,20 +78,16 @@ export function MatchesListPage() {
   const matchesQuery = useQuery({
     placeholderData: keepPreviousData,
     queryFn: () => fetchMatchList(deferredSearch),
-    queryKey: ["matches", "list", deferredSearch],
+    queryKey: matchKeys.list(deferredSearch),
   });
   const matchesSummaryQuery = useQuery({
     placeholderData: keepPreviousData,
     queryFn: () => fetchMatchListSummary(deferredSearch),
-    queryKey: [
-      "matches",
-      "summary",
-      {
-        gameTitleId: deferredSearch.gameTitleId,
-        heldEventId: deferredSearch.heldEventId,
-        seasonMasterId: deferredSearch.seasonMasterId,
-      },
-    ],
+    queryKey: matchKeys.summary({
+      gameTitleId: deferredSearch.gameTitleId,
+      heldEventId: deferredSearch.heldEventId,
+      seasonMasterId: deferredSearch.seasonMasterId,
+    }),
   });
 
   const lookupMaps = useMemo(() => {

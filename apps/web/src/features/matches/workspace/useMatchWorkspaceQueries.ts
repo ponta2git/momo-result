@@ -22,6 +22,7 @@ import { getOcrDraftsBulk } from "@/shared/api/ocrDrafts";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
 import { shouldShowQueryError } from "@/shared/api/queryErrorState";
+import { heldEventKeys, ocrDraftKeys } from "@/shared/api/queryKeys";
 import { bySlot } from "@/shared/lib/slotMap";
 import type { SlotMap } from "@/shared/lib/slotMap";
 import { useResourceQuery } from "@/shared/lib/useResourceQuery";
@@ -77,7 +78,7 @@ export function useMatchWorkspaceQueries(
   const legacyIds = useMemo(() => draftIdsFromParams(searchParams), [searchParams]);
 
   const heldEventsQuery = useSuspenseQuery({
-    queryKey: ["held-events", "workspace"],
+    queryKey: heldEventKeys.scope("workspace"),
     queryFn: () => listHeldEvents("", 100),
   });
 
@@ -99,7 +100,7 @@ export function useMatchWorkspaceQueries(
   });
 
   const draftDetailQuery = useResourceQuery({
-    key: matchKeys.matchDraftDetail,
+    key: matchKeys.draft.detail,
     id: matchDraftId,
     fetcher: getMatchDraftDetail,
     enabled: mode !== "edit",
@@ -124,21 +125,21 @@ export function useMatchWorkspaceQueries(
   );
 
   const matchDetailQuery = useResourceQuery({
-    key: matchKeys.matchDetail,
+    key: matchKeys.detail,
     id: matchId,
     fetcher: getMatch,
     enabled: mode === "edit",
   });
 
   const ocrDraftsQuery = useQuery({
-    queryKey: matchKeys.ocrDraftsBulk(reviewDraftIdList.join(",")),
+    queryKey: ocrDraftKeys.bulk(reviewDraftIdList.join(",")),
     queryFn: () => getOcrDraftsBulk(reviewDraftIdList),
     enabled: mode === "review" && !useSampleDrafts && reviewDraftIdList.length > 0,
     retry: false,
   });
 
   const sourceImageQuery = useResourceQuery({
-    key: matchKeys.matchDraftSourceImages,
+    key: matchKeys.draft.sourceImages,
     id: matchDraftSourceImagesId,
     fetcher: listMatchDraftSourceImages,
     enabled: mode !== "edit" && !isOcrRunning(draftDetailQuery.data?.status),

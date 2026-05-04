@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { authQueryOptions } from "@/features/auth/authQueries";
-import { invalidateMatchCaches } from "@/features/matches/queryKeys";
+import { invalidateMatchAndDraftCaches } from "@/features/matches/queryKeys";
 import {
   cancelMatchDraft,
   cancelOcrJob,
@@ -322,7 +322,7 @@ export function OcrCapturePage() {
     }
 
     if (createdJobCount > 0) {
-      await invalidateMatchCaches(queryClient);
+      await invalidateMatchAndDraftCaches(queryClient);
       navigate("/matches", { replace: true });
       return;
     }

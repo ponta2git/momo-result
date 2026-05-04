@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { getOcrJob } from "@/features/ocrCapture/api";
 import { isTerminalJobStatus } from "@/shared/api/enums";
+import { ocrJobKeys } from "@/shared/api/queryKeys";
 
 export const maxPollAttempts = 15;
 export const pollIntervalMs = 2_000;
@@ -13,7 +14,7 @@ type UseOcrJobPollingInput = {
 
 export function useOcrJobPolling({ jobId, attempts }: UseOcrJobPollingInput) {
   return useQuery({
-    queryKey: ["ocr-job", jobId],
+    queryKey: ocrJobKeys.detail(jobId),
     queryFn: () => getOcrJob(jobId ?? ""),
     enabled: Boolean(jobId) && attempts < maxPollAttempts,
     refetchInterval: (query) => {

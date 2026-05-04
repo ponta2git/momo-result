@@ -44,6 +44,8 @@ Testing Library の user-event で実行する。
 
 - `onChange` / `onSubmit` / `onClick` の実行経路は、レンダリング確認だけで代用しない。
 - React event の値を state updater 内で読む実装を避け、必要な値は handler 内で先に退避する。
+- form/filter の障害対応では、類似する代表操作ではなく、報告された操作そのものを user-event で通す。
+- event lifetime の障害を直す場合は、同一 component 内の同種 `event` / state updater pattern を検索して確認する。
 - PC用とモバイル用で同じ入力UIを二重に持つ場合は、どちらの実行経路を検証したかを明確にする。
 
 ## 3. DB-backed APIの必須検証

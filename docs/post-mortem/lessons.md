@@ -114,11 +114,13 @@
 - React event 由来の値は handler 内で同期的に退避し、state updater 内では退避済みの値だけを使う。
 - UIが表示されることと、ユーザー操作の実行経路が壊れていないことは別である。
 - 代表的な form/filter 操作は Testing Library + user-event で直接通す。
+- 障害対応では、類似する代表操作ではなく報告された操作そのものを通し、同一 component 内の同種 handler pattern も確認する。
 
 参照:
 
 - web component/page の入力操作テスト責務: `docs/test-rule.md`
 - 元の事象: `docs/post-mortem/2026-05-03-frontend-matches-filter-event-currenttarget.md`
+- 再発事象: `docs/post-mortem/2026-05-04-frontend-matches-sort-event-currenttarget-regression.md`
 
 ### Cross-repo schema dependency
 

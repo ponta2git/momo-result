@@ -48,6 +48,25 @@ Testing Library の user-event で実行する。
 - event lifetime の障害を直す場合は、同一 component 内の同種 `event` / state updater pattern を検索して確認する。
 - PC用とモバイル用で同じ入力UIを二重に持つ場合は、どちらの実行経路を検証したかを明確にする。
 
+### web テスト基盤の規約
+
+`apps/web/src/test/` 以下に共通基盤を集約する。テストファイル側で同等のヘルパを再実装しない。
+
+| 配置 | 役割 |
+|---|---|
+| `src/test/setup.ts` | グローバル `beforeAll`/`afterEach`/`afterAll`。MSW server のlisten/reset、`resetMswStores`、`localStorage`/`sessionStorage` クリア、`vi.restoreAllMocks` / `vi.useRealTimers` を集約する |
+| `src/test/queryClient.ts` | `createTestQueryClient`（`retry: false`, `staleTime: 0`, `refetchOnMount: false`）。各 `beforeEach` で生成し共有しない |
+| `src/test/factories/` | OpenAPI 由来型を直接参照したテストデータビルダ |
+| `src/test/doubles/` | `HTMLVideoElement.prototype.play` 等プロトタイプ差し替えの typed helper |
+| `src/shared/api/msw/handlers.ts` | `resetMswStores` を export し、新規 module-scope 可変ストアを追加したら必ず登録する |
+
+テスト実装側の規約:
+
+- 純粋ロジックの `*.test.ts`（DOM / `window` / `localStorage` を使わない）には先頭に `// @vitest-environment node` を付ける。jsdom 起動コストが落ち、テスト全体が高速化する。
+- 出現待ちは `expect(await screen.findBy*(...)).toBe...` を使う。`waitFor` は disappearance（`queryBy + not.toBeInTheDocument`）、複数 expect、non-DOM な assertion でのみ使う。
+- in-flight 状態を作る場合、実時間 `setTimeout` で遅延させない。MSW handler 内で deferred promise を `await` し、テスト側は「リクエスト到達」イベントと組み合わせて、リクエスト到達 → 同期アサート → 解放 の順で決定論化する。
+- 個別ファイルで `afterEach` を増やさない。共通クリーンアップは `setup.ts` に集約する。テスト固有の状態は `beforeEach` で再生成する。
+
 ## 3. DB-backed APIの必須検証
 
 DB-backed API を変更するときは、該当Endpointに対応するPostgreSQL repository pathを実DBで実行する。

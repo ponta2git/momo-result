@@ -1,41 +1,27 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
+import { useState } from "react";
 
-import { authQueryOptions } from "@/features/auth/authQueries";
-import { invalidateMatchAndDraftCaches } from "@/features/matches/queryKeys";
-import {
-  cancelMatchDraft,
-  cancelOcrJob,
-  createMatchDraft,
-  createOcrJob,
-  getOcrDraft,
-  uploadImage,
-} from "@/features/ocrCapture/api";
-import type { OcrDraftResponse } from "@/features/ocrCapture/api";
 import { CameraCapture } from "@/features/ocrCapture/CameraCapture";
 import { CaptureRail } from "@/features/ocrCapture/CaptureRail";
 import {
-  createInitialSlot,
-  createInitialSlots,
   detectedKindFromResponse,
-  releaseSlotResources,
-  requestedImageTypeForSlot,
   slotDefinitions,
 } from "@/features/ocrCapture/captureState";
-import type { CaptureSlotState, InputSource } from "@/features/ocrCapture/captureState";
-import { buildOcrHints } from "@/features/ocrCapture/hints";
+import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
 import { ImageInput } from "@/features/ocrCapture/ImageInput";
-import { defaultSetupValues, setupSchema } from "@/features/ocrCapture/schema";
+import { defaultSetupValues } from "@/features/ocrCapture/schema";
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
 import { SetupPanel } from "@/features/ocrCapture/SetupPanel";
+import { isWorkingStatus } from "@/features/ocrCapture/slotPolicy";
+import { getOcrDraft } from "@/features/ocrCapture/api";
+import type { OcrDraftResponse } from "@/features/ocrCapture/api";
+import { useOcrCaptureDraftFlow } from "@/features/ocrCapture/useOcrCaptureDraftFlow";
+import { useOcrCaptureMutations } from "@/features/ocrCapture/useOcrCaptureMutations";
+import { useOcrCaptureQueries } from "@/features/ocrCapture/useOcrCaptureQueries";
 import { useOcrJobPolling } from "@/features/ocrCapture/useOcrJobPolling";
 import type { SlotKind } from "@/shared/api/enums";
-import { parseLayoutFamily, parseOcrJobStatus } from "@/shared/api/enums";
-import { listGameTitles } from "@/shared/api/masters";
-import { formatApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
+import { parseOcrJobStatus } from "@/shared/api/enums";
 import { AuthPanel } from "@/shared/auth/AuthPanel";
-import type { SlotMap } from "@/shared/lib/slotMap";
 import { useDistinctMarkerEffect } from "@/shared/lib/useDistinctMarkerEffect";
 import { Button } from "@/shared/ui/actions/Button";
 import { LiveRegion } from "@/shared/ui/feedback/LiveRegion";
@@ -80,45 +66,6 @@ function SlotWatcher({ slot, onUpdate, onDraft }: SlotWatcherProps) {
   return null;
 }
 
-function isWorkingStatus(status: CaptureSlotState["status"]) {
-  return ["uploading", "queueing", "queued", "running"].includes(status);
-}
-
-function keepImageOnly(slot: CaptureSlotState): CaptureSlotState {
-  if (!slot.file || !slot.previewUrl) {
-    return createInitialSlot(slot.kind);
-  }
-  return {
-    ...createInitialSlot(slot.kind),
-    source: slot.source,
-    file: slot.file,
-    previewUrl: slot.previewUrl,
-    status: "selected",
-  };
-}
-
-/** OCR ジョブ送信対象とみなすスロット（画像があり、未送信または再試行可能なもの）を抽出する。 */
-function pickOcrTargets(slots: readonly CaptureSlotState[]): CaptureSlotState[] {
-  return slots.filter(
-    (slot) => slot.file && ["selected", "failed", "cancelled"].includes(slot.status),
-  );
-}
-
-/** 送信開始時のスロット状態（前回までのエラー/ジョブ情報を全部クリアしつつ画像は維持）。 */
-function toUploadingSlot(slot: CaptureSlotState): CaptureSlotState {
-  return {
-    ...slot,
-    status: "uploading",
-    transportError: undefined,
-    jobFailure: undefined,
-    detectedKind: undefined,
-    imageId: undefined,
-    jobId: undefined,
-    draftId: undefined,
-    pollAttempts: 0,
-  };
-}
-
 const panelClass =
   "rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4";
 
@@ -130,301 +77,42 @@ const linkButtonClass =
   "inline-flex min-h-10 items-center rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-surface-subtle)]";
 
 export function OcrCapturePage() {
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const [setup, setSetup] = useState<SetupFormValues>(defaultSetupValues);
-  const [slots, setSlots] = useState<CaptureSlotState[]>(() => createInitialSlots());
-  const [drafts, setDrafts] = useState<SlotMap<OcrDraftResponse>>({});
   const [notice, setNotice] = useState("");
-  const slotsRef = useRef(slots);
 
-  const authQuery = useQuery({
-    ...authQueryOptions(),
-    retry: false,
-  });
-  const authReady = authQuery.isSuccess;
-  const authMemberId = authQuery.data?.memberId;
-
-  const gameTitlesQuery = useQuery({
-    queryKey: ["masters", "game-titles", authMemberId ?? "anonymous"],
-    queryFn: listGameTitles,
-    enabled: authReady,
-  });
-
-  const hints = useMemo(() => {
-    const selected = gameTitlesQuery.data?.items?.find((item) => item.id === setup.gameTitleId);
-    const input: { gameTitleName?: string; layoutFamily?: "momotetsu_2" | "world" | "reiwa" } = {};
-    if (selected?.name) input.gameTitleName = selected.name;
-    const lf = parseLayoutFamily(selected?.layoutFamily);
-    if (lf) input.layoutFamily = lf;
-    return buildOcrHints(input);
-  }, [gameTitlesQuery.data, setup.gameTitleId]);
-
-  const uploadMutation = useMutation({
-    mutationFn: async ({
-      matchDraftId,
-      slot,
-      file,
-    }: {
-      file: File;
-      matchDraftId: string;
-      slot: CaptureSlotState;
-    }) => {
-      const upload = await uploadImage(file);
-      const job = await createOcrJob({
-        imageId: upload.imageId,
-        matchDraftId,
-        requestedImageType: requestedImageTypeForSlot(slot),
-        ocrHints: hints,
-      });
-      return { upload, job };
-    },
-  });
-
-  const updateSlot = useCallback((nextSlot: CaptureSlotState) => {
-    setSlots((current) => current.map((slot) => (slot.kind === nextSlot.kind ? nextSlot : slot)));
-  }, []);
-
-  useEffect(() => {
-    slotsRef.current = slots;
-  }, [slots]);
-
-  useEffect(() => {
-    return () => {
-      for (const slot of slotsRef.current) {
-        releaseSlotResources(slot);
-      }
-    };
-  }, []);
-
-  const setDraft = useCallback((kind: SlotKind, draft: OcrDraftResponse) => {
-    setDrafts((current) => ({ ...current, [kind]: draft }));
-  }, []);
+  const { auth, gameTitlesQuery, hints } = useOcrCaptureQueries(setup.gameTitleId);
+  const flow = useOcrCaptureDraftFlow();
+  const submission = useOcrCaptureMutations(hints);
 
   function notify(message: string) {
     setNotice(message);
     showToast({ title: message, tone: "info" });
   }
 
-  function handleAddImage(file: File, source: InputSource) {
-    const targetSlot =
-      slots.find((slot) => slot.status === "empty") ??
-      slots.find((slot) => !slot.file && !slot.previewUrl);
-    if (!targetSlot) {
-      notify("3枚すべて配置済みです。差し替える場合は先に不要な画像を削除してください。");
-      return;
-    }
-
-    const previewUrl = URL.createObjectURL(file);
-    const selectedSlot: CaptureSlotState = {
-      ...createInitialSlot(targetSlot.kind),
-      source,
-      file,
-      previewUrl,
-      status: "selected",
-    };
-    updateSlot(selectedSlot);
-    setDrafts((current) => {
-      const next = { ...current };
-      delete next[targetSlot.kind];
-      return next;
-    });
-    notify(
-      `${source === "camera" ? "撮影" : "追加"}した画像を「${slotDefinitions.find((definition) => definition.kind === targetSlot.kind)?.label ?? targetSlot.kind}」へ置きました。必要ならドラッグで並べ替えてください。`,
-    );
-  }
-
-  const createOcrMatchDraft = async (
-    selectedGameTitle: { id: string; layoutFamily?: string | null } | undefined,
-  ): Promise<string | null> => {
-    try {
-      const matchDraft = await createMatchDraft({
-        gameTitleId: setup.gameTitleId,
-        ...(selectedGameTitle?.layoutFamily
-          ? { layoutFamily: selectedGameTitle.layoutFamily }
-          : {}),
-        mapMasterId: setup.mapMasterId,
-        ownerMemberId: setup.ownerMemberId,
-        playedAt: new Date().toISOString(),
-        seasonMasterId: setup.seasonMasterId,
-        status: "ocr_running",
-      });
-      return matchDraft.matchDraftId;
-    } catch (error) {
-      notify(formatApiError(error, "対局の作成に失敗しました"));
-      return null;
-    }
-  };
-
-  /** 1スロット分の画像をアップロードして OCR ジョブを作成。成功時 true、失敗時 false。 */
-  const enqueueSlotJob = async (slot: CaptureSlotState, matchDraftId: string): Promise<boolean> => {
-    if (!slot.file) {
-      return false;
-    }
-    const uploadingSlot = toUploadingSlot(slot);
-    updateSlot(uploadingSlot);
-
-    try {
-      const { upload, job } = await uploadMutation.mutateAsync({
-        matchDraftId,
-        slot: uploadingSlot,
-        file: slot.file,
-      });
-      const status = parseOcrJobStatus(job.status);
-      updateSlot({
-        ...uploadingSlot,
-        imageId: upload.imageId,
-        jobId: job.jobId,
-        draftId: job.draftId,
-        status: status === "unknown" ? "queued" : status,
-      });
-      return true;
-    } catch (error) {
-      updateSlot({
-        ...uploadingSlot,
-        status: "failed",
-        transportError: normalizeUnknownApiError(error),
-      });
-      return false;
-    }
-  };
-
-  async function handleStartOcr() {
-    const targetSlots = pickOcrTargets(slots);
-    if (targetSlots.length === 0) {
-      notify("OCRに送る画像がありません。まず撮影して分類トレイへ置いてください。");
-      return;
-    }
-    const setupSubmission = setupSchema.safeParse(setup);
-    if (!setupSubmission.success) {
-      notify(setupSubmission.error.issues[0]?.message ?? "試合コンテキストを確認してください。");
-      return;
-    }
-
-    const selectedGameTitle = gameTitlesQuery.data?.items?.find(
-      (item) => item.id === setup.gameTitleId,
-    );
-
-    notify(
-      `${targetSlots.length}枚をOCRに送信しています。作業単位を作成して、試合一覧でOCR中として追跡します。`,
-    );
-
-    const matchDraftId = await createOcrMatchDraft(selectedGameTitle);
-    if (!matchDraftId) {
-      return;
-    }
-
-    let createdJobCount = 0;
-    for (const slot of targetSlots) {
-      if (await enqueueSlotJob(slot, matchDraftId)) {
-        createdJobCount += 1;
-      }
-    }
-
-    if (createdJobCount > 0) {
-      await invalidateMatchAndDraftCaches(queryClient);
-      navigate("/matches", { replace: true });
-      return;
-    }
-
-    void cancelMatchDraft(matchDraftId).catch(() => undefined);
-    notify("OCRジョブを作成できませんでした。画像と試合コンテキストを確認してください。");
-  }
-
-  function handleClear(kind: SlotKind) {
-    const currentSlot = slots.find((slot) => slot.kind === kind);
-    if (currentSlot) {
-      releaseSlotResources(currentSlot);
-      if (currentSlot.jobId && isWorkingStatus(currentSlot.status)) {
-        void cancelOcrJob(currentSlot.jobId).catch(() => undefined);
-      }
-    }
-    setSlots((current) =>
-      current.map((slot) => (slot.kind === kind ? createInitialSlot(kind) : slot)),
-    );
-    setDrafts((current) => {
-      const next = { ...current };
-      delete next[kind];
-      return next;
-    });
-    notify("画像を削除しました。");
-  }
-
-  function handleReset() {
-    for (const slot of slots) {
-      releaseSlotResources(slot);
-      if (slot.jobId && isWorkingStatus(slot.status)) {
-        void cancelOcrJob(slot.jobId).catch(() => undefined);
-      }
-    }
-    setSlots(createInitialSlots());
-    setDrafts({});
-    notify("撮影画像とOCR下書き表示をクリアしました。次の試合を撮影できます。");
-  }
-
-  function handleDropImage(sourceKind: SlotKind, targetKind: SlotKind) {
-    if (sourceKind === targetKind) {
-      return;
-    }
-    const sourceSlot = slots.find((slot) => slot.kind === sourceKind);
-    const targetSlot = slots.find((slot) => slot.kind === targetKind);
-    if (!sourceSlot || !targetSlot || !sourceSlot.file) {
-      return;
-    }
-    for (const slot of [sourceSlot, targetSlot]) {
-      if (slot.jobId && isWorkingStatus(slot.status)) {
-        void cancelOcrJob(slot.jobId).catch(() => undefined);
-      }
-    }
-
-    setSlots((current) =>
-      current.map((slot) => {
-        if (slot.kind === sourceKind) {
-          return { ...keepImageOnly(targetSlot), kind: sourceKind };
-        }
-        if (slot.kind === targetKind) {
-          return { ...keepImageOnly(sourceSlot), kind: targetKind };
-        }
-        return slot;
-      }),
-    );
-    setDrafts((current) => {
-      const next = { ...current };
-      delete next[sourceKind];
-      delete next[targetKind];
-      return next;
-    });
-    notify("画像の分類を入れ替えました。OCR送信時は移動後の分類名をヒントにします。");
-  }
-
-  function handleMoveImage(kind: SlotKind, direction: -1 | 1) {
-    const index = slotDefinitions.findIndex((definition) => definition.kind === kind);
-    const targetKind = slotDefinitions[index + direction]?.kind;
-    if (targetKind) {
-      handleDropImage(kind, targetKind);
-    }
-  }
-
   function handleValidationError(message: string) {
     notify(message);
   }
 
-  function handleManualRefresh(kind: SlotKind) {
-    const currentSlot = slots.find((slot) => slot.kind === kind);
-    if (!currentSlot) {
-      return;
-    }
-    updateSlot({ ...currentSlot, pollAttempts: 0 });
+  async function handleStartOcr() {
+    const selectedGameTitle = gameTitlesQuery.data?.items?.find(
+      (item) => item.id === setup.gameTitleId,
+    );
+    await submission.submit({
+      notify,
+      selectedGameTitle,
+      setup,
+      slots: flow.slots,
+      updateSlot: flow.updateSlot,
+    });
   }
 
-  const authError = authQuery.error ? normalizeUnknownApiError(authQuery.error) : undefined;
-  const ocrReadyCount = slots.filter(
+  const ocrReadyCount = flow.slots.filter(
     (slot) => slot.file && ["selected", "failed", "cancelled"].includes(slot.status),
   ).length;
-  const hasWorkingSlot = slots.some((slot) => isWorkingStatus(slot.status));
+  const hasWorkingSlot = flow.slots.some((slot) => isWorkingStatus(slot.status));
   const selectedSlotLabels = slotDefinitions
     .filter((definition) =>
-      slots.some(
+      flow.slots.some(
         (slot) =>
           slot.kind === definition.kind &&
           slot.file &&
@@ -435,7 +123,7 @@ export function OcrCapturePage() {
 
   return (
     <div className="grid gap-5">
-      <LiveRegion message={notice || uploadMutation.status} />
+      <LiveRegion message={notice || submission.status} />
       <PageHeader
         eyebrow="OCR"
         title="OCR取り込み"
@@ -447,16 +135,16 @@ export function OcrCapturePage() {
         }
       />
 
-      {authError ? (
+      {auth.error ? (
         <div className="grid gap-3 rounded-[var(--radius-md)] border border-[var(--color-danger)]/50 bg-[var(--color-danger)]/8 p-4 md:grid-cols-[1fr_18rem] md:items-center">
-          <Notice className="border-0 bg-transparent p-0" tone="danger" title={authError.title}>
+          <Notice className="border-0 bg-transparent p-0" tone="danger" title={auth.error.title}>
             <p>
-              {authError.status === 403
+              {auth.error.status === 403
                 ? "DEV_MEMBER_IDS に含まれていないユーザーです。"
-                : authError.detail}
+                : auth.error.detail}
             </p>
           </Notice>
-          <AuthPanel auth={authQuery.data} forceDevPicker={authError.status === 401} />
+          <AuthPanel auth={auth.data} forceDevPicker={auth.error.status === 401} />
         </div>
       ) : null}
 
@@ -469,8 +157,8 @@ export function OcrCapturePage() {
           <SetupPanel
             value={setup}
             onChange={setSetup}
-            enabled={authReady}
-            authMemberId={authMemberId}
+            enabled={auth.ready}
+            authMemberId={auth.memberId}
           />
         </div>
 
@@ -496,14 +184,14 @@ export function OcrCapturePage() {
           <div>
             <CameraCapture
               slotLabel="撮影台"
-              onSelect={handleAddImage}
+              onSelect={(file, source) => flow.handleAddImage(file, source, notify)}
               onValidationError={handleValidationError}
             />
           </div>
           <div className="flex flex-wrap items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
             <ImageInput
               slotLabel="撮影台"
-              onSelect={handleAddImage}
+              onSelect={(file, source) => flow.handleAddImage(file, source, notify)}
               onValidationError={handleValidationError}
             />
             <p className="text-xs text-[var(--color-text-secondary)]">
@@ -530,11 +218,11 @@ export function OcrCapturePage() {
           </span>
           <Button
             onClick={handleStartOcr}
-            disabled={ocrReadyCount === 0 || hasWorkingSlot || uploadMutation.isPending}
+            disabled={ocrReadyCount === 0 || hasWorkingSlot || submission.isSubmitting}
           >
             OCRを開始して試合一覧へ
           </Button>
-          <Button variant="secondary" onClick={handleReset}>
+          <Button variant="secondary" onClick={() => flow.handleResetAll(notify)}>
             撮影画像を全消去して次の試合へ
           </Button>
         </div>
@@ -548,17 +236,22 @@ export function OcrCapturePage() {
           </p>
         </div>
         <CaptureRail
-          slots={slots}
-          drafts={drafts}
-          onClear={handleClear}
-          onDropImage={handleDropImage}
-          onMoveImage={handleMoveImage}
-          onManualRefresh={handleManualRefresh}
+          slots={flow.slots}
+          drafts={flow.drafts}
+          onClear={(kind) => flow.handleClear(kind, notify)}
+          onDropImage={(source, target) => flow.handleDropImage(source, target, notify)}
+          onMoveImage={(kind, direction) => flow.handleMoveImage(kind, direction, notify)}
+          onManualRefresh={flow.handleManualRefresh}
         />
       </section>
 
-      {slots.map((slot) => (
-        <SlotWatcher key={slot.kind} slot={slot} onUpdate={updateSlot} onDraft={setDraft} />
+      {flow.slots.map((slot) => (
+        <SlotWatcher
+          key={slot.kind}
+          slot={slot}
+          onUpdate={flow.updateSlot}
+          onDraft={flow.setDraft}
+        />
       ))}
     </div>
   );

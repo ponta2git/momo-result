@@ -1,4 +1,4 @@
-import type { IncidentLookupEntry } from "@/features/draftReview/mergeDrafts";
+import type { IncidentLookupEntry } from "@/features/draftReview/reviewViewModel";
 import type { IncidentKey, MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
 
 type PlayerField = Exclude<keyof MatchFormValues["players"][number], "incidents">;

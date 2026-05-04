@@ -1,10 +1,10 @@
-import { incidentNames, parseOcrDraftPayload } from "@/features/draftReview/ocrPayload";
+import { incidentNames, parseOcrDraftPayload } from "@/features/draftReview/ocrDraftPayload";
 import type {
   IncidentName,
   OcrDraftPayload,
   OcrField,
   OcrPlayerEntry,
-} from "@/features/draftReview/ocrPayload";
+} from "@/features/draftReview/ocrDraftPayload";
 import { fixedMembers } from "@/features/auth/members";
 import type { components } from "@/shared/api/generated";
 import { pipe } from "@/shared/lib/pipe";

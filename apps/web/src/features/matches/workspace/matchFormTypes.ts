@@ -2,8 +2,8 @@ import type {
   DraftByKind,
   IncidentLookupEntry,
   ReviewPlayer,
-} from "@/features/draftReview/mergeDrafts";
-import type { ConfirmMatchFormValues } from "@/features/draftReview/schema";
+} from "@/features/draftReview/reviewViewModel";
+import type { ConfirmMatchFormValues } from "@/features/draftReview/confirmMatchFormSchema";
 import { fixedMembers } from "@/features/auth/members";
 
 export const incidentColumns = [

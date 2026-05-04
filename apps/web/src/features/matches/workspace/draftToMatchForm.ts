@@ -1,5 +1,5 @@
-import { mergeDrafts } from "@/features/draftReview/mergeDrafts";
-import type { DraftByKind } from "@/features/draftReview/mergeDrafts";
+import { mergeDrafts } from "@/features/draftReview/reviewViewModel";
+import type { DraftByKind } from "@/features/draftReview/reviewViewModel";
 import type {
   MatchDraftSummary,
   MatchFormValues,

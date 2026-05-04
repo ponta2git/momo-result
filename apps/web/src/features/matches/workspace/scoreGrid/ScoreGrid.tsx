@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 
-import type { IncidentLookupEntry, ReviewPlayer } from "@/features/draftReview/mergeDrafts";
+import type { IncidentLookupEntry, ReviewPlayer } from "@/features/draftReview/reviewViewModel";
 import { incidentColumns } from "@/features/matches/workspace/matchFormTypes";
 import type { IncidentKey, MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
 import { handleScoreGridKeydown } from "@/features/matches/workspace/scoreGrid/ScoreGridKeyboard";

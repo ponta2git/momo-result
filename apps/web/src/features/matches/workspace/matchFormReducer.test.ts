@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 
-import type { IncidentLookupEntry } from "@/features/draftReview/mergeDrafts";
+import type { IncidentLookupEntry } from "@/features/draftReview/reviewViewModel";
 import {
   createMatchFormReducerState,
   matchFormReducer,

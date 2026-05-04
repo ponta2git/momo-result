@@ -113,6 +113,17 @@ apps/
 - キーボード操作、ラベル、フォーカス表示、コントラストなど基本的なWCAG AA相当を目指す。
 - 画像アップロード/CSV出力系はPC主対象。その他の機能はスマホでも快適に操作できることを目指す。
 
+### 3.5 モジュール分割と依存方向
+
+- `apps/web/src` は `app/` `features/` `shared/` の3層で構成する。
+- 依存方向は `app → features → shared` の一方向のみとする。`shared` は他層を import しない。
+- features 同士は実装詳細（API client、query key、view model、内部型）を直接 import しない。
+  複数 features から参照される共有概念は `shared/` または専用 feature（例: `features/auth/`）に再配置する。
+- 横断的な API クライアントは `shared/api/<resource>.ts` に置く。TanStack Query の `queryKey` も同じ場所に `*Keys` として並置する（例: `heldEventKeys`, `ocrDraftKeys`, `ocrJobKeys`）。
+- feature 内のファイルは役割ごとに分割する：`api.ts`（HTTP）、`types.ts`（公開型）、`*ViewModel.ts`（純粋変換）、`use*.ts`（状態・副作用）、`*Page.tsx` / コンポーネント（描画）。
+- `*Page.tsx` は描画と setup state の保持に責務を絞り、データ取得・mutation・ローカル状態機械は専用 hook に切り出す。
+- テスト用ユーティリティ（`@/test/*`）を本番コードから import しない。
+
 ---
 
 ## 4. OCRワーカー実装規約

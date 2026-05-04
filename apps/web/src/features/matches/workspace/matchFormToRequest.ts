@@ -1,5 +1,5 @@
-import { confirmMatchSchema } from "@/features/draftReview/schema";
-import type { ConfirmMatchRequest } from "@/features/draftReview/schema";
+import { confirmMatchSchema } from "@/features/draftReview/confirmMatchFormSchema";
+import type { ConfirmMatchRequest } from "@/features/draftReview/confirmMatchFormSchema";
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
 import type { components } from "@/shared/api/generated";
 

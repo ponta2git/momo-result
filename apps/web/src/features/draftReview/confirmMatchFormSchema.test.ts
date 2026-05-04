@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 
-import { confirmMatchSchema } from "@/features/draftReview/schema";
+import { confirmMatchSchema } from "@/features/draftReview/confirmMatchFormSchema";
 
 const valid = {
   heldEventId: "held-1",

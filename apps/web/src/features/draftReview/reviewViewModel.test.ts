@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
-import { mergeDrafts } from "@/features/draftReview/mergeDrafts";
+import { mergeDrafts } from "@/features/draftReview/reviewViewModel";
 
 const field = <T>(value: T, confidence = 0.96) => ({
   value,

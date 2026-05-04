@@ -63,7 +63,7 @@ final class PostgresMatchListRepositorySpec extends IntegrationSuite:
     totalAssetsDraftId = None,
     revenueDraftId = None,
     incidentLogDraftId = None,
-    players = List(
+    players = FourPlayers(
       player("member_ponta", 1, 1),
       player("member_akane_mami", 2, 2),
       player("member_otaka", 3, 3),

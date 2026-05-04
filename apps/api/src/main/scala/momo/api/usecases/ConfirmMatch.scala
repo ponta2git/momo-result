@@ -9,7 +9,7 @@ import cats.data.EitherT
 import cats.syntax.all.*
 
 import momo.api.domain.ids.*
-import momo.api.domain.{MatchRecord, PlayerResult}
+import momo.api.domain.{FourPlayers, MatchRecord, PlayerResult}
 import momo.api.errors.AppError
 import momo.api.repositories.{
   GameTitlesRepository, HeldEventsRepository, MapMastersRepository, MatchConfirmationRepository,
@@ -32,18 +32,20 @@ final class ConfirmMatch[F[_]: MonadThrow](
   import ConfirmMatch.*
 
   def run(command: Command, createdBy: MemberId): F[Either[AppError, MatchRecord]] = (for
-    _ <- EitherT.fromEither[F](MatchValidation.validateShape(
-      MatchValidation.Input(
-        heldEventId = command.heldEventId,
-        matchNoInEvent = command.matchNoInEvent,
-        gameTitleId = command.gameTitleId,
-        seasonMasterId = command.seasonMasterId,
-        ownerMemberId = command.ownerMemberId,
-        mapMasterId = command.mapMasterId,
-        players = command.players,
-      ),
-      allowedMemberIds,
-    ))
+    validated <- EitherT.fromEither[F](
+      MatchValidation.validate(
+        MatchValidation.Input(
+          heldEventId = command.heldEventId,
+          matchNoInEvent = command.matchNoInEvent,
+          gameTitleId = command.gameTitleId,
+          seasonMasterId = command.seasonMasterId,
+          ownerMemberId = command.ownerMemberId,
+          mapMasterId = command.mapMasterId,
+          players = command.players,
+        ),
+        allowedMemberIds,
+      ).leftMap(MatchValidation.toAppError)
+    )
     playedAt <- EitherT.fromEither[F](Try(Instant.parse(command.playedAt)).toEither.left.map(_ =>
       AppError.ValidationFailed("playedAt must be ISO8601 instant.")
     ))
@@ -80,7 +82,15 @@ final class ConfirmMatch[F[_]: MonadThrow](
     )
     id <- EitherT.liftF(nextId)
     createdAt <- EitherT.liftF(now)
-    record = toMatchRecord(MatchId(id), createdAt, playedAt, title.layoutFamily, createdBy, command)
+    record = toMatchRecord(
+      MatchId(id),
+      createdAt,
+      playedAt,
+      title.layoutFamily,
+      createdBy,
+      command,
+      validated.players,
+    )
     maybeDraft <- command.matchDraftId match
       case None => EitherT.rightT[F, AppError](Option.empty[momo.api.domain.MatchDraft])
       case Some(draftId) => EitherT(
@@ -125,6 +135,7 @@ object ConfirmMatch:
       layoutFamily: String,
       createdByMemberId: MemberId,
       command: Command,
+      players: FourPlayers,
   ): MatchRecord = MatchRecord(
     id = id,
     heldEventId = command.heldEventId,
@@ -138,7 +149,7 @@ object ConfirmMatch:
     totalAssetsDraftId = command.draftRefs.totalAssets,
     revenueDraftId = command.draftRefs.revenue,
     incidentLogDraftId = command.draftRefs.incidentLog,
-    players = command.players,
+    players = players,
     createdByMemberId = createdByMemberId,
     createdAt = createdAt,
   )

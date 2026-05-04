@@ -9,7 +9,8 @@ import munit.FunSuite
 
 import momo.api.domain.ids.*
 import momo.api.domain.{
-  IncidentCounts, MatchListItem, MatchListItemKind, MatchListRankEntry, MatchRecord, PlayerResult,
+  FourPlayers, IncidentCounts, MatchListItem, MatchListItemKind, MatchListRankEntry, MatchRecord,
+  PlayerResult,
 }
 
 /**
@@ -56,7 +57,7 @@ final class MatchModelsRoundtripSpec extends FunSuite:
     totalAssetsDraftId = Some(OcrDraftId("draft_total_assets")),
     revenueDraftId = None,
     incidentLogDraftId = None,
-    players = List(
+    players = FourPlayers(
       player("member_a", playOrder = 1, rank = 1),
       player("member_b", playOrder = 2, rank = 2),
       player("member_c", playOrder = 3, rank = 3),

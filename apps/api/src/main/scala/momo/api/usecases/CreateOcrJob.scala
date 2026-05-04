@@ -134,20 +134,13 @@ object CreateOcrJob:
       imagePath: java.nio.file.Path,
       screenType: ScreenType,
       createdAt: Instant,
-  ): OcrJob = OcrJob(
+  ): OcrJob = OcrJob.Queued(
     id = jobId,
     draftId = draftId,
     imageId = imageId,
     imagePath = imagePath,
     requestedScreenType = screenType,
-    detectedScreenType = None,
-    status = OcrJobStatus.Queued,
     attemptCount = 0,
-    workerId = None,
-    failure = None,
-    startedAt = None,
-    finishedAt = None,
-    durationMs = None,
     createdAt = createdAt,
     updatedAt = createdAt,
   )

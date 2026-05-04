@@ -9,7 +9,7 @@ import io.circe.syntax.*
 import munit.FunSuite
 
 import momo.api.domain.ids.*
-import momo.api.domain.{FailureCode, OcrFailure, OcrJob, OcrJobStatus, ScreenType}
+import momo.api.domain.{FailureCode, OcrFailure, OcrJob, ScreenType}
 
 /**
  * Roundtrip + golden-JSON guard for [[OcrJobResponse]].
@@ -23,34 +23,37 @@ final class OcrJobResponseRoundtripSpec extends FunSuite:
   private val createdAt = Instant.parse("2026-04-30T12:00:00Z")
   private val updatedAt = Instant.parse("2026-04-30T12:00:01Z")
 
-  private val queuedJob = OcrJob(
+  private val queuedJob: OcrJob = OcrJob.Queued(
     id = OcrJobId("job_001"),
     draftId = OcrDraftId("draft_001"),
     imageId = ImageId("image_001"),
     imagePath = Paths.get("/tmp/images/image_001.png"),
     requestedScreenType = ScreenType.TotalAssets,
-    detectedScreenType = None,
-    status = OcrJobStatus.Queued,
     attemptCount = 0,
-    workerId = None,
-    failure = None,
-    startedAt = None,
-    finishedAt = None,
-    durationMs = None,
     createdAt = createdAt,
     updatedAt = updatedAt,
   )
 
-  private val failedJob = queuedJob.copy(
-    status = OcrJobStatus.Failed,
+  private val failedJob: OcrJob = OcrJob.Failed(
+    id = OcrJobId("job_001"),
+    draftId = OcrDraftId("draft_001"),
+    imageId = ImageId("image_001"),
+    imagePath = Paths.get("/tmp/images/image_001.png"),
+    requestedScreenType = ScreenType.TotalAssets,
+    failedDetectedScreenType = Some(ScreenType.Revenue),
     attemptCount = 2,
-    detectedScreenType = Some(ScreenType.Revenue),
-    failure = Some(OcrFailure(
+    failedWorkerId = None,
+    failedFailure = OcrFailure(
       code = FailureCode.OcrTimeout,
       message = "engine timed out after 30s",
       retryable = true,
       userAction = Some("retry later"),
-    )),
+    ),
+    failedStartedAt = None,
+    failedFinishedAt = updatedAt,
+    failedDurationMs = None,
+    createdAt = createdAt,
+    updatedAt = updatedAt,
   )
 
   test("OcrJobResponse: encode → decode is identity (queued)"):

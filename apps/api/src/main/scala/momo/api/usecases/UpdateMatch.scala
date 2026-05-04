@@ -42,6 +42,10 @@ final class UpdateMatch[F[_]: MonadThrow](
       ),
       allowedMemberIds,
     ))
+    validatedPlayers <- EitherT.fromEither[F](
+      momo.api.domain.FourPlayers.fromList(command.players, allowedMemberIds)
+        .leftMap(MatchValidation.toAppError)
+    )
     playedAt <- EitherT.fromEither[F](Try(Instant.parse(command.playedAt)).toEither.left.map(_ =>
       AppError.ValidationFailed("playedAt must be ISO8601 instant.")
     ))
@@ -91,7 +95,7 @@ final class UpdateMatch[F[_]: MonadThrow](
       totalAssetsDraftId = command.draftRefs.totalAssets.orElse(existing.totalAssetsDraftId),
       revenueDraftId = command.draftRefs.revenue.orElse(existing.revenueDraftId),
       incidentLogDraftId = command.draftRefs.incidentLog.orElse(existing.incidentLogDraftId),
-      players = command.players,
+      players = validatedPlayers,
     )
     _ <- EitherT.liftF(matches.update(record, updatedAt))
   yield record).value

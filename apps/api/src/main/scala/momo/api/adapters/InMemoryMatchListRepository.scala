@@ -42,7 +42,7 @@ final class InMemoryMatchListRepository[F[_]: Monad](
           playedAt = Some(record.playedAt),
           createdAt = record.createdAt,
           updatedAt = record.createdAt,
-          ranks = record.players.sortBy(_.playOrder)
+          ranks = record.players.byPlayOrder
             .map(p => MatchListRankEntry(p.memberId, p.rank, p.playOrder)),
         )
       }

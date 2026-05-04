@@ -51,16 +51,23 @@ final class UpdateMatchDraft[F[_]: MonadThrow](
     _ <- validateForeignKeys(command)
     status <- EitherT.fromEither[F](resolveStatus(command.status, existing.status))
     at <- EitherT.liftF(now)
-    updated = existing.copy(
-      status = status,
-      heldEventId = command.heldEventId.orElse(existing.heldEventId),
-      matchNoInEvent = command.matchNoInEvent.orElse(existing.matchNoInEvent),
-      gameTitleId = command.gameTitleId.orElse(existing.gameTitleId),
-      layoutFamily = command.layoutFamily.orElse(existing.layoutFamily),
-      seasonMasterId = command.seasonMasterId.orElse(existing.seasonMasterId),
-      ownerMemberId = command.ownerMemberId.orElse(existing.ownerMemberId),
-      mapMasterId = command.mapMasterId.orElse(existing.mapMasterId),
-      playedAt = command.playedAt.orElse(existing.playedAt),
+    updated <- EitherT.fromEither[F](
+      existing match
+        case e: MatchDraft.Editing => Right(
+            e.copy(
+              status = status,
+              heldEventId = command.heldEventId.orElse(e.heldEventId),
+              matchNoInEvent = command.matchNoInEvent.orElse(e.matchNoInEvent),
+              gameTitleId = command.gameTitleId.orElse(e.gameTitleId),
+              layoutFamily = command.layoutFamily.orElse(e.layoutFamily),
+              seasonMasterId = command.seasonMasterId.orElse(e.seasonMasterId),
+              ownerMemberId = command.ownerMemberId.orElse(e.ownerMemberId),
+              mapMasterId = command.mapMasterId.orElse(e.mapMasterId),
+              playedAt = command.playedAt.orElse(e.playedAt),
+            )
+          )
+        case _ => Left(AppError.Conflict(s"match draft in status=${existing.status
+              .wire} cannot be edited."))
     )
     saved <- EitherT.liftF(matchDrafts.update(updated, at))
     _ <- EitherT

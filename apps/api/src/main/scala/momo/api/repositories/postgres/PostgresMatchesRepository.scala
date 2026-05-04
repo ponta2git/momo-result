@@ -11,7 +11,7 @@ import doobie.util.fragments
 import doobie.util.update.Update
 
 import momo.api.domain.ids.*
-import momo.api.domain.{IncidentCounts, MatchRecord, PlayerResult}
+import momo.api.domain.{FourPlayers, IncidentCounts, MatchRecord, PlayerResult}
 import momo.api.repositories.MatchesRepository
 import momo.api.repositories.postgres.PostgresMeta.given
 
@@ -47,7 +47,7 @@ final class PostgresMatchesRepository[F[_]: MonadCancelThrow](transactor: Transa
            created_by_member_id, created_at, updated_at
          FROM matches"""
 
-  private def toRecord(m: MatchRow, players: List[PlayerResult]): MatchRecord = MatchRecord(
+  private def toRecord(m: MatchRow, players: FourPlayers): MatchRecord = MatchRecord(
     id = m._1,
     heldEventId = m._2,
     matchNoInEvent = m._3,
@@ -124,24 +124,25 @@ final class PostgresMatchesRepository[F[_]: MonadCancelThrow](transactor: Transa
         )
       """.update.run
 
-    val playerRows: List[(MatchId, MemberId, Int, Int, Int, Int, Instant)] = record.players.map { p =>
-      (
-        record.id,
-        p.memberId,
-        p.playOrder,
-        p.rank,
-        p.totalAssetsManYen,
-        p.revenueManYen,
-        record.createdAt,
-      )
-    }
+    val playerRows: List[(MatchId, MemberId, Int, Int, Int, Int, Instant)] = record.players.toList
+      .map { p =>
+        (
+          record.id,
+          p.memberId,
+          p.playOrder,
+          p.rank,
+          p.totalAssetsManYen,
+          p.revenueManYen,
+          record.createdAt,
+        )
+      }
     val insertPlayers =
       Update[(MatchId, MemberId, Int, Int, Int, Int, Instant)]("""INSERT INTO match_players
          (match_id, member_id, play_order, rank, total_assets_man_yen, revenue_man_yen, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?)""").updateMany(playerRows)
 
     val incidentRows: List[(MatchId, MemberId, IncidentMasterId, Int, Instant)] = record.players
-      .flatMap { p =>
+      .toList.flatMap { p =>
         p.incidents.entriesByMasterId.map { case (incidentId, count) =>
           (record.id, p.memberId, incidentId, count, record.createdAt)
         }
@@ -160,11 +161,21 @@ final class PostgresMatchesRepository[F[_]: MonadCancelThrow](transactor: Transa
   override def delete(id: MatchId): F[Boolean] = sql"DELETE FROM matches WHERE id = $id".update.run
     .map(_ > 0).transact(transactor)
 
+  private def loadFourPlayers(matchId: MatchId): ConnectionIO[FourPlayers] = loadPlayers(matchId)
+    .flatMap { players =>
+      FourPlayers.fromTrustedRow(players) match
+        case Right(fp) => fp.pure[ConnectionIO]
+        case Left(errs) => cats.MonadThrow[ConnectionIO]
+            .raiseError(new IllegalStateException(s"match ${matchId
+                .value} has invalid match_players row(s): ${errs.toChain.toList.map(_.message)
+                .mkString("; ")}"))
+    }
+
   override def find(id: MatchId): F[Option[MatchRecord]] =
     val program: ConnectionIO[Option[MatchRecord]] = (selectMatch ++ fr"WHERE id = $id")
       .query[MatchRow].option.flatMap {
         case None => Option.empty[MatchRecord].pure[ConnectionIO]
-        case Some(row) => loadPlayers(id).map(players => Some(toRecord(row, players)))
+        case Some(row) => loadFourPlayers(id).map(players => Some(toRecord(row, players)))
       }
     program.transact(transactor)
 
@@ -174,7 +185,7 @@ final class PostgresMatchesRepository[F[_]: MonadCancelThrow](transactor: Transa
         rows <-
         (selectMatch ++ fr"WHERE held_event_id = $heldEventId" ++ fr"ORDER BY match_no_in_event")
           .query[MatchRow].to[List]
-        out <- rows.traverse(r => loadPlayers(r._1).map(p => toRecord(r, p)))
+        out <- rows.traverse(r => loadFourPlayers(r._1).map(p => toRecord(r, p)))
       yield out
     program.transact(transactor)
 
@@ -210,7 +221,7 @@ final class PostgresMatchesRepository[F[_]: MonadCancelThrow](transactor: Transa
       for
         rows <- (selectMatch ++ where ++ fr"ORDER BY played_at DESC, created_at DESC" ++ limit)
           .query[MatchRow].to[List]
-        out <- rows.traverse(r => loadPlayers(r._1).map(p => toRecord(r, p)))
+        out <- rows.traverse(r => loadFourPlayers(r._1).map(p => toRecord(r, p)))
       yield out
     program.transact(transactor)
 

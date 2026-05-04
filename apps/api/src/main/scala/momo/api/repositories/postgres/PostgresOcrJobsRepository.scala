@@ -38,27 +38,110 @@ final class PostgresOcrJobsRepository[F[_]: MonadCancelThrow](transactor: Transa
       Instant,
   )
 
-  private def toJob(r: Row): OcrJob =
-    val failure = (r._10, r._11, r._12) match
-      case (Some(code), Some(msg), Some(retry)) => Some(OcrFailure(code, msg, retry, r._13))
+  private def toJob(r: Row): ConnectionIO[OcrJob] =
+    val (
+      id,
+      draftId,
+      imageId,
+      imagePath,
+      requestedScreenType,
+      detectedScreenType,
+      status,
+      attemptCount,
+      workerId,
+      failureCode,
+      failureMessage,
+      failureRetryable,
+      failureUserAction,
+      startedAt,
+      finishedAt,
+      durationMs,
+      createdAt,
+      updatedAt,
+    ) = r
+    val failure = (failureCode, failureMessage, failureRetryable) match
+      case (Some(code), Some(msg), Some(retry)) =>
+        Some(OcrFailure(code, msg, retry, failureUserAction))
       case _ => None
-    OcrJob(
-      id = r._1,
-      draftId = r._2,
-      imageId = r._3,
-      imagePath = r._4,
-      requestedScreenType = r._5,
-      detectedScreenType = r._6,
-      status = r._7,
-      attemptCount = r._8,
-      workerId = r._9,
-      failure = failure,
-      startedAt = r._14,
-      finishedAt = r._15,
-      durationMs = r._16,
-      createdAt = r._17,
-      updatedAt = r._18,
-    )
+
+    def inconsistent(reason: String): ConnectionIO[OcrJob] = cats.MonadThrow[ConnectionIO]
+      .raiseError(new IllegalStateException(s"ocr_jobs row ${id.value} is inconsistent: $reason"))
+
+    status match
+      case OcrJobStatus.Queued => OcrJob.Queued(
+          id,
+          draftId,
+          imageId,
+          imagePath,
+          requestedScreenType,
+          attemptCount,
+          createdAt,
+          updatedAt,
+        ).pure[ConnectionIO].widen[OcrJob]
+      case OcrJobStatus.Running => (workerId, startedAt) match
+          case (Some(w), Some(s)) => OcrJob.Running(
+              id,
+              draftId,
+              imageId,
+              imagePath,
+              requestedScreenType,
+              attemptCount,
+              w,
+              s,
+              createdAt,
+              updatedAt,
+            ).pure[ConnectionIO].widen[OcrJob]
+          case _ => inconsistent("status=running requires worker_id and started_at")
+      case OcrJobStatus.Succeeded => (detectedScreenType, startedAt, finishedAt, durationMs) match
+          case (Some(d), Some(s), Some(f), Some(dm)) => OcrJob.Succeeded(
+              id,
+              draftId,
+              imageId,
+              imagePath,
+              requestedScreenType,
+              d,
+              attemptCount,
+              workerId,
+              s,
+              f,
+              dm,
+              createdAt,
+              updatedAt,
+            ).pure[ConnectionIO].widen[OcrJob]
+          case _ => inconsistent(
+              "status=succeeded requires detected_screen_type, started_at, finished_at, duration_ms"
+            )
+      case OcrJobStatus.Failed => (failure, finishedAt) match
+          case (Some(f), Some(fin)) => OcrJob.Failed(
+              id,
+              draftId,
+              imageId,
+              imagePath,
+              requestedScreenType,
+              detectedScreenType,
+              attemptCount,
+              workerId,
+              f,
+              startedAt,
+              fin,
+              durationMs,
+              createdAt,
+              updatedAt,
+            ).pure[ConnectionIO].widen[OcrJob]
+          case _ => inconsistent("status=failed requires failure_* columns and finished_at")
+      case OcrJobStatus.Cancelled => finishedAt match
+          case Some(f) => OcrJob.Cancelled(
+              id,
+              draftId,
+              imageId,
+              imagePath,
+              requestedScreenType,
+              attemptCount,
+              f,
+              createdAt,
+              updatedAt,
+            ).pure[ConnectionIO].widen[OcrJob]
+          case None => inconsistent("status=cancelled requires finished_at")
 
   private val selectAll = fr"""SELECT
            id, draft_id, image_id, image_path,
@@ -89,7 +172,10 @@ final class PostgresOcrJobsRepository[F[_]: MonadCancelThrow](transactor: Transa
     """.update.run.void.transact(transactor)
 
   override def find(jobId: OcrJobId): F[Option[OcrJob]] = (selectAll ++ fr"WHERE id = $jobId")
-    .query[Row].option.map(_.map(toJob)).transact(transactor)
+    .query[Row].option.flatMap {
+      case None => Option.empty[OcrJob].pure[ConnectionIO]
+      case Some(row) => toJob(row).map(Some(_))
+    }.transact(transactor)
 
   override def markFailed(jobId: OcrJobId, failure: OcrFailure, now: Instant): F[Unit] = sql"""
       UPDATE ocr_jobs SET

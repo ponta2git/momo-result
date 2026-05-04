@@ -59,7 +59,7 @@ final case class MatchRecord(
     totalAssetsDraftId: Option[OcrDraftId],
     revenueDraftId: Option[OcrDraftId],
     incidentLogDraftId: Option[OcrDraftId],
-    players: List[PlayerResult],
+    players: FourPlayers,
     createdByMemberId: MemberId,
     createdAt: Instant,
 )

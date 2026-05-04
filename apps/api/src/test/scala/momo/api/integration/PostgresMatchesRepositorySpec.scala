@@ -84,7 +84,7 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
     totalAssetsDraftId = None,
     revenueDraftId = None,
     incidentLogDraftId = None,
-    players = List(
+    players = FourPlayers(
       playerWithIncidents("member_ponta", 1, 1, 12000, 3000, destination = 5, plusStation = 2),
       player("member_akane_mami", 2, 2, 9000, 1500),
       player("member_otaka", 3, 3, 6500, 800),
@@ -103,10 +103,10 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
     yield
       val got = found.getOrElse(fail("match_001 not found after create"))
       assertEquals(got.id, rec.id)
-      assertEquals(got.players.size, 4)
-      assertEquals(got.players.map(_.playOrder), List(1, 2, 3, 4))
-      assertEquals(got.players.map(_.rank), List(1, 2, 3, 4))
-      val ponta = got.players.find(_.memberId == MemberId("member_ponta")).get
+      assertEquals(got.players.toList.size, 4)
+      assertEquals(got.players.byPlayOrder.map(_.playOrder), List(1, 2, 3, 4))
+      assertEquals(got.players.byRank.map(_.rank), List(1, 2, 3, 4))
+      val ponta = got.players.toList.find(_.memberId == MemberId("member_ponta")).get
       assertEquals(ponta.totalAssetsManYen, 12000)
       assertEquals(ponta.incidents.destination, 5)
       assertEquals(ponta.incidents.plusStation, 2)

@@ -55,24 +55,25 @@ final class PostgresMatchConfirmationRepository[F[_]: MonadCancelThrow](transact
       )
     """.update.run
 
-    val playerRows: List[(MatchId, MemberId, Int, Int, Int, Int, Instant)] = record.players.map { p =>
-      (
-        record.id,
-        p.memberId,
-        p.playOrder,
-        p.rank,
-        p.totalAssetsManYen,
-        p.revenueManYen,
-        record.createdAt,
-      )
-    }
+    val playerRows: List[(MatchId, MemberId, Int, Int, Int, Int, Instant)] = record.players.toList
+      .map { p =>
+        (
+          record.id,
+          p.memberId,
+          p.playOrder,
+          p.rank,
+          p.totalAssetsManYen,
+          p.revenueManYen,
+          record.createdAt,
+        )
+      }
     val insertPlayers =
       Update[(MatchId, MemberId, Int, Int, Int, Int, Instant)]("""INSERT INTO match_players
          (match_id, member_id, play_order, rank, total_assets_man_yen, revenue_man_yen, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?)""").updateMany(playerRows)
 
     val incidentRows: List[(MatchId, MemberId, IncidentMasterId, Int, Instant)] = record.players
-      .flatMap { p =>
+      .toList.flatMap { p =>
         p.incidents.entriesByMasterId.map { case (incidentId, count) =>
           (record.id, p.memberId, incidentId, count, record.createdAt)
         }

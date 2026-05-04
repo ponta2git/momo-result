@@ -104,7 +104,7 @@ final class ExportMatches[F[_]: Applicative](
         ownerName <- lookup(memberNames, record.ownerMemberId, "member")
         seasonNo <- lookup(seasonNoByMatch, record.id, "season sequence")
         gameNo <- lookup(gameNoByMatch, record.id, "game title sequence")
-        rows <- record.players.sortBy(_.playOrder).traverse { player =>
+        rows <- record.players.byPlayOrder.traverse { player =>
           playerRow(record, player, memberNames, seasonName, seasonNo, ownerName, mapName, gameNo)
         }
       yield rows

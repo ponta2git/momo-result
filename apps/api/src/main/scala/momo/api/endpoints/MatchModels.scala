@@ -176,7 +176,7 @@ object MatchDetailResponse:
     totalAssetsDraftId = r.totalAssetsDraftId.map(_.value),
     revenueDraftId = r.revenueDraftId.map(_.value),
     incidentLogDraftId = r.incidentLogDraftId.map(_.value),
-    players = r.players.sortBy(_.playOrder).map(p =>
+    players = r.players.byPlayOrder.map(p =>
       PlayerResultResponse(
         memberId = p.memberId.value,
         playOrder = p.playOrder,

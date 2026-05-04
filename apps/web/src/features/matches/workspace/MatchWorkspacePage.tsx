@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { useEffect, useReducer, useState, useTransition } from "react";
+import { useActionState, useEffect, useReducer, useState, useTransition } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { createHeldEvent } from "@/features/draftReview/api";
@@ -128,6 +128,11 @@ export function MatchWorkspacePage({
       onConfirmSuccess: () => setConfirmOpen(false),
       onError: setValidationMessage,
     });
+
+  const [, confirmAction] = useActionState<null, FormData>(async () => {
+    await confirmMutation.mutateAsync(toConfirmMatchRequest(state.values));
+    return null;
+  }, null);
 
   useEffect(() => {
     if (notice === "") {
@@ -463,10 +468,9 @@ export function MatchWorkspacePage({
       {confirmOpen ? (
         <MatchConfirmDialog
           heldEvent={selectedHeldEvent}
-          pending={confirmMutation.isPending}
           values={state.values}
           onCancel={() => setConfirmOpen(false)}
-          onConfirm={() => confirmMutation.mutate(toConfirmMatchRequest(state.values))}
+          confirmAction={confirmAction}
         />
       ) : null}
 

@@ -1,3 +1,5 @@
+import { useFormStatus } from "react-dom";
+
 import type { HeldEventResponse } from "@/features/draftReview/api";
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
 import { fixedMembers } from "@/features/ocrCapture/localMasters";
@@ -9,22 +11,37 @@ function memberName(memberId: string): string {
 
 type MatchConfirmDialogProps = {
   heldEvent: HeldEventResponse | undefined;
-  pending: boolean;
   values: MatchFormValues;
   onCancel: () => void;
-  onConfirm: () => void;
+  confirmAction: (formData: FormData) => void | Promise<void>;
 };
+
+function ConfirmActionButtons({ onCancel }: { onCancel: () => void }) {
+  const { pending } = useFormStatus();
+  return (
+    <div className="mt-6 flex justify-end gap-2">
+      <Button variant="secondary" disabled={pending} onClick={onCancel} type="button">
+        戻って修正
+      </Button>
+      <Button disabled={pending} type="submit">
+        {pending ? "確定中..." : "確定する"}
+      </Button>
+    </div>
+  );
+}
 
 export function MatchConfirmDialog({
   heldEvent,
-  pending,
   values,
   onCancel,
-  onConfirm,
+  confirmAction,
 }: MatchConfirmDialogProps) {
   return (
     <div className="fixed inset-0 z-[var(--z-dialog)] grid place-items-center bg-[var(--momo-night-900)]/35 p-4">
-      <div className="w-full max-w-xl rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-lg">
+      <form
+        action={confirmAction}
+        className="w-full max-w-xl rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-lg"
+      >
         <p className="text-xs font-semibold text-[var(--color-text-secondary)]">Final Check</p>
         <h2 className="mt-2 text-2xl font-semibold text-balance text-[var(--color-text-primary)]">
           この内容で確定しますか？
@@ -55,15 +72,8 @@ export function MatchConfirmDialog({
           </div>
         </dl>
 
-        <div className="mt-6 flex justify-end gap-2">
-          <Button variant="secondary" disabled={pending} onClick={onCancel}>
-            戻って修正
-          </Button>
-          <Button disabled={pending} onClick={onConfirm}>
-            確定する
-          </Button>
-        </div>
-      </div>
+        <ConfirmActionButtons onCancel={onCancel} />
+      </form>
     </div>
   );
 }

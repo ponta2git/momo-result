@@ -5,17 +5,23 @@ import cats.syntax.functor.*
 
 import momo.api.domain.HeldEvent
 import momo.api.domain.ids.HeldEventId
-import momo.api.repositories.HeldEventsRepository
+import momo.api.repositories.{HeldEventsAlg, HeldEventsRepository}
 
 final class InMemoryHeldEventsRepository[F[_]: Sync] private (
     ref: Ref[F, Map[HeldEventId, HeldEvent]]
 ) extends HeldEventsRepository[F]:
-  override def list(query: Option[String], limit: Int): F[List[HeldEvent]] = ref.get
-    .map(events => InMemoryHeldEventsRepository.filterAndSort(events.values, query, limit))
+  private val alg: HeldEventsAlg[F] = new HeldEventsAlg[F]:
+    override def list(query: Option[String], limit: Int): F[List[HeldEvent]] = ref.get
+      .map(events => InMemoryHeldEventsRepository.filterAndSort(events.values, query, limit))
+    override def find(id: HeldEventId): F[Option[HeldEvent]] = ref.get.map(_.get(id))
+    override def create(event: HeldEvent): F[Unit] = ref.update(_ + (event.id -> event))
 
-  override def find(id: HeldEventId): F[Option[HeldEvent]] = ref.get.map(_.get(id))
+  private val delegate: HeldEventsRepository[F] = HeldEventsRepository.liftIdentity(alg)
 
-  override def create(event: HeldEvent): F[Unit] = ref.update(_ + (event.id -> event))
+  override def list(query: Option[String], limit: Int): F[List[HeldEvent]] = delegate
+    .list(query, limit)
+  override def find(id: HeldEventId): F[Option[HeldEvent]] = delegate.find(id)
+  override def create(event: HeldEvent): F[Unit] = delegate.create(event)
 
 object InMemoryHeldEventsRepository:
   private[adapters] def filterAndSort(
@@ -32,3 +38,4 @@ object InMemoryHeldEventsRepository:
 
   def create[F[_]: Sync]: F[InMemoryHeldEventsRepository[F]] = Ref
     .of[F, Map[HeldEventId, HeldEvent]](Map.empty).map(new InMemoryHeldEventsRepository(_))
+end InMemoryHeldEventsRepository

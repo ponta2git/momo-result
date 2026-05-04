@@ -1,12 +1,18 @@
 package momo.api.repositories
 
+import cats.~>
+import doobie.ConnectionIO
+
 import momo.api.domain.ids.{GameTitleId, HeldEventId, SeasonMasterId}
 import momo.api.domain.{MatchDraftStatus, MatchListItem}
 
-trait MatchListRepository[F[_]]:
-  def list(filter: MatchListRepository.Filter): F[List[MatchListItem]]
+trait MatchListAlg[F0[_]]:
+  def list(filter: MatchListReadModel.Filter): F0[List[MatchListItem]]
 
-object MatchListRepository:
+trait MatchListReadModel[F[_]]:
+  def list(filter: MatchListReadModel.Filter): F[List[MatchListItem]]
+
+object MatchListReadModel:
   enum StatusFilter derives CanEqual:
     case All
     case Incomplete
@@ -35,3 +41,13 @@ object MatchListRepository:
     MatchDraftStatus.DraftReady,
     MatchDraftStatus.NeedsReview,
   )
+
+  def fromConnectionIO[F[_]](
+      alg: MatchListAlg[ConnectionIO],
+      transactK: ConnectionIO ~> F,
+  ): MatchListReadModel[F] = new MatchListReadModel[F]:
+    def list(filter: Filter): F[List[MatchListItem]] = transactK(alg.list(filter))
+
+  def liftIdentity[F[_]](alg: MatchListAlg[F]): MatchListReadModel[F] = new MatchListReadModel[F]:
+    def list(filter: Filter): F[List[MatchListItem]] = alg.list(filter)
+end MatchListReadModel

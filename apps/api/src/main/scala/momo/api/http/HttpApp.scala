@@ -7,7 +7,7 @@ import org.http4s.HttpApp as Http4sApp
 import momo.api.adapters.{
   InMemoryAppSessionsRepository, InMemoryGameTitlesRepository, InMemoryHeldEventsRepository,
   InMemoryIncidentMastersRepository, InMemoryMapMastersRepository,
-  InMemoryMatchConfirmationRepository, InMemoryMatchDraftsRepository, InMemoryMatchListRepository,
+  InMemoryMatchConfirmationRepository, InMemoryMatchDraftsRepository, InMemoryMatchListReadModel,
   InMemoryMatchesRepository, InMemoryMembersRepository, InMemoryOcrDraftsRepository,
   InMemoryOcrJobsRepository, InMemoryQueueProducer, InMemorySeasonMastersRepository,
   LocalFsImageStore, RedisQueueProducer,
@@ -23,13 +23,13 @@ import momo.api.domain.ids.*
 import momo.api.repositories.postgres.{
   PostgresAppSessionsRepository, PostgresGameTitlesRepository, PostgresHeldEventsRepository,
   PostgresIncidentMastersRepository, PostgresMapMastersRepository,
-  PostgresMatchConfirmationRepository, PostgresMatchDraftsRepository, PostgresMatchListRepository,
+  PostgresMatchConfirmationRepository, PostgresMatchDraftsRepository, PostgresMatchListReadModel,
   PostgresMatchesRepository, PostgresMembersRepository, PostgresOcrDraftsRepository,
   PostgresOcrJobsRepository, PostgresSeasonMastersRepository,
 }
 import momo.api.repositories.{
   AppSessionsRepository, GameTitlesRepository, HeldEventsRepository, IncidentMastersRepository,
-  MapMastersRepository, MatchConfirmationRepository, MatchDraftsRepository, MatchListRepository,
+  MapMastersRepository, MatchConfirmationRepository, MatchDraftsRepository, MatchListReadModel,
   MatchesRepository, MembersRepository, OcrDraftsRepository, OcrJobsRepository,
   SeasonMastersRepository,
 }
@@ -66,7 +66,7 @@ object HttpApp:
             val heldEvents: HeldEventsRepository[F] = PostgresHeldEventsRepository[F](transactor)
             val matches: MatchesRepository[F] = PostgresMatchesRepository[F](transactor)
             val matchDrafts: MatchDraftsRepository[F] = PostgresMatchDraftsRepository[F](transactor)
-            val matchList: MatchListRepository[F] = PostgresMatchListRepository[F](transactor)
+            val matchList: MatchListReadModel[F] = PostgresMatchListReadModel[F](transactor)
             val matchConfirmation: MatchConfirmationRepository[F] =
               PostgresMatchConfirmationRepository[F](transactor)
             val appSessions: AppSessionsRepository[F] = PostgresAppSessionsRepository[F](transactor)
@@ -103,7 +103,7 @@ object HttpApp:
           heldEvents <- InMemoryHeldEventsRepository.create[F]
           matches <- InMemoryMatchesRepository.create[F]
           matchDrafts <- InMemoryMatchDraftsRepository.create[F]
-          matchList = InMemoryMatchListRepository[F](matches, matchDrafts)
+          matchList = InMemoryMatchListReadModel[F](matches, matchDrafts)
           matchConfirmation = InMemoryMatchConfirmationRepository[F](matches, matchDrafts)
           appSessions <- InMemoryAppSessionsRepository.create[F]
           members <- InMemoryMembersRepository.create[F](config.devMemberIds.map(id =>
@@ -147,7 +147,7 @@ object HttpApp:
       heldEvents: HeldEventsRepository[F],
       matches: MatchesRepository[F],
       matchDrafts: MatchDraftsRepository[F],
-      matchList: MatchListRepository[F],
+      matchList: MatchListReadModel[F],
       matchConfirmation: MatchConfirmationRepository[F],
       appSessions: AppSessionsRepository[F],
       members: MembersRepository[F],

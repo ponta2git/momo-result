@@ -6,10 +6,10 @@ import cats.effect.IO
 
 import momo.api.domain.*
 import momo.api.domain.ids.*
-import momo.api.repositories.MatchListRepository
+import momo.api.repositories.MatchListReadModel
 import momo.api.repositories.postgres.*
 
-final class PostgresMatchListRepositorySpec extends IntegrationSuite:
+final class PostgresMatchListReadModelSpec extends IntegrationSuite:
 
   private val gameTitleId = GameTitleId("title_world")
   private val mapMasterId = MapMasterId("map_east")
@@ -23,7 +23,7 @@ final class PostgresMatchListRepositorySpec extends IntegrationSuite:
   private def heldEvents = new PostgresHeldEventsRepository[IO](transactor)
   private def matches = new PostgresMatchesRepository[IO](transactor)
   private def drafts = new PostgresMatchDraftsRepository[IO](transactor)
-  private def matchList = new PostgresMatchListRepository[IO](transactor)
+  private def matchList = new PostgresMatchListReadModel[IO](transactor)
 
   private def seedPrereqs: IO[Unit] =
     for
@@ -112,7 +112,7 @@ final class PostgresMatchListRepositorySpec extends IntegrationSuite:
         MatchDraftStatus.DraftReady,
         Instant.parse("2026-04-30T02:00:00Z"),
       ))
-      items <- matchList.list(MatchListRepository.Filter())
+      items <- matchList.list(MatchListReadModel.Filter())
     yield
       assertEquals(items.map(_.id), List("draft_ready", "match_older"))
       assertEquals(items.map(_.kind), List(MatchListItemKind.MatchDraft, MatchListItemKind.Match))
@@ -134,12 +134,12 @@ final class PostgresMatchListRepositorySpec extends IntegrationSuite:
         MatchDraftStatus.Cancelled,
         Instant.parse("2026-04-30T03:00:00Z"),
       ))
-      confirmed <- matchList.list(MatchListRepository.Filter(
-        kind = MatchListRepository.KindFilter.Match,
-        status = MatchListRepository.StatusFilter.Confirmed,
+      confirmed <- matchList.list(MatchListReadModel.Filter(
+        kind = MatchListReadModel.KindFilter.Match,
+        status = MatchListReadModel.StatusFilter.Confirmed,
       ))
       draftsOnly <- matchList
-        .list(MatchListRepository.Filter(kind = MatchListRepository.KindFilter.MatchDraft))
+        .list(MatchListReadModel.Filter(kind = MatchListReadModel.KindFilter.MatchDraft))
     yield
       assertEquals(confirmed.map(_.id), List("match_confirmed"))
       assertEquals(draftsOnly.map(_.id), List("draft_ready"))
@@ -159,7 +159,7 @@ final class PostgresMatchListRepositorySpec extends IntegrationSuite:
         Instant.parse("2026-04-30T04:00:00Z"),
         playedAt = Some(Instant.parse("2026-04-30T01:00:00Z")),
       ))
-      items <- matchList.list(MatchListRepository.Filter(limit = Some(2)))
+      items <- matchList.list(MatchListReadModel.Filter(limit = Some(2)))
     yield assertEquals(items.map(_.id), List("draft_latest", "match_middle"))
 
-end PostgresMatchListRepositorySpec
+end PostgresMatchListReadModelSpec

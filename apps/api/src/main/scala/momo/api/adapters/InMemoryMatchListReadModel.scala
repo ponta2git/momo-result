@@ -5,13 +5,13 @@ import cats.syntax.flatMap.*
 import cats.syntax.functor.*
 
 import momo.api.domain.{MatchDraftStatus, MatchListItem, MatchListItemKind, MatchListRankEntry}
-import momo.api.repositories.{MatchDraftsRepository, MatchListRepository, MatchesRepository}
+import momo.api.repositories.{MatchDraftsRepository, MatchListReadModel, MatchesRepository}
 
-final class InMemoryMatchListRepository[F[_]: Monad](
+final class InMemoryMatchListReadModel[F[_]: Monad](
     matches: MatchesRepository[F],
     matchDrafts: MatchDraftsRepository[F],
-) extends MatchListRepository[F]:
-  override def list(filter: MatchListRepository.Filter): F[List[MatchListItem]] =
+) extends MatchListReadModel[F]:
+  override def list(filter: MatchListReadModel.Filter): F[List[MatchListItem]] =
     for
       confirmed <- matches.list(MatchesRepository.ListFilter(
         heldEventId = filter.heldEventId,
@@ -70,10 +70,10 @@ final class InMemoryMatchListRepository[F[_]: Monad](
       }
 
       val combined = filter.kind match
-        case MatchListRepository.KindFilter.Match => confirmedItems
-        case MatchListRepository.KindFilter.MatchDraft => draftItems
-        case MatchListRepository.KindFilter.All => filter.status match
-            case MatchListRepository.StatusFilter.Confirmed => confirmedItems
+        case MatchListReadModel.KindFilter.Match => confirmedItems
+        case MatchListReadModel.KindFilter.MatchDraft => draftItems
+        case MatchListReadModel.KindFilter.All => filter.status match
+            case MatchListReadModel.StatusFilter.Confirmed => confirmedItems
             case _ => confirmedItems ++ draftItems
       val ordered = combined.sortBy(i =>
         (
@@ -86,15 +86,14 @@ final class InMemoryMatchListRepository[F[_]: Monad](
 
   private def draftMatchesStatus(
       draft: momo.api.domain.MatchDraft,
-      statusFilter: MatchListRepository.StatusFilter,
+      statusFilter: MatchListReadModel.StatusFilter,
   ): Boolean = statusFilter match
-    case MatchListRepository.StatusFilter.All => true
-    case MatchListRepository.StatusFilter.Incomplete => MatchListRepository.IncompleteStatuses
+    case MatchListReadModel.StatusFilter.All => true
+    case MatchListReadModel.StatusFilter.Incomplete => MatchListReadModel.IncompleteStatuses
         .contains(draft.status)
-    case MatchListRepository.StatusFilter.OcrRunning => draft.status == MatchDraftStatus.OcrRunning
-    case MatchListRepository.StatusFilter.PreConfirm =>
+    case MatchListReadModel.StatusFilter.OcrRunning => draft.status == MatchDraftStatus.OcrRunning
+    case MatchListReadModel.StatusFilter.PreConfirm =>
       Set(MatchDraftStatus.OcrFailed, MatchDraftStatus.DraftReady, MatchDraftStatus.NeedsReview)
         .contains(draft.status)
-    case MatchListRepository.StatusFilter.NeedsReview => draft.status ==
-        MatchDraftStatus.NeedsReview
-    case MatchListRepository.StatusFilter.Confirmed => false
+    case MatchListReadModel.StatusFilter.NeedsReview => draft.status == MatchDraftStatus.NeedsReview
+    case MatchListReadModel.StatusFilter.Confirmed => false

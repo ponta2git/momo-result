@@ -29,7 +29,8 @@ object MatchValidationError:
 
   final case class OwnerMemberIdNotAllowed(actual: MemberId, allowed: Set[MemberId])
       extends MatchValidationError:
-    val message = s"ownerMemberId must be one of ${allowed.toList.map(_.value).sorted.mkString(", ")}."
+    val message =
+      s"ownerMemberId must be one of ${allowed.toList.map(_.value).sorted.mkString(", ")}."
 
   final case class PlayerCountMismatch(actual: Int) extends MatchValidationError:
     val message = s"players must contain exactly 4 entries (was $actual)."

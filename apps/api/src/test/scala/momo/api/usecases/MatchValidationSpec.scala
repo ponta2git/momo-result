@@ -8,12 +8,7 @@ import momo.api.domain.{IncidentCounts, MatchValidationError, PlayerResult}
 final class MatchValidationSpec extends FunSuite:
   private val zero = IncidentCounts(0, 0, 0, 0, 0, 0)
 
-  private val allowed = Set(
-    MemberId("a"),
-    MemberId("b"),
-    MemberId("c"),
-    MemberId("d"),
-  )
+  private val allowed = Set(MemberId("a"), MemberId("b"), MemberId("c"), MemberId("d"))
 
   private def player(id: String, playOrder: Int, rank: Int): PlayerResult = PlayerResult(
     memberId = MemberId(id),
@@ -60,13 +55,12 @@ final class MatchValidationSpec extends FunSuite:
     })
 
   test("validateShape shim returns AppError.ValidationFailed joining all messages"):
-    val bad = happyInput.copy(
-      matchNoInEvent = 0,
-      ownerMemberId = MemberId("intruder"),
-    )
+    val bad = happyInput.copy(matchNoInEvent = 0, ownerMemberId = MemberId("intruder"))
     val result = MatchValidation.validateShape(bad, allowed)
     val err = result.swap.getOrElse(fail("expected Left"))
-    assert(err match
-      case _: momo.api.errors.AppError.ValidationFailed => true
-      case _ => false)
+    assert(
+      err match
+        case _: momo.api.errors.AppError.ValidationFailed => true
+        case _ => false
+    )
 end MatchValidationSpec

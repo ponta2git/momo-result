@@ -15,7 +15,7 @@ addCommandAlias("apiQuality", "apiFormatCheck; apiLint; Test / compile; apiOpenA
 addCommandAlias("apiCheck", "apiQuality; test")
 addCommandAlias(
   "apiDbQuality",
-  "testOnly momo.api.integration.DbContractSpec; testOnly momo.api.integration.PostgresMatchesRepositorySpec; testOnly momo.api.integration.PostgresMatchListRepositorySpec",
+  "testOnly momo.api.integration.DbContractSpec; testOnly momo.api.integration.PostgresMatchesRepositorySpec; testOnly momo.api.integration.PostgresMatchListReadModelSpec",
 )
 
 lazy val apiOpenApi = taskKey[File]("Generate OpenAPI from Tapir endpoint definitions")

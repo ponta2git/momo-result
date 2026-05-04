@@ -94,7 +94,9 @@ final class MatchDraftLifecycleSpec extends CatsEffectSuite:
       createdAt = createdAt,
       updatedAt = createdAt,
     )
-    assert(d match
-      case _: MatchDraft.Editing => true
-      case _ => false)
+    assert(
+      d match
+        case _: MatchDraft.Editing => true
+        case _ => false
+    )
 end MatchDraftLifecycleSpec

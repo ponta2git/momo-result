@@ -47,14 +47,12 @@ object FourPlayers:
       players: List[PlayerResult],
       allowedMemberIds: Set[MemberId],
   ): EitherNec[MatchValidationError, FourPlayers] =
-    if players.length != 4 then
-      MatchValidationError.PlayerCountMismatch(players.length).leftNec
+    if players.length != 4 then MatchValidationError.PlayerCountMismatch(players.length).leftNec
     else
       val memberSet = players.iterator.map(_.memberId).toSet
       val playOrders = players.iterator.map(_.playOrder).toSet
       val ranks = players.iterator.map(_.rank).toSet
-      val negativeIncidents = players.iterator
-        .filter(p => !hasNonNegativeIncidentCounts(p))
+      val negativeIncidents = players.iterator.filter(p => !hasNonNegativeIncidentCounts(p))
         .map(p => MatchValidationError.IncidentCountsNegative(p.memberId)).toList
 
       val errs = List.newBuilder[MatchValidationError]
@@ -84,6 +82,5 @@ object FourPlayers:
     fromList(players, players.iterator.map(_.memberId).toSet)
 
   private def hasNonNegativeIncidentCounts(p: PlayerResult): Boolean =
-    p.incidents.destination >= 0 && p.incidents.plusStation >= 0 &&
-      p.incidents.minusStation >= 0 && p.incidents.cardStation >= 0 &&
-      p.incidents.cardShop >= 0 && p.incidents.suriNoGinji >= 0
+    p.incidents.destination >= 0 && p.incidents.plusStation >= 0 && p.incidents.minusStation >= 0 &&
+      p.incidents.cardStation >= 0 && p.incidents.cardShop >= 0 && p.incidents.suriNoGinji >= 0

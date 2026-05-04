@@ -65,12 +65,12 @@ export function Dialog({
     <BaseDialog.Root onOpenChange={(nextOpen) => onOpenChange?.(nextOpen)} open={open}>
       <BaseDialog.Trigger render={trigger} />
       <BaseDialog.Portal>
-        <BaseDialog.Backdrop className="fixed inset-0 z-[var(--z-dialog)] bg-[rgb(23_32_51_/_0.35)]" />
+        <BaseDialog.Backdrop className="fixed inset-0 z-[var(--z-dialog)] bg-[var(--momo-night-900)]/35" />
         <BaseDialog.Popup
           className="fixed inset-0 z-[var(--z-dialog)] mx-auto flex w-full max-w-[40rem] items-center justify-center p-4"
           initialFocus={true}
         >
-          <div className="momo-ui-surface w-full p-4 shadow-lg">
+          <div className="w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] shadow-lg">
             <DialogContentFrame className={className} description={description} title={title}>
               {children}
             </DialogContentFrame>
@@ -97,9 +97,9 @@ export function AlertDialog({
     <BaseAlertDialog.Root onOpenChange={(nextOpen) => onOpenChange?.(nextOpen)} open={open}>
       <BaseAlertDialog.Trigger render={trigger} />
       <BaseAlertDialog.Portal>
-        <BaseAlertDialog.Backdrop className="fixed inset-0 z-[var(--z-dialog)] bg-[rgb(23_32_51_/_0.35)]" />
+        <BaseAlertDialog.Backdrop className="fixed inset-0 z-[var(--z-dialog)] bg-[var(--momo-night-900)]/35" />
         <BaseAlertDialog.Popup className="fixed inset-0 z-[var(--z-dialog)] mx-auto flex w-full max-w-[40rem] items-center justify-center p-4">
-          <div className="momo-ui-surface w-full p-4 shadow-lg">
+          <div className="w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] shadow-lg">
             <div className="space-y-3">
               <h2 className="text-lg font-semibold text-balance text-[var(--color-text-primary)]">
                 {title}

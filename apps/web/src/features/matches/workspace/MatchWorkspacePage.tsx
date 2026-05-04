@@ -52,11 +52,11 @@ import type { SlotKind } from "@/shared/api/enums";
 import { slotKinds } from "@/shared/api/enums";
 import { listGameTitles, listMapMasters, listSeasonMasters } from "@/shared/api/masters";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
-import { Button } from "@/shared/ui/Button";
-import { Card } from "@/shared/ui/Card";
-import { LiveRegion } from "@/shared/ui/LiveRegion";
+import { Button } from "@/shared/ui/actions/Button";
+import { LiveRegion } from "@/shared/ui/feedback/LiveRegion";
+import { Card } from "@/shared/ui/layout/Card";
 
-const labelClass = "text-xs font-bold tracking-[0.18em] text-ink-300 uppercase";
+const labelClass = "text-xs font-semibold text-[var(--color-text-secondary)]";
 
 function draftIdsFromParams(searchParams: URLSearchParams): Partial<Record<SlotKind, string>> {
   const ids: Partial<Record<SlotKind, string>> = {};
@@ -544,14 +544,14 @@ export function MatchWorkspacePage({
     .map((error) => normalizeUnknownApiError(error));
 
   if (mode === "edit" && matchDetailQuery.isLoading) {
-    return <p className="text-ink-200 p-8">読み込み中...</p>;
+    return <p className="p-8 text-[var(--color-text-secondary)]">読み込み中...</p>;
   }
 
   if (mode === "edit" && matchDetailQuery.isError) {
     return (
       <div className="p-8">
-        <p className="text-red-300">試合が見つかりませんでした</p>
-        <Link className="text-rail-gold hover:underline" to="/matches">
+        <p className="text-[var(--color-danger)]">試合が見つかりませんでした</p>
+        <Link className="text-[var(--color-action)] hover:underline" to="/matches">
           一覧に戻る
         </Link>
       </div>
@@ -564,31 +564,34 @@ export function MatchWorkspacePage({
 
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className={`${labelClass} text-rail-gold`}>
+          <p className={labelClass}>
             {mode === "review"
               ? "Match Review Workspace"
               : mode === "edit"
                 ? "Match Edit Workspace"
                 : "Match Create Workspace"}
           </p>
-          <h1 className="text-ink-100 mt-1 text-3xl font-black">
+          <h1 className="mt-1 text-3xl font-semibold text-balance text-[var(--color-text-primary)]">
             {mode === "review"
               ? "OCR下書き確認"
               : mode === "edit"
                 ? "試合を編集"
                 : "試合の新規作成"}
           </h1>
-          <p className="text-ink-300 mt-2 text-sm">
+          <p className="mt-2 text-sm text-pretty text-[var(--color-text-secondary)]">
             1試合フォームを共通基盤で処理します。ステータス: {reviewStatusLabel(reviewStatus)}
           </p>
           {useSampleDrafts ? (
-            <p className="border-rail-gold/35 bg-rail-gold/10 text-rail-gold mt-2 inline-flex rounded-full border px-3 py-1 text-sm font-bold">
+            <p className="mt-2 inline-flex rounded-full border border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18 px-3 py-1 text-sm font-semibold text-[var(--color-text-primary)]">
               開発用サンプル下書きで表示中
             </p>
           ) : null}
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link className="text-rail-gold text-sm font-semibold hover:underline" to="/matches">
+          <Link
+            className="text-sm font-semibold text-[var(--color-action)] hover:underline"
+            to="/matches"
+          >
             ← 試合一覧へ戻る
           </Link>
           {canCancelDraft ? (
@@ -663,7 +666,7 @@ export function MatchWorkspacePage({
       {baseErrors.map((error) => (
         <div
           key={`${error.status}-${error.detail}`}
-          className="mt-4 rounded-2xl border border-red-300/30 bg-red-950/40 p-4 text-red-50"
+          className="mt-4 rounded-[var(--radius-md)] border border-[var(--color-danger)]/50 bg-[var(--color-danger)]/10 p-4 text-[var(--color-text-primary)]"
           role="alert"
         >
           <strong>{error.title}</strong>
@@ -673,13 +676,13 @@ export function MatchWorkspacePage({
 
       {notice ? (
         <div
-          className="border-rail-gold/30 bg-night-900/95 fixed top-4 right-4 z-40 max-w-sm rounded-xl border p-3 text-sm text-yellow-50 shadow-xl"
+          className="momo-safe-top momo-safe-right fixed z-[var(--z-toast)] max-w-sm rounded-[var(--radius-lg)] border border-[var(--color-warning)]/65 bg-[var(--color-surface)] p-3 text-sm text-[var(--color-text-primary)] shadow-sm"
           role="status"
         >
           <div className="flex items-start justify-between gap-2">
             <p>{notice}</p>
             <button
-              className="text-ink-300 hover:text-ink-100 text-xs"
+              className="text-xs text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
               type="button"
               onClick={() => setNotice("")}
             >
@@ -691,8 +694,10 @@ export function MatchWorkspacePage({
 
       {isOcrRunningBlocked ? (
         <Card className="mt-5">
-          <h2 className="text-ink-100 text-xl font-black">OCR中のため編集できません</h2>
-          <p className="text-ink-300 mt-2 text-sm">
+          <h2 className="text-xl font-semibold text-[var(--color-text-primary)]">
+            OCR中のため編集できません
+          </h2>
+          <p className="mt-2 text-sm text-pretty text-[var(--color-text-secondary)]">
             OCRジョブが完了するまで結果確認画面には入れません。完了後に試合一覧の「確定前」から再度開いてください。
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -705,7 +710,10 @@ export function MatchWorkspacePage({
             >
               {refreshingReviewStatus ? "更新中..." : "状態を更新"}
             </Button>
-            <Link className="text-rail-gold text-sm font-semibold hover:underline" to="/matches">
+            <Link
+              className="text-sm font-semibold text-[var(--color-action)] hover:underline"
+              to="/matches"
+            >
               試合一覧へ戻る
             </Link>
           </div>
@@ -740,8 +748,8 @@ export function MatchWorkspacePage({
           />
 
           {workspaceData?.warnings.length ? (
-            <Card className="border-rail-gold/30 bg-rail-gold/8 mt-4">
-              <ul className="list-disc pl-5 text-sm text-yellow-50">
+            <Card className="mt-4 border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18">
+              <ul className="list-disc pl-5 text-sm text-[var(--color-text-primary)]">
                 {workspaceData.warnings.map((warning) => (
                   <li key={warning}>{warning}</li>
                 ))}
@@ -752,11 +760,13 @@ export function MatchWorkspacePage({
           <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] xl:grid-cols-[minmax(0,1fr)_26rem]">
             <Card className="p-4">
               {mode === "review" ? (
-                <details className="border-line-soft bg-capture-black/22 mb-4 rounded-xl border p-3">
-                  <summary className="text-ink-100 cursor-pointer text-sm font-bold">
+                <details className="mb-4 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
+                  <summary className="cursor-pointer text-sm font-semibold text-[var(--color-text-primary)]">
                     OCR読み取り状況を確認
                   </summary>
-                  <p className="text-ink-300 mt-2 text-xs">緑=高信頼OCR / 黄=要確認 / 金=手修正</p>
+                  <p className="mt-2 text-xs text-[var(--color-text-secondary)]">
+                    緑=高信頼OCR / 黄=要確認 / 金=手修正
+                  </p>
                 </details>
               ) : null}
               <ScoreGrid
@@ -804,7 +814,7 @@ export function MatchWorkspacePage({
           </div>
 
           {validationMessage ? (
-            <Card className="border-rail-gold/30 bg-rail-gold/10 mt-4 text-yellow-50">
+            <Card className="mt-4 border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18">
               {validationMessage}
             </Card>
           ) : null}

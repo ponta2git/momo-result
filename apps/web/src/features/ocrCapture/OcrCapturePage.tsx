@@ -35,10 +35,10 @@ import { listGameTitles } from "@/shared/api/masters";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { AuthPanel } from "@/shared/auth/AuthPanel";
 import { Button } from "@/shared/ui/actions/Button";
+import { LiveRegion } from "@/shared/ui/feedback/LiveRegion";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { showToast } from "@/shared/ui/feedback/Toast";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
-import { LiveRegion } from "@/shared/ui/LiveRegion";
 
 type SlotWatcherProps = {
   slot: CaptureSlotState;
@@ -486,7 +486,7 @@ export function OcrCapturePage() {
         </div>
       </section>
 
-      <section className="sticky bottom-3 z-[var(--z-sticky)] flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-lg)] border border-[var(--color-border-strong)] bg-[var(--color-surface)]/95 p-4 shadow-sm backdrop-blur">
+      <section className="sticky bottom-3 z-[var(--z-sticky)] flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-lg)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-4 shadow-sm">
         <div>
           <p className="text-sm font-semibold text-[var(--color-text-primary)]">
             {ocrReadyCount === 0 ? "分類トレイに画像を置いてください" : "OCRを開始できます"}

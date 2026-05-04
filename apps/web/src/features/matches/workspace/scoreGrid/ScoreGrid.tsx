@@ -27,7 +27,7 @@ const gridColumns: GridColumn[] = [
 ];
 
 const baseInputClass =
-  "w-full rounded-xl border border-line-soft bg-capture-black/45 px-2 py-2 text-sm text-ink-100 transition hover:border-white/18";
+  "w-full min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-2 text-sm text-[var(--color-text-primary)] transition-colors duration-150 hover:bg-[var(--color-surface-subtle)]";
 const textNumericShortClass = `${baseInputClass} min-w-[6ch] text-center tabular-nums`;
 const textNumericClass = `${baseInputClass} min-w-[12ch] text-right tabular-nums`;
 const selectShortClass = `${baseInputClass} min-w-[6ch] text-center`;
@@ -52,35 +52,35 @@ function cellViewState(args: {
   if (args.error) {
     return {
       label: "要確認",
-      toneClass: "border-red-300/65 bg-red-950/35",
+      toneClass: "border-[var(--color-danger)]/65 bg-[var(--color-danger)]/10",
     };
   }
 
   if (args.synced) {
     return {
       label: "同期済み",
-      toneClass: "border-cyan-300/55 bg-cyan-600/12",
+      toneClass: "border-[var(--color-action)]/55 bg-[var(--color-action)]/10",
     };
   }
 
   if (args.originalValue !== undefined && args.currentValue !== args.originalValue) {
     return {
       label: "手修正",
-      toneClass: "border-rail-gold/55 bg-rail-gold/10",
+      toneClass: "border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18",
     };
   }
 
   if (args.confidence != null && args.confidence >= confidenceThresholdHigh) {
     return {
       label: "OCR",
-      toneClass: "border-emerald-400/55 bg-emerald-400/10",
+      toneClass: "border-[var(--color-success)]/55 bg-[var(--color-success)]/10",
     };
   }
 
   if (args.confidence != null) {
     return {
       label: "要確認",
-      toneClass: "border-amber-300/55 bg-amber-300/10",
+      toneClass: "border-[var(--color-review)]/55 bg-[var(--color-review)]/10",
     };
   }
 
@@ -326,7 +326,9 @@ export function ScoreGrid({
           }
         />
         {args.viewState.label ? (
-          <p className="text-ink-300 mt-1 text-[0.68rem]">{args.viewState.label}</p>
+          <p className="mt-1 text-[0.68rem] text-[var(--color-text-secondary)]">
+            {args.viewState.label}
+          </p>
         ) : null}
       </>
     );
@@ -393,7 +395,9 @@ export function ScoreGrid({
           }
         />
         {viewState.label ? (
-          <p className="text-ink-300 mt-1 text-[0.68rem]">{viewState.label}</p>
+          <p className="mt-1 text-[0.68rem] text-[var(--color-text-secondary)]">
+            {viewState.label}
+          </p>
         ) : null}
       </>
     );
@@ -411,7 +415,7 @@ export function ScoreGrid({
           <col key={label} className="w-[7ch]" />
         ))}
       </colgroup>
-      <thead className="text-ink-300 text-xs tracking-[0.14em] uppercase">
+      <thead className="text-xs text-[var(--color-text-secondary)]">
         <tr>
           <th className="px-2 py-2">メンバー</th>
           <th className="px-2 py-2">順</th>
@@ -431,8 +435,8 @@ export function ScoreGrid({
           const originalRow = originalPlayers?.[rowIndex];
           const originalByOrder = originalByPlayOrder.get(player.playOrder);
           return (
-            <tr key={rowIndex} className="bg-capture-black/24">
-              <td className="rounded-l-2xl px-2 py-3 align-top">
+            <tr key={rowIndex} className="bg-[var(--color-surface-subtle)]">
+              <td className="rounded-l-[var(--radius-md)] px-2 py-3 align-top">
                 <select
                   ref={(node) => {
                     const cellId = getCellId(rowIndex, 0);
@@ -483,7 +487,7 @@ export function ScoreGrid({
                       aria-label={`${memberName(player.memberId)} playOrder`}
                       className={`${selectShortClass} ${
                         errorPathSet.has(keyToPath(rowIndex, "playOrder"))
-                          ? "border-red-300/65 bg-red-950/35"
+                          ? "border-[var(--color-danger)]/65 bg-[var(--color-danger)]/10"
                           : ""
                       }`}
                       value={Number.isFinite(player.playOrder) ? String(player.playOrder) : ""}
@@ -571,7 +575,10 @@ export function ScoreGrid({
                   synced: lastSyncedPlayerIndex === rowIndex,
                 });
                 return (
-                  <td key={incidentKey} className="px-2 py-3 align-top last:rounded-r-2xl">
+                  <td
+                    key={incidentKey}
+                    className="px-2 py-3 align-top last:rounded-r-[var(--radius-md)]"
+                  >
                     {renderIncidentCell(rowIndex, incidentKey, col, incidentState)}
                   </td>
                 );
@@ -587,12 +594,16 @@ export function ScoreGrid({
     <section className="mt-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-ink-100 text-xl font-black">4人分の結果を確認・手修正</h2>
-          <p className="text-ink-400 mt-1 text-sm">
+          <h2 className="text-xl font-semibold text-[var(--color-text-primary)]">
+            4人分の結果を確認・手修正
+          </h2>
+          <p className="mt-1 text-sm text-pretty text-[var(--color-text-secondary)]">
             Enter/矢印で移動、Escでセルを編集前へ戻せます。
           </p>
         </div>
-        <p className="text-ink-300 text-xs">金額 12ch / 順位・順番・事件簿 6ch 以上</p>
+        <p className="text-xs text-[var(--color-text-secondary)]">
+          金額 12ch / 順位・順番・事件簿 6ch 以上
+        </p>
       </div>
 
       {!isNarrowViewport ? <div className="mt-4 overflow-x-auto pb-2">{grid}</div> : null}
@@ -602,7 +613,7 @@ export function ScoreGrid({
           {players.map((player, index) => (
             <article
               key={index}
-              className="border-line-soft bg-capture-black/20 rounded-2xl border p-3"
+              className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
             >
               <button
                 className="flex w-full items-center justify-between text-left"
@@ -611,15 +622,17 @@ export function ScoreGrid({
                   setExpandedMobilePlayer((current) => (current === index ? -1 : index))
                 }
               >
-                <span className="text-ink-100 font-bold">{memberName(player.memberId)}</span>
-                <span className="text-ink-300 text-xs">
+                <span className="font-semibold text-[var(--color-text-primary)]">
+                  {memberName(player.memberId)}
+                </span>
+                <span className="text-xs text-[var(--color-text-secondary)]">
                   {expandedMobilePlayer === index ? "閉じる" : "詳細"}
                 </span>
               </button>
               {expandedMobilePlayer === index ? (
                 <div className="mt-3 space-y-2">
                   <div className="grid grid-cols-2 gap-2">
-                    <label className="text-ink-300 grid gap-1 text-xs">
+                    <label className="grid gap-1 text-xs text-[var(--color-text-secondary)]">
                       プレー順
                       <select
                         className={selectShortClass}
@@ -636,7 +649,7 @@ export function ScoreGrid({
                         ))}
                       </select>
                     </label>
-                    <label className="text-ink-300 grid gap-1 text-xs">
+                    <label className="grid gap-1 text-xs text-[var(--color-text-secondary)]">
                       順位
                       <input
                         className={textNumericShortClass}
@@ -654,7 +667,7 @@ export function ScoreGrid({
                       />
                     </label>
                   </div>
-                  <label className="text-ink-300 grid gap-1 text-xs">
+                  <label className="grid gap-1 text-xs text-[var(--color-text-secondary)]">
                     総資産
                     <input
                       className={textNumericClass}
@@ -676,7 +689,7 @@ export function ScoreGrid({
                       }
                     />
                   </label>
-                  <label className="text-ink-300 grid gap-1 text-xs">
+                  <label className="grid gap-1 text-xs text-[var(--color-text-secondary)]">
                     収益
                     <input
                       className={textNumericClass}
@@ -698,7 +711,10 @@ export function ScoreGrid({
                   </label>
                   <div className="grid grid-cols-2 gap-2">
                     {incidentColumns.map(([incidentKey, incidentLabel]) => (
-                      <label key={incidentKey} className="text-ink-300 grid gap-1 text-xs">
+                      <label
+                        key={incidentKey}
+                        className="grid gap-1 text-xs text-[var(--color-text-secondary)]"
+                      >
                         {incidentLabel}
                         <input
                           className={textNumericShortClass}

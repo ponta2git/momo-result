@@ -15,7 +15,7 @@ type ExportTicketProps = {
 
 export function ExportTicket({ isPending, onDownload, view }: ExportTicketProps) {
   return (
-    <aside className="momo-ui-surface grid gap-4 p-4 lg:sticky lg:top-4">
+    <aside className="grid gap-4 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] lg:sticky lg:top-4">
       <div>
         <p className="text-xs font-semibold text-[var(--color-text-muted)]">Export Ticket</p>
         <h2 className="mt-1 text-lg font-semibold text-[var(--color-text-primary)]">

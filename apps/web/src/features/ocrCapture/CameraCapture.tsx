@@ -135,7 +135,7 @@ export function CameraCapture({ slotLabel, onSelect, onValidationError }: Camera
 
   return (
     <div className="space-y-3">
-      <div className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-slate-950">
+      <div className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--momo-night-900)]">
         <video
           ref={videoRef}
           className="aspect-video w-full object-cover"

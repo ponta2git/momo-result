@@ -15,10 +15,10 @@ export function SourceImageTabs({ activeKind, onChange }: SourceImageTabsProps) 
           <button
             key={kind}
             aria-selected={active}
-            className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+            className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors duration-150 ${
               active
-                ? "border-rail-gold/70 bg-rail-gold/15 text-ink-100"
-                : "border-line-soft bg-capture-black/25 text-ink-300 hover:border-white/20"
+                ? "border-[var(--color-action)]/60 bg-[var(--color-action)]/12 text-[var(--color-text-primary)]"
+                : "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-subtle)]"
             }`}
             role="tab"
             type="button"

@@ -116,12 +116,13 @@ export function MatchesListFilters({
             label="ソート"
             options={sortOptions}
             value={draftSearch.sort}
-            onChange={(event) =>
+            onChange={(event) => {
+              const value = event.currentTarget.value;
               setDraftSearch((current) => ({
                 ...current,
-                sort: event.currentTarget.value as MatchListSort,
-              }))
-            }
+                sort: value as MatchListSort,
+              }));
+            }}
           />
         </div>
 

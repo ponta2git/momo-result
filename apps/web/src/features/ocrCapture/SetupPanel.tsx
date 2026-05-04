@@ -13,7 +13,7 @@ import type {
   SeasonMasterResponse,
 } from "@/shared/api/masters";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
-import { Field } from "@/shared/ui/Field";
+import { Field } from "@/shared/ui/forms/Field";
 
 type SetupPanelProps = {
   value: SetupFormValues;
@@ -176,7 +176,7 @@ export function SetupPanel({ value, onChange, enabled = true, authMemberId }: Se
         label="シーズン"
         htmlFor={fields.seasonMasterId.id}
         error={fields.seasonMasterId.errors?.[0]}
-        hint="OCRには送らず、後続の結果確定で使います。"
+        description="OCRには送らず、後続の結果確定で使います。"
       >
         <select
           id={fields.seasonMasterId.id}

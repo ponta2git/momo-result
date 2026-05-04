@@ -43,19 +43,19 @@ export const slotDefinitions: Array<{
     kind: "total_assets",
     label: "総資産",
     stationLabel: "01",
-    accentClass: "from-rail-blue/70 via-rail-blue/35 to-transparent",
+    accentClass: "bg-[var(--color-action)]",
   },
   {
     kind: "revenue",
     label: "収益",
     stationLabel: "02",
-    accentClass: "from-rail-gold/75 via-rail-gold/35 to-transparent",
+    accentClass: "bg-[var(--color-warning)]",
   },
   {
     kind: "incident_log",
     label: "事件簿",
     stationLabel: "03",
-    accentClass: "from-rail-magenta/70 via-rail-magenta/30 to-transparent",
+    accentClass: "bg-[var(--color-review)]",
   },
 ];
 

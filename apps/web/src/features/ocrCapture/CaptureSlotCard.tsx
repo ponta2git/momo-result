@@ -6,7 +6,7 @@ import { DraftPreview } from "@/features/ocrCapture/DraftPreview";
 import type { SlotKind } from "@/shared/api/enums";
 import { parseSlotKind } from "@/shared/api/enums";
 import { Button } from "@/shared/ui/actions/Button";
-import { StatusBadge } from "@/shared/ui/StatusBadge";
+import { cn } from "@/shared/ui/cn";
 
 type CaptureSlotCardProps = {
   slot: CaptureSlotState;
@@ -26,6 +26,53 @@ const sourceLabels = {
   camera: "撮影",
   upload: "単体追加",
 };
+
+const statusToneClass: Record<string, string> = {
+  cancelled:
+    "border-[var(--color-border)] bg-[var(--color-surface-subtle)] text-[var(--color-text-secondary)]",
+  empty:
+    "border-[var(--color-border)] bg-[var(--color-surface-subtle)] text-[var(--color-text-secondary)]",
+  failed: "border-[var(--color-danger)]/45 bg-[var(--color-danger)]/10 text-[var(--color-danger)]",
+  queued:
+    "border-[var(--color-warning)]/60 bg-[var(--color-warning)]/20 text-[var(--color-text-primary)]",
+  queueing:
+    "border-[var(--color-warning)]/60 bg-[var(--color-warning)]/20 text-[var(--color-text-primary)]",
+  running: "border-[var(--color-action)]/45 bg-[var(--color-action)]/10 text-[var(--color-action)]",
+  selected:
+    "border-[var(--color-action)]/45 bg-[var(--color-action)]/10 text-[var(--color-action)]",
+  succeeded:
+    "border-[var(--color-success)]/50 bg-[var(--color-success)]/12 text-[var(--color-text-primary)]",
+  uploaded:
+    "border-[var(--color-action)]/45 bg-[var(--color-action)]/10 text-[var(--color-action)]",
+  uploading:
+    "border-[var(--color-action)]/45 bg-[var(--color-action)]/10 text-[var(--color-action)]",
+};
+
+const statusLabel: Record<string, string> = {
+  cancelled: "キャンセル済み",
+  empty: "未配置",
+  failed: "要確認",
+  queued: "OCR待機中",
+  queueing: "OCR依頼中",
+  running: "OCR実行中",
+  selected: "OCR待ち",
+  succeeded: "下書き保存済み",
+  uploaded: "送信済み",
+  uploading: "画像送信中",
+};
+
+function CaptureStatusBadge({ status }: { status: string }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold",
+        statusToneClass[status] ?? statusToneClass.empty,
+      )}
+    >
+      {statusLabel[status] ?? status}
+    </span>
+  );
+}
 
 export function CaptureSlotCard({
   slot,
@@ -68,7 +115,7 @@ export function CaptureSlotCard({
       }}
       onDrop={handleDrop}
     >
-      <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${accentClass}`} />
+      <div className={`absolute inset-x-0 top-0 h-1 ${accentClass}`} />
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-3">
@@ -86,12 +133,12 @@ export function CaptureSlotCard({
             このホームの画像は「{label}」として送信します。
           </p>
         </div>
-        <StatusBadge status={slot.status} />
+        <CaptureStatusBadge status={slot.status} />
       </div>
 
       {slot.previewUrl ? (
         <div
-          className="mt-4 cursor-grab rounded-[var(--radius-md)] border border-[var(--color-border)] bg-slate-950 p-2 active:cursor-grabbing"
+          className="mt-4 cursor-grab rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--momo-night-900)] p-2 active:cursor-grabbing"
           draggable
           onDragStart={handleDragStart}
         >
@@ -100,7 +147,7 @@ export function CaptureSlotCard({
             alt={`${label}プレビュー`}
             className="aspect-video w-full rounded-[var(--radius-sm)] object-contain"
           />
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 px-1 text-xs text-slate-200">
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 px-1 text-xs text-white/80">
             <span>{slot.source ? `${sourceLabels[slot.source]}した画像` : "配置済み画像"}</span>
             <span>ドラッグして別の分類へ移動</span>
           </div>

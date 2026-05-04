@@ -14,7 +14,7 @@ export function DraftPreview({ draft }: DraftPreviewProps) {
       <summary className="cursor-pointer text-sm font-semibold text-[var(--color-text-primary)]">
         OCRドラフト JSON を表示
       </summary>
-      <pre className="mt-3 max-h-56 overflow-auto rounded-[var(--radius-sm)] bg-slate-950 p-3 text-xs text-slate-100">
+      <pre className="mt-3 max-h-56 overflow-auto rounded-[var(--radius-sm)] bg-[var(--momo-night-900)] p-3 text-xs text-white/90">
         {JSON.stringify(
           {
             draftId: draft.draftId,

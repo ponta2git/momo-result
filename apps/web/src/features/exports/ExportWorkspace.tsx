@@ -49,7 +49,7 @@ export function ExportWorkspace({
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,28rem)] lg:items-start">
-        <section className="momo-ui-surface grid gap-5 p-4">
+        <section className="grid gap-5 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)]">
           <div>
             <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">出力条件</h2>
             <p className="mt-1 text-sm leading-6 text-[var(--color-text-secondary)]">

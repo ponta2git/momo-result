@@ -2,7 +2,7 @@ import { useEffect } from "react";
 
 import type { SourceImageKind } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
 import { sourceImageKindLabels } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
-import { Button } from "@/shared/ui/Button";
+import { Button } from "@/shared/ui/actions/Button";
 
 type SourceImagePreviewDialogProps = {
   kind: SourceImageKind;
@@ -26,19 +26,19 @@ export function SourceImagePreviewDialog({ kind, onClose, url }: SourceImagePrev
   return (
     <div
       aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 px-3 py-6"
+      className="fixed inset-0 z-[var(--z-dialog)] flex items-center justify-center bg-[var(--momo-night-900)]/65 px-3 py-6"
       role="dialog"
     >
-      <div className="border-line-soft bg-night-900/95 w-full max-w-4xl rounded-2xl border p-4 shadow-xl">
+      <div className="w-full max-w-4xl rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-lg">
         <div className="mb-3 flex items-center justify-between gap-2">
-          <h3 className="text-ink-100 text-base font-black">
+          <h3 className="text-base font-semibold text-[var(--color-text-primary)]">
             {sourceImageKindLabels[kind]}の拡大表示
           </h3>
           <Button variant="secondary" onClick={onClose}>
             閉じる
           </Button>
         </div>
-        <div className="border-line-soft bg-capture-black/20 max-h-[75dvh] overflow-auto rounded-xl border p-2">
+        <div className="max-h-[75dvh] overflow-auto rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-2">
           <img
             alt={`${sourceImageKindLabels[kind]}の元画像`}
             className="mx-auto h-auto max-w-full object-contain"

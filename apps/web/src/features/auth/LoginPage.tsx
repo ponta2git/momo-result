@@ -13,7 +13,7 @@ export function LoginPage() {
     <>
       <GlobalNav isAuthenticated={false} />
       <PageFrame>
-        <section className="momo-ui-surface mx-auto w-full max-w-[34rem] space-y-4 p-5">
+        <section className="mx-auto w-full max-w-[34rem] space-y-4 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5 text-[var(--color-text-primary)]">
           <header>
             <h1 className="text-2xl font-semibold text-[var(--color-text-primary)]">ログイン</h1>
             <p className="mt-2 text-sm leading-6 text-[var(--color-text-secondary)]">

@@ -8,8 +8,8 @@ import type {
   SourceImageKind,
 } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
 import { toSourceImageStates } from "@/features/matches/workspace/sourceImages/sourceImageViewModel";
-import { Button } from "@/shared/ui/Button";
-import { Card } from "@/shared/ui/Card";
+import { Button } from "@/shared/ui/actions/Button";
+import { Card } from "@/shared/ui/layout/Card";
 
 type SourceImagePanelProps = {
   loading: boolean;
@@ -49,12 +49,12 @@ export function SourceImagePanel({ loading, preferredKind, sourceImages }: Sourc
         })();
 
   return (
-    <Card className="h-fit rounded-2xl p-4 lg:sticky lg:top-4 lg:w-[22rem] xl:w-[26rem]">
+    <Card className="h-fit p-4 lg:sticky lg:top-4 lg:w-[22rem] xl:w-[26rem]">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-ink-100 text-base font-black">元画像参照</h2>
-        <span className="text-ink-400 text-xs">OCR下書き正本</span>
+        <h2 className="text-base font-semibold text-[var(--color-text-primary)]">元画像参照</h2>
+        <span className="text-xs text-[var(--color-text-secondary)]">OCR下書き正本</span>
       </div>
-      <p className="text-ink-400 mt-1 text-xs">
+      <p className="mt-1 text-xs text-pretty text-[var(--color-text-secondary)]">
         入力中セルに応じて既定タブを切り替えます。手動で選んだタブはしばらく固定されます。
       </p>
 
@@ -68,18 +68,22 @@ export function SourceImagePanel({ loading, preferredKind, sourceImages }: Sourc
         />
       </div>
 
-      <div className="border-line-soft bg-capture-black/30 mt-3 rounded-xl border p-3">
-        {loading ? <p className="text-ink-300 text-sm">画像を取得しています...</p> : null}
+      <div className="mt-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
+        {loading ? (
+          <p className="text-sm text-[var(--color-text-secondary)]">画像を取得しています...</p>
+        ) : null}
 
         {!loading && activeState?.status === "available" ? (
           <>
             <img
               alt={`${sourceImageKindLabels[activeState.kind]}の元画像`}
-              className="h-[13rem] w-full rounded-lg bg-black/20 object-contain"
+              className="h-[13rem] w-full rounded-[var(--radius-sm)] bg-[var(--momo-night-900)] object-contain"
               src={activeState.url}
             />
             <div className="mt-2 flex items-center justify-between gap-2">
-              <p className="text-ink-300 text-xs">{activeState.description}</p>
+              <p className="text-xs text-[var(--color-text-secondary)]">
+                {activeState.description}
+              </p>
               <Button
                 variant="secondary"
                 onClick={(event) => {
@@ -94,7 +98,7 @@ export function SourceImagePanel({ loading, preferredKind, sourceImages }: Sourc
         ) : null}
 
         {!loading && activeState?.status === "missing" ? (
-          <p className="text-ink-300 text-sm">{activeState.description}</p>
+          <p className="text-sm text-[var(--color-text-secondary)]">{activeState.description}</p>
         ) : null}
       </div>
 

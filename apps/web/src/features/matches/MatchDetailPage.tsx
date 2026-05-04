@@ -8,8 +8,8 @@ import { MatchWorkspacePage } from "@/features/matches/workspace/MatchWorkspaceP
 import { fixedMembers } from "@/features/ocrCapture/localMasters";
 import { listGameTitles, listMapMasters, listSeasonMasters } from "@/shared/api/masters";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
-import { Button } from "@/shared/ui/Button";
-import { Card } from "@/shared/ui/Card";
+import { Button } from "@/shared/ui/actions/Button";
+import { Card } from "@/shared/ui/layout/Card";
 
 const incidentColumns = [
   ["destination", "目的地"],
@@ -84,13 +84,13 @@ export function MatchDetailPage() {
   });
 
   if (matchQuery.isLoading) {
-    return <p className="text-ink-200 p-8">読み込み中...</p>;
+    return <p className="p-8 text-[var(--color-text-secondary)]">読み込み中...</p>;
   }
   if (matchQuery.isError || !matchQuery.data) {
     return (
       <div className="p-8">
-        <p className="text-red-300">試合が見つかりませんでした</p>
-        <Link to="/matches" className="text-rail-gold hover:underline">
+        <p className="text-[var(--color-danger)]">試合が見つかりませんでした</p>
+        <Link to="/matches" className="text-[var(--color-action)] hover:underline">
           一覧に戻る
         </Link>
       </div>
@@ -109,10 +109,15 @@ export function MatchDetailPage() {
     <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-8">
       <header className="flex items-center justify-between">
         <div>
-          <Link to="/matches" className="text-rail-gold text-sm hover:underline">
+          <Link
+            to="/matches"
+            className="text-sm font-semibold text-[var(--color-action)] hover:underline"
+          >
             ← 一覧へ
           </Link>
-          <h1 className="text-ink-50 text-2xl font-bold">試合詳細 #{m.matchNoInEvent}</h1>
+          <h1 className="text-2xl font-semibold text-[var(--color-text-primary)]">
+            試合詳細 #{m.matchNoInEvent}
+          </h1>
         </div>
         <div className="flex gap-2">
           <Link to={`/exports?matchId=${encodeURIComponent(m.matchId)}`}>
@@ -129,52 +134,54 @@ export function MatchDetailPage() {
 
       {errorMessage ? (
         <Card>
-          <p className="text-red-300">{errorMessage}</p>
+          <p className="text-[var(--color-danger)]">{errorMessage}</p>
         </Card>
       ) : null}
 
       <Card>
         <dl className="grid grid-cols-1 gap-3 text-sm md:grid-cols-2">
           <div>
-            <dt className="text-ink-300">開催</dt>
+            <dt className="text-[var(--color-text-secondary)]">開催</dt>
             <dd>{heldEvent ? formatDate(heldEvent.heldAt) : m.heldEventId}</dd>
           </div>
           <div>
-            <dt className="text-ink-300">試合番号</dt>
+            <dt className="text-[var(--color-text-secondary)]">試合番号</dt>
             <dd>#{m.matchNoInEvent}</dd>
           </div>
           <div>
-            <dt className="text-ink-300">作品</dt>
+            <dt className="text-[var(--color-text-secondary)]">作品</dt>
             <dd>{gameTitle?.name ?? m.gameTitleId}</dd>
           </div>
           <div>
-            <dt className="text-ink-300">シーズン</dt>
+            <dt className="text-[var(--color-text-secondary)]">シーズン</dt>
             <dd>{season?.name ?? m.seasonMasterId}</dd>
           </div>
           <div>
-            <dt className="text-ink-300">マップ</dt>
+            <dt className="text-[var(--color-text-secondary)]">マップ</dt>
             <dd>{map?.name ?? m.mapMasterId}</dd>
           </div>
           <div>
-            <dt className="text-ink-300">親</dt>
+            <dt className="text-[var(--color-text-secondary)]">親</dt>
             <dd>{memberName(m.ownerMemberId)}</dd>
           </div>
           <div>
-            <dt className="text-ink-300">開催日時</dt>
+            <dt className="text-[var(--color-text-secondary)]">開催日時</dt>
             <dd>{formatDate(m.playedAt)}</dd>
           </div>
           <div>
-            <dt className="text-ink-300">確定日時</dt>
+            <dt className="text-[var(--color-text-secondary)]">確定日時</dt>
             <dd>{formatDate(m.createdAt)}</dd>
           </div>
         </dl>
       </Card>
 
       <Card>
-        <h2 className="text-ink-50 mb-3 text-lg font-bold">プレイヤー結果</h2>
+        <h2 className="mb-3 text-lg font-semibold text-[var(--color-text-primary)]">
+          プレイヤー結果
+        </h2>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="text-ink-300 text-left">
+            <thead className="text-left text-[var(--color-text-secondary)]">
               <tr>
                 <th className="py-2">プレー順</th>
                 <th>メンバー</th>
@@ -190,7 +197,7 @@ export function MatchDetailPage() {
             </thead>
             <tbody>
               {players.map((p) => (
-                <tr key={p.memberId} className="border-line-soft border-t">
+                <tr key={p.memberId} className="border-t border-[var(--color-border)]">
                   <td className="py-2">{p.playOrder}</td>
                   <td>{memberName(p.memberId)}</td>
                   <td className="text-right">{p.rank}</td>
@@ -239,16 +246,19 @@ function DeleteConfirmModal({
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
+      className="fixed inset-0 z-[var(--z-dialog)] flex items-center justify-center bg-[var(--momo-night-900)]/60 px-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="delete-confirm-title"
     >
       <Card className="w-full max-w-md">
-        <h2 id="delete-confirm-title" className="text-ink-50 text-lg font-bold">
+        <h2
+          id="delete-confirm-title"
+          className="text-lg font-semibold text-[var(--color-text-primary)]"
+        >
           試合を削除しますか？
         </h2>
-        <p className="text-ink-200 mt-2 text-sm">
+        <p className="mt-2 text-sm text-pretty text-[var(--color-text-secondary)]">
           試合番号 #{matchNo} を完全に削除します。この操作は取り消せません。
         </p>
         <div className="mt-4 flex justify-end gap-2">

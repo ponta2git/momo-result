@@ -40,7 +40,7 @@ export function TextField({
       <input
         {...props}
         className={cn(
-          "momo-ui-control min-h-10 px-3 py-2 leading-6 text-[var(--color-text-primary)]",
+          "min-h-10 w-full min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 leading-6 text-[var(--color-text-primary)]",
           error ? "border-[var(--color-danger)]" : "",
           inputClassName,
         )}

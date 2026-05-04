@@ -6,12 +6,12 @@ import type {
   MapMasterListResponse,
   SeasonMasterListResponse,
 } from "@/shared/api/masters";
-import { Button } from "@/shared/ui/Button";
-import { Card } from "@/shared/ui/Card";
+import { Button } from "@/shared/ui/actions/Button";
+import { Card } from "@/shared/ui/layout/Card";
 
 const inputClass =
-  "w-full rounded-xl border border-line-soft bg-capture-black/45 px-3 py-2 text-sm text-ink-100 transition hover:border-white/18";
-const labelClass = "text-xs font-bold tracking-[0.18em] text-ink-300 uppercase";
+  "w-full min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] transition-colors duration-150 hover:bg-[var(--color-surface-subtle)] disabled:cursor-not-allowed disabled:opacity-60";
+const labelClass = "text-xs font-semibold text-[var(--color-text-secondary)]";
 
 function toLocalDateTime(value: string): string {
   const date = new Date(value);
@@ -55,17 +55,21 @@ export function MatchSetupSection({
     <Card className="mt-4">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2 className="text-ink-100 text-xl font-black">記録先と試合条件</h2>
-          <p className="text-ink-400 mt-1 text-sm">
+          <h2 className="text-xl font-semibold text-[var(--color-text-primary)]">
+            記録先と試合条件
+          </h2>
+          <p className="mt-1 text-sm text-pretty text-[var(--color-text-secondary)]">
             この結果をどの開催履歴・作品として保存するかを先に決めます。開催履歴、シーズン、マップ、オーナーは後から変更できます。
           </p>
         </div>
         {selectedHeldEvent ? (
-          <div className="border-line-soft bg-capture-black/24 text-ink-300 rounded-xl border px-3 py-2 text-sm">
-            <p className="text-ink-100 font-bold">
+          <div className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-2 text-sm text-[var(--color-text-secondary)]">
+            <p className="font-semibold text-[var(--color-text-primary)]">
               {new Date(selectedHeldEvent.heldAt).toLocaleString()}
             </p>
-            <p className="text-ink-400 mt-1 text-xs">第{values.matchNoInEvent}試合として保存</p>
+            <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
+              第{values.matchNoInEvent}試合として保存
+            </p>
           </div>
         ) : null}
       </div>
@@ -188,11 +192,11 @@ export function MatchSetupSection({
         </label>
       </div>
 
-      <details className="border-line-soft/60 mt-4 border-t pt-3">
-        <summary className="text-ink-300 cursor-pointer text-xs font-bold tracking-[0.16em] uppercase">
+      <details className="mt-4 border-t border-[var(--color-border)] pt-3">
+        <summary className="cursor-pointer text-xs font-semibold text-[var(--color-text-secondary)]">
           一覧にない開催履歴を追加
         </summary>
-        <div className="border-line-soft bg-capture-black/24 mt-3 grid gap-2 rounded-xl border p-3 md:grid-cols-[1fr_auto] md:items-end">
+        <div className="mt-3 grid gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3 md:grid-cols-[1fr_auto] md:items-end">
           <input
             className={inputClass}
             type="datetime-local"

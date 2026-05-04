@@ -1,4 +1,4 @@
-import { Button } from "@/shared/ui/Button";
+import { Button } from "@/shared/ui/actions/Button";
 
 type MatchFormActionsProps = {
   actionLabel: string;
@@ -16,9 +16,9 @@ export function MatchFormActions({
   onPrimaryAction,
 }: MatchFormActionsProps) {
   return (
-    <div className="border-line-soft bg-night-900/92 sticky bottom-4 mt-8 rounded-2xl border p-4 backdrop-blur">
+    <div className="momo-safe-bottom sticky bottom-4 mt-8 rounded-[var(--radius-lg)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-4 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-ink-300 text-sm">{message}</p>
+        <p className="text-sm text-pretty text-[var(--color-text-secondary)]">{message}</p>
         <Button
           id="workspace-primary-action"
           disabled={disabled || pending}

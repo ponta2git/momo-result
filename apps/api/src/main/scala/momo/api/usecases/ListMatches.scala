@@ -1,7 +1,8 @@
 package momo.api.usecases
 
-import cats.data.EitherT
 import cats.Monad
+import cats.data.EitherT
+
 import momo.api.domain.MatchListItem
 import momo.api.errors.AppError
 import momo.api.repositories.MatchListRepository

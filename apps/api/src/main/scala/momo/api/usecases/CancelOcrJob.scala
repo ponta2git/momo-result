@@ -1,8 +1,10 @@
 package momo.api.usecases
 
-import cats.syntax.all.*
-import cats.Monad
 import java.time.Instant
+
+import cats.Monad
+import cats.syntax.all.*
+
 import momo.api.domain.ids.JobId
 import momo.api.errors.AppError
 import momo.api.repositories.OcrJobsRepository

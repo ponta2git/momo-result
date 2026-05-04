@@ -1,15 +1,17 @@
 package momo.api.repositories.postgres
 
+import java.time.Instant
+
 import cats.effect.MonadCancelThrow
 import cats.syntax.all.*
 import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 import doobie.util.fragments
-import java.time.Instant
+
 import momo.api.domain.{MatchDraft, MatchDraftStatus, ScreenType}
-import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.repositories.MatchDraftsRepository
+import momo.api.repositories.postgres.PostgresMeta.given
 
 final class PostgresMatchDraftsRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends MatchDraftsRepository[F]:

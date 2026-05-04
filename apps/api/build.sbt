@@ -4,12 +4,15 @@ import sbt.Keys.*
 ThisBuild / scalaVersion := "3.8.3"
 ThisBuild / semanticdbEnabled := true
 ThisBuild / semanticdbVersion := scalafixSemanticdb.revision
+ThisBuild / evictionErrorLevel := Level.Warn
+ThisBuild / versionScheme := Some("early-semver")
 
 addCommandAlias("apiFormat", "scalafmtAll")
 addCommandAlias("apiFormatCheck", "scalafmtCheckAll")
 addCommandAlias("apiLint", "scalafixAll --check")
 addCommandAlias("apiFix", "scalafixAll")
 addCommandAlias("apiQuality", "apiFormatCheck; apiLint; Test / compile; apiOpenApiCheck")
+addCommandAlias("apiCheck", "apiQuality; test")
 addCommandAlias(
   "apiDbQuality",
   "testOnly momo.api.integration.DbContractSpec; testOnly momo.api.integration.PostgresMatchesRepositorySpec; testOnly momo.api.integration.PostgresMatchListRepositorySpec",
@@ -18,23 +21,38 @@ addCommandAlias(
 lazy val apiOpenApi = taskKey[File]("Generate OpenAPI from Tapir endpoint definitions")
 lazy val apiOpenApiCheck = taskKey[Unit]("Check that openapi.yaml can be generated")
 
+// Scalac options shared by Compile and Test.
+//
+// Goal: catch as many bugs as possible at compile time, and force AI-generated
+// code to be precise. Each flag is paired with a short rationale.
+lazy val sharedScalacOptions = Seq(
+  "-deprecation",                // do not silently use deprecated API
+  "-encoding", "UTF-8",
+  "-explain",                    // verbose error messages help AI/humans debug type errors
+  "-feature",                    // require explicit imports for advanced features
+  "-unchecked",                  // surface unsafe pattern matches and erasures
+  "-Wunused:all",                // unused imports/vals/params/locals/privates
+  "-Wvalue-discard",             // accidental discard of a non-Unit value is an error
+  "-Wnonunit-statement",         // expressions that compute a non-Unit value cannot be statements
+  "-Wimplausible-patterns",      // unreachable case branches (Scala 3.4+)
+  "-Wsafe-init",                 // detect bad object initialization order
+  "-Xverify-signatures",         // ensure ASM-emitted signatures match Scala types
+  "-Werror",                     // promote all warnings above to errors
+  "-language:strictEquality",    // forbid `==` between unrelated types (CanEqual required)
+)
+
 lazy val root = (project in file("."))
   .settings(
     name := "momo-result-api",
     organization := "momo",
-    scalacOptions ++= Seq(
-      "-deprecation",
-      "-encoding",
-      "UTF-8",
-      "-explain",
-      "-feature",
-      "-unchecked",
-      "-Wunused:all",
-      "-Wvalue-discard",
-      "-Wnonunit-statement",
-      "-Werror",
-      "-language:strictEquality"
-    ),
+    scalacOptions ++= sharedScalacOptions,
+    // Keep the REPL usable without -Werror / -Xfatal-warnings firing on incomplete snippets.
+    Compile / console / scalacOptions ~= {
+      _.filterNot(opt => opt == "-Werror" || opt.startsWith("-Xfatal"))
+    },
+    Test / console / scalacOptions ~= {
+      _.filterNot(opt => opt == "-Werror" || opt.startsWith("-Xfatal"))
+    },
     Compile / run / mainClass := Some("momo.api.Main"),
     Compile / run / fork := true,
     Compile / run / javaOptions += "-Dcats.effect.warnOnNonMainThreadDetected=false",

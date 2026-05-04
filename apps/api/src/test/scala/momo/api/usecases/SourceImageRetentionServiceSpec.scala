@@ -1,12 +1,14 @@
 package momo.api.usecases
 
-import cats.effect.IO
 import java.nio.file.Files
 import java.time.Instant
-import momo.api.adapters.{InMemoryMatchDraftsRepository, LocalFsImageStore}
-import momo.api.domain.{MatchDraft, MatchDraftStatus}
-import momo.api.domain.ids.MemberId
+
+import cats.effect.IO
+
 import momo.api.MomoCatsEffectSuite
+import momo.api.adapters.{InMemoryMatchDraftsRepository, LocalFsImageStore}
+import momo.api.domain.ids.MemberId
+import momo.api.domain.{MatchDraft, MatchDraftStatus}
 
 final class SourceImageRetentionServiceSpec extends MomoCatsEffectSuite:
   private val pngBytes: Array[Byte] =
@@ -66,8 +68,8 @@ final class SourceImageRetentionServiceSpec extends MomoCatsEffectSuite:
   private def saveImage(
       imageStore: LocalFsImageStore[IO],
       fileName: String,
-  ): IO[momo.api.domain.StoredImage] =
-    imageStore.save(Some(fileName), Some("image/png"), pngBytes).flatMap {
+  ): IO[momo.api.domain.StoredImage] = imageStore.save(Some(fileName), Some("image/png"), pngBytes)
+    .flatMap {
       case Right(image) => IO.pure(image)
       case Left(error) => fail(s"expected image to be stored: $error")
     }

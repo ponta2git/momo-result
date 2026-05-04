@@ -3,6 +3,13 @@ package momo.api.http
 import cats.effect.Async
 import cats.syntax.all.*
 import io.circe.syntax.*
+import org.http4s.circe.*
+import org.http4s.headers.`Content-Type`
+import org.http4s.{
+  Header, HttpRoutes, MediaType, Request, Response, ResponseCookie, SameSite, Status,
+}
+import org.typelevel.ci.CIString
+
 import momo.api.auth.{
   CsrfTokenService, DiscordOAuthClient, LoginRateLimiter, OAuthStateCodec, SessionService,
 }
@@ -11,12 +18,6 @@ import momo.api.domain.ids.*
 import momo.api.endpoints.AuthMeResponse
 import momo.api.errors.AppError
 import momo.api.repositories.MembersRepository
-import org.http4s.{
-  Header, HttpRoutes, MediaType, Request, Response, ResponseCookie, SameSite, Status,
-}
-import org.http4s.circe.*
-import org.http4s.headers.`Content-Type`
-import org.typelevel.ci.CIString
 
 private[http] object AuthHttpRoutes:
   def routes[F[_]: Async](

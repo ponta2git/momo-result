@@ -1,9 +1,10 @@
 package momo.api.usecases
 
-import cats.syntax.all.*
 import cats.Functor
-import momo.api.domain.ids.JobId
+import cats.syntax.all.*
+
 import momo.api.domain.OcrJob
+import momo.api.domain.ids.JobId
 import momo.api.errors.AppError
 import momo.api.repositories.OcrJobsRepository
 

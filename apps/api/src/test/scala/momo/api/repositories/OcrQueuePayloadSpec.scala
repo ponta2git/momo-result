@@ -1,11 +1,13 @@
 package momo.api.repositories
 
-import io.circe.Json
 import java.nio.file.Path
 import java.time.Instant
-import momo.api.domain.{OcrJobHints, PlayerAliasHint, ScreenType}
-import momo.api.domain.ids.*
+
+import io.circe.Json
 import munit.FunSuite
+
+import momo.api.domain.ids.*
+import momo.api.domain.{OcrJobHints, PlayerAliasHint, ScreenType}
 
 final class OcrQueuePayloadSpec extends FunSuite:
   test("builds the exact Redis Streams payload expected by the OCR worker without hints") {

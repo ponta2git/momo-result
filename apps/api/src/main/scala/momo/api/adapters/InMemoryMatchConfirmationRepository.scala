@@ -1,9 +1,11 @@
 package momo.api.adapters
 
+import java.time.Instant
+
+import cats.Monad
 import cats.syntax.flatMap.*
 import cats.syntax.functor.*
-import cats.Monad
-import java.time.Instant
+
 import momo.api.domain.MatchRecord
 import momo.api.repositories.{MatchConfirmationRepository, MatchDraftsRepository, MatchesRepository}
 

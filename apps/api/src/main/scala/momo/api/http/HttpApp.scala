@@ -2,6 +2,8 @@ package momo.api.http
 
 import cats.effect.{Async, Clock, Resource}
 import cats.syntax.all.*
+import org.http4s.HttpApp as Http4sApp
+
 import momo.api.adapters.{
   InMemoryAppSessionsRepository, InMemoryGameTitlesRepository, InMemoryHeldEventsRepository,
   InMemoryIncidentMastersRepository, InMemoryMapMastersRepository,
@@ -17,18 +19,18 @@ import momo.api.auth.{
 import momo.api.config.AppConfig
 import momo.api.db.Database
 import momo.api.domain.{IdGenerator, Member}
-import momo.api.repositories.{
-  AppSessionsRepository, GameTitlesRepository, HeldEventsRepository, IncidentMastersRepository,
-  MapMastersRepository, MatchConfirmationRepository, MatchDraftsRepository, MatchListRepository,
-  MatchesRepository, MembersRepository, OcrDraftsRepository, OcrJobsRepository,
-  SeasonMastersRepository,
-}
 import momo.api.repositories.postgres.{
   PostgresAppSessionsRepository, PostgresGameTitlesRepository, PostgresHeldEventsRepository,
   PostgresIncidentMastersRepository, PostgresMapMastersRepository,
   PostgresMatchConfirmationRepository, PostgresMatchDraftsRepository, PostgresMatchListRepository,
   PostgresMatchesRepository, PostgresMembersRepository, PostgresOcrDraftsRepository,
   PostgresOcrJobsRepository, PostgresSeasonMastersRepository,
+}
+import momo.api.repositories.{
+  AppSessionsRepository, GameTitlesRepository, HeldEventsRepository, IncidentMastersRepository,
+  MapMastersRepository, MatchConfirmationRepository, MatchDraftsRepository, MatchListRepository,
+  MatchesRepository, MembersRepository, OcrDraftsRepository, OcrJobsRepository,
+  SeasonMastersRepository,
 }
 import momo.api.usecases.{
   CancelMatchDraft, CancelOcrJob, ConfirmMatch, CreateGameTitle, CreateHeldEvent, CreateMapMaster,
@@ -37,7 +39,6 @@ import momo.api.usecases.{
   ListHeldEvents, ListMatches, SourceImageRetentionService, UpdateMatch, UpdateMatchDraft,
   UploadImage,
 }
-import org.http4s.HttpApp as Http4sApp
 
 object HttpApp:
   /** Test-only handle for specs that need direct access to in-memory master repositories. */

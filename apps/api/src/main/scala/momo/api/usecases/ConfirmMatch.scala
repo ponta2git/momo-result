@@ -1,17 +1,20 @@
 package momo.api.usecases
 
+import java.time.Instant
+
+import scala.util.Try
+
+import cats.MonadThrow
 import cats.data.EitherT
 import cats.syntax.all.*
-import cats.MonadThrow
-import java.time.Instant
-import momo.api.domain.{MatchRecord, PlayerResult}
+
 import momo.api.domain.ids.{MemberId, *}
+import momo.api.domain.{MatchRecord, PlayerResult}
 import momo.api.errors.AppError
 import momo.api.repositories.{
   GameTitlesRepository, HeldEventsRepository, MapMastersRepository, MatchConfirmationRepository,
   MatchDraftsRepository, MatchesRepository, SeasonMastersRepository,
 }
-import scala.util.Try
 
 final class ConfirmMatch[F[_]: MonadThrow](
     heldEvents: HeldEventsRepository[F],

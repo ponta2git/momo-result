@@ -1,7 +1,8 @@
 package momo.api.endpoints
 
-import momo.api.http.ProblemDetails.ErrorInfo
 import sttp.tapir.{PublicEndpoint, *}
+
+import momo.api.http.ProblemDetails.ErrorInfo
 
 object ExportEndpoints:
   type MatchExportInput = (String, Option[String], Option[String], Option[String], Option[String])

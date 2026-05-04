@@ -1,11 +1,13 @@
 package momo.api.repositories.postgres
 
+import java.time.{LocalDate, ZoneId}
+
 import cats.effect.MonadCancelThrow
 import cats.syntax.all.*
 import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
-import java.time.{LocalDate, ZoneId}
+
 import momo.api.domain.HeldEvent
 import momo.api.repositories.HeldEventsRepository
 

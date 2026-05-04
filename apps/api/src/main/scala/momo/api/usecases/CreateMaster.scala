@@ -1,8 +1,10 @@
 package momo.api.usecases
 
-import cats.syntax.all.*
-import cats.MonadThrow
 import java.time.Instant
+
+import cats.MonadThrow
+import cats.syntax.all.*
+
 import momo.api.domain.{GameTitle, MapMaster, SeasonMaster}
 import momo.api.errors.AppError
 import momo.api.repositories.{GameTitlesRepository, MapMastersRepository, SeasonMastersRepository}

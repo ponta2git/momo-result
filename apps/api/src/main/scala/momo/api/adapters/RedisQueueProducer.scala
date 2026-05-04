@@ -1,14 +1,16 @@
 package momo.api.adapters
 
+import scala.jdk.CollectionConverters.*
+
+import cats.Functor
 import cats.effect.{Async, Resource}
 import cats.syntax.functor.*
-import cats.Functor
-import dev.profunktor.redis4cats.{Redis, RedisCommands}
 import dev.profunktor.redis4cats.data.RedisCodec
 import dev.profunktor.redis4cats.effect.Log.NoOp.*
+import dev.profunktor.redis4cats.{Redis, RedisCommands}
+
 import momo.api.config.RedisConfig
 import momo.api.repositories.{OcrQueuePayload, QueueProducer}
-import scala.jdk.CollectionConverters.*
 
 trait RedisStreamClient[F[_]]:
   def xadd(stream: String, fields: Map[String, String]): F[String]

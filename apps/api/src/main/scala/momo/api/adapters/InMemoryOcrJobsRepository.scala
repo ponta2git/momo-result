@@ -1,10 +1,12 @@
 package momo.api.adapters
 
+import java.time.Instant
+
 import cats.effect.{Ref, Sync}
 import cats.syntax.functor.*
-import java.time.Instant
-import momo.api.domain.{OcrFailure, OcrJob, OcrJobStatus}
+
 import momo.api.domain.ids.*
+import momo.api.domain.{OcrFailure, OcrJob, OcrJobStatus}
 import momo.api.repositories.OcrJobsRepository
 
 final class InMemoryOcrJobsRepository[F[_]: Sync] private (ref: Ref[F, Map[String, OcrJob]])

@@ -1,8 +1,10 @@
 package momo.api.usecases
 
 import java.time.Instant
-import momo.api.domain.{IncidentCounts, MatchExportFormat, MatchExportRow}
+
 import munit.FunSuite
+
+import momo.api.domain.{IncidentCounts, MatchExportFormat, MatchExportRow}
 
 final class MatchExportSerializerSpec extends FunSuite:
   private val row = MatchExportRow(

@@ -1,7 +1,8 @@
 package momo.api.http
 
-import momo.api.errors.AppError
 import sttp.model.Part
+
+import momo.api.errors.AppError
 
 private[http] final case class MultipartUpload(
     fileName: Option[String],

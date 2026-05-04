@@ -1,8 +1,9 @@
 package momo.api.http
 
 import io.circe.Codec
-import momo.api.errors.AppError
 import sttp.model.StatusCode
+
+import momo.api.errors.AppError
 
 final case class ProblemDetails(
     `type`: String,

@@ -1,7 +1,9 @@
 package momo.api.endpoints
 
-import io.circe.Codec
 import java.time.format.DateTimeFormatter
+
+import io.circe.Codec
+
 import momo.api.domain.{GameTitle, IncidentMaster, MapMaster, SeasonMaster}
 
 final case class GameTitleResponse(

@@ -1,9 +1,11 @@
 package momo.api.endpoints
 
-import io.circe.Codec
 import java.time.format.DateTimeFormatter
-import momo.api.domain.{HeldEvent, MatchListItem}
+
+import io.circe.Codec
 import sttp.tapir.Schema
+
+import momo.api.domain.{HeldEvent, MatchListItem}
 
 final case class HeldEventResponse(id: String, heldAt: String, matchCount: Int)
     derives Codec.AsObject

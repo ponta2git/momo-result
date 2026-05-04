@@ -1,9 +1,15 @@
 package momo.api.http
 
+import java.time.Instant
+import java.time.format.DateTimeFormatter
+
 import cats.effect.Async
 import cats.syntax.all.*
-import java.time.format.DateTimeFormatter
-import java.time.Instant
+import org.http4s.server.Router
+import org.http4s.{HttpApp as Http4sApp, HttpRoutes as Http4sRoutes}
+import sttp.tapir.server.ServerEndpoint
+import sttp.tapir.server.http4s.Http4sServerInterpreter
+
 import momo.api.auth.{
   CsrfTokenService, DiscordOAuthClient, LoginRateLimiter, MemberRoster, OAuthStateCodec,
   SessionService,
@@ -16,12 +22,11 @@ import momo.api.endpoints.{
   GameTitleResponse, GameTitlesEndpoints, HealthEndpoints, HeldEventListResponse, HeldEventResponse,
   HeldEventsEndpoints, IncidentMasterListResponse, IncidentMasterResponse, IncidentMastersEndpoints,
   MapMasterListResponse, MapMasterResponse, MapMastersEndpoints, MatchDetailResponse,
-  MatchDraftDetailResponse,
-  MatchDraftEndpoints, MatchDraftResponse, MatchDraftSourceImageListResponse,
-  MatchDraftSourceImageResponse, MatchListResponse, MatchSummaryResponse, MatchesEndpoints,
-  OcrDraftEndpoints, OcrDraftListResponse, OcrDraftResponse, OcrJobEndpoints, OcrJobResponse,
-  OpenApiEndpoints, SeasonMasterListResponse, SeasonMasterResponse, SeasonMastersEndpoints,
-  UpdateMatchRequest, UploadEndpoints, UploadImageResponse,
+  MatchDraftDetailResponse, MatchDraftEndpoints, MatchDraftResponse,
+  MatchDraftSourceImageListResponse, MatchDraftSourceImageResponse, MatchListResponse,
+  MatchSummaryResponse, MatchesEndpoints, OcrDraftEndpoints, OcrDraftListResponse, OcrDraftResponse,
+  OcrJobEndpoints, OcrJobResponse, OpenApiEndpoints, SeasonMasterListResponse, SeasonMasterResponse,
+  SeasonMastersEndpoints, UpdateMatchRequest, UploadEndpoints, UploadImageResponse,
 }
 import momo.api.errors.AppError
 import momo.api.openapi.OpenApiGenerator
@@ -33,15 +38,10 @@ import momo.api.usecases.{
   CancelMatchDraft, CancelOcrJob, ConfirmMatch, CreateGameTitle, CreateGameTitleCommand,
   CreateHeldEvent, CreateHeldEventCommand, CreateMapMaster, CreateMapMasterCommand,
   CreateMatchDraft, CreateMatchDraftCommand, CreateOcrJob, CreateOcrJobCommand, CreateSeasonMaster,
-  CreateSeasonMasterCommand, DeleteMatch, ExportMatches, GetMatch, GetMatchDraftSourceImages,
-  GetMatchDraft, GetOcrDraft, GetOcrDraftsBulk, GetOcrJob, ListHeldEvents, ListMatches,
-  ListMatchesCommand,
-  UpdateMatch, UpdateMatchDraft, UpdateMatchDraftCommand, UploadImage,
+  CreateSeasonMasterCommand, DeleteMatch, ExportMatches, GetMatch, GetMatchDraft,
+  GetMatchDraftSourceImages, GetOcrDraft, GetOcrDraftsBulk, GetOcrJob, ListHeldEvents, ListMatches,
+  ListMatchesCommand, UpdateMatch, UpdateMatchDraft, UpdateMatchDraftCommand, UploadImage,
 }
-import org.http4s.{HttpApp as Http4sApp, HttpRoutes as Http4sRoutes}
-import org.http4s.server.Router
-import sttp.tapir.server.http4s.Http4sServerInterpreter
-import sttp.tapir.server.ServerEndpoint
 
 object HttpRoutes:
   final case class Dependencies[F[_]](

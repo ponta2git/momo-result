@@ -1,7 +1,8 @@
 package momo.api.usecases
 
-import cats.syntax.all.*
 import cats.Monad
+import cats.syntax.all.*
+
 import momo.api.domain.HeldEvent
 import momo.api.repositories.{HeldEventsRepository, MatchesRepository}
 

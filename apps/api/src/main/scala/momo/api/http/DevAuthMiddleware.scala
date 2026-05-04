@@ -1,6 +1,7 @@
 package momo.api.http
 
 import cats.effect.Sync
+
 import momo.api.auth.{AuthenticatedMember, MemberRoster}
 import momo.api.config.AppEnv
 import momo.api.errors.AppError

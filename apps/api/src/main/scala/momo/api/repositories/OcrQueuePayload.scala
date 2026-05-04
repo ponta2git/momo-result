@@ -1,12 +1,14 @@
 package momo.api.repositories
 
-import io.circe.{Json, Printer}
-import io.circe.syntax.*
 import java.nio.file.Path
-import java.time.format.DateTimeFormatter
 import java.time.Instant
-import momo.api.domain.{OcrJobHints, ScreenType}
+import java.time.format.DateTimeFormatter
+
+import io.circe.syntax.*
+import io.circe.{Json, Printer}
+
 import momo.api.domain.ids.*
+import momo.api.domain.{OcrJobHints, ScreenType}
 
 final case class OcrQueuePayload(fields: Map[String, String])
 

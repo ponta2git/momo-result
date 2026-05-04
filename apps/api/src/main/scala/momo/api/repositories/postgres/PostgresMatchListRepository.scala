@@ -1,5 +1,7 @@
 package momo.api.repositories.postgres
 
+import java.time.Instant
+
 import cats.data.NonEmptyList
 import cats.effect.MonadCancelThrow
 import cats.syntax.all.*
@@ -7,10 +9,10 @@ import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 import doobie.util.fragments
-import java.time.Instant
+
 import momo.api.domain.{MatchDraftStatus, MatchListItem, MatchListItemKind, MatchListRankEntry}
-import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.repositories.MatchListRepository
+import momo.api.repositories.postgres.PostgresMeta.given
 
 final class PostgresMatchListRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends MatchListRepository[F]:
@@ -158,13 +160,10 @@ final class PostgresMatchListRepository[F[_]: MonadCancelThrow](transactor: Tran
       case None => List.empty[MatchListItem].pure[F]
       case Some(selectQuery) =>
         val limit = filter.limit.map(v => fr"LIMIT $v").getOrElse(Fragment.empty)
-        val ordered = fr"SELECT * FROM (" ++
-          selectQuery ++
-          fr""") AS combined
+        val ordered = fr"SELECT * FROM (" ++ selectQuery ++ fr""") AS combined
               ORDER BY COALESCE(combined.played_at, combined.updated_at) DESC,
                        combined.updated_at DESC,
-                       combined.created_at DESC""" ++
-          limit
+                       combined.created_at DESC""" ++ limit
         for
           rows <- ordered.query[Row].to[List].transact(transactor)
           matchIds = rows.flatMap(_._3).distinct

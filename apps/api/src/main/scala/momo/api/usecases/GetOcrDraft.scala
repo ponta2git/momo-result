@@ -1,9 +1,10 @@
 package momo.api.usecases
 
-import cats.syntax.all.*
 import cats.Functor
-import momo.api.domain.ids.DraftId
+import cats.syntax.all.*
+
 import momo.api.domain.OcrDraft
+import momo.api.domain.ids.DraftId
 import momo.api.errors.AppError
 import momo.api.repositories.OcrDraftsRepository
 

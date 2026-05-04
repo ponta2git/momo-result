@@ -1,9 +1,11 @@
 package momo.api.repositories.postgres
 
-import doobie.Meta
 import java.nio.file.{Path, Paths}
-import momo.api.domain.{FailureCode, MatchDraftStatus, OcrJobStatus, ScreenType}
+
+import doobie.Meta
+
 import momo.api.domain.ids.*
+import momo.api.domain.{FailureCode, MatchDraftStatus, OcrJobStatus, ScreenType}
 
 /**
  * Shared database type mappings for opaque IDs, enums, and other custom types used by the

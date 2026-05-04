@@ -1,7 +1,7 @@
 package momo.api.repositories
 
-import momo.api.domain.ids.ImageId
 import momo.api.domain.StoredImage
+import momo.api.domain.ids.ImageId
 import momo.api.errors.AppError
 
 trait ImageStore[F[_]]:

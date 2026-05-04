@@ -5,6 +5,7 @@ import cats.syntax.all.*
 import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
+
 import momo.api.domain.{GameTitle, IncidentMaster, MapMaster, MemberAlias, SeasonMaster}
 import momo.api.repositories.{
   GameTitlesRepository, IncidentMastersRepository, MapMastersRepository, MemberAliasesRepository,

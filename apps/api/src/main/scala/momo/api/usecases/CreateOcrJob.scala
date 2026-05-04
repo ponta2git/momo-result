@@ -1,10 +1,12 @@
 package momo.api.usecases
 
+import java.time.Instant
+
+import cats.MonadThrow
 import cats.data.EitherT
 import cats.syntax.all.*
-import cats.MonadThrow
 import io.circe.Json
-import java.time.Instant
+
 import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.errors.AppError

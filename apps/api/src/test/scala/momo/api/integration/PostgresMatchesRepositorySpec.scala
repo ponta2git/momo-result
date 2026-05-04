@@ -1,7 +1,9 @@
 package momo.api.integration
 
-import cats.effect.IO
 import java.time.Instant
+
+import cats.effect.IO
+
 import momo.api.domain.*
 import momo.api.repositories.postgres.*
 

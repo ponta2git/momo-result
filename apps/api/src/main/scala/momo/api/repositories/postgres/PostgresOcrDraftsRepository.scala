@@ -1,5 +1,7 @@
 package momo.api.repositories.postgres
 
+import java.time.Instant
+
 import cats.effect.MonadCancelThrow
 import cats.syntax.all.*
 import doobie.*
@@ -7,11 +9,11 @@ import doobie.implicits.*
 import doobie.postgres.circe.jsonb.implicits.*
 import doobie.postgres.implicits.*
 import io.circe.Json
-import java.time.Instant
-import momo.api.domain.{OcrDraft, ScreenType}
+
 import momo.api.domain.ids.*
-import momo.api.repositories.postgres.PostgresMeta.given
+import momo.api.domain.{OcrDraft, ScreenType}
 import momo.api.repositories.OcrDraftsRepository
+import momo.api.repositories.postgres.PostgresMeta.given
 
 final class PostgresOcrDraftsRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends OcrDraftsRepository[F]:

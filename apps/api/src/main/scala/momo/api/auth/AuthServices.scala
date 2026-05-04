@@ -1,16 +1,18 @@
 package momo.api.auth
 
-import cats.effect.{Async, Ref, Sync}
-import cats.syntax.all.*
-import io.circe.parser.decode
-import io.circe.Decoder
-import java.net.{URI, URLEncoder}
 import java.net.http.{HttpClient, HttpRequest, HttpResponse}
+import java.net.{URI, URLEncoder}
 import java.nio.charset.StandardCharsets
 import java.security.{MessageDigest, SecureRandom}
 import java.time.Instant
-import javax.crypto.spec.SecretKeySpec
 import javax.crypto.Mac
+import javax.crypto.spec.SecretKeySpec
+
+import cats.effect.{Async, Ref, Sync}
+import cats.syntax.all.*
+import io.circe.Decoder
+import io.circe.parser.decode
+
 import momo.api.config.AuthConfig
 import momo.api.domain.ids.MemberId
 import momo.api.errors.AppError

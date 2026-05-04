@@ -1,12 +1,14 @@
 package momo.api.openapi
 
-import io.circe.syntax.*
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
-import momo.api.endpoints.ApiEndpoints
-import sttp.apispec.openapi.circe.*
+
+import io.circe.syntax.*
 import sttp.apispec.openapi.OpenAPI
+import sttp.apispec.openapi.circe.*
 import sttp.tapir.docs.openapi.OpenAPIDocsInterpreter
+
+import momo.api.endpoints.ApiEndpoints
 
 object OpenApiGenerator:
   def openApi: OpenAPI = OpenAPIDocsInterpreter()

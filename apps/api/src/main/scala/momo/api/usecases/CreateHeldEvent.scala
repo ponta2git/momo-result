@@ -1,10 +1,12 @@
 package momo.api.usecases
 
+import java.time.Instant
+import java.time.format.DateTimeParseException
+
+import cats.MonadThrow
 import cats.data.EitherT
 import cats.syntax.either.*
-import cats.MonadThrow
-import java.time.format.DateTimeParseException
-import java.time.Instant
+
 import momo.api.domain.HeldEvent
 import momo.api.errors.AppError
 import momo.api.repositories.HeldEventsRepository

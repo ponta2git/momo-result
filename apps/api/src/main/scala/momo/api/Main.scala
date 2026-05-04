@@ -2,9 +2,10 @@ package momo.api
 
 import cats.effect.{IO, IOApp}
 import com.comcast.ip4s.*
+import org.http4s.ember.server.EmberServerBuilder
+
 import momo.api.config.AppConfig
 import momo.api.http.HttpApp
-import org.http4s.ember.server.EmberServerBuilder
 
 object Main extends IOApp.Simple:
   override def run: IO[Unit] = AppConfig.load[IO].flatMap { config =>

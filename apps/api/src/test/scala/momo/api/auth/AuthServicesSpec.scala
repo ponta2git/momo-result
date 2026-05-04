@@ -1,11 +1,14 @@
 package momo.api.auth
 
-import cats.effect.IO
 import java.time.Instant
+
+import scala.concurrent.duration.*
+
+import cats.effect.IO
+
+import momo.api.MomoCatsEffectSuite
 import momo.api.config.{AppEnv, AuthConfig}
 import momo.api.repositories.AppSession
-import momo.api.MomoCatsEffectSuite
-import scala.concurrent.duration.*
 
 final class AuthServicesSpec extends MomoCatsEffectSuite:
   private val config = AuthConfig.defaults(AppEnv.Test)

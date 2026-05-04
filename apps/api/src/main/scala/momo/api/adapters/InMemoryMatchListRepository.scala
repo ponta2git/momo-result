@@ -1,8 +1,9 @@
 package momo.api.adapters
 
+import cats.Monad
 import cats.syntax.flatMap.*
 import cats.syntax.functor.*
-import cats.Monad
+
 import momo.api.domain.{MatchDraftStatus, MatchListItem, MatchListItemKind, MatchListRankEntry}
 import momo.api.repositories.{MatchDraftsRepository, MatchListRepository, MatchesRepository}
 

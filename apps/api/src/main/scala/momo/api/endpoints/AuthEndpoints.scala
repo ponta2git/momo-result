@@ -1,9 +1,10 @@
 package momo.api.endpoints
 
-import momo.api.http.ProblemDetails.ErrorInfo
-import sttp.tapir.{PublicEndpoint, *}
 import sttp.tapir.generic.auto.*
 import sttp.tapir.json.circe.*
+import sttp.tapir.{PublicEndpoint, *}
+
+import momo.api.http.ProblemDetails.ErrorInfo
 
 object AuthEndpoints:
   val login: PublicEndpoint[Unit, ErrorInfo, String, Any] = endpoint

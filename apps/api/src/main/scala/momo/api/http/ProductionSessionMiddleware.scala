@@ -4,14 +4,15 @@ import cats.data.Kleisli
 import cats.effect.Async
 import cats.syntax.all.*
 import io.circe.syntax.*
+import org.http4s.circe.*
+import org.http4s.headers.`Content-Type`
+import org.http4s.{Header, HttpApp, MediaType, Request, Response, Status}
+import org.typelevel.ci.CIString
+
 import momo.api.auth.{CsrfTokenService, SessionService}
 import momo.api.config.{AppConfig, AppEnv}
 import momo.api.domain.ids.*
 import momo.api.errors.AppError
-import org.http4s.{Header, HttpApp, MediaType, Request, Response, Status}
-import org.http4s.circe.*
-import org.http4s.headers.`Content-Type`
-import org.typelevel.ci.CIString
 
 private[http] final class ProductionSessionMiddleware[F[_]: Async](
     config: AppConfig,

@@ -1,7 +1,8 @@
 package momo.api.usecases
 
-import cats.syntax.all.*
 import cats.Applicative
+import cats.syntax.all.*
+
 import momo.api.domain.{
   MapMaster, MatchExportFile, MatchExportFormat, MatchExportRow, MatchExportScope, MatchRecord,
   Member, PlayerResult, SeasonMaster,

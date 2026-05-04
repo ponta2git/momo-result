@@ -4,6 +4,7 @@ import cats.effect.MonadCancelThrow
 import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
+
 import momo.api.domain.Member
 import momo.api.repositories.MembersRepository
 

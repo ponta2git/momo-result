@@ -3,8 +3,8 @@ package momo.api.http
 import cats.effect.IO
 import com.comcast.ip4s.IpAddress
 import munit.CatsEffectSuite
-import org.http4s.{Header, Method, Request}
 import org.http4s.implicits.uri
+import org.http4s.{Header, Method, Request}
 import org.typelevel.ci.CIString
 
 class ClientIpSpec extends CatsEffectSuite:

@@ -1,16 +1,18 @@
 package momo.api.usecases
 
-import cats.effect.IO
 import java.nio.file.Files
 import java.time.Instant
+
+import cats.effect.IO
+
+import momo.api.MomoCatsEffectSuite
 import momo.api.adapters.{
   InMemoryMatchDraftsRepository, InMemoryOcrDraftsRepository, InMemoryOcrJobsRepository,
   InMemoryQueueProducer, LocalFsImageStore,
 }
-import momo.api.domain.ids.*
 import momo.api.domain.OcrJobHints
+import momo.api.domain.ids.*
 import momo.api.errors.AppError
-import momo.api.MomoCatsEffectSuite
 
 final class CreateOcrJobSpec extends MomoCatsEffectSuite:
   private val pngBytes: Array[Byte] =

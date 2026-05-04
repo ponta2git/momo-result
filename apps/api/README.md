@@ -29,6 +29,42 @@ sbt apiOpenApiCheck
 
 `apiOpenApi` は Tapir のエンドポイント定義から `openapi.yaml` を生成します。現時点では JSON 形式で出力しています（JSON は YAML 1.2 としても有効です）。
 
+### 品質ゲート（format / lint / compile / test）
+
+| alias | 内容 |
+|---|---|
+| `apiFormat` | scalafmt で全ソースを整形 |
+| `apiFormatCheck` | scalafmt の差分があれば失敗 |
+| `apiLint` | scalafix を `--check` で実行（差分があれば失敗） |
+| `apiFix` | scalafix を適用して書き換え |
+| `apiQuality` | `apiFormatCheck → apiLint → Test/compile → apiOpenApiCheck` |
+| `apiCheck` | `apiQuality` に加えて `test` まで実行する完全ゲート |
+
+PRを出す前にローカルで `sbt apiCheck` が通ることを確認してください。
+
+### コーディング規約（lint / scalac で強制）
+
+- Scala 3 新構文へ自動変換（`rewrite.scala3.convertToNewSyntax`）
+- 改行コードは LF 固定（`.editorconfig` と `.scalafmt.conf`）
+- `-language:strictEquality` により異なる型の `==` / `!=` はコンパイルエラー
+- `-Werror` + `-Wunused:all` + `-Wvalue-discard` + `-Wnonunit-statement` + `-Wsafe-init` + `-Wimplausible-patterns` + `-Xverify-signatures`
+- scalafix で禁止: `var` / `throw` / `return` / `null` / `asInstanceOf` / `isInstanceOf` / `finalize` / セミコロン / タブ / XML / `val` パターン / デフォルト引数
+- 正規表現禁止: `println` / `System.out|err` / `Thread.sleep` / `scala.concurrent.Await` / `unsafeRun*` / `TODO`・`FIXME` のチケット番号無し記述
+- import は scalafix `OrganizeImports` で自動整列（java → scala → 3rd party → `momo`）
+
+どうしても上記ルールから外れる正当な事情がある場合は、最小スコープで scalafix の suppression を付けます:
+
+```scala
+// 行単位
+val foo = unsafeBlock() // scalafix:ok DisableSyntax.noUnsafeRunSync
+
+// 範囲
+// scalafix:off DisableSyntax.noUnsafeRunSync
+beforeAll { initIo.unsafeRunSync() }
+afterAll { teardownIo.unsafeRunSync() }
+// scalafix:on DisableSyntax.noUnsafeRunSync
+```
+
 ## 環境変数
 
 | 変数 | 既定値 | 説明 |

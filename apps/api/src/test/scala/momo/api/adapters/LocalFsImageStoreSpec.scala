@@ -1,10 +1,12 @@
 package momo.api.adapters
 
-import cats.effect.IO
 import java.nio.file.Files
+
+import cats.effect.IO
+
+import momo.api.MomoCatsEffectSuite
 import momo.api.domain.ids.ImageId
 import momo.api.errors.AppError
-import momo.api.MomoCatsEffectSuite
 
 final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:
   private val pngBytes: Array[Byte] =
@@ -63,8 +65,6 @@ final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:
   test("delete returns false when image does not exist") {
     IO.blocking(Files.createTempDirectory("momo-api-image-store")).flatMap { dir =>
       val store = LocalFsImageStore[IO](dir)
-      store.delete(ImageId("missing-image-id")).map { deleted =>
-        assertEquals(deleted, false)
-      }
+      store.delete(ImageId("missing-image-id")).map(deleted => assertEquals(deleted, false))
     }
   }

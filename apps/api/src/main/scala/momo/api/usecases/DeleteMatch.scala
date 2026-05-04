@@ -1,7 +1,8 @@
 package momo.api.usecases
 
-import cats.syntax.functor.*
 import cats.Functor
+import cats.syntax.functor.*
+
 import momo.api.errors.AppError
 import momo.api.repositories.MatchesRepository
 

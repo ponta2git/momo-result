@@ -1,5 +1,7 @@
 package momo.api.repositories.postgres
 
+import java.time.Instant
+
 import cats.effect.MonadCancelThrow
 import cats.syntax.all.*
 import doobie.*
@@ -7,7 +9,7 @@ import doobie.implicits.*
 import doobie.postgres.implicits.*
 import doobie.util.fragments
 import doobie.util.update.Update
-import java.time.Instant
+
 import momo.api.domain.{IncidentCounts, MatchRecord, PlayerResult}
 import momo.api.repositories.MatchesRepository
 

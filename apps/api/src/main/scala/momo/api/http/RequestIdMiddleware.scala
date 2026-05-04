@@ -1,10 +1,11 @@
 package momo.api.http
 
-import cats.data.{Kleisli, OptionT}
-import cats.effect.syntax.all.*
-import cats.effect.Sync
-import cats.syntax.all.*
 import java.util.UUID
+
+import cats.data.{Kleisli, OptionT}
+import cats.effect.Sync
+import cats.effect.syntax.all.*
+import cats.syntax.all.*
 import org.http4s.{Header, HttpApp as Http4sApp, HttpRoutes as Http4sRoutes, Request, Response}
 import org.slf4j.MDC
 import org.typelevel.ci.CIString

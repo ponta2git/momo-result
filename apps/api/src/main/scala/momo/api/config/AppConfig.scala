@@ -1,10 +1,12 @@
 package momo.api.config
 
-import cats.syntax.all.*
-import cats.MonadThrow
 import java.net.URI
 import java.nio.file.Path
+
 import scala.concurrent.duration.*
+
+import cats.MonadThrow
+import cats.syntax.all.*
 
 final case class DatabaseConfig(jdbcUrl: String, user: String, password: String, poolSize: Int)
 

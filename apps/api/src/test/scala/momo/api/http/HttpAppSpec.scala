@@ -1,13 +1,15 @@
 package momo.api.http
 
+import java.nio.file.Files
+
 import cats.effect.{IO, Resource}
 import io.circe.Json
-import java.nio.file.Files
-import momo.api.config.{AppConfig, AppEnv}
-import momo.api.MomoCatsEffectSuite
-import org.http4s.{Method, Request, Status}
 import org.http4s.circe.*
 import org.http4s.implicits.*
+import org.http4s.{Method, Request, Status}
+
+import momo.api.MomoCatsEffectSuite
+import momo.api.config.{AppConfig, AppEnv}
 
 final class HttpAppSpec extends MomoCatsEffectSuite:
   private def app = Resource.eval(IO.blocking(Files.createTempDirectory("momo-api-http")))

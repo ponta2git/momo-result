@@ -1,8 +1,10 @@
 package momo.api.adapters
 
+import java.time.Instant
+
 import cats.effect.{Ref, Sync}
 import cats.syntax.all.*
-import java.time.Instant
+
 import momo.api.repositories.{AppSession, AppSessionsRepository}
 
 final class InMemoryAppSessionsRepository[F[_]: Sync] private (ref: Ref[F, Map[String, AppSession]])

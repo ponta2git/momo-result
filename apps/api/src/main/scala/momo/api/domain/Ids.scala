@@ -1,9 +1,11 @@
 package momo.api.domain
 
-import cats.effect.Sync
 import java.security.SecureRandom
 import java.util.UUID
+
 import scala.annotation.targetName
+
+import cats.effect.Sync
 
 object ids:
   opaque type JobId = String

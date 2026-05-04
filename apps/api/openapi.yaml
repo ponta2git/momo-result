@@ -843,6 +843,52 @@
       }
     },
     "/api/match-drafts/{draftId}" : {
+      "get" : {
+        "tags" : [
+          "match-drafts"
+        ],
+        "operationId" : "getApiMatch-draftsDraftid",
+        "parameters" : [
+          {
+            "name" : "draftId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-Dev-User",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MatchDraftDetailResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
       "patch" : {
         "tags" : [
           "match-drafts"
@@ -2420,6 +2466,70 @@
             "type" : "string"
           },
           "createdAt" : {
+            "type" : "string"
+          }
+        }
+      },
+      "MatchDraftDetailResponse" : {
+        "title" : "MatchDraftDetailResponse",
+        "type" : "object",
+        "required" : [
+          "matchDraftId",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties" : {
+          "matchDraftId" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "heldEventId" : {
+            "type" : "string"
+          },
+          "matchNoInEvent" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "gameTitleId" : {
+            "type" : "string"
+          },
+          "seasonMasterId" : {
+            "type" : "string"
+          },
+          "ownerMemberId" : {
+            "type" : "string"
+          },
+          "mapMasterId" : {
+            "type" : "string"
+          },
+          "playedAt" : {
+            "type" : "string"
+          },
+          "totalAssetsDraftId" : {
+            "type" : "string"
+          },
+          "revenueDraftId" : {
+            "type" : "string"
+          },
+          "incidentLogDraftId" : {
+            "type" : "string"
+          },
+          "totalAssetsImageId" : {
+            "type" : "string"
+          },
+          "revenueImageId" : {
+            "type" : "string"
+          },
+          "incidentLogImageId" : {
+            "type" : "string"
+          },
+          "createdAt" : {
+            "type" : "string"
+          },
+          "updatedAt" : {
             "type" : "string"
           }
         }

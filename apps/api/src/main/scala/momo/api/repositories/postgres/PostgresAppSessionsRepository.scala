@@ -1,11 +1,13 @@
 package momo.api.repositories.postgres
 
+import java.time.Instant
+
 import cats.effect.MonadCancelThrow
 import cats.syntax.all.*
 import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
-import java.time.Instant
+
 import momo.api.repositories.{AppSession, AppSessionsRepository}
 
 final class PostgresAppSessionsRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])

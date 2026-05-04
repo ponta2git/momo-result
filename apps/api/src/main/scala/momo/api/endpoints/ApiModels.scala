@@ -1,9 +1,11 @@
 package momo.api.endpoints
 
-import io.circe.{Codec, Json}
 import java.time.format.DateTimeFormatter
-import momo.api.domain.{OcrDraft, OcrJob, OcrJobHints, StoredImage}
+
+import io.circe.{Codec, Json}
+
 import momo.api.domain.ids.*
+import momo.api.domain.{OcrDraft, OcrJob, OcrJobHints, StoredImage}
 
 final case class AuthMeResponse(memberId: String, displayName: String, csrfToken: Option[String])
     derives Codec.AsObject

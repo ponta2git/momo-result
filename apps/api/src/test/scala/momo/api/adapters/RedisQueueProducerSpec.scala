@@ -1,18 +1,21 @@
 package momo.api.adapters
 
+import java.util
+import java.util.UUID
+
+import scala.jdk.CollectionConverters.*
+
 import cats.effect.{IO, Ref}
+import dev.profunktor.redis4cats.Redis
 import dev.profunktor.redis4cats.data.RedisCodec
 import dev.profunktor.redis4cats.effect.Log.NoOp.*
-import dev.profunktor.redis4cats.Redis
 import io.lettuce.core.Range
-import java.util.UUID
-import java.util
-import momo.api.config.RedisConfig
-import momo.api.repositories.OcrQueuePayload
-import momo.api.MomoCatsEffectSuite
 import org.testcontainers.containers.GenericContainer
 import org.testcontainers.utility.DockerImageName
-import scala.jdk.CollectionConverters.*
+
+import momo.api.MomoCatsEffectSuite
+import momo.api.config.RedisConfig
+import momo.api.repositories.OcrQueuePayload
 
 final class RedisQueueProducerSpec extends MomoCatsEffectSuite:
   test("publishes OCR payload fields to the configured Redis stream"):
@@ -64,18 +67,16 @@ final class RedisQueueProducerSpec extends MomoCatsEffectSuite:
       }
     }(container => IO.blocking(container.stop()))
 
-  private def redisUrlResource: cats.effect.Resource[IO, String] =
-    redisContainer.map(container =>
-      s"redis://${container.getHost}:${container.getMappedPort(6379)}"
-    ).handleErrorWith { containerError =>
+  private def redisUrlResource: cats.effect.Resource[IO, String] = redisContainer
+    .map(container => s"redis://${container.getHost}:${container.getMappedPort(6379)}")
+    .handleErrorWith { containerError =>
       val fallback = sys.env.getOrElse("MOMO_TEST_REDIS_URL", "redis://127.0.0.1:6379")
-      cats.effect.Resource.eval(
-        Redis[IO].simple(fallback, RedisCodec.Utf8).use(_.ping).attempt.flatMap {
+      cats.effect.Resource
+        .eval(Redis[IO].simple(fallback, RedisCodec.Utf8).use(_.ping).attempt.flatMap {
           case Right(_) => IO.pure(fallback)
           case Left(fallbackError) => IO.raiseError(new RuntimeException(
               s"Redis test setup failed. Testcontainers: ${containerError.getMessage}. " +
                 s"Fallback $fallback: ${fallbackError.getMessage}"
             ))
-        }
-      )
+        })
     }

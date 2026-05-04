@@ -2,6 +2,7 @@ package momo.api.http
 
 import cats.effect.Async
 import cats.syntax.all.*
+
 import momo.api.auth.{AuthenticatedMember, MemberRoster}
 import momo.api.config.AppConfig
 import momo.api.errors.AppError

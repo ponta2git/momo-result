@@ -3,9 +3,10 @@ package momo.api.http
 import cats.data.Kleisli
 import cats.effect.Sync
 import cats.syntax.all.*
-import momo.api.config.AppEnv
 import org.http4s.{Header, HttpApp as Http4sApp}
 import org.typelevel.ci.CIString
+
+import momo.api.config.AppEnv
 
 /**
  * Minimum baseline of security response headers for all routes (SPA + API).

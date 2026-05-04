@@ -1,10 +1,12 @@
 package momo.api.integration
 
-import cats.effect.IO
 import java.time.Instant
+
+import cats.effect.IO
+
 import momo.api.domain.*
-import momo.api.repositories.postgres.*
 import momo.api.repositories.MatchListRepository
+import momo.api.repositories.postgres.*
 
 final class PostgresMatchListRepositorySpec extends IntegrationSuite:
 
@@ -74,7 +76,7 @@ final class PostgresMatchListRepositorySpec extends IntegrationSuite:
       id: String,
       status: MatchDraftStatus,
       updatedAt: Instant,
-      playedAt: Option[Instant] = None,
+      playedAt: Option[Instant] = None, // scalafix:ok DisableSyntax.defaultArgs
   ): MatchDraft = MatchDraft(
     id = id,
     createdByMemberId = "member_ponta",

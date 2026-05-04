@@ -2,6 +2,7 @@ package momo.api.adapters
 
 import cats.effect.{Ref, Sync}
 import cats.syntax.functor.*
+
 import momo.api.domain.MatchRecord
 import momo.api.repositories.MatchesRepository
 

@@ -1,9 +1,11 @@
 package momo.api.usecases
 
+import java.time.Instant
+
 import cats.data.EitherT
 import cats.effect.Sync
 import cats.syntax.all.*
-import java.time.Instant
+
 import momo.api.domain.ids.{ImageId, MemberId}
 import momo.api.errors.AppError
 import momo.api.repositories.{ImageStore, MatchDraftsRepository}

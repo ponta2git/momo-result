@@ -2,6 +2,7 @@ package momo.api.adapters
 
 import cats.effect.{Ref, Sync}
 import cats.syntax.functor.*
+
 import momo.api.repositories.{OcrQueuePayload, QueueProducer}
 
 final class InMemoryQueueProducer[F[_]] private (ref: Ref[F, Vector[OcrQueuePayload]])

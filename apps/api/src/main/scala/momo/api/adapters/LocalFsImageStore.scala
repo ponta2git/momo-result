@@ -1,10 +1,12 @@
 package momo.api.adapters
 
+import java.nio.file.{Files, Path}
+
 import cats.effect.Sync
 import cats.syntax.all.*
-import java.nio.file.{Files, Path}
-import momo.api.domain.ids.*
+
 import momo.api.domain.StoredImage
+import momo.api.domain.ids.*
 import momo.api.errors.AppError
 import momo.api.repositories.ImageStore
 
@@ -33,12 +35,11 @@ final class LocalFsImageStore[F[_]: Sync](root: Path) extends ImageStore[F]:
   }
 
   override def delete(imageId: ImageId): F[Boolean] = Sync[F].blocking {
-    SupportedImageTypes
-      .exists(imageType => Files.deleteIfExists(imagePath(imageId, imageType)))
+    SupportedImageTypes.exists(imageType => Files.deleteIfExists(imagePath(imageId, imageType)))
   }
 
-  private def imagePath(imageId: ImageId, imageType: ImageType): Path =
-    root.resolve(s"${imageId.value}.${imageType.extension}").toAbsolutePath.normalize()
+  private def imagePath(imageId: ImageId, imageType: ImageType): Path = root
+    .resolve(s"${imageId.value}.${imageType.extension}").toAbsolutePath.normalize()
 
   private def validate(
       bytes: Array[Byte],

@@ -1,8 +1,9 @@
 package momo.api.repositories
 
 import java.time.Instant
-import momo.api.domain.{OcrFailure, OcrJob}
+
 import momo.api.domain.ids.JobId
+import momo.api.domain.{OcrFailure, OcrJob}
 
 trait OcrJobsRepository[F[_]]:
   def create(job: OcrJob): F[Unit]

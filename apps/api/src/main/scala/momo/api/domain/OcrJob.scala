@@ -2,6 +2,7 @@ package momo.api.domain
 
 import java.nio.file.Path
 import java.time.Instant
+
 import momo.api.domain.ids.*
 
 enum OcrJobStatus(val wire: String) derives CanEqual:

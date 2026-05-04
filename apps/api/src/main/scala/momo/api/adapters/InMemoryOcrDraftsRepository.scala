@@ -2,8 +2,9 @@ package momo.api.adapters
 
 import cats.effect.{Ref, Sync}
 import cats.syntax.functor.*
-import momo.api.domain.ids.*
+
 import momo.api.domain.OcrDraft
+import momo.api.domain.ids.*
 import momo.api.repositories.OcrDraftsRepository
 
 final class InMemoryOcrDraftsRepository[F[_]: Sync] private (ref: Ref[F, Map[String, OcrDraft]])

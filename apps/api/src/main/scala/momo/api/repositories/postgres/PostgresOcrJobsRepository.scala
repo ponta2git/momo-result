@@ -1,16 +1,18 @@
 package momo.api.repositories.postgres
 
+import java.nio.file.Path
+import java.time.Instant
+
 import cats.effect.MonadCancelThrow
 import cats.syntax.all.*
 import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
-import java.nio.file.Path
-import java.time.Instant
-import momo.api.domain.{FailureCode, OcrFailure, OcrJob, OcrJobStatus, ScreenType}
+
 import momo.api.domain.ids.*
-import momo.api.repositories.postgres.PostgresMeta.given
+import momo.api.domain.{FailureCode, OcrFailure, OcrJob, OcrJobStatus, ScreenType}
 import momo.api.repositories.OcrJobsRepository
+import momo.api.repositories.postgres.PostgresMeta.given
 
 final class PostgresOcrJobsRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends OcrJobsRepository[F]:

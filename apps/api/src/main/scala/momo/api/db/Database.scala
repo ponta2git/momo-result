@@ -1,9 +1,11 @@
 package momo.api.db
 
+import scala.concurrent.ExecutionContext
+
 import cats.effect.{Async, Resource}
 import doobie.hikari.HikariTransactor
+
 import momo.api.config.DatabaseConfig
-import scala.concurrent.ExecutionContext
 
 object Database:
 

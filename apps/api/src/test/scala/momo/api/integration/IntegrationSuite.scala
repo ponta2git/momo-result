@@ -1,16 +1,22 @@
 package momo.api.integration
 
-import cats.effect.IO
 import java.util.concurrent.atomic.AtomicReference
-import munit.{AnyFixture, CatsEffectSuite}
+
 import scala.concurrent.duration.DurationInt
+
+import cats.effect.IO
+import munit.{AnyFixture, CatsEffectSuite}
 
 /**
  * Base for tests that hit the shared local Postgres at :5433.
  *
  * If the DB is unreachable the suite is skipped via `assume(false, ...)` in `beforeAll`, so it can
  * run safely on dev machines without docker.
+ *
+ * `unsafeRunSync` is permitted here because munit's lifecycle hooks (`beforeAll`/`afterAll`) are
+ * `Unit`-returning and cannot accept an `IO`. Production code MUST NOT call `unsafeRunSync`.
  */
+// scalafix:off DisableSyntax.noUnsafeRunSync
 abstract class IntegrationSuite extends CatsEffectSuite:
   override def munitIOTimeout = 30.seconds
 
@@ -44,3 +50,4 @@ abstract class IntegrationSuite extends CatsEffectSuite:
 
   protected def transactor: doobie.Transactor[IO] = dbFixture().transactor
 end IntegrationSuite
+// scalafix:on DisableSyntax.noUnsafeRunSync

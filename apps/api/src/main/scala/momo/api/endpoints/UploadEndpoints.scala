@@ -1,10 +1,11 @@
 package momo.api.endpoints
 
-import momo.api.http.ProblemDetails.ErrorInfo
 import sttp.model.Part
-import sttp.tapir.{PublicEndpoint, *}
 import sttp.tapir.generic.auto.*
 import sttp.tapir.json.circe.*
+import sttp.tapir.{PublicEndpoint, *}
+
+import momo.api.http.ProblemDetails.ErrorInfo
 
 object UploadEndpoints:
   type UploadInput = (Option[String], Option[String], Seq[Part[Array[Byte]]])

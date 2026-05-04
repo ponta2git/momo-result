@@ -1,9 +1,9 @@
 package momo.api.endpoints
 
 import io.circe.Codec
-import sttp.tapir.{PublicEndpoint, *}
 import sttp.tapir.generic.auto.*
 import sttp.tapir.json.circe.*
+import sttp.tapir.{PublicEndpoint, *}
 
 object HealthEndpoints:
   final case class HealthResponse(status: String) derives Codec.AsObject

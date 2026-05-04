@@ -1,7 +1,9 @@
 package momo.api.domain
 
-import io.circe.Json
 import java.time.Instant
+
+import io.circe.Json
+
 import momo.api.domain.ids.*
 
 final case class OcrDraft(

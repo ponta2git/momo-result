@@ -32,15 +32,86 @@ const ocrPlayerEntrySchema = z.object({
   incidents: z.record(z.string(), ocrNumberFieldSchema).default({}),
 });
 
-export const ocrDraftPayloadSchema = z.object({
-  requested_screen_type: z.enum(["total_assets", "revenue", "incident_log"]),
+/**
+ * OCR worker が画面種別ごとに付随情報として返す `category_payload`。
+ * `parser` キーで画面種別を判別する discriminated union として表現する。
+ *
+ * - 既知のフィールド以外は worker 側の進化を許容するため `passthrough` で保持する
+ * - 旧来の空オブジェクト `{}` 等、`parser` 未設定の payload は legacy fallback で受ける
+ */
+const baseCategoryFields = {
+  status: z.string().optional(),
+  rows: z.array(z.unknown()).optional(),
+  player_order: z.unknown().optional(),
+  include_raw_text: z.boolean().optional(),
+} as const;
+
+const totalAssetsCategoryPayloadSchema = z
+  .object({ parser: z.literal("total_assets"), ...baseCategoryFields })
+  .passthrough();
+
+const revenueCategoryPayloadSchema = z
+  .object({ parser: z.literal("revenue"), ...baseCategoryFields })
+  .passthrough();
+
+const incidentLogCategoryPayloadSchema = z
+  .object({
+    parser: z.literal("incident_log"),
+    ...baseCategoryFields,
+    layout_profile_id: z.string().optional(),
+    incident_names: z.array(z.string()).optional(),
+  })
+  .passthrough();
+
+const legacyCategoryPayloadSchema = z.record(z.string(), z.unknown());
+
+export const ocrCategoryPayloadSchema = z.union([
+  z.discriminatedUnion("parser", [
+    totalAssetsCategoryPayloadSchema,
+    revenueCategoryPayloadSchema,
+    incidentLogCategoryPayloadSchema,
+  ]),
+  legacyCategoryPayloadSchema,
+]);
+
+export type OcrCategoryPayload = z.infer<typeof ocrCategoryPayloadSchema>;
+
+const baseDraftFields = {
   detected_screen_type: z.string().nullable(),
   profile_id: z.string().nullable(),
   players: z.array(ocrPlayerEntrySchema).default([]),
-  category_payload: z.unknown(),
   warnings: z.array(z.unknown()).default([]),
   raw_snippets: z.unknown(),
-});
+} as const;
+
+/**
+ * OCR worker が返す画面種別ごとの draft 本体。
+ * `requested_screen_type` を判別子に持つ discriminated union で、
+ * 画面種別ごとに紐づく `category_payload` の形を型レベルで限定する。
+ */
+export const ocrDraftPayloadSchema = z.discriminatedUnion("requested_screen_type", [
+  z.object({
+    requested_screen_type: z.literal("total_assets"),
+    category_payload: z
+      .union([totalAssetsCategoryPayloadSchema, legacyCategoryPayloadSchema])
+      .default({}),
+    ...baseDraftFields,
+  }),
+  z.object({
+    requested_screen_type: z.literal("revenue"),
+    category_payload: z
+      .union([revenueCategoryPayloadSchema, legacyCategoryPayloadSchema])
+      .default({}),
+    ...baseDraftFields,
+  }),
+  z.object({
+    requested_screen_type: z.literal("incident_log"),
+    category_payload: z
+      .union([incidentLogCategoryPayloadSchema, legacyCategoryPayloadSchema])
+      .default({}),
+    ...baseDraftFields,
+  }),
+]);
 
 export type OcrField<T> = {
   value: T | null;
@@ -54,3 +125,4 @@ export type OcrPlayerEntry = z.infer<typeof ocrPlayerEntrySchema>;
 export function parseOcrDraftPayload(value: unknown): OcrDraftPayload {
   return ocrDraftPayloadSchema.parse(value);
 }
+

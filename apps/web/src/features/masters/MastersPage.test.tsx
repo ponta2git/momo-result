@@ -57,6 +57,25 @@ describe("MastersPage", () => {
     );
   });
 
+  it("invalidates consumer-facing master caches after creating a game title", async () => {
+    window.localStorage.setItem("momoresult.devUser", "ponta");
+    queryClient.setQueryData(["masters", "game-titles", "workspace"], { items: [] });
+    queryClient.setQueryData(["game-titles"], { items: [] });
+    renderPage();
+
+    await waitFor(() => expect(screen.getAllByText("桃太郎電鉄2").length).toBeGreaterThan(0));
+
+    await userEvent.type(screen.getByPlaceholderText("例: 桃太郎電鉄2"), "桃太郎電鉄ワールド");
+    await userEvent.click(screen.getByRole("button", { name: "作品を追加" }));
+
+    await waitFor(() => {
+      expect(
+        queryClient.getQueryState(["masters", "game-titles", "workspace"])?.isInvalidated,
+      ).toBe(true);
+      expect(queryClient.getQueryState(["game-titles"])?.isInvalidated).toBe(true);
+    });
+  });
+
   it("shows the six fixed incident masters", async () => {
     window.localStorage.setItem("momoresult.devUser", "ponta");
     renderPage();

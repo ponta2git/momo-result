@@ -31,6 +31,7 @@ import {
 } from "@/features/masters/masterValidation";
 import { buildMasterViewModel } from "@/features/masters/masterViewModel";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
+import { shouldShowQueryError } from "@/shared/api/queryErrorState";
 import { useAuth } from "@/shared/auth/useAuth";
 import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
@@ -47,8 +48,16 @@ function errorMessage(error: unknown): string | undefined {
   return normalized.detail || normalized.title;
 }
 
-function shouldShowQueryError(query: { error: unknown; isFetching: boolean }): boolean {
-  return Boolean(query.error && !query.isFetching);
+async function invalidateMasterResourceCaches(
+  queryClient: ReturnType<typeof useQueryClient>,
+  adminQueryKey: readonly unknown[],
+  resource: "game-titles" | "map-masters" | "season-masters",
+) {
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: adminQueryKey }),
+    queryClient.invalidateQueries({ queryKey: ["masters", resource] }),
+    queryClient.invalidateQueries({ queryKey: [resource] }),
+  ]);
 }
 
 export function MastersPage() {
@@ -129,7 +138,11 @@ export function MastersPage() {
     onSuccess(created) {
       setSelectedGameTitleId(created.id);
       setGameTitleDraft({ layoutFamily: normalizeLayoutFamily(""), name: "" });
-      void queryClient.invalidateQueries({ queryKey: masterQueryKeys.gameTitles(authScope) });
+      void invalidateMasterResourceCaches(
+        queryClient,
+        masterQueryKeys.gameTitles(authScope),
+        "game-titles",
+      );
     },
   });
 
@@ -137,9 +150,11 @@ export function MastersPage() {
     mutationFn: postMapMaster,
     onSuccess() {
       setMapDraftName("");
-      void queryClient.invalidateQueries({
-        queryKey: masterQueryKeys.mapMasters(authScope, selectedGameTitleId),
-      });
+      void invalidateMasterResourceCaches(
+        queryClient,
+        masterQueryKeys.mapMasters(authScope, selectedGameTitleId),
+        "map-masters",
+      );
     },
   });
 
@@ -147,9 +162,11 @@ export function MastersPage() {
     mutationFn: postSeasonMaster,
     onSuccess() {
       setSeasonDraftName("");
-      void queryClient.invalidateQueries({
-        queryKey: masterQueryKeys.seasonMasters(authScope, selectedGameTitleId),
-      });
+      void invalidateMasterResourceCaches(
+        queryClient,
+        masterQueryKeys.seasonMasters(authScope, selectedGameTitleId),
+        "season-masters",
+      );
     },
   });
 

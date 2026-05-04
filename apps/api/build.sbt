@@ -10,6 +10,10 @@ addCommandAlias("apiFormatCheck", "scalafmtCheckAll")
 addCommandAlias("apiLint", "scalafixAll --check")
 addCommandAlias("apiFix", "scalafixAll")
 addCommandAlias("apiQuality", "apiFormatCheck; apiLint; Test / compile; apiOpenApiCheck")
+addCommandAlias(
+  "apiDbQuality",
+  "testOnly momo.api.integration.DbContractSpec; testOnly momo.api.integration.PostgresMatchesRepositorySpec; testOnly momo.api.integration.PostgresMatchListRepositorySpec",
+)
 
 lazy val apiOpenApi = taskKey[File]("Generate OpenAPI from Tapir endpoint definitions")
 lazy val apiOpenApiCheck = taskKey[Unit]("Check that openapi.yaml can be generated")

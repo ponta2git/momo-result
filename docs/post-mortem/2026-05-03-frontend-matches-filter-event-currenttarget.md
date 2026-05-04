@@ -114,6 +114,10 @@ React DOM event と state updater の実行順序を再現できない。
 | P0 | Keep durable test rule for changed form/filter interactions. | `docs/test-rule.md` | form/filter/select/input 変更時に user-event の代表操作が必要と明記されている。 | 文書レビュー |
 | P1 | Add broader filter behavior tests when sort/status/season behavior changes again. | `apps/web/src/features/matches/list` | 変更した filter ごとに URL 反映または表示更新を検証する。 | 対象変更時の Vitest |
 
+2026-05-04 follow-up status: completed for the sort change. The direct sort interaction is covered
+in `MatchesListFilters.test.tsx`, and `MatchesPages.test.tsx` verifies the sort URL parameter is
+applied.
+
 ## Changed Mental Model
 
 Replace:

@@ -8,6 +8,7 @@ import { MatchWorkspacePage } from "@/features/matches/workspace/MatchWorkspaceP
 import { fixedMembers } from "@/features/ocrCapture/localMasters";
 import { listGameTitles, listMapMasters, listSeasonMasters } from "@/shared/api/masters";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
+import { isInitialQueryLoading, shouldShowBlockingQueryError } from "@/shared/api/queryErrorState";
 import { Button } from "@/shared/ui/actions/Button";
 import { Card } from "@/shared/ui/layout/Card";
 
@@ -83,10 +84,10 @@ export function MatchDetailPage() {
     },
   });
 
-  if (matchQuery.isLoading) {
+  if (isInitialQueryLoading(matchQuery)) {
     return <p className="p-8 text-[var(--color-text-secondary)]">読み込み中...</p>;
   }
-  if (matchQuery.isError || !matchQuery.data) {
+  if (shouldShowBlockingQueryError(matchQuery) || !matchQuery.data) {
     return (
       <div className="p-8">
         <p className="text-[var(--color-danger)]">試合が見つかりませんでした</p>

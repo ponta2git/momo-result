@@ -13,6 +13,7 @@ import type {
   SeasonMasterResponse,
 } from "@/shared/api/masters";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
+import { shouldShowQueryError } from "@/shared/api/queryErrorState";
 import { Field } from "@/shared/ui/forms/Field";
 
 type SetupPanelProps = {
@@ -60,12 +61,21 @@ export function SetupPanel({ value, onChange, enabled = true, authMemberId }: Se
   const gameTitles = gameTitlesQuery.data?.items ?? emptyGameTitles;
   const mapMasters = mapMastersQuery.data?.items ?? emptyMapMasters;
   const seasonMasters = seasonMastersQuery.data?.items ?? emptySeasonMasters;
-  const gameTitlesError = queryErrorMessage(gameTitlesQuery.error);
-  const mapMastersError = queryErrorMessage(mapMastersQuery.error);
-  const seasonMastersError = queryErrorMessage(seasonMastersQuery.error);
+  const gameTitlesLoadFailed = shouldShowQueryError(gameTitlesQuery);
+  const mapMastersLoadFailed = shouldShowQueryError(mapMastersQuery);
+  const seasonMastersLoadFailed = shouldShowQueryError(seasonMastersQuery);
+  const gameTitlesError = gameTitlesLoadFailed
+    ? queryErrorMessage(gameTitlesQuery.error)
+    : undefined;
+  const mapMastersError = mapMastersLoadFailed
+    ? queryErrorMessage(mapMastersQuery.error)
+    : undefined;
+  const seasonMastersError = seasonMastersLoadFailed
+    ? queryErrorMessage(seasonMastersQuery.error)
+    : undefined;
   const gameTitlesPlaceholder = !enabled
     ? "ログイン後に読み込みます"
-    : gameTitlesQuery.isError
+    : gameTitlesLoadFailed
       ? "読み込みに失敗"
       : gameTitlesQuery.isLoading
         ? "読み込み中…"
@@ -74,7 +84,7 @@ export function SetupPanel({ value, onChange, enabled = true, authMemberId }: Se
     ? "ログイン後に読み込みます"
     : !value.gameTitleId
       ? "作品を選択してください"
-      : seasonMastersQuery.isError
+      : seasonMastersLoadFailed
         ? "読み込みに失敗"
         : seasonMastersQuery.isLoading
           ? "読み込み中…"
@@ -83,7 +93,7 @@ export function SetupPanel({ value, onChange, enabled = true, authMemberId }: Se
     ? "ログイン後に読み込みます"
     : !value.gameTitleId
       ? "作品を選択してください"
-      : mapMastersQuery.isError
+      : mapMastersLoadFailed
         ? "読み込みに失敗"
         : mapMastersQuery.isLoading
           ? "読み込み中…"

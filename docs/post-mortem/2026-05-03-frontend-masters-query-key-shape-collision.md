@@ -150,6 +150,10 @@ The added regression test executes the failing path directly by placing `{ items
 | P1 | Audit frontend query keys for raw-response versus transformed-array collisions. | `apps/web/src/features/**`, `apps/web/src/shared/api/**` | Each shared backend resource has either one canonical cached shape, `select`-based derivation, or a namespaced query key for each stored shape. | `rg "queryKey:" apps/web/src` plus targeted tests for any changed keys. |
 | P1 | Review master mutation invalidation after key separation. | `apps/web/src/features/masters/MastersPage.tsx` | Creating masters invalidates all cache namespaces that should update immediately after returning to OCR/review flows. | Add/adjust tests if immediate cross-route freshness is required. |
 
+2026-05-04 follow-up status: completed. The audit found no remaining raw-response versus transformed
+array collisions under the same key. Master create mutations now invalidate both `masters-admin` and
+consumer-facing master cache namespaces, with regression coverage for game title creation.
+
 ## Changed Mental Model
 
 Replace:

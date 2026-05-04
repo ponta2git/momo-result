@@ -205,6 +205,13 @@ The SQL fix is locally mitigated, but recurrence prevention is incomplete until:
 | P1 | Add an sbt alias for DB-backed verification. | `apps/api/build.sbt` | Agents can run one named command for DB contract + Postgres repository specs. | `sbt <alias>` runs the intended suites. |
 | P1 | Decide dev/prod startup DB contract behavior. | API startup / health design | A documented decision exists for fail-fast vs health warning. | Decision recorded before implementation. |
 
+2026-05-04 follow-up status:
+
+- Completed: `PostgresMatchListRepositorySpec`, match-list `DbContractSpec` coverage,
+  `match_drafts` integration cleanup, DB-backed verification docs, and `apiDbQuality` sbt alias.
+- Not completed here: dev/prod startup DB contract behavior. This is a product/operations design
+  decision, not an immediately safe implementation action.
+
 ## Regression Cases For `PostgresMatchListRepositorySpec`
 
 Minimum cases:

@@ -1,12 +1,17 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { queryClient } from "@/app/queryClient";
 import { MatchDetailPage } from "@/features/matches/MatchDetailPage";
 import { MatchesListPage } from "@/features/matches/MatchesListPage";
+
+function LocationProbe() {
+  const location = useLocation();
+  return <output aria-label="current location">{location.search}</output>;
+}
 
 describe("MatchesListPage", () => {
   afterEach(() => queryClient.clear());
@@ -52,6 +57,36 @@ describe("MatchesListPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "絞り込む" }));
 
     expect(screen.getByRole("heading", { name: "試合" })).toBeInTheDocument();
+  });
+
+  it("applies sort changes to the URL search params", async () => {
+    window.localStorage.setItem("momoresult.devUser", "ponta");
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches"]}>
+          <Routes>
+            <Route
+              path="/matches"
+              element={
+                <>
+                  <LocationProbe />
+                  <MatchesListPage />
+                </>
+              }
+            />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "試合" })).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByLabelText("ソート"), "updated_desc");
+    await userEvent.click(screen.getByRole("button", { name: "絞り込む" }));
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("current location")).toHaveTextContent("sort=updated_desc"),
+    );
   });
 });
 

@@ -72,6 +72,7 @@ object IntegrationDb:
       TRUNCATE TABLE
         match_incidents,
         match_players,
+        match_drafts,
         matches,
         ocr_jobs,
         ocr_drafts,

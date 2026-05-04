@@ -125,4 +125,10 @@ sbt "testOnly momo.api.integration.DbContractSpec"
 sbt "testOnly <該当するPostgresRepositorySpec>"
 ```
 
+よく使うDB-backed API検証は、`apps/api` で以下のaliasから実行できる。
+
+```sh
+sbt apiDbQuality
+```
+
 検証結果を報告するときは、実行したspec名を明示する。DB未起動によりintegration testがskipされた場合は、DB動作は未検証として扱う。

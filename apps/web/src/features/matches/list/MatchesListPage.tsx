@@ -20,6 +20,11 @@ import {
 } from "@/features/matches/list/matchListViewModel";
 import { MatchMobileCard } from "@/features/matches/list/MatchMobileCard";
 import { listGameTitles, listMapMasters, listSeasonMasters } from "@/shared/api/masters";
+import {
+  isInitialQueryLoading,
+  shouldShowBlockingQueryError,
+  shouldShowQueryError,
+} from "@/shared/api/queryErrorState";
 import { Button } from "@/shared/ui/actions/Button";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
@@ -94,13 +99,20 @@ export function MatchesListPage() {
     return summarizeMatchList(views);
   }, [lookupMaps, matchesSummaryQuery.data]);
   const selectionErrors = {
-    ...(gameTitlesQuery.isError ? { gameTitles: "作品候補の読み込みに失敗しました。" } : {}),
-    ...(heldEventsQuery.isError ? { heldEvents: "開催候補の読み込みに失敗しました。" } : {}),
-    ...(seasonsQuery.isError ? { seasons: "シーズン候補の読み込みに失敗しました。" } : {}),
+    ...(shouldShowQueryError(gameTitlesQuery)
+      ? { gameTitles: "作品候補の読み込みに失敗しました。" }
+      : {}),
+    ...(shouldShowQueryError(heldEventsQuery)
+      ? { heldEvents: "開催候補の読み込みに失敗しました。" }
+      : {}),
+    ...(shouldShowQueryError(seasonsQuery)
+      ? { seasons: "シーズン候補の読み込みに失敗しました。" }
+      : {}),
   };
 
   const hasFilters = hasMatchListFilters(search);
-  const showMatchesError = matchesQuery.isError && !matchesQuery.data;
+  const showMatchesLoading = isInitialQueryLoading(matchesQuery);
+  const showMatchesError = shouldShowBlockingQueryError(matchesQuery);
   const refreshing = matchesQuery.isFetching || matchesSummaryQuery.isFetching;
 
   return (
@@ -160,7 +172,7 @@ export function MatchesListPage() {
       />
 
       <section className="grid gap-4">
-        {matchesQuery.isLoading ? (
+        {showMatchesLoading ? (
           <TableSkeleton />
         ) : showMatchesError ? (
           <Notice tone="danger" title="試合一覧を読み込めませんでした。">

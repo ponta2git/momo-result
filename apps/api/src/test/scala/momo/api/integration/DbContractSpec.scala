@@ -9,6 +9,13 @@ import doobie.implicits.*
  */
 final class DbContractSpec extends IntegrationSuite:
 
+  private def columnsFor(tableName: String) = sql"""
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = $tableName
+    ORDER BY ordinal_position
+  """.query[String].to[List].transact(transactor)
+
   test("members table is seeded with the four MVP players"):
     val program = sql"""
       SELECT id, display_name FROM members ORDER BY id
@@ -41,13 +48,7 @@ final class DbContractSpec extends IntegrationSuite:
     }
 
   test("matches table exposes the expected columns"):
-    val program = sql"""
-      SELECT column_name
-      FROM information_schema.columns
-      WHERE table_schema = 'public' AND table_name = 'matches'
-      ORDER BY ordinal_position
-    """.query[String].to[List].transact(transactor)
-    program.map { cols =>
+    columnsFor("matches").map { cols =>
       val expected = Set(
         "id",
         "held_event_id",
@@ -67,6 +68,45 @@ final class DbContractSpec extends IntegrationSuite:
       )
       val missing = expected -- cols.toSet
       assert(missing.isEmpty, s"matches is missing columns: $missing (have $cols)")
+    }
+
+  test("match_drafts table exposes the expected list columns"):
+    columnsFor("match_drafts").map { cols =>
+      val expected = Set(
+        "id",
+        "created_by_member_id",
+        "status",
+        "held_event_id",
+        "match_no_in_event",
+        "game_title_id",
+        "layout_family",
+        "season_master_id",
+        "owner_member_id",
+        "map_master_id",
+        "played_at",
+        "total_assets_draft_id",
+        "revenue_draft_id",
+        "incident_log_draft_id",
+        "confirmed_match_id",
+        "created_at",
+        "updated_at",
+      )
+      val missing = expected -- cols.toSet
+      assert(missing.isEmpty, s"match_drafts is missing columns: $missing (have $cols)")
+    }
+
+  test("match_players table exposes the expected rank columns"):
+    columnsFor("match_players").map { cols =>
+      val expected = Set("match_id", "member_id", "play_order", "rank")
+      val missing = expected -- cols.toSet
+      assert(missing.isEmpty, s"match_players is missing columns: $missing (have $cols)")
+    }
+
+  test("match_incidents table exists for confirmed match details"):
+    columnsFor("match_incidents").map { cols =>
+      val expected = Set("match_id", "member_id", "incident_master_id", "count")
+      val missing = expected -- cols.toSet
+      assert(missing.isEmpty, s"match_incidents is missing columns: $missing (have $cols)")
     }
 
   test("held_events.session_id is nullable so momo-result can create events"):

@@ -138,6 +138,10 @@ delayed successful MSW response, and checks that the stale notice is absent whil
 | P1 | Audit other query-driven pages for stale error visibility. | `apps/web/src/features/**` | Each page that displays query load errors has an explicit terminal-error condition or a documented reason it can use simpler state. | `rg "isError|query.error|読み込みに失敗" apps/web/src/features` plus targeted Vitest updates where needed. |
 | P1 | Promote a shared helper if two or more pages need identical blocking-load semantics. | `apps/web/src/shared` or feature-local shared module | Reused code expresses the common condition and page tests cover at least one cached-error recovery path. | `pnpm --dir apps/web test:run <affected tests>` |
 
+2026-05-04 follow-up status: completed. `queryErrorState` now owns the shared
+`shouldShowQueryError`, `shouldShowBlockingQueryError`, and `isInitialQueryLoading` rules; affected
+query-driven pages use those helpers or have non-load-control `isError` checks.
+
 ## Changed Mental Model
 
 Replace:

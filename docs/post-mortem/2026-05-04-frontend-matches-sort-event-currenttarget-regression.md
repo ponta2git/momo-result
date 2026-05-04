@@ -109,6 +109,13 @@ React DOM event と state updater の実行順序を再現できない。
 | P0 | Require same-component handler pattern search during event lifetime fixes. | `docs/test-rule.md` | 同一 component 内の同種 event/state updater pattern を確認する、と明記されている。 | 文書レビュー |
 | P1 | Consider a broader `/matches` filter E2E when E2E smoke scope is expanded. | E2E smoke suite | 状態変更、ソート変更、開催 filter のうち主要操作が1本の smoke に入っている。 | Playwright smoke |
 
+2026-05-04 follow-up status:
+
+- Completed: direct sort regression coverage, exact-operation rule, and same-component handler
+  pattern rule.
+- Not completed here: broader `/matches` E2E smoke. The action is conditional on E2E smoke scope
+  expansion, so it is not an immediate follow-up.
+
 ## Changed Mental Model
 
 Replace:

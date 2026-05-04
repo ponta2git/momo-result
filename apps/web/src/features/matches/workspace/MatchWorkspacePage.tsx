@@ -52,6 +52,11 @@ import type { SlotKind } from "@/shared/api/enums";
 import { slotKinds } from "@/shared/api/enums";
 import { listGameTitles, listMapMasters, listSeasonMasters } from "@/shared/api/masters";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
+import {
+  isInitialQueryLoading,
+  shouldShowBlockingQueryError,
+  shouldShowQueryError,
+} from "@/shared/api/queryErrorState";
 import { Button } from "@/shared/ui/actions/Button";
 import { LiveRegion } from "@/shared/ui/feedback/LiveRegion";
 import { Card } from "@/shared/ui/layout/Card";
@@ -531,23 +536,23 @@ export function MatchWorkspacePage({
     isCancelableDraftStatus(reviewStatus);
 
   const baseErrors = [
-    heldEventsQuery.error,
-    gameTitlesQuery.error,
-    mapMastersQuery.error,
-    seasonMastersQuery.error,
-    draftDetailQuery.error,
-    ocrDraftsQuery.error,
-    sourceImageQuery.error,
-    matchDetailQuery.error,
+    heldEventsQuery,
+    gameTitlesQuery,
+    mapMastersQuery,
+    seasonMastersQuery,
+    draftDetailQuery,
+    ocrDraftsQuery,
+    sourceImageQuery,
+    matchDetailQuery,
   ]
-    .filter(Boolean)
-    .map((error) => normalizeUnknownApiError(error));
+    .filter(shouldShowQueryError)
+    .map((query) => normalizeUnknownApiError(query.error));
 
-  if (mode === "edit" && matchDetailQuery.isLoading) {
+  if (mode === "edit" && isInitialQueryLoading(matchDetailQuery)) {
     return <p className="p-8 text-[var(--color-text-secondary)]">読み込み中...</p>;
   }
 
-  if (mode === "edit" && matchDetailQuery.isError) {
+  if (mode === "edit" && shouldShowBlockingQueryError(matchDetailQuery)) {
     return (
       <div className="p-8">
         <p className="text-[var(--color-danger)]">試合が見つかりませんでした</p>

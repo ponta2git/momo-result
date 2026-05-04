@@ -24,6 +24,7 @@ import type { ExportDownloadResultView } from "@/features/exports/exportViewMode
 import { ExportWorkspace } from "@/features/exports/ExportWorkspace";
 import { listMatches } from "@/features/matches/api";
 import { listSeasonMasters } from "@/shared/api/masters";
+import { shouldShowBlockingQueryError } from "@/shared/api/queryErrorState";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
 type ExportPageProps = {
@@ -107,12 +108,12 @@ export function ExportPage({
           : false;
   const candidateError =
     urlState.scope === "season"
-      ? seasonsQuery.isError && !seasonsQuery.data
+      ? shouldShowBlockingQueryError(seasonsQuery)
       : urlState.scope === "heldEvent"
-        ? heldEventsQuery.isError && !heldEventsQuery.data
+        ? shouldShowBlockingQueryError(heldEventsQuery)
         : urlState.scope === "match"
-          ? (matchesQuery.isError && !matchesQuery.data) ||
-            (heldEventsQuery.isError && !heldEventsQuery.data)
+          ? shouldShowBlockingQueryError(matchesQuery) ||
+            shouldShowBlockingQueryError(heldEventsQuery)
           : false;
 
   const candidateView = buildCandidateView({

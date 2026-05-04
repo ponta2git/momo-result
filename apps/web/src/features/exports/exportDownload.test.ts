@@ -1,13 +1,8 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { downloadExportMatches } from "./exportDownload";
 
 describe("exportDownload", () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-    vi.useRealTimers();
-  });
-
   it("starts the browser download and revokes the blob URL", async () => {
     vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:test-download");
     const revokeSpy = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);

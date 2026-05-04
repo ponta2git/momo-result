@@ -76,6 +76,10 @@
 - `as unknown as` で型契約を回避するくらいなら、`src/test/doubles/` に typed helper を用意する。テスト側で型エラーが出るのは仕様変更検知のシグナルである。
 - 共通テストデータは `src/test/factories/` に集約する。各テストファイルで inline payload を 30+ 行 量産しない。OpenAPI 由来型 (`components["schemas"]["..."]`) を直接参照する。
 - 共有 `queryClient` instance を全テストで使うと並行・retry・cache の混入リスクがある。test-scoped factory (`createTestQueryClient` で `retry: false`, `gcTime: 0`) を使う。
+- 単体・統合テスト内で `setTimeout` による実時間遅延に依存しない。MSW で in-flight 状態を作るときは deferred promise (`new Promise<void>(r => resolveResponse = r)`) と「リクエスト到達」イベントを組み合わせ、リクエスト到達 → 同期アサート → 解放 の 3 段階で決定論化する。
+- `waitFor(() => expect(screen.getBy*(...)).toBeInTheDocument())` ではなく `expect(await screen.findBy*(...)).toBeInTheDocument()` を使う。`waitFor` は disappearance（`queryBy + not.toBeInTheDocument`）や non-DOM な assertion でのみ使う。
+- グローバルな後片付け（`server.resetHandlers()` / `resetMswStores()` / `localStorage.clear()` / `sessionStorage.clear()` / `vi.restoreAllMocks()` / `vi.useRealTimers()`）は `src/test/setup.ts` の `afterEach` に集約する。各テストファイルの defensive `afterEach` は冗長なので削除する。
+- 純粋ロジックの `*.test.ts` には先頭に `// @vitest-environment node` を付け、jsdom 起動コストを避ける。DOM/ストレージを使うテストはデフォルト (jsdom) のまま残す。
 
 参照:
 

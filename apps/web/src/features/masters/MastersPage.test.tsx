@@ -4,7 +4,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse, delay } from "msw";
 import { MemoryRouter } from "react-router-dom";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import { masterQueryKeys } from "@/features/masters/masterApi";
 import {
@@ -31,9 +31,6 @@ describe("MastersPage", () => {
   beforeEach(() => {
     queryClient = createTestQueryClient();
   });
-  afterEach(() => {
-    window.sessionStorage.clear();
-  });
 
   it("renders relation board headings", async () => {
     window.localStorage.setItem("momoresult.devUser", "ponta");
@@ -52,16 +49,12 @@ describe("MastersPage", () => {
     window.localStorage.setItem("momoresult.devUser", "ponta");
     renderPage();
 
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: /桃太郎電鉄2/ })).toBeInTheDocument(),
-    );
+    expect(await screen.findByRole("button", { name: /桃太郎電鉄2/ })).toBeInTheDocument();
 
     await userEvent.type(screen.getByPlaceholderText("例: 桃太郎電鉄2"), "桃太郎電鉄ワールド");
     await userEvent.click(screen.getByRole("button", { name: "作品を追加" }));
 
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: /桃太郎電鉄ワールド/ })).toBeInTheDocument(),
-    );
+    expect(await screen.findByRole("button", { name: /桃太郎電鉄ワールド/ })).toBeInTheDocument();
   });
 
   it("invalidates consumer-facing master caches after creating a game title", async () => {
@@ -70,9 +63,7 @@ describe("MastersPage", () => {
     queryClient.setQueryData(["game-titles"], { items: [] });
     renderPage();
 
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: /桃太郎電鉄2/ })).toBeInTheDocument(),
-    );
+    expect(await screen.findByRole("button", { name: /桃太郎電鉄2/ })).toBeInTheDocument();
 
     await userEvent.type(screen.getByPlaceholderText("例: 桃太郎電鉄2"), "桃太郎電鉄ワールド");
     await userEvent.click(screen.getByRole("button", { name: "作品を追加" }));
@@ -101,9 +92,7 @@ describe("MastersPage", () => {
     );
 
     renderPage();
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: /桃太郎電鉄2/ })).toBeInTheDocument(),
-    );
+    expect(await screen.findByRole("button", { name: /桃太郎電鉄2/ })).toBeInTheDocument();
 
     await userEvent.type(screen.getByPlaceholderText("例: 桃太郎電鉄2"), "桃鉄DX");
     await userEvent.click(screen.getByRole("button", { name: "作品を追加" }));
@@ -188,28 +177,34 @@ describe("MastersPage", () => {
       })
       .catch(() => undefined);
 
-    server.use(
-      http.get("/api/game-titles", async () => {
-        await new Promise((resolve) => {
-          setTimeout(resolve, 50);
-        });
-        return HttpResponse.json({
-          items: [
-            {
-              id: "gt_recovered",
-              name: "復旧済み作品",
-              layoutFamily: "momotetsu_2",
-              displayOrder: 1,
-              createdAt: "2026-01-01T00:00:00.000Z",
-            },
-          ],
-        });
-      }),
-    );
+    let resolveResponse!: () => void;
+    const requestStarted = new Promise<void>((requestSeen) => {
+      server.use(
+        http.get("/api/game-titles", async () => {
+          requestSeen();
+          await new Promise<void>((resolve) => {
+            resolveResponse = resolve;
+          });
+          return HttpResponse.json({
+            items: [
+              {
+                id: "gt_recovered",
+                name: "復旧済み作品",
+                layoutFamily: "momotetsu_2",
+                displayOrder: 1,
+                createdAt: "2026-01-01T00:00:00.000Z",
+              },
+            ],
+          });
+        }),
+      );
+    });
 
     renderPage();
 
+    await requestStarted;
     expect(screen.queryByText("作品マスタの読み込みに失敗しました")).not.toBeInTheDocument();
+    resolveResponse();
     expect(await screen.findByText("復旧済み作品")).toBeInTheDocument();
   });
 

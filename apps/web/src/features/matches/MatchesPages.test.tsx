@@ -124,9 +124,7 @@ describe("MatchDetailPage", () => {
       </QueryClientProvider>,
     );
 
-    await waitFor(() =>
-      expect(screen.getByRole("heading", { name: /試合詳細/ })).toBeInTheDocument(),
-    );
+    expect(await screen.findByRole("heading", { name: /試合詳細/ })).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "削除" }));
     expect(screen.getByRole("heading", { name: "試合を削除しますか？" })).toBeInTheDocument();

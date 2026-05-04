@@ -99,10 +99,11 @@ describe("CameraCapture", () => {
 
   it("guards against double-clicking カメラ開始 while the previous start is in flight", async () => {
     const user = userEvent.setup();
+    let resolveStream!: (stream: MediaStream) => void;
     const getUserMedia = vi.fn(
       () =>
         new Promise<MediaStream>((resolve) => {
-          setTimeout(() => resolve(createMockMediaStream().stream), 30);
+          resolveStream = resolve;
         }),
     );
     Object.defineProperty(navigator, "mediaDevices", {
@@ -117,6 +118,7 @@ describe("CameraCapture", () => {
     await user.click(screen.getByRole("button", { name: /起動中/ }));
 
     expect(getUserMedia).toHaveBeenCalledTimes(1);
+    resolveStream(createMockMediaStream().stream);
   });
 
   it("captures and emits a file with source=camera once ready", async () => {

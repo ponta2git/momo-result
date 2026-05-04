@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import {
   appendHandoffIdToReturnTo,
@@ -10,10 +10,6 @@ import {
 } from "@/features/masters/masterReturnHandoff";
 
 describe("masterReturnHandoff", () => {
-  afterEach(() => {
-    window.sessionStorage.clear();
-  });
-
   it("accepts app-internal returnTo paths and rejects external urls", () => {
     expect(sanitizeReturnTo("/review/session-1?sample=1")).toBe("/review/session-1?sample=1");
     expect(sanitizeReturnTo("https://example.com/review/session-1")).toBeUndefined();

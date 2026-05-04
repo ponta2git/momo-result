@@ -4,7 +4,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { OcrCapturePage } from "@/features/ocrCapture/OcrCapturePage";
 import { server } from "@/shared/api/msw/server";
@@ -45,11 +45,6 @@ describe("OcrCapturePage", () => {
   beforeEach(() => {
     queryClient = createTestQueryClient();
   });
-  afterEach(() => {
-    window.localStorage.clear();
-    window.sessionStorage.clear();
-    vi.restoreAllMocks();
-  });
 
   it("reloads protected master selects after selecting a dev user", async () => {
     render(
@@ -67,7 +62,7 @@ describe("OcrCapturePage", () => {
 
     await userEvent.selectOptions(await screen.findByLabelText("Dev User"), "member_ponta");
 
-    await waitFor(() => expect(screen.getByLabelText("作品")).toBeEnabled());
+    expect(await screen.findByLabelText("作品")).toBeEnabled();
     expect(screen.getByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
   });
 
@@ -104,7 +99,7 @@ describe("OcrCapturePage", () => {
     await userEvent.upload(input, new File(["image"], "assets.png", { type: "image/png" }));
     await userEvent.click(screen.getByRole("button", { name: "OCRを開始して試合一覧へ" }));
 
-    await waitFor(() => expect(screen.getByText("matches-page")).toBeInTheDocument());
+    expect(await screen.findByText("matches-page")).toBeInTheDocument();
     const localStorageValues = Array.from({ length: window.localStorage.length }, (_, index) => {
       const key = window.localStorage.key(index);
       return key ? `${key}:${window.localStorage.getItem(key)}` : "";

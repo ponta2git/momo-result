@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 
 import type { IncidentLookupEntry, ReviewPlayer } from "@/features/draftReview/mergeDrafts";
@@ -6,6 +6,7 @@ import { incidentColumns } from "@/features/matches/workspace/matchFormTypes";
 import type { IncidentKey, MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
 import { handleScoreGridKeydown } from "@/features/matches/workspace/scoreGrid/ScoreGridKeyboard";
 import { fixedMembers } from "@/features/ocrCapture/localMasters";
+import { useMediaQuery } from "@/shared/lib/useMediaQuery";
 
 const confidenceThresholdHigh = 0.9;
 
@@ -164,7 +165,7 @@ export function ScoreGrid({
   players,
 }: ScoreGridProps) {
   const [expandedMobilePlayer, setExpandedMobilePlayer] = useState(0);
-  const [isNarrowViewport, setIsNarrowViewport] = useState(false);
+  const isNarrowViewport = useMediaQuery("(max-width: 1023px)");
   const [draftInputs, setDraftInputs] = useState<Record<string, string>>({});
   const editStartByCell = useRef(new Map<string, string>());
   const inputRefs = useRef(new Map<string, HTMLElement>());
@@ -175,18 +176,6 @@ export function ScoreGrid({
     }
     return new Map(originalPlayers.map((player) => [player.playOrder, player]));
   }, [originalPlayers]);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
-      setIsNarrowViewport(false);
-      return;
-    }
-    const media = window.matchMedia("(max-width: 1023px)");
-    const apply = () => setIsNarrowViewport(media.matches);
-    apply();
-    media.addEventListener("change", apply);
-    return () => media.removeEventListener("change", apply);
-  }, []);
 
   const getCellId = (row: number, col: number) => `player-${row}-${gridColumns[col]}`;
 

@@ -1,7 +1,8 @@
 import { getFormProps, useForm } from "@conform-to/react";
+import type { SubmissionResult } from "@conform-to/react";
 import { parseWithZod } from "@conform-to/zod/v4";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useActionState, useEffect } from "react";
 
 import { fixedMembers } from "@/features/ocrCapture/localMasters";
 import { setupSchema } from "@/features/ocrCapture/schema";
@@ -99,17 +100,24 @@ export function SetupPanel({ value, onChange, enabled = true, authMemberId }: Se
           ? "読み込み中…"
           : "未登録";
 
+  type SetupSubmitState = { lastResult: SubmissionResult<string[]> | null };
+  const [submitState, submitAction] = useActionState<SetupSubmitState, FormData>(
+    (_prev, formData) => {
+      const submission = parseWithZod(formData, { schema: setupSchema });
+      if (submission.status === "success") {
+        onChange(submission.value);
+      }
+      return { lastResult: submission.reply() };
+    },
+    { lastResult: null },
+  );
+
   const [form, fields] = useForm({
     id: "ocr-setup",
     defaultValue: value,
+    lastResult: submitState.lastResult,
     onValidate({ formData }) {
       return parseWithZod(formData, { schema: setupSchema });
-    },
-    onSubmit(event, { submission }) {
-      event.preventDefault();
-      if (submission?.status === "success") {
-        onChange(submission.value);
-      }
     },
   });
 
@@ -151,7 +159,11 @@ export function SetupPanel({ value, onChange, enabled = true, authMemberId }: Se
   }
 
   return (
-    <form {...getFormProps(form)} className="grid gap-4 lg:grid-cols-4">
+    <form
+      {...getFormProps(form)}
+      action={submitAction}
+      className="grid gap-4 lg:grid-cols-4"
+    >
       <Field label="作品" htmlFor={fields.gameTitleId.id} error={fields.gameTitleId.errors?.[0]}>
         <select
           id={fields.gameTitleId.id}

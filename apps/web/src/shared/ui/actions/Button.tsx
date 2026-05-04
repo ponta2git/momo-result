@@ -65,38 +65,20 @@ export function Button({
   // `ButtonType` の判別を JSX 側で行いリテラルとして埋める。
   if (type === "submit") {
     return (
-      <button
-        ref={ref}
-        className={buttonClassName}
-        disabled={isDisabled}
-        type="submit"
-        {...props}
-      >
+      <button ref={ref} className={buttonClassName} disabled={isDisabled} type="submit" {...props}>
         {inner}
       </button>
     );
   }
   if (type === "reset") {
     return (
-      <button
-        ref={ref}
-        className={buttonClassName}
-        disabled={isDisabled}
-        type="reset"
-        {...props}
-      >
+      <button ref={ref} className={buttonClassName} disabled={isDisabled} type="reset" {...props}>
         {inner}
       </button>
     );
   }
   return (
-    <button
-      ref={ref}
-      className={buttonClassName}
-      disabled={isDisabled}
-      type="button"
-      {...props}
-    >
+    <button ref={ref} className={buttonClassName} disabled={isDisabled} type="button" {...props}>
       {inner}
     </button>
   );

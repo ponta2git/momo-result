@@ -2,12 +2,10 @@ import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import type { UseQueryResult, UseSuspenseQueryResult } from "@tanstack/react-query";
 import { useMemo } from "react";
 
-import { isOcrRunning } from "@/features/matches/draftStatus";
 import { getMatch } from "@/features/matches/api";
+import { isOcrRunning } from "@/features/matches/draftStatus";
 import { matchKeys } from "@/features/matches/queryKeys";
-import type {
-  MatchDraftDetailResponse,
-} from "@/features/matches/workspace/api";
+import type { MatchDraftDetailResponse } from "@/features/matches/workspace/api";
 import {
   getMatchDraftDetail,
   getOcrDraftsBulk,
@@ -49,10 +47,7 @@ export type MatchWorkspaceQueries = {
   reviewDraftIdList: string[];
   reviewDraftIds: SlotMap<string>;
   seasonMastersQuery: ReturnType<typeof useQuery<Awaited<ReturnType<typeof listSeasonMasters>>>>;
-  sourceImageQuery: UseQueryResult<
-    Awaited<ReturnType<typeof listMatchDraftSourceImages>>,
-    Error
-  >;
+  sourceImageQuery: UseQueryResult<Awaited<ReturnType<typeof listMatchDraftSourceImages>>, Error>;
 };
 
 export type MatchWorkspaceQueriesDerived = {

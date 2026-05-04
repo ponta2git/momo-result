@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
+import { authQueryOptions } from "@/features/auth/authQueries";
+import { invalidateMatchCaches } from "@/features/matches/queryKeys";
 import {
   cancelMatchDraft,
   cancelOcrJob,
@@ -11,10 +13,8 @@ import {
   uploadImage,
 } from "@/features/ocrCapture/api";
 import type { OcrDraftResponse } from "@/features/ocrCapture/api";
-import { authQueryOptions } from "@/features/auth/authQueries";
 import { CameraCapture } from "@/features/ocrCapture/CameraCapture";
 import { CaptureRail } from "@/features/ocrCapture/CaptureRail";
-import { invalidateMatchCaches } from "@/features/matches/queryKeys";
 import {
   createInitialSlot,
   createInitialSlots,
@@ -31,12 +31,12 @@ import type { SetupFormValues } from "@/features/ocrCapture/schema";
 import { SetupPanel } from "@/features/ocrCapture/SetupPanel";
 import { useOcrJobPolling } from "@/features/ocrCapture/useOcrJobPolling";
 import type { SlotKind } from "@/shared/api/enums";
-import type { SlotMap } from "@/shared/lib/slotMap";
-import { useDistinctMarkerEffect } from "@/shared/lib/useDistinctMarkerEffect";
 import { parseLayoutFamily, parseOcrJobStatus } from "@/shared/api/enums";
 import { listGameTitles } from "@/shared/api/masters";
 import { formatApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { AuthPanel } from "@/shared/auth/AuthPanel";
+import type { SlotMap } from "@/shared/lib/slotMap";
+import { useDistinctMarkerEffect } from "@/shared/lib/useDistinctMarkerEffect";
 import { Button } from "@/shared/ui/actions/Button";
 import { LiveRegion } from "@/shared/ui/feedback/LiveRegion";
 import { Notice } from "@/shared/ui/feedback/Notice";
@@ -235,9 +235,7 @@ export function OcrCapturePage() {
   }
 
   const createOcrMatchDraft = async (
-    selectedGameTitle:
-      | { id: string; layoutFamily?: string | null }
-      | undefined,
+    selectedGameTitle: { id: string; layoutFamily?: string | null } | undefined,
   ): Promise<string | null> => {
     try {
       const matchDraft = await createMatchDraft({
@@ -259,10 +257,7 @@ export function OcrCapturePage() {
   };
 
   /** 1スロット分の画像をアップロードして OCR ジョブを作成。成功時 true、失敗時 false。 */
-  const enqueueSlotJob = async (
-    slot: CaptureSlotState,
-    matchDraftId: string,
-  ): Promise<boolean> => {
+  const enqueueSlotJob = async (slot: CaptureSlotState, matchDraftId: string): Promise<boolean> => {
     if (!slot.file) {
       return false;
     }

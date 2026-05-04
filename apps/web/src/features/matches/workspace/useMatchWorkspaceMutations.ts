@@ -3,10 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 import { confirmMatch } from "@/features/draftReview/api";
 import { updateMatch } from "@/features/matches/api";
-import {
-  invalidateMatchCaches,
-  invalidateMatchDetailCaches,
-} from "@/features/matches/queryKeys";
+import { invalidateMatchCaches, invalidateMatchDetailCaches } from "@/features/matches/queryKeys";
 import { cancelMatchDraft } from "@/features/matches/workspace/api";
 import { toUpdateMatchRequest } from "@/features/matches/workspace/matchFormToRequest";
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";

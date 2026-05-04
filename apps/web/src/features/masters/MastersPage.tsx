@@ -1,12 +1,5 @@
 import { useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import {
-  useActionState,
-  useEffect,
-  useMemo,
-  useOptimistic,
-  useState,
-  useTransition,
-} from "react";
+import { useActionState, useEffect, useMemo, useOptimistic, useState, useTransition } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import {
@@ -267,8 +260,7 @@ export function MastersPage() {
     }
   }, initialCreateState);
 
-  const hasPendingMutation =
-    gameTitleCreatePending || mapCreatePending || seasonCreatePending;
+  const hasPendingMutation = gameTitleCreatePending || mapCreatePending || seasonCreatePending;
 
   const returnDestination =
     returnTo && handoffStatus === "available" && handoffId
@@ -283,7 +275,10 @@ export function MastersPage() {
         description="作品を起点に、マップとシーズンの関係を管理します。"
         actions={
           returnTo ? (
-            <Button variant="secondary" onClick={() => navigateWithTransition(returnDestination ?? "/matches")}>
+            <Button
+              variant="secondary"
+              onClick={() => navigateWithTransition(returnDestination ?? "/matches")}
+            >
               戻る
             </Button>
           ) : (

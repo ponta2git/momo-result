@@ -58,11 +58,7 @@ export function MasterCreateForm({
   const pendingLabel = submitLabel ? `${submitLabel}中` : `${actionLabel}中`;
 
   return (
-    <form
-      action={action}
-      className="grid gap-2 md:grid-cols-[1fr_auto] md:items-end"
-      key={formKey}
-    >
+    <form action={action} className="grid gap-2 md:grid-cols-[1fr_auto] md:items-end" key={formKey}>
       <label className="grid gap-1">
         <span className={labelClass}>{label}</span>
         <input

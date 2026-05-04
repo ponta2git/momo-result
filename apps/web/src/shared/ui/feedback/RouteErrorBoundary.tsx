@@ -19,7 +19,10 @@ type RouteErrorBoundaryState = {
  * ルート単位の ErrorBoundary。Suspense 配下の query エラーを `Notice`(danger) で表示し、
  * 再表示ボタンで境界を解除する。`resetKey`（例: pathname）が変わった場合も自動リセットする。
  */
-export class RouteErrorBoundary extends Component<RouteErrorBoundaryProps, RouteErrorBoundaryState> {
+export class RouteErrorBoundary extends Component<
+  RouteErrorBoundaryProps,
+  RouteErrorBoundaryState
+> {
   constructor(props: RouteErrorBoundaryProps) {
     super(props);
     this.state = { error: null, resetKey: props.resetKey };

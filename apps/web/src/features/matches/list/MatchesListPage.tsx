@@ -21,10 +21,7 @@ import {
 } from "@/features/matches/list/matchListViewModel";
 import { MatchMobileCard } from "@/features/matches/list/MatchMobileCard";
 import { listGameTitles, listMapMasters, listSeasonMasters } from "@/shared/api/masters";
-import {
-  isInitialQueryLoading,
-  shouldShowBlockingQueryError,
-} from "@/shared/api/queryErrorState";
+import { isInitialQueryLoading, shouldShowBlockingQueryError } from "@/shared/api/queryErrorState";
 import { Button } from "@/shared/ui/actions/Button";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";

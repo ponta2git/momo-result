@@ -82,7 +82,11 @@ export function GameTitleList({
                 >
                   <p className="line-clamp-2 text-sm font-semibold text-[var(--color-text-primary)]">
                     {item.name}
-                    {isPending ? <span className="ml-2 text-xs font-normal text-[var(--color-text-secondary)]">(追加中…)</span> : null}
+                    {isPending ? (
+                      <span className="ml-2 text-xs font-normal text-[var(--color-text-secondary)]">
+                        (追加中…)
+                      </span>
+                    ) : null}
                   </p>
                   <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
                     {item.layoutFamily}
@@ -97,12 +101,7 @@ export function GameTitleList({
       <form action={createAction} className="mt-4 grid gap-2" key={createFormKey}>
         <label className="grid gap-1">
           <span className={labelClass}>作品名</span>
-          <input
-            className={selectClass}
-            name="name"
-            placeholder="例: 桃太郎電鉄2"
-            type="text"
-          />
+          <input className={selectClass} name="name" placeholder="例: 桃太郎電鉄2" type="text" />
         </label>
 
         <label className="grid gap-1">

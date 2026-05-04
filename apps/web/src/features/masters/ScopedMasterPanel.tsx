@@ -57,7 +57,11 @@ export function ScopedMasterPanel({
               >
                 <p className="line-clamp-2 text-sm font-semibold text-[var(--color-text-primary)]">
                   {item.name}
-                  {isPending ? <span className="ml-2 text-xs font-normal text-[var(--color-text-secondary)]">(追加中…)</span> : null}
+                  {isPending ? (
+                    <span className="ml-2 text-xs font-normal text-[var(--color-text-secondary)]">
+                      (追加中…)
+                    </span>
+                  ) : null}
                 </p>
                 <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">{item.id}</p>
               </li>

@@ -159,11 +159,7 @@ export function SetupPanel({ value, onChange, enabled = true, authMemberId }: Se
   }
 
   return (
-    <form
-      {...getFormProps(form)}
-      action={submitAction}
-      className="grid gap-4 lg:grid-cols-4"
-    >
+    <form {...getFormProps(form)} action={submitAction} className="grid gap-4 lg:grid-cols-4">
       <Field label="作品" htmlFor={fields.gameTitleId.id} error={fields.gameTitleId.errors?.[0]}>
         <select
           id={fields.gameTitleId.id}

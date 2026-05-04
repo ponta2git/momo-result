@@ -125,4 +125,3 @@ export type OcrPlayerEntry = z.infer<typeof ocrPlayerEntrySchema>;
 export function parseOcrDraftPayload(value: unknown): OcrDraftPayload {
   return ocrDraftPayloadSchema.parse(value);
 }
-

@@ -99,10 +99,7 @@ export function useMasterHandoffRestore({
   const location = useLocation();
   const processedHandoffIdsRef = useRef(new Set<string>());
 
-  const returnSearchParams = useMemo(
-    () => clearHandoffIdFromSearch(searchParams),
-    [searchParams],
-  );
+  const returnSearchParams = useMemo(() => clearHandoffIdFromSearch(searchParams), [searchParams]);
   const returnSearch = returnSearchParams.toString();
   const returnTo = sanitizeReturnTo(
     `${location.pathname}${returnSearch ? `?${returnSearch}` : ""}`,

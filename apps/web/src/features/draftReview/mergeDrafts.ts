@@ -72,10 +72,7 @@ function aliasToMemberId(rawName: string | null | undefined): string | undefined
   )?.memberId;
 }
 
-function resolveMemberIdForRow(
-  entry: OcrPlayerEntry | undefined,
-  fallbackIndex: number,
-): string {
+function resolveMemberIdForRow(entry: OcrPlayerEntry | undefined, fallbackIndex: number): string {
   if (entry?.member_id && memberIds.includes(entry.member_id)) {
     return entry.member_id;
   }
@@ -198,8 +195,7 @@ function collectWarnings(parsed: ParsedDrafts): string[] {
   if (!parsed.totalAssets)
     warnings.push("総資産の下書きがありません。順位と総資産は手入力してください。");
   if (!parsed.revenue) warnings.push("収益の下書きがありません。収益は手入力してください。");
-  if (!parsed.incidentLog)
-    warnings.push("事件簿の下書きがありません。事件簿は0で初期化しました。");
+  if (!parsed.incidentLog) warnings.push("事件簿の下書きがありません。事件簿は0で初期化しました。");
   return warnings;
 }
 
@@ -325,11 +321,7 @@ function sortByAssetsDesc(players: readonly ReviewPlayer[]): ReviewPlayer[] {
 export function mergeDrafts(drafts: DraftByKind): MergedDraftReview {
   const parsed = parseAll(drafts);
   const incidentByPlayOrder = buildIncidentLookup(parsed.incidentLog);
-  const players = pipe(
-    buildPlayers(parsed, incidentByPlayOrder),
-    padToFour,
-    sortByAssetsDesc,
-  );
+  const players = pipe(buildPlayers(parsed, incidentByPlayOrder), padToFour, sortByAssetsDesc);
   return {
     players,
     warnings: collectWarnings(parsed),

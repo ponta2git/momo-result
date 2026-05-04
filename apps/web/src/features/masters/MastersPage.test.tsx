@@ -98,7 +98,9 @@ describe("MastersPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "作品を追加" }));
 
     expect(await screen.findByText("(追加中…)")).toBeInTheDocument();
-    expect(screen.getByText((_, node) => node?.textContent === "桃鉄DX(追加中…)")).toBeInTheDocument();
+    expect(
+      screen.getByText((_, node) => node?.textContent === "桃鉄DX(追加中…)"),
+    ).toBeInTheDocument();
 
     await waitFor(() => expect(screen.queryByText("(追加中…)")).not.toBeInTheDocument());
   });

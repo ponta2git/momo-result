@@ -24,9 +24,7 @@ export function draftsByKind(
   return bySlot(slotKinds.map((kind) => [kind, ids[kind] ? byId.get(ids[kind]) : undefined]));
 }
 
-export function draftIdsFromDetail(
-  detail: MatchDraftDetailResponse | undefined,
-): SlotMap<string> {
+export function draftIdsFromDetail(detail: MatchDraftDetailResponse | undefined): SlotMap<string> {
   if (!detail) {
     return {};
   }

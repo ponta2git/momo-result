@@ -2,12 +2,9 @@ import { useEffect, useRef } from "react";
 
 import { createSampleDraftMap } from "@/features/draftReview/sampleDrafts";
 import type { getMatch } from "@/features/matches/api";
+import type { getMatchDraftDetail, getOcrDraftsBulk } from "@/features/matches/workspace/api";
 import { draftToMatchForm } from "@/features/matches/workspace/draftToMatchForm";
 import { matchDetailToMatchForm } from "@/features/matches/workspace/matchDetailToMatchForm";
-import type {
-  getMatchDraftDetail,
-  getOcrDraftsBulk,
-} from "@/features/matches/workspace/api";
 import type {
   MatchFormValues,
   MatchWorkspaceInitialData,

@@ -150,6 +150,11 @@
 - `<form action>` + `useActionState` では、optimistic 更新は action 内で `addOptimistic*` を同期的に呼んでから `await` すること。await 後に呼ぶと transition が解決済みで反映されない。
 - `useFormStatus` は同じ `<form>` の子コンポーネント内でのみ pending を読める。submit ボタンと cancel ボタンを同居させる場合、cancel は `type="button"` を明示する。
 - `<Context>` 直接利用 / Provider 撤去は createContext を自前で持つ場合のみ意味がある。外部ライブラリの Provider（QueryClientProvider 等）には適用できない。
+- `<Activity mode="hidden">` は「不要になった UI を捨てずに残し、状態とリソースを保持する」ための仕掛け。採用は次の条件を全て満たすときに限る:
+  - 隠す/見せるの切替を頻繁に行う UI で、再マウントするとユーザー入力やスクロール状態が失われる。
+  - 隠した状態でも DOM/データ取得を保持しておく実利がある（再表示時に明確な高速化や状態復元が必要）。
+  - メモリ常駐コストが見合う（タブ数が小さい、画像が軽量等）。
+  - momo-result 現状の評価: SourceImagePanel は同時に 1 種別のみ表示（画像 3 枚は HTTP/disk cache で再表示が安価）、ScoreGrid の desktop/mobile 切替はビューポート変化のみ、Workspace に複数タブ UI は無し。いずれも `<Activity>` を導入する正味のメリットが薄いため採用見送り。
 
 思い出すこと:
 

@@ -10,13 +10,13 @@ import type {
 } from "@/features/matches/list/matchListTypes";
 import { compact } from "@/shared/lib/compact";
 
-const statusPriority: Record<MatchListStatus, number> = {
+const statusPriority = {
   ocr_running: 0,
   needs_review: 1,
   draft_ready: 2,
   ocr_failed: 3,
   confirmed: 4,
-};
+} as const satisfies Record<MatchListStatus, number>;
 
 function normalizeStatus(value: string): MatchListStatus {
   return parseDraftStatus(value) ?? "confirmed";

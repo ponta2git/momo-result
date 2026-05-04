@@ -4,7 +4,7 @@ import { cn } from "@/shared/ui/cn";
 
 type NoticeTone = "info" | "success" | "warning" | "danger";
 
-const toneClass: Record<NoticeTone, string> = {
+const toneClass = {
   info: "border-[var(--color-border)] bg-[var(--color-surface-subtle)] text-[var(--color-text-secondary)]",
   success:
     "border-[var(--color-success)]/50 bg-[var(--color-success)]/12 text-[var(--color-text-primary)]",
@@ -12,7 +12,7 @@ const toneClass: Record<NoticeTone, string> = {
     "border-[var(--color-warning)]/65 bg-[var(--color-warning)]/22 text-[var(--color-text-primary)]",
   danger:
     "border-[var(--color-danger)]/50 bg-[var(--color-danger)]/10 text-[var(--color-text-primary)]",
-};
+} as const satisfies Record<NoticeTone, string>;
 
 export type NoticeProps = {
   action?: ReactNode;

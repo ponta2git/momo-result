@@ -1,16 +1,15 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useEffectEvent, useRef } from "react";
 
 /**
  * `marker` が変わったときだけ副作用を1回実行する。
  * ポーリング/ストリーミングで同じレスポンスが繰り返し届くケースなど、
  * 「同じ状態 (= 同じ marker) なら何もしない」を局所化したいときに使う。
  *
- * `marker` が `null` の間は何もしない。`effect` は最新クロージャで実行される
- * （レンダーごとに ref で差し替えられるため）ので、deps を指定する必要はない。
+ * `marker` が `null` の間は何もしない。`effect` は `useEffectEvent` により
+ * 常に最新クロージャで実行されるので、deps を指定する必要はない。
  */
 export function useDistinctMarkerEffect(marker: string | null, effect: () => void): void {
-  const effectRef = useRef(effect);
-  effectRef.current = effect;
+  const runEffect = useEffectEvent(effect);
   const lastMarkerRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -21,6 +20,6 @@ export function useDistinctMarkerEffect(marker: string | null, effect: () => voi
       return;
     }
     lastMarkerRef.current = marker;
-    effectRef.current();
+    runEffect();
   }, [marker]);
 }

@@ -24,11 +24,11 @@ export type DataTableProps<Row> = {
   rows: Row[];
 };
 
-const alignClass: Record<DataTableAlign, string> = {
+const alignClass = {
   center: "text-center",
   left: "text-left",
   right: "text-right",
-};
+} as const satisfies Record<DataTableAlign, string>;
 
 export function DataTable<Row>({
   className,

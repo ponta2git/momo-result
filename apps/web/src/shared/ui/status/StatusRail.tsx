@@ -41,13 +41,13 @@ function buildSteps(status: MatchStatus): RailStep[] {
   ];
 }
 
-const stepClassByState: Record<StepState, string> = {
+const stepClassByState = {
   complete:
     "border-[var(--color-border)] bg-[var(--color-surface-subtle)] text-[var(--color-text-secondary)]",
   current:
     "border-[var(--color-action)]/55 bg-[var(--color-action)]/12 text-[var(--color-text-primary)]",
   pending: "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-muted)]",
-};
+} as const satisfies Record<StepState, string>;
 
 export function StatusRail({ className, compact = false, status }: StatusRailProps) {
   if (compact) {

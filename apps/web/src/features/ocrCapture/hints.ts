@@ -15,7 +15,7 @@ export function buildOcrHints({ gameTitleName, layoutFamily }: BuildOcrHintsInpu
       memberId: member.memberId,
       aliases: member.aliases,
     })),
-    computerPlayerAliases: computerAliasesFor(layoutFamily),
+    computerPlayerAliases: [...computerAliasesFor(layoutFamily)],
   };
   if (gameTitleName !== undefined) hints.gameTitle = gameTitleName;
   if (layoutFamily !== undefined) hints.layoutFamily = layoutFamily;

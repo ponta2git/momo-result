@@ -6,10 +6,10 @@ import { buildFieldDescribedBy, Field } from "@/shared/ui/forms/Field";
 
 type NumberFieldWidth = "money" | "short";
 
-const widthClass: Record<NumberFieldWidth, string> = {
+const widthClass = {
   money: "min-w-[12ch]",
   short: "min-w-[6ch]",
-};
+} as const satisfies Record<NumberFieldWidth, string>;
 
 export type NumberFieldProps = {
   "aria-describedby"?: string | undefined;

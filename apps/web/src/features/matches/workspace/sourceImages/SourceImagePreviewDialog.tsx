@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useEffectEvent } from "react";
 
 import type { SourceImageKind } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
 import { sourceImageKindLabels } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
@@ -11,17 +11,18 @@ type SourceImagePreviewDialogProps = {
 };
 
 export function SourceImagePreviewDialog({ kind, onClose, url }: SourceImagePreviewDialogProps) {
-  useEffect(() => {
-    const listener = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onClose();
-      }
-    };
+  const handleKeyDown = useEffectEvent((event: KeyboardEvent) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onClose();
+    }
+  });
 
+  useEffect(() => {
+    const listener = (event: KeyboardEvent) => handleKeyDown(event);
     window.addEventListener("keydown", listener);
     return () => window.removeEventListener("keydown", listener);
-  }, [onClose]);
+  }, []);
 
   return (
     <div

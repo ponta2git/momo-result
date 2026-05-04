@@ -9,11 +9,11 @@ export type SourceImageItem = {
 
 export const sourceImageKinds: SourceImageKind[] = ["total_assets", "revenue", "incident_log"];
 
-export const sourceImageKindLabels: Record<SourceImageKind, string> = {
+export const sourceImageKindLabels = {
   incident_log: "事件簿",
   revenue: "収益",
   total_assets: "総資産",
-};
+} as const satisfies Record<SourceImageKind, string>;
 
 /**
  * API レスポンスの 1 件を、`SourceImagePanel` が必要とする descriptor 形式に整える。

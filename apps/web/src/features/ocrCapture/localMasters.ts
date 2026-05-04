@@ -21,13 +21,13 @@ export const fixedMembers: FixedMember[] = [
   { memberId: "member_eu", displayName: "いーゆー", aliases: ["いーゆー", "いーゆー社長"] },
 ];
 
-const computerAliasesByLayoutFamily: Record<LayoutFamily, string[]> = {
+const computerAliasesByLayoutFamily = {
   momotetsu_2: [],
   world: [],
   reiwa: ["さくま"],
-};
+} as const satisfies Record<LayoutFamily, readonly string[]>;
 
-export function computerAliasesFor(layoutFamily: LayoutFamily | undefined): string[] {
+export function computerAliasesFor(layoutFamily: LayoutFamily | undefined): readonly string[] {
   if (!layoutFamily) return [];
   return computerAliasesByLayoutFamily[layoutFamily] ?? [];
 }

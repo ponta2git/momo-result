@@ -118,7 +118,10 @@ export function MastersPage() {
     }
     const exists = gameTitles.some((item) => item.id === selectedGameTitleId);
     if (!exists) {
-      setSelectedGameTitleId(gameTitles[0]!.id);
+      const first = gameTitles[0];
+      if (first) {
+        setSelectedGameTitleId(first.id);
+      }
     }
   }, [gameTitles, selectedGameTitleId]);
 

@@ -54,6 +54,7 @@ export const IconButton = forwardRef(function IconButton(
         variantClass[variant],
         className,
       )}
+      // oxlint-disable-next-line react/button-has-type -- type is constrained to the button/submit/reset literal union with a default of "button".
       type={type}
       {...props}
     >

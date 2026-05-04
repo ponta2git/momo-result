@@ -108,7 +108,7 @@ export function MatchSetupSection({
             value={Number.isFinite(values.matchNoInEvent) ? String(values.matchNoInEvent) : ""}
             onChange={(event) =>
               onPatchRoot({
-                matchNoInEvent: Number.parseInt(event.target.value.replace(/\D/g, ""), 10),
+                matchNoInEvent: Number.parseInt(event.target.value.replaceAll(/\D/g, ""), 10),
               })
             }
           />

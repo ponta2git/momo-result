@@ -1,13 +1,13 @@
 function slugify(input: string): string {
   return input
     .normalize("NFKD")
-    .replace(/[^a-zA-Z0-9_-]+/g, "_")
-    .replace(/^_+|_+$/g, "")
+    .replaceAll(/[^a-zA-Z0-9_-]+/g, "_")
+    .replaceAll(/^_+|_+$/g, "")
     .toLowerCase();
 }
 
 function nowSuffix(now: number): string {
-  return String(now).replace(/\D/g, "");
+  return String(now).replaceAll(/\D/g, "");
 }
 
 export function createGameTitleId(name: string, now = Date.now()): string {

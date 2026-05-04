@@ -57,6 +57,7 @@ import {
   shouldShowBlockingQueryError,
   shouldShowQueryError,
 } from "@/shared/api/queryErrorState";
+import { assertDefined } from "@/shared/lib/invariant";
 import { Button } from "@/shared/ui/actions/Button";
 import { LiveRegion } from "@/shared/ui/feedback/LiveRegion";
 import { Card } from "@/shared/ui/layout/Card";
@@ -256,7 +257,10 @@ export function MatchWorkspacePage({
 
   const draftDetailQuery = useQuery({
     queryKey: ["match-draft-detail", matchDraftId],
-    queryFn: () => getMatchDraftDetail(matchDraftId!),
+    queryFn: () => {
+      assertDefined(matchDraftId, "matchDraftId");
+      return getMatchDraftDetail(matchDraftId);
+    },
     enabled: mode !== "edit" && Boolean(matchDraftId),
   });
 
@@ -270,13 +274,20 @@ export function MatchWorkspacePage({
   }, [draftDetailQuery.data, legacyIds]);
 
   const reviewDraftIdList = useMemo(
-    () => slotKinds.flatMap((kind) => (reviewDraftIds[kind] ? [reviewDraftIds[kind]!] : [])),
+    () =>
+      slotKinds.flatMap((kind) => {
+        const id = reviewDraftIds[kind];
+        return id ? [id] : [];
+      }),
     [reviewDraftIds],
   );
 
   const matchDetailQuery = useQuery({
     queryKey: ["match", matchId],
-    queryFn: () => getMatch(matchId!),
+    queryFn: () => {
+      assertDefined(matchId, "matchId");
+      return getMatch(matchId);
+    },
     enabled: mode === "edit" && Boolean(matchId),
   });
 
@@ -289,7 +300,10 @@ export function MatchWorkspacePage({
 
   const sourceImageQuery = useQuery({
     queryKey: ["match-draft-source-images", state.values.matchDraftId],
-    queryFn: () => listMatchDraftSourceImages(state.values.matchDraftId!),
+    queryFn: () => {
+      assertDefined(state.values.matchDraftId, "matchDraftId");
+      return listMatchDraftSourceImages(state.values.matchDraftId);
+    },
     enabled:
       Boolean(state.values.matchDraftId) &&
       mode !== "edit" &&
@@ -328,7 +342,10 @@ export function MatchWorkspacePage({
   });
 
   const updateMutation = useMutation({
-    mutationFn: (values: MatchFormValues) => updateMatch(matchId!, toUpdateMatchRequest(values)),
+    mutationFn: (values: MatchFormValues) => {
+      assertDefined(matchId, "matchId");
+      return updateMatch(matchId, toUpdateMatchRequest(values));
+    },
     onSuccess: async (response) => {
       await queryClient.invalidateQueries({ queryKey: ["match", matchId] });
       await queryClient.invalidateQueries({ queryKey: ["matches"] });
@@ -806,14 +823,20 @@ export function MatchWorkspacePage({
               <SourceImagePanel
                 loading={sourceImageQuery.isLoading}
                 preferredKind={preferredImageKind}
-                sourceImages={(sourceImageQuery.data?.items ?? []).map((item) => ({
-                  createdAt: item.createdAt,
-                  imageUrl:
-                    item.imageUrl ||
-                    `/api/match-drafts/${encodeURIComponent(state.values.matchDraftId!)}/source-images/${encodeURIComponent(item.kind)}`,
-                  kind: item.kind as SourceImageKind,
-                  ...(item.contentType ? { contentType: item.contentType } : {}),
-                }))}
+                sourceImages={(sourceImageQuery.data?.items ?? []).map((item) => {
+                  const matchDraftIdForImages = state.values.matchDraftId;
+                  assertDefined(matchDraftIdForImages, "matchDraftId");
+                  return Object.assign(
+                    {
+                      createdAt: item.createdAt,
+                      imageUrl:
+                        item.imageUrl ||
+                        `/api/match-drafts/${encodeURIComponent(matchDraftIdForImages)}/source-images/${encodeURIComponent(item.kind)}`,
+                      kind: item.kind as SourceImageKind,
+                    },
+                    item.contentType ? { contentType: item.contentType } : {},
+                  );
+                })}
               />
             ) : null}
           </div>

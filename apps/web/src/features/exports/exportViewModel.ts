@@ -47,7 +47,7 @@ export type ExportViewModel = {
   scopeDescription: string;
   scopeLabel: string;
   selectedId: string;
-  ticketRows: { label: string; value: string }[];
+  ticketRows: Array<{ label: string; value: string }>;
 };
 
 export function formatDateTime(iso: string): string {

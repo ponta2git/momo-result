@@ -258,12 +258,12 @@ export const handlers = [
   ),
   http.post("/api/match-drafts/:draftId/cancel", ({ params }) =>
     HttpResponse.json({
-      matchDraftId: params.draftId,
+      matchDraftId: params["draftId"],
       status: "cancelled",
     }),
   ),
   http.get("/api/match-drafts/:draftId", ({ params }) => {
-    const draftId = String(params.draftId);
+    const draftId = String(params["draftId"]);
     return HttpResponse.json({
       matchDraftId: draftId,
       status: draftId === "draft-running-1" ? "ocr_running" : "needs_review",
@@ -291,19 +291,19 @@ export const handlers = [
           kind: "total_assets",
           contentType: "image/png",
           createdAt: now,
-          imageUrl: `/api/match-drafts/${params.draftId}/source-images/total_assets`,
+          imageUrl: `/api/match-drafts/${params["draftId"]}/source-images/total_assets`,
         },
         {
           kind: "revenue",
           contentType: "image/png",
           createdAt: now,
-          imageUrl: `/api/match-drafts/${params.draftId}/source-images/revenue`,
+          imageUrl: `/api/match-drafts/${params["draftId"]}/source-images/revenue`,
         },
         {
           kind: "incident_log",
           contentType: "image/png",
           createdAt: now,
-          imageUrl: `/api/match-drafts/${params.draftId}/source-images/incident_log`,
+          imageUrl: `/api/match-drafts/${params["draftId"]}/source-images/incident_log`,
         },
       ],
     }),
@@ -360,7 +360,7 @@ export const handlers = [
   }),
   http.get("/api/matches/:matchId", ({ params }) =>
     HttpResponse.json({
-      matchId: params.matchId,
+      matchId: params["matchId"],
       heldEventId: "held-1",
       matchNoInEvent: 1,
       gameTitleId: "gt_momotetsu_2",
@@ -455,7 +455,7 @@ export const handlers = [
   }),
   http.put("/api/matches/:matchId", async ({ params }) =>
     HttpResponse.json({
-      matchId: params.matchId,
+      matchId: params["matchId"],
       heldEventId: "held-1",
       matchNoInEvent: 1,
       gameTitleId: "gt_momotetsu_2",
@@ -470,7 +470,7 @@ export const handlers = [
     }),
   ),
   http.delete("/api/matches/:matchId", ({ params }) =>
-    HttpResponse.json({ matchId: params.matchId, deleted: true }),
+    HttpResponse.json({ matchId: params["matchId"], deleted: true }),
   ),
   http.get("/api/game-titles", () =>
     HttpResponse.json({
@@ -546,7 +546,7 @@ export const handlers = [
   ),
   http.delete("/api/ocr-jobs/:jobId", ({ params }) =>
     HttpResponse.json({
-      jobId: params.jobId,
+      jobId: params["jobId"],
       status: "cancelled",
     }),
   ),

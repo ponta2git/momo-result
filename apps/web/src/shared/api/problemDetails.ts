@@ -17,11 +17,11 @@ function isProblemDetails(value: unknown): value is ProblemDetails {
   }
   const candidate = value as Record<string, unknown>;
   return (
-    typeof candidate.type === "string" &&
-    typeof candidate.title === "string" &&
-    typeof candidate.status === "number" &&
-    typeof candidate.detail === "string" &&
-    typeof candidate.code === "string"
+    typeof candidate["type"] === "string" &&
+    typeof candidate["title"] === "string" &&
+    typeof candidate["status"] === "number" &&
+    typeof candidate["detail"] === "string" &&
+    typeof candidate["code"] === "string"
   );
 }
 

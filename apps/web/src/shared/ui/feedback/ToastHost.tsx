@@ -33,7 +33,7 @@ function ToastRenderer() {
             key={toast.id}
             className={cn(
               "rounded-[var(--radius-lg)] border p-3 shadow-sm",
-              toneClass[toast.type ?? "info"] ?? toneClass.info,
+              toneClass[toast.type ?? "info"] ?? toneClass["info"],
             )}
             toast={toast}
           >

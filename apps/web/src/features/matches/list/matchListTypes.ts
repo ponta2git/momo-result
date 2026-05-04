@@ -64,7 +64,7 @@ export type MatchListItemView = {
   matchNoInEvent?: number;
   ownerName?: string;
   primaryAction: MatchListAction;
-  ranks: { displayName: string; memberId: string; rank: number }[];
+  ranks: Array<{ displayName: string; memberId: string; rank: number }>;
   reviewHref?: string;
   secondaryActions: MatchListAction[];
   seasonMasterId?: string;

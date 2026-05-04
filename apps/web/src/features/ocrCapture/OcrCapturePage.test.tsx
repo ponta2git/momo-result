@@ -202,9 +202,9 @@ describe("OcrCapturePage", () => {
         ),
       ),
       http.post("/api/match-drafts/:draftId/cancel", ({ params }) => {
-        cancelledDraftIds.push(String(params.draftId));
+        cancelledDraftIds.push(String(params["draftId"]));
         return HttpResponse.json({
-          matchDraftId: params.draftId,
+          matchDraftId: params["draftId"],
           status: "cancelled",
         });
       }),

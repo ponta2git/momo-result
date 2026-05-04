@@ -18,7 +18,7 @@ export type DataTableColumn<Row> = {
 
 export type DataTableProps<Row> = {
   className?: string;
-  columns: DataTableColumn<Row>[];
+  columns: Array<DataTableColumn<Row>>;
   emptyState?: ReactNode;
   getRowKey: (row: Row, index: number) => string;
   rows: Row[];

@@ -116,13 +116,15 @@ export function SetupPanel({ value, onChange, enabled = true, authMemberId }: Se
   useEffect(() => {
     if (value.gameTitleId) {
       const stillValid = gameTitles.some((gt) => gt.id === value.gameTitleId);
-      if (!stillValid && gameTitles.length > 0) {
-        onChange({ ...value, gameTitleId: gameTitles[0]!.id, mapMasterId: "", seasonMasterId: "" });
+      const first = gameTitles[0];
+      if (!stillValid && first) {
+        onChange({ ...value, gameTitleId: first.id, mapMasterId: "", seasonMasterId: "" });
       }
       return;
     }
-    if (gameTitles.length > 0) {
-      onChange({ ...value, gameTitleId: gameTitles[0]!.id });
+    const fallback = gameTitles[0];
+    if (fallback) {
+      onChange({ ...value, gameTitleId: fallback.id });
     }
   }, [gameTitles, onChange, value]);
 

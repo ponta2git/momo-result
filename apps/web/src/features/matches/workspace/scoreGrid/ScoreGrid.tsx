@@ -100,7 +100,7 @@ function normalizeNumericDraft(input: string, allowSign: boolean): string {
 
   const sign = allowSign && input.startsWith("-") ? "-" : "";
   const rest = sign ? input.slice(1) : input;
-  const digits = rest.replace(/\D/g, "");
+  const digits = rest.replaceAll(/\D/g, "");
 
   if (!digits) {
     return sign;

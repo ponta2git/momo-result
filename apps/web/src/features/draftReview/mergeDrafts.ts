@@ -85,8 +85,8 @@ function memberIdFor(entry: OcrPlayerEntry | undefined, fallbackIndex: number): 
  * `memberIdFor` 単体ではエイリアスにマッチしなかった行と、別の行のフォールバック
  * 先（fixedMembers[index]）が衝突して同じメンバーが2回現れる問題を防ぐ。
  */
-function resolveMemberIds(entries: (OcrPlayerEntry | undefined)[]): string[] {
-  const resolved: (string | undefined)[] = entries.map((entry) => {
+function resolveMemberIds(entries: Array<OcrPlayerEntry | undefined>): string[] {
+  const resolved: Array<string | undefined> = entries.map((entry) => {
     if (entry?.member_id && memberIds.includes(entry.member_id)) {
       return entry.member_id;
     }
@@ -109,13 +109,13 @@ function resolveMemberIds(entries: (OcrPlayerEntry | undefined)[]): string[] {
   });
 }
 
-function resolvePlayOrders(entries: (OcrPlayerEntry | undefined)[]): number[] {
+function resolvePlayOrders(entries: Array<OcrPlayerEntry | undefined>): number[] {
   // OCR が play_order を検出した行はその値を尊重し、未検出 (または重複) の行には
   // 未使用の play_order (1〜4) を 1 から順に割り当てる。
   // 単純な `index + 1` フォールバックだと、別行で OCR が読み取った play_order と
   // 衝突して同一の事件簿行を参照する不具合が起きるため。
   const used = new Set<number>();
-  const claimed: (number | undefined)[] = entries.map((entry) => {
+  const claimed: Array<number | undefined> = entries.map((entry) => {
     const value = entry?.play_order?.value;
     if (
       typeof value === "number" &&

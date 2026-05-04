@@ -8,9 +8,14 @@
   "jsxSingleQuote": false,
   "trailingComma": "all",
   "bracketSpacing": true,
+  "bracketSameLine": false,
   "arrowParens": "always",
   "endOfLine": "lf",
+  "insertFinalNewline": true,
+  "objectWrap": "preserve",
+  "singleAttributePerLine": false,
   "sortImports": true,
+  "sortPackageJson": true,
   "sortTailwindcss": true,
   "ignorePatterns": ["src/shared/api/generated.ts"]
 }

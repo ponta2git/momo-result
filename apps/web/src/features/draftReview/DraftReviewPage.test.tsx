@@ -1,19 +1,22 @@
 import { QueryClientProvider } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { afterEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
-import { queryClient } from "@/app/queryClient";
 import { DraftReviewPage } from "@/features/draftReview/DraftReviewPage";
 import {
   createDraftReviewHandoffPayload,
   saveMasterHandoff,
 } from "@/features/masters/masterReturnHandoff";
+import { makeDraftReviewHandoffValues, makeFourReviewPlayerInputs } from "@/test/factories";
+import { createTestQueryClient } from "@/test/queryClient";
 
 describe("DraftReviewPage", () => {
-  afterEach(() => {
-    queryClient.clear();
+  let queryClient: QueryClient;
+  beforeEach(() => {
+    queryClient = createTestQueryClient();
   });
 
   it("loads OCR drafts and blocks confirmation until held event is selected", async () => {
@@ -34,7 +37,7 @@ describe("DraftReviewPage", () => {
     await waitFor(() => expect(screen.getByDisplayValue("あかねまみ")).toBeInTheDocument());
 
     expect(screen.getByRole("button", { name: "確定前チェックへ進む" })).toBeDisabled();
-    expect(screen.getAllByText("開催履歴を選択してください").length).toBeGreaterThan(0);
+    expect(screen.getByText("開催履歴を選択してください")).toBeInTheDocument();
   });
 
   it("keeps held event creation collapsed until requested", async () => {
@@ -140,16 +143,16 @@ describe("DraftReviewPage", () => {
       createDraftReviewHandoffPayload({
         matchSessionId: "session-1",
         returnTo: "/review/session-1?sample=1",
-        values: {
-          draftIds: {},
-          gameTitleId: "gt_momotetsu_2",
+        values: makeDraftReviewHandoffValues({
           heldEventId: "held-2",
-          mapMasterId: "map_east",
           matchNoInEvent: 9,
-          ownerMemberId: "member_ponta",
           playedAt: "2026-02-02T02:02:00.000Z",
-          players: [
+          players: makeFourReviewPlayerInputs([
             {
+              memberId: "member_ponta",
+              rank: 4,
+              revenueManYen: 777,
+              totalAssetsManYen: 8888,
               incidents: {
                 cardShop: 3,
                 cardStation: 2,
@@ -158,60 +161,12 @@ describe("DraftReviewPage", () => {
                 plusStation: 4,
                 suriNoGinji: 6,
               },
-              memberId: "member_ponta",
-              playOrder: 1,
-              rank: 4,
-              revenueManYen: 777,
-              totalAssetsManYen: 8888,
             },
-            {
-              incidents: {
-                cardShop: 0,
-                cardStation: 0,
-                destination: 0,
-                minusStation: 0,
-                plusStation: 0,
-                suriNoGinji: 0,
-              },
-              memberId: "member_akane_mami",
-              playOrder: 2,
-              rank: 1,
-              revenueManYen: 111,
-              totalAssetsManYen: 2222,
-            },
-            {
-              incidents: {
-                cardShop: 0,
-                cardStation: 0,
-                destination: 0,
-                minusStation: 0,
-                plusStation: 0,
-                suriNoGinji: 0,
-              },
-              memberId: "member_otaka",
-              playOrder: 3,
-              rank: 2,
-              revenueManYen: 333,
-              totalAssetsManYen: 4444,
-            },
-            {
-              incidents: {
-                cardShop: 0,
-                cardStation: 0,
-                destination: 0,
-                minusStation: 0,
-                plusStation: 0,
-                suriNoGinji: 0,
-              },
-              memberId: "member_eu",
-              playOrder: 4,
-              rank: 3,
-              revenueManYen: 555,
-              totalAssetsManYen: 6666,
-            },
-          ],
-          seasonMasterId: "season_current",
-        },
+            { memberId: "member_akane_mami", rank: 1, revenueManYen: 111, totalAssetsManYen: 2222 },
+            { memberId: "member_otaka", rank: 2, revenueManYen: 333, totalAssetsManYen: 4444 },
+            { memberId: "member_eu", rank: 3, revenueManYen: 555, totalAssetsManYen: 6666 },
+          ]),
+        }),
       }),
     );
 

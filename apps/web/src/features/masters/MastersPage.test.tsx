@@ -1,11 +1,11 @@
 import { QueryClientProvider } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse, delay } from "msw";
 import { MemoryRouter } from "react-router-dom";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { queryClient } from "@/app/queryClient";
 import { masterQueryKeys } from "@/features/masters/masterApi";
 import {
   createDraftReviewHandoffPayload,
@@ -13,6 +13,9 @@ import {
 } from "@/features/masters/masterReturnHandoff";
 import { MastersPage } from "@/features/masters/MastersPage";
 import { server } from "@/shared/api/msw/server";
+import { createTestQueryClient } from "@/test/queryClient";
+
+let queryClient: QueryClient;
 
 function renderPage(entry = "/admin/masters") {
   return render(
@@ -25,8 +28,10 @@ function renderPage(entry = "/admin/masters") {
 }
 
 describe("MastersPage", () => {
+  beforeEach(() => {
+    queryClient = createTestQueryClient();
+  });
   afterEach(() => {
-    queryClient.clear();
     window.sessionStorage.clear();
   });
 
@@ -47,13 +52,15 @@ describe("MastersPage", () => {
     window.localStorage.setItem("momoresult.devUser", "ponta");
     renderPage();
 
-    await waitFor(() => expect(screen.getAllByText("桃太郎電鉄2").length).toBeGreaterThan(0));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /桃太郎電鉄2/ })).toBeInTheDocument(),
+    );
 
     await userEvent.type(screen.getByPlaceholderText("例: 桃太郎電鉄2"), "桃太郎電鉄ワールド");
     await userEvent.click(screen.getByRole("button", { name: "作品を追加" }));
 
     await waitFor(() =>
-      expect(screen.getAllByText("桃太郎電鉄ワールド").length).toBeGreaterThan(0),
+      expect(screen.getByRole("button", { name: /桃太郎電鉄ワールド/ })).toBeInTheDocument(),
     );
   });
 
@@ -63,7 +70,9 @@ describe("MastersPage", () => {
     queryClient.setQueryData(["game-titles"], { items: [] });
     renderPage();
 
-    await waitFor(() => expect(screen.getAllByText("桃太郎電鉄2").length).toBeGreaterThan(0));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /桃太郎電鉄2/ })).toBeInTheDocument(),
+    );
 
     await userEvent.type(screen.getByPlaceholderText("例: 桃太郎電鉄2"), "桃太郎電鉄ワールド");
     await userEvent.click(screen.getByRole("button", { name: "作品を追加" }));
@@ -92,7 +101,9 @@ describe("MastersPage", () => {
     );
 
     renderPage();
-    await waitFor(() => expect(screen.getAllByText("桃太郎電鉄2").length).toBeGreaterThan(0));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /桃太郎電鉄2/ })).toBeInTheDocument(),
+    );
 
     await userEvent.type(screen.getByPlaceholderText("例: 桃太郎電鉄2"), "桃鉄DX");
     await userEvent.click(screen.getByRole("button", { name: "作品を追加" }));

@@ -6,6 +6,7 @@ import {
   requestedImageTypeForSlot,
   validateImageFile,
 } from "@/features/ocrCapture/captureState";
+import { createMockMediaStream } from "@/test/doubles/dom";
 
 describe("captureState", () => {
   it("uses the final classification tray as the OCR image type hint", () => {
@@ -26,8 +27,7 @@ describe("captureState", () => {
 
   it("releases object URLs and camera tracks", () => {
     const revoke = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
-    const stop = vi.fn();
-    const stream = { getTracks: () => [{ stop }] } as unknown as MediaStream;
+    const { stream, track } = createMockMediaStream();
 
     releaseSlotResources({
       ...createInitialSlot("total_assets"),
@@ -36,6 +36,6 @@ describe("captureState", () => {
     });
 
     expect(revoke).toHaveBeenCalledWith("blob:test");
-    expect(stop).toHaveBeenCalledOnce();
+    expect(track.stop).toHaveBeenCalledOnce();
   });
 });

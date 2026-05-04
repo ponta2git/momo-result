@@ -1,19 +1,22 @@
 import { QueryClientProvider } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { delay, http, HttpResponse } from "msw";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { afterEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
-import { queryClient } from "@/app/queryClient";
 import { ExportPage } from "@/features/exports/ExportPage";
 import { server } from "@/shared/api/msw/server";
+import { createTestQueryClient } from "@/test/queryClient";
 
 type RenderOptions = {
   downloadTimeoutMs?: number;
   path?: string;
   slowThresholdMs?: number;
 };
+
+let queryClient: QueryClient;
 
 function renderPage({ downloadTimeoutMs, path = "/exports", slowThresholdMs }: RenderOptions = {}) {
   window.localStorage.setItem("momoresult.devUser", "ponta");
@@ -34,7 +37,9 @@ function renderPage({ downloadTimeoutMs, path = "/exports", slowThresholdMs }: R
 }
 
 describe("ExportPage", () => {
-  afterEach(() => queryClient.clear());
+  beforeEach(() => {
+    queryClient = createTestQueryClient();
+  });
 
   it("downloads all matches as CSV by default", async () => {
     let captured: URL | undefined;

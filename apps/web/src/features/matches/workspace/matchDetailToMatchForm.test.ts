@@ -2,41 +2,28 @@ import { describe, expect, it } from "vitest";
 
 import type { MatchDetailResponse } from "@/features/matches/api";
 import { matchDetailToMatchForm } from "@/features/matches/workspace/matchDetailToMatchForm";
+import { makeFourPlayerResults, makeIncidents, makeMatchDetail } from "@/test/factories";
 
 function detail(overrides: Partial<MatchDetailResponse> = {}): MatchDetailResponse {
-  return {
-    matchId: "match-1",
-    heldEventId: "held-1",
-    matchNoInEvent: 2,
-    gameTitleId: "gt_momotetsu_2",
-    layoutFamily: "default",
-    seasonMasterId: "season_current",
-    ownerMemberId: "member_ponta",
-    mapMasterId: "map_east",
-    playedAt: "2026-04-04T12:34:56.000Z",
-    createdByMemberId: "member_ponta",
-    createdAt: "2026-04-04T13:00:00.000Z",
-    ...overrides,
-  };
+  return makeMatchDetail({ matchNoInEvent: 2, ...overrides });
 }
 
-const incidents = {
+const incidents = makeIncidents({
   destination: 1,
   plusStation: 2,
   minusStation: 3,
   cardStation: 4,
   cardShop: 5,
   suriNoGinji: 6,
-};
+});
 
 describe("matchDetailToMatchForm", () => {
   it("populates top-level form fields from the detail response", () => {
     const values = matchDetailToMatchForm(
       detail({
-        players: [
+        players: makeFourPlayerResults([
           {
             memberId: "member_ponta",
-            playOrder: 1,
             rank: 1,
             totalAssetsManYen: 100,
             revenueManYen: 10,
@@ -44,29 +31,14 @@ describe("matchDetailToMatchForm", () => {
           },
           {
             memberId: "member_akane_mami",
-            playOrder: 2,
             rank: 2,
             totalAssetsManYen: 90,
             revenueManYen: 9,
             incidents,
           },
-          {
-            memberId: "member_otaka",
-            playOrder: 3,
-            rank: 3,
-            totalAssetsManYen: 80,
-            revenueManYen: 8,
-            incidents,
-          },
-          {
-            memberId: "member_eu",
-            playOrder: 4,
-            rank: 4,
-            totalAssetsManYen: 70,
-            revenueManYen: 7,
-            incidents,
-          },
-        ],
+          { memberId: "member_otaka", rank: 3, totalAssetsManYen: 80, revenueManYen: 8, incidents },
+          { memberId: "member_eu", rank: 4, totalAssetsManYen: 70, revenueManYen: 7, incidents },
+        ]),
       }),
     );
 
@@ -131,10 +103,9 @@ describe("matchDetailToMatchForm", () => {
   it("forwards player asset/revenue/incident values verbatim", () => {
     const values = matchDetailToMatchForm(
       detail({
-        players: [
+        players: makeFourPlayerResults([
           {
             memberId: "member_ponta",
-            playOrder: 1,
             rank: 1,
             totalAssetsManYen: 1234,
             revenueManYen: 567,
@@ -142,29 +113,14 @@ describe("matchDetailToMatchForm", () => {
           },
           {
             memberId: "member_akane_mami",
-            playOrder: 2,
             rank: 2,
             totalAssetsManYen: 90,
             revenueManYen: 9,
             incidents,
           },
-          {
-            memberId: "member_otaka",
-            playOrder: 3,
-            rank: 3,
-            totalAssetsManYen: 80,
-            revenueManYen: 8,
-            incidents,
-          },
-          {
-            memberId: "member_eu",
-            playOrder: 4,
-            rank: 4,
-            totalAssetsManYen: 70,
-            revenueManYen: 7,
-            incidents,
-          },
-        ],
+          { memberId: "member_otaka", rank: 3, totalAssetsManYen: 80, revenueManYen: 8, incidents },
+          { memberId: "member_eu", rank: 4, totalAssetsManYen: 70, revenueManYen: 7, incidents },
+        ]),
       }),
     );
 

@@ -60,6 +60,30 @@
 - テストレイヤの責務: `docs/test-rule.md`
 - DB-backed API変更時の検証: `docs/dev-rule.md`
 
+### Frontend / テストオラクルとテストダブル
+
+該当条件:
+
+- フロントの `*.test.ts(x)` を追加・修正している。
+- ページ統合テストを書いている。
+- `vi.spyOn` / 直代入 / MSW handlers / DOM API 差し替えを使う。
+
+思い出すこと:
+
+- 弱オラクル禁止: `length > 0` / 単独の `toBeInTheDocument()` / "without crashing" / "存在する"系の test name は使わない。代わりに役割と name を指定した role-based query (`getByRole`/`findByRole`) で同定し、可能なら属性 (`href` 等) や値・state まで固定する。
+- モジュールスコープの可変ストア (MSW handlers の seed 配列など) は `server.resetHandlers()` で復元されない。`afterEach` で個別に `resetMswStores()` を呼ぶ。新規 store を追加したら必ずリセットに加える。
+- `HTMLVideoElement.prototype.play` 等のプロトタイプ直代入は `afterEach` で必ず元の値に戻す。`vi.spyOn` を使い、`vi.restoreAllMocks()` か `restoreMocks: true` で集中的にリセットする。
+- `as unknown as` で型契約を回避するくらいなら、`src/test/doubles/` に typed helper を用意する。テスト側で型エラーが出るのは仕様変更検知のシグナルである。
+- 共通テストデータは `src/test/factories/` に集約する。各テストファイルで inline payload を 30+ 行 量産しない。OpenAPI 由来型 (`components["schemas"]["..."]`) を直接参照する。
+- 共有 `queryClient` instance を全テストで使うと並行・retry・cache の混入リスクがある。test-scoped factory (`createTestQueryClient` で `retry: false`, `gcTime: 0`) を使う。
+
+参照:
+
+- フロント実装規約: `docs/architecture.md`
+- フロントテスト方針: `docs/test-rule.md`
+- 共有 factory: `apps/web/src/test/factories/`
+- MSW reset: `apps/web/src/shared/api/msw/handlers.ts` の `resetMswStores`
+
 ### Frontend / TanStack Query error visibility
 
 該当条件:

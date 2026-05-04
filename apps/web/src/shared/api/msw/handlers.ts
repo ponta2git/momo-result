@@ -1,29 +1,15 @@
 import { http, HttpResponse } from "msw";
 
+import type { components } from "@/shared/api/generated";
+
 const now = "2026-01-01T00:00:00.000Z";
 
-type GameTitleRecord = {
-  id: string;
-  name: string;
-  layoutFamily: string;
-  displayOrder: number;
-  createdAt: string;
-};
-type ScopedMasterRecord = {
-  id: string;
-  gameTitleId: string;
-  name: string;
-  displayOrder: number;
-  createdAt: string;
-};
-type IncidentRecord = {
-  id: string;
-  key: string;
-  displayName: string;
-  displayOrder: number;
-};
+type GameTitleRecord = components["schemas"]["GameTitleResponse"];
+type MapMasterRecord = components["schemas"]["MapMasterResponse"];
+type SeasonMasterRecord = components["schemas"]["SeasonMasterResponse"];
+type IncidentRecord = components["schemas"]["IncidentMasterResponse"];
 
-const gameTitlesStore: GameTitleRecord[] = [
+const gameTitlesSeed: readonly GameTitleRecord[] = [
   {
     id: "gt_momotetsu_2",
     name: "桃太郎電鉄2",
@@ -32,7 +18,7 @@ const gameTitlesStore: GameTitleRecord[] = [
     createdAt: now,
   },
 ];
-const mapMastersStore: ScopedMasterRecord[] = [
+const mapMastersSeed: readonly MapMasterRecord[] = [
   {
     id: "map_east",
     gameTitleId: "gt_momotetsu_2",
@@ -41,7 +27,7 @@ const mapMastersStore: ScopedMasterRecord[] = [
     createdAt: now,
   },
 ];
-const seasonMastersStore: ScopedMasterRecord[] = [
+const seasonMastersSeed: readonly SeasonMasterRecord[] = [
   {
     id: "season_current",
     gameTitleId: "gt_momotetsu_2",
@@ -50,6 +36,12 @@ const seasonMastersStore: ScopedMasterRecord[] = [
     createdAt: now,
   },
 ];
+
+let gameTitlesStore: GameTitleRecord[] = structuredClone(gameTitlesSeed) as GameTitleRecord[];
+let mapMastersStore: MapMasterRecord[] = structuredClone(mapMastersSeed) as MapMasterRecord[];
+let seasonMastersStore: SeasonMasterRecord[] = structuredClone(
+  seasonMastersSeed,
+) as SeasonMasterRecord[];
 const incidentMastersSeed: IncidentRecord[] = [
   { id: "incident_destination", key: "destination", displayName: "目的地", displayOrder: 1 },
   { id: "incident_plus_station", key: "plusStation", displayName: "プラス駅", displayOrder: 2 },
@@ -84,7 +76,9 @@ const draftPayload = {
   raw_snippets: null,
 };
 
-const matchListStore = [
+type MatchListEntry = components["schemas"]["MatchSummaryResponse"];
+
+const matchListSeed: readonly MatchListEntry[] = [
   {
     kind: "match_draft",
     id: "draft-running-1",
@@ -139,6 +133,15 @@ const matchListStore = [
     ],
   },
 ];
+
+let matchListStore: MatchListEntry[] = structuredClone(matchListSeed) as MatchListEntry[];
+
+export function resetMswStores(): void {
+  gameTitlesStore = structuredClone(gameTitlesSeed) as GameTitleRecord[];
+  mapMastersStore = structuredClone(mapMastersSeed) as MapMasterRecord[];
+  seasonMastersStore = structuredClone(seasonMastersSeed) as SeasonMasterRecord[];
+  matchListStore = structuredClone(matchListSeed) as MatchListEntry[];
+}
 
 export const handlers = [
   http.get("/api/auth/me", ({ request }) => {

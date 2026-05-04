@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { apiDownload, apiRequest, getAuthMe } from "@/shared/api/client";
+import { fetchCallsOf } from "@/test/doubles/dom";
 
 function requireInit(init: RequestInit | undefined): RequestInit {
   if (!init) {
@@ -26,7 +27,7 @@ describe("apiRequest", () => {
     await apiRequest("/api/example");
     await apiRequest("/api/example", { method: "POST", body: { ok: true } });
 
-    const calls = fetchMock.mock.calls as unknown as Array<[RequestInfo | URL, RequestInit]>;
+    const calls = fetchCallsOf(fetchMock);
     const getInit = requireInit(calls[0]?.[1]);
     const postInit = requireInit(calls[1]?.[1]);
     const getHeaders = getInit.headers as Headers;
@@ -51,7 +52,7 @@ describe("apiRequest", () => {
     await getAuthMe();
     await apiRequest("/api/example", { method: "POST", body: { ok: true } });
 
-    const calls = fetchMock.mock.calls as unknown as Array<[RequestInfo | URL, RequestInit]>;
+    const calls = fetchCallsOf(fetchMock);
     const postInit = requireInit(calls[1]?.[1]);
     const postHeaders = postInit.headers as Headers;
 
@@ -65,7 +66,7 @@ describe("apiRequest", () => {
 
     await apiRequest("/api/uploads/images", { method: "POST", formData: new FormData() });
 
-    const calls = fetchMock.mock.calls as unknown as Array<[RequestInfo | URL, RequestInit]>;
+    const calls = fetchCallsOf(fetchMock);
     const init = requireInit(calls[0]?.[1]);
     const headers = init.headers as Headers;
     expect(headers.has("Content-Type")).toBe(false);
@@ -86,7 +87,7 @@ describe("apiRequest", () => {
 
     const result = await apiDownload("/api/exports/matches?format=csv");
 
-    const calls = fetchMock.mock.calls as unknown as Array<[RequestInfo | URL, RequestInit]>;
+    const calls = fetchCallsOf(fetchMock);
     const init = requireInit(calls[0]?.[1]);
     const headers = init.headers as Headers;
     expect(headers.get("X-Dev-User")).toBe("ponta");

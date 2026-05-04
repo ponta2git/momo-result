@@ -1,12 +1,13 @@
 import { QueryClientProvider } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
-import { afterEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
-import { queryClient } from "@/app/queryClient";
 import { MatchDetailPage } from "@/features/matches/MatchDetailPage";
 import { MatchesListPage } from "@/features/matches/MatchesListPage";
+import { createTestQueryClient } from "@/test/queryClient";
 
 function LocationProbe() {
   const location = useLocation();
@@ -14,7 +15,10 @@ function LocationProbe() {
 }
 
 describe("MatchesListPage", () => {
-  afterEach(() => queryClient.clear());
+  let queryClient: QueryClient;
+  beforeEach(() => {
+    queryClient = createTestQueryClient();
+  });
 
   it("renders matches and links to detail", async () => {
     window.localStorage.setItem("momoresult.devUser", "ponta");
@@ -31,19 +35,27 @@ describe("MatchesListPage", () => {
     );
 
     expect(await screen.findByRole("heading", { name: "試合" })).toBeInTheDocument();
-    await waitFor(() =>
-      expect(screen.getAllByRole("link", { name: "詳細を見る" }).length).toBeGreaterThan(0),
-    );
+    const detailLinks = await screen.findAllByRole("link", { name: "詳細を見る" });
+    expect(detailLinks.length).toBeGreaterThan(0);
+    detailLinks.forEach((link) => expect(link).toHaveAttribute("href", "/matches/match-1"));
   });
 
-  it("updates held-event filter without crashing", async () => {
+  it("preserves selected held-event filter in URL after submitting", async () => {
     window.localStorage.setItem("momoresult.devUser", "ponta");
 
     render(
       <QueryClientProvider client={queryClient}>
         <MemoryRouter initialEntries={["/matches"]}>
           <Routes>
-            <Route path="/matches" element={<MatchesListPage />} />
+            <Route
+              path="/matches"
+              element={
+                <>
+                  <LocationProbe />
+                  <MatchesListPage />
+                </>
+              }
+            />
           </Routes>
         </MemoryRouter>
       </QueryClientProvider>,
@@ -56,7 +68,9 @@ describe("MatchesListPage", () => {
     await userEvent.selectOptions(heldEventSelect, "held-1");
     await userEvent.click(screen.getByRole("button", { name: "絞り込む" }));
 
-    expect(screen.getByRole("heading", { name: "試合" })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByLabelText("current location")).toHaveTextContent("heldEventId=held-1"),
+    );
   });
 
   it("applies sort changes to the URL search params", async () => {
@@ -91,7 +105,10 @@ describe("MatchesListPage", () => {
 });
 
 describe("MatchDetailPage", () => {
-  afterEach(() => queryClient.clear());
+  let queryClient: QueryClient;
+  beforeEach(() => {
+    queryClient = createTestQueryClient();
+  });
 
   it("shows delete confirmation modal when 削除 clicked", async () => {
     window.localStorage.setItem("momoresult.devUser", "ponta");

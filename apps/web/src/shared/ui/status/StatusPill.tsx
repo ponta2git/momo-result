@@ -1,14 +1,10 @@
 import { AlertTriangle, CircleCheck, LoaderCircle, PencilLine } from "lucide-react";
 import type { ReactNode } from "react";
 
+import type { DraftStatus } from "@/features/matches/draftStatus";
 import { cn } from "@/shared/ui/cn";
 
-export type MatchStatus =
-  | "confirmed"
-  | "draft_ready"
-  | "needs_review"
-  | "ocr_failed"
-  | "ocr_running";
+export type MatchStatus = DraftStatus;
 
 type StatusViewModel = {
   icon: ReactNode;

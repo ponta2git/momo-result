@@ -1,45 +1,31 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { useMutation } from "@tanstack/react-query";
+import { useEffect, useReducer, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
-import { confirmMatch, createHeldEvent } from "@/features/draftReview/api";
-import type { OcrDraftResponse } from "@/features/draftReview/api";
-import { createSampleDraftMap } from "@/features/draftReview/sampleDrafts";
+import { createHeldEvent } from "@/features/draftReview/api";
 import {
   buildMasterRoute,
-  clearHandoffIdFromSearch,
   createDraftReviewHandoffPayload,
-  loadMasterHandoff,
-  removeMasterHandoff,
-  sanitizeReturnTo,
   saveMasterHandoff,
 } from "@/features/masters/masterReturnHandoff";
-import type { MasterHandoffPayload } from "@/features/masters/masterReturnHandoff";
-import { getMatch, updateMatch } from "@/features/matches/api";
-import {
-  cancelMatchDraft,
-  getMatchDraftDetail,
-  getOcrDraftsBulk,
-  listHeldEvents,
-  listMatchDraftSourceImages,
-} from "@/features/matches/workspace/api";
-import type { MatchDraftDetailResponse } from "@/features/matches/workspace/api";
-import { draftToMatchForm } from "@/features/matches/workspace/draftToMatchForm";
 import { MatchConfirmDialog } from "@/features/matches/workspace/MatchConfirmDialog";
-import { matchDetailToMatchForm } from "@/features/matches/workspace/matchDetailToMatchForm";
 import { MatchFormActions } from "@/features/matches/workspace/MatchFormActions";
+import { toIsoFromLocal } from "@/features/matches/workspace/workspaceDerivations";
+import { useMasterHandoffRestore } from "@/features/matches/workspace/useMasterHandoffRestore";
+import { useMatchWorkspaceInit } from "@/features/matches/workspace/useMatchWorkspaceInit";
+import { useMatchWorkspaceMutations } from "@/features/matches/workspace/useMatchWorkspaceMutations";
+import { useMatchWorkspaceQueries } from "@/features/matches/workspace/useMatchWorkspaceQueries";
 import {
   createMatchFormReducerState,
   matchFormReducer,
 } from "@/features/matches/workspace/matchFormReducer";
-import {
-  toConfirmMatchRequest,
-  toUpdateMatchRequest,
-} from "@/features/matches/workspace/matchFormToRequest";
+import { toConfirmMatchRequest } from "@/features/matches/workspace/matchFormToRequest";
 import { createEmptyMatchForm } from "@/features/matches/workspace/matchFormTypes";
+import {
+  isCancelableDraftStatus,
+  reviewStatusLabel,
+} from "@/features/matches/draftStatus";
 import type {
-  MatchDraftSummary,
-  MatchFormValues,
   MatchWorkspaceInitialData,
   WorkspaceMode,
 } from "@/features/matches/workspace/matchFormTypes";
@@ -48,14 +34,9 @@ import { MatchSetupSection } from "@/features/matches/workspace/MatchSetupSectio
 import { ScoreGrid } from "@/features/matches/workspace/scoreGrid/ScoreGrid";
 import { SourceImagePanel } from "@/features/matches/workspace/sourceImages/SourceImagePanel";
 import type { SourceImageKind } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
-import type { SlotKind } from "@/shared/api/enums";
-import { slotKinds } from "@/shared/api/enums";
-import { listGameTitles, listMapMasters, listSeasonMasters } from "@/shared/api/masters";
-import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import {
   isInitialQueryLoading,
   shouldShowBlockingQueryError,
-  shouldShowQueryError,
 } from "@/shared/api/queryErrorState";
 import { assertDefined } from "@/shared/lib/invariant";
 import { Button } from "@/shared/ui/actions/Button";
@@ -64,139 +45,8 @@ import { Card } from "@/shared/ui/layout/Card";
 
 const labelClass = "text-xs font-semibold text-[var(--color-text-secondary)]";
 
-function draftIdsFromParams(searchParams: URLSearchParams): Partial<Record<SlotKind, string>> {
-  const ids: Partial<Record<SlotKind, string>> = {};
-  const totalAssets = searchParams.get("totalAssets");
-  const revenue = searchParams.get("revenue");
-  const incidentLog = searchParams.get("incidentLog");
-  if (totalAssets) ids.total_assets = totalAssets;
-  if (revenue) ids.revenue = revenue;
-  if (incidentLog) ids.incident_log = incidentLog;
-  return ids;
-}
-
-function draftsByKind(
-  ids: Partial<Record<SlotKind, string>>,
-  drafts: OcrDraftResponse[] | undefined,
-): Partial<Record<SlotKind, OcrDraftResponse>> {
-  const byId = new Map((drafts ?? []).map((draft) => [draft.draftId, draft]));
-  return Object.fromEntries(
-    slotKinds
-      .map((kind) => [kind, ids[kind] ? byId.get(ids[kind]) : undefined] as const)
-      .filter(([, draft]) => draft),
-  ) as Partial<Record<SlotKind, OcrDraftResponse>>;
-}
-
-function draftIdsFromDetail(
-  detail: MatchDraftDetailResponse | undefined,
-): Partial<Record<SlotKind, string>> {
-  if (!detail) {
-    return {};
-  }
-  return {
-    ...(detail.totalAssetsDraftId ? { total_assets: detail.totalAssetsDraftId } : {}),
-    ...(detail.revenueDraftId ? { revenue: detail.revenueDraftId } : {}),
-    ...(detail.incidentLogDraftId ? { incident_log: detail.incidentLogDraftId } : {}),
-  };
-}
-
-function toIsoFromLocal(value: string): string {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toISOString();
-}
-
-function prefillFromDraftSummary(
-  base: MatchFormValues,
-  summary?: MatchDraftSummary,
-): MatchFormValues {
-  if (!summary) {
-    return base;
-  }
-
-  return {
-    ...base,
-    gameTitleId: summary.gameTitleId ?? base.gameTitleId,
-    heldEventId: summary.heldEventId ?? base.heldEventId,
-    mapMasterId: summary.mapMasterId ?? base.mapMasterId,
-    matchNoInEvent: summary.matchNoInEvent ?? base.matchNoInEvent,
-    ownerMemberId: (summary.ownerMemberId ??
-      base.ownerMemberId) as MatchFormValues["ownerMemberId"],
-    playedAt: summary.playedAt ?? base.playedAt,
-    seasonMasterId: summary.seasonMasterId ?? base.seasonMasterId,
-  };
-}
-
-function reviewStatusLabel(status: string | undefined): string {
-  if (status === "ocr_running") {
-    return "OCR中";
-  }
-  if (status === "confirmed") {
-    return "確定済み";
-  }
-  return "確定前";
-}
-
-function isCancelableDraftStatus(status: string | undefined): boolean {
-  return ["ocr_running", "ocr_failed", "draft_ready", "needs_review"].includes(status ?? "");
-}
-
-function loadMasterHandoffFallback(handoffId: string): MasterHandoffPayload | undefined {
-  if (typeof window === "undefined") {
-    return undefined;
-  }
-
-  try {
-    const raw = window.sessionStorage.getItem(`momoresult.masterHandoff.${handoffId}`);
-    if (!raw) {
-      return undefined;
-    }
-    const parsed = JSON.parse(raw) as Partial<MasterHandoffPayload>;
-    if (parsed.source !== "draftReview" || !parsed.values) {
-      return undefined;
-    }
-    return parsed as MasterHandoffPayload;
-  } catch {
-    return undefined;
-  }
-}
-
-function findLatestDraftReviewHandoff(matchSessionId?: string): {
-  handoffId: string;
-  payload: MasterHandoffPayload;
-} | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  const prefix = "momoresult.masterHandoff.";
-  const candidates: Array<{ handoffId: string; payload: MasterHandoffPayload }> = [];
-  for (let index = 0; index < window.sessionStorage.length; index += 1) {
-    const key = window.sessionStorage.key(index);
-    if (!key?.startsWith(prefix)) {
-      continue;
-    }
-
-    const handoffId = key.slice(prefix.length);
-    const payload = loadMasterHandoffFallback(handoffId);
-    if (!payload || payload.source !== "draftReview") {
-      continue;
-    }
-
-    if (matchSessionId && payload.matchSessionId !== matchSessionId) {
-      continue;
-    }
-    candidates.push({ handoffId, payload });
-  }
-
-  if (candidates.length === 0) {
-    return null;
-  }
-
-  const sorted = candidates.toSorted(
-    (left, right) => Date.parse(right.payload.createdAt) - Date.parse(left.payload.createdAt),
-  );
-  return sorted[0] ?? null;
-}
+// reviewStatusLabel / isCancelableDraftStatus は features/matches/draftStatus.ts に集約
+// 純関数（draftIdsFromParams 等）は ./workspaceDerivations.ts に集約
 
 type MatchWorkspacePageProps = {
   matchDraftId?: string;
@@ -212,8 +62,6 @@ export function MatchWorkspacePage({
   mode,
 }: MatchWorkspacePageProps) {
   const navigate = useNavigate();
-  const location = useLocation();
-  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
 
   const [notice, setNotice] = useState("");
@@ -222,8 +70,6 @@ export function MatchWorkspacePage({
   const [eventDraftValue, setEventDraftValue] = useState("");
   const [workspaceData, setWorkspaceData] = useState<MatchWorkspaceInitialData | null>(null);
   const [preferredImageKind, setPreferredImageKind] = useState<SourceImageKind>("total_assets");
-  const initializedKeyRef = useRef<string | null>(null);
-  const processedHandoffIdsRef = useRef(new Set<string>());
 
   const [state, dispatch] = useReducer(
     matchFormReducer,
@@ -231,84 +77,27 @@ export function MatchWorkspacePage({
   );
 
   const useSampleDrafts = mode === "review" && searchParams.get("sample") === "1";
-  const legacyIds = useMemo(() => draftIdsFromParams(searchParams), [searchParams]);
 
-  const heldEventsQuery = useQuery({
-    queryKey: ["held-events", "workspace"],
-    queryFn: () => listHeldEvents("", 100),
-  });
-
-  const gameTitlesQuery = useQuery({
-    queryKey: ["masters", "game-titles", "workspace"],
-    queryFn: () => listGameTitles(),
-  });
-
-  const mapMastersQuery = useQuery({
-    queryKey: ["masters", "map-masters", "workspace", state.values.gameTitleId],
-    queryFn: () => listMapMasters(state.values.gameTitleId || undefined),
-    enabled: Boolean(state.values.gameTitleId),
-  });
-
-  const seasonMastersQuery = useQuery({
-    queryKey: ["masters", "season-masters", "workspace", state.values.gameTitleId],
-    queryFn: () => listSeasonMasters(state.values.gameTitleId || undefined),
-    enabled: Boolean(state.values.gameTitleId),
-  });
-
-  const draftDetailQuery = useQuery({
-    queryKey: ["match-draft-detail", matchDraftId],
-    queryFn: () => {
-      assertDefined(matchDraftId, "matchDraftId");
-      return getMatchDraftDetail(matchDraftId);
-    },
-    enabled: mode !== "edit" && Boolean(matchDraftId),
-  });
-
-  const reviewDraftIds = useMemo(() => {
-    const fromDetail = draftIdsFromDetail(draftDetailQuery.data);
-    return {
-      total_assets: legacyIds.total_assets ?? fromDetail.total_assets,
-      revenue: legacyIds.revenue ?? fromDetail.revenue,
-      incident_log: legacyIds.incident_log ?? fromDetail.incident_log,
-    } as Partial<Record<SlotKind, string>>;
-  }, [draftDetailQuery.data, legacyIds]);
-
-  const reviewDraftIdList = useMemo(
-    () =>
-      slotKinds.flatMap((kind) => {
-        const id = reviewDraftIds[kind];
-        return id ? [id] : [];
-      }),
-    [reviewDraftIds],
-  );
-
-  const matchDetailQuery = useQuery({
-    queryKey: ["match", matchId],
-    queryFn: () => {
-      assertDefined(matchId, "matchId");
-      return getMatch(matchId);
-    },
-    enabled: mode === "edit" && Boolean(matchId),
-  });
-
-  const ocrDraftsQuery = useQuery({
-    queryKey: ["ocr-drafts-bulk", reviewDraftIdList.join(",")],
-    queryFn: () => getOcrDraftsBulk(reviewDraftIdList),
-    enabled: mode === "review" && !useSampleDrafts && reviewDraftIdList.length > 0,
-    retry: false,
-  });
-
-  const sourceImageQuery = useQuery({
-    queryKey: ["match-draft-source-images", state.values.matchDraftId],
-    queryFn: () => {
-      assertDefined(state.values.matchDraftId, "matchDraftId");
-      return listMatchDraftSourceImages(state.values.matchDraftId);
-    },
-    enabled:
-      Boolean(state.values.matchDraftId) &&
-      mode !== "edit" &&
-      draftDetailQuery.data?.status !== "ocr_running",
-    retry: false,
+  const {
+    derived: { baseErrors, isOcrRunningBlocked, refreshingReviewStatus, reviewStatus },
+    draftDetailQuery,
+    gameTitlesQuery,
+    heldEventsQuery,
+    mapMastersQuery,
+    matchDetailQuery,
+    ocrDraftsQuery,
+    reviewDraftIdList,
+    reviewDraftIds,
+    seasonMastersQuery,
+    sourceImageQuery,
+  } = useMatchWorkspaceQueries({
+    gameTitleId: state.values.gameTitleId,
+    matchDraftId,
+    matchDraftSourceImagesId: state.values.matchDraftId,
+    matchId,
+    mode,
+    searchParams,
+    useSampleDrafts,
   });
 
   const createEventMutation = useMutation({
@@ -326,50 +115,12 @@ export function MatchWorkspacePage({
     },
   });
 
-  const confirmMutation = useMutation({
-    mutationFn: confirmMatch,
-    onSuccess: async (response) => {
-      await queryClient.invalidateQueries({ queryKey: ["matches"] });
-      await queryClient.invalidateQueries({ queryKey: ["match-draft-summary"] });
-      await queryClient.invalidateQueries({ queryKey: ["match-draft-detail"] });
-      setConfirmOpen(false);
-      navigate(`/matches/${encodeURIComponent(response.matchId)}`);
-    },
-    onError: (error) => {
-      const normalized = normalizeUnknownApiError(error);
-      setValidationMessage(normalized.detail || normalized.title || "確定に失敗しました");
-    },
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: (values: MatchFormValues) => {
-      assertDefined(matchId, "matchId");
-      return updateMatch(matchId, toUpdateMatchRequest(values));
-    },
-    onSuccess: async (response) => {
-      await queryClient.invalidateQueries({ queryKey: ["match", matchId] });
-      await queryClient.invalidateQueries({ queryKey: ["matches"] });
-      navigate(`/matches/${encodeURIComponent(response.matchId)}`);
-    },
-    onError: (error) => {
-      const normalized = normalizeUnknownApiError(error);
-      setValidationMessage(normalized.detail || normalized.title || "更新に失敗しました");
-    },
-  });
-
-  const cancelDraftMutation = useMutation({
-    mutationFn: (draftId: string) => cancelMatchDraft(draftId),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["matches"] });
-      await queryClient.invalidateQueries({ queryKey: ["match-draft-summary"] });
-      await queryClient.invalidateQueries({ queryKey: ["match-draft-detail"] });
-      navigate("/matches", { replace: true });
-    },
-    onError: (error) => {
-      const normalized = normalizeUnknownApiError(error);
-      setValidationMessage(normalized.detail || normalized.title || "下書きの削除に失敗しました");
-    },
-  });
+  const { cancelDraftMutation, confirmMutation, isMutating, updateMutation } =
+    useMatchWorkspaceMutations({
+      matchId,
+      onConfirmSuccess: () => setConfirmOpen(false),
+      onError: setValidationMessage,
+    });
 
   useEffect(() => {
     if (eventDraftValue) {
@@ -389,181 +140,57 @@ export function MatchWorkspacePage({
     return () => window.clearTimeout(timer);
   }, [notice]);
 
-  useEffect(() => {
-    const initKey = JSON.stringify({
-      draftSummaryUpdatedAt: draftDetailQuery.data?.updatedAt,
-      hasLegacyDrafts: reviewDraftIdList.join(","),
-      matchDraftId,
-      matchId,
-      mode,
-      sample: useSampleDrafts,
-    });
-
-    if (initializedKeyRef.current === initKey) {
-      return;
-    }
-
-    if (mode === "edit") {
-      if (!matchDetailQuery.data) {
-        return;
-      }
-      dispatch({ payload: matchDetailToMatchForm(matchDetailQuery.data), type: "replace" });
-      setWorkspaceData(null);
-      initializedKeyRef.current = initKey;
-      return;
-    }
-
-    if (mode === "create") {
-      if (matchDraftId && draftDetailQuery.isLoading) {
-        return;
-      }
-
-      const base = prefillFromDraftSummary(
-        {
-          ...createEmptyMatchForm(new Date().toISOString()),
-          ...(matchDraftId ? { matchDraftId } : {}),
-        },
-        draftDetailQuery.data ?? undefined,
-      );
-
-      dispatch({ payload: base, type: "replace" });
-      setWorkspaceData(null);
-      initializedKeyRef.current = initKey;
-      return;
-    }
-
-    if (mode === "review") {
-      if (
-        !useSampleDrafts &&
-        reviewDraftIdList.length > 0 &&
-        !ocrDraftsQuery.data &&
-        !ocrDraftsQuery.isError
-      ) {
-        return;
-      }
-
-      const draftByKind = useSampleDrafts
-        ? createSampleDraftMap()
-        : draftsByKind(reviewDraftIds, ocrDraftsQuery.data?.items);
-
-      const prepared = draftToMatchForm({
-        draftByKind,
-        ...(draftDetailQuery.data ? { draftSummary: draftDetailQuery.data } : {}),
-        ...(matchDraftId ? { matchDraftId } : {}),
-        nowIso: new Date().toISOString(),
-      });
-
-      dispatch({ payload: prepared.values, type: "replace" });
-      setWorkspaceData(prepared.initialData);
-      initializedKeyRef.current = initKey;
-    }
-  }, [
-    draftDetailQuery.data,
-    draftDetailQuery.isLoading,
-    matchDetailQuery.data,
+  const { isInitialized } = useMatchWorkspaceInit({
+    draftDetail: draftDetailQuery.data ?? undefined,
+    draftDetailLoading: draftDetailQuery.isLoading,
+    emptyFormFactory: () => createEmptyMatchForm(new Date().toISOString()),
+    matchDetail: matchDetailQuery.data ?? undefined,
     matchDraftId,
     matchId,
     mode,
-    ocrDraftsQuery.data,
-    ocrDraftsQuery.isError,
+    ocrDrafts: ocrDraftsQuery.data ?? undefined,
+    ocrDraftsError: ocrDraftsQuery.isError,
+    onInitialize: (values, workspaceInitial) => {
+      dispatch({ payload: values, type: "replace" });
+      setWorkspaceData(workspaceInitial);
+    },
     reviewDraftIdList,
     reviewDraftIds,
     useSampleDrafts,
-  ]);
+  });
 
-  const returnSearchParams = useMemo(() => clearHandoffIdFromSearch(searchParams), [searchParams]);
-  const returnSearch = returnSearchParams.toString();
-  const returnTo = sanitizeReturnTo(
-    `${location.pathname}${returnSearch ? `?${returnSearch}` : ""}`,
-  );
-
-  useEffect(() => {
-    if (mode !== "review") {
-      return;
-    }
-
-    if (initializedKeyRef.current == null) {
-      return;
-    }
-
-    const handoffId = searchParams.get("handoffId");
-    if (!handoffId || !returnTo) {
-      return;
-    }
-    if (processedHandoffIdsRef.current.has(handoffId)) {
-      return;
-    }
-    processedHandoffIdsRef.current.add(handoffId);
-
-    const payload =
-      loadMasterHandoff({ expectedReturnTo: returnTo, handoffId }) ??
-      loadMasterHandoff({ expectedReturnTo: location.pathname, handoffId }) ??
-      loadMasterHandoffFallback(handoffId);
-    const fallbackRecord = payload ? null : findLatestDraftReviewHandoff(matchSessionId);
-    const restoredPayload = payload ?? fallbackRecord?.payload;
-    const consumedHandoffId = handoffId ?? fallbackRecord?.handoffId;
-    if (restoredPayload?.source === "draftReview") {
+  const { returnTo } = useMasterHandoffRestore({
+    isInitialized,
+    matchSessionId,
+    mode,
+    onRestore: (payload) => {
       dispatch({
         payload: {
           ...state.values,
-          ...restoredPayload.values,
+          ...payload.values,
           ...(state.values.matchDraftId ? { matchDraftId: state.values.matchDraftId } : {}),
         },
         type: "replace",
       });
       setNotice("マスタ管理から戻ったため、入力内容を復元しました。");
-    } else {
+    },
+    onRestoreFailed: () => {
       setNotice("マスタ管理から戻りましたが、入力内容を復元できませんでした。");
-    }
-
-    removeMasterHandoff(consumedHandoffId ?? null);
-    navigate(
-      {
-        pathname: location.pathname,
-        search: returnSearch ? `?${returnSearch}` : "",
-      },
-      { replace: true },
-    );
-  }, [
-    location.pathname,
-    matchSessionId,
-    mode,
-    navigate,
-    returnSearch,
-    returnTo,
+    },
     searchParams,
-    state.values,
-  ]);
+  });
 
   const validation = validateMatchForm(state.values);
   const selectedHeldEvent = (heldEventsQuery.data?.items ?? []).find(
     (event) => event.id === state.values.heldEventId,
   );
 
-  const reviewStatus = draftDetailQuery.data?.status;
-  const isOcrRunningBlocked = mode !== "edit" && reviewStatus === "ocr_running";
-  const refreshingReviewStatus = draftDetailQuery.isFetching || ocrDraftsQuery.isFetching;
-  const isMutating =
-    confirmMutation.isPending || updateMutation.isPending || cancelDraftMutation.isPending;
   const canCancelDraft =
     mode !== "edit" &&
     !useSampleDrafts &&
     Boolean(draftDetailQuery.data) &&
     Boolean(state.values.matchDraftId) &&
     isCancelableDraftStatus(reviewStatus);
-
-  const baseErrors = [
-    heldEventsQuery,
-    gameTitlesQuery,
-    mapMastersQuery,
-    seasonMastersQuery,
-    draftDetailQuery,
-    ocrDraftsQuery,
-    sourceImageQuery,
-    matchDetailQuery,
-  ]
-    .filter(shouldShowQueryError)
-    .map((query) => normalizeUnknownApiError(query.error));
 
   if (mode === "edit" && isInitialQueryLoading(matchDetailQuery)) {
     return <p className="p-8 text-[var(--color-text-secondary)]">読み込み中...</p>;

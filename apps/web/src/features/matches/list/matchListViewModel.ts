@@ -1,3 +1,4 @@
+import { parseDraftStatus } from "@/features/matches/draftStatus";
 import { memberName } from "@/features/matches/list/matchListFormat";
 import type {
   MatchListItemView,
@@ -7,6 +8,7 @@ import type {
   MatchListStatus,
   MatchListSummaryCounts,
 } from "@/features/matches/list/matchListTypes";
+import { compact } from "@/shared/lib/compact";
 
 const statusPriority: Record<MatchListStatus, number> = {
   ocr_running: 0,
@@ -17,16 +19,7 @@ const statusPriority: Record<MatchListStatus, number> = {
 };
 
 function normalizeStatus(value: string): MatchListStatus {
-  switch (value) {
-    case "ocr_running":
-    case "ocr_failed":
-    case "draft_ready":
-    case "needs_review":
-    case "confirmed":
-      return value;
-    default:
-      return "confirmed";
-  }
+  return parseDraftStatus(value) ?? "confirmed";
 }
 
 function buildPrimaryAction(item: MatchListSourceItem, status: MatchListStatus) {
@@ -35,26 +28,25 @@ function buildPrimaryAction(item: MatchListSourceItem, status: MatchListStatus) 
 
   switch (status) {
     case "confirmed":
-      return {
-        ...(matchId ? { href: `/matches/${encodeURIComponent(matchId)}` } : { disabled: true }),
-        label: "詳細を見る",
-      };
+      return matchId
+        ? { href: `/matches/${encodeURIComponent(matchId)}`, label: "詳細を見る" }
+        : { disabled: true, label: "詳細を見る" };
     case "draft_ready":
-      return {
-        ...(matchDraftId
-          ? { href: `/review/${encodeURIComponent(matchDraftId)}` }
-          : { disabled: true }),
-        label: "確認して確定",
-        variant: "primary" as const,
-      };
+      return matchDraftId
+        ? {
+            href: `/review/${encodeURIComponent(matchDraftId)}`,
+            label: "確認して確定",
+            variant: "primary" as const,
+          }
+        : { disabled: true, label: "確認して確定", variant: "primary" as const };
     case "needs_review":
-      return {
-        ...(matchDraftId
-          ? { href: `/review/${encodeURIComponent(matchDraftId)}` }
-          : { disabled: true }),
-        label: "要確認を直す",
-        variant: "primary" as const,
-      };
+      return matchDraftId
+        ? {
+            href: `/review/${encodeURIComponent(matchDraftId)}`,
+            label: "要確認を直す",
+            variant: "primary" as const,
+          }
+        : { disabled: true, label: "要確認を直す", variant: "primary" as const };
     case "ocr_failed":
       return {
         href: matchDraftId
@@ -88,6 +80,12 @@ function buildSecondaryActions(item: MatchListSourceItem, status: MatchListStatu
   return [];
 }
 
+function statusDescription(status: MatchListStatus): string | undefined {
+  if (status === "ocr_failed") return "OCR失敗。手入力で続行できます。";
+  if (status === "needs_review") return "要確認セルがあります。";
+  return undefined;
+}
+
 export function toMatchListItemView(
   item: MatchListSourceItem,
   lookupMaps: MatchListLookupMaps,
@@ -97,26 +95,16 @@ export function toMatchListItemView(
   const gameTitle = item.gameTitleId ? lookupMaps.gameTitlesById.get(item.gameTitleId) : undefined;
   const season = item.seasonMasterId ? lookupMaps.seasonsById.get(item.seasonMasterId) : undefined;
   const map = item.mapMasterId ? lookupMaps.mapsById.get(item.mapMasterId) : undefined;
+  const heldAt = heldEvent?.heldAt ?? item.playedAt;
 
   return {
     canCancelOcr: false,
     createdAt: item.createdAt,
-    ...(item.matchId ? { detailHref: `/matches/${encodeURIComponent(item.matchId)}` } : {}),
     displayStatus:
       status === "confirmed" ? "confirmed" : status === "ocr_running" ? "ocr" : "pre_confirm",
-    ...(item.matchId ? { exportHref: `/exports?matchId=${encodeURIComponent(item.matchId)}` } : {}),
-    ...(item.gameTitleId ? { gameTitleId: item.gameTitleId } : {}),
-    ...(gameTitle?.name ? { gameTitleName: gameTitle.name } : {}),
     hasWarnings: status === "needs_review" || status === "ocr_failed",
-    ...((heldEvent?.heldAt ?? item.playedAt) ? { heldAt: heldEvent?.heldAt ?? item.playedAt } : {}),
-    ...(item.heldEventId ? { heldEventId: item.heldEventId } : {}),
     id: item.id,
     kind: item.kind === "match_draft" ? "match_draft" : "match",
-    ...(map?.name ? { mapName: map.name } : {}),
-    ...(item.matchDraftId ? { matchDraftId: item.matchDraftId } : {}),
-    ...(item.matchId ? { matchId: item.matchId } : {}),
-    ...(item.matchNoInEvent ? { matchNoInEvent: item.matchNoInEvent } : {}),
-    ...(item.ownerMemberId ? { ownerName: memberName(item.ownerMemberId) } : {}),
     primaryAction: buildPrimaryAction(item, status),
     ranks: (item.ranks ?? [])
       .toSorted((left, right) => left.rank - right.rank)
@@ -125,27 +113,30 @@ export function toMatchListItemView(
         memberId: rank.memberId,
         rank: rank.rank,
       })),
-    ...(item.matchDraftId && status !== "confirmed"
-      ? { reviewHref: `/review/${encodeURIComponent(item.matchDraftId)}` }
-      : {}),
     secondaryActions: buildSecondaryActions(item, status),
-    ...(item.seasonMasterId ? { seasonMasterId: item.seasonMasterId } : {}),
-    ...(season?.name ? { seasonName: season.name } : {}),
     status,
-    ...((
-      status === "ocr_failed"
-        ? "OCR失敗。手入力で続行できます。"
-        : status === "needs_review"
-          ? "要確認セルがあります。"
-          : undefined
-    )
-      ? {
-          statusDescription:
-            status === "ocr_failed" ? "OCR失敗。手入力で続行できます。" : "要確認セルがあります。",
-        }
-      : {}),
     statusLabel: status === "confirmed" ? "確定済" : status === "ocr_running" ? "OCR中" : "確定前",
     updatedAt: item.updatedAt,
+    ...compact({
+      detailHref: item.matchId ? `/matches/${encodeURIComponent(item.matchId)}` : undefined,
+      exportHref: item.matchId ? `/exports?matchId=${encodeURIComponent(item.matchId)}` : undefined,
+      gameTitleId: item.gameTitleId || undefined,
+      gameTitleName: gameTitle?.name || undefined,
+      heldAt: heldAt || undefined,
+      heldEventId: item.heldEventId || undefined,
+      mapName: map?.name || undefined,
+      matchDraftId: item.matchDraftId || undefined,
+      matchId: item.matchId || undefined,
+      matchNoInEvent: item.matchNoInEvent || undefined,
+      ownerName: item.ownerMemberId ? memberName(item.ownerMemberId) : undefined,
+      reviewHref:
+        item.matchDraftId && status !== "confirmed"
+          ? `/review/${encodeURIComponent(item.matchDraftId)}`
+          : undefined,
+      seasonMasterId: item.seasonMasterId || undefined,
+      seasonName: season?.name || undefined,
+      statusDescription: statusDescription(status),
+    }),
   };
 }
 

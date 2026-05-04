@@ -1,4 +1,5 @@
 import type { HeldEventResponse } from "@/features/draftReview/api";
+import type { DraftStatus } from "@/features/matches/draftStatus";
 import type { MatchSummaryResponse } from "@/features/matches/api";
 import type {
   GameTitleResponse,
@@ -6,12 +7,7 @@ import type {
   SeasonMasterResponse,
 } from "@/shared/api/masters";
 
-export type MatchListStatus =
-  | "confirmed"
-  | "draft_ready"
-  | "needs_review"
-  | "ocr_failed"
-  | "ocr_running";
+export type MatchListStatus = DraftStatus;
 
 export type MatchListKind = "match" | "match_draft";
 

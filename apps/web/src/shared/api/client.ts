@@ -1,3 +1,4 @@
+import { clearCsrfToken, getCsrfToken, setCsrfToken } from "@/shared/api/csrfTokenStore";
 import type { components } from "@/shared/api/generated";
 import { normalizeApiErrorResponse, normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
@@ -19,7 +20,6 @@ export type ApiDownloadResult = {
 };
 
 const mutatingMethods = new Set<HttpMethod>(["POST", "PUT", "PATCH", "DELETE"]);
-let csrfToken: string | undefined;
 
 export type ApiErrorLike = NormalizedApiError;
 
@@ -49,8 +49,11 @@ function buildHeaders(method: HttpMethod, options: ApiRequestOptions): Headers {
   if (mutatingMethods.has(method)) {
     if (devUser) {
       headers.set("X-CSRF-Token", "dev");
-    } else if (csrfToken) {
-      headers.set("X-CSRF-Token", csrfToken);
+    } else {
+      const token = getCsrfToken();
+      if (token) {
+        headers.set("X-CSRF-Token", token);
+      }
     }
   }
 
@@ -144,11 +147,11 @@ export type AuthMeResponse = components["schemas"]["AuthMeResponse"];
 
 export async function getAuthMe(): Promise<AuthMeResponse> {
   const response = await apiRequest<AuthMeResponse>("/api/auth/me");
-  csrfToken = response.csrfToken ?? undefined;
+  setCsrfToken(response.csrfToken ?? undefined);
   return response;
 }
 
 export async function logout(): Promise<void> {
   await apiRequest<void>("/api/auth/logout", { method: "POST" });
-  csrfToken = undefined;
+  clearCsrfToken();
 }

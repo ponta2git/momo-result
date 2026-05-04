@@ -6,6 +6,7 @@ import { cn } from "@/shared/ui/cn";
 
 type ButtonVariant = "primary" | "secondary" | "quiet" | "danger";
 type ButtonSize = "sm" | "md" | "lg";
+type ButtonType = "button" | "submit" | "reset";
 
 const variantClass: Record<ButtonVariant, string> = {
   primary:
@@ -29,7 +30,7 @@ export type ButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "type"> 
   pending?: boolean;
   pendingLabel?: ReactNode;
   size?: ButtonSize;
-  type?: "button" | "submit" | "reset";
+  type?: ButtonType;
   variant?: ButtonVariant;
 };
 
@@ -49,23 +50,56 @@ export const Button = forwardRef(function Button(
   ref: Ref<HTMLButtonElement>,
 ) {
   const isDisabled = disabled || pending;
+  const buttonClassName = cn(
+    "inline-flex w-auto min-w-0 items-center justify-center gap-2 rounded-[var(--radius-sm)] border font-semibold whitespace-normal break-words transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-60",
+    sizeClass[size],
+    variantClass[variant],
+    className,
+  );
+  const inner = (
+    <>
+      {pending ? <LoaderCircle aria-hidden="true" className="size-4 animate-spin" /> : icon}
+      <span>{pending ? (pendingLabel ?? children) : children}</span>
+    </>
+  );
 
+  // 静的解析 (react/button-has-type) はリテラル `type` のみ受け入れるため、
+  // `ButtonType` の判別を JSX 側で行いリテラルとして埋める。
+  if (type === "submit") {
+    return (
+      <button
+        ref={ref}
+        className={buttonClassName}
+        disabled={isDisabled}
+        type="submit"
+        {...props}
+      >
+        {inner}
+      </button>
+    );
+  }
+  if (type === "reset") {
+    return (
+      <button
+        ref={ref}
+        className={buttonClassName}
+        disabled={isDisabled}
+        type="reset"
+        {...props}
+      >
+        {inner}
+      </button>
+    );
+  }
   return (
     <button
       ref={ref}
-      className={cn(
-        "inline-flex w-auto min-w-0 items-center justify-center gap-2 rounded-[var(--radius-sm)] border font-semibold whitespace-normal break-words transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-60",
-        sizeClass[size],
-        variantClass[variant],
-        className,
-      )}
+      className={buttonClassName}
       disabled={isDisabled}
-      // oxlint-disable-next-line react/button-has-type -- type is constrained to the button/submit/reset literal union with a default of "button".
-      type={type}
+      type="button"
       {...props}
     >
-      {pending ? <LoaderCircle aria-hidden="true" className="size-4 animate-spin" /> : icon}
-      <span>{pending ? (pendingLabel ?? children) : children}</span>
+      {inner}
     </button>
   );
 });

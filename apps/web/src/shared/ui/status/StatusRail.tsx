@@ -1,3 +1,4 @@
+import { isConfirmed, isOcrFailed, isOcrRunning, isNeedsReview } from "@/features/matches/draftStatus";
 import { cn } from "@/shared/ui/cn";
 import type { MatchStatus } from "@/shared/ui/status/StatusPill";
 import { StatusPill } from "@/shared/ui/status/StatusPill";
@@ -17,7 +18,7 @@ type RailStep = {
 };
 
 function buildSteps(status: MatchStatus): RailStep[] {
-  if (status === "confirmed") {
+  if (isConfirmed(status)) {
     return [
       { key: "ocr", label: "OCR中", state: "complete" },
       { key: "draft", label: "確定前", state: "complete" },
@@ -25,7 +26,7 @@ function buildSteps(status: MatchStatus): RailStep[] {
     ];
   }
 
-  if (status === "ocr_running") {
+  if (isOcrRunning(status)) {
     return [
       { key: "ocr", label: "OCR中", state: "current" },
       { key: "draft", label: "確定前", state: "pending" },
@@ -54,8 +55,7 @@ export function StatusRail({ className, compact = false, status }: StatusRailPro
   }
 
   const steps = buildSteps(status);
-  const note =
-    status === "ocr_failed" ? "OCR失敗" : status === "needs_review" ? "要確認" : undefined;
+  const note = isOcrFailed(status) ? "OCR失敗" : isNeedsReview(status) ? "要確認" : undefined;
 
   return (
     <div className={cn("flex min-w-0 flex-wrap items-center gap-2", className)}>

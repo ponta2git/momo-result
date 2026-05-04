@@ -1,5 +1,6 @@
 import type { OcrDraftResponse } from "@/features/draftReview/api";
 import type { SlotKind } from "@/shared/api/enums";
+import type { SlotMap } from "@/shared/lib/slotMap";
 
 const now = "2026-01-01T00:00:00.000Z";
 
@@ -74,7 +75,7 @@ export function createSampleDraft(kind: SlotKind): OcrDraftResponse {
   };
 }
 
-export function createSampleDraftMap(): Partial<Record<SlotKind, OcrDraftResponse>> {
+export function createSampleDraftMap(): SlotMap<OcrDraftResponse> {
   return {
     total_assets: createSampleDraft("total_assets"),
     revenue: createSampleDraft("revenue"),

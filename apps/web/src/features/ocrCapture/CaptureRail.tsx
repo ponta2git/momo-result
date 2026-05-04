@@ -3,10 +3,11 @@ import { CaptureSlotCard } from "@/features/ocrCapture/CaptureSlotCard";
 import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
 import { slotDefinitions } from "@/features/ocrCapture/captureState";
 import type { SlotKind } from "@/shared/api/enums";
+import type { SlotMap } from "@/shared/lib/slotMap";
 
 type CaptureRailProps = {
   slots: CaptureSlotState[];
-  drafts: Partial<Record<SlotKind, OcrDraftResponse>>;
+  drafts: SlotMap<OcrDraftResponse>;
   onClear: (kind: SlotKind) => void;
   onDropImage: (sourceKind: SlotKind, targetKind: SlotKind) => void;
   onMoveImage: (kind: SlotKind, direction: -1 | 1) => void;

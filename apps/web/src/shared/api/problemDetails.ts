@@ -63,3 +63,14 @@ export function normalizeUnknownApiError(error: unknown): NormalizedApiError {
       error instanceof Error ? error.message : "API request failed before receiving a response.",
   };
 }
+
+/**
+ * 任意の未処理エラーを UI に表示するメッセージへ純関数として変換する。
+ *
+ * 優先順位は `detail → title → fallback`。すべてのページで同じ規則を使うため、
+ * `normalizeUnknownApiError(...).detail || ... || "..."` の重複を解消する。
+ */
+export function formatApiError(error: unknown, fallback: string): string {
+  const normalized = normalizeUnknownApiError(error);
+  return normalized.detail || normalized.title || fallback;
+}

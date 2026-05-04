@@ -23,6 +23,31 @@ const playerSchema = z.object({
   incidents: incidentSchema,
 });
 
+export type ConfirmMatchRequest = components["schemas"]["ConfirmMatchRequest"];
+
+function toIsoFromLocal(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toISOString();
+}
+
+function pruneDraftIds(values: {
+  totalAssets?: string | undefined;
+  revenue?: string | undefined;
+  incidentLog?: string | undefined;
+}): ConfirmMatchRequest["draftIds"] {
+  const next: ConfirmMatchRequest["draftIds"] = {};
+  if (values.totalAssets) next.totalAssets = values.totalAssets;
+  if (values.revenue) next.revenue = values.revenue;
+  if (values.incidentLog) next.incidentLog = values.incidentLog;
+  return next;
+}
+
+/**
+ * フォーム値を検証しつつ `ConfirmMatchRequest` (= API リクエスト DTO) に変換する。
+ *
+ * `transform()` を末尾に置くことで「parse → validate → reshape」を 1 段にまとめ、
+ * 呼び出し側で個別に request 整形関数を用意する必要をなくしている。
+ */
 export const confirmMatchSchema = z
   .object({
     heldEventId: z.string().min(1, "開催履歴を選択してください"),
@@ -61,15 +86,15 @@ export const confirmMatchSchema = z
         });
       }
     }
-  });
+  })
+  .transform(
+    (values): ConfirmMatchRequest => ({
+      ...values,
+      draftIds: pruneDraftIds(values.draftIds),
+      playedAt: toIsoFromLocal(values.playedAt),
+    }),
+  );
 
-export type ConfirmMatchFormValues = z.infer<typeof confirmMatchSchema>;
-export type ConfirmMatchRequest = components["schemas"]["ConfirmMatchRequest"];
+/** フォーム入力時の値の型 (transform 適用前)。 */
+export type ConfirmMatchFormValues = z.input<typeof confirmMatchSchema>;
 
-export function toConfirmMatchRequest(values: ConfirmMatchFormValues): ConfirmMatchRequest {
-  const draftIds: ConfirmMatchRequest["draftIds"] = {};
-  if (values.draftIds.totalAssets) draftIds.totalAssets = values.draftIds.totalAssets;
-  if (values.draftIds.revenue) draftIds.revenue = values.draftIds.revenue;
-  if (values.draftIds.incidentLog) draftIds.incidentLog = values.draftIds.incidentLog;
-  return { ...values, draftIds };
-}

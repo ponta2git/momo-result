@@ -4,10 +4,11 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 
 import { listHeldEvents } from "@/features/draftReview/api";
 import { deleteMatch, getMatch } from "@/features/matches/api";
+import { invalidateMatchCaches, matchKeys } from "@/features/matches/queryKeys";
 import { MatchWorkspacePage } from "@/features/matches/workspace/MatchWorkspacePage";
 import { fixedMembers } from "@/features/ocrCapture/localMasters";
 import { listGameTitles, listMapMasters, listSeasonMasters } from "@/shared/api/masters";
-import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
+import { formatApiError } from "@/shared/api/problemDetails";
 import { isInitialQueryLoading, shouldShowBlockingQueryError } from "@/shared/api/queryErrorState";
 import { Button } from "@/shared/ui/actions/Button";
 import { Card } from "@/shared/ui/layout/Card";
@@ -50,7 +51,7 @@ export function MatchDetailPage() {
   }
 
   const matchQuery = useQuery({
-    queryKey: ["match", matchId],
+    queryKey: matchKeys.matchDetail(matchId),
     queryFn: () => getMatch(matchId),
     enabled: matchId.length > 0,
   });
@@ -75,12 +76,11 @@ export function MatchDetailPage() {
   const deleteMutation = useMutation({
     mutationFn: () => deleteMatch(matchId),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["matches"] });
+      await invalidateMatchCaches(queryClient);
       navigate("/matches", { replace: true });
     },
     onError: (error) => {
-      const normalized = normalizeUnknownApiError(error);
-      setErrorMessage(normalized.detail ?? normalized.title ?? "削除に失敗しました");
+      setErrorMessage(formatApiError(error, "削除に失敗しました"));
     },
   });
 

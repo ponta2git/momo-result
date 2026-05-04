@@ -1,3 +1,4 @@
+import { confirmMatchSchema } from "@/features/draftReview/schema";
 import type { ConfirmMatchRequest } from "@/features/draftReview/schema";
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
 import type { components } from "@/shared/api/generated";
@@ -5,31 +6,17 @@ import type { components } from "@/shared/api/generated";
 export type MatchConfirmRequest = ConfirmMatchRequest;
 export type MatchUpdateRequest = components["schemas"]["UpdateMatchRequest"];
 
-function toIsoFromLocal(value: string): string {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toISOString();
-}
-
-function pruneDraftIds(values: MatchFormValues["draftIds"]): MatchConfirmRequest["draftIds"] {
-  const next: MatchConfirmRequest["draftIds"] = {};
-  if (values.incidentLog) next.incidentLog = values.incidentLog;
-  if (values.revenue) next.revenue = values.revenue;
-  if (values.totalAssets) next.totalAssets = values.totalAssets;
-  return next;
-}
-
+/**
+ * フォーム値を `ConfirmMatchRequest` (= 確定 API リクエスト DTO) に変換する。
+ *
+ * 値変換 (ISO 化・draftIds の null 落とし) は `confirmMatchSchema.transform` が
+ * 行うため、ここは parse 呼び出しの薄いラッパに過ぎない。
+ *
+ * 呼び出し側は事前に validateMatchForm で検証済みである前提で、ここでは throw する
+ * `parse` を使う (検証エラーは UI 側で先に握っている)。
+ */
 export function toConfirmMatchRequest(values: MatchFormValues): MatchConfirmRequest {
-  return {
-    draftIds: pruneDraftIds(values.draftIds),
-    gameTitleId: values.gameTitleId,
-    heldEventId: values.heldEventId,
-    mapMasterId: values.mapMasterId,
-    matchNoInEvent: values.matchNoInEvent,
-    ownerMemberId: values.ownerMemberId,
-    playedAt: toIsoFromLocal(values.playedAt),
-    players: values.players,
-    seasonMasterId: values.seasonMasterId,
-  };
+  return confirmMatchSchema.parse(values);
 }
 
 export function toUpdateMatchRequest(values: MatchFormValues): MatchUpdateRequest {

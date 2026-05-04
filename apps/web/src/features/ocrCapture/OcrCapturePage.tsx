@@ -13,6 +13,7 @@ import {
 import type { OcrDraftResponse } from "@/features/ocrCapture/api";
 import { CameraCapture } from "@/features/ocrCapture/CameraCapture";
 import { CaptureRail } from "@/features/ocrCapture/CaptureRail";
+import { invalidateMatchCaches } from "@/features/matches/queryKeys";
 import {
   createInitialSlot,
   createInitialSlots,
@@ -30,9 +31,10 @@ import { SetupPanel } from "@/features/ocrCapture/SetupPanel";
 import { useOcrJobPolling } from "@/features/ocrCapture/useOcrJobPolling";
 import { getAuthMe } from "@/shared/api/client";
 import type { SlotKind } from "@/shared/api/enums";
+import type { SlotMap } from "@/shared/lib/slotMap";
 import { parseLayoutFamily, parseOcrJobStatus } from "@/shared/api/enums";
 import { listGameTitles } from "@/shared/api/masters";
-import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
+import { formatApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { AuthPanel } from "@/shared/auth/AuthPanel";
 import { Button } from "@/shared/ui/actions/Button";
 import { LiveRegion } from "@/shared/ui/feedback/LiveRegion";
@@ -111,7 +113,7 @@ export function OcrCapturePage() {
   const queryClient = useQueryClient();
   const [setup, setSetup] = useState<SetupFormValues>(defaultSetupValues);
   const [slots, setSlots] = useState<CaptureSlotState[]>(() => createInitialSlots());
-  const [drafts, setDrafts] = useState<Partial<Record<SlotKind, OcrDraftResponse>>>({});
+  const [drafts, setDrafts] = useState<SlotMap<OcrDraftResponse>>({});
   const [notice, setNotice] = useState("");
   const slotsRef = useRef(slots);
 
@@ -248,8 +250,7 @@ export function OcrCapturePage() {
       });
       matchDraftId = matchDraft.matchDraftId;
     } catch (error) {
-      const normalized = normalizeUnknownApiError(error);
-      notify(normalized.detail || normalized.title);
+      notify(formatApiError(error, "対局の作成に失敗しました"));
       return;
     }
 
@@ -295,7 +296,7 @@ export function OcrCapturePage() {
       }
     }
     if (createdJobCount > 0) {
-      await queryClient.invalidateQueries({ queryKey: ["matches"] });
+      await invalidateMatchCaches(queryClient);
       navigate("/matches", { replace: true });
       return;
     }

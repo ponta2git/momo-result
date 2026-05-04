@@ -1,4 +1,4 @@
-import type { HeldEventResponse } from "@/features/draftReview/api";
+import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
 import { fixedMembers } from "@/features/auth/members";
 import type {

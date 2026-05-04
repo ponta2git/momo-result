@@ -2,7 +2,7 @@ import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
-import { listHeldEvents } from "@/features/draftReview/api";
+import { listHeldEvents } from "@/shared/api/heldEvents";
 import {
   DEFAULT_EXPORT_SLOW_THRESHOLD_MS,
   DEFAULT_EXPORT_TIMEOUT_MS,

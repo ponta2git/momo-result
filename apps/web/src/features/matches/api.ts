@@ -6,6 +6,8 @@ export type MatchListResponse = components["schemas"]["MatchListResponse"];
 export type MatchDetailResponse = components["schemas"]["MatchDetailResponse"];
 export type UpdateMatchRequest = components["schemas"]["UpdateMatchRequest"];
 export type DeleteMatchResponse = components["schemas"]["DeleteMatchResponse"];
+export type ConfirmMatchRequest = components["schemas"]["ConfirmMatchRequest"];
+export type ConfirmMatchResponse = components["schemas"]["ConfirmMatchResponse"];
 
 export type ListMatchesQuery = {
   heldEventId?: string;
@@ -45,5 +47,12 @@ export async function updateMatch(
 export async function deleteMatch(matchId: string): Promise<DeleteMatchResponse> {
   return apiRequest<DeleteMatchResponse>(`/api/matches/${encodeURIComponent(matchId)}`, {
     method: "DELETE",
+  });
+}
+
+export async function confirmMatch(request: ConfirmMatchRequest): Promise<ConfirmMatchResponse> {
+  return apiRequest<ConfirmMatchResponse>("/api/matches", {
+    method: "POST",
+    body: request,
   });
 }

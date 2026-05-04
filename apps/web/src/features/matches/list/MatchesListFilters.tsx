@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import type { HeldEventResponse } from "@/features/draftReview/api";
+import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import type {
   MatchListSearch,
   MatchListSort,

@@ -2,7 +2,7 @@ import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-q
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
-import { listHeldEvents } from "@/features/draftReview/api";
+import { listHeldEvents } from "@/shared/api/heldEvents";
 import { deleteMatch, getMatch } from "@/features/matches/api";
 import { invalidateMatchCaches, matchKeys } from "@/features/matches/queryKeys";
 import { fixedMembers } from "@/features/auth/members";

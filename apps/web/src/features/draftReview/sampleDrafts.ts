@@ -1,4 +1,4 @@
-import type { OcrDraftResponse } from "@/features/draftReview/api";
+import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
 import type { SlotKind } from "@/shared/api/enums";
 import type { SlotMap } from "@/shared/lib/slotMap";
 

@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 
 import { createSampleDraftMap } from "@/features/draftReview/sampleDrafts";
 import type { getMatch } from "@/features/matches/api";
-import type { getMatchDraftDetail, getOcrDraftsBulk } from "@/features/matches/workspace/api";
+import type { getMatchDraftDetail } from "@/features/matches/workspace/api";
 import { draftToMatchForm } from "@/features/matches/workspace/draftToMatchForm";
 import { matchDetailToMatchForm } from "@/features/matches/workspace/matchDetailToMatchForm";
 import type {
@@ -14,6 +14,7 @@ import {
   draftsByKind,
   prefillFromDraftSummary,
 } from "@/features/matches/workspace/workspaceDerivations";
+import type { getOcrDraftsBulk } from "@/shared/api/ocrDrafts";
 import type { SlotMap } from "@/shared/lib/slotMap";
 
 type MatchDetail = Awaited<ReturnType<typeof getMatch>>;

@@ -1,6 +1,6 @@
 import { useFormStatus } from "react-dom";
 
-import type { HeldEventResponse } from "@/features/draftReview/api";
+import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
 import { fixedMembers } from "@/features/auth/members";
 import { Button } from "@/shared/ui/actions/Button";

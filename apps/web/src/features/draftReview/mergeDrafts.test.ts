@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 
-import type { OcrDraftResponse } from "@/features/draftReview/api";
+import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
 import { mergeDrafts } from "@/features/draftReview/mergeDrafts";
 
 const field = <T>(value: T, confidence = 0.96) => ({

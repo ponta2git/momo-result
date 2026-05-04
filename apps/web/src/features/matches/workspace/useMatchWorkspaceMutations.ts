@@ -1,8 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
-import { confirmMatch } from "@/features/draftReview/api";
-import { updateMatch } from "@/features/matches/api";
+import { confirmMatch, updateMatch } from "@/features/matches/api";
 import { invalidateMatchCaches, invalidateMatchDetailCaches } from "@/features/matches/queryKeys";
 import { cancelMatchDraft } from "@/features/matches/workspace/api";
 import { toUpdateMatchRequest } from "@/features/matches/workspace/matchFormToRequest";

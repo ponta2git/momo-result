@@ -1,4 +1,4 @@
-import type { OcrDraftResponse } from "@/features/draftReview/api";
+import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
 import type { MatchDraftDetailResponse } from "@/features/matches/workspace/api";
 import type {
   MatchDraftSummary,

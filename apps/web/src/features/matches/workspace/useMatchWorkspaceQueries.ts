@@ -8,8 +8,6 @@ import { matchKeys } from "@/features/matches/queryKeys";
 import type { MatchDraftDetailResponse } from "@/features/matches/workspace/api";
 import {
   getMatchDraftDetail,
-  getOcrDraftsBulk,
-  listHeldEvents,
   listMatchDraftSourceImages,
 } from "@/features/matches/workspace/api";
 import type { WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
@@ -18,7 +16,9 @@ import {
   draftIdsFromParams,
 } from "@/features/matches/workspace/workspaceDerivations";
 import { slotKinds } from "@/shared/api/enums";
+import { listHeldEvents } from "@/shared/api/heldEvents";
 import { listGameTitles, listMapMasters, listSeasonMasters } from "@/shared/api/masters";
+import { getOcrDraftsBulk } from "@/shared/api/ocrDrafts";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
 import { shouldShowQueryError } from "@/shared/api/queryErrorState";

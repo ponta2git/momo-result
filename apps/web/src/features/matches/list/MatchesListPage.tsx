@@ -3,7 +3,7 @@ import { AlertTriangle, Download, PenSquare, RefreshCw, ScanLine } from "lucide-
 import { useDeferredValue, useMemo, useTransition } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
-import { listHeldEvents } from "@/features/draftReview/api";
+import { listHeldEvents } from "@/shared/api/heldEvents";
 import { MatchesListFilters } from "@/features/matches/list/MatchesListFilters";
 import { MatchesTable } from "@/features/matches/list/MatchesTable";
 import { MatchesWorkQueueSummary } from "@/features/matches/list/MatchesWorkQueueSummary";

@@ -1,7 +1,7 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { http, HttpResponse } from "msw";
+import { http, HttpResponse, delay } from "msw";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -74,6 +74,33 @@ describe("MastersPage", () => {
       ).toBe(true);
       expect(queryClient.getQueryState(["game-titles"])?.isInvalidated).toBe(true);
     });
+  });
+
+  it("shows the new game title optimistically while the server is responding", async () => {
+    window.localStorage.setItem("momoresult.devUser", "ponta");
+    server.use(
+      http.post("/api/game-titles", async ({ request }) => {
+        const body = (await request.json()) as { id: string; name: string; layoutFamily: string };
+        await delay(120);
+        const created = {
+          ...body,
+          displayOrder: 99,
+          createdAt: "2026-01-01T00:00:00.000Z",
+        };
+        return HttpResponse.json(created);
+      }),
+    );
+
+    renderPage();
+    await waitFor(() => expect(screen.getAllByText("桃太郎電鉄2").length).toBeGreaterThan(0));
+
+    await userEvent.type(screen.getByPlaceholderText("例: 桃太郎電鉄2"), "桃鉄DX");
+    await userEvent.click(screen.getByRole("button", { name: "作品を追加" }));
+
+    expect(await screen.findByText("(追加中…)")).toBeInTheDocument();
+    expect(screen.getByText((_, node) => node?.textContent === "桃鉄DX(追加中…)")).toBeInTheDocument();
+
+    await waitFor(() => expect(screen.queryByText("(追加中…)")).not.toBeInTheDocument());
   });
 
   it("shows the six fixed incident masters", async () => {

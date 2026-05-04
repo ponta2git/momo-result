@@ -50,7 +50,7 @@ export function PublicOnlyRoute({ children }: { children: ReactNode }) {
     return <Navigate to={destination} replace />;
   }
 
-  return <>{children}</>;
+  return children;
 }
 
 export function AuthenticatedRoute({ children }: { children: ReactNode }) {
@@ -91,5 +91,5 @@ export function AuthenticatedRoute({ children }: { children: ReactNode }) {
     );
   }
 
-  return <>{children}</>;
+  return children;
 }

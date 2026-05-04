@@ -435,7 +435,7 @@ export function ScoreGrid({
           const originalRow = originalPlayers?.[rowIndex];
           const originalByOrder = originalByPlayOrder.get(player.playOrder);
           return (
-            <tr key={rowIndex} className="bg-[var(--color-surface-subtle)]">
+            <tr key={player.memberId} className="bg-[var(--color-surface-subtle)]">
               <td className="rounded-l-[var(--radius-md)] px-2 py-3 align-top">
                 <select
                   ref={(node) => {
@@ -612,7 +612,7 @@ export function ScoreGrid({
         <div className="mt-4 grid gap-3">
           {players.map((player, index) => (
             <article
-              key={index}
+              key={player.memberId}
               className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
             >
               <button

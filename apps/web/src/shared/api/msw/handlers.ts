@@ -499,7 +499,7 @@ export const handlers = [
     const items = gameTitleId
       ? mapMastersStore.filter((item) => item.gameTitleId === gameTitleId)
       : mapMastersStore;
-    return HttpResponse.json({ items: items.map((item) => ({ ...item })) });
+    return HttpResponse.json({ items: structuredClone(items) });
   }),
   http.post("/api/map-masters", async ({ request }) => {
     const body = (await request.json()) as {
@@ -523,7 +523,7 @@ export const handlers = [
     const items = gameTitleId
       ? seasonMastersStore.filter((item) => item.gameTitleId === gameTitleId)
       : seasonMastersStore;
-    return HttpResponse.json({ items: items.map((item) => ({ ...item })) });
+    return HttpResponse.json({ items: structuredClone(items) });
   }),
   http.post("/api/season-masters", async ({ request }) => {
     const body = (await request.json()) as {
@@ -542,7 +542,7 @@ export const handlers = [
     return HttpResponse.json(created);
   }),
   http.get("/api/incident-masters", () =>
-    HttpResponse.json({ items: incidentMastersSeed.map((item) => ({ ...item })) }),
+    HttpResponse.json({ items: structuredClone(incidentMastersSeed) }),
   ),
   http.delete("/api/ocr-jobs/:jobId", ({ params }) =>
     HttpResponse.json({

@@ -5,5 +5,5 @@ type DialogHostProps = {
 };
 
 export function DialogHost({ children }: DialogHostProps) {
-  return <>{children}</>;
+  return children;
 }

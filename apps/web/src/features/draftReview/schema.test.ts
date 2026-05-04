@@ -84,7 +84,7 @@ describe("confirmMatchSchema", () => {
     const result = confirmMatchSchema.safeParse({
       ...valid,
       players: valid.players.map((player, index) =>
-        index === 1 ? { ...player, rank: 1 } : player,
+        index === 1 ? Object.assign({}, player, { rank: 1 }) : player,
       ),
     });
 

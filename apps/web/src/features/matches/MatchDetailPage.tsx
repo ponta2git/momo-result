@@ -46,31 +46,31 @@ export function MatchDetailPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const mode = searchParams.get("mode");
 
-  if (mode === "edit") {
-    return <MatchWorkspacePage matchId={matchId} mode="edit" />;
-  }
-
   const matchQuery = useQuery({
     queryKey: matchKeys.matchDetail(matchId),
     queryFn: () => getMatch(matchId),
-    enabled: matchId.length > 0,
+    enabled: matchId.length > 0 && mode !== "edit",
   });
 
   const heldEventsQuery = useQuery({
     queryKey: ["held-events", "all"],
     queryFn: () => listHeldEvents("", 100),
+    enabled: mode !== "edit",
   });
   const gameTitlesQuery = useQuery({
     queryKey: ["game-titles"],
     queryFn: () => listGameTitles(),
+    enabled: mode !== "edit",
   });
   const seasonsQuery = useQuery({
     queryKey: ["season-masters", "all"],
     queryFn: () => listSeasonMasters(),
+    enabled: mode !== "edit",
   });
   const mapsQuery = useQuery({
     queryKey: ["map-masters", "all"],
     queryFn: () => listMapMasters(),
+    enabled: mode !== "edit",
   });
 
   const deleteMutation = useMutation({
@@ -83,6 +83,10 @@ export function MatchDetailPage() {
       setErrorMessage(formatApiError(error, "削除に失敗しました"));
     },
   });
+
+  if (mode === "edit") {
+    return <MatchWorkspacePage matchId={matchId} mode="edit" />;
+  }
 
   if (isInitialQueryLoading(matchQuery)) {
     return <p className="p-8 text-[var(--color-text-secondary)]">読み込み中...</p>;

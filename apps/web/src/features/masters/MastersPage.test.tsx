@@ -150,7 +150,9 @@ describe("MastersPage", () => {
 
     server.use(
       http.get("/api/game-titles", async () => {
-        await new Promise((resolve) => setTimeout(resolve, 50));
+        await new Promise((resolve) => {
+          setTimeout(resolve, 50);
+        });
         return HttpResponse.json({
           items: [
             {

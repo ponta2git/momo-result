@@ -36,8 +36,8 @@ function TableSkeleton() {
   return (
     <div className="grid gap-3">
       <Skeleton className="min-h-10" />
-      {Array.from({ length: 5 }).map((_, index) => (
-        <Skeleton key={index} className="min-h-18" />
+      {["s1", "s2", "s3", "s4", "s5"].map((id) => (
+        <Skeleton key={id} className="min-h-18" />
       ))}
     </div>
   );

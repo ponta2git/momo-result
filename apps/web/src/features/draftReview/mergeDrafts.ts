@@ -97,7 +97,7 @@ function resolveMemberIds(entries: ReadonlyArray<OcrPlayerEntry | undefined>): s
     return aliasToMemberId(entry?.raw_player_name.value);
   });
 
-  const used = new Set(resolved.filter((id): id is string => Boolean(id)));
+  const used = new Set(resolved.filter(Boolean));
   const remaining = memberIds.filter((id) => !used.has(id));
 
   return resolved.map((id) => {

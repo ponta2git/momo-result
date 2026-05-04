@@ -11,16 +11,17 @@ import { MastersPage } from "@/features/masters/MastersPage";
 import { MatchCreatePage } from "@/features/matches/MatchCreatePage";
 import { MatchDetailPage } from "@/features/matches/MatchDetailPage";
 import { MatchesListPage } from "@/features/matches/MatchesListPage";
+import { MatchWorkspacePage } from "@/features/matches/workspace/MatchWorkspacePage";
 import { OcrCapturePage } from "@/features/ocrCapture/OcrCapturePage";
 
-function MatchEditRedirect() {
+function MatchEditPage() {
   const { matchId } = useParams<{ matchId: string }>();
 
   if (!matchId) {
     return <Navigate replace to="/matches" />;
   }
 
-  return <Navigate replace to={`/matches/${matchId}?mode=edit`} />;
+  return <MatchWorkspacePage matchId={matchId} mode="edit" />;
 }
 
 export const appRoutes: RouteObject[] = [
@@ -61,7 +62,7 @@ export const appRoutes: RouteObject[] = [
           },
           {
             path: "matches/:matchId/edit",
-            element: <MatchEditRedirect />,
+            element: <MatchEditPage />,
           },
           {
             path: "ocr/new",

@@ -10,7 +10,10 @@ import {
 } from "@/features/masters/masterReturnHandoff";
 import { MatchConfirmDialog } from "@/features/matches/workspace/MatchConfirmDialog";
 import { MatchFormActions } from "@/features/matches/workspace/MatchFormActions";
-import { toIsoFromLocal } from "@/features/matches/workspace/workspaceDerivations";
+import {
+  currentLocalIsoMinute,
+  toIsoFromLocal,
+} from "@/features/matches/workspace/workspaceDerivations";
 import { useMasterHandoffRestore } from "@/features/matches/workspace/useMasterHandoffRestore";
 import { useMatchWorkspaceInit } from "@/features/matches/workspace/useMatchWorkspaceInit";
 import { useMatchWorkspaceMutations } from "@/features/matches/workspace/useMatchWorkspaceMutations";
@@ -33,12 +36,14 @@ import { validateMatchForm } from "@/features/matches/workspace/matchFormValidat
 import { MatchSetupSection } from "@/features/matches/workspace/MatchSetupSection";
 import { ScoreGrid } from "@/features/matches/workspace/scoreGrid/ScoreGrid";
 import { SourceImagePanel } from "@/features/matches/workspace/sourceImages/SourceImagePanel";
+import {
+  toSourceImageDescriptor,
+} from "@/features/matches/workspace/sourceImages/sourceImageTypes";
 import type { SourceImageKind } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
 import {
   isInitialQueryLoading,
   shouldShowBlockingQueryError,
 } from "@/shared/api/queryErrorState";
-import { assertDefined } from "@/shared/lib/invariant";
 import { Button } from "@/shared/ui/actions/Button";
 import { LiveRegion } from "@/shared/ui/feedback/LiveRegion";
 import { Card } from "@/shared/ui/layout/Card";
@@ -67,7 +72,8 @@ export function MatchWorkspacePage({
   const [notice, setNotice] = useState("");
   const [validationMessage, setValidationMessage] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [eventDraftValue, setEventDraftValue] = useState("");
+  const [cancelDraftConfirmOpen, setCancelDraftConfirmOpen] = useState(false);
+  const [eventDraftValue, setEventDraftValue] = useState<string>(currentLocalIsoMinute);
   const [workspaceData, setWorkspaceData] = useState<MatchWorkspaceInitialData | null>(null);
   const [preferredImageKind, setPreferredImageKind] = useState<SourceImageKind>("total_assets");
 
@@ -123,16 +129,6 @@ export function MatchWorkspacePage({
     });
 
   useEffect(() => {
-    if (eventDraftValue) {
-      return;
-    }
-
-    const now = new Date();
-    const offsetMs = now.getTimezoneOffset() * 60_000;
-    setEventDraftValue(new Date(now.getTime() - offsetMs).toISOString().slice(0, 16));
-  }, [eventDraftValue]);
-
-  useEffect(() => {
     if (notice === "") {
       return;
     }
@@ -184,6 +180,7 @@ export function MatchWorkspacePage({
   const selectedHeldEvent = (heldEventsQuery.data?.items ?? []).find(
     (event) => event.id === state.values.heldEventId,
   );
+  const matchDraftIdForImages = state.values.matchDraftId;
 
   const canCancelDraft =
     mode !== "edit" &&
@@ -191,6 +188,29 @@ export function MatchWorkspacePage({
     Boolean(draftDetailQuery.data) &&
     Boolean(state.values.matchDraftId) &&
     isCancelableDraftStatus(reviewStatus);
+
+  const handleCancelDraftConfirmed = () => {
+    const targetDraftId = state.values.matchDraftId;
+    setCancelDraftConfirmOpen(false);
+    if (!targetDraftId) {
+      return;
+    }
+    setValidationMessage("");
+    cancelDraftMutation.mutate(targetDraftId);
+  };
+
+  const handleNavigateToMasters = () => {
+    if (!returnTo) {
+      return;
+    }
+    const payload = createDraftReviewHandoffPayload({
+      matchSessionId: matchSessionId ?? matchDraftId ?? "review",
+      returnTo,
+      values: state.values,
+    });
+    const handoffId = saveMasterHandoff(payload);
+    navigate(buildMasterRoute(returnTo, handoffId));
+  };
 
   if (mode === "edit" && isInitialQueryLoading(matchDetailQuery)) {
     return <p className="p-8 text-[var(--color-text-secondary)]">読み込み中...</p>;
@@ -247,65 +267,13 @@ export function MatchWorkspacePage({
             <Button
               disabled={isMutating}
               variant="danger"
-              onClick={() => {
-                const targetDraftId = state.values.matchDraftId;
-                if (!targetDraftId) {
-                  return;
-                }
-                const confirmed = window.confirm(
-                  "この確定前の下書きを削除します。元に戻せません。よろしいですか？",
-                );
-                if (!confirmed) {
-                  return;
-                }
-                setValidationMessage("");
-                cancelDraftMutation.mutate(targetDraftId);
-              }}
+              onClick={() => setCancelDraftConfirmOpen(true)}
             >
               {cancelDraftMutation.isPending ? "削除中..." : "下書きを削除"}
             </Button>
           ) : null}
           {mode === "review" && returnTo ? (
-            <Button
-              variant="secondary"
-              onClick={() => {
-                const payload = createDraftReviewHandoffPayload({
-                  matchSessionId: matchSessionId ?? matchDraftId ?? "review",
-                  returnTo,
-                  values: {
-                    draftIds: {
-                      incidentLog: state.values.draftIds.incidentLog,
-                      revenue: state.values.draftIds.revenue,
-                      totalAssets: state.values.draftIds.totalAssets,
-                    },
-                    gameTitleId: state.values.gameTitleId,
-                    heldEventId: state.values.heldEventId,
-                    mapMasterId: state.values.mapMasterId,
-                    matchNoInEvent: state.values.matchNoInEvent,
-                    ownerMemberId: state.values.ownerMemberId,
-                    playedAt: state.values.playedAt,
-                    players: state.values.players.map((player) => ({
-                      incidents: {
-                        cardShop: player.incidents.cardShop,
-                        cardStation: player.incidents.cardStation,
-                        destination: player.incidents.destination,
-                        minusStation: player.incidents.minusStation,
-                        plusStation: player.incidents.plusStation,
-                        suriNoGinji: player.incidents.suriNoGinji,
-                      },
-                      memberId: player.memberId,
-                      playOrder: player.playOrder,
-                      rank: player.rank,
-                      revenueManYen: player.revenueManYen,
-                      totalAssetsManYen: player.totalAssetsManYen,
-                    })),
-                    seasonMasterId: state.values.seasonMasterId,
-                  },
-                });
-                const handoffId = saveMasterHandoff(payload);
-                navigate(buildMasterRoute(returnTo, handoffId));
-              }}
-            >
+            <Button variant="secondary" onClick={handleNavigateToMasters}>
               マスタ管理へ
             </Button>
           ) : null}
@@ -446,24 +414,13 @@ export function MatchWorkspacePage({
               />
             </Card>
 
-            {mode !== "edit" && state.values.matchDraftId ? (
+            {mode !== "edit" && matchDraftIdForImages ? (
               <SourceImagePanel
                 loading={sourceImageQuery.isLoading}
                 preferredKind={preferredImageKind}
-                sourceImages={(sourceImageQuery.data?.items ?? []).map((item) => {
-                  const matchDraftIdForImages = state.values.matchDraftId;
-                  assertDefined(matchDraftIdForImages, "matchDraftId");
-                  return Object.assign(
-                    {
-                      createdAt: item.createdAt,
-                      imageUrl:
-                        item.imageUrl ||
-                        `/api/match-drafts/${encodeURIComponent(matchDraftIdForImages)}/source-images/${encodeURIComponent(item.kind)}`,
-                      kind: item.kind as SourceImageKind,
-                    },
-                    item.contentType ? { contentType: item.contentType } : {},
-                  );
-                })}
+                sourceImages={(sourceImageQuery.data?.items ?? []).map((item) =>
+                  toSourceImageDescriptor(matchDraftIdForImages, item),
+                )}
               />
             ) : null}
           </div>
@@ -509,6 +466,53 @@ export function MatchWorkspacePage({
           onConfirm={() => confirmMutation.mutate(toConfirmMatchRequest(state.values))}
         />
       ) : null}
+
+      {cancelDraftConfirmOpen ? (
+        <CancelDraftConfirmDialog
+          pending={cancelDraftMutation.isPending}
+          onCancel={() => setCancelDraftConfirmOpen(false)}
+          onConfirm={handleCancelDraftConfirmed}
+        />
+      ) : null}
     </main>
+  );
+}
+
+function CancelDraftConfirmDialog({
+  onCancel,
+  onConfirm,
+  pending,
+}: {
+  onCancel: () => void;
+  onConfirm: () => void;
+  pending: boolean;
+}) {
+  return (
+    <div
+      aria-labelledby="cancel-draft-confirm-title"
+      aria-modal="true"
+      className="fixed inset-0 z-[var(--z-dialog)] flex items-center justify-center bg-[var(--momo-night-900)]/60 px-4"
+      role="dialog"
+    >
+      <Card className="w-full max-w-md">
+        <h2
+          className="text-lg font-semibold text-[var(--color-text-primary)]"
+          id="cancel-draft-confirm-title"
+        >
+          下書きを削除しますか？
+        </h2>
+        <p className="mt-2 text-sm text-pretty text-[var(--color-text-secondary)]">
+          この確定前の下書きを削除します。元に戻せません。
+        </p>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button disabled={pending} variant="secondary" onClick={onCancel}>
+            キャンセル
+          </Button>
+          <Button disabled={pending} variant="danger" onClick={onConfirm}>
+            {pending ? "削除中..." : "削除する"}
+          </Button>
+        </div>
+      </Card>
+    </div>
   );
 }

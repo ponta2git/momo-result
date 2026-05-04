@@ -32,6 +32,7 @@ import { useOcrJobPolling } from "@/features/ocrCapture/useOcrJobPolling";
 import { getAuthMe } from "@/shared/api/client";
 import type { SlotKind } from "@/shared/api/enums";
 import type { SlotMap } from "@/shared/lib/slotMap";
+import { useDistinctMarkerEffect } from "@/shared/lib/useDistinctMarkerEffect";
 import { parseLayoutFamily, parseOcrJobStatus } from "@/shared/api/enums";
 import { listGameTitles } from "@/shared/api/masters";
 import { formatApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
@@ -50,18 +51,16 @@ type SlotWatcherProps = {
 
 function SlotWatcher({ slot, onUpdate, onDraft }: SlotWatcherProps) {
   const query = useOcrJobPolling({ jobId: slot.jobId, attempts: slot.pollAttempts });
-  const handledMarkerRef = useRef("");
 
-  useEffect(() => {
-    if (!query.data || !slot.jobId) {
+  const marker =
+    query.data && slot.jobId
+      ? `${slot.jobId}:${query.data.status}:${query.data.updatedAt}:${query.data.draftId ?? ""}`
+      : null;
+
+  useDistinctMarkerEffect(marker, () => {
+    if (!query.data) {
       return;
     }
-    const marker = `${slot.jobId}:${query.data.status}:${query.data.updatedAt}:${query.data.draftId ?? ""}`;
-    if (handledMarkerRef.current === marker) {
-      return;
-    }
-    handledMarkerRef.current = marker;
-
     const status = parseOcrJobStatus(query.data.status);
     const nextStatus = status === "unknown" ? slot.status : status;
     onUpdate({
@@ -76,7 +75,7 @@ function SlotWatcher({ slot, onUpdate, onDraft }: SlotWatcherProps) {
     if (status === "succeeded") {
       void getOcrDraft(query.data.draftId).then((draft) => onDraft(slot.kind, draft));
     }
-  }, [onDraft, onUpdate, query.data, slot]);
+  });
 
   return null;
 }
@@ -95,6 +94,28 @@ function keepImageOnly(slot: CaptureSlotState): CaptureSlotState {
     file: slot.file,
     previewUrl: slot.previewUrl,
     status: "selected",
+  };
+}
+
+/** OCR ジョブ送信対象とみなすスロット（画像があり、未送信または再試行可能なもの）を抽出する。 */
+function pickOcrTargets(slots: readonly CaptureSlotState[]): CaptureSlotState[] {
+  return slots.filter(
+    (slot) => slot.file && ["selected", "failed", "cancelled"].includes(slot.status),
+  );
+}
+
+/** 送信開始時のスロット状態（前回までのエラー/ジョブ情報を全部クリアしつつ画像は維持）。 */
+function toUploadingSlot(slot: CaptureSlotState): CaptureSlotState {
+  return {
+    ...slot,
+    status: "uploading",
+    transportError: undefined,
+    jobFailure: undefined,
+    detectedKind: undefined,
+    imageId: undefined,
+    jobId: undefined,
+    draftId: undefined,
+    pollAttempts: 0,
   };
 }
 
@@ -214,10 +235,68 @@ export function OcrCapturePage() {
     );
   }
 
+  const createOcrMatchDraft = async (
+    selectedGameTitle:
+      | { id: string; layoutFamily?: string | null }
+      | undefined,
+  ): Promise<string | null> => {
+    try {
+      const matchDraft = await createMatchDraft({
+        gameTitleId: setup.gameTitleId,
+        ...(selectedGameTitle?.layoutFamily
+          ? { layoutFamily: selectedGameTitle.layoutFamily }
+          : {}),
+        mapMasterId: setup.mapMasterId,
+        ownerMemberId: setup.ownerMemberId,
+        playedAt: new Date().toISOString(),
+        seasonMasterId: setup.seasonMasterId,
+        status: "ocr_running",
+      });
+      return matchDraft.matchDraftId;
+    } catch (error) {
+      notify(formatApiError(error, "対局の作成に失敗しました"));
+      return null;
+    }
+  };
+
+  /** 1スロット分の画像をアップロードして OCR ジョブを作成。成功時 true、失敗時 false。 */
+  const enqueueSlotJob = async (
+    slot: CaptureSlotState,
+    matchDraftId: string,
+  ): Promise<boolean> => {
+    if (!slot.file) {
+      return false;
+    }
+    const uploadingSlot = toUploadingSlot(slot);
+    updateSlot(uploadingSlot);
+
+    try {
+      const { upload, job } = await uploadMutation.mutateAsync({
+        matchDraftId,
+        slot: uploadingSlot,
+        file: slot.file,
+      });
+      const status = parseOcrJobStatus(job.status);
+      updateSlot({
+        ...uploadingSlot,
+        imageId: upload.imageId,
+        jobId: job.jobId,
+        draftId: job.draftId,
+        status: status === "unknown" ? "queued" : status,
+      });
+      return true;
+    } catch (error) {
+      updateSlot({
+        ...uploadingSlot,
+        status: "failed",
+        transportError: normalizeUnknownApiError(error),
+      });
+      return false;
+    }
+  };
+
   async function handleStartOcr() {
-    const targetSlots = slots.filter(
-      (slot) => slot.file && ["selected", "failed", "cancelled"].includes(slot.status),
-    );
+    const targetSlots = pickOcrTargets(slots);
     if (targetSlots.length === 0) {
       notify("OCRに送る画像がありません。まず撮影して分類トレイへ置いてください。");
       return;
@@ -235,66 +314,19 @@ export function OcrCapturePage() {
     notify(
       `${targetSlots.length}枚をOCRに送信しています。作業単位を作成して、試合一覧でOCR中として追跡します。`,
     );
-    let matchDraftId = "";
-    try {
-      const matchDraft = await createMatchDraft({
-        gameTitleId: setup.gameTitleId,
-        ...(selectedGameTitle?.layoutFamily
-          ? { layoutFamily: selectedGameTitle.layoutFamily }
-          : {}),
-        mapMasterId: setup.mapMasterId,
-        ownerMemberId: setup.ownerMemberId,
-        playedAt: new Date().toISOString(),
-        seasonMasterId: setup.seasonMasterId,
-        status: "ocr_running",
-      });
-      matchDraftId = matchDraft.matchDraftId;
-    } catch (error) {
-      notify(formatApiError(error, "対局の作成に失敗しました"));
+
+    const matchDraftId = await createOcrMatchDraft(selectedGameTitle);
+    if (!matchDraftId) {
       return;
     }
 
     let createdJobCount = 0;
     for (const slot of targetSlots) {
-      if (!slot.file) {
-        continue;
-      }
-      const uploadingSlot: CaptureSlotState = {
-        ...slot,
-        status: "uploading",
-        transportError: undefined,
-        jobFailure: undefined,
-        detectedKind: undefined,
-        imageId: undefined,
-        jobId: undefined,
-        draftId: undefined,
-        pollAttempts: 0,
-      };
-      updateSlot(uploadingSlot);
-
-      try {
-        const { upload, job } = await uploadMutation.mutateAsync({
-          matchDraftId,
-          slot: uploadingSlot,
-          file: slot.file,
-        });
+      if (await enqueueSlotJob(slot, matchDraftId)) {
         createdJobCount += 1;
-        const status = parseOcrJobStatus(job.status);
-        updateSlot({
-          ...uploadingSlot,
-          imageId: upload.imageId,
-          jobId: job.jobId,
-          draftId: job.draftId,
-          status: status === "unknown" ? "queued" : status,
-        });
-      } catch (error) {
-        updateSlot({
-          ...uploadingSlot,
-          status: "failed",
-          transportError: normalizeUnknownApiError(error),
-        });
       }
     }
+
     if (createdJobCount > 0) {
       await invalidateMatchCaches(queryClient);
       navigate("/matches", { replace: true });

@@ -83,58 +83,64 @@ function resolveMemberIdForRow(
 }
 
 /**
- * 4人分の OCR エントリからエイリアス一致 → 固定メンバー順 (fallback) の順で
- * memberId を解決し、重複が出ないように未使用メンバーで埋める。
+ * 各エントリから 1 件ずつ値を取り出すが、`pool` 内のユニークな値しか採用しないクレーム処理。
+ * 採用されなかった行には、まだ誰にも使われていない `pool` の値を順に充当する。
  *
- * `resolveMemberIdForRow` 単体ではエイリアスにマッチしなかった行と、別の行のフォールバック
- * 先 (fixedMembers[index]) が衝突して同じメンバーが2回現れる問題を防ぐ。
+ * memberId / playOrder のように「重複させたくないが、欠けた行は fallback で埋めたい」共通パターン。
  */
-function resolveMemberIds(entries: ReadonlyArray<OcrPlayerEntry | undefined>): string[] {
-  const resolved: Array<string | undefined> = entries.map((entry) => {
-    if (entry?.member_id && memberIds.includes(entry.member_id)) {
-      return entry.member_id;
-    }
-    return aliasToMemberId(entry?.raw_player_name.value);
-  });
-
-  const used = new Set(resolved.filter(Boolean));
-  const remaining = memberIds.filter((id) => !used.has(id));
-
-  return resolved.map((id) => {
-    if (id) {
-      return id;
-    }
-    const next = remaining.shift();
-    if (next) {
-      used.add(next);
-      return next;
-    }
-    return "";
-  });
-}
-
-function resolvePlayOrders(entries: ReadonlyArray<OcrPlayerEntry | undefined>): number[] {
-  // OCR が play_order を検出した行はその値を尊重し、未検出 (または重複) の行には
-  // 未使用の play_order (1〜4) を 1 から順に割り当てる。
-  // 単純な `index + 1` フォールバックだと、別行で OCR が読み取った play_order と
-  // 衝突して同一の事件簿行を参照する不具合が起きるため。
-  const used = new Set<number>();
-  const claimed: Array<number | undefined> = entries.map((entry) => {
-    const value = entry?.play_order?.value;
-    if (
-      typeof value === "number" &&
-      Number.isFinite(value) &&
-      value >= 1 &&
-      value <= 4 &&
-      !used.has(value)
-    ) {
+function claimWithoutDuplicates<T, V>(
+  entries: readonly T[],
+  pool: readonly V[],
+  claim: (entry: T) => V | undefined,
+  fallbackEmpty: V,
+): V[] {
+  const used = new Set<V>();
+  const initial: Array<V | undefined> = entries.map((entry) => {
+    const value = claim(entry);
+    if (value !== undefined && pool.includes(value) && !used.has(value)) {
       used.add(value);
       return value;
     }
     return undefined;
   });
-  const remaining: number[] = [1, 2, 3, 4].filter((order) => !used.has(order));
-  return claimed.map((value) => value ?? remaining.shift() ?? 0);
+  const remaining = pool.filter((value) => !used.has(value));
+  return initial.map((value) => value ?? remaining.shift() ?? fallbackEmpty);
+}
+
+/**
+ * 4人分の OCR エントリからエイリアス一致 → 固定メンバー順 (fallback) の順で
+ * memberId を解決し、重複が出ないように未使用メンバーで埋める。
+ */
+function resolveMemberIds(entries: ReadonlyArray<OcrPlayerEntry | undefined>): string[] {
+  return claimWithoutDuplicates(
+    entries,
+    memberIds,
+    (entry) => {
+      if (entry?.member_id && memberIds.includes(entry.member_id)) {
+        return entry.member_id;
+      }
+      return aliasToMemberId(entry?.raw_player_name.value);
+    },
+    "",
+  );
+}
+
+/**
+ * OCR が play_order を検出した行はその値を尊重し、未検出 (または重複) の行には
+ * 未使用の play_order (1〜4) を 1 から順に割り当てる。
+ */
+function resolvePlayOrders(entries: ReadonlyArray<OcrPlayerEntry | undefined>): number[] {
+  return claimWithoutDuplicates(
+    entries,
+    [1, 2, 3, 4] as const,
+    (entry) => {
+      const value = entry?.play_order?.value;
+      return typeof value === "number" && Number.isFinite(value) && value >= 1 && value <= 4
+        ? value
+        : undefined;
+    },
+    0,
+  );
 }
 
 function numberValue(field: OcrField<number> | undefined, fallback: number): number {

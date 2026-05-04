@@ -1,11 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { listHeldEvents } from "@/features/draftReview/api";
 import { deleteMatch, getMatch } from "@/features/matches/api";
 import { invalidateMatchCaches, matchKeys } from "@/features/matches/queryKeys";
-import { MatchWorkspacePage } from "@/features/matches/workspace/MatchWorkspacePage";
 import { fixedMembers } from "@/features/ocrCapture/localMasters";
 import { listGameTitles, listMapMasters, listSeasonMasters } from "@/shared/api/masters";
 import { formatApiError } from "@/shared/api/problemDetails";
@@ -39,38 +38,32 @@ function formatDate(iso: string): string {
 
 export function MatchDetailPage() {
   const { matchId = "" } = useParams<{ matchId: string }>();
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [showConfirm, setShowConfirm] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const mode = searchParams.get("mode");
 
   const matchQuery = useQuery({
     queryKey: matchKeys.matchDetail(matchId),
     queryFn: () => getMatch(matchId),
-    enabled: matchId.length > 0 && mode !== "edit",
+    enabled: matchId.length > 0,
   });
 
   const heldEventsQuery = useQuery({
     queryKey: ["held-events", "all"],
     queryFn: () => listHeldEvents("", 100),
-    enabled: mode !== "edit",
   });
   const gameTitlesQuery = useQuery({
     queryKey: ["game-titles"],
     queryFn: () => listGameTitles(),
-    enabled: mode !== "edit",
   });
   const seasonsQuery = useQuery({
     queryKey: ["season-masters", "all"],
     queryFn: () => listSeasonMasters(),
-    enabled: mode !== "edit",
   });
   const mapsQuery = useQuery({
     queryKey: ["map-masters", "all"],
     queryFn: () => listMapMasters(),
-    enabled: mode !== "edit",
   });
 
   const deleteMutation = useMutation({
@@ -83,10 +76,6 @@ export function MatchDetailPage() {
       setErrorMessage(formatApiError(error, "削除に失敗しました"));
     },
   });
-
-  if (mode === "edit") {
-    return <MatchWorkspacePage matchId={matchId} mode="edit" />;
-  }
 
   if (isInitialQueryLoading(matchQuery)) {
     return <p className="p-8 text-[var(--color-text-secondary)]">読み込み中...</p>;

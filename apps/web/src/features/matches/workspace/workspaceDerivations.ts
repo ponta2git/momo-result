@@ -42,6 +42,15 @@ export function toIsoFromLocal(value: string): string {
   return Number.isNaN(date.getTime()) ? value : date.toISOString();
 }
 
+/**
+ * `<input type="datetime-local">` 用に、現在のローカル時刻を `YYYY-MM-DDTHH:mm` 形式で返す。
+ * `useEffect` で初期化しないで済むよう、純粋関数として分離。
+ */
+export function currentLocalIsoMinute(now: Date = new Date()): string {
+  const offsetMs = now.getTimezoneOffset() * 60_000;
+  return new Date(now.getTime() - offsetMs).toISOString().slice(0, 16);
+}
+
 export function prefillFromDraftSummary(
   base: MatchFormValues,
   summary?: MatchDraftSummary,

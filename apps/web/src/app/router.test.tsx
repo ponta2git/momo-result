@@ -75,13 +75,12 @@ describe("app routing", () => {
     expect(router.state.location.pathname).toBe("/matches");
   });
 
-  it("redirects /matches/:matchId/edit to /matches/:matchId?mode=edit", async () => {
+  it("renders edit mode at /matches/:matchId/edit", async () => {
     window.localStorage.setItem("momoresult.devUser", "ponta");
     const { router } = renderApp("/matches/match-1/edit");
 
     await waitFor(() => {
-      expect(router.state.location.pathname).toBe("/matches/match-1");
-      expect(router.state.location.search).toBe("?mode=edit");
+      expect(router.state.location.pathname).toBe("/matches/match-1/edit");
     });
   });
 });

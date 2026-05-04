@@ -6,9 +6,7 @@ Responsibilities are kept to:
 2. Drive :func:`pipeline.run_pipeline` (state-machine + analysis).
 3. Convert any uncaught error into a terminal ``FAILED`` row via
    :func:`failure_recorder.record_terminal_failure`.
-4. Best-effort delete the temporary image (image retention is forbidden
-   by AGENTS.md).
-5. Acknowledge the queue delivery *only* after the terminal status has
+4. Acknowledge the queue delivery *only* after the terminal status has
    been written.
 
 State transitions, alias resolution, debug-dir resolution and warning
@@ -21,7 +19,6 @@ import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from pathlib import Path
 
 from momo_ocr.features.ocr_jobs.cancellation import CancellationChecker
 from momo_ocr.features.ocr_jobs.consumer import OcrJobConsumer
@@ -33,7 +30,6 @@ from momo_ocr.features.ocr_jobs.repository import OcrJobRepository
 from momo_ocr.features.ocr_jobs.result_writer import OcrResultWriter
 from momo_ocr.features.standalone_analysis.analyze_image import analyze_image
 from momo_ocr.features.standalone_analysis.report import AnalysisResult
-from momo_ocr.features.temp_images.cleanup import delete_if_exists
 from momo_ocr.features.text_recognition.engine import (
     FakeTextRecognitionEngine,
     TextRecognitionEngine,
@@ -68,7 +64,6 @@ class JobRunnerDependencies:
     cancellation: CancellationChecker
     worker_id: str
     analyze: AnalyzeImageFn = analyze_image
-    delete_image: Callable[[Path], bool] = delete_if_exists
     text_engine: TextRecognitionEngine = field(default_factory=FakeTextRecognitionEngine)
 
 
@@ -114,11 +109,6 @@ def run_one_job(deps: JobRunnerDependencies) -> JobRunOutcome:
         )
         record_terminal_failure(deps, delivery.message, failure)
         outcome_status = OcrJobStatus.FAILED
-    finally:
-        # Best-effort image cleanup for every terminal outcome. Image
-        # retention violates AGENTS.md; a delete failure is non-fatal.
-        deps.delete_image(delivery.message.image_path)
-
     ack_delivery(deps, delivery)
     duration_ms = (time.monotonic() - started) * 1000.0
     return JobRunOutcome(

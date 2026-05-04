@@ -136,13 +136,7 @@ def _make_deps(
     result_writer: InMemoryOcrResultWriter,
     cancellation: InMemoryCancellationChecker,
     analyze: Callable[..., AnalysisResult],
-    deletes: list[Path] | None = None,
 ) -> JobRunnerDependencies:
-    def delete_image(path: Path) -> bool:
-        if deletes is not None:
-            deletes.append(path)
-        return True
-
     return JobRunnerDependencies(
         consumer=consumer,
         repository=repository,
@@ -150,7 +144,6 @@ def _make_deps(
         cancellation=cancellation,
         worker_id=WORKER_ID,
         analyze=analyze,
-        delete_image=delete_image,
     )
 
 
@@ -176,8 +169,6 @@ def test_happy_path_persists_result_and_acks() -> None:
     consumer = InMemoryOcrJobConsumer()
     repository = InMemoryOcrJobRepository()
     result_writer = InMemoryOcrResultWriter()
-    deletes: list[Path] = []
-
     payload = _make_payload(image_path=Path("/tmp/momo/abc.jpg"))
     _seed_record(repository, payload)
     consumer.enqueue(payload, delivery_tag="d1")
@@ -188,7 +179,6 @@ def test_happy_path_persists_result_and_acks() -> None:
         result_writer=result_writer,
         cancellation=InMemoryCancellationChecker(),
         analyze=lambda **_: _success_analysis(),
-        deletes=deletes,
     )
 
     outcome = run_one_job(deps)
@@ -202,7 +192,6 @@ def test_happy_path_persists_result_and_acks() -> None:
     assert "job-1" in result_writer.records
     assert result_writer.records["job-1"].draft_id == "draft-1"
     assert consumer.acked == ["d1"]
-    assert deletes == [Path("/tmp/momo/abc.jpg")]
 
 
 def test_failure_analysis_records_failed_terminal_status_with_metadata() -> None:

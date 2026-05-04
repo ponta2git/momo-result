@@ -20,6 +20,7 @@ object ApiEndpoints:
     HeldEventsEndpoints.list,
     HeldEventsEndpoints.create,
     MatchDraftEndpoints.create,
+    MatchDraftEndpoints.get,
     MatchDraftEndpoints.update,
     MatchDraftEndpoints.cancel,
     MatchDraftEndpoints.listSourceImages,

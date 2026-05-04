@@ -33,8 +33,9 @@ import momo.api.repositories.postgres.{
 import momo.api.usecases.{
   CancelMatchDraft, CancelOcrJob, ConfirmMatch, CreateGameTitle, CreateHeldEvent, CreateMapMaster,
   CreateMatchDraft, CreateOcrJob, CreateSeasonMaster, DeleteMatch, ExportMatches, GetMatch,
-  GetMatchDraftSourceImages, GetOcrDraft, GetOcrDraftsBulk, GetOcrJob, ListHeldEvents, ListMatches,
-  SourceImageRetentionService, UpdateMatch, UpdateMatchDraft, UploadImage,
+  GetMatchDraft, GetMatchDraftSourceImages, GetOcrDraft, GetOcrDraftsBulk, GetOcrJob,
+  ListHeldEvents, ListMatches, SourceImageRetentionService, UpdateMatch, UpdateMatchDraft,
+  UploadImage,
 }
 import org.http4s.HttpApp as Http4sApp
 
@@ -176,7 +177,7 @@ object HttpApp:
     val cancelOcrJob = CancelOcrJob[F](jobs, nowF)
     val listHeldEvents = ListHeldEvents[F](heldEvents, matches)
     val createHeldEvent = CreateHeldEvent[F](heldEvents, IdGenerator.next[F])
-    val sourceImageRetention = SourceImageRetentionService[F](matchDrafts)
+    val sourceImageRetention = SourceImageRetentionService[F](matchDrafts, imageStore)
     val createMatchDraft = CreateMatchDraft[F](
       heldEvents = heldEvents,
       gameTitles = gameTitles,
@@ -186,6 +187,7 @@ object HttpApp:
       now = nowF,
       nextId = IdGenerator.next[F],
     )
+    val getMatchDraft = GetMatchDraft[F](matchDrafts)
     val updateMatchDraft = UpdateMatchDraft[F](
       heldEvents = heldEvents,
       gameTitles = gameTitles,
@@ -239,6 +241,7 @@ object HttpApp:
         listHeldEvents = listHeldEvents,
         createHeldEvent = createHeldEvent,
         createMatchDraft = createMatchDraft,
+        getMatchDraft = getMatchDraft,
         updateMatchDraft = updateMatchDraft,
         cancelMatchDraft = cancelMatchDraft,
         getMatchDraftSourceImages = getMatchDraftSourceImages,

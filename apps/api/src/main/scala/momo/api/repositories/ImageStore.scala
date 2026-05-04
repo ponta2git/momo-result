@@ -11,3 +11,4 @@ trait ImageStore[F[_]]:
       bytes: Array[Byte],
   ): F[Either[AppError, StoredImage]]
   def find(imageId: ImageId): F[Option[StoredImage]]
+  def delete(imageId: ImageId): F[Boolean]

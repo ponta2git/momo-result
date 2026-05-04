@@ -1,9 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { listHeldEvents } from "@/features/draftReview/api";
 import { deleteMatch, getMatch } from "@/features/matches/api";
+import { MatchWorkspacePage } from "@/features/matches/workspace/MatchWorkspacePage";
 import { fixedMembers } from "@/features/ocrCapture/localMasters";
 import { listGameTitles, listMapMasters, listSeasonMasters } from "@/shared/api/masters";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
@@ -36,10 +37,16 @@ function formatDate(iso: string): string {
 
 export function MatchDetailPage() {
   const { matchId = "" } = useParams<{ matchId: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [showConfirm, setShowConfirm] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const mode = searchParams.get("mode");
+
+  if (mode === "edit") {
+    return <MatchWorkspacePage matchId={matchId} mode="edit" />;
+  }
 
   const matchQuery = useQuery({
     queryKey: ["match", matchId],

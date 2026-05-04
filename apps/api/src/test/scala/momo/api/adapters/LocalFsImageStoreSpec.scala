@@ -2,6 +2,7 @@ package momo.api.adapters
 
 import cats.effect.IO
 import java.nio.file.Files
+import momo.api.domain.ids.ImageId
 import momo.api.errors.AppError
 import momo.api.MomoCatsEffectSuite
 
@@ -39,6 +40,31 @@ final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:
         case Left(error: AppError.PayloadTooLarge) =>
           assert(error.detail.contains(LocalFsImageStore.MaxBytes.toString))
         case other => fail(s"expected payload too large, got $other")
+      }
+    }
+  }
+
+  test("deletes stored images by image id") {
+    IO.blocking(Files.createTempDirectory("momo-api-image-store")).flatMap { dir =>
+      val store = LocalFsImageStore[IO](dir)
+      for
+        stored <- store.save(Some("sample.png"), Some("image/png"), pngBytes).flatMap {
+          case Right(image) => IO.pure(image)
+          case Left(error) => fail(s"expected image to be stored: $error")
+        }
+        deleted <- store.delete(stored.imageId)
+        existsAfter <- IO.blocking(Files.exists(stored.path))
+      yield
+        assertEquals(deleted, true)
+        assertEquals(existsAfter, false)
+    }
+  }
+
+  test("delete returns false when image does not exist") {
+    IO.blocking(Files.createTempDirectory("momo-api-image-store")).flatMap { dir =>
+      val store = LocalFsImageStore[IO](dir)
+      store.delete(ImageId("missing-image-id")).map { deleted =>
+        assertEquals(deleted, false)
       }
     }
   }

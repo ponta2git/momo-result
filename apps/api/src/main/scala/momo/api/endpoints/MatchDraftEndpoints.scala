@@ -7,6 +7,7 @@ import sttp.tapir.json.circe.*
 
 object MatchDraftEndpoints:
   type CreateInput = (Option[String], Option[String], CreateMatchDraftRequest)
+  type GetInput = (String, Option[String])
   type UpdateInput = (String, Option[String], Option[String], UpdateMatchDraftRequest)
   type CancelInput = (String, Option[String], Option[String])
 
@@ -28,6 +29,14 @@ object MatchDraftEndpoints:
     .in(jsonBody[UpdateMatchDraftRequest])
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[MatchDraftResponse])
+    .tag("match-drafts")
+
+  val get: PublicEndpoint[GetInput, ErrorInfo, MatchDraftDetailResponse, Any] = endpoint
+    .get
+    .in("api" / "match-drafts" / path[String]("draftId"))
+    .in(header[Option[String]]("X-Dev-User"))
+    .errorOut(CommonEndpoint.errorOut)
+    .out(jsonBody[MatchDraftDetailResponse])
     .tag("match-drafts")
 
   val cancel: PublicEndpoint[CancelInput, ErrorInfo, CancelMatchDraftResponse, Any] = endpoint

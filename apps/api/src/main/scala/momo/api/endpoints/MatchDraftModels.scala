@@ -44,6 +44,47 @@ object MatchDraftResponse:
     updatedAt = DateTimeFormatter.ISO_INSTANT.format(draft.updatedAt),
   )
 
+final case class MatchDraftDetailResponse(
+    matchDraftId: String,
+    status: String,
+    heldEventId: Option[String],
+    matchNoInEvent: Option[Int],
+    gameTitleId: Option[String],
+    seasonMasterId: Option[String],
+    ownerMemberId: Option[String],
+    mapMasterId: Option[String],
+    playedAt: Option[String],
+    totalAssetsDraftId: Option[String],
+    revenueDraftId: Option[String],
+    incidentLogDraftId: Option[String],
+    totalAssetsImageId: Option[String],
+    revenueImageId: Option[String],
+    incidentLogImageId: Option[String],
+    createdAt: String,
+    updatedAt: String,
+) derives Codec.AsObject
+
+object MatchDraftDetailResponse:
+  def from(draft: MatchDraft): MatchDraftDetailResponse = MatchDraftDetailResponse(
+    matchDraftId = draft.id,
+    status = draft.status.wire,
+    heldEventId = draft.heldEventId,
+    matchNoInEvent = draft.matchNoInEvent,
+    gameTitleId = draft.gameTitleId,
+    seasonMasterId = draft.seasonMasterId,
+    ownerMemberId = draft.ownerMemberId,
+    mapMasterId = draft.mapMasterId,
+    playedAt = draft.playedAt.map(DateTimeFormatter.ISO_INSTANT.format),
+    totalAssetsDraftId = draft.totalAssetsDraftId,
+    revenueDraftId = draft.revenueDraftId,
+    incidentLogDraftId = draft.incidentLogDraftId,
+    totalAssetsImageId = draft.totalAssetsImageId,
+    revenueImageId = draft.revenueImageId,
+    incidentLogImageId = draft.incidentLogImageId,
+    createdAt = DateTimeFormatter.ISO_INSTANT.format(draft.createdAt),
+    updatedAt = DateTimeFormatter.ISO_INSTANT.format(draft.updatedAt),
+  )
+
 final case class CancelMatchDraftResponse(matchDraftId: String, status: String)
     derives Codec.AsObject
 

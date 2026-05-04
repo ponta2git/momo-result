@@ -92,7 +92,7 @@ final class ConfirmMatch[F[_]: MonadThrow](
     )
     _ <- maybeDraft match
       case None => EitherT.rightT[F, AppError](())
-      case Some(draft) => EitherT.liftF(sourceImageRetention.markForCleanup(draft.id, createdAt))
+      case Some(draft) => EitherT.liftF(sourceImageRetention.cleanupNow(draft.id, createdAt))
   yield record).value
 
 object ConfirmMatch:

@@ -16,6 +16,7 @@ import momo.api.endpoints.{
   GameTitleResponse, GameTitlesEndpoints, HealthEndpoints, HeldEventListResponse, HeldEventResponse,
   HeldEventsEndpoints, IncidentMasterListResponse, IncidentMasterResponse, IncidentMastersEndpoints,
   MapMasterListResponse, MapMasterResponse, MapMastersEndpoints, MatchDetailResponse,
+  MatchDraftDetailResponse,
   MatchDraftEndpoints, MatchDraftResponse, MatchDraftSourceImageListResponse,
   MatchDraftSourceImageResponse, MatchListResponse, MatchSummaryResponse, MatchesEndpoints,
   OcrDraftEndpoints, OcrDraftListResponse, OcrDraftResponse, OcrJobEndpoints, OcrJobResponse,
@@ -33,7 +34,8 @@ import momo.api.usecases.{
   CreateHeldEvent, CreateHeldEventCommand, CreateMapMaster, CreateMapMasterCommand,
   CreateMatchDraft, CreateMatchDraftCommand, CreateOcrJob, CreateOcrJobCommand, CreateSeasonMaster,
   CreateSeasonMasterCommand, DeleteMatch, ExportMatches, GetMatch, GetMatchDraftSourceImages,
-  GetOcrDraft, GetOcrDraftsBulk, GetOcrJob, ListHeldEvents, ListMatches, ListMatchesCommand,
+  GetMatchDraft, GetOcrDraft, GetOcrDraftsBulk, GetOcrJob, ListHeldEvents, ListMatches,
+  ListMatchesCommand,
   UpdateMatch, UpdateMatchDraft, UpdateMatchDraftCommand, UploadImage,
 }
 import org.http4s.{HttpApp as Http4sApp, HttpRoutes as Http4sRoutes}
@@ -54,6 +56,7 @@ object HttpRoutes:
       listHeldEvents: ListHeldEvents[F],
       createHeldEvent: CreateHeldEvent[F],
       createMatchDraft: CreateMatchDraft[F],
+      getMatchDraft: GetMatchDraft[F],
       updateMatchDraft: UpdateMatchDraft[F],
       cancelMatchDraft: CancelMatchDraft[F],
       getMatchDraftSourceImages: GetMatchDraftSourceImages[F],
@@ -194,6 +197,11 @@ object HttpRoutes:
                 member.memberId,
               ))(MatchDraftResponse.from)
           }
+        }
+      },
+      MatchDraftEndpoints.get.serverLogic { case (draftId, devUser) =>
+        security.authorizeRead(devUser) { member =>
+          respond(deps.getMatchDraft.run(draftId, member.memberId))(MatchDraftDetailResponse.from)
         }
       },
       MatchDraftEndpoints.cancel.serverLogic { case (draftId, devUser, csrfToken) =>

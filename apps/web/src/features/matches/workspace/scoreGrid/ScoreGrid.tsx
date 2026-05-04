@@ -1,0 +1,735 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { KeyboardEvent } from "react";
+
+import type { IncidentLookupEntry, ReviewPlayer } from "@/features/draftReview/mergeDrafts";
+import { incidentColumns } from "@/features/matches/workspace/matchFormTypes";
+import type { IncidentKey, MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
+import { handleScoreGridKeydown } from "@/features/matches/workspace/scoreGrid/ScoreGridKeyboard";
+import { fixedMembers } from "@/features/ocrCapture/localMasters";
+
+const confidenceThresholdHigh = 0.9;
+
+type GridColumn =
+  | "memberId"
+  | "playOrder"
+  | "rank"
+  | "totalAssetsManYen"
+  | "revenueManYen"
+  | `incident.${IncidentKey}`;
+
+const gridColumns: GridColumn[] = [
+  "memberId",
+  "playOrder",
+  "rank",
+  "totalAssetsManYen",
+  "revenueManYen",
+  ...incidentColumns.map(([key]) => `incident.${key}` as const),
+];
+
+const baseInputClass =
+  "w-full rounded-xl border border-line-soft bg-capture-black/45 px-2 py-2 text-sm text-ink-100 transition hover:border-white/18";
+const textNumericShortClass = `${baseInputClass} min-w-[6ch] text-center tabular-nums`;
+const textNumericClass = `${baseInputClass} min-w-[12ch] text-right tabular-nums`;
+const selectShortClass = `${baseInputClass} min-w-[6ch] text-center`;
+const memberSelectClass = `${baseInputClass} min-w-[10rem]`;
+
+function memberName(memberId: string): string {
+  return fixedMembers.find((member) => member.memberId === memberId)?.displayName ?? memberId;
+}
+
+type CellViewState = {
+  label?: string;
+  toneClass: string;
+};
+
+function cellViewState(args: {
+  confidence: number | null | undefined;
+  currentValue: number;
+  error: boolean;
+  originalValue: number | undefined;
+  synced: boolean;
+}): CellViewState {
+  if (args.error) {
+    return {
+      label: "要確認",
+      toneClass: "border-red-300/65 bg-red-950/35",
+    };
+  }
+
+  if (args.synced) {
+    return {
+      label: "同期済み",
+      toneClass: "border-cyan-300/55 bg-cyan-600/12",
+    };
+  }
+
+  if (args.originalValue !== undefined && args.currentValue !== args.originalValue) {
+    return {
+      label: "手修正",
+      toneClass: "border-rail-gold/55 bg-rail-gold/10",
+    };
+  }
+
+  if (args.confidence != null && args.confidence >= confidenceThresholdHigh) {
+    return {
+      label: "OCR",
+      toneClass: "border-emerald-400/55 bg-emerald-400/10",
+    };
+  }
+
+  if (args.confidence != null) {
+    return {
+      label: "要確認",
+      toneClass: "border-amber-300/55 bg-amber-300/10",
+    };
+  }
+
+  return {
+    toneClass: "",
+  };
+}
+
+function normalizeNumericDraft(input: string, allowSign: boolean): string {
+  if (input.trim() === "") {
+    return "";
+  }
+
+  if (allowSign && input === "-") {
+    return input;
+  }
+
+  const sign = allowSign && input.startsWith("-") ? "-" : "";
+  const rest = sign ? input.slice(1) : input;
+  const digits = rest.replace(/\D/g, "");
+
+  if (!digits) {
+    return sign;
+  }
+
+  return `${sign}${digits.replace(/^0+(?=\d)/, "")}`;
+}
+
+function parseNumericValue(value: string, allowSign: boolean): number {
+  if (value.trim() === "" || value === "-") {
+    return Number.NaN;
+  }
+
+  if (allowSign) {
+    return /^-?\d+$/.test(value) ? Number(value) : Number.NaN;
+  }
+
+  return /^\d+$/.test(value) ? Number(value) : Number.NaN;
+}
+
+function keyToPath(row: number, column: GridColumn): string {
+  if (column.startsWith("incident.")) {
+    return `players.${row}.incidents.${column.replace("incident.", "")}`;
+  }
+  return `players.${row}.${column}`;
+}
+
+function preferImageKind(column: GridColumn): "incident_log" | "revenue" | "total_assets" {
+  if (column === "revenueManYen") {
+    return "revenue";
+  }
+  if (column.startsWith("incident.")) {
+    return "incident_log";
+  }
+  return "total_assets";
+}
+
+type ScoreGridProps = {
+  errorPathSet: Set<string>;
+  incidentByPlayOrder: Map<number, IncidentLookupEntry> | undefined;
+  lastSyncedPlayerIndex: number | null;
+  onIncidentChange: (index: number, key: IncidentKey, value: number) => void;
+  onPlayerChange: (index: number, patch: Partial<MatchFormValues["players"][number]>) => void;
+  onPlayOrderChange: (index: number, playOrder: number) => void;
+  onPreferImageKindChange?: (kind: "incident_log" | "revenue" | "total_assets") => void;
+  onRequestSubmitFocus: () => void;
+  originalPlayers: ReviewPlayer[] | undefined;
+  players: MatchFormValues["players"];
+};
+
+export function ScoreGrid({
+  errorPathSet,
+  incidentByPlayOrder,
+  lastSyncedPlayerIndex,
+  onIncidentChange,
+  onPlayerChange,
+  onPlayOrderChange,
+  onPreferImageKindChange,
+  onRequestSubmitFocus,
+  originalPlayers,
+  players,
+}: ScoreGridProps) {
+  const [expandedMobilePlayer, setExpandedMobilePlayer] = useState(0);
+  const [isNarrowViewport, setIsNarrowViewport] = useState(false);
+  const [draftInputs, setDraftInputs] = useState<Record<string, string>>({});
+  const editStartByCell = useRef(new Map<string, string>());
+  const inputRefs = useRef(new Map<string, HTMLElement>());
+
+  const originalByPlayOrder = useMemo(() => {
+    if (!originalPlayers) {
+      return new Map<number, ReviewPlayer>();
+    }
+    return new Map(originalPlayers.map((player) => [player.playOrder, player]));
+  }, [originalPlayers]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      setIsNarrowViewport(false);
+      return;
+    }
+    const media = window.matchMedia("(max-width: 1023px)");
+    const apply = () => setIsNarrowViewport(media.matches);
+    apply();
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
+  }, []);
+
+  const getCellId = (row: number, col: number) => `player-${row}-${gridColumns[col]}`;
+
+  const focusCell = (cellId: string) => {
+    const next = inputRefs.current.get(cellId);
+    if (next) {
+      next.focus();
+    }
+  };
+
+  const updateDraft = (cellId: string, value: string) => {
+    setDraftInputs((current) => ({
+      ...current,
+      [cellId]: value,
+    }));
+  };
+
+  const clearDraft = (cellId: string) => {
+    setDraftInputs((current) => {
+      if (!(cellId in current)) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[cellId];
+      return next;
+    });
+  };
+
+  const handleKeyboard = (args: {
+    col: number;
+    event: KeyboardEvent<HTMLElement>;
+    onRevertCell: () => void;
+    row: number;
+  }) => {
+    const target = args.event.currentTarget;
+
+    if (args.event.key === "ArrowLeft" || args.event.key === "ArrowRight") {
+      const delta = args.event.key === "ArrowLeft" ? -1 : 1;
+      const nextCol = args.col + delta;
+      if (nextCol >= 0 && nextCol < gridColumns.length) {
+        const isSelect = target instanceof HTMLSelectElement;
+        const isInputSelectedAll =
+          target instanceof HTMLInputElement &&
+          target.selectionStart === 0 &&
+          target.selectionEnd === target.value.length;
+
+        if (isSelect || isInputSelectedAll) {
+          args.event.preventDefault();
+          focusCell(getCellId(args.row, nextCol));
+          return;
+        }
+      }
+    }
+
+    handleScoreGridKeydown({
+      colCount: gridColumns.length,
+      event: args.event,
+      getCellId: ({ col, row }) => getCellId(row, col),
+      onFocusCell: focusCell,
+      onRevertCell: args.onRevertCell,
+      onSubmitFocus: onRequestSubmitFocus,
+      position: { col: args.col, row: args.row },
+      rowCount: players.length,
+    });
+  };
+
+  const renderNumericCell = (args: {
+    allowSign: boolean;
+    col: number;
+    field: "rank" | "revenueManYen" | "totalAssetsManYen";
+    row: number;
+    viewState: CellViewState;
+  }) => {
+    const player = players[args.row];
+    if (!player) {
+      return null;
+    }
+    const cellId = getCellId(args.row, args.col);
+    const rawValue = player[args.field];
+    const fallbackValue = Number.isFinite(rawValue) ? String(rawValue) : "";
+    const draftValue = draftInputs[cellId] ?? fallbackValue;
+
+    return (
+      <>
+        <input
+          ref={(node) => {
+            if (node) {
+              inputRefs.current.set(cellId, node);
+            } else {
+              inputRefs.current.delete(cellId);
+            }
+          }}
+          aria-label={`${memberName(player.memberId)} ${args.field}`}
+          className={`${args.field === "rank" ? textNumericShortClass : textNumericClass} ${args.viewState.toneClass}`}
+          inputMode="numeric"
+          type="text"
+          value={draftValue}
+          onBlur={() => {
+            const parsed = parseNumericValue(draftValue, args.allowSign);
+            onPlayerChange(args.row, { [args.field]: parsed } as Partial<
+              MatchFormValues["players"][number]
+            >);
+            if (!Number.isNaN(parsed)) {
+              clearDraft(cellId);
+            }
+          }}
+          onChange={(event) => {
+            const normalized = normalizeNumericDraft(event.target.value, args.allowSign);
+            updateDraft(cellId, normalized);
+            onPlayerChange(args.row, {
+              [args.field]: parseNumericValue(normalized, args.allowSign),
+            } as Partial<MatchFormValues["players"][number]>);
+          }}
+          onFocus={() => {
+            editStartByCell.current.set(cellId, draftValue);
+            if (args.field !== "rank") {
+              const column = gridColumns[args.col];
+              if (column) {
+                onPreferImageKindChange?.(preferImageKind(column));
+              }
+            }
+          }}
+          onKeyDown={(event) =>
+            handleKeyboard({
+              col: args.col,
+              event,
+              onRevertCell: () => {
+                const before = editStartByCell.current.get(cellId) ?? fallbackValue;
+                updateDraft(cellId, before);
+                const parsed = parseNumericValue(before, args.allowSign);
+                onPlayerChange(args.row, {
+                  [args.field]: parsed,
+                } as Partial<MatchFormValues["players"][number]>);
+              },
+              row: args.row,
+            })
+          }
+        />
+        {args.viewState.label ? (
+          <p className="text-ink-300 mt-1 text-[0.68rem]">{args.viewState.label}</p>
+        ) : null}
+      </>
+    );
+  };
+
+  const renderIncidentCell = (
+    row: number,
+    incidentKey: IncidentKey,
+    col: number,
+    viewState: CellViewState,
+  ) => {
+    const player = players[row];
+    if (!player) {
+      return null;
+    }
+    const cellId = getCellId(row, col);
+    const fallbackValue = Number.isFinite(player.incidents[incidentKey])
+      ? String(player.incidents[incidentKey])
+      : "";
+    const draftValue = draftInputs[cellId] ?? fallbackValue;
+
+    return (
+      <>
+        <input
+          ref={(node) => {
+            if (node) {
+              inputRefs.current.set(cellId, node);
+            } else {
+              inputRefs.current.delete(cellId);
+            }
+          }}
+          aria-label={`${memberName(player.memberId)} ${incidentKey}`}
+          className={`${textNumericShortClass} ${viewState.toneClass}`}
+          inputMode="numeric"
+          type="text"
+          value={draftValue}
+          onBlur={() => {
+            const parsed = parseNumericValue(draftValue, false);
+            onIncidentChange(row, incidentKey, parsed);
+            if (!Number.isNaN(parsed)) {
+              clearDraft(cellId);
+            }
+          }}
+          onChange={(event) => {
+            const normalized = normalizeNumericDraft(event.target.value, false);
+            updateDraft(cellId, normalized);
+            onIncidentChange(row, incidentKey, parseNumericValue(normalized, false));
+          }}
+          onFocus={() => {
+            editStartByCell.current.set(cellId, draftValue);
+            onPreferImageKindChange?.("incident_log");
+          }}
+          onKeyDown={(event) =>
+            handleKeyboard({
+              col,
+              event,
+              onRevertCell: () => {
+                const before = editStartByCell.current.get(cellId) ?? fallbackValue;
+                updateDraft(cellId, before);
+                onIncidentChange(row, incidentKey, parseNumericValue(before, false));
+              },
+              row,
+            })
+          }
+        />
+        {viewState.label ? (
+          <p className="text-ink-300 mt-1 text-[0.68rem]">{viewState.label}</p>
+        ) : null}
+      </>
+    );
+  };
+
+  const grid = (
+    <table className="min-w-[1200px] table-fixed border-separate border-spacing-y-2 text-left text-sm">
+      <colgroup>
+        <col className="w-[10rem]" />
+        <col className="w-[7ch]" />
+        <col className="w-[7ch]" />
+        <col className="w-[12ch]" />
+        <col className="w-[12ch]" />
+        {incidentColumns.map(([, label]) => (
+          <col key={label} className="w-[7ch]" />
+        ))}
+      </colgroup>
+      <thead className="text-ink-300 text-xs tracking-[0.14em] uppercase">
+        <tr>
+          <th className="px-2 py-2">メンバー</th>
+          <th className="px-2 py-2">順</th>
+          <th className="px-2 py-2">順位</th>
+          <th className="px-2 py-2">総資産</th>
+          <th className="px-2 py-2">収益</th>
+          {incidentColumns.map(([, label]) => (
+            <th key={label} className="px-2 py-2">
+              {label}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {players.map((player, rowIndex) => {
+          const incidentLookup = incidentByPlayOrder?.get(player.playOrder);
+          const originalRow = originalPlayers?.[rowIndex];
+          const originalByOrder = originalByPlayOrder.get(player.playOrder);
+          return (
+            <tr key={rowIndex} className="bg-capture-black/24">
+              <td className="rounded-l-2xl px-2 py-3 align-top">
+                <select
+                  ref={(node) => {
+                    const cellId = getCellId(rowIndex, 0);
+                    if (node) {
+                      inputRefs.current.set(cellId, node);
+                    } else {
+                      inputRefs.current.delete(cellId);
+                    }
+                  }}
+                  aria-label={`${memberName(player.memberId)} memberId`}
+                  className={memberSelectClass}
+                  value={player.memberId}
+                  onChange={(event) => {
+                    onPlayerChange(rowIndex, {
+                      memberId: event.target
+                        .value as MatchFormValues["players"][number]["memberId"],
+                    });
+                  }}
+                  onKeyDown={(event) =>
+                    handleKeyboard({
+                      col: 0,
+                      event,
+                      onRevertCell: () => undefined,
+                      row: rowIndex,
+                    })
+                  }
+                >
+                  {fixedMembers.map((member) => (
+                    <option key={member.memberId} value={member.memberId}>
+                      {member.displayName}
+                    </option>
+                  ))}
+                </select>
+              </td>
+
+              <td className="px-2 py-3 align-top">
+                {(() => {
+                  const cellId = getCellId(rowIndex, 1);
+                  return (
+                    <select
+                      ref={(node) => {
+                        if (node) {
+                          inputRefs.current.set(cellId, node);
+                        } else {
+                          inputRefs.current.delete(cellId);
+                        }
+                      }}
+                      aria-label={`${memberName(player.memberId)} playOrder`}
+                      className={`${selectShortClass} ${
+                        errorPathSet.has(keyToPath(rowIndex, "playOrder"))
+                          ? "border-red-300/65 bg-red-950/35"
+                          : ""
+                      }`}
+                      value={Number.isFinite(player.playOrder) ? String(player.playOrder) : ""}
+                      onChange={(event) =>
+                        onPlayOrderChange(rowIndex, Number.parseInt(event.target.value, 10))
+                      }
+                      onFocus={() => onPreferImageKindChange?.("incident_log")}
+                      onKeyDown={(event) =>
+                        handleKeyboard({
+                          col: 1,
+                          event,
+                          onRevertCell: () => undefined,
+                          row: rowIndex,
+                        })
+                      }
+                    >
+                      <option value="">-</option>
+                      {[1, 2, 3, 4].map((order) => (
+                        <option key={order} value={order}>
+                          {order}
+                        </option>
+                      ))}
+                    </select>
+                  );
+                })()}
+              </td>
+
+              <td className="px-2 py-3 align-top">
+                {renderNumericCell({
+                  allowSign: false,
+                  col: 2,
+                  field: "rank",
+                  row: rowIndex,
+                  viewState: cellViewState({
+                    confidence: originalRow?.confidence.rank,
+                    currentValue: player.rank,
+                    error: errorPathSet.has(keyToPath(rowIndex, "rank")),
+                    originalValue: originalRow?.rank,
+                    synced: false,
+                  }),
+                })}
+              </td>
+
+              <td className="px-2 py-3 align-top">
+                {renderNumericCell({
+                  allowSign: true,
+                  col: 3,
+                  field: "totalAssetsManYen",
+                  row: rowIndex,
+                  viewState: cellViewState({
+                    confidence: originalRow?.confidence.totalAssets,
+                    currentValue: player.totalAssetsManYen,
+                    error: errorPathSet.has(keyToPath(rowIndex, "totalAssetsManYen")),
+                    originalValue: originalRow?.totalAssetsManYen,
+                    synced: false,
+                  }),
+                })}
+              </td>
+
+              <td className="px-2 py-3 align-top">
+                {renderNumericCell({
+                  allowSign: true,
+                  col: 4,
+                  field: "revenueManYen",
+                  row: rowIndex,
+                  viewState: cellViewState({
+                    confidence: originalRow?.confidence.revenue,
+                    currentValue: player.revenueManYen,
+                    error: errorPathSet.has(keyToPath(rowIndex, "revenueManYen")),
+                    originalValue: originalRow?.revenueManYen,
+                    synced: false,
+                  }),
+                })}
+              </td>
+
+              {incidentColumns.map(([incidentKey, incidentLabel], incidentIndex) => {
+                const col = incidentIndex + 5;
+                const incidentState = cellViewState({
+                  confidence: incidentLookup?.confidence[incidentLabel],
+                  currentValue: player.incidents[incidentKey],
+                  error: errorPathSet.has(
+                    keyToPath(rowIndex, `incident.${incidentKey}` as GridColumn),
+                  ),
+                  originalValue: originalByOrder?.incidents[incidentLabel],
+                  synced: lastSyncedPlayerIndex === rowIndex,
+                });
+                return (
+                  <td key={incidentKey} className="px-2 py-3 align-top last:rounded-r-2xl">
+                    {renderIncidentCell(rowIndex, incidentKey, col, incidentState)}
+                  </td>
+                );
+              })}
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+
+  return (
+    <section className="mt-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-ink-100 text-xl font-black">4人分の結果を確認・手修正</h2>
+          <p className="text-ink-400 mt-1 text-sm">
+            Enter/矢印で移動、Escでセルを編集前へ戻せます。
+          </p>
+        </div>
+        <p className="text-ink-300 text-xs">金額 12ch / 順位・順番・事件簿 6ch 以上</p>
+      </div>
+
+      {!isNarrowViewport ? <div className="mt-4 overflow-x-auto pb-2">{grid}</div> : null}
+
+      {isNarrowViewport ? (
+        <div className="mt-4 grid gap-3">
+          {players.map((player, index) => (
+            <article
+              key={index}
+              className="border-line-soft bg-capture-black/20 rounded-2xl border p-3"
+            >
+              <button
+                className="flex w-full items-center justify-between text-left"
+                type="button"
+                onClick={() =>
+                  setExpandedMobilePlayer((current) => (current === index ? -1 : index))
+                }
+              >
+                <span className="text-ink-100 font-bold">{memberName(player.memberId)}</span>
+                <span className="text-ink-300 text-xs">
+                  {expandedMobilePlayer === index ? "閉じる" : "詳細"}
+                </span>
+              </button>
+              {expandedMobilePlayer === index ? (
+                <div className="mt-3 space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="text-ink-300 grid gap-1 text-xs">
+                      プレー順
+                      <select
+                        className={selectShortClass}
+                        value={Number.isFinite(player.playOrder) ? String(player.playOrder) : ""}
+                        onChange={(event) =>
+                          onPlayOrderChange(index, Number.parseInt(event.target.value, 10))
+                        }
+                      >
+                        <option value="">-</option>
+                        {[1, 2, 3, 4].map((order) => (
+                          <option key={order} value={order}>
+                            {order}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="text-ink-300 grid gap-1 text-xs">
+                      順位
+                      <input
+                        className={textNumericShortClass}
+                        inputMode="numeric"
+                        type="text"
+                        value={Number.isFinite(player.rank) ? String(player.rank) : ""}
+                        onChange={(event) =>
+                          onPlayerChange(index, {
+                            rank: parseNumericValue(
+                              normalizeNumericDraft(event.target.value, false),
+                              false,
+                            ),
+                          })
+                        }
+                      />
+                    </label>
+                  </div>
+                  <label className="text-ink-300 grid gap-1 text-xs">
+                    総資産
+                    <input
+                      className={textNumericClass}
+                      inputMode="numeric"
+                      type="text"
+                      value={
+                        Number.isFinite(player.totalAssetsManYen)
+                          ? String(player.totalAssetsManYen)
+                          : ""
+                      }
+                      onFocus={() => onPreferImageKindChange?.("total_assets")}
+                      onChange={(event) =>
+                        onPlayerChange(index, {
+                          totalAssetsManYen: parseNumericValue(
+                            normalizeNumericDraft(event.target.value, true),
+                            true,
+                          ),
+                        })
+                      }
+                    />
+                  </label>
+                  <label className="text-ink-300 grid gap-1 text-xs">
+                    収益
+                    <input
+                      className={textNumericClass}
+                      inputMode="numeric"
+                      type="text"
+                      value={
+                        Number.isFinite(player.revenueManYen) ? String(player.revenueManYen) : ""
+                      }
+                      onFocus={() => onPreferImageKindChange?.("revenue")}
+                      onChange={(event) =>
+                        onPlayerChange(index, {
+                          revenueManYen: parseNumericValue(
+                            normalizeNumericDraft(event.target.value, true),
+                            true,
+                          ),
+                        })
+                      }
+                    />
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {incidentColumns.map(([incidentKey, incidentLabel]) => (
+                      <label key={incidentKey} className="text-ink-300 grid gap-1 text-xs">
+                        {incidentLabel}
+                        <input
+                          className={textNumericShortClass}
+                          inputMode="numeric"
+                          type="text"
+                          value={
+                            Number.isFinite(player.incidents[incidentKey])
+                              ? String(player.incidents[incidentKey])
+                              : ""
+                          }
+                          onFocus={() => onPreferImageKindChange?.("incident_log")}
+                          onChange={(event) =>
+                            onIncidentChange(
+                              index,
+                              incidentKey,
+                              parseNumericValue(
+                                normalizeNumericDraft(event.target.value, false),
+                                false,
+                              ),
+                            )
+                          }
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </article>
+          ))}
+        </div>
+      ) : null}
+    </section>
+  );
+}

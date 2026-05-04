@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Download, PenSquare, ScanLine } from "lucide-react";
+import { AlertTriangle, Download, PenSquare, RefreshCw, ScanLine } from "lucide-react";
 import { useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
@@ -101,6 +101,7 @@ export function MatchesListPage() {
 
   const hasFilters = hasMatchListFilters(search);
   const showMatchesError = matchesQuery.isError && !matchesQuery.data;
+  const refreshing = matchesQuery.isFetching || matchesSummaryQuery.isFetching;
 
   return (
     <PageFrame className="gap-5">
@@ -122,6 +123,17 @@ export function MatchesListPage() {
                 CSV/TSV出力
               </Button>
             </Link>
+            <Button
+              icon={<RefreshCw className="size-4" />}
+              pending={refreshing}
+              pendingLabel="更新中..."
+              variant="quiet"
+              onClick={async () => {
+                await Promise.all([matchesQuery.refetch(), matchesSummaryQuery.refetch()]);
+              }}
+            >
+              最新情報に更新
+            </Button>
           </>
         }
       />

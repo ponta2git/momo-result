@@ -79,7 +79,6 @@ def test_redis_to_worker_to_postgres_smoke() -> None:
                 cancellation=RepositoryCancellationChecker(repository),
                 worker_id="worker-it",
                 analyze=_fake_success_analysis,
-                delete_image=lambda _path: True,
             )
 
             outcome = run_one_job(deps)

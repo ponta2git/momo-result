@@ -262,6 +262,62 @@ export const handlers = [
       status: "cancelled",
     }),
   ),
+  http.get("/api/match-drafts/:draftId", ({ params }) => {
+    const draftId = String(params.draftId);
+    return HttpResponse.json({
+      matchDraftId: draftId,
+      status: draftId === "draft-running-1" ? "ocr_running" : "needs_review",
+      heldEventId: "held-1",
+      matchNoInEvent: 3,
+      gameTitleId: "gt_momotetsu_2",
+      seasonMasterId: "season_current",
+      ownerMemberId: "member_ponta",
+      mapMasterId: "map_east",
+      playedAt: now,
+      totalAssetsDraftId: `${draftId}-total`,
+      revenueDraftId: `${draftId}-revenue`,
+      incidentLogDraftId: `${draftId}-incident`,
+      totalAssetsImageId: `${draftId}-img-total`,
+      revenueImageId: `${draftId}-img-revenue`,
+      incidentLogImageId: `${draftId}-img-incident`,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }),
+  http.get("/api/match-drafts/:draftId/source-images", ({ params }) =>
+    HttpResponse.json({
+      items: [
+        {
+          kind: "total_assets",
+          contentType: "image/png",
+          createdAt: now,
+          imageUrl: `/api/match-drafts/${params.draftId}/source-images/total_assets`,
+        },
+        {
+          kind: "revenue",
+          contentType: "image/png",
+          createdAt: now,
+          imageUrl: `/api/match-drafts/${params.draftId}/source-images/revenue`,
+        },
+        {
+          kind: "incident_log",
+          contentType: "image/png",
+          createdAt: now,
+          imageUrl: `/api/match-drafts/${params.draftId}/source-images/incident_log`,
+        },
+      ],
+    }),
+  ),
+  http.get(
+    "/api/match-drafts/:draftId/source-images/:kind",
+    () =>
+      new HttpResponse("mock-image", {
+        headers: {
+          "Content-Type": "image/png",
+        },
+        status: 200,
+      }),
+  ),
   http.post("/api/matches", async () =>
     HttpResponse.json({
       matchId: "match-1",

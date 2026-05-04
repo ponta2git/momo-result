@@ -26,11 +26,19 @@ final class LocalFsImageStore[F[_]: Sync](root: Path) extends ImageStore[F]:
 
   override def find(imageId: ImageId): F[Option[StoredImage]] = Sync[F].blocking {
     SupportedImageTypes.to(LazyList).flatMap { imageType =>
-      val path = root.resolve(s"${imageId.value}.${imageType.extension}").toAbsolutePath.normalize()
+      val path = imagePath(imageId, imageType)
       Option
         .when(Files.exists(path))(StoredImage(imageId, path, imageType.mediaType, Files.size(path)))
     }.headOption
   }
+
+  override def delete(imageId: ImageId): F[Boolean] = Sync[F].blocking {
+    SupportedImageTypes
+      .exists(imageType => Files.deleteIfExists(imagePath(imageId, imageType)))
+  }
+
+  private def imagePath(imageId: ImageId, imageType: ImageType): Path =
+    root.resolve(s"${imageId.value}.${imageType.extension}").toAbsolutePath.normalize()
 
   private def validate(
       bytes: Array[Byte],

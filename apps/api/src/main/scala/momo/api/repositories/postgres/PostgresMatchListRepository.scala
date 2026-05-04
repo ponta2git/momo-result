@@ -54,7 +54,7 @@ final class PostgresMatchListRepository[F[_]: MonadCancelThrow](transactor: Tran
     d.id AS id,
     NULL::text AS match_id,
     d.id AS match_draft_id,
-    d.status AS status,
+    d.computed_status AS status,
     d.held_event_id,
     d.match_no_in_event,
     d.game_title_id,
@@ -64,7 +64,46 @@ final class PostgresMatchListRepository[F[_]: MonadCancelThrow](transactor: Tran
     d.played_at,
     d.created_at,
     d.updated_at
-  FROM match_drafts d"""
+  FROM (
+    SELECT
+      md.*,
+      md.status AS persisted_status,
+      CASE
+        WHEN md.status <> 'ocr_running' THEN md.status
+        WHEN md.total_assets_draft_id IS NULL
+          AND md.revenue_draft_id IS NULL
+          AND md.incident_log_draft_id IS NULL THEN md.status
+        WHEN EXISTS (
+          SELECT 1
+          FROM unnest(
+            ARRAY[md.total_assets_draft_id, md.revenue_draft_id, md.incident_log_draft_id]
+          ) AS slot(ocr_draft_id)
+          LEFT JOIN ocr_jobs j ON j.draft_id = slot.ocr_draft_id
+          WHERE slot.ocr_draft_id IS NOT NULL
+            AND (j.status IS NULL OR j.status IN ('queued', 'running'))
+        ) THEN 'ocr_running'
+        WHEN EXISTS (
+          SELECT 1
+          FROM unnest(
+            ARRAY[md.total_assets_draft_id, md.revenue_draft_id, md.incident_log_draft_id]
+          ) AS slot(ocr_draft_id)
+          JOIN ocr_jobs j ON j.draft_id = slot.ocr_draft_id
+          WHERE slot.ocr_draft_id IS NOT NULL
+            AND j.status IN ('failed', 'cancelled')
+        ) THEN 'ocr_failed'
+        WHEN EXISTS (
+          SELECT 1
+          FROM unnest(
+            ARRAY[md.total_assets_draft_id, md.revenue_draft_id, md.incident_log_draft_id]
+          ) AS slot(ocr_draft_id)
+          JOIN ocr_drafts od ON od.id = slot.ocr_draft_id
+          WHERE slot.ocr_draft_id IS NOT NULL
+            AND jsonb_array_length(od.warnings_json) > 0
+        ) THEN 'needs_review'
+        ELSE 'draft_ready'
+      END AS computed_status
+    FROM match_drafts md
+  ) d"""
 
   override def list(filter: MatchListRepository.Filter): F[List[MatchListItem]] =
     val confirmedConditions = List(
@@ -78,21 +117,21 @@ final class PostgresMatchListRepository[F[_]: MonadCancelThrow](transactor: Tran
       filter.heldEventId.map(v => fr"d.held_event_id = $v"),
       filter.gameTitleId.map(v => fr"d.game_title_id = $v"),
       filter.seasonMasterId.map(v => fr"d.season_master_id = $v"),
-      Some(fr"d.status <> ${MatchDraftStatus.Cancelled}"),
-      Some(fr"d.status <> ${MatchDraftStatus.Confirmed}"),
+      Some(fr"d.persisted_status <> ${MatchDraftStatus.Cancelled}"),
+      Some(fr"d.persisted_status <> ${MatchDraftStatus.Confirmed}"),
     ).flatten
     val draftStatusCondition = filter.status match
       case MatchListRepository.StatusFilter.All => None
       case MatchListRepository.StatusFilter.Incomplete =>
-        Some(statusIn("d.status", MatchListRepository.IncompleteStatuses))
+        Some(statusIn("d.computed_status", MatchListRepository.IncompleteStatuses))
       case MatchListRepository.StatusFilter.OcrRunning =>
-        Some(fr"d.status = ${MatchDraftStatus.OcrRunning}")
+        Some(fr"d.computed_status = ${MatchDraftStatus.OcrRunning}")
       case MatchListRepository.StatusFilter.PreConfirm => Some(statusIn(
-          "d.status",
+          "d.computed_status",
           Set(MatchDraftStatus.OcrFailed, MatchDraftStatus.DraftReady, MatchDraftStatus.NeedsReview),
         ))
       case MatchListRepository.StatusFilter.NeedsReview =>
-        Some(fr"d.status = ${MatchDraftStatus.NeedsReview}")
+        Some(fr"d.computed_status = ${MatchDraftStatus.NeedsReview}")
       case MatchListRepository.StatusFilter.Confirmed => Some(fr"FALSE")
     val draftSelect = draftBase ++
       fragments.whereAndOpt(draftConditionsCommon ++ draftStatusCondition.toList)

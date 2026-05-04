@@ -2,6 +2,8 @@ package momo.api.repositories
 
 import java.time.Instant
 
+import momo.api.domain.ids.MemberId
+
 /**
  * Discord OAuth session row stored in `app_sessions`.
  *
@@ -10,7 +12,7 @@ import java.time.Instant
  */
 final case class AppSession(
     id: String,
-    memberId: String,
+    memberId: MemberId,
     csrfSecret: String,
     createdAt: Instant,
     lastSeenAt: Instant,

@@ -24,8 +24,8 @@ final class OcrJobResponseRoundtripSpec extends FunSuite:
   private val updatedAt = Instant.parse("2026-04-30T12:00:01Z")
 
   private val queuedJob = OcrJob(
-    id = JobId("job_001"),
-    draftId = DraftId("draft_001"),
+    id = OcrJobId("job_001"),
+    draftId = OcrDraftId("draft_001"),
     imageId = ImageId("image_001"),
     imagePath = Paths.get("/tmp/images/image_001.png"),
     requestedScreenType = ScreenType.TotalAssets,
@@ -45,14 +45,12 @@ final class OcrJobResponseRoundtripSpec extends FunSuite:
     status = OcrJobStatus.Failed,
     attemptCount = 2,
     detectedScreenType = Some(ScreenType.Revenue),
-    failure = Some(
-      OcrFailure(
-        code = FailureCode.OcrTimeout,
-        message = "engine timed out after 30s",
-        retryable = true,
-        userAction = Some("retry later"),
-      )
-    ),
+    failure = Some(OcrFailure(
+      code = FailureCode.OcrTimeout,
+      message = "engine timed out after 30s",
+      retryable = true,
+      userAction = Some("retry later"),
+    )),
   )
 
   test("OcrJobResponse: encode → decode is identity (queued)"):

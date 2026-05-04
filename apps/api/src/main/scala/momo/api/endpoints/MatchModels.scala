@@ -12,7 +12,7 @@ final case class HeldEventResponse(id: String, heldAt: String, matchCount: Int)
 
 object HeldEventResponse:
   def from(e: HeldEvent, matchCount: Int): HeldEventResponse = HeldEventResponse(
-    id = e.id,
+    id = e.id.value,
     heldAt = DateTimeFormatter.ISO_INSTANT.format(e.heldAt),
     matchCount = matchCount,
   )
@@ -145,40 +145,40 @@ object MatchSummaryResponse:
   def from(item: MatchListItem): MatchSummaryResponse = MatchSummaryResponse(
     kind = item.kind.wire,
     id = item.id,
-    matchId = item.matchId,
-    matchDraftId = item.matchDraftId,
+    matchId = item.matchId.map(_.value),
+    matchDraftId = item.matchDraftId.map(_.value),
     status = item.status,
-    heldEventId = item.heldEventId,
+    heldEventId = item.heldEventId.map(_.value),
     matchNoInEvent = item.matchNoInEvent,
-    gameTitleId = item.gameTitleId,
-    seasonMasterId = item.seasonMasterId,
-    mapMasterId = item.mapMasterId,
-    ownerMemberId = item.ownerMemberId,
+    gameTitleId = item.gameTitleId.map(_.value),
+    seasonMasterId = item.seasonMasterId.map(_.value),
+    mapMasterId = item.mapMasterId.map(_.value),
+    ownerMemberId = item.ownerMemberId.map(_.value),
     playedAt = item.playedAt.map(DateTimeFormatter.ISO_INSTANT.format),
     createdAt = DateTimeFormatter.ISO_INSTANT.format(item.createdAt),
     updatedAt = DateTimeFormatter.ISO_INSTANT.format(item.updatedAt),
     ranks = item.ranks
-      .map(p => MatchRankEntry(memberId = p.memberId, rank = p.rank, playOrder = p.playOrder)),
+      .map(p => MatchRankEntry(memberId = p.memberId.value, rank = p.rank, playOrder = p.playOrder)),
   )
 
 object MatchDetailResponse:
   import momo.api.domain.MatchRecord
   def from(r: MatchRecord): MatchDetailResponse = MatchDetailResponse(
-    matchId = r.id,
-    heldEventId = r.heldEventId,
+    matchId = r.id.value,
+    heldEventId = r.heldEventId.value,
     matchNoInEvent = r.matchNoInEvent,
-    gameTitleId = r.gameTitleId,
+    gameTitleId = r.gameTitleId.value,
     layoutFamily = r.layoutFamily,
-    seasonMasterId = r.seasonMasterId,
-    ownerMemberId = r.ownerMemberId,
-    mapMasterId = r.mapMasterId,
+    seasonMasterId = r.seasonMasterId.value,
+    ownerMemberId = r.ownerMemberId.value,
+    mapMasterId = r.mapMasterId.value,
     playedAt = DateTimeFormatter.ISO_INSTANT.format(r.playedAt),
-    totalAssetsDraftId = r.totalAssetsDraftId,
-    revenueDraftId = r.revenueDraftId,
-    incidentLogDraftId = r.incidentLogDraftId,
+    totalAssetsDraftId = r.totalAssetsDraftId.map(_.value),
+    revenueDraftId = r.revenueDraftId.map(_.value),
+    incidentLogDraftId = r.incidentLogDraftId.map(_.value),
     players = r.players.sortBy(_.playOrder).map(p =>
       PlayerResultResponse(
-        memberId = p.memberId,
+        memberId = p.memberId.value,
         playOrder = p.playOrder,
         rank = p.rank,
         totalAssetsManYen = p.totalAssetsManYen,
@@ -193,7 +193,7 @@ object MatchDetailResponse:
         ),
       )
     ),
-    createdByMemberId = r.createdByMemberId,
+    createdByMemberId = r.createdByMemberId.value,
     createdAt = DateTimeFormatter.ISO_INSTANT.format(r.createdAt),
   )
 

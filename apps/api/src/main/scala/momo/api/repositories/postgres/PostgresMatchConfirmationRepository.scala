@@ -10,14 +10,16 @@ import doobie.postgres.implicits.*
 import doobie.util.update.Update
 
 import momo.api.domain.MatchRecord
+import momo.api.domain.ids.*
 import momo.api.repositories.MatchConfirmationRepository
+import momo.api.repositories.postgres.PostgresMeta.given
 
 final class PostgresMatchConfirmationRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends MatchConfirmationRepository[F]:
 
   override def confirm(
       record: MatchRecord,
-      draftId: Option[String],
+      draftId: Option[MatchDraftId],
       updatedAt: Instant,
   ): F[Boolean] =
     val program =
@@ -53,7 +55,7 @@ final class PostgresMatchConfirmationRepository[F[_]: MonadCancelThrow](transact
       )
     """.update.run
 
-    val playerRows: List[(String, String, Int, Int, Int, Int, Instant)] = record.players.map { p =>
+    val playerRows: List[(MatchId, MemberId, Int, Int, Int, Int, Instant)] = record.players.map { p =>
       (
         record.id,
         p.memberId,
@@ -65,17 +67,18 @@ final class PostgresMatchConfirmationRepository[F[_]: MonadCancelThrow](transact
       )
     }
     val insertPlayers =
-      Update[(String, String, Int, Int, Int, Int, Instant)]("""INSERT INTO match_players
+      Update[(MatchId, MemberId, Int, Int, Int, Int, Instant)]("""INSERT INTO match_players
          (match_id, member_id, play_order, rank, total_assets_man_yen, revenue_man_yen, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?)""").updateMany(playerRows)
 
-    val incidentRows: List[(String, String, String, Int, Instant)] = record.players.flatMap { p =>
-      p.incidents.entriesByMasterId.map { case (incidentId, count) =>
-        (record.id, p.memberId, incidentId, count, record.createdAt)
+    val incidentRows: List[(MatchId, MemberId, IncidentMasterId, Int, Instant)] = record.players
+      .flatMap { p =>
+        p.incidents.entriesByMasterId.map { case (incidentId, count) =>
+          (record.id, p.memberId, incidentId, count, record.createdAt)
+        }
       }
-    }
     val insertIncidents =
-      Update[(String, String, String, Int, Instant)]("""INSERT INTO match_incidents
+      Update[(MatchId, MemberId, IncidentMasterId, Int, Instant)]("""INSERT INTO match_incidents
          (match_id, member_id, incident_master_id, count, created_at)
          VALUES (?, ?, ?, ?, ?)""").updateMany(incidentRows)
 

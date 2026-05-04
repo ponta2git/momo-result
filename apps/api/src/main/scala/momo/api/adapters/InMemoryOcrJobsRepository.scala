@@ -13,9 +13,9 @@ final class InMemoryOcrJobsRepository[F[_]: Sync] private (ref: Ref[F, Map[Strin
     extends OcrJobsRepository[F]:
   override def create(job: OcrJob): F[Unit] = ref.update(_ + (job.id.value -> job))
 
-  override def find(jobId: JobId): F[Option[OcrJob]] = ref.get.map(_.get(jobId.value))
+  override def find(jobId: OcrJobId): F[Option[OcrJob]] = ref.get.map(_.get(jobId.value))
 
-  override def markFailed(jobId: JobId, failure: OcrFailure, now: Instant): F[Unit] = ref
+  override def markFailed(jobId: OcrJobId, failure: OcrFailure, now: Instant): F[Unit] = ref
     .update { jobs =>
       jobs.updatedWith(jobId.value)(_.map(job =>
         job.copy(
@@ -27,7 +27,7 @@ final class InMemoryOcrJobsRepository[F[_]: Sync] private (ref: Ref[F, Map[Strin
       ))
     }
 
-  override def cancelQueued(jobId: JobId, now: Instant): F[Boolean] = ref.modify { jobs =>
+  override def cancelQueued(jobId: OcrJobId, now: Instant): F[Boolean] = ref.modify { jobs =>
     jobs.get(jobId.value) match
       case Some(job) if job.status == OcrJobStatus.Queued =>
         val updated = job

@@ -7,7 +7,7 @@ import cats.effect.IO
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.adapters.{InMemoryMatchDraftsRepository, LocalFsImageStore}
-import momo.api.domain.ids.MemberId
+import momo.api.domain.ids.*
 import momo.api.domain.{MatchDraft, MatchDraftStatus}
 
 final class SourceImageRetentionServiceSpec extends MomoCatsEffectSuite:
@@ -25,8 +25,8 @@ final class SourceImageRetentionServiceSpec extends MomoCatsEffectSuite:
       incidentLog <- saveImage(imageStore, "incident.png")
       matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
       draft = MatchDraft(
-        id = "draft-1",
-        createdByMemberId = MemberId("member-1").value,
+        id = MatchDraftId("draft-1"),
+        createdByMemberId = MemberId("member-1"),
         status = MatchDraftStatus.NeedsReview,
         heldEventId = None,
         matchNoInEvent = None,
@@ -36,9 +36,9 @@ final class SourceImageRetentionServiceSpec extends MomoCatsEffectSuite:
         ownerMemberId = None,
         mapMasterId = None,
         playedAt = None,
-        totalAssetsImageId = Some(totalAssets.imageId.value),
-        revenueImageId = Some(revenue.imageId.value),
-        incidentLogImageId = Some(incidentLog.imageId.value),
+        totalAssetsImageId = Some(totalAssets.imageId),
+        revenueImageId = Some(revenue.imageId),
+        incidentLogImageId = Some(incidentLog.imageId),
         totalAssetsDraftId = None,
         revenueDraftId = None,
         incidentLogDraftId = None,

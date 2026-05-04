@@ -9,6 +9,7 @@ import cats.data.EitherT
 import cats.syntax.all.*
 
 import momo.api.domain.MatchRecord
+import momo.api.domain.ids.*
 import momo.api.errors.AppError
 import momo.api.repositories.{
   GameTitlesRepository, HeldEventsRepository, MapMastersRepository, MatchesRepository,
@@ -22,12 +23,13 @@ final class UpdateMatch[F[_]: MonadThrow](
     mapMasters: MapMastersRepository[F],
     seasonMasters: SeasonMastersRepository[F],
     now: F[Instant],
-    allowedMemberIds: Set[String],
+    allowedMemberIds: Set[MemberId],
 ):
   import UpdateMatch.*
 
-  def run(matchId: String, command: Command): F[Either[AppError, MatchRecord]] = (for
-    existing <- EitherT(matches.find(matchId).map(_.toRight(AppError.NotFound("match", matchId))))
+  def run(matchId: MatchId, command: Command): F[Either[AppError, MatchRecord]] = (for
+    existing <-
+      EitherT(matches.find(matchId).map(_.toRight(AppError.NotFound("match", matchId.value))))
     _ <- EitherT.fromEither[F](MatchValidation.validateShape(
       MatchValidation.Input(
         heldEventId = command.heldEventId,
@@ -44,13 +46,13 @@ final class UpdateMatch[F[_]: MonadThrow](
       AppError.ValidationFailed("playedAt must be ISO8601 instant.")
     ))
     _ <- EitherT(heldEvents.find(command.heldEventId).map(_.toRight(
-      AppError.NotFound("held event", command.heldEventId)
+      AppError.NotFound("held event", command.heldEventId.value)
     )))
     title <- EitherT(gameTitles.find(command.gameTitleId).map(_.toRight(
-      AppError.NotFound("game title", command.gameTitleId)
+      AppError.NotFound("game title", command.gameTitleId.value)
     )))
     mapMaster <- EitherT(mapMasters.find(command.mapMasterId).map(_.toRight(
-      AppError.NotFound("map master", command.mapMasterId)
+      AppError.NotFound("map master", command.mapMasterId.value)
     )))
     _ <- EitherT.fromEither[F](
       if mapMaster.gameTitleId == title.id then Right(())
@@ -59,7 +61,7 @@ final class UpdateMatch[F[_]: MonadThrow](
             .id} does not belong to gameTitleId ${title.id}."))
     )
     season <- EitherT(seasonMasters.find(command.seasonMasterId).map(_.toRight(
-      AppError.NotFound("season master", command.seasonMasterId)
+      AppError.NotFound("season master", command.seasonMasterId.value)
     )))
     _ <- EitherT.fromEither[F](
       if season.gameTitleId == title.id then Right(())
@@ -96,12 +98,12 @@ final class UpdateMatch[F[_]: MonadThrow](
 
 object UpdateMatch:
   final case class Command(
-      heldEventId: String,
+      heldEventId: HeldEventId,
       matchNoInEvent: Int,
-      gameTitleId: String,
-      seasonMasterId: String,
-      ownerMemberId: String,
-      mapMasterId: String,
+      gameTitleId: GameTitleId,
+      seasonMasterId: SeasonMasterId,
+      ownerMemberId: MemberId,
+      mapMasterId: MapMasterId,
       playedAt: String,
       draftRefs: ConfirmMatch.DraftRefs,
       players: List[momo.api.domain.PlayerResult],

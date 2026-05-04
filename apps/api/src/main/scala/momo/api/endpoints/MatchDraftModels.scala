@@ -40,7 +40,7 @@ final case class MatchDraftResponse(
 
 object MatchDraftResponse:
   def from(draft: MatchDraft): MatchDraftResponse = MatchDraftResponse(
-    matchDraftId = draft.id,
+    matchDraftId = draft.id.value,
     status = draft.status.wire,
     createdAt = DateTimeFormatter.ISO_INSTANT.format(draft.createdAt),
     updatedAt = DateTimeFormatter.ISO_INSTANT.format(draft.updatedAt),
@@ -68,21 +68,21 @@ final case class MatchDraftDetailResponse(
 
 object MatchDraftDetailResponse:
   def from(draft: MatchDraft): MatchDraftDetailResponse = MatchDraftDetailResponse(
-    matchDraftId = draft.id,
+    matchDraftId = draft.id.value,
     status = draft.status.wire,
-    heldEventId = draft.heldEventId,
+    heldEventId = draft.heldEventId.map(_.value),
     matchNoInEvent = draft.matchNoInEvent,
-    gameTitleId = draft.gameTitleId,
-    seasonMasterId = draft.seasonMasterId,
-    ownerMemberId = draft.ownerMemberId,
-    mapMasterId = draft.mapMasterId,
+    gameTitleId = draft.gameTitleId.map(_.value),
+    seasonMasterId = draft.seasonMasterId.map(_.value),
+    ownerMemberId = draft.ownerMemberId.map(_.value),
+    mapMasterId = draft.mapMasterId.map(_.value),
     playedAt = draft.playedAt.map(DateTimeFormatter.ISO_INSTANT.format),
-    totalAssetsDraftId = draft.totalAssetsDraftId,
-    revenueDraftId = draft.revenueDraftId,
-    incidentLogDraftId = draft.incidentLogDraftId,
-    totalAssetsImageId = draft.totalAssetsImageId,
-    revenueImageId = draft.revenueImageId,
-    incidentLogImageId = draft.incidentLogImageId,
+    totalAssetsDraftId = draft.totalAssetsDraftId.map(_.value),
+    revenueDraftId = draft.revenueDraftId.map(_.value),
+    incidentLogDraftId = draft.incidentLogDraftId.map(_.value),
+    totalAssetsImageId = draft.totalAssetsImageId.map(_.value),
+    revenueImageId = draft.revenueImageId.map(_.value),
+    incidentLogImageId = draft.incidentLogImageId.map(_.value),
     createdAt = DateTimeFormatter.ISO_INSTANT.format(draft.createdAt),
     updatedAt = DateTimeFormatter.ISO_INSTANT.format(draft.updatedAt),
   )

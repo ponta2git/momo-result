@@ -7,8 +7,8 @@ import io.circe.Json
 import momo.api.domain.ids.*
 
 final case class OcrDraft(
-    id: DraftId,
-    jobId: JobId,
+    id: OcrDraftId,
+    jobId: OcrJobId,
     requestedScreenType: ScreenType,
     detectedScreenType: Option[ScreenType],
     profileId: Option[String],

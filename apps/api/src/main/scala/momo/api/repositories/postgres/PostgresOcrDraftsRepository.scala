@@ -19,8 +19,8 @@ final class PostgresOcrDraftsRepository[F[_]: MonadCancelThrow](transactor: Tran
     extends OcrDraftsRepository[F]:
 
   private type Row = (
-      DraftId,
-      JobId,
+      OcrDraftId,
+      OcrJobId,
       ScreenType,
       Option[ScreenType],
       Option[String],
@@ -58,7 +58,7 @@ final class PostgresOcrDraftsRepository[F[_]: MonadCancelThrow](transactor: Tran
       )
     """.update.run.void.transact(transactor)
 
-  override def find(draftId: DraftId): F[Option[OcrDraft]] = sql"""
+  override def find(draftId: OcrDraftId): F[Option[OcrDraft]] = sql"""
       SELECT id, job_id, requested_screen_type, detected_screen_type, profile_id,
              payload_json, warnings_json, timings_ms_json, created_at, updated_at
       FROM ocr_drafts

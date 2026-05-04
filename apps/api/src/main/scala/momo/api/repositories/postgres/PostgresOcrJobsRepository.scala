@@ -18,8 +18,8 @@ final class PostgresOcrJobsRepository[F[_]: MonadCancelThrow](transactor: Transa
     extends OcrJobsRepository[F]:
 
   private type Row = (
-      JobId,
-      DraftId,
+      OcrJobId,
+      OcrDraftId,
       ImageId,
       Path,
       ScreenType,
@@ -88,10 +88,10 @@ final class PostgresOcrJobsRepository[F[_]: MonadCancelThrow](transactor: Transa
       )
     """.update.run.void.transact(transactor)
 
-  override def find(jobId: JobId): F[Option[OcrJob]] = (selectAll ++ fr"WHERE id = $jobId")
+  override def find(jobId: OcrJobId): F[Option[OcrJob]] = (selectAll ++ fr"WHERE id = $jobId")
     .query[Row].option.map(_.map(toJob)).transact(transactor)
 
-  override def markFailed(jobId: JobId, failure: OcrFailure, now: Instant): F[Unit] = sql"""
+  override def markFailed(jobId: OcrJobId, failure: OcrFailure, now: Instant): F[Unit] = sql"""
       UPDATE ocr_jobs SET
         status = ${OcrJobStatus.Failed},
         failure_code = ${failure.code},
@@ -103,7 +103,7 @@ final class PostgresOcrJobsRepository[F[_]: MonadCancelThrow](transactor: Transa
       WHERE id = $jobId
     """.update.run.void.transact(transactor)
 
-  override def cancelQueued(jobId: JobId, now: Instant): F[Boolean] = sql"""
+  override def cancelQueued(jobId: OcrJobId, now: Instant): F[Boolean] = sql"""
       UPDATE ocr_jobs SET
         status = ${OcrJobStatus.Cancelled},
         finished_at = $now,

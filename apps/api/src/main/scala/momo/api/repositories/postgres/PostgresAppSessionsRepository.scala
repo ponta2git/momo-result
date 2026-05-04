@@ -8,6 +8,7 @@ import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
+import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.repositories.{AppSession, AppSessionsRepository}
 
 final class PostgresAppSessionsRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])

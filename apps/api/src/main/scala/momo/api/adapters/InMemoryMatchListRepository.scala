@@ -29,7 +29,7 @@ final class InMemoryMatchListRepository[F[_]: Monad](
       val confirmedItems = confirmed.map { record =>
         MatchListItem(
           kind = MatchListItemKind.Match,
-          id = record.id,
+          id = record.id.value,
           matchId = Some(record.id),
           matchDraftId = None,
           status = MatchDraftStatus.Confirmed.wire,
@@ -52,7 +52,7 @@ final class InMemoryMatchListRepository[F[_]: Monad](
       ).filter(draftMatchesStatus(_, filter.status)).map { draft =>
         MatchListItem(
           kind = MatchListItemKind.MatchDraft,
-          id = draft.id,
+          id = draft.id.value,
           matchId = None,
           matchDraftId = Some(draft.id),
           status = draft.status.wire,

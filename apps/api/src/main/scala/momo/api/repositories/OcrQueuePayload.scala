@@ -21,8 +21,8 @@ object OcrQueuePayload:
   private val printer: Printer = Printer.noSpaces.copy(dropNullValues = true, sortKeys = true)
 
   def build(
-      jobId: JobId,
-      draftId: DraftId,
+      jobId: OcrJobId,
+      draftId: OcrDraftId,
       imageId: ImageId,
       imagePath: Path,
       requestedScreenType: ScreenType,

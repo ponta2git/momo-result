@@ -12,8 +12,8 @@ import momo.api.domain.{OcrJobHints, PlayerAliasHint, ScreenType}
 final class OcrQueuePayloadSpec extends FunSuite:
   test("builds the exact Redis Streams payload expected by the OCR worker without hints") {
     val payload = OcrQueuePayload.build(
-      jobId = JobId("job-1"),
-      draftId = DraftId("draft-1"),
+      jobId = OcrJobId("job-1"),
+      draftId = OcrDraftId("draft-1"),
       imageId = ImageId("image-1"),
       imagePath = Path.of("/tmp/momo-result/uploads/image-1.png"),
       requestedScreenType = ScreenType.TotalAssets,
@@ -39,8 +39,8 @@ final class OcrQueuePayloadSpec extends FunSuite:
 
   test("serializes hints as compact sorted UTF-8 JSON") {
     val payload = OcrQueuePayload.build(
-      jobId = JobId("job-2"),
-      draftId = DraftId("draft-2"),
+      jobId = OcrJobId("job-2"),
+      draftId = OcrDraftId("draft-2"),
       imageId = ImageId("image-2"),
       imagePath = Path.of("/tmp/momo-result/uploads/image-2.webp"),
       requestedScreenType = ScreenType.Auto,
@@ -63,8 +63,8 @@ final class OcrQueuePayloadSpec extends FunSuite:
 
   test("includes requestId when provided and omits it when empty/None") {
     val basePayload = OcrQueuePayload.build(
-      jobId = JobId("job-3"),
-      draftId = DraftId("draft-3"),
+      jobId = OcrJobId("job-3"),
+      draftId = OcrDraftId("draft-3"),
       imageId = ImageId("image-3"),
       imagePath = Path.of("/tmp/momo-result/uploads/image-3.png"),
       requestedScreenType = ScreenType.TotalAssets,
@@ -76,8 +76,8 @@ final class OcrQueuePayloadSpec extends FunSuite:
     assertEquals(basePayload.fields.get(OcrQueuePayload.RequestIdKey), None)
 
     val withId = OcrQueuePayload.build(
-      jobId = JobId("job-3"),
-      draftId = DraftId("draft-3"),
+      jobId = OcrJobId("job-3"),
+      draftId = OcrDraftId("draft-3"),
       imageId = ImageId("image-3"),
       imagePath = Path.of("/tmp/momo-result/uploads/image-3.png"),
       requestedScreenType = ScreenType.TotalAssets,
@@ -89,8 +89,8 @@ final class OcrQueuePayloadSpec extends FunSuite:
     assertEquals(withId.fields.get(OcrQueuePayload.RequestIdKey), Some("abc-123_DEF"))
 
     val withEmpty = OcrQueuePayload.build(
-      jobId = JobId("job-3"),
-      draftId = DraftId("draft-3"),
+      jobId = OcrJobId("job-3"),
+      draftId = OcrDraftId("draft-3"),
       imageId = ImageId("image-3"),
       imagePath = Path.of("/tmp/momo-result/uploads/image-3.png"),
       requestedScreenType = ScreenType.TotalAssets,

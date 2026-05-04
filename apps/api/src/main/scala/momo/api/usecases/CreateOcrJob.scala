@@ -16,10 +16,10 @@ import momo.api.repositories.{
 }
 
 final case class CreateOcrJobCommand(
-    imageId: String,
+    imageId: ImageId,
     requestedImageType: String,
     ocrHints: OcrJobHints,
-    matchDraftId: Option[String],
+    matchDraftId: Option[MatchDraftId],
 )
 
 final case class CreatedOcrJob(job: OcrJob, draft: OcrDraft, queuePayload: OcrQueuePayload)
@@ -41,7 +41,7 @@ final class CreateOcrJob[F[_]: MonadThrow](
     draftForMatch <- command.matchDraftId match
       case None => EitherT.rightT[F, AppError](Option.empty[momo.api.domain.MatchDraft])
       case Some(id) => EitherT(
-          matchDrafts.find(id).map(_.toRight(AppError.NotFound("match draft", id)))
+          matchDrafts.find(id).map(_.toRight(AppError.NotFound("match draft", id.value)))
         ).flatMap { draft =>
           if Set(MatchDraftStatus.Confirmed, MatchDraftStatus.Cancelled).contains(draft.status) then
             EitherT.leftT[F, Option[momo.api.domain.MatchDraft]](AppError.Conflict(
@@ -49,12 +49,13 @@ final class CreateOcrJob[F[_]: MonadThrow](
             ))
           else EitherT.rightT[F, AppError](Some(draft))
         }
-    imageId = ImageId(command.imageId)
-    image <-
-      EitherT(imageStore.find(imageId).map(_.toRight(AppError.NotFound("image", command.imageId))))
+    imageId = command.imageId
+    image <- EitherT(
+      imageStore.find(imageId).map(_.toRight(AppError.NotFound("image", command.imageId.value)))
+    )
     createdAt <- EitherT.liftF(now)
-    jobId <- EitherT.liftF(nextId.map(JobId(_)))
-    draftId <- EitherT.liftF(nextId.map(DraftId(_)))
+    jobId <- EitherT.liftF(nextId.map(OcrJobId(_)))
+    draftId <- EitherT.liftF(nextId.map(OcrDraftId(_)))
     requestId <- EitherT.liftF(requestIdLookup)
     draft = initialDraft(draftId, jobId, screenType, createdAt)
     job = queuedJob(jobId, draftId, imageId, image.path, screenType, createdAt)
@@ -76,9 +77,11 @@ final class CreateOcrJob[F[_]: MonadThrow](
             draftId = draftRecord.id,
             screenType = screenType,
             sourceImageId = command.imageId,
-            ocrDraftId = draft.id.value,
+            ocrDraftId = draft.id,
             updatedAt = createdAt,
-          ).map(found => Either.cond(found, (), AppError.NotFound("match draft", draftRecord.id)))
+          ).map(found =>
+            Either.cond(found, (), AppError.NotFound("match draft", draftRecord.id.value))
+          )
         )
       case None => EitherT.rightT[F, AppError](())
     published <- EitherT(queue.publish(payload).attempt.flatMap {
@@ -99,8 +102,8 @@ object CreateOcrJob:
     ))
 
   private def initialDraft(
-      draftId: DraftId,
-      jobId: JobId,
+      draftId: OcrDraftId,
+      jobId: OcrJobId,
       screenType: ScreenType,
       createdAt: Instant,
   ): OcrDraft = OcrDraft(
@@ -125,8 +128,8 @@ object CreateOcrJob:
   )
 
   private def queuedJob(
-      jobId: JobId,
-      draftId: DraftId,
+      jobId: OcrJobId,
+      draftId: OcrDraftId,
       imageId: ImageId,
       imagePath: java.nio.file.Path,
       screenType: ScreenType,
@@ -150,8 +153,8 @@ object CreateOcrJob:
   )
 
   private def queuePayload(
-      jobId: JobId,
-      draftId: DraftId,
+      jobId: OcrJobId,
+      draftId: OcrDraftId,
       imageId: ImageId,
       imagePath: java.nio.file.Path,
       screenType: ScreenType,

@@ -2,6 +2,8 @@ package momo.api.domain
 
 import java.time.Instant
 
+import momo.api.domain.ids.{HeldEventId, MatchId, SeasonMasterId}
+
 enum MatchExportFormat(
     val wire: String,
     val contentType: String,
@@ -19,15 +21,15 @@ object MatchExportFormat:
 
 enum MatchExportScope derives CanEqual:
   case All
-  case Season(seasonMasterId: String)
-  case HeldEvent(heldEventId: String)
-  case Match(matchId: String)
+  case Season(seasonMasterId: SeasonMasterId)
+  case HeldEvent(heldEventId: HeldEventId)
+  case Match(matchId: MatchId)
 
   def filePart: String = this match
     case All => "all"
-    case Season(id) => s"season-${MatchExportScope.safeFilePart(id)}"
-    case HeldEvent(id) => s"held-event-${MatchExportScope.safeFilePart(id)}"
-    case Match(id) => s"match-${MatchExportScope.safeFilePart(id)}"
+    case Season(id) => s"season-${MatchExportScope.safeFilePart(id.value)}"
+    case HeldEvent(id) => s"held-event-${MatchExportScope.safeFilePart(id.value)}"
+    case Match(id) => s"match-${MatchExportScope.safeFilePart(id.value)}"
 
 object MatchExportScope:
   private def safeFilePart(value: String): String =

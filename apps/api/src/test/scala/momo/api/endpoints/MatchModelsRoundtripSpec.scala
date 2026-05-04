@@ -7,13 +7,9 @@ import io.circe.parser.parse
 import io.circe.syntax.*
 import munit.FunSuite
 
+import momo.api.domain.ids.*
 import momo.api.domain.{
-  IncidentCounts,
-  MatchListItem,
-  MatchListItemKind,
-  MatchListRankEntry,
-  MatchRecord,
-  PlayerResult,
+  IncidentCounts, MatchListItem, MatchListItemKind, MatchListRankEntry, MatchRecord, PlayerResult,
 }
 
 /**
@@ -29,37 +25,35 @@ final class MatchModelsRoundtripSpec extends FunSuite:
   private val createdAt = Instant.parse("2026-04-30T13:00:00Z")
   private val updatedAt = Instant.parse("2026-04-30T13:30:00Z")
 
-  private val zeroIncidents =
-    IncidentCounts(
-      destination = 0,
-      plusStation = 0,
-      minusStation = 0,
-      cardStation = 0,
-      cardShop = 0,
-      suriNoGinji = 0,
-    )
+  private val zeroIncidents = IncidentCounts(
+    destination = 0,
+    plusStation = 0,
+    minusStation = 0,
+    cardStation = 0,
+    cardShop = 0,
+    suriNoGinji = 0,
+  )
 
-  private def player(memberId: String, playOrder: Int, rank: Int): PlayerResult =
-    PlayerResult(
-      memberId = memberId,
-      playOrder = playOrder,
-      rank = rank,
-      totalAssetsManYen = 100 * rank,
-      revenueManYen = 50 * rank,
-      incidents = zeroIncidents,
-    )
+  private def player(memberId: String, playOrder: Int, rank: Int): PlayerResult = PlayerResult(
+    memberId = MemberId(memberId),
+    playOrder = playOrder,
+    rank = rank,
+    totalAssetsManYen = 100 * rank,
+    revenueManYen = 50 * rank,
+    incidents = zeroIncidents,
+  )
 
   private val matchRecord = MatchRecord(
-    id = "match_001",
-    heldEventId = "held_2026_04_30",
+    id = MatchId("match_001"),
+    heldEventId = HeldEventId("held_2026_04_30"),
     matchNoInEvent = 1,
-    gameTitleId = "title_world",
+    gameTitleId = GameTitleId("title_world"),
     layoutFamily = "world",
-    seasonMasterId = "season_2024_spring",
-    ownerMemberId = "member_a",
-    mapMasterId = "map_east",
+    seasonMasterId = SeasonMasterId("season_2024_spring"),
+    ownerMemberId = MemberId("member_a"),
+    mapMasterId = MapMasterId("map_east"),
     playedAt = playedAt,
-    totalAssetsDraftId = Some("draft_total_assets"),
+    totalAssetsDraftId = Some(OcrDraftId("draft_total_assets")),
     revenueDraftId = None,
     incidentLogDraftId = None,
     players = List(
@@ -68,30 +62,30 @@ final class MatchModelsRoundtripSpec extends FunSuite:
       player("member_c", playOrder = 3, rank = 3),
       player("member_d", playOrder = 4, rank = 4),
     ),
-    createdByMemberId = "member_a",
+    createdByMemberId = MemberId("member_a"),
     createdAt = createdAt,
   )
 
   private val matchListItem = MatchListItem(
     kind = MatchListItemKind.Match,
     id = "match_001",
-    matchId = Some("match_001"),
+    matchId = Some(MatchId("match_001")),
     matchDraftId = None,
     status = "confirmed",
-    heldEventId = Some("held_2026_04_30"),
+    heldEventId = Some(HeldEventId("held_2026_04_30")),
     matchNoInEvent = Some(1),
-    gameTitleId = Some("title_world"),
-    seasonMasterId = Some("season_2024_spring"),
-    mapMasterId = Some("map_east"),
-    ownerMemberId = Some("member_a"),
+    gameTitleId = Some(GameTitleId("title_world")),
+    seasonMasterId = Some(SeasonMasterId("season_2024_spring")),
+    mapMasterId = Some(MapMasterId("map_east")),
+    ownerMemberId = Some(MemberId("member_a")),
     playedAt = Some(playedAt),
     createdAt = createdAt,
     updatedAt = updatedAt,
     ranks = List(
-      MatchListRankEntry(memberId = "member_a", rank = 1, playOrder = 1),
-      MatchListRankEntry(memberId = "member_b", rank = 2, playOrder = 2),
-      MatchListRankEntry(memberId = "member_c", rank = 3, playOrder = 3),
-      MatchListRankEntry(memberId = "member_d", rank = 4, playOrder = 4),
+      MatchListRankEntry(memberId = MemberId("member_a"), rank = 1, playOrder = 1),
+      MatchListRankEntry(memberId = MemberId("member_b"), rank = 2, playOrder = 2),
+      MatchListRankEntry(memberId = MemberId("member_c"), rank = 3, playOrder = 3),
+      MatchListRankEntry(memberId = MemberId("member_d"), rank = 4, playOrder = 4),
     ),
   )
 

@@ -2,6 +2,8 @@ package momo.api.domain
 
 import java.time.Instant
 
+import momo.api.domain.ids.*
+
 enum MatchDraftStatus(val wire: String) derives CanEqual:
   case OcrRunning extends MatchDraftStatus("ocr_running")
   case OcrFailed extends MatchDraftStatus("ocr_failed")
@@ -20,29 +22,29 @@ enum MatchListItemKind(val wire: String) derives CanEqual:
 object MatchListItemKind:
   def fromWire(value: String): Option[MatchListItemKind] = values.find(_.wire == value)
 
-final case class MatchListRankEntry(memberId: String, rank: Int, playOrder: Int)
+final case class MatchListRankEntry(memberId: MemberId, rank: Int, playOrder: Int)
 
 final case class MatchDraft(
-    id: String,
-    createdByMemberId: String,
+    id: MatchDraftId,
+    createdByMemberId: MemberId,
     status: MatchDraftStatus,
-    heldEventId: Option[String],
+    heldEventId: Option[HeldEventId],
     matchNoInEvent: Option[Int],
-    gameTitleId: Option[String],
+    gameTitleId: Option[GameTitleId],
     layoutFamily: Option[String],
-    seasonMasterId: Option[String],
-    ownerMemberId: Option[String],
-    mapMasterId: Option[String],
+    seasonMasterId: Option[SeasonMasterId],
+    ownerMemberId: Option[MemberId],
+    mapMasterId: Option[MapMasterId],
     playedAt: Option[Instant],
-    totalAssetsImageId: Option[String],
-    revenueImageId: Option[String],
-    incidentLogImageId: Option[String],
-    totalAssetsDraftId: Option[String],
-    revenueDraftId: Option[String],
-    incidentLogDraftId: Option[String],
+    totalAssetsImageId: Option[ImageId],
+    revenueImageId: Option[ImageId],
+    incidentLogImageId: Option[ImageId],
+    totalAssetsDraftId: Option[OcrDraftId],
+    revenueDraftId: Option[OcrDraftId],
+    incidentLogDraftId: Option[OcrDraftId],
     sourceImagesRetainedUntil: Option[Instant],
     sourceImagesDeletedAt: Option[Instant],
-    confirmedMatchId: Option[String],
+    confirmedMatchId: Option[MatchId],
     createdAt: Instant,
     updatedAt: Instant,
 )
@@ -50,15 +52,15 @@ final case class MatchDraft(
 final case class MatchListItem(
     kind: MatchListItemKind,
     id: String,
-    matchId: Option[String],
-    matchDraftId: Option[String],
+    matchId: Option[MatchId],
+    matchDraftId: Option[MatchDraftId],
     status: String,
-    heldEventId: Option[String],
+    heldEventId: Option[HeldEventId],
     matchNoInEvent: Option[Int],
-    gameTitleId: Option[String],
-    seasonMasterId: Option[String],
-    mapMasterId: Option[String],
-    ownerMemberId: Option[String],
+    gameTitleId: Option[GameTitleId],
+    seasonMasterId: Option[SeasonMasterId],
+    mapMasterId: Option[MapMasterId],
+    ownerMemberId: Option[MemberId],
     playedAt: Option[Instant],
     createdAt: Instant,
     updatedAt: Instant,

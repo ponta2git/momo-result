@@ -16,8 +16,8 @@ final class GetOcrDraftsBulkSpec extends MomoCatsEffectSuite:
   private val timestamp = Instant.parse("2026-04-29T11:40:16Z")
 
   private def draft(id: String, jobId: String): OcrDraft = OcrDraft(
-    id = DraftId(id),
-    jobId = JobId(jobId),
+    id = OcrDraftId(id),
+    jobId = OcrJobId(jobId),
     requestedScreenType = ScreenType.TotalAssets,
     detectedScreenType = None,
     profileId = None,

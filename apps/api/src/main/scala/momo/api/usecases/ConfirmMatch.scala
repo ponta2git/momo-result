@@ -8,7 +8,7 @@ import cats.MonadThrow
 import cats.data.EitherT
 import cats.syntax.all.*
 
-import momo.api.domain.ids.{MemberId, *}
+import momo.api.domain.ids.*
 import momo.api.domain.{MatchRecord, PlayerResult}
 import momo.api.errors.AppError
 import momo.api.repositories.{
@@ -27,7 +27,7 @@ final class ConfirmMatch[F[_]: MonadThrow](
     seasonMasters: SeasonMastersRepository[F],
     now: F[Instant],
     nextId: F[String],
-    allowedMemberIds: Set[String],
+    allowedMemberIds: Set[MemberId],
 ):
   import ConfirmMatch.*
 
@@ -48,13 +48,13 @@ final class ConfirmMatch[F[_]: MonadThrow](
       AppError.ValidationFailed("playedAt must be ISO8601 instant.")
     ))
     _ <- EitherT(heldEvents.find(command.heldEventId).map(_.toRight(
-      AppError.NotFound("held event", command.heldEventId)
+      AppError.NotFound("held event", command.heldEventId.value)
     )))
     title <- EitherT(gameTitles.find(command.gameTitleId).map(_.toRight(
-      AppError.NotFound("game title", command.gameTitleId)
+      AppError.NotFound("game title", command.gameTitleId.value)
     )))
     mapMaster <- EitherT(mapMasters.find(command.mapMasterId).map(_.toRight(
-      AppError.NotFound("map master", command.mapMasterId)
+      AppError.NotFound("map master", command.mapMasterId.value)
     )))
     _ <- EitherT.fromEither[F](
       if mapMaster.gameTitleId == title.id then Right(())
@@ -63,7 +63,7 @@ final class ConfirmMatch[F[_]: MonadThrow](
             .id} does not belong to gameTitleId ${title.id}."))
     )
     season <- EitherT(seasonMasters.find(command.seasonMasterId).map(_.toRight(
-      AppError.NotFound("season master", command.seasonMasterId)
+      AppError.NotFound("season master", command.seasonMasterId.value)
     )))
     _ <- EitherT.fromEither[F](
       if season.gameTitleId == title.id then Right(())
@@ -75,16 +75,16 @@ final class ConfirmMatch[F[_]: MonadThrow](
     _ <- EitherT.fromEither[F](
       if duplicate then
         Left(AppError.Conflict(s"matchNoInEvent ${command
-            .matchNoInEvent} already exists for held event ${command.heldEventId}."))
+            .matchNoInEvent} already exists for held event ${command.heldEventId.value}."))
       else Right(())
     )
     id <- EitherT.liftF(nextId)
     createdAt <- EitherT.liftF(now)
-    record = toMatchRecord(id, createdAt, playedAt, title.layoutFamily, createdBy.value, command)
+    record = toMatchRecord(MatchId(id), createdAt, playedAt, title.layoutFamily, createdBy, command)
     maybeDraft <- command.matchDraftId match
       case None => EitherT.rightT[F, AppError](Option.empty[momo.api.domain.MatchDraft])
       case Some(draftId) => EitherT(
-          matchDrafts.find(draftId).map(_.toRight(AppError.NotFound("match draft", draftId)))
+          matchDrafts.find(draftId).map(_.toRight(AppError.NotFound("match draft", draftId.value)))
         ).flatMap { draft =>
           EitherT.fromEither[F](validateDraftForConfirm(draft, command.draftRefs))
             .map(_ => Some(draft))
@@ -100,30 +100,30 @@ final class ConfirmMatch[F[_]: MonadThrow](
 
 object ConfirmMatch:
   final case class DraftRefs(
-      totalAssets: Option[String],
-      revenue: Option[String],
-      incidentLog: Option[String],
+      totalAssets: Option[OcrDraftId],
+      revenue: Option[OcrDraftId],
+      incidentLog: Option[OcrDraftId],
   )
 
   final case class Command(
-      heldEventId: String,
+      heldEventId: HeldEventId,
       matchNoInEvent: Int,
-      gameTitleId: String,
-      seasonMasterId: String,
-      ownerMemberId: String,
-      mapMasterId: String,
+      gameTitleId: GameTitleId,
+      seasonMasterId: SeasonMasterId,
+      ownerMemberId: MemberId,
+      mapMasterId: MapMasterId,
       playedAt: String,
-      matchDraftId: Option[String],
+      matchDraftId: Option[MatchDraftId],
       draftRefs: DraftRefs,
       players: List[PlayerResult],
   )
 
   private def toMatchRecord(
-      id: String,
+      id: MatchId,
       createdAt: Instant,
       playedAt: Instant,
       layoutFamily: String,
-      createdByMemberId: String,
+      createdByMemberId: MemberId,
       command: Command,
   ): MatchRecord = MatchRecord(
     id = id,

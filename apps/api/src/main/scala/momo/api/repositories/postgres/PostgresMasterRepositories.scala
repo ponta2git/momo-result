@@ -6,7 +6,9 @@ import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
+import momo.api.domain.ids.*
 import momo.api.domain.{GameTitle, IncidentMaster, MapMaster, MemberAlias, SeasonMaster}
+import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.repositories.{
   GameTitlesRepository, IncidentMastersRepository, MapMastersRepository, MemberAliasesRepository,
   SeasonMastersRepository,
@@ -21,7 +23,7 @@ final class PostgresGameTitlesRepository[F[_]: MonadCancelThrow](transactor: Tra
       ORDER BY display_order, created_at, id
     """.query[GameTitle].to[List].transact(transactor)
 
-  override def find(id: String): F[Option[GameTitle]] = sql"""
+  override def find(id: GameTitleId): F[Option[GameTitle]] = sql"""
       SELECT id, name, layout_family, display_order, created_at
       FROM game_titles
       WHERE id = $id
@@ -40,13 +42,13 @@ final class PostgresGameTitlesRepository[F[_]: MonadCancelThrow](transactor: Tra
 final class PostgresMapMastersRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends MapMastersRepository[F]:
 
-  override def list(gameTitleId: Option[String]): F[List[MapMaster]] =
+  override def list(gameTitleId: Option[GameTitleId]): F[List[MapMaster]] =
     val base = fr"SELECT id, game_title_id, name, display_order, created_at FROM map_masters"
     val where = gameTitleId.fold(Fragment.empty)(id => fr"WHERE game_title_id = $id")
     val order = fr"ORDER BY game_title_id, display_order, created_at, id"
     (base ++ where ++ order).query[MapMaster].to[List].transact(transactor)
 
-  override def find(id: String): F[Option[MapMaster]] = sql"""
+  override def find(id: MapMasterId): F[Option[MapMaster]] = sql"""
       SELECT id, game_title_id, name, display_order, created_at
       FROM map_masters
       WHERE id = $id
@@ -57,7 +59,7 @@ final class PostgresMapMastersRepository[F[_]: MonadCancelThrow](transactor: Tra
       VALUES (${map.id}, ${map.gameTitleId}, ${map.name}, ${map.displayOrder}, ${map.createdAt})
     """.update.run.void.transact(transactor)
 
-  override def nextDisplayOrder(gameTitleId: String): F[Int] = sql"""
+  override def nextDisplayOrder(gameTitleId: GameTitleId): F[Int] = sql"""
       SELECT COALESCE(MAX(display_order), 0) + 1
       FROM map_masters
       WHERE game_title_id = $gameTitleId
@@ -66,13 +68,13 @@ final class PostgresMapMastersRepository[F[_]: MonadCancelThrow](transactor: Tra
 final class PostgresSeasonMastersRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends SeasonMastersRepository[F]:
 
-  override def list(gameTitleId: Option[String]): F[List[SeasonMaster]] =
+  override def list(gameTitleId: Option[GameTitleId]): F[List[SeasonMaster]] =
     val base = fr"SELECT id, game_title_id, name, display_order, created_at FROM season_masters"
     val where = gameTitleId.fold(Fragment.empty)(id => fr"WHERE game_title_id = $id")
     val order = fr"ORDER BY game_title_id, display_order, created_at, id"
     (base ++ where ++ order).query[SeasonMaster].to[List].transact(transactor)
 
-  override def find(id: String): F[Option[SeasonMaster]] = sql"""
+  override def find(id: SeasonMasterId): F[Option[SeasonMaster]] = sql"""
       SELECT id, game_title_id, name, display_order, created_at
       FROM season_masters
       WHERE id = $id
@@ -84,7 +86,7 @@ final class PostgresSeasonMastersRepository[F[_]: MonadCancelThrow](transactor: 
       .createdAt})
     """.update.run.void.transact(transactor)
 
-  override def nextDisplayOrder(gameTitleId: String): F[Int] = sql"""
+  override def nextDisplayOrder(gameTitleId: GameTitleId): F[Int] = sql"""
       SELECT COALESCE(MAX(display_order), 0) + 1
       FROM season_masters
       WHERE game_title_id = $gameTitleId
@@ -110,7 +112,7 @@ final class PostgresMemberAliasesRepository[F[_]: MonadCancelThrow](
     nextId: F[String],
 ) extends MemberAliasesRepository[F]:
 
-  override def list(memberId: Option[String]): F[List[MemberAlias]] =
+  override def list(memberId: Option[MemberId]): F[List[MemberAlias]] =
     val base = fr"SELECT member_id, alias, created_at FROM member_aliases"
     val where = memberId.fold(Fragment.empty)(id => fr"WHERE member_id = $id")
     val order = fr"ORDER BY member_id, alias"

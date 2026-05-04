@@ -8,6 +8,7 @@ import cats.data.EitherT
 import cats.syntax.either.*
 
 import momo.api.domain.HeldEvent
+import momo.api.domain.ids.*
 import momo.api.errors.AppError
 import momo.api.repositories.HeldEventsRepository
 
@@ -19,7 +20,7 @@ final class CreateHeldEvent[F[_]: MonadThrow](events: HeldEventsRepository[F], n
     case Left(error) => MonadThrow[F].pure(Left(error))
     case Right(instant) => (for
         id <- EitherT.liftF(nextId)
-        event = HeldEvent(id = id, heldAt = instant)
+        event = HeldEvent(id = HeldEventId(id), heldAt = instant)
         _ <- EitherT.liftF(events.create(event))
       yield event).value
 

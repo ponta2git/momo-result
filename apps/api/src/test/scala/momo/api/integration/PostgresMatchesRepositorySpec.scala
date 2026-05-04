@@ -5,15 +5,16 @@ import java.time.Instant
 import cats.effect.IO
 
 import momo.api.domain.*
+import momo.api.domain.ids.*
 import momo.api.repositories.postgres.*
 
 final class PostgresMatchesRepositorySpec extends IntegrationSuite:
 
   private val now = Instant.parse("2026-04-30T00:00:00Z")
-  private val gameTitleId = "title_world"
-  private val mapMasterId = "map_east"
-  private val seasonMasterId = "season_2024_spring"
-  private val heldEventId = "held_2026_04_30"
+  private val gameTitleId = GameTitleId("title_world")
+  private val mapMasterId = MapMasterId("map_east")
+  private val seasonMasterId = SeasonMasterId("season_2024_spring")
+  private val heldEventId = HeldEventId("held_2026_04_30")
 
   private def gameTitles = new PostgresGameTitlesRepository[IO](transactor)
   private def mapMasters = new PostgresMapMastersRepository[IO](transactor)
@@ -55,7 +56,7 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       destination: Int,
       plusStation: Int,
   ): PlayerResult = PlayerResult(
-    memberId = memberId,
+    memberId = MemberId(memberId),
     playOrder = playOrder,
     rank = rank,
     totalAssetsManYen = totalAssets,
@@ -71,13 +72,13 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
   )
 
   private def sampleMatch(id: String, matchNo: Int): MatchRecord = MatchRecord(
-    id = id,
+    id = MatchId(id),
     heldEventId = heldEventId,
     matchNoInEvent = matchNo,
     gameTitleId = gameTitleId,
     layoutFamily = "world",
     seasonMasterId = seasonMasterId,
-    ownerMemberId = "member_ponta",
+    ownerMemberId = MemberId("member_ponta"),
     mapMasterId = mapMasterId,
     playedAt = now,
     totalAssetsDraftId = None,
@@ -89,7 +90,7 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       player("member_otaka", 3, 3, 6500, 800),
       player("member_eu", 4, 4, 4000, 200),
     ),
-    createdByMemberId = "member_ponta",
+    createdByMemberId = MemberId("member_ponta"),
     createdAt = now,
   )
 
@@ -98,14 +99,14 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
     for
       _ <- seedPrereqs
       _ <- matches.create(rec)
-      found <- matches.find("match_001")
+      found <- matches.find(MatchId("match_001"))
     yield
       val got = found.getOrElse(fail("match_001 not found after create"))
       assertEquals(got.id, rec.id)
       assertEquals(got.players.size, 4)
       assertEquals(got.players.map(_.playOrder), List(1, 2, 3, 4))
       assertEquals(got.players.map(_.rank), List(1, 2, 3, 4))
-      val ponta = got.players.find(_.memberId == "member_ponta").get
+      val ponta = got.players.find(_.memberId == MemberId("member_ponta")).get
       assertEquals(ponta.totalAssetsManYen, 12000)
       assertEquals(ponta.incidents.destination, 5)
       assertEquals(ponta.incidents.plusStation, 2)
@@ -118,7 +119,7 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       _ <- matches.create(sampleMatch("match_a", 1))
       list <- matches.listByHeldEvent(heldEventId)
     yield
-      assertEquals(list.map(_.id), List("match_a", "match_b"))
+      assertEquals(list.map(_.id.value), List("match_a", "match_b"))
       assertEquals(list.map(_.matchNoInEvent), List(1, 2))
 
   test("existsMatchNo and maxMatchNo reflect inserted rows"):
@@ -143,13 +144,13 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       _ <- seedPrereqs
       _ <- matches.create(sampleMatch("match_001", 1))
       _ <- matches.create(sampleMatch("match_002", 2))
-      counts <- matches.countByHeldEvents(List(heldEventId, "missing_event"))
+      counts <- matches.countByHeldEvents(List(heldEventId, HeldEventId("missing_event")))
     yield
       assertEquals(counts.get(heldEventId), Some(2))
-      assertEquals(counts.get("missing_event"), Some(0))
+      assertEquals(counts.get(HeldEventId("missing_event")), Some(0))
 
   test("countByHeldEvents short-circuits on empty input"):
-    matches.countByHeldEvents(Nil).map(m => assertEquals(m, Map.empty[String, Int]))
+    matches.countByHeldEvents(Nil).map(m => assertEquals(m, Map.empty[HeldEventId, Int]))
 
   test("duplicate match_no_in_event for same held_event raises"):
     val rec1 = sampleMatch("match_001", 1)

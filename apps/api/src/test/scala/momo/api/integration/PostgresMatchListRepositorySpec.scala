@@ -5,15 +5,16 @@ import java.time.Instant
 import cats.effect.IO
 
 import momo.api.domain.*
+import momo.api.domain.ids.*
 import momo.api.repositories.MatchListRepository
 import momo.api.repositories.postgres.*
 
 final class PostgresMatchListRepositorySpec extends IntegrationSuite:
 
-  private val gameTitleId = "title_world"
-  private val mapMasterId = "map_east"
-  private val seasonMasterId = "season_2024_spring"
-  private val heldEventId = "held_2026_04_30"
+  private val gameTitleId = GameTitleId("title_world")
+  private val mapMasterId = MapMasterId("map_east")
+  private val seasonMasterId = SeasonMasterId("season_2024_spring")
+  private val heldEventId = HeldEventId("held_2026_04_30")
   private val baseTime = Instant.parse("2026-04-30T00:00:00Z")
 
   private def gameTitles = new PostgresGameTitlesRepository[IO](transactor)
@@ -34,7 +35,7 @@ final class PostgresMatchListRepositorySpec extends IntegrationSuite:
     yield ()
 
   private def player(memberId: String, playOrder: Int, rank: Int): PlayerResult = PlayerResult(
-    memberId = memberId,
+    memberId = MemberId(memberId),
     playOrder = playOrder,
     rank = rank,
     totalAssetsManYen = 10_000 - (rank * 1_000),
@@ -50,13 +51,13 @@ final class PostgresMatchListRepositorySpec extends IntegrationSuite:
   )
 
   private def sampleMatch(id: String, matchNo: Int, playedAt: Instant): MatchRecord = MatchRecord(
-    id = id,
+    id = MatchId(id),
     heldEventId = heldEventId,
     matchNoInEvent = matchNo,
     gameTitleId = gameTitleId,
     layoutFamily = "world",
     seasonMasterId = seasonMasterId,
-    ownerMemberId = "member_ponta",
+    ownerMemberId = MemberId("member_ponta"),
     mapMasterId = mapMasterId,
     playedAt = playedAt,
     totalAssetsDraftId = None,
@@ -68,7 +69,7 @@ final class PostgresMatchListRepositorySpec extends IntegrationSuite:
       player("member_otaka", 3, 3),
       player("member_eu", 4, 4),
     ),
-    createdByMemberId = "member_ponta",
+    createdByMemberId = MemberId("member_ponta"),
     createdAt = playedAt,
   )
 
@@ -78,15 +79,15 @@ final class PostgresMatchListRepositorySpec extends IntegrationSuite:
       updatedAt: Instant,
       playedAt: Option[Instant] = None, // scalafix:ok DisableSyntax.defaultArgs
   ): MatchDraft = MatchDraft(
-    id = id,
-    createdByMemberId = "member_ponta",
+    id = MatchDraftId(id),
+    createdByMemberId = MemberId("member_ponta"),
     status = status,
     heldEventId = Some(heldEventId),
     matchNoInEvent = Some(2),
     gameTitleId = Some(gameTitleId),
     layoutFamily = Some("world"),
     seasonMasterId = Some(seasonMasterId),
-    ownerMemberId = Some("member_ponta"),
+    ownerMemberId = Some(MemberId("member_ponta")),
     mapMasterId = Some(mapMasterId),
     playedAt = playedAt,
     totalAssetsImageId = None,

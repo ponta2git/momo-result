@@ -14,6 +14,7 @@ import momo.api.config.{AppConfig, AppEnv}
 
 final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite:
   import java.time.Instant
+  import momo.api.domain.ids.*
   import momo.api.domain.{GameTitle, MapMaster, SeasonMaster}
 
   private def app: Resource[IO, org.http4s.HttpApp[IO]] = Resource
@@ -28,10 +29,17 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite:
       HttpApp.wired[IO](config).evalTap { w =>
         val now = Instant.parse("2024-01-01T00:00:00Z")
         for
-          _ <- w.gameTitles.create(GameTitle("title_world", "桃太郎電鉄ワールド", "world", 1, now))
-          _ <- w.mapMasters.create(MapMaster("map_east", "title_world", "東日本編", 1, now))
-          _ <- w.seasonMasters
-            .create(SeasonMaster("season_2024_spring", "title_world", "2024-spring", 1, now))
+          _ <- w.gameTitles
+            .create(GameTitle(GameTitleId("title_world"), "桃太郎電鉄ワールド", "world", 1, now))
+          _ <- w.mapMasters
+            .create(MapMaster(MapMasterId("map_east"), GameTitleId("title_world"), "東日本編", 1, now))
+          _ <- w.seasonMasters.create(SeasonMaster(
+            SeasonMasterId("season_2024_spring"),
+            GameTitleId("title_world"),
+            "2024-spring",
+            1,
+            now,
+          ))
         yield ()
       }.map(_.app)
     }

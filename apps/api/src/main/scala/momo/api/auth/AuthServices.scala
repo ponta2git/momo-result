@@ -14,7 +14,6 @@ import io.circe.Decoder
 import io.circe.parser.decode
 
 import momo.api.config.AuthConfig
-import momo.api.domain.ids.MemberId
 import momo.api.errors.AppError
 import momo.api.repositories.{AppSession, AppSessionsRepository, MembersRepository}
 
@@ -136,7 +135,7 @@ final class SessionService[F[_]: Sync](
                     expiresAt = current.plusSeconds(config.sessionTtl.toSeconds),
                   )
                   sessions.upsert(renewed).as(Right(AuthenticatedSession(
-                    AuthenticatedMember(MemberId(member.id), member.displayName),
+                    AuthenticatedMember(member.id, member.displayName),
                     renewed,
                   )))
               }

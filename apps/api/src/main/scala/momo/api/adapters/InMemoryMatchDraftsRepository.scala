@@ -5,11 +5,13 @@ import java.time.Instant
 import cats.effect.{Ref, Sync}
 import cats.syntax.all.*
 
+import momo.api.domain.ids.*
 import momo.api.domain.{MatchDraft, MatchDraftStatus, ScreenType}
 import momo.api.repositories.MatchDraftsRepository
 
-final class InMemoryMatchDraftsRepository[F[_]: Sync] private (ref: Ref[F, Map[String, MatchDraft]])
-    extends MatchDraftsRepository[F]:
+final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
+    ref: Ref[F, Map[MatchDraftId, MatchDraft]]
+) extends MatchDraftsRepository[F]:
   override def create(draft: MatchDraft): F[Unit] = ref.update(_ + (draft.id -> draft))
 
   override def update(draft: MatchDraft, updatedAt: Instant): F[Boolean] = ref.modify { current =>
@@ -20,7 +22,7 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (ref: Ref[F, Map[S
         (current + (draft.id -> next), true)
   }
 
-  override def find(id: String): F[Option[MatchDraft]] = ref.get.map(_.get(id))
+  override def find(id: MatchDraftId): F[Option[MatchDraft]] = ref.get.map(_.get(id))
 
   override def list(filter: MatchDraftsRepository.ListFilter): F[List[MatchDraft]] = ref.get
     .map { all =>
@@ -34,8 +36,8 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (ref: Ref[F, Map[S
     }
 
   override def markConfirmed(
-      draftId: String,
-      confirmedMatchId: String,
+      draftId: MatchDraftId,
+      confirmedMatchId: MatchId,
       updatedAt: Instant,
   ): F[Boolean] = ref.modify { current =>
     current.get(draftId) match
@@ -49,7 +51,7 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (ref: Ref[F, Map[S
         (current + (draftId -> next), true)
   }
 
-  override def markOcrFailed(draftId: String, updatedAt: Instant): F[Boolean] = ref
+  override def markOcrFailed(draftId: MatchDraftId, updatedAt: Instant): F[Boolean] = ref
     .modify { current =>
       current.get(draftId) match
         case None => (current, false)
@@ -60,7 +62,7 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (ref: Ref[F, Map[S
           )
     }
 
-  override def cancel(draftId: String, updatedAt: Instant): F[Boolean] = ref.modify { current =>
+  override def cancel(draftId: MatchDraftId, updatedAt: Instant): F[Boolean] = ref.modify { current =>
     current.get(draftId) match
       case None => (current, false)
       case Some(draft) => (
@@ -71,10 +73,10 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (ref: Ref[F, Map[S
   }
 
   override def attachOcrArtifacts(
-      draftId: String,
+      draftId: MatchDraftId,
       screenType: ScreenType,
-      sourceImageId: String,
-      ocrDraftId: String,
+      sourceImageId: ImageId,
+      ocrDraftId: OcrDraftId,
       updatedAt: Instant,
   ): F[Boolean] = ref.modify { current =>
     current.get(draftId) match
@@ -97,7 +99,7 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (ref: Ref[F, Map[S
   }
 
   override def markSourceImagesRetention(
-      draftId: String,
+      draftId: MatchDraftId,
       retainedUntil: Option[Instant],
       deletedAt: Option[Instant],
       updatedAt: Instant,
@@ -115,4 +117,4 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (ref: Ref[F, Map[S
 
 object InMemoryMatchDraftsRepository:
   def create[F[_]: Sync]: F[InMemoryMatchDraftsRepository[F]] = Ref
-    .of[F, Map[String, MatchDraft]](Map.empty).map(new InMemoryMatchDraftsRepository(_))
+    .of[F, Map[MatchDraftId, MatchDraft]](Map.empty).map(new InMemoryMatchDraftsRepository(_))

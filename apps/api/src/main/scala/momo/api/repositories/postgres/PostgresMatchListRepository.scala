@@ -10,6 +10,7 @@ import doobie.implicits.*
 import doobie.postgres.implicits.*
 import doobie.util.fragments
 
+import momo.api.domain.ids.*
 import momo.api.domain.{MatchDraftStatus, MatchListItem, MatchListItemKind, MatchListRankEntry}
 import momo.api.repositories.MatchListRepository
 import momo.api.repositories.postgres.PostgresMeta.given
@@ -20,20 +21,19 @@ final class PostgresMatchListRepository[F[_]: MonadCancelThrow](transactor: Tran
   private type Row = (
       String,
       String,
-      Option[String],
-      Option[String],
+      Option[MatchId],
+      Option[MatchDraftId],
       String,
-      Option[String],
+      Option[HeldEventId],
       Option[Int],
-      Option[String],
-      Option[String],
-      Option[String],
-      Option[String],
+      Option[GameTitleId],
+      Option[SeasonMasterId],
+      Option[MapMasterId],
+      Option[MemberId],
       Option[Instant],
       Instant,
       Instant,
   )
-
   private val confirmedBase = fr"""SELECT
     'match' AS kind,
     m.id AS id,
@@ -170,8 +170,8 @@ final class PostgresMatchListRepository[F[_]: MonadCancelThrow](transactor: Tran
           ranks <- loadRanks(matchIds)
         yield rows.map(row => toItem(row, matchId => ranks.getOrElse(matchId, Nil)))
 
-  private def loadRanks(matchIds: List[String]): F[Map[String, List[MatchListRankEntry]]] =
-    if matchIds.isEmpty then Map.empty[String, List[MatchListRankEntry]].pure[F]
+  private def loadRanks(matchIds: List[MatchId]): F[Map[MatchId, List[MatchListRankEntry]]] =
+    if matchIds.isEmpty then Map.empty[MatchId, List[MatchListRankEntry]].pure[F]
     else
       val ids = NonEmptyList.fromListUnsafe(matchIds)
       (fr"""
@@ -179,12 +179,12 @@ final class PostgresMatchListRepository[F[_]: MonadCancelThrow](transactor: Tran
         FROM match_players
         WHERE """ ++ fragments.in(fr"match_id", ids) ++ fr"""
         ORDER BY match_id, play_order
-      """).query[(String, String, Int, Int)].to[List].transact(transactor).map { rows =>
+      """).query[(MatchId, MemberId, Int, Int)].to[List].transact(transactor).map { rows =>
         rows.groupBy(_._1).view.mapValues(_.map(row => MatchListRankEntry(row._2, row._3, row._4)))
           .toMap
       }
 
-  private def toItem(row: Row, getRanks: String => List[MatchListRankEntry]): MatchListItem =
+  private def toItem(row: Row, getRanks: MatchId => List[MatchListRankEntry]): MatchListItem =
     val kind = MatchListItemKind.fromWire(row._1).getOrElse(MatchListItemKind.Match)
     val ranks = row._3.map(getRanks).getOrElse(Nil)
     MatchListItem(

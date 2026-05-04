@@ -8,6 +8,7 @@ import cats.effect.IO
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.config.{AppEnv, AuthConfig}
+import momo.api.domain.ids.MemberId
 import momo.api.repositories.AppSession
 
 final class AuthServicesSpec extends MomoCatsEffectSuite:
@@ -37,7 +38,7 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
   test("CsrfTokenService verifies the session csrf secret") {
     val session = AppSession(
       id = "session",
-      memberId = "member_ponta",
+      memberId = MemberId("member_ponta"),
       csrfSecret = "secret",
       createdAt = Instant.EPOCH,
       lastSeenAt = Instant.EPOCH,

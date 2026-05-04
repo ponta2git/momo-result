@@ -2,6 +2,8 @@ package momo.api.domain
 
 import java.time.Instant
 
+import momo.api.domain.ids.*
+
 final case class IncidentCounts(
     destination: Int,
     plusStation: Int,
@@ -14,7 +16,7 @@ final case class IncidentCounts(
    * Pairs each count with its `incident_masters.id` in the canonical order. Used by the matches
    * repository to insert the 6 required `match_incidents` rows per player.
    */
-  def entriesByMasterId: List[(String, Int)] = List(
+  def entriesByMasterId: List[(IncidentMasterId, Int)] = List(
     IncidentCounts.IdDestination -> destination,
     IncidentCounts.IdPlusStation -> plusStation,
     IncidentCounts.IdMinusStation -> minusStation,
@@ -28,15 +30,15 @@ object IncidentCounts:
    * Stable IDs of the 6 fixed `incident_masters` rows. Must match the seed in
    * momo-db/drizzle/0008_foamy_nekra.sql.
    */
-  val IdDestination = "incident_destination"
-  val IdPlusStation = "incident_plus_station"
-  val IdMinusStation = "incident_minus_station"
-  val IdCardStation = "incident_card_station"
-  val IdCardShop = "incident_card_shop"
-  val IdSuriNoGinji = "incident_suri_no_ginji"
+  val IdDestination: IncidentMasterId = IncidentMasterId("incident_destination")
+  val IdPlusStation: IncidentMasterId = IncidentMasterId("incident_plus_station")
+  val IdMinusStation: IncidentMasterId = IncidentMasterId("incident_minus_station")
+  val IdCardStation: IncidentMasterId = IncidentMasterId("incident_card_station")
+  val IdCardShop: IncidentMasterId = IncidentMasterId("incident_card_shop")
+  val IdSuriNoGinji: IncidentMasterId = IncidentMasterId("incident_suri_no_ginji")
 
 final case class PlayerResult(
-    memberId: String,
+    memberId: MemberId,
     playOrder: Int,
     rank: Int,
     totalAssetsManYen: Int,
@@ -45,19 +47,19 @@ final case class PlayerResult(
 )
 
 final case class MatchRecord(
-    id: String,
-    heldEventId: String,
+    id: MatchId,
+    heldEventId: HeldEventId,
     matchNoInEvent: Int,
-    gameTitleId: String,
+    gameTitleId: GameTitleId,
     layoutFamily: String,
-    seasonMasterId: String,
-    ownerMemberId: String,
-    mapMasterId: String,
+    seasonMasterId: SeasonMasterId,
+    ownerMemberId: MemberId,
+    mapMasterId: MapMasterId,
     playedAt: Instant,
-    totalAssetsDraftId: Option[String],
-    revenueDraftId: Option[String],
-    incidentLogDraftId: Option[String],
+    totalAssetsDraftId: Option[OcrDraftId],
+    revenueDraftId: Option[OcrDraftId],
+    incidentLogDraftId: Option[OcrDraftId],
     players: List[PlayerResult],
-    createdByMemberId: String,
+    createdByMemberId: MemberId,
     createdAt: Instant,
 )

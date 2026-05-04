@@ -3,6 +3,7 @@ package momo.api.usecases
 import cats.Applicative
 import cats.syntax.all.*
 
+import momo.api.domain.ids.*
 import momo.api.domain.{
   MapMaster, MatchExportFile, MatchExportFormat, MatchExportRow, MatchExportScope, MatchRecord,
   Member, PlayerResult, SeasonMaster,
@@ -20,9 +21,9 @@ final class ExportMatches[F[_]: Applicative](
 ):
   def run(
       formatValue: String,
-      seasonMasterId: Option[String],
-      heldEventId: Option[String],
-      matchId: Option[String],
+      seasonMasterId: Option[SeasonMasterId],
+      heldEventId: Option[HeldEventId],
+      matchId: Option[MatchId],
   ): F[Either[AppError, MatchExportFile]] =
     (parseFormat(formatValue), parseScope(seasonMasterId, heldEventId, matchId)).tupled match
       case Left(error) => error.asLeft[MatchExportFile].pure[F]
@@ -39,7 +40,8 @@ final class ExportMatches[F[_]: Applicative](
   ).mapN { (allMatches, memberRows, mapRows, seasonRows) =>
     val selected = filter(scope, allMatches)
     scope match
-      case MatchExportScope.Match(id) if selected.isEmpty => AppError.NotFound("match", id).asLeft
+      case MatchExportScope.Match(id) if selected.isEmpty =>
+        AppError.NotFound("match", id.value).asLeft
       case _ => buildRows(
           selected = selected,
           allMatches = allMatches,
@@ -59,14 +61,14 @@ final class ExportMatches[F[_]: Applicative](
     .fromWire(value).toRight(AppError.ValidationFailed("format must be one of: csv, tsv."))
 
   private def parseScope(
-      seasonMasterId: Option[String],
-      heldEventId: Option[String],
-      matchId: Option[String],
+      seasonMasterId: Option[SeasonMasterId],
+      heldEventId: Option[HeldEventId],
+      matchId: Option[MatchId],
   ): Either[AppError, MatchExportScope] =
     val scopes = List(
-      seasonMasterId.filter(_.trim.nonEmpty).map(id => MatchExportScope.Season(id.trim)),
-      heldEventId.filter(_.trim.nonEmpty).map(id => MatchExportScope.HeldEvent(id.trim)),
-      matchId.filter(_.trim.nonEmpty).map(id => MatchExportScope.Match(id.trim)),
+      seasonMasterId.filter(_.value.trim.nonEmpty).map(MatchExportScope.Season(_)),
+      heldEventId.filter(_.value.trim.nonEmpty).map(MatchExportScope.HeldEvent(_)),
+      matchId.filter(_.value.trim.nonEmpty).map(MatchExportScope.Match(_)),
     ).flatten
     scopes match
       case Nil => Right(MatchExportScope.All)
@@ -111,7 +113,7 @@ final class ExportMatches[F[_]: Applicative](
   private def playerRow(
       record: MatchRecord,
       player: PlayerResult,
-      memberNames: Map[String, String],
+      memberNames: Map[MemberId, String],
       seasonName: String,
       seasonNo: Int,
       ownerName: String,
@@ -135,15 +137,17 @@ final class ExportMatches[F[_]: Applicative](
       )
     }
 
-  private def lookup[A](values: Map[String, A], id: String, label: String): Either[AppError, A] =
-    values.get(id).toRight(AppError.Internal(s"Export $label lookup failed for id: $id"))
+  private def lookup[A, Id](values: Map[Id, A], id: Id, label: String): Either[AppError, A] = values
+    .get(id).toRight(AppError.Internal(s"Export $label lookup failed for id: $id"))
 
-  private def sequenceBy(records: List[MatchRecord])(key: MatchRecord => String): Map[String, Int] =
+  private def sequenceBy[Id](records: List[MatchRecord])(
+      key: MatchRecord => Id
+  ): Map[MatchId, Int] =
     val sorted = records.sortWith(compareMatches)
     sorted.groupMap(key)(identity).values
       .flatMap(_.zipWithIndex.map { case (record, index) => record.id -> (index + 1) }).toMap
 
   private def compareMatches(a: MatchRecord, b: MatchRecord): Boolean =
-    val ak = (a.playedAt.toEpochMilli, a.heldEventId, a.matchNoInEvent, a.id)
-    val bk = (b.playedAt.toEpochMilli, b.heldEventId, b.matchNoInEvent, b.id)
+    val ak = (a.playedAt.toEpochMilli, a.heldEventId.value, a.matchNoInEvent, a.id.value)
+    val bk = (b.playedAt.toEpochMilli, b.heldEventId.value, b.matchNoInEvent, b.id.value)
     ak < bk

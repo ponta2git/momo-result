@@ -9,7 +9,9 @@ import doobie.implicits.*
 import doobie.postgres.implicits.*
 
 import momo.api.domain.HeldEvent
+import momo.api.domain.ids.HeldEventId
 import momo.api.repositories.HeldEventsRepository
+import momo.api.repositories.postgres.PostgresMeta.given
 
 /**
  * `held_events` 行を読み書きする。本アプリで作成する ad-hoc な開催履歴は `session_id IS NULL` で挿入する（summit が作る出席 session
@@ -33,7 +35,7 @@ final class PostgresHeldEventsRepository[F[_]: MonadCancelThrow](transactor: Tra
     val lim = fr"LIMIT ${math.max(limit, 0)}"
     (base ++ where ++ order ++ lim).query[HeldEvent].to[List].transact(transactor)
 
-  override def find(id: String): F[Option[HeldEvent]] = sql"""
+  override def find(id: HeldEventId): F[Option[HeldEvent]] = sql"""
       SELECT id, start_at FROM held_events WHERE id = $id
     """.query[HeldEvent].option.transact(transactor)
 

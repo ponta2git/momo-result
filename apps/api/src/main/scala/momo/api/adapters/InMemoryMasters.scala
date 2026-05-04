@@ -5,36 +5,39 @@ import java.time.Instant
 import cats.effect.{Ref, Sync}
 import cats.syntax.functor.*
 
+import momo.api.domain.ids.*
 import momo.api.domain.{GameTitle, IncidentMaster, MapMaster, Member, MemberAlias, SeasonMaster}
 import momo.api.repositories.{
   GameTitlesRepository, IncidentMastersRepository, MapMastersRepository, MemberAliasesRepository,
   MembersRepository, SeasonMastersRepository,
 }
 
-final class InMemoryGameTitlesRepository[F[_]: Sync] private (ref: Ref[F, Map[String, GameTitle]])
-    extends GameTitlesRepository[F]:
+final class InMemoryGameTitlesRepository[F[_]: Sync] private (
+    ref: Ref[F, Map[GameTitleId, GameTitle]]
+) extends GameTitlesRepository[F]:
   override def list: F[List[GameTitle]] = ref.get
-    .map(_.values.toList.sortBy(t => (t.displayOrder, t.createdAt, t.id)))
-  override def find(id: String): F[Option[GameTitle]] = ref.get.map(_.get(id))
+    .map(_.values.toList.sortBy(t => (t.displayOrder, t.createdAt, t.id.value)))
+  override def find(id: GameTitleId): F[Option[GameTitle]] = ref.get.map(_.get(id))
   override def create(title: GameTitle): F[Unit] = ref.update(_ + (title.id -> title))
   override def nextDisplayOrder: F[Int] = ref.get
     .map(_.values.map(_.displayOrder).maxOption.getOrElse(0) + 1)
 
 object InMemoryGameTitlesRepository:
   def create[F[_]: Sync]: F[InMemoryGameTitlesRepository[F]] = Ref
-    .of[F, Map[String, GameTitle]](Map.empty).map(new InMemoryGameTitlesRepository(_))
+    .of[F, Map[GameTitleId, GameTitle]](Map.empty).map(new InMemoryGameTitlesRepository(_))
 
-final class InMemoryMapMastersRepository[F[_]: Sync] private (ref: Ref[F, Map[String, MapMaster]])
-    extends MapMastersRepository[F]:
-  override def list(gameTitleId: Option[String]): F[List[MapMaster]] = ref.get.map { m =>
+final class InMemoryMapMastersRepository[F[_]: Sync] private (
+    ref: Ref[F, Map[MapMasterId, MapMaster]]
+) extends MapMastersRepository[F]:
+  override def list(gameTitleId: Option[GameTitleId]): F[List[MapMaster]] = ref.get.map { m =>
     val items = gameTitleId match
       case Some(id) => m.values.filter(_.gameTitleId == id)
       case None => m.values
-    items.toList.sortBy(x => (x.gameTitleId, x.displayOrder, x.createdAt, x.id))
+    items.toList.sortBy(x => (x.gameTitleId.value, x.displayOrder, x.createdAt, x.id.value))
   }
-  override def find(id: String): F[Option[MapMaster]] = ref.get.map(_.get(id))
+  override def find(id: MapMasterId): F[Option[MapMaster]] = ref.get.map(_.get(id))
   override def create(map: MapMaster): F[Unit] = ref.update(_ + (map.id -> map))
-  override def nextDisplayOrder(gameTitleId: String): F[Int] = ref.get.map { m =>
+  override def nextDisplayOrder(gameTitleId: GameTitleId): F[Int] = ref.get.map { m =>
     val maxOrder = m.values.filter(_.gameTitleId == gameTitleId).map(_.displayOrder).maxOption
       .getOrElse(0)
     maxOrder + 1
@@ -42,20 +45,20 @@ final class InMemoryMapMastersRepository[F[_]: Sync] private (ref: Ref[F, Map[St
 
 object InMemoryMapMastersRepository:
   def create[F[_]: Sync]: F[InMemoryMapMastersRepository[F]] = Ref
-    .of[F, Map[String, MapMaster]](Map.empty).map(new InMemoryMapMastersRepository(_))
+    .of[F, Map[MapMasterId, MapMaster]](Map.empty).map(new InMemoryMapMastersRepository(_))
 
 final class InMemorySeasonMastersRepository[F[_]: Sync] private (
-    ref: Ref[F, Map[String, SeasonMaster]]
+    ref: Ref[F, Map[SeasonMasterId, SeasonMaster]]
 ) extends SeasonMastersRepository[F]:
-  override def list(gameTitleId: Option[String]): F[List[SeasonMaster]] = ref.get.map { m =>
+  override def list(gameTitleId: Option[GameTitleId]): F[List[SeasonMaster]] = ref.get.map { m =>
     val items = gameTitleId match
       case Some(id) => m.values.filter(_.gameTitleId == id)
       case None => m.values
-    items.toList.sortBy(x => (x.gameTitleId, x.displayOrder, x.createdAt, x.id))
+    items.toList.sortBy(x => (x.gameTitleId.value, x.displayOrder, x.createdAt, x.id.value))
   }
-  override def find(id: String): F[Option[SeasonMaster]] = ref.get.map(_.get(id))
+  override def find(id: SeasonMasterId): F[Option[SeasonMaster]] = ref.get.map(_.get(id))
   override def create(season: SeasonMaster): F[Unit] = ref.update(_ + (season.id -> season))
-  override def nextDisplayOrder(gameTitleId: String): F[Int] = ref.get.map { m =>
+  override def nextDisplayOrder(gameTitleId: GameTitleId): F[Int] = ref.get.map { m =>
     val maxOrder = m.values.filter(_.gameTitleId == gameTitleId).map(_.displayOrder).maxOption
       .getOrElse(0)
     maxOrder + 1
@@ -63,7 +66,7 @@ final class InMemorySeasonMastersRepository[F[_]: Sync] private (
 
 object InMemorySeasonMastersRepository:
   def create[F[_]: Sync]: F[InMemorySeasonMastersRepository[F]] = Ref
-    .of[F, Map[String, SeasonMaster]](Map.empty).map(new InMemorySeasonMastersRepository(_))
+    .of[F, Map[SeasonMasterId, SeasonMaster]](Map.empty).map(new InMemorySeasonMastersRepository(_))
 
 final class InMemoryIncidentMastersRepository[F[_]] private (ref: Ref[F, List[IncidentMaster]])
     extends IncidentMastersRepository[F]:
@@ -74,18 +77,18 @@ object InMemoryIncidentMastersRepository:
   def create[F[_]: Sync]: F[InMemoryIncidentMastersRepository[F]] =
     val now = Instant.EPOCH
     val seed = List(
-      IncidentMaster("incident_destination", "destination", "目的地", 1, now),
-      IncidentMaster("incident_plus_station", "plus_station", "プラス駅", 2, now),
-      IncidentMaster("incident_minus_station", "minus_station", "マイナス駅", 3, now),
-      IncidentMaster("incident_card_station", "card_station", "カード駅", 4, now),
-      IncidentMaster("incident_card_shop", "card_shop", "カード売り場", 5, now),
-      IncidentMaster("incident_suri_no_ginji", "suri_no_ginji", "スリの銀次", 6, now),
+      IncidentMaster(IncidentMasterId("incident_destination"), "destination", "目的地", 1, now),
+      IncidentMaster(IncidentMasterId("incident_plus_station"), "plus_station", "プラス駅", 2, now),
+      IncidentMaster(IncidentMasterId("incident_minus_station"), "minus_station", "マイナス駅", 3, now),
+      IncidentMaster(IncidentMasterId("incident_card_station"), "card_station", "カード駅", 4, now),
+      IncidentMaster(IncidentMasterId("incident_card_shop"), "card_shop", "カード売り場", 5, now),
+      IncidentMaster(IncidentMasterId("incident_suri_no_ginji"), "suri_no_ginji", "スリの銀次", 6, now),
     )
     Ref.of[F, List[IncidentMaster]](seed).map(new InMemoryIncidentMastersRepository(_))
 
 final class InMemoryMemberAliasesRepository[F[_]: Sync] private (ref: Ref[F, List[MemberAlias]])
     extends MemberAliasesRepository[F]:
-  override def list(memberId: Option[String]): F[List[MemberAlias]] = ref.get.map { all =>
+  override def list(memberId: Option[MemberId]): F[List[MemberAlias]] = ref.get.map { all =>
     memberId match
       case Some(id) => all.filter(_.memberId == id)
       case None => all
@@ -96,16 +99,16 @@ object InMemoryMemberAliasesRepository:
   def create[F[_]: Sync]: F[InMemoryMemberAliasesRepository[F]] = Ref.of[F, List[MemberAlias]](Nil)
     .map(new InMemoryMemberAliasesRepository(_))
 
-final class InMemoryMembersRepository[F[_]: Sync] private (ref: Ref[F, Map[String, Member]])
+final class InMemoryMembersRepository[F[_]: Sync] private (ref: Ref[F, Map[MemberId, Member]])
     extends MembersRepository[F]:
-  override def list: F[List[Member]] = ref.get.map(_.values.toList.sortBy(_.id))
-  override def find(id: String): F[Option[Member]] = ref.get.map(_.get(id))
-  override def findByDiscordUserId(userId: String): F[Option[Member]] = ref.get
+  override def list: F[List[Member]] = ref.get.map(_.values.toList.sortBy(_.id.value))
+  override def find(id: MemberId): F[Option[Member]] = ref.get.map(_.get(id))
+  override def findByDiscordUserId(userId: UserId): F[Option[Member]] = ref.get
     .map(_.values.find(_.userId == userId))
 
 object InMemoryMembersRepository:
   def create[F[_]: Sync]: F[InMemoryMembersRepository[F]] = create(Nil)
 
   def create[F[_]: Sync](members: List[Member]): F[InMemoryMembersRepository[F]] = Ref
-    .of[F, Map[String, Member]](members.map(m => m.id -> m).toMap)
+    .of[F, Map[MemberId, Member]](members.map(m => m.id -> m).toMap)
     .map(new InMemoryMembersRepository(_))

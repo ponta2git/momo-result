@@ -18,7 +18,8 @@ import momo.api.auth.{
 }
 import momo.api.config.AppConfig
 import momo.api.db.Database
-import momo.api.domain.{IdGenerator, Member}
+import momo.api.domain.Member
+import momo.api.domain.ids.*
 import momo.api.repositories.postgres.{
   PostgresAppSessionsRepository, PostgresGameTitlesRepository, PostgresHeldEventsRepository,
   PostgresIncidentMastersRepository, PostgresMapMastersRepository,
@@ -105,8 +106,9 @@ object HttpApp:
           matchList = InMemoryMatchListRepository[F](matches, matchDrafts)
           matchConfirmation = InMemoryMatchConfirmationRepository[F](matches, matchDrafts)
           appSessions <- InMemoryAppSessionsRepository.create[F]
-          members <- InMemoryMembersRepository
-            .create[F](config.devMemberIds.map(id => Member(id, id, id, java.time.Instant.EPOCH)))
+          members <- InMemoryMembersRepository.create[F](config.devMemberIds.map(id =>
+            Member(MemberId(id), UserId(id), id, java.time.Instant.EPOCH)
+          ))
           gameTitles <- InMemoryGameTitlesRepository.create[F]
           mapMasters <- InMemoryMapMastersRepository.create[F]
           seasonMasters <- InMemorySeasonMastersRepository.create[F]
@@ -158,6 +160,7 @@ object HttpApp:
     val roster = MemberRoster.dev(config.devMemberIds)
     val uploadImage = UploadImage[F](imageStore)
     val nowF = Clock[F].realTimeInstant
+    val nextId = OcrJobId.fresh[F].map(_.value)
     val sessionService = SessionService[F](appSessions, members, config.auth, nowF)
     val csrfTokenService = CsrfTokenService()
     val oauthStateCodec = OAuthStateCodec[F](config.auth, nowF)
@@ -169,7 +172,7 @@ object HttpApp:
       matchDrafts = matchDrafts,
       queue = queue,
       now = nowF,
-      nextId = IdGenerator.next[F],
+      nextId = nextId,
       requestIdLookup = RequestIdMiddleware.lookup[F],
     )
     val getOcrJob = GetOcrJob[F](jobs)
@@ -177,7 +180,7 @@ object HttpApp:
     val getOcrDraftsBulk = GetOcrDraftsBulk[F](drafts)
     val cancelOcrJob = CancelOcrJob[F](jobs, nowF)
     val listHeldEvents = ListHeldEvents[F](heldEvents, matches)
-    val createHeldEvent = CreateHeldEvent[F](heldEvents, IdGenerator.next[F])
+    val createHeldEvent = CreateHeldEvent[F](heldEvents, nextId)
     val sourceImageRetention = SourceImageRetentionService[F](matchDrafts, imageStore)
     val createMatchDraft = CreateMatchDraft[F](
       heldEvents = heldEvents,
@@ -186,7 +189,7 @@ object HttpApp:
       seasonMasters = seasonMasters,
       matchDrafts = matchDrafts,
       now = nowF,
-      nextId = IdGenerator.next[F],
+      nextId = nextId,
     )
     val getMatchDraft = GetMatchDraft[F](matchDrafts)
     val updateMatchDraft = UpdateMatchDraft[F](
@@ -209,8 +212,8 @@ object HttpApp:
       mapMasters = mapMasters,
       seasonMasters = seasonMasters,
       now = nowF,
-      nextId = IdGenerator.next[F],
-      allowedMemberIds = config.devMemberIds.toSet,
+      nextId = nextId,
+      allowedMemberIds = config.devMemberIds.map(MemberId(_)).toSet,
     )
     val listMatches = ListMatches[F](matchList)
     val exportMatches = ExportMatches[F](matches, members, mapMasters, seasonMasters)
@@ -222,7 +225,7 @@ object HttpApp:
       mapMasters = mapMasters,
       seasonMasters = seasonMasters,
       now = nowF,
-      allowedMemberIds = config.devMemberIds.toSet,
+      allowedMemberIds = config.devMemberIds.map(MemberId(_)).toSet,
     )
     val deleteMatch = DeleteMatch[F](matches)
     val createGameTitle = CreateGameTitle[F](gameTitles, nowF)

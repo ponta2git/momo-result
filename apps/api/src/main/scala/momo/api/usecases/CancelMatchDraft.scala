@@ -7,7 +7,7 @@ import cats.data.EitherT
 import cats.syntax.all.*
 
 import momo.api.domain.MatchDraftStatus
-import momo.api.domain.ids.MemberId
+import momo.api.domain.ids.*
 import momo.api.errors.AppError
 import momo.api.repositories.MatchDraftsRepository
 
@@ -23,21 +23,22 @@ final class CancelMatchDraft[F[_]: MonadThrow](
     MatchDraftStatus.NeedsReview,
   )
 
-  def run(draftId: String, memberId: MemberId): F[Either[AppError, Unit]] = (for
-    draft <-
-      EitherT(matchDrafts.find(draftId).map(_.toRight(AppError.NotFound("match draft", draftId))))
+  def run(draftId: MatchDraftId, memberId: MemberId): F[Either[AppError, Unit]] = (for
+    draft <- EitherT(
+      matchDrafts.find(draftId).map(_.toRight(AppError.NotFound("match draft", draftId.value)))
+    )
     _ <- EitherT.fromEither[F](authorize(draft.createdByMemberId, memberId))
     _ <- EitherT.fromEither[F](canCancel(draft.status))
     at <- EitherT.liftF(now)
     cancelled <- EitherT.liftF(matchDrafts.cancel(draftId, at))
     _ <- EitherT
-      .fromEither[F](Either.cond(cancelled, (), AppError.NotFound("match draft", draftId)))
+      .fromEither[F](Either.cond(cancelled, (), AppError.NotFound("match draft", draftId.value)))
     _ <- EitherT.liftF(sourceImageRetention.cleanupNow(draftId, at))
   yield ()).value
 
-  private def authorize(createdByMemberId: String, memberId: MemberId): Either[AppError, Unit] =
+  private def authorize(createdByMemberId: MemberId, memberId: MemberId): Either[AppError, Unit] =
     Either.cond(
-      createdByMemberId == memberId.value,
+      createdByMemberId == memberId,
       (),
       AppError.Forbidden("You cannot cancel this match draft."),
     )

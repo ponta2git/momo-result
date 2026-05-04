@@ -58,7 +58,7 @@ private[http] object AuthHttpRoutes:
                   case true => oauth.fetchUser(codeValue).flatMap {
                       case Left(error) => problem(error)
                           .map(_.addCookie(clearCookie(config.auth.stateCookieName, config)))
-                      case Right(discordUser) => members.findByDiscordUserId(discordUser.id)
+                      case Right(discordUser) => members.findByDiscordUserId(UserId(discordUser.id))
                           .flatMap {
                             case None => problem(
                                 AppError.Forbidden("This Discord user is not allowed to log in.")
@@ -94,9 +94,9 @@ private[http] object AuthHttpRoutes:
         config.appEnv match
           case AppEnv.Dev | AppEnv.Test => request.headers.get(CIString("X-Dev-User"))
               .flatMap(_.head.value.some) match
-              case Some(memberId) => members.find(memberId).flatMap {
+              case Some(memberId) => members.find(MemberId(memberId)).flatMap {
                   case Some(member) => json(AuthMeResponse(
-                      member.id,
+                      member.id.value,
                       member.displayName,
                       csrfToken = Some(CsrfMiddleware.DevToken),
                     ))

@@ -4,13 +4,14 @@ import cats.Monad
 import cats.data.EitherT
 
 import momo.api.domain.MatchListItem
+import momo.api.domain.ids.*
 import momo.api.errors.AppError
 import momo.api.repositories.MatchListRepository
 
 final case class ListMatchesCommand(
-    heldEventId: Option[String],
-    gameTitleId: Option[String],
-    seasonMasterId: Option[String],
+    heldEventId: Option[HeldEventId],
+    gameTitleId: Option[GameTitleId],
+    seasonMasterId: Option[SeasonMasterId],
     status: Option[String],
     kind: Option[String],
     limit: Option[Int],

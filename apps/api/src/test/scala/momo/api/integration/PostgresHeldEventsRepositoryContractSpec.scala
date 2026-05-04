@@ -16,8 +16,7 @@ import momo.api.repositories.postgres.PostgresHeldEventsRepository
  * Skipped automatically when the local Postgres on :5433 is unavailable.
  */
 final class PostgresHeldEventsRepositoryContractSpec
-    extends IntegrationSuite
-    with HeldEventsRepositoryContract:
+    extends IntegrationSuite with HeldEventsRepositoryContract:
 
-  override protected def freshRepo: IO[HeldEventsRepository[IO]] =
-    IO.delay(new PostgresHeldEventsRepository[IO](transactor))
+  override protected def freshRepo: IO[HeldEventsRepository[IO]] = IO
+    .delay(new PostgresHeldEventsRepository[IO](transactor))

@@ -12,10 +12,18 @@ import momo.api.domain.{FailureCode, MatchDraftStatus, OcrJobStatus, ScreenType}
  * PostgreSQL repositories. Keeping them in one place avoids accidental divergence between repos.
  */
 object PostgresMeta:
-  given Meta[JobId] = Meta[String].imap(JobId.apply)(_.value)
-  given Meta[DraftId] = Meta[String].imap(DraftId.apply)(_.value)
+  given Meta[OcrJobId] = Meta[String].imap(OcrJobId.apply)(_.value)
+  given Meta[OcrDraftId] = Meta[String].imap(OcrDraftId.apply)(_.value)
   given Meta[ImageId] = Meta[String].imap(ImageId.apply)(_.value)
   given Meta[MemberId] = Meta[String].imap(MemberId.apply)(_.value)
+  given Meta[HeldEventId] = Meta[String].imap(HeldEventId.apply)(_.value)
+  given Meta[MatchId] = Meta[String].imap(MatchId.apply)(_.value)
+  given Meta[MatchDraftId] = Meta[String].imap(MatchDraftId.apply)(_.value)
+  given Meta[GameTitleId] = Meta[String].imap(GameTitleId.apply)(_.value)
+  given Meta[MapMasterId] = Meta[String].imap(MapMasterId.apply)(_.value)
+  given Meta[SeasonMasterId] = Meta[String].imap(SeasonMasterId.apply)(_.value)
+  given Meta[IncidentMasterId] = Meta[String].imap(IncidentMasterId.apply)(_.value)
+  given Meta[UserId] = Meta[String].imap(UserId.apply)(_.value)
 
   given Meta[Path] = Meta[String].imap(Paths.get(_))(_.toString)
 

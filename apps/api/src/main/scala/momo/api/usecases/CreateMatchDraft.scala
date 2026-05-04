@@ -6,7 +6,7 @@ import cats.MonadThrow
 import cats.data.EitherT
 import cats.syntax.all.*
 
-import momo.api.domain.ids.MemberId
+import momo.api.domain.ids.*
 import momo.api.domain.{MatchDraft, MatchDraftStatus}
 import momo.api.errors.AppError
 import momo.api.repositories.{
@@ -15,13 +15,13 @@ import momo.api.repositories.{
 }
 
 final case class CreateMatchDraftCommand(
-    heldEventId: Option[String],
+    heldEventId: Option[HeldEventId],
     matchNoInEvent: Option[Int],
-    gameTitleId: Option[String],
+    gameTitleId: Option[GameTitleId],
     layoutFamily: Option[String],
-    seasonMasterId: Option[String],
-    ownerMemberId: Option[String],
-    mapMasterId: Option[String],
+    seasonMasterId: Option[SeasonMasterId],
+    ownerMemberId: Option[MemberId],
+    mapMasterId: Option[MapMasterId],
     playedAt: Option[Instant],
     status: Option[String],
 )
@@ -43,8 +43,8 @@ final class CreateMatchDraft[F[_]: MonadThrow](
       id <- EitherT.liftF(nextId)
       at <- EitherT.liftF(now)
       draft = MatchDraft(
-        id = id,
-        createdByMemberId = createdBy.value,
+        id = MatchDraftId(id),
+        createdByMemberId = createdBy,
         status = status,
         heldEventId = command.heldEventId,
         matchNoInEvent = command.matchNoInEvent,
@@ -86,33 +86,34 @@ final class CreateMatchDraft[F[_]: MonadThrow](
       _ <- command.heldEventId match
         case None => EitherT.rightT[F, AppError](())
         case Some(id) => EitherT(
-            heldEvents.find(id).map(_.toRight(AppError.NotFound("held event", id)).map(_ => ()))
+            heldEvents.find(id)
+              .map(_.toRight(AppError.NotFound("held event", id.value)).map(_ => ()))
           )
       title <- command.gameTitleId match
         case None => EitherT.rightT[F, AppError](Option.empty[momo.api.domain.GameTitle])
         case Some(id) =>
-          EitherT(gameTitles.find(id).map(_.toRight(AppError.NotFound("game title", id))))
+          EitherT(gameTitles.find(id).map(_.toRight(AppError.NotFound("game title", id.value))))
             .map(Some(_))
       _ <- command.mapMasterId match
         case None => EitherT.rightT[F, AppError](())
         case Some(id) => EitherT(
-            mapMasters.find(id).map(_.toRight(AppError.NotFound("map master", id)))
+            mapMasters.find(id).map(_.toRight(AppError.NotFound("map master", id.value)))
           ).flatMap { map =>
             title match
               case Some(t) if map.gameTitleId != t.id =>
-                EitherT.leftT[F, Unit](AppError.ValidationFailed(s"mapMasterId ${map
-                    .id} does not belong to gameTitleId ${t.id}."))
+                EitherT.leftT[F, Unit](AppError.ValidationFailed(s"mapMasterId ${map.id
+                    .value} does not belong to gameTitleId ${t.id.value}."))
               case _ => EitherT.rightT[F, AppError](())
           }
       _ <- command.seasonMasterId match
         case None => EitherT.rightT[F, AppError](())
         case Some(id) => EitherT(
-            seasonMasters.find(id).map(_.toRight(AppError.NotFound("season master", id)))
+            seasonMasters.find(id).map(_.toRight(AppError.NotFound("season master", id.value)))
           ).flatMap { season =>
             title match
               case Some(t) if season.gameTitleId != t.id =>
-                EitherT.leftT[F, Unit](AppError.ValidationFailed(s"seasonMasterId ${season
-                    .id} does not belong to gameTitleId ${t.id}."))
+                EitherT.leftT[F, Unit](AppError.ValidationFailed(s"seasonMasterId ${season.id
+                    .value} does not belong to gameTitleId ${t.id.value}."))
               case _ => EitherT.rightT[F, AppError](())
           }
     yield ()

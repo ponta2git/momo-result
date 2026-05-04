@@ -16,7 +16,7 @@ final case class GameTitleResponse(
 
 object GameTitleResponse:
   def from(t: GameTitle): GameTitleResponse = GameTitleResponse(
-    id = t.id,
+    id = t.id.value,
     name = t.name,
     layoutFamily = t.layoutFamily,
     displayOrder = t.displayOrder,
@@ -38,8 +38,8 @@ final case class MapMasterResponse(
 
 object MapMasterResponse:
   def from(m: MapMaster): MapMasterResponse = MapMasterResponse(
-    id = m.id,
-    gameTitleId = m.gameTitleId,
+    id = m.id.value,
+    gameTitleId = m.gameTitleId.value,
     name = m.name,
     displayOrder = m.displayOrder,
     createdAt = DateTimeFormatter.ISO_INSTANT.format(m.createdAt),
@@ -60,8 +60,8 @@ final case class SeasonMasterResponse(
 
 object SeasonMasterResponse:
   def from(s: SeasonMaster): SeasonMasterResponse = SeasonMasterResponse(
-    id = s.id,
-    gameTitleId = s.gameTitleId,
+    id = s.id.value,
+    gameTitleId = s.gameTitleId.value,
     name = s.name,
     displayOrder = s.displayOrder,
     createdAt = DateTimeFormatter.ISO_INSTANT.format(s.createdAt),
@@ -81,7 +81,7 @@ final case class IncidentMasterResponse(
 
 object IncidentMasterResponse:
   def from(i: IncidentMaster): IncidentMasterResponse = IncidentMasterResponse(
-    id = i.id,
+    id = i.id.value,
     key = i.key,
     displayName = i.displayName,
     displayOrder = i.displayOrder,

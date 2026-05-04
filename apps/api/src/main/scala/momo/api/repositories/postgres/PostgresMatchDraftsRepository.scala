@@ -9,6 +9,7 @@ import doobie.implicits.*
 import doobie.postgres.implicits.*
 import doobie.util.fragments
 
+import momo.api.domain.ids.*
 import momo.api.domain.{MatchDraft, MatchDraftStatus, ScreenType}
 import momo.api.repositories.MatchDraftsRepository
 import momo.api.repositories.postgres.PostgresMeta.given
@@ -17,26 +18,26 @@ final class PostgresMatchDraftsRepository[F[_]: MonadCancelThrow](transactor: Tr
     extends MatchDraftsRepository[F]:
 
   private type Row = (
-      String,
-      String,
+      MatchDraftId,
+      MemberId,
       MatchDraftStatus,
-      Option[String],
+      Option[HeldEventId],
       Option[Int],
+      Option[GameTitleId],
       Option[String],
-      Option[String],
-      Option[String],
-      Option[String],
-      Option[String],
+      Option[SeasonMasterId],
+      Option[MemberId],
+      Option[MapMasterId],
       Option[Instant],
-      Option[String],
-      Option[String],
-      Option[String],
-      Option[String],
-      Option[String],
-      Option[String],
+      Option[ImageId],
+      Option[ImageId],
+      Option[ImageId],
+      Option[OcrDraftId],
+      Option[OcrDraftId],
+      Option[OcrDraftId],
       Option[Instant],
       Option[Instant],
-      Option[String],
+      Option[MatchId],
       Instant,
       Instant,
   )
@@ -120,7 +121,7 @@ final class PostgresMatchDraftsRepository[F[_]: MonadCancelThrow](transactor: Tr
     WHERE id = ${draft.id}
   """.update.run.map(_ > 0).transact(transactor)
 
-  override def find(id: String): F[Option[MatchDraft]] = (selectAll ++ fr"WHERE id = $id")
+  override def find(id: MatchDraftId): F[Option[MatchDraft]] = (selectAll ++ fr"WHERE id = $id")
     .query[Row].option.map(_.map(toDraft)).transact(transactor)
 
   override def list(filter: MatchDraftsRepository.ListFilter): F[List[MatchDraft]] =
@@ -137,8 +138,8 @@ final class PostgresMatchDraftsRepository[F[_]: MonadCancelThrow](transactor: Tr
       .to[List].map(_.map(toDraft)).transact(transactor)
 
   override def markConfirmed(
-      draftId: String,
-      confirmedMatchId: String,
+      draftId: MatchDraftId,
+      confirmedMatchId: MatchId,
       updatedAt: Instant,
   ): F[Boolean] = sql"""
     UPDATE match_drafts SET
@@ -148,14 +149,14 @@ final class PostgresMatchDraftsRepository[F[_]: MonadCancelThrow](transactor: Tr
     WHERE id = $draftId
   """.update.run.map(_ > 0).transact(transactor)
 
-  override def markOcrFailed(draftId: String, updatedAt: Instant): F[Boolean] = sql"""
+  override def markOcrFailed(draftId: MatchDraftId, updatedAt: Instant): F[Boolean] = sql"""
     UPDATE match_drafts SET
       status = ${MatchDraftStatus.OcrFailed},
       updated_at = $updatedAt
     WHERE id = $draftId
   """.update.run.map(_ > 0).transact(transactor)
 
-  override def cancel(draftId: String, updatedAt: Instant): F[Boolean] = sql"""
+  override def cancel(draftId: MatchDraftId, updatedAt: Instant): F[Boolean] = sql"""
     UPDATE match_drafts SET
       status = ${MatchDraftStatus.Cancelled},
       updated_at = $updatedAt
@@ -163,10 +164,10 @@ final class PostgresMatchDraftsRepository[F[_]: MonadCancelThrow](transactor: Tr
   """.update.run.map(_ > 0).transact(transactor)
 
   override def attachOcrArtifacts(
-      draftId: String,
+      draftId: MatchDraftId,
       screenType: ScreenType,
-      sourceImageId: String,
-      ocrDraftId: String,
+      sourceImageId: ImageId,
+      ocrDraftId: OcrDraftId,
       updatedAt: Instant,
   ): F[Boolean] =
     val command = screenType match
@@ -207,7 +208,7 @@ final class PostgresMatchDraftsRepository[F[_]: MonadCancelThrow](transactor: Tr
     command.update.run.map(_ > 0).transact(transactor)
 
   override def markSourceImagesRetention(
-      draftId: String,
+      draftId: MatchDraftId,
       retainedUntil: Option[Instant],
       deletedAt: Option[Instant],
       updatedAt: Instant,

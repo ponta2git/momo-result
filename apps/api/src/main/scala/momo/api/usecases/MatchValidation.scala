@@ -1,6 +1,7 @@
 package momo.api.usecases
 
 import momo.api.domain.PlayerResult
+import momo.api.domain.ids.*
 import momo.api.errors.AppError
 
 /**
@@ -10,27 +11,27 @@ import momo.api.errors.AppError
  */
 object MatchValidation:
   final case class Input(
-      heldEventId: String,
+      heldEventId: HeldEventId,
       matchNoInEvent: Int,
-      gameTitleId: String,
-      seasonMasterId: String,
-      ownerMemberId: String,
-      mapMasterId: String,
+      gameTitleId: GameTitleId,
+      seasonMasterId: SeasonMasterId,
+      ownerMemberId: MemberId,
+      mapMasterId: MapMasterId,
       players: List[PlayerResult],
   )
 
   private val RequiredOrdinals = Set(1, 2, 3, 4)
 
-  def validateShape(input: Input, allowedMemberIds: Set[String]): Either[AppError, Unit] =
+  def validateShape(input: Input, allowedMemberIds: Set[MemberId]): Either[AppError, Unit] =
     def fail(msg: String): Either[AppError, Unit] = Left(AppError.ValidationFailed(msg))
 
-    if input.heldEventId.trim.isEmpty then fail("heldEventId is required.")
+    if input.heldEventId.value.trim.isEmpty then fail("heldEventId is required.")
     else if input.matchNoInEvent < 1 then fail("matchNoInEvent must be >= 1.")
-    else if input.gameTitleId.trim.isEmpty then fail("gameTitleId is required.")
-    else if input.seasonMasterId.trim.isEmpty then fail("seasonMasterId is required.")
+    else if input.gameTitleId.value.trim.isEmpty then fail("gameTitleId is required.")
+    else if input.seasonMasterId.value.trim.isEmpty then fail("seasonMasterId is required.")
     else if !allowedMemberIds.contains(input.ownerMemberId) then
-      fail(s"ownerMemberId must be one of ${allowedMemberIds.mkString(", ")}.")
-    else if input.mapMasterId.trim.isEmpty then fail("mapMasterId is required.")
+      fail(s"ownerMemberId must be one of ${allowedMemberIds.toList.map(_.value).mkString(", ")}.")
+    else if input.mapMasterId.value.trim.isEmpty then fail("mapMasterId is required.")
     else if input.players.length != 4 then fail("players must contain exactly 4 entries.")
     else
       val members = input.players.map(_.memberId).toSet
@@ -38,14 +39,15 @@ object MatchValidation:
       val ranks = input.players.map(_.rank).toSet
       if members.size != 4 then fail("player memberId must be unique.")
       else if !members.subsetOf(allowedMemberIds) then
-        fail(s"player memberId must be a subset of ${allowedMemberIds.mkString(", ")}.")
+        fail(s"player memberId must be a subset of ${allowedMemberIds.toList.map(_.value)
+            .mkString(", ")}.")
       else if playOrders != RequiredOrdinals then
         fail("players.playOrder must be a permutation of {1,2,3,4}.")
       else if ranks != RequiredOrdinals then
         fail("players.rank must be a permutation of {1,2,3,4}.")
       else
         input.players.find(p => !hasNonNegativeIncidentCounts(p)) match
-          case Some(p) => fail(s"player ${p.memberId} has negative incident count.")
+          case Some(p) => fail(s"player ${p.memberId.value} has negative incident count.")
           case None => Right(())
 
   private def hasNonNegativeIncidentCounts(p: PlayerResult): Boolean =

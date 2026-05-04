@@ -2,6 +2,8 @@ package momo.api.domain
 
 import java.time.Instant
 
+import momo.api.domain.ids.*
+
 /**
  * Master tables shared with the summit app via momo-db.
  *
@@ -10,7 +12,7 @@ import java.time.Instant
  * `matches.map_master_id`, etc.
  */
 final case class GameTitle(
-    id: String,
+    id: GameTitleId,
     name: String,
     layoutFamily: String,
     displayOrder: Int,
@@ -18,16 +20,16 @@ final case class GameTitle(
 )
 
 final case class MapMaster(
-    id: String,
-    gameTitleId: String,
+    id: MapMasterId,
+    gameTitleId: GameTitleId,
     name: String,
     displayOrder: Int,
     createdAt: Instant,
 )
 
 final case class SeasonMaster(
-    id: String,
-    gameTitleId: String,
+    id: SeasonMasterId,
+    gameTitleId: GameTitleId,
     name: String,
     displayOrder: Int,
     createdAt: Instant,
@@ -38,17 +40,17 @@ final case class SeasonMaster(
  * ...）で、 ドメイン層の `IncidentCounts` の各フィールドと 1:1 対応する。
  */
 final case class IncidentMaster(
-    id: String,
+    id: IncidentMasterId,
     key: String,
     displayName: String,
     displayOrder: Int,
     createdAt: Instant,
 )
 
-final case class MemberAlias(memberId: String, alias: String, createdAt: Instant)
+final case class MemberAlias(memberId: MemberId, alias: String, createdAt: Instant)
 
 /**
  * Represents a row from the shared `members` table. The fixed 4 members are seeded by momo-db
  * migration `0009_seed_members`.
  */
-final case class Member(id: String, userId: String, displayName: String, createdAt: Instant)
+final case class Member(id: MemberId, userId: UserId, displayName: String, createdAt: Instant)

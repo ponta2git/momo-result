@@ -11,8 +11,7 @@ import momo.api.repositories.HeldEventsRepository
  * repository is built per test, so isolation comes for free.
  */
 final class InMemoryHeldEventsRepositoryContractSpec
-    extends CatsEffectSuite
-    with HeldEventsRepositoryContract:
+    extends CatsEffectSuite with HeldEventsRepositoryContract:
 
-  override protected def freshRepo: IO[HeldEventsRepository[IO]] =
-    InMemoryHeldEventsRepository.create[IO].map(repo => repo: HeldEventsRepository[IO])
+  override protected def freshRepo: IO[HeldEventsRepository[IO]] = InMemoryHeldEventsRepository
+    .create[IO].map(repo => repo: HeldEventsRepository[IO])

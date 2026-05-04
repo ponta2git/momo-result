@@ -20,8 +20,8 @@ final case class OcrFailure(
 )
 
 final case class OcrJob(
-    id: JobId,
-    draftId: DraftId,
+    id: OcrJobId,
+    draftId: OcrDraftId,
     imageId: ImageId,
     imagePath: Path,
     requestedScreenType: ScreenType,

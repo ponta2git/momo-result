@@ -1,5 +1,6 @@
 package momo.api.repositories
 
+import momo.api.domain.ids.{GameTitleId, HeldEventId, SeasonMasterId}
 import momo.api.domain.{MatchDraftStatus, MatchListItem}
 
 trait MatchListRepository[F[_]]:
@@ -20,9 +21,9 @@ object MatchListRepository:
     case MatchDraft
 
   final case class Filter(
-      heldEventId: Option[String] = None,
-      gameTitleId: Option[String] = None,
-      seasonMasterId: Option[String] = None,
+      heldEventId: Option[HeldEventId] = None,
+      gameTitleId: Option[GameTitleId] = None,
+      seasonMasterId: Option[SeasonMasterId] = None,
       status: StatusFilter = StatusFilter.All,
       kind: KindFilter = KindFilter.All,
       limit: Option[Int] = None,

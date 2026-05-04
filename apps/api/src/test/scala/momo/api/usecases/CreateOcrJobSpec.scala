@@ -11,7 +11,6 @@ import momo.api.adapters.{
   InMemoryQueueProducer, LocalFsImageStore,
 }
 import momo.api.domain.OcrJobHints
-import momo.api.domain.ids.*
 import momo.api.errors.AppError
 
 final class CreateOcrJobSpec extends MomoCatsEffectSuite:
@@ -47,7 +46,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         requestIdLookup = IO.pure(Some("test-req-id")),
       )
       created <- usecase
-        .run(CreateOcrJobCommand(image.imageId.value, "total_assets", OcrJobHints(), None))
+        .run(CreateOcrJobCommand(image.imageId, "total_assets", OcrJobHints(), None))
         .flatMap(fromAppEither)
       foundJob <- jobs.find(created.job.id)
       foundDraft <- drafts.find(created.draft.id)

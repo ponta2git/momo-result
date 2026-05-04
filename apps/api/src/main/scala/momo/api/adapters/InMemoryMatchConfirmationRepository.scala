@@ -7,6 +7,7 @@ import cats.syntax.flatMap.*
 import cats.syntax.functor.*
 
 import momo.api.domain.MatchRecord
+import momo.api.domain.ids.MatchDraftId
 import momo.api.repositories.{MatchConfirmationRepository, MatchDraftsRepository, MatchesRepository}
 
 final class InMemoryMatchConfirmationRepository[F[_]: Monad](
@@ -15,7 +16,7 @@ final class InMemoryMatchConfirmationRepository[F[_]: Monad](
 ) extends MatchConfirmationRepository[F]:
   override def confirm(
       record: MatchRecord,
-      draftId: Option[String],
+      draftId: Option[MatchDraftId],
       updatedAt: Instant,
   ): F[Boolean] = draftId match
     case None => matches.create(record).as(true)

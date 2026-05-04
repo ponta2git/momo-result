@@ -1,5 +1,3 @@
-import { Toggle } from "@base-ui/react/toggle";
-import { ToggleGroup } from "@base-ui/react/toggle-group";
 import { useId } from "react";
 
 import { cn } from "@/shared/ui/cn";
@@ -47,34 +45,33 @@ export function SegmentedControl({
   }
 
   return (
-    <ToggleGroup
+    <div
       aria-label={label}
       className={cn(
         "inline-flex max-w-full min-w-0 flex-wrap items-stretch gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-1",
         className,
       )}
-      value={[value]}
-      onValueChange={(nextValue) => {
-        const selectedValue = nextValue[0];
-        if (selectedValue !== undefined) {
-          onValueChange(selectedValue);
-        }
-      }}
+      role="group"
     >
-      {options.map((option) => (
-        <Toggle
-          key={option.value}
-          className={cn(
-            "min-h-9 min-w-[5ch] rounded-[var(--radius-xs)] px-3 py-1.5 text-sm font-medium text-[var(--color-text-secondary)] transition-colors duration-150",
-            "data-[pressed]:bg-[var(--color-surface-selected)] data-[pressed]:text-[var(--color-text-primary)]",
-            "disabled:cursor-not-allowed disabled:opacity-50",
-          )}
-          disabled={option.disabled}
-          value={option.value}
-        >
-          {option.label}
-        </Toggle>
-      ))}
-    </ToggleGroup>
+      {options.map((option) => {
+        const selected = option.value === value;
+        return (
+          <button
+            key={option.value}
+            aria-pressed={selected}
+            className={cn(
+              "min-h-9 min-w-[5ch] rounded-[var(--radius-xs)] px-3 py-1.5 text-sm font-medium text-[var(--color-text-secondary)] transition-colors duration-150",
+              selected ? "bg-[var(--color-surface-selected)] text-[var(--color-text-primary)]" : "",
+              "disabled:cursor-not-allowed disabled:opacity-50",
+            )}
+            disabled={option.disabled}
+            type="button"
+            onClick={() => onValueChange(option.value)}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }

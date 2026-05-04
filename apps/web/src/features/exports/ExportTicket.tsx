@@ -1,0 +1,66 @@
+import { Download } from "lucide-react";
+
+import { Button } from "@/shared/ui/actions/Button";
+import { Notice } from "@/shared/ui/feedback/Notice";
+
+import { ExportDownloadProgress } from "./ExportDownloadProgress";
+import { ExportDownloadResult } from "./ExportDownloadResult";
+import type { ExportViewModel } from "./exportViewModel";
+
+type ExportTicketProps = {
+  isPending: boolean;
+  onDownload: () => void;
+  view: ExportViewModel;
+};
+
+export function ExportTicket({ isPending, onDownload, view }: ExportTicketProps) {
+  return (
+    <aside className="momo-ui-surface grid gap-4 p-4 lg:sticky lg:top-4">
+      <div>
+        <p className="text-xs font-semibold text-[var(--color-text-muted)]">Export Ticket</p>
+        <h2 className="mt-1 text-lg font-semibold text-[var(--color-text-primary)]">
+          ダウンロード控え
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-[var(--color-text-secondary)]">
+          固定列順で、確定済みの台帳だけを書き出します。
+        </p>
+      </div>
+
+      <dl className="grid gap-2 border-y border-[var(--color-border)] py-3">
+        {view.ticketRows.map((row) => (
+          <div key={row.label} className="grid grid-cols-[6rem_1fr] gap-3 text-sm">
+            <dt className="text-[var(--color-text-muted)]">{row.label}</dt>
+            <dd className="min-w-0 font-medium break-words text-[var(--color-text-primary)]">
+              {row.value}
+            </dd>
+          </div>
+        ))}
+      </dl>
+
+      <Notice tone="info" title="列順">
+        シーズン、シーズンNo.、オーナー、マップ、対戦日、対戦No.、プレー順、プレーヤー名、順位、総資産、収益、事件簿6項目の順で出力します。
+      </Notice>
+
+      {view.disableReason ? (
+        <Notice tone="warning" title="出力条件を確認してください">
+          {view.disableReason}
+        </Notice>
+      ) : null}
+
+      <Button
+        className="w-full lg:w-auto"
+        disabled={!view.canDownload}
+        icon={<Download className="size-4" />}
+        pending={isPending}
+        pendingLabel="作成中"
+        size="lg"
+        onClick={onDownload}
+      >
+        {view.actionLabel}
+      </Button>
+
+      <ExportDownloadProgress isPending={isPending} isSlow={view.isSlow} />
+      <ExportDownloadResult result={view.result} onRetry={onDownload} />
+    </aside>
+  );
+}

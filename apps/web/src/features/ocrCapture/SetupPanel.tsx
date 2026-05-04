@@ -7,6 +7,11 @@ import { fixedMembers } from "@/features/ocrCapture/localMasters";
 import { setupSchema } from "@/features/ocrCapture/schema";
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
 import { listGameTitles, listMapMasters, listSeasonMasters } from "@/shared/api/masters";
+import type {
+  GameTitleResponse,
+  MapMasterResponse,
+  SeasonMasterResponse,
+} from "@/shared/api/masters";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { Field } from "@/shared/ui/Field";
 
@@ -19,6 +24,10 @@ type SetupPanelProps = {
 
 const selectClass =
   "w-full rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] transition hover:bg-[var(--color-surface-subtle)] disabled:cursor-not-allowed disabled:opacity-60";
+
+const emptyGameTitles: GameTitleResponse[] = [];
+const emptyMapMasters: MapMasterResponse[] = [];
+const emptySeasonMasters: SeasonMasterResponse[] = [];
 
 function queryErrorMessage(error: unknown): string | undefined {
   if (!error) {
@@ -48,9 +57,9 @@ export function SetupPanel({ value, onChange, enabled = true, authMemberId }: Se
     enabled: enabled && Boolean(value.gameTitleId),
   });
 
-  const gameTitles = gameTitlesQuery.data?.items ?? [];
-  const mapMasters = mapMastersQuery.data?.items ?? [];
-  const seasonMasters = seasonMastersQuery.data?.items ?? [];
+  const gameTitles = gameTitlesQuery.data?.items ?? emptyGameTitles;
+  const mapMasters = mapMastersQuery.data?.items ?? emptyMapMasters;
+  const seasonMasters = seasonMastersQuery.data?.items ?? emptySeasonMasters;
   const gameTitlesError = queryErrorMessage(gameTitlesQuery.error);
   const mapMastersError = queryErrorMessage(mapMastersQuery.error);
   const seasonMastersError = queryErrorMessage(seasonMastersQuery.error);

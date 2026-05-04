@@ -14,9 +14,10 @@ export function ImageInput({ slotLabel, onSelect, onValidationError }: ImageInpu
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    const input = inputRef.current;
     return () => {
-      if (inputRef.current) {
-        inputRef.current.value = "";
+      if (input) {
+        input.value = "";
       }
     };
   }, []);

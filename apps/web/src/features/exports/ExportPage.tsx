@@ -1,260 +1,233 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 
 import { listHeldEvents } from "@/features/draftReview/api";
-import { exportMatches } from "@/features/exports/api";
-import type { ExportFormat, ExportScope } from "@/features/exports/api";
+import {
+  DEFAULT_EXPORT_SLOW_THRESHOLD_MS,
+  DEFAULT_EXPORT_TIMEOUT_MS,
+  downloadExportMatches,
+} from "@/features/exports/exportDownload";
+import type { ExportCandidate, ExportFormat, ExportScope } from "@/features/exports/exportTypes";
+import {
+  buildExportSearchParams,
+  parseExportSearchParams,
+  selectedIdForScope,
+} from "@/features/exports/exportUrlState";
+import {
+  buildCandidateView,
+  buildExportViewModel,
+  failedResultView,
+  formatDateTime,
+} from "@/features/exports/exportViewModel";
+import type { ExportDownloadResultView } from "@/features/exports/exportViewModel";
+import { ExportWorkspace } from "@/features/exports/ExportWorkspace";
 import { listMatches } from "@/features/matches/api";
-import type { ApiDownloadResult } from "@/shared/api/client";
 import { listSeasonMasters } from "@/shared/api/masters";
-import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
-import { Button } from "@/shared/ui/Button";
-import { Card } from "@/shared/ui/Card";
+import { showToast } from "@/shared/ui/feedback/Toast";
 
-const inputClass =
-  "w-full rounded-2xl border border-line-soft bg-capture-black/45 px-3 py-2 text-sm text-ink-100 transition hover:border-white/18";
-const labelClass = "text-xs font-bold tracking-[0.22em] text-ink-300 uppercase";
+type ExportPageProps = {
+  downloadTimeoutMs?: number | undefined;
+  slowThresholdMs?: number | undefined;
+};
 
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mi = String(d.getMinutes()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
-}
-
-function scopeFromParams(searchParams: URLSearchParams): ExportScope {
-  if (searchParams.get("matchId")) return "match";
-  if (searchParams.get("heldEventId")) return "heldEvent";
-  if (searchParams.get("seasonMasterId")) return "season";
-  return "all";
-}
-
-function triggerDownload(result: ApiDownloadResult): void {
-  const url = URL.createObjectURL(result.blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = result.fileName;
-  document.body.append(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
-}
-
-export function ExportPage() {
-  const [searchParams] = useSearchParams();
-  const [format, setFormat] = useState<ExportFormat>(
-    searchParams.get("format") === "tsv" ? "tsv" : "csv",
-  );
-  const [scope, setScope] = useState<ExportScope>(() => scopeFromParams(searchParams));
-  const [seasonMasterId, setSeasonMasterId] = useState(searchParams.get("seasonMasterId") ?? "");
-  const [heldEventId, setHeldEventId] = useState(searchParams.get("heldEventId") ?? "");
-  const [matchId, setMatchId] = useState(searchParams.get("matchId") ?? "");
+export function ExportPage({
+  downloadTimeoutMs = DEFAULT_EXPORT_TIMEOUT_MS,
+  slowThresholdMs = DEFAULT_EXPORT_SLOW_THRESHOLD_MS,
+}: ExportPageProps) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlState = parseExportSearchParams(searchParams);
+  const [lastResult, setLastResult] = useState<ExportDownloadResultView | undefined>();
+  const [downloadStartedAt, setDownloadStartedAt] = useState<number | null>(null);
+  const [elapsedMs, setElapsedMs] = useState(0);
 
   const seasonsQuery = useQuery({
-    queryKey: ["season-masters", "all"],
     queryFn: () => listSeasonMasters(),
+    queryKey: ["season-masters", "exports"],
   });
   const heldEventsQuery = useQuery({
-    queryKey: ["held-events", "all"],
     queryFn: () => listHeldEvents("", 100),
+    queryKey: ["held-events", "exports"],
   });
   const matchesQuery = useQuery({
-    queryKey: ["matches", "export"],
-    queryFn: () => listMatches({ status: "confirmed" }),
+    queryFn: () => listMatches({ kind: "match", limit: 100, status: "confirmed" }),
+    queryKey: ["matches", "exports", { kind: "match", status: "confirmed" }],
+  });
+
+  const seasonCandidates = useMemo<ExportCandidate[]>(
+    () =>
+      (seasonsQuery.data?.items ?? []).map((season) => ({
+        label: season.name,
+        value: season.id,
+      })),
+    [seasonsQuery.data],
+  );
+  const heldEventCandidates = useMemo<ExportCandidate[]>(
+    () =>
+      (heldEventsQuery.data?.items ?? []).map((event) => ({
+        description: `${event.matchCount}試合`,
+        label: formatDateTime(event.heldAt),
+        value: event.id,
+      })),
+    [heldEventsQuery.data],
+  );
+  const matchCandidates = useMemo<ExportCandidate[]>(() => {
+    const heldEventsById = new Map(
+      (heldEventsQuery.data?.items ?? []).map((event) => [event.id, event]),
+    );
+    return (matchesQuery.data?.items ?? [])
+      .filter((match) => match.kind === "match" && match.status === "confirmed" && match.matchId)
+      .map((match) => {
+        const heldAt = match.heldEventId
+          ? heldEventsById.get(match.heldEventId)?.heldAt
+          : undefined;
+        return {
+          description: match.seasonMasterId,
+          label: `${heldAt ? formatDateTime(heldAt) : (match.heldEventId ?? "開催未設定")} / #${match.matchNoInEvent ?? "-"}`,
+          value: match.matchId ?? "",
+        };
+      });
+  }, [heldEventsQuery.data, matchesQuery.data]);
+
+  const candidates =
+    urlState.scope === "season"
+      ? seasonCandidates
+      : urlState.scope === "heldEvent"
+        ? heldEventCandidates
+        : urlState.scope === "match"
+          ? matchCandidates
+          : [];
+  const candidateLoading =
+    urlState.scope === "season"
+      ? seasonsQuery.isLoading
+      : urlState.scope === "heldEvent"
+        ? heldEventsQuery.isLoading
+        : urlState.scope === "match"
+          ? matchesQuery.isLoading || heldEventsQuery.isLoading
+          : false;
+  const candidateError =
+    urlState.scope === "season"
+      ? seasonsQuery.isError && !seasonsQuery.data
+      : urlState.scope === "heldEvent"
+        ? heldEventsQuery.isError && !heldEventsQuery.data
+        : urlState.scope === "match"
+          ? (matchesQuery.isError && !matchesQuery.data) ||
+            (heldEventsQuery.isError && !heldEventsQuery.data)
+          : false;
+
+  const candidateView = buildCandidateView({
+    candidates,
+    error: candidateError,
+    loading: candidateLoading,
+    scope: urlState.scope,
+    selectedId: selectedIdForScope(urlState, urlState.scope),
   });
 
   useEffect(() => {
-    if (scope === "season" && !seasonMasterId) {
-      setSeasonMasterId(seasonsQuery.data?.items?.[0]?.id ?? "");
+    if (
+      urlState.errors.length === 0 &&
+      urlState.scope !== "all" &&
+      !selectedIdForScope(urlState, urlState.scope) &&
+      candidateView.kind === "ready" &&
+      candidateView.selectedId
+    ) {
+      setSearchParams(
+        buildExportSearchParams({
+          format: urlState.format,
+          scope: urlState.scope,
+          selectedId: candidateView.selectedId,
+        }),
+        { replace: true },
+      );
     }
-    if (scope === "heldEvent" && !heldEventId) {
-      setHeldEventId(heldEventsQuery.data?.items?.[0]?.id ?? "");
-    }
-    if (scope === "match" && !matchId) {
-      setMatchId(matchesQuery.data?.items?.find((item) => item.matchId)?.matchId ?? "");
-    }
-  }, [
-    heldEventId,
-    heldEventsQuery.data,
-    matchId,
-    matchesQuery.data,
-    scope,
-    seasonMasterId,
-    seasonsQuery.data,
-  ]);
+  }, [candidateView, setSearchParams, urlState]);
 
-  const heldEventsById = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const event of heldEventsQuery.data?.items ?? []) {
-      map.set(event.id, formatDate(event.heldAt));
+  useEffect(() => {
+    if (downloadStartedAt === null) {
+      setElapsedMs(0);
+      return;
     }
-    return map;
-  }, [heldEventsQuery.data]);
-
-  const selectedScopeReady =
-    scope === "all" ||
-    (scope === "season" && Boolean(seasonMasterId)) ||
-    (scope === "heldEvent" && Boolean(heldEventId)) ||
-    (scope === "match" && Boolean(matchId));
+    const intervalId = window.setInterval(() => {
+      setElapsedMs(Date.now() - downloadStartedAt);
+    }, 250);
+    return () => window.clearInterval(intervalId);
+  }, [downloadStartedAt]);
 
   const mutation = useMutation({
-    mutationFn: () =>
-      exportMatches({
-        format,
-        scope,
-        seasonMasterId,
-        heldEventId,
-        matchId,
-      }),
-    onSuccess: triggerDownload,
+    mutationFn: () => {
+      setDownloadStartedAt(Date.now());
+      setElapsedMs(0);
+      setLastResult(undefined);
+      return downloadExportMatches(
+        {
+          format: urlState.format,
+          scope: urlState.scope,
+          heldEventId: urlState.heldEventId,
+          matchId: urlState.matchId,
+          seasonMasterId: urlState.seasonMasterId,
+        },
+        { timeoutMs: downloadTimeoutMs },
+      );
+    },
+    onSettled: () => setDownloadStartedAt(null),
+    onSuccess: (outcome) => {
+      if (outcome.kind === "download_started") {
+        setLastResult({
+          fileName: outcome.fileName,
+          format: outcome.format,
+          kind: "success",
+          startedAt: outcome.startedAt,
+        });
+        showToast({
+          description: outcome.fileName,
+          title: "ダウンロードを開始しました",
+          tone: "success",
+        });
+        return;
+      }
+      if (outcome.kind === "timeout") {
+        setLastResult({
+          detail: outcome.detail,
+          kind: "timeout",
+          title: outcome.title,
+        });
+        showToast({ title: outcome.title, tone: "warning" });
+        return;
+      }
+      const failed = failedResultView(outcome.error);
+      setLastResult(failed);
+      showToast({
+        description: failed.detail,
+        title: failed.title,
+        tone: "danger",
+      });
+    },
   });
 
-  const normalizedError = mutation.error ? normalizeUnknownApiError(mutation.error) : null;
+  const view = buildExportViewModel({
+    candidate: candidateView,
+    elapsedMs,
+    isPending: mutation.isPending,
+    lastResult,
+    slowThresholdMs,
+    urlState,
+  });
+
+  function updateSearch(format: ExportFormat, scope: ExportScope, selectedId?: string): void {
+    setLastResult(undefined);
+    setSearchParams(buildExportSearchParams({ format, scope, selectedId }), { replace: true });
+  }
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-8">
-      <header className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-        <div>
-          <Link to="/matches" className="text-rail-gold text-sm hover:underline">
-            ← 試合一覧へ
-          </Link>
-          <p className="text-rail-gold mt-4 text-xs font-bold tracking-[0.24em] uppercase">
-            Export Gate
-          </p>
-          <h1 className="text-ink-50 mt-1 text-3xl font-black">CSV / TSV 出力</h1>
-          <p className="text-ink-300 mt-2 max-w-2xl text-sm leading-6">
-            確定済み試合を、集計用の固定列順で書き出します。駅の改札で範囲を切るように、
-            全体・シーズン・開催・試合の単位を選んでダウンロードします。
-          </p>
-        </div>
-        <div className="border-line-soft bg-capture-black/35 text-ink-200 rounded-2xl border px-4 py-3 text-sm">
-          <span className="text-ink-400">出力対象</span>{" "}
-          {scope === "all"
-            ? "全試合"
-            : scope === "season"
-              ? "シーズン"
-              : scope === "heldEvent"
-                ? "開催"
-                : "試合"}
-        </div>
-      </header>
-
-      <Card>
-        <div className="grid gap-5 md:grid-cols-[14rem_1fr]">
-          <section className="border-line-soft bg-capture-black/30 rounded-3xl border p-4">
-            <p className={labelClass}>File Type</p>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              {(["csv", "tsv"] as const).map((candidate) => (
-                <button
-                  key={candidate}
-                  type="button"
-                  className={`rounded-2xl border px-3 py-3 text-sm font-black uppercase transition ${
-                    format === candidate
-                      ? "border-rail-gold/70 bg-rail-gold text-night-950"
-                      : "border-line-soft bg-night-800/70 text-ink-200 hover:border-white/20"
-                  }`}
-                  onClick={() => setFormat(candidate)}
-                >
-                  {candidate}
-                </button>
-              ))}
-            </div>
-          </section>
-
-          <section className="grid gap-4">
-            <label className="grid gap-2">
-              <span className={labelClass}>出力範囲</span>
-              <select
-                className={inputClass}
-                value={scope}
-                onChange={(event) => setScope(event.target.value as ExportScope)}
-              >
-                <option value="all">全試合</option>
-                <option value="season">シーズン単位</option>
-                <option value="heldEvent">開催単位</option>
-                <option value="match">試合単位</option>
-              </select>
-            </label>
-
-            {scope === "season" ? (
-              <label className="grid gap-2">
-                <span className={labelClass}>シーズン</span>
-                <select
-                  className={inputClass}
-                  value={seasonMasterId}
-                  onChange={(event) => setSeasonMasterId(event.target.value)}
-                >
-                  {(seasonsQuery.data?.items ?? []).map((season) => (
-                    <option key={season.id} value={season.id}>
-                      {season.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
-
-            {scope === "heldEvent" ? (
-              <label className="grid gap-2">
-                <span className={labelClass}>開催</span>
-                <select
-                  className={inputClass}
-                  value={heldEventId}
-                  onChange={(event) => setHeldEventId(event.target.value)}
-                >
-                  {(heldEventsQuery.data?.items ?? []).map((event) => (
-                    <option key={event.id} value={event.id}>
-                      {formatDate(event.heldAt)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
-
-            {scope === "match" ? (
-              <label className="grid gap-2">
-                <span className={labelClass}>試合</span>
-                <select
-                  className={inputClass}
-                  value={matchId}
-                  onChange={(event) => setMatchId(event.target.value)}
-                >
-                  {(matchesQuery.data?.items ?? [])
-                    .filter((match) => Boolean(match.matchId))
-                    .map((match) => (
-                      <option key={match.id} value={match.matchId}>
-                        {heldEventsById.get(match.heldEventId ?? "") ?? match.heldEventId} / #
-                        {match.matchNoInEvent}
-                      </option>
-                    ))}
-                </select>
-              </label>
-            ) : null}
-          </section>
-        </div>
-
-        <div className="border-line-soft mt-6 flex flex-col gap-3 border-t pt-5 md:flex-row md:items-center md:justify-between">
-          <p className="text-ink-300 text-sm">
-            列順は要求仕様のCSV/TSV出力に固定。資産・収益は万円単位の整数で出力します。
-          </p>
-          <Button
-            variant="primary"
-            disabled={!selectedScopeReady || mutation.isPending}
-            onClick={() => mutation.mutate()}
-          >
-            {mutation.isPending ? "出力中..." : `${format.toUpperCase()} をダウンロード`}
-          </Button>
-        </div>
-        {normalizedError ? (
-          <p role="alert" className="text-rail-magenta mt-4 text-sm">
-            {normalizedError.detail || normalizedError.title}
-          </p>
-        ) : null}
-      </Card>
-    </div>
+    <ExportWorkspace
+      isPending={mutation.isPending}
+      view={view}
+      onCandidateChange={(selectedId) => updateSearch(urlState.format, urlState.scope, selectedId)}
+      onDownload={() => mutation.mutate()}
+      onFormatChange={(nextFormat) =>
+        updateSearch(nextFormat, urlState.scope, selectedIdForScope(urlState, urlState.scope))
+      }
+      onScopeChange={(nextScope) => updateSearch(urlState.format, nextScope)}
+    />
   );
 }

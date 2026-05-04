@@ -1,6 +1,6 @@
-import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { AlertTriangle, Download, PenSquare, RefreshCw, ScanLine } from "lucide-react";
-import { useMemo } from "react";
+import { useDeferredValue, useMemo, useTransition } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { listHeldEvents } from "@/features/draftReview/api";
@@ -13,6 +13,7 @@ import {
   hasMatchListFilters,
   parseMatchListSearchParams,
 } from "@/features/matches/list/matchListSearchParams";
+import type { MatchListSearch } from "@/features/matches/list/matchListTypes";
 import {
   sortMatchListItems,
   summarizeMatchList,
@@ -45,6 +46,19 @@ function TableSkeleton() {
 export function MatchesListPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const search = parseMatchListSearchParams(searchParams);
+  const deferredSearch = useDeferredValue(search);
+  const [isFilterPending, startFilterTransition] = useTransition();
+
+  const applySearch = (nextSearch: MatchListSearch) => {
+    startFilterTransition(() => {
+      setSearchParams(buildMatchListSearchParams(nextSearch));
+    });
+  };
+  const clearSearch = () => {
+    startFilterTransition(() => {
+      setSearchParams(new URLSearchParams());
+    });
+  };
 
   const heldEventsQuery = useSuspenseQuery({
     queryFn: () => listHeldEvents("", 100),
@@ -63,18 +77,20 @@ export function MatchesListPage() {
     queryKey: ["map-masters", "matches-list"],
   });
   const matchesQuery = useQuery({
-    queryFn: () => fetchMatchList(search),
-    queryKey: ["matches", "list", search],
+    placeholderData: keepPreviousData,
+    queryFn: () => fetchMatchList(deferredSearch),
+    queryKey: ["matches", "list", deferredSearch],
   });
   const matchesSummaryQuery = useQuery({
-    queryFn: () => fetchMatchListSummary(search),
+    placeholderData: keepPreviousData,
+    queryFn: () => fetchMatchListSummary(deferredSearch),
     queryKey: [
       "matches",
       "summary",
       {
-        gameTitleId: search.gameTitleId,
-        heldEventId: search.heldEventId,
-        seasonMasterId: search.seasonMasterId,
+        gameTitleId: deferredSearch.gameTitleId,
+        heldEventId: deferredSearch.heldEventId,
+        seasonMasterId: deferredSearch.seasonMasterId,
       },
     ],
   });
@@ -90,8 +106,8 @@ export function MatchesListPage() {
 
   const items = useMemo(() => {
     const views = toMatchListItemViews(matchesQuery.data?.items ?? [], lookupMaps);
-    return sortMatchListItems(views, search.sort);
-  }, [lookupMaps, matchesQuery.data, search.sort]);
+    return sortMatchListItems(views, deferredSearch.sort);
+  }, [lookupMaps, matchesQuery.data, deferredSearch.sort]);
 
   const summaryCounts = useMemo(() => {
     const views = toMatchListItemViews(matchesSummaryQuery.data?.items ?? [], lookupMaps);
@@ -102,6 +118,7 @@ export function MatchesListPage() {
   const showMatchesLoading = isInitialQueryLoading(matchesQuery);
   const showMatchesError = shouldShowBlockingQueryError(matchesQuery);
   const refreshing = matchesQuery.isFetching || matchesSummaryQuery.isFetching;
+  const isStale = isFilterPending || search !== deferredSearch;
 
   return (
     <PageFrame className="gap-5">
@@ -143,8 +160,7 @@ export function MatchesListPage() {
         currentStatus={search.status}
         loading={matchesSummaryQuery.isLoading}
         onSelectStatus={(status) => {
-          const nextSearch = { ...search, status };
-          setSearchParams(buildMatchListSearchParams(nextSearch));
+          applySearch({ ...search, status });
         }}
       />
 
@@ -153,12 +169,15 @@ export function MatchesListPage() {
         gameTitles={gameTitlesQuery.data.items ?? []}
         heldEvents={heldEventsQuery.data.items ?? []}
         initialSearch={search}
-        onApply={(nextSearch) => setSearchParams(buildMatchListSearchParams(nextSearch))}
-        onClear={() => setSearchParams(new URLSearchParams())}
+        onApply={applySearch}
+        onClear={clearSearch}
         seasons={seasonsQuery.data.items ?? []}
       />
 
-      <section className="grid gap-4">
+      <section
+        aria-busy={isStale}
+        className={`grid gap-4 transition-opacity duration-150 ${isStale ? "opacity-70" : ""}`}
+      >
         {showMatchesLoading ? (
           <TableSkeleton />
         ) : showMatchesError ? (
@@ -169,7 +188,7 @@ export function MatchesListPage() {
           <EmptyState
             action={
               hasFilters ? (
-                <Button onClick={() => setSearchParams(new URLSearchParams())} variant="secondary">
+                <Button onClick={clearSearch} variant="secondary">
                   条件をクリア
                 </Button>
               ) : (
@@ -196,9 +215,7 @@ export function MatchesListPage() {
             <div className="hidden lg:block">
               <MatchesTable
                 items={items}
-                onSortChange={(sort) =>
-                  setSearchParams(buildMatchListSearchParams({ ...search, sort }))
-                }
+                onSortChange={(sort) => applySearch({ ...search, sort })}
                 sort={search.sort}
               />
             </div>

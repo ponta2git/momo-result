@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import {
@@ -65,6 +65,12 @@ export function MastersPage() {
   const authScope = auth.auth?.memberId ?? "anonymous";
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const [, startReturnTransition] = useTransition();
+  const navigateWithTransition = (to: string) => {
+    startReturnTransition(() => {
+      navigate(to);
+    });
+  };
   const [searchParams] = useSearchParams();
 
   const rawReturnTo = searchParams.get("returnTo");
@@ -225,7 +231,7 @@ export function MastersPage() {
         description="作品を起点に、マップとシーズンの関係を管理します。"
         actions={
           returnTo ? (
-            <Button variant="secondary" onClick={() => navigate(returnDestination ?? "/matches")}>
+            <Button variant="secondary" onClick={() => navigateWithTransition(returnDestination ?? "/matches")}>
               戻る
             </Button>
           ) : (
@@ -250,7 +256,7 @@ export function MastersPage() {
           destination={returnDestination}
           handoffStatus={handoffStatus}
           disabled={hasPendingMutation}
-          onReturn={() => navigate(returnDestination)}
+          onReturn={() => navigateWithTransition(returnDestination)}
         />
       ) : null}
 

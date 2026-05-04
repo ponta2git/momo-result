@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { useEffect, useReducer, useState } from "react";
+import { useEffect, useReducer, useState, useTransition } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { createHeldEvent } from "@/features/draftReview/api";
@@ -67,6 +67,7 @@ export function MatchWorkspacePage({
   mode,
 }: MatchWorkspacePageProps) {
   const navigate = useNavigate();
+  const [, startMastersTransition] = useTransition();
   const [searchParams] = useSearchParams();
 
   const [notice, setNotice] = useState("");
@@ -209,7 +210,9 @@ export function MatchWorkspacePage({
       values: state.values,
     });
     const handoffId = saveMasterHandoff(payload);
-    navigate(buildMasterRoute(returnTo, handoffId));
+    startMastersTransition(() => {
+      navigate(buildMasterRoute(returnTo, handoffId));
+    });
   };
 
   if (mode === "edit" && isInitialQueryLoading(matchDetailQuery)) {

@@ -5,7 +5,7 @@ import type {
   OcrField,
   OcrPlayerEntry,
 } from "@/features/draftReview/ocrPayload";
-import { fixedMembers } from "@/features/ocrCapture/localMasters";
+import { fixedMembers } from "@/features/auth/members";
 import type { components } from "@/shared/api/generated";
 import { pipe } from "@/shared/lib/pipe";
 import type { SlotMap } from "@/shared/lib/slotMap";

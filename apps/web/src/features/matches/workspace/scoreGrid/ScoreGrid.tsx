@@ -5,7 +5,7 @@ import type { IncidentLookupEntry, ReviewPlayer } from "@/features/draftReview/m
 import { incidentColumns } from "@/features/matches/workspace/matchFormTypes";
 import type { IncidentKey, MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
 import { handleScoreGridKeydown } from "@/features/matches/workspace/scoreGrid/ScoreGridKeyboard";
-import { fixedMembers } from "@/features/ocrCapture/localMasters";
+import { fixedMembers } from "@/features/auth/members";
 import { useMediaQuery } from "@/shared/lib/useMediaQuery";
 
 const confidenceThresholdHigh = 0.9;

@@ -1,4 +1,4 @@
-import { fixedMembers } from "@/features/ocrCapture/localMasters";
+import { fixedMembers } from "@/features/auth/members";
 
 export function formatDateTime(iso: string | undefined): string {
   if (!iso) {

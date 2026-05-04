@@ -1,4 +1,5 @@
-import { computerAliasesFor, fixedMembers } from "@/features/ocrCapture/localMasters";
+import { fixedMembers } from "@/features/auth/members";
+import { computerAliasesFor } from "@/features/ocrCapture/computerAliases";
 import type { LayoutFamily } from "@/shared/api/enums";
 import type { components } from "@/shared/api/generated";
 

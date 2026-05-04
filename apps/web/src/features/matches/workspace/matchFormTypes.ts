@@ -4,7 +4,7 @@ import type {
   ReviewPlayer,
 } from "@/features/draftReview/mergeDrafts";
 import type { ConfirmMatchFormValues } from "@/features/draftReview/schema";
-import { fixedMembers } from "@/features/ocrCapture/localMasters";
+import { fixedMembers } from "@/features/auth/members";
 
 export const incidentColumns = [
   ["destination", "目的地"],

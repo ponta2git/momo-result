@@ -35,9 +35,9 @@ object OcrModule:
           "POST /api/ocr-jobs",
           request,
           nowF,
-          security.respond(createOcrJob.run(OcrJobCodec.toCreateCommand(request)))(
-            OcrJobCodec.toCreateResponse
-          ),
+          security.respond(
+            createOcrJob.run(OcrJobCodec.toCreateCommand(request))
+          )(OcrJobCodec.toCreateResponse),
         )
       }
     },
@@ -48,9 +48,8 @@ object OcrModule:
     },
     OcrJobEndpoints.cancel.serverLogic { case (jobId, devUser, csrfToken) =>
       security.authorizeMutation(devUser, csrfToken) { _ =>
-        security.respond(cancelOcrJob.run(OcrJobId(jobId)))(_ =>
-          CancelOcrJobResponse(jobId, "cancelled")
-        )
+        security
+          .respond(cancelOcrJob.run(OcrJobId(jobId)))(_ => CancelOcrJobResponse(jobId, "cancelled"))
       }
     },
     OcrDraftEndpoints.get.serverLogic { case (draftId, devUser) =>
@@ -60,9 +59,9 @@ object OcrModule:
     },
     OcrDraftEndpoints.listByIds.serverLogic { case (ids, devUser) =>
       security.authorizeRead(devUser) { _ =>
-        security.respond(getOcrDraftsBulk.run(ids))(items =>
-          OcrDraftListResponse(items.map(OcrDraftResponse.from))
-        )
+        security.respond(
+          getOcrDraftsBulk.run(ids)
+        )(items => OcrDraftListResponse(items.map(OcrDraftResponse.from)))
       }
     },
   )

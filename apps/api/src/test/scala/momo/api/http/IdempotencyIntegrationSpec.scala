@@ -34,8 +34,7 @@ final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite:
     idemKey.fold(base)(k => base :+ (Header.Raw(CIString("Idempotency-Key"), k): Header.ToRaw))
 
   private def heldEventReq(idemKey: Option[String], heldAt: String): Request[IO] =
-    Request[IO](Method.POST, uri"/api/held-events")
-      .putHeaders(authHeaders(idemKey)*)
+    Request[IO](Method.POST, uri"/api/held-events").putHeaders(authHeaders(idemKey)*)
       .withEntity(Json.obj("heldAt" -> Json.fromString(heldAt)))
 
   test("idempotency: same key + same body replays response and skips side-effect") {

@@ -4,7 +4,6 @@ import java.time.Instant
 
 import cats.MonadThrow
 import cats.data.EitherT
-import cats.syntax.all.*
 
 import momo.api.domain.ids.*
 import momo.api.domain.{MatchDraft, MatchDraftStatus}
@@ -13,7 +12,7 @@ import momo.api.repositories.{
   GameTitlesRepository, HeldEventsRepository, MapMastersRepository, MatchDraftsRepository,
   SeasonMastersRepository,
 }
-import momo.api.usecases.syntax.UseCaseSyntax.*
+import momo.api.usecases.syntax.MatchDraftForeignKeyValidation
 
 final case class CreateMatchDraftCommand(
     heldEventId: Option[HeldEventId],
@@ -83,30 +82,11 @@ final class CreateMatchDraft[F[_]: MonadThrow](
       case _ => Right(())
 
   private def validateForeignKeys(command: CreateMatchDraftCommand): EitherT[F, AppError, Unit] =
-    for
-      _ <- command.heldEventId match
-        case None => EitherT.rightT[F, AppError](())
-        case Some(id) => heldEvents.find(id).orNotFound("held event", id.value).void
-      title <- command.gameTitleId match
-        case None => EitherT.rightT[F, AppError](Option.empty[momo.api.domain.GameTitle])
-        case Some(id) => gameTitles.find(id).orNotFound("game title", id.value).map(Some(_))
-      _ <- command.mapMasterId match
-        case None => EitherT.rightT[F, AppError](())
-        case Some(id) => mapMasters.find(id).orNotFound("map master", id.value).flatMap { map =>
-            title match
-              case Some(t) if map.gameTitleId != t.id =>
-                EitherT.leftT[F, Unit](AppError.ValidationFailed(s"mapMasterId ${map.id
-                    .value} does not belong to gameTitleId ${t.id.value}."))
-              case _ => EitherT.rightT[F, AppError](())
-          }
-      _ <- command.seasonMasterId match
-        case None => EitherT.rightT[F, AppError](())
-        case Some(id) => seasonMasters.find(id).orNotFound("season master", id.value)
-            .flatMap { season =>
-              title match
-                case Some(t) if season.gameTitleId != t.id =>
-                  EitherT.leftT[F, Unit](AppError.ValidationFailed(s"seasonMasterId ${season.id
-                      .value} does not belong to gameTitleId ${t.id.value}."))
-                case _ => EitherT.rightT[F, AppError](())
-            }
-    yield ()
+    MatchDraftForeignKeyValidation.validate(heldEvents, gameTitles, mapMasters, seasonMasters)(
+      MatchDraftForeignKeyValidation.Input(
+        heldEventId = command.heldEventId,
+        gameTitleId = command.gameTitleId,
+        mapMasterId = command.mapMasterId,
+        seasonMasterId = command.seasonMasterId,
+      )
+    )

@@ -12,13 +12,12 @@ import momo.api.usecases.{CreateMatchDraftCommand, UpdateMatchDraftCommand}
 
 /** DTO ↔ usecase command conversions for `MatchDraftEndpoints`. */
 object MatchDraftCodec:
-  def parseInstantOption[F[_]: Async](
-      value: Option[String]
-  ): F[Either[AppError, Option[Instant]]] = value match
-    case None => Async[F].pure(Right(None))
-    case Some(raw) => Either.catchOnly[Exception](Instant.parse(raw))
-        .leftMap(_ => AppError.ValidationFailed("playedAt must be ISO8601 instant.")).map(Some(_))
-        .pure[F]
+  def parseInstantOption[F[_]: Async](value: Option[String]): F[Either[AppError, Option[Instant]]] =
+    value match
+      case None => Async[F].pure(Right(None))
+      case Some(raw) => Either.catchOnly[Exception](Instant.parse(raw))
+          .leftMap(_ => AppError.ValidationFailed("playedAt must be ISO8601 instant.")).map(Some(_))
+          .pure[F]
 
   def toCreateCommand(
       request: CreateMatchDraftRequest,

@@ -11,16 +11,12 @@ object UploadModule:
   def routes[F[_]: Async](
       uploadImage: UploadImage[F],
       security: EndpointSecurity[F],
-  ): List[ServerEndpoint[Any, F]] = List(
-    UploadEndpoints.uploadImage.serverLogic { case (devUser, csrfToken, parts) =>
-      security.authorizeMutation(devUser, csrfToken) { _ =>
+  ): List[ServerEndpoint[Any, F]] = List(UploadEndpoints.uploadImage.serverLogic {
+    case (devUser, csrfToken, parts) => security.authorizeMutation(devUser, csrfToken) { _ =>
         MultipartUpload.file(parts) match
           case Left(error) => Async[F].pure(Left(security.toProblem(error)))
-          case Right(upload) =>
-            security
-              .respond(uploadImage.run(upload.fileName, upload.contentType, upload.bytes))(
-                UploadImageResponse.from
-              )
+          case Right(upload) => security.respond(
+              uploadImage.run(upload.fileName, upload.contentType, upload.bytes)
+            )(UploadImageResponse.from)
       }
-    }
-  )
+  })

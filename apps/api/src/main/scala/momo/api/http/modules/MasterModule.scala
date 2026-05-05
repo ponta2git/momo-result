@@ -36,9 +36,8 @@ object MasterModule:
   ): List[ServerEndpoint[Any, F]] = List(
     GameTitlesEndpoints.list.serverLogic { devUser =>
       security.authorizeRead(devUser) { _ =>
-        gameTitles.list.map(items =>
-          Right(GameTitleListResponse(items.map(GameTitleResponse.from)))
-        )
+        gameTitles.list
+          .map(items => Right(GameTitleListResponse(items.map(GameTitleResponse.from))))
       }
     },
     GameTitlesEndpoints.create.serverLogic { case (devUser, csrfToken, idemKey, request) =>
@@ -50,17 +49,16 @@ object MasterModule:
           "POST /api/game-titles",
           request,
           nowF,
-          security.respond(createGameTitle.run(MasterCodec.toCreateGameTitleCommand(request)))(
-            GameTitleResponse.from
-          ),
+          security.respond(
+            createGameTitle.run(MasterCodec.toCreateGameTitleCommand(request))
+          )(GameTitleResponse.from),
         )
       }
     },
     MapMastersEndpoints.list.serverLogic { case (gameTitleId, devUser) =>
       security.authorizeRead(devUser) { _ =>
-        mapMasters.list(gameTitleId.map(GameTitleId(_))).map(items =>
-          Right(MapMasterListResponse(items.map(MapMasterResponse.from)))
-        )
+        mapMasters.list(gameTitleId.map(GameTitleId(_)))
+          .map(items => Right(MapMasterListResponse(items.map(MapMasterResponse.from))))
       }
     },
     MapMastersEndpoints.create.serverLogic { case (devUser, csrfToken, idemKey, request) =>
@@ -72,17 +70,16 @@ object MasterModule:
           "POST /api/map-masters",
           request,
           nowF,
-          security.respond(createMapMaster.run(MasterCodec.toCreateMapMasterCommand(request)))(
-            MapMasterResponse.from
-          ),
+          security.respond(
+            createMapMaster.run(MasterCodec.toCreateMapMasterCommand(request))
+          )(MapMasterResponse.from),
         )
       }
     },
     SeasonMastersEndpoints.list.serverLogic { case (gameTitleId, devUser) =>
       security.authorizeRead(devUser) { _ =>
-        seasonMasters.list(gameTitleId.map(GameTitleId(_))).map(items =>
-          Right(SeasonMasterListResponse(items.map(SeasonMasterResponse.from)))
-        )
+        seasonMasters.list(gameTitleId.map(GameTitleId(_)))
+          .map(items => Right(SeasonMasterListResponse(items.map(SeasonMasterResponse.from))))
       }
     },
     SeasonMastersEndpoints.create.serverLogic { case (devUser, csrfToken, idemKey, request) =>
@@ -94,17 +91,16 @@ object MasterModule:
           "POST /api/season-masters",
           request,
           nowF,
-          security.respond(createSeasonMaster.run(MasterCodec.toCreateSeasonMasterCommand(request)))(
-            SeasonMasterResponse.from
-          ),
+          security.respond(
+            createSeasonMaster.run(MasterCodec.toCreateSeasonMasterCommand(request))
+          )(SeasonMasterResponse.from),
         )
       }
     },
     IncidentMastersEndpoints.list.serverLogic { devUser =>
       security.authorizeRead(devUser) { _ =>
-        incidentMasters.list.map(items =>
-          Right(IncidentMasterListResponse(items.map(IncidentMasterResponse.from)))
-        )
+        incidentMasters.list
+          .map(items => Right(IncidentMasterListResponse(items.map(IncidentMasterResponse.from))))
       }
     },
   )

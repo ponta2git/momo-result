@@ -38,9 +38,9 @@ object HeldEventModule:
           "POST /api/held-events",
           request,
           nowF,
-          security.respond(createHeldEvent.run(HeldEventCodec.toCreateCommand(request)))(event =>
-            HeldEventResponse.from(event, 0)
-          ),
+          security.respond(
+            createHeldEvent.run(HeldEventCodec.toCreateCommand(request))
+          )(event => HeldEventResponse.from(event, 0)),
         )
       }
     },

@@ -36,31 +36,26 @@ object MatchModule:
           "POST /api/matches",
           request,
           nowF,
-          security.respond(
-            confirmMatch.run(MatchCodec.toConfirmCommand(request), member.memberId)
-          )(record =>
-            ConfirmMatchResponse(
-              matchId = record.id.value,
-              heldEventId = record.heldEventId.value,
-              matchNoInEvent = record.matchNoInEvent,
-              createdAt = DateTimeFormatter.ISO_INSTANT.format(record.createdAt),
-            )
+          security.respond(confirmMatch.run(MatchCodec.toConfirmCommand(request), member.memberId))(
+            record =>
+              ConfirmMatchResponse(
+                matchId = record.id.value,
+                heldEventId = record.heldEventId.value,
+                matchNoInEvent = record.matchNoInEvent,
+                createdAt = DateTimeFormatter.ISO_INSTANT.format(record.createdAt),
+              )
           ),
         )
       }
     },
     MatchesEndpoints.list.serverLogic {
-      case (heldEventId, gameTitleId, seasonMasterId, status, kind, limit, devUser) =>
-        security.authorizeRead(devUser) { _ =>
-          security.respond(listMatches.run(MatchListCodec.toListCommand(
-            heldEventId,
-            gameTitleId,
-            seasonMasterId,
-            status,
-            kind,
-            limit,
-          )))(items => MatchListResponse(items.map(MatchSummaryResponse.from)))
-        }
+      case (heldEventId, gameTitleId, seasonMasterId, status, kind, limit, devUser) => security
+          .authorizeRead(devUser) { _ =>
+            security.respond(listMatches.run(
+              MatchListCodec
+                .toListCommand(heldEventId, gameTitleId, seasonMasterId, status, kind, limit)
+            ))(items => MatchListResponse(items.map(MatchSummaryResponse.from)))
+          }
     },
     MatchesEndpoints.get.serverLogic { case (matchId, devUser) =>
       security.authorizeRead(devUser) { _ =>
@@ -76,9 +71,9 @@ object MatchModule:
     },
     MatchesEndpoints.delete.serverLogic { case (matchId, devUser, csrfToken) =>
       security.authorizeMutation(devUser, csrfToken) { _ =>
-        security.respond(deleteMatch.run(MatchId(matchId)))(_ =>
-          DeleteMatchResponse(matchId, deleted = true)
-        )
+        security.respond(
+          deleteMatch.run(MatchId(matchId))
+        )(_ => DeleteMatchResponse(matchId, deleted = true))
       }
     },
   )

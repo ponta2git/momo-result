@@ -88,7 +88,8 @@ final class PostgresIdempotencyRepositoryContractSpec extends IntegrationSuite:
 
   test("cleanup deletes records whose expires_at has passed and leaves the rest"):
     val repo = freshRepo
-    val expired = buildRecord("expired", draftEndpoint, defaultHash, now.minusSeconds(1), Vector.empty)
+    val expired =
+      buildRecord("expired", draftEndpoint, defaultHash, now.minusSeconds(1), Vector.empty)
     val live = buildRecord("live", draftEndpoint, defaultHash, now.plusSeconds(60), Vector.empty)
     for
       _ <- repo.record(expired)

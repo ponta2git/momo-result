@@ -9,8 +9,8 @@ import doobie.implicits.*
 import doobie.postgres.implicits.*
 import doobie.util.update.Update
 
-import momo.api.domain.MatchRecord
 import momo.api.domain.ids.*
+import momo.api.domain.{MatchDraftStatus, MatchRecord}
 import momo.api.repositories.MatchConfirmationRepository
 import momo.api.repositories.postgres.PostgresMeta.given
 
@@ -29,11 +29,12 @@ final class PostgresMatchConfirmationRepository[F[_]: MonadCancelThrow](transact
           case None => true.pure[ConnectionIO]
           case Some(id) => sql"""
             UPDATE match_drafts SET
-              status = 'confirmed',
+              status = ${MatchDraftStatus.Confirmed},
               confirmed_match_id = ${record.id},
               updated_at = $updatedAt
             WHERE id = $id
-              AND status IN ('draft_ready','needs_review','ocr_failed')
+              AND status IN (${MatchDraftStatus.DraftReady}, ${MatchDraftStatus
+                .NeedsReview}, ${MatchDraftStatus.OcrFailed})
           """.update.run.map(_ > 0)
       yield updated
     program.transact(transactor)

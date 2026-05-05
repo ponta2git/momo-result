@@ -4,9 +4,7 @@ import momo.api.domain.ids.*
 import momo.api.endpoints.{
   CreateGameTitleRequest, CreateMapMasterRequest, CreateSeasonMasterRequest,
 }
-import momo.api.usecases.{
-  CreateGameTitleCommand, CreateMapMasterCommand, CreateSeasonMasterCommand,
-}
+import momo.api.usecases.{CreateGameTitleCommand, CreateMapMasterCommand, CreateSeasonMasterCommand}
 
 /** DTO ↔ usecase command conversions for master-data endpoints. */
 object MasterCodec:

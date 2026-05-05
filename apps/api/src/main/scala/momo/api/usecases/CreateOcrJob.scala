@@ -82,8 +82,15 @@ final class CreateOcrJob[F[_]: MonadThrow](
         val markDraftFailure = command.matchDraftId match
           case Some(id) => matchDrafts.markOcrFailed(id, createdAt).void
           case None => MonadThrow[F].unit
-        jobs.markFailed(jobId, queueFailure(error), createdAt) >> markDraftFailure >>
-          AppError.Internal("Failed to enqueue OCR job.").asLeft[CreatedOcrJob].pure[F]
+        // Wrap the compensation chain in `attempt` so a secondary failure (e.g. DB outage during
+        // markFailed / markDraftFailure) does not propagate and override the user-facing
+        // `AppError.Internal`. The user-visible result is always Internal regardless of
+        // compensation outcome.
+        // NOTE: replace `attempt.void` with structured logging once a `Logger[F]` is wired into
+        // usecases; tracked as a follow-up to phase6-ocr-compensation.
+        val compensate =
+          (jobs.markFailed(jobId, queueFailure(error), createdAt) >> markDraftFailure).attempt.void
+        compensate >> AppError.Internal("Failed to enqueue OCR job.").asLeft[CreatedOcrJob].pure[F]
       ,
       _ => CreatedOcrJob(job, draft, payload).asRight[AppError].pure[F],
     ))

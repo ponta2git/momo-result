@@ -11,7 +11,7 @@ import momo.api.endpoints.{
   CancelOcrJobResponse, CreateOcrJobRequest, OcrDraftEndpoints, OcrDraftListResponse,
   OcrDraftResponse, OcrJobEndpoints, OcrJobResponse,
 }
-import momo.api.http.{EndpointSecurity, IdempotencyHandler}
+import momo.api.http.{EndpointSecurity, IdempotencyReplay}
 import momo.api.repositories.IdempotencyRepository
 import momo.api.usecases.{CancelOcrJob, CreateOcrJob, GetOcrDraft, GetOcrDraftsBulk, GetOcrJob}
 
@@ -28,7 +28,7 @@ object OcrModule:
   ): List[ServerEndpoint[Any, F]] = List(
     OcrJobEndpoints.create.serverLogic { case (devUser, csrfToken, idemKey, request) =>
       security.authorizeMutation(devUser, csrfToken) { member =>
-        IdempotencyHandler.wrap[F, CreateOcrJobRequest, momo.api.endpoints.CreateOcrJobResponse](
+        IdempotencyReplay.wrap[F, CreateOcrJobRequest, momo.api.endpoints.CreateOcrJobResponse](
           idempotency,
           idemKey,
           member,

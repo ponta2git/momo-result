@@ -8,11 +8,11 @@ import cats.syntax.all.*
 import momo.api.domain.ids.MatchDraftId
 import momo.api.repositories.{ImageStore, MatchDraftsRepository}
 
-final class SourceImageRetentionService[F[_]: Monad](
+final class PurgeSourceImages[F[_]: Monad](
     matchDrafts: MatchDraftsRepository[F],
     imageStore: ImageStore[F],
 ):
-  def cleanupNow(draftId: MatchDraftId, now: Instant): F[Unit] =
+  def run(draftId: MatchDraftId, now: Instant): F[Unit] =
     for
       maybeDraft <- matchDrafts.find(draftId)
       _ <- maybeDraft.traverse_(deleteSourceImages)

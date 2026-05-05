@@ -13,7 +13,7 @@ import momo.api.endpoints.{
   MatchDraftResponse, MatchDraftSourceImageListResponse, MatchDraftSourceImageResponse,
   UpdateMatchDraftRequest,
 }
-import momo.api.http.{EndpointSecurity, IdempotencyHandler}
+import momo.api.http.{EndpointSecurity, IdempotencyReplay}
 import momo.api.repositories.IdempotencyRepository
 import momo.api.usecases.{
   CancelMatchDraft, CreateMatchDraft, GetMatchDraft, GetMatchDraftSourceImages, UpdateMatchDraft,
@@ -32,7 +32,7 @@ object MatchDraftModule:
   ): List[ServerEndpoint[Any, F]] = List(
     MatchDraftEndpoints.create.serverLogic { case (devUser, csrfToken, idemKey, request) =>
       security.authorizeMutation(devUser, csrfToken) { member =>
-        IdempotencyHandler.wrap[F, CreateMatchDraftRequest, MatchDraftResponse](
+        IdempotencyReplay.wrap[F, CreateMatchDraftRequest, MatchDraftResponse](
           idempotency,
           idemKey,
           member,
@@ -52,7 +52,7 @@ object MatchDraftModule:
     },
     MatchDraftEndpoints.update.serverLogic { case (draftId, devUser, csrfToken, idemKey, request) =>
       security.authorizeMutation(devUser, csrfToken) { member =>
-        IdempotencyHandler.wrap[F, UpdateMatchDraftRequest, MatchDraftResponse](
+        IdempotencyReplay.wrap[F, UpdateMatchDraftRequest, MatchDraftResponse](
           idempotency,
           idemKey,
           member,

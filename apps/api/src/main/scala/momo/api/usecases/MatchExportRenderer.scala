@@ -5,7 +5,7 @@ import java.time.format.DateTimeFormatter
 
 import momo.api.domain.{MatchExportFormat, MatchExportRow}
 
-object MatchExportSerializer:
+object MatchExportRenderer:
   private val Jst = ZoneId.of("Asia/Tokyo")
   private val DateFormatter = DateTimeFormatter.ISO_LOCAL_DATE
   val Header: List[String] = List(

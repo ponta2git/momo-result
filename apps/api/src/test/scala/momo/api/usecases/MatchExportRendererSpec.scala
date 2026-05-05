@@ -6,7 +6,7 @@ import munit.FunSuite
 
 import momo.api.domain.{IncidentCounts, MatchExportFormat, MatchExportRow}
 
-final class MatchExportSerializerSpec extends FunSuite:
+final class MatchExportRendererSpec extends FunSuite:
   private val row = MatchExportRow(
     seasonName = "春,大会",
     seasonNo = 2,
@@ -30,7 +30,7 @@ final class MatchExportSerializerSpec extends FunSuite:
   )
 
   test("CSV output fixes header order and escapes RFC4180 fields"):
-    val out = MatchExportSerializer.render(MatchExportFormat.Csv, List(row))
+    val out = MatchExportRenderer.render(MatchExportFormat.Csv, List(row))
     val lines = out.split("\r\n", -1).toList
     assertEquals(
       lines.head,
@@ -43,7 +43,7 @@ final class MatchExportSerializerSpec extends FunSuite:
     assertEquals(lines.last, "")
 
   test("TSV output escapes structural tab and newline characters"):
-    val out = MatchExportSerializer
+    val out = MatchExportRenderer
       .render(MatchExportFormat.Tsv, List(row.copy(seasonName = "春\t大会", playerName = "A\\B\nC")))
     val lines = out.split("\r\n", -1).toList
     assertEquals(
@@ -52,7 +52,7 @@ final class MatchExportSerializerSpec extends FunSuite:
     )
 
   test("empty exports still include the header line"):
-    val out = MatchExportSerializer.render(MatchExportFormat.Csv, Nil)
+    val out = MatchExportRenderer.render(MatchExportFormat.Csv, Nil)
     assertEquals(
       out,
       "シーズン,シーズンNo.,オーナー,マップ,対戦日,対戦No.,プレー順,プレーヤー名,順位,総資産,収益,目的地,プラス駅,マイナス駅,カード駅,カード売り場,スリの銀次\r\n",

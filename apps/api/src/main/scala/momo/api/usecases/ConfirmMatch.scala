@@ -22,7 +22,7 @@ final class ConfirmMatch[F[_]: MonadThrow](
     matches: MatchesRepository[F],
     matchDrafts: MatchDraftsRepository[F],
     confirmations: MatchConfirmationRepository[F],
-    sourceImageRetention: SourceImageRetentionService[F],
+    sourceImageRetention: PurgeSourceImages[F],
     gameTitles: GameTitlesRepository[F],
     mapMasters: MapMastersRepository[F],
     seasonMasters: SeasonMastersRepository[F],
@@ -99,7 +99,7 @@ final class ConfirmMatch[F[_]: MonadThrow](
       .ensureF(AppError.Conflict("Failed to confirm match from the draft."))
     _ <- maybeDraft match
       case None => EitherT.rightT[F, AppError](())
-      case Some(draft) => EitherT.liftF(sourceImageRetention.cleanupNow(draft.id, createdAt))
+      case Some(draft) => EitherT.liftF(sourceImageRetention.run(draft.id, createdAt))
   yield record).value
 
 object ConfirmMatch:

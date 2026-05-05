@@ -10,7 +10,7 @@ import momo.api.endpoints.codec.HeldEventCodec
 import momo.api.endpoints.{
   CreateHeldEventRequest, HeldEventListResponse, HeldEventResponse, HeldEventsEndpoints,
 }
-import momo.api.http.{EndpointSecurity, IdempotencyHandler}
+import momo.api.http.{EndpointSecurity, IdempotencyReplay}
 import momo.api.repositories.IdempotencyRepository
 import momo.api.usecases.{CreateHeldEvent, ListHeldEvents}
 
@@ -31,7 +31,7 @@ object HeldEventModule:
     },
     HeldEventsEndpoints.create.serverLogic { case (devUser, csrfToken, idemKey, request) =>
       security.authorizeMutation(devUser, csrfToken) { member =>
-        IdempotencyHandler.wrap[F, CreateHeldEventRequest, HeldEventResponse](
+        IdempotencyReplay.wrap[F, CreateHeldEventRequest, HeldEventResponse](
           idempotency,
           idemKey,
           member,

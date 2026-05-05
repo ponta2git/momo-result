@@ -14,7 +14,7 @@ import momo.api.endpoints.{
   IncidentMastersEndpoints, MapMasterListResponse, MapMasterResponse, MapMastersEndpoints,
   SeasonMasterListResponse, SeasonMasterResponse, SeasonMastersEndpoints,
 }
-import momo.api.http.{EndpointSecurity, IdempotencyHandler}
+import momo.api.http.{EndpointSecurity, IdempotencyReplay}
 import momo.api.repositories.{
   GameTitlesRepository, IdempotencyRepository, IncidentMastersRepository, MapMastersRepository,
   SeasonMastersRepository,
@@ -42,7 +42,7 @@ object MasterModule:
     },
     GameTitlesEndpoints.create.serverLogic { case (devUser, csrfToken, idemKey, request) =>
       security.authorizeMutation(devUser, csrfToken) { member =>
-        IdempotencyHandler.wrap[F, CreateGameTitleRequest, GameTitleResponse](
+        IdempotencyReplay.wrap[F, CreateGameTitleRequest, GameTitleResponse](
           idempotency,
           idemKey,
           member,
@@ -63,7 +63,7 @@ object MasterModule:
     },
     MapMastersEndpoints.create.serverLogic { case (devUser, csrfToken, idemKey, request) =>
       security.authorizeMutation(devUser, csrfToken) { member =>
-        IdempotencyHandler.wrap[F, CreateMapMasterRequest, MapMasterResponse](
+        IdempotencyReplay.wrap[F, CreateMapMasterRequest, MapMasterResponse](
           idempotency,
           idemKey,
           member,
@@ -84,7 +84,7 @@ object MasterModule:
     },
     SeasonMastersEndpoints.create.serverLogic { case (devUser, csrfToken, idemKey, request) =>
       security.authorizeMutation(devUser, csrfToken) { member =>
-        IdempotencyHandler.wrap[F, CreateSeasonMasterRequest, SeasonMasterResponse](
+        IdempotencyReplay.wrap[F, CreateSeasonMasterRequest, SeasonMasterResponse](
           idempotency,
           idemKey,
           member,

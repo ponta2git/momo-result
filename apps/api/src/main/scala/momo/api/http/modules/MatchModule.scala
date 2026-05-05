@@ -12,7 +12,7 @@ import momo.api.endpoints.{
   ConfirmMatchRequest, ConfirmMatchResponse, DeleteMatchResponse, MatchDetailResponse,
   MatchListResponse, MatchSummaryResponse, MatchesEndpoints,
 }
-import momo.api.http.{EndpointSecurity, IdempotencyHandler}
+import momo.api.http.{EndpointSecurity, IdempotencyReplay}
 import momo.api.repositories.IdempotencyRepository
 import momo.api.usecases.{ConfirmMatch, DeleteMatch, GetMatch, ListMatches, UpdateMatch}
 
@@ -29,7 +29,7 @@ object MatchModule:
   ): List[ServerEndpoint[Any, F]] = List(
     MatchesEndpoints.confirm.serverLogic { case (devUser, csrfToken, idemKey, request) =>
       security.authorizeMutation(devUser, csrfToken) { member =>
-        IdempotencyHandler.wrap[F, ConfirmMatchRequest, ConfirmMatchResponse](
+        IdempotencyReplay.wrap[F, ConfirmMatchRequest, ConfirmMatchResponse](
           idempotency,
           idemKey,
           member,

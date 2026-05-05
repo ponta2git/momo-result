@@ -123,9 +123,9 @@ object CreateOcrJob:
     requestedScreenType = screenType,
     detectedScreenType = None,
     profileId = None,
-    payloadJson = OcrDraftPayloads.initialPayload(screenType),
-    warningsJson = OcrDraftPayloads.initialWarnings,
-    timingsMsJson = OcrDraftPayloads.initialTimings,
+    payloadJson = OcrDraftInitialPayloads.payload(screenType),
+    warningsJson = OcrDraftInitialPayloads.warnings,
+    timingsMsJson = OcrDraftInitialPayloads.timings,
     createdAt = createdAt,
     updatedAt = createdAt,
   )

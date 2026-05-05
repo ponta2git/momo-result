@@ -10,8 +10,8 @@ import momo.api.domain.ScreenType
  * `io.circe` dependency; callers serialize once here and the domain just carries the resulting
  * raw JSON strings.
  */
-private[momo] object OcrDraftPayloads:
-  def initialPayload(screenType: ScreenType): String = Json.obj(
+private[momo] object OcrDraftInitialPayloads:
+  def payload(screenType: ScreenType): String = Json.obj(
     "requested_screen_type" -> Json.fromString(screenType.wire),
     "detected_screen_type" -> Json.Null,
     "profile_id" -> Json.Null,
@@ -21,5 +21,5 @@ private[momo] object OcrDraftPayloads:
     "raw_snippets" -> Json.Null,
   ).noSpaces
 
-  val initialWarnings: String = Json.arr().noSpaces
-  val initialTimings: String = Json.obj().noSpaces
+  val warnings: String = Json.arr().noSpaces
+  val timings: String = Json.obj().noSpaces

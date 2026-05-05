@@ -52,7 +52,7 @@ final class ExportMatches[F[_]: Monad](
           MatchExportFile(
             fileName = s"momo-results-${scope.filePart}.${format.extension}",
             contentType = format.contentType,
-            body = MatchExportSerializer.render(format, rows),
+            body = MatchExportRenderer.render(format, rows),
           )
         }
 

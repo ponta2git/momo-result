@@ -10,7 +10,7 @@ import momo.api.adapters.{InMemoryMatchDraftsRepository, LocalFsImageStore}
 import momo.api.domain.ids.*
 import momo.api.domain.{MatchDraft, MatchDraftStatus}
 
-final class SourceImageRetentionServiceSpec extends MomoCatsEffectSuite:
+final class PurgeSourceImagesSpec extends MomoCatsEffectSuite:
   private val pngBytes: Array[Byte] =
     Array[Byte](0x89.toByte, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)
 
@@ -50,8 +50,8 @@ final class SourceImageRetentionServiceSpec extends MomoCatsEffectSuite:
       ).getOrElse(fail("invalid draft fixture"))
       _ <- matchDrafts.create(draft)
       beforeCleanup <- imageStore.find(totalAssets.imageId)
-      service = SourceImageRetentionService[IO](matchDrafts, imageStore)
-      _ <- service.cleanupNow(draft.id, finalizedAt)
+      service = PurgeSourceImages[IO](matchDrafts, imageStore)
+      _ <- service.run(draft.id, finalizedAt)
       totalAfter <- imageStore.find(totalAssets.imageId)
       revenueAfter <- imageStore.find(revenue.imageId)
       incidentAfter <- imageStore.find(incidentLog.imageId)

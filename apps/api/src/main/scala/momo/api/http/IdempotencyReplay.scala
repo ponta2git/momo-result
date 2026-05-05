@@ -26,7 +26,7 @@ import momo.api.repositories.{IdempotencyRecord, IdempotencyRepository, Idempote
  *   - Same key with a different request hash returns HTTP 409 Conflict.
  *   - Otherwise the effect runs and the success response is recorded with a 24h TTL.
  */
-private[http] object IdempotencyHandler:
+private[http] object IdempotencyReplay:
   private val PrinterCanonical: Printer =
     Printer(dropNullValues = false, indent = "", sortKeys = true)
   private val RetentionMillis: Long = 24L * 60L * 60L * 1000L
@@ -105,4 +105,4 @@ private[http] object IdempotencyHandler:
 
   private def decodeStoredBody[A: Decoder](bytes: Vector[Byte]): Either[Throwable, A] =
     circeDecode[A](new String(bytes.toArray, StandardCharsets.UTF_8))
-end IdempotencyHandler
+end IdempotencyReplay

@@ -13,7 +13,7 @@ import momo.api.usecases.syntax.UseCaseSyntax.*
 
 final class CancelMatchDraft[F[_]: MonadThrow](
     matchDrafts: MatchDraftsRepository[F],
-    sourceImageRetention: SourceImageRetentionService[F],
+    sourceImageRetention: PurgeSourceImages[F],
     now: F[Instant],
 ):
   private val cancellableStatuses = Set(
@@ -29,7 +29,7 @@ final class CancelMatchDraft[F[_]: MonadThrow](
     _ <- EitherT.fromEither[F](canCancel(draft.status))
     at <- EitherT.liftF(now)
     _ <- matchDrafts.cancel(draftId, at).ensureFoundF("match draft", draftId.value)
-    _ <- EitherT.liftF(sourceImageRetention.cleanupNow(draftId, at))
+    _ <- EitherT.liftF(sourceImageRetention.run(draftId, at))
   yield ()).value
 
   private def authorize(createdByMemberId: MemberId, memberId: MemberId): Either[AppError, Unit] =

@@ -6,6 +6,7 @@ import io.circe.{Codec, Json}
 
 import momo.api.domain.ids.*
 import momo.api.domain.{OcrDraft, OcrJob, OcrJobHints, StoredImage}
+import momo.api.endpoints.codec.OcrHintsCodec.given
 
 final case class AuthMeResponse(memberId: String, displayName: String, csrfToken: Option[String])
     derives Codec.AsObject

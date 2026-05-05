@@ -23,7 +23,7 @@ final class InMemoryMatchesRepository[F[_]: Sync] private (ref: Ref[F, Map[Match
     val filtered = m.values.filter { r =>
       filter.heldEventId.forall(_ == r.heldEventId) &&
       filter.gameTitleId.forall(_ == r.gameTitleId) &&
-      filter.seasonMasterId.forall(_ == r.seasonMasterId)
+      filter.seasonMasterId.forall(_ == r.seasonMasterId) && filter.matchId.forall(_ == r.id)
     }.toList.sortBy(r => (-r.playedAt.toEpochMilli, -r.createdAt.toEpochMilli))
     filter.limit.fold(filtered)(filtered.take)
   }

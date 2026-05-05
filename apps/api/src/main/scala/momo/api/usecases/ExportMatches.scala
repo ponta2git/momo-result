@@ -1,6 +1,6 @@
 package momo.api.usecases
 
-import cats.Applicative
+import cats.Monad
 import cats.syntax.all.*
 
 import momo.api.domain.ids.*
@@ -13,7 +13,7 @@ import momo.api.repositories.{
   MapMastersRepository, MatchesRepository, MembersRepository, SeasonMastersRepository,
 }
 
-final class ExportMatches[F[_]: Applicative](
+final class ExportMatches[F[_]: Monad](
     matches: MatchesRepository[F],
     members: MembersRepository[F],
     mapMasters: MapMastersRepository[F],
@@ -32,19 +32,19 @@ final class ExportMatches[F[_]: Applicative](
   private def build(
       format: MatchExportFormat,
       scope: MatchExportScope,
-  ): F[Either[AppError, MatchExportFile]] = (
-    matches.list(MatchesRepository.ListFilter()),
-    members.list,
-    mapMasters.list(None),
-    seasonMasters.list(None),
-  ).mapN { (allMatches, memberRows, mapRows, seasonRows) =>
-    val selected = filter(scope, allMatches)
-    scope match
+  ): F[Either[AppError, MatchExportFile]] =
+    for
+      selected <- matches.list(scopeToFilter(scope))
+      sequenceMatches <- loadSequenceMatches(scope, selected)
+      memberRows <- members.list
+      mapRows <- mapMasters.list(None)
+      seasonRows <- seasonMasters.list(None)
+    yield scope match
       case MatchExportScope.Match(id) if selected.isEmpty =>
         AppError.NotFound("match", id.value).asLeft
       case _ => buildRows(
           selected = selected,
-          allMatches = allMatches,
+          allMatches = sequenceMatches,
           members = memberRows,
           maps = mapRows,
           seasons = seasonRows,
@@ -55,7 +55,34 @@ final class ExportMatches[F[_]: Applicative](
             body = MatchExportSerializer.render(format, rows),
           )
         }
-  }
+
+  private def scopeToFilter(scope: MatchExportScope): MatchesRepository.ListFilter = scope match
+    case MatchExportScope.All => MatchesRepository.ListFilter()
+    case MatchExportScope.Season(id) => MatchesRepository.ListFilter(seasonMasterId = Some(id))
+    case MatchExportScope.HeldEvent(id) => MatchesRepository.ListFilter(heldEventId = Some(id))
+    case MatchExportScope.Match(id) => MatchesRepository.ListFilter(matchId = Some(id))
+
+  /**
+   * The CSV columns シーズンNo. (sequence within season) and 対戦No. (sequence within game title)
+   * are computed across the **entire** dataset for the relevant season / game title, not just the
+   * selected slice. For narrow scopes we therefore fan out targeted queries by season and game
+   * title instead of pulling the full table — the result is byte-identical to the previous
+   * full-scan implementation, but DB load stays bounded.
+   */
+  private def loadSequenceMatches(
+      scope: MatchExportScope,
+      selected: List[MatchRecord],
+  ): F[List[MatchRecord]] = scope match
+    case MatchExportScope.All => selected.pure[F]
+    case _ =>
+      val seasonIds = selected.map(_.seasonMasterId).distinct
+      val gameTitleIds = selected.map(_.gameTitleId).distinct
+      for
+        bySeason <- seasonIds
+          .flatTraverse(id => matches.list(MatchesRepository.ListFilter(seasonMasterId = Some(id))))
+        byGame <- gameTitleIds
+          .flatTraverse(id => matches.list(MatchesRepository.ListFilter(gameTitleId = Some(id))))
+      yield (bySeason ++ byGame).distinctBy(_.id)
 
   private def parseFormat(value: String): Either[AppError, MatchExportFormat] = MatchExportFormat
     .fromWire(value).toRight(AppError.ValidationFailed("format must be one of: csv, tsv."))
@@ -76,13 +103,6 @@ final class ExportMatches[F[_]: Applicative](
       case _ => Left(AppError.ValidationFailed(
           "Specify at most one export scope: seasonMasterId, heldEventId, or matchId."
         ))
-
-  private def filter(scope: MatchExportScope, records: List[MatchRecord]): List[MatchRecord] =
-    scope match
-      case MatchExportScope.All => records
-      case MatchExportScope.Season(id) => records.filter(_.seasonMasterId == id)
-      case MatchExportScope.HeldEvent(id) => records.filter(_.heldEventId == id)
-      case MatchExportScope.Match(id) => records.filter(_.id == id)
 
   private def buildRows(
       selected: List[MatchRecord],

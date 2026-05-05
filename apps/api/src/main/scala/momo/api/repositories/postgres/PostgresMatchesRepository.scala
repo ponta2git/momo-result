@@ -157,6 +157,7 @@ object PostgresMatches:
         filter.heldEventId.map(id => fr"held_event_id = $id"),
         filter.gameTitleId.map(id => fr"game_title_id = $id"),
         filter.seasonMasterId.map(id => fr"season_master_id = $id"),
+        filter.matchId.map(id => fr"id = $id"),
       ).flatten
       val where = fragments.whereAndOpt(conditions)
       val limit = filter.limit.map(n => fr"LIMIT $n").getOrElse(Fragment.empty)

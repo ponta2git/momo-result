@@ -43,6 +43,7 @@ object MatchesRepository:
       heldEventId: Option[HeldEventId] = None,
       gameTitleId: Option[GameTitleId] = None,
       seasonMasterId: Option[SeasonMasterId] = None,
+      matchId: Option[MatchId] = None,
       limit: Option[Int] = None,
   )
 

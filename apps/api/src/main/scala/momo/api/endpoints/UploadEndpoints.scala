@@ -5,12 +5,12 @@ import sttp.tapir.generic.auto.*
 import sttp.tapir.json.circe.*
 import sttp.tapir.{PublicEndpoint, *}
 
-import momo.api.http.ProblemDetails.ErrorInfo
+import momo.api.endpoints.ProblemDetails.ProblemResponse
 
 object UploadEndpoints:
   type UploadInput = (Option[String], Option[String], Seq[Part[Array[Byte]]])
 
-  val uploadImage: PublicEndpoint[UploadInput, ErrorInfo, UploadImageResponse, Any] = endpoint
+  val uploadImage: PublicEndpoint[UploadInput, ProblemResponse, UploadImageResponse, Any] = endpoint
     .post
     .in("api" / "uploads" / "images")
     .in(CommonEndpoint.devUserHeader)

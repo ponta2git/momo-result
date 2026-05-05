@@ -15,7 +15,7 @@ import momo.api.auth.{
 }
 import momo.api.config.{AppConfig, AppEnv}
 import momo.api.domain.ids.*
-import momo.api.endpoints.AuthMeResponse
+import momo.api.endpoints.{AuthMeResponse, ProblemDetails}
 import momo.api.errors.AppError
 import momo.api.repositories.MembersRepository
 

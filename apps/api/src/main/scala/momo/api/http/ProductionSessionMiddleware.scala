@@ -12,6 +12,7 @@ import org.typelevel.ci.CIString
 import momo.api.auth.{CsrfTokenService, SessionService}
 import momo.api.config.{AppConfig, AppEnv}
 import momo.api.domain.ids.*
+import momo.api.endpoints.ProblemDetails
 import momo.api.errors.AppError
 
 private[http] final class ProductionSessionMiddleware[F[_]: Async](

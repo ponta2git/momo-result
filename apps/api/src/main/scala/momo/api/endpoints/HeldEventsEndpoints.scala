@@ -4,12 +4,12 @@ import sttp.tapir.generic.auto.*
 import sttp.tapir.json.circe.*
 import sttp.tapir.{PublicEndpoint, *}
 
-import momo.api.http.ProblemDetails.ErrorInfo
+import momo.api.endpoints.ProblemDetails.ProblemResponse
 
 object HeldEventsEndpoints:
   val list: PublicEndpoint[
     (Option[String], Option[Int], Option[String]),
-    ErrorInfo,
+    ProblemResponse,
     HeldEventListResponse,
     Any,
   ] = endpoint
@@ -24,7 +24,7 @@ object HeldEventsEndpoints:
 
   type CreateInput = (Option[String], Option[String], Option[String], CreateHeldEventRequest)
 
-  val create: PublicEndpoint[CreateInput, ErrorInfo, HeldEventResponse, Any] = endpoint
+  val create: PublicEndpoint[CreateInput, ProblemResponse, HeldEventResponse, Any] = endpoint
     .post
     .in("api" / "held-events")
     .in(CommonEndpoint.devUserHeader)

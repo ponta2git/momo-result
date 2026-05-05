@@ -4,13 +4,13 @@ import sttp.tapir.generic.auto.*
 import sttp.tapir.json.circe.*
 import sttp.tapir.{PublicEndpoint, *}
 
-import momo.api.http.ProblemDetails.ErrorInfo
+import momo.api.endpoints.ProblemDetails.ProblemResponse
 
 object OcrJobEndpoints:
   type CreateInput = (Option[String], Option[String], Option[String], CreateOcrJobRequest)
   type CancelInput = (String, Option[String], Option[String])
 
-  val create: PublicEndpoint[CreateInput, ErrorInfo, CreateOcrJobResponse, Any] = endpoint
+  val create: PublicEndpoint[CreateInput, ProblemResponse, CreateOcrJobResponse, Any] = endpoint
     .post
     .in("api" / "ocr-jobs")
     .in(CommonEndpoint.devUserHeader)
@@ -21,7 +21,7 @@ object OcrJobEndpoints:
     .out(jsonBody[CreateOcrJobResponse])
     .tag("ocr")
 
-  val get: PublicEndpoint[(String, Option[String]), ErrorInfo, OcrJobResponse, Any] = endpoint
+  val get: PublicEndpoint[(String, Option[String]), ProblemResponse, OcrJobResponse, Any] = endpoint
     .get
     .in("api" / "ocr-jobs" / path[String]("jobId"))
     .in(CommonEndpoint.devUserHeader)
@@ -29,7 +29,7 @@ object OcrJobEndpoints:
     .out(jsonBody[OcrJobResponse])
     .tag("ocr")
 
-  val cancel: PublicEndpoint[CancelInput, ErrorInfo, CancelOcrJobResponse, Any] = endpoint
+  val cancel: PublicEndpoint[CancelInput, ProblemResponse, CancelOcrJobResponse, Any] = endpoint
     .delete
     .in("api" / "ocr-jobs" / path[String]("jobId"))
     .in(CommonEndpoint.devUserHeader)

@@ -11,6 +11,7 @@ import io.circe.syntax.*
 import io.circe.{Decoder, Encoder, Json, Printer}
 
 import momo.api.auth.AuthenticatedMember
+import momo.api.endpoints.ProblemDetails
 import momo.api.errors.AppError
 import momo.api.repositories.{IdempotencyRecord, IdempotencyRepository, IdempotencyResponse}
 
@@ -45,26 +46,28 @@ private[http] object IdempotencyHandler:
       endpoint: String,
       request: Req,
       now: F[Instant],
-      run: F[Either[ProblemDetails.ErrorInfo, Resp]],
-  )(using Encoder[Req], Encoder[Resp], Decoder[Resp]): F[Either[ProblemDetails.ErrorInfo, Resp]] =
-    key.map(_.trim).filter(_.nonEmpty) match
-      case None => run
-      case Some(rawKey) =>
-        val requestHash = sha256(canonicalJsonBytes(request.asJson))
-        idempotency.lookup(rawKey, member.memberId, endpoint).flatMap {
-          case Some(existing) if existing.requestHash == requestHash =>
-            decodeStoredBody[Resp](existing.response.body) match
-              case Right(replay) => Async[F].pure(Right(replay))
-              case Left(_) => run.flatMap(
-                  handleFreshResult(idempotency, rawKey, member, endpoint, requestHash, now, _)
-                )
-          case Some(_) => Async[F].pure(Left(ProblemDetails.from(
-              AppError.Conflict("Idempotency-Key was reused with a different request payload.")
-            )))
-          case None => run.flatMap(
-              handleFreshResult(idempotency, rawKey, member, endpoint, requestHash, now, _)
-            )
-        }
+      run: F[Either[ProblemDetails.ProblemResponse, Resp]],
+  )(
+      using Encoder[Req],
+      Encoder[Resp],
+      Decoder[Resp],
+  ): F[Either[ProblemDetails.ProblemResponse, Resp]] = key.map(_.trim).filter(_.nonEmpty) match
+    case None => run
+    case Some(rawKey) =>
+      val requestHash = sha256(canonicalJsonBytes(request.asJson))
+      idempotency.lookup(rawKey, member.memberId, endpoint).flatMap {
+        case Some(existing) if existing.requestHash == requestHash =>
+          decodeStoredBody[Resp](existing.response.body) match
+            case Right(replay) => Async[F].pure(Right(replay))
+            case Left(_) => run.flatMap(
+                handleFreshResult(idempotency, rawKey, member, endpoint, requestHash, now, _)
+              )
+        case Some(_) => Async[F].pure(Left(ProblemDetails.from(
+            AppError.Conflict("Idempotency-Key was reused with a different request payload.")
+          )))
+        case None => run
+            .flatMap(handleFreshResult(idempotency, rawKey, member, endpoint, requestHash, now, _))
+      }
 
   private def handleFreshResult[F[_]: Async, Resp: Encoder](
       idempotency: IdempotencyRepository[F],
@@ -73,8 +76,8 @@ private[http] object IdempotencyHandler:
       endpoint: String,
       requestHash: Vector[Byte],
       now: F[Instant],
-      result: Either[ProblemDetails.ErrorInfo, Resp],
-  ): F[Either[ProblemDetails.ErrorInfo, Resp]] = result match
+      result: Either[ProblemDetails.ProblemResponse, Resp],
+  ): F[Either[ProblemDetails.ProblemResponse, Resp]] = result match
     case left @ Left(_) => Async[F].pure(left)
     case right @ Right(value) => now.flatMap { ts =>
         val response = IdempotencyResponse(

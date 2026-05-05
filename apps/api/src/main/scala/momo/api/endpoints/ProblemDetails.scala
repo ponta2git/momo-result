@@ -1,4 +1,4 @@
-package momo.api.http
+package momo.api.endpoints
 
 import io.circe.Codec
 import sttp.model.StatusCode
@@ -14,9 +14,9 @@ final case class ProblemDetails(
 ) derives Codec.AsObject
 
 object ProblemDetails:
-  type ErrorInfo = (StatusCode, ProblemDetails)
+  type ProblemResponse = (StatusCode, ProblemDetails)
 
-  def from(error: AppError): ErrorInfo = error.status -> ProblemDetails(
+  def from(error: AppError): ProblemResponse = error.status -> ProblemDetails(
     `type` = s"https://momo-result.local/problems/${error.code.toLowerCase}",
     title = error.title,
     status = error.status.code,

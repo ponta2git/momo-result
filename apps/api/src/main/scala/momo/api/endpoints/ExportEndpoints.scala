@@ -2,14 +2,14 @@ package momo.api.endpoints
 
 import sttp.tapir.{PublicEndpoint, *}
 
-import momo.api.http.ProblemDetails.ErrorInfo
+import momo.api.endpoints.ProblemDetails.ProblemResponse
 
 object ExportEndpoints:
   type MatchExportInput = (String, Option[String], Option[String], Option[String], Option[String])
 
   type MatchExportOutput = (String, String, String)
 
-  val matches: PublicEndpoint[MatchExportInput, ErrorInfo, MatchExportOutput, Any] = endpoint
+  val matches: PublicEndpoint[MatchExportInput, ProblemResponse, MatchExportOutput, Any] = endpoint
     .get
     .in("api" / "exports" / "matches")
     .in(query[String]("format"))

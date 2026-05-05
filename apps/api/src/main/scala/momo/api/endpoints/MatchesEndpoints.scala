@@ -4,12 +4,12 @@ import sttp.tapir.generic.auto.*
 import sttp.tapir.json.circe.*
 import sttp.tapir.{PublicEndpoint, *}
 
-import momo.api.http.ProblemDetails.ErrorInfo
+import momo.api.endpoints.ProblemDetails.ProblemResponse
 
 object MatchesEndpoints:
   type ConfirmInput = (Option[String], Option[String], Option[String], ConfirmMatchRequest)
 
-  val confirm: PublicEndpoint[ConfirmInput, ErrorInfo, ConfirmMatchResponse, Any] = endpoint
+  val confirm: PublicEndpoint[ConfirmInput, ProblemResponse, ConfirmMatchResponse, Any] = endpoint
     .post
     .in("api" / "matches")
     .in(CommonEndpoint.devUserHeader)
@@ -30,7 +30,7 @@ object MatchesEndpoints:
       Option[String],
   )
 
-  val list: PublicEndpoint[ListInput, ErrorInfo, MatchListResponse, Any] = endpoint
+  val list: PublicEndpoint[ListInput, ProblemResponse, MatchListResponse, Any] = endpoint
     .get
     .in("api" / "matches")
     .in(query[Option[String]]("heldEventId"))
@@ -44,17 +44,18 @@ object MatchesEndpoints:
     .out(jsonBody[MatchListResponse])
     .tag("matches")
 
-  val get: PublicEndpoint[(String, Option[String]), ErrorInfo, MatchDetailResponse, Any] = endpoint
-    .get
-    .in("api" / "matches" / path[String]("matchId"))
-    .in(CommonEndpoint.devUserHeader)
-    .errorOut(CommonEndpoint.errorOut)
-    .out(jsonBody[MatchDetailResponse])
-    .tag("matches")
+  val get: PublicEndpoint[(String, Option[String]), ProblemResponse, MatchDetailResponse, Any] =
+    endpoint
+      .get
+      .in("api" / "matches" / path[String]("matchId"))
+      .in(CommonEndpoint.devUserHeader)
+      .errorOut(CommonEndpoint.errorOut)
+      .out(jsonBody[MatchDetailResponse])
+      .tag("matches")
 
   type UpdateInput = (String, Option[String], Option[String], UpdateMatchRequest)
 
-  val update: PublicEndpoint[UpdateInput, ErrorInfo, MatchDetailResponse, Any] = endpoint
+  val update: PublicEndpoint[UpdateInput, ProblemResponse, MatchDetailResponse, Any] = endpoint
     .put
     .in("api" / "matches" / path[String]("matchId"))
     .in(CommonEndpoint.devUserHeader)
@@ -66,7 +67,7 @@ object MatchesEndpoints:
 
   type DeleteInput = (String, Option[String], Option[String])
 
-  val delete: PublicEndpoint[DeleteInput, ErrorInfo, DeleteMatchResponse, Any] = endpoint
+  val delete: PublicEndpoint[DeleteInput, ProblemResponse, DeleteMatchResponse, Any] = endpoint
     .delete
     .in("api" / "matches" / path[String]("matchId"))
     .in(CommonEndpoint.devUserHeader)

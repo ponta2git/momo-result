@@ -4,8 +4,7 @@ import sttp.tapir.generic.auto.*
 import sttp.tapir.json.circe.*
 import sttp.tapir.{header, statusCode, EndpointInput, EndpointOutput}
 
-import momo.api.http.ProblemDetails
-import momo.api.http.ProblemDetails.ErrorInfo
+import momo.api.endpoints.ProblemDetails.ProblemResponse
 
 /**
  * Building blocks shared across every Tapir endpoint definition.
@@ -16,7 +15,7 @@ import momo.api.http.ProblemDetails.ErrorInfo
  * are documented in `apps/api/docs/proposals/idempotency-keys.md` and `architecture.md`.
  */
 object CommonEndpoint:
-  val errorOut: EndpointOutput[ErrorInfo] = statusCode.and(jsonBody[ProblemDetails])
+  val errorOut: EndpointOutput[ProblemResponse] = statusCode.and(jsonBody[ProblemDetails])
 
   /**
    * The session-derived `X-Dev-User` header. In Prod, [[ProductionSessionMiddleware]] injects it

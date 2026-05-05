@@ -4,7 +4,7 @@ import sttp.tapir.generic.auto.*
 import sttp.tapir.json.circe.*
 import sttp.tapir.{PublicEndpoint, *}
 
-import momo.api.http.ProblemDetails.ErrorInfo
+import momo.api.endpoints.ProblemDetails.ProblemResponse
 
 object MatchDraftEndpoints:
   type CreateInput = (Option[String], Option[String], Option[String], CreateMatchDraftRequest)
@@ -13,7 +13,7 @@ object MatchDraftEndpoints:
     (String, Option[String], Option[String], Option[String], UpdateMatchDraftRequest)
   type CancelInput = (String, Option[String], Option[String])
 
-  val create: PublicEndpoint[CreateInput, ErrorInfo, MatchDraftResponse, Any] = endpoint
+  val create: PublicEndpoint[CreateInput, ProblemResponse, MatchDraftResponse, Any] = endpoint
     .post
     .in("api" / "match-drafts")
     .in(CommonEndpoint.devUserHeader)
@@ -24,7 +24,7 @@ object MatchDraftEndpoints:
     .out(jsonBody[MatchDraftResponse])
     .tag("match-drafts")
 
-  val update: PublicEndpoint[UpdateInput, ErrorInfo, MatchDraftResponse, Any] = endpoint
+  val update: PublicEndpoint[UpdateInput, ProblemResponse, MatchDraftResponse, Any] = endpoint
     .patch
     .in("api" / "match-drafts" / path[String]("draftId"))
     .in(CommonEndpoint.devUserHeader)
@@ -35,7 +35,7 @@ object MatchDraftEndpoints:
     .out(jsonBody[MatchDraftResponse])
     .tag("match-drafts")
 
-  val get: PublicEndpoint[GetInput, ErrorInfo, MatchDraftDetailResponse, Any] = endpoint
+  val get: PublicEndpoint[GetInput, ProblemResponse, MatchDraftDetailResponse, Any] = endpoint
     .get
     .in("api" / "match-drafts" / path[String]("draftId"))
     .in(CommonEndpoint.devUserHeader)
@@ -43,7 +43,7 @@ object MatchDraftEndpoints:
     .out(jsonBody[MatchDraftDetailResponse])
     .tag("match-drafts")
 
-  val cancel: PublicEndpoint[CancelInput, ErrorInfo, CancelMatchDraftResponse, Any] = endpoint
+  val cancel: PublicEndpoint[CancelInput, ProblemResponse, CancelMatchDraftResponse, Any] = endpoint
     .post
     .in("api" / "match-drafts" / path[String]("draftId") / "cancel")
     .in(CommonEndpoint.devUserHeader)
@@ -54,7 +54,7 @@ object MatchDraftEndpoints:
 
   val listSourceImages: PublicEndpoint[
     (String, Option[String]),
-    ErrorInfo,
+    ProblemResponse,
     MatchDraftSourceImageListResponse,
     Any,
   ] = endpoint
@@ -68,7 +68,7 @@ object MatchDraftEndpoints:
   type SourceImageOutput = (String, String, Array[Byte])
 
   val getSourceImage
-      : PublicEndpoint[(String, String, Option[String]), ErrorInfo, SourceImageOutput, Any] =
+      : PublicEndpoint[(String, String, Option[String]), ProblemResponse, SourceImageOutput, Any] =
     endpoint
       .get
       .in("api" / "match-drafts" / path[String]("draftId") / "source-images" / path[String]("kind"))

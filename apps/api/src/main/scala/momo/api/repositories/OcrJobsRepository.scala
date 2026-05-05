@@ -33,9 +33,5 @@ object OcrJobsRepository:
       transactK(alg.cancelQueued(jobId, now))
 
   def liftIdentity[F[_]](alg: OcrJobsAlg[F]): OcrJobsRepository[F] = new OcrJobsRepository[F]:
-    def create(job: OcrJob): F[Unit] = alg.create(job)
-    def find(jobId: OcrJobId): F[Option[OcrJob]] = alg.find(jobId)
-    def markFailed(jobId: OcrJobId, failure: OcrFailure, now: Instant): F[Unit] = alg
-      .markFailed(jobId, failure, now)
-    def cancelQueued(jobId: OcrJobId, now: Instant): F[Boolean] = alg.cancelQueued(jobId, now)
+    export alg.*
 end OcrJobsRepository

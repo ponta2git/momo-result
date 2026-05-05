@@ -30,10 +30,7 @@ object GameTitlesRepository:
 
   def liftIdentity[F[_]](alg: GameTitlesAlg[F]): GameTitlesRepository[F] =
     new GameTitlesRepository[F]:
-      def list: F[List[GameTitle]] = alg.list
-      def find(id: GameTitleId): F[Option[GameTitle]] = alg.find(id)
-      def create(title: GameTitle): F[Unit] = alg.create(title)
-      def nextDisplayOrder: F[Int] = alg.nextDisplayOrder
+      export alg.*
 end GameTitlesRepository
 
 trait MapMastersAlg[F0[_]]:
@@ -62,10 +59,7 @@ object MapMastersRepository:
 
   def liftIdentity[F[_]](alg: MapMastersAlg[F]): MapMastersRepository[F] =
     new MapMastersRepository[F]:
-      def list(gameTitleId: Option[GameTitleId]): F[List[MapMaster]] = alg.list(gameTitleId)
-      def find(id: MapMasterId): F[Option[MapMaster]] = alg.find(id)
-      def create(map: MapMaster): F[Unit] = alg.create(map)
-      def nextDisplayOrder(gameTitleId: GameTitleId): F[Int] = alg.nextDisplayOrder(gameTitleId)
+      export alg.*
 end MapMastersRepository
 
 trait SeasonMastersAlg[F0[_]]:
@@ -94,10 +88,7 @@ object SeasonMastersRepository:
 
   def liftIdentity[F[_]](alg: SeasonMastersAlg[F]): SeasonMastersRepository[F] =
     new SeasonMastersRepository[F]:
-      def list(gameTitleId: Option[GameTitleId]): F[List[SeasonMaster]] = alg.list(gameTitleId)
-      def find(id: SeasonMasterId): F[Option[SeasonMaster]] = alg.find(id)
-      def create(season: SeasonMaster): F[Unit] = alg.create(season)
-      def nextDisplayOrder(gameTitleId: GameTitleId): F[Int] = alg.nextDisplayOrder(gameTitleId)
+      export alg.*
 end SeasonMastersRepository
 
 trait IncidentMastersAlg[F0[_]]:
@@ -115,7 +106,7 @@ object IncidentMastersRepository:
 
   def liftIdentity[F[_]](alg: IncidentMastersAlg[F]): IncidentMastersRepository[F] =
     new IncidentMastersRepository[F]:
-      def list: F[List[IncidentMaster]] = alg.list
+      export alg.*
 end IncidentMastersRepository
 
 trait MemberAliasesAlg[F0[_]]:
@@ -147,8 +138,5 @@ object MembersRepository:
       transactK(alg.findByDiscordUserId(userId))
 
   def liftIdentity[F[_]](alg: MembersAlg[F]): MembersRepository[F] = new MembersRepository[F]:
-    def list: F[List[momo.api.domain.Member]] = alg.list
-    def find(id: MemberId): F[Option[momo.api.domain.Member]] = alg.find(id)
-    def findByDiscordUserId(userId: UserId): F[Option[momo.api.domain.Member]] = alg
-      .findByDiscordUserId(userId)
+    export alg.*
 end MembersRepository

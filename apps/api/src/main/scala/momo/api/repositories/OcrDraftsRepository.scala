@@ -23,6 +23,5 @@ object OcrDraftsRepository:
     def find(draftId: OcrDraftId): F[Option[OcrDraft]] = transactK(alg.find(draftId))
 
   def liftIdentity[F[_]](alg: OcrDraftsAlg[F]): OcrDraftsRepository[F] = new OcrDraftsRepository[F]:
-    def create(draft: OcrDraft): F[Unit] = alg.create(draft)
-    def find(draftId: OcrDraftId): F[Option[OcrDraft]] = alg.find(draftId)
+    export alg.*
 end OcrDraftsRepository

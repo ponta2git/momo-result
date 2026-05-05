@@ -26,7 +26,5 @@ object HeldEventsRepository:
   /** InMemory facade: the algebra already runs in `F`, so the lift is identity. */
   def liftIdentity[F[_]](alg: HeldEventsAlg[F]): HeldEventsRepository[F] =
     new HeldEventsRepository[F]:
-      def list(query: Option[String], limit: Int): F[List[HeldEvent]] = alg.list(query, limit)
-      def find(id: HeldEventId): F[Option[HeldEvent]] = alg.find(id)
-      def create(event: HeldEvent): F[Unit] = alg.create(event)
+      export alg.*
 end HeldEventsRepository

@@ -105,31 +105,5 @@ object MatchDraftsRepository:
 
   def liftIdentity[F[_]](alg: MatchDraftsAlg[F]): MatchDraftsRepository[F] =
     new MatchDraftsRepository[F]:
-      def create(draft: MatchDraft): F[Unit] = alg.create(draft)
-      def update(draft: MatchDraft, updatedAt: Instant): F[Boolean] = alg.update(draft, updatedAt)
-      def find(id: MatchDraftId): F[Option[MatchDraft]] = alg.find(id)
-      def list(filter: ListFilter): F[List[MatchDraft]] = alg.list(filter)
-      def markConfirmed(
-          draftId: MatchDraftId,
-          confirmedMatchId: MatchId,
-          updatedAt: Instant,
-      ): F[Boolean] = alg.markConfirmed(draftId, confirmedMatchId, updatedAt)
-      def markOcrFailed(draftId: MatchDraftId, updatedAt: Instant): F[Boolean] = alg
-        .markOcrFailed(draftId, updatedAt)
-      def cancel(draftId: MatchDraftId, updatedAt: Instant): F[Boolean] = alg
-        .cancel(draftId, updatedAt)
-      def attachOcrArtifacts(
-          draftId: MatchDraftId,
-          screenType: ScreenType,
-          sourceImageId: ImageId,
-          ocrDraftId: OcrDraftId,
-          updatedAt: Instant,
-      ): F[Boolean] = alg
-        .attachOcrArtifacts(draftId, screenType, sourceImageId, ocrDraftId, updatedAt)
-      def markSourceImagesRetention(
-          draftId: MatchDraftId,
-          retainedUntil: Option[Instant],
-          deletedAt: Option[Instant],
-          updatedAt: Instant,
-      ): F[Boolean] = alg.markSourceImagesRetention(draftId, retainedUntil, deletedAt, updatedAt)
+      export alg.*
 end MatchDraftsRepository

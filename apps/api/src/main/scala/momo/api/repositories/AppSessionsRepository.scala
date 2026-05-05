@@ -52,9 +52,5 @@ object AppSessionsRepository:
 
   def liftIdentity[F[_]](alg: AppSessionsAlg[F]): AppSessionsRepository[F] =
     new AppSessionsRepository[F]:
-      def find(id: String): F[Option[AppSession]] = alg.find(id)
-      def upsert(session: AppSession): F[Unit] = alg.upsert(session)
-      def delete(id: String): F[Unit] = alg.delete(id)
-      def touchLastSeen(id: String, lastSeenAt: Instant): F[Unit] = alg
-        .touchLastSeen(id, lastSeenAt)
+      export alg.*
 end AppSessionsRepository

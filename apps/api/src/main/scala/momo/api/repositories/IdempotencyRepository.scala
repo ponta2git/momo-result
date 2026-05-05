@@ -99,8 +99,5 @@ object IdempotencyRepository:
   /** InMemory facade: the algebra already runs in `F`, so the lift is identity. */
   def liftIdentity[F[_]](alg: IdempotencyAlg[F]): IdempotencyRepository[F] =
     new IdempotencyRepository[F]:
-      def lookup(key: String, memberId: MemberId, endpoint: String): F[Option[IdempotencyRecord]] =
-        alg.lookup(key, memberId, endpoint)
-      def record(entry: IdempotencyRecord): F[Unit] = alg.record(entry)
-      def cleanup(now: Instant): F[Int] = alg.cleanup(now)
+      export alg.*
 end IdempotencyRepository

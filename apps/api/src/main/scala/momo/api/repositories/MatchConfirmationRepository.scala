@@ -27,9 +27,5 @@ object MatchConfirmationRepository:
 
   def liftIdentity[F[_]](alg: MatchConfirmationAlg[F]): MatchConfirmationRepository[F] =
     new MatchConfirmationRepository[F]:
-      def confirm(
-          record: MatchRecord,
-          draftId: Option[MatchDraftId],
-          updatedAt: Instant,
-      ): F[Boolean] = alg.confirm(record, draftId, updatedAt)
+      export alg.*
 end MatchConfirmationRepository

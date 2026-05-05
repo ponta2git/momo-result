@@ -49,5 +49,5 @@ object MatchListReadModel:
     def list(filter: Filter): F[List[MatchListItem]] = transactK(alg.list(filter))
 
   def liftIdentity[F[_]](alg: MatchListAlg[F]): MatchListReadModel[F] = new MatchListReadModel[F]:
-    def list(filter: Filter): F[List[MatchListItem]] = alg.list(filter)
+    export alg.*
 end MatchListReadModel

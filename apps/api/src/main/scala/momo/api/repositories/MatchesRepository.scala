@@ -71,22 +71,5 @@ object MatchesRepository:
       transactK(alg.countByHeldEvents(heldEventIds))
 
   def liftIdentity[F[_]](alg: MatchesAlg[F]): MatchesRepository[F] = new MatchesRepository[F]:
-    def create(record: MatchRecord): F[Unit] = alg.create(record)
-    def update(record: MatchRecord, updatedAt: java.time.Instant): F[Unit] = alg
-      .update(record, updatedAt)
-    def delete(id: MatchId): F[Boolean] = alg.delete(id)
-    def find(id: MatchId): F[Option[MatchRecord]] = alg.find(id)
-    def list(filter: ListFilter): F[List[MatchRecord]] = alg.list(filter)
-    def listByHeldEvent(heldEventId: HeldEventId): F[List[MatchRecord]] = alg
-      .listByHeldEvent(heldEventId)
-    def existsMatchNo(heldEventId: HeldEventId, matchNoInEvent: Int): F[Boolean] = alg
-      .existsMatchNo(heldEventId, matchNoInEvent)
-    def existsMatchNoExcept(
-        heldEventId: HeldEventId,
-        matchNoInEvent: Int,
-        excludeMatchId: MatchId,
-    ): F[Boolean] = alg.existsMatchNoExcept(heldEventId, matchNoInEvent, excludeMatchId)
-    def maxMatchNo(heldEventId: HeldEventId): F[Int] = alg.maxMatchNo(heldEventId)
-    def countByHeldEvents(heldEventIds: List[HeldEventId]): F[Map[HeldEventId, Int]] = alg
-      .countByHeldEvents(heldEventIds)
+    export alg.*
 end MatchesRepository

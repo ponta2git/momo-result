@@ -3,6 +3,7 @@ package momo.api.adapters
 import java.nio.file.{Files, Path}
 
 import cats.effect.Sync
+import cats.effect.std.Random
 import cats.syntax.all.*
 
 import momo.api.domain.StoredImage
@@ -10,7 +11,7 @@ import momo.api.domain.ids.*
 import momo.api.errors.AppError
 import momo.api.repositories.ImageStore
 
-final class LocalFsImageStore[F[_]: Sync](root: Path) extends ImageStore[F]:
+final class LocalFsImageStore[F[_]: Sync: Random](root: Path) extends ImageStore[F]:
   import LocalFsImageStore.*
 
   override def save(

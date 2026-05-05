@@ -1,17 +1,15 @@
 package momo.api.domain
 
-import java.security.SecureRandom
 import java.util.UUID
 
-import cats.effect.Sync
+import cats.effect.std.Random
 import cats.syntax.all.*
-import cats.{Eq, Order, Show}
+import cats.{Apply, Eq, Order, Show}
 
 object ids:
   private object IdGenerator:
-    private val rng = SecureRandom()
-    def next[F[_]: Sync]: F[String] = Sync[F]
-      .delay(rng.synchronized(UUID(rng.nextLong(), rng.nextLong()).toString))
+    def next[F[_]: Apply: Random]: F[String] = (Random[F].nextLong, Random[F].nextLong)
+      .mapN((hi, lo) => UUID(hi, lo).toString)
 
   private[domain] trait IdCompanion[Id]:
     protected def make(s: String): Id
@@ -22,7 +20,7 @@ object ids:
     given Show[Id] = Show.show(underlying)
     given Order[Id] = Order.from((a, b) => underlying(a).compareTo(underlying(b)))
     given CanEqual[Id, Id] = CanEqual.derived
-    def fresh[F[_]: Sync]: F[Id] = IdGenerator.next[F].map(apply)
+    def fresh[F[_]: Apply: Random]: F[Id] = IdGenerator.next[F].map(apply)
 
   opaque type OcrJobId = String
   object OcrJobId extends IdCompanion[OcrJobId]:

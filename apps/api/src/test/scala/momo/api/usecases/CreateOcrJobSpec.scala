@@ -53,7 +53,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         requestIdLookup = IO.pure(Some("test-req-id")),
       )
       created <- usecase
-        .run(CreateOcrJobCommand(image.imageId, "total_assets", OcrJobHints(), None))
+        .run(CreateOcrJobCommand(image.imageId, "total_assets", OcrJobHints.empty, None))
         .flatMap(fromAppEither)
       foundJob <- jobs.find(created.job.id)
       foundDraft <- drafts.find(created.draft.id)
@@ -105,7 +105,8 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         },
         requestIdLookup = IO.pure(None),
       )
-      result <- usecase.run(CreateOcrJobCommand(image.imageId, "total_assets", OcrJobHints(), None))
+      result <- usecase
+        .run(CreateOcrJobCommand(image.imageId, "total_assets", OcrJobHints.empty, None))
     yield result match
       case Left(_: AppError.Internal) => ()
       case other => fail(s"expected Left(AppError.Internal), got: $other")
@@ -153,7 +154,8 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         },
         requestIdLookup = IO.pure(None),
       )
-      result <- usecase.run(CreateOcrJobCommand(image.imageId, "total_assets", OcrJobHints(), None))
+      result <- usecase
+        .run(CreateOcrJobCommand(image.imageId, "total_assets", OcrJobHints.empty, None))
       logged <- ref.get
     yield
       // Original AppError.Internal is still surfaced to the caller (enqueue failure not swallowed).

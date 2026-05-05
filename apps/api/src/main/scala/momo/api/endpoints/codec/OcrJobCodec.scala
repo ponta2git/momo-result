@@ -10,7 +10,7 @@ object OcrJobCodec:
   def toCreateCommand(request: CreateOcrJobRequest): CreateOcrJobCommand = CreateOcrJobCommand(
     imageId = ImageId(request.imageId),
     requestedImageType = request.requestedImageType,
-    ocrHints = request.ocrHints.getOrElse(OcrJobHints()),
+    ocrHints = request.ocrHints.getOrElse(OcrJobHints.empty),
     matchDraftId = request.matchDraftId.map(MatchDraftId(_)),
   )
 

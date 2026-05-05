@@ -19,7 +19,7 @@ final class OcrQueuePayloadSpec extends FunSuite:
       requestedScreenType = ScreenType.TotalAssets,
       attempt = 1,
       enqueuedAt = Instant.parse("2026-04-29T11:40:16Z"),
-      hints = OcrJobHints(),
+      hints = OcrJobHints.empty,
       requestId = None,
     )
 
@@ -70,7 +70,7 @@ final class OcrQueuePayloadSpec extends FunSuite:
       requestedScreenType = ScreenType.TotalAssets,
       attempt = 1,
       enqueuedAt = Instant.parse("2026-04-29T11:40:16Z"),
-      hints = OcrJobHints(),
+      hints = OcrJobHints.empty,
       requestId = None,
     )
     assertEquals(basePayload.fields.get(OcrQueuePayload.RequestIdKey), None)
@@ -83,7 +83,7 @@ final class OcrQueuePayloadSpec extends FunSuite:
       requestedScreenType = ScreenType.TotalAssets,
       attempt = 1,
       enqueuedAt = Instant.parse("2026-04-29T11:40:16Z"),
-      hints = OcrJobHints(),
+      hints = OcrJobHints.empty,
       requestId = Some("abc-123_DEF"),
     )
     assertEquals(withId.fields.get(OcrQueuePayload.RequestIdKey), Some("abc-123_DEF"))
@@ -96,7 +96,7 @@ final class OcrQueuePayloadSpec extends FunSuite:
       requestedScreenType = ScreenType.TotalAssets,
       attempt = 1,
       enqueuedAt = Instant.parse("2026-04-29T11:40:16Z"),
-      hints = OcrJobHints(),
+      hints = OcrJobHints.empty,
       requestId = Some(""),
     )
     assertEquals(withEmpty.fields.get(OcrQueuePayload.RequestIdKey), None)

@@ -9,7 +9,7 @@ import momo.api.endpoints.codec.OcrHintsCodec.given
 
 final class OcrHintsCodecSpec extends FunSuite:
   test("encodes an empty OcrJobHints with all-null Option / empty List wire shape") {
-    val empty = OcrJobHints()
+    val empty = OcrJobHints.empty
     val json = empty.asJson.noSpaces
 
     assertEquals(
@@ -49,7 +49,7 @@ final class OcrHintsCodecSpec extends FunSuite:
       """{"gameTitle":null,"layoutFamily":null,"knownPlayerAliases":[],"computerPlayerAliases":[]}"""
     )
 
-    assertEquals(parsed, Right(OcrJobHints()))
+    assertEquals(parsed, Right(OcrJobHints.empty))
   }
 
   test("PlayerAliasHint round-trips") {

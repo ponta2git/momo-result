@@ -41,10 +41,11 @@ object MatchDraftModule:
           nowF,
           MatchDraftCodec.parseInstantOption[F](request.playedAt).flatMap {
             case Left(error) => Async[F].pure(Left(security.toProblem(error)))
-            case Right(playedAt) => security.respond(
-                createMatchDraft
-                  .run(MatchDraftCodec.toCreateCommand(request, playedAt), member.memberId)
-              )(MatchDraftResponse.from)
+            case Right(playedAt) => MatchDraftCodec.toCreateCommand(request, playedAt) match
+                case Left(error) => Async[F].pure(Left(security.toProblem(error)))
+                case Right(command) => security.respond(
+                    createMatchDraft.run(command, member.memberId)
+                  )(MatchDraftResponse.from)
           },
         )
       }

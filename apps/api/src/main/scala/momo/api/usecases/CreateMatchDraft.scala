@@ -23,7 +23,7 @@ final case class CreateMatchDraftCommand(
     ownerMemberId: Option[MemberId],
     mapMasterId: Option[MapMasterId],
     playedAt: Option[Instant],
-    status: Option[String],
+    status: Option[MatchDraftStatus],
 )
 
 final class CreateMatchDraft[F[_]: MonadThrow](
@@ -37,7 +37,6 @@ final class CreateMatchDraft[F[_]: MonadThrow](
 ):
   def run(command: CreateMatchDraftCommand, createdBy: MemberId): F[Either[AppError, MatchDraft]] =
     (for
-      status <- EitherT.fromEither[F](parseStatus(command.status))
       _ <- EitherT.fromEither[F](validateMatchNo(command.matchNoInEvent))
       _ <- validateForeignKeys(command)
       id <- EitherT.liftF(nextId)
@@ -45,7 +44,7 @@ final class CreateMatchDraft[F[_]: MonadThrow](
       draft = MatchDraft(
         id = MatchDraftId(id),
         createdByMemberId = createdBy,
-        status = status,
+        status = command.status.getOrElse(MatchDraftStatus.DraftReady),
         heldEventId = command.heldEventId,
         matchNoInEvent = command.matchNoInEvent,
         gameTitleId = command.gameTitleId,
@@ -68,12 +67,6 @@ final class CreateMatchDraft[F[_]: MonadThrow](
       )
       _ <- EitherT.liftF(matchDrafts.create(draft))
     yield draft).value
-
-  private def parseStatus(status: Option[String]): Either[AppError, MatchDraftStatus] = status match
-    case None => Right(MatchDraftStatus.DraftReady)
-    case Some(value) => MatchDraftStatus.fromWire(value).toRight(AppError.ValidationFailed(
-        s"status must be one of ocr_running, ocr_failed, draft_ready, needs_review, confirmed, cancelled: $value"
-      ))
 
   private def validateMatchNo(matchNoInEvent: Option[Int]): Either[AppError, Unit] =
     matchNoInEvent match

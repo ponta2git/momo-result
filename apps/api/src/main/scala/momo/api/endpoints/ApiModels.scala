@@ -92,9 +92,9 @@ object OcrDraftResponse:
     requestedImageType = draft.requestedScreenType.wire,
     detectedImageType = draft.detectedScreenType.map(_.wire),
     profileId = draft.profileId,
-    payloadJson = draft.payloadJson,
-    warningsJson = draft.warningsJson,
-    timingsMsJson = draft.timingsMsJson,
+    payloadJson = io.circe.parser.parse(draft.payloadJson).getOrElse(Json.Null),
+    warningsJson = io.circe.parser.parse(draft.warningsJson).getOrElse(Json.Null),
+    timingsMsJson = io.circe.parser.parse(draft.timingsMsJson).getOrElse(Json.Null),
     createdAt = DateTimeFormatter.ISO_INSTANT.format(draft.createdAt),
     updatedAt = DateTimeFormatter.ISO_INSTANT.format(draft.updatedAt),
   )

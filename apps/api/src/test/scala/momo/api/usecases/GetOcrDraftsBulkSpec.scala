@@ -3,7 +3,6 @@ package momo.api.usecases
 import java.time.Instant
 
 import cats.effect.IO
-import io.circe.Json
 import sttp.model.StatusCode
 
 import momo.api.MomoCatsEffectSuite
@@ -21,9 +20,9 @@ final class GetOcrDraftsBulkSpec extends MomoCatsEffectSuite:
     requestedScreenType = ScreenType.TotalAssets,
     detectedScreenType = None,
     profileId = None,
-    payloadJson = Json.obj("players" -> Json.arr()),
-    warningsJson = Json.arr(),
-    timingsMsJson = Json.obj(),
+    payloadJson = """{"players":[]}""",
+    warningsJson = "[]",
+    timingsMsJson = "{}",
     createdAt = timestamp,
     updatedAt = timestamp,
   )

@@ -5,7 +5,6 @@ import java.time.Instant
 import cats.MonadThrow
 import cats.data.EitherT
 import cats.syntax.all.*
-import io.circe.Json
 
 import momo.api.domain.*
 import momo.api.domain.ids.*
@@ -113,17 +112,9 @@ object CreateOcrJob:
     requestedScreenType = screenType,
     detectedScreenType = None,
     profileId = None,
-    payloadJson = Json.obj(
-      "requested_screen_type" -> Json.fromString(screenType.wire),
-      "detected_screen_type" -> Json.Null,
-      "profile_id" -> Json.Null,
-      "players" -> Json.arr(),
-      "category_payload" -> Json.obj(),
-      "warnings" -> Json.arr(),
-      "raw_snippets" -> Json.Null,
-    ),
-    warningsJson = Json.arr(),
-    timingsMsJson = Json.obj(),
+    payloadJson = OcrDraftPayloads.initialPayload(screenType),
+    warningsJson = OcrDraftPayloads.initialWarnings,
+    timingsMsJson = OcrDraftPayloads.initialTimings,
     createdAt = createdAt,
     updatedAt = createdAt,
   )

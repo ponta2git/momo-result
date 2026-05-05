@@ -8,7 +8,7 @@ import doobie.*
 import doobie.implicits.*
 import doobie.postgres.circe.jsonb.implicits.*
 import doobie.postgres.implicits.*
-import io.circe.Json
+import io.circe.{parser, Json}
 
 import momo.api.domain.ids.*
 import momo.api.domain.{OcrDraft, ScreenType}
@@ -37,14 +37,20 @@ final class PostgresOcrDraftsRepository[F[_]: MonadCancelThrow](transactor: Tran
     requestedScreenType = r._3,
     detectedScreenType = r._4,
     profileId = r._5,
-    payloadJson = r._6,
-    warningsJson = r._7,
-    timingsMsJson = r._8,
+    payloadJson = r._6.noSpaces,
+    warningsJson = r._7.noSpaces,
+    timingsMsJson = r._8.noSpaces,
     createdAt = r._9,
     updatedAt = r._10,
   )
 
-  override def create(draft: OcrDraft): F[Unit] = sql"""
+  private def asJson(raw: String): Json = parser.parse(raw).getOrElse(Json.Null)
+
+  override def create(draft: OcrDraft): F[Unit] =
+    val payload = asJson(draft.payloadJson)
+    val warnings = asJson(draft.warningsJson)
+    val timings = asJson(draft.timingsMsJson)
+    sql"""
       INSERT INTO ocr_drafts (
         id, job_id,
         requested_screen_type, detected_screen_type, profile_id,
@@ -53,7 +59,7 @@ final class PostgresOcrDraftsRepository[F[_]: MonadCancelThrow](transactor: Tran
       ) VALUES (
         ${draft.id}, ${draft.jobId},
         ${draft.requestedScreenType}, ${draft.detectedScreenType}, ${draft.profileId},
-        ${draft.payloadJson}, ${draft.warningsJson}, ${draft.timingsMsJson},
+        $payload, $warnings, $timings,
         ${draft.createdAt}, ${draft.updatedAt}
       )
     """.update.run.void.transact(transactor)
@@ -64,3 +70,4 @@ final class PostgresOcrDraftsRepository[F[_]: MonadCancelThrow](transactor: Tran
       FROM ocr_drafts
       WHERE id = $draftId
     """.query[Row].option.map(_.map(toDraft)).transact(transactor)
+end PostgresOcrDraftsRepository

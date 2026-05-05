@@ -3,11 +3,13 @@ package momo.api.auth
 import java.net.http.{HttpClient, HttpRequest, HttpResponse}
 import java.net.{URI, URLEncoder}
 import java.nio.charset.StandardCharsets
-import java.security.{MessageDigest, SecureRandom}
+import java.security.MessageDigest
 import java.time.Instant
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
+import cats.Functor
+import cats.effect.std.SecureRandom
 import cats.effect.{Async, Ref, Resource, Sync}
 import cats.syntax.all.*
 import io.circe.Decoder
@@ -99,7 +101,7 @@ object JavaDiscordOAuthClient:
 
 final case class AuthenticatedSession(member: AuthenticatedMember, session: AppSession)
 
-final class SessionService[F[_]: Sync](
+final class SessionService[F[_]: Sync: SecureRandom](
     sessions: AppSessionsRepository[F],
     members: MembersRepository[F],
     config: AuthConfig,
@@ -159,7 +161,7 @@ final class CsrfTokenService:
         ) => Right(())
     case _ => Left(AppError.Forbidden("A valid CSRF token is required."))
 
-final class OAuthStateCodec[F[_]: Sync](config: AuthConfig, now: F[Instant]):
+final class OAuthStateCodec[F[_]: Sync: SecureRandom](config: AuthConfig, now: F[Instant]):
   private val separator = "."
 
   def create: F[String] =
@@ -220,13 +222,8 @@ object LoginRateLimiter:
     .of[F, Map[String, Bucket]](Map.empty).map(LoginRateLimiter(_, maxPerMinute, now))
 
 object SecureTokenGenerator:
-  private val random = SecureRandom()
-
-  def token[F[_]: Sync](byteLength: Int): F[String] = Sync[F].delay {
-    val bytes = Array.ofDim[Byte](byteLength)
-    random.nextBytes(bytes)
-    Base64Url.encode(bytes)
-  }
+  def token[F[_]: Functor: SecureRandom](byteLength: Int): F[String] = SecureRandom[F]
+    .nextBytes(byteLength).map(Base64Url.encode)
 
 object Base64Url:
   private val encoder = java.util.Base64.getUrlEncoder.withoutPadding()

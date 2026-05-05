@@ -1,6 +1,6 @@
 package momo.api.http
 
-import cats.effect.std.{Random, SecureRandom}
+import cats.effect.std.SecureRandom
 import cats.effect.{Async, Clock, Resource}
 import cats.syntax.all.*
 import org.http4s.HttpApp as Http4sApp
@@ -62,12 +62,12 @@ object HttpApp:
    * HikariCP; otherwise we wire up InMemory adapters (used by tests and the early dev environment).
    */
   def wired[F[_]: Async](config: AppConfig): Resource[F, Wired[F]] = Resource
-    .eval(SecureRandom.javaSecuritySecureRandom[F]).flatMap { case given Random[F] =>
+    .eval(SecureRandom.javaSecuritySecureRandom[F]).flatMap { case given SecureRandom[F] =>
       JavaDiscordOAuthClient.resource[F](config.auth)
         .flatMap(oauthClient => wiredInner[F](config, oauthClient))
     }
 
-  private def wiredInner[F[_]: Async: Random](
+  private def wiredInner[F[_]: Async: SecureRandom](
       config: AppConfig,
       oauthClient: DiscordOAuthClient[F],
   ): Resource[F, Wired[F]] = config.database match
@@ -158,7 +158,7 @@ object HttpApp:
     case Some(redis) => RedisQueueProducer.resource[F](redis).widen
     case None => Resource.eval(InMemoryQueueProducer.create[F]).widen
 
-  private def assemble[F[_]: Async: Random](
+  private def assemble[F[_]: Async: SecureRandom](
       config: AppConfig,
       queue: momo.api.repositories.QueueProducer[F],
       jobs: OcrJobsRepository[F],

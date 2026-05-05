@@ -235,33 +235,5 @@ final class PostgresMatchDraftsRepository[F[_]: MonadCancelThrow](transactor: Tr
   private val delegate: MatchDraftsRepository[F] = MatchDraftsRepository
     .fromConnectionIO(PostgresMatchDrafts.alg, Database.transactK(transactor))
 
-  override def create(draft: MatchDraft): F[Unit] = delegate.create(draft)
-  override def update(draft: MatchDraft, updatedAt: Instant): F[Boolean] = delegate
-    .update(draft, updatedAt)
-  override def find(id: MatchDraftId): F[Option[MatchDraft]] = delegate.find(id)
-  override def list(filter: MatchDraftsRepository.ListFilter): F[List[MatchDraft]] = delegate
-    .list(filter)
-  override def markConfirmed(
-      draftId: MatchDraftId,
-      confirmedMatchId: MatchId,
-      updatedAt: Instant,
-  ): F[Boolean] = delegate.markConfirmed(draftId, confirmedMatchId, updatedAt)
-  override def markOcrFailed(draftId: MatchDraftId, updatedAt: Instant): F[Boolean] = delegate
-    .markOcrFailed(draftId, updatedAt)
-  override def cancel(draftId: MatchDraftId, updatedAt: Instant): F[Boolean] = delegate
-    .cancel(draftId, updatedAt)
-  override def attachOcrArtifacts(
-      draftId: MatchDraftId,
-      screenType: ScreenType,
-      sourceImageId: ImageId,
-      ocrDraftId: OcrDraftId,
-      updatedAt: Instant,
-  ): F[Boolean] = delegate
-    .attachOcrArtifacts(draftId, screenType, sourceImageId, ocrDraftId, updatedAt)
-  override def markSourceImagesRetention(
-      draftId: MatchDraftId,
-      retainedUntil: Option[Instant],
-      deletedAt: Option[Instant],
-      updatedAt: Instant,
-  ): F[Boolean] = delegate.markSourceImagesRetention(draftId, retainedUntil, deletedAt, updatedAt)
+  export delegate.*
 end PostgresMatchDraftsRepository

@@ -232,6 +232,5 @@ final class PostgresMatchListReadModel[F[_]: MonadCancelThrow](transactor: Trans
   private val delegate: MatchListReadModel[F] = MatchListReadModel
     .fromConnectionIO(PostgresMatchList.alg, Database.transactK(transactor))
 
-  override def list(filter: MatchListReadModel.Filter): F[List[MatchListItem]] = delegate
-    .list(filter)
+  export delegate.*
 end PostgresMatchListReadModel

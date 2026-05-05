@@ -230,23 +230,5 @@ final class PostgresMatchesRepository[F[_]: MonadCancelThrow](transactor: Transa
   private val delegate: MatchesRepository[F] = MatchesRepository
     .fromConnectionIO(PostgresMatches.alg, Database.transactK(transactor))
 
-  override def create(record: MatchRecord): F[Unit] = delegate.create(record)
-  override def update(record: MatchRecord, updatedAt: Instant): F[Unit] = delegate
-    .update(record, updatedAt)
-  override def delete(id: MatchId): F[Boolean] = delegate.delete(id)
-  override def find(id: MatchId): F[Option[MatchRecord]] = delegate.find(id)
-  override def list(filter: MatchesRepository.ListFilter): F[List[MatchRecord]] = delegate
-    .list(filter)
-  override def listByHeldEvent(heldEventId: HeldEventId): F[List[MatchRecord]] = delegate
-    .listByHeldEvent(heldEventId)
-  override def existsMatchNo(heldEventId: HeldEventId, matchNoInEvent: Int): F[Boolean] = delegate
-    .existsMatchNo(heldEventId, matchNoInEvent)
-  override def existsMatchNoExcept(
-      heldEventId: HeldEventId,
-      matchNoInEvent: Int,
-      excludeMatchId: MatchId,
-  ): F[Boolean] = delegate.existsMatchNoExcept(heldEventId, matchNoInEvent, excludeMatchId)
-  override def maxMatchNo(heldEventId: HeldEventId): F[Int] = delegate.maxMatchNo(heldEventId)
-  override def countByHeldEvents(heldEventIds: List[HeldEventId]): F[Map[HeldEventId, Int]] =
-    delegate.countByHeldEvents(heldEventIds)
+  export delegate.*
 end PostgresMatchesRepository

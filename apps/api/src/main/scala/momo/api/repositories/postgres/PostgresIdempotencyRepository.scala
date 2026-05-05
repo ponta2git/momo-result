@@ -122,11 +122,5 @@ final class PostgresIdempotencyRepository[F[_]: MonadCancelThrow](transactor: Tr
   private val delegate: IdempotencyRepository[F] = IdempotencyRepository
     .fromConnectionIO(PostgresIdempotency.alg, Database.transactK(transactor))
 
-  override def lookup(
-      key: String,
-      memberId: MemberId,
-      endpoint: String,
-  ): F[Option[IdempotencyRecord]] = delegate.lookup(key, memberId, endpoint)
-  override def record(entry: IdempotencyRecord): F[Unit] = delegate.record(entry)
-  override def cleanup(now: Instant): F[Int] = delegate.cleanup(now)
+  export delegate.*
 end PostgresIdempotencyRepository

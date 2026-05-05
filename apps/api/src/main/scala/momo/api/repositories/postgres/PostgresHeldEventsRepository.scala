@@ -56,8 +56,5 @@ final class PostgresHeldEventsRepository[F[_]: MonadCancelThrow](transactor: Tra
   private val delegate: HeldEventsRepository[F] = HeldEventsRepository
     .fromConnectionIO(PostgresHeldEvents.alg, Database.transactK(transactor))
 
-  override def list(query: Option[String], limit: Int): F[List[HeldEvent]] = delegate
-    .list(query, limit)
-  override def find(id: HeldEventId): F[Option[HeldEvent]] = delegate.find(id)
-  override def create(event: HeldEvent): F[Unit] = delegate.create(event)
+  export delegate.*
 end PostgresHeldEventsRepository

@@ -12,7 +12,7 @@ import doobie.util.fragments
 
 import momo.api.db.Database
 import momo.api.domain.ids.*
-import momo.api.domain.{FourPlayers, IncidentCounts, MatchRecord, PlayerResult}
+import momo.api.domain.{FourPlayers, IncidentCounts, IncidentKind, MatchRecord, PlayerResult}
 import momo.api.repositories.postgres.PostgresMatchInsertOps.insertMatchCascade
 import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.repositories.{MatchesAlg, MatchesRepository}
@@ -101,9 +101,11 @@ object PostgresMatches:
       playerRows: List[(MatchId, MemberId, Int, Int, Int, Int)],
       incidentRows: List[(MatchId, MemberId, IncidentMasterId, Int)],
   ): ConnectionIO[Map[MatchId, FourPlayers]] =
-    val incidentsByMatch: Map[MatchId, Map[MemberId, Map[IncidentMasterId, Int]]] = incidentRows
+    val incidentsByMatch: Map[MatchId, Map[MemberId, Map[IncidentKind, Int]]] = incidentRows
       .groupBy(_._1).view.mapValues { rows =>
-        rows.groupBy(_._2).view.mapValues(rs => rs.map(r => r._3 -> r._4).toMap).toMap
+        rows.groupBy(_._2).view.mapValues { rs =>
+          rs.iterator.flatMap(r => IncidentKindMapping.kindOf(r._3).map(_ -> r._4)).toMap
+        }.toMap
       }.toMap
 
     val playersByMatch: Map[MatchId, List[PlayerResult]] = playerRows.groupBy(_._1).view
@@ -117,14 +119,7 @@ object PostgresMatches:
             rank = rank,
             totalAssetsManYen = totalAssets,
             revenueManYen = revenue,
-            incidents = IncidentCounts(
-              destination = ic.getOrElse(IncidentCounts.IdDestination, 0),
-              plusStation = ic.getOrElse(IncidentCounts.IdPlusStation, 0),
-              minusStation = ic.getOrElse(IncidentCounts.IdMinusStation, 0),
-              cardStation = ic.getOrElse(IncidentCounts.IdCardStation, 0),
-              cardShop = ic.getOrElse(IncidentCounts.IdCardShop, 0),
-              suriNoGinji = ic.getOrElse(IncidentCounts.IdSuriNoGinji, 0),
-            ),
+            incidents = IncidentCounts.fromKindMap(ic),
           )
         }
       }.toMap

@@ -13,29 +13,28 @@ final case class IncidentCounts(
     suriNoGinji: Int,
 ):
   /**
-   * Pairs each count with its `incident_masters.id` in the canonical order. Used by the matches
-   * repository to insert the 6 required `match_incidents` rows per player.
+   * Pairs each count with its [[IncidentKind]] in the canonical order. The repository layer is
+   * responsible for translating each kind to the corresponding `incident_masters.id`.
    */
-  def entriesByMasterId: List[(IncidentMasterId, Int)] = List(
-    IncidentCounts.IdDestination -> destination,
-    IncidentCounts.IdPlusStation -> plusStation,
-    IncidentCounts.IdMinusStation -> minusStation,
-    IncidentCounts.IdCardStation -> cardStation,
-    IncidentCounts.IdCardShop -> cardShop,
-    IncidentCounts.IdSuriNoGinji -> suriNoGinji,
+  def entriesByKind: List[(IncidentKind, Int)] = List(
+    IncidentKind.Destination -> destination,
+    IncidentKind.PlusStation -> plusStation,
+    IncidentKind.MinusStation -> minusStation,
+    IncidentKind.CardStation -> cardStation,
+    IncidentKind.CardShop -> cardShop,
+    IncidentKind.SuriNoGinji -> suriNoGinji,
   )
 
 object IncidentCounts:
-  /**
-   * Stable IDs of the 6 fixed `incident_masters` rows. Must match the seed in
-   * momo-db/drizzle/0008_foamy_nekra.sql.
-   */
-  val IdDestination: IncidentMasterId = IncidentMasterId("incident_destination")
-  val IdPlusStation: IncidentMasterId = IncidentMasterId("incident_plus_station")
-  val IdMinusStation: IncidentMasterId = IncidentMasterId("incident_minus_station")
-  val IdCardStation: IncidentMasterId = IncidentMasterId("incident_card_station")
-  val IdCardShop: IncidentMasterId = IncidentMasterId("incident_card_shop")
-  val IdSuriNoGinji: IncidentMasterId = IncidentMasterId("incident_suri_no_ginji")
+  /** Builds an `IncidentCounts` from a kind-keyed map, defaulting missing kinds to 0. */
+  def fromKindMap(values: Map[IncidentKind, Int]): IncidentCounts = IncidentCounts(
+    destination = values.getOrElse(IncidentKind.Destination, 0),
+    plusStation = values.getOrElse(IncidentKind.PlusStation, 0),
+    minusStation = values.getOrElse(IncidentKind.MinusStation, 0),
+    cardStation = values.getOrElse(IncidentKind.CardStation, 0),
+    cardShop = values.getOrElse(IncidentKind.CardShop, 0),
+    suriNoGinji = values.getOrElse(IncidentKind.SuriNoGinji, 0),
+  )
 
 final case class PlayerResult(
     memberId: MemberId,

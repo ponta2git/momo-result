@@ -57,8 +57,8 @@ object PostgresMatchInsertOps:
 
     val incidentRows: List[(MatchId, MemberId, IncidentMasterId, Int, Instant)] = record.players
       .toList.flatMap { p =>
-        p.incidents.entriesByMasterId.map { case (incidentId, count) =>
-          (record.id, p.memberId, incidentId, count, record.createdAt)
+        p.incidents.entriesByKind.map { case (kind, count) =>
+          (record.id, p.memberId, IncidentKindMapping.masterId(kind), count, record.createdAt)
         }
       }
     val insertIncidents =

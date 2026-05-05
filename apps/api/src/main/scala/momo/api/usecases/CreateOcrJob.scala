@@ -5,6 +5,7 @@ import java.time.Instant
 import cats.MonadThrow
 import cats.data.EitherT
 import cats.syntax.all.*
+import org.typelevel.log4cats.LoggerFactory
 
 import momo.api.domain.*
 import momo.api.domain.ids.*
@@ -24,7 +25,7 @@ final case class CreateOcrJobCommand(
 
 final case class CreatedOcrJob(job: OcrJob, draft: OcrDraft, queuePayload: OcrQueuePayload)
 
-final class CreateOcrJob[F[_]: MonadThrow](
+final class CreateOcrJob[F[_]: MonadThrow: LoggerFactory](
     imageStore: ImageStore[F],
     jobs: OcrJobsRepository[F],
     drafts: OcrDraftsRepository[F],
@@ -35,6 +36,8 @@ final class CreateOcrJob[F[_]: MonadThrow](
     requestIdLookup: F[Option[String]],
 ):
   import CreateOcrJob.*
+
+  private val logger = LoggerFactory[F].getLoggerFromClass(classOf[CreateOcrJob[F]])
 
   def run(command: CreateOcrJobCommand): F[Either[AppError, CreatedOcrJob]] = (for
     screenType <- EitherT.fromEither[F](requestedScreenType(command))
@@ -81,14 +84,22 @@ final class CreateOcrJob[F[_]: MonadThrow](
         val markDraftFailure = command.matchDraftId match
           case Some(id) => matchDrafts.markOcrFailed(id, createdAt).void
           case None => MonadThrow[F].unit
-        // Wrap the compensation chain in `attempt` so a secondary failure (e.g. DB outage during
-        // markFailed / markDraftFailure) does not propagate and override the user-facing
-        // `AppError.Internal`. The user-visible result is always Internal regardless of
-        // compensation outcome.
-        // NOTE: replace `attempt.void` with structured logging once a `Logger[F]` is wired into
-        // usecases; tracked as a follow-up to phase6-ocr-compensation.
+        // Run compensation (mark job/draft failed) and log any secondary failure so it is not
+        // silently swallowed. The user-visible result remains AppError.Internal regardless of the
+        // compensation outcome; the original `error` from queue.publish is still surfaced via the
+        // log statement so observability does not lose the root cause.
+        // Logged fields are restricted to identifiers (jobId / draftId / matchDraftId) and the
+        // throwable. We never log image bytes, OAuth tokens, session IDs, CSRF tokens, or AppError
+        // detail strings here (they may carry user-facing copy that does not belong in error logs).
         val compensate =
-          (jobs.markFailed(jobId, queueFailure(error), createdAt) >> markDraftFailure).attempt.void
+          (jobs.markFailed(jobId, queueFailure(error), createdAt) >> markDraftFailure).attempt
+            .flatMap {
+              case Right(_) => MonadThrow[F].unit
+              case Left(compensationError) => logger
+                  .error(compensationError)(s"OCR enqueue compensation failed jobId=${jobId
+                      .value} draftId=${draftId.value}" + s" matchDraftId=${command.matchDraftId
+                      .fold("none")(_.value)} originalError=" + s"${error.getClass.getName}")
+            }
         compensate >> AppError.Internal("Failed to enqueue OCR job.").asLeft[CreatedOcrJob].pure[F]
       ,
       _ => CreatedOcrJob(job, draft, payload).asRight[AppError].pure[F],

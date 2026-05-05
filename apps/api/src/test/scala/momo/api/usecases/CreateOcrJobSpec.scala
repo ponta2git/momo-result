@@ -4,6 +4,8 @@ import java.nio.file.Files
 import java.time.Instant
 
 import cats.effect.IO
+import org.typelevel.log4cats.LoggerFactory
+import org.typelevel.log4cats.noop.NoOpFactory
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.adapters.{
@@ -14,8 +16,11 @@ import momo.api.domain.ids.OcrJobId
 import momo.api.domain.{OcrFailure, OcrJob, OcrJobHints}
 import momo.api.errors.AppError
 import momo.api.repositories.{OcrJobsRepository, OcrQueuePayload, QueueProducer}
+import momo.api.usecases.testing.CapturingLoggerFactory
 
 final class CreateOcrJobSpec extends MomoCatsEffectSuite:
+  private given LoggerFactory[IO] = NoOpFactory[IO]
+
   private val pngBytes: Array[Byte] =
     Array[Byte](0x89.toByte, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)
 
@@ -104,4 +109,68 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
     yield result match
       case Left(_: AppError.Internal) => ()
       case other => fail(s"expected Left(AppError.Internal), got: $other")
+  }
+
+  test("logs compensation failure exactly once when both queue.publish and markFailed fail") {
+    val queueError = new RuntimeException("boom-queue")
+    val markFailedError = new RuntimeException("boom-markFailed")
+
+    val failingQueue: QueueProducer[IO] = new QueueProducer[IO]:
+      override def publish(payload: OcrQueuePayload): IO[Unit] = IO.raiseError(queueError)
+
+    def failingJobs(delegate: OcrJobsRepository[IO]): OcrJobsRepository[IO] =
+      new OcrJobsRepository[IO]:
+        override def create(job: OcrJob): IO[Unit] = delegate.create(job)
+        override def find(jobId: OcrJobId): IO[Option[OcrJob]] = delegate.find(jobId)
+        override def markFailed(jobId: OcrJobId, failure: OcrFailure, now: Instant): IO[Unit] = IO
+          .raiseError(markFailedError)
+        override def cancelQueued(jobId: OcrJobId, now: Instant): IO[Boolean] = delegate
+          .cancelQueued(jobId, now)
+
+    for
+      capture <- CapturingLoggerFactory.create[IO]
+      (factory, ref) = capture
+      given LoggerFactory[IO] = factory
+      dir <- IO.blocking(Files.createTempDirectory("momo-api-create-job-log"))
+      imageStore = LocalFsImageStore[IO](dir)
+      image <- imageStore.save(Some("sample.png"), Some("image/png"), pngBytes)
+        .flatMap(fromAppEither)
+      jobsBase <- InMemoryOcrJobsRepository.create[IO]
+      jobs = failingJobs(jobsBase)
+      drafts <- InMemoryOcrDraftsRepository.create[IO]
+      matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
+      ids <- IO.ref(List("job-log-1", "draft-log-1"))
+      usecase = CreateOcrJob[IO](
+        imageStore = imageStore,
+        jobs = jobs,
+        drafts = drafts,
+        matchDrafts = matchDrafts,
+        queue = failingQueue,
+        now = IO.pure(Instant.parse("2026-04-29T11:40:16Z")),
+        nextId = ids.modify {
+          case head :: tail => tail -> head
+          case Nil => Nil -> "unexpected"
+        },
+        requestIdLookup = IO.pure(None),
+      )
+      result <- usecase.run(CreateOcrJobCommand(image.imageId, "total_assets", OcrJobHints(), None))
+      logged <- ref.get
+    yield
+      // Original AppError.Internal is still surfaced to the caller (enqueue failure not swallowed).
+      result match
+        case Left(_: AppError.Internal) => ()
+        case other => fail(s"expected Left(AppError.Internal), got: $other")
+      // Exactly one error log emitted, with the compensation (markFailed) throwable attached.
+      assertEquals(logged.size, 1)
+      val entry = logged.head
+      assertEquals(entry.throwable, Some(markFailedError))
+      assert(entry.message.contains("jobId=job-log-1"), s"message missing jobId: ${entry.message}")
+      assert(
+        entry.message.contains("draftId=draft-log-1"),
+        s"message missing draftId: ${entry.message}",
+      )
+      assert(
+        entry.message.contains("compensation"),
+        s"message missing 'compensation' marker: ${entry.message}",
+      )
   }

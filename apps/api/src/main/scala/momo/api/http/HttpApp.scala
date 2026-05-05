@@ -4,6 +4,8 @@ import cats.effect.std.{Random, SecureRandom}
 import cats.effect.{Async, Clock, Resource}
 import cats.syntax.all.*
 import org.http4s.HttpApp as Http4sApp
+import org.typelevel.log4cats.LoggerFactory
+import org.typelevel.log4cats.slf4j.Slf4jFactory
 
 import momo.api.adapters.{
   InMemoryAppSessionsRepository, InMemoryGameTitlesRepository, InMemoryHeldEventsRepository,
@@ -175,6 +177,7 @@ object HttpApp:
       idempotency: IdempotencyRepository[F],
       oauthClient: DiscordOAuthClient[F],
   ): F[Wired[F]] =
+    given LoggerFactory[F] = Slf4jFactory.create[F]
     val imageStore = LocalFsImageStore[F](config.imageTmpDir)
     val roster = MemberRoster.dev(config.devMemberIds)
     val uploadImage = UploadImage[F](imageStore)

@@ -9,13 +9,13 @@ import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
+import momo.api.db.Database
 import momo.api.domain.ids.*
 import momo.api.domain.{FailureCode, OcrFailure, OcrJob, OcrJobStatus, ScreenType}
-import momo.api.repositories.OcrJobsRepository
 import momo.api.repositories.postgres.PostgresMeta.given
+import momo.api.repositories.{OcrJobsAlg, OcrJobsRepository}
 
-final class PostgresOcrJobsRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
-    extends OcrJobsRepository[F]:
+object PostgresOcrJobs:
 
   private type Row = (
       OcrJobId,
@@ -152,47 +152,62 @@ final class PostgresOcrJobsRepository[F[_]: MonadCancelThrow](transactor: Transa
            created_at, updated_at
          FROM ocr_jobs"""
 
-  override def create(job: OcrJob): F[Unit] = sql"""
-      INSERT INTO ocr_jobs (
-        id, draft_id, image_id, image_path,
-        requested_screen_type, detected_screen_type,
-        status, attempt_count, worker_id,
-        failure_code, failure_message, failure_retryable, failure_user_action,
-        started_at, finished_at, duration_ms,
-        created_at, updated_at
-      ) VALUES (
-        ${job.id}, ${job.draftId}, ${job.imageId}, ${job.imagePath},
-        ${job.requestedScreenType}, ${job.detectedScreenType},
-        ${job.status}, ${job.attemptCount}, ${job.workerId},
-        ${job.failure.map(_.code)}, ${job.failure.map(_.message)},
-        ${job.failure.map(_.retryable)}, ${job.failure.flatMap(_.userAction)},
-        ${job.startedAt}, ${job.finishedAt}, ${job.durationMs},
-        ${job.createdAt}, ${job.updatedAt}
-      )
-    """.update.run.void.transact(transactor)
+  val alg: OcrJobsAlg[ConnectionIO] = new OcrJobsAlg[ConnectionIO]:
+    override def create(job: OcrJob): ConnectionIO[Unit] = sql"""
+        INSERT INTO ocr_jobs (
+          id, draft_id, image_id, image_path,
+          requested_screen_type, detected_screen_type,
+          status, attempt_count, worker_id,
+          failure_code, failure_message, failure_retryable, failure_user_action,
+          started_at, finished_at, duration_ms,
+          created_at, updated_at
+        ) VALUES (
+          ${job.id}, ${job.draftId}, ${job.imageId}, ${job.imagePath},
+          ${job.requestedScreenType}, ${job.detectedScreenType},
+          ${job.status}, ${job.attemptCount}, ${job.workerId},
+          ${job.failure.map(_.code)}, ${job.failure.map(_.message)},
+          ${job.failure.map(_.retryable)}, ${job.failure.flatMap(_.userAction)},
+          ${job.startedAt}, ${job.finishedAt}, ${job.durationMs},
+          ${job.createdAt}, ${job.updatedAt}
+        )
+      """.update.run.void
 
-  override def find(jobId: OcrJobId): F[Option[OcrJob]] = (selectAll ++ fr"WHERE id = $jobId")
-    .query[Row].option.flatMap {
-      case None => Option.empty[OcrJob].pure[ConnectionIO]
-      case Some(row) => toJob(row).map(Some(_))
-    }.transact(transactor)
+    override def find(jobId: OcrJobId): ConnectionIO[Option[OcrJob]] =
+      (selectAll ++ fr"WHERE id = $jobId").query[Row].option.flatMap {
+        case None => Option.empty[OcrJob].pure[ConnectionIO]
+        case Some(row) => toJob(row).map(Some(_))
+      }
 
-  override def markFailed(jobId: OcrJobId, failure: OcrFailure, now: Instant): F[Unit] = sql"""
-      UPDATE ocr_jobs SET
-        status = ${OcrJobStatus.Failed},
-        failure_code = ${failure.code},
-        failure_message = ${failure.message},
-        failure_retryable = ${failure.retryable},
-        failure_user_action = ${failure.userAction},
-        finished_at = $now,
-        updated_at = $now
-      WHERE id = $jobId
-    """.update.run.void.transact(transactor)
+    override def markFailed(
+        jobId: OcrJobId,
+        failure: OcrFailure,
+        now: Instant,
+    ): ConnectionIO[Unit] = sql"""
+        UPDATE ocr_jobs SET
+          status = ${OcrJobStatus.Failed},
+          failure_code = ${failure.code},
+          failure_message = ${failure.message},
+          failure_retryable = ${failure.retryable},
+          failure_user_action = ${failure.userAction},
+          finished_at = $now,
+          updated_at = $now
+        WHERE id = $jobId
+      """.update.run.void
 
-  override def cancelQueued(jobId: OcrJobId, now: Instant): F[Boolean] = sql"""
-      UPDATE ocr_jobs SET
-        status = ${OcrJobStatus.Cancelled},
-        finished_at = $now,
-        updated_at = $now
-      WHERE id = $jobId AND status = ${OcrJobStatus.Queued}
-    """.update.run.map(_ > 0).transact(transactor)
+    override def cancelQueued(jobId: OcrJobId, now: Instant): ConnectionIO[Boolean] = sql"""
+        UPDATE ocr_jobs SET
+          status = ${OcrJobStatus.Cancelled},
+          finished_at = $now,
+          updated_at = $now
+        WHERE id = $jobId AND status = ${OcrJobStatus.Queued}
+      """.update.run.map(_ > 0)
+end PostgresOcrJobs
+
+/** Backwards-compatible class facade. */
+final class PostgresOcrJobsRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
+    extends OcrJobsRepository[F]:
+  private val delegate: OcrJobsRepository[F] = OcrJobsRepository
+    .fromConnectionIO(PostgresOcrJobs.alg, Database.transactK(transactor))
+
+  export delegate.*
+end PostgresOcrJobsRepository

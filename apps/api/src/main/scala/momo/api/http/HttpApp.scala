@@ -13,8 +13,8 @@ import momo.api.adapters.{
   LocalFsImageStore, RedisQueueProducer,
 }
 import momo.api.auth.{
-  CsrfTokenService, JavaDiscordOAuthClient, LoginRateLimiter, MemberRoster, OAuthStateCodec,
-  SessionService,
+  CsrfTokenService, DiscordOAuthClient, JavaDiscordOAuthClient, LoginRateLimiter, MemberRoster,
+  OAuthStateCodec, SessionService,
 }
 import momo.api.config.AppConfig
 import momo.api.db.Database
@@ -58,7 +58,13 @@ object HttpApp:
    * Build all dependencies. When `config.database` is set we use PostgreSQL repositories backed by
    * HikariCP; otherwise we wire up InMemory adapters (used by tests and the early dev environment).
    */
-  def wired[F[_]: Async](config: AppConfig): Resource[F, Wired[F]] = config.database match
+  def wired[F[_]: Async](config: AppConfig): Resource[F, Wired[F]] = JavaDiscordOAuthClient
+    .resource[F](config.auth).flatMap(oauthClient => wiredInner[F](config, oauthClient))
+
+  private def wiredInner[F[_]: Async](
+      config: AppConfig,
+      oauthClient: DiscordOAuthClient[F],
+  ): Resource[F, Wired[F]] = config.database match
     case Some(db) => Resource.eval(Async[F].executionContext).flatMap { connectExecutionContext =>
         (Database.transactor[F](db, connectExecutionContext), queueResource[F](config)).tupled
           .evalMap { (transactor, queue) =>
@@ -96,6 +102,7 @@ object HttpApp:
               seasonMasters = seasonMasters,
               incidentMasters = incidentMasters,
               idempotency = idempotency,
+              oauthClient = oauthClient,
             )
           }
       }
@@ -134,6 +141,7 @@ object HttpApp:
             seasonMasters = seasonMasters,
             incidentMasters = incidentMasters,
             idempotency = idempotency,
+            oauthClient = oauthClient,
           )
         yield wired
       }
@@ -161,6 +169,7 @@ object HttpApp:
       seasonMasters: SeasonMastersRepository[F],
       incidentMasters: IncidentMastersRepository[F],
       idempotency: IdempotencyRepository[F],
+      oauthClient: DiscordOAuthClient[F],
   ): F[Wired[F]] =
     val imageStore = LocalFsImageStore[F](config.imageTmpDir)
     val roster = MemberRoster.dev(config.devMemberIds)
@@ -170,7 +179,6 @@ object HttpApp:
     val sessionService = SessionService[F](appSessions, members, config.auth, nowF)
     val csrfTokenService = CsrfTokenService()
     val oauthStateCodec = OAuthStateCodec[F](config.auth, nowF)
-    val oauthClient = JavaDiscordOAuthClient[F](config.auth)
     val createOcrJob = CreateOcrJob[F](
       imageStore = imageStore,
       jobs = jobs,

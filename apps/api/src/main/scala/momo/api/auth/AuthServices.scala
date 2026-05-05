@@ -8,7 +8,7 @@ import java.time.Instant
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
-import cats.effect.{Async, Ref, Sync}
+import cats.effect.{Async, Ref, Resource, Sync}
 import cats.syntax.all.*
 import io.circe.Decoder
 import io.circe.parser.decode
@@ -23,11 +23,11 @@ trait DiscordOAuthClient[F[_]]:
   def authorizationUrl(state: String): F[String]
   def fetchUser(code: String): F[Either[AppError, DiscordUser]]
 
-final class JavaDiscordOAuthClient[F[_]: Async](config: AuthConfig) extends DiscordOAuthClient[F]:
+final class JavaDiscordOAuthClient[F[_]: Async](config: AuthConfig, client: HttpClient)
+    extends DiscordOAuthClient[F]:
   private val authorizeUrl = "https://discord.com/oauth2/authorize"
   private val tokenUrl = "https://discord.com/api/oauth2/token"
   private val userUrl = "https://discord.com/api/users/@me"
-  private val client = HttpClient.newHttpClient()
 
   override def authorizationUrl(state: String): F[String] = Async[F].delay {
     val params = Map(
@@ -91,6 +91,11 @@ final class JavaDiscordOAuthClient[F[_]: Async](config: AuthConfig) extends Disc
   private final case class DiscordUserResponse(id: String)
   private object DiscordUserResponse:
     given Decoder[DiscordUserResponse] = Decoder.forProduct1("id")(DiscordUserResponse(_))
+
+object JavaDiscordOAuthClient:
+  def resource[F[_]: Async](config: AuthConfig): Resource[F, JavaDiscordOAuthClient[F]] = Resource
+    .fromAutoCloseable(Sync[F].delay(HttpClient.newHttpClient()))
+    .map(new JavaDiscordOAuthClient[F](config, _))
 
 final case class AuthenticatedSession(member: AuthenticatedMember, session: AppSession)
 

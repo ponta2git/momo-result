@@ -54,22 +54,24 @@ final class UpdateMatchDraft[F[_]: MonadThrow](
       existing match
         case e: MatchDraft.Editing => Right(
             e.copy(
+              common = e.common.copy(
+                heldEventId = command.heldEventId.orElse(e.heldEventId),
+                matchNoInEvent = command.matchNoInEvent.orElse(e.matchNoInEvent),
+                gameTitleId = command.gameTitleId.orElse(e.gameTitleId),
+                layoutFamily = command.layoutFamily.orElse(e.layoutFamily),
+                seasonMasterId = command.seasonMasterId.orElse(e.seasonMasterId),
+                ownerMemberId = command.ownerMemberId.orElse(e.ownerMemberId),
+                mapMasterId = command.mapMasterId.orElse(e.mapMasterId),
+                playedAt = command.playedAt.orElse(e.playedAt),
+              ),
               status = status,
-              heldEventId = command.heldEventId.orElse(e.heldEventId),
-              matchNoInEvent = command.matchNoInEvent.orElse(e.matchNoInEvent),
-              gameTitleId = command.gameTitleId.orElse(e.gameTitleId),
-              layoutFamily = command.layoutFamily.orElse(e.layoutFamily),
-              seasonMasterId = command.seasonMasterId.orElse(e.seasonMasterId),
-              ownerMemberId = command.ownerMemberId.orElse(e.ownerMemberId),
-              mapMasterId = command.mapMasterId.orElse(e.mapMasterId),
-              playedAt = command.playedAt.orElse(e.playedAt),
             )
           )
         case _ => Left(AppError.Conflict(s"match draft in status=${existing.status
               .wire} cannot be edited."))
     )
     _ <- matchDrafts.update(updated, at).ensureFoundF("match draft", draftId.value)
-  yield updated.copy(updatedAt = at)).value
+  yield updated.withCommon(_.copy(updatedAt = at))).value
 
   private def authorize(draft: MatchDraft, memberId: MemberId): Either[AppError, Unit] = Either
     .cond(

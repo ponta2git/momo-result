@@ -2,6 +2,7 @@ package momo.api.repositories.postgres
 
 import java.time.Instant
 
+import cats.MonadThrow
 import cats.effect.MonadCancelThrow
 import cats.syntax.all.*
 import doobie.*
@@ -56,7 +57,7 @@ object PostgresMatchDrafts:
       created_at, updated_at
     FROM match_drafts"""
 
-  private def toDraft(row: Row): MatchDraft = MatchDraft(
+  private def toDraft(row: Row): ConnectionIO[MatchDraft] = MatchDraft.fromInputs(
     id = row._1,
     createdByMemberId = row._2,
     status = row._3,
@@ -79,6 +80,11 @@ object PostgresMatchDrafts:
     confirmedMatchId = row._20,
     createdAt = row._21,
     updatedAt = row._22,
+  ).fold(
+    err =>
+      MonadThrow[ConnectionIO]
+        .raiseError(IllegalStateException(s"inconsistent match_drafts row: ${err.message}")),
+    MonadThrow[ConnectionIO].pure,
   )
 
   val alg: MatchDraftsAlg[ConnectionIO] = new MatchDraftsAlg[ConnectionIO]:
@@ -129,7 +135,7 @@ object PostgresMatchDrafts:
     """.update.run.map(_ > 0)
 
     override def find(id: MatchDraftId): ConnectionIO[Option[MatchDraft]] =
-      (selectAll ++ fr"WHERE id = $id").query[Row].option.map(_.map(toDraft))
+      (selectAll ++ fr"WHERE id = $id").query[Row].option.flatMap(_.traverse(toDraft))
 
     override def list(filter: MatchDraftsRepository.ListFilter): ConnectionIO[List[MatchDraft]] =
       val conditions = List(
@@ -142,7 +148,7 @@ object PostgresMatchDrafts:
       val where = fragments.whereAndOpt(conditions)
       val limit = filter.limit.map(v => fr"LIMIT $v").getOrElse(Fragment.empty)
       (selectAll ++ where ++ fr"ORDER BY updated_at DESC, created_at DESC" ++ limit).query[Row]
-        .to[List].map(_.map(toDraft))
+        .to[List].flatMap(_.traverse(toDraft))
 
     override def markConfirmed(
         draftId: MatchDraftId,

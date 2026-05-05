@@ -24,7 +24,7 @@ final class SourceImageRetentionServiceSpec extends MomoCatsEffectSuite:
       revenue <- saveImage(imageStore, "revenue.png")
       incidentLog <- saveImage(imageStore, "incident.png")
       matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
-      draft = MatchDraft(
+      draft = MatchDraft.fromInputs(
         id = MatchDraftId("draft-1"),
         createdByMemberId = MemberId("member-1"),
         status = MatchDraftStatus.NeedsReview,
@@ -47,7 +47,7 @@ final class SourceImageRetentionServiceSpec extends MomoCatsEffectSuite:
         confirmedMatchId = None,
         createdAt = createdAt,
         updatedAt = createdAt,
-      )
+      ).getOrElse(fail("invalid draft fixture"))
       _ <- matchDrafts.create(draft)
       beforeCleanup <- imageStore.find(totalAssets.imageId)
       service = SourceImageRetentionService[IO](matchDrafts, imageStore)

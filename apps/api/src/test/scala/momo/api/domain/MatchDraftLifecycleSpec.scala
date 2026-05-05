@@ -13,27 +13,29 @@ final class MatchDraftLifecycleSpec extends CatsEffectSuite:
   private val laterAt = Instant.parse("2026-05-04T10:05:00Z")
 
   private def newEditing(status: MatchDraftStatus): MatchDraft.Editing = MatchDraft.Editing(
-    id = MatchDraftId("d1"),
-    createdByMemberId = MemberId("m1"),
+    common = MatchDraftCommon(
+      id = MatchDraftId("d1"),
+      createdByMemberId = MemberId("m1"),
+      heldEventId = None,
+      matchNoInEvent = None,
+      gameTitleId = None,
+      layoutFamily = None,
+      seasonMasterId = None,
+      ownerMemberId = None,
+      mapMasterId = None,
+      playedAt = None,
+      totalAssetsImageId = None,
+      revenueImageId = None,
+      incidentLogImageId = None,
+      totalAssetsDraftId = None,
+      revenueDraftId = None,
+      incidentLogDraftId = None,
+      sourceImagesRetainedUntil = None,
+      sourceImagesDeletedAt = None,
+      createdAt = createdAt,
+      updatedAt = createdAt,
+    ),
     status = status,
-    heldEventId = None,
-    matchNoInEvent = None,
-    gameTitleId = None,
-    layoutFamily = None,
-    seasonMasterId = None,
-    ownerMemberId = None,
-    mapMasterId = None,
-    playedAt = None,
-    totalAssetsImageId = None,
-    revenueImageId = None,
-    incidentLogImageId = None,
-    totalAssetsDraftId = None,
-    revenueDraftId = None,
-    incidentLogDraftId = None,
-    sourceImagesRetainedUntil = None,
-    sourceImagesDeletedAt = None,
-    createdAt = createdAt,
-    updatedAt = createdAt,
   )
 
   test("Editing → Confirmed via markConfirmed; subsequent transitions return false"):
@@ -69,8 +71,8 @@ final class MatchDraftLifecycleSpec extends CatsEffectSuite:
       ok2 <- repo.cancel(draft.id, laterAt)
     yield assert(!ok2)
 
-  test("smart factory falls back to Editing if status=Confirmed but confirmedMatchId is None"):
-    val d = MatchDraft(
+  test("smart factory rejects status=Confirmed without confirmedMatchId"):
+    val result = MatchDraft.fromInputs(
       id = MatchDraftId("d2"),
       createdByMemberId = MemberId("m1"),
       status = MatchDraftStatus.Confirmed,
@@ -94,9 +96,5 @@ final class MatchDraftLifecycleSpec extends CatsEffectSuite:
       createdAt = createdAt,
       updatedAt = createdAt,
     )
-    assert(
-      d match
-        case _: MatchDraft.Editing => true
-        case _ => false
-    )
+    assertEquals(result, Left(MatchDraftError.ConfirmedRequiresMatchId))
 end MatchDraftLifecycleSpec

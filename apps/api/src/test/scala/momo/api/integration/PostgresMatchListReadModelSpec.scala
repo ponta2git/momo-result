@@ -78,7 +78,7 @@ final class PostgresMatchListReadModelSpec extends IntegrationSuite:
       status: MatchDraftStatus,
       updatedAt: Instant,
       playedAt: Option[Instant] = None, // scalafix:ok DisableSyntax.defaultArgs
-  ): MatchDraft = MatchDraft(
+  ): MatchDraft = MatchDraft.fromInputs(
     id = MatchDraftId(id),
     createdByMemberId = MemberId("member_ponta"),
     status = status,
@@ -101,7 +101,7 @@ final class PostgresMatchListReadModelSpec extends IntegrationSuite:
     confirmedMatchId = None,
     createdAt = updatedAt.minusSeconds(60),
     updatedAt = updatedAt,
-  )
+  ).getOrElse(fail("invalid draft fixture"))
 
   test("default list returns confirmed matches and active drafts without union SQL errors"):
     for

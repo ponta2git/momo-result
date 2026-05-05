@@ -18,7 +18,7 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
     current.get(draft.id) match
       case None => (current, false)
       case Some(_) =>
-        val next = withUpdatedAt(draft, updatedAt)
+        val next = draft.withCommon(_.copy(updatedAt = updatedAt))
         (current + (draft.id -> next), true)
   }
 
@@ -43,27 +43,8 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
     current.get(draftId) match
       case Some(e: MatchDraft.Editing) =>
         val next = MatchDraft.Confirmed(
-          id = e.id,
-          createdByMemberId = e.createdByMemberId,
-          heldEventId = e.heldEventId,
-          matchNoInEvent = e.matchNoInEvent,
-          gameTitleId = e.gameTitleId,
-          layoutFamily = e.layoutFamily,
-          seasonMasterId = e.seasonMasterId,
-          ownerMemberId = e.ownerMemberId,
-          mapMasterId = e.mapMasterId,
-          playedAt = e.playedAt,
-          totalAssetsImageId = e.totalAssetsImageId,
-          revenueImageId = e.revenueImageId,
-          incidentLogImageId = e.incidentLogImageId,
-          totalAssetsDraftId = e.totalAssetsDraftId,
-          revenueDraftId = e.revenueDraftId,
-          incidentLogDraftId = e.incidentLogDraftId,
-          sourceImagesRetainedUntil = e.sourceImagesRetainedUntil,
-          sourceImagesDeletedAt = e.sourceImagesDeletedAt,
+          common = e.common.copy(updatedAt = updatedAt),
           confirmedMatchIdValue = confirmedMatchId,
-          createdAt = e.createdAt,
-          updatedAt = updatedAt,
         )
         (current + (draftId -> next), true)
       case _ => (current, false)
@@ -73,7 +54,10 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
     .modify { current =>
       current.get(draftId) match
         case Some(e: MatchDraft.Editing) =>
-          val next = e.copy(status = MatchDraftStatus.OcrFailed, updatedAt = updatedAt)
+          val next = e.copy(
+            common = e.common.copy(updatedAt = updatedAt),
+            status = MatchDraftStatus.OcrFailed,
+          )
           (current + (draftId -> next), true)
         case _ => (current, false)
     }
@@ -81,28 +65,7 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
   override def cancel(draftId: MatchDraftId, updatedAt: Instant): F[Boolean] = ref.modify { current =>
     current.get(draftId) match
       case Some(e: MatchDraft.Editing) =>
-        val next = MatchDraft.Cancelled(
-          id = e.id,
-          createdByMemberId = e.createdByMemberId,
-          heldEventId = e.heldEventId,
-          matchNoInEvent = e.matchNoInEvent,
-          gameTitleId = e.gameTitleId,
-          layoutFamily = e.layoutFamily,
-          seasonMasterId = e.seasonMasterId,
-          ownerMemberId = e.ownerMemberId,
-          mapMasterId = e.mapMasterId,
-          playedAt = e.playedAt,
-          totalAssetsImageId = e.totalAssetsImageId,
-          revenueImageId = e.revenueImageId,
-          incidentLogImageId = e.incidentLogImageId,
-          totalAssetsDraftId = e.totalAssetsDraftId,
-          revenueDraftId = e.revenueDraftId,
-          incidentLogDraftId = e.incidentLogDraftId,
-          sourceImagesRetainedUntil = e.sourceImagesRetainedUntil,
-          sourceImagesDeletedAt = e.sourceImagesDeletedAt,
-          createdAt = e.createdAt,
-          updatedAt = updatedAt,
-        )
+        val next = MatchDraft.Cancelled(common = e.common.copy(updatedAt = updatedAt))
         (current + (draftId -> next), true)
       case _ => (current, false)
   }
@@ -117,17 +80,16 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
     current.get(draftId) match
       case Some(e: MatchDraft.Editing) =>
         val withArtifacts = screenType match
-          case ScreenType.TotalAssets => e
+          case ScreenType.TotalAssets => e.common
               .copy(totalAssetsImageId = Some(sourceImageId), totalAssetsDraftId = Some(ocrDraftId))
-          case ScreenType.Revenue => e
+          case ScreenType.Revenue => e.common
               .copy(revenueImageId = Some(sourceImageId), revenueDraftId = Some(ocrDraftId))
-          case ScreenType.IncidentLog => e
+          case ScreenType.IncidentLog => e.common
               .copy(incidentLogImageId = Some(sourceImageId), incidentLogDraftId = Some(ocrDraftId))
-          case ScreenType.Auto => e
-        val next = withArtifacts.copy(
+          case ScreenType.Auto => e.common
+        val next = e.copy(
+          common = withArtifacts.copy(updatedAt = updatedAt, sourceImagesDeletedAt = None),
           status = MatchDraftStatus.OcrRunning,
-          updatedAt = updatedAt,
-          sourceImagesDeletedAt = None,
         )
         (current + (draftId -> next), true)
       case _ => (current, false)
@@ -141,33 +103,14 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
   ): F[Boolean] = ref.modify { current =>
     current.get(draftId) match
       case None => (current, false)
-      case Some(e: MatchDraft.Editing) =>
-        val next = e.copy(
+      case Some(draft) =>
+        val next = draft.withCommon(_.copy(
           sourceImagesRetainedUntil = retainedUntil,
           sourceImagesDeletedAt = deletedAt,
           updatedAt = updatedAt,
-        )
-        (current + (draftId -> next), true)
-      case Some(c: MatchDraft.Confirmed) =>
-        val next = c.copy(
-          sourceImagesRetainedUntil = retainedUntil,
-          sourceImagesDeletedAt = deletedAt,
-          updatedAt = updatedAt,
-        )
-        (current + (draftId -> next), true)
-      case Some(c: MatchDraft.Cancelled) =>
-        val next = c.copy(
-          sourceImagesRetainedUntil = retainedUntil,
-          sourceImagesDeletedAt = deletedAt,
-          updatedAt = updatedAt,
-        )
+        ))
         (current + (draftId -> next), true)
   }
-
-  private def withUpdatedAt(draft: MatchDraft, updatedAt: Instant): MatchDraft = draft match
-    case e: MatchDraft.Editing => e.copy(updatedAt = updatedAt)
-    case c: MatchDraft.Confirmed => c.copy(updatedAt = updatedAt)
-    case c: MatchDraft.Cancelled => c.copy(updatedAt = updatedAt)
 
 object InMemoryMatchDraftsRepository:
   def create[F[_]: Sync]: F[InMemoryMatchDraftsRepository[F]] = Ref

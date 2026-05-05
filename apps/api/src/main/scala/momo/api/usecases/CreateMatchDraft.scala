@@ -41,29 +41,31 @@ final class CreateMatchDraft[F[_]: MonadThrow](
       _ <- validateForeignKeys(command)
       id <- EitherT.liftF(nextId)
       at <- EitherT.liftF(now)
-      draft = MatchDraft(
-        id = MatchDraftId(id),
-        createdByMemberId = createdBy,
-        status = command.status.getOrElse(MatchDraftStatus.DraftReady),
-        heldEventId = command.heldEventId,
-        matchNoInEvent = command.matchNoInEvent,
-        gameTitleId = command.gameTitleId,
-        layoutFamily = command.layoutFamily,
-        seasonMasterId = command.seasonMasterId,
-        ownerMemberId = command.ownerMemberId,
-        mapMasterId = command.mapMasterId,
-        playedAt = command.playedAt,
-        totalAssetsImageId = None,
-        revenueImageId = None,
-        incidentLogImageId = None,
-        totalAssetsDraftId = None,
-        revenueDraftId = None,
-        incidentLogDraftId = None,
-        sourceImagesRetainedUntil = None,
-        sourceImagesDeletedAt = None,
-        confirmedMatchId = None,
-        createdAt = at,
-        updatedAt = at,
+      draft <- EitherT.fromEither[F](
+        MatchDraft.fromInputs(
+          id = MatchDraftId(id),
+          createdByMemberId = createdBy,
+          status = command.status.getOrElse(MatchDraftStatus.DraftReady),
+          heldEventId = command.heldEventId,
+          matchNoInEvent = command.matchNoInEvent,
+          gameTitleId = command.gameTitleId,
+          layoutFamily = command.layoutFamily,
+          seasonMasterId = command.seasonMasterId,
+          ownerMemberId = command.ownerMemberId,
+          mapMasterId = command.mapMasterId,
+          playedAt = command.playedAt,
+          totalAssetsImageId = None,
+          revenueImageId = None,
+          incidentLogImageId = None,
+          totalAssetsDraftId = None,
+          revenueDraftId = None,
+          incidentLogDraftId = None,
+          sourceImagesRetainedUntil = None,
+          sourceImagesDeletedAt = None,
+          confirmedMatchId = None,
+          createdAt = at,
+          updatedAt = at,
+        ).left.map(err => AppError.ValidationFailed(err.message))
       )
       _ <- EitherT.liftF(matchDrafts.create(draft))
     yield draft).value

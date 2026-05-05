@@ -82,6 +82,7 @@ object IntegrationDb:
         season_masters,
         map_masters,
         game_titles,
+        idempotency_keys,
         app_sessions
       RESTART IDENTITY CASCADE
     """.update.run.void.transact(transactor)

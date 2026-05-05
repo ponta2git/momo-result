@@ -38,8 +38,8 @@ object UseCaseSyntax:
       EitherT(fb.map(found => Either.cond(found, (), error)))
 
     /** Fail with [[AppError.NotFound]] when the boolean result is `false`. */
-    def ensureFoundF(resource: String, id: String)(using
-        F: Functor[F]
+    def ensureFoundF(resource: String, id: String)(
+        using F: Functor[F]
     ): EitherT[F, AppError, Unit] = ensureF(AppError.NotFound(resource, id))
 
 end UseCaseSyntax

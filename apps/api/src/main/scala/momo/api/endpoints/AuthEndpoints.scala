@@ -30,7 +30,7 @@ object AuthEndpoints:
   val logout: PublicEndpoint[Option[String], ErrorInfo, Unit, Any] = endpoint
     .post
     .in("api" / "auth" / "logout")
-    .in(header[Option[String]]("X-CSRF-Token"))
+    .in(CommonEndpoint.csrfHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(statusCode(sttp.model.StatusCode.NoContent))
     .tag("auth")
@@ -38,7 +38,7 @@ object AuthEndpoints:
   val me: PublicEndpoint[Option[String], ErrorInfo, AuthMeResponse, Any] = endpoint
     .get
     .in("api" / "auth" / "me")
-    .in(header[Option[String]]("X-Dev-User"))
+    .in(CommonEndpoint.devUserHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[AuthMeResponse])
     .tag("auth")

@@ -132,4 +132,41 @@ final class DbContractSpec extends IntegrationSuite:
         Set("failure_code", "failure_message", "failure_retryable", "failure_user_action"),
       )
     }
+  test("idempotency_keys table exposes the columns required by the proposal"):
+    columnsFor("idempotency_keys").map { cols =>
+      val expected = Set(
+        "key",
+        "member_id",
+        "endpoint",
+        "request_hash",
+        "response_status",
+        "response_headers",
+        "response_body",
+        "created_at",
+        "expires_at",
+      )
+      val missing = expected -- cols.toSet
+      assert(missing.isEmpty, s"idempotency_keys is missing columns: $missing (have $cols)")
+    }
+
+  test("idempotency_keys primary key is (key, member_id, endpoint)"):
+    val program = sql"""
+      SELECT a.attname
+      FROM pg_index i
+      JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+      WHERE i.indrelid = 'public.idempotency_keys'::regclass AND i.indisprimary
+      ORDER BY array_position(i.indkey, a.attnum)
+    """.query[String].to[List].transact(transactor)
+    program.map(cols => assertEquals(cols, List("key", "member_id", "endpoint")))
+
+  test("idempotency_keys has an expires_at index for the cleanup query"):
+    val program = sql"""
+      SELECT 1
+      FROM pg_indexes
+      WHERE schemaname = 'public'
+        AND tablename = 'idempotency_keys'
+        AND indexname = 'idempotency_keys_expires_at_idx'
+    """.query[Int].option.transact(transactor)
+    program.map(opt => assert(opt.isDefined, "idempotency_keys_expires_at_idx is missing"))
+
 end DbContractSpec

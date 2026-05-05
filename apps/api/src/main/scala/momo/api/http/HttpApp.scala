@@ -6,7 +6,7 @@ import org.http4s.HttpApp as Http4sApp
 
 import momo.api.adapters.{
   InMemoryAppSessionsRepository, InMemoryGameTitlesRepository, InMemoryHeldEventsRepository,
-  InMemoryIncidentMastersRepository, InMemoryMapMastersRepository,
+  InMemoryIdempotencyRepository, InMemoryIncidentMastersRepository, InMemoryMapMastersRepository,
   InMemoryMatchConfirmationRepository, InMemoryMatchDraftsRepository, InMemoryMatchListReadModel,
   InMemoryMatchesRepository, InMemoryMembersRepository, InMemoryOcrDraftsRepository,
   InMemoryOcrJobsRepository, InMemoryQueueProducer, InMemorySeasonMastersRepository,
@@ -22,16 +22,16 @@ import momo.api.domain.Member
 import momo.api.domain.ids.*
 import momo.api.repositories.postgres.{
   PostgresAppSessionsRepository, PostgresGameTitlesRepository, PostgresHeldEventsRepository,
-  PostgresIncidentMastersRepository, PostgresMapMastersRepository,
+  PostgresIdempotencyRepository, PostgresIncidentMastersRepository, PostgresMapMastersRepository,
   PostgresMatchConfirmationRepository, PostgresMatchDraftsRepository, PostgresMatchListReadModel,
   PostgresMatchesRepository, PostgresMembersRepository, PostgresOcrDraftsRepository,
   PostgresOcrJobsRepository, PostgresSeasonMastersRepository,
 }
 import momo.api.repositories.{
-  AppSessionsRepository, GameTitlesRepository, HeldEventsRepository, IncidentMastersRepository,
-  MapMastersRepository, MatchConfirmationRepository, MatchDraftsRepository, MatchListReadModel,
-  MatchesRepository, MembersRepository, OcrDraftsRepository, OcrJobsRepository,
-  SeasonMastersRepository,
+  AppSessionsRepository, GameTitlesRepository, HeldEventsRepository, IdempotencyRepository,
+  IncidentMastersRepository, MapMastersRepository, MatchConfirmationRepository,
+  MatchDraftsRepository, MatchListReadModel, MatchesRepository, MembersRepository,
+  OcrDraftsRepository, OcrJobsRepository, SeasonMastersRepository,
 }
 import momo.api.usecases.{
   CancelMatchDraft, CancelOcrJob, ConfirmMatch, CreateGameTitle, CreateHeldEvent, CreateMapMaster,
@@ -48,6 +48,7 @@ object HttpApp:
       gameTitles: momo.api.repositories.GameTitlesRepository[F],
       mapMasters: momo.api.repositories.MapMastersRepository[F],
       seasonMasters: momo.api.repositories.SeasonMastersRepository[F],
+      idempotency: momo.api.repositories.IdempotencyRepository[F],
   )
 
   def resource[F[_]: Async](config: AppConfig): Resource[F, Http4sApp[F]] = wired[F](config)
@@ -77,6 +78,7 @@ object HttpApp:
               PostgresSeasonMastersRepository[F](transactor)
             val incidentMasters: IncidentMastersRepository[F] =
               PostgresIncidentMastersRepository[F](transactor)
+            val idempotency: IdempotencyRepository[F] = PostgresIdempotencyRepository[F](transactor)
             assemble(
               config = config,
               queue = queue,
@@ -93,6 +95,7 @@ object HttpApp:
               mapMasters = mapMasters,
               seasonMasters = seasonMasters,
               incidentMasters = incidentMasters,
+              idempotency = idempotency,
             )
           }
       }
@@ -113,6 +116,7 @@ object HttpApp:
           mapMasters <- InMemoryMapMastersRepository.create[F]
           seasonMasters <- InMemorySeasonMastersRepository.create[F]
           incidentMasters <- InMemoryIncidentMastersRepository.create[F]
+          idempotency <- InMemoryIdempotencyRepository.create[F]
           wired <- assemble(
             config = config,
             queue = queue,
@@ -129,6 +133,7 @@ object HttpApp:
             mapMasters = mapMasters,
             seasonMasters = seasonMasters,
             incidentMasters = incidentMasters,
+            idempotency = idempotency,
           )
         yield wired
       }
@@ -155,6 +160,7 @@ object HttpApp:
       mapMasters: MapMastersRepository[F],
       seasonMasters: SeasonMastersRepository[F],
       incidentMasters: IncidentMastersRepository[F],
+      idempotency: IdempotencyRepository[F],
   ): F[Wired[F]] =
     val imageStore = LocalFsImageStore[F](config.imageTmpDir)
     val roster = MemberRoster.dev(config.devMemberIds)
@@ -268,6 +274,8 @@ object HttpApp:
         csrfTokenService = csrfTokenService,
         oauthStateCodec = oauthStateCodec,
         loginRateLimiter = loginRateLimiter,
+        idempotency = idempotency,
+        nowF = nowF,
       ))
-      Wired(app, gameTitles, mapMasters, seasonMasters)
+      Wired(app, gameTitles, mapMasters, seasonMasters, idempotency)
     }

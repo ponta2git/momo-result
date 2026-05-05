@@ -14,11 +14,7 @@ import momo.api.domain.ids.MemberId
  * `headers` MUST NOT contain authorization, cookies or any secret material — the producer is
  * responsible for filtering before calling [[IdempotencyAlg.record]].
  */
-final case class IdempotencyResponse(
-    status: Int,
-    headers: Map[String, String],
-    body: Vector[Byte],
-)
+final case class IdempotencyResponse(status: Int, headers: Map[String, String], body: Vector[Byte])
 
 object IdempotencyResponse:
   given CanEqual[IdempotencyResponse, IdempotencyResponse] = CanEqual.derived
@@ -61,11 +57,7 @@ enum IdempotencyOutcome derives CanEqual:
 trait IdempotencyAlg[F0[_]]:
 
   /** Look up a stored record by its full composite key. */
-  def lookup(
-      key: String,
-      memberId: MemberId,
-      endpoint: String,
-  ): F0[Option[IdempotencyRecord]]
+  def lookup(key: String, memberId: MemberId, endpoint: String): F0[Option[IdempotencyRecord]]
 
   /**
    * Persist the supplied record. Implementations MUST treat `(key, memberId, endpoint)` as the
@@ -88,11 +80,7 @@ end IdempotencyAlg
  * `apps/api/docs/proposals/idempotency-keys.md`.
  */
 trait IdempotencyRepository[F[_]]:
-  def lookup(
-      key: String,
-      memberId: MemberId,
-      endpoint: String,
-  ): F[Option[IdempotencyRecord]]
+  def lookup(key: String, memberId: MemberId, endpoint: String): F[Option[IdempotencyRecord]]
   def record(entry: IdempotencyRecord): F[Unit]
   def cleanup(now: Instant): F[Int]
 
@@ -103,22 +91,16 @@ object IdempotencyRepository:
       alg: IdempotencyAlg[ConnectionIO],
       transactK: ConnectionIO ~> F,
   ): IdempotencyRepository[F] = new IdempotencyRepository[F]:
-    def lookup(
-        key: String,
-        memberId: MemberId,
-        endpoint: String,
-    ): F[Option[IdempotencyRecord]] = transactK(alg.lookup(key, memberId, endpoint))
+    def lookup(key: String, memberId: MemberId, endpoint: String): F[Option[IdempotencyRecord]] =
+      transactK(alg.lookup(key, memberId, endpoint))
     def record(entry: IdempotencyRecord): F[Unit] = transactK(alg.record(entry))
     def cleanup(now: Instant): F[Int] = transactK(alg.cleanup(now))
 
   /** InMemory facade: the algebra already runs in `F`, so the lift is identity. */
   def liftIdentity[F[_]](alg: IdempotencyAlg[F]): IdempotencyRepository[F] =
     new IdempotencyRepository[F]:
-      def lookup(
-          key: String,
-          memberId: MemberId,
-          endpoint: String,
-      ): F[Option[IdempotencyRecord]] = alg.lookup(key, memberId, endpoint)
+      def lookup(key: String, memberId: MemberId, endpoint: String): F[Option[IdempotencyRecord]] =
+        alg.lookup(key, memberId, endpoint)
       def record(entry: IdempotencyRecord): F[Unit] = alg.record(entry)
       def cleanup(now: Instant): F[Int] = alg.cleanup(now)
 end IdempotencyRepository

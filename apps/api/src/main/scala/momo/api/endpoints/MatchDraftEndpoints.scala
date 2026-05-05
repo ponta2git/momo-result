@@ -7,16 +7,18 @@ import sttp.tapir.{PublicEndpoint, *}
 import momo.api.http.ProblemDetails.ErrorInfo
 
 object MatchDraftEndpoints:
-  type CreateInput = (Option[String], Option[String], CreateMatchDraftRequest)
+  type CreateInput = (Option[String], Option[String], Option[String], CreateMatchDraftRequest)
   type GetInput = (String, Option[String])
-  type UpdateInput = (String, Option[String], Option[String], UpdateMatchDraftRequest)
+  type UpdateInput =
+    (String, Option[String], Option[String], Option[String], UpdateMatchDraftRequest)
   type CancelInput = (String, Option[String], Option[String])
 
   val create: PublicEndpoint[CreateInput, ErrorInfo, MatchDraftResponse, Any] = endpoint
     .post
     .in("api" / "match-drafts")
-    .in(header[Option[String]]("X-Dev-User"))
-    .in(header[Option[String]]("X-CSRF-Token"))
+    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.csrfHeader)
+    .in(CommonEndpoint.idempotencyKeyHeader)
     .in(jsonBody[CreateMatchDraftRequest])
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[MatchDraftResponse])
@@ -25,8 +27,9 @@ object MatchDraftEndpoints:
   val update: PublicEndpoint[UpdateInput, ErrorInfo, MatchDraftResponse, Any] = endpoint
     .patch
     .in("api" / "match-drafts" / path[String]("draftId"))
-    .in(header[Option[String]]("X-Dev-User"))
-    .in(header[Option[String]]("X-CSRF-Token"))
+    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.csrfHeader)
+    .in(CommonEndpoint.idempotencyKeyHeader)
     .in(jsonBody[UpdateMatchDraftRequest])
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[MatchDraftResponse])
@@ -35,7 +38,7 @@ object MatchDraftEndpoints:
   val get: PublicEndpoint[GetInput, ErrorInfo, MatchDraftDetailResponse, Any] = endpoint
     .get
     .in("api" / "match-drafts" / path[String]("draftId"))
-    .in(header[Option[String]]("X-Dev-User"))
+    .in(CommonEndpoint.devUserHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[MatchDraftDetailResponse])
     .tag("match-drafts")
@@ -43,8 +46,8 @@ object MatchDraftEndpoints:
   val cancel: PublicEndpoint[CancelInput, ErrorInfo, CancelMatchDraftResponse, Any] = endpoint
     .post
     .in("api" / "match-drafts" / path[String]("draftId") / "cancel")
-    .in(header[Option[String]]("X-Dev-User"))
-    .in(header[Option[String]]("X-CSRF-Token"))
+    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.csrfHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[CancelMatchDraftResponse])
     .tag("match-drafts")
@@ -57,7 +60,7 @@ object MatchDraftEndpoints:
   ] = endpoint
     .get
     .in("api" / "match-drafts" / path[String]("draftId") / "source-images")
-    .in(header[Option[String]]("X-Dev-User"))
+    .in(CommonEndpoint.devUserHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[MatchDraftSourceImageListResponse])
     .tag("match-drafts")
@@ -69,7 +72,7 @@ object MatchDraftEndpoints:
     endpoint
       .get
       .in("api" / "match-drafts" / path[String]("draftId") / "source-images" / path[String]("kind"))
-      .in(header[Option[String]]("X-Dev-User"))
+      .in(CommonEndpoint.devUserHeader)
       .errorOut(CommonEndpoint.errorOut)
       .out(header[String]("Cache-Control"))
       .out(header[String]("X-Content-Type-Options"))

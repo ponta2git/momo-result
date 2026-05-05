@@ -17,18 +17,19 @@ object HeldEventsEndpoints:
     .in("api" / "held-events")
     .in(query[Option[String]]("q"))
     .in(query[Option[Int]]("limit"))
-    .in(header[Option[String]]("X-Dev-User"))
+    .in(CommonEndpoint.devUserHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[HeldEventListResponse])
     .tag("held-events")
 
-  type CreateInput = (Option[String], Option[String], CreateHeldEventRequest)
+  type CreateInput = (Option[String], Option[String], Option[String], CreateHeldEventRequest)
 
   val create: PublicEndpoint[CreateInput, ErrorInfo, HeldEventResponse, Any] = endpoint
     .post
     .in("api" / "held-events")
-    .in(header[Option[String]]("X-Dev-User"))
-    .in(header[Option[String]]("X-CSRF-Token"))
+    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.csrfHeader)
+    .in(CommonEndpoint.idempotencyKeyHeader)
     .in(jsonBody[CreateHeldEventRequest])
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[HeldEventResponse])

@@ -58,9 +58,8 @@ final class InMemoryIdempotencyRepositorySpec extends CatsEffectSuite:
         _ <- repo.record(r)
         _ <- repo.record(r)
       yield ()
-    effect.attempt.map { result =>
-      assert(result.isLeft, s"expected duplicate insert to fail, got: $result")
-    }
+    effect.attempt
+      .map(result => assert(result.isLeft, s"expected duplicate insert to fail, got: $result"))
 
   test("the same key on a different endpoint is treated as a different record"):
     val a = record("kshared", draftEndpoint, defaultHash, later)

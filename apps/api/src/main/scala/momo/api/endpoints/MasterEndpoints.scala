@@ -10,21 +10,22 @@ object GameTitlesEndpoints:
   val list: PublicEndpoint[Option[String], ErrorInfo, GameTitleListResponse, Any] = endpoint
     .get
     .in("api" / "game-titles")
-    .in(header[Option[String]]("X-Dev-User"))
+    .in(CommonEndpoint.devUserHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[GameTitleListResponse])
     .tag("masters")
 
   val create: PublicEndpoint[
-    (Option[String], Option[String], CreateGameTitleRequest),
+    (Option[String], Option[String], Option[String], CreateGameTitleRequest),
     ErrorInfo,
     GameTitleResponse,
     Any,
   ] = endpoint
     .post
     .in("api" / "game-titles")
-    .in(header[Option[String]]("X-Dev-User"))
-    .in(header[Option[String]]("X-CSRF-Token"))
+    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.csrfHeader)
+    .in(CommonEndpoint.idempotencyKeyHeader)
     .in(jsonBody[CreateGameTitleRequest])
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[GameTitleResponse])
@@ -37,21 +38,22 @@ object MapMastersEndpoints:
       .get
       .in("api" / "map-masters")
       .in(query[Option[String]]("gameTitleId"))
-      .in(header[Option[String]]("X-Dev-User"))
+      .in(CommonEndpoint.devUserHeader)
       .errorOut(CommonEndpoint.errorOut)
       .out(jsonBody[MapMasterListResponse])
       .tag("masters")
 
   val create: PublicEndpoint[
-    (Option[String], Option[String], CreateMapMasterRequest),
+    (Option[String], Option[String], Option[String], CreateMapMasterRequest),
     ErrorInfo,
     MapMasterResponse,
     Any,
   ] = endpoint
     .post
     .in("api" / "map-masters")
-    .in(header[Option[String]]("X-Dev-User"))
-    .in(header[Option[String]]("X-CSRF-Token"))
+    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.csrfHeader)
+    .in(CommonEndpoint.idempotencyKeyHeader)
     .in(jsonBody[CreateMapMasterRequest])
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[MapMasterResponse])
@@ -64,21 +66,22 @@ object SeasonMastersEndpoints:
       .get
       .in("api" / "season-masters")
       .in(query[Option[String]]("gameTitleId"))
-      .in(header[Option[String]]("X-Dev-User"))
+      .in(CommonEndpoint.devUserHeader)
       .errorOut(CommonEndpoint.errorOut)
       .out(jsonBody[SeasonMasterListResponse])
       .tag("masters")
 
   val create: PublicEndpoint[
-    (Option[String], Option[String], CreateSeasonMasterRequest),
+    (Option[String], Option[String], Option[String], CreateSeasonMasterRequest),
     ErrorInfo,
     SeasonMasterResponse,
     Any,
   ] = endpoint
     .post
     .in("api" / "season-masters")
-    .in(header[Option[String]]("X-Dev-User"))
-    .in(header[Option[String]]("X-CSRF-Token"))
+    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.csrfHeader)
+    .in(CommonEndpoint.idempotencyKeyHeader)
     .in(jsonBody[CreateSeasonMasterRequest])
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[SeasonMasterResponse])
@@ -88,7 +91,7 @@ object IncidentMastersEndpoints:
   val list: PublicEndpoint[Option[String], ErrorInfo, IncidentMasterListResponse, Any] = endpoint
     .get
     .in("api" / "incident-masters")
-    .in(header[Option[String]]("X-Dev-User"))
+    .in(CommonEndpoint.devUserHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[IncidentMasterListResponse])
     .tag("masters")

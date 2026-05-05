@@ -7,13 +7,14 @@ import sttp.tapir.{PublicEndpoint, *}
 import momo.api.http.ProblemDetails.ErrorInfo
 
 object MatchesEndpoints:
-  type ConfirmInput = (Option[String], Option[String], ConfirmMatchRequest)
+  type ConfirmInput = (Option[String], Option[String], Option[String], ConfirmMatchRequest)
 
   val confirm: PublicEndpoint[ConfirmInput, ErrorInfo, ConfirmMatchResponse, Any] = endpoint
     .post
     .in("api" / "matches")
-    .in(header[Option[String]]("X-Dev-User"))
-    .in(header[Option[String]]("X-CSRF-Token"))
+    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.csrfHeader)
+    .in(CommonEndpoint.idempotencyKeyHeader)
     .in(jsonBody[ConfirmMatchRequest])
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[ConfirmMatchResponse])
@@ -38,7 +39,7 @@ object MatchesEndpoints:
     .in(query[Option[String]]("status"))
     .in(query[Option[String]]("kind"))
     .in(query[Option[Int]]("limit"))
-    .in(header[Option[String]]("X-Dev-User"))
+    .in(CommonEndpoint.devUserHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[MatchListResponse])
     .tag("matches")
@@ -46,7 +47,7 @@ object MatchesEndpoints:
   val get: PublicEndpoint[(String, Option[String]), ErrorInfo, MatchDetailResponse, Any] = endpoint
     .get
     .in("api" / "matches" / path[String]("matchId"))
-    .in(header[Option[String]]("X-Dev-User"))
+    .in(CommonEndpoint.devUserHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[MatchDetailResponse])
     .tag("matches")
@@ -56,8 +57,8 @@ object MatchesEndpoints:
   val update: PublicEndpoint[UpdateInput, ErrorInfo, MatchDetailResponse, Any] = endpoint
     .put
     .in("api" / "matches" / path[String]("matchId"))
-    .in(header[Option[String]]("X-Dev-User"))
-    .in(header[Option[String]]("X-CSRF-Token"))
+    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.csrfHeader)
     .in(jsonBody[UpdateMatchRequest])
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[MatchDetailResponse])
@@ -68,8 +69,8 @@ object MatchesEndpoints:
   val delete: PublicEndpoint[DeleteInput, ErrorInfo, DeleteMatchResponse, Any] = endpoint
     .delete
     .in("api" / "matches" / path[String]("matchId"))
-    .in(header[Option[String]]("X-Dev-User"))
-    .in(header[Option[String]]("X-CSRF-Token"))
+    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.csrfHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[DeleteMatchResponse])
     .tag("matches")

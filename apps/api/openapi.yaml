@@ -291,6 +291,14 @@
             "schema" : {
               "type" : "string"
             }
+          },
+          {
+            "name" : "Idempotency-Key",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
           }
         ],
         "requestBody" : {
@@ -728,6 +736,14 @@
             "schema" : {
               "type" : "string"
             }
+          },
+          {
+            "name" : "Idempotency-Key",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
           }
         ],
         "requestBody" : {
@@ -791,6 +807,14 @@
           },
           {
             "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "Idempotency-Key",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -913,6 +937,14 @@
           },
           {
             "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "Idempotency-Key",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -1258,6 +1290,14 @@
             "schema" : {
               "type" : "string"
             }
+          },
+          {
+            "name" : "Idempotency-Key",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
           }
         ],
         "requestBody" : {
@@ -1540,6 +1580,14 @@
             "schema" : {
               "type" : "string"
             }
+          },
+          {
+            "name" : "Idempotency-Key",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
           }
         ],
         "requestBody" : {
@@ -1654,6 +1702,14 @@
             "schema" : {
               "type" : "string"
             }
+          },
+          {
+            "name" : "Idempotency-Key",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
           }
         ],
         "requestBody" : {
@@ -1763,6 +1819,14 @@
           },
           {
             "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "Idempotency-Key",
             "in" : "header",
             "required" : false,
             "schema" : {

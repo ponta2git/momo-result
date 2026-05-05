@@ -4,8 +4,8 @@ import io.circe.parser
 import io.circe.syntax.*
 import munit.FunSuite
 
+import momo.api.codec.OcrHintsCodec.given
 import momo.api.domain.{OcrJobHints, PlayerAliasHint}
-import momo.api.endpoints.codec.OcrHintsCodec.given
 
 final class OcrHintsCodecSpec extends FunSuite:
   test("encodes an empty OcrJobHints with all-null Option / empty List wire shape") {

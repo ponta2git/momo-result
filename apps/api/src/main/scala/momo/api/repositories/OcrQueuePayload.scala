@@ -7,9 +7,9 @@ import java.time.format.DateTimeFormatter
 import io.circe.syntax.*
 import io.circe.{Json, Printer}
 
+import momo.api.codec.OcrHintsCodec.given
 import momo.api.domain.ids.*
 import momo.api.domain.{OcrJobHints, ScreenType}
-import momo.api.endpoints.codec.OcrHintsCodec.given
 
 final case class OcrQueuePayload(fields: Map[String, String])
 

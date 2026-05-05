@@ -13,6 +13,7 @@ import momo.api.repositories.{
   GameTitlesRepository, HeldEventsRepository, MapMastersRepository, MatchDraftsRepository,
   SeasonMastersRepository,
 }
+import momo.api.usecases.syntax.UseCaseSyntax.*
 
 final case class UpdateMatchDraftCommand(
     heldEventId: Option[HeldEventId],
@@ -42,9 +43,7 @@ final class UpdateMatchDraft[F[_]: MonadThrow](
       command: UpdateMatchDraftCommand,
       memberId: MemberId,
   ): F[Either[AppError, MatchDraft]] = (for
-    existing <- EitherT(
-      matchDrafts.find(draftId).map(_.toRight(AppError.NotFound("match draft", draftId.value)))
-    )
+    existing <- matchDrafts.find(draftId).orNotFound("match draft", draftId.value)
     _ <- EitherT.fromEither[F](authorize(existing, memberId))
     _ <- EitherT.fromEither[F](ensureEditable(existing.status))
     _ <- EitherT.fromEither[F](validateMatchNo(command.matchNoInEvent))
@@ -69,9 +68,7 @@ final class UpdateMatchDraft[F[_]: MonadThrow](
         case _ => Left(AppError.Conflict(s"match draft in status=${existing.status
               .wire} cannot be edited."))
     )
-    saved <- EitherT.liftF(matchDrafts.update(updated, at))
-    _ <- EitherT
-      .fromEither[F](Either.cond(saved, (), AppError.NotFound("match draft", draftId.value)))
+    _ <- matchDrafts.update(updated, at).ensureFoundF("match draft", draftId.value)
   yield updated.copy(updatedAt = at)).value
 
   private def authorize(draft: MatchDraft, memberId: MemberId): Either[AppError, Unit] = Either
@@ -108,20 +105,13 @@ final class UpdateMatchDraft[F[_]: MonadThrow](
     for
       _ <- command.heldEventId match
         case None => EitherT.rightT[F, AppError](())
-        case Some(id) => EitherT(
-            heldEvents.find(id)
-              .map(_.toRight(AppError.NotFound("held event", id.value)).map(_ => ()))
-          )
+        case Some(id) => heldEvents.find(id).orNotFound("held event", id.value).void
       title <- command.gameTitleId match
         case None => EitherT.rightT[F, AppError](Option.empty[momo.api.domain.GameTitle])
-        case Some(id) =>
-          EitherT(gameTitles.find(id).map(_.toRight(AppError.NotFound("game title", id.value))))
-            .map(Some(_))
+        case Some(id) => gameTitles.find(id).orNotFound("game title", id.value).map(Some(_))
       _ <- command.mapMasterId match
         case None => EitherT.rightT[F, AppError](())
-        case Some(id) => EitherT(
-            mapMasters.find(id).map(_.toRight(AppError.NotFound("map master", id.value)))
-          ).flatMap { map =>
+        case Some(id) => mapMasters.find(id).orNotFound("map master", id.value).flatMap { map =>
             title match
               case Some(t) if map.gameTitleId != t.id =>
                 EitherT.leftT[F, Unit](AppError.ValidationFailed(s"mapMasterId ${map.id
@@ -130,13 +120,12 @@ final class UpdateMatchDraft[F[_]: MonadThrow](
           }
       _ <- command.seasonMasterId match
         case None => EitherT.rightT[F, AppError](())
-        case Some(id) => EitherT(
-            seasonMasters.find(id).map(_.toRight(AppError.NotFound("season master", id.value)))
-          ).flatMap { season =>
-            title match
-              case Some(t) if season.gameTitleId != t.id =>
-                EitherT.leftT[F, Unit](AppError.ValidationFailed(s"seasonMasterId ${season.id
-                    .value} does not belong to gameTitleId ${t.id.value}."))
-              case _ => EitherT.rightT[F, AppError](())
-          }
+        case Some(id) => seasonMasters.find(id).orNotFound("season master", id.value)
+            .flatMap { season =>
+              title match
+                case Some(t) if season.gameTitleId != t.id =>
+                  EitherT.leftT[F, Unit](AppError.ValidationFailed(s"seasonMasterId ${season.id
+                      .value} does not belong to gameTitleId ${t.id.value}."))
+                case _ => EitherT.rightT[F, AppError](())
+            }
     yield ()

@@ -4,12 +4,12 @@ import java.time.Instant
 
 import cats.MonadThrow
 import cats.data.EitherT
-import cats.syntax.all.*
 
 import momo.api.domain.MatchDraftStatus
 import momo.api.domain.ids.*
 import momo.api.errors.AppError
 import momo.api.repositories.MatchDraftsRepository
+import momo.api.usecases.syntax.UseCaseSyntax.*
 
 final class CancelMatchDraft[F[_]: MonadThrow](
     matchDrafts: MatchDraftsRepository[F],
@@ -24,15 +24,11 @@ final class CancelMatchDraft[F[_]: MonadThrow](
   )
 
   def run(draftId: MatchDraftId, memberId: MemberId): F[Either[AppError, Unit]] = (for
-    draft <- EitherT(
-      matchDrafts.find(draftId).map(_.toRight(AppError.NotFound("match draft", draftId.value)))
-    )
+    draft <- matchDrafts.find(draftId).orNotFound("match draft", draftId.value)
     _ <- EitherT.fromEither[F](authorize(draft.createdByMemberId, memberId))
     _ <- EitherT.fromEither[F](canCancel(draft.status))
     at <- EitherT.liftF(now)
-    cancelled <- EitherT.liftF(matchDrafts.cancel(draftId, at))
-    _ <- EitherT
-      .fromEither[F](Either.cond(cancelled, (), AppError.NotFound("match draft", draftId.value)))
+    _ <- matchDrafts.cancel(draftId, at).ensureFoundF("match draft", draftId.value)
     _ <- EitherT.liftF(sourceImageRetention.cleanupNow(draftId, at))
   yield ()).value
 

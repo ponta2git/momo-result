@@ -34,6 +34,9 @@ final class LocalFsImageStore[F[_]: Sync](root: Path) extends ImageStore[F]:
     }.headOption
   }
 
+  override def readBytes(image: StoredImage): F[Array[Byte]] = Sync[F]
+    .blocking(Files.readAllBytes(image.path))
+
   override def delete(imageId: ImageId): F[Boolean] = Sync[F].blocking {
     SupportedImageTypes.exists(imageType => Files.deleteIfExists(imagePath(imageId, imageType)))
   }

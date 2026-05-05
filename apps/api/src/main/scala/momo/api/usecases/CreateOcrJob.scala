@@ -14,6 +14,7 @@ import momo.api.repositories.{
   ImageStore, MatchDraftsRepository, OcrDraftsRepository, OcrJobsRepository, OcrQueuePayload,
   QueueProducer,
 }
+import momo.api.usecases.syntax.UseCaseSyntax.*
 
 final case class CreateOcrJobCommand(
     imageId: ImageId,
@@ -40,9 +41,7 @@ final class CreateOcrJob[F[_]: MonadThrow](
     screenType <- EitherT.fromEither[F](requestedScreenType(command))
     draftForMatch <- command.matchDraftId match
       case None => EitherT.rightT[F, AppError](Option.empty[momo.api.domain.MatchDraft])
-      case Some(id) => EitherT(
-          matchDrafts.find(id).map(_.toRight(AppError.NotFound("match draft", id.value)))
-        ).flatMap { draft =>
+      case Some(id) => matchDrafts.find(id).orNotFound("match draft", id.value).flatMap { draft =>
           if Set(MatchDraftStatus.Confirmed, MatchDraftStatus.Cancelled).contains(draft.status) then
             EitherT.leftT[F, Option[momo.api.domain.MatchDraft]](AppError.Conflict(
               s"match draft in status=${draft.status.wire} cannot start OCR."
@@ -50,9 +49,7 @@ final class CreateOcrJob[F[_]: MonadThrow](
           else EitherT.rightT[F, AppError](Some(draft))
         }
     imageId = command.imageId
-    image <- EitherT(
-      imageStore.find(imageId).map(_.toRight(AppError.NotFound("image", command.imageId.value)))
-    )
+    image <- imageStore.find(imageId).orNotFound("image", command.imageId.value)
     createdAt <- EitherT.liftF(now)
     jobId <- EitherT.liftF(nextId.map(OcrJobId(_)))
     draftId <- EitherT.liftF(nextId.map(OcrDraftId(_)))
@@ -72,27 +69,24 @@ final class CreateOcrJob[F[_]: MonadThrow](
     _ <- EitherT.liftF(drafts.create(draft))
     _ <- EitherT.liftF(jobs.create(job))
     _ <- draftForMatch match
-      case Some(draftRecord) => EitherT(
-          matchDrafts.attachOcrArtifacts(
-            draftId = draftRecord.id,
-            screenType = screenType,
-            sourceImageId = command.imageId,
-            ocrDraftId = draft.id,
-            updatedAt = createdAt,
-          ).map(found =>
-            Either.cond(found, (), AppError.NotFound("match draft", draftRecord.id.value))
-          )
-        )
+      case Some(draftRecord) => matchDrafts.attachOcrArtifacts(
+          draftId = draftRecord.id,
+          screenType = screenType,
+          sourceImageId = command.imageId,
+          ocrDraftId = draft.id,
+          updatedAt = createdAt,
+        ).ensureFoundF("match draft", draftRecord.id.value)
       case None => EitherT.rightT[F, AppError](())
-    published <- EitherT(queue.publish(payload).attempt.flatMap {
-      case Right(_) => CreatedOcrJob(job, draft, payload).asRight[AppError].pure[F]
-      case Left(error) =>
+    published <- EitherT(queue.publish(payload).redeemWith(
+      error =>
         val markDraftFailure = command.matchDraftId match
           case Some(id) => matchDrafts.markOcrFailed(id, createdAt).void
           case None => MonadThrow[F].unit
         jobs.markFailed(jobId, queueFailure(error), createdAt) >> markDraftFailure >>
           AppError.Internal("Failed to enqueue OCR job.").asLeft[CreatedOcrJob].pure[F]
-    })
+      ,
+      _ => CreatedOcrJob(job, draft, payload).asRight[AppError].pure[F],
+    ))
   yield published).value
 
 object CreateOcrJob:

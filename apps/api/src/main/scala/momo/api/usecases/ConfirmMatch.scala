@@ -15,6 +15,7 @@ import momo.api.repositories.{
   GameTitlesRepository, HeldEventsRepository, MapMastersRepository, MatchConfirmationRepository,
   MatchDraftsRepository, MatchesRepository, SeasonMastersRepository,
 }
+import momo.api.usecases.syntax.UseCaseSyntax.*
 
 final class ConfirmMatch[F[_]: MonadThrow](
     heldEvents: HeldEventsRepository[F],
@@ -49,24 +50,20 @@ final class ConfirmMatch[F[_]: MonadThrow](
     playedAt <- EitherT.fromEither[F](Try(Instant.parse(command.playedAt)).toEither.left.map(_ =>
       AppError.ValidationFailed("playedAt must be ISO8601 instant.")
     ))
-    _ <- EitherT(heldEvents.find(command.heldEventId).map(_.toRight(
-      AppError.NotFound("held event", command.heldEventId.value)
-    )))
-    title <- EitherT(gameTitles.find(command.gameTitleId).map(_.toRight(
-      AppError.NotFound("game title", command.gameTitleId.value)
-    )))
-    mapMaster <- EitherT(mapMasters.find(command.mapMasterId).map(_.toRight(
-      AppError.NotFound("map master", command.mapMasterId.value)
-    )))
+    _ <- heldEvents.find(command.heldEventId).orNotFound("held event", command.heldEventId.value)
+      .void
+    title <- gameTitles.find(command.gameTitleId)
+      .orNotFound("game title", command.gameTitleId.value)
+    mapMaster <- mapMasters.find(command.mapMasterId)
+      .orNotFound("map master", command.mapMasterId.value)
     _ <- EitherT.fromEither[F](
       if mapMaster.gameTitleId == title.id then Right(())
       else
         Left(AppError.ValidationFailed(s"mapMasterId ${mapMaster
             .id} does not belong to gameTitleId ${title.id}."))
     )
-    season <- EitherT(seasonMasters.find(command.seasonMasterId).map(_.toRight(
-      AppError.NotFound("season master", command.seasonMasterId.value)
-    )))
+    season <- seasonMasters.find(command.seasonMasterId)
+      .orNotFound("season master", command.seasonMasterId.value)
     _ <- EitherT.fromEither[F](
       if season.gameTitleId == title.id then Right(())
       else
@@ -93,16 +90,13 @@ final class ConfirmMatch[F[_]: MonadThrow](
     )
     maybeDraft <- command.matchDraftId match
       case None => EitherT.rightT[F, AppError](Option.empty[momo.api.domain.MatchDraft])
-      case Some(draftId) => EitherT(
-          matchDrafts.find(draftId).map(_.toRight(AppError.NotFound("match draft", draftId.value)))
-        ).flatMap { draft =>
-          EitherT.fromEither[F](validateDraftForConfirm(draft, command.draftRefs))
-            .map(_ => Some(draft))
-        }
-    saved <- EitherT.liftF(confirmations.confirm(record, maybeDraft.map(_.id), createdAt))
-    _ <- EitherT.fromEither[F](
-      Either.cond(saved, (), AppError.Conflict("Failed to confirm match from the draft."))
-    )
+      case Some(draftId) => matchDrafts.find(draftId).orNotFound("match draft", draftId.value)
+          .flatMap { draft =>
+            EitherT.fromEither[F](validateDraftForConfirm(draft, command.draftRefs))
+              .map(_ => Some(draft))
+          }
+    _ <- confirmations.confirm(record, maybeDraft.map(_.id), createdAt)
+      .ensureF(AppError.Conflict("Failed to confirm match from the draft."))
     _ <- maybeDraft match
       case None => EitherT.rightT[F, AppError](())
       case Some(draft) => EitherT.liftF(sourceImageRetention.cleanupNow(draft.id, createdAt))

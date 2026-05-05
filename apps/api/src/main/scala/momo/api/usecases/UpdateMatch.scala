@@ -15,6 +15,7 @@ import momo.api.repositories.{
   GameTitlesRepository, HeldEventsRepository, MapMastersRepository, MatchesRepository,
   SeasonMastersRepository,
 }
+import momo.api.usecases.syntax.UseCaseSyntax.*
 
 final class UpdateMatch[F[_]: MonadThrow](
     heldEvents: HeldEventsRepository[F],
@@ -28,8 +29,7 @@ final class UpdateMatch[F[_]: MonadThrow](
   import UpdateMatch.*
 
   def run(matchId: MatchId, command: Command): F[Either[AppError, MatchRecord]] = (for
-    existing <-
-      EitherT(matches.find(matchId).map(_.toRight(AppError.NotFound("match", matchId.value))))
+    existing <- matches.find(matchId).orNotFound("match", matchId.value)
     _ <- EitherT.fromEither[F](MatchValidation.validateShape(
       MatchValidation.Input(
         heldEventId = command.heldEventId,
@@ -49,24 +49,20 @@ final class UpdateMatch[F[_]: MonadThrow](
     playedAt <- EitherT.fromEither[F](Try(Instant.parse(command.playedAt)).toEither.left.map(_ =>
       AppError.ValidationFailed("playedAt must be ISO8601 instant.")
     ))
-    _ <- EitherT(heldEvents.find(command.heldEventId).map(_.toRight(
-      AppError.NotFound("held event", command.heldEventId.value)
-    )))
-    title <- EitherT(gameTitles.find(command.gameTitleId).map(_.toRight(
-      AppError.NotFound("game title", command.gameTitleId.value)
-    )))
-    mapMaster <- EitherT(mapMasters.find(command.mapMasterId).map(_.toRight(
-      AppError.NotFound("map master", command.mapMasterId.value)
-    )))
+    _ <- heldEvents.find(command.heldEventId).orNotFound("held event", command.heldEventId.value)
+      .void
+    title <- gameTitles.find(command.gameTitleId)
+      .orNotFound("game title", command.gameTitleId.value)
+    mapMaster <- mapMasters.find(command.mapMasterId)
+      .orNotFound("map master", command.mapMasterId.value)
     _ <- EitherT.fromEither[F](
       if mapMaster.gameTitleId == title.id then Right(())
       else
         Left(AppError.ValidationFailed(s"mapMasterId ${mapMaster
             .id} does not belong to gameTitleId ${title.id}."))
     )
-    season <- EitherT(seasonMasters.find(command.seasonMasterId).map(_.toRight(
-      AppError.NotFound("season master", command.seasonMasterId.value)
-    )))
+    season <- seasonMasters.find(command.seasonMasterId)
+      .orNotFound("season master", command.seasonMasterId.value)
     _ <- EitherT.fromEither[F](
       if season.gameTitleId == title.id then Right(())
       else

@@ -2,13 +2,14 @@ package momo.api.usecases
 
 import java.time.Instant
 
+import cats.MonadThrow
 import cats.data.EitherT
-import cats.effect.Sync
 import cats.syntax.all.*
 
 import momo.api.domain.ids.{ImageId, MemberId, *}
 import momo.api.errors.AppError
 import momo.api.repositories.{ImageStore, MatchDraftsRepository}
+import momo.api.usecases.syntax.UseCaseSyntax.*
 
 enum MatchDraftSourceImageKind(val wire: String) derives CanEqual:
   case TotalAssets extends MatchDraftSourceImageKind("total_assets")
@@ -27,7 +28,7 @@ final case class MatchDraftSourceImage(
 
 final case class MatchDraftSourceImageBinary(contentType: String, bytes: Array[Byte])
 
-final class GetMatchDraftSourceImages[F[_]: Sync](
+final class GetMatchDraftSourceImages[F[_]: MonadThrow](
     matchDrafts: MatchDraftsRepository[F],
     imageStore: ImageStore[F],
 ):
@@ -68,19 +69,15 @@ final class GetMatchDraftSourceImages[F[_]: Sync](
     imageId <- EitherT.fromEither[F](sourceImageId(draft, kind).toRight(
       AppError.NotFound("source image", s"${draftId.value}:${kind.wire}")
     ))
-    image <- EitherT(imageStore.find(imageId).map(_.toRight(
-      AppError.NotFound("source image", s"${draftId.value}:${kind.wire}")
-    )))
-    bytes <- EitherT.liftF(Sync[F].blocking(java.nio.file.Files.readAllBytes(image.path)))
+    image <- imageStore.find(imageId).orNotFound("source image", s"${draftId.value}:${kind.wire}")
+    bytes <- EitherT.liftF(imageStore.readBytes(image))
   yield MatchDraftSourceImageBinary(image.mediaType, bytes)).value
 
   private def loadAuthorizedDraft(
       draftId: MatchDraftId,
       memberId: MemberId,
   ): F[Either[AppError, momo.api.domain.MatchDraft]] = (for
-    draft <- EitherT(
-      matchDrafts.find(draftId).map(_.toRight(AppError.NotFound("match draft", draftId.value)))
-    )
+    draft <- matchDrafts.find(draftId).orNotFound("match draft", draftId.value)
     _ <- EitherT.fromEither[F](Either.cond(
       draft.createdByMemberId == memberId,
       (),

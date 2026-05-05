@@ -8,34 +8,48 @@ import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
+import momo.api.db.Database
 import momo.api.repositories.postgres.PostgresMeta.given
-import momo.api.repositories.{AppSession, AppSessionsRepository}
+import momo.api.repositories.{AppSession, AppSessionsAlg, AppSessionsRepository}
 
+/**
+ * Postgres-backed [[AppSessionsAlg]]. The class facade preserves
+ * `new PostgresAppSessionsRepository(xa)` wiring while exposing a tx-agnostic algebra.
+ */
+object PostgresAppSessions:
+
+  val alg: AppSessionsAlg[ConnectionIO] = new AppSessionsAlg[ConnectionIO]:
+    override def find(id: String): ConnectionIO[Option[AppSession]] = sql"""
+        SELECT id, member_id, csrf_secret, created_at, last_seen_at, expires_at
+        FROM app_sessions
+        WHERE id = $id
+      """.query[AppSession].option
+
+    override def upsert(session: AppSession): ConnectionIO[Unit] = sql"""
+        INSERT INTO app_sessions
+          (id, member_id, csrf_secret, created_at, last_seen_at, expires_at)
+        VALUES
+          (${session.id}, ${session.memberId}, ${session.csrfSecret},
+           ${session.createdAt}, ${session.lastSeenAt}, ${session.expiresAt})
+        ON CONFLICT (id) DO UPDATE SET
+          member_id    = EXCLUDED.member_id,
+          csrf_secret  = EXCLUDED.csrf_secret,
+          last_seen_at = EXCLUDED.last_seen_at,
+          expires_at   = EXCLUDED.expires_at
+      """.update.run.void
+
+    override def delete(id: String): ConnectionIO[Unit] =
+      sql"DELETE FROM app_sessions WHERE id = $id".update.run.void
+
+    override def touchLastSeen(id: String, lastSeenAt: Instant): ConnectionIO[Unit] =
+      sql"UPDATE app_sessions SET last_seen_at = $lastSeenAt WHERE id = $id".update.run.void
+end PostgresAppSessions
+
+/** Backwards-compatible class facade. */
 final class PostgresAppSessionsRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends AppSessionsRepository[F]:
+  private val delegate: AppSessionsRepository[F] = AppSessionsRepository
+    .fromConnectionIO(PostgresAppSessions.alg, Database.transactK(transactor))
 
-  override def find(id: String): F[Option[AppSession]] = sql"""
-      SELECT id, member_id, csrf_secret, created_at, last_seen_at, expires_at
-      FROM app_sessions
-      WHERE id = $id
-    """.query[AppSession].option.transact(transactor)
-
-  override def upsert(session: AppSession): F[Unit] = sql"""
-      INSERT INTO app_sessions
-        (id, member_id, csrf_secret, created_at, last_seen_at, expires_at)
-      VALUES
-        (${session.id}, ${session.memberId}, ${session.csrfSecret},
-         ${session.createdAt}, ${session.lastSeenAt}, ${session.expiresAt})
-      ON CONFLICT (id) DO UPDATE SET
-        member_id    = EXCLUDED.member_id,
-        csrf_secret  = EXCLUDED.csrf_secret,
-        last_seen_at = EXCLUDED.last_seen_at,
-        expires_at   = EXCLUDED.expires_at
-    """.update.run.void.transact(transactor)
-
-  override def delete(id: String): F[Unit] = sql"DELETE FROM app_sessions WHERE id = $id".update.run
-    .void.transact(transactor)
-
-  override def touchLastSeen(id: String, lastSeenAt: Instant): F[Unit] =
-    sql"UPDATE app_sessions SET last_seen_at = $lastSeenAt WHERE id = $id".update.run.void
-      .transact(transactor)
+  export delegate.*
+end PostgresAppSessionsRepository

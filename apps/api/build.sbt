@@ -66,6 +66,7 @@ lazy val root = (project in file("."))
       val logbackVersion = "1.5.18"
       val logstashEncoderVersion = "8.0"
       val janinoVersion = "3.1.12"
+      val log4catsVersion = "2.7.1"
       val munitCatsEffectVersion = "2.2.0"
       val munitVersion = "1.3.0"
       val redis4catsVersion = "1.7.2"
@@ -74,6 +75,7 @@ lazy val root = (project in file("."))
 
       Seq(
         "org.typelevel" %% "cats-effect" % catsEffectVersion,
+        "org.typelevel" %% "log4cats-slf4j" % log4catsVersion,
         "org.http4s" %% "http4s-ember-server" % http4sVersion,
         "org.http4s" %% "http4s-dsl" % http4sVersion,
         "org.http4s" %% "http4s-circe" % http4sVersion,

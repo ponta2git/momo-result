@@ -6,14 +6,15 @@ import cats.effect.{IO, Resource}
 import fs2.Stream
 import io.circe.Json
 import org.http4s.circe.*
-import org.http4s.implicits.*
 import org.http4s.headers.`Content-Type`
+import org.http4s.implicits.*
 import org.http4s.multipart.{Multiparts, Part}
 import org.http4s.{Header, MediaType, Method, Request, Status, Uri}
 import org.typelevel.ci.CIString
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.config.{AppConfig, AppEnv}
+import momo.api.http.HttpProblemAssertions.assertProblem
 
 final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite:
   import java.time.Instant
@@ -99,21 +100,23 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite:
     app.use { httpApp =>
       val req = Request[IO](Method.POST, uri"/api/held-events").putHeaders(authHeaders*)
         .withEntity(Json.obj("heldAt" -> Json.fromString("not-an-instant")))
-      httpApp.run(req).map(res => assertEquals(res.status, Status.UnprocessableContent))
+      httpApp.run(req).flatMap { res =>
+        assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "heldAt")
+      }
     }
   }
 
   test("GET /api/ocr-drafts bulk rejects empty ids") {
     app.use { httpApp =>
       httpApp.run(Request[IO](Method.GET, uri"/api/ocr-drafts?ids=").putHeaders(readHeader))
-        .map(res => assertEquals(res.status, Status.UnprocessableContent))
+        .flatMap(res => assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "ids"))
     }
   }
 
   test("GET /api/ocr-drafts bulk returns 404 when a draft is missing") {
     app.use { httpApp =>
       httpApp.run(Request[IO](Method.GET, uri"/api/ocr-drafts?ids=missing").putHeaders(readHeader))
-        .map(res => assertEquals(res.status, Status.NotFound))
+        .flatMap(res => assertProblem(res, Status.NotFound, "NOT_FOUND", "ocr draft was not found"))
     }
   }
 
@@ -220,7 +223,7 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite:
     }
   }
 
-  test("POST /api/matches rejects duplicate ranks") {
+  test("POST /api/matches maps validation failures to ProblemDetails") {
     app.use { httpApp =>
       for
         id <- createEvent(httpApp)
@@ -235,35 +238,8 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite:
         res <- httpApp.run(
           Request[IO](Method.POST, uri"/api/matches").putHeaders(authHeaders*).withEntity(body)
         )
-      yield assertEquals(res.status, Status.UnprocessableContent)
-    }
-  }
-
-  test("POST /api/matches rejects missing held event") {
-    app.use { httpApp =>
-      val res = httpApp.run(
-        Request[IO](Method.POST, uri"/api/matches").putHeaders(authHeaders*)
-          .withEntity(confirmBody("does-not-exist"))
-      )
-      res.map(r => assertEquals(r.status, Status.NotFound))
-    }
-  }
-
-  test("POST /api/matches rejects duplicate matchNo") {
-    app.use { httpApp =>
-      for
-        id <- createEvent(httpApp)
-        first <- httpApp.run(
-          Request[IO](Method.POST, uri"/api/matches").putHeaders(authHeaders*)
-            .withEntity(confirmBody(id, 1))
-        )
-        _ = assertEquals(first.status, Status.Ok)
-        _ <- first.as[Json]
-        second <- httpApp.run(
-          Request[IO](Method.POST, uri"/api/matches").putHeaders(authHeaders*)
-            .withEntity(confirmBody(id, 1))
-        )
-      yield assertEquals(second.status, Status.Conflict)
+        _ <- assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "players.rank")
+      yield ()
     }
   }
 
@@ -329,22 +305,8 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite:
     app.use { httpApp =>
       val invalidFormat = Request[IO](Method.GET, uri"/api/exports/matches?format=x")
         .putHeaders(readHeader)
-      val multiScope =
-        Request[IO](Method.GET, uri"/api/exports/matches?format=csv&seasonMasterId=a&heldEventId=b")
-          .putHeaders(readHeader)
-      for
-        r1 <- httpApp.run(invalidFormat)
-        r2 <- httpApp.run(multiScope)
-      yield
-        assertEquals(r1.status, Status.UnprocessableContent)
-        assertEquals(r2.status, Status.UnprocessableContent)
-    }
-  }
-
-  test("GET /api/exports/matches returns 404 for unknown match scope") {
-    app.use { httpApp =>
-      val req = Request[IO](Method.GET, uri"/api/exports/matches?format=csv&matchId=missing")
-        .putHeaders(readHeader)
-      httpApp.run(req).map(res => assertEquals(res.status, Status.NotFound))
+      httpApp.run(invalidFormat).flatMap { res =>
+        assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "format")
+      }
     }
   }

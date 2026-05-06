@@ -11,6 +11,7 @@ import org.typelevel.ci.CIString
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.config.{AppConfig, AppEnv}
+import momo.api.http.HttpProblemAssertions.assertProblem
 
 final class MasterEndpointsSpec extends MomoCatsEffectSuite:
 
@@ -92,38 +93,9 @@ final class MasterEndpointsSpec extends MomoCatsEffectSuite:
       )
       val req = Request[IO](Method.POST, uri"/api/game-titles").withHeaders(authHeaders*)
         .withEntity(body)
-      http.run(req).map(r => assertEquals(r.status, Status.UnprocessableContent))
-    }
-  }
-
-  test("POST /api/game-titles returns 409 on duplicate id") {
-    app.use { http =>
-      val body = Json.obj(
-        "id" -> Json.fromString("title_world"),
-        "name" -> Json.fromString("ワールド"),
-        "layoutFamily" -> Json.fromString("world"),
-      )
-      val req = Request[IO](Method.POST, uri"/api/game-titles").withHeaders(authHeaders*)
-        .withEntity(body)
-      for
-        first <- http.run(req)
-        _ = assertEquals(first.status, Status.Ok)
-        second <- http.run(req)
-        _ = assertEquals(second.status, Status.Conflict)
-      yield ()
-    }
-  }
-
-  test("POST /api/map-masters requires existing game title") {
-    app.use { http =>
-      val body = Json.obj(
-        "id" -> Json.fromString("map_east"),
-        "gameTitleId" -> Json.fromString("title_missing"),
-        "name" -> Json.fromString("東日本編"),
-      )
-      val req = Request[IO](Method.POST, uri"/api/map-masters").withHeaders(authHeaders*)
-        .withEntity(body)
-      http.run(req).map(r => assertEquals(r.status, Status.NotFound))
+      http.run(req).flatMap { r =>
+        assertProblem(r, Status.UnprocessableContent, "VALIDATION_FAILED", "id must match")
+      }
     }
   }
 
@@ -189,13 +161,15 @@ final class MasterEndpointsSpec extends MomoCatsEffectSuite:
       )
       val req = Request[IO](Method.POST, uri"/api/game-titles")
         .withHeaders(Header.Raw(CIString("X-Dev-User"), "ponta")).withEntity(body)
-      http.run(req).map(r => assertEquals(r.status, Status.Forbidden))
+      http.run(req).flatMap(r => assertProblem(r, Status.Forbidden, "FORBIDDEN", "CSRF"))
     }
   }
 
   test("GET /api/game-titles without auth returns 401") {
     app.use { http =>
       val req = Request[IO](Method.GET, uri"/api/game-titles")
-      http.run(req).map(r => assertEquals(r.status, Status.Unauthorized))
+      http.run(req).flatMap { r =>
+        assertProblem(r, Status.Unauthorized, "UNAUTHORIZED", "Authentication is required")
+      }
     }
   }

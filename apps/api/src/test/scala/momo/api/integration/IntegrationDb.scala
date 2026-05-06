@@ -23,6 +23,8 @@ object IntegrationDb:
 
   final case class Settings(jdbcUrl: String, user: String, password: String)
 
+  def isCi: Boolean = sys.env.get("CI").exists(_.equalsIgnoreCase("true"))
+
   def settings: Settings =
     val jdbcUrl = sys.env
       .getOrElse("MOMO_RESULT_TEST_DATABASE_URL", "jdbc:postgresql://localhost:5433/summit")

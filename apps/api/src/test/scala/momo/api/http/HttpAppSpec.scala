@@ -1,8 +1,6 @@
 package momo.api.http
 
-import java.nio.file.Files
-
-import cats.effect.{IO, Resource}
+import cats.effect.IO
 import io.circe.Json
 import org.http4s.circe.*
 import org.http4s.implicits.*
@@ -13,17 +11,16 @@ import momo.api.config.{AppConfig, AppEnv}
 import momo.api.http.HttpAssertions.{assertProblem, headerValue, jsonField, optionalHeaderValue}
 
 final class HttpAppSpec extends MomoCatsEffectSuite:
-  private def app = Resource.eval(IO.blocking(Files.createTempDirectory("momo-api-http")))
-    .flatMap { dir =>
-      val config = AppConfig(
-        appEnv = AppEnv.Test,
-        httpHost = "127.0.0.1",
-        httpPort = 0,
-        imageTmpDir = dir,
-        devMemberIds = List("ponta", "akane-mami", "otaka", "eu"),
-      )
-      HttpApp.resource[IO](config)
-    }
+  private def app = tempDirectory("momo-api-http").flatMap { dir =>
+    val config = AppConfig(
+      appEnv = AppEnv.Test,
+      httpHost = "127.0.0.1",
+      httpPort = 0,
+      imageTmpDir = dir,
+      devMemberIds = List("ponta", "akane-mami", "otaka", "eu"),
+    )
+    HttpApp.resource[IO](config)
+  }
 
   test("GET /healthz returns ok") {
     app.use { httpApp =>
@@ -90,7 +87,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite:
   }
 
   test("HSTS is set on prod responses") {
-    Resource.eval(IO.blocking(Files.createTempDirectory("momo-api-prod-hsts"))).flatMap { dir =>
+    tempDirectory("momo-api-prod-hsts").flatMap { dir =>
       val config = AppConfig(
         appEnv = AppEnv.Prod,
         httpHost = "127.0.0.1",
@@ -148,7 +145,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite:
   }
 
   test("prod protected endpoint rejects external X-Dev-User without session cookie") {
-    Resource.eval(IO.blocking(Files.createTempDirectory("momo-api-prod-http"))).flatMap { dir =>
+    tempDirectory("momo-api-prod-http").flatMap { dir =>
       val config = AppConfig(
         appEnv = AppEnv.Prod,
         httpHost = "127.0.0.1",

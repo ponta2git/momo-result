@@ -1,7 +1,5 @@
 package momo.api.http
 
-import java.nio.file.Files
-
 import cats.effect.{IO, Resource}
 import fs2.Stream
 import io.circe.Json
@@ -21,8 +19,8 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite:
   import momo.api.domain.ids.*
   import momo.api.domain.{GameTitle, MapMaster, SeasonMaster}
 
-  private def app: Resource[IO, org.http4s.HttpApp[IO]] = Resource
-    .eval(IO.blocking(Files.createTempDirectory("momo-api-held"))).flatMap { dir =>
+  private def app: Resource[IO, org.http4s.HttpApp[IO]] = tempDirectory("momo-api-held")
+    .flatMap { dir =>
       val config = AppConfig(
         appEnv = AppEnv.Test,
         httpHost = "127.0.0.1",

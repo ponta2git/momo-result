@@ -1,6 +1,5 @@
 package momo.api.usecases
 
-import java.nio.file.Files
 import java.time.Instant
 
 import cats.effect.IO
@@ -29,41 +28,42 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
     case Left(error) => IO.raiseError(new RuntimeException(error.detail))
 
   test("creates empty draft, queued job, and stream payload") {
-    for
-      dir <- IO.blocking(Files.createTempDirectory("momo-api-create-job"))
-      imageStore = LocalFsImageStore[IO](dir)
-      image <- imageStore.save(Some("sample.png"), Some("image/png"), pngBytes)
-        .flatMap(fromAppEither)
-      jobs <- InMemoryOcrJobsRepository.create[IO]
-      drafts <- InMemoryOcrDraftsRepository.create[IO]
-      matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
-      queue <- InMemoryQueueProducer.create[IO]
-      ids <- IO.ref(List("job-1", "draft-1"))
-      usecase = CreateOcrJob[IO](
-        imageStore = imageStore,
-        jobs = jobs,
-        drafts = drafts,
-        matchDrafts = matchDrafts,
-        queue = queue,
-        now = IO.pure(Instant.parse("2026-04-29T11:40:16Z")),
-        nextId = ids.modify {
-          case head :: tail => tail -> head
-          case Nil => Nil -> "unexpected"
-        },
-        requestIdLookup = IO.pure(Some("test-req-id")),
-      )
-      created <- usecase
-        .run(CreateOcrJobCommand(image.imageId, "total_assets", OcrJobHints.empty, None))
-        .flatMap(fromAppEither)
-      foundJob <- jobs.find(created.job.id)
-      foundDraft <- drafts.find(created.draft.id)
-      published <- queue.published
-    yield
-      assertEquals(foundJob.map(_.status.wire), Some("queued"))
-      assertEquals(foundDraft.map(_.id), Some(created.draft.id))
-      assertEquals(published.map(_.fields("jobId")), Vector("job-1"))
-      assertEquals(published.head.fields("requestedImageType"), "total_assets")
-      assertEquals(published.head.fields.get("requestId"), Some("test-req-id"))
+    tempDirectory("momo-api-create-job").use { dir =>
+      for
+        imageStore <- IO.pure(LocalFsImageStore[IO](dir))
+        image <- imageStore.save(Some("sample.png"), Some("image/png"), pngBytes)
+          .flatMap(fromAppEither)
+        jobs <- InMemoryOcrJobsRepository.create[IO]
+        drafts <- InMemoryOcrDraftsRepository.create[IO]
+        matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
+        queue <- InMemoryQueueProducer.create[IO]
+        ids <- IO.ref(List("job-1", "draft-1"))
+        usecase = CreateOcrJob[IO](
+          imageStore = imageStore,
+          jobs = jobs,
+          drafts = drafts,
+          matchDrafts = matchDrafts,
+          queue = queue,
+          now = IO.pure(Instant.parse("2026-04-29T11:40:16Z")),
+          nextId = ids.modify {
+            case head :: tail => tail -> head
+            case Nil => Nil -> "unexpected"
+          },
+          requestIdLookup = IO.pure(Some("test-req-id")),
+        )
+        created <- usecase
+          .run(CreateOcrJobCommand(image.imageId, "total_assets", OcrJobHints.empty, None))
+          .flatMap(fromAppEither)
+        foundJob <- jobs.find(created.job.id)
+        foundDraft <- drafts.find(created.draft.id)
+        published <- queue.published
+      yield
+        assertEquals(foundJob.map(_.status.wire), Some("queued"))
+        assertEquals(foundDraft.map(_.id), Some(created.draft.id))
+        assertEquals(published.map(_.fields("jobId")), Vector("job-1"))
+        assertEquals(published.head.fields("requestedImageType"), "total_assets")
+        assertEquals(published.head.fields.get("requestId"), Some("test-req-id"))
+    }
   }
 
   test("returns Internal and does not raise when both queue.publish and markFailed fail") {
@@ -82,34 +82,35 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         override def cancelQueued(jobId: OcrJobId, now: Instant): IO[Boolean] = delegate
           .cancelQueued(jobId, now)
 
-    for
-      dir <- IO.blocking(Files.createTempDirectory("momo-api-create-job-fail"))
-      imageStore = LocalFsImageStore[IO](dir)
-      image <- imageStore.save(Some("sample.png"), Some("image/png"), pngBytes)
-        .flatMap(fromAppEither)
-      jobsBase <- InMemoryOcrJobsRepository.create[IO]
-      jobs = failingJobs(jobsBase)
-      drafts <- InMemoryOcrDraftsRepository.create[IO]
-      matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
-      ids <- IO.ref(List("job-1", "draft-1"))
-      usecase = CreateOcrJob[IO](
-        imageStore = imageStore,
-        jobs = jobs,
-        drafts = drafts,
-        matchDrafts = matchDrafts,
-        queue = failingQueue,
-        now = IO.pure(Instant.parse("2026-04-29T11:40:16Z")),
-        nextId = ids.modify {
-          case head :: tail => tail -> head
-          case Nil => Nil -> "unexpected"
-        },
-        requestIdLookup = IO.pure(None),
-      )
-      result <- usecase
-        .run(CreateOcrJobCommand(image.imageId, "total_assets", OcrJobHints.empty, None))
-    yield result match
-      case Left(_: AppError.Internal) => ()
-      case other => fail(s"expected Left(AppError.Internal), got: $other")
+    tempDirectory("momo-api-create-job-fail").use { dir =>
+      for
+        imageStore <- IO.pure(LocalFsImageStore[IO](dir))
+        image <- imageStore.save(Some("sample.png"), Some("image/png"), pngBytes)
+          .flatMap(fromAppEither)
+        jobsBase <- InMemoryOcrJobsRepository.create[IO]
+        jobs = failingJobs(jobsBase)
+        drafts <- InMemoryOcrDraftsRepository.create[IO]
+        matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
+        ids <- IO.ref(List("job-1", "draft-1"))
+        usecase = CreateOcrJob[IO](
+          imageStore = imageStore,
+          jobs = jobs,
+          drafts = drafts,
+          matchDrafts = matchDrafts,
+          queue = failingQueue,
+          now = IO.pure(Instant.parse("2026-04-29T11:40:16Z")),
+          nextId = ids.modify {
+            case head :: tail => tail -> head
+            case Nil => Nil -> "unexpected"
+          },
+          requestIdLookup = IO.pure(None),
+        )
+        result <- usecase
+          .run(CreateOcrJobCommand(image.imageId, "total_assets", OcrJobHints.empty, None))
+      yield result match
+        case Left(_: AppError.Internal) => ()
+        case other => fail(s"expected Left(AppError.Internal), got: $other")
+    }
   }
 
   test("logs compensation failure exactly once when both queue.publish and markFailed fail") {
@@ -128,51 +129,55 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         override def cancelQueued(jobId: OcrJobId, now: Instant): IO[Boolean] = delegate
           .cancelQueued(jobId, now)
 
-    for
-      capture <- CapturingLoggerFactory.create[IO]
-      (factory, ref) = capture
-      given LoggerFactory[IO] = factory
-      dir <- IO.blocking(Files.createTempDirectory("momo-api-create-job-log"))
-      imageStore = LocalFsImageStore[IO](dir)
-      image <- imageStore.save(Some("sample.png"), Some("image/png"), pngBytes)
-        .flatMap(fromAppEither)
-      jobsBase <- InMemoryOcrJobsRepository.create[IO]
-      jobs = failingJobs(jobsBase)
-      drafts <- InMemoryOcrDraftsRepository.create[IO]
-      matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
-      ids <- IO.ref(List("job-log-1", "draft-log-1"))
-      usecase = CreateOcrJob[IO](
-        imageStore = imageStore,
-        jobs = jobs,
-        drafts = drafts,
-        matchDrafts = matchDrafts,
-        queue = failingQueue,
-        now = IO.pure(Instant.parse("2026-04-29T11:40:16Z")),
-        nextId = ids.modify {
-          case head :: tail => tail -> head
-          case Nil => Nil -> "unexpected"
-        },
-        requestIdLookup = IO.pure(None),
-      )
-      result <- usecase
-        .run(CreateOcrJobCommand(image.imageId, "total_assets", OcrJobHints.empty, None))
-      logged <- ref.get
-    yield
-      // Original AppError.Internal is still surfaced to the caller (enqueue failure not swallowed).
-      result match
-        case Left(_: AppError.Internal) => ()
-        case other => fail(s"expected Left(AppError.Internal), got: $other")
-      // Exactly one error log emitted, with the compensation (markFailed) throwable attached.
-      assertEquals(logged.size, 1)
-      val entry = logged.head
-      assertEquals(entry.throwable, Some(markFailedError))
-      assert(entry.message.contains("jobId=job-log-1"), s"message missing jobId: ${entry.message}")
-      assert(
-        entry.message.contains("draftId=draft-log-1"),
-        s"message missing draftId: ${entry.message}",
-      )
-      assert(
-        entry.message.contains("compensation"),
-        s"message missing 'compensation' marker: ${entry.message}",
-      )
+    tempDirectory("momo-api-create-job-log").use { dir =>
+      for
+        capture <- CapturingLoggerFactory.create[IO]
+        (factory, ref) = capture
+        given LoggerFactory[IO] = factory
+        imageStore <- IO.pure(LocalFsImageStore[IO](dir))
+        image <- imageStore.save(Some("sample.png"), Some("image/png"), pngBytes)
+          .flatMap(fromAppEither)
+        jobsBase <- InMemoryOcrJobsRepository.create[IO]
+        jobs = failingJobs(jobsBase)
+        drafts <- InMemoryOcrDraftsRepository.create[IO]
+        matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
+        ids <- IO.ref(List("job-log-1", "draft-log-1"))
+        usecase = CreateOcrJob[IO](
+          imageStore = imageStore,
+          jobs = jobs,
+          drafts = drafts,
+          matchDrafts = matchDrafts,
+          queue = failingQueue,
+          now = IO.pure(Instant.parse("2026-04-29T11:40:16Z")),
+          nextId = ids.modify {
+            case head :: tail => tail -> head
+            case Nil => Nil -> "unexpected"
+          },
+          requestIdLookup = IO.pure(None),
+        )
+        result <- usecase
+          .run(CreateOcrJobCommand(image.imageId, "total_assets", OcrJobHints.empty, None))
+        logged <- ref.get
+      yield
+        // Original AppError.Internal is still surfaced to the caller (enqueue failure not swallowed).
+        result match
+          case Left(_: AppError.Internal) => ()
+          case other => fail(s"expected Left(AppError.Internal), got: $other")
+        // Exactly one error log emitted, with the compensation (markFailed) throwable attached.
+        assertEquals(logged.size, 1)
+        val entry = logged.head
+        assertEquals(entry.throwable, Some(markFailedError))
+        assert(
+          entry.message.contains("jobId=job-log-1"),
+          s"message missing jobId: ${entry.message}",
+        )
+        assert(
+          entry.message.contains("draftId=draft-log-1"),
+          s"message missing draftId: ${entry.message}",
+        )
+        assert(
+          entry.message.contains("compensation"),
+          s"message missing 'compensation' marker: ${entry.message}",
+        )
+    }
   }

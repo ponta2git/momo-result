@@ -23,16 +23,14 @@ object HttpAssertions:
     )
   }
 
-  def jsonField[A: Decoder](body: Json, field: String): A =
-    body.hcursor.get[A](field).fold(
-      error => fail(s"expected JSON field '$field': ${error.getMessage}; body=${body.noSpaces}"),
-      identity,
-    )
+  def jsonField[A: Decoder](body: Json, field: String): A = body.hcursor.get[A](field).fold(
+    error => fail(s"expected JSON field '$field': ${error.getMessage}; body=${body.noSpaces}"),
+    identity,
+  )
 
-  def optionalHeaderValue(response: Response[IO], name: CIString): Option[String] =
-    response.headers.get(name).map(_.head.value)
+  def optionalHeaderValue(response: Response[IO], name: CIString): Option[String] = response.headers
+    .get(name).map(_.head.value)
 
-  def headerValue(response: Response[IO], name: CIString): String = optionalHeaderValue(
-    response,
-    name,
-  ).getOrElse(fail(s"expected header '${name.toString}' on response status=${response.status}"))
+  def headerValue(response: Response[IO], name: CIString): String =
+    optionalHeaderValue(response, name)
+      .getOrElse(fail(s"expected header '${name.toString}' on response status=${response.status}"))

@@ -100,7 +100,8 @@ DB-backed API を変更するときは、該当Endpointに対応するPostgreSQL
 
 Docker、Redis、外部プロセスに依存するテストは、下位レベルの単体テストと混在させない。PostgreSQL依存のDB-backed API検証は、前章のDB専用ルールに従う。
 
-- `sbt test` では `Integration` tag付きの任意外部サービス接続テストを除外する。
+- `sbt test` では `Integration` tag付きの外部サービス接続テストを除外する。
+- PostgreSQL-backed spec は `Integration` tag を付け、`sbt apiDbQuality` で明示的に実行する。
 - Redis Streams など外部Redisのwire動作は `Integration` tag を付け、`sbt apiRedisQuality` で明示的に実行する。
 - statefulな外部サービスを使うspecは、stream名・DB row・一時ファイル名などをテストごとに分離する。
 - 実時間のsleepで待たず、publish後の読み取り、deferred promise、明示的な状態確認で同期する。

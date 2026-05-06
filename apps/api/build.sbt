@@ -20,7 +20,8 @@ addCommandAlias(
 )
 addCommandAlias(
   "apiDbQuality",
-  "testOnly momo.api.integration.DbContractSpec; " +
+  "set Test / testOptions := Seq(); " +
+    "testOnly momo.api.integration.DbContractSpec; " +
     "testOnly momo.api.integration.PostgresHeldEventsRepositoryContractSpec; " +
     "testOnly momo.api.integration.PostgresIdempotencyRepositoryContractSpec; " +
     "testOnly momo.api.integration.PostgresMatchesRepositorySpec; " +

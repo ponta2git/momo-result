@@ -1,9 +1,8 @@
 package momo.api.usecases
 
-import java.nio.file.Files
 import java.time.Instant
 
-import cats.effect.IO
+import cats.effect.{IO, Resource}
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.adapters.{
@@ -25,57 +24,62 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
     Set(MemberId("ponta"), MemberId("akane-mami"), MemberId("otaka"), MemberId("eu"))
 
   test("confirms a valid match and persists the created record"):
-    for
-      fixture <- Fixture.create
-      _ <- fixture.seedPrereqs()
-      result <- fixture.usecase.run(command(), MemberId("ponta"))
-      found <- fixture.matches.find(MatchId("match-1"))
-    yield
-      assertEquals(result.map(_.id), Right(MatchId("match-1")))
-      assertEquals(found.map(_.matchNoInEvent), Some(1))
+    Fixture.resource.use { fixture =>
+      for
+        _ <- fixture.seedPrereqs()
+        result <- fixture.usecase.run(command(), MemberId("ponta"))
+        found <- fixture.matches.find(MatchId("match-1"))
+      yield
+        assertEquals(result.map(_.id), Right(MatchId("match-1")))
+        assertEquals(found.map(_.matchNoInEvent), Some(1))
+    }
 
   test("rejects invalid player ranks before persisting"):
-    for
-      fixture <- Fixture.create
-      _ <- fixture.seedPrereqs()
-      bad = commandWithPlayers(List(
-        player("ponta", 1, 1),
-        player("akane-mami", 2, 1),
-        player("otaka", 3, 3),
-        player("eu", 4, 4),
-      ))
-      result <- fixture.usecase.run(bad, MemberId("ponta"))
-      found <- fixture.matches.find(MatchId("match-1"))
-    yield
-      assertAppError(result, "VALIDATION_FAILED", "players.rank")
-      assertEquals(found, None)
+    Fixture.resource.use { fixture =>
+      for
+        _ <- fixture.seedPrereqs()
+        bad = commandWithPlayers(List(
+          player("ponta", 1, 1),
+          player("akane-mami", 2, 1),
+          player("otaka", 3, 3),
+          player("eu", 4, 4),
+        ))
+        result <- fixture.usecase.run(bad, MemberId("ponta"))
+        found <- fixture.matches.find(MatchId("match-1"))
+      yield
+        assertAppError(result, "VALIDATION_FAILED", "players.rank")
+        assertEquals(found, None)
+    }
 
   test("rejects missing held event"):
-    for
-      fixture <- Fixture.create
-      _ <- fixture.seedMastersOnly()
-      result <- fixture.usecase.run(command(), MemberId("ponta"))
-    yield assertAppError(result, "NOT_FOUND", "held event was not found")
+    Fixture.resource.use { fixture =>
+      for
+        _ <- fixture.seedMastersOnly()
+        result <- fixture.usecase.run(command(), MemberId("ponta"))
+      yield assertAppError(result, "NOT_FOUND", "held event was not found")
+    }
 
   test("rejects duplicate match number for the same held event"):
-    for
-      fixture <- Fixture.create
-      _ <- fixture.seedPrereqs()
-      first <- fixture.usecase.run(command(), MemberId("ponta"))
-      second <- fixture.usecase.run(commandWithMatchNo(1), MemberId("ponta"))
-    yield
-      assertEquals(first.map(_.matchNoInEvent), Right(1))
-      assertAppError(second, "CONFLICT", "already exists for held event")
+    Fixture.resource.use { fixture =>
+      for
+        _ <- fixture.seedPrereqs()
+        first <- fixture.usecase.run(command(), MemberId("ponta"))
+        second <- fixture.usecase.run(commandWithMatchNo(1), MemberId("ponta"))
+      yield
+        assertEquals(first.map(_.matchNoInEvent), Right(1))
+        assertAppError(second, "CONFLICT", "already exists for held event")
+    }
 
   test("rejects map and season that belong to a different game title"):
-    for
-      fixture <- Fixture.create
-      _ <- fixture.seedPrereqs()
-      _ <- fixture.gameTitles
-        .create(GameTitle(GameTitleId("title_japan"), "Japan", "japan", 2, now))
-      result <- fixture.usecase
-        .run(commandWithGameTitle(GameTitleId("title_japan")), MemberId("ponta"))
-    yield assertAppError(result, "VALIDATION_FAILED", "mapMasterId")
+    Fixture.resource.use { fixture =>
+      for
+        _ <- fixture.seedPrereqs()
+        _ <- fixture.gameTitles
+          .create(GameTitle(GameTitleId("title_japan"), "Japan", "japan", 2, now))
+        result <- fixture.usecase
+          .run(commandWithGameTitle(GameTitleId("title_japan")), MemberId("ponta"))
+      yield assertAppError(result, "VALIDATION_FAILED", "mapMasterId")
+    }
 
   private def command(): ConfirmMatch.Command =
     commandWith(matchNoInEvent = 1, gameTitleId = titleId, players = defaultPlayers)
@@ -149,9 +153,8 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
       seasonMasters.create(SeasonMaster(seasonId, titleId, "Spring", 1, now))
 
   private object Fixture:
-    def create: IO[Fixture] =
+    def resource: Resource[IO, Fixture] = tempDirectory("momo-api-confirm-match").evalMap { dir =>
       for
-        dir <- IO.blocking(Files.createTempDirectory("momo-api-confirm-match"))
         gameTitles <- InMemoryGameTitlesRepository.create[IO]
         mapMasters <- InMemoryMapMastersRepository.create[IO]
         seasonMasters <- InMemorySeasonMastersRepository.create[IO]
@@ -178,3 +181,4 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
           allowedMemberIds = allowedMembers,
         )
       yield Fixture(gameTitles, mapMasters, seasonMasters, heldEvents, matches, usecase)
+    }

@@ -1,6 +1,5 @@
 package momo.api.usecases
 
-import java.nio.file.Files
 import java.time.Instant
 
 import cats.effect.IO
@@ -17,52 +16,53 @@ final class PurgeSourceImagesSpec extends MomoCatsEffectSuite:
   test("keeps source images before cleanup and deletes them at cleanup time") {
     val createdAt = Instant.parse("2026-05-04T01:00:00Z")
     val finalizedAt = Instant.parse("2026-05-04T01:30:00Z")
-    for
-      dir <- IO.blocking(Files.createTempDirectory("momo-api-source-image-retention"))
-      imageStore = LocalFsImageStore[IO](dir)
-      totalAssets <- saveImage(imageStore, "total.png")
-      revenue <- saveImage(imageStore, "revenue.png")
-      incidentLog <- saveImage(imageStore, "incident.png")
-      matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
-      draft = MatchDraft.fromInputs(
-        id = MatchDraftId("draft-1"),
-        createdByMemberId = MemberId("member-1"),
-        status = MatchDraftStatus.NeedsReview,
-        heldEventId = None,
-        matchNoInEvent = None,
-        gameTitleId = None,
-        layoutFamily = None,
-        seasonMasterId = None,
-        ownerMemberId = None,
-        mapMasterId = None,
-        playedAt = None,
-        totalAssetsImageId = Some(totalAssets.imageId),
-        revenueImageId = Some(revenue.imageId),
-        incidentLogImageId = Some(incidentLog.imageId),
-        totalAssetsDraftId = None,
-        revenueDraftId = None,
-        incidentLogDraftId = None,
-        sourceImagesRetainedUntil = None,
-        sourceImagesDeletedAt = None,
-        confirmedMatchId = None,
-        createdAt = createdAt,
-        updatedAt = createdAt,
-      ).getOrElse(fail("invalid draft fixture"))
-      _ <- matchDrafts.create(draft)
-      beforeCleanup <- imageStore.find(totalAssets.imageId)
-      service = PurgeSourceImages[IO](matchDrafts, imageStore)
-      _ <- service.run(draft.id, finalizedAt)
-      totalAfter <- imageStore.find(totalAssets.imageId)
-      revenueAfter <- imageStore.find(revenue.imageId)
-      incidentAfter <- imageStore.find(incidentLog.imageId)
-      updatedDraft <- matchDrafts.find(draft.id)
-    yield
-      assert(beforeCleanup.nonEmpty)
-      assertEquals(totalAfter, None)
-      assertEquals(revenueAfter, None)
-      assertEquals(incidentAfter, None)
-      assertEquals(updatedDraft.flatMap(_.sourceImagesRetainedUntil), Some(finalizedAt))
-      assertEquals(updatedDraft.flatMap(_.sourceImagesDeletedAt), Some(finalizedAt))
+    tempDirectory("momo-api-source-image-retention").use { dir =>
+      for
+        imageStore <- IO.pure(LocalFsImageStore[IO](dir))
+        totalAssets <- saveImage(imageStore, "total.png")
+        revenue <- saveImage(imageStore, "revenue.png")
+        incidentLog <- saveImage(imageStore, "incident.png")
+        matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
+        draft = MatchDraft.fromInputs(
+          id = MatchDraftId("draft-1"),
+          createdByMemberId = MemberId("member-1"),
+          status = MatchDraftStatus.NeedsReview,
+          heldEventId = None,
+          matchNoInEvent = None,
+          gameTitleId = None,
+          layoutFamily = None,
+          seasonMasterId = None,
+          ownerMemberId = None,
+          mapMasterId = None,
+          playedAt = None,
+          totalAssetsImageId = Some(totalAssets.imageId),
+          revenueImageId = Some(revenue.imageId),
+          incidentLogImageId = Some(incidentLog.imageId),
+          totalAssetsDraftId = None,
+          revenueDraftId = None,
+          incidentLogDraftId = None,
+          sourceImagesRetainedUntil = None,
+          sourceImagesDeletedAt = None,
+          confirmedMatchId = None,
+          createdAt = createdAt,
+          updatedAt = createdAt,
+        ).getOrElse(fail("invalid draft fixture"))
+        _ <- matchDrafts.create(draft)
+        beforeCleanup <- imageStore.find(totalAssets.imageId)
+        service = PurgeSourceImages[IO](matchDrafts, imageStore)
+        _ <- service.run(draft.id, finalizedAt)
+        totalAfter <- imageStore.find(totalAssets.imageId)
+        revenueAfter <- imageStore.find(revenue.imageId)
+        incidentAfter <- imageStore.find(incidentLog.imageId)
+        updatedDraft <- matchDrafts.find(draft.id)
+      yield
+        assert(beforeCleanup.nonEmpty)
+        assertEquals(totalAfter, None)
+        assertEquals(revenueAfter, None)
+        assertEquals(incidentAfter, None)
+        assertEquals(updatedDraft.flatMap(_.sourceImagesRetainedUntil), Some(finalizedAt))
+        assertEquals(updatedDraft.flatMap(_.sourceImagesDeletedAt), Some(finalizedAt))
+    }
   }
 
   private def saveImage(

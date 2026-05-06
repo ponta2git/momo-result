@@ -13,7 +13,7 @@ final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:
     Array[Byte](0x89.toByte, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)
 
   test("stores PNG images after magic byte and content type validation") {
-    IO.blocking(Files.createTempDirectory("momo-api-image-store")).flatMap { dir =>
+    tempDirectory("momo-api-image-store").use { dir =>
       val store = LocalFsImageStore[IO](dir)
       store.save(Some("sample.png"), Some("image/png"), pngBytes).flatMap {
         case Right(image) => IO.blocking(Files.exists(image.path)).assertEquals(true) *>
@@ -25,7 +25,7 @@ final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:
   }
 
   test("rejects unsupported bytes") {
-    IO.blocking(Files.createTempDirectory("momo-api-image-store")).flatMap { dir =>
+    tempDirectory("momo-api-image-store").use { dir =>
       val store = LocalFsImageStore[IO](dir)
       store.save(Some("sample.txt"), Some("text/plain"), Array[Byte](1, 2, 3)).map {
         case Left(error: AppError.UnsupportedMediaType) => assert(error.detail.contains("PNG"))
@@ -35,7 +35,7 @@ final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:
   }
 
   test("rejects images larger than 3MB") {
-    IO.blocking(Files.createTempDirectory("momo-api-image-store")).flatMap { dir =>
+    tempDirectory("momo-api-image-store").use { dir =>
       val store = LocalFsImageStore[IO](dir)
       val tooLarge = Array.fill[Byte](LocalFsImageStore.MaxBytes + 1)(0.toByte)
       store.save(Some("large.png"), Some("image/png"), tooLarge).map {
@@ -47,7 +47,7 @@ final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:
   }
 
   test("deletes stored images by image id") {
-    IO.blocking(Files.createTempDirectory("momo-api-image-store")).flatMap { dir =>
+    tempDirectory("momo-api-image-store").use { dir =>
       val store = LocalFsImageStore[IO](dir)
       for
         stored <- store.save(Some("sample.png"), Some("image/png"), pngBytes).flatMap {
@@ -63,7 +63,7 @@ final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:
   }
 
   test("delete returns false when image does not exist") {
-    IO.blocking(Files.createTempDirectory("momo-api-image-store")).flatMap { dir =>
+    tempDirectory("momo-api-image-store").use { dir =>
       val store = LocalFsImageStore[IO](dir)
       store.delete(ImageId("missing-image-id")).map(deleted => assertEquals(deleted, false))
     }

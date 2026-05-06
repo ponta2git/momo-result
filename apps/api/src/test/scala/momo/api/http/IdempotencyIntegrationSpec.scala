@@ -1,7 +1,5 @@
 package momo.api.http
 
-import java.nio.file.Files
-
 import cats.effect.{IO, Resource}
 import io.circe.Json
 import org.http4s.circe.*
@@ -15,8 +13,8 @@ import momo.api.http.HttpAssertions.{assertProblem, jsonField}
 
 final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite:
 
-  private def app: Resource[IO, org.http4s.HttpApp[IO]] = Resource
-    .eval(IO.blocking(Files.createTempDirectory("momo-api-idempotency"))).flatMap { dir =>
+  private def app: Resource[IO, org.http4s.HttpApp[IO]] = tempDirectory("momo-api-idempotency")
+    .flatMap { dir =>
       val config = AppConfig(
         appEnv = AppEnv.Test,
         httpHost = "127.0.0.1",

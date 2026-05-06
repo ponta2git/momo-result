@@ -19,7 +19,11 @@ import munit.{AnyFixture, CatsEffectSuite}
  */
 // scalafix:off DisableSyntax.noUnsafeRunSync
 abstract class IntegrationSuite extends CatsEffectSuite:
+  private val Integration = new munit.Tag("Integration")
+
   override def munitIOTimeout = 30.seconds
+
+  override def munitTests(): Seq[munit.Test] = super.munitTests().map(_.tag(Integration))
 
   private def missingDbMessage: String =
     s"Integration Postgres is not reachable at ${IntegrationDb.settings.jdbcUrl}"

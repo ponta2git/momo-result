@@ -11,7 +11,7 @@ import org.typelevel.ci.CIString
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.config.{AppConfig, AppEnv}
-import momo.api.http.HttpProblemAssertions.assertProblem
+import momo.api.http.HttpAssertions.{assertProblem, jsonField}
 
 final class MasterEndpointsSpec extends MomoCatsEffectSuite:
 
@@ -40,9 +40,9 @@ final class MasterEndpointsSpec extends MomoCatsEffectSuite:
       http.run(req).flatMap { resp =>
         assertEquals(resp.status, Status.Ok)
         resp.as[Json].map { json =>
-          val items = json.hcursor.downField("items").values.toList.flatMap(_.toList)
+          val items = jsonField[List[Json]](json, "items")
           assertEquals(items.size, 6)
-          val ids = items.flatMap(_.hcursor.downField("id").as[String].toOption).toSet
+          val ids = items.map(jsonField[String](_, "id")).toSet
           assertEquals(
             ids,
             Set(
@@ -73,12 +73,12 @@ final class MasterEndpointsSpec extends MomoCatsEffectSuite:
         c <- http.run(create)
         _ = assertEquals(c.status, Status.Ok)
         cj <- c.as[Json]
-        _ = assertEquals(cj.hcursor.downField("id").as[String].toOption, Some("title_world"))
-        _ = assertEquals(cj.hcursor.downField("displayOrder").as[Int].toOption, Some(1))
+        _ = assertEquals(jsonField[String](cj, "id"), "title_world")
+        _ = assertEquals(jsonField[Int](cj, "displayOrder"), 1)
         l <- http.run(list)
         _ = assertEquals(l.status, Status.Ok)
         lj <- l.as[Json]
-        items = lj.hcursor.downField("items").values.toList.flatMap(_.toList)
+        items = jsonField[List[Json]](lj, "items")
         _ = assertEquals(items.size, 1)
       yield ()
     }
@@ -130,13 +130,11 @@ final class MasterEndpointsSpec extends MomoCatsEffectSuite:
         _ <- post("/api/game-titles", titleBody).flatMap(r => IO(assertEquals(r.status, Status.Ok)))
         _ <- post("/api/map-masters", map1).flatMap { r =>
           assertEquals(r.status, Status.Ok)
-          r.as[Json]
-            .map(j => assertEquals(j.hcursor.downField("displayOrder").as[Int].toOption, Some(1)))
+          r.as[Json].map(j => assertEquals(jsonField[Int](j, "displayOrder"), 1))
         }
         _ <- post("/api/map-masters", map2).flatMap { r =>
           assertEquals(r.status, Status.Ok)
-          r.as[Json]
-            .map(j => assertEquals(j.hcursor.downField("displayOrder").as[Int].toOption, Some(2)))
+          r.as[Json].map(j => assertEquals(jsonField[Int](j, "displayOrder"), 2))
         }
         _ <- post("/api/season-masters", season).flatMap(r => IO(assertEquals(r.status, Status.Ok)))
         // filtered listing
@@ -146,7 +144,7 @@ final class MasterEndpointsSpec extends MomoCatsEffectSuite:
         )
         _ = assertEquals(listed.status, Status.Ok)
         lj <- listed.as[Json]
-        items = lj.hcursor.downField("items").values.toList.flatMap(_.toList)
+        items = jsonField[List[Json]](lj, "items")
         _ = assertEquals(items.size, 2)
       yield ()
     }

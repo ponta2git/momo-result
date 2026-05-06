@@ -14,7 +14,7 @@ import org.typelevel.ci.CIString
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.config.{AppConfig, AppEnv}
-import momo.api.http.HttpProblemAssertions.assertProblem
+import momo.api.http.HttpAssertions.{assertProblem, headerValue, jsonField, optionalHeaderValue}
 
 final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite:
   import java.time.Instant
@@ -84,15 +84,15 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite:
         createRes <- httpApp.run(createReq)
         _ = assertEquals(createRes.status, Status.Ok)
         body <- createRes.as[Json]
-        id = body.hcursor.get[String]("id").toOption.get
+        id = jsonField[String](body, "id")
         listRes <- httpApp
           .run(Request[IO](Method.GET, uri"/api/held-events").putHeaders(readHeader))
         _ = assertEquals(listRes.status, Status.Ok)
         listBody <- listRes.as[Json]
-        items = listBody.hcursor.get[List[Json]]("items").toOption.get
-      yield
-        assertEquals(items.size, 1)
-        assertEquals(items.head.hcursor.get[String]("id"), Right(id))
+        items = jsonField[List[Json]](listBody, "items")
+      yield items match
+        case item :: Nil => assertEquals(jsonField[String](item, "id"), id)
+        case other => fail(s"expected exactly 1 held event, got: ${other.map(_.noSpaces)}")
     }
   }
 
@@ -143,7 +143,10 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite:
   private def createEvent(httpApp: org.http4s.HttpApp[IO]): IO[String] = httpApp.run(
     Request[IO](Method.POST, uri"/api/held-events").putHeaders(authHeaders*)
       .withEntity(Json.obj("heldAt" -> Json.fromString("2024-01-01T00:00:00Z")))
-  ).flatMap(_.as[Json]).map(_.hcursor.get[String]("id").toOption.get)
+  ).flatMap { response =>
+    assertEquals(response.status, Status.Ok)
+    response.as[Json].map(jsonField[String](_, "id"))
+  }
 
   private def createMatchDraft(httpApp: org.http4s.HttpApp[IO]): IO[String] =
     val body = Json.obj(
@@ -159,7 +162,10 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite:
     )
     httpApp.run(
       Request[IO](Method.POST, uri"/api/match-drafts").putHeaders(authHeaders*).withEntity(body)
-    ).flatMap(_.as[Json]).map(_.hcursor.get[String]("matchDraftId").toOption.get)
+    ).flatMap { response =>
+      assertEquals(response.status, Status.Ok)
+      response.as[Json].map(jsonField[String](_, "matchDraftId"))
+    }
 
   private def uploadPng(httpApp: org.http4s.HttpApp[IO]): IO[String] =
     val part = Part.fileData[IO](
@@ -176,7 +182,9 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite:
           .putHeaders(multipart.headers).withEntity(multipart)
       )
       body <- response.as[Json]
-    yield body.hcursor.get[String]("imageId").toOption.get
+    yield
+      assertEquals(response.status, Status.Ok)
+      jsonField[String](body, "imageId")
 
   test("POST /api/matches confirms with valid body") {
     app.use { httpApp =>
@@ -189,8 +197,8 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite:
         body <- res.as[Json]
       yield
         assertEquals(res.status, Status.Ok)
-        assertEquals(body.hcursor.get[String]("heldEventId"), Right(id))
-        assertEquals(body.hcursor.get[Int]("matchNoInEvent"), Right(1))
+        assertEquals(jsonField[String](body, "heldEventId"), id)
+        assertEquals(jsonField[Int](body, "matchNoInEvent"), 1)
     }
   }
 
@@ -217,8 +225,10 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite:
         body <- sourceImageRes.as[Array[Byte]]
       yield
         assertEquals(sourceImageRes.status, Status.Ok)
-        val contentType = sourceImageRes.headers.get(CIString("Content-Type")).map(_.head.value)
-        assertEquals(contentType, Some("image/png"))
+        assertEquals(
+          optionalHeaderValue(sourceImageRes, CIString("Content-Type")),
+          Some("image/png"),
+        )
         assertEquals(body.toVector, pngBytes.toVector)
     }
   }
@@ -258,17 +268,20 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite:
         body <- exportRes.as[String]
       yield
         assertEquals(exportRes.status, Status.Ok)
-        val disposition = exportRes.headers.get(CIString("Content-Disposition")).map(_.head.value)
-        assertEquals(disposition, Some("attachment; filename=\"momo-results-all.csv\""))
-        val contentType = exportRes.headers.get(CIString("Content-Type")).map(_.head.value)
-          .getOrElse("")
+        assertEquals(
+          optionalHeaderValue(exportRes, CIString("Content-Disposition")),
+          Some("attachment; filename=\"momo-results-all.csv\""),
+        )
+        val contentType = headerValue(exportRes, CIString("Content-Type"))
         assert(contentType.contains("text/csv"), s"unexpected content type: $contentType")
         val lines = body.split("\r\n", -1).toList
         assertEquals(
-          lines.head,
-          "シーズン,シーズンNo.,オーナー,マップ,対戦日,対戦No.,プレー順,プレーヤー名,順位,総資産,収益,目的地,プラス駅,マイナス駅,カード駅,カード売り場,スリの銀次",
+          lines.take(2),
+          List(
+            "シーズン,シーズンNo.,オーナー,マップ,対戦日,対戦No.,プレー順,プレーヤー名,順位,総資産,収益,目的地,プラス駅,マイナス駅,カード駅,カード売り場,スリの銀次",
+            "2024-spring,1,ponta,東日本編,2024-01-02,1,1,ponta,1,100,50,1,0,0,0,0,0",
+          ),
         )
-        assertEquals(lines(1), "2024-spring,1,ponta,東日本編,2024-01-02,1,1,ponta,1,100,50,1,0,0,0,0,0")
         assertEquals(lines.size, 6)
     }
   }
@@ -282,7 +295,7 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite:
             .withEntity(confirmBody(id, 1))
         )
         createBody <- create.as[Json]
-        matchId = createBody.hcursor.get[String]("matchId").toOption.get
+        matchId = jsonField[String](createBody, "matchId")
         exportRes <- httpApp.run(
           Request[IO](
             Method.GET,
@@ -293,10 +306,12 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite:
       yield
         assertEquals(exportRes.status, Status.Ok)
         assertEquals(
-          exportRes.headers.get(CIString("Content-Disposition")).map(_.head.value),
+          optionalHeaderValue(exportRes, CIString("Content-Disposition")),
           Some(s"""attachment; filename="momo-results-match-$matchId.tsv""""),
         )
-        assert(body.linesIterator.next().contains("\t"), "TSV header should use tab delimiter")
+        val header = body.linesIterator.toList.headOption
+          .getOrElse(fail(s"expected TSV header line, got: $body"))
+        assert(header.contains("\t"), "TSV header should use tab delimiter")
         assert(body.contains("2024-spring\t1\tponta\t東日本編"))
     }
   }

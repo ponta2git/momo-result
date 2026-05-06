@@ -18,6 +18,8 @@ import momo.api.config.RedisConfig
 import momo.api.repositories.OcrQueuePayload
 
 final class RedisQueueProducerSpec extends MomoCatsEffectSuite:
+  private val Integration = new munit.Tag("Integration")
+
   test("publishes OCR payload fields to the configured Redis stream"):
     for
       ref <- Ref.of[IO, Vector[(String, Map[String, String])]](Vector.empty)
@@ -30,7 +32,7 @@ final class RedisQueueProducerSpec extends MomoCatsEffectSuite:
       published <- ref.get
     yield assertEquals(published, Vector("momo:ocr:jobs" -> payload.fields))
 
-  test("publishes OCR payload fields to a Redis Streams Testcontainer"):
+  test("publishes OCR payload fields to a Redis Streams Testcontainer".tag(Integration)):
     val payload = OcrQueuePayload(Map(
       "jobId" -> "job-redis",
       "draftId" -> "draft-redis",

@@ -11,8 +11,7 @@ import momo.api.adapters.{
 }
 import momo.api.domain.ids.*
 import momo.api.domain.{
-  FourPlayers, GameTitle, IncidentCounts, MapMaster, MatchRecord, Member, PlayerResult,
-  SeasonMaster,
+  FourPlayers, GameTitle, IncidentCounts, MapMaster, MatchRecord, Member, PlayerResult, SeasonMaster,
 }
 import momo.api.errors.AppError
 
@@ -53,9 +52,8 @@ final class ExportMatchesSpec extends MomoCatsEffectSuite:
 
   private def createUsecase(): IO[ExportMatches[IO]] = createUsecaseSeeded(seedMatch = false)
 
-  private def createUsecaseWithMatch(): IO[ExportMatches[IO]] = createUsecaseSeeded(
-    seedMatch = true
-  )
+  private def createUsecaseWithMatch(): IO[ExportMatches[IO]] =
+    createUsecaseSeeded(seedMatch = true)
 
   private def createUsecaseSeeded(seedMatch: Boolean): IO[ExportMatches[IO]] =
     for
@@ -114,9 +112,8 @@ final class ExportMatchesSpec extends MomoCatsEffectSuite:
       result: Either[AppError, A],
       expectedCode: String,
       detailContains: String,
-  ): Unit =
-    result match
-      case Left(error) =>
-        assertEquals(error.code, expectedCode)
-        assert(error.detail.contains(detailContains), s"unexpected detail: ${error.detail}")
-      case Right(value) => fail(s"expected $expectedCode, got success: $value")
+  ): Unit = result match
+    case Left(error) =>
+      assertEquals(error.code, expectedCode)
+      assert(error.detail.contains(detailContains), s"unexpected detail: ${error.detail}")
+    case Right(value) => fail(s"expected $expectedCode, got success: $value")

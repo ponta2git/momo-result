@@ -14,6 +14,11 @@ addCommandAlias("apiFix", "scalafixAll")
 addCommandAlias("apiQuality", "apiFormatCheck; apiLint; Test / compile; apiOpenApiCheck")
 addCommandAlias("apiCheck", "apiQuality; test")
 addCommandAlias(
+  "apiRedisQuality",
+  "set Test / testOptions := Seq(); " +
+    "testOnly momo.api.adapters.RedisQueueProducerSpec -- --include-tags=Integration",
+)
+addCommandAlias(
   "apiDbQuality",
   "testOnly momo.api.integration.DbContractSpec; " +
     "testOnly momo.api.integration.PostgresHeldEventsRepositoryContractSpec; " +
@@ -60,6 +65,7 @@ lazy val root = (project in file("."))
     Compile / run / mainClass := Some("momo.api.Main"),
     Compile / run / fork := true,
     Compile / run / javaOptions += "-Dcats.effect.warnOnNonMainThreadDetected=false",
+    Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "--exclude-tags=Integration"),
     Test / parallelExecution := false,
     Test / fork := false,
     libraryDependencies ++= {

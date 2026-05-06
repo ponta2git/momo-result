@@ -69,12 +69,16 @@ final class CreateMasterSpec extends MomoCatsEffectSuite:
         CreateSeasonMasterCommand(SeasonMasterId("season_spring"), GameTitleId("missing"), "Spring")
       )
       _ <- createTitle.run(CreateGameTitleCommand(GameTitleId("title_world"), "World", "world"))
-      _ <- usecase.run(
-        CreateSeasonMasterCommand(SeasonMasterId("season_spring"), GameTitleId("title_world"), "Spring")
-      )
-      duplicate <- usecase.run(
-        CreateSeasonMasterCommand(SeasonMasterId("season_spring"), GameTitleId("title_world"), "Spring")
-      )
+      _ <- usecase.run(CreateSeasonMasterCommand(
+        SeasonMasterId("season_spring"),
+        GameTitleId("title_world"),
+        "Spring",
+      ))
+      duplicate <- usecase.run(CreateSeasonMasterCommand(
+        SeasonMasterId("season_spring"),
+        GameTitleId("title_world"),
+        "Spring",
+      ))
     yield
       assertAppError(missing, "NOT_FOUND", "game_title was not found")
       assertAppError(duplicate, "CONFLICT", "already exists")
@@ -83,9 +87,8 @@ final class CreateMasterSpec extends MomoCatsEffectSuite:
       result: Either[AppError, A],
       expectedCode: String,
       detailContains: String,
-  ): Unit =
-    result match
-      case Left(error) =>
-        assertEquals(error.code, expectedCode)
-        assert(error.detail.contains(detailContains), s"unexpected detail: ${error.detail}")
-      case Right(value) => fail(s"expected $expectedCode, got success: $value")
+  ): Unit = result match
+    case Left(error) =>
+      assertEquals(error.code, expectedCode)
+      assert(error.detail.contains(detailContains), s"unexpected detail: ${error.detail}")
+    case Right(value) => fail(s"expected $expectedCode, got success: $value")

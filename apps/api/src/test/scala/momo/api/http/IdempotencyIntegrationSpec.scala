@@ -11,6 +11,7 @@ import org.typelevel.ci.CIString
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.config.{AppConfig, AppEnv}
+import momo.api.http.HttpAssertions.{assertProblem, jsonField}
 
 final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite:
 
@@ -53,7 +54,7 @@ final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite:
         assertEquals(first.status, Status.Ok)
         assertEquals(second.status, Status.Ok)
         assertEquals(firstBody, secondBody)
-        val items = listBody.hcursor.downField("items").as[List[Json]].toOption.getOrElse(Nil)
+        val items = jsonField[List[Json]](listBody, "items")
         assertEquals(items.size, 1)
     }
   }
@@ -64,7 +65,8 @@ final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite:
         first <- httpApp.run(heldEventReq(Some("key-2"), "2024-02-01T00:00:00Z"))
         _ = assertEquals(first.status, Status.Ok)
         second <- httpApp.run(heldEventReq(Some("key-2"), "2024-03-01T00:00:00Z"))
-      yield assertEquals(second.status, Status.Conflict)
+        _ <- assertProblem(second, Status.Conflict, "CONFLICT", "Idempotency-Key")
+      yield ()
     }
   }
 
@@ -81,7 +83,7 @@ final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite:
         )
         listBody <- listRes.as[Json]
       yield
-        val items = listBody.hcursor.downField("items").as[List[Json]].toOption.getOrElse(Nil)
+        val items = jsonField[List[Json]](listBody, "items")
         assertEquals(items.size, 2)
     }
   }

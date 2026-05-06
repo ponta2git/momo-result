@@ -107,6 +107,7 @@ type: `feat` / `fix` / `refactor` / `test` / `chore` / `docs`
 | api format check | `sbt scalafmtCheck` | `apps/api` |
 | api lint | `sbt scalafix` | `apps/api` |
 | api test | `sbt test` | `apps/api` |
+| api Redis integration | `sbt apiRedisQuality` | `apps/api` |
 | ocr-worker format | `uv run ruff format --check .` | `apps/ocr-worker` |
 | ocr-worker lint | `uv run ruff check .` | `apps/ocr-worker` |
 | ocr-worker test | `uv run pytest` | `apps/ocr-worker` |
@@ -134,3 +135,14 @@ sbt apiDbQuality
 検証結果を報告するときは、実行したspec名を明示する。DB未起動によりintegration testがskipされた場合は、DB動作は未検証として扱う。
 
 CIのAPI workflowでは PostgreSQL service を起動し、`momo-db` をcheckoutしてmigrationを適用してから `sbt test` と `sbt apiDbQuality` を実行する。`momo-db` がprivate repositoryの場合は、読み取り権限を持つ `MOMO_DB_READ_TOKEN` secret を設定する。
+
+### 4.2 Redis-backed API変更時の検証
+
+Redis Streamsのwire動作や `RedisQueueProducer.resource` に触れた場合は、通常のapi testに加えて以下を実行する。
+
+```sh
+cd apps/api
+sbt apiRedisQuality
+```
+
+`sbt test` では `Integration` tag付きのRedis外部接続テストを除外する。これにより、単体・in-memory中心の下位レベルテストはDocker/Redisの状態に依存しない。

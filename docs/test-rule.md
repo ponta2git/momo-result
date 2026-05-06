@@ -20,6 +20,7 @@ MVPでも以下のテストを実装対象に含める。
 |---|---|---|
 | DB contract | APIが前提にする table / column / seed / nullable / default を確認する | `DbContractSpec` |
 | PostgreSQL repository | SQLが実DBで動くこと、filter / order / transaction を確認する | `Postgres*RepositorySpec` |
+| Redis integration | Redis Streams など外部Redisとの接続・wire動作を確認する | `Integration` tag付きspec / `apiRedisQuality` |
 | HTTP spec | request parameter、auth/CSRF、response encoding、AppError mapping を確認する | `*HttpSpec` |
 | Usecase / in-memory | DBなしでdomain分岐、validation、status parsing を確認する | `*UseCaseSpec` |
 | web component/page | UI表示、フォーム操作、APIエラー表示を確認する | Vitest + Testing Library |
@@ -95,7 +96,16 @@ DB-backed API を変更するときは、該当Endpointに対応するPostgreSQL
 - dynamic fragment
 - 複数tableをまたぐfilter/order/limit
 
-## 4. CIチェック項目
+## 4. 外部サービス依存テストの分離
+
+Docker、Redis、外部プロセスに依存するテストは、下位レベルの単体テストと混在させない。PostgreSQL依存のDB-backed API検証は、前章のDB専用ルールに従う。
+
+- `sbt test` では `Integration` tag付きの任意外部サービス接続テストを除外する。
+- Redis Streams など外部Redisのwire動作は `Integration` tag を付け、`sbt apiRedisQuality` で明示的に実行する。
+- statefulな外部サービスを使うspecは、stream名・DB row・一時ファイル名などをテストごとに分離する。
+- 実時間のsleepで待たず、publish後の読み取り、deferred promise、明示的な状態確認で同期する。
+
+## 5. CIチェック項目
 
 CIでは以下を必須チェックにする。
 
@@ -107,7 +117,7 @@ CIでは以下を必須チェックにする。
 - E2E smoke test
 - build
 
-## 5. 品質ツール
+## 6. 品質ツール
 
 | 領域 | ツール |
 |---|---|

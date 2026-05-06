@@ -71,7 +71,8 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
     for
       fixture <- Fixture.create
       _ <- fixture.seedPrereqs()
-      _ <- fixture.gameTitles.create(GameTitle(GameTitleId("title_japan"), "Japan", "japan", 2, now))
+      _ <- fixture.gameTitles
+        .create(GameTitle(GameTitleId("title_japan"), "Japan", "japan", 2, now))
       result <- fixture.usecase
         .run(commandWithGameTitle(GameTitleId("title_japan")), MemberId("ponta"))
     yield assertAppError(result, "VALIDATION_FAILED", "mapMasterId")
@@ -125,12 +126,11 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
       result: Either[AppError, A],
       expectedCode: String,
       detailContains: String,
-  ): Unit =
-    result match
-      case Left(error) =>
-        assertEquals(error.code, expectedCode)
-        assert(error.detail.contains(detailContains), s"unexpected detail: ${error.detail}")
-      case Right(value) => fail(s"expected $expectedCode, got success: $value")
+  ): Unit = result match
+    case Left(error) =>
+      assertEquals(error.code, expectedCode)
+      assert(error.detail.contains(detailContains), s"unexpected detail: ${error.detail}")
+    case Right(value) => fail(s"expected $expectedCode, got success: $value")
 
   private final case class Fixture(
       gameTitles: InMemoryGameTitlesRepository[IO],
@@ -140,12 +140,13 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
       matches: InMemoryMatchesRepository[IO],
       usecase: ConfirmMatch[IO],
   ):
-    def seedPrereqs(): IO[Unit] = seedMastersOnly() *> heldEvents.create(HeldEvent(heldEventId, now))
+    def seedPrereqs(): IO[Unit] = seedMastersOnly() *>
+      heldEvents.create(HeldEvent(heldEventId, now))
 
-    def seedMastersOnly(): IO[Unit] =
-      gameTitles.create(GameTitle(titleId, "World", "world", 1, now)) *>
-        mapMasters.create(MapMaster(mapId, titleId, "East", 1, now)) *>
-        seasonMasters.create(SeasonMaster(seasonId, titleId, "Spring", 1, now))
+    def seedMastersOnly(): IO[Unit] = gameTitles
+      .create(GameTitle(titleId, "World", "world", 1, now)) *>
+      mapMasters.create(MapMaster(mapId, titleId, "East", 1, now)) *>
+      seasonMasters.create(SeasonMaster(seasonId, titleId, "Spring", 1, now))
 
   private object Fixture:
     def create: IO[Fixture] =

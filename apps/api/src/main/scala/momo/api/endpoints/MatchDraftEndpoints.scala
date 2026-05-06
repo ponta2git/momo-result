@@ -65,7 +65,7 @@ object MatchDraftEndpoints:
     .out(jsonBody[MatchDraftSourceImageListResponse])
     .tag("match-drafts")
 
-  type SourceImageOutput = (String, String, Array[Byte])
+  type SourceImageOutput = (String, String, String, Array[Byte])
 
   val getSourceImage
       : PublicEndpoint[(String, String, Option[String]), ProblemResponse, SourceImageOutput, Any] =
@@ -74,6 +74,7 @@ object MatchDraftEndpoints:
       .in("api" / "match-drafts" / path[String]("draftId") / "source-images" / path[String]("kind"))
       .in(CommonEndpoint.devUserHeader)
       .errorOut(CommonEndpoint.errorOut)
+      .out(header[String]("Content-Type"))
       .out(header[String]("Cache-Control"))
       .out(header[String]("X-Content-Type-Options"))
       .out(byteArrayBody)

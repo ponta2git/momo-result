@@ -1136,6 +1136,12 @@
           "200" : {
             "description" : "",
             "headers" : {
+              "Content-Type" : {
+                "required" : true,
+                "schema" : {
+                  "type" : "string"
+                }
+              },
               "Cache-Control" : {
                 "required" : true,
                 "schema" : {

@@ -95,7 +95,7 @@ object MatchDraftModule:
       security.authorizeRead(devUser) { member =>
         security.respond(
           getMatchDraftSourceImages.stream(MatchDraftId(draftId), kind, member.memberId)
-        )(image => ("private, no-store", "nosniff", image.bytes))
+        )(image => (image.contentType, "private, no-store", "nosniff", image.bytes))
       }
     },
   )

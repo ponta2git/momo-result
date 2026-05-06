@@ -1,4 +1,4 @@
-import { apiRequest } from "@/shared/api/client";
+import { apiDownload, apiRequest } from "@/shared/api/client";
 import type { components } from "@/shared/api/generated";
 
 export type MatchDraftSourceImageListResponse =
@@ -31,6 +31,14 @@ export async function listMatchDraftSourceImages(
   return apiRequest<MatchDraftSourceImageListResponse>(
     `/api/match-drafts/${encodeURIComponent(draftId)}/source-images`,
   );
+}
+
+export async function downloadMatchDraftSourceImage(
+  imageUrl: string,
+  signal?: AbortSignal,
+): Promise<Blob> {
+  const result = await apiDownload(imageUrl, signal ? { signal } : {});
+  return result.blob;
 }
 
 export async function cancelMatchDraft(draftId: string): Promise<CancelMatchDraftResponse> {

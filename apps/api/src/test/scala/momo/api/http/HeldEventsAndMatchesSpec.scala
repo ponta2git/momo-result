@@ -3,10 +3,13 @@ package momo.api.http
 import java.nio.file.Files
 
 import cats.effect.{IO, Resource}
+import fs2.Stream
 import io.circe.Json
 import org.http4s.circe.*
 import org.http4s.implicits.*
-import org.http4s.{Header, Method, Request, Status, Uri}
+import org.http4s.headers.`Content-Type`
+import org.http4s.multipart.{Multiparts, Part}
+import org.http4s.{Header, MediaType, Method, Request, Status, Uri}
 import org.typelevel.ci.CIString
 
 import momo.api.MomoCatsEffectSuite
@@ -50,6 +53,9 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite:
   )
 
   private def readHeader = Header.Raw(CIString("X-Dev-User"), "ponta")
+
+  private val pngBytes: Array[Byte] =
+    Array[Byte](0x89.toByte, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)
 
   private def incidents = Json.obj(
     "destination" -> Json.fromInt(1),
@@ -136,6 +142,39 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite:
       .withEntity(Json.obj("heldAt" -> Json.fromString("2024-01-01T00:00:00Z")))
   ).flatMap(_.as[Json]).map(_.hcursor.get[String]("id").toOption.get)
 
+  private def createMatchDraft(httpApp: org.http4s.HttpApp[IO]): IO[String] =
+    val body = Json.obj(
+      "heldEventId" -> Json.Null,
+      "matchNoInEvent" -> Json.Null,
+      "gameTitleId" -> Json.Null,
+      "layoutFamily" -> Json.Null,
+      "seasonMasterId" -> Json.Null,
+      "ownerMemberId" -> Json.Null,
+      "mapMasterId" -> Json.Null,
+      "playedAt" -> Json.Null,
+      "status" -> Json.Null,
+    )
+    httpApp.run(
+      Request[IO](Method.POST, uri"/api/match-drafts").putHeaders(authHeaders*).withEntity(body)
+    ).flatMap(_.as[Json]).map(_.hcursor.get[String]("matchDraftId").toOption.get)
+
+  private def uploadPng(httpApp: org.http4s.HttpApp[IO]): IO[String] =
+    val part = Part.fileData[IO](
+      "file",
+      "source.png",
+      Stream.emits(pngBytes).covary[IO],
+      `Content-Type`(MediaType.image.png),
+    )
+    for
+      multiparts <- Multiparts.forSync[IO]
+      multipart <- multiparts.multipart(Vector(part))
+      response <- httpApp.run(
+        Request[IO](Method.POST, uri"/api/uploads/images").putHeaders(authHeaders*)
+          .putHeaders(multipart.headers).withEntity(multipart)
+      )
+      body <- response.as[Json]
+    yield body.hcursor.get[String]("imageId").toOption.get
+
   test("POST /api/matches confirms with valid body") {
     app.use { httpApp =>
       for
@@ -149,6 +188,35 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite:
         assertEquals(res.status, Status.Ok)
         assertEquals(body.hcursor.get[String]("heldEventId"), Right(id))
         assertEquals(body.hcursor.get[Int]("matchNoInEvent"), Right(1))
+    }
+  }
+
+  test("GET /api/match-drafts/:draftId/source-images/:kind returns the stored image media type") {
+    app.use { httpApp =>
+      for
+        matchDraftId <- createMatchDraft(httpApp)
+        imageId <- uploadPng(httpApp)
+        createJobRes <- httpApp.run(
+          Request[IO](Method.POST, uri"/api/ocr-jobs").putHeaders(authHeaders*).withEntity(Json.obj(
+            "imageId" -> Json.fromString(imageId),
+            "requestedImageType" -> Json.fromString("total_assets"),
+            "matchDraftId" -> Json.fromString(matchDraftId),
+          ))
+        )
+        _ = assertEquals(createJobRes.status, Status.Ok)
+        _ <- createJobRes.as[Json]
+        sourceImageRes <- httpApp.run(
+          Request[IO](
+            Method.GET,
+            Uri.unsafeFromString(s"/api/match-drafts/$matchDraftId/source-images/total_assets"),
+          ).putHeaders(readHeader)
+        )
+        body <- sourceImageRes.as[Array[Byte]]
+      yield
+        assertEquals(sourceImageRes.status, Status.Ok)
+        val contentType = sourceImageRes.headers.get(CIString("Content-Type")).map(_.head.value)
+        assertEquals(contentType, Some("image/png"))
+        assertEquals(body.toVector, pngBytes.toVector)
     }
   }
 

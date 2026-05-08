@@ -1,0 +1,61 @@
+name: OCR worker
+
+on:
+  pull_request:
+    paths:
+      - "apps/ocr-worker/**"
+      - ".github/workflows/ocr-worker.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/ocr-worker/**"
+      - ".github/workflows/ocr-worker.yml"
+
+jobs:
+  ocr-worker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/ocr-worker
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+
+      - name: Install Python
+        run: uv python install 3.12
+        timeout-minutes: 3
+
+      - name: Install OCR system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libleptonica-dev \
+            libtesseract-dev \
+            tesseract-ocr \
+            tesseract-ocr-eng
+        timeout-minutes: 5
+
+      - name: Install dependencies
+        run: uv sync --locked --dev --extra inproc
+        timeout-minutes: 5
+
+      - name: Format check
+        run: uv run ruff format --check .
+        timeout-minutes: 2
+
+      - name: Lint check
+        run: uv run ruff check .
+        timeout-minutes: 2
+
+      - name: Type check
+        run: uv run mypy
+        timeout-minutes: 5
+
+      - name: Test
+        run: uv run pytest
+        timeout-minutes: 10

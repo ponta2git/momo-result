@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from momo_ocr.app.composition import default_parser_registry, default_text_recognition_engine
 from momo_ocr.features.ocr_domain.models import (
     OcrWarning,
     ScreenType,
@@ -14,6 +13,7 @@ from momo_ocr.features.ocr_results.ranked_rows import (
     DEFAULT_ALIAS_RESOLVER,
     PlayerAliasResolver,
 )
+from momo_ocr.features.ocr_results.registry import default_parser_registry
 from momo_ocr.features.player_order.detector import detect_player_order
 from momo_ocr.features.player_order.models import PlayerOrderDetection
 from momo_ocr.features.screen_detection.classifier import classify_screen_type, detection_failure
@@ -23,6 +23,7 @@ from momo_ocr.features.standalone_analysis.report import AnalysisResult
 from momo_ocr.features.temp_images.storage import resolve_local_image
 from momo_ocr.features.temp_images.validation import open_decoded_image, read_image_metadata
 from momo_ocr.features.text_recognition.engine import TextRecognitionEngine
+from momo_ocr.features.text_recognition.factory import default_text_recognition_engine
 from momo_ocr.shared.errors import OcrError
 from momo_ocr.shared.time import record_duration_ms
 

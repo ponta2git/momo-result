@@ -33,10 +33,11 @@ from __future__ import annotations
 import logging
 import os
 import threading
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
 from types import MappingProxyType
+from typing import Protocol, cast
 
 from PIL import Image
 
@@ -70,6 +71,38 @@ _TESSDATA_CANDIDATES: tuple[str, ...] = (
 )
 
 
+class _TesserocrApi(Protocol):
+    """Small typed surface of ``tesserocr.PyTessBaseAPI`` used by this worker."""
+
+    def SetPageSegMode(self, psm: int) -> None:  # noqa: N802 - external API name
+        raise NotImplementedError
+
+    def SetVariable(self, key: str, value: str) -> None:  # noqa: N802
+        raise NotImplementedError
+
+    def SetImage(self, image: Image.Image) -> None:  # noqa: N802
+        raise NotImplementedError
+
+    def GetUTF8Text(self) -> str:  # noqa: N802
+        raise NotImplementedError
+
+    def MeanTextConf(self) -> int | float:  # noqa: N802
+        raise NotImplementedError
+
+    def Clear(self) -> None:  # noqa: N802
+        raise NotImplementedError
+
+    def End(self) -> None:  # noqa: N802
+        raise NotImplementedError
+
+
+class _ApiFactory(Protocol):
+    """Factory signature for dependency-injected ``PyTessBaseAPI`` instances."""
+
+    def __call__(self, *, language: str, oem: int, tessdata_path: str | None) -> _TesserocrApi:
+        raise NotImplementedError
+
+
 def _resolve_tessdata_path() -> str | None:
     """Return a tessdata directory path or None to let tesseract auto-detect.
 
@@ -90,7 +123,7 @@ def _resolve_tessdata_path() -> str | None:
 class _ApiCacheEntry:
     """One cached PyTessBaseAPI guarded by its own lock and var tracker."""
 
-    api: object
+    api: _TesserocrApi
     lock: threading.Lock
     set_variable_keys: set[str]
 
@@ -104,7 +137,7 @@ class TesserocrEngine(TextRecognitionEngine):
         default_config: RecognitionConfig = DEFAULT_TESSEROCR_CONFIG,
         field_configs: Mapping[RecognitionField, RecognitionConfig] = DEFAULT_FIELD_CONFIGS,
         tessdata_path: str | None = None,
-        api_factory: object | None = None,
+        api_factory: _ApiFactory | None = None,
     ) -> None:
         self.default_config = default_config
         self.field_configs = MappingProxyType(dict(field_configs))
@@ -203,12 +236,12 @@ class TesserocrEngine(TextRecognitionEngine):
         api = entry.api
         with entry.lock:
             psm = config.psm if config.psm is not None else 3
-            api.SetPageSegMode(psm)  # type: ignore[attr-defined]
+            api.SetPageSegMode(psm)
             self._sync_variables(entry=entry, variables=config.variables)
             try:
-                api.SetImage(image)  # type: ignore[attr-defined]
-                raw_text = api.GetUTF8Text()  # type: ignore[attr-defined]
-                confidence_raw: int | float = api.MeanTextConf()  # type: ignore[attr-defined]
+                api.SetImage(image)
+                raw_text = api.GetUTF8Text()
+                confidence_raw = api.MeanTextConf()
             except Exception as exc:
                 msg = f"tesserocr recognize failed: {exc}"
                 raise OcrError(FailureCode.PARSER_FAILED, msg, retryable=False) from exc
@@ -219,7 +252,7 @@ class TesserocrEngine(TextRecognitionEngine):
                 clear = getattr(api, "Clear", None)
                 if callable(clear):
                     clear()
-        if confidence_raw is not None and confidence_raw >= 0:
+        if confidence_raw >= 0:
             confidence: float | None = confidence_raw / 100.0
         else:
             confidence = None
@@ -230,12 +263,12 @@ class TesserocrEngine(TextRecognitionEngine):
         api = entry.api
         # Apply incoming overrides.
         for key, value in variables.items():
-            api.SetVariable(key, value)  # type: ignore[attr-defined]
+            api.SetVariable(key, value)
             entry.set_variable_keys.add(key)
         # Reset any previously-set key that is absent from this call.
         stale_keys = entry.set_variable_keys - set(variables.keys())
         for stale in stale_keys:
-            api.SetVariable(stale, "")  # type: ignore[attr-defined]
+            api.SetVariable(stale, "")
         # Stale keys are kept in the tracker because resetting a variable to
         # "" still counts as a "we touched this" state we must rewind on the
         # next call if a different value is asked for.
@@ -264,7 +297,7 @@ def _apply_postprocessors(text: str, config: RecognitionConfig) -> str:
     return processed
 
 
-def _default_api_factory() -> Callable[..., object]:
+def _default_api_factory() -> _ApiFactory:
     """Return a factory that builds real ``PyTessBaseAPI`` instances.
 
     Imported lazily so the module stays importable when ``tesserocr`` is
@@ -284,10 +317,10 @@ def _default_api_factory() -> Callable[..., object]:
             user_action="Install the 'inproc' extra or set MOMO_OCR_ENGINE=subprocess.",
         ) from exc
 
-    def factory(*, language: str, oem: int, tessdata_path: str | None) -> object:
+    def factory(*, language: str, oem: int, tessdata_path: str | None) -> _TesserocrApi:
         kwargs: dict[str, object] = {"lang": language, "oem": oem}
         if tessdata_path is not None:
             kwargs["path"] = tessdata_path
-        return tesserocr.PyTessBaseAPI(**kwargs)
+        return cast("_TesserocrApi", tesserocr.PyTessBaseAPI(**kwargs))
 
     return factory

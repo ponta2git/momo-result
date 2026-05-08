@@ -35,9 +35,11 @@ build-backend = "hatchling.build"
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-src = ["src", "tests"]
-fix = true
+src = ["src", "tests", "scripts"]
 show-fixes = true
+extend-exclude = [
+  "out",
+]
 
 [tool.ruff.format]
 docstring-code-format = true
@@ -79,6 +81,10 @@ unfixable = [
 # apply. The actual implementation lives in the sibling `eval_lib/` package.
 "scripts/eval_accuracy.py" = ["INP001"]
 
+[tool.ruff.lint.isort]
+known-first-party = ["eval_lib", "momo_ocr"]
+required-imports = ["from __future__ import annotations"]
+
 [tool.ruff.lint.pylint]
 max-args = 6
 max-branches = 8
@@ -93,18 +99,39 @@ mypy-init-return = true
 testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = [
+  "--import-mode=importlib",
   "--strict-config",
   "--strict-markers",
 ]
+xfail_strict = true
 markers = [
   "integration: tests that require Docker-backed Testcontainers",
 ]
 
 [tool.mypy]
-python_version = "3.13"
+python_version = "3.12"
 strict = true
+disallow_any_unimported = true
+enable_error_code = [
+  "ignore-without-code",
+  "possibly-undefined",
+  "redundant-expr",
+  "truthy-bool",
+  "truthy-iterable",
+]
+extra_checks = true
+local_partial_types = true
+strict_bytes = true
+strict_equality = true
 warn_unreachable = true
 warn_unused_configs = true
 show_error_codes = true
 pretty = true
 files = ["src", "tests"]
+
+[[tool.mypy.overrides]]
+module = [
+  "tesserocr",
+  "testcontainers.*",
+]
+ignore_missing_imports = true

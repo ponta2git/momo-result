@@ -7,7 +7,10 @@ from PIL import Image
 
 from momo_ocr.features.ocr_domain.models import ScreenType
 from momo_ocr.features.ocr_results.parsing import ScreenParseContext
-from momo_ocr.features.ocr_results.ranked_rows import extract_player_name_candidate
+from momo_ocr.features.ocr_results.ranked_rows import (
+    alias_resolver_from_member_aliases,
+    extract_player_name_candidate,
+)
 from momo_ocr.features.text_recognition.engine import TextRecognitionEngine
 from momo_ocr.features.text_recognition.models import (
     RecognitionConfig,
@@ -111,6 +114,30 @@ def test_total_assets_parser_warns_for_unreadable_row(tmp_path: Path) -> None:
         "MISSING_AMOUNT",
         "UNKNOWN_PLAYER_ALIAS",
     }
+
+
+def test_total_assets_parser_sets_member_id_from_alias_hint(tmp_path: Path) -> None:
+    image_path = tmp_path / "assets.jpg"
+    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    engine = SequenceTextRecognitionEngine(["PONTAプレイヤー社長 1億円"] * 8)
+
+    payload = TotalAssetsParser().parse(
+        ScreenParseContext(
+            image_path=image_path,
+            requested_screen_type=ScreenType.TOTAL_ASSETS,
+            detected_screen_type=ScreenType.TOTAL_ASSETS,
+            profile_id="full-hd-total-assets-v1",
+            debug_dir=None,
+            include_raw_text=False,
+            text_engine=engine,
+            alias_resolver=alias_resolver_from_member_aliases(
+                {"member-ponta": ("PONTAプレイヤー社長",)}
+            ),
+        )
+    )
+
+    assert payload.players[0].raw_player_name.value == "PONTAプレイヤー社長"
+    assert payload.players[0].member_id == "member-ponta"
 
 
 class SequenceTextRecognitionEngine(TextRecognitionEngine):

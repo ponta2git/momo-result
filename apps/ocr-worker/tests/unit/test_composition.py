@@ -1,13 +1,17 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from typing import cast
 
 import pytest
+from psycopg_pool import ConnectionPool
 
 from momo_ocr.app.composition import (
     WorkerRuntime,
     _with_sslmode_require,
-    text_recognition_engine_from_env,
 )
+from momo_ocr.features.ocr_jobs.runner import JobRunnerDependencies
+from momo_ocr.features.text_recognition.factory import text_recognition_engine_from_env
 from momo_ocr.features.text_recognition.tesseract import TesseractEngine
 from momo_ocr.features.text_recognition.tesserocr_engine import TesserocrEngine
 from momo_ocr.shared.errors import FailureCode, OcrError
@@ -81,7 +85,10 @@ def _make_runtime(
     pool: object,
 ) -> WorkerRuntime:
     deps = _FakeDeps(text_engine=text_engine, consumer=consumer)
-    return WorkerRuntime(deps=cast("object", deps), pool=cast("object", pool))  # type: ignore[arg-type]
+    return WorkerRuntime(
+        deps=cast("JobRunnerDependencies", deps),
+        pool=cast("ConnectionPool", pool),
+    )
 
 
 def test_worker_runtime_close_releases_text_engine_consumer_and_pool() -> None:

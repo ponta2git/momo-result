@@ -24,6 +24,7 @@ from momo_ocr.features.text_recognition.tesserocr_engine import (  # noqa: E402
 def _render_text_image(text: str, *, size: tuple[int, int] = (240, 80)) -> Image.Image:
     image = Image.new("RGB", size, color="white")
     draw = ImageDraw.Draw(image)
+    font: ImageFont.FreeTypeFont | ImageFont.ImageFont
     try:
         font = ImageFont.truetype(
             "/System/Library/Fonts/Helvetica.ttc",

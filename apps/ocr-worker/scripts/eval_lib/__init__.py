@@ -10,6 +10,8 @@ Module split:
     - cli       : argparse + orchestrator main()
 """
 
+from __future__ import annotations
+
 from eval_lib.cli import main
 
 __all__ = ["main"]

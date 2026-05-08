@@ -5,6 +5,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 from pathlib import Path
+from typing import cast
 from unicodedata import normalize
 
 from PIL import Image, ImageEnhance, ImageOps
@@ -38,6 +39,18 @@ DEFAULT_STATIC_ALIASES: dict[str, tuple[str, ...]] = {
 
 
 @dataclass(frozen=True)
+class PlayerAliasMatch:
+    canonical_name: str
+    member_id: str | None = None
+
+
+@dataclass(frozen=True)
+class ExtractedPlayerIdentity:
+    raw_player_name: str | None
+    member_id: str | None = None
+
+
+@dataclass(frozen=True)
 class PlayerAliasResolver:
     """Maps OCR-noisy ranked-row text to a canonical player display name.
 
@@ -48,25 +61,25 @@ class PlayerAliasResolver:
     ``た社長``, ``NO11``) from matching unrelated text.
     """
 
-    pairs: tuple[tuple[str, str], ...] = ()
+    pairs: tuple[tuple[str, str, str | None], ...] = ()
     fuzzy_threshold: float | None = None
 
-    def resolve(self, normalized_text: str) -> str | None:
-        best_canonical: str | None = None
+    def resolve(self, normalized_text: str) -> PlayerAliasMatch | None:
+        best_match: PlayerAliasMatch | None = None
         best_ratio = 0.0
-        for canonical, surface in self.pairs:
+        for canonical, surface, member_id in self.pairs:
             normalized_surface = _normalize_name_for_match(surface)
             if len(normalized_surface) < MIN_SAFE_ALIAS_LENGTH:
                 continue
             if normalized_surface in normalized_text:
-                return canonical
+                return PlayerAliasMatch(canonical_name=canonical, member_id=member_id)
             if self.fuzzy_threshold is not None:
                 ratio = SequenceMatcher(None, normalized_surface, normalized_text).ratio()
                 if ratio > best_ratio:
-                    best_canonical = canonical
+                    best_match = PlayerAliasMatch(canonical_name=canonical, member_id=member_id)
                     best_ratio = ratio
         if self.fuzzy_threshold is not None and best_ratio >= self.fuzzy_threshold:
-            return best_canonical
+            return best_match
         return None
 
 
@@ -76,7 +89,22 @@ def alias_resolver_from_map(
     fuzzy_threshold: float | None = None,
 ) -> PlayerAliasResolver:
     pairs = tuple(
-        (canonical, surface) for canonical, surfaces in aliases.items() for surface in surfaces
+        (canonical, surface, None)
+        for canonical, surfaces in aliases.items()
+        for surface in surfaces
+    )
+    return PlayerAliasResolver(pairs=pairs, fuzzy_threshold=fuzzy_threshold)
+
+
+def alias_resolver_from_member_aliases(
+    aliases: Mapping[str, Sequence[str]],
+    *,
+    fuzzy_threshold: float | None = None,
+) -> PlayerAliasResolver:
+    pairs = tuple(
+        (_display_name_from_aliases(member_id, surfaces), surface, member_id)
+        for member_id, surfaces in aliases.items()
+        for surface in surfaces
     )
     return PlayerAliasResolver(pairs=pairs, fuzzy_threshold=fuzzy_threshold)
 
@@ -111,7 +139,7 @@ def _is_inverted_text(image: Image.Image) -> bool:
     luminance to a midline and emit an inverted variant when needed.
     """
     gray = ImageOps.grayscale(image)
-    pixels = list(gray.getdata())
+    pixels = cast("tuple[int, ...]", gray.get_flattened_data())
     mean = sum(pixels) / len(pixels) if pixels else 255.0
     return mean < _INVERTED_LUMINANCE_THRESHOLD
 
@@ -235,6 +263,14 @@ def extract_player_name_candidate(
     *,
     alias_resolver: PlayerAliasResolver | None = None,
 ) -> str | None:
+    return extract_player_identity(text, alias_resolver=alias_resolver).raw_player_name
+
+
+def extract_player_identity(
+    text: str,
+    *,
+    alias_resolver: PlayerAliasResolver | None = None,
+) -> ExtractedPlayerIdentity:
     """Return a canonical or raw player display name candidate from row OCR text.
 
     ``alias_resolver`` defaults to :data:`DEFAULT_ALIAS_RESOLVER` (conservative
@@ -245,21 +281,31 @@ def extract_player_name_candidate(
     resolver = alias_resolver if alias_resolver is not None else DEFAULT_ALIAS_RESOLVER
     normalized = normalize_ocr_text(MONEY_TEXT_RE.sub(" ", text))
     if not normalized:
-        return None
+        return ExtractedPlayerIdentity(raw_player_name=None)
     alias_match = resolver.resolve(_normalize_name_for_match(normalized))
     if alias_match is not None:
-        return alias_match
+        return ExtractedPlayerIdentity(
+            raw_player_name=alias_match.canonical_name,
+            member_id=alias_match.member_id,
+        )
 
     matches = re.findall(r"((?:NO\s*1\s*1|[一-龥ぁ-んァ-ンー_]+)\s*社長)", normalized)
     if not matches:
-        return None
+        return ExtractedPlayerIdentity(raw_player_name=None)
 
     name = normalize_ocr_text(matches[-1]).replace("_", "ー")
     tokens = name.split()
     if len(tokens) >= MIN_NOISE_PREFIX_TOKENS and _is_latin_noise(tokens[0]):
         name = " ".join(tokens[1:])
     name = re.sub(r"(?<=\d)社長", " 社長", name)
-    return name or None
+    return ExtractedPlayerIdentity(raw_player_name=name or None)
+
+
+def _display_name_from_aliases(member_id: str, surfaces: Sequence[str]) -> str:
+    for surface in surfaces:
+        if surface:
+            return surface
+    return member_id
 
 
 def _normalize_name_for_match(value: str) -> str:

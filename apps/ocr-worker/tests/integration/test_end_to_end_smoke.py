@@ -8,8 +8,9 @@ from psycopg.types.json import Jsonb
 from psycopg_pool import ConnectionPool
 from redis import Redis
 from redis.typing import EncodableT
-from testcontainers.postgres import PostgresContainer  # type: ignore[import-untyped]
-from testcontainers.redis import RedisContainer  # type: ignore[import-untyped]
+from testcontainers.core.container import DockerContainer
+from testcontainers.core.wait_strategies import ExecWaitStrategy
+from testcontainers.postgres import PostgresContainer
 
 from momo_ocr.features.ocr_domain.models import OcrDraftPayload, ScreenType
 from momo_ocr.features.ocr_jobs.cancellation import RepositoryCancellationChecker
@@ -26,7 +27,11 @@ POSTGRES_PASSWORD = "test"  # noqa: S105
 
 @pytest.mark.integration
 def test_redis_to_worker_to_postgres_smoke() -> None:
-    redis_container = RedisContainer("redis:7-alpine")
+    redis_container = (
+        DockerContainer("redis:7-alpine")
+        .with_exposed_ports(6379)
+        .waiting_for(ExecWaitStrategy(["redis-cli", "ping"]))
+    )
     postgres_container = PostgresContainer(
         "postgres:16-alpine",
         username="test",

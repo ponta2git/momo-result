@@ -251,7 +251,10 @@ class PostgresOcrJobRepository:
                     retryable=True,
                 )
             # Keep worker portable for environments that only provision OCR tables.
-            with suppress(psycopg.errors.UndefinedTable):
+            # The optional sync needs a savepoint: once PostgreSQL raises
+            # UndefinedTable, the current transaction is aborted until rolled
+            # back, and we must not lose the terminal job update above.
+            with suppress(psycopg.errors.UndefinedTable), conn.transaction():
                 _sync_match_draft_status_for_terminal_job(conn, job_id)
 
 

@@ -4,9 +4,9 @@ from pathlib import Path
 
 from PIL import Image
 
-from momo_ocr.app.composition import default_parser_registry
 from momo_ocr.features.ocr_domain.models import ScreenType
 from momo_ocr.features.ocr_results.parsing import ScreenParseContext
+from momo_ocr.features.ocr_results.registry import default_parser_registry
 from momo_ocr.features.text_recognition.engine import FakeTextRecognitionEngine
 
 

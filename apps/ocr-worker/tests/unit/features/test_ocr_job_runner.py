@@ -21,7 +21,7 @@ from momo_ocr.features.ocr_domain.models import (
     ScreenType,
     WarningCode,
 )
-from momo_ocr.features.ocr_jobs.cancellation import InMemoryCancellationChecker
+from momo_ocr.features.ocr_jobs.cancellation import CancellationChecker, InMemoryCancellationChecker
 from momo_ocr.features.ocr_jobs.consumer import InMemoryOcrJobConsumer
 from momo_ocr.features.ocr_jobs.models import (
     OcrJobHints,
@@ -134,7 +134,7 @@ def _make_deps(
     consumer: InMemoryOcrJobConsumer,
     repository: InMemoryOcrJobRepository,
     result_writer: InMemoryOcrResultWriter,
-    cancellation: InMemoryCancellationChecker,
+    cancellation: CancellationChecker,
     analyze: Callable[..., AnalysisResult],
 ) -> JobRunnerDependencies:
     return JobRunnerDependencies(
@@ -389,8 +389,10 @@ def test_hints_are_merged_into_alias_resolver_passed_to_analyze() -> None:
     # The resolver normalizes the alias surface but expects the input text to
     # already be normalized (callers in ``ranked_rows`` do that step). Mirror
     # that here so the substring match runs against comparable forms.
-    canonical = resolver.resolve(_normalize_name_for_match("PONTAプレイヤー"))
-    assert canonical == "ぽんた社長"
+    match = resolver.resolve(_normalize_name_for_match("PONTAプレイヤー"))
+    assert match is not None
+    assert match.canonical_name == "PONTAプレイヤー"
+    assert match.member_id == "ぽんた社長"
 
 
 class _ToggleAfterFirstCallCancellation:

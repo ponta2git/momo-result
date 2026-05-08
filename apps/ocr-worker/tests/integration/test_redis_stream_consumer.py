@@ -5,14 +5,19 @@ from typing import cast
 import pytest
 from redis import Redis
 from redis.typing import EncodableT
-from testcontainers.redis import RedisContainer  # type: ignore[import-untyped]
+from testcontainers.core.container import DockerContainer
+from testcontainers.core.wait_strategies import ExecWaitStrategy
 
 from momo_ocr.features.ocr_jobs.consumer import RedisOcrJobConsumer
 
 
 @pytest.mark.integration
 def test_redis_consumer_reads_stream_delivery_from_testcontainer() -> None:
-    container = RedisContainer("redis:7-alpine")
+    container = (
+        DockerContainer("redis:7-alpine")
+        .with_exposed_ports(6379)
+        .waiting_for(ExecWaitStrategy(["redis-cli", "ping"]))
+    )
     try:
         container.start()
     except Exception as exc:  # noqa: BLE001

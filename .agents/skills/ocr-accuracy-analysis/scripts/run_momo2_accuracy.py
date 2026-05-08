@@ -45,6 +45,8 @@ FILENAME_RE = re.compile(
     r"(?P<ext>jpg|jpeg|png|webp)$",
     re.IGNORECASE,
 )
+INCIDENT_LOG_LOW_CONFIDENCE_THRESHOLD = 0.2
+MAX_INCIDENT_LOG_QUALITY_EXAMPLES = 12
 
 
 @dataclass(frozen=True)
@@ -396,6 +398,126 @@ def per_match_summary(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return rows
 
 
+def incident_log_candidate_quality(results: list[dict[str, Any]]) -> dict[str, Any]:
+    quality: dict[str, Any] = {
+        "threshold": INCIDENT_LOG_LOW_CONFIDENCE_THRESHOLD,
+        "images": 0,
+        "cells": 0,
+        "low_confidence_cells": 0,
+        "missing_confidence_cells": 0,
+        "multi_candidate_cells": 0,
+        "suspicious_cells": 0,
+        "missing_debug_files": [],
+        "examples": [],
+    }
+    examples: list[dict[str, Any]] = []
+
+    for result in results:
+        if result.get("screen_type") != "incident_log":
+            continue
+
+        quality["images"] += 1
+        file_name = str(result.get("file") or "")
+        debug_dir = result.get("debug_dir")
+        cells_path = (
+            Path(str(debug_dir)) / "incident_log" / "cells.json" if debug_dir else None
+        )
+        if cells_path is None or not cells_path.is_file():
+            quality["missing_debug_files"].append(file_name)
+            continue
+
+        with cells_path.open("r", encoding="utf-8") as fh:
+            cells_payload = json.load(fh)
+        cells = _cell_debug_values(cells_payload.get("cells"))
+        if cells is None:
+            quality["missing_debug_files"].append(file_name)
+            continue
+
+        for cell in cells:
+            if not isinstance(cell, dict):
+                continue
+
+            quality["cells"] += 1
+            confidence = _float_or_none(cell.get("final_confidence"))
+            raw_text = str(cell.get("final_raw_text") or "")
+            raw_candidate_count = _raw_candidate_count(raw_text)
+            low_confidence = (
+                confidence is not None
+                and confidence < INCIDENT_LOG_LOW_CONFIDENCE_THRESHOLD
+            )
+            missing_confidence = confidence is None
+            multi_candidate = raw_candidate_count > 1
+            suspicious = low_confidence or missing_confidence or multi_candidate
+
+            if low_confidence:
+                quality["low_confidence_cells"] += 1
+            if missing_confidence:
+                quality["missing_confidence_cells"] += 1
+            if multi_candidate:
+                quality["multi_candidate_cells"] += 1
+            if suspicious:
+                quality["suspicious_cells"] += 1
+                examples.append(
+                    {
+                        "file": file_name,
+                        "incident": cell.get("incident_name"),
+                        "player": int(cell.get("player_index") or 0) + 1,
+                        "count": cell.get("final_count"),
+                        "confidence": confidence,
+                        "raw_candidate_count": raw_candidate_count,
+                        "raw": raw_text,
+                        "low_confidence": low_confidence,
+                        "missing_confidence": missing_confidence,
+                        "multi_candidate": multi_candidate,
+                        "cell_image": str(
+                            cells_path.parent / str(cell.get("cell_image"))
+                        ),
+                    }
+                )
+
+    examples.sort(key=_incident_quality_example_sort_key)
+    quality["examples"] = examples[:MAX_INCIDENT_LOG_QUALITY_EXAMPLES]
+    return quality
+
+
+def _float_or_none(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _cell_debug_values(cells: Any) -> list[Any] | None:
+    if isinstance(cells, dict):
+        return list(cells.values())
+    if isinstance(cells, list):
+        return cells
+    return None
+
+
+def _raw_candidate_count(raw_text: str) -> int:
+    if not raw_text:
+        return 0
+    return len([part for part in raw_text.split("|") if part.strip()])
+
+
+def _incident_quality_example_sort_key(item: dict[str, Any]) -> tuple[Any, ...]:
+    confidence = item.get("confidence")
+    sortable_confidence = confidence if isinstance(confidence, (int, float)) else -1.0
+    return (
+        not item.get("low_confidence"),
+        not item.get("missing_confidence"),
+        not item.get("multi_candidate"),
+        sortable_confidence,
+        -int(item.get("raw_candidate_count") or 0),
+        str(item.get("file")),
+        str(item.get("incident")),
+        int(item.get("player") or 0),
+    )
+
+
 def build_digest(
     report: dict[str, Any], *, scope: str, answers_info: dict[str, Any]
 ) -> dict[str, Any]:
@@ -411,6 +533,7 @@ def build_digest(
         "warning_counts": warning_counts(results),
         "worst_images": worst_images(results),
         "per_match": per_match_summary(results),
+        "incident_log_candidate_quality": incident_log_candidate_quality(results),
     }
 
 
@@ -464,6 +587,47 @@ def write_digest_files(report_path: Path, digest: dict[str, Any]) -> tuple[Path,
             f"- {screen}: {stats.get('correct')}/{stats.get('total')} "
             f"({pct(stats.get('accuracy'))}), images={stats.get('images')}"
         )
+
+    quality = digest.get("incident_log_candidate_quality", {})
+    lines.extend(["", "## Incident Log Candidate Quality", ""])
+    if quality.get("images"):
+        threshold = quality.get("threshold")
+        lines.extend(
+            [
+                f"- Images: {quality.get('images')}",
+                f"- Cells: {quality.get('cells')}",
+                f"- Low confidence (<{threshold:.2f}): "
+                f"{quality.get('low_confidence_cells')}",
+                f"- Missing confidence: {quality.get('missing_confidence_cells')}",
+                f"- Multiple raw candidates: {quality.get('multi_candidate_cells')}",
+                f"- Suspicious cells: {quality.get('suspicious_cells')}",
+            ]
+        )
+        missing_debug_files = quality.get("missing_debug_files", [])
+        if missing_debug_files:
+            lines.append(
+                "- Missing debug files: "
+                + ", ".join(str(item) for item in missing_debug_files)
+            )
+        examples = quality.get("examples", [])
+        if examples:
+            lines.extend(["", "### Candidate Examples", ""])
+            for item in examples:
+                flags = []
+                if item.get("low_confidence"):
+                    flags.append("low_confidence")
+                if item.get("missing_confidence"):
+                    flags.append("missing_confidence")
+                if item.get("multi_candidate"):
+                    flags.append("multi_candidate")
+                lines.append(
+                    f"- {item.get('file')} / {item.get('incident')} player {item.get('player')}: "
+                    f"count={item.get('count')}, confidence={item.get('confidence')}, "
+                    f"raw_candidates={item.get('raw_candidate_count')}, flags={','.join(flags)}, "
+                    f"raw=`{item.get('raw')}`, cell=`{item.get('cell_image')}`"
+                )
+    else:
+        lines.append("- no incident_log images")
 
     lines.extend(["", "## Top Diff Fields", ""])
     for item in digest["top_diff_fields"][:10]:

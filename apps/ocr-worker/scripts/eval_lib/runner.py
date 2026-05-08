@@ -148,8 +148,21 @@ def evaluate_one(
             eval_record.diffs.append({"field": "<analysis>", "got": None, "expected": "result"})
         return eval_record
 
+    player_order_stats = {
+        "direct_total": 0,
+        "direct_matches": 0,
+        "fallback_name_matches": 0,
+        "unresolved_players": 0,
+    }
     for expected in expected_players:
         predicted, match_kind = resolve_player(last.result, expected)
+        player_order_stats["direct_total"] += 1
+        if match_kind == "play_order":
+            player_order_stats["direct_matches"] += 1
+        elif match_kind == "name":
+            player_order_stats["fallback_name_matches"] += 1
+        else:
+            player_order_stats["unresolved_players"] += 1
         correct, total = compare_player(
             expected=expected,
             predicted=predicted,
@@ -168,6 +181,11 @@ def evaluate_one(
         eval_record.field_correct += correct
         eval_record.field_total += total
 
+    total = player_order_stats["direct_total"]
+    eval_record.diagnostics["player_order"] = {
+        **player_order_stats,
+        "direct_accuracy": (player_order_stats["direct_matches"] / total if total else None),
+    }
     return eval_record
 
 

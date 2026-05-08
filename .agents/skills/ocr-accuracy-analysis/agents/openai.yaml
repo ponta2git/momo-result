@@ -1,0 +1,4 @@
+interface:
+  display_name: "OCR Accuracy Analysis"
+  short_description: "桃鉄2 OCR精度とdebug出力を深掘り分析する"
+  default_prompt: "Use $ocr-accuracy-analysis to analyze 桃鉄2 OCR accuracy, inspect debug artifacts, and report concrete improvement proposals."

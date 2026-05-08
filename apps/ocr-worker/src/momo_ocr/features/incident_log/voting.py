@@ -41,13 +41,13 @@ def vote_count(attempts: list[PsmAttempt]) -> tuple[int | None, float | None]:
             continue
         by_count.setdefault(attempt.count, []).append(attempt)
 
-    def sort_key(item: tuple[int, list[PsmAttempt]]) -> tuple[int, int, float, int]:
-        _, group = item
+    def sort_key(item: tuple[int, list[PsmAttempt]]) -> tuple[int, int, float, int, int]:
+        count, group = item
         votes = len(group)
         min_text_len = min(len(attempt.text) for attempt in group)
         max_conf = max((attempt.confidence or 0.0) for attempt in group)
         has_any_digit = int(any(any(c.isdigit() for c in attempt.text) for attempt in group))
-        return (-has_any_digit, -votes, -max_conf, min_text_len)
+        return (-has_any_digit, -votes, -max_conf, min_text_len, count)
 
     chosen_count, chosen_group = min(by_count.items(), key=sort_key)
     confidences = [attempt.confidence for attempt in chosen_group if attempt.confidence is not None]
@@ -83,6 +83,14 @@ def select_count_recognition(
         for result in valid
         if result.count is not None and result.count <= max_plausible_count
     ]
+    recovered = _recover_plausible_leading_digit(valid, max_plausible_count=max_plausible_count)
+    if not plausible and recovered is not None:
+        count, confidence = recovered
+        return CountRecognitionResult(
+            raw_text=" | ".join(dict.fromkeys(snippets)),
+            count=count,
+            confidence=confidence,
+        )
     pool = plausible or valid
     by_count: dict[int, list[CountRecognitionResult]] = {}
     for result in pool:
@@ -90,8 +98,10 @@ def select_count_recognition(
             continue
         by_count.setdefault(result.count, []).append(result)
 
-    def sort_key(item: tuple[int, list[CountRecognitionResult]]) -> tuple[int, int, float, int]:
-        _, group = item
+    def sort_key(
+        item: tuple[int, list[CountRecognitionResult]],
+    ) -> tuple[int, int, float, int, int]:
+        count, group = item
         votes = len(group)
         # raw_text may concatenate multiple PSM snippets via " | "; pick
         # the shortest pipe-separated piece so that noise-bloated reads
@@ -111,7 +121,7 @@ def select_count_recognition(
                 for piece in result.raw_text.split("|")
             )
         )
-        return (-has_any_digit, -votes, -max_conf, min_text_len)
+        return (-has_any_digit, -votes, -max_conf, min_text_len, count)
 
     chosen_count, chosen_group = min(by_count.items(), key=sort_key)
     confidences = [result.confidence for result in chosen_group if result.confidence is not None]
@@ -125,6 +135,40 @@ def select_count_recognition(
         count=chosen_count,
         confidence=final_confidence,
     )
+
+
+def _recover_plausible_leading_digit(
+    results: list[CountRecognitionResult],
+    *,
+    max_plausible_count: int,
+) -> tuple[int, float | None] | None:
+    """Recover a one-digit value when all OCR variants over-read the same prefix.
+
+    Compact 桃鉄2 cells have a right-edge chevron. When that decoration is
+    captured with a real digit, OCR can produce overlarge values like 31/35 for
+    a visible 3. This recovery only applies when no normal plausible candidate
+    exists and every multi-digit candidate agrees on the same plausible leading
+    digit.
+    """
+
+    leading_digits: list[int] = []
+    confidences: list[float] = []
+    for result in results:
+        if result.count is None or result.count <= max_plausible_count:
+            continue
+        for piece in (piece.strip() for piece in result.raw_text.split("|")):
+            digits = "".join(ch for ch in piece if ch.isdigit())
+            if len(digits) <= 1:
+                continue
+            leading = int(digits[0])
+            if 0 < leading <= max_plausible_count:
+                leading_digits.append(leading)
+                if result.confidence is not None:
+                    confidences.append(result.confidence)
+                break
+    if not leading_digits or len(set(leading_digits)) != 1:
+        return None
+    return leading_digits[0], max(confidences) if confidences else None
 
 
 def plausibility_warnings(

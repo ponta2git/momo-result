@@ -69,3 +69,4 @@ class ImageEval:
     diffs: list[dict[str, Any]] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     debug_dir: str | None = None
+    diagnostics: dict[str, Any] = field(default_factory=dict)

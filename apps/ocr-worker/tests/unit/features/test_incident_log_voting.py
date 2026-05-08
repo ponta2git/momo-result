@@ -69,6 +69,27 @@ def test_select_count_recognition_falls_back_when_no_plausible() -> None:
     assert selected.count == 5
 
 
+def test_select_count_recognition_recovers_common_leading_digit_from_overread() -> None:
+    primary = CountRecognitionResult(raw_text="31", count=31, confidence=0.0)
+    fallback = CountRecognitionResult(raw_text="35", count=35, confidence=0.28)
+    selected = select_count_recognition(
+        primary, [fallback], max_plausible_count=MAX_PLAUSIBLE_STOP_COUNT
+    )
+    assert selected.count == 3
+
+
+def test_select_count_recognition_uses_count_tie_breaker_for_single_vote_digits() -> None:
+    primary = CountRecognitionResult(raw_text="oi", count=0, confidence=0.0)
+    fallback_a = CountRecognitionResult(raw_text="6", count=6, confidence=0.0)
+    fallback_b = CountRecognitionResult(raw_text="3", count=3, confidence=0.0)
+    selected = select_count_recognition(
+        primary,
+        [fallback_a, fallback_b],
+        max_plausible_count=MAX_PLAUSIBLE_STOP_COUNT,
+    )
+    assert selected.count == 3
+
+
 def test_select_count_recognition_attenuates_confidence_by_agreement() -> None:
     # 1 票だけ → agreement=1/3, confidence factor = 0.5 + 0.5/3 ≈ 0.667
     primary = CountRecognitionResult(raw_text="3", count=3, confidence=1.0)

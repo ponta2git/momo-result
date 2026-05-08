@@ -33,6 +33,7 @@ def aggregate(records: list[ImageEval]) -> dict[str, Any]:
         bucket["images"] += 1
 
     durations = [r.duration_ms_mean for r in records]
+    player_order = _aggregate_player_order(records)
     return {
         "images": len(records),
         "fields_total": total,
@@ -54,5 +55,24 @@ def aggregate(records: list[ImageEval]) -> dict[str, Any]:
             "p95": percentile(durations, 95),
             "p99": percentile(durations, 99),
         },
+        "player_order": player_order,
         "failures": [r.file for r in records if r.failure is not None or r.field_total == 0],
+    }
+
+
+def _aggregate_player_order(records: list[ImageEval]) -> dict[str, Any]:
+    totals = {
+        "direct_total": 0,
+        "direct_matches": 0,
+        "fallback_name_matches": 0,
+        "unresolved_players": 0,
+    }
+    for record in records:
+        stats = record.diagnostics.get("player_order", {})
+        for key in totals:
+            totals[key] += int(stats.get(key) or 0)
+    direct_total = totals["direct_total"]
+    return {
+        **totals,
+        "direct_accuracy": (totals["direct_matches"] / direct_total if direct_total else None),
     }

@@ -8,7 +8,7 @@ from difflib import SequenceMatcher
 from pathlib import Path
 from typing import cast
 
-from PIL import Image
+from PIL import Image, ImageOps
 
 from momo_ocr.features.image_processing.geometry import Size, scale_profile_rect_to_image
 from momo_ocr.features.image_processing.roi import crop_roi
@@ -33,7 +33,9 @@ MIN_NAME_MATCH_LENGTH = 3
 MIN_NAME_SIMILARITY = 0.65
 MIN_SATURATION = 0.45
 MIN_VALUE = 0.25
-NAME_OCR_PSMS = (6, 13)
+NAME_OCR_PSMS = (6, 8)
+NAME_WHITE_THRESHOLDS = (150, 170, 190)
+NAME_VARIANT_SCALE = 2
 RED_HUE_MAX = 20
 RED_HUE_MIN = 330
 YELLOW_HUE_MIN = 30
@@ -47,6 +49,12 @@ COLOR_HUE_RANGES = (
     (PlayerColor.YELLOW, ((YELLOW_HUE_MIN, YELLOW_HUE_MAX),)),
     (PlayerColor.GREEN, ((GREEN_HUE_MIN, GREEN_HUE_MAX),)),
     (PlayerColor.BLUE, ((BLUE_HUE_MIN, BLUE_HUE_MAX),)),
+)
+NAME_CONFUSION_REPLACEMENTS = (
+    ("いローゆ", "いーゆ"),
+    ("いハーゆ", "いーゆ"),
+    ("ハーゆ", "いーゆ"),
+    ("バーゆ", "いーゆ"),
 )
 
 
@@ -73,11 +81,14 @@ def detect_player_order(
         )
         if debug_dir is not None:
             indicator_image.save(debug_dir / f"order_{slot_profile.play_order}_indicator.png")
+            name_image.save(debug_dir / f"order_{slot_profile.play_order}_name.png")
 
         detected_color, color_confidence = _detect_dominant_player_color(indicator_image)
         raw_player_name, name_confidence = _recognize_slot_name(
             name_image,
             text_engine=text_engine,
+            debug_dir=debug_dir,
+            play_order=slot_profile.play_order,
         )
 
         if detected_color != slot_profile.expected_color or color_confidence < MIN_COLOR_CONFIDENCE:
@@ -220,31 +231,32 @@ def _recognize_slot_name(
     image: Image.Image,
     *,
     text_engine: TextRecognitionEngine,
+    debug_dir: Path | None = None,
+    play_order: int | None = None,
 ) -> tuple[str | None, float | None]:
-    candidates: list[tuple[str, float | None]] = []
-    for psm in NAME_OCR_PSMS:
-        recognized = text_engine.recognize(
-            image,
-            field=RecognitionField.PLAYER_NAME,
-            config=RecognitionConfig(psm=psm),
-        )
-        cleaned = _clean_player_name(recognized.text)
-        if cleaned is not None:
-            candidates.append((cleaned, recognized.confidence))
+    candidates: list[tuple[str, float | None, float]] = []
+    for variant_label, variant_image in _slot_name_variants(image):
+        if debug_dir is not None and play_order is not None and variant_label != "raw":
+            variant_image.save(debug_dir / f"order_{play_order}_name_{variant_label}.png")
+        for psm in NAME_OCR_PSMS:
+            recognized = text_engine.recognize(
+                variant_image,
+                field=RecognitionField.PLAYER_NAME,
+                config=RecognitionConfig(psm=psm),
+            )
+            cleaned = _clean_player_name(recognized.text)
+            if cleaned is not None and not _is_name_noise(cleaned):
+                candidates.append(
+                    (
+                        cleaned,
+                        recognized.confidence,
+                        _name_candidate_score(cleaned, recognized.confidence),
+                    )
+                )
 
-    # Prefer the highest-confidence candidate that contains 社長, then any
-    # 社長-bearing candidate, then the highest-confidence candidate overall.
-    # Falling back to "first PSM wins" can let a noisy low-confidence read
-    # (e.g. PSM 7 misreading a player avatar) override a clean PSM 6/13 read.
-    sho_cho_candidates = [
-        (name, confidence)
-        for name, confidence in candidates
-        if "社長" in name and not _is_name_noise(name)
-    ]
-    if sho_cho_candidates:
-        return max(sho_cho_candidates, key=lambda item: item[1] or 0.0)
     if candidates:
-        return max(candidates, key=lambda item: item[1] or 0.0)
+        name, confidence, _score = max(candidates, key=lambda item: item[2])
+        return name, confidence
     return None, None
 
 
@@ -263,6 +275,49 @@ def _clean_player_name(text: str) -> str | None:
     return normalize_ocr_text(matches[-1]).replace("一", "ー")
 
 
+def _slot_name_variants(image: Image.Image) -> list[tuple[str, Image.Image]]:
+    variants = [("raw", image)]
+    gray = ImageOps.grayscale(image)
+    for threshold in NAME_WHITE_THRESHOLDS:
+        prepared = gray.point(
+            lambda value, threshold=threshold: 0 if value > threshold else 255
+        ).convert("L")
+        variants.append(
+            (
+                f"white_{threshold}",
+                prepared.resize(
+                    (
+                        prepared.width * NAME_VARIANT_SCALE,
+                        prepared.height * NAME_VARIANT_SCALE,
+                    ),
+                    Image.Resampling.LANCZOS,
+                ),
+            )
+        )
+    return variants
+
+
+def _name_candidate_score(name: str, confidence: float | None) -> float:
+    score = confidence or 0.0
+    if "社長" in name:
+        score += 0.10
+    if _has_mixed_kana(_strip_president_suffix(name)):
+        score -= 0.15
+    if _looks_like_partial_company_suffix(name):
+        score -= 0.05
+    return score
+
+
+def _has_mixed_kana(value: str) -> bool:
+    has_hiragana = bool(re.search(r"[ぁ-ん]", value))
+    has_katakana = bool(re.search(r"[ァ-ン]", value))
+    return has_hiragana and has_katakana
+
+
+def _looks_like_partial_company_suffix(name: str) -> bool:
+    return "社" in name and "社長" not in name
+
+
 def _is_name_noise(name: str) -> bool:
     non_marks = name.replace("ー", "").replace("-", "").strip()
     return len(non_marks) == 0
@@ -270,6 +325,8 @@ def _is_name_noise(name: str) -> bool:
 
 def _normalize_name_for_match(name: str) -> str:
     normalized = name.replace("一", "ー").replace("_", "ー")
+    for source, replacement in NAME_CONFUSION_REPLACEMENTS:
+        normalized = normalized.replace(source, replacement)
     return re.sub(r"[^A-Za-z0-9一-龥ぁ-んァ-ンー]", "", normalized)
 
 

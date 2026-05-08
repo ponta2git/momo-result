@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from PIL import Image, ImageDraw
 
+from momo_ocr.features.image_processing.geometry import Size, scale_profile_rect_to_image
 from momo_ocr.features.ocr_domain.models import OcrField, PlayerResultDraft
 from momo_ocr.features.player_order.detector import (
     apply_player_order_to_column_players,
@@ -9,6 +10,7 @@ from momo_ocr.features.player_order.detector import (
     detect_player_order,
 )
 from momo_ocr.features.player_order.models import PlayerColor, PlayerOrderDetection, PlayerOrderSlot
+from momo_ocr.features.player_order.profile import SLOT_PROFILES
 from momo_ocr.features.text_recognition.engine import TextRecognitionEngine
 from momo_ocr.features.text_recognition.models import (
     RecognitionConfig,
@@ -18,23 +20,14 @@ from momo_ocr.features.text_recognition.models import (
 
 
 def test_detect_player_order_reads_four_color_slots_and_names() -> None:
-    image = Image.new("RGB", (1280, 720), "black")
+    image = Image.new("RGB", (1920, 1080), "black")
     draw = ImageDraw.Draw(image)
     colors = ["#2878d0", "#d03030", "#d8a020", "#60a020"]
-    for index, color in enumerate(colors):
-        draw.rectangle((index * 320, 620, (index + 1) * 320, 720), fill=color)
-    engine = SequenceTextRecognitionEngine(
-        [
-            "いーゆ社長",
-            "いーゆ社長",
-            "おーたか社長",
-            "おーたか社長",
-            "ぽんた社長",
-            "ぽんた社長",
-            "NO1 1社長",
-            "NO1 1社長",
-        ]
-    )
+    size = Size(width=image.width, height=image.height)
+    for slot_profile, color in zip(SLOT_PROFILES, colors, strict=True):
+        rect = scale_profile_rect_to_image(slot_profile.indicator_roi, size)
+        draw.rectangle((rect.x, rect.y, rect.x + rect.width, rect.y + rect.height), fill=color)
+    engine = SlotTextRecognitionEngine(["いーゆ社長", "おーたか社長", "ぽんた社長", "NO1 1社長"])
 
     detection = detect_player_order(image, text_engine=engine)
 
@@ -66,6 +59,48 @@ def test_apply_player_order_matches_ranked_player_names() -> None:
     updated = apply_player_order_to_ranked_players(players, detection)
 
     assert [player.play_order.value for player in updated] == [4, 2, 3, 1]
+
+
+def test_apply_player_order_matches_known_ocr_mixed_kana_noise() -> None:
+    detection = PlayerOrderDetection(
+        slots=[
+            PlayerOrderSlot(
+                play_order=3,
+                expected_color=PlayerColor.YELLOW,
+                detected_color=PlayerColor.YELLOW,
+                raw_player_name="いローゆー社長",
+                color_confidence=0.9,
+                name_confidence=0.8,
+            )
+        ],
+        confidence=0.9,
+    )
+    players = [PlayerResultDraft(raw_player_name=OcrField(value="いーゆー社長"))]
+
+    updated = apply_player_order_to_ranked_players(players, detection)
+
+    assert updated[0].play_order.value == 3
+
+
+def test_apply_player_order_matches_ranked_name_missing_leading_i() -> None:
+    detection = PlayerOrderDetection(
+        slots=[
+            PlayerOrderSlot(
+                play_order=3,
+                expected_color=PlayerColor.YELLOW,
+                detected_color=PlayerColor.YELLOW,
+                raw_player_name="いーゆー社長",
+                color_confidence=0.9,
+                name_confidence=0.8,
+            )
+        ],
+        confidence=0.9,
+    )
+    players = [PlayerResultDraft(raw_player_name=OcrField(value="ハーゆー社長"))]
+
+    updated = apply_player_order_to_ranked_players(players, detection)
+
+    assert updated[0].play_order.value == 3
 
 
 def test_apply_player_order_assigns_column_players_by_slot() -> None:
@@ -118,3 +153,22 @@ class SequenceTextRecognitionEngine(TextRecognitionEngine):
         text = self._texts[0]
         self._texts = self._texts[1:]
         return RecognizedText(text=text, confidence=0.9)
+
+
+class SlotTextRecognitionEngine(TextRecognitionEngine):
+    def __init__(self, texts: list[str]) -> None:
+        self._texts = texts
+        self._calls = 0
+
+    def recognize(
+        self,
+        image: Image.Image,
+        *,
+        field: RecognitionField = RecognitionField.GENERIC,
+        psm: int | None = None,
+        config: RecognitionConfig | None = None,
+    ) -> RecognizedText:
+        del image, field, psm, config
+        slot_index = min(self._calls // 8, len(self._texts) - 1)
+        self._calls += 1
+        return RecognizedText(text=self._texts[slot_index], confidence=0.9)

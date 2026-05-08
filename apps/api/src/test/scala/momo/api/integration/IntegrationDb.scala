@@ -1,69 +1,136 @@
 package momo.api.integration
 
+import java.nio.file.{Files, Path, Paths}
+import java.sql.DriverManager
+
+import scala.jdk.CollectionConverters.*
+
 import cats.effect.{IO, Resource}
 import cats.syntax.all.*
 import com.zaxxer.hikari.HikariConfig
 import doobie.*
 import doobie.hikari.HikariTransactor
 import doobie.implicits.*
+import org.testcontainers.containers.PostgreSQLContainer
+import org.testcontainers.utility.DockerImageName
 
 /**
- * Helpers for integration tests that talk to the shared local Postgres provisioned by
- * `~/Documents/codes/momo-db` (`pnpm db:up && pnpm db:migrate`).
+ * Helpers for integration tests that talk to an isolated Postgres Testcontainer migrated with the
+ * momo-db drizzle SQL files.
  *
- * Defaults match `compose.yaml` in momo-db:
- *   - host=localhost, port=5433, db=summit, user=summit, password=summit
- *
- * Override via env var `MOMO_RESULT_TEST_DATABASE_URL` (full JDBC URL), `MOMO_RESULT_TEST_DB_USER`,
- * `MOMO_RESULT_TEST_DB_PASSWORD`.
- *
- * The schema is owned by momo-db; tests must NOT issue DDL.
+ * The schema is owned by momo-db; tests must NOT issue DDL. Set `MOMO_DB_MIGRATIONS_DIR` when the
+ * momo-db checkout is not discoverable from the current working directory.
  */
+// scalafix:off DisableSyntax.noUnsafeRunSync
+// scalafix:off DisableSyntax.throw
 object IntegrationDb:
+
+  private val PostgresImage = DockerImageName.parse("postgres:16-alpine")
+  private val DatabaseName = "summit"
+  private val Username = "summit"
+  private val Password = "summit"
+  private val StatementBreakpoint = raw"(?m)-->\s*statement-breakpoint\s*".r
+
+  private final class MomoPostgresContainer
+      extends PostgreSQLContainer[MomoPostgresContainer](PostgresImage)
 
   final case class Settings(jdbcUrl: String, user: String, password: String)
 
-  def isCi: Boolean = sys.env.get("CI").exists(_.equalsIgnoreCase("true"))
-
-  def settings: Settings =
-    val jdbcUrl = sys.env
-      .getOrElse("MOMO_RESULT_TEST_DATABASE_URL", "jdbc:postgresql://localhost:5433/summit")
-    val user = sys.env.getOrElse("MOMO_RESULT_TEST_DB_USER", "summit")
-    val password = sys.env.getOrElse("MOMO_RESULT_TEST_DB_PASSWORD", "summit")
-    Settings(jdbcUrl, user, password)
-
   /**
-   * Quick liveness probe used by suites to skip themselves when no DB is available (e.g. on CI
-   * without docker or local dev without `pnpm db:up`).
+   * Suite-wide fixture combining a transactor with auto-cleanup before each test. Suites
+   * instantiate via [[withDb]] in their `munitFixtures`.
    */
-  def isAvailable: Boolean =
-    try
-      Class.forName("org.postgresql.Driver")
-      val s = settings
-      val c = java.sql.DriverManager.getConnection(s.jdbcUrl, s.user, s.password)
-      try
-        val st = c.createStatement()
-        try
-          val rs = st.executeQuery("SELECT 1")
-          rs.next()
-        finally st.close()
-      finally c.close()
-      true
-    catch case _: Throwable => false
+  final class DbFixture(
+      val settings: Settings,
+      val transactor: HikariTransactor[IO],
+      release: IO[Unit],
+  ):
+    def cleanup(): IO[Unit] = truncateAppTables(transactor)
+    def close(): IO[Unit] = release
+
+  private lazy val sharedFixture: DbFixture =
+    import cats.effect.unsafe.implicits.global
+
+    val container = new MomoPostgresContainer().withDatabaseName(DatabaseName)
+      .withUsername(Username).withPassword(Password)
+    container.start()
+
+    val settings = Settings(container.getJdbcUrl, container.getUsername, container.getPassword)
+    try migrate(settings)
+    catch
+      case error: Throwable =>
+        container.stop()
+        throw error
+
+    val (transactor, releaseTransactor) = transactorResource(settings).allocated.unsafeRunSync()
+    val release = releaseTransactor >> IO.blocking(container.stop())
+    val _ = sys.addShutdownHook(release.unsafeRunSync())
+    new DbFixture(settings, transactor, IO.unit)
+
+  def acquire: IO[DbFixture] = IO.blocking(sharedFixture)
 
   /**
    * Build a HikariCP-backed transactor for tests. Uses a tiny pool to keep concurrency predictable.
    */
-  def transactor: Resource[IO, HikariTransactor[IO]] =
-    val s = settings
+  private def transactorResource(settings: Settings): Resource[IO, HikariTransactor[IO]] =
     val cfg = new HikariConfig()
-    cfg.setJdbcUrl(s.jdbcUrl)
-    cfg.setUsername(s.user)
-    cfg.setPassword(s.password)
+    cfg.setJdbcUrl(settings.jdbcUrl)
+    cfg.setUsername(settings.user)
+    cfg.setPassword(settings.password)
     cfg.setMaximumPoolSize(2)
     cfg.setMinimumIdle(0)
     cfg.setPoolName("momo-result-it")
     HikariTransactor.fromHikariConfig[IO](cfg)
+
+  private def migrate(settings: Settings): Unit =
+    val migrations = migrationFiles(migrationsDirectory)
+    if migrations.isEmpty then sys.error("No momo-db migration SQL files found.")
+
+    Class.forName("org.postgresql.Driver")
+    val connection = DriverManager.getConnection(settings.jdbcUrl, settings.user, settings.password)
+    try
+      connection.setAutoCommit(true)
+      migrations.foreach { path =>
+        val sql = Files.readString(path)
+        StatementBreakpoint.split(sql).iterator.map(_.trim).filter(_.nonEmpty).foreach {
+          statementSql =>
+            val statement = connection.createStatement()
+            try statement.execute(statementSql)
+            catch
+              case error: Throwable => throw new RuntimeException(
+                  s"Failed to apply momo-db migration ${path.getFileName}",
+                  error,
+                )
+            finally statement.close()
+        }
+      }
+    finally connection.close()
+
+  private def migrationFiles(directory: Path): Seq[Path] =
+    val stream = Files.list(directory)
+    try stream.iterator().asScala
+        .filter(path => path.getFileName.toString.matches("""\d{4}_.+\.sql""")).toSeq
+        .sortBy(_.getFileName.toString)
+    finally stream.close()
+
+  private def migrationsDirectory: Path =
+    val explicit = sys.env.get("MOMO_DB_MIGRATIONS_DIR")
+      .map(Paths.get(_).toAbsolutePath.normalize())
+    explicit.getOrElse {
+      val cwd = Paths.get(sys.props("user.dir")).toAbsolutePath.normalize()
+      val candidates = Seq(
+        cwd.resolve("../../_deps/momo-db/drizzle"),
+        cwd.resolve("_deps/momo-db/drizzle"),
+        cwd.resolve("../../../momo-db/drizzle"),
+        cwd.resolve("../momo-db/drizzle"),
+      ).map(_.normalize())
+      candidates.find(Files.isDirectory(_)).getOrElse {
+        val searched = candidates.mkString(", ")
+        throw new IllegalStateException(
+          s"momo-db migrations directory was not found. Set MOMO_DB_MIGRATIONS_DIR. Searched: $searched"
+        )
+      }
+    }
 
   /**
    * Wipe all app-owned tables so each test starts from a clean slate. Skips `members` (seeded by
@@ -89,16 +156,6 @@ object IntegrationDb:
         app_sessions
       RESTART IDENTITY CASCADE
     """.update.run.void.transact(transactor)
-
-  /**
-   * Suite-wide fixture combining a transactor with auto-cleanup before each test. Suites
-   * instantiate via [[withDb]] in their `munitFixtures`.
-   */
-  final class DbFixture(val transactor: HikariTransactor[IO], release: IO[Unit]):
-    def cleanup(): IO[Unit] = truncateAppTables(transactor)
-    def close(): IO[Unit] = release
-
-  def acquire: IO[DbFixture] = transactor.allocated.map { case (transactor, release) =>
-    new DbFixture(transactor, release)
-  }
 end IntegrationDb
+// scalafix:on DisableSyntax.throw
+// scalafix:on DisableSyntax.noUnsafeRunSync

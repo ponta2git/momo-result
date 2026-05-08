@@ -1,26 +1,20 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
-from contextlib import contextmanager
-
 import psycopg
 import pytest
 from psycopg.types.json import Jsonb
 from psycopg_pool import ConnectionPool
-from testcontainers.postgres import PostgresContainer
 
 from momo_ocr.features.ocr_domain.models import OcrDraftPayload, ScreenType
 from momo_ocr.features.ocr_jobs.models import OcrJobExecutionResult, OcrJobStatus
 from momo_ocr.features.ocr_jobs.repository import PostgresOcrJobRepository
 from momo_ocr.features.ocr_jobs.result_writer import OcrResultRecord, PostgresOcrResultWriter
-
-POSTGRES_PASSWORD = "test"  # noqa: S105
+from tests.integration.momo_db import migrated_postgres_conninfo
 
 
 @pytest.mark.integration
 def test_postgres_repository_transitions_job_lifecycle() -> None:
-    with _postgres_conninfo() as conninfo:
-        _create_schema(conninfo)
+    with migrated_postgres_conninfo() as conninfo:
         _insert_job(conninfo, job_id="job-1", draft_id="draft-1")
         with ConnectionPool(conninfo, min_size=1, max_size=2, open=True) as pool:
             repository = PostgresOcrJobRepository(pool)
@@ -56,8 +50,7 @@ def test_postgres_repository_transitions_job_lifecycle() -> None:
 
 @pytest.mark.integration
 def test_postgres_result_writer_upserts_one_draft_per_job() -> None:
-    with _postgres_conninfo() as conninfo:
-        _create_schema(conninfo)
+    with migrated_postgres_conninfo() as conninfo:
         _insert_job(conninfo, job_id="job-1", draft_id="draft-1")
         with ConnectionPool(conninfo, min_size=1, max_size=2, open=True) as pool:
             writer = PostgresOcrResultWriter(pool)
@@ -96,69 +89,6 @@ def test_postgres_result_writer_upserts_one_draft_per_job() -> None:
                 ("job-1",),
             ).fetchone()
         assert row == (1, "revenue-test-2", "9.0")
-
-
-@contextmanager
-def _postgres_conninfo() -> Iterator[str]:
-    container = PostgresContainer(
-        "postgres:16-alpine",
-        username="test",
-        password=POSTGRES_PASSWORD,
-        dbname="test",
-        driver=None,
-    )
-    try:
-        container.start()
-    except Exception as exc:  # noqa: BLE001
-        pytest.skip(f"Docker is not available for Postgres Testcontainer: {exc}")
-    try:
-        yield f"{container.get_connection_url(driver=None)}?sslmode=disable"
-    finally:
-        container.stop()
-
-
-def _create_schema(conninfo: str) -> None:
-    with psycopg.connect(conninfo) as conn:
-        conn.execute(
-            """
-            CREATE TABLE ocr_jobs (
-              id text PRIMARY KEY,
-              draft_id text NOT NULL,
-              image_id text NOT NULL,
-              image_path text NOT NULL,
-              requested_screen_type text NOT NULL,
-              detected_screen_type text,
-              status text NOT NULL,
-              attempt_count integer NOT NULL DEFAULT 0,
-              worker_id text,
-              failure_code text,
-              failure_message text,
-              failure_retryable boolean,
-              failure_user_action text,
-              started_at timestamptz,
-              finished_at timestamptz,
-              duration_ms integer,
-              created_at timestamptz NOT NULL DEFAULT now(),
-              updated_at timestamptz NOT NULL DEFAULT now()
-            )
-            """
-        )
-        conn.execute(
-            """
-            CREATE TABLE ocr_drafts (
-              id text PRIMARY KEY,
-              job_id text NOT NULL UNIQUE REFERENCES ocr_jobs(id),
-              requested_screen_type text NOT NULL,
-              detected_screen_type text,
-              profile_id text,
-              payload_json jsonb NOT NULL,
-              warnings_json jsonb NOT NULL,
-              timings_ms_json jsonb NOT NULL,
-              created_at timestamptz NOT NULL DEFAULT now(),
-              updated_at timestamptz NOT NULL DEFAULT now()
-            )
-            """
-        )
 
 
 def _insert_job(conninfo: str, *, job_id: str, draft_id: str) -> None:

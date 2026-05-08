@@ -80,6 +80,10 @@ uv run mypy
 uv run pytest
 ```
 
+Postgres integration tests start a Postgres Testcontainer and apply the `momo-db/drizzle` SQL files.
+If `momo-db` is not available as a sibling checkout or under `_deps/momo-db`, set
+`MOMO_DB_MIGRATIONS_DIR` to the `drizzle/` directory before running `uv run pytest`.
+
 Use the fix commands before committing local edits. The strict verification gate is:
 
 ```sh

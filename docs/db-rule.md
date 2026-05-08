@@ -21,7 +21,7 @@
 - DBスキーマ変更が必要な場合は、まず momo-db に PR を出し、消費プロジェクト側の影響と deploy 順序を明示する。
 - 本アプリ専用の試合結果系テーブル（`match_drafts` / `matches` / `match_players` / `match_incidents`）と共有マスタ（`game_titles` / `map_masters` / `season_masters` / `incident_masters` / `member_aliases`）も momo-db に配置する。
 - OCRに送信した元画像は、下書き確定またはキャンセルまで編集時の正本として保持する。DBには `match_drafts` のslot別source image IDだけを置き、画像実体、内部path、長寿命URLは保存・公開しない。
-- API結合テストではローカルPostgreSQLに momo-db の migration を適用し、主要クエリを実行してDB契約を検証する。
+- API結合テストではTestcontainers Postgresに momo-db の migration を適用し、主要クエリを実行してDB契約を検証する。
 
 ## 2. 消費側APIでのDB契約検証
 
@@ -30,10 +30,11 @@
 実装時の確認:
 
 - API変更が要求するDB table / column / seed / nullable / default を明示する。
-- `../momo-db` 管理テーブルを参照する場合、ローカル検証前に migration を適用する。
+- `../momo-db` 管理テーブルを参照する場合、`sbt apiDbQuality` で momo-db migration 適用済みのTestcontainers Postgresに対して検証する。
 
 ```sh
-pnpm --dir ../momo-db db:migrate
+cd apps/api
+sbt apiDbQuality
 ```
 
 - `relation does not exist`、存在しないcolumn、SQLSTATEを含むDBエラーでは、APIコード修正前に接続先DBのmigration状態を確認する。

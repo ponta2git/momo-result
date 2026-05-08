@@ -39,11 +39,11 @@ sbt apiOpenApiCheck
 | `apiFix` | scalafix を適用して書き換え |
 | `apiQuality` | `apiFormatCheck → apiLint → Test/compile → apiOpenApiCheck` |
 | `apiCheck` | `apiQuality` に加えて、外部サービス依存を除く `test` まで実行する通常ゲート |
-| `apiDbQuality` | PostgreSQL-backed integration spec を実行するDBゲート |
+| `apiDbQuality` | Testcontainers Postgres に momo-db migration を適用して PostgreSQL-backed integration spec を実行するDBゲート |
 | `apiRedisQuality` | Testcontainers Redis で Redis Streams の wire integration spec を実行するRedisゲート |
 | `apiFullCheck` | `apiCheck`、`apiDbQuality`、`apiRedisQuality` を順に実行するローカル完全ゲート |
 
-PRを出す前にローカルで `sbt apiCheck` が通ることを確認してください。DB/Redis 経路に触れた場合、または CI 相当の確認をしたい場合は、PostgreSQL migration 適用済み・Docker/Testcontainers 利用可能な状態で `sbt apiFullCheck` を実行してください。Redis ゲートはローカル Redis ではなく Testcontainers Redis を使います。
+PRを出す前にローカルで `sbt apiCheck` が通ることを確認してください。DB/Redis 経路に触れた場合、または CI 相当の確認をしたい場合は、Docker/Testcontainers 利用可能な状態で `sbt apiFullCheck` を実行してください。DB ゲートは momo-db migration 適用済みの Testcontainers Postgres、Redis ゲートは Testcontainers Redis を使います。
 
 ### コーディング規約（lint / scalac で強制）
 

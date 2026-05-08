@@ -118,11 +118,9 @@ type: `feat` / `fix` / `refactor` / `test` / `chore` / `docs`
 
 ### 4.1 DB-backed API変更時の検証
 
-PostgreSQL repository、Doobie query、DB table/column、migration前提に触れた場合は、通常のapi testに加えてDB契約と該当Repositoryを実DBで確認する。
+PostgreSQL repository、Doobie query、DB table/column、migration前提に触れた場合は、通常のapi testに加えてDB契約と該当RepositoryをTestcontainers Postgresで確認する。
 
 ```sh
-pnpm --dir ../momo-db db:up
-pnpm --dir ../momo-db db:migrate
 cd apps/api
 sbt apiDbQuality
 ```
@@ -133,11 +131,11 @@ sbt apiDbQuality
 sbt apiDbQuality
 ```
 
-`sbt test` では `Integration` tag付きのDB-backed specを除外する。検証結果を報告するときは、通常テストとは別に `apiDbQuality` で実行したspec名を明示する。DB未起動によりintegration testがskipされた場合は、DB動作は未検証として扱う。
+`sbt test` では `Integration` tag付きのDB-backed specを除外する。`apiDbQuality` はPostgres Testcontainerを起動し、`momo-db` のdrizzle SQLを適用してから実行する。検証結果を報告するときは、通常テストとは別に `apiDbQuality` で実行したspec名を明示する。
 
-CIのAPI workflowでは PostgreSQL service を起動し、`momo-db` をcheckoutしてmigrationを適用してから `sbt test` と `sbt apiDbQuality` を実行する。`momo-db` がprivate repositoryの場合は、読み取り権限を持つ `MOMO_DB_READ_TOKEN` secret を設定する。
+CIのAPI workflowでは `momo-db` をcheckoutし、`apiDbQuality` がTestcontainer内にmigrationを適用する。`momo-db` がprivate repositoryの場合は、読み取り権限を持つ `MOMO_DB_READ_TOKEN` secret を設定する。
 
-ローカルでCI相当のAPIゲートをまとめて確認する場合は、PostgreSQL migration適用済み・Docker/Testcontainers利用可能な状態で `apps/api` から `sbt apiFullCheck` を実行する。
+ローカルでCI相当のAPIゲートをまとめて確認する場合は、Docker/Testcontainers利用可能な状態で `apps/api` から `sbt apiFullCheck` を実行する。`momo-db` が兄弟ディレクトリやCI checkout場所にない場合は `MOMO_DB_MIGRATIONS_DIR` で `drizzle/` ディレクトリを指定する。
 
 ### 4.2 Redis-backed API変更時の検証
 

@@ -25,16 +25,19 @@ addCommandAlias(
 )
 addCommandAlias(
   "apiDbQuality",
-  "set Test / parallelExecution := false; " +
+  "set Test / fork := true; " +
+    "set Test / parallelExecution := false; " +
     "set Test / testOptions := Seq(); " +
-    "testOnly momo.api.integration.DbContractSpec; " +
-    "testOnly momo.api.integration.PostgresHeldEventsRepositoryContractSpec; " +
-    "testOnly momo.api.integration.PostgresIdempotencyRepositoryContractSpec; " +
-    "testOnly momo.api.integration.PostgresOcrJobCreationRepositorySpec; " +
-    "testOnly momo.api.integration.PostgresOcrJobMaintenanceRepositorySpec; " +
-    "testOnly momo.api.integration.PostgresOcrQueueOutboxRepositorySpec; " +
-    "testOnly momo.api.integration.PostgresMatchesRepositorySpec; " +
-    "testOnly momo.api.integration.PostgresMatchListReadModelSpec",
+    "testOnly " +
+    "momo.api.integration.DbContractSpec " +
+    "momo.api.integration.PostgresHeldEventsRepositoryContractSpec " +
+    "momo.api.integration.PostgresIdempotencyRepositoryContractSpec " +
+    "momo.api.integration.PostgresOcrJobCreationRepositorySpec " +
+    "momo.api.integration.PostgresOcrJobMaintenanceRepositorySpec " +
+    "momo.api.integration.PostgresOcrQueueOutboxRepositorySpec " +
+    "momo.api.integration.PostgresMatchesRepositorySpec " +
+    "momo.api.integration.PostgresMatchListReadModelSpec " +
+    "-- --include-tags=Integration",
 )
 
 lazy val apiOpenApi = taskKey[File]("Generate OpenAPI from Tapir endpoint definitions")
@@ -136,6 +139,7 @@ lazy val root = (project in file("."))
         "net.logstash.logback" % "logstash-logback-encoder" % logstashEncoderVersion,
         "org.codehaus.janino" % "janino" % janinoVersion,
         "org.scalameta" %% "munit" % munitVersion % Test,
+        "org.testcontainers" % "postgresql" % testcontainersVersion % Test,
         "org.testcontainers" % "testcontainers" % testcontainersVersion % Test,
         "org.typelevel" %% "munit-cats-effect" % munitCatsEffectVersion % Test
       )

@@ -40,10 +40,10 @@ sbt apiOpenApiCheck
 | `apiQuality` | `apiFormatCheck → apiLint → Test/compile → apiOpenApiCheck` |
 | `apiCheck` | `apiQuality` に加えて、外部サービス依存を除く `test` まで実行する通常ゲート |
 | `apiDbQuality` | PostgreSQL-backed integration spec を実行するDBゲート |
-| `apiRedisQuality` | Redis Streams の wire integration spec を実行するRedisゲート |
+| `apiRedisQuality` | Testcontainers Redis で Redis Streams の wire integration spec を実行するRedisゲート |
 | `apiFullCheck` | `apiCheck`、`apiDbQuality`、`apiRedisQuality` を順に実行するローカル完全ゲート |
 
-PRを出す前にローカルで `sbt apiCheck` が通ることを確認してください。DB/Redis 経路に触れた場合、または CI 相当の確認をしたい場合は、PostgreSQL migration 適用済み・Redis 起動可能な状態で `sbt apiFullCheck` を実行してください。
+PRを出す前にローカルで `sbt apiCheck` が通ることを確認してください。DB/Redis 経路に触れた場合、または CI 相当の確認をしたい場合は、PostgreSQL migration 適用済み・Docker/Testcontainers 利用可能な状態で `sbt apiFullCheck` を実行してください。Redis ゲートはローカル Redis ではなく Testcontainers Redis を使います。
 
 ### コーディング規約（lint / scalac で強制）
 

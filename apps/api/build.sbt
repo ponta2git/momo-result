@@ -1,3 +1,5 @@
+import java.nio.file.{Files, Paths}
+
 import sbt.*
 import sbt.Keys.*
 
@@ -16,7 +18,8 @@ addCommandAlias("apiCheck", "apiQuality; test")
 addCommandAlias("apiFullCheck", "apiCheck; apiDbQuality; apiRedisQuality")
 addCommandAlias(
   "apiRedisQuality",
-  "set Test / parallelExecution := false; " +
+  "set Test / fork := true; " +
+    "set Test / parallelExecution := false; " +
     "set Test / testOptions := Seq(); " +
     "testOnly momo.api.adapters.RedisQueueProducerSpec -- --include-tags=Integration",
 )
@@ -36,6 +39,11 @@ addCommandAlias(
 
 lazy val apiOpenApi = taskKey[File]("Generate OpenAPI from Tapir endpoint definitions")
 lazy val apiOpenApiCheck = taskKey[Unit]("Check that openapi.yaml can be generated")
+
+lazy val testcontainersDockerEnv = settingKey[Map[String, String]](
+  "Docker environment variables used by forked Testcontainers-based tests"
+)
+lazy val testcontainersDockerApiVersion = "1.40"
 
 // Scalac options shared by Compile and Test.
 //
@@ -76,6 +84,20 @@ lazy val root = (project in file("."))
     Test / testOptions += Tests.Filter(name => !name.startsWith("momo.api.integration.")),
     Test / parallelExecution := true,
     Test / fork := false,
+    Test / envVars ++= testcontainersDockerEnv.value,
+    testcontainersDockerEnv := {
+      val apiVersionEnv = Map(
+        // docker-java 3.4.x defaults to API 1.32; Docker 29+ rejects it because its minimum is 1.40.
+        "api.version" -> sys.env.getOrElse("api.version", testcontainersDockerApiVersion)
+      )
+      val dockerHostEnv = sys.env.get("DOCKER_HOST").fold {
+        val dockerDesktopSocket = Paths.get(sys.props("user.home"), ".docker", "run", "docker.sock")
+        if (Files.exists(dockerDesktopSocket)) {
+          Map("DOCKER_HOST" -> s"unix://$dockerDesktopSocket")
+        } else Map.empty[String, String]
+      }(dockerHost => Map("DOCKER_HOST" -> dockerHost))
+      apiVersionEnv ++ dockerHostEnv
+    },
     libraryDependencies ++= {
       val catsEffectVersion = "3.7.0"
       val circeVersion = "0.14.15"

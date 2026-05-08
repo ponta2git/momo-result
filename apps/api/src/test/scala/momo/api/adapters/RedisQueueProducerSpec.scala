@@ -90,14 +90,3 @@ final class RedisQueueProducerSpec extends MomoCatsEffectSuite:
 
   private def redisUrlResource: cats.effect.Resource[IO, String] = redisContainer
     .map(container => s"redis://${container.getHost}:${container.getMappedPort(6379)}")
-    .handleErrorWith { containerError =>
-      val fallback = sys.env.getOrElse("MOMO_TEST_REDIS_URL", "redis://127.0.0.1:6379")
-      cats.effect.Resource
-        .eval(Redis[IO].simple(fallback, RedisCodec.Utf8).use(_.ping).attempt.flatMap {
-          case Right(_) => IO.pure(fallback)
-          case Left(fallbackError) => IO.raiseError(new RuntimeException(
-              s"Redis test setup failed. Testcontainers: ${containerError.getMessage}. " +
-                s"Fallback $fallback: ${fallbackError.getMessage}"
-            ))
-        })
-    }

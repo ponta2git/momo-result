@@ -137,11 +137,11 @@ sbt apiDbQuality
 
 CIのAPI workflowでは PostgreSQL service を起動し、`momo-db` をcheckoutしてmigrationを適用してから `sbt test` と `sbt apiDbQuality` を実行する。`momo-db` がprivate repositoryの場合は、読み取り権限を持つ `MOMO_DB_READ_TOKEN` secret を設定する。
 
-ローカルでCI相当のAPIゲートをまとめて確認する場合は、PostgreSQL migration適用済み・Redis起動可能な状態で `apps/api` から `sbt apiFullCheck` を実行する。
+ローカルでCI相当のAPIゲートをまとめて確認する場合は、PostgreSQL migration適用済み・Docker/Testcontainers利用可能な状態で `apps/api` から `sbt apiFullCheck` を実行する。
 
 ### 4.2 Redis-backed API変更時の検証
 
-Redis Streamsのwire動作や `RedisQueueProducer.resource` に触れた場合は、通常のapi testに加えて以下を実行する。
+Redis Streamsのwire動作や `RedisQueueProducer.resource` に触れた場合は、通常のapi testに加えて以下を実行する。このゲートはTestcontainersでRedisコンテナを起動するため、ローカルRedisの起動は不要。
 
 ```sh
 cd apps/api

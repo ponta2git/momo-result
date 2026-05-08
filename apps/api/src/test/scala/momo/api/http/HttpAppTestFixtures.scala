@@ -35,22 +35,20 @@ trait HttpAppTestFixtures:
 
   protected def devReadHeader(): Header.Raw = devReadHeader("ponta")
 
-  protected def devReadHeader(memberId: String): Header.Raw =
-    Header.Raw(CIString("X-Dev-User"), memberId)
+  protected def devReadHeader(memberId: String): Header.Raw = Header
+    .Raw(CIString("X-Dev-User"), memberId)
 
   protected def devWriteHeaders(): List[Header.ToRaw] = devWriteHeaders("ponta", None)
 
-  protected def devWriteHeadersWithIdempotency(
-      idempotencyKey: Option[String]
-  ): List[Header.ToRaw] = devWriteHeaders("ponta", idempotencyKey)
+  protected def devWriteHeadersWithIdempotency(idempotencyKey: Option[String]): List[Header.ToRaw] =
+    devWriteHeaders("ponta", idempotencyKey)
 
   private def httpAppResourceWith(
       prefix: String,
       appEnv: AppEnv,
       configure: AppConfig => AppConfig,
-  ): Resource[IO, TestHttpApp] = tempDirectory(prefix).flatMap { dir =>
-    HttpApp.resource[IO](configure(defaultConfig(dir, appEnv)))
-  }
+  ): Resource[IO, TestHttpApp] = tempDirectory(prefix)
+    .flatMap(dir => HttpApp.resource[IO](configure(defaultConfig(dir, appEnv))))
 
   private def wiredHttpAppResourceWith(
       prefix: String,
@@ -64,13 +62,10 @@ trait HttpAppTestFixtures:
       memberId: String,
       idempotencyKey: Option[String],
   ): List[Header.ToRaw] =
-    val base = List[Header.ToRaw](
-      devReadHeader(memberId),
-      Header.Raw(CIString("X-CSRF-Token"), "dev"),
-    )
-    idempotencyKey.fold(base)(key =>
-      base :+ (Header.Raw(CIString("Idempotency-Key"), key): Header.ToRaw)
-    )
+    val base =
+      List[Header.ToRaw](devReadHeader(memberId), Header.Raw(CIString("X-CSRF-Token"), "dev"))
+    idempotencyKey
+      .fold(base)(key => base :+ (Header.Raw(CIString("Idempotency-Key"), key): Header.ToRaw))
 
   private def defaultConfig(dir: Path, appEnv: AppEnv): AppConfig = AppConfig(
     appEnv = appEnv,

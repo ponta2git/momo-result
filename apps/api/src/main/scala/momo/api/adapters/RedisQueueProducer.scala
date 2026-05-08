@@ -14,20 +14,24 @@ import momo.api.repositories.{OcrQueuePayload, QueueProducer}
 
 trait RedisStreamClient[F[_]]:
   def xadd(stream: String, fields: Map[String, String]): F[String]
+  def ping: F[Unit]
 
-final class RedisQueueProducer[F[_]: Functor] private (stream: String, client: RedisStreamClient[F])
+final class RedisQueueProducer[F[_]] private (stream: String, client: RedisStreamClient[F])
     extends QueueProducer[F]:
-  override def publish(payload: OcrQueuePayload): F[Unit] = client.xadd(stream, payload.fields).void
+  override def publish(payload: OcrQueuePayload): F[String] = client.xadd(stream, payload.fields)
+  override def ping: F[Unit] = client.ping
 
 object RedisQueueProducer:
-  def apply[F[_]: Functor](stream: String, client: RedisStreamClient[F]): RedisQueueProducer[F] =
+  def apply[F[_]](stream: String, client: RedisStreamClient[F]): RedisQueueProducer[F] =
     new RedisQueueProducer(stream, client)
 
   def resource[F[_]: Async](config: RedisConfig): Resource[F, RedisQueueProducer[F]] = Redis[F]
     .simple(config.url, RedisCodec.Utf8)
     .map(commands => RedisQueueProducer(config.stream, Redis4CatsStreamClient(commands)))
 
-private final class Redis4CatsStreamClient[F[_]](commands: RedisCommands[F, String, String])
-    extends RedisStreamClient[F]:
+private final class Redis4CatsStreamClient[F[_]: Functor](
+    commands: RedisCommands[F, String, String]
+) extends RedisStreamClient[F]:
   override def xadd(stream: String, fields: Map[String, String]): F[String] = commands
     .unsafe(_.xadd(stream, fields.asJava))
+  override def ping: F[Unit] = commands.ping.void

@@ -9,11 +9,12 @@ import org.typelevel.log4cats.slf4j.Slf4jFactory
 
 import momo.api.adapters.{
   InMemoryAppSessionsRepository, InMemoryGameTitlesRepository, InMemoryHeldEventsRepository,
-  InMemoryIdempotencyRepository, InMemoryIncidentMastersRepository, InMemoryMapMastersRepository,
+  InMemoryIdempotencyRepository, InMemoryImageReferenceRepository,
+  InMemoryIncidentMastersRepository, InMemoryMapMastersRepository,
   InMemoryMatchConfirmationRepository, InMemoryMatchDraftsRepository, InMemoryMatchListReadModel,
   InMemoryMatchesRepository, InMemoryMembersRepository, InMemoryOcrDraftsRepository,
-  InMemoryOcrJobsRepository, InMemoryQueueProducer, InMemorySeasonMastersRepository,
-  LocalFsImageStore, RedisQueueProducer,
+  InMemoryOcrJobCreationRepository, InMemoryOcrJobMaintenanceRepository, InMemoryOcrJobsRepository,
+  InMemoryQueueProducer, InMemorySeasonMastersRepository, LocalFsImageStore, RedisQueueProducer,
 }
 import momo.api.auth.{
   CsrfTokenService, DiscordOAuthClient, JavaDiscordOAuthClient, LoginRateLimiter, MemberRoster,
@@ -23,24 +24,30 @@ import momo.api.config.AppConfig
 import momo.api.db.Database
 import momo.api.domain.Member
 import momo.api.domain.ids.*
+import momo.api.endpoints.HealthEndpoints.HealthDetailsResponse
 import momo.api.repositories.postgres.{
   PostgresAppSessionsRepository, PostgresGameTitlesRepository, PostgresHeldEventsRepository,
-  PostgresIdempotencyRepository, PostgresIncidentMastersRepository, PostgresMapMastersRepository,
+  PostgresIdempotencyRepository, PostgresImageReferenceRepository,
+  PostgresIncidentMastersRepository, PostgresMapMastersRepository,
   PostgresMatchConfirmationRepository, PostgresMatchDraftsRepository, PostgresMatchListReadModel,
   PostgresMatchesRepository, PostgresMembersRepository, PostgresOcrDraftsRepository,
-  PostgresOcrJobsRepository, PostgresSeasonMastersRepository,
+  PostgresOcrJobCreationRepository, PostgresOcrJobMaintenanceRepository, PostgresOcrJobsRepository,
+  PostgresOcrQueueOutboxRepository, PostgresSeasonMastersRepository,
 }
 import momo.api.repositories.{
   AppSessionsRepository, GameTitlesRepository, HeldEventsRepository, IdempotencyRepository,
-  IncidentMastersRepository, MapMastersRepository, MatchConfirmationRepository,
-  MatchDraftsRepository, MatchListReadModel, MatchesRepository, MembersRepository,
-  OcrDraftsRepository, OcrJobsRepository, SeasonMastersRepository,
+  ImageReferenceRepository, IncidentMastersRepository, MapMastersRepository,
+  MatchConfirmationRepository, MatchDraftsRepository, MatchListReadModel, MatchesRepository,
+  MembersRepository, OcrDraftsRepository, OcrJobCreationRepository, OcrJobMaintenanceRepository,
+  OcrJobsRepository, QueueProducer, SeasonMastersRepository,
 }
 import momo.api.usecases.{
   CancelMatchDraft, CancelOcrJob, ConfirmMatch, CreateGameTitle, CreateHeldEvent, CreateMapMaster,
-  CreateMatchDraft, CreateOcrJob, CreateSeasonMaster, DeleteMatch, ExportMatches, GetMatch,
-  GetMatchDraft, GetMatchDraftSourceImages, GetOcrDraft, GetOcrDraftsBulk, GetOcrJob,
-  ListHeldEvents, ListMatches, PurgeSourceImages, UpdateMatch, UpdateMatchDraft, UploadImage,
+  CreateMatchDraft, CreateOcrJob, CreateSeasonMaster, DeleteMatch, ExpiredSessionPruner,
+  ExportMatches, GetMatch, GetMatchDraft, GetMatchDraftSourceImages, GetOcrDraft, GetOcrDraftsBulk,
+  GetOcrJob, ListHeldEvents, ListMatches, OcrQueueOutboxDispatcher, OcrQueueSubmitter,
+  PurgeSourceImages, SourceImageOrphanReaper, StaleOcrJobReaper, UpdateMatch, UpdateMatchDraft,
+  UploadImage,
 }
 
 object HttpApp:
@@ -72,9 +79,13 @@ object HttpApp:
   ): Resource[F, Wired[F]] = config.database match
     case Some(db) => Resource.eval(Async[F].executionContext).flatMap { connectExecutionContext =>
         (Database.transactor[F](db, connectExecutionContext), queueResource[F](config)).tupled
-          .evalMap { (transactor, queue) =>
+          .flatMap { (transactor, queue) =>
+            given LoggerFactory[F] = Slf4jFactory.create[F]
             val jobs: OcrJobsRepository[F] = PostgresOcrJobsRepository[F](transactor)
             val drafts: OcrDraftsRepository[F] = PostgresOcrDraftsRepository[F](transactor)
+            val ocrJobCreation: OcrJobCreationRepository[F] =
+              PostgresOcrJobCreationRepository[F](transactor)
+            val ocrQueueOutbox = PostgresOcrQueueOutboxRepository[F](transactor)
             val heldEvents: HeldEventsRepository[F] = PostgresHeldEventsRepository[F](transactor)
             val matches: MatchesRepository[F] = PostgresMatchesRepository[F](transactor)
             val matchDrafts: MatchDraftsRepository[F] = PostgresMatchDraftsRepository[F](transactor)
@@ -90,76 +101,202 @@ object HttpApp:
             val incidentMasters: IncidentMastersRepository[F] =
               PostgresIncidentMastersRepository[F](transactor)
             val idempotency: IdempotencyRepository[F] = PostgresIdempotencyRepository[F](transactor)
-            assemble(
-              config = config,
-              queue = queue,
-              jobs = jobs,
-              drafts = drafts,
-              heldEvents = heldEvents,
-              matches = matches,
-              matchDrafts = matchDrafts,
-              matchList = matchList,
-              matchConfirmation = matchConfirmation,
-              appSessions = appSessions,
-              members = members,
-              gameTitles = gameTitles,
-              mapMasters = mapMasters,
-              seasonMasters = seasonMasters,
-              incidentMasters = incidentMasters,
-              idempotency = idempotency,
-              oauthClient = oauthClient,
+            val imageStore = LocalFsImageStore[F](config.imageTmpDir)
+            val imageReferences: ImageReferenceRepository[F] =
+              PostgresImageReferenceRepository[F](transactor)
+            val ocrMaintenance: OcrJobMaintenanceRepository[F] =
+              PostgresOcrJobMaintenanceRepository[F](transactor)
+            val health = healthDetails[F](
+              Some(Database.ping[F](transactor)),
+              config.redis.map(_ => queue.ping),
             )
+            OcrQueueOutboxDispatcher.resource[F](ocrQueueOutbox, queue).flatMap { _ =>
+              runtimeMaintenance(
+                config = config,
+                imageStore = imageStore,
+                imageReferences = imageReferences,
+                ocrMaintenance = ocrMaintenance,
+                appSessions = appSessions,
+                now = Clock[F].realTimeInstant,
+              ).evalMap { _ =>
+                assemble(
+                  config = config,
+                  imageStore = imageStore,
+                  healthDetails = health,
+                  ocrQueueSubmitter = OcrQueueSubmitter.deferred[F],
+                  ocrJobCreation = ocrJobCreation,
+                  jobs = jobs,
+                  drafts = drafts,
+                  heldEvents = heldEvents,
+                  matches = matches,
+                  matchDrafts = matchDrafts,
+                  matchList = matchList,
+                  matchConfirmation = matchConfirmation,
+                  appSessions = appSessions,
+                  members = members,
+                  gameTitles = gameTitles,
+                  mapMasters = mapMasters,
+                  seasonMasters = seasonMasters,
+                  incidentMasters = incidentMasters,
+                  idempotency = idempotency,
+                  oauthClient = oauthClient,
+                )
+              }
+            }
           }
       }
-    case None => queueResource[F](config).evalMap { queue =>
-        for
-          jobs <- InMemoryOcrJobsRepository.create[F]
-          drafts <- InMemoryOcrDraftsRepository.create[F]
-          heldEvents <- InMemoryHeldEventsRepository.create[F]
-          matches <- InMemoryMatchesRepository.create[F]
-          matchDrafts <- InMemoryMatchDraftsRepository.create[F]
-          matchList = InMemoryMatchListReadModel[F](matches, matchDrafts)
-          matchConfirmation = InMemoryMatchConfirmationRepository[F](matches, matchDrafts)
-          appSessions <- InMemoryAppSessionsRepository.create[F]
-          members <- InMemoryMembersRepository.create[F](config.devMemberIds.map(id =>
-            Member(MemberId(id), UserId(id), id, java.time.Instant.EPOCH)
-          ))
-          gameTitles <- InMemoryGameTitlesRepository.create[F]
-          mapMasters <- InMemoryMapMastersRepository.create[F]
-          seasonMasters <- InMemorySeasonMastersRepository.create[F]
-          incidentMasters <- InMemoryIncidentMastersRepository.create[F]
-          idempotency <- InMemoryIdempotencyRepository.create[F]
-          wired <- assemble(
-            config = config,
-            queue = queue,
-            jobs = jobs,
-            drafts = drafts,
-            heldEvents = heldEvents,
-            matches = matches,
-            matchDrafts = matchDrafts,
-            matchList = matchList,
-            matchConfirmation = matchConfirmation,
-            appSessions = appSessions,
-            members = members,
-            gameTitles = gameTitles,
-            mapMasters = mapMasters,
-            seasonMasters = seasonMasters,
-            incidentMasters = incidentMasters,
-            idempotency = idempotency,
-            oauthClient = oauthClient,
+    case None => queueResource[F](config).flatMap { queue =>
+        given LoggerFactory[F] = Slf4jFactory.create[F]
+        Resource.eval(
+          for
+            jobs <- InMemoryOcrJobsRepository.create[F]
+            drafts <- InMemoryOcrDraftsRepository.create[F]
+            heldEvents <- InMemoryHeldEventsRepository.create[F]
+            matches <- InMemoryMatchesRepository.create[F]
+            matchDrafts <- InMemoryMatchDraftsRepository.create[F]
+            matchList = InMemoryMatchListReadModel[F](matches, matchDrafts)
+            matchConfirmation = InMemoryMatchConfirmationRepository[F](matches, matchDrafts)
+            appSessions <- InMemoryAppSessionsRepository.create[F]
+            members <- InMemoryMembersRepository.create[F](config.devMemberIds.map(id =>
+              Member(MemberId(id), UserId(id), id, java.time.Instant.EPOCH)
+            ))
+            gameTitles <- InMemoryGameTitlesRepository.create[F]
+            mapMasters <- InMemoryMapMastersRepository.create[F]
+            seasonMasters <- InMemorySeasonMastersRepository.create[F]
+            incidentMasters <- InMemoryIncidentMastersRepository.create[F]
+            idempotency <- InMemoryIdempotencyRepository.create[F]
+            ocrJobCreation = InMemoryOcrJobCreationRepository[F](drafts, jobs, matchDrafts)
+            ocrQueueSubmitter = OcrQueueSubmitter.direct[F](jobs, matchDrafts, queue)
+          yield (
+            jobs,
+            drafts,
+            heldEvents,
+            matches,
+            matchDrafts,
+            matchList,
+            matchConfirmation,
+            appSessions,
+            members,
+            gameTitles,
+            mapMasters,
+            seasonMasters,
+            incidentMasters,
+            idempotency,
+            ocrJobCreation,
+            ocrQueueSubmitter,
           )
-        yield wired
+        ).flatMap {
+          case (
+                jobs,
+                drafts,
+                heldEvents,
+                matches,
+                matchDrafts,
+                matchList,
+                matchConfirmation,
+                appSessions,
+                members,
+                gameTitles,
+                mapMasters,
+                seasonMasters,
+                incidentMasters,
+                idempotency,
+                ocrJobCreation,
+                ocrQueueSubmitter,
+              ) =>
+            val imageStore = LocalFsImageStore[F](config.imageTmpDir)
+            val imageReferences: ImageReferenceRepository[F] =
+              new InMemoryImageReferenceRepository[F]
+            val ocrMaintenance: OcrJobMaintenanceRepository[F] =
+              new InMemoryOcrJobMaintenanceRepository[F]
+            val health = healthDetails[F](None, config.redis.map(_ => queue.ping))
+            runtimeMaintenance(
+              config = config,
+              imageStore = imageStore,
+              imageReferences = imageReferences,
+              ocrMaintenance = ocrMaintenance,
+              appSessions = appSessions,
+              now = Clock[F].realTimeInstant,
+            ).evalMap { _ =>
+              assemble(
+                config = config,
+                imageStore = imageStore,
+                healthDetails = health,
+                ocrQueueSubmitter = ocrQueueSubmitter,
+                ocrJobCreation = ocrJobCreation,
+                jobs = jobs,
+                drafts = drafts,
+                heldEvents = heldEvents,
+                matches = matches,
+                matchDrafts = matchDrafts,
+                matchList = matchList,
+                matchConfirmation = matchConfirmation,
+                appSessions = appSessions,
+                members = members,
+                gameTitles = gameTitles,
+                mapMasters = mapMasters,
+                seasonMasters = seasonMasters,
+                incidentMasters = incidentMasters,
+                idempotency = idempotency,
+                oauthClient = oauthClient,
+              )
+            }
+        }
       }
 
-  private def queueResource[F[_]: Async](
-      config: AppConfig
-  ): Resource[F, momo.api.repositories.QueueProducer[F]] = config.redis match
-    case Some(redis) => RedisQueueProducer.resource[F](redis).widen
-    case None => Resource.eval(InMemoryQueueProducer.create[F]).widen
+  private def queueResource[F[_]: Async](config: AppConfig): Resource[F, QueueProducer[F]] =
+    config.redis match
+      case Some(redis) => RedisQueueProducer.resource[F](redis).widen
+      case None => Resource.eval(InMemoryQueueProducer.create[F]).widen
+
+  private def runtimeMaintenance[F[_]: Async: LoggerFactory](
+      config: AppConfig,
+      imageStore: LocalFsImageStore[F],
+      imageReferences: ImageReferenceRepository[F],
+      ocrMaintenance: OcrJobMaintenanceRepository[F],
+      appSessions: AppSessionsRepository[F],
+      now: F[java.time.Instant],
+  ): Resource[F, Unit] = SourceImageOrphanReaper.resource[F](
+    imageStore = imageStore,
+    references = imageReferences,
+    olderThan = config.resourceLimits.imageOrphanOlderThan,
+    interval = config.resourceLimits.imageOrphanReaperInterval,
+    now = now,
+  ).flatMap(_ =>
+    StaleOcrJobReaper.resource[F](
+      jobs = ocrMaintenance,
+      staleAfter = config.resourceLimits.staleOcrJobAfter,
+      interval = config.resourceLimits.staleOcrJobReaperInterval,
+      now = now,
+    )
+  ).flatMap(_ =>
+    ExpiredSessionPruner.resource[F](
+      sessions = appSessions,
+      interval = config.resourceLimits.sessionPruneInterval,
+      now = now,
+    )
+  )
+
+  private def healthDetails[F[_]: Async](
+      database: Option[F[Unit]],
+      redis: Option[F[Unit]],
+  ): F[HealthDetailsResponse] =
+    def check(probe: Option[F[Unit]]): F[String] = probe match
+      case None => Async[F].pure("disabled")
+      case Some(value) => value.attempt.map(_.fold(_ => "unavailable", _ => "ok"))
+
+    (check(database), check(redis)).mapN { (databaseStatus, redisStatus) =>
+      val required = List(databaseStatus, redisStatus).filterNot(_ == "disabled")
+      val status = if required.forall(_ == "ok") then "ok" else "degraded"
+      HealthDetailsResponse(status, databaseStatus, redisStatus)
+    }
 
   private def assemble[F[_]: Async: SecureRandom](
       config: AppConfig,
-      queue: momo.api.repositories.QueueProducer[F],
+      imageStore: LocalFsImageStore[F],
+      healthDetails: F[HealthDetailsResponse],
+      ocrQueueSubmitter: OcrQueueSubmitter[F],
+      ocrJobCreation: OcrJobCreationRepository[F],
       jobs: OcrJobsRepository[F],
       drafts: OcrDraftsRepository[F],
       heldEvents: HeldEventsRepository[F],
@@ -176,8 +313,6 @@ object HttpApp:
       idempotency: IdempotencyRepository[F],
       oauthClient: DiscordOAuthClient[F],
   ): F[Wired[F]] =
-    given LoggerFactory[F] = Slf4jFactory.create[F]
-    val imageStore = LocalFsImageStore[F](config.imageTmpDir)
     val roster = MemberRoster.dev(config.devMemberIds)
     val uploadImage = UploadImage[F](imageStore)
     val nowF = Clock[F].realTimeInstant
@@ -187,10 +322,9 @@ object HttpApp:
     val oauthStateCodec = OAuthStateCodec[F](config.auth, nowF)
     val createOcrJob = CreateOcrJob[F](
       imageStore = imageStore,
-      jobs = jobs,
-      drafts = drafts,
+      creation = ocrJobCreation,
       matchDrafts = matchDrafts,
-      queue = queue,
+      queueSubmitter = ocrQueueSubmitter,
       now = nowF,
       nextId = nextId,
       requestIdLookup = RequestIdMiddleware.lookup[F],
@@ -252,7 +386,11 @@ object HttpApp:
     val createMapMaster = CreateMapMaster[F](gameTitles, mapMasters, nowF)
     val createSeasonMaster = CreateSeasonMaster[F](gameTitles, seasonMasters, nowF)
 
-    LoginRateLimiter.create[F](config.auth.rateLimitPerMinute, nowF).map { loginRateLimiter =>
+    (
+      LoginRateLimiter.create[F](config.auth.rateLimitPerMinute, nowF),
+      LoginRateLimiter.create[F](config.resourceLimits.uploadRateLimitPerMinute, nowF),
+      LoginRateLimiter.create[F](config.resourceLimits.exportRateLimitPerMinute, nowF),
+    ).mapN { (loginRateLimiter, uploadRateLimiter, exportRateLimiter) =>
       val app = HttpRoutes.routes(HttpRoutes.Dependencies(
         config = config,
         roster = roster,
@@ -288,7 +426,9 @@ object HttpApp:
         csrfTokenService = csrfTokenService,
         oauthStateCodec = oauthStateCodec,
         loginRateLimiter = loginRateLimiter,
+        rateLimiters = HttpRateLimiters(uploadRateLimiter, exportRateLimiter),
         idempotency = idempotency,
+        healthDetails = healthDetails,
         nowF = nowF,
       ))
       Wired(app, gameTitles, mapMasters, seasonMasters, idempotency)

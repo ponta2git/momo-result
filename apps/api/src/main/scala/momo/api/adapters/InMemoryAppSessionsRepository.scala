@@ -18,6 +18,11 @@ final class InMemoryAppSessionsRepository[F[_]: Sync] private (ref: Ref[F, Map[S
   override def touchLastSeen(id: String, lastSeenAt: Instant): F[Unit] = ref
     .update(sessions => sessions.updatedWith(id)(_.map(_.copy(lastSeenAt = lastSeenAt))))
 
+  override def deleteExpired(now: Instant): F[Int] = ref.modify { sessions =>
+    val retained = sessions.filter { case (_, session) => !session.expiresAt.isBefore(now) }
+    (retained, sessions.size - retained.size)
+  }
+
 object InMemoryAppSessionsRepository:
   def create[F[_]: Sync]: F[InMemoryAppSessionsRepository[F]] = Ref
     .of[F, Map[String, AppSession]](Map.empty).map(InMemoryAppSessionsRepository(_))

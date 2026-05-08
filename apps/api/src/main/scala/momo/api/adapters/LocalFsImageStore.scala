@@ -1,6 +1,9 @@
 package momo.api.adapters
 
 import java.nio.file.{Files, Path}
+import java.time.Instant
+
+import scala.jdk.CollectionConverters.*
 
 import cats.effect.Sync
 import cats.effect.std.Random
@@ -42,8 +45,30 @@ final class LocalFsImageStore[F[_]: Sync: Random](root: Path) extends ImageStore
     SupportedImageTypes.exists(imageType => Files.deleteIfExists(imagePath(imageId, imageType)))
   }
 
+  def deleteOrphans(referenced: Set[ImageId], olderThan: Instant): F[Int] = Sync[F].blocking {
+    if !Files.isDirectory(root) then 0
+    else
+      val paths = Files.list(root)
+      try paths.iterator().asScala.count { path =>
+          isSupportedImagePath(path) && fileImageId(path).exists(id => !referenced.contains(id)) &&
+          Files.getLastModifiedTime(path).toInstant.isBefore(olderThan) &&
+          Files.deleteIfExists(path)
+        }
+      finally paths.close()
+  }
+
   private def imagePath(imageId: ImageId, imageType: ImageType): Path = root
     .resolve(s"${imageId.value}.${imageType.extension}").toAbsolutePath.normalize()
+
+  private def isSupportedImagePath(path: Path): Boolean = Files.isRegularFile(path) &&
+    fileImageId(path).isDefined
+
+  private def fileImageId(path: Path): Option[ImageId] =
+    val fileName = path.getFileName.toString
+    SupportedImageTypes.collectFirst {
+      case imageType if fileName.endsWith(s".${imageType.extension}") =>
+        ImageId(fileName.stripSuffix(s".${imageType.extension}"))
+    }
 
   private def validate(
       bytes: Array[Byte],

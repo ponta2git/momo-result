@@ -9,6 +9,7 @@ import cats.syntax.all.*
 import io.circe.parser.decode as circeDecode
 import io.circe.syntax.*
 import io.circe.{Decoder, Encoder, Json, Printer}
+import org.slf4j.LoggerFactory
 
 import momo.api.auth.AuthenticatedMember
 import momo.api.endpoints.ProblemDetails
@@ -27,6 +28,7 @@ import momo.api.repositories.{IdempotencyRecord, IdempotencyRepository, Idempote
  *   - Otherwise the effect runs and the success response is recorded with a 24h TTL.
  */
 private[http] object IdempotencyReplay:
+  private val logger = LoggerFactory.getLogger("momo.api.http.IdempotencyReplay")
   private val PrinterCanonical: Printer =
     Printer(dropNullValues = false, indent = "", sortKeys = true)
   private val RetentionMillis: Long = 24L * 60L * 60L * 1000L
@@ -94,7 +96,16 @@ private[http] object IdempotencyReplay:
           createdAt = ts,
           expiresAt = ts.plusMillis(RetentionMillis),
         )
-        idempotency.record(record).attempt.as(right)
+        idempotency.record(record).attempt.flatMap {
+          case Right(_) => Async[F].pure(right)
+          case Left(error) => Async[F].delay {
+              logger.error(
+                s"Failed to record idempotency response endpoint=$endpoint memberId=${member
+                    .memberId.value} keyLength=${key.length} errorClass=${error.getClass.getName}",
+                error,
+              )
+            }.as(right)
+        }
       }
 
   private def canonicalJsonBytes(json: Json): Array[Byte] = PrinterCanonical.print(json)

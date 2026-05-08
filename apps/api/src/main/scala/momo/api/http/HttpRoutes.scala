@@ -63,15 +63,18 @@ object HttpRoutes:
       csrfTokenService: CsrfTokenService,
       oauthStateCodec: OAuthStateCodec[F],
       loginRateLimiter: LoginRateLimiter[F],
+      rateLimiters: HttpRateLimiters[F],
       idempotency: IdempotencyRepository[F],
+      healthDetails: F[momo.api.endpoints.HealthEndpoints.HealthDetailsResponse],
       nowF: F[java.time.Instant],
   )
 
   def routes[F[_]: Async](deps: Dependencies[F]): Http4sApp[F] =
     val security = EndpointSecurity[F](AuthPolicy[F](deps.config, deps.roster))
 
-    val endpoints: List[ServerEndpoint[Any, F]] = HealthModule.routes[F] :::
-      UploadModule.routes[F](deps.uploadImage, security) ::: OcrModule.routes[F](
+    val endpoints: List[ServerEndpoint[Any, F]] = HealthModule.routes[F](deps.healthDetails) :::
+      UploadModule.routes[F](deps.uploadImage, deps.rateLimiters.upload, security) :::
+      OcrModule.routes[F](
         deps.createOcrJob,
         deps.getOcrJob,
         deps.cancelOcrJob,
@@ -95,7 +98,8 @@ object HttpRoutes:
         deps.idempotency,
         deps.nowF,
         security,
-      ) ::: ExportModule.routes[F](deps.exportMatches, security) ::: MatchModule.routes[F](
+      ) ::: ExportModule.routes[F](deps.exportMatches, deps.rateLimiters.matchExport, security) :::
+      MatchModule.routes[F](
         deps.confirmMatch,
         deps.listMatches,
         deps.getMatch,
@@ -134,8 +138,10 @@ object HttpRoutes:
       rateLimiter = deps.loginRateLimiter,
     )
 
-    RequestIdMiddleware[F](SecurityHeadersMiddleware[F](deps.config.appEnv)(
-      Router("/" -> (authRoutes <+> Http4sRoutes.of[F](request => protectedRoutes.run(request))))
-        .orNotFound
-    ))
+    RequestIdMiddleware[F](SecurityHeadersMiddleware[F](deps.config.appEnv)(HttpErrorMiddleware[F](
+      MaxBodySizeMiddleware.uploadOnly[F](deps.config.resourceLimits.uploadRequestMaxBytes)(
+        Router("/" -> (authRoutes <+> Http4sRoutes.of[F](request => protectedRoutes.run(request))))
+          .orNotFound
+      )
+    )))
 end HttpRoutes

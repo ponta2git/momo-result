@@ -26,11 +26,14 @@ final class RedisQueueProducerSpec extends MomoCatsEffectSuite:
       client = new RedisStreamClient[IO]:
         override def xadd(stream: String, fields: Map[String, String]): IO[String] = ref
           .update(_ :+ (stream -> fields)).as("1-0")
+        override def ping: IO[Unit] = IO.unit
       producer = RedisQueueProducer[IO]("momo:ocr:jobs", client)
       payload = OcrQueuePayload(Map("jobId" -> "job-1", "attempt" -> "1"))
-      _ <- producer.publish(payload)
+      messageId <- producer.publish(payload)
       published <- ref.get
-    yield assertEquals(published, Vector("momo:ocr:jobs" -> payload.fields))
+    yield
+      assertEquals(messageId, "1-0")
+      assertEquals(published, Vector("momo:ocr:jobs" -> payload.fields))
 
   test("publishes OCR payload fields to a Redis Streams Testcontainer".tag(Integration)):
     val payload = OcrQueuePayload(Map(
@@ -46,11 +49,12 @@ final class RedisQueueProducerSpec extends MomoCatsEffectSuite:
       val streamName = s"momo:ocr:jobs:test:${UUID.randomUUID().toString}"
       val config = RedisConfig(redisUrl, streamName, "momo-ocr-workers")
       RedisQueueProducer.resource[IO](config).use { producer =>
-        producer.publish(payload).flatMap { _ =>
+        producer.publish(payload).flatMap { messageId =>
           Redis[IO].simple(redisUrl, RedisCodec.Utf8).use { commands =>
             commands.unsafe(_.xrange(streamName, Range.unbounded[String]())).map { messages =>
               val rows = messages.asScala.toList
               assert(rows.nonEmpty, s"expected at least 1 message in stream=$streamName")
+              assertEquals(messageId, rows.head.getId)
               val body: util.Map[String, String] = rows.head.getBody
               assertEquals(body, payload.fields.asJava)
             }

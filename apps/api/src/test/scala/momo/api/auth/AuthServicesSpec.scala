@@ -62,3 +62,18 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       assert(second)
       assert(!third)
   }
+
+  test("LoginRateLimiter evicts stale minute buckets") {
+    for
+      nowRef <- IO.ref(Instant.parse("2026-01-01T00:00:00Z"))
+      limiter <- LoginRateLimiter.create[IO](2, nowRef.get)
+      _ <- limiter.allow("ip-1")
+      _ <- limiter.allow("ip-2")
+      countBefore <- limiter.bucketCount
+      _ <- nowRef.set(Instant.parse("2026-01-01T00:02:00Z"))
+      _ <- limiter.allow("ip-3")
+      countAfter <- limiter.bucketCount
+    yield
+      assertEquals(countBefore, 2)
+      assertEquals(countAfter, 1)
+  }

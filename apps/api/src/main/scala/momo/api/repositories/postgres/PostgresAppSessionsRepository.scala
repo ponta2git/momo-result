@@ -43,6 +43,9 @@ object PostgresAppSessions:
 
     override def touchLastSeen(id: String, lastSeenAt: Instant): ConnectionIO[Unit] =
       sql"UPDATE app_sessions SET last_seen_at = $lastSeenAt WHERE id = $id".update.run.void
+
+    override def deleteExpired(now: Instant): ConnectionIO[Int] =
+      sql"DELETE FROM app_sessions WHERE expires_at < $now".update.run
 end PostgresAppSessions
 
 /** Backwards-compatible class facade. */

@@ -107,3 +107,15 @@ final class OcrQueuePayloadSpec extends FunSuite:
 
     assertEquals(json, Json.obj("a" -> Json.fromString("1"), "b" -> Json.fromString("2")))
   }
+
+  test("fromJson accepts only string-valued JSON objects") {
+    assertEquals(
+      OcrQueuePayload.fromJson(Json.obj("jobId" -> Json.fromString("job-1"))),
+      Right(OcrQueuePayload(Map("jobId" -> "job-1"))),
+    )
+    assertEquals(OcrQueuePayload.fromJson(Json.arr()), Left("stream payload must be a JSON object"))
+    assertEquals(
+      OcrQueuePayload.fromJson(Json.obj("attempt" -> Json.fromInt(1))),
+      Left("field attempt must be a string"),
+    )
+  }

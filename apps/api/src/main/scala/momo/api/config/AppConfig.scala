@@ -12,6 +12,17 @@ final case class DatabaseConfig(jdbcUrl: String, user: String, password: String,
 
 final case class RedisConfig(url: String, stream: String, group: String)
 
+final case class ResourceLimitsConfig(
+    uploadRateLimitPerMinute: Int,
+    exportRateLimitPerMinute: Int,
+    uploadRequestMaxBytes: Long,
+    imageOrphanOlderThan: FiniteDuration,
+    imageOrphanReaperInterval: FiniteDuration,
+    staleOcrJobAfter: FiniteDuration,
+    staleOcrJobReaperInterval: FiniteDuration,
+    sessionPruneInterval: FiniteDuration,
+)
+
 final case class AuthConfig(
     discordClientId: Option[String],
     discordClientSecret: Option[String],
@@ -35,6 +46,7 @@ final case class AppConfig(
     imageTmpDir: Path,
     devMemberIds: List[String],
     auth: AuthConfig = AuthConfig.defaults(AppEnv.Dev),
+    resourceLimits: ResourceLimitsConfig = ResourceLimitsConfig.defaults,
     database: Option[DatabaseConfig] = None,
     redis: Option[RedisConfig] = None,
 )
@@ -56,25 +68,30 @@ object AppConfig:
   def load[F[_]: MonadThrow]: F[AppConfig] =
     val env = sys.env
     val rawAppEnv = env.getOrElse("APP_ENV", "dev")
-    AppEnv.fromString(rawAppEnv).leftMap(new IllegalArgumentException(_)).liftTo[F].flatMap {
-      appEnv =>
-        (loadDatabase[F](env, appEnv), loadRedis[F](env, appEnv), loadAuth[F](env, appEnv))
-          .mapN { (database, redis, auth) =>
-            AppConfig(
-              appEnv = appEnv,
-              httpHost = env.getOrElse("HTTP_HOST", "0.0.0.0"),
-              httpPort = env.get("HTTP_PORT").flatMap(_.toIntOption).getOrElse(8080),
-              imageTmpDir = Path.of(env.getOrElse("IMAGE_TMP_DIR", "/tmp/momo-result/uploads"))
-                .toAbsolutePath,
-              devMemberIds = env.get("DEV_MEMBER_IDS")
-                .map(_.split(",").iterator.map(_.trim).filter(_.nonEmpty).toList)
-                .getOrElse(DefaultDevMemberIds),
-              auth = auth,
-              database = database,
-              redis = redis,
-            )
-          }
-    }
+    AppEnv.fromString(rawAppEnv).leftMap(new IllegalArgumentException(_)).liftTo[F]
+      .flatMap { appEnv =>
+        (
+          loadDatabase[F](env, appEnv),
+          loadRedis[F](env, appEnv),
+          loadAuth[F](env, appEnv),
+          loadResourceLimits[F](env),
+        ).mapN { (database, redis, auth, resourceLimits) =>
+          AppConfig(
+            appEnv = appEnv,
+            httpHost = env.getOrElse("HTTP_HOST", "0.0.0.0"),
+            httpPort = env.get("HTTP_PORT").flatMap(_.toIntOption).getOrElse(8080),
+            imageTmpDir = Path.of(env.getOrElse("IMAGE_TMP_DIR", "/tmp/momo-result/uploads"))
+              .toAbsolutePath,
+            devMemberIds = env.get("DEV_MEMBER_IDS")
+              .map(_.split(",").iterator.map(_.trim).filter(_.nonEmpty).toList)
+              .getOrElse(DefaultDevMemberIds),
+            auth = auth,
+            resourceLimits = resourceLimits,
+            database = database,
+            redis = redis,
+          )
+        }
+      }
 
   private def loadDatabase[F[_]: MonadThrow](
       env: Map[String, String],
@@ -93,7 +110,7 @@ object AppConfig:
           user = urlUser.orElse(env.get("DATABASE_USER").filter(_.nonEmpty)).getOrElse(""),
           password = urlPassword.orElse(env.get("DATABASE_PASSWORD").filter(_.nonEmpty))
             .getOrElse(""),
-          poolSize = env.get("DB_POOL_SIZE").flatMap(_.toIntOption).getOrElse(8),
+          poolSize = env.get("DB_POOL_SIZE").flatMap(_.toIntOption).getOrElse(2),
         )))
 
   private def loadRedis[F[_]: MonadThrow](
@@ -155,6 +172,27 @@ object AppConfig:
       ))
     else MonadThrow[F].pure(config)
 
+  private def loadResourceLimits[F[_]: MonadThrow](
+      env: Map[String, String]
+  ): F[ResourceLimitsConfig] = MonadThrow[F].pure(ResourceLimitsConfig(
+    uploadRateLimitPerMinute = env.get("UPLOAD_RATE_LIMIT_PER_MINUTE").flatMap(_.toIntOption)
+      .getOrElse(20),
+    exportRateLimitPerMinute = env.get("EXPORT_RATE_LIMIT_PER_MINUTE").flatMap(_.toIntOption)
+      .getOrElse(30),
+    uploadRequestMaxBytes = env.get("UPLOAD_REQUEST_MAX_BYTES").flatMap(_.toLongOption)
+      .getOrElse(ResourceLimitsConfig.DefaultUploadRequestMaxBytes),
+    imageOrphanOlderThan = env.get("IMAGE_ORPHAN_OLDER_THAN_MINUTES").flatMap(_.toLongOption)
+      .getOrElse(60L).minutes,
+    imageOrphanReaperInterval = env.get("IMAGE_ORPHAN_REAPER_INTERVAL_MINUTES")
+      .flatMap(_.toLongOption).getOrElse(60L).minutes,
+    staleOcrJobAfter = env.get("STALE_OCR_JOB_AFTER_SECONDS").flatMap(_.toLongOption)
+      .getOrElse(300L).seconds,
+    staleOcrJobReaperInterval = env.get("STALE_OCR_JOB_REAPER_INTERVAL_SECONDS")
+      .flatMap(_.toLongOption).getOrElse(60L).seconds,
+    sessionPruneInterval = env.get("SESSION_PRUNE_INTERVAL_MINUTES").flatMap(_.toLongOption)
+      .getOrElse(60L).minutes,
+  ))
+
   /**
    * Convert a postgres:// or postgresql:// URL to a JDBC URL, extracting embedded credentials.
    * Returns (jdbcUrl, userOption, passwordOption). Already-prefixed jdbc:postgresql:// URLs are
@@ -194,4 +232,18 @@ object AuthConfig:
     callbackRedirectPath = "/",
     useSecureCookies = appEnv == AppEnv.Prod,
     useHostPrefix = appEnv == AppEnv.Prod,
+  )
+
+object ResourceLimitsConfig:
+  val DefaultUploadRequestMaxBytes: Long = 3L * 1024L * 1024L + 64L * 1024L
+
+  val defaults: ResourceLimitsConfig = ResourceLimitsConfig(
+    uploadRateLimitPerMinute = 20,
+    exportRateLimitPerMinute = 30,
+    uploadRequestMaxBytes = DefaultUploadRequestMaxBytes,
+    imageOrphanOlderThan = 60.minutes,
+    imageOrphanReaperInterval = 60.minutes,
+    staleOcrJobAfter = 300.seconds,
+    staleOcrJobReaperInterval = 60.seconds,
+    sessionPruneInterval = 60.minutes,
   )

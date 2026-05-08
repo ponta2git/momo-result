@@ -5,9 +5,11 @@ import cats.syntax.functor.*
 
 import momo.api.repositories.{OcrQueuePayload, QueueProducer}
 
-final class InMemoryQueueProducer[F[_]] private (ref: Ref[F, Vector[OcrQueuePayload]])
+final class InMemoryQueueProducer[F[_]: Sync] private (ref: Ref[F, Vector[OcrQueuePayload]])
     extends QueueProducer[F]:
-  override def publish(payload: OcrQueuePayload): F[Unit] = ref.update(_ :+ payload)
+  override def publish(payload: OcrQueuePayload): F[String] = ref
+    .modify(published => (published :+ payload, s"in-memory-${published.size + 1}"))
+  override def ping: F[Unit] = Sync[F].unit
 
   def published: F[Vector[OcrQueuePayload]] = ref.get
 

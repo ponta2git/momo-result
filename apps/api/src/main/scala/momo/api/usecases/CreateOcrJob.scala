@@ -5,14 +5,13 @@ import java.time.Instant
 import cats.MonadThrow
 import cats.data.EitherT
 import cats.syntax.all.*
-import org.typelevel.log4cats.LoggerFactory
 
 import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.errors.AppError
 import momo.api.repositories.{
-  ImageStore, MatchDraftsRepository, OcrDraftsRepository, OcrJobsRepository, OcrQueuePayload,
-  QueueProducer,
+  ImageStore, MatchDraftsRepository, OcrJobCreationRepository, OcrJobDraftAttachment,
+  OcrQueuePayload,
 }
 import momo.api.usecases.syntax.UseCaseSyntax.*
 
@@ -25,19 +24,16 @@ final case class CreateOcrJobCommand(
 
 final case class CreatedOcrJob(job: OcrJob, draft: OcrDraft, queuePayload: OcrQueuePayload)
 
-final class CreateOcrJob[F[_]: MonadThrow: LoggerFactory](
+final class CreateOcrJob[F[_]: MonadThrow](
     imageStore: ImageStore[F],
-    jobs: OcrJobsRepository[F],
-    drafts: OcrDraftsRepository[F],
+    creation: OcrJobCreationRepository[F],
     matchDrafts: MatchDraftsRepository[F],
-    queue: QueueProducer[F],
+    queueSubmitter: OcrQueueSubmitter[F],
     now: F[Instant],
     nextId: F[String],
     requestIdLookup: F[Option[String]],
 ):
   import CreateOcrJob.*
-
-  private val logger = LoggerFactory[F].getLoggerFromClass(classOf[CreateOcrJob[F]])
 
   def run(command: CreateOcrJobCommand): F[Either[AppError, CreatedOcrJob]] = (for
     screenType <- EitherT.fromEither[F](requestedScreenType(command))
@@ -68,42 +64,38 @@ final class CreateOcrJob[F[_]: MonadThrow: LoggerFactory](
       command.ocrHints,
       requestId,
     )
-    _ <- EitherT.liftF(drafts.create(draft))
-    _ <- EitherT.liftF(jobs.create(job))
-    _ <- draftForMatch match
-      case Some(draftRecord) => matchDrafts.attachOcrArtifacts(
-          draftId = draftRecord.id,
-          screenType = screenType,
-          sourceImageId = command.imageId,
-          ocrDraftId = draft.id,
-          updatedAt = createdAt,
-        ).ensureFoundF("match draft", draftRecord.id.value)
-      case None => EitherT.rightT[F, AppError](())
-    published <- EitherT(queue.publish(payload).redeemWith(
-      error =>
-        val markDraftFailure = command.matchDraftId match
-          case Some(id) => matchDrafts.markOcrFailed(id, createdAt).void
-          case None => MonadThrow[F].unit
-        // Run compensation (mark job/draft failed) and log any secondary failure so it is not
-        // silently swallowed. The user-visible result remains AppError.Internal regardless of the
-        // compensation outcome; the original `error` from queue.publish is still surfaced via the
-        // log statement so observability does not lose the root cause.
-        // Logged fields are restricted to identifiers (jobId / draftId / matchDraftId) and the
-        // throwable. We never log image bytes, OAuth tokens, session IDs, CSRF tokens, or AppError
-        // detail strings here (they may carry user-facing copy that does not belong in error logs).
-        val compensate = (jobs.markFailed(jobId, queueFailure, createdAt) >> markDraftFailure)
-          .attempt.flatMap {
-            case Right(_) => MonadThrow[F].unit
-            case Left(compensationError) => logger
-                .error(compensationError)(s"OCR enqueue compensation failed jobId=${jobId
-                    .value} draftId=${draftId.value}" + s" matchDraftId=${command.matchDraftId
-                    .fold("none")(_.value)} originalError=" + s"${error.getClass.getName}")
-          }
-        compensate >> AppError.Internal("Failed to enqueue OCR job.").asLeft[CreatedOcrJob].pure[F]
-      ,
-      _ => CreatedOcrJob(job, draft, payload).asRight[AppError].pure[F],
-    ))
-  yield published).value
+    attachment = draftForMatch.map(draftRecord =>
+      OcrJobDraftAttachment(
+        draftId = draftRecord.id,
+        screenType = screenType,
+        sourceImageId = command.imageId,
+        ocrDraftId = draft.id,
+        updatedAt = createdAt,
+      )
+    )
+    _ <- createDbRecords(draft, job, attachment, payload)
+    _ <- EitherT(queueSubmitter.submit(OcrQueueSubmitter.Context(
+      payload = payload,
+      jobId = jobId,
+      draftId = draftId,
+      matchDraftId = command.matchDraftId,
+      createdAt = createdAt,
+    )))
+  yield CreatedOcrJob(job, draft, payload)).value
+
+  private def createDbRecords(
+      draft: OcrDraft,
+      job: OcrJob,
+      attachment: Option[OcrJobDraftAttachment],
+      payload: OcrQueuePayload,
+  ): EitherT[F, AppError, Unit] = EitherT(
+    creation.createQueuedJob(draft, job, attachment, payload).attempt.flatMap {
+      case Right(_) => ().asRight[AppError].pure[F]
+      case Left(_: OcrJobCreationRepository.MatchDraftAttachFailed) => AppError
+          .Conflict("match draft could not be attached to the OCR job.").asLeft[Unit].pure[F]
+      case Left(error) => MonadThrow[F].raiseError[Either[AppError, Unit]](error)
+    }
+  )
 
 object CreateOcrJob:
   private def requestedScreenType(command: CreateOcrJobCommand): Either[AppError, ScreenType] =
@@ -166,11 +158,4 @@ object CreateOcrJob:
     enqueuedAt = enqueuedAt,
     hints = hints,
     requestId = requestId,
-  )
-
-  private val queueFailure: OcrFailure = OcrFailure(
-    code = FailureCode.QueueFailure,
-    message = "Failed to enqueue OCR job.",
-    retryable = false,
-    userAction = Some("運用に連絡してください"),
   )

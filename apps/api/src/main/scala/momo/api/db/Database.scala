@@ -3,9 +3,11 @@ package momo.api.db
 import scala.concurrent.ExecutionContext
 
 import cats.effect.{Async, MonadCancelThrow, Resource}
+import cats.syntax.all.*
 import cats.~>
 import doobie.ConnectionIO
 import doobie.hikari.HikariTransactor
+import doobie.implicits.*
 import doobie.util.transactor.Transactor
 
 import momo.api.config.DatabaseConfig
@@ -42,8 +44,14 @@ object Database:
     transactor.configure { ds =>
       Async[F].delay {
         ds.setMaximumPoolSize(config.poolSize)
+        ds.setMinimumIdle(0)
+        ds.setKeepaliveTime(60_000L)
+        ds.setIdleTimeout(300_000L)
         ds.setPoolName("momo-result-api")
       }
     }
   }
+
+  def ping[F[_]: MonadCancelThrow](xa: Transactor[F]): F[Unit] = sql"SELECT 1".query[Int].unique
+    .transact(xa).void
 end Database

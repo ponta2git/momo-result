@@ -5,9 +5,10 @@ import io.circe.Json
 import org.http4s.circe.*
 import org.http4s.implicits.*
 import org.http4s.{Method, Request, Status}
+import org.typelevel.ci.CIString
 
 import momo.api.MomoCatsEffectSuite
-import momo.api.config.{AppConfig, AppEnv}
+import momo.api.config.{AppConfig, AppEnv, ResourceLimitsConfig}
 import momo.api.http.HttpAssertions.{assertProblem, headerValue, jsonField, optionalHeaderValue}
 
 final class HttpAppSpec extends MomoCatsEffectSuite:
@@ -28,6 +29,19 @@ final class HttpAppSpec extends MomoCatsEffectSuite:
         response.as[Json].map { body =>
           assertEquals(response.status, Status.Ok)
           assertEquals(jsonField[String](body, "status"), "ok")
+        }
+      }
+    }
+  }
+
+  test("GET /healthz/details reports disabled optional dependencies in in-memory mode") {
+    app.use { httpApp =>
+      httpApp.run(Request[IO](Method.GET, uri"/healthz/details")).flatMap { response =>
+        response.as[Json].map { body =>
+          assertEquals(response.status, Status.Ok)
+          assertEquals(jsonField[String](body, "status"), "ok")
+          assertEquals(jsonField[String](body, "database"), "disabled")
+          assertEquals(jsonField[String](body, "redis"), "disabled")
         }
       }
     }
@@ -159,6 +173,63 @@ final class HttpAppSpec extends MomoCatsEffectSuite:
         .putHeaders(org.http4s.Header.Raw(org.typelevel.ci.CIString("X-Dev-User"), "ponta"))
       httpApp.run(request).flatMap(response =>
         assertProblem(response, Status.Unauthorized, "UNAUTHORIZED", "Authentication is required")
+      )
+    }
+  }
+
+  test("prod /openapi.yaml is protected by session middleware") {
+    tempDirectory("momo-api-prod-openapi").flatMap { dir =>
+      val config = AppConfig(
+        appEnv = AppEnv.Prod,
+        httpHost = "127.0.0.1",
+        httpPort = 0,
+        imageTmpDir = dir,
+        devMemberIds = List("ponta", "akane-mami", "otaka", "eu"),
+      )
+      HttpApp.resource[IO](config)
+    }.use { httpApp =>
+      httpApp.run(Request[IO](Method.GET, uri"/openapi.yaml")).flatMap(response =>
+        assertProblem(response, Status.Unauthorized, "UNAUTHORIZED", "Authentication is required")
+      )
+    }
+  }
+
+  test("oversized upload requests are rejected before multipart decoding") {
+    tempDirectory("momo-api-upload-limit").flatMap { dir =>
+      val config = AppConfig(
+        appEnv = AppEnv.Test,
+        httpHost = "127.0.0.1",
+        httpPort = 0,
+        imageTmpDir = dir,
+        devMemberIds = List("ponta", "akane-mami", "otaka", "eu"),
+        resourceLimits = ResourceLimitsConfig.defaults.copy(uploadRequestMaxBytes = 1L),
+      )
+      HttpApp.resource[IO](config)
+    }.use { httpApp =>
+      val request = Request[IO](Method.POST, uri"/api/uploads/images")
+        .putHeaders(org.http4s.Header.Raw(CIString("Content-Length"), "2")).withEntity("xx")
+      httpApp.run(request).flatMap(response =>
+        assertProblem(response, Status.PayloadTooLarge, "PAYLOAD_TOO_LARGE", "Upload request")
+      )
+    }
+  }
+
+  test("export endpoint applies per-member rate limits") {
+    tempDirectory("momo-api-export-rate").flatMap { dir =>
+      val config = AppConfig(
+        appEnv = AppEnv.Test,
+        httpHost = "127.0.0.1",
+        httpPort = 0,
+        imageTmpDir = dir,
+        devMemberIds = List("ponta", "akane-mami", "otaka", "eu"),
+        resourceLimits = ResourceLimitsConfig.defaults.copy(exportRateLimitPerMinute = 0),
+      )
+      HttpApp.resource[IO](config)
+    }.use { httpApp =>
+      val request = Request[IO](Method.GET, uri"/api/exports/matches?format=tsv")
+        .putHeaders(org.http4s.Header.Raw(CIString("X-Dev-User"), "ponta"))
+      httpApp.run(request).flatMap(response =>
+        assertProblem(response, Status.TooManyRequests, "TOO_MANY_REQUESTS", "Too many exports")
       )
     }
   }

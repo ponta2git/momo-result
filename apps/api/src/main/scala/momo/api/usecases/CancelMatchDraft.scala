@@ -29,7 +29,7 @@ final class CancelMatchDraft[F[_]: MonadThrow](
     _ <- EitherT.fromEither[F](canCancel(draft.status))
     at <- EitherT.liftF(now)
     _ <- matchDrafts.cancel(draftId, at).ensureFoundF("match draft", draftId.value)
-    _ <- EitherT.liftF(sourceImageRetention.run(draftId, at))
+    _ <- EitherT.liftF(sourceImageRetention.runBestEffort(draftId, at))
   yield ()).value
 
   private def authorize(createdByMemberId: MemberId, memberId: MemberId): Either[AppError, Unit] =

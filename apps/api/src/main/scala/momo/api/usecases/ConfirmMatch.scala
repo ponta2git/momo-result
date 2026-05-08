@@ -99,7 +99,7 @@ final class ConfirmMatch[F[_]: MonadThrow](
       .ensureF(AppError.Conflict("Failed to confirm match from the draft."))
     _ <- maybeDraft match
       case None => EitherT.rightT[F, AppError](())
-      case Some(draft) => EitherT.liftF(sourceImageRetention.run(draft.id, createdAt))
+      case Some(draft) => EitherT.liftF(sourceImageRetention.runBestEffort(draft.id, createdAt))
   yield record).value
 
 object ConfirmMatch:

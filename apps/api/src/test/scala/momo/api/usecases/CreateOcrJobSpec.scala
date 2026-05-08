@@ -8,8 +8,8 @@ import org.typelevel.log4cats.noop.NoOpFactory
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.adapters.{
-  InMemoryMatchDraftsRepository, InMemoryOcrDraftsRepository, InMemoryOcrJobsRepository,
-  InMemoryQueueProducer, LocalFsImageStore,
+  InMemoryMatchDraftsRepository, InMemoryOcrDraftsRepository, InMemoryOcrJobCreationRepository,
+  InMemoryOcrJobsRepository, InMemoryQueueProducer, LocalFsImageStore,
 }
 import momo.api.domain.ids.OcrJobId
 import momo.api.domain.{OcrFailure, OcrJob, OcrJobHints}
@@ -36,14 +36,15 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         jobs <- InMemoryOcrJobsRepository.create[IO]
         drafts <- InMemoryOcrDraftsRepository.create[IO]
         matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
+        creation = InMemoryOcrJobCreationRepository[IO](drafts, jobs, matchDrafts)
         queue <- InMemoryQueueProducer.create[IO]
+        submitter = OcrQueueSubmitter.direct[IO](jobs, matchDrafts, queue)
         ids <- IO.ref(List("job-1", "draft-1"))
         usecase = CreateOcrJob[IO](
           imageStore = imageStore,
-          jobs = jobs,
-          drafts = drafts,
+          creation = creation,
           matchDrafts = matchDrafts,
-          queue = queue,
+          queueSubmitter = submitter,
           now = IO.pure(Instant.parse("2026-04-29T11:40:16Z")),
           nextId = ids.modify {
             case head :: tail => tail -> head
@@ -66,12 +67,13 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
     }
   }
 
-  test("returns Internal and does not raise when both queue.publish and markFailed fail") {
+  test("returns DependencyFailed and does not raise when both queue.publish and markFailed fail") {
     val queueError = new RuntimeException("boom-queue")
     val markFailedError = new RuntimeException("boom-markFailed")
 
     val failingQueue: QueueProducer[IO] = new QueueProducer[IO]:
-      override def publish(payload: OcrQueuePayload): IO[Unit] = IO.raiseError(queueError)
+      override def publish(payload: OcrQueuePayload): IO[String] = IO.raiseError(queueError)
+      override def ping: IO[Unit] = IO.unit
 
     def failingJobs(delegate: OcrJobsRepository[IO]): OcrJobsRepository[IO] =
       new OcrJobsRepository[IO]:
@@ -91,13 +93,14 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         jobs = failingJobs(jobsBase)
         drafts <- InMemoryOcrDraftsRepository.create[IO]
         matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
+        creation = InMemoryOcrJobCreationRepository[IO](drafts, jobs, matchDrafts)
+        submitter = OcrQueueSubmitter.direct[IO](jobs, matchDrafts, failingQueue)
         ids <- IO.ref(List("job-1", "draft-1"))
         usecase = CreateOcrJob[IO](
           imageStore = imageStore,
-          jobs = jobs,
-          drafts = drafts,
+          creation = creation,
           matchDrafts = matchDrafts,
-          queue = failingQueue,
+          queueSubmitter = submitter,
           now = IO.pure(Instant.parse("2026-04-29T11:40:16Z")),
           nextId = ids.modify {
             case head :: tail => tail -> head
@@ -108,15 +111,16 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         result <- usecase
           .run(CreateOcrJobCommand(image.imageId, "total_assets", OcrJobHints.empty, None))
       yield result match
-        case Left(_: AppError.Internal) => ()
-        case other => fail(s"expected Left(AppError.Internal), got: $other")
+        case Left(_: AppError.DependencyFailed) => ()
+        case other => fail(s"expected Left(AppError.DependencyFailed), got: $other")
     }
   }
 
   test("stores sanitized failure message when queue.publish fails") {
     val queueError = new RuntimeException("redis://secret-host/boom")
     val failingQueue: QueueProducer[IO] = new QueueProducer[IO]:
-      override def publish(payload: OcrQueuePayload): IO[Unit] = IO.raiseError(queueError)
+      override def publish(payload: OcrQueuePayload): IO[String] = IO.raiseError(queueError)
+      override def ping: IO[Unit] = IO.unit
 
     tempDirectory("momo-api-create-job-sanitized-failure").use { dir =>
       for
@@ -126,13 +130,14 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         jobs <- InMemoryOcrJobsRepository.create[IO]
         drafts <- InMemoryOcrDraftsRepository.create[IO]
         matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
+        creation = InMemoryOcrJobCreationRepository[IO](drafts, jobs, matchDrafts)
+        submitter = OcrQueueSubmitter.direct[IO](jobs, matchDrafts, failingQueue)
         ids <- IO.ref(List("job-1", "draft-1"))
         usecase = CreateOcrJob[IO](
           imageStore = imageStore,
-          jobs = jobs,
-          drafts = drafts,
+          creation = creation,
           matchDrafts = matchDrafts,
-          queue = failingQueue,
+          queueSubmitter = submitter,
           now = IO.pure(Instant.parse("2026-04-29T11:40:16Z")),
           nextId = ids.modify {
             case head :: tail => tail -> head
@@ -150,12 +155,13 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
     }
   }
 
-  test("logs compensation failure exactly once when both queue.publish and markFailed fail") {
+  test("logs publish and compensation failures when both queue.publish and markFailed fail") {
     val queueError = new RuntimeException("boom-queue")
     val markFailedError = new RuntimeException("boom-markFailed")
 
     val failingQueue: QueueProducer[IO] = new QueueProducer[IO]:
-      override def publish(payload: OcrQueuePayload): IO[Unit] = IO.raiseError(queueError)
+      override def publish(payload: OcrQueuePayload): IO[String] = IO.raiseError(queueError)
+      override def ping: IO[Unit] = IO.unit
 
     def failingJobs(delegate: OcrJobsRepository[IO]): OcrJobsRepository[IO] =
       new OcrJobsRepository[IO]:
@@ -178,13 +184,14 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         jobs = failingJobs(jobsBase)
         drafts <- InMemoryOcrDraftsRepository.create[IO]
         matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
+        creation = InMemoryOcrJobCreationRepository[IO](drafts, jobs, matchDrafts)
+        submitter = OcrQueueSubmitter.direct[IO](jobs, matchDrafts, failingQueue)
         ids <- IO.ref(List("job-log-1", "draft-log-1"))
         usecase = CreateOcrJob[IO](
           imageStore = imageStore,
-          jobs = jobs,
-          drafts = drafts,
+          creation = creation,
           matchDrafts = matchDrafts,
-          queue = failingQueue,
+          queueSubmitter = submitter,
           now = IO.pure(Instant.parse("2026-04-29T11:40:16Z")),
           nextId = ids.modify {
             case head :: tail => tail -> head
@@ -196,13 +203,13 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
           .run(CreateOcrJobCommand(image.imageId, "total_assets", OcrJobHints.empty, None))
         logged <- ref.get
       yield
-        // Original AppError.Internal is still surfaced to the caller (enqueue failure not swallowed).
+        // Original dependency failure is still surfaced to the caller (enqueue failure not swallowed).
         result match
-          case Left(_: AppError.Internal) => ()
-          case other => fail(s"expected Left(AppError.Internal), got: $other")
-        // Exactly one error log emitted, with the compensation (markFailed) throwable attached.
-        assertEquals(logged.size, 1)
-        val entry = logged.head
+          case Left(_: AppError.DependencyFailed) => ()
+          case other => fail(s"expected Left(AppError.DependencyFailed), got: $other")
+        // Original publish failure and secondary compensation failure are both logged.
+        assertEquals(logged.size, 2)
+        val entry = logged(1)
         assertEquals(entry.throwable, Some(markFailedError))
         assert(
           entry.message.contains("jobId=job-log-1"),

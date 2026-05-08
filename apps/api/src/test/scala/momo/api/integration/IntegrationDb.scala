@@ -76,6 +76,7 @@ object IntegrationDb:
         match_players,
         match_drafts,
         matches,
+        ocr_queue_outbox,
         ocr_jobs,
         ocr_drafts,
         held_event_participants,

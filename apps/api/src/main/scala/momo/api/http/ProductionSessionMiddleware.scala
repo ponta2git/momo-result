@@ -52,7 +52,7 @@ private[http] final class ProductionSessionMiddleware[F[_]: Async](
 
   private def isPublic(request: Request[F]): Boolean =
     val path = request.uri.path.renderString
-    path == "/healthz" || path == "/openapi.yaml"
+    path == "/healthz" || path == "/healthz/details"
 
   private def problem(error: AppError): F[Response[F]] =
     val (status, body) = ProblemDetails.from(error)

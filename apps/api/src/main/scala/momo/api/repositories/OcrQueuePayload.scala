@@ -4,6 +4,7 @@ import java.nio.file.Path
 import java.time.Instant
 import java.time.format.DateTimeFormatter
 
+import cats.syntax.all.*
 import io.circe.syntax.*
 import io.circe.{Json, Printer}
 
@@ -56,3 +57,10 @@ object OcrQueuePayload:
     .obj(payload.fields.toSeq.sortBy(_._1).map { case (key, value) =>
       key -> Json.fromString(value)
     }*)
+
+  def fromJson(json: Json): Either[String, OcrQueuePayload] = json.asObject
+    .toRight("stream payload must be a JSON object").flatMap { obj =>
+      obj.toMap.toList.traverse { case (key, value) =>
+        value.asString.toRight(s"field $key must be a string").map(key -> _)
+      }.map(entries => OcrQueuePayload(entries.toMap))
+    }

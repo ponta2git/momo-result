@@ -193,6 +193,8 @@ object PostgresMatchDrafts:
             source_images_deleted_at = NULL,
             updated_at = $updatedAt
           WHERE id = $draftId
+            AND status <> ${MatchDraftStatus.Confirmed}
+            AND status <> ${MatchDraftStatus.Cancelled}
         """
         case ScreenType.Revenue => sql"""
           UPDATE match_drafts SET
@@ -202,6 +204,8 @@ object PostgresMatchDrafts:
             source_images_deleted_at = NULL,
             updated_at = $updatedAt
           WHERE id = $draftId
+            AND status <> ${MatchDraftStatus.Confirmed}
+            AND status <> ${MatchDraftStatus.Cancelled}
         """
         case ScreenType.IncidentLog => sql"""
           UPDATE match_drafts SET
@@ -211,6 +215,8 @@ object PostgresMatchDrafts:
             source_images_deleted_at = NULL,
             updated_at = $updatedAt
           WHERE id = $draftId
+            AND status <> ${MatchDraftStatus.Confirmed}
+            AND status <> ${MatchDraftStatus.Cancelled}
         """
         case ScreenType.Auto => sql"""
           UPDATE match_drafts SET
@@ -218,6 +224,8 @@ object PostgresMatchDrafts:
             source_images_deleted_at = NULL,
             updated_at = $updatedAt
           WHERE id = $draftId
+            AND status <> ${MatchDraftStatus.Confirmed}
+            AND status <> ${MatchDraftStatus.Cancelled}
         """
       command.update.run.map(_ > 0)
 

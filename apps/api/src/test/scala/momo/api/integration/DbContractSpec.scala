@@ -132,6 +132,51 @@ final class DbContractSpec extends IntegrationSuite:
         Set("failure_code", "failure_message", "failure_retryable", "failure_user_action"),
       )
     }
+
+  test("ocr_queue_outbox exposes the durable OCR enqueue contract"):
+    columnsFor("ocr_queue_outbox").map { cols =>
+      val expected = Set(
+        "id",
+        "job_id",
+        "dedupe_key",
+        "stream_payload",
+        "status",
+        "attempt_count",
+        "last_error",
+        "claim_expires_at",
+        "next_attempt_at",
+        "delivered_at",
+        "redis_message_id",
+        "created_at",
+        "updated_at",
+      )
+      val missing = expected -- cols.toSet
+      assert(missing.isEmpty, s"ocr_queue_outbox is missing columns: $missing (have $cols)")
+    }
+
+  test("ocr_queue_outbox has dispatcher indexes"):
+    val program = sql"""
+      SELECT indexname
+      FROM pg_indexes
+      WHERE schemaname = 'public'
+        AND tablename = 'ocr_queue_outbox'
+        AND indexname IN (
+          'uq_ocr_queue_outbox_dedupe_active',
+          'idx_ocr_queue_outbox_status_next',
+          'idx_ocr_queue_outbox_job_id'
+        )
+    """.query[String].to[List].transact(transactor)
+    program.map { indexes =>
+      assertEquals(
+        indexes.toSet,
+        Set(
+          "uq_ocr_queue_outbox_dedupe_active",
+          "idx_ocr_queue_outbox_status_next",
+          "idx_ocr_queue_outbox_job_id",
+        ),
+      )
+    }
+
   test("idempotency_keys table exposes the columns required by the proposal"):
     columnsFor("idempotency_keys").map { cols =>
       val expected = Set(

@@ -27,6 +27,8 @@ trait DiscordOAuthClient[F[_]]:
 
 final class JavaDiscordOAuthClient[F[_]: Async](config: AuthConfig, client: HttpClient)
     extends DiscordOAuthClient[F]:
+  import JavaDiscordOAuthClient.*
+
   private val authorizeUrl = "https://discord.com/oauth2/authorize"
   private val tokenUrl = "https://discord.com/api/oauth2/token"
   private val userUrl = "https://discord.com/api/users/@me"
@@ -57,7 +59,7 @@ final class JavaDiscordOAuthClient[F[_]: Async](config: AuthConfig, client: Http
       "redirect_uri" -> config.discordRedirectUri.getOrElse(""),
     ))
     val request = HttpRequest.newBuilder(URI.create(tokenUrl))
-      .header("Content-Type", "application/x-www-form-urlencoded")
+      .header("Content-Type", "application/x-www-form-urlencoded").timeout(RequestTimeout)
       .POST(HttpRequest.BodyPublishers.ofString(body)).build()
     val response = client.send(request, HttpResponse.BodyHandlers.ofString())
     if response.statusCode() / 100 != 2 then
@@ -71,7 +73,7 @@ final class JavaDiscordOAuthClient[F[_]: Async](config: AuthConfig, client: Http
   private def fetchUserInfo(accessToken: String): F[Either[AppError, DiscordUser]] = Async[F]
     .blocking {
       val request = HttpRequest.newBuilder(URI.create(userUrl))
-        .header("Authorization", s"Bearer $accessToken").GET().build()
+        .header("Authorization", s"Bearer $accessToken").timeout(RequestTimeout).GET().build()
       val response = client.send(request, HttpResponse.BodyHandlers.ofString())
       if response.statusCode() / 100 != 2 then
         Left(AppError.Forbidden("Discord user lookup failed."))
@@ -95,9 +97,13 @@ final class JavaDiscordOAuthClient[F[_]: Async](config: AuthConfig, client: Http
     given Decoder[DiscordUserResponse] = Decoder.forProduct1("id")(DiscordUserResponse(_))
 
 object JavaDiscordOAuthClient:
+  private val ConnectTimeout = java.time.Duration.ofSeconds(5)
+  private val RequestTimeout = java.time.Duration.ofSeconds(8)
+
   def resource[F[_]: Async](config: AuthConfig): Resource[F, JavaDiscordOAuthClient[F]] = Resource
-    .fromAutoCloseable(Sync[F].delay(HttpClient.newHttpClient()))
-    .map(new JavaDiscordOAuthClient[F](config, _))
+    .fromAutoCloseable(
+      Sync[F].delay(HttpClient.newBuilder().connectTimeout(ConnectTimeout).build())
+    ).map(new JavaDiscordOAuthClient[F](config, _))
 
 final case class AuthenticatedSession(member: AuthenticatedMember, session: AppSession)
 
@@ -200,26 +206,30 @@ final class LoginRateLimiter[F[_]: Sync] private (
     ref: Ref[F, Map[String, LoginRateLimiter.Bucket]],
     maxPerMinute: Int,
     now: F[Instant],
+    retainWindows: Long,
 ):
   def allow(key: String): F[Boolean] =
     for
       current <- now
       allowed <- ref.modify { buckets =>
         val minute = current.getEpochSecond / 60
-        val bucket = buckets.getOrElse(key, LoginRateLimiter.Bucket(minute, 0))
+        val retained = buckets.filter { case (_, bucket) => minute - bucket.minute < retainWindows }
+        val bucket = retained.getOrElse(key, LoginRateLimiter.Bucket(minute, 0))
         val next =
           if bucket.minute == minute then bucket.copy(count = bucket.count + 1)
           else LoginRateLimiter.Bucket(minute, 1)
         val limited = next.count > maxPerMinute
-        (buckets.updated(key, next), !limited)
+        (retained.updated(key, next), !limited)
       }
     yield allowed
+
+  private[auth] def bucketCount: F[Int] = ref.get.map(_.size)
 
 object LoginRateLimiter:
   final case class Bucket(minute: Long, count: Int)
 
   def create[F[_]: Sync](maxPerMinute: Int, now: F[Instant]): F[LoginRateLimiter[F]] = Ref
-    .of[F, Map[String, Bucket]](Map.empty).map(LoginRateLimiter(_, maxPerMinute, now))
+    .of[F, Map[String, Bucket]](Map.empty).map(LoginRateLimiter(_, maxPerMinute, now, 2L))
 
 object SecureTokenGenerator:
   def token[F[_]: Functor: SecureRandom](byteLength: Int): F[String] = SecureRandom[F]

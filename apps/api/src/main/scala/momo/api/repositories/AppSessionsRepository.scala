@@ -27,6 +27,7 @@ trait AppSessionsAlg[F0[_]]:
   def upsert(session: AppSession): F0[Unit]
   def delete(id: String): F0[Unit]
   def touchLastSeen(id: String, lastSeenAt: Instant): F0[Unit]
+  def deleteExpired(now: Instant): F0[Int]
 
 /**
  * Skeleton repository for the Discord OAuth session aggregate. The OAuth flow that consumes it
@@ -38,6 +39,7 @@ trait AppSessionsRepository[F[_]]:
   def upsert(session: AppSession): F[Unit]
   def delete(id: String): F[Unit]
   def touchLastSeen(id: String, lastSeenAt: Instant): F[Unit]
+  def deleteExpired(now: Instant): F[Int]
 
 object AppSessionsRepository:
   def fromConnectionIO[F[_]](
@@ -49,6 +51,7 @@ object AppSessionsRepository:
     def delete(id: String): F[Unit] = transactK(alg.delete(id))
     def touchLastSeen(id: String, lastSeenAt: Instant): F[Unit] =
       transactK(alg.touchLastSeen(id, lastSeenAt))
+    def deleteExpired(now: Instant): F[Int] = transactK(alg.deleteExpired(now))
 
   def liftIdentity[F[_]](alg: AppSessionsAlg[F]): AppSessionsRepository[F] =
     new AppSessionsRepository[F]:

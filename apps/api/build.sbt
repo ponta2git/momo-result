@@ -24,6 +24,8 @@ addCommandAlias(
     "testOnly momo.api.integration.DbContractSpec; " +
     "testOnly momo.api.integration.PostgresHeldEventsRepositoryContractSpec; " +
     "testOnly momo.api.integration.PostgresIdempotencyRepositoryContractSpec; " +
+    "testOnly momo.api.integration.PostgresOcrJobCreationRepositorySpec; " +
+    "testOnly momo.api.integration.PostgresOcrJobMaintenanceRepositorySpec; " +
     "testOnly momo.api.integration.PostgresMatchesRepositorySpec; " +
     "testOnly momo.api.integration.PostgresMatchListReadModelSpec",
 )

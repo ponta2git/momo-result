@@ -1,6 +1,8 @@
 package momo.api.adapters
 
 import java.nio.file.Files
+import java.nio.file.attribute.FileTime
+import java.time.Instant
 
 import cats.effect.IO
 
@@ -66,5 +68,33 @@ final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:
     tempDirectory("momo-api-image-store").use { dir =>
       val store = LocalFsImageStore[IO](dir)
       store.delete(ImageId("missing-image-id")).map(deleted => assertEquals(deleted, false))
+    }
+  }
+
+  test("deleteOrphans removes only old unreferenced source images") {
+    tempDirectory("momo-api-image-store").use { dir =>
+      val store = LocalFsImageStore[IO](dir)
+      val now = Instant.parse("2026-05-08T12:00:00Z")
+      val old = FileTime.from(now.minusSeconds(3600))
+      val recent = FileTime.from(now.minusSeconds(10))
+      val keptPath = dir.resolve("kept.png")
+      val orphanPath = dir.resolve("orphan.png")
+      val recentPath = dir.resolve("recent.png")
+      for
+        _ <- IO.blocking(Files.write(keptPath, pngBytes))
+        _ <- IO.blocking(Files.write(orphanPath, pngBytes))
+        _ <- IO.blocking(Files.write(recentPath, pngBytes))
+        _ <- IO.blocking(Files.setLastModifiedTime(keptPath, old))
+        _ <- IO.blocking(Files.setLastModifiedTime(orphanPath, old))
+        _ <- IO.blocking(Files.setLastModifiedTime(recentPath, recent))
+        deleted <- store.deleteOrphans(Set(ImageId("kept")), now.minusSeconds(60))
+        keptExists <- IO.blocking(Files.exists(keptPath))
+        orphanExists <- IO.blocking(Files.exists(orphanPath))
+        recentExists <- IO.blocking(Files.exists(recentPath))
+      yield
+        assertEquals(deleted, 1)
+        assert(keptExists)
+        assert(!orphanExists)
+        assert(recentExists)
     }
   }

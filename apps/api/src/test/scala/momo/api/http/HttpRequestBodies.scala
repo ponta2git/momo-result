@@ -11,8 +11,7 @@ import momo.api.endpoints.{
 
 object HttpRequestBodies:
   object Master:
-    def gameTitleWorld: Json =
-      createGameTitle("title_world", "桃太郎電鉄ワールド", "world")
+    def gameTitleWorld: Json = createGameTitle("title_world", "桃太郎電鉄ワールド", "world")
 
     def createGameTitle(id: String, name: String, layoutFamily: String): Json =
       CreateGameTitleRequest(id, name, layoutFamily).asJson
@@ -44,10 +43,8 @@ object HttpRequestBodies:
       status = None,
     ).asJson
 
-    def createOcrJob(imageId: String, requestedImageType: String): Json = CreateOcrJobRequest(
-      imageId = imageId,
-      requestedImageType = requestedImageType,
-    ).asJson
+    def createOcrJob(imageId: String, requestedImageType: String): Json =
+      CreateOcrJobRequest(imageId = imageId, requestedImageType = requestedImageType).asJson
 
     def createOcrJobForDraft(
         imageId: String,
@@ -77,11 +74,7 @@ object HttpRequestBodies:
       suriNoGinji = suriNoGinji,
     )
 
-    def player(
-        memberId: String,
-        playOrder: Int,
-        rank: Int,
-    ): PlayerResultRequest = playerWithScores(
+    def player(memberId: String, playOrder: Int, rank: Int): PlayerResultRequest = playerWithScores(
       memberId = memberId,
       playOrder = playOrder,
       rank = rank,

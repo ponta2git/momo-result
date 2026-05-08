@@ -2,7 +2,7 @@ package momo.api.usecases
 
 import java.time.Instant
 
-import cats.effect.IO
+import cats.effect.{IO, Resource}
 import org.typelevel.log4cats.LoggerFactory
 import org.typelevel.log4cats.noop.NoOpFactory
 
@@ -12,13 +12,15 @@ import momo.api.adapters.{
   InMemoryOcrJobsRepository, InMemoryQueueProducer, LocalFsImageStore,
 }
 import momo.api.domain.ids.OcrJobId
-import momo.api.domain.{OcrFailure, OcrJob, OcrJobHints}
+import momo.api.domain.{OcrFailure, OcrJob, OcrJobHints, StoredImage}
 import momo.api.errors.AppError
-import momo.api.repositories.{OcrJobsRepository, OcrQueuePayload, QueueProducer}
+import momo.api.repositories.{ImageStore, OcrJobsRepository, OcrQueuePayload, QueueProducer}
 import momo.api.usecases.testing.CapturingLoggerFactory
 
 final class CreateOcrJobSpec extends MomoCatsEffectSuite:
   private given LoggerFactory[IO] = NoOpFactory[IO]
+
+  private val now = Instant.parse("2026-04-29T11:40:16Z")
 
   private val pngBytes: Array[Byte] =
     Array[Byte](0x89.toByte, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)
@@ -28,36 +30,20 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
     case Left(error) => IO.raiseError(new RuntimeException(error.detail))
 
   test("creates empty draft, queued job, and stream payload") {
-    tempDirectory("momo-api-create-job").use { dir =>
+    inMemoryQueueFixture(
+      prefix = "momo-api-create-job",
+      idSeed = List("job-1", "draft-1"),
+      requestId = Some("test-req-id"),
+    ).use { fixture =>
       for
-        imageStore <- IO.pure(LocalFsImageStore[IO](dir))
-        image <- imageStore.save(Some("sample.png"), Some("image/png"), pngBytes)
-          .flatMap(fromAppEither)
-        jobs <- InMemoryOcrJobsRepository.create[IO]
-        drafts <- InMemoryOcrDraftsRepository.create[IO]
-        matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
-        creation = InMemoryOcrJobCreationRepository[IO](drafts, jobs, matchDrafts)
-        queue <- InMemoryQueueProducer.create[IO]
-        submitter = OcrQueueSubmitter.direct[IO](jobs, matchDrafts, queue)
-        ids <- IO.ref(List("job-1", "draft-1"))
-        usecase = CreateOcrJob[IO](
-          imageStore = imageStore,
-          creation = creation,
-          matchDrafts = matchDrafts,
-          queueSubmitter = submitter,
-          now = IO.pure(Instant.parse("2026-04-29T11:40:16Z")),
-          nextId = ids.modify {
-            case head :: tail => tail -> head
-            case Nil => Nil -> "unexpected"
-          },
-          requestIdLookup = IO.pure(Some("test-req-id")),
-        )
+        image <- fixture.savePng
+        usecase <- fixture.usecase
         created <- usecase
           .run(CreateOcrJobCommand(image.imageId, "total_assets", OcrJobHints.empty, None))
           .flatMap(fromAppEither)
-        foundJob <- jobs.find(created.job.id)
-        foundDraft <- drafts.find(created.draft.id)
-        published <- queue.published
+        foundJob <- fixture.jobs.find(created.job.id)
+        foundDraft <- fixture.drafts.find(created.draft.id)
+        published <- fixture.queue.published
       yield
         assertEquals(foundJob.map(_.status.wire), Some("queued"))
         assertEquals(foundDraft.map(_.id), Some(created.draft.id))
@@ -71,43 +57,16 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
     val queueError = new RuntimeException("boom-queue")
     val markFailedError = new RuntimeException("boom-markFailed")
 
-    val failingQueue: QueueProducer[IO] = new QueueProducer[IO]:
-      override def publish(payload: OcrQueuePayload): IO[String] = IO.raiseError(queueError)
-      override def ping: IO[Unit] = IO.unit
-
-    def failingJobs(delegate: OcrJobsRepository[IO]): OcrJobsRepository[IO] =
-      new OcrJobsRepository[IO]:
-        override def create(job: OcrJob): IO[Unit] = delegate.create(job)
-        override def find(jobId: OcrJobId): IO[Option[OcrJob]] = delegate.find(jobId)
-        override def markFailed(jobId: OcrJobId, failure: OcrFailure, now: Instant): IO[Unit] = IO
-          .raiseError(markFailedError)
-        override def cancelQueued(jobId: OcrJobId, now: Instant): IO[Boolean] = delegate
-          .cancelQueued(jobId, now)
-
-    tempDirectory("momo-api-create-job-fail").use { dir =>
+    fixtureResource(
+      prefix = "momo-api-create-job-fail",
+      queue = failingQueue(queueError),
+      idSeed = List("job-1", "draft-1"),
+      requestId = None,
+      decorateJobs = failingJobs(_, markFailedError),
+    ).use { fixture =>
       for
-        imageStore <- IO.pure(LocalFsImageStore[IO](dir))
-        image <- imageStore.save(Some("sample.png"), Some("image/png"), pngBytes)
-          .flatMap(fromAppEither)
-        jobsBase <- InMemoryOcrJobsRepository.create[IO]
-        jobs = failingJobs(jobsBase)
-        drafts <- InMemoryOcrDraftsRepository.create[IO]
-        matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
-        creation = InMemoryOcrJobCreationRepository[IO](drafts, jobs, matchDrafts)
-        submitter = OcrQueueSubmitter.direct[IO](jobs, matchDrafts, failingQueue)
-        ids <- IO.ref(List("job-1", "draft-1"))
-        usecase = CreateOcrJob[IO](
-          imageStore = imageStore,
-          creation = creation,
-          matchDrafts = matchDrafts,
-          queueSubmitter = submitter,
-          now = IO.pure(Instant.parse("2026-04-29T11:40:16Z")),
-          nextId = ids.modify {
-            case head :: tail => tail -> head
-            case Nil => Nil -> "unexpected"
-          },
-          requestIdLookup = IO.pure(None),
-        )
+        image <- fixture.savePng
+        usecase <- fixture.usecase
         result <- usecase
           .run(CreateOcrJobCommand(image.imageId, "total_assets", OcrJobHints.empty, None))
       yield result match
@@ -118,36 +77,20 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
 
   test("stores sanitized failure message when queue.publish fails") {
     val queueError = new RuntimeException("redis://secret-host/boom")
-    val failingQueue: QueueProducer[IO] = new QueueProducer[IO]:
-      override def publish(payload: OcrQueuePayload): IO[String] = IO.raiseError(queueError)
-      override def ping: IO[Unit] = IO.unit
 
-    tempDirectory("momo-api-create-job-sanitized-failure").use { dir =>
+    fixtureResource(
+      prefix = "momo-api-create-job-sanitized-failure",
+      queue = failingQueue(queueError),
+      idSeed = List("job-1", "draft-1"),
+      requestId = None,
+      decorateJobs = identity[OcrJobsRepository[IO]],
+    ).use { fixture =>
       for
-        imageStore <- IO.pure(LocalFsImageStore[IO](dir))
-        image <- imageStore.save(Some("sample.png"), Some("image/png"), pngBytes)
-          .flatMap(fromAppEither)
-        jobs <- InMemoryOcrJobsRepository.create[IO]
-        drafts <- InMemoryOcrDraftsRepository.create[IO]
-        matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
-        creation = InMemoryOcrJobCreationRepository[IO](drafts, jobs, matchDrafts)
-        submitter = OcrQueueSubmitter.direct[IO](jobs, matchDrafts, failingQueue)
-        ids <- IO.ref(List("job-1", "draft-1"))
-        usecase = CreateOcrJob[IO](
-          imageStore = imageStore,
-          creation = creation,
-          matchDrafts = matchDrafts,
-          queueSubmitter = submitter,
-          now = IO.pure(Instant.parse("2026-04-29T11:40:16Z")),
-          nextId = ids.modify {
-            case head :: tail => tail -> head
-            case Nil => Nil -> "unexpected"
-          },
-          requestIdLookup = IO.pure(None),
-        )
+        image <- fixture.savePng
+        usecase <- fixture.usecase
         _ <- usecase
           .run(CreateOcrJobCommand(image.imageId, "total_assets", OcrJobHints.empty, None))
-        found <- jobs.find(OcrJobId("job-1"))
+        found <- fixture.jobs.find(OcrJobId("job-1"))
       yield
         val failure = found.flatMap(_.failure).getOrElse(fail("expected failed job"))
         assertEquals(failure.message, "Failed to enqueue OCR job.")
@@ -159,46 +102,19 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
     val queueError = new RuntimeException("boom-queue")
     val markFailedError = new RuntimeException("boom-markFailed")
 
-    val failingQueue: QueueProducer[IO] = new QueueProducer[IO]:
-      override def publish(payload: OcrQueuePayload): IO[String] = IO.raiseError(queueError)
-      override def ping: IO[Unit] = IO.unit
-
-    def failingJobs(delegate: OcrJobsRepository[IO]): OcrJobsRepository[IO] =
-      new OcrJobsRepository[IO]:
-        override def create(job: OcrJob): IO[Unit] = delegate.create(job)
-        override def find(jobId: OcrJobId): IO[Option[OcrJob]] = delegate.find(jobId)
-        override def markFailed(jobId: OcrJobId, failure: OcrFailure, now: Instant): IO[Unit] = IO
-          .raiseError(markFailedError)
-        override def cancelQueued(jobId: OcrJobId, now: Instant): IO[Boolean] = delegate
-          .cancelQueued(jobId, now)
-
-    tempDirectory("momo-api-create-job-log").use { dir =>
+    fixtureResource(
+      prefix = "momo-api-create-job-log",
+      queue = failingQueue(queueError),
+      idSeed = List("job-log-1", "draft-log-1"),
+      requestId = None,
+      decorateJobs = failingJobs(_, markFailedError),
+    ).use { fixture =>
       for
         capture <- CapturingLoggerFactory.create[IO]
         (factory, ref) = capture
         given LoggerFactory[IO] = factory
-        imageStore <- IO.pure(LocalFsImageStore[IO](dir))
-        image <- imageStore.save(Some("sample.png"), Some("image/png"), pngBytes)
-          .flatMap(fromAppEither)
-        jobsBase <- InMemoryOcrJobsRepository.create[IO]
-        jobs = failingJobs(jobsBase)
-        drafts <- InMemoryOcrDraftsRepository.create[IO]
-        matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
-        creation = InMemoryOcrJobCreationRepository[IO](drafts, jobs, matchDrafts)
-        submitter = OcrQueueSubmitter.direct[IO](jobs, matchDrafts, failingQueue)
-        ids <- IO.ref(List("job-log-1", "draft-log-1"))
-        usecase = CreateOcrJob[IO](
-          imageStore = imageStore,
-          creation = creation,
-          matchDrafts = matchDrafts,
-          queueSubmitter = submitter,
-          now = IO.pure(Instant.parse("2026-04-29T11:40:16Z")),
-          nextId = ids.modify {
-            case head :: tail => tail -> head
-            case Nil => Nil -> "unexpected"
-          },
-          requestIdLookup = IO.pure(None),
-        )
+        image <- fixture.savePng
+        usecase <- fixture.usecase
         result <- usecase
           .run(CreateOcrJobCommand(image.imageId, "total_assets", OcrJobHints.empty, None))
         logged <- ref.get
@@ -225,3 +141,79 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         )
     }
   }
+
+  private def inMemoryQueueFixture(
+      prefix: String,
+      idSeed: List[String],
+      requestId: Option[String],
+  ): Resource[IO, Fixture[InMemoryQueueProducer[IO]]] = Resource
+    .eval(InMemoryQueueProducer.create[IO]).flatMap(queue =>
+      fixtureResource(
+        prefix = prefix,
+        queue = queue,
+        idSeed = idSeed,
+        requestId = requestId,
+        decorateJobs = identity[OcrJobsRepository[IO]],
+      )
+    )
+
+  private def fixtureResource[Q <: QueueProducer[IO]](
+      prefix: String,
+      queue: Q,
+      idSeed: List[String],
+      requestId: Option[String],
+      decorateJobs: OcrJobsRepository[IO] => OcrJobsRepository[IO],
+  ): Resource[IO, Fixture[Q]] = tempDirectory(prefix).evalMap { dir =>
+    for
+      jobsBase <- InMemoryOcrJobsRepository.create[IO]
+      drafts <- InMemoryOcrDraftsRepository.create[IO]
+      matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
+      imageStore = LocalFsImageStore[IO](dir)
+      jobs = decorateJobs(jobsBase)
+    yield Fixture(imageStore, jobs, drafts, matchDrafts, queue, idSeed, requestId)
+  }
+
+  private def failingQueue(error: Throwable): QueueProducer[IO] = new QueueProducer[IO]:
+    override def publish(payload: OcrQueuePayload): IO[String] =
+      val _ = payload
+      IO.raiseError(error)
+    override def ping: IO[Unit] = IO.unit
+
+  private def failingJobs(
+      delegate: OcrJobsRepository[IO],
+      markFailedError: Throwable,
+  ): OcrJobsRepository[IO] = new OcrJobsRepository[IO]:
+    override def create(job: OcrJob): IO[Unit] = delegate.create(job)
+    override def find(jobId: OcrJobId): IO[Option[OcrJob]] = delegate.find(jobId)
+    override def markFailed(jobId: OcrJobId, failure: OcrFailure, now: Instant): IO[Unit] =
+      val _ = (jobId, failure, now)
+      IO.raiseError(markFailedError)
+    override def cancelQueued(jobId: OcrJobId, now: Instant): IO[Boolean] = delegate
+      .cancelQueued(jobId, now)
+
+  private final case class Fixture[Q <: QueueProducer[IO]](
+      imageStore: ImageStore[IO],
+      jobs: OcrJobsRepository[IO],
+      drafts: InMemoryOcrDraftsRepository[IO],
+      matchDrafts: InMemoryMatchDraftsRepository[IO],
+      queue: Q,
+      idSeed: List[String],
+      requestId: Option[String],
+  ):
+    def savePng: IO[StoredImage] = imageStore.save(Some("sample.png"), Some("image/png"), pngBytes)
+      .flatMap(fromAppEither)
+
+    def usecase(using LoggerFactory[IO]): IO[CreateOcrJob[IO]] = IO.ref(idSeed).map { ids =>
+      CreateOcrJob[IO](
+        imageStore = imageStore,
+        creation = InMemoryOcrJobCreationRepository[IO](drafts, jobs, matchDrafts),
+        matchDrafts = matchDrafts,
+        queueSubmitter = OcrQueueSubmitter.direct[IO](jobs, matchDrafts, queue),
+        now = IO.pure(now),
+        nextId = ids.modify {
+          case head :: tail => tail -> head
+          case Nil => Nil -> "unexpected"
+        },
+        requestIdLookup = IO.pure(requestId),
+      )
+    }

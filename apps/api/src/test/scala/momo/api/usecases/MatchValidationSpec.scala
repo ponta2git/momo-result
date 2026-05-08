@@ -2,22 +2,13 @@ package momo.api.usecases
 
 import munit.FunSuite
 
+import momo.api.domain.MatchValidationError
 import momo.api.domain.ids.*
-import momo.api.domain.{IncidentCounts, MatchValidationError, PlayerResult}
+import momo.api.usecases.testing.MatchFixtures
 
 final class MatchValidationSpec extends FunSuite:
-  private val zero = IncidentCounts(0, 0, 0, 0, 0, 0)
-
-  private val allowed = Set(MemberId("a"), MemberId("b"), MemberId("c"), MemberId("d"))
-
-  private def player(id: String, playOrder: Int, rank: Int): PlayerResult = PlayerResult(
-    memberId = MemberId(id),
-    playOrder = playOrder,
-    rank = rank,
-    totalAssetsManYen = 100,
-    revenueManYen = 50,
-    incidents = zero,
-  )
+  private val memberValues = List("a", "b", "c", "d")
+  private val allowed = MatchFixtures.allowedMembers(memberValues)
 
   private val happyInput = MatchValidation.Input(
     heldEventId = HeldEventId("e1"),
@@ -26,7 +17,7 @@ final class MatchValidationSpec extends FunSuite:
     seasonMasterId = SeasonMasterId("season"),
     ownerMemberId = MemberId("a"),
     mapMasterId = MapMasterId("map"),
-    players = List(player("a", 1, 1), player("b", 2, 2), player("c", 3, 3), player("d", 4, 4)),
+    players = MatchFixtures.defaultPlayers(memberValues),
   )
 
   test("happy path: produces ValidatedInput"):

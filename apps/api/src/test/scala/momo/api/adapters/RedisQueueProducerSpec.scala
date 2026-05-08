@@ -20,6 +20,8 @@ import momo.api.repositories.OcrQueuePayload
 final class RedisQueueProducerSpec extends MomoCatsEffectSuite:
   private val Integration = new munit.Tag("Integration")
 
+  private final case class RedisStreamFixture(redisUrl: String, streamName: String)
+
   test("publishes OCR payload fields to the configured Redis stream"):
     for
       ref <- Ref.of[IO, Vector[(String, Map[String, String])]](Vector.empty)
@@ -45,23 +47,36 @@ final class RedisQueueProducerSpec extends MomoCatsEffectSuite:
       "attempt" -> "1",
       "enqueuedAt" -> "2026-04-29T10:00:00Z",
     ))
-    redisUrlResource.use { redisUrl =>
-      val streamName = s"momo:ocr:jobs:test:${UUID.randomUUID().toString}"
-      val config = RedisConfig(redisUrl, streamName, "momo-ocr-workers")
+    redisStreamFixture.use { fixture =>
+      val config = RedisConfig(fixture.redisUrl, fixture.streamName, "momo-ocr-workers")
       RedisQueueProducer.resource[IO](config).use { producer =>
         producer.publish(payload).flatMap { messageId =>
-          Redis[IO].simple(redisUrl, RedisCodec.Utf8).use { commands =>
-            commands.unsafe(_.xrange(streamName, Range.unbounded[String]())).map { messages =>
-              val rows = messages.asScala.toList
-              assert(rows.nonEmpty, s"expected at least 1 message in stream=$streamName")
-              assertEquals(messageId, rows.head.getId)
-              val body: util.Map[String, String] = rows.head.getBody
-              assertEquals(body, payload.fields.asJava)
+          Redis[IO].simple(fixture.redisUrl, RedisCodec.Utf8).use { commands =>
+            commands.unsafe(_.xrange(fixture.streamName, Range.unbounded[String]())).map {
+              messages =>
+                val rows = messages.asScala.toList
+                assert(
+                  rows.nonEmpty,
+                  s"expected at least 1 message in stream=${fixture.streamName}",
+                )
+                assertEquals(messageId, rows.head.getId)
+                val body: util.Map[String, String] = rows.head.getBody
+                assertEquals(body, payload.fields.asJava)
             }
           }
         }
       }
     }
+
+  private def redisStreamFixture: cats.effect.Resource[IO, RedisStreamFixture] = redisUrlResource
+    .flatMap { redisUrl =>
+      cats.effect.Resource.make {
+        IO.pure(RedisStreamFixture(redisUrl, s"momo:ocr:jobs:test:${UUID.randomUUID().toString}"))
+      }(fixture => deleteStream(fixture.redisUrl, fixture.streamName))
+    }
+
+  private def deleteStream(redisUrl: String, streamName: String): IO[Unit] = Redis[IO]
+    .simple(redisUrl, RedisCodec.Utf8).use(_.del(streamName).void).handleErrorWith(_ => IO.unit)
 
   private def redisContainer: cats.effect.Resource[IO, GenericContainer[?]] = cats.effect.Resource
     .make {

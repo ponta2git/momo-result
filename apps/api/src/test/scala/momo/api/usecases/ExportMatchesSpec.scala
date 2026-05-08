@@ -9,11 +9,10 @@ import momo.api.adapters.{
   InMemoryGameTitlesRepository, InMemoryMapMastersRepository, InMemoryMatchesRepository,
   InMemoryMembersRepository, InMemorySeasonMastersRepository,
 }
+import momo.api.domain.MatchRecord
 import momo.api.domain.ids.*
-import momo.api.domain.{
-  FourPlayers, GameTitle, IncidentCounts, MapMaster, MatchRecord, Member, PlayerResult, SeasonMaster,
-}
 import momo.api.errors.AppError
+import momo.api.usecases.testing.MatchFixtures
 
 final class ExportMatchesSpec extends MomoCatsEffectSuite:
   private val now = Instant.parse("2026-05-06T20:00:00Z")
@@ -21,6 +20,7 @@ final class ExportMatchesSpec extends MomoCatsEffectSuite:
   private val titleId = GameTitleId("title_world")
   private val seasonId = SeasonMasterId("season_spring")
   private val mapId = MapMasterId("map_east")
+  private val memberValues = MatchFixtures.DevMemberValues
 
   test("rejects invalid format before querying export data"):
     for
@@ -65,54 +65,27 @@ final class ExportMatchesSpec extends MomoCatsEffectSuite:
   private def createUsecaseSeeded(seedMatch: Boolean): IO[ExportMatches[IO]] =
     for
       matches <- InMemoryMatchesRepository.create[IO]
-      members <- InMemoryMembersRepository.create[IO](List(
-        member("ponta", "ponta"),
-        member("akane-mami", "akane-mami"),
-        member("otaka", "otaka"),
-        member("eu", "eu"),
-      ))
+      members <- InMemoryMembersRepository.create[IO](MatchFixtures.members(memberValues, now))
       gameTitles <- InMemoryGameTitlesRepository.create[IO]
       maps <- InMemoryMapMastersRepository.create[IO]
       seasons <- InMemorySeasonMastersRepository.create[IO]
-      _ <- gameTitles.create(GameTitle(titleId, "World", "world", 1, now))
-      _ <- maps.create(MapMaster(mapId, titleId, "East", 1, now))
-      _ <- seasons.create(SeasonMaster(seasonId, titleId, "Spring", 1, now))
+      _ <- MatchFixtures.seedWorldMasters(gameTitles, maps, seasons, titleId, mapId, seasonId, now)
       _ <- if seedMatch then matches.create(matchRecord()) else IO.unit
     yield ExportMatches[IO](matches, members, maps, seasons)
 
-  private def member(id: String, displayName: String): Member =
-    Member(MemberId(id), UserId(id), displayName, now)
-
-  private def matchRecord(): MatchRecord = MatchRecord(
+  private def matchRecord(): MatchRecord = MatchFixtures.matchRecord(
     id = MatchId("match-1"),
     heldEventId = heldEventId,
     matchNoInEvent = 1,
-    gameTitleId = titleId,
-    layoutFamily = "world",
-    seasonMasterId = seasonId,
-    ownerMemberId = MemberId("ponta"),
-    mapMasterId = mapId,
+    titleId = titleId,
+    seasonId = seasonId,
+    mapId = mapId,
     playedAt = now,
+    createdAt = now,
+    memberValues = memberValues,
     totalAssetsDraftId = None,
     revenueDraftId = None,
     incidentLogDraftId = None,
-    players = FourPlayers(
-      player("ponta", 1, 1),
-      player("akane-mami", 2, 2),
-      player("otaka", 3, 3),
-      player("eu", 4, 4),
-    ),
-    createdByMemberId = MemberId("ponta"),
-    createdAt = now,
-  )
-
-  private def player(memberId: String, playOrder: Int, rank: Int): PlayerResult = PlayerResult(
-    memberId = MemberId(memberId),
-    playOrder = playOrder,
-    rank = rank,
-    totalAssetsManYen = 100,
-    revenueManYen = 50,
-    incidents = IncidentCounts(0, 0, 0, 0, 0, 0),
   )
 
   private def assertAppError[A](

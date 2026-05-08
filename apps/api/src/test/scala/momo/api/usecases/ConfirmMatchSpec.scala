@@ -11,8 +11,9 @@ import momo.api.adapters.{
   InMemorySeasonMastersRepository, LocalFsImageStore,
 }
 import momo.api.domain.ids.*
-import momo.api.domain.{GameTitle, HeldEvent, IncidentCounts, MapMaster, PlayerResult, SeasonMaster}
+import momo.api.domain.{GameTitle, PlayerResult}
 import momo.api.errors.AppError
+import momo.api.usecases.testing.MatchFixtures
 
 final class ConfirmMatchSpec extends MomoCatsEffectSuite:
   private val now = Instant.parse("2026-05-06T00:00:00Z")
@@ -20,8 +21,8 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
   private val titleId = GameTitleId("title_world")
   private val mapId = MapMasterId("map_east")
   private val seasonId = SeasonMasterId("season_spring")
-  private val allowedMembers =
-    Set(MemberId("ponta"), MemberId("akane-mami"), MemberId("otaka"), MemberId("eu"))
+  private val memberValues = MatchFixtures.DevMemberValues
+  private val allowedMembers = MatchFixtures.allowedMembers(memberValues)
 
   test("confirms a valid match and persists the created record"):
     Fixture.resource.use { fixture =>
@@ -38,12 +39,7 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
     Fixture.resource.use { fixture =>
       for
         _ <- fixture.seedPrereqs()
-        bad = commandWithPlayers(List(
-          player("ponta", 1, 1),
-          player("akane-mami", 2, 1),
-          player("otaka", 3, 3),
-          player("eu", 4, 4),
-        ))
+        bad = commandWithPlayers(MatchFixtures.duplicateRankPlayers(memberValues))
         result <- fixture.usecase.run(bad, MemberId("ponta"))
         found <- fixture.matches.find(MatchId("match-1"))
       yield
@@ -110,21 +106,7 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
     players = players,
   )
 
-  private def defaultPlayers: List[PlayerResult] = List(
-    player("ponta", 1, 1),
-    player("akane-mami", 2, 2),
-    player("otaka", 3, 3),
-    player("eu", 4, 4),
-  )
-
-  private def player(memberId: String, playOrder: Int, rank: Int): PlayerResult = PlayerResult(
-    memberId = MemberId(memberId),
-    playOrder = playOrder,
-    rank = rank,
-    totalAssetsManYen = 100,
-    revenueManYen = 50,
-    incidents = IncidentCounts(0, 0, 0, 0, 0, 0),
-  )
+  private def defaultPlayers: List[PlayerResult] = MatchFixtures.defaultPlayers(memberValues)
 
   private def assertAppError[A](
       result: Either[AppError, A],
@@ -144,13 +126,20 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
       matches: InMemoryMatchesRepository[IO],
       usecase: ConfirmMatch[IO],
   ):
-    def seedPrereqs(): IO[Unit] = seedMastersOnly() *>
-      heldEvents.create(HeldEvent(heldEventId, now))
+    def seedPrereqs(): IO[Unit] = MatchFixtures.seedWorldPrereqs(
+      heldEvents,
+      gameTitles,
+      mapMasters,
+      seasonMasters,
+      heldEventId,
+      titleId,
+      mapId,
+      seasonId,
+      now,
+    )
 
-    def seedMastersOnly(): IO[Unit] = gameTitles
-      .create(GameTitle(titleId, "World", "world", 1, now)) *>
-      mapMasters.create(MapMaster(mapId, titleId, "East", 1, now)) *>
-      seasonMasters.create(SeasonMaster(seasonId, titleId, "Spring", 1, now))
+    def seedMastersOnly(): IO[Unit] = MatchFixtures
+      .seedWorldMasters(gameTitles, mapMasters, seasonMasters, titleId, mapId, seasonId, now)
 
   private object Fixture:
     def resource: Resource[IO, Fixture] = tempDirectory("momo-api-confirm-match").evalMap { dir =>

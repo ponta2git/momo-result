@@ -10,11 +10,9 @@ import momo.api.adapters.{
   InMemoryMatchesRepository, InMemorySeasonMastersRepository,
 }
 import momo.api.domain.ids.*
-import momo.api.domain.{
-  FourPlayers, GameTitle, HeldEvent, IncidentCounts, MapMaster, MatchRecord, PlayerResult,
-  SeasonMaster,
-}
+import momo.api.domain.{GameTitle, MatchRecord, PlayerResult}
 import momo.api.errors.AppError
+import momo.api.usecases.testing.MatchFixtures
 
 final class UpdateMatchSpec extends MomoCatsEffectSuite:
   private val createdAt = Instant.parse("2026-05-08T11:00:00Z")
@@ -25,8 +23,8 @@ final class UpdateMatchSpec extends MomoCatsEffectSuite:
   private val mapId = MapMasterId("map_east")
   private val seasonId = SeasonMasterId("season_spring")
   private val matchId = MatchId("match-update-1")
-  private val allowedMembers =
-    Set(MemberId("ponta"), MemberId("akane-mami"), MemberId("otaka"), MemberId("eu"))
+  private val memberValues = MatchFixtures.DevMemberValues
+  private val allowedMembers = MatchFixtures.allowedMembers(memberValues)
 
   test("updates a match and preserves existing draft refs when the command omits them"):
     for
@@ -82,12 +80,7 @@ final class UpdateMatchSpec extends MomoCatsEffectSuite:
       assertEquals(found.map(_.gameTitleId), Some(titleId))
 
   test("rejects invalid player ranks and leaves the existing record unchanged"):
-    val badPlayers = List(
-      player("ponta", playOrder = 1, rank = 1),
-      player("akane-mami", playOrder = 2, rank = 1),
-      player("otaka", playOrder = 3, rank = 3),
-      player("eu", playOrder = 4, rank = 4),
-    )
+    val badPlayers = MatchFixtures.duplicateRankPlayers(memberValues)
     for
       fixture <- Fixture.create
       _ <- fixture.seedPrereqs()
@@ -118,44 +111,23 @@ final class UpdateMatchSpec extends MomoCatsEffectSuite:
   private def command(matchNoInEvent: Int, gameTitleId: GameTitleId): UpdateMatch.Command =
     command(matchNoInEvent, gameTitleId, ConfirmMatch.DraftRefs(None, None, None))
 
-  private def sampleMatch(id: MatchId, matchNoInEvent: Int): MatchRecord = MatchRecord(
-    id = id,
-    heldEventId = heldEventId,
-    matchNoInEvent = matchNoInEvent,
-    gameTitleId = titleId,
-    layoutFamily = "world",
-    seasonMasterId = seasonId,
-    ownerMemberId = MemberId("ponta"),
-    mapMasterId = mapId,
-    playedAt = createdAt,
-    totalAssetsDraftId = Some(OcrDraftId("draft-total-old")),
-    revenueDraftId = None,
-    incidentLogDraftId = Some(OcrDraftId("draft-incident-old")),
-    players = FourPlayers(
-      player("ponta", playOrder = 1, rank = 1),
-      player("akane-mami", playOrder = 2, rank = 2),
-      player("otaka", playOrder = 3, rank = 3),
-      player("eu", playOrder = 4, rank = 4),
-    ),
-    createdByMemberId = MemberId("ponta"),
-    createdAt = createdAt,
-  )
+  private def sampleMatch(id: MatchId, matchNoInEvent: Int): MatchRecord = MatchFixtures
+    .matchRecord(
+      id = id,
+      heldEventId = heldEventId,
+      matchNoInEvent = matchNoInEvent,
+      titleId = titleId,
+      seasonId = seasonId,
+      mapId = mapId,
+      playedAt = createdAt,
+      createdAt = createdAt,
+      memberValues = memberValues,
+      totalAssetsDraftId = Some(OcrDraftId("draft-total-old")),
+      revenueDraftId = None,
+      incidentLogDraftId = Some(OcrDraftId("draft-incident-old")),
+    )
 
-  private def defaultPlayers: List[PlayerResult] = List(
-    player("ponta", playOrder = 1, rank = 1),
-    player("akane-mami", playOrder = 2, rank = 2),
-    player("otaka", playOrder = 3, rank = 3),
-    player("eu", playOrder = 4, rank = 4),
-  )
-
-  private def player(id: String, playOrder: Int, rank: Int): PlayerResult = PlayerResult(
-    memberId = MemberId(id),
-    playOrder = playOrder,
-    rank = rank,
-    totalAssetsManYen = 100,
-    revenueManYen = 50,
-    incidents = IncidentCounts(0, 0, 0, 0, 0, 0),
-  )
+  private def defaultPlayers: List[PlayerResult] = MatchFixtures.defaultPlayers(memberValues)
 
   private def assertRight(result: Either[AppError, MatchRecord]): MatchRecord = result match
     case Right(value) => value
@@ -179,13 +151,17 @@ final class UpdateMatchSpec extends MomoCatsEffectSuite:
       matches: InMemoryMatchesRepository[IO],
       usecase: UpdateMatch[IO],
   ):
-    def seedPrereqs(): IO[Unit] =
-      for
-        _ <- heldEvents.create(HeldEvent(heldEventId, createdAt))
-        _ <- gameTitles.create(GameTitle(titleId, "World", "world", 1, createdAt))
-        _ <- mapMasters.create(MapMaster(mapId, titleId, "East", 1, createdAt))
-        _ <- seasonMasters.create(SeasonMaster(seasonId, titleId, "Spring", 1, createdAt))
-      yield ()
+    def seedPrereqs(): IO[Unit] = MatchFixtures.seedWorldPrereqs(
+      heldEvents,
+      gameTitles,
+      mapMasters,
+      seasonMasters,
+      heldEventId,
+      titleId,
+      mapId,
+      seasonId,
+      createdAt,
+    )
 
   private object Fixture:
     def create: IO[Fixture] =

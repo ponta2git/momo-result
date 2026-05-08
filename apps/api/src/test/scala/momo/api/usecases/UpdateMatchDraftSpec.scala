@@ -10,8 +10,9 @@ import momo.api.adapters.{
   InMemoryMatchDraftsRepository, InMemorySeasonMastersRepository,
 }
 import momo.api.domain.ids.*
-import momo.api.domain.{GameTitle, HeldEvent, MapMaster, MatchDraft, MatchDraftStatus, SeasonMaster}
+import momo.api.domain.{GameTitle, MatchDraft, MatchDraftStatus}
 import momo.api.errors.AppError
+import momo.api.usecases.testing.MatchFixtures
 
 final class UpdateMatchDraftSpec extends MomoCatsEffectSuite:
   private val createdAt = Instant.parse("2026-05-08T10:00:00Z")
@@ -184,13 +185,17 @@ final class UpdateMatchDraftSpec extends MomoCatsEffectSuite:
       matchDrafts: InMemoryMatchDraftsRepository[IO],
       usecase: UpdateMatchDraft[IO],
   ):
-    def seedPrereqs(): IO[Unit] =
-      for
-        _ <- gameTitles.create(GameTitle(titleId, "World", "world", 1, createdAt))
-        _ <- heldEvents.create(HeldEvent(heldEventId, createdAt))
-        _ <- mapMasters.create(MapMaster(mapId, titleId, "East", 1, createdAt))
-        _ <- seasonMasters.create(SeasonMaster(seasonId, titleId, "Spring", 1, createdAt))
-      yield ()
+    def seedPrereqs(): IO[Unit] = MatchFixtures.seedWorldPrereqs(
+      heldEvents,
+      gameTitles,
+      mapMasters,
+      seasonMasters,
+      heldEventId,
+      titleId,
+      mapId,
+      seasonId,
+      createdAt,
+    )
 
   private object Fixture:
     def create: IO[Fixture] =

@@ -56,28 +56,10 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite:
   private val pngBytes: Array[Byte] =
     Array[Byte](0x89.toByte, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)
 
-  private def incidents = Json.obj(
-    "destination" -> Json.fromInt(1),
-    "plusStation" -> Json.fromInt(0),
-    "minusStation" -> Json.fromInt(0),
-    "cardStation" -> Json.fromInt(0),
-    "cardShop" -> Json.fromInt(0),
-    "suriNoGinji" -> Json.fromInt(0),
-  )
-
-  private def player(memberId: String, playOrder: Int, rank: Int): Json = Json.obj(
-    "memberId" -> Json.fromString(memberId),
-    "playOrder" -> Json.fromInt(playOrder),
-    "rank" -> Json.fromInt(rank),
-    "totalAssetsManYen" -> Json.fromInt(100),
-    "revenueManYen" -> Json.fromInt(50),
-    "incidents" -> incidents,
-  )
-
   test("POST /api/held-events creates event and lists it") {
     app.use { httpApp =>
       val createReq = Request[IO](Method.POST, uri"/api/held-events").putHeaders(authHeaders*)
-        .withEntity(Json.obj("heldAt" -> Json.fromString("2024-01-01T00:00:00Z")))
+        .withEntity(HttpRequestBodies.Matches.createHeldEvent("2024-01-01T00:00:00Z"))
       for
         createRes <- httpApp.run(createReq)
         _ = assertEquals(createRes.status, Status.Ok)
@@ -97,7 +79,7 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite:
   test("POST /api/held-events with invalid heldAt returns 422") {
     app.use { httpApp =>
       val req = Request[IO](Method.POST, uri"/api/held-events").putHeaders(authHeaders*)
-        .withEntity(Json.obj("heldAt" -> Json.fromString("not-an-instant")))
+        .withEntity(HttpRequestBodies.Matches.createHeldEvent("not-an-instant"))
       httpApp.run(req).flatMap { res =>
         assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "heldAt")
       }
@@ -120,50 +102,24 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite:
 
   private def confirmBody(heldEventId: String): Json = confirmBody(heldEventId, 1)
 
-  private def confirmBody(heldEventId: String, matchNo: Int): Json = Json.obj(
-    "heldEventId" -> Json.fromString(heldEventId),
-    "matchNoInEvent" -> Json.fromInt(matchNo),
-    "gameTitleId" -> Json.fromString("title_world"),
-    "seasonMasterId" -> Json.fromString("season_2024_spring"),
-    "ownerMemberId" -> Json.fromString("ponta"),
-    "mapMasterId" -> Json.fromString("map_east"),
-    "playedAt" -> Json.fromString("2024-01-01T20:00:00Z"),
-    "draftIds" ->
-      Json.obj("totalAssets" -> Json.Null, "revenue" -> Json.Null, "incidentLog" -> Json.Null),
-    "players" -> Json.arr(
-      player("ponta", 1, 1),
-      player("akane-mami", 2, 2),
-      player("otaka", 3, 3),
-      player("eu", 4, 4),
-    ),
-  )
+  private def confirmBody(heldEventId: String, matchNo: Int): Json = HttpRequestBodies.Matches
+    .confirmMatchWithNo(heldEventId, matchNo)
 
   private def createEvent(httpApp: org.http4s.HttpApp[IO]): IO[String] = httpApp.run(
     Request[IO](Method.POST, uri"/api/held-events").putHeaders(authHeaders*)
-      .withEntity(Json.obj("heldAt" -> Json.fromString("2024-01-01T00:00:00Z")))
+      .withEntity(HttpRequestBodies.Matches.createHeldEvent("2024-01-01T00:00:00Z"))
   ).flatMap { response =>
     assertEquals(response.status, Status.Ok)
     response.as[Json].map(jsonField[String](_, "id"))
   }
 
-  private def createMatchDraft(httpApp: org.http4s.HttpApp[IO]): IO[String] =
-    val body = Json.obj(
-      "heldEventId" -> Json.Null,
-      "matchNoInEvent" -> Json.Null,
-      "gameTitleId" -> Json.Null,
-      "layoutFamily" -> Json.Null,
-      "seasonMasterId" -> Json.Null,
-      "ownerMemberId" -> Json.Null,
-      "mapMasterId" -> Json.Null,
-      "playedAt" -> Json.Null,
-      "status" -> Json.Null,
-    )
-    httpApp.run(
-      Request[IO](Method.POST, uri"/api/match-drafts").putHeaders(authHeaders*).withEntity(body)
-    ).flatMap { response =>
-      assertEquals(response.status, Status.Ok)
-      response.as[Json].map(jsonField[String](_, "matchDraftId"))
-    }
+  private def createMatchDraft(httpApp: org.http4s.HttpApp[IO]): IO[String] = httpApp.run(
+    Request[IO](Method.POST, uri"/api/match-drafts").putHeaders(authHeaders*)
+      .withEntity(HttpRequestBodies.Matches.emptyMatchDraft)
+  ).flatMap { response =>
+    assertEquals(response.status, Status.Ok)
+    response.as[Json].map(jsonField[String](_, "matchDraftId"))
+  }
 
   private def uploadPng(httpApp: org.http4s.HttpApp[IO]): IO[String] =
     val part = Part.fileData[IO](
@@ -205,13 +161,10 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite:
       for
         matchDraftId <- createMatchDraft(httpApp)
         imageId <- uploadPng(httpApp)
-        createJobRes <- httpApp.run(
-          Request[IO](Method.POST, uri"/api/ocr-jobs").putHeaders(authHeaders*).withEntity(Json.obj(
-            "imageId" -> Json.fromString(imageId),
-            "requestedImageType" -> Json.fromString("total_assets"),
-            "matchDraftId" -> Json.fromString(matchDraftId),
+        createJobRes <- httpApp
+          .run(Request[IO](Method.POST, uri"/api/ocr-jobs").putHeaders(authHeaders*).withEntity(
+            HttpRequestBodies.Matches.createOcrJobForDraft(imageId, "total_assets", matchDraftId)
           ))
-        )
         _ = assertEquals(createJobRes.status, Status.Ok)
         _ <- createJobRes.as[Json]
         sourceImageRes <- httpApp.run(
@@ -235,14 +188,16 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite:
     app.use { httpApp =>
       for
         id <- createEvent(httpApp)
-        body = confirmBody(id).hcursor.downField("players").withFocus(_ =>
-          Json.arr(
-            player("ponta", 1, 1),
-            player("akane-mami", 2, 1),
-            player("otaka", 3, 3),
-            player("eu", 4, 4),
-          )
-        ).top.get
+        body = HttpRequestBodies.Matches.confirmMatchWithPlayers(
+          id,
+          1,
+          players = List(
+            HttpRequestBodies.Matches.player("ponta", 1, 1),
+            HttpRequestBodies.Matches.player("akane-mami", 2, 1),
+            HttpRequestBodies.Matches.player("otaka", 3, 3),
+            HttpRequestBodies.Matches.player("eu", 4, 4),
+          ),
+        )
         res <- httpApp.run(
           Request[IO](Method.POST, uri"/api/matches").putHeaders(authHeaders*).withEntity(body)
         )
@@ -307,10 +262,20 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite:
           optionalHeaderValue(exportRes, CIString("Content-Disposition")),
           Some(s"""attachment; filename="momo-results-match-$matchId.tsv""""),
         )
-        val header = body.linesIterator.toList.headOption
-          .getOrElse(fail(s"expected TSV header line, got: $body"))
-        assert(header.contains("\t"), "TSV header should use tab delimiter")
-        assert(body.contains("2024-spring\t1\tponta\t東日本編"))
+        val contentType = headerValue(exportRes, CIString("Content-Type"))
+        assert(
+          contentType.contains("text/tab-separated-values"),
+          s"unexpected content type: $contentType",
+        )
+        val lines = body.split("\r\n", -1).toList
+        assertEquals(
+          lines.take(2),
+          List(
+            "シーズン\tシーズンNo.\tオーナー\tマップ\t対戦日\t対戦No.\tプレー順\tプレーヤー名\t順位\t総資産\t収益\t目的地\tプラス駅\tマイナス駅\tカード駅\tカード売り場\tスリの銀次",
+            "2024-spring\t1\tponta\t東日本編\t2024-01-02\t1\t1\tponta\t1\t100\t50\t1\t0\t0\t0\t0\t0",
+          ),
+        )
+        assertEquals(lines.size, 6)
     }
   }
 

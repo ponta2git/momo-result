@@ -34,7 +34,7 @@ final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite:
 
   private def heldEventReq(idemKey: Option[String], heldAt: String): Request[IO] =
     Request[IO](Method.POST, uri"/api/held-events").putHeaders(authHeaders(idemKey)*)
-      .withEntity(Json.obj("heldAt" -> Json.fromString(heldAt)))
+      .withEntity(HttpRequestBodies.Matches.createHeldEvent(heldAt))
 
   test("idempotency: same key + same body replays response and skips side-effect") {
     app.use { httpApp =>
@@ -73,16 +73,21 @@ final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite:
       for
         first <- httpApp.run(heldEventReq(Some("key-3a"), "2024-04-01T00:00:00Z"))
         _ = assertEquals(first.status, Status.Ok)
+        firstBody <- first.as[Json]
         second <- httpApp.run(heldEventReq(Some("key-3b"), "2024-04-02T00:00:00Z"))
         _ = assertEquals(second.status, Status.Ok)
+        secondBody <- second.as[Json]
         listRes <- httpApp.run(
           Request[IO](Method.GET, uri"/api/held-events?limit=50")
             .putHeaders(Header.Raw(CIString("X-Dev-User"), "ponta"))
         )
         listBody <- listRes.as[Json]
       yield
+        val createdIds =
+          Set(jsonField[String](firstBody, "id"), jsonField[String](secondBody, "id"))
         val items = jsonField[List[Json]](listBody, "items")
         assertEquals(items.size, 2)
+        assertEquals(items.map(jsonField[String](_, "id")).toSet, createdIds)
     }
   }
 

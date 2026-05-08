@@ -19,11 +19,8 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
 
   private def repo = PostgresOcrQueueOutboxRepository[IO](transactor)
 
-  private def payload(jobId: OcrJobId): OcrQueuePayload = OcrQueuePayload(Map(
-    "jobId" -> jobId.value,
-    "attempt" -> "1",
-    "enqueuedAt" -> now.toString,
-  ))
+  private def payload(jobId: OcrJobId): OcrQueuePayload =
+    OcrQueuePayload(Map("jobId" -> jobId.value, "attempt" -> "1", "enqueuedAt" -> now.toString))
 
   private def insertOcrRows(jobId: OcrJobId, draftId: OcrDraftId, createdAt: Instant): IO[Unit] =
     (for
@@ -112,7 +109,10 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
     yield
       assertEquals(claimed.map(_.id), List("outbox-expired", "outbox-pending"))
       assertEquals(claimed.map(_.attemptCount), List(2, 0))
-      assertEquals(claimed.map(_.payload.fields("jobId")), List(expiredJobId.value, pendingJobId.value))
+      assertEquals(
+        claimed.map(_.payload.fields("jobId")),
+        List(expiredJobId.value, pendingJobId.value),
+      )
       assertEquals(
         states,
         List(
@@ -141,9 +141,8 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
         SELECT status, claim_expires_at, delivered_at, redis_message_id
         FROM ocr_queue_outbox
         WHERE id = 'outbox-delivered'
-      """.query[(String, Option[Instant], Option[Instant], Option[String])].unique.transact(
-        transactor
-      )
+      """.query[(String, Option[Instant], Option[Instant], Option[String])].unique
+        .transact(transactor)
     yield assertEquals(row, ("DELIVERED", None, Some(deliveredAt), Some("1700000000000-0")))
 
   test("releaseForRetry increments attempts, records sanitized error class, and reschedules"):
@@ -171,10 +170,12 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
         SELECT status, attempt_count, last_error, claim_expires_at, next_attempt_at, updated_at
         FROM ocr_queue_outbox
         WHERE id = 'outbox-retry'
-      """.query[(String, Int, Option[String], Option[Instant], Instant, Instant)].unique.transact(
-        transactor
-      )
-    yield assertEquals(row, ("PENDING", 2, Some("RuntimeException"), None, nextAttemptAt, releasedAt))
+      """.query[(String, Int, Option[String], Option[Instant], Instant, Instant)].unique
+        .transact(transactor)
+    yield assertEquals(
+      row,
+      ("PENDING", 2, Some("RuntimeException"), None, nextAttemptAt, releasedAt),
+    )
 
   test("claimDue rejects non-string stream payload fields and rolls back the claim"):
     val jobId = OcrJobId("job-outbox-invalid-payload")

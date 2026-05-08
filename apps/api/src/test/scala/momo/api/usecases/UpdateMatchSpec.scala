@@ -35,11 +35,15 @@ final class UpdateMatchSpec extends MomoCatsEffectSuite:
       _ <- fixture.matches.create(sampleMatch(matchId, matchNoInEvent = 1))
       result <- fixture.usecase.run(
         matchId,
-        command(matchNoInEvent = 2, gameTitleId = titleId, draftRefs = ConfirmMatch.DraftRefs(
-          totalAssets = None,
-          revenue = Some(OcrDraftId("draft-revenue-new")),
-          incidentLog = None,
-        )),
+        command(
+          matchNoInEvent = 2,
+          gameTitleId = titleId,
+          draftRefs = ConfirmMatch.DraftRefs(
+            totalAssets = None,
+            revenue = Some(OcrDraftId("draft-revenue-new")),
+            incidentLog = None,
+          ),
+        ),
       )
       found <- fixture.matches.find(matchId)
     yield
@@ -68,10 +72,10 @@ final class UpdateMatchSpec extends MomoCatsEffectSuite:
     for
       fixture <- Fixture.create
       _ <- fixture.seedPrereqs()
-      _ <- fixture.gameTitles
-        .create(GameTitle(otherTitleId, "Japan", "japan", 2, createdAt))
+      _ <- fixture.gameTitles.create(GameTitle(otherTitleId, "Japan", "japan", 2, createdAt))
       _ <- fixture.matches.create(sampleMatch(matchId, matchNoInEvent = 1))
-      result <- fixture.usecase.run(matchId, command(matchNoInEvent = 2, gameTitleId = otherTitleId))
+      result <- fixture.usecase
+        .run(matchId, command(matchNoInEvent = 2, gameTitleId = otherTitleId))
       found <- fixture.matches.find(matchId)
     yield
       assertAppError(result, "VALIDATION_FAILED", "mapMasterId")
@@ -88,10 +92,8 @@ final class UpdateMatchSpec extends MomoCatsEffectSuite:
       fixture <- Fixture.create
       _ <- fixture.seedPrereqs()
       _ <- fixture.matches.create(sampleMatch(matchId, matchNoInEvent = 1))
-      result <- fixture.usecase.run(
-        matchId,
-        command(matchNoInEvent = 2, gameTitleId = titleId).copy(players = badPlayers),
-      )
+      result <- fixture.usecase
+        .run(matchId, command(matchNoInEvent = 2, gameTitleId = titleId).copy(players = badPlayers))
       found <- fixture.matches.find(matchId)
     yield
       assertAppError(result, "VALIDATION_FAILED", "players.rank")

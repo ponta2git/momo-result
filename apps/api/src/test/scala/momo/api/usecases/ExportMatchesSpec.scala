@@ -48,7 +48,14 @@ final class ExportMatchesSpec extends MomoCatsEffectSuite:
       val file = result.getOrElse(fail(s"expected export file, got $result"))
       assertEquals(file.fileName, "momo-results-match-match-1.tsv")
       assertEquals(file.contentType, "text/tab-separated-values; charset=utf-8")
-      assert(file.body.linesIterator.next().contains("\t"), "TSV header should use tab delimiter")
+      assertEquals(
+        file.body,
+        "シーズン\tシーズンNo.\tオーナー\tマップ\t対戦日\t対戦No.\tプレー順\tプレーヤー名\t順位\t総資産\t収益\t目的地\tプラス駅\tマイナス駅\tカード駅\tカード売り場\tスリの銀次\r\n" +
+          "Spring\t1\tponta\tEast\t2026-05-07\t1\t1\tponta\t1\t100\t50\t0\t0\t0\t0\t0\t0\r\n" +
+          "Spring\t1\tponta\tEast\t2026-05-07\t1\t2\takane-mami\t2\t100\t50\t0\t0\t0\t0\t0\t0\r\n" +
+          "Spring\t1\tponta\tEast\t2026-05-07\t1\t3\totaka\t3\t100\t50\t0\t0\t0\t0\t0\t0\r\n" +
+          "Spring\t1\tponta\tEast\t2026-05-07\t1\t4\teu\t4\t100\t50\t0\t0\t0\t0\t0\t0\r\n",
+      )
 
   private def createUsecase(): IO[ExportMatches[IO]] = createUsecaseSeeded(seedMatch = false)
 

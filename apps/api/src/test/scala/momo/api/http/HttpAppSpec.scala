@@ -9,7 +9,9 @@ import org.typelevel.ci.CIString
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.config.{AppConfig, AppEnv, ResourceLimitsConfig}
-import momo.api.http.HttpAssertions.{assertProblem, headerValue, jsonField, optionalHeaderValue}
+import momo.api.http.HttpAssertions.{
+  assertProblem, assertProblemDetailEquals, headerValue, jsonField, optionalHeaderValue,
+}
 
 final class HttpAppSpec extends MomoCatsEffectSuite:
   private def app = tempDirectory("momo-api-http").flatMap { dir =>
@@ -65,19 +67,27 @@ final class HttpAppSpec extends MomoCatsEffectSuite:
     app.use { httpApp =>
       val request = Request[IO](Method.POST, uri"/api/ocr-jobs")
         .putHeaders(org.http4s.Header.Raw(org.typelevel.ci.CIString("X-Dev-User"), "ponta"))
-        .withEntity(Json.obj(
-          "imageId" -> Json.fromString("missing"),
-          "requestedImageType" -> Json.fromString("auto"),
-        ))
-      httpApp.run(request)
-        .flatMap(response => assertProblem(response, Status.Forbidden, "FORBIDDEN", "CSRF"))
+        .withEntity(HttpRequestBodies.Matches.createOcrJob("missing", "auto"))
+      httpApp.run(request).flatMap(response =>
+        assertProblemDetailEquals(
+          response,
+          Status.Forbidden,
+          "FORBIDDEN",
+          "Development CSRF token is required. Use X-CSRF-Token: dev.",
+        )
+      )
     }
   }
 
   test("protected endpoint without auth header returns 401") {
     app.use { httpApp =>
       httpApp.run(Request[IO](Method.GET, uri"/api/auth/me")).flatMap(response =>
-        assertProblem(response, Status.Unauthorized, "UNAUTHORIZED", "Authentication is required")
+        assertProblemDetailEquals(
+          response,
+          Status.Unauthorized,
+          "UNAUTHORIZED",
+          "Authentication is required.",
+        )
       )
     }
   }
@@ -172,7 +182,12 @@ final class HttpAppSpec extends MomoCatsEffectSuite:
       val request = Request[IO](Method.GET, uri"/api/held-events")
         .putHeaders(org.http4s.Header.Raw(org.typelevel.ci.CIString("X-Dev-User"), "ponta"))
       httpApp.run(request).flatMap(response =>
-        assertProblem(response, Status.Unauthorized, "UNAUTHORIZED", "Authentication is required")
+        assertProblemDetailEquals(
+          response,
+          Status.Unauthorized,
+          "UNAUTHORIZED",
+          "Authentication is required.",
+        )
       )
     }
   }
@@ -189,7 +204,12 @@ final class HttpAppSpec extends MomoCatsEffectSuite:
       HttpApp.resource[IO](config)
     }.use { httpApp =>
       httpApp.run(Request[IO](Method.GET, uri"/openapi.yaml")).flatMap(response =>
-        assertProblem(response, Status.Unauthorized, "UNAUTHORIZED", "Authentication is required")
+        assertProblemDetailEquals(
+          response,
+          Status.Unauthorized,
+          "UNAUTHORIZED",
+          "Authentication is required.",
+        )
       )
     }
   }

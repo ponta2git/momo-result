@@ -14,14 +14,32 @@ object HttpAssertions:
       expectedCode: String,
       detailContains: String,
   ): IO[Unit] = response.as[Json].map { body =>
-    assertEquals(response.status, expectedStatus)
-    assertEquals(body.hcursor.get[Int]("status"), Right(expectedStatus.code))
-    assertEquals(body.hcursor.get[String]("code"), Right(expectedCode))
+    assertProblemFields(response, body, expectedStatus, expectedCode)
     assert(
       body.hcursor.get[String]("detail").exists(_.contains(detailContains)),
       s"expected problem detail to contain '$detailContains', got: ${body.noSpaces}",
     )
   }
+
+  def assertProblemDetailEquals(
+      response: Response[IO],
+      expectedStatus: Status,
+      expectedCode: String,
+      expectedDetail: String,
+  ): IO[Unit] = response.as[Json].map { body =>
+    assertProblemFields(response, body, expectedStatus, expectedCode)
+    assertEquals(body.hcursor.get[String]("detail"), Right(expectedDetail))
+  }
+
+  private def assertProblemFields(
+      response: Response[IO],
+      body: Json,
+      expectedStatus: Status,
+      expectedCode: String,
+  ): Unit =
+    assertEquals(response.status, expectedStatus)
+    assertEquals(body.hcursor.get[Int]("status"), Right(expectedStatus.code))
+    assertEquals(body.hcursor.get[String]("code"), Right(expectedCode))
 
   def jsonField[A: Decoder](body: Json, field: String): A = body.hcursor.get[A](field).fold(
     error => fail(s"expected JSON field '$field': ${error.getMessage}; body=${body.noSpaces}"),

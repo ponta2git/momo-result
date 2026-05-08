@@ -10,7 +10,12 @@ type ApiRequestOptions = {
   body?: unknown;
   formData?: FormData;
   headers?: HeadersInit;
+  idempotencyKey?: string | undefined;
   signal?: AbortSignal;
+};
+
+export type IdempotencyRequestOptions = {
+  idempotencyKey?: string | undefined;
 };
 
 export type ApiDownloadResult = {
@@ -20,6 +25,19 @@ export type ApiDownloadResult = {
 };
 
 const mutatingMethods = new Set<HttpMethod>(["POST", "PUT", "PATCH", "DELETE"]);
+const jsonIdempotencyTargets: ReadonlyArray<{
+  method: HttpMethod;
+  pathname: RegExp;
+}> = [
+  { method: "POST", pathname: /^\/api\/held-events$/ },
+  { method: "POST", pathname: /^\/api\/match-drafts$/ },
+  { method: "PATCH", pathname: /^\/api\/match-drafts\/[^/]+$/ },
+  { method: "POST", pathname: /^\/api\/matches$/ },
+  { method: "POST", pathname: /^\/api\/ocr-jobs$/ },
+  { method: "POST", pathname: /^\/api\/game-titles$/ },
+  { method: "POST", pathname: /^\/api\/map-masters$/ },
+  { method: "POST", pathname: /^\/api\/season-masters$/ },
+];
 
 export type ApiErrorLike = NormalizedApiError;
 
@@ -38,7 +56,55 @@ export function resolveDevUser(): string | undefined {
   return getBuildTimeDevUser() ?? getStoredDevUser();
 }
 
-function buildHeaders(method: HttpMethod, options: ApiRequestOptions): Headers {
+export function createIdempotencyKey(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+
+  const bytes = new Uint8Array(16);
+  if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
+    crypto.getRandomValues(bytes);
+  } else {
+    for (let index = 0; index < bytes.length; index += 1) {
+      bytes[index] = Math.floor(Math.random() * 256);
+    }
+  }
+
+  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40;
+  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return [
+    hex.slice(0, 8),
+    hex.slice(8, 12),
+    hex.slice(12, 16),
+    hex.slice(16, 20),
+    hex.slice(20),
+  ].join("-");
+}
+
+function requestPathname(path: string): string {
+  try {
+    return new URL(path, "https://momo-result.local").pathname;
+  } catch {
+    return path.split("?")[0] ?? path;
+  }
+}
+
+function shouldAttachIdempotencyKey(
+  path: string,
+  method: HttpMethod,
+  options: ApiRequestOptions,
+): boolean {
+  if (options.formData !== undefined) {
+    return false;
+  }
+  const pathname = requestPathname(path);
+  return jsonIdempotencyTargets.some(
+    (target) => target.method === method && target.pathname.test(pathname),
+  );
+}
+
+function buildHeaders(path: string, method: HttpMethod, options: ApiRequestOptions): Headers {
   const headers = new Headers(options.headers);
   const devUser = resolveDevUser();
 
@@ -61,12 +127,16 @@ function buildHeaders(method: HttpMethod, options: ApiRequestOptions): Headers {
     headers.set("Content-Type", "application/json");
   }
 
+  if (shouldAttachIdempotencyKey(path, method, options) && !headers.has("Idempotency-Key")) {
+    headers.set("Idempotency-Key", options.idempotencyKey ?? createIdempotencyKey());
+  }
+
   return headers;
 }
 
 export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
   const method = options.method ?? "GET";
-  const headers = buildHeaders(method, options);
+  const headers = buildHeaders(path, method, options);
 
   try {
     const init: RequestInit = {
@@ -103,7 +173,7 @@ export async function apiDownload(
   path: string,
   options: Pick<ApiRequestOptions, "headers" | "signal"> = {},
 ): Promise<ApiDownloadResult> {
-  const headers = buildHeaders("GET", options);
+  const headers = buildHeaders(path, "GET", options);
 
   try {
     const init: RequestInit = {

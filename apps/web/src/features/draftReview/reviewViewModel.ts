@@ -1,3 +1,4 @@
+import { fixedMembers } from "@/features/auth/members";
 import { incidentNames, parseOcrDraftPayload } from "@/features/draftReview/ocrDraftPayload";
 import type {
   IncidentName,
@@ -5,7 +6,6 @@ import type {
   OcrField,
   OcrPlayerEntry,
 } from "@/features/draftReview/ocrDraftPayload";
-import { fixedMembers } from "@/features/auth/members";
 import type { components } from "@/shared/api/generated";
 import { pipe } from "@/shared/lib/pipe";
 import type { SlotMap } from "@/shared/lib/slotMap";

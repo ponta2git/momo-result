@@ -11,11 +11,11 @@ import {
 } from "@/features/ocrCapture/api";
 import { requestedImageTypeForSlot } from "@/features/ocrCapture/captureState";
 import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
-import { pickOcrTargets, toUploadingSlot } from "@/features/ocrCapture/slotPolicy";
 import { setupSchema } from "@/features/ocrCapture/schema";
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
+import { pickOcrTargets, toUploadingSlot } from "@/features/ocrCapture/slotPolicy";
 import { parseOcrJobStatus } from "@/shared/api/enums";
-import { formatApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
+import { formatApiError, normalizeDisplayApiError } from "@/shared/api/problemDetails";
 
 export type OcrCaptureSubmitParams = {
   notify: (message: string) => void;
@@ -36,9 +36,7 @@ export type OcrCaptureMutations = {
  * 画像/設定の状態は呼び出し側 (Page) が引数で渡し、本フックは送信パイプラインと
  * matches キャッシュ無効化、ナビゲーションだけを担う。
  */
-export function useOcrCaptureMutations(
-  hints: Record<string, unknown>,
-): OcrCaptureMutations {
+export function useOcrCaptureMutations(hints: Record<string, unknown>): OcrCaptureMutations {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -64,13 +62,7 @@ export function useOcrCaptureMutations(
   });
 
   const submit = useCallback(
-    async ({
-      notify,
-      selectedGameTitle,
-      setup,
-      slots,
-      updateSlot,
-    }: OcrCaptureSubmitParams) => {
+    async ({ notify, selectedGameTitle, setup, slots, updateSlot }: OcrCaptureSubmitParams) => {
       const targetSlots = pickOcrTargets(slots);
       if (targetSlots.length === 0) {
         notify("OCRに送る画像がありません。まず撮影して分類トレイへ置いてください。");
@@ -130,7 +122,7 @@ export function useOcrCaptureMutations(
           updateSlot({
             ...uploadingSlot,
             status: "failed",
-            transportError: normalizeUnknownApiError(error),
+            transportError: normalizeDisplayApiError(error, "OCRジョブの作成に失敗しました"),
           });
         }
       }

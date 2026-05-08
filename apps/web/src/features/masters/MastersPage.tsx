@@ -30,7 +30,7 @@ import {
   normalizeName,
 } from "@/features/masters/masterValidation";
 import { buildMasterViewModel } from "@/features/masters/masterViewModel";
-import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
+import { formatApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { shouldShowQueryError } from "@/shared/api/queryErrorState";
 import { useAuth } from "@/shared/auth/useAuth";
 import { Button } from "@/shared/ui/actions/Button";
@@ -188,7 +188,7 @@ export function MastersPage() {
       );
       return { error: undefined, version: prev.version + 1 };
     } catch (error) {
-      return { ...prev, error: errorMessage(error) ?? "作品の追加に失敗しました" };
+      return { ...prev, error: formatApiError(error, "作品の追加に失敗しました") };
     }
   }, initialCreateState);
 
@@ -220,7 +220,7 @@ export function MastersPage() {
         );
         return { error: undefined, version: prev.version + 1 };
       } catch (error) {
-        return { ...prev, error: errorMessage(error) ?? "マップの追加に失敗しました" };
+        return { ...prev, error: formatApiError(error, "マップの追加に失敗しました") };
       }
     },
     initialCreateState,
@@ -256,7 +256,7 @@ export function MastersPage() {
       );
       return { error: undefined, version: prev.version + 1 };
     } catch (error) {
-      return { ...prev, error: errorMessage(error) ?? "シーズンの追加に失敗しました" };
+      return { ...prev, error: formatApiError(error, "シーズンの追加に失敗しました") };
     }
   }, initialCreateState);
 

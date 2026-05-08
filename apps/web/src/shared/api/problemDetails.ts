@@ -11,6 +11,8 @@ export type NormalizedApiError = {
   problem?: ProblemDetails;
 };
 
+const idempotencyConflictMessage = "内部エラーが発生しました。ページを再読み込みしてください。";
+
 function isProblemDetails(value: unknown): value is ProblemDetails {
   if (!value || typeof value !== "object") {
     return false;
@@ -64,6 +66,36 @@ export function normalizeUnknownApiError(error: unknown): NormalizedApiError {
   };
 }
 
+export function isIdempotencyConflict(error: NormalizedApiError): boolean {
+  return error.code === "IDEMPOTENCY_CONFLICT";
+}
+
+function logIdempotencyConflict(error: NormalizedApiError): void {
+  // oxlint-disable-next-line no-console -- API contract asks us to keep this client-logic signal out of UI but visible in logs.
+  console.warn("Idempotency-Key conflict", {
+    code: error.code,
+    detail: error.detail,
+    status: error.status,
+    title: error.title,
+  });
+}
+
+export function normalizeDisplayApiError(
+  error: unknown,
+  fallbackTitle = "API request failed",
+): NormalizedApiError {
+  const normalized = normalizeUnknownApiError(error);
+  if (isIdempotencyConflict(normalized)) {
+    logIdempotencyConflict(normalized);
+    return {
+      ...normalized,
+      detail: idempotencyConflictMessage,
+      title: fallbackTitle,
+    };
+  }
+  return normalized;
+}
+
 /**
  * 任意の未処理エラーを UI に表示するメッセージへ純関数として変換する。
  *
@@ -71,6 +103,6 @@ export function normalizeUnknownApiError(error: unknown): NormalizedApiError {
  * `normalizeUnknownApiError(...).detail || ... || "..."` の重複を解消する。
  */
 export function formatApiError(error: unknown, fallback: string): string {
-  const normalized = normalizeUnknownApiError(error);
+  const normalized = normalizeDisplayApiError(error, fallback);
   return normalized.detail || normalized.title || fallback;
 }

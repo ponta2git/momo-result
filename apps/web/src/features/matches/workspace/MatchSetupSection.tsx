@@ -1,6 +1,6 @@
-import type { HeldEventResponse } from "@/shared/api/heldEvents";
-import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
 import { fixedMembers } from "@/features/auth/members";
+import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
+import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import type {
   GameTitleListResponse,
   MapMasterListResponse,

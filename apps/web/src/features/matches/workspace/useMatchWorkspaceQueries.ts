@@ -6,10 +6,7 @@ import { getMatch } from "@/features/matches/api";
 import { isOcrRunning } from "@/features/matches/draftStatus";
 import { matchKeys } from "@/features/matches/queryKeys";
 import type { MatchDraftDetailResponse } from "@/features/matches/workspace/api";
-import {
-  getMatchDraftDetail,
-  listMatchDraftSourceImages,
-} from "@/features/matches/workspace/api";
+import { getMatchDraftDetail, listMatchDraftSourceImages } from "@/features/matches/workspace/api";
 import type { WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
 import {
   draftIdsFromDetail,

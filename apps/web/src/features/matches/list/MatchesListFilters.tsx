@@ -1,11 +1,11 @@
 import { useState } from "react";
 
-import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import type {
   MatchListSearch,
   MatchListSort,
   MatchListStatusFilter,
 } from "@/features/matches/list/matchListTypes";
+import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import type { GameTitleResponse, SeasonMasterResponse } from "@/shared/api/masters";
 import { Button } from "@/shared/ui/actions/Button";
 import { SegmentedControl } from "@/shared/ui/forms/SegmentedControl";

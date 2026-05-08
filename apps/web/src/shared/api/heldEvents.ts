@@ -1,4 +1,5 @@
 import { apiRequest } from "@/shared/api/client";
+import type { IdempotencyRequestOptions } from "@/shared/api/client";
 import type { components } from "@/shared/api/generated";
 
 export type HeldEventResponse = components["schemas"]["HeldEventResponse"];
@@ -13,9 +14,13 @@ export async function listHeldEvents(query = "", limit = 10): Promise<HeldEventL
   return apiRequest<HeldEventListResponse>(`/api/held-events?${params.toString()}`);
 }
 
-export async function createHeldEvent(request: CreateHeldEventRequest): Promise<HeldEventResponse> {
+export async function createHeldEvent(
+  request: CreateHeldEventRequest,
+  options: IdempotencyRequestOptions = {},
+): Promise<HeldEventResponse> {
   return apiRequest<HeldEventResponse>("/api/held-events", {
     method: "POST",
     body: request,
+    idempotencyKey: options.idempotencyKey,
   });
 }

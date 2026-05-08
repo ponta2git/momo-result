@@ -1,4 +1,5 @@
 import { apiRequest } from "@/shared/api/client";
+import type { IdempotencyRequestOptions } from "@/shared/api/client";
 import type { components } from "@/shared/api/generated";
 
 export type GameTitleResponse = components["schemas"]["GameTitleResponse"];
@@ -20,10 +21,14 @@ export async function listGameTitles(): Promise<GameTitleListResponse> {
   return apiRequest<GameTitleListResponse>("/api/game-titles");
 }
 
-export async function createGameTitle(request: CreateGameTitleRequest): Promise<GameTitleResponse> {
+export async function createGameTitle(
+  request: CreateGameTitleRequest,
+  options: IdempotencyRequestOptions = {},
+): Promise<GameTitleResponse> {
   return apiRequest<GameTitleResponse>("/api/game-titles", {
     method: "POST",
     body: request,
+    idempotencyKey: options.idempotencyKey,
   });
 }
 
@@ -34,10 +39,14 @@ export async function listMapMasters(gameTitleId?: string): Promise<MapMasterLis
   return apiRequest<MapMasterListResponse>(path);
 }
 
-export async function createMapMaster(request: CreateMapMasterRequest): Promise<MapMasterResponse> {
+export async function createMapMaster(
+  request: CreateMapMasterRequest,
+  options: IdempotencyRequestOptions = {},
+): Promise<MapMasterResponse> {
   return apiRequest<MapMasterResponse>("/api/map-masters", {
     method: "POST",
     body: request,
+    idempotencyKey: options.idempotencyKey,
   });
 }
 
@@ -50,10 +59,12 @@ export async function listSeasonMasters(gameTitleId?: string): Promise<SeasonMas
 
 export async function createSeasonMaster(
   request: CreateSeasonMasterRequest,
+  options: IdempotencyRequestOptions = {},
 ): Promise<SeasonMasterResponse> {
   return apiRequest<SeasonMasterResponse>("/api/season-masters", {
     method: "POST",
     body: request,
+    idempotencyKey: options.idempotencyKey,
   });
 }
 

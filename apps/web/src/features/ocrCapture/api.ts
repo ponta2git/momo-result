@@ -1,4 +1,5 @@
 import { apiRequest } from "@/shared/api/client";
+import type { IdempotencyRequestOptions } from "@/shared/api/client";
 import type { components } from "@/shared/api/generated";
 
 export type UploadImageResponse = components["schemas"]["UploadImageResponse"];
@@ -22,10 +23,12 @@ export async function uploadImage(file: File): Promise<UploadImageResponse> {
 
 export async function createMatchDraft(
   request: CreateMatchDraftRequest,
+  options: IdempotencyRequestOptions = {},
 ): Promise<MatchDraftResponse> {
   return apiRequest<MatchDraftResponse>("/api/match-drafts", {
     method: "POST",
     body: request,
+    idempotencyKey: options.idempotencyKey,
   });
 }
 
@@ -38,10 +41,14 @@ export async function cancelMatchDraft(draftId: string): Promise<CancelMatchDraf
   );
 }
 
-export async function createOcrJob(request: CreateOcrJobRequest): Promise<CreateOcrJobResponse> {
+export async function createOcrJob(
+  request: CreateOcrJobRequest,
+  options: IdempotencyRequestOptions = {},
+): Promise<CreateOcrJobResponse> {
   return apiRequest<CreateOcrJobResponse>("/api/ocr-jobs", {
     method: "POST",
     body: request,
+    idempotencyKey: options.idempotencyKey,
   });
 }
 

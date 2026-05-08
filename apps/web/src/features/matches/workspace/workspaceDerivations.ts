@@ -1,10 +1,10 @@
-import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
 import type { MatchDraftDetailResponse } from "@/features/matches/workspace/api";
 import type {
   MatchDraftSummary,
   MatchFormValues,
 } from "@/features/matches/workspace/matchFormTypes";
 import { slotKinds } from "@/shared/api/enums";
+import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
 import { bySlot } from "@/shared/lib/slotMap";
 import type { SlotMap } from "@/shared/lib/slotMap";
 

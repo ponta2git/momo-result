@@ -1,4 +1,5 @@
 import { apiRequest } from "@/shared/api/client";
+import type { IdempotencyRequestOptions } from "@/shared/api/client";
 import type { components } from "@/shared/api/generated";
 
 export type MatchSummaryResponse = components["schemas"]["MatchSummaryResponse"];
@@ -50,9 +51,13 @@ export async function deleteMatch(matchId: string): Promise<DeleteMatchResponse>
   });
 }
 
-export async function confirmMatch(request: ConfirmMatchRequest): Promise<ConfirmMatchResponse> {
+export async function confirmMatch(
+  request: ConfirmMatchRequest,
+  options: IdempotencyRequestOptions = {},
+): Promise<ConfirmMatchResponse> {
   return apiRequest<ConfirmMatchResponse>("/api/matches", {
     method: "POST",
     body: request,
+    idempotencyKey: options.idempotencyKey,
   });
 }

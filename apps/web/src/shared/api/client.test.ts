@@ -72,6 +72,54 @@ describe("apiRequest", () => {
     expect(headers.has("Content-Type")).toBe(false);
   });
 
+  it("adds idempotency keys only to JSON mutation endpoints that require them", async () => {
+    const fetchMock = vi.fn(async () => Response.json({ ok: true }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const idempotentRequests = [
+      { method: "POST", path: "/api/held-events" },
+      { method: "POST", path: "/api/match-drafts" },
+      { method: "PATCH", path: "/api/match-drafts/draft-1" },
+      { method: "POST", path: "/api/matches" },
+      { method: "POST", path: "/api/ocr-jobs" },
+      { method: "POST", path: "/api/game-titles" },
+      { method: "POST", path: "/api/map-masters" },
+      { method: "POST", path: "/api/season-masters" },
+    ] as const;
+
+    for (const request of idempotentRequests) {
+      await apiRequest(request.path, { method: request.method, body: { ok: true } });
+    }
+    await apiRequest("/api/uploads/images", { method: "POST", formData: new FormData() });
+    await apiRequest("/api/auth/logout", { method: "POST" });
+
+    const calls = fetchCallsOf(fetchMock);
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+    for (const [index] of idempotentRequests.entries()) {
+      const headers = requireInit(calls[index]?.[1]).headers as Headers;
+      expect(headers.get("Idempotency-Key")).toMatch(uuidPattern);
+    }
+    const uploadHeaders = requireInit(calls[idempotentRequests.length]?.[1]).headers as Headers;
+    const logoutHeaders = requireInit(calls[idempotentRequests.length + 1]?.[1]).headers as Headers;
+    expect(uploadHeaders.has("Idempotency-Key")).toBe(false);
+    expect(logoutHeaders.has("Idempotency-Key")).toBe(false);
+  });
+
+  it("uses caller-provided idempotency key for manual retries", async () => {
+    const fetchMock = vi.fn(async () => Response.json({ ok: true }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await apiRequest("/api/matches", {
+      method: "POST",
+      body: { matchNoInEvent: 1 },
+      idempotencyKey: "submit-key-1",
+    });
+
+    const calls = fetchCallsOf(fetchMock);
+    const headers = requireInit(calls[0]?.[1]).headers as Headers;
+    expect(headers.get("Idempotency-Key")).toBe("submit-key-1");
+  });
+
   it("downloads non-JSON files with dev auth and filename metadata", async () => {
     window.localStorage.setItem("momoresult.devUser", "ponta");
     const fetchMock = vi.fn(

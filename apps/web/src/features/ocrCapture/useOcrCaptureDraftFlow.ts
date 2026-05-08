@@ -23,11 +23,7 @@ export type OcrCaptureDraftFlow = {
     notify: (message: string) => void,
   ) => void;
   handleManualRefresh: (kind: SlotKind) => void;
-  handleMoveImage: (
-    kind: SlotKind,
-    direction: -1 | 1,
-    notify: (message: string) => void,
-  ) => void;
+  handleMoveImage: (kind: SlotKind, direction: -1 | 1, notify: (message: string) => void) => void;
   handleResetAll: (notify: (message: string) => void) => void;
   setDraft: (kind: SlotKind, draft: OcrDraftResponse) => void;
   slots: CaptureSlotState[];

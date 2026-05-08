@@ -1,11 +1,11 @@
 import { useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 
+import { fixedMembers } from "@/features/auth/members";
 import type { IncidentLookupEntry, ReviewPlayer } from "@/features/draftReview/reviewViewModel";
 import { incidentColumns } from "@/features/matches/workspace/matchFormTypes";
 import type { IncidentKey, MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
 import { handleScoreGridKeydown } from "@/features/matches/workspace/scoreGrid/ScoreGridKeyboard";
-import { fixedMembers } from "@/features/auth/members";
 import { useMediaQuery } from "@/shared/lib/useMediaQuery";
 
 const confidenceThresholdHigh = 0.9;

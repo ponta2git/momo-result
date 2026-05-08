@@ -2,7 +2,10 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
 import { confirmMatch, updateMatch } from "@/features/matches/api";
-import { invalidateMatchAndDraftCaches, invalidateMatchDetailCaches } from "@/features/matches/queryKeys";
+import {
+  invalidateMatchAndDraftCaches,
+  invalidateMatchDetailCaches,
+} from "@/features/matches/queryKeys";
 import { cancelMatchDraft } from "@/features/matches/workspace/api";
 import { toUpdateMatchRequest } from "@/features/matches/workspace/matchFormToRequest";
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
@@ -29,7 +32,7 @@ export function useMatchWorkspaceMutations({
   const queryClient = useQueryClient();
 
   const confirmMutation = useMutation({
-    mutationFn: confirmMatch,
+    mutationFn: (request: Parameters<typeof confirmMatch>[0]) => confirmMatch(request),
     onSuccess: async (response) => {
       await invalidateMatchAndDraftCaches(queryClient);
       onConfirmSuccess();

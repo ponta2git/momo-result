@@ -1,20 +1,17 @@
-import { Link } from "react-router-dom";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 
+import { getOcrDraft } from "@/features/ocrCapture/api";
+import type { OcrDraftResponse } from "@/features/ocrCapture/api";
 import { CameraCapture } from "@/features/ocrCapture/CameraCapture";
 import { CaptureRail } from "@/features/ocrCapture/CaptureRail";
-import {
-  detectedKindFromResponse,
-  slotDefinitions,
-} from "@/features/ocrCapture/captureState";
+import { detectedKindFromResponse, slotDefinitions } from "@/features/ocrCapture/captureState";
 import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
 import { ImageInput } from "@/features/ocrCapture/ImageInput";
 import { defaultSetupValues } from "@/features/ocrCapture/schema";
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
 import { SetupPanel } from "@/features/ocrCapture/SetupPanel";
 import { isWorkingStatus } from "@/features/ocrCapture/slotPolicy";
-import { getOcrDraft } from "@/features/ocrCapture/api";
-import type { OcrDraftResponse } from "@/features/ocrCapture/api";
 import { useOcrCaptureDraftFlow } from "@/features/ocrCapture/useOcrCaptureDraftFlow";
 import { useOcrCaptureMutations } from "@/features/ocrCapture/useOcrCaptureMutations";
 import { useOcrCaptureQueries } from "@/features/ocrCapture/useOcrCaptureQueries";

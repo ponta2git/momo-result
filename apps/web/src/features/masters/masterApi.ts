@@ -1,3 +1,4 @@
+import type { IdempotencyRequestOptions } from "@/shared/api/client";
 import {
   createGameTitle,
   createMapMaster,
@@ -66,14 +67,23 @@ export async function fetchIncidentMasters(): Promise<IncidentMasterResponse[]> 
   return (response.items ?? []).toSorted(byIncidentOrder);
 }
 
-export function postGameTitle(request: CreateGameTitleRequest) {
-  return createGameTitle(request);
+export function postGameTitle(
+  request: CreateGameTitleRequest,
+  options: IdempotencyRequestOptions = {},
+) {
+  return createGameTitle(request, options);
 }
 
-export function postMapMaster(request: CreateMapMasterRequest) {
-  return createMapMaster(request);
+export function postMapMaster(
+  request: CreateMapMasterRequest,
+  options: IdempotencyRequestOptions = {},
+) {
+  return createMapMaster(request, options);
 }
 
-export function postSeasonMaster(request: CreateSeasonMasterRequest) {
-  return createSeasonMaster(request);
+export function postSeasonMaster(
+  request: CreateSeasonMasterRequest,
+  options: IdempotencyRequestOptions = {},
+) {
+  return createSeasonMaster(request, options);
 }

@@ -1,10 +1,10 @@
+import { fixedMembers } from "@/features/auth/members";
+import type { ConfirmMatchFormValues } from "@/features/draftReview/confirmMatchFormSchema";
 import type {
   DraftByKind,
   IncidentLookupEntry,
   ReviewPlayer,
 } from "@/features/draftReview/reviewViewModel";
-import type { ConfirmMatchFormValues } from "@/features/draftReview/confirmMatchFormSchema";
-import { fixedMembers } from "@/features/auth/members";
 
 export const incidentColumns = [
   ["destination", "目的地"],

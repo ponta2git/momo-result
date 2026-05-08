@@ -1,6 +1,6 @@
-import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import type { MatchSummaryResponse } from "@/features/matches/api";
 import type { DraftStatus } from "@/features/matches/draftStatus";
+import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import type {
   GameTitleResponse,
   MapMasterResponse,

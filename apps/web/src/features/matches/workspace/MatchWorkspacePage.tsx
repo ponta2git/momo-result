@@ -2,7 +2,6 @@ import { useMutation } from "@tanstack/react-query";
 import { useActionState, useEffect, useReducer, useState, useTransition } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
-import { createHeldEvent } from "@/shared/api/heldEvents";
 import {
   buildMasterRoute,
   createDraftReviewHandoffPayload,
@@ -35,6 +34,8 @@ import {
   currentLocalIsoMinute,
   toIsoFromLocal,
 } from "@/features/matches/workspace/workspaceDerivations";
+import { createHeldEvent } from "@/shared/api/heldEvents";
+import { formatApiError } from "@/shared/api/problemDetails";
 import { isInitialQueryLoading, shouldShowBlockingQueryError } from "@/shared/api/queryErrorState";
 import { Button } from "@/shared/ui/actions/Button";
 import { LiveRegion } from "@/shared/ui/feedback/LiveRegion";
@@ -100,7 +101,7 @@ export function MatchWorkspacePage({
   });
 
   const createEventMutation = useMutation({
-    mutationFn: createHeldEvent,
+    mutationFn: (request: Parameters<typeof createHeldEvent>[0]) => createHeldEvent(request),
     onSuccess: (event) => {
       dispatch({
         patch: {
@@ -111,6 +112,9 @@ export function MatchWorkspacePage({
         type: "patch_root",
       });
       setNotice(`開催履歴（${new Date(event.heldAt).toLocaleString()}）を作成して選択しました。`);
+    },
+    onError: (error) => {
+      setValidationMessage(formatApiError(error, "開催履歴の作成に失敗しました"));
     },
   });
 

@@ -20,23 +20,24 @@ final class PostgresOcrJobCreationRepository[F[_]: MonadCancelThrow](transactor:
       queuePayload: OcrQueuePayload,
   ): F[Unit] =
     val outbox = OcrQueueOutboxDraft.forJob(job.id, queuePayload, job.createdAt)
-    val program = for
-      _ <- PostgresOcrDrafts.alg.create(draft)
-      _ <- PostgresOcrJobs.alg.create(job)
-      _ <- attachment match
-        case None => MonadThrow[ConnectionIO].unit
-        case Some(a) => PostgresMatchDrafts.alg.attachOcrArtifacts(
-            draftId = a.draftId,
-            screenType = a.screenType,
-            sourceImageId = a.sourceImageId,
-            ocrDraftId = a.ocrDraftId,
-            updatedAt = a.updatedAt,
-          ).flatMap(attached =>
-            if attached then MonadThrow[ConnectionIO].unit
-            else MonadThrow[ConnectionIO].raiseError(
-              OcrJobCreationRepository.MatchDraftAttachFailed(a.draftId)
+    val program =
+      for
+        _ <- PostgresOcrDrafts.alg.create(draft)
+        _ <- PostgresOcrJobs.alg.create(job)
+        _ <- attachment match
+          case None => MonadThrow[ConnectionIO].unit
+          case Some(a) => PostgresMatchDrafts.alg.attachOcrArtifacts(
+              draftId = a.draftId,
+              screenType = a.screenType,
+              sourceImageId = a.sourceImageId,
+              ocrDraftId = a.ocrDraftId,
+              updatedAt = a.updatedAt,
+            ).flatMap(attached =>
+              if attached then MonadThrow[ConnectionIO].unit
+              else
+                MonadThrow[ConnectionIO]
+                  .raiseError(OcrJobCreationRepository.MatchDraftAttachFailed(a.draftId))
             )
-          )
-      _ <- PostgresOcrQueueOutbox.insertIntent(outbox)
-    yield ()
+        _ <- PostgresOcrQueueOutbox.insertIntent(outbox)
+      yield ()
     program.transact(transactor)

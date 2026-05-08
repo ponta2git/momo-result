@@ -35,8 +35,9 @@ final class InMemoryOcrJobCreationRepository[F[_]: MonadThrow](
           )
       _ <-
         if attached then MonadThrow[F].unit
-        else attachment match
-          case Some(a) =>
-            MonadThrow[F].raiseError(OcrJobCreationRepository.MatchDraftAttachFailed(a.draftId))
-          case None => MonadThrow[F].unit
+        else
+          attachment match
+            case Some(a) => MonadThrow[F]
+                .raiseError(OcrJobCreationRepository.MatchDraftAttachFailed(a.draftId))
+            case None => MonadThrow[F].unit
     yield ()

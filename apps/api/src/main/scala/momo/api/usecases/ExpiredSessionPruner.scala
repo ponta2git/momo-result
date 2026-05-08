@@ -16,11 +16,12 @@ final class ExpiredSessionPruner[F[_]: Concurrent: LoggerFactory](
 ):
   private val logger = LoggerFactory[F].getLogger
 
-  def runOnce: F[Int] = for
-    instant <- now
-    deleted <- sessions.deleteExpired(instant)
-    _ <- logger.info(s"expired_session_pruner deleted=${deleted.toString}")
-  yield deleted
+  def runOnce: F[Int] =
+    for
+      instant <- now
+      deleted <- sessions.deleteExpired(instant)
+      _ <- logger.info(s"expired_session_pruner deleted=${deleted.toString}")
+    yield deleted
 
 object ExpiredSessionPruner:
   def resource[F[_]: Concurrent: Temporal: LoggerFactory](

@@ -30,32 +30,25 @@ private[http] object HttpErrorMiddleware:
   private def problem[F[_]: Async](error: AppError): F[Response[F]] =
     val (status, body) = ProblemDetails.from(error)
     Response[F](Status.fromInt(status.code).getOrElse(Status.InternalServerError))
-      .withEntity(body.asJson)
-      .putHeaders(`Content-Type`(MediaType.application.json))
-      .pure[F]
+      .withEntity(body.asJson).putHeaders(`Content-Type`(MediaType.application.json)).pure[F]
 
   private def classify(error: Throwable): AppError =
-    if hasCause(error)(isSqlError) then
-      AppError.DependencyFailed("Database operation failed.")
-    else if hasCause(error)(isRedisError) then
-      AppError.DependencyFailed("Queue operation failed.")
-    else if hasCause(error)(isIoError) then
-      AppError.Internal("File operation failed.")
+    if hasCause(error)(isSqlError) then AppError.DependencyFailed("Database operation failed.")
+    else if hasCause(error)(isRedisError) then AppError.DependencyFailed("Queue operation failed.")
+    else if hasCause(error)(isIoError) then AppError.Internal("File operation failed.")
     else AppError.Internal("Unexpected server error.")
 
-  private def log(request: Request[?], appError: AppError, error: Throwable): Unit =
-    logger.error(
-      s"Unhandled HTTP error method=${request.method.name} path=${request.uri.path.renderString} " +
-        s"problemCode=${appError.code} errorClass=${error.getClass.getName}",
-      error,
-    )
+  private def log(request: Request[?], appError: AppError, error: Throwable): Unit = logger.error(
+    s"Unhandled HTTP error method=${request.method.name} path=${request.uri.path.renderString} " +
+      s"problemCode=${appError.code} errorClass=${error.getClass.getName}",
+    error,
+  )
 
   private def hasCause(error: Throwable)(predicate: Throwable => Boolean): Boolean =
     @tailrec
-    def loop(current: Option[Throwable]): Boolean =
-      current match
-        case None => false
-        case Some(throwable) => predicate(throwable) || loop(Option(throwable.getCause))
+    def loop(current: Option[Throwable]): Boolean = current match
+      case None => false
+      case Some(throwable) => predicate(throwable) || loop(Option(throwable.getCause))
     loop(Some(error))
 
   private def isSqlError(error: Throwable): Boolean = error match

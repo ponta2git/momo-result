@@ -19,13 +19,14 @@ final class SourceImageOrphanReaper[F[_]: Concurrent: LoggerFactory](
 ):
   private val logger = LoggerFactory[F].getLogger
 
-  def runOnce: F[Int] = for
-    instant <- now
-    threshold = instant.minusMillis(olderThan.toMillis)
-    referenced <- references.referencedImageIds
-    deleted <- imageStore.deleteOrphans(referenced, threshold)
-    _ <- logger.info(s"source_image_orphan_reaper deleted=${deleted.toString}")
-  yield deleted
+  def runOnce: F[Int] =
+    for
+      instant <- now
+      threshold = instant.minusMillis(olderThan.toMillis)
+      referenced <- references.referencedImageIds
+      deleted <- imageStore.deleteOrphans(referenced, threshold)
+      _ <- logger.info(s"source_image_orphan_reaper deleted=${deleted.toString}")
+    yield deleted
 
 object SourceImageOrphanReaper:
   def resource[F[_]: Concurrent: Temporal: LoggerFactory](

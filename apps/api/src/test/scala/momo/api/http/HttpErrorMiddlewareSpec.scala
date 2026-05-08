@@ -10,8 +10,8 @@ import momo.api.MomoCatsEffectSuite
 
 final class HttpErrorMiddlewareSpec extends MomoCatsEffectSuite:
   test("maps database exceptions to sanitized dependency ProblemDetails") {
-    val app = HttpErrorMiddleware[IO](HttpRoutes.of[IO] {
-      case _ => IO.raiseError(new SQLException("relation secret_table missing"))
+    val app = HttpErrorMiddleware[IO](HttpRoutes.of[IO] { case _ =>
+      IO.raiseError(new SQLException("relation secret_table missing"))
     }.orNotFound)
 
     for

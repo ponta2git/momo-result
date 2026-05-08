@@ -107,7 +107,9 @@ type: `feat` / `fix` / `refactor` / `test` / `chore` / `docs`
 | api format check | `sbt scalafmtCheck` | `apps/api` |
 | api lint | `sbt scalafix` | `apps/api` |
 | api test | `sbt test` | `apps/api` |
+| api DB integration | `sbt apiDbQuality` | `apps/api` |
 | api Redis integration | `sbt apiRedisQuality` | `apps/api` |
+| api full local gate | `sbt apiFullCheck` | `apps/api` |
 | ocr-worker format | `uv run ruff format --check .` | `apps/ocr-worker` |
 | ocr-worker lint | `uv run ruff check .` | `apps/ocr-worker` |
 | ocr-worker test | `uv run pytest` | `apps/ocr-worker` |
@@ -134,6 +136,8 @@ sbt apiDbQuality
 `sbt test` では `Integration` tag付きのDB-backed specを除外する。検証結果を報告するときは、通常テストとは別に `apiDbQuality` で実行したspec名を明示する。DB未起動によりintegration testがskipされた場合は、DB動作は未検証として扱う。
 
 CIのAPI workflowでは PostgreSQL service を起動し、`momo-db` をcheckoutしてmigrationを適用してから `sbt test` と `sbt apiDbQuality` を実行する。`momo-db` がprivate repositoryの場合は、読み取り権限を持つ `MOMO_DB_READ_TOKEN` secret を設定する。
+
+ローカルでCI相当のAPIゲートをまとめて確認する場合は、PostgreSQL migration適用済み・Redis起動可能な状態で `apps/api` から `sbt apiFullCheck` を実行する。
 
 ### 4.2 Redis-backed API変更時の検証
 

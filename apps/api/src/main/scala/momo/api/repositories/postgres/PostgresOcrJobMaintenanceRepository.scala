@@ -11,9 +11,8 @@ import momo.api.domain.{FailureCode, MatchDraftStatus, OcrJobStatus}
 import momo.api.repositories.OcrJobMaintenanceRepository
 import momo.api.repositories.postgres.PostgresMeta.given
 
-final class PostgresOcrJobMaintenanceRepository[F[_]: MonadCancelThrow](
-    transactor: Transactor[F]
-) extends OcrJobMaintenanceRepository[F]:
+final class PostgresOcrJobMaintenanceRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
+    extends OcrJobMaintenanceRepository[F]:
 
   override def failStaleJobs(now: Instant, staleBefore: Instant): F[Int] =
     val message = "OCR job timed out before completion."

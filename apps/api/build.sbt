@@ -13,6 +13,7 @@ addCommandAlias("apiLint", "scalafixAll --check")
 addCommandAlias("apiFix", "scalafixAll")
 addCommandAlias("apiQuality", "apiFormatCheck; apiLint; Test / compile; apiOpenApiCheck")
 addCommandAlias("apiCheck", "apiQuality; test")
+addCommandAlias("apiFullCheck", "apiCheck; apiDbQuality; apiRedisQuality")
 addCommandAlias(
   "apiRedisQuality",
   "set Test / testOptions := Seq(); " +
@@ -26,6 +27,7 @@ addCommandAlias(
     "testOnly momo.api.integration.PostgresIdempotencyRepositoryContractSpec; " +
     "testOnly momo.api.integration.PostgresOcrJobCreationRepositorySpec; " +
     "testOnly momo.api.integration.PostgresOcrJobMaintenanceRepositorySpec; " +
+    "testOnly momo.api.integration.PostgresOcrQueueOutboxRepositorySpec; " +
     "testOnly momo.api.integration.PostgresMatchesRepositorySpec; " +
     "testOnly momo.api.integration.PostgresMatchListReadModelSpec",
 )

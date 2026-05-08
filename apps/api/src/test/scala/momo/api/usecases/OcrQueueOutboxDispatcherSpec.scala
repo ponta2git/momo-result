@@ -45,8 +45,8 @@ final class OcrQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
           val _ = (id, lastError, nextAttemptAt, now)
           IO.unit
       queue = new QueueProducer[IO]:
-        override def publish(payload: OcrQueuePayload): IO[String] =
-          IO.pure(s"redis-${payload.fields("jobId")}")
+        override def publish(payload: OcrQueuePayload): IO[String] = IO
+          .pure(s"redis-${payload.fields("jobId")}")
         override def ping: IO[Unit] = IO.unit
       _ <- OcrQueueOutboxDispatcher[IO](repo, queue, OcrQueueOutboxDispatcherConfig()).runOnce
       got <- delivered.get
@@ -84,7 +84,8 @@ final class OcrQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
       _ <- OcrQueueOutboxDispatcher[IO](repo, queue, OcrQueueOutboxDispatcherConfig()).runOnce
       got <- released.get
     yield
-      assertEquals(got.map { case (id, lastError, _) => id -> lastError }, Vector(
-        "outbox-1" -> classOf[RuntimeException].getName
-      ))
+      assertEquals(
+        got.map { case (id, lastError, _) => id -> lastError },
+        Vector("outbox-1" -> classOf[RuntimeException].getName),
+      )
       assert(got.head._3.isAfter(before), s"nextAttemptAt should be after $before: ${got.head._3}")

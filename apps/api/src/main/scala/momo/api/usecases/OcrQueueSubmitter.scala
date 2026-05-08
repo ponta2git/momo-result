@@ -9,7 +9,9 @@ import org.typelevel.log4cats.LoggerFactory
 import momo.api.domain.ids.*
 import momo.api.domain.{FailureCode, OcrFailure}
 import momo.api.errors.AppError
-import momo.api.repositories.{MatchDraftsRepository, OcrJobsRepository, OcrQueuePayload, QueueProducer}
+import momo.api.repositories.{
+  MatchDraftsRepository, OcrJobsRepository, OcrQueuePayload, QueueProducer,
+}
 
 trait OcrQueueSubmitter[F[_]]:
   def submit(context: OcrQueueSubmitter.Context): F[Either[AppError, Unit]]
@@ -35,8 +37,8 @@ object OcrQueueSubmitter:
   ): OcrQueueSubmitter[F] = new OcrQueueSubmitter[F]:
     private val logger = LoggerFactory[F].getLoggerFromClass(classOf[OcrQueueSubmitter[F]])
 
-    override def submit(context: Context): F[Either[AppError, Unit]] =
-      queue.publish(context.payload).redeemWith(
+    override def submit(context: Context): F[Either[AppError, Unit]] = queue
+      .publish(context.payload).redeemWith(
         error =>
           val logOriginal = logger.error(s"OCR enqueue publish failed jobId=${context.jobId
               .value} draftId=${context.draftId.value} matchDraftId=${context.matchDraftId
@@ -52,12 +54,12 @@ object OcrQueueSubmitter:
                 case Right(_) => MonadThrow[F].unit
                 case Left(compensationError) => logger
                     .error(compensationError)(s"OCR enqueue compensation failed jobId=${context
-                        .jobId.value} draftId=${context.draftId.value}" + s" matchDraftId=${context
-                        .matchDraftId.fold("none")(_.value)} originalError=" +
-                        s"${error.getClass.getName}")
+                        .jobId.value} draftId=${context.draftId
+                        .value}" + s" matchDraftId=${context.matchDraftId
+                        .fold("none")(_.value)} originalError=" + s"${error.getClass.getName}")
               }
-          logOriginal >> compensate >>
-            AppError.DependencyFailed("Failed to enqueue OCR job.").asLeft[Unit].pure[F]
+          logOriginal >> compensate >> AppError.DependencyFailed("Failed to enqueue OCR job.")
+            .asLeft[Unit].pure[F]
         ,
         _ => ().asRight[AppError].pure[F],
       )

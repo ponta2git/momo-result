@@ -17,12 +17,13 @@ final class StaleOcrJobReaper[F[_]: Concurrent: LoggerFactory](
 ):
   private val logger = LoggerFactory[F].getLogger
 
-  def runOnce: F[Int] = for
-    instant <- now
-    staleBefore = instant.minusMillis(staleAfter.toMillis)
-    failed <- jobs.failStaleJobs(instant, staleBefore)
-    _ <- logger.info(s"stale_ocr_job_reaper failed=${failed.toString}")
-  yield failed
+  def runOnce: F[Int] =
+    for
+      instant <- now
+      staleBefore = instant.minusMillis(staleAfter.toMillis)
+      failed <- jobs.failStaleJobs(instant, staleBefore)
+      _ <- logger.info(s"stale_ocr_job_reaper failed=${failed.toString}")
+    yield failed
 
 object StaleOcrJobReaper:
   def resource[F[_]: Concurrent: Temporal: LoggerFactory](

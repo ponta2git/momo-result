@@ -40,11 +40,10 @@ object PostgresOcrQueueOutbox:
     val (id, jobId, payloadJson, attemptCount) = row
     OcrQueuePayload.fromJson(payloadJson) match
       case Right(payload) => OcrQueueOutboxRecord(id, jobId, payload, attemptCount)
-        .pure[ConnectionIO]
-      case Left(reason) => MonadThrow[ConnectionIO]
-          .raiseError(new IllegalStateException(
-            s"ocr_queue_outbox row $id has invalid stream_payload: $reason"
-          ))
+          .pure[ConnectionIO]
+      case Left(reason) => MonadThrow[ConnectionIO].raiseError(new IllegalStateException(
+          s"ocr_queue_outbox row $id has invalid stream_payload: $reason"
+        ))
 
 final class PostgresOcrQueueOutboxRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends OcrQueueOutboxRepository[F]:
@@ -54,8 +53,7 @@ final class PostgresOcrQueueOutboxRepository[F[_]: MonadCancelThrow](transactor:
       limit: Int,
       now: Instant,
       claimUntil: Instant,
-  ): F[List[OcrQueueOutboxRecord]] =
-    sql"""
+  ): F[List[OcrQueueOutboxRecord]] = sql"""
       WITH candidate AS (
         SELECT id
         FROM ocr_queue_outbox

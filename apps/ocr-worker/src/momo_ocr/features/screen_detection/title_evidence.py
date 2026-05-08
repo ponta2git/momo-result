@@ -5,9 +5,9 @@ from pathlib import Path
 from PIL import Image, ImageOps
 
 from momo_ocr.features.image_processing.geometry import Rect, Size, scale_profile_rect_to_image
+from momo_ocr.features.image_processing.preprocessing import otsu_binarize
 from momo_ocr.features.image_processing.roi import crop_roi
 from momo_ocr.features.ocr_domain.models import ScreenType
-from momo_ocr.features.ocr_results.ranked_rows import _otsu_binarize
 from momo_ocr.features.screen_detection.profiles import PROFILES
 from momo_ocr.features.text_recognition.engine import TextRecognitionEngine
 from momo_ocr.features.text_recognition.models import RecognitionField
@@ -116,7 +116,7 @@ def _title_preprocessing_variants(image: Image.Image) -> tuple[tuple[str, Image.
     grayscale = ImageOps.grayscale(image)
     return (
         ("base", image),
-        ("otsu", _otsu_binarize(image)),
+        ("otsu", otsu_binarize(image)),
         ("invert", ImageOps.invert(grayscale)),
     )
 

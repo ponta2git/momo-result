@@ -7,7 +7,7 @@ from PIL import Image
 
 from momo_ocr.features.ocr_domain.models import ScreenType
 from momo_ocr.features.ocr_results.parsing import ScreenParseContext
-from momo_ocr.features.ocr_results.ranked_rows import (
+from momo_ocr.features.ocr_results.player_aliases import (
     alias_resolver_from_member_aliases,
     extract_player_name_candidate,
 )

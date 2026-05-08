@@ -7,7 +7,7 @@ state transitions.
 from __future__ import annotations
 
 from momo_ocr.features.ocr_jobs.models import OcrJobHints
-from momo_ocr.features.ocr_results.ranked_rows import (
+from momo_ocr.features.ocr_results.player_aliases import (
     DEFAULT_STATIC_ALIASES,
     PlayerAliasResolver,
 )

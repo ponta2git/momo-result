@@ -9,7 +9,6 @@ production runner is responsible for, independently of any real transport.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -33,8 +32,8 @@ from momo_ocr.features.ocr_jobs.models import (
 from momo_ocr.features.ocr_jobs.queue_contract import parse_job_message, to_stream_payload
 from momo_ocr.features.ocr_jobs.repository import InMemoryOcrJobRepository
 from momo_ocr.features.ocr_jobs.result_writer import InMemoryOcrResultWriter
-from momo_ocr.features.ocr_jobs.runner import JobRunnerDependencies, run_one_job
-from momo_ocr.features.ocr_results.ranked_rows import _normalize_name_for_match
+from momo_ocr.features.ocr_jobs.runner import AnalyzeImageFn, JobRunnerDependencies, run_one_job
+from momo_ocr.features.ocr_results.player_aliases import _normalize_name_for_match
 from momo_ocr.features.standalone_analysis.report import AnalysisResult
 from momo_ocr.shared.errors import FailureCode, OcrError
 
@@ -135,7 +134,7 @@ def _make_deps(
     repository: InMemoryOcrJobRepository,
     result_writer: InMemoryOcrResultWriter,
     cancellation: CancellationChecker,
-    analyze: Callable[..., AnalysisResult],
+    analyze: AnalyzeImageFn,
 ) -> JobRunnerDependencies:
     return JobRunnerDependencies(
         consumer=consumer,
@@ -387,11 +386,11 @@ def test_hints_are_merged_into_alias_resolver_passed_to_analyze() -> None:
     assert captured["layout_family_hint"] == "reiwa"
     resolver = captured["alias_resolver"]
     # The resolver normalizes the alias surface but expects the input text to
-    # already be normalized (callers in ``ranked_rows`` do that step). Mirror
+    # already be normalized (callers in ``player_aliases`` do that step). Mirror
     # that here so the substring match runs against comparable forms.
     match = resolver.resolve(_normalize_name_for_match("PONTAプレイヤー"))
     assert match is not None
-    assert match.canonical_name == "PONTAプレイヤー"
+    assert match.display_name == "PONTAプレイヤー"
     assert match.member_id == "ぽんた社長"
 
 

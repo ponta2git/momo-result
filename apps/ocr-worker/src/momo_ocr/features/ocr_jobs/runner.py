@@ -17,8 +17,9 @@ from __future__ import annotations
 
 import logging
 import time
-from collections.abc import Callable
 from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Protocol
 
 from momo_ocr.features.ocr_jobs.cancellation import CancellationChecker
 from momo_ocr.features.ocr_jobs.consumer import OcrJobConsumer
@@ -28,6 +29,7 @@ from momo_ocr.features.ocr_jobs.models import OcrJobStatus
 from momo_ocr.features.ocr_jobs.pipeline import run_pipeline
 from momo_ocr.features.ocr_jobs.repository import OcrJobRepository
 from momo_ocr.features.ocr_jobs.result_writer import OcrResultWriter
+from momo_ocr.features.ocr_results.player_aliases import PlayerAliasResolver
 from momo_ocr.features.standalone_analysis.analyze_image import analyze_image
 from momo_ocr.features.standalone_analysis.report import AnalysisResult
 from momo_ocr.features.text_recognition.engine import (
@@ -39,7 +41,19 @@ from momo_ocr.shared.errors import FailureCode, OcrError, OcrFailure
 logger = logging.getLogger(__name__)
 
 
-AnalyzeImageFn = Callable[..., AnalysisResult]
+class AnalyzeImageFn(Protocol):
+    def __call__(  # noqa: PLR0913 - mirrors the analyzer boundary explicitly.
+        self,
+        *,
+        image_path: Path,
+        requested_screen_type: str,
+        debug_dir: Path | None,
+        include_raw_text: bool,
+        text_engine: TextRecognitionEngine | None = None,
+        layout_family_hint: str | None = None,
+        alias_resolver: PlayerAliasResolver | None = None,
+    ) -> AnalysisResult:
+        raise NotImplementedError
 
 
 @dataclass(frozen=True)

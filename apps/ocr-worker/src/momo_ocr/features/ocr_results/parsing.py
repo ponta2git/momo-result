@@ -13,7 +13,7 @@ from momo_ocr.features.ocr_domain.models import (
     WarningCode,
     WarningSeverity,
 )
-from momo_ocr.features.ocr_results.ranked_rows import (
+from momo_ocr.features.ocr_results.player_aliases import (
     DEFAULT_ALIAS_RESOLVER,
     PlayerAliasResolver,
 )

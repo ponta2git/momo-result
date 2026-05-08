@@ -14,12 +14,14 @@ from momo_ocr.features.ocr_domain.models import (
     WarningCode,
 )
 from momo_ocr.features.ocr_results.parsing import ScreenParseContext
-from momo_ocr.features.ocr_results.ranked_rows import (
+from momo_ocr.features.ocr_results.player_aliases import (
     ExtractedPlayerIdentity,
     extract_player_identity,
+)
+from momo_ocr.features.ocr_results.ranked_row_debug import save_debug_ranked_row
+from momo_ocr.features.ocr_results.ranked_row_ocr import (
     prepare_ranked_row_image,
     recognize_ranked_row_text,
-    save_debug_ranked_row,
 )
 from momo_ocr.features.player_order.detector import apply_player_order_to_ranked_players
 from momo_ocr.features.temp_images.validation import open_decoded_image

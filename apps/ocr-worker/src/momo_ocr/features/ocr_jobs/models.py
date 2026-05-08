@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -54,6 +55,18 @@ class PulledJob:
 
     message: OcrJobMessage
     delivery_tag: str
+
+
+@dataclass(frozen=True)
+class MalformedPulledJob:
+    """A queue delivery whose payload failed the worker/API contract parser."""
+
+    delivery_tag: str
+    raw_fields: Mapping[str, str]
+    failure: OcrFailure
+
+
+OcrQueueDelivery = PulledJob | MalformedPulledJob
 
 
 @dataclass(frozen=True)

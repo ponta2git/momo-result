@@ -159,17 +159,16 @@ def _persist_analysis_result(
         return OcrJobStatus.FAILED
 
     payload = attach_warnings_to_payload(analysis.result, analysis.warnings)
-    deps.result_writer.persist(
-        OcrResultRecord(
-            job_id=message.job_id,
-            draft_id=message.draft_id,
-            payload=payload,
-            warnings=tuple(analysis.warnings),
-            timings_ms=dict(analysis.timings_ms),
-        )
+    result_record = OcrResultRecord(
+        job_id=message.job_id,
+        draft_id=message.draft_id,
+        payload=payload,
+        warnings=tuple(analysis.warnings),
+        timings_ms=dict(analysis.timings_ms),
     )
-    deps.repository.complete(
+    deps.repository.complete_success(
         message.job_id,
+        result_record,
         OcrJobExecutionResult(
             status=OcrJobStatus.SUCCEEDED,
             draft_payload=payload,

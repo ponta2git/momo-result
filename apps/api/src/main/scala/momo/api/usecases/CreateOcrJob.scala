@@ -91,15 +91,14 @@ final class CreateOcrJob[F[_]: MonadThrow: LoggerFactory](
         // Logged fields are restricted to identifiers (jobId / draftId / matchDraftId) and the
         // throwable. We never log image bytes, OAuth tokens, session IDs, CSRF tokens, or AppError
         // detail strings here (they may carry user-facing copy that does not belong in error logs).
-        val compensate =
-          (jobs.markFailed(jobId, queueFailure(error), createdAt) >> markDraftFailure).attempt
-            .flatMap {
-              case Right(_) => MonadThrow[F].unit
-              case Left(compensationError) => logger
-                  .error(compensationError)(s"OCR enqueue compensation failed jobId=${jobId
-                      .value} draftId=${draftId.value}" + s" matchDraftId=${command.matchDraftId
-                      .fold("none")(_.value)} originalError=" + s"${error.getClass.getName}")
-            }
+        val compensate = (jobs.markFailed(jobId, queueFailure, createdAt) >> markDraftFailure)
+          .attempt.flatMap {
+            case Right(_) => MonadThrow[F].unit
+            case Left(compensationError) => logger
+                .error(compensationError)(s"OCR enqueue compensation failed jobId=${jobId
+                    .value} draftId=${draftId.value}" + s" matchDraftId=${command.matchDraftId
+                    .fold("none")(_.value)} originalError=" + s"${error.getClass.getName}")
+          }
         compensate >> AppError.Internal("Failed to enqueue OCR job.").asLeft[CreatedOcrJob].pure[F]
       ,
       _ => CreatedOcrJob(job, draft, payload).asRight[AppError].pure[F],
@@ -169,9 +168,9 @@ object CreateOcrJob:
     requestId = requestId,
   )
 
-  private def queueFailure(error: Throwable): OcrFailure = OcrFailure(
+  private val queueFailure: OcrFailure = OcrFailure(
     code = FailureCode.QueueFailure,
-    message = s"Failed to enqueue OCR job: ${error.getMessage}",
+    message = "Failed to enqueue OCR job.",
     retryable = false,
     userAction = Some("運用に連絡してください"),
   )

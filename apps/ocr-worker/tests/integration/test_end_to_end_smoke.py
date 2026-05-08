@@ -18,7 +18,6 @@ from momo_ocr.features.ocr_jobs.consumer import RedisOcrJobConsumer
 from momo_ocr.features.ocr_jobs.models import OcrJobHints, OcrJobMessage, OcrJobStatus
 from momo_ocr.features.ocr_jobs.queue_contract import to_stream_payload
 from momo_ocr.features.ocr_jobs.repository import PostgresOcrJobRepository
-from momo_ocr.features.ocr_jobs.result_writer import PostgresOcrResultWriter
 from momo_ocr.features.ocr_jobs.runner import JobRunnerDependencies, run_one_job
 from momo_ocr.features.standalone_analysis.report import AnalysisResult
 
@@ -80,7 +79,6 @@ def test_redis_to_worker_to_postgres_smoke() -> None:
             deps = JobRunnerDependencies(
                 consumer=consumer,
                 repository=repository,
-                result_writer=PostgresOcrResultWriter(pool),
                 cancellation=RepositoryCancellationChecker(repository),
                 worker_id="worker-it",
                 analyze=_fake_success_analysis,

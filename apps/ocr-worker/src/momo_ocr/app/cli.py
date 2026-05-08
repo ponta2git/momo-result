@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 import signal
 import sys
@@ -10,6 +11,7 @@ from pathlib import Path
 
 from momo_ocr.app.composition import production_worker_runtime
 from momo_ocr.app.config import load_worker_config
+from momo_ocr.app.logging import configure_logging
 from momo_ocr.app.worker_process import WorkerLoopConfig, run_worker_process
 from momo_ocr.features.standalone_analysis.analyze_image import analyze_image
 from momo_ocr.features.standalone_analysis.batch_calibration import (
@@ -30,6 +32,7 @@ SCREEN_TYPE_CHOICES = ("auto", "total_assets", "revenue", "incident_log")
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    configure_logging(_log_level_from_env())
     parser = argparse.ArgumentParser(prog="momo-ocr")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -194,3 +197,9 @@ def _resolve_batch_debug_dir(explicit: Path | None) -> Path | None:
     if not base:
         return None
     return Path(base).expanduser()
+
+
+def _log_level_from_env() -> int:
+    raw = os.environ.get("MOMO_LOG_LEVEL", "INFO").strip().upper()
+    level = logging.getLevelName(raw)
+    return level if isinstance(level, int) else logging.INFO

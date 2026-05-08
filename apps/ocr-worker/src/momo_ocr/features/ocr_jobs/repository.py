@@ -17,6 +17,7 @@ from momo_ocr.features.ocr_jobs.models import (
     OcrJobRecord,
     OcrJobStatus,
 )
+from momo_ocr.features.ocr_jobs.result_writer import OcrResultRecord, persist_result_record
 from momo_ocr.shared.errors import FailureCode, OcrError, OcrFailure
 
 _SELECT_JOB_FOR_UPDATE = """
@@ -41,6 +42,14 @@ class OcrJobRepository(Protocol):
     def complete(self, job_id: str, result: OcrJobExecutionResult) -> None:
         raise NotImplementedError
 
+    def complete_success(
+        self,
+        job_id: str,
+        result_record: OcrResultRecord,
+        result: OcrJobExecutionResult,
+    ) -> None:
+        raise NotImplementedError
+
     def transition_to_failed_terminal(self, job_id: str, result: OcrJobExecutionResult) -> None:
         raise NotImplementedError
 
@@ -59,6 +68,7 @@ class InMemoryOcrJobRepository:
 
     records: dict[str, OcrJobRecord] = field(default_factory=dict)
     completions: dict[str, OcrJobExecutionResult] = field(default_factory=dict)
+    result_records: dict[str, OcrResultRecord] = field(default_factory=dict)
     _lock: Lock = field(default_factory=Lock, repr=False, compare=False)
 
     def seed(self, record: OcrJobRecord) -> None:
@@ -87,6 +97,16 @@ class InMemoryOcrJobRepository:
 
     def complete(self, job_id: str, result: OcrJobExecutionResult) -> None:
         self._terminal_transition(job_id, result, expected=OcrJobStatus.SUCCEEDED)
+
+    def complete_success(
+        self,
+        job_id: str,
+        result_record: OcrResultRecord,
+        result: OcrJobExecutionResult,
+    ) -> None:
+        self._terminal_transition(job_id, result, expected=OcrJobStatus.SUCCEEDED)
+        with self._lock:
+            self.result_records[result_record.job_id] = result_record
 
     def transition_to_failed_terminal(self, job_id: str, result: OcrJobExecutionResult) -> None:
         if result.status not in {OcrJobStatus.FAILED, OcrJobStatus.CANCELLED}:
@@ -184,6 +204,19 @@ class PostgresOcrJobRepository:
     def complete(self, job_id: str, result: OcrJobExecutionResult) -> None:
         self._terminal_transition(job_id, result, expected=OcrJobStatus.SUCCEEDED)
 
+    def complete_success(
+        self,
+        job_id: str,
+        result_record: OcrResultRecord,
+        result: OcrJobExecutionResult,
+    ) -> None:
+        self._terminal_transition(
+            job_id,
+            result,
+            expected=OcrJobStatus.SUCCEEDED,
+            result_record=result_record,
+        )
+
     def transition_to_failed_terminal(self, job_id: str, result: OcrJobExecutionResult) -> None:
         if result.status not in {OcrJobStatus.FAILED, OcrJobStatus.CANCELLED}:
             raise OcrError(
@@ -202,6 +235,7 @@ class PostgresOcrJobRepository:
         result: OcrJobExecutionResult,
         *,
         expected: OcrJobStatus,
+        result_record: OcrResultRecord | None = None,
     ) -> None:
         detected_screen_type = (
             result.draft_payload.detected_screen_type.value
@@ -219,6 +253,8 @@ class PostgresOcrJobRepository:
                     retryable=True,
                 )
             ensure_transition_allowed(current, expected)
+            if result_record is not None:
+                persist_result_record(conn, result_record)
             updated = conn.execute(
                 """
                 UPDATE ocr_jobs SET

@@ -113,6 +113,43 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
     }
   }
 
+  test("stores sanitized failure message when queue.publish fails") {
+    val queueError = new RuntimeException("redis://secret-host/boom")
+    val failingQueue: QueueProducer[IO] = new QueueProducer[IO]:
+      override def publish(payload: OcrQueuePayload): IO[Unit] = IO.raiseError(queueError)
+
+    tempDirectory("momo-api-create-job-sanitized-failure").use { dir =>
+      for
+        imageStore <- IO.pure(LocalFsImageStore[IO](dir))
+        image <- imageStore.save(Some("sample.png"), Some("image/png"), pngBytes)
+          .flatMap(fromAppEither)
+        jobs <- InMemoryOcrJobsRepository.create[IO]
+        drafts <- InMemoryOcrDraftsRepository.create[IO]
+        matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
+        ids <- IO.ref(List("job-1", "draft-1"))
+        usecase = CreateOcrJob[IO](
+          imageStore = imageStore,
+          jobs = jobs,
+          drafts = drafts,
+          matchDrafts = matchDrafts,
+          queue = failingQueue,
+          now = IO.pure(Instant.parse("2026-04-29T11:40:16Z")),
+          nextId = ids.modify {
+            case head :: tail => tail -> head
+            case Nil => Nil -> "unexpected"
+          },
+          requestIdLookup = IO.pure(None),
+        )
+        _ <- usecase
+          .run(CreateOcrJobCommand(image.imageId, "total_assets", OcrJobHints.empty, None))
+        found <- jobs.find(OcrJobId("job-1"))
+      yield
+        val failure = found.flatMap(_.failure).getOrElse(fail("expected failed job"))
+        assertEquals(failure.message, "Failed to enqueue OCR job.")
+        assert(!failure.message.contains("secret-host"))
+    }
+  }
+
   test("logs compensation failure exactly once when both queue.publish and markFailed fail") {
     val queueError = new RuntimeException("boom-queue")
     val markFailedError = new RuntimeException("boom-markFailed")

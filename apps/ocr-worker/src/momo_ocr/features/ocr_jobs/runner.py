@@ -25,10 +25,9 @@ from momo_ocr.features.ocr_jobs.cancellation import CancellationChecker
 from momo_ocr.features.ocr_jobs.consumer import OcrJobConsumer
 from momo_ocr.features.ocr_jobs.delivery_handler import ack_delivery
 from momo_ocr.features.ocr_jobs.failure_recorder import record_terminal_failure
-from momo_ocr.features.ocr_jobs.models import OcrJobStatus
+from momo_ocr.features.ocr_jobs.models import MalformedPulledJob, OcrJobStatus
 from momo_ocr.features.ocr_jobs.pipeline import run_pipeline
 from momo_ocr.features.ocr_jobs.repository import OcrJobRepository
-from momo_ocr.features.ocr_jobs.result_writer import OcrResultWriter
 from momo_ocr.features.ocr_results.player_aliases import PlayerAliasResolver
 from momo_ocr.features.standalone_analysis.analyze_image import analyze_image
 from momo_ocr.features.standalone_analysis.report import AnalysisResult
@@ -74,7 +73,6 @@ class JobRunnerDependencies:
 
     consumer: OcrJobConsumer
     repository: OcrJobRepository
-    result_writer: OcrResultWriter
     cancellation: CancellationChecker
     worker_id: str
     analyze: AnalyzeImageFn = analyze_image
@@ -104,30 +102,63 @@ def run_one_job(deps: JobRunnerDependencies) -> JobRunOutcome:
     if delivery is None:
         return JobRunOutcome(pulled=False, job_id=None, status=None, duration_ms=0.0)
 
+    if isinstance(delivery, MalformedPulledJob):
+        return _handle_malformed_delivery(deps, delivery)
+
     job_id = delivery.message.job_id
     log_extra: dict[str, str] = {"job_id": job_id}
     if delivery.message.request_id:
         log_extra["request_id"] = delivery.message.request_id
     started = time.monotonic()
+    should_ack = True
     try:
         outcome_status = run_pipeline(deps, delivery)
     except OcrError as exc:
-        record_terminal_failure(deps, delivery.message, exc.to_failure())
+        should_ack = record_terminal_failure(deps, delivery.message.job_id, exc.to_failure())
         outcome_status = OcrJobStatus.FAILED
-    except Exception as exc:
+    except Exception:
         logger.exception("Unhandled error in OCR job runner", extra=log_extra)
         failure = OcrFailure(
             code=FailureCode.PARSER_FAILED,
-            message=f"Unexpected runner error: {type(exc).__name__}: {exc}",
+            message="Unexpected OCR worker error.",
             retryable=False,
         )
-        record_terminal_failure(deps, delivery.message, failure)
+        should_ack = record_terminal_failure(deps, delivery.message.job_id, failure)
         outcome_status = OcrJobStatus.FAILED
-    ack_delivery(deps, delivery)
+    if should_ack:
+        ack_delivery(deps, delivery)
+    else:
+        logger.error(
+            "OCR job did not reach a persisted terminal state; leaving delivery pending",
+            extra={"job_id": job_id, "delivery_tag": delivery.delivery_tag},
+        )
     duration_ms = (time.monotonic() - started) * 1000.0
     return JobRunOutcome(
         pulled=True,
         job_id=job_id,
         status=outcome_status,
         duration_ms=duration_ms,
+    )
+
+
+def _handle_malformed_delivery(
+    deps: JobRunnerDependencies,
+    delivery: MalformedPulledJob,
+) -> JobRunOutcome:
+    job_id = delivery.raw_fields.get("jobId")
+    should_ack = True
+    if job_id:
+        should_ack = record_terminal_failure(deps, job_id, delivery.failure)
+    if should_ack:
+        ack_delivery(deps, delivery)
+    else:
+        logger.error(
+            "Malformed OCR queue delivery could not be persisted as failed; leaving pending",
+            extra={"job_id": job_id, "delivery_tag": delivery.delivery_tag},
+        )
+    return JobRunOutcome(
+        pulled=True,
+        job_id=job_id,
+        status=OcrJobStatus.FAILED,
+        duration_ms=0.0,
     )

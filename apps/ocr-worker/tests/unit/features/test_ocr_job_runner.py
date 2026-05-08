@@ -23,6 +23,7 @@ from momo_ocr.features.ocr_domain.models import (
 from momo_ocr.features.ocr_jobs.cancellation import CancellationChecker, InMemoryCancellationChecker
 from momo_ocr.features.ocr_jobs.consumer import InMemoryOcrJobConsumer
 from momo_ocr.features.ocr_jobs.models import (
+    OcrJobExecutionResult,
     OcrJobHints,
     OcrJobMessage,
     OcrJobRecord,
@@ -31,7 +32,6 @@ from momo_ocr.features.ocr_jobs.models import (
 )
 from momo_ocr.features.ocr_jobs.queue_contract import parse_job_message, to_stream_payload
 from momo_ocr.features.ocr_jobs.repository import InMemoryOcrJobRepository
-from momo_ocr.features.ocr_jobs.result_writer import InMemoryOcrResultWriter
 from momo_ocr.features.ocr_jobs.runner import AnalyzeImageFn, JobRunnerDependencies, run_one_job
 from momo_ocr.features.ocr_results.player_aliases import _normalize_name_for_match
 from momo_ocr.features.standalone_analysis.report import AnalysisResult
@@ -132,14 +132,12 @@ def _make_deps(
     *,
     consumer: InMemoryOcrJobConsumer,
     repository: InMemoryOcrJobRepository,
-    result_writer: InMemoryOcrResultWriter,
     cancellation: CancellationChecker,
     analyze: AnalyzeImageFn,
 ) -> JobRunnerDependencies:
     return JobRunnerDependencies(
         consumer=consumer,
         repository=repository,
-        result_writer=result_writer,
         cancellation=cancellation,
         worker_id=WORKER_ID,
         analyze=analyze,
@@ -152,7 +150,6 @@ def test_run_one_job_returns_not_pulled_when_queue_is_empty() -> None:
     deps = _make_deps(
         consumer=consumer,
         repository=repository,
-        result_writer=InMemoryOcrResultWriter(),
         cancellation=InMemoryCancellationChecker(),
         analyze=lambda **_: pytest.fail("analyze should not be called when queue is empty"),
     )
@@ -167,7 +164,6 @@ def test_run_one_job_returns_not_pulled_when_queue_is_empty() -> None:
 def test_happy_path_persists_result_and_acks() -> None:
     consumer = InMemoryOcrJobConsumer()
     repository = InMemoryOcrJobRepository()
-    result_writer = InMemoryOcrResultWriter()
     payload = _make_payload(image_path=Path("/tmp/momo/abc.jpg"))
     _seed_record(repository, payload)
     consumer.enqueue(payload, delivery_tag="d1")
@@ -175,7 +171,6 @@ def test_happy_path_persists_result_and_acks() -> None:
     deps = _make_deps(
         consumer=consumer,
         repository=repository,
-        result_writer=result_writer,
         cancellation=InMemoryCancellationChecker(),
         analyze=lambda **_: _success_analysis(),
     )
@@ -188,15 +183,14 @@ def test_happy_path_persists_result_and_acks() -> None:
     assert record.status is OcrJobStatus.SUCCEEDED
     assert record.worker_id == WORKER_ID
     assert record.attempt_count == 1
-    assert "job-1" in result_writer.records
-    assert result_writer.records["job-1"].draft_id == "draft-1"
+    assert "job-1" in repository.result_records
+    assert repository.result_records["job-1"].draft_id == "draft-1"
     assert consumer.acked == ["d1"]
 
 
 def test_failure_analysis_records_failed_terminal_status_with_metadata() -> None:
     consumer = InMemoryOcrJobConsumer()
     repository = InMemoryOcrJobRepository()
-    result_writer = InMemoryOcrResultWriter()
 
     payload = _make_payload()
     _seed_record(repository, payload)
@@ -205,7 +199,6 @@ def test_failure_analysis_records_failed_terminal_status_with_metadata() -> None
     deps = _make_deps(
         consumer=consumer,
         repository=repository,
-        result_writer=result_writer,
         cancellation=InMemoryCancellationChecker(),
         analyze=lambda **_: _failure_analysis(),
     )
@@ -219,14 +212,13 @@ def test_failure_analysis_records_failed_terminal_status_with_metadata() -> None
     assert record.failure.code is FailureCode.PARSER_FAILED
     assert record.failure.retryable is True
     assert record.failure.user_action == "Re-upload a clearer screenshot."
-    assert "job-1" not in result_writer.records
+    assert "job-1" not in repository.result_records
     assert consumer.acked == ["d1"]
 
 
 def test_unexpected_exception_in_analyze_is_converted_to_failed_terminal() -> None:
     consumer = InMemoryOcrJobConsumer()
     repository = InMemoryOcrJobRepository()
-    result_writer = InMemoryOcrResultWriter()
 
     payload = _make_payload()
     _seed_record(repository, payload)
@@ -239,7 +231,6 @@ def test_unexpected_exception_in_analyze_is_converted_to_failed_terminal() -> No
     deps = _make_deps(
         consumer=consumer,
         repository=repository,
-        result_writer=result_writer,
         cancellation=InMemoryCancellationChecker(),
         analyze=boom,
     )
@@ -273,7 +264,6 @@ def test_ocr_error_in_analyze_is_recorded_with_its_failure_metadata() -> None:
     deps = _make_deps(
         consumer=consumer,
         repository=repository,
-        result_writer=InMemoryOcrResultWriter(),
         cancellation=InMemoryCancellationChecker(),
         analyze=raise_ocr_error,
     )
@@ -288,6 +278,83 @@ def test_ocr_error_in_analyze_is_recorded_with_its_failure_metadata() -> None:
     assert record.failure.user_action == "re-upload"
 
 
+class _FailingTerminalRepository(InMemoryOcrJobRepository):
+    def transition_to_failed_terminal(self, job_id: str, result: OcrJobExecutionResult) -> None:
+        del job_id, result
+        raise OcrError(FailureCode.DB_WRITE_FAILED, "db unavailable", retryable=True)
+
+
+def test_terminal_failure_write_failure_leaves_delivery_pending() -> None:
+    consumer = InMemoryOcrJobConsumer()
+    repository = _FailingTerminalRepository()
+    payload = _make_payload()
+    _seed_record(repository, payload)
+    consumer.enqueue(payload, delivery_tag="d1")
+
+    def raise_ocr_error(**_: Any) -> AnalysisResult:  # noqa: ANN401
+        raise OcrError(FailureCode.PARSER_FAILED, "parser failed")
+
+    deps = _make_deps(
+        consumer=consumer,
+        repository=repository,
+        cancellation=InMemoryCancellationChecker(),
+        analyze=raise_ocr_error,
+    )
+
+    outcome = run_one_job(deps)
+
+    assert outcome.status is OcrJobStatus.FAILED
+    assert consumer.acked == []
+
+
+def test_malformed_queue_payload_with_job_id_is_failed_before_ack() -> None:
+    consumer = InMemoryOcrJobConsumer()
+    repository = InMemoryOcrJobRepository()
+    payload = _make_payload()
+    _seed_record(repository, payload)
+    malformed = dict(payload)
+    del malformed["draftId"]
+    consumer.enqueue(malformed, delivery_tag="bad-1")
+
+    deps = _make_deps(
+        consumer=consumer,
+        repository=repository,
+        cancellation=InMemoryCancellationChecker(),
+        analyze=lambda **_: pytest.fail("analyze should not run for malformed queue payloads"),
+    )
+
+    outcome = run_one_job(deps)
+
+    assert outcome.status is OcrJobStatus.FAILED
+    record = repository.records["job-1"]
+    assert record.status is OcrJobStatus.FAILED
+    assert record.failure is not None
+    assert record.failure.code is FailureCode.QUEUE_FAILURE
+    assert consumer.acked == ["bad-1"]
+
+
+def test_malformed_queue_payload_write_failure_leaves_delivery_pending() -> None:
+    consumer = InMemoryOcrJobConsumer()
+    repository = _FailingTerminalRepository()
+    payload = _make_payload()
+    _seed_record(repository, payload)
+    malformed = dict(payload)
+    del malformed["draftId"]
+    consumer.enqueue(malformed, delivery_tag="bad-1")
+
+    deps = _make_deps(
+        consumer=consumer,
+        repository=repository,
+        cancellation=InMemoryCancellationChecker(),
+        analyze=lambda **_: pytest.fail("analyze should not run for malformed queue payloads"),
+    )
+
+    outcome = run_one_job(deps)
+
+    assert outcome.status is OcrJobStatus.FAILED
+    assert consumer.acked == []
+
+
 def test_pre_running_cancellation_skips_analyze_and_marks_cancelled() -> None:
     consumer = InMemoryOcrJobConsumer()
     repository = InMemoryOcrJobRepository()
@@ -300,7 +367,6 @@ def test_pre_running_cancellation_skips_analyze_and_marks_cancelled() -> None:
     deps = _make_deps(
         consumer=consumer,
         repository=repository,
-        result_writer=InMemoryOcrResultWriter(),
         cancellation=cancellation,
         analyze=lambda **_: pytest.fail("analyze should not run for cancelled jobs"),
     )
@@ -323,7 +389,6 @@ def test_already_cancelled_record_is_acked_without_repository_writes() -> None:
     deps = _make_deps(
         consumer=consumer,
         repository=repository,
-        result_writer=InMemoryOcrResultWriter(),
         cancellation=InMemoryCancellationChecker(),
         analyze=lambda **_: pytest.fail("analyze should not run for terminal jobs"),
     )
@@ -345,7 +410,6 @@ def test_unknown_job_id_is_acked_and_dropped() -> None:
     deps = _make_deps(
         consumer=consumer,
         repository=repository,
-        result_writer=InMemoryOcrResultWriter(),
         cancellation=InMemoryCancellationChecker(),
         analyze=lambda **_: pytest.fail("analyze should not run for unknown jobs"),
     )
@@ -375,7 +439,6 @@ def test_hints_are_merged_into_alias_resolver_passed_to_analyze() -> None:
     deps = _make_deps(
         consumer=consumer,
         repository=repository,
-        result_writer=InMemoryOcrResultWriter(),
         cancellation=InMemoryCancellationChecker(),
         analyze=capturing_analyze,
     )
@@ -425,7 +488,6 @@ def test_post_running_cancellation_is_honoured_before_analyze() -> None:
     deps = _make_deps(
         consumer=consumer,
         repository=repository,
-        result_writer=InMemoryOcrResultWriter(),
         cancellation=cancellation,
         analyze=lambda **_: pytest.fail(
             "analyze must not run when cancellation appears post-running"
@@ -464,7 +526,6 @@ def test_ack_runs_only_after_terminal_status_is_persisted() -> None:
     deps = _make_deps(
         consumer=consumer,
         repository=repository,
-        result_writer=InMemoryOcrResultWriter(),
         cancellation=InMemoryCancellationChecker(),
         analyze=lambda **_: _success_analysis(),
     )

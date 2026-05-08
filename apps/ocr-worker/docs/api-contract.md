@@ -20,8 +20,8 @@ DBマイグレーションの正本は MVP 期間中 summit 側にある（`AGEN
 | 画像アップロード受け取り（3MB制限・形式検証）、一時パス生成 | API |
 | `ocr_jobs` 行の作成（status=`queued`）、Redis Streams への投入 | API（プロデューサ） |
 | キャンセル要求（`cancelled` への遷移要求） | API |
-| 一時画像の物理ファイル管理（書き込み）と存続保証 | API |
-| キュー消費、画像読み込み、OCR、パース、結果永続化、画像削除、ack | OCRワーカー |
+| 一時画像の物理ファイル管理（書き込み・保持・削除）と存続保証 | API |
+| キュー消費、画像読み込み、OCR、パース、結果永続化、ack | OCRワーカー |
 | 失敗の分類とユーザー向けエラーメッセージ生成 | OCRワーカー（コード） / API（表示） |
 | 結果ドラフトの編集・確定 | API |
 | `ocr_jobs.status` の最終遷移（`succeeded`/`failed`/`cancelled`） | OCRワーカー |
@@ -40,8 +40,8 @@ DBマイグレーションの正本は MVP 期間中 summit 側にある（`AGEN
 - ストリーム名: `momo:ocr:jobs`（コンシューマグループ: `momo-ocr-workers`）。MVP では同時実行数 1（直列）。
 - 投入方式: `XADD`。各メッセージは平坦な文字列フィールドのマップ。
 - ack: ワーカーが DB の終端遷移（`succeeded`/`failed`/`cancelled`）を永続化した**後にのみ** `XACK`。
-- nack: MVPでは即時nackを実装しない。ackされなかった配送は PEL（pending entries list）に残り、後続の再配送/claim 方針は `ocr-timeout-retry-dlq` で確定する。**冪等性は DB のステータス遷移で担保**するのが規約（後述）。
-- 最大配送回数 / dead-letter: MVP 未確定（`AGENTS.md` §6.3）。実測後に値を決め、本書を更新する。
+- nack: 即時nackは実装しない。ackされなかった配送は PEL（pending entries list）に残り、ワーカーが stale pending を claim して再処理または DLQ 化する。**冪等性は DB のステータス遷移で担保**する。
+- 最大配送回数 / dead-letter: `OCR_MAX_ATTEMPTS`（初期値1）を超えた pending 配送は `OCR_REDIS_DEAD_LETTER_STREAM`（初期値 `momo:ocr:jobs:dead`）へ移してから ack する。
 
 ### 2.2 ペイロードフィールド
 
@@ -144,7 +144,7 @@ queued ──► running ──► succeeded
 ### 排他
 
 - ワーカーは `get_for_update` 相当のロックでレコードを取得し、`running` 遷移と `attempt_count` インクリメントを **同一トランザクション**内で行うことを期待する。
-- 実装: `PostgresOcrJobRepository` は `SELECT ... FOR UPDATE` で現状を確認し、`running` 遷移は `UPDATE ... WHERE status = 'queued'` によって `attempt_count` インクリメントと同時にclaimする。終端遷移は `queued`/`running` のみを対象にし、終端済みジョブの二重配送は ack して破棄する。
+- 実装: `PostgresOcrJobRepository` は `SELECT ... FOR UPDATE` で現状を確認し、`running` 遷移は `UPDATE ... WHERE status = 'queued'` によって `attempt_count` インクリメントと同時にclaimする。成功時は `ocr_drafts` upsert と `ocr_jobs` 終端遷移を同一トランザクションでコミットする。終端遷移は `queued`/`running` のみを対象にし、終端済みジョブの二重配送は ack して破棄する。
 
 ---
 
@@ -219,9 +219,9 @@ queued ──► running ──► succeeded
 
 - API は `imagePath` に **ワーカーから読める絶対パス**を渡す。同一 Fly VM 内ファイルシステム共有が前提（supervisord 配下の同居プロセス）。
 - 上限 3MB / PNG・JPEG・WebP（`AGENTS.md` §6.2）。検証は API 側責務。
-- ワーカーは終端遷移後に **best-effort で削除** する（成功/失敗/キャンセル問わず）。削除失敗はジョブ失敗にしない（ログに残すのみ）。
+- ワーカーは一時画像を削除しない。OCR完了後も下書き確認・再ダウンロードで必要になるため、API 側が下書き確定またはキャンセルまで保持する。
 - VM 再起動等で画像が消えた場合、ワーカーは `TEMP_IMAGE_MISSING` で `failed` 終端させ、`retryable=false` / `user_action=「画像を再アップロードしてください」` を返す。
-- API 側は **OCR 完了前のユーザー再ダウンロード**用に画像を保持する（要求）。完了後はサーバから消去し恒久保存しない。
+- API 側は下書き確定またはキャンセル後に画像を削除する。画像はサーバーに恒久保存しない。
 
 ---
 
@@ -255,8 +255,8 @@ API はこの enum を**そのまま**保存・分岐する（不明なコード
 1. **DB 永続化が ack より先**: 終端ステータス（`succeeded`/`failed`/`cancelled`）の遷移を DB にコミットしてから `XACK` する。
 2. **未知 `jobId` は ack して破棄**: DB に行が存在しないメッセージは過去の残骸とみなして削除する。
 3. **既終端 `jobId` は ack して破棄**: 二重配送時は何もせず ack のみ行う。
-4. **画像削除は ack の前**（best-effort）: 失敗してもジョブを失敗化しない。
-5. **想定外例外**: 直接 ack せず、`PARSER_FAILED` で `failed` に終端させてから ack。これにより無限再配送ループを防ぐ。
+4. **不正メッセージは可能ならDB失敗化**: `jobId` が読める malformed delivery は `QUEUE_FAILURE` で `failed` 終端させてから ack する。DBに記録できない場合は ack せず pending に残す。
+5. **想定外例外**: 直接 ack せず、`PARSER_FAILED` で `failed` に終端させてから ack。終端遷移が失敗した場合は ack せず、pending claim / DLQ の対象にする。
 
 API 側で前提にしてよい性質:
 - `succeeded` は同一 `jobId` で**最大1回**観測される。
@@ -268,14 +268,15 @@ API 側で前提にしてよい性質:
 ## 8. レート制限・同時実行
 
 - ワーカーの同時実行数は MVP で **1ジョブ直列**（`AGENTS.md` §6.3）。
+- `OCR_WORKER_CONCURRENCY` は現時点では 1 のみ許可する。複数並列はDB/Redis接続上限とOCR CPU負荷を再評価してから有効化する。
 - API はキュー深度を制限する責任を負う（ユーザー操作からの DoS 防止）。アップロード/ログイン/CSV と同様に軽いレート制限を入れる。
-- OCR タイムアウト・最大配送回数は実測後に決定する。決定したら本書 §2.1 と §6 を更新する。
+- 本番デフォルトの OCR engine は `tesserocr`。高速化を優先する一方、Tesseract 呼び出し単位の強制終了境界は subprocess engine より弱い。`MOMO_OCR_ENGINE=subprocess` を指定した場合は `OCR_TIMEOUT_SECONDS`（初期値30秒）を Tesseract 呼び出しの hard timeout として使う。
 
 ---
 
 ## 9. ロギング・観測性
 
-- ワーカーは構造化 JSON ログを stdout に書く（`AGENTS.md` §12）。ジョブログには `jobId` / `draftId` / `workerId` / `status` / `failure_code` を含める。
+- ワーカーは構造化 JSON ログを stderr/stdout の標準ログストリームに書く。ジョブログには `job_id` / `draft_id` / `worker_id` / `status` / `failure_code` / `duration_ms` / `delivery_tag` を含める。
 - **禁止事項**: 画像内容、OCR 抽出生テキスト全文、CSRF/セッショントークン、Discord トークンをログに出さない。
 - API ログ側でも `jobId` をキーに横断検索可能な形にする（同一 `jobId` でログを束ねる前提）。
 - `duration_ms` を `ocr_jobs.duration_ms` に保存することで、API 側ダッシュボード（将来）で OCR 性能を観測できる。
@@ -311,7 +312,5 @@ API 側で実施してほしいこと:
 
 ## 12. 未確定事項（要追従）
 
-- OCR タイムアウト値・最大再配送回数（実測待ち）
-- DLQ（dead-letter queue）方針
 - API 側のキャンセル UI と再投入の UX
 - `ocr_drafts.payload_json` を OpenAPI に載せる際のフィールド命名（snake_case / camelCase）

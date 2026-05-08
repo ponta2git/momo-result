@@ -9,6 +9,7 @@ from testcontainers.core.container import DockerContainer
 from testcontainers.core.wait_strategies import ExecWaitStrategy
 
 from momo_ocr.features.ocr_jobs.consumer import RedisOcrJobConsumer
+from momo_ocr.features.ocr_jobs.models import PulledJob
 
 
 @pytest.mark.integration
@@ -48,6 +49,7 @@ def test_redis_consumer_reads_stream_delivery_from_testcontainer() -> None:
         pulled = consumer.pull()
 
         assert pulled is not None
+        assert isinstance(pulled, PulledJob)
         assert pulled.message.job_id == "job-1"
         assert pulled.delivery_tag
         consumer.ack(pulled.delivery_tag)

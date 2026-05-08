@@ -64,6 +64,10 @@ Optional OCR hints are encoded as a single `ocrHintsJson` string field so the st
 
 These values are hints only. `requestedImageType` may come from the upload slot or manual UI selection; `gameTitle`/`layoutFamily` may select parser profiles; aliases may improve name matching. The worker must still return raw OCR values, warnings, and draft data for user review instead of treating hints as authoritative results.
 
+The production worker defaults to the in-process `tesserocr` engine for throughput. Set `MOMO_OCR_ENGINE=subprocess` when a deployment needs `OCR_TIMEOUT_SECONDS` as a hard per-call process timeout boundary more than the in-process speedup.
+
+The worker reads temporary images but does not delete them. The API keeps source images until the draft is confirmed or cancelled, then applies the server-side retention cleanup policy.
+
 ## Development commands
 
 ```sh

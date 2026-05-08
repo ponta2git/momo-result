@@ -63,6 +63,12 @@ def require_production_config(config: WorkerConfig) -> None:
         joined = ", ".join(missing)
         msg = f"Missing required OCR worker config: {joined}"
         raise ValueError(msg)
+    if config.concurrency != DEFAULT_WORKER_CONCURRENCY:
+        msg = (
+            "OCR_WORKER_CONCURRENCY greater than 1 is not supported by this worker process yet; "
+            "run multiple worker processes only after DB/Redis capacity is reviewed."
+        )
+        raise ValueError(msg)
 
 
 def _optional_non_empty(env: Mapping[str, str], key: str) -> str | None:

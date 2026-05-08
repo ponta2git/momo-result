@@ -11,7 +11,6 @@ from momo_ocr.app.config import WorkerConfig, require_production_config
 from momo_ocr.features.ocr_jobs.cancellation import RepositoryCancellationChecker
 from momo_ocr.features.ocr_jobs.consumer import RedisOcrJobConsumer
 from momo_ocr.features.ocr_jobs.repository import PostgresOcrJobRepository
-from momo_ocr.features.ocr_jobs.result_writer import PostgresOcrResultWriter
 from momo_ocr.features.text_recognition.factory import default_text_recognition_engine
 
 if TYPE_CHECKING:
@@ -98,15 +97,12 @@ def production_worker_runtime(config: WorkerConfig) -> WorkerRuntime:
     try:
         consumer = redis_consumer_from_config(config)
         repository = PostgresOcrJobRepository(pool)
-        writer = PostgresOcrResultWriter(pool)
-        # Construct one TesseractEngine for the entire worker process so we
-        # pay shutil.which() and field-config setup exactly once. The runner
-        # then re-uses this instance for every job.
-        text_engine = default_text_recognition_engine()
+        # Construct one OCR engine for the entire worker process so expensive
+        # engine setup is paid once and the runner re-uses it for every job.
+        text_engine = default_text_recognition_engine(timeout_seconds=config.ocr_timeout_seconds)
         deps = JobRunnerDependencies(
             consumer=consumer,
             repository=repository,
-            result_writer=writer,
             cancellation=RepositoryCancellationChecker(repository),
             worker_id=config.worker_id,
             text_engine=text_engine,

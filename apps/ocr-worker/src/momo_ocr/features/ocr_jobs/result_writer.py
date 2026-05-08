@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from threading import Lock
 from typing import Protocol
 
+import psycopg
 from psycopg.types.json import Jsonb
 from psycopg_pool import ConnectionPool
 
@@ -55,43 +56,50 @@ class PostgresOcrResultWriter:
         self._pool = pool
 
     def persist(self, record: OcrResultRecord) -> None:
-        detected_screen_type = (
-            record.payload.detected_screen_type.value
-            if record.payload.detected_screen_type is not None
-            else None
-        )
         with self._pool.connection() as conn, conn.transaction():
-            conn.execute(
-                """
-                INSERT INTO ocr_drafts (
-                  id, job_id,
-                  requested_screen_type, detected_screen_type, profile_id,
-                  payload_json, warnings_json, timings_ms_json,
-                  created_at, updated_at
-                ) VALUES (
-                  %s, %s,
-                  %s, %s, %s,
-                  %s, %s, %s,
-                  now(), now()
-                )
-                ON CONFLICT (job_id) DO UPDATE SET
-                  id = EXCLUDED.id,
-                  requested_screen_type = EXCLUDED.requested_screen_type,
-                  detected_screen_type = EXCLUDED.detected_screen_type,
-                  profile_id = EXCLUDED.profile_id,
-                  payload_json = EXCLUDED.payload_json,
-                  warnings_json = EXCLUDED.warnings_json,
-                  timings_ms_json = EXCLUDED.timings_ms_json,
-                  updated_at = now()
-                """,
-                (
-                    record.draft_id,
-                    record.job_id,
-                    record.payload.requested_screen_type.value,
-                    detected_screen_type,
-                    record.payload.profile_id,
-                    Jsonb(to_jsonable(record.payload)),
-                    Jsonb(to_jsonable(list(record.warnings))),
-                    Jsonb(to_jsonable(record.timings_ms)),
-                ),
-            )
+            persist_result_record(conn, record)
+
+
+def persist_result_record(
+    conn: psycopg.Connection[object],
+    record: OcrResultRecord,
+) -> None:
+    detected_screen_type = (
+        record.payload.detected_screen_type.value
+        if record.payload.detected_screen_type is not None
+        else None
+    )
+    conn.execute(
+        """
+        INSERT INTO ocr_drafts (
+          id, job_id,
+          requested_screen_type, detected_screen_type, profile_id,
+          payload_json, warnings_json, timings_ms_json,
+          created_at, updated_at
+        ) VALUES (
+          %s, %s,
+          %s, %s, %s,
+          %s, %s, %s,
+          now(), now()
+        )
+        ON CONFLICT (job_id) DO UPDATE SET
+          id = EXCLUDED.id,
+          requested_screen_type = EXCLUDED.requested_screen_type,
+          detected_screen_type = EXCLUDED.detected_screen_type,
+          profile_id = EXCLUDED.profile_id,
+          payload_json = EXCLUDED.payload_json,
+          warnings_json = EXCLUDED.warnings_json,
+          timings_ms_json = EXCLUDED.timings_ms_json,
+          updated_at = now()
+        """,
+        (
+            record.draft_id,
+            record.job_id,
+            record.payload.requested_screen_type.value,
+            detected_screen_type,
+            record.payload.profile_id,
+            Jsonb(to_jsonable(record.payload)),
+            Jsonb(to_jsonable(list(record.warnings))),
+            Jsonb(to_jsonable(record.timings_ms)),
+        ),
+    )

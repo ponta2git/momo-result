@@ -35,3 +35,16 @@ def test_require_production_config_rejects_missing_urls() -> None:
 
     assert "REDIS_URL" in str(error.value)
     assert "OCR_DATABASE_URL" in str(error.value)
+
+
+def test_require_production_config_rejects_unsupported_concurrency() -> None:
+    config = load_worker_config(
+        {
+            "REDIS_URL": "redis://localhost:6379/0",
+            "OCR_DATABASE_URL": "postgresql://user:pass@localhost:5432/db",
+            "OCR_WORKER_CONCURRENCY": "2",
+        }
+    )
+
+    with pytest.raises(ValueError, match="OCR_WORKER_CONCURRENCY"):
+        require_production_config(config)

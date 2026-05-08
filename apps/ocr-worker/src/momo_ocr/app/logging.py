@@ -8,7 +8,19 @@ from typing import Any
 # are surfaced into the JSON output to enable cross-process correlation with
 # the API. Keeping the whitelist small avoids accidentally leaking arbitrary
 # attributes (e.g. PII or image content) into log sinks.
-_EXTRA_KEYS: tuple[str, ...] = ("request_id", "job_id", "draft_id", "image_id", "image_type")
+_EXTRA_KEYS: tuple[str, ...] = (
+    "request_id",
+    "job_id",
+    "draft_id",
+    "image_id",
+    "image_type",
+    "worker_id",
+    "status",
+    "failure_code",
+    "duration_ms",
+    "delivery_tag",
+    "resource",
+)
 
 
 class JsonFormatter(logging.Formatter):

@@ -20,8 +20,8 @@ object MatchFixtures:
 
   val zeroIncidents: IncidentCounts = IncidentCounts(0, 0, 0, 0, 0, 0)
 
-  def allowedMembers(memberValues: List[String]): Set[MemberId] = memberValues
-    .map(MemberId.apply).toSet
+  def allowedMembers(memberValues: List[String]): Set[MemberId] = memberValues.map(MemberId.apply)
+    .toSet
 
   def members(memberValues: List[String], createdAt: Instant): List[Member] = memberValues
     .map(id => Member(MemberId(id), UserId(id), id, createdAt))
@@ -53,15 +53,14 @@ object MatchFixtures:
       player(members(3), 4, 4),
     )
 
-  def fourPlayers(memberValues: List[String]): FourPlayers =
-    defaultPlayers(memberValues) match
-      case a :: b :: c :: d :: _ => FourPlayers(a, b, c, d)
-      case _ => FourPlayers(
-          player("missing_member_1", 1, 1),
-          player("missing_member_2", 2, 2),
-          player("missing_member_3", 3, 3),
-          player("missing_member_4", 4, 4),
-        )
+  def fourPlayers(memberValues: List[String]): FourPlayers = defaultPlayers(memberValues) match
+    case a :: b :: c :: d :: _ => FourPlayers(a, b, c, d)
+    case _ => FourPlayers(
+        player("missing_member_1", 1, 1),
+        player("missing_member_2", 2, 2),
+        player("missing_member_3", 3, 3),
+        player("missing_member_4", 4, 4),
+      )
 
   def seedWorldMasters(
       gameTitles: GameTitlesRepository[IO],
@@ -91,7 +90,8 @@ object MatchFixtures:
   ): IO[Unit] =
     for
       _ <- heldEvents.create(HeldEvent(heldEventId, createdAt))
-      _ <- seedWorldMasters(gameTitles, mapMasters, seasonMasters, titleId, mapId, seasonId, createdAt)
+      _ <-
+        seedWorldMasters(gameTitles, mapMasters, seasonMasters, titleId, mapId, seasonId, createdAt)
     yield ()
 
   def matchRecord(

@@ -16,12 +16,14 @@ addCommandAlias("apiCheck", "apiQuality; test")
 addCommandAlias("apiFullCheck", "apiCheck; apiDbQuality; apiRedisQuality")
 addCommandAlias(
   "apiRedisQuality",
-  "set Test / testOptions := Seq(); " +
+  "set Test / parallelExecution := false; " +
+    "set Test / testOptions := Seq(); " +
     "testOnly momo.api.adapters.RedisQueueProducerSpec -- --include-tags=Integration",
 )
 addCommandAlias(
   "apiDbQuality",
-  "set Test / testOptions := Seq(); " +
+  "set Test / parallelExecution := false; " +
+    "set Test / testOptions := Seq(); " +
     "testOnly momo.api.integration.DbContractSpec; " +
     "testOnly momo.api.integration.PostgresHeldEventsRepositoryContractSpec; " +
     "testOnly momo.api.integration.PostgresIdempotencyRepositoryContractSpec; " +
@@ -71,7 +73,8 @@ lazy val root = (project in file("."))
     Compile / run / fork := true,
     Compile / run / javaOptions += "-Dcats.effect.warnOnNonMainThreadDetected=false",
     Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "--exclude-tags=Integration"),
-    Test / parallelExecution := false,
+    Test / testOptions += Tests.Filter(name => !name.startsWith("momo.api.integration.")),
+    Test / parallelExecution := true,
     Test / fork := false,
     libraryDependencies ++= {
       val catsEffectVersion = "3.7.0"

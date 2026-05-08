@@ -20,3 +20,4 @@ docs/mvp-todos.md
 docs/frontend-rebuild/
 .env
 **/.env
+**/.pnpm-store/

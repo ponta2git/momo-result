@@ -102,8 +102,9 @@ Redis Streams へ投入するフィールドは `../../docs/redis-streams-ocr-co
 Scala側では `OcrQueuePayloadSpec` で `../../docs/schemas/` の JSON Schema に対して以下を固定しています。
 
 - 全フィールドは文字列
-- 必須キー: `jobId`, `draftId`, `imageId`, `imagePath`, `requestedImageType`, `attempt`, `enqueuedAt`
-- `ocrHintsJson` は compact / sorted keys / UTF-8 の JSON 文字列
+- 必須キー: `schemaVersion`, `jobId`, `draftId`, `imageId`, `imagePath`, `requestedImageType`, `attempt`, `enqueuedAt`
+- `schemaVersion` は Stream Payload v1 では `"1"` 固定
+- `ocrHintsJson` は compact / sorted keys / UTF-8 の JSON 文字列。最大 8192 文字で、内容は hints schema の上限に従う
 - `requestId` は任意のログ相関 field
 
 画像は OCR 完了までの一時保存のみを想定し、恒久保存しません。

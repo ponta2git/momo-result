@@ -1,149 +1,116 @@
 # 開発作業規約
 
-## 1. ローカル環境セットアップ
+この文書はローカル起動、検証コマンド、Git運用の正本である。DB所有権は `docs/db-rule.md`、テスト選択は `docs/test-rule.md` を参照する。
 
-### 1.1 必要ツール
+## 1. 必要ツール
 
-| ツール | バージョン目安 | 用途 |
+| ツール | 目安 | 用途 |
 |---|---|---|
-| Node.js | 20+ | web |
-| pnpm | 9+ | webパッケージマネージャ |
-| Java (JDK) | 21+ | api（Scala 3） |
-| sbt | 1.10+ | apiビルド |
-| Python | 3.12+ | ocr-worker |
-| uv | 最新 | ocr-workerパッケージマネージャ |
-| Docker | 最新 | ローカルDB/Redis起動 |
-| Tesseract | 5+ | OCRエンジン（ocr-worker） |
+| Node.js | CI は 24 | web |
+| pnpm | 10.10.0 | workspace / web |
+| Java | 21 | api |
+| sbt | 1.12 系 | api |
+| Python | 3.12 | ocr-worker |
+| uv | lockfile 対応版 | ocr-worker |
+| Docker | Testcontainers 対応 | DB/Redis integration |
+| Tesseract | 5+ | OCR |
 
-### 1.2 環境変数
+## 2. 環境変数
 
-- ローカルは `.env` を使う（リポジトリにコミットしない）。
+- ローカルは `.env` を使う。コミットしない。
 - 必要なキー名は `.env.example` を参照する。
-- 本番は `fly secrets set`、CI は GitHub Actions secrets で管理する。
-- Secretsをログに出力しない。
+- Scala API と Python worker は `.env` を自動読み込みしない。root の `.env` を shell に読み込んでから起動する。
+- Web で root `.env` の `VITE_*` を使う場合も、同じ shell で `.env` を読み込んでから `pnpm dev` する。
+- 本番 secrets は `fly secrets`、CI secrets は GitHub Actions secrets で管理する。
+- `MOMO_LOG_FORMAT=json` は本番向け1行JSON、`MOMO_LOG_FORMAT=text` はローカル向け。
 
-#### apiのログ出力形式
+## 3. ローカル起動
 
-- `MOMO_LOG_FORMAT=json`（デフォルト）: 1行JSON（`@timestamp`/`level`/`logger`/`thread`/`message`/MDC各種）。本番必須。
-- `MOMO_LOG_FORMAT=text`: 人間可読のpattern出力。ローカル開発向け（`.env.example` のデフォルト）。
-- `MOMO_LOG_LEVEL`（デフォルト `INFO`）でルートレベルを上書き可能。
-- 設定は `apps/api/src/main/resources/logback.xml`。テストは `logback-test.xml`（WARN固定、人間可読）。
-
-### 1.3 ローカルDB・Redis起動
-
-Redis はこのリポジトリの Docker Compose で起動する。
+Redis はこのリポジトリの compose で起動する。
 
 ```sh
 docker compose up -d
 ```
 
-PostgreSQL は `momo-db` リポジトリの Docker Compose で起動し、migration も `momo-db` 側で適用する（`docs/db-rule.md` 参照）。
+PostgreSQL と migration は `../momo-db` 側で管理する。
 
 ```sh
 pnpm --dir ../momo-db db:up
 pnpm --dir ../momo-db db:migrate
 ```
 
-DB-backed API を検証する前に、接続先DBへ migration が適用済みであることを確認する。`momo-db` に migration が存在することと、ローカルDBに適用済みであることは別である。
+起動順序:
 
-## 2. 開発サーバー起動
+1. Redis: `docker compose up -d`
+2. PostgreSQL: `pnpm --dir ../momo-db db:up`
+3. migration: `pnpm --dir ../momo-db db:migrate`
+4. API: `set -a; source .env; set +a; cd apps/api && sbt run`
+5. OCR worker: `set -a; source .env; set +a; uv run --directory apps/ocr-worker momo-ocr worker`
+6. Web: `cd apps/web && pnpm dev`
 
-各アプリは言語ごとのdevコマンドで直接起動する。ScalaとPythonは `.env` を自動読み込みしないため、起動前に `source .env` が必要。
+root からの web 起動は `pnpm web:dev` でもよい。
 
-```sh
-# API（apps/api ディレクトリで）
-set -a; source .env; set +a
-sbt run
+## 4. 標準検証コマンド
 
-# OCR worker（apps/ocr-worker ディレクトリで）
-set -a; source .env; set +a
-uv run python -m momo_ocr worker
+### root
 
-# Web（apps/web ディレクトリで）
-pnpm dev
-```
+| 目的 | コマンド |
+|---|---|
+| web dev | `pnpm web:dev` |
+| web build | `pnpm web:build` |
+| web test | `pnpm web:test` |
+| web typecheck | `pnpm web:typecheck` |
+| api quality | `pnpm api:quality` |
+| api test | `pnpm api:test` |
 
-起動順序の依存: `docker compose up -d`（Redis）→ `pnpm --dir ../momo-db db:up`（PostgreSQL）→ `pnpm --dir ../momo-db db:migrate` → api → ocr-worker → web
+### web (`apps/web`)
 
-| アプリ | コマンド | 作業ディレクトリ |
-|---|---|---|
-| web | `pnpm dev` | `apps/web` |
-| api | `set -a; source .env; set +a && sbt run` | `apps/api` |
-| ocr-worker | `set -a; source .env; set +a && uv run python -m momo_ocr worker` | `apps/ocr-worker` |
+| 目的 | コマンド |
+|---|---|
+| OpenAPI型生成 | `pnpm generate:api` |
+| format | `pnpm format:check` |
+| lint | `pnpm lint` |
+| typecheck | `pnpm typecheck` |
+| test | `pnpm test:run` |
+| build | `pnpm build` |
 
-## 3. Git・コミット規約
+### api (`apps/api`)
 
-### 3.1 ブランチ命名
+| 目的 | コマンド |
+|---|---|
+| format | `sbt apiFormatCheck` |
+| lint | `sbt apiLint` |
+| compile + OpenAPI | `sbt apiQuality` |
+| unit / non-integration test | `sbt test` |
+| DB integration | `sbt apiDbQuality` |
+| Redis integration | `sbt apiRedisQuality` |
+| full local gate | `sbt apiFullCheck` |
 
-```text
-<type>/<short-description>
-例: feat/match-confirm, fix/csrf-header, chore/update-deps
-```
+`sbt test` は `Integration` tag と `momo.api.integration.*` を除外する。DB/Redis の wire 動作は `apiDbQuality` / `apiRedisQuality` で明示的に実行する。
 
-type: `feat` / `fix` / `refactor` / `test` / `chore` / `docs`
+### ocr-worker (`apps/ocr-worker`)
 
-### 3.2 コミットメッセージ
+| 目的 | コマンド |
+|---|---|
+| format | `uv run ruff format --check .` |
+| lint | `uv run ruff check .` |
+| typecheck | `uv run mypy` |
+| test | `uv run pytest` |
 
-```text
-<type>: <概要>（日本語可）
+## 5. 変更別ゲート
 
-<詳細・理由（任意）>
-```
+- web 変更: `generate:api` が関係する場合は先に実行し、`format:check`、`lint`、`typecheck`、`test:run`、必要なら `build`。
+- api endpoint / OpenAPI 変更: `apiQuality`（OpenAPI生成確認を含む）、`test` 後に web の `generate:api`。
+- PostgreSQL repository / migration 前提の変更: `apiDbQuality` を追加し、実行した spec 名を報告する。
+- Redis Streams / OCR queue 変更: `apiRedisQuality` を追加する。
+- ocr-worker 変更: `ruff format --check`、`ruff check`、`mypy`、`pytest`。Docker-backed integration に依存する失敗は未検証として扱わない。
 
-### 3.3 PR・マージ
+CI の API / OCR worker は `momo-db` を checkout し、`MOMO_DB_MIGRATIONS_DIR` で migration ディレクトリを指定する。ローカルで兄弟 repo がない場合も同 env で `drizzle/` を指定できる。
 
-- PRは最小限のスコープにする。
-- CI（format / lint / typecheck / test）が通ることを確認してからマージする。
-- squash mergeを基本とする。
+## 6. Git
 
-## 4. 検証コマンド早見表
-
-| 領域 | コマンド | 実行場所 |
-|---|---|---|
-| web format | `pnpm fmt` | `apps/web` |
-| web lint | `pnpm lint` | `apps/web` |
-| web typecheck | `pnpm typecheck` | `apps/web` |
-| web test | `pnpm test` | `apps/web` |
-| api format check | `sbt scalafmtCheck` | `apps/api` |
-| api lint | `sbt scalafix` | `apps/api` |
-| api test | `sbt test` | `apps/api` |
-| api DB integration | `sbt apiDbQuality` | `apps/api` |
-| api Redis integration | `sbt apiRedisQuality` | `apps/api` |
-| api full local gate | `sbt apiFullCheck` | `apps/api` |
-| ocr-worker format | `uv run ruff format --check .` | `apps/ocr-worker` |
-| ocr-worker lint | `uv run ruff check .` | `apps/ocr-worker` |
-| ocr-worker test | `uv run pytest` | `apps/ocr-worker` |
-
-既存のスクリプトやMakefileがある場合はそちらを優先する。
-
-### 4.1 DB-backed API変更時の検証
-
-PostgreSQL repository、Doobie query、DB table/column、migration前提に触れた場合は、通常のapi testに加えてDB契約と該当RepositoryをTestcontainers Postgresで確認する。
-
-```sh
-cd apps/api
-sbt apiDbQuality
-```
-
-よく使うDB-backed API検証は、`apps/api` で以下のaliasから実行できる。
-
-```sh
-sbt apiDbQuality
-```
-
-`sbt test` では `Integration` tag付きのDB-backed specを除外する。`apiDbQuality` はPostgres Testcontainerを起動し、`momo-db` のdrizzle SQLを適用してから実行する。検証結果を報告するときは、通常テストとは別に `apiDbQuality` で実行したspec名を明示する。
-
-CIのAPI workflowでは `momo-db` をcheckoutし、`apiDbQuality` がTestcontainer内にmigrationを適用する。`momo-db` がprivate repositoryの場合は、読み取り権限を持つ `MOMO_DB_READ_TOKEN` secret を設定する。
-
-ローカルでCI相当のAPIゲートをまとめて確認する場合は、Docker/Testcontainers利用可能な状態で `apps/api` から `sbt apiFullCheck` を実行する。`momo-db` が兄弟ディレクトリやCI checkout場所にない場合は `MOMO_DB_MIGRATIONS_DIR` で `drizzle/` ディレクトリを指定する。
-
-### 4.2 Redis-backed API変更時の検証
-
-Redis Streamsのwire動作や `RedisQueueProducer.resource` に触れた場合は、通常のapi testに加えて以下を実行する。このゲートはTestcontainersでRedisコンテナを起動するため、ローカルRedisの起動は不要。
-
-```sh
-cd apps/api
-sbt apiRedisQuality
-```
-
-`sbt test` では `Integration` tag付きのRedis外部接続テストを除外する。これにより、単体・in-memory中心の下位レベルテストはDocker/Redisの状態に依存しない。
+- ブランチ名: `<type>/<short-description>`。type は `feat` / `fix` / `refactor` / `test` / `chore` / `docs`。
+- コミットメッセージ: `<type>: <概要>`。
+- PR は小さく保つ。
+- merge 前に該当領域の format / lint / typecheck / test を通す。
+- squash merge を基本とする。

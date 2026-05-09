@@ -52,8 +52,8 @@ MVPでは、Discord OAuthログイン、固定4名だけの仲間内運用、開
   - DB is the source of truth for OCR job state
 - Production:
   - single Fly.io app/domain
-  - API serves SPA static assets
-  - API and OCR worker run in the same VM as separate supervisord-managed processes
+  - nginx serves SPA static assets and reverse-proxies API requests
+  - nginx, API, and OCR worker run in the same VM as separate supervisord-managed processes
 
 ---
 

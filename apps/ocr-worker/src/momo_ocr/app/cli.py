@@ -8,6 +8,7 @@ import sys
 import threading
 from collections.abc import Sequence
 from pathlib import Path
+from types import TracebackType
 
 from momo_ocr.app.composition import production_worker_runtime
 from momo_ocr.app.config import load_worker_config
@@ -32,7 +33,7 @@ SCREEN_TYPE_CHOICES = ("auto", "total_assets", "revenue", "incident_log")
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    configure_logging(_log_level_from_env())
+    _configure_process_logging()
     parser = argparse.ArgumentParser(prog="momo-ocr")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -203,3 +204,26 @@ def _log_level_from_env() -> int:
     raw = os.environ.get("MOMO_LOG_LEVEL", "INFO").strip().upper()
     level = logging.getLevelName(raw)
     return level if isinstance(level, int) else logging.INFO
+
+
+def _configure_process_logging() -> None:
+    configure_logging(_log_level_from_env())
+    _install_exception_logger()
+
+
+def _install_exception_logger() -> None:
+    sys.excepthook = _log_unhandled_exception
+
+
+def _log_unhandled_exception(
+    exc_type: type[BaseException],
+    exc_value: BaseException,
+    traceback: TracebackType | None,
+) -> None:
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.__excepthook__(exc_type, exc_value, traceback)
+        return
+    logging.getLogger(__name__).critical(
+        "Unhandled OCR process exception",
+        exc_info=(exc_type, exc_value, traceback),
+    )

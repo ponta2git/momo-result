@@ -1,0 +1,31 @@
+app = "momo-result"
+primary_region = "nrt"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  APP_ENV = "prod"
+  HTTP_HOST = "127.0.0.1"
+  HTTP_PORT = "8081"
+  IMAGE_TMP_DIR = "/tmp/momo-result/uploads"
+  MOMO_LOG_FORMAT = "json"
+  MOMO_LOG_LEVEL = "INFO"
+  DB_POOL_SIZE = "2"
+  JAVA_OPTS = "-XX:MaxRAMPercentage=70 -Djava.security.egd=file:/dev/./urandom"
+  TESSDATA_PREFIX = "/usr/share/tesseract-ocr/5/tessdata"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+  [[http_service.checks]]
+    grace_period = "30s"
+    interval = "30s"
+    method = "GET"
+    timeout = "5s"
+    path = "/healthz/details"

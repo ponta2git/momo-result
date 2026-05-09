@@ -69,6 +69,7 @@ lazy val sharedScalacOptions = Seq(
 )
 
 lazy val root = (project in file("."))
+  .enablePlugins(JavaAppPackaging)
   .settings(
     name := "momo-result-api",
     organization := "momo",
@@ -80,6 +81,7 @@ lazy val root = (project in file("."))
     Test / console / scalacOptions ~= {
       _.filterNot(opt => opt == "-Werror" || opt.startsWith("-Xfatal"))
     },
+    Compile / mainClass := Some("momo.api.Main"),
     Compile / run / mainClass := Some("momo.api.Main"),
     Compile / run / fork := true,
     Compile / run / javaOptions += "-Dcats.effect.warnOnNonMainThreadDetected=false",

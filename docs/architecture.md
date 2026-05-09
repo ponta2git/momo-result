@@ -25,15 +25,16 @@ apps/
 | DB | Neon PostgreSQL（スキーマ正本は `~/Documents/codes/momo-db`、`@momo/db` パッケージ経由で参照） |
 | Queue | Upstash Redis Streams |
 | Deploy | Fly.io |
+| Front server | nginx |
 | Process management | supervisord |
 
 ### 1.2 本番構成
 
 - 本番は同一Fly.ioアプリ、同一ドメインで運用する。
-- APIサーバーがweb SPAの静的ファイルを配信する。
-- APIサーバーとOCRワーカーは同一VM内の別プロセスとして動かす。
+- nginx がweb SPAの静的ファイル配信とAPI reverse proxyを担当する。
+- APIサーバーとOCRワーカーはnginxと同一VM内の別プロセスとして動かす。
 - 同一VM内の複数プロセス管理には `supervisord` を使う。
-- web/api/ocr-workerをマルチステージDockerfileでビルドし、単一ランタイムイメージにまとめる。
+- web/api/ocr-worker/nginxをマルチステージDockerfileでビルドし、単一ランタイムイメージにまとめる。
 
 ### 1.3 ローカル開発
 

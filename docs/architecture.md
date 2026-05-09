@@ -61,6 +61,7 @@
 - `queryKey` は backend resource 名だけでなく、cache に保存する runtime data shape を表す。同じ resource でも raw response と feature-local ViewModel を同じ key に保存しない。
 - 共有 query key は `shared/api/queryKeys.ts`、feature 専属 key は feature 配下の `queryKeys.ts` に置く。
 - query key / query function を変更したら、別画面が先に cache へ入れた shape と invalidation 範囲を確認する。
+- 作成・更新 mutation が作成した resource を同画面で選択/表示する場合は、選択値だけでなく候補リストを供給する query cache も `setQueryData` / invalidate / refetch のいずれかで整合させる。
 
 ### Form / React 19
 

@@ -33,6 +33,7 @@ TanStack Query を使うページで API エラー表示、`queryKey`、`queryFn
 - 認証、`enabled`、`isFetching` / `fetchStatus` と表示条件の整合をテストする。
 - cached error -> remount -> refetch success など、変更対象の lifecycle を直接通す。
 - 同じ backend resource を複数画面で読む場合は、別画面が seed した cache shape を再現するか、実際の画面遷移順を通す。
+- mutation で作成した resource を同画面の select/list で即時選択・表示する場合は、成功通知だけでなく、選択値と候補 option/list への追加を両方検証する。
 
 ### Form / interaction
 

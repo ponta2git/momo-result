@@ -75,6 +75,7 @@
 - 認証や `enabled` の前提とエラー表示条件がずれていないか。
 - `queryKey` は API リソース名ではなく、runtime cache value の形状まで表しているか。
 - cached error、remount、refetch success、別画面で seed された cache shape など、実際の lifecycle をテストしているか。
+- mutation 成功後に選択値だけを更新し、候補 list/select を供給する cache を古いままにしていないか。
 
 参照:
 
@@ -82,6 +83,7 @@
 - web component/page テスト責務: `docs/test-rule.md`
 - 元事象: `docs/post-mortem/2026-05-03-frontend-masters-query-error-visibility.md`
 - 元事象: `docs/post-mortem/2026-05-03-frontend-masters-query-key-shape-collision.md`
+- 元事象: `docs/post-mortem/2026-05-10-frontend-held-event-create-cache.md`
 
 ### Frontend / Form・Filter Interaction
 
@@ -95,6 +97,7 @@
 
 - React event 由来の値を handler 内で同期的に退避しているか。
 - 変更した入力操作を Testing Library + user-event で直接実行したか。
+- mutation で追加した候補を選ぶ UI では、成功通知だけでなく option/list への追加と選択状態を検証したか。
 - 障害対応では、報告された操作そのものを通したか。
 - 同一 component 内に同種の handler / state updater pattern が残っていないか。
 

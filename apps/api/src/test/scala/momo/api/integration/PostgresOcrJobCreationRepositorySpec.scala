@@ -5,13 +5,16 @@ import java.time.Instant
 
 import cats.effect.IO
 import doobie.implicits.*
+import doobie.postgres.circe.jsonb.implicits.*
+import io.circe.Json
 
 import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.repositories.postgres.PostgresOcrJobCreationRepository
 import momo.api.repositories.{OcrJobDraftAttachment, OcrQueuePayload}
+import momo.api.testing.JsonSchemaAssertions
 
-final class PostgresOcrJobCreationRepositorySpec extends IntegrationSuite:
+final class PostgresOcrJobCreationRepositorySpec extends IntegrationSuite with JsonSchemaAssertions:
 
   private val now = Instant.parse("2026-05-08T10:00:00Z")
   private val jobId = OcrJobId("job-outbox-1")
@@ -44,26 +47,38 @@ final class PostgresOcrJobCreationRepositorySpec extends IntegrationSuite:
     updatedAt = now,
   )
 
-  private def payload: OcrQueuePayload = OcrQueuePayload(Map(
-    "jobId" -> jobId.value,
-    "draftId" -> draftId.value,
-    "imageId" -> imageId.value,
-    "imagePath" -> "/tmp/image.png",
-    "requestedImageType" -> "total_assets",
-    "attempt" -> "1",
-    "enqueuedAt" -> "2026-05-08T10:00:00Z",
-    "requestId" -> "req-outbox-1",
-  ))
+  private def payload: OcrQueuePayload = OcrQueuePayload.build(
+    jobId = jobId,
+    draftId = draftId,
+    imageId = imageId,
+    imagePath = Path.of("/tmp/image.png"),
+    requestedScreenType = ScreenType.TotalAssets,
+    attempt = 1,
+    enqueuedAt = now,
+    hints = OcrJobHints(
+      gameTitle = Some("桃鉄2"),
+      layoutFamily = Some("momotetsu_2"),
+      knownPlayerAliases = List(PlayerAliasHint("member-ponta", List("ぽんた", "ぽんた社長"))),
+      computerPlayerAliases = List("さくま"),
+    ),
+    requestId = Some("req-outbox-1"),
+  )
 
   test("createQueuedJob inserts OCR records and durable outbox intent in one transaction"):
     for
       _ <- repo.createQueuedJob(draft, job, None, payload)
       row <- sql"""
-        SELECT status, attempt_count, stream_payload->>'jobId', stream_payload->>'requestId'
+        SELECT status, attempt_count, stream_payload->>'jobId', stream_payload->>'requestId',
+               stream_payload
         FROM ocr_queue_outbox
         WHERE job_id = ${jobId.value}
-      """.query[(String, Int, String, String)].unique.transact(transactor)
-    yield assertEquals(row, ("PENDING", 0, jobId.value, "req-outbox-1"))
+      """.query[(String, Int, String, String, Json)].unique.transact(transactor)
+    yield
+      assertEquals(row._1, "PENDING")
+      assertEquals(row._2, 0)
+      assertEquals(row._3, jobId.value)
+      assertEquals(row._4, "req-outbox-1")
+      assertOcrQueuePayloadSchemaValid(row._5)
 
   test("createQueuedJob rolls back OCR records when match draft attachment fails"):
     val attachment = OcrJobDraftAttachment(

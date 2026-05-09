@@ -15,7 +15,7 @@ import io.circe.Json
 import io.circe.syntax.*
 
 import momo.api.db.Database
-import momo.api.domain.ids.MemberId
+import momo.api.domain.ids.AccountId
 import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.repositories.{
   IdempotencyAlg, IdempotencyRecord, IdempotencyRepository, IdempotencyResponse,
@@ -25,7 +25,7 @@ import momo.api.repositories.{
  * Postgres-backed [[IdempotencyAlg]].
  *
  * Schema is owned by momo-summit (see `apps/api/docs/proposals/idempotency-keys.md`). The actual
- * applied DDL matches the proposal: `(key, member_id, endpoint)` composite PK,
+ * applied DDL matches the proposal: `(key, account_id, endpoint)` composite PK,
  * `request_hash bytea`, `response_status int`, `response_headers jsonb`, `response_body bytea`,
  * `created_at`/`expires_at` `timestamptz`.
  *
@@ -51,7 +51,7 @@ object PostgresIdempotency:
 
   private type Row = (
       String, // key
-      MemberId,
+      AccountId,
       String, // endpoint
       Array[Byte], // request_hash
       Int, // response_status
@@ -63,7 +63,7 @@ object PostgresIdempotency:
 
   private def toRecord(row: Row): IdempotencyRecord = IdempotencyRecord(
     key = row._1,
-    memberId = row._2,
+    accountId = row._2,
     endpoint = row._3,
     requestHash = arrayToBytes(row._4),
     response = IdempotencyResponse(
@@ -78,13 +78,13 @@ object PostgresIdempotency:
   val alg: IdempotencyAlg[ConnectionIO] = new IdempotencyAlg[ConnectionIO]:
     override def lookup(
         key: String,
-        memberId: MemberId,
+        accountId: AccountId,
         endpoint: String,
     ): ConnectionIO[Option[IdempotencyRecord]] = sql"""
-        SELECT key, member_id, endpoint, request_hash, response_status,
+        SELECT key, account_id, endpoint, request_hash, response_status,
                response_headers, response_body, created_at, expires_at
         FROM idempotency_keys
-        WHERE key = $key AND member_id = $memberId AND endpoint = $endpoint
+        WHERE key = $key AND account_id = $accountId AND endpoint = $endpoint
       """.query[Row].option.map(_.map(toRecord))
 
     override def record(entry: IdempotencyRecord): ConnectionIO[Unit] =
@@ -94,10 +94,10 @@ object PostgresIdempotency:
       val headersJson = headersToJson(entry.response.headers)
       sql"""
         INSERT INTO idempotency_keys (
-          key, member_id, endpoint, request_hash, response_status,
+          key, account_id, endpoint, request_hash, response_status,
           response_headers, response_body, created_at, expires_at
         ) VALUES (
-          ${entry.key}, ${entry.memberId}, ${entry.endpoint}, $hashArray,
+          ${entry.key}, ${entry.accountId}, ${entry.endpoint}, $hashArray,
           ${entry.response.status}, $headersJson, $bodyOpt,
           ${entry.createdAt}, ${entry.expiresAt}
         )

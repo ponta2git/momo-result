@@ -13,19 +13,14 @@ import momo.api.auth.{
 }
 import momo.api.config.AppConfig
 import momo.api.http.modules.{
-  ExportModule, HealthModule, HeldEventModule, MasterModule, MatchDraftModule, MatchModule,
-  OcrModule, UploadModule,
+  AdminAccountModule, ExportModule, HealthModule, HeldEventModule, MasterModule, MatchDraftModule,
+  MatchModule, OcrModule, UploadModule,
 }
 import momo.api.repositories.{
-  GameTitlesRepository, IdempotencyRepository, IncidentMastersRepository, MapMastersRepository,
-  MembersRepository, SeasonMastersRepository,
+  GameTitlesRepository, IdempotencyRepository, IncidentMastersRepository, LoginAccountsRepository,
+  MapMastersRepository, MembersRepository, SeasonMastersRepository,
 }
-import momo.api.usecases.{
-  CancelMatchDraft, CancelOcrJob, ConfirmMatch, CreateGameTitle, CreateHeldEvent, CreateMapMaster,
-  CreateMatchDraft, CreateOcrJob, CreateSeasonMaster, DeleteMatch, ExportMatches, GetMatch,
-  GetMatchDraft, GetMatchDraftSourceImages, GetOcrDraft, GetOcrDraftsBulk, GetOcrJob,
-  ListHeldEvents, ListMatches, UpdateMatch, UpdateMatchDraft, UploadImage,
-}
+import momo.api.usecases.*
 
 object HttpRoutes:
   final case class Dependencies[F[_]](
@@ -54,6 +49,10 @@ object HttpRoutes:
       mapMasters: MapMastersRepository[F],
       seasonMasters: SeasonMastersRepository[F],
       incidentMasters: IncidentMastersRepository[F],
+      loginAccounts: LoginAccountsRepository[F],
+      listLoginAccounts: ListLoginAccounts[F],
+      createLoginAccount: CreateLoginAccount[F],
+      updateLoginAccount: UpdateLoginAccount[F],
       createGameTitle: CreateGameTitle[F],
       createMapMaster: CreateMapMaster[F],
       createSeasonMaster: CreateSeasonMaster[F],
@@ -70,7 +69,7 @@ object HttpRoutes:
   )
 
   def routes[F[_]: Async](deps: Dependencies[F]): Http4sApp[F] =
-    val security = EndpointSecurity[F](AuthPolicy[F](deps.config, deps.roster))
+    val security = EndpointSecurity[F](AuthPolicy[F](deps.config, deps.roster, deps.loginAccounts))
 
     val endpoints: List[ServerEndpoint[Any, F]] = HealthModule.routes[F](deps.healthDetails) :::
       UploadModule.routes[F](deps.uploadImage, deps.rateLimiters.upload, security) :::
@@ -119,6 +118,13 @@ object HttpRoutes:
         deps.idempotency,
         deps.nowF,
         security,
+      ) ::: AdminAccountModule.routes[F](
+        deps.listLoginAccounts,
+        deps.createLoginAccount,
+        deps.updateLoginAccount,
+        deps.idempotency,
+        deps.nowF,
+        security,
       )
 
     val tapirRoutes = Http4sServerInterpreter[F]().toRoutes(endpoints)
@@ -134,7 +140,7 @@ object HttpRoutes:
       stateCodec = deps.oauthStateCodec,
       sessions = deps.sessionService,
       csrf = deps.csrfTokenService,
-      members = deps.members,
+      accounts = deps.loginAccounts,
       rateLimiter = deps.loginRateLimiter,
     )
 

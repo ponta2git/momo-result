@@ -20,7 +20,7 @@ describe("DraftReviewPage", () => {
   });
 
   it("loads OCR drafts and blocks confirmation until held event is selected", async () => {
-    window.localStorage.setItem("momoresult.devUser", "ponta");
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
 
     render(
       <QueryClientProvider client={queryClient}>
@@ -41,7 +41,7 @@ describe("DraftReviewPage", () => {
   });
 
   it("keeps held event creation collapsed until requested", async () => {
-    window.localStorage.setItem("momoresult.devUser", "ponta");
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
 
     render(
       <QueryClientProvider client={queryClient}>
@@ -61,7 +61,7 @@ describe("DraftReviewPage", () => {
   });
 
   it("shows review notices as dismissible top toast", async () => {
-    window.localStorage.setItem("momoresult.devUser", "ponta");
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
 
     render(
       <QueryClientProvider client={queryClient}>
@@ -84,7 +84,7 @@ describe("DraftReviewPage", () => {
   });
 
   it("renders the development sample drafts without OCR worker data", async () => {
-    window.localStorage.setItem("momoresult.devUser", "ponta");
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
 
     render(
       <QueryClientProvider client={queryClient}>
@@ -113,7 +113,7 @@ describe("DraftReviewPage", () => {
   });
 
   it("allows clearing and retyping numeric result cells without prefixing zero", async () => {
-    window.localStorage.setItem("momoresult.devUser", "ponta");
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
 
     render(
       <QueryClientProvider client={queryClient}>
@@ -137,7 +137,7 @@ describe("DraftReviewPage", () => {
   });
 
   it("restores form values after returning from master management with handoffId", async () => {
-    window.localStorage.setItem("momoresult.devUser", "ponta");
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
 
     const handoffId = saveMasterHandoff(
       createDraftReviewHandoffPayload({

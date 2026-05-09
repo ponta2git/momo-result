@@ -4,7 +4,7 @@ import { confirmMatch } from "@/features/matches/api";
 
 describe("matches api", () => {
   it("confirms match", async () => {
-    window.localStorage.setItem("momoresult.devUser", "ponta");
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
 
     await expect(
       confirmMatch({

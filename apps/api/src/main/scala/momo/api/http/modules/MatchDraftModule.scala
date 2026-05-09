@@ -44,7 +44,7 @@ object MatchDraftModule:
             case Right(playedAt) => MatchDraftCodec.toCreateCommand(request, playedAt) match
                 case Left(error) => Async[F].pure(Left(security.toProblem(error)))
                 case Right(command) => security.respond(
-                    createMatchDraft.run(command, member.memberId)
+                    createMatchDraft.run(command, member.accountId, member.playerMemberId)
                   )(MatchDraftResponse.from)
           },
         )
@@ -64,7 +64,7 @@ object MatchDraftModule:
             case Right(playedAt) => security.respond(updateMatchDraft.run(
                 MatchDraftId(draftId),
                 MatchDraftCodec.toUpdateCommand(request, playedAt),
-                member.memberId,
+                member.accountId,
               ))(MatchDraftResponse.from)
           },
         )
@@ -73,28 +73,28 @@ object MatchDraftModule:
     MatchDraftEndpoints.get.serverLogic { case (draftId, devUser) =>
       security.authorizeRead(devUser) { member =>
         security.respond(
-          getMatchDraft.run(MatchDraftId(draftId), member.memberId)
+          getMatchDraft.run(MatchDraftId(draftId), member.accountId)
         )(MatchDraftDetailResponse.from)
       }
     },
     MatchDraftEndpoints.cancel.serverLogic { case (draftId, devUser, csrfToken) =>
       security.authorizeMutation(devUser, csrfToken) { member =>
         security.respond(
-          cancelMatchDraft.run(MatchDraftId(draftId), member.memberId)
+          cancelMatchDraft.run(MatchDraftId(draftId), member.accountId)
         )(_ => CancelMatchDraftResponse(matchDraftId = draftId, status = "cancelled"))
       }
     },
     MatchDraftEndpoints.listSourceImages.serverLogic { case (draftId, devUser) =>
       security.authorizeRead(devUser) { member =>
         security.respond(
-          getMatchDraftSourceImages.list(MatchDraftId(draftId), member.memberId)
+          getMatchDraftSourceImages.list(MatchDraftId(draftId), member.accountId)
         )(items => MatchDraftSourceImageListResponse(items.map(MatchDraftSourceImageResponse.from)))
       }
     },
     MatchDraftEndpoints.getSourceImage.serverLogic { case (draftId, kind, devUser) =>
       security.authorizeRead(devUser) { member =>
         security.respond(
-          getMatchDraftSourceImages.stream(MatchDraftId(draftId), kind, member.memberId)
+          getMatchDraftSourceImages.stream(MatchDraftId(draftId), kind, member.accountId)
         )(image => (image.contentType, "private, no-store", "nosniff", image.bytes))
       }
     },

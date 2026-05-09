@@ -37,7 +37,8 @@ object PostgresMatches:
       Option[OcrDraftId],
       Option[OcrDraftId],
       Option[OcrDraftId],
-      MemberId,
+      AccountId,
+      Option[MemberId],
       Instant,
       Instant,
   )
@@ -47,7 +48,7 @@ object PostgresMatches:
            game_title_id, layout_family, season_master_id,
            owner_member_id, map_master_id, played_at,
            total_assets_draft_id, revenue_draft_id, incident_log_draft_id,
-           created_by_member_id, created_at, updated_at
+           created_by_account_id, created_by_member_id, created_at, updated_at
          FROM matches"""
 
   private def toRecord(m: MatchRow, players: FourPlayers): MatchRecord = MatchRecord(
@@ -64,8 +65,9 @@ object PostgresMatches:
     revenueDraftId = m._11,
     incidentLogDraftId = m._12,
     players = players,
-    createdByMemberId = m._13,
-    createdAt = m._14,
+    createdByAccountId = m._13,
+    createdByMemberId = m._14,
+    createdAt = m._15,
   )
 
   /**

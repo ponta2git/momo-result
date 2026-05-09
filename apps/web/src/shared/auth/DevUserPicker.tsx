@@ -17,6 +17,11 @@ export function DevUserPicker({ force = false }: DevUserPickerProps) {
     return null;
   }
 
+  const devAccounts = fixedMembers.map((member) => ({
+    accountId: `account_${member.memberId.replace(/^member_/, "")}`,
+    displayName: member.displayName,
+  }));
+
   return (
     <div className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
       <label
@@ -29,16 +34,18 @@ export function DevUserPicker({ force = false }: DevUserPickerProps) {
         id={id}
         value={devUser}
         onChange={(event) => {
-          setDevUser(event.target.value);
+          const next = event.target.value;
+          if (next === devUser) return;
+          setDevUser(next);
           void queryClient.invalidateQueries();
         }}
         disabled={lockedByEnv}
         className="mt-2 w-full rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)]"
       >
         <option value="">未選択</option>
-        {fixedMembers.map((member) => (
-          <option key={member.memberId} value={member.memberId}>
-            {member.displayName} ({member.memberId})
+        {devAccounts.map((account) => (
+          <option key={account.accountId} value={account.accountId}>
+            {account.displayName} ({account.accountId})
           </option>
         ))}
       </select>

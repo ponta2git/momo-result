@@ -28,6 +28,7 @@
 ### 認証・CSRF
 
 - Discord OAuth 後の session は HttpOnly Cookie と PostgreSQL `app_sessions` で管理する。
+- 認証主体は `momo_login_accounts`。`members` は試合参加者マスタであり、ログインアカウントとは分離する。
 - 本番 Cookie は Secure / SameSite=Lax を基本にする。
 - 状態変更 API は CSRF トークンを要求する。mutation ごとの個別漏れを作らず、状態変更メソッド全体へ統一的に適用する。
 - dev 認証はローカル・テスト用であり、本番経路に混ぜない。

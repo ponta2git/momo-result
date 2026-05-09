@@ -6,7 +6,7 @@ import cats.MonadThrow
 import cats.data.EitherT
 import cats.syntax.all.*
 
-import momo.api.domain.ids.{ImageId, MemberId, *}
+import momo.api.domain.ids.{ImageId, *}
 import momo.api.errors.AppError
 import momo.api.repositories.{ImageStore, MatchDraftsRepository}
 import momo.api.usecases.syntax.UseCaseSyntax.*
@@ -34,9 +34,9 @@ final class GetMatchDraftSourceImages[F[_]: MonadThrow](
 ):
   def list(
       draftId: MatchDraftId,
-      memberId: MemberId,
+      accountId: AccountId,
   ): F[Either[AppError, List[MatchDraftSourceImage]]] = (for
-    draft <- EitherT(loadAuthorizedDraft(draftId, memberId))
+    draft <- EitherT(loadAuthorizedDraft(draftId, accountId))
     entries <- EitherT.liftF(
       List(
         MatchDraftSourceImageKind.TotalAssets -> draft.totalAssetsImageId,
@@ -60,12 +60,12 @@ final class GetMatchDraftSourceImages[F[_]: MonadThrow](
   def stream(
       draftId: MatchDraftId,
       kindWire: String,
-      memberId: MemberId,
+      accountId: AccountId,
   ): F[Either[AppError, MatchDraftSourceImageBinary]] = (for
     kind <- EitherT.fromEither[F](MatchDraftSourceImageKind.fromWire(kindWire).toRight(
       AppError.ValidationFailed("kind must be total_assets, revenue, or incident_log.")
     ))
-    draft <- EitherT(loadAuthorizedDraft(draftId, memberId))
+    draft <- EitherT(loadAuthorizedDraft(draftId, accountId))
     imageId <- EitherT.fromEither[F](sourceImageId(draft, kind).toRight(
       AppError.NotFound("source image", s"${draftId.value}:${kind.wire}")
     ))
@@ -75,11 +75,11 @@ final class GetMatchDraftSourceImages[F[_]: MonadThrow](
 
   private def loadAuthorizedDraft(
       draftId: MatchDraftId,
-      memberId: MemberId,
+      accountId: AccountId,
   ): F[Either[AppError, momo.api.domain.MatchDraft]] = (for
     draft <- matchDrafts.find(draftId).orNotFound("match draft", draftId.value)
     _ <- EitherT.fromEither[F](Either.cond(
-      draft.createdByMemberId == memberId,
+      draft.createdByAccountId == accountId,
       (),
       AppError.Forbidden("You cannot access source images for this draft."),
     ))

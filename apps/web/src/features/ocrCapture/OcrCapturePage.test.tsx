@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { OcrCapturePage } from "@/features/ocrCapture/OcrCapturePage";
 import { server } from "@/shared/api/msw/server";
+import { DevUserPicker } from "@/shared/auth/DevUserPicker";
 import { createTestQueryClient } from "@/test/queryClient";
 
 type OcrJobRequestBody = {
@@ -47,9 +48,24 @@ describe("OcrCapturePage", () => {
   });
 
   it("reloads protected master selects after selecting a dev user", async () => {
+    let authRequests = 0;
+    server.use(
+      http.get("/api/auth/me", () => {
+        authRequests += 1;
+        return HttpResponse.json({
+          accountId: "account_ponta",
+          displayName: "ぽんた",
+          isAdmin: true,
+          memberId: "member_ponta",
+          csrfToken: "csrf-dev",
+        });
+      }),
+    );
+
     render(
       <QueryClientProvider client={queryClient}>
         <MemoryRouter>
+          <DevUserPicker />
           <OcrCapturePage />
         </MemoryRouter>
       </QueryClientProvider>,
@@ -59,15 +75,17 @@ describe("OcrCapturePage", () => {
       3,
     );
     expect(screen.getByLabelText("作品")).toBeDisabled();
+    expect(authRequests).toBe(0);
 
-    await userEvent.selectOptions(await screen.findByLabelText("Dev User"), "member_ponta");
+    await userEvent.selectOptions(await screen.findByLabelText("Dev User"), "account_ponta");
 
     expect(await screen.findByLabelText("作品")).toBeEnabled();
     expect(screen.getByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
+    expect(authRequests).toBe(1);
   });
 
   it("creates a match draft, starts OCR jobs, and returns to matches", async () => {
-    window.localStorage.setItem("momoresult.devUser", "ponta");
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
     const createdDrafts: MatchDraftRequestBody[] = [];
     const createdJobs: OcrJobRequestBody[] = [];
 
@@ -127,7 +145,7 @@ describe("OcrCapturePage", () => {
   });
 
   it("uses the final tray position as the OCR image type hint", async () => {
-    window.localStorage.setItem("momoresult.devUser", "ponta");
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
     const createdJobs: OcrJobRequestBody[] = [];
     vi.spyOn(URL, "createObjectURL").mockImplementation((value) =>
       value instanceof File ? `blob:${value.name}` : "blob:unknown",
@@ -185,7 +203,7 @@ describe("OcrCapturePage", () => {
   });
 
   it("cancels the created match draft when no OCR job is created", async () => {
-    window.localStorage.setItem("momoresult.devUser", "ponta");
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
     const cancelledDraftIds: string[] = [];
 
     server.use(
@@ -222,7 +240,7 @@ describe("OcrCapturePage", () => {
   });
 
   it("does not expose a direct review action for OCR-running drafts", async () => {
-    window.localStorage.setItem("momoresult.devUser", "ponta");
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
     renderCaptureRoute();
 
     const input = await screen.findByLabelText("撮影台の画像をアップロード");

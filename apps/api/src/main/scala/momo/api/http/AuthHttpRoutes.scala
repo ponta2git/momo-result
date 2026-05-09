@@ -17,7 +17,7 @@ import momo.api.config.{AppConfig, AppEnv}
 import momo.api.domain.ids.*
 import momo.api.endpoints.{AuthMeResponse, ProblemDetails}
 import momo.api.errors.AppError
-import momo.api.repositories.MembersRepository
+import momo.api.repositories.LoginAccountsRepository
 
 private[http] object AuthHttpRoutes:
   def routes[F[_]: Async](
@@ -26,7 +26,7 @@ private[http] object AuthHttpRoutes:
       stateCodec: OAuthStateCodec[F],
       sessions: SessionService[F],
       csrf: CsrfTokenService,
-      members: MembersRepository[F],
+      accounts: LoginAccountsRepository[F],
       rateLimiter: LoginRateLimiter[F],
   ): HttpRoutes[F] =
     lazy val routes: HttpRoutes[F] = HttpRoutes.of[F] {
@@ -58,12 +58,15 @@ private[http] object AuthHttpRoutes:
                   case true => oauth.fetchUser(codeValue).flatMap {
                       case Left(error) => problem(error)
                           .map(_.addCookie(clearCookie(config.auth.stateCookieName, config)))
-                      case Right(discordUser) => members.findByDiscordUserId(UserId(discordUser.id))
-                          .flatMap {
+                      case Right(discordUser) => accounts
+                          .findByDiscordUserId(UserId(discordUser.id)).flatMap {
                             case None => problem(
                                 AppError.Forbidden("This Discord user is not allowed to log in.")
                               ).map(_.addCookie(clearCookie(config.auth.stateCookieName, config)))
-                            case Some(member) => sessions.create(member).flatMap { session =>
+                            case Some(account) if !account.loginEnabled =>
+                              problem(AppError.Forbidden("This account is not allowed to log in."))
+                                .map(_.addCookie(clearCookie(config.auth.stateCookieName, config)))
+                            case Some(account) => sessions.create(account).flatMap { session =>
                                 redirect(config.auth.callbackRedirectPath).map(
                                   _.addCookie(sessionCookie(config, session.id))
                                     .addCookie(clearCookie(config.auth.stateCookieName, config))
@@ -94,14 +97,19 @@ private[http] object AuthHttpRoutes:
         config.appEnv match
           case AppEnv.Dev | AppEnv.Test => request.headers.get(CIString("X-Dev-User"))
               .flatMap(_.head.value.some) match
-              case Some(memberId) => members.find(MemberId(memberId)).flatMap {
-                  case Some(member) => json(AuthMeResponse(
-                      member.id.value,
-                      member.displayName,
+              case Some(accountId) => accounts.find(AccountId(accountId)).flatMap {
+                  case Some(account) if account.loginEnabled =>
+                    json(AuthMeResponse(
+                      accountId = account.id.value,
+                      displayName = account.displayName,
+                      isAdmin = account.isAdmin,
+                      memberId = account.playerMemberId.map(_.value),
                       csrfToken = Some(CsrfMiddleware.DevToken),
                     ))
+                  case Some(_) =>
+                    problem(AppError.Forbidden("This account is not allowed to log in."))
                   case None =>
-                    problem(AppError.Forbidden("X-Dev-User is not one of the allowed members."))
+                    problem(AppError.Forbidden("X-Dev-User is not one of the allowed accounts."))
                 }
               case None => problem(AppError.Unauthorized())
           case AppEnv.Prod =>
@@ -110,8 +118,10 @@ private[http] object AuthHttpRoutes:
             sessions.authenticate(sessionId).flatMap {
               case Left(error) => problem(error)
               case Right(authenticated) => json(AuthMeResponse(
-                  memberId = authenticated.member.memberId.value,
-                  displayName = authenticated.member.displayName,
+                  accountId = authenticated.account.accountId.value,
+                  displayName = authenticated.account.displayName,
+                  isAdmin = authenticated.account.isAdmin,
+                  memberId = authenticated.account.playerMemberId.map(_.value),
                   csrfToken = Some(csrf.issue(authenticated.session)),
                 ))
             }

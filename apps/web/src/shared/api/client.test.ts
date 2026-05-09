@@ -20,7 +20,7 @@ describe("apiRequest", () => {
   });
 
   it("adds dev auth and csrf headers only when appropriate", async () => {
-    window.localStorage.setItem("momoresult.devUser", "ponta");
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
     const fetchMock = vi.fn(async () => Response.json({ ok: true }));
     vi.stubGlobal("fetch", fetchMock);
 
@@ -33,9 +33,9 @@ describe("apiRequest", () => {
     const getHeaders = getInit.headers as Headers;
     const postHeaders = postInit.headers as Headers;
 
-    expect(getHeaders.get("X-Dev-User")).toBe("ponta");
+    expect(getHeaders.get("X-Dev-User")).toBe("account_ponta");
     expect(getHeaders.has("X-CSRF-Token")).toBe(false);
-    expect(postHeaders.get("X-Dev-User")).toBe("ponta");
+    expect(postHeaders.get("X-Dev-User")).toBe("account_ponta");
     expect(postHeaders.get("X-CSRF-Token")).toBe("dev");
     expect(postHeaders.get("Content-Type")).toBe("application/json");
   });
@@ -44,7 +44,13 @@ describe("apiRequest", () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
-        Response.json({ memberId: "member_ponta", displayName: "ぽんた", csrfToken: "csrf-1" }),
+        Response.json({
+          accountId: "account_ponta",
+          displayName: "ぽんた",
+          isAdmin: true,
+          memberId: "member_ponta",
+          csrfToken: "csrf-1",
+        }),
       )
       .mockResolvedValueOnce(Response.json({ ok: true }));
     vi.stubGlobal("fetch", fetchMock);
@@ -85,6 +91,7 @@ describe("apiRequest", () => {
       { method: "POST", path: "/api/game-titles" },
       { method: "POST", path: "/api/map-masters" },
       { method: "POST", path: "/api/season-masters" },
+      { method: "POST", path: "/api/admin/login-accounts" },
     ] as const;
 
     for (const request of idempotentRequests) {
@@ -121,7 +128,7 @@ describe("apiRequest", () => {
   });
 
   it("downloads non-JSON files with dev auth and filename metadata", async () => {
-    window.localStorage.setItem("momoresult.devUser", "ponta");
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
     const fetchMock = vi.fn(
       async () =>
         new Response("a,b\n", {
@@ -138,7 +145,7 @@ describe("apiRequest", () => {
     const calls = fetchCallsOf(fetchMock);
     const init = requireInit(calls[0]?.[1]);
     const headers = init.headers as Headers;
-    expect(headers.get("X-Dev-User")).toBe("ponta");
+    expect(headers.get("X-Dev-User")).toBe("account_ponta");
     expect(result.fileName).toBe("momo-results-all.csv");
     expect(result.contentType).toContain("text/csv");
     await expect(result.blob.text()).resolves.toBe("a,b\n");

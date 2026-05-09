@@ -9,10 +9,10 @@ import momo.api.errors.AppError
 import momo.api.repositories.MatchDraftsRepository
 
 final class GetMatchDraft[F[_]: Functor](matchDrafts: MatchDraftsRepository[F]):
-  def run(draftId: MatchDraftId, memberId: MemberId): F[Either[AppError, MatchDraft]] = matchDrafts
-    .find(draftId).map {
+  def run(draftId: MatchDraftId, accountId: AccountId): F[Either[AppError, MatchDraft]] =
+    matchDrafts.find(draftId).map {
       case None => Left(AppError.NotFound("match draft", draftId.value))
-      case Some(draft) if draft.createdByMemberId != memberId =>
+      case Some(draft) if draft.createdByAccountId != accountId =>
         Left(AppError.Forbidden("You cannot access this match draft."))
       case Some(draft) => Right(draft)
     }

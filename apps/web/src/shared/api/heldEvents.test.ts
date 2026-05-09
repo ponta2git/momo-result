@@ -4,7 +4,7 @@ import { createHeldEvent, listHeldEvents } from "@/shared/api/heldEvents";
 
 describe("held events api", () => {
   it("loads held events", async () => {
-    window.localStorage.setItem("momoresult.devUser", "ponta");
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
 
     await expect(listHeldEvents()).resolves.toMatchObject({
       items: [{ id: "held-1" }],
@@ -12,7 +12,7 @@ describe("held events api", () => {
   });
 
   it("creates held event", async () => {
-    window.localStorage.setItem("momoresult.devUser", "ponta");
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
 
     await expect(createHeldEvent({ heldAt: "2026-01-01T00:00:00.000Z" })).resolves.toMatchObject({
       id: "held-created",

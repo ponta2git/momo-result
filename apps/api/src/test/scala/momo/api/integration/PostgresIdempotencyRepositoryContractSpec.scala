@@ -4,7 +4,7 @@ import java.time.Instant
 
 import cats.effect.IO
 
-import momo.api.domain.ids.MemberId
+import momo.api.domain.ids.AccountId
 import momo.api.repositories.postgres.PostgresIdempotencyRepository
 import momo.api.repositories.{IdempotencyRecord, IdempotencyRepository, IdempotencyResponse}
 
@@ -18,7 +18,7 @@ final class PostgresIdempotencyRepositoryContractSpec extends IntegrationSuite:
 
   private val now = Instant.parse("2026-04-30T12:00:00Z")
   private val later = now.plusSeconds(60 * 60 * 24)
-  private val member = MemberId("member_ponta")
+  private val member = AccountId("account_ponta")
 
   private def freshRepo: IdempotencyRepository[IO] =
     new PostgresIdempotencyRepository[IO](transactor)
@@ -31,7 +31,7 @@ final class PostgresIdempotencyRepositoryContractSpec extends IntegrationSuite:
       body: Vector[Byte],
   ): IdempotencyRecord = IdempotencyRecord(
     key = key,
-    memberId = member,
+    accountId = member,
     endpoint = endpoint,
     requestHash = hash,
     response = IdempotencyResponse(
@@ -56,7 +56,7 @@ final class PostgresIdempotencyRepositoryContractSpec extends IntegrationSuite:
     val r = buildRecord("k1", draftEndpoint, defaultHash, later, Vector(9.toByte, 8.toByte))
     for
       _ <- repo.record(r)
-      got <- repo.lookup(r.key, r.memberId, r.endpoint)
+      got <- repo.lookup(r.key, r.accountId, r.endpoint)
     yield assertEquals(got, Some(r))
 
   test("record with empty body round-trips as empty body"):
@@ -64,7 +64,7 @@ final class PostgresIdempotencyRepositoryContractSpec extends IntegrationSuite:
     val r = buildRecord("k-empty", draftEndpoint, defaultHash, later, Vector.empty)
     for
       _ <- repo.record(r)
-      got <- repo.lookup(r.key, r.memberId, r.endpoint)
+      got <- repo.lookup(r.key, r.accountId, r.endpoint)
     yield assertEquals(got.map(_.response.body), Some(Vector.empty[Byte]))
 
   test("record fails when the same composite key is reused"):

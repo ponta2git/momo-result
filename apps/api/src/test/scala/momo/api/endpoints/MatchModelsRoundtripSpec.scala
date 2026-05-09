@@ -173,6 +173,7 @@ final class MatchModelsRoundtripSpec extends FunSuite:
             }
           }
         ],
+        "createdByAccountId": "member_a",
         "createdByMemberId": "member_a",
         "createdAt": "2026-04-30T13:00:00Z"
       }

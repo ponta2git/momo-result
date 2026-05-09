@@ -28,7 +28,7 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
     Fixture.resource.use { fixture =>
       for
         _ <- fixture.seedPrereqs()
-        result <- fixture.usecase.run(command(), MemberId("ponta"))
+        result <- fixture.usecase.run(command(), AccountId("ponta"))
         found <- fixture.matches.find(MatchId("match-1"))
       yield
         assertEquals(result.map(_.id), Right(MatchId("match-1")))
@@ -40,7 +40,7 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
       for
         _ <- fixture.seedPrereqs()
         bad = commandWithPlayers(MatchFixtures.duplicateRankPlayers(memberValues))
-        result <- fixture.usecase.run(bad, MemberId("ponta"))
+        result <- fixture.usecase.run(bad, AccountId("ponta"))
         found <- fixture.matches.find(MatchId("match-1"))
       yield
         assertAppError(result, "VALIDATION_FAILED", "players.rank")
@@ -51,7 +51,7 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
     Fixture.resource.use { fixture =>
       for
         _ <- fixture.seedMastersOnly()
-        result <- fixture.usecase.run(command(), MemberId("ponta"))
+        result <- fixture.usecase.run(command(), AccountId("ponta"))
       yield assertAppError(result, "NOT_FOUND", "held event was not found")
     }
 
@@ -59,8 +59,8 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
     Fixture.resource.use { fixture =>
       for
         _ <- fixture.seedPrereqs()
-        first <- fixture.usecase.run(command(), MemberId("ponta"))
-        second <- fixture.usecase.run(commandWithMatchNo(1), MemberId("ponta"))
+        first <- fixture.usecase.run(command(), AccountId("ponta"))
+        second <- fixture.usecase.run(commandWithMatchNo(1), AccountId("ponta"))
       yield
         assertEquals(first.map(_.matchNoInEvent), Right(1))
         assertAppError(second, "CONFLICT", "already exists for held event")
@@ -73,7 +73,7 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
         _ <- fixture.gameTitles
           .create(GameTitle(GameTitleId("title_japan"), "Japan", "japan", 2, now))
         result <- fixture.usecase
-          .run(commandWithGameTitle(GameTitleId("title_japan")), MemberId("ponta"))
+          .run(commandWithGameTitle(GameTitleId("title_japan")), AccountId("ponta"))
       yield assertAppError(result, "VALIDATION_FAILED", "mapMasterId")
     }
 

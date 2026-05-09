@@ -37,6 +37,7 @@ const jsonIdempotencyTargets: ReadonlyArray<{
   { method: "POST", pathname: /^\/api\/game-titles$/ },
   { method: "POST", pathname: /^\/api\/map-masters$/ },
   { method: "POST", pathname: /^\/api\/season-masters$/ },
+  { method: "POST", pathname: /^\/api\/admin\/login-accounts$/ },
 ];
 
 export type ApiErrorLike = NormalizedApiError;
@@ -214,6 +215,10 @@ function fileNameFromDisposition(disposition: string | null): string {
 }
 
 export type AuthMeResponse = components["schemas"]["AuthMeResponse"];
+export type LoginAccountListResponse = components["schemas"]["LoginAccountListResponse"];
+export type LoginAccountResponse = components["schemas"]["LoginAccountResponse"];
+export type CreateLoginAccountRequest = components["schemas"]["CreateLoginAccountRequest"];
+export type UpdateLoginAccountRequest = components["schemas"]["UpdateLoginAccountRequest"];
 
 export async function getAuthMe(): Promise<AuthMeResponse> {
   const response = await apiRequest<AuthMeResponse>("/api/auth/me");
@@ -224,4 +229,32 @@ export async function getAuthMe(): Promise<AuthMeResponse> {
 export async function logout(): Promise<void> {
   await apiRequest<void>("/api/auth/logout", { method: "POST" });
   clearCsrfToken();
+}
+
+export async function listLoginAccounts(): Promise<LoginAccountListResponse> {
+  return apiRequest<LoginAccountListResponse>("/api/admin/login-accounts");
+}
+
+export async function createLoginAccount(
+  request: CreateLoginAccountRequest,
+  options: IdempotencyRequestOptions = {},
+): Promise<LoginAccountResponse> {
+  return apiRequest<LoginAccountResponse>("/api/admin/login-accounts", {
+    method: "POST",
+    body: request,
+    idempotencyKey: options.idempotencyKey,
+  });
+}
+
+export async function updateLoginAccount(
+  accountId: string,
+  request: UpdateLoginAccountRequest,
+): Promise<LoginAccountResponse> {
+  return apiRequest<LoginAccountResponse>(
+    `/api/admin/login-accounts/${encodeURIComponent(accountId)}`,
+    {
+      method: "PATCH",
+      body: request,
+    },
+  );
 }

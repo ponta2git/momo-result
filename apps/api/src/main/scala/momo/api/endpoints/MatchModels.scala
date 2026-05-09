@@ -137,7 +137,8 @@ final case class MatchDetailResponse(
     revenueDraftId: Option[String],
     incidentLogDraftId: Option[String],
     players: List[PlayerResultResponse],
-    createdByMemberId: String,
+    createdByAccountId: String,
+    createdByMemberId: Option[String],
     createdAt: String,
 ) derives Codec.AsObject
 
@@ -193,7 +194,8 @@ object MatchDetailResponse:
         ),
       )
     ),
-    createdByMemberId = r.createdByMemberId.value,
+    createdByAccountId = r.createdByAccountId.value,
+    createdByMemberId = r.createdByMemberId.map(_.value),
     createdAt = DateTimeFormatter.ISO_INSTANT.format(r.createdAt),
   )
 

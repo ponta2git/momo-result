@@ -10,7 +10,7 @@ import org.typelevel.log4cats.slf4j.Slf4jFactory
 import momo.api.adapters.{
   InMemoryAppSessionsRepository, InMemoryGameTitlesRepository, InMemoryHeldEventsRepository,
   InMemoryIdempotencyRepository, InMemoryImageReferenceRepository,
-  InMemoryIncidentMastersRepository, InMemoryMapMastersRepository,
+  InMemoryIncidentMastersRepository, InMemoryLoginAccountsRepository, InMemoryMapMastersRepository,
   InMemoryMatchConfirmationRepository, InMemoryMatchDraftsRepository, InMemoryMatchListReadModel,
   InMemoryMatchesRepository, InMemoryMembersRepository, InMemoryOcrDraftsRepository,
   InMemoryOcrJobCreationRepository, InMemoryOcrJobMaintenanceRepository, InMemoryOcrJobsRepository,
@@ -22,31 +22,24 @@ import momo.api.auth.{
 }
 import momo.api.config.AppConfig
 import momo.api.db.Database
-import momo.api.domain.Member
 import momo.api.domain.ids.*
+import momo.api.domain.{LoginAccount, Member}
 import momo.api.endpoints.HealthEndpoints.HealthDetailsResponse
-import momo.api.repositories.postgres.{
-  PostgresAppSessionsRepository, PostgresGameTitlesRepository, PostgresHeldEventsRepository,
-  PostgresIdempotencyRepository, PostgresImageReferenceRepository,
-  PostgresIncidentMastersRepository, PostgresMapMastersRepository,
-  PostgresMatchConfirmationRepository, PostgresMatchDraftsRepository, PostgresMatchListReadModel,
-  PostgresMatchesRepository, PostgresMembersRepository, PostgresOcrDraftsRepository,
-  PostgresOcrJobCreationRepository, PostgresOcrJobMaintenanceRepository, PostgresOcrJobsRepository,
-  PostgresOcrQueueOutboxRepository, PostgresSeasonMastersRepository,
-}
+import momo.api.repositories.postgres.*
 import momo.api.repositories.{
   AppSessionsRepository, GameTitlesRepository, HeldEventsRepository, IdempotencyRepository,
-  ImageReferenceRepository, IncidentMastersRepository, MapMastersRepository,
-  MatchConfirmationRepository, MatchDraftsRepository, MatchListReadModel, MatchesRepository,
-  MembersRepository, OcrDraftsRepository, OcrJobCreationRepository, OcrJobMaintenanceRepository,
-  OcrJobsRepository, QueueProducer, SeasonMastersRepository,
+  ImageReferenceRepository, IncidentMastersRepository, LoginAccountsRepository,
+  MapMastersRepository, MatchConfirmationRepository, MatchDraftsRepository, MatchListReadModel,
+  MatchesRepository, MembersRepository, OcrDraftsRepository, OcrJobCreationRepository,
+  OcrJobMaintenanceRepository, OcrJobsRepository, QueueProducer, SeasonMastersRepository,
 }
 import momo.api.usecases.{
-  CancelMatchDraft, CancelOcrJob, ConfirmMatch, CreateGameTitle, CreateHeldEvent, CreateMapMaster,
-  CreateMatchDraft, CreateOcrJob, CreateSeasonMaster, DeleteMatch, ExpiredSessionPruner,
-  ExportMatches, GetMatch, GetMatchDraft, GetMatchDraftSourceImages, GetOcrDraft, GetOcrDraftsBulk,
-  GetOcrJob, ListHeldEvents, ListMatches, OcrQueueOutboxDispatcher, OcrQueueSubmitter,
-  PurgeSourceImages, SourceImageOrphanReaper, StaleOcrJobReaper, UpdateMatch, UpdateMatchDraft,
+  CancelMatchDraft, CancelOcrJob, ConfirmMatch, CreateGameTitle, CreateHeldEvent,
+  CreateLoginAccount, CreateMapMaster, CreateMatchDraft, CreateOcrJob, CreateSeasonMaster,
+  DeleteMatch, ExpiredSessionPruner, ExportMatches, GetMatch, GetMatchDraft,
+  GetMatchDraftSourceImages, GetOcrDraft, GetOcrDraftsBulk, GetOcrJob, ListHeldEvents,
+  ListLoginAccounts, ListMatches, OcrQueueOutboxDispatcher, OcrQueueSubmitter, PurgeSourceImages,
+  SourceImageOrphanReaper, StaleOcrJobReaper, UpdateLoginAccount, UpdateMatch, UpdateMatchDraft,
   UploadImage,
 }
 
@@ -94,6 +87,8 @@ object HttpApp:
               PostgresMatchConfirmationRepository[F](transactor)
             val appSessions: AppSessionsRepository[F] = PostgresAppSessionsRepository[F](transactor)
             val members: MembersRepository[F] = PostgresMembersRepository[F](transactor)
+            val loginAccounts: LoginAccountsRepository[F] =
+              PostgresLoginAccountsRepository[F](transactor)
             val gameTitles: GameTitlesRepository[F] = PostgresGameTitlesRepository[F](transactor)
             val mapMasters: MapMastersRepository[F] = PostgresMapMastersRepository[F](transactor)
             val seasonMasters: SeasonMastersRepository[F] =
@@ -134,6 +129,7 @@ object HttpApp:
                   matchConfirmation = matchConfirmation,
                   appSessions = appSessions,
                   members = members,
+                  loginAccounts = loginAccounts,
                   gameTitles = gameTitles,
                   mapMasters = mapMasters,
                   seasonMasters = seasonMasters,
@@ -160,6 +156,19 @@ object HttpApp:
             members <- InMemoryMembersRepository.create[F](config.devMemberIds.map(id =>
               Member(MemberId(id), UserId(id), id, java.time.Instant.EPOCH)
             ))
+            loginAccounts <- InMemoryLoginAccountsRepository
+              .create[F](config.devMemberIds.zipWithIndex.map { (id, index) =>
+                LoginAccount(
+                  MemberRoster.devAccountIdFor(id),
+                  UserId(id),
+                  id,
+                  Some(MemberId(id)),
+                  loginEnabled = true,
+                  isAdmin = index == 0,
+                  createdAt = java.time.Instant.EPOCH,
+                  updatedAt = java.time.Instant.EPOCH,
+                )
+              })
             gameTitles <- InMemoryGameTitlesRepository.create[F]
             mapMasters <- InMemoryMapMastersRepository.create[F]
             seasonMasters <- InMemorySeasonMastersRepository.create[F]
@@ -177,6 +186,7 @@ object HttpApp:
             matchConfirmation,
             appSessions,
             members,
+            loginAccounts,
             gameTitles,
             mapMasters,
             seasonMasters,
@@ -196,6 +206,7 @@ object HttpApp:
                 matchConfirmation,
                 appSessions,
                 members,
+                loginAccounts,
                 gameTitles,
                 mapMasters,
                 seasonMasters,
@@ -233,6 +244,7 @@ object HttpApp:
                 matchConfirmation = matchConfirmation,
                 appSessions = appSessions,
                 members = members,
+                loginAccounts = loginAccounts,
                 gameTitles = gameTitles,
                 mapMasters = mapMasters,
                 seasonMasters = seasonMasters,
@@ -306,6 +318,7 @@ object HttpApp:
       matchConfirmation: MatchConfirmationRepository[F],
       appSessions: AppSessionsRepository[F],
       members: MembersRepository[F],
+      loginAccounts: LoginAccountsRepository[F],
       gameTitles: GameTitlesRepository[F],
       mapMasters: MapMastersRepository[F],
       seasonMasters: SeasonMastersRepository[F],
@@ -317,7 +330,7 @@ object HttpApp:
     val uploadImage = UploadImage[F](imageStore)
     val nowF = Clock[F].realTimeInstant
     val nextId = OcrJobId.fresh[F].map(_.value)
-    val sessionService = SessionService[F](appSessions, members, config.auth, nowF)
+    val sessionService = SessionService[F](appSessions, loginAccounts, config.auth, nowF)
     val csrfTokenService = CsrfTokenService()
     val oauthStateCodec = OAuthStateCodec[F](config.auth, nowF)
     val createOcrJob = CreateOcrJob[F](
@@ -385,6 +398,9 @@ object HttpApp:
     val createGameTitle = CreateGameTitle[F](gameTitles, nowF)
     val createMapMaster = CreateMapMaster[F](gameTitles, mapMasters, nowF)
     val createSeasonMaster = CreateSeasonMaster[F](gameTitles, seasonMasters, nowF)
+    val listLoginAccounts = ListLoginAccounts[F](loginAccounts)
+    val createLoginAccount = CreateLoginAccount[F](loginAccounts, members, nowF, nextId)
+    val updateLoginAccount = UpdateLoginAccount[F](loginAccounts, members, appSessions, nowF)
 
     (
       LoginRateLimiter.create[F](config.auth.rateLimitPerMinute, nowF),
@@ -417,6 +433,10 @@ object HttpApp:
         mapMasters = mapMasters,
         seasonMasters = seasonMasters,
         incidentMasters = incidentMasters,
+        loginAccounts = loginAccounts,
+        listLoginAccounts = listLoginAccounts,
+        createLoginAccount = createLoginAccount,
+        updateLoginAccount = updateLoginAccount,
         createGameTitle = createGameTitle,
         createMapMaster = createMapMaster,
         createSeasonMaster = createSeasonMaster,

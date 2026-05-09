@@ -1923,6 +1923,196 @@
           }
         }
       }
+    },
+    "/api/admin/login-accounts" : {
+      "get" : {
+        "tags" : [
+          "admin"
+        ],
+        "operationId" : "getApiAdminLogin-accounts",
+        "parameters" : [
+          {
+            "name" : "X-Dev-User",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LoginAccountListResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post" : {
+        "tags" : [
+          "admin"
+        ],
+        "operationId" : "postApiAdminLogin-accounts",
+        "parameters" : [
+          {
+            "name" : "X-Dev-User",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "Idempotency-Key",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateLoginAccountRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LoginAccountResponse"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: body",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/login-accounts/{accountId}" : {
+      "patch" : {
+        "tags" : [
+          "admin"
+        ],
+        "operationId" : "patchApiAdminLogin-accountsAccountid",
+        "parameters" : [
+          {
+            "name" : "accountId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-Dev-User",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateLoginAccountRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LoginAccountResponse"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: body",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components" : {
@@ -1931,14 +2121,21 @@
         "title" : "AuthMeResponse",
         "type" : "object",
         "required" : [
-          "memberId",
-          "displayName"
+          "accountId",
+          "displayName",
+          "isAdmin"
         ],
         "properties" : {
-          "memberId" : {
+          "accountId" : {
             "type" : "string"
           },
           "displayName" : {
+            "type" : "string"
+          },
+          "isAdmin" : {
+            "type" : "boolean"
+          },
+          "memberId" : {
             "type" : "string"
           },
           "csrfToken" : {
@@ -2097,6 +2294,33 @@
         "properties" : {
           "heldAt" : {
             "type" : "string"
+          }
+        }
+      },
+      "CreateLoginAccountRequest" : {
+        "title" : "CreateLoginAccountRequest",
+        "type" : "object",
+        "required" : [
+          "discordUserId",
+          "displayName",
+          "loginEnabled",
+          "isAdmin"
+        ],
+        "properties" : {
+          "discordUserId" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "playerMemberId" : {
+            "type" : "string"
+          },
+          "loginEnabled" : {
+            "type" : "boolean"
+          },
+          "isAdmin" : {
+            "type" : "boolean"
           }
         }
       },
@@ -2431,6 +2655,57 @@
           }
         }
       },
+      "LoginAccountListResponse" : {
+        "title" : "LoginAccountListResponse",
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/LoginAccountResponse"
+            }
+          }
+        }
+      },
+      "LoginAccountResponse" : {
+        "title" : "LoginAccountResponse",
+        "type" : "object",
+        "required" : [
+          "accountId",
+          "discordUserId",
+          "displayName",
+          "loginEnabled",
+          "isAdmin",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties" : {
+          "accountId" : {
+            "type" : "string"
+          },
+          "discordUserId" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "playerMemberId" : {
+            "type" : "string"
+          },
+          "loginEnabled" : {
+            "type" : "boolean"
+          },
+          "isAdmin" : {
+            "type" : "boolean"
+          },
+          "createdAt" : {
+            "type" : "string"
+          },
+          "updatedAt" : {
+            "type" : "string"
+          }
+        }
+      },
       "MapMasterListResponse" : {
         "title" : "MapMasterListResponse",
         "type" : "object",
@@ -2485,7 +2760,7 @@
           "ownerMemberId",
           "mapMasterId",
           "playedAt",
-          "createdByMemberId",
+          "createdByAccountId",
           "createdAt"
         ],
         "properties" : {
@@ -2531,6 +2806,9 @@
             "items" : {
               "$ref" : "#/components/schemas/PlayerResultResponse"
             }
+          },
+          "createdByAccountId" : {
+            "type" : "string"
           },
           "createdByMemberId" : {
             "type" : "string"
@@ -3072,6 +3350,24 @@
           },
           "createdAt" : {
             "type" : "string"
+          }
+        }
+      },
+      "UpdateLoginAccountRequest" : {
+        "title" : "UpdateLoginAccountRequest",
+        "type" : "object",
+        "properties" : {
+          "displayName" : {
+            "type" : "string"
+          },
+          "playerMemberId" : {
+            "type" : "string"
+          },
+          "loginEnabled" : {
+            "type" : "boolean"
+          },
+          "isAdmin" : {
+            "type" : "boolean"
           }
         }
       },

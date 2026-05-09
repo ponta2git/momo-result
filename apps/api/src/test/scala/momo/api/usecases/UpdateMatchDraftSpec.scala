@@ -42,7 +42,7 @@ final class UpdateMatchDraftSpec extends MomoCatsEffectSuite:
           playedAt = Some(updatedAt),
           status = Some("needs_review"),
         ),
-        MemberId("ponta"),
+        AccountId("ponta"),
       )
       found <- fixture.matchDrafts.find(draftId)
     yield
@@ -61,7 +61,7 @@ final class UpdateMatchDraftSpec extends MomoCatsEffectSuite:
       _ <- fixture.seedPrereqs()
       _ <- fixture.matchDrafts.create(editingDraft(draftId, MatchDraftStatus.DraftReady))
       result <- fixture.usecase
-        .run(draftId, blankCommand.copy(status = Some("needs_review")), MemberId("otaka"))
+        .run(draftId, blankCommand.copy(status = Some("needs_review")), AccountId("otaka"))
       found <- fixture.matchDrafts.find(draftId)
     yield
       assertAppError(result, "FORBIDDEN", "cannot update")
@@ -74,7 +74,7 @@ final class UpdateMatchDraftSpec extends MomoCatsEffectSuite:
       _ <- fixture.seedPrereqs()
       _ <- fixture.matchDrafts.create(confirmedDraft(draftId))
       result <- fixture.usecase
-        .run(draftId, blankCommand.copy(matchNoInEvent = Some(2)), MemberId("ponta"))
+        .run(draftId, blankCommand.copy(matchNoInEvent = Some(2)), AccountId("ponta"))
       found <- fixture.matchDrafts.find(draftId)
     yield
       assertAppError(result, "CONFLICT", "cannot be edited")
@@ -87,9 +87,9 @@ final class UpdateMatchDraftSpec extends MomoCatsEffectSuite:
       _ <- fixture.seedPrereqs()
       _ <- fixture.matchDrafts.create(editingDraft(draftId, MatchDraftStatus.DraftReady))
       unknown <- fixture.usecase
-        .run(draftId, blankCommand.copy(status = Some("not_a_status")), MemberId("ponta"))
+        .run(draftId, blankCommand.copy(status = Some("not_a_status")), AccountId("ponta"))
       terminal <- fixture.usecase
-        .run(draftId, blankCommand.copy(status = Some("confirmed")), MemberId("ponta"))
+        .run(draftId, blankCommand.copy(status = Some("confirmed")), AccountId("ponta"))
       found <- fixture.matchDrafts.find(draftId)
     yield
       assertAppError(unknown, "VALIDATION_FAILED", "unknown match draft status")
@@ -109,7 +109,7 @@ final class UpdateMatchDraftSpec extends MomoCatsEffectSuite:
           mapMasterId = Some(mapId),
           seasonMasterId = Some(seasonId),
         ),
-        MemberId("ponta"),
+        AccountId("ponta"),
       )
       found <- fixture.matchDrafts.find(draftId)
     yield

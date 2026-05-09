@@ -33,15 +33,15 @@ trait HttpAppTestFixtures:
       seed: HttpApp.Wired[IO] => IO[Unit],
   ): Resource[IO, TestHttpApp] = wiredHttpAppResourceWith(prefix, identity, seed)
 
-  protected def devReadHeader(): Header.Raw = devReadHeader("ponta")
+  protected def devReadHeader(): Header.Raw = devReadHeader("account_ponta")
 
-  protected def devReadHeader(memberId: String): Header.Raw = Header
-    .Raw(CIString("X-Dev-User"), memberId)
+  protected def devReadHeader(accountId: String): Header.Raw = Header
+    .Raw(CIString("X-Dev-User"), accountId)
 
-  protected def devWriteHeaders(): List[Header.ToRaw] = devWriteHeaders("ponta", None)
+  protected def devWriteHeaders(): List[Header.ToRaw] = devWriteHeaders("account_ponta", None)
 
   protected def devWriteHeadersWithIdempotency(idempotencyKey: Option[String]): List[Header.ToRaw] =
-    devWriteHeaders("ponta", idempotencyKey)
+    devWriteHeaders("account_ponta", idempotencyKey)
 
   private def httpAppResourceWith(
       prefix: String,
@@ -59,11 +59,11 @@ trait HttpAppTestFixtures:
   }
 
   private def devWriteHeaders(
-      memberId: String,
+      accountId: String,
       idempotencyKey: Option[String],
   ): List[Header.ToRaw] =
     val base =
-      List[Header.ToRaw](devReadHeader(memberId), Header.Raw(CIString("X-CSRF-Token"), "dev"))
+      List[Header.ToRaw](devReadHeader(accountId), Header.Raw(CIString("X-CSRF-Token"), "dev"))
     idempotencyKey
       .fold(base)(key => base :+ (Header.Raw(CIString("Idempotency-Key"), key): Header.ToRaw))
 
@@ -72,5 +72,5 @@ trait HttpAppTestFixtures:
     httpHost = "127.0.0.1",
     httpPort = 0,
     imageTmpDir = dir,
-    devMemberIds = List("ponta", "akane-mami", "otaka", "eu"),
+    devMemberIds = List("member_ponta", "member_akane_mami", "member_otaka", "member_eu"),
   )

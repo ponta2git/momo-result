@@ -19,7 +19,7 @@ object ExportModule:
   ): List[ServerEndpoint[Any, F]] = List(ExportEndpoints.matches.serverLogic {
     case (format, seasonMasterId, heldEventId, matchId, devUser) => security
         .authorizeRead(devUser) { member =>
-          rateLimiter.allow(s"export:${member.memberId.value}").flatMap {
+          rateLimiter.allow(s"export:${member.accountId.value}").flatMap {
             case false => Async[F].pure(Left(
                 security.toProblem(AppError.TooManyRequests("Too many exports. Try again later."))
               ))

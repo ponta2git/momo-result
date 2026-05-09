@@ -62,7 +62,7 @@ async function invalidateMasterResourceCaches(
 
 export function MastersPage() {
   const auth = useAuth();
-  const authScope = auth.auth?.memberId ?? "anonymous";
+  const authScope = auth.auth?.accountId ?? "anonymous";
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [, startReturnTransition] = useTransition();

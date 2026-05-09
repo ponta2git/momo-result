@@ -5,14 +5,14 @@ import java.time.Instant
 import cats.effect.IO
 import munit.CatsEffectSuite
 
-import momo.api.domain.ids.MemberId
+import momo.api.domain.ids.AccountId
 import momo.api.repositories.{IdempotencyRecord, IdempotencyResponse}
 
 final class InMemoryIdempotencyRepositorySpec extends CatsEffectSuite:
 
   private val now = Instant.parse("2026-04-30T12:00:00Z")
   private val later = now.plusSeconds(60 * 60 * 24)
-  private val member = MemberId("ponta")
+  private val member = AccountId("ponta")
 
   private def record(
       key: String,
@@ -21,7 +21,7 @@ final class InMemoryIdempotencyRepositorySpec extends CatsEffectSuite:
       expiresAt: Instant,
   ): IdempotencyRecord = IdempotencyRecord(
     key = key,
-    memberId = member,
+    accountId = member,
     endpoint = endpoint,
     requestHash = hash,
     response = IdempotencyResponse(200, Map("Content-Type" -> "application/json"), Vector.empty),
@@ -47,7 +47,7 @@ final class InMemoryIdempotencyRepositorySpec extends CatsEffectSuite:
     for
       repo <- InMemoryIdempotencyRepository.create[IO]
       _ <- repo.record(r)
-      got <- repo.lookup(r.key, r.memberId, r.endpoint)
+      got <- repo.lookup(r.key, r.accountId, r.endpoint)
     yield assertEquals(got, Some(r))
 
   test("record fails when the same composite key is reused"):

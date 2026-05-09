@@ -3,7 +3,8 @@ import { createBrowserRouter, Navigate, useParams } from "react-router-dom";
 
 import { App } from "@/app/App";
 import { AppShell } from "@/app/AppShell";
-import { AuthenticatedRoute, PublicOnlyRoute, RootRedirect } from "@/app/routeGuards";
+import { AdminRoute, AuthenticatedRoute, PublicOnlyRoute, RootRedirect } from "@/app/routeGuards";
+import { AdminAccountsPage } from "@/features/adminAccounts/AdminAccountsPage";
 import { LoginPage } from "@/features/auth/LoginPage";
 import { DraftReviewPage } from "@/features/draftReview/DraftReviewPage";
 import { ExportPage } from "@/features/exports/ExportPage";
@@ -79,6 +80,14 @@ export const appRoutes: RouteObject[] = [
           {
             path: "admin/masters",
             element: <MastersPage />,
+          },
+          {
+            path: "admin/accounts",
+            element: (
+              <AdminRoute>
+                <AdminAccountsPage />
+              </AdminRoute>
+            ),
           },
         ],
       },

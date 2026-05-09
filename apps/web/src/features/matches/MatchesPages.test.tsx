@@ -21,7 +21,7 @@ describe("MatchesListPage", () => {
   });
 
   it("renders matches and links to detail", async () => {
-    window.localStorage.setItem("momoresult.devUser", "ponta");
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
 
     render(
       <QueryClientProvider client={queryClient}>
@@ -41,7 +41,7 @@ describe("MatchesListPage", () => {
   });
 
   it("preserves selected held-event filter in URL after submitting", async () => {
-    window.localStorage.setItem("momoresult.devUser", "ponta");
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
 
     render(
       <QueryClientProvider client={queryClient}>
@@ -74,7 +74,7 @@ describe("MatchesListPage", () => {
   });
 
   it("applies sort changes to the URL search params", async () => {
-    window.localStorage.setItem("momoresult.devUser", "ponta");
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
 
     render(
       <QueryClientProvider client={queryClient}>
@@ -111,7 +111,7 @@ describe("MatchDetailPage", () => {
   });
 
   it("shows delete confirmation modal when 削除 clicked", async () => {
-    window.localStorage.setItem("momoresult.devUser", "ponta");
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
 
     render(
       <QueryClientProvider client={queryClient}>

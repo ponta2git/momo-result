@@ -36,14 +36,16 @@ object MatchModule:
           "POST /api/matches",
           request,
           nowF,
-          security.respond(confirmMatch.run(MatchCodec.toConfirmCommand(request), member.memberId))(
-            record =>
-              ConfirmMatchResponse(
-                matchId = record.id.value,
-                heldEventId = record.heldEventId.value,
-                matchNoInEvent = record.matchNoInEvent,
-                createdAt = DateTimeFormatter.ISO_INSTANT.format(record.createdAt),
-              )
+          security.respond(
+            confirmMatch
+              .run(MatchCodec.toConfirmCommand(request), member.accountId, member.playerMemberId)
+          )(record =>
+            ConfirmMatchResponse(
+              matchId = record.id.value,
+              heldEventId = record.heldEventId.value,
+              matchNoInEvent = record.matchNoInEvent,
+              createdAt = DateTimeFormatter.ISO_INSTANT.format(record.createdAt),
+            )
           ),
         )
       }

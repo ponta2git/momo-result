@@ -3,11 +3,12 @@ package momo.api.http
 import cats.effect.Async
 import cats.syntax.all.*
 
-import momo.api.auth.{AuthenticatedMember, MemberRoster}
+import momo.api.auth.{AuthenticatedAccount, MemberRoster}
 import momo.api.config.{AppConfig, AppEnv}
-import momo.api.domain.ids.MemberId
+import momo.api.domain.ids.AccountId
 import momo.api.endpoints.ProblemDetails
 import momo.api.errors.AppError
+import momo.api.repositories.LoginAccountsRepository
 
 /**
  * Pluggable authentication / CSRF policy bound to the runtime environment.
@@ -19,24 +20,39 @@ import momo.api.errors.AppError
 trait AuthPolicy[F[_]]:
   def authenticate(
       devUser: Option[String]
-  ): F[Either[ProblemDetails.ProblemResponse, AuthenticatedMember]]
+  ): F[Either[ProblemDetails.ProblemResponse, AuthenticatedAccount]]
 
   def verifyCsrf(csrfToken: Option[String]): F[Either[ProblemDetails.ProblemResponse, Unit]]
 
 object AuthPolicy:
-  def apply[F[_]: Async](config: AppConfig, roster: MemberRoster): AuthPolicy[F] =
-    config.appEnv match
-      case AppEnv.Prod => new ProductionAuthPolicy[F]
-      case AppEnv.Dev | AppEnv.Test => new DevAuthPolicy[F](config, roster)
+  def apply[F[_]: Async](
+      config: AppConfig,
+      roster: MemberRoster,
+      accounts: LoginAccountsRepository[F],
+  ): AuthPolicy[F] = config.appEnv match
+    case AppEnv.Prod => new ProductionAuthPolicy[F](accounts)
+    case AppEnv.Dev | AppEnv.Test => new DevAuthPolicy[F](config, roster)
 
-private final class ProductionAuthPolicy[F[_]: Async] extends AuthPolicy[F]:
+private final class ProductionAuthPolicy[F[_]: Async](accounts: LoginAccountsRepository[F])
+    extends AuthPolicy[F]:
   private def toProblem(error: AppError): ProblemDetails.ProblemResponse = ProblemDetails
     .from(error)
 
   override def authenticate(
       devUser: Option[String]
-  ): F[Either[ProblemDetails.ProblemResponse, AuthenticatedMember]] = devUser match
-    case Some(value) => Async[F].pure(Right(AuthenticatedMember(MemberId(value), value)))
+  ): F[Either[ProblemDetails.ProblemResponse, AuthenticatedAccount]] = devUser match
+    case Some(value) => accounts.find(AccountId(value)).map {
+        case Some(account) if account.loginEnabled =>
+          Right(AuthenticatedAccount(
+            account.id,
+            account.displayName,
+            account.isAdmin,
+            account.playerMemberId,
+          ))
+        case Some(_) =>
+          Left(toProblem(AppError.Forbidden("This account is not allowed to log in.")))
+        case None => Left(toProblem(AppError.Unauthorized()))
+      }
     case None => Async[F].pure(Left(toProblem(AppError.Unauthorized())))
 
   override def verifyCsrf(
@@ -50,7 +66,7 @@ private final class DevAuthPolicy[F[_]: Async](config: AppConfig, roster: Member
 
   override def authenticate(
       devUser: Option[String]
-  ): F[Either[ProblemDetails.ProblemResponse, AuthenticatedMember]] = devUser match
+  ): F[Either[ProblemDetails.ProblemResponse, AuthenticatedAccount]] = devUser match
     case Some(value) => DevAuthMiddleware.authenticate(config.appEnv, roster, value)
         .map(_.leftMap(toProblem))
     case None => Async[F].pure(Left(toProblem(AppError.Unauthorized())))

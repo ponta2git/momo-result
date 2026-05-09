@@ -76,7 +76,7 @@ afterAll { teardownIo.unsafeRunSync() }
 | `HTTP_HOST` | `0.0.0.0` | bind host |
 | `HTTP_PORT` | `8080` | bind port |
 | `IMAGE_TMP_DIR` | 一時ディレクトリ配下の共有パス | OCR Worker と共有する一時画像ディレクトリ |
-| `DEV_MEMBER_IDS` | 開発用メンバーIDのカンマ区切り | 開発用ログイン可能ID（固定4名） |
+| `DEV_MEMBER_IDS` | 開発用メンバーIDのカンマ区切り | 試合参加者として許可する固定4名の `member_*` ID |
 
 `APP_ENV=prod` では開発用認証は拒否されます。
 
@@ -84,14 +84,14 @@ afterAll { teardownIo.unsafeRunSync() }
 
 ```sh
 cd apps/api
-APP_ENV=dev DEV_MEMBER_IDS=<dev-member-1>,<dev-member-2>,<dev-member-3>,<dev-member-4> sbt run
+APP_ENV=dev DEV_MEMBER_IDS=member_ponta,member_akane_mami,member_otaka,member_eu sbt run
 ```
 
 例:
 
 ```sh
 curl http://localhost:8080/healthz
-curl -H 'X-Dev-User: <dev-member-id>' http://localhost:8080/api/auth/me
+curl -H 'X-Dev-User: account_ponta' http://localhost:8080/api/auth/me
 ```
 
 Mutation 系 API は `X-Dev-User` と `X-CSRF-Token: dev` が必要です。

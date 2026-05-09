@@ -90,7 +90,8 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       player("member_otaka", 3, 3, 6500, 800),
       player("member_eu", 4, 4, 4000, 200),
     ),
-    createdByMemberId = MemberId("member_ponta"),
+    createdByAccountId = AccountId("account_ponta"),
+    createdByMemberId = Some(MemberId("member_ponta")),
     createdAt = now,
   )
 

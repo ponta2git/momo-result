@@ -137,7 +137,7 @@ export function OcrCapturePage() {
           <Notice className="border-0 bg-transparent p-0" tone="danger" title={auth.error.title}>
             <p>
               {auth.error.status === 403
-                ? "DEV_MEMBER_IDS に含まれていないユーザーです。"
+                ? "許可されていない開発用アカウントです。API の DEV_MEMBER_IDS を確認してください。"
                 : auth.error.detail}
             </p>
           </Notice>

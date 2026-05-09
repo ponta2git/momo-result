@@ -29,6 +29,25 @@ final class DbContractSpec extends IntegrationSuite:
       )
     }
 
+  test("momo_login_accounts table is seeded with MVP player accounts"):
+    val program = sql"""
+      SELECT id, player_member_id, login_enabled, is_admin
+      FROM momo_login_accounts
+      ORDER BY id
+    """.query[(String, Option[String], Boolean, Boolean)].to[List].transact(transactor)
+    program.map { rows =>
+      assertEquals(
+        rows.toSet,
+        Set[(String, Option[String], Boolean, Boolean)](
+          ("account_akane_mami", Some("member_akane_mami"), true, false),
+          ("account_eu", Some("member_eu"), true, false),
+          ("account_otaka", Some("member_otaka"), true, false),
+          ("account_ponta", Some("member_ponta"), true, true),
+        ),
+        s"unexpected login accounts: $rows",
+      )
+    }
+
   test("incident_masters has the 6 fixed incident IDs"):
     val program = sql"""
       SELECT id FROM incident_masters ORDER BY display_order
@@ -62,6 +81,7 @@ final class DbContractSpec extends IntegrationSuite:
         "total_assets_draft_id",
         "revenue_draft_id",
         "incident_log_draft_id",
+        "created_by_account_id",
         "created_by_member_id",
         "created_at",
         "updated_at",
@@ -74,6 +94,7 @@ final class DbContractSpec extends IntegrationSuite:
     columnsFor("match_drafts").map { cols =>
       val expected = Set(
         "id",
+        "created_by_account_id",
         "created_by_member_id",
         "status",
         "held_event_id",
@@ -177,10 +198,26 @@ final class DbContractSpec extends IntegrationSuite:
       )
     }
 
-  test("idempotency_keys table exposes the columns required by the proposal"):
+  test("app_sessions tracks the login account separately from the optional player member"):
+    columnsFor("app_sessions").map { cols =>
+      val expected = Set(
+        "id",
+        "account_id",
+        "member_id",
+        "csrf_secret",
+        "created_at",
+        "last_seen_at",
+        "expires_at",
+      )
+      val missing = expected -- cols.toSet
+      assert(missing.isEmpty, s"app_sessions is missing columns: $missing (have $cols)")
+    }
+
+  test("idempotency_keys table exposes the account-scoped columns required by the API"):
     columnsFor("idempotency_keys").map { cols =>
       val expected = Set(
         "key",
+        "account_id",
         "member_id",
         "endpoint",
         "request_hash",
@@ -194,7 +231,7 @@ final class DbContractSpec extends IntegrationSuite:
       assert(missing.isEmpty, s"idempotency_keys is missing columns: $missing (have $cols)")
     }
 
-  test("idempotency_keys primary key is (key, member_id, endpoint)"):
+  test("idempotency_keys primary key is (key, account_id, endpoint)"):
     val program = sql"""
       SELECT a.attname
       FROM pg_index i
@@ -202,7 +239,7 @@ final class DbContractSpec extends IntegrationSuite:
       WHERE i.indrelid = 'public.idempotency_keys'::regclass AND i.indisprimary
       ORDER BY array_position(i.indkey, a.attnum)
     """.query[String].to[List].transact(transactor)
-    program.map(cols => assertEquals(cols, List("key", "member_id", "endpoint")))
+    program.map(cols => assertEquals(cols, List("key", "account_id", "endpoint")))
 
   test("idempotency_keys has an expires_at index for the cleanup query"):
     val program = sql"""

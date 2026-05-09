@@ -16,8 +16,9 @@ import io.circe.Decoder
 import io.circe.parser.decode
 
 import momo.api.config.AuthConfig
+import momo.api.domain.LoginAccount
 import momo.api.errors.AppError
-import momo.api.repositories.{AppSession, AppSessionsRepository, MembersRepository}
+import momo.api.repositories.{AppSession, AppSessionsRepository, LoginAccountsRepository}
 
 final case class DiscordUser(id: String)
 
@@ -105,22 +106,23 @@ object JavaDiscordOAuthClient:
       Sync[F].delay(HttpClient.newBuilder().connectTimeout(ConnectTimeout).build())
     ).map(new JavaDiscordOAuthClient[F](config, _))
 
-final case class AuthenticatedSession(member: AuthenticatedMember, session: AppSession)
+final case class AuthenticatedSession(account: AuthenticatedAccount, session: AppSession)
 
 final class SessionService[F[_]: Sync: SecureRandom](
     sessions: AppSessionsRepository[F],
-    members: MembersRepository[F],
+    accounts: LoginAccountsRepository[F],
     config: AuthConfig,
     now: F[Instant],
 ):
-  def create(member: momo.api.domain.Member): F[AppSession] =
+  def create(account: LoginAccount): F[AppSession] =
     for
       current <- now
       id <- SecureTokenGenerator.token[F](32)
       csrf <- SecureTokenGenerator.token[F](32)
       session = AppSession(
         id = id,
-        memberId = member.id,
+        accountId = account.id,
+        playerMemberId = account.playerMemberId,
         csrfSecret = csrf,
         createdAt = current,
         lastSeenAt = current,
@@ -140,15 +142,23 @@ final class SessionService[F[_]: Sync: SecureRandom](
             case None => Sync[F].pure(Left(AppError.Unauthorized()))
             case Some(session) if !session.expiresAt.isAfter(current) =>
               sessions.delete(session.id).as(Left(AppError.Unauthorized("Session has expired.")))
-            case Some(session) => members.find(session.memberId).flatMap {
-                case None => Sync[F].pure(Left(AppError.Unauthorized()))
-                case Some(member) =>
+            case Some(session) => accounts.find(session.accountId).flatMap {
+                case None => sessions.delete(session.id).as(Left(AppError.Unauthorized()))
+                case Some(account) if !account.loginEnabled =>
+                  sessions.delete(session.id)
+                    .as(Left(AppError.Forbidden("This account is not allowed to log in.")))
+                case Some(account) =>
                   val renewed = session.copy(
                     lastSeenAt = current,
                     expiresAt = current.plusSeconds(config.sessionTtl.toSeconds),
                   )
                   sessions.upsert(renewed).as(Right(AuthenticatedSession(
-                    AuthenticatedMember(member.id, member.displayName),
+                    AuthenticatedAccount(
+                      account.id,
+                      account.displayName,
+                      account.isAdmin,
+                      account.playerMemberId,
+                    ),
                     renewed,
                   )))
               }

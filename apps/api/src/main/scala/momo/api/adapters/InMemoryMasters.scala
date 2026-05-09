@@ -6,10 +6,13 @@ import cats.effect.{Ref, Sync}
 import cats.syntax.functor.*
 
 import momo.api.domain.ids.*
-import momo.api.domain.{GameTitle, IncidentMaster, MapMaster, Member, MemberAlias, SeasonMaster}
+import momo.api.domain.{
+  GameTitle, IncidentMaster, LoginAccount, MapMaster, Member, MemberAlias, SeasonMaster,
+}
 import momo.api.repositories.{
-  GameTitlesRepository, IncidentMastersRepository, MapMastersRepository, MemberAliasesRepository,
-  MembersRepository, SeasonMastersRepository,
+  CreateLoginAccountData, GameTitlesRepository, IncidentMastersRepository, LoginAccountsRepository,
+  MapMastersRepository, MemberAliasesRepository, MembersRepository, SeasonMastersRepository,
+  UpdateLoginAccountData,
 }
 
 final class InMemoryGameTitlesRepository[F[_]: Sync] private (
@@ -112,3 +115,45 @@ object InMemoryMembersRepository:
   def create[F[_]: Sync](members: List[Member]): F[InMemoryMembersRepository[F]] = Ref
     .of[F, Map[MemberId, Member]](members.map(m => m.id -> m).toMap)
     .map(new InMemoryMembersRepository(_))
+
+final class InMemoryLoginAccountsRepository[F[_]: Sync] private (
+    ref: Ref[F, Map[AccountId, LoginAccount]]
+) extends LoginAccountsRepository[F]:
+  override def list: F[List[LoginAccount]] = ref.get
+    .map(_.values.toList.sortBy(a => (!a.isAdmin, !a.loginEnabled, a.createdAt, a.id.value)))
+  override def find(id: AccountId): F[Option[LoginAccount]] = ref.get.map(_.get(id))
+  override def findByDiscordUserId(userId: UserId): F[Option[LoginAccount]] = ref.get
+    .map(_.values.find(_.discordUserId == userId))
+  override def create(account: CreateLoginAccountData): F[LoginAccount] =
+    val created = LoginAccount(
+      account.id,
+      account.discordUserId,
+      account.displayName,
+      account.playerMemberId,
+      account.loginEnabled,
+      account.isAdmin,
+      account.createdAt,
+      account.updatedAt,
+    )
+    ref.update(_ + (created.id -> created)).as(created)
+  override def update(id: AccountId, data: UpdateLoginAccountData): F[Option[LoginAccount]] = ref
+    .modify { accounts =>
+      accounts.get(id) match
+        case None => (accounts, None)
+        case Some(existing) =>
+          val updated = existing.copy(
+            displayName = data.displayName.getOrElse(existing.displayName),
+            playerMemberId = data.playerMemberId.getOrElse(existing.playerMemberId),
+            loginEnabled = data.loginEnabled.getOrElse(existing.loginEnabled),
+            isAdmin = data.isAdmin.getOrElse(existing.isAdmin),
+            updatedAt = data.updatedAt,
+          )
+          (accounts.updated(id, updated), Some(updated))
+    }
+  override def enabledAdminCount: F[Int] = ref.get
+    .map(_.values.count(a => a.loginEnabled && a.isAdmin))
+
+object InMemoryLoginAccountsRepository:
+  def create[F[_]: Sync](accounts: List[LoginAccount]): F[InMemoryLoginAccountsRepository[F]] = Ref
+    .of[F, Map[AccountId, LoginAccount]](accounts.map(a => a.id -> a).toMap)
+    .map(new InMemoryLoginAccountsRepository(_))

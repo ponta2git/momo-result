@@ -19,7 +19,7 @@ type RenderOptions = {
 let queryClient: QueryClient;
 
 function renderPage({ downloadTimeoutMs, path = "/exports", slowThresholdMs }: RenderOptions = {}) {
-  window.localStorage.setItem("momoresult.devUser", "ponta");
+  window.localStorage.setItem("momoresult.devUser", "account_ponta");
   render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[path]}>

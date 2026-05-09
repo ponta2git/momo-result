@@ -38,14 +38,14 @@ private[http] final class ProductionSessionMiddleware[F[_]: Async](
               csrf.verify(authenticated.session, token) match
                 case Left(error) => problem(error)
                 case Right(_) => app
-                    .run(withInternalAuth(sanitized, authenticated.member.memberId.value))
+                    .run(withInternalAuth(sanitized, authenticated.account.accountId.value))
             case Right(authenticated) => app
-                .run(withInternalAuth(sanitized, authenticated.member.memberId.value))
+                .run(withInternalAuth(sanitized, authenticated.account.accountId.value))
           }
       }
 
-  private def withInternalAuth(request: Request[F], memberId: String): Request[F] = request
-    .putHeaders(Header.Raw(devUserHeader, memberId))
+  private def withInternalAuth(request: Request[F], accountId: String): Request[F] = request
+    .putHeaders(Header.Raw(devUserHeader, accountId))
 
   private def isMutating(method: org.http4s.Method): Boolean = Set("POST", "PUT", "PATCH", "DELETE")
     .contains(method.name)

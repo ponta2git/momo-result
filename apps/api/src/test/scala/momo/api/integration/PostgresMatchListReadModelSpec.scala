@@ -69,7 +69,8 @@ final class PostgresMatchListReadModelSpec extends IntegrationSuite:
       player("member_otaka", 3, 3),
       player("member_eu", 4, 4),
     ),
-    createdByMemberId = MemberId("member_ponta"),
+    createdByAccountId = AccountId("account_ponta"),
+    createdByMemberId = Some(MemberId("member_ponta")),
     createdAt = playedAt,
   )
 
@@ -80,7 +81,8 @@ final class PostgresMatchListReadModelSpec extends IntegrationSuite:
       playedAt: Option[Instant] = None, // scalafix:ok DisableSyntax.defaultArgs
   ): MatchDraft = MatchDraft.fromInputs(
     id = MatchDraftId(id),
-    createdByMemberId = MemberId("member_ponta"),
+    createdByAccountId = AccountId("account_ponta"),
+    createdByMemberId = Some(MemberId("member_ponta")),
     status = status,
     heldEventId = Some(heldEventId),
     matchNoInEvent = Some(2),

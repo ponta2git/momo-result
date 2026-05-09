@@ -6,7 +6,7 @@ import { fetchCallsOf } from "@/test/doubles/dom";
 
 describe("SourceImagePanel", () => {
   it("loads source images through the API client so dev auth headers are sent", async () => {
-    window.localStorage.setItem("momoresult.devUser", "ponta");
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
     vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:source-image");
     const fetchMock = vi.fn(
       async () =>
@@ -40,6 +40,6 @@ describe("SourceImagePanel", () => {
       throw new Error("Expected fetch init");
     }
     expect(init.credentials).toBe("include");
-    expect((init.headers as Headers).get("X-Dev-User")).toBe("ponta");
+    expect((init.headers as Headers).get("X-Dev-User")).toBe("account_ponta");
   });
 });

@@ -14,12 +14,15 @@
 | 種別 | テーブル |
 |---|---|
 | summit 共有 | `members`, `held_events`, `held_event_participants`, `app_sessions` |
+| 認証・権限 | `momo_login_accounts` |
 | 試合結果 | `match_drafts`, `matches`, `match_players`, `match_incidents` |
 | OCR | `ocr_drafts`, `ocr_jobs`, `ocr_queue_outbox` |
 | マスタ | `game_titles`, `map_masters`, `season_masters`, `incident_masters`, `member_aliases` |
 | 冪等性 | `idempotency_keys` |
 
 `held_events.session_id` は nullable。summit 作成分は session に紐づき、本アプリ作成分は `NULL` になり得る。
+
+`momo_login_accounts` は momo-result のログイン主体を管理する。`members` は試合参加者マスタとして扱い、ログインアカウントとは `player_member_id` で任意に紐づける。
 
 ## 3. 画像データ
 

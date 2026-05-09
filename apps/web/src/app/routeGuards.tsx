@@ -93,3 +93,23 @@ export function AuthenticatedRoute({ children }: { children: ReactNode }) {
 
   return children;
 }
+
+export function AdminRoute({ children }: { children: ReactNode }) {
+  const auth = useAuth();
+
+  if (auth.isChecking) {
+    return <AuthLoading message="認証状態を確認中です..." />;
+  }
+
+  if (!auth.auth?.isAdmin) {
+    return (
+      <PageFrame>
+        <Notice tone="danger" title="管理者権限が必要です">
+          この画面は管理者だけが利用できます。
+        </Notice>
+      </PageFrame>
+    );
+  }
+
+  return children;
+}

@@ -6,7 +6,7 @@ import cats.MonadThrow
 import cats.effect.{Ref, Sync}
 import cats.syntax.all.*
 
-import momo.api.domain.ids.MemberId
+import momo.api.domain.ids.AccountId
 import momo.api.repositories.{IdempotencyAlg, IdempotencyRecord, IdempotencyRepository}
 
 /**
@@ -23,13 +23,13 @@ final class InMemoryIdempotencyRepository[F[_]: MonadThrow] private (
   private val alg: IdempotencyAlg[F] = new IdempotencyAlg[F]:
     override def lookup(
         key: String,
-        memberId: MemberId,
+        accountId: AccountId,
         endpoint: String,
     ): F[Option[IdempotencyRecord]] = ref.get
-      .map(_.get(InMemoryIdempotencyRepository.Key(key, memberId, endpoint)))
+      .map(_.get(InMemoryIdempotencyRepository.Key(key, accountId, endpoint)))
 
     override def record(entry: IdempotencyRecord): F[Unit] =
-      val pk = InMemoryIdempotencyRepository.Key(entry.key, entry.memberId, entry.endpoint)
+      val pk = InMemoryIdempotencyRepository.Key(entry.key, entry.accountId, entry.endpoint)
       ref.modify { state =>
         state.get(pk) match
           case Some(existing) => (state, Left(existing))
@@ -50,15 +50,15 @@ final class InMemoryIdempotencyRepository[F[_]: MonadThrow] private (
 
   override def lookup(
       key: String,
-      memberId: MemberId,
+      accountId: AccountId,
       endpoint: String,
-  ): F[Option[IdempotencyRecord]] = delegate.lookup(key, memberId, endpoint)
+  ): F[Option[IdempotencyRecord]] = delegate.lookup(key, accountId, endpoint)
   override def record(entry: IdempotencyRecord): F[Unit] = delegate.record(entry)
   override def cleanup(now: Instant): F[Int] = delegate.cleanup(now)
 end InMemoryIdempotencyRepository
 
 object InMemoryIdempotencyRepository:
-  private[adapters] final case class Key(key: String, memberId: MemberId, endpoint: String)
+  private[adapters] final case class Key(key: String, accountId: AccountId, endpoint: String)
       derives CanEqual
 
   def create[F[_]: Sync]: F[InMemoryIdempotencyRepository[F]] = Ref

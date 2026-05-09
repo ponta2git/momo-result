@@ -5,6 +5,7 @@ import type { components } from "@/shared/api/generated";
 const now = "2026-01-01T00:00:00.000Z";
 
 type GameTitleRecord = components["schemas"]["GameTitleResponse"];
+type LoginAccountRecord = components["schemas"]["LoginAccountResponse"];
 type MapMasterRecord = components["schemas"]["MapMasterResponse"];
 type SeasonMasterRecord = components["schemas"]["SeasonMasterResponse"];
 type IncidentRecord = components["schemas"]["IncidentMasterResponse"];
@@ -36,12 +37,37 @@ const seasonMastersSeed: readonly SeasonMasterRecord[] = [
     createdAt: now,
   },
 ];
+const loginAccountsSeed: readonly LoginAccountRecord[] = [
+  {
+    accountId: "account_ponta",
+    discordUserId: "523484457705930752",
+    displayName: "ぽんた",
+    playerMemberId: "member_ponta",
+    loginEnabled: true,
+    isAdmin: true,
+    createdAt: now,
+    updatedAt: now,
+  },
+  {
+    accountId: "account_eu",
+    discordUserId: "523484457705930755",
+    displayName: "いーゆー",
+    playerMemberId: "member_eu",
+    loginEnabled: true,
+    isAdmin: false,
+    createdAt: now,
+    updatedAt: now,
+  },
+];
 
 let gameTitlesStore: GameTitleRecord[] = structuredClone(gameTitlesSeed) as GameTitleRecord[];
 let mapMastersStore: MapMasterRecord[] = structuredClone(mapMastersSeed) as MapMasterRecord[];
 let seasonMastersStore: SeasonMasterRecord[] = structuredClone(
   seasonMastersSeed,
 ) as SeasonMasterRecord[];
+let loginAccountsStore: LoginAccountRecord[] = structuredClone(
+  loginAccountsSeed,
+) as LoginAccountRecord[];
 const incidentMastersSeed: IncidentRecord[] = [
   { id: "incident_destination", key: "destination", displayName: "目的地", displayOrder: 1 },
   { id: "incident_plus_station", key: "plusStation", displayName: "プラス駅", displayOrder: 2 },
@@ -140,6 +166,7 @@ export function resetMswStores(): void {
   gameTitlesStore = structuredClone(gameTitlesSeed) as GameTitleRecord[];
   mapMastersStore = structuredClone(mapMastersSeed) as MapMasterRecord[];
   seasonMastersStore = structuredClone(seasonMastersSeed) as SeasonMasterRecord[];
+  loginAccountsStore = structuredClone(loginAccountsSeed) as LoginAccountRecord[];
   matchListStore = structuredClone(matchListSeed) as MatchListEntry[];
 }
 
@@ -158,7 +185,55 @@ export const handlers = [
         { status: 401 },
       );
     }
-    return HttpResponse.json({ memberId: devUser, displayName: devUser });
+    const account = loginAccountsStore.find((item) => item.accountId === devUser);
+    if (!account || !account.loginEnabled) {
+      return HttpResponse.json(
+        {
+          type: "about:blank",
+          title: "Forbidden",
+          status: 403,
+          detail: "dev user is not allowed",
+          code: "FORBIDDEN",
+        },
+        { status: 403 },
+      );
+    }
+    return HttpResponse.json({
+      accountId: account.accountId,
+      displayName: account.displayName,
+      isAdmin: account.isAdmin,
+      memberId: account.playerMemberId,
+      csrfToken: "dev",
+    });
+  }),
+  http.get("/api/admin/login-accounts", () =>
+    HttpResponse.json({ items: structuredClone(loginAccountsStore) }),
+  ),
+  http.post("/api/admin/login-accounts", async ({ request }) => {
+    const body = (await request.json()) as components["schemas"]["CreateLoginAccountRequest"];
+    const created: LoginAccountRecord = {
+      accountId: `account-${body.discordUserId}`,
+      discordUserId: body.discordUserId,
+      displayName: body.displayName,
+      loginEnabled: body.loginEnabled,
+      isAdmin: body.isAdmin,
+      createdAt: now,
+      updatedAt: now,
+    };
+    if (body.playerMemberId) {
+      created.playerMemberId = body.playerMemberId;
+    }
+    loginAccountsStore.push(created);
+    return HttpResponse.json(created);
+  }),
+  http.patch("/api/admin/login-accounts/:accountId", async ({ params, request }) => {
+    const accountId = String(params["accountId"]);
+    const body = (await request.json()) as components["schemas"]["UpdateLoginAccountRequest"];
+    loginAccountsStore = loginAccountsStore.map((account) =>
+      account.accountId === accountId ? { ...account, ...body, updatedAt: now } : account,
+    );
+    const updated = loginAccountsStore.find((account) => account.accountId === accountId);
+    return HttpResponse.json(updated);
   }),
   http.post("/api/uploads/images", async () =>
     HttpResponse.json({

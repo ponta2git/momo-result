@@ -41,10 +41,10 @@ final class UpdateMatchDraft[F[_]: MonadThrow](
   def run(
       draftId: MatchDraftId,
       command: UpdateMatchDraftCommand,
-      memberId: MemberId,
+      accountId: AccountId,
   ): F[Either[AppError, MatchDraft]] = (for
     existing <- matchDrafts.find(draftId).orNotFound("match draft", draftId.value)
-    _ <- EitherT.fromEither[F](authorize(existing, memberId))
+    _ <- EitherT.fromEither[F](authorize(existing, accountId))
     _ <- EitherT.fromEither[F](ensureEditable(existing.status))
     _ <- EitherT.fromEither[F](validateMatchNo(command.matchNoInEvent))
     _ <- validateForeignKeys(command)
@@ -73,9 +73,9 @@ final class UpdateMatchDraft[F[_]: MonadThrow](
     _ <- matchDrafts.update(updated, at).ensureFoundF("match draft", draftId.value)
   yield updated.withCommon(_.copy(updatedAt = at))).value
 
-  private def authorize(draft: MatchDraft, memberId: MemberId): Either[AppError, Unit] = Either
+  private def authorize(draft: MatchDraft, accountId: AccountId): Either[AppError, Unit] = Either
     .cond(
-      draft.createdByMemberId == memberId,
+      draft.createdByAccountId == accountId,
       (),
       AppError.Forbidden("You cannot update this match draft."),
     )

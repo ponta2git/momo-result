@@ -61,6 +61,7 @@ export function makeMatchDetail(overrides: Partial<MatchDetailResponse> = {}): M
     ownerMemberId: "member_ponta",
     mapMasterId: "map_east",
     playedAt: "2026-04-04T12:34:56.000Z",
+    createdByAccountId: "account_ponta",
     createdByMemberId: "member_ponta",
     createdAt: "2026-04-04T13:00:00.000Z",
     ...overrides,

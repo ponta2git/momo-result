@@ -30,7 +30,7 @@ The API dev auth header is resolved in this order:
 2. `localStorage["momoresult.devUser"]`
 3. The in-page Dev User picker
 
-Allowed local users must match API `DEV_MEMBER_IDS`: `ponta,akane-mami,otaka,eu`.
+Allowed local users use account IDs derived from API `DEV_MEMBER_IDS`: `account_ponta`, `account_akane_mami`, `account_otaka`, `account_eu`.
 
 ## Quality commands
 

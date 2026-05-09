@@ -32,7 +32,14 @@ final class ConfirmMatch[F[_]: MonadThrow](
 ):
   import ConfirmMatch.*
 
-  def run(command: Command, createdBy: MemberId): F[Either[AppError, MatchRecord]] = (for
+  def run(command: Command, createdBy: AccountId): F[Either[AppError, MatchRecord]] =
+    run(command, createdBy, Some(MemberId(createdBy.value)))
+
+  def run(
+      command: Command,
+      createdBy: AccountId,
+      playerMemberId: Option[MemberId],
+  ): F[Either[AppError, MatchRecord]] = (for
     validated <- EitherT.fromEither[F](
       MatchValidation.validate(
         MatchValidation.Input(
@@ -85,6 +92,7 @@ final class ConfirmMatch[F[_]: MonadThrow](
       playedAt,
       title.layoutFamily,
       createdBy,
+      playerMemberId,
       command,
       validated.players,
     )
@@ -127,7 +135,8 @@ object ConfirmMatch:
       createdAt: Instant,
       playedAt: Instant,
       layoutFamily: String,
-      createdByMemberId: MemberId,
+      createdByAccountId: AccountId,
+      createdByMemberId: Option[MemberId],
       command: Command,
       players: FourPlayers,
   ): MatchRecord = MatchRecord(
@@ -144,6 +153,7 @@ object ConfirmMatch:
     revenueDraftId = command.draftRefs.revenue,
     incidentLogDraftId = command.draftRefs.incidentLog,
     players = players,
+    createdByAccountId = createdByAccountId,
     createdByMemberId = createdByMemberId,
     createdAt = createdAt,
   )

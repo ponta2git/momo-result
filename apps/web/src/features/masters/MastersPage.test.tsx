@@ -33,7 +33,7 @@ describe("MastersPage", () => {
   });
 
   it("renders relation board headings", async () => {
-    window.localStorage.setItem("momoresult.devUser", "ponta");
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
     renderPage();
 
     expect(await screen.findByRole("heading", { name: "マスタ管理" })).toBeInTheDocument();
@@ -46,7 +46,7 @@ describe("MastersPage", () => {
   });
 
   it("creates a new game title and selects it", async () => {
-    window.localStorage.setItem("momoresult.devUser", "ponta");
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
     renderPage();
 
     expect(await screen.findByRole("button", { name: /桃太郎電鉄2/ })).toBeInTheDocument();
@@ -58,7 +58,7 @@ describe("MastersPage", () => {
   });
 
   it("invalidates consumer-facing master caches after creating a game title", async () => {
-    window.localStorage.setItem("momoresult.devUser", "ponta");
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
     queryClient.setQueryData(["masters", "game-titles", "workspace"], { items: [] });
     queryClient.setQueryData(["game-titles"], { items: [] });
     renderPage();
@@ -77,7 +77,7 @@ describe("MastersPage", () => {
   });
 
   it("shows the new game title optimistically while the server is responding", async () => {
-    window.localStorage.setItem("momoresult.devUser", "ponta");
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
     server.use(
       http.post("/api/game-titles", async ({ request }) => {
         const body = (await request.json()) as { id: string; name: string; layoutFamily: string };
@@ -106,7 +106,7 @@ describe("MastersPage", () => {
   });
 
   it("shows the six fixed incident masters", async () => {
-    window.localStorage.setItem("momoresult.devUser", "ponta");
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
     renderPage();
 
     expect(await screen.findByText("目的地")).toBeInTheDocument();
@@ -118,7 +118,7 @@ describe("MastersPage", () => {
   });
 
   it("shows return action with handoff notice when returnTo is provided", async () => {
-    window.localStorage.setItem("momoresult.devUser", "ponta");
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
 
     const handoffId = saveMasterHandoff(
       createDraftReviewHandoffPayload({
@@ -167,10 +167,10 @@ describe("MastersPage", () => {
   });
 
   it("does not show cached load error after remount while refetch is running", async () => {
-    window.localStorage.setItem("momoresult.devUser", "ponta");
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
     await queryClient
       .fetchQuery({
-        queryKey: masterQueryKeys.gameTitles("ponta"),
+        queryKey: masterQueryKeys.gameTitles("account_ponta"),
         queryFn: async () => {
           throw new Error("cached load error");
         },
@@ -209,8 +209,8 @@ describe("MastersPage", () => {
   });
 
   it("does not reuse list-response cache entries from OCR setup queries", async () => {
-    window.localStorage.setItem("momoresult.devUser", "ponta");
-    queryClient.setQueryData(["masters", "game-titles", "ponta"], {
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    queryClient.setQueryData(["masters", "game-titles", "account_ponta"], {
       items: [
         {
           id: "gt_cached_response",

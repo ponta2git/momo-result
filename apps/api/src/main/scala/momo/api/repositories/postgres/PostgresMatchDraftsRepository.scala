@@ -23,33 +23,34 @@ import momo.api.repositories.{MatchDraftsAlg, MatchDraftsRepository}
  */
 object PostgresMatchDrafts:
 
-  private type Row = (
-      MatchDraftId,
-      MemberId,
-      MatchDraftStatus,
-      Option[HeldEventId],
-      Option[Int],
-      Option[GameTitleId],
-      Option[String],
-      Option[SeasonMasterId],
-      Option[MemberId],
-      Option[MapMasterId],
-      Option[Instant],
-      Option[ImageId],
-      Option[ImageId],
-      Option[ImageId],
-      Option[OcrDraftId],
-      Option[OcrDraftId],
-      Option[OcrDraftId],
-      Option[Instant],
-      Option[Instant],
-      Option[MatchId],
-      Instant,
-      Instant,
+  private final case class Row(
+      id: MatchDraftId,
+      createdByAccountId: AccountId,
+      createdByMemberId: Option[MemberId],
+      status: MatchDraftStatus,
+      heldEventId: Option[HeldEventId],
+      matchNoInEvent: Option[Int],
+      gameTitleId: Option[GameTitleId],
+      layoutFamily: Option[String],
+      seasonMasterId: Option[SeasonMasterId],
+      ownerMemberId: Option[MemberId],
+      mapMasterId: Option[MapMasterId],
+      playedAt: Option[Instant],
+      totalAssetsImageId: Option[ImageId],
+      revenueImageId: Option[ImageId],
+      incidentLogImageId: Option[ImageId],
+      totalAssetsDraftId: Option[OcrDraftId],
+      revenueDraftId: Option[OcrDraftId],
+      incidentLogDraftId: Option[OcrDraftId],
+      sourceImagesRetainedUntil: Option[Instant],
+      sourceImagesDeletedAt: Option[Instant],
+      confirmedMatchId: Option[MatchId],
+      createdAt: Instant,
+      updatedAt: Instant,
   )
 
   private val selectAll = fr"""SELECT
-      id, created_by_member_id, status, held_event_id, match_no_in_event,
+      id, created_by_account_id, created_by_member_id, status, held_event_id, match_no_in_event,
       game_title_id, layout_family, season_master_id, owner_member_id, map_master_id,
       played_at, total_assets_image_id, revenue_image_id, incident_log_image_id,
       total_assets_draft_id, revenue_draft_id, incident_log_draft_id,
@@ -58,28 +59,29 @@ object PostgresMatchDrafts:
     FROM match_drafts"""
 
   private def toDraft(row: Row): ConnectionIO[MatchDraft] = MatchDraft.fromInputs(
-    id = row._1,
-    createdByMemberId = row._2,
-    status = row._3,
-    heldEventId = row._4,
-    matchNoInEvent = row._5,
-    gameTitleId = row._6,
-    layoutFamily = row._7,
-    seasonMasterId = row._8,
-    ownerMemberId = row._9,
-    mapMasterId = row._10,
-    playedAt = row._11,
-    totalAssetsImageId = row._12,
-    revenueImageId = row._13,
-    incidentLogImageId = row._14,
-    totalAssetsDraftId = row._15,
-    revenueDraftId = row._16,
-    incidentLogDraftId = row._17,
-    sourceImagesRetainedUntil = row._18,
-    sourceImagesDeletedAt = row._19,
-    confirmedMatchId = row._20,
-    createdAt = row._21,
-    updatedAt = row._22,
+    id = row.id,
+    createdByAccountId = row.createdByAccountId,
+    createdByMemberId = row.createdByMemberId,
+    status = row.status,
+    heldEventId = row.heldEventId,
+    matchNoInEvent = row.matchNoInEvent,
+    gameTitleId = row.gameTitleId,
+    layoutFamily = row.layoutFamily,
+    seasonMasterId = row.seasonMasterId,
+    ownerMemberId = row.ownerMemberId,
+    mapMasterId = row.mapMasterId,
+    playedAt = row.playedAt,
+    totalAssetsImageId = row.totalAssetsImageId,
+    revenueImageId = row.revenueImageId,
+    incidentLogImageId = row.incidentLogImageId,
+    totalAssetsDraftId = row.totalAssetsDraftId,
+    revenueDraftId = row.revenueDraftId,
+    incidentLogDraftId = row.incidentLogDraftId,
+    sourceImagesRetainedUntil = row.sourceImagesRetainedUntil,
+    sourceImagesDeletedAt = row.sourceImagesDeletedAt,
+    confirmedMatchId = row.confirmedMatchId,
+    createdAt = row.createdAt,
+    updatedAt = row.updatedAt,
   ).fold(
     err =>
       MonadThrow[ConnectionIO]
@@ -90,15 +92,15 @@ object PostgresMatchDrafts:
   val alg: MatchDraftsAlg[ConnectionIO] = new MatchDraftsAlg[ConnectionIO]:
     override def create(draft: MatchDraft): ConnectionIO[Unit] = sql"""
       INSERT INTO match_drafts (
-        id, created_by_member_id, status, held_event_id, match_no_in_event,
+        id, created_by_account_id, created_by_member_id, status, held_event_id, match_no_in_event,
         game_title_id, layout_family, season_master_id, owner_member_id, map_master_id,
         played_at, total_assets_image_id, revenue_image_id, incident_log_image_id,
         total_assets_draft_id, revenue_draft_id, incident_log_draft_id,
         source_images_retained_until, source_images_deleted_at, confirmed_match_id,
         created_at, updated_at
       ) VALUES (
-        ${draft.id}, ${draft.createdByMemberId}, ${draft.status}, ${draft.heldEventId}, ${draft
-        .matchNoInEvent},
+        ${draft.id}, ${draft.createdByAccountId}, ${draft.createdByMemberId}, ${draft
+        .status}, ${draft.heldEventId}, ${draft.matchNoInEvent},
         ${draft.gameTitleId}, ${draft.layoutFamily}, ${draft.seasonMasterId}, ${draft
         .ownerMemberId}, ${draft.mapMasterId},
         ${draft.playedAt}, ${draft.totalAssetsImageId}, ${draft.revenueImageId}, ${draft

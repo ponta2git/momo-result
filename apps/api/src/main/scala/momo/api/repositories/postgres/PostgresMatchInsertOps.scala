@@ -28,13 +28,13 @@ object PostgresMatchInsertOps:
           game_title_id, layout_family, season_master_id,
           owner_member_id, map_master_id, played_at,
           total_assets_draft_id, revenue_draft_id, incident_log_draft_id,
-          created_by_member_id, created_at, updated_at
+          created_by_account_id, created_by_member_id, created_at, updated_at
         ) VALUES (
           ${record.id}, ${record.heldEventId}, ${record.matchNoInEvent},
           ${record.gameTitleId}, ${record.layoutFamily}, ${record.seasonMasterId},
           ${record.ownerMemberId}, ${record.mapMasterId}, ${record.playedAt},
           ${record.totalAssetsDraftId}, ${record.revenueDraftId}, ${record.incidentLogDraftId},
-          ${record.createdByMemberId}, ${record.createdAt}, $updatedAt
+          ${record.createdByAccountId}, ${record.createdByMemberId}, ${record.createdAt}, $updatedAt
         )
       """.update.run
 

@@ -53,10 +53,76 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
     httpApp.run(request).flatMap { response =>
       response.as[Json].map { body =>
         assertEquals(response.status, Status.Ok)
-        assertEquals(jsonField[String](body, "memberId"), "ponta")
+        assertEquals(jsonField[String](body, "accountId"), "account_ponta")
+        assertEquals(jsonField[String](body, "memberId"), "member_ponta")
+        assertEquals(jsonField[Boolean](body, "isAdmin"), true)
         assertEquals(jsonField[String](body, "csrfToken"), "dev")
       }
     }
+  }
+
+  app.test("GET /api/admin/login-accounts is restricted to administrator accounts") { httpApp =>
+    val request = Request[IO](Method.GET, uri"/api/admin/login-accounts")
+      .putHeaders(devReadHeader("account_akane_mami"))
+    httpApp.run(request).flatMap(response =>
+      assertProblemDetailEquals(
+        response,
+        Status.Forbidden,
+        "FORBIDDEN",
+        "Administrator access is required.",
+      )
+    )
+  }
+
+  app.test("GET /api/admin/login-accounts lists operator accounts for administrators") { httpApp =>
+    val request = Request[IO](Method.GET, uri"/api/admin/login-accounts")
+      .putHeaders(devReadHeader())
+    httpApp.run(request).flatMap { response =>
+      response.as[Json].map { body =>
+        assertEquals(response.status, Status.Ok)
+        val accountIds = body.hcursor.downField("items").as[List[Json]].fold(
+          error => fail(s"expected items: ${error.getMessage}; body=${body.noSpaces}"),
+          _.flatMap(_.hcursor.get[String]("accountId").toOption),
+        )
+        assert(
+          accountIds.contains("account_ponta"),
+          s"account_ponta account is missing: $accountIds",
+        )
+      }
+    }
+  }
+
+  app.test("POST /api/admin/login-accounts creates an operator-only account") { httpApp =>
+    val request = Request[IO](Method.POST, uri"/api/admin/login-accounts")
+      .putHeaders(devWriteHeaders()*).withEntity(Json.obj(
+        "discordUserId" -> Json.fromString("123456789012345678"),
+        "displayName" -> Json.fromString("operator"),
+        "playerMemberId" -> Json.Null,
+        "loginEnabled" -> Json.fromBoolean(true),
+        "isAdmin" -> Json.fromBoolean(false),
+      ))
+    httpApp.run(request).flatMap { response =>
+      response.as[Json].map { body =>
+        assertEquals(response.status, Status.Ok)
+        assertEquals(jsonField[String](body, "displayName"), "operator")
+        assertEquals(jsonField[Option[String]](body, "playerMemberId"), None)
+        assertEquals(jsonField[Boolean](body, "isAdmin"), false)
+      }
+    }
+  }
+
+  app.test("PATCH /api/admin/login-accounts keeps at least one enabled administrator") { httpApp =>
+    val request = Request[IO](Method.PATCH, uri"/api/admin/login-accounts/account_ponta")
+      .putHeaders(devWriteHeaders()*)
+      .withEntity(Json.obj("loginEnabled" -> Json.fromBoolean(false)))
+    httpApp.run(request).flatMap(response =>
+      assertProblemDetailEquals(
+        response,
+        Status.Conflict,
+        "CONFLICT",
+        "At least one enabled administrator account is required.",
+      )
+    )
   }
 
   app.test("mutation without development CSRF token is rejected") { httpApp =>

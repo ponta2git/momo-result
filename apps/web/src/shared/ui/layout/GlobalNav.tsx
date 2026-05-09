@@ -1,4 +1,4 @@
-import { Database, Download, LogIn, LogOut, ScanLine, Trophy } from "lucide-react";
+import { Database, Download, LogIn, LogOut, ScanLine, ShieldCheck, Trophy } from "lucide-react";
 import type { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
 
@@ -18,10 +18,15 @@ const defaultItems: NavItem[] = [
   { icon: <Database className="size-4" />, label: "マスタ", to: "/admin/masters" },
 ];
 
+const adminItems: NavItem[] = [
+  { icon: <ShieldCheck className="size-4" />, label: "アカウント", to: "/admin/accounts" },
+];
+
 type GlobalNavProps = {
   authDisplayName?: string | undefined;
   className?: string;
   isAuthenticated?: boolean;
+  isAdmin?: boolean;
   isLogoutPending?: boolean;
   items?: NavItem[];
   onLogout?: (() => void) | undefined;
@@ -31,12 +36,15 @@ export function GlobalNav({
   authDisplayName,
   className,
   isAuthenticated = true,
+  isAdmin = false,
   isLogoutPending = false,
   items = defaultItems,
   onLogout,
 }: GlobalNavProps) {
   const navItems = isAuthenticated
-    ? items
+    ? isAdmin
+      ? [...items, ...adminItems]
+      : items
     : [{ icon: <LogIn className="size-4" />, label: "ログイン", to: "/login" }];
 
   return (

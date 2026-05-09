@@ -18,7 +18,7 @@ object UploadModule:
   ): List[ServerEndpoint[Any, F]] = List(UploadEndpoints.uploadImage.serverLogic {
     case (devUser, csrfToken, parts) => security
         .authorizeMutation(devUser, csrfToken) { member =>
-          rateLimiter.allow(s"upload:${member.memberId.value}").flatMap {
+          rateLimiter.allow(s"upload:${member.accountId.value}").flatMap {
             case false => Async[F].pure(Left(
                 security
                   .toProblem(AppError.TooManyRequests("Too many image uploads. Try again later."))

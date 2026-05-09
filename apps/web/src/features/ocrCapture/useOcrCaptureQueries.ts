@@ -9,6 +9,7 @@ import { parseLayoutFamily } from "@/shared/api/enums";
 import { listGameTitles } from "@/shared/api/masters";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
+import { useDevUser } from "@/shared/auth/useDevUser";
 
 type AuthMe = Awaited<ReturnType<typeof getAuthMe>>;
 
@@ -30,12 +31,13 @@ export type OcrCaptureQueries = {
  * 認証関連は `auth` スライスに整形し、ページ側は `auth.error` 等のフラットな値だけ参照する。
  */
 export function useOcrCaptureQueries(gameTitleId: string): OcrCaptureQueries {
-  const authQuery = useQuery({ ...authQueryOptions(), retry: false });
+  const { devUser } = useDevUser();
+  const authQuery = useQuery({ ...authQueryOptions(devUser), retry: false });
   const ready = authQuery.isSuccess;
-  const memberId = authQuery.data?.memberId;
+  const accountId = authQuery.data?.accountId;
 
   const gameTitlesQuery = useQuery({
-    queryKey: ["masters", "game-titles", memberId ?? "anonymous"],
+    queryKey: ["masters", "game-titles", accountId ?? "anonymous"],
     queryFn: listGameTitles,
     enabled: ready,
   });
@@ -53,7 +55,7 @@ export function useOcrCaptureQueries(gameTitleId: string): OcrCaptureQueries {
     auth: {
       data: authQuery.data,
       error: authQuery.error ? normalizeUnknownApiError(authQuery.error) : undefined,
-      memberId,
+      memberId: accountId,
       ready,
     },
     gameTitlesQuery,

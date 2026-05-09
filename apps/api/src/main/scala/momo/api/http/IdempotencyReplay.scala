@@ -11,7 +11,7 @@ import io.circe.syntax.*
 import io.circe.{Decoder, Encoder, Json, Printer}
 import org.slf4j.LoggerFactory
 
-import momo.api.auth.AuthenticatedMember
+import momo.api.auth.AuthenticatedAccount
 import momo.api.endpoints.ProblemDetails
 import momo.api.errors.AppError
 import momo.api.repositories.{IdempotencyRecord, IdempotencyRepository, IdempotencyResponse}
@@ -22,7 +22,7 @@ import momo.api.repositories.{IdempotencyRecord, IdempotencyRepository, Idempote
  * For details see `apps/api/docs/proposals/idempotency-keys.md`.
  *
  *   - When `Idempotency-Key` is absent, the wrapped effect runs unchanged.
- *   - When present and the `(key, memberId, endpoint)` row already exists with the same request
+ *   - When present and the `(key, accountId, endpoint)` row already exists with the same request
  *     hash, the stored response body is decoded and replayed without invoking the effect.
  *   - Same key with a different request hash returns HTTP 409 Conflict.
  *   - Otherwise the effect runs and the success response is recorded with a 24h TTL.
@@ -35,7 +35,7 @@ private[http] object IdempotencyReplay:
 
   /**
    * @param key       the inbound `Idempotency-Key` header value
-   * @param member    authenticated caller (PK component)
+   * @param account   authenticated caller (PK component)
    * @param endpoint  endpoint label, e.g. "POST /api/match-drafts"
    * @param request   request payload used to compute the canonical hash
    * @param now       effectful clock
@@ -44,7 +44,7 @@ private[http] object IdempotencyReplay:
   def wrap[F[_]: Async, Req, Resp](
       idempotency: IdempotencyRepository[F],
       key: Option[String],
-      member: AuthenticatedMember,
+      account: AuthenticatedAccount,
       endpoint: String,
       request: Req,
       now: F[Instant],
@@ -57,24 +57,24 @@ private[http] object IdempotencyReplay:
     case None => run
     case Some(rawKey) =>
       val requestHash = sha256(canonicalJsonBytes(request.asJson))
-      idempotency.lookup(rawKey, member.memberId, endpoint).flatMap {
+      idempotency.lookup(rawKey, account.accountId, endpoint).flatMap {
         case Some(existing) if existing.requestHash == requestHash =>
           decodeStoredBody[Resp](existing.response.body) match
             case Right(replay) => Async[F].pure(Right(replay))
             case Left(_) => run.flatMap(
-                handleFreshResult(idempotency, rawKey, member, endpoint, requestHash, now, _)
+                handleFreshResult(idempotency, rawKey, account, endpoint, requestHash, now, _)
               )
         case Some(_) => Async[F].pure(Left(ProblemDetails.from(
             AppError.Conflict("Idempotency-Key was reused with a different request payload.")
           )))
         case None => run
-            .flatMap(handleFreshResult(idempotency, rawKey, member, endpoint, requestHash, now, _))
+            .flatMap(handleFreshResult(idempotency, rawKey, account, endpoint, requestHash, now, _))
       }
 
   private def handleFreshResult[F[_]: Async, Resp: Encoder](
       idempotency: IdempotencyRepository[F],
       key: String,
-      member: AuthenticatedMember,
+      account: AuthenticatedAccount,
       endpoint: String,
       requestHash: Vector[Byte],
       now: F[Instant],
@@ -89,7 +89,7 @@ private[http] object IdempotencyReplay:
         )
         val record = IdempotencyRecord(
           key = key,
-          memberId = member.memberId,
+          accountId = account.accountId,
           endpoint = endpoint,
           requestHash = requestHash,
           response = response,
@@ -100,8 +100,8 @@ private[http] object IdempotencyReplay:
           case Right(_) => Async[F].pure(right)
           case Left(error) => Async[F].delay {
               logger.error(
-                s"Failed to record idempotency response endpoint=$endpoint memberId=${member
-                    .memberId.value} keyLength=${key.length} errorClass=${error.getClass.getName}",
+                s"Failed to record idempotency response endpoint=$endpoint accountId=${account
+                    .accountId.value} keyLength=${key.length} errorClass=${error.getClass.getName}",
                 error,
               )
             }.as(right)

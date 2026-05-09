@@ -23,6 +23,7 @@ export function AppShell() {
       <GlobalNav
         authDisplayName={auth.auth?.displayName}
         isAuthenticated={auth.isAuthenticated}
+        isAdmin={auth.auth?.isAdmin ?? false}
         isLogoutPending={auth.isLogoutPending}
         onLogout={auth.logout}
       />

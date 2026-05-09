@@ -51,7 +51,7 @@ describe("app routing", () => {
   });
 
   it("redirects / to /matches when authenticated", async () => {
-    window.localStorage.setItem("momoresult.devUser", "ponta");
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
     const { router } = renderApp("/");
 
     expect(await screen.findByRole("heading", { name: "試合" })).toBeInTheDocument();
@@ -68,7 +68,7 @@ describe("app routing", () => {
   });
 
   it("redirects /login to /matches when authenticated", async () => {
-    window.localStorage.setItem("momoresult.devUser", "ponta");
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
     const { router } = renderApp("/login");
 
     expect(await screen.findByRole("heading", { name: "試合" })).toBeInTheDocument();
@@ -76,7 +76,7 @@ describe("app routing", () => {
   });
 
   it("renders edit mode at /matches/:matchId/edit", async () => {
-    window.localStorage.setItem("momoresult.devUser", "ponta");
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
     const { router } = renderApp("/matches/match-1/edit");
 
     await waitFor(() => {

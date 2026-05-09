@@ -37,4 +37,7 @@ object ApiEndpoints:
     SeasonMastersEndpoints.list,
     SeasonMastersEndpoints.create,
     IncidentMastersEndpoints.list,
+    AdminAccountEndpoints.list,
+    AdminAccountEndpoints.create,
+    AdminAccountEndpoints.update,
   )

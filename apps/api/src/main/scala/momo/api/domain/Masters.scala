@@ -54,3 +54,18 @@ final case class MemberAlias(memberId: MemberId, alias: String, createdAt: Insta
  * migration `0009_seed_members`.
  */
 final case class Member(id: MemberId, userId: UserId, displayName: String, createdAt: Instant)
+
+/**
+ * Login/operator account for momo-result. `playerMemberId` is nullable because some operators can
+ * edit records without being one of the current four game participants.
+ */
+final case class LoginAccount(
+    id: AccountId,
+    discordUserId: UserId,
+    displayName: String,
+    playerMemberId: Option[MemberId],
+    loginEnabled: Boolean,
+    isAdmin: Boolean,
+    createdAt: Instant,
+    updatedAt: Instant,
+)

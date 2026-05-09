@@ -5,7 +5,7 @@ import java.time.Instant
 import cats.~>
 import doobie.ConnectionIO
 
-import momo.api.domain.ids.MemberId
+import momo.api.domain.ids.{AccountId, MemberId}
 
 /**
  * Discord OAuth session row stored in `app_sessions`.
@@ -15,7 +15,8 @@ import momo.api.domain.ids.MemberId
  */
 final case class AppSession(
     id: String,
-    memberId: MemberId,
+    accountId: AccountId,
+    playerMemberId: Option[MemberId],
     csrfSecret: String,
     createdAt: Instant,
     lastSeenAt: Instant,
@@ -26,6 +27,7 @@ trait AppSessionsAlg[F0[_]]:
   def find(id: String): F0[Option[AppSession]]
   def upsert(session: AppSession): F0[Unit]
   def delete(id: String): F0[Unit]
+  def deleteByAccount(accountId: AccountId): F0[Int]
   def touchLastSeen(id: String, lastSeenAt: Instant): F0[Unit]
   def deleteExpired(now: Instant): F0[Int]
 
@@ -38,6 +40,7 @@ trait AppSessionsRepository[F[_]]:
   def find(id: String): F[Option[AppSession]]
   def upsert(session: AppSession): F[Unit]
   def delete(id: String): F[Unit]
+  def deleteByAccount(accountId: AccountId): F[Int]
   def touchLastSeen(id: String, lastSeenAt: Instant): F[Unit]
   def deleteExpired(now: Instant): F[Int]
 
@@ -49,6 +52,7 @@ object AppSessionsRepository:
     def find(id: String): F[Option[AppSession]] = transactK(alg.find(id))
     def upsert(session: AppSession): F[Unit] = transactK(alg.upsert(session))
     def delete(id: String): F[Unit] = transactK(alg.delete(id))
+    def deleteByAccount(accountId: AccountId): F[Int] = transactK(alg.deleteByAccount(accountId))
     def touchLastSeen(id: String, lastSeenAt: Instant): F[Unit] =
       transactK(alg.touchLastSeen(id, lastSeenAt))
     def deleteExpired(now: Instant): F[Int] = transactK(alg.deleteExpired(now))

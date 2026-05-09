@@ -28,9 +28,10 @@ final class PostgresOcrJobMaintenanceRepositorySpec extends IntegrationSuite:
       """.update.run.transact(transactor)
       _ <- sql"""
         INSERT INTO match_drafts (
-          id, created_by_member_id, status, total_assets_draft_id, created_at, updated_at
+          id, created_by_account_id, created_by_member_id, status, total_assets_draft_id,
+          created_at, updated_at
         ) VALUES (
-          'match-draft-stale-maintenance', 'member_ponta', 'ocr_running',
+          'match-draft-stale-maintenance', 'account_ponta', 'member_ponta', 'ocr_running',
           'draft-stale-maintenance', $staleCreatedAt, $staleCreatedAt
         )
       """.update.run.transact(transactor)

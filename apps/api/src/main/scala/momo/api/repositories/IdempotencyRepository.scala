@@ -5,7 +5,7 @@ import java.time.Instant
 import cats.~>
 import doobie.ConnectionIO
 
-import momo.api.domain.ids.MemberId
+import momo.api.domain.ids.AccountId
 
 /**
  * Stable response snapshot kept under one idempotency key. Bytes are returned as-is so the HTTP
@@ -25,7 +25,7 @@ object IdempotencyResponse:
  */
 final case class IdempotencyRecord(
     key: String,
-    memberId: MemberId,
+    accountId: AccountId,
     endpoint: String,
     requestHash: Vector[Byte],
     response: IdempotencyResponse,
@@ -57,10 +57,10 @@ enum IdempotencyOutcome derives CanEqual:
 trait IdempotencyAlg[F0[_]]:
 
   /** Look up a stored record by its full composite key. */
-  def lookup(key: String, memberId: MemberId, endpoint: String): F0[Option[IdempotencyRecord]]
+  def lookup(key: String, accountId: AccountId, endpoint: String): F0[Option[IdempotencyRecord]]
 
   /**
-   * Persist the supplied record. Implementations MUST treat `(key, memberId, endpoint)` as the
+   * Persist the supplied record. Implementations MUST treat `(key, accountId, endpoint)` as the
    * primary key and surface the conflict (e.g. via raised error or returned `false`); higher
    * layers translate that into [[IdempotencyOutcome.Conflict]].
    */
@@ -80,7 +80,7 @@ end IdempotencyAlg
  * `apps/api/docs/proposals/idempotency-keys.md`.
  */
 trait IdempotencyRepository[F[_]]:
-  def lookup(key: String, memberId: MemberId, endpoint: String): F[Option[IdempotencyRecord]]
+  def lookup(key: String, accountId: AccountId, endpoint: String): F[Option[IdempotencyRecord]]
   def record(entry: IdempotencyRecord): F[Unit]
   def cleanup(now: Instant): F[Int]
 
@@ -91,8 +91,8 @@ object IdempotencyRepository:
       alg: IdempotencyAlg[ConnectionIO],
       transactK: ConnectionIO ~> F,
   ): IdempotencyRepository[F] = new IdempotencyRepository[F]:
-    def lookup(key: String, memberId: MemberId, endpoint: String): F[Option[IdempotencyRecord]] =
-      transactK(alg.lookup(key, memberId, endpoint))
+    def lookup(key: String, accountId: AccountId, endpoint: String): F[Option[IdempotencyRecord]] =
+      transactK(alg.lookup(key, accountId, endpoint))
     def record(entry: IdempotencyRecord): F[Unit] = transactK(alg.record(entry))
     def cleanup(now: Instant): F[Int] = transactK(alg.cleanup(now))
 

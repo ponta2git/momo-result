@@ -16,7 +16,6 @@ Last reviewed: 2026-05-10
 
 | Current Priority | Status | Source | Original Priority | Action | Target | Done when | Verification | Evidence / Note |
 |---|---|---|---|---|---|---|---|---|
-| P1 | Open | `2026-05-10-frontend-held-event-create-cache.md` | P1 | Audit other frontend create mutations that immediately select or display the created resource. | `apps/web/src/features/**` | Each such mutation either updates the relevant cache, invalidates and waits/refetches appropriately, or documents why no same-page reflection is needed. | `rg "useMutation|setQueryData|invalidateQueries" apps/web/src/features apps/web/src/shared` plus targeted tests for any changed flow. | No postmortem status or audit result found yet. Current architecture/test rules are in place, but this specific audit remains separate work. |
 | P2 | Deferred | `2026-05-03-backend-matches-list-db-errors.md` | P1 | Decide dev/prod startup DB contract behavior. | API startup / health design | A documented decision exists for fail-fast vs health warning. | Decision recorded before implementation. | Original postmortem marks this as not completed and a product/operations design decision. Existing `docs/architecture.md` separates `/healthz` and detailed dependency health, but no explicit startup DB contract decision was found. |
 | P2 | Deferred | `2026-05-04-frontend-matches-sort-event-currenttarget-regression.md` | P1 | Consider a broader `/matches` filter E2E when E2E smoke scope is expanded. | E2E smoke suite | 状態変更、ソート変更、開催 filter のうち主要操作が1本の smoke に入っている。 | Playwright smoke | Original postmortem marks this as conditional on E2E smoke scope expansion, not an immediate follow-up. |
 
@@ -45,9 +44,10 @@ Last reviewed: 2026-05-10
 | 2026-05-04 | `2026-05-04-frontend-matches-sort-event-currenttarget-regression.md` | P0 | Require same-component handler pattern search during event lifetime fixes. | `docs/test-rule.md` | 文書レビュー | Source postmortem status says completed. `docs/test-rule.md` requires same-component handler pattern search. |
 | 2026-05-10 | `2026-05-10-frontend-held-event-create-cache.md` | P0 | Keep a durable architecture rule that create/update mutations must refresh or patch any query cache that powers the currently selected candidate list. | `docs/architecture.md` | Reviewers can point to the rule when a mutation sets a selected ID. | `docs/architecture.md` documents mutation success cache reflection for selected/displayed resources. |
 | 2026-05-10 | `2026-05-10-frontend-held-event-create-cache.md` | P0 | Keep a durable test rule for mutation-driven selects/lists. | `docs/test-rule.md` | A future fix includes a direct user-event test or explains why no visible candidate list exists. | `docs/test-rule.md` requires asserting selected value and option/list membership. `DraftReviewPage.test.tsx` covers the exact held-event create interaction. |
+| 2026-05-10 | `2026-05-10-frontend-held-event-create-cache.md` | P1 | Audit other frontend create mutations that immediately select or display the created resource. | `apps/web/src/features/**` | `rg "useMutation|setQueryData|invalidateQueries" apps/web/src/features apps/web/src/shared` plus targeted tests for any changed flow. | Audit found existing same-page create/display paths use `setQueryData`, cache invalidation, optimistic display, or navigation. Added `AdminAccountsPage.test.tsx` to cover login account creation refetching into the same-page account list. Verified with `pnpm --dir apps/web test:run -- AdminAccountsPage`. |
 
 ## Review Notes
 
-- 現在の未対応で最も具体的なのは、2026-05-10 の create mutation audit である。既存の durable rules は入っているが、横断監査の完了証跡はない。
+- 2026-05-10 の create mutation audit は完了。新たに具体的な同種未修正箇所は見つからなかった。
 - backend startup DB contract behavior は実装作業ではなく設計判断待ちとして扱う。
 - `/matches` filter E2E は E2E smoke scope 拡大時の候補であり、直近の component/page 回帰対策は完了済み。

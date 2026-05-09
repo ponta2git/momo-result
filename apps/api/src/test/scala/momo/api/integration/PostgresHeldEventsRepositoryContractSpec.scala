@@ -12,8 +12,6 @@ import momo.api.repositories.postgres.PostgresHeldEventsRepository
  * Per-test isolation comes from [[IntegrationSuite.beforeEach]], which truncates app-owned tables
  * (including `held_events`) before each test. `freshRepo` is `IO.delay` so the transactor fixture
  * is read after the suite's `beforeAll`/`beforeEach` have run.
- *
- * Skipped automatically when the local Postgres on :5433 is unavailable.
  */
 final class PostgresHeldEventsRepositoryContractSpec
     extends IntegrationSuite with HeldEventsRepositoryContract:

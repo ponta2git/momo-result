@@ -11,8 +11,6 @@ import momo.api.repositories.{IdempotencyRecord, IdempotencyRepository, Idempote
 /**
  * Postgres-backed contract verification for [[IdempotencyRepository]]. Mirrors
  * `InMemoryIdempotencyRepositorySpec` so behavior parity between the two adapters is enforced.
- *
- * Skipped automatically when local Postgres on :5433 is unavailable.
  */
 final class PostgresIdempotencyRepositoryContractSpec extends IntegrationSuite:
 

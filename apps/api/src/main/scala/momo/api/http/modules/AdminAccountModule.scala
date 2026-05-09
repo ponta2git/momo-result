@@ -29,9 +29,8 @@ object AdminAccountModule:
   ): List[ServerEndpoint[Any, F]] = List(
     AdminAccountEndpoints.list.serverLogic { devUser =>
       security.authorizeAdminRead(devUser) { _ =>
-        listLoginAccounts.run.map(items =>
-          Right(LoginAccountListResponse(items.map(LoginAccountResponse.from)))
-        )
+        listLoginAccounts.run
+          .map(items => Right(LoginAccountListResponse(items.map(LoginAccountResponse.from))))
       }
     },
     AdminAccountEndpoints.create.serverLogic { case (devUser, csrfToken, idemKey, request) =>
@@ -49,9 +48,9 @@ object AdminAccountModule:
     },
     AdminAccountEndpoints.update.serverLogic { case (accountId, devUser, csrfToken, request) =>
       security.authorizeAdminMutation(devUser, csrfToken) { _ =>
-        security.respond(updateLoginAccount.run(AccountId(accountId), toCommand(request)))(
-          LoginAccountResponse.from
-        )
+        security.respond(
+          updateLoginAccount.run(AccountId(accountId), toCommand(request))
+        )(LoginAccountResponse.from)
       }
     },
   )

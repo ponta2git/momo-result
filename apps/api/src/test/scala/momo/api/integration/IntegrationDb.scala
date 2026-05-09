@@ -134,8 +134,9 @@ object IntegrationDb:
 
   /**
    * Wipe all app-owned tables so each test starts from a clean slate. Skips `members` (seeded by
-   * momo-db migration `0009_seed_members.sql`) and `incident_masters` (seeded by drizzle
-   * migration). Order respects FK dependencies; using TRUNCATE ... CASCADE keeps it terse.
+   * momo-db migration `0009_seed_members.sql`), `momo_login_accounts` (seeded by migration
+   * `0013_login_accounts.sql`), and `incident_masters` (seeded by migration). Order respects FK
+   * dependencies; using TRUNCATE ... CASCADE keeps it terse.
    */
   def truncateAppTables(transactor: Transactor[IO]): IO[Unit] = sql"""
       TRUNCATE TABLE

@@ -4,8 +4,8 @@ import cats.effect.IO
 import doobie.implicits.*
 
 /**
- * Lightweight smoke test that the local Postgres exposes the columns and seeded rows the API
- * expects. If this fails, the migrations in `momo-db` have drifted from the API's contract.
+ * Lightweight smoke test that the Testcontainers Postgres exposes the columns and seeded rows the
+ * API expects. If this fails, the migrations in `momo-db` have drifted from the API's contract.
  */
 final class DbContractSpec extends IntegrationSuite:
 

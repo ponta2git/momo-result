@@ -45,11 +45,9 @@ final class CreateLoginAccount[F[_]: MonadThrow](
     playerMemberId <- EitherT.fromEither[F](command.playerMemberId.traverse(validateMemberId))
     _ <- playerMemberId.traverse(id => members.find(id).orNotFound("member", id.value)).void
     existing <- EitherT.liftF(accounts.findByDiscordUserId(discordUserId))
-    _ <- EitherT.fromEither[F](Either.cond(
-      existing.isEmpty,
-      (),
-      AppError.Conflict("discordUserId is already registered."),
-    ))
+    _ <- EitherT.fromEither[F](
+      Either.cond(existing.isEmpty, (), AppError.Conflict("discordUserId is already registered."))
+    )
     id <- EitherT.liftF(nextId.map(AccountId(_)))
     at <- EitherT.liftF(now)
     created <- EitherT.liftF(accounts.create(CreateLoginAccountData(
@@ -98,25 +96,27 @@ final class UpdateLoginAccount[F[_]: MonadThrow](
     (for
       existing <- accounts.find(id).orNotFound("login account", id.value)
       displayName <- EitherT.fromEither[F](command.displayName.traverse(validateDisplayName))
-      playerMemberId <- EitherT.fromEither[F](command.playerMemberId.traverse(
-        _.traverse(validateMemberId)
-      ))
+      playerMemberId <- EitherT
+        .fromEither[F](command.playerMemberId.traverse(_.traverse(validateMemberId)))
       _ <- playerMemberId.flatten.traverse(mid => members.find(mid).orNotFound("member", mid.value))
         .void
       nextLoginEnabled = command.loginEnabled.getOrElse(existing.loginEnabled)
       nextIsAdmin = command.isAdmin.getOrElse(existing.isAdmin)
       _ <- ensureLastAdminIsKept(existing, nextLoginEnabled, nextIsAdmin)
       at <- EitherT.liftF(now)
-      updated <- accounts.update(id, UpdateLoginAccountData(
-        displayName = displayName,
-        playerMemberId = playerMemberId,
-        loginEnabled = command.loginEnabled,
-        isAdmin = command.isAdmin,
-        updatedAt = at,
-      )).orNotFound("login account", id.value)
-      _ <- if existing.loginEnabled && !updated.loginEnabled then EitherT.liftF(
-          sessions.deleteByAccount(id).void
-        )
+      updated <- accounts.update(
+        id,
+        UpdateLoginAccountData(
+          displayName = displayName,
+          playerMemberId = playerMemberId,
+          loginEnabled = command.loginEnabled,
+          isAdmin = command.isAdmin,
+          updatedAt = at,
+        ),
+      ).orNotFound("login account", id.value)
+      _ <-
+        if existing.loginEnabled && !updated.loginEnabled then
+          EitherT.liftF(sessions.deleteByAccount(id).void)
         else EitherT.rightT[F, AppError](())
     yield updated).value
 

@@ -300,21 +300,21 @@ def _apply_postprocessors(text: str, config: RecognitionConfig) -> str:
 def _default_api_factory() -> _ApiFactory:
     """Return a factory that builds real ``PyTessBaseAPI`` instances.
 
-    Imported lazily so the module stays importable when ``tesserocr`` is
-    not installed (e.g. CI without the ``inproc`` extra).
+    Imported lazily so tests can import this module without immediately
+    initializing the native tesserocr binding.
     """
     try:
         import tesserocr  # noqa: PLC0415
     except ImportError as exc:
         msg = (
             "tesserocr is not installed. "
-            "Install with `uv sync --extra inproc` to use TesserocrEngine."
+            "Install OCR worker dependencies with `uv sync` to use TesserocrEngine."
         )
         raise OcrError(
             FailureCode.OCR_ENGINE_UNAVAILABLE,
             msg,
             retryable=False,
-            user_action="Install the 'inproc' extra or set MOMO_OCR_ENGINE=subprocess.",
+            user_action="Install OCR worker dependencies or set MOMO_OCR_ENGINE=subprocess.",
         ) from exc
 
     def factory(*, language: str, oem: int, tessdata_path: str | None) -> _TesserocrApi:

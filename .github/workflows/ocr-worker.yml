@@ -48,7 +48,7 @@ jobs:
         timeout-minutes: 5
 
       - name: Install dependencies
-        run: uv sync --locked --dev --extra inproc
+        run: uv sync --locked --dev
         timeout-minutes: 5
 
       - name: Format check

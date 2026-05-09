@@ -257,10 +257,6 @@ dependencies = [
     { name = "psycopg", extra = ["binary"] },
     { name = "psycopg-pool" },
     { name = "redis" },
-]
-
-[package.optional-dependencies]
-inproc = [
     { name = "tesserocr" },
 ]
 
@@ -281,9 +277,8 @@ requires-dist = [
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2.0" },
     { name = "psycopg-pool", specifier = ">=3.2.0" },
     { name = "redis", specifier = ">=5.0.0" },
-    { name = "tesserocr", marker = "extra == 'inproc'", specifier = ">=2.7.0" },
+    { name = "tesserocr", specifier = ">=2.7.0" },
 ]
-provides-extras = ["inproc"]
 
 [package.metadata.requires-dev]
 dev = [

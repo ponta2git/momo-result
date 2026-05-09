@@ -1,22 +1,18 @@
 """Smoke test for the in-process tesserocr engine.
 
-Skipped automatically if ``tesserocr`` is not installed (the
-``inproc`` extra is opt-in). Runs a real OCR call against a generated
-image to ensure the API initializes and produces text.
+Runs a real OCR call against a generated image to ensure the default
+production OCR engine initializes and produces text.
 """
 
 from __future__ import annotations
 
-import pytest
 from PIL import Image, ImageDraw, ImageFont
 
-tesserocr = pytest.importorskip("tesserocr")
-
-from momo_ocr.features.text_recognition.models import (  # noqa: E402
+from momo_ocr.features.text_recognition.models import (
     RecognitionConfig,
     RecognitionField,
 )
-from momo_ocr.features.text_recognition.tesserocr_engine import (  # noqa: E402
+from momo_ocr.features.text_recognition.tesserocr_engine import (
     TesserocrEngine,
 )
 

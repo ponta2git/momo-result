@@ -42,7 +42,7 @@ API は `XADD` する。worker は `XGROUP CREATE ... MKSTREAM` を許容し、`
 | `attempt` | yes | API が payload 作成時に入れる正整数。現行実装では常に `1` |
 | `enqueuedAt` | yes | API が payload を作成した ISO-8601 UTC timestamp |
 | `ocrHintsJson` | no | compact / sorted keys / UTF-8 の JSON string |
-| `requestId` | no | ログ相関用 ID。`^[A-Za-z0-9_-]{1,64}$` のみ worker が保持 |
+| `requestId` | no | ログ相関用 ID。`^[A-Za-z0-9_-]{1,64}$` のみ許容 |
 
 `attempt`、`ocr_jobs.attempt_count`、`ocr_queue_outbox.attempt_count`、Redis `times_delivered` は別概念である。
 
@@ -53,7 +53,9 @@ API は `XADD` する。worker は `XGROUP CREATE ... MKSTREAM` を許容し、`
 | `ocr_queue_outbox.attempt_count` | API dispatcher | Redis publish 試行失敗回数 |
 | Redis `times_delivered` | Redis | consumer group delivery 回数。DLQ 判定に使用 |
 
-JSON Schema は `docs/schemas/ocr-queue-payload-v1.schema.json` を正本とする。契約テストは各言語の serializer 出力をこの schema で検証する。schema は producer payload を閉じた契約として扱うため、Redis payload field を追加する場合は schema と Scala/Python の契約テストを同じ変更で更新する。
+JSON Schema は `docs/schemas/ocr-queue-payload-v1.schema.json` を正本とする。契約テストは各言語の serializer 出力をこの schema で検証する。worker の `parse_job_message` は runtime 境界でも stream payload schema を適用し、`ocrHintsJson` がある場合は JSON parse 後に `docs/schemas/ocr-hints-v1.schema.json` も適用する。schema validation 後の parser は型変換と、絶対 `imagePath` など JSON Schema だけで表しにくい runtime 境界条件を担当する。
+
+schema は producer payload を閉じた契約として扱うため、Redis payload field を追加する場合は schema と Scala/Python の契約テスト、worker parser を同じ変更で更新する。
 
 ## 4. `ocrHintsJson`
 

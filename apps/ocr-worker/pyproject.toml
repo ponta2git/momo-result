@@ -5,6 +5,7 @@ description = "OCR worker for momo-result"
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
 dependencies = [
+  "jsonschema[format-nongpl]>=4.25.0",
   "opencv-python-headless>=4.12.0.88",
   "pillow>=12.0.0",
   "psycopg[binary]>=3.2.0",
@@ -22,7 +23,6 @@ momo-ocr = "momo_ocr.main:main"
 
 [dependency-groups]
 dev = [
-  "jsonschema[format-nongpl]>=4.25.0",
   "mypy>=1.19.0",
   "pytest>=9.0.2",
   "ruff>=0.14.9",

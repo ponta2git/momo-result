@@ -251,6 +251,7 @@ name = "momo-ocr"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "jsonschema", extra = ["format-nongpl"] },
     { name = "opencv-python-headless" },
     { name = "pillow" },
     { name = "psycopg", extra = ["binary"] },
@@ -265,7 +266,6 @@ inproc = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "jsonschema", extra = ["format-nongpl"] },
     { name = "mypy" },
     { name = "pytest" },
     { name = "ruff" },
@@ -275,6 +275,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "jsonschema", extras = ["format-nongpl"], specifier = ">=4.25.0" },
     { name = "opencv-python-headless", specifier = ">=4.12.0.88" },
     { name = "pillow", specifier = ">=12.0.0" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2.0" },
@@ -286,7 +287,6 @@ provides-extras = ["inproc"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "jsonschema", extras = ["format-nongpl"], specifier = ">=4.25.0" },
     { name = "mypy", specifier = ">=1.19.0" },
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "ruff", specifier = ">=0.14.9" },

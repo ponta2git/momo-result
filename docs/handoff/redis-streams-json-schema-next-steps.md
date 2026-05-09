@@ -16,24 +16,28 @@ versioning にはまだ改善余地がある。
 
 ### 1. Runtime 境界での schema validation 方針を決める
 
+対応状況:
+
+- 2026-05-09: worker runtime dependency として JSON Schema validator を採用した。
+- worker `parse_job_message` は stream payload schema と hints schema を runtime 境界で適用し、schema validation 後に型変換する。
+- 方針は `docs/redis-streams-ocr-contract.md` と `apps/ocr-worker/README.md` に明記済み。
+
 現状:
 
 - API producer は test scope の JSON Schema validator で serializer 出力を検証している。
-- worker は dev dependency の `jsonschema` で test 中に serializer 出力を検証している。
-- 実行時の Redis payload parse は従来の手書き validation のままで、JSON Schema は直接使っていない。
+- worker は runtime dependency の `jsonschema` で、test 中の serializer 出力と実行時の Redis payload parse の両方を検証している。
+- worker parser は schema validation 後、domain model への型変換と絶対 `imagePath` など JSON Schema だけで表しにくい境界条件を検証する。
 
-リスク:
+解消したリスク:
 
-- 契約テストを通らない payload は開発中に捕まるが、runtime で DB outbox に入った古い payload や、
-  手動投入・運用介入・将来の別 producer が作る schema-invalid payload は schema と同じルールで弾けない。
-- worker parser と JSON Schema の validation 規則が時間とともに微妙にずれる可能性がある。
+- runtime で DB outbox に入った古い payload、手動投入、運用介入、将来の別 producer が作る schema-invalid payload は、
+  worker 境界で schema と同じルールで弾けるようになった。
+- worker parser と JSON Schema の validation 規則が時間とともにずれるリスクは、parser 前段で schema を直接適用することで低減した。
 
-推奨:
+残:
 
-- API: `OcrQueuePayload.build` 直後、または `ocr_queue_outbox` insert 直前で schema validation を行うか決める。
-- worker: `parse_job_message` の先頭で stream payload schema を適用するか決める。
-- worker runtime で schema validation する場合は、`jsonschema` を dev dependency から runtime dependency へ移す必要がある。
-- runtime で採用しない場合も、「JSON Schema は test-only oracle」と明記し、worker parser 側で schema と同等の失敗ケースを追加する。
+- 完了: worker runtime で schema validation を採用し、`jsonschema` を runtime dependency へ移した。
+- 残: API producer runtime validation は未採用。必要になった場合は、test scope の validator を runtime dependency に移す影響と、DB outbox insert 失敗時の HTTP/transaction 挙動を別途設計する。
 
 ### 2. `ocr_queue_outbox.stream_payload` の DB/integration 検証を schema 軸に寄せる
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from pathlib import Path
 from typing import cast
 
@@ -140,6 +141,27 @@ def test_parse_job_message_rejects_missing_required_keys() -> None:
     assert "draftId" in error.value.message
 
 
+def test_parse_job_message_rejects_schema_invalid_top_level_payloads() -> None:
+    payload = _schema_valid_payload()
+
+    invalid_payloads: list[tuple[Mapping[str, object], tuple[str, ...]]] = [
+        ({**payload, "attempt": 1}, ("$.attempt", "not of type 'string'")),
+        ({**payload, "unknownField": "value"}, ("Additional properties", "unknownField")),
+        ({**payload, "jobId": ""}, ("$.jobId", "should be non-empty")),
+        ({**payload, "imagePath": "relative/image.png"}, ("$.imagePath", "does not match '^/'")),
+        ({**payload, "attempt": "01"}, ("$.attempt", "does not match")),
+        ({**payload, "enqueuedAt": "not-a-date-time"}, ("$.enqueuedAt", "not-a-date-time")),
+    ]
+
+    for invalid_payload, expected_messages in invalid_payloads:
+        with pytest.raises(OcrError) as error:
+            parse_job_message(invalid_payload)
+
+        assert error.value.code.value == "QUEUE_FAILURE"
+        for expected_message in expected_messages:
+            assert expected_message in error.value.message
+
+
 def test_parse_job_message_rejects_invalid_hint_json() -> None:
     payload = {
         "jobId": "job-1",
@@ -178,6 +200,29 @@ def test_parse_job_message_rejects_invalid_alias_hint_shape() -> None:
     assert "knownPlayerAliases[0].aliases" in error.value.message
 
 
+def test_parse_job_message_rejects_schema_invalid_hint_payloads() -> None:
+    payload = _schema_valid_payload()
+    invalid_hints = [
+        ('{"unknownField":"value"}', ("Additional properties", "unknownField")),
+        (
+            '{"knownPlayerAliases":[{"memberId":"member-1"}]}',
+            ("$.knownPlayerAliases[0]", "aliases"),
+        ),
+        (
+            '{"knownPlayerAliases":[{"memberId":"member-1","aliases":[],"extra":"value"}]}',
+            ("$.knownPlayerAliases[0]", "Additional properties", "extra"),
+        ),
+    ]
+
+    for raw_hints, expected_messages in invalid_hints:
+        with pytest.raises(OcrError) as error:
+            parse_job_message({**payload, "ocrHintsJson": raw_hints})
+
+        assert error.value.code.value == "QUEUE_FAILURE"
+        for expected_message in expected_messages:
+            assert expected_message in error.value.message
+
+
 def test_request_id_round_trips_when_set() -> None:
     payload = to_stream_payload(
         OcrJobMessage(
@@ -214,20 +259,23 @@ def test_request_id_is_omitted_when_absent() -> None:
     assert parse_job_message(payload).request_id is None
 
 
-def test_invalid_request_id_is_dropped_on_parse() -> None:
-    parsed = parse_job_message(
-        {
-            "jobId": "job-1",
-            "draftId": "draft-1",
-            "imageId": "image-1",
-            "imagePath": "/tmp/sample.jpg",
-            "requestedImageType": "total_assets",
-            "attempt": "1",
-            "enqueuedAt": "2026-04-29T10:00:00Z",
-            "requestId": "bad value with spaces",
-        }
-    )
-    assert parsed.request_id is None
+def test_invalid_request_id_is_rejected_by_runtime_schema_validation() -> None:
+    with pytest.raises(OcrError) as error:
+        parse_job_message(
+            {
+                "jobId": "job-1",
+                "draftId": "draft-1",
+                "imageId": "image-1",
+                "imagePath": "/tmp/sample.jpg",
+                "requestedImageType": "total_assets",
+                "attempt": "1",
+                "enqueuedAt": "2026-04-29T10:00:00Z",
+                "requestId": "bad value with spaces",
+            }
+        )
+
+    assert error.value.code.value == "QUEUE_FAILURE"
+    assert "$.requestId" in error.value.message
 
 
 def test_stream_payload_schema_rejects_non_string_and_unknown_fields() -> None:

@@ -67,6 +67,7 @@ These values are hints only. `requestedImageType` may come from the upload slot 
 
 The canonical contract lives in `../../docs/redis-streams-ocr-contract.md`.
 `tests/unit/features/test_queue_contract.py` validates the worker serializer against `../../docs/schemas/ocr-queue-payload-v1.schema.json`, then parses `ocrHintsJson` and validates it against `../../docs/schemas/ocr-hints-v1.schema.json`.
+Runtime payload parsing applies the same JSON Schemas before converting the stream fields into an `OcrJobMessage`.
 
 The production worker defaults to the in-process `tesserocr` engine for throughput. Set `MOMO_OCR_ENGINE=subprocess` when a deployment needs `OCR_TIMEOUT_SECONDS` as a hard per-call process timeout boundary more than the in-process speedup.
 

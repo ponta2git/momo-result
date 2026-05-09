@@ -1,4 +1,4 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useActionState, useEffect, useReducer, useState, useTransition } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
@@ -35,13 +35,30 @@ import {
   toIsoFromLocal,
 } from "@/features/matches/workspace/workspaceDerivations";
 import { createHeldEvent } from "@/shared/api/heldEvents";
+import type { HeldEventListResponse, HeldEventResponse } from "@/shared/api/heldEvents";
 import { formatApiError } from "@/shared/api/problemDetails";
 import { isInitialQueryLoading, shouldShowBlockingQueryError } from "@/shared/api/queryErrorState";
+import { heldEventKeys } from "@/shared/api/queryKeys";
 import { Button } from "@/shared/ui/actions/Button";
 import { LiveRegion } from "@/shared/ui/feedback/LiveRegion";
 import { Card } from "@/shared/ui/layout/Card";
 
 const labelClass = "text-xs font-semibold text-[var(--color-text-secondary)]";
+
+function upsertHeldEventList(
+  current: HeldEventListResponse | undefined,
+  event: HeldEventResponse,
+): HeldEventListResponse {
+  const existingItems = current?.items ?? [];
+  const withoutDuplicate = existingItems.filter((item) => item.id !== event.id);
+  return {
+    items: [event, ...withoutDuplicate].toSorted(
+      (left, right) =>
+        new Date(right.heldAt).getTime() - new Date(left.heldAt).getTime() ||
+        right.id.localeCompare(left.id),
+    ),
+  };
+}
 
 // reviewStatusLabel / isCancelableDraftStatus は features/matches/draftStatus.ts に集約
 // 純関数（draftIdsFromParams 等）は ./workspaceDerivations.ts に集約
@@ -60,6 +77,7 @@ export function MatchWorkspacePage({
   mode,
 }: MatchWorkspacePageProps) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [, startMastersTransition] = useTransition();
   const [searchParams] = useSearchParams();
 
@@ -103,6 +121,10 @@ export function MatchWorkspacePage({
   const createEventMutation = useMutation({
     mutationFn: (request: Parameters<typeof createHeldEvent>[0]) => createHeldEvent(request),
     onSuccess: (event) => {
+      queryClient.setQueryData<HeldEventListResponse>(heldEventKeys.scope("workspace"), (current) =>
+        upsertHeldEventList(current, event),
+      );
+      void queryClient.invalidateQueries({ queryKey: heldEventKeys.all() });
       dispatch({
         patch: {
           heldEventId: event.id,

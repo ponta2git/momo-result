@@ -1,7 +1,8 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { http, HttpResponse } from "msw";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
@@ -10,6 +11,7 @@ import {
   createDraftReviewHandoffPayload,
   saveMasterHandoff,
 } from "@/features/masters/masterReturnHandoff";
+import { server } from "@/shared/api/msw/server";
 import { makeDraftReviewHandoffValues, makeFourReviewPlayerInputs } from "@/test/factories";
 import { createTestQueryClient } from "@/test/queryClient";
 
@@ -62,6 +64,19 @@ describe("DraftReviewPage", () => {
 
   it("shows review notices as dismissible top toast", async () => {
     window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    const heldEvents = [{ id: "held-1", heldAt: "2026-01-01T00:00:00.000Z", matchCount: 0 }];
+    const createdHeldEvent = {
+      id: "held-created",
+      heldAt: "2026-01-02T00:00:00.000Z",
+      matchCount: 0,
+    };
+    server.use(
+      http.get("/api/held-events", () => HttpResponse.json({ items: heldEvents })),
+      http.post("/api/held-events", () => {
+        heldEvents.unshift(createdHeldEvent);
+        return HttpResponse.json(createdHeldEvent);
+      }),
+    );
 
     render(
       <QueryClientProvider client={queryClient}>
@@ -76,6 +91,10 @@ describe("DraftReviewPage", () => {
     await screen.findByText("一覧にない開催履歴を追加");
     await userEvent.click(screen.getByText("一覧にない開催履歴を追加"));
     await userEvent.click(screen.getByRole("button", { name: "作成して選択" }));
+
+    const heldEventSelect = screen.getByLabelText("開催履歴") as HTMLSelectElement;
+    await waitFor(() => expect(heldEventSelect).toHaveValue("held-created"));
+    expect([...heldEventSelect.options].map((option) => option.value)).toContain("held-created");
 
     const toast = await screen.findByRole("status");
     expect(toast).toHaveTextContent(/開催履歴/);

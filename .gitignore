@@ -21,3 +21,4 @@ docs/frontend-rebuild/
 .env
 **/.env
 **/.pnpm-store/
+.serena/cache

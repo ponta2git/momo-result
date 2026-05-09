@@ -81,6 +81,8 @@ lazy val root = (project in file("."))
     Test / console / scalacOptions ~= {
       _.filterNot(opt => opt == "-Werror" || opt.startsWith("-Xfatal"))
     },
+    Compile / doc / sources := Seq.empty,
+    Compile / packageDoc / publishArtifact := false,
     Compile / mainClass := Some("momo.api.Main"),
     Compile / run / mainClass := Some("momo.api.Main"),
     Compile / run / fork := true,

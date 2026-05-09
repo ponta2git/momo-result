@@ -12,6 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import psycopg
 import pytest
 
 from momo_ocr.features.ocr_domain.models import (
@@ -284,6 +285,13 @@ class _FailingTerminalRepository(InMemoryOcrJobRepository):
         raise OcrError(FailureCode.DB_WRITE_FAILED, "db unavailable", retryable=True)
 
 
+class _AdminShutdownRepository(InMemoryOcrJobRepository):
+    def get_for_update(self, job_id: str) -> OcrJobRecord | None:
+        del job_id
+        message = "terminating connection due to administrator command"
+        raise psycopg.errors.AdminShutdown(message)
+
+
 def test_terminal_failure_write_failure_leaves_delivery_pending() -> None:
     consumer = InMemoryOcrJobConsumer()
     repository = _FailingTerminalRepository()
@@ -304,6 +312,25 @@ def test_terminal_failure_write_failure_leaves_delivery_pending() -> None:
     outcome = run_one_job(deps)
 
     assert outcome.status is OcrJobStatus.FAILED
+    assert consumer.acked == []
+
+
+def test_database_shutdown_during_lookup_leaves_delivery_pending() -> None:
+    consumer = InMemoryOcrJobConsumer()
+    repository = _AdminShutdownRepository()
+    payload = _make_payload()
+    consumer.enqueue(payload, delivery_tag="d1")
+
+    deps = _make_deps(
+        consumer=consumer,
+        repository=repository,
+        cancellation=InMemoryCancellationChecker(),
+        analyze=lambda **_: pytest.fail("analyze should not run when job lookup fails"),
+    )
+
+    outcome = run_one_job(deps)
+
+    assert outcome.status is None
     assert consumer.acked == []
 
 

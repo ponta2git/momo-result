@@ -4,7 +4,7 @@ Responsibilities are kept to:
 
 1. Pull a delivery from the consumer.
 2. Drive :func:`pipeline.run_pipeline` (state-machine + analysis).
-3. Convert any uncaught error into a terminal ``FAILED`` row via
+3. Convert uncaught application errors into a terminal ``FAILED`` row via
    :func:`failure_recorder.record_terminal_failure`.
 4. Acknowledge the queue delivery *only* after the terminal status has
    been written.
@@ -20,6 +20,8 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
+
+import psycopg
 
 from momo_ocr.features.ocr_jobs.cancellation import CancellationChecker
 from momo_ocr.features.ocr_jobs.consumer import OcrJobConsumer
@@ -94,9 +96,12 @@ def run_one_job(deps: JobRunnerDependencies) -> JobRunOutcome:
 
     Returns a :class:`JobRunOutcome` describing what happened so the worker
     loop can decide whether to back off or pull another message immediately.
-    Any unhandled exception in the pipeline is converted into a terminal
-    ``FAILED`` job; the queue is acked so the broker does not redeliver
-    indefinitely (retries are owned by the API/orchestrator).
+    Any unhandled application exception in the pipeline is converted into a
+    terminal ``FAILED`` job; the queue is acked so the broker does not redeliver
+    indefinitely (retries are owned by the API/orchestrator). Database
+    connection failures are different: the worker cannot know whether a
+    terminal state was persisted, so the delivery is left pending for Redis PEL
+    recovery instead of being acknowledged.
     """
     delivery = deps.consumer.pull()
     if delivery is None:
@@ -113,6 +118,13 @@ def run_one_job(deps: JobRunnerDependencies) -> JobRunOutcome:
     should_ack = True
     try:
         outcome_status = run_pipeline(deps, delivery)
+    except psycopg.Error:
+        logger.exception(
+            "Database error in OCR job runner; leaving delivery pending",
+            extra=log_extra,
+        )
+        should_ack = False
+        outcome_status = None
     except OcrError as exc:
         should_ack = record_terminal_failure(deps, delivery.message.job_id, exc.to_failure())
         outcome_status = OcrJobStatus.FAILED

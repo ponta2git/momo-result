@@ -57,8 +57,9 @@ All times are shown with their original source timezone.
 `momo-result` does not own DB migrations. The canonical schema lives in `../momo-db`, as documented
 in `docs/db-rule.md`.
 
-The API was run against `postgres://summit:summit@localhost:5433/summit`, but that DB did not yet
-have the migrations that create momo-result tables such as `match_drafts`.
+The API was run against a local PostgreSQL connection such as
+`postgres://<user>:<password>@localhost:<port>/<database>`, but that database did not yet have the
+migrations that create momo-result tables such as `match_drafts`.
 
 The missing practice was: before verifying a PostgreSQL-backed API path, explicitly verify that the
 consumer API's DB contract exists in the target database.

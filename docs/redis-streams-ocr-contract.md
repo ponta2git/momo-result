@@ -67,7 +67,7 @@ schema は producer payload を閉じた契約として扱うため、Redis payl
   "gameTitle": "桃鉄2",
   "layoutFamily": "momotetsu_2",
   "knownPlayerAliases": [
-    { "memberId": "member-ponta", "aliases": ["ぽんた", "ぽんた社長"] }
+    { "memberId": "member-sample", "aliases": ["サンプル", "サンプル社長"] }
   ],
   "computerPlayerAliases": ["さくま", "さくま社長"]
 }

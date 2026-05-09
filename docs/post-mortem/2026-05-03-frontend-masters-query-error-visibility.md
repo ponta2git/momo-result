@@ -93,8 +93,9 @@ detect whether a React page displays a stale cached error during refetch.
 | HTTP/API | Response status and payload shape. | Not applicable to stale UI visibility. | No additional backend test required for this frontend issue. |
 
 The regression test added in the commit executes the correct failing path: it renders `MastersPage`
-with the same `QueryClientProvider`, seeds the `gameTitles("ponta")` query with an error, performs a
-delayed successful MSW response, and checks that the stale notice is absent while recovery proceeds.
+with the same `QueryClientProvider`, seeds the `gameTitles("sample-user")` query with an error,
+performs a delayed successful MSW response, and checks that the stale notice is absent while
+recovery proceeds.
 
 ## What Worked
 

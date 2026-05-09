@@ -19,7 +19,7 @@
 
 ## 2. summit アプリ・momo-db との連携
 
-`~/Documents/codes/summit` にある summit アプリと、`~/Documents/codes/momo-db` にある DB 管理リポジトリ（`@momo/db` パッケージ）と連携する。
+同じ開発ツリーにある summit アプリと DB 管理リポジトリ（`@momo/db` パッケージ）と連携する。
 
 - DBスキーマと migration の正本は momo-db リポジトリに集約する。
 - summit アプリと本アプリは `"@momo/db": "file:../momo-db"` 相当の参照で同じ Neon PostgreSQL スキーマを共有する。

@@ -60,7 +60,7 @@
 
 ```sh
 set -a; source .env; set +a
-MOMO_OCR_DEBUG_DIR=/tmp/momo-ocr-debug \
+MOMO_OCR_DEBUG_DIR=${TMPDIR:-/tmp}/momo-ocr-debug \
 uv run --project apps/ocr-worker python apps/ocr-worker/scripts/eval_accuracy.py \
   --samples-dir ocr_samples/003_桃鉄2 \
   --answers ocr_samples/003_桃鉄2/answers.tsv \

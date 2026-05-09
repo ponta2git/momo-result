@@ -102,7 +102,7 @@ whether two React pages share a client-side cache key with incompatible shapes.
 | HTTP/API | Response encoding and status. | Not applicable; the API response was valid. | No backend test required for this frontend cache issue. |
 
 The added regression test executes the failing path directly by placing `{ items: [...] }` under
-`["masters", "game-titles", "ponta"]` before rendering `MastersPage`.
+`["masters", "game-titles", "sample-user"]` before rendering `MastersPage`.
 
 ## What Worked
 

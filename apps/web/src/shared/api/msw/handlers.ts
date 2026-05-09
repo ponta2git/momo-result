@@ -206,6 +206,7 @@ export const handlers = [
       csrfToken: "dev",
     });
   }),
+  http.post("/api/auth/logout", () => new HttpResponse(null, { status: 204 })),
   http.get("/api/admin/login-accounts", () =>
     HttpResponse.json({ items: structuredClone(loginAccountsStore) }),
   ),

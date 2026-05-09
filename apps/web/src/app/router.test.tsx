@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -73,6 +74,20 @@ describe("app routing", () => {
 
     expect(await screen.findByRole("heading", { name: "試合" })).toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/matches");
+  });
+
+  it("logs out from the global nav in dev auth mode", async () => {
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    const { router } = renderApp("/matches");
+
+    expect(await screen.findByRole("heading", { name: "試合" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "ログアウト" }));
+
+    await waitFor(() => {
+      expect(window.localStorage.getItem("momoresult.devUser")).toBeNull();
+      expect(router.state.location.pathname).toBe("/login");
+    });
+    expect(screen.getByRole("heading", { name: "ログイン" })).toBeInTheDocument();
   });
 
   it("renders edit mode at /matches/:matchId/edit", async () => {

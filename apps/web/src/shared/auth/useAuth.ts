@@ -7,7 +7,7 @@ import { useDevUser } from "@/shared/auth/useDevUser";
 
 export function useAuth() {
   const queryClient = useQueryClient();
-  const { devUser } = useDevUser();
+  const { devUser, lockedByEnv, setDevUser } = useDevUser();
   const authQuery = useQuery(authQueryOptions(devUser));
   const isMissingDevUser = import.meta.env.DEV && !devUser;
   const normalizedError = authQuery.error ? normalizeUnknownApiError(authQuery.error) : undefined;
@@ -15,6 +15,9 @@ export function useAuth() {
   const logoutMutation = useMutation({
     mutationFn: logout,
     onSettled: async () => {
+      if (import.meta.env.DEV && !lockedByEnv) {
+        setDevUser("");
+      }
       await queryClient.invalidateQueries({ queryKey: authMeQueryKey });
     },
   });

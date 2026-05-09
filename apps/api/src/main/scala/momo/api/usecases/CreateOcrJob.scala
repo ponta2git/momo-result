@@ -37,6 +37,7 @@ final class CreateOcrJob[F[_]: MonadThrow](
 
   def run(command: CreateOcrJobCommand): F[Either[AppError, CreatedOcrJob]] = (for
     screenType <- EitherT.fromEither[F](requestedScreenType(command))
+    _ <- EitherT.fromEither[F](validateOcrHints(command.ocrHints))
     draftForMatch <- command.matchDraftId match
       case None => EitherT.rightT[F, AppError](Option.empty[momo.api.domain.MatchDraft])
       case Some(id) => matchDrafts.find(id).orNotFound("match draft", id.value).flatMap { draft =>
@@ -102,6 +103,11 @@ object CreateOcrJob:
     ScreenType.fromWire(command.requestedImageType).toRight(AppError.ValidationFailed(
       "requestedImageType must be auto, total_assets, revenue, or incident_log."
     ))
+
+  private def validateOcrHints(hints: OcrJobHints): Either[AppError, Unit] = OcrJobHints
+    .validationErrors(hints) match
+    case Nil => Right(())
+    case errors => Left(AppError.ValidationFailed(errors.mkString(" ")))
 
   private def initialDraft(
       draftId: OcrDraftId,

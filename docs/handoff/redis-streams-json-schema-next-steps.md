@@ -9,8 +9,8 @@ Redis Streams / OCR queue 契約は `docs/redis-streams-ocr-contract.md` と
 を正本にした。共有 JSON fixture は廃止し、Scala/Python の契約テストは各 serializer 出力を
 JSON Schema で検証する形に寄せた。
 
-この整理で、契約の「テスト時の検証」は強くなった。一方で、runtime 境界・DB outbox 境界・将来の
-versioning にはまだ改善余地がある。
+この整理で、契約の「テスト時の検証」は強くなった。2026-05-09 時点で worker runtime 境界、
+DB outbox 境界、payload versioning、OCR hints size limit の改善は実装済み。
 
 ## 次に取り組む推奨順
 
@@ -41,45 +41,49 @@ versioning にはまだ改善余地がある。
 
 ### 2. `ocr_queue_outbox.stream_payload` の DB/integration 検証を schema 軸に寄せる
 
-現状:
+対応状況:
 
-- `stream_payload` は Redis Stream に送る payload の保存先だが、DB 側では JSON object であること以上の検証は限定的。
-- `apiDbQuality` は outbox row の存在や値を確認しているが、JSON Schema 正本とはまだ直接結びついていない。
+- 2026-05-09: `PostgresOcrJobCreationRepositorySpec` で保存済み `stream_payload` を読み戻し、
+  `docs/schemas/ocr-queue-payload-v1.schema.json` で検証するようにした。
+- `ocrHintsJson` がある場合は parse 後に `docs/schemas/ocr-hints-v1.schema.json` でも検証する。
+- DB constraint は当面 `jsonb_typeof(stream_payload) = 'object'` 程度に留め、schema 全体の assert は integration test に置く。
 
-リスク:
+解消したリスク:
 
 - API serializer は schema-valid でも、DB repository 経由の保存・復元で payload shape が崩れた場合に、
-  DB integration 側だけでは検出が弱い。
-- `momo-db` 側に JSON Schema extension を入れない限り、DB CHECK で schema 全体を表現するのは重い。
+  DB integration 側で検出できるようになった。
 
-推奨:
+残:
 
-- `PostgresOcrJobCreationRepositorySpec` または `PostgresOcrQueueOutboxRepositorySpec` で、
-  保存された `stream_payload` を読み戻して `docs/schemas/ocr-queue-payload-v1.schema.json` で検証する。
-- `ocrHintsJson` がある場合は parse 後に `ocr-hints-v1.schema.json` でも検証する。
-- DB constraint は当面 `jsonb_typeof(stream_payload) = 'object'` 程度に留め、schema 全体の assert は consumer repository test に置く。
+- 完了。
 
 ### 3. payload version と size limit を検討する
 
-現状:
+対応状況:
 
-- schema ファイル名と `$id` は v1 だが、Redis payload 自体には `schemaVersion` field がない。
-- `ocrHintsJson` の中身、alias 数、文字列長、payload 全体サイズには明示的な上限がない。
+- 2026-05-09: `schemaVersion: "1"` を Stream Payload v1 の required field として追加した。
+  API producer は常に `"1"` を出力し、worker は欠落または `"1"` 以外の値を拒否する。
+- `ocrHintsJson` は最大 8192 文字に制限した。
+- `ocr-hints-v1.schema.json` に `maxItems` / `maxLength` / 必要な `minLength` を追加した。
+- API request validation、API serializer 契約テスト、worker serializer/parser 契約テストを同時に更新した。
 
-リスク:
+解消したリスク:
 
 - 将来 v2 が必要になったとき、stream / outbox に残る v1 payload と新 payload の判別が暗黙になる。
 - OCR hints が大きくなりすぎると、Redis Stream、DB outbox、ログ調査、DLQ 調査の運用コストが上がる。
 
-推奨:
+採用した上限:
 
-- 次の後方互換変更として `schemaVersion: "1"` を optional field で追加するか検討する。
-- `ocr-hints-v1.schema.json` に `maxItems` / `maxLength` を入れる。候補:
-  - `knownPlayerAliases`: 最大 4 または UI/API が許す人数上限
-  - `aliases`: 1 member あたり最大 8 程度
-  - alias 文字列: 最大 64 文字程度
-  - `ocrHintsJson`: stream payload 側で最大文字数を設定
-- 上限を入れる場合は API request validation、serializer、worker parser、schema test を同じ変更で更新する。
+- `gameTitle`, `layoutFamily`: 1-64 文字
+- `knownPlayerAliases`: 最大 4 件
+- `knownPlayerAliases[].memberId`: 1-128 文字
+- `knownPlayerAliases[].aliases`: 1-8 件、各 1-64 文字
+- `computerPlayerAliases`: 最大 8 件、各 1-64 文字
+- `ocrHintsJson`: 最大 8192 文字
+
+残:
+
+- 完了。
 
 ## 参照
 

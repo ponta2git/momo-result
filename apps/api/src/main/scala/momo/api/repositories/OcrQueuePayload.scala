@@ -15,8 +15,18 @@ import momo.api.domain.{OcrJobHints, ScreenType}
 final case class OcrQueuePayload(fields: Map[String, String])
 
 object OcrQueuePayload:
-  val RequiredKeys: Set[String] =
-    Set("jobId", "draftId", "imageId", "imagePath", "requestedImageType", "attempt", "enqueuedAt")
+  val SchemaVersionKey = "schemaVersion"
+  val SchemaVersion = "1"
+  val RequiredKeys: Set[String] = Set(
+    SchemaVersionKey,
+    "jobId",
+    "draftId",
+    "imageId",
+    "imagePath",
+    "requestedImageType",
+    "attempt",
+    "enqueuedAt",
+  )
   val HintsKey = "ocrHintsJson"
   val RequestIdKey = "requestId"
 
@@ -34,6 +44,7 @@ object OcrQueuePayload:
       requestId: Option[String],
   ): OcrQueuePayload =
     val base = Map(
+      SchemaVersionKey -> SchemaVersion,
       "jobId" -> jobId.value,
       "draftId" -> draftId.value,
       "imageId" -> imageId.value,

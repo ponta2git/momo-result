@@ -29,6 +29,7 @@ def test_redis_consumer_reads_stream_delivery_from_testcontainer() -> None:
         )
         client = Redis.from_url(redis_url, decode_responses=True)
         payload: dict[EncodableT, EncodableT] = {
+            "schemaVersion": "1",
             "jobId": "job-1",
             "draftId": "draft-1",
             "imageId": "image-1",

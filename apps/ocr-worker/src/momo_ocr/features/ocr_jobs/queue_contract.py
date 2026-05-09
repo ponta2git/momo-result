@@ -15,6 +15,8 @@ from momo_ocr.features.ocr_jobs.models import OcrJobHints, OcrJobMessage, Player
 from momo_ocr.shared.errors import FailureCode, OcrError
 
 OCR_HINTS_KEY = "ocrHintsJson"
+SCHEMA_VERSION_KEY = "schemaVersion"
+SCHEMA_VERSION = "1"
 REQUEST_ID_KEY = "requestId"
 REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 REPO_ROOT = Path(__file__).resolve().parents[6]
@@ -52,6 +54,7 @@ def parse_job_message(payload: Mapping[str, object]) -> OcrJobMessage:
 
 def to_stream_payload(message: OcrJobMessage) -> dict[str, str]:
     payload = {
+        SCHEMA_VERSION_KEY: SCHEMA_VERSION,
         "jobId": message.job_id,
         "draftId": message.draft_id,
         "imageId": message.image_id,

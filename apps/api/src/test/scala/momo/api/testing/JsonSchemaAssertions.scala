@@ -15,8 +15,7 @@ trait JsonSchemaAssertions extends Assertions:
     assertJsonSchemaValid(streamPayloadSchemaPath, payloadJson.noSpaces)
     OcrQueuePayload.fromJson(payloadJson) match
       case Left(reason) => fail(s"stream payload is not an OcrQueuePayload: $reason")
-      case Right(payload) =>
-        payload.fields.get(OcrQueuePayload.HintsKey)
+      case Right(payload) => payload.fields.get(OcrQueuePayload.HintsKey)
           .foreach(hintsJson => assertJsonSchemaValid(ocrHintsSchemaPath, hintsJson))
 
   protected def assertOcrQueuePayloadSchemaValid(payload: OcrQueuePayload): Unit =

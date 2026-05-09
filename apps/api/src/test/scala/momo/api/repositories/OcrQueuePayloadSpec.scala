@@ -21,6 +21,7 @@ final class OcrQueuePayloadSpec extends FunSuite with JsonSchemaAssertions:
     assertEquals(payload.fields("requestedImageType"), "incident_log")
     assertEquals(payload.fields("attempt"), "1")
     assertEquals(payload.fields("enqueuedAt"), "2026-05-09T00:00:00Z")
+    assertEquals(payload.fields("schemaVersion"), "1")
     assertEquals(payload.fields("requestId"), "req_20260509-abc")
     assertOcrQueuePayloadSchemaValid(payload)
   }
@@ -39,6 +40,40 @@ final class OcrQueuePayloadSpec extends FunSuite with JsonSchemaAssertions:
     assertJsonSchemaInvalid(
       streamPayloadSchemaPath,
       baseJson.mapObject(_.add("unknownField", Json.fromString("value"))).noSpaces,
+    )
+    assertJsonSchemaInvalid(
+      streamPayloadSchemaPath,
+      baseJson.mapObject(_.add("schemaVersion", Json.fromString("2"))).noSpaces,
+    )
+    assertJsonSchemaInvalid(
+      streamPayloadSchemaPath,
+      baseJson.mapObject(_.add(OcrQueuePayload.HintsKey, Json.fromString("x" * 8193))).noSpaces,
+    )
+  }
+
+  test("JSON Schema rejects OCR hints that exceed contract limits") {
+    val oversizedAliases = Json.obj(
+      "knownPlayerAliases" -> Json.arr(Json.obj(
+        "memberId" -> Json.fromString("member-1"),
+        "aliases" -> Json.arr(List.fill(9)(Json.fromString("alias"))*),
+      ))
+    )
+
+    assertJsonSchemaInvalid(ocrHintsSchemaPath, oversizedAliases.noSpaces)
+    assertJsonSchemaInvalid(
+      ocrHintsSchemaPath,
+      Json.obj(
+        "knownPlayerAliases" -> Json.arr(
+          List.fill(5)(Json.obj(
+            "memberId" -> Json.fromString("member-1"),
+            "aliases" -> Json.arr(Json.fromString("alias")),
+          ))*
+        )
+      ).noSpaces,
+    )
+    assertJsonSchemaInvalid(
+      ocrHintsSchemaPath,
+      Json.obj("computerPlayerAliases" -> Json.arr(Json.fromString("x" * 65))).noSpaces,
     )
   }
 
@@ -65,6 +100,7 @@ final class OcrQueuePayloadSpec extends FunSuite with JsonSchemaAssertions:
         "requestedImageType" -> "total_assets",
         "attempt" -> "1",
         "enqueuedAt" -> "2026-04-29T11:40:16Z",
+        "schemaVersion" -> "1",
       ),
     )
     assertOcrQueuePayloadSchemaValid(payload)

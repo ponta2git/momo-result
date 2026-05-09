@@ -11,8 +11,8 @@ import momo.api.adapters.{
   InMemoryMatchDraftsRepository, InMemoryOcrDraftsRepository, InMemoryOcrJobCreationRepository,
   InMemoryOcrJobsRepository, InMemoryQueueProducer, LocalFsImageStore,
 }
-import momo.api.domain.ids.OcrJobId
-import momo.api.domain.{OcrFailure, OcrJob, OcrJobHints, StoredImage}
+import momo.api.domain.ids.{ImageId, OcrJobId}
+import momo.api.domain.{OcrFailure, OcrJob, OcrJobHints, PlayerAliasHint, StoredImage}
 import momo.api.errors.AppError
 import momo.api.repositories.{ImageStore, OcrJobsRepository, OcrQueuePayload, QueueProducer}
 import momo.api.usecases.testing.CapturingLoggerFactory
@@ -48,6 +48,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         assertEquals(foundJob.map(_.status.wire), Some("queued"))
         assertEquals(foundDraft.map(_.id), Some(created.draft.id))
         assertEquals(published.map(_.fields("jobId")), Vector("job-1"))
+        assertEquals(published.head.fields("schemaVersion"), "1")
         assertEquals(published.head.fields("requestedImageType"), "total_assets")
         assertEquals(published.head.fields.get("requestId"), Some("test-req-id"))
     }
@@ -95,6 +96,32 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         val failure = found.flatMap(_.failure).getOrElse(fail("expected failed job"))
         assertEquals(failure.message, "Failed to enqueue OCR job.")
         assert(!failure.message.contains("secret-host"))
+    }
+  }
+
+  test("rejects OCR hints that exceed Redis payload contract limits") {
+    inMemoryQueueFixture(
+      prefix = "momo-api-create-job-hints-limit",
+      idSeed = List("job-1", "draft-1"),
+      requestId = None,
+    ).use { fixture =>
+      for
+        usecase <- fixture.usecase
+        result <- usecase.run(CreateOcrJobCommand(
+          ImageId("missing-image"),
+          "total_assets",
+          OcrJobHints(
+            gameTitle = None,
+            layoutFamily = None,
+            knownPlayerAliases = List(PlayerAliasHint("member-1", List.fill(9)("alias"))),
+            computerPlayerAliases = Nil,
+          ),
+          None,
+        ))
+      yield result match
+        case Left(AppError.ValidationFailed(detail)) =>
+          assert(detail.contains("ocrHints.knownPlayerAliases[0].aliases"))
+        case other => fail(s"expected Left(AppError.ValidationFailed), got: $other")
     }
   }
 

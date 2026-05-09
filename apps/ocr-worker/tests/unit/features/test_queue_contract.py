@@ -22,6 +22,7 @@ OCR_HINTS_SCHEMA_PATH = REPO_ROOT / "docs" / "schemas" / "ocr-hints-v1.schema.js
 def test_parse_job_message_uses_api_contract_keys() -> None:
     message = parse_job_message(
         {
+            "schemaVersion": "1",
             "jobId": "job-1",
             "draftId": "draft-1",
             "imageId": "image-1",
@@ -81,6 +82,7 @@ def test_job_message_round_trips_to_api_payload_keys() -> None:
     )
 
     assert payload == {
+        "schemaVersion": "1",
         "jobId": "job-1",
         "draftId": "draft-1",
         "imageId": "image-1",
@@ -147,10 +149,16 @@ def test_parse_job_message_rejects_schema_invalid_top_level_payloads() -> None:
     invalid_payloads: list[tuple[Mapping[str, object], tuple[str, ...]]] = [
         ({**payload, "attempt": 1}, ("$.attempt", "not of type 'string'")),
         ({**payload, "unknownField": "value"}, ("Additional properties", "unknownField")),
+        (
+            {key: value for key, value in payload.items() if key != "schemaVersion"},
+            ("'schemaVersion' is a required property",),
+        ),
         ({**payload, "jobId": ""}, ("$.jobId", "should be non-empty")),
         ({**payload, "imagePath": "relative/image.png"}, ("$.imagePath", "does not match '^/'")),
         ({**payload, "attempt": "01"}, ("$.attempt", "does not match")),
         ({**payload, "enqueuedAt": "not-a-date-time"}, ("$.enqueuedAt", "not-a-date-time")),
+        ({**payload, "schemaVersion": "2"}, ("$.schemaVersion", "'1' was expected")),
+        ({**payload, "ocrHintsJson": "x" * 8193}, ("$.ocrHintsJson", "is too long")),
     ]
 
     for invalid_payload, expected_messages in invalid_payloads:
@@ -164,6 +172,7 @@ def test_parse_job_message_rejects_schema_invalid_top_level_payloads() -> None:
 
 def test_parse_job_message_rejects_invalid_hint_json() -> None:
     payload = {
+        "schemaVersion": "1",
         "jobId": "job-1",
         "draftId": "draft-1",
         "imageId": "image-1",
@@ -183,6 +192,7 @@ def test_parse_job_message_rejects_invalid_hint_json() -> None:
 
 def test_parse_job_message_rejects_invalid_alias_hint_shape() -> None:
     payload = {
+        "schemaVersion": "1",
         "jobId": "job-1",
         "draftId": "draft-1",
         "imageId": "image-1",
@@ -211,6 +221,18 @@ def test_parse_job_message_rejects_schema_invalid_hint_payloads() -> None:
         (
             '{"knownPlayerAliases":[{"memberId":"member-1","aliases":[],"extra":"value"}]}',
             ("$.knownPlayerAliases[0]", "Additional properties", "extra"),
+        ),
+        (
+            '{"knownPlayerAliases":[{"memberId":"member-1","aliases":[]}]}',
+            ("$.knownPlayerAliases[0].aliases", "should be non-empty"),
+        ),
+        (
+            '{"knownPlayerAliases":[{"memberId":"member-1","aliases":["a","b","c","d","e","f","g","h","i"]}]}',
+            ("$.knownPlayerAliases[0].aliases", "is too long"),
+        ),
+        (
+            '{"computerPlayerAliases":["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]}',
+            ("$.computerPlayerAliases[0]", "is too long"),
         ),
     ]
 

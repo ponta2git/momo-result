@@ -39,6 +39,7 @@ Required stream fields:
 
 ```json
 {
+  "schemaVersion": "1",
   "jobId": "uuid",
   "draftId": "uuid",
   "imageId": "uuid",
@@ -64,6 +65,8 @@ Optional OCR hints are encoded as a single `ocrHintsJson` string field so the st
 ```
 
 These values are hints only. `requestedImageType` may come from the upload slot or manual UI selection; `gameTitle`/`layoutFamily` may select parser profiles; aliases may improve name matching. The worker must still return raw OCR values, warnings, and draft data for user review instead of treating hints as authoritative results.
+
+The API producer emits `schemaVersion: "1"` and the worker rejects missing or non-`"1"` versions. `ocrHintsJson` is capped at 8192 characters, with per-field hint limits defined by the JSON Schema.
 
 The canonical contract lives in `../../docs/redis-streams-ocr-contract.md`.
 `tests/unit/features/test_queue_contract.py` validates the worker serializer against `../../docs/schemas/ocr-queue-payload-v1.schema.json`, then parses `ocrHintsJson` and validates it against `../../docs/schemas/ocr-hints-v1.schema.json`.

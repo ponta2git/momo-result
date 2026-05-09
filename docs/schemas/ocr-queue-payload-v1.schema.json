@@ -4,6 +4,7 @@
   "title": "OCR Redis Streams payload v1",
   "type": "object",
   "required": [
+    "schemaVersion",
     "jobId",
     "draftId",
     "imageId",
@@ -13,6 +14,10 @@
     "enqueuedAt"
   ],
   "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "1"
+    },
     "jobId": {
       "type": "string",
       "minLength": 1
@@ -44,6 +49,7 @@
     },
     "ocrHintsJson": {
       "type": "string",
+      "maxLength": 8192,
       "contentMediaType": "application/json"
     },
     "requestId": {

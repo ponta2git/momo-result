@@ -55,6 +55,7 @@ def test_redis_consumer_pulls_and_parses_valid_delivery() -> None:
                     (
                         "1-0",
                         {
+                            "schemaVersion": "1",
                             "jobId": "job-1",
                             "draftId": "draft-1",
                             "imageId": "image-1",

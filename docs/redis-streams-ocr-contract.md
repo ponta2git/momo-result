@@ -34,6 +34,7 @@ API は `XADD` する。worker は `XGROUP CREATE ... MKSTREAM` を許容し、`
 
 | Field | Required | Meaning |
 |---|---:|---|
+| `schemaVersion` | yes | payload schema version。Stream Payload v1 では `"1"` 固定 |
 | `jobId` | yes | DB `ocr_jobs.id`。worker の idempotency key |
 | `draftId` | yes | DB `ocr_drafts.id` |
 | `imageId` | yes | API 側の一時画像論理 ID |
@@ -41,7 +42,7 @@ API は `XADD` する。worker は `XGROUP CREATE ... MKSTREAM` を許容し、`
 | `requestedImageType` | yes | `auto`, `total_assets`, `revenue`, `incident_log` |
 | `attempt` | yes | API が payload 作成時に入れる正整数。現行実装では常に `1` |
 | `enqueuedAt` | yes | API が payload を作成した ISO-8601 UTC timestamp |
-| `ocrHintsJson` | no | compact / sorted keys / UTF-8 の JSON string |
+| `ocrHintsJson` | no | compact / sorted keys / UTF-8 の JSON string。最大 8192 文字 |
 | `requestId` | no | ログ相関用 ID。`^[A-Za-z0-9_-]{1,64}$` のみ許容 |
 
 `attempt`、`ocr_jobs.attempt_count`、`ocr_queue_outbox.attempt_count`、Redis `times_delivered` は別概念である。
@@ -75,6 +76,14 @@ schema は producer payload を閉じた契約として扱うため、Redis payl
 worker は hint を補助情報として扱う。画面種別、プレイヤー名、結果値の正本として扱わない。未知 field の追加は後方互換であり、既存 field の型変更・削除は非互換である。
 
 `ocrHintsJson` は Redis field 上では string なので、トップレベル schema では JSON string であることだけを検証する。内容は `ocrHintsJson` を JSON parse したうえで `docs/schemas/ocr-hints-v1.schema.json` に対して検証する。
+
+OCR hints は API request validation と JSON Schema の両方で次の上限を持つ。
+
+- `gameTitle`, `layoutFamily`: 1-64 文字
+- `knownPlayerAliases`: 最大 4 件
+- `knownPlayerAliases[].memberId`: 1-128 文字
+- `knownPlayerAliases[].aliases`: 1-8 件、各 1-64 文字
+- `computerPlayerAliases`: 最大 8 件、各 1-64 文字
 
 ## 5. API Durable Outbox
 
@@ -131,6 +140,7 @@ queued -> cancelled
 後方互換:
 
 - Redis payload に optional field を追加する。ただし producer の正本 schema は閉じているため、schema と契約テストを同時に更新する。
+- `schemaVersion` は必須 field とし、v1 では `"1"` 固定とする。
 - `ocrHintsJson` に optional field を追加する。ただし hints schema と契約テストを同時に更新する。
 - DB に nullable column または default 付き column を追加する。
 - 新しい warning code を追加し、API が未知 warning を透過表示する。

@@ -22,10 +22,12 @@ momo-ocr = "momo_ocr.main:main"
 
 [dependency-groups]
 dev = [
+  "jsonschema[format-nongpl]>=4.25.0",
   "mypy>=1.19.0",
   "pytest>=9.0.2",
   "ruff>=0.14.9",
   "testcontainers[postgres,redis]>=4.9.0",
+  "types-jsonschema>=4.25.1.20250822",
 ]
 
 [build-system]

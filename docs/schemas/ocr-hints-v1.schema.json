@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://momo-result.local/schemas/ocr-hints-v1.schema.json",
+  "title": "OCR hints v1",
+  "type": "object",
+  "properties": {
+    "gameTitle": {
+      "type": "string"
+    },
+    "layoutFamily": {
+      "type": "string"
+    },
+    "knownPlayerAliases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["memberId", "aliases"],
+        "properties": {
+          "memberId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "computerPlayerAliases": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}

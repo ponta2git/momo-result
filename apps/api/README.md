@@ -98,11 +98,12 @@ Mutation 系 API は `X-Dev-User` と `X-CSRF-Token: dev` が必要です。
 
 ## OCR Worker との契約
 
-Redis Streams へ投入するフィールドは `apps/ocr-worker/docs/api-contract.md` に従います。
-Scala側では `OcrQueuePayloadSpec` で以下を固定しています。
+Redis Streams へ投入するフィールドは `../../docs/redis-streams-ocr-contract.md` に従います。
+Scala側では `OcrQueuePayloadSpec` で `../../docs/schemas/` の JSON Schema に対して以下を固定しています。
 
 - 全フィールドは文字列
 - 必須キー: `jobId`, `draftId`, `imageId`, `imagePath`, `requestedImageType`, `attempt`, `enqueuedAt`
 - `ocrHintsJson` は compact / sorted keys / UTF-8 の JSON 文字列
+- `requestId` は任意のログ相関 field
 
 画像は OCR 完了までの一時保存のみを想定し、恒久保存しません。

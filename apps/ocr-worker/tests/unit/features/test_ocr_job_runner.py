@@ -379,11 +379,17 @@ def test_pre_running_cancellation_skips_analyze_and_marks_cancelled() -> None:
     assert consumer.acked == ["d1"]
 
 
-def test_already_cancelled_record_is_acked_without_repository_writes() -> None:
+@pytest.mark.parametrize(
+    "terminal_status",
+    [OcrJobStatus.SUCCEEDED, OcrJobStatus.FAILED, OcrJobStatus.CANCELLED],
+)
+def test_already_terminal_record_is_acked_without_repository_writes(
+    terminal_status: OcrJobStatus,
+) -> None:
     consumer = InMemoryOcrJobConsumer()
     repository = InMemoryOcrJobRepository()
     payload = _make_payload()
-    _seed_record(repository, payload, status=OcrJobStatus.CANCELLED)
+    _seed_record(repository, payload, status=terminal_status)
     consumer.enqueue(payload, delivery_tag="d1")
 
     deps = _make_deps(
@@ -395,7 +401,7 @@ def test_already_cancelled_record_is_acked_without_repository_writes() -> None:
 
     outcome = run_one_job(deps)
 
-    assert outcome.status is OcrJobStatus.CANCELLED
+    assert outcome.status is terminal_status
     # The seeded record stays terminal; no transitions were attempted.
     assert repository.records["job-1"].attempt_count == 0
     assert consumer.acked == ["d1"]

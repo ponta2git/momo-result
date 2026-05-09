@@ -6,6 +6,9 @@
 
 追記: 2026-05-08 時点で `momo-db` 側の `ocr_queue_outbox` migration は local 適用済み。`apps/api` 側も outbox insert / dispatcher / DB contract test まで追従済み。
 
+現在の Redis Streams / OCR queue 契約の正本は `docs/redis-streams-ocr-contract.md`。この handoff は履歴資料として残す。
+Stream payload と OCR hints の JSON Schema 正本は `docs/schemas/ocr-queue-payload-v1.schema.json` と `docs/schemas/ocr-hints-v1.schema.json`。
+
 ---
 
 ## 1. 背景
@@ -70,6 +73,7 @@
 ### 2.2 `stream_payload` の contract
 
 `stream_payload` は `apps/api` の `OcrQueuePayload` / `apps/ocr-worker` の `queue_contract.py` と同じ field を保持する。
+JSONB object として保存する値は `docs/schemas/ocr-queue-payload-v1.schema.json` に従う。
 
 必須 keys:
 

@@ -1,8 +1,11 @@
 package momo.api.repositories
 
-import java.nio.file.Path
+import java.nio.file.{Files, Path}
 import java.time.Instant
 
+import scala.jdk.CollectionConverters.*
+
+import com.networknt.schema.{InputFormat, SchemaRegistry, SpecificationVersion}
 import io.circe.Json
 import munit.FunSuite
 
@@ -10,6 +13,37 @@ import momo.api.domain.ids.*
 import momo.api.domain.{OcrJobHints, PlayerAliasHint, ScreenType}
 
 final class OcrQueuePayloadSpec extends FunSuite:
+  test("builds a JSON Schema-valid Redis Streams payload with hints and requestId") {
+    val payload = canonicalPayload
+
+    assertEquals(payload.fields("jobId"), "job-schema-1")
+    assertEquals(payload.fields("draftId"), "draft-schema-1")
+    assertEquals(payload.fields("imageId"), "image-schema-1")
+    assertEquals(payload.fields("imagePath"), "/tmp/momo-result/uploads/image-schema-1.png")
+    assertEquals(payload.fields("requestedImageType"), "incident_log")
+    assertEquals(payload.fields("attempt"), "1")
+    assertEquals(payload.fields("enqueuedAt"), "2026-05-09T00:00:00Z")
+    assertEquals(payload.fields("requestId"), "req_20260509-abc")
+    assertPayloadSchemaValid(payload)
+  }
+
+  test("JSON Schema rejects invalid Redis Streams payload shape") {
+    val baseJson = OcrQueuePayload.fieldsAsJson(canonicalPayload)
+
+    assertJsonSchemaInvalid(
+      streamPayloadSchemaPath,
+      baseJson.mapObject(_.add("attempt", Json.fromInt(1))).noSpaces,
+    )
+    assertJsonSchemaInvalid(
+      streamPayloadSchemaPath,
+      baseJson.mapObject(_.add("enqueuedAt", Json.fromString("not-a-date-time"))).noSpaces,
+    )
+    assertJsonSchemaInvalid(
+      streamPayloadSchemaPath,
+      baseJson.mapObject(_.add("unknownField", Json.fromString("value"))).noSpaces,
+    )
+  }
+
   test("builds the exact Redis Streams payload expected by the OCR worker without hints") {
     val payload = OcrQueuePayload.build(
       jobId = OcrJobId("job-1"),
@@ -35,6 +69,7 @@ final class OcrQueuePayloadSpec extends FunSuite:
         "enqueuedAt" -> "2026-04-29T11:40:16Z",
       ),
     )
+    assertPayloadSchemaValid(payload)
   }
 
   test("serializes hints as compact sorted UTF-8 JSON") {
@@ -59,6 +94,7 @@ final class OcrQueuePayloadSpec extends FunSuite:
       payload.fields(OcrQueuePayload.HintsKey),
       """{"computerPlayerAliases":["さくま","サクマ"],"gameTitle":"桃太郎電鉄ワールド","knownPlayerAliases":[{"aliases":["ぽんた","PONTA"],"memberId":"member-1"}],"layoutFamily":"world"}""",
     )
+    assertPayloadSchemaValid(payload)
   }
 
   test("includes requestId when provided and omits it when empty/None") {
@@ -119,3 +155,72 @@ final class OcrQueuePayloadSpec extends FunSuite:
       Left("field attempt must be a string"),
     )
   }
+
+  private def canonicalPayload: OcrQueuePayload = OcrQueuePayload.build(
+    jobId = OcrJobId("job-schema-1"),
+    draftId = OcrDraftId("draft-schema-1"),
+    imageId = ImageId("image-schema-1"),
+    imagePath = Path.of("/tmp/momo-result/uploads/image-schema-1.png"),
+    requestedScreenType = ScreenType.IncidentLog,
+    attempt = 1,
+    enqueuedAt = Instant.parse("2026-05-09T00:00:00Z"),
+    hints = OcrJobHints(
+      gameTitle = Some("桃鉄2"),
+      layoutFamily = Some("momotetsu_2"),
+      knownPlayerAliases = List(
+        PlayerAliasHint("member-ponta", List("ぽんた", "ぽんた社長")),
+        PlayerAliasHint("member-otaka", List("オータカ", "オータカ社長")),
+      ),
+      computerPlayerAliases = List("さくま", "さくま社長"),
+    ),
+    requestId = Some("req_20260509-abc"),
+  )
+
+  private def streamPayloadSchemaPath: Path =
+    repoPath("docs/schemas/ocr-queue-payload-v1.schema.json")
+
+  private def ocrHintsSchemaPath: Path = repoPath("docs/schemas/ocr-hints-v1.schema.json")
+
+  private def assertPayloadSchemaValid(payload: OcrQueuePayload): Unit =
+    assertJsonSchemaValid(streamPayloadSchemaPath, OcrQueuePayload.fieldsAsJson(payload).noSpaces)
+    payload.fields.get(OcrQueuePayload.HintsKey)
+      .foreach(hintsJson => assertJsonSchemaValid(ocrHintsSchemaPath, hintsJson))
+
+  private def assertJsonSchemaValid(schemaPath: Path, inputJson: String): Unit =
+    val errors = jsonSchemaErrors(schemaPath, inputJson)
+
+    assert(
+      errors.isEmpty,
+      s"JSON Schema validation failed for ${schemaPath.getFileName}: ${errors.mkString("; ")}",
+    )
+
+  private def assertJsonSchemaInvalid(schemaPath: Path, inputJson: String): Unit =
+    val errors = jsonSchemaErrors(schemaPath, inputJson)
+
+    assert(
+      errors.nonEmpty,
+      s"JSON Schema validation unexpectedly passed for ${schemaPath.getFileName}: $inputJson",
+    )
+
+  private def jsonSchemaErrors(
+      schemaPath: Path,
+      inputJson: String,
+  ): List[com.networknt.schema.Error] =
+    val registry = SchemaRegistry.withDefaultDialect(SpecificationVersion.DRAFT_2020_12)
+    val schema = registry.getSchema(Files.readString(schemaPath), InputFormat.JSON)
+    schema.validate(
+      inputJson,
+      InputFormat.JSON,
+      executionContext =>
+        executionContext.executionConfig { executionConfig =>
+          executionConfig.formatAssertionsEnabled(true)
+          ()
+        },
+    ).asScala.toList
+
+  private def repoPath(relativePath: String): Path =
+    val cwd = Path.of(sys.props("user.dir"))
+    val candidates = List(cwd.resolve(relativePath), cwd.resolve(s"../../$relativePath"))
+      .map(_.normalize)
+    candidates.find(path => Files.exists(path))
+      .getOrElse(fail(s"repository path not found: $relativePath from cwd=$cwd"))

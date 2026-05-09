@@ -31,9 +31,9 @@ Default is `all`. Report holdout accuracy separately when documenting tuning out
 
 ## API queue producer contract
 
-For the full contract — DB schema, status transitions, failure codes, ack semantics, idempotency rules, and compatibility policy — see [`docs/api-contract.md`](docs/api-contract.md). The summary below is a quick reference.
+For the full contract — Redis Streams payload, durable outbox, DB schema, status transitions, failure codes, ack semantics, idempotency rules, and compatibility policy — see [`../../docs/redis-streams-ocr-contract.md`](../../docs/redis-streams-ocr-contract.md). The summary below is a quick reference.
 
-`apps/api` owns the Redis Streams producer side. It must create the durable OCR job row first, then enqueue one stream message. Redis is delivery only; the worker always verifies the DB job state before processing.
+`apps/api` owns the Redis Streams producer side. It must create the durable OCR job row and outbox intent in one transaction, then the dispatcher publishes the stream message. Redis is delivery only; the worker always verifies the DB job state before processing.
 
 Required stream fields:
 
@@ -45,7 +45,8 @@ Required stream fields:
   "imagePath": "/tmp/momo-result/uploads/image.jpg",
   "requestedImageType": "auto | total_assets | revenue | incident_log",
   "attempt": "1",
-  "enqueuedAt": "2026-04-29T10:00:00Z"
+  "enqueuedAt": "2026-04-29T10:00:00Z",
+  "requestId": "optional-correlation-id"
 }
 ```
 
@@ -63,6 +64,9 @@ Optional OCR hints are encoded as a single `ocrHintsJson` string field so the st
 ```
 
 These values are hints only. `requestedImageType` may come from the upload slot or manual UI selection; `gameTitle`/`layoutFamily` may select parser profiles; aliases may improve name matching. The worker must still return raw OCR values, warnings, and draft data for user review instead of treating hints as authoritative results.
+
+The canonical contract lives in `../../docs/redis-streams-ocr-contract.md`.
+`tests/unit/features/test_queue_contract.py` validates the worker serializer against `../../docs/schemas/ocr-queue-payload-v1.schema.json`, then parses `ocrHintsJson` and validates it against `../../docs/schemas/ocr-hints-v1.schema.json`.
 
 The production worker defaults to the in-process `tesserocr` engine for throughput. Set `MOMO_OCR_ENGINE=subprocess` when a deployment needs `OCR_TIMEOUT_SECONDS` as a hard per-call process timeout boundary more than the in-process speedup.
 

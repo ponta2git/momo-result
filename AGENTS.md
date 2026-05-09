@@ -11,6 +11,8 @@
 | `docs/architecture.md` | 実装規約（スタック・API設計・web/OCR規約・セキュリティ） |
 | `docs/db-rule.md` | DB共有ルール・マイグレーション方針 |
 | `docs/domain-rule.md` | ドメイン用語・試合記録の確定条件・フロー |
+| `docs/redis-streams-ocr-contract.md` | Redis Streams / OCR queue / outbox / worker ack 契約（正本） |
+| `docs/schemas/ocr-queue-payload-v1.schema.json` / `docs/schemas/ocr-hints-v1.schema.json` | Redis Streams / OCR hints の JSON Schema 正本 |
 | `docs/dev-rule.md` | ローカル開発・Git規約・検証コマンド |
 | `docs/test-rule.md` | テスト実装方針・CI必須チェック項目 |
 | `docs/post-mortem/lessons.md` | 過去障害から得た実装時チェック教訓 |

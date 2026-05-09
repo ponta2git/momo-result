@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 
 from momo_ocr.features.ocr_jobs.aliases import alias_resolver_from_hints
 from momo_ocr.features.ocr_jobs.debug_dir import resolve_debug_dir
+from momo_ocr.features.ocr_jobs.lifecycle import is_terminal
 from momo_ocr.features.ocr_jobs.models import (
     OcrJobExecutionResult,
     OcrJobMessage,
@@ -70,9 +71,10 @@ def _phase_lookup_record(deps: JobRunnerDependencies, delivery: PulledJob) -> Oc
         )
         return OcrJobStatus.FAILED
 
-    if record.status is OcrJobStatus.CANCELLED:
-        # Cancelled before pickup — nothing to do.
-        return OcrJobStatus.CANCELLED
+    if is_terminal(record.status):
+        # Duplicate delivery after a persisted terminal state: DB is the source
+        # of truth, so no retry or compensating transition is needed.
+        return record.status
     return None
 
 

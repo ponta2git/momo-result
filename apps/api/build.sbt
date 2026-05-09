@@ -109,6 +109,7 @@ lazy val root = (project in file("."))
       val logbackVersion = "1.5.18"
       val logstashEncoderVersion = "8.0"
       val janinoVersion = "3.1.12"
+      val jsonSchemaValidatorVersion = "2.0.1"
       val log4catsVersion = "2.8.0"
       val munitCatsEffectVersion = "2.2.0"
       val munitVersion = "1.3.0"
@@ -138,6 +139,7 @@ lazy val root = (project in file("."))
         "ch.qos.logback" % "logback-classic" % logbackVersion,
         "net.logstash.logback" % "logstash-logback-encoder" % logstashEncoderVersion,
         "org.codehaus.janino" % "janino" % janinoVersion,
+        "com.networknt" % "json-schema-validator" % jsonSchemaValidatorVersion % Test,
         "org.scalameta" %% "munit" % munitVersion % Test,
         "org.testcontainers" % "postgresql" % testcontainersVersion % Test,
         "org.testcontainers" % "testcontainers" % testcontainersVersion % Test,

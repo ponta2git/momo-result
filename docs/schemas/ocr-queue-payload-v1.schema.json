@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://momo-result.local/schemas/ocr-queue-payload-v1.schema.json",
+  "title": "OCR Redis Streams payload v1",
+  "type": "object",
+  "required": [
+    "jobId",
+    "draftId",
+    "imageId",
+    "imagePath",
+    "requestedImageType",
+    "attempt",
+    "enqueuedAt"
+  ],
+  "properties": {
+    "jobId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "draftId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "imageId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "imagePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^/"
+    },
+    "requestedImageType": {
+      "type": "string",
+      "enum": ["auto", "total_assets", "revenue", "incident_log"]
+    },
+    "attempt": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*$"
+    },
+    "enqueuedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "ocrHintsJson": {
+      "type": "string",
+      "contentMediaType": "application/json"
+    },
+    "requestId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,64}$"
+    }
+  },
+  "additionalProperties": false
+}

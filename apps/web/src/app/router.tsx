@@ -84,7 +84,11 @@ export const appRoutes: RouteObject[] = [
           },
           {
             path: "admin/masters",
-            element: <MastersPage />,
+            element: (
+              <AdminRoute>
+                <MastersPage />
+              </AdminRoute>
+            ),
           },
           {
             path: "admin/accounts",

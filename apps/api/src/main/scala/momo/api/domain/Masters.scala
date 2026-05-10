@@ -47,7 +47,7 @@ final case class IncidentMaster(
     createdAt: Instant,
 )
 
-final case class MemberAlias(memberId: MemberId, alias: String, createdAt: Instant)
+final case class MemberAlias(id: String, memberId: MemberId, alias: String, createdAt: Instant)
 
 /**
  * Represents a row from the shared `members` table. The fixed 4 members are seeded by momo-db

@@ -31,6 +31,35 @@ object GameTitlesEndpoints:
     .out(jsonBody[GameTitleResponse])
     .tag("masters")
 
+  val update: PublicEndpoint[
+    (String, Option[String], Option[String], UpdateGameTitleRequest),
+    ProblemResponse,
+    GameTitleResponse,
+    Any,
+  ] = endpoint
+    .patch
+    .in("api" / "game-titles" / path[String]("id"))
+    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.csrfHeader)
+    .in(jsonBody[UpdateGameTitleRequest])
+    .errorOut(CommonEndpoint.errorOut)
+    .out(jsonBody[GameTitleResponse])
+    .tag("masters")
+
+  val delete: PublicEndpoint[
+    (String, Option[String], Option[String]),
+    ProblemResponse,
+    DeleteMasterResponse,
+    Any,
+  ] = endpoint
+    .delete
+    .in("api" / "game-titles" / path[String]("id"))
+    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.csrfHeader)
+    .errorOut(CommonEndpoint.errorOut)
+    .out(jsonBody[DeleteMasterResponse])
+    .tag("masters")
+
 object MapMastersEndpoints:
   val list: PublicEndpoint[
     (Option[String], Option[String]),
@@ -60,6 +89,35 @@ object MapMastersEndpoints:
     .in(jsonBody[CreateMapMasterRequest])
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[MapMasterResponse])
+    .tag("masters")
+
+  val update: PublicEndpoint[
+    (String, Option[String], Option[String], UpdateMapMasterRequest),
+    ProblemResponse,
+    MapMasterResponse,
+    Any,
+  ] = endpoint
+    .patch
+    .in("api" / "map-masters" / path[String]("id"))
+    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.csrfHeader)
+    .in(jsonBody[UpdateMapMasterRequest])
+    .errorOut(CommonEndpoint.errorOut)
+    .out(jsonBody[MapMasterResponse])
+    .tag("masters")
+
+  val delete: PublicEndpoint[
+    (String, Option[String], Option[String]),
+    ProblemResponse,
+    DeleteMasterResponse,
+    Any,
+  ] = endpoint
+    .delete
+    .in("api" / "map-masters" / path[String]("id"))
+    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.csrfHeader)
+    .errorOut(CommonEndpoint.errorOut)
+    .out(jsonBody[DeleteMasterResponse])
     .tag("masters")
 
 object SeasonMastersEndpoints:
@@ -93,6 +151,35 @@ object SeasonMastersEndpoints:
     .out(jsonBody[SeasonMasterResponse])
     .tag("masters")
 
+  val update: PublicEndpoint[
+    (String, Option[String], Option[String], UpdateSeasonMasterRequest),
+    ProblemResponse,
+    SeasonMasterResponse,
+    Any,
+  ] = endpoint
+    .patch
+    .in("api" / "season-masters" / path[String]("id"))
+    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.csrfHeader)
+    .in(jsonBody[UpdateSeasonMasterRequest])
+    .errorOut(CommonEndpoint.errorOut)
+    .out(jsonBody[SeasonMasterResponse])
+    .tag("masters")
+
+  val delete: PublicEndpoint[
+    (String, Option[String], Option[String]),
+    ProblemResponse,
+    DeleteMasterResponse,
+    Any,
+  ] = endpoint
+    .delete
+    .in("api" / "season-masters" / path[String]("id"))
+    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.csrfHeader)
+    .errorOut(CommonEndpoint.errorOut)
+    .out(jsonBody[DeleteMasterResponse])
+    .tag("masters")
+
 object IncidentMastersEndpoints:
   val list: PublicEndpoint[Option[String], ProblemResponse, IncidentMasterListResponse, Any] =
     endpoint
@@ -102,3 +189,63 @@ object IncidentMastersEndpoints:
       .errorOut(CommonEndpoint.errorOut)
       .out(jsonBody[IncidentMasterListResponse])
       .tag("masters")
+
+object MemberAliasesEndpoints:
+  val list: PublicEndpoint[
+    (Option[String], Option[String]),
+    ProblemResponse,
+    MemberAliasListResponse,
+    Any,
+  ] = endpoint
+    .get
+    .in("api" / "member-aliases")
+    .in(query[Option[String]]("memberId"))
+    .in(CommonEndpoint.devUserHeader)
+    .errorOut(CommonEndpoint.errorOut)
+    .out(jsonBody[MemberAliasListResponse])
+    .tag("masters")
+
+  val create: PublicEndpoint[
+    (Option[String], Option[String], Option[String], CreateMemberAliasRequest),
+    ProblemResponse,
+    MemberAliasResponse,
+    Any,
+  ] = endpoint
+    .post
+    .in("api" / "member-aliases")
+    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.csrfHeader)
+    .in(CommonEndpoint.idempotencyKeyHeader)
+    .in(jsonBody[CreateMemberAliasRequest])
+    .errorOut(CommonEndpoint.errorOut)
+    .out(jsonBody[MemberAliasResponse])
+    .tag("masters")
+
+  val update: PublicEndpoint[
+    (String, Option[String], Option[String], UpdateMemberAliasRequest),
+    ProblemResponse,
+    MemberAliasResponse,
+    Any,
+  ] = endpoint
+    .patch
+    .in("api" / "member-aliases" / path[String]("id"))
+    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.csrfHeader)
+    .in(jsonBody[UpdateMemberAliasRequest])
+    .errorOut(CommonEndpoint.errorOut)
+    .out(jsonBody[MemberAliasResponse])
+    .tag("masters")
+
+  val delete: PublicEndpoint[
+    (String, Option[String], Option[String]),
+    ProblemResponse,
+    DeleteMasterResponse,
+    Any,
+  ] = endpoint
+    .delete
+    .in("api" / "member-aliases" / path[String]("id"))
+    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.csrfHeader)
+    .errorOut(CommonEndpoint.errorOut)
+    .out(jsonBody[DeleteMasterResponse])
+    .tag("masters")

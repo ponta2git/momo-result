@@ -12,9 +12,10 @@ import momo.api.adapters.{
   InMemoryIdempotencyRepository, InMemoryImageReferenceRepository,
   InMemoryIncidentMastersRepository, InMemoryLoginAccountsRepository, InMemoryMapMastersRepository,
   InMemoryMatchConfirmationRepository, InMemoryMatchDraftsRepository, InMemoryMatchListReadModel,
-  InMemoryMatchesRepository, InMemoryMembersRepository, InMemoryOcrDraftsRepository,
-  InMemoryOcrJobCreationRepository, InMemoryOcrJobMaintenanceRepository, InMemoryOcrJobsRepository,
-  InMemoryQueueProducer, InMemorySeasonMastersRepository, LocalFsImageStore, RedisQueueProducer,
+  InMemoryMatchesRepository, InMemoryMemberAliasesRepository, InMemoryMembersRepository,
+  InMemoryOcrDraftsRepository, InMemoryOcrJobCreationRepository,
+  InMemoryOcrJobMaintenanceRepository, InMemoryOcrJobsRepository, InMemoryQueueProducer,
+  InMemorySeasonMastersRepository, LocalFsImageStore, RedisQueueProducer,
 }
 import momo.api.auth.{
   CsrfTokenService, DiscordOAuthClient, JavaDiscordOAuthClient, LoginRateLimiter, MemberRoster,
@@ -30,17 +31,20 @@ import momo.api.repositories.{
   AppSessionsRepository, GameTitlesRepository, HeldEventsRepository, IdempotencyRepository,
   ImageReferenceRepository, IncidentMastersRepository, LoginAccountsRepository,
   MapMastersRepository, MatchConfirmationRepository, MatchDraftsRepository, MatchListReadModel,
-  MatchesRepository, MembersRepository, OcrDraftsRepository, OcrJobCreationRepository,
-  OcrJobMaintenanceRepository, OcrJobsRepository, QueueProducer, SeasonMastersRepository,
+  MatchesRepository, MemberAliasesRepository, MembersRepository, OcrDraftsRepository,
+  OcrJobCreationRepository, OcrJobMaintenanceRepository, OcrJobsRepository, QueueProducer,
+  SeasonMastersRepository,
 }
 import momo.api.usecases.{
   CancelMatchDraft, CancelOcrJob, ConfirmMatch, CreateGameTitle, CreateHeldEvent,
-  CreateLoginAccount, CreateMapMaster, CreateMatchDraft, CreateOcrJob, CreateSeasonMaster,
-  DeleteHeldEvent, DeleteMatch, ExpiredSessionPruner, ExportMatches, GetMatch, GetMatchDraft,
-  GetMatchDraftSourceImages, GetOcrDraft, GetOcrDraftsBulk, GetOcrJob, ListHeldEvents,
-  ListLoginAccounts, ListMatches, OcrQueueOutboxDispatcher, OcrQueueSubmitter, PurgeSourceImages,
-  SourceImageOrphanReaper, StaleOcrJobReaper, UpdateLoginAccount, UpdateMatch, UpdateMatchDraft,
-  UploadImage,
+  CreateLoginAccount, CreateMapMaster, CreateMatchDraft, CreateMemberAlias, CreateOcrJob,
+  CreateSeasonMaster, DeleteGameTitle, DeleteHeldEvent, DeleteMapMaster, DeleteMatch,
+  DeleteMemberAlias, DeleteSeasonMaster, ExpiredSessionPruner, ExportMatches, GetMatch,
+  GetMatchDraft, GetMatchDraftSourceImages, GetOcrDraft, GetOcrDraftsBulk, GetOcrJob,
+  ListHeldEvents, ListLoginAccounts, ListMatches, ListMemberAliases, OcrQueueOutboxDispatcher,
+  OcrQueueSubmitter, PurgeSourceImages, SourceImageOrphanReaper, StaleOcrJobReaper, UpdateGameTitle,
+  UpdateLoginAccount, UpdateMapMaster, UpdateMatch, UpdateMatchDraft, UpdateMemberAlias,
+  UpdateSeasonMaster, UploadImage,
 }
 
 object HttpApp:
@@ -95,6 +99,8 @@ object HttpApp:
               PostgresSeasonMastersRepository[F](transactor)
             val incidentMasters: IncidentMastersRepository[F] =
               PostgresIncidentMastersRepository[F](transactor)
+            val memberAliases: MemberAliasesRepository[F] =
+              PostgresMemberAliasesRepository[F](transactor)
             val idempotency: IdempotencyRepository[F] = PostgresIdempotencyRepository[F](transactor)
             val imageStore = LocalFsImageStore[F](config.imageTmpDir)
             val imageReferences: ImageReferenceRepository[F] =
@@ -134,6 +140,7 @@ object HttpApp:
                   mapMasters = mapMasters,
                   seasonMasters = seasonMasters,
                   incidentMasters = incidentMasters,
+                  memberAliases = memberAliases,
                   idempotency = idempotency,
                   oauthClient = oauthClient,
                 )
@@ -173,6 +180,7 @@ object HttpApp:
             mapMasters <- InMemoryMapMastersRepository.create[F]
             seasonMasters <- InMemorySeasonMastersRepository.create[F]
             incidentMasters <- InMemoryIncidentMastersRepository.create[F]
+            memberAliases <- InMemoryMemberAliasesRepository.create[F]
             idempotency <- InMemoryIdempotencyRepository.create[F]
             ocrJobCreation = InMemoryOcrJobCreationRepository[F](drafts, jobs, matchDrafts)
             ocrQueueSubmitter = OcrQueueSubmitter.direct[F](jobs, matchDrafts, queue)
@@ -191,6 +199,7 @@ object HttpApp:
             mapMasters,
             seasonMasters,
             incidentMasters,
+            memberAliases,
             idempotency,
             ocrJobCreation,
             ocrQueueSubmitter,
@@ -211,6 +220,7 @@ object HttpApp:
                 mapMasters,
                 seasonMasters,
                 incidentMasters,
+                memberAliases,
                 idempotency,
                 ocrJobCreation,
                 ocrQueueSubmitter,
@@ -249,6 +259,7 @@ object HttpApp:
                 mapMasters = mapMasters,
                 seasonMasters = seasonMasters,
                 incidentMasters = incidentMasters,
+                memberAliases = memberAliases,
                 idempotency = idempotency,
                 oauthClient = oauthClient,
               )
@@ -323,6 +334,7 @@ object HttpApp:
       mapMasters: MapMastersRepository[F],
       seasonMasters: SeasonMastersRepository[F],
       incidentMasters: IncidentMastersRepository[F],
+      memberAliases: MemberAliasesRepository[F],
       idempotency: IdempotencyRepository[F],
       oauthClient: DiscordOAuthClient[F],
   ): F[Wired[F]] =
@@ -341,6 +353,7 @@ object HttpApp:
       now = nowF,
       nextId = nextId,
       requestIdLookup = RequestIdMiddleware.lookup[F],
+      memberAliases = memberAliases,
     )
     val getOcrJob = GetOcrJob[F](jobs)
     val getOcrDraft = GetOcrDraft[F](drafts)
@@ -399,6 +412,16 @@ object HttpApp:
     val createGameTitle = CreateGameTitle[F](gameTitles, nowF)
     val createMapMaster = CreateMapMaster[F](gameTitles, mapMasters, nowF)
     val createSeasonMaster = CreateSeasonMaster[F](gameTitles, seasonMasters, nowF)
+    val updateGameTitle = UpdateGameTitle[F](gameTitles)
+    val updateMapMaster = UpdateMapMaster[F](mapMasters)
+    val updateSeasonMaster = UpdateSeasonMaster[F](seasonMasters)
+    val deleteGameTitle = DeleteGameTitle[F](gameTitles)
+    val deleteMapMaster = DeleteMapMaster[F](mapMasters)
+    val deleteSeasonMaster = DeleteSeasonMaster[F](seasonMasters)
+    val listMemberAliases = ListMemberAliases[F](memberAliases)
+    val createMemberAlias = CreateMemberAlias[F](memberAliases, members, nowF, nextId)
+    val updateMemberAlias = UpdateMemberAlias[F](memberAliases, members)
+    val deleteMemberAlias = DeleteMemberAlias[F](memberAliases)
     val listLoginAccounts = ListLoginAccounts[F](loginAccounts)
     val createLoginAccount = CreateLoginAccount[F](loginAccounts, members, nowF, nextId)
     val updateLoginAccount = UpdateLoginAccount[F](loginAccounts, members, appSessions, nowF)
@@ -435,6 +458,7 @@ object HttpApp:
         mapMasters = mapMasters,
         seasonMasters = seasonMasters,
         incidentMasters = incidentMasters,
+        memberAliases = memberAliases,
         loginAccounts = loginAccounts,
         listLoginAccounts = listLoginAccounts,
         createLoginAccount = createLoginAccount,
@@ -442,6 +466,16 @@ object HttpApp:
         createGameTitle = createGameTitle,
         createMapMaster = createMapMaster,
         createSeasonMaster = createSeasonMaster,
+        updateGameTitle = updateGameTitle,
+        updateMapMaster = updateMapMaster,
+        updateSeasonMaster = updateSeasonMaster,
+        deleteGameTitle = deleteGameTitle,
+        deleteMapMaster = deleteMapMaster,
+        deleteSeasonMaster = deleteSeasonMaster,
+        listMemberAliases = listMemberAliases,
+        createMemberAlias = createMemberAlias,
+        updateMemberAlias = updateMemberAlias,
+        deleteMemberAlias = deleteMemberAlias,
         members = members,
         oauthClient = oauthClient,
         sessionService = sessionService,

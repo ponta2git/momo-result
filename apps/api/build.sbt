@@ -35,6 +35,7 @@ addCommandAlias(
     "momo.api.integration.PostgresOcrJobCreationRepositorySpec " +
     "momo.api.integration.PostgresOcrJobMaintenanceRepositorySpec " +
     "momo.api.integration.PostgresOcrQueueOutboxRepositorySpec " +
+    "momo.api.integration.PostgresMasterRepositoriesSpec " +
     "momo.api.integration.PostgresMatchesRepositorySpec " +
     "momo.api.integration.PostgresMatchListReadModelSpec " +
     "-- --include-tags=Integration",

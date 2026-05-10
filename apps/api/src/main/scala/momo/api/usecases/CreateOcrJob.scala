@@ -10,8 +10,8 @@ import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.errors.AppError
 import momo.api.repositories.{
-  ImageStore, MatchDraftsRepository, OcrJobCreationRepository, OcrJobDraftAttachment,
-  OcrQueuePayload,
+  ImageStore, MatchDraftsRepository, MemberAliasesRepository, OcrJobCreationRepository,
+  OcrJobDraftAttachment, OcrQueuePayload,
 }
 import momo.api.usecases.syntax.UseCaseSyntax.*
 
@@ -32,12 +32,14 @@ final class CreateOcrJob[F[_]: MonadThrow](
     now: F[Instant],
     nextId: F[String],
     requestIdLookup: F[Option[String]],
+    memberAliases: MemberAliasesRepository[F],
 ):
   import CreateOcrJob.*
 
   def run(command: CreateOcrJobCommand): F[Either[AppError, CreatedOcrJob]] = (for
     screenType <- EitherT.fromEither[F](requestedScreenType(command))
     _ <- EitherT.fromEither[F](validateOcrHints(command.ocrHints))
+    hintsWithAliases <- EitherT.liftF(mergeMemberAliases(command.ocrHints))
     draftForMatch <- command.matchDraftId match
       case None => EitherT.rightT[F, AppError](Option.empty[momo.api.domain.MatchDraft])
       case Some(id) => matchDrafts.find(id).orNotFound("match draft", id.value).flatMap { draft =>
@@ -62,7 +64,7 @@ final class CreateOcrJob[F[_]: MonadThrow](
       image.path,
       screenType,
       createdAt,
-      command.ocrHints,
+      hintsWithAliases,
       requestId,
     )
     attachment = draftForMatch.map(draftRecord =>
@@ -97,6 +99,24 @@ final class CreateOcrJob[F[_]: MonadThrow](
       case Left(error) => MonadThrow[F].raiseError[Either[AppError, Unit]](error)
     }
   )
+
+  private def mergeMemberAliases(hints: OcrJobHints): F[OcrJobHints] = memberAliases.list(None)
+    .map { rows =>
+      if rows.isEmpty then hints
+      else
+        val byMember = rows.groupMap(_.memberId.value)(_.alias)
+        val requestedIds = hints.knownPlayerAliases.map(_.memberId)
+        val dbOnlyIds = byMember.keys.toList.sorted.filterNot(requestedIds.contains)
+        val memberIds = (requestedIds ++ dbOnlyIds).distinct.take(OcrJobHints.MaxKnownPlayerAliases)
+        val mergedAliases = memberIds.flatMap { memberId =>
+          val clientAliases = hints.knownPlayerAliases.find(_.memberId == memberId)
+            .fold(Nil)(_.aliases)
+          val aliases = (clientAliases ++ byMember.getOrElse(memberId, Nil)).map(_.trim)
+            .filter(_.nonEmpty).distinct.take(OcrJobHints.MaxAliasesPerPlayer)
+          Option.when(aliases.nonEmpty)(PlayerAliasHint(memberId, aliases))
+        }
+        hints.copy(knownPlayerAliases = mergedAliases)
+    }
 
 object CreateOcrJob:
   private def requestedScreenType(command: CreateOcrJobCommand): Either[AppError, ScreenType] =

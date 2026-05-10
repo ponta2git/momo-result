@@ -76,9 +76,23 @@ def alias_resolver_from_map(
     pairs = tuple(
         (display_name, surface, None)
         for display_name, surfaces in aliases.items()
-        for surface in surfaces
+        for surface in _expand_momotetsu_president_surfaces(surfaces)
     )
     return PlayerAliasResolver(pairs=pairs, fuzzy_threshold=fuzzy_threshold)
+
+
+def _expand_momotetsu_president_surfaces(surfaces: Sequence[str]) -> tuple[str, ...]:
+    expanded: list[str] = []
+    seen: set[str] = set()
+    for surface in surfaces:
+        candidates = [surface]
+        if surface and not surface.endswith("社長"):
+            candidates.append(f"{surface}社長")
+        for candidate in candidates:
+            if candidate not in seen:
+                seen.add(candidate)
+                expanded.append(candidate)
+    return tuple(expanded)
 
 
 def alias_resolver_from_member_aliases(
@@ -89,7 +103,7 @@ def alias_resolver_from_member_aliases(
     pairs = tuple(
         (_display_name_from_aliases(member_id, surfaces), surface, member_id)
         for member_id, surfaces in aliases.items()
-        for surface in surfaces
+        for surface in _expand_momotetsu_president_surfaces(surfaces)
     )
     return PlayerAliasResolver(pairs=pairs, fuzzy_threshold=fuzzy_threshold)
 

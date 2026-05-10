@@ -18,12 +18,18 @@ type MasterRelationBoardProps = {
   gameTitleCreateFormKey?: string | number | undefined;
   gameTitleDefaultLayoutFamily: LayoutFamily;
   gameTitles: GameTitleListItem[];
+  onDeleteGameTitle: (id: string) => void;
+  onDeleteMapMaster: (id: string) => void;
+  onDeleteSeasonMaster: (id: string) => void;
   incidentMasters: IncidentMasterResponse[];
   mapCreateAction: (formData: FormData) => void | Promise<void>;
   mapCreateError?: string | undefined;
   mapCreateFormKey?: string | number | undefined;
   mapMasters: ScopedMasterListItem[];
   onSelectGameTitle: (id: string) => void;
+  onUpdateGameTitle: (id: string, request: { name: string; layoutFamily: string }) => Promise<void>;
+  onUpdateMapMaster: (id: string, request: { name: string }) => Promise<void>;
+  onUpdateSeasonMaster: (id: string, request: { name: string }) => Promise<void>;
   scopedDisabledReason?: string | undefined;
   seasonCreateAction: (formData: FormData) => void | Promise<void>;
   seasonCreateError?: string | undefined;
@@ -39,12 +45,18 @@ export function MasterRelationBoard({
   gameTitleCreateFormKey,
   gameTitleDefaultLayoutFamily,
   gameTitles,
+  onDeleteGameTitle,
+  onDeleteMapMaster,
+  onDeleteSeasonMaster,
   incidentMasters,
   mapCreateAction,
   mapCreateError,
   mapCreateFormKey,
   mapMasters,
   onSelectGameTitle,
+  onUpdateGameTitle,
+  onUpdateMapMaster,
+  onUpdateSeasonMaster,
   scopedDisabledReason,
   seasonCreateAction,
   seasonCreateError,
@@ -61,6 +73,8 @@ export function MasterRelationBoard({
         createFormKey={gameTitleCreateFormKey}
         defaultLayoutFamily={gameTitleDefaultLayoutFamily}
         items={gameTitles}
+        onDelete={onDeleteGameTitle}
+        onUpdate={onUpdateGameTitle}
         onSelect={onSelectGameTitle}
         selectedGameTitleId={selectedGameTitleId}
       />
@@ -69,6 +83,8 @@ export function MasterRelationBoard({
         title="マップマスタ"
         itemLabel="マップ"
         items={mapMasters}
+        onDelete={onDeleteMapMaster}
+        onUpdate={onUpdateMapMaster}
         selectedGameTitleName={selectedGameTitleName}
         emptyDescription="この作品に紐づくマップを追加してください。"
         createAction={mapCreateAction}
@@ -81,6 +97,8 @@ export function MasterRelationBoard({
         title="シーズンマスタ"
         itemLabel="シーズン"
         items={seasonMasters}
+        onDelete={onDeleteSeasonMaster}
+        onUpdate={onUpdateSeasonMaster}
         selectedGameTitleName={selectedGameTitleName}
         emptyDescription="この作品に紐づくシーズンを追加してください。"
         createAction={seasonCreateAction}

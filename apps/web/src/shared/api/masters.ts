@@ -5,17 +5,26 @@ import type { components } from "@/shared/api/generated";
 export type GameTitleResponse = components["schemas"]["GameTitleResponse"];
 export type GameTitleListResponse = components["schemas"]["GameTitleListResponse"];
 export type CreateGameTitleRequest = components["schemas"]["CreateGameTitleRequest"];
+export type UpdateGameTitleRequest = components["schemas"]["UpdateGameTitleRequest"];
 
 export type MapMasterResponse = components["schemas"]["MapMasterResponse"];
 export type MapMasterListResponse = components["schemas"]["MapMasterListResponse"];
 export type CreateMapMasterRequest = components["schemas"]["CreateMapMasterRequest"];
+export type UpdateMapMasterRequest = components["schemas"]["UpdateMapMasterRequest"];
 
 export type SeasonMasterResponse = components["schemas"]["SeasonMasterResponse"];
 export type SeasonMasterListResponse = components["schemas"]["SeasonMasterListResponse"];
 export type CreateSeasonMasterRequest = components["schemas"]["CreateSeasonMasterRequest"];
+export type UpdateSeasonMasterRequest = components["schemas"]["UpdateSeasonMasterRequest"];
 
 export type IncidentMasterResponse = components["schemas"]["IncidentMasterResponse"];
 export type IncidentMasterListResponse = components["schemas"]["IncidentMasterListResponse"];
+
+export type MemberAliasResponse = components["schemas"]["MemberAliasResponse"];
+export type MemberAliasListResponse = components["schemas"]["MemberAliasListResponse"];
+export type CreateMemberAliasRequest = components["schemas"]["CreateMemberAliasRequest"];
+export type UpdateMemberAliasRequest = components["schemas"]["UpdateMemberAliasRequest"];
+export type DeleteMasterResponse = components["schemas"]["DeleteMasterResponse"];
 
 export async function listGameTitles(): Promise<GameTitleListResponse> {
   return apiRequest<GameTitleListResponse>("/api/game-titles");
@@ -29,6 +38,22 @@ export async function createGameTitle(
     method: "POST",
     body: request,
     idempotencyKey: options.idempotencyKey,
+  });
+}
+
+export async function updateGameTitle(
+  id: string,
+  request: UpdateGameTitleRequest,
+): Promise<GameTitleResponse> {
+  return apiRequest<GameTitleResponse>(`/api/game-titles/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: request,
+  });
+}
+
+export async function deleteGameTitle(id: string): Promise<DeleteMasterResponse> {
+  return apiRequest<DeleteMasterResponse>(`/api/game-titles/${encodeURIComponent(id)}`, {
+    method: "DELETE",
   });
 }
 
@@ -50,6 +75,22 @@ export async function createMapMaster(
   });
 }
 
+export async function updateMapMaster(
+  id: string,
+  request: UpdateMapMasterRequest,
+): Promise<MapMasterResponse> {
+  return apiRequest<MapMasterResponse>(`/api/map-masters/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: request,
+  });
+}
+
+export async function deleteMapMaster(id: string): Promise<DeleteMasterResponse> {
+  return apiRequest<DeleteMasterResponse>(`/api/map-masters/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
 export async function listSeasonMasters(gameTitleId?: string): Promise<SeasonMasterListResponse> {
   const path = gameTitleId
     ? `/api/season-masters?gameTitleId=${encodeURIComponent(gameTitleId)}`
@@ -68,6 +109,56 @@ export async function createSeasonMaster(
   });
 }
 
+export async function updateSeasonMaster(
+  id: string,
+  request: UpdateSeasonMasterRequest,
+): Promise<SeasonMasterResponse> {
+  return apiRequest<SeasonMasterResponse>(`/api/season-masters/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: request,
+  });
+}
+
+export async function deleteSeasonMaster(id: string): Promise<DeleteMasterResponse> {
+  return apiRequest<DeleteMasterResponse>(`/api/season-masters/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
 export async function listIncidentMasters(): Promise<IncidentMasterListResponse> {
   return apiRequest<IncidentMasterListResponse>("/api/incident-masters");
+}
+
+export async function listMemberAliases(memberId?: string): Promise<MemberAliasListResponse> {
+  const path = memberId
+    ? `/api/member-aliases?memberId=${encodeURIComponent(memberId)}`
+    : "/api/member-aliases";
+  return apiRequest<MemberAliasListResponse>(path);
+}
+
+export async function createMemberAlias(
+  request: CreateMemberAliasRequest,
+  options: IdempotencyRequestOptions = {},
+): Promise<MemberAliasResponse> {
+  return apiRequest<MemberAliasResponse>("/api/member-aliases", {
+    method: "POST",
+    body: request,
+    idempotencyKey: options.idempotencyKey,
+  });
+}
+
+export async function updateMemberAlias(
+  id: string,
+  request: UpdateMemberAliasRequest,
+): Promise<MemberAliasResponse> {
+  return apiRequest<MemberAliasResponse>(`/api/member-aliases/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: request,
+  });
+}
+
+export async function deleteMemberAlias(id: string): Promise<DeleteMasterResponse> {
+  return apiRequest<DeleteMasterResponse>(`/api/member-aliases/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
 }

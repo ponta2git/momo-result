@@ -1696,6 +1696,136 @@
         }
       }
     },
+    "/api/game-titles/{id}" : {
+      "delete" : {
+        "tags" : [
+          "masters"
+        ],
+        "operationId" : "deleteApiGame-titlesId",
+        "parameters" : [
+          {
+            "name" : "id",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-Dev-User",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DeleteMasterResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch" : {
+        "tags" : [
+          "masters"
+        ],
+        "operationId" : "patchApiGame-titlesId",
+        "parameters" : [
+          {
+            "name" : "id",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-Dev-User",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateGameTitleRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/GameTitleResponse"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: body",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/map-masters" : {
       "get" : {
         "tags" : [
@@ -1779,6 +1909,136 @@
             "application/json" : {
               "schema" : {
                 "$ref" : "#/components/schemas/CreateMapMasterRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MapMasterResponse"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: body",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/map-masters/{id}" : {
+      "delete" : {
+        "tags" : [
+          "masters"
+        ],
+        "operationId" : "deleteApiMap-mastersId",
+        "parameters" : [
+          {
+            "name" : "id",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-Dev-User",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DeleteMasterResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch" : {
+        "tags" : [
+          "masters"
+        ],
+        "operationId" : "patchApiMap-mastersId",
+        "parameters" : [
+          {
+            "name" : "id",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-Dev-User",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateMapMasterRequest"
               }
             }
           },
@@ -1940,6 +2200,136 @@
         }
       }
     },
+    "/api/season-masters/{id}" : {
+      "delete" : {
+        "tags" : [
+          "masters"
+        ],
+        "operationId" : "deleteApiSeason-mastersId",
+        "parameters" : [
+          {
+            "name" : "id",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-Dev-User",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DeleteMasterResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch" : {
+        "tags" : [
+          "masters"
+        ],
+        "operationId" : "patchApiSeason-mastersId",
+        "parameters" : [
+          {
+            "name" : "id",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-Dev-User",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateSeasonMasterRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SeasonMasterResponse"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: body",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/incident-masters" : {
       "get" : {
         "tags" : [
@@ -1963,6 +2353,258 @@
               "application/json" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/IncidentMasterListResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/member-aliases" : {
+      "get" : {
+        "tags" : [
+          "masters"
+        ],
+        "operationId" : "getApiMember-aliases",
+        "parameters" : [
+          {
+            "name" : "memberId",
+            "in" : "query",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-Dev-User",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MemberAliasListResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post" : {
+        "tags" : [
+          "masters"
+        ],
+        "operationId" : "postApiMember-aliases",
+        "parameters" : [
+          {
+            "name" : "X-Dev-User",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "Idempotency-Key",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateMemberAliasRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MemberAliasResponse"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: body",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/member-aliases/{id}" : {
+      "delete" : {
+        "tags" : [
+          "masters"
+        ],
+        "operationId" : "deleteApiMember-aliasesId",
+        "parameters" : [
+          {
+            "name" : "id",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-Dev-User",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DeleteMasterResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch" : {
+        "tags" : [
+          "masters"
+        ],
+        "operationId" : "patchApiMember-aliasesId",
+        "parameters" : [
+          {
+            "name" : "id",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-Dev-User",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateMemberAliasRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MemberAliasResponse"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: body",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
                 }
               }
             }
@@ -2434,6 +3076,22 @@
           }
         }
       },
+      "CreateMemberAliasRequest" : {
+        "title" : "CreateMemberAliasRequest",
+        "type" : "object",
+        "required" : [
+          "memberId",
+          "alias"
+        ],
+        "properties" : {
+          "memberId" : {
+            "type" : "string"
+          },
+          "alias" : {
+            "type" : "string"
+          }
+        }
+      },
       "CreateOcrJobRequest" : {
         "title" : "CreateOcrJobRequest",
         "type" : "object",
@@ -2505,6 +3163,22 @@
         ],
         "properties" : {
           "heldEventId" : {
+            "type" : "string"
+          },
+          "deleted" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "DeleteMasterResponse" : {
+        "title" : "DeleteMasterResponse",
+        "type" : "object",
+        "required" : [
+          "id",
+          "deleted"
+        ],
+        "properties" : {
+          "id" : {
             "type" : "string"
           },
           "deleted" : {
@@ -3109,6 +3783,42 @@
           }
         }
       },
+      "MemberAliasListResponse" : {
+        "title" : "MemberAliasListResponse",
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/MemberAliasResponse"
+            }
+          }
+        }
+      },
+      "MemberAliasResponse" : {
+        "title" : "MemberAliasResponse",
+        "type" : "object",
+        "required" : [
+          "id",
+          "memberId",
+          "alias",
+          "createdAt"
+        ],
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "memberId" : {
+            "type" : "string"
+          },
+          "alias" : {
+            "type" : "string"
+          },
+          "createdAt" : {
+            "type" : "string"
+          }
+        }
+      },
       "OcrDraftListResponse" : {
         "title" : "OcrDraftListResponse",
         "type" : "object",
@@ -3425,6 +4135,22 @@
           }
         }
       },
+      "UpdateGameTitleRequest" : {
+        "title" : "UpdateGameTitleRequest",
+        "type" : "object",
+        "required" : [
+          "name",
+          "layoutFamily"
+        ],
+        "properties" : {
+          "name" : {
+            "type" : "string"
+          },
+          "layoutFamily" : {
+            "type" : "string"
+          }
+        }
+      },
       "UpdateLoginAccountRequest" : {
         "title" : "UpdateLoginAccountRequest",
         "type" : "object",
@@ -3440,6 +4166,18 @@
           },
           "isAdmin" : {
             "type" : "boolean"
+          }
+        }
+      },
+      "UpdateMapMasterRequest" : {
+        "title" : "UpdateMapMasterRequest",
+        "type" : "object",
+        "required" : [
+          "name"
+        ],
+        "properties" : {
+          "name" : {
+            "type" : "string"
           }
         }
       },
@@ -3521,6 +4259,34 @@
             "items" : {
               "$ref" : "#/components/schemas/PlayerResultRequest"
             }
+          }
+        }
+      },
+      "UpdateMemberAliasRequest" : {
+        "title" : "UpdateMemberAliasRequest",
+        "type" : "object",
+        "required" : [
+          "memberId",
+          "alias"
+        ],
+        "properties" : {
+          "memberId" : {
+            "type" : "string"
+          },
+          "alias" : {
+            "type" : "string"
+          }
+        }
+      },
+      "UpdateSeasonMasterRequest" : {
+        "title" : "UpdateSeasonMasterRequest",
+        "type" : "object",
+        "required" : [
+          "name"
+        ],
+        "properties" : {
+          "name" : {
+            "type" : "string"
           }
         }
       },

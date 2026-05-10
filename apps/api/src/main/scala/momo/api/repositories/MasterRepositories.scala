@@ -10,12 +10,16 @@ trait GameTitlesAlg[F0[_]]:
   def list: F0[List[GameTitle]]
   def find(id: GameTitleId): F0[Option[GameTitle]]
   def create(title: GameTitle): F0[Unit]
+  def update(title: GameTitle): F0[Unit]
+  def delete(id: GameTitleId): F0[Unit]
   def nextDisplayOrder: F0[Int]
 
 trait GameTitlesRepository[F[_]]:
   def list: F[List[GameTitle]]
   def find(id: GameTitleId): F[Option[GameTitle]]
   def create(title: GameTitle): F[Unit]
+  def update(title: GameTitle): F[Unit]
+  def delete(id: GameTitleId): F[Unit]
   def nextDisplayOrder: F[Int]
 
 object GameTitlesRepository:
@@ -26,6 +30,8 @@ object GameTitlesRepository:
     def list: F[List[GameTitle]] = transactK(alg.list)
     def find(id: GameTitleId): F[Option[GameTitle]] = transactK(alg.find(id))
     def create(title: GameTitle): F[Unit] = transactK(alg.create(title))
+    def update(title: GameTitle): F[Unit] = transactK(alg.update(title))
+    def delete(id: GameTitleId): F[Unit] = transactK(alg.delete(id))
     def nextDisplayOrder: F[Int] = transactK(alg.nextDisplayOrder)
 
   def liftIdentity[F[_]](alg: GameTitlesAlg[F]): GameTitlesRepository[F] =
@@ -37,12 +43,16 @@ trait MapMastersAlg[F0[_]]:
   def list(gameTitleId: Option[GameTitleId]): F0[List[MapMaster]]
   def find(id: MapMasterId): F0[Option[MapMaster]]
   def create(map: MapMaster): F0[Unit]
+  def update(map: MapMaster): F0[Unit]
+  def delete(id: MapMasterId): F0[Unit]
   def nextDisplayOrder(gameTitleId: GameTitleId): F0[Int]
 
 trait MapMastersRepository[F[_]]:
   def list(gameTitleId: Option[GameTitleId]): F[List[MapMaster]]
   def find(id: MapMasterId): F[Option[MapMaster]]
   def create(map: MapMaster): F[Unit]
+  def update(map: MapMaster): F[Unit]
+  def delete(id: MapMasterId): F[Unit]
   def nextDisplayOrder(gameTitleId: GameTitleId): F[Int]
 
 object MapMastersRepository:
@@ -54,6 +64,8 @@ object MapMastersRepository:
       transactK(alg.list(gameTitleId))
     def find(id: MapMasterId): F[Option[MapMaster]] = transactK(alg.find(id))
     def create(map: MapMaster): F[Unit] = transactK(alg.create(map))
+    def update(map: MapMaster): F[Unit] = transactK(alg.update(map))
+    def delete(id: MapMasterId): F[Unit] = transactK(alg.delete(id))
     def nextDisplayOrder(gameTitleId: GameTitleId): F[Int] =
       transactK(alg.nextDisplayOrder(gameTitleId))
 
@@ -66,12 +78,16 @@ trait SeasonMastersAlg[F0[_]]:
   def list(gameTitleId: Option[GameTitleId]): F0[List[SeasonMaster]]
   def find(id: SeasonMasterId): F0[Option[SeasonMaster]]
   def create(season: SeasonMaster): F0[Unit]
+  def update(season: SeasonMaster): F0[Unit]
+  def delete(id: SeasonMasterId): F0[Unit]
   def nextDisplayOrder(gameTitleId: GameTitleId): F0[Int]
 
 trait SeasonMastersRepository[F[_]]:
   def list(gameTitleId: Option[GameTitleId]): F[List[SeasonMaster]]
   def find(id: SeasonMasterId): F[Option[SeasonMaster]]
   def create(season: SeasonMaster): F[Unit]
+  def update(season: SeasonMaster): F[Unit]
+  def delete(id: SeasonMasterId): F[Unit]
   def nextDisplayOrder(gameTitleId: GameTitleId): F[Int]
 
 object SeasonMastersRepository:
@@ -83,6 +99,8 @@ object SeasonMastersRepository:
       transactK(alg.list(gameTitleId))
     def find(id: SeasonMasterId): F[Option[SeasonMaster]] = transactK(alg.find(id))
     def create(season: SeasonMaster): F[Unit] = transactK(alg.create(season))
+    def update(season: SeasonMaster): F[Unit] = transactK(alg.update(season))
+    def delete(id: SeasonMasterId): F[Unit] = transactK(alg.delete(id))
     def nextDisplayOrder(gameTitleId: GameTitleId): F[Int] =
       transactK(alg.nextDisplayOrder(gameTitleId))
 
@@ -111,11 +129,17 @@ end IncidentMastersRepository
 
 trait MemberAliasesAlg[F0[_]]:
   def list(memberId: Option[MemberId]): F0[List[MemberAlias]]
-  def create(id: String, alias: MemberAlias): F0[Unit]
+  def find(id: String): F0[Option[MemberAlias]]
+  def create(alias: MemberAlias): F0[Unit]
+  def update(alias: MemberAlias): F0[Unit]
+  def delete(id: String): F0[Unit]
 
 trait MemberAliasesRepository[F[_]]:
   def list(memberId: Option[MemberId]): F[List[MemberAlias]]
+  def find(id: String): F[Option[MemberAlias]]
   def create(alias: MemberAlias): F[Unit]
+  def update(alias: MemberAlias): F[Unit]
+  def delete(id: String): F[Unit]
 
 trait MembersAlg[F0[_]]:
   def list: F0[List[momo.api.domain.Member]]

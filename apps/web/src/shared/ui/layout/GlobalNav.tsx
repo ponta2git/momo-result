@@ -25,10 +25,10 @@ const defaultItems: NavItem[] = [
   { icon: <CalendarDays className="size-4" />, label: "開催", to: "/held-events" },
   { icon: <ScanLine className="size-4" />, label: "OCR", to: "/ocr/new" },
   { icon: <Download className="size-4" />, label: "出力", to: "/exports" },
-  { icon: <Database className="size-4" />, label: "マスタ", to: "/admin/masters" },
 ];
 
 const adminItems: NavItem[] = [
+  { icon: <Database className="size-4" />, label: "マスタ", to: "/admin/masters" },
   { icon: <ShieldCheck className="size-4" />, label: "アカウント", to: "/admin/accounts" },
 ];
 

@@ -1,6 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse, delay } from "msw";
 import { MemoryRouter } from "react-router-dom";
@@ -115,6 +115,51 @@ describe("MastersPage", () => {
     expect(screen.getByText("カード駅")).toBeInTheDocument();
     expect(screen.getByText("カード売り場")).toBeInTheDocument();
     expect(screen.getByText("スリの銀次")).toBeInTheDocument();
+  });
+
+  it("updates a game title from the admin controls", async () => {
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    renderPage();
+
+    expect(await screen.findByRole("button", { name: /桃太郎電鉄2/ })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "作品を編集" }));
+    const nameInput = screen.getByDisplayValue("桃太郎電鉄2");
+    await userEvent.clear(nameInput);
+    await userEvent.type(nameInput, "桃太郎電鉄2 DX");
+    await userEvent.click(screen.getByRole("button", { name: "保存" }));
+
+    expect(await screen.findByRole("button", { name: /桃太郎電鉄2 DX/ })).toBeInTheDocument();
+  });
+
+  it("creates and deletes member aliases", async () => {
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    renderPage();
+
+    expect(
+      await screen.findByRole("heading", { name: "プレイヤー名エイリアス" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("NO11")).toBeInTheDocument();
+    const aliasPanel = screen
+      .getByRole("heading", { name: "プレイヤー名エイリアス" })
+      .closest("section");
+    if (!aliasPanel) {
+      throw new Error("alias panel was not rendered");
+    }
+    const aliasPanelScreen = within(aliasPanel);
+
+    await userEvent.type(aliasPanelScreen.getByPlaceholderText("例: NO11社長"), "ポン太");
+    await userEvent.click(aliasPanelScreen.getByRole("button", { name: "追加" }));
+    expect(await screen.findByText("ポン太")).toBeInTheDocument();
+
+    const no11Row = screen.getByText("NO11").closest("li");
+    if (!no11Row) {
+      throw new Error("NO11 alias row was not rendered");
+    }
+    await userEvent.click(within(no11Row).getByRole("button", { name: "エイリアスを削除" }));
+    await userEvent.click(screen.getByRole("button", { name: "削除" }));
+
+    await waitFor(() => expect(screen.queryByText("NO11")).not.toBeInTheDocument());
   });
 
   it("shows return action with handoff notice when returnTo is provided", async () => {

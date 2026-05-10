@@ -7,7 +7,10 @@ import momo.api.auth.AuthenticatedAccount
 import momo.api.endpoints.ProblemDetails
 import momo.api.errors.AppError
 
-private[http] final class EndpointSecurity[F[_]: Async](policy: AuthPolicy[F]):
+private[http] final class EndpointSecurity[F[_]: Async](
+    policy: AuthPolicy[F],
+    masterManagementPolicy: MasterManagementPolicy = new MasterManagementPolicy,
+):
   def authorizeRead[A](devUser: Option[String])(
       authorized: AuthenticatedAccount => F[Either[ProblemDetails.ProblemResponse, A]]
   ): F[Either[ProblemDetails.ProblemResponse, A]] = policy.authenticate(devUser).flatMap {
@@ -36,6 +39,14 @@ private[http] final class EndpointSecurity[F[_]: Async](policy: AuthPolicy[F]):
   ): F[Either[ProblemDetails.ProblemResponse, A]] = authorizeRead(devUser) { account =>
     if account.isAdmin then authorized(account)
     else Async[F].pure(Left(toProblem(AppError.Forbidden("Administrator access is required."))))
+  }
+
+  def authorizeMasterManagementMutation[A](devUser: Option[String], csrfToken: Option[String])(
+      authorized: AuthenticatedAccount => F[Either[ProblemDetails.ProblemResponse, A]]
+  ): F[Either[ProblemDetails.ProblemResponse, A]] = authorizeMutation(devUser, csrfToken) { account =>
+    masterManagementPolicy.requireManage(account) match
+      case Right(_) => authorized(account)
+      case Left(error) => Async[F].pure(Left(toProblem(error)))
   }
 
   def toProblem(error: AppError): ProblemDetails.ProblemResponse = ProblemDetails.from(error)

@@ -22,6 +22,8 @@ final class InMemoryGameTitlesRepository[F[_]: Sync] private (
     .map(_.values.toList.sortBy(t => (t.displayOrder, t.createdAt, t.id.value)))
   override def find(id: GameTitleId): F[Option[GameTitle]] = ref.get.map(_.get(id))
   override def create(title: GameTitle): F[Unit] = ref.update(_ + (title.id -> title))
+  override def update(title: GameTitle): F[Unit] = ref.update(_.updated(title.id, title))
+  override def delete(id: GameTitleId): F[Unit] = ref.update(_ - id)
   override def nextDisplayOrder: F[Int] = ref.get
     .map(_.values.map(_.displayOrder).maxOption.getOrElse(0) + 1)
 
@@ -40,6 +42,8 @@ final class InMemoryMapMastersRepository[F[_]: Sync] private (
   }
   override def find(id: MapMasterId): F[Option[MapMaster]] = ref.get.map(_.get(id))
   override def create(map: MapMaster): F[Unit] = ref.update(_ + (map.id -> map))
+  override def update(map: MapMaster): F[Unit] = ref.update(_.updated(map.id, map))
+  override def delete(id: MapMasterId): F[Unit] = ref.update(_ - id)
   override def nextDisplayOrder(gameTitleId: GameTitleId): F[Int] = ref.get.map { m =>
     val maxOrder = m.values.filter(_.gameTitleId == gameTitleId).map(_.displayOrder).maxOption
       .getOrElse(0)
@@ -61,6 +65,8 @@ final class InMemorySeasonMastersRepository[F[_]: Sync] private (
   }
   override def find(id: SeasonMasterId): F[Option[SeasonMaster]] = ref.get.map(_.get(id))
   override def create(season: SeasonMaster): F[Unit] = ref.update(_ + (season.id -> season))
+  override def update(season: SeasonMaster): F[Unit] = ref.update(_.updated(season.id, season))
+  override def delete(id: SeasonMasterId): F[Unit] = ref.update(_ - id)
   override def nextDisplayOrder(gameTitleId: GameTitleId): F[Int] = ref.get.map { m =>
     val maxOrder = m.values.filter(_.gameTitleId == gameTitleId).map(_.displayOrder).maxOption
       .getOrElse(0)
@@ -96,7 +102,11 @@ final class InMemoryMemberAliasesRepository[F[_]: Sync] private (ref: Ref[F, Lis
       case Some(id) => all.filter(_.memberId == id)
       case None => all
   }
+  override def find(id: String): F[Option[MemberAlias]] = ref.get.map(_.find(_.id == id))
   override def create(alias: MemberAlias): F[Unit] = ref.update(_ :+ alias)
+  override def update(alias: MemberAlias): F[Unit] = ref
+    .update(_.map(existing => if existing.id == alias.id then alias else existing))
+  override def delete(id: String): F[Unit] = ref.update(_.filterNot(_.id == id))
 
 object InMemoryMemberAliasesRepository:
   def create[F[_]: Sync]: F[InMemoryMemberAliasesRepository[F]] = Ref.of[F, List[MemberAlias]](Nil)

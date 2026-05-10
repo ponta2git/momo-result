@@ -1,6 +1,7 @@
 package momo.api.integration
 
 import cats.effect.IO
+import cats.syntax.all.*
 import doobie.implicits.*
 
 /**
@@ -63,6 +64,24 @@ final class DbContractSpec extends IntegrationSuite:
           "incident_card_shop",
           "incident_suri_no_ginji",
         ),
+      )
+    }
+
+  test("member_aliases exposes OCR name resolution columns and indexes"):
+    val columnProgram = columnsFor("member_aliases")
+    val indexProgram = sql"""
+      SELECT indexname
+      FROM pg_indexes
+      WHERE schemaname = 'public'
+        AND tablename = 'member_aliases'
+        AND indexname IN ('member_aliases_member_alias_unique', 'member_aliases_alias_idx')
+    """.query[String].to[List].transact(transactor)
+    (columnProgram, indexProgram).mapN { (cols, indexes) =>
+      val missing = Set("id", "member_id", "alias", "created_at") -- cols.toSet
+      assert(missing.isEmpty, s"member_aliases is missing columns: $missing (have $cols)")
+      assertEquals(
+        indexes.toSet,
+        Set("member_aliases_member_alias_unique", "member_aliases_alias_idx"),
       )
     }
 

@@ -7,12 +7,14 @@ import io.circe.Json
 import org.http4s.circe.*
 import org.http4s.circe.CirceEntityCodec.*
 import org.http4s.implicits.*
-import org.http4s.{Method, Request, Status}
+import org.http4s.{Header, Method, Request, Status}
+import org.typelevel.ci.CIString
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.endpoints.{
   GameTitleListResponse, GameTitleResponse, IncidentMasterListResponse, IncidentMasterResponse,
-  MapMasterListResponse, MapMasterResponse, SeasonMasterListResponse, SeasonMasterResponse,
+  MapMasterListResponse, MapMasterResponse, MemberAliasListResponse, MemberAliasResponse,
+  SeasonMasterListResponse, SeasonMasterResponse,
 }
 import momo.api.http.HttpAssertions.{assertProblem, assertProblemDetailEquals}
 
@@ -43,6 +45,9 @@ final class MasterEndpointsSpec extends MomoCatsEffectSuite with HttpAppTestFixt
   ): Unit =
     assertIsoInstant(actual.createdAt)
     assertEquals(actual.copy(createdAt = ""), expectedWithoutCreatedAt.copy(createdAt = ""))
+
+  private def nonAdminWriteHeaders(): List[Header.ToRaw] =
+    List(devReadHeader("account_eu"), Header.Raw(CIString("X-CSRF-Token"), "dev"))
 
   app.test("GET /api/incident-masters returns 6 fixed incidents") { http =>
     val req = Request[IO](Method.GET, uri"/api/incident-masters").withHeaders(devReadHeader())
@@ -86,6 +91,45 @@ final class MasterEndpointsSpec extends MomoCatsEffectSuite with HttpAppTestFixt
     http.run(req).flatMap { r =>
       assertProblem(r, Status.UnprocessableContent, "VALIDATION_FAILED", "id must match")
     }
+  }
+
+  app.test("POST /api/game-titles is restricted to administrators") { http =>
+    val req = Request[IO](Method.POST, uri"/api/game-titles").withHeaders(nonAdminWriteHeaders()*)
+      .withEntity(HttpRequestBodies.Master.gameTitleWorld)
+    http.run(req).flatMap { r =>
+      assertProblemDetailEquals(
+        r,
+        Status.Forbidden,
+        "FORBIDDEN",
+        "Administrator access is required.",
+      )
+    }
+  }
+
+  app.test("PATCH and DELETE /api/game-titles update and remove an unused title") { http =>
+    val create = Request[IO](Method.POST, uri"/api/game-titles").withHeaders(devWriteHeaders()*)
+      .withEntity(HttpRequestBodies.Master.gameTitleWorld)
+    val patch = Request[IO](Method.PATCH, uri"/api/game-titles/title_world")
+      .withHeaders(devWriteHeaders()*).withEntity(Json.obj(
+        "name" -> Json.fromString("桃太郎電鉄ワールドDX"),
+        "layoutFamily" -> Json.fromString("world"),
+      ))
+    val delete = Request[IO](Method.DELETE, uri"/api/game-titles/title_world")
+      .withHeaders(devWriteHeaders()*)
+    val list = Request[IO](Method.GET, uri"/api/game-titles").withHeaders(devReadHeader())
+    for
+      created <- http.run(create)
+      _ = assertEquals(created.status, Status.Ok)
+      updated <- http.run(patch)
+      _ = assertEquals(updated.status, Status.Ok)
+      body <- updated.as[GameTitleResponse]
+      _ = assertEquals(body.name, "桃太郎電鉄ワールドDX")
+      deleted <- http.run(delete)
+      _ = assertEquals(deleted.status, Status.Ok)
+      listed <- http.run(list)
+      items <- listed.as[GameTitleListResponse]
+      _ = assertEquals(items.items, Nil)
+    yield ()
   }
 
   app.test("POST /api/map-masters and /api/season-masters happy path with display order") { http =>
@@ -146,6 +190,41 @@ final class MasterEndpointsSpec extends MomoCatsEffectSuite with HttpAppTestFixt
         "Development CSRF token is required. Use X-CSRF-Token: dev.",
       )
     )
+  }
+
+  app.test("member alias CRUD lists, creates, updates, and deletes aliases") { http =>
+    def writeReq(method: Method, path: String, body: Option[Json]): Request[IO] =
+      val base = Request[IO](method, org.http4s.Uri.unsafeFromString(path))
+        .withHeaders(devWriteHeaders()*)
+      body.fold(base)(base.withEntity)
+
+    val createBody = Json
+      .obj("memberId" -> Json.fromString("member_akane_mami"), "alias" -> Json.fromString("NO11社長"))
+    val updateBody = Json
+      .obj("memberId" -> Json.fromString("member_otaka"), "alias" -> Json.fromString("オータカ社長"))
+    for
+      createdResp <- http.run(writeReq(Method.POST, "/api/member-aliases", Some(createBody)))
+      _ = assertEquals(createdResp.status, Status.Ok)
+      created <- createdResp.as[MemberAliasResponse]
+      _ = assertEquals(created.memberId, "member_akane_mami")
+      listedResp <- http
+        .run(Request[IO](Method.GET, uri"/api/member-aliases").withHeaders(devReadHeader()))
+      _ = assertEquals(listedResp.status, Status.Ok)
+      listed <- listedResp.as[MemberAliasListResponse]
+      _ = assertEquals(listed.items.map(_.alias), List("NO11社長"))
+      updatedResp <- http
+        .run(writeReq(Method.PATCH, s"/api/member-aliases/${created.id}", Some(updateBody)))
+      _ = assertEquals(updatedResp.status, Status.Ok)
+      updated <- updatedResp.as[MemberAliasResponse]
+      _ = assertEquals(updated.memberId, "member_otaka")
+      _ = assertEquals(updated.alias, "オータカ社長")
+      deletedResp <- http.run(writeReq(Method.DELETE, s"/api/member-aliases/${created.id}", None))
+      _ = assertEquals(deletedResp.status, Status.Ok)
+      emptyResp <- http
+        .run(Request[IO](Method.GET, uri"/api/member-aliases").withHeaders(devReadHeader()))
+      empty <- emptyResp.as[MemberAliasListResponse]
+      _ = assertEquals(empty.items, Nil)
+    yield ()
   }
 
   app.test("GET /api/game-titles without auth returns 401") { http =>

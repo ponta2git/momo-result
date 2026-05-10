@@ -17,7 +17,7 @@ import momo.api.repositories.{GameTitlesRepository, MapMastersRepository, Season
  * underscore so they remain stable, URL-safe, and trivially comparable across summit and
  * momo-result.
  */
-private object MasterField:
+private[usecases] object MasterField:
   private val Pattern = "^[a-z][a-z0-9_]{1,63}$".r
   def slug(field: String, value: String): Either[AppError, String] =
     Pattern.pattern.matcher(value).matches() match

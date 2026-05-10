@@ -9,6 +9,7 @@ type LoginAccountRecord = components["schemas"]["LoginAccountResponse"];
 type MapMasterRecord = components["schemas"]["MapMasterResponse"];
 type SeasonMasterRecord = components["schemas"]["SeasonMasterResponse"];
 type IncidentRecord = components["schemas"]["IncidentMasterResponse"];
+type MemberAliasRecord = components["schemas"]["MemberAliasResponse"];
 
 const gameTitlesSeed: readonly GameTitleRecord[] = [
   {
@@ -34,6 +35,14 @@ const seasonMastersSeed: readonly SeasonMasterRecord[] = [
     gameTitleId: "gt_momotetsu_2",
     name: "今シーズン",
     displayOrder: 1,
+    createdAt: now,
+  },
+];
+const memberAliasesSeed: readonly MemberAliasRecord[] = [
+  {
+    id: "alias-akane-mami-no11",
+    memberId: "member_akane_mami",
+    alias: "NO11",
     createdAt: now,
   },
 ];
@@ -65,6 +74,9 @@ let mapMastersStore: MapMasterRecord[] = structuredClone(mapMastersSeed) as MapM
 let seasonMastersStore: SeasonMasterRecord[] = structuredClone(
   seasonMastersSeed,
 ) as SeasonMasterRecord[];
+let memberAliasesStore: MemberAliasRecord[] = structuredClone(
+  memberAliasesSeed,
+) as MemberAliasRecord[];
 let loginAccountsStore: LoginAccountRecord[] = structuredClone(
   loginAccountsSeed,
 ) as LoginAccountRecord[];
@@ -166,6 +178,7 @@ export function resetMswStores(): void {
   gameTitlesStore = structuredClone(gameTitlesSeed) as GameTitleRecord[];
   mapMastersStore = structuredClone(mapMastersSeed) as MapMasterRecord[];
   seasonMastersStore = structuredClone(seasonMastersSeed) as SeasonMasterRecord[];
+  memberAliasesStore = structuredClone(memberAliasesSeed) as MemberAliasRecord[];
   loginAccountsStore = structuredClone(loginAccountsSeed) as LoginAccountRecord[];
   matchListStore = structuredClone(matchListSeed) as MatchListEntry[];
 }
@@ -578,6 +591,21 @@ export const handlers = [
     gameTitlesStore.push(created);
     return HttpResponse.json(created);
   }),
+  http.patch("/api/game-titles/:id", async ({ params, request }) => {
+    const id = String(params["id"]);
+    const body = (await request.json()) as components["schemas"]["UpdateGameTitleRequest"];
+    gameTitlesStore = gameTitlesStore.map((item) =>
+      item.id === id ? { ...item, name: body.name, layoutFamily: body.layoutFamily } : item,
+    );
+    return HttpResponse.json(gameTitlesStore.find((item) => item.id === id));
+  }),
+  http.delete("/api/game-titles/:id", ({ params }) => {
+    const id = String(params["id"]);
+    gameTitlesStore = gameTitlesStore.filter((item) => item.id !== id);
+    mapMastersStore = mapMastersStore.filter((item) => item.gameTitleId !== id);
+    seasonMastersStore = seasonMastersStore.filter((item) => item.gameTitleId !== id);
+    return HttpResponse.json({ id, deleted: true });
+  }),
   http.get("/api/map-masters", ({ request }) => {
     const url = new URL(request.url);
     const gameTitleId = url.searchParams.get("gameTitleId");
@@ -601,6 +629,19 @@ export const handlers = [
     };
     mapMastersStore.push(created);
     return HttpResponse.json(created);
+  }),
+  http.patch("/api/map-masters/:id", async ({ params, request }) => {
+    const id = String(params["id"]);
+    const body = (await request.json()) as components["schemas"]["UpdateMapMasterRequest"];
+    mapMastersStore = mapMastersStore.map((item) =>
+      item.id === id ? { ...item, name: body.name } : item,
+    );
+    return HttpResponse.json(mapMastersStore.find((item) => item.id === id));
+  }),
+  http.delete("/api/map-masters/:id", ({ params }) => {
+    const id = String(params["id"]);
+    mapMastersStore = mapMastersStore.filter((item) => item.id !== id);
+    return HttpResponse.json({ id, deleted: true });
   }),
   http.get("/api/season-masters", ({ request }) => {
     const url = new URL(request.url);
@@ -626,9 +667,54 @@ export const handlers = [
     seasonMastersStore.push(created);
     return HttpResponse.json(created);
   }),
+  http.patch("/api/season-masters/:id", async ({ params, request }) => {
+    const id = String(params["id"]);
+    const body = (await request.json()) as components["schemas"]["UpdateSeasonMasterRequest"];
+    seasonMastersStore = seasonMastersStore.map((item) =>
+      item.id === id ? { ...item, name: body.name } : item,
+    );
+    return HttpResponse.json(seasonMastersStore.find((item) => item.id === id));
+  }),
+  http.delete("/api/season-masters/:id", ({ params }) => {
+    const id = String(params["id"]);
+    seasonMastersStore = seasonMastersStore.filter((item) => item.id !== id);
+    return HttpResponse.json({ id, deleted: true });
+  }),
   http.get("/api/incident-masters", () =>
     HttpResponse.json({ items: structuredClone(incidentMastersSeed) }),
   ),
+  http.get("/api/member-aliases", ({ request }) => {
+    const url = new URL(request.url);
+    const memberId = url.searchParams.get("memberId");
+    const items = memberId
+      ? memberAliasesStore.filter((item) => item.memberId === memberId)
+      : memberAliasesStore;
+    return HttpResponse.json({ items: structuredClone(items) });
+  }),
+  http.post("/api/member-aliases", async ({ request }) => {
+    const body = (await request.json()) as components["schemas"]["CreateMemberAliasRequest"];
+    const created = {
+      id: `alias-${memberAliasesStore.length + 1}`,
+      memberId: body.memberId,
+      alias: body.alias,
+      createdAt: now,
+    };
+    memberAliasesStore.push(created);
+    return HttpResponse.json(created);
+  }),
+  http.patch("/api/member-aliases/:id", async ({ params, request }) => {
+    const id = String(params["id"]);
+    const body = (await request.json()) as components["schemas"]["UpdateMemberAliasRequest"];
+    memberAliasesStore = memberAliasesStore.map((item) =>
+      item.id === id ? { ...item, memberId: body.memberId, alias: body.alias } : item,
+    );
+    return HttpResponse.json(memberAliasesStore.find((item) => item.id === id));
+  }),
+  http.delete("/api/member-aliases/:id", ({ params }) => {
+    const id = String(params["id"]);
+    memberAliasesStore = memberAliasesStore.filter((item) => item.id !== id);
+    return HttpResponse.json({ id, deleted: true });
+  }),
   http.delete("/api/ocr-jobs/:jobId", ({ params }) =>
     HttpResponse.json({
       jobId: params["jobId"],

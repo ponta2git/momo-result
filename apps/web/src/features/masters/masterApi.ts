@@ -2,20 +2,36 @@ import type { IdempotencyRequestOptions } from "@/shared/api/client";
 import {
   createGameTitle,
   createMapMaster,
+  createMemberAlias,
   createSeasonMaster,
+  deleteGameTitle,
+  deleteMapMaster,
+  deleteMemberAlias,
+  deleteSeasonMaster,
   listGameTitles,
   listIncidentMasters,
   listMapMasters,
+  listMemberAliases,
   listSeasonMasters,
+  updateGameTitle,
+  updateMapMaster,
+  updateMemberAlias,
+  updateSeasonMaster,
 } from "@/shared/api/masters";
 import type {
   CreateGameTitleRequest,
   CreateMapMasterRequest,
+  CreateMemberAliasRequest,
   CreateSeasonMasterRequest,
   GameTitleResponse,
   IncidentMasterResponse,
   MapMasterResponse,
+  MemberAliasResponse,
   SeasonMasterResponse,
+  UpdateGameTitleRequest,
+  UpdateMapMasterRequest,
+  UpdateMemberAliasRequest,
+  UpdateSeasonMasterRequest,
 } from "@/shared/api/masters";
 
 function byDisplayOrder<T extends { displayOrder: number; name: string }>(a: T, b: T): number {
@@ -32,11 +48,19 @@ function byIncidentOrder(a: IncidentMasterResponse, b: IncidentMasterResponse): 
   return a.displayName.localeCompare(b.displayName, "ja");
 }
 
+function byMemberAlias(a: MemberAliasResponse, b: MemberAliasResponse): number {
+  if (a.memberId !== b.memberId) {
+    return a.memberId.localeCompare(b.memberId);
+  }
+  return a.alias.localeCompare(b.alias, "ja");
+}
+
 export const masterQueryKeys = {
   gameTitles: (authScope: string) => ["masters-admin", "game-titles", authScope] as const,
   incidentMasters: (authScope: string) => ["masters-admin", "incident-masters", authScope] as const,
   mapMasters: (authScope: string, gameTitleId: string) =>
     ["masters-admin", "map-masters", authScope, gameTitleId || "none"] as const,
+  memberAliases: (authScope: string) => ["masters-admin", "member-aliases", authScope] as const,
   seasonMasters: (authScope: string, gameTitleId: string) =>
     ["masters-admin", "season-masters", authScope, gameTitleId || "none"] as const,
 };
@@ -67,6 +91,11 @@ export async function fetchIncidentMasters(): Promise<IncidentMasterResponse[]> 
   return (response.items ?? []).toSorted(byIncidentOrder);
 }
 
+export async function fetchMemberAliases(): Promise<MemberAliasResponse[]> {
+  const response = await listMemberAliases();
+  return (response.items ?? []).toSorted(byMemberAlias);
+}
+
 export function postGameTitle(
   request: CreateGameTitleRequest,
   options: IdempotencyRequestOptions = {},
@@ -86,4 +115,43 @@ export function postSeasonMaster(
   options: IdempotencyRequestOptions = {},
 ) {
   return createSeasonMaster(request, options);
+}
+
+export function patchGameTitle(id: string, request: UpdateGameTitleRequest) {
+  return updateGameTitle(id, request);
+}
+
+export function removeGameTitle(id: string) {
+  return deleteGameTitle(id);
+}
+
+export function patchMapMaster(id: string, request: UpdateMapMasterRequest) {
+  return updateMapMaster(id, request);
+}
+
+export function removeMapMaster(id: string) {
+  return deleteMapMaster(id);
+}
+
+export function patchSeasonMaster(id: string, request: UpdateSeasonMasterRequest) {
+  return updateSeasonMaster(id, request);
+}
+
+export function removeSeasonMaster(id: string) {
+  return deleteSeasonMaster(id);
+}
+
+export function postMemberAlias(
+  request: CreateMemberAliasRequest,
+  options: IdempotencyRequestOptions = {},
+) {
+  return createMemberAlias(request, options);
+}
+
+export function patchMemberAlias(id: string, request: UpdateMemberAliasRequest) {
+  return updateMemberAlias(id, request);
+}
+
+export function removeMemberAlias(id: string) {
+  return deleteMemberAlias(id);
 }

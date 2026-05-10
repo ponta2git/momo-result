@@ -8,6 +8,8 @@ from momo_ocr.features.ocr_results.player_aliases import (
     MIN_SAFE_ALIAS_LENGTH,
     PlayerAliasResolver,
     alias_resolver_from_map,
+    alias_resolver_from_member_aliases,
+    extract_player_identity,
     extract_player_name_candidate,
 )
 
@@ -39,6 +41,26 @@ def test_custom_alias_resolver_overrides_defaults() -> None:
     assert (
         extract_player_name_candidate("noise ハーゆー社長 800万円", alias_resolver=resolver)
         == "ハーゆー社長"
+    )
+
+
+def test_member_alias_resolver_matches_momotetsu_president_suffix_without_seed() -> None:
+    resolver = alias_resolver_from_member_aliases({"member_akane_mami": ("NO11",)})
+
+    identity = extract_player_identity(
+        "なーーールーな Se se SE NO11 社長 148570044", alias_resolver=resolver
+    )
+
+    assert identity.raw_player_name == "NO11"
+    assert identity.member_id == "member_akane_mami"
+
+
+def test_custom_alias_resolver_matches_momotetsu_president_suffix_without_seed() -> None:
+    resolver = alias_resolver_from_map({"オータカ": ("オータカ",)})
+
+    assert (
+        extract_player_name_candidate("noise オータカ社長 800万円", alias_resolver=resolver)
+        == "オータカ"
     )
 
 

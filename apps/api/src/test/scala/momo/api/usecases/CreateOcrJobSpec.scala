@@ -8,11 +8,13 @@ import org.typelevel.log4cats.noop.NoOpFactory
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.adapters.{
-  InMemoryMatchDraftsRepository, InMemoryOcrDraftsRepository, InMemoryOcrJobCreationRepository,
-  InMemoryOcrJobsRepository, InMemoryQueueProducer, LocalFsImageStore,
+  InMemoryMatchDraftsRepository, InMemoryMemberAliasesRepository, InMemoryOcrDraftsRepository,
+  InMemoryOcrJobCreationRepository, InMemoryOcrJobsRepository, InMemoryQueueProducer,
+  LocalFsImageStore,
 }
-import momo.api.domain.ids.{ImageId, OcrJobId}
-import momo.api.domain.{OcrFailure, OcrJob, OcrJobHints, PlayerAliasHint, StoredImage}
+import momo.api.codec.OcrHintsCodec.given
+import momo.api.domain.ids.{ImageId, MemberId, OcrJobId}
+import momo.api.domain.{MemberAlias, OcrFailure, OcrJob, OcrJobHints, PlayerAliasHint, StoredImage}
 import momo.api.errors.AppError
 import momo.api.repositories.{ImageStore, OcrJobsRepository, OcrQueuePayload, QueueProducer}
 import momo.api.usecases.testing.CapturingLoggerFactory
@@ -51,6 +53,42 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         assertEquals(published.head.fields("schemaVersion"), "1")
         assertEquals(published.head.fields("requestedImageType"), "total_assets")
         assertEquals(published.head.fields.get("requestId"), Some("test-req-id"))
+    }
+  }
+
+  test("merges member aliases from DB into OCR queue hints") {
+    inMemoryQueueFixture(
+      prefix = "momo-api-create-job-aliases",
+      idSeed = List("job-1", "draft-1"),
+      requestId = None,
+    ).use { fixture =>
+      for
+        image <- fixture.savePng
+        _ <- fixture.memberAliases.create(MemberAlias(
+          id = "alias-1",
+          memberId = MemberId("member_ponta"),
+          alias = "ポン太社長",
+          createdAt = now,
+        ))
+        usecase <- fixture.usecase
+        _ <- usecase.run(CreateOcrJobCommand(
+          image.imageId,
+          "total_assets",
+          OcrJobHints(
+            gameTitle = None,
+            layoutFamily = None,
+            knownPlayerAliases = List(PlayerAliasHint("member_ponta", List("ぽんた"))),
+            computerPlayerAliases = Nil,
+          ),
+          None,
+        )).flatMap(fromAppEither)
+        published <- fixture.queue.published
+        hintsJson = published.head.fields("ocrHintsJson")
+        parsed = io.circe.parser.decode[OcrJobHints](hintsJson)
+      yield assertEquals(
+        parsed.map(_.knownPlayerAliases),
+        Right(List(PlayerAliasHint("member_ponta", List("ぽんた", "ポン太社長")))),
+      )
     }
   }
 
@@ -195,9 +233,10 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
       jobsBase <- InMemoryOcrJobsRepository.create[IO]
       drafts <- InMemoryOcrDraftsRepository.create[IO]
       matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
+      memberAliases <- InMemoryMemberAliasesRepository.create[IO]
       imageStore = LocalFsImageStore[IO](dir)
       jobs = decorateJobs(jobsBase)
-    yield Fixture(imageStore, jobs, drafts, matchDrafts, queue, idSeed, requestId)
+    yield Fixture(imageStore, jobs, drafts, matchDrafts, memberAliases, queue, idSeed, requestId)
   }
 
   private def failingQueue(error: Throwable): QueueProducer[IO] = new QueueProducer[IO]:
@@ -223,6 +262,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
       jobs: OcrJobsRepository[IO],
       drafts: InMemoryOcrDraftsRepository[IO],
       matchDrafts: InMemoryMatchDraftsRepository[IO],
+      memberAliases: InMemoryMemberAliasesRepository[IO],
       queue: Q,
       idSeed: List[String],
       requestId: Option[String],
@@ -231,16 +271,19 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
       .flatMap(fromAppEither)
 
     def usecase(using LoggerFactory[IO]): IO[CreateOcrJob[IO]] = IO.ref(idSeed).map { ids =>
-      CreateOcrJob[IO](
-        imageStore = imageStore,
-        creation = InMemoryOcrJobCreationRepository[IO](drafts, jobs, matchDrafts),
-        matchDrafts = matchDrafts,
-        queueSubmitter = OcrQueueSubmitter.direct[IO](jobs, matchDrafts, queue),
-        now = IO.pure(now),
-        nextId = ids.modify {
-          case head :: tail => tail -> head
-          case Nil => Nil -> "unexpected"
-        },
-        requestIdLookup = IO.pure(requestId),
-      )
-    }
+      IO.pure {
+        CreateOcrJob[IO](
+          imageStore = imageStore,
+          creation = InMemoryOcrJobCreationRepository[IO](drafts, jobs, matchDrafts),
+          matchDrafts = matchDrafts,
+          queueSubmitter = OcrQueueSubmitter.direct[IO](jobs, matchDrafts, queue),
+          now = IO.pure(now),
+          nextId = ids.modify {
+            case head :: tail => tail -> head
+            case Nil => Nil -> "unexpected"
+          },
+          requestIdLookup = IO.pure(requestId),
+          memberAliases = memberAliases,
+        )
+      }
+    }.flatten

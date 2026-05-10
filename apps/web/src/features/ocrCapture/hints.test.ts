@@ -38,10 +38,10 @@ describe("buildOcrHints", () => {
       "member_eu",
     ]);
     expect(aliases.find((alias) => alias.memberId === "member_akane_mami")?.aliases).toContain(
-      "NO11社長",
+      "NO11",
     );
     expect(aliases.find((alias) => alias.memberId === "member_otaka")?.aliases).toContain(
-      "オータカ社長",
+      "オータカ",
     );
   });
 

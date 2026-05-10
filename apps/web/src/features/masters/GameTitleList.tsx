@@ -1,5 +1,6 @@
 import { useFormStatus } from "react-dom";
 
+import { MasterDeleteDialog, MasterEditDialog } from "@/features/masters/MasterActionDialogs";
 import { layoutFamilies } from "@/shared/api/enums";
 import type { LayoutFamily } from "@/shared/api/enums";
 import type { GameTitleResponse } from "@/shared/api/masters";
@@ -18,6 +19,8 @@ type GameTitleListProps = {
   createFormKey?: string | number | undefined;
   defaultLayoutFamily: LayoutFamily;
   items: GameTitleListItem[];
+  onDelete: (id: string) => void;
+  onUpdate: (id: string, request: { name: string; layoutFamily: string }) => Promise<void>;
   onSelect: (id: string) => void;
   selectedGameTitleId: string;
 };
@@ -43,6 +46,8 @@ export function GameTitleList({
   createFormKey,
   defaultLayoutFamily,
   items,
+  onDelete,
+  onUpdate,
   onSelect,
   selectedGameTitleId,
 }: GameTitleListProps) {
@@ -69,29 +74,55 @@ export function GameTitleList({
             const isPending = item.pending === true;
             return (
               <li key={item.id}>
-                <button
-                  className={`w-full rounded-[var(--radius-sm)] border px-3 py-2 text-left transition-colors ${
+                <div
+                  className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-[var(--radius-sm)] border px-3 py-2 transition-colors ${
                     isSelected
                       ? "border-[var(--color-action)]/60 bg-[var(--color-action)]/12"
                       : "border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-surface-subtle)]"
                   } ${isPending ? "opacity-60" : ""}`}
-                  type="button"
-                  disabled={isPending}
                   aria-busy={isPending || undefined}
-                  onClick={() => onSelect(item.id)}
                 >
-                  <p className="line-clamp-2 text-sm font-semibold text-[var(--color-text-primary)]">
-                    {item.name}
-                    {isPending ? (
-                      <span className="ml-2 text-xs font-normal text-[var(--color-text-secondary)]">
-                        (追加中…)
-                      </span>
-                    ) : null}
-                  </p>
-                  <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
-                    {item.layoutFamily}
-                  </p>
-                </button>
+                  <button
+                    className="min-w-0 text-left"
+                    type="button"
+                    disabled={isPending}
+                    onClick={() => onSelect(item.id)}
+                  >
+                    <p className="line-clamp-2 text-sm font-semibold text-[var(--color-text-primary)]">
+                      {item.name}
+                      {isPending ? (
+                        <span className="ml-2 text-xs font-normal text-[var(--color-text-secondary)]">
+                          (追加中…)
+                        </span>
+                      ) : null}
+                    </p>
+                    <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
+                      {item.layoutFamily}
+                    </p>
+                  </button>
+                  {isPending ? null : (
+                    <div className="flex items-center">
+                      <MasterEditDialog
+                        initialLayoutFamily={item.layoutFamily}
+                        initialName={item.name}
+                        label="作品"
+                        onSave={async (values) => {
+                          await onUpdate(item.id, {
+                            name: values.name,
+                            layoutFamily: values.layoutFamily ?? item.layoutFamily,
+                          });
+                        }}
+                        showLayoutFamily
+                        title="作品を編集"
+                      />
+                      <MasterDeleteDialog
+                        label="作品"
+                        name={item.name}
+                        onDelete={() => onDelete(item.id)}
+                      />
+                    </div>
+                  )}
+                </div>
               </li>
             );
           })}

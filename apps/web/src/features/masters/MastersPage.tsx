@@ -6,11 +6,21 @@ import {
   fetchGameTitles,
   fetchIncidentMasters,
   fetchMapMasters,
+  fetchMemberAliases,
   fetchSeasonMasters,
   masterQueryKeys,
+  patchGameTitle,
+  patchMapMaster,
+  patchMemberAlias,
+  patchSeasonMaster,
   postGameTitle,
   postMapMaster,
+  postMemberAlias,
   postSeasonMaster,
+  removeGameTitle,
+  removeMapMaster,
+  removeMemberAlias,
+  removeSeasonMaster,
 } from "@/features/masters/masterApi";
 import {
   createGameTitleId,
@@ -30,6 +40,7 @@ import {
   normalizeName,
 } from "@/features/masters/masterValidation";
 import { buildMasterViewModel } from "@/features/masters/masterViewModel";
+import { MemberAliasPanel } from "@/features/masters/MemberAliasPanel";
 import { formatApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { shouldShowQueryError } from "@/shared/api/queryErrorState";
 import { useAuth } from "@/shared/auth/useAuth";
@@ -82,6 +93,7 @@ export function MastersPage() {
     : "missing";
 
   const [selectedGameTitleId, setSelectedGameTitleId] = useState("");
+  const [operationError, setOperationError] = useState<string>();
 
   const gameTitlesQuery = useSuspenseQuery({
     queryKey: masterQueryKeys.gameTitles(authScope),
@@ -105,9 +117,15 @@ export function MastersPage() {
     queryFn: fetchIncidentMasters,
   });
 
+  const memberAliasesQuery = useSuspenseQuery({
+    queryKey: masterQueryKeys.memberAliases(authScope),
+    queryFn: fetchMemberAliases,
+  });
+
   const gameTitles = useMemo(() => gameTitlesQuery.data ?? [], [gameTitlesQuery.data]);
   const mapMasters = useMemo(() => mapMastersQuery.data ?? [], [mapMastersQuery.data]);
   const seasonMasters = useMemo(() => seasonMastersQuery.data ?? [], [seasonMastersQuery.data]);
+  const memberAliases = useMemo(() => memberAliasesQuery.data ?? [], [memberAliasesQuery.data]);
 
   type OptimisticGameTitle = (typeof gameTitles)[number] & { pending?: boolean };
   type OptimisticMap = (typeof mapMasters)[number] & { pending?: boolean };
@@ -260,7 +278,77 @@ export function MastersPage() {
     }
   }, initialCreateState);
 
-  const hasPendingMutation = gameTitleCreatePending || mapCreatePending || seasonCreatePending;
+  const [aliasCreateState, aliasCreateAction, aliasCreatePending] = useActionState<
+    CreateState,
+    FormData
+  >(async (prev, formData) => {
+    const memberId = normalizeName(String(formData.get("memberId") ?? ""));
+    const alias = normalizeName(String(formData.get("alias") ?? ""));
+    if (!memberId || !alias) {
+      return { ...prev, error: "プレイヤーとエイリアスを入力してください" };
+    }
+    try {
+      await postMemberAlias({ memberId, alias });
+      await queryClient.invalidateQueries({ queryKey: masterQueryKeys.memberAliases(authScope) });
+      return { error: undefined, version: prev.version + 1 };
+    } catch (error) {
+      return { ...prev, error: formatApiError(error, "エイリアスの追加に失敗しました") };
+    }
+  }, initialCreateState);
+
+  async function updateGameTitle(id: string, request: { name: string; layoutFamily: string }) {
+    setOperationError(undefined);
+    await patchGameTitle(id, {
+      name: normalizeName(request.name),
+      layoutFamily: normalizeLayoutFamily(request.layoutFamily),
+    });
+    await invalidateMasterResourceCaches(
+      queryClient,
+      masterQueryKeys.gameTitles(authScope),
+      "game-titles",
+    );
+  }
+
+  async function updateMapMaster(id: string, request: { name: string }) {
+    setOperationError(undefined);
+    await patchMapMaster(id, { name: normalizeName(request.name) });
+    await invalidateMasterResourceCaches(
+      queryClient,
+      masterQueryKeys.mapMasters(authScope, viewModel.selectedGameTitleId),
+      "map-masters",
+    );
+  }
+
+  async function updateSeasonMaster(id: string, request: { name: string }) {
+    setOperationError(undefined);
+    await patchSeasonMaster(id, { name: normalizeName(request.name) });
+    await invalidateMasterResourceCaches(
+      queryClient,
+      masterQueryKeys.seasonMasters(authScope, viewModel.selectedGameTitleId),
+      "season-masters",
+    );
+  }
+
+  async function updateMemberAlias(id: string, request: { memberId: string; alias: string }) {
+    setOperationError(undefined);
+    await patchMemberAlias(id, {
+      memberId: normalizeName(request.memberId),
+      alias: normalizeName(request.alias),
+    });
+    await queryClient.invalidateQueries({ queryKey: masterQueryKeys.memberAliases(authScope) });
+  }
+
+  async function deleteWithNotice(action: () => Promise<unknown>, fallback: string) {
+    setOperationError(undefined);
+    try {
+      await action();
+    } catch (error) {
+      setOperationError(formatApiError(error, fallback));
+    }
+  }
+
+  const hasPendingMutation =
+    gameTitleCreatePending || mapCreatePending || seasonCreatePending || aliasCreatePending;
 
   const returnDestination =
     returnTo && handoffStatus === "available" && handoffId
@@ -298,6 +386,12 @@ export function MastersPage() {
         </Notice>
       ) : null}
 
+      {operationError ? (
+        <Notice tone="danger" title="マスタ操作に失敗しました">
+          {operationError}
+        </Notice>
+      ) : null}
+
       {returnDestination ? (
         <MasterReturnNotice
           destination={returnDestination}
@@ -323,20 +417,70 @@ export function MastersPage() {
         selectedGameTitleId={viewModel.selectedGameTitleId}
         selectedGameTitleName={viewModel.selectedGameTitle?.name}
         onSelectGameTitle={setSelectedGameTitleId}
+        onUpdateGameTitle={updateGameTitle}
+        onDeleteGameTitle={(id) => {
+          void deleteWithNotice(async () => {
+            await removeGameTitle(id);
+            if (selectedGameTitleId === id) setSelectedGameTitleId("");
+            await invalidateMasterResourceCaches(
+              queryClient,
+              masterQueryKeys.gameTitles(authScope),
+              "game-titles",
+            );
+          }, "作品の削除に失敗しました");
+        }}
         gameTitleCreateAction={gameTitleCreateAction}
         gameTitleCreateError={gameTitleCreateState.error}
         gameTitleCreateFormKey={gameTitleCreateState.version}
         gameTitleDefaultLayoutFamily={normalizeLayoutFamily("")}
         mapMasters={viewModel.selectedMapMasters}
+        onUpdateMapMaster={updateMapMaster}
+        onDeleteMapMaster={(id) => {
+          void deleteWithNotice(async () => {
+            await removeMapMaster(id);
+            await invalidateMasterResourceCaches(
+              queryClient,
+              masterQueryKeys.mapMasters(authScope, viewModel.selectedGameTitleId),
+              "map-masters",
+            );
+          }, "マップの削除に失敗しました");
+        }}
         mapCreateAction={mapCreateAction}
         mapCreateError={mapCreateState.error}
         mapCreateFormKey={mapCreateState.version}
         seasonMasters={viewModel.selectedSeasonMasters}
+        onUpdateSeasonMaster={updateSeasonMaster}
+        onDeleteSeasonMaster={(id) => {
+          void deleteWithNotice(async () => {
+            await removeSeasonMaster(id);
+            await invalidateMasterResourceCaches(
+              queryClient,
+              masterQueryKeys.seasonMasters(authScope, viewModel.selectedGameTitleId),
+              "season-masters",
+            );
+          }, "シーズンの削除に失敗しました");
+        }}
         seasonCreateAction={seasonCreateAction}
         seasonCreateError={seasonCreateState.error}
         seasonCreateFormKey={seasonCreateState.version}
         scopedDisabledReason={viewModel.scopedDisabledReason}
         incidentMasters={incidentMastersQuery.data}
+      />
+
+      <MemberAliasPanel
+        aliases={memberAliases}
+        createAction={aliasCreateAction}
+        createError={aliasCreateState.error}
+        createFormKey={aliasCreateState.version}
+        onDelete={(id) => {
+          void deleteWithNotice(async () => {
+            await removeMemberAlias(id);
+            await queryClient.invalidateQueries({
+              queryKey: masterQueryKeys.memberAliases(authScope),
+            });
+          }, "エイリアスの削除に失敗しました");
+        }}
+        onUpdate={updateMemberAlias}
       />
 
       {hasInvalidReturnTo ? (

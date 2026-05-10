@@ -9,12 +9,12 @@ export const fixedMembers: FixedMember[] = [
   {
     memberId: "member_akane_mami",
     displayName: "あかねまみ",
-    aliases: ["あかねまみ", "NO11社長"],
+    aliases: ["あかねまみ", "NO11"],
   },
   {
     memberId: "member_otaka",
     displayName: "おーたか",
-    aliases: ["おーたか", "オータカ社長"],
+    aliases: ["おーたか", "オータカ"],
   },
-  { memberId: "member_eu", displayName: "いーゆー", aliases: ["いーゆー", "いーゆー社長"] },
+  { memberId: "member_eu", displayName: "いーゆー", aliases: ["いーゆー"] },
 ];

@@ -4,7 +4,7 @@ import java.time.format.DateTimeFormatter
 
 import io.circe.Codec
 
-import momo.api.domain.{GameTitle, IncidentMaster, MapMaster, SeasonMaster}
+import momo.api.domain.{GameTitle, IncidentMaster, MapMaster, MemberAlias, SeasonMaster}
 
 final case class GameTitleResponse(
     id: String,
@@ -28,6 +28,8 @@ final case class GameTitleListResponse(items: List[GameTitleResponse]) derives C
 final case class CreateGameTitleRequest(id: String, name: String, layoutFamily: String)
     derives Codec.AsObject
 
+final case class UpdateGameTitleRequest(name: String, layoutFamily: String) derives Codec.AsObject
+
 final case class MapMasterResponse(
     id: String,
     gameTitleId: String,
@@ -49,6 +51,8 @@ final case class MapMasterListResponse(items: List[MapMasterResponse]) derives C
 
 final case class CreateMapMasterRequest(id: String, gameTitleId: String, name: String)
     derives Codec.AsObject
+
+final case class UpdateMapMasterRequest(name: String) derives Codec.AsObject
 
 final case class SeasonMasterResponse(
     id: String,
@@ -72,6 +76,8 @@ final case class SeasonMasterListResponse(items: List[SeasonMasterResponse]) der
 final case class CreateSeasonMasterRequest(id: String, gameTitleId: String, name: String)
     derives Codec.AsObject
 
+final case class UpdateSeasonMasterRequest(name: String) derives Codec.AsObject
+
 final case class IncidentMasterResponse(
     id: String,
     key: String,
@@ -89,3 +95,22 @@ object IncidentMasterResponse:
 
 final case class IncidentMasterListResponse(items: List[IncidentMasterResponse])
     derives Codec.AsObject
+
+final case class MemberAliasResponse(id: String, memberId: String, alias: String, createdAt: String)
+    derives Codec.AsObject
+
+object MemberAliasResponse:
+  def from(a: MemberAlias): MemberAliasResponse = MemberAliasResponse(
+    id = a.id,
+    memberId = a.memberId.value,
+    alias = a.alias,
+    createdAt = DateTimeFormatter.ISO_INSTANT.format(a.createdAt),
+  )
+
+final case class MemberAliasListResponse(items: List[MemberAliasResponse]) derives Codec.AsObject
+
+final case class CreateMemberAliasRequest(memberId: String, alias: String) derives Codec.AsObject
+
+final case class UpdateMemberAliasRequest(memberId: String, alias: String) derives Codec.AsObject
+
+final case class DeleteMasterResponse(id: String, deleted: Boolean) derives Codec.AsObject

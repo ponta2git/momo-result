@@ -34,7 +34,7 @@ describe("MatchesListPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("heading", { name: "試合" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
     const detailLinks = await screen.findAllByRole("link", { name: "詳細を見る" });
     expect(detailLinks.length).toBeGreaterThan(0);
     detailLinks.forEach((link) => expect(link).toHaveAttribute("href", "/matches/match-1"));
@@ -61,12 +61,11 @@ describe("MatchesListPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("heading", { name: "試合" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
     const heldEventSelect = screen.getAllByLabelText("開催")[0] as HTMLSelectElement;
     await waitFor(() => expect(heldEventSelect.options.length).toBeGreaterThan(1));
 
     await userEvent.selectOptions(heldEventSelect, "held-1");
-    await userEvent.click(screen.getByRole("button", { name: "絞り込む" }));
 
     await waitFor(() =>
       expect(screen.getByLabelText("current location")).toHaveTextContent("heldEventId=held-1"),
@@ -94,9 +93,8 @@ describe("MatchesListPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("heading", { name: "試合" })).toBeInTheDocument();
-    await userEvent.selectOptions(screen.getByLabelText("ソート"), "updated_desc");
-    await userEvent.click(screen.getByRole("button", { name: "絞り込む" }));
+    expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByLabelText("並び順"), "updated_desc");
 
     await waitFor(() =>
       expect(screen.getByLabelText("current location")).toHaveTextContent("sort=updated_desc"),
@@ -124,7 +122,7 @@ describe("MatchDetailPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("heading", { name: /試合詳細/ })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "削除" }));
     expect(screen.getByRole("heading", { name: "試合を削除しますか？" })).toBeInTheDocument();

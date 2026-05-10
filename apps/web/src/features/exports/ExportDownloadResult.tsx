@@ -2,7 +2,6 @@ import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
 
 import type { ExportDownloadResultView } from "./exportViewModel";
-import { formatDateTime } from "./exportViewModel";
 
 type ExportDownloadResultProps = {
   onRetry?: (() => void) | undefined;
@@ -12,14 +11,7 @@ type ExportDownloadResultProps = {
 export function ExportDownloadResult({ onRetry, result }: ExportDownloadResultProps) {
   if (!result) return null;
 
-  if (result.kind === "success") {
-    return (
-      <Notice tone="success" title="ダウンロードを開始しました">
-        {result.fileName}（{result.format.toUpperCase()}）の保存を{" "}
-        {formatDateTime(result.startedAt)} に開始しました。
-      </Notice>
-    );
-  }
+  if (result.kind === "success") return null;
 
   if (result.kind === "timeout") {
     return (

@@ -9,6 +9,7 @@ export type ScoreGridKeyArgs = {
   colCount: number;
   event: KeyboardEvent<HTMLElement>;
   getCellId: (position: GridPosition) => string;
+  horizontalEnterFromCol?: number | undefined;
   onFocusCell: (cellId: string) => void;
   onRevertCell: () => void;
   onSubmitFocus: () => void;
@@ -26,6 +27,25 @@ function moveWithinColumn(args: ScoreGridKeyArgs, delta: -1 | 1) {
 
 function moveByEnter(args: ScoreGridKeyArgs, reverse: boolean) {
   args.event.preventDefault();
+
+  if (
+    args.horizontalEnterFromCol !== undefined &&
+    args.position.col >= args.horizontalEnterFromCol
+  ) {
+    const nextCol = reverse ? args.position.col - 1 : args.position.col + 1;
+    if (nextCol >= args.horizontalEnterFromCol && nextCol < args.colCount) {
+      args.onFocusCell(args.getCellId({ col: nextCol, row: args.position.row }));
+      return;
+    }
+
+    const nextRow = reverse ? args.position.row - 1 : args.position.row + 1;
+    if (nextRow < 0 || nextRow >= args.rowCount) {
+      return;
+    }
+    const wrappedCol = reverse ? args.colCount - 1 : args.horizontalEnterFromCol;
+    args.onFocusCell(args.getCellId({ col: wrappedCol, row: nextRow }));
+    return;
+  }
 
   const delta = reverse ? -1 : 1;
   const nextRow = args.position.row + delta;

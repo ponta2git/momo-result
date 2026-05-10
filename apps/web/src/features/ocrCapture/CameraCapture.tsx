@@ -5,6 +5,7 @@ import { validateImageFile } from "@/features/ocrCapture/captureState";
 import { Button } from "@/shared/ui/actions/Button";
 
 type CameraCaptureProps = {
+  disabled?: boolean;
   slotLabel: string;
   onSelect: (file: File, source: InputSource) => void;
   onValidationError: (message: string) => void;
@@ -19,13 +20,20 @@ function stopStream(stream: MediaStream | null) {
   }
 }
 
-export function CameraCapture({ slotLabel, onSelect, onValidationError }: CameraCaptureProps) {
+export function CameraCapture({
+  disabled = false,
+  slotLabel,
+  onSelect,
+  onValidationError,
+}: CameraCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const startingRef = useRef(false);
   const [active, setActive] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
+  const [deviceId, setDeviceId] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const stop = useCallback(() => {
@@ -38,6 +46,22 @@ export function CameraCapture({ slotLabel, onSelect, onValidationError }: Camera
     streamRef.current = null;
     setActive(false);
   }, []);
+
+  useEffect(() => {
+    if (!navigator.mediaDevices?.enumerateDevices) {
+      return;
+    }
+    void (async () => {
+      const items = await navigator.mediaDevices.enumerateDevices();
+      setDevices(items.filter((item) => item.kind === "videoinput"));
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (disabled) {
+      stop();
+    }
+  }, [disabled, stop]);
 
   useEffect(() => {
     return () => {
@@ -62,10 +86,14 @@ export function CameraCapture({ slotLabel, onSelect, onValidationError }: Camera
       streamRef.current = null;
 
       const nextStream = await navigator.mediaDevices.getUserMedia({
-        video: true,
+        video: deviceId ? { deviceId: { exact: deviceId } } : true,
         audio: false,
       });
       streamRef.current = nextStream;
+      if (navigator.mediaDevices.enumerateDevices) {
+        const items = await navigator.mediaDevices.enumerateDevices();
+        setDevices(items.filter((item) => item.kind === "videoinput"));
+      }
 
       const video = videoRef.current;
       if (!video) {
@@ -137,10 +165,28 @@ export function CameraCapture({ slotLabel, onSelect, onValidationError }: Camera
 
   return (
     <div className="space-y-3">
-      <div className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--momo-night-900)]">
+      {devices.length > 0 ? (
+        <label className="grid max-w-[28rem] gap-1 text-xs font-semibold text-[var(--color-text-secondary)]">
+          カメラ
+          <select
+            className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={disabled || active || starting}
+            value={deviceId}
+            onChange={(event) => setDeviceId(event.target.value)}
+          >
+            <option value="">ブラウザの既定カメラ</option>
+            {devices.map((device, index) => (
+              <option key={device.deviceId || index} value={device.deviceId}>
+                {device.label || `カメラ ${index + 1}`}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+      <div className="max-w-[44rem] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--momo-night-900)]">
         <video
           ref={videoRef}
-          className="aspect-video w-full object-cover"
+          className="aspect-video max-h-[22rem] w-full object-contain"
           muted
           playsInline
           aria-label={`${slotLabel}のカメラプレビュー`}
@@ -149,10 +195,10 @@ export function CameraCapture({ slotLabel, onSelect, onValidationError }: Camera
       </div>
       {error ? <p className="text-sm text-[var(--color-danger)]">{error}</p> : null}
       <div className="flex flex-wrap gap-2">
-        <Button variant="secondary" onClick={startCamera} disabled={starting || active}>
+        <Button variant="secondary" onClick={startCamera} disabled={disabled || starting || active}>
           {starting ? "起動中…" : active ? "カメラ使用中" : "カメラ開始"}
         </Button>
-        <Button onClick={capture} disabled={!active}>
+        <Button onClick={capture} disabled={disabled || !active}>
           静止画を撮影
         </Button>
         <Button variant="secondary" onClick={stop} disabled={!active}>
@@ -160,7 +206,9 @@ export function CameraCapture({ slotLabel, onSelect, onValidationError }: Camera
         </Button>
       </div>
       <p className="text-xs text-[var(--color-text-secondary)]">
-        撮影した画像は、空いている分類トレイへ左から順に入ります。
+        {disabled
+          ? "分類トレイが埋まっているため、追加の撮影はできません。"
+          : "撮影した画像は、空いている分類トレイへ左から順に入ります。"}
       </p>
     </div>
   );

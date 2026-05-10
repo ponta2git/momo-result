@@ -27,6 +27,12 @@ const sourceLabels = {
   upload: "単体追加",
 };
 
+const slotKindLabels = {
+  incident_log: "事件簿",
+  revenue: "収益",
+  total_assets: "総資産",
+} as const satisfies Record<SlotKind, string>;
+
 const statusToneClass: Record<string, string> = {
   cancelled:
     "border-[var(--color-border)] bg-[var(--color-surface-subtle)] text-[var(--color-text-secondary)]",
@@ -50,7 +56,7 @@ const statusToneClass: Record<string, string> = {
 
 const statusLabel: Record<string, string> = {
   cancelled: "キャンセル済み",
-  empty: "未配置",
+  empty: "画像待ち",
   failed: "要確認",
   queued: "OCR待機中",
   queueing: "OCR依頼中",
@@ -66,6 +72,7 @@ function CaptureStatusBadge({ status }: { status: string }) {
     <span
       className={cn(
         "inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold",
+        "shrink-0 whitespace-nowrap",
         statusToneClass[status] ?? statusToneClass["empty"],
       )}
     >
@@ -119,7 +126,7 @@ export function CaptureSlotCard({
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-3">
-            <span className="grid h-10 w-10 place-items-center rounded-full border border-[var(--color-action)]/40 bg-[var(--color-action)]/10 text-sm font-semibold text-[var(--color-action)]">
+            <span className="grid size-10 place-items-center rounded-full border border-[var(--color-tray-marker)]/35 bg-[var(--color-tray-marker)]/8 text-sm font-semibold text-[var(--color-tray-marker)]">
               {stationLabel}
             </span>
             <div>
@@ -187,7 +194,8 @@ export function CaptureSlotCard({
           className="mt-4 rounded-[var(--radius-md)] border border-[var(--color-warning)]/60 bg-[var(--color-warning)]/20 p-3 text-sm text-[var(--color-text-primary)]"
           role="alert"
         >
-          OCR判定は <strong>{slot.detectedKind}</strong>{" "}
+          OCR判定は{" "}
+          <strong>{slot.detectedKind ? slotKindLabels[slot.detectedKind] : "別の分類"}</strong>{" "}
           でした。画像を正しい分類へ移動してから、もう一度「OCRにかけて下書き保存」を実行してください。
         </div>
       ) : null}

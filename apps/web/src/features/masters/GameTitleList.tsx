@@ -1,10 +1,11 @@
 import { useFormStatus } from "react-dom";
 
 import { MasterDeleteDialog, MasterEditDialog } from "@/features/masters/MasterActionDialogs";
-import { layoutFamilies } from "@/shared/api/enums";
+import { layoutFamilies, layoutFamilyLabels } from "@/shared/api/enums";
 import type { LayoutFamily } from "@/shared/api/enums";
 import type { GameTitleResponse } from "@/shared/api/masters";
 import { Button } from "@/shared/ui/actions/Button";
+import { cn } from "@/shared/ui/cn";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 
 const selectClass =
@@ -75,11 +76,13 @@ export function GameTitleList({
             return (
               <li key={item.id}>
                 <div
-                  className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-[var(--radius-sm)] border px-3 py-2 transition-colors ${
+                  className={cn(
+                    "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-[var(--radius-sm)] border px-3 py-2 transition-colors",
                     isSelected
                       ? "border-[var(--color-action)]/60 bg-[var(--color-action)]/12"
-                      : "border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-surface-subtle)]"
-                  } ${isPending ? "opacity-60" : ""}`}
+                      : "border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-surface-subtle)]",
+                    isPending ? "opacity-60" : "",
+                  )}
                   aria-busy={isPending || undefined}
                 >
                   <button
@@ -97,7 +100,8 @@ export function GameTitleList({
                       ) : null}
                     </p>
                     <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
-                      {item.layoutFamily}
+                      OCR読み取り方式:{" "}
+                      {layoutFamilyLabels[item.layoutFamily as LayoutFamily] ?? "未設定"}
                     </p>
                   </button>
                   {isPending ? null : (
@@ -136,16 +140,16 @@ export function GameTitleList({
         </label>
 
         <label className="grid gap-1">
-          <span className={labelClass}>Layout Family</span>
+          <span className={labelClass}>OCR読み取り方式</span>
           <select className={selectClass} defaultValue={defaultLayoutFamily} name="layoutFamily">
             {layoutFamilies.map((family) => (
               <option key={family} value={family}>
-                {family}
+                {layoutFamilyLabels[family]}
               </option>
             ))}
           </select>
           <p className="text-xs text-[var(--color-text-secondary)]">
-            OCR profileの選択に使われます。
+            作品ごとの画面構造に合わせて、OCRの読み取り方を切り替えます。
           </p>
         </label>
 

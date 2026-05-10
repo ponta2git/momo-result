@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useActionState, useEffect, useReducer, useState, useTransition } from "react";
+import { useActionState, useEffect, useMemo, useReducer, useState, useTransition } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import {
@@ -40,10 +40,14 @@ import { formatApiError } from "@/shared/api/problemDetails";
 import { isInitialQueryLoading, shouldShowBlockingQueryError } from "@/shared/api/queryErrorState";
 import { heldEventKeys } from "@/shared/api/queryKeys";
 import { Button } from "@/shared/ui/actions/Button";
+import { cn } from "@/shared/ui/cn";
+import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { LiveRegion } from "@/shared/ui/feedback/LiveRegion";
+import { Notice } from "@/shared/ui/feedback/Notice";
+import { showToast } from "@/shared/ui/feedback/Toast";
 import { Card } from "@/shared/ui/layout/Card";
-
-const labelClass = "text-xs font-semibold text-[var(--color-text-secondary)]";
+import { PageFrame } from "@/shared/ui/layout/PageFrame";
+import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 function upsertHeldEventList(
   current: HeldEventListResponse | undefined,
@@ -83,11 +87,16 @@ export function MatchWorkspacePage({
 
   const [notice, setNotice] = useState("");
   const [validationMessage, setValidationMessage] = useState("");
+  const [showValidationErrors, setShowValidationErrors] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [cancelDraftConfirmOpen, setCancelDraftConfirmOpen] = useState(false);
   const [eventDraftValue, setEventDraftValue] = useState<string>(currentLocalIsoMinute);
   const [workspaceData, setWorkspaceData] = useState<MatchWorkspaceInitialData | null>(null);
   const [preferredImageKind, setPreferredImageKind] = useState<SourceImageKind>("total_assets");
+  const notify = (message: string, tone: "info" | "success" | "warning" = "info") => {
+    setNotice(message);
+    showToast({ title: message, tone });
+  };
 
   const [state, dispatch] = useReducer(
     matchFormReducer,
@@ -95,6 +104,7 @@ export function MatchWorkspacePage({
   );
 
   const useSampleDrafts = mode === "review" && searchParams.get("sample") === "1";
+  const hasHandoff = searchParams.has("handoffId");
 
   const {
     derived: { baseErrors, isOcrRunningBlocked, refreshingReviewStatus, reviewStatus },
@@ -133,7 +143,10 @@ export function MatchWorkspacePage({
         },
         type: "patch_root",
       });
-      setNotice(`開催履歴（${new Date(event.heldAt).toLocaleString()}）を作成して選択しました。`);
+      notify(
+        `開催履歴（${new Date(event.heldAt).toLocaleString()}）を作成して選択しました。`,
+        "success",
+      );
     },
     onError: (error) => {
       setValidationMessage(formatApiError(error, "開催履歴の作成に失敗しました"));
@@ -192,19 +205,57 @@ export function MatchWorkspacePage({
         },
         type: "replace",
       });
-      setNotice("マスタ管理から戻ったため、入力内容を復元しました。");
+      notify("マスタ管理から戻ったため、入力内容を復元しました。", "success");
     },
     onRestoreFailed: () => {
-      setNotice("マスタ管理から戻りましたが、入力内容を復元できませんでした。");
+      notify("マスタ管理から戻りましたが、入力内容を復元できませんでした。", "warning");
     },
     searchParams,
   });
 
   const validation = validateMatchForm(state.values);
-  const selectedHeldEvent = (heldEventsQuery.data?.items ?? []).find(
-    (event) => event.id === state.values.heldEventId,
+  const emptyErrorPathSet = useMemo(() => new Set<string>(), []);
+  const visibleErrorPathSet =
+    showValidationErrors || mode !== "create" ? validation.pathSet : emptyErrorPathSet;
+  const heldEvents = useMemo(
+    () => heldEventsQuery.data?.items ?? [],
+    [heldEventsQuery.data?.items],
   );
+  const gameTitleItems = gameTitlesQuery.data?.items ?? [];
+  const mapItems = mapMastersQuery.data?.items ?? [];
+  const seasonItems = seasonMastersQuery.data?.items ?? [];
+  const selectedHeldEvent = heldEvents.find((event) => event.id === state.values.heldEventId);
+  const selectedGameTitle = gameTitleItems.find((item) => item.id === state.values.gameTitleId);
+  const selectedMap = mapItems.find((item) => item.id === state.values.mapMasterId);
+  const selectedSeason = seasonItems.find((item) => item.id === state.values.seasonMasterId);
   const matchDraftIdForImages = state.values.matchDraftId;
+  const hasSourceImagePanel = mode !== "edit" && Boolean(matchDraftIdForImages);
+
+  useEffect(() => {
+    if (
+      !isInitialized ||
+      hasHandoff ||
+      mode === "edit" ||
+      state.values.heldEventId ||
+      heldEvents.length === 0
+    ) {
+      return;
+    }
+    const latest = heldEvents.toSorted(
+      (left, right) => new Date(right.heldAt).getTime() - new Date(left.heldAt).getTime(),
+    )[0];
+    if (!latest) {
+      return;
+    }
+    dispatch({
+      patch: {
+        heldEventId: latest.id,
+        matchNoInEvent: latest.matchCount + 1,
+        playedAt: latest.heldAt,
+      },
+      type: "patch_root",
+    });
+  }, [hasHandoff, heldEvents, isInitialized, mode, state.values.heldEventId]);
 
   const canCancelDraft =
     mode !== "edit" &&
@@ -238,102 +289,89 @@ export function MatchWorkspacePage({
     });
   };
 
+  const pageTitle =
+    mode === "review" ? "OCR下書き確認" : mode === "edit" ? "試合を編集" : "試合の新規作成";
+  const pageDescription =
+    mode === "edit"
+      ? "確定済みの試合記録を編集します。保存後は一覧と出力に反映されます。"
+      : mode === "review"
+        ? `OCR結果を確認して、開催履歴と4人分の結果を確定します。ステータス: ${reviewStatusLabel(reviewStatus)}`
+        : "開催履歴と4人分の結果を入力して、確定前チェックへ進みます。";
+
   if (mode === "edit" && isInitialQueryLoading(matchDetailQuery)) {
-    return <p className="p-8 text-[var(--color-text-secondary)]">読み込み中...</p>;
+    return (
+      <PageFrame>
+        <p className="text-[var(--color-text-secondary)]">読み込み中...</p>
+      </PageFrame>
+    );
   }
 
   if (mode === "edit" && shouldShowBlockingQueryError(matchDetailQuery)) {
     return (
-      <div className="p-8">
-        <p className="text-[var(--color-danger)]">試合が見つかりませんでした</p>
-        <Link className="text-[var(--color-action)] hover:underline" to="/matches">
-          一覧に戻る
+      <PageFrame>
+        <Notice tone="danger" title="試合が見つかりませんでした">
+          一覧に戻って、対象の試合を選び直してください。
+        </Notice>
+        <Link to="/matches">
+          <Button variant="secondary">試合一覧へ戻る</Button>
         </Link>
-      </div>
+      </PageFrame>
     );
   }
 
   return (
-    <main className="mx-auto max-w-[1440px] px-4 py-8 sm:px-6 lg:px-8">
+    <PageFrame className="gap-5" width="workspace">
       <LiveRegion message={notice || validationMessage} />
 
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className={labelClass}>
-            {mode === "review"
-              ? "Match Review Workspace"
-              : mode === "edit"
-                ? "Match Edit Workspace"
-                : "Match Create Workspace"}
-          </p>
-          <h1 className="mt-1 text-3xl font-semibold text-balance text-[var(--color-text-primary)]">
-            {mode === "review"
-              ? "OCR下書き確認"
-              : mode === "edit"
-                ? "試合を編集"
-                : "試合の新規作成"}
-          </h1>
-          <p className="mt-2 text-sm text-pretty text-[var(--color-text-secondary)]">
-            1試合フォームを共通基盤で処理します。ステータス: {reviewStatusLabel(reviewStatus)}
-          </p>
-          {useSampleDrafts ? (
-            <p className="mt-2 inline-flex rounded-full border border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18 px-3 py-1 text-sm font-semibold text-[var(--color-text-primary)]">
-              開発用サンプル下書きで表示中
-            </p>
-          ) : null}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link
-            className="text-sm font-semibold text-[var(--color-action)] hover:underline"
-            to="/matches"
-          >
-            ← 試合一覧へ戻る
-          </Link>
-          {canCancelDraft ? (
-            <Button
-              disabled={isMutating}
-              variant="danger"
-              onClick={() => setCancelDraftConfirmOpen(true)}
-            >
-              {cancelDraftMutation.isPending ? "削除中..." : "下書きを削除"}
-            </Button>
-          ) : null}
-          {mode === "review" && returnTo ? (
-            <Button variant="secondary" onClick={handleNavigateToMasters}>
-              マスタ管理へ
-            </Button>
-          ) : null}
-        </div>
-      </header>
+      <PageHeader
+        description={
+          <>
+            {pageDescription}
+            {useSampleDrafts ? (
+              <span className="mt-2 block w-fit rounded-full border border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18 px-3 py-1 text-sm font-semibold text-[var(--color-text-primary)]">
+                開発用サンプル下書きで表示中
+              </span>
+            ) : null}
+          </>
+        }
+        eyebrow="試合記録"
+        title={pageTitle}
+        actions={
+          <>
+            {canCancelDraft ? (
+              <AlertDialog
+                cancelLabel="キャンセル"
+                confirmLabel={cancelDraftMutation.isPending ? "削除中..." : "削除する"}
+                description="この確定前の下書きを削除します。元に戻せません。"
+                open={cancelDraftConfirmOpen}
+                title="下書きを削除しますか？"
+                trigger={
+                  <Button
+                    disabled={isMutating}
+                    variant="danger"
+                    onClick={() => setCancelDraftConfirmOpen(true)}
+                  >
+                    {cancelDraftMutation.isPending ? "削除中..." : "下書きを削除"}
+                  </Button>
+                }
+                onConfirm={handleCancelDraftConfirmed}
+                onOpenChange={setCancelDraftConfirmOpen}
+              />
+            ) : null}
+            {mode === "review" && returnTo ? (
+              <Button variant="secondary" onClick={handleNavigateToMasters}>
+                マスタ管理へ
+              </Button>
+            ) : null}
+          </>
+        }
+      />
 
       {baseErrors.map((error) => (
-        <div
-          key={`${error.status}-${error.detail}`}
-          className="mt-4 rounded-[var(--radius-md)] border border-[var(--color-danger)]/50 bg-[var(--color-danger)]/10 p-4 text-[var(--color-text-primary)]"
-          role="alert"
-        >
-          <strong>{error.title}</strong>
-          <p className="mt-1 text-sm">{error.detail}</p>
-        </div>
+        <Notice key={`${error.status}-${error.detail}`} tone="danger" title={error.title}>
+          {error.detail}
+        </Notice>
       ))}
-
-      {notice ? (
-        <div
-          className="momo-safe-top momo-safe-right fixed z-[var(--z-toast)] max-w-sm rounded-[var(--radius-lg)] border border-[var(--color-warning)]/65 bg-[var(--color-surface)] p-3 text-sm text-[var(--color-text-primary)] shadow-sm"
-          role="status"
-        >
-          <div className="flex items-start justify-between gap-2">
-            <p>{notice}</p>
-            <button
-              className="text-xs text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-              type="button"
-              onClick={() => setNotice("")}
-            >
-              閉じる
-            </button>
-          </div>
-        </div>
-      ) : null}
 
       {isOcrRunningBlocked ? (
         <Card className="mt-5">
@@ -365,11 +403,12 @@ export function MatchWorkspacePage({
         <>
           <MatchSetupSection
             createEventPending={createEventMutation.isPending}
+            errorPathSet={visibleErrorPathSet}
             eventDraftValue={eventDraftValue}
-            gameTitleItems={gameTitlesQuery.data?.items}
+            gameTitleItems={gameTitleItems}
             heldEvents={heldEventsQuery.data?.items ?? []}
-            mapItems={mapMastersQuery.data?.items}
-            seasonItems={seasonMastersQuery.data?.items}
+            mapItems={mapItems}
+            seasonItems={seasonItems}
             values={state.values}
             onCreateEvent={() =>
               createEventMutation.mutate({
@@ -400,20 +439,17 @@ export function MatchWorkspacePage({
             </Card>
           ) : null}
 
-          <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] xl:grid-cols-[minmax(0,1fr)_26rem]">
+          <div
+            className={cn(
+              "mt-4 grid gap-4",
+              hasSourceImagePanel
+                ? "xl:grid-cols-[minmax(0,1fr)_24rem] 2xl:grid-cols-[minmax(0,1fr)_28rem]"
+                : "",
+            )}
+          >
             <Card className="p-4">
-              {mode === "review" ? (
-                <details className="mb-4 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
-                  <summary className="cursor-pointer text-sm font-semibold text-[var(--color-text-primary)]">
-                    OCR読み取り状況を確認
-                  </summary>
-                  <p className="mt-2 text-xs text-[var(--color-text-secondary)]">
-                    緑=高信頼OCR / 黄=要確認 / 金=手修正
-                  </p>
-                </details>
-              ) : null}
               <ScoreGrid
-                errorPathSet={validation.pathSet}
+                errorPathSet={visibleErrorPathSet}
                 incidentByPlayOrder={workspaceData?.incidentByPlayOrder}
                 lastSyncedPlayerIndex={state.lastSyncedPlayerIndex}
                 originalPlayers={workspaceData?.originalPlayers}
@@ -440,7 +476,7 @@ export function MatchWorkspacePage({
               />
             </Card>
 
-            {mode !== "edit" && matchDraftIdForImages ? (
+            {hasSourceImagePanel && matchDraftIdForImages ? (
               <SourceImagePanel
                 loading={sourceImageQuery.isLoading}
                 preferredKind={preferredImageKind}
@@ -459,7 +495,7 @@ export function MatchWorkspacePage({
 
           <MatchFormActions
             actionLabel={mode === "edit" ? "保存" : "確定前チェックへ進む"}
-            disabled={!validation.success}
+            disabled={false}
             message={
               validation.success
                 ? "確定前チェックへ進めます"
@@ -469,9 +505,11 @@ export function MatchWorkspacePage({
             onPrimaryAction={() => {
               const nextValidation = validateMatchForm(state.values);
               if (!nextValidation.success) {
+                setShowValidationErrors(true);
                 setValidationMessage(nextValidation.firstMessage ?? "入力内容を確認してください");
                 return;
               }
+              setShowValidationErrors(false);
               setValidationMessage("");
               if (mode === "edit") {
                 updateMutation.mutate(state.values);
@@ -485,59 +523,15 @@ export function MatchWorkspacePage({
 
       {confirmOpen ? (
         <MatchConfirmDialog
+          gameTitleName={selectedGameTitle?.name}
           heldEvent={selectedHeldEvent}
+          mapName={selectedMap?.name}
+          seasonName={selectedSeason?.name}
           values={state.values}
           onCancel={() => setConfirmOpen(false)}
           confirmAction={confirmAction}
         />
       ) : null}
-
-      {cancelDraftConfirmOpen ? (
-        <CancelDraftConfirmDialog
-          pending={cancelDraftMutation.isPending}
-          onCancel={() => setCancelDraftConfirmOpen(false)}
-          onConfirm={handleCancelDraftConfirmed}
-        />
-      ) : null}
-    </main>
-  );
-}
-
-function CancelDraftConfirmDialog({
-  onCancel,
-  onConfirm,
-  pending,
-}: {
-  onCancel: () => void;
-  onConfirm: () => void;
-  pending: boolean;
-}) {
-  return (
-    <div
-      aria-labelledby="cancel-draft-confirm-title"
-      aria-modal="true"
-      className="fixed inset-0 z-[var(--z-dialog)] flex items-center justify-center bg-[var(--momo-night-900)]/60 px-4"
-      role="dialog"
-    >
-      <Card className="w-full max-w-md">
-        <h2
-          className="text-lg font-semibold text-[var(--color-text-primary)]"
-          id="cancel-draft-confirm-title"
-        >
-          下書きを削除しますか？
-        </h2>
-        <p className="mt-2 text-sm text-pretty text-[var(--color-text-secondary)]">
-          この確定前の下書きを削除します。元に戻せません。
-        </p>
-        <div className="mt-4 flex justify-end gap-2">
-          <Button disabled={pending} variant="secondary" onClick={onCancel}>
-            キャンセル
-          </Button>
-          <Button disabled={pending} variant="danger" onClick={onConfirm}>
-            {pending ? "削除中..." : "削除する"}
-          </Button>
-        </div>
-      </Card>
-    </div>
+    </PageFrame>
   );
 }

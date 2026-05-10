@@ -4,6 +4,7 @@ import { Component } from "react";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
+import { PageFrame } from "@/shared/ui/layout/PageFrame";
 
 type RouteErrorBoundaryProps = {
   children: ReactNode;
@@ -51,8 +52,8 @@ export class RouteErrorBoundary extends Component<
       const normalized = normalizeUnknownApiError(this.state.error);
       const detail = normalized.detail || normalized.title || this.state.error.message;
       return (
-        <main className="mx-auto max-w-3xl px-4 py-12" role="alert">
-          <Notice tone="danger" title="画面の読み込みに失敗しました">
+        <PageFrame className="py-8 sm:py-12" width="narrow">
+          <Notice className="p-5" role="alert" tone="danger" title="画面の読み込みに失敗しました">
             <p className="text-sm">{detail}</p>
             <div className="mt-3">
               <Button onClick={this.handleReset} variant="secondary">
@@ -60,7 +61,7 @@ export class RouteErrorBoundary extends Component<
               </Button>
             </div>
           </Notice>
-        </main>
+        </PageFrame>
       );
     }
 

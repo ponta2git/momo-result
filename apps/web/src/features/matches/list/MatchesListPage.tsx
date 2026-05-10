@@ -1,6 +1,6 @@
 import { keepPreviousData, useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { AlertTriangle, Download, PenSquare, RefreshCw, ScanLine } from "lucide-react";
-import { useDeferredValue, useMemo, useTransition } from "react";
+import { useDeferredValue, useEffect, useMemo, useTransition } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { MatchesListFilters } from "@/features/matches/list/MatchesListFilters";
@@ -108,18 +108,36 @@ export function MatchesListPage() {
     const views = toMatchListItemViews(matchesSummaryQuery.data?.items ?? [], lookupMaps);
     return summarizeMatchList(views);
   }, [lookupMaps, matchesSummaryQuery.data]);
+  const matchesDataUpdatedAt = matchesQuery.dataUpdatedAt;
+  const summaryDataUpdatedAt = matchesSummaryQuery.dataUpdatedAt;
+  const summaryIsFetching = matchesSummaryQuery.isFetching;
+  const refetchSummary = matchesSummaryQuery.refetch;
+
+  useEffect(() => {
+    if (
+      matchesDataUpdatedAt === 0 ||
+      summaryIsFetching ||
+      matchesDataUpdatedAt <= summaryDataUpdatedAt
+    ) {
+      return;
+    }
+    void refetchSummary();
+  }, [matchesDataUpdatedAt, refetchSummary, summaryDataUpdatedAt, summaryIsFetching]);
 
   const hasFilters = hasMatchListFilters(search);
   const showMatchesLoading = isInitialQueryLoading(matchesQuery);
   const showMatchesError = shouldShowBlockingQueryError(matchesQuery);
   const refreshing = matchesQuery.isFetching || matchesSummaryQuery.isFetching;
-  const isStale = isFilterPending || search !== deferredSearch;
+  const searchSignature = buildMatchListSearchParams(search).toString();
+  const deferredSearchSignature = buildMatchListSearchParams(deferredSearch).toString();
+  const isStale = isFilterPending || searchSignature !== deferredSearchSignature;
 
   return (
     <PageFrame className="gap-5">
       <PageHeader
-        description="OCR中、確定前、確定済みの試合記録を確認します。"
-        title="試合"
+        description="OCR中、確定前、確定済みの試合記録を確認します。開催や作品で絞り込み、出力対象を探します。"
+        eyebrow="試合記録"
+        title="試合一覧"
         actions={
           <>
             <Link to="/ocr/new">
@@ -160,7 +178,6 @@ export function MatchesListPage() {
       />
 
       <MatchesListFilters
-        key={buildMatchListSearchParams(search).toString()}
         gameTitles={gameTitlesQuery.data.items ?? []}
         heldEvents={heldEventsQuery.data.items ?? []}
         initialSearch={search}

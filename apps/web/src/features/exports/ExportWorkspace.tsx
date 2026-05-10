@@ -1,6 +1,3 @@
-import { Link } from "react-router-dom";
-
-import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
@@ -30,15 +27,10 @@ export function ExportWorkspace({
   view,
 }: ExportWorkspaceProps) {
   return (
-    <PageFrame className="max-w-[70rem] gap-5">
+    <PageFrame className="gap-5">
       <PageHeader
-        actions={
-          <Link to="/matches">
-            <Button variant="secondary">試合一覧へ戻る</Button>
-          </Link>
-        }
         description="確定済み試合を固定列順で書き出します。OCR中・確定前の作業は出力対象外です。"
-        eyebrow="Export Gate"
+        eyebrow="出力"
         title="CSV / TSV 出力"
       />
 
@@ -53,7 +45,7 @@ export function ExportWorkspace({
           <div>
             <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">出力条件</h2>
             <p className="mt-1 text-sm leading-6 text-[var(--color-text-secondary)]">
-              集計に渡す範囲切符を作ります。条件を変えるとURLも共有可能な形で更新されます。
+              書き出す範囲とファイル形式を選びます。条件を変えるとURLも共有可能な形で更新されます。
             </p>
           </div>
 

@@ -42,6 +42,16 @@ function renderCaptureRoute() {
   );
 }
 
+async function startOcrAllowingPartialTray() {
+  await userEvent.click(screen.getByRole("button", { name: "OCRを開始して試合一覧へ" }));
+  expect(
+    await screen.findByText(
+      "3種類すべての画像は揃っていません。続行する場合はもう一度OCR開始を押してください。",
+    ),
+  ).toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "不足したままOCR開始" }));
+}
+
 describe("OcrCapturePage", () => {
   beforeEach(() => {
     queryClient = createTestQueryClient();
@@ -74,12 +84,12 @@ describe("OcrCapturePage", () => {
     expect(await screen.findAllByRole("option", { name: "ログイン後に読み込みます" })).toHaveLength(
       3,
     );
-    expect(screen.getByLabelText("作品")).toBeDisabled();
+    expect(screen.getByLabelText(/作品/u)).toBeDisabled();
     expect(authRequests).toBe(0);
 
     await userEvent.selectOptions(await screen.findByLabelText("Dev User"), "account_ponta");
 
-    expect(await screen.findByLabelText("作品")).toBeEnabled();
+    expect(await screen.findByLabelText(/作品/u)).toBeEnabled();
     expect(screen.getByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
     expect(authRequests).toBe(1);
   });
@@ -113,9 +123,9 @@ describe("OcrCapturePage", () => {
     renderCaptureRoute();
 
     expect(await screen.findByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
-    const input = await screen.findByLabelText("撮影台の画像をアップロード");
+    const input = await screen.findByLabelText("OCRの画像をアップロード");
     await userEvent.upload(input, new File(["image"], "assets.png", { type: "image/png" }));
-    await userEvent.click(screen.getByRole("button", { name: "OCRを開始して試合一覧へ" }));
+    await startOcrAllowingPartialTray();
 
     expect(await screen.findByText("matches-page")).toBeInTheDocument();
     const localStorageValues = Array.from({ length: window.localStorage.length }, (_, index) => {
@@ -176,14 +186,14 @@ describe("OcrCapturePage", () => {
     renderCaptureRoute();
 
     expect(await screen.findByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
-    const input = await screen.findByLabelText("撮影台の画像をアップロード");
+    const input = await screen.findByLabelText("OCRの画像をアップロード");
     await userEvent.upload(input, new File(["first"], "first.png", { type: "image/png" }));
     await userEvent.upload(input, new File(["second"], "second.png", { type: "image/png" }));
     await userEvent.click(screen.getAllByRole("button", { name: "次の分類へ" })[0]!);
     expect(screen.getByAltText("総資産プレビュー")).toHaveAttribute("src", "blob:second.png");
     expect(screen.getByAltText("収益プレビュー")).toHaveAttribute("src", "blob:first.png");
 
-    await userEvent.click(screen.getByRole("button", { name: "OCRを開始して試合一覧へ" }));
+    await startOcrAllowingPartialTray();
 
     await waitFor(() => expect(createdJobs).toHaveLength(2));
     expect(createdJobs).toEqual([
@@ -231,9 +241,9 @@ describe("OcrCapturePage", () => {
     renderCaptureRoute();
 
     expect(await screen.findByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
-    const input = await screen.findByLabelText("撮影台の画像をアップロード");
+    const input = await screen.findByLabelText("OCRの画像をアップロード");
     await userEvent.upload(input, new File(["image"], "assets.png", { type: "image/png" }));
-    await userEvent.click(screen.getByRole("button", { name: "OCRを開始して試合一覧へ" }));
+    await startOcrAllowingPartialTray();
 
     await waitFor(() => expect(cancelledDraftIds).toEqual(["draft-created-1"]));
     expect(screen.queryByText("matches-page")).not.toBeInTheDocument();
@@ -243,7 +253,7 @@ describe("OcrCapturePage", () => {
     window.localStorage.setItem("momoresult.devUser", "account_ponta");
     renderCaptureRoute();
 
-    const input = await screen.findByLabelText("撮影台の画像をアップロード");
+    const input = await screen.findByLabelText("OCRの画像をアップロード");
     await userEvent.upload(input, new File(["image"], "assets.png", { type: "image/png" }));
 
     expect(screen.queryByRole("button", { name: "下書きを確認する" })).not.toBeInTheDocument();

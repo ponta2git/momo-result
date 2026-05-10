@@ -1,6 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -21,7 +21,7 @@ describe("DraftReviewPage", () => {
     queryClient = createTestQueryClient();
   });
 
-  it("loads OCR drafts and blocks confirmation until held event is selected", async () => {
+  it("loads OCR drafts and opens confirmation after validation passes", async () => {
     window.localStorage.setItem("momoresult.devUser", "account_ponta");
 
     render(
@@ -38,8 +38,10 @@ describe("DraftReviewPage", () => {
     expect(await screen.findByRole("heading", { name: "OCR下書き確認" })).toBeInTheDocument();
     expect(await screen.findByDisplayValue("あかねまみ")).toBeInTheDocument();
 
-    expect(screen.getByRole("button", { name: "確定前チェックへ進む" })).toBeDisabled();
-    expect(screen.getByText("開催履歴を選択してください")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "確定前チェックへ進む" }));
+    expect(
+      await screen.findByRole("heading", { name: "この内容で確定しますか？" }),
+    ).toBeInTheDocument();
   });
 
   it("keeps held event creation collapsed until requested", async () => {
@@ -92,14 +94,10 @@ describe("DraftReviewPage", () => {
     await userEvent.click(screen.getByText("一覧にない開催履歴を追加"));
     await userEvent.click(screen.getByRole("button", { name: "作成して選択" }));
 
-    const heldEventSelect = screen.getByLabelText("開催履歴") as HTMLSelectElement;
+    const heldEventSelect = screen.getByLabelText(/開催履歴/u) as HTMLSelectElement;
     await waitFor(() => expect(heldEventSelect).toHaveValue("held-created"));
     expect([...heldEventSelect.options].map((option) => option.value)).toContain("held-created");
-
-    const toast = await screen.findByRole("status");
-    expect(toast).toHaveTextContent(/開催履歴/);
-    await userEvent.click(within(toast).getByRole("button", { name: "閉じる" }));
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect((await screen.findAllByText(/開催履歴（/u)).length).toBeGreaterThan(0);
   });
 
   it("renders the development sample drafts without OCR worker data", async () => {
@@ -124,11 +122,12 @@ describe("DraftReviewPage", () => {
       matchSetupHeading.compareDocumentPosition(playerResultsHeading) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    expect(screen.getByText(/この結果をどの開催履歴・作品として保存するか/)).toBeInTheDocument();
-    expect(screen.getByText("OCR読み取り状況を確認")).toBeInTheDocument();
+    expect(screen.getByText(/この結果をどの開催履歴・作品として保存するか/u)).toBeInTheDocument();
     expect(await screen.findByDisplayValue("あかねまみ")).toBeInTheDocument();
     expect(await screen.findByDisplayValue("15420")).toBeInTheDocument();
-    expect(screen.getByText(/緑=高信頼OCR/)).toBeInTheDocument();
+    expect(screen.queryByText("OCR読み取り状況を確認")).not.toBeInTheDocument();
+    expect(screen.queryByText(/緑=高信頼OCR/u)).not.toBeInTheDocument();
+    expect(screen.getByText(/事件簿はEnterで横方向に移動します/u)).toBeInTheDocument();
   });
 
   it("allows clearing and retyping numeric result cells without prefixing zero", async () => {

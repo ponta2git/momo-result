@@ -40,21 +40,19 @@ describe("MastersPage", () => {
     expect(screen.getByRole("heading", { name: "作品マスタ" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "マップマスタ" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "シーズンマスタ" })).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { name: "事件簿マスタ（読み取り専用）" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "事件簿" })).toBeInTheDocument();
   });
 
   it("creates a new game title and selects it", async () => {
     window.localStorage.setItem("momoresult.devUser", "account_ponta");
     renderPage();
 
-    expect(await screen.findByRole("button", { name: /桃太郎電鉄2/ })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /桃太郎電鉄2/u })).toBeInTheDocument();
 
     await userEvent.type(screen.getByPlaceholderText("例: 桃太郎電鉄2"), "桃太郎電鉄ワールド");
     await userEvent.click(screen.getByRole("button", { name: "作品を追加" }));
 
-    expect(await screen.findByRole("button", { name: /桃太郎電鉄ワールド/ })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /桃太郎電鉄ワールド/u })).toBeInTheDocument();
   });
 
   it("invalidates consumer-facing master caches after creating a game title", async () => {
@@ -63,7 +61,7 @@ describe("MastersPage", () => {
     queryClient.setQueryData(["game-titles"], { items: [] });
     renderPage();
 
-    expect(await screen.findByRole("button", { name: /桃太郎電鉄2/ })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /桃太郎電鉄2/u })).toBeInTheDocument();
 
     await userEvent.type(screen.getByPlaceholderText("例: 桃太郎電鉄2"), "桃太郎電鉄ワールド");
     await userEvent.click(screen.getByRole("button", { name: "作品を追加" }));
@@ -92,7 +90,7 @@ describe("MastersPage", () => {
     );
 
     renderPage();
-    expect(await screen.findByRole("button", { name: /桃太郎電鉄2/ })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /桃太郎電鉄2/u })).toBeInTheDocument();
 
     await userEvent.type(screen.getByPlaceholderText("例: 桃太郎電鉄2"), "桃鉄DX");
     await userEvent.click(screen.getByRole("button", { name: "作品を追加" }));
@@ -109,6 +107,7 @@ describe("MastersPage", () => {
     window.localStorage.setItem("momoresult.devUser", "account_ponta");
     renderPage();
 
+    await userEvent.click(await screen.findByRole("button", { name: "事件簿" }));
     expect(await screen.findByText("目的地")).toBeInTheDocument();
     expect(screen.getByText("プラス駅")).toBeInTheDocument();
     expect(screen.getByText("マイナス駅")).toBeInTheDocument();
@@ -121,7 +120,7 @@ describe("MastersPage", () => {
     window.localStorage.setItem("momoresult.devUser", "account_ponta");
     renderPage();
 
-    expect(await screen.findByRole("button", { name: /桃太郎電鉄2/ })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /桃太郎電鉄2/u })).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "作品を編集" }));
     const nameInput = screen.getByDisplayValue("桃太郎電鉄2");
@@ -129,13 +128,14 @@ describe("MastersPage", () => {
     await userEvent.type(nameInput, "桃太郎電鉄2 DX");
     await userEvent.click(screen.getByRole("button", { name: "保存" }));
 
-    expect(await screen.findByRole("button", { name: /桃太郎電鉄2 DX/ })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /桃太郎電鉄2 DX/u })).toBeInTheDocument();
   });
 
   it("creates and deletes member aliases", async () => {
     window.localStorage.setItem("momoresult.devUser", "account_ponta");
     renderPage();
 
+    await userEvent.click(await screen.findByRole("button", { name: "メンバー名寄せ" }));
     expect(
       await screen.findByRole("heading", { name: "プレイヤー名エイリアス" }),
     ).toBeInTheDocument();
@@ -204,7 +204,7 @@ describe("MastersPage", () => {
     );
 
     expect(await screen.findByRole("button", { name: "元の入力画面へ戻る" })).toBeInTheDocument();
-    expect(screen.getByText(/戻り先情報を引き継いでいます/)).toBeInTheDocument();
+    expect(screen.getByText(/戻り先情報を引き継いでいます/u)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "戻り先を確認" })).toHaveAttribute(
       "href",
       expect.stringContaining("handoffId="),

@@ -30,7 +30,7 @@ export function RootRedirect() {
   }
 
   if (auth.isAuthenticated) {
-    return <Navigate to="/matches" replace />;
+    return <Navigate to="/held-events" replace />;
   }
 
   return <Navigate to="/login" replace />;
@@ -46,7 +46,7 @@ export function PublicOnlyRoute({ children }: { children: ReactNode }) {
 
   if (auth.isAuthenticated) {
     const next = searchParams.get("next");
-    const destination = next && next.startsWith("/") ? next : "/matches";
+    const destination = next && next.startsWith("/") ? next : "/held-events";
     return <Navigate to={destination} replace />;
   }
 

@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
 
 import { getOcrDraft } from "@/features/ocrCapture/api";
 import type { OcrDraftResponse } from "@/features/ocrCapture/api";
@@ -24,6 +23,7 @@ import { Button } from "@/shared/ui/actions/Button";
 import { LiveRegion } from "@/shared/ui/feedback/LiveRegion";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { showToast } from "@/shared/ui/feedback/Toast";
+import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 type SlotWatcherProps = {
@@ -70,20 +70,18 @@ const panelTitleClass = "text-lg font-semibold text-[var(--color-text-primary)]"
 
 const panelLeadClass = "mt-1 text-sm leading-6 text-[var(--color-text-secondary)]";
 
-const linkButtonClass =
-  "inline-flex min-h-10 items-center rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-surface-subtle)]";
-
 export function OcrCapturePage() {
   const [setup, setSetup] = useState<SetupFormValues>(defaultSetupValues);
   const [notice, setNotice] = useState("");
+  const [partialStartAcknowledged, setPartialStartAcknowledged] = useState(false);
 
   const { auth, gameTitlesQuery, hints } = useOcrCaptureQueries(setup.gameTitleId);
   const flow = useOcrCaptureDraftFlow();
   const submission = useOcrCaptureMutations(hints);
 
-  function notify(message: string) {
+  function notify(message: string, tone: "info" | "success" | "warning" = "info") {
     setNotice(message);
-    showToast({ title: message, tone: "info" });
+    showToast({ title: message, tone });
   }
 
   function handleValidationError(message: string) {
@@ -91,6 +89,14 @@ export function OcrCapturePage() {
   }
 
   async function handleStartOcr() {
+    if (ocrReadyCount < slotDefinitions.length && !partialStartAcknowledged) {
+      setPartialStartAcknowledged(true);
+      notify(
+        "3種類すべての画像は揃っていません。続行する場合はもう一度OCR開始を押してください。",
+        "warning",
+      );
+      return;
+    }
     const selectedGameTitle = gameTitlesQuery.data?.items?.find(
       (item) => item.id === setup.gameTitleId,
     );
@@ -107,6 +113,7 @@ export function OcrCapturePage() {
     (slot) => slot.file && ["selected", "failed", "cancelled"].includes(slot.status),
   ).length;
   const hasWorkingSlot = flow.slots.some((slot) => isWorkingStatus(slot.status));
+  const slotsFull = flow.slots.every((slot) => Boolean(slot.file));
   const selectedSlotLabels = slotDefinitions
     .filter((definition) =>
       flow.slots.some(
@@ -118,18 +125,17 @@ export function OcrCapturePage() {
     )
     .map((definition) => definition.label);
 
+  useEffect(() => {
+    setPartialStartAcknowledged(false);
+  }, [ocrReadyCount]);
+
   return (
-    <div className="grid gap-5">
-      <LiveRegion message={notice || submission.status} />
+    <PageFrame className="gap-5" width="workspace">
+      <LiveRegion message={notice} />
       <PageHeader
         eyebrow="OCR"
         title="OCR取り込み"
-        description="試合を選び、画像を分類して、OCRジョブだけを開始します。結果待ちは試合一覧で扱います。"
-        actions={
-          <Link className={linkButtonClass} to="/matches">
-            試合一覧へ戻る
-          </Link>
-        }
+        description="試合条件を選び、総資産・収益・事件簿の画像を分類してOCRを開始します。結果待ちは試合一覧で扱います。"
       />
 
       {auth.error ? (
@@ -145,101 +151,106 @@ export function OcrCapturePage() {
         </div>
       ) : null}
 
-      <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(21rem,0.44fr)]">
-        <div className={panelClass}>
-          <div className="mb-4">
-            <h2 className={panelTitleClass}>試合設定</h2>
-            <p className={panelLeadClass}>OCR profileと後続の確認画面で使う最小情報です。</p>
-          </div>
-          <SetupPanel
-            value={setup}
-            onChange={setSetup}
-            enabled={auth.ready}
-            authMemberId={auth.memberId}
-          />
-        </div>
-
-        <aside className="grid gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-4">
-          <h2 className={panelTitleClass}>開始後</h2>
-          <div className="grid gap-2 text-sm leading-6 text-[var(--color-text-secondary)]">
-            <p>OCR完了は待ちません。</p>
-            <p>OCR中の作業として試合一覧へ戻ります。</p>
-            <p>3枚未満でも開始できます。</p>
-          </div>
-          <div className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-xs leading-5 text-[var(--color-text-secondary)]">
-            元画像の本体やIDはブラウザ保存せず、サーバー側の作業単位へ紐づけます。
-          </div>
-        </aside>
-      </section>
-
-      <section className={panelClass}>
-        <div className="mb-4">
-          <h2 className={panelTitleClass}>画像を入れる</h2>
-          <p className={panelLeadClass}>撮影または単体画像の追加で、空いている分類へ配置します。</p>
-        </div>
+      <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_26rem] xl:items-start">
         <div className="grid gap-4">
+          <section className={panelClass}>
+            <div className="mb-4">
+              <h2 className={panelTitleClass}>1. 試合設定</h2>
+              <p className={panelLeadClass}>
+                OCRの読み取り方式と、後続の確認画面で使う開催情報を先に選びます。
+              </p>
+            </div>
+            <SetupPanel
+              value={setup}
+              onChange={setSetup}
+              enabled={auth.ready}
+              authMemberId={auth.memberId}
+            />
+          </section>
+
+          <section className={panelClass}>
+            <div className="mb-4">
+              <h2 className={panelTitleClass}>2. 画像を入れる</h2>
+              <p className={panelLeadClass}>
+                撮影または画像追加で、空いている分類トレイへ自動配置します。分類が違う場合は右のトレイで入れ替えます。
+              </p>
+            </div>
+            <div className="grid gap-4">
+              <CameraCapture
+                disabled={slotsFull}
+                slotLabel="OCR"
+                onSelect={(file, source) => flow.handleAddImage(file, source, notify)}
+                onValidationError={handleValidationError}
+              />
+              <div className="flex flex-wrap items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
+                <ImageInput
+                  disabled={slotsFull}
+                  slotLabel="OCR"
+                  onSelect={(file, source) => flow.handleAddImage(file, source, notify)}
+                  onValidationError={handleValidationError}
+                />
+                <p className="text-xs text-[var(--color-text-secondary)]">
+                  {slotsFull
+                    ? "分類トレイが埋まっているため、追加アップロードはできません。"
+                    : "カメラが使えない場合は画像ファイルを追加してください。"}
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section className="momo-safe-bottom flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-lg)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-4 shadow-sm">
+            <div>
+              <p className="text-sm font-semibold text-[var(--color-text-primary)]">
+                {ocrReadyCount === 0 ? "分類トレイに画像を置いてください" : "OCRを開始できます"}
+              </p>
+              <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+                {selectedSlotLabels.length > 0
+                  ? `送信対象: ${selectedSlotLabels.join(" / ")}`
+                  : "画像は1枚から開始できます。OCR完了は待たず、試合一覧で状態を確認します。"}
+              </p>
+              {partialStartAcknowledged && ocrReadyCount < slotDefinitions.length ? (
+                <p className="mt-2 text-sm font-semibold text-[var(--color-review)]">
+                  画像が{ocrReadyCount}
+                  件だけ選択されています。不足したまま進める場合は、もう一度開始してください。
+                </p>
+              ) : null}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-2 text-sm font-semibold text-[var(--color-text-primary)]">
+                {ocrReadyCount === 0 ? "画像未選択" : `送信対象 ${ocrReadyCount}件`}
+              </span>
+              <Button
+                onClick={handleStartOcr}
+                disabled={ocrReadyCount === 0 || hasWorkingSlot || submission.isSubmitting}
+              >
+                {partialStartAcknowledged && ocrReadyCount < slotDefinitions.length
+                  ? "不足したままOCR開始"
+                  : "OCRを開始して試合一覧へ"}
+              </Button>
+              <Button variant="secondary" onClick={() => flow.handleResetAll(notify)}>
+                画像を全消去
+              </Button>
+            </div>
+          </section>
+        </div>
+
+        <aside className="grid gap-3 xl:sticky xl:top-20">
           <div>
-            <CameraCapture
-              slotLabel="撮影台"
-              onSelect={(file, source) => flow.handleAddImage(file, source, notify)}
-              onValidationError={handleValidationError}
-            />
-          </div>
-          <div className="flex flex-wrap items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
-            <ImageInput
-              slotLabel="撮影台"
-              onSelect={(file, source) => flow.handleAddImage(file, source, notify)}
-              onValidationError={handleValidationError}
-            />
-            <p className="text-xs text-[var(--color-text-secondary)]">
-              カメラが使えない場合は画像ファイルを追加してください。
+            <h2 className={panelTitleClass}>3. 分類トレイ</h2>
+            <p className={panelLeadClass}>
+              トレイ名がOCR種別になります。違っていたらカード内の操作で入れ替えます。
             </p>
           </div>
-        </div>
-      </section>
-
-      <section className="sticky bottom-3 z-[var(--z-sticky)] flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-lg)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-4 shadow-sm">
-        <div>
-          <p className="text-sm font-semibold text-[var(--color-text-primary)]">
-            {ocrReadyCount === 0 ? "分類トレイに画像を置いてください" : "OCRを開始できます"}
-          </p>
-          <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-            {selectedSlotLabels.length > 0
-              ? `送信対象: ${selectedSlotLabels.join(" / ")}`
-              : "画像は1枚から開始できます。"}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-2 text-sm font-semibold text-[var(--color-text-primary)]">
-            {ocrReadyCount === 0 ? "画像未選択" : `送信対象 ${ocrReadyCount}件`}
-          </span>
-          <Button
-            onClick={handleStartOcr}
-            disabled={ocrReadyCount === 0 || hasWorkingSlot || submission.isSubmitting}
-          >
-            OCRを開始して試合一覧へ
-          </Button>
-          <Button variant="secondary" onClick={() => flow.handleResetAll(notify)}>
-            撮影画像を全消去して次の試合へ
-          </Button>
-        </div>
-      </section>
-
-      <section className="grid gap-3">
-        <div>
-          <h2 className={panelTitleClass}>分類トレイ</h2>
-          <p className={panelLeadClass}>
-            各トレイ名がOCR種別になります。違っていたら、カード内の操作で入れ替えます。
-          </p>
-        </div>
-        <CaptureRail
-          slots={flow.slots}
-          drafts={flow.drafts}
-          onClear={(kind) => flow.handleClear(kind, notify)}
-          onDropImage={(source, target) => flow.handleDropImage(source, target, notify)}
-          onMoveImage={(kind, direction) => flow.handleMoveImage(kind, direction, notify)}
-          onManualRefresh={flow.handleManualRefresh}
-        />
+          <CaptureRail
+            layout="stack"
+            slots={flow.slots}
+            drafts={flow.drafts}
+            onClear={(kind) => flow.handleClear(kind, notify)}
+            onDropImage={(source, target) => flow.handleDropImage(source, target, notify)}
+            onMoveImage={(kind, direction) => flow.handleMoveImage(kind, direction, notify)}
+            onManualRefresh={flow.handleManualRefresh}
+          />
+        </aside>
       </section>
 
       {flow.slots.map((slot) => (
@@ -250,6 +261,6 @@ export function OcrCapturePage() {
           onDraft={flow.setDraft}
         />
       ))}
-    </div>
+    </PageFrame>
   );
 }

@@ -1,7 +1,8 @@
 import { useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useActionState, useEffect, useMemo, useOptimistic, useState, useTransition } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
+import { IncidentMasterPanel } from "@/features/masters/IncidentMasterPanel";
 import {
   fetchGameTitles,
   fetchIncidentMasters,
@@ -45,11 +46,18 @@ import { formatApiError, normalizeUnknownApiError } from "@/shared/api/problemDe
 import { shouldShowQueryError } from "@/shared/api/queryErrorState";
 import { useAuth } from "@/shared/auth/useAuth";
 import { Button } from "@/shared/ui/actions/Button";
+import { cn } from "@/shared/ui/cn";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 const sectionClass = "grid gap-4";
+const masterTabs = [
+  { id: "catalog", label: "作品・マップ・シーズン" },
+  { id: "aliases", label: "メンバー名寄せ" },
+  { id: "incidents", label: "事件簿" },
+] as const;
+type MasterTabId = (typeof masterTabs)[number]["id"];
 
 function errorMessage(error: unknown): string | undefined {
   if (!error) {
@@ -93,6 +101,7 @@ export function MastersPage() {
     : "missing";
 
   const [selectedGameTitleId, setSelectedGameTitleId] = useState("");
+  const [activeTab, setActiveTab] = useState<MasterTabId>("catalog");
   const [operationError, setOperationError] = useState<string>();
 
   const gameTitlesQuery = useSuspenseQuery({
@@ -358,9 +367,9 @@ export function MastersPage() {
   return (
     <PageFrame className={sectionClass}>
       <PageHeader
-        eyebrow="Admin"
+        eyebrow="管理"
         title="マスタ管理"
-        description="作品を起点に、マップとシーズンの関係を管理します。"
+        description="作品、OCR読み取り方式、マップ、シーズン、名寄せを管理します。"
         actions={
           returnTo ? (
             <Button
@@ -369,14 +378,7 @@ export function MastersPage() {
             >
               戻る
             </Button>
-          ) : (
-            <Link
-              className="inline-flex min-h-10 items-center rounded-[var(--radius-sm)] border border-[var(--color-border)] px-4 py-2 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-surface-subtle)]"
-              to="/matches"
-            >
-              試合一覧へ
-            </Link>
-          )
+          ) : null
         }
       />
 
@@ -412,76 +414,102 @@ export function MastersPage() {
         </Notice>
       ) : null}
 
-      <MasterRelationBoard
-        gameTitles={optimisticGameTitles}
-        selectedGameTitleId={viewModel.selectedGameTitleId}
-        selectedGameTitleName={viewModel.selectedGameTitle?.name}
-        onSelectGameTitle={setSelectedGameTitleId}
-        onUpdateGameTitle={updateGameTitle}
-        onDeleteGameTitle={(id) => {
-          void deleteWithNotice(async () => {
-            await removeGameTitle(id);
-            if (selectedGameTitleId === id) setSelectedGameTitleId("");
-            await invalidateMasterResourceCaches(
-              queryClient,
-              masterQueryKeys.gameTitles(authScope),
-              "game-titles",
-            );
-          }, "作品の削除に失敗しました");
-        }}
-        gameTitleCreateAction={gameTitleCreateAction}
-        gameTitleCreateError={gameTitleCreateState.error}
-        gameTitleCreateFormKey={gameTitleCreateState.version}
-        gameTitleDefaultLayoutFamily={normalizeLayoutFamily("")}
-        mapMasters={viewModel.selectedMapMasters}
-        onUpdateMapMaster={updateMapMaster}
-        onDeleteMapMaster={(id) => {
-          void deleteWithNotice(async () => {
-            await removeMapMaster(id);
-            await invalidateMasterResourceCaches(
-              queryClient,
-              masterQueryKeys.mapMasters(authScope, viewModel.selectedGameTitleId),
-              "map-masters",
-            );
-          }, "マップの削除に失敗しました");
-        }}
-        mapCreateAction={mapCreateAction}
-        mapCreateError={mapCreateState.error}
-        mapCreateFormKey={mapCreateState.version}
-        seasonMasters={viewModel.selectedSeasonMasters}
-        onUpdateSeasonMaster={updateSeasonMaster}
-        onDeleteSeasonMaster={(id) => {
-          void deleteWithNotice(async () => {
-            await removeSeasonMaster(id);
-            await invalidateMasterResourceCaches(
-              queryClient,
-              masterQueryKeys.seasonMasters(authScope, viewModel.selectedGameTitleId),
-              "season-masters",
-            );
-          }, "シーズンの削除に失敗しました");
-        }}
-        seasonCreateAction={seasonCreateAction}
-        seasonCreateError={seasonCreateState.error}
-        seasonCreateFormKey={seasonCreateState.version}
-        scopedDisabledReason={viewModel.scopedDisabledReason}
-        incidentMasters={incidentMastersQuery.data}
-      />
+      <section
+        aria-label="マスタ管理の表示切替"
+        className="flex flex-wrap gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2"
+      >
+        {masterTabs.map((tab) => (
+          <button
+            key={tab.id}
+            className={cn(
+              "min-h-9 rounded-[var(--radius-sm)] px-3 py-1.5 text-sm font-semibold transition-colors duration-150",
+              activeTab === tab.id
+                ? "bg-[var(--color-surface-selected)] text-[var(--color-text-primary)]"
+                : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-subtle)]",
+            )}
+            type="button"
+            onClick={() => setActiveTab(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </section>
 
-      <MemberAliasPanel
-        aliases={memberAliases}
-        createAction={aliasCreateAction}
-        createError={aliasCreateState.error}
-        createFormKey={aliasCreateState.version}
-        onDelete={(id) => {
-          void deleteWithNotice(async () => {
-            await removeMemberAlias(id);
-            await queryClient.invalidateQueries({
-              queryKey: masterQueryKeys.memberAliases(authScope),
-            });
-          }, "エイリアスの削除に失敗しました");
-        }}
-        onUpdate={updateMemberAlias}
-      />
+      {activeTab === "catalog" ? (
+        <MasterRelationBoard
+          gameTitles={optimisticGameTitles}
+          selectedGameTitleId={viewModel.selectedGameTitleId}
+          selectedGameTitleName={viewModel.selectedGameTitle?.name}
+          onSelectGameTitle={setSelectedGameTitleId}
+          onUpdateGameTitle={updateGameTitle}
+          onDeleteGameTitle={(id) => {
+            void deleteWithNotice(async () => {
+              await removeGameTitle(id);
+              if (selectedGameTitleId === id) setSelectedGameTitleId("");
+              await invalidateMasterResourceCaches(
+                queryClient,
+                masterQueryKeys.gameTitles(authScope),
+                "game-titles",
+              );
+            }, "作品の削除に失敗しました");
+          }}
+          gameTitleCreateAction={gameTitleCreateAction}
+          gameTitleCreateError={gameTitleCreateState.error}
+          gameTitleCreateFormKey={gameTitleCreateState.version}
+          gameTitleDefaultLayoutFamily={normalizeLayoutFamily("")}
+          mapMasters={viewModel.selectedMapMasters}
+          onUpdateMapMaster={updateMapMaster}
+          onDeleteMapMaster={(id) => {
+            void deleteWithNotice(async () => {
+              await removeMapMaster(id);
+              await invalidateMasterResourceCaches(
+                queryClient,
+                masterQueryKeys.mapMasters(authScope, viewModel.selectedGameTitleId),
+                "map-masters",
+              );
+            }, "マップの削除に失敗しました");
+          }}
+          mapCreateAction={mapCreateAction}
+          mapCreateError={mapCreateState.error}
+          mapCreateFormKey={mapCreateState.version}
+          seasonMasters={viewModel.selectedSeasonMasters}
+          onUpdateSeasonMaster={updateSeasonMaster}
+          onDeleteSeasonMaster={(id) => {
+            void deleteWithNotice(async () => {
+              await removeSeasonMaster(id);
+              await invalidateMasterResourceCaches(
+                queryClient,
+                masterQueryKeys.seasonMasters(authScope, viewModel.selectedGameTitleId),
+                "season-masters",
+              );
+            }, "シーズンの削除に失敗しました");
+          }}
+          seasonCreateAction={seasonCreateAction}
+          seasonCreateError={seasonCreateState.error}
+          seasonCreateFormKey={seasonCreateState.version}
+          scopedDisabledReason={viewModel.scopedDisabledReason}
+        />
+      ) : null}
+
+      {activeTab === "aliases" ? (
+        <MemberAliasPanel
+          aliases={memberAliases}
+          createAction={aliasCreateAction}
+          createError={aliasCreateState.error}
+          createFormKey={aliasCreateState.version}
+          onDelete={(id) => {
+            void deleteWithNotice(async () => {
+              await removeMemberAlias(id);
+              await queryClient.invalidateQueries({
+                queryKey: masterQueryKeys.memberAliases(authScope),
+              });
+            }, "エイリアスの削除に失敗しました");
+          }}
+          onUpdate={updateMemberAlias}
+        />
+      ) : null}
+
+      {activeTab === "incidents" ? <IncidentMasterPanel items={incidentMastersQuery.data} /> : null}
 
       {hasInvalidReturnTo ? (
         <Notice tone="warning" title="戻り先を確認できませんでした">

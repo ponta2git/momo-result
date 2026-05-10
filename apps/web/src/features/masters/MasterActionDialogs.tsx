@@ -1,7 +1,7 @@
 import { Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 
-import { layoutFamilies } from "@/shared/api/enums";
+import { layoutFamilies, layoutFamilyLabels } from "@/shared/api/enums";
 import type { LayoutFamily } from "@/shared/api/enums";
 import { formatApiError } from "@/shared/api/problemDetails";
 import { Button } from "@/shared/ui/actions/Button";
@@ -74,7 +74,10 @@ export function MasterEditDialog({
           <input className={inputClass} defaultValue={initialName} name="name" required />
         </Field>
         {showLayoutFamily ? (
-          <Field label="Layout Family">
+          <Field
+            label="OCR読み取り方式"
+            description="作品ごとの画面構造に合わせて、OCRの読み取り方を切り替えます。"
+          >
             <select
               className={inputClass}
               defaultValue={initialLayoutFamily ?? layoutFamilies[0]}
@@ -82,7 +85,7 @@ export function MasterEditDialog({
             >
               {layoutFamilies.map((family) => (
                 <option key={family} value={family}>
-                  {family}
+                  {layoutFamilyLabels[family]}
                 </option>
               ))}
             </select>

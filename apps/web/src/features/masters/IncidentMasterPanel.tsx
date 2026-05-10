@@ -22,13 +22,13 @@ export function IncidentMasterPanel({ items }: IncidentMasterPanelProps) {
         </p>
       </header>
 
-      {!hasExpectedCount ? (
+      {hasExpectedCount ? null : (
         <Notice className="mt-3" tone="warning" title="事件簿マスタ件数を確認してください">
           現在 {items.length} 件です。期待値は6件です。
         </Notice>
-      ) : null}
+      )}
 
-      <ul className="mt-3 grid gap-2">
+      <ul className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {items.map((item) => (
           <li
             key={item.id}
@@ -37,7 +37,6 @@ export function IncidentMasterPanel({ items }: IncidentMasterPanelProps) {
             <span className="line-clamp-2 text-sm font-semibold text-[var(--color-text-primary)]">
               {item.displayName}
             </span>
-            <span className="text-xs text-[var(--color-text-secondary)]">{item.key}</span>
           </li>
         ))}
       </ul>

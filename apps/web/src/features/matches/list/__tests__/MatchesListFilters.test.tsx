@@ -28,8 +28,7 @@ describe("MatchesListFilters", () => {
       />,
     );
 
-    await userEvent.selectOptions(screen.getByLabelText("ソート"), "updated_desc");
-    await userEvent.click(screen.getByRole("button", { name: "絞り込む" }));
+    await userEvent.selectOptions(screen.getByLabelText("並び順"), "updated_desc");
 
     expect(onApply).toHaveBeenCalledWith({
       ...initialSearch,

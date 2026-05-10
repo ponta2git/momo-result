@@ -1,5 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, Download, ListFilter, Plus, RefreshCw, Trash2 } from "lucide-react";
+import {
+  CalendarDays,
+  Download,
+  ListFilter,
+  PenSquare,
+  Plus,
+  RefreshCw,
+  ScanLine,
+  Trash2,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -11,10 +20,12 @@ import { heldEventKeys } from "@/shared/api/queryKeys";
 import { Button } from "@/shared/ui/actions/Button";
 import { DataTable } from "@/shared/ui/data/DataTable";
 import type { DataTableColumn } from "@/shared/ui/data/DataTable";
+import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { LiveRegion } from "@/shared/ui/feedback/LiveRegion";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
+import { showToast } from "@/shared/ui/feedback/Toast";
 import { TextField } from "@/shared/ui/forms/TextField";
 import { Card } from "@/shared/ui/layout/Card";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
@@ -102,6 +113,7 @@ export function HeldEventsPage() {
       setHeldAtDraft(currentLocalIsoMinute());
       setErrorMessage("");
       setNotice(`開催履歴（${formatDateTime(event.heldAt)}）を作成しました。`);
+      showToast({ title: "開催履歴を作成しました。", tone: "success" });
     },
     onError: (error) => {
       setNotice("");
@@ -120,6 +132,7 @@ export function HeldEventsPage() {
       setDeleteTarget(null);
       setErrorMessage("");
       setNotice("開催履歴を削除しました。");
+      showToast({ title: "開催履歴を削除しました。", tone: "success" });
     },
     onError: (error) => {
       setNotice("");
@@ -129,6 +142,7 @@ export function HeldEventsPage() {
   });
 
   const rows = heldEventsQuery.data?.items ?? emptyHeldEvents;
+  const latestEvent = rows[0];
   const totalMatches = useMemo(
     () => rows.reduce((sum, event) => sum + event.matchCount, 0),
     [rows],
@@ -159,20 +173,10 @@ export function HeldEventsPage() {
         ),
       },
       {
-        header: "ID",
-        key: "id",
-        minWidth: "13rem",
-        renderCell: (event) => (
-          <code className="rounded-[var(--radius-xs)] bg-[var(--color-surface-subtle)] px-1.5 py-0.5 text-xs break-all">
-            {event.id}
-          </code>
-        ),
-      },
-      {
         align: "right",
         header: "操作",
         key: "actions",
-        minWidth: "21rem",
+        minWidth: "17rem",
         renderCell: (event) => (
           <div className="flex min-w-0 flex-wrap justify-end gap-2">
             <Link to={`/matches?heldEventId=${encodeURIComponent(event.id)}`}>
@@ -185,15 +189,21 @@ export function HeldEventsPage() {
                 出力
               </Button>
             </Link>
-            <Button
-              disabled={event.matchCount > 0 || deleteMutation.isPending}
-              icon={<Trash2 className="size-4" />}
-              size="sm"
-              variant="danger"
-              onClick={() => setDeleteTarget(event)}
-            >
-              削除
-            </Button>
+            {event.matchCount === 0 ? (
+              <Button
+                disabled={deleteMutation.isPending}
+                icon={<Trash2 className="size-4" />}
+                size="sm"
+                variant="quiet"
+                onClick={() => setDeleteTarget(event)}
+              >
+                削除
+              </Button>
+            ) : (
+              <span className="inline-flex min-h-9 items-center rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-1.5 text-sm font-semibold text-[var(--color-text-secondary)]">
+                試合あり
+              </span>
+            )}
           </div>
         ),
       },
@@ -210,74 +220,58 @@ export function HeldEventsPage() {
       <LiveRegion message={liveMessage} />
       <PageHeader
         actions={
-          <>
-            <Link to="/matches">
-              <Button variant="secondary">試合一覧へ</Button>
-            </Link>
-            <Button
-              icon={<RefreshCw className="size-4" />}
-              pending={heldEventsQuery.isFetching}
-              pendingLabel="更新中..."
-              variant="quiet"
-              onClick={() => void heldEventsQuery.refetch()}
-            >
-              最新情報に更新
-            </Button>
-          </>
+          <Button
+            icon={<RefreshCw className="size-4" />}
+            pending={heldEventsQuery.isFetching}
+            pendingLabel="更新中..."
+            variant="quiet"
+            onClick={() => void heldEventsQuery.refetch()}
+          >
+            最新情報に更新
+          </Button>
         }
         description="1夜の開催回を作成し、試合記録やCSV/TSV出力の範囲として使います。"
-        eyebrow="Held Events"
-        meta={
-          <div className="grid gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm">
-            <span className="text-xs font-semibold text-[var(--color-text-secondary)]">
-              登録済み
-            </span>
-            <span className="text-[var(--color-text-primary)] tabular-nums">
-              {rows.length.toLocaleString()}開催 / {totalMatches.toLocaleString()}試合
-            </span>
-          </div>
-        }
+        eyebrow="開催"
         title="開催履歴"
       />
 
-      {notice ? (
-        <Notice tone="success" title="操作が完了しました">
-          {notice}
-        </Notice>
-      ) : null}
       {errorMessage ? (
         <Notice tone="danger" title="操作に失敗しました">
           {errorMessage}
         </Notice>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(20rem,25rem)_minmax(0,1fr)] lg:items-start">
-        <Card className="grid gap-4">
-          <div className="grid gap-1">
-            <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">新しい開催回</h2>
-            <p className="text-sm leading-6 text-[var(--color-text-secondary)]">
-              作成した開催回は、試合作成画面や出力範囲の候補にすぐ反映されます。
+      {latestEvent ? (
+        <Card className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+          <div>
+            <p className="text-xs font-semibold text-[var(--color-text-secondary)]">最新開催</p>
+            <h2 className="mt-1 text-2xl font-semibold text-balance text-[var(--color-text-primary)]">
+              {formatDateTime(latestEvent.heldAt)}
+            </h2>
+            <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
+              現在 {latestEvent.matchCount.toLocaleString()}試合。次は第
+              {(latestEvent.matchCount + 1).toLocaleString()}試合として記録します。
             </p>
           </div>
-          <TextField
-            label="開催日時"
-            type="datetime-local"
-            value={heldAtDraft}
-            onChange={(event) => {
-              setHeldAtDraft(event.target.value);
-            }}
-          />
-          <Button
-            disabled={!heldAtDraft || createMutation.isPending}
-            icon={<Plus className="size-4" />}
-            pending={createMutation.isPending}
-            pendingLabel="作成中..."
-            onClick={() => createMutation.mutate()}
-          >
-            開催履歴を作成
-          </Button>
+          <div className="flex flex-wrap gap-2 md:justify-end">
+            <Link to="/ocr/new">
+              <Button icon={<ScanLine className="size-4" />}>OCR取り込み</Button>
+            </Link>
+            <Link to="/matches/new">
+              <Button icon={<PenSquare className="size-4" />} variant="secondary">
+                手入力
+              </Button>
+            </Link>
+            <Link to={`/matches?heldEventId=${encodeURIComponent(latestEvent.id)}`}>
+              <Button icon={<ListFilter className="size-4" />} variant="secondary">
+                この開催の試合
+              </Button>
+            </Link>
+          </div>
         </Card>
+      ) : null}
 
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
         <Card className="min-w-0">
           <div className="mb-3 flex min-w-0 flex-wrap items-start justify-between gap-3">
             <div>
@@ -285,6 +279,9 @@ export function HeldEventsPage() {
               <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
                 試合がない開催回だけ削除できます。
               </p>
+            </div>
+            <div className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-2 text-sm tabular-nums">
+              {rows.length.toLocaleString()}開催 / {totalMatches.toLocaleString()}試合
             </div>
           </div>
 
@@ -313,57 +310,52 @@ export function HeldEventsPage() {
             />
           )}
         </Card>
+
+        <Card className="grid gap-4">
+          <div className="grid gap-1">
+            <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">新しい開催回</h2>
+            <p className="text-sm leading-6 text-[var(--color-text-secondary)]">
+              summit側で作られない場合に、ここから開催回を追加します。
+            </p>
+          </div>
+          <TextField
+            label="開催日時"
+            type="datetime-local"
+            value={heldAtDraft}
+            onChange={(event) => {
+              setHeldAtDraft(event.target.value);
+            }}
+          />
+          <Button
+            disabled={!heldAtDraft || createMutation.isPending}
+            icon={<Plus className="size-4" />}
+            pending={createMutation.isPending}
+            pendingLabel="作成中..."
+            onClick={() => createMutation.mutate()}
+          >
+            開催履歴を作成
+          </Button>
+        </Card>
       </div>
 
       {deleteTarget ? (
-        <DeleteHeldEventDialog
-          event={deleteTarget}
-          pending={deleteMutation.isPending}
-          onCancel={() => setDeleteTarget(null)}
+        <AlertDialog
+          cancelLabel="キャンセル"
+          confirmLabel={deleteMutation.isPending ? "削除中..." : "削除する"}
+          description={`${formatDateTime(deleteTarget.heldAt)} の開催履歴を削除します。この操作は取り消せません。`}
+          open={Boolean(deleteTarget)}
+          title="開催履歴を削除しますか？"
+          trigger={
+            <button className="sr-only" type="button">
+              削除確認
+            </button>
+          }
           onConfirm={() => deleteMutation.mutate(deleteTarget)}
+          onOpenChange={(open) => {
+            if (!open) setDeleteTarget(null);
+          }}
         />
       ) : null}
     </PageFrame>
-  );
-}
-
-function DeleteHeldEventDialog({
-  event,
-  onCancel,
-  onConfirm,
-  pending,
-}: {
-  event: HeldEventResponse;
-  onCancel: () => void;
-  onConfirm: () => void;
-  pending: boolean;
-}) {
-  return (
-    <div
-      aria-labelledby="delete-held-event-title"
-      aria-modal="true"
-      className="fixed inset-0 z-[var(--z-dialog)] flex items-center justify-center bg-[var(--momo-night-900)]/60 px-4"
-      role="dialog"
-    >
-      <Card className="w-full max-w-md">
-        <h2
-          className="text-lg font-semibold text-[var(--color-text-primary)]"
-          id="delete-held-event-title"
-        >
-          開催履歴を削除しますか？
-        </h2>
-        <p className="mt-2 text-sm text-pretty text-[var(--color-text-secondary)]">
-          {formatDateTime(event.heldAt)} の開催履歴を削除します。この操作は取り消せません。
-        </p>
-        <div className="mt-4 flex justify-end gap-2">
-          <Button disabled={pending} variant="secondary" onClick={onCancel}>
-            キャンセル
-          </Button>
-          <Button disabled={pending} variant="danger" onClick={onConfirm}>
-            {pending ? "削除中..." : "削除する"}
-          </Button>
-        </div>
-      </Card>
-    </div>
   );
 }

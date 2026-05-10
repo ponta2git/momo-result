@@ -56,12 +56,12 @@ describe("app routing", () => {
     expect(router.state.location.pathname).toBe("/login");
   });
 
-  it("redirects / to /matches when authenticated", async () => {
+  it("redirects / to /held-events when authenticated", async () => {
     window.localStorage.setItem("momoresult.devUser", "account_ponta");
     const { router } = renderApp("/");
 
-    expect(await screen.findByRole("heading", { name: "試合" })).toBeInTheDocument();
-    expect(router.state.location.pathname).toBe("/matches");
+    expect(await screen.findByRole("heading", { name: "開催履歴" })).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe("/held-events");
     expect(screen.getByRole("button", { name: "ログアウト" })).toBeInTheDocument();
   });
 
@@ -73,19 +73,19 @@ describe("app routing", () => {
     expect(router.state.location.search).toContain("next=%2Fexports");
   });
 
-  it("redirects /login to /matches when authenticated", async () => {
+  it("redirects /login to /held-events when authenticated", async () => {
     window.localStorage.setItem("momoresult.devUser", "account_ponta");
     const { router } = renderApp("/login");
 
-    expect(await screen.findByRole("heading", { name: "試合" })).toBeInTheDocument();
-    expect(router.state.location.pathname).toBe("/matches");
+    expect(await screen.findByRole("heading", { name: "開催履歴" })).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe("/held-events");
   });
 
   it("logs out from the global nav in dev auth mode", async () => {
     window.localStorage.setItem("momoresult.devUser", "account_ponta");
     const { router } = renderApp("/matches");
 
-    expect(await screen.findByRole("heading", { name: "試合" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "ログアウト" }));
 
     await waitFor(() => {

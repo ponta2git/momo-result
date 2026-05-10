@@ -1,5 +1,3 @@
-import { useState } from "react";
-
 import type {
   MatchListSearch,
   MatchListSort,
@@ -59,10 +57,8 @@ export function MatchesListFilters({
   seasons,
   selectionErrors,
 }: MatchesListFiltersProps) {
-  const [draftSearch, setDraftSearch] = useState(initialSearch);
-
   const seasonOptions = seasons.filter((season) => {
-    return !draftSearch.gameTitleId || season.gameTitleId === draftSearch.gameTitleId;
+    return !initialSearch.gameTitleId || season.gameTitleId === initialSearch.gameTitleId;
   });
   const heldEventsErrorProps = selectionErrors?.heldEvents
     ? { error: selectionErrors.heldEvents }
@@ -72,75 +68,58 @@ export function MatchesListFilters({
     : {};
   const seasonsErrorProps = selectionErrors?.seasons ? { error: selectionErrors.seasons } : {};
 
+  function patchSearch(patch: Partial<MatchListSearch>) {
+    onApply({ ...initialSearch, ...patch });
+  }
+
   return (
     <section className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-      <form
-        className="flex flex-col gap-4"
-        onSubmit={(event) => {
-          event.preventDefault();
-          onApply(draftSearch);
-        }}
-      >
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_16rem]">
-          <div className="flex min-w-0 flex-col gap-3">
+      <div className="grid gap-4">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_16rem] lg:items-end">
+          <div className="min-w-0">
+            <p className="mb-2 text-sm font-semibold text-[var(--color-text-primary)]">状態</p>
             <div className="hidden min-[44rem]:block">
               <SegmentedControl
                 className="w-full"
                 label="状態"
-                onValueChange={(value) =>
-                  setDraftSearch((current) => ({
-                    ...current,
-                    status: value as MatchListStatusFilter,
-                  }))
-                }
+                onValueChange={(value) => patchSearch({ status: value as MatchListStatusFilter })}
                 options={statusOptions}
-                value={draftSearch.status}
+                value={initialSearch.status}
               />
             </div>
             <div className="min-[44rem]:hidden">
               <SegmentedControl
                 asSelect
                 label="状態"
-                onValueChange={(value) =>
-                  setDraftSearch((current) => ({
-                    ...current,
-                    status: value as MatchListStatusFilter,
-                  }))
-                }
+                onValueChange={(value) => patchSearch({ status: value as MatchListStatusFilter })}
                 options={statusOptions}
-                value={draftSearch.status}
+                value={initialSearch.status}
               />
             </div>
           </div>
           <SelectField
-            label="ソート"
+            label="並び順"
             options={sortOptions}
-            value={draftSearch.sort}
+            value={initialSearch.sort}
             onChange={(event) => {
               const value = event.currentTarget.value;
-              setDraftSearch((current) => ({
-                ...current,
-                sort: value as MatchListSort,
-              }));
+              patchSearch({ sort: value as MatchListSort });
             }}
           />
         </div>
 
-        <div className="hidden gap-4 md:grid md:grid-cols-3">
+        <div className="hidden gap-4 md:grid md:grid-cols-[1fr_1fr_1fr_auto] md:items-end">
           <SelectField
             label="開催"
             options={[
               { label: "すべて", value: "" },
               ...heldEvents.map((event) => ({ label: heldEventLabel(event), value: event.id })),
             ]}
-            value={draftSearch.heldEventId}
+            value={initialSearch.heldEventId}
             {...heldEventsErrorProps}
             onChange={(event) => {
               const value = event.currentTarget.value;
-              setDraftSearch((current) => ({
-                ...current,
-                heldEventId: value,
-              }));
+              patchSearch({ heldEventId: value });
             }}
           />
           <SelectField
@@ -149,16 +128,15 @@ export function MatchesListFilters({
               { label: "すべて", value: "" },
               ...gameTitles.map((gameTitle) => ({ label: gameTitle.name, value: gameTitle.id })),
             ]}
-            value={draftSearch.gameTitleId}
+            value={initialSearch.gameTitleId}
             {...gameTitlesErrorProps}
             onChange={(event) => {
               const value = event.currentTarget.value;
-              setDraftSearch((current) => ({
-                ...current,
+              patchSearch({
                 gameTitleId: value,
                 seasonMasterId:
-                  value && current.gameTitleId === value ? current.seasonMasterId : "",
-              }));
+                  value && initialSearch.gameTitleId === value ? initialSearch.seasonMasterId : "",
+              });
             }}
           />
           <SelectField
@@ -167,16 +145,16 @@ export function MatchesListFilters({
               { label: "すべて", value: "" },
               ...seasonOptions.map((season) => ({ label: season.name, value: season.id })),
             ]}
-            value={draftSearch.seasonMasterId}
+            value={initialSearch.seasonMasterId}
             {...seasonsErrorProps}
             onChange={(event) => {
               const value = event.currentTarget.value;
-              setDraftSearch((current) => ({
-                ...current,
-                seasonMasterId: value,
-              }));
+              patchSearch({ seasonMasterId: value });
             }}
           />
+          <Button onClick={onClear} type="button" variant="secondary">
+            条件をリセット
+          </Button>
         </div>
 
         <details className="md:hidden">
@@ -190,14 +168,11 @@ export function MatchesListFilters({
                 { label: "すべて", value: "" },
                 ...heldEvents.map((event) => ({ label: heldEventLabel(event), value: event.id })),
               ]}
-              value={draftSearch.heldEventId}
+              value={initialSearch.heldEventId}
               {...heldEventsErrorProps}
               onChange={(event) => {
                 const value = event.currentTarget.value;
-                setDraftSearch((current) => ({
-                  ...current,
-                  heldEventId: value,
-                }));
+                patchSearch({ heldEventId: value });
               }}
             />
             <SelectField
@@ -206,16 +181,17 @@ export function MatchesListFilters({
                 { label: "すべて", value: "" },
                 ...gameTitles.map((gameTitle) => ({ label: gameTitle.name, value: gameTitle.id })),
               ]}
-              value={draftSearch.gameTitleId}
+              value={initialSearch.gameTitleId}
               {...gameTitlesErrorProps}
               onChange={(event) => {
                 const value = event.currentTarget.value;
-                setDraftSearch((current) => ({
-                  ...current,
+                patchSearch({
                   gameTitleId: value,
                   seasonMasterId:
-                    value && current.gameTitleId === value ? current.seasonMasterId : "",
-                }));
+                    value && initialSearch.gameTitleId === value
+                      ? initialSearch.seasonMasterId
+                      : "",
+                });
               }}
             />
             <SelectField
@@ -224,26 +200,19 @@ export function MatchesListFilters({
                 { label: "すべて", value: "" },
                 ...seasonOptions.map((season) => ({ label: season.name, value: season.id })),
               ]}
-              value={draftSearch.seasonMasterId}
+              value={initialSearch.seasonMasterId}
               {...seasonsErrorProps}
               onChange={(event) => {
                 const value = event.currentTarget.value;
-                setDraftSearch((current) => ({
-                  ...current,
-                  seasonMasterId: value,
-                }));
+                patchSearch({ seasonMasterId: value });
               }}
             />
+            <Button onClick={onClear} type="button" variant="secondary">
+              条件をリセット
+            </Button>
           </div>
         </details>
-
-        <div className="flex flex-wrap gap-2">
-          <Button type="submit">絞り込む</Button>
-          <Button onClick={onClear} type="button" variant="secondary">
-            条件をクリア
-          </Button>
-        </div>
-      </form>
+      </div>
     </section>
   );
 }

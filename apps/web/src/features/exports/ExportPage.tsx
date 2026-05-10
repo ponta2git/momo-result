@@ -26,6 +26,7 @@ import { matchKeys } from "@/features/matches/queryKeys";
 import { listHeldEvents } from "@/shared/api/heldEvents";
 import { listSeasonMasters } from "@/shared/api/masters";
 import { heldEventKeys } from "@/shared/api/queryKeys";
+import { LiveRegion } from "@/shared/ui/feedback/LiveRegion";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
 type ExportPageProps = {
@@ -77,6 +78,9 @@ export function ExportPage({
     const heldEventsById = new Map(
       (heldEventsQuery.data?.items ?? []).map((event) => [event.id, event]),
     );
+    const seasonsById = new Map(
+      (seasonsQuery.data?.items ?? []).map((season) => [season.id, season]),
+    );
     return (matchesQuery.data?.items ?? [])
       .filter((match) => match.kind === "match" && match.status === "confirmed" && match.matchId)
       .map((match) => {
@@ -84,12 +88,12 @@ export function ExportPage({
           ? heldEventsById.get(match.heldEventId)?.heldAt
           : undefined;
         return {
-          description: match.seasonMasterId,
-          label: `${heldAt ? formatDateTime(heldAt) : (match.heldEventId ?? "開催未設定")} / #${match.matchNoInEvent ?? "-"}`,
+          description: seasonsById.get(match.seasonMasterId ?? "")?.name ?? "シーズン未設定",
+          label: `${heldAt ? formatDateTime(heldAt) : "開催未設定"} / 第${match.matchNoInEvent ?? "-"}試合`,
           value: match.matchId ?? "",
         };
       });
-  }, [heldEventsQuery.data, matchesQuery.data]);
+  }, [heldEventsQuery.data, matchesQuery.data, seasonsQuery.data]);
 
   const candidates =
     urlState.scope === "season"
@@ -203,16 +207,23 @@ export function ExportPage({
     setSearchParams(buildExportSearchParams({ format, scope, selectedId }), { replace: true });
   }
 
+  const liveMessage = lastResult?.kind === "success" ? "ダウンロードを開始しました" : "";
+
   return (
-    <ExportWorkspace
-      isPending={mutation.isPending}
-      view={view}
-      onCandidateChange={(selectedId) => updateSearch(urlState.format, urlState.scope, selectedId)}
-      onDownload={() => mutation.mutate()}
-      onFormatChange={(nextFormat) =>
-        updateSearch(nextFormat, urlState.scope, selectedIdForScope(urlState, urlState.scope))
-      }
-      onScopeChange={(nextScope) => updateSearch(urlState.format, nextScope)}
-    />
+    <>
+      <LiveRegion message={liveMessage} />
+      <ExportWorkspace
+        isPending={mutation.isPending}
+        view={view}
+        onCandidateChange={(selectedId) =>
+          updateSearch(urlState.format, urlState.scope, selectedId)
+        }
+        onDownload={() => mutation.mutate()}
+        onFormatChange={(nextFormat) =>
+          updateSearch(nextFormat, urlState.scope, selectedIdForScope(urlState, urlState.scope))
+        }
+        onScopeChange={(nextScope) => updateSearch(urlState.format, nextScope)}
+      />
+    </>
   );
 }

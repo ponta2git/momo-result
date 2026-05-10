@@ -21,7 +21,7 @@ export function MatchesTable({ items, sort, onSortChange }: MatchesTableProps) {
         {
           header: "状態",
           key: "status",
-          minWidth: "13rem",
+          minWidth: "9rem",
           renderCell: (item) => (
             <div className="grid gap-1">
               <StatusRail compact={item.displayStatus === "confirmed"} status={item.status} />
@@ -36,7 +36,7 @@ export function MatchesTable({ items, sort, onSortChange }: MatchesTableProps) {
         {
           header: "開催",
           key: "held",
-          minWidth: "11rem",
+          minWidth: "12rem",
           onSort: () => onSortChange(nextHeldSort(sort)),
           renderCell: (item) => (
             <div className="grid gap-1">
@@ -56,7 +56,7 @@ export function MatchesTable({ items, sort, onSortChange }: MatchesTableProps) {
         {
           header: "作品 / シーズン",
           key: "game",
-          minWidth: "14rem",
+          minWidth: "13rem",
           renderCell: (item) => (
             <div className="grid gap-1">
               <p className="font-medium">{item.gameTitleName ?? "作品未設定"}</p>
@@ -70,8 +70,9 @@ export function MatchesTable({ items, sort, onSortChange }: MatchesTableProps) {
         {
           header: "順位",
           key: "ranks",
+          minWidth: "16rem",
           renderCell: (item) => (
-            <div className="grid gap-1 text-sm">
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
               {item.ranks.length > 0 ? (
                 item.ranks.map((rank) => (
                   <p key={`${item.id}:${rank.memberId}`} className="truncate">
@@ -87,7 +88,7 @@ export function MatchesTable({ items, sort, onSortChange }: MatchesTableProps) {
         {
           header: "更新",
           key: "updated",
-          minWidth: "9rem",
+          minWidth: "10rem",
           onSort: () => onSortChange("updated_desc"),
           renderCell: (item) => (
             <div className="grid gap-1 text-xs">
@@ -103,7 +104,7 @@ export function MatchesTable({ items, sort, onSortChange }: MatchesTableProps) {
         {
           header: "操作",
           key: "actions",
-          minWidth: "10rem",
+          minWidth: "9rem",
           renderCell: (item) => (
             <MatchListActions
               primaryAction={item.primaryAction}

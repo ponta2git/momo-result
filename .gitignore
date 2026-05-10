@@ -22,3 +22,4 @@ docs/frontend-rebuild/
 **/.env
 **/.pnpm-store/
 .serena/cache
+.playwright-mcp

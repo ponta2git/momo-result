@@ -11,7 +11,7 @@ export type DataTableColumn<Row> = {
   key: string;
   minWidth?: string;
   renderCell: (row: Row) => ReactNode;
-  sortDirection?: "asc" | "desc";
+  sortDirection?: "asc" | "desc" | undefined;
   sortable?: boolean;
   onSort?: () => void;
 };
@@ -45,6 +45,15 @@ export function DataTable<Row>({
             {columns.map((column) => (
               <th
                 key={column.key}
+                aria-sort={
+                  column.sortable
+                    ? column.sortDirection === "asc"
+                      ? "ascending"
+                      : column.sortDirection === "desc"
+                        ? "descending"
+                        : "none"
+                    : undefined
+                }
                 className={cn(
                   "border-b border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3 py-2 text-xs font-semibold text-[var(--color-text-secondary)]",
                   alignClass[column.align ?? "left"],

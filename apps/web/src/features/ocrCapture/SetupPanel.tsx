@@ -160,7 +160,11 @@ export function SetupPanel({ value, onChange, enabled = true, authMemberId }: Se
 
   return (
     <form {...getFormProps(form)} action={submitAction} className="grid gap-4 lg:grid-cols-4">
-      <Field label="作品" htmlFor={fields.gameTitleId.id} error={fields.gameTitleId.errors?.[0]}>
+      <Field
+        label="作品（必須）"
+        htmlFor={fields.gameTitleId.id}
+        error={fields.gameTitleId.errors?.[0]}
+      >
         <select
           id={fields.gameTitleId.id}
           name={fields.gameTitleId.name}
@@ -193,7 +197,7 @@ export function SetupPanel({ value, onChange, enabled = true, authMemberId }: Se
       </Field>
 
       <Field
-        label="シーズン"
+        label="シーズン（必須）"
         htmlFor={fields.seasonMasterId.id}
         error={fields.seasonMasterId.errors?.[0]}
         description="OCRには送らず、後続の結果確定で使います。"
@@ -223,7 +227,11 @@ export function SetupPanel({ value, onChange, enabled = true, authMemberId }: Se
         ) : null}
       </Field>
 
-      <Field label="マップ" htmlFor={fields.mapMasterId.id} error={fields.mapMasterId.errors?.[0]}>
+      <Field
+        label="マップ（必須）"
+        htmlFor={fields.mapMasterId.id}
+        error={fields.mapMasterId.errors?.[0]}
+      >
         <select
           id={fields.mapMasterId.id}
           name={fields.mapMasterId.name}
@@ -250,7 +258,7 @@ export function SetupPanel({ value, onChange, enabled = true, authMemberId }: Se
       </Field>
 
       <Field
-        label="オーナー"
+        label="オーナー（必須）"
         htmlFor={fields.ownerMemberId.id}
         error={fields.ownerMemberId.errors?.[0]}
       >

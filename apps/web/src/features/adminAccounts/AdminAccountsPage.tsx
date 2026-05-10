@@ -13,6 +13,7 @@ import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Field } from "@/shared/ui/forms/Field";
+import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 const queryKey = ["admin", "login-accounts"] as const;
@@ -66,9 +67,9 @@ export function AdminAccountsPage() {
   const accounts = accountsQuery.data?.items ?? [];
 
   return (
-    <div className="grid gap-5">
+    <PageFrame className="gap-5">
       <PageHeader
-        eyebrow="Admin"
+        eyebrow="管理"
         title="ログインアカウント管理"
         description="Discordログインできる操作アカウントと管理者権限を管理します。試合参加者とは別の権限です。"
       />
@@ -85,7 +86,7 @@ export function AdminAccountsPage() {
           新規アカウント
         </h2>
         <form
-          className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto]"
+          className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_16rem_auto]"
           onSubmit={(event) => {
             event.preventDefault();
             createMutation.mutate(form);
@@ -141,33 +142,37 @@ export function AdminAccountsPage() {
               ))}
             </select>
           </Field>
-          <div className="flex flex-wrap items-end gap-3">
-            <label className="inline-flex items-center gap-2 text-sm">
-              <input
-                checked={form.loginEnabled}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    loginEnabled: event.target.checked,
-                  }))
-                }
-                type="checkbox"
-              />
-              ログイン許可
-            </label>
-            <label className="inline-flex items-center gap-2 text-sm">
-              <input
-                checked={form.isAdmin}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    isAdmin: event.target.checked,
-                  }))
-                }
-                type="checkbox"
-              />
-              管理者
-            </label>
+          <Field label="権限">
+            <div className="flex min-h-10 flex-wrap items-center gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
+              <label className="inline-flex items-center gap-2 text-sm">
+                <input
+                  checked={form.loginEnabled}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      loginEnabled: event.target.checked,
+                    }))
+                  }
+                  type="checkbox"
+                />
+                ログイン許可
+              </label>
+              <label className="inline-flex items-center gap-2 text-sm">
+                <input
+                  checked={form.isAdmin}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      isAdmin: event.target.checked,
+                    }))
+                  }
+                  type="checkbox"
+                />
+                管理者
+              </label>
+            </div>
+          </Field>
+          <div className="flex items-end">
             <Button pending={createMutation.isPending} pendingLabel="追加中" type="submit">
               追加
             </Button>
@@ -175,8 +180,8 @@ export function AdminAccountsPage() {
         </form>
       </section>
 
-      <section className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]">
-        <table className="w-full text-left text-sm">
+      <section className="overflow-x-auto rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]">
+        <table className="w-full min-w-[44rem] text-left text-sm">
           <thead className="bg-[var(--color-surface-subtle)] text-[var(--color-text-secondary)]">
             <tr>
               <th className="px-3 py-2">表示名</th>
@@ -200,7 +205,7 @@ export function AdminAccountsPage() {
           </tbody>
         </table>
       </section>
-    </div>
+    </PageFrame>
   );
 }
 
@@ -216,7 +221,9 @@ function AccountRow({
   return (
     <tr className="border-t border-[var(--color-border)]">
       <td className="px-3 py-2 font-semibold">{account.displayName}</td>
-      <td className="px-3 py-2 font-mono text-xs">{account.discordUserId}</td>
+      <td className="max-w-[14rem] truncate px-3 py-2 font-mono text-xs">
+        {account.discordUserId}
+      </td>
       <td className="px-3 py-2">{memberName(account.playerMemberId)}</td>
       <td className="px-3 py-2">
         {account.isAdmin ? "管理者" : "一般"} / {account.loginEnabled ? "許可" : "停止"}

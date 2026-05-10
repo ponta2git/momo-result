@@ -145,6 +145,7 @@ describe("matchListViewModel", () => {
       incompleteCount: 2,
       needsReviewCount: 1,
       ocrRunningCount: 1,
+      preConfirmCount: 1,
     });
   });
 });

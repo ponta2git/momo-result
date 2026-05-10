@@ -30,7 +30,7 @@ export function PageHeader({
         {eyebrow ? (
           <p className="text-xs font-semibold text-[var(--color-text-secondary)]">{eyebrow}</p>
         ) : null}
-        <h1 className="mt-1 text-2xl font-semibold text-balance text-[var(--color-text-primary)] md:text-3xl">
+        <h1 className="mt-1 text-xl font-semibold text-balance text-[var(--color-text-primary)] md:text-2xl">
           {title}
         </h1>
         {description ? (

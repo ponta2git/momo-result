@@ -75,6 +75,7 @@ export type MatchListSummaryCounts = {
   incompleteCount: number;
   needsReviewCount: number;
   ocrRunningCount: number;
+  preConfirmCount: number;
 };
 
 export type MatchListLookupMaps = {

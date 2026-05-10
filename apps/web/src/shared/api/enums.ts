@@ -9,6 +9,11 @@ export type OcrJobStatus = (typeof ocrJobStatuses)[number];
 
 export const layoutFamilies = ["momotetsu_2", "world", "reiwa"] as const;
 export type LayoutFamily = (typeof layoutFamilies)[number];
+export const layoutFamilyLabels = {
+  momotetsu_2: "桃鉄2向け",
+  reiwa: "令和版向け",
+  world: "ワールド向け",
+} as const satisfies Record<LayoutFamily, string>;
 
 export const terminalJobStatuses = ["succeeded", "failed", "cancelled"] as const;
 

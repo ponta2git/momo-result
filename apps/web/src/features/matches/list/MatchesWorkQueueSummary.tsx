@@ -18,7 +18,7 @@ const items: Array<{
   status: MatchListStatusFilter;
 }> = [
   { countKey: "ocrRunningCount", label: "OCR中", status: "ocr_running" },
-  { countKey: "incompleteCount", label: "確定前", status: "incomplete" },
+  { countKey: "preConfirmCount", label: "確定前", status: "pre_confirm" },
   { countKey: "needsReviewCount", label: "要確認", status: "needs_review" },
 ];
 
@@ -62,7 +62,8 @@ export function MatchesWorkQueueSummary({
                 ? "border-[var(--color-action)]/60 bg-[var(--color-action)]/12"
                 : "border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-surface-subtle)]",
             )}
-            onClick={() => onSelectStatus(item.status)}
+            aria-pressed={selected}
+            onClick={() => onSelectStatus(selected ? "all" : item.status)}
             type="button"
           >
             <span className="text-sm font-semibold text-[var(--color-text-primary)]">

@@ -1,10 +1,8 @@
 import { GameTitleList } from "@/features/masters/GameTitleList";
-import { IncidentMasterPanel } from "@/features/masters/IncidentMasterPanel";
 import { ScopedMasterPanel } from "@/features/masters/ScopedMasterPanel";
 import type { LayoutFamily } from "@/shared/api/enums";
 import type {
   GameTitleResponse,
-  IncidentMasterResponse,
   MapMasterResponse,
   SeasonMasterResponse,
 } from "@/shared/api/masters";
@@ -21,7 +19,6 @@ type MasterRelationBoardProps = {
   onDeleteGameTitle: (id: string) => void;
   onDeleteMapMaster: (id: string) => void;
   onDeleteSeasonMaster: (id: string) => void;
-  incidentMasters: IncidentMasterResponse[];
   mapCreateAction: (formData: FormData) => void | Promise<void>;
   mapCreateError?: string | undefined;
   mapCreateFormKey?: string | number | undefined;
@@ -48,7 +45,6 @@ export function MasterRelationBoard({
   onDeleteGameTitle,
   onDeleteMapMaster,
   onDeleteSeasonMaster,
-  incidentMasters,
   mapCreateAction,
   mapCreateError,
   mapCreateFormKey,
@@ -106,10 +102,6 @@ export function MasterRelationBoard({
         createFormKey={seasonCreateFormKey}
         disabledReason={scopedDisabledReason}
       />
-
-      <div className="xl:col-span-3">
-        <IncidentMasterPanel items={incidentMasters} />
-      </div>
     </section>
   );
 }

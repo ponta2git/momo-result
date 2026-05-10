@@ -198,6 +198,9 @@ export function summarizeMatchList(items: MatchListItemView[]): MatchListSummary
       if (item.status !== "confirmed") {
         summary.incompleteCount += 1;
       }
+      if (item.status !== "confirmed" && item.status !== "ocr_running") {
+        summary.preConfirmCount += 1;
+      }
       if (item.status === "needs_review") {
         summary.needsReviewCount += 1;
       }
@@ -207,6 +210,7 @@ export function summarizeMatchList(items: MatchListItemView[]): MatchListSummary
       incompleteCount: 0,
       needsReviewCount: 0,
       ocrRunningCount: 0,
+      preConfirmCount: 0,
     },
   );
 }

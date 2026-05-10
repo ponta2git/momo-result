@@ -69,7 +69,6 @@ export function ScopedMasterPanel({
                       </span>
                     ) : null}
                   </p>
-                  <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">{item.id}</p>
                 </div>
                 {isPending ? null : (
                   <div className="flex items-center">

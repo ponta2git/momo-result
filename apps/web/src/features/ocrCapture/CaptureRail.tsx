@@ -4,8 +4,10 @@ import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
 import { slotDefinitions } from "@/features/ocrCapture/captureState";
 import type { SlotKind } from "@/shared/api/enums";
 import type { SlotMap } from "@/shared/lib/slotMap";
+import { cn } from "@/shared/ui/cn";
 
 type CaptureRailProps = {
+  layout?: "rail" | "stack";
   slots: CaptureSlotState[];
   drafts: SlotMap<OcrDraftResponse>;
   onClear: (kind: SlotKind) => void;
@@ -15,6 +17,7 @@ type CaptureRailProps = {
 };
 
 export function CaptureRail({
+  layout = "rail",
   slots,
   drafts,
   onClear,
@@ -23,7 +26,10 @@ export function CaptureRail({
   onManualRefresh,
 }: CaptureRailProps) {
   return (
-    <section className="grid gap-5 xl:grid-cols-3" aria-label="OCR画像取り込み">
+    <section
+      className={cn("grid gap-5", layout === "rail" ? "xl:grid-cols-3" : "")}
+      aria-label="OCR画像取り込み"
+    >
       {slotDefinitions.map((definition, index) => {
         const slot = slots.find((candidate) => candidate.kind === definition.kind);
         if (!slot) {

@@ -8,8 +8,6 @@ import type { IncidentKey, MatchFormValues } from "@/features/matches/workspace/
 import { handleScoreGridKeydown } from "@/features/matches/workspace/scoreGrid/ScoreGridKeyboard";
 import { useMediaQuery } from "@/shared/lib/useMediaQuery";
 
-const confidenceThresholdHigh = 0.9;
-
 type GridColumn =
   | "memberId"
   | "playOrder"
@@ -71,20 +69,6 @@ function cellViewState(args: {
     };
   }
 
-  if (args.confidence != null && args.confidence >= confidenceThresholdHigh) {
-    return {
-      label: "OCR",
-      toneClass: "border-[var(--color-success)]/55 bg-[var(--color-success)]/10",
-    };
-  }
-
-  if (args.confidence != null) {
-    return {
-      label: "要確認",
-      toneClass: "border-[var(--color-review)]/55 bg-[var(--color-review)]/10",
-    };
-  }
-
   return {
     toneClass: "",
   };
@@ -101,13 +85,13 @@ function normalizeNumericDraft(input: string, allowSign: boolean): string {
 
   const sign = allowSign && input.startsWith("-") ? "-" : "";
   const rest = sign ? input.slice(1) : input;
-  const digits = rest.replaceAll(/\D/g, "");
+  const digits = rest.replaceAll(/\D/gu, "");
 
   if (!digits) {
     return sign;
   }
 
-  return `${sign}${digits.replace(/^0+(?=\d)/, "")}`;
+  return `${sign}${digits.replace(/^0+(?=\d)/u, "")}`;
 }
 
 function parseNumericValue(value: string, allowSign: boolean): number {
@@ -116,10 +100,10 @@ function parseNumericValue(value: string, allowSign: boolean): number {
   }
 
   if (allowSign) {
-    return /^-?\d+$/.test(value) ? Number(value) : Number.NaN;
+    return /^-?\d+$/u.test(value) ? Number(value) : Number.NaN;
   }
 
-  return /^\d+$/.test(value) ? Number(value) : Number.NaN;
+  return /^\d+$/u.test(value) ? Number(value) : Number.NaN;
 }
 
 function keyToPath(row: number, column: GridColumn): string {
@@ -234,6 +218,7 @@ export function ScoreGrid({
       colCount: gridColumns.length,
       event: args.event,
       getCellId: ({ col, row }) => getCellId(row, col),
+      horizontalEnterFromCol: 5,
       onFocusCell: focusCell,
       onRevertCell: args.onRevertCell,
       onSubmitFocus: onRequestSubmitFocus,
@@ -393,7 +378,7 @@ export function ScoreGrid({
   };
 
   const grid = (
-    <table className="min-w-[1200px] table-fixed border-separate border-spacing-y-2 text-left text-sm">
+    <table className="min-w-[64rem] table-fixed border-separate border-spacing-y-2 text-left text-sm">
       <colgroup>
         <col className="w-[10rem]" />
         <col className="w-[7ch]" />
@@ -587,15 +572,12 @@ export function ScoreGrid({
             4人分の結果を確認・手修正
           </h2>
           <p className="mt-1 text-sm text-pretty text-[var(--color-text-secondary)]">
-            Enter/矢印で移動、Escでセルを編集前へ戻せます。
+            Enter/矢印で移動、Escでセルを編集前へ戻せます。事件簿はEnterで横方向に移動します。
           </p>
         </div>
-        <p className="text-xs text-[var(--color-text-secondary)]">
-          金額 12ch / 順位・順番・事件簿 6ch 以上
-        </p>
       </div>
 
-      {!isNarrowViewport ? <div className="mt-4 overflow-x-auto pb-2">{grid}</div> : null}
+      {isNarrowViewport ? null : <div className="mt-4 overflow-x-auto pb-2">{grid}</div>}
 
       {isNarrowViewport ? (
         <div className="mt-4 grid gap-3">

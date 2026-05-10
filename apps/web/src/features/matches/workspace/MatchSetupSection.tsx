@@ -7,6 +7,7 @@ import type {
   SeasonMasterListResponse,
 } from "@/shared/api/masters";
 import { Button } from "@/shared/ui/actions/Button";
+import { cn } from "@/shared/ui/cn";
 import { Card } from "@/shared/ui/layout/Card";
 
 const inputClass =
@@ -24,6 +25,7 @@ function toLocalDateTime(value: string): string {
 
 type MatchSetupSectionProps = {
   createEventPending: boolean;
+  errorPathSet: Set<string>;
   eventDraftValue: string;
   gameTitleItems: GameTitleListResponse["items"];
   heldEvents: HeldEventResponse[];
@@ -38,6 +40,7 @@ type MatchSetupSectionProps = {
 
 export function MatchSetupSection({
   createEventPending,
+  errorPathSet,
   eventDraftValue,
   gameTitleItems,
   heldEvents,
@@ -50,6 +53,13 @@ export function MatchSetupSection({
   onPatchRoot,
 }: MatchSetupSectionProps) {
   const selectedHeldEvent = heldEvents.find((event) => event.id === values.heldEventId);
+  const errorClass = "border-[var(--color-danger)]/70 bg-[var(--color-danger)]/10";
+  const inputStateClass = (path: string) =>
+    cn(inputClass, errorPathSet.has(path) ? errorClass : "");
+  const FieldError = ({ path }: { path: string }) =>
+    errorPathSet.has(path) ? (
+      <span className="text-xs font-semibold text-[var(--color-danger)]">入力してください</span>
+    ) : null;
 
   return (
     <Card className="mt-4">
@@ -76,9 +86,10 @@ export function MatchSetupSection({
 
       <div className="mt-4 grid gap-3 lg:grid-cols-12">
         <label className="grid gap-1 lg:col-span-5">
-          <span className={labelClass}>開催履歴</span>
+          <span className={labelClass}>開催履歴（必須）</span>
           <select
-            className={inputClass}
+            aria-invalid={errorPathSet.has("heldEventId")}
+            className={inputStateClass("heldEventId")}
             value={values.heldEventId}
             onChange={(event) => {
               const selected = heldEvents.find((candidate) => candidate.id === event.target.value);
@@ -96,38 +107,44 @@ export function MatchSetupSection({
               </option>
             ))}
           </select>
+          <FieldError path="heldEventId" />
         </label>
 
         <label className="grid gap-1 lg:col-span-2">
-          <span className={labelClass}>試合番号</span>
+          <span className={labelClass}>試合番号（必須）</span>
           <input
             aria-label="試合番号"
-            className={inputClass}
+            aria-invalid={errorPathSet.has("matchNoInEvent")}
+            className={inputStateClass("matchNoInEvent")}
             inputMode="numeric"
             type="text"
             value={Number.isFinite(values.matchNoInEvent) ? String(values.matchNoInEvent) : ""}
             onChange={(event) =>
               onPatchRoot({
-                matchNoInEvent: Number.parseInt(event.target.value.replaceAll(/\D/g, ""), 10),
+                matchNoInEvent: Number.parseInt(event.target.value.replaceAll(/\D/gu, ""), 10),
               })
             }
           />
+          <FieldError path="matchNoInEvent" />
         </label>
 
         <label className="grid gap-1 lg:col-span-5">
-          <span className={labelClass}>開催日時</span>
+          <span className={labelClass}>開催日時（必須）</span>
           <input
-            className={inputClass}
+            aria-invalid={errorPathSet.has("playedAt")}
+            className={inputStateClass("playedAt")}
             type="datetime-local"
             value={toLocalDateTime(values.playedAt)}
             onChange={(event) => onPatchRoot({ playedAt: event.target.value })}
           />
+          <FieldError path="playedAt" />
         </label>
 
         <label className="grid gap-1 lg:col-span-3">
-          <span className={labelClass}>作品</span>
+          <span className={labelClass}>作品（必須）</span>
           <select
-            className={inputClass}
+            aria-invalid={errorPathSet.has("gameTitleId")}
+            className={inputStateClass("gameTitleId")}
             value={values.gameTitleId}
             onChange={(event) => onGameTitleChange(event.target.value)}
           >
@@ -138,12 +155,14 @@ export function MatchSetupSection({
               </option>
             ))}
           </select>
+          <FieldError path="gameTitleId" />
         </label>
 
         <label className="grid gap-1 lg:col-span-3">
-          <span className={labelClass}>シーズン</span>
+          <span className={labelClass}>シーズン（必須）</span>
           <select
-            className={inputClass}
+            aria-invalid={errorPathSet.has("seasonMasterId")}
+            className={inputStateClass("seasonMasterId")}
             disabled={!values.gameTitleId}
             value={values.seasonMasterId}
             onChange={(event) => onPatchRoot({ seasonMasterId: event.target.value })}
@@ -155,12 +174,14 @@ export function MatchSetupSection({
               </option>
             ))}
           </select>
+          <FieldError path="seasonMasterId" />
         </label>
 
         <label className="grid gap-1 lg:col-span-3">
-          <span className={labelClass}>マップ</span>
+          <span className={labelClass}>マップ（必須）</span>
           <select
-            className={inputClass}
+            aria-invalid={errorPathSet.has("mapMasterId")}
+            className={inputStateClass("mapMasterId")}
             disabled={!values.gameTitleId}
             value={values.mapMasterId}
             onChange={(event) => onPatchRoot({ mapMasterId: event.target.value })}
@@ -172,12 +193,14 @@ export function MatchSetupSection({
               </option>
             ))}
           </select>
+          <FieldError path="mapMasterId" />
         </label>
 
         <label className="grid gap-1 lg:col-span-3">
-          <span className={labelClass}>オーナー</span>
+          <span className={labelClass}>オーナー（必須）</span>
           <select
-            className={inputClass}
+            aria-invalid={errorPathSet.has("ownerMemberId")}
+            className={inputStateClass("ownerMemberId")}
             value={values.ownerMemberId}
             onChange={(event) =>
               onPatchRoot({ ownerMemberId: event.target.value as MatchFormValues["ownerMemberId"] })
@@ -189,6 +212,7 @@ export function MatchSetupSection({
               </option>
             ))}
           </select>
+          <FieldError path="ownerMemberId" />
         </label>
       </div>
 

@@ -28,7 +28,7 @@ export function AppShell() {
         onLogout={auth.logout}
       />
       <main
-        className="mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-[75rem] flex-col gap-4 px-3 py-4 sm:px-4 sm:py-6"
+        className="mx-auto flex min-h-[calc(100dvh-4rem)] w-full flex-col px-3 py-4 sm:px-4 sm:py-6"
         id="main-content"
       >
         <RouteErrorBoundary resetKey={location.pathname}>

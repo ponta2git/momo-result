@@ -57,6 +57,7 @@ export const confirmMatchSchema = z
     ownerMemberId: z.enum(memberIds),
     mapMasterId: z.string().min(1, "マップを選択してください"),
     playedAt: z.string().min(1, "開催日時を入力してください"),
+    matchDraftId: z.string().optional(),
     draftIds: z.object({
       totalAssets: z.string().optional(),
       revenue: z.string().optional(),
@@ -87,13 +88,15 @@ export const confirmMatchSchema = z
       }
     }
   })
-  .transform(
-    (values): ConfirmMatchRequest => ({
-      ...values,
+  .transform((values): ConfirmMatchRequest => {
+    const { matchDraftId, ...rest } = values;
+    return {
+      ...rest,
+      ...(matchDraftId ? { matchDraftId } : {}),
       draftIds: pruneDraftIds(values.draftIds),
       playedAt: toIsoFromLocal(values.playedAt),
-    }),
-  );
+    };
+  });
 
 /** フォーム入力時の値の型 (transform 適用前)。 */
 export type ConfirmMatchFormValues = z.input<typeof confirmMatchSchema>;

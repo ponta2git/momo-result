@@ -59,6 +59,15 @@ describe("toConfirmMatchRequest", () => {
     expect(result.draftIds).toEqual({});
   });
 
+  it("keeps matchDraftId so confirming from OCR closes the source draft", () => {
+    const values = validForm();
+    values.matchDraftId = "match-draft-1";
+
+    const result = toConfirmMatchRequest(values);
+
+    expect(result.matchDraftId).toBe("match-draft-1");
+  });
+
   it("throws ZodError when the form violates schema (rank duplicate)", () => {
     const values = validForm();
     values.players[1]!.rank = values.players[0]!.rank;
@@ -81,9 +90,13 @@ describe("toConfirmMatchRequest", () => {
 });
 
 describe("toUpdateMatchRequest", () => {
-  it("produces the same payload shape as toConfirmMatchRequest", () => {
+  it("omits matchDraftId because the update endpoint does not accept it", () => {
     const values = validForm();
+    values.matchDraftId = "match-draft-1";
 
-    expect(toUpdateMatchRequest(values)).toEqual(toConfirmMatchRequest(values));
+    const result = toUpdateMatchRequest(values);
+
+    expect(result).toEqual(expect.objectContaining({ heldEventId: "held-1" }));
+    expect("matchDraftId" in result).toBe(false);
   });
 });

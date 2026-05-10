@@ -81,6 +81,15 @@ describe("confirmMatchSchema", () => {
     expect(confirmMatchSchema.safeParse(valid).success).toBe(true);
   });
 
+  it("preserves matchDraftId when present", () => {
+    const result = confirmMatchSchema.parse({
+      ...valid,
+      matchDraftId: "match-draft-1",
+    });
+
+    expect(result.matchDraftId).toBe("match-draft-1");
+  });
+
   it("rejects duplicated ranks", () => {
     const result = confirmMatchSchema.safeParse({
       ...valid,

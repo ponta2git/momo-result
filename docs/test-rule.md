@@ -45,6 +45,18 @@ form、filter、select、input、button の handler を変更する場合:
 - 障害対応では報告された操作そのものを通し、同一 component 内の同種 handler pattern を検索する。
 - PC用とモバイル用でUIが二重なら、検証した経路を明示する。
 
+### Form schema / request transform
+
+Zod schema、フォーム値から API request への変換、mutation payload を変更する場合:
+
+- route param、prefill、hidden state 由来の workflow identifier が mutation に必要なら、schema
+  parse / transform 後の request body に残ることをテストする。
+- create / confirm / update で受け付ける field が違う場合は、共有変換で暗黙に流用せず、送る field
+  と落とす field をテストで固定する。
+- optional field の有無で endpoint / usecase の意味論や副作用が変わる場合は、その field を
+  mode discriminator として扱い、各 mode の request payload をテストする。
+- 画面の prefill テストだけで payload 契約の検証にしない。`form values -> request DTO` の境界を直接通す。
+
 ### Test foundation
 
 - 共通 setup は `apps/web/src/test/setup.ts` に集約する。

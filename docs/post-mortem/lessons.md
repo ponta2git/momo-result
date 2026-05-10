@@ -90,6 +90,7 @@
 該当条件:
 
 - form、filter、select、input、button の event handler を追加・変更する。
+- Zod schema、フォーム値から API request への変換、mutation payload を変更する。
 - `setState((current) => ...)` の updater 内で event や DOM node を参照している。
 - 障害対応で、報告された UI 操作に近いが同一ではない操作をテストしている。
 
@@ -97,6 +98,11 @@
 
 - React event 由来の値を handler 内で同期的に退避しているか。
 - 変更した入力操作を Testing Library + user-event で直接実行したか。
+- route param、prefill、hidden state 由来の workflow identifier が schema parse / transform 後の
+  request body に残ることを検証したか。
+- create / confirm / update で受け付ける field の違いを、共有変換の偶然ではなくテストで固定したか。
+- optional field の有無が API/usecase の mode や副作用を変える場合、その field の仕様上の役割を
+  domain/API docs で確認したか。
 - mutation で追加した候補を選ぶ UI では、成功通知だけでなく option/list への追加と選択状態を検証したか。
 - 障害対応では、報告された操作そのものを通したか。
 - 同一 component 内に同種の handler / state updater pattern が残っていないか。
@@ -106,6 +112,7 @@
 - web component/page の入力操作テスト責務: `docs/test-rule.md`
 - 元事象: `docs/post-mortem/2026-05-03-frontend-matches-filter-event-currenttarget.md`
 - 再発事象: `docs/post-mortem/2026-05-04-frontend-matches-sort-event-currenttarget-regression.md`
+- 元事象: `docs/post-mortem/2026-05-10-frontend-ocr-confirm-match-draft-id-dropped.md`
 
 ### Frontend / Test Double・Test Oracle
 

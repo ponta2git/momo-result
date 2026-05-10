@@ -60,6 +60,18 @@
 - OCR失敗はジョブ失敗として記録し、空の手入力下書きとして続行できる導線を残す。
 - 低信頼度や警告は確認画面でユーザーが判断できる形にする。
 
+### 4.1 試合確定の2経路
+
+試合確定には同じ `matches` 作成でも2つの意味論がある。
+
+| 経路 | 識別子 | 必須の副作用 |
+|---|---|---|
+| 手入力 / 画像なしの直接作成 | `matchDraftId` なし | `matches` / `match_players` / `match_incidents` を作成する。`match_drafts` は触らない。 |
+| OCR下書きからの確定 | `matchDraftId` あり | `matches` / `match_players` / `match_incidents` を作成し、元 `match_drafts` を `confirmed` にして `confirmed_match_id` を保存し、元画像保持を閉じる。 |
+
+`draftIds` は確定済み試合が参照した OCR 結果の履歴であり、元作業単位を閉じる識別子ではない。
+OCR下書きから確定する経路では、`draftIds` だけでなく `matchDraftId` を必ず保持して API に渡す。
+
 ## 5. マスタ
 
 マスタは `momo-db` 管理。変更には `momo-db` の schema / migration / seed 変更が必要。

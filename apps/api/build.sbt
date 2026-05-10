@@ -112,16 +112,17 @@ lazy val root = (project in file("."))
       val circeVersion = "0.14.15"
       val doobieVersion = "1.0.0-RC12"
       val http4sVersion = "0.23.34"
-      val logbackVersion = "1.5.18"
-      val logstashEncoderVersion = "8.0"
+      val logbackVersion = "1.5.32"
+      val logstashEncoderVersion = "9.0"
       val janinoVersion = "3.1.12"
-      val jsonSchemaValidatorVersion = "2.0.1"
+      val jsonSchemaValidatorVersion = "3.0.2"
       val log4catsVersion = "2.8.0"
       val munitCatsEffectVersion = "2.2.0"
       val munitVersion = "1.3.0"
-      val redis4catsVersion = "1.7.2"
-      val tapirVersion = "1.13.17"
-      val testcontainersVersion = "1.21.3"
+      val redis4catsVersion = "2.0.3"
+      val tapirVersion = "1.13.18"
+      val testcontainersPostgresVersion = "1.21.4"
+      val testcontainersVersion = "2.0.5"
 
       Seq(
         "org.typelevel" %% "cats-effect" % catsEffectVersion,
@@ -147,7 +148,7 @@ lazy val root = (project in file("."))
         "org.codehaus.janino" % "janino" % janinoVersion,
         "com.networknt" % "json-schema-validator" % jsonSchemaValidatorVersion % Test,
         "org.scalameta" %% "munit" % munitVersion % Test,
-        "org.testcontainers" % "postgresql" % testcontainersVersion % Test,
+        "org.testcontainers" % "postgresql" % testcontainersPostgresVersion % Test,
         "org.testcontainers" % "testcontainers" % testcontainersVersion % Test,
         "org.typelevel" %% "munit-cats-effect" % munitCatsEffectVersion % Test
       )

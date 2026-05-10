@@ -23,19 +23,20 @@ final class PostgresAppSessionsRepositorySpec extends IntegrationSuite:
       rawSessionToken: String,
       rawCsrfToken: String,
       expiresAt: Instant,
-  ): IO[AppSession] =
-    (SessionTokenHash.sha256[IO](rawSessionToken), SessionTokenHash.sha256[IO](rawCsrfToken))
-      .mapN { (idHash, csrfHash) =>
-        AppSession(
-          idHash = idHash,
-          accountId = accountId,
-          playerMemberId = Some(memberId),
-          csrfSecretHash = csrfHash,
-          createdAt = now,
-          lastSeenAt = now,
-          expiresAt = expiresAt,
-        )
-      }
+  ): IO[AppSession] = (
+    SessionTokenHash.sha256[IO](rawSessionToken),
+    SessionTokenHash.sha256[IO](rawCsrfToken),
+  ).mapN { (idHash, csrfHash) =>
+    AppSession(
+      idHash = idHash,
+      accountId = accountId,
+      playerMemberId = Some(memberId),
+      csrfSecretHash = csrfHash,
+      createdAt = now,
+      lastSeenAt = now,
+      expiresAt = expiresAt,
+    )
+  }
 
   test("upsert and find round-trip hashed session columns without storing raw tokens"):
     val rawSessionToken = "raw-session-token"

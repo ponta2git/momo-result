@@ -3,7 +3,7 @@ name = "momo-ocr"
 version = "0.1.0"
 description = "OCR worker for momo-result"
 readme = "README.md"
-requires-python = ">=3.12,<3.14"
+requires-python = ">=3.14,<3.15"
 dependencies = [
   "jsonschema[format-nongpl]>=4.25.0",
   "opencv-python-headless>=4.12.0.88",
@@ -32,7 +32,7 @@ build-backend = "hatchling.build"
 
 [tool.ruff]
 line-length = 100
-target-version = "py312"
+target-version = "py314"
 src = ["src", "tests", "scripts"]
 show-fixes = true
 extend-exclude = [
@@ -107,7 +107,7 @@ markers = [
 ]
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.14"
 strict = true
 disallow_any_unimported = true
 enable_error_code = [

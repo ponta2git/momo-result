@@ -8,9 +8,9 @@
 |---|---|---|
 | Node.js | CI は 24 | web |
 | pnpm | 10.10.0 | workspace / web |
-| Java | 21 | api |
+| Java | 25 | api |
 | sbt | 1.12 系 | api |
-| Python | 3.12 | ocr-worker |
+| Python | 3.14 | ocr-worker |
 | uv | lockfile 対応版 | ocr-worker |
 | Docker | Testcontainers 対応 | DB/Redis integration |
 | Tesseract | 5+ | OCR |

@@ -6,12 +6,17 @@
 .serena
 .vscode
 **/.DS_Store
+**/.bloop
 **/.env
+**/.metals
+**/.mypy_cache
 **/.pnpm-store
 **/.pytest_cache
 **/.ruff_cache
+**/.scala-build
 **/.venv
 **/__pycache__
+**/metals.sbt
 **/node_modules
 **/target
 *.tsbuildinfo

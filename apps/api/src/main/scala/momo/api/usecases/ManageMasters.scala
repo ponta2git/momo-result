@@ -24,7 +24,8 @@ final class UpdateGameTitle[F[_]: MonadThrow](titles: GameTitlesRepository[F]):
   def run(command: UpdateGameTitleCommand): F[Either[AppError, GameTitle]] = (for
     existing <- titles.find(command.id).orNotFound("game title", command.id.value)
     name <- EitherT.fromEither[F](MasterField.nonBlank("name", command.name))
-    layoutFamily <- EitherT.fromEither[F](MasterField.nonBlank("layoutFamily", command.layoutFamily))
+    layoutFamily <- EitherT
+      .fromEither[F](MasterField.nonBlank("layoutFamily", command.layoutFamily))
     updated = existing.copy(name = name, layoutFamily = layoutFamily)
     _ <- EitherT.liftF(titles.update(updated))
   yield updated).value
@@ -67,10 +68,10 @@ final case class CreateMemberAliasCommand(memberId: String, alias: String)
 final case class UpdateMemberAliasCommand(id: String, memberId: String, alias: String)
 
 final class ListMemberAliases[F[_]: MonadThrow](aliases: MemberAliasesRepository[F]):
-  def run(memberId: Option[String]): F[Either[AppError, List[MemberAlias]]] =
-    memberId.traverse(validateMemberId) match
-      case Left(error) => MonadThrow[F].pure(Left(error))
-      case Right(id) => aliases.list(id).map(_.asRight[AppError])
+  def run(memberId: Option[String]): F[Either[AppError, List[MemberAlias]]] = memberId
+    .traverse(validateMemberId) match
+    case Left(error) => MonadThrow[F].pure(Left(error))
+    case Right(id) => aliases.list(id).map(_.asRight[AppError])
 
 final class CreateMemberAlias[F[_]: MonadThrow](
     aliases: MemberAliasesRepository[F],
@@ -132,11 +133,7 @@ private def ensureAliasAvailable[F[_]: MonadThrow](
 ): EitherT[F, AppError, Unit] = EitherT {
   aliases.list(None).map { all =>
     val duplicate = all.exists(row => row.alias == alias && !exceptId.contains(row.id))
-    Either.cond(
-      !duplicate,
-      (),
-      AppError.Conflict(s"member alias already exists: $alias"),
-    )
+    Either.cond(!duplicate, (), AppError.Conflict(s"member alias already exists: $alias"))
   }
 }
 

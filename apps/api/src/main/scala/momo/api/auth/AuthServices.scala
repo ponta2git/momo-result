@@ -106,7 +106,13 @@ object JavaDiscordOAuthClient:
       Sync[F].delay(HttpClient.newBuilder().connectTimeout(ConnectTimeout).build())
     ).map(new JavaDiscordOAuthClient[F](config, _))
 
-final case class AuthenticatedSession(account: AuthenticatedAccount, session: AppSession)
+final case class CreatedSession(cookieValue: String)
+
+final case class AuthenticatedSession(
+    account: AuthenticatedAccount,
+    session: AppSession,
+    csrfToken: String,
+)
 
 final class SessionService[F[_]: Sync: SecureRandom](
     sessions: AppSessionsRepository[F],
@@ -114,67 +120,76 @@ final class SessionService[F[_]: Sync: SecureRandom](
     config: AuthConfig,
     now: F[Instant],
 ):
-  def create(account: LoginAccount): F[AppSession] =
+  def create(account: LoginAccount): F[CreatedSession] =
     for
       current <- now
       id <- SecureTokenGenerator.token[F](32)
       csrf <- SecureTokenGenerator.token[F](32)
+      idHash <- SessionTokenHash.sha256[F](id)
+      csrfHash <- SessionTokenHash.sha256[F](csrf)
       session = AppSession(
-        id = id,
+        idHash = idHash,
         accountId = account.id,
         playerMemberId = account.playerMemberId,
-        csrfSecret = csrf,
+        csrfSecretHash = csrfHash,
         createdAt = current,
         lastSeenAt = current,
         expiresAt = current.plusSeconds(config.sessionTtl.toSeconds),
       )
       _ <- sessions.upsert(session)
-    yield session
+    yield CreatedSession(SessionCookieCodec.encode(SessionCookieTokens(id, csrf)))
 
-  def authenticate(sessionId: Option[String]): F[Either[AppError, AuthenticatedSession]] =
-    sessionId match
+  def authenticate(sessionCookie: Option[String]): F[Either[AppError, AuthenticatedSession]] =
+    sessionCookie.flatMap(SessionCookieCodec.decode) match
       case None => Sync[F].pure(Left(AppError.Unauthorized()))
-      case Some(id) =>
+      case Some(tokens) =>
         for
           current <- now
-          maybeSession <- sessions.find(id)
+          idHash <- SessionTokenHash.sha256[F](tokens.sessionToken)
+          csrfMatches <- SessionTokenHash.matches[F](tokens.csrfToken)
+          maybeSession <- sessions.find(idHash)
           result <- maybeSession match
             case None => Sync[F].pure(Left(AppError.Unauthorized()))
             case Some(session) if !session.expiresAt.isAfter(current) =>
-              sessions.delete(session.id).as(Left(AppError.Unauthorized("Session has expired.")))
+              sessions.delete(session.idHash)
+                .as(Left(AppError.Unauthorized("Session has expired.")))
+            case Some(session) if !csrfMatches(session.csrfSecretHash) =>
+              Sync[F].pure(Left(AppError.Unauthorized()))
             case Some(session) => accounts.find(session.accountId).flatMap {
-                case None => sessions.delete(session.id).as(Left(AppError.Unauthorized()))
+                case None => sessions.delete(session.idHash).as(Left(AppError.Unauthorized()))
                 case Some(account) if !account.loginEnabled =>
-                  sessions.delete(session.id)
+                  sessions.delete(session.idHash)
                     .as(Left(AppError.Forbidden("This account is not allowed to log in.")))
                 case Some(account) =>
                   val renewed = session.copy(
                     lastSeenAt = current,
                     expiresAt = current.plusSeconds(config.sessionTtl.toSeconds),
                   )
-                  sessions.upsert(renewed).as(Right(AuthenticatedSession(
-                    AuthenticatedAccount(
-                      account.id,
-                      account.displayName,
-                      account.isAdmin,
-                      account.playerMemberId,
-                    ),
-                    renewed,
-                  )))
+                  val accountAuth = AuthenticatedAccount(
+                    account.id,
+                    account.displayName,
+                    account.isAdmin,
+                    account.playerMemberId,
+                  )
+                  if shouldRenew(session, current) then
+                    sessions.renew(renewed.idHash, renewed.lastSeenAt, renewed.expiresAt)
+                      .as(Right(AuthenticatedSession(accountAuth, renewed, tokens.csrfToken)))
+                  else
+                    Sync[F]
+                      .pure(Right(AuthenticatedSession(accountAuth, session, tokens.csrfToken)))
               }
         yield result
 
-  def delete(sessionId: String): F[Unit] = sessions.delete(sessionId)
+  def delete(idHash: String): F[Unit] = sessions.delete(idHash)
+
+  private def shouldRenew(session: AppSession, current: Instant): Boolean = current
+    .isAfter(session.expiresAt.minusSeconds(config.sessionTtl.toSeconds / 2L))
 
 final class CsrfTokenService:
-  def issue(session: AppSession): String = session.csrfSecret
+  def issue(authenticated: AuthenticatedSession): String = authenticated.csrfToken
 
   def verify(session: AppSession, token: Option[String]): Either[AppError, Unit] = token match
-    case Some(value)
-        if MessageDigest.isEqual(
-          value.getBytes(StandardCharsets.UTF_8),
-          session.csrfSecret.getBytes(StandardCharsets.UTF_8),
-        ) => Right(())
+    case Some(value) if SessionTokenHash.matchesUnsafe(value, session.csrfSecretHash) => Right(())
     case _ => Left(AppError.Forbidden("A valid CSRF token is required."))
 
 final class OAuthStateCodec[F[_]: Sync: SecureRandom](config: AuthConfig, now: F[Instant]):
@@ -244,6 +259,36 @@ object LoginRateLimiter:
 object SecureTokenGenerator:
   def token[F[_]: Functor: SecureRandom](byteLength: Int): F[String] = SecureRandom[F]
     .nextBytes(byteLength).map(Base64Url.encode)
+
+final case class SessionCookieTokens(sessionToken: String, csrfToken: String)
+
+object SessionCookieCodec:
+  private val Version = "v1"
+  private val Separator = "."
+
+  def encode(tokens: SessionCookieTokens): String =
+    s"$Version$Separator${tokens.sessionToken}$Separator${tokens.csrfToken}"
+
+  def decode(value: String): Option[SessionCookieTokens] = value.split("\\.", -1).toList match
+    case Version :: sessionToken :: csrfToken :: Nil
+        if sessionToken.nonEmpty && csrfToken.nonEmpty =>
+      Some(SessionCookieTokens(sessionToken, csrfToken))
+    case _ => None
+
+object SessionTokenHash:
+  def sha256[F[_]: Sync](value: String): F[String] = Sync[F].delay(sha256Unsafe(value))
+
+  def matches[F[_]: Sync](value: String): F[String => Boolean] = sha256(value)
+    .map(hash => expected => constantTimeEquals(hash, expected))
+
+  def matchesUnsafe(value: String, expected: String): Boolean =
+    constantTimeEquals(sha256Unsafe(value), expected)
+
+  private def sha256Unsafe(value: String): String = Base64Url
+    .encode(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)))
+
+  private def constantTimeEquals(left: String, right: String): Boolean = MessageDigest
+    .isEqual(left.getBytes(StandardCharsets.UTF_8), right.getBytes(StandardCharsets.UTF_8))
 
 object Base64Url:
   private val encoder = java.util.Base64.getUrlEncoder.withoutPadding()

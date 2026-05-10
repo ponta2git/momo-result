@@ -20,34 +20,42 @@ import momo.api.repositories.{AppSession, AppSessionsAlg, AppSessionsRepository}
 object PostgresAppSessions:
 
   val alg: AppSessionsAlg[ConnectionIO] = new AppSessionsAlg[ConnectionIO]:
-    override def find(id: String): ConnectionIO[Option[AppSession]] = sql"""
-        SELECT id, account_id, member_id, csrf_secret, created_at, last_seen_at, expires_at
+    override def find(idHash: String): ConnectionIO[Option[AppSession]] = sql"""
+        SELECT id_hash, account_id, member_id, csrf_secret_hash, created_at, last_seen_at, expires_at
         FROM app_sessions
-        WHERE id = $id
+        WHERE id_hash = $idHash
       """.query[AppSession].option
 
     override def upsert(session: AppSession): ConnectionIO[Unit] = sql"""
         INSERT INTO app_sessions
-          (id, account_id, member_id, csrf_secret, created_at, last_seen_at, expires_at)
+          (id_hash, account_id, member_id, csrf_secret_hash, created_at, last_seen_at, expires_at)
         VALUES
-          (${session.id}, ${session.accountId}, ${session.playerMemberId}, ${session.csrfSecret},
+          (${session.idHash}, ${session.accountId}, ${session.playerMemberId}, ${session
+        .csrfSecretHash},
            ${session.createdAt}, ${session.lastSeenAt}, ${session.expiresAt})
-        ON CONFLICT (id) DO UPDATE SET
+        ON CONFLICT (id_hash) DO UPDATE SET
           account_id   = EXCLUDED.account_id,
           member_id    = EXCLUDED.member_id,
-          csrf_secret  = EXCLUDED.csrf_secret,
+          csrf_secret_hash = EXCLUDED.csrf_secret_hash,
           last_seen_at = EXCLUDED.last_seen_at,
           expires_at   = EXCLUDED.expires_at
       """.update.run.void
 
-    override def delete(id: String): ConnectionIO[Unit] =
-      sql"DELETE FROM app_sessions WHERE id = $id".update.run.void
+    override def delete(idHash: String): ConnectionIO[Unit] =
+      sql"DELETE FROM app_sessions WHERE id_hash = $idHash".update.run.void
 
     override def deleteByAccount(accountId: AccountId): ConnectionIO[Int] =
       sql"DELETE FROM app_sessions WHERE account_id = $accountId".update.run
 
-    override def touchLastSeen(id: String, lastSeenAt: Instant): ConnectionIO[Unit] =
-      sql"UPDATE app_sessions SET last_seen_at = $lastSeenAt WHERE id = $id".update.run.void
+    override def renew(
+        idHash: String,
+        lastSeenAt: Instant,
+        expiresAt: Instant,
+    ): ConnectionIO[Unit] = sql"""
+        UPDATE app_sessions
+        SET last_seen_at = $lastSeenAt, expires_at = $expiresAt
+        WHERE id_hash = $idHash
+      """.update.run.void
 
     override def deleteExpired(now: Instant): ConnectionIO[Int] =
       sql"DELETE FROM app_sessions WHERE expires_at < $now".update.run

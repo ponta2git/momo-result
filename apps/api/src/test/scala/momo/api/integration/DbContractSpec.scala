@@ -220,10 +220,10 @@ final class DbContractSpec extends IntegrationSuite:
   test("app_sessions tracks the login account separately from the optional player member"):
     columnsFor("app_sessions").map { cols =>
       val expected = Set(
-        "id",
+        "id_hash",
         "account_id",
         "member_id",
-        "csrf_secret",
+        "csrf_secret_hash",
         "created_at",
         "last_seen_at",
         "expires_at",

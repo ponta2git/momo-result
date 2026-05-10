@@ -68,7 +68,7 @@ private[http] object AuthHttpRoutes:
                                 .map(_.addCookie(clearCookie(config.auth.stateCookieName, config)))
                             case Some(account) => sessions.create(account).flatMap { session =>
                                 redirect(config.auth.callbackRedirectPath).map(
-                                  _.addCookie(sessionCookie(config, session.id))
+                                  _.addCookie(sessionCookie(config, session.cookieValue))
                                     .addCookie(clearCookie(config.auth.stateCookieName, config))
                                 )
                               }
@@ -89,7 +89,7 @@ private[http] object AuthHttpRoutes:
               request.headers.get(CIString(CsrfMiddleware.HeaderName)).flatMap(_.head.value.some),
             ) match
               case Left(error) => problem(error)
-              case Right(_) => sessions.delete(authenticated.session.id) *>
+              case Right(_) => sessions.delete(authenticated.session.idHash) *>
                   noContent.map(_.addCookie(clearCookie(config.auth.sessionCookieName, config)))
         }
 
@@ -122,7 +122,7 @@ private[http] object AuthHttpRoutes:
                   displayName = authenticated.account.displayName,
                   isAdmin = authenticated.account.isAdmin,
                   memberId = authenticated.account.playerMemberId.map(_.value),
-                  csrfToken = Some(csrf.issue(authenticated.session)),
+                  csrfToken = Some(csrf.issue(authenticated)),
                 ))
             }
     }

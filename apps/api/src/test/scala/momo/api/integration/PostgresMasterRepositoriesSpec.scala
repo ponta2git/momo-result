@@ -23,8 +23,8 @@ final class PostgresMasterRepositoriesSpec extends IntegrationSuite:
   private def memberAliases = new PostgresMemberAliasesRepository[IO](transactor)
   private def members = new PostgresMembersRepository[IO](transactor)
 
-  private def seedTitle: IO[Unit] =
-    gameTitles.create(GameTitle(titleId, "テストタイトル", "world", 1, now))
+  private def seedTitle: IO[Unit] = gameTitles
+    .create(GameTitle(titleId, "テストタイトル", "world", 1, now))
 
   private def seedScopedMasters: IO[Unit] =
     for
@@ -74,22 +74,13 @@ final class PostgresMasterRepositoriesSpec extends IntegrationSuite:
     for
       _ <- seedScopedMasters
       result <- delete.run(titleId)
-    yield
-      assertEquals(result, Left(AppError.Conflict("game title is still referenced.")))
+    yield assertEquals(result, Left(AppError.Conflict("game title is still referenced.")))
 
   test("member aliases create, list, update, reject duplicates, and delete"):
-    val create = new CreateMemberAlias[IO](
-      memberAliases,
-      members,
-      IO.pure(now),
-      IO.pure("alias-ponta"),
-    )
-    val createDuplicateId = new CreateMemberAlias[IO](
-      memberAliases,
-      members,
-      IO.pure(now),
-      IO.pure("alias-otaka"),
-    )
+    val create =
+      new CreateMemberAlias[IO](memberAliases, members, IO.pure(now), IO.pure("alias-ponta"))
+    val createDuplicateId =
+      new CreateMemberAlias[IO](memberAliases, members, IO.pure(now), IO.pure("alias-otaka"))
     val update = new UpdateMemberAlias[IO](memberAliases, members)
     val delete = new DeleteMemberAlias[IO](memberAliases)
     for

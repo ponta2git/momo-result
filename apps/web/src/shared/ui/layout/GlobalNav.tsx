@@ -1,4 +1,13 @@
-import { Database, Download, LogIn, LogOut, ScanLine, ShieldCheck, Trophy } from "lucide-react";
+import {
+  CalendarDays,
+  Database,
+  Download,
+  LogIn,
+  LogOut,
+  ScanLine,
+  ShieldCheck,
+  Trophy,
+} from "lucide-react";
 import type { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
 
@@ -13,6 +22,7 @@ type NavItem = {
 
 const defaultItems: NavItem[] = [
   { icon: <Trophy className="size-4" />, label: "試合", to: "/matches" },
+  { icon: <CalendarDays className="size-4" />, label: "開催", to: "/held-events" },
   { icon: <ScanLine className="size-4" />, label: "OCR", to: "/ocr/new" },
   { icon: <Download className="size-4" />, label: "出力", to: "/exports" },
   { icon: <Database className="size-4" />, label: "マスタ", to: "/admin/masters" },

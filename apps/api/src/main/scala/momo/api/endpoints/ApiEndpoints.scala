@@ -19,6 +19,7 @@ object ApiEndpoints:
     ExportEndpoints.matches,
     HeldEventsEndpoints.list,
     HeldEventsEndpoints.create,
+    HeldEventsEndpoints.delete,
     MatchDraftEndpoints.create,
     MatchDraftEndpoints.get,
     MatchDraftEndpoints.update,

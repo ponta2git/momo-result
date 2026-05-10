@@ -15,6 +15,8 @@ final class InMemoryHeldEventsRepository[F[_]: Sync] private (
       .map(events => InMemoryHeldEventsRepository.filterAndSort(events.values, query, limit))
     override def find(id: HeldEventId): F[Option[HeldEvent]] = ref.get.map(_.get(id))
     override def create(event: HeldEvent): F[Unit] = ref.update(_ + (event.id -> event))
+    override def delete(id: HeldEventId): F[Boolean] = ref
+      .modify(current => if current.contains(id) then (current - id, true) else (current, false))
 
   private val delegate: HeldEventsRepository[F] = HeldEventsRepository.liftIdentity(alg)
 
@@ -22,6 +24,7 @@ final class InMemoryHeldEventsRepository[F[_]: Sync] private (
     .list(query, limit)
   override def find(id: HeldEventId): F[Option[HeldEvent]] = delegate.find(id)
   override def create(event: HeldEvent): F[Unit] = delegate.create(event)
+  override def delete(id: HeldEventId): F[Boolean] = delegate.delete(id)
 
 object InMemoryHeldEventsRepository:
   private[adapters] def filterAndSort(

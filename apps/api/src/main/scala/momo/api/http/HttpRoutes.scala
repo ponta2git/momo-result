@@ -34,6 +34,7 @@ object HttpRoutes:
       cancelOcrJob: CancelOcrJob[F],
       listHeldEvents: ListHeldEvents[F],
       createHeldEvent: CreateHeldEvent[F],
+      deleteHeldEvent: DeleteHeldEvent[F],
       createMatchDraft: CreateMatchDraft[F],
       getMatchDraft: GetMatchDraft[F],
       updateMatchDraft: UpdateMatchDraft[F],
@@ -85,6 +86,7 @@ object HttpRoutes:
       ) ::: HeldEventModule.routes[F](
         deps.listHeldEvents,
         deps.createHeldEvent,
+        deps.deleteHeldEvent,
         deps.idempotency,
         deps.nowF,
         security,

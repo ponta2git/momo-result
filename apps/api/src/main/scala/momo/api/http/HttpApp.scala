@@ -36,7 +36,7 @@ import momo.api.repositories.{
 import momo.api.usecases.{
   CancelMatchDraft, CancelOcrJob, ConfirmMatch, CreateGameTitle, CreateHeldEvent,
   CreateLoginAccount, CreateMapMaster, CreateMatchDraft, CreateOcrJob, CreateSeasonMaster,
-  DeleteMatch, ExpiredSessionPruner, ExportMatches, GetMatch, GetMatchDraft,
+  DeleteHeldEvent, DeleteMatch, ExpiredSessionPruner, ExportMatches, GetMatch, GetMatchDraft,
   GetMatchDraftSourceImages, GetOcrDraft, GetOcrDraftsBulk, GetOcrJob, ListHeldEvents,
   ListLoginAccounts, ListMatches, OcrQueueOutboxDispatcher, OcrQueueSubmitter, PurgeSourceImages,
   SourceImageOrphanReaper, StaleOcrJobReaper, UpdateLoginAccount, UpdateMatch, UpdateMatchDraft,
@@ -395,6 +395,7 @@ object HttpApp:
       allowedMemberIds = config.devMemberIds.map(MemberId(_)).toSet,
     )
     val deleteMatch = DeleteMatch[F](matches)
+    val deleteHeldEvent = DeleteHeldEvent[F](heldEvents, matches, matchDrafts)
     val createGameTitle = CreateGameTitle[F](gameTitles, nowF)
     val createMapMaster = CreateMapMaster[F](gameTitles, mapMasters, nowF)
     val createSeasonMaster = CreateSeasonMaster[F](gameTitles, seasonMasters, nowF)
@@ -418,6 +419,7 @@ object HttpApp:
         cancelOcrJob = cancelOcrJob,
         listHeldEvents = listHeldEvents,
         createHeldEvent = createHeldEvent,
+        deleteHeldEvent = deleteHeldEvent,
         createMatchDraft = createMatchDraft,
         getMatchDraft = getMatchDraft,
         updateMatchDraft = updateMatchDraft,

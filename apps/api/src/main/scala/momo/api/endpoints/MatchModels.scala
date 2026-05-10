@@ -21,6 +21,9 @@ final case class HeldEventListResponse(items: List[HeldEventResponse]) derives C
 
 final case class CreateHeldEventRequest(heldAt: String) derives Codec.AsObject
 
+final case class DeleteHeldEventResponse(heldEventId: String, deleted: Boolean)
+    derives Codec.AsObject
+
 final case class IncidentCountsRequest(
     destination: Int,
     plusStation: Int,

@@ -65,6 +65,58 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
     }
   }
 
+  app.test("DELETE /api/held-events/:id deletes an empty held event") { httpApp =>
+    for
+      id <- createEvent(httpApp)
+      res <- httpApp.run(
+        Request[IO](Method.DELETE, Uri.unsafeFromString(s"/api/held-events/$id"))
+          .putHeaders(devWriteHeaders()*)
+      )
+      _ = assertEquals(res.status, Status.Ok)
+      body <- res.as[Json]
+      listRes <- httpApp
+        .run(Request[IO](Method.GET, uri"/api/held-events").putHeaders(devReadHeader()))
+      listBody <- listRes.as[Json]
+      items = jsonField[List[Json]](listBody, "items")
+    yield
+      assertEquals(jsonField[String](body, "heldEventId"), id)
+      assertEquals(jsonField[Boolean](body, "deleted"), true)
+      assertEquals(items.exists(item => jsonField[String](item, "id") == id), false)
+  }
+
+  app
+    .test("DELETE /api/held-events/:id returns 409 when a confirmed match references it") { httpApp =>
+      for
+        id <- createEvent(httpApp)
+        createMatchRes <- httpApp.run(
+          Request[IO](Method.POST, uri"/api/matches").putHeaders(devWriteHeaders()*)
+            .withEntity(confirmBody(id))
+        )
+        _ = assertEquals(createMatchRes.status, Status.Ok)
+        res <- httpApp.run(
+          Request[IO](Method.DELETE, Uri.unsafeFromString(s"/api/held-events/$id"))
+            .putHeaders(devWriteHeaders()*)
+        )
+        _ <- assertProblem(res, Status.Conflict, "CONFLICT", "confirmed matches")
+      yield ()
+    }
+
+  app.test("DELETE /api/held-events/:id returns 409 when a match draft references it") { httpApp =>
+    for
+      id <- createEvent(httpApp)
+      createDraftRes <- httpApp.run(
+        Request[IO](Method.POST, uri"/api/match-drafts").putHeaders(devWriteHeaders()*)
+          .withEntity(HttpRequestBodies.Matches.matchDraftForHeldEvent(id))
+      )
+      _ = assertEquals(createDraftRes.status, Status.Ok)
+      res <- httpApp.run(
+        Request[IO](Method.DELETE, Uri.unsafeFromString(s"/api/held-events/$id"))
+          .putHeaders(devWriteHeaders()*)
+      )
+      _ <- assertProblem(res, Status.Conflict, "CONFLICT", "match drafts")
+    yield ()
+  }
+
   app.test("GET /api/ocr-drafts bulk rejects empty ids") { httpApp =>
     httpApp.run(Request[IO](Method.GET, uri"/api/ocr-drafts?ids=").putHeaders(devReadHeader()))
       .flatMap(res => assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "ids"))
@@ -162,10 +214,10 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
         id,
         1,
         players = List(
-          HttpRequestBodies.Matches.player("ponta", 1, 1),
-          HttpRequestBodies.Matches.player("akane-mami", 2, 1),
-          HttpRequestBodies.Matches.player("otaka", 3, 3),
-          HttpRequestBodies.Matches.player("eu", 4, 4),
+          HttpRequestBodies.Matches.player("member_ponta", 1, 1),
+          HttpRequestBodies.Matches.player("member_akane_mami", 2, 1),
+          HttpRequestBodies.Matches.player("member_otaka", 3, 3),
+          HttpRequestBodies.Matches.player("member_eu", 4, 4),
         ),
       )
       res <- httpApp.run(
@@ -201,7 +253,7 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
         lines.take(2),
         List(
           "シーズン,シーズンNo.,オーナー,マップ,対戦日,対戦No.,プレー順,プレーヤー名,順位,総資産,収益,目的地,プラス駅,マイナス駅,カード駅,カード売り場,スリの銀次",
-          "2024-spring,1,ponta,東日本編,2024-01-02,1,1,ponta,1,100,50,1,0,0,0,0,0",
+          "2024-spring,1,member_ponta,東日本編,2024-01-02,1,1,member_ponta,1,100,50,1,0,0,0,0,0",
         ),
       )
       assertEquals(lines.size, 6)
@@ -239,7 +291,7 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
         lines.take(2),
         List(
           "シーズン\tシーズンNo.\tオーナー\tマップ\t対戦日\t対戦No.\tプレー順\tプレーヤー名\t順位\t総資産\t収益\t目的地\tプラス駅\tマイナス駅\tカード駅\tカード売り場\tスリの銀次",
-          "2024-spring\t1\tponta\t東日本編\t2024-01-02\t1\t1\tponta\t1\t100\t50\t1\t0\t0\t0\t0\t0",
+          "2024-spring\t1\tmember_ponta\t東日本編\t2024-01-02\t1\t1\tmember_ponta\t1\t100\t50\t1\t0\t0\t0\t0\t0",
         ),
       )
       assertEquals(lines.size, 6)

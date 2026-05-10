@@ -5,6 +5,7 @@ import type { components } from "@/shared/api/generated";
 export type HeldEventResponse = components["schemas"]["HeldEventResponse"];
 export type HeldEventListResponse = components["schemas"]["HeldEventListResponse"];
 export type CreateHeldEventRequest = components["schemas"]["CreateHeldEventRequest"];
+export type DeleteHeldEventResponse = components["schemas"]["DeleteHeldEventResponse"];
 
 export async function listHeldEvents(query = "", limit = 10): Promise<HeldEventListResponse> {
   const params = new URLSearchParams({ limit: String(limit) });
@@ -23,4 +24,13 @@ export async function createHeldEvent(
     body: request,
     idempotencyKey: options.idempotencyKey,
   });
+}
+
+export async function deleteHeldEvent(heldEventId: string): Promise<DeleteHeldEventResponse> {
+  return apiRequest<DeleteHeldEventResponse>(
+    `/api/held-events/${encodeURIComponent(heldEventId)}`,
+    {
+      method: "DELETE",
+    },
+  );
 }

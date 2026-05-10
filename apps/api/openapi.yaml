@@ -790,6 +790,62 @@
         }
       }
     },
+    "/api/held-events/{heldEventId}" : {
+      "delete" : {
+        "tags" : [
+          "held-events"
+        ],
+        "operationId" : "deleteApiHeld-eventsHeldeventid",
+        "parameters" : [
+          {
+            "name" : "heldEventId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-Dev-User",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DeleteHeldEventResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/match-drafts" : {
       "post" : {
         "tags" : [
@@ -2437,6 +2493,22 @@
           },
           "name" : {
             "type" : "string"
+          }
+        }
+      },
+      "DeleteHeldEventResponse" : {
+        "title" : "DeleteHeldEventResponse",
+        "type" : "object",
+        "required" : [
+          "heldEventId",
+          "deleted"
+        ],
+        "properties" : {
+          "heldEventId" : {
+            "type" : "string"
+          },
+          "deleted" : {
+            "type" : "boolean"
           }
         }
       },

@@ -15,3 +15,4 @@ trait HeldEventsAlg[F0[_]]:
   def list(query: Option[String], limit: Int): F0[List[HeldEvent]]
   def find(id: HeldEventId): F0[Option[HeldEvent]]
   def create(event: HeldEvent): F0[Unit]
+  def delete(id: HeldEventId): F0[Boolean]

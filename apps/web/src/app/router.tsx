@@ -8,6 +8,7 @@ import { AdminAccountsPage } from "@/features/adminAccounts/AdminAccountsPage";
 import { LoginPage } from "@/features/auth/LoginPage";
 import { DraftReviewPage } from "@/features/draftReview/DraftReviewPage";
 import { ExportPage } from "@/features/exports/ExportPage";
+import { HeldEventsPage } from "@/features/heldEvents/HeldEventsPage";
 import { MastersPage } from "@/features/masters/MastersPage";
 import { MatchCreatePage } from "@/features/matches/MatchCreatePage";
 import { MatchDetailPage } from "@/features/matches/MatchDetailPage";
@@ -52,6 +53,10 @@ export const appRoutes: RouteObject[] = [
           {
             path: "matches",
             element: <MatchesListPage />,
+          },
+          {
+            path: "held-events",
+            element: <HeldEventsPage />,
           },
           {
             path: "matches/new",

@@ -34,3 +34,14 @@ object HeldEventsEndpoints:
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[HeldEventResponse])
     .tag("held-events")
+
+  type DeleteInput = (String, Option[String], Option[String])
+
+  val delete: PublicEndpoint[DeleteInput, ProblemResponse, DeleteHeldEventResponse, Any] = endpoint
+    .delete
+    .in("api" / "held-events" / path[String]("heldEventId"))
+    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.csrfHeader)
+    .errorOut(CommonEndpoint.errorOut)
+    .out(jsonBody[DeleteHeldEventResponse])
+    .tag("held-events")

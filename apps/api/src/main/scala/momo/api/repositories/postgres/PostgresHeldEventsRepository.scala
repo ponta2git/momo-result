@@ -45,6 +45,10 @@ object PostgresHeldEvents:
         INSERT INTO held_events (id, session_id, held_date_iso, start_at, created_at)
         VALUES (${event.id}, NULL, $heldDateIso, ${event.heldAt}, ${event.heldAt})
       """.update.run.void
+
+    override def delete(id: HeldEventId): ConnectionIO[Boolean] = sql"""
+        DELETE FROM held_events WHERE id = $id
+      """.update.run.map(_ > 0)
 end PostgresHeldEvents
 
 /**

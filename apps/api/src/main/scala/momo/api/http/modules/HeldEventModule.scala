@@ -6,18 +6,21 @@ import cats.effect.Async
 import cats.syntax.all.*
 import sttp.tapir.server.ServerEndpoint
 
+import momo.api.domain.ids.HeldEventId
 import momo.api.endpoints.codec.HeldEventCodec
 import momo.api.endpoints.{
-  CreateHeldEventRequest, HeldEventListResponse, HeldEventResponse, HeldEventsEndpoints,
+  CreateHeldEventRequest, DeleteHeldEventResponse, HeldEventListResponse, HeldEventResponse,
+  HeldEventsEndpoints,
 }
 import momo.api.http.{EndpointSecurity, IdempotencyReplay}
 import momo.api.repositories.IdempotencyRepository
-import momo.api.usecases.{CreateHeldEvent, ListHeldEvents}
+import momo.api.usecases.{CreateHeldEvent, DeleteHeldEvent, ListHeldEvents}
 
 object HeldEventModule:
   def routes[F[_]: Async](
       listHeldEvents: ListHeldEvents[F],
       createHeldEvent: CreateHeldEvent[F],
+      deleteHeldEvent: DeleteHeldEvent[F],
       idempotency: IdempotencyRepository[F],
       nowF: F[Instant],
       security: EndpointSecurity[F],
@@ -42,6 +45,13 @@ object HeldEventModule:
             createHeldEvent.run(HeldEventCodec.toCreateCommand(request))
           )(event => HeldEventResponse.from(event, 0)),
         )
+      }
+    },
+    HeldEventsEndpoints.delete.serverLogic { case (heldEventId, devUser, csrfToken) =>
+      security.authorizeMutation(devUser, csrfToken) { _ =>
+        security.respond(deleteHeldEvent.run(HeldEventId(heldEventId))) { _ =>
+          DeleteHeldEventResponse(heldEventId = heldEventId, deleted = true)
+        }
       }
     },
   )

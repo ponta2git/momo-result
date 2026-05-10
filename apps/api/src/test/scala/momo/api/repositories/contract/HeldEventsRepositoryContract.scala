@@ -40,6 +40,19 @@ trait HeldEventsRepositoryContract:
       got <- repo.find(event.id)
     yield assertEquals(got, Some(event))
 
+  test("delete removes an existing held event and returns false for missing ids"):
+    val event = HeldEvent(HeldEventId("held_delete"), baseInstant)
+    for
+      repo <- freshRepo
+      _ <- repo.create(event)
+      first <- repo.delete(event.id)
+      second <- repo.delete(event.id)
+      got <- repo.find(event.id)
+    yield
+      assertEquals(first, true)
+      assertEquals(second, false)
+      assertEquals(got, None)
+
   test("list orders events by heldAt desc, then by id desc as tie-breaker"):
     val older = HeldEvent(HeldEventId("held_alpha"), at(0))
     val newer = HeldEvent(HeldEventId("held_beta"), at(60))

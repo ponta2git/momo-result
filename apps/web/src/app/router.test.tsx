@@ -98,4 +98,13 @@ describe("app routing", () => {
       expect(router.state.location.pathname).toBe("/matches/match-1/edit");
     });
   });
+
+  it("renders held events at /held-events for authenticated users", async () => {
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    const { router } = renderApp("/held-events");
+
+    expect(await screen.findByRole("heading", { name: "開催履歴" })).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe("/held-events");
+    expect(screen.getByRole("link", { name: "開催" })).toBeInTheDocument();
+  });
 });

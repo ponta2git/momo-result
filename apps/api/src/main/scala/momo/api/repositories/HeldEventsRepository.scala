@@ -10,6 +10,7 @@ trait HeldEventsRepository[F[_]]:
   def list(query: Option[String], limit: Int): F[List[HeldEvent]]
   def find(id: HeldEventId): F[Option[HeldEvent]]
   def create(event: HeldEvent): F[Unit]
+  def delete(id: HeldEventId): F[Boolean]
 
 object HeldEventsRepository:
 
@@ -22,6 +23,7 @@ object HeldEventsRepository:
       transactK(alg.list(query, limit))
     def find(id: HeldEventId): F[Option[HeldEvent]] = transactK(alg.find(id))
     def create(event: HeldEvent): F[Unit] = transactK(alg.create(event))
+    def delete(id: HeldEventId): F[Boolean] = transactK(alg.delete(id))
 
   /** InMemory facade: the algebra already runs in `F`, so the lift is identity. */
   def liftIdentity[F[_]](alg: HeldEventsAlg[F]): HeldEventsRepository[F] =

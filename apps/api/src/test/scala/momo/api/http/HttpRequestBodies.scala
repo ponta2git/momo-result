@@ -43,6 +43,18 @@ object HttpRequestBodies:
       status = None,
     ).asJson
 
+    def matchDraftForHeldEvent(heldEventId: String): Json = CreateMatchDraftRequest(
+      heldEventId = Some(heldEventId),
+      matchNoInEvent = Some(1),
+      gameTitleId = None,
+      layoutFamily = None,
+      seasonMasterId = None,
+      ownerMemberId = None,
+      mapMasterId = None,
+      playedAt = None,
+      status = None,
+    ).asJson
+
     def createOcrJob(imageId: String, requestedImageType: String): Json =
       CreateOcrJobRequest(imageId = imageId, requestedImageType = requestedImageType).asJson
 
@@ -100,10 +112,10 @@ object HttpRequestBodies:
     )
 
     private def defaultPlayers: List[PlayerResultRequest] = List(
-      player("ponta", 1, 1),
-      player("akane-mami", 2, 2),
-      player("otaka", 3, 3),
-      player("eu", 4, 4),
+      player("member_ponta", 1, 1),
+      player("member_akane_mami", 2, 2),
+      player("member_otaka", 3, 3),
+      player("member_eu", 4, 4),
     )
 
     def confirmMatch(heldEventId: String): Json = confirmMatchWithNo(heldEventId, 1)
@@ -121,7 +133,7 @@ object HttpRequestBodies:
       matchNoInEvent = matchNoInEvent,
       gameTitleId = "title_world",
       seasonMasterId = "season_2024_spring",
-      ownerMemberId = "ponta",
+      ownerMemberId = "member_ponta",
       mapMasterId = "map_east",
       playedAt = "2024-01-01T20:00:00Z",
       draftIds = ConfirmMatchDraftIds(None, None, None),

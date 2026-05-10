@@ -327,6 +327,12 @@ export const handlers = [
       matchCount: 0,
     }),
   ),
+  http.delete("/api/held-events/:heldEventId", ({ params }) =>
+    HttpResponse.json({
+      heldEventId: String(params["heldEventId"]),
+      deleted: true,
+    }),
+  ),
   http.post("/api/match-drafts", async () =>
     HttpResponse.json({
       matchDraftId: "draft-created-1",

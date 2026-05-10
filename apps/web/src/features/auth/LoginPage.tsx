@@ -28,6 +28,10 @@ export function LoginPage() {
           ) : null}
 
           <AuthPanel auth={undefined} forceDevPicker={import.meta.env.DEV} />
+
+          <p className="text-xs leading-6 text-[var(--color-text-secondary)]">
+            別のDiscordアカウントを使う場合は、Discord側でログアウトするか、シークレットウィンドウを利用してください。
+          </p>
         </section>
       </PageFrame>
     </>

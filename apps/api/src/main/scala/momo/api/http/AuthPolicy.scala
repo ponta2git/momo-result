@@ -31,7 +31,7 @@ object AuthPolicy:
       accounts: LoginAccountsRepository[F],
   ): AuthPolicy[F] = config.appEnv match
     case AppEnv.Prod => new ProductionAuthPolicy[F](accounts)
-    case AppEnv.Dev | AppEnv.Test => new DevAuthPolicy[F](config, roster)
+    case AppEnv.Dev | AppEnv.Test => new DevAuthPolicy[F](config, roster, accounts)
 
 private final class ProductionAuthPolicy[F[_]: Async](accounts: LoginAccountsRepository[F])
     extends AuthPolicy[F]:
@@ -59,16 +59,33 @@ private final class ProductionAuthPolicy[F[_]: Async](accounts: LoginAccountsRep
       csrfToken: Option[String]
   ): F[Either[ProblemDetails.ProblemResponse, Unit]] = Async[F].pure(Right(()))
 
-private final class DevAuthPolicy[F[_]: Async](config: AppConfig, roster: MemberRoster)
-    extends AuthPolicy[F]:
+private final class DevAuthPolicy[F[_]: Async](
+    config: AppConfig,
+    roster: MemberRoster,
+    accounts: LoginAccountsRepository[F],
+) extends AuthPolicy[F]:
   private def toProblem(error: AppError): ProblemDetails.ProblemResponse = ProblemDetails
     .from(error)
 
   override def authenticate(
       devUser: Option[String]
   ): F[Either[ProblemDetails.ProblemResponse, AuthenticatedAccount]] = devUser match
-    case Some(value) => DevAuthMiddleware.authenticate(config.appEnv, roster, value)
-        .map(_.leftMap(toProblem))
+    case Some(value) => DevAuthMiddleware.authenticate(config.appEnv, roster, value).flatMap {
+        case Right(account) => Async[F].pure(Right(account))
+        case Left(_) => accounts.find(AccountId(value)).map {
+            case Some(account) if account.loginEnabled =>
+              Right(AuthenticatedAccount(
+                account.id,
+                account.displayName,
+                account.isAdmin,
+                account.playerMemberId,
+              ))
+            case Some(_) =>
+              Left(toProblem(AppError.Forbidden("This account is not allowed to log in.")))
+            case None =>
+              Left(toProblem(AppError.Forbidden("X-Dev-User is not one of the allowed accounts.")))
+          }
+      }
     case None => Async[F].pure(Left(toProblem(AppError.Unauthorized())))
 
   override def verifyCsrf(

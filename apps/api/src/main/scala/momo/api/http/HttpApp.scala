@@ -18,8 +18,8 @@ import momo.api.adapters.{
   InMemorySeasonMastersRepository, LocalFsImageStore, RedisQueueProducer,
 }
 import momo.api.auth.{
-  CsrfTokenService, DiscordOAuthClient, JavaDiscordOAuthClient, LoginRateLimiter, MemberRoster,
-  OAuthStateCodec, SessionService,
+  CreatedSession, CsrfTokenService, DiscordOAuthClient, JavaDiscordOAuthClient, LoginRateLimiter,
+  MemberRoster, OAuthStateCodec, SessionService,
 }
 import momo.api.config.AppConfig
 import momo.api.db.Database
@@ -55,6 +55,8 @@ object HttpApp:
       mapMasters: momo.api.repositories.MapMastersRepository[F],
       seasonMasters: momo.api.repositories.SeasonMastersRepository[F],
       idempotency: momo.api.repositories.IdempotencyRepository[F],
+      loginAccounts: momo.api.repositories.LoginAccountsRepository[F],
+      createSession: LoginAccount => F[CreatedSession],
   )
 
   def resource[F[_]: Async](config: AppConfig): Resource[F, Http4sApp[F]] = wired[F](config)
@@ -487,5 +489,13 @@ object HttpApp:
         healthDetails = healthDetails,
         nowF = nowF,
       ))
-      Wired(app, gameTitles, mapMasters, seasonMasters, idempotency)
+      Wired(
+        app,
+        gameTitles,
+        mapMasters,
+        seasonMasters,
+        idempotency,
+        loginAccounts,
+        sessionService.create,
+      )
     }

@@ -37,20 +37,20 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
     val now = IO.pure(Instant.parse("2026-01-01T00:00:00Z"))
     val codec = OAuthStateCodec[IO](config, now)
     for
-      state <- codec.create
+      state <- codec.create(silent = true)
       valid <- codec.validate(state)
       tampered <- codec.validate(state.dropRight(1) + "x")
     yield
-      assert(valid)
-      assert(!tampered)
+      assertEquals(valid, Some(codec.Payload(silent = true)))
+      assertEquals(tampered, None)
   }
 
   test("OAuthStateCodec rejects expired state") {
     val createdAt = Instant.parse("2026-01-01T00:00:00Z")
     for
-      state <- OAuthStateCodec[IO](config, IO.pure(createdAt)).create
+      state <- OAuthStateCodec[IO](config, IO.pure(createdAt)).create(silent = false)
       valid <- OAuthStateCodec[IO](config, IO.pure(createdAt.plusSeconds(301))).validate(state)
-    yield assert(!valid)
+    yield assertEquals(valid, None)
   }
 
   test("CsrfTokenService verifies the hashed session csrf secret"):

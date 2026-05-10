@@ -41,7 +41,7 @@ export function AuthPanel({ auth, forceDevPicker = false }: AuthPanelProps) {
         </div>
       ) : (
         <a
-          href="/api/auth/login"
+          href="/api/auth/login?silent=1"
           className="mt-2 inline-flex rounded-[var(--radius-sm)] bg-[var(--color-action)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 active:opacity-95"
         >
           Discordでログイン

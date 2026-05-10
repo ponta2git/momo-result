@@ -23,7 +23,7 @@ import momo.api.repositories.{AppSession, AppSessionsRepository, LoginAccountsRe
 final case class DiscordUser(id: String)
 
 trait DiscordOAuthClient[F[_]]:
-  def authorizationUrl(state: String): F[String]
+  def authorizationUrl(state: String, prompt: Option[String]): F[String]
   def fetchUser(code: String): F[Either[AppError, DiscordUser]]
 
 final class JavaDiscordOAuthClient[F[_]: Async](config: AuthConfig, client: HttpClient)
@@ -34,14 +34,14 @@ final class JavaDiscordOAuthClient[F[_]: Async](config: AuthConfig, client: Http
   private val tokenUrl = "https://discord.com/api/oauth2/token"
   private val userUrl = "https://discord.com/api/users/@me"
 
-  override def authorizationUrl(state: String): F[String] = Async[F].delay {
+  override def authorizationUrl(state: String, prompt: Option[String]): F[String] = Async[F].delay {
     val params = Map(
       "client_id" -> config.discordClientId.getOrElse(""),
       "redirect_uri" -> config.discordRedirectUri.getOrElse(""),
       "response_type" -> "code",
       "scope" -> config.discordScope,
       "state" -> state,
-    )
+    ) ++ prompt.map("prompt" -> _)
     s"$authorizeUrl?${formEncode(params)}"
   }
 
@@ -194,31 +194,42 @@ final class CsrfTokenService:
 
 final class OAuthStateCodec[F[_]: Sync: SecureRandom](config: AuthConfig, now: F[Instant]):
   private val separator = "."
+  private val silentMarker = "1"
+  private val interactiveMarker = "0"
 
-  def create: F[String] =
+  final case class Payload(silent: Boolean)
+
+  def create(silent: Boolean): F[String] =
     for
       current <- now
       nonce <- SecureTokenGenerator.token[F](24)
-      payload = s"$nonce:${current.plusSeconds(config.stateTtl.toSeconds).getEpochSecond}"
+      marker = if silent then silentMarker else interactiveMarker
+      payload = s"$nonce:${current.plusSeconds(config.stateTtl.toSeconds).getEpochSecond}:$marker"
       sig <- sign(payload)
     yield s"${Base64Url.encode(payload.getBytes(StandardCharsets.UTF_8))}$separator$sig"
 
-  def validate(value: String): F[Boolean] = value.split("\\.", 2).toList match
+  def validate(value: String): F[Option[Payload]] = value.split("\\.", 2).toList match
     case payloadEncoded :: signature :: Nil =>
       val decoded = Base64Url.decode(payloadEncoded)
       decoded match
-        case None => Sync[F].pure(false)
+        case None => Sync[F].pure(None)
         case Some(payloadBytes) =>
           val payload = String(payloadBytes, StandardCharsets.UTF_8)
-          payload.split(":", 2).toList match
-            case _ :: expires :: Nil => (now, sign(payload)).mapN { (current, expected) =>
-                expires.toLongOption.exists(_ > current.getEpochSecond) && MessageDigest.isEqual(
+          payload.split(":", 3).toList match
+            case _ :: expires :: marker :: Nil => (now, sign(payload)).mapN { (current, expected) =>
+                val signatureMatches = MessageDigest.isEqual(
                   signature.getBytes(StandardCharsets.UTF_8),
                   expected.getBytes(StandardCharsets.UTF_8),
                 )
+                val notExpired = expires.toLongOption.exists(_ > current.getEpochSecond)
+                val silent = marker match
+                  case `silentMarker` => Some(true)
+                  case `interactiveMarker` => Some(false)
+                  case _ => None
+                if signatureMatches && notExpired then silent.map(Payload(_)) else None
               }
-            case _ => Sync[F].pure(false)
-    case _ => Sync[F].pure(false)
+            case _ => Sync[F].pure(None)
+    case _ => Sync[F].pure(None)
 
   private def sign(payload: String): F[String] = Sync[F].delay {
     val key = config.stateSigningKey.getOrElse("development-only-oauth-state-signing-key")

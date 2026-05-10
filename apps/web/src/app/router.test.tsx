@@ -48,6 +48,11 @@ describe("app routing", () => {
 
     expect(await screen.findByRole("heading", { name: "ログイン" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "ログイン" })).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "別のDiscordアカウントを使う場合は、Discord側でログアウトするか、シークレットウィンドウを利用してください。",
+      ),
+    ).toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/login");
   });
 

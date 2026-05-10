@@ -4,20 +4,51 @@ import cats.effect.IO
 import io.circe.Json
 import org.http4s.circe.*
 import org.http4s.implicits.*
-import org.http4s.{Method, Request, Status}
+import org.http4s.{Header, Method, Request, Status}
 import org.typelevel.ci.CIString
 
 import momo.api.MomoCatsEffectSuite
-import momo.api.config.ResourceLimitsConfig
+import momo.api.auth.SessionCookieCodec
+import momo.api.config.{AppConfig, AppEnv, ResourceLimitsConfig}
+import momo.api.domain.ids.AccountId
 import momo.api.http.HttpAssertions.{
   assertProblem, assertProblemDetailEquals, headerValue, jsonField, optionalHeaderValue,
 }
 
 final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
+  private final case class SessionBackedHttpApp(
+      app: TestHttpApp,
+      sessionCookie: String,
+      csrfToken: String,
+  )
+
   private val app = ResourceFunFixture(httpAppResource("momo-api-http"))
   private val prodHstsApp = ResourceFunFixture(prodHttpAppResource("momo-api-prod-hsts"))
   private val prodHttpApp = ResourceFunFixture(prodHttpAppResource("momo-api-prod-http"))
   private val prodOpenApiApp = ResourceFunFixture(prodHttpAppResource("momo-api-prod-openapi"))
+  private val sessionBackedApp = ResourceFunFixture(
+    tempDirectory("momo-api-session-auth").flatMap { dir =>
+      HttpApp.wired[IO](AppConfig(
+        appEnv = AppEnv.Test,
+        httpHost = "127.0.0.1",
+        httpPort = 0,
+        imageTmpDir = dir,
+        devMemberIds = List("member_ponta", "member_akane_mami", "member_otaka", "member_eu"),
+      )).evalMap { wired =>
+        for
+          account <- wired.loginAccounts.find(AccountId("account_ponta")).flatMap {
+            case Some(value) => IO.pure(value)
+            case None => IO.raiseError(new IllegalStateException("account_ponta is missing"))
+          }
+          created <- wired.createSession(account)
+          tokens <- IO
+            .fromOption(SessionCookieCodec.decode(created.cookieValue))(new IllegalStateException(
+              "session cookie could not be decoded"
+            ))
+        yield SessionBackedHttpApp(wired.app, created.cookieValue, tokens.csrfToken)
+      }
+    }
+  )
   private val uploadLimitApp = ResourceFunFixture(configuredHttpAppResource(
     "momo-api-upload-limit",
     _.copy(resourceLimits = ResourceLimitsConfig.defaults.copy(uploadRequestMaxBytes = 1L)),
@@ -60,6 +91,75 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
       }
     }
   }
+
+  app.test("GET /api/auth/login?silent=1 requests Discord prompt=none") { httpApp =>
+    httpApp.run(Request[IO](Method.GET, uri"/api/auth/login?silent=1")).map { response =>
+      assertEquals(response.status, Status.Found)
+      val location = headerValue(response, CIString("Location"))
+      assert(location.contains("prompt=none"), s"expected prompt=none in redirect: $location")
+    }
+  }
+
+  app.test("GET /api/auth/login without silent omits Discord prompt") { httpApp =>
+    httpApp.run(Request[IO](Method.GET, uri"/api/auth/login")).map { response =>
+      assertEquals(response.status, Status.Found)
+      val location = headerValue(response, CIString("Location"))
+      assert(!location.contains("prompt="), s"did not expect prompt in redirect: $location")
+    }
+  }
+
+  app.test("silent OAuth callback failure falls back to interactive login") { httpApp =>
+    httpApp.run(Request[IO](Method.GET, uri"/api/auth/login?silent=1")).flatMap { loginResponse =>
+      val stateCookie = loginResponse.cookies.find(_.name == "momo_result_oauth_state")
+        .getOrElse(fail("missing oauth state cookie"))
+      val callbackRequest = Request[IO](
+        Method.GET,
+        uri"/api/auth/callback".withQueryParam("error", "access_denied")
+          .withQueryParam("state", stateCookie.content),
+      ).putHeaders(Header.Raw(CIString("Cookie"), s"${stateCookie.name}=${stateCookie.content}"))
+
+      httpApp.run(callbackRequest).map { callbackResponse =>
+        assertEquals(callbackResponse.status, Status.Found)
+        assertEquals(headerValue(callbackResponse, CIString("Location")), "/api/auth/login")
+        val cleared = callbackResponse.cookies.find(_.name == "momo_result_oauth_state")
+          .getOrElse(fail("missing cleared oauth state cookie"))
+        assertEquals(cleared.content, "")
+        assertEquals(cleared.maxAge, Some(0L))
+      }
+    }
+  }
+
+  sessionBackedApp.test("GET /api/auth/me accepts a session cookie in test env") { fixture =>
+    val request = Request[IO](Method.GET, uri"/api/auth/me")
+      .putHeaders(sessionCookieHeader(fixture.sessionCookie))
+    fixture.app.run(request).flatMap { response =>
+      response.as[Json].map { body =>
+        assertEquals(response.status, Status.Ok)
+        assertEquals(jsonField[String](body, "accountId"), "account_ponta")
+        assertEquals(jsonField[String](body, "csrfToken"), fixture.csrfToken)
+      }
+    }
+  }
+
+  sessionBackedApp
+    .test("admin mutation accepts session auth and session CSRF in test env") { fixture =>
+      val request = Request[IO](Method.POST, uri"/api/admin/login-accounts").putHeaders(
+        sessionCookieHeader(fixture.sessionCookie),
+        Header.Raw(CIString("X-CSRF-Token"), fixture.csrfToken),
+      ).withEntity(Json.obj(
+        "discordUserId" -> Json.fromString("123456789012345678"),
+        "displayName" -> Json.fromString("operator-from-session"),
+        "playerMemberId" -> Json.Null,
+        "loginEnabled" -> Json.fromBoolean(true),
+        "isAdmin" -> Json.fromBoolean(false),
+      ))
+      fixture.app.run(request).flatMap { response =>
+        response.as[Json].map { body =>
+          assertEquals(response.status, Status.Ok)
+          assertEquals(jsonField[String](body, "displayName"), "operator-from-session")
+        }
+      }
+    }
 
   app.test("GET /api/admin/login-accounts is restricted to administrator accounts") { httpApp =>
     val request = Request[IO](Method.GET, uri"/api/admin/login-accounts")
@@ -247,3 +347,6 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
       assertProblem(response, Status.TooManyRequests, "TOO_MANY_REQUESTS", "Too many exports")
     )
   }
+
+  private def sessionCookieHeader(value: String): Header.Raw = Header
+    .Raw(CIString("Cookie"), s"momo_result_session=$value")

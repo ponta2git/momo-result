@@ -279,7 +279,7 @@ export function MatchWorkspacePage({
       return;
     }
     const payload = createDraftReviewHandoffPayload({
-      matchSessionId: matchSessionId ?? matchDraftId ?? "review",
+      matchSessionId: matchSessionId ?? matchDraftId ?? mode,
       returnTo,
       values: state.values,
     });
@@ -358,7 +358,7 @@ export function MatchWorkspacePage({
                 onOpenChange={setCancelDraftConfirmOpen}
               />
             ) : null}
-            {mode === "review" && returnTo ? (
+            {(mode === "review" || mode === "create") && returnTo ? (
               <Button variant="secondary" onClick={handleNavigateToMasters}>
                 マスタ管理へ
               </Button>

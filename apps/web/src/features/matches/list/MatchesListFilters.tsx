@@ -98,7 +98,7 @@ export function MatchesListFilters({
             </div>
           </div>
           <SelectField
-            label="並び順"
+            label="表の並び順"
             options={sortOptions}
             value={initialSearch.sort}
             onChange={(event) => {

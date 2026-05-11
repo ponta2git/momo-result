@@ -136,9 +136,9 @@ export function CaptureSlotCard({
               </h2>
             </div>
           </div>
-          <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-            このホームの画像は「{label}」として送信します。
-          </p>
+          {hasImage ? (
+            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">送信分類: {label}</p>
+          ) : null}
         </div>
         <CaptureStatusBadge status={slot.status} />
       </div>
@@ -164,7 +164,7 @@ export function CaptureSlotCard({
           <span>
             {label}画像をここへ配置
             <br />
-            <span className="text-xs">空きホーム</span>
+            <span className="text-xs">空きトレイ</span>
           </span>
         </div>
       )}

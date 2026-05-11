@@ -9,10 +9,10 @@ export const exportFormats = [
 ] as const;
 
 export const exportScopes = [
-  { description: "確定済みの全試合を出力", label: "全試合", value: "all" },
-  { description: "選択したシーズンだけを出力", label: "シーズン", value: "season" },
-  { description: "選択した開催日の試合を出力", label: "開催", value: "heldEvent" },
-  { description: "選択した1試合だけを出力", label: "試合", value: "match" },
+  { description: "全試合をまとめて書き出します。", label: "全試合", value: "all" },
+  { description: "シーズンで絞り込みます。", label: "シーズン", value: "season" },
+  { description: "開催回で絞り込みます。", label: "開催", value: "heldEvent" },
+  { description: "1試合だけを書き出します。", label: "試合", value: "match" },
 ] as const;
 
 export type ExportCandidateView =
@@ -85,7 +85,7 @@ export function buildCandidateView(input: {
   if (input.candidates.length === 0) {
     if (input.scope === "season") {
       return {
-        actionHref: "/masters",
+        actionHref: "/admin/masters",
         actionLabel: "マスタ管理へ",
         kind: "empty",
         message: "出力範囲に使えるシーズンがまだありません。",
@@ -140,7 +140,10 @@ function scopeLabel(scope: ExportScope): string {
 }
 
 function scopeDescription(scope: ExportScope): string {
-  return exportScopes.find((item) => item.value === scope)?.description ?? "確定済みの全試合を出力";
+  return (
+    exportScopes.find((item) => item.value === scope)?.description ??
+    "全試合をまとめて書き出します。"
+  );
 }
 
 function errorDetail(error: NormalizedApiError): string {
@@ -196,11 +199,8 @@ export function buildExportViewModel(input: {
     selectedId: input.candidate.kind === "ready" ? input.candidate.selectedId : "",
     ticketRows: [
       { label: "形式", value: formatLabel },
-      { label: "範囲", value: scopeLabel(input.urlState.scope) },
-      { label: "候補", value: selectedLabel },
-      { label: "行構造", value: "1プレイヤー1行" },
-      { label: "金額単位", value: "万円単位の整数" },
-      { label: "対象", value: "確定済み試合のみ" },
+      { label: "対象", value: scopeLabel(input.urlState.scope) },
+      { label: "選択中", value: selectedLabel },
     ],
   };
 }

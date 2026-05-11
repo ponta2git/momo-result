@@ -40,11 +40,7 @@ export function MatchesWorkQueueSummary({
 
   const totalIncomplete = counts?.incompleteCount ?? 0;
   if (!counts || totalIncomplete === 0) {
-    return (
-      <section className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
-        <p className="text-sm text-[var(--color-text-secondary)]">未完了の処理はありません。</p>
-      </section>
-    );
+    return null;
   }
 
   return (

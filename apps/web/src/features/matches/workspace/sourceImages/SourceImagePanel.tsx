@@ -95,7 +95,9 @@ export function SourceImagePanel({ loading, preferredKind, sourceImages }: Sourc
     <Card className="h-fit p-4 lg:sticky lg:top-4 lg:w-[22rem] xl:w-[26rem]">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-base font-semibold text-[var(--color-text-primary)]">元画像参照</h2>
-        <span className="text-xs text-[var(--color-text-secondary)]">元画像</span>
+        <span className="text-xs font-semibold text-[var(--color-text-secondary)]">
+          {sourceImageKindLabels[activeKind]}
+        </span>
       </div>
       <p className="mt-1 text-xs text-pretty text-[var(--color-text-secondary)]">
         入力中セルに応じて参照画像を切り替えます。手動で選んだタブはしばらく固定されます。

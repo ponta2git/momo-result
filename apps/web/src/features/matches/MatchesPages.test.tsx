@@ -5,13 +5,14 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { MatchCreatePage } from "@/features/matches/MatchCreatePage";
 import { MatchDetailPage } from "@/features/matches/MatchDetailPage";
 import { MatchesListPage } from "@/features/matches/MatchesListPage";
 import { createTestQueryClient } from "@/test/queryClient";
 
 function LocationProbe() {
   const location = useLocation();
-  return <output aria-label="current location">{location.search}</output>;
+  return <output aria-label="current location">{`${location.pathname}${location.search}`}</output>;
 }
 
 describe("MatchesListPage", () => {
@@ -94,11 +95,53 @@ describe("MatchesListPage", () => {
     );
 
     expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
-    await userEvent.selectOptions(screen.getByLabelText("並び順"), "updated_desc");
+    await userEvent.selectOptions(screen.getByLabelText("表の並び順"), "updated_desc");
 
     await waitFor(() =>
       expect(screen.getByLabelText("current location")).toHaveTextContent("sort=updated_desc"),
     );
+  });
+
+  it("opens master management from manual creation with return handoff", async () => {
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches/new"]}>
+          <Routes>
+            <Route
+              path="/matches/new"
+              element={
+                <>
+                  <LocationProbe />
+                  <MatchCreatePage />
+                </>
+              }
+            />
+            <Route
+              path="/admin/masters"
+              element={
+                <>
+                  <LocationProbe />
+                  <p>masters</p>
+                </>
+              }
+            />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "試合の新規作成" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "マスタ管理へ" }));
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("current location")).toHaveTextContent("/admin/masters"),
+    );
+    expect(screen.getByLabelText("current location")).toHaveTextContent(
+      "returnTo=%2Fmatches%2Fnew",
+    );
+    expect(screen.getByLabelText("current location")).toHaveTextContent("handoffId=");
   });
 });
 

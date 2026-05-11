@@ -22,7 +22,7 @@ export function ExportTicket({ isPending, onDownload, view }: ExportTicketProps)
           ダウンロード確認
         </h2>
         <p className="mt-2 text-sm leading-6 text-[var(--color-text-secondary)]">
-          固定列順で、確定済みの台帳だけを書き出します。
+          選択内容を確認してダウンロードします。
         </p>
       </div>
 
@@ -37,8 +37,8 @@ export function ExportTicket({ isPending, onDownload, view }: ExportTicketProps)
         ))}
       </dl>
 
-      <Notice tone="info" title="列順">
-        シーズン、シーズンNo.、オーナー、マップ、対戦日、対戦No.、プレー順、プレーヤー名、順位、総資産、収益、事件簿6項目の順で出力します。
+      <Notice tone="info" title="列仕様">
+        1プレーヤー1行、金額は万円単位です。列順はシーズン、開催情報、プレーヤー結果、事件簿の順です。
       </Notice>
 
       {view.disableReason ? (

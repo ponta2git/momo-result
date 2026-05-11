@@ -208,7 +208,7 @@ export function CameraCapture({
       <p className="text-xs text-[var(--color-text-secondary)]">
         {disabled
           ? "分類トレイが埋まっているため、追加の撮影はできません。"
-          : "撮影した画像は、空いている分類トレイへ左から順に入ります。"}
+          : "撮影した画像は、最初の空きトレイに入ります。種類が違う場合は分類トレイで入れ替えます。"}
       </p>
     </div>
   );

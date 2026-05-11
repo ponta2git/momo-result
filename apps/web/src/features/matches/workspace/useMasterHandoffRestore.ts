@@ -106,7 +106,7 @@ export function useMasterHandoffRestore({
   );
 
   useEffect(() => {
-    if (mode !== "review") {
+    if (mode !== "review" && mode !== "create") {
       return;
     }
     if (!isInitialized) {

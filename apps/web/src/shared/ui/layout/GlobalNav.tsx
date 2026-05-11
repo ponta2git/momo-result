@@ -48,7 +48,8 @@ function NavItemLink({ item }: { item: NavItem }) {
       to={item.to}
       className={({ isActive }) =>
         cn(
-          "inline-flex min-h-9 items-center gap-2 rounded-[var(--radius-sm)] border px-3 py-1.5 text-sm font-semibold transition-colors duration-150",
+          "inline-flex min-h-8 items-center gap-2 rounded-[var(--radius-sm)] border px-2.5 py-1 text-sm font-semibold transition-colors duration-150 lg:min-h-9 lg:px-3 lg:py-1.5",
+          "shrink-0",
           isActive
             ? "border-[var(--color-action)]/60 bg-[var(--color-action)]/12 text-[var(--color-text-primary)]"
             : "border-transparent text-[var(--color-text-secondary)] hover:border-[var(--color-border)] hover:bg-[var(--color-surface-subtle)]",
@@ -82,46 +83,48 @@ export function GlobalNav({
         className,
       )}
     >
-      <div className="mx-auto grid w-full max-w-[75rem] min-w-0 gap-2 px-3 py-2 sm:px-4 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center">
-        <div className="flex min-w-0 items-center gap-2">
-          <p className="rounded-[var(--radius-xs)] bg-[var(--color-surface-subtle)] px-2 py-1 text-sm font-semibold text-[var(--color-text-primary)]">
-            momo-result
-          </p>
-          {import.meta.env.DEV ? (
-            <span className="rounded-[var(--radius-xs)] border border-[var(--color-border)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-text-secondary)]">
-              DEV
-            </span>
+      <div className="mx-auto grid w-full max-w-[75rem] min-w-0 grid-cols-1 gap-1.5 px-3 py-1.5 sm:px-4 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center lg:gap-2 lg:py-2">
+        <div className="flex min-w-0 items-center justify-between gap-2 lg:contents">
+          <div className="flex min-w-0 items-center gap-2 lg:col-start-1 lg:row-start-1">
+            <p className="rounded-[var(--radius-xs)] bg-[var(--color-surface-subtle)] px-2 py-1 text-sm font-semibold text-[var(--color-text-primary)]">
+              momo-result
+            </p>
+            {import.meta.env.DEV ? (
+              <span className="rounded-[var(--radius-xs)] border border-[var(--color-border)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-text-secondary)]">
+                DEV
+              </span>
+            ) : null}
+          </div>
+          {isAuthenticated ? (
+            <div className="ml-auto flex min-w-0 items-center gap-2 lg:col-start-3 lg:row-start-1 lg:justify-end">
+              <p className="max-w-28 truncate text-xs text-[var(--color-text-secondary)]">
+                {authDisplayName ?? "ログイン中"}
+              </p>
+              <Button
+                icon={<LogOut className="size-4" />}
+                onClick={onLogout}
+                pending={isLogoutPending}
+                pendingLabel="ログアウト中"
+                size="sm"
+                variant="secondary"
+              >
+                ログアウト
+              </Button>
+            </div>
           ) : null}
         </div>
-        <div className="flex min-w-0 flex-wrap items-center gap-1.5 lg:justify-center">
+        <div className="-mx-3 flex min-w-0 [scrollbar-width:none] items-center gap-1.5 overflow-x-auto px-3 pb-1 lg:col-start-2 lg:row-start-1 lg:mx-0 lg:flex-wrap lg:justify-center lg:overflow-visible lg:px-0 lg:pb-0 [&::-webkit-scrollbar]:hidden">
           {primaryItems.map((item) => (
             <NavItemLink key={item.to} item={item} />
           ))}
           {managementItems.length > 0 ? (
-            <div className="ml-0 flex min-w-0 flex-wrap items-center gap-1.5 border-t border-[var(--color-border)] pt-1.5 sm:ml-1 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-2">
+            <div className="ml-1 flex min-w-0 shrink-0 items-center gap-1.5 border-l border-[var(--color-border)] pl-2">
               {managementItems.map((item) => (
                 <NavItemLink key={item.to} item={item} />
               ))}
             </div>
           ) : null}
         </div>
-        {isAuthenticated ? (
-          <div className="flex min-w-0 items-center gap-2 lg:justify-end">
-            <p className="truncate text-xs text-[var(--color-text-secondary)]">
-              {authDisplayName ?? "ログイン中"}
-            </p>
-            <Button
-              icon={<LogOut className="size-4" />}
-              onClick={onLogout}
-              pending={isLogoutPending}
-              pendingLabel="ログアウト中"
-              size="sm"
-              variant="secondary"
-            >
-              ログアウト
-            </Button>
-          </div>
-        ) : null}
       </div>
     </nav>
   );

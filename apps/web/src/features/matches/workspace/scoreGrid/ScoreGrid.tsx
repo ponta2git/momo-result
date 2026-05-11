@@ -391,7 +391,9 @@ export function ScoreGrid({
       </colgroup>
       <thead className="text-xs text-[var(--color-text-secondary)]">
         <tr>
-          <th className="px-2 py-2">メンバー</th>
+          <th className="sticky left-0 z-[var(--z-dropdown)] bg-[var(--color-surface)] px-2 py-2">
+            メンバー
+          </th>
           <th className="px-2 py-2">順</th>
           <th className="px-2 py-2">順位</th>
           <th className="px-2 py-2">総資産</th>
@@ -410,7 +412,7 @@ export function ScoreGrid({
           const originalByOrder = originalByPlayOrder.get(player.playOrder);
           return (
             <tr key={player.memberId} className="bg-[var(--color-surface-subtle)]">
-              <td className="rounded-l-[var(--radius-md)] px-2 py-3 align-top">
+              <td className="sticky left-0 z-[var(--z-sticky)] rounded-l-[var(--radius-md)] bg-[var(--color-surface-subtle)] px-2 py-3 align-top">
                 <select
                   ref={(node) => {
                     const cellId = getCellId(rowIndex, 0);
@@ -565,7 +567,7 @@ export function ScoreGrid({
   );
 
   return (
-    <section className="mt-6">
+    <section>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold text-[var(--color-text-primary)]">

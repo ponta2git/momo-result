@@ -7,19 +7,26 @@ import { IconButton } from "@/shared/ui/actions/IconButton";
 import { cn } from "@/shared/ui/cn";
 
 type DialogBaseProps = {
+  backdropClassName?: string | undefined;
   children?: ReactNode | undefined;
   className?: string | undefined;
   description?: ReactNode | undefined;
   onOpenChange?: ((open: boolean) => void) | undefined;
   open?: boolean | undefined;
+  popupClassName?: string | undefined;
+  surfaceClassName?: string | undefined;
   title: ReactNode;
-  trigger: ReactElement;
+};
+
+type DialogProps = DialogBaseProps & {
+  trigger?: ReactElement | undefined;
 };
 
 type AlertDialogProps = DialogBaseProps & {
   cancelLabel?: ReactNode | undefined;
   confirmLabel?: ReactNode | undefined;
   onConfirm: () => void;
+  trigger: ReactElement;
 };
 
 function DialogContentFrame({
@@ -32,9 +39,9 @@ function DialogContentFrame({
     <div className="space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-lg font-semibold text-balance text-[var(--color-text-primary)]">
+          <BaseDialog.Title className="text-lg font-semibold text-balance text-[var(--color-text-primary)]">
             {title}
-          </h2>
+          </BaseDialog.Title>
           {description ? (
             <p className="mt-1 text-sm leading-6 text-pretty text-[var(--color-text-secondary)]">
               {description}
@@ -54,23 +61,39 @@ function DialogContentFrame({
 
 export function Dialog({
   children,
+  backdropClassName,
   className,
   description,
   onOpenChange,
   open,
+  popupClassName,
+  surfaceClassName,
   title,
   trigger,
-}: DialogBaseProps) {
+}: DialogProps) {
   return (
     <BaseDialog.Root onOpenChange={(nextOpen) => onOpenChange?.(nextOpen)} open={open}>
-      <BaseDialog.Trigger render={trigger} />
+      {trigger ? <BaseDialog.Trigger render={trigger} /> : null}
       <BaseDialog.Portal>
-        <BaseDialog.Backdrop className="fixed inset-0 z-[var(--z-dialog)] bg-[var(--momo-night-900)]/35" />
+        <BaseDialog.Backdrop
+          className={cn(
+            "fixed inset-0 z-[var(--z-dialog)] bg-[var(--momo-night-900)]/35",
+            backdropClassName,
+          )}
+        />
         <BaseDialog.Popup
-          className="fixed inset-0 z-[var(--z-dialog)] mx-auto flex w-full max-w-[40rem] items-center justify-center p-4"
+          className={cn(
+            "fixed inset-0 z-[var(--z-dialog)] mx-auto flex w-full max-w-[40rem] items-center justify-center p-4",
+            popupClassName,
+          )}
           initialFocus={true}
         >
-          <div className="w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] shadow-lg">
+          <div
+            className={cn(
+              "w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] shadow-lg",
+              surfaceClassName,
+            )}
+          >
             <DialogContentFrame className={className} description={description} title={title}>
               {children}
             </DialogContentFrame>

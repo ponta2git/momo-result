@@ -149,6 +149,10 @@ export function MatchDetailPage() {
       return (leftValue - rightValue) * direction;
     });
   }, [match.players, sort]);
+  const rankedPlayers = useMemo(
+    () => (match.players ?? []).toSorted((left, right) => left.rank - right.rank),
+    [match.players],
+  );
 
   return (
     <PageFrame className="gap-5" width="wide">
@@ -235,8 +239,53 @@ export function MatchDetailPage() {
       </Card>
 
       <Card>
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] md:items-start">
+          <div className="rounded-[var(--radius-md)] border border-[var(--color-action)]/45 bg-[var(--color-action)]/10 p-4">
+            <p className="text-xs font-semibold text-[var(--color-text-secondary)]">優勝</p>
+            <p className="mt-1 text-2xl font-semibold text-balance text-[var(--color-text-primary)]">
+              {rankedPlayers[0] ? memberName(rankedPlayers[0].memberId) : "未確定"}
+            </p>
+            {rankedPlayers[0] ? (
+              <div className="mt-3 grid gap-1 text-sm text-[var(--color-text-secondary)]">
+                <p>
+                  総資産{" "}
+                  <span className="font-semibold text-[var(--color-text-primary)] tabular-nums">
+                    {formatManYen(rankedPlayers[0].totalAssetsManYen)}
+                  </span>
+                </p>
+                <p>
+                  収益{" "}
+                  <span className="font-semibold text-[var(--color-text-primary)] tabular-nums">
+                    {formatManYen(rankedPlayers[0].revenueManYen)}
+                  </span>
+                </p>
+              </div>
+            ) : null}
+          </div>
+          <ol className="grid gap-2">
+            {rankedPlayers.map((player) => (
+              <li
+                key={player.memberId}
+                className="grid grid-cols-[3rem_minmax(0,1fr)_auto] items-center gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-2"
+              >
+                <span className="text-lg font-semibold text-[var(--color-text-primary)] tabular-nums">
+                  {player.rank}位
+                </span>
+                <span className="truncate font-semibold text-[var(--color-text-primary)]">
+                  {memberName(player.memberId)}
+                </span>
+                <span className="text-sm text-[var(--color-text-secondary)] tabular-nums">
+                  {formatManYen(player.totalAssetsManYen)}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </Card>
+
+      <Card>
         <div className="mb-3">
-          <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">プレイヤー結果</h2>
+          <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">成績詳細</h2>
           <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
             見出しを選ぶと、各項目で並び替えできます。
           </p>

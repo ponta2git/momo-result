@@ -1,6 +1,6 @@
 import { keepPreviousData, useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { AlertTriangle, Download, PenSquare, RefreshCw, ScanLine } from "lucide-react";
-import { useDeferredValue, useEffect, useMemo, useTransition } from "react";
+import { useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { MatchesListFilters } from "@/features/matches/list/MatchesListFilters";
@@ -47,6 +47,7 @@ export function MatchesListPage() {
   const search = parseMatchListSearchParams(searchParams);
   const deferredSearch = useDeferredValue(search);
   const [isFilterPending, startFilterTransition] = useTransition();
+  const [isManualRefreshing, setIsManualRefreshing] = useState(false);
 
   const applySearch = (nextSearch: MatchListSearch) => {
     startFilterTransition(() => {
@@ -127,10 +128,18 @@ export function MatchesListPage() {
   const hasFilters = hasMatchListFilters(search);
   const showMatchesLoading = isInitialQueryLoading(matchesQuery);
   const showMatchesError = shouldShowBlockingQueryError(matchesQuery);
-  const refreshing = matchesQuery.isFetching || matchesSummaryQuery.isFetching;
   const searchSignature = buildMatchListSearchParams(search).toString();
   const deferredSearchSignature = buildMatchListSearchParams(deferredSearch).toString();
   const isStale = isFilterPending || searchSignature !== deferredSearchSignature;
+
+  const handleManualRefresh = async () => {
+    setIsManualRefreshing(true);
+    try {
+      await Promise.all([matchesQuery.refetch(), matchesSummaryQuery.refetch()]);
+    } finally {
+      setIsManualRefreshing(false);
+    }
+  };
 
   return (
     <PageFrame className="gap-5">
@@ -138,35 +147,42 @@ export function MatchesListPage() {
         description="OCR中、確定前、確定済みの試合記録を確認します。開催や作品で絞り込み、出力対象を探します。"
         eyebrow="試合記録"
         title="試合一覧"
-        actions={
-          <>
-            <Link to="/ocr/new">
-              <Button icon={<ScanLine className="size-4" />}>OCR取り込み</Button>
-            </Link>
-            <Link to="/matches/new">
-              <Button icon={<PenSquare className="size-4" />} variant="secondary">
-                手入力で作成
-              </Button>
-            </Link>
-            <Link to="/exports">
-              <Button icon={<Download className="size-4" />} variant="secondary">
-                CSV/TSV出力
-              </Button>
-            </Link>
-            <Button
-              icon={<RefreshCw className="size-4" />}
-              pending={refreshing}
-              pendingLabel="更新中..."
-              variant="quiet"
-              onClick={async () => {
-                await Promise.all([matchesQuery.refetch(), matchesSummaryQuery.refetch()]);
-              }}
-            >
-              最新情報に更新
-            </Button>
-          </>
-        }
       />
+
+      <section className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Link to="/ocr/new">
+            <Button icon={<ScanLine className="size-4" />}>OCR取り込み</Button>
+          </Link>
+          <Link to="/matches/new">
+            <Button icon={<PenSquare className="size-4" />} variant="secondary">
+              手入力で作成
+            </Button>
+          </Link>
+          <Link to="/exports">
+            <Button icon={<Download className="size-4" />} variant="secondary">
+              CSV/TSV出力
+            </Button>
+          </Link>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {isStale ? (
+            <span className="text-sm font-medium text-[var(--color-text-secondary)]">
+              条件を反映中
+            </span>
+          ) : null}
+          <Button
+            className="w-44"
+            icon={<RefreshCw className="size-4" />}
+            pending={isManualRefreshing}
+            pendingLabel="更新中..."
+            variant="quiet"
+            onClick={handleManualRefresh}
+          >
+            最新情報に更新
+          </Button>
+        </div>
+      </section>
 
       <MatchesWorkQueueSummary
         counts={summaryCounts}

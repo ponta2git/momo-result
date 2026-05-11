@@ -69,3 +69,15 @@ final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite with HttpAppT
       second <- httpApp.run(heldEventReq(None, "2024-05-01T00:00:00Z"))
     yield assertEquals(second.status, Status.Ok)
   }
+
+  app.test("idempotency: invalid key characters are rejected before side effects") { httpApp =>
+    httpApp.run(heldEventReq(Some("bad key"), "2024-06-01T00:00:00Z")).flatMap { response =>
+      assertProblem(response, Status.UnprocessableContent, "VALIDATION_FAILED", "Idempotency-Key")
+    }
+  }
+
+  app.test("idempotency: keys longer than 128 characters are rejected") { httpApp =>
+    httpApp.run(heldEventReq(Some("a" * 129), "2024-07-01T00:00:00Z")).flatMap { response =>
+      assertProblem(response, Status.UnprocessableContent, "VALIDATION_FAILED", "Idempotency-Key")
+    }
+  }

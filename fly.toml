@@ -5,9 +5,9 @@ primary_region = "nrt"
   dockerfile = "Dockerfile"
 
 [build.args]
-  PYTHON_IMAGE = "python:3.14-slim-bookworm"
+  PYTHON_IMAGE = "python:3.14-slim-bookworm@sha256:cba2eed20b946f0fcf51f2e736f00b71921884b0704b4301febf8d01032b1792"
   TESSERACT_VERSION = "5.5.2"
-  TESSDATA_REF = "main"
+  TESSDATA_REF = "87416418657359cb625c412a48b6e1d6d41c29bd"
   TESSDATA_LANGS = "eng jpn"
 
 [env]
@@ -34,4 +34,4 @@ primary_region = "nrt"
     interval = "30s"
     method = "GET"
     timeout = "5s"
-    path = "/healthz/details"
+    path = "/healthz"

@@ -39,3 +39,30 @@ class AppConfigSpec extends FunSuite:
     assertEquals(user, None)
     assertEquals(pass, None)
   }
+
+  test("ensureProdSslMode: appends sslmode=require in prod when missing") {
+    val result = AppConfig.ensureProdSslMode("jdbc:postgresql://db.example.com/mydb", AppEnv.Prod)
+    assertEquals(result, Right("jdbc:postgresql://db.example.com/mydb?sslmode=require"))
+  }
+
+  test("ensureProdSslMode: preserves existing strict sslmode in prod") {
+    val result = AppConfig.ensureProdSslMode(
+      "jdbc:postgresql://db.example.com/mydb?connectTimeout=10&sslmode=verify-full",
+      AppEnv.Prod,
+    )
+    assertEquals(
+      result,
+      Right("jdbc:postgresql://db.example.com/mydb?connectTimeout=10&sslmode=verify-full"),
+    )
+  }
+
+  test("ensureProdSslMode: rejects weak sslmode in prod") {
+    val result = AppConfig
+      .ensureProdSslMode("jdbc:postgresql://db.example.com/mydb?sslmode=disable", AppEnv.Prod)
+    assert(result.isLeft, s"expected weak sslmode to be rejected: $result")
+  }
+
+  test("ensureProdSslMode: leaves non-prod URLs unchanged") {
+    val result = AppConfig.ensureProdSslMode("jdbc:postgresql://localhost:5432/mydb", AppEnv.Test)
+    assertEquals(result, Right("jdbc:postgresql://localhost:5432/mydb"))
+  }

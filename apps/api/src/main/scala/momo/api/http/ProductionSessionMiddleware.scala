@@ -25,11 +25,13 @@ private[http] final class ProductionSessionMiddleware[F[_]: Async](
 
   def apply(app: HttpApp[F]): HttpApp[F] = config.appEnv match
     case AppEnv.Dev | AppEnv.Test => Kleisli { request =>
-        if isPublic(request) || request.headers.get(devUserHeader).nonEmpty then app.run(request)
+        if isPublic(request, allowDetailedHealth = true) || request.headers.get(devUserHeader)
+            .nonEmpty
+        then app.run(request)
         else withSession(request, app)
       }
     case AppEnv.Prod => Kleisli { request =>
-        if isPublic(request) then app.run(request)
+        if isPublic(request, allowDetailedHealth = false) then app.run(request)
         else withSession(request.removeHeader(devUserHeader), app)
       }
 
@@ -59,9 +61,9 @@ private[http] final class ProductionSessionMiddleware[F[_]: Async](
   private def isMutating(method: org.http4s.Method): Boolean = Set("POST", "PUT", "PATCH", "DELETE")
     .contains(method.name)
 
-  private def isPublic(request: Request[F]): Boolean =
+  private def isPublic(request: Request[F], allowDetailedHealth: Boolean): Boolean =
     val path = request.uri.path.renderString
-    path == "/healthz" || path == "/healthz/details"
+    path == "/healthz" || (allowDetailedHealth && path == "/healthz/details")
 
   private def problem(error: AppError): F[Response[F]] =
     val (status, body) = ProblemDetails.from(error)

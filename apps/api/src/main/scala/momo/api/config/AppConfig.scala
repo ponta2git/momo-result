@@ -105,13 +105,16 @@ object AppConfig:
       case None => MonadThrow[F].pure(None)
       case Some(rawUrl) =>
         val (jdbcUrl, urlUser, urlPassword) = toJdbcUrl(rawUrl)
-        MonadThrow[F].pure(Some(DatabaseConfig(
-          jdbcUrl = jdbcUrl,
-          user = urlUser.orElse(env.get("DATABASE_USER").filter(_.nonEmpty)).getOrElse(""),
-          password = urlPassword.orElse(env.get("DATABASE_PASSWORD").filter(_.nonEmpty))
-            .getOrElse(""),
-          poolSize = env.get("DB_POOL_SIZE").flatMap(_.toIntOption).getOrElse(2),
-        )))
+        val validated = ensureProdSslMode(jdbcUrl, appEnv)
+        validated.map { safeJdbcUrl =>
+          Some(DatabaseConfig(
+            jdbcUrl = safeJdbcUrl,
+            user = urlUser.orElse(env.get("DATABASE_USER").filter(_.nonEmpty)).getOrElse(""),
+            password = urlPassword.orElse(env.get("DATABASE_PASSWORD").filter(_.nonEmpty))
+              .getOrElse(""),
+            poolSize = env.get("DB_POOL_SIZE").flatMap(_.toIntOption).getOrElse(2),
+          ))
+        }.liftTo[F]
 
   private def loadRedis[F[_]: MonadThrow](
       env: Map[String, String],
@@ -215,6 +218,37 @@ object AppConfig:
       val query = Option(uri.getRawQuery).map(q => s"?$q").getOrElse("")
       val jdbcUrl = s"jdbc:postgresql://$host$port$path$query"
       (jdbcUrl, user, pass)
+
+  private[config] def ensureProdSslMode(
+      jdbcUrl: String,
+      appEnv: AppEnv,
+  ): Either[Throwable, String] =
+    if appEnv != AppEnv.Prod then Right(jdbcUrl)
+    else
+      val sslMode = jdbcQueryParams(jdbcUrl).get("sslmode").flatMap(_.lastOption)
+      sslMode match
+        case Some(value)
+            if value.equalsIgnoreCase("require") || value.equalsIgnoreCase("verify-ca") ||
+              value.equalsIgnoreCase("verify-full") => Right(jdbcUrl)
+        case Some(value) => Left(new IllegalArgumentException(
+            s"DATABASE_URL sslmode must be require, verify-ca, or verify-full in prod APP_ENV, got: $value"
+          ))
+        case None => Right(appendJdbcQueryParam(jdbcUrl, "sslmode", "require"))
+
+  private def jdbcQueryParams(jdbcUrl: String): Map[String, List[String]] =
+    val queryStart = jdbcUrl.indexOf('?')
+    if queryStart < 0 || queryStart == jdbcUrl.length - 1 then Map.empty
+    else
+      jdbcUrl.substring(queryStart + 1).split("&").iterator.toList.filter(_.nonEmpty)
+        .foldLeft(Map.empty[String, List[String]]) { (acc, part) =>
+          val key = part.takeWhile(_ != '=')
+          val value = part.drop(key.length).stripPrefix("=")
+          acc.updated(key, acc.getOrElse(key, Nil) :+ value)
+        }
+
+  private def appendJdbcQueryParam(jdbcUrl: String, key: String, value: String): String =
+    val separator = if jdbcUrl.contains("?") then "&" else "?"
+    s"$jdbcUrl$separator$key=$value"
 
 object AuthConfig:
   def defaults(appEnv: AppEnv): AuthConfig = AuthConfig(

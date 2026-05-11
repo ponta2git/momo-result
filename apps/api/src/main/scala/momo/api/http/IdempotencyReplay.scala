@@ -32,6 +32,7 @@ private[http] object IdempotencyReplay:
   private val PrinterCanonical: Printer =
     Printer(dropNullValues = false, indent = "", sortKeys = true)
   private val RetentionMillis: Long = 24L * 60L * 60L * 1000L
+  private val ValidKeyPattern = "^[A-Za-z0-9._:-]{1,128}$".r
 
   /**
    * @param key       the inbound `Idempotency-Key` header value
@@ -53,8 +54,12 @@ private[http] object IdempotencyReplay:
       using Encoder[Req],
       Encoder[Resp],
       Decoder[Resp],
-  ): F[Either[ProblemDetails.ProblemResponse, Resp]] = key.map(_.trim).filter(_.nonEmpty) match
+  ): F[Either[ProblemDetails.ProblemResponse, Resp]] = key match
     case None => run
+    case Some(rawKey) if !isValidKey(rawKey) =>
+      Async[F].pure(Left(ProblemDetails.from(AppError.ValidationFailed(
+        "Idempotency-Key must be 1 to 128 characters using only A-Z, a-z, 0-9, dot, underscore, colon, or hyphen."
+      ))))
     case Some(rawKey) =>
       val requestHash = sha256(canonicalJsonBytes(request.asJson))
       idempotency.lookup(rawKey, account.accountId, endpoint).flatMap {
@@ -113,6 +118,8 @@ private[http] object IdempotencyReplay:
 
   private def sha256(bytes: Array[Byte]): Vector[Byte] = MessageDigest.getInstance("SHA-256")
     .digest(bytes).toVector
+
+  private def isValidKey(value: String): Boolean = ValidKeyPattern.matches(value)
 
   private def decodeStoredBody[A: Decoder](bytes: Vector[Byte]): Either[Throwable, A] =
     circeDecode[A](new String(bytes.toArray, StandardCharsets.UTF_8))

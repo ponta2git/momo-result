@@ -331,6 +331,17 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
     )
   }
 
+  prodHttpApp.test("prod /healthz/details is protected by session middleware") { httpApp =>
+    httpApp.run(Request[IO](Method.GET, uri"/healthz/details")).flatMap(response =>
+      assertProblemDetailEquals(
+        response,
+        Status.Unauthorized,
+        "UNAUTHORIZED",
+        "Authentication is required.",
+      )
+    )
+  }
+
   uploadLimitApp
     .test("oversized upload requests are rejected before multipart decoding") { httpApp =>
       val request = Request[IO](Method.POST, uri"/api/uploads/images")

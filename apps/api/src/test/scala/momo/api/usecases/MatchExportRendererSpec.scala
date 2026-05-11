@@ -51,6 +51,31 @@ final class MatchExportRendererSpec extends FunSuite:
       "春\\t大会\t2\tぽん\"た\t東日本編\t2024-01-02\t7\t1\tA\\\\B\\nC\t1\t12000\t3000\t5\t2\t1\t3\t4\t0",
     )
 
+  test("CSV output neutralizes spreadsheet formulas in text cells"):
+    val out = MatchExportRenderer.render(
+      MatchExportFormat.Csv,
+      List(row.copy(
+        seasonName = "=cmd",
+        ownerName = " +SUM(A1:A2)",
+        mapName = "@hidden",
+        playerName = "-player",
+      )),
+    )
+    val lines = out.split("\r\n", -1).toList
+    assertEquals(
+      lines(1),
+      "'=cmd,2,' +SUM(A1:A2),'@hidden,2024-01-02,7,1,'-player,1,12000,3000,5,2,1,3,4,0",
+    )
+
+  test("TSV output neutralizes formulas before structural escaping"):
+    val out = MatchExportRenderer
+      .render(MatchExportFormat.Tsv, List(row.copy(seasonName = "\t=cmd", playerName = "@player")))
+    val lines = out.split("\r\n", -1).toList
+    assertEquals(
+      lines(1),
+      "'\\t=cmd\t2\tぽん\"た\t東日本編\t2024-01-02\t7\t1\t'@player\t1\t12000\t3000\t5\t2\t1\t3\t4\t0",
+    )
+
   test("empty exports still include the header line"):
     val out = MatchExportRenderer.render(MatchExportFormat.Csv, Nil)
     assertEquals(

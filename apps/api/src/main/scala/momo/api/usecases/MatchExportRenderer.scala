@@ -33,14 +33,14 @@ object MatchExportRenderer:
     allLines.map(line => renderLine(format, line)).mkString("\r\n") + "\r\n"
 
   private def fields(row: MatchExportRow): List[String] = List(
-    row.seasonName,
+    spreadsheetSafeText(row.seasonName),
     row.seasonNo.toString,
-    row.ownerName,
-    row.mapName,
+    spreadsheetSafeText(row.ownerName),
+    spreadsheetSafeText(row.mapName),
     DateFormatter.format(row.playedAt.atZone(Jst).toLocalDate),
     row.gameTitleMatchNo.toString,
     row.playOrder.toString,
-    row.playerName,
+    spreadsheetSafeText(row.playerName),
     row.rank.toString,
     row.totalAssetsManYen.toString,
     row.revenueManYen.toString,
@@ -55,6 +55,13 @@ object MatchExportRenderer:
   private def renderLine(format: MatchExportFormat, fields: List[String]): String = format match
     case MatchExportFormat.Csv => fields.map(csvField).mkString(format.delimiter)
     case MatchExportFormat.Tsv => fields.map(tsvField).mkString(format.delimiter)
+
+  private def spreadsheetSafeText(value: String): String =
+    val dangerousFirst = value.headOption.exists(ch => ch == '\t' || ch == '\r' || ch == '\n')
+    val afterLeadingBlanks = value.dropWhile(ch => ch == ' ' || ch == '\t')
+    val dangerousFormula = afterLeadingBlanks.headOption
+      .exists(ch => ch == '=' || ch == '+' || ch == '-' || ch == '@')
+    if dangerousFirst || dangerousFormula then s"'$value" else value
 
   private def csvField(value: String): String =
     val mustQuote = value.exists(ch => ch == ',' || ch == '"' || ch == '\r' || ch == '\n')

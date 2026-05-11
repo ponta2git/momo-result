@@ -29,15 +29,15 @@ const jsonIdempotencyTargets: ReadonlyArray<{
   method: HttpMethod;
   pathname: RegExp;
 }> = [
-  { method: "POST", pathname: /^\/api\/held-events$/ },
-  { method: "POST", pathname: /^\/api\/match-drafts$/ },
-  { method: "PATCH", pathname: /^\/api\/match-drafts\/[^/]+$/ },
-  { method: "POST", pathname: /^\/api\/matches$/ },
-  { method: "POST", pathname: /^\/api\/ocr-jobs$/ },
-  { method: "POST", pathname: /^\/api\/game-titles$/ },
-  { method: "POST", pathname: /^\/api\/map-masters$/ },
-  { method: "POST", pathname: /^\/api\/season-masters$/ },
-  { method: "POST", pathname: /^\/api\/admin\/login-accounts$/ },
+  { method: "POST", pathname: /^\/api\/held-events$/u },
+  { method: "POST", pathname: /^\/api\/match-drafts$/u },
+  { method: "PATCH", pathname: /^\/api\/match-drafts\/[^/]+$/u },
+  { method: "POST", pathname: /^\/api\/matches$/u },
+  { method: "POST", pathname: /^\/api\/ocr-jobs$/u },
+  { method: "POST", pathname: /^\/api\/game-titles$/u },
+  { method: "POST", pathname: /^\/api\/map-masters$/u },
+  { method: "POST", pathname: /^\/api\/season-masters$/u },
+  { method: "POST", pathname: /^\/api\/admin\/login-accounts$/u },
 ];
 
 export type ApiErrorLike = NormalizedApiError;
@@ -206,11 +206,11 @@ function fileNameFromDisposition(disposition: string | null): string {
   if (!disposition) {
     return "momo-results.csv";
   }
-  const quoted = /filename="([^"]+)"/.exec(disposition);
+  const quoted = /filename="([^"]+)"/u.exec(disposition);
   if (quoted?.[1]) {
     return quoted[1];
   }
-  const plain = /filename=([^;]+)/.exec(disposition);
+  const plain = /filename=([^;]+)/u.exec(disposition);
   return plain?.[1]?.trim() || "momo-results.csv";
 }
 

@@ -74,31 +74,36 @@ export function SetupPanel({ value, onChange, enabled = true, authMemberId }: Se
   const seasonMastersError = seasonMastersLoadFailed
     ? queryErrorMessage(seasonMastersQuery.error)
     : undefined;
-  const gameTitlesPlaceholder = !enabled
-    ? "ログイン後に読み込みます"
-    : gameTitlesLoadFailed
+  let gameTitlesPlaceholder = "ログイン後に読み込みます";
+  if (enabled) {
+    gameTitlesPlaceholder = gameTitlesLoadFailed
       ? "読み込みに失敗"
       : gameTitlesQuery.isLoading
         ? "読み込み中…"
         : "未登録";
-  const seasonMastersPlaceholder = !enabled
-    ? "ログイン後に読み込みます"
-    : !value.gameTitleId
-      ? "作品を選択してください"
-      : seasonMastersLoadFailed
+  }
+
+  let seasonMastersPlaceholder = "ログイン後に読み込みます";
+  if (enabled) {
+    seasonMastersPlaceholder = value.gameTitleId
+      ? seasonMastersLoadFailed
         ? "読み込みに失敗"
         : seasonMastersQuery.isLoading
           ? "読み込み中…"
-          : "未登録";
-  const mapMastersPlaceholder = !enabled
-    ? "ログイン後に読み込みます"
-    : !value.gameTitleId
-      ? "作品を選択してください"
-      : mapMastersLoadFailed
+          : "未登録"
+      : "作品を選択してください";
+  }
+
+  let mapMastersPlaceholder = "ログイン後に読み込みます";
+  if (enabled) {
+    mapMastersPlaceholder = value.gameTitleId
+      ? mapMastersLoadFailed
         ? "読み込みに失敗"
         : mapMastersQuery.isLoading
           ? "読み込み中…"
-          : "未登録";
+          : "未登録"
+      : "作品を選択してください";
+  }
 
   type SetupSubmitState = { lastResult: SubmissionResult<string[]> | null };
   const [submitState, submitAction] = useActionState<SetupSubmitState, FormData>(

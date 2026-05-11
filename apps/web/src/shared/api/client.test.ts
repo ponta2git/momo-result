@@ -101,7 +101,7 @@ describe("apiRequest", () => {
     await apiRequest("/api/auth/logout", { method: "POST" });
 
     const calls = fetchCallsOf(fetchMock);
-    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
     for (const [index] of idempotentRequests.entries()) {
       const headers = requireInit(calls[index]?.[1]).headers as Headers;
       expect(headers.get("Idempotency-Key")).toMatch(uuidPattern);

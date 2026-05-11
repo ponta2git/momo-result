@@ -18,7 +18,7 @@ export function DevUserPicker({ force = false }: DevUserPickerProps) {
   }
 
   const devAccounts = fixedMembers.map((member) => ({
-    accountId: `account_${member.memberId.replace(/^member_/, "")}`,
+    accountId: `account_${member.memberId.replace(/^member_/u, "")}`,
     displayName: member.displayName,
   }));
 

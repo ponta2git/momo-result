@@ -114,7 +114,7 @@ describe("toIsoFromLocal", () => {
   it("returns a UTC ISO string for valid local datetime input", () => {
     const result = toIsoFromLocal("2026-01-01T09:00");
 
-    expect(result).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/);
+    expect(result).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/u);
     expect(new Date(result).toISOString()).toBe(result);
   });
 
@@ -132,7 +132,7 @@ describe("currentLocalIsoMinute", () => {
   it("formats a value as YYYY-MM-DDTHH:mm (minute precision, no seconds, no timezone)", () => {
     const result = currentLocalIsoMinute(new Date("2026-05-04T12:34:00Z"));
 
-    expect(result).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
+    expect(result).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/u);
     expect(result).toHaveLength(16);
   });
 
@@ -146,7 +146,7 @@ describe("currentLocalIsoMinute", () => {
 
   it("defaults to the current Date when no argument is passed", () => {
     const result = currentLocalIsoMinute();
-    expect(result).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
+    expect(result).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/u);
   });
 });
 

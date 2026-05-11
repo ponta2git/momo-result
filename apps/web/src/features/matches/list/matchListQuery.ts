@@ -8,7 +8,7 @@ export function buildMatchListApiQuery(search: MatchListSearch): ListMatchesQuer
     gameTitleId: search.gameTitleId || undefined,
     heldEventId: search.heldEventId || undefined,
     seasonMasterId: search.seasonMasterId || undefined,
-    status: search.status !== "all" ? search.status : undefined,
+    status: search.status === "all" ? undefined : search.status,
   });
 }
 

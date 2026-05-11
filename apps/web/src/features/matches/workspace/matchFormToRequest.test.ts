@@ -26,7 +26,7 @@ describe("toConfirmMatchRequest", () => {
     const result = toConfirmMatchRequest(validForm());
 
     expect(result.playedAt).not.toBe(baseIso);
-    expect(result.playedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/);
+    expect(result.playedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/u);
     expect(new Date(result.playedAt).toISOString()).toBe(result.playedAt);
   });
 

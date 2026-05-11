@@ -115,7 +115,7 @@ describe("CameraCapture", () => {
 
     const startButton = screen.getByRole("button", { name: "カメラ開始" });
     await user.click(startButton);
-    await user.click(screen.getByRole("button", { name: /起動中/ }));
+    await user.click(screen.getByRole("button", { name: /起動中/u }));
 
     expect(getUserMedia).toHaveBeenCalledTimes(1);
     resolveStream(createMockMediaStream().stream);

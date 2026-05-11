@@ -355,7 +355,7 @@ describe("mergeDrafts", () => {
     });
 
     const incidents = merged.players.map((player) => player.incidents["目的地"]);
-    // 全プレイヤーの目的地数が一意 (= 衝突せず別の play_order を引いている) こと
+    // 全プレーヤーの目的地数が一意 (= 衝突せず別の play_order を引いている) こと
     expect(new Set(incidents).size).toBe(4);
     // 具体的な割当: 検出済み play_order=4,2 はそのまま、null は残った 1,3 に割当
     const eu = merged.players.find((p) => p.rank === 1);

@@ -14,16 +14,14 @@ export function IncidentMasterPanel({ items }: IncidentMasterPanelProps) {
     <section className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
       <header>
         <p className={labelClass}>事件簿</p>
-        <h2 className="mt-1 text-lg font-semibold text-[var(--color-text-primary)]">
-          事件簿マスタ（読み取り専用）
-        </h2>
+        <h2 className="mt-1 text-lg font-semibold text-[var(--color-text-primary)]">事件簿</h2>
         <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-          MVPでは6項目固定です。追加・編集はできません。
+          現在は6項目固定です。追加・編集はできません。
         </p>
       </header>
 
       {hasExpectedCount ? null : (
-        <Notice className="mt-3" tone="warning" title="事件簿マスタ件数を確認してください">
+        <Notice className="mt-3" tone="warning" title="事件簿の項目数を確認してください">
           現在 {items.length} 件です。期待値は6件です。
         </Notice>
       )}

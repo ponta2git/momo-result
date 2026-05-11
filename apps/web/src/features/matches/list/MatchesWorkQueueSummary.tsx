@@ -17,8 +17,8 @@ const items: Array<{
   label: string;
   status: MatchListStatusFilter;
 }> = [
-  { countKey: "ocrRunningCount", label: "OCR中", status: "ocr_running" },
-  { countKey: "preConfirmCount", label: "確定前", status: "pre_confirm" },
+  { countKey: "ocrRunningCount", label: "処理中", status: "ocr_running" },
+  { countKey: "preConfirmCount", label: "確認待ち", status: "pre_confirm" },
   { countKey: "needsReviewCount", label: "要確認", status: "needs_review" },
 ];
 

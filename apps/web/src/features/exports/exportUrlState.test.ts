@@ -32,7 +32,7 @@ describe("exportUrlState", () => {
     expect(state.scope).toBe("match");
     expect(state.seasonMasterId).toBe("season-1");
     expect(state.matchId).toBe("match-1");
-    expect(state.errors).toContain("出力範囲のIDは1つだけ指定してください。");
+    expect(state.errors).toContain("出力範囲は1つだけ指定してください。");
   });
 
   it("serializes only the selected scope id", () => {

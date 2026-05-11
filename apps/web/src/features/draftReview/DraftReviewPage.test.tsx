@@ -35,10 +35,10 @@ describe("DraftReviewPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("heading", { name: "OCR下書き確認" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "OCR結果の確認" })).toBeInTheDocument();
     expect(await screen.findByDisplayValue("あかねまみ")).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "確定前チェックへ進む" }));
+    await userEvent.click(screen.getByRole("button", { name: "確定前の確認へ進む" }));
     expect(
       await screen.findByRole("heading", { name: "この内容で確定しますか？" }),
     ).toBeInTheDocument();
@@ -57,10 +57,10 @@ describe("DraftReviewPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByText("一覧にない開催履歴を追加")).toBeInTheDocument();
+    expect(await screen.findByText("一覧にない開催履歴を追加する")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "作成して選択" })).not.toBeVisible();
 
-    await userEvent.click(screen.getByText("一覧にない開催履歴を追加"));
+    await userEvent.click(screen.getByText("一覧にない開催履歴を追加する"));
     expect(screen.getByRole("button", { name: "作成して選択" })).toBeVisible();
   });
 
@@ -90,8 +90,8 @@ describe("DraftReviewPage", () => {
       </QueryClientProvider>,
     );
 
-    await screen.findByText("一覧にない開催履歴を追加");
-    await userEvent.click(screen.getByText("一覧にない開催履歴を追加"));
+    await screen.findByText("一覧にない開催履歴を追加する");
+    await userEvent.click(screen.getByText("一覧にない開催履歴を追加する"));
     await userEvent.click(screen.getByRole("button", { name: "作成して選択" }));
 
     const heldEventSelect = screen.getByLabelText(/開催履歴/u) as HTMLSelectElement;
@@ -113,10 +113,10 @@ describe("DraftReviewPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByText("開発用サンプル下書きで表示中")).toBeInTheDocument();
+    expect(await screen.findByText("サンプルの読み取り結果で表示中")).toBeInTheDocument();
     const matchSetupHeading = screen.getByRole("heading", { name: "記録先と試合条件" });
     const playerResultsHeading = screen.getByRole("heading", {
-      name: "4人分の結果を確認・手修正",
+      name: "4人分の結果を確認・修正",
     });
     expect(
       matchSetupHeading.compareDocumentPosition(playerResultsHeading) &
@@ -127,7 +127,7 @@ describe("DraftReviewPage", () => {
     expect(await screen.findByDisplayValue("15420")).toBeInTheDocument();
     expect(screen.queryByText("OCR読み取り状況を確認")).not.toBeInTheDocument();
     expect(screen.queryByText(/緑=高信頼OCR/u)).not.toBeInTheDocument();
-    expect(screen.getByText(/事件簿はEnterで横方向に移動します/u)).toBeInTheDocument();
+    expect(screen.getByText(/Enterキーと矢印キーで移動できます/u)).toBeInTheDocument();
   });
 
   it("allows clearing and retyping numeric result cells without prefixing zero", async () => {
@@ -143,7 +143,7 @@ describe("DraftReviewPage", () => {
       </QueryClientProvider>,
     );
 
-    await screen.findByText("開発用サンプル下書きで表示中");
+    await screen.findByText("サンプルの読み取り結果で表示中");
     const rankInput = screen.getByLabelText("ぽんた rank");
 
     await userEvent.clear(rankInput);
@@ -199,7 +199,7 @@ describe("DraftReviewPage", () => {
     );
 
     expect(
-      (await screen.findAllByText("マスタ管理から戻ったため、入力内容を復元しました。")).length,
+      (await screen.findAllByText("設定管理から戻ったため、入力内容を復元しました。")).length,
     ).toBeGreaterThan(0);
     expect(screen.getByLabelText("試合番号")).toHaveValue("9");
     expect(screen.getByLabelText("ぽんた rank")).toHaveValue("4");

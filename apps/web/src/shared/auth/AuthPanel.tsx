@@ -24,7 +24,7 @@ export function AuthPanel({ auth, forceDevPicker = false }: AuthPanelProps) {
 
   return (
     <div className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
-      <p className="text-xs font-semibold text-[var(--color-text-secondary)]">Account</p>
+      <p className="text-xs font-semibold text-[var(--color-text-secondary)]">ログイン中</p>
       {auth ? (
         <div className="mt-2 flex items-center justify-between gap-3">
           <p className="text-sm font-semibold text-[var(--color-text-primary)]">
@@ -44,7 +44,7 @@ export function AuthPanel({ auth, forceDevPicker = false }: AuthPanelProps) {
           href="/api/auth/login?silent=1"
           className="mt-2 inline-flex rounded-[var(--radius-sm)] bg-[var(--color-action)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 active:opacity-95"
         >
-          Discordでログイン
+          Discordでログインする
         </a>
       )}
     </div>

@@ -23,7 +23,7 @@ export function MasterReturnNotice({
   return (
     <Notice
       tone={shouldWarn ? "warning" : "info"}
-      title="不足していたマスタを追加したら、元の入力画面へ戻れます。"
+      title="必要な設定を追加したら、元の入力画面へ戻れます。"
       action={
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="primary" onClick={onReturn} disabled={disabled}>
@@ -39,9 +39,9 @@ export function MasterReturnNotice({
       }
     >
       {shouldWarn ? (
-        <p>handoff情報が無効または期限切れです。入力内容を復元できない可能性があります。</p>
+        <p>戻り先の情報を確認できません。入力内容を復元できない可能性があります。</p>
       ) : (
-        <p>現在の作業を中断せずに戻れるよう、戻り先情報を引き継いでいます。</p>
+        <p>現在の入力内容を保ったまま戻れるようにしています。</p>
       )}
     </Notice>
   );

@@ -15,7 +15,7 @@ export function RouteSuspenseFallback() {
       <Skeleton className="h-8 w-1/3" />
       <Skeleton className="h-4 w-2/3" />
       <Skeleton className="h-40 w-full" />
-      <span className="sr-only">読み込み中...</span>
+      <span className="sr-only">読み込んでいます…</span>
     </div>
   );
 }

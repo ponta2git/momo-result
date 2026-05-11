@@ -49,7 +49,7 @@ export async function normalizeApiErrorResponse(response: Response): Promise<Nor
     kind: "api",
     status: response.status,
     title: `HTTP ${response.status}`,
-    detail: text || response.statusText || "API request failed.",
+    detail: text || response.statusText || "通信に失敗しました。",
   };
 }
 
@@ -60,9 +60,8 @@ export function normalizeUnknownApiError(error: unknown): NormalizedApiError {
 
   return {
     kind: "api",
-    title: "Network error",
-    detail:
-      error instanceof Error ? error.message : "API request failed before receiving a response.",
+    title: "通信に失敗しました",
+    detail: error instanceof Error ? error.message : "応答を受け取れませんでした。",
   };
 }
 
@@ -82,7 +81,7 @@ function logIdempotencyConflict(error: NormalizedApiError): void {
 
 export function normalizeDisplayApiError(
   error: unknown,
-  fallbackTitle = "API request failed",
+  fallbackTitle = "通信に失敗しました",
 ): NormalizedApiError {
   const normalized = normalizeUnknownApiError(error);
   if (isIdempotencyConflict(normalized)) {

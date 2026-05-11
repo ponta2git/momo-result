@@ -65,7 +65,7 @@ export function useMatchWorkspaceMutations({
       navigate("/matches", { replace: true });
     },
     onError: (error) => {
-      onError(formatApiError(error, "下書きの削除に失敗しました"));
+      onError(formatApiError(error, "確定前の記録を削除できませんでした"));
     },
   });
 

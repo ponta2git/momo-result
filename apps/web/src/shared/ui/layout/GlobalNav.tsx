@@ -28,7 +28,7 @@ const defaultItems: NavItem[] = [
 ];
 
 const adminItems: NavItem[] = [
-  { icon: <Database className="size-4" />, label: "マスタ", to: "/admin/masters" },
+  { icon: <Database className="size-4" />, label: "設定", to: "/admin/masters" },
   { icon: <ShieldCheck className="size-4" />, label: "アカウント", to: "/admin/accounts" },
 ];
 

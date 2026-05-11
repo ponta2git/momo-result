@@ -15,7 +15,7 @@ describe("exportViewModel", () => {
     expect(candidate).toMatchObject({
       kind: "ready",
       selectedId: "match-missing",
-      selectedLabel: "選択中ID: match-missing",
+      selectedLabel: "指定された対象: match-missing",
       selectedUnknown: true,
     });
   });
@@ -40,7 +40,7 @@ describe("exportViewModel", () => {
       candidate: {
         kind: "empty",
         actionHref: "/masters",
-        actionLabel: "マスタ管理へ",
+        actionLabel: "設定管理へ",
         message: "",
         title: "",
       },
@@ -55,7 +55,7 @@ describe("exportViewModel", () => {
     });
 
     expect(view.canDownload).toBe(false);
-    expect(view.disableReason).toBe("出力範囲の候補を選択してください。");
+    expect(view.disableReason).toBe("書き出す対象を選択してください。");
   });
 
   it("shows slow state while a download is pending past threshold", () => {

@@ -43,13 +43,13 @@ function renderCaptureRoute() {
 }
 
 async function startOcrAllowingPartialTray() {
-  await userEvent.click(screen.getByRole("button", { name: "OCRを開始して試合一覧へ" }));
+  await userEvent.click(screen.getByRole("button", { name: "読み取りを開始して試合一覧へ" }));
   expect(
     await screen.findByText(
-      "3種類すべての画像は揃っていません。続行する場合はもう一度OCR開始を押してください。",
+      "3種類すべての画像は揃っていません。このまま進める場合は、もう一度開始してください。",
     ),
   ).toBeInTheDocument();
-  await userEvent.click(screen.getByRole("button", { name: "不足したままOCR開始" }));
+  await userEvent.click(screen.getByRole("button", { name: "このまま読み取りを開始" }));
 }
 
 describe("OcrCapturePage", () => {
@@ -87,7 +87,10 @@ describe("OcrCapturePage", () => {
     expect(screen.getByLabelText(/作品/u)).toBeDisabled();
     expect(authRequests).toBe(0);
 
-    await userEvent.selectOptions(await screen.findByLabelText("Dev User"), "account_ponta");
+    await userEvent.selectOptions(
+      await screen.findByLabelText("操作用アカウント"),
+      "account_ponta",
+    );
 
     expect(await screen.findByLabelText(/作品/u)).toBeEnabled();
     expect(screen.getByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
@@ -256,6 +259,8 @@ describe("OcrCapturePage", () => {
     const input = await screen.findByLabelText("OCRの画像をアップロード");
     await userEvent.upload(input, new File(["image"], "assets.png", { type: "image/png" }));
 
-    expect(screen.queryByRole("button", { name: "下書きを確認する" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "読み取り結果を確認する" }),
+    ).not.toBeInTheDocument();
   });
 });

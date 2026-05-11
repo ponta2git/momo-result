@@ -56,9 +56,9 @@ export function GameTitleList({
     <section className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
       <header>
         <p className={labelClass}>作品</p>
-        <h2 className="mt-1 text-lg font-semibold text-[var(--color-text-primary)]">作品マスタ</h2>
+        <h2 className="mt-1 text-lg font-semibold text-[var(--color-text-primary)]">作品</h2>
         <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-          作品を選ぶと、右側のマップ/シーズン表示が同時に切り替わります。
+          作品を選ぶと、対応するマップとシーズンが表示されます。
         </p>
       </header>
 
@@ -100,7 +100,7 @@ export function GameTitleList({
                       ) : null}
                     </p>
                     <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
-                      OCR読み取り方式:{" "}
+                      読み取り方式:{" "}
                       {layoutFamilyLabels[item.layoutFamily as LayoutFamily] ?? "未設定"}
                     </p>
                   </button>
@@ -140,7 +140,7 @@ export function GameTitleList({
         </label>
 
         <label className="grid gap-1">
-          <span className={labelClass}>OCR読み取り方式</span>
+          <span className={labelClass}>読み取り方式</span>
           <select className={selectClass} defaultValue={defaultLayoutFamily} name="layoutFamily">
             {layoutFamilies.map((family) => (
               <option key={family} value={family}>
@@ -149,7 +149,7 @@ export function GameTitleList({
             ))}
           </select>
           <p className="text-xs text-[var(--color-text-secondary)]">
-            作品ごとの画面構造に合わせて、OCRの読み取り方を切り替えます。
+            作品ごとの画面構造に合わせて、読み取り方を切り替えます。
           </p>
         </label>
 

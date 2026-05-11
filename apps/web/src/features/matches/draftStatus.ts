@@ -76,13 +76,13 @@ export function isPreConfirm(status: string | null | undefined): boolean {
 export function reviewStatusLabel(status: string | null | undefined): string {
   switch (asDraftStatusOrUnknown(status)) {
     case "ocr_running":
-      return "OCR中";
+      return "処理中";
     case "confirmed":
       return "確定済み";
     case "needs_review":
     case "ocr_failed":
     case "draft_ready":
     case "unknown":
-      return "確定前";
+      return "確認待ち";
   }
 }

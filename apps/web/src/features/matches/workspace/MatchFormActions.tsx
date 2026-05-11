@@ -24,7 +24,7 @@ export function MatchFormActions({
           disabled={disabled || pending}
           onClick={onPrimaryAction}
         >
-          {pending ? "送信中..." : actionLabel}
+          {pending ? "送信中…" : actionLabel}
         </Button>
       </div>
     </div>

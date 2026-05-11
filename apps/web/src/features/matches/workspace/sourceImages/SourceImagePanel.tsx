@@ -115,11 +115,11 @@ export function SourceImagePanel({ loading, preferredKind, sourceImages }: Sourc
 
       <div className="mt-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
         {loading ? (
-          <p className="text-sm text-[var(--color-text-secondary)]">画像を取得しています...</p>
+          <p className="text-sm text-[var(--color-text-secondary)]">画像を取得しています…</p>
         ) : null}
 
         {!loading && activeState?.status === "available" && loadedImage.status === "loading" ? (
-          <p className="text-sm text-[var(--color-text-secondary)]">画像を読み込んでいます...</p>
+          <p className="text-sm text-[var(--color-text-secondary)]">画像を読み込んでいます…</p>
         ) : null}
 
         {!loading && activeState?.status === "available" && loadedImage.status === "error" ? (

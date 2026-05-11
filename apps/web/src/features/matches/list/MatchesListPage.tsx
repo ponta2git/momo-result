@@ -144,7 +144,7 @@ export function MatchesListPage() {
   return (
     <PageFrame className="gap-5">
       <PageHeader
-        description="OCR中、確定前、確定済みの試合記録を確認します。開催や作品で絞り込み、出力対象を探します。"
+        description="処理中、確認待ち、確定済みの試合記録を確認します。開催や作品で絞り込み、必要な記録をすばやく探せます。"
         eyebrow="試合記録"
         title="試合一覧"
       />
@@ -175,7 +175,7 @@ export function MatchesListPage() {
             className="w-44"
             icon={<RefreshCw className="size-4" />}
             pending={isManualRefreshing}
-            pendingLabel="更新中..."
+            pendingLabel="更新中…"
             variant="quiet"
             onClick={handleManualRefresh}
           >
@@ -233,7 +233,7 @@ export function MatchesListPage() {
             description={
               hasFilters
                 ? "状態や開催条件を広げると、他の試合記録も表示できます。"
-                : "最初の試合登録は OCR 取り込みから始めるか、手入力の作成導線を使ってください。"
+                : "最初の試合は、OCR取り込みまたは手入力で登録してください。"
             }
             icon={<AlertTriangle className="size-5" />}
             title={hasFilters ? "条件に合う試合がありません" : "まだ試合がありません"}

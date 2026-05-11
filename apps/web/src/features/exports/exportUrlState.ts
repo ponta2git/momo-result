@@ -37,7 +37,7 @@ export function parseExportSearchParams(searchParams: URLSearchParams): ExportUr
     errors.push("format は csv または tsv を指定してください。");
   }
   if (activeScopeCount > 1) {
-    errors.push("出力範囲のIDは1つだけ指定してください。");
+    errors.push("出力範囲は1つだけ指定してください。");
   }
 
   return {

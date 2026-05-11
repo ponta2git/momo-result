@@ -27,7 +27,7 @@ function ConfirmActionButtons({ onCancel }: { onCancel: () => void }) {
         戻って修正
       </Button>
       <Button disabled={pending} type="submit">
-        {pending ? "確定中..." : "確定する"}
+        {pending ? "確定中…" : "確定する"}
       </Button>
     </div>
   );
@@ -48,7 +48,7 @@ export function MatchConfirmDialog({
         action={confirmAction}
         className="w-full max-w-xl rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-lg"
       >
-        <p className="text-xs font-semibold text-[var(--color-text-secondary)]">確定前チェック</p>
+        <p className="text-xs font-semibold text-[var(--color-text-secondary)]">確定前の確認</p>
         <h2 className="mt-2 text-2xl font-semibold text-balance text-[var(--color-text-primary)]">
           この内容で確定しますか？
         </h2>

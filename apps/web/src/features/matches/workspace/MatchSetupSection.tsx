@@ -218,7 +218,7 @@ export function MatchSetupSection({
 
       <details className="mt-4 border-t border-[var(--color-border)] pt-3">
         <summary className="cursor-pointer text-xs font-semibold text-[var(--color-text-secondary)]">
-          一覧にない開催履歴を追加
+          一覧にない開催履歴を追加する
         </summary>
         <div className="mt-3 grid gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3 md:grid-cols-[1fr_auto] md:items-end">
           <input

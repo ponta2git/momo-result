@@ -1,6 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { delay, http, HttpResponse } from "msw";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -127,7 +127,7 @@ describe("ExportPage", () => {
     await user.click(screen.getByRole("button", { name: "シーズン" }));
 
     expect(await screen.findByText("シーズン候補がありません")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "マスタ管理へ" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "設定管理へ" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "CSVをダウンロード" })).toBeDisabled();
   });
 
@@ -175,9 +175,9 @@ describe("ExportPage", () => {
     await screen.findByRole("heading", { name: "CSV / TSV 出力" });
     await userEvent.click(screen.getByRole("button", { name: "CSVをダウンロード" }));
 
-    expect(screen.getByRole("button", { name: "作成中" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "作成中…" })).toBeDisabled();
     expect(screen.getByText("出力ファイルを作成しています")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "作成中" }));
+    fireEvent.click(screen.getByRole("button", { name: "作成中…" }));
     expect(requests).toBe(1);
   });
 
@@ -195,7 +195,7 @@ describe("ExportPage", () => {
 
     expect(await screen.findByText("通常より時間がかかっています")).toBeInTheDocument();
     expect(await screen.findByText("出力が完了しませんでした")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "作成中" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "作成中…" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "もう一度試す" })).toBeInTheDocument();
   });
 });

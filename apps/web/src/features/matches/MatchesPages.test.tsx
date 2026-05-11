@@ -133,7 +133,7 @@ describe("MatchesListPage", () => {
     );
 
     expect(await screen.findByRole("heading", { name: "試合の新規作成" })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "マスタ管理へ" }));
+    await userEvent.click(screen.getByRole("button", { name: "設定管理へ" }));
 
     await waitFor(() =>
       expect(screen.getByLabelText("current location")).toHaveTextContent("/admin/masters"),

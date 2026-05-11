@@ -28,7 +28,7 @@ const inputClass =
   "w-full rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)]";
 
 function memberName(memberId: string | undefined): string {
-  if (!memberId) return "操作専用";
+  if (!memberId) return "試合参加者に紐づけない";
   return fixedMembers.find((member) => member.memberId === memberId)?.displayName ?? memberId;
 }
 
@@ -71,7 +71,7 @@ export function AdminAccountsPage() {
       <PageHeader
         eyebrow="管理"
         title="ログインアカウント管理"
-        description="Discordログインできる操作アカウントと管理者権限を管理します。試合参加者とは別の権限です。"
+        description="Discordでログインできるアカウントと管理者権限を管理します。試合参加者とは別に設定できます。"
       />
 
       {normalizedError ? (
@@ -83,7 +83,7 @@ export function AdminAccountsPage() {
       <section className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
         <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold">
           <ShieldCheck className="size-5" />
-          新規アカウント
+          アカウントを追加
         </h2>
         <form
           className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_16rem_auto]"
@@ -92,7 +92,7 @@ export function AdminAccountsPage() {
             createMutation.mutate(form);
           }}
         >
-          <Field label="Discord User ID">
+          <Field label="DiscordユーザーID">
             <input
               className={inputClass}
               inputMode="numeric"
@@ -121,7 +121,7 @@ export function AdminAccountsPage() {
               value={form.displayName}
             />
           </Field>
-          <Field label="紐づくプレイヤー">
+          <Field label="紐づくプレーヤー">
             <select
               className={inputClass}
               onChange={(event) =>
@@ -134,7 +134,7 @@ export function AdminAccountsPage() {
               }
               value={form.playerMemberId ?? ""}
             >
-              <option value="">操作専用</option>
+              <option value="">試合参加者に紐づけない</option>
               {fixedMembers.map((member) => (
                 <option key={member.memberId} value={member.memberId}>
                   {member.displayName}
@@ -185,8 +185,8 @@ export function AdminAccountsPage() {
           <thead className="bg-[var(--color-surface-subtle)] text-[var(--color-text-secondary)]">
             <tr>
               <th className="px-3 py-2">表示名</th>
-              <th className="px-3 py-2">Discord ID</th>
-              <th className="px-3 py-2">プレイヤー</th>
+              <th className="px-3 py-2">DiscordユーザーID</th>
+              <th className="px-3 py-2">プレーヤー</th>
               <th className="px-3 py-2">権限</th>
               <th className="px-3 py-2">操作</th>
             </tr>

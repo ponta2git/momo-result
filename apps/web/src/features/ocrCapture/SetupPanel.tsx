@@ -37,7 +37,7 @@ function queryErrorMessage(error: unknown): string | undefined {
   }
   const normalized = normalizeUnknownApiError(error);
   return normalized.status === 401
-    ? "ログイン後にマスタを読み込めます。"
+    ? "ログイン後に選択肢を読み込めます。"
     : normalized.detail || normalized.title;
 }
 
@@ -200,7 +200,7 @@ export function SetupPanel({ value, onChange, enabled = true, authMemberId }: Se
         label="シーズン（必須）"
         htmlFor={fields.seasonMasterId.id}
         error={fields.seasonMasterId.errors?.[0]}
-        description="OCRには送らず、後続の結果確定で使います。"
+        description="読み取り結果の確認と確定に使います。"
       >
         <select
           id={fields.seasonMasterId.id}

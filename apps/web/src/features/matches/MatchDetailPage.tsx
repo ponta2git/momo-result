@@ -172,7 +172,7 @@ export function MatchDetailPage() {
             </Link>
             <AlertDialog
               cancelLabel="キャンセル"
-              confirmLabel={deleteMutation.isPending ? "削除中..." : "削除する"}
+              confirmLabel={deleteMutation.isPending ? "削除中…" : "削除する"}
               description={`第${match.matchNoInEvent}試合を完全に削除します。この操作は取り消せません。`}
               open={showConfirm}
               title="試合を削除しますか？"
@@ -302,7 +302,7 @@ export function MatchDetailPage() {
               sortable: true,
             },
             {
-              header: "メンバー",
+              header: "プレーヤー",
               key: "member",
               minWidth: "10rem",
               onSort: () => setSort((current) => nextSort(current, "member")),

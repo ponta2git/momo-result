@@ -43,12 +43,12 @@ export function MemberAliasPanel({
   return (
     <section className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
       <header>
-        <p className={labelClass}>OCR名寄せ</p>
+        <p className={labelClass}>読み取り用の名前</p>
         <h2 className="mt-1 text-lg font-semibold text-[var(--color-text-primary)]">
-          プレイヤー名エイリアス
+          プレーヤー名の別名
         </h2>
         <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-          OCRで読まれる表記を正式なプレイヤーに紐づけます。
+          画像から読み取られる表記を正式なプレーヤー名に紐づけます。
         </p>
       </header>
 
@@ -57,7 +57,7 @@ export function MemberAliasPanel({
         className="mt-4 grid gap-3 md:grid-cols-[minmax(12rem,0.35fr)_minmax(12rem,1fr)_auto]"
         key={createFormKey}
       >
-        <Field label="プレイヤー">
+        <Field label="プレーヤー">
           <select className={inputClass} name="memberId">
             {fixedMembers.map((member) => (
               <option key={member.memberId} value={member.memberId}>
@@ -66,7 +66,7 @@ export function MemberAliasPanel({
             ))}
           </select>
         </Field>
-        <Field label="エイリアス">
+        <Field label="別名">
           <input className={inputClass} name="alias" placeholder="例: NO11社長" required />
         </Field>
         <div className="flex items-end">
@@ -89,7 +89,7 @@ export function MemberAliasPanel({
               {member.displayName}
             </h3>
             {memberAliases.length === 0 ? (
-              <EmptyState className="mt-2" title="未登録" description="追加待ちです。" />
+              <EmptyState className="mt-2" title="未登録" description="別名はまだありません。" />
             ) : (
               <ul className="mt-2 grid gap-2">
                 {memberAliases.map((alias) => (
@@ -103,16 +103,16 @@ export function MemberAliasPanel({
                     <div className="flex items-center">
                       <AliasEditDialog alias={alias} onUpdate={onUpdate} />
                       <AlertDialog
-                        title="エイリアスを削除しますか？"
+                        title="別名を削除しますか？"
                         description={`${memberName(alias.memberId)} の ${alias.alias} を削除します。`}
                         confirmLabel="削除"
                         onConfirm={() => onDelete(alias.id)}
                         trigger={
                           <IconButton
-                            aria-label="エイリアスを削除"
+                            aria-label="別名を削除"
                             icon={<Trash2 />}
                             size="sm"
-                            tooltip="エイリアスを削除"
+                            tooltip="別名を削除"
                             variant="quiet"
                           />
                         }
@@ -144,13 +144,13 @@ function AliasEditDialog({
     <Dialog
       open={open}
       onOpenChange={setOpen}
-      title="エイリアスを編集"
+      title="別名を編集"
       trigger={
         <IconButton
-          aria-label="エイリアスを編集"
+          aria-label="別名を編集"
           icon={<Pencil />}
           size="sm"
-          tooltip="エイリアスを編集"
+          tooltip="別名を編集"
           variant="quiet"
         />
       }
@@ -169,13 +169,13 @@ function AliasEditDialog({
             });
             setOpen(false);
           } catch (caught) {
-            setError(formatApiError(caught, "エイリアスの更新に失敗しました"));
+            setError(formatApiError(caught, "別名の更新に失敗しました"));
           } finally {
             setPending(false);
           }
         }}
       >
-        <Field label="プレイヤー">
+        <Field label="プレーヤー">
           <select className={inputClass} defaultValue={alias.memberId} name="memberId">
             {fixedMembers.map((member) => (
               <option key={member.memberId} value={member.memberId}>
@@ -184,7 +184,7 @@ function AliasEditDialog({
             ))}
           </select>
         </Field>
-        <Field label="エイリアス">
+        <Field label="別名">
           <input className={inputClass} defaultValue={alias.alias} name="alias" required />
         </Field>
         {error ? <p className="text-sm text-[var(--color-danger)]">{error}</p> : null}

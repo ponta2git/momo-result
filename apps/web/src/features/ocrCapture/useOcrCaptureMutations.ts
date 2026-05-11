@@ -65,17 +65,17 @@ export function useOcrCaptureMutations(hints: Record<string, unknown>): OcrCaptu
     async ({ notify, selectedGameTitle, setup, slots, updateSlot }: OcrCaptureSubmitParams) => {
       const targetSlots = pickOcrTargets(slots);
       if (targetSlots.length === 0) {
-        notify("OCRに送る画像がありません。まず撮影して分類トレイへ置いてください。");
+        notify("読み取る画像がありません。まず撮影または画像追加を行ってください。");
         return;
       }
       const setupSubmission = setupSchema.safeParse(setup);
       if (!setupSubmission.success) {
-        notify(setupSubmission.error.issues[0]?.message ?? "試合コンテキストを確認してください。");
+        notify(setupSubmission.error.issues[0]?.message ?? "試合設定を確認してください。");
         return;
       }
 
       notify(
-        `${targetSlots.length}枚をOCRに送信しています。作業単位を作成して、試合一覧でOCR中として追跡します。`,
+        `${targetSlots.length}枚の読み取りを開始します。確定前の記録を作成し、試合一覧で処理状況を確認できるようにします。`,
       );
 
       let matchDraftId: string | null;
@@ -93,7 +93,7 @@ export function useOcrCaptureMutations(hints: Record<string, unknown>): OcrCaptu
         });
         matchDraftId = matchDraft.matchDraftId;
       } catch (error) {
-        notify(formatApiError(error, "対局の作成に失敗しました"));
+        notify(formatApiError(error, "確定前の記録を作成できませんでした"));
         return;
       }
       if (!matchDraftId) return;
@@ -122,7 +122,7 @@ export function useOcrCaptureMutations(hints: Record<string, unknown>): OcrCaptu
           updateSlot({
             ...uploadingSlot,
             status: "failed",
-            transportError: normalizeDisplayApiError(error, "OCRジョブの作成に失敗しました"),
+            transportError: normalizeDisplayApiError(error, "読み取り処理を開始できませんでした"),
           });
         }
       }
@@ -134,7 +134,7 @@ export function useOcrCaptureMutations(hints: Record<string, unknown>): OcrCaptu
       }
 
       void cancelMatchDraft(matchDraftId).catch(() => undefined);
-      notify("OCRジョブを作成できませんでした。画像と試合コンテキストを確認してください。");
+      notify("読み取り処理を開始できませんでした。画像と試合設定を確認してください。");
     },
     [navigate, queryClient, uploadMutation],
   );

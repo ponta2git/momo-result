@@ -92,7 +92,7 @@ export function OcrCapturePage() {
     if (ocrReadyCount < slotDefinitions.length && !partialStartAcknowledged) {
       setPartialStartAcknowledged(true);
       notify(
-        "3種類すべての画像は揃っていません。続行する場合はもう一度OCR開始を押してください。",
+        "3種類すべての画像は揃っていません。このまま進める場合は、もう一度開始してください。",
         "warning",
       );
       return;
@@ -135,7 +135,7 @@ export function OcrCapturePage() {
       <PageHeader
         eyebrow="OCR"
         title="OCR取り込み"
-        description="試合条件を選び、総資産・収益・事件簿の画像を分類してOCRを開始します。結果待ちは試合一覧で扱います。"
+        description="試合条件を選び、総資産・収益・事件簿の画像を分類して読み取ります。処理中の記録は試合一覧で確認できます。"
       />
 
       {auth.error ? (
@@ -143,7 +143,7 @@ export function OcrCapturePage() {
           <Notice className="border-0 bg-transparent p-0" tone="danger" title={auth.error.title}>
             <p>
               {auth.error.status === 403
-                ? "許可されていない開発用アカウントです。API の DEV_MEMBER_IDS を確認してください。"
+                ? "この操作用アカウントでは利用できません。管理者に確認してください。"
                 : auth.error.detail}
             </p>
           </Notice>
@@ -157,7 +157,7 @@ export function OcrCapturePage() {
             <div className="mb-4">
               <h2 className={panelTitleClass}>1. 試合設定</h2>
               <p className={panelLeadClass}>
-                OCRの読み取り方式と、後続の確認画面で使う開催情報を先に選びます。
+                読み取り方式と、確認画面で使う開催情報を先に選びます。
               </p>
             </div>
             <SetupPanel
@@ -172,7 +172,7 @@ export function OcrCapturePage() {
             <div className="mb-4">
               <h2 className={panelTitleClass}>2. 画像を入れる</h2>
               <p className={panelLeadClass}>
-                撮影または画像追加で、空いている分類トレイへ自動配置します。分類が違う場合は右のトレイで入れ替えます。
+                撮影または画像追加で、空いている分類へ自動で置きます。分類が違う場合は右側で入れ替えます。
               </p>
             </div>
             <div className="grid gap-4">
@@ -191,7 +191,7 @@ export function OcrCapturePage() {
                 />
                 <p className="text-xs text-[var(--color-text-secondary)]">
                   {slotsFull
-                    ? "分類トレイが埋まっているため、追加アップロードはできません。"
+                    ? "3枚すべて配置済みのため、画像を追加できません。"
                     : "カメラが使えない場合は画像ファイルを追加してください。"}
                 </p>
               </div>
@@ -201,17 +201,17 @@ export function OcrCapturePage() {
           <section className="momo-safe-bottom flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-lg)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-4 shadow-sm">
             <div>
               <p className="text-sm font-semibold text-[var(--color-text-primary)]">
-                {ocrReadyCount === 0 ? "分類トレイに画像を置いてください" : "OCRを開始できます"}
+                {ocrReadyCount === 0 ? "画像を追加してください" : "読み取りを開始できます"}
               </p>
               <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
                 {selectedSlotLabels.length > 0
                   ? `送信対象: ${selectedSlotLabels.join(" / ")}`
-                  : "画像は1枚から開始できます。OCR完了は待たず、試合一覧で状態を確認します。"}
+                  : "画像は1枚から開始できます。完了状況は試合一覧で確認します。"}
               </p>
               {partialStartAcknowledged && ocrReadyCount < slotDefinitions.length ? (
                 <p className="mt-2 text-sm font-semibold text-[var(--color-review)]">
                   画像が{ocrReadyCount}
-                  件だけ選択されています。不足したまま進める場合は、もう一度開始してください。
+                  件だけ選択されています。このまま進める場合は、もう一度開始してください。
                 </p>
               ) : null}
             </div>
@@ -224,11 +224,11 @@ export function OcrCapturePage() {
                 disabled={ocrReadyCount === 0 || hasWorkingSlot || submission.isSubmitting}
               >
                 {partialStartAcknowledged && ocrReadyCount < slotDefinitions.length
-                  ? "不足したままOCR開始"
-                  : "OCRを開始して試合一覧へ"}
+                  ? "このまま読み取りを開始"
+                  : "読み取りを開始して試合一覧へ"}
               </Button>
               <Button variant="secondary" onClick={() => flow.handleResetAll(notify)}>
-                画像を全消去
+                画像をすべて削除
               </Button>
             </div>
           </section>
@@ -238,7 +238,7 @@ export function OcrCapturePage() {
           <div>
             <h2 className={panelTitleClass}>3. 分類トレイ</h2>
             <p className={panelLeadClass}>
-              トレイ名がOCR種別になります。違っていたらカード内の操作で入れ替えます。
+              分類名が読み取りの種類になります。違っていたらカード内の操作で入れ替えます。
             </p>
           </div>
           <CaptureRail

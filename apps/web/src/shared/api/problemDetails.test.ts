@@ -47,7 +47,7 @@ describe("problemDetails", () => {
 
   it("normalizes network failures", () => {
     expect(normalizeUnknownApiError(new Error("fetch failed"))).toMatchObject({
-      title: "Network error",
+      title: "通信に失敗しました",
       detail: "fetch failed",
     });
   });

@@ -67,7 +67,7 @@ export type MatchListItemView = {
   seasonName?: string;
   status: MatchListStatus;
   statusDescription?: string;
-  statusLabel: "OCR中" | "確定前" | "確定済";
+  statusLabel: "処理中" | "確認待ち" | "確定済";
   updatedAt: string;
 };
 

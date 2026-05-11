@@ -193,9 +193,10 @@ function parseAll(drafts: DraftByKind): ParsedDrafts {
 function collectWarnings(parsed: ParsedDrafts): string[] {
   const warnings: string[] = [];
   if (!parsed.totalAssets)
-    warnings.push("総資産の下書きがありません。順位と総資産は手入力してください。");
-  if (!parsed.revenue) warnings.push("収益の下書きがありません。収益は手入力してください。");
-  if (!parsed.incidentLog) warnings.push("事件簿の下書きがありません。事件簿は0で初期化しました。");
+    warnings.push("総資産の読み取り結果がありません。順位と総資産は手入力してください。");
+  if (!parsed.revenue) warnings.push("収益の読み取り結果がありません。収益は手入力してください。");
+  if (!parsed.incidentLog)
+    warnings.push("事件簿の読み取り結果がありません。事件簿は0で初期化しました。");
   return warnings;
 }
 

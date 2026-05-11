@@ -29,13 +29,13 @@ export function ExportWorkspace({
   return (
     <PageFrame className="gap-5">
       <PageHeader
-        description="確定済み試合を固定列順で書き出します。OCR中・確定前の作業は出力対象外です。"
+        description="確定済みの試合をCSVまたはTSVで書き出します。処理中・確認待ちの記録は含まれません。"
         eyebrow="出力"
         title="CSV / TSV 出力"
       />
 
       {view.errors.length > 0 ? (
-        <Notice tone="danger" title="URLの出力条件を確認してください">
+        <Notice tone="danger" title="出力条件を確認してください">
           {view.errors.join(" ")}
         </Notice>
       ) : null}
@@ -45,7 +45,7 @@ export function ExportWorkspace({
           <div>
             <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">出力条件</h2>
             <p className="mt-1 text-sm leading-6 text-[var(--color-text-secondary)]">
-              書き出す範囲とファイル形式を選びます。条件を変えるとURLも共有可能な形で更新されます。
+              書き出す範囲とファイル形式を選びます。選択した条件は画面を開き直しても引き継がれます。
             </p>
           </div>
 

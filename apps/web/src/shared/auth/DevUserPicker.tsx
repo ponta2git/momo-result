@@ -28,7 +28,7 @@ export function DevUserPicker({ force = false }: DevUserPickerProps) {
         htmlFor={id}
         className="block text-xs font-semibold text-[var(--color-text-secondary)]"
       >
-        Dev User
+        操作用アカウント
       </label>
       <select
         id={id}
@@ -51,7 +51,7 @@ export function DevUserPicker({ force = false }: DevUserPickerProps) {
       </select>
       {lockedByEnv ? (
         <p className="mt-2 text-xs text-[var(--color-text-secondary)]">
-          VITE_DEV_USER で固定されています。
+          ローカル設定で固定されています。
         </p>
       ) : null}
     </div>

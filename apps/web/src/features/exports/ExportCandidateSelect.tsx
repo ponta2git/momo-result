@@ -77,8 +77,8 @@ export function ExportCandidateSelect({
         onChange={(event) => onChange(event.currentTarget.value)}
       />
       {view.selectedUnknown ? (
-        <Notice tone="warning" title="候補一覧にないIDを選択中です。">
-          URLで指定されたIDを保持しています。存在する対象であれば、このまま出力を試せます。
+        <Notice tone="warning" title="一覧にない対象が指定されています">
+          指定された対象が存在する場合は、このまま出力できます。別の対象を選ぶこともできます。
         </Notice>
       ) : null}
     </div>

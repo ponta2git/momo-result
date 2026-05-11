@@ -35,18 +35,18 @@ function buildPrimaryAction(item: MatchListSourceItem, status: MatchListStatus) 
       return matchDraftId
         ? {
             href: `/review/${encodeURIComponent(matchDraftId)}`,
-            label: "確認して確定",
+            label: "内容を確認",
             variant: "primary" as const,
           }
-        : { disabled: true, label: "確認して確定", variant: "primary" as const };
+        : { disabled: true, label: "内容を確認", variant: "primary" as const };
     case "needs_review":
       return matchDraftId
         ? {
             href: `/review/${encodeURIComponent(matchDraftId)}`,
-            label: "要確認を直す",
+            label: "確認事項を直す",
             variant: "primary" as const,
           }
-        : { disabled: true, label: "要確認を直す", variant: "primary" as const };
+        : { disabled: true, label: "確認事項を直す", variant: "primary" as const };
     case "ocr_failed":
       return {
         href: matchDraftId
@@ -58,7 +58,7 @@ function buildPrimaryAction(item: MatchListSourceItem, status: MatchListStatus) 
     case "ocr_running":
       return {
         disabled: true,
-        label: "OCR結果待ち",
+        label: "読み取り中",
         variant: "secondary" as const,
       };
   }
@@ -81,8 +81,8 @@ function buildSecondaryActions(item: MatchListSourceItem, status: MatchListStatu
 }
 
 function statusDescription(status: MatchListStatus): string | undefined {
-  if (status === "ocr_failed") return "OCR失敗。手入力で続行できます。";
-  if (status === "needs_review") return "要確認セルがあります。";
+  if (status === "ocr_failed") return "読み取りに失敗しました。手入力で続行できます。";
+  if (status === "needs_review") return "確認が必要な項目があります。";
   return undefined;
 }
 
@@ -115,7 +115,8 @@ export function toMatchListItemView(
       })),
     secondaryActions: buildSecondaryActions(item, status),
     status,
-    statusLabel: status === "confirmed" ? "確定済" : status === "ocr_running" ? "OCR中" : "確定前",
+    statusLabel:
+      status === "confirmed" ? "確定済" : status === "ocr_running" ? "処理中" : "確認待ち",
     updatedAt: item.updatedAt,
     ...compact({
       detailHref: item.matchId ? `/matches/${encodeURIComponent(item.matchId)}` : undefined,

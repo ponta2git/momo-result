@@ -28,7 +28,7 @@ export function CaptureRail({
   return (
     <section
       className={cn("grid gap-5", layout === "rail" ? "xl:grid-cols-3" : "")}
-      aria-label="OCR画像取り込み"
+      aria-label="画像取り込み"
     >
       {slotDefinitions.map((definition, index) => {
         const slot = slots.find((candidate) => candidate.kind === definition.kind);

@@ -21,8 +21,8 @@ export function ExportDownloadProgress({ isPending, isSlow }: ExportDownloadProg
       title={isSlow ? "通常より時間がかかっています" : "出力ファイルを作成しています"}
     >
       {isSlow
-        ? "画面を離れると、このダウンロード要求は中断される場合があります。"
-        : "保存ダイアログが始まるまで少しお待ちください。"}
+        ? "画面を離れると、ファイル作成が中断される場合があります。"
+        : "保存画面が開くまで少しお待ちください。"}
     </Notice>
   );
 }

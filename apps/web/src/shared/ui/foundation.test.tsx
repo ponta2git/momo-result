@@ -48,8 +48,8 @@ describe("ui foundation", () => {
       </>,
     );
 
-    expect(screen.getByText("OCR中")).toBeInTheDocument();
-    expect(screen.getAllByText("確定前").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("処理中")).toBeInTheDocument();
+    expect(screen.getAllByText("確認待ち").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("確定済")).toBeInTheDocument();
     expect(screen.getByText("OCR失敗")).toBeInTheDocument();
   });
@@ -57,8 +57,8 @@ describe("ui foundation", () => {
   it("StatusRail can fallback to compact pill", () => {
     render(<StatusRail compact status="needs_review" />);
 
-    expect(screen.getByText("確定前")).toBeInTheDocument();
-    expect(screen.queryByText("OCR中", { selector: "div span" })).not.toBeInTheDocument();
+    expect(screen.getByText("確認待ち")).toBeInTheDocument();
+    expect(screen.queryByText("処理中", { selector: "div span" })).not.toBeInTheDocument();
   });
 
   it("SegmentedControl supports keyboard selection", async () => {

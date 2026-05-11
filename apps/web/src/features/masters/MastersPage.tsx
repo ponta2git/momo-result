@@ -294,14 +294,14 @@ export function MastersPage() {
     const memberId = normalizeName(String(formData.get("memberId") ?? ""));
     const alias = normalizeName(String(formData.get("alias") ?? ""));
     if (!memberId || !alias) {
-      return { ...prev, error: "プレイヤーとエイリアスを入力してください" };
+      return { ...prev, error: "プレーヤーと別名を入力してください" };
     }
     try {
       await postMemberAlias({ memberId, alias });
       await queryClient.invalidateQueries({ queryKey: masterQueryKeys.memberAliases(authScope) });
       return { error: undefined, version: prev.version + 1 };
     } catch (error) {
-      return { ...prev, error: formatApiError(error, "エイリアスの追加に失敗しました") };
+      return { ...prev, error: formatApiError(error, "別名の追加に失敗しました") };
     }
   }, initialCreateState);
 
@@ -368,8 +368,8 @@ export function MastersPage() {
     <PageFrame className={sectionClass}>
       <PageHeader
         eyebrow="管理"
-        title="マスタ管理"
-        description="作品、OCR読み取り方式、マップ、シーズン、名寄せを管理します。"
+        title="設定管理"
+        description="作品、読み取り方式、マップ、シーズン、名前の読み替えを管理します。"
         actions={
           returnTo ? (
             <Button
@@ -389,7 +389,7 @@ export function MastersPage() {
       ) : null}
 
       {operationError ? (
-        <Notice tone="danger" title="マスタ操作に失敗しました">
+        <Notice tone="danger" title="設定の変更に失敗しました">
           {operationError}
         </Notice>
       ) : null}
@@ -404,18 +404,18 @@ export function MastersPage() {
       ) : null}
 
       {auth.isAuthenticated && shouldShowQueryError(mapMastersQuery) ? (
-        <Notice tone="danger" title="マップマスタの読み込みに失敗しました">
+        <Notice tone="danger" title="マップを読み込めませんでした">
           {errorMessage(mapMastersQuery.error)}
         </Notice>
       ) : null}
       {auth.isAuthenticated && shouldShowQueryError(seasonMastersQuery) ? (
-        <Notice tone="danger" title="シーズンマスタの読み込みに失敗しました">
+        <Notice tone="danger" title="シーズンを読み込めませんでした">
           {errorMessage(seasonMastersQuery.error)}
         </Notice>
       ) : null}
 
       <section
-        aria-label="マスタ管理の表示切替"
+        aria-label="設定管理の表示切替"
         className="flex flex-wrap gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2"
       >
         {masterTabs.map((tab) => (
@@ -513,13 +513,13 @@ export function MastersPage() {
 
       {hasInvalidReturnTo ? (
         <Notice tone="warning" title="戻り先を確認できませんでした">
-          戻り先パラメータが不正なため、試合一覧への導線だけを表示しています。
+          戻り先を確認できないため、試合一覧へ戻る導線だけを表示しています。
         </Notice>
       ) : null}
 
       {viewModel.shouldPromptGameTitleCreation ? (
         <Notice tone="info" title="最初に作品を追加してください">
-          マップとシーズンは作品に紐づいて作成されます。
+          マップとシーズンは作品を選んでから追加できます。
         </Notice>
       ) : null}
     </PageFrame>

@@ -66,7 +66,7 @@ export function useOcrCaptureDraftFlow(): OcrCaptureDraftFlow {
         slotsRef.current.find((slot) => slot.status === "empty") ??
         slotsRef.current.find((slot) => !slot.file && !slot.previewUrl);
       if (!targetSlot) {
-        notify("3枚すべて配置済みです。差し替える場合は先に不要な画像を削除してください。");
+        notify("3枚すべて配置済みです。差し替える場合は、先に不要な画像を削除してください。");
         return;
       }
       const previewUrl = URL.createObjectURL(file);
@@ -87,7 +87,7 @@ export function useOcrCaptureDraftFlow(): OcrCaptureDraftFlow {
         slotDefinitions.find((definition) => definition.kind === targetSlot.kind)?.label ??
         targetSlot.kind;
       notify(
-        `${source === "camera" ? "撮影" : "追加"}した画像を「${label}」へ置きました。必要ならドラッグで並べ替えてください。`,
+        `${source === "camera" ? "撮影" : "追加"}した画像を「${label}」に配置しました。必要に応じて分類を入れ替えてください。`,
       );
     },
     [updateSlot],
@@ -121,7 +121,7 @@ export function useOcrCaptureDraftFlow(): OcrCaptureDraftFlow {
     }
     setSlots(createInitialSlots());
     setDrafts({});
-    notify("撮影画像とOCR下書き表示をクリアしました。次の試合を撮影できます。");
+    notify("画像をすべて削除しました。次の試合を撮影できます。");
   }, []);
 
   const handleDropImage = useCallback(
@@ -148,7 +148,7 @@ export function useOcrCaptureDraftFlow(): OcrCaptureDraftFlow {
         delete next[targetKind];
         return next;
       });
-      notify("画像の分類を入れ替えました。OCR送信時は移動後の分類名をヒントにします。");
+      notify("画像の分類を入れ替えました。読み取り時は移動後の分類として扱います。");
     },
     [],
   );

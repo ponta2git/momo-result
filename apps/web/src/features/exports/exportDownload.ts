@@ -9,7 +9,7 @@ export const DEFAULT_EXPORT_SLOW_THRESHOLD_MS = 10_000;
 
 const timeoutTitle = "出力が完了しませんでした";
 const timeoutDetail =
-  "通信またはサーバー処理が想定より長くかかっています。条件を確認してもう一度お試しください。";
+  "通信または処理に時間がかかっています。条件を確認して、もう一度お試しください。";
 
 export function triggerDownload(result: ApiDownloadResult): void {
   const url = URL.createObjectURL(result.blob);

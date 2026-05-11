@@ -75,8 +75,8 @@ export function MasterEditDialog({
         </Field>
         {showLayoutFamily ? (
           <Field
-            label="OCR読み取り方式"
-            description="作品ごとの画面構造に合わせて、OCRの読み取り方を切り替えます。"
+            label="読み取り方式"
+            description="作品ごとの画面構造に合わせて、読み取り方を切り替えます。"
           >
             <select
               className={inputClass}
@@ -110,7 +110,7 @@ export function MasterDeleteDialog({ label, name, onDelete }: MasterDeleteDialog
   return (
     <AlertDialog
       title={`${label}を削除しますか？`}
-      description={`${name} を削除します。試合や下書きから参照されている場合は削除できません。`}
+      description={`${name} を削除します。試合や確定前の記録から参照されている場合は削除できません。`}
       confirmLabel="削除"
       onConfirm={onDelete}
       trigger={

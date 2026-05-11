@@ -571,10 +571,10 @@ export function ScoreGrid({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold text-[var(--color-text-primary)]">
-            4人分の結果を確認・手修正
+            4人分の結果を確認・修正
           </h2>
           <p className="mt-1 text-sm text-pretty text-[var(--color-text-secondary)]">
-            Enter/矢印で移動、Escでセルを編集前へ戻せます。事件簿はEnterで横方向に移動します。
+            Enterキーと矢印キーで移動できます。Escキーで編集中のセルを元に戻せます。
           </p>
         </div>
       </div>

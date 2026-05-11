@@ -22,7 +22,7 @@ export function RootRedirect() {
   const auth = useAuth();
 
   if (auth.isChecking) {
-    return <AuthLoading message="認証状態を確認中です..." />;
+    return <AuthLoading message="ログイン状態を確認しています…" />;
   }
 
   if (auth.isForbidden) {
@@ -41,7 +41,7 @@ export function PublicOnlyRoute({ children }: { children: ReactNode }) {
   const [searchParams] = useSearchParams();
 
   if (auth.isChecking) {
-    return <AuthLoading message="認証状態を確認中です..." />;
+    return <AuthLoading message="ログイン状態を確認しています…" />;
   }
 
   if (auth.isAuthenticated) {
@@ -58,7 +58,7 @@ export function AuthenticatedRoute({ children }: { children: ReactNode }) {
   const location = useLocation();
 
   if (auth.isChecking) {
-    return <AuthLoading message="認証状態を確認中です..." />;
+    return <AuthLoading message="ログイン状態を確認しています…" />;
   }
 
   if (auth.isUnauthorized) {
@@ -98,7 +98,7 @@ export function AdminRoute({ children }: { children: ReactNode }) {
   const auth = useAuth();
 
   if (auth.isChecking) {
-    return <AuthLoading message="認証状態を確認中です..." />;
+    return <AuthLoading message="ログイン状態を確認しています…" />;
   }
 
   if (!auth.auth?.isAdmin) {

@@ -24,7 +24,7 @@ type CaptureSlotCardProps = {
 
 const sourceLabels = {
   camera: "撮影",
-  upload: "単体追加",
+  upload: "追加",
 };
 
 const slotKindLabels = {
@@ -58,11 +58,11 @@ const statusLabel: Record<string, string> = {
   cancelled: "キャンセル済み",
   empty: "画像待ち",
   failed: "要確認",
-  queued: "OCR待機中",
-  queueing: "OCR依頼中",
-  running: "OCR実行中",
-  selected: "OCR待ち",
-  succeeded: "下書き保存済み",
+  queued: "読み取り待ち",
+  queueing: "準備中",
+  running: "読み取り中",
+  selected: "読み取り待ち",
+  succeeded: "確認待ち",
   uploaded: "送信済み",
   uploading: "画像送信中",
 };
@@ -130,14 +130,14 @@ export function CaptureSlotCard({
               {stationLabel}
             </span>
             <div>
-              <p className="text-xs font-semibold text-[var(--color-text-secondary)]">OCR種別</p>
+              <p className="text-xs font-semibold text-[var(--color-text-secondary)]">分類</p>
               <h2 className="mt-0.5 text-lg font-semibold text-[var(--color-text-primary)]">
                 {label}
               </h2>
             </div>
           </div>
           {hasImage ? (
-            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">送信分類: {label}</p>
+            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">読み取り分類: {label}</p>
           ) : null}
         </div>
         <CaptureStatusBadge status={slot.status} />
@@ -162,9 +162,9 @@ export function CaptureSlotCard({
       ) : (
         <div className="mt-4 grid aspect-video place-items-center rounded-[var(--radius-md)] border border-dashed border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-4 text-center text-sm text-[var(--color-text-secondary)]">
           <span>
-            {label}画像をここへ配置
+            {label}の画像をここへ配置
             <br />
-            <span className="text-xs">空きトレイ</span>
+            <span className="text-xs">空き分類</span>
           </span>
         </div>
       )}
@@ -196,7 +196,7 @@ export function CaptureSlotCard({
         >
           OCR判定は{" "}
           <strong>{slot.detectedKind ? slotKindLabels[slot.detectedKind] : "別の分類"}</strong>{" "}
-          でした。画像を正しい分類へ移動してから、もう一度「OCRにかけて下書き保存」を実行してください。
+          でした。画像を正しい分類へ移動してから、もう一度読み取りを開始してください。
         </div>
       ) : null}
 
@@ -222,9 +222,9 @@ export function CaptureSlotCard({
 
       {slot.pollAttempts >= 15 && !["succeeded", "failed", "cancelled"].includes(slot.status) ? (
         <div className="mt-4 rounded-[var(--radius-md)] border border-[var(--color-warning)]/60 bg-[var(--color-warning)]/20 p-3 text-sm text-[var(--color-text-primary)]">
-          Worker未接続の可能性があります。
+          読み取り処理に接続できていない可能性があります。
           <Button className="ml-3" variant="secondary" onClick={onManualRefresh}>
-            手動で再取得
+            状態を確認
           </Button>
         </div>
       ) : null}

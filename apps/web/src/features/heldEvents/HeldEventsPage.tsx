@@ -223,7 +223,7 @@ export function HeldEventsPage() {
           <Button
             icon={<RefreshCw className="size-4" />}
             pending={heldEventsQuery.isFetching}
-            pendingLabel="更新中..."
+            pendingLabel="更新中…"
             variant="quiet"
             onClick={() => void heldEventsQuery.refetch()}
           >
@@ -259,7 +259,7 @@ export function HeldEventsPage() {
             </Link>
             <Link to="/matches/new">
               <Button icon={<PenSquare className="size-4" />} variant="secondary">
-                手入力
+                手入力で作成
               </Button>
             </Link>
             <Link to={`/matches?heldEventId=${encodeURIComponent(latestEvent.id)}`}>
@@ -330,7 +330,7 @@ export function HeldEventsPage() {
             disabled={!heldAtDraft || createMutation.isPending}
             icon={<Plus className="size-4" />}
             pending={createMutation.isPending}
-            pendingLabel="作成中..."
+            pendingLabel="作成中…"
             onClick={() => createMutation.mutate()}
           >
             開催履歴を作成
@@ -341,7 +341,7 @@ export function HeldEventsPage() {
       {deleteTarget ? (
         <AlertDialog
           cancelLabel="キャンセル"
-          confirmLabel={deleteMutation.isPending ? "削除中..." : "削除する"}
+          confirmLabel={deleteMutation.isPending ? "削除中…" : "削除する"}
           description={`${formatDateTime(deleteTarget.heldAt)} の開催履歴を削除します。この操作は取り消せません。`}
           open={Boolean(deleteTarget)}
           title="開催履歴を削除しますか？"

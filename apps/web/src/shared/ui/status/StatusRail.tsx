@@ -25,23 +25,23 @@ type RailStep = {
 function buildSteps(status: MatchStatus): RailStep[] {
   if (isConfirmed(status)) {
     return [
-      { key: "ocr", label: "OCR中", state: "complete" },
-      { key: "draft", label: "確定前", state: "complete" },
+      { key: "ocr", label: "処理中", state: "complete" },
+      { key: "draft", label: "確認待ち", state: "complete" },
       { key: "confirmed", label: "確定済", state: "current" },
     ];
   }
 
   if (isOcrRunning(status)) {
     return [
-      { key: "ocr", label: "OCR中", state: "current" },
-      { key: "draft", label: "確定前", state: "pending" },
+      { key: "ocr", label: "処理中", state: "current" },
+      { key: "draft", label: "確認待ち", state: "pending" },
       { key: "confirmed", label: "確定済", state: "pending" },
     ];
   }
 
   return [
-    { key: "ocr", label: "OCR中", state: "complete" },
-    { key: "draft", label: "確定前", state: "current" },
+    { key: "ocr", label: "処理中", state: "complete" },
+    { key: "draft", label: "確認待ち", state: "current" },
     { key: "confirmed", label: "確定済", state: "pending" },
   ];
 }
@@ -60,7 +60,7 @@ export function StatusRail({ className, compact = false, status }: StatusRailPro
   }
 
   const steps = buildSteps(status);
-  const note = isOcrFailed(status) ? "OCR失敗" : isNeedsReview(status) ? "要確認" : undefined;
+  const note = isOcrFailed(status) ? "読み取り失敗" : isNeedsReview(status) ? "要確認" : undefined;
 
   return (
     <div className={cn("flex min-w-0 flex-wrap items-center gap-2", className)}>

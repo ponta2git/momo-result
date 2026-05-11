@@ -9,10 +9,10 @@ export const exportFormats = [
 ] as const;
 
 export const exportScopes = [
-  { description: "全試合をまとめて書き出します。", label: "全試合", value: "all" },
-  { description: "シーズンで絞り込みます。", label: "シーズン", value: "season" },
-  { description: "開催回で絞り込みます。", label: "開催", value: "heldEvent" },
-  { description: "1試合だけを書き出します。", label: "試合", value: "match" },
+  { description: "確定済みの全試合を書き出します。", label: "全試合", value: "all" },
+  { description: "シーズンを選んで書き出します。", label: "シーズン", value: "season" },
+  { description: "開催回を選んで書き出します。", label: "開催", value: "heldEvent" },
+  { description: "1試合だけ選んで書き出します。", label: "試合", value: "match" },
 ] as const;
 
 export type ExportCandidateView =
@@ -77,7 +77,7 @@ export function buildCandidateView(input: {
       candidates: [],
       kind: "ready",
       selectedId: input.selectedId,
-      selectedLabel: `選択中ID: ${input.selectedId}`,
+      selectedLabel: `指定された対象: ${input.selectedId}`,
       selectedUnknown: true,
     };
   }
@@ -86,7 +86,7 @@ export function buildCandidateView(input: {
     if (input.scope === "season") {
       return {
         actionHref: "/admin/masters",
-        actionLabel: "マスタ管理へ",
+        actionLabel: "設定管理へ",
         kind: "empty",
         message: "出力範囲に使えるシーズンがまだありません。",
         title: "シーズン候補がありません",
@@ -120,7 +120,7 @@ export function buildCandidateView(input: {
       candidates: input.candidates,
       kind: "ready",
       selectedId: input.selectedId,
-      selectedLabel: `選択中ID: ${input.selectedId}`,
+      selectedLabel: `指定された対象: ${input.selectedId}`,
       selectedUnknown: true,
     };
   }
@@ -142,19 +142,19 @@ function scopeLabel(scope: ExportScope): string {
 function scopeDescription(scope: ExportScope): string {
   return (
     exportScopes.find((item) => item.value === scope)?.description ??
-    "全試合をまとめて書き出します。"
+    "確定済みの全試合を書き出します。"
   );
 }
 
 function errorDetail(error: NormalizedApiError): string {
   if (error.status === 401 || error.status === 403) {
-    return "ログイン状態または権限を確認してください。";
+    return "ログイン状態または利用権限を確認してください。";
   }
   if (error.status === 422) {
     return error.detail || "出力条件を確認してください。";
   }
   if (error.status === 404) {
-    return error.detail || "選択候補または出力対象が見つかりませんでした。";
+    return error.detail || "選択した対象が見つかりませんでした。";
   }
   return error.detail || error.title;
 }
@@ -174,10 +174,10 @@ export function buildExportViewModel(input: {
   const disableReason =
     input.urlState.errors[0] ??
     (input.candidate.kind === "error" ? input.candidate.message : undefined) ??
-    (candidateNeedsSelection ? "出力範囲の候補を選択してください。" : undefined);
+    (candidateNeedsSelection ? "書き出す対象を選択してください。" : undefined);
   const selectedLabel =
     input.urlState.scope === "all"
-      ? "全ての確定済み試合"
+      ? "すべての確定済み試合"
       : input.candidate.kind === "ready"
         ? input.candidate.selectedLabel
         : "未選択";
@@ -199,8 +199,8 @@ export function buildExportViewModel(input: {
     selectedId: input.candidate.kind === "ready" ? input.candidate.selectedId : "",
     ticketRows: [
       { label: "形式", value: formatLabel },
-      { label: "対象", value: scopeLabel(input.urlState.scope) },
-      { label: "選択中", value: selectedLabel },
+      { label: "範囲", value: scopeLabel(input.urlState.scope) },
+      { label: "対象", value: selectedLabel },
     ],
   };
 }

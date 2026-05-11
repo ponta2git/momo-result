@@ -205,10 +205,10 @@ export function MatchWorkspacePage({
         },
         type: "replace",
       });
-      notify("マスタ管理から戻ったため、入力内容を復元しました。", "success");
+      notify("設定管理から戻ったため、入力内容を復元しました。", "success");
     },
     onRestoreFailed: () => {
-      notify("マスタ管理から戻りましたが、入力内容を復元できませんでした。", "warning");
+      notify("設定管理から戻りましたが、入力内容を復元できませんでした。", "warning");
     },
     searchParams,
   });
@@ -290,18 +290,18 @@ export function MatchWorkspacePage({
   };
 
   const pageTitle =
-    mode === "review" ? "OCR下書き確認" : mode === "edit" ? "試合を編集" : "試合の新規作成";
+    mode === "review" ? "OCR結果の確認" : mode === "edit" ? "試合を編集" : "試合の新規作成";
   const pageDescription =
     mode === "edit"
       ? "確定済みの試合記録を編集します。保存後は一覧と出力に反映されます。"
       : mode === "review"
-        ? `OCR結果を確認して、開催履歴と4人分の結果を確定します。ステータス: ${reviewStatusLabel(reviewStatus)}`
-        : "開催履歴と4人分の結果を入力して、確定前チェックへ進みます。";
+        ? `読み取り結果を確認して、開催履歴と4人分の結果を確定します。現在の状態: ${reviewStatusLabel(reviewStatus)}`
+        : "開催履歴と4人分の結果を入力して、確定前の確認へ進みます。";
 
   if (mode === "edit" && isInitialQueryLoading(matchDetailQuery)) {
     return (
       <PageFrame>
-        <p className="text-[var(--color-text-secondary)]">読み込み中...</p>
+        <p className="text-[var(--color-text-secondary)]">読み込んでいます…</p>
       </PageFrame>
     );
   }
@@ -329,7 +329,7 @@ export function MatchWorkspacePage({
             {pageDescription}
             {useSampleDrafts ? (
               <span className="mt-2 block w-fit rounded-full border border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18 px-3 py-1 text-sm font-semibold text-[var(--color-text-primary)]">
-                開発用サンプル下書きで表示中
+                サンプルの読み取り結果で表示中
               </span>
             ) : null}
           </>
@@ -341,17 +341,17 @@ export function MatchWorkspacePage({
             {canCancelDraft ? (
               <AlertDialog
                 cancelLabel="キャンセル"
-                confirmLabel={cancelDraftMutation.isPending ? "削除中..." : "削除する"}
-                description="この確定前の下書きを削除します。元に戻せません。"
+                confirmLabel={cancelDraftMutation.isPending ? "削除中…" : "削除する"}
+                description="この確定前の記録を削除します。元に戻せません。"
                 open={cancelDraftConfirmOpen}
-                title="下書きを削除しますか？"
+                title="確定前の記録を削除しますか？"
                 trigger={
                   <Button
                     disabled={isMutating}
                     variant="danger"
                     onClick={() => setCancelDraftConfirmOpen(true)}
                   >
-                    {cancelDraftMutation.isPending ? "削除中..." : "下書きを削除"}
+                    {cancelDraftMutation.isPending ? "削除中…" : "確定前の記録を削除"}
                   </Button>
                 }
                 onConfirm={handleCancelDraftConfirmed}
@@ -360,7 +360,7 @@ export function MatchWorkspacePage({
             ) : null}
             {(mode === "review" || mode === "create") && returnTo ? (
               <Button variant="secondary" onClick={handleNavigateToMasters}>
-                マスタ管理へ
+                設定管理へ
               </Button>
             ) : null}
           </>
@@ -376,10 +376,10 @@ export function MatchWorkspacePage({
       {isOcrRunningBlocked ? (
         <Card className="mt-5">
           <h2 className="text-xl font-semibold text-[var(--color-text-primary)]">
-            OCR中のため編集できません
+            読み取り中のため編集できません
           </h2>
           <p className="mt-2 text-sm text-pretty text-[var(--color-text-secondary)]">
-            OCRジョブが完了するまで結果確認画面には入れません。完了後に試合一覧の「確定前」から再度開いてください。
+            読み取りが完了するまで結果確認画面には入れません。完了後に試合一覧の「確認待ち」から再度開いてください。
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <Button
@@ -389,7 +389,7 @@ export function MatchWorkspacePage({
                 await Promise.all([draftDetailQuery.refetch(), ocrDraftsQuery.refetch()]);
               }}
             >
-              {refreshingReviewStatus ? "更新中..." : "状態を更新"}
+              {refreshingReviewStatus ? "更新中…" : "状態を更新"}
             </Button>
             <Link
               className="text-sm font-semibold text-[var(--color-action)] hover:underline"
@@ -494,11 +494,11 @@ export function MatchWorkspacePage({
           ) : null}
 
           <MatchFormActions
-            actionLabel={mode === "edit" ? "保存" : "確定前チェックへ進む"}
+            actionLabel={mode === "edit" ? "保存" : "確定前の確認へ進む"}
             disabled={false}
             message={
               validation.success
-                ? "確定前チェックへ進めます"
+                ? "確定前の確認へ進めます"
                 : (validation.firstMessage ?? "入力内容を確認してください")
             }
             pending={isMutating}

@@ -36,10 +36,10 @@ describe("MastersPage", () => {
     window.localStorage.setItem("momoresult.devUser", "account_ponta");
     renderPage();
 
-    expect(await screen.findByRole("heading", { name: "マスタ管理" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "作品マスタ" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "マップマスタ" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "シーズンマスタ" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "設定管理" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "作品" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "マップ" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "シーズン" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "事件簿" })).toBeInTheDocument();
   });
 
@@ -136,12 +136,10 @@ describe("MastersPage", () => {
     renderPage();
 
     await userEvent.click(await screen.findByRole("button", { name: "メンバー名寄せ" }));
-    expect(
-      await screen.findByRole("heading", { name: "プレイヤー名エイリアス" }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "プレーヤー名の別名" })).toBeInTheDocument();
     expect(screen.getByText("NO11")).toBeInTheDocument();
     const aliasPanel = screen
-      .getByRole("heading", { name: "プレイヤー名エイリアス" })
+      .getByRole("heading", { name: "プレーヤー名の別名" })
       .closest("section");
     if (!aliasPanel) {
       throw new Error("alias panel was not rendered");
@@ -156,7 +154,7 @@ describe("MastersPage", () => {
     if (!no11Row) {
       throw new Error("NO11 alias row was not rendered");
     }
-    await userEvent.click(within(no11Row).getByRole("button", { name: "エイリアスを削除" }));
+    await userEvent.click(within(no11Row).getByRole("button", { name: "別名を削除" }));
     await userEvent.click(screen.getByRole("button", { name: "削除" }));
 
     await waitFor(() => expect(screen.queryByText("NO11")).not.toBeInTheDocument());
@@ -204,7 +202,9 @@ describe("MastersPage", () => {
     );
 
     expect(await screen.findByRole("button", { name: "元の入力画面へ戻る" })).toBeInTheDocument();
-    expect(screen.getByText(/戻り先情報を引き継いでいます/u)).toBeInTheDocument();
+    expect(
+      screen.getByText(/現在の入力内容を保ったまま戻れるようにしています/u),
+    ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "戻り先を確認" })).toHaveAttribute(
       "href",
       expect.stringContaining("handoffId="),
@@ -248,7 +248,7 @@ describe("MastersPage", () => {
     renderPage();
 
     await requestStarted;
-    expect(screen.queryByText("作品マスタの読み込みに失敗しました")).not.toBeInTheDocument();
+    expect(screen.queryByText("作品を読み込めませんでした")).not.toBeInTheDocument();
     resolveResponse();
     expect(await screen.findByText("復旧済み作品")).toBeInTheDocument();
   });
@@ -269,7 +269,7 @@ describe("MastersPage", () => {
 
     renderPage();
 
-    expect(await screen.findByRole("heading", { name: "マスタ管理" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "設定管理" })).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByText("別画面キャッシュ")).not.toBeInTheDocument());
   });
 });

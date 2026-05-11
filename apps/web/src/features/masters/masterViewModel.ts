@@ -19,7 +19,7 @@ export function buildMasterViewModel({
     canCreateScopedMasters: Boolean(selectedGameTitle),
     scopedDisabledReason: selectedGameTitle
       ? undefined
-      : "先に作品マスタを追加してください。マップとシーズンは作品に紐づきます。",
+      : "先に作品を追加してください。マップとシーズンは作品を選んでから追加できます。",
     selectedGameTitle,
     selectedGameTitleId: selectedId,
     selectedMapMasters,

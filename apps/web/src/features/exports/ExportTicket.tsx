@@ -19,10 +19,10 @@ export function ExportTicket({ isPending, onDownload, view }: ExportTicketProps)
       <div>
         <p className="text-xs font-semibold text-[var(--color-text-muted)]">出力内容</p>
         <h2 className="mt-1 text-lg font-semibold text-[var(--color-text-primary)]">
-          ダウンロード確認
+          書き出し内容の確認
         </h2>
         <p className="mt-2 text-sm leading-6 text-[var(--color-text-secondary)]">
-          選択内容を確認してダウンロードします。
+          内容を確認してからファイルを作成します。
         </p>
       </div>
 
@@ -37,8 +37,8 @@ export function ExportTicket({ isPending, onDownload, view }: ExportTicketProps)
         ))}
       </dl>
 
-      <Notice tone="info" title="列仕様">
-        1プレーヤー1行、金額は万円単位です。列順はシーズン、開催情報、プレーヤー結果、事件簿の順です。
+      <Notice tone="info" title="ファイルの内容">
+        1プレーヤー1行で出力します。金額は万円単位です。
       </Notice>
 
       {view.disableReason ? (
@@ -52,7 +52,7 @@ export function ExportTicket({ isPending, onDownload, view }: ExportTicketProps)
         disabled={!view.canDownload}
         icon={<Download className="size-4" />}
         pending={isPending}
-        pendingLabel="作成中"
+        pendingLabel="作成中…"
         size="lg"
         onClick={onDownload}
       >

@@ -76,7 +76,7 @@ export function MasterRelationBoard({
       />
 
       <ScopedMasterPanel
-        title="マップマスタ"
+        title="マップ"
         itemLabel="マップ"
         items={mapMasters}
         onDelete={onDeleteMapMaster}
@@ -90,7 +90,7 @@ export function MasterRelationBoard({
       />
 
       <ScopedMasterPanel
-        title="シーズンマスタ"
+        title="シーズン"
         itemLabel="シーズン"
         items={seasonMasters}
         onDelete={onDeleteSeasonMaster}

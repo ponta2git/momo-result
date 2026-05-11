@@ -26,14 +26,14 @@ type MatchesListFiltersProps = {
 const statusOptions: Array<{ label: string; value: MatchListStatusFilter }> = [
   { label: "すべて", value: "all" },
   { label: "未完了", value: "incomplete" },
-  { label: "OCR中", value: "ocr_running" },
-  { label: "確定前", value: "pre_confirm" },
+  { label: "処理中", value: "ocr_running" },
+  { label: "確認待ち", value: "pre_confirm" },
   { label: "要確認", value: "needs_review" },
   { label: "確定済", value: "confirmed" },
 ];
 
 const sortOptions: Array<{ label: string; value: MatchListSort }> = [
-  { label: "未完了を先頭", value: "status_priority" },
+  { label: "未完了から表示", value: "status_priority" },
   { label: "更新が新しい順", value: "updated_desc" },
   { label: "開催が新しい順", value: "held_desc" },
   { label: "開催が古い順", value: "held_asc" },

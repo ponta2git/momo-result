@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { authMeQueryKey, authQueryOptions } from "@/features/auth/authQueries";
 import { logout } from "@/shared/api/client";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
+import { authMeQueryKey, authQueryOptions } from "@/shared/auth/authQueries";
 import { useDevUser } from "@/shared/auth/useDevUser";
 
 export function useAuth() {

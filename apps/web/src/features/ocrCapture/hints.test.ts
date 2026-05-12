@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 
 import { buildOcrHints } from "@/features/ocrCapture/hints";
+import { buildMemberAliasDirectory } from "@/shared/domain/memberDirectory";
 
 describe("buildOcrHints", () => {
   it("uses the canonical layout families and does not include result context fields", () => {
@@ -43,6 +44,20 @@ describe("buildOcrHints", () => {
     expect(aliases.find((alias) => alias.memberId === "member_otaka")?.aliases).toContain(
       "オータカ",
     );
+  });
+
+  it("includes member aliases managed in the database", () => {
+    const directory = buildMemberAliasDirectory([
+      { memberId: "member_ponta", alias: "ぽんた社長" },
+      { memberId: "member_eu", alias: "EU" },
+    ]);
+
+    const aliases =
+      buildOcrHints({ gameTitleName: "桃太郎電鉄2", layoutFamily: "momotetsu_2" }, directory)
+        .knownPlayerAliases ?? [];
+
+    expect(aliases.find((alias) => alias.memberId === "member_ponta")?.aliases).toContain("ぽんた");
+    expect(aliases.find((alias) => alias.memberId === "member_eu")?.aliases).toContain("EU");
   });
 
   it("sends computer aliases only for the Reiwa layout family", () => {

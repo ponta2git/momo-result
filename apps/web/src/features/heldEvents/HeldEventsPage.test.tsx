@@ -7,7 +7,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { HeldEventsPage } from "@/features/heldEvents/HeldEventsPage";
-import { server } from "@/shared/api/msw/server";
+import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
 
 function renderPage(path = "/held-events") {
@@ -142,6 +142,6 @@ describe("HeldEventsPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "削除する" }));
 
     expect((await screen.findAllByText(/held event has match drafts/u)).length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: "削除" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "削除する" })).toBeInTheDocument();
   });
 });

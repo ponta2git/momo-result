@@ -16,9 +16,9 @@ type MasterRelationBoardProps = {
   gameTitleCreateFormKey?: string | number | undefined;
   gameTitleDefaultLayoutFamily: LayoutFamily;
   gameTitles: GameTitleListItem[];
-  onDeleteGameTitle: (id: string) => void;
-  onDeleteMapMaster: (id: string) => void;
-  onDeleteSeasonMaster: (id: string) => void;
+  onDeleteGameTitle: (id: string) => Promise<void> | void;
+  onDeleteMapMaster: (id: string) => Promise<void> | void;
+  onDeleteSeasonMaster: (id: string) => Promise<void> | void;
   mapCreateAction: (formData: FormData) => void | Promise<void>;
   mapCreateError?: string | undefined;
   mapCreateFormKey?: string | number | undefined;

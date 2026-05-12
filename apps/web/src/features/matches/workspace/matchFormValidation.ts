@@ -1,5 +1,5 @@
-import { confirmMatchSchema } from "@/features/draftReview/confirmMatchFormSchema";
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
+import { confirmMatchSchema } from "@/features/matches/workspace/review/confirmMatchFormSchema";
 
 type ValidationResult = {
   firstMessage?: string;

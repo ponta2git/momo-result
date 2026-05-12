@@ -1,8 +1,9 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 
-import { mergeDrafts } from "@/features/draftReview/reviewViewModel";
+import { mergeDrafts } from "@/features/matches/workspace/review/reviewViewModel";
 import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
+import { buildMemberAliasDirectory } from "@/shared/domain/memberDirectory";
 
 const field = <T>(value: T, confidence = 0.96) => ({
   value,
@@ -63,6 +64,23 @@ describe("mergeDrafts", () => {
     });
     expect(merged.players[0]?.incidents["目的地"]).toBe(2);
     expect(merged.players[0]?.incidents["カード駅"]).toBe(0);
+  });
+
+  it("uses member aliases managed outside fixed member defaults", () => {
+    const totalAssetsDraft = draft("total_assets");
+    const payload = totalAssetsDraft.payloadJson as {
+      players: Array<{ raw_player_name: ReturnType<typeof field<string>> }>;
+    };
+    payload.players[0]!.raw_player_name = field("PNT社長");
+
+    const merged = mergeDrafts(
+      {
+        total_assets: totalAssetsDraft,
+      },
+      buildMemberAliasDirectory([{ memberId: "member_ponta", alias: "PNT" }]),
+    );
+
+    expect(merged.players[0]?.memberId).toBe("member_ponta");
   });
 
   it("matches incident_log entries by play_order even when member_id is unresolved", () => {

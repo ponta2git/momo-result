@@ -1,5 +1,6 @@
 import { ArrowDown, ArrowUp } from "lucide-react";
-import type { ReactNode } from "react";
+import { useMemo } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 import { cn } from "@/shared/ui/cn";
 
@@ -37,6 +38,15 @@ export function DataTable<Row>({
   getRowKey,
   rows,
 }: DataTableProps<Row>) {
+  const columnStyleByKey = useMemo(() => {
+    return new Map<string, CSSProperties | undefined>(
+      columns.map((column) => [
+        column.key,
+        column.minWidth ? { minWidth: column.minWidth } : undefined,
+      ]),
+    );
+  }, [columns]);
+
   return (
     <div className={cn("min-w-0 overflow-x-auto", className)}>
       <table className="w-full min-w-full border-separate border-spacing-0 text-sm">
@@ -58,7 +68,7 @@ export function DataTable<Row>({
                   "border-b border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3 py-2 text-xs font-semibold text-[var(--color-text-secondary)]",
                   alignClass[column.align ?? "left"],
                 )}
-                style={column.minWidth ? { minWidth: column.minWidth } : undefined}
+                style={columnStyleByKey.get(column.key)}
               >
                 {column.sortable ? (
                   <button
@@ -96,7 +106,7 @@ export function DataTable<Row>({
                     "px-3 py-2 align-top text-[var(--color-text-primary)]",
                     alignClass[column.align ?? "left"],
                   )}
-                  style={column.minWidth ? { minWidth: column.minWidth } : undefined}
+                  style={columnStyleByKey.get(column.key)}
                 >
                   <div className="min-w-0">{column.renderCell(row)}</div>
                 </td>

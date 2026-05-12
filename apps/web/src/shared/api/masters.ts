@@ -37,7 +37,7 @@ export async function createGameTitle(
   return apiRequest<GameTitleResponse>("/api/game-titles", {
     method: "POST",
     body: request,
-    idempotencyKey: options.idempotencyKey,
+    idempotency: options.idempotencyKey ? { key: options.idempotencyKey } : "auto",
   });
 }
 
@@ -71,7 +71,7 @@ export async function createMapMaster(
   return apiRequest<MapMasterResponse>("/api/map-masters", {
     method: "POST",
     body: request,
-    idempotencyKey: options.idempotencyKey,
+    idempotency: options.idempotencyKey ? { key: options.idempotencyKey } : "auto",
   });
 }
 
@@ -105,7 +105,7 @@ export async function createSeasonMaster(
   return apiRequest<SeasonMasterResponse>("/api/season-masters", {
     method: "POST",
     body: request,
-    idempotencyKey: options.idempotencyKey,
+    idempotency: options.idempotencyKey ? { key: options.idempotencyKey } : "auto",
   });
 }
 
@@ -143,7 +143,7 @@ export async function createMemberAlias(
   return apiRequest<MemberAliasResponse>("/api/member-aliases", {
     method: "POST",
     body: request,
-    idempotencyKey: options.idempotencyKey,
+    idempotency: options.idempotencyKey ? { key: options.idempotencyKey } : "auto",
   });
 }
 

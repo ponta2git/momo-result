@@ -6,13 +6,13 @@ import { http, HttpResponse } from "msw";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { DraftReviewPage } from "@/features/draftReview/DraftReviewPage";
+import { DraftReviewPage } from "@/features/matches/workspace/DraftReviewPage";
 import {
   createDraftReviewHandoffPayload,
   saveMasterHandoff,
-} from "@/features/masters/masterReturnHandoff";
-import { server } from "@/shared/api/msw/server";
+} from "@/shared/workflows/masterReturnHandoff";
 import { makeDraftReviewHandoffValues, makeFourReviewPlayerInputs } from "@/test/factories";
+import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
 
 describe("DraftReviewPage", () => {

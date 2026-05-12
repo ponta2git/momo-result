@@ -1,40 +1,28 @@
-import { fixedMembers } from "@/features/auth/members";
-import { incidentNames, parseOcrDraftPayload } from "@/features/draftReview/ocrDraftPayload";
+import type {
+  DraftByKind,
+  IncidentLookupEntry,
+  OriginalPlayerSnapshot,
+  ReviewIncidentCounts,
+} from "@/features/matches/workspace/matchFormTypes";
+import {
+  incidentNames,
+  parseOcrDraftPayload,
+} from "@/features/matches/workspace/review/ocrDraftPayload";
 import type {
   IncidentName,
   OcrDraftPayload,
   OcrField,
   OcrPlayerEntry,
-} from "@/features/draftReview/ocrDraftPayload";
-import type { components } from "@/shared/api/generated";
+} from "@/features/matches/workspace/review/ocrDraftPayload";
+import {
+  defaultMemberAliasDirectory,
+  resolveMemberIdByAlias,
+} from "@/shared/domain/memberDirectory";
+import type { MemberAliasDirectory } from "@/shared/domain/memberDirectory";
+import { fixedMembers } from "@/shared/domain/members";
 import { pipe } from "@/shared/lib/pipe";
-import type { SlotMap } from "@/shared/lib/slotMap";
 
-export type DraftByKind = SlotMap<components["schemas"]["OcrDraftResponse"]>;
-
-export type ReviewIncidentCounts = Record<IncidentName, number>;
-
-export type ReviewPlayer = {
-  memberId: string;
-  playOrder: number;
-  rank: number;
-  totalAssetsManYen: number;
-  revenueManYen: number;
-  incidents: ReviewIncidentCounts;
-  rawPlayerName?: string | undefined;
-  warnings: string[];
-  confidence: {
-    rank?: number | null;
-    totalAssets?: number | null;
-    revenue?: number | null;
-    incidents: Partial<Record<IncidentName, number | null>>;
-  };
-};
-
-export type IncidentLookupEntry = {
-  counts: ReviewIncidentCounts;
-  confidence: Partial<Record<IncidentName, number | null>>;
-};
+export type ReviewPlayer = OriginalPlayerSnapshot;
 
 export type MergedDraftReview = {
   players: ReviewPlayer[];
@@ -47,36 +35,24 @@ export type MergedDraftReview = {
   incidentByPlayOrder: Map<number, IncidentLookupEntry>;
 };
 
-const memberIds = fixedMembers.map((member) => member.memberId);
-
 function emptyIncidents(): ReviewIncidentCounts {
   return Object.fromEntries(incidentNames.map((name) => [name, 0])) as ReviewIncidentCounts;
 }
 
-function stripPresidentSuffix(name: string): string {
-  return name.replace(/社長\s*$/u, "").trim();
-}
-
-function aliasToMemberId(rawName: string | null | undefined): string | undefined {
-  if (!rawName) {
-    return undefined;
-  }
-  const normalized = stripPresidentSuffix(rawName.trim());
-  if (!normalized) {
-    return undefined;
-  }
-  return fixedMembers.find((member) =>
-    [member.displayName, ...member.aliases]
-      .map((alias) => stripPresidentSuffix(alias.trim()))
-      .some((alias) => alias === normalized),
-  )?.memberId;
-}
-
-function resolveMemberIdForRow(entry: OcrPlayerEntry | undefined, fallbackIndex: number): string {
+function resolveMemberIdForRow(
+  directory: MemberAliasDirectory,
+  entry: OcrPlayerEntry | undefined,
+  fallbackIndex: number,
+): string {
+  const memberIds = directory.memberIds;
   if (entry?.member_id && memberIds.includes(entry.member_id)) {
     return entry.member_id;
   }
-  return aliasToMemberId(entry?.raw_player_name.value) ?? memberIds[fallbackIndex] ?? "";
+  return (
+    resolveMemberIdByAlias(directory, entry?.raw_player_name.value) ??
+    memberIds[fallbackIndex] ??
+    ""
+  );
 }
 
 /**
@@ -108,15 +84,18 @@ function claimWithoutDuplicates<T, V>(
  * 4人分の OCR エントリからエイリアス一致 → 固定メンバー順 (fallback) の順で
  * memberId を解決し、重複が出ないように未使用メンバーで埋める。
  */
-function resolveMemberIds(entries: ReadonlyArray<OcrPlayerEntry | undefined>): string[] {
+function resolveMemberIds(
+  entries: ReadonlyArray<OcrPlayerEntry | undefined>,
+  directory: MemberAliasDirectory,
+): string[] {
   return claimWithoutDuplicates(
     entries,
-    memberIds,
+    directory.memberIds,
     (entry) => {
-      if (entry?.member_id && memberIds.includes(entry.member_id)) {
+      if (entry?.member_id && directory.memberIds.includes(entry.member_id)) {
         return entry.member_id;
       }
-      return aliasToMemberId(entry?.raw_player_name.value);
+      return resolveMemberIdByAlias(directory, entry?.raw_player_name.value);
     },
     "",
   );
@@ -145,19 +124,20 @@ function numberValue(field: OcrField<number> | undefined, fallback: number): num
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
-function parseDraft(
-  draft: components["schemas"]["OcrDraftResponse"] | undefined,
-): OcrDraftPayload | undefined {
+function parseDraft(draft: DraftByKind["total_assets"] | undefined): OcrDraftPayload | undefined {
   if (!draft) {
     return undefined;
   }
   return parseOcrDraftPayload(draft.payloadJson);
 }
 
-function byMemberId(payload: OcrDraftPayload | undefined): Map<string, OcrPlayerEntry> {
+function byMemberId(
+  payload: OcrDraftPayload | undefined,
+  directory: MemberAliasDirectory,
+): Map<string, OcrPlayerEntry> {
   const entries = new Map<string, OcrPlayerEntry>();
   payload?.players.forEach((entry, index) => {
-    entries.set(resolveMemberIdForRow(entry, index), entry);
+    entries.set(resolveMemberIdForRow(directory, entry, index), entry);
   });
   return entries;
 }
@@ -220,14 +200,16 @@ function buildIncidentLookup(
 function buildPlayers(
   parsed: ParsedDrafts,
   incidentByPlayOrder: Map<number, IncidentLookupEntry>,
+  directory: MemberAliasDirectory,
 ): ReviewPlayer[] {
+  const memberIds = directory.memberIds;
   const sourcePlayers = parsed.totalAssets?.players.length
     ? parsed.totalAssets.players
     : fixedMembers.map(() => undefined);
   const trimmedSources = sourcePlayers.slice(0, 4);
-  const resolvedMemberIds = resolveMemberIds(trimmedSources);
+  const resolvedMemberIds = resolveMemberIds(trimmedSources, directory);
   const resolvedPlayOrders = resolvePlayOrders(trimmedSources);
-  const revenueByMember = byMemberId(parsed.revenue);
+  const revenueByMember = byMemberId(parsed.revenue, directory);
 
   return trimmedSources.map((entry, index) => {
     const memberId = resolvedMemberIds[index] ?? memberIds[index] ?? "";
@@ -319,10 +301,17 @@ function sortByAssetsDesc(players: readonly ReviewPlayer[]): ReviewPlayer[] {
  *
  * 各段は独立した純関数で、入力に対する出力が一意 (参照透過)。
  */
-export function mergeDrafts(drafts: DraftByKind): MergedDraftReview {
+export function mergeDrafts(
+  drafts: DraftByKind,
+  memberDirectory: MemberAliasDirectory = defaultMemberAliasDirectory,
+): MergedDraftReview {
   const parsed = parseAll(drafts);
   const incidentByPlayOrder = buildIncidentLookup(parsed.incidentLog);
-  const players = pipe(buildPlayers(parsed, incidentByPlayOrder), padToFour, sortByAssetsDesc);
+  const players = pipe(
+    buildPlayers(parsed, incidentByPlayOrder, memberDirectory),
+    padToFour,
+    sortByAssetsDesc,
+  );
   return {
     players,
     warnings: collectWarnings(parsed),

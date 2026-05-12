@@ -1,3 +1,5 @@
+import { useMemo } from "react";
+
 import type {
   MatchListSearch,
   MatchListSort,
@@ -57,9 +59,34 @@ export function MatchesListFilters({
   seasons,
   selectionErrors,
 }: MatchesListFiltersProps) {
-  const seasonOptions = seasons.filter((season) => {
-    return !initialSearch.gameTitleId || season.gameTitleId === initialSearch.gameTitleId;
-  });
+  const seasonMasters = useMemo(
+    () =>
+      seasons.filter((season) => {
+        return !initialSearch.gameTitleId || season.gameTitleId === initialSearch.gameTitleId;
+      }),
+    [initialSearch.gameTitleId, seasons],
+  );
+  const heldEventOptions = useMemo(
+    () => [
+      { label: "すべて", value: "" },
+      ...heldEvents.map((event) => ({ label: heldEventLabel(event), value: event.id })),
+    ],
+    [heldEvents],
+  );
+  const gameTitleOptions = useMemo(
+    () => [
+      { label: "すべて", value: "" },
+      ...gameTitles.map((gameTitle) => ({ label: gameTitle.name, value: gameTitle.id })),
+    ],
+    [gameTitles],
+  );
+  const seasonOptions = useMemo(
+    () => [
+      { label: "すべて", value: "" },
+      ...seasonMasters.map((season) => ({ label: season.name, value: season.id })),
+    ],
+    [seasonMasters],
+  );
   const heldEventsErrorProps = selectionErrors?.heldEvents
     ? { error: selectionErrors.heldEvents }
     : {};
@@ -111,10 +138,7 @@ export function MatchesListFilters({
         <div className="hidden gap-4 md:grid md:grid-cols-[1fr_1fr_1fr_auto] md:items-end">
           <SelectField
             label="開催"
-            options={[
-              { label: "すべて", value: "" },
-              ...heldEvents.map((event) => ({ label: heldEventLabel(event), value: event.id })),
-            ]}
+            options={heldEventOptions}
             value={initialSearch.heldEventId}
             {...heldEventsErrorProps}
             onChange={(event) => {
@@ -124,10 +148,7 @@ export function MatchesListFilters({
           />
           <SelectField
             label="作品"
-            options={[
-              { label: "すべて", value: "" },
-              ...gameTitles.map((gameTitle) => ({ label: gameTitle.name, value: gameTitle.id })),
-            ]}
+            options={gameTitleOptions}
             value={initialSearch.gameTitleId}
             {...gameTitlesErrorProps}
             onChange={(event) => {
@@ -141,10 +162,7 @@ export function MatchesListFilters({
           />
           <SelectField
             label="シーズン"
-            options={[
-              { label: "すべて", value: "" },
-              ...seasonOptions.map((season) => ({ label: season.name, value: season.id })),
-            ]}
+            options={seasonOptions}
             value={initialSearch.seasonMasterId}
             {...seasonsErrorProps}
             onChange={(event) => {
@@ -164,10 +182,7 @@ export function MatchesListFilters({
           <div className="mt-3 grid gap-4">
             <SelectField
               label="開催"
-              options={[
-                { label: "すべて", value: "" },
-                ...heldEvents.map((event) => ({ label: heldEventLabel(event), value: event.id })),
-              ]}
+              options={heldEventOptions}
               value={initialSearch.heldEventId}
               {...heldEventsErrorProps}
               onChange={(event) => {
@@ -177,10 +192,7 @@ export function MatchesListFilters({
             />
             <SelectField
               label="作品"
-              options={[
-                { label: "すべて", value: "" },
-                ...gameTitles.map((gameTitle) => ({ label: gameTitle.name, value: gameTitle.id })),
-              ]}
+              options={gameTitleOptions}
               value={initialSearch.gameTitleId}
               {...gameTitlesErrorProps}
               onChange={(event) => {
@@ -196,10 +208,7 @@ export function MatchesListFilters({
             />
             <SelectField
               label="シーズン"
-              options={[
-                { label: "すべて", value: "" },
-                ...seasonOptions.map((season) => ({ label: season.name, value: season.id })),
-              ]}
+              options={seasonOptions}
               value={initialSearch.seasonMasterId}
               {...seasonsErrorProps}
               onChange={(event) => {

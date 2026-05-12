@@ -1,14 +1,15 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
-import { confirmMatch, updateMatch } from "@/features/matches/api";
-import {
-  invalidateMatchAndDraftCaches,
-  invalidateMatchDetailCaches,
-} from "@/features/matches/queryKeys";
 import { cancelMatchDraft } from "@/features/matches/workspace/api";
 import { toUpdateMatchRequest } from "@/features/matches/workspace/matchFormToRequest";
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
+import {
+  invalidateAfterDraftCancelled,
+  invalidateAfterMatchConfirmed,
+  invalidateAfterMatchUpdated,
+} from "@/shared/api/cacheInvalidation";
+import { confirmMatch, updateMatch } from "@/shared/api/matches";
 import { formatApiError } from "@/shared/api/problemDetails";
 import { assertDefined } from "@/shared/lib/invariant";
 
@@ -34,7 +35,7 @@ export function useMatchWorkspaceMutations({
   const confirmMutation = useMutation({
     mutationFn: (request: Parameters<typeof confirmMatch>[0]) => confirmMatch(request),
     onSuccess: async (response) => {
-      await invalidateMatchAndDraftCaches(queryClient);
+      await invalidateAfterMatchConfirmed(queryClient);
       onConfirmSuccess();
       navigate(`/matches/${encodeURIComponent(response.matchId)}`);
     },
@@ -50,7 +51,7 @@ export function useMatchWorkspaceMutations({
     },
     onSuccess: async (response) => {
       assertDefined(matchId, "matchId");
-      await invalidateMatchDetailCaches(queryClient, matchId);
+      await invalidateAfterMatchUpdated(queryClient, matchId);
       navigate(`/matches/${encodeURIComponent(response.matchId)}`);
     },
     onError: (error) => {
@@ -61,7 +62,7 @@ export function useMatchWorkspaceMutations({
   const cancelDraftMutation = useMutation({
     mutationFn: (draftId: string) => cancelMatchDraft(draftId),
     onSuccess: async () => {
-      await invalidateMatchAndDraftCaches(queryClient);
+      await invalidateAfterDraftCancelled(queryClient);
       navigate("/matches", { replace: true });
     },
     onError: (error) => {

@@ -1,7 +1,7 @@
 import { AlertTriangle, CircleCheck, LoaderCircle, PencilLine } from "lucide-react";
 import type { ReactNode } from "react";
 
-import type { DraftStatus } from "@/features/matches/draftStatus";
+import type { DraftStatus } from "@/shared/domain/draftStatus";
 import { cn } from "@/shared/ui/cn";
 
 export type MatchStatus = DraftStatus;

@@ -1,4 +1,4 @@
-import { fixedMembers } from "@/features/auth/members";
+import { fixedMembers } from "@/shared/domain/members";
 
 export function formatDateTime(iso: string | undefined): string {
   if (!iso) {

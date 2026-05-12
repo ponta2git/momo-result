@@ -1,10 +1,7 @@
-import { fixedMembers } from "@/features/auth/members";
-import type { ConfirmMatchFormValues } from "@/features/draftReview/confirmMatchFormSchema";
-import type {
-  DraftByKind,
-  IncidentLookupEntry,
-  ReviewPlayer,
-} from "@/features/draftReview/reviewViewModel";
+import type { ConfirmMatchFormValues } from "@/features/matches/workspace/review/confirmMatchFormSchema";
+import type { components } from "@/shared/api/generated";
+import { fixedMembers } from "@/shared/domain/members";
+import type { SlotMap } from "@/shared/lib/slotMap";
 
 export const incidentColumns = [
   ["destination", "目的地"],
@@ -17,6 +14,31 @@ export const incidentColumns = [
 
 export type IncidentKey = (typeof incidentColumns)[number][0];
 export type IncidentLabel = (typeof incidentColumns)[number][1];
+export type ReviewIncidentCounts = Record<IncidentLabel, number>;
+
+export type DraftByKind = SlotMap<components["schemas"]["OcrDraftResponse"]>;
+
+export type IncidentLookupEntry = {
+  confidence: Partial<Record<IncidentLabel, number | null>>;
+  counts: ReviewIncidentCounts;
+};
+
+export type OriginalPlayerSnapshot = {
+  confidence: {
+    incidents: Partial<Record<IncidentLabel, number | null>>;
+    rank?: number | null;
+    revenue?: number | null;
+    totalAssets?: number | null;
+  };
+  incidents: ReviewIncidentCounts;
+  memberId: string;
+  playOrder: number;
+  rank: number;
+  rawPlayerName?: string | undefined;
+  revenueManYen: number;
+  totalAssetsManYen: number;
+  warnings: string[];
+};
 
 export type MatchDraftSummary = {
   status: string;
@@ -41,7 +63,7 @@ export type MatchFormValues = ConfirmMatchFormValues & {
 export type MatchWorkspaceInitialData = {
   draftByKind: DraftByKind;
   incidentByPlayOrder: Map<number, IncidentLookupEntry>;
-  originalPlayers: ReviewPlayer[];
+  originalPlayers: OriginalPlayerSnapshot[];
   warnings: string[];
 };
 

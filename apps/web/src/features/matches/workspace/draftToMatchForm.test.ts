@@ -1,8 +1,11 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 
-import { createSampleDraft, createSampleDraftMap } from "@/features/draftReview/sampleDrafts";
 import { draftToMatchForm } from "@/features/matches/workspace/draftToMatchForm";
+import {
+  createSampleDraft,
+  createSampleDraftMap,
+} from "@/features/matches/workspace/review/sampleDrafts";
 
 const baseIso = "2026-01-01T09:00";
 

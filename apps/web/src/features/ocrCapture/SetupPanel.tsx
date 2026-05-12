@@ -1,11 +1,6 @@
-import { getFormProps, useForm } from "@conform-to/react";
-import type { SubmissionResult } from "@conform-to/react";
-import { parseWithZod } from "@conform-to/zod/v4";
 import { useQuery } from "@tanstack/react-query";
-import { useActionState, useEffect } from "react";
+import { useEffect, useId } from "react";
 
-import { fixedMembers } from "@/features/auth/members";
-import { setupSchema } from "@/features/ocrCapture/schema";
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
 import { listGameTitles, listMapMasters, listSeasonMasters } from "@/shared/api/masters";
 import type {
@@ -15,13 +10,15 @@ import type {
 } from "@/shared/api/masters";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { shouldShowQueryError } from "@/shared/api/queryErrorState";
+import { masterKeys } from "@/shared/api/queryKeys";
+import { fixedMembers } from "@/shared/domain/members";
 import { Field } from "@/shared/ui/forms/Field";
 
 type SetupPanelProps = {
   value: SetupFormValues;
   onChange: (value: SetupFormValues) => void;
   enabled?: boolean;
-  authMemberId?: string | undefined;
+  authAccountId?: string | undefined;
 };
 
 const selectClass =
@@ -41,20 +38,21 @@ function queryErrorMessage(error: unknown): string | undefined {
     : normalized.detail || normalized.title;
 }
 
-export function SetupPanel({ value, onChange, enabled = true, authMemberId }: SetupPanelProps) {
-  const authScope = authMemberId ?? "anonymous";
+export function SetupPanel({ value, onChange, enabled = true, authAccountId }: SetupPanelProps) {
+  const fieldIdPrefix = useId();
+  const authScope = authAccountId ?? "anonymous";
   const gameTitlesQuery = useQuery({
-    queryKey: ["masters", "game-titles", authScope],
+    queryKey: masterKeys.gameTitles.list(authScope),
     queryFn: listGameTitles,
     enabled,
   });
   const mapMastersQuery = useQuery({
-    queryKey: ["masters", "map-masters", authScope, value.gameTitleId],
+    queryKey: masterKeys.mapMasters.list(authScope, value.gameTitleId),
     queryFn: () => listMapMasters(value.gameTitleId || undefined),
     enabled: enabled && Boolean(value.gameTitleId),
   });
   const seasonMastersQuery = useQuery({
-    queryKey: ["masters", "season-masters", authScope, value.gameTitleId],
+    queryKey: masterKeys.seasonMasters.list(authScope, value.gameTitleId),
     queryFn: () => listSeasonMasters(value.gameTitleId || undefined),
     enabled: enabled && Boolean(value.gameTitleId),
   });
@@ -105,26 +103,10 @@ export function SetupPanel({ value, onChange, enabled = true, authMemberId }: Se
       : "作品を選択してください";
   }
 
-  type SetupSubmitState = { lastResult: SubmissionResult<string[]> | null };
-  const [submitState, submitAction] = useActionState<SetupSubmitState, FormData>(
-    (_prev, formData) => {
-      const submission = parseWithZod(formData, { schema: setupSchema });
-      if (submission.status === "success") {
-        onChange(submission.value);
-      }
-      return { lastResult: submission.reply() };
-    },
-    { lastResult: null },
-  );
-
-  const [form, fields] = useForm({
-    id: "ocr-setup",
-    defaultValue: value,
-    lastResult: submitState.lastResult,
-    onValidate({ formData }) {
-      return parseWithZod(formData, { schema: setupSchema });
-    },
-  });
+  const gameTitleId = `${fieldIdPrefix}-game-title`;
+  const seasonMasterId = `${fieldIdPrefix}-season-master`;
+  const mapMasterId = `${fieldIdPrefix}-map-master`;
+  const ownerMemberId = `${fieldIdPrefix}-owner-member`;
 
   useEffect(() => {
     if (value.gameTitleId) {
@@ -164,15 +146,10 @@ export function SetupPanel({ value, onChange, enabled = true, authMemberId }: Se
   }
 
   return (
-    <form {...getFormProps(form)} action={submitAction} className="grid gap-4 lg:grid-cols-4">
-      <Field
-        label="作品（必須）"
-        htmlFor={fields.gameTitleId.id}
-        error={fields.gameTitleId.errors?.[0]}
-      >
+    <div className="grid gap-4 lg:grid-cols-4">
+      <Field label="作品（必須）" htmlFor={gameTitleId}>
         <select
-          id={fields.gameTitleId.id}
-          name={fields.gameTitleId.name}
+          id={gameTitleId}
           value={value.gameTitleId}
           onChange={(event) =>
             patchValue({
@@ -203,13 +180,11 @@ export function SetupPanel({ value, onChange, enabled = true, authMemberId }: Se
 
       <Field
         label="シーズン（必須）"
-        htmlFor={fields.seasonMasterId.id}
-        error={fields.seasonMasterId.errors?.[0]}
+        htmlFor={seasonMasterId}
         description="読み取り結果の確認と確定に使います。"
       >
         <select
-          id={fields.seasonMasterId.id}
-          name={fields.seasonMasterId.name}
+          id={seasonMasterId}
           value={value.seasonMasterId}
           onChange={(event) => patchValue({ seasonMasterId: event.target.value })}
           className={selectClass}
@@ -232,14 +207,9 @@ export function SetupPanel({ value, onChange, enabled = true, authMemberId }: Se
         ) : null}
       </Field>
 
-      <Field
-        label="マップ（必須）"
-        htmlFor={fields.mapMasterId.id}
-        error={fields.mapMasterId.errors?.[0]}
-      >
+      <Field label="マップ（必須）" htmlFor={mapMasterId}>
         <select
-          id={fields.mapMasterId.id}
-          name={fields.mapMasterId.name}
+          id={mapMasterId}
           value={value.mapMasterId}
           onChange={(event) => patchValue({ mapMasterId: event.target.value })}
           className={selectClass}
@@ -262,14 +232,9 @@ export function SetupPanel({ value, onChange, enabled = true, authMemberId }: Se
         ) : null}
       </Field>
 
-      <Field
-        label="オーナー（必須）"
-        htmlFor={fields.ownerMemberId.id}
-        error={fields.ownerMemberId.errors?.[0]}
-      >
+      <Field label="オーナー（必須）" htmlFor={ownerMemberId}>
         <select
-          id={fields.ownerMemberId.id}
-          name={fields.ownerMemberId.name}
+          id={ownerMemberId}
           value={value.ownerMemberId}
           onChange={(event) => patchValue({ ownerMemberId: event.target.value })}
           className={selectClass}
@@ -281,6 +246,6 @@ export function SetupPanel({ value, onChange, enabled = true, authMemberId }: Se
           ))}
         </select>
       </Field>
-    </form>
+    </div>
   );
 }

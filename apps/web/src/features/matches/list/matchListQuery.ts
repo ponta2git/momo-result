@@ -1,6 +1,6 @@
-import type { ListMatchesQuery } from "@/features/matches/api";
-import { listMatches } from "@/features/matches/api";
 import type { MatchListSearch } from "@/features/matches/list/matchListTypes";
+import type { ListMatchesQuery } from "@/shared/api/matches";
+import { listMatches } from "@/shared/api/matches";
 import { compact } from "@/shared/lib/compact";
 
 export function buildMatchListApiQuery(search: MatchListSearch): ListMatchesQuery {

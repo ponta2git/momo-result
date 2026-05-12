@@ -1,4 +1,4 @@
-import type { DraftReviewHandoffValues } from "@/features/masters/masterReturnHandoff";
+import type { DraftReviewHandoffValues } from "@/shared/workflows/masterReturnHandoff";
 
 type ReviewPlayerInput = DraftReviewHandoffValues["players"][number];
 

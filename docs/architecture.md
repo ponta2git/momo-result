@@ -57,6 +57,7 @@
 - API取得と server state は TanStack Query を使う。
 - Suspense は route 配下の読み込みに使う。mutation、フォーム保存、バリデーションエラー、ユーザー操作中状態は明示的に扱う。
 - route 単位の fallback は `RouteSuspenseFallback`、query/render error は `RouteErrorBoundary` で扱う。再試行時は QueryClient の状態も必要に応じて reset / invalidate する。
+- 主要導線の route component はリンク hover / focus 時に preload できる形で `apps/web/src/app/router.tsx` の loader 関数へ集約する。
 - ページ単位の読み込み失敗表示は `query.error` や `isError` だけで確定しない。認証、`enabled`、`isFetching` / `fetchStatus` を合わせ、過去エラーを再取得中の致命的失敗として表示しない。
 - `queryKey` は backend resource 名だけでなく、cache に保存する runtime data shape を表す。同じ resource でも raw response と feature-local ViewModel を同じ key に保存しない。
 - 共有 query key は `shared/api/queryKeys.ts`、feature 専属 key は feature 配下の `queryKeys.ts` に置く。
@@ -70,6 +71,9 @@
 - `useActionState` / `useFormStatus` / `useOptimistic` は既存フォーム経路と整合する場合だけ使う。
 - `useFormStatus` は同じ `<form>` の子でだけ pending を読める。submit 以外のボタンは `type="button"` を明示する。
 - `use(promise)` で TanStack Query の cache / retry / auth error normalization を迂回しない。
+- React Compiler は、既存 lint/format/CI と compiler diagnostic を安定して統合できるまで採用しない。採用前の性能改善は、hot path の state 境界、`useMemo` / `useDeferredValue` / `useTransition`、route preload、必要箇所の `<Activity>` で行う。
+- `oxlint --react-plugin --jsx-a11y-plugin` は必須 lint に含める。`react-perf` は false positive と既存負債が多いため、hot path の見直し時だけ `pnpm --filter web lint:react-perf` で production code の補助診断として使う。テストを含む全体監査が必要な場合だけ `pnpm --filter web lint:react-perf:all` を使う。
+- `<Activity>` は、タブなど「一度開いた画面状態を保持する」明確なUX価値がある箇所に限定し、server state の再取得制御を置き換える目的では使わない。
 
 ### API Client
 

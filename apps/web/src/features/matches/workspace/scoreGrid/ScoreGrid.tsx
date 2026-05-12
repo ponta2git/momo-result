@@ -1,11 +1,14 @@
-import { useMemo, useRef, useState } from "react";
-import type { KeyboardEvent } from "react";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
+import type { ChangeEvent, KeyboardEvent } from "react";
 
-import { fixedMembers } from "@/features/auth/members";
-import type { IncidentLookupEntry, ReviewPlayer } from "@/features/draftReview/reviewViewModel";
 import { incidentColumns } from "@/features/matches/workspace/matchFormTypes";
-import type { IncidentKey, MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
+import type {
+  IncidentKey,
+  MatchFormValues,
+  OriginalPlayerSnapshot,
+} from "@/features/matches/workspace/matchFormTypes";
 import { handleScoreGridKeydown } from "@/features/matches/workspace/scoreGrid/ScoreGridKeyboard";
+import { fixedMembers } from "@/shared/domain/members";
 import { useMediaQuery } from "@/shared/lib/useMediaQuery";
 
 type GridColumn =
@@ -31,6 +34,19 @@ const textNumericShortClass = `${baseInputClass} min-w-[6ch] text-center tabular
 const textNumericClass = `${baseInputClass} min-w-[12ch] text-right tabular-nums`;
 const selectShortClass = `${baseInputClass} min-w-[6ch] text-center`;
 const memberSelectClass = `${baseInputClass} min-w-[10rem]`;
+
+type NumericPlayerField = "rank" | "revenueManYen" | "totalAssetsManYen";
+type PreferredImageKind = "incident_log" | "revenue" | "total_assets";
+type RegisterCellRef = (cellId: string, node: HTMLElement | null) => void;
+type NumericKeyboardArgs = {
+  col: number;
+  event: KeyboardEvent<HTMLElement>;
+  onRevertCell: () => void;
+  row: number;
+};
+type NumericKeyboardHandler = (args: NumericKeyboardArgs) => void;
+type PlayerNumericCommit = (index: number, field: NumericPlayerField, value: number) => void;
+type IncidentNumericCommit = (index: number, key: IncidentKey, value: number) => void;
 
 function memberName(memberId: string): string {
   return fixedMembers.find((member) => member.memberId === memberId)?.displayName ?? memberId;
@@ -113,32 +129,164 @@ function keyToPath(row: number, column: GridColumn): string {
   return `players.${row}.${column}`;
 }
 
-function preferImageKind(column: GridColumn): "incident_log" | "revenue" | "total_assets" {
-  if (column === "revenueManYen") {
-    return "revenue";
-  }
-  if (column.startsWith("incident.")) {
-    return "incident_log";
-  }
-  return "total_assets";
-}
+type ScoreGridNumericEditorProps = {
+  allowSign: boolean;
+  ariaLabel: string;
+  baseClassName: string;
+  cellId: string;
+  col?: number | undefined;
+  error?: boolean | undefined;
+  focusImageKind?: PreferredImageKind | undefined;
+  originalValue?: number | undefined;
+  registerCellRef?: RegisterCellRef | undefined;
+  row: number;
+  showStateLabel?: boolean | undefined;
+  synced?: boolean | undefined;
+  value: number;
+  onKeyboard?: NumericKeyboardHandler | undefined;
+  onPreferImageKindChange?: ((kind: PreferredImageKind) => void) | undefined;
+} & (
+  | {
+      commitKind: "player";
+      field: NumericPlayerField;
+      incidentKey?: never;
+      onIncidentCommit?: never;
+      onPlayerCommit: PlayerNumericCommit;
+    }
+  | {
+      commitKind: "incident";
+      field?: never;
+      incidentKey: IncidentKey;
+      onIncidentCommit: IncidentNumericCommit;
+      onPlayerCommit?: never;
+    }
+);
+
+const ScoreGridNumericEditor = memo(function ScoreGridNumericEditor({
+  allowSign,
+  ariaLabel,
+  baseClassName,
+  cellId,
+  col,
+  error = false,
+  focusImageKind,
+  originalValue,
+  registerCellRef,
+  row,
+  showStateLabel = false,
+  synced = false,
+  value,
+  onKeyboard,
+  onPreferImageKindChange,
+  ...commitProps
+}: ScoreGridNumericEditorProps) {
+  const [draftValue, setDraftValue] = useState<string | undefined>(undefined);
+  const editStartValueRef = useRef<string | null>(null);
+  const fallbackValue = Number.isFinite(value) ? String(value) : "";
+  const inputValue = draftValue ?? fallbackValue;
+  const currentValue = draftValue === undefined ? value : parseNumericValue(draftValue, allowSign);
+  const viewState = showStateLabel
+    ? cellViewState({
+        confidence: undefined,
+        currentValue,
+        error,
+        originalValue,
+        synced,
+      })
+    : { toneClass: "" };
+
+  const commitParsedValue = useCallback(
+    (parsed: number) => {
+      if (commitProps.commitKind === "player") {
+        commitProps.onPlayerCommit(row, commitProps.field, parsed);
+        return;
+      }
+      commitProps.onIncidentCommit(row, commitProps.incidentKey, parsed);
+    },
+    [commitProps, row],
+  );
+
+  const commitInputValue = useCallback(() => {
+    const parsed = parseNumericValue(inputValue, allowSign);
+    commitParsedValue(parsed);
+    if (!Number.isNaN(parsed)) {
+      setDraftValue(undefined);
+    }
+  }, [allowSign, commitParsedValue, inputValue]);
+
+  const revertCell = useCallback(() => {
+    const before = editStartValueRef.current ?? fallbackValue;
+    setDraftValue(before);
+    commitParsedValue(parseNumericValue(before, allowSign));
+  }, [allowSign, commitParsedValue, fallbackValue]);
+
+  const handleChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      setDraftValue(normalizeNumericDraft(event.currentTarget.value, allowSign));
+    },
+    [allowSign],
+  );
+
+  const handleFocus = useCallback(() => {
+    editStartValueRef.current = inputValue;
+    if (focusImageKind) {
+      onPreferImageKindChange?.(focusImageKind);
+    }
+  }, [focusImageKind, inputValue, onPreferImageKindChange]);
+
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLInputElement>) => {
+      if (col === undefined || !onKeyboard) {
+        return;
+      }
+      onKeyboard({ col, event, onRevertCell: revertCell, row });
+    },
+    [col, onKeyboard, revertCell, row],
+  );
+
+  const handleRef = useCallback(
+    (node: HTMLInputElement | null) => {
+      registerCellRef?.(cellId, node);
+    },
+    [cellId, registerCellRef],
+  );
+
+  return (
+    <>
+      <input
+        ref={registerCellRef ? handleRef : undefined}
+        aria-label={ariaLabel}
+        className={`${baseClassName} ${viewState.toneClass}`}
+        id={cellId}
+        inputMode="numeric"
+        type="text"
+        value={inputValue}
+        onBlur={commitInputValue}
+        onChange={handleChange}
+        onFocus={handleFocus}
+        onKeyDown={handleKeyDown}
+      />
+      {showStateLabel && viewState.label ? (
+        <p className="mt-1 text-[0.68rem] text-[var(--color-text-secondary)]">{viewState.label}</p>
+      ) : null}
+    </>
+  );
+});
 
 type ScoreGridProps = {
   errorPathSet: Set<string>;
-  incidentByPlayOrder: Map<number, IncidentLookupEntry> | undefined;
   lastSyncedPlayerIndex: number | null;
   onIncidentChange: (index: number, key: IncidentKey, value: number) => void;
   onPlayerChange: (index: number, patch: Partial<MatchFormValues["players"][number]>) => void;
   onPlayOrderChange: (index: number, playOrder: number) => void;
   onPreferImageKindChange?: (kind: "incident_log" | "revenue" | "total_assets") => void;
   onRequestSubmitFocus: () => void;
-  originalPlayers: ReviewPlayer[] | undefined;
+  originalPlayers: OriginalPlayerSnapshot[] | undefined;
   players: MatchFormValues["players"];
 };
 
 export function ScoreGrid({
   errorPathSet,
-  incidentByPlayOrder,
   lastSyncedPlayerIndex,
   onIncidentChange,
   onPlayerChange,
@@ -150,232 +298,87 @@ export function ScoreGrid({
 }: ScoreGridProps) {
   const [expandedMobilePlayer, setExpandedMobilePlayer] = useState(0);
   const isNarrowViewport = useMediaQuery("(max-width: 1023px)");
-  const [draftInputs, setDraftInputs] = useState<Record<string, string>>({});
-  const editStartByCell = useRef(new Map<string, string>());
   const inputRefs = useRef(new Map<string, HTMLElement>());
 
   const originalByPlayOrder = useMemo(() => {
     if (!originalPlayers) {
-      return new Map<number, ReviewPlayer>();
+      return new Map<number, OriginalPlayerSnapshot>();
     }
     return new Map(originalPlayers.map((player) => [player.playOrder, player]));
   }, [originalPlayers]);
 
-  const getCellId = (row: number, col: number) => `player-${row}-${gridColumns[col]}`;
+  const getCellId = useCallback(
+    (row: number, col: number) => `player-${row}-${gridColumns[col]}`,
+    [],
+  );
 
-  const focusCell = (cellId: string) => {
+  const registerCellRef = useCallback((cellId: string, node: HTMLElement | null) => {
+    if (node) {
+      inputRefs.current.set(cellId, node);
+    } else {
+      inputRefs.current.delete(cellId);
+    }
+  }, []);
+
+  const focusCell = useCallback((cellId: string) => {
     const next = inputRefs.current.get(cellId);
     if (next) {
       next.focus();
     }
-  };
+  }, []);
 
-  const updateDraft = (cellId: string, value: string) => {
-    setDraftInputs((current) => ({
-      ...current,
-      [cellId]: value,
-    }));
-  };
+  const handleKeyboard = useCallback(
+    (args: {
+      col: number;
+      event: KeyboardEvent<HTMLElement>;
+      onRevertCell: () => void;
+      row: number;
+    }) => {
+      const target = args.event.currentTarget;
 
-  const clearDraft = (cellId: string) => {
-    setDraftInputs((current) => {
-      if (!(cellId in current)) {
-        return current;
-      }
-      const next = { ...current };
-      delete next[cellId];
-      return next;
-    });
-  };
+      if (args.event.key === "ArrowLeft" || args.event.key === "ArrowRight") {
+        const delta = args.event.key === "ArrowLeft" ? -1 : 1;
+        const nextCol = args.col + delta;
+        if (nextCol >= 0 && nextCol < gridColumns.length) {
+          const isSelect = target instanceof HTMLSelectElement;
+          const isInputSelectedAll =
+            target instanceof HTMLInputElement &&
+            target.selectionStart === 0 &&
+            target.selectionEnd === target.value.length;
 
-  const handleKeyboard = (args: {
-    col: number;
-    event: KeyboardEvent<HTMLElement>;
-    onRevertCell: () => void;
-    row: number;
-  }) => {
-    const target = args.event.currentTarget;
-
-    if (args.event.key === "ArrowLeft" || args.event.key === "ArrowRight") {
-      const delta = args.event.key === "ArrowLeft" ? -1 : 1;
-      const nextCol = args.col + delta;
-      if (nextCol >= 0 && nextCol < gridColumns.length) {
-        const isSelect = target instanceof HTMLSelectElement;
-        const isInputSelectedAll =
-          target instanceof HTMLInputElement &&
-          target.selectionStart === 0 &&
-          target.selectionEnd === target.value.length;
-
-        if (isSelect || isInputSelectedAll) {
-          args.event.preventDefault();
-          focusCell(getCellId(args.row, nextCol));
-          return;
+          if (isSelect || isInputSelectedAll) {
+            args.event.preventDefault();
+            focusCell(getCellId(args.row, nextCol));
+            return;
+          }
         }
       }
-    }
 
-    handleScoreGridKeydown({
-      colCount: gridColumns.length,
-      event: args.event,
-      getCellId: ({ col, row }) => getCellId(row, col),
-      horizontalEnterFromCol: 5,
-      onFocusCell: focusCell,
-      onRevertCell: args.onRevertCell,
-      onSubmitFocus: onRequestSubmitFocus,
-      position: { col: args.col, row: args.row },
-      rowCount: players.length,
-    });
-  };
+      handleScoreGridKeydown({
+        colCount: gridColumns.length,
+        event: args.event,
+        getCellId: ({ col, row }) => getCellId(row, col),
+        horizontalEnterFromCol: 5,
+        onFocusCell: focusCell,
+        onRevertCell: args.onRevertCell,
+        onSubmitFocus: onRequestSubmitFocus,
+        position: { col: args.col, row: args.row },
+        rowCount: players.length,
+      });
+    },
+    [focusCell, getCellId, onRequestSubmitFocus, players.length],
+  );
 
-  const renderNumericCell = (args: {
-    allowSign: boolean;
-    col: number;
-    field: "rank" | "revenueManYen" | "totalAssetsManYen";
-    row: number;
-    viewState: CellViewState;
-  }) => {
-    const player = players[args.row];
-    if (!player) {
-      return null;
-    }
-    const cellId = getCellId(args.row, args.col);
-    const rawValue = player[args.field];
-    const fallbackValue = Number.isFinite(rawValue) ? String(rawValue) : "";
-    const draftValue = draftInputs[cellId] ?? fallbackValue;
+  const handlePlayerNumericCommit = useCallback<PlayerNumericCommit>(
+    (index, field, value) =>
+      onPlayerChange(index, { [field]: value } as Partial<MatchFormValues["players"][number]>),
+    [onPlayerChange],
+  );
 
-    return (
-      <>
-        <input
-          ref={(node) => {
-            if (node) {
-              inputRefs.current.set(cellId, node);
-            } else {
-              inputRefs.current.delete(cellId);
-            }
-          }}
-          aria-label={`${memberName(player.memberId)} ${args.field}`}
-          className={`${args.field === "rank" ? textNumericShortClass : textNumericClass} ${args.viewState.toneClass}`}
-          inputMode="numeric"
-          type="text"
-          value={draftValue}
-          onBlur={() => {
-            const parsed = parseNumericValue(draftValue, args.allowSign);
-            onPlayerChange(args.row, { [args.field]: parsed } as Partial<
-              MatchFormValues["players"][number]
-            >);
-            if (!Number.isNaN(parsed)) {
-              clearDraft(cellId);
-            }
-          }}
-          onChange={(event) => {
-            const normalized = normalizeNumericDraft(event.target.value, args.allowSign);
-            updateDraft(cellId, normalized);
-            onPlayerChange(args.row, {
-              [args.field]: parseNumericValue(normalized, args.allowSign),
-            } as Partial<MatchFormValues["players"][number]>);
-          }}
-          onFocus={() => {
-            editStartByCell.current.set(cellId, draftValue);
-            if (args.field !== "rank") {
-              const column = gridColumns[args.col];
-              if (column) {
-                onPreferImageKindChange?.(preferImageKind(column));
-              }
-            }
-          }}
-          onKeyDown={(event) =>
-            handleKeyboard({
-              col: args.col,
-              event,
-              onRevertCell: () => {
-                const before = editStartByCell.current.get(cellId) ?? fallbackValue;
-                updateDraft(cellId, before);
-                const parsed = parseNumericValue(before, args.allowSign);
-                onPlayerChange(args.row, {
-                  [args.field]: parsed,
-                } as Partial<MatchFormValues["players"][number]>);
-              },
-              row: args.row,
-            })
-          }
-        />
-        {args.viewState.label ? (
-          <p className="mt-1 text-[0.68rem] text-[var(--color-text-secondary)]">
-            {args.viewState.label}
-          </p>
-        ) : null}
-      </>
-    );
-  };
-
-  const renderIncidentCell = (
-    row: number,
-    incidentKey: IncidentKey,
-    col: number,
-    viewState: CellViewState,
-  ) => {
-    const player = players[row];
-    if (!player) {
-      return null;
-    }
-    const cellId = getCellId(row, col);
-    const fallbackValue = Number.isFinite(player.incidents[incidentKey])
-      ? String(player.incidents[incidentKey])
-      : "";
-    const draftValue = draftInputs[cellId] ?? fallbackValue;
-
-    return (
-      <>
-        <input
-          ref={(node) => {
-            if (node) {
-              inputRefs.current.set(cellId, node);
-            } else {
-              inputRefs.current.delete(cellId);
-            }
-          }}
-          aria-label={`${memberName(player.memberId)} ${incidentKey}`}
-          className={`${textNumericShortClass} ${viewState.toneClass}`}
-          inputMode="numeric"
-          type="text"
-          value={draftValue}
-          onBlur={() => {
-            const parsed = parseNumericValue(draftValue, false);
-            onIncidentChange(row, incidentKey, parsed);
-            if (!Number.isNaN(parsed)) {
-              clearDraft(cellId);
-            }
-          }}
-          onChange={(event) => {
-            const normalized = normalizeNumericDraft(event.target.value, false);
-            updateDraft(cellId, normalized);
-            onIncidentChange(row, incidentKey, parseNumericValue(normalized, false));
-          }}
-          onFocus={() => {
-            editStartByCell.current.set(cellId, draftValue);
-            onPreferImageKindChange?.("incident_log");
-          }}
-          onKeyDown={(event) =>
-            handleKeyboard({
-              col,
-              event,
-              onRevertCell: () => {
-                const before = editStartByCell.current.get(cellId) ?? fallbackValue;
-                updateDraft(cellId, before);
-                onIncidentChange(row, incidentKey, parseNumericValue(before, false));
-              },
-              row,
-            })
-          }
-        />
-        {viewState.label ? (
-          <p className="mt-1 text-[0.68rem] text-[var(--color-text-secondary)]">
-            {viewState.label}
-          </p>
-        ) : null}
-      </>
-    );
-  };
+  const handleIncidentNumericCommit = useCallback<IncidentNumericCommit>(
+    (index, key, value) => onIncidentChange(index, key, value),
+    [onIncidentChange],
+  );
 
   const grid = (
     <table className="min-w-[64rem] table-fixed border-separate border-spacing-y-2 text-left text-sm">
@@ -407,7 +410,6 @@ export function ScoreGrid({
       </thead>
       <tbody>
         {players.map((player, rowIndex) => {
-          const incidentLookup = incidentByPlayOrder?.get(player.playOrder);
           const originalRow = originalPlayers?.[rowIndex];
           const originalByOrder = originalByPlayOrder.get(player.playOrder);
           return (
@@ -492,70 +494,99 @@ export function ScoreGrid({
               </td>
 
               <td className="px-2 py-3 align-top">
-                {renderNumericCell({
-                  allowSign: false,
-                  col: 2,
-                  field: "rank",
-                  row: rowIndex,
-                  viewState: cellViewState({
-                    confidence: originalRow?.confidence.rank,
-                    currentValue: player.rank,
-                    error: errorPathSet.has(keyToPath(rowIndex, "rank")),
-                    originalValue: originalRow?.rank,
-                    synced: false,
-                  }),
-                })}
+                <ScoreGridNumericEditor
+                  allowSign={false}
+                  ariaLabel={`${memberName(player.memberId)} rank`}
+                  baseClassName={textNumericShortClass}
+                  cellId={getCellId(rowIndex, 2)}
+                  col={2}
+                  commitKind="player"
+                  error={errorPathSet.has(keyToPath(rowIndex, "rank"))}
+                  field="rank"
+                  originalValue={originalRow?.rank}
+                  registerCellRef={registerCellRef}
+                  row={rowIndex}
+                  showStateLabel
+                  value={player.rank}
+                  onKeyboard={handleKeyboard}
+                  onPlayerCommit={handlePlayerNumericCommit}
+                />
               </td>
 
               <td className="px-2 py-3 align-top">
-                {renderNumericCell({
-                  allowSign: true,
-                  col: 3,
-                  field: "totalAssetsManYen",
-                  row: rowIndex,
-                  viewState: cellViewState({
-                    confidence: originalRow?.confidence.totalAssets,
-                    currentValue: player.totalAssetsManYen,
-                    error: errorPathSet.has(keyToPath(rowIndex, "totalAssetsManYen")),
-                    originalValue: originalRow?.totalAssetsManYen,
-                    synced: false,
-                  }),
-                })}
+                <ScoreGridNumericEditor
+                  allowSign
+                  ariaLabel={`${memberName(player.memberId)} totalAssetsManYen`}
+                  baseClassName={textNumericClass}
+                  cellId={getCellId(rowIndex, 3)}
+                  col={3}
+                  commitKind="player"
+                  error={errorPathSet.has(keyToPath(rowIndex, "totalAssetsManYen"))}
+                  focusImageKind="total_assets"
+                  field="totalAssetsManYen"
+                  originalValue={originalRow?.totalAssetsManYen}
+                  registerCellRef={registerCellRef}
+                  row={rowIndex}
+                  showStateLabel
+                  value={player.totalAssetsManYen}
+                  onKeyboard={handleKeyboard}
+                  onPlayerCommit={handlePlayerNumericCommit}
+                  onPreferImageKindChange={onPreferImageKindChange}
+                />
               </td>
 
               <td className="px-2 py-3 align-top">
-                {renderNumericCell({
-                  allowSign: true,
-                  col: 4,
-                  field: "revenueManYen",
-                  row: rowIndex,
-                  viewState: cellViewState({
-                    confidence: originalRow?.confidence.revenue,
-                    currentValue: player.revenueManYen,
-                    error: errorPathSet.has(keyToPath(rowIndex, "revenueManYen")),
-                    originalValue: originalRow?.revenueManYen,
-                    synced: false,
-                  }),
-                })}
+                <ScoreGridNumericEditor
+                  allowSign
+                  ariaLabel={`${memberName(player.memberId)} revenueManYen`}
+                  baseClassName={textNumericClass}
+                  cellId={getCellId(rowIndex, 4)}
+                  col={4}
+                  commitKind="player"
+                  error={errorPathSet.has(keyToPath(rowIndex, "revenueManYen"))}
+                  focusImageKind="revenue"
+                  field="revenueManYen"
+                  originalValue={originalRow?.revenueManYen}
+                  registerCellRef={registerCellRef}
+                  row={rowIndex}
+                  showStateLabel
+                  value={player.revenueManYen}
+                  onKeyboard={handleKeyboard}
+                  onPlayerCommit={handlePlayerNumericCommit}
+                  onPreferImageKindChange={onPreferImageKindChange}
+                />
               </td>
 
               {incidentColumns.map(([incidentKey, incidentLabel], incidentIndex) => {
                 const col = incidentIndex + 5;
-                const incidentState = cellViewState({
-                  confidence: incidentLookup?.confidence[incidentLabel],
-                  currentValue: player.incidents[incidentKey],
-                  error: errorPathSet.has(
-                    keyToPath(rowIndex, `incident.${incidentKey}` as GridColumn),
-                  ),
-                  originalValue: originalByOrder?.incidents[incidentLabel],
-                  synced: lastSyncedPlayerIndex === rowIndex,
-                });
+                const cellId = getCellId(rowIndex, col);
                 return (
                   <td
                     key={incidentKey}
                     className="px-2 py-3 align-top last:rounded-r-[var(--radius-md)]"
                   >
-                    {renderIncidentCell(rowIndex, incidentKey, col, incidentState)}
+                    <ScoreGridNumericEditor
+                      allowSign={false}
+                      ariaLabel={`${memberName(player.memberId)} ${incidentKey}`}
+                      baseClassName={textNumericShortClass}
+                      cellId={cellId}
+                      col={col}
+                      commitKind="incident"
+                      error={errorPathSet.has(
+                        keyToPath(rowIndex, `incident.${incidentKey}` as GridColumn),
+                      )}
+                      focusImageKind="incident_log"
+                      incidentKey={incidentKey}
+                      originalValue={originalByOrder?.incidents[incidentLabel]}
+                      registerCellRef={registerCellRef}
+                      row={rowIndex}
+                      showStateLabel
+                      synced={lastSyncedPlayerIndex === rowIndex}
+                      value={player.incidents[incidentKey]}
+                      onIncidentCommit={handleIncidentNumericCommit}
+                      onKeyboard={handleKeyboard}
+                      onPreferImageKindChange={onPreferImageKindChange}
+                    />
                   </td>
                 );
               })}
@@ -622,64 +653,60 @@ export function ScoreGrid({
                         ))}
                       </select>
                     </label>
-                    <label className="grid gap-1 text-xs text-[var(--color-text-secondary)]">
+                    <label
+                      className="grid gap-1 text-xs text-[var(--color-text-secondary)]"
+                      htmlFor={`mobile-${index}-rank`}
+                    >
                       順位
-                      <input
-                        className={textNumericShortClass}
-                        inputMode="numeric"
-                        type="text"
-                        value={Number.isFinite(player.rank) ? String(player.rank) : ""}
-                        onChange={(event) =>
-                          onPlayerChange(index, {
-                            rank: parseNumericValue(
-                              normalizeNumericDraft(event.target.value, false),
-                              false,
-                            ),
-                          })
-                        }
+                      <ScoreGridNumericEditor
+                        allowSign={false}
+                        ariaLabel={`${memberName(player.memberId)} rank`}
+                        baseClassName={textNumericShortClass}
+                        cellId={`mobile-${index}-rank`}
+                        commitKind="player"
+                        field="rank"
+                        row={index}
+                        value={player.rank}
+                        onPlayerCommit={handlePlayerNumericCommit}
                       />
                     </label>
                   </div>
-                  <label className="grid gap-1 text-xs text-[var(--color-text-secondary)]">
+                  <label
+                    className="grid gap-1 text-xs text-[var(--color-text-secondary)]"
+                    htmlFor={`mobile-${index}-totalAssetsManYen`}
+                  >
                     総資産
-                    <input
-                      className={textNumericClass}
-                      inputMode="numeric"
-                      type="text"
-                      value={
-                        Number.isFinite(player.totalAssetsManYen)
-                          ? String(player.totalAssetsManYen)
-                          : ""
-                      }
-                      onFocus={() => onPreferImageKindChange?.("total_assets")}
-                      onChange={(event) =>
-                        onPlayerChange(index, {
-                          totalAssetsManYen: parseNumericValue(
-                            normalizeNumericDraft(event.target.value, true),
-                            true,
-                          ),
-                        })
-                      }
+                    <ScoreGridNumericEditor
+                      allowSign
+                      ariaLabel={`${memberName(player.memberId)} totalAssetsManYen`}
+                      baseClassName={textNumericClass}
+                      cellId={`mobile-${index}-totalAssetsManYen`}
+                      commitKind="player"
+                      field="totalAssetsManYen"
+                      focusImageKind="total_assets"
+                      row={index}
+                      value={player.totalAssetsManYen}
+                      onPlayerCommit={handlePlayerNumericCommit}
+                      onPreferImageKindChange={onPreferImageKindChange}
                     />
                   </label>
-                  <label className="grid gap-1 text-xs text-[var(--color-text-secondary)]">
+                  <label
+                    className="grid gap-1 text-xs text-[var(--color-text-secondary)]"
+                    htmlFor={`mobile-${index}-revenueManYen`}
+                  >
                     収益
-                    <input
-                      className={textNumericClass}
-                      inputMode="numeric"
-                      type="text"
-                      value={
-                        Number.isFinite(player.revenueManYen) ? String(player.revenueManYen) : ""
-                      }
-                      onFocus={() => onPreferImageKindChange?.("revenue")}
-                      onChange={(event) =>
-                        onPlayerChange(index, {
-                          revenueManYen: parseNumericValue(
-                            normalizeNumericDraft(event.target.value, true),
-                            true,
-                          ),
-                        })
-                      }
+                    <ScoreGridNumericEditor
+                      allowSign
+                      ariaLabel={`${memberName(player.memberId)} revenueManYen`}
+                      baseClassName={textNumericClass}
+                      cellId={`mobile-${index}-revenueManYen`}
+                      commitKind="player"
+                      field="revenueManYen"
+                      focusImageKind="revenue"
+                      row={index}
+                      value={player.revenueManYen}
+                      onPlayerCommit={handlePlayerNumericCommit}
+                      onPreferImageKindChange={onPreferImageKindChange}
                     />
                   </label>
                   <div className="grid grid-cols-2 gap-2">
@@ -687,28 +714,21 @@ export function ScoreGrid({
                       <label
                         key={incidentKey}
                         className="grid gap-1 text-xs text-[var(--color-text-secondary)]"
+                        htmlFor={`mobile-${index}-${incidentKey}`}
                       >
                         {incidentLabel}
-                        <input
-                          className={textNumericShortClass}
-                          inputMode="numeric"
-                          type="text"
-                          value={
-                            Number.isFinite(player.incidents[incidentKey])
-                              ? String(player.incidents[incidentKey])
-                              : ""
-                          }
-                          onFocus={() => onPreferImageKindChange?.("incident_log")}
-                          onChange={(event) =>
-                            onIncidentChange(
-                              index,
-                              incidentKey,
-                              parseNumericValue(
-                                normalizeNumericDraft(event.target.value, false),
-                                false,
-                              ),
-                            )
-                          }
+                        <ScoreGridNumericEditor
+                          allowSign={false}
+                          ariaLabel={`${memberName(player.memberId)} ${incidentKey}`}
+                          baseClassName={textNumericShortClass}
+                          cellId={`mobile-${index}-${incidentKey}`}
+                          commitKind="incident"
+                          focusImageKind="incident_log"
+                          incidentKey={incidentKey}
+                          row={index}
+                          value={player.incidents[incidentKey]}
+                          onIncidentCommit={handleIncidentNumericCommit}
+                          onPreferImageKindChange={onPreferImageKindChange}
                         />
                       </label>
                     ))}

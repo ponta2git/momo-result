@@ -33,6 +33,7 @@ import type {
   UpdateMemberAliasRequest,
   UpdateSeasonMasterRequest,
 } from "@/shared/api/masters";
+import { masterKeys } from "@/shared/api/queryKeys";
 
 function byDisplayOrder<T extends { displayOrder: number; name: string }>(a: T, b: T): number {
   if (a.displayOrder !== b.displayOrder) {
@@ -56,13 +57,11 @@ function byMemberAlias(a: MemberAliasResponse, b: MemberAliasResponse): number {
 }
 
 export const masterQueryKeys = {
-  gameTitles: (authScope: string) => ["masters-admin", "game-titles", authScope] as const,
-  incidentMasters: (authScope: string) => ["masters-admin", "incident-masters", authScope] as const,
-  mapMasters: (authScope: string, gameTitleId: string) =>
-    ["masters-admin", "map-masters", authScope, gameTitleId || "none"] as const,
-  memberAliases: (authScope: string) => ["masters-admin", "member-aliases", authScope] as const,
-  seasonMasters: (authScope: string, gameTitleId: string) =>
-    ["masters-admin", "season-masters", authScope, gameTitleId || "none"] as const,
+  gameTitles: masterKeys.gameTitles.adminList,
+  incidentMasters: masterKeys.incidentMasters.adminList,
+  mapMasters: masterKeys.mapMasters.adminList,
+  memberAliases: masterKeys.memberAliases.adminList,
+  seasonMasters: masterKeys.seasonMasters.adminList,
 };
 
 export async function fetchGameTitles(): Promise<GameTitleResponse[]> {

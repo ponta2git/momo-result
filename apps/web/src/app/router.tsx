@@ -1,30 +1,35 @@
+import { lazy } from "react";
 import type { RouteObject } from "react-router-dom";
-import { createBrowserRouter, Navigate, useParams } from "react-router-dom";
+import { createBrowserRouter, Navigate } from "react-router-dom";
 
 import { App } from "@/app/App";
 import { AppShell } from "@/app/AppShell";
 import { AdminRoute, AuthenticatedRoute, PublicOnlyRoute, RootRedirect } from "@/app/routeGuards";
-import { AdminAccountsPage } from "@/features/adminAccounts/AdminAccountsPage";
-import { LoginPage } from "@/features/auth/LoginPage";
-import { DraftReviewPage } from "@/features/draftReview/DraftReviewPage";
-import { ExportPage } from "@/features/exports/ExportPage";
-import { HeldEventsPage } from "@/features/heldEvents/HeldEventsPage";
-import { MastersPage } from "@/features/masters/MastersPage";
-import { MatchCreatePage } from "@/features/matches/MatchCreatePage";
-import { MatchDetailPage } from "@/features/matches/MatchDetailPage";
-import { MatchesListPage } from "@/features/matches/MatchesListPage";
-import { MatchWorkspacePage } from "@/features/matches/workspace/MatchWorkspacePage";
-import { OcrCapturePage } from "@/features/ocrCapture/OcrCapturePage";
+import {
+  loadAdminAccountsPage,
+  loadDraftReviewPage,
+  loadExportPage,
+  loadHeldEventsPage,
+  loadLoginPage,
+  loadMastersPage,
+  loadMatchCreatePage,
+  loadMatchDetailPage,
+  loadMatchesListPage,
+  loadMatchEditPage,
+  loadOcrCapturePage,
+} from "@/app/routeModules";
 
-function MatchEditPage() {
-  const { matchId } = useParams<{ matchId: string }>();
-
-  if (!matchId) {
-    return <Navigate replace to="/matches" />;
-  }
-
-  return <MatchWorkspacePage matchId={matchId} mode="edit" />;
-}
+const AdminAccountsPage = lazy(loadAdminAccountsPage);
+const LoginPage = lazy(loadLoginPage);
+const DraftReviewPage = lazy(loadDraftReviewPage);
+const ExportPage = lazy(loadExportPage);
+const HeldEventsPage = lazy(loadHeldEventsPage);
+const MastersPage = lazy(loadMastersPage);
+const MatchCreatePage = lazy(loadMatchCreatePage);
+const MatchDetailPage = lazy(loadMatchDetailPage);
+const MatchesListPage = lazy(loadMatchesListPage);
+const MatchEditPage = lazy(loadMatchEditPage);
+const OcrCapturePage = lazy(loadOcrCapturePage);
 
 export const appRoutes: RouteObject[] = [
   {

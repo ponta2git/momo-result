@@ -13,7 +13,7 @@ type ScopedMasterPanelProps = {
   emptyDescription: string;
   itemLabel: string;
   items: ScopedMasterItem[];
-  onDelete: (id: string) => void;
+  onDelete: (id: string) => Promise<void> | void;
   onUpdate: (id: string, request: { name: string }) => Promise<void>;
   selectedGameTitleName?: string | undefined;
   title: string;

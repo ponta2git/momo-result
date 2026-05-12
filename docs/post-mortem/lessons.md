@@ -134,7 +134,7 @@
 - フロントテスト基盤: `docs/test-rule.md`
 - フロント実装規約: `docs/architecture.md`
 - 共有 factory: `apps/web/src/test/factories/`
-- MSW reset: `apps/web/src/shared/api/msw/handlers.ts` の `resetMswStores`
+- MSW reset: `apps/web/src/test/msw/handlers.ts` の `resetMswStores`
 
 ### React 新APIの採否判断
 

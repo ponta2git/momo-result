@@ -1,8 +1,8 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useId } from "react";
 
-import { fixedMembers } from "@/features/auth/members";
 import { useDevUser } from "@/shared/auth/useDevUser";
+import { fixedMembers } from "@/shared/domain/members";
 
 type DevUserPickerProps = {
   force?: boolean;

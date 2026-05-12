@@ -58,6 +58,6 @@ export async function confirmMatch(
   return apiRequest<ConfirmMatchResponse>("/api/matches", {
     method: "POST",
     body: request,
-    idempotencyKey: options.idempotencyKey,
+    idempotency: options.idempotencyKey ? { key: options.idempotencyKey } : "auto",
   });
 }

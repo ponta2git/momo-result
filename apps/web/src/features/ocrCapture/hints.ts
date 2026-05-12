@@ -1,7 +1,8 @@
-import { fixedMembers } from "@/features/auth/members";
 import { computerAliasesFor } from "@/features/ocrCapture/computerAliases";
 import type { LayoutFamily } from "@/shared/api/enums";
 import type { components } from "@/shared/api/generated";
+import { defaultMemberAliasDirectory, playerAliasHints } from "@/shared/domain/memberDirectory";
+import type { MemberAliasDirectory } from "@/shared/domain/memberDirectory";
 
 export type OcrHints = components["schemas"]["OcrJobHints"];
 
@@ -10,12 +11,12 @@ type BuildOcrHintsInput = {
   layoutFamily?: LayoutFamily;
 };
 
-export function buildOcrHints({ gameTitleName, layoutFamily }: BuildOcrHintsInput): OcrHints {
+export function buildOcrHints(
+  { gameTitleName, layoutFamily }: BuildOcrHintsInput,
+  memberDirectory: MemberAliasDirectory = defaultMemberAliasDirectory,
+): OcrHints {
   const hints: OcrHints = {
-    knownPlayerAliases: fixedMembers.map((member) => ({
-      memberId: member.memberId,
-      aliases: member.aliases,
-    })),
+    knownPlayerAliases: playerAliasHints(memberDirectory),
     computerPlayerAliases: [...computerAliasesFor(layoutFamily)],
   };
   if (gameTitleName !== undefined) hints.gameTitle = gameTitleName;

@@ -124,3 +124,49 @@ export type FetchCall = [RequestInfo | URL, RequestInit | undefined];
 export function fetchCallsOf(fetchMock: ReturnType<typeof vi.fn>): FetchCall[] {
   return fetchMock.mock.calls as unknown as FetchCall[];
 }
+
+export type MatchMediaController = {
+  setMatches: (matches: boolean) => void;
+  restore: () => void;
+};
+
+export function installMatchMediaController(initialMatches: boolean): MatchMediaController {
+  const originalMatchMedia = window.matchMedia;
+  let matches = initialMatches;
+  const listeners = new Set<(event: MediaQueryListEvent) => void>();
+
+  window.matchMedia = vi.fn((query: string) => {
+    const media: MediaQueryList = {
+      addEventListener: (_type: string, listener: EventListenerOrEventListenerObject) => {
+        listeners.add(listener as (event: MediaQueryListEvent) => void);
+      },
+      addListener: (listener) => {
+        listeners.add(listener as (event: MediaQueryListEvent) => void);
+      },
+      dispatchEvent: () => true,
+      matches,
+      media: query,
+      onchange: null,
+      removeEventListener: (_type: string, listener: EventListenerOrEventListenerObject) => {
+        listeners.delete(listener as (event: MediaQueryListEvent) => void);
+      },
+      removeListener: (listener) => {
+        listeners.delete(listener as (event: MediaQueryListEvent) => void);
+      },
+    };
+    return media;
+  });
+
+  return {
+    restore: () => {
+      window.matchMedia = originalMatchMedia;
+    },
+    setMatches: (next) => {
+      matches = next;
+      const event = { matches, media: "" } as MediaQueryListEvent;
+      for (const listener of listeners) {
+        listener(event);
+      }
+    },
+  };
+}

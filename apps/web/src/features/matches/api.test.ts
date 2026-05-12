@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { confirmMatch } from "@/features/matches/api";
+import { confirmMatch } from "@/shared/api/matches";
 
 describe("matches api", () => {
   it("confirms match", async () => {

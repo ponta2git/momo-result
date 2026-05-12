@@ -1,9 +1,4 @@
-import {
-  isConfirmed,
-  isOcrFailed,
-  isOcrRunning,
-  isNeedsReview,
-} from "@/features/matches/draftStatus";
+import { isConfirmed, isOcrFailed, isOcrRunning, isNeedsReview } from "@/shared/domain/draftStatus";
 import { cn } from "@/shared/ui/cn";
 import type { MatchStatus } from "@/shared/ui/status/StatusPill";
 import { StatusPill } from "@/shared/ui/status/StatusPill";

@@ -3,13 +3,15 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { AuthMeResponse } from "@/shared/api/client";
 import { logout } from "@/shared/api/client";
 import { DevUserPicker } from "@/shared/auth/DevUserPicker";
+import { buildAuthLoginHref } from "@/shared/auth/redirectPath";
 
 type AuthPanelProps = {
   auth: AuthMeResponse | undefined;
   forceDevPicker?: boolean;
+  loginNextPath?: string | undefined;
 };
 
-export function AuthPanel({ auth, forceDevPicker = false }: AuthPanelProps) {
+export function AuthPanel({ auth, forceDevPicker = false, loginNextPath }: AuthPanelProps) {
   const queryClient = useQueryClient();
   const logoutMutation = useMutation({
     mutationFn: logout,
@@ -41,7 +43,7 @@ export function AuthPanel({ auth, forceDevPicker = false }: AuthPanelProps) {
         </div>
       ) : (
         <a
-          href="/api/auth/login?silent=1"
+          href={buildAuthLoginHref(loginNextPath)}
           className="mt-2 inline-flex rounded-[var(--radius-sm)] bg-[var(--color-action)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 active:opacity-95"
         >
           Discordでログインする

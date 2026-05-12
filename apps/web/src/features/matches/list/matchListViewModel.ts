@@ -1,4 +1,3 @@
-import { parseDraftStatus } from "@/features/matches/draftStatus";
 import { memberName } from "@/features/matches/list/matchListFormat";
 import type {
   MatchListItemView,
@@ -8,6 +7,7 @@ import type {
   MatchListStatus,
   MatchListSummaryCounts,
 } from "@/features/matches/list/matchListTypes";
+import { parseDraftStatus } from "@/shared/domain/draftStatus";
 import { compact } from "@/shared/lib/compact";
 
 const statusPriority = {

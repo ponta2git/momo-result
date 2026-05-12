@@ -9,7 +9,8 @@ import {
   ScanLine,
   Trash2,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useActionState, useMemo, useState } from "react";
+import { useFormStatus } from "react-dom";
 import { Link } from "react-router-dom";
 
 import { createHeldEvent, deleteHeldEvent, listHeldEvents } from "@/shared/api/heldEvents";
@@ -32,6 +33,7 @@ import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 const emptyHeldEvents: HeldEventResponse[] = [];
+const initialCreateHeldEventState = { version: 0 };
 
 function currentLocalIsoMinute(): string {
   const now = new Date();
@@ -102,24 +104,35 @@ export function HeldEventsPage() {
     queryKey: heldEventKeys.scope("held-events-page"),
   });
 
-  const createMutation = useMutation({
-    mutationFn: () => createHeldEvent({ heldAt: toIsoFromLocal(heldAtDraft) }),
-    onSuccess: (event) => {
-      queryClient.setQueryData<HeldEventListResponse>(
-        heldEventKeys.scope("held-events-page"),
-        (current) => upsertHeldEventList(current, event),
-      );
-      void queryClient.invalidateQueries({ queryKey: heldEventKeys.all() });
-      setHeldAtDraft(currentLocalIsoMinute());
-      setErrorMessage("");
-      setNotice(`開催履歴（${formatDateTime(event.heldAt)}）を作成しました。`);
-      showToast({ title: "開催履歴を作成しました。", tone: "success" });
+  const [createState, createAction] = useActionState<typeof initialCreateHeldEventState, FormData>(
+    async (previous, formData) => {
+      const heldAt = String(formData.get("heldAt") ?? "");
+      if (!heldAt) {
+        setNotice("");
+        setErrorMessage("開催日時を入力してください。");
+        return previous;
+      }
+
+      try {
+        const event = await createHeldEvent({ heldAt: toIsoFromLocal(heldAt) });
+        queryClient.setQueryData<HeldEventListResponse>(
+          heldEventKeys.scope("held-events-page"),
+          (current) => upsertHeldEventList(current, event),
+        );
+        void queryClient.invalidateQueries({ queryKey: heldEventKeys.all() });
+        setHeldAtDraft(currentLocalIsoMinute());
+        setErrorMessage("");
+        setNotice(`開催履歴（${formatDateTime(event.heldAt)}）を作成しました。`);
+        showToast({ title: "開催履歴を作成しました。", tone: "success" });
+        return { version: previous.version + 1 };
+      } catch (error) {
+        setNotice("");
+        setErrorMessage(formatApiError(error, "開催履歴の作成に失敗しました"));
+        return previous;
+      }
     },
-    onError: (error) => {
-      setNotice("");
-      setErrorMessage(formatApiError(error, "開催履歴の作成に失敗しました"));
-    },
-  });
+    initialCreateHeldEventState,
+  );
 
   const deleteMutation = useMutation({
     mutationFn: (event: HeldEventResponse) => deleteHeldEvent(event.id),
@@ -136,7 +149,6 @@ export function HeldEventsPage() {
     },
     onError: (error) => {
       setNotice("");
-      setDeleteTarget(null);
       setErrorMessage(formatApiError(error, "開催履歴の削除に失敗しました"));
     },
   });
@@ -311,37 +323,35 @@ export function HeldEventsPage() {
           )}
         </Card>
 
-        <Card className="grid gap-4">
-          <div className="grid gap-1">
-            <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">新しい開催回</h2>
-            <p className="text-sm leading-6 text-[var(--color-text-secondary)]">
-              summit側で作られない場合に、ここから開催回を追加します。
-            </p>
-          </div>
-          <TextField
-            label="開催日時"
-            type="datetime-local"
-            value={heldAtDraft}
-            onChange={(event) => {
-              setHeldAtDraft(event.target.value);
-            }}
-          />
-          <Button
-            disabled={!heldAtDraft || createMutation.isPending}
-            icon={<Plus className="size-4" />}
-            pending={createMutation.isPending}
-            pendingLabel="作成中…"
-            onClick={() => createMutation.mutate()}
-          >
-            開催履歴を作成
-          </Button>
-        </Card>
+        <form key={createState.version} action={createAction}>
+          <Card className="grid gap-4">
+            <div className="grid gap-1">
+              <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">
+                新しい開催回
+              </h2>
+              <p className="text-sm leading-6 text-[var(--color-text-secondary)]">
+                summit側で作られない場合に、ここから開催回を追加します。
+              </p>
+            </div>
+            <TextField
+              label="開催日時"
+              name="heldAt"
+              type="datetime-local"
+              value={heldAtDraft}
+              onChange={(event) => {
+                setHeldAtDraft(event.target.value);
+              }}
+            />
+            <CreateHeldEventButton disabled={!heldAtDraft} />
+          </Card>
+        </form>
       </div>
 
       {deleteTarget ? (
         <AlertDialog
           cancelLabel="キャンセル"
           confirmLabel={deleteMutation.isPending ? "削除中…" : "削除する"}
+          pending={deleteMutation.isPending}
           description={`${formatDateTime(deleteTarget.heldAt)} の開催履歴を削除します。この操作は取り消せません。`}
           open={Boolean(deleteTarget)}
           title="開催履歴を削除しますか？"
@@ -350,12 +360,29 @@ export function HeldEventsPage() {
               削除確認
             </button>
           }
-          onConfirm={() => deleteMutation.mutate(deleteTarget)}
+          onConfirm={async () => {
+            await deleteMutation.mutateAsync(deleteTarget);
+          }}
           onOpenChange={(open) => {
             if (!open) setDeleteTarget(null);
           }}
         />
       ) : null}
     </PageFrame>
+  );
+}
+
+function CreateHeldEventButton({ disabled }: { disabled: boolean }) {
+  const { pending } = useFormStatus();
+  return (
+    <Button
+      disabled={disabled}
+      icon={<Plus className="size-4" />}
+      pending={pending}
+      pendingLabel="作成中…"
+      type="submit"
+    >
+      開催履歴を作成
+    </Button>
   );
 }

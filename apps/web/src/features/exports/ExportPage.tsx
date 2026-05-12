@@ -21,11 +21,10 @@ import {
 } from "@/features/exports/exportViewModel";
 import type { ExportDownloadResultView } from "@/features/exports/exportViewModel";
 import { ExportWorkspace } from "@/features/exports/ExportWorkspace";
-import { listMatches } from "@/features/matches/api";
-import { matchKeys } from "@/features/matches/queryKeys";
 import { listHeldEvents } from "@/shared/api/heldEvents";
 import { listSeasonMasters } from "@/shared/api/masters";
-import { heldEventKeys } from "@/shared/api/queryKeys";
+import { listMatches } from "@/shared/api/matches";
+import { heldEventKeys, masterKeys, matchKeys } from "@/shared/api/queryKeys";
 import { LiveRegion } from "@/shared/ui/feedback/LiveRegion";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
@@ -46,7 +45,7 @@ export function ExportPage({
 
   const seasonsQuery = useSuspenseQuery({
     queryFn: () => listSeasonMasters(),
-    queryKey: ["season-masters", "exports"],
+    queryKey: masterKeys.seasonMasters.list("exports"),
   });
   const heldEventsQuery = useSuspenseQuery({
     queryFn: () => listHeldEvents("", 100),

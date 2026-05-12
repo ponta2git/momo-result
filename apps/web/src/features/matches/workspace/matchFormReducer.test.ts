@@ -1,13 +1,13 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 
-import type { IncidentLookupEntry } from "@/features/draftReview/reviewViewModel";
 import {
   createMatchFormReducerState,
   matchFormReducer,
   playerFieldPatch,
 } from "@/features/matches/workspace/matchFormReducer";
 import { createEmptyMatchForm } from "@/features/matches/workspace/matchFormTypes";
+import type { IncidentLookupEntry } from "@/features/matches/workspace/matchFormTypes";
 
 const baseIso = "2026-01-01T09:00";
 
@@ -95,14 +95,30 @@ describe("matchFormReducer", () => {
     expect(differentIndex.lastSyncedPlayerIndex).toBe(2);
   });
 
-  it("set_play_order syncs incidents from incidentByPlayOrder and remembers the index", () => {
+  it("set_play_order preserves incidents and does not mark the row as synced", () => {
+    const seed = createEmptyMatchForm(baseIso);
+    seed.players[2]!.incidents.destination = 7;
+    const initial = createMatchFormReducerState(seed);
+
+    const next = matchFormReducer(initial, {
+      type: "set_play_order",
+      index: 2,
+      playOrder: 4,
+    });
+
+    expect(next.lastSyncedPlayerIndex).toBeNull();
+    expect(next.values.players[2]!.playOrder).toBe(4);
+    expect(next.values.players[2]!.incidents.destination).toBe(7);
+  });
+
+  it("sync_incidents_from_play_order syncs incidents and remembers the index", () => {
     const initial = createMatchFormReducerState(createEmptyMatchForm(baseIso));
     const incidentByPlayOrder = new Map<number, IncidentLookupEntry>([
       [3, entry({ 目的地: 5, プラス駅: 1, スリの銀次: 2 })],
     ]);
 
     const next = matchFormReducer(initial, {
-      type: "set_play_order",
+      type: "sync_incidents_from_play_order",
       index: 1,
       playOrder: 3,
       incidentByPlayOrder,
@@ -121,15 +137,16 @@ describe("matchFormReducer", () => {
     expect(next.values.players[0]).toBe(initial.values.players[0]);
   });
 
-  it("set_play_order without lookup zeroes the incidents", () => {
+  it("sync_incidents_from_play_order without lookup zeroes incidents explicitly", () => {
     const seed = createEmptyMatchForm(baseIso);
     seed.players[2]!.incidents.destination = 7;
     const initial = createMatchFormReducerState(seed);
 
     const next = matchFormReducer(initial, {
-      type: "set_play_order",
+      type: "sync_incidents_from_play_order",
       index: 2,
       playOrder: 4,
+      incidentByPlayOrder: new Map(),
     });
 
     expect(next.lastSyncedPlayerIndex).toBe(2);
@@ -147,7 +164,7 @@ describe("matchFormReducer", () => {
   it("subsequent patch_incident on the just-synced index clears lastSyncedPlayerIndex", () => {
     const initial = createMatchFormReducerState(createEmptyMatchForm(baseIso));
     const synced = matchFormReducer(initial, {
-      type: "set_play_order",
+      type: "sync_incidents_from_play_order",
       index: 0,
       playOrder: 2,
       incidentByPlayOrder: new Map([[2, entry({ 目的地: 9 })]]),
@@ -168,9 +185,10 @@ describe("matchFormReducer", () => {
   it("replace resets the entire state and clears lastSyncedPlayerIndex", () => {
     const initial = createMatchFormReducerState(createEmptyMatchForm(baseIso));
     const synced = matchFormReducer(initial, {
-      type: "set_play_order",
+      type: "sync_incidents_from_play_order",
       index: 1,
       playOrder: 4,
+      incidentByPlayOrder: new Map(),
     });
     expect(synced.lastSyncedPlayerIndex).toBe(1);
 

@@ -2,23 +2,23 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { invalidateMatchAndDraftCaches } from "@/features/matches/queryKeys";
 import {
   cancelMatchDraft,
   createMatchDraft,
   createOcrJob,
   uploadImage,
 } from "@/features/ocrCapture/api";
-import { requestedImageTypeForSlot } from "@/features/ocrCapture/captureState";
 import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
-import { setupSchema } from "@/features/ocrCapture/schema";
+import {
+  ocrJobRequestForSlot,
+  runOcrSubmissionWorkflow,
+} from "@/features/ocrCapture/ocrSubmissionWorkflow";
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
-import { pickOcrTargets, toUploadingSlot } from "@/features/ocrCapture/slotPolicy";
-import { parseOcrJobStatus } from "@/shared/api/enums";
-import { formatApiError, normalizeDisplayApiError } from "@/shared/api/problemDetails";
+import { invalidateAfterOcrSubmissionStarted } from "@/shared/api/cacheInvalidation";
+import { formatApiError } from "@/shared/api/problemDetails";
 
 export type OcrCaptureSubmitParams = {
-  notify: (message: string) => void;
+  notify: (message: string, tone?: "info" | "success" | "warning") => void;
   selectedGameTitle: { id: string; layoutFamily?: string | null } | undefined;
   setup: SetupFormValues;
   slots: readonly CaptureSlotState[];
@@ -51,90 +51,66 @@ export function useOcrCaptureMutations(hints: Record<string, unknown>): OcrCaptu
       slot: CaptureSlotState;
     }) => {
       const upload = await uploadImage(file);
-      const job = await createOcrJob({
-        imageId: upload.imageId,
-        matchDraftId,
-        requestedImageType: requestedImageTypeForSlot(slot),
-        ocrHints: hints,
-      });
+      const job = await createOcrJob(
+        ocrJobRequestForSlot(matchDraftId, slot, upload.imageId, hints),
+      );
       return { upload, job };
     },
   });
 
   const submit = useCallback(
     async ({ notify, selectedGameTitle, setup, slots, updateSlot }: OcrCaptureSubmitParams) => {
-      const targetSlots = pickOcrTargets(slots);
-      if (targetSlots.length === 0) {
+      const result = await runOcrSubmissionWorkflow({
+        cancelDraft: cancelMatchDraft,
+        createDraft: createMatchDraft,
+        createUploadJob: ({ file, matchDraftId, slot }) =>
+          uploadMutation.mutateAsync({ file, matchDraftId, slot }),
+        onReady: (targetCount) =>
+          notify(
+            `${targetCount}件の読み取りを開始します。確定前の記録を作成し、試合一覧で処理状況を確認できるようにします。`,
+          ),
+        selectedGameTitle,
+        setup,
+        slots,
+        updateSlot,
+      });
+
+      if (result.status === "empty") {
         notify("読み取る画像がありません。まず撮影または画像追加を行ってください。");
         return;
       }
-      const setupSubmission = setupSchema.safeParse(setup);
-      if (!setupSubmission.success) {
-        notify(setupSubmission.error.issues[0]?.message ?? "試合設定を確認してください。");
+      if (result.status === "invalid") {
+        notify(result.message);
         return;
       }
-
-      notify(
-        `${targetSlots.length}枚の読み取りを開始します。確定前の記録を作成し、試合一覧で処理状況を確認できるようにします。`,
-      );
-
-      let matchDraftId: string | null;
-      try {
-        const matchDraft = await createMatchDraft({
-          gameTitleId: setup.gameTitleId,
-          ...(selectedGameTitle?.layoutFamily
-            ? { layoutFamily: selectedGameTitle.layoutFamily }
-            : {}),
-          mapMasterId: setup.mapMasterId,
-          ownerMemberId: setup.ownerMemberId,
-          playedAt: new Date().toISOString(),
-          seasonMasterId: setup.seasonMasterId,
-          status: "ocr_running",
-        });
-        matchDraftId = matchDraft.matchDraftId;
-      } catch (error) {
-        notify(formatApiError(error, "確定前の記録を作成できませんでした"));
+      if (result.status === "draft_create_failed") {
+        notify(formatApiError(result.error, "確定前の記録を作成できませんでした"));
         return;
       }
-      if (!matchDraftId) return;
-
-      let createdJobCount = 0;
-      for (const slot of targetSlots) {
-        if (!slot.file) continue;
-        const uploadingSlot = toUploadingSlot(slot);
-        updateSlot(uploadingSlot);
-        try {
-          const { upload, job } = await uploadMutation.mutateAsync({
-            matchDraftId,
-            slot: uploadingSlot,
-            file: slot.file,
-          });
-          const status = parseOcrJobStatus(job.status);
-          updateSlot({
-            ...uploadingSlot,
-            imageId: upload.imageId,
-            jobId: job.jobId,
-            draftId: job.draftId,
-            status: status === "unknown" ? "queued" : status,
-          });
-          createdJobCount += 1;
-        } catch (error) {
-          updateSlot({
-            ...uploadingSlot,
-            status: "failed",
-            transportError: normalizeDisplayApiError(error, "読み取り処理を開始できませんでした"),
-          });
+      if (result.status === "started" || result.status === "partial_started") {
+        await invalidateAfterOcrSubmissionStarted(queryClient);
+        if (result.status === "partial_started") {
+          notify(
+            `${result.createdJobCount}件の読み取りを開始しました。一部の画像は開始できなかったため、確認画面で手入力してください。`,
+            "warning",
+          );
         }
-      }
-
-      if (createdJobCount > 0) {
-        await invalidateMatchAndDraftCaches(queryClient);
         navigate("/matches", { replace: true });
         return;
       }
+      if (result.status === "failed_cleanup_failed") {
+        await invalidateAfterOcrSubmissionStarted(queryClient);
+        notify(
+          formatApiError(
+            result.cleanupError,
+            "読み取り処理を開始できず、確定前の記録の取り消しにも失敗しました。試合一覧で状態を確認してください",
+          ),
+          "warning",
+        );
+        return;
+      }
 
-      void cancelMatchDraft(matchDraftId).catch(() => undefined);
-      notify("読み取り処理を開始できませんでした。画像と試合設定を確認してください。");
+      notify("読み取り処理を開始できませんでした。確定前の記録は取り消しました。");
     },
     [navigate, queryClient, uploadMutation],
   );

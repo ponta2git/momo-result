@@ -7,8 +7,8 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { OcrCapturePage } from "@/features/ocrCapture/OcrCapturePage";
-import { server } from "@/shared/api/msw/server";
 import { DevUserPicker } from "@/shared/auth/DevUserPicker";
+import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
 
 type OcrJobRequestBody = {

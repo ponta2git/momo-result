@@ -1,6 +1,7 @@
 import { useSearchParams } from "react-router-dom";
 
 import { AuthPanel } from "@/shared/auth/AuthPanel";
+import { sanitizeAppRedirectPath } from "@/shared/auth/redirectPath";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { GlobalNav } from "@/shared/ui/layout/GlobalNav";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
@@ -8,6 +9,7 @@ import { PageFrame } from "@/shared/ui/layout/PageFrame";
 export function LoginPage() {
   const [searchParams] = useSearchParams();
   const reason = searchParams.get("reason");
+  const next = sanitizeAppRedirectPath(searchParams.get("next"));
 
   return (
     <>
@@ -27,7 +29,7 @@ export function LoginPage() {
             </Notice>
           ) : null}
 
-          <AuthPanel auth={undefined} forceDevPicker={import.meta.env.DEV} />
+          <AuthPanel auth={undefined} forceDevPicker={import.meta.env.DEV} loginNextPath={next} />
 
           <p className="text-xs leading-6 text-[var(--color-text-secondary)]">
             別のDiscordアカウントを使う場合は、Discord側でログアウトするか、シークレットウィンドウを利用してください。

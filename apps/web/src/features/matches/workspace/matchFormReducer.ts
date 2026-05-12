@@ -1,5 +1,8 @@
-import type { IncidentLookupEntry } from "@/features/draftReview/reviewViewModel";
-import type { IncidentKey, MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
+import type {
+  IncidentKey,
+  IncidentLookupEntry,
+  MatchFormValues,
+} from "@/features/matches/workspace/matchFormTypes";
 
 type PlayerField = Exclude<keyof MatchFormValues["players"][number], "incidents">;
 
@@ -7,11 +10,12 @@ type MatchFormAction =
   | { patch: Partial<MatchFormValues>; type: "patch_root" }
   | { index: number; patch: Partial<MatchFormValues["players"][number]>; type: "patch_player" }
   | { index: number; key: IncidentKey; type: "patch_incident"; value: number }
+  | { index: number; playOrder: number; type: "set_play_order" }
   | {
       index: number;
-      incidentByPlayOrder?: Map<number, IncidentLookupEntry>;
+      incidentByPlayOrder: Map<number, IncidentLookupEntry>;
       playOrder: number;
-      type: "set_play_order";
+      type: "sync_incidents_from_play_order";
     }
   | { payload: MatchFormValues; type: "replace" };
 
@@ -92,7 +96,17 @@ export function matchFormReducer(
           ) as MatchFormValues["players"],
         },
       };
-    case "set_play_order": {
+    case "set_play_order":
+      return {
+        ...state,
+        values: {
+          ...state.values,
+          players: state.values.players.map((player, index) =>
+            index === action.index ? { ...player, playOrder: action.playOrder } : player,
+          ) as MatchFormValues["players"],
+        },
+      };
+    case "sync_incidents_from_play_order": {
       const lookup = action.incidentByPlayOrder?.get(action.playOrder);
       return {
         lastSyncedPlayerIndex: action.index,

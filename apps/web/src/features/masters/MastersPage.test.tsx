@@ -7,12 +7,13 @@ import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { masterQueryKeys } from "@/features/masters/masterApi";
+import { MastersPage } from "@/features/masters/MastersPage";
+import { masterKeys } from "@/shared/api/queryKeys";
 import {
   createDraftReviewHandoffPayload,
   saveMasterHandoff,
-} from "@/features/masters/masterReturnHandoff";
-import { MastersPage } from "@/features/masters/MastersPage";
-import { server } from "@/shared/api/msw/server";
+} from "@/shared/workflows/masterReturnHandoff";
+import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
 
 let queryClient: QueryClient;
@@ -57,8 +58,8 @@ describe("MastersPage", () => {
 
   it("invalidates consumer-facing master caches after creating a game title", async () => {
     window.localStorage.setItem("momoresult.devUser", "account_ponta");
-    queryClient.setQueryData(["masters", "game-titles", "workspace"], { items: [] });
-    queryClient.setQueryData(["game-titles"], { items: [] });
+    queryClient.setQueryData(masterKeys.gameTitles.list("workspace"), { items: [] });
+    queryClient.setQueryData(masterKeys.gameTitles.list("match-detail"), { items: [] });
     renderPage();
 
     expect(await screen.findByRole("button", { name: /桃太郎電鉄2/u })).toBeInTheDocument();
@@ -68,9 +69,11 @@ describe("MastersPage", () => {
 
     await waitFor(() => {
       expect(
-        queryClient.getQueryState(["masters", "game-titles", "workspace"])?.isInvalidated,
+        queryClient.getQueryState(masterKeys.gameTitles.list("workspace"))?.isInvalidated,
       ).toBe(true);
-      expect(queryClient.getQueryState(["game-titles"])?.isInvalidated).toBe(true);
+      expect(
+        queryClient.getQueryState(masterKeys.gameTitles.list("match-detail"))?.isInvalidated,
+      ).toBe(true);
     });
   });
 
@@ -255,7 +258,7 @@ describe("MastersPage", () => {
 
   it("does not reuse list-response cache entries from OCR setup queries", async () => {
     window.localStorage.setItem("momoresult.devUser", "account_ponta");
-    queryClient.setQueryData(["masters", "game-titles", "account_ponta"], {
+    queryClient.setQueryData(masterKeys.gameTitles.list("account_ponta"), {
       items: [
         {
           id: "gt_cached_response",

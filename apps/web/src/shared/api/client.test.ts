@@ -85,12 +85,14 @@ describe("apiRequest", () => {
     const idempotentRequests = [
       { method: "POST", path: "/api/held-events" },
       { method: "POST", path: "/api/match-drafts" },
+      { method: "POST", path: "/api/match-drafts/draft-1/cancel" },
       { method: "PATCH", path: "/api/match-drafts/draft-1" },
       { method: "POST", path: "/api/matches" },
       { method: "POST", path: "/api/ocr-jobs" },
       { method: "POST", path: "/api/game-titles" },
       { method: "POST", path: "/api/map-masters" },
       { method: "POST", path: "/api/season-masters" },
+      { method: "POST", path: "/api/member-aliases" },
       { method: "POST", path: "/api/admin/login-accounts" },
     ] as const;
 
@@ -125,6 +127,21 @@ describe("apiRequest", () => {
     const calls = fetchCallsOf(fetchMock);
     const headers = requireInit(calls[0]?.[1]).headers as Headers;
     expect(headers.get("Idempotency-Key")).toBe("submit-key-1");
+  });
+
+  it("attaches caller-provided idempotency key to any JSON mutation", async () => {
+    const fetchMock = vi.fn(async () => Response.json({ ok: true }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await apiRequest("/api/custom-mutation", {
+      method: "POST",
+      body: { ok: true },
+      idempotencyKey: "custom-key-1",
+    });
+
+    const calls = fetchCallsOf(fetchMock);
+    const headers = requireInit(calls[0]?.[1]).headers as Headers;
+    expect(headers.get("Idempotency-Key")).toBe("custom-key-1");
   });
 
   it("downloads non-JSON files with dev auth and filename metadata", async () => {

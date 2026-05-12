@@ -2,6 +2,7 @@ import { AlertDialog as BaseAlertDialog } from "@base-ui/react/alert-dialog";
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
 import { X } from "lucide-react";
 import type { ReactElement, ReactNode } from "react";
+import { useState } from "react";
 
 import { IconButton } from "@/shared/ui/actions/IconButton";
 import { cn } from "@/shared/ui/cn";
@@ -24,8 +25,11 @@ type DialogProps = DialogBaseProps & {
 
 type AlertDialogProps = DialogBaseProps & {
   cancelLabel?: ReactNode | undefined;
+  closeOnSuccess?: boolean | undefined;
+  confirmDisabled?: boolean | undefined;
   confirmLabel?: ReactNode | undefined;
-  onConfirm: () => void;
+  onConfirm: () => Promise<void> | void;
+  pending?: boolean | undefined;
   trigger: ReactElement;
 };
 
@@ -108,16 +112,44 @@ export function AlertDialog({
   cancelLabel = "キャンセル",
   children,
   className,
+  closeOnSuccess = true,
+  confirmDisabled = false,
   confirmLabel = "実行",
   description,
   onConfirm,
   onOpenChange,
   open,
+  pending = false,
   title,
   trigger,
 }: AlertDialogProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const [internalPending, setInternalPending] = useState(false);
+  const controlled = open !== undefined;
+  const actualOpen = controlled ? open : internalOpen;
+  const actualPending = pending || internalPending;
+  const setOpen = (nextOpen: boolean) => {
+    if (!controlled) {
+      setInternalOpen(nextOpen);
+    }
+    onOpenChange?.(nextOpen);
+  };
+  const handleConfirm = async () => {
+    setInternalPending(true);
+    try {
+      await onConfirm();
+      if (closeOnSuccess) {
+        setOpen(false);
+      }
+    } catch {
+      // Keep the dialog open. Callers surface operation errors in their own UI.
+    } finally {
+      setInternalPending(false);
+    }
+  };
+
   return (
-    <BaseAlertDialog.Root onOpenChange={(nextOpen) => onOpenChange?.(nextOpen)} open={open}>
+    <BaseAlertDialog.Root onOpenChange={setOpen} open={actualOpen}>
       <BaseAlertDialog.Trigger render={trigger} />
       <BaseAlertDialog.Portal>
         <BaseAlertDialog.Backdrop className="fixed inset-0 z-[var(--z-dialog)] bg-[var(--momo-night-900)]/35" />
@@ -138,23 +170,22 @@ export function AlertDialog({
                   render={
                     <button
                       className="inline-flex min-h-10 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-sm font-semibold text-[var(--color-text-primary)]"
+                      disabled={actualPending}
                       type="button"
                     />
                   }
                 >
                   {cancelLabel}
                 </BaseAlertDialog.Close>
-                <BaseAlertDialog.Close
-                  onClick={onConfirm}
-                  render={
-                    <button
-                      className="inline-flex min-h-10 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-danger)] bg-[var(--color-danger)] px-4 py-2 text-sm font-semibold text-white"
-                      type="button"
-                    />
-                  }
+                <button
+                  aria-busy={actualPending}
+                  className="inline-flex min-h-10 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-danger)] bg-[var(--color-danger)] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={actualPending || confirmDisabled}
+                  type="button"
+                  onClick={handleConfirm}
                 >
                   {confirmLabel}
-                </BaseAlertDialog.Close>
+                </button>
               </div>
             </div>
           </div>

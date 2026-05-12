@@ -2,14 +2,14 @@ import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-q
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
-import { fixedMembers } from "@/features/auth/members";
-import { deleteMatch, getMatch } from "@/features/matches/api";
-import type { MatchDetailResponse } from "@/features/matches/api";
-import { invalidateMatchAndDraftCaches, matchKeys } from "@/features/matches/queryKeys";
+import { invalidateAfterMatchDeleted } from "@/shared/api/cacheInvalidation";
 import { listHeldEvents } from "@/shared/api/heldEvents";
 import { listGameTitles, listMapMasters, listSeasonMasters } from "@/shared/api/masters";
+import { deleteMatch, getMatch } from "@/shared/api/matches";
+import type { MatchDetailResponse } from "@/shared/api/matches";
 import { formatApiError } from "@/shared/api/problemDetails";
-import { heldEventKeys } from "@/shared/api/queryKeys";
+import { heldEventKeys, masterKeys, matchKeys } from "@/shared/api/queryKeys";
+import { fixedMembers } from "@/shared/domain/members";
 import { formatManYen } from "@/shared/lib/formatters";
 import { Button } from "@/shared/ui/actions/Button";
 import { DataTable } from "@/shared/ui/data/DataTable";
@@ -104,15 +104,15 @@ export function MatchDetailPage() {
   });
   const gameTitlesQuery = useSuspenseQuery({
     queryFn: () => listGameTitles(),
-    queryKey: ["game-titles"],
+    queryKey: masterKeys.gameTitles.list("match-detail"),
   });
   const seasonsQuery = useSuspenseQuery({
     queryFn: () => listSeasonMasters(),
-    queryKey: ["season-masters", "all"],
+    queryKey: masterKeys.seasonMasters.list("match-detail"),
   });
   const mapsQuery = useSuspenseQuery({
     queryFn: () => listMapMasters(),
-    queryKey: ["map-masters", "all"],
+    queryKey: masterKeys.mapMasters.list("match-detail"),
   });
 
   const deleteMutation = useMutation({
@@ -121,7 +121,7 @@ export function MatchDetailPage() {
       setErrorMessage(formatApiError(error, "削除に失敗しました"));
     },
     onSuccess: async () => {
-      await invalidateMatchAndDraftCaches(queryClient);
+      await invalidateAfterMatchDeleted(queryClient);
       navigate("/matches", { replace: true });
     },
   });
@@ -173,6 +173,7 @@ export function MatchDetailPage() {
             <AlertDialog
               cancelLabel="キャンセル"
               confirmLabel={deleteMutation.isPending ? "削除中…" : "削除する"}
+              pending={deleteMutation.isPending}
               description={`第${match.matchNoInEvent}試合を完全に削除します。この操作は取り消せません。`}
               open={showConfirm}
               title="試合を削除しますか？"
@@ -181,10 +182,9 @@ export function MatchDetailPage() {
                   削除
                 </Button>
               }
-              onConfirm={() => {
+              onConfirm={async () => {
                 setErrorMessage(null);
-                setShowConfirm(false);
-                deleteMutation.mutate();
+                await deleteMutation.mutateAsync();
               }}
               onOpenChange={setShowConfirm}
             />

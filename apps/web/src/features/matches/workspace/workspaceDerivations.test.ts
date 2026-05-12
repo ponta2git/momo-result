@@ -1,9 +1,9 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 
-import { createSampleDraft } from "@/features/draftReview/sampleDrafts";
 import type { MatchDraftDetailResponse } from "@/features/matches/workspace/api";
 import { createEmptyMatchForm } from "@/features/matches/workspace/matchFormTypes";
+import { createSampleDraft } from "@/features/matches/workspace/review/sampleDrafts";
 import {
   currentLocalIsoMinute,
   draftIdsFromDetail,

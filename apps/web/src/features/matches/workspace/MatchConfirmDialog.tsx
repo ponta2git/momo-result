@@ -1,8 +1,8 @@
 import { useFormStatus } from "react-dom";
 
-import { fixedMembers } from "@/features/auth/members";
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
+import { fixedMembers } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
 
 function memberName(memberId: string): string {

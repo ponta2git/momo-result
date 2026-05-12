@@ -2,9 +2,6 @@ import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import type { UseQueryResult, UseSuspenseQueryResult } from "@tanstack/react-query";
 import { useMemo } from "react";
 
-import { getMatch } from "@/features/matches/api";
-import { isOcrRunning } from "@/features/matches/draftStatus";
-import { matchKeys } from "@/features/matches/queryKeys";
 import type { MatchDraftDetailResponse } from "@/features/matches/workspace/api";
 import { getMatchDraftDetail, listMatchDraftSourceImages } from "@/features/matches/workspace/api";
 import type { WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
@@ -14,12 +11,19 @@ import {
 } from "@/features/matches/workspace/workspaceDerivations";
 import { slotKinds } from "@/shared/api/enums";
 import { listHeldEvents } from "@/shared/api/heldEvents";
-import { listGameTitles, listMapMasters, listSeasonMasters } from "@/shared/api/masters";
+import {
+  listGameTitles,
+  listMapMasters,
+  listMemberAliases,
+  listSeasonMasters,
+} from "@/shared/api/masters";
+import { getMatch } from "@/shared/api/matches";
 import { getOcrDraftsBulk } from "@/shared/api/ocrDrafts";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
 import { shouldShowQueryError } from "@/shared/api/queryErrorState";
-import { heldEventKeys, ocrDraftKeys } from "@/shared/api/queryKeys";
+import { heldEventKeys, masterKeys, matchKeys, ocrDraftKeys } from "@/shared/api/queryKeys";
+import { isOcrRunning } from "@/shared/domain/draftStatus";
 import { bySlot } from "@/shared/lib/slotMap";
 import type { SlotMap } from "@/shared/lib/slotMap";
 import { useResourceQuery } from "@/shared/lib/useResourceQuery";
@@ -40,6 +44,7 @@ export type MatchWorkspaceQueries = {
   heldEventsQuery: UseSuspenseQueryResult<Awaited<ReturnType<typeof listHeldEvents>>, Error>;
   legacyIds: SlotMap<string>;
   mapMastersQuery: ReturnType<typeof useQuery<Awaited<ReturnType<typeof listMapMasters>>>>;
+  memberAliasesQuery: UseSuspenseQueryResult<Awaited<ReturnType<typeof listMemberAliases>>, Error>;
   matchDetailQuery: UseQueryResult<Awaited<ReturnType<typeof getMatch>>, Error>;
   ocrDraftsQuery: ReturnType<typeof useQuery<Awaited<ReturnType<typeof getOcrDraftsBulk>>>>;
   reviewDraftIdList: string[];
@@ -80,18 +85,23 @@ export function useMatchWorkspaceQueries(
   });
 
   const gameTitlesQuery = useSuspenseQuery({
-    queryKey: ["masters", "game-titles", "workspace"],
+    queryKey: masterKeys.gameTitles.list("workspace"),
     queryFn: () => listGameTitles(),
   });
 
+  const memberAliasesQuery = useSuspenseQuery({
+    queryKey: masterKeys.memberAliases.list("workspace"),
+    queryFn: () => listMemberAliases(),
+  });
+
   const mapMastersQuery = useQuery({
-    queryKey: ["masters", "map-masters", "workspace", gameTitleId],
+    queryKey: masterKeys.mapMasters.list("workspace", gameTitleId),
     queryFn: () => listMapMasters(gameTitleId || undefined),
     enabled: Boolean(gameTitleId),
   });
 
   const seasonMastersQuery = useQuery({
-    queryKey: ["masters", "season-masters", "workspace", gameTitleId],
+    queryKey: masterKeys.seasonMasters.list("workspace", gameTitleId),
     queryFn: () => listSeasonMasters(gameTitleId || undefined),
     enabled: Boolean(gameTitleId),
   });
@@ -168,6 +178,7 @@ export function useMatchWorkspaceQueries(
     heldEventsQuery,
     legacyIds,
     mapMastersQuery,
+    memberAliasesQuery,
     matchDetailQuery,
     ocrDraftsQuery,
     reviewDraftIdList,

@@ -1,6 +1,11 @@
 import type { ReactNode } from "react";
 import { Navigate, useLocation, useSearchParams } from "react-router-dom";
 
+import {
+  buildLoginPath,
+  currentAppPath,
+  sanitizeAppRedirectPath,
+} from "@/shared/auth/redirectPath";
 import { useAuth } from "@/shared/auth/useAuth";
 import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
@@ -12,10 +17,6 @@ function AuthLoading({ message }: { message: string }) {
       <p className="text-sm text-[var(--color-text-secondary)]">{message}</p>
     </PageFrame>
   );
-}
-
-function buildNextPath(pathname: string, search: string, hash: string) {
-  return `${pathname}${search}${hash}`;
 }
 
 export function RootRedirect() {
@@ -45,8 +46,7 @@ export function PublicOnlyRoute({ children }: { children: ReactNode }) {
   }
 
   if (auth.isAuthenticated) {
-    const next = searchParams.get("next");
-    const destination = next && next.startsWith("/") ? next : "/held-events";
+    const destination = sanitizeAppRedirectPath(searchParams.get("next")) ?? "/held-events";
     return <Navigate to={destination} replace />;
   }
 
@@ -62,8 +62,8 @@ export function AuthenticatedRoute({ children }: { children: ReactNode }) {
   }
 
   if (auth.isUnauthorized) {
-    const next = buildNextPath(location.pathname, location.search, location.hash);
-    return <Navigate to={`/login?next=${encodeURIComponent(next)}`} replace />;
+    const next = currentAppPath(location.pathname, location.search, location.hash);
+    return <Navigate to={buildLoginPath(next)} replace />;
   }
 
   if (auth.isForbidden) {

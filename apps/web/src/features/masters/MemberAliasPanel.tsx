@@ -1,9 +1,9 @@
 import { Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 
-import { fixedMembers } from "@/features/auth/members";
 import type { MemberAliasResponse } from "@/shared/api/masters";
 import { formatApiError } from "@/shared/api/problemDetails";
+import { fixedMembers } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
 import { IconButton } from "@/shared/ui/actions/IconButton";
 import { AlertDialog, Dialog } from "@/shared/ui/feedback/Dialog";
@@ -19,7 +19,7 @@ type MemberAliasPanelProps = {
   createAction: (formData: FormData) => void | Promise<void>;
   createError?: string | undefined;
   createFormKey?: string | number | undefined;
-  onDelete: (id: string) => void;
+  onDelete: (id: string) => Promise<void> | void;
   onUpdate: (id: string, request: { memberId: string; alias: string }) => Promise<void>;
 };
 

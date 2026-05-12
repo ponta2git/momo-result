@@ -1,22 +1,24 @@
-import { mergeDrafts } from "@/features/draftReview/reviewViewModel";
-import type { DraftByKind } from "@/features/draftReview/reviewViewModel";
 import type {
+  DraftByKind,
   MatchDraftSummary,
   MatchFormValues,
   MatchWorkspaceInitialData,
 } from "@/features/matches/workspace/matchFormTypes";
 import { createEmptyMatchForm } from "@/features/matches/workspace/matchFormTypes";
+import { mergeDrafts } from "@/features/matches/workspace/review/reviewViewModel";
+import type { MemberAliasDirectory } from "@/shared/domain/memberDirectory";
 
 export function draftToMatchForm(input: {
   draftByKind: DraftByKind;
   draftSummary?: MatchDraftSummary;
   matchDraftId?: string;
+  memberDirectory?: MemberAliasDirectory;
   nowIso: string;
 }): {
   initialData: MatchWorkspaceInitialData;
   values: MatchFormValues;
 } {
-  const merged = mergeDrafts(input.draftByKind);
+  const merged = mergeDrafts(input.draftByKind, input.memberDirectory);
   const base = createEmptyMatchForm(input.nowIso);
 
   const values: MatchFormValues = {

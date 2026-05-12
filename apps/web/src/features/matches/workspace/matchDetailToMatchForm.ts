@@ -1,7 +1,7 @@
-import { fixedMembers } from "@/features/auth/members";
-import type { MatchDetailResponse } from "@/features/matches/api";
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
 import { createEmptyMatchForm, emptyIncidents } from "@/features/matches/workspace/matchFormTypes";
+import type { MatchDetailResponse } from "@/shared/api/matches";
+import { fixedMembers } from "@/shared/domain/members";
 
 export function matchDetailToMatchForm(detail: MatchDetailResponse): MatchFormValues {
   const base = createEmptyMatchForm(detail.playedAt);

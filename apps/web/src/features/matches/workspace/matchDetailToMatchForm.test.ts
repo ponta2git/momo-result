@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 
-import type { MatchDetailResponse } from "@/features/matches/api";
 import { matchDetailToMatchForm } from "@/features/matches/workspace/matchDetailToMatchForm";
+import type { MatchDetailResponse } from "@/shared/api/matches";
 import { makeFourPlayerResults, makeIncidents, makeMatchDetail } from "@/test/factories";
 
 function detail(overrides: Partial<MatchDetailResponse> = {}): MatchDetailResponse {

@@ -2,7 +2,7 @@ import { useParams } from "react-router-dom";
 
 import { MatchWorkspacePage } from "@/features/matches/workspace/MatchWorkspacePage";
 
-export function DraftReviewRouteAdapter() {
+export function DraftReviewPage() {
   const { matchSessionId = "" } = useParams<{ matchSessionId: string }>();
 
   return (

@@ -20,7 +20,7 @@ type GameTitleListProps = {
   createFormKey?: string | number | undefined;
   defaultLayoutFamily: LayoutFamily;
   items: GameTitleListItem[];
-  onDelete: (id: string) => void;
+  onDelete: (id: string) => Promise<void> | void;
   onUpdate: (id: string, request: { name: string; layoutFamily: string }) => Promise<void>;
   onSelect: (id: string) => void;
   selectedGameTitleId: string;

@@ -103,7 +103,7 @@ export function MasterEditDialog({
 type MasterDeleteDialogProps = {
   label: string;
   name: string;
-  onDelete: () => void;
+  onDelete: () => Promise<void> | void;
 };
 
 export function MasterDeleteDialog({ label, name, onDelete }: MasterDeleteDialogProps) {

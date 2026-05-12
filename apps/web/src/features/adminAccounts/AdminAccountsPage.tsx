@@ -1,15 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ShieldCheck } from "lucide-react";
-import { useState } from "react";
+import { useActionState } from "react";
+import { useFormStatus } from "react-dom";
 
-import { fixedMembers } from "@/features/auth/members";
 import { createLoginAccount, listLoginAccounts, updateLoginAccount } from "@/shared/api/client";
 import type {
   CreateLoginAccountRequest,
   LoginAccountResponse,
   UpdateLoginAccountRequest,
 } from "@/shared/api/client";
-import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
+import { formatApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
+import { fixedMembers } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Field } from "@/shared/ui/forms/Field";
@@ -17,12 +18,7 @@ import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 const queryKey = ["admin", "login-accounts"] as const;
-const blankForm: CreateLoginAccountRequest = {
-  discordUserId: "",
-  displayName: "",
-  loginEnabled: true,
-  isAdmin: false,
-};
+const initialCreateAccountState = { error: "", version: 0 };
 
 const inputClass =
   "w-full rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)]";
@@ -34,20 +30,36 @@ function memberName(memberId: string | undefined): string {
 
 export function AdminAccountsPage() {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState<CreateLoginAccountRequest>(blankForm);
 
   const accountsQuery = useQuery({
     queryKey,
     queryFn: listLoginAccounts,
   });
 
-  const createMutation = useMutation({
-    mutationFn: (request: CreateLoginAccountRequest) => createLoginAccount(request),
-    onSuccess: async () => {
-      setForm(blankForm);
-      await queryClient.invalidateQueries({ queryKey });
+  const [createState, createAction] = useActionState<typeof initialCreateAccountState, FormData>(
+    async (previous, formData) => {
+      const playerMemberId = String(formData.get("playerMemberId") ?? "");
+      const request: CreateLoginAccountRequest = {
+        discordUserId: String(formData.get("discordUserId") ?? ""),
+        displayName: String(formData.get("displayName") ?? ""),
+        isAdmin: formData.get("isAdmin") === "on",
+        loginEnabled: formData.get("loginEnabled") === "on",
+        ...(playerMemberId ? { playerMemberId } : {}),
+      };
+
+      try {
+        await createLoginAccount(request);
+        await queryClient.invalidateQueries({ queryKey });
+        return { error: "", version: previous.version + 1 };
+      } catch (error) {
+        return {
+          error: formatApiError(error, "ログインアカウントの作成に失敗しました"),
+          version: previous.version,
+        };
+      }
     },
-  });
+    initialCreateAccountState,
+  );
 
   const updateMutation = useMutation({
     mutationFn: ({
@@ -62,7 +74,7 @@ export function AdminAccountsPage() {
     },
   });
 
-  const error = createMutation.error ?? updateMutation.error ?? accountsQuery.error;
+  const error = updateMutation.error ?? accountsQuery.error;
   const normalizedError = error ? normalizeUnknownApiError(error) : undefined;
   const accounts = accountsQuery.data?.items ?? [];
 
@@ -74,9 +86,9 @@ export function AdminAccountsPage() {
         description="Discordでログインできるアカウントと管理者権限を管理します。試合参加者とは別に設定できます。"
       />
 
-      {normalizedError ? (
-        <Notice tone="danger" title={normalizedError.title}>
-          {normalizedError.detail}
+      {createState.error || normalizedError ? (
+        <Notice tone="danger" title={normalizedError?.title ?? "操作に失敗しました"}>
+          {createState.error || normalizedError?.detail}
         </Notice>
       ) : null}
 
@@ -86,54 +98,29 @@ export function AdminAccountsPage() {
           アカウントを追加
         </h2>
         <form
+          key={createState.version}
+          action={createAction}
           className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_16rem_auto]"
-          onSubmit={(event) => {
-            event.preventDefault();
-            createMutation.mutate(form);
-          }}
         >
           <Field label="DiscordユーザーID">
             <input
               className={inputClass}
               inputMode="numeric"
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  discordUserId: event.target.value,
-                }))
-              }
+              name="discordUserId"
               placeholder="例: 523484457705930752"
               required
-              value={form.discordUserId}
             />
           </Field>
           <Field label="表示名">
             <input
               className={inputClass}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  displayName: event.target.value,
-                }))
-              }
+              name="displayName"
               placeholder="例: 代理入力者"
               required
-              value={form.displayName}
             />
           </Field>
           <Field label="紐づくプレーヤー">
-            <select
-              className={inputClass}
-              onChange={(event) =>
-                setForm((current) => {
-                  const { playerMemberId: _playerMemberId, ...rest } = current;
-                  return event.target.value
-                    ? { ...rest, playerMemberId: event.target.value }
-                    : rest;
-                })
-              }
-              value={form.playerMemberId ?? ""}
-            >
+            <select className={inputClass} name="playerMemberId" defaultValue="">
               <option value="">試合参加者に紐づけない</option>
               {fixedMembers.map((member) => (
                 <option key={member.memberId} value={member.memberId}>
@@ -145,37 +132,17 @@ export function AdminAccountsPage() {
           <Field label="権限">
             <div className="flex min-h-10 flex-wrap items-center gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
               <label className="inline-flex items-center gap-2 text-sm">
-                <input
-                  checked={form.loginEnabled}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      loginEnabled: event.target.checked,
-                    }))
-                  }
-                  type="checkbox"
-                />
+                <input defaultChecked name="loginEnabled" type="checkbox" />
                 ログイン許可
               </label>
               <label className="inline-flex items-center gap-2 text-sm">
-                <input
-                  checked={form.isAdmin}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      isAdmin: event.target.checked,
-                    }))
-                  }
-                  type="checkbox"
-                />
+                <input name="isAdmin" type="checkbox" />
                 管理者
               </label>
             </div>
           </Field>
           <div className="flex items-end">
-            <Button pending={createMutation.isPending} pendingLabel="追加中" type="submit">
-              追加
-            </Button>
+            <CreateAccountSubmitButton />
           </div>
         </form>
       </section>
@@ -206,6 +173,15 @@ export function AdminAccountsPage() {
         </table>
       </section>
     </PageFrame>
+  );
+}
+
+function CreateAccountSubmitButton() {
+  const { pending } = useFormStatus();
+  return (
+    <Button pending={pending} pendingLabel="追加中" type="submit">
+      追加
+    </Button>
   );
 }
 

@@ -1,7 +1,5 @@
 import { useEffect, useRef } from "react";
 
-import { createSampleDraftMap } from "@/features/draftReview/sampleDrafts";
-import type { getMatch } from "@/features/matches/api";
 import type { getMatchDraftDetail } from "@/features/matches/workspace/api";
 import { draftToMatchForm } from "@/features/matches/workspace/draftToMatchForm";
 import { matchDetailToMatchForm } from "@/features/matches/workspace/matchDetailToMatchForm";
@@ -10,11 +8,15 @@ import type {
   MatchWorkspaceInitialData,
   WorkspaceMode,
 } from "@/features/matches/workspace/matchFormTypes";
+import { createSampleDraftMap } from "@/features/matches/workspace/review/sampleDrafts";
 import {
   draftsByKind,
   prefillFromDraftSummary,
 } from "@/features/matches/workspace/workspaceDerivations";
+import type { getMatch } from "@/shared/api/matches";
 import type { getOcrDraftsBulk } from "@/shared/api/ocrDrafts";
+import { buildMemberAliasDirectory } from "@/shared/domain/memberDirectory";
+import type { MemberAliasRecord } from "@/shared/domain/memberDirectory";
 import type { SlotMap } from "@/shared/lib/slotMap";
 
 type MatchDetail = Awaited<ReturnType<typeof getMatch>>;
@@ -27,6 +29,7 @@ export type MatchWorkspaceInitParams = {
   matchDetail: MatchDetail | undefined;
   matchDraftId: string | undefined;
   matchId: string | undefined;
+  memberAliases: readonly MemberAliasRecord[];
   mode: WorkspaceMode;
   ocrDrafts: OcrDraftBulk | undefined;
   ocrDraftsError: boolean;
@@ -50,6 +53,7 @@ export function useMatchWorkspaceInit({
   matchDetail,
   matchDraftId,
   matchId,
+  memberAliases,
   mode,
   ocrDrafts,
   ocrDraftsError,
@@ -112,6 +116,7 @@ export function useMatchWorkspaceInit({
         draftByKind,
         ...(draftDetail ? { draftSummary: draftDetail } : {}),
         ...(matchDraftId ? { matchDraftId } : {}),
+        memberDirectory: buildMemberAliasDirectory(memberAliases),
         nowIso: new Date().toISOString(),
       });
 
@@ -124,6 +129,7 @@ export function useMatchWorkspaceInit({
     matchDetail,
     matchDraftId,
     matchId,
+    memberAliases,
     mode,
     ocrDrafts,
     ocrDraftsError,

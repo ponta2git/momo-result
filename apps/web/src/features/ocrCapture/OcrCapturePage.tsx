@@ -164,7 +164,7 @@ export function OcrCapturePage() {
               value={setup}
               onChange={setSetup}
               enabled={auth.ready}
-              authMemberId={auth.memberId}
+              authAccountId={auth.accountId}
             />
           </section>
 

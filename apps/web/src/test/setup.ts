@@ -1,8 +1,8 @@
 import "@testing-library/jest-dom/vitest";
 import { afterAll, afterEach, beforeAll, vi } from "vitest";
 
-import { resetMswStores } from "@/shared/api/msw/handlers";
-import { server } from "@/shared/api/msw/server";
+import { resetMswStores } from "@/test/msw/handlers";
+import { server } from "@/test/msw/server";
 
 const hasDom = typeof window !== "undefined";
 

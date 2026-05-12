@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-import { fixedMembers } from "@/features/auth/members";
 import type { components } from "@/shared/api/generated";
+import { fixedMembers } from "@/shared/domain/members";
 
 const memberIds = fixedMembers.map((member) => member.memberId) as [string, ...string[]];
 

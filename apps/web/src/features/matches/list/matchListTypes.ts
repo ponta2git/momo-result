@@ -1,11 +1,11 @@
-import type { MatchSummaryResponse } from "@/features/matches/api";
-import type { DraftStatus } from "@/features/matches/draftStatus";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import type {
   GameTitleResponse,
   MapMasterResponse,
   SeasonMasterResponse,
 } from "@/shared/api/masters";
+import type { MatchSummaryResponse } from "@/shared/api/matches";
+import type { DraftStatus } from "@/shared/domain/draftStatus";
 
 export type MatchListStatus = DraftStatus;
 

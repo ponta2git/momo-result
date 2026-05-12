@@ -45,6 +45,15 @@ form、filter、select、input、button の handler を変更する場合:
 - 障害対応では報告された操作そのものを通し、同一 component 内の同種 handler pattern を検索する。
 - PC用とモバイル用でUIが二重なら、検証した経路を明示する。
 
+### React performance / UX
+
+React 19 API、route preload、hot path の入力処理、Suspense 境界、`useDeferredValue` / `useTransition` / `<Activity>` を変更する場合:
+
+- `pnpm --filter web lint`、`typecheck`、対象 component/page の user-event テストを通す。
+- 入力中 state を局所化した場合は、入力途中、blur、Enter/Tab 移動、送信直前の値確定を検証する。
+- React Compiler は採用しない限り前提にしない。補助診断として `pnpm --filter web lint:react-perf` を使った場合は、production code 向けの hard gate ではない診断であることを最終報告に明記する。テストを含む全体監査は `pnpm --filter web lint:react-perf:all` で分けて扱う。
+- route preload は feature から app layer へ逆依存させず、router 側の loader 関数と app shell 側のイベントで検証する。
+
 ### Form schema / request transform
 
 Zod schema、フォーム値から API request への変換、mutation payload を変更する場合:

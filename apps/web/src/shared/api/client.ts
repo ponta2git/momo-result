@@ -6,6 +6,7 @@ import type { NormalizedApiError } from "@/shared/api/problemDetails";
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 type ApiRequestOptions = {
+  idempotency?: "auto" | "none" | { key: string } | undefined;
   method?: HttpMethod;
   body?: unknown;
   formData?: FormData;
@@ -31,12 +32,14 @@ const jsonIdempotencyTargets: ReadonlyArray<{
 }> = [
   { method: "POST", pathname: /^\/api\/held-events$/u },
   { method: "POST", pathname: /^\/api\/match-drafts$/u },
+  { method: "POST", pathname: /^\/api\/match-drafts\/[^/]+\/cancel$/u },
   { method: "PATCH", pathname: /^\/api\/match-drafts\/[^/]+$/u },
   { method: "POST", pathname: /^\/api\/matches$/u },
   { method: "POST", pathname: /^\/api\/ocr-jobs$/u },
   { method: "POST", pathname: /^\/api\/game-titles$/u },
   { method: "POST", pathname: /^\/api\/map-masters$/u },
   { method: "POST", pathname: /^\/api\/season-masters$/u },
+  { method: "POST", pathname: /^\/api\/member-aliases$/u },
   { method: "POST", pathname: /^\/api\/admin\/login-accounts$/u },
 ];
 
@@ -99,10 +102,26 @@ function shouldAttachIdempotencyKey(
   if (options.formData !== undefined) {
     return false;
   }
+  if (options.idempotency === "none") {
+    return false;
+  }
+  if (options.idempotency === "auto" || typeof options.idempotency === "object") {
+    return mutatingMethods.has(method);
+  }
+  if (options.idempotencyKey !== undefined) {
+    return mutatingMethods.has(method);
+  }
   const pathname = requestPathname(path);
   return jsonIdempotencyTargets.some(
     (target) => target.method === method && target.pathname.test(pathname),
   );
+}
+
+function resolveIdempotencyKey(options: ApiRequestOptions): string {
+  if (typeof options.idempotency === "object") {
+    return options.idempotency.key;
+  }
+  return options.idempotencyKey ?? createIdempotencyKey();
 }
 
 function buildHeaders(path: string, method: HttpMethod, options: ApiRequestOptions): Headers {
@@ -129,7 +148,7 @@ function buildHeaders(path: string, method: HttpMethod, options: ApiRequestOptio
   }
 
   if (shouldAttachIdempotencyKey(path, method, options) && !headers.has("Idempotency-Key")) {
-    headers.set("Idempotency-Key", options.idempotencyKey ?? createIdempotencyKey());
+    headers.set("Idempotency-Key", resolveIdempotencyKey(options));
   }
 
   return headers;
@@ -242,7 +261,7 @@ export async function createLoginAccount(
   return apiRequest<LoginAccountResponse>("/api/admin/login-accounts", {
     method: "POST",
     body: request,
-    idempotencyKey: options.idempotencyKey,
+    idempotency: options.idempotencyKey ? { key: options.idempotencyKey } : "auto",
   });
 }
 

@@ -1,4 +1,3 @@
-import { fixedMembers } from "@/features/auth/members";
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import type {
@@ -6,6 +5,7 @@ import type {
   MapMasterListResponse,
   SeasonMasterListResponse,
 } from "@/shared/api/masters";
+import { fixedMembers } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { Card } from "@/shared/ui/layout/Card";

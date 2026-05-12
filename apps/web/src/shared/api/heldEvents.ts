@@ -22,7 +22,7 @@ export async function createHeldEvent(
   return apiRequest<HeldEventResponse>("/api/held-events", {
     method: "POST",
     body: request,
-    idempotencyKey: options.idempotencyKey,
+    idempotency: options.idempotencyKey ? { key: options.idempotencyKey } : "auto",
   });
 }
 

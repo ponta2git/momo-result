@@ -25,7 +25,6 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
   private val app = ResourceFunFixture(httpAppResource("momo-api-http"))
   private val prodHstsApp = ResourceFunFixture(prodHttpAppResource("momo-api-prod-hsts"))
   private val prodHttpApp = ResourceFunFixture(prodHttpAppResource("momo-api-prod-http"))
-  private val prodOpenApiApp = ResourceFunFixture(prodHttpAppResource("momo-api-prod-openapi"))
   private val sessionBackedApp = ResourceFunFixture(
     tempDirectory("momo-api-session-auth").flatMap { dir =>
       HttpApp.wired[IO](AppConfig(
@@ -320,15 +319,9 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
       )
     }
 
-  prodOpenApiApp.test("prod /openapi.yaml is protected by session middleware") { httpApp =>
-    httpApp.run(Request[IO](Method.GET, uri"/openapi.yaml")).flatMap(response =>
-      assertProblemDetailEquals(
-        response,
-        Status.Unauthorized,
-        "UNAUTHORIZED",
-        "Authentication is required.",
-      )
-    )
+  app.test("GET /openapi.yaml is not served by API routes") { httpApp =>
+    val request = Request[IO](Method.GET, uri"/openapi.yaml").putHeaders(devReadHeader())
+    httpApp.run(request).map(response => assertEquals(response.status, Status.NotFound))
   }
 
   prodHttpApp.test("prod /healthz/details is protected by session middleware") { httpApp =>

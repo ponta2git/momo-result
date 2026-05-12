@@ -5,7 +5,6 @@ import sttp.tapir.AnyEndpoint
 object ApiEndpoints:
   val all: List[AnyEndpoint] = List(
     HealthEndpoints.health,
-    OpenApiEndpoints.yaml,
     AuthEndpoints.login,
     AuthEndpoints.callback,
     AuthEndpoints.logout,

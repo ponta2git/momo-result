@@ -25,26 +25,6 @@
         }
       }
     },
-    "/openapi.yaml" : {
-      "get" : {
-        "tags" : [
-          "openapi"
-        ],
-        "operationId" : "getOpenapi.yaml",
-        "responses" : {
-          "200" : {
-            "description" : "",
-            "content" : {
-              "text/plain" : {
-                "schema" : {
-                  "type" : "string"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/auth/login" : {
       "get" : {
         "tags" : [

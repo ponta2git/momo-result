@@ -8,8 +8,8 @@ import {
   loadMasterHandoff,
   removeMasterHandoff,
   sanitizeReturnTo,
-} from "@/shared/workflows/masterReturnHandoff";
-import type { MasterHandoffPayload } from "@/shared/workflows/masterReturnHandoff";
+} from "@/shared/workflows/matchWorkspaceMasterHandoff";
+import type { MasterHandoffPayload } from "@/shared/workflows/matchWorkspaceMasterHandoff";
 
 export type MasterHandoffRestoreParams = {
   isInitialized: boolean;

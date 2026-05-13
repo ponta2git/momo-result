@@ -6,14 +6,14 @@ import { http, HttpResponse, delay } from "msw";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { masterQueryKeys } from "@/features/masters/masterApi";
+import { masterQueryKeys } from "@/features/masters/masterQueries";
 import { MastersPage } from "@/features/masters/MastersPage";
 import { masterKeys } from "@/shared/api/queryKeys";
 import {
-  createDraftReviewHandoffPayload,
+  createMatchWorkspaceMasterHandoffPayload,
   saveMasterHandoff,
-} from "@/shared/workflows/masterReturnHandoff";
-import { makeDraftReviewHandoffValues } from "@/test/factories";
+} from "@/shared/workflows/matchWorkspaceMasterHandoff";
+import { makeMatchWorkspaceMasterHandoffValues } from "@/test/factories";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
 
@@ -168,10 +168,10 @@ describe("MastersPage", () => {
     window.localStorage.setItem("momoresult.devUser", "account_ponta");
 
     const handoffId = saveMasterHandoff(
-      createDraftReviewHandoffPayload({
+      createMatchWorkspaceMasterHandoffPayload({
         matchSessionId: "session-1",
         returnTo: "/review/session-1?totalAssets=draft-1",
-        values: makeDraftReviewHandoffValues({
+        values: makeMatchWorkspaceMasterHandoffValues({
           draftIds: { totalAssets: "draft-1" },
           gameTitleId: "gt_momotetsu_2",
           heldEventId: "event-1",

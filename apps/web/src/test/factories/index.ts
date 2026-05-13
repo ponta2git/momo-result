@@ -13,5 +13,5 @@ export type {
 export {
   makeReviewPlayerInput,
   makeFourReviewPlayerInputs,
-  makeDraftReviewHandoffValues,
+  makeMatchWorkspaceMasterHandoffValues,
 } from "@/test/factories/draftReview";

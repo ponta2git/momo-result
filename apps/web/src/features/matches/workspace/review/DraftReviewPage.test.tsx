@@ -8,10 +8,13 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { DraftReviewPage } from "@/features/matches/workspace/DraftReviewPage";
 import {
-  createDraftReviewHandoffPayload,
+  createMatchWorkspaceMasterHandoffPayload,
   saveMasterHandoff,
-} from "@/shared/workflows/masterReturnHandoff";
-import { makeDraftReviewHandoffValues, makeFourReviewPlayerInputs } from "@/test/factories";
+} from "@/shared/workflows/matchWorkspaceMasterHandoff";
+import {
+  makeMatchWorkspaceMasterHandoffValues,
+  makeFourReviewPlayerInputs,
+} from "@/test/factories";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
 
@@ -158,10 +161,10 @@ describe("DraftReviewPage", () => {
     window.localStorage.setItem("momoresult.devUser", "account_ponta");
 
     const handoffId = saveMasterHandoff(
-      createDraftReviewHandoffPayload({
+      createMatchWorkspaceMasterHandoffPayload({
         matchSessionId: "session-1",
         returnTo: "/review/session-1?sample=1",
-        values: makeDraftReviewHandoffValues({
+        values: makeMatchWorkspaceMasterHandoffValues({
           heldEventId: "held-2",
           matchNoInEvent: 9,
           playedAt: "2026-02-02T02:02:00.000Z",

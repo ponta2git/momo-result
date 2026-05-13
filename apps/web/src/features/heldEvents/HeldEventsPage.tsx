@@ -1,4 +1,3 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CalendarDays,
   Download,
@@ -9,16 +8,13 @@ import {
   ScanLine,
   Trash2,
 } from "lucide-react";
-import { useActionState, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useFormStatus } from "react-dom";
 import { Link } from "react-router-dom";
 
-import { createHeldEvent, deleteHeldEvent, listHeldEvents } from "@/shared/api/heldEvents";
-import type { HeldEventListResponse, HeldEventResponse } from "@/shared/api/heldEvents";
-import { formatApiError } from "@/shared/api/problemDetails";
-import { isInitialQueryLoading, shouldShowBlockingQueryError } from "@/shared/api/queryErrorState";
-import { heldEventKeys } from "@/shared/api/queryKeys";
-import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
+import { formatDateKey, formatDateTime } from "@/features/heldEvents/heldEventViewModel";
+import { useHeldEventsPageController } from "@/features/heldEvents/useHeldEventsPageController";
+import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { Button } from "@/shared/ui/actions/Button";
 import { DataTable } from "@/shared/ui/data/DataTable";
 import type { DataTableColumn } from "@/shared/ui/data/DataTable";
@@ -27,145 +23,30 @@ import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { LiveRegion } from "@/shared/ui/feedback/LiveRegion";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
-import { showToast } from "@/shared/ui/feedback/Toast";
 import { TextField } from "@/shared/ui/forms/TextField";
 import { Card } from "@/shared/ui/layout/Card";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
-const emptyHeldEvents: HeldEventResponse[] = [];
-const initialCreateHeldEventState = { version: 0 };
-
-function currentLocalIsoMinute(): string {
-  const now = new Date();
-  const offsetMs = now.getTimezoneOffset() * 60_000;
-  return new Date(now.getTime() - offsetMs).toISOString().slice(0, 16);
-}
-
-function toIsoFromLocal(value: string): string {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return value;
-  }
-  return parsed.toISOString();
-}
-
-function formatDateTime(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-  return date.toLocaleString();
-}
-
-function formatDateKey(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-  const yyyy = date.getFullYear();
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const dd = String(date.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-function upsertHeldEventList(
-  current: HeldEventListResponse | undefined,
-  event: HeldEventResponse,
-): HeldEventListResponse {
-  const existingItems = current?.items ?? [];
-  const withoutDuplicate = existingItems.filter((item) => item.id !== event.id);
-  return {
-    items: [event, ...withoutDuplicate].toSorted(
-      (left, right) =>
-        new Date(right.heldAt).getTime() - new Date(left.heldAt).getTime() ||
-        right.id.localeCompare(left.id),
-    ),
-  };
-}
-
-function removeHeldEventFromList(
-  current: HeldEventListResponse | undefined,
-  heldEventId: string,
-): HeldEventListResponse {
-  return {
-    items: (current?.items ?? []).filter((item) => item.id !== heldEventId),
-  };
-}
-
 export function HeldEventsPage() {
-  const queryClient = useQueryClient();
-  const [heldAtDraft, setHeldAtDraft] = useState(currentLocalIsoMinute);
-  const [notice, setNotice] = useState("");
-  const [errorMessage, setErrorMessage] = useState("");
-  const [deleteTarget, setDeleteTarget] = useState<HeldEventResponse | null>(null);
-  const idempotencyKeys = useIdempotencyKeyStore();
-
-  const heldEventsQuery = useQuery({
-    queryFn: () => listHeldEvents("", 100),
-    queryKey: heldEventKeys.scope("held-events-page"),
-  });
-
-  const [createState, createAction] = useActionState<typeof initialCreateHeldEventState, FormData>(
-    async (previous, formData) => {
-      const heldAt = String(formData.get("heldAt") ?? "");
-      if (!heldAt) {
-        setNotice("");
-        setErrorMessage("開催日時を入力してください。");
-        return previous;
-      }
-
-      try {
-        const request = { heldAt: toIsoFromLocal(heldAt) };
-        const attempt = idempotencyKeys.begin("heldEvents.createHeldEvent", request);
-        const event = await createHeldEvent(request, {
-          idempotencyKey: attempt.key,
-        });
-        attempt.complete();
-        queryClient.setQueryData<HeldEventListResponse>(
-          heldEventKeys.scope("held-events-page"),
-          (current) => upsertHeldEventList(current, event),
-        );
-        void queryClient.invalidateQueries({ queryKey: heldEventKeys.all() });
-        setHeldAtDraft(currentLocalIsoMinute());
-        setErrorMessage("");
-        setNotice(`開催履歴（${formatDateTime(event.heldAt)}）を作成しました。`);
-        showToast({ title: "開催履歴を作成しました。", tone: "success" });
-        return { version: previous.version + 1 };
-      } catch (error) {
-        setNotice("");
-        setErrorMessage(formatApiError(error, "開催履歴の作成に失敗しました"));
-        return previous;
-      }
-    },
-    initialCreateHeldEventState,
-  );
-
-  const deleteMutation = useMutation({
-    mutationFn: (event: HeldEventResponse) => deleteHeldEvent(event.id),
-    onSuccess: (response) => {
-      queryClient.setQueryData<HeldEventListResponse>(
-        heldEventKeys.scope("held-events-page"),
-        (current) => removeHeldEventFromList(current, response.heldEventId),
-      );
-      void queryClient.invalidateQueries({ queryKey: heldEventKeys.all() });
-      setDeleteTarget(null);
-      setErrorMessage("");
-      setNotice("開催履歴を削除しました。");
-      showToast({ title: "開催履歴を削除しました。", tone: "success" });
-    },
-    onError: (error) => {
-      setNotice("");
-      setErrorMessage(formatApiError(error, "開催履歴の削除に失敗しました"));
-    },
-  });
-
-  const rows = heldEventsQuery.data?.items ?? emptyHeldEvents;
-  const latestEvent = rows[0];
-  const totalMatches = useMemo(
-    () => rows.reduce((sum, event) => sum + event.matchCount, 0),
-    [rows],
-  );
+  const controller = useHeldEventsPageController();
+  const {
+    createAction,
+    createState,
+    deleteMutation,
+    deleteTarget,
+    errorMessage,
+    heldAtDraft,
+    heldEventsQuery,
+    latestEvent,
+    liveMessage,
+    loadFailed,
+    loading,
+    rows,
+    setDeleteTarget,
+    setHeldAtDraft,
+    totalMatches,
+  } = controller;
 
   const columns = useMemo<Array<DataTableColumn<HeldEventResponse>>>(
     () => [
@@ -227,12 +108,8 @@ export function HeldEventsPage() {
         ),
       },
     ],
-    [deleteMutation.isPending],
+    [deleteMutation.isPending, setDeleteTarget],
   );
-
-  const loading = isInitialQueryLoading(heldEventsQuery);
-  const loadFailed = shouldShowBlockingQueryError(heldEventsQuery);
-  const liveMessage = notice || errorMessage;
 
   return (
     <PageFrame className="gap-5">

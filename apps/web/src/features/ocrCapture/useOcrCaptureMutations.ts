@@ -15,6 +15,7 @@ import {
 } from "@/features/ocrCapture/ocrSubmissionWorkflow";
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
 import { invalidateAfterOcrSubmissionStarted } from "@/shared/api/cacheInvalidation";
+import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { formatApiError } from "@/shared/api/problemDetails";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 
@@ -54,11 +55,12 @@ export function useOcrCaptureMutations(hints: Record<string, unknown>): OcrCaptu
     }) => {
       const upload = await uploadImage(file);
       const request = ocrJobRequestForSlot(matchDraftId, slot, upload.imageId, hints);
-      const attempt = idempotencyKeys.begin("ocrCapture.createOcrJob", request);
-      const job = await createOcrJob(request, {
-        idempotencyKey: attempt.key,
-      });
-      attempt.complete();
+      const job = await runIdempotentMutation(
+        idempotencyKeys,
+        "ocrCapture.createOcrJob",
+        request,
+        (options) => createOcrJob(request, options),
+      );
       return { upload, job };
     },
   });
@@ -68,21 +70,20 @@ export function useOcrCaptureMutations(hints: Record<string, unknown>): OcrCaptu
       const result = await runOcrSubmissionWorkflow({
         cancelDraft: async (matchDraftId) => {
           const payload = { matchDraftId };
-          const attempt = idempotencyKeys.begin("ocrCapture.cancelMatchDraft", payload);
-          const response = await cancelMatchDraft(matchDraftId, {
-            idempotencyKey: attempt.key,
-          });
-          attempt.complete();
-          return response;
+          return runIdempotentMutation(
+            idempotencyKeys,
+            "ocrCapture.cancelMatchDraft",
+            payload,
+            (options) => cancelMatchDraft(matchDraftId, options),
+          );
         },
-        createDraft: async (request) => {
-          const attempt = idempotencyKeys.begin("ocrCapture.createMatchDraft", request);
-          const response = await createMatchDraft(request, {
-            idempotencyKey: attempt.key,
-          });
-          attempt.complete();
-          return response;
-        },
+        createDraft: (request) =>
+          runIdempotentMutation(
+            idempotencyKeys,
+            "ocrCapture.createMatchDraft",
+            request,
+            (options) => createMatchDraft(request, options),
+          ),
         createUploadJob: ({ file, matchDraftId, slot }) =>
           uploadMutation.mutateAsync({ file, matchDraftId, slot }),
         onReady: (targetCount) =>

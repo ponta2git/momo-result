@@ -6,9 +6,8 @@ import {
   useMemo,
   useReducer,
   useState,
-  useTransition,
 } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 
 import {
   createMatchFormReducerState,
@@ -25,8 +24,10 @@ import { validateMatchForm } from "@/features/matches/workspace/matchFormValidat
 import type { SourceImageKind } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
 import { toSourceImageDescriptor } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
 import { useMasterHandoffRestore } from "@/features/matches/workspace/useMasterHandoffRestore";
+import { useMatchWorkspaceHandoffNavigation } from "@/features/matches/workspace/useMatchWorkspaceHandoffNavigation";
 import { useMatchWorkspaceInit } from "@/features/matches/workspace/useMatchWorkspaceInit";
 import { useMatchWorkspaceMutations } from "@/features/matches/workspace/useMatchWorkspaceMutations";
+import { useMatchWorkspacePrimaryAction } from "@/features/matches/workspace/useMatchWorkspacePrimaryAction";
 import { useMatchWorkspaceQueries } from "@/features/matches/workspace/useMatchWorkspaceQueries";
 import { useWorkspaceHeldEventCreation } from "@/features/matches/workspace/useWorkspaceHeldEventCreation";
 import { useWorkspaceNotice } from "@/features/matches/workspace/useWorkspaceNotice";
@@ -39,11 +40,6 @@ import {
   latestHeldEventPatch,
 } from "@/features/matches/workspace/workspaceViewModel";
 import { isCancelableDraftStatus } from "@/shared/domain/draftStatus";
-import {
-  buildMasterRoute,
-  createMatchWorkspaceHandoffPayload,
-  saveMasterHandoff,
-} from "@/shared/workflows/masterReturnHandoff";
 
 export type MatchWorkspaceControllerParams = {
   matchDraftId?: string | undefined;
@@ -58,8 +54,6 @@ export function useMatchWorkspaceController({
   matchSessionId,
   mode,
 }: MatchWorkspaceControllerParams) {
-  const navigate = useNavigate();
-  const [, startMastersTransition] = useTransition();
   const [searchParams] = useSearchParams();
 
   const { notice, notify } = useWorkspaceNotice();
@@ -229,20 +223,14 @@ export function useMatchWorkspaceController({
     await cancelDraftMutation.mutateAsync(targetDraftId);
   };
 
-  const handleNavigateToMasters = () => {
-    if (!returnTo) {
-      return;
-    }
-    const payload = createMatchWorkspaceHandoffPayload({
-      matchSessionId: matchSessionId ?? matchDraftId ?? mode,
-      returnTo,
-      values: state.values,
-    });
-    const handoffId = saveMasterHandoff(payload);
-    startMastersTransition(() => {
-      navigate(buildMasterRoute(returnTo, handoffId));
-    });
-  };
+  const handleNavigateToMasters = useMatchWorkspaceHandoffNavigation({
+    matchDraftId,
+    matchSessionId,
+    mode,
+    notify,
+    returnTo,
+    values: state.values,
+  });
 
   const pageCopy = buildWorkspacePageCopy({ mode, reviewStatus });
 
@@ -300,21 +288,14 @@ export function useMatchWorkspaceController({
       ),
     [workspaceData?.incidentByPlayOrder],
   );
-  const onPrimaryAction = useCallback(() => {
-    const nextValidation = validateMatchForm(state.values);
-    if (!nextValidation.success) {
-      setShowValidationErrors(true);
-      setValidationMessage(nextValidation.firstMessage ?? "入力内容を確認してください");
-      return;
-    }
-    setShowValidationErrors(false);
-    setValidationMessage("");
-    if (mode === "edit") {
-      updateMutation.mutate(state.values);
-      return;
-    }
-    setConfirmOpen(true);
-  }, [mode, state.values, updateMutation]);
+  const onPrimaryAction = useMatchWorkspacePrimaryAction({
+    mode,
+    setConfirmOpen,
+    setShowValidationErrors,
+    setValidationMessage,
+    update: updateMutation.mutate,
+    values: state.values,
+  });
   const onRequestSubmitFocus = useCallback(() => {
     const action = document.getElementById("workspace-primary-action");
     action?.focus();

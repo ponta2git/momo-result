@@ -1,6 +1,6 @@
-import type { DraftReviewHandoffValues } from "@/shared/workflows/masterReturnHandoff";
+import type { MatchWorkspaceMasterHandoffValues } from "@/shared/workflows/matchWorkspaceMasterHandoff";
 
-type ReviewPlayerInput = DraftReviewHandoffValues["players"][number];
+type ReviewPlayerInput = MatchWorkspaceMasterHandoffValues["players"][number];
 
 const defaultMemberOrder = [
   "member_ponta",
@@ -42,9 +42,9 @@ export function makeFourReviewPlayerInputs(
   );
 }
 
-export function makeDraftReviewHandoffValues(
-  overrides: Partial<DraftReviewHandoffValues> = {},
-): DraftReviewHandoffValues {
+export function makeMatchWorkspaceMasterHandoffValues(
+  overrides: Partial<MatchWorkspaceMasterHandoffValues> = {},
+): MatchWorkspaceMasterHandoffValues {
   return {
     draftIds: {},
     gameTitleId: "gt_momotetsu_2",

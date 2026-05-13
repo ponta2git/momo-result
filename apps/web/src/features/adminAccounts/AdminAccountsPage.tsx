@@ -13,6 +13,7 @@ import type {
   LoginAccountResponse,
   UpdateLoginAccountRequest,
 } from "@/shared/api/adminAccounts";
+import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { formatApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 import { fixedMembers, memberDisplayName } from "@/shared/domain/members";
@@ -49,11 +50,12 @@ export function AdminAccountsPage() {
       };
 
       try {
-        const attempt = idempotencyKeys.begin("adminAccounts.createLoginAccount", request);
-        await createLoginAccount(request, {
-          idempotencyKey: attempt.key,
-        });
-        attempt.complete();
+        await runIdempotentMutation(
+          idempotencyKeys,
+          "adminAccounts.createLoginAccount",
+          request,
+          (options) => createLoginAccount(request, options),
+        );
         await queryClient.invalidateQueries({ queryKey });
         return { error: "", version: previous.version + 1 };
       } catch (error) {

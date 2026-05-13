@@ -1,14 +1,15 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   appendHandoffIdToReturnTo,
-  createDraftReviewHandoffPayload,
+  createMatchWorkspaceMasterHandoffPayload,
   findLatestMasterHandoff,
   inspectMasterHandoff,
   loadMasterHandoff,
+  prepareMatchWorkspaceMasterHandoffRoute,
   sanitizeReturnTo,
   saveMasterHandoff,
-} from "@/shared/workflows/masterReturnHandoff";
+} from "@/shared/workflows/matchWorkspaceMasterHandoff";
 
 const memberIds = ["member_ponta", "member_akane_mami", "member_otaka", "member_eu"] as const;
 
@@ -37,7 +38,7 @@ function handoffPlayers(
   }));
 }
 
-describe("masterReturnHandoff", () => {
+describe("matchWorkspaceMasterHandoff", () => {
   beforeEach(() => {
     window.sessionStorage.clear();
   });
@@ -49,7 +50,7 @@ describe("masterReturnHandoff", () => {
   });
 
   it("saves and loads draft review handoff payload", () => {
-    const payload = createDraftReviewHandoffPayload({
+    const payload = createMatchWorkspaceMasterHandoffPayload({
       matchSessionId: "session-1",
       returnTo: "/review/session-1?totalAssets=draft-1",
       values: {
@@ -99,7 +100,7 @@ describe("masterReturnHandoff", () => {
   });
 
   it("marks an old handoff as expired", () => {
-    const payload = createDraftReviewHandoffPayload({
+    const payload = createMatchWorkspaceMasterHandoffPayload({
       matchSessionId: "session-1",
       returnTo: "/review/session-1",
       values: {
@@ -126,6 +127,31 @@ describe("masterReturnHandoff", () => {
     expect(status.status).toBe("expired");
   });
 
+  it("does not build a master route when session storage cannot persist the handoff", () => {
+    const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("storage unavailable");
+    });
+
+    const result = prepareMatchWorkspaceMasterHandoffRoute({
+      matchSessionId: "session-1",
+      returnTo: "/review/session-1",
+      values: {
+        draftIds: {},
+        gameTitleId: "gt_momotetsu_2",
+        heldEventId: "event-1",
+        mapMasterId: "map-east",
+        matchNoInEvent: 1,
+        ownerMemberId: "member_ponta",
+        playedAt: "2026-01-01T00:00:00.000Z",
+        players: handoffPlayers(),
+        seasonMasterId: "season-1",
+      },
+    });
+
+    expect(result.status).toBe("unavailable");
+    setItem.mockRestore();
+  });
+
   it("finds latest handoff only through validated return and session contracts", () => {
     const baseValues = {
       draftIds: {},
@@ -138,7 +164,7 @@ describe("masterReturnHandoff", () => {
       players: handoffPlayers(),
       seasonMasterId: "season-1",
     };
-    const foreign = createDraftReviewHandoffPayload({
+    const foreign = createMatchWorkspaceMasterHandoffPayload({
       matchSessionId: "session-2",
       returnTo: "/review/session-1",
       values: baseValues,
@@ -146,7 +172,7 @@ describe("masterReturnHandoff", () => {
     foreign.createdAt = "2026-01-01T02:00:00.000Z";
     saveMasterHandoff(foreign);
 
-    const expired = createDraftReviewHandoffPayload({
+    const expired = createMatchWorkspaceMasterHandoffPayload({
       matchSessionId: "session-1",
       returnTo: "/review/session-1",
       values: baseValues,
@@ -154,7 +180,7 @@ describe("masterReturnHandoff", () => {
     expired.createdAt = "2026-01-01T00:00:00.000Z";
     saveMasterHandoff(expired);
 
-    const valid = createDraftReviewHandoffPayload({
+    const valid = createMatchWorkspaceMasterHandoffPayload({
       matchSessionId: "session-1",
       returnTo: "/review/session-1",
       values: baseValues,

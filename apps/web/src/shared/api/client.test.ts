@@ -89,20 +89,16 @@ describe("apiRequest", () => {
       body: { ok: true },
       idempotency: { key: "operation-key-1" },
     });
-    await apiRequest("/api/ocr-jobs", { method: "POST", body: { ok: true }, idempotency: "auto" });
     await apiRequest("/api/uploads/images", { method: "POST", formData: new FormData() });
     await apiRequest("/api/auth/logout", { method: "POST" });
 
     const calls = fetchCallsOf(fetchMock);
-    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
     const implicitHeaders = requireInit(calls[0]?.[1]).headers as Headers;
     const explicitHeaders = requireInit(calls[1]?.[1]).headers as Headers;
-    const autoHeaders = requireInit(calls[2]?.[1]).headers as Headers;
-    const uploadHeaders = requireInit(calls[3]?.[1]).headers as Headers;
-    const logoutHeaders = requireInit(calls[4]?.[1]).headers as Headers;
+    const uploadHeaders = requireInit(calls[2]?.[1]).headers as Headers;
+    const logoutHeaders = requireInit(calls[3]?.[1]).headers as Headers;
     expect(implicitHeaders.has("Idempotency-Key")).toBe(false);
     expect(explicitHeaders.get("Idempotency-Key")).toBe("operation-key-1");
-    expect(autoHeaders.get("Idempotency-Key")).toMatch(uuidPattern);
     expect(uploadHeaders.has("Idempotency-Key")).toBe(false);
     expect(logoutHeaders.has("Idempotency-Key")).toBe(false);
   });
@@ -114,7 +110,7 @@ describe("apiRequest", () => {
     await apiRequest("/api/matches", {
       method: "POST",
       body: { matchNoInEvent: 1 },
-      idempotencyKey: "submit-key-1",
+      idempotency: { key: "submit-key-1" },
     });
 
     const calls = fetchCallsOf(fetchMock);
@@ -129,7 +125,7 @@ describe("apiRequest", () => {
     await apiRequest("/api/custom-mutation", {
       method: "POST",
       body: { ok: true },
-      idempotencyKey: "custom-key-1",
+      idempotency: { key: "custom-key-1" },
     });
 
     const calls = fetchCallsOf(fetchMock);

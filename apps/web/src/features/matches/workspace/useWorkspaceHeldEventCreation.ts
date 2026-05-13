@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { createHeldEvent } from "@/shared/api/heldEvents";
 import type { HeldEventListResponse, HeldEventResponse } from "@/shared/api/heldEvents";
+import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { formatApiError } from "@/shared/api/problemDetails";
 import { heldEventKeys } from "@/shared/api/queryKeys";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
@@ -31,12 +32,12 @@ export function useWorkspaceHeldEventCreation(args: {
 
   return useMutation({
     mutationFn: async (request: Parameters<typeof createHeldEvent>[0]) => {
-      const attempt = idempotencyKeys.begin("matchWorkspace.createHeldEvent", request);
-      const event = await createHeldEvent(request, {
-        idempotencyKey: attempt.key,
-      });
-      attempt.complete();
-      return event;
+      return runIdempotentMutation(
+        idempotencyKeys,
+        "matchWorkspace.createHeldEvent",
+        request,
+        (options) => createHeldEvent(request, options),
+      );
     },
     onSuccess: (event) => {
       queryClient.setQueryData<HeldEventListResponse>(heldEventKeys.scope("workspace"), (current) =>

@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { invalidateAfterMatchDeleted } from "@/shared/api/cacheInvalidation";
 import { listHeldEvents } from "@/shared/api/heldEvents";
+import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { listGameTitles, listMapMasters, listSeasonMasters } from "@/shared/api/masters";
 import { deleteMatch, getMatch } from "@/shared/api/matches";
 import type { MatchDetailResponse } from "@/shared/api/matches";
@@ -108,12 +109,9 @@ export function MatchDetailPage() {
   const deleteMutation = useMutation({
     mutationFn: async () => {
       const payload = { matchId };
-      const attempt = idempotencyKeys.begin("matchDetail.deleteMatch", payload);
-      const response = await deleteMatch(matchId, {
-        idempotencyKey: attempt.key,
-      });
-      attempt.complete();
-      return response;
+      return runIdempotentMutation(idempotencyKeys, "matchDetail.deleteMatch", payload, (options) =>
+        deleteMatch(matchId, options),
+      );
     },
     onError: (error) => {
       setErrorMessage(formatApiError(error, "削除に失敗しました"));

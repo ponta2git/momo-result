@@ -1,7 +1,5 @@
 export type IdempotencyKeyStore = {
   begin: (operation: IdempotencyOperation, payload: unknown) => IdempotencyOperationAttempt;
-  complete: (operation: IdempotencyOperation, payload: unknown) => void;
-  keyFor: (operation: IdempotencyOperation, payload: unknown) => string;
   reset: (operation?: IdempotencyOperation, payload?: unknown) => void;
 };
 
@@ -30,6 +28,10 @@ export type IdempotencyOperationAttempt = {
   operation: IdempotencyOperation;
   payload: unknown;
   reset: () => void;
+};
+
+export type IdempotentMutationOptions = {
+  idempotencyKey: string;
 };
 
 export function createIdempotencyKey(): string {
@@ -122,8 +124,25 @@ export function createIdempotencyKeyStore(): IdempotencyKeyStore {
       };
       return attempt;
     },
-    complete: reset,
-    keyFor,
     reset,
   };
+}
+
+export async function runIdempotentMutation<T>(
+  store: Pick<IdempotencyKeyStore, "begin">,
+  operation: IdempotencyOperation,
+  payload: unknown,
+  mutation: (options: IdempotentMutationOptions) => Promise<T>,
+): Promise<T> {
+  const attempt = store.begin(operation, payload);
+  return runIdempotentOperationAttempt(attempt, mutation);
+}
+
+export async function runIdempotentOperationAttempt<T>(
+  attempt: IdempotencyOperationAttempt,
+  mutation: (options: IdempotentMutationOptions) => Promise<T>,
+): Promise<T> {
+  const response = await mutation({ idempotencyKey: attempt.key });
+  attempt.complete();
+  return response;
 }

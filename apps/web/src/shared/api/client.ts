@@ -1,17 +1,15 @@
 import { getCsrfToken } from "@/shared/api/csrfTokenStore";
-import { createIdempotencyKey } from "@/shared/api/idempotency";
 import { normalizeApiErrorResponse, normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
 
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 type ApiRequestOptions = {
-  idempotency?: "auto" | "none" | { key: string } | undefined;
+  idempotency?: "none" | { key: string } | undefined;
   method?: HttpMethod;
   body?: unknown;
   formData?: FormData;
   headers?: HeadersInit;
-  idempotencyKey?: string | undefined;
   signal?: AbortSignal;
 };
 
@@ -44,21 +42,14 @@ export function resolveDevUser(): string | undefined {
   return getBuildTimeDevUser() ?? getStoredDevUser();
 }
 
-function shouldAttachIdempotencyKey(
-  _path: string,
-  method: HttpMethod,
-  options: ApiRequestOptions,
-): boolean {
+function shouldAttachIdempotencyKey(method: HttpMethod, options: ApiRequestOptions): boolean {
   if (options.formData !== undefined) {
     return false;
   }
   if (options.idempotency === "none") {
     return false;
   }
-  if (options.idempotency === "auto" || typeof options.idempotency === "object") {
-    return mutatingMethods.has(method);
-  }
-  if (options.idempotencyKey !== undefined) {
+  if (typeof options.idempotency === "object") {
     return mutatingMethods.has(method);
   }
   return false;
@@ -68,10 +59,10 @@ function resolveIdempotencyKey(options: ApiRequestOptions): string {
   if (typeof options.idempotency === "object") {
     return options.idempotency.key;
   }
-  return options.idempotencyKey ?? createIdempotencyKey();
+  throw new Error("Idempotency key was requested but not provided.");
 }
 
-function buildHeaders(path: string, method: HttpMethod, options: ApiRequestOptions): Headers {
+function buildHeaders(method: HttpMethod, options: ApiRequestOptions): Headers {
   const headers = new Headers(options.headers);
   const devUser = resolveDevUser();
 
@@ -94,7 +85,7 @@ function buildHeaders(path: string, method: HttpMethod, options: ApiRequestOptio
     headers.set("Content-Type", "application/json");
   }
 
-  if (shouldAttachIdempotencyKey(path, method, options) && !headers.has("Idempotency-Key")) {
+  if (shouldAttachIdempotencyKey(method, options) && !headers.has("Idempotency-Key")) {
     headers.set("Idempotency-Key", resolveIdempotencyKey(options));
   }
 
@@ -103,7 +94,7 @@ function buildHeaders(path: string, method: HttpMethod, options: ApiRequestOptio
 
 export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
   const method = options.method ?? "GET";
-  const headers = buildHeaders(path, method, options);
+  const headers = buildHeaders(method, options);
 
   try {
     const init: RequestInit = {
@@ -140,7 +131,7 @@ export async function apiDownload(
   path: string,
   options: Pick<ApiRequestOptions, "headers" | "signal"> = {},
 ): Promise<ApiDownloadResult> {
-  const headers = buildHeaders(path, "GET", options);
+  const headers = buildHeaders("GET", options);
 
   try {
     const init: RequestInit = {

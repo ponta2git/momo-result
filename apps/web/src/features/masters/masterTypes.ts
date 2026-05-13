@@ -37,8 +37,8 @@ export type MasterViewModelInput = {
 
 export type MasterViewModel = {
   canCreateScopedMasters: boolean;
-  scopedDisabledReason?: string;
-  selectedGameTitle?: GameTitleResponse;
+  scopedDisabledReason: string | undefined;
+  selectedGameTitle: GameTitleResponse | undefined;
   selectedGameTitleId: string;
   selectedMapMasters: MapMasterResponse[];
   selectedSeasonMasters: SeasonMasterResponse[];

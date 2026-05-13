@@ -24,6 +24,14 @@ web の `build` / `typecheck` / `test:run` / `lint` は `generate:api` を前段
 
 web の API wrapper は idempotency が必要な mutation で `idempotencyKey` を必須にした。API 側は従来どおり key + canonical payload hash の同一性を維持すること。
 
+### 4. frontend の idempotency auto 生成経路を廃止した
+
+web の低レベル `apiRequest` は `idempotency: "auto"` と `idempotencyKey` 直指定を受け付けない。mutation は `runIdempotentMutation` / `runIdempotentOperationAttempt` 経由で operation 名と payload fingerprint を必ず持つ。API 側は `Idempotency-Key` 欠落時のエラー仕様を維持し、同じ operation payload の retry と payload mismatch を区別できるようにしておくこと。
+
+### 5. master の displayOrder は暫定的に web の pending list 長で送っている
+
+作品・マップ・シーズン作成時の `displayOrder` 相当の意図は、web では pending list の末尾追加としてしか扱えない。API 側で display order が domain 上の整合性を持つ場合は、将来的に「末尾追加」などの intent を受け取り、採番・競合解決を backend transaction 内へ寄せること。
+
 ## apps/ocr-worker への申し送り
 
 ### 1. 事件簿名の順序と表記
@@ -42,3 +50,7 @@ worker 側で incident 名や順序を変える場合は、API schema / web shar
 ### 2. 収益 OCR の重複 member 解決
 
 web は revenue payload 内で同じ member に解決される行が複数ある場合、最初の行を採用し warning を表示する。worker 側で重複を検出できる場合は、`warnings` に原因を入れると UI 上の確認理由が明確になる。
+
+### 3. ScoreGrid は incident key の shared domain 定義を直接参照する
+
+web の score grid は desktop / mobile とも `shared/domain/incidents` の列定義を参照する。worker 側の incident payload が増減・改名される場合は、API schema と web shared domain を同時に更新すること。

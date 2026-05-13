@@ -46,6 +46,23 @@ function importedFeature(specifier) {
   return match?.[1];
 }
 
+function matchesSubArea(relativePath) {
+  if (!relativePath.startsWith("features/matches/")) {
+    return undefined;
+  }
+  const segments = relativePath.split("/");
+  if (segments[2] === "list") {
+    return "list";
+  }
+  if (segments[2] === "workspace") {
+    return "workspace";
+  }
+  if (segments[2] === "MatchDetailPage.tsx") {
+    return "detail";
+  }
+  return undefined;
+}
+
 function normalizedRelativePath(path) {
   return path.split("\\").join("/");
 }
@@ -74,12 +91,14 @@ for (const file of walk(root)) {
   const source = readFileSync(file, "utf8");
   const sourceLayer = layer(relativePath);
   const sourceFeature = topLevelFeature(relativePath);
+  const sourceMatchesSubArea = matchesSubArea(relativePath);
 
   for (const match of source.matchAll(importPattern)) {
     const specifier = match[1] ?? match[2] ?? "";
     const resolvedImport = resolveLocalImport(relativePath, specifier);
     const importedLayer = resolvedImport ? layer(resolvedImport) : undefined;
     const feature = resolvedImport ? topLevelFeature(resolvedImport) : importedFeature(specifier);
+    const importedMatchesSubArea = resolvedImport ? matchesSubArea(resolvedImport) : undefined;
 
     if (sourceLayer === "shared" && (feature || importedLayer === "app")) {
       violations.push(`${relativePath}: shared must not import ${specifier}`);
@@ -91,6 +110,16 @@ for (const file of walk(root)) {
 
     if (sourceLayer === "features" && feature && sourceFeature && feature !== sourceFeature) {
       violations.push(`${relativePath}: feature '${sourceFeature}' must not import ${specifier}`);
+    }
+
+    if (
+      sourceMatchesSubArea &&
+      importedMatchesSubArea &&
+      sourceMatchesSubArea !== importedMatchesSubArea
+    ) {
+      violations.push(
+        `${relativePath}: matches/${sourceMatchesSubArea} must not import matches/${importedMatchesSubArea} via ${specifier}`,
+      );
     }
 
     if (productionSource && resolvedImport?.startsWith("test/")) {

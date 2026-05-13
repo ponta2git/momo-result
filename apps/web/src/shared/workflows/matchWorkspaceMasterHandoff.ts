@@ -55,7 +55,7 @@ const masterHandoffPayloadSchema = z.object({
 });
 
 export type MatchWorkspaceHandoffValues = z.infer<typeof handoffValuesSchema>;
-export type DraftReviewHandoffValues = MatchWorkspaceHandoffValues;
+export type MatchWorkspaceMasterHandoffValues = MatchWorkspaceHandoffValues;
 
 export type MasterHandoffPayload = z.infer<typeof masterHandoffPayloadSchema>;
 
@@ -165,7 +165,7 @@ export function createMatchWorkspaceHandoffPayload(input: {
   };
 }
 
-export const createDraftReviewHandoffPayload = createMatchWorkspaceHandoffPayload;
+export const createMatchWorkspaceMasterHandoffPayload = createMatchWorkspaceHandoffPayload;
 
 export function saveMasterHandoff(payload: MasterHandoffPayload): string | undefined {
   if (typeof window === "undefined") {
@@ -178,6 +178,27 @@ export function saveMasterHandoff(payload: MasterHandoffPayload): string | undef
   } catch {
     return undefined;
   }
+}
+
+export type MatchWorkspaceMasterHandoffRouteResult =
+  | { handoffId: string; route: string; status: "available" }
+  | { reason: "storage_unavailable"; status: "unavailable" };
+
+export function prepareMatchWorkspaceMasterHandoffRoute(input: {
+  matchSessionId: string;
+  returnTo: string;
+  values: MatchWorkspaceHandoffValues;
+}): MatchWorkspaceMasterHandoffRouteResult {
+  const payload = createMatchWorkspaceMasterHandoffPayload(input);
+  const handoffId = saveMasterHandoff(payload);
+  if (!handoffId) {
+    return { reason: "storage_unavailable", status: "unavailable" };
+  }
+  return {
+    handoffId,
+    route: buildMasterRoute(input.returnTo, handoffId),
+    status: "available",
+  };
 }
 
 export function inspectMasterHandoff(input: {

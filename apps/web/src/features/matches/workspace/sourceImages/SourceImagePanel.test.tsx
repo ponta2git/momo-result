@@ -41,7 +41,7 @@ describe("SourceImagePanel", () => {
       throw new Error("Expected fetch init");
     }
     expect(init.credentials).toBe("include");
-    expect((init.headers as Headers).get("X-Dev-User")).toBe("account_ponta");
+    expect((init.headers as Headers).get("X-Momo-Account-Id")).toBe("account_ponta");
   });
 
   it("opens the source image preview in a modal dialog", async () => {

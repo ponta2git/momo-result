@@ -6,7 +6,6 @@ export const ocrHandlers = [
   http.post("/api/uploads/images", async () =>
     HttpResponse.json({
       imageId: "image-1",
-      imagePath: "/tmp/ignored.png",
       mediaType: "image/png",
       sizeBytes: 100,
     }),
@@ -22,12 +21,11 @@ export const ocrHandlers = [
     HttpResponse.json({
       attemptCount: 1,
       createdAt: now,
-      detectedImageType: "total_assets",
+      detectedScreenType: "total_assets",
       draftId: "draft-1",
       imageId: "image-1",
-      imagePath: "/tmp/ignored.png",
       jobId: "job-1",
-      requestedImageType: "auto",
+      requestedScreenType: "auto",
       status: "succeeded",
       updatedAt: now,
     }),
@@ -41,12 +39,12 @@ export const ocrHandlers = [
   http.get("/api/ocr-drafts/:draftId", () =>
     HttpResponse.json({
       createdAt: now,
-      detectedImageType: "total_assets",
+      detectedScreenType: "total_assets",
       draftId: "draft-1",
       jobId: "job-1",
       payloadJson: { players: [] },
       profileId: "momotetsu_2.total_assets.v1",
-      requestedImageType: "auto",
+      requestedScreenType: "auto",
       timingsMsJson: {},
       updatedAt: now,
       warningsJson: [],
@@ -70,12 +68,12 @@ export const ocrHandlers = [
     return HttpResponse.json({
       items: ids.map((draftId) => ({
         createdAt: now,
-        detectedImageType: "total_assets",
+        detectedScreenType: "total_assets",
         draftId,
         jobId: `job-${draftId}`,
         payloadJson: draftPayload,
         profileId: "momotetsu_2.total_assets.v1",
-        requestedImageType: "auto",
+        requestedScreenType: "auto",
         timingsMsJson: {},
         updatedAt: now,
         warningsJson: [],

@@ -36,6 +36,7 @@ import { buildMasterViewModel } from "@/features/masters/masterViewModel";
 import { formatApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { shouldShowQueryError } from "@/shared/api/queryErrorState";
 import { masterKeys } from "@/shared/api/queryKeys";
+import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 import { useAuth } from "@/shared/auth/useAuth";
 import {
   appendHandoffIdToReturnTo,
@@ -84,6 +85,7 @@ export function useMastersPageController() {
   const auth = useAuth();
   const authScope = auth.auth?.accountId ?? "anonymous";
   const queryClient = useQueryClient();
+  const idempotencyKeys = useIdempotencyKeyStore();
   const navigate = useNavigate();
   const [, startReturnTransition] = useTransition();
   const navigateWithTransition = (to: string) => {
@@ -200,10 +202,13 @@ export function useMastersPageController() {
       pending: true,
     });
     try {
-      const created = await postGameTitle({
+      const request = {
         id: draftId,
         layoutFamily,
         name,
+      };
+      const created = await postGameTitle(request, {
+        idempotencyKey: idempotencyKeys.keyFor("masters.createGameTitle", request),
       });
       setSelectedGameTitleId(created.id);
       await invalidateMasterResourceCaches(
@@ -233,10 +238,13 @@ export function useMastersPageController() {
         pending: true,
       });
       try {
-        await postMapMaster({
+        const request = {
           id: draftId,
           gameTitleId: viewModel.selectedGameTitleId,
           name,
+        };
+        await postMapMaster(request, {
+          idempotencyKey: idempotencyKeys.keyFor("masters.createMapMaster", request),
         });
         await invalidateMasterResourceCaches(
           queryClient,
@@ -269,10 +277,13 @@ export function useMastersPageController() {
       pending: true,
     });
     try {
-      await postSeasonMaster({
+      const request = {
         id: draftId,
         gameTitleId: viewModel.selectedGameTitleId,
         name,
+      };
+      await postSeasonMaster(request, {
+        idempotencyKey: idempotencyKeys.keyFor("masters.createSeasonMaster", request),
       });
       await invalidateMasterResourceCaches(
         queryClient,
@@ -295,7 +306,10 @@ export function useMastersPageController() {
       return { ...prev, error: "プレーヤーと別名を入力してください" };
     }
     try {
-      await postMemberAlias({ memberId, alias });
+      const request = { memberId, alias };
+      await postMemberAlias(request, {
+        idempotencyKey: idempotencyKeys.keyFor("masters.createMemberAlias", request),
+      });
       await queryClient.invalidateQueries({ queryKey: masterQueryKeys.memberAliases(authScope) });
       await queryClient.invalidateQueries({ queryKey: masterKeys.memberAliases.all() });
       return { error: undefined, version: prev.version + 1 };

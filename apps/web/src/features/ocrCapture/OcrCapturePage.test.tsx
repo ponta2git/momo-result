@@ -15,7 +15,7 @@ type OcrJobRequestBody = {
   imageId: string;
   matchDraftId?: string;
   ocrHints?: unknown;
-  requestedImageType: string;
+  requestedScreenType: string;
 };
 
 type MatchDraftRequestBody = {
@@ -152,7 +152,7 @@ describe("OcrCapturePage", () => {
       expect.objectContaining({
         imageId: "image-1",
         matchDraftId: "draft-created-1",
-        requestedImageType: "total_assets",
+        requestedScreenType: "total_assets",
       }),
     ]);
   });
@@ -170,7 +170,6 @@ describe("OcrCapturePage", () => {
         uploadCount += 1;
         return HttpResponse.json({
           imageId: `image-${uploadCount}`,
-          imagePath: "/tmp/ignored.png",
           mediaType: "image/png",
           sizeBytes: 100,
         });
@@ -203,13 +202,13 @@ describe("OcrCapturePage", () => {
       {
         imageId: "image-1",
         matchDraftId: "draft-created-1",
-        requestedImageType: "total_assets",
+        requestedScreenType: "total_assets",
         ocrHints: expect.any(Object),
       },
       {
         imageId: "image-2",
         matchDraftId: "draft-created-1",
-        requestedImageType: "revenue",
+        requestedScreenType: "revenue",
         ocrHints: expect.any(Object),
       },
     ]);

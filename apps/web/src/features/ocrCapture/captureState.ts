@@ -1,4 +1,4 @@
-import type { RequestedImageType, SlotKind } from "@/shared/api/enums";
+import type { ScreenType, SlotKind } from "@/shared/api/enums";
 import { parseSlotKind } from "@/shared/api/enums";
 import type { components } from "@/shared/api/generated";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
@@ -71,9 +71,7 @@ export function createInitialSlots(): CaptureSlotState[] {
   return slotDefinitions.map((definition) => createInitialSlot(definition.kind));
 }
 
-export function requestedImageTypeForSlot(
-  slot: Pick<CaptureSlotState, "kind">,
-): RequestedImageType {
+export function requestedScreenTypeForSlot(slot: Pick<CaptureSlotState, "kind">): ScreenType {
   return slot.kind;
 }
 

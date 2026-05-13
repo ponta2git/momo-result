@@ -1,4 +1,4 @@
-import { requestedImageTypeForSlot } from "@/features/ocrCapture/captureState";
+import { requestedScreenTypeForSlot } from "@/features/ocrCapture/captureState";
 import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
 import { setupSchema } from "@/features/ocrCapture/schema";
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
@@ -132,7 +132,7 @@ export function ocrJobRequestForSlot(
   return {
     imageId,
     matchDraftId,
-    requestedImageType: requestedImageTypeForSlot(slot),
+    requestedScreenType: requestedScreenTypeForSlot(slot),
     ocrHints: hints,
   };
 }

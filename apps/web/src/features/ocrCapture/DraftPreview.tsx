@@ -4,17 +4,17 @@ type DraftPreviewProps = {
   draft?: OcrDraftResponse | undefined;
 };
 
-const imageTypeLabels: Record<string, string> = {
+const screenTypeLabels: Record<string, string> = {
   incident_log: "事件簿",
   revenue: "収益",
   total_assets: "総資産",
 };
 
-function imageTypeLabel(value: string | undefined): string {
+function screenTypeLabel(value: string | undefined): string {
   if (!value) {
     return "判定できませんでした";
   }
-  return imageTypeLabels[value] ?? "判定できませんでした";
+  return screenTypeLabels[value] ?? "判定できませんでした";
 }
 
 function warningSummary(value: unknown): string {
@@ -44,8 +44,8 @@ export function DraftPreview({ draft }: DraftPreviewProps) {
       </summary>
       <dl className="mt-3 grid gap-2 text-sm text-[var(--color-text-primary)]">
         <div className="flex justify-between gap-4">
-          <dt className="text-[var(--color-text-secondary)]">画像の種類</dt>
-          <dd>{imageTypeLabel(draft.detectedImageType)}</dd>
+          <dt className="text-[var(--color-text-secondary)]">読み取り画面</dt>
+          <dd>{screenTypeLabel(draft.detectedScreenType)}</dd>
         </div>
         <div className="flex justify-between gap-4">
           <dt className="text-[var(--color-text-secondary)]">確認事項</dt>

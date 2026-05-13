@@ -10,7 +10,7 @@
     "typecheck": "tsc -b --pretty false",
     "test": "vitest",
     "test:run": "vitest run",
-    "lint": "oxlint --react-plugin --jsx-a11y-plugin . && node ./scripts/check-architecture-imports.mjs",
+    "lint": "oxlint --react-plugin --jsx-a11y-plugin . && node ./scripts/check-architecture-imports.mjs && node ./scripts/check-api-contract.mjs",
     "lint:fix": "oxlint --react-plugin --jsx-a11y-plugin . --fix",
     "lint:react-perf": "oxlint --react-plugin --react-perf-plugin src --ignore-pattern \"**/*.test.*\" --ignore-pattern \"**/__tests__/**\"",
     "lint:react-perf:all": "oxlint --react-plugin --react-perf-plugin .",

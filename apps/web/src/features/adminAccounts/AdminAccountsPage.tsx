@@ -3,13 +3,18 @@ import { ShieldCheck } from "lucide-react";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
-import { createLoginAccount, listLoginAccounts, updateLoginAccount } from "@/shared/api/client";
+import {
+  createLoginAccount,
+  listLoginAccounts,
+  updateLoginAccount,
+} from "@/shared/api/adminAccounts";
 import type {
   CreateLoginAccountRequest,
   LoginAccountResponse,
   UpdateLoginAccountRequest,
-} from "@/shared/api/client";
+} from "@/shared/api/adminAccounts";
 import { formatApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
+import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 import { fixedMembers } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
@@ -30,6 +35,7 @@ function memberName(memberId: string | undefined): string {
 
 export function AdminAccountsPage() {
   const queryClient = useQueryClient();
+  const idempotencyKeys = useIdempotencyKeyStore();
 
   const accountsQuery = useQuery({
     queryKey,
@@ -48,7 +54,9 @@ export function AdminAccountsPage() {
       };
 
       try {
-        await createLoginAccount(request);
+        await createLoginAccount(request, {
+          idempotencyKey: idempotencyKeys.keyFor("adminAccounts.createLoginAccount", request),
+        });
         await queryClient.invalidateQueries({ queryKey });
         return { error: "", version: previous.version + 1 };
       } catch (error) {

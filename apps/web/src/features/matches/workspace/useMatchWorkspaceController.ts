@@ -33,7 +33,11 @@ import {
   currentLocalIsoMinute,
   toIsoFromLocal,
 } from "@/features/matches/workspace/workspaceDerivations";
-import { isCancelableDraftStatus, reviewStatusLabel } from "@/shared/domain/draftStatus";
+import {
+  buildWorkspacePageCopy,
+  latestHeldEventPatch,
+} from "@/features/matches/workspace/workspaceViewModel";
+import { isCancelableDraftStatus } from "@/shared/domain/draftStatus";
 import { showToast } from "@/shared/ui/feedback/Toast";
 import {
   buildMasterRoute,
@@ -212,18 +216,12 @@ export function useMatchWorkspaceController({
     ) {
       return;
     }
-    const latest = heldEvents.toSorted(
-      (left, right) => new Date(right.heldAt).getTime() - new Date(left.heldAt).getTime(),
-    )[0];
-    if (!latest) {
+    const patch = latestHeldEventPatch(heldEvents);
+    if (!patch) {
       return;
     }
     dispatch({
-      patch: {
-        heldEventId: latest.id,
-        matchNoInEvent: latest.matchCount + 1,
-        playedAt: latest.heldAt,
-      },
+      patch,
       type: "patch_root",
     });
   }, [hasHandoff, heldEvents, isInitialized, mode, state.values.heldEventId]);
@@ -259,14 +257,7 @@ export function useMatchWorkspaceController({
     });
   };
 
-  const pageTitle =
-    mode === "review" ? "OCR結果の確認" : mode === "edit" ? "試合を編集" : "試合の新規作成";
-  const pageDescription =
-    mode === "edit"
-      ? "確定済みの試合記録を編集します。保存後は一覧と出力に反映されます。"
-      : mode === "review"
-        ? `読み取り結果を確認して、開催履歴と4人分の結果を確定します。現在の状態: ${reviewStatusLabel(reviewStatus)}`
-        : "開催履歴と4人分の結果を入力して、確定前の確認へ進みます。";
+  const pageCopy = buildWorkspacePageCopy({ mode, reviewStatus });
 
   const sourceImages =
     matchDraftIdForImages === undefined
@@ -365,8 +356,8 @@ export function useMatchWorkspaceController({
     matchDraftIdForImages,
     notice,
     ocrDraftsQuery,
-    pageDescription,
-    pageTitle,
+    pageDescription: pageCopy.description,
+    pageTitle: pageCopy.title,
     preferredImageKind,
     refreshingReviewStatus,
     returnTo,

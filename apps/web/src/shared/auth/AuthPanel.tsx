@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import type { AuthMeResponse } from "@/shared/api/client";
-import { logout } from "@/shared/api/client";
+import type { AuthMeResponse } from "@/shared/api/auth";
+import { logout } from "@/shared/api/auth";
 import { DevUserPicker } from "@/shared/auth/DevUserPicker";
 import { buildAuthLoginHref } from "@/shared/auth/redirectPath";
 

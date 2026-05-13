@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import {
   formatApiError,
@@ -52,26 +52,59 @@ describe("problemDetails", () => {
     });
   });
 
-  it("formats idempotency conflicts as an internal reload message", () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-
-    expect(
-      formatApiError(
+  it("formats idempotency in-progress conflicts as a retryable processing message", async () => {
+    const error = await normalizeApiErrorResponse(
+      Response.json(
         {
-          kind: "api",
-          status: 409,
+          type: "about:blank",
           title: "Conflict",
-          detail: "same Idempotency-Key was reused with a different payload",
-          code: "IDEMPOTENCY_CONFLICT",
+          status: 409,
+          detail: "Idempotency-Key is already processing. Retry later.",
+          code: "CONFLICT",
         },
-        "fallback",
+        { status: 409 },
       ),
-    ).toBe("内部エラーが発生しました。ページを再読み込みしてください。");
-    expect(warn).toHaveBeenCalledWith(
-      "Idempotency-Key conflict",
-      expect.objectContaining({ code: "IDEMPOTENCY_CONFLICT", status: 409 }),
+    );
+    expect(formatApiError(error, "fallback")).toBe(
+      "同じ操作を処理中です。しばらく待ってから、同じ内容でもう一度実行してください。",
+    );
+  });
+
+  it("formats payload mismatch idempotency conflicts as a changed-input message", async () => {
+    const error = await normalizeApiErrorResponse(
+      Response.json(
+        {
+          type: "about:blank",
+          title: "Conflict",
+          status: 409,
+          detail: "Idempotency-Key was reused with a different request payload.",
+          code: "CONFLICT",
+        },
+        { status: 409 },
+      ),
     );
 
-    warn.mockRestore();
+    expect(formatApiError(error, "fallback")).toBe(
+      "送信内容が変更されています。現在の内容でもう一度実行してください。",
+    );
+  });
+
+  it("formats payload-too-large as a validation message", async () => {
+    const error = await normalizeApiErrorResponse(
+      Response.json(
+        {
+          type: "about:blank",
+          title: "Payload Too Large",
+          status: 413,
+          detail: "Request body is too large.",
+          code: "PAYLOAD_TOO_LARGE",
+        },
+        { status: 413 },
+      ),
+    );
+
+    expect(formatApiError(error, "fallback")).toBe(
+      "送信内容が大きすぎます。入力内容を減らすか、画像ファイルは画像アップロードから送信してください。",
+    );
   });
 });

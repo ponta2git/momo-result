@@ -49,7 +49,7 @@ function SlotWatcher({ slot, onUpdate, onDraft }: SlotWatcherProps) {
     onUpdate({
       ...slot,
       status: nextStatus,
-      detectedKind: detectedKindFromResponse(query.data.detectedImageType),
+      detectedKind: detectedKindFromResponse(query.data.detectedScreenType),
       draftId: query.data.draftId,
       jobFailure: query.data.failure,
       pollAttempts: slot.pollAttempts + 1,

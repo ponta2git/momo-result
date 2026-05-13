@@ -1,4 +1,4 @@
-import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
@@ -43,15 +43,15 @@ export function ExportPage({
   const [downloadStartedAt, setDownloadStartedAt] = useState<number | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
 
-  const seasonsQuery = useSuspenseQuery({
+  const seasonsQuery = useQuery({
     queryFn: () => listSeasonMasters(),
     queryKey: masterKeys.seasonMasters.list("exports"),
   });
-  const heldEventsQuery = useSuspenseQuery({
+  const heldEventsQuery = useQuery({
     queryFn: () => listHeldEvents("", 100),
     queryKey: heldEventKeys.scope("exports"),
   });
-  const matchesQuery = useSuspenseQuery({
+  const matchesQuery = useQuery({
     queryFn: () => listMatches({ kind: "match", limit: 100, status: "confirmed" }),
     queryKey: matchKeys.exports({ kind: "match", status: "confirmed" }),
   });
@@ -102,11 +102,27 @@ export function ExportPage({
         : urlState.scope === "match"
           ? matchCandidates
           : [];
+  const candidateLoading =
+    urlState.scope === "season"
+      ? seasonsQuery.isLoading
+      : urlState.scope === "heldEvent"
+        ? heldEventsQuery.isLoading
+        : urlState.scope === "match"
+          ? seasonsQuery.isLoading || heldEventsQuery.isLoading || matchesQuery.isLoading
+          : false;
+  const candidateError =
+    urlState.scope === "season"
+      ? seasonsQuery.isError
+      : urlState.scope === "heldEvent"
+        ? heldEventsQuery.isError
+        : urlState.scope === "match"
+          ? seasonsQuery.isError || heldEventsQuery.isError || matchesQuery.isError
+          : false;
 
   const candidateView = buildCandidateView({
     candidates,
-    error: false,
-    loading: false,
+    error: candidateError,
+    loading: candidateLoading,
     scope: urlState.scope,
     selectedId: selectedIdForScope(urlState, urlState.scope),
   });

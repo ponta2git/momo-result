@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { apiDownload, apiRequest, getAuthMe } from "@/shared/api/client";
+import { getAuthMe } from "@/shared/api/auth";
+import { apiDownload, apiRequest } from "@/shared/api/client";
 import { fetchCallsOf } from "@/test/doubles/dom";
 
 function requireInit(init: RequestInit | undefined): RequestInit {
@@ -33,9 +34,9 @@ describe("apiRequest", () => {
     const getHeaders = getInit.headers as Headers;
     const postHeaders = postInit.headers as Headers;
 
-    expect(getHeaders.get("X-Dev-User")).toBe("account_ponta");
+    expect(getHeaders.get("X-Momo-Account-Id")).toBe("account_ponta");
     expect(getHeaders.has("X-CSRF-Token")).toBe(false);
-    expect(postHeaders.get("X-Dev-User")).toBe("account_ponta");
+    expect(postHeaders.get("X-Momo-Account-Id")).toBe("account_ponta");
     expect(postHeaders.get("X-CSRF-Token")).toBe("dev");
     expect(postHeaders.get("Content-Type")).toBe("application/json");
   });
@@ -62,7 +63,7 @@ describe("apiRequest", () => {
     const postInit = requireInit(calls[1]?.[1]);
     const postHeaders = postInit.headers as Headers;
 
-    expect(postHeaders.has("X-Dev-User")).toBe(false);
+    expect(postHeaders.has("X-Momo-Account-Id")).toBe(false);
     expect(postHeaders.get("X-CSRF-Token")).toBe("csrf-1");
   });
 
@@ -162,7 +163,7 @@ describe("apiRequest", () => {
     const calls = fetchCallsOf(fetchMock);
     const init = requireInit(calls[0]?.[1]);
     const headers = init.headers as Headers;
-    expect(headers.get("X-Dev-User")).toBe("account_ponta");
+    expect(headers.get("X-Momo-Account-Id")).toBe("account_ponta");
     expect(result.fileName).toBe("momo-results-all.csv");
     expect(result.contentType).toContain("text/csv");
     await expect(result.blob.text()).resolves.toBe("a,b\n");

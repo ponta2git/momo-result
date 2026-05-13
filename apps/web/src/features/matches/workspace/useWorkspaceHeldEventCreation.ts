@@ -4,6 +4,7 @@ import { createHeldEvent } from "@/shared/api/heldEvents";
 import type { HeldEventListResponse, HeldEventResponse } from "@/shared/api/heldEvents";
 import { formatApiError } from "@/shared/api/problemDetails";
 import { heldEventKeys } from "@/shared/api/queryKeys";
+import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 
 function upsertHeldEventList(
   current: HeldEventListResponse | undefined,
@@ -26,9 +27,13 @@ export function useWorkspaceHeldEventCreation(args: {
   onSuccessNotice: (message: string) => void;
 }) {
   const queryClient = useQueryClient();
+  const idempotencyKeys = useIdempotencyKeyStore();
 
   return useMutation({
-    mutationFn: (request: Parameters<typeof createHeldEvent>[0]) => createHeldEvent(request),
+    mutationFn: (request: Parameters<typeof createHeldEvent>[0]) =>
+      createHeldEvent(request, {
+        idempotencyKey: idempotencyKeys.keyFor("matchWorkspace.createHeldEvent", request),
+      }),
     onSuccess: (event) => {
       queryClient.setQueryData<HeldEventListResponse>(heldEventKeys.scope("workspace"), (current) =>
         upsertHeldEventList(current, event),

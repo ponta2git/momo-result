@@ -3,7 +3,7 @@ import type { UseQueryResult } from "@tanstack/react-query";
 import { useMemo } from "react";
 
 import { buildOcrHints } from "@/features/ocrCapture/hints";
-import type { getAuthMe } from "@/shared/api/client";
+import type { getAuthMe } from "@/shared/api/auth";
 import { parseLayoutFamily } from "@/shared/api/enums";
 import { listGameTitles, listMemberAliases } from "@/shared/api/masters";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";

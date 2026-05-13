@@ -4,16 +4,16 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createInitialSlot,
   releaseSlotResources,
-  requestedImageTypeForSlot,
+  requestedScreenTypeForSlot,
   validateImageFile,
 } from "@/features/ocrCapture/captureState";
 import { createMockMediaStream } from "@/test/doubles/dom";
 
 describe("captureState", () => {
-  it("uses the final classification tray as the OCR image type hint", () => {
-    expect(requestedImageTypeForSlot({ kind: "total_assets" })).toBe("total_assets");
-    expect(requestedImageTypeForSlot({ kind: "revenue" })).toBe("revenue");
-    expect(requestedImageTypeForSlot({ kind: "incident_log" })).toBe("incident_log");
+  it("uses the final classification tray as the OCR screen type hint", () => {
+    expect(requestedScreenTypeForSlot({ kind: "total_assets" })).toBe("total_assets");
+    expect(requestedScreenTypeForSlot({ kind: "revenue" })).toBe("revenue");
+    expect(requestedScreenTypeForSlot({ kind: "incident_log" })).toBe("incident_log");
   });
 
   it("validates image type and size before upload", () => {

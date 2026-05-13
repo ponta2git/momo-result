@@ -38,16 +38,22 @@ export async function getMatch(matchId: string): Promise<MatchDetailResponse> {
 export async function updateMatch(
   matchId: string,
   request: UpdateMatchRequest,
+  options: IdempotencyRequestOptions = {},
 ): Promise<MatchDetailResponse> {
   return apiRequest<MatchDetailResponse>(`/api/matches/${encodeURIComponent(matchId)}`, {
     method: "PUT",
     body: request,
+    idempotency: options.idempotencyKey ? { key: options.idempotencyKey } : "auto",
   });
 }
 
-export async function deleteMatch(matchId: string): Promise<DeleteMatchResponse> {
+export async function deleteMatch(
+  matchId: string,
+  options: IdempotencyRequestOptions = {},
+): Promise<DeleteMatchResponse> {
   return apiRequest<DeleteMatchResponse>(`/api/matches/${encodeURIComponent(matchId)}`, {
     method: "DELETE",
+    idempotency: options.idempotencyKey ? { key: options.idempotencyKey } : "auto",
   });
 }
 

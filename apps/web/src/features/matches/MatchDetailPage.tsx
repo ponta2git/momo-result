@@ -9,6 +9,7 @@ import { deleteMatch, getMatch } from "@/shared/api/matches";
 import type { MatchDetailResponse } from "@/shared/api/matches";
 import { formatApiError } from "@/shared/api/problemDetails";
 import { heldEventKeys, masterKeys, matchKeys } from "@/shared/api/queryKeys";
+import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 import { fixedMembers } from "@/shared/domain/members";
 import { formatManYen } from "@/shared/lib/formatters";
 import { Button } from "@/shared/ui/actions/Button";
@@ -89,6 +90,7 @@ export function MatchDetailPage() {
   const { matchId = "" } = useParams<{ matchId: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const idempotencyKeys = useIdempotencyKeyStore();
   const [showConfirm, setShowConfirm] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [sort, setSort] = useState<SortState>({ key: "playOrder", direction: "asc" });
@@ -116,7 +118,10 @@ export function MatchDetailPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: () => deleteMatch(matchId),
+    mutationFn: () =>
+      deleteMatch(matchId, {
+        idempotencyKey: idempotencyKeys.keyFor("matchDetail.deleteMatch", { matchId }),
+      }),
     onError: (error) => {
       setErrorMessage(formatApiError(error, "削除に失敗しました"));
     },

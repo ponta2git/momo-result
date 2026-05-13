@@ -4,7 +4,7 @@ import type { components } from "@/shared/api/generated";
 import { defaultMemberAliasDirectory, playerAliasHints } from "@/shared/domain/memberDirectory";
 import type { MemberAliasDirectory } from "@/shared/domain/memberDirectory";
 
-export type OcrHints = components["schemas"]["OcrJobHints"];
+export type OcrHints = components["schemas"]["OcrJobHintsRequest"];
 
 type BuildOcrHintsInput = {
   gameTitleName?: string;

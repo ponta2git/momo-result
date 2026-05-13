@@ -64,8 +64,8 @@ export function createSampleDraft(kind: SlotKind): OcrDraftResponse {
   return {
     draftId: `sample-${kind}`,
     jobId: `sample-job-${kind}`,
-    requestedImageType: kind,
-    detectedImageType: kind,
+    requestedScreenType: kind,
+    detectedScreenType: kind,
     profileId: `dev.${kind}.sample`,
     payloadJson: payload(kind),
     warningsJson: [],

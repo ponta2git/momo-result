@@ -18,6 +18,7 @@ import type { HeldEventListResponse, HeldEventResponse } from "@/shared/api/held
 import { formatApiError } from "@/shared/api/problemDetails";
 import { isInitialQueryLoading, shouldShowBlockingQueryError } from "@/shared/api/queryErrorState";
 import { heldEventKeys } from "@/shared/api/queryKeys";
+import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 import { Button } from "@/shared/ui/actions/Button";
 import { DataTable } from "@/shared/ui/data/DataTable";
 import type { DataTableColumn } from "@/shared/ui/data/DataTable";
@@ -98,6 +99,7 @@ export function HeldEventsPage() {
   const [notice, setNotice] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<HeldEventResponse | null>(null);
+  const idempotencyKeys = useIdempotencyKeyStore();
 
   const heldEventsQuery = useQuery({
     queryFn: () => listHeldEvents("", 100),
@@ -114,7 +116,10 @@ export function HeldEventsPage() {
       }
 
       try {
-        const event = await createHeldEvent({ heldAt: toIsoFromLocal(heldAt) });
+        const request = { heldAt: toIsoFromLocal(heldAt) };
+        const event = await createHeldEvent(request, {
+          idempotencyKey: idempotencyKeys.keyFor("heldEvents.createHeldEvent", request),
+        });
         queryClient.setQueryData<HeldEventListResponse>(
           heldEventKeys.scope("held-events-page"),
           (current) => upsertHeldEventList(current, event),

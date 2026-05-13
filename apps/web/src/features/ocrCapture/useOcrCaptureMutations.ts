@@ -16,6 +16,7 @@ import {
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
 import { invalidateAfterOcrSubmissionStarted } from "@/shared/api/cacheInvalidation";
 import { formatApiError } from "@/shared/api/problemDetails";
+import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 
 export type OcrCaptureSubmitParams = {
   notify: (message: string, tone?: "info" | "success" | "warning") => void;
@@ -39,6 +40,7 @@ export type OcrCaptureMutations = {
 export function useOcrCaptureMutations(hints: Record<string, unknown>): OcrCaptureMutations {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const idempotencyKeys = useIdempotencyKeyStore();
 
   const uploadMutation = useMutation({
     mutationFn: async ({
@@ -51,9 +53,10 @@ export function useOcrCaptureMutations(hints: Record<string, unknown>): OcrCaptu
       slot: CaptureSlotState;
     }) => {
       const upload = await uploadImage(file);
-      const job = await createOcrJob(
-        ocrJobRequestForSlot(matchDraftId, slot, upload.imageId, hints),
-      );
+      const request = ocrJobRequestForSlot(matchDraftId, slot, upload.imageId, hints);
+      const job = await createOcrJob(request, {
+        idempotencyKey: idempotencyKeys.keyFor("ocrCapture.createOcrJob", request),
+      });
       return { upload, job };
     },
   });
@@ -61,8 +64,16 @@ export function useOcrCaptureMutations(hints: Record<string, unknown>): OcrCaptu
   const submit = useCallback(
     async ({ notify, selectedGameTitle, setup, slots, updateSlot }: OcrCaptureSubmitParams) => {
       const result = await runOcrSubmissionWorkflow({
-        cancelDraft: cancelMatchDraft,
-        createDraft: createMatchDraft,
+        cancelDraft: (matchDraftId) =>
+          cancelMatchDraft(matchDraftId, {
+            idempotencyKey: idempotencyKeys.keyFor("ocrCapture.cancelMatchDraft", {
+              matchDraftId,
+            }),
+          }),
+        createDraft: (request) =>
+          createMatchDraft(request, {
+            idempotencyKey: idempotencyKeys.keyFor("ocrCapture.createMatchDraft", request),
+          }),
         createUploadJob: ({ file, matchDraftId, slot }) =>
           uploadMutation.mutateAsync({ file, matchDraftId, slot }),
         onReady: (targetCount) =>
@@ -112,7 +123,7 @@ export function useOcrCaptureMutations(hints: Record<string, unknown>): OcrCaptu
 
       notify("読み取り処理を開始できませんでした。確定前の記録は取り消しました。");
     },
-    [navigate, queryClient, uploadMutation],
+    [idempotencyKeys, navigate, queryClient, uploadMutation],
   );
 
   return {

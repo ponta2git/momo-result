@@ -1,5 +1,5 @@
-import { clearCsrfToken, getCsrfToken, setCsrfToken } from "@/shared/api/csrfTokenStore";
-import type { components } from "@/shared/api/generated";
+import { getCsrfToken } from "@/shared/api/csrfTokenStore";
+import { createIdempotencyKey } from "@/shared/api/idempotency";
 import { normalizeApiErrorResponse, normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
 
@@ -60,32 +60,6 @@ export function resolveDevUser(): string | undefined {
   return getBuildTimeDevUser() ?? getStoredDevUser();
 }
 
-export function createIdempotencyKey(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-
-  const bytes = new Uint8Array(16);
-  if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
-    crypto.getRandomValues(bytes);
-  } else {
-    for (let index = 0; index < bytes.length; index += 1) {
-      bytes[index] = Math.floor(Math.random() * 256);
-    }
-  }
-
-  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40;
-  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
-  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
-  return [
-    hex.slice(0, 8),
-    hex.slice(8, 12),
-    hex.slice(12, 16),
-    hex.slice(16, 20),
-    hex.slice(20),
-  ].join("-");
-}
-
 function requestPathname(path: string): string {
   try {
     return new URL(path, "https://momo-result.local").pathname;
@@ -129,7 +103,7 @@ function buildHeaders(path: string, method: HttpMethod, options: ApiRequestOptio
   const devUser = resolveDevUser();
 
   if (devUser) {
-    headers.set("X-Dev-User", devUser);
+    headers.set("X-Momo-Account-Id", devUser);
   }
 
   if (mutatingMethods.has(method)) {
@@ -231,49 +205,4 @@ function fileNameFromDisposition(disposition: string | null): string {
   }
   const plain = /filename=([^;]+)/u.exec(disposition);
   return plain?.[1]?.trim() || "momo-results.csv";
-}
-
-export type AuthMeResponse = components["schemas"]["AuthMeResponse"];
-export type LoginAccountListResponse = components["schemas"]["LoginAccountListResponse"];
-export type LoginAccountResponse = components["schemas"]["LoginAccountResponse"];
-export type CreateLoginAccountRequest = components["schemas"]["CreateLoginAccountRequest"];
-export type UpdateLoginAccountRequest = components["schemas"]["UpdateLoginAccountRequest"];
-
-export async function getAuthMe(): Promise<AuthMeResponse> {
-  const response = await apiRequest<AuthMeResponse>("/api/auth/me");
-  setCsrfToken(response.csrfToken ?? undefined);
-  return response;
-}
-
-export async function logout(): Promise<void> {
-  await apiRequest<void>("/api/auth/logout", { method: "POST" });
-  clearCsrfToken();
-}
-
-export async function listLoginAccounts(): Promise<LoginAccountListResponse> {
-  return apiRequest<LoginAccountListResponse>("/api/admin/login-accounts");
-}
-
-export async function createLoginAccount(
-  request: CreateLoginAccountRequest,
-  options: IdempotencyRequestOptions = {},
-): Promise<LoginAccountResponse> {
-  return apiRequest<LoginAccountResponse>("/api/admin/login-accounts", {
-    method: "POST",
-    body: request,
-    idempotency: options.idempotencyKey ? { key: options.idempotencyKey } : "auto",
-  });
-}
-
-export async function updateLoginAccount(
-  accountId: string,
-  request: UpdateLoginAccountRequest,
-): Promise<LoginAccountResponse> {
-  return apiRequest<LoginAccountResponse>(
-    `/api/admin/login-accounts/${encodeURIComponent(accountId)}`,
-    {
-      method: "PATCH",
-      body: request,
-    },
-  );
 }

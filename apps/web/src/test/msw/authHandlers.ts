@@ -6,7 +6,7 @@ import type { LoginAccountRecord } from "@/test/msw/fixtures";
 
 export const authHandlers = [
   http.get("/api/auth/me", ({ request }) => {
-    const devUser = request.headers.get("X-Dev-User");
+    const devUser = request.headers.get("X-Momo-Account-Id");
     if (!devUser) {
       return HttpResponse.json(
         {

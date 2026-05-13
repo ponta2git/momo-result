@@ -16,8 +16,8 @@ function draft(kind: "total_assets" | "revenue" | "incident_log"): OcrDraftRespo
   return {
     draftId: `draft-${kind}`,
     jobId: `job-${kind}`,
-    requestedImageType: kind,
-    detectedImageType: kind,
+    requestedScreenType: kind,
+    detectedScreenType: kind,
     payloadJson: {
       requested_screen_type: kind,
       detected_screen_type: kind,
@@ -87,8 +87,8 @@ describe("mergeDrafts", () => {
     const totalAssetsDraft: OcrDraftResponse = {
       draftId: "draft-total-assets",
       jobId: "job-total-assets",
-      requestedImageType: "total_assets",
-      detectedImageType: "total_assets",
+      requestedScreenType: "total_assets",
+      detectedScreenType: "total_assets",
       payloadJson: {
         requested_screen_type: "total_assets",
         detected_screen_type: "total_assets",
@@ -126,8 +126,8 @@ describe("mergeDrafts", () => {
     const incidentDraft: OcrDraftResponse = {
       draftId: "draft-incident",
       jobId: "job-incident",
-      requestedImageType: "incident_log",
-      detectedImageType: "incident_log",
+      requestedScreenType: "incident_log",
+      detectedScreenType: "incident_log",
       payloadJson: {
         requested_screen_type: "incident_log",
         detected_screen_type: "incident_log",
@@ -179,8 +179,8 @@ describe("mergeDrafts", () => {
     const totalAssetsDraft: OcrDraftResponse = {
       draftId: "draft-total-assets",
       jobId: "job-total-assets",
-      requestedImageType: "total_assets",
-      detectedImageType: "total_assets",
+      requestedScreenType: "total_assets",
+      detectedScreenType: "total_assets",
       payloadJson: {
         requested_screen_type: "total_assets",
         detected_screen_type: "total_assets",
@@ -257,8 +257,8 @@ describe("mergeDrafts", () => {
     const totalAssetsDraft: OcrDraftResponse = {
       draftId: "draft-total-assets",
       jobId: "job-total-assets",
-      requestedImageType: "total_assets",
-      detectedImageType: "total_assets",
+      requestedScreenType: "total_assets",
+      detectedScreenType: "total_assets",
       payloadJson: {
         requested_screen_type: "total_assets",
         detected_screen_type: "total_assets",
@@ -313,8 +313,8 @@ describe("mergeDrafts", () => {
     const incidentDraft: OcrDraftResponse = {
       draftId: "draft-incident",
       jobId: "job-incident",
-      requestedImageType: "incident_log",
-      detectedImageType: "incident_log",
+      requestedScreenType: "incident_log",
+      detectedScreenType: "incident_log",
       payloadJson: {
         requested_screen_type: "incident_log",
         detected_screen_type: "incident_log",

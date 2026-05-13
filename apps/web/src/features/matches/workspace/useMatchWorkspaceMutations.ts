@@ -11,6 +11,7 @@ import {
 } from "@/shared/api/cacheInvalidation";
 import { confirmMatch, updateMatch } from "@/shared/api/matches";
 import { formatApiError } from "@/shared/api/problemDetails";
+import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 import { assertDefined } from "@/shared/lib/invariant";
 
 export type MatchWorkspaceMutationsParams = {
@@ -31,9 +32,13 @@ export function useMatchWorkspaceMutations({
 }: MatchWorkspaceMutationsParams) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const idempotencyKeys = useIdempotencyKeyStore();
 
   const confirmMutation = useMutation({
-    mutationFn: (request: Parameters<typeof confirmMatch>[0]) => confirmMatch(request),
+    mutationFn: (request: Parameters<typeof confirmMatch>[0]) =>
+      confirmMatch(request, {
+        idempotencyKey: idempotencyKeys.keyFor("matchWorkspace.confirmMatch", request),
+      }),
     onSuccess: async (response) => {
       await invalidateAfterMatchConfirmed(queryClient);
       onConfirmSuccess();
@@ -47,7 +52,13 @@ export function useMatchWorkspaceMutations({
   const updateMutation = useMutation({
     mutationFn: (values: MatchFormValues) => {
       assertDefined(matchId, "matchId");
-      return updateMatch(matchId, toUpdateMatchRequest(values));
+      const request = toUpdateMatchRequest(values);
+      return updateMatch(matchId, request, {
+        idempotencyKey: idempotencyKeys.keyFor("matchWorkspace.updateMatch", {
+          matchId,
+          request,
+        }),
+      });
     },
     onSuccess: async (response) => {
       assertDefined(matchId, "matchId");
@@ -60,7 +71,10 @@ export function useMatchWorkspaceMutations({
   });
 
   const cancelDraftMutation = useMutation({
-    mutationFn: (draftId: string) => cancelMatchDraft(draftId),
+    mutationFn: (draftId: string) =>
+      cancelMatchDraft(draftId, {
+        idempotencyKey: idempotencyKeys.keyFor("matchWorkspace.cancelMatchDraft", { draftId }),
+      }),
     onSuccess: async () => {
       await invalidateAfterDraftCancelled(queryClient);
       navigate("/matches", { replace: true });

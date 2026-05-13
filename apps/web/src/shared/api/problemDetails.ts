@@ -8,10 +8,16 @@ export type NormalizedApiError = {
   title: string;
   detail: string;
   code?: string;
+  category?: "idempotency_in_progress" | "idempotency_payload_mismatch" | "payload_too_large";
   problem?: ProblemDetails;
 };
 
-const idempotencyConflictMessage = "内部エラーが発生しました。ページを再読み込みしてください。";
+const idempotencyInProgressMessage =
+  "同じ操作を処理中です。しばらく待ってから、同じ内容でもう一度実行してください。";
+const idempotencyPayloadMismatchMessage =
+  "送信内容が変更されています。現在の内容でもう一度実行してください。";
+const payloadTooLargeMessage =
+  "送信内容が大きすぎます。入力内容を減らすか、画像ファイルは画像アップロードから送信してください。";
 
 function isProblemDetails(value: unknown): value is ProblemDetails {
   if (!value || typeof value !== "object") {
@@ -33,12 +39,14 @@ export async function normalizeApiErrorResponse(response: Response): Promise<Nor
   if (contentType.includes("application/json")) {
     const body: unknown = await response.json().catch(() => undefined);
     if (isProblemDetails(body)) {
+      const category = categorizeProblem(body);
       return {
         kind: "api",
         status: body.status,
         title: body.title,
         detail: body.detail,
         code: body.code,
+        ...(category ? { category } : {}),
         problem: body,
       };
     }
@@ -51,6 +59,20 @@ export async function normalizeApiErrorResponse(response: Response): Promise<Nor
     title: `HTTP ${response.status}`,
     detail: text || response.statusText || "通信に失敗しました。",
   };
+}
+
+function categorizeProblem(
+  problem: Pick<ProblemDetails, "code" | "detail" | "status">,
+): NormalizedApiError["category"] {
+  if (problem.status === 413 || problem.code === "PAYLOAD_TOO_LARGE") {
+    return "payload_too_large";
+  }
+  if (isIdempotencyConflictShape(problem)) {
+    return problem.detail.includes("different request payload")
+      ? "idempotency_payload_mismatch"
+      : "idempotency_in_progress";
+  }
+  return undefined;
 }
 
 export function normalizeUnknownApiError(error: unknown): NormalizedApiError {
@@ -66,17 +88,20 @@ export function normalizeUnknownApiError(error: unknown): NormalizedApiError {
 }
 
 export function isIdempotencyConflict(error: NormalizedApiError): boolean {
-  return error.code === "IDEMPOTENCY_CONFLICT";
+  return (
+    error.category === "idempotency_in_progress" ||
+    error.category === "idempotency_payload_mismatch"
+  );
 }
 
-function logIdempotencyConflict(error: NormalizedApiError): void {
-  // oxlint-disable-next-line no-console -- API contract asks us to keep this client-logic signal out of UI but visible in logs.
-  console.warn("Idempotency-Key conflict", {
-    code: error.code,
-    detail: error.detail,
-    status: error.status,
-    title: error.title,
-  });
+function isIdempotencyConflictShape(
+  problem: Pick<NormalizedApiError, "code" | "detail" | "status">,
+): boolean {
+  return (
+    (problem.code === "IDEMPOTENCY_CONFLICT" || problem.code === "CONFLICT") &&
+    problem.status === 409 &&
+    problem.detail.includes("Idempotency-Key")
+  );
 }
 
 export function normalizeDisplayApiError(
@@ -84,11 +109,24 @@ export function normalizeDisplayApiError(
   fallbackTitle = "通信に失敗しました",
 ): NormalizedApiError {
   const normalized = normalizeUnknownApiError(error);
-  if (isIdempotencyConflict(normalized)) {
-    logIdempotencyConflict(normalized);
+  if (normalized.category === "idempotency_in_progress") {
     return {
       ...normalized,
-      detail: idempotencyConflictMessage,
+      detail: idempotencyInProgressMessage,
+      title: fallbackTitle,
+    };
+  }
+  if (normalized.category === "idempotency_payload_mismatch") {
+    return {
+      ...normalized,
+      detail: idempotencyPayloadMismatchMessage,
+      title: fallbackTitle,
+    };
+  }
+  if (normalized.category === "payload_too_large") {
+    return {
+      ...normalized,
+      detail: payloadTooLargeMessage,
       title: fallbackTitle,
     };
   }

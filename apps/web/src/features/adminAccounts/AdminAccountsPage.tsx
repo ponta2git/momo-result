@@ -15,7 +15,7 @@ import type {
 } from "@/shared/api/adminAccounts";
 import { formatApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
-import { fixedMembers } from "@/shared/domain/members";
+import { fixedMembers, memberDisplayName } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Field } from "@/shared/ui/forms/Field";
@@ -27,11 +27,6 @@ const initialCreateAccountState = { error: "", version: 0 };
 
 const inputClass =
   "w-full rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)]";
-
-function memberName(memberId: string | undefined): string {
-  if (!memberId) return "試合参加者に紐づけない";
-  return fixedMembers.find((member) => member.memberId === memberId)?.displayName ?? memberId;
-}
 
 export function AdminAccountsPage() {
   const queryClient = useQueryClient();
@@ -54,9 +49,11 @@ export function AdminAccountsPage() {
       };
 
       try {
+        const attempt = idempotencyKeys.begin("adminAccounts.createLoginAccount", request);
         await createLoginAccount(request, {
-          idempotencyKey: idempotencyKeys.keyFor("adminAccounts.createLoginAccount", request),
+          idempotencyKey: attempt.key,
         });
+        attempt.complete();
         await queryClient.invalidateQueries({ queryKey });
         return { error: "", version: previous.version + 1 };
       } catch (error) {
@@ -208,7 +205,7 @@ function AccountRow({
       <td className="max-w-[14rem] truncate px-3 py-2 font-mono text-xs">
         {account.discordUserId}
       </td>
-      <td className="px-3 py-2">{memberName(account.playerMemberId)}</td>
+      <td className="px-3 py-2">{memberDisplayName(account.playerMemberId)}</td>
       <td className="px-3 py-2">
         {account.isAdmin ? "管理者" : "一般"} / {account.loginEnabled ? "許可" : "停止"}
       </td>

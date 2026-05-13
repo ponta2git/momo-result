@@ -12,12 +12,12 @@ export type CancelMatchDraftResponse = components["schemas"]["CancelMatchDraftRe
 
 export async function createMatchDraft(
   request: CreateMatchDraftRequest,
-  options: IdempotencyRequestOptions = {},
+  options: IdempotencyRequestOptions,
 ): Promise<MatchDraftResponse> {
   return apiRequest<MatchDraftResponse>("/api/match-drafts", {
     method: "POST",
     body: request,
-    idempotency: options.idempotencyKey ? { key: options.idempotencyKey } : "auto",
+    idempotency: { key: options.idempotencyKey },
   });
 }
 
@@ -43,13 +43,13 @@ export async function downloadMatchDraftSourceImage(
 
 export async function cancelMatchDraft(
   draftId: string,
-  options: IdempotencyRequestOptions = {},
+  options: IdempotencyRequestOptions,
 ): Promise<CancelMatchDraftResponse> {
   return apiRequest<CancelMatchDraftResponse>(
     `/api/match-drafts/${encodeURIComponent(draftId)}/cancel`,
     {
       method: "POST",
-      idempotency: options.idempotencyKey ? { key: options.idempotencyKey } : "auto",
+      idempotency: { key: options.idempotencyKey },
     },
   );
 }

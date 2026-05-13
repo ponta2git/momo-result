@@ -27,11 +27,7 @@ import {
   createMapMasterId,
   createSeasonMasterId,
 } from "@/features/masters/masterId";
-import {
-  isNameValid,
-  normalizeLayoutFamily,
-  normalizeName,
-} from "@/features/masters/masterValidation";
+import { parseLayoutFamily, isNameValid, normalizeName } from "@/features/masters/masterValidation";
 import { buildMasterViewModel } from "@/features/masters/masterViewModel";
 import { formatApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { shouldShowQueryError } from "@/shared/api/queryErrorState";
@@ -191,8 +187,13 @@ export function useMastersPageController() {
     if (!isNameValid(name)) {
       return { ...prev, error: "作品名を入力してください" };
     }
-    const layoutFamily = normalizeLayoutFamily(String(formData.get("layoutFamily") ?? ""));
-    const draftId = createGameTitleId(name);
+    const layoutFamily = parseLayoutFamily(String(formData.get("layoutFamily") ?? ""));
+    if (!layoutFamily) {
+      return { ...prev, error: "作品種別を選択してください" };
+    }
+    const intent = { layoutFamily, name };
+    const attempt = idempotencyKeys.begin("masters.createGameTitle", intent);
+    const draftId = createGameTitleId(name, attempt.key);
     addOptimisticGameTitle({
       id: draftId,
       layoutFamily,
@@ -208,8 +209,9 @@ export function useMastersPageController() {
         name,
       };
       const created = await postGameTitle(request, {
-        idempotencyKey: idempotencyKeys.keyFor("masters.createGameTitle", request),
+        idempotencyKey: attempt.key,
       });
+      attempt.complete();
       setSelectedGameTitleId(created.id);
       await invalidateMasterResourceCaches(
         queryClient,
@@ -228,7 +230,9 @@ export function useMastersPageController() {
       if (!isNameValid(name) || !viewModel.selectedGameTitleId) {
         return { ...prev, error: "マップ名を入力してください" };
       }
-      const draftId = createMapMasterId(name);
+      const intent = { gameTitleId: viewModel.selectedGameTitleId, name };
+      const attempt = idempotencyKeys.begin("masters.createMapMaster", intent);
+      const draftId = createMapMasterId(name, attempt.key);
       addOptimisticMapMaster({
         id: draftId,
         gameTitleId: viewModel.selectedGameTitleId,
@@ -244,8 +248,9 @@ export function useMastersPageController() {
           name,
         };
         await postMapMaster(request, {
-          idempotencyKey: idempotencyKeys.keyFor("masters.createMapMaster", request),
+          idempotencyKey: attempt.key,
         });
+        attempt.complete();
         await invalidateMasterResourceCaches(
           queryClient,
           masterQueryKeys.mapMasters(authScope, viewModel.selectedGameTitleId),
@@ -267,7 +272,9 @@ export function useMastersPageController() {
     if (!isNameValid(name) || !viewModel.selectedGameTitleId) {
       return { ...prev, error: "シーズン名を入力してください" };
     }
-    const draftId = createSeasonMasterId(name);
+    const intent = { gameTitleId: viewModel.selectedGameTitleId, name };
+    const attempt = idempotencyKeys.begin("masters.createSeasonMaster", intent);
+    const draftId = createSeasonMasterId(name, attempt.key);
     addOptimisticSeasonMaster({
       id: draftId,
       gameTitleId: viewModel.selectedGameTitleId,
@@ -283,8 +290,9 @@ export function useMastersPageController() {
         name,
       };
       await postSeasonMaster(request, {
-        idempotencyKey: idempotencyKeys.keyFor("masters.createSeasonMaster", request),
+        idempotencyKey: attempt.key,
       });
+      attempt.complete();
       await invalidateMasterResourceCaches(
         queryClient,
         masterQueryKeys.seasonMasters(authScope, viewModel.selectedGameTitleId),
@@ -307,9 +315,11 @@ export function useMastersPageController() {
     }
     try {
       const request = { memberId, alias };
+      const attempt = idempotencyKeys.begin("masters.createMemberAlias", request);
       await postMemberAlias(request, {
-        idempotencyKey: idempotencyKeys.keyFor("masters.createMemberAlias", request),
+        idempotencyKey: attempt.key,
       });
+      attempt.complete();
       await queryClient.invalidateQueries({ queryKey: masterQueryKeys.memberAliases(authScope) });
       await queryClient.invalidateQueries({ queryKey: masterKeys.memberAliases.all() });
       return { error: undefined, version: prev.version + 1 };
@@ -320,9 +330,14 @@ export function useMastersPageController() {
 
   async function updateGameTitle(id: string, request: { name: string; layoutFamily: string }) {
     setOperationError(undefined);
+    const layoutFamily = parseLayoutFamily(request.layoutFamily);
+    if (!layoutFamily) {
+      setOperationError("作品種別を選択してください");
+      return;
+    }
     await patchGameTitle(id, {
       name: normalizeName(request.name),
-      layoutFamily: normalizeLayoutFamily(request.layoutFamily),
+      layoutFamily,
     });
     await invalidateMasterResourceCaches(
       queryClient,

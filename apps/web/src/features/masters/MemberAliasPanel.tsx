@@ -3,7 +3,7 @@ import { useState } from "react";
 
 import type { MemberAliasResponse } from "@/shared/api/masters";
 import { formatApiError } from "@/shared/api/problemDetails";
-import { fixedMembers } from "@/shared/domain/members";
+import { fixedMembers, memberDisplayName } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
 import { IconButton } from "@/shared/ui/actions/IconButton";
 import { AlertDialog, Dialog } from "@/shared/ui/feedback/Dialog";
@@ -22,10 +22,6 @@ type MemberAliasPanelProps = {
   onDelete: (id: string) => Promise<void> | void;
   onUpdate: (id: string, request: { memberId: string; alias: string }) => Promise<void>;
 };
-
-function memberName(memberId: string): string {
-  return fixedMembers.find((member) => member.memberId === memberId)?.displayName ?? memberId;
-}
 
 export function MemberAliasPanel({
   aliases,
@@ -104,7 +100,7 @@ export function MemberAliasPanel({
                       <AliasEditDialog alias={alias} onUpdate={onUpdate} />
                       <AlertDialog
                         title="別名を削除しますか？"
-                        description={`${memberName(alias.memberId)} の ${alias.alias} を削除します。`}
+                        description={`${memberDisplayName(alias.memberId)} の ${alias.alias} を削除します。`}
                         confirmLabel="削除"
                         onConfirm={() => onDelete(alias.id)}
                         trigger={

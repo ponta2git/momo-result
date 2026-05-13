@@ -66,6 +66,31 @@ describe("mergeDrafts", () => {
     expect(merged.players[0]?.incidents["カード駅"]).toBe(0);
   });
 
+  it("keeps the first revenue row and reports a warning when member matching is duplicated", () => {
+    const revenueDraft = draft("revenue");
+    const payload = revenueDraft.payloadJson as {
+      players: Array<{
+        member_id: string | null;
+        revenue_man_yen: ReturnType<typeof field<number>>;
+      }>;
+    };
+    payload.players.push({
+      ...payload.players[0]!,
+      member_id: "member_akane_mami",
+      revenue_man_yen: field(999),
+    });
+
+    const merged = mergeDrafts({
+      total_assets: draft("total_assets"),
+      revenue: revenueDraft,
+    });
+
+    expect(merged.players[0]?.revenueManYen).toBe(300);
+    expect(merged.warnings).toContain(
+      "収益の読み取り結果で member_akane_mami に解決される行が複数あります。最初の行を採用しました。",
+    );
+  });
+
   it("uses member aliases managed outside fixed member defaults", () => {
     const totalAssetsDraft = draft("total_assets");
     const payload = totalAssetsDraft.payloadJson as {

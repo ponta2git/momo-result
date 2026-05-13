@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+import { incidentOcrNames } from "@/shared/domain/incidents";
+import type { IncidentOcrName } from "@/shared/domain/incidents";
+
 const ocrFieldSchema = <T extends z.ZodType>(valueSchema: T) =>
   z.object({
     value: valueSchema.nullable(),
@@ -11,16 +14,9 @@ const ocrFieldSchema = <T extends z.ZodType>(valueSchema: T) =>
 export const ocrNumberFieldSchema = ocrFieldSchema(z.number());
 export const ocrStringFieldSchema = ocrFieldSchema(z.string());
 
-export const incidentNames = [
-  "目的地",
-  "プラス駅",
-  "マイナス駅",
-  "カード駅",
-  "カード売り場",
-  "スリの銀次",
-] as const;
+export const incidentNames = incidentOcrNames;
 
-export type IncidentName = (typeof incidentNames)[number];
+export type IncidentName = IncidentOcrName;
 
 const ocrPlayerEntrySchema = z.object({
   raw_player_name: ocrStringFieldSchema,

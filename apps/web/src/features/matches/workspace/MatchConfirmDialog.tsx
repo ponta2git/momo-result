@@ -2,12 +2,8 @@ import { useFormStatus } from "react-dom";
 
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
-import { fixedMembers } from "@/shared/domain/members";
+import { memberDisplayName } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
-
-function memberName(memberId: string): string {
-  return fixedMembers.find((member) => member.memberId === memberId)?.displayName ?? memberId;
-}
 
 type MatchConfirmDialogProps = {
   gameTitleName?: string | undefined;
@@ -78,7 +74,7 @@ export function MatchConfirmDialog({
             <dt className="text-[var(--color-text-secondary)]">順位</dt>
             <dd>
               {values.players
-                .map((player) => `${player.rank}位 ${memberName(player.memberId)}`)
+                .map((player) => `${player.rank}位 ${memberDisplayName(player.memberId)}`)
                 .join(" / ")}
             </dd>
           </div>

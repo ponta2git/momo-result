@@ -35,10 +35,14 @@ export function useMatchWorkspaceMutations({
   const idempotencyKeys = useIdempotencyKeyStore();
 
   const confirmMutation = useMutation({
-    mutationFn: (request: Parameters<typeof confirmMatch>[0]) =>
-      confirmMatch(request, {
-        idempotencyKey: idempotencyKeys.keyFor("matchWorkspace.confirmMatch", request),
-      }),
+    mutationFn: async (request: Parameters<typeof confirmMatch>[0]) => {
+      const attempt = idempotencyKeys.begin("matchWorkspace.confirmMatch", request);
+      const response = await confirmMatch(request, {
+        idempotencyKey: attempt.key,
+      });
+      attempt.complete();
+      return response;
+    },
     onSuccess: async (response) => {
       await invalidateAfterMatchConfirmed(queryClient);
       onConfirmSuccess();
@@ -53,11 +57,13 @@ export function useMatchWorkspaceMutations({
     mutationFn: (values: MatchFormValues) => {
       assertDefined(matchId, "matchId");
       const request = toUpdateMatchRequest(values);
+      const payload = { matchId, request };
+      const attempt = idempotencyKeys.begin("matchWorkspace.updateMatch", payload);
       return updateMatch(matchId, request, {
-        idempotencyKey: idempotencyKeys.keyFor("matchWorkspace.updateMatch", {
-          matchId,
-          request,
-        }),
+        idempotencyKey: attempt.key,
+      }).then((response) => {
+        attempt.complete();
+        return response;
       });
     },
     onSuccess: async (response) => {
@@ -71,10 +77,15 @@ export function useMatchWorkspaceMutations({
   });
 
   const cancelDraftMutation = useMutation({
-    mutationFn: (draftId: string) =>
-      cancelMatchDraft(draftId, {
-        idempotencyKey: idempotencyKeys.keyFor("matchWorkspace.cancelMatchDraft", { draftId }),
-      }),
+    mutationFn: async (draftId: string) => {
+      const payload = { draftId };
+      const attempt = idempotencyKeys.begin("matchWorkspace.cancelMatchDraft", payload);
+      const response = await cancelMatchDraft(draftId, {
+        idempotencyKey: attempt.key,
+      });
+      attempt.complete();
+      return response;
+    },
     onSuccess: async () => {
       await invalidateAfterDraftCancelled(queryClient);
       navigate("/matches", { replace: true });

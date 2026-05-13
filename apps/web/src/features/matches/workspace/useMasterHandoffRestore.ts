@@ -92,7 +92,7 @@ export function useMasterHandoffRestore({
     const restoredPayload = payload ?? fallbackRecord?.payload;
     const consumedHandoffId = payload ? handoffId : (fallbackRecord?.handoffId ?? handoffId);
 
-    if (restoredPayload?.source === "draftReview") {
+    if (restoredPayload?.source === "draftReview" || restoredPayload?.source === "matchWorkspace") {
       onRestore(restoredPayload);
     } else {
       onRestoreFailed();

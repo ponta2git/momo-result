@@ -67,6 +67,12 @@ function categorizeProblem(
   if (problem.status === 413 || problem.code === "PAYLOAD_TOO_LARGE") {
     return "payload_too_large";
   }
+  if (problem.code === "IDEMPOTENCY_IN_PROGRESS") {
+    return "idempotency_in_progress";
+  }
+  if (problem.code === "IDEMPOTENCY_PAYLOAD_MISMATCH") {
+    return "idempotency_payload_mismatch";
+  }
   if (isIdempotencyConflictShape(problem)) {
     return problem.detail.includes("different request payload")
       ? "idempotency_payload_mismatch"

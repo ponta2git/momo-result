@@ -17,12 +17,12 @@ export async function listHeldEvents(query = "", limit = 10): Promise<HeldEventL
 
 export async function createHeldEvent(
   request: CreateHeldEventRequest,
-  options: IdempotencyRequestOptions = {},
+  options: IdempotencyRequestOptions,
 ): Promise<HeldEventResponse> {
   return apiRequest<HeldEventResponse>("/api/held-events", {
     method: "POST",
     body: request,
-    idempotency: options.idempotencyKey ? { key: options.idempotencyKey } : "auto",
+    idempotency: { key: options.idempotencyKey },
   });
 }
 

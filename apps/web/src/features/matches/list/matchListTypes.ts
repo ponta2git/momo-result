@@ -5,9 +5,9 @@ import type {
   SeasonMasterResponse,
 } from "@/shared/api/masters";
 import type { MatchSummaryResponse } from "@/shared/api/matches";
-import type { DraftStatus } from "@/shared/domain/draftStatus";
+import type { DraftStatusOrUnknown } from "@/shared/domain/draftStatus";
 
-export type MatchListStatus = DraftStatus;
+export type MatchListStatus = DraftStatusOrUnknown;
 
 export type MatchListKind = "match" | "match_draft";
 

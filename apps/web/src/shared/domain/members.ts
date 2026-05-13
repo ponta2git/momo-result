@@ -18,3 +18,10 @@ export const fixedMembers: FixedMember[] = [
   },
   { memberId: "member_eu", displayName: "いーゆー", defaultAliases: ["いーゆー"] },
 ];
+
+export function memberDisplayName(memberId: string | null | undefined): string {
+  if (!memberId) {
+    return "試合参加者に紐づけない";
+  }
+  return fixedMembers.find((member) => member.memberId === memberId)?.displayName ?? memberId;
+}

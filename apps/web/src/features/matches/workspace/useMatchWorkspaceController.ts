@@ -29,6 +29,7 @@ import { useMatchWorkspaceInit } from "@/features/matches/workspace/useMatchWork
 import { useMatchWorkspaceMutations } from "@/features/matches/workspace/useMatchWorkspaceMutations";
 import { useMatchWorkspaceQueries } from "@/features/matches/workspace/useMatchWorkspaceQueries";
 import { useWorkspaceHeldEventCreation } from "@/features/matches/workspace/useWorkspaceHeldEventCreation";
+import { useWorkspaceNotice } from "@/features/matches/workspace/useWorkspaceNotice";
 import {
   currentLocalIsoMinute,
   toIsoFromLocal,
@@ -38,10 +39,9 @@ import {
   latestHeldEventPatch,
 } from "@/features/matches/workspace/workspaceViewModel";
 import { isCancelableDraftStatus } from "@/shared/domain/draftStatus";
-import { showToast } from "@/shared/ui/feedback/Toast";
 import {
   buildMasterRoute,
-  createDraftReviewHandoffPayload,
+  createMatchWorkspaceHandoffPayload,
   saveMasterHandoff,
 } from "@/shared/workflows/masterReturnHandoff";
 
@@ -62,7 +62,7 @@ export function useMatchWorkspaceController({
   const [, startMastersTransition] = useTransition();
   const [searchParams] = useSearchParams();
 
-  const [notice, setNotice] = useState("");
+  const { notice, notify } = useWorkspaceNotice();
   const [validationMessage, setValidationMessage] = useState("");
   const [showValidationErrors, setShowValidationErrors] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -70,11 +70,6 @@ export function useMatchWorkspaceController({
   const [eventDraftValue, setEventDraftValue] = useState<string>(currentLocalIsoMinute);
   const [workspaceData, setWorkspaceData] = useState<MatchWorkspaceInitialData | null>(null);
   const [preferredImageKind, setPreferredImageKind] = useState<SourceImageKind>("total_assets");
-  const notify = (message: string, tone: "info" | "success" | "warning" = "info") => {
-    setNotice(message);
-    showToast({ title: message, tone });
-  };
-
   const [state, dispatch] = useReducer(
     matchFormReducer,
     createMatchFormReducerState(createEmptyMatchForm(new Date().toISOString())),
@@ -134,14 +129,6 @@ export function useMatchWorkspaceController({
     await confirmMutation.mutateAsync(toConfirmMatchRequest(state.values));
     return null;
   }, null);
-
-  useEffect(() => {
-    if (notice === "") {
-      return;
-    }
-    const timer = window.setTimeout(() => setNotice(""), 4000);
-    return () => window.clearTimeout(timer);
-  }, [notice]);
 
   const { isInitialized } = useMatchWorkspaceInit({
     draftDetail: draftDetailQuery.data ?? undefined,
@@ -246,7 +233,7 @@ export function useMatchWorkspaceController({
     if (!returnTo) {
       return;
     }
-    const payload = createDraftReviewHandoffPayload({
+    const payload = createMatchWorkspaceHandoffPayload({
       matchSessionId: matchSessionId ?? matchDraftId ?? mode,
       returnTo,
       values: state.values,

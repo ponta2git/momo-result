@@ -1,45 +1,69 @@
+import { z } from "zod";
+
+import { incidentDefinitions } from "@/shared/domain/incidents";
+import type { IncidentCountsByKey } from "@/shared/domain/incidents";
+
 const handoffStoragePrefix = "momoresult.masterHandoff.";
 const handoffSchemaVersion = 1;
 const handoffTtlMs = 2 * 60 * 60 * 1000;
 
-export type DraftReviewHandoffValues = {
-  draftIds: {
-    incidentLog?: string | undefined;
-    revenue?: string | undefined;
-    totalAssets?: string | undefined;
-  };
-  gameTitleId: string;
-  heldEventId: string;
-  mapMasterId: string;
-  matchNoInEvent: number;
-  ownerMemberId: string;
-  playedAt: string;
-  players: Array<{
-    incidents: {
-      cardShop: number;
-      cardStation: number;
-      destination: number;
-      minusStation: number;
-      plusStation: number;
-      suriNoGinji: number;
-    };
-    memberId: string;
-    playOrder: number;
-    rank: number;
-    revenueManYen: number;
-    totalAssetsManYen: number;
-  }>;
-  seasonMasterId: string;
-};
+const handoffSourceSchema = z.enum(["draftReview", "matchWorkspace"]);
 
-export type MasterHandoffPayload = {
-  createdAt: string;
-  matchSessionId: string;
-  returnTo: string;
-  schemaVersion: number;
-  source: "draftReview";
-  values: DraftReviewHandoffValues;
-};
+const handoffIncidentsSchema = z.object({
+  cardShop: z.number().int().min(0),
+  cardStation: z.number().int().min(0),
+  destination: z.number().int().min(0),
+  minusStation: z.number().int().min(0),
+  plusStation: z.number().int().min(0),
+  suriNoGinji: z.number().int().min(0),
+});
+
+const handoffValuesSchema = z.object({
+  draftIds: z.object({
+    incidentLog: z.string().optional(),
+    revenue: z.string().optional(),
+    totalAssets: z.string().optional(),
+  }),
+  gameTitleId: z.string(),
+  heldEventId: z.string(),
+  mapMasterId: z.string(),
+  matchNoInEvent: z.number().int().min(1),
+  ownerMemberId: z.string(),
+  playedAt: z.string(),
+  players: z
+    .array(
+      z.object({
+        incidents: handoffIncidentsSchema,
+        memberId: z.string(),
+        playOrder: z.number().int().min(1).max(4),
+        rank: z.number().int().min(1).max(4),
+        revenueManYen: z.number().int(),
+        totalAssetsManYen: z.number().int(),
+      }),
+    )
+    .length(4),
+  seasonMasterId: z.string(),
+});
+
+const masterHandoffPayloadSchema = z.object({
+  createdAt: z.string(),
+  matchSessionId: z.string(),
+  returnTo: z.string(),
+  schemaVersion: z.literal(handoffSchemaVersion),
+  source: handoffSourceSchema,
+  values: handoffValuesSchema,
+});
+
+export type MatchWorkspaceHandoffValues = z.infer<typeof handoffValuesSchema>;
+export type DraftReviewHandoffValues = MatchWorkspaceHandoffValues;
+
+export type MasterHandoffPayload = z.infer<typeof masterHandoffPayloadSchema>;
+
+function pickIncidents(incidents: IncidentCountsByKey): IncidentCountsByKey {
+  return Object.fromEntries(
+    incidentDefinitions.map((definition) => [definition.key, incidents[definition.key]]),
+  ) as IncidentCountsByKey;
+}
 
 export type HandoffInspectResult =
   | { status: "available" }
@@ -91,18 +115,7 @@ function storageKey(handoffId: string): string {
 
 function parsePayload(raw: string): MasterHandoffPayload | undefined {
   try {
-    const parsed = JSON.parse(raw) as Partial<MasterHandoffPayload>;
-    if (
-      parsed?.schemaVersion !== handoffSchemaVersion ||
-      parsed?.source !== "draftReview" ||
-      typeof parsed?.createdAt !== "string" ||
-      typeof parsed?.returnTo !== "string" ||
-      typeof parsed?.matchSessionId !== "string" ||
-      !parsed?.values
-    ) {
-      return undefined;
-    }
-    return parsed as MasterHandoffPayload;
+    return masterHandoffPayloadSchema.parse(JSON.parse(raw));
   } catch {
     return undefined;
   }
@@ -116,17 +129,17 @@ function isExpired(createdAt: string, nowMs: number): boolean {
   return nowMs - createdMs > handoffTtlMs;
 }
 
-export function createDraftReviewHandoffPayload(input: {
+export function createMatchWorkspaceHandoffPayload(input: {
   matchSessionId: string;
   returnTo: string;
-  values: DraftReviewHandoffValues;
+  values: MatchWorkspaceHandoffValues;
 }): MasterHandoffPayload {
   return {
     createdAt: new Date().toISOString(),
     matchSessionId: input.matchSessionId,
     returnTo: input.returnTo,
     schemaVersion: handoffSchemaVersion,
-    source: "draftReview",
+    source: "matchWorkspace",
     values: {
       draftIds: {
         incidentLog: input.values.draftIds.incidentLog,
@@ -140,14 +153,7 @@ export function createDraftReviewHandoffPayload(input: {
       ownerMemberId: input.values.ownerMemberId,
       playedAt: input.values.playedAt,
       players: input.values.players.map((player) => ({
-        incidents: {
-          cardShop: player.incidents.cardShop,
-          cardStation: player.incidents.cardStation,
-          destination: player.incidents.destination,
-          minusStation: player.incidents.minusStation,
-          plusStation: player.incidents.plusStation,
-          suriNoGinji: player.incidents.suriNoGinji,
-        },
+        incidents: pickIncidents(player.incidents),
         memberId: player.memberId,
         playOrder: player.playOrder,
         rank: player.rank,
@@ -158,6 +164,8 @@ export function createDraftReviewHandoffPayload(input: {
     },
   };
 }
+
+export const createDraftReviewHandoffPayload = createMatchWorkspaceHandoffPayload;
 
 export function saveMasterHandoff(payload: MasterHandoffPayload): string | undefined {
   if (typeof window === "undefined") {

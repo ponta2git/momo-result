@@ -1,5 +1,6 @@
 import type { SlotKind } from "@/shared/api/enums";
 import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
+import { incidentOcrNames } from "@/shared/domain/incidents";
 import type { SlotMap } from "@/shared/lib/slotMap";
 
 const now = "2026-01-01T00:00:00.000Z";
@@ -20,15 +21,6 @@ const players = [
   ["いーゆー", "member_eu", 4, 4, 9800, 1990, [1, 4, 7, 3, 1, 2]],
 ] as const;
 
-const incidentNames = [
-  "目的地",
-  "プラス駅",
-  "マイナス駅",
-  "カード駅",
-  "カード売り場",
-  "スリの銀次",
-] as const;
-
 function payload(kind: SlotKind) {
   return {
     requested_screen_type: kind,
@@ -47,7 +39,7 @@ function payload(kind: SlotKind) {
         total_assets_man_yen: field(kind === "total_assets" ? assets : null),
         revenue_man_yen: field(kind === "revenue" ? revenue : null, index === 3 ? 0.72 : 0.94),
         incidents: Object.fromEntries(
-          incidentNames.map((name, incidentIndex) => [
+          incidentOcrNames.map((name, incidentIndex) => [
             name,
             field(kind === "incident_log" ? incidents[incidentIndex] : null),
           ]),

@@ -134,12 +134,23 @@ function parseDraft(draft: DraftByKind["total_assets"] | undefined): OcrDraftPay
 function byMemberId(
   payload: OcrDraftPayload | undefined,
   directory: MemberAliasDirectory,
-): Map<string, OcrPlayerEntry> {
+): { entries: Map<string, OcrPlayerEntry>; warnings: string[] } {
   const entries = new Map<string, OcrPlayerEntry>();
+  const warnings: string[] = [];
   payload?.players.forEach((entry, index) => {
-    entries.set(resolveMemberIdForRow(directory, entry, index), entry);
+    const memberId = resolveMemberIdForRow(directory, entry, index);
+    if (!memberId) {
+      return;
+    }
+    if (entries.has(memberId)) {
+      warnings.push(
+        `収益の読み取り結果で ${memberId} に解決される行が複数あります。最初の行を採用しました。`,
+      );
+      return;
+    }
+    entries.set(memberId, entry);
   });
-  return entries;
+  return { entries, warnings };
 }
 
 function byPlayOrder(payload: OcrDraftPayload | undefined): Map<number, OcrPlayerEntry> {
@@ -201,7 +212,7 @@ function buildPlayers(
   parsed: ParsedDrafts,
   incidentByPlayOrder: Map<number, IncidentLookupEntry>,
   directory: MemberAliasDirectory,
-): ReviewPlayer[] {
+): { players: ReviewPlayer[]; warnings: string[] } {
   const memberIds = directory.memberIds;
   const sourcePlayers = parsed.totalAssets?.players.length
     ? parsed.totalAssets.players
@@ -211,9 +222,9 @@ function buildPlayers(
   const resolvedPlayOrders = resolvePlayOrders(trimmedSources);
   const revenueByMember = byMemberId(parsed.revenue, directory);
 
-  return trimmedSources.map((entry, index) => {
+  const players = trimmedSources.map((entry, index) => {
     const memberId = resolvedMemberIds[index] ?? memberIds[index] ?? "";
-    const revenueEntry = revenueByMember.get(memberId);
+    const revenueEntry = revenueByMember.entries.get(memberId);
     const playOrder = resolvedPlayOrders[index] ?? index + 1;
     const incidentLookup = incidentByPlayOrder.get(playOrder);
     const incidents = incidentLookup ? { ...incidentLookup.counts } : emptyIncidents();
@@ -245,6 +256,7 @@ function buildPlayers(
       },
     };
   });
+  return { players, warnings: revenueByMember.warnings };
 }
 
 function padToFour(players: readonly ReviewPlayer[]): ReviewPlayer[] {
@@ -307,14 +319,11 @@ export function mergeDrafts(
 ): MergedDraftReview {
   const parsed = parseAll(drafts);
   const incidentByPlayOrder = buildIncidentLookup(parsed.incidentLog);
-  const players = pipe(
-    buildPlayers(parsed, incidentByPlayOrder, memberDirectory),
-    padToFour,
-    sortByAssetsDesc,
-  );
+  const builtPlayers = buildPlayers(parsed, incidentByPlayOrder, memberDirectory);
+  const players = pipe(builtPlayers.players, padToFour, sortByAssetsDesc);
   return {
     players,
-    warnings: collectWarnings(parsed),
+    warnings: [...collectWarnings(parsed), ...builtPlayers.warnings],
     incidentByPlayOrder,
   };
 }

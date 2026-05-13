@@ -35,6 +35,8 @@
 
 ログインアカウントは試合参加者ではない。`momo_login_accounts.player_member_id` があるアカウントは対応する `members` に紐づくが、`NULL` のアカウントも戦績操作は可能とする。将来、桃鉄の参加者入れ替えを扱う場合も、試合結果の参加者は `match_players.member_id`、操作主体は `created_by_account_id` として分離したまま拡張する。
 
+固定4名の member id / 表示名 / 初期プレー順は業務不変条件として扱う。frontend の `fixedMembers` は任意のUI定数ではなく、この不変条件を型とフォーム初期値へ写像する境界である。将来プレーヤー追加・入れ替えを扱う場合は、`fixedMembers` を局所修正するのではなく、`members` の所有権を API 契約へ移す設計変更として扱う。
+
 ## 3. 数値・単位
 
 - 資産・収益は整数で保存する。

@@ -54,9 +54,11 @@ export function useOcrCaptureMutations(hints: Record<string, unknown>): OcrCaptu
     }) => {
       const upload = await uploadImage(file);
       const request = ocrJobRequestForSlot(matchDraftId, slot, upload.imageId, hints);
+      const attempt = idempotencyKeys.begin("ocrCapture.createOcrJob", request);
       const job = await createOcrJob(request, {
-        idempotencyKey: idempotencyKeys.keyFor("ocrCapture.createOcrJob", request),
+        idempotencyKey: attempt.key,
       });
+      attempt.complete();
       return { upload, job };
     },
   });
@@ -64,16 +66,23 @@ export function useOcrCaptureMutations(hints: Record<string, unknown>): OcrCaptu
   const submit = useCallback(
     async ({ notify, selectedGameTitle, setup, slots, updateSlot }: OcrCaptureSubmitParams) => {
       const result = await runOcrSubmissionWorkflow({
-        cancelDraft: (matchDraftId) =>
-          cancelMatchDraft(matchDraftId, {
-            idempotencyKey: idempotencyKeys.keyFor("ocrCapture.cancelMatchDraft", {
-              matchDraftId,
-            }),
-          }),
-        createDraft: (request) =>
-          createMatchDraft(request, {
-            idempotencyKey: idempotencyKeys.keyFor("ocrCapture.createMatchDraft", request),
-          }),
+        cancelDraft: async (matchDraftId) => {
+          const payload = { matchDraftId };
+          const attempt = idempotencyKeys.begin("ocrCapture.cancelMatchDraft", payload);
+          const response = await cancelMatchDraft(matchDraftId, {
+            idempotencyKey: attempt.key,
+          });
+          attempt.complete();
+          return response;
+        },
+        createDraft: async (request) => {
+          const attempt = idempotencyKeys.begin("ocrCapture.createMatchDraft", request);
+          const response = await createMatchDraft(request, {
+            idempotencyKey: attempt.key,
+          });
+          attempt.complete();
+          return response;
+        },
         createUploadJob: ({ file, matchDraftId, slot }) =>
           uploadMutation.mutateAsync({ file, matchDraftId, slot }),
         onReady: (targetCount) =>

@@ -6,6 +6,7 @@ import type {
 } from "@/features/matches/workspace/matchFormTypes";
 import { createEmptyMatchForm } from "@/features/matches/workspace/matchFormTypes";
 import { mergeDrafts } from "@/features/matches/workspace/review/reviewViewModel";
+import { incidentCountsByLabelToKey } from "@/shared/domain/incidents";
 import type { MemberAliasDirectory } from "@/shared/domain/memberDirectory";
 
 export function draftToMatchForm(input: {
@@ -41,14 +42,7 @@ export function draftToMatchForm(input: {
       base.ownerMemberId) as MatchFormValues["ownerMemberId"],
     playedAt: input.draftSummary?.playedAt ?? base.playedAt,
     players: merged.players.map((player) => ({
-      incidents: {
-        cardShop: player.incidents["カード売り場"],
-        cardStation: player.incidents["カード駅"],
-        destination: player.incidents["目的地"],
-        minusStation: player.incidents["マイナス駅"],
-        plusStation: player.incidents["プラス駅"],
-        suriNoGinji: player.incidents["スリの銀次"],
-      },
+      incidents: incidentCountsByLabelToKey(player.incidents),
       memberId: player.memberId as MatchFormValues["players"][number]["memberId"],
       playOrder: player.playOrder,
       rank: player.rank,

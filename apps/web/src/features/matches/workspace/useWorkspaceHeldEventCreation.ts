@@ -30,10 +30,14 @@ export function useWorkspaceHeldEventCreation(args: {
   const idempotencyKeys = useIdempotencyKeyStore();
 
   return useMutation({
-    mutationFn: (request: Parameters<typeof createHeldEvent>[0]) =>
-      createHeldEvent(request, {
-        idempotencyKey: idempotencyKeys.keyFor("matchWorkspace.createHeldEvent", request),
-      }),
+    mutationFn: async (request: Parameters<typeof createHeldEvent>[0]) => {
+      const attempt = idempotencyKeys.begin("matchWorkspace.createHeldEvent", request);
+      const event = await createHeldEvent(request, {
+        idempotencyKey: attempt.key,
+      });
+      attempt.complete();
+      return event;
+    },
     onSuccess: (event) => {
       queryClient.setQueryData<HeldEventListResponse>(heldEventKeys.scope("workspace"), (current) =>
         upsertHeldEventList(current, event),

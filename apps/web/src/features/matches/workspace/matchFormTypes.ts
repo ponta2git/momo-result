@@ -1,19 +1,12 @@
 import type { ConfirmMatchFormValues } from "@/features/matches/workspace/review/confirmMatchFormSchema";
 import type { components } from "@/shared/api/generated";
+import { emptyIncidentCountsByKey, incidentColumns } from "@/shared/domain/incidents";
+import type { IncidentKey, IncidentLabel } from "@/shared/domain/incidents";
 import { fixedMembers } from "@/shared/domain/members";
 import type { SlotMap } from "@/shared/lib/slotMap";
 
-export const incidentColumns = [
-  ["destination", "目的地"],
-  ["plusStation", "プラス駅"],
-  ["minusStation", "マイナス駅"],
-  ["cardStation", "カード駅"],
-  ["cardShop", "カード売り場"],
-  ["suriNoGinji", "スリの銀次"],
-] as const;
-
-export type IncidentKey = (typeof incidentColumns)[number][0];
-export type IncidentLabel = (typeof incidentColumns)[number][1];
+export { incidentColumns };
+export type { IncidentKey, IncidentLabel };
 export type ReviewIncidentCounts = Record<IncidentLabel, number>;
 
 export type DraftByKind = SlotMap<components["schemas"]["OcrDraftResponse"]>;
@@ -68,12 +61,7 @@ export type MatchWorkspaceInitialData = {
 };
 
 export const emptyIncidents = (): Record<IncidentKey, number> => ({
-  cardShop: 0,
-  cardStation: 0,
-  destination: 0,
-  minusStation: 0,
-  plusStation: 0,
-  suriNoGinji: 0,
+  ...emptyIncidentCountsByKey(),
 });
 
 export function emptyPlayers(): MatchFormValues["players"] {

@@ -13,12 +13,12 @@ export async function listLoginAccounts(): Promise<LoginAccountListResponse> {
 
 export async function createLoginAccount(
   request: CreateLoginAccountRequest,
-  options: IdempotencyRequestOptions = {},
+  options: IdempotencyRequestOptions,
 ): Promise<LoginAccountResponse> {
   return apiRequest<LoginAccountResponse>("/api/admin/login-accounts", {
     method: "POST",
     body: request,
-    idempotency: options.idempotencyKey ? { key: options.idempotencyKey } : "auto",
+    idempotency: { key: options.idempotencyKey },
   });
 }
 

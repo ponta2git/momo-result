@@ -16,7 +16,7 @@ type ApiRequestOptions = {
 };
 
 export type IdempotencyRequestOptions = {
-  idempotencyKey?: string | undefined;
+  idempotencyKey: string;
 };
 
 export type ApiDownloadResult = {
@@ -26,22 +26,6 @@ export type ApiDownloadResult = {
 };
 
 const mutatingMethods = new Set<HttpMethod>(["POST", "PUT", "PATCH", "DELETE"]);
-const jsonIdempotencyTargets: ReadonlyArray<{
-  method: HttpMethod;
-  pathname: RegExp;
-}> = [
-  { method: "POST", pathname: /^\/api\/held-events$/u },
-  { method: "POST", pathname: /^\/api\/match-drafts$/u },
-  { method: "POST", pathname: /^\/api\/match-drafts\/[^/]+\/cancel$/u },
-  { method: "PATCH", pathname: /^\/api\/match-drafts\/[^/]+$/u },
-  { method: "POST", pathname: /^\/api\/matches$/u },
-  { method: "POST", pathname: /^\/api\/ocr-jobs$/u },
-  { method: "POST", pathname: /^\/api\/game-titles$/u },
-  { method: "POST", pathname: /^\/api\/map-masters$/u },
-  { method: "POST", pathname: /^\/api\/season-masters$/u },
-  { method: "POST", pathname: /^\/api\/member-aliases$/u },
-  { method: "POST", pathname: /^\/api\/admin\/login-accounts$/u },
-];
 
 export type ApiErrorLike = NormalizedApiError;
 
@@ -60,16 +44,8 @@ export function resolveDevUser(): string | undefined {
   return getBuildTimeDevUser() ?? getStoredDevUser();
 }
 
-function requestPathname(path: string): string {
-  try {
-    return new URL(path, "https://momo-result.local").pathname;
-  } catch {
-    return path.split("?")[0] ?? path;
-  }
-}
-
 function shouldAttachIdempotencyKey(
-  path: string,
+  _path: string,
   method: HttpMethod,
   options: ApiRequestOptions,
 ): boolean {
@@ -85,10 +61,7 @@ function shouldAttachIdempotencyKey(
   if (options.idempotencyKey !== undefined) {
     return mutatingMethods.has(method);
   }
-  const pathname = requestPathname(path);
-  return jsonIdempotencyTargets.some(
-    (target) => target.method === method && target.pathname.test(pathname),
-  );
+  return false;
 }
 
 function resolveIdempotencyKey(options: ApiRequestOptions): string {

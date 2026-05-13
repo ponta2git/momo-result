@@ -3,7 +3,7 @@ import { Activity } from "react";
 import { IncidentMasterPanel } from "@/features/masters/IncidentMasterPanel";
 import { MasterRelationBoard } from "@/features/masters/MasterRelationBoard";
 import { MasterReturnNotice } from "@/features/masters/MasterReturnNotice";
-import { normalizeLayoutFamily } from "@/features/masters/masterValidation";
+import { defaultLayoutFamily } from "@/features/masters/masterValidation";
 import { MemberAliasPanel } from "@/features/masters/MemberAliasPanel";
 import { masterTabs, useMastersPageController } from "@/features/masters/useMastersPageController";
 import { Button } from "@/shared/ui/actions/Button";
@@ -133,7 +133,7 @@ export function MastersPage() {
           gameTitleCreateAction={gameTitleCreateAction}
           gameTitleCreateError={gameTitleCreateState.error}
           gameTitleCreateFormKey={gameTitleCreateState.version}
-          gameTitleDefaultLayoutFamily={normalizeLayoutFamily("")}
+          gameTitleDefaultLayoutFamily={defaultLayoutFamily}
           mapMasters={viewModel.selectedMapMasters}
           onUpdateMapMaster={updateMapMaster}
           onDeleteMapMaster={deleteMapMaster}

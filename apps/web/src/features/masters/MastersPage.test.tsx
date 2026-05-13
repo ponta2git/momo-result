@@ -13,6 +13,7 @@ import {
   createDraftReviewHandoffPayload,
   saveMasterHandoff,
 } from "@/shared/workflows/masterReturnHandoff";
+import { makeDraftReviewHandoffValues } from "@/test/factories";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
 
@@ -170,7 +171,7 @@ describe("MastersPage", () => {
       createDraftReviewHandoffPayload({
         matchSessionId: "session-1",
         returnTo: "/review/session-1?totalAssets=draft-1",
-        values: {
+        values: makeDraftReviewHandoffValues({
           draftIds: { totalAssets: "draft-1" },
           gameTitleId: "gt_momotetsu_2",
           heldEventId: "event-1",
@@ -178,25 +179,8 @@ describe("MastersPage", () => {
           matchNoInEvent: 1,
           ownerMemberId: "member_ponta",
           playedAt: "2026-01-01T00:00:00.000Z",
-          players: [
-            {
-              incidents: {
-                cardShop: 0,
-                cardStation: 0,
-                destination: 0,
-                minusStation: 0,
-                plusStation: 0,
-                suriNoGinji: 0,
-              },
-              memberId: "member_ponta",
-              playOrder: 1,
-              rank: 1,
-              revenueManYen: 0,
-              totalAssetsManYen: 0,
-            },
-          ],
           seasonMasterId: "season_current",
-        },
+        }),
       }),
     );
 

@@ -1,4 +1,3 @@
-import { memberName } from "@/features/matches/list/matchListFormat";
 import type {
   MatchListItemView,
   MatchListLookupMaps,
@@ -7,19 +6,21 @@ import type {
   MatchListStatus,
   MatchListSummaryCounts,
 } from "@/features/matches/list/matchListTypes";
-import { parseDraftStatus } from "@/shared/domain/draftStatus";
+import { asDraftStatusOrUnknown } from "@/shared/domain/draftStatus";
+import { memberDisplayName } from "@/shared/domain/members";
 import { compact } from "@/shared/lib/compact";
 
 const statusPriority = {
   ocr_running: 0,
   needs_review: 1,
   draft_ready: 2,
-  ocr_failed: 3,
-  confirmed: 4,
+  unknown: 3,
+  ocr_failed: 4,
+  confirmed: 5,
 } as const satisfies Record<MatchListStatus, number>;
 
 function normalizeStatus(value: string): MatchListStatus {
-  return parseDraftStatus(value) ?? "confirmed";
+  return asDraftStatusOrUnknown(value);
 }
 
 function buildPrimaryAction(item: MatchListSourceItem, status: MatchListStatus) {
@@ -61,6 +62,14 @@ function buildPrimaryAction(item: MatchListSourceItem, status: MatchListStatus) 
         label: "読み取り中",
         variant: "secondary" as const,
       };
+    case "unknown":
+      return matchDraftId
+        ? {
+            href: `/review/${encodeURIComponent(matchDraftId)}`,
+            label: "状態を確認",
+            variant: "primary" as const,
+          }
+        : { disabled: true, label: "状態を確認", variant: "primary" as const };
   }
 }
 
@@ -83,6 +92,7 @@ function buildSecondaryActions(item: MatchListSourceItem, status: MatchListStatu
 function statusDescription(status: MatchListStatus): string | undefined {
   if (status === "ocr_failed") return "読み取りに失敗しました。手入力で続行できます。";
   if (status === "needs_review") return "確認が必要な項目があります。";
+  if (status === "unknown") return "未対応の状態です。確認画面で内容を確認してください。";
   return undefined;
 }
 
@@ -109,7 +119,7 @@ export function toMatchListItemView(
     ranks: (item.ranks ?? [])
       .toSorted((left, right) => left.rank - right.rank)
       .map((rank) => ({
-        displayName: memberName(rank.memberId),
+        displayName: memberDisplayName(rank.memberId),
         memberId: rank.memberId,
         rank: rank.rank,
       })),
@@ -129,7 +139,7 @@ export function toMatchListItemView(
       matchDraftId: item.matchDraftId || undefined,
       matchId: item.matchId || undefined,
       matchNoInEvent: item.matchNoInEvent || undefined,
-      ownerName: item.ownerMemberId ? memberName(item.ownerMemberId) : undefined,
+      ownerName: item.ownerMemberId ? memberDisplayName(item.ownerMemberId) : undefined,
       reviewHref:
         item.matchDraftId && status !== "confirmed"
           ? `/review/${encodeURIComponent(item.matchDraftId)}`

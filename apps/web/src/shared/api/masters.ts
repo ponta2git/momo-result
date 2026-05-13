@@ -32,12 +32,12 @@ export async function listGameTitles(): Promise<GameTitleListResponse> {
 
 export async function createGameTitle(
   request: CreateGameTitleRequest,
-  options: IdempotencyRequestOptions = {},
+  options: IdempotencyRequestOptions,
 ): Promise<GameTitleResponse> {
   return apiRequest<GameTitleResponse>("/api/game-titles", {
     method: "POST",
     body: request,
-    idempotency: options.idempotencyKey ? { key: options.idempotencyKey } : "auto",
+    idempotency: { key: options.idempotencyKey },
   });
 }
 
@@ -66,12 +66,12 @@ export async function listMapMasters(gameTitleId?: string): Promise<MapMasterLis
 
 export async function createMapMaster(
   request: CreateMapMasterRequest,
-  options: IdempotencyRequestOptions = {},
+  options: IdempotencyRequestOptions,
 ): Promise<MapMasterResponse> {
   return apiRequest<MapMasterResponse>("/api/map-masters", {
     method: "POST",
     body: request,
-    idempotency: options.idempotencyKey ? { key: options.idempotencyKey } : "auto",
+    idempotency: { key: options.idempotencyKey },
   });
 }
 
@@ -100,12 +100,12 @@ export async function listSeasonMasters(gameTitleId?: string): Promise<SeasonMas
 
 export async function createSeasonMaster(
   request: CreateSeasonMasterRequest,
-  options: IdempotencyRequestOptions = {},
+  options: IdempotencyRequestOptions,
 ): Promise<SeasonMasterResponse> {
   return apiRequest<SeasonMasterResponse>("/api/season-masters", {
     method: "POST",
     body: request,
-    idempotency: options.idempotencyKey ? { key: options.idempotencyKey } : "auto",
+    idempotency: { key: options.idempotencyKey },
   });
 }
 
@@ -138,12 +138,12 @@ export async function listMemberAliases(memberId?: string): Promise<MemberAliasL
 
 export async function createMemberAlias(
   request: CreateMemberAliasRequest,
-  options: IdempotencyRequestOptions = {},
+  options: IdempotencyRequestOptions,
 ): Promise<MemberAliasResponse> {
   return apiRequest<MemberAliasResponse>("/api/member-aliases", {
     method: "POST",
     body: request,
-    idempotency: options.idempotencyKey ? { key: options.idempotencyKey } : "auto",
+    idempotency: { key: options.idempotencyKey },
   });
 }
 

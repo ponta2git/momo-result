@@ -89,6 +89,23 @@ describe("problemDetails", () => {
     );
   });
 
+  it("uses machine-readable idempotency codes when backend provides them", async () => {
+    const error = await normalizeApiErrorResponse(
+      Response.json(
+        {
+          type: "about:blank",
+          title: "Conflict",
+          status: 409,
+          detail: "retry later",
+          code: "IDEMPOTENCY_IN_PROGRESS",
+        },
+        { status: 409 },
+      ),
+    );
+
+    expect(error.category).toBe("idempotency_in_progress");
+  });
+
   it("formats payload-too-large as a validation message", async () => {
     const error = await normalizeApiErrorResponse(
       Response.json(

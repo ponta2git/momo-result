@@ -70,9 +70,7 @@ const violations = [];
 
 for (const file of walk(root)) {
   const relativePath = relative(root, file);
-  if (!isProductionSource(relativePath)) {
-    continue;
-  }
+  const productionSource = isProductionSource(relativePath);
   const source = readFileSync(file, "utf8");
   const sourceLayer = layer(relativePath);
   const sourceFeature = topLevelFeature(relativePath);
@@ -95,11 +93,11 @@ for (const file of walk(root)) {
       violations.push(`${relativePath}: feature '${sourceFeature}' must not import ${specifier}`);
     }
 
-    if (sourceLayer !== "test" && resolvedImport?.startsWith("test/")) {
+    if (productionSource && resolvedImport?.startsWith("test/")) {
       violations.push(`${relativePath}: production code must not import ${specifier}`);
     }
 
-    if (sourceLayer !== "test" && resolvedImport?.startsWith("shared/api/msw/")) {
+    if (productionSource && resolvedImport?.startsWith("shared/api/msw/")) {
       violations.push(`${relativePath}: production code must not import ${specifier}`);
     }
   }

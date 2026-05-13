@@ -10,6 +10,33 @@ import {
   saveMasterHandoff,
 } from "@/shared/workflows/masterReturnHandoff";
 
+const memberIds = ["member_ponta", "member_akane_mami", "member_otaka", "member_eu"] as const;
+
+function handoffPlayers(
+  overrides: {
+    destination?: number;
+    plusStation?: number;
+    revenueManYen?: number;
+    totalAssetsManYen?: number;
+  } = {},
+) {
+  return memberIds.map((memberId, index) => ({
+    incidents: {
+      cardShop: 0,
+      cardStation: 0,
+      destination: overrides.destination ?? 0,
+      minusStation: 0,
+      plusStation: overrides.plusStation ?? 0,
+      suriNoGinji: 0,
+    },
+    memberId,
+    playOrder: index + 1,
+    rank: index + 1,
+    revenueManYen: overrides.revenueManYen ?? 0,
+    totalAssetsManYen: overrides.totalAssetsManYen ?? 0,
+  }));
+}
+
 describe("masterReturnHandoff", () => {
   beforeEach(() => {
     window.sessionStorage.clear();
@@ -37,23 +64,12 @@ describe("masterReturnHandoff", () => {
         matchNoInEvent: 1,
         ownerMemberId: "member_ponta",
         playedAt: "2026-01-01T00:00:00.000Z",
-        players: [
-          {
-            incidents: {
-              cardShop: 0,
-              cardStation: 0,
-              destination: 1,
-              minusStation: 0,
-              plusStation: 2,
-              suriNoGinji: 0,
-            },
-            memberId: "member_ponta",
-            playOrder: 1,
-            rank: 1,
-            revenueManYen: 100,
-            totalAssetsManYen: 1000,
-          },
-        ],
+        players: handoffPlayers({
+          destination: 1,
+          plusStation: 2,
+          revenueManYen: 100,
+          totalAssetsManYen: 1000,
+        }),
         seasonMasterId: "season-1",
       },
     });
@@ -94,23 +110,7 @@ describe("masterReturnHandoff", () => {
         matchNoInEvent: 1,
         ownerMemberId: "member_ponta",
         playedAt: "2026-01-01T00:00:00.000Z",
-        players: [
-          {
-            incidents: {
-              cardShop: 0,
-              cardStation: 0,
-              destination: 0,
-              minusStation: 0,
-              plusStation: 0,
-              suriNoGinji: 0,
-            },
-            memberId: "member_ponta",
-            playOrder: 1,
-            rank: 1,
-            revenueManYen: 0,
-            totalAssetsManYen: 0,
-          },
-        ],
+        players: handoffPlayers(),
         seasonMasterId: "season-1",
       },
     });
@@ -135,23 +135,7 @@ describe("masterReturnHandoff", () => {
       matchNoInEvent: 1,
       ownerMemberId: "member_ponta",
       playedAt: "2026-01-01T00:00:00.000Z",
-      players: [
-        {
-          incidents: {
-            cardShop: 0,
-            cardStation: 0,
-            destination: 0,
-            minusStation: 0,
-            plusStation: 0,
-            suriNoGinji: 0,
-          },
-          memberId: "member_ponta",
-          playOrder: 1,
-          rank: 1,
-          revenueManYen: 0,
-          totalAssetsManYen: 0,
-        },
-      ],
+      players: handoffPlayers(),
       seasonMasterId: "season-1",
     };
     const foreign = createDraftReviewHandoffPayload({

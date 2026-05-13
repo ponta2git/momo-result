@@ -1,10 +1,10 @@
 import { AlertTriangle, CircleCheck, LoaderCircle, PencilLine } from "lucide-react";
 import type { ReactNode } from "react";
 
-import type { DraftStatus } from "@/shared/domain/draftStatus";
+import type { DraftStatusOrUnknown } from "@/shared/domain/draftStatus";
 import { cn } from "@/shared/ui/cn";
 
-export type MatchStatus = DraftStatus;
+export type MatchStatus = DraftStatusOrUnknown;
 
 type StatusViewModel = {
   icon: ReactNode;
@@ -42,6 +42,12 @@ const statusViewModel: Record<MatchStatus, StatusViewModel> = {
     shortLabel: "処理中",
     toneClass:
       "border-[var(--color-action)]/60 bg-[var(--color-action)]/12 text-[var(--color-text-primary)]",
+  },
+  unknown: {
+    icon: <AlertTriangle className="size-4" />,
+    shortLabel: "確認待ち",
+    toneClass:
+      "border-[var(--color-warning)]/80 bg-[var(--color-warning)]/20 text-[var(--color-text-primary)]",
   },
 };
 

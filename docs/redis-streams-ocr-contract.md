@@ -39,7 +39,7 @@ API は `XADD` する。worker は `XGROUP CREATE ... MKSTREAM` を許容し、`
 | `draftId` | yes | DB `ocr_drafts.id` |
 | `imageId` | yes | API 側の一時画像論理 ID |
 | `imagePath` | yes | worker が読める絶対パス |
-| `requestedImageType` | yes | `auto`, `total_assets`, `revenue`, `incident_log` |
+| `requestedScreenType` | yes | `auto`, `total_assets`, `revenue`, `incident_log` |
 | `attempt` | yes | API が payload 作成時に入れる正整数。現行実装では常に `1` |
 | `enqueuedAt` | yes | API が payload を作成した ISO-8601 UTC timestamp |
 | `ocrHintsJson` | no | compact / sorted keys / UTF-8 の JSON string。最大 8192 文字 |
@@ -149,7 +149,7 @@ queued -> cancelled
 
 - 必須 field の削除または rename。
 - 既存 field の型、意味、単位の変更。
-- `requestedImageType`, `FailureCode`, job status の既存値削除。
+- `requestedScreenType`, `FailureCode`, job status の既存値削除。
 - ack 前後関係、DB 正本性、terminal transition 条件の変更。
 
 非互換変更は API、worker、`momo-db` の deploy 順序を明示し、JSON Schema と両言語の契約テストを同じ PR で更新する。

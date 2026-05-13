@@ -6,21 +6,24 @@ function slugify(input: string): string {
     .toLowerCase();
 }
 
-function nowSuffix(now: number): string {
-  return String(now).replaceAll(/\D/gu, "");
+function seedSuffix(seed: number | string): string {
+  return String(seed)
+    .replaceAll(/[^a-zA-Z0-9]+/gu, "")
+    .toLowerCase()
+    .slice(0, 18);
 }
 
-export function createGameTitleId(name: string, now = Date.now()): string {
+export function createGameTitleId(name: string, seed: number | string = Date.now()): string {
   const suffix = slugify(name) || "game_title";
-  return `gt_${suffix}_${nowSuffix(now)}`;
+  return `gt_${suffix}_${seedSuffix(seed)}`;
 }
 
-export function createMapMasterId(name: string, now = Date.now()): string {
+export function createMapMasterId(name: string, seed: number | string = Date.now()): string {
   const suffix = slugify(name) || "map";
-  return `map_master_${suffix}_${nowSuffix(now)}`;
+  return `map_master_${suffix}_${seedSuffix(seed)}`;
 }
 
-export function createSeasonMasterId(name: string, now = Date.now()): string {
+export function createSeasonMasterId(name: string, seed: number | string = Date.now()): string {
   const suffix = slugify(name) || "season";
-  return `season_master_${suffix}_${nowSuffix(now)}`;
+  return `season_master_${suffix}_${seedSuffix(seed)}`;
 }

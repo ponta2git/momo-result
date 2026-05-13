@@ -1,6 +1,35 @@
 export type IdempotencyKeyStore = {
-  keyFor: (operation: string, payload: unknown) => string;
-  reset: (operation?: string, payload?: unknown) => void;
+  begin: (operation: IdempotencyOperation, payload: unknown) => IdempotencyOperationAttempt;
+  complete: (operation: IdempotencyOperation, payload: unknown) => void;
+  keyFor: (operation: IdempotencyOperation, payload: unknown) => string;
+  reset: (operation?: IdempotencyOperation, payload?: unknown) => void;
+};
+
+export const idempotencyOperations = [
+  "adminAccounts.createLoginAccount",
+  "heldEvents.createHeldEvent",
+  "masters.createGameTitle",
+  "masters.createMapMaster",
+  "masters.createMemberAlias",
+  "masters.createSeasonMaster",
+  "matchDetail.deleteMatch",
+  "matchWorkspace.cancelMatchDraft",
+  "matchWorkspace.confirmMatch",
+  "matchWorkspace.createHeldEvent",
+  "matchWorkspace.updateMatch",
+  "ocrCapture.cancelMatchDraft",
+  "ocrCapture.createMatchDraft",
+  "ocrCapture.createOcrJob",
+] as const;
+
+export type IdempotencyOperation = (typeof idempotencyOperations)[number];
+
+export type IdempotencyOperationAttempt = {
+  complete: () => void;
+  key: string;
+  operation: IdempotencyOperation;
+  payload: unknown;
+  reset: () => void;
 };
 
 export function createIdempotencyKey(): string {
@@ -49,38 +78,52 @@ function normalizeForJson(value: unknown): unknown {
   );
 }
 
-export function idempotencyFingerprint(operation: string, payload: unknown): string {
+export function idempotencyFingerprint(operation: IdempotencyOperation, payload: unknown): string {
   return `${operation}:${stableJson(payload)}`;
 }
 
 export function createIdempotencyKeyStore(): IdempotencyKeyStore {
   const keys = new Map<string, string>();
-  return {
-    keyFor(operation, payload) {
-      const fingerprint = idempotencyFingerprint(operation, payload);
-      const existing = keys.get(fingerprint);
-      if (existing) {
-        return existing;
-      }
-      const key = createIdempotencyKey();
-      keys.set(fingerprint, key);
-      return key;
-    },
-    reset(operation, payload) {
-      if (operation === undefined) {
-        keys.clear();
-        return;
-      }
-      if (payload === undefined) {
-        const prefix = `${operation}:`;
-        for (const fingerprint of keys.keys()) {
-          if (fingerprint.startsWith(prefix)) {
-            keys.delete(fingerprint);
-          }
+  const reset = (operation?: IdempotencyOperation, payload?: unknown) => {
+    if (operation === undefined) {
+      keys.clear();
+      return;
+    }
+    if (payload === undefined) {
+      const prefix = `${operation}:`;
+      for (const fingerprint of keys.keys()) {
+        if (fingerprint.startsWith(prefix)) {
+          keys.delete(fingerprint);
         }
-        return;
       }
-      keys.delete(idempotencyFingerprint(operation, payload));
+      return;
+    }
+    keys.delete(idempotencyFingerprint(operation, payload));
+  };
+  const keyFor = (operation: IdempotencyOperation, payload: unknown): string => {
+    const fingerprint = idempotencyFingerprint(operation, payload);
+    const existing = keys.get(fingerprint);
+    if (existing) {
+      return existing;
+    }
+    const key = createIdempotencyKey();
+    keys.set(fingerprint, key);
+    return key;
+  };
+
+  return {
+    begin(operation, payload) {
+      const attempt = {
+        complete: () => reset(operation, payload),
+        key: keyFor(operation, payload),
+        operation,
+        payload,
+        reset: () => reset(operation, payload),
+      };
+      return attempt;
     },
+    complete: reset,
+    keyFor,
+    reset,
   };
 }

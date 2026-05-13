@@ -26,12 +26,12 @@ export async function uploadImage(file: File): Promise<UploadImageResponse> {
 
 export async function createOcrJob(
   request: CreateOcrJobRequest,
-  options: IdempotencyRequestOptions = {},
+  options: IdempotencyRequestOptions,
 ): Promise<CreateOcrJobResponse> {
   return apiRequest<CreateOcrJobResponse>("/api/ocr-jobs", {
     method: "POST",
     body: request,
-    idempotency: options.idempotencyKey ? { key: options.idempotencyKey } : "auto",
+    idempotency: { key: options.idempotencyKey },
   });
 }
 

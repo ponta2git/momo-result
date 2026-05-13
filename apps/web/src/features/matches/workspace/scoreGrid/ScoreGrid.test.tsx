@@ -145,4 +145,24 @@ describe("ScoreGrid", () => {
 
     expect(incidentChanges.at(-1)).toEqual([0, "destination", 7]);
   });
+
+  it("does not commit NaN when a mobile numeric draft is incomplete", async () => {
+    matchMedia = installMatchMediaController(true);
+    const user = userEvent.setup();
+    const onPlayerChange =
+      vi.fn<(index: number, patch: Partial<MatchFormValues["players"][number]>) => void>();
+
+    render(<ScoreGridHarness onPlayerChange={onPlayerChange} />);
+
+    const revenueInput = screen.getByRole("textbox", {
+      name: "ぽんた revenueManYen",
+    });
+
+    await user.clear(revenueInput);
+    await user.type(revenueInput, "-");
+    await user.tab();
+
+    expect(revenueInput).toHaveValue("-");
+    expect(onPlayerChange).not.toHaveBeenCalled();
+  });
 });

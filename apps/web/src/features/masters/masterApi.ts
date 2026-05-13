@@ -95,23 +95,17 @@ export async function fetchMemberAliases(): Promise<MemberAliasResponse[]> {
   return (response.items ?? []).toSorted(byMemberAlias);
 }
 
-export function postGameTitle(
-  request: CreateGameTitleRequest,
-  options: IdempotencyRequestOptions = {},
-) {
+export function postGameTitle(request: CreateGameTitleRequest, options: IdempotencyRequestOptions) {
   return createGameTitle(request, options);
 }
 
-export function postMapMaster(
-  request: CreateMapMasterRequest,
-  options: IdempotencyRequestOptions = {},
-) {
+export function postMapMaster(request: CreateMapMasterRequest, options: IdempotencyRequestOptions) {
   return createMapMaster(request, options);
 }
 
 export function postSeasonMaster(
   request: CreateSeasonMasterRequest,
-  options: IdempotencyRequestOptions = {},
+  options: IdempotencyRequestOptions,
 ) {
   return createSeasonMaster(request, options);
 }
@@ -142,7 +136,7 @@ export function removeSeasonMaster(id: string) {
 
 export function postMemberAlias(
   request: CreateMemberAliasRequest,
-  options: IdempotencyRequestOptions = {},
+  options: IdempotencyRequestOptions,
 ) {
   return createMemberAlias(request, options);
 }

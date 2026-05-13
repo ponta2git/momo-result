@@ -3,6 +3,7 @@ import type {
   IncidentLookupEntry,
   MatchFormValues,
 } from "@/features/matches/workspace/matchFormTypes";
+import { emptyIncidentCountsByKey, incidentCountsByLabelToKey } from "@/shared/domain/incidents";
 
 type PlayerField = Exclude<keyof MatchFormValues["players"][number], "incidents">;
 
@@ -26,23 +27,9 @@ export type MatchFormReducerState = {
 
 function syncedIncidents(entry: IncidentLookupEntry | undefined) {
   if (!entry) {
-    return {
-      cardShop: 0,
-      cardStation: 0,
-      destination: 0,
-      minusStation: 0,
-      plusStation: 0,
-      suriNoGinji: 0,
-    };
+    return emptyIncidentCountsByKey();
   }
-  return {
-    cardShop: entry.counts["カード売り場"],
-    cardStation: entry.counts["カード駅"],
-    destination: entry.counts["目的地"],
-    minusStation: entry.counts["マイナス駅"],
-    plusStation: entry.counts["プラス駅"],
-    suriNoGinji: entry.counts["スリの銀次"],
-  };
+  return incidentCountsByLabelToKey(entry.counts);
 }
 
 export function createMatchFormReducerState(values: MatchFormValues): MatchFormReducerState {

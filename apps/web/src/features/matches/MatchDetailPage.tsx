@@ -10,7 +10,8 @@ import type { MatchDetailResponse } from "@/shared/api/matches";
 import { formatApiError } from "@/shared/api/problemDetails";
 import { heldEventKeys, masterKeys, matchKeys } from "@/shared/api/queryKeys";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
-import { fixedMembers } from "@/shared/domain/members";
+import { incidentColumns } from "@/shared/domain/incidents";
+import { memberDisplayName } from "@/shared/domain/members";
 import { formatManYen } from "@/shared/lib/formatters";
 import { Button } from "@/shared/ui/actions/Button";
 import { DataTable } from "@/shared/ui/data/DataTable";
@@ -19,15 +20,6 @@ import { Notice } from "@/shared/ui/feedback/Notice";
 import { Card } from "@/shared/ui/layout/Card";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
-
-const incidentColumns = [
-  ["destination", "目的地"],
-  ["plusStation", "プラス駅"],
-  ["minusStation", "マイナス駅"],
-  ["cardStation", "カード駅"],
-  ["cardShop", "カード売り場"],
-  ["suriNoGinji", "スリの銀次"],
-] as const;
 
 type PlayerResult = NonNullable<MatchDetailResponse["players"]>[number];
 type SortKey =
@@ -46,10 +38,6 @@ type SortState = {
   direction: "asc" | "desc";
   key: SortKey;
 };
-
-function memberName(memberId: string): string {
-  return fixedMembers.find((m) => m.memberId === memberId)?.displayName ?? memberId;
-}
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
@@ -72,7 +60,7 @@ function formatDateOnly(iso: string): string {
 }
 
 function sortValue(player: PlayerResult, key: SortKey): number | string {
-  if (key === "member") return memberName(player.memberId);
+  if (key === "member") return memberDisplayName(player.memberId);
   if (key in player.incidents) return player.incidents[key as keyof PlayerResult["incidents"]];
   return player[
     key as keyof Pick<PlayerResult, "playOrder" | "rank" | "revenueManYen" | "totalAssetsManYen">
@@ -118,10 +106,15 @@ export function MatchDetailPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: () =>
-      deleteMatch(matchId, {
-        idempotencyKey: idempotencyKeys.keyFor("matchDetail.deleteMatch", { matchId }),
-      }),
+    mutationFn: async () => {
+      const payload = { matchId };
+      const attempt = idempotencyKeys.begin("matchDetail.deleteMatch", payload);
+      const response = await deleteMatch(matchId, {
+        idempotencyKey: attempt.key,
+      });
+      attempt.complete();
+      return response;
+    },
     onError: (error) => {
       setErrorMessage(formatApiError(error, "削除に失敗しました"));
     },
@@ -229,7 +222,7 @@ export function MatchDetailPage() {
             </div>
             <div>
               <dt className="text-xs font-semibold text-[var(--color-text-secondary)]">オーナー</dt>
-              <dd className="mt-1">{memberName(match.ownerMemberId)}</dd>
+              <dd className="mt-1">{memberDisplayName(match.ownerMemberId)}</dd>
             </div>
             <div>
               <dt className="text-xs font-semibold text-[var(--color-text-secondary)]">対戦日時</dt>
@@ -248,7 +241,7 @@ export function MatchDetailPage() {
           <div className="rounded-[var(--radius-md)] border border-[var(--color-action)]/45 bg-[var(--color-action)]/10 p-4">
             <p className="text-xs font-semibold text-[var(--color-text-secondary)]">優勝</p>
             <p className="mt-1 text-2xl font-semibold text-balance text-[var(--color-text-primary)]">
-              {rankedPlayers[0] ? memberName(rankedPlayers[0].memberId) : "未確定"}
+              {rankedPlayers[0] ? memberDisplayName(rankedPlayers[0].memberId) : "未確定"}
             </p>
             {rankedPlayers[0] ? (
               <div className="mt-3 grid gap-1 text-sm text-[var(--color-text-secondary)]">
@@ -277,7 +270,7 @@ export function MatchDetailPage() {
                   {player.rank}位
                 </span>
                 <span className="truncate font-semibold text-[var(--color-text-primary)]">
-                  {memberName(player.memberId)}
+                  {memberDisplayName(player.memberId)}
                 </span>
                 <span className="text-sm text-[var(--color-text-secondary)] tabular-nums">
                   {formatManYen(player.totalAssetsManYen)}
@@ -311,7 +304,7 @@ export function MatchDetailPage() {
               key: "member",
               minWidth: "10rem",
               onSort: () => setSort((current) => nextSort(current, "member")),
-              renderCell: (player) => memberName(player.memberId),
+              renderCell: (player) => memberDisplayName(player.memberId),
               sortDirection: sort.key === "member" ? sort.direction : undefined,
               sortable: true,
             },

@@ -9,7 +9,7 @@ import type { UseQueryResult } from "@tanstack/react-query";
  * fetcher の引数は `string`（非 undefined）に絞られるため、
  * `assertDefined` がなくても型検査で弾ける。
  *
- * 参照透過性: 同じ key/fetcher/id では常に同じクエリ結果を返す。
+ * query key / fetcher / enabled 条件の形を統一し、未選択 id の queryFn 実行を防ぐ。
  */
 export function useResourceQuery<TData>(args: {
   key: (id: string | undefined) => readonly unknown[];

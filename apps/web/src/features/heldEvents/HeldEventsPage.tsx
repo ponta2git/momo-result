@@ -117,9 +117,11 @@ export function HeldEventsPage() {
 
       try {
         const request = { heldAt: toIsoFromLocal(heldAt) };
+        const attempt = idempotencyKeys.begin("heldEvents.createHeldEvent", request);
         const event = await createHeldEvent(request, {
-          idempotencyKey: idempotencyKeys.keyFor("heldEvents.createHeldEvent", request),
+          idempotencyKey: attempt.key,
         });
+        attempt.complete();
         queryClient.setQueryData<HeldEventListResponse>(
           heldEventKeys.scope("held-events-page"),
           (current) => upsertHeldEventList(current, event),

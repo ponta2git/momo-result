@@ -1,4 +1,4 @@
-import { layoutFamilies } from "@/shared/api/enums";
+import { parseLayoutFamily as parseLayoutFamilyValue } from "@/shared/api/enums";
 import type { LayoutFamily } from "@/shared/api/enums";
 
 export function normalizeName(name: string): string {
@@ -9,8 +9,8 @@ export function isNameValid(name: string): boolean {
   return normalizeName(name).length > 0;
 }
 
-export function normalizeLayoutFamily(layoutFamily: string): LayoutFamily {
-  return layoutFamilies.includes(layoutFamily as LayoutFamily)
-    ? (layoutFamily as LayoutFamily)
-    : layoutFamilies[0];
+export const defaultLayoutFamily: LayoutFamily = "momotetsu_2";
+
+export function parseLayoutFamily(layoutFamily: string): LayoutFamily | undefined {
+  return parseLayoutFamilyValue(layoutFamily);
 }

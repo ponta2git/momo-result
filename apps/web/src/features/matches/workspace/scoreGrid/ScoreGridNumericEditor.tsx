@@ -75,16 +75,16 @@ function normalizeNumericDraft(input: string, allowSign: boolean): string {
   return `${sign}${digits.replace(/^0+(?=\d)/u, "")}`;
 }
 
-function parseNumericValue(value: string, allowSign: boolean): number {
+function parseNumericValue(value: string, allowSign: boolean): number | undefined {
   if (value.trim() === "" || value === "-") {
-    return Number.NaN;
+    return undefined;
   }
 
   if (allowSign) {
-    return /^-?\d+$/u.test(value) ? Number(value) : Number.NaN;
+    return /^-?\d+$/u.test(value) ? Number(value) : undefined;
   }
 
-  return /^\d+$/u.test(value) ? Number(value) : Number.NaN;
+  return /^\d+$/u.test(value) ? Number(value) : undefined;
 }
 
 type ScoreGridNumericEditorProps = {
@@ -142,7 +142,9 @@ export const ScoreGridNumericEditor = memo(function ScoreGridNumericEditor({
   const editStartValueRef = useRef<string | null>(null);
   const fallbackValue = Number.isFinite(value) ? String(value) : "";
   const inputValue = draftValue ?? fallbackValue;
-  const currentValue = draftValue === undefined ? value : parseNumericValue(draftValue, allowSign);
+  const parsedDraftValue =
+    draftValue === undefined ? undefined : parseNumericValue(draftValue, allowSign);
+  const currentValue = parsedDraftValue ?? value;
   const viewState = showStateLabel
     ? cellViewState({
         currentValue,
@@ -165,16 +167,20 @@ export const ScoreGridNumericEditor = memo(function ScoreGridNumericEditor({
 
   const commitInputValue = useCallback(() => {
     const parsed = parseNumericValue(inputValue, allowSign);
-    commitParsedValue(parsed);
-    if (!Number.isNaN(parsed)) {
-      setDraftValue(undefined);
+    if (parsed === undefined) {
+      return;
     }
+    commitParsedValue(parsed);
+    setDraftValue(undefined);
   }, [allowSign, commitParsedValue, inputValue]);
 
   const revertCell = useCallback(() => {
     const before = editStartValueRef.current ?? fallbackValue;
+    const parsed = parseNumericValue(before, allowSign);
     setDraftValue(before);
-    commitParsedValue(parseNumericValue(before, allowSign));
+    if (parsed !== undefined) {
+      commitParsedValue(parsed);
+    }
   }, [allowSign, commitParsedValue, fallbackValue]);
 
   const handleChange = useCallback(

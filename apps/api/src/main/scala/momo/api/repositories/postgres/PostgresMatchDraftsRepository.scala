@@ -12,7 +12,7 @@ import doobie.util.fragments
 
 import momo.api.db.Database
 import momo.api.domain.ids.*
-import momo.api.domain.{MatchDraft, MatchDraftStatus, ScreenType}
+import momo.api.domain.{MatchDraft, MatchDraftStatus, MatchNoInEvent, ScreenType}
 import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.repositories.{MatchDraftsAlg, MatchDraftsRepository}
 
@@ -29,7 +29,7 @@ object PostgresMatchDrafts:
       createdByMemberId: Option[MemberId],
       status: MatchDraftStatus,
       heldEventId: Option[HeldEventId],
-      matchNoInEvent: Option[Int],
+      matchNoInEvent: Option[MatchNoInEvent],
       gameTitleId: Option[GameTitleId],
       layoutFamily: Option[String],
       seasonMasterId: Option[SeasonMasterId],

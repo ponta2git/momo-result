@@ -16,5 +16,5 @@ object DevAuthMiddleware:
         .pure(Left(AppError.Forbidden("Development authentication is disabled in prod.")))
     case AppEnv.Dev | AppEnv.Test => Sync[F].pure(
         roster.find(headerValue)
-          .toRight(AppError.Forbidden("X-Dev-User is not one of the allowed accounts."))
+          .toRight(AppError.Forbidden("Account header is not one of the allowed accounts."))
       )

@@ -15,6 +15,7 @@ final case class RedisConfig(url: String, stream: String, group: String)
 final case class ResourceLimitsConfig(
     uploadRateLimitPerMinute: Int,
     exportRateLimitPerMinute: Int,
+    requestMaxBytes: Long,
     uploadRequestMaxBytes: Long,
     imageOrphanOlderThan: FiniteDuration,
     imageOrphanReaperInterval: FiniteDuration,
@@ -105,16 +106,16 @@ object AppConfig:
       case None => MonadThrow[F].pure(None)
       case Some(rawUrl) =>
         val (jdbcUrl, urlUser, urlPassword) = toJdbcUrl(rawUrl)
-        val validated = ensureProdSslMode(jdbcUrl, appEnv)
-        validated.map { safeJdbcUrl =>
-          Some(DatabaseConfig(
-            jdbcUrl = safeJdbcUrl,
-            user = urlUser.orElse(env.get("DATABASE_USER").filter(_.nonEmpty)).getOrElse(""),
-            password = urlPassword.orElse(env.get("DATABASE_PASSWORD").filter(_.nonEmpty))
-              .getOrElse(""),
-            poolSize = env.get("DB_POOL_SIZE").flatMap(_.toIntOption).getOrElse(2),
-          ))
-        }.liftTo[F]
+        for
+          safeJdbcUrl <- ensureProdSslMode(jdbcUrl, appEnv).liftTo[F]
+          poolSize <- parsePositiveInt(env, "DB_POOL_SIZE", default = 2).liftTo[F]
+        yield Some(DatabaseConfig(
+          jdbcUrl = safeJdbcUrl,
+          user = urlUser.orElse(env.get("DATABASE_USER").filter(_.nonEmpty)).getOrElse(""),
+          password = urlPassword.orElse(env.get("DATABASE_PASSWORD").filter(_.nonEmpty))
+            .getOrElse(""),
+          poolSize = poolSize,
+        ))
 
   private def loadRedis[F[_]: MonadThrow](
       env: Map[String, String],
@@ -133,31 +134,35 @@ object AppConfig:
         )))
 
   private def loadAuth[F[_]: MonadThrow](env: Map[String, String], appEnv: AppEnv): F[AuthConfig] =
-    val config = AuthConfig(
-      discordClientId = env.get("DISCORD_CLIENT_ID").filter(_.nonEmpty),
-      discordClientSecret = env.get("DISCORD_CLIENT_SECRET").filter(_.nonEmpty),
-      discordRedirectUri = env.get("DISCORD_REDIRECT_URI").filter(_.nonEmpty),
-      stateSigningKey = env.get("AUTH_STATE_SIGNING_KEY").filter(_.nonEmpty),
-      sessionCookieName = env.getOrElse(
-        "SESSION_COOKIE_NAME",
-        if appEnv == AppEnv.Prod then "__Host-momo_result_session" else "momo_result_session",
-      ),
-      stateCookieName = env.getOrElse(
-        "OAUTH_STATE_COOKIE_NAME",
-        if appEnv == AppEnv.Prod then "__Host-momo_result_oauth_state"
-        else "momo_result_oauth_state",
-      ),
-      sessionTtl = env.get("SESSION_TTL_DAYS").flatMap(_.toLongOption).getOrElse(30L).days,
-      stateTtl = env.get("OAUTH_STATE_TTL_SECONDS").flatMap(_.toLongOption).getOrElse(300L).seconds,
-      rateLimitPerMinute = env.get("AUTH_RATE_LIMIT_PER_MINUTE").flatMap(_.toIntOption)
-        .getOrElse(10),
-      callbackRedirectPath = env.getOrElse("AUTH_CALLBACK_REDIRECT_PATH", "/"),
-      useSecureCookies = env.get("AUTH_COOKIE_SECURE").flatMap(_.toBooleanOption)
-        .getOrElse(appEnv == AppEnv.Prod),
-      useHostPrefix = env.get("AUTH_COOKIE_HOST_PREFIX").flatMap(_.toBooleanOption)
-        .getOrElse(appEnv == AppEnv.Prod),
-    )
-    validateAuth[F](config, appEnv)
+    (
+      parsePositiveLong(env, "SESSION_TTL_DAYS", default = 30L),
+      parsePositiveLong(env, "OAUTH_STATE_TTL_SECONDS", default = 300L),
+      parseNonNegativeInt(env, "AUTH_RATE_LIMIT_PER_MINUTE", default = 10),
+      parseBoolean(env, "AUTH_COOKIE_SECURE", default = appEnv == AppEnv.Prod),
+      parseBoolean(env, "AUTH_COOKIE_HOST_PREFIX", default = appEnv == AppEnv.Prod),
+    ).mapN { (sessionTtlDays, stateTtlSeconds, rateLimit, secureCookies, hostPrefix) =>
+      AuthConfig(
+        discordClientId = env.get("DISCORD_CLIENT_ID").filter(_.nonEmpty),
+        discordClientSecret = env.get("DISCORD_CLIENT_SECRET").filter(_.nonEmpty),
+        discordRedirectUri = env.get("DISCORD_REDIRECT_URI").filter(_.nonEmpty),
+        stateSigningKey = env.get("AUTH_STATE_SIGNING_KEY").filter(_.nonEmpty),
+        sessionCookieName = env.getOrElse(
+          "SESSION_COOKIE_NAME",
+          if appEnv == AppEnv.Prod then "__Host-momo_result_session" else "momo_result_session",
+        ),
+        stateCookieName = env.getOrElse(
+          "OAUTH_STATE_COOKIE_NAME",
+          if appEnv == AppEnv.Prod then "__Host-momo_result_oauth_state"
+          else "momo_result_oauth_state",
+        ),
+        sessionTtl = sessionTtlDays.days,
+        stateTtl = stateTtlSeconds.seconds,
+        rateLimitPerMinute = rateLimit,
+        callbackRedirectPath = env.getOrElse("AUTH_CALLBACK_REDIRECT_PATH", "/"),
+        useSecureCookies = secureCookies,
+        useHostPrefix = hostPrefix,
+      )
+    }.liftTo[F].flatMap(validateAuth[F](_, appEnv))
 
   private def validateAuth[F[_]: MonadThrow](config: AuthConfig, appEnv: AppEnv): F[AuthConfig] =
     val missing =
@@ -177,24 +182,93 @@ object AppConfig:
 
   private def loadResourceLimits[F[_]: MonadThrow](
       env: Map[String, String]
-  ): F[ResourceLimitsConfig] = MonadThrow[F].pure(ResourceLimitsConfig(
-    uploadRateLimitPerMinute = env.get("UPLOAD_RATE_LIMIT_PER_MINUTE").flatMap(_.toIntOption)
-      .getOrElse(20),
-    exportRateLimitPerMinute = env.get("EXPORT_RATE_LIMIT_PER_MINUTE").flatMap(_.toIntOption)
-      .getOrElse(30),
-    uploadRequestMaxBytes = env.get("UPLOAD_REQUEST_MAX_BYTES").flatMap(_.toLongOption)
-      .getOrElse(ResourceLimitsConfig.DefaultUploadRequestMaxBytes),
-    imageOrphanOlderThan = env.get("IMAGE_ORPHAN_OLDER_THAN_MINUTES").flatMap(_.toLongOption)
-      .getOrElse(60L).minutes,
-    imageOrphanReaperInterval = env.get("IMAGE_ORPHAN_REAPER_INTERVAL_MINUTES")
-      .flatMap(_.toLongOption).getOrElse(60L).minutes,
-    staleOcrJobAfter = env.get("STALE_OCR_JOB_AFTER_SECONDS").flatMap(_.toLongOption)
-      .getOrElse(300L).seconds,
-    staleOcrJobReaperInterval = env.get("STALE_OCR_JOB_REAPER_INTERVAL_SECONDS")
-      .flatMap(_.toLongOption).getOrElse(60L).seconds,
-    sessionPruneInterval = env.get("SESSION_PRUNE_INTERVAL_MINUTES").flatMap(_.toLongOption)
-      .getOrElse(60L).minutes,
-  ))
+  ): F[ResourceLimitsConfig] = (
+    parseNonNegativeInt(env, "UPLOAD_RATE_LIMIT_PER_MINUTE", default = 20),
+    parseNonNegativeInt(env, "EXPORT_RATE_LIMIT_PER_MINUTE", default = 30),
+    parsePositiveLong(env, "REQUEST_MAX_BYTES", ResourceLimitsConfig.DefaultRequestMaxBytes),
+    parsePositiveLong(
+      env,
+      "UPLOAD_REQUEST_MAX_BYTES",
+      ResourceLimitsConfig.DefaultUploadRequestMaxBytes,
+    ),
+    parsePositiveLong(env, "IMAGE_ORPHAN_OLDER_THAN_MINUTES", default = 60L),
+    parsePositiveLong(env, "IMAGE_ORPHAN_REAPER_INTERVAL_MINUTES", default = 60L),
+    parsePositiveLong(env, "STALE_OCR_JOB_AFTER_SECONDS", default = 300L),
+    parsePositiveLong(env, "STALE_OCR_JOB_REAPER_INTERVAL_SECONDS", default = 60L),
+    parsePositiveLong(env, "SESSION_PRUNE_INTERVAL_MINUTES", default = 60L),
+  ).mapN {
+    (
+        uploadRateLimit,
+        exportRateLimit,
+        requestMaxBytes,
+        uploadRequestMaxBytes,
+        orphanOlderThan,
+        orphanReaperInterval,
+        staleOcrJobAfter,
+        staleOcrJobReaperInterval,
+        sessionPruneInterval,
+    ) =>
+      ResourceLimitsConfig(
+        uploadRateLimitPerMinute = uploadRateLimit,
+        exportRateLimitPerMinute = exportRateLimit,
+        requestMaxBytes = requestMaxBytes,
+        uploadRequestMaxBytes = uploadRequestMaxBytes,
+        imageOrphanOlderThan = orphanOlderThan.minutes,
+        imageOrphanReaperInterval = orphanReaperInterval.minutes,
+        staleOcrJobAfter = staleOcrJobAfter.seconds,
+        staleOcrJobReaperInterval = staleOcrJobReaperInterval.seconds,
+        sessionPruneInterval = sessionPruneInterval.minutes,
+      )
+  }.liftTo[F]
+
+  private[config] def parsePositiveInt(
+      env: Map[String, String],
+      name: String,
+      default: Int,
+  ): Either[Throwable, Int] = parseInt(env, name, default, _ > 0, "positive integer")
+
+  private[config] def parseNonNegativeInt(
+      env: Map[String, String],
+      name: String,
+      default: Int,
+  ): Either[Throwable, Int] = parseInt(env, name, default, _ >= 0, "non-negative integer")
+
+  private[config] def parsePositiveLong(
+      env: Map[String, String],
+      name: String,
+      default: Long,
+  ): Either[Throwable, Long] = parseLong(env, name, default, _ > 0L, "positive integer")
+
+  private[config] def parseBoolean(
+      env: Map[String, String],
+      name: String,
+      default: Boolean,
+  ): Either[Throwable, Boolean] = env.get(name).filter(_.nonEmpty) match
+    case None => Right(default)
+    case Some(raw) => raw.toBooleanOption
+        .toRight(new IllegalArgumentException(s"$name must be true or false, got: $raw"))
+
+  private def parseInt(
+      env: Map[String, String],
+      name: String,
+      default: Int,
+      valid: Int => Boolean,
+      description: String,
+  ): Either[Throwable, Int] = env.get(name).filter(_.nonEmpty) match
+    case None => Right(default)
+    case Some(raw) => raw.toIntOption.filter(valid)
+        .toRight(new IllegalArgumentException(s"$name must be a $description, got: $raw"))
+
+  private def parseLong(
+      env: Map[String, String],
+      name: String,
+      default: Long,
+      valid: Long => Boolean,
+      description: String,
+  ): Either[Throwable, Long] = env.get(name).filter(_.nonEmpty) match
+    case None => Right(default)
+    case Some(raw) => raw.toLongOption.filter(valid)
+        .toRight(new IllegalArgumentException(s"$name must be a $description, got: $raw"))
 
   /**
    * Convert a postgres:// or postgresql:// URL to a JDBC URL, extracting embedded credentials.
@@ -269,11 +343,13 @@ object AuthConfig:
   )
 
 object ResourceLimitsConfig:
+  val DefaultRequestMaxBytes: Long = 256L * 1024L
   val DefaultUploadRequestMaxBytes: Long = 3L * 1024L * 1024L + 64L * 1024L
 
   val defaults: ResourceLimitsConfig = ResourceLimitsConfig(
     uploadRateLimitPerMinute = 20,
     exportRateLimitPerMinute = 30,
+    requestMaxBytes = DefaultRequestMaxBytes,
     uploadRequestMaxBytes = DefaultUploadRequestMaxBytes,
     imageOrphanOlderThan = 60.minutes,
     imageOrphanReaperInterval = 60.minutes,

@@ -2,6 +2,7 @@ package momo.api.repositories.postgres
 
 import java.time.Instant
 
+import cats.syntax.all.*
 import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
@@ -38,15 +39,23 @@ object PostgresMatchInsertOps:
         )
       """.update.run
 
+    insertMatch *> insertMatchChildren(record)
+
+  def replaceMatchChildren(record: MatchRecord): ConnectionIO[Unit] =
+    sql"DELETE FROM match_incidents WHERE match_id = ${record.id}".update.run *>
+      sql"DELETE FROM match_players WHERE match_id = ${record.id}".update.run *>
+      insertMatchChildren(record)
+
+  private def insertMatchChildren(record: MatchRecord): ConnectionIO[Unit] =
     val playerRows: List[(MatchId, MemberId, Int, Int, Int, Int, Instant)] = record.players.toList
       .map { p =>
         (
           record.id,
           p.memberId,
-          p.playOrder,
-          p.rank,
-          p.totalAssetsManYen,
-          p.revenueManYen,
+          p.playOrder.value,
+          p.rank.value,
+          p.totalAssetsManYen.value,
+          p.revenueManYen.value,
           record.createdAt,
         )
       }
@@ -58,7 +67,7 @@ object PostgresMatchInsertOps:
     val incidentRows: List[(MatchId, MemberId, IncidentMasterId, Int, Instant)] = record.players
       .toList.flatMap { p =>
         p.incidents.entriesByKind.map { case (kind, count) =>
-          (record.id, p.memberId, IncidentKindMapping.masterId(kind), count, record.createdAt)
+          (record.id, p.memberId, IncidentKindMapping.masterId(kind), count.value, record.createdAt)
         }
       }
     val insertIncidents =
@@ -66,9 +75,5 @@ object PostgresMatchInsertOps:
          (match_id, member_id, incident_master_id, count, created_at)
          VALUES (?, ?, ?, ?, ?)""").updateMany(incidentRows)
 
-    for
-      _ <- insertMatch
-      _ <- insertPlayers
-      _ <- insertIncidents
-    yield ()
+    insertPlayers *> insertIncidents.void
 end PostgresMatchInsertOps

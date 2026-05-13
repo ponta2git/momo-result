@@ -14,9 +14,9 @@ final class OcrJobLifecycleSpec extends CatsEffectSuite:
   private val laterAt = Instant.parse("2026-05-04T10:05:00Z")
 
   private def queued: OcrJob.Queued = OcrJob.Queued(
-    id = OcrJobId("job_1"),
-    draftId = OcrDraftId("draft_1"),
-    imageId = ImageId("img_1"),
+    id = OcrJobId.unsafeFromString("job_1"),
+    draftId = OcrDraftId.unsafeFromString("draft_1"),
+    imageId = ImageId.unsafeFromString("img_1"),
     imagePath = Paths.get("/tmp/img_1.png"),
     requestedScreenType = ScreenType.TotalAssets,
     attemptCount = 0,
@@ -24,11 +24,11 @@ final class OcrJobLifecycleSpec extends CatsEffectSuite:
     updatedAt = createdAt,
   )
 
-  test("trait Option accessors expose case-specific fields"):
+  test("companion Option accessors expose case-specific fields"):
     val q = queued
-    assertEquals(q.workerId, None)
-    assertEquals(q.failure, None)
-    assertEquals(q.finishedAt, None)
+    assertEquals(OcrJob.workerId(q), None)
+    assertEquals(OcrJob.failure(q), None)
+    assertEquals(OcrJob.finishedAt(q), None)
     assertEquals(q.status, OcrJobStatus.Queued)
 
     val r = OcrJob.Running(
@@ -43,8 +43,8 @@ final class OcrJobLifecycleSpec extends CatsEffectSuite:
       createdAt = q.createdAt,
       updatedAt = laterAt,
     )
-    assertEquals(r.workerId, Some("w1"))
-    assertEquals(r.startedAt, Some(laterAt))
+    assertEquals(OcrJob.workerId(r), Some("w1"))
+    assertEquals(OcrJob.startedAt(r), Some(laterAt))
     assertEquals(r.status, OcrJobStatus.Running)
 
   test("InMemoryOcrJobsRepository.cancelQueued only succeeds on Queued"):

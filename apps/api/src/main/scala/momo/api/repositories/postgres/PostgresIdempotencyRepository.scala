@@ -18,7 +18,8 @@ import momo.api.db.Database
 import momo.api.domain.ids.AccountId
 import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.repositories.{
-  IdempotencyAlg, IdempotencyRecord, IdempotencyRepository, IdempotencyResponse,
+  IdempotencyAlg, IdempotencyRecord, IdempotencyRepository, IdempotencyReservation,
+  IdempotencyResponse,
 }
 
 /**
@@ -107,6 +108,70 @@ object PostgresIdempotency:
             s"idempotency record already exists for key=${entry.key} endpoint=${entry.endpoint}"
           ))
       }
+
+    override def reserve(entry: IdempotencyRecord): ConnectionIO[IdempotencyReservation] =
+      val hashArray = bytesToArray(entry.requestHash)
+      val headersJson = headersToJson(entry.response.headers)
+      sql"""
+        INSERT INTO idempotency_keys (
+          key, account_id, endpoint, request_hash, response_status,
+          response_headers, response_body, created_at, expires_at
+        ) VALUES (
+          ${entry.key}, ${entry.accountId}, ${entry.endpoint}, $hashArray,
+          ${entry.response.status}, $headersJson, ${Option.empty[Array[Byte]]},
+          ${entry.createdAt}, ${entry.expiresAt}
+        )
+        ON CONFLICT (key, account_id, endpoint) DO NOTHING
+      """.update.run.flatMap {
+        case 1 => IdempotencyReservation.Reserved.pure[ConnectionIO]
+        case _ => lookup(entry.key, entry.accountId, entry.endpoint).map {
+            case Some(existing) if existing.requestHash != entry.requestHash =>
+              IdempotencyReservation.Conflict
+            case Some(existing) if existing.response.status == 0 =>
+              IdempotencyReservation.InProgress
+            case Some(existing) => IdempotencyReservation.Replay(existing.response)
+            case None => IdempotencyReservation.InProgress
+          }
+      }
+
+    override def complete(
+        key: String,
+        accountId: AccountId,
+        endpoint: String,
+        requestHash: Vector[Byte],
+        response: IdempotencyResponse,
+    ): ConnectionIO[Unit] =
+      val hashArray = bytesToArray(requestHash)
+      val bodyOpt: Option[Array[Byte]] =
+        if response.body.isEmpty then Some(Array.emptyByteArray)
+        else Some(bytesToArray(response.body))
+      val headersJson = headersToJson(response.headers)
+      sql"""
+        UPDATE idempotency_keys
+        SET response_status = ${response.status},
+            response_headers = $headersJson,
+            response_body = $bodyOpt
+        WHERE key = $key
+          AND account_id = $accountId
+          AND endpoint = $endpoint
+          AND request_hash = $hashArray
+      """.update.run.void
+
+    override def abandon(
+        key: String,
+        accountId: AccountId,
+        endpoint: String,
+        requestHash: Vector[Byte],
+    ): ConnectionIO[Unit] =
+      val hashArray = bytesToArray(requestHash)
+      sql"""
+        DELETE FROM idempotency_keys
+        WHERE key = $key
+          AND account_id = $accountId
+          AND endpoint = $endpoint
+          AND request_hash = $hashArray
+          AND response_status = 0
+      """.update.run.void
 
     override def cleanup(now: Instant): ConnectionIO[Int] = sql"""
         DELETE FROM idempotency_keys WHERE expires_at <= $now

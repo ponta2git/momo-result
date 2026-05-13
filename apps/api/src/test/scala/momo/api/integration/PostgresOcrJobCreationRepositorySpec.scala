@@ -17,9 +17,9 @@ import momo.api.testing.JsonSchemaAssertions
 final class PostgresOcrJobCreationRepositorySpec extends IntegrationSuite with JsonSchemaAssertions:
 
   private val now = Instant.parse("2026-05-08T10:00:00Z")
-  private val jobId = OcrJobId("job-outbox-1")
-  private val draftId = OcrDraftId("draft-outbox-1")
-  private val imageId = ImageId("img-outbox-1")
+  private val jobId = OcrJobId.unsafeFromString("job-outbox-1")
+  private val draftId = OcrDraftId.unsafeFromString("draft-outbox-1")
+  private val imageId = ImageId.unsafeFromString("img-outbox-1")
 
   private def repo = PostgresOcrJobCreationRepository[IO](transactor)
 
@@ -58,7 +58,8 @@ final class PostgresOcrJobCreationRepositorySpec extends IntegrationSuite with J
     hints = OcrJobHints(
       gameTitle = Some("桃鉄2"),
       layoutFamily = Some("momotetsu_2"),
-      knownPlayerAliases = List(PlayerAliasHint("member-ponta", List("ぽんた", "ぽんた社長"))),
+      knownPlayerAliases =
+        List(PlayerAliasHint(MemberId.unsafeFromString("member-ponta"), List("ぽんた", "ぽんた社長"))),
       computerPlayerAliases = List("さくま"),
     ),
     requestId = Some("req-outbox-1"),
@@ -82,7 +83,7 @@ final class PostgresOcrJobCreationRepositorySpec extends IntegrationSuite with J
 
   test("createQueuedJob rolls back OCR records when match draft attachment fails"):
     val attachment = OcrJobDraftAttachment(
-      draftId = MatchDraftId("missing-match-draft"),
+      draftId = MatchDraftId.unsafeFromString("missing-match-draft"),
       screenType = ScreenType.TotalAssets,
       sourceImageId = imageId,
       ocrDraftId = draftId,

@@ -7,8 +7,9 @@ final case class MemberRoster(accounts: Map[String, AuthenticatedAccount]):
 
 object MemberRoster:
   def devAccountIdFor(memberId: String): AccountId =
-    if memberId.startsWith("member_") then AccountId(s"account_${memberId.stripPrefix("member_")}")
-    else AccountId(memberId)
+    if memberId.startsWith("member_") then
+      AccountId.unsafeFromString(s"account_${memberId.stripPrefix("member_")}")
+    else AccountId.unsafeFromString(memberId)
 
   def dev(memberIds: List[String]): MemberRoster = MemberRoster(memberIds.zipWithIndex.map {
     (id, index) =>
@@ -17,6 +18,6 @@ object MemberRoster:
         accountId = accountId,
         displayName = id,
         isAdmin = index == 0,
-        playerMemberId = Some(MemberId(id)),
+        playerMemberId = Some(MemberId.unsafeFromString(id)),
       )
   }.toMap)

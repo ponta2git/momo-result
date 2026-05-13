@@ -41,14 +41,44 @@ sealed trait OcrJob derives CanEqual:
   def attemptCount: Int
   def createdAt: Instant
   def updatedAt: Instant
-  def detectedScreenType: Option[ScreenType] = None
-  def workerId: Option[String] = None
-  def failure: Option[OcrFailure] = None
-  def startedAt: Option[Instant] = None
-  def finishedAt: Option[Instant] = None
-  def durationMs: Option[Int] = None
 
 object OcrJob:
+  def detectedScreenType(job: OcrJob): Option[ScreenType] = job match
+    case _: Queued => None
+    case _: Running => None
+    case value: Succeeded => Some(value.succeededDetectedScreenType)
+    case value: Failed => value.failedDetectedScreenType
+    case _: Cancelled => None
+
+  def workerId(job: OcrJob): Option[String] = job match
+    case _: Queued => None
+    case value: Running => Some(value.runningWorkerId)
+    case value: Succeeded => value.succeededWorkerId
+    case value: Failed => value.failedWorkerId
+    case _: Cancelled => None
+
+  def failure(job: OcrJob): Option[OcrFailure] = job match
+    case value: Failed => Some(value.failedFailure)
+    case _ => None
+
+  def startedAt(job: OcrJob): Option[Instant] = job match
+    case _: Queued => None
+    case value: Running => Some(value.runningStartedAt)
+    case value: Succeeded => Some(value.succeededStartedAt)
+    case value: Failed => value.failedStartedAt
+    case _: Cancelled => None
+
+  def finishedAt(job: OcrJob): Option[Instant] = job match
+    case _: Queued => None
+    case _: Running => None
+    case value: Succeeded => Some(value.succeededFinishedAt)
+    case value: Failed => Some(value.failedFinishedAt)
+    case value: Cancelled => Some(value.cancelledFinishedAt)
+
+  def durationMs(job: OcrJob): Option[Int] = job match
+    case value: Succeeded => Some(value.succeededDurationMs)
+    case value: Failed => value.failedDurationMs
+    case _ => None
 
   /** Newly created job sitting in the queue, awaiting a worker to claim it. */
   final case class Queued(
@@ -77,8 +107,6 @@ object OcrJob:
       updatedAt: Instant,
   ) extends OcrJob:
     val status: OcrJobStatus = OcrJobStatus.Running
-    override def workerId: Option[String] = Some(runningWorkerId)
-    override def startedAt: Option[Instant] = Some(runningStartedAt)
 
   /** Successfully completed job. The detected screen type is authoritative. */
   final case class Succeeded(
@@ -97,11 +125,6 @@ object OcrJob:
       updatedAt: Instant,
   ) extends OcrJob:
     val status: OcrJobStatus = OcrJobStatus.Succeeded
-    override def detectedScreenType: Option[ScreenType] = Some(succeededDetectedScreenType)
-    override def workerId: Option[String] = succeededWorkerId
-    override def startedAt: Option[Instant] = Some(succeededStartedAt)
-    override def finishedAt: Option[Instant] = Some(succeededFinishedAt)
-    override def durationMs: Option[Int] = Some(succeededDurationMs)
 
   /** Job that has terminated with a failure. Always has [[OcrFailure]] populated. */
   final case class Failed(
@@ -121,12 +144,6 @@ object OcrJob:
       updatedAt: Instant,
   ) extends OcrJob:
     val status: OcrJobStatus = OcrJobStatus.Failed
-    override def detectedScreenType: Option[ScreenType] = failedDetectedScreenType
-    override def workerId: Option[String] = failedWorkerId
-    override def failure: Option[OcrFailure] = Some(failedFailure)
-    override def startedAt: Option[Instant] = failedStartedAt
-    override def finishedAt: Option[Instant] = Some(failedFinishedAt)
-    override def durationMs: Option[Int] = failedDurationMs
 
   /** Cancelled job (only Queued jobs may transition here in current MVP). */
   final case class Cancelled(
@@ -141,6 +158,5 @@ object OcrJob:
       updatedAt: Instant,
   ) extends OcrJob:
     val status: OcrJobStatus = OcrJobStatus.Cancelled
-    override def finishedAt: Option[Instant] = Some(cancelledFinishedAt)
 
 end OcrJob

@@ -13,7 +13,7 @@ import momo.api.domain.ids.MemberId
  *   - memberId values are pairwise unique and all from the allowed member set
  *   - playOrder values are a permutation of {1,2,3,4}
  *   - rank values are a permutation of {1,2,3,4}
- *   - incident counts are non-negative
+ *   - incident counts have already been refined to non-negative values
  *
  * Internally backed by a 4-tuple so that pattern matching and field access remain ergonomic.
  * Repository layers reconstructing values from the database use the same smart constructor and
@@ -29,10 +29,10 @@ final case class FourPlayers(
   def toList: List[PlayerResult] = List(p1, p2, p3, p4)
 
   /** Players sorted ascending by playOrder (1..4). */
-  def byPlayOrder: List[PlayerResult] = toList.sortBy(_.playOrder)
+  def byPlayOrder: List[PlayerResult] = toList.sortBy(_.playOrder.value)
 
   /** Players sorted ascending by rank (1..4). */
-  def byRank: List[PlayerResult] = toList.sortBy(_.rank)
+  def byRank: List[PlayerResult] = toList.sortBy(_.rank.value)
 
   def memberIds: Set[MemberId] = toList.iterator.map(_.memberId).toSet
 
@@ -50,18 +50,14 @@ object FourPlayers:
     if players.length != 4 then MatchValidationError.PlayerCountMismatch(players.length).leftNec
     else
       val memberSet = players.iterator.map(_.memberId).toSet
-      val playOrders = players.iterator.map(_.playOrder).toSet
-      val ranks = players.iterator.map(_.rank).toSet
-      val negativeIncidents = players.iterator.filter(p => !hasNonNegativeIncidentCounts(p))
-        .map(p => MatchValidationError.IncidentCountsNegative(p.memberId)).toList
-
+      val playOrders = players.iterator.map(_.playOrder.value).toSet
+      val ranks = players.iterator.map(_.rank.value).toSet
       val errs = List.newBuilder[MatchValidationError]
       if memberSet.size != 4 then errs += MatchValidationError.PlayerMemberIdsNotUnique
       if memberSet.size == 4 && !memberSet.subsetOf(allowedMemberIds) then
         errs += MatchValidationError.PlayerMemberIdsNotAllowed(memberSet, allowedMemberIds)
       if playOrders != RequiredOrdinals then errs += MatchValidationError.PlayOrdersNotPermutation
       if ranks != RequiredOrdinals then errs += MatchValidationError.RanksNotPermutation
-      negativeIncidents.foreach(errs += _)
 
       val errors = errs.result()
       NonEmptyChain.fromSeq(errors) match
@@ -76,11 +72,7 @@ object FourPlayers:
    *
    * We use the empty allowed-member set here intentionally: the database already enforces
    * `member_id` references via FK, so we skip the membership check by passing every encountered
-   * memberId as allowed. Other invariants (count, permutations, non-negative) still apply.
+   * memberId as allowed. Other invariants (count and permutations) still apply.
    */
   def fromTrustedRow(players: List[PlayerResult]): EitherNec[MatchValidationError, FourPlayers] =
     fromList(players, players.iterator.map(_.memberId).toSet)
-
-  private def hasNonNegativeIncidentCounts(p: PlayerResult): Boolean =
-    p.incidents.destination >= 0 && p.incidents.plusStation >= 0 && p.incidents.minusStation >= 0 &&
-      p.incidents.cardStation >= 0 && p.incidents.cardShop >= 0 && p.incidents.suriNoGinji >= 0

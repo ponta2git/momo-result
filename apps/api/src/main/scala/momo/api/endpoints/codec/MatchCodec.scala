@@ -7,13 +7,13 @@ import momo.api.usecases.{ConfirmMatch, UpdateMatch}
 
 /** DTO ↔ usecase command conversions for `MatchesEndpoints`. */
 object MatchCodec:
-  def toPlayerResult(player: PlayerResultRequest): PlayerResult = PlayerResult(
-    memberId = MemberId(player.memberId),
+  def toPlayerResult(player: PlayerResultRequest): PlayerResult.Input = PlayerResult.Input(
+    memberId = MemberId.unsafeFromString(player.memberId),
     playOrder = player.playOrder,
     rank = player.rank,
     totalAssetsManYen = player.totalAssetsManYen,
     revenueManYen = player.revenueManYen,
-    incidents = IncidentCounts(
+    incidents = IncidentCounts.Input(
       destination = player.incidents.destination,
       plusStation = player.incidents.plusStation,
       minusStation = player.incidents.minusStation,
@@ -24,34 +24,34 @@ object MatchCodec:
   )
 
   def toConfirmCommand(request: ConfirmMatchRequest): ConfirmMatch.Command = ConfirmMatch.Command(
-    heldEventId = HeldEventId(request.heldEventId),
+    heldEventId = HeldEventId.unsafeFromString(request.heldEventId),
     matchNoInEvent = request.matchNoInEvent,
-    gameTitleId = GameTitleId(request.gameTitleId),
-    seasonMasterId = SeasonMasterId(request.seasonMasterId),
-    ownerMemberId = MemberId(request.ownerMemberId),
-    mapMasterId = MapMasterId(request.mapMasterId),
+    gameTitleId = GameTitleId.unsafeFromString(request.gameTitleId),
+    seasonMasterId = SeasonMasterId.unsafeFromString(request.seasonMasterId),
+    ownerMemberId = MemberId.unsafeFromString(request.ownerMemberId),
+    mapMasterId = MapMasterId.unsafeFromString(request.mapMasterId),
     playedAt = request.playedAt,
-    matchDraftId = request.matchDraftId.map(MatchDraftId(_)),
+    matchDraftId = request.matchDraftId.map(MatchDraftId.unsafeFromString(_)),
     draftRefs = ConfirmMatch.DraftRefs(
-      totalAssets = request.draftIds.totalAssets.map(OcrDraftId(_)),
-      revenue = request.draftIds.revenue.map(OcrDraftId(_)),
-      incidentLog = request.draftIds.incidentLog.map(OcrDraftId(_)),
+      totalAssets = request.draftIds.totalAssets.map(OcrDraftId.unsafeFromString(_)),
+      revenue = request.draftIds.revenue.map(OcrDraftId.unsafeFromString(_)),
+      incidentLog = request.draftIds.incidentLog.map(OcrDraftId.unsafeFromString(_)),
     ),
     players = request.players.map(toPlayerResult),
   )
 
   def toUpdateCommand(request: UpdateMatchRequest): UpdateMatch.Command = UpdateMatch.Command(
-    heldEventId = HeldEventId(request.heldEventId),
+    heldEventId = HeldEventId.unsafeFromString(request.heldEventId),
     matchNoInEvent = request.matchNoInEvent,
-    gameTitleId = GameTitleId(request.gameTitleId),
-    seasonMasterId = SeasonMasterId(request.seasonMasterId),
-    ownerMemberId = MemberId(request.ownerMemberId),
-    mapMasterId = MapMasterId(request.mapMasterId),
+    gameTitleId = GameTitleId.unsafeFromString(request.gameTitleId),
+    seasonMasterId = SeasonMasterId.unsafeFromString(request.seasonMasterId),
+    ownerMemberId = MemberId.unsafeFromString(request.ownerMemberId),
+    mapMasterId = MapMasterId.unsafeFromString(request.mapMasterId),
     playedAt = request.playedAt,
     draftRefs = ConfirmMatch.DraftRefs(
-      totalAssets = request.draftIds.totalAssets.map(OcrDraftId(_)),
-      revenue = request.draftIds.revenue.map(OcrDraftId(_)),
-      incidentLog = request.draftIds.incidentLog.map(OcrDraftId(_)),
+      totalAssets = request.draftIds.totalAssets.map(OcrDraftId.unsafeFromString(_)),
+      revenue = request.draftIds.revenue.map(OcrDraftId.unsafeFromString(_)),
+      incidentLog = request.draftIds.incidentLog.map(OcrDraftId.unsafeFromString(_)),
     ),
     players = request.players.map(toPlayerResult),
   )

@@ -148,11 +148,11 @@ final class ExportMatches[F[_]: Monad](
         mapName = mapName,
         playedAt = record.playedAt,
         gameTitleMatchNo = gameNo,
-        playOrder = player.playOrder,
+        playOrder = player.playOrder.value,
         playerName = playerName,
-        rank = player.rank,
-        totalAssetsManYen = player.totalAssetsManYen,
-        revenueManYen = player.revenueManYen,
+        rank = player.rank.value,
+        totalAssetsManYen = player.totalAssetsManYen.value,
+        revenueManYen = player.revenueManYen.value,
         incidents = player.incidents,
       )
     }
@@ -168,6 +168,6 @@ final class ExportMatches[F[_]: Monad](
       .flatMap(_.zipWithIndex.map { case (record, index) => record.id -> (index + 1) }).toMap
 
   private def compareMatches(a: MatchRecord, b: MatchRecord): Boolean =
-    val ak = (a.playedAt.toEpochMilli, a.heldEventId.value, a.matchNoInEvent, a.id.value)
-    val bk = (b.playedAt.toEpochMilli, b.heldEventId.value, b.matchNoInEvent, b.id.value)
+    val ak = (a.playedAt.toEpochMilli, a.heldEventId.value, a.matchNoInEvent.value, a.id.value)
+    val bk = (b.playedAt.toEpochMilli, b.heldEventId.value, b.matchNoInEvent.value, b.id.value)
     ak < bk

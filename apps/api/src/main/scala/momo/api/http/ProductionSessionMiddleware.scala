@@ -9,7 +9,7 @@ import org.http4s.headers.`Content-Type`
 import org.http4s.{Header, HttpApp, MediaType, Request, Response, Status}
 import org.typelevel.ci.CIString
 
-import momo.api.auth.{CsrfTokenService, SessionService}
+import momo.api.auth.{AuthHeaderNames, CsrfTokenService, SessionService}
 import momo.api.config.{AppConfig, AppEnv}
 import momo.api.domain.ids.*
 import momo.api.endpoints.ProblemDetails
@@ -20,25 +20,24 @@ private[http] final class ProductionSessionMiddleware[F[_]: Async](
     sessions: SessionService[F],
     csrf: CsrfTokenService,
 ):
-  private val devUserHeader = CIString("X-Dev-User")
+  private val accountHeader = CIString(AuthHeaderNames.AccountId)
   private val csrfHeader = CIString(CsrfMiddleware.HeaderName)
 
   def apply(app: HttpApp[F]): HttpApp[F] = config.appEnv match
     case AppEnv.Dev | AppEnv.Test => Kleisli { request =>
-        if isPublic(request, allowDetailedHealth = true) || request.headers.get(devUserHeader)
-            .nonEmpty
-        then app.run(request)
+        if isPublic(request, allowDetailedHealth = true) then app.run(request)
+        else if request.headers.get(accountHeader).nonEmpty then app.run(request)
         else withSession(request, app)
       }
     case AppEnv.Prod => Kleisli { request =>
         if isPublic(request, allowDetailedHealth = false) then app.run(request)
-        else withSession(request.removeHeader(devUserHeader), app)
+        else withSession(request.removeHeader(accountHeader), app)
       }
 
   private def withInternalAuth(request: Request[F], accountId: String): Request[F] = request
-    .putHeaders(Header.Raw(devUserHeader, accountId))
+    .putHeaders(Header.Raw(accountHeader, accountId))
 
-  // Dev/Test endpoints still validate CSRF through the legacy header contract. After a session
+  // Dev/Test endpoints still validate CSRF through the internal header contract. After a session
   // token has been verified here, normalize the internal request to that contract.
   private def withVerifiedCsrf(request: Request[F]): Request[F] = request
     .putHeaders(Header.Raw(csrfHeader, CsrfMiddleware.DevToken))

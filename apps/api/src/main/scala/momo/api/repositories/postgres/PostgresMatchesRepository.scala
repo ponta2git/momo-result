@@ -6,14 +6,22 @@ import cats.MonadThrow
 import cats.effect.MonadCancelThrow
 import cats.syntax.all.*
 import doobie.*
+import doobie.enumerated.SqlState
 import doobie.implicits.*
 import doobie.postgres.implicits.*
+import doobie.postgres.sqlstate
 import doobie.util.fragments
 
 import momo.api.db.Database
 import momo.api.domain.ids.*
-import momo.api.domain.{FourPlayers, IncidentCounts, IncidentKind, MatchRecord, PlayerResult}
-import momo.api.repositories.postgres.PostgresMatchInsertOps.insertMatchCascade
+import momo.api.domain.{
+  FourPlayers, IncidentCounts, IncidentKind, ManYen, MatchNoInEvent, MatchRecord, PlayOrder,
+  PlayerResult, Rank,
+}
+import momo.api.errors.{AppError, AppException}
+import momo.api.repositories.postgres.PostgresMatchInsertOps.{
+  insertMatchCascade, replaceMatchChildren,
+}
 import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.repositories.{MatchesAlg, MatchesRepository}
 
@@ -23,11 +31,16 @@ import momo.api.repositories.{MatchesAlg, MatchesRepository}
  * regardless of result cardinality) to avoid N+1.
  */
 object PostgresMatches:
+  private def isUniqueViolation(state: SqlState): Boolean = state.value ==
+    sqlstate.class23.UNIQUE_VIOLATION.value
+
+  private def conflict[A](detail: String): ConnectionIO[A] = MonadThrow[ConnectionIO]
+    .raiseError[A](new AppException(AppError.Conflict(detail)))
 
   private type MatchRow = (
       MatchId,
       HeldEventId,
-      Int,
+      MatchNoInEvent,
       GameTitleId,
       String,
       SeasonMasterId,
@@ -84,7 +97,7 @@ object PostgresMatches:
           FROM match_players
           WHERE match_id = ANY($ids)
           ORDER BY match_id, play_order
-        """.query[(MatchId, MemberId, Int, Int, Int, Int)].to[List]
+        """.query[(MatchId, MemberId, PlayOrder, Rank, ManYen, ManYen)].to[List]
 
       val incidentsIO = sql"""
           SELECT match_id, member_id, incident_master_id, count
@@ -100,7 +113,7 @@ object PostgresMatches:
 
   private def assemble(
       matchIds: List[MatchId],
-      playerRows: List[(MatchId, MemberId, Int, Int, Int, Int)],
+      playerRows: List[(MatchId, MemberId, PlayOrder, Rank, ManYen, ManYen)],
       incidentRows: List[(MatchId, MemberId, IncidentMasterId, Int)],
   ): ConnectionIO[Map[MatchId, FourPlayers]] =
     val incidentsByMatch: Map[MatchId, Map[MemberId, Map[IncidentKind, Int]]] = incidentRows
@@ -138,11 +151,37 @@ object PostgresMatches:
 
   val alg: MatchesAlg[ConnectionIO] = new MatchesAlg[ConnectionIO]:
     override def create(record: MatchRecord): ConnectionIO[Unit] =
-      insertMatchCascade(record, record.createdAt)
+      insertMatchCascade(record, record.createdAt).exceptSomeSqlState {
+        case state if isUniqueViolation(state) =>
+          conflict[Unit](s"matchNoInEvent ${record.matchNoInEvent.value
+              .toString} already exists for held event ${record.heldEventId.value}.")
+      }
 
     override def update(record: MatchRecord, updatedAt: Instant): ConnectionIO[Unit] =
-      val deleteMatch = sql"DELETE FROM matches WHERE id = ${record.id}".update.run
-      (deleteMatch *> insertMatchCascade(record, updatedAt)).void
+      val updateMatch = sql"""
+        UPDATE matches
+        SET held_event_id = ${record.heldEventId},
+            match_no_in_event = ${record.matchNoInEvent},
+            game_title_id = ${record.gameTitleId},
+            layout_family = ${record.layoutFamily},
+            season_master_id = ${record.seasonMasterId},
+            owner_member_id = ${record.ownerMemberId},
+            map_master_id = ${record.mapMasterId},
+            played_at = ${record.playedAt},
+            total_assets_draft_id = ${record.totalAssetsDraftId},
+            revenue_draft_id = ${record.revenueDraftId},
+            incident_log_draft_id = ${record.incidentLogDraftId},
+            updated_at = $updatedAt
+        WHERE id = ${record.id}
+      """.update.run
+      updateMatch.flatMap {
+        case 1 => replaceMatchChildren(record)
+        case _ => ().pure[ConnectionIO]
+      }.exceptSomeSqlState {
+        case state if isUniqueViolation(state) =>
+          conflict[Unit](s"matchNoInEvent ${record.matchNoInEvent.value
+              .toString} already exists for held event ${record.heldEventId.value}.")
+      }
 
     override def delete(id: MatchId): ConnectionIO[Boolean] =
       sql"DELETE FROM matches WHERE id = $id".update.run.map(_ > 0)
@@ -179,7 +218,7 @@ object PostgresMatches:
 
     override def existsMatchNo(
         heldEventId: HeldEventId,
-        matchNoInEvent: Int,
+        matchNoInEvent: MatchNoInEvent,
     ): ConnectionIO[Boolean] = sql"""
         SELECT EXISTS (
           SELECT 1 FROM matches
@@ -189,7 +228,7 @@ object PostgresMatches:
 
     override def existsMatchNoExcept(
         heldEventId: HeldEventId,
-        matchNoInEvent: Int,
+        matchNoInEvent: MatchNoInEvent,
         excludeMatchId: MatchId,
     ): ConnectionIO[Boolean] = sql"""
         SELECT EXISTS (

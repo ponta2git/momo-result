@@ -30,8 +30,8 @@ object MatchDraftModule:
       nowF: F[Instant],
       security: EndpointSecurity[F],
   ): List[ServerEndpoint[Any, F]] = List(
-    MatchDraftEndpoints.create.serverLogic { case (devUser, csrfToken, idemKey, request) =>
-      security.authorizeMutation(devUser, csrfToken) { member =>
+    MatchDraftEndpoints.create.serverLogic { case (accountHeader, csrfToken, idemKey, request) =>
+      security.authorizeMutation(accountHeader, csrfToken) { member =>
         IdempotencyReplay.wrap[F, CreateMatchDraftRequest, MatchDraftResponse](
           idempotency,
           idemKey,
@@ -50,51 +50,53 @@ object MatchDraftModule:
         )
       }
     },
-    MatchDraftEndpoints.update.serverLogic { case (draftId, devUser, csrfToken, idemKey, request) =>
-      security.authorizeMutation(devUser, csrfToken) { member =>
-        IdempotencyReplay.wrap[F, UpdateMatchDraftRequest, MatchDraftResponse](
-          idempotency,
-          idemKey,
-          member,
-          s"PATCH /api/match-drafts/$draftId",
-          request,
-          nowF,
-          MatchDraftCodec.parseInstantOption[F](request.playedAt).flatMap {
-            case Left(error) => Async[F].pure(Left(security.toProblem(error)))
-            case Right(playedAt) => security.respond(updateMatchDraft.run(
-                MatchDraftId(draftId),
-                MatchDraftCodec.toUpdateCommand(request, playedAt),
-                member.accountId,
-              ))(MatchDraftResponse.from)
-          },
-        )
-      }
+    MatchDraftEndpoints.update.serverLogic {
+      case (draftId, accountHeader, csrfToken, idemKey, request) => security
+          .authorizeMutation(accountHeader, csrfToken) { member =>
+            IdempotencyReplay.wrap[F, UpdateMatchDraftRequest, MatchDraftResponse](
+              idempotency,
+              idemKey,
+              member,
+              s"PATCH /api/match-drafts/$draftId",
+              request,
+              nowF,
+              MatchDraftCodec.parseInstantOption[F](request.playedAt).flatMap {
+                case Left(error) => Async[F].pure(Left(security.toProblem(error)))
+                case Right(playedAt) => security.respond(updateMatchDraft.run(
+                    MatchDraftId.unsafeFromString(draftId),
+                    MatchDraftCodec.toUpdateCommand(request, playedAt),
+                    member.accountId,
+                  ))(MatchDraftResponse.from)
+              },
+            )
+          }
     },
-    MatchDraftEndpoints.get.serverLogic { case (draftId, devUser) =>
-      security.authorizeRead(devUser) { member =>
+    MatchDraftEndpoints.get.serverLogic { case (draftId, accountHeader) =>
+      security.authorizeRead(accountHeader) { member =>
         security.respond(
-          getMatchDraft.run(MatchDraftId(draftId), member.accountId)
+          getMatchDraft.run(MatchDraftId.unsafeFromString(draftId), member.accountId)
         )(MatchDraftDetailResponse.from)
       }
     },
-    MatchDraftEndpoints.cancel.serverLogic { case (draftId, devUser, csrfToken) =>
-      security.authorizeMutation(devUser, csrfToken) { member =>
+    MatchDraftEndpoints.cancel.serverLogic { case (draftId, accountHeader, csrfToken) =>
+      security.authorizeMutation(accountHeader, csrfToken) { member =>
         security.respond(
-          cancelMatchDraft.run(MatchDraftId(draftId), member.accountId)
+          cancelMatchDraft.run(MatchDraftId.unsafeFromString(draftId), member.accountId)
         )(_ => CancelMatchDraftResponse(matchDraftId = draftId, status = "cancelled"))
       }
     },
-    MatchDraftEndpoints.listSourceImages.serverLogic { case (draftId, devUser) =>
-      security.authorizeRead(devUser) { member =>
+    MatchDraftEndpoints.listSourceImages.serverLogic { case (draftId, accountHeader) =>
+      security.authorizeRead(accountHeader) { member =>
         security.respond(
-          getMatchDraftSourceImages.list(MatchDraftId(draftId), member.accountId)
+          getMatchDraftSourceImages.list(MatchDraftId.unsafeFromString(draftId), member.accountId)
         )(items => MatchDraftSourceImageListResponse(items.map(MatchDraftSourceImageResponse.from)))
       }
     },
-    MatchDraftEndpoints.getSourceImage.serverLogic { case (draftId, kind, devUser) =>
-      security.authorizeRead(devUser) { member =>
+    MatchDraftEndpoints.getSourceImage.serverLogic { case (draftId, kind, accountHeader) =>
+      security.authorizeRead(accountHeader) { member =>
         security.respond(
-          getMatchDraftSourceImages.stream(MatchDraftId(draftId), kind, member.accountId)
+          getMatchDraftSourceImages
+            .stream(MatchDraftId.unsafeFromString(draftId), kind, member.accountId)
         )(image => (image.contentType, "private, no-store", "nosniff", image.bytes))
       }
     },

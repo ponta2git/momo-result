@@ -18,7 +18,7 @@ final class OcrQueuePayloadSpec extends FunSuite with JsonSchemaAssertions:
     assertEquals(payload.fields("draftId"), "draft-schema-1")
     assertEquals(payload.fields("imageId"), "image-schema-1")
     assertEquals(payload.fields("imagePath"), "/tmp/momo-result/uploads/image-schema-1.png")
-    assertEquals(payload.fields("requestedImageType"), "incident_log")
+    assertEquals(payload.fields("requestedScreenType"), "incident_log")
     assertEquals(payload.fields("attempt"), "1")
     assertEquals(payload.fields("enqueuedAt"), "2026-05-09T00:00:00Z")
     assertEquals(payload.fields("schemaVersion"), "1")
@@ -79,9 +79,9 @@ final class OcrQueuePayloadSpec extends FunSuite with JsonSchemaAssertions:
 
   test("builds the exact Redis Streams payload expected by the OCR worker without hints") {
     val payload = OcrQueuePayload.build(
-      jobId = OcrJobId("job-1"),
-      draftId = OcrDraftId("draft-1"),
-      imageId = ImageId("image-1"),
+      jobId = OcrJobId.unsafeFromString("job-1"),
+      draftId = OcrDraftId.unsafeFromString("draft-1"),
+      imageId = ImageId.unsafeFromString("image-1"),
       imagePath = Path.of("/tmp/momo-result/uploads/image-1.png"),
       requestedScreenType = ScreenType.TotalAssets,
       attempt = 1,
@@ -97,7 +97,7 @@ final class OcrQueuePayloadSpec extends FunSuite with JsonSchemaAssertions:
         "draftId" -> "draft-1",
         "imageId" -> "image-1",
         "imagePath" -> "/tmp/momo-result/uploads/image-1.png",
-        "requestedImageType" -> "total_assets",
+        "requestedScreenType" -> "total_assets",
         "attempt" -> "1",
         "enqueuedAt" -> "2026-04-29T11:40:16Z",
         "schemaVersion" -> "1",
@@ -108,9 +108,9 @@ final class OcrQueuePayloadSpec extends FunSuite with JsonSchemaAssertions:
 
   test("serializes hints as compact sorted UTF-8 JSON") {
     val payload = OcrQueuePayload.build(
-      jobId = OcrJobId("job-2"),
-      draftId = OcrDraftId("draft-2"),
-      imageId = ImageId("image-2"),
+      jobId = OcrJobId.unsafeFromString("job-2"),
+      draftId = OcrDraftId.unsafeFromString("draft-2"),
+      imageId = ImageId.unsafeFromString("image-2"),
       imagePath = Path.of("/tmp/momo-result/uploads/image-2.webp"),
       requestedScreenType = ScreenType.Auto,
       attempt = 1,
@@ -118,7 +118,8 @@ final class OcrQueuePayloadSpec extends FunSuite with JsonSchemaAssertions:
       hints = OcrJobHints(
         gameTitle = Some("桃太郎電鉄ワールド"),
         layoutFamily = Some("world"),
-        knownPlayerAliases = List(PlayerAliasHint("member-1", List("ぽんた", "PONTA"))),
+        knownPlayerAliases =
+          List(PlayerAliasHint(MemberId.unsafeFromString("member-1"), List("ぽんた", "PONTA"))),
         computerPlayerAliases = List("さくま", "サクマ"),
       ),
       requestId = None,
@@ -133,9 +134,9 @@ final class OcrQueuePayloadSpec extends FunSuite with JsonSchemaAssertions:
 
   test("includes requestId when provided and omits it when empty/None") {
     val basePayload = OcrQueuePayload.build(
-      jobId = OcrJobId("job-3"),
-      draftId = OcrDraftId("draft-3"),
-      imageId = ImageId("image-3"),
+      jobId = OcrJobId.unsafeFromString("job-3"),
+      draftId = OcrDraftId.unsafeFromString("draft-3"),
+      imageId = ImageId.unsafeFromString("image-3"),
       imagePath = Path.of("/tmp/momo-result/uploads/image-3.png"),
       requestedScreenType = ScreenType.TotalAssets,
       attempt = 1,
@@ -146,9 +147,9 @@ final class OcrQueuePayloadSpec extends FunSuite with JsonSchemaAssertions:
     assertEquals(basePayload.fields.get(OcrQueuePayload.RequestIdKey), None)
 
     val withId = OcrQueuePayload.build(
-      jobId = OcrJobId("job-3"),
-      draftId = OcrDraftId("draft-3"),
-      imageId = ImageId("image-3"),
+      jobId = OcrJobId.unsafeFromString("job-3"),
+      draftId = OcrDraftId.unsafeFromString("draft-3"),
+      imageId = ImageId.unsafeFromString("image-3"),
       imagePath = Path.of("/tmp/momo-result/uploads/image-3.png"),
       requestedScreenType = ScreenType.TotalAssets,
       attempt = 1,
@@ -159,9 +160,9 @@ final class OcrQueuePayloadSpec extends FunSuite with JsonSchemaAssertions:
     assertEquals(withId.fields.get(OcrQueuePayload.RequestIdKey), Some("abc-123_DEF"))
 
     val withEmpty = OcrQueuePayload.build(
-      jobId = OcrJobId("job-3"),
-      draftId = OcrDraftId("draft-3"),
-      imageId = ImageId("image-3"),
+      jobId = OcrJobId.unsafeFromString("job-3"),
+      draftId = OcrDraftId.unsafeFromString("draft-3"),
+      imageId = ImageId.unsafeFromString("image-3"),
       imagePath = Path.of("/tmp/momo-result/uploads/image-3.png"),
       requestedScreenType = ScreenType.TotalAssets,
       attempt = 1,
@@ -173,27 +174,33 @@ final class OcrQueuePayloadSpec extends FunSuite with JsonSchemaAssertions:
   }
 
   test("fieldsAsJson is deterministic by key order") {
-    val json = OcrQueuePayload.fieldsAsJson(OcrQueuePayload(Map("b" -> "2", "a" -> "1")))
+    val payload = canonicalPayload
+    val json = OcrQueuePayload.fieldsAsJson(payload)
 
-    assertEquals(json, Json.obj("a" -> Json.fromString("1"), "b" -> Json.fromString("2")))
+    assertEquals(
+      json,
+      Json.obj(payload.fields.toSeq.sortBy(_._1).map { case (key, value) =>
+        key -> Json.fromString(value)
+      }*),
+    )
   }
 
-  test("fromJson accepts only string-valued JSON objects") {
-    assertEquals(
-      OcrQueuePayload.fromJson(Json.obj("jobId" -> Json.fromString("job-1"))),
-      Right(OcrQueuePayload(Map("jobId" -> "job-1"))),
-    )
+  test("fromJson decodes the typed stream payload and rejects malformed objects") {
+    val payload = canonicalPayload
+    val json = OcrQueuePayload.fieldsAsJson(payload)
+
+    assertEquals(OcrQueuePayload.fromJson(json), Right(payload))
     assertEquals(OcrQueuePayload.fromJson(Json.arr()), Left("stream payload must be a JSON object"))
     assertEquals(
-      OcrQueuePayload.fromJson(Json.obj("attempt" -> Json.fromInt(1))),
+      OcrQueuePayload.fromJson(json.mapObject(_.add("attempt", Json.fromInt(1)))),
       Left("field attempt must be a string"),
     )
   }
 
   private def canonicalPayload: OcrQueuePayload = OcrQueuePayload.build(
-    jobId = OcrJobId("job-schema-1"),
-    draftId = OcrDraftId("draft-schema-1"),
-    imageId = ImageId("image-schema-1"),
+    jobId = OcrJobId.unsafeFromString("job-schema-1"),
+    draftId = OcrDraftId.unsafeFromString("draft-schema-1"),
+    imageId = ImageId.unsafeFromString("image-schema-1"),
     imagePath = Path.of("/tmp/momo-result/uploads/image-schema-1.png"),
     requestedScreenType = ScreenType.IncidentLog,
     attempt = 1,
@@ -202,8 +209,8 @@ final class OcrQueuePayloadSpec extends FunSuite with JsonSchemaAssertions:
       gameTitle = Some("桃鉄2"),
       layoutFamily = Some("momotetsu_2"),
       knownPlayerAliases = List(
-        PlayerAliasHint("member-ponta", List("ぽんた", "ぽんた社長")),
-        PlayerAliasHint("member-otaka", List("オータカ", "オータカ社長")),
+        PlayerAliasHint(MemberId.unsafeFromString("member-ponta"), List("ぽんた", "ぽんた社長")),
+        PlayerAliasHint(MemberId.unsafeFromString("member-otaka"), List("オータカ", "オータカ社長")),
       ),
       computerPlayerAliases = List("さくま", "さくま社長"),
     ),

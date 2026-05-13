@@ -6,7 +6,7 @@ import cats.effect.Async
 import sttp.tapir.server.ServerEndpoint
 
 import momo.api.domain.ids.{OcrDraftId, OcrJobId}
-import momo.api.endpoints.codec.OcrJobCodec
+import momo.api.endpoints.codec.{OcrDraftCodec, OcrJobCodec}
 import momo.api.endpoints.{
   CancelOcrJobResponse, CreateOcrJobRequest, OcrDraftEndpoints, OcrDraftListResponse,
   OcrDraftResponse, OcrJobEndpoints, OcrJobResponse,
@@ -26,8 +26,8 @@ object OcrModule:
       nowF: F[Instant],
       security: EndpointSecurity[F],
   ): List[ServerEndpoint[Any, F]] = List(
-    OcrJobEndpoints.create.serverLogic { case (devUser, csrfToken, idemKey, request) =>
-      security.authorizeMutation(devUser, csrfToken) { member =>
+    OcrJobEndpoints.create.serverLogic { case (accountHeader, csrfToken, idemKey, request) =>
+      security.authorizeMutation(accountHeader, csrfToken) { member =>
         IdempotencyReplay.wrap[F, CreateOcrJobRequest, momo.api.endpoints.CreateOcrJobResponse](
           idempotency,
           idemKey,
@@ -41,26 +41,30 @@ object OcrModule:
         )
       }
     },
-    OcrJobEndpoints.get.serverLogic { case (jobId, devUser) =>
-      security.authorizeRead(devUser)(_ =>
-        security.respond(getOcrJob.run(OcrJobId(jobId)))(OcrJobResponse.from)
+    OcrJobEndpoints.get.serverLogic { case (jobId, accountHeader) =>
+      security.authorizeRead(accountHeader)(_ =>
+        security.respond(getOcrJob.run(OcrJobId.unsafeFromString(jobId)))(OcrJobResponse.from)
       )
     },
-    OcrJobEndpoints.cancel.serverLogic { case (jobId, devUser, csrfToken) =>
-      security.authorizeMutation(devUser, csrfToken) { _ =>
-        security
-          .respond(cancelOcrJob.run(OcrJobId(jobId)))(_ => CancelOcrJobResponse(jobId, "cancelled"))
+    OcrJobEndpoints.cancel.serverLogic { case (jobId, accountHeader, csrfToken) =>
+      security.authorizeMutation(accountHeader, csrfToken) { _ =>
+        security.respond(
+          cancelOcrJob.run(OcrJobId.unsafeFromString(jobId))
+        )(_ => CancelOcrJobResponse(jobId, "cancelled"))
       }
     },
-    OcrDraftEndpoints.get.serverLogic { case (draftId, devUser) =>
-      security.authorizeRead(devUser)(_ =>
-        security.respond(getOcrDraft.run(OcrDraftId(draftId)))(OcrDraftResponse.from)
+    OcrDraftEndpoints.get.serverLogic { case (draftId, accountHeader) =>
+      security.authorizeRead(accountHeader)(_ =>
+        security
+          .respond(getOcrDraft.run(OcrDraftId.unsafeFromString(draftId)))(OcrDraftResponse.from)
       )
     },
-    OcrDraftEndpoints.listByIds.serverLogic { case (ids, devUser) =>
-      security.authorizeRead(devUser) { _ =>
+    OcrDraftEndpoints.listByIds.serverLogic { case (ids, accountHeader) =>
+      security.authorizeRead(accountHeader) { _ =>
         security.respond(
-          getOcrDraftsBulk.run(ids)
+          OcrDraftCodec.toDraftIds(ids) match
+            case Left(error) => Async[F].pure(Left(error))
+            case Right(draftIds) => getOcrDraftsBulk.run(draftIds)
         )(items => OcrDraftListResponse(items.map(OcrDraftResponse.from)))
       }
     },

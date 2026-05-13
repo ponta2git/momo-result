@@ -1,5 +1,6 @@
 package momo.api.integration
 
+import java.nio.file.Path
 import java.time.Instant
 
 import cats.effect.IO
@@ -8,6 +9,7 @@ import doobie.postgres.circe.jsonb.implicits.*
 import doobie.postgres.implicits.*
 
 import momo.api.domain.ids.*
+import momo.api.domain.{OcrJobHints, ScreenType}
 import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.repositories.postgres.PostgresOcrQueueOutboxRepository
 import momo.api.repositories.{OcrQueueOutboxStatus, OcrQueuePayload}
@@ -19,8 +21,17 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
 
   private def repo = PostgresOcrQueueOutboxRepository[IO](transactor)
 
-  private def payload(jobId: OcrJobId): OcrQueuePayload =
-    OcrQueuePayload(Map("jobId" -> jobId.value, "attempt" -> "1", "enqueuedAt" -> now.toString))
+  private def payload(jobId: OcrJobId): OcrQueuePayload = OcrQueuePayload.build(
+    jobId = jobId,
+    draftId = OcrDraftId.unsafeFromString(s"draft-${jobId.value}"),
+    imageId = ImageId.unsafeFromString(s"image-${jobId.value}"),
+    imagePath = Path.of("/tmp/outbox.png"),
+    requestedScreenType = ScreenType.TotalAssets,
+    attempt = 1,
+    enqueuedAt = now,
+    hints = OcrJobHints.empty,
+    requestId = None,
+  )
 
   private def insertOcrRows(jobId: OcrJobId, draftId: OcrDraftId, createdAt: Instant): IO[Unit] =
     (for
@@ -37,7 +48,7 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
           id, draft_id, image_id, image_path, requested_screen_type, status, attempt_count,
           created_at, updated_at
         ) VALUES (
-          $jobId, $draftId, ${ImageId(s"image-${jobId.value}")}, '/tmp/outbox.png',
+          $jobId, $draftId, ${ImageId.unsafeFromString(s"image-${jobId.value}")}, '/tmp/outbox.png',
           'total_assets', 'queued', 0, $createdAt, $createdAt
         )
       """.update.run
@@ -66,13 +77,25 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
     """.update.run.transact(transactor).map(_ => ())
 
   test("claimDue claims due pending and expired in-flight rows in deterministic order"):
-    val pendingJobId = OcrJobId("job-outbox-pending")
-    val expiredJobId = OcrJobId("job-outbox-expired")
-    val futureJobId = OcrJobId("job-outbox-future")
+    val pendingJobId = OcrJobId.unsafeFromString("job-outbox-pending")
+    val expiredJobId = OcrJobId.unsafeFromString("job-outbox-expired")
+    val futureJobId = OcrJobId.unsafeFromString("job-outbox-future")
     for
-      _ <- insertOcrRows(pendingJobId, OcrDraftId("draft-outbox-pending"), now.minusSeconds(300))
-      _ <- insertOcrRows(expiredJobId, OcrDraftId("draft-outbox-expired"), now.minusSeconds(240))
-      _ <- insertOcrRows(futureJobId, OcrDraftId("draft-outbox-future"), now.minusSeconds(180))
+      _ <- insertOcrRows(
+        pendingJobId,
+        OcrDraftId.unsafeFromString("draft-outbox-pending"),
+        now.minusSeconds(300),
+      )
+      _ <- insertOcrRows(
+        expiredJobId,
+        OcrDraftId.unsafeFromString("draft-outbox-expired"),
+        now.minusSeconds(240),
+      )
+      _ <- insertOcrRows(
+        futureJobId,
+        OcrDraftId.unsafeFromString("draft-outbox-future"),
+        now.minusSeconds(180),
+      )
       _ <- insertOutbox(
         id = "outbox-pending",
         jobId = pendingJobId,
@@ -123,10 +146,14 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
       )
 
   test("markDelivered stores Redis message id and clears the claim"):
-    val jobId = OcrJobId("job-outbox-delivered")
+    val jobId = OcrJobId.unsafeFromString("job-outbox-delivered")
     val deliveredAt = now.plusSeconds(10)
     for
-      _ <- insertOcrRows(jobId, OcrDraftId("draft-outbox-delivered"), now.minusSeconds(60))
+      _ <- insertOcrRows(
+        jobId,
+        OcrDraftId.unsafeFromString("draft-outbox-delivered"),
+        now.minusSeconds(60),
+      )
       _ <- insertOutbox(
         id = "outbox-delivered",
         jobId = jobId,
@@ -146,11 +173,15 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
     yield assertEquals(row, ("DELIVERED", None, Some(deliveredAt), Some("1700000000000-0")))
 
   test("releaseForRetry increments attempts, records sanitized error class, and reschedules"):
-    val jobId = OcrJobId("job-outbox-retry")
+    val jobId = OcrJobId.unsafeFromString("job-outbox-retry")
     val nextAttemptAt = now.plusSeconds(120)
     val releasedAt = now.plusSeconds(5)
     for
-      _ <- insertOcrRows(jobId, OcrDraftId("draft-outbox-retry"), now.minusSeconds(60))
+      _ <- insertOcrRows(
+        jobId,
+        OcrDraftId.unsafeFromString("draft-outbox-retry"),
+        now.minusSeconds(60),
+      )
       _ <- insertOutbox(
         id = "outbox-retry",
         jobId = jobId,
@@ -178,16 +209,29 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
     )
 
   test("claimDue rejects non-string stream payload fields and rolls back the claim"):
-    val jobId = OcrJobId("job-outbox-invalid-payload")
+    val jobId = OcrJobId.unsafeFromString("job-outbox-invalid-payload")
     for
-      _ <- insertOcrRows(jobId, OcrDraftId("draft-outbox-invalid-payload"), now.minusSeconds(60))
+      _ <- insertOcrRows(
+        jobId,
+        OcrDraftId.unsafeFromString("draft-outbox-invalid-payload"),
+        now.minusSeconds(60),
+      )
       _ <- sql"""
         INSERT INTO ocr_queue_outbox (
           id, job_id, dedupe_key, stream_payload,
           status, attempt_count, next_attempt_at, created_at, updated_at
         ) VALUES (
           'outbox-invalid-payload', $jobId, 'ocr-job:job-outbox-invalid-payload',
-          '{"attempt": 1}'::jsonb, ${OcrQueueOutboxStatus.Pending}, 0,
+          '{
+            "schemaVersion": "1",
+            "jobId": "job-outbox-invalid-payload",
+            "draftId": "draft-outbox-invalid-payload",
+            "imageId": "image-job-outbox-invalid-payload",
+            "imagePath": "/tmp/outbox.png",
+            "requestedScreenType": "total_assets",
+            "attempt": 1,
+            "enqueuedAt": "2026-05-08T15:00:00Z"
+          }'::jsonb, ${OcrQueueOutboxStatus.Pending}, 0,
           ${now.minusSeconds(1)}, ${now.minusSeconds(60)}, ${now.minusSeconds(60)}
         )
       """.update.run.transact(transactor)

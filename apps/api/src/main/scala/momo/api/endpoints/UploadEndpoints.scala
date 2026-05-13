@@ -13,7 +13,7 @@ object UploadEndpoints:
   val uploadImage: PublicEndpoint[UploadInput, ProblemResponse, UploadImageResponse, Any] = endpoint
     .post
     .in("api" / "uploads" / "images")
-    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.accountHeader)
     .in(CommonEndpoint.csrfHeader)
     .in(multipartBody)
     .errorOut(CommonEndpoint.errorOut)

@@ -17,17 +17,17 @@ object ExportModule:
       rateLimiter: LoginRateLimiter[F],
       security: EndpointSecurity[F],
   ): List[ServerEndpoint[Any, F]] = List(ExportEndpoints.matches.serverLogic {
-    case (format, seasonMasterId, heldEventId, matchId, devUser) => security
-        .authorizeRead(devUser) { member =>
+    case (format, seasonMasterId, heldEventId, matchId, accountHeader) => security
+        .authorizeRead(accountHeader) { member =>
           rateLimiter.allow(s"export:${member.accountId.value}").flatMap {
             case false => Async[F].pure(Left(
                 security.toProblem(AppError.TooManyRequests("Too many exports. Try again later."))
               ))
             case true => exportMatches.run(
                 format,
-                seasonMasterId.map(SeasonMasterId(_)),
-                heldEventId.map(HeldEventId(_)),
-                matchId.map(MatchId(_)),
+                seasonMasterId.map(SeasonMasterId.unsafeFromString(_)),
+                heldEventId.map(HeldEventId.unsafeFromString(_)),
+                matchId.map(MatchId.unsafeFromString(_)),
               ).map(_.leftMap(security.toProblem).map(file =>
                 (file.contentDisposition, file.contentType, file.body)
               ))

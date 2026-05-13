@@ -9,7 +9,7 @@ import cats.data.EitherT
 import cats.syntax.all.*
 
 import momo.api.domain.ids.*
-import momo.api.domain.{FourPlayers, MatchRecord, PlayerResult}
+import momo.api.domain.{MatchPolicy, MatchRecord, PlayerResult}
 import momo.api.errors.AppError
 import momo.api.repositories.{
   GameTitlesRepository, HeldEventsRepository, MapMastersRepository, MatchConfirmationRepository,
@@ -28,21 +28,19 @@ final class ConfirmMatch[F[_]: MonadThrow](
     seasonMasters: SeasonMastersRepository[F],
     now: F[Instant],
     nextId: F[String],
-    allowedMemberIds: Set[MemberId],
+    allowedMemberIds: F[Set[MemberId]],
 ):
   import ConfirmMatch.*
-
-  def run(command: Command, createdBy: AccountId): F[Either[AppError, MatchRecord]] =
-    run(command, createdBy, Some(MemberId(createdBy.value)))
 
   def run(
       command: Command,
       createdBy: AccountId,
       playerMemberId: Option[MemberId],
   ): F[Either[AppError, MatchRecord]] = (for
+    allowed <- EitherT.liftF(allowedMemberIds)
     validated <- EitherT.fromEither[F](
-      MatchValidation.validate(
-        MatchValidation.Input(
+      MatchPolicy.validate(
+        MatchPolicy.Input(
           heldEventId = command.heldEventId,
           matchNoInEvent = command.matchNoInEvent,
           gameTitleId = command.gameTitleId,
@@ -51,8 +49,8 @@ final class ConfirmMatch[F[_]: MonadThrow](
           mapMasterId = command.mapMasterId,
           players = command.players,
         ),
-        allowedMemberIds,
-      ).leftMap(MatchValidation.toAppError)
+        allowed,
+      ).leftMap(errors => AppError.ValidationFailed(MatchPolicy.toMessage(errors)))
     )
     playedAt <- EitherT.fromEither[F](Try(Instant.parse(command.playedAt)).toEither.left.map(_ =>
       AppError.ValidationFailed("playedAt must be ISO8601 instant.")
@@ -77,7 +75,7 @@ final class ConfirmMatch[F[_]: MonadThrow](
         Left(AppError.ValidationFailed(s"seasonMasterId ${season
             .id} does not belong to gameTitleId ${title.id}."))
     )
-    duplicate <- EitherT.liftF(matches.existsMatchNo(command.heldEventId, command.matchNoInEvent))
+    duplicate <- EitherT.liftF(matches.existsMatchNo(command.heldEventId, validated.matchNoInEvent))
     _ <- EitherT.fromEither[F](
       if duplicate then
         Left(AppError.Conflict(s"matchNoInEvent ${command
@@ -87,14 +85,14 @@ final class ConfirmMatch[F[_]: MonadThrow](
     id <- EitherT.liftF(nextId)
     createdAt <- EitherT.liftF(now)
     record = toMatchRecord(
-      MatchId(id),
+      MatchId.unsafeFromString(id),
       createdAt,
       playedAt,
       title.layoutFamily,
       createdBy,
       playerMemberId,
       command,
-      validated.players,
+      validated,
     )
     maybeDraft <- command.matchDraftId match
       case None => EitherT.rightT[F, AppError](Option.empty[momo.api.domain.MatchDraft])
@@ -127,7 +125,7 @@ object ConfirmMatch:
       playedAt: String,
       matchDraftId: Option[MatchDraftId],
       draftRefs: DraftRefs,
-      players: List[PlayerResult],
+      players: List[PlayerResult.Input],
   )
 
   private def toMatchRecord(
@@ -138,21 +136,21 @@ object ConfirmMatch:
       createdByAccountId: AccountId,
       createdByMemberId: Option[MemberId],
       command: Command,
-      players: FourPlayers,
+      validated: MatchRecord.ValidatedInput,
   ): MatchRecord = MatchRecord(
     id = id,
-    heldEventId = command.heldEventId,
-    matchNoInEvent = command.matchNoInEvent,
-    gameTitleId = command.gameTitleId,
+    heldEventId = validated.heldEventId,
+    matchNoInEvent = validated.matchNoInEvent,
+    gameTitleId = validated.gameTitleId,
     layoutFamily = layoutFamily,
-    seasonMasterId = command.seasonMasterId,
-    ownerMemberId = command.ownerMemberId,
-    mapMasterId = command.mapMasterId,
+    seasonMasterId = validated.seasonMasterId,
+    ownerMemberId = validated.ownerMemberId,
+    mapMasterId = validated.mapMasterId,
     playedAt = playedAt,
     totalAssetsDraftId = command.draftRefs.totalAssets,
     revenueDraftId = command.draftRefs.revenue,
     incidentLogDraftId = command.draftRefs.incidentLog,
-    players = players,
+    players = validated.players,
     createdByAccountId = createdByAccountId,
     createdByMemberId = createdByMemberId,
     createdAt = createdAt,

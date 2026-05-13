@@ -13,7 +13,7 @@ object OcrJobEndpoints:
   val create: PublicEndpoint[CreateInput, ProblemResponse, CreateOcrJobResponse, Any] = endpoint
     .post
     .in("api" / "ocr-jobs")
-    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.accountHeader)
     .in(CommonEndpoint.csrfHeader)
     .in(CommonEndpoint.idempotencyKeyHeader)
     .in(jsonBody[CreateOcrJobRequest])
@@ -24,7 +24,7 @@ object OcrJobEndpoints:
   val get: PublicEndpoint[(String, Option[String]), ProblemResponse, OcrJobResponse, Any] = endpoint
     .get
     .in("api" / "ocr-jobs" / path[String]("jobId"))
-    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.accountHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[OcrJobResponse])
     .tag("ocr")
@@ -32,7 +32,7 @@ object OcrJobEndpoints:
   val cancel: PublicEndpoint[CancelInput, ProblemResponse, CancelOcrJobResponse, Any] = endpoint
     .delete
     .in("api" / "ocr-jobs" / path[String]("jobId"))
-    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.accountHeader)
     .in(CommonEndpoint.csrfHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[CancelOcrJobResponse])

@@ -153,7 +153,7 @@ object MatchSummaryResponse:
     matchDraftId = item.matchDraftId.map(_.value),
     status = item.status,
     heldEventId = item.heldEventId.map(_.value),
-    matchNoInEvent = item.matchNoInEvent,
+    matchNoInEvent = item.matchNoInEvent.map(_.value),
     gameTitleId = item.gameTitleId.map(_.value),
     seasonMasterId = item.seasonMasterId.map(_.value),
     mapMasterId = item.mapMasterId.map(_.value),
@@ -161,8 +161,13 @@ object MatchSummaryResponse:
     playedAt = item.playedAt.map(DateTimeFormatter.ISO_INSTANT.format),
     createdAt = DateTimeFormatter.ISO_INSTANT.format(item.createdAt),
     updatedAt = DateTimeFormatter.ISO_INSTANT.format(item.updatedAt),
-    ranks = item.ranks
-      .map(p => MatchRankEntry(memberId = p.memberId.value, rank = p.rank, playOrder = p.playOrder)),
+    ranks = item.ranks.map(p =>
+      MatchRankEntry(
+        memberId = p.memberId.value,
+        rank = p.rank.value,
+        playOrder = p.playOrder.value,
+      )
+    ),
   )
 
 object MatchDetailResponse:
@@ -170,7 +175,7 @@ object MatchDetailResponse:
   def from(r: MatchRecord): MatchDetailResponse = MatchDetailResponse(
     matchId = r.id.value,
     heldEventId = r.heldEventId.value,
-    matchNoInEvent = r.matchNoInEvent,
+    matchNoInEvent = r.matchNoInEvent.value,
     gameTitleId = r.gameTitleId.value,
     layoutFamily = r.layoutFamily,
     seasonMasterId = r.seasonMasterId.value,
@@ -183,17 +188,17 @@ object MatchDetailResponse:
     players = r.players.byPlayOrder.map(p =>
       PlayerResultResponse(
         memberId = p.memberId.value,
-        playOrder = p.playOrder,
-        rank = p.rank,
-        totalAssetsManYen = p.totalAssetsManYen,
-        revenueManYen = p.revenueManYen,
+        playOrder = p.playOrder.value,
+        rank = p.rank.value,
+        totalAssetsManYen = p.totalAssetsManYen.value,
+        revenueManYen = p.revenueManYen.value,
         incidents = IncidentCountsResponse(
-          destination = p.incidents.destination,
-          plusStation = p.incidents.plusStation,
-          minusStation = p.incidents.minusStation,
-          cardStation = p.incidents.cardStation,
-          cardShop = p.incidents.cardShop,
-          suriNoGinji = p.incidents.suriNoGinji,
+          destination = p.incidents.destination.value,
+          plusStation = p.incidents.plusStation.value,
+          minusStation = p.incidents.minusStation.value,
+          cardStation = p.incidents.cardStation.value,
+          cardShop = p.incidents.cardShop.value,
+          suriNoGinji = p.incidents.suriNoGinji.value,
         ),
       )
     ),

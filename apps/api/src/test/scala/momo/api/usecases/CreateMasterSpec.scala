@@ -18,8 +18,11 @@ final class CreateMasterSpec extends MomoCatsEffectSuite:
     for
       titles <- InMemoryGameTitlesRepository.create[IO]
       usecase = CreateGameTitle[IO](titles, now)
-      first <- usecase.run(CreateGameTitleCommand(GameTitleId("title_world"), " World ", " world "))
-      second <- usecase.run(CreateGameTitleCommand(GameTitleId("title_japan"), "Japan", "japan"))
+      first <- usecase.run(
+        CreateGameTitleCommand(GameTitleId.unsafeFromString("title_world"), " World ", " world ")
+      )
+      second <- usecase
+        .run(CreateGameTitleCommand(GameTitleId.unsafeFromString("title_japan"), "Japan", "japan"))
     yield
       assertEquals(first.map(_.name), Right("World"))
       assertEquals(first.map(_.layoutFamily), Right("world"))
@@ -30,9 +33,12 @@ final class CreateMasterSpec extends MomoCatsEffectSuite:
     for
       titles <- InMemoryGameTitlesRepository.create[IO]
       usecase = CreateGameTitle[IO](titles, now)
-      invalid <- usecase.run(CreateGameTitleCommand(GameTitleId("Title-World"), "World", "world"))
-      _ <- usecase.run(CreateGameTitleCommand(GameTitleId("title_world"), "World", "world"))
-      duplicate <- usecase.run(CreateGameTitleCommand(GameTitleId("title_world"), "World", "world"))
+      invalid <- usecase
+        .run(CreateGameTitleCommand(GameTitleId.unsafeFromString("Title-World"), "World", "world"))
+      _ <- usecase
+        .run(CreateGameTitleCommand(GameTitleId.unsafeFromString("title_world"), "World", "world"))
+      duplicate <- usecase
+        .run(CreateGameTitleCommand(GameTitleId.unsafeFromString("title_world"), "World", "world"))
     yield
       assertAppError(invalid, "VALIDATION_FAILED", "id must match")
       assertAppError(duplicate, "CONFLICT", "already exists")
@@ -43,16 +49,30 @@ final class CreateMasterSpec extends MomoCatsEffectSuite:
       maps <- InMemoryMapMastersRepository.create[IO]
       createTitle = CreateGameTitle[IO](titles, now)
       usecase = CreateMapMaster[IO](titles, maps, now)
-      missing <- usecase
-        .run(CreateMapMasterCommand(MapMasterId("map_east"), GameTitleId("missing_title"), "East"))
-      _ <- createTitle.run(CreateGameTitleCommand(GameTitleId("title_world"), "World", "world"))
-      _ <- createTitle.run(CreateGameTitleCommand(GameTitleId("title_japan"), "Japan", "japan"))
-      east <- usecase
-        .run(CreateMapMasterCommand(MapMasterId("map_east"), GameTitleId("title_world"), "East"))
-      west <- usecase
-        .run(CreateMapMasterCommand(MapMasterId("map_west"), GameTitleId("title_world"), "West"))
-      japan <- usecase
-        .run(CreateMapMasterCommand(MapMasterId("map_japan"), GameTitleId("title_japan"), "Japan"))
+      missing <- usecase.run(CreateMapMasterCommand(
+        MapMasterId.unsafeFromString("map_east"),
+        GameTitleId.unsafeFromString("missing_title"),
+        "East",
+      ))
+      _ <- createTitle
+        .run(CreateGameTitleCommand(GameTitleId.unsafeFromString("title_world"), "World", "world"))
+      _ <- createTitle
+        .run(CreateGameTitleCommand(GameTitleId.unsafeFromString("title_japan"), "Japan", "japan"))
+      east <- usecase.run(CreateMapMasterCommand(
+        MapMasterId.unsafeFromString("map_east"),
+        GameTitleId.unsafeFromString("title_world"),
+        "East",
+      ))
+      west <- usecase.run(CreateMapMasterCommand(
+        MapMasterId.unsafeFromString("map_west"),
+        GameTitleId.unsafeFromString("title_world"),
+        "West",
+      ))
+      japan <- usecase.run(CreateMapMasterCommand(
+        MapMasterId.unsafeFromString("map_japan"),
+        GameTitleId.unsafeFromString("title_japan"),
+        "Japan",
+      ))
     yield
       assertAppError(missing, "NOT_FOUND", "game_title was not found")
       assertEquals(east.map(_.displayOrder), Right(1))
@@ -65,18 +85,21 @@ final class CreateMasterSpec extends MomoCatsEffectSuite:
       seasons <- InMemorySeasonMastersRepository.create[IO]
       createTitle = CreateGameTitle[IO](titles, now)
       usecase = CreateSeasonMaster[IO](titles, seasons, now)
-      missing <- usecase.run(
-        CreateSeasonMasterCommand(SeasonMasterId("season_spring"), GameTitleId("missing"), "Spring")
-      )
-      _ <- createTitle.run(CreateGameTitleCommand(GameTitleId("title_world"), "World", "world"))
+      missing <- usecase.run(CreateSeasonMasterCommand(
+        SeasonMasterId.unsafeFromString("season_spring"),
+        GameTitleId.unsafeFromString("missing"),
+        "Spring",
+      ))
+      _ <- createTitle
+        .run(CreateGameTitleCommand(GameTitleId.unsafeFromString("title_world"), "World", "world"))
       _ <- usecase.run(CreateSeasonMasterCommand(
-        SeasonMasterId("season_spring"),
-        GameTitleId("title_world"),
+        SeasonMasterId.unsafeFromString("season_spring"),
+        GameTitleId.unsafeFromString("title_world"),
         "Spring",
       ))
       duplicate <- usecase.run(CreateSeasonMasterCommand(
-        SeasonMasterId("season_spring"),
-        GameTitleId("title_world"),
+        SeasonMasterId.unsafeFromString("season_spring"),
+        GameTitleId.unsafeFromString("title_world"),
         "Spring",
       ))
     yield

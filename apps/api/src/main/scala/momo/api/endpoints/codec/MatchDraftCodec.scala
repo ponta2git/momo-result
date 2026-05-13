@@ -33,13 +33,13 @@ object MatchDraftCodec:
       playedAt: Option[Instant],
   ): Either[AppError, CreateMatchDraftCommand] = parseStatusOption(request.status).map { status =>
     CreateMatchDraftCommand(
-      heldEventId = request.heldEventId.map(HeldEventId(_)),
+      heldEventId = request.heldEventId.map(HeldEventId.unsafeFromString(_)),
       matchNoInEvent = request.matchNoInEvent,
-      gameTitleId = request.gameTitleId.map(GameTitleId(_)),
+      gameTitleId = request.gameTitleId.map(GameTitleId.unsafeFromString(_)),
       layoutFamily = request.layoutFamily,
-      seasonMasterId = request.seasonMasterId.map(SeasonMasterId(_)),
-      ownerMemberId = request.ownerMemberId.map(MemberId(_)),
-      mapMasterId = request.mapMasterId.map(MapMasterId(_)),
+      seasonMasterId = request.seasonMasterId.map(SeasonMasterId.unsafeFromString(_)),
+      ownerMemberId = request.ownerMemberId.map(MemberId.unsafeFromString(_)),
+      mapMasterId = request.mapMasterId.map(MapMasterId.unsafeFromString(_)),
       playedAt = playedAt,
       status = status,
     )
@@ -49,13 +49,13 @@ object MatchDraftCodec:
       request: UpdateMatchDraftRequest,
       playedAt: Option[Instant],
   ): UpdateMatchDraftCommand = UpdateMatchDraftCommand(
-    heldEventId = request.heldEventId.map(HeldEventId(_)),
+    heldEventId = request.heldEventId.map(HeldEventId.unsafeFromString(_)),
     matchNoInEvent = request.matchNoInEvent,
-    gameTitleId = request.gameTitleId.map(GameTitleId(_)),
+    gameTitleId = request.gameTitleId.map(GameTitleId.unsafeFromString(_)),
     layoutFamily = request.layoutFamily,
-    seasonMasterId = request.seasonMasterId.map(SeasonMasterId(_)),
-    ownerMemberId = request.ownerMemberId.map(MemberId(_)),
-    mapMasterId = request.mapMasterId.map(MapMasterId(_)),
+    seasonMasterId = request.seasonMasterId.map(SeasonMasterId.unsafeFromString(_)),
+    ownerMemberId = request.ownerMemberId.map(MemberId.unsafeFromString(_)),
+    mapMasterId = request.mapMasterId.map(MapMasterId.unsafeFromString(_)),
     playedAt = playedAt,
     status = request.status,
   )

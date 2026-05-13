@@ -16,7 +16,7 @@ object ExportEndpoints:
     .in(query[Option[String]]("seasonMasterId"))
     .in(query[Option[String]]("heldEventId"))
     .in(query[Option[String]]("matchId"))
-    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.accountHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(header[String]("Content-Disposition"))
     .out(header[String]("Content-Type"))

@@ -4,9 +4,10 @@ import java.time.Instant
 
 import cats.MonadThrow
 import cats.data.EitherT
+import cats.syntax.all.*
 
 import momo.api.domain.ids.*
-import momo.api.domain.{MatchDraft, MatchDraftStatus}
+import momo.api.domain.{MatchDraft, MatchDraftStatus, MatchNoInEvent}
 import momo.api.errors.AppError
 import momo.api.repositories.{
   GameTitlesRepository, HeldEventsRepository, MapMastersRepository, MatchDraftsRepository,
@@ -46,27 +47,25 @@ final class UpdateMatchDraft[F[_]: MonadThrow](
     existing <- matchDrafts.find(draftId).orNotFound("match draft", draftId.value)
     _ <- EitherT.fromEither[F](authorize(existing, accountId))
     _ <- EitherT.fromEither[F](ensureEditable(existing.status))
-    _ <- EitherT.fromEither[F](validateMatchNo(command.matchNoInEvent))
+    matchNoInEvent <- EitherT.fromEither[F](validateMatchNo(command.matchNoInEvent))
     _ <- validateForeignKeys(command)
     status <- EitherT.fromEither[F](resolveStatus(command.status, existing.status))
     at <- EitherT.liftF(now)
     updated <- EitherT.fromEither[F](
       existing match
-        case e: MatchDraft.Editing => Right(
-            e.copy(
-              common = e.common.copy(
-                heldEventId = command.heldEventId.orElse(e.heldEventId),
-                matchNoInEvent = command.matchNoInEvent.orElse(e.matchNoInEvent),
-                gameTitleId = command.gameTitleId.orElse(e.gameTitleId),
-                layoutFamily = command.layoutFamily.orElse(e.layoutFamily),
-                seasonMasterId = command.seasonMasterId.orElse(e.seasonMasterId),
-                ownerMemberId = command.ownerMemberId.orElse(e.ownerMemberId),
-                mapMasterId = command.mapMasterId.orElse(e.mapMasterId),
-                playedAt = command.playedAt.orElse(e.playedAt),
-              ),
-              status = status,
-            )
-          )
+        case e: MatchDraft.Editable => MatchDraft.editable(
+            e.common.copy(
+              heldEventId = command.heldEventId.orElse(e.heldEventId),
+              matchNoInEvent = matchNoInEvent.orElse(e.matchNoInEvent),
+              gameTitleId = command.gameTitleId.orElse(e.gameTitleId),
+              layoutFamily = command.layoutFamily.orElse(e.layoutFamily),
+              seasonMasterId = command.seasonMasterId.orElse(e.seasonMasterId),
+              ownerMemberId = command.ownerMemberId.orElse(e.ownerMemberId),
+              mapMasterId = command.mapMasterId.orElse(e.mapMasterId),
+              playedAt = command.playedAt.orElse(e.playedAt),
+            ),
+            status = status,
+          ).leftMap(err => AppError.ValidationFailed(err.message))
         case _ => Left(AppError.Conflict(s"match draft in status=${existing.status
               .wire} cannot be edited."))
     )
@@ -86,11 +85,11 @@ final class UpdateMatchDraft[F[_]: MonadThrow](
     AppError.Conflict(s"match draft in status=${status.wire} cannot be edited."),
   )
 
-  private def validateMatchNo(matchNoInEvent: Option[Int]): Either[AppError, Unit] =
-    matchNoInEvent match
-      case Some(value) if value <= 0 =>
-        Left(AppError.ValidationFailed("matchNoInEvent must be greater than 0."))
-      case _ => Right(())
+  private def validateMatchNo(
+      matchNoInEvent: Option[Int]
+  ): Either[AppError, Option[MatchNoInEvent]] = matchNoInEvent.traverse(value =>
+    MatchNoInEvent.fromInt(value).left.map(err => AppError.ValidationFailed(err.message))
+  )
 
   private def resolveStatus(
       wire: Option[String],

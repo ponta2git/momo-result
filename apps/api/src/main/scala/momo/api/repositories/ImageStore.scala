@@ -1,5 +1,7 @@
 package momo.api.repositories
 
+import java.time.Instant
+
 import momo.api.domain.StoredImage
 import momo.api.domain.ids.ImageId
 import momo.api.errors.AppError
@@ -20,3 +22,6 @@ trait ImageStore[F[_]]:
    */
   def readBytes(image: StoredImage): F[Array[Byte]]
   def delete(imageId: ImageId): F[Boolean]
+
+trait ImageOrphanStore[F[_]]:
+  def deleteOrphans(referenced: Set[ImageId], olderThan: Instant): F[Int]

@@ -35,7 +35,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
         devMemberIds = List("member_ponta", "member_akane_mami", "member_otaka", "member_eu"),
       )).evalMap { wired =>
         for
-          account <- wired.loginAccounts.find(AccountId("account_ponta")).flatMap {
+          account <- wired.loginAccounts.find(AccountId.unsafeFromString("account_ponta")).flatMap {
             case Some(value) => IO.pure(value)
             case None => IO.raiseError(new IllegalStateException("account_ponta is missing"))
           }
@@ -51,6 +51,10 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
   private val uploadLimitApp = ResourceFunFixture(configuredHttpAppResource(
     "momo-api-upload-limit",
     _.copy(resourceLimits = ResourceLimitsConfig.defaults.copy(uploadRequestMaxBytes = 1L)),
+  ))
+  private val requestLimitApp = ResourceFunFixture(configuredHttpAppResource(
+    "momo-api-request-limit",
+    _.copy(resourceLimits = ResourceLimitsConfig.defaults.copy(requestMaxBytes = 1L)),
   ))
   private val exportRateLimitApp = ResourceFunFixture(configuredHttpAppResource(
     "momo-api-export-rate",
@@ -307,16 +311,17 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
   }
 
   prodHttpApp
-    .test("prod protected endpoint rejects external X-Dev-User without session cookie") { httpApp =>
-      val request = Request[IO](Method.GET, uri"/api/held-events").putHeaders(devReadHeader())
-      httpApp.run(request).flatMap(response =>
-        assertProblemDetailEquals(
-          response,
-          Status.Unauthorized,
-          "UNAUTHORIZED",
-          "Authentication is required.",
+    .test("prod protected endpoint rejects external account header without session cookie") {
+      httpApp =>
+        val request = Request[IO](Method.GET, uri"/api/held-events").putHeaders(devReadHeader())
+        httpApp.run(request).flatMap(response =>
+          assertProblemDetailEquals(
+            response,
+            Status.Unauthorized,
+            "UNAUTHORIZED",
+            "Authentication is required.",
+          )
         )
-      )
     }
 
   app.test("GET /openapi.yaml is not served by API routes") { httpApp =>
@@ -341,6 +346,16 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
         .putHeaders(org.http4s.Header.Raw(CIString("Content-Length"), "2")).withEntity("xx")
       httpApp.run(request).flatMap(response =>
         assertProblem(response, Status.PayloadTooLarge, "PAYLOAD_TOO_LARGE", "Upload request")
+      )
+    }
+
+  requestLimitApp
+    .test("oversized mutation requests are rejected before endpoint decoding") { httpApp =>
+      val request = Request[IO](Method.POST, uri"/api/match-drafts")
+        .putHeaders(devWriteHeaders() :+ org.http4s.Header.Raw(CIString("Content-Length"), "2")*)
+        .withEntity("xx")
+      httpApp.run(request).flatMap(response =>
+        assertProblem(response, Status.PayloadTooLarge, "PAYLOAD_TOO_LARGE", "Request body")
       )
     }
 

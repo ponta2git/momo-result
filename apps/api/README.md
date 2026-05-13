@@ -6,7 +6,7 @@ Scala 3 / sbt / Tapir / http4s / Cats Effect による API サーバーです。
 
 - `GET /healthz`
 - `GET /openapi.yaml`
-- 開発用スタブ認証 `X-Dev-User`
+- 開発用スタブ認証 `X-Momo-Account-Id`
 - 開発用 CSRF `X-CSRF-Token: dev`
 - 一時画像保存（PNG/JPEG/WebP、3MB上限、マジックバイト検証）
 - OCRジョブ作成、取得、キャンセル
@@ -91,10 +91,10 @@ APP_ENV=dev DEV_MEMBER_IDS=member_ponta,member_akane_mami,member_otaka,member_eu
 
 ```sh
 curl http://localhost:8080/healthz
-curl -H 'X-Dev-User: account_ponta' http://localhost:8080/api/auth/me
+curl -H 'X-Momo-Account-Id: account_ponta' http://localhost:8080/api/auth/me
 ```
 
-Mutation 系 API は `X-Dev-User` と `X-CSRF-Token: dev` が必要です。
+Mutation 系 API は `X-Momo-Account-Id` と `X-CSRF-Token: dev` が必要です。
 
 ## OCR Worker との契約
 
@@ -102,7 +102,7 @@ Redis Streams へ投入するフィールドは `../../docs/redis-streams-ocr-co
 Scala側では `OcrQueuePayloadSpec` で `../../docs/schemas/` の JSON Schema に対して以下を固定しています。
 
 - 全フィールドは文字列
-- 必須キー: `schemaVersion`, `jobId`, `draftId`, `imageId`, `imagePath`, `requestedImageType`, `attempt`, `enqueuedAt`
+- 必須キー: `schemaVersion`, `jobId`, `draftId`, `imageId`, `imagePath`, `requestedScreenType`, `attempt`, `enqueuedAt`
 - `schemaVersion` は Stream Payload v1 では `"1"` 固定
 - `ocrHintsJson` は compact / sorted keys / UTF-8 の JSON 文字列。最大 8192 文字で、内容は hints schema の上限に従う
 - `requestId` は任意のログ相関 field

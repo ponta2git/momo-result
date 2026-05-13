@@ -23,13 +23,19 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
   private def seedMasters(wired: HttpApp.Wired[IO]): IO[Unit] =
     val now = Instant.parse("2024-01-01T00:00:00Z")
     for
-      _ <- wired.gameTitles
-        .create(GameTitle(GameTitleId("title_world"), "桃太郎電鉄ワールド", "world", 1, now))
-      _ <- wired.mapMasters
-        .create(MapMaster(MapMasterId("map_east"), GameTitleId("title_world"), "東日本編", 1, now))
+      _ <- wired.gameTitles.create(
+        GameTitle(GameTitleId.unsafeFromString("title_world"), "桃太郎電鉄ワールド", "world", 1, now)
+      )
+      _ <- wired.mapMasters.create(MapMaster(
+        MapMasterId.unsafeFromString("map_east"),
+        GameTitleId.unsafeFromString("title_world"),
+        "東日本編",
+        1,
+        now,
+      ))
       _ <- wired.seasonMasters.create(SeasonMaster(
-        SeasonMasterId("season_2024_spring"),
-        GameTitleId("title_world"),
+        SeasonMasterId.unsafeFromString("season_2024_spring"),
+        GameTitleId.unsafeFromString("title_world"),
         "2024-spring",
         1,
         now,

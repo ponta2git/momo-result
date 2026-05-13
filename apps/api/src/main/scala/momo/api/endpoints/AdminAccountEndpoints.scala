@@ -11,7 +11,7 @@ object AdminAccountEndpoints:
     endpoint
       .get
       .in("api" / "admin" / "login-accounts")
-      .in(CommonEndpoint.devUserHeader)
+      .in(CommonEndpoint.accountHeader)
       .errorOut(CommonEndpoint.errorOut)
       .out(jsonBody[LoginAccountListResponse])
       .tag("admin")
@@ -24,7 +24,7 @@ object AdminAccountEndpoints:
   ] = endpoint
     .post
     .in("api" / "admin" / "login-accounts")
-    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.accountHeader)
     .in(CommonEndpoint.csrfHeader)
     .in(CommonEndpoint.idempotencyKeyHeader)
     .in(jsonBody[CreateLoginAccountRequest])
@@ -40,7 +40,7 @@ object AdminAccountEndpoints:
   ] = endpoint
     .patch
     .in("api" / "admin" / "login-accounts" / path[String]("accountId"))
-    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.accountHeader)
     .in(CommonEndpoint.csrfHeader)
     .in(jsonBody[UpdateLoginAccountRequest])
     .errorOut(CommonEndpoint.errorOut)

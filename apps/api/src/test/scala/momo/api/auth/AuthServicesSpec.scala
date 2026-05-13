@@ -23,10 +23,10 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
 
   private val instant = Instant.parse("2026-01-01T00:00:00Z")
   private val account = LoginAccount(
-    id = AccountId("account_ponta"),
-    discordUserId = UserId("123456789012345678"),
+    id = AccountId.unsafeFromString("account_ponta"),
+    discordUserId = UserId.unsafeFromString("123456789012345678"),
     displayName = "ぽんた",
-    playerMemberId = Some(MemberId("member_ponta")),
+    playerMemberId = Some(MemberId.unsafeFromString("member_ponta")),
     loginEnabled = true,
     isAdmin = true,
     createdAt = instant,
@@ -57,8 +57,8 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
     for csrfHash <- SessionTokenHash.sha256[IO]("secret") yield
       val session = AppSession(
         idHash = "session-hash",
-        accountId = AccountId("account_ponta"),
-        playerMemberId = Some(MemberId("member_ponta")),
+        accountId = AccountId.unsafeFromString("account_ponta"),
+        playerMemberId = Some(MemberId.unsafeFromString("member_ponta")),
         csrfSecretHash = csrfHash,
         createdAt = Instant.EPOCH,
         lastSeenAt = Instant.EPOCH,

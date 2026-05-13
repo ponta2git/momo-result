@@ -16,8 +16,8 @@ object UploadModule:
       rateLimiter: LoginRateLimiter[F],
       security: EndpointSecurity[F],
   ): List[ServerEndpoint[Any, F]] = List(UploadEndpoints.uploadImage.serverLogic {
-    case (devUser, csrfToken, parts) => security
-        .authorizeMutation(devUser, csrfToken) { member =>
+    case (accountHeader, csrfToken, parts) => security
+        .authorizeMutation(accountHeader, csrfToken) { member =>
           rateLimiter.allow(s"upload:${member.accountId.value}").flatMap {
             case false => Async[F].pure(Left(
                 security

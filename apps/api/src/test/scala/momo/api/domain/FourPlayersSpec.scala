@@ -5,14 +5,19 @@ import munit.FunSuite
 import momo.api.domain.ids.MemberId
 
 final class FourPlayersSpec extends FunSuite:
-  private val allowed =
-    Set(MemberId("m1"), MemberId("m2"), MemberId("m3"), MemberId("m4"), MemberId("m5"))
+  private val allowed = Set(
+    MemberId.unsafeFromString("m1"),
+    MemberId.unsafeFromString("m2"),
+    MemberId.unsafeFromString("m3"),
+    MemberId.unsafeFromString("m4"),
+    MemberId.unsafeFromString("m5"),
+  )
 
-  private val zero = IncidentCounts(0, 0, 0, 0, 0, 0)
+  private val zero = IncidentCounts.unsafeFromInts(0, 0, 0, 0, 0, 0)
 
   private def player(id: String, playOrder: Int, rank: Int, incidents: IncidentCounts) =
-    PlayerResult(
-      MemberId(id),
+    PlayerResult.unsafeFromInts(
+      MemberId.unsafeFromString(id),
       playOrder,
       rank,
       totalAssetsManYen = 100,
@@ -58,34 +63,14 @@ final class FourPlayersSpec extends FunSuite:
 
   test("non-permutation playOrder and rank both reported"):
     val players =
-      List(player("m1", 1, 1), player("m2", 2, 2), player("m3", 3, 3), player("m4", 5, 5))
+      List(player("m1", 1, 1), player("m2", 2, 2), player("m3", 3, 3), player("m4", 3, 3))
     val errs = FourPlayers.fromList(players, allowed).swap.toOption.get.toNonEmptyList.toList
     assert(errs.contains(MatchValidationError.PlayOrdersNotPermutation))
     assert(errs.contains(MatchValidationError.RanksNotPermutation))
 
-  test("negative incident counts accumulated per offending player"):
-    val players = List(
-      player("m1", 1, 1, IncidentCounts(-1, 0, 0, 0, 0, 0)),
-      player("m2", 2, 2, IncidentCounts(0, -1, 0, 0, 0, 0)),
-      player("m3", 3, 3),
-      player("m4", 4, 4),
-    )
-    val errs = FourPlayers.fromList(players, allowed).swap.toOption.get.toNonEmptyList.toList
-    val negs = errs.collect { case e: MatchValidationError.IncidentCountsNegative => e }
-    assertEquals(negs.size, 2)
-    assertEquals(negs.map(_.memberId.value).toSet, Set("m1", "m2"))
-
   test("multiple unrelated errors accumulate in a single chain"):
-    val players = List(
-      player("m1", 1, 1),
-      player("m1", 2, 2),
-      player("m3", 3, 5),
-      player("m4", 4, 4, IncidentCounts(-1, 0, 0, 0, 0, 0)),
-    )
+    val players =
+      List(player("m1", 1, 1), player("m1", 2, 2), player("m3", 3, 3), player("m4", 4, 3))
     val errs = FourPlayers.fromList(players, allowed).swap.toOption.get.toNonEmptyList.toList
     assert(errs.contains(MatchValidationError.PlayerMemberIdsNotUnique))
     assert(errs.contains(MatchValidationError.RanksNotPermutation))
-    assert(errs.exists {
-      case _: MatchValidationError.IncidentCountsNegative => true
-      case _ => false
-    })

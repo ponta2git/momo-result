@@ -12,7 +12,10 @@ import doobie.util.fragments
 
 import momo.api.db.Database
 import momo.api.domain.ids.*
-import momo.api.domain.{MatchDraftStatus, MatchListItem, MatchListItemKind, MatchListRankEntry}
+import momo.api.domain.{
+  MatchDraftStatus, MatchListItem, MatchListItemKind, MatchListRankEntry, MatchNoInEvent, PlayOrder,
+  Rank,
+}
 import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.repositories.{MatchListAlg, MatchListReadModel}
 
@@ -33,7 +36,7 @@ object PostgresMatchList:
       Option[MatchDraftId],
       String,
       Option[HeldEventId],
-      Option[Int],
+      Option[MatchNoInEvent],
       Option[GameTitleId],
       Option[SeasonMasterId],
       Option[MapMasterId],
@@ -127,7 +130,7 @@ object PostgresMatchList:
         FROM match_players
         WHERE """ ++ fragments.in(fr"match_id", ids) ++ fr"""
         ORDER BY match_id, play_order
-      """).query[(MatchId, MemberId, Int, Int)].to[List].map { rows =>
+      """).query[(MatchId, MemberId, Rank, PlayOrder)].to[List].map { rows =>
         rows.groupBy(_._1).view.mapValues(_.map(row => MatchListRankEntry(row._2, row._3, row._4)))
           .toMap
       }

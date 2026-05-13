@@ -16,10 +16,7 @@ import momo.api.http.modules.{
   AdminAccountModule, ExportModule, HealthModule, HeldEventModule, MasterModule, MatchDraftModule,
   MatchModule, OcrModule, UploadModule,
 }
-import momo.api.repositories.{
-  GameTitlesRepository, IdempotencyRepository, IncidentMastersRepository, LoginAccountsRepository,
-  MapMastersRepository, MemberAliasesRepository, MembersRepository, SeasonMastersRepository,
-}
+import momo.api.repositories.{IdempotencyRepository, LoginAccountsRepository}
 import momo.api.usecases.*
 
 object HttpRoutes:
@@ -46,15 +43,14 @@ object HttpRoutes:
       getMatch: GetMatch[F],
       updateMatch: UpdateMatch[F],
       deleteMatch: DeleteMatch[F],
-      gameTitles: GameTitlesRepository[F],
-      mapMasters: MapMastersRepository[F],
-      seasonMasters: SeasonMastersRepository[F],
-      incidentMasters: IncidentMastersRepository[F],
-      memberAliases: MemberAliasesRepository[F],
       loginAccounts: LoginAccountsRepository[F],
       listLoginAccounts: ListLoginAccounts[F],
       createLoginAccount: CreateLoginAccount[F],
       updateLoginAccount: UpdateLoginAccount[F],
+      listGameTitles: ListGameTitles[F],
+      listMapMasters: ListMapMasters[F],
+      listSeasonMasters: ListSeasonMasters[F],
+      listIncidentMasters: ListIncidentMasters[F],
       createGameTitle: CreateGameTitle[F],
       createMapMaster: CreateMapMaster[F],
       createSeasonMaster: CreateSeasonMaster[F],
@@ -68,7 +64,6 @@ object HttpRoutes:
       createMemberAlias: CreateMemberAlias[F],
       updateMemberAlias: UpdateMemberAlias[F],
       deleteMemberAlias: DeleteMemberAlias[F],
-      members: MembersRepository[F],
       oauthClient: DiscordOAuthClient[F],
       sessionService: SessionService[F],
       csrfTokenService: CsrfTokenService,
@@ -121,10 +116,10 @@ object HttpRoutes:
         deps.nowF,
         security,
       ) ::: MasterModule.routes[F](
-        deps.gameTitles,
-        deps.mapMasters,
-        deps.seasonMasters,
-        deps.incidentMasters,
+        deps.listGameTitles,
+        deps.listMapMasters,
+        deps.listSeasonMasters,
+        deps.listIncidentMasters,
         deps.createGameTitle,
         deps.createMapMaster,
         deps.createSeasonMaster,
@@ -168,7 +163,10 @@ object HttpRoutes:
     )
 
     RequestIdMiddleware[F](SecurityHeadersMiddleware[F](deps.config.appEnv)(HttpErrorMiddleware[F](
-      MaxBodySizeMiddleware.uploadOnly[F](deps.config.resourceLimits.uploadRequestMaxBytes)(
+      MaxBodySizeMiddleware.requestAndUpload[F](
+        deps.config.resourceLimits.requestMaxBytes,
+        deps.config.resourceLimits.uploadRequestMaxBytes,
+      )(
         Router("/" -> (authRoutes <+> Http4sRoutes.of[F](request => protectedRoutes.run(request))))
           .orNotFound
       )

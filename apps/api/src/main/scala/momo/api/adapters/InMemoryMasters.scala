@@ -3,7 +3,7 @@ package momo.api.adapters
 import java.time.Instant
 
 import cats.effect.{Ref, Sync}
-import cats.syntax.functor.*
+import cats.syntax.all.*
 
 import momo.api.domain.ids.*
 import momo.api.domain.{
@@ -22,10 +22,13 @@ final class InMemoryGameTitlesRepository[F[_]: Sync] private (
     .map(_.values.toList.sortBy(t => (t.displayOrder, t.createdAt, t.id.value)))
   override def find(id: GameTitleId): F[Option[GameTitle]] = ref.get.map(_.get(id))
   override def create(title: GameTitle): F[Unit] = ref.update(_ + (title.id -> title))
+  override def createWithNextDisplayOrder(title: GameTitle): F[GameTitle] = ref.modify { items =>
+    val nextOrder = items.values.map(_.displayOrder).maxOption.getOrElse(0) + 1
+    val created = title.copy(displayOrder = nextOrder)
+    (items + (created.id -> created), created)
+  }
   override def update(title: GameTitle): F[Unit] = ref.update(_.updated(title.id, title))
   override def delete(id: GameTitleId): F[Unit] = ref.update(_ - id)
-  override def nextDisplayOrder: F[Int] = ref.get
-    .map(_.values.map(_.displayOrder).maxOption.getOrElse(0) + 1)
 
 object InMemoryGameTitlesRepository:
   def create[F[_]: Sync]: F[InMemoryGameTitlesRepository[F]] = Ref
@@ -42,13 +45,14 @@ final class InMemoryMapMastersRepository[F[_]: Sync] private (
   }
   override def find(id: MapMasterId): F[Option[MapMaster]] = ref.get.map(_.get(id))
   override def create(map: MapMaster): F[Unit] = ref.update(_ + (map.id -> map))
+  override def createWithNextDisplayOrder(map: MapMaster): F[MapMaster] = ref.modify { items =>
+    val nextOrder = items.values.filter(_.gameTitleId == map.gameTitleId).map(_.displayOrder)
+      .maxOption.getOrElse(0) + 1
+    val created = map.copy(displayOrder = nextOrder)
+    (items + (created.id -> created), created)
+  }
   override def update(map: MapMaster): F[Unit] = ref.update(_.updated(map.id, map))
   override def delete(id: MapMasterId): F[Unit] = ref.update(_ - id)
-  override def nextDisplayOrder(gameTitleId: GameTitleId): F[Int] = ref.get.map { m =>
-    val maxOrder = m.values.filter(_.gameTitleId == gameTitleId).map(_.displayOrder).maxOption
-      .getOrElse(0)
-    maxOrder + 1
-  }
 
 object InMemoryMapMastersRepository:
   def create[F[_]: Sync]: F[InMemoryMapMastersRepository[F]] = Ref
@@ -65,13 +69,15 @@ final class InMemorySeasonMastersRepository[F[_]: Sync] private (
   }
   override def find(id: SeasonMasterId): F[Option[SeasonMaster]] = ref.get.map(_.get(id))
   override def create(season: SeasonMaster): F[Unit] = ref.update(_ + (season.id -> season))
+  override def createWithNextDisplayOrder(season: SeasonMaster): F[SeasonMaster] = ref
+    .modify { items =>
+      val nextOrder = items.values.filter(_.gameTitleId == season.gameTitleId).map(_.displayOrder)
+        .maxOption.getOrElse(0) + 1
+      val created = season.copy(displayOrder = nextOrder)
+      (items + (created.id -> created), created)
+    }
   override def update(season: SeasonMaster): F[Unit] = ref.update(_.updated(season.id, season))
   override def delete(id: SeasonMasterId): F[Unit] = ref.update(_ - id)
-  override def nextDisplayOrder(gameTitleId: GameTitleId): F[Int] = ref.get.map { m =>
-    val maxOrder = m.values.filter(_.gameTitleId == gameTitleId).map(_.displayOrder).maxOption
-      .getOrElse(0)
-    maxOrder + 1
-  }
 
 object InMemorySeasonMastersRepository:
   def create[F[_]: Sync]: F[InMemorySeasonMastersRepository[F]] = Ref
@@ -86,12 +92,48 @@ object InMemoryIncidentMastersRepository:
   def create[F[_]: Sync]: F[InMemoryIncidentMastersRepository[F]] =
     val now = Instant.EPOCH
     val seed = List(
-      IncidentMaster(IncidentMasterId("incident_destination"), "destination", "目的地", 1, now),
-      IncidentMaster(IncidentMasterId("incident_plus_station"), "plus_station", "プラス駅", 2, now),
-      IncidentMaster(IncidentMasterId("incident_minus_station"), "minus_station", "マイナス駅", 3, now),
-      IncidentMaster(IncidentMasterId("incident_card_station"), "card_station", "カード駅", 4, now),
-      IncidentMaster(IncidentMasterId("incident_card_shop"), "card_shop", "カード売り場", 5, now),
-      IncidentMaster(IncidentMasterId("incident_suri_no_ginji"), "suri_no_ginji", "スリの銀次", 6, now),
+      IncidentMaster(
+        IncidentMasterId.unsafeFromString("incident_destination"),
+        "destination",
+        "目的地",
+        1,
+        now,
+      ),
+      IncidentMaster(
+        IncidentMasterId.unsafeFromString("incident_plus_station"),
+        "plus_station",
+        "プラス駅",
+        2,
+        now,
+      ),
+      IncidentMaster(
+        IncidentMasterId.unsafeFromString("incident_minus_station"),
+        "minus_station",
+        "マイナス駅",
+        3,
+        now,
+      ),
+      IncidentMaster(
+        IncidentMasterId.unsafeFromString("incident_card_station"),
+        "card_station",
+        "カード駅",
+        4,
+        now,
+      ),
+      IncidentMaster(
+        IncidentMasterId.unsafeFromString("incident_card_shop"),
+        "card_shop",
+        "カード売り場",
+        5,
+        now,
+      ),
+      IncidentMaster(
+        IncidentMasterId.unsafeFromString("incident_suri_no_ginji"),
+        "suri_no_ginji",
+        "スリの銀次",
+        6,
+        now,
+      ),
     )
     Ref.of[F, List[IncidentMaster]](seed).map(new InMemoryIncidentMastersRepository(_))
 

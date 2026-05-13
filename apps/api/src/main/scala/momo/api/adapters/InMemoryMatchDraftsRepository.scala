@@ -6,7 +6,7 @@ import cats.effect.{Ref, Sync}
 import cats.syntax.all.*
 
 import momo.api.domain.ids.*
-import momo.api.domain.{MatchDraft, MatchDraftStatus, ScreenType}
+import momo.api.domain.{MatchDraft, ScreenType}
 import momo.api.repositories.MatchDraftsRepository
 
 final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
@@ -41,7 +41,7 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
       updatedAt: Instant,
   ): F[Boolean] = ref.modify { current =>
     current.get(draftId) match
-      case Some(e: MatchDraft.Editing) =>
+      case Some(e: MatchDraft.Editable) =>
         val next = MatchDraft.Confirmed(
           common = e.common.copy(updatedAt = updatedAt),
           confirmedMatchIdValue = confirmedMatchId,
@@ -53,18 +53,15 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
   override def markOcrFailed(draftId: MatchDraftId, updatedAt: Instant): F[Boolean] = ref
     .modify { current =>
       current.get(draftId) match
-        case Some(e: MatchDraft.Editing) =>
-          val next = e.copy(
-            common = e.common.copy(updatedAt = updatedAt),
-            status = MatchDraftStatus.OcrFailed,
-          )
+        case Some(e: MatchDraft.Editable) =>
+          val next = MatchDraft.OcrFailed(e.common.copy(updatedAt = updatedAt))
           (current + (draftId -> next), true)
         case _ => (current, false)
     }
 
   override def cancel(draftId: MatchDraftId, updatedAt: Instant): F[Boolean] = ref.modify { current =>
     current.get(draftId) match
-      case Some(e: MatchDraft.Editing) =>
+      case Some(e: MatchDraft.Editable) =>
         val next = MatchDraft.Cancelled(common = e.common.copy(updatedAt = updatedAt))
         (current + (draftId -> next), true)
       case _ => (current, false)
@@ -78,7 +75,7 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
       updatedAt: Instant,
   ): F[Boolean] = ref.modify { current =>
     current.get(draftId) match
-      case Some(e: MatchDraft.Editing) =>
+      case Some(e: MatchDraft.Editable) =>
         val withArtifacts = screenType match
           case ScreenType.TotalAssets => e.common
               .copy(totalAssetsImageId = Some(sourceImageId), totalAssetsDraftId = Some(ocrDraftId))
@@ -87,10 +84,8 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
           case ScreenType.IncidentLog => e.common
               .copy(incidentLogImageId = Some(sourceImageId), incidentLogDraftId = Some(ocrDraftId))
           case ScreenType.Auto => e.common
-        val next = e.copy(
-          common = withArtifacts.copy(updatedAt = updatedAt, sourceImagesDeletedAt = None),
-          status = MatchDraftStatus.OcrRunning,
-        )
+        val next = MatchDraft
+          .OcrRunning(withArtifacts.copy(updatedAt = updatedAt, sourceImagesDeletedAt = None))
         (current + (draftId -> next), true)
       case _ => (current, false)
   }

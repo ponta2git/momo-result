@@ -4,7 +4,7 @@ import java.nio.file.Path
 import java.time.Instant
 import java.time.format.DateTimeFormatter
 
-import cats.syntax.all.*
+import cats.syntax.either.*
 import io.circe.syntax.*
 import io.circe.{Json, Printer}
 
@@ -12,7 +12,20 @@ import momo.api.codec.OcrHintsCodec.given
 import momo.api.domain.ids.*
 import momo.api.domain.{OcrJobHints, ScreenType}
 
-final case class OcrQueuePayload(fields: Map[String, String])
+final case class OcrQueuePayloadV1(
+    jobId: OcrJobId,
+    draftId: OcrDraftId,
+    imageId: ImageId,
+    imagePath: Path,
+    requestedScreenType: ScreenType,
+    attempt: Int,
+    enqueuedAt: Instant,
+    hints: OcrJobHints,
+    requestId: Option[String],
+)
+
+final case class OcrQueuePayload(value: OcrQueuePayloadV1):
+  def fields: Map[String, String] = OcrQueuePayload.toRedisFields(value)
 
 object OcrQueuePayload:
   val SchemaVersionKey = "schemaVersion"
@@ -23,7 +36,7 @@ object OcrQueuePayload:
     "draftId",
     "imageId",
     "imagePath",
-    "requestedImageType",
+    "requestedScreenType",
     "attempt",
     "enqueuedAt",
   )
@@ -42,27 +55,37 @@ object OcrQueuePayload:
       enqueuedAt: Instant,
       hints: OcrJobHints,
       requestId: Option[String],
-  ): OcrQueuePayload =
+  ): OcrQueuePayload = OcrQueuePayload(OcrQueuePayloadV1(
+    jobId = jobId,
+    draftId = draftId,
+    imageId = imageId,
+    imagePath = imagePath,
+    requestedScreenType = requestedScreenType,
+    attempt = attempt,
+    enqueuedAt = enqueuedAt,
+    hints = hints,
+    requestId = requestId,
+  ))
+
+  def toRedisFields(value: OcrQueuePayloadV1): Map[String, String] =
     val base = Map(
       SchemaVersionKey -> SchemaVersion,
-      "jobId" -> jobId.value,
-      "draftId" -> draftId.value,
-      "imageId" -> imageId.value,
-      "imagePath" -> imagePath.toString,
-      "requestedImageType" -> requestedScreenType.wire,
-      "attempt" -> attempt.toString,
-      "enqueuedAt" -> DateTimeFormatter.ISO_INSTANT.format(enqueuedAt),
+      "jobId" -> value.jobId.value,
+      "draftId" -> value.draftId.value,
+      "imageId" -> value.imageId.value,
+      "imagePath" -> value.imagePath.toString,
+      "requestedScreenType" -> value.requestedScreenType.wire,
+      "attempt" -> value.attempt.toString,
+      "enqueuedAt" -> DateTimeFormatter.ISO_INSTANT.format(value.enqueuedAt),
     )
 
     val withHints =
-      if hints.isEmpty then base
-      else base + (HintsKey -> printer.print(hints.asJson.deepDropNullValues))
+      if value.hints.isEmpty then base
+      else base + (HintsKey -> printer.print(value.hints.asJson.deepDropNullValues))
 
-    val withRequestId = requestId.filter(_.nonEmpty) match
+    value.requestId.filter(_.nonEmpty) match
       case Some(id) => withHints + (RequestIdKey -> id)
       case None => withHints
-
-    OcrQueuePayload(withRequestId)
 
   def fieldsAsJson(payload: OcrQueuePayload): Json = Json
     .obj(payload.fields.toSeq.sortBy(_._1).map { case (key, value) =>
@@ -71,7 +94,54 @@ object OcrQueuePayload:
 
   def fromJson(json: Json): Either[String, OcrQueuePayload] = json.asObject
     .toRight("stream payload must be a JSON object").flatMap { obj =>
-      obj.toMap.toList.traverse { case (key, value) =>
-        value.asString.toRight(s"field $key must be a string").map(key -> _)
-      }.map(entries => OcrQueuePayload(entries.toMap))
+      val fields = obj.toMap
+      val allowed = RequiredKeys + HintsKey + RequestIdKey
+      val unknown = fields.keySet.diff(allowed)
+      if unknown.nonEmpty then
+        Left(s"unknown stream payload field(s): ${unknown.toList.sorted.mkString(",")}")
+      else parseRedisFields(fields.map { case (key, value) => key -> value.asString })
     }
+
+  private def parseRedisFields(
+      fields: Map[String, Option[String]]
+  ): Either[String, OcrQueuePayload] =
+    def required(key: String): Either[String, String] = fields.get(key).flatten
+      .toRight(s"field $key must be a string")
+
+    def optional(key: String): Either[String, Option[String]] = fields.get(key) match
+      case None => Right(None)
+      case Some(Some(value)) => Right(Some(value))
+      case Some(None) => Left(s"field $key must be a string")
+
+    for
+      version <- required(SchemaVersionKey)
+      _ <- Either.cond(version == SchemaVersion, (), s"schemaVersion must be $SchemaVersion")
+      jobId <- required("jobId")
+      draftId <- required("draftId")
+      imageId <- required("imageId")
+      imagePath <- required("imagePath")
+      requested <- required("requestedScreenType")
+      screenType <- ScreenType.fromWire(requested)
+        .toRight(s"unknown requestedScreenType=$requested")
+      attemptValue <- required("attempt").flatMap(value =>
+        value.toIntOption.filter(_ > 0).toRight("attempt must be a positive integer string")
+      )
+      enqueuedAt <- required("enqueuedAt").flatMap(value =>
+        Either.catchNonFatal(Instant.parse(value)).left.map(_ => "enqueuedAt must be ISO-8601")
+      )
+      hintsJson <- optional(HintsKey)
+      requestId <- optional(RequestIdKey)
+      hints <- hintsJson match
+        case None => Right(OcrJobHints.empty)
+        case Some(raw) => io.circe.parser.decode[OcrJobHints](raw).left.map(_.getMessage)
+    yield OcrQueuePayload(OcrQueuePayloadV1(
+      jobId = OcrJobId.unsafeFromString(jobId),
+      draftId = OcrDraftId.unsafeFromString(draftId),
+      imageId = ImageId.unsafeFromString(imageId),
+      imagePath = java.nio.file.Paths.get(imagePath),
+      requestedScreenType = screenType,
+      attempt = attemptValue,
+      enqueuedAt = enqueuedAt,
+      hints = hints,
+      requestId = requestId,
+    ))

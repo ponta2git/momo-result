@@ -8,8 +8,8 @@ import cats.MonadThrow
 import cats.data.EitherT
 import cats.syntax.all.*
 
-import momo.api.domain.MatchRecord
 import momo.api.domain.ids.*
+import momo.api.domain.{MatchPolicy, MatchRecord, PlayerResult}
 import momo.api.errors.AppError
 import momo.api.repositories.{
   GameTitlesRepository, HeldEventsRepository, MapMastersRepository, MatchesRepository,
@@ -24,27 +24,26 @@ final class UpdateMatch[F[_]: MonadThrow](
     mapMasters: MapMastersRepository[F],
     seasonMasters: SeasonMastersRepository[F],
     now: F[Instant],
-    allowedMemberIds: Set[MemberId],
+    allowedMemberIds: F[Set[MemberId]],
 ):
   import UpdateMatch.*
 
   def run(matchId: MatchId, command: Command): F[Either[AppError, MatchRecord]] = (for
+    allowed <- EitherT.liftF(allowedMemberIds)
     existing <- matches.find(matchId).orNotFound("match", matchId.value)
-    _ <- EitherT.fromEither[F](MatchValidation.validateShape(
-      MatchValidation.Input(
-        heldEventId = command.heldEventId,
-        matchNoInEvent = command.matchNoInEvent,
-        gameTitleId = command.gameTitleId,
-        seasonMasterId = command.seasonMasterId,
-        ownerMemberId = command.ownerMemberId,
-        mapMasterId = command.mapMasterId,
-        players = command.players,
-      ),
-      allowedMemberIds,
-    ))
-    validatedPlayers <- EitherT.fromEither[F](
-      momo.api.domain.FourPlayers.fromList(command.players, allowedMemberIds)
-        .leftMap(MatchValidation.toAppError)
+    validated <- EitherT.fromEither[F](
+      MatchPolicy.validate(
+        MatchPolicy.Input(
+          heldEventId = command.heldEventId,
+          matchNoInEvent = command.matchNoInEvent,
+          gameTitleId = command.gameTitleId,
+          seasonMasterId = command.seasonMasterId,
+          ownerMemberId = command.ownerMemberId,
+          mapMasterId = command.mapMasterId,
+          players = command.players,
+        ),
+        allowed,
+      ).leftMap(errors => AppError.ValidationFailed(MatchPolicy.toMessage(errors)))
     )
     playedAt <- EitherT.fromEither[F](Try(Instant.parse(command.playedAt)).toEither.left.map(_ =>
       AppError.ValidationFailed("playedAt must be ISO8601 instant.")
@@ -70,7 +69,7 @@ final class UpdateMatch[F[_]: MonadThrow](
             .id} does not belong to gameTitleId ${title.id}."))
     )
     duplicate <- EitherT
-      .liftF(matches.existsMatchNoExcept(command.heldEventId, command.matchNoInEvent, matchId))
+      .liftF(matches.existsMatchNoExcept(command.heldEventId, validated.matchNoInEvent, matchId))
     _ <- EitherT.fromEither[F](
       if duplicate then
         Left(AppError.Conflict(s"matchNoInEvent ${command
@@ -79,19 +78,19 @@ final class UpdateMatch[F[_]: MonadThrow](
     )
     updatedAt <- EitherT.liftF(now)
     record = existing.copy(
-      heldEventId = command.heldEventId,
-      matchNoInEvent = command.matchNoInEvent,
-      gameTitleId = command.gameTitleId,
+      heldEventId = validated.heldEventId,
+      matchNoInEvent = validated.matchNoInEvent,
+      gameTitleId = validated.gameTitleId,
       layoutFamily = title.layoutFamily,
-      seasonMasterId = command.seasonMasterId,
-      ownerMemberId = command.ownerMemberId,
-      mapMasterId = command.mapMasterId,
+      seasonMasterId = validated.seasonMasterId,
+      ownerMemberId = validated.ownerMemberId,
+      mapMasterId = validated.mapMasterId,
       playedAt = playedAt,
       // Preserve existing draft refs unless caller explicitly provides new ones.
       totalAssetsDraftId = command.draftRefs.totalAssets.orElse(existing.totalAssetsDraftId),
       revenueDraftId = command.draftRefs.revenue.orElse(existing.revenueDraftId),
       incidentLogDraftId = command.draftRefs.incidentLog.orElse(existing.incidentLogDraftId),
-      players = validatedPlayers,
+      players = validated.players,
     )
     _ <- EitherT.liftF(matches.update(record, updatedAt))
   yield record).value
@@ -106,5 +105,5 @@ object UpdateMatch:
       mapMasterId: MapMasterId,
       playedAt: String,
       draftRefs: ConfirmMatch.DraftRefs,
-      players: List[momo.api.domain.PlayerResult],
+      players: List[PlayerResult.Input],
   )

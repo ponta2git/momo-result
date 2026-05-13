@@ -1,5 +1,6 @@
 package momo.api.usecases
 
+import java.nio.file.Path
 import java.time.Instant
 
 import scala.concurrent.duration.*
@@ -10,7 +11,8 @@ import org.typelevel.log4cats.LoggerFactory
 import org.typelevel.log4cats.noop.NoOpFactory
 
 import momo.api.MomoCatsEffectSuite
-import momo.api.domain.ids.OcrJobId
+import momo.api.domain.ids.*
+import momo.api.domain.{OcrJobHints, ScreenType}
 import momo.api.repositories.{
   OcrQueueOutboxRecord, OcrQueueOutboxRepository, OcrQueuePayload, QueueProducer,
 }
@@ -21,8 +23,18 @@ final class OcrQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
 
   private val row = OcrQueueOutboxRecord(
     id = "outbox-1",
-    jobId = OcrJobId("job-1"),
-    payload = OcrQueuePayload(Map("jobId" -> "job-1")),
+    jobId = OcrJobId.unsafeFromString("job-1"),
+    payload = OcrQueuePayload.build(
+      jobId = OcrJobId.unsafeFromString("job-1"),
+      draftId = OcrDraftId.unsafeFromString("draft-1"),
+      imageId = ImageId.unsafeFromString("image-1"),
+      imagePath = Path.of("/tmp/image.png"),
+      requestedScreenType = ScreenType.TotalAssets,
+      attempt = 1,
+      enqueuedAt = fixedNow,
+      hints = OcrJobHints.empty,
+      requestId = None,
+    ),
     attemptCount = 0,
   )
 

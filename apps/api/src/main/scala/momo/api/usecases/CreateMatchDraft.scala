@@ -4,9 +4,10 @@ import java.time.Instant
 
 import cats.MonadThrow
 import cats.data.EitherT
+import cats.syntax.all.*
 
 import momo.api.domain.ids.*
-import momo.api.domain.{MatchDraft, MatchDraftStatus}
+import momo.api.domain.{MatchDraft, MatchDraftStatus, MatchNoInEvent}
 import momo.api.errors.AppError
 import momo.api.repositories.{
   GameTitlesRepository, HeldEventsRepository, MapMastersRepository, MatchDraftsRepository,
@@ -40,18 +41,18 @@ final class CreateMatchDraft[F[_]: MonadThrow](
       createdBy: AccountId,
       playerMemberId: Option[MemberId],
   ): F[Either[AppError, MatchDraft]] = (for
-    _ <- EitherT.fromEither[F](validateMatchNo(command.matchNoInEvent))
+    matchNoInEvent <- EitherT.fromEither[F](validateMatchNo(command.matchNoInEvent))
     _ <- validateForeignKeys(command)
     id <- EitherT.liftF(nextId)
     at <- EitherT.liftF(now)
     draft <- EitherT.fromEither[F](
       MatchDraft.fromInputs(
-        id = MatchDraftId(id),
+        id = MatchDraftId.unsafeFromString(id),
         createdByAccountId = createdBy,
         createdByMemberId = playerMemberId,
         status = command.status.getOrElse(MatchDraftStatus.DraftReady),
         heldEventId = command.heldEventId,
-        matchNoInEvent = command.matchNoInEvent,
+        matchNoInEvent = matchNoInEvent,
         gameTitleId = command.gameTitleId,
         layoutFamily = command.layoutFamily,
         seasonMasterId = command.seasonMasterId,
@@ -74,11 +75,11 @@ final class CreateMatchDraft[F[_]: MonadThrow](
     _ <- EitherT.liftF(matchDrafts.create(draft))
   yield draft).value
 
-  private def validateMatchNo(matchNoInEvent: Option[Int]): Either[AppError, Unit] =
-    matchNoInEvent match
-      case Some(value) if value <= 0 =>
-        Left(AppError.ValidationFailed("matchNoInEvent must be greater than 0."))
-      case _ => Right(())
+  private def validateMatchNo(
+      matchNoInEvent: Option[Int]
+  ): Either[AppError, Option[MatchNoInEvent]] = matchNoInEvent.traverse(value =>
+    MatchNoInEvent.fromInt(value).left.map(err => AppError.ValidationFailed(err.message))
+  )
 
   private def validateForeignKeys(command: CreateMatchDraftCommand): EitherT[F, AppError, Unit] =
     MatchDraftForeignKeyValidation.validate(heldEvents, gameTitles, mapMasters, seasonMasters)(

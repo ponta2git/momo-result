@@ -17,22 +17,20 @@ import momo.api.endpoints.{
   SeasonMastersEndpoints,
 }
 import momo.api.http.{EndpointSecurity, IdempotencyReplay}
-import momo.api.repositories.{
-  GameTitlesRepository, IdempotencyRepository, IncidentMastersRepository, MapMastersRepository,
-  SeasonMastersRepository,
-}
+import momo.api.repositories.IdempotencyRepository
 import momo.api.usecases.{
   CreateGameTitle, CreateMapMaster, CreateMemberAlias, CreateSeasonMaster, DeleteGameTitle,
-  DeleteMapMaster, DeleteMemberAlias, DeleteSeasonMaster, ListMemberAliases, UpdateGameTitle,
-  UpdateMapMaster, UpdateMemberAlias, UpdateSeasonMaster,
+  DeleteMapMaster, DeleteMemberAlias, DeleteSeasonMaster, ListGameTitles, ListIncidentMasters,
+  ListMapMasters, ListMemberAliases, ListSeasonMasters, UpdateGameTitle, UpdateMapMaster,
+  UpdateMemberAlias, UpdateSeasonMaster,
 }
 
 object MasterModule:
   def routes[F[_]: Async](
-      gameTitles: GameTitlesRepository[F],
-      mapMasters: MapMastersRepository[F],
-      seasonMasters: SeasonMastersRepository[F],
-      incidentMasters: IncidentMastersRepository[F],
+      listGameTitles: ListGameTitles[F],
+      listMapMasters: ListMapMasters[F],
+      listSeasonMasters: ListSeasonMasters[F],
+      listIncidentMasters: ListIncidentMasters[F],
       createGameTitle: CreateGameTitle[F],
       createMapMaster: CreateMapMaster[F],
       createSeasonMaster: CreateSeasonMaster[F],
@@ -50,14 +48,14 @@ object MasterModule:
       nowF: F[Instant],
       security: EndpointSecurity[F],
   ): List[ServerEndpoint[Any, F]] = List(
-    GameTitlesEndpoints.list.serverLogic { devUser =>
-      security.authorizeRead(devUser) { _ =>
-        gameTitles.list
+    GameTitlesEndpoints.list.serverLogic { accountHeader =>
+      security.authorizeRead(accountHeader) { _ =>
+        listGameTitles.run
           .map(items => Right(GameTitleListResponse(items.map(GameTitleResponse.from))))
       }
     },
-    GameTitlesEndpoints.create.serverLogic { case (devUser, csrfToken, idemKey, request) =>
-      security.authorizeMasterManagementMutation(devUser, csrfToken) { member =>
+    GameTitlesEndpoints.create.serverLogic { case (accountHeader, csrfToken, idemKey, request) =>
+      security.authorizeMasterManagementMutation(accountHeader, csrfToken) { member =>
         IdempotencyReplay.wrap[F, CreateGameTitleRequest, GameTitleResponse](
           idempotency,
           idemKey,
@@ -71,28 +69,28 @@ object MasterModule:
         )
       }
     },
-    GameTitlesEndpoints.update.serverLogic { case (id, devUser, csrfToken, request) =>
-      security.authorizeMasterManagementMutation(devUser, csrfToken) { _ =>
+    GameTitlesEndpoints.update.serverLogic { case (id, accountHeader, csrfToken, request) =>
+      security.authorizeMasterManagementMutation(accountHeader, csrfToken) { _ =>
         security.respond(
           updateGameTitle.run(MasterCodec.toUpdateGameTitleCommand(id, request))
         )(GameTitleResponse.from)
       }
     },
-    GameTitlesEndpoints.delete.serverLogic { case (id, devUser, csrfToken) =>
-      security.authorizeMasterManagementMutation(devUser, csrfToken) { _ =>
+    GameTitlesEndpoints.delete.serverLogic { case (id, accountHeader, csrfToken) =>
+      security.authorizeMasterManagementMutation(accountHeader, csrfToken) { _ =>
         security.respond(
-          deleteGameTitle.run(momo.api.domain.ids.GameTitleId(id))
+          deleteGameTitle.run(momo.api.domain.ids.GameTitleId.unsafeFromString(id))
         )(_ => DeleteMasterResponse(id, deleted = true))
       }
     },
-    MapMastersEndpoints.list.serverLogic { case (gameTitleId, devUser) =>
-      security.authorizeRead(devUser) { _ =>
-        mapMasters.list(gameTitleId.map(GameTitleId(_)))
+    MapMastersEndpoints.list.serverLogic { case (gameTitleId, accountHeader) =>
+      security.authorizeRead(accountHeader) { _ =>
+        listMapMasters.run(gameTitleId.map(GameTitleId.unsafeFromString(_)))
           .map(items => Right(MapMasterListResponse(items.map(MapMasterResponse.from))))
       }
     },
-    MapMastersEndpoints.create.serverLogic { case (devUser, csrfToken, idemKey, request) =>
-      security.authorizeMasterManagementMutation(devUser, csrfToken) { member =>
+    MapMastersEndpoints.create.serverLogic { case (accountHeader, csrfToken, idemKey, request) =>
+      security.authorizeMasterManagementMutation(accountHeader, csrfToken) { member =>
         IdempotencyReplay.wrap[F, CreateMapMasterRequest, MapMasterResponse](
           idempotency,
           idemKey,
@@ -106,28 +104,28 @@ object MasterModule:
         )
       }
     },
-    MapMastersEndpoints.update.serverLogic { case (id, devUser, csrfToken, request) =>
-      security.authorizeMasterManagementMutation(devUser, csrfToken) { _ =>
+    MapMastersEndpoints.update.serverLogic { case (id, accountHeader, csrfToken, request) =>
+      security.authorizeMasterManagementMutation(accountHeader, csrfToken) { _ =>
         security.respond(
           updateMapMaster.run(MasterCodec.toUpdateMapMasterCommand(id, request))
         )(MapMasterResponse.from)
       }
     },
-    MapMastersEndpoints.delete.serverLogic { case (id, devUser, csrfToken) =>
-      security.authorizeMasterManagementMutation(devUser, csrfToken) { _ =>
+    MapMastersEndpoints.delete.serverLogic { case (id, accountHeader, csrfToken) =>
+      security.authorizeMasterManagementMutation(accountHeader, csrfToken) { _ =>
         security.respond(
-          deleteMapMaster.run(momo.api.domain.ids.MapMasterId(id))
+          deleteMapMaster.run(momo.api.domain.ids.MapMasterId.unsafeFromString(id))
         )(_ => DeleteMasterResponse(id, deleted = true))
       }
     },
-    SeasonMastersEndpoints.list.serverLogic { case (gameTitleId, devUser) =>
-      security.authorizeRead(devUser) { _ =>
-        seasonMasters.list(gameTitleId.map(GameTitleId(_)))
+    SeasonMastersEndpoints.list.serverLogic { case (gameTitleId, accountHeader) =>
+      security.authorizeRead(accountHeader) { _ =>
+        listSeasonMasters.run(gameTitleId.map(GameTitleId.unsafeFromString(_)))
           .map(items => Right(SeasonMasterListResponse(items.map(SeasonMasterResponse.from))))
       }
     },
-    SeasonMastersEndpoints.create.serverLogic { case (devUser, csrfToken, idemKey, request) =>
-      security.authorizeMasterManagementMutation(devUser, csrfToken) { member =>
+    SeasonMastersEndpoints.create.serverLogic { case (accountHeader, csrfToken, idemKey, request) =>
+      security.authorizeMasterManagementMutation(accountHeader, csrfToken) { member =>
         IdempotencyReplay.wrap[F, CreateSeasonMasterRequest, SeasonMasterResponse](
           idempotency,
           idemKey,
@@ -141,35 +139,35 @@ object MasterModule:
         )
       }
     },
-    SeasonMastersEndpoints.update.serverLogic { case (id, devUser, csrfToken, request) =>
-      security.authorizeMasterManagementMutation(devUser, csrfToken) { _ =>
+    SeasonMastersEndpoints.update.serverLogic { case (id, accountHeader, csrfToken, request) =>
+      security.authorizeMasterManagementMutation(accountHeader, csrfToken) { _ =>
         security.respond(
           updateSeasonMaster.run(MasterCodec.toUpdateSeasonMasterCommand(id, request))
         )(SeasonMasterResponse.from)
       }
     },
-    SeasonMastersEndpoints.delete.serverLogic { case (id, devUser, csrfToken) =>
-      security.authorizeMasterManagementMutation(devUser, csrfToken) { _ =>
+    SeasonMastersEndpoints.delete.serverLogic { case (id, accountHeader, csrfToken) =>
+      security.authorizeMasterManagementMutation(accountHeader, csrfToken) { _ =>
         security.respond(
-          deleteSeasonMaster.run(momo.api.domain.ids.SeasonMasterId(id))
+          deleteSeasonMaster.run(momo.api.domain.ids.SeasonMasterId.unsafeFromString(id))
         )(_ => DeleteMasterResponse(id, deleted = true))
       }
     },
-    IncidentMastersEndpoints.list.serverLogic { devUser =>
-      security.authorizeRead(devUser) { _ =>
-        incidentMasters.list
+    IncidentMastersEndpoints.list.serverLogic { accountHeader =>
+      security.authorizeRead(accountHeader) { _ =>
+        listIncidentMasters.run
           .map(items => Right(IncidentMasterListResponse(items.map(IncidentMasterResponse.from))))
       }
     },
-    MemberAliasesEndpoints.list.serverLogic { case (memberId, devUser) =>
-      security.authorizeRead(devUser) { _ =>
+    MemberAliasesEndpoints.list.serverLogic { case (memberId, accountHeader) =>
+      security.authorizeRead(accountHeader) { _ =>
         security.respond(
           listMemberAliases.run(memberId)
         )(items => MemberAliasListResponse(items.map(MemberAliasResponse.from)))
       }
     },
-    MemberAliasesEndpoints.create.serverLogic { case (devUser, csrfToken, idemKey, request) =>
-      security.authorizeMasterManagementMutation(devUser, csrfToken) { member =>
+    MemberAliasesEndpoints.create.serverLogic { case (accountHeader, csrfToken, idemKey, request) =>
+      security.authorizeMasterManagementMutation(accountHeader, csrfToken) { member =>
         IdempotencyReplay.wrap[F, CreateMemberAliasRequest, MemberAliasResponse](
           idempotency,
           idemKey,
@@ -183,15 +181,15 @@ object MasterModule:
         )
       }
     },
-    MemberAliasesEndpoints.update.serverLogic { case (id, devUser, csrfToken, request) =>
-      security.authorizeMasterManagementMutation(devUser, csrfToken) { _ =>
+    MemberAliasesEndpoints.update.serverLogic { case (id, accountHeader, csrfToken, request) =>
+      security.authorizeMasterManagementMutation(accountHeader, csrfToken) { _ =>
         security.respond(
           updateMemberAlias.run(MasterCodec.toUpdateMemberAliasCommand(id, request))
         )(MemberAliasResponse.from)
       }
     },
-    MemberAliasesEndpoints.delete.serverLogic { case (id, devUser, csrfToken) =>
-      security.authorizeMasterManagementMutation(devUser, csrfToken) { _ =>
+    MemberAliasesEndpoints.delete.serverLogic { case (id, accountHeader, csrfToken) =>
+      security.authorizeMasterManagementMutation(accountHeader, csrfToken) { _ =>
         security.respond(deleteMemberAlias.run(id))(_ => DeleteMasterResponse(id, deleted = true))
       }
     },

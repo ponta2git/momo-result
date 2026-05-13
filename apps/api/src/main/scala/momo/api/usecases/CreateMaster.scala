@@ -40,7 +40,7 @@ final class CreateGameTitle[F[_]: MonadThrow](titles: GameTitlesRepository[F], n
         id <- MasterField.slug("id", command.id.value)
         name <- MasterField.nonBlank("name", command.name)
         layoutFamily <- MasterField.nonBlank("layoutFamily", command.layoutFamily)
-      yield (GameTitleId(id), name, layoutFamily)
+      yield (GameTitleId.unsafeFromString(id), name, layoutFamily)
 
     validated match
       case Left(err) => MonadThrow[F].pure(Left(err))
@@ -49,17 +49,16 @@ final class CreateGameTitle[F[_]: MonadThrow](titles: GameTitlesRepository[F], n
               .pure(Left(AppError.Conflict(s"game_title with id=${id.value} already exists.")))
           case None =>
             for
-              order <- titles.nextDisplayOrder
               created <- now
               title = GameTitle(
                 id = id,
                 name = name,
                 layoutFamily = layoutFamily,
-                displayOrder = order,
+                displayOrder = 0,
                 createdAt = created,
               )
-              _ <- titles.create(title)
-            yield Right(title)
+              inserted <- titles.createWithNextDisplayOrder(title)
+            yield Right(inserted)
         }
 
 final case class CreateMapMasterCommand(id: MapMasterId, gameTitleId: GameTitleId, name: String)
@@ -75,7 +74,7 @@ final class CreateMapMaster[F[_]: MonadThrow](
         id <- MasterField.slug("id", command.id.value)
         gameTitleId <- MasterField.slug("gameTitleId", command.gameTitleId.value)
         name <- MasterField.nonBlank("name", command.name)
-      yield (MapMasterId(id), GameTitleId(gameTitleId), name)
+      yield (MapMasterId.unsafeFromString(id), GameTitleId.unsafeFromString(gameTitleId), name)
 
     validated match
       case Left(err) => MonadThrow[F].pure(Left(err))
@@ -86,17 +85,16 @@ final class CreateMapMaster[F[_]: MonadThrow](
                   .pure(Left(AppError.Conflict(s"map_master with id=${id.value} already exists.")))
               case None =>
                 for
-                  order <- maps.nextDisplayOrder(gameTitleId)
                   created <- now
                   mapMaster = MapMaster(
                     id = id,
                     gameTitleId = gameTitleId,
                     name = name,
-                    displayOrder = order,
+                    displayOrder = 0,
                     createdAt = created,
                   )
-                  _ <- maps.create(mapMaster)
-                yield Right(mapMaster)
+                  inserted <- maps.createWithNextDisplayOrder(mapMaster)
+                yield Right(inserted)
             }
         }
 
@@ -117,7 +115,7 @@ final class CreateSeasonMaster[F[_]: MonadThrow](
         id <- MasterField.slug("id", command.id.value)
         gameTitleId <- MasterField.slug("gameTitleId", command.gameTitleId.value)
         name <- MasterField.nonBlank("name", command.name)
-      yield (SeasonMasterId(id), GameTitleId(gameTitleId), name)
+      yield (SeasonMasterId.unsafeFromString(id), GameTitleId.unsafeFromString(gameTitleId), name)
 
     validated match
       case Left(err) => MonadThrow[F].pure(Left(err))
@@ -128,16 +126,15 @@ final class CreateSeasonMaster[F[_]: MonadThrow](
                     .value} already exists.")))
               case None =>
                 for
-                  order <- seasons.nextDisplayOrder(gameTitleId)
                   created <- now
                   seasonMaster = SeasonMaster(
                     id = id,
                     gameTitleId = gameTitleId,
                     name = name,
-                    displayOrder = order,
+                    displayOrder = 0,
                     createdAt = created,
                   )
-                  _ <- seasons.create(seasonMaster)
-                yield Right(seasonMaster)
+                  inserted <- seasons.createWithNextDisplayOrder(seasonMaster)
+                yield Right(inserted)
             }
         }

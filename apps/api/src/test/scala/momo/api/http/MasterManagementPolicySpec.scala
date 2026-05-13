@@ -10,7 +10,7 @@ final class MasterManagementPolicySpec extends MomoCatsEffectSuite:
 
   test("allows administrator accounts to manage masters") {
     val account = AuthenticatedAccount(
-      accountId = AccountId("account_admin"),
+      accountId = AccountId.unsafeFromString("account_admin"),
       displayName = "admin",
       isAdmin = true,
       playerMemberId = None,
@@ -20,7 +20,7 @@ final class MasterManagementPolicySpec extends MomoCatsEffectSuite:
 
   test("rejects non-administrator accounts") {
     val account = AuthenticatedAccount(
-      accountId = AccountId("account_operator"),
+      accountId = AccountId.unsafeFromString("account_operator"),
       displayName = "operator",
       isAdmin = false,
       playerMemberId = None,

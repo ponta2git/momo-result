@@ -163,11 +163,11 @@ object PostgresOcrJobs:
           created_at, updated_at
         ) VALUES (
           ${job.id}, ${job.draftId}, ${job.imageId}, ${job.imagePath},
-          ${job.requestedScreenType}, ${job.detectedScreenType},
-          ${job.status}, ${job.attemptCount}, ${job.workerId},
-          ${job.failure.map(_.code)}, ${job.failure.map(_.message)},
-          ${job.failure.map(_.retryable)}, ${job.failure.flatMap(_.userAction)},
-          ${job.startedAt}, ${job.finishedAt}, ${job.durationMs},
+          ${job.requestedScreenType}, ${OcrJob.detectedScreenType(job)},
+          ${job.status}, ${job.attemptCount}, ${OcrJob.workerId(job)},
+          ${OcrJob.failure(job).map(_.code)}, ${OcrJob.failure(job).map(_.message)},
+          ${OcrJob.failure(job).map(_.retryable)}, ${OcrJob.failure(job).flatMap(_.userAction)},
+          ${OcrJob.startedAt(job)}, ${OcrJob.finishedAt(job)}, ${OcrJob.durationMs(job)},
           ${job.createdAt}, ${job.updatedAt}
         )
       """.update.run.void

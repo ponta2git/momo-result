@@ -3,8 +3,8 @@ package momo.api.repositories
 import cats.~>
 import doobie.ConnectionIO
 
-import momo.api.domain.MatchRecord
 import momo.api.domain.ids.*
+import momo.api.domain.{MatchNoInEvent, MatchRecord}
 
 trait MatchesAlg[F0[_]]:
   def create(record: MatchRecord): F0[Unit]
@@ -13,10 +13,10 @@ trait MatchesAlg[F0[_]]:
   def find(id: MatchId): F0[Option[MatchRecord]]
   def list(filter: MatchesRepository.ListFilter): F0[List[MatchRecord]]
   def listByHeldEvent(heldEventId: HeldEventId): F0[List[MatchRecord]]
-  def existsMatchNo(heldEventId: HeldEventId, matchNoInEvent: Int): F0[Boolean]
+  def existsMatchNo(heldEventId: HeldEventId, matchNoInEvent: MatchNoInEvent): F0[Boolean]
   def existsMatchNoExcept(
       heldEventId: HeldEventId,
-      matchNoInEvent: Int,
+      matchNoInEvent: MatchNoInEvent,
       excludeMatchId: MatchId,
   ): F0[Boolean]
   def maxMatchNo(heldEventId: HeldEventId): F0[Int]
@@ -29,10 +29,10 @@ trait MatchesRepository[F[_]]:
   def find(id: MatchId): F[Option[MatchRecord]]
   def list(filter: MatchesRepository.ListFilter): F[List[MatchRecord]]
   def listByHeldEvent(heldEventId: HeldEventId): F[List[MatchRecord]]
-  def existsMatchNo(heldEventId: HeldEventId, matchNoInEvent: Int): F[Boolean]
+  def existsMatchNo(heldEventId: HeldEventId, matchNoInEvent: MatchNoInEvent): F[Boolean]
   def existsMatchNoExcept(
       heldEventId: HeldEventId,
-      matchNoInEvent: Int,
+      matchNoInEvent: MatchNoInEvent,
       excludeMatchId: MatchId,
   ): F[Boolean]
   def maxMatchNo(heldEventId: HeldEventId): F[Int]
@@ -59,11 +59,11 @@ object MatchesRepository:
     def list(filter: ListFilter): F[List[MatchRecord]] = transactK(alg.list(filter))
     def listByHeldEvent(heldEventId: HeldEventId): F[List[MatchRecord]] =
       transactK(alg.listByHeldEvent(heldEventId))
-    def existsMatchNo(heldEventId: HeldEventId, matchNoInEvent: Int): F[Boolean] =
+    def existsMatchNo(heldEventId: HeldEventId, matchNoInEvent: MatchNoInEvent): F[Boolean] =
       transactK(alg.existsMatchNo(heldEventId, matchNoInEvent))
     def existsMatchNoExcept(
         heldEventId: HeldEventId,
-        matchNoInEvent: Int,
+        matchNoInEvent: MatchNoInEvent,
         excludeMatchId: MatchId,
     ): F[Boolean] = transactK(alg.existsMatchNoExcept(heldEventId, matchNoInEvent, excludeMatchId))
     def maxMatchNo(heldEventId: HeldEventId): F[Int] = transactK(alg.maxMatchNo(heldEventId))

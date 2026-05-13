@@ -3,8 +3,8 @@ package momo.api.adapters
 import cats.effect.{Ref, Sync}
 import cats.syntax.functor.*
 
-import momo.api.domain.MatchRecord
 import momo.api.domain.ids.*
+import momo.api.domain.{MatchNoInEvent, MatchRecord}
 import momo.api.repositories.MatchesRepository
 
 final class InMemoryMatchesRepository[F[_]: Sync] private (ref: Ref[F, Map[MatchId, MatchRecord]])
@@ -29,21 +29,22 @@ final class InMemoryMatchesRepository[F[_]: Sync] private (ref: Ref[F, Map[Match
   }
 
   override def listByHeldEvent(heldEventId: HeldEventId): F[List[MatchRecord]] = ref.get
-    .map(_.values.filter(_.heldEventId == heldEventId).toList.sortBy(_.matchNoInEvent))
+    .map(_.values.filter(_.heldEventId == heldEventId).toList.sortBy(_.matchNoInEvent.value))
 
-  override def existsMatchNo(heldEventId: HeldEventId, matchNoInEvent: Int): F[Boolean] = ref.get
-    .map(_.values.exists(r => r.heldEventId == heldEventId && r.matchNoInEvent == matchNoInEvent))
+  override def existsMatchNo(heldEventId: HeldEventId, matchNoInEvent: MatchNoInEvent): F[Boolean] =
+    ref.get
+      .map(_.values.exists(r => r.heldEventId == heldEventId && r.matchNoInEvent == matchNoInEvent))
 
   override def existsMatchNoExcept(
       heldEventId: HeldEventId,
-      matchNoInEvent: Int,
+      matchNoInEvent: MatchNoInEvent,
       excludeMatchId: MatchId,
   ): F[Boolean] = ref.get.map(_.values.exists(r =>
     r.heldEventId == heldEventId && r.matchNoInEvent == matchNoInEvent && r.id != excludeMatchId
   ))
 
   override def maxMatchNo(heldEventId: HeldEventId): F[Int] = ref.get.map { m =>
-    val nums = m.values.filter(_.heldEventId == heldEventId).map(_.matchNoInEvent)
+    val nums = m.values.filter(_.heldEventId == heldEventId).map(_.matchNoInEvent.value)
     if nums.isEmpty then 0 else nums.max
   }
 

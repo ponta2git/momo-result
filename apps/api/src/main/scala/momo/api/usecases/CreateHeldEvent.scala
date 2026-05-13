@@ -20,7 +20,7 @@ final class CreateHeldEvent[F[_]: MonadThrow](events: HeldEventsRepository[F], n
     case Left(error) => MonadThrow[F].pure(Left(error))
     case Right(instant) => (for
         id <- EitherT.liftF(nextId)
-        event = HeldEvent(id = HeldEventId(id), heldAt = instant)
+        event = HeldEvent(id = HeldEventId.unsafeFromString(id), heldAt = instant)
         _ <- EitherT.liftF(events.create(event))
       yield event).value
 

@@ -24,9 +24,9 @@ final class OcrJobResponseRoundtripSpec extends FunSuite:
   private val updatedAt = Instant.parse("2026-04-30T12:00:01Z")
 
   private val queuedJob: OcrJob = OcrJob.Queued(
-    id = OcrJobId("job_001"),
-    draftId = OcrDraftId("draft_001"),
-    imageId = ImageId("image_001"),
+    id = OcrJobId.unsafeFromString("job_001"),
+    draftId = OcrDraftId.unsafeFromString("draft_001"),
+    imageId = ImageId.unsafeFromString("image_001"),
     imagePath = Paths.get("/tmp/images/image_001.png"),
     requestedScreenType = ScreenType.TotalAssets,
     attemptCount = 0,
@@ -35,9 +35,9 @@ final class OcrJobResponseRoundtripSpec extends FunSuite:
   )
 
   private val failedJob: OcrJob = OcrJob.Failed(
-    id = OcrJobId("job_001"),
-    draftId = OcrDraftId("draft_001"),
-    imageId = ImageId("image_001"),
+    id = OcrJobId.unsafeFromString("job_001"),
+    draftId = OcrDraftId.unsafeFromString("draft_001"),
+    imageId = ImageId.unsafeFromString("image_001"),
     imagePath = Paths.get("/tmp/images/image_001.png"),
     requestedScreenType = ScreenType.TotalAssets,
     failedDetectedScreenType = Some(ScreenType.Revenue),
@@ -71,9 +71,8 @@ final class OcrJobResponseRoundtripSpec extends FunSuite:
         "jobId": "job_001",
         "draftId": "draft_001",
         "imageId": "image_001",
-        "imagePath": "/tmp/images/image_001.png",
-        "requestedImageType": "total_assets",
-        "detectedImageType": null,
+        "requestedScreenType": "total_assets",
+        "detectedScreenType": null,
         "status": "queued",
         "attemptCount": 0,
         "failure": null,
@@ -90,9 +89,8 @@ final class OcrJobResponseRoundtripSpec extends FunSuite:
         "jobId": "job_001",
         "draftId": "draft_001",
         "imageId": "image_001",
-        "imagePath": "/tmp/images/image_001.png",
-        "requestedImageType": "total_assets",
-        "detectedImageType": "revenue",
+        "requestedScreenType": "total_assets",
+        "detectedScreenType": "revenue",
         "status": "failed",
         "attemptCount": 2,
         "failure": {

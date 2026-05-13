@@ -12,9 +12,10 @@ import cats.syntax.all.*
 import momo.api.domain.StoredImage
 import momo.api.domain.ids.*
 import momo.api.errors.AppError
-import momo.api.repositories.ImageStore
+import momo.api.repositories.{ImageOrphanStore, ImageStore}
 
-final class LocalFsImageStore[F[_]: Sync: Random](root: Path) extends ImageStore[F]:
+final class LocalFsImageStore[F[_]: Sync: Random](root: Path)
+    extends ImageStore[F], ImageOrphanStore[F]:
   import LocalFsImageStore.*
 
   override def save(
@@ -45,17 +46,18 @@ final class LocalFsImageStore[F[_]: Sync: Random](root: Path) extends ImageStore
     SupportedImageTypes.exists(imageType => Files.deleteIfExists(imagePath(imageId, imageType)))
   }
 
-  def deleteOrphans(referenced: Set[ImageId], olderThan: Instant): F[Int] = Sync[F].blocking {
-    if !Files.isDirectory(root) then 0
-    else
-      val paths = Files.list(root)
-      try paths.iterator().asScala.count { path =>
-          isSupportedImagePath(path) && fileImageId(path).exists(id => !referenced.contains(id)) &&
-          Files.getLastModifiedTime(path).toInstant.isBefore(olderThan) &&
-          Files.deleteIfExists(path)
-        }
-      finally paths.close()
-  }
+  override def deleteOrphans(referenced: Set[ImageId], olderThan: Instant): F[Int] = Sync[F]
+    .blocking {
+      if !Files.isDirectory(root) then 0
+      else
+        val paths = Files.list(root)
+        try paths.iterator().asScala.count { path =>
+            isSupportedImagePath(path) && fileImageId(path)
+              .exists(id => !referenced.contains(id)) && Files.getLastModifiedTime(path)
+              .toInstant.isBefore(olderThan) && Files.deleteIfExists(path)
+          }
+        finally paths.close()
+    }
 
   private def imagePath(imageId: ImageId, imageType: ImageType): Path = root
     .resolve(s"${imageId.value}.${imageType.extension}").toAbsolutePath.normalize()
@@ -67,7 +69,7 @@ final class LocalFsImageStore[F[_]: Sync: Random](root: Path) extends ImageStore
     val fileName = path.getFileName.toString
     SupportedImageTypes.collectFirst {
       case imageType if fileName.endsWith(s".${imageType.extension}") =>
-        ImageId(fileName.stripSuffix(s".${imageType.extension}"))
+        ImageId.unsafeFromString(fileName.stripSuffix(s".${imageType.extension}"))
     }
 
   private def validate(

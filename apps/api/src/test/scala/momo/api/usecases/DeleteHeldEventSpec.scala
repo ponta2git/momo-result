@@ -14,7 +14,7 @@ import momo.api.errors.AppError
 
 final class DeleteHeldEventSpec extends CatsEffectSuite:
   private val now = Instant.parse("2026-05-10T10:00:00Z")
-  private val heldEventId = HeldEventId("held-delete-usecase")
+  private val heldEventId = HeldEventId.unsafeFromString("held-delete-usecase")
 
   private def fixture: IO[
     (
@@ -31,35 +31,64 @@ final class DeleteHeldEventSpec extends CatsEffectSuite:
     yield (events, matches, drafts, DeleteHeldEvent[IO](events, matches, drafts))
 
   private def sampleMatch: MatchRecord = MatchRecord(
-    id = MatchId("match-delete-usecase"),
+    id = MatchId.unsafeFromString("match-delete-usecase"),
     heldEventId = heldEventId,
-    matchNoInEvent = 1,
-    gameTitleId = GameTitleId("title_world"),
+    matchNoInEvent = MatchNoInEvent.unsafeFromInt(1),
+    gameTitleId = GameTitleId.unsafeFromString("title_world"),
     layoutFamily = "world",
-    seasonMasterId = SeasonMasterId("season_2026"),
-    ownerMemberId = MemberId("member_ponta"),
-    mapMasterId = MapMasterId("map_east"),
+    seasonMasterId = SeasonMasterId.unsafeFromString("season_2026"),
+    ownerMemberId = MemberId.unsafeFromString("member_ponta"),
+    mapMasterId = MapMasterId.unsafeFromString("map_east"),
     playedAt = now,
     totalAssetsDraftId = None,
     revenueDraftId = None,
     incidentLogDraftId = None,
     players = FourPlayers(
-      PlayerResult(MemberId("member_ponta"), 1, 1, 100, 10, IncidentCounts(0, 0, 0, 0, 0, 0)),
-      PlayerResult(MemberId("member_akane_mami"), 2, 2, 90, 9, IncidentCounts(0, 0, 0, 0, 0, 0)),
-      PlayerResult(MemberId("member_otaka"), 3, 3, 80, 8, IncidentCounts(0, 0, 0, 0, 0, 0)),
-      PlayerResult(MemberId("member_eu"), 4, 4, 70, 7, IncidentCounts(0, 0, 0, 0, 0, 0)),
+      PlayerResult.unsafeFromInts(
+        MemberId.unsafeFromString("member_ponta"),
+        1,
+        1,
+        100,
+        10,
+        IncidentCounts.unsafeFromInts(0, 0, 0, 0, 0, 0),
+      ),
+      PlayerResult.unsafeFromInts(
+        MemberId.unsafeFromString("member_akane_mami"),
+        2,
+        2,
+        90,
+        9,
+        IncidentCounts.unsafeFromInts(0, 0, 0, 0, 0, 0),
+      ),
+      PlayerResult.unsafeFromInts(
+        MemberId.unsafeFromString("member_otaka"),
+        3,
+        3,
+        80,
+        8,
+        IncidentCounts.unsafeFromInts(0, 0, 0, 0, 0, 0),
+      ),
+      PlayerResult.unsafeFromInts(
+        MemberId.unsafeFromString("member_eu"),
+        4,
+        4,
+        70,
+        7,
+        IncidentCounts.unsafeFromInts(0, 0, 0, 0, 0, 0),
+      ),
     ),
-    createdByAccountId = AccountId("account_ponta"),
-    createdByMemberId = Some(MemberId("member_ponta")),
+    createdByAccountId = AccountId.unsafeFromString("account_ponta"),
+    createdByMemberId = Some(MemberId.unsafeFromString("member_ponta")),
     createdAt = now,
   )
 
-  private def sampleDraft: MatchDraft = MatchDraft.Editing(
+  private def sampleDraft: MatchDraft = MatchDraft.editable(
     common = MatchDraftCommon(
-      id = MatchDraftId("draft-delete-usecase"),
-      createdByMemberId = MemberId("member_ponta"),
+      id = MatchDraftId.unsafeFromString("draft-delete-usecase"),
+      createdByAccountId = AccountId.unsafeFromString("account_ponta"),
+      createdByMemberId = Some(MemberId.unsafeFromString("member_ponta")),
       heldEventId = Some(heldEventId),
-      matchNoInEvent = Some(1),
+      matchNoInEvent = Some(MatchNoInEvent.unsafeFromInt(1)),
       gameTitleId = None,
       layoutFamily = None,
       seasonMasterId = None,
@@ -78,7 +107,7 @@ final class DeleteHeldEventSpec extends CatsEffectSuite:
       updatedAt = now,
     ),
     status = MatchDraftStatus.NeedsReview,
-  )
+  ).getOrElse(fail("invalid draft fixture"))
 
   test("deletes an unreferenced held event"):
     for

@@ -24,8 +24,9 @@ final class PurgeSourceImagesSpec extends MomoCatsEffectSuite:
         incidentLog <- saveImage(imageStore, "incident.png")
         matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
         draft = MatchDraft.fromInputs(
-          id = MatchDraftId("draft-1"),
-          createdByMemberId = MemberId("member-1"),
+          id = MatchDraftId.unsafeFromString("draft-1"),
+          createdByAccountId = AccountId.unsafeFromString("account-1"),
+          createdByMemberId = Some(MemberId.unsafeFromString("member-1")),
           status = MatchDraftStatus.NeedsReview,
           heldEventId = None,
           matchNoInEvent = None,

@@ -67,7 +67,8 @@ final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:
   test("delete returns false when image does not exist") {
     tempDirectory("momo-api-image-store").use { dir =>
       val store = LocalFsImageStore[IO](dir)
-      store.delete(ImageId("missing-image-id")).map(deleted => assertEquals(deleted, false))
+      store.delete(ImageId.unsafeFromString("missing-image-id"))
+        .map(deleted => assertEquals(deleted, false))
     }
   }
 
@@ -87,7 +88,7 @@ final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:
         _ <- IO.blocking(Files.setLastModifiedTime(keptPath, old))
         _ <- IO.blocking(Files.setLastModifiedTime(orphanPath, old))
         _ <- IO.blocking(Files.setLastModifiedTime(recentPath, recent))
-        deleted <- store.deleteOrphans(Set(ImageId("kept")), now.minusSeconds(60))
+        deleted <- store.deleteOrphans(Set(ImageId.unsafeFromString("kept")), now.minusSeconds(60))
         keptExists <- IO.blocking(Files.exists(keptPath))
         orphanExists <- IO.blocking(Files.exists(orphanPath))
         recentExists <- IO.blocking(Files.exists(recentPath))

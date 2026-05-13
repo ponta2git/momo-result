@@ -17,10 +17,10 @@ import momo.api.usecases.testing.MatchFixtures
 
 final class ConfirmMatchSpec extends MomoCatsEffectSuite:
   private val now = Instant.parse("2026-05-06T00:00:00Z")
-  private val heldEventId = HeldEventId("held_2026_05_06")
-  private val titleId = GameTitleId("title_world")
-  private val mapId = MapMasterId("map_east")
-  private val seasonId = SeasonMasterId("season_spring")
+  private val heldEventId = HeldEventId.unsafeFromString("held_2026_05_06")
+  private val titleId = GameTitleId.unsafeFromString("title_world")
+  private val mapId = MapMasterId.unsafeFromString("map_east")
+  private val seasonId = SeasonMasterId.unsafeFromString("season_spring")
   private val memberValues = MatchFixtures.DevMemberValues
   private val allowedMembers = MatchFixtures.allowedMembers(memberValues)
 
@@ -28,20 +28,25 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
     Fixture.resource.use { fixture =>
       for
         _ <- fixture.seedPrereqs()
-        result <- fixture.usecase.run(command(), AccountId("ponta"))
-        found <- fixture.matches.find(MatchId("match-1"))
+        result <- fixture.usecase.run(
+          command(),
+          AccountId.unsafeFromString("ponta"),
+          Some(MemberId.unsafeFromString("ponta")),
+        )
+        found <- fixture.matches.find(MatchId.unsafeFromString("match-1"))
       yield
-        assertEquals(result.map(_.id), Right(MatchId("match-1")))
-        assertEquals(found.map(_.matchNoInEvent), Some(1))
+        assertEquals(result.map(_.id), Right(MatchId.unsafeFromString("match-1")))
+        assertEquals(found.map(_.matchNoInEvent.value), Some(1))
     }
 
   test("rejects invalid player ranks before persisting"):
     Fixture.resource.use { fixture =>
       for
         _ <- fixture.seedPrereqs()
-        bad = commandWithPlayers(MatchFixtures.duplicateRankPlayers(memberValues))
-        result <- fixture.usecase.run(bad, AccountId("ponta"))
-        found <- fixture.matches.find(MatchId("match-1"))
+        bad = commandWithPlayers(MatchFixtures.duplicateRankPlayerInputs(memberValues))
+        result <- fixture.usecase
+          .run(bad, AccountId.unsafeFromString("ponta"), Some(MemberId.unsafeFromString("ponta")))
+        found <- fixture.matches.find(MatchId.unsafeFromString("match-1"))
       yield
         assertAppError(result, "VALIDATION_FAILED", "players.rank")
         assertEquals(found, None)
@@ -51,7 +56,11 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
     Fixture.resource.use { fixture =>
       for
         _ <- fixture.seedMastersOnly()
-        result <- fixture.usecase.run(command(), AccountId("ponta"))
+        result <- fixture.usecase.run(
+          command(),
+          AccountId.unsafeFromString("ponta"),
+          Some(MemberId.unsafeFromString("ponta")),
+        )
       yield assertAppError(result, "NOT_FOUND", "held event was not found")
     }
 
@@ -59,10 +68,18 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
     Fixture.resource.use { fixture =>
       for
         _ <- fixture.seedPrereqs()
-        first <- fixture.usecase.run(command(), AccountId("ponta"))
-        second <- fixture.usecase.run(commandWithMatchNo(1), AccountId("ponta"))
+        first <- fixture.usecase.run(
+          command(),
+          AccountId.unsafeFromString("ponta"),
+          Some(MemberId.unsafeFromString("ponta")),
+        )
+        second <- fixture.usecase.run(
+          commandWithMatchNo(1),
+          AccountId.unsafeFromString("ponta"),
+          Some(MemberId.unsafeFromString("ponta")),
+        )
       yield
-        assertEquals(first.map(_.matchNoInEvent), Right(1))
+        assertEquals(first.map(_.matchNoInEvent.value), Right(1))
         assertAppError(second, "CONFLICT", "already exists for held event")
     }
 
@@ -71,9 +88,12 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
       for
         _ <- fixture.seedPrereqs()
         _ <- fixture.gameTitles
-          .create(GameTitle(GameTitleId("title_japan"), "Japan", "japan", 2, now))
-        result <- fixture.usecase
-          .run(commandWithGameTitle(GameTitleId("title_japan")), AccountId("ponta"))
+          .create(GameTitle(GameTitleId.unsafeFromString("title_japan"), "Japan", "japan", 2, now))
+        result <- fixture.usecase.run(
+          commandWithGameTitle(GameTitleId.unsafeFromString("title_japan")),
+          AccountId.unsafeFromString("ponta"),
+          Some(MemberId.unsafeFromString("ponta")),
+        )
       yield assertAppError(result, "VALIDATION_FAILED", "mapMasterId")
     }
 
@@ -86,19 +106,19 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
   private def commandWithGameTitle(gameTitleId: GameTitleId): ConfirmMatch.Command =
     commandWith(matchNoInEvent = 1, gameTitleId = gameTitleId, players = defaultPlayers)
 
-  private def commandWithPlayers(players: List[PlayerResult]): ConfirmMatch.Command =
+  private def commandWithPlayers(players: List[PlayerResult.Input]): ConfirmMatch.Command =
     commandWith(matchNoInEvent = 1, gameTitleId = titleId, players = players)
 
   private def commandWith(
       matchNoInEvent: Int,
       gameTitleId: GameTitleId,
-      players: List[PlayerResult],
+      players: List[PlayerResult.Input],
   ): ConfirmMatch.Command = ConfirmMatch.Command(
     heldEventId = heldEventId,
     matchNoInEvent = matchNoInEvent,
     gameTitleId = gameTitleId,
     seasonMasterId = seasonId,
-    ownerMemberId = MemberId("ponta"),
+    ownerMemberId = MemberId.unsafeFromString("ponta"),
     mapMasterId = mapId,
     playedAt = "2026-05-06T20:00:00Z",
     matchDraftId = None,
@@ -106,7 +126,8 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
     players = players,
   )
 
-  private def defaultPlayers: List[PlayerResult] = MatchFixtures.defaultPlayers(memberValues)
+  private def defaultPlayers: List[PlayerResult.Input] = MatchFixtures
+    .defaultPlayerInputs(memberValues)
 
   private def assertAppError[A](
       result: Either[AppError, A],
@@ -167,7 +188,7 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
             case head :: tail => tail -> head
             case Nil => Nil -> "unexpected-match-id"
           },
-          allowedMemberIds = allowedMembers,
+          allowedMemberIds = IO.pure(allowedMembers),
         )
       yield Fixture(gameTitles, mapMasters, seasonMasters, heldEvents, matches, usecase)
     }

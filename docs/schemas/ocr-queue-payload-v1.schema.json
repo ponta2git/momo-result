@@ -9,7 +9,7 @@
     "draftId",
     "imageId",
     "imagePath",
-    "requestedImageType",
+    "requestedScreenType",
     "attempt",
     "enqueuedAt"
   ],
@@ -35,7 +35,7 @@
       "minLength": 1,
       "pattern": "^/"
     },
-    "requestedImageType": {
+    "requestedScreenType": {
       "type": "string",
       "enum": ["auto", "total_assets", "revenue", "incident_log"]
     },

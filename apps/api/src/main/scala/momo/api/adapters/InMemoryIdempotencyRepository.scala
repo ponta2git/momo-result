@@ -7,15 +7,15 @@ import cats.effect.{Ref, Sync}
 import cats.syntax.all.*
 
 import momo.api.domain.ids.AccountId
-import momo.api.repositories.{IdempotencyAlg, IdempotencyRecord, IdempotencyRepository}
+import momo.api.repositories.{
+  IdempotencyAlg, IdempotencyRecord, IdempotencyRepository, IdempotencyReservation,
+  IdempotencyResponse,
+}
 
 /**
- * In-memory adapter for [[IdempotencyRepository]]. Used by tests and by future local development
- * runs. Conflicts on the composite primary key are surfaced via `IllegalStateException`, mirroring
- * what the Postgres `unique_violation` raise will look like at the call site.
- *
- * Phase 4-d note: this is **not yet wired** into `Main.scala`. See
- * `apps/api/docs/proposals/idempotency-keys.md` for the rollout plan.
+ * In-memory adapter for [[IdempotencyRepository]]. Used by tests and local development runs.
+ * Conflicts on the composite primary key are surfaced via `IllegalStateException`, mirroring what
+ * the Postgres `unique_violation` raise will look like at the call site.
  */
 final class InMemoryIdempotencyRepository[F[_]: MonadThrow] private (
     ref: Ref[F, Map[InMemoryIdempotencyRepository.Key, IdempotencyRecord]]
@@ -41,6 +41,47 @@ final class InMemoryIdempotencyRepository[F[_]: MonadThrow] private (
           ))
       }
 
+    override def reserve(entry: IdempotencyRecord): F[IdempotencyReservation] =
+      val pk = InMemoryIdempotencyRepository.Key(entry.key, entry.accountId, entry.endpoint)
+      ref.modify { state =>
+        state.get(pk) match
+          case None => (state.updated(pk, entry), IdempotencyReservation.Reserved)
+          case Some(existing) if existing.requestHash != entry.requestHash =>
+            (state, IdempotencyReservation.Conflict)
+          case Some(existing) if existing.response.status == 0 =>
+            (state, IdempotencyReservation.InProgress)
+          case Some(existing) => (state, IdempotencyReservation.Replay(existing.response))
+      }
+
+    override def complete(
+        key: String,
+        accountId: AccountId,
+        endpoint: String,
+        requestHash: Vector[Byte],
+        response: IdempotencyResponse,
+    ): F[Unit] =
+      val pk = InMemoryIdempotencyRepository.Key(key, accountId, endpoint)
+      ref.update { state =>
+        state.get(pk) match
+          case Some(existing) if existing.requestHash == requestHash =>
+            state.updated(pk, existing.copy(response = response))
+          case _ => state
+      }
+
+    override def abandon(
+        key: String,
+        accountId: AccountId,
+        endpoint: String,
+        requestHash: Vector[Byte],
+    ): F[Unit] =
+      val pk = InMemoryIdempotencyRepository.Key(key, accountId, endpoint)
+      ref.update { state =>
+        state.get(pk) match
+          case Some(existing)
+              if existing.requestHash == requestHash && existing.response.status == 0 => state - pk
+          case _ => state
+      }
+
     override def cleanup(now: Instant): F[Int] = ref.modify { state =>
       val (expired, kept) = state.partition { case (_, r) => !r.expiresAt.isAfter(now) }
       (kept, expired.size)
@@ -54,6 +95,21 @@ final class InMemoryIdempotencyRepository[F[_]: MonadThrow] private (
       endpoint: String,
   ): F[Option[IdempotencyRecord]] = delegate.lookup(key, accountId, endpoint)
   override def record(entry: IdempotencyRecord): F[Unit] = delegate.record(entry)
+  override def reserve(entry: IdempotencyRecord): F[IdempotencyReservation] = delegate
+    .reserve(entry)
+  override def complete(
+      key: String,
+      accountId: AccountId,
+      endpoint: String,
+      requestHash: Vector[Byte],
+      response: IdempotencyResponse,
+  ): F[Unit] = delegate.complete(key, accountId, endpoint, requestHash, response)
+  override def abandon(
+      key: String,
+      accountId: AccountId,
+      endpoint: String,
+      requestHash: Vector[Byte],
+  ): F[Unit] = delegate.abandon(key, accountId, endpoint, requestHash)
   override def cleanup(now: Instant): F[Int] = delegate.cleanup(now)
 end InMemoryIdempotencyRepository
 

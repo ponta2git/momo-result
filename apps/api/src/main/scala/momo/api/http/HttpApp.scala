@@ -29,7 +29,7 @@ import momo.api.endpoints.HealthEndpoints.HealthDetailsResponse
 import momo.api.repositories.postgres.*
 import momo.api.repositories.{
   AppSessionsRepository, GameTitlesRepository, HeldEventsRepository, IdempotencyRepository,
-  ImageReferenceRepository, IncidentMastersRepository, LoginAccountsRepository,
+  ImageOrphanStore, ImageReferenceRepository, IncidentMastersRepository, LoginAccountsRepository,
   MapMastersRepository, MatchConfirmationRepository, MatchDraftsRepository, MatchListReadModel,
   MatchesRepository, MemberAliasesRepository, MembersRepository, OcrDraftsRepository,
   OcrJobCreationRepository, OcrJobMaintenanceRepository, OcrJobsRepository, QueueProducer,
@@ -41,8 +41,9 @@ import momo.api.usecases.{
   CreateSeasonMaster, DeleteGameTitle, DeleteHeldEvent, DeleteMapMaster, DeleteMatch,
   DeleteMemberAlias, DeleteSeasonMaster, ExpiredSessionPruner, ExportMatches, GetMatch,
   GetMatchDraft, GetMatchDraftSourceImages, GetOcrDraft, GetOcrDraftsBulk, GetOcrJob,
-  ListHeldEvents, ListLoginAccounts, ListMatches, ListMemberAliases, OcrQueueOutboxDispatcher,
-  OcrQueueSubmitter, PurgeSourceImages, SourceImageOrphanReaper, StaleOcrJobReaper, UpdateGameTitle,
+  ListGameTitles, ListHeldEvents, ListIncidentMasters, ListLoginAccounts, ListMapMasters,
+  ListMatches, ListMemberAliases, ListSeasonMasters, OcrQueueOutboxDispatcher, OcrQueueSubmitter,
+  PurgeSourceImages, SourceImageOrphanReaper, StaleOcrJobReaper, UpdateGameTitle,
   UpdateLoginAccount, UpdateMapMaster, UpdateMatch, UpdateMatchDraft, UpdateMemberAlias,
   UpdateSeasonMaster, UploadImage,
 }
@@ -163,15 +164,20 @@ object HttpApp:
             matchConfirmation = InMemoryMatchConfirmationRepository[F](matches, matchDrafts)
             appSessions <- InMemoryAppSessionsRepository.create[F]
             members <- InMemoryMembersRepository.create[F](config.devMemberIds.map(id =>
-              Member(MemberId(id), UserId(id), id, java.time.Instant.EPOCH)
+              Member(
+                MemberId.unsafeFromString(id),
+                UserId.unsafeFromString(id),
+                id,
+                java.time.Instant.EPOCH,
+              )
             ))
             loginAccounts <- InMemoryLoginAccountsRepository
               .create[F](config.devMemberIds.zipWithIndex.map { (id, index) =>
                 LoginAccount(
                   MemberRoster.devAccountIdFor(id),
-                  UserId(id),
+                  UserId.unsafeFromString(id),
                   id,
-                  Some(MemberId(id)),
+                  Some(MemberId.unsafeFromString(id)),
                   loginEnabled = true,
                   isAdmin = index == 0,
                   createdAt = java.time.Instant.EPOCH,
@@ -276,7 +282,7 @@ object HttpApp:
 
   private def runtimeMaintenance[F[_]: Async: LoggerFactory](
       config: AppConfig,
-      imageStore: LocalFsImageStore[F],
+      imageStore: ImageOrphanStore[F],
       imageReferences: ImageReferenceRepository[F],
       ocrMaintenance: OcrJobMaintenanceRepository[F],
       appSessions: AppSessionsRepository[F],
@@ -395,7 +401,7 @@ object HttpApp:
       seasonMasters = seasonMasters,
       now = nowF,
       nextId = nextId,
-      allowedMemberIds = config.devMemberIds.map(MemberId(_)).toSet,
+      allowedMemberIds = members.list.map(_.map(_.id).toSet),
     )
     val listMatches = ListMatches[F](matchList)
     val exportMatches = ExportMatches[F](matches, members, mapMasters, seasonMasters)
@@ -407,10 +413,14 @@ object HttpApp:
       mapMasters = mapMasters,
       seasonMasters = seasonMasters,
       now = nowF,
-      allowedMemberIds = config.devMemberIds.map(MemberId(_)).toSet,
+      allowedMemberIds = members.list.map(_.map(_.id).toSet),
     )
     val deleteMatch = DeleteMatch[F](matches)
     val deleteHeldEvent = DeleteHeldEvent[F](heldEvents, matches, matchDrafts)
+    val listGameTitles = ListGameTitles[F](gameTitles)
+    val listMapMasters = ListMapMasters[F](mapMasters)
+    val listSeasonMasters = ListSeasonMasters[F](seasonMasters)
+    val listIncidentMasters = ListIncidentMasters[F](incidentMasters)
     val createGameTitle = CreateGameTitle[F](gameTitles, nowF)
     val createMapMaster = CreateMapMaster[F](gameTitles, mapMasters, nowF)
     val createSeasonMaster = CreateSeasonMaster[F](gameTitles, seasonMasters, nowF)
@@ -456,15 +466,14 @@ object HttpApp:
         getMatch = getMatch,
         updateMatch = updateMatch,
         deleteMatch = deleteMatch,
-        gameTitles = gameTitles,
-        mapMasters = mapMasters,
-        seasonMasters = seasonMasters,
-        incidentMasters = incidentMasters,
-        memberAliases = memberAliases,
         loginAccounts = loginAccounts,
         listLoginAccounts = listLoginAccounts,
         createLoginAccount = createLoginAccount,
         updateLoginAccount = updateLoginAccount,
+        listGameTitles = listGameTitles,
+        listMapMasters = listMapMasters,
+        listSeasonMasters = listSeasonMasters,
+        listIncidentMasters = listIncidentMasters,
         createGameTitle = createGameTitle,
         createMapMaster = createMapMaster,
         createSeasonMaster = createSeasonMaster,
@@ -478,7 +487,6 @@ object HttpApp:
         createMemberAlias = createMemberAlias,
         updateMemberAlias = updateMemberAlias,
         deleteMemberAlias = deleteMemberAlias,
-        members = members,
         oauthClient = oauthClient,
         sessionService = sessionService,
         csrfTokenService = csrfTokenService,

@@ -11,10 +11,10 @@ import momo.api.repositories.postgres.*
 
 final class PostgresMatchListReadModelSpec extends IntegrationSuite:
 
-  private val gameTitleId = GameTitleId("title_world")
-  private val mapMasterId = MapMasterId("map_east")
-  private val seasonMasterId = SeasonMasterId("season_2024_spring")
-  private val heldEventId = HeldEventId("held_2026_04_30")
+  private val gameTitleId = GameTitleId.unsafeFromString("title_world")
+  private val mapMasterId = MapMasterId.unsafeFromString("map_east")
+  private val seasonMasterId = SeasonMasterId.unsafeFromString("season_2024_spring")
+  private val heldEventId = HeldEventId.unsafeFromString("held_2026_04_30")
   private val baseTime = Instant.parse("2026-04-30T00:00:00Z")
 
   private def gameTitles = new PostgresGameTitlesRepository[IO](transactor)
@@ -34,30 +34,31 @@ final class PostgresMatchListReadModelSpec extends IntegrationSuite:
       _ <- heldEvents.create(HeldEvent(heldEventId, baseTime))
     yield ()
 
-  private def player(memberId: String, playOrder: Int, rank: Int): PlayerResult = PlayerResult(
-    memberId = MemberId(memberId),
-    playOrder = playOrder,
-    rank = rank,
-    totalAssetsManYen = 10_000 - (rank * 1_000),
-    revenueManYen = 1_000 - (rank * 100),
-    incidents = IncidentCounts(
-      destination = 0,
-      plusStation = 0,
-      minusStation = 0,
-      cardStation = 0,
-      cardShop = 0,
-      suriNoGinji = 0,
-    ),
-  )
+  private def player(memberId: String, playOrder: Int, rank: Int): PlayerResult = PlayerResult
+    .unsafeFromInts(
+      memberId = MemberId.unsafeFromString(memberId),
+      playOrder = playOrder,
+      rank = rank,
+      totalAssetsManYen = 10_000 - (rank * 1_000),
+      revenueManYen = 1_000 - (rank * 100),
+      incidents = IncidentCounts.unsafeFromInts(
+        destination = 0,
+        plusStation = 0,
+        minusStation = 0,
+        cardStation = 0,
+        cardShop = 0,
+        suriNoGinji = 0,
+      ),
+    )
 
   private def sampleMatch(id: String, matchNo: Int, playedAt: Instant): MatchRecord = MatchRecord(
-    id = MatchId(id),
+    id = MatchId.unsafeFromString(id),
     heldEventId = heldEventId,
-    matchNoInEvent = matchNo,
+    matchNoInEvent = MatchNoInEvent.unsafeFromInt(matchNo),
     gameTitleId = gameTitleId,
     layoutFamily = "world",
     seasonMasterId = seasonMasterId,
-    ownerMemberId = MemberId("member_ponta"),
+    ownerMemberId = MemberId.unsafeFromString("member_ponta"),
     mapMasterId = mapMasterId,
     playedAt = playedAt,
     totalAssetsDraftId = None,
@@ -69,8 +70,8 @@ final class PostgresMatchListReadModelSpec extends IntegrationSuite:
       player("member_otaka", 3, 3),
       player("member_eu", 4, 4),
     ),
-    createdByAccountId = AccountId("account_ponta"),
-    createdByMemberId = Some(MemberId("member_ponta")),
+    createdByAccountId = AccountId.unsafeFromString("account_ponta"),
+    createdByMemberId = Some(MemberId.unsafeFromString("member_ponta")),
     createdAt = playedAt,
   )
 
@@ -80,16 +81,16 @@ final class PostgresMatchListReadModelSpec extends IntegrationSuite:
       updatedAt: Instant,
       playedAt: Option[Instant] = None, // scalafix:ok DisableSyntax.defaultArgs
   ): MatchDraft = MatchDraft.fromInputs(
-    id = MatchDraftId(id),
-    createdByAccountId = AccountId("account_ponta"),
-    createdByMemberId = Some(MemberId("member_ponta")),
+    id = MatchDraftId.unsafeFromString(id),
+    createdByAccountId = AccountId.unsafeFromString("account_ponta"),
+    createdByMemberId = Some(MemberId.unsafeFromString("member_ponta")),
     status = status,
     heldEventId = Some(heldEventId),
-    matchNoInEvent = Some(2),
+    matchNoInEvent = Some(MatchNoInEvent.unsafeFromInt(2)),
     gameTitleId = Some(gameTitleId),
     layoutFamily = Some("world"),
     seasonMasterId = Some(seasonMasterId),
-    ownerMemberId = Some(MemberId("member_ponta")),
+    ownerMemberId = Some(MemberId.unsafeFromString("member_ponta")),
     mapMasterId = Some(mapMasterId),
     playedAt = playedAt,
     totalAssetsImageId = None,
@@ -119,8 +120,8 @@ final class PostgresMatchListReadModelSpec extends IntegrationSuite:
       assertEquals(items.map(_.id), List("draft_ready", "match_older"))
       assertEquals(items.map(_.kind), List(MatchListItemKind.MatchDraft, MatchListItemKind.Match))
       val confirmed = items.find(_.id == "match_older").getOrElse(fail("match row missing"))
-      assertEquals(confirmed.ranks.map(_.playOrder), List(1, 2, 3, 4))
-      assertEquals(confirmed.ranks.map(_.rank), List(1, 2, 3, 4))
+      assertEquals(confirmed.ranks.map(_.playOrder.value), List(1, 2, 3, 4))
+      assertEquals(confirmed.ranks.map(_.rank.value), List(1, 2, 3, 4))
 
   test("filters confirmed matches and active drafts by kind and status"):
     for

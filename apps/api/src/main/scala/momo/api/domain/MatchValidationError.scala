@@ -3,7 +3,7 @@ package momo.api.domain
 import momo.api.domain.ids.MemberId
 
 /**
- * Domain-level validation errors produced by [[MatchValidation]] and [[momo.api.domain.FourPlayers]].
+ * Domain-level validation errors produced by [[MatchPolicy]] and [[momo.api.domain.FourPlayers]].
  *
  * Kept as a sealed ADT (not raw strings) so that future formatting / i18n / error-code mapping
  * has a single point of customisation. Each case knows how to render itself via [[message]].
@@ -17,6 +17,15 @@ object MatchValidationError:
 
   final case class MatchNoInEventInvalid(actual: Int) extends MatchValidationError:
     val message = s"matchNoInEvent must be >= 1 (was $actual)."
+
+  final case class PlayOrderInvalid(actual: Int) extends MatchValidationError:
+    val message = s"players.playOrder must be in 1..4 (was $actual)."
+
+  final case class RankInvalid(actual: Int) extends MatchValidationError:
+    val message = s"players.rank must be in 1..4 (was $actual)."
+
+  final case class IncidentCountInvalid(actual: Int) extends MatchValidationError:
+    val message = s"incident count must be >= 0 (was $actual)."
 
   case object GameTitleIdRequired extends MatchValidationError:
     val message = "gameTitleId is required."
@@ -48,8 +57,5 @@ object MatchValidationError:
 
   case object RanksNotPermutation extends MatchValidationError:
     val message = "players.rank must be a permutation of {1,2,3,4}."
-
-  final case class IncidentCountsNegative(memberId: MemberId) extends MatchValidationError:
-    val message = s"player ${memberId.value} has negative incident count."
 
 end MatchValidationError

@@ -17,19 +17,29 @@ object MaxBodySizeMiddleware:
       extends RuntimeException(s"request body exceeds ${limitBytes.toString} bytes")
 
   def uploadOnly[F[_]: Async](limitBytes: Long)(http: HttpApp[F]): HttpApp[F] = Kleisli { request =>
-    if isUpload(request) then applyLimit(request, limitBytes, http) else http.run(request)
+    if isUpload(request) then applyLimit(request, limitBytes, "Upload request", http)
+    else http.run(request)
+  }
+
+  def requestAndUpload[F[_]: Async](requestLimitBytes: Long, uploadLimitBytes: Long)(
+      http: HttpApp[F]
+  ): HttpApp[F] = Kleisli { request =>
+    if isUpload(request) then applyLimit(request, uploadLimitBytes, "Upload request", http)
+    else if isMutating(request) then applyLimit(request, requestLimitBytes, "Request body", http)
+    else http.run(request)
   }
 
   private def applyLimit[F[_]: Async](
       request: Request[F],
       limitBytes: Long,
+      label: String,
       http: HttpApp[F],
   ): F[Response[F]] = request.headers.get[`Content-Length`].map(_.length) match
-    case Some(length) if length > limitBytes => problem[F](limitBytes)
+    case Some(length) if length > limitBytes => problem[F](limitBytes, label)
     case _ =>
       val limited = request.withBodyStream(limitStream(request.body, limitBytes))
       http.run(limited).handleErrorWith {
-        case _: RequestBodyTooLarge => problem[F](limitBytes)
+        case _: RequestBodyTooLarge => problem[F](limitBytes, label)
         case error => Async[F].raiseError(error)
       }
 
@@ -44,9 +54,12 @@ object MaxBodySizeMiddleware:
   private def isUpload[F[_]](request: Request[F]): Boolean = request.method.name == "POST" &&
     request.uri.path.renderString == "/api/uploads/images"
 
-  private def problem[F[_]: Async](limitBytes: Long): F[Response[F]] =
+  private def isMutating[F[_]](request: Request[F]): Boolean = request.method.name == "POST" ||
+    request.method.name == "PUT" || request.method.name == "PATCH" ||
+    request.method.name == "DELETE"
+
+  private def problem[F[_]: Async](limitBytes: Long, label: String): F[Response[F]] =
     val (status, body) = ProblemDetails
-      .from(AppError.PayloadTooLarge(s"Upload request must be ${limitBytes
-          .toString} bytes or smaller."))
+      .from(AppError.PayloadTooLarge(s"$label must be ${limitBytes.toString} bytes or smaller."))
     Response[F](Status.fromInt(status.code).getOrElse(Status.PayloadTooLarge))
       .withEntity(body.asJson).putHeaders(`Content-Type`(MediaType.application.json)).pure[F]

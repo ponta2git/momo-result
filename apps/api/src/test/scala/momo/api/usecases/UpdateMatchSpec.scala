@@ -17,12 +17,12 @@ import momo.api.usecases.testing.MatchFixtures
 final class UpdateMatchSpec extends MomoCatsEffectSuite:
   private val createdAt = Instant.parse("2026-05-08T11:00:00Z")
   private val updatedAt = Instant.parse("2026-05-08T11:05:00Z")
-  private val heldEventId = HeldEventId("held-update-match")
-  private val titleId = GameTitleId("title_world")
-  private val otherTitleId = GameTitleId("title_japan")
-  private val mapId = MapMasterId("map_east")
-  private val seasonId = SeasonMasterId("season_spring")
-  private val matchId = MatchId("match-update-1")
+  private val heldEventId = HeldEventId.unsafeFromString("held-update-match")
+  private val titleId = GameTitleId.unsafeFromString("title_world")
+  private val otherTitleId = GameTitleId.unsafeFromString("title_japan")
+  private val mapId = MapMasterId.unsafeFromString("map_east")
+  private val seasonId = SeasonMasterId.unsafeFromString("season_spring")
+  private val matchId = MatchId.unsafeFromString("match-update-1")
   private val memberValues = MatchFixtures.DevMemberValues
   private val allowedMembers = MatchFixtures.allowedMembers(memberValues)
 
@@ -38,7 +38,7 @@ final class UpdateMatchSpec extends MomoCatsEffectSuite:
           gameTitleId = titleId,
           draftRefs = ConfirmMatch.DraftRefs(
             totalAssets = None,
-            revenue = Some(OcrDraftId("draft-revenue-new")),
+            revenue = Some(OcrDraftId.unsafeFromString("draft-revenue-new")),
             incidentLog = None,
           ),
         ),
@@ -46,25 +46,29 @@ final class UpdateMatchSpec extends MomoCatsEffectSuite:
       found <- fixture.matches.find(matchId)
     yield
       val updated = assertRight(result)
-      assertEquals(updated.matchNoInEvent, 2)
+      assertEquals(updated.matchNoInEvent.value, 2)
       assertEquals(updated.layoutFamily, "world")
       assertEquals(updated.playedAt, Instant.parse("2026-05-08T20:00:00Z"))
-      assertEquals(updated.totalAssetsDraftId, Some(OcrDraftId("draft-total-old")))
-      assertEquals(updated.revenueDraftId, Some(OcrDraftId("draft-revenue-new")))
-      assertEquals(updated.incidentLogDraftId, Some(OcrDraftId("draft-incident-old")))
-      assertEquals(found.map(_.matchNoInEvent), Some(2))
+      assertEquals(updated.totalAssetsDraftId, Some(OcrDraftId.unsafeFromString("draft-total-old")))
+      assertEquals(updated.revenueDraftId, Some(OcrDraftId.unsafeFromString("draft-revenue-new")))
+      assertEquals(
+        updated.incidentLogDraftId,
+        Some(OcrDraftId.unsafeFromString("draft-incident-old")),
+      )
+      assertEquals(found.map(_.matchNoInEvent.value), Some(2))
 
   test("rejects duplicate match number for the same held event before updating"):
     for
       fixture <- Fixture.create
       _ <- fixture.seedPrereqs()
       _ <- fixture.matches.create(sampleMatch(matchId, matchNoInEvent = 1))
-      _ <- fixture.matches.create(sampleMatch(MatchId("match-update-2"), matchNoInEvent = 2))
+      _ <- fixture.matches
+        .create(sampleMatch(MatchId.unsafeFromString("match-update-2"), matchNoInEvent = 2))
       result <- fixture.usecase.run(matchId, command(matchNoInEvent = 2, gameTitleId = titleId))
       found <- fixture.matches.find(matchId)
     yield
       assertAppError(result, "CONFLICT", "already exists for held event")
-      assertEquals(found.map(_.matchNoInEvent), Some(1))
+      assertEquals(found.map(_.matchNoInEvent.value), Some(1))
 
   test("rejects map and season masters that do not belong to the supplied game title"):
     for
@@ -80,7 +84,7 @@ final class UpdateMatchSpec extends MomoCatsEffectSuite:
       assertEquals(found.map(_.gameTitleId), Some(titleId))
 
   test("rejects invalid player ranks and leaves the existing record unchanged"):
-    val badPlayers = MatchFixtures.duplicateRankPlayers(memberValues)
+    val badPlayers = MatchFixtures.duplicateRankPlayerInputs(memberValues)
     for
       fixture <- Fixture.create
       _ <- fixture.seedPrereqs()
@@ -90,7 +94,7 @@ final class UpdateMatchSpec extends MomoCatsEffectSuite:
       found <- fixture.matches.find(matchId)
     yield
       assertAppError(result, "VALIDATION_FAILED", "players.rank")
-      assertEquals(found.map(_.matchNoInEvent), Some(1))
+      assertEquals(found.map(_.matchNoInEvent.value), Some(1))
 
   private def command(
       matchNoInEvent: Int,
@@ -101,7 +105,7 @@ final class UpdateMatchSpec extends MomoCatsEffectSuite:
     matchNoInEvent = matchNoInEvent,
     gameTitleId = gameTitleId,
     seasonMasterId = seasonId,
-    ownerMemberId = MemberId("ponta"),
+    ownerMemberId = MemberId.unsafeFromString("ponta"),
     mapMasterId = mapId,
     playedAt = "2026-05-08T20:00:00Z",
     draftRefs = draftRefs,
@@ -122,12 +126,13 @@ final class UpdateMatchSpec extends MomoCatsEffectSuite:
       playedAt = createdAt,
       createdAt = createdAt,
       memberValues = memberValues,
-      totalAssetsDraftId = Some(OcrDraftId("draft-total-old")),
+      totalAssetsDraftId = Some(OcrDraftId.unsafeFromString("draft-total-old")),
       revenueDraftId = None,
-      incidentLogDraftId = Some(OcrDraftId("draft-incident-old")),
+      incidentLogDraftId = Some(OcrDraftId.unsafeFromString("draft-incident-old")),
     )
 
-  private def defaultPlayers: List[PlayerResult] = MatchFixtures.defaultPlayers(memberValues)
+  private def defaultPlayers: List[PlayerResult.Input] = MatchFixtures
+    .defaultPlayerInputs(memberValues)
 
   private def assertRight(result: Either[AppError, MatchRecord]): MatchRecord = result match
     case Right(value) => value
@@ -178,6 +183,6 @@ final class UpdateMatchSpec extends MomoCatsEffectSuite:
           mapMasters = mapMasters,
           seasonMasters = seasonMasters,
           now = IO.pure(updatedAt),
-          allowedMemberIds = allowedMembers,
+          allowedMemberIds = IO.pure(allowedMembers),
         )
       yield Fixture(heldEvents, gameTitles, mapMasters, seasonMasters, matches, usecase)

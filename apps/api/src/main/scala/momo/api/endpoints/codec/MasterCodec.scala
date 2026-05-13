@@ -15,15 +15,23 @@ import momo.api.usecases.{
 /** DTO ↔ usecase command conversions for master-data endpoints. */
 object MasterCodec:
   def toCreateGameTitleCommand(request: CreateGameTitleRequest): CreateGameTitleCommand =
-    CreateGameTitleCommand(GameTitleId(request.id), request.name, request.layoutFamily)
+    CreateGameTitleCommand(
+      GameTitleId.unsafeFromString(request.id),
+      request.name,
+      request.layoutFamily,
+    )
 
   def toCreateMapMasterCommand(request: CreateMapMasterRequest): CreateMapMasterCommand =
-    CreateMapMasterCommand(MapMasterId(request.id), GameTitleId(request.gameTitleId), request.name)
+    CreateMapMasterCommand(
+      MapMasterId.unsafeFromString(request.id),
+      GameTitleId.unsafeFromString(request.gameTitleId),
+      request.name,
+    )
 
   def toCreateSeasonMasterCommand(request: CreateSeasonMasterRequest): CreateSeasonMasterCommand =
     CreateSeasonMasterCommand(
-      SeasonMasterId(request.id),
-      GameTitleId(request.gameTitleId),
+      SeasonMasterId.unsafeFromString(request.id),
+      GameTitleId.unsafeFromString(request.gameTitleId),
       request.name,
     )
 
@@ -31,17 +39,18 @@ object MasterCodec:
       id: String,
       request: UpdateGameTitleRequest,
   ): UpdateGameTitleCommand =
-    UpdateGameTitleCommand(GameTitleId(id), request.name, request.layoutFamily)
+    UpdateGameTitleCommand(GameTitleId.unsafeFromString(id), request.name, request.layoutFamily)
 
   def toUpdateMapMasterCommand(
       id: String,
       request: UpdateMapMasterRequest,
-  ): UpdateMapMasterCommand = UpdateMapMasterCommand(MapMasterId(id), request.name)
+  ): UpdateMapMasterCommand = UpdateMapMasterCommand(MapMasterId.unsafeFromString(id), request.name)
 
   def toUpdateSeasonMasterCommand(
       id: String,
       request: UpdateSeasonMasterRequest,
-  ): UpdateSeasonMasterCommand = UpdateSeasonMasterCommand(SeasonMasterId(id), request.name)
+  ): UpdateSeasonMasterCommand =
+    UpdateSeasonMasterCommand(SeasonMasterId.unsafeFromString(id), request.name)
 
   def toCreateMemberAliasCommand(request: CreateMemberAliasRequest): CreateMemberAliasCommand =
     CreateMemberAliasCommand(request.memberId, request.alias)

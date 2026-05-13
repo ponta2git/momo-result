@@ -17,7 +17,7 @@ object HeldEventsEndpoints:
     .in("api" / "held-events")
     .in(query[Option[String]]("q"))
     .in(query[Option[Int]]("limit"))
-    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.accountHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[HeldEventListResponse])
     .tag("held-events")
@@ -27,7 +27,7 @@ object HeldEventsEndpoints:
   val create: PublicEndpoint[CreateInput, ProblemResponse, HeldEventResponse, Any] = endpoint
     .post
     .in("api" / "held-events")
-    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.accountHeader)
     .in(CommonEndpoint.csrfHeader)
     .in(CommonEndpoint.idempotencyKeyHeader)
     .in(jsonBody[CreateHeldEventRequest])
@@ -40,7 +40,7 @@ object HeldEventsEndpoints:
   val delete: PublicEndpoint[DeleteInput, ProblemResponse, DeleteHeldEventResponse, Any] = endpoint
     .delete
     .in("api" / "held-events" / path[String]("heldEventId"))
-    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.accountHeader)
     .in(CommonEndpoint.csrfHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[DeleteHeldEventResponse])

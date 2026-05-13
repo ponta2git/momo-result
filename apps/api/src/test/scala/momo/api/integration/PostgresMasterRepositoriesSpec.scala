@@ -13,9 +13,9 @@ import momo.api.usecases.*
 final class PostgresMasterRepositoriesSpec extends IntegrationSuite:
 
   private val now = Instant.parse("2026-05-01T00:00:00Z")
-  private val titleId = GameTitleId("title_test")
-  private val mapId = MapMasterId("map_test")
-  private val seasonId = SeasonMasterId("season_test")
+  private val titleId = GameTitleId.unsafeFromString("title_test")
+  private val mapId = MapMasterId.unsafeFromString("map_test")
+  private val seasonId = SeasonMasterId.unsafeFromString("season_test")
 
   private def gameTitles = new PostgresGameTitlesRepository[IO](transactor)
   private def mapMasters = new PostgresMapMastersRepository[IO](transactor)
@@ -86,7 +86,7 @@ final class PostgresMasterRepositoriesSpec extends IntegrationSuite:
     for
       created <- create.run(CreateMemberAliasCommand("member_ponta", "  ポン太社長  "))
       duplicate <- createDuplicateId.run(CreateMemberAliasCommand("member_otaka", "ポン太社長"))
-      list <- memberAliases.list(Some(MemberId("member_ponta")))
+      list <- memberAliases.list(Some(MemberId.unsafeFromString("member_ponta")))
       updated <- update.run(UpdateMemberAliasCommand("alias-ponta", "member_otaka", "おたか社長"))
       found <- memberAliases.find("alias-ponta")
       deleted <- delete.run("alias-ponta")
@@ -95,7 +95,7 @@ final class PostgresMasterRepositoriesSpec extends IntegrationSuite:
       assertEquals(created.map(_.alias), Right("ポン太社長"))
       assertEquals(duplicate, Left(AppError.Conflict("member alias already exists: ポン太社長")))
       assertEquals(list.map(_.id), List("alias-ponta"))
-      assertEquals(updated.map(_.memberId), Right(MemberId("member_otaka")))
+      assertEquals(updated.map(_.memberId), Right(MemberId.unsafeFromString("member_otaka")))
       assertEquals(found.map(_.alias), Some("おたか社長"))
       assertEquals(deleted, Right(()))
       assertEquals(afterDelete, None)

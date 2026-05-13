@@ -11,10 +11,10 @@ import momo.api.repositories.postgres.*
 final class PostgresMatchesRepositorySpec extends IntegrationSuite:
 
   private val now = Instant.parse("2026-04-30T00:00:00Z")
-  private val gameTitleId = GameTitleId("title_world")
-  private val mapMasterId = MapMasterId("map_east")
-  private val seasonMasterId = SeasonMasterId("season_2024_spring")
-  private val heldEventId = HeldEventId("held_2026_04_30")
+  private val gameTitleId = GameTitleId.unsafeFromString("title_world")
+  private val mapMasterId = MapMasterId.unsafeFromString("map_east")
+  private val seasonMasterId = SeasonMasterId.unsafeFromString("season_2024_spring")
+  private val heldEventId = HeldEventId.unsafeFromString("held_2026_04_30")
 
   private def gameTitles = new PostgresGameTitlesRepository[IO](transactor)
   private def mapMasters = new PostgresMapMastersRepository[IO](transactor)
@@ -55,13 +55,13 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       revenue: Int,
       destination: Int,
       plusStation: Int,
-  ): PlayerResult = PlayerResult(
-    memberId = MemberId(memberId),
+  ): PlayerResult = PlayerResult.unsafeFromInts(
+    memberId = MemberId.unsafeFromString(memberId),
     playOrder = playOrder,
     rank = rank,
     totalAssetsManYen = totalAssets,
     revenueManYen = revenue,
-    incidents = IncidentCounts(
+    incidents = IncidentCounts.unsafeFromInts(
       destination = destination,
       plusStation = plusStation,
       minusStation = 0,
@@ -72,13 +72,13 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
   )
 
   private def sampleMatch(id: String, matchNo: Int): MatchRecord = MatchRecord(
-    id = MatchId(id),
+    id = MatchId.unsafeFromString(id),
     heldEventId = heldEventId,
-    matchNoInEvent = matchNo,
+    matchNoInEvent = MatchNoInEvent.unsafeFromInt(matchNo),
     gameTitleId = gameTitleId,
     layoutFamily = "world",
     seasonMasterId = seasonMasterId,
-    ownerMemberId = MemberId("member_ponta"),
+    ownerMemberId = MemberId.unsafeFromString("member_ponta"),
     mapMasterId = mapMasterId,
     playedAt = now,
     totalAssetsDraftId = None,
@@ -90,8 +90,8 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       player("member_otaka", 3, 3, 6500, 800),
       player("member_eu", 4, 4, 4000, 200),
     ),
-    createdByAccountId = AccountId("account_ponta"),
-    createdByMemberId = Some(MemberId("member_ponta")),
+    createdByAccountId = AccountId.unsafeFromString("account_ponta"),
+    createdByMemberId = Some(MemberId.unsafeFromString("member_ponta")),
     createdAt = now,
   )
 
@@ -100,18 +100,19 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
     for
       _ <- seedPrereqs
       _ <- matches.create(rec)
-      found <- matches.find(MatchId("match_001"))
+      found <- matches.find(MatchId.unsafeFromString("match_001"))
     yield
       val got = found.getOrElse(fail("match_001 not found after create"))
       assertEquals(got.id, rec.id)
       assertEquals(got.players.toList.size, 4)
-      assertEquals(got.players.byPlayOrder.map(_.playOrder), List(1, 2, 3, 4))
-      assertEquals(got.players.byRank.map(_.rank), List(1, 2, 3, 4))
-      val ponta = got.players.toList.find(_.memberId == MemberId("member_ponta")).get
-      assertEquals(ponta.totalAssetsManYen, 12000)
-      assertEquals(ponta.incidents.destination, 5)
-      assertEquals(ponta.incidents.plusStation, 2)
-      assertEquals(ponta.incidents.suriNoGinji, 0)
+      assertEquals(got.players.byPlayOrder.map(_.playOrder.value), List(1, 2, 3, 4))
+      assertEquals(got.players.byRank.map(_.rank.value), List(1, 2, 3, 4))
+      val ponta = got.players.toList.find(_.memberId == MemberId.unsafeFromString("member_ponta"))
+        .get
+      assertEquals(ponta.totalAssetsManYen.value, 12000)
+      assertEquals(ponta.incidents.destination.value, 5)
+      assertEquals(ponta.incidents.plusStation.value, 2)
+      assertEquals(ponta.incidents.suriNoGinji.value, 0)
 
   test("listByHeldEvent orders by match_no_in_event"):
     for
@@ -121,17 +122,17 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       list <- matches.listByHeldEvent(heldEventId)
     yield
       assertEquals(list.map(_.id.value), List("match_a", "match_b"))
-      assertEquals(list.map(_.matchNoInEvent), List(1, 2))
+      assertEquals(list.map(_.matchNoInEvent.value), List(1, 2))
 
   test("existsMatchNo and maxMatchNo reflect inserted rows"):
     for
       _ <- seedPrereqs
-      empty <- matches.existsMatchNo(heldEventId, 1)
+      empty <- matches.existsMatchNo(heldEventId, MatchNoInEvent.unsafeFromInt(1))
       m0 <- matches.maxMatchNo(heldEventId)
       _ <- matches.create(sampleMatch("match_001", 1))
       _ <- matches.create(sampleMatch("match_003", 3))
-      ex1 <- matches.existsMatchNo(heldEventId, 1)
-      ex2 <- matches.existsMatchNo(heldEventId, 2)
+      ex1 <- matches.existsMatchNo(heldEventId, MatchNoInEvent.unsafeFromInt(1))
+      ex2 <- matches.existsMatchNo(heldEventId, MatchNoInEvent.unsafeFromInt(2))
       mn <- matches.maxMatchNo(heldEventId)
     yield
       assertEquals(empty, false)
@@ -140,15 +141,46 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       assertEquals(ex2, false)
       assertEquals(mn, 3)
 
+  test("update changes parent fields and replaces child player rows without deleting the match"):
+    val rec = sampleMatch("match_001", 1)
+    val updated = rec.copy(
+      matchNoInEvent = MatchNoInEvent.unsafeFromInt(2),
+      players = FourPlayers(
+        playerWithIncidents("member_ponta", 1, 4, 1000, 100, destination = 0, plusStation = 0),
+        player("member_akane_mami", 2, 3, 2000, 200),
+        player("member_otaka", 3, 2, 3000, 300),
+        player("member_eu", 4, 1, 4000, 400),
+      ),
+    )
+    for
+      _ <- seedPrereqs
+      _ <- matches.create(rec)
+      _ <- matches.update(updated, now.plusSeconds(60))
+      found <- matches.find(rec.id)
+    yield
+      val got = found.getOrElse(fail("match_001 not found after update"))
+      assertEquals(got.id, rec.id)
+      assertEquals(got.createdAt, rec.createdAt)
+      assertEquals(got.matchNoInEvent.value, 2)
+      assertEquals(
+        got.players.byRank.map(_.memberId.value),
+        List("member_eu", "member_otaka", "member_akane_mami", "member_ponta"),
+      )
+      val ponta = got.players.toList.find(_.memberId == MemberId.unsafeFromString("member_ponta"))
+        .get
+      assertEquals(ponta.totalAssetsManYen.value, 1000)
+      assertEquals(ponta.incidents.destination.value, 0)
+
   test("countByHeldEvents returns zero for unknown event ids"):
     for
       _ <- seedPrereqs
       _ <- matches.create(sampleMatch("match_001", 1))
       _ <- matches.create(sampleMatch("match_002", 2))
-      counts <- matches.countByHeldEvents(List(heldEventId, HeldEventId("missing_event")))
+      counts <- matches
+        .countByHeldEvents(List(heldEventId, HeldEventId.unsafeFromString("missing_event")))
     yield
       assertEquals(counts.get(heldEventId), Some(2))
-      assertEquals(counts.get(HeldEventId("missing_event")), Some(0))
+      assertEquals(counts.get(HeldEventId.unsafeFromString("missing_event")), Some(0))
 
   test("countByHeldEvents short-circuits on empty input"):
     matches.countByHeldEvents(Nil).map(m => assertEquals(m, Map.empty[HeldEventId, Int]))

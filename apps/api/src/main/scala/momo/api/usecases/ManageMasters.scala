@@ -1,6 +1,5 @@
 package momo.api.usecases
 
-import java.sql.SQLException
 import java.time.Instant
 
 import cats.MonadThrow
@@ -9,10 +8,10 @@ import cats.syntax.all.*
 
 import momo.api.domain.ids.*
 import momo.api.domain.{GameTitle, MapMaster, MemberAlias, SeasonMaster}
-import momo.api.errors.AppError
+import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.{
-  GameTitlesRepository, MapMastersRepository, MemberAliasesRepository, MembersRepository,
-  SeasonMastersRepository,
+  GameTitlesRepository, IncidentMastersRepository, MapMastersRepository, MemberAliasesRepository,
+  MembersRepository, SeasonMastersRepository,
 }
 import momo.api.usecases.syntax.UseCaseSyntax.*
 
@@ -33,7 +32,7 @@ final class UpdateGameTitle[F[_]: MonadThrow](titles: GameTitlesRepository[F]):
 final class DeleteGameTitle[F[_]: MonadThrow](titles: GameTitlesRepository[F]):
   def run(id: GameTitleId): F[Either[AppError, Unit]] = (for
     _ <- titles.find(id).orNotFound("game title", id.value)
-    _ <- deleteRestricted(titles.delete(id), "game title is still referenced.")
+    _ <- deleteRestricted(titles.delete(id))
   yield ()).value
 
 final class UpdateMapMaster[F[_]: MonadThrow](maps: MapMastersRepository[F]):
@@ -47,7 +46,7 @@ final class UpdateMapMaster[F[_]: MonadThrow](maps: MapMastersRepository[F]):
 final class DeleteMapMaster[F[_]: MonadThrow](maps: MapMastersRepository[F]):
   def run(id: MapMasterId): F[Either[AppError, Unit]] = (for
     _ <- maps.find(id).orNotFound("map master", id.value)
-    _ <- deleteRestricted(maps.delete(id), "map master is still referenced.")
+    _ <- deleteRestricted(maps.delete(id))
   yield ()).value
 
 final class UpdateSeasonMaster[F[_]: MonadThrow](seasons: SeasonMastersRepository[F]):
@@ -61,8 +60,20 @@ final class UpdateSeasonMaster[F[_]: MonadThrow](seasons: SeasonMastersRepositor
 final class DeleteSeasonMaster[F[_]: MonadThrow](seasons: SeasonMastersRepository[F]):
   def run(id: SeasonMasterId): F[Either[AppError, Unit]] = (for
     _ <- seasons.find(id).orNotFound("season master", id.value)
-    _ <- deleteRestricted(seasons.delete(id), "season master is still referenced.")
+    _ <- deleteRestricted(seasons.delete(id))
   yield ()).value
+
+final class ListGameTitles[F[_]](titles: GameTitlesRepository[F]):
+  def run: F[List[GameTitle]] = titles.list
+
+final class ListMapMasters[F[_]](maps: MapMastersRepository[F]):
+  def run(gameTitleId: Option[GameTitleId]): F[List[MapMaster]] = maps.list(gameTitleId)
+
+final class ListSeasonMasters[F[_]](seasons: SeasonMastersRepository[F]):
+  def run(gameTitleId: Option[GameTitleId]): F[List[SeasonMaster]] = seasons.list(gameTitleId)
+
+final class ListIncidentMasters[F[_]](incidents: IncidentMastersRepository[F]):
+  def run: F[List[momo.api.domain.IncidentMaster]] = incidents.list
 
 final case class CreateMemberAliasCommand(memberId: String, alias: String)
 final case class UpdateMemberAliasCommand(id: String, memberId: String, alias: String)
@@ -114,7 +125,7 @@ private def validateMemberId(value: String): Either[AppError, MemberId] =
   val trimmed = value.trim
   Either.cond(
     trimmed.nonEmpty,
-    MemberId(trimmed),
+    MemberId.unsafeFromString(trimmed),
     AppError.ValidationFailed("memberId must not be blank."),
   )
 
@@ -137,14 +148,11 @@ private def ensureAliasAvailable[F[_]: MonadThrow](
   }
 }
 
-private def deleteRestricted[F[_]: MonadThrow](
-    action: F[Unit],
-    detail: String,
-): EitherT[F, AppError, Unit] = EitherT {
-  action.attempt.flatMap {
-    case Right(_) => MonadThrow[F].pure(Right(()))
-    case Left(sql: SQLException) if sql.getSQLState == "23503" =>
-      MonadThrow[F].pure(Left(AppError.Conflict(detail)))
-    case Left(error) => MonadThrow[F].raiseError[Either[AppError, Unit]](error)
+private def deleteRestricted[F[_]: MonadThrow](action: F[Unit]): EitherT[F, AppError, Unit] =
+  EitherT {
+    action.attempt.flatMap {
+      case Right(_) => MonadThrow[F].pure(Right(()))
+      case Left(app: AppException) => MonadThrow[F].pure(Left(app.error))
+      case Left(error) => MonadThrow[F].raiseError[Either[AppError, Unit]](error)
+    }
   }
-}

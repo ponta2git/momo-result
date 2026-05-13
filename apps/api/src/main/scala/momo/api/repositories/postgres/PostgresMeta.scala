@@ -5,7 +5,10 @@ import java.nio.file.{Path, Paths}
 import doobie.Meta
 
 import momo.api.domain.ids.*
-import momo.api.domain.{FailureCode, MatchDraftStatus, OcrJobStatus, ScreenType}
+import momo.api.domain.{
+  FailureCode, IncidentCount, ManYen, MatchDraftStatus, MatchNoInEvent, OcrJobStatus, PlayOrder,
+  Rank, ScreenType,
+}
 import momo.api.repositories.OcrQueueOutboxStatus
 
 /**
@@ -13,21 +16,27 @@ import momo.api.repositories.OcrQueueOutboxStatus
  * PostgreSQL repositories. Keeping them in one place avoids accidental divergence between repos.
  */
 object PostgresMeta:
-  given Meta[OcrJobId] = Meta[String].imap(OcrJobId.apply)(_.value)
-  given Meta[OcrDraftId] = Meta[String].imap(OcrDraftId.apply)(_.value)
-  given Meta[ImageId] = Meta[String].imap(ImageId.apply)(_.value)
-  given Meta[MemberId] = Meta[String].imap(MemberId.apply)(_.value)
-  given Meta[AccountId] = Meta[String].imap(AccountId.apply)(_.value)
-  given Meta[HeldEventId] = Meta[String].imap(HeldEventId.apply)(_.value)
-  given Meta[MatchId] = Meta[String].imap(MatchId.apply)(_.value)
-  given Meta[MatchDraftId] = Meta[String].imap(MatchDraftId.apply)(_.value)
-  given Meta[GameTitleId] = Meta[String].imap(GameTitleId.apply)(_.value)
-  given Meta[MapMasterId] = Meta[String].imap(MapMasterId.apply)(_.value)
-  given Meta[SeasonMasterId] = Meta[String].imap(SeasonMasterId.apply)(_.value)
-  given Meta[IncidentMasterId] = Meta[String].imap(IncidentMasterId.apply)(_.value)
-  given Meta[UserId] = Meta[String].imap(UserId.apply)(_.value)
+  given Meta[OcrJobId] = Meta[String].imap(OcrJobId.unsafeFromString)(_.value)
+  given Meta[OcrDraftId] = Meta[String].imap(OcrDraftId.unsafeFromString)(_.value)
+  given Meta[ImageId] = Meta[String].imap(ImageId.unsafeFromString)(_.value)
+  given Meta[MemberId] = Meta[String].imap(MemberId.unsafeFromString)(_.value)
+  given Meta[AccountId] = Meta[String].imap(AccountId.unsafeFromString)(_.value)
+  given Meta[HeldEventId] = Meta[String].imap(HeldEventId.unsafeFromString)(_.value)
+  given Meta[MatchId] = Meta[String].imap(MatchId.unsafeFromString)(_.value)
+  given Meta[MatchDraftId] = Meta[String].imap(MatchDraftId.unsafeFromString)(_.value)
+  given Meta[GameTitleId] = Meta[String].imap(GameTitleId.unsafeFromString)(_.value)
+  given Meta[MapMasterId] = Meta[String].imap(MapMasterId.unsafeFromString)(_.value)
+  given Meta[SeasonMasterId] = Meta[String].imap(SeasonMasterId.unsafeFromString)(_.value)
+  given Meta[IncidentMasterId] = Meta[String].imap(IncidentMasterId.unsafeFromString)(_.value)
+  given Meta[UserId] = Meta[String].imap(UserId.unsafeFromString)(_.value)
 
   given Meta[Path] = Meta[String].imap(Paths.get(_))(_.toString)
+
+  given Meta[MatchNoInEvent] = Meta[Int].imap(MatchNoInEvent.unsafeFromInt)(_.value)
+  given Meta[PlayOrder] = Meta[Int].imap(PlayOrder.unsafeFromInt)(_.value)
+  given Meta[Rank] = Meta[Int].imap(Rank.unsafeFromInt)(_.value)
+  given Meta[ManYen] = Meta[Int].imap(ManYen.unsafeFromInt)(_.value)
+  given Meta[IncidentCount] = Meta[Int].imap(IncidentCount.unsafeFromInt)(_.value)
 
   given Meta[ScreenType] = Meta[String]
     .tiemap(s => ScreenType.fromWire(s).toRight(s"unknown screen_type=$s"))(_.wire)

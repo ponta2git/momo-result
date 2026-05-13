@@ -6,8 +6,8 @@ import cats.effect.IO
 
 import momo.api.domain.ids.*
 import momo.api.domain.{
-  FourPlayers, GameTitle, HeldEvent, IncidentCounts, MapMaster, MatchRecord, Member, PlayerResult,
-  SeasonMaster,
+  FourPlayers, GameTitle, HeldEvent, IncidentCounts, MapMaster, MatchNoInEvent, MatchRecord, Member,
+  PlayerResult, SeasonMaster,
 }
 import momo.api.repositories.{
   GameTitlesRepository, HeldEventsRepository, MapMastersRepository, SeasonMastersRepository,
@@ -18,22 +18,33 @@ object MatchFixtures:
   val DbMemberValues: List[String] =
     List("member_ponta", "member_akane_mami", "member_otaka", "member_eu")
 
-  val zeroIncidents: IncidentCounts = IncidentCounts(0, 0, 0, 0, 0, 0)
+  val zeroIncidents: IncidentCounts = IncidentCounts.unsafeFromInts(0, 0, 0, 0, 0, 0)
 
-  def allowedMembers(memberValues: List[String]): Set[MemberId] = memberValues.map(MemberId.apply)
-    .toSet
+  def allowedMembers(memberValues: List[String]): Set[MemberId] = memberValues
+    .map(MemberId.unsafeFromString).toSet
 
   def members(memberValues: List[String], createdAt: Instant): List[Member] = memberValues
-    .map(id => Member(MemberId(id), UserId(id), id, createdAt))
+    .map(id => Member(MemberId.unsafeFromString(id), UserId.unsafeFromString(id), id, createdAt))
 
-  def player(memberId: String, playOrder: Int, rank: Int): PlayerResult = PlayerResult(
-    memberId = MemberId(memberId),
-    playOrder = playOrder,
-    rank = rank,
-    totalAssetsManYen = 100,
-    revenueManYen = 50,
-    incidents = zeroIncidents,
-  )
+  def player(memberId: String, playOrder: Int, rank: Int): PlayerResult = PlayerResult
+    .unsafeFromInts(
+      memberId = MemberId.unsafeFromString(memberId),
+      playOrder = playOrder,
+      rank = rank,
+      totalAssetsManYen = 100,
+      revenueManYen = 50,
+      incidents = zeroIncidents,
+    )
+
+  def playerInput(memberId: String, playOrder: Int, rank: Int): PlayerResult.Input = PlayerResult
+    .Input(
+      memberId = MemberId.unsafeFromString(memberId),
+      playOrder = playOrder,
+      rank = rank,
+      totalAssetsManYen = 100,
+      revenueManYen = 50,
+      incidents = IncidentCounts.Input(0, 0, 0, 0, 0, 0),
+    )
 
   def defaultPlayers(memberValues: List[String]): List[PlayerResult] =
     val members = fourMemberValues(memberValues)
@@ -51,6 +62,24 @@ object MatchFixtures:
       player(members(1), 2, 1),
       player(members(2), 3, 3),
       player(members(3), 4, 4),
+    )
+
+  def defaultPlayerInputs(memberValues: List[String]): List[PlayerResult.Input] =
+    val members = fourMemberValues(memberValues)
+    List(
+      playerInput(members(0), 1, 1),
+      playerInput(members(1), 2, 2),
+      playerInput(members(2), 3, 3),
+      playerInput(members(3), 4, 4),
+    )
+
+  def duplicateRankPlayerInputs(memberValues: List[String]): List[PlayerResult.Input] =
+    val members = fourMemberValues(memberValues)
+    List(
+      playerInput(members(0), 1, 1),
+      playerInput(members(1), 2, 1),
+      playerInput(members(2), 3, 3),
+      playerInput(members(3), 4, 4),
     )
 
   def fourPlayers(memberValues: List[String]): FourPlayers = defaultPlayers(memberValues) match
@@ -108,11 +137,11 @@ object MatchFixtures:
       revenueDraftId: Option[OcrDraftId],
       incidentLogDraftId: Option[OcrDraftId],
   ): MatchRecord =
-    val ownerMemberId = MemberId(fourMemberValues(memberValues).head)
+    val ownerMemberId = MemberId.unsafeFromString(fourMemberValues(memberValues).head)
     MatchRecord(
       id = id,
       heldEventId = heldEventId,
-      matchNoInEvent = matchNoInEvent,
+      matchNoInEvent = MatchNoInEvent.unsafeFromInt(matchNoInEvent),
       gameTitleId = titleId,
       layoutFamily = "world",
       seasonMasterId = seasonId,
@@ -123,7 +152,8 @@ object MatchFixtures:
       revenueDraftId = revenueDraftId,
       incidentLogDraftId = incidentLogDraftId,
       players = fourPlayers(memberValues),
-      createdByMemberId = ownerMemberId,
+      createdByAccountId = AccountId.unsafeFromString(ownerMemberId.value),
+      createdByMemberId = Some(ownerMemberId),
       createdAt = createdAt,
     )
 

@@ -12,12 +12,19 @@ import doobie.postgres.sqlstate
 import momo.api.db.Database
 import momo.api.domain.ids.*
 import momo.api.domain.{GameTitle, IncidentMaster, MapMaster, MemberAlias, SeasonMaster}
+import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.repositories.{
   GameTitlesAlg, GameTitlesRepository, IncidentMastersAlg, IncidentMastersRepository, MapMastersAlg,
   MapMastersRepository, MemberAliasesAlg, MemberAliasesRepository, SeasonMastersAlg,
   SeasonMastersRepository,
 }
+
+private def isForeignKeyViolation(state: SqlState): Boolean = state.value ==
+  sqlstate.class23.FOREIGN_KEY_VIOLATION.value
+
+private def conflict(message: String): ConnectionIO[Unit] = MonadThrow[ConnectionIO]
+  .raiseError[Unit](new AppException(AppError.Conflict(message)))
 
 object PostgresGameTitles:
 
@@ -40,6 +47,23 @@ object PostgresGameTitles:
         .createdAt})
       """.update.run.void
 
+    override def createWithNextDisplayOrder(title: GameTitle): ConnectionIO[GameTitle] =
+      val lockKey = "momo:game_titles:display_order"
+      sql"""
+        WITH display_order_lock AS (
+          SELECT pg_advisory_xact_lock(hashtext($lockKey)::bigint)
+        ),
+        next_order AS (
+          SELECT COALESCE(MAX(display_order), 0) + 1 AS display_order
+          FROM game_titles
+        )
+        INSERT INTO game_titles (id, name, layout_family, display_order, created_at)
+        SELECT ${title.id}, ${title.name}, ${title.layoutFamily}, next_order.display_order, ${title
+          .createdAt}
+        FROM display_order_lock, next_order
+        RETURNING id, name, layout_family, display_order, created_at
+      """.query[GameTitle].unique
+
     override def update(title: GameTitle): ConnectionIO[Unit] = sql"""
         UPDATE game_titles
         SET name = ${title.name}, layout_family = ${title.layoutFamily}
@@ -47,10 +71,10 @@ object PostgresGameTitles:
       """.update.run.void
 
     override def delete(id: GameTitleId): ConnectionIO[Unit] =
-      sql"DELETE FROM game_titles WHERE id = $id".update.run.void
+      sql"DELETE FROM game_titles WHERE id = $id".update.run.void.exceptSomeSqlState {
+        case state if isForeignKeyViolation(state) => conflict("game title is still referenced.")
+      }
 
-    override def nextDisplayOrder: ConnectionIO[Int] =
-      sql"SELECT COALESCE(MAX(display_order), 0) + 1 FROM game_titles".query[Int].unique
 end PostgresGameTitles
 
 final class PostgresGameTitlesRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
@@ -81,6 +105,24 @@ object PostgresMapMasters:
         VALUES (${map.id}, ${map.gameTitleId}, ${map.name}, ${map.displayOrder}, ${map.createdAt})
       """.update.run.void
 
+    override def createWithNextDisplayOrder(map: MapMaster): ConnectionIO[MapMaster] =
+      val lockKey = s"momo:map_masters:${map.gameTitleId.value}:display_order"
+      sql"""
+        WITH display_order_lock AS (
+          SELECT pg_advisory_xact_lock(hashtext($lockKey)::bigint)
+        ),
+        next_order AS (
+          SELECT COALESCE(MAX(display_order), 0) + 1 AS display_order
+          FROM map_masters
+          WHERE game_title_id = ${map.gameTitleId}
+        )
+        INSERT INTO map_masters (id, game_title_id, name, display_order, created_at)
+        SELECT ${map.id}, ${map.gameTitleId}, ${map.name}, next_order.display_order, ${map
+          .createdAt}
+        FROM display_order_lock, next_order
+        RETURNING id, game_title_id, name, display_order, created_at
+      """.query[MapMaster].unique
+
     override def update(map: MapMaster): ConnectionIO[Unit] = sql"""
         UPDATE map_masters
         SET name = ${map.name}
@@ -88,13 +130,10 @@ object PostgresMapMasters:
       """.update.run.void
 
     override def delete(id: MapMasterId): ConnectionIO[Unit] =
-      sql"DELETE FROM map_masters WHERE id = $id".update.run.void
+      sql"DELETE FROM map_masters WHERE id = $id".update.run.void.exceptSomeSqlState {
+        case state if isForeignKeyViolation(state) => conflict("map master is still referenced.")
+      }
 
-    override def nextDisplayOrder(gameTitleId: GameTitleId): ConnectionIO[Int] = sql"""
-        SELECT COALESCE(MAX(display_order), 0) + 1
-        FROM map_masters
-        WHERE game_title_id = $gameTitleId
-      """.query[Int].unique
 end PostgresMapMasters
 
 final class PostgresMapMastersRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
@@ -126,6 +165,24 @@ object PostgresSeasonMasters:
         .displayOrder}, ${season.createdAt})
       """.update.run.void
 
+    override def createWithNextDisplayOrder(season: SeasonMaster): ConnectionIO[SeasonMaster] =
+      val lockKey = s"momo:season_masters:${season.gameTitleId.value}:display_order"
+      sql"""
+        WITH display_order_lock AS (
+          SELECT pg_advisory_xact_lock(hashtext($lockKey)::bigint)
+        ),
+        next_order AS (
+          SELECT COALESCE(MAX(display_order), 0) + 1 AS display_order
+          FROM season_masters
+          WHERE game_title_id = ${season.gameTitleId}
+        )
+        INSERT INTO season_masters (id, game_title_id, name, display_order, created_at)
+        SELECT ${season.id}, ${season.gameTitleId}, ${season
+          .name}, next_order.display_order, ${season.createdAt}
+        FROM display_order_lock, next_order
+        RETURNING id, game_title_id, name, display_order, created_at
+      """.query[SeasonMaster].unique
+
     override def update(season: SeasonMaster): ConnectionIO[Unit] = sql"""
         UPDATE season_masters
         SET name = ${season.name}
@@ -133,13 +190,10 @@ object PostgresSeasonMasters:
       """.update.run.void
 
     override def delete(id: SeasonMasterId): ConnectionIO[Unit] =
-      sql"DELETE FROM season_masters WHERE id = $id".update.run.void
+      sql"DELETE FROM season_masters WHERE id = $id".update.run.void.exceptSomeSqlState {
+        case state if isForeignKeyViolation(state) => conflict("season master is still referenced.")
+      }
 
-    override def nextDisplayOrder(gameTitleId: GameTitleId): ConnectionIO[Int] = sql"""
-        SELECT COALESCE(MAX(display_order), 0) + 1
-        FROM season_masters
-        WHERE game_title_id = $gameTitleId
-      """.query[Int].unique
 end PostgresSeasonMasters
 
 final class PostgresSeasonMastersRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
@@ -174,13 +228,8 @@ end PostgresIncidentMastersRepository
  * The unique index on `(member_id, alias)` protects against duplicate rows when writes race.
  */
 object PostgresMemberAliases:
-  final class MemberAliasConflict(message: String) extends RuntimeException(message)
-
   private[postgres] def isUniqueViolation(state: SqlState): Boolean = state.value ==
     sqlstate.class23.UNIQUE_VIOLATION.value
-
-  private def conflict(message: String): ConnectionIO[Unit] = MonadThrow[ConnectionIO]
-    .raiseError[Unit](new MemberAliasConflict(message))
 
   val alg: MemberAliasesAlg[ConnectionIO] = new MemberAliasesAlg[ConnectionIO]:
     override def list(memberId: Option[MemberId]): ConnectionIO[List[MemberAlias]] =

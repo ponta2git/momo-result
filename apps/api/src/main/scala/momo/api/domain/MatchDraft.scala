@@ -22,7 +22,7 @@ enum MatchListItemKind(val wire: String) derives CanEqual:
 object MatchListItemKind:
   def fromWire(value: String): Option[MatchListItemKind] = values.find(_.wire == value)
 
-final case class MatchListRankEntry(memberId: MemberId, rank: Int, playOrder: Int)
+final case class MatchListRankEntry(memberId: MemberId, rank: Rank, playOrder: PlayOrder)
 
 /** Inconsistencies surfaced by [[MatchDraft.fromInputs]] when status / confirmedMatchId disagree. */
 enum MatchDraftError derives CanEqual:
@@ -45,7 +45,7 @@ final case class MatchDraftCommon(
     createdByAccountId: AccountId,
     createdByMemberId: Option[MemberId],
     heldEventId: Option[HeldEventId],
-    matchNoInEvent: Option[Int],
+    matchNoInEvent: Option[MatchNoInEvent],
     gameTitleId: Option[GameTitleId],
     layoutFamily: Option[String],
     seasonMasterId: Option[SeasonMasterId],
@@ -64,52 +64,6 @@ final case class MatchDraftCommon(
     updatedAt: Instant,
 )
 
-object MatchDraftCommon:
-  def apply(
-      id: MatchDraftId,
-      createdByMemberId: MemberId,
-      heldEventId: Option[HeldEventId],
-      matchNoInEvent: Option[Int],
-      gameTitleId: Option[GameTitleId],
-      layoutFamily: Option[String],
-      seasonMasterId: Option[SeasonMasterId],
-      ownerMemberId: Option[MemberId],
-      mapMasterId: Option[MapMasterId],
-      playedAt: Option[Instant],
-      totalAssetsImageId: Option[ImageId],
-      revenueImageId: Option[ImageId],
-      incidentLogImageId: Option[ImageId],
-      totalAssetsDraftId: Option[OcrDraftId],
-      revenueDraftId: Option[OcrDraftId],
-      incidentLogDraftId: Option[OcrDraftId],
-      sourceImagesRetainedUntil: Option[Instant],
-      sourceImagesDeletedAt: Option[Instant],
-      createdAt: Instant,
-      updatedAt: Instant,
-  ): MatchDraftCommon = MatchDraftCommon(
-    id = id,
-    createdByAccountId = AccountId(createdByMemberId.value),
-    createdByMemberId = Some(createdByMemberId),
-    heldEventId = heldEventId,
-    matchNoInEvent = matchNoInEvent,
-    gameTitleId = gameTitleId,
-    layoutFamily = layoutFamily,
-    seasonMasterId = seasonMasterId,
-    ownerMemberId = ownerMemberId,
-    mapMasterId = mapMasterId,
-    playedAt = playedAt,
-    totalAssetsImageId = totalAssetsImageId,
-    revenueImageId = revenueImageId,
-    incidentLogImageId = incidentLogImageId,
-    totalAssetsDraftId = totalAssetsDraftId,
-    revenueDraftId = revenueDraftId,
-    incidentLogDraftId = incidentLogDraftId,
-    sourceImagesRetainedUntil = sourceImagesRetainedUntil,
-    sourceImagesDeletedAt = sourceImagesDeletedAt,
-    createdAt = createdAt,
-    updatedAt = updatedAt,
-  )
-
 sealed trait MatchDraft derives CanEqual:
   def common: MatchDraftCommon
   def status: MatchDraftStatus
@@ -119,7 +73,7 @@ sealed trait MatchDraft derives CanEqual:
   def createdByAccountId: AccountId = common.createdByAccountId
   def createdByMemberId: Option[MemberId] = common.createdByMemberId
   def heldEventId: Option[HeldEventId] = common.heldEventId
-  def matchNoInEvent: Option[Int] = common.matchNoInEvent
+  def matchNoInEvent: Option[MatchNoInEvent] = common.matchNoInEvent
   def gameTitleId: Option[GameTitleId] = common.gameTitleId
   def layoutFamily: Option[String] = common.layoutFamily
   def seasonMasterId: Option[SeasonMasterId] = common.seasonMasterId
@@ -139,66 +93,38 @@ sealed trait MatchDraft derives CanEqual:
 
   /** Apply a transformation to the shared fields without changing the variant. */
   def withCommon(f: MatchDraftCommon => MatchDraftCommon): MatchDraft = this match
-    case e: MatchDraft.Editing => e.copy(common = f(e.common))
+    case d: MatchDraft.OcrRunning => d.copy(common = f(d.common))
+    case d: MatchDraft.OcrFailed => d.copy(common = f(d.common))
+    case d: MatchDraft.DraftReady => d.copy(common = f(d.common))
+    case d: MatchDraft.NeedsReview => d.copy(common = f(d.common))
     case c: MatchDraft.Confirmed => c.copy(common = f(c.common))
     case c: MatchDraft.Cancelled => c.copy(common = f(c.common))
 
 object MatchDraft:
-  def fromInputs(
-      id: MatchDraftId,
-      createdByMemberId: MemberId,
-      status: MatchDraftStatus,
-      heldEventId: Option[HeldEventId],
-      matchNoInEvent: Option[Int],
-      gameTitleId: Option[GameTitleId],
-      layoutFamily: Option[String],
-      seasonMasterId: Option[SeasonMasterId],
-      ownerMemberId: Option[MemberId],
-      mapMasterId: Option[MapMasterId],
-      playedAt: Option[Instant],
-      totalAssetsImageId: Option[ImageId],
-      revenueImageId: Option[ImageId],
-      incidentLogImageId: Option[ImageId],
-      totalAssetsDraftId: Option[OcrDraftId],
-      revenueDraftId: Option[OcrDraftId],
-      incidentLogDraftId: Option[OcrDraftId],
-      sourceImagesRetainedUntil: Option[Instant],
-      sourceImagesDeletedAt: Option[Instant],
-      confirmedMatchId: Option[MatchId],
-      createdAt: Instant,
-      updatedAt: Instant,
-  ): Either[MatchDraftError, MatchDraft] = fromInputs(
-    id = id,
-    createdByAccountId = AccountId(createdByMemberId.value),
-    createdByMemberId = Some(createdByMemberId),
-    status = status,
-    heldEventId = heldEventId,
-    matchNoInEvent = matchNoInEvent,
-    gameTitleId = gameTitleId,
-    layoutFamily = layoutFamily,
-    seasonMasterId = seasonMasterId,
-    ownerMemberId = ownerMemberId,
-    mapMasterId = mapMasterId,
-    playedAt = playedAt,
-    totalAssetsImageId = totalAssetsImageId,
-    revenueImageId = revenueImageId,
-    incidentLogImageId = incidentLogImageId,
-    totalAssetsDraftId = totalAssetsDraftId,
-    revenueDraftId = revenueDraftId,
-    incidentLogDraftId = incidentLogDraftId,
-    sourceImagesRetainedUntil = sourceImagesRetainedUntil,
-    sourceImagesDeletedAt = sourceImagesDeletedAt,
-    confirmedMatchId = confirmedMatchId,
-    createdAt = createdAt,
-    updatedAt = updatedAt,
-  )
-
-  /**
-   * Editing-state draft: any non-terminal status (OcrRunning, OcrFailed, DraftReady, NeedsReview).
-   * Cannot carry a confirmedMatchId.
-   */
-  final case class Editing(common: MatchDraftCommon, status: MatchDraftStatus) extends MatchDraft:
+  sealed trait Editable extends MatchDraft:
     val confirmedMatchId: Option[MatchId] = None
+
+  final case class OcrRunning(common: MatchDraftCommon) extends Editable:
+    val status: MatchDraftStatus = MatchDraftStatus.OcrRunning
+
+  final case class OcrFailed(common: MatchDraftCommon) extends Editable:
+    val status: MatchDraftStatus = MatchDraftStatus.OcrFailed
+
+  final case class DraftReady(common: MatchDraftCommon) extends Editable:
+    val status: MatchDraftStatus = MatchDraftStatus.DraftReady
+
+  final case class NeedsReview(common: MatchDraftCommon) extends Editable:
+    val status: MatchDraftStatus = MatchDraftStatus.NeedsReview
+
+  def editable(
+      common: MatchDraftCommon,
+      status: MatchDraftStatus,
+  ): Either[MatchDraftError, Editable] = status match
+    case MatchDraftStatus.OcrRunning => Right(OcrRunning(common))
+    case MatchDraftStatus.OcrFailed => Right(OcrFailed(common))
+    case MatchDraftStatus.DraftReady => Right(DraftReady(common))
+    case MatchDraftStatus.NeedsReview => Right(NeedsReview(common))
+    case other => Left(MatchDraftError.StatusForbidsConfirmedMatchId(other))
 
   /** Terminal confirmed draft: status fixed to Confirmed and confirmedMatchId required. */
   final case class Confirmed(common: MatchDraftCommon, confirmedMatchIdValue: MatchId)
@@ -222,7 +148,7 @@ object MatchDraft:
       createdByMemberId: Option[MemberId],
       status: MatchDraftStatus,
       heldEventId: Option[HeldEventId],
-      matchNoInEvent: Option[Int],
+      matchNoInEvent: Option[MatchNoInEvent],
       gameTitleId: Option[GameTitleId],
       layoutFamily: Option[String],
       seasonMasterId: Option[SeasonMasterId],
@@ -270,7 +196,7 @@ object MatchDraft:
       case (MatchDraftStatus.Cancelled, None) => Right(Cancelled(common))
       case (MatchDraftStatus.Cancelled, Some(_)) =>
         Left(MatchDraftError.StatusForbidsConfirmedMatchId(MatchDraftStatus.Cancelled))
-      case (other, None) => Right(Editing(common, other))
+      case (other, None) => editable(common, other)
       case (other, Some(_)) => Left(MatchDraftError.StatusForbidsConfirmedMatchId(other))
 end MatchDraft
 
@@ -281,7 +207,7 @@ final case class MatchListItem(
     matchDraftId: Option[MatchDraftId],
     status: String,
     heldEventId: Option[HeldEventId],
-    matchNoInEvent: Option[Int],
+    matchNoInEvent: Option[MatchNoInEvent],
     gameTitleId: Option[GameTitleId],
     seasonMasterId: Option[SeasonMasterId],
     mapMasterId: Option[MapMasterId],

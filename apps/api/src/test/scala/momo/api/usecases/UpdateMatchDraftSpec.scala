@@ -17,12 +17,12 @@ import momo.api.usecases.testing.MatchFixtures
 final class UpdateMatchDraftSpec extends MomoCatsEffectSuite:
   private val createdAt = Instant.parse("2026-05-08T10:00:00Z")
   private val updatedAt = Instant.parse("2026-05-08T10:05:00Z")
-  private val heldEventId = HeldEventId("held-update-draft")
-  private val titleId = GameTitleId("title_world")
-  private val otherTitleId = GameTitleId("title_japan")
-  private val mapId = MapMasterId("map_east")
-  private val seasonId = SeasonMasterId("season_spring")
-  private val draftId = MatchDraftId("draft-update-1")
+  private val heldEventId = HeldEventId.unsafeFromString("held-update-draft")
+  private val titleId = GameTitleId.unsafeFromString("title_world")
+  private val otherTitleId = GameTitleId.unsafeFromString("title_japan")
+  private val mapId = MapMasterId.unsafeFromString("map_east")
+  private val seasonId = SeasonMasterId.unsafeFromString("season_spring")
+  private val draftId = MatchDraftId.unsafeFromString("draft-update-1")
 
   test("updates editable draft fields for the owner and persists the timestamp"):
     for
@@ -37,19 +37,19 @@ final class UpdateMatchDraftSpec extends MomoCatsEffectSuite:
           gameTitleId = Some(titleId),
           layoutFamily = Some("world"),
           seasonMasterId = Some(seasonId),
-          ownerMemberId = Some(MemberId("ponta")),
+          ownerMemberId = Some(MemberId.unsafeFromString("ponta")),
           mapMasterId = Some(mapId),
           playedAt = Some(updatedAt),
           status = Some("needs_review"),
         ),
-        AccountId("ponta"),
+        AccountId.unsafeFromString("ponta"),
       )
       found <- fixture.matchDrafts.find(draftId)
     yield
       val updated = assertRight(result)
       assertEquals(updated.status, MatchDraftStatus.NeedsReview)
       assertEquals(updated.heldEventId, Some(heldEventId))
-      assertEquals(updated.matchNoInEvent, Some(2))
+      assertEquals(updated.matchNoInEvent.map(_.value), Some(2))
       assertEquals(updated.layoutFamily, Some("world"))
       assertEquals(updated.updatedAt, updatedAt)
       assertEquals(found.map(_.status), Some(MatchDraftStatus.NeedsReview))
@@ -60,8 +60,11 @@ final class UpdateMatchDraftSpec extends MomoCatsEffectSuite:
       fixture <- Fixture.create
       _ <- fixture.seedPrereqs()
       _ <- fixture.matchDrafts.create(editingDraft(draftId, MatchDraftStatus.DraftReady))
-      result <- fixture.usecase
-        .run(draftId, blankCommand.copy(status = Some("needs_review")), AccountId("otaka"))
+      result <- fixture.usecase.run(
+        draftId,
+        blankCommand.copy(status = Some("needs_review")),
+        AccountId.unsafeFromString("otaka"),
+      )
       found <- fixture.matchDrafts.find(draftId)
     yield
       assertAppError(result, "FORBIDDEN", "cannot update")
@@ -73,23 +76,35 @@ final class UpdateMatchDraftSpec extends MomoCatsEffectSuite:
       fixture <- Fixture.create
       _ <- fixture.seedPrereqs()
       _ <- fixture.matchDrafts.create(confirmedDraft(draftId))
-      result <- fixture.usecase
-        .run(draftId, blankCommand.copy(matchNoInEvent = Some(2)), AccountId("ponta"))
+      result <- fixture.usecase.run(
+        draftId,
+        blankCommand.copy(matchNoInEvent = Some(2)),
+        AccountId.unsafeFromString("ponta"),
+      )
       found <- fixture.matchDrafts.find(draftId)
     yield
       assertAppError(result, "CONFLICT", "cannot be edited")
       assertEquals(found.map(_.status), Some(MatchDraftStatus.Confirmed))
-      assertEquals(found.flatMap(_.confirmedMatchId), Some(MatchId("match-confirmed-1")))
+      assertEquals(
+        found.flatMap(_.confirmedMatchId),
+        Some(MatchId.unsafeFromString("match-confirmed-1")),
+      )
 
   test("rejects unknown and terminal status values from the update endpoint"):
     for
       fixture <- Fixture.create
       _ <- fixture.seedPrereqs()
       _ <- fixture.matchDrafts.create(editingDraft(draftId, MatchDraftStatus.DraftReady))
-      unknown <- fixture.usecase
-        .run(draftId, blankCommand.copy(status = Some("not_a_status")), AccountId("ponta"))
-      terminal <- fixture.usecase
-        .run(draftId, blankCommand.copy(status = Some("confirmed")), AccountId("ponta"))
+      unknown <- fixture.usecase.run(
+        draftId,
+        blankCommand.copy(status = Some("not_a_status")),
+        AccountId.unsafeFromString("ponta"),
+      )
+      terminal <- fixture.usecase.run(
+        draftId,
+        blankCommand.copy(status = Some("confirmed")),
+        AccountId.unsafeFromString("ponta"),
+      )
       found <- fixture.matchDrafts.find(draftId)
     yield
       assertAppError(unknown, "VALIDATION_FAILED", "unknown match draft status")
@@ -109,7 +124,7 @@ final class UpdateMatchDraftSpec extends MomoCatsEffectSuite:
           mapMasterId = Some(mapId),
           seasonMasterId = Some(seasonId),
         ),
-        AccountId("ponta"),
+        AccountId.unsafeFromString("ponta"),
       )
       found <- fixture.matchDrafts.find(draftId)
     yield
@@ -131,8 +146,11 @@ final class UpdateMatchDraftSpec extends MomoCatsEffectSuite:
   private def editingDraft(id: MatchDraftId, status: MatchDraftStatus): MatchDraft =
     draft(id, status, confirmedMatchId = None)
 
-  private def confirmedDraft(id: MatchDraftId): MatchDraft =
-    draft(id, MatchDraftStatus.Confirmed, confirmedMatchId = Some(MatchId("match-confirmed-1")))
+  private def confirmedDraft(id: MatchDraftId): MatchDraft = draft(
+    id,
+    MatchDraftStatus.Confirmed,
+    confirmedMatchId = Some(MatchId.unsafeFromString("match-confirmed-1")),
+  )
 
   private def draft(
       id: MatchDraftId,
@@ -140,7 +158,8 @@ final class UpdateMatchDraftSpec extends MomoCatsEffectSuite:
       confirmedMatchId: Option[MatchId],
   ): MatchDraft = MatchDraft.fromInputs(
     id = id,
-    createdByMemberId = MemberId("ponta"),
+    createdByAccountId = AccountId.unsafeFromString("ponta"),
+    createdByMemberId = Some(MemberId.unsafeFromString("ponta")),
     status = status,
     heldEventId = None,
     matchNoInEvent = None,

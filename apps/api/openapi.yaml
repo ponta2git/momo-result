@@ -148,7 +148,7 @@
         "operationId" : "getApiAuthMe",
         "parameters" : [
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -188,7 +188,7 @@
         "operationId" : "postApiUploadsImages",
         "parameters" : [
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -257,7 +257,7 @@
         "operationId" : "postApiOcr-jobs",
         "parameters" : [
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -341,7 +341,7 @@
             }
           },
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -387,7 +387,7 @@
             }
           },
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -443,7 +443,7 @@
             }
           },
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -491,7 +491,7 @@
             }
           },
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -573,7 +573,7 @@
             }
           },
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -654,7 +654,7 @@
             }
           },
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -702,7 +702,7 @@
         "operationId" : "postApiHeld-events",
         "parameters" : [
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -786,7 +786,7 @@
             }
           },
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -834,7 +834,7 @@
         "operationId" : "postApiMatch-drafts",
         "parameters" : [
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -918,7 +918,7 @@
             }
           },
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -964,7 +964,7 @@
             }
           },
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -1048,7 +1048,7 @@
             }
           },
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -1104,7 +1104,7 @@
             }
           },
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -1160,7 +1160,7 @@
             }
           },
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -1270,7 +1270,7 @@
             }
           },
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -1318,7 +1318,7 @@
         "operationId" : "postApiMatches",
         "parameters" : [
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -1402,7 +1402,7 @@
             }
           },
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -1448,7 +1448,7 @@
             }
           },
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -1522,7 +1522,7 @@
             }
           },
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -1570,7 +1570,7 @@
         "operationId" : "getApiGame-titles",
         "parameters" : [
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -1608,7 +1608,7 @@
         "operationId" : "postApiGame-titles",
         "parameters" : [
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -1692,7 +1692,7 @@
             }
           },
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -1746,7 +1746,7 @@
             }
           },
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -1822,7 +1822,7 @@
             }
           },
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -1860,7 +1860,7 @@
         "operationId" : "postApiMap-masters",
         "parameters" : [
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -1944,7 +1944,7 @@
             }
           },
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -1998,7 +1998,7 @@
             }
           },
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -2074,7 +2074,7 @@
             }
           },
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -2112,7 +2112,7 @@
         "operationId" : "postApiSeason-masters",
         "parameters" : [
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -2196,7 +2196,7 @@
             }
           },
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -2250,7 +2250,7 @@
             }
           },
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -2318,7 +2318,7 @@
         "operationId" : "getApiIncident-masters",
         "parameters" : [
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -2366,7 +2366,7 @@
             }
           },
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -2404,7 +2404,7 @@
         "operationId" : "postApiMember-aliases",
         "parameters" : [
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -2488,7 +2488,7 @@
             }
           },
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -2542,7 +2542,7 @@
             }
           },
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -2610,7 +2610,7 @@
         "operationId" : "getApiAdminLogin-accounts",
         "parameters" : [
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -2648,7 +2648,7 @@
         "operationId" : "postApiAdminLogin-accounts",
         "parameters" : [
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -2732,7 +2732,7 @@
             }
           },
           {
-            "name" : "X-Dev-User",
+            "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -3077,17 +3077,17 @@
         "type" : "object",
         "required" : [
           "imageId",
-          "requestedImageType"
+          "requestedScreenType"
         ],
         "properties" : {
           "imageId" : {
             "type" : "string"
           },
-          "requestedImageType" : {
+          "requestedScreenType" : {
             "type" : "string"
           },
           "ocrHints" : {
-            "$ref" : "#/components/schemas/OcrJobHints"
+            "$ref" : "#/components/schemas/OcrJobHintsRequest"
           },
           "matchDraftId" : {
             "type" : "string"
@@ -3817,7 +3817,7 @@
         "required" : [
           "draftId",
           "jobId",
-          "requestedImageType",
+          "requestedScreenType",
           "payloadJson",
           "warningsJson",
           "timingsMsJson",
@@ -3831,10 +3831,10 @@
           "jobId" : {
             "type" : "string"
           },
-          "requestedImageType" : {
+          "requestedScreenType" : {
             "type" : "string"
           },
-          "detectedImageType" : {
+          "detectedScreenType" : {
             "type" : "string"
           },
           "profileId" : {
@@ -3880,8 +3880,8 @@
           }
         }
       },
-      "OcrJobHints" : {
-        "title" : "OcrJobHints",
+      "OcrJobHintsRequest" : {
+        "title" : "OcrJobHintsRequest",
         "type" : "object",
         "properties" : {
           "gameTitle" : {
@@ -3893,7 +3893,7 @@
           "knownPlayerAliases" : {
             "type" : "array",
             "items" : {
-              "$ref" : "#/components/schemas/PlayerAliasHint"
+              "$ref" : "#/components/schemas/PlayerAliasHintRequest"
             }
           },
           "computerPlayerAliases" : {
@@ -3911,8 +3911,7 @@
           "jobId",
           "draftId",
           "imageId",
-          "imagePath",
-          "requestedImageType",
+          "requestedScreenType",
           "status",
           "attemptCount",
           "createdAt",
@@ -3928,13 +3927,10 @@
           "imageId" : {
             "type" : "string"
           },
-          "imagePath" : {
+          "requestedScreenType" : {
             "type" : "string"
           },
-          "requestedImageType" : {
-            "type" : "string"
-          },
-          "detectedImageType" : {
+          "detectedScreenType" : {
             "type" : "string"
           },
           "status" : {
@@ -3955,8 +3951,8 @@
           }
         }
       },
-      "PlayerAliasHint" : {
-        "title" : "PlayerAliasHint",
+      "PlayerAliasHintRequest" : {
+        "title" : "PlayerAliasHintRequest",
         "type" : "object",
         "required" : [
           "memberId"
@@ -4275,15 +4271,11 @@
         "type" : "object",
         "required" : [
           "imageId",
-          "imagePath",
           "mediaType",
           "sizeBytes"
         ],
         "properties" : {
           "imageId" : {
-            "type" : "string"
-          },
-          "imagePath" : {
             "type" : "string"
           },
           "mediaType" : {

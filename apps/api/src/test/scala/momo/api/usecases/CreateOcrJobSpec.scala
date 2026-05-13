@@ -51,7 +51,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         assertEquals(foundDraft.map(_.id), Some(created.draft.id))
         assertEquals(published.map(_.fields("jobId")), Vector("job-1"))
         assertEquals(published.head.fields("schemaVersion"), "1")
-        assertEquals(published.head.fields("requestedImageType"), "total_assets")
+        assertEquals(published.head.fields("requestedScreenType"), "total_assets")
         assertEquals(published.head.fields.get("requestId"), Some("test-req-id"))
     }
   }
@@ -66,7 +66,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         image <- fixture.savePng
         _ <- fixture.memberAliases.create(MemberAlias(
           id = "alias-1",
-          memberId = MemberId("member_ponta"),
+          memberId = MemberId.unsafeFromString("member_ponta"),
           alias = "ポン太社長",
           createdAt = now,
         ))
@@ -77,7 +77,8 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
           OcrJobHints(
             gameTitle = None,
             layoutFamily = None,
-            knownPlayerAliases = List(PlayerAliasHint("member_ponta", List("ぽんた"))),
+            knownPlayerAliases =
+              List(PlayerAliasHint(MemberId.unsafeFromString("member_ponta"), List("ぽんた"))),
             computerPlayerAliases = Nil,
           ),
           None,
@@ -87,7 +88,9 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         parsed = io.circe.parser.decode[OcrJobHints](hintsJson)
       yield assertEquals(
         parsed.map(_.knownPlayerAliases),
-        Right(List(PlayerAliasHint("member_ponta", List("ぽんた", "ポン太社長")))),
+        Right(
+          List(PlayerAliasHint(MemberId.unsafeFromString("member_ponta"), List("ぽんた", "ポン太社長")))
+        ),
       )
     }
   }
@@ -129,9 +132,9 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         usecase <- fixture.usecase
         _ <- usecase
           .run(CreateOcrJobCommand(image.imageId, "total_assets", OcrJobHints.empty, None))
-        found <- fixture.jobs.find(OcrJobId("job-1"))
+        found <- fixture.jobs.find(OcrJobId.unsafeFromString("job-1"))
       yield
-        val failure = found.flatMap(_.failure).getOrElse(fail("expected failed job"))
+        val failure = found.flatMap(OcrJob.failure).getOrElse(fail("expected failed job"))
         assertEquals(failure.message, "Failed to enqueue OCR job.")
         assert(!failure.message.contains("secret-host"))
     }
@@ -146,12 +149,13 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
       for
         usecase <- fixture.usecase
         result <- usecase.run(CreateOcrJobCommand(
-          ImageId("missing-image"),
+          ImageId.unsafeFromString("missing-image"),
           "total_assets",
           OcrJobHints(
             gameTitle = None,
             layoutFamily = None,
-            knownPlayerAliases = List(PlayerAliasHint("member-1", List.fill(9)("alias"))),
+            knownPlayerAliases =
+              List(PlayerAliasHint(MemberId.unsafeFromString("member-1"), List.fill(9)("alias"))),
             computerPlayerAliases = Nil,
           ),
           None,

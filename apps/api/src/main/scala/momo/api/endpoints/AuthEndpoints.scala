@@ -39,7 +39,7 @@ object AuthEndpoints:
   val me: PublicEndpoint[Option[String], ProblemResponse, AuthMeResponse, Any] = endpoint
     .get
     .in("api" / "auth" / "me")
-    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.accountHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[AuthMeResponse])
     .tag("auth")

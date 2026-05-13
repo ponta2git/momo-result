@@ -5,6 +5,7 @@ import io.circe.syntax.*
 import munit.FunSuite
 
 import momo.api.codec.OcrHintsCodec.given
+import momo.api.domain.ids.MemberId
 import momo.api.domain.{OcrJobHints, PlayerAliasHint}
 
 final class OcrHintsCodecSpec extends FunSuite:
@@ -22,7 +23,8 @@ final class OcrHintsCodecSpec extends FunSuite:
     val hints = OcrJobHints(
       gameTitle = Some("桃太郎電鉄ワールド"),
       layoutFamily = Some("world"),
-      knownPlayerAliases = List(PlayerAliasHint("member-1", List("ぽんた", "PONTA"))),
+      knownPlayerAliases =
+        List(PlayerAliasHint(MemberId.unsafeFromString("member-1"), List("ぽんた", "PONTA"))),
       computerPlayerAliases = List("さくま", "サクマ"),
     )
 
@@ -36,7 +38,8 @@ final class OcrHintsCodecSpec extends FunSuite:
     val hints = OcrJobHints(
       gameTitle = Some("桃太郎電鉄ワールド"),
       layoutFamily = Some("world"),
-      knownPlayerAliases = List(PlayerAliasHint("member-1", List("ぽんた", "PONTA"))),
+      knownPlayerAliases =
+        List(PlayerAliasHint(MemberId.unsafeFromString("member-1"), List("ぽんた", "PONTA"))),
       computerPlayerAliases = List("さくま"),
     )
     val parsed = parser.decode[OcrJobHints](hints.asJson.noSpaces)
@@ -53,7 +56,7 @@ final class OcrHintsCodecSpec extends FunSuite:
   }
 
   test("PlayerAliasHint round-trips") {
-    val hint = PlayerAliasHint("member-2", List("alias1"))
+    val hint = PlayerAliasHint(MemberId.unsafeFromString("member-2"), List("alias1"))
 
     assertEquals(hint.asJson.noSpaces, """{"memberId":"member-2","aliases":["alias1"]}""")
     assertEquals(parser.decode[PlayerAliasHint](hint.asJson.noSpaces), Right(hint))

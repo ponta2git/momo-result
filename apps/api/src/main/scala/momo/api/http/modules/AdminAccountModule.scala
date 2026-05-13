@@ -27,14 +27,14 @@ object AdminAccountModule:
       nowF: F[Instant],
       security: EndpointSecurity[F],
   ): List[ServerEndpoint[Any, F]] = List(
-    AdminAccountEndpoints.list.serverLogic { devUser =>
-      security.authorizeAdminRead(devUser) { _ =>
+    AdminAccountEndpoints.list.serverLogic { accountHeader =>
+      security.authorizeAdminRead(accountHeader) { _ =>
         listLoginAccounts.run
           .map(items => Right(LoginAccountListResponse(items.map(LoginAccountResponse.from))))
       }
     },
-    AdminAccountEndpoints.create.serverLogic { case (devUser, csrfToken, idemKey, request) =>
-      security.authorizeAdminMutation(devUser, csrfToken) { account =>
+    AdminAccountEndpoints.create.serverLogic { case (accountHeader, csrfToken, idemKey, request) =>
+      security.authorizeAdminMutation(accountHeader, csrfToken) { account =>
         IdempotencyReplay.wrap[F, CreateLoginAccountRequest, LoginAccountResponse](
           idempotency,
           idemKey,
@@ -46,12 +46,13 @@ object AdminAccountModule:
         )
       }
     },
-    AdminAccountEndpoints.update.serverLogic { case (accountId, devUser, csrfToken, request) =>
-      security.authorizeAdminMutation(devUser, csrfToken) { _ =>
-        security.respond(
-          updateLoginAccount.run(AccountId(accountId), toCommand(request))
-        )(LoginAccountResponse.from)
-      }
+    AdminAccountEndpoints.update.serverLogic {
+      case (accountId, accountHeader, csrfToken, request) => security
+          .authorizeAdminMutation(accountHeader, csrfToken) { _ =>
+            security.respond(
+              updateLoginAccount.run(AccountId.unsafeFromString(accountId), toCommand(request))
+            )(LoginAccountResponse.from)
+          }
     },
   )
 

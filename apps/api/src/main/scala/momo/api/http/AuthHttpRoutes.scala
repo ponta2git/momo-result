@@ -11,7 +11,8 @@ import org.http4s.{
 import org.typelevel.ci.CIString
 
 import momo.api.auth.{
-  CsrfTokenService, DiscordOAuthClient, LoginRateLimiter, OAuthStateCodec, SessionService,
+  AuthHeaderNames, CsrfTokenService, DiscordOAuthClient, LoginRateLimiter, OAuthStateCodec,
+  SessionService,
 }
 import momo.api.config.{AppConfig, AppEnv}
 import momo.api.domain.ids.*
@@ -69,7 +70,8 @@ private[http] object AuthHttpRoutes:
                                   clearCookie(config.auth.stateCookieName, config)
                                 ))
                               case Right(discordUser) => accounts
-                                  .findByDiscordUserId(UserId(discordUser.id)).flatMap {
+                                  .findByDiscordUserId(UserId.unsafeFromString(discordUser.id))
+                                  .flatMap {
                                     case None => problem(AppError.Forbidden(
                                         "This Discord user is not allowed to log in."
                                       )).map(_.addCookie(
@@ -117,9 +119,8 @@ private[http] object AuthHttpRoutes:
 
       case request if request.method.name == "GET" && path(request) == "/api/auth/me" =>
         config.appEnv match
-          case AppEnv.Dev | AppEnv.Test => request.headers.get(CIString("X-Dev-User"))
-              .flatMap(_.head.value.some) match
-              case Some(accountId) => accounts.find(AccountId(accountId)).flatMap {
+          case AppEnv.Dev | AppEnv.Test => devAccountHeader(request) match
+              case Some(accountId) => accounts.find(AccountId.unsafeFromString(accountId)).flatMap {
                   case Some(account) if account.loginEnabled =>
                     json(AuthMeResponse(
                       accountId = account.id.value,
@@ -130,14 +131,18 @@ private[http] object AuthHttpRoutes:
                     ))
                   case Some(_) =>
                     problem(AppError.Forbidden("This account is not allowed to log in."))
-                  case None =>
-                    problem(AppError.Forbidden("X-Dev-User is not one of the allowed accounts."))
+                  case None => problem(
+                      AppError.Forbidden("Account header is not one of the allowed accounts.")
+                    )
                 }
               case None => sessionAuthMe(request)
           case AppEnv.Prod => sessionAuthMe(request)
     }
 
     def path(request: Request[F]): String = request.uri.path.renderString
+
+    def devAccountHeader(request: Request[F]): Option[String] = request.headers
+      .get(CIString(AuthHeaderNames.AccountId)).map(_.head.value)
 
     def redirect(location: String): F[Response[F]] = Response[F](Status.Found)
       .putHeaders(Header.Raw(CIString("Location"), location)).pure[F]

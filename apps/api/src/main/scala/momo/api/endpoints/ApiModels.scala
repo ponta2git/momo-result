@@ -3,10 +3,10 @@ package momo.api.endpoints
 import java.time.format.DateTimeFormatter
 
 import io.circe.{Codec, Json}
+import sttp.tapir.Schema
 
-import momo.api.codec.OcrHintsCodec.given
 import momo.api.domain.ids.*
-import momo.api.domain.{OcrDraft, OcrJob, OcrJobHints, StoredImage}
+import momo.api.domain.{OcrDraft, OcrJob, OcrJobHints, PlayerAliasHint, StoredImage}
 
 final case class AuthMeResponse(
     accountId: String,
@@ -16,25 +16,43 @@ final case class AuthMeResponse(
     csrfToken: Option[String],
 ) derives Codec.AsObject
 
-final case class UploadImageResponse(
-    imageId: String,
-    imagePath: String,
-    mediaType: String,
-    sizeBytes: Long,
-) derives Codec.AsObject
+final case class UploadImageResponse(imageId: String, mediaType: String, sizeBytes: Long)
+    derives Codec.AsObject
 
 object UploadImageResponse:
   def from(image: StoredImage): UploadImageResponse = UploadImageResponse(
     imageId = image.imageId.value,
-    imagePath = image.path.toString,
     mediaType = image.mediaType,
     sizeBytes = image.sizeBytes,
   )
 
+final case class PlayerAliasHintRequest(memberId: String, aliases: List[String])
+    derives Codec.AsObject
+
+object PlayerAliasHintRequest:
+  given Schema[PlayerAliasHintRequest] = Schema.derived
+
+final case class OcrJobHintsRequest(
+    gameTitle: Option[String],
+    layoutFamily: Option[String],
+    knownPlayerAliases: List[PlayerAliasHintRequest],
+    computerPlayerAliases: List[String],
+) derives Codec.AsObject:
+  def asDomain: OcrJobHints = OcrJobHints(
+    gameTitle = gameTitle,
+    layoutFamily = layoutFamily,
+    knownPlayerAliases = knownPlayerAliases
+      .map(hint => PlayerAliasHint(MemberId.unsafeFromString(hint.memberId), hint.aliases)),
+    computerPlayerAliases = computerPlayerAliases,
+  )
+
+object OcrJobHintsRequest:
+  given Schema[OcrJobHintsRequest] = Schema.derived
+
 final case class CreateOcrJobRequest(
     imageId: String,
-    requestedImageType: String,
-    ocrHints: Option[OcrJobHints] = None,
+    requestedScreenType: String,
+    ocrHints: Option[OcrJobHintsRequest] = None,
     matchDraftId: Option[String] = None,
 ) derives Codec.AsObject
 
@@ -52,9 +70,8 @@ final case class OcrJobResponse(
     jobId: String,
     draftId: String,
     imageId: String,
-    imagePath: String,
-    requestedImageType: String,
-    detectedImageType: Option[String],
+    requestedScreenType: String,
+    detectedScreenType: Option[String],
     status: String,
     attemptCount: Int,
     failure: Option[OcrFailureResponse],
@@ -67,12 +84,11 @@ object OcrJobResponse:
     jobId = job.id.value,
     draftId = job.draftId.value,
     imageId = job.imageId.value,
-    imagePath = job.imagePath.toString,
-    requestedImageType = job.requestedScreenType.wire,
-    detectedImageType = job.detectedScreenType.map(_.wire),
+    requestedScreenType = job.requestedScreenType.wire,
+    detectedScreenType = OcrJob.detectedScreenType(job).map(_.wire),
     status = job.status.wire,
     attemptCount = job.attemptCount,
-    failure = job.failure
+    failure = OcrJob.failure(job)
       .map(f => OcrFailureResponse(f.code.wire, f.message, f.retryable, f.userAction)),
     createdAt = DateTimeFormatter.ISO_INSTANT.format(job.createdAt),
     updatedAt = DateTimeFormatter.ISO_INSTANT.format(job.updatedAt),
@@ -81,8 +97,8 @@ object OcrJobResponse:
 final case class OcrDraftResponse(
     draftId: String,
     jobId: String,
-    requestedImageType: String,
-    detectedImageType: Option[String],
+    requestedScreenType: String,
+    detectedScreenType: Option[String],
     profileId: Option[String],
     payloadJson: Json,
     warningsJson: Json,
@@ -95,8 +111,8 @@ object OcrDraftResponse:
   def from(draft: OcrDraft): OcrDraftResponse = OcrDraftResponse(
     draftId = draft.id.value,
     jobId = draft.jobId.value,
-    requestedImageType = draft.requestedScreenType.wire,
-    detectedImageType = draft.detectedScreenType.map(_.wire),
+    requestedScreenType = draft.requestedScreenType.wire,
+    detectedScreenType = draft.detectedScreenType.map(_.wire),
     profileId = draft.profileId,
     payloadJson = io.circe.parser.parse(draft.payloadJson).getOrElse(Json.Null),
     warningsJson = io.circe.parser.parse(draft.warningsJson).getOrElse(Json.Null),

@@ -25,15 +25,15 @@ object HeldEventModule:
       nowF: F[Instant],
       security: EndpointSecurity[F],
   ): List[ServerEndpoint[Any, F]] = List(
-    HeldEventsEndpoints.list.serverLogic { case (q, limit, devUser) =>
-      security.authorizeRead(devUser) { _ =>
+    HeldEventsEndpoints.list.serverLogic { case (q, limit, accountHeader) =>
+      security.authorizeRead(accountHeader) { _ =>
         listHeldEvents.run(q, limit).map(items =>
           Right(HeldEventListResponse(items.map((e, c) => HeldEventResponse.from(e, c))))
         )
       }
     },
-    HeldEventsEndpoints.create.serverLogic { case (devUser, csrfToken, idemKey, request) =>
-      security.authorizeMutation(devUser, csrfToken) { member =>
+    HeldEventsEndpoints.create.serverLogic { case (accountHeader, csrfToken, idemKey, request) =>
+      security.authorizeMutation(accountHeader, csrfToken) { member =>
         IdempotencyReplay.wrap[F, CreateHeldEventRequest, HeldEventResponse](
           idempotency,
           idemKey,
@@ -47,9 +47,9 @@ object HeldEventModule:
         )
       }
     },
-    HeldEventsEndpoints.delete.serverLogic { case (heldEventId, devUser, csrfToken) =>
-      security.authorizeMutation(devUser, csrfToken) { _ =>
-        security.respond(deleteHeldEvent.run(HeldEventId(heldEventId))) { _ =>
+    HeldEventsEndpoints.delete.serverLogic { case (heldEventId, accountHeader, csrfToken) =>
+      security.authorizeMutation(accountHeader, csrfToken) { _ =>
+        security.respond(deleteHeldEvent.run(HeldEventId.unsafeFromString(heldEventId))) { _ =>
           DeleteHeldEventResponse(heldEventId = heldEventId, deleted = true)
         }
       }

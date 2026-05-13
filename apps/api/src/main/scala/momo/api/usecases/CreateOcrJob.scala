@@ -17,7 +17,7 @@ import momo.api.usecases.syntax.UseCaseSyntax.*
 
 final case class CreateOcrJobCommand(
     imageId: ImageId,
-    requestedImageType: String,
+    requestedScreenType: String,
     ocrHints: OcrJobHints,
     matchDraftId: Option[MatchDraftId],
 )
@@ -52,8 +52,8 @@ final class CreateOcrJob[F[_]: MonadThrow](
     imageId = command.imageId
     image <- imageStore.find(imageId).orNotFound("image", command.imageId.value)
     createdAt <- EitherT.liftF(now)
-    jobId <- EitherT.liftF(nextId.map(OcrJobId(_)))
-    draftId <- EitherT.liftF(nextId.map(OcrDraftId(_)))
+    jobId <- EitherT.liftF(nextId.map(OcrJobId.unsafeFromString(_)))
+    draftId <- EitherT.liftF(nextId.map(OcrDraftId.unsafeFromString(_)))
     requestId <- EitherT.liftF(requestIdLookup)
     draft = initialDraft(draftId, jobId, screenType, createdAt)
     job = queuedJob(jobId, draftId, imageId, image.path, screenType, createdAt)
@@ -104,9 +104,9 @@ final class CreateOcrJob[F[_]: MonadThrow](
     .map { rows =>
       if rows.isEmpty then hints
       else
-        val byMember = rows.groupMap(_.memberId.value)(_.alias)
+        val byMember = rows.groupMap(_.memberId)(_.alias)
         val requestedIds = hints.knownPlayerAliases.map(_.memberId)
-        val dbOnlyIds = byMember.keys.toList.sorted.filterNot(requestedIds.contains)
+        val dbOnlyIds = byMember.keys.toList.sortBy(_.value).filterNot(requestedIds.contains)
         val memberIds = (requestedIds ++ dbOnlyIds).distinct.take(OcrJobHints.MaxKnownPlayerAliases)
         val mergedAliases = memberIds.flatMap { memberId =>
           val clientAliases = hints.knownPlayerAliases.find(_.memberId == memberId)
@@ -120,8 +120,8 @@ final class CreateOcrJob[F[_]: MonadThrow](
 
 object CreateOcrJob:
   private def requestedScreenType(command: CreateOcrJobCommand): Either[AppError, ScreenType] =
-    ScreenType.fromWire(command.requestedImageType).toRight(AppError.ValidationFailed(
-      "requestedImageType must be auto, total_assets, revenue, or incident_log."
+    ScreenType.fromWire(command.requestedScreenType).toRight(AppError.ValidationFailed(
+      "requestedScreenType must be auto, total_assets, revenue, or incident_log."
     ))
 
   private def validateOcrHints(hints: OcrJobHints): Either[AppError, Unit] = OcrJobHints

@@ -43,7 +43,7 @@ addCommandAlias(
 )
 
 lazy val apiOpenApi = taskKey[File]("Generate OpenAPI from Tapir endpoint definitions")
-lazy val apiOpenApiCheck = taskKey[Unit]("Check that openapi.yaml can be generated")
+lazy val apiOpenApiCheck = taskKey[Unit]("Check that openapi.yaml matches generated Tapir output")
 
 lazy val testcontainersDockerEnv = settingKey[Map[String, String]](
   "Docker environment variables used by forked Testcontainers-based tests"
@@ -165,8 +165,23 @@ lazy val root = (project in file("."))
       output
     },
     apiOpenApiCheck := {
-      val output = apiOpenApi.value
-      if (!output.exists()) sys.error(s"OpenAPI was not generated: ${output.getAbsolutePath}")
+      val output = baseDirectory.value / "openapi.yaml"
+      if (!output.exists()) sys.error(s"OpenAPI file does not exist: ${output.getAbsolutePath}")
+      val generated = Files.createTempFile("momo-result-openapi-", ".yaml")
+      try {
+        val result = (Compile / runner).value.run(
+          "momo.api.openapi.OpenApiMain",
+          (Compile / fullClasspath).value.files,
+          Seq(generated.toAbsolutePath.toString),
+          streams.value.log
+        )
+        result.failed.foreach(error => throw error)
+        val expectedText = Files.readString(output.toPath)
+        val generatedText = Files.readString(generated)
+        if (expectedText != generatedText) {
+          sys.error("openapi.yaml is stale. Run `sbt apiOpenApi` and commit the result.")
+        }
+      } finally Files.deleteIfExists(generated)
       ()
     }
   )

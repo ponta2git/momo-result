@@ -6,13 +6,13 @@ import cats.effect.IO
 import munit.CatsEffectSuite
 
 import momo.api.domain.ids.AccountId
-import momo.api.repositories.{IdempotencyRecord, IdempotencyResponse}
+import momo.api.repositories.{IdempotencyRecord, IdempotencyReservation, IdempotencyResponse}
 
 final class InMemoryIdempotencyRepositorySpec extends CatsEffectSuite:
 
   private val now = Instant.parse("2026-04-30T12:00:00Z")
   private val later = now.plusSeconds(60 * 60 * 24)
-  private val member = AccountId("ponta")
+  private val member = AccountId.unsafeFromString("ponta")
 
   private def record(
       key: String,
@@ -35,6 +35,9 @@ final class InMemoryIdempotencyRepositorySpec extends CatsEffectSuite:
 
   private def freshRecord(key: String): IdempotencyRecord =
     record(key, draftEndpoint, defaultHash, later)
+
+  private def pendingRecord(key: String): IdempotencyRecord = freshRecord(key)
+    .copy(response = IdempotencyResponse(0, Map.empty, Vector.empty))
 
   test("lookup returns None when no record exists"):
     for
@@ -88,4 +91,29 @@ final class InMemoryIdempotencyRepositorySpec extends CatsEffectSuite:
       assertEquals(removed, 1)
       assertEquals(gotExpired, None)
       assertEquals(gotLive, Some(live))
+
+  test("reserve, complete, replay, conflict, and abandon form the atomic lifecycle"):
+    val pending = pendingRecord("k-reserve")
+    val completed = IdempotencyResponse(200, Map("Content-Type" -> "application/json"), Vector(1))
+    for
+      repo <- InMemoryIdempotencyRepository.create[IO]
+      first <- repo.reserve(pending)
+      second <- repo.reserve(pending)
+      conflict <- repo.reserve(pending.copy(requestHash = Vector(9.toByte)))
+      _ <- repo
+        .complete(pending.key, pending.accountId, pending.endpoint, pending.requestHash, completed)
+      replay <- repo.reserve(pending)
+      abandonedKey = "k-abandon"
+      abandoned = pending.copy(key = abandonedKey)
+      reserved <- repo.reserve(abandoned)
+      _ <- repo
+        .abandon(abandoned.key, abandoned.accountId, abandoned.endpoint, abandoned.requestHash)
+      reservedAgain <- repo.reserve(abandoned)
+    yield
+      assertEquals(first, IdempotencyReservation.Reserved)
+      assertEquals(second, IdempotencyReservation.InProgress)
+      assertEquals(conflict, IdempotencyReservation.Conflict)
+      assertEquals(replay, IdempotencyReservation.Replay(completed))
+      assertEquals(reserved, IdempotencyReservation.Reserved)
+      assertEquals(reservedAgain, IdempotencyReservation.Reserved)
 end InMemoryIdempotencyRepositorySpec

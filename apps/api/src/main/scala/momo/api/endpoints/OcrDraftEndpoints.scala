@@ -11,7 +11,7 @@ object OcrDraftEndpoints:
     endpoint
       .get
       .in("api" / "ocr-drafts" / path[String]("draftId"))
-      .in(CommonEndpoint.devUserHeader)
+      .in(CommonEndpoint.accountHeader)
       .errorOut(CommonEndpoint.errorOut)
       .out(jsonBody[OcrDraftResponse])
       .tag("ocr")
@@ -22,7 +22,7 @@ object OcrDraftEndpoints:
       .get
       .in("api" / "ocr-drafts")
       .in(query[String]("ids"))
-      .in(CommonEndpoint.devUserHeader)
+      .in(CommonEndpoint.accountHeader)
       .errorOut(CommonEndpoint.errorOut)
       .out(jsonBody[OcrDraftListResponse])
       .tag("ocr")

@@ -9,8 +9,8 @@ import munit.FunSuite
 
 import momo.api.domain.ids.*
 import momo.api.domain.{
-  FourPlayers, IncidentCounts, MatchListItem, MatchListItemKind, MatchListRankEntry, MatchRecord,
-  PlayerResult,
+  FourPlayers, IncidentCounts, MatchListItem, MatchListItemKind, MatchListRankEntry, MatchNoInEvent,
+  MatchRecord, PlayOrder, PlayerResult, Rank,
 }
 
 /**
@@ -26,7 +26,7 @@ final class MatchModelsRoundtripSpec extends FunSuite:
   private val createdAt = Instant.parse("2026-04-30T13:00:00Z")
   private val updatedAt = Instant.parse("2026-04-30T13:30:00Z")
 
-  private val zeroIncidents = IncidentCounts(
+  private val zeroIncidents = IncidentCounts.unsafeFromInts(
     destination = 0,
     plusStation = 0,
     minusStation = 0,
@@ -35,26 +35,27 @@ final class MatchModelsRoundtripSpec extends FunSuite:
     suriNoGinji = 0,
   )
 
-  private def player(memberId: String, playOrder: Int, rank: Int): PlayerResult = PlayerResult(
-    memberId = MemberId(memberId),
-    playOrder = playOrder,
-    rank = rank,
-    totalAssetsManYen = 100 * rank,
-    revenueManYen = 50 * rank,
-    incidents = zeroIncidents,
-  )
+  private def player(memberId: String, playOrder: Int, rank: Int): PlayerResult = PlayerResult
+    .unsafeFromInts(
+      memberId = MemberId.unsafeFromString(memberId),
+      playOrder = playOrder,
+      rank = rank,
+      totalAssetsManYen = 100 * rank,
+      revenueManYen = 50 * rank,
+      incidents = zeroIncidents,
+    )
 
   private val matchRecord = MatchRecord(
-    id = MatchId("match_001"),
-    heldEventId = HeldEventId("held_2026_04_30"),
-    matchNoInEvent = 1,
-    gameTitleId = GameTitleId("title_world"),
+    id = MatchId.unsafeFromString("match_001"),
+    heldEventId = HeldEventId.unsafeFromString("held_2026_04_30"),
+    matchNoInEvent = MatchNoInEvent.unsafeFromInt(1),
+    gameTitleId = GameTitleId.unsafeFromString("title_world"),
     layoutFamily = "world",
-    seasonMasterId = SeasonMasterId("season_2024_spring"),
-    ownerMemberId = MemberId("member_a"),
-    mapMasterId = MapMasterId("map_east"),
+    seasonMasterId = SeasonMasterId.unsafeFromString("season_2024_spring"),
+    ownerMemberId = MemberId.unsafeFromString("member_a"),
+    mapMasterId = MapMasterId.unsafeFromString("map_east"),
     playedAt = playedAt,
-    totalAssetsDraftId = Some(OcrDraftId("draft_total_assets")),
+    totalAssetsDraftId = Some(OcrDraftId.unsafeFromString("draft_total_assets")),
     revenueDraftId = None,
     incidentLogDraftId = None,
     players = FourPlayers(
@@ -63,30 +64,47 @@ final class MatchModelsRoundtripSpec extends FunSuite:
       player("member_c", playOrder = 3, rank = 3),
       player("member_d", playOrder = 4, rank = 4),
     ),
-    createdByMemberId = MemberId("member_a"),
+    createdByAccountId = AccountId.unsafeFromString("account_a"),
+    createdByMemberId = Some(MemberId.unsafeFromString("member_a")),
     createdAt = createdAt,
   )
 
   private val matchListItem = MatchListItem(
     kind = MatchListItemKind.Match,
     id = "match_001",
-    matchId = Some(MatchId("match_001")),
+    matchId = Some(MatchId.unsafeFromString("match_001")),
     matchDraftId = None,
     status = "confirmed",
-    heldEventId = Some(HeldEventId("held_2026_04_30")),
-    matchNoInEvent = Some(1),
-    gameTitleId = Some(GameTitleId("title_world")),
-    seasonMasterId = Some(SeasonMasterId("season_2024_spring")),
-    mapMasterId = Some(MapMasterId("map_east")),
-    ownerMemberId = Some(MemberId("member_a")),
+    heldEventId = Some(HeldEventId.unsafeFromString("held_2026_04_30")),
+    matchNoInEvent = Some(MatchNoInEvent.unsafeFromInt(1)),
+    gameTitleId = Some(GameTitleId.unsafeFromString("title_world")),
+    seasonMasterId = Some(SeasonMasterId.unsafeFromString("season_2024_spring")),
+    mapMasterId = Some(MapMasterId.unsafeFromString("map_east")),
+    ownerMemberId = Some(MemberId.unsafeFromString("member_a")),
     playedAt = Some(playedAt),
     createdAt = createdAt,
     updatedAt = updatedAt,
     ranks = List(
-      MatchListRankEntry(memberId = MemberId("member_a"), rank = 1, playOrder = 1),
-      MatchListRankEntry(memberId = MemberId("member_b"), rank = 2, playOrder = 2),
-      MatchListRankEntry(memberId = MemberId("member_c"), rank = 3, playOrder = 3),
-      MatchListRankEntry(memberId = MemberId("member_d"), rank = 4, playOrder = 4),
+      MatchListRankEntry(
+        memberId = MemberId.unsafeFromString("member_a"),
+        rank = Rank.unsafeFromInt(1),
+        playOrder = PlayOrder.unsafeFromInt(1),
+      ),
+      MatchListRankEntry(
+        memberId = MemberId.unsafeFromString("member_b"),
+        rank = Rank.unsafeFromInt(2),
+        playOrder = PlayOrder.unsafeFromInt(2),
+      ),
+      MatchListRankEntry(
+        memberId = MemberId.unsafeFromString("member_c"),
+        rank = Rank.unsafeFromInt(3),
+        playOrder = PlayOrder.unsafeFromInt(3),
+      ),
+      MatchListRankEntry(
+        memberId = MemberId.unsafeFromString("member_d"),
+        rank = Rank.unsafeFromInt(4),
+        playOrder = PlayOrder.unsafeFromInt(4),
+      ),
     ),
   )
 
@@ -173,7 +191,7 @@ final class MatchModelsRoundtripSpec extends FunSuite:
             }
           }
         ],
-        "createdByAccountId": "member_a",
+        "createdByAccountId": "account_a",
         "createdByMemberId": "member_a",
         "createdAt": "2026-04-30T13:00:00Z"
       }

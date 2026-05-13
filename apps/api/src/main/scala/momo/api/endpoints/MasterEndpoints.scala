@@ -10,7 +10,7 @@ object GameTitlesEndpoints:
   val list: PublicEndpoint[Option[String], ProblemResponse, GameTitleListResponse, Any] = endpoint
     .get
     .in("api" / "game-titles")
-    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.accountHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[GameTitleListResponse])
     .tag("masters")
@@ -23,7 +23,7 @@ object GameTitlesEndpoints:
   ] = endpoint
     .post
     .in("api" / "game-titles")
-    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.accountHeader)
     .in(CommonEndpoint.csrfHeader)
     .in(CommonEndpoint.idempotencyKeyHeader)
     .in(jsonBody[CreateGameTitleRequest])
@@ -39,7 +39,7 @@ object GameTitlesEndpoints:
   ] = endpoint
     .patch
     .in("api" / "game-titles" / path[String]("id"))
-    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.accountHeader)
     .in(CommonEndpoint.csrfHeader)
     .in(jsonBody[UpdateGameTitleRequest])
     .errorOut(CommonEndpoint.errorOut)
@@ -54,7 +54,7 @@ object GameTitlesEndpoints:
   ] = endpoint
     .delete
     .in("api" / "game-titles" / path[String]("id"))
-    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.accountHeader)
     .in(CommonEndpoint.csrfHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[DeleteMasterResponse])
@@ -70,7 +70,7 @@ object MapMastersEndpoints:
     .get
     .in("api" / "map-masters")
     .in(query[Option[String]]("gameTitleId"))
-    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.accountHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[MapMasterListResponse])
     .tag("masters")
@@ -83,7 +83,7 @@ object MapMastersEndpoints:
   ] = endpoint
     .post
     .in("api" / "map-masters")
-    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.accountHeader)
     .in(CommonEndpoint.csrfHeader)
     .in(CommonEndpoint.idempotencyKeyHeader)
     .in(jsonBody[CreateMapMasterRequest])
@@ -99,7 +99,7 @@ object MapMastersEndpoints:
   ] = endpoint
     .patch
     .in("api" / "map-masters" / path[String]("id"))
-    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.accountHeader)
     .in(CommonEndpoint.csrfHeader)
     .in(jsonBody[UpdateMapMasterRequest])
     .errorOut(CommonEndpoint.errorOut)
@@ -114,7 +114,7 @@ object MapMastersEndpoints:
   ] = endpoint
     .delete
     .in("api" / "map-masters" / path[String]("id"))
-    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.accountHeader)
     .in(CommonEndpoint.csrfHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[DeleteMasterResponse])
@@ -130,7 +130,7 @@ object SeasonMastersEndpoints:
     .get
     .in("api" / "season-masters")
     .in(query[Option[String]]("gameTitleId"))
-    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.accountHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[SeasonMasterListResponse])
     .tag("masters")
@@ -143,7 +143,7 @@ object SeasonMastersEndpoints:
   ] = endpoint
     .post
     .in("api" / "season-masters")
-    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.accountHeader)
     .in(CommonEndpoint.csrfHeader)
     .in(CommonEndpoint.idempotencyKeyHeader)
     .in(jsonBody[CreateSeasonMasterRequest])
@@ -159,7 +159,7 @@ object SeasonMastersEndpoints:
   ] = endpoint
     .patch
     .in("api" / "season-masters" / path[String]("id"))
-    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.accountHeader)
     .in(CommonEndpoint.csrfHeader)
     .in(jsonBody[UpdateSeasonMasterRequest])
     .errorOut(CommonEndpoint.errorOut)
@@ -174,7 +174,7 @@ object SeasonMastersEndpoints:
   ] = endpoint
     .delete
     .in("api" / "season-masters" / path[String]("id"))
-    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.accountHeader)
     .in(CommonEndpoint.csrfHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[DeleteMasterResponse])
@@ -185,7 +185,7 @@ object IncidentMastersEndpoints:
     endpoint
       .get
       .in("api" / "incident-masters")
-      .in(CommonEndpoint.devUserHeader)
+      .in(CommonEndpoint.accountHeader)
       .errorOut(CommonEndpoint.errorOut)
       .out(jsonBody[IncidentMasterListResponse])
       .tag("masters")
@@ -200,7 +200,7 @@ object MemberAliasesEndpoints:
     .get
     .in("api" / "member-aliases")
     .in(query[Option[String]]("memberId"))
-    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.accountHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[MemberAliasListResponse])
     .tag("masters")
@@ -213,7 +213,7 @@ object MemberAliasesEndpoints:
   ] = endpoint
     .post
     .in("api" / "member-aliases")
-    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.accountHeader)
     .in(CommonEndpoint.csrfHeader)
     .in(CommonEndpoint.idempotencyKeyHeader)
     .in(jsonBody[CreateMemberAliasRequest])
@@ -229,7 +229,7 @@ object MemberAliasesEndpoints:
   ] = endpoint
     .patch
     .in("api" / "member-aliases" / path[String]("id"))
-    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.accountHeader)
     .in(CommonEndpoint.csrfHeader)
     .in(jsonBody[UpdateMemberAliasRequest])
     .errorOut(CommonEndpoint.errorOut)
@@ -244,7 +244,7 @@ object MemberAliasesEndpoints:
   ] = endpoint
     .delete
     .in("api" / "member-aliases" / path[String]("id"))
-    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.accountHeader)
     .in(CommonEndpoint.csrfHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[DeleteMasterResponse])

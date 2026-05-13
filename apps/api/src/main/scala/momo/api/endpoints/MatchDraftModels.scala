@@ -71,7 +71,7 @@ object MatchDraftDetailResponse:
     matchDraftId = draft.id.value,
     status = draft.status.wire,
     heldEventId = draft.heldEventId.map(_.value),
-    matchNoInEvent = draft.matchNoInEvent,
+    matchNoInEvent = draft.matchNoInEvent.map(_.value),
     gameTitleId = draft.gameTitleId.map(_.value),
     seasonMasterId = draft.seasonMasterId.map(_.value),
     ownerMemberId = draft.ownerMemberId.map(_.value),

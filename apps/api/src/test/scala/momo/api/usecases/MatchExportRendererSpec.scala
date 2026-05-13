@@ -19,7 +19,7 @@ final class MatchExportRendererSpec extends FunSuite:
     rank = 1,
     totalAssetsManYen = 12000,
     revenueManYen = 3000,
-    incidents = IncidentCounts(
+    incidents = IncidentCounts.unsafeFromInts(
       destination = 5,
       plusStation = 2,
       minusStation = 1,

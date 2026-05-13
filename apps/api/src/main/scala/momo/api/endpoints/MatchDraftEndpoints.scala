@@ -16,7 +16,7 @@ object MatchDraftEndpoints:
   val create: PublicEndpoint[CreateInput, ProblemResponse, MatchDraftResponse, Any] = endpoint
     .post
     .in("api" / "match-drafts")
-    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.accountHeader)
     .in(CommonEndpoint.csrfHeader)
     .in(CommonEndpoint.idempotencyKeyHeader)
     .in(jsonBody[CreateMatchDraftRequest])
@@ -27,7 +27,7 @@ object MatchDraftEndpoints:
   val update: PublicEndpoint[UpdateInput, ProblemResponse, MatchDraftResponse, Any] = endpoint
     .patch
     .in("api" / "match-drafts" / path[String]("draftId"))
-    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.accountHeader)
     .in(CommonEndpoint.csrfHeader)
     .in(CommonEndpoint.idempotencyKeyHeader)
     .in(jsonBody[UpdateMatchDraftRequest])
@@ -38,7 +38,7 @@ object MatchDraftEndpoints:
   val get: PublicEndpoint[GetInput, ProblemResponse, MatchDraftDetailResponse, Any] = endpoint
     .get
     .in("api" / "match-drafts" / path[String]("draftId"))
-    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.accountHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[MatchDraftDetailResponse])
     .tag("match-drafts")
@@ -46,7 +46,7 @@ object MatchDraftEndpoints:
   val cancel: PublicEndpoint[CancelInput, ProblemResponse, CancelMatchDraftResponse, Any] = endpoint
     .post
     .in("api" / "match-drafts" / path[String]("draftId") / "cancel")
-    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.accountHeader)
     .in(CommonEndpoint.csrfHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[CancelMatchDraftResponse])
@@ -60,7 +60,7 @@ object MatchDraftEndpoints:
   ] = endpoint
     .get
     .in("api" / "match-drafts" / path[String]("draftId") / "source-images")
-    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.accountHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[MatchDraftSourceImageListResponse])
     .tag("match-drafts")
@@ -72,7 +72,7 @@ object MatchDraftEndpoints:
     endpoint
       .get
       .in("api" / "match-drafts" / path[String]("draftId") / "source-images" / path[String]("kind"))
-      .in(CommonEndpoint.devUserHeader)
+      .in(CommonEndpoint.accountHeader)
       .errorOut(CommonEndpoint.errorOut)
       .out(header[String]("Content-Type"))
       .out(header[String]("Cache-Control"))

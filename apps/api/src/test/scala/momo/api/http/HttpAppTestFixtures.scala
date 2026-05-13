@@ -7,6 +7,7 @@ import org.http4s.{Header, HttpApp as Http4sApp}
 import org.typelevel.ci.CIString
 
 import momo.api.MomoCatsEffectSuite
+import momo.api.auth.AuthHeaderNames
 import momo.api.config.{AppConfig, AppEnv}
 
 trait HttpAppTestFixtures:
@@ -36,7 +37,7 @@ trait HttpAppTestFixtures:
   protected def devReadHeader(): Header.Raw = devReadHeader("account_ponta")
 
   protected def devReadHeader(accountId: String): Header.Raw = Header
-    .Raw(CIString("X-Dev-User"), accountId)
+    .Raw(CIString(AuthHeaderNames.AccountId), accountId)
 
   protected def devWriteHeaders(): List[Header.ToRaw] = devWriteHeaders("account_ponta", None)
 

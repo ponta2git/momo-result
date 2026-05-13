@@ -15,7 +15,7 @@ import org.http4s.{HttpApp, MediaType, Request, Response, Status}
 import org.slf4j.LoggerFactory
 
 import momo.api.endpoints.ProblemDetails
-import momo.api.errors.AppError
+import momo.api.errors.{AppError, AppException}
 
 private[http] object HttpErrorMiddleware:
   private val logger = LoggerFactory.getLogger("momo.api.http.HttpErrorMiddleware")
@@ -32,11 +32,12 @@ private[http] object HttpErrorMiddleware:
     Response[F](Status.fromInt(status.code).getOrElse(Status.InternalServerError))
       .withEntity(body.asJson).putHeaders(`Content-Type`(MediaType.application.json)).pure[F]
 
-  private def classify(error: Throwable): AppError =
-    if hasCause(error)(isSqlError) then AppError.DependencyFailed("Database operation failed.")
-    else if hasCause(error)(isRedisError) then AppError.DependencyFailed("Queue operation failed.")
-    else if hasCause(error)(isIoError) then AppError.Internal("File operation failed.")
-    else AppError.Internal("Unexpected server error.")
+  private def classify(error: Throwable): AppError = findAppException(error) match
+    case Some(app) => app.error
+    case _ if hasCause(error)(isSqlError) => AppError.DependencyFailed("Database operation failed.")
+    case _ if hasCause(error)(isRedisError) => AppError.DependencyFailed("Queue operation failed.")
+    case _ if hasCause(error)(isIoError) => AppError.Internal("File operation failed.")
+    case _ => AppError.Internal("Unexpected server error.")
 
   private def log(request: Request[?], appError: AppError, error: Throwable): Unit = logger.error(
     s"Unhandled HTTP error method=${request.method.name} path=${request.uri.path.renderString} " +
@@ -45,10 +46,22 @@ private[http] object HttpErrorMiddleware:
   )
 
   private def hasCause(error: Throwable)(predicate: Throwable => Boolean): Boolean =
+    findCause(error)(predicate).isDefined
+
+  private def findAppException(error: Throwable): Option[AppException] =
     @tailrec
-    def loop(current: Option[Throwable]): Boolean = current match
-      case None => false
-      case Some(throwable) => predicate(throwable) || loop(Option(throwable.getCause))
+    def loop(current: Option[Throwable]): Option[AppException] = current match
+      case None => None
+      case Some(app: AppException) => Some(app)
+      case Some(throwable) => loop(Option(throwable.getCause))
+    loop(Some(error))
+
+  private def findCause(error: Throwable)(predicate: Throwable => Boolean): Option[Throwable] =
+    @tailrec
+    def loop(current: Option[Throwable]): Option[Throwable] = current match
+      case None => None
+      case Some(throwable) if predicate(throwable) => Some(throwable)
+      case Some(throwable) => loop(Option(throwable.getCause))
     loop(Some(error))
 
   private def isSqlError(error: Throwable): Boolean = error match

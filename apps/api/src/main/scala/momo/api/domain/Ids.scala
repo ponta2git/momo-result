@@ -14,13 +14,16 @@ object ids:
   private[domain] trait IdCompanion[Id]:
     protected def make(s: String): Id
     protected def underlying(id: Id): String
-    final def apply(value: String): Id = make(value)
+    final def unsafeFromString(value: String): Id = make(value)
+    def fromString(value: String): Either[String, Id] =
+      val trimmed = value.trim
+      Either.cond(trimmed.nonEmpty, make(trimmed), "id must not be blank")
     extension (id: Id) def value: String = underlying(id)
     given Eq[Id] = Eq.instance((a, b) => underlying(a) == underlying(b))
     given Show[Id] = Show.show(underlying)
     given Order[Id] = Order.from((a, b) => underlying(a).compareTo(underlying(b)))
     given CanEqual[Id, Id] = CanEqual.derived
-    def fresh[F[_]: Apply: Random]: F[Id] = IdGenerator.next[F].map(apply)
+    def fresh[F[_]: Apply: Random]: F[Id] = IdGenerator.next[F].map(unsafeFromString)
 
   opaque type OcrJobId = String
   object OcrJobId extends IdCompanion[OcrJobId]:

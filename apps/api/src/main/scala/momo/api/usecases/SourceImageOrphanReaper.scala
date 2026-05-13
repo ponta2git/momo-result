@@ -8,11 +8,10 @@ import cats.effect.{Concurrent, Resource, Temporal}
 import cats.syntax.all.*
 import org.typelevel.log4cats.LoggerFactory
 
-import momo.api.adapters.LocalFsImageStore
-import momo.api.repositories.ImageReferenceRepository
+import momo.api.repositories.{ImageOrphanStore, ImageReferenceRepository}
 
 final class SourceImageOrphanReaper[F[_]: Concurrent: LoggerFactory](
-    imageStore: LocalFsImageStore[F],
+    imageStore: ImageOrphanStore[F],
     references: ImageReferenceRepository[F],
     olderThan: FiniteDuration,
     now: F[Instant],
@@ -30,7 +29,7 @@ final class SourceImageOrphanReaper[F[_]: Concurrent: LoggerFactory](
 
 object SourceImageOrphanReaper:
   def resource[F[_]: Concurrent: Temporal: LoggerFactory](
-      imageStore: LocalFsImageStore[F],
+      imageStore: ImageOrphanStore[F],
       references: ImageReferenceRepository[F],
       olderThan: FiniteDuration,
       interval: FiniteDuration,

@@ -16,10 +16,10 @@ import momo.api.usecases.testing.MatchFixtures
 
 final class ExportMatchesSpec extends MomoCatsEffectSuite:
   private val now = Instant.parse("2026-05-06T20:00:00Z")
-  private val heldEventId = HeldEventId("held_2026_05_06")
-  private val titleId = GameTitleId("title_world")
-  private val seasonId = SeasonMasterId("season_spring")
-  private val mapId = MapMasterId("map_east")
+  private val heldEventId = HeldEventId.unsafeFromString("held_2026_05_06")
+  private val titleId = GameTitleId.unsafeFromString("title_world")
+  private val seasonId = SeasonMasterId.unsafeFromString("season_spring")
+  private val mapId = MapMasterId.unsafeFromString("map_east")
   private val memberValues = MatchFixtures.DevMemberValues
 
   test("rejects invalid format before querying export data"):
@@ -37,13 +37,13 @@ final class ExportMatchesSpec extends MomoCatsEffectSuite:
   test("returns not found for an unknown match scope"):
     for
       usecase <- createUsecase()
-      result <- usecase.run("csv", None, None, Some(MatchId("missing")))
+      result <- usecase.run("csv", None, None, Some(MatchId.unsafeFromString("missing")))
     yield assertAppError(result, "NOT_FOUND", "match was not found")
 
   test("builds a scoped TSV export with stable filename and content type"):
     for
       usecase <- createUsecaseWithMatch()
-      result <- usecase.run("tsv", None, None, Some(MatchId("match-1")))
+      result <- usecase.run("tsv", None, None, Some(MatchId.unsafeFromString("match-1")))
     yield
       val file = result.getOrElse(fail(s"expected export file, got $result"))
       assertEquals(file.fileName, "momo-results-match-match-1.tsv")
@@ -74,7 +74,7 @@ final class ExportMatchesSpec extends MomoCatsEffectSuite:
     yield ExportMatches[IO](matches, members, maps, seasons)
 
   private def matchRecord(): MatchRecord = MatchFixtures.matchRecord(
-    id = MatchId("match-1"),
+    id = MatchId.unsafeFromString("match-1"),
     heldEventId = heldEventId,
     matchNoInEvent = 1,
     titleId = titleId,

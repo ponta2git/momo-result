@@ -21,8 +21,10 @@ import momo.api.domain.ids.HeldEventId
  */
 final class HeldEventResponseRoundtripSpec extends FunSuite:
 
-  private val held =
-    HeldEvent(HeldEventId("held_2026_04_30"), Instant.parse("2026-04-30T12:00:00Z"))
+  private val held = HeldEvent(
+    HeldEventId.unsafeFromString("held_2026_04_30"),
+    Instant.parse("2026-04-30T12:00:00Z"),
+  )
   private val response = HeldEventResponse.from(held, matchCount = 3)
 
   test("HeldEventResponse: encode → decode is identity"):

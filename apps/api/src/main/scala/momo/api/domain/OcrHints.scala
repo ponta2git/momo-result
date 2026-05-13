@@ -1,6 +1,8 @@
 package momo.api.domain
 
-final case class PlayerAliasHint(memberId: String, aliases: List[String])
+import momo.api.domain.ids.MemberId
+
+final case class PlayerAliasHint(memberId: MemberId, aliases: List[String])
 
 final case class OcrJobHints(
     gameTitle: Option[String],
@@ -44,7 +46,7 @@ object OcrJobHints:
     hints.knownPlayerAliases.zipWithIndex.foreach { case (hint, index) =>
       validateText(
         s"ocrHints.knownPlayerAliases[$index].memberId",
-        hint.memberId,
+        hint.memberId.value,
         MaxMemberIdLength,
       )
       if hint.aliases.isEmpty then

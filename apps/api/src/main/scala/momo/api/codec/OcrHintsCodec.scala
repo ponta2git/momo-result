@@ -1,7 +1,9 @@
 package momo.api.codec
 
-import io.circe.Codec
+import io.circe.syntax.*
+import io.circe.{Codec, Decoder, Encoder, HCursor, Json, JsonObject}
 
+import momo.api.domain.ids.MemberId
 import momo.api.domain.{OcrJobHints, PlayerAliasHint}
 
 /**
@@ -14,5 +16,17 @@ import momo.api.domain.{OcrJobHints, PlayerAliasHint}
  * the case class declarations themselves.
  */
 object OcrHintsCodec:
-  given Codec.AsObject[PlayerAliasHint] = Codec.AsObject.derived
+  given Encoder.AsObject[PlayerAliasHint] with
+    override def encodeObject(hint: PlayerAliasHint): JsonObject = JsonObject(
+      "memberId" -> Json.fromString(hint.memberId.value),
+      "aliases" -> hint.aliases.asJson,
+    )
+
+  given Decoder[PlayerAliasHint] with
+    override def apply(cursor: HCursor): Decoder.Result[PlayerAliasHint] =
+      for
+        memberId <- cursor.downField("memberId").as[String]
+        aliases <- cursor.downField("aliases").as[List[String]]
+      yield PlayerAliasHint(MemberId.unsafeFromString(memberId), aliases)
+
   given Codec.AsObject[OcrJobHints] = Codec.AsObject.derived

@@ -6,7 +6,9 @@ import cats.effect.IO
 
 import momo.api.domain.ids.AccountId
 import momo.api.repositories.postgres.PostgresIdempotencyRepository
-import momo.api.repositories.{IdempotencyRecord, IdempotencyRepository, IdempotencyResponse}
+import momo.api.repositories.{
+  IdempotencyRecord, IdempotencyRepository, IdempotencyReservation, IdempotencyResponse,
+}
 
 /**
  * Postgres-backed contract verification for [[IdempotencyRepository]]. Mirrors
@@ -16,7 +18,7 @@ final class PostgresIdempotencyRepositoryContractSpec extends IntegrationSuite:
 
   private val now = Instant.parse("2026-04-30T12:00:00Z")
   private val later = now.plusSeconds(60 * 60 * 24)
-  private val member = AccountId("account_ponta")
+  private val member = AccountId.unsafeFromString("account_ponta")
 
   private def freshRepo: IdempotencyRepository[IO] =
     new PostgresIdempotencyRepository[IO](transactor)
@@ -99,4 +101,30 @@ final class PostgresIdempotencyRepositoryContractSpec extends IntegrationSuite:
       assertEquals(removed, 1)
       assertEquals(gotExpired, None)
       assertEquals(gotLive, Some(live))
+
+  test("reserve, complete, replay, conflict, and abandon form the atomic lifecycle"):
+    val repo = freshRepo
+    val pending =
+      buildRecord("k-reserve-lifecycle", draftEndpoint, defaultHash, later, Vector.empty)
+        .copy(response = IdempotencyResponse(0, Map.empty, Vector.empty))
+    val completed = IdempotencyResponse(200, Map("Content-Type" -> "application/json"), Vector(1))
+    val abandoned = pending.copy(key = "k-abandon-lifecycle")
+    for
+      first <- repo.reserve(pending)
+      second <- repo.reserve(pending)
+      conflict <- repo.reserve(pending.copy(requestHash = Vector(9.toByte)))
+      _ <- repo
+        .complete(pending.key, pending.accountId, pending.endpoint, pending.requestHash, completed)
+      replay <- repo.reserve(pending)
+      reserved <- repo.reserve(abandoned)
+      _ <- repo
+        .abandon(abandoned.key, abandoned.accountId, abandoned.endpoint, abandoned.requestHash)
+      reservedAgain <- repo.reserve(abandoned)
+    yield
+      assertEquals(first, IdempotencyReservation.Reserved)
+      assertEquals(second, IdempotencyReservation.InProgress)
+      assertEquals(conflict, IdempotencyReservation.Conflict)
+      assertEquals(replay, IdempotencyReservation.Replay(completed))
+      assertEquals(reserved, IdempotencyReservation.Reserved)
+      assertEquals(reservedAgain, IdempotencyReservation.Reserved)
 end PostgresIdempotencyRepositoryContractSpec

@@ -14,7 +14,9 @@ import org.slf4j.LoggerFactory
 import momo.api.auth.AuthenticatedAccount
 import momo.api.endpoints.ProblemDetails
 import momo.api.errors.AppError
-import momo.api.repositories.{IdempotencyRecord, IdempotencyRepository, IdempotencyResponse}
+import momo.api.repositories.{
+  IdempotencyRecord, IdempotencyRepository, IdempotencyReservation, IdempotencyResponse,
+}
 
 /**
  * Wraps a mutation effect with persistent idempotency replay semantics.
@@ -62,18 +64,28 @@ private[http] object IdempotencyReplay:
       ))))
     case Some(rawKey) =>
       val requestHash = sha256(canonicalJsonBytes(request.asJson))
-      idempotency.lookup(rawKey, account.accountId, endpoint).flatMap {
-        case Some(existing) if existing.requestHash == requestHash =>
-          decodeStoredBody[Resp](existing.response.body) match
-            case Right(replay) => Async[F].pure(Right(replay))
-            case Left(_) => run.flatMap(
-                handleFreshResult(idempotency, rawKey, account, endpoint, requestHash, now, _)
-              )
-        case Some(_) => Async[F].pure(Left(ProblemDetails.from(
-            AppError.Conflict("Idempotency-Key was reused with a different request payload.")
-          )))
-        case None => run
-            .flatMap(handleFreshResult(idempotency, rawKey, account, endpoint, requestHash, now, _))
+      now.flatMap { ts =>
+        val pending = IdempotencyRecord(
+          key = rawKey,
+          accountId = account.accountId,
+          endpoint = endpoint,
+          requestHash = requestHash,
+          response = IdempotencyResponse(status = 0, headers = Map.empty, body = Vector.empty),
+          createdAt = ts,
+          expiresAt = ts.plusMillis(RetentionMillis),
+        )
+        idempotency.reserve(pending).flatMap {
+          case IdempotencyReservation.Reserved => run
+              .flatMap(handleFreshResult(idempotency, rawKey, account, endpoint, requestHash, _))
+          case IdempotencyReservation.Replay(response) => replayStoredBody[F, Resp](response)
+          case IdempotencyReservation.InProgress => Async[F].pure(Left(
+              ProblemDetails
+                .from(AppError.Conflict("Idempotency-Key is already processing. Retry later."))
+            ))
+          case IdempotencyReservation.Conflict => Async[F].pure(Left(ProblemDetails.from(
+              AppError.Conflict("Idempotency-Key was reused with a different request payload.")
+            )))
+        }
       }
 
   private def handleFreshResult[F[_]: Async, Resp: Encoder](
@@ -82,36 +94,26 @@ private[http] object IdempotencyReplay:
       account: AuthenticatedAccount,
       endpoint: String,
       requestHash: Vector[Byte],
-      now: F[Instant],
       result: Either[ProblemDetails.ProblemResponse, Resp],
   ): F[Either[ProblemDetails.ProblemResponse, Resp]] = result match
-    case left @ Left(_) => Async[F].pure(left)
-    case right @ Right(value) => now.flatMap { ts =>
-        val response = IdempotencyResponse(
-          status = 200,
-          headers = Map.empty,
-          body = canonicalJsonBytes(value.asJson).toVector,
-        )
-        val record = IdempotencyRecord(
-          key = key,
-          accountId = account.accountId,
-          endpoint = endpoint,
-          requestHash = requestHash,
-          response = response,
-          createdAt = ts,
-          expiresAt = ts.plusMillis(RetentionMillis),
-        )
-        idempotency.record(record).attempt.flatMap {
-          case Right(_) => Async[F].pure(right)
-          case Left(error) => Async[F].delay {
-              logger.error(
-                s"Failed to record idempotency response endpoint=$endpoint accountId=${account
-                    .accountId.value} keyLength=${key.length} errorClass=${error.getClass.getName}",
-                error,
-              )
-            }.as(right)
+    case left @ Left(_) => idempotency.abandon(key, account.accountId, endpoint, requestHash)
+        .attempt.flatMap {
+          case Right(_) => Async[F].pure(left)
+          case Left(error) => logIdempotencyFailure(endpoint, account, key, "abandon", error)
+              .as(left)
         }
-      }
+    case right @ Right(value) =>
+      val response = IdempotencyResponse(
+        status = 200,
+        headers = Map.empty,
+        body = canonicalJsonBytes(value.asJson).toVector,
+      )
+      idempotency.complete(key, account.accountId, endpoint, requestHash, response).attempt
+        .flatMap {
+          case Right(_) => Async[F].pure(right)
+          case Left(error) => logIdempotencyFailure(endpoint, account, key, "complete", error)
+              .as(right)
+        }
 
   private def canonicalJsonBytes(json: Json): Array[Byte] = PrinterCanonical.print(json)
     .getBytes(StandardCharsets.UTF_8)
@@ -123,4 +125,26 @@ private[http] object IdempotencyReplay:
 
   private def decodeStoredBody[A: Decoder](bytes: Vector[Byte]): Either[Throwable, A] =
     circeDecode[A](new String(bytes.toArray, StandardCharsets.UTF_8))
+
+  private def replayStoredBody[F[_]: Async, A: Decoder](
+      response: IdempotencyResponse
+  ): F[Either[ProblemDetails.ProblemResponse, A]] = decodeStoredBody[A](response.body) match
+    case Right(replay) => Async[F].pure(Right(replay))
+    case Left(_) => Async[F].pure(Left(
+        ProblemDetails.from(AppError.Internal("Stored idempotency response could not be decoded."))
+      ))
+
+  private def logIdempotencyFailure[F[_]: Async](
+      endpoint: String,
+      account: AuthenticatedAccount,
+      key: String,
+      operation: String,
+      error: Throwable,
+  ): F[Unit] = Async[F].delay {
+    logger.error(
+      s"Failed to $operation idempotency response endpoint=$endpoint accountId=${account.accountId
+          .value} keyLength=${key.length} errorClass=${error.getClass.getName}",
+      error,
+    )
+  }
 end IdempotencyReplay

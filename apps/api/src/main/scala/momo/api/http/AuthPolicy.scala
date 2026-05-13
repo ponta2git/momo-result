@@ -14,12 +14,12 @@ import momo.api.repositories.LoginAccountsRepository
  * Pluggable authentication / CSRF policy bound to the runtime environment.
  *
  * The HTTP layer never inspects `AppEnv` directly; it only calls these methods. Production trusts
- * `X-Dev-User` injected by `ProductionSessionMiddleware` (CSRF already verified there); Dev/Test
- * authenticates against the local roster and validates CSRF inline.
+ * the internal account-id header injected by `ProductionSessionMiddleware` (CSRF already verified
+ * there); Dev/Test authenticates against the local roster and validates CSRF inline.
  */
 trait AuthPolicy[F[_]]:
   def authenticate(
-      devUser: Option[String]
+      accountHeader: Option[String]
   ): F[Either[ProblemDetails.ProblemResponse, AuthenticatedAccount]]
 
   def verifyCsrf(csrfToken: Option[String]): F[Either[ProblemDetails.ProblemResponse, Unit]]
@@ -39,9 +39,9 @@ private final class ProductionAuthPolicy[F[_]: Async](accounts: LoginAccountsRep
     .from(error)
 
   override def authenticate(
-      devUser: Option[String]
-  ): F[Either[ProblemDetails.ProblemResponse, AuthenticatedAccount]] = devUser match
-    case Some(value) => accounts.find(AccountId(value)).map {
+      accountHeader: Option[String]
+  ): F[Either[ProblemDetails.ProblemResponse, AuthenticatedAccount]] = accountHeader match
+    case Some(value) => accounts.find(AccountId.unsafeFromString(value)).map {
         case Some(account) if account.loginEnabled =>
           Right(AuthenticatedAccount(
             account.id,
@@ -68,11 +68,11 @@ private final class DevAuthPolicy[F[_]: Async](
     .from(error)
 
   override def authenticate(
-      devUser: Option[String]
-  ): F[Either[ProblemDetails.ProblemResponse, AuthenticatedAccount]] = devUser match
+      accountHeader: Option[String]
+  ): F[Either[ProblemDetails.ProblemResponse, AuthenticatedAccount]] = accountHeader match
     case Some(value) => DevAuthMiddleware.authenticate(config.appEnv, roster, value).flatMap {
         case Right(account) => Async[F].pure(Right(account))
-        case Left(_) => accounts.find(AccountId(value)).map {
+        case Left(_) => accounts.find(AccountId.unsafeFromString(value)).map {
             case Some(account) if account.loginEnabled =>
               Right(AuthenticatedAccount(
                 account.id,
@@ -82,8 +82,9 @@ private final class DevAuthPolicy[F[_]: Async](
               ))
             case Some(_) =>
               Left(toProblem(AppError.Forbidden("This account is not allowed to log in.")))
-            case None =>
-              Left(toProblem(AppError.Forbidden("X-Dev-User is not one of the allowed accounts.")))
+            case None => Left(
+                toProblem(AppError.Forbidden("Account header is not one of the allowed accounts."))
+              )
           }
       }
     case None => Async[F].pure(Left(toProblem(AppError.Unauthorized())))

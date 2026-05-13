@@ -14,8 +14,8 @@ import momo.api.repositories.postgres.PostgresAppSessionsRepository
 final class PostgresAppSessionsRepositorySpec extends IntegrationSuite:
 
   private val now = Instant.parse("2026-01-01T00:00:00Z")
-  private val accountId = AccountId("account_ponta")
-  private val memberId = MemberId("member_ponta")
+  private val accountId = AccountId.unsafeFromString("account_ponta")
+  private val memberId = MemberId.unsafeFromString("member_ponta")
 
   private def repo = new PostgresAppSessionsRepository[IO](transactor)
 
@@ -81,7 +81,7 @@ final class PostgresAppSessionsRepositorySpec extends IntegrationSuite:
           expiresAt = now.minusSeconds(1),
         )
         other <- buildSession("other-session-token", "other-csrf-token", now.plusSeconds(3600))
-          .map(_.copy(accountId = AccountId("account_akane_mami")))
+          .map(_.copy(accountId = AccountId.unsafeFromString("account_akane_mami")))
         _ <- repo.upsert(active)
         _ <- repo.upsert(expired)
         _ <- repo.upsert(other)

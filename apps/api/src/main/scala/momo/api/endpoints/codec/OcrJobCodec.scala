@@ -8,10 +8,10 @@ import momo.api.usecases.{CreateOcrJobCommand, CreatedOcrJob}
 /** DTO ↔ usecase command conversions for `OcrJobEndpoints`. */
 object OcrJobCodec:
   def toCreateCommand(request: CreateOcrJobRequest): CreateOcrJobCommand = CreateOcrJobCommand(
-    imageId = ImageId(request.imageId),
-    requestedImageType = request.requestedImageType,
-    ocrHints = request.ocrHints.getOrElse(OcrJobHints.empty),
-    matchDraftId = request.matchDraftId.map(MatchDraftId(_)),
+    imageId = ImageId.unsafeFromString(request.imageId),
+    requestedScreenType = request.requestedScreenType,
+    ocrHints = request.ocrHints.fold(OcrJobHints.empty)(_.asDomain),
+    matchDraftId = request.matchDraftId.map(MatchDraftId.unsafeFromString(_)),
   )
 
   def toCreateResponse(created: CreatedOcrJob): CreateOcrJobResponse = CreateOcrJobResponse(

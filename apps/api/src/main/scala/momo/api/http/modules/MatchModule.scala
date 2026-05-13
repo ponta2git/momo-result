@@ -27,8 +27,8 @@ object MatchModule:
       nowF: F[Instant],
       security: EndpointSecurity[F],
   ): List[ServerEndpoint[Any, F]] = List(
-    MatchesEndpoints.confirm.serverLogic { case (devUser, csrfToken, idemKey, request) =>
-      security.authorizeMutation(devUser, csrfToken) { member =>
+    MatchesEndpoints.confirm.serverLogic { case (accountHeader, csrfToken, idemKey, request) =>
+      security.authorizeMutation(accountHeader, csrfToken) { member =>
         IdempotencyReplay.wrap[F, ConfirmMatchRequest, ConfirmMatchResponse](
           idempotency,
           idemKey,
@@ -43,7 +43,7 @@ object MatchModule:
             ConfirmMatchResponse(
               matchId = record.id.value,
               heldEventId = record.heldEventId.value,
-              matchNoInEvent = record.matchNoInEvent,
+              matchNoInEvent = record.matchNoInEvent.value,
               createdAt = DateTimeFormatter.ISO_INSTANT.format(record.createdAt),
             )
           ),
@@ -51,30 +51,30 @@ object MatchModule:
       }
     },
     MatchesEndpoints.list.serverLogic {
-      case (heldEventId, gameTitleId, seasonMasterId, status, kind, limit, devUser) => security
-          .authorizeRead(devUser) { _ =>
-            security.respond(listMatches.run(
-              MatchListCodec
-                .toListCommand(heldEventId, gameTitleId, seasonMasterId, status, kind, limit)
-            ))(items => MatchListResponse(items.map(MatchSummaryResponse.from)))
-          }
+      case (heldEventId, gameTitleId, seasonMasterId, status, kind, limit, accountHeader) =>
+        security.authorizeRead(accountHeader) { _ =>
+          security.respond(listMatches.run(
+            MatchListCodec
+              .toListCommand(heldEventId, gameTitleId, seasonMasterId, status, kind, limit)
+          ))(items => MatchListResponse(items.map(MatchSummaryResponse.from)))
+        }
     },
-    MatchesEndpoints.get.serverLogic { case (matchId, devUser) =>
-      security.authorizeRead(devUser) { _ =>
-        security.respond(getMatch.run(MatchId(matchId)))(MatchDetailResponse.from)
+    MatchesEndpoints.get.serverLogic { case (matchId, accountHeader) =>
+      security.authorizeRead(accountHeader) { _ =>
+        security.respond(getMatch.run(MatchId.unsafeFromString(matchId)))(MatchDetailResponse.from)
       }
     },
-    MatchesEndpoints.update.serverLogic { case (matchId, devUser, csrfToken, request) =>
-      security.authorizeMutation(devUser, csrfToken) { _ =>
+    MatchesEndpoints.update.serverLogic { case (matchId, accountHeader, csrfToken, request) =>
+      security.authorizeMutation(accountHeader, csrfToken) { _ =>
         security.respond(
-          updateMatch.run(MatchId(matchId), MatchCodec.toUpdateCommand(request))
+          updateMatch.run(MatchId.unsafeFromString(matchId), MatchCodec.toUpdateCommand(request))
         )(MatchDetailResponse.from)
       }
     },
-    MatchesEndpoints.delete.serverLogic { case (matchId, devUser, csrfToken) =>
-      security.authorizeMutation(devUser, csrfToken) { _ =>
+    MatchesEndpoints.delete.serverLogic { case (matchId, accountHeader, csrfToken) =>
+      security.authorizeMutation(accountHeader, csrfToken) { _ =>
         security.respond(
-          deleteMatch.run(MatchId(matchId))
+          deleteMatch.run(MatchId.unsafeFromString(matchId))
         )(_ => DeleteMatchResponse(matchId, deleted = true))
       }
     },

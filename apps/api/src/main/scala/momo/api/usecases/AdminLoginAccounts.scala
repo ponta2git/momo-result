@@ -48,7 +48,7 @@ final class CreateLoginAccount[F[_]: MonadThrow](
     _ <- EitherT.fromEither[F](
       Either.cond(existing.isEmpty, (), AppError.Conflict("discordUserId is already registered."))
     )
-    id <- EitherT.liftF(nextId.map(AccountId(_)))
+    id <- EitherT.liftF(nextId.map(AccountId.unsafeFromString(_)))
     at <- EitherT.liftF(now)
     created <- EitherT.liftF(accounts.create(CreateLoginAccountData(
       id = id,
@@ -66,7 +66,7 @@ final class CreateLoginAccount[F[_]: MonadThrow](
     val trimmed = value.trim
     Either.cond(
       trimmed.matches("^[0-9]{5,32}$"),
-      UserId(trimmed),
+      UserId.unsafeFromString(trimmed),
       AppError.ValidationFailed("discordUserId must be a Discord snowflake-like numeric id."),
     )
 
@@ -82,7 +82,7 @@ final class CreateLoginAccount[F[_]: MonadThrow](
     val trimmed = value.trim
     Either.cond(
       trimmed.nonEmpty,
-      MemberId(trimmed),
+      MemberId.unsafeFromString(trimmed),
       AppError.ValidationFailed("playerMemberId must not be blank."),
     )
 
@@ -104,7 +104,7 @@ final class UpdateLoginAccount[F[_]: MonadThrow](
       nextIsAdmin = command.isAdmin.getOrElse(existing.isAdmin)
       _ <- ensureLastAdminIsKept(existing, nextLoginEnabled, nextIsAdmin)
       at <- EitherT.liftF(now)
-      updated <- accounts.update(
+      updatedOpt <- EitherT.liftF(accounts.update(
         id,
         UpdateLoginAccountData(
           displayName = displayName,
@@ -113,7 +113,12 @@ final class UpdateLoginAccount[F[_]: MonadThrow](
           isAdmin = command.isAdmin,
           updatedAt = at,
         ),
-      ).orNotFound("login account", id.value)
+      ))
+      updated <- updatedOpt match
+        case Some(value) => EitherT.rightT[F, AppError](value)
+        case None if wouldRemoveEnabledAdmin(existing, nextLoginEnabled, nextIsAdmin) =>
+          EitherT.leftT[F, LoginAccount](lastAdminConflict)
+        case None => EitherT.leftT[F, LoginAccount](AppError.NotFound("login account", id.value))
       _ <-
         if existing.loginEnabled && !updated.loginEnabled then
           EitherT.liftF(sessions.deleteByAccount(id).void)
@@ -125,15 +130,20 @@ final class UpdateLoginAccount[F[_]: MonadThrow](
       nextLoginEnabled: Boolean,
       nextIsAdmin: Boolean,
   ): EitherT[F, AppError, Unit] =
-    if existing.loginEnabled && existing.isAdmin && (!nextLoginEnabled || !nextIsAdmin) then
-      EitherT(accounts.enabledAdminCount.map { count =>
-        Either.cond(
-          count > 1,
-          (),
-          AppError.Conflict("At least one enabled administrator account is required."),
-        )
-      })
+    if wouldRemoveEnabledAdmin(existing, nextLoginEnabled, nextIsAdmin) then
+      EitherT(
+        accounts.enabledAdminCount.map(count => Either.cond(count > 1, (), lastAdminConflict))
+      )
     else EitherT.rightT[F, AppError](())
+
+  private def wouldRemoveEnabledAdmin(
+      existing: LoginAccount,
+      nextLoginEnabled: Boolean,
+      nextIsAdmin: Boolean,
+  ): Boolean = existing.loginEnabled && existing.isAdmin && (!nextLoginEnabled || !nextIsAdmin)
+
+  private val lastAdminConflict: AppError = AppError
+    .Conflict("At least one enabled administrator account is required.")
 
   private def validateDisplayName(value: String): Either[AppError, String] =
     val trimmed = value.trim
@@ -147,6 +157,6 @@ final class UpdateLoginAccount[F[_]: MonadThrow](
     val trimmed = value.trim
     Either.cond(
       trimmed.nonEmpty,
-      MemberId(trimmed),
+      MemberId.unsafeFromString(trimmed),
       AppError.ValidationFailed("playerMemberId must not be blank."),
     )

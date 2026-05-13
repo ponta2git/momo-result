@@ -13,9 +13,9 @@ object MatchListCodec:
       kind: Option[String],
       limit: Option[Int],
   ): ListMatchesCommand = ListMatchesCommand(
-    heldEventId = heldEventId.map(HeldEventId(_)),
-    gameTitleId = gameTitleId.map(GameTitleId(_)),
-    seasonMasterId = seasonMasterId.map(SeasonMasterId(_)),
+    heldEventId = heldEventId.map(HeldEventId.unsafeFromString(_)),
+    gameTitleId = gameTitleId.map(GameTitleId.unsafeFromString(_)),
+    seasonMasterId = seasonMasterId.map(SeasonMasterId.unsafeFromString(_)),
     status = status,
     kind = kind,
     limit = limit,

@@ -12,10 +12,11 @@ final class MatchDraftLifecycleSpec extends CatsEffectSuite:
   private val createdAt = Instant.parse("2026-05-04T10:00:00Z")
   private val laterAt = Instant.parse("2026-05-04T10:05:00Z")
 
-  private def newEditing(status: MatchDraftStatus): MatchDraft.Editing = MatchDraft.Editing(
+  private def newEditing(status: MatchDraftStatus): MatchDraft.Editable = MatchDraft.editable(
     common = MatchDraftCommon(
-      id = MatchDraftId("d1"),
-      createdByMemberId = MemberId("m1"),
+      id = MatchDraftId.unsafeFromString("d1"),
+      createdByAccountId = AccountId.unsafeFromString("account_m1"),
+      createdByMemberId = Some(MemberId.unsafeFromString("m1")),
       heldEventId = None,
       matchNoInEvent = None,
       gameTitleId = None,
@@ -36,28 +37,28 @@ final class MatchDraftLifecycleSpec extends CatsEffectSuite:
       updatedAt = createdAt,
     ),
     status = status,
-  )
+  ).getOrElse(fail(s"invalid editable status=${status.wire}"))
 
-  test("Editing → Confirmed via markConfirmed; subsequent transitions return false"):
+  test("Editable → Confirmed via markConfirmed; subsequent transitions return false"):
     for
       repo <- InMemoryMatchDraftsRepository.create[IO]
       draft = newEditing(MatchDraftStatus.DraftReady)
       _ <- repo.create(draft)
-      ok <- repo.markConfirmed(draft.id, MatchId("match_1"), laterAt)
+      ok <- repo.markConfirmed(draft.id, MatchId.unsafeFromString("match_1"), laterAt)
       _ = assert(ok)
       after <- repo.find(draft.id)
       _ = after match
         case Some(c: MatchDraft.Confirmed) =>
-          assertEquals(c.confirmedMatchIdValue, MatchId("match_1"))
-          assertEquals(c.confirmedMatchId, Some(MatchId("match_1")))
+          assertEquals(c.confirmedMatchIdValue, MatchId.unsafeFromString("match_1"))
+          assertEquals(c.confirmedMatchId, Some(MatchId.unsafeFromString("match_1")))
           assertEquals(c.status, MatchDraftStatus.Confirmed)
           assertEquals(c.updatedAt, laterAt)
         case other => fail(s"expected Confirmed, got $other")
-      // a second confirm attempt on a non-Editing draft should fail
-      ok2 <- repo.markConfirmed(draft.id, MatchId("match_2"), laterAt)
+      // a second confirm attempt on a non-editable draft should fail
+      ok2 <- repo.markConfirmed(draft.id, MatchId.unsafeFromString("match_2"), laterAt)
     yield assert(!ok2)
 
-  test("cancel only succeeds on Editing; idempotent calls return false on Cancelled"):
+  test("cancel only succeeds on editable drafts; idempotent calls return false on Cancelled"):
     for
       repo <- InMemoryMatchDraftsRepository.create[IO]
       draft = newEditing(MatchDraftStatus.NeedsReview)
@@ -73,8 +74,9 @@ final class MatchDraftLifecycleSpec extends CatsEffectSuite:
 
   test("smart factory rejects status=Confirmed without confirmedMatchId"):
     val result = MatchDraft.fromInputs(
-      id = MatchDraftId("d2"),
-      createdByMemberId = MemberId("m1"),
+      id = MatchDraftId.unsafeFromString("d2"),
+      createdByAccountId = AccountId.unsafeFromString("account_m1"),
+      createdByMemberId = Some(MemberId.unsafeFromString("m1")),
       status = MatchDraftStatus.Confirmed,
       heldEventId = None,
       matchNoInEvent = None,

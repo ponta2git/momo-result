@@ -12,7 +12,7 @@ object MatchesEndpoints:
   val confirm: PublicEndpoint[ConfirmInput, ProblemResponse, ConfirmMatchResponse, Any] = endpoint
     .post
     .in("api" / "matches")
-    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.accountHeader)
     .in(CommonEndpoint.csrfHeader)
     .in(CommonEndpoint.idempotencyKeyHeader)
     .in(jsonBody[ConfirmMatchRequest])
@@ -39,7 +39,7 @@ object MatchesEndpoints:
     .in(query[Option[String]]("status"))
     .in(query[Option[String]]("kind"))
     .in(query[Option[Int]]("limit"))
-    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.accountHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[MatchListResponse])
     .tag("matches")
@@ -48,7 +48,7 @@ object MatchesEndpoints:
     endpoint
       .get
       .in("api" / "matches" / path[String]("matchId"))
-      .in(CommonEndpoint.devUserHeader)
+      .in(CommonEndpoint.accountHeader)
       .errorOut(CommonEndpoint.errorOut)
       .out(jsonBody[MatchDetailResponse])
       .tag("matches")
@@ -58,7 +58,7 @@ object MatchesEndpoints:
   val update: PublicEndpoint[UpdateInput, ProblemResponse, MatchDetailResponse, Any] = endpoint
     .put
     .in("api" / "matches" / path[String]("matchId"))
-    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.accountHeader)
     .in(CommonEndpoint.csrfHeader)
     .in(jsonBody[UpdateMatchRequest])
     .errorOut(CommonEndpoint.errorOut)
@@ -70,7 +70,7 @@ object MatchesEndpoints:
   val delete: PublicEndpoint[DeleteInput, ProblemResponse, DeleteMatchResponse, Any] = endpoint
     .delete
     .in("api" / "matches" / path[String]("matchId"))
-    .in(CommonEndpoint.devUserHeader)
+    .in(CommonEndpoint.accountHeader)
     .in(CommonEndpoint.csrfHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[DeleteMatchResponse])

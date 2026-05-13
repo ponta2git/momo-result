@@ -44,12 +44,12 @@ object MatchExportRenderer:
     row.rank.toString,
     row.totalAssetsManYen.toString,
     row.revenueManYen.toString,
-    row.incidents.destination.toString,
-    row.incidents.plusStation.toString,
-    row.incidents.minusStation.toString,
-    row.incidents.cardStation.toString,
-    row.incidents.cardShop.toString,
-    row.incidents.suriNoGinji.toString,
+    row.incidents.destination.value.toString,
+    row.incidents.plusStation.value.toString,
+    row.incidents.minusStation.value.toString,
+    row.incidents.cardStation.value.toString,
+    row.incidents.cardShop.value.toString,
+    row.incidents.suriNoGinji.value.toString,
   )
 
   private def renderLine(format: MatchExportFormat, fields: List[String]): String = format match

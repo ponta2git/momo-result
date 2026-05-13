@@ -66,3 +66,19 @@ class AppConfigSpec extends FunSuite:
     val result = AppConfig.ensureProdSslMode("jdbc:postgresql://localhost:5432/mydb", AppEnv.Test)
     assertEquals(result, Right("jdbc:postgresql://localhost:5432/mydb"))
   }
+
+  test("numeric env parsing rejects malformed values instead of silently using defaults") {
+    assert(
+      AppConfig.parsePositiveLong(Map("REQUEST_MAX_BYTES" -> "nope"), "REQUEST_MAX_BYTES", 1L)
+        .isLeft
+    )
+    assert(AppConfig.parsePositiveInt(Map("DB_POOL_SIZE" -> "0"), "DB_POOL_SIZE", 2).isLeft)
+    assertEquals(
+      AppConfig.parseNonNegativeInt(
+        Map("EXPORT_RATE_LIMIT_PER_MINUTE" -> "0"),
+        "EXPORT_RATE_LIMIT_PER_MINUTE",
+        30,
+      ),
+      Right(0),
+    )
+  }

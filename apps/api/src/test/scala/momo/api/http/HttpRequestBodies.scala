@@ -55,16 +55,16 @@ object HttpRequestBodies:
       status = None,
     ).asJson
 
-    def createOcrJob(imageId: String, requestedImageType: String): Json =
-      CreateOcrJobRequest(imageId = imageId, requestedImageType = requestedImageType).asJson
+    def createOcrJob(imageId: String, requestedScreenType: String): Json =
+      CreateOcrJobRequest(imageId = imageId, requestedScreenType = requestedScreenType).asJson
 
     def createOcrJobForDraft(
         imageId: String,
-        requestedImageType: String,
+        requestedScreenType: String,
         matchDraftId: String,
     ): Json = CreateOcrJobRequest(
       imageId = imageId,
-      requestedImageType = requestedImageType,
+      requestedScreenType = requestedScreenType,
       matchDraftId = Some(matchDraftId),
     ).asJson
 

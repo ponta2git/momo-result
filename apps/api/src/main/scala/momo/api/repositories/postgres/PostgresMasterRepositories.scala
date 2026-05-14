@@ -31,6 +31,9 @@ private def appError[A](error: AppError): ConnectionIO[A] = MonadThrow[Connectio
 
 private def conflict[A](message: String): ConnectionIO[A] = appError(AppError.Conflict(message))
 
+private def notFound[A](resource: String, id: String): ConnectionIO[A] =
+  appError(AppError.NotFound(resource, id))
+
 object PostgresGameTitles:
 
   val alg: GameTitlesAlg[ConnectionIO] = new GameTitlesAlg[ConnectionIO]:
@@ -79,10 +82,16 @@ object PostgresGameTitles:
         UPDATE game_titles
         SET name = ${title.name}, layout_family = ${title.layoutFamily}
         WHERE id = ${title.id}
-      """.update.run.void
+      """.update.run.flatMap {
+      case 1 => ().pure[ConnectionIO]
+      case _ => notFound("game title", title.id.value)
+    }
 
     override def delete(id: GameTitleId): ConnectionIO[Unit] =
-      sql"DELETE FROM game_titles WHERE id = $id".update.run.void.exceptSomeSqlState {
+      sql"DELETE FROM game_titles WHERE id = $id".update.run.flatMap {
+        case 1 => ().pure[ConnectionIO]
+        case _ => notFound("game title", id.value)
+      }.exceptSomeSqlState {
         case state if isForeignKeyViolation(state) => conflict("game title is still referenced.")
       }
 
@@ -148,10 +157,16 @@ object PostgresMapMasters:
         UPDATE map_masters
         SET name = ${map.name}
         WHERE id = ${map.id}
-      """.update.run.void
+      """.update.run.flatMap {
+      case 1 => ().pure[ConnectionIO]
+      case _ => notFound("map master", map.id.value)
+    }
 
     override def delete(id: MapMasterId): ConnectionIO[Unit] =
-      sql"DELETE FROM map_masters WHERE id = $id".update.run.void.exceptSomeSqlState {
+      sql"DELETE FROM map_masters WHERE id = $id".update.run.flatMap {
+        case 1 => ().pure[ConnectionIO]
+        case _ => notFound("map master", id.value)
+      }.exceptSomeSqlState {
         case state if isForeignKeyViolation(state) => conflict("map master is still referenced.")
       }
 
@@ -218,10 +233,16 @@ object PostgresSeasonMasters:
         UPDATE season_masters
         SET name = ${season.name}
         WHERE id = ${season.id}
-      """.update.run.void
+      """.update.run.flatMap {
+      case 1 => ().pure[ConnectionIO]
+      case _ => notFound("season master", season.id.value)
+    }
 
     override def delete(id: SeasonMasterId): ConnectionIO[Unit] =
-      sql"DELETE FROM season_masters WHERE id = $id".update.run.void.exceptSomeSqlState {
+      sql"DELETE FROM season_masters WHERE id = $id".update.run.flatMap {
+        case 1 => ().pure[ConnectionIO]
+        case _ => notFound("season master", id.value)
+      }.exceptSomeSqlState {
         case state if isForeignKeyViolation(state) => conflict("season master is still referenced.")
       }
 
@@ -284,13 +305,19 @@ object PostgresMemberAliases:
         UPDATE member_aliases
         SET member_id = ${alias.memberId}, alias = ${alias.alias}
         WHERE id = ${alias.id}
-      """.update.run.void.exceptSomeSqlState {
+      """.update.run.flatMap {
+      case 1 => ().pure[ConnectionIO]
+      case _ => notFound("member alias", alias.id)
+    }.exceptSomeSqlState {
       case state if isUniqueViolation(state) =>
         conflict(s"member alias already exists: ${alias.alias}")
     }
 
     override def delete(id: String): ConnectionIO[Unit] =
-      sql"DELETE FROM member_aliases WHERE id = $id".update.run.void
+      sql"DELETE FROM member_aliases WHERE id = $id".update.run.flatMap {
+        case 1 => ().pure[ConnectionIO]
+        case _ => notFound("member alias", id)
+      }
 end PostgresMemberAliases
 
 final class PostgresMemberAliasesRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])

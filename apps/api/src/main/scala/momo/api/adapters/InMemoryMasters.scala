@@ -9,6 +9,7 @@ import momo.api.domain.ids.*
 import momo.api.domain.{
   GameTitle, IncidentMaster, LoginAccount, MapMaster, Member, MemberAlias, SeasonMaster,
 }
+import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.{
   CreateLoginAccountData, GameTitlesRepository, IncidentMastersRepository, LoginAccountsRepository,
   MapMastersRepository, MemberAliasesRepository, MembersRepository, SeasonMastersRepository,
@@ -21,14 +22,46 @@ final class InMemoryGameTitlesRepository[F[_]: Sync] private (
   override def list: F[List[GameTitle]] = ref.get
     .map(_.values.toList.sortBy(t => (t.displayOrder, t.createdAt, t.id.value)))
   override def find(id: GameTitleId): F[Option[GameTitle]] = ref.get.map(_.get(id))
-  override def create(title: GameTitle): F[Unit] = ref.update(_ + (title.id -> title))
+  override def create(title: GameTitle): F[Unit] = ref.modify { items =>
+    if containsGameTitleConflict(items, title, excluding = None) then
+      (
+        items,
+        Left(masterConflict(s"game_title already exists: ${title.id.value} or ${title.name}")),
+      )
+    else (items.updated(title.id, title), Right(()))
+  }.flatMap(completeUnit)
   override def createWithNextDisplayOrder(title: GameTitle): F[GameTitle] = ref.modify { items =>
-    val nextOrder = items.values.map(_.displayOrder).maxOption.getOrElse(0) + 1
-    val created = title.copy(displayOrder = nextOrder)
-    (items + (created.id -> created), created)
-  }
-  override def update(title: GameTitle): F[Unit] = ref.update(_.updated(title.id, title))
-  override def delete(id: GameTitleId): F[Unit] = ref.update(_ - id)
+    if containsGameTitleConflict(items, title, excluding = None) then
+      (
+        items,
+        Left(masterConflict(s"game_title already exists: ${title.id.value} or ${title.name}")),
+      )
+    else
+      val nextOrder = items.values.map(_.displayOrder).maxOption.getOrElse(0) + 1
+      val created = title.copy(displayOrder = nextOrder)
+      (items.updated(created.id, created), Right(created))
+  }.flatMap(complete)
+  override def update(title: GameTitle): F[Unit] = ref.modify { items =>
+    if !items.contains(title.id) then (items, Left(notFound("game title", title.id.value)))
+    else if containsGameTitleConflict(items, title, excluding = Some(title.id)) then
+      (
+        items,
+        Left(masterConflict(s"game_title already exists: ${title.id.value} or ${title.name}")),
+      )
+    else (items.updated(title.id, title), Right(()))
+  }.flatMap(completeUnit)
+  override def delete(id: GameTitleId): F[Unit] = ref.modify { items =>
+    if items.contains(id) then (items - id, Right(()))
+    else (items, Left(notFound("game title", id.value)))
+  }.flatMap(completeUnit)
+
+  private def containsGameTitleConflict(
+      items: Map[GameTitleId, GameTitle],
+      title: GameTitle,
+      excluding: Option[GameTitleId],
+  ): Boolean = items.values.exists(existing =>
+    !excluding.contains(existing.id) && (existing.id == title.id || existing.name == title.name)
+  )
 
 object InMemoryGameTitlesRepository:
   def create[F[_]: Sync]: F[InMemoryGameTitlesRepository[F]] = Ref
@@ -44,15 +77,40 @@ final class InMemoryMapMastersRepository[F[_]: Sync] private (
     items.toList.sortBy(x => (x.gameTitleId.value, x.displayOrder, x.createdAt, x.id.value))
   }
   override def find(id: MapMasterId): F[Option[MapMaster]] = ref.get.map(_.get(id))
-  override def create(map: MapMaster): F[Unit] = ref.update(_ + (map.id -> map))
+  override def create(map: MapMaster): F[Unit] = ref.modify { items =>
+    if containsMapConflict(items, map, excluding = None) then
+      (items, Left(masterConflict(s"map_master already exists: ${map.id.value} or ${map.name}")))
+    else (items.updated(map.id, map), Right(()))
+  }.flatMap(completeUnit)
   override def createWithNextDisplayOrder(map: MapMaster): F[MapMaster] = ref.modify { items =>
-    val nextOrder = items.values.filter(_.gameTitleId == map.gameTitleId).map(_.displayOrder)
-      .maxOption.getOrElse(0) + 1
-    val created = map.copy(displayOrder = nextOrder)
-    (items + (created.id -> created), created)
-  }
-  override def update(map: MapMaster): F[Unit] = ref.update(_.updated(map.id, map))
-  override def delete(id: MapMasterId): F[Unit] = ref.update(_ - id)
+    if containsMapConflict(items, map, excluding = None) then
+      (items, Left(masterConflict(s"map_master already exists: ${map.id.value} or ${map.name}")))
+    else
+      val nextOrder = items.values.filter(_.gameTitleId == map.gameTitleId).map(_.displayOrder)
+        .maxOption.getOrElse(0) + 1
+      val created = map.copy(displayOrder = nextOrder)
+      (items.updated(created.id, created), Right(created))
+  }.flatMap(complete)
+  override def update(map: MapMaster): F[Unit] = ref.modify { items =>
+    if !items.contains(map.id) then (items, Left(notFound("map master", map.id.value)))
+    else if containsMapConflict(items, map, excluding = Some(map.id)) then
+      (items, Left(masterConflict(s"map_master already exists: ${map.id.value} or ${map.name}")))
+    else (items.updated(map.id, map), Right(()))
+  }.flatMap(completeUnit)
+  override def delete(id: MapMasterId): F[Unit] = ref.modify { items =>
+    if items.contains(id) then (items - id, Right(()))
+    else (items, Left(notFound("map master", id.value)))
+  }.flatMap(completeUnit)
+
+  private def containsMapConflict(
+      items: Map[MapMasterId, MapMaster],
+      map: MapMaster,
+      excluding: Option[MapMasterId],
+  ): Boolean = items.values.exists(existing =>
+    !excluding.contains(existing.id) &&
+      (existing.id == map.id ||
+        (existing.gameTitleId == map.gameTitleId && existing.name == map.name))
+  )
 
 object InMemoryMapMastersRepository:
   def create[F[_]: Sync]: F[InMemoryMapMastersRepository[F]] = Ref
@@ -68,16 +126,51 @@ final class InMemorySeasonMastersRepository[F[_]: Sync] private (
     items.toList.sortBy(x => (x.gameTitleId.value, x.displayOrder, x.createdAt, x.id.value))
   }
   override def find(id: SeasonMasterId): F[Option[SeasonMaster]] = ref.get.map(_.get(id))
-  override def create(season: SeasonMaster): F[Unit] = ref.update(_ + (season.id -> season))
+  override def create(season: SeasonMaster): F[Unit] = ref.modify { items =>
+    if containsSeasonConflict(items, season, excluding = None) then
+      (
+        items,
+        Left(masterConflict(s"season_master already exists: ${season.id.value} or ${season.name}")),
+      )
+    else (items.updated(season.id, season), Right(()))
+  }.flatMap(completeUnit)
   override def createWithNextDisplayOrder(season: SeasonMaster): F[SeasonMaster] = ref
     .modify { items =>
-      val nextOrder = items.values.filter(_.gameTitleId == season.gameTitleId).map(_.displayOrder)
-        .maxOption.getOrElse(0) + 1
-      val created = season.copy(displayOrder = nextOrder)
-      (items + (created.id -> created), created)
-    }
-  override def update(season: SeasonMaster): F[Unit] = ref.update(_.updated(season.id, season))
-  override def delete(id: SeasonMasterId): F[Unit] = ref.update(_ - id)
+      if containsSeasonConflict(items, season, excluding = None) then
+        (
+          items,
+          Left(masterConflict(s"season_master already exists: ${season.id.value} or ${season
+              .name}")),
+        )
+      else
+        val nextOrder = items.values.filter(_.gameTitleId == season.gameTitleId).map(_.displayOrder)
+          .maxOption.getOrElse(0) + 1
+        val created = season.copy(displayOrder = nextOrder)
+        (items.updated(created.id, created), Right(created))
+    }.flatMap(complete)
+  override def update(season: SeasonMaster): F[Unit] = ref.modify { items =>
+    if !items.contains(season.id) then (items, Left(notFound("season master", season.id.value)))
+    else if containsSeasonConflict(items, season, excluding = Some(season.id)) then
+      (
+        items,
+        Left(masterConflict(s"season_master already exists: ${season.id.value} or ${season.name}")),
+      )
+    else (items.updated(season.id, season), Right(()))
+  }.flatMap(completeUnit)
+  override def delete(id: SeasonMasterId): F[Unit] = ref.modify { items =>
+    if items.contains(id) then (items - id, Right(()))
+    else (items, Left(notFound("season master", id.value)))
+  }.flatMap(completeUnit)
+
+  private def containsSeasonConflict(
+      items: Map[SeasonMasterId, SeasonMaster],
+      season: SeasonMaster,
+      excluding: Option[SeasonMasterId],
+  ): Boolean = items.values.exists(existing =>
+    !excluding.contains(existing.id) &&
+      (existing.id == season.id ||
+        (existing.gameTitleId == season.gameTitleId && existing.name == season.name))
+  )
 
 object InMemorySeasonMastersRepository:
   def create[F[_]: Sync]: F[InMemorySeasonMastersRepository[F]] = Ref
@@ -145,10 +238,31 @@ final class InMemoryMemberAliasesRepository[F[_]: Sync] private (ref: Ref[F, Lis
       case None => all
   }
   override def find(id: String): F[Option[MemberAlias]] = ref.get.map(_.find(_.id == id))
-  override def create(alias: MemberAlias): F[Unit] = ref.update(_ :+ alias)
-  override def update(alias: MemberAlias): F[Unit] = ref
-    .update(_.map(existing => if existing.id == alias.id then alias else existing))
-  override def delete(id: String): F[Unit] = ref.update(_.filterNot(_.id == id))
+  override def create(alias: MemberAlias): F[Unit] = ref.modify { aliases =>
+    if containsAliasConflict(aliases, alias, excluding = None) then
+      (aliases, Left(masterConflict(s"member alias already exists: ${alias.alias}")))
+    else (aliases :+ alias, Right(()))
+  }.flatMap(completeUnit)
+  override def update(alias: MemberAlias): F[Unit] = ref.modify { aliases =>
+    if !aliases.exists(_.id == alias.id) then (aliases, Left(notFound("member alias", alias.id)))
+    else if containsAliasConflict(aliases, alias, excluding = Some(alias.id)) then
+      (aliases, Left(masterConflict(s"member alias already exists: ${alias.alias}")))
+    else (aliases.map(existing => if existing.id == alias.id then alias else existing), Right(()))
+  }.flatMap(completeUnit)
+  override def delete(id: String): F[Unit] = ref.modify { aliases =>
+    if aliases.exists(_.id == id) then (aliases.filterNot(_.id == id), Right(()))
+    else (aliases, Left(notFound("member alias", id)))
+  }.flatMap(completeUnit)
+
+  private def containsAliasConflict(
+      aliases: List[MemberAlias],
+      alias: MemberAlias,
+      excluding: Option[String],
+  ): Boolean = aliases.exists(existing =>
+    !excluding.contains(existing.id) &&
+      (existing.id == alias.id ||
+        (existing.memberId == alias.memberId && existing.alias == alias.alias))
+  )
 
 object InMemoryMemberAliasesRepository:
   def create[F[_]: Sync]: F[InMemoryMemberAliasesRepository[F]] = Ref.of[F, List[MemberAlias]](Nil)
@@ -209,3 +323,15 @@ object InMemoryLoginAccountsRepository:
   def create[F[_]: Sync](accounts: List[LoginAccount]): F[InMemoryLoginAccountsRepository[F]] = Ref
     .of[F, Map[AccountId, LoginAccount]](accounts.map(a => a.id -> a).toMap)
     .map(new InMemoryLoginAccountsRepository(_))
+
+private def masterConflict(message: String): AppException =
+  new AppException(AppError.Conflict(message))
+
+private def notFound(resource: String, id: String): AppException =
+  new AppException(AppError.NotFound(resource, id))
+
+private def complete[F[_]: Sync, A](result: Either[AppException, A]): F[A] = result match
+  case Right(value) => Sync[F].pure(value)
+  case Left(error) => Sync[F].raiseError(error)
+
+private def completeUnit[F[_]: Sync](result: Either[AppException, Unit]): F[Unit] = complete(result)

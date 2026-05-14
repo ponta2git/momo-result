@@ -74,6 +74,9 @@ final class InMemoryMatchesRepositorySpec extends MomoCatsEffectSuite:
   ): Unit = result match
     case Left(error: AppException) =>
       assertEquals(error.error.code, expectedCode)
-      assert(error.error.detail.contains(detailContains), s"unexpected detail: ${error.error.detail}")
+      assert(
+        error.error.detail.contains(detailContains),
+        s"unexpected detail: ${error.error.detail}",
+      )
     case Left(error) => fail(s"expected AppException($expectedCode), got $error")
     case Right(_) => fail(s"expected AppException($expectedCode), got success")

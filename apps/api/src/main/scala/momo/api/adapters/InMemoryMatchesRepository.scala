@@ -1,18 +1,28 @@
 package momo.api.adapters
 
 import cats.effect.{Ref, Sync}
-import cats.syntax.functor.*
+import cats.syntax.all.*
 
 import momo.api.domain.ids.*
 import momo.api.domain.{MatchNoInEvent, MatchRecord}
+import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.MatchesRepository
 
 final class InMemoryMatchesRepository[F[_]: Sync] private (ref: Ref[F, Map[MatchId, MatchRecord]])
     extends MatchesRepository[F]:
-  override def create(record: MatchRecord): F[Unit] = ref.update(_ + (record.id -> record))
+  override def create(record: MatchRecord): F[Unit] = ref.modify { current =>
+    if current.contains(record.id) || containsMatchNo(current, record, excluding = None) then
+      (current, Left(conflict(record)))
+    else (current.updated(record.id, record), Right(()))
+  }.flatMap(complete)
 
   override def update(record: MatchRecord, updatedAt: java.time.Instant): F[Unit] = ref
-    .update(_ + (record.id -> record))
+    .modify { current =>
+      if !current.contains(record.id) then (current, Left(notFound(record.id)))
+      else if containsMatchNo(current, record, excluding = Some(record.id)) then
+        (current, Left(conflict(record)))
+      else (current.updated(record.id, record), Right(()))
+    }.flatMap(complete)
 
   override def delete(id: MatchId): F[Boolean] = ref
     .modify(m => if m.contains(id) then (m - id, true) else (m, false))
@@ -55,6 +65,26 @@ final class InMemoryMatchesRepository[F[_]: Sync] private (ref: Ref[F, Map[Match
         .groupMapReduce(_.heldEventId)(_ => 1)(_ + _)
       heldEventIds.map(id => id -> counts.getOrElse(id, 0)).toMap
     }
+
+  private def containsMatchNo(
+      current: Map[MatchId, MatchRecord],
+      record: MatchRecord,
+      excluding: Option[MatchId],
+  ): Boolean = current.values.exists(r =>
+    !excluding.contains(r.id) && r.heldEventId == record.heldEventId &&
+      r.matchNoInEvent == record.matchNoInEvent
+  )
+
+  private def conflict(record: MatchRecord): AppException =
+    new AppException(AppError.Conflict(s"matchNoInEvent ${record.matchNoInEvent.value
+        .toString} already exists for held event ${record.heldEventId.value}."))
+
+  private def notFound(id: MatchId): AppException =
+    new AppException(AppError.NotFound("match", id.value))
+
+  private def complete(result: Either[AppException, Unit]): F[Unit] = result match
+    case Right(()) => Sync[F].unit
+    case Left(error) => Sync[F].raiseError(error)
 
 object InMemoryMatchesRepository:
   def create[F[_]: Sync]: F[InMemoryMatchesRepository[F]] = Ref

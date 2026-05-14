@@ -136,6 +136,7 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
         claimed.map(_.payload.fields("jobId")),
         List(expiredJobId.value, pendingJobId.value),
       )
+      assertEquals(claimed.map(_.claimExpiresAt), List(claimUntil, claimUntil))
       assertEquals(
         states,
         List(
@@ -163,14 +164,17 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
         claimExpiresAt = Some(claimUntil),
         createdAt = now.minusSeconds(60),
       )
-      _ <- repo.markDelivered("outbox-delivered", "1700000000000-0", deliveredAt)
+      delivered <- repo
+        .markDelivered("outbox-delivered", claimUntil, "1700000000000-0", deliveredAt)
       row <- sql"""
         SELECT status, claim_expires_at, delivered_at, redis_message_id
         FROM ocr_queue_outbox
         WHERE id = 'outbox-delivered'
       """.query[(String, Option[Instant], Option[Instant], Option[String])].unique
         .transact(transactor)
-    yield assertEquals(row, ("DELIVERED", None, Some(deliveredAt), Some("1700000000000-0")))
+    yield
+      assert(delivered)
+      assertEquals(row, ("DELIVERED", None, Some(deliveredAt), Some("1700000000000-0")))
 
   test("releaseForRetry increments attempts, records sanitized error class, and reschedules"):
     val jobId = OcrJobId.unsafeFromString("job-outbox-retry")
@@ -191,8 +195,9 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
         claimExpiresAt = Some(claimUntil),
         createdAt = now.minusSeconds(60),
       )
-      _ <- repo.releaseForRetry(
+      released <- repo.releaseForRetry(
         id = "outbox-retry",
+        claimExpiresAt = claimUntil,
         lastError = "RuntimeException",
         nextAttemptAt = nextAttemptAt,
         now = releasedAt,
@@ -203,10 +208,54 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
         WHERE id = 'outbox-retry'
       """.query[(String, Int, Option[String], Option[Instant], Instant, Instant)].unique
         .transact(transactor)
-    yield assertEquals(
-      row,
-      ("PENDING", 2, Some("RuntimeException"), None, nextAttemptAt, releasedAt),
-    )
+    yield
+      assert(released)
+      assertEquals(row, ("PENDING", 2, Some("RuntimeException"), None, nextAttemptAt, releasedAt))
+
+  test("releaseForRetry ignores stale claims and does not reopen delivered rows"):
+    val jobId = OcrJobId.unsafeFromString("job-outbox-stale-release")
+    val deliveredAt = now.plusSeconds(10)
+    val staleReleaseAt = now.plusSeconds(20)
+    for
+      _ <- insertOcrRows(
+        jobId,
+        OcrDraftId.unsafeFromString("draft-outbox-stale-release"),
+        now.minusSeconds(60),
+      )
+      _ <- insertOutbox(
+        id = "outbox-stale-release",
+        jobId = jobId,
+        status = OcrQueueOutboxStatus.InFlight,
+        attemptCount = 1,
+        nextAttemptAt = now.minusSeconds(1),
+        claimExpiresAt = Some(claimUntil),
+        createdAt = now.minusSeconds(60),
+      )
+      delivered <- repo
+        .markDelivered("outbox-stale-release", claimUntil, "1700000000001-0", deliveredAt)
+      released <- repo.releaseForRetry(
+        id = "outbox-stale-release",
+        claimExpiresAt = claimUntil,
+        lastError = "RuntimeException",
+        nextAttemptAt = now.plusSeconds(120),
+        now = staleReleaseAt,
+      )
+      row <- sql"""
+        SELECT status, attempt_count, last_error, claim_expires_at, delivered_at, redis_message_id,
+               updated_at
+        FROM ocr_queue_outbox
+        WHERE id = 'outbox-stale-release'
+      """
+        .query[
+          (String, Int, Option[String], Option[Instant], Option[Instant], Option[String], Instant)
+        ].unique.transact(transactor)
+    yield
+      assert(delivered)
+      assertEquals(released, false)
+      assertEquals(
+        row,
+        ("DELIVERED", 1, None, None, Some(deliveredAt), Some("1700000000001-0"), deliveredAt),
+      )
 
   test("claimDue rejects non-string stream payload fields and rolls back the claim"):
     val jobId = OcrJobId.unsafeFromString("job-outbox-invalid-payload")

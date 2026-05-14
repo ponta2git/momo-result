@@ -41,8 +41,14 @@ final class OcrQueueOutboxDispatcher[F[_]: Temporal: Clock: LoggerFactory](
 
   private def publishOne(row: OcrQueueOutboxRecord): F[Unit] = queue.publish(row.payload).attempt
     .flatMap {
-      case Right(redisMessageId) => Clock[F].realTimeInstant
-          .flatMap(now => outbox.markDelivered(row.id, redisMessageId, now))
+      case Right(redisMessageId) => Clock[F].realTimeInstant.flatMap { now =>
+          outbox.markDelivered(row.id, row.claimExpiresAt, redisMessageId, now).flatMap {
+            case true => Temporal[F].unit
+            case false => logger
+                .warn(s"OCR queue outbox delivered update ignored for stale claim outboxId=${row
+                    .id} " + s"jobId=${row.jobId.value}")
+          }
+        }
       case Left(error) =>
         for
           now <- Clock[F].realTimeInstant
@@ -51,7 +57,13 @@ final class OcrQueueOutboxDispatcher[F[_]: Temporal: Clock: LoggerFactory](
           _ <- logger.error(error)(s"OCR queue outbox publish failed outboxId=${row.id} jobId=${row
               .jobId.value} attempt=${row.attemptCount +
               1} nextAttemptAt=$nextAttemptAt " + s"errorClass=${error.getClass.getName}")
-          _ <- outbox.releaseForRetry(row.id, sanitized, nextAttemptAt, now)
+          released <- outbox
+            .releaseForRetry(row.id, row.claimExpiresAt, sanitized, nextAttemptAt, now)
+          _ <-
+            if released then Temporal[F].unit
+            else
+              logger.warn(s"OCR queue outbox retry release ignored for stale claim outboxId=${row
+                  .id} " + s"jobId=${row.jobId.value}")
         yield ()
     }
 

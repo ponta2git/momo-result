@@ -18,6 +18,7 @@ final case class OcrQueueOutboxRecord(
     jobId: OcrJobId,
     payload: OcrQueuePayload,
     attemptCount: Int,
+    claimExpiresAt: Instant,
 )
 
 final case class OcrQueueOutboxDraft(
@@ -40,5 +41,16 @@ object OcrQueueOutboxDraft:
 
 trait OcrQueueOutboxRepository[F[_]]:
   def claimDue(limit: Int, now: Instant, claimUntil: Instant): F[List[OcrQueueOutboxRecord]]
-  def markDelivered(id: String, redisMessageId: String, now: Instant): F[Unit]
-  def releaseForRetry(id: String, lastError: String, nextAttemptAt: Instant, now: Instant): F[Unit]
+  def markDelivered(
+      id: String,
+      claimExpiresAt: Instant,
+      redisMessageId: String,
+      now: Instant,
+  ): F[Boolean]
+  def releaseForRetry(
+      id: String,
+      claimExpiresAt: Instant,
+      lastError: String,
+      nextAttemptAt: Instant,
+      now: Instant,
+  ): F[Boolean]

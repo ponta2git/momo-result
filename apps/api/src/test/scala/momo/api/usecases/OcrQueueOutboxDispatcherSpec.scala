@@ -21,7 +21,7 @@ final class OcrQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
   private given LoggerFactory[IO] = NoOpFactory[IO]
   private val fixedNow = Instant.parse("2026-05-09T00:00:00Z")
 
-  private val row = OcrQueueOutboxRecord(
+  private def rowAt(claimExpiresAt: Instant) = OcrQueueOutboxRecord(
     id = "outbox-1",
     jobId = OcrJobId.unsafeFromString("job-1"),
     payload = OcrQueuePayload.build(
@@ -36,6 +36,7 @@ final class OcrQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
       requestId = None,
     ),
     attemptCount = 0,
+    claimExpiresAt = claimExpiresAt,
   )
 
   private def fixedClock(now: Instant): Clock[IO] = new Clock[IO]:
@@ -56,24 +57,29 @@ final class OcrQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
   test("runOnce publishes claimed rows and marks them delivered"):
     for
       claimed <- Ref.of[IO, Vector[(Int, Instant, Instant)]](Vector.empty)
-      delivered <- Ref.of[IO, Vector[(String, String, Instant)]](Vector.empty)
+      delivered <- Ref.of[IO, Vector[(String, Instant, String, Instant)]](Vector.empty)
       repo = new OcrQueueOutboxRepository[IO]:
         override def claimDue(
             limit: Int,
             now: Instant,
             claimUntil: Instant,
         ): IO[List[OcrQueueOutboxRecord]] = claimed.update(_ :+ (limit, now, claimUntil))
-          .as(List(row))
-        override def markDelivered(id: String, redisMessageId: String, now: Instant): IO[Unit] =
-          delivered.update(_ :+ (id, redisMessageId, now))
+          .as(List(rowAt(claimUntil)))
+        override def markDelivered(
+            id: String,
+            claimExpiresAt: Instant,
+            redisMessageId: String,
+            now: Instant,
+        ): IO[Boolean] = delivered.update(_ :+ (id, claimExpiresAt, redisMessageId, now)).as(true)
         override def releaseForRetry(
             id: String,
+            claimExpiresAt: Instant,
             lastError: String,
             nextAttemptAt: Instant,
             now: Instant,
-        ): IO[Unit] =
-          val _ = (id, lastError, nextAttemptAt, now)
-          IO.unit
+        ): IO[Boolean] =
+          val _ = (id, claimExpiresAt, lastError, nextAttemptAt, now)
+          IO.pure(true)
       queue = new QueueProducer[IO]:
         override def publish(payload: OcrQueuePayload): IO[String] = IO
           .pure(s"redis-${payload.fields("jobId")}")
@@ -84,7 +90,10 @@ final class OcrQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
       gotDelivered <- delivered.get
     yield
       assertEquals(gotClaimed, Vector((25, fixedNow, fixedNow.plusSeconds(30))))
-      assertEquals(gotDelivered, Vector(("outbox-1", "redis-job-1", fixedNow)))
+      assertEquals(
+        gotDelivered,
+        Vector(("outbox-1", fixedNow.plusSeconds(30), "redis-job-1", fixedNow)),
+      )
 
   test("runOnce releases failed publishes for retry with sanitized error class"):
     val queueError = new RuntimeException("redis://secret-host/boom")
@@ -97,18 +106,24 @@ final class OcrQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
             claimUntil: Instant,
         ): IO[List[OcrQueueOutboxRecord]] =
           val _ = (limit, now, claimUntil)
-          IO.pure(List(row))
-        override def markDelivered(id: String, redisMessageId: String, now: Instant): IO[Unit] =
-          val _ = (id, redisMessageId, now)
-          IO.unit
+          IO.pure(List(rowAt(fixedNow.plusSeconds(30))))
+        override def markDelivered(
+            id: String,
+            claimExpiresAt: Instant,
+            redisMessageId: String,
+            now: Instant,
+        ): IO[Boolean] =
+          val _ = (id, claimExpiresAt, redisMessageId, now)
+          IO.pure(true)
         override def releaseForRetry(
             id: String,
+            claimExpiresAt: Instant,
             lastError: String,
             nextAttemptAt: Instant,
             now: Instant,
-        ): IO[Unit] =
-          val _ = now
-          released.update(_ :+ (id, lastError, nextAttemptAt))
+        ): IO[Boolean] =
+          val _ = (claimExpiresAt, now)
+          released.update(_ :+ (id, lastError, nextAttemptAt)).as(true)
       queue = new QueueProducer[IO]:
         override def publish(payload: OcrQueuePayload): IO[String] =
           val _ = payload

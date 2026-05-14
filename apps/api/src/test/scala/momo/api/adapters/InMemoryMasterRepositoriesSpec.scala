@@ -52,23 +52,25 @@ final class InMemoryMasterRepositoriesSpec extends MomoCatsEffectSuite:
       aliases <- InMemoryMemberAliasesRepository.create[IO]
       _ <- titles.create(gameTitle(titleId, "World"))
       duplicateTitle <- titles
-        .create(gameTitle(GameTitleId.unsafeFromString("title_other"), "World"))
-        .attempt
+        .create(gameTitle(GameTitleId.unsafeFromString("title_other"), "World")).attempt
       _ <- maps.create(mapMaster(mapId, titleId, "East"))
       duplicateMap <- maps
-        .create(mapMaster(MapMasterId.unsafeFromString("map_other"), titleId, "East"))
-        .attempt
+        .create(mapMaster(MapMasterId.unsafeFromString("map_other"), titleId, "East")).attempt
       _ <- seasons.create(seasonMaster(seasonId, titleId, "Spring"))
       duplicateSeason <- seasons
         .create(seasonMaster(SeasonMasterId.unsafeFromString("season_other"), titleId, "Spring"))
         .attempt
       _ <- aliases.create(MemberAlias("alias-1", memberId, "ポン太社長", now))
-      duplicateAlias <- aliases
-        .create(MemberAlias("alias-2", memberId, "ポン太社長", now))
-        .attempt
+      duplicateAlias <- aliases.create(MemberAlias("alias-2", memberId, "ポン太社長", now)).attempt
     yield
-      assertAppError(duplicateTitle, AppError.Conflict("game_title already exists: title_other or World"))
-      assertAppError(duplicateMap, AppError.Conflict("map_master already exists: map_other or East"))
+      assertAppError(
+        duplicateTitle,
+        AppError.Conflict("game_title already exists: title_other or World"),
+      )
+      assertAppError(
+        duplicateMap,
+        AppError.Conflict("map_master already exists: map_other or East"),
+      )
       assertAppError(
         duplicateSeason,
         AppError.Conflict("season_master already exists: season_other or Spring"),
@@ -83,13 +85,12 @@ final class InMemoryMasterRepositoriesSpec extends MomoCatsEffectSuite:
       aliases <- InMemoryMemberAliasesRepository.create[IO]
       _ <- titles.create(gameTitle(titleId, "World"))
       _ <- titles.create(gameTitle(GameTitleId.unsafeFromString("title_other"), "Japan"))
-      duplicateTitle <- titles.update(gameTitle(GameTitleId.unsafeFromString("title_other"), "World"))
-        .attempt
+      duplicateTitle <- titles
+        .update(gameTitle(GameTitleId.unsafeFromString("title_other"), "World")).attempt
       _ <- maps.create(mapMaster(mapId, titleId, "East"))
       _ <- maps.create(mapMaster(MapMasterId.unsafeFromString("map_other"), titleId, "West"))
       duplicateMap <- maps
-        .update(mapMaster(MapMasterId.unsafeFromString("map_other"), titleId, "East"))
-        .attempt
+        .update(mapMaster(MapMasterId.unsafeFromString("map_other"), titleId, "East")).attempt
       _ <- seasons.create(seasonMaster(seasonId, titleId, "Spring"))
       _ <- seasons
         .create(seasonMaster(SeasonMasterId.unsafeFromString("season_other"), titleId, "Summer"))
@@ -98,12 +99,16 @@ final class InMemoryMasterRepositoriesSpec extends MomoCatsEffectSuite:
         .attempt
       _ <- aliases.create(MemberAlias("alias-1", memberId, "ポン太社長", now))
       _ <- aliases.create(MemberAlias("alias-2", memberId, "おたか社長", now))
-      duplicateAlias <- aliases
-        .update(MemberAlias("alias-2", memberId, "ポン太社長", now))
-        .attempt
+      duplicateAlias <- aliases.update(MemberAlias("alias-2", memberId, "ポン太社長", now)).attempt
     yield
-      assertAppError(duplicateTitle, AppError.Conflict("game_title already exists: title_other or World"))
-      assertAppError(duplicateMap, AppError.Conflict("map_master already exists: map_other or East"))
+      assertAppError(
+        duplicateTitle,
+        AppError.Conflict("game_title already exists: title_other or World"),
+      )
+      assertAppError(
+        duplicateMap,
+        AppError.Conflict("map_master already exists: map_other or East"),
+      )
       assertAppError(
         duplicateSeason,
         AppError.Conflict("season_master already exists: season_other or Spring"),

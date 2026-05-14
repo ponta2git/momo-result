@@ -301,7 +301,17 @@ final class InMemoryLoginAccountsRepository[F[_]: Sync] private (
       account.createdAt,
       account.updatedAt,
     )
-    ref.update(_ + (created.id -> created)).as(created)
+    ref.modify { accounts =>
+      if accounts.contains(created.id) ||
+        accounts.values.exists(_.discordUserId == created.discordUserId)
+      then
+        (
+          accounts,
+          Left(masterConflict(s"login account already exists for discord user ${created
+              .discordUserId.value}.")),
+        )
+      else (accounts.updated(created.id, created), Right(created))
+    }.flatMap(complete)
   override def update(id: AccountId, data: UpdateLoginAccountData): F[Option[LoginAccount]] = ref
     .modify { accounts =>
       accounts.get(id) match
@@ -314,7 +324,11 @@ final class InMemoryLoginAccountsRepository[F[_]: Sync] private (
             isAdmin = data.isAdmin.getOrElse(existing.isAdmin),
             updatedAt = data.updatedAt,
           )
-          (accounts.updated(id, updated), Some(updated))
+          val wouldRemoveLastAdmin = existing.loginEnabled && existing.isAdmin &&
+            (!updated.loginEnabled || !updated.isAdmin) &&
+            accounts.values.count(a => a.loginEnabled && a.isAdmin) <= 1
+          if wouldRemoveLastAdmin then (accounts, None)
+          else (accounts.updated(id, updated), Some(updated))
     }
   override def enabledAdminCount: F[Int] = ref.get
     .map(_.values.count(a => a.loginEnabled && a.isAdmin))

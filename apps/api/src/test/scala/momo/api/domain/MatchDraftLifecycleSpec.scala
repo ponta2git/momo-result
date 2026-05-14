@@ -99,4 +99,43 @@ final class MatchDraftLifecycleSpec extends CatsEffectSuite:
       updatedAt = createdAt,
     )
     assertEquals(result, Left(MatchDraftError.ConfirmedRequiresMatchId))
+
+  test("OCR slot projection keeps the domain status precedence in one pure rule"):
+    def slot(status: Option[OcrJobStatus], warnings: Boolean) = MatchDraftOcrSlot(status, warnings)
+
+    assertEquals(
+      MatchDraftOcrStatus.project(
+        MatchDraftStatus.OcrRunning,
+        List(slot(Some(OcrJobStatus.Succeeded), warnings = false), slot(None, warnings = false)),
+      ),
+      MatchDraftStatus.OcrRunning,
+    )
+    assertEquals(
+      MatchDraftOcrStatus.project(
+        MatchDraftStatus.OcrRunning,
+        List(
+          slot(Some(OcrJobStatus.Succeeded), warnings = true),
+          slot(Some(OcrJobStatus.Failed), warnings = false),
+        ),
+      ),
+      MatchDraftStatus.OcrFailed,
+    )
+    assertEquals(
+      MatchDraftOcrStatus.project(
+        MatchDraftStatus.OcrRunning,
+        List(slot(Some(OcrJobStatus.Succeeded), warnings = true)),
+      ),
+      MatchDraftStatus.NeedsReview,
+    )
+    assertEquals(
+      MatchDraftOcrStatus.project(
+        MatchDraftStatus.OcrRunning,
+        List(slot(Some(OcrJobStatus.Succeeded), warnings = false)),
+      ),
+      MatchDraftStatus.DraftReady,
+    )
+    assertEquals(
+      MatchDraftOcrStatus.project(MatchDraftStatus.NeedsReview, List(slot(None, warnings = false))),
+      MatchDraftStatus.NeedsReview,
+    )
 end MatchDraftLifecycleSpec

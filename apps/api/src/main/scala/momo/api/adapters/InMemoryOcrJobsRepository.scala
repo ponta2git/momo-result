@@ -6,7 +6,9 @@ import cats.effect.{Ref, Sync}
 import cats.syntax.all.*
 
 import momo.api.domain.ids.*
-import momo.api.domain.{MatchDraft, MatchDraftStatus, OcrFailure, OcrJob, OcrJobStatus}
+import momo.api.domain.{
+  MatchDraft, MatchDraftOcrSlot, MatchDraftOcrStatus, MatchDraftStatus, OcrFailure, OcrJob,
+}
 import momo.api.repositories.{MatchDraftsRepository, OcrJobsRepository}
 
 final class InMemoryOcrJobsRepository[F[_]: Sync] private (
@@ -82,11 +84,16 @@ object InMemoryOcrJobsRepository:
     drafts.find(draft => draftOcrDraftIds(draft).contains(cancelled.draftId)) match
       case Some(draft) if draft.status == MatchDraftStatus.OcrRunning =>
         val slotDraftIds = draftOcrDraftIds(draft)
-        val slotJobs = jobs.filter(job => slotDraftIds.contains(job.draftId))
-        val hasPending = slotJobs
-          .exists(job => job.status == OcrJobStatus.Queued || job.status == OcrJobStatus.Running)
-        if hasPending then Sync[F].unit
-        else matchDrafts.markOcrFailed(draft.id, cancelled.updatedAt).void
+        val slots = slotDraftIds.toList.map { draftId =>
+          MatchDraftOcrSlot(
+            jobStatus = jobs.find(_.draftId == draftId).map(_.status),
+            hasWarnings = false,
+          )
+        }
+        MatchDraftOcrStatus.project(draft.status, slots) match
+          case MatchDraftStatus.OcrFailed => matchDrafts
+              .markOcrFailed(draft.id, cancelled.updatedAt).void
+          case _ => Sync[F].unit
       case _ => Sync[F].unit
   }
 

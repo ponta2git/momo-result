@@ -5,8 +5,8 @@ import cats.syntax.all.*
 import io.circe.parser.parse
 
 import momo.api.domain.{
-  MatchDraft, MatchDraftStatus, MatchListItem, MatchListItemKind, MatchListRankEntry, OcrDraft,
-  OcrJobStatus,
+  MatchDraft, MatchDraftOcrSlot, MatchDraftOcrStatus, MatchDraftStatus, MatchListItem,
+  MatchListItemKind, MatchListRankEntry, OcrDraft, OcrJobStatus,
 }
 import momo.api.repositories.{
   MatchDraftsRepository, MatchListReadModel, MatchesRepository, OcrDraftsRepository,
@@ -119,16 +119,10 @@ final class InMemoryMatchListReadModel[F[_]: Monad](
                 .map(job => (job.map(_.status), hasWarnings(ocrDraft)))
           }
         }.map { slots =>
-          if slots.exists { case (status, _) =>
-              status.forall(s => s == OcrJobStatus.Queued || s == OcrJobStatus.Running)
-            }
-          then MatchDraftStatus.OcrRunning
-          else if slots.exists { case (status, _) =>
-              status.exists(s => s == OcrJobStatus.Failed || s == OcrJobStatus.Cancelled)
-            }
-          then MatchDraftStatus.OcrFailed
-          else if slots.exists { case (_, warnings) => warnings } then MatchDraftStatus.NeedsReview
-          else MatchDraftStatus.DraftReady
+          MatchDraftOcrStatus.project(
+            draft.status,
+            slots.map { case (status, warnings) => MatchDraftOcrSlot(status, warnings) },
+          )
         }
       case _ => draft.status.pure[F]
 

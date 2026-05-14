@@ -15,6 +15,25 @@ enum MatchDraftStatus(val wire: String) derives CanEqual:
 object MatchDraftStatus:
   def fromWire(value: String): Option[MatchDraftStatus] = values.find(_.wire == value)
 
+final case class MatchDraftOcrSlot(jobStatus: Option[OcrJobStatus], hasWarnings: Boolean)
+
+object MatchDraftOcrStatus:
+  def project(current: MatchDraftStatus, slots: List[MatchDraftOcrSlot]): MatchDraftStatus =
+    if current != MatchDraftStatus.OcrRunning || slots.isEmpty then current
+    else projectRunning(slots)
+
+  def projectRunning(slots: List[MatchDraftOcrSlot]): MatchDraftStatus =
+    if slots.exists(slot => slot.jobStatus.forall(isPending)) then MatchDraftStatus.OcrRunning
+    else if slots.exists(slot => slot.jobStatus.exists(isFailed)) then MatchDraftStatus.OcrFailed
+    else if slots.exists(_.hasWarnings) then MatchDraftStatus.NeedsReview
+    else MatchDraftStatus.DraftReady
+
+  private def isPending(status: OcrJobStatus): Boolean = status == OcrJobStatus.Queued ||
+    status == OcrJobStatus.Running
+
+  private def isFailed(status: OcrJobStatus): Boolean = status == OcrJobStatus.Failed ||
+    status == OcrJobStatus.Cancelled
+
 enum MatchListItemKind(val wire: String) derives CanEqual:
   case Match extends MatchListItemKind("match")
   case MatchDraft extends MatchListItemKind("match_draft")

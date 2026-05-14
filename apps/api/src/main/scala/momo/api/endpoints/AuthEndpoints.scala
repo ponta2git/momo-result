@@ -7,26 +7,34 @@ import sttp.tapir.{PublicEndpoint, *}
 import momo.api.endpoints.ProblemDetails.ProblemResponse
 
 object AuthEndpoints:
-  val login: PublicEndpoint[Unit, ProblemResponse, String, Any] = endpoint
-    .get
-    .in("api" / "auth" / "login")
-    .errorOut(CommonEndpoint.errorOut)
-    .out(statusCode(sttp.model.StatusCode.Found))
-    .out(header[String]("Location"))
-    .tag("auth")
-    .description("Start Discord OAuth login.")
-
-  val callback: PublicEndpoint[(Option[String], Option[String]), ProblemResponse, String, Any] =
+  val login: PublicEndpoint[(Option[String], Option[String]), ProblemResponse, String, Any] =
     endpoint
       .get
-      .in("api" / "auth" / "callback")
-      .in(query[Option[String]]("code"))
-      .in(query[Option[String]]("state"))
+      .in("api" / "auth" / "login")
+      .in(query[Option[String]]("silent"))
+      .in(query[Option[String]]("next"))
       .errorOut(CommonEndpoint.errorOut)
       .out(statusCode(sttp.model.StatusCode.Found))
       .out(header[String]("Location"))
       .tag("auth")
-      .description("Complete Discord OAuth login.")
+      .description("Start Discord OAuth login.")
+
+  val callback: PublicEndpoint[
+    (Option[String], Option[String], Option[String]),
+    ProblemResponse,
+    String,
+    Any,
+  ] = endpoint
+    .get
+    .in("api" / "auth" / "callback")
+    .in(query[Option[String]]("code"))
+    .in(query[Option[String]]("state"))
+    .in(query[Option[String]]("error"))
+    .errorOut(CommonEndpoint.errorOut)
+    .out(statusCode(sttp.model.StatusCode.Found))
+    .out(header[String]("Location"))
+    .tag("auth")
+    .description("Complete Discord OAuth login.")
 
   val logout: PublicEndpoint[Option[String], ProblemResponse, Unit, Any] = endpoint
     .post

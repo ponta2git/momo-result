@@ -202,14 +202,17 @@ final class OAuthStateCodec[F[_]: Sync: SecureRandom](config: AuthConfig, now: F
   private val silentMarker = "1"
   private val interactiveMarker = "0"
 
-  final case class Payload(silent: Boolean)
+  final case class Payload(silent: Boolean, redirectPath: Option[String])
 
-  def create(silent: Boolean): F[String] =
+  def create(silent: Boolean, redirectPath: Option[String]): F[String] =
     for
       current <- now
       nonce <- SecureTokenGenerator.token[F](24)
       marker = if silent then silentMarker else interactiveMarker
-      payload = s"$nonce:${current.plusSeconds(config.stateTtl.toSeconds).getEpochSecond}:$marker"
+      redirect = redirectPath.filter(isSafeRedirectPath)
+        .map(path => Base64Url.encode(path.getBytes(StandardCharsets.UTF_8))).getOrElse("")
+      payload =
+        s"$nonce:${current.plusSeconds(config.stateTtl.toSeconds).getEpochSecond}:$marker:$redirect"
       sig <- sign(payload)
     yield s"${Base64Url.encode(payload.getBytes(StandardCharsets.UTF_8))}$separator$sig"
 
@@ -220,21 +223,39 @@ final class OAuthStateCodec[F[_]: Sync: SecureRandom](config: AuthConfig, now: F
         case None => Sync[F].pure(None)
         case Some(payloadBytes) =>
           val payload = String(payloadBytes, StandardCharsets.UTF_8)
-          payload.split(":", 3).toList match
-            case _ :: expires :: marker :: Nil => (now, sign(payload)).mapN { (current, expected) =>
-                val signatureMatches = MessageDigest.isEqual(
-                  signature.getBytes(StandardCharsets.UTF_8),
-                  expected.getBytes(StandardCharsets.UTF_8),
-                )
-                val notExpired = expires.toLongOption.exists(_ > current.getEpochSecond)
-                val silent = marker match
-                  case `silentMarker` => Some(true)
-                  case `interactiveMarker` => Some(false)
-                  case _ => None
-                if signatureMatches && notExpired then silent.map(Payload(_)) else None
-              }
+          payload.split(":", 4).toList match
+            case _ :: expires :: marker :: redirect :: Nil =>
+              validatePayload(payload, signature, expires, marker, decodeRedirectPath(redirect))
+            case _ :: expires :: marker :: Nil =>
+              validatePayload(payload, signature, expires, marker, None)
             case _ => Sync[F].pure(None)
     case _ => Sync[F].pure(None)
+
+  private def validatePayload(
+      payload: String,
+      signature: String,
+      expires: String,
+      marker: String,
+      redirectPath: Option[String],
+  ): F[Option[Payload]] = (now, sign(payload)).mapN { (current, expected) =>
+    val signatureMatches = MessageDigest.isEqual(
+      signature.getBytes(StandardCharsets.UTF_8),
+      expected.getBytes(StandardCharsets.UTF_8),
+    )
+    val notExpired = expires.toLongOption.exists(_ > current.getEpochSecond)
+    val silent = marker match
+      case `silentMarker` => Some(true)
+      case `interactiveMarker` => Some(false)
+      case _ => None
+    if signatureMatches && notExpired then silent.map(Payload(_, redirectPath)) else None
+  }
+
+  private def decodeRedirectPath(value: String): Option[String] = Option.when(value.nonEmpty)(value)
+    .flatMap(Base64Url.decode).map(bytes => String(bytes, StandardCharsets.UTF_8))
+    .filter(isSafeRedirectPath)
+
+  private def isSafeRedirectPath(value: String): Boolean = value.startsWith("/") &&
+    !value.startsWith("//") && !value.exists(ch => ch == '\r' || ch == '\n')
 
   private def sign(payload: String): F[String] = Sync[F].delay {
     val key = config.stateSigningKey.getOrElse("development-only-oauth-state-signing-key")

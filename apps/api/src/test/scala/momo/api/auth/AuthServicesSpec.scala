@@ -1,7 +1,10 @@
 package momo.api.auth
 
+import java.nio.charset.StandardCharsets
 import java.time.Instant
 import java.util.UUID
+import javax.crypto.Mac
+import javax.crypto.spec.SecretKeySpec
 
 import scala.concurrent.duration.*
 
@@ -42,20 +45,46 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
     val now = IO.pure(Instant.parse("2026-01-01T00:00:00Z"))
     val codec = OAuthStateCodec[IO](config, now)
     for
-      state <- codec.create(silent = true)
+      state <- codec.create(silent = true, redirectPath = None)
       valid <- codec.validate(state)
       tampered <- codec.validate(state.dropRight(1) + "x")
     yield
-      assertEquals(valid, Some(codec.Payload(silent = true)))
+      assertEquals(valid, Some(codec.Payload(silent = true, redirectPath = None)))
       assertEquals(tampered, None)
   }
 
   test("OAuthStateCodec rejects expired state") {
     val createdAt = Instant.parse("2026-01-01T00:00:00Z")
     for
-      state <- OAuthStateCodec[IO](config, IO.pure(createdAt)).create(silent = false)
+      state <- OAuthStateCodec[IO](config, IO.pure(createdAt))
+        .create(silent = false, redirectPath = None)
       valid <- OAuthStateCodec[IO](config, IO.pure(createdAt.plusSeconds(301))).validate(state)
     yield assertEquals(valid, None)
+  }
+
+  test("OAuthStateCodec preserves only safe root-relative redirect paths") {
+    val now = IO.pure(Instant.parse("2026-01-01T00:00:00Z"))
+    val codec = OAuthStateCodec[IO](config, now)
+    for
+      state <- codec.create(silent = true, redirectPath = Some("/exports?format=tsv#latest"))
+      valid <- codec.validate(state)
+      externalState <- codec.create(silent = true, redirectPath = Some("https://example.com/"))
+      external <- codec.validate(externalState)
+    yield
+      assertEquals(
+        valid,
+        Some(codec.Payload(silent = true, redirectPath = Some("/exports?format=tsv#latest"))),
+      )
+      assertEquals(external, Some(codec.Payload(silent = true, redirectPath = None)))
+  }
+
+  test("OAuthStateCodec accepts legacy state payloads without redirect paths") {
+    val now = IO.pure(Instant.parse("2026-01-01T00:00:00Z"))
+    val codec = OAuthStateCodec[IO](config, now)
+    val legacy = signedLegacyState("nonce", "1767225900", "1")
+
+    codec.validate(legacy)
+      .map(result => assertEquals(result, Some(codec.Payload(silent = true, redirectPath = None))))
   }
 
   test("CsrfTokenService verifies the hashed session csrf secret"):
@@ -188,6 +217,18 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
 
   private def redisUrlResource: Resource[IO, String] = redisContainer
     .map(container => s"redis://${container.getHost}:${container.getMappedPort(6379)}")
+
+  private def signedLegacyState(nonce: String, expires: String, marker: String): String =
+    val payload = s"$nonce:$expires:$marker"
+    val payloadBytes = payload.getBytes(StandardCharsets.UTF_8)
+    val mac = Mac.getInstance("HmacSHA256")
+    mac.init(SecretKeySpec(
+      config.stateSigningKey.getOrElse(fail("missing state signing key"))
+        .getBytes(StandardCharsets.UTF_8),
+      "HmacSHA256",
+    ))
+    val signature = Base64Url.encode(mac.doFinal(payloadBytes))
+    s"${Base64Url.encode(payloadBytes)}.$signature"
 
 private final case class SessionRepoSnapshot(
     sessions: Map[String, AppSession],

@@ -32,6 +32,24 @@
         ],
         "description" : "Start Discord OAuth login.",
         "operationId" : "getApiAuthLogin",
+        "parameters" : [
+          {
+            "name" : "silent",
+            "in" : "query",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "next",
+            "in" : "query",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
         "responses" : {
           "302" : {
             "description" : "",
@@ -75,6 +93,14 @@
           },
           {
             "name" : "state",
+            "in" : "query",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "error",
             "in" : "query",
             "required" : false,
             "schema" : {

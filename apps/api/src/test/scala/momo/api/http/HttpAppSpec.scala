@@ -132,6 +132,31 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
     }
   }
 
+  app.test("silent OAuth callback failure preserves a safe next path") { httpApp =>
+    val loginRequest = Request[IO](
+      Method.GET,
+      uri"/api/auth/login".withQueryParam("silent", "1")
+        .withQueryParam("next", "/exports?format=tsv"),
+    )
+    httpApp.run(loginRequest).flatMap { loginResponse =>
+      val stateCookie = loginResponse.cookies.find(_.name == "momo_result_oauth_state")
+        .getOrElse(fail("missing oauth state cookie"))
+      val callbackRequest = Request[IO](
+        Method.GET,
+        uri"/api/auth/callback".withQueryParam("error", "login_required")
+          .withQueryParam("state", stateCookie.content),
+      ).putHeaders(Header.Raw(CIString("Cookie"), s"${stateCookie.name}=${stateCookie.content}"))
+
+      httpApp.run(callbackRequest).map { callbackResponse =>
+        assertEquals(callbackResponse.status, Status.Found)
+        assertEquals(
+          headerValue(callbackResponse, CIString("Location")),
+          "/api/auth/login?next=%2Fexports%3Fformat%3Dtsv",
+        )
+      }
+    }
+  }
+
   sessionBackedApp.test("GET /api/auth/me accepts a session cookie in test env") { fixture =>
     val request = Request[IO](Method.GET, uri"/api/auth/me")
       .putHeaders(sessionCookieHeader(fixture.sessionCookie))

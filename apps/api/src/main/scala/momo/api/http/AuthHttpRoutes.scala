@@ -1,5 +1,8 @@
 package momo.api.http
 
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
+
 import cats.effect.Async
 import cats.syntax.all.*
 import io.circe.syntax.*
@@ -37,7 +40,8 @@ private[http] object AuthHttpRoutes:
           case Right(_) =>
             for
               silent = request.uri.query.params.get("silent").contains("1")
-              state <- stateCodec.create(silent)
+              next = request.uri.query.params.get("next").flatMap(sanitizeRedirectPath)
+              state <- stateCodec.create(silent, next)
               location <- oauth.authorizationUrl(state, if silent then Some("none") else None)
               response <- redirect(location).map(_.addCookie(stateCookie(config, state)))
             yield response
@@ -59,7 +63,7 @@ private[http] object AuthHttpRoutes:
                   case None => problem(AppError.Forbidden("OAuth state is invalid or expired."))
                   case Some(context) => oauthError match
                       case Some(_) if context.silent =>
-                        redirect("/api/auth/login")
+                        redirect(interactiveLoginPath(context.redirectPath))
                           .map(_.addCookie(clearCookie(config.auth.stateCookieName, config)))
                       case Some(_) =>
                         problem(AppError.Forbidden("Discord OAuth was cancelled or denied."))
@@ -85,7 +89,10 @@ private[http] object AuthHttpRoutes:
                                       ))
                                     case Some(account) => sessions.create(account)
                                         .flatMap { session =>
-                                          redirect(config.auth.callbackRedirectPath).map(
+                                          redirect(
+                                            context.redirectPath
+                                              .getOrElse(config.auth.callbackRedirectPath)
+                                          ).map(
                                             _.addCookie(sessionCookie(config, session.cookieValue))
                                               .addCookie(
                                                 clearCookie(config.auth.stateCookieName, config)
@@ -147,6 +154,10 @@ private[http] object AuthHttpRoutes:
     def redirect(location: String): F[Response[F]] = Response[F](Status.Found)
       .putHeaders(Header.Raw(CIString("Location"), location)).pure[F]
 
+    def interactiveLoginPath(next: Option[String]): String = next match
+      case None => "/api/auth/login"
+      case Some(path) => s"/api/auth/login?next=${URLEncoder.encode(path, StandardCharsets.UTF_8)}"
+
     def noContent: F[Response[F]] = Response[F](Status.NoContent).pure[F]
 
     def json(body: AuthMeResponse): F[Response[F]] = Response[F](Status.Ok).withEntity(body.asJson)
@@ -198,5 +209,10 @@ private[http] object AuthHttpRoutes:
     )
 
     def clientKey(request: Request[F]): String = ClientIp.of(request)
+
+    def sanitizeRedirectPath(value: String): Option[String] = Option.when(
+      value.startsWith("/") && !value.startsWith("//") &&
+        !value.exists(ch => ch == '\r' || ch == '\n')
+    )(value)
 
     routes

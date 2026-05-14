@@ -10,7 +10,7 @@ import momo.api.domain.ids.MatchId
 import momo.api.endpoints.codec.{MatchCodec, MatchListCodec}
 import momo.api.endpoints.{
   ConfirmMatchRequest, ConfirmMatchResponse, DeleteMatchResponse, MatchDetailResponse,
-  MatchListResponse, MatchSummaryResponse, MatchesEndpoints,
+  MatchListResponse, MatchSummaryResponse, MatchesEndpoints, UpdateMatchRequest,
 }
 import momo.api.http.{EndpointSecurity, IdempotencyReplay}
 import momo.api.repositories.IdempotencyRepository
@@ -64,18 +64,36 @@ object MatchModule:
         security.respond(getMatch.run(MatchId.unsafeFromString(matchId)))(MatchDetailResponse.from)
       }
     },
-    MatchesEndpoints.update.serverLogic { case (matchId, accountHeader, csrfToken, request) =>
-      security.authorizeMutation(accountHeader, csrfToken) { _ =>
-        security.respond(
-          updateMatch.run(MatchId.unsafeFromString(matchId), MatchCodec.toUpdateCommand(request))
-        )(MatchDetailResponse.from)
-      }
+    MatchesEndpoints.update.serverLogic {
+      case (matchId, accountHeader, csrfToken, idemKey, request) => security
+          .authorizeMutation(accountHeader, csrfToken) { member =>
+            IdempotencyReplay.wrap[F, UpdateMatchRequest, MatchDetailResponse](
+              idempotency,
+              idemKey,
+              member,
+              s"PUT /api/matches/$matchId",
+              request,
+              nowF,
+              security.respond(
+                updateMatch
+                  .run(MatchId.unsafeFromString(matchId), MatchCodec.toUpdateCommand(request))
+              )(MatchDetailResponse.from),
+            )
+          }
     },
-    MatchesEndpoints.delete.serverLogic { case (matchId, accountHeader, csrfToken) =>
-      security.authorizeMutation(accountHeader, csrfToken) { _ =>
-        security.respond(
-          deleteMatch.run(MatchId.unsafeFromString(matchId))
-        )(_ => DeleteMatchResponse(matchId, deleted = true))
+    MatchesEndpoints.delete.serverLogic { case (matchId, accountHeader, csrfToken, idemKey) =>
+      security.authorizeMutation(accountHeader, csrfToken) { member =>
+        IdempotencyReplay.wrap[F, String, DeleteMatchResponse](
+          idempotency,
+          idemKey,
+          member,
+          s"DELETE /api/matches/$matchId",
+          matchId,
+          nowF,
+          security.respond(
+            deleteMatch.run(MatchId.unsafeFromString(matchId))
+          )(_ => DeleteMatchResponse(matchId, deleted = true)),
+        )
       }
     },
   )

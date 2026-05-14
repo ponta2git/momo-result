@@ -23,8 +23,13 @@ import momo.api.repositories.{
 private def isForeignKeyViolation(state: SqlState): Boolean = state.value ==
   sqlstate.class23.FOREIGN_KEY_VIOLATION.value
 
-private def conflict(message: String): ConnectionIO[Unit] = MonadThrow[ConnectionIO]
-  .raiseError[Unit](new AppException(AppError.Conflict(message)))
+private def isUniqueViolation(state: SqlState): Boolean = state.value ==
+  sqlstate.class23.UNIQUE_VIOLATION.value
+
+private def appError[A](error: AppError): ConnectionIO[A] = MonadThrow[ConnectionIO]
+  .raiseError[A](new AppException(error))
+
+private def conflict[A](message: String): ConnectionIO[A] = appError(AppError.Conflict(message))
 
 object PostgresGameTitles:
 
@@ -45,7 +50,10 @@ object PostgresGameTitles:
         INSERT INTO game_titles (id, name, layout_family, display_order, created_at)
         VALUES (${title.id}, ${title.name}, ${title.layoutFamily}, ${title.displayOrder}, ${title
         .createdAt})
-      """.update.run.void
+      """.update.run.void.exceptSomeSqlState {
+      case state if isUniqueViolation(state) =>
+        conflict(s"game_title already exists: ${title.id.value} or ${title.name}")
+    }
 
     override def createWithNextDisplayOrder(title: GameTitle): ConnectionIO[GameTitle] =
       val lockKey = "momo:game_titles:display_order"
@@ -62,7 +70,10 @@ object PostgresGameTitles:
           .createdAt}
         FROM display_order_lock, next_order
         RETURNING id, name, layout_family, display_order, created_at
-      """.query[GameTitle].unique
+      """.query[GameTitle].unique.exceptSomeSqlState {
+        case state if isUniqueViolation(state) =>
+          conflict(s"game_title already exists: ${title.id.value} or ${title.name}")
+      }
 
     override def update(title: GameTitle): ConnectionIO[Unit] = sql"""
         UPDATE game_titles
@@ -103,7 +114,12 @@ object PostgresMapMasters:
     override def create(map: MapMaster): ConnectionIO[Unit] = sql"""
         INSERT INTO map_masters (id, game_title_id, name, display_order, created_at)
         VALUES (${map.id}, ${map.gameTitleId}, ${map.name}, ${map.displayOrder}, ${map.createdAt})
-      """.update.run.void
+      """.update.run.void.exceptSomeSqlState {
+      case state if isUniqueViolation(state) =>
+        conflict(s"map_master already exists: ${map.id.value} or ${map.name}")
+      case state if isForeignKeyViolation(state) =>
+        appError(AppError.NotFound("game_title", map.gameTitleId.value))
+    }
 
     override def createWithNextDisplayOrder(map: MapMaster): ConnectionIO[MapMaster] =
       val lockKey = s"momo:map_masters:${map.gameTitleId.value}:display_order"
@@ -121,7 +137,12 @@ object PostgresMapMasters:
           .createdAt}
         FROM display_order_lock, next_order
         RETURNING id, game_title_id, name, display_order, created_at
-      """.query[MapMaster].unique
+      """.query[MapMaster].unique.exceptSomeSqlState {
+        case state if isUniqueViolation(state) =>
+          conflict(s"map_master already exists: ${map.id.value} or ${map.name}")
+        case state if isForeignKeyViolation(state) =>
+          appError(AppError.NotFound("game_title", map.gameTitleId.value))
+      }
 
     override def update(map: MapMaster): ConnectionIO[Unit] = sql"""
         UPDATE map_masters
@@ -163,7 +184,12 @@ object PostgresSeasonMasters:
         INSERT INTO season_masters (id, game_title_id, name, display_order, created_at)
         VALUES (${season.id}, ${season.gameTitleId}, ${season.name}, ${season
         .displayOrder}, ${season.createdAt})
-      """.update.run.void
+      """.update.run.void.exceptSomeSqlState {
+      case state if isUniqueViolation(state) =>
+        conflict(s"season_master already exists: ${season.id.value} or ${season.name}")
+      case state if isForeignKeyViolation(state) =>
+        appError(AppError.NotFound("game_title", season.gameTitleId.value))
+    }
 
     override def createWithNextDisplayOrder(season: SeasonMaster): ConnectionIO[SeasonMaster] =
       val lockKey = s"momo:season_masters:${season.gameTitleId.value}:display_order"
@@ -181,7 +207,12 @@ object PostgresSeasonMasters:
           .name}, next_order.display_order, ${season.createdAt}
         FROM display_order_lock, next_order
         RETURNING id, game_title_id, name, display_order, created_at
-      """.query[SeasonMaster].unique
+      """.query[SeasonMaster].unique.exceptSomeSqlState {
+        case state if isUniqueViolation(state) =>
+          conflict(s"season_master already exists: ${season.id.value} or ${season.name}")
+        case state if isForeignKeyViolation(state) =>
+          appError(AppError.NotFound("game_title", season.gameTitleId.value))
+      }
 
     override def update(season: SeasonMaster): ConnectionIO[Unit] = sql"""
         UPDATE season_masters
@@ -228,9 +259,6 @@ end PostgresIncidentMastersRepository
  * The unique index on `(member_id, alias)` protects against duplicate rows when writes race.
  */
 object PostgresMemberAliases:
-  private[postgres] def isUniqueViolation(state: SqlState): Boolean = state.value ==
-    sqlstate.class23.UNIQUE_VIOLATION.value
-
   val alg: MemberAliasesAlg[ConnectionIO] = new MemberAliasesAlg[ConnectionIO]:
     override def list(memberId: Option[MemberId]): ConnectionIO[List[MemberAlias]] =
       val base = fr"SELECT id, member_id, alias, created_at FROM member_aliases"

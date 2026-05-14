@@ -1,6 +1,5 @@
 package momo.api.endpoints
 
-import sttp.tapir.generic.auto.*
 import sttp.tapir.json.circe.*
 import sttp.tapir.{header, statusCode, EndpointInput, EndpointOutput}
 
@@ -28,6 +27,9 @@ object CommonEndpoint:
 
   /** CSRF token sent on every state-changing request alongside the session cookie. */
   val csrfHeader: EndpointInput[Option[String]] = header[Option[String]]("X-CSRF-Token")
+
+  /** Correlation id validated or minted by [[momo.api.http.RequestIdMiddleware]]. */
+  val requestIdHeader: EndpointInput[Option[String]] = header[Option[String]]("X-Request-Id")
 
   /**
    * Per-request `Idempotency-Key` header used by mutation endpoints to deduplicate retries.

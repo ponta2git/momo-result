@@ -44,7 +44,7 @@ COPY apps/api/openapi.yaml openapi.yaml
 RUN --mount=type=cache,id=sbt-boot,target=/root/.sbt,sharing=locked \
   --mount=type=cache,id=coursier-cache,target=/root/.cache/coursier,sharing=locked \
   --mount=type=cache,id=ivy-cache,target=/root/.ivy2/cache,sharing=locked \
-  sbt stage
+  sbt apiOpenApiCheck stage
 
 FROM ${PYTHON_IMAGE} AS tesseract-builder
 ARG TESSERACT_VERSION=5.5.2

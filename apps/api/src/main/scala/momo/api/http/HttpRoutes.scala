@@ -8,8 +8,7 @@ import sttp.tapir.server.ServerEndpoint
 import sttp.tapir.server.http4s.Http4sServerInterpreter
 
 import momo.api.auth.{
-  CsrfTokenService, DiscordOAuthClient, LoginRateLimiter, MemberRoster, OAuthStateCodec,
-  SessionService,
+  CsrfTokenService, DiscordOAuthClient, MemberRoster, OAuthStateCodec, RateLimiter, SessionService,
 }
 import momo.api.config.AppConfig
 import momo.api.http.modules.{
@@ -68,7 +67,7 @@ object HttpRoutes:
       sessionService: SessionService[F],
       csrfTokenService: CsrfTokenService,
       oauthStateCodec: OAuthStateCodec[F],
-      loginRateLimiter: LoginRateLimiter[F],
+      loginRateLimiter: RateLimiter[F],
       rateLimiters: HttpRateLimiters[F],
       idempotency: IdempotencyRepository[F],
       healthDetails: F[momo.api.endpoints.HealthEndpoints.HealthDetailsResponse],

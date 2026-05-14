@@ -7,8 +7,9 @@ import sttp.tapir.{PublicEndpoint, *}
 import momo.api.endpoints.ProblemDetails.ProblemResponse
 
 object OcrJobEndpoints:
-  type CreateInput = (Option[String], Option[String], Option[String], CreateOcrJobRequest)
-  type CancelInput = (String, Option[String], Option[String])
+  type CreateInput =
+    (Option[String], Option[String], Option[String], Option[String], CreateOcrJobRequest)
+  type CancelInput = (String, Option[String], Option[String], Option[String])
 
   val create: PublicEndpoint[CreateInput, ProblemResponse, CreateOcrJobResponse, Any] = endpoint
     .post
@@ -16,6 +17,7 @@ object OcrJobEndpoints:
     .in(CommonEndpoint.accountHeader)
     .in(CommonEndpoint.csrfHeader)
     .in(CommonEndpoint.idempotencyKeyHeader)
+    .in(CommonEndpoint.requestIdHeader)
     .in(jsonBody[CreateOcrJobRequest])
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[CreateOcrJobResponse])
@@ -34,6 +36,7 @@ object OcrJobEndpoints:
     .in("api" / "ocr-jobs" / path[String]("jobId"))
     .in(CommonEndpoint.accountHeader)
     .in(CommonEndpoint.csrfHeader)
+    .in(CommonEndpoint.idempotencyKeyHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[CancelOcrJobResponse])
     .tag("ocr")

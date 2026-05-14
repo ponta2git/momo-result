@@ -37,6 +37,14 @@ object AppError:
     val code = "CONFLICT"
     val title = "Conflict"
 
+  final case class IdempotencyInProgress(detail: String) extends AppError:
+    val code = "IDEMPOTENCY_IN_PROGRESS"
+    val title = "Idempotency Key In Progress"
+
+  final case class IdempotencyPayloadMismatch(detail: String) extends AppError:
+    val code = "IDEMPOTENCY_PAYLOAD_MISMATCH"
+    val title = "Idempotency Payload Mismatch"
+
   final case class TooManyRequests(detail: String) extends AppError:
     val code = "TOO_MANY_REQUESTS"
     val title = "Too Many Requests"

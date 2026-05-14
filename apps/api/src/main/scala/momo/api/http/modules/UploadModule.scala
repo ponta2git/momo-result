@@ -4,7 +4,7 @@ import cats.effect.Async
 import cats.syntax.flatMap.*
 import sttp.tapir.server.ServerEndpoint
 
-import momo.api.auth.LoginRateLimiter
+import momo.api.auth.RateLimiter
 import momo.api.endpoints.{UploadEndpoints, UploadImageResponse}
 import momo.api.errors.AppError
 import momo.api.http.{EndpointSecurity, MultipartUpload}
@@ -13,7 +13,7 @@ import momo.api.usecases.UploadImage
 object UploadModule:
   def routes[F[_]: Async](
       uploadImage: UploadImage[F],
-      rateLimiter: LoginRateLimiter[F],
+      rateLimiter: RateLimiter[F],
       security: EndpointSecurity[F],
   ): List[ServerEndpoint[Any, F]] = List(UploadEndpoints.uploadImage.serverLogic {
     case (accountHeader, csrfToken, parts) => security

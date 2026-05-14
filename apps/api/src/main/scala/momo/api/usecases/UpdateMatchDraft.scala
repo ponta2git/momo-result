@@ -69,7 +69,9 @@ final class UpdateMatchDraft[F[_]: MonadThrow](
         case _ => Left(AppError.Conflict(s"match draft in status=${existing.status
               .wire} cannot be edited."))
     )
-    _ <- matchDrafts.update(updated, at).ensureFoundF("match draft", draftId.value)
+    _ <- matchDrafts.update(updated, at).ensureF(AppError.Conflict(
+      "match draft was changed to a terminal status before the update could be saved."
+    ))
   yield updated.withCommon(_.copy(updatedAt = at))).value
 
   private def authorize(draft: MatchDraft, accountId: AccountId): Either[AppError, Unit] = Either

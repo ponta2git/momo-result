@@ -47,11 +47,20 @@ object HeldEventModule:
         )
       }
     },
-    HeldEventsEndpoints.delete.serverLogic { case (heldEventId, accountHeader, csrfToken) =>
-      security.authorizeMutation(accountHeader, csrfToken) { _ =>
-        security.respond(deleteHeldEvent.run(HeldEventId.unsafeFromString(heldEventId))) { _ =>
-          DeleteHeldEventResponse(heldEventId = heldEventId, deleted = true)
-        }
-      }
+    HeldEventsEndpoints.delete.serverLogic {
+      case (heldEventId, accountHeader, csrfToken, idemKey) => security
+          .authorizeMutation(accountHeader, csrfToken) { member =>
+            IdempotencyReplay.wrap[F, String, DeleteHeldEventResponse](
+              idempotency,
+              idemKey,
+              member,
+              "DELETE /api/held-events",
+              heldEventId,
+              nowF,
+              security.respond(deleteHeldEvent.run(HeldEventId.unsafeFromString(heldEventId))) { _ =>
+                DeleteHeldEventResponse(heldEventId = heldEventId, deleted = true)
+              },
+            )
+          }
     },
   )

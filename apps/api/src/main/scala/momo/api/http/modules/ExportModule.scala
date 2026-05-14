@@ -4,7 +4,7 @@ import cats.effect.Async
 import cats.syntax.all.*
 import sttp.tapir.server.ServerEndpoint
 
-import momo.api.auth.LoginRateLimiter
+import momo.api.auth.RateLimiter
 import momo.api.domain.ids.{HeldEventId, MatchId, SeasonMasterId}
 import momo.api.endpoints.ExportEndpoints
 import momo.api.errors.AppError
@@ -14,7 +14,7 @@ import momo.api.usecases.ExportMatches
 object ExportModule:
   def routes[F[_]: Async](
       exportMatches: ExportMatches[F],
-      rateLimiter: LoginRateLimiter[F],
+      rateLimiter: RateLimiter[F],
       security: EndpointSecurity[F],
   ): List[ServerEndpoint[Any, F]] = List(ExportEndpoints.matches.serverLogic {
     case (format, seasonMasterId, heldEventId, matchId, accountHeader) => security

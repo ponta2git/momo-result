@@ -31,13 +31,16 @@ final class CreateOcrJob[F[_]: MonadThrow](
     queueSubmitter: OcrQueueSubmitter[F],
     now: F[Instant],
     nextId: F[String],
-    requestIdLookup: F[Option[String]],
     memberAliases: MemberAliasesRepository[F],
 ):
   import CreateOcrJob.*
 
-  def run(command: CreateOcrJobCommand): F[Either[AppError, CreatedOcrJob]] = (for
+  def run(
+      command: CreateOcrJobCommand,
+      requestId: Option[String],
+  ): F[Either[AppError, CreatedOcrJob]] = (for
     screenType <- EitherT.fromEither[F](requestedScreenType(command))
+    _ <- EitherT.fromEither[F](validateMatchDraftScreenType(screenType, command.matchDraftId))
     _ <- EitherT.fromEither[F](validateOcrHints(command.ocrHints))
     hintsWithAliases <- EitherT.liftF(mergeMemberAliases(command.ocrHints))
     draftForMatch <- command.matchDraftId match
@@ -54,7 +57,6 @@ final class CreateOcrJob[F[_]: MonadThrow](
     createdAt <- EitherT.liftF(now)
     jobId <- EitherT.liftF(nextId.map(OcrJobId.unsafeFromString(_)))
     draftId <- EitherT.liftF(nextId.map(OcrDraftId.unsafeFromString(_)))
-    requestId <- EitherT.liftF(requestIdLookup)
     draft = initialDraft(draftId, jobId, screenType, createdAt)
     job = queuedJob(jobId, draftId, imageId, image.path, screenType, createdAt)
     payload = queuePayload(
@@ -123,6 +125,16 @@ object CreateOcrJob:
     ScreenType.fromWire(command.requestedScreenType).toRight(AppError.ValidationFailed(
       "requestedScreenType must be auto, total_assets, revenue, or incident_log."
     ))
+
+  private def validateMatchDraftScreenType(
+      screenType: ScreenType,
+      matchDraftId: Option[MatchDraftId],
+  ): Either[AppError, Unit] =
+    if screenType == ScreenType.Auto && matchDraftId.nonEmpty then
+      Left(AppError.ValidationFailed(
+        "requestedScreenType=auto cannot be attached to an existing match draft."
+      ))
+    else Right(())
 
   private def validateOcrHints(hints: OcrJobHints): Either[AppError, Unit] = OcrJobHints
     .validationErrors(hints) match

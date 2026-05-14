@@ -37,6 +37,9 @@ object PostgresMatches:
   private def conflict[A](detail: String): ConnectionIO[A] = MonadThrow[ConnectionIO]
     .raiseError[A](new AppException(AppError.Conflict(detail)))
 
+  private def notFound[A](resource: String, id: String): ConnectionIO[A] = MonadThrow[ConnectionIO]
+    .raiseError[A](new AppException(AppError.NotFound(resource, id)))
+
   private type MatchRow = (
       MatchId,
       HeldEventId,
@@ -176,7 +179,7 @@ object PostgresMatches:
       """.update.run
       updateMatch.flatMap {
         case 1 => replaceMatchChildren(record)
-        case _ => ().pure[ConnectionIO]
+        case _ => notFound[Unit]("match", record.id.value)
       }.exceptSomeSqlState {
         case state if isUniqueViolation(state) =>
           conflict[Unit](s"matchNoInEvent ${record.matchNoInEvent.value

@@ -22,6 +22,6 @@ final class InMemoryMatchConfirmationRepository[F[_]: Monad](
     case None => matches.create(record).as(true)
     case Some(id) =>
       for
-        _ <- matches.create(record)
         updated <- matchDrafts.markConfirmed(id, record.id, updatedAt)
+        _ <- if updated then matches.create(record) else Monad[F].unit
       yield updated

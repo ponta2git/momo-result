@@ -47,11 +47,19 @@ object AdminAccountModule:
       }
     },
     AdminAccountEndpoints.update.serverLogic {
-      case (accountId, accountHeader, csrfToken, request) => security
-          .authorizeAdminMutation(accountHeader, csrfToken) { _ =>
-            security.respond(
-              updateLoginAccount.run(AccountId.unsafeFromString(accountId), toCommand(request))
-            )(LoginAccountResponse.from)
+      case (accountId, accountHeader, csrfToken, idemKey, request) => security
+          .authorizeAdminMutation(accountHeader, csrfToken) { account =>
+            IdempotencyReplay.wrap[F, (String, UpdateLoginAccountRequest), LoginAccountResponse](
+              idempotency,
+              idemKey,
+              account,
+              "PATCH /api/admin/login-accounts",
+              (accountId, request),
+              nowF,
+              security.respond(
+                updateLoginAccount.run(AccountId.unsafeFromString(accountId), toCommand(request))
+              )(LoginAccountResponse.from),
+            )
           }
     },
   )

@@ -11,7 +11,7 @@ import doobie.postgres.implicits.*
 
 import momo.api.db.Database
 import momo.api.domain.ids.*
-import momo.api.domain.{FailureCode, OcrFailure, OcrJob, OcrJobStatus, ScreenType}
+import momo.api.domain.{FailureCode, MatchDraftStatus, OcrFailure, OcrJob, OcrJobStatus, ScreenType}
 import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.repositories.{OcrJobsAlg, OcrJobsRepository}
 
@@ -194,13 +194,72 @@ object PostgresOcrJobs:
         WHERE id = $jobId
       """.update.run.void
 
-    override def cancelQueued(jobId: OcrJobId, now: Instant): ConnectionIO[Boolean] = sql"""
+    override def cancelQueued(jobId: OcrJobId, now: Instant): ConnectionIO[Boolean] =
+      for
+        updated <- sql"""
         UPDATE ocr_jobs SET
           status = ${OcrJobStatus.Cancelled},
           finished_at = $now,
           updated_at = $now
         WHERE id = $jobId AND status = ${OcrJobStatus.Queued}
-      """.update.run.map(_ > 0)
+      """.update.run
+        _ <-
+          if updated == 1 then syncMatchDraftStatusForTerminalJob(jobId, now)
+          else ().pure[ConnectionIO]
+      yield updated == 1
+
+  private def syncMatchDraftStatusForTerminalJob(
+      jobId: OcrJobId,
+      now: Instant,
+  ): ConnectionIO[Unit] = sql"""
+    WITH touched AS (
+      SELECT md.id
+      FROM match_drafts md
+      JOIN ocr_jobs j ON j.id = $jobId
+      WHERE md.status = ${MatchDraftStatus.OcrRunning}
+        AND j.draft_id IN (
+          md.total_assets_draft_id,
+          md.revenue_draft_id,
+          md.incident_log_draft_id
+        )
+    ),
+    slot_jobs AS (
+      SELECT
+        md.id AS match_draft_id,
+        j.status AS job_status,
+        COALESCE(jsonb_array_length(od.warnings_json), 0) AS warning_count
+      FROM match_drafts md
+      JOIN touched t ON t.id = md.id
+      JOIN LATERAL unnest(
+        ARRAY[md.total_assets_draft_id, md.revenue_draft_id, md.incident_log_draft_id]
+      ) AS slot(ocr_draft_id) ON slot.ocr_draft_id IS NOT NULL
+      LEFT JOIN ocr_jobs j ON j.draft_id = slot.ocr_draft_id
+      LEFT JOIN ocr_drafts od ON od.id = slot.ocr_draft_id
+    ),
+    next_status AS (
+      SELECT
+        match_draft_id,
+        CASE
+          WHEN COUNT(*) FILTER (
+            WHERE job_status IN ('queued', 'running') OR job_status IS NULL
+          ) > 0 THEN 'ocr_running'
+          WHEN COUNT(*) FILTER (
+            WHERE job_status IN ('failed', 'cancelled')
+          ) > 0 THEN 'ocr_failed'
+          WHEN COUNT(*) FILTER (WHERE warning_count > 0) > 0 THEN 'needs_review'
+          ELSE 'draft_ready'
+        END AS status
+      FROM slot_jobs
+      GROUP BY match_draft_id
+    )
+    UPDATE match_drafts md
+    SET status = ns.status,
+        updated_at = $now
+    FROM next_status ns
+    WHERE md.id = ns.match_draft_id
+      AND md.status = ${MatchDraftStatus.OcrRunning}
+      AND md.status <> ns.status
+  """.update.run.void
 end PostgresOcrJobs
 
 /** Backwards-compatible class facade. */

@@ -19,7 +19,7 @@ import momo.api.adapters.{
 }
 import momo.api.auth.{
   CreatedSession, CsrfTokenService, DiscordOAuthClient, JavaDiscordOAuthClient, LoginRateLimiter,
-  MemberRoster, OAuthStateCodec, SessionService,
+  MemberRoster, OAuthStateCodec, RateLimiter, RedisRateLimiter, SessionService,
 }
 import momo.api.config.AppConfig
 import momo.api.db.Database
@@ -43,9 +43,9 @@ import momo.api.usecases.{
   GetMatchDraft, GetMatchDraftSourceImages, GetOcrDraft, GetOcrDraftsBulk, GetOcrJob,
   ListGameTitles, ListHeldEvents, ListIncidentMasters, ListLoginAccounts, ListMapMasters,
   ListMatches, ListMemberAliases, ListSeasonMasters, OcrQueueOutboxDispatcher, OcrQueueSubmitter,
-  PurgeSourceImages, SourceImageOrphanReaper, StaleOcrJobReaper, UpdateGameTitle,
-  UpdateLoginAccount, UpdateMapMaster, UpdateMatch, UpdateMatchDraft, UpdateMemberAlias,
-  UpdateSeasonMaster, UploadImage,
+  PeriodicMaintenance, PurgeSourceImages, SourceImageOrphanReaper, StaleOcrJobReaper,
+  UpdateGameTitle, UpdateLoginAccount, UpdateMapMaster, UpdateMatch, UpdateMatchDraft,
+  UpdateMemberAlias, UpdateSeasonMaster, UploadImage,
 }
 
 object HttpApp:
@@ -121,32 +121,35 @@ object HttpApp:
                 imageReferences = imageReferences,
                 ocrMaintenance = ocrMaintenance,
                 appSessions = appSessions,
+                idempotency = idempotency,
                 now = Clock[F].realTimeInstant,
-              ).evalMap { _ =>
-                assemble(
-                  config = config,
-                  imageStore = imageStore,
-                  healthDetails = health,
-                  ocrQueueSubmitter = OcrQueueSubmitter.deferred[F],
-                  ocrJobCreation = ocrJobCreation,
-                  jobs = jobs,
-                  drafts = drafts,
-                  heldEvents = heldEvents,
-                  matches = matches,
-                  matchDrafts = matchDrafts,
-                  matchList = matchList,
-                  matchConfirmation = matchConfirmation,
-                  appSessions = appSessions,
-                  members = members,
-                  loginAccounts = loginAccounts,
-                  gameTitles = gameTitles,
-                  mapMasters = mapMasters,
-                  seasonMasters = seasonMasters,
-                  incidentMasters = incidentMasters,
-                  memberAliases = memberAliases,
-                  idempotency = idempotency,
-                  oauthClient = oauthClient,
-                )
+              ).flatMap(_ => rateLimitersResource[F](config, Clock[F].realTimeInstant)).evalMap {
+                case (loginRateLimiter, rateLimiters) => assemble(
+                    config = config,
+                    imageStore = imageStore,
+                    healthDetails = health,
+                    ocrQueueSubmitter = OcrQueueSubmitter.deferred[F],
+                    ocrJobCreation = ocrJobCreation,
+                    jobs = jobs,
+                    drafts = drafts,
+                    heldEvents = heldEvents,
+                    matches = matches,
+                    matchDrafts = matchDrafts,
+                    matchList = matchList,
+                    matchConfirmation = matchConfirmation,
+                    appSessions = appSessions,
+                    members = members,
+                    loginAccounts = loginAccounts,
+                    gameTitles = gameTitles,
+                    mapMasters = mapMasters,
+                    seasonMasters = seasonMasters,
+                    incidentMasters = incidentMasters,
+                    memberAliases = memberAliases,
+                    idempotency = idempotency,
+                    oauthClient = oauthClient,
+                    loginRateLimiter = loginRateLimiter,
+                    rateLimiters = rateLimiters,
+                  )
               }
             }
           }
@@ -155,12 +158,17 @@ object HttpApp:
         given LoggerFactory[F] = Slf4jFactory.create[F]
         Resource.eval(
           for
-            jobs <- InMemoryOcrJobsRepository.create[F]
+            matchDrafts <- InMemoryMatchDraftsRepository.create[F]
+            jobs <- InMemoryOcrJobsRepository.createWithDraftCancelSync[F](matchDrafts)
             drafts <- InMemoryOcrDraftsRepository.create[F]
             heldEvents <- InMemoryHeldEventsRepository.create[F]
             matches <- InMemoryMatchesRepository.create[F]
-            matchDrafts <- InMemoryMatchDraftsRepository.create[F]
-            matchList = InMemoryMatchListReadModel[F](matches, matchDrafts)
+            matchList = InMemoryMatchListReadModel[F](
+              matches,
+              matchDrafts,
+              ocrJobs = Some(jobs),
+              ocrDrafts = Some(drafts),
+            )
             matchConfirmation = InMemoryMatchConfirmationRepository[F](matches, matchDrafts)
             appSessions <- InMemoryAppSessionsRepository.create[F]
             members <- InMemoryMembersRepository.create[F](config.devMemberIds.map(id =>
@@ -245,32 +253,35 @@ object HttpApp:
               imageReferences = imageReferences,
               ocrMaintenance = ocrMaintenance,
               appSessions = appSessions,
+              idempotency = idempotency,
               now = Clock[F].realTimeInstant,
-            ).evalMap { _ =>
-              assemble(
-                config = config,
-                imageStore = imageStore,
-                healthDetails = health,
-                ocrQueueSubmitter = ocrQueueSubmitter,
-                ocrJobCreation = ocrJobCreation,
-                jobs = jobs,
-                drafts = drafts,
-                heldEvents = heldEvents,
-                matches = matches,
-                matchDrafts = matchDrafts,
-                matchList = matchList,
-                matchConfirmation = matchConfirmation,
-                appSessions = appSessions,
-                members = members,
-                loginAccounts = loginAccounts,
-                gameTitles = gameTitles,
-                mapMasters = mapMasters,
-                seasonMasters = seasonMasters,
-                incidentMasters = incidentMasters,
-                memberAliases = memberAliases,
-                idempotency = idempotency,
-                oauthClient = oauthClient,
-              )
+            ).flatMap(_ => rateLimitersResource[F](config, Clock[F].realTimeInstant)).evalMap {
+              case (loginRateLimiter, rateLimiters) => assemble(
+                  config = config,
+                  imageStore = imageStore,
+                  healthDetails = health,
+                  ocrQueueSubmitter = ocrQueueSubmitter,
+                  ocrJobCreation = ocrJobCreation,
+                  jobs = jobs,
+                  drafts = drafts,
+                  heldEvents = heldEvents,
+                  matches = matches,
+                  matchDrafts = matchDrafts,
+                  matchList = matchList,
+                  matchConfirmation = matchConfirmation,
+                  appSessions = appSessions,
+                  members = members,
+                  loginAccounts = loginAccounts,
+                  gameTitles = gameTitles,
+                  mapMasters = mapMasters,
+                  seasonMasters = seasonMasters,
+                  incidentMasters = incidentMasters,
+                  memberAliases = memberAliases,
+                  idempotency = idempotency,
+                  oauthClient = oauthClient,
+                  loginRateLimiter = loginRateLimiter,
+                  rateLimiters = rateLimiters,
+                )
             }
         }
       }
@@ -280,12 +291,36 @@ object HttpApp:
       case Some(redis) => RedisQueueProducer.resource[F](redis).widen
       case None => Resource.eval(InMemoryQueueProducer.create[F]).widen
 
+  private def rateLimitersResource[F[_]: Async](
+      config: AppConfig,
+      now: F[java.time.Instant],
+  ): Resource[F, (RateLimiter[F], HttpRateLimiters[F])] = config.redis match
+    case Some(redis) => (
+        RedisRateLimiter.resource[F](redis, "login", config.auth.rateLimitPerMinute, now),
+        RedisRateLimiter
+          .resource[F](redis, "upload", config.resourceLimits.uploadRateLimitPerMinute, now),
+        RedisRateLimiter
+          .resource[F](redis, "export", config.resourceLimits.exportRateLimitPerMinute, now),
+      ).mapN((login, upload, exportLimiter) =>
+        (login: RateLimiter[F], HttpRateLimiters(upload, exportLimiter))
+      )
+    case None => Resource.eval(
+        (
+          LoginRateLimiter.create[F](config.auth.rateLimitPerMinute, now),
+          LoginRateLimiter.create[F](config.resourceLimits.uploadRateLimitPerMinute, now),
+          LoginRateLimiter.create[F](config.resourceLimits.exportRateLimitPerMinute, now),
+        ).mapN((login, upload, exportLimiter) =>
+          (login: RateLimiter[F], HttpRateLimiters(upload, exportLimiter))
+        )
+      )
+
   private def runtimeMaintenance[F[_]: Async: LoggerFactory](
       config: AppConfig,
       imageStore: ImageOrphanStore[F],
       imageReferences: ImageReferenceRepository[F],
       ocrMaintenance: OcrJobMaintenanceRepository[F],
       appSessions: AppSessionsRepository[F],
+      idempotency: IdempotencyRepository[F],
       now: F[java.time.Instant],
   ): Resource[F, Unit] = SourceImageOrphanReaper.resource[F](
     imageStore = imageStore,
@@ -306,6 +341,11 @@ object HttpApp:
       interval = config.resourceLimits.sessionPruneInterval,
       now = now,
     )
+  ).flatMap(_ =>
+    PeriodicMaintenance
+      .resource("idempotency_key_pruner", config.resourceLimits.sessionPruneInterval)(
+        now.flatMap(idempotency.cleanup).void
+      )
   )
 
   private def healthDetails[F[_]: Async](
@@ -345,6 +385,8 @@ object HttpApp:
       memberAliases: MemberAliasesRepository[F],
       idempotency: IdempotencyRepository[F],
       oauthClient: DiscordOAuthClient[F],
+      loginRateLimiter: RateLimiter[F],
+      rateLimiters: HttpRateLimiters[F],
   ): F[Wired[F]] =
     val roster = MemberRoster.dev(config.devMemberIds)
     val uploadImage = UploadImage[F](imageStore)
@@ -360,7 +402,6 @@ object HttpApp:
       queueSubmitter = ocrQueueSubmitter,
       now = nowF,
       nextId = nextId,
-      requestIdLookup = RequestIdMiddleware.lookup[F],
       memberAliases = memberAliases,
     )
     val getOcrJob = GetOcrJob[F](jobs)
@@ -438,72 +479,66 @@ object HttpApp:
     val createLoginAccount = CreateLoginAccount[F](loginAccounts, members, nowF, nextId)
     val updateLoginAccount = UpdateLoginAccount[F](loginAccounts, members, appSessions, nowF)
 
-    (
-      LoginRateLimiter.create[F](config.auth.rateLimitPerMinute, nowF),
-      LoginRateLimiter.create[F](config.resourceLimits.uploadRateLimitPerMinute, nowF),
-      LoginRateLimiter.create[F](config.resourceLimits.exportRateLimitPerMinute, nowF),
-    ).mapN { (loginRateLimiter, uploadRateLimiter, exportRateLimiter) =>
-      val app = HttpRoutes.routes(HttpRoutes.Dependencies(
-        config = config,
-        roster = roster,
-        uploadImage = uploadImage,
-        createOcrJob = createOcrJob,
-        getOcrJob = getOcrJob,
-        getOcrDraft = getOcrDraft,
-        getOcrDraftsBulk = getOcrDraftsBulk,
-        cancelOcrJob = cancelOcrJob,
-        listHeldEvents = listHeldEvents,
-        createHeldEvent = createHeldEvent,
-        deleteHeldEvent = deleteHeldEvent,
-        createMatchDraft = createMatchDraft,
-        getMatchDraft = getMatchDraft,
-        updateMatchDraft = updateMatchDraft,
-        cancelMatchDraft = cancelMatchDraft,
-        getMatchDraftSourceImages = getMatchDraftSourceImages,
-        confirmMatch = confirmMatch,
-        exportMatches = exportMatches,
-        listMatches = listMatches,
-        getMatch = getMatch,
-        updateMatch = updateMatch,
-        deleteMatch = deleteMatch,
-        loginAccounts = loginAccounts,
-        listLoginAccounts = listLoginAccounts,
-        createLoginAccount = createLoginAccount,
-        updateLoginAccount = updateLoginAccount,
-        listGameTitles = listGameTitles,
-        listMapMasters = listMapMasters,
-        listSeasonMasters = listSeasonMasters,
-        listIncidentMasters = listIncidentMasters,
-        createGameTitle = createGameTitle,
-        createMapMaster = createMapMaster,
-        createSeasonMaster = createSeasonMaster,
-        updateGameTitle = updateGameTitle,
-        updateMapMaster = updateMapMaster,
-        updateSeasonMaster = updateSeasonMaster,
-        deleteGameTitle = deleteGameTitle,
-        deleteMapMaster = deleteMapMaster,
-        deleteSeasonMaster = deleteSeasonMaster,
-        listMemberAliases = listMemberAliases,
-        createMemberAlias = createMemberAlias,
-        updateMemberAlias = updateMemberAlias,
-        deleteMemberAlias = deleteMemberAlias,
-        oauthClient = oauthClient,
-        sessionService = sessionService,
-        csrfTokenService = csrfTokenService,
-        oauthStateCodec = oauthStateCodec,
-        loginRateLimiter = loginRateLimiter,
-        rateLimiters = HttpRateLimiters(uploadRateLimiter, exportRateLimiter),
-        idempotency = idempotency,
-        healthDetails = healthDetails,
-        nowF = nowF,
-      ))
-      Wired(
-        app,
-        gameTitles,
-        mapMasters,
-        seasonMasters,
-        idempotency,
-        loginAccounts,
-        sessionService.create,
-      )
-    }
+    val app = HttpRoutes.routes(HttpRoutes.Dependencies(
+      config = config,
+      roster = roster,
+      uploadImage = uploadImage,
+      createOcrJob = createOcrJob,
+      getOcrJob = getOcrJob,
+      getOcrDraft = getOcrDraft,
+      getOcrDraftsBulk = getOcrDraftsBulk,
+      cancelOcrJob = cancelOcrJob,
+      listHeldEvents = listHeldEvents,
+      createHeldEvent = createHeldEvent,
+      deleteHeldEvent = deleteHeldEvent,
+      createMatchDraft = createMatchDraft,
+      getMatchDraft = getMatchDraft,
+      updateMatchDraft = updateMatchDraft,
+      cancelMatchDraft = cancelMatchDraft,
+      getMatchDraftSourceImages = getMatchDraftSourceImages,
+      confirmMatch = confirmMatch,
+      exportMatches = exportMatches,
+      listMatches = listMatches,
+      getMatch = getMatch,
+      updateMatch = updateMatch,
+      deleteMatch = deleteMatch,
+      loginAccounts = loginAccounts,
+      listLoginAccounts = listLoginAccounts,
+      createLoginAccount = createLoginAccount,
+      updateLoginAccount = updateLoginAccount,
+      listGameTitles = listGameTitles,
+      listMapMasters = listMapMasters,
+      listSeasonMasters = listSeasonMasters,
+      listIncidentMasters = listIncidentMasters,
+      createGameTitle = createGameTitle,
+      createMapMaster = createMapMaster,
+      createSeasonMaster = createSeasonMaster,
+      updateGameTitle = updateGameTitle,
+      updateMapMaster = updateMapMaster,
+      updateSeasonMaster = updateSeasonMaster,
+      deleteGameTitle = deleteGameTitle,
+      deleteMapMaster = deleteMapMaster,
+      deleteSeasonMaster = deleteSeasonMaster,
+      listMemberAliases = listMemberAliases,
+      createMemberAlias = createMemberAlias,
+      updateMemberAlias = updateMemberAlias,
+      deleteMemberAlias = deleteMemberAlias,
+      oauthClient = oauthClient,
+      sessionService = sessionService,
+      csrfTokenService = csrfTokenService,
+      oauthStateCodec = oauthStateCodec,
+      loginRateLimiter = loginRateLimiter,
+      rateLimiters = rateLimiters,
+      idempotency = idempotency,
+      healthDetails = healthDetails,
+      nowF = nowF,
+    ))
+    Wired(
+      app,
+      gameTitles,
+      mapMasters,
+      seasonMasters,
+      idempotency,
+      loginAccounts,
+      sessionService.create,
+    ).pure[F]

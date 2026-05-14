@@ -1,19 +1,24 @@
 package momo.api.auth
 
 import java.time.Instant
+import java.util.UUID
 
 import scala.concurrent.duration.*
 
-import cats.effect.{IO, Ref}
+import cats.effect.{IO, Ref, Resource}
+import org.testcontainers.containers.GenericContainer
+import org.testcontainers.utility.DockerImageName
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.adapters.InMemoryLoginAccountsRepository
-import momo.api.config.{AppEnv, AuthConfig}
+import momo.api.config.{AppEnv, AuthConfig, RedisConfig}
 import momo.api.domain.LoginAccount
 import momo.api.domain.ids.{AccountId, MemberId, UserId}
 import momo.api.repositories.{AppSession, AppSessionsRepository}
 
 final class AuthServicesSpec extends MomoCatsEffectSuite:
+  private val Integration = new munit.Tag("Integration")
+
   private val config = AuthConfig.defaults(AppEnv.Test).copy(
     stateSigningKey = Some("test-signing-key"),
     stateTtl = 5.minutes,
@@ -151,6 +156,38 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       assertEquals(countBefore, 2)
       assertEquals(countAfter, 1)
   }
+
+  test("RedisRateLimiter shares counters across limiter instances".tag(Integration)):
+    redisUrlResource.use { redisUrl =>
+      val config = RedisConfig(redisUrl, "unused-stream", "unused-group")
+      val namespace = s"login-test-${UUID.randomUUID().toString}"
+      val now = IO.pure(Instant.parse("2026-05-14T00:00:00Z"))
+
+      RedisRateLimiter.resource[IO](config, namespace, 2, now).use { firstLimiter =>
+        RedisRateLimiter.resource[IO](config, namespace, 2, now).use { secondLimiter =>
+          for
+            first <- firstLimiter.allow("ip")
+            second <- secondLimiter.allow("ip")
+            third <- firstLimiter.allow("ip")
+          yield
+            assert(first)
+            assert(second)
+            assert(!third)
+        }
+      }
+    }
+
+  private def redisContainer: Resource[IO, GenericContainer[?]] = Resource.make {
+    IO.blocking {
+      val container = new GenericContainer(DockerImageName.parse("redis:7-alpine"))
+      container.addExposedPort(6379)
+      container.start()
+      container
+    }
+  }(container => IO.blocking(container.stop()))
+
+  private def redisUrlResource: Resource[IO, String] = redisContainer
+    .map(container => s"redis://${container.getHost}:${container.getMappedPort(6379)}")
 
 private final case class SessionRepoSnapshot(
     sessions: Map[String, AppSession],

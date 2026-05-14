@@ -1,17 +1,30 @@
 package momo.api.repositories.postgres
 
+import cats.MonadThrow
 import cats.effect.MonadCancelThrow
 import doobie.*
+import doobie.enumerated.SqlState
 import doobie.implicits.*
 import doobie.postgres.implicits.*
+import doobie.postgres.sqlstate
 
 import momo.api.db.Database
 import momo.api.domain.LoginAccount
 import momo.api.domain.ids.{AccountId, UserId}
+import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.repositories.{
   CreateLoginAccountData, LoginAccountsAlg, LoginAccountsRepository, UpdateLoginAccountData,
 }
+
+private def isLoginAccountUniqueViolation(state: SqlState): Boolean = state.value ==
+  sqlstate.class23.UNIQUE_VIOLATION.value
+
+private def isLoginAccountForeignKeyViolation(state: SqlState): Boolean = state.value ==
+  sqlstate.class23.FOREIGN_KEY_VIOLATION.value
+
+private def raiseLoginAccountError[A](error: AppError): ConnectionIO[A] = MonadThrow[ConnectionIO]
+  .raiseError[A](new AppException(error))
 
 object PostgresLoginAccounts:
   val alg: LoginAccountsAlg[ConnectionIO] = new LoginAccountsAlg[ConnectionIO]:
@@ -46,7 +59,16 @@ object PostgresLoginAccounts:
            ${account.createdAt}, ${account.updatedAt})
         RETURNING id, discord_user_id, display_name, player_member_id,
                   login_enabled, is_admin, created_at, updated_at
-      """.query[LoginAccount].unique
+      """.query[LoginAccount].unique.exceptSomeSqlState {
+      case state if isLoginAccountUniqueViolation(state) =>
+        raiseLoginAccountError(AppError.Conflict(
+          s"login account already exists for discord user ${account.discordUserId.value}."
+        ))
+      case state if isLoginAccountForeignKeyViolation(state) =>
+        raiseLoginAccountError(
+          AppError.NotFound("member", account.playerMemberId.map(_.value).getOrElse("<empty>"))
+        )
+    }
 
     override def update(
         id: AccountId,

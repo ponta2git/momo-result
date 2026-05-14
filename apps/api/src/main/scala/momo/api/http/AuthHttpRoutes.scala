@@ -11,7 +11,7 @@ import org.http4s.{
 import org.typelevel.ci.CIString
 
 import momo.api.auth.{
-  AuthHeaderNames, CsrfTokenService, DiscordOAuthClient, LoginRateLimiter, OAuthStateCodec,
+  AuthHeaderNames, CsrfTokenService, DiscordOAuthClient, OAuthStateCodec, RateLimiter,
   SessionService,
 }
 import momo.api.config.{AppConfig, AppEnv}
@@ -28,7 +28,7 @@ private[http] object AuthHttpRoutes:
       sessions: SessionService[F],
       csrf: CsrfTokenService,
       accounts: LoginAccountsRepository[F],
-      rateLimiter: LoginRateLimiter[F],
+      rateLimiter: RateLimiter[F],
   ): HttpRoutes[F] =
     lazy val routes: HttpRoutes[F] = HttpRoutes.of[F] {
       case request if request.method.name == "GET" && path(request) == "/api/auth/login" =>

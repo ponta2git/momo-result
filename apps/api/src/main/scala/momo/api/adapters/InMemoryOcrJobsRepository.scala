@@ -3,14 +3,16 @@ package momo.api.adapters
 import java.time.Instant
 
 import cats.effect.{Ref, Sync}
-import cats.syntax.functor.*
+import cats.syntax.all.*
 
 import momo.api.domain.ids.*
-import momo.api.domain.{OcrFailure, OcrJob}
-import momo.api.repositories.OcrJobsRepository
+import momo.api.domain.{MatchDraft, MatchDraftStatus, OcrFailure, OcrJob, OcrJobStatus}
+import momo.api.repositories.{MatchDraftsRepository, OcrJobsRepository}
 
-final class InMemoryOcrJobsRepository[F[_]: Sync] private (ref: Ref[F, Map[String, OcrJob]])
-    extends OcrJobsRepository[F]:
+final class InMemoryOcrJobsRepository[F[_]: Sync] private (
+    ref: Ref[F, Map[String, OcrJob]],
+    onQueuedCancel: (OcrJob.Cancelled, List[OcrJob]) => F[Unit],
+) extends OcrJobsRepository[F]:
   override def create(job: OcrJob): F[Unit] = ref.update(_ + (job.id.value -> job))
 
   override def find(jobId: OcrJobId): F[Option[OcrJob]] = ref.get.map(_.get(jobId.value))
@@ -21,7 +23,7 @@ final class InMemoryOcrJobsRepository[F[_]: Sync] private (ref: Ref[F, Map[Strin
   override def cancelQueued(jobId: OcrJobId, now: Instant): F[Boolean] = ref.modify { jobs =>
     jobs.get(jobId.value) match
       case Some(q: OcrJob.Queued) =>
-        val updated = OcrJob.Cancelled(
+        val cancelled = OcrJob.Cancelled(
           id = q.id,
           draftId = q.draftId,
           imageId = q.imageId,
@@ -32,8 +34,12 @@ final class InMemoryOcrJobsRepository[F[_]: Sync] private (ref: Ref[F, Map[Strin
           createdAt = q.createdAt,
           updatedAt = now,
         )
-        jobs.updated(jobId.value, updated) -> true
-      case _ => jobs -> false
+        val updated = jobs.updated(jobId.value, cancelled)
+        updated -> Some((cancelled, updated.values.toList))
+      case _ => jobs -> None
+  }.flatMap {
+    case Some((cancelled, jobs)) => onQueuedCancel(cancelled, jobs).as(true)
+    case None => false.pure[F]
   }
 
   private def toFailed(job: OcrJob, failure: OcrFailure, now: Instant): OcrJob.Failed = OcrJob
@@ -56,4 +62,33 @@ final class InMemoryOcrJobsRepository[F[_]: Sync] private (ref: Ref[F, Map[Strin
 
 object InMemoryOcrJobsRepository:
   def create[F[_]: Sync]: F[InMemoryOcrJobsRepository[F]] = Ref
-    .of[F, Map[String, OcrJob]](Map.empty).map(new InMemoryOcrJobsRepository(_))
+    .of[F, Map[String, OcrJob]](Map.empty)
+    .map(new InMemoryOcrJobsRepository(_, (_, _) => Sync[F].unit))
+
+  def createWithCancelSync[F[_]: Sync](
+      onQueuedCancel: (OcrJob.Cancelled, List[OcrJob]) => F[Unit]
+  ): F[InMemoryOcrJobsRepository[F]] = Ref.of[F, Map[String, OcrJob]](Map.empty)
+    .map(new InMemoryOcrJobsRepository(_, onQueuedCancel))
+
+  def createWithDraftCancelSync[F[_]: Sync](
+      matchDrafts: MatchDraftsRepository[F]
+  ): F[InMemoryOcrJobsRepository[F]] = createWithCancelSync(syncCancelledOcrJob(matchDrafts, _, _))
+
+  private def syncCancelledOcrJob[F[_]: Sync](
+      matchDrafts: MatchDraftsRepository[F],
+      cancelled: OcrJob.Cancelled,
+      jobs: List[OcrJob],
+  ): F[Unit] = matchDrafts.list(MatchDraftsRepository.ListFilter()).flatMap { drafts =>
+    drafts.find(draft => draftOcrDraftIds(draft).contains(cancelled.draftId)) match
+      case Some(draft) if draft.status == MatchDraftStatus.OcrRunning =>
+        val slotDraftIds = draftOcrDraftIds(draft)
+        val slotJobs = jobs.filter(job => slotDraftIds.contains(job.draftId))
+        val hasPending = slotJobs
+          .exists(job => job.status == OcrJobStatus.Queued || job.status == OcrJobStatus.Running)
+        if hasPending then Sync[F].unit
+        else matchDrafts.markOcrFailed(draft.id, cancelled.updatedAt).void
+      case _ => Sync[F].unit
+  }
+
+  private def draftOcrDraftIds(draft: MatchDraft): Set[OcrDraftId] =
+    List(draft.totalAssetsDraftId, draft.revenueDraftId, draft.incidentLogDraftId).flatten.toSet

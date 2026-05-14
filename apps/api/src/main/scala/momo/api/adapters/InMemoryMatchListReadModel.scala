@@ -1,15 +1,23 @@
 package momo.api.adapters
 
 import cats.Monad
-import cats.syntax.flatMap.*
-import cats.syntax.functor.*
+import cats.syntax.all.*
+import io.circe.parser.parse
 
-import momo.api.domain.{MatchDraftStatus, MatchListItem, MatchListItemKind, MatchListRankEntry}
-import momo.api.repositories.{MatchDraftsRepository, MatchListReadModel, MatchesRepository}
+import momo.api.domain.{
+  MatchDraft, MatchDraftStatus, MatchListItem, MatchListItemKind, MatchListRankEntry, OcrDraft,
+  OcrJobStatus,
+}
+import momo.api.repositories.{
+  MatchDraftsRepository, MatchListReadModel, MatchesRepository, OcrDraftsRepository,
+  OcrJobsRepository,
+}
 
 final class InMemoryMatchListReadModel[F[_]: Monad](
     matches: MatchesRepository[F],
     matchDrafts: MatchDraftsRepository[F],
+    ocrJobs: Option[OcrJobsRepository[F]] = None,
+    ocrDrafts: Option[OcrDraftsRepository[F]] = None,
 ) extends MatchListReadModel[F]:
   override def list(filter: MatchListReadModel.Filter): F[List[MatchListItem]] =
     for
@@ -25,6 +33,9 @@ final class InMemoryMatchListReadModel[F[_]: Monad](
         seasonMasterId = filter.seasonMasterId,
         limit = None,
       ))
+      projectedDrafts <- drafts.filterNot(d =>
+        d.status == MatchDraftStatus.Cancelled || d.status == MatchDraftStatus.Confirmed
+      ).traverse(draft => projectedStatus(draft).map(status => (draft, status)))
     yield
       val confirmedItems = confirmed.map { record =>
         MatchListItem(
@@ -47,15 +58,15 @@ final class InMemoryMatchListReadModel[F[_]: Monad](
         )
       }
 
-      val draftItems = drafts.filterNot(d =>
-        d.status == MatchDraftStatus.Cancelled || d.status == MatchDraftStatus.Confirmed
-      ).filter(draftMatchesStatus(_, filter.status)).map { draft =>
+      val draftItems = projectedDrafts.filter { case (_, status) =>
+        draftMatchesStatus(status, filter.status)
+      }.map { case (draft, status) =>
         MatchListItem(
           kind = MatchListItemKind.MatchDraft,
           id = draft.id.value,
           matchId = None,
           matchDraftId = Some(draft.id),
-          status = draft.status.wire,
+          status = status.wire,
           heldEventId = draft.heldEventId,
           matchNoInEvent = draft.matchNoInEvent,
           gameTitleId = draft.gameTitleId,
@@ -69,12 +80,22 @@ final class InMemoryMatchListReadModel[F[_]: Monad](
         )
       }
 
-      val combined = filter.kind match
-        case MatchListReadModel.KindFilter.Match => confirmedItems
-        case MatchListReadModel.KindFilter.MatchDraft => draftItems
-        case MatchListReadModel.KindFilter.All => filter.status match
-            case MatchListReadModel.StatusFilter.Confirmed => confirmedItems
-            case _ => confirmedItems ++ draftItems
+      val includeMatches = filter.kind match
+        case MatchListReadModel.KindFilter.Match => true
+        case MatchListReadModel.KindFilter.MatchDraft => false
+        case MatchListReadModel.KindFilter.All =>
+          filter.status == MatchListReadModel.StatusFilter.All ||
+          filter.status == MatchListReadModel.StatusFilter.Confirmed
+      val includeDrafts = filter.kind match
+        case MatchListReadModel.KindFilter.Match => false
+        case MatchListReadModel.KindFilter.MatchDraft => true
+        case MatchListReadModel.KindFilter.All => filter.status !=
+            MatchListReadModel.StatusFilter.Confirmed
+      val combined = (includeMatches, includeDrafts) match
+        case (true, true) => confirmedItems ++ draftItems
+        case (true, false) => confirmedItems
+        case (false, true) => draftItems
+        case (false, false) => Nil
       val ordered = combined.sortBy(i =>
         (
           -i.playedAt.getOrElse(i.updatedAt).toEpochMilli,
@@ -84,16 +105,46 @@ final class InMemoryMatchListReadModel[F[_]: Monad](
       )
       filter.limit.fold(ordered)(ordered.take)
 
+  private def projectedStatus(draft: MatchDraft): F[MatchDraftStatus] =
+    val draftIds = List(draft.totalAssetsDraftId, draft.revenueDraftId, draft.incidentLogDraftId)
+      .flatten
+
+    (ocrJobs, ocrDrafts) match
+      case (Some(jobs), Some(drafts))
+          if draft.status == MatchDraftStatus.OcrRunning && draftIds.nonEmpty =>
+        draftIds.traverse { draftId =>
+          drafts.find(draftId).flatMap {
+            case None => (Option.empty[OcrJobStatus], false).pure[F]
+            case Some(ocrDraft) => jobs.find(ocrDraft.jobId)
+                .map(job => (job.map(_.status), hasWarnings(ocrDraft)))
+          }
+        }.map { slots =>
+          if slots.exists { case (status, _) =>
+              status.forall(s => s == OcrJobStatus.Queued || s == OcrJobStatus.Running)
+            }
+          then MatchDraftStatus.OcrRunning
+          else if slots.exists { case (status, _) =>
+              status.exists(s => s == OcrJobStatus.Failed || s == OcrJobStatus.Cancelled)
+            }
+          then MatchDraftStatus.OcrFailed
+          else if slots.exists { case (_, warnings) => warnings } then MatchDraftStatus.NeedsReview
+          else MatchDraftStatus.DraftReady
+        }
+      case _ => draft.status.pure[F]
+
+  private def hasWarnings(draft: OcrDraft): Boolean = parse(draft.warningsJson).toOption
+    .flatMap(_.asArray).exists(_.nonEmpty)
+
   private def draftMatchesStatus(
-      draft: momo.api.domain.MatchDraft,
+      status: MatchDraftStatus,
       statusFilter: MatchListReadModel.StatusFilter,
   ): Boolean = statusFilter match
     case MatchListReadModel.StatusFilter.All => true
     case MatchListReadModel.StatusFilter.Incomplete => MatchListReadModel.IncompleteStatuses
-        .contains(draft.status)
-    case MatchListReadModel.StatusFilter.OcrRunning => draft.status == MatchDraftStatus.OcrRunning
+        .contains(status)
+    case MatchListReadModel.StatusFilter.OcrRunning => status == MatchDraftStatus.OcrRunning
     case MatchListReadModel.StatusFilter.PreConfirm =>
       Set(MatchDraftStatus.OcrFailed, MatchDraftStatus.DraftReady, MatchDraftStatus.NeedsReview)
-        .contains(draft.status)
-    case MatchListReadModel.StatusFilter.NeedsReview => draft.status == MatchDraftStatus.NeedsReview
+        .contains(status)
+    case MatchListReadModel.StatusFilter.NeedsReview => status == MatchDraftStatus.NeedsReview
     case MatchListReadModel.StatusFilter.Confirmed => false

@@ -7,7 +7,9 @@ import cats.effect.IO
 import momo.api.MomoCatsEffectSuite
 import momo.api.adapters.{InMemoryMatchDraftsRepository, LocalFsImageStore}
 import momo.api.domain.ids.*
-import momo.api.domain.{MatchDraft, MatchDraftStatus}
+import momo.api.domain.{MatchDraft, MatchDraftStatus, StoredImage}
+import momo.api.errors.AppError
+import momo.api.repositories.ImageStore
 
 final class PurgeSourceImagesSpec extends MomoCatsEffectSuite:
   private val pngBytes: Array[Byte] =
@@ -66,6 +68,54 @@ final class PurgeSourceImagesSpec extends MomoCatsEffectSuite:
     }
   }
 
+  test("marks retention before deleting files so delete failures do not leave live DB references") {
+    val createdAt = Instant.parse("2026-05-04T02:00:00Z")
+    val finalizedAt = Instant.parse("2026-05-04T02:30:00Z")
+    val deleteError = RuntimeException("delete failed")
+    tempDirectory("momo-api-source-image-retention-delete-failure").use { dir =>
+      for
+        imageStore <- IO.pure(LocalFsImageStore[IO](dir))
+        totalAssets <- saveImage(imageStore, "total.png")
+        matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
+        draft = MatchDraft.fromInputs(
+          id = MatchDraftId.unsafeFromString("draft-delete-failure"),
+          createdByAccountId = AccountId.unsafeFromString("account-1"),
+          createdByMemberId = Some(MemberId.unsafeFromString("member-1")),
+          status = MatchDraftStatus.NeedsReview,
+          heldEventId = None,
+          matchNoInEvent = None,
+          gameTitleId = None,
+          layoutFamily = None,
+          seasonMasterId = None,
+          ownerMemberId = None,
+          mapMasterId = None,
+          playedAt = None,
+          totalAssetsImageId = Some(totalAssets.imageId),
+          revenueImageId = None,
+          incidentLogImageId = None,
+          totalAssetsDraftId = None,
+          revenueDraftId = None,
+          incidentLogDraftId = None,
+          sourceImagesRetainedUntil = None,
+          sourceImagesDeletedAt = None,
+          confirmedMatchId = None,
+          createdAt = createdAt,
+          updatedAt = createdAt,
+        ).getOrElse(fail("invalid draft fixture"))
+        _ <- matchDrafts.create(draft)
+        failingStore = failingDeleteStore(imageStore, deleteError)
+        service = PurgeSourceImages[IO](matchDrafts, failingStore)
+        result <- service.run(draft.id, finalizedAt).attempt
+        updatedDraft <- matchDrafts.find(draft.id)
+        imageAfter <- imageStore.find(totalAssets.imageId)
+      yield
+        assertEquals(result.swap.toOption, Some(deleteError))
+        assertEquals(updatedDraft.flatMap(_.sourceImagesRetainedUntil), Some(finalizedAt))
+        assertEquals(updatedDraft.flatMap(_.sourceImagesDeletedAt), Some(finalizedAt))
+        assert(imageAfter.nonEmpty)
+    }
+  }
+
   private def saveImage(
       imageStore: LocalFsImageStore[IO],
       fileName: String,
@@ -74,3 +124,18 @@ final class PurgeSourceImagesSpec extends MomoCatsEffectSuite:
       case Right(image) => IO.pure(image)
       case Left(error) => fail(s"expected image to be stored: $error")
     }
+
+  private def failingDeleteStore(
+      delegate: LocalFsImageStore[IO],
+      error: Throwable,
+  ): ImageStore[IO] = new ImageStore[IO]:
+    override def save(
+        fileName: Option[String],
+        contentType: Option[String],
+        bytes: Array[Byte],
+    ): IO[Either[AppError, StoredImage]] = delegate.save(fileName, contentType, bytes)
+    override def find(imageId: ImageId): IO[Option[StoredImage]] = delegate.find(imageId)
+    override def readBytes(image: StoredImage): IO[Array[Byte]] = delegate.readBytes(image)
+    override def delete(imageId: ImageId): IO[Boolean] =
+      val _ = imageId
+      IO.raiseError(error)

@@ -33,7 +33,7 @@ object AdminAccountEndpoints:
     .tag("admin")
 
   val update: PublicEndpoint[
-    (String, Option[String], Option[String], UpdateLoginAccountRequest),
+    (String, Option[String], Option[String], Option[String], UpdateLoginAccountRequest),
     ProblemResponse,
     LoginAccountResponse,
     Any,
@@ -42,6 +42,7 @@ object AdminAccountEndpoints:
     .in("api" / "admin" / "login-accounts" / path[String]("accountId"))
     .in(CommonEndpoint.accountHeader)
     .in(CommonEndpoint.csrfHeader)
+    .in(CommonEndpoint.idempotencyKeyHeader)
     .in(jsonBody[UpdateLoginAccountRequest])
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[LoginAccountResponse])

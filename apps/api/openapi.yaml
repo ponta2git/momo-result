@@ -279,6 +279,14 @@
             "schema" : {
               "type" : "string"
             }
+          },
+          {
+            "name" : "X-Request-Id",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
           }
         ],
         "requestBody" : {
@@ -396,6 +404,14 @@
           },
           {
             "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "Idempotency-Key",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -800,6 +816,14 @@
             "schema" : {
               "type" : "string"
             }
+          },
+          {
+            "name" : "Idempotency-Key",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
           }
         ],
         "responses" : {
@@ -1057,6 +1081,14 @@
           },
           {
             "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "Idempotency-Key",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -1462,6 +1494,14 @@
             "schema" : {
               "type" : "string"
             }
+          },
+          {
+            "name" : "Idempotency-Key",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
           }
         ],
         "requestBody" : {
@@ -1531,6 +1571,14 @@
           },
           {
             "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "Idempotency-Key",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -1706,6 +1754,14 @@
             "schema" : {
               "type" : "string"
             }
+          },
+          {
+            "name" : "Idempotency-Key",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
           }
         ],
         "responses" : {
@@ -1755,6 +1811,14 @@
           },
           {
             "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "Idempotency-Key",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -1958,6 +2022,14 @@
             "schema" : {
               "type" : "string"
             }
+          },
+          {
+            "name" : "Idempotency-Key",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
           }
         ],
         "responses" : {
@@ -2007,6 +2079,14 @@
           },
           {
             "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "Idempotency-Key",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -2210,6 +2290,14 @@
             "schema" : {
               "type" : "string"
             }
+          },
+          {
+            "name" : "Idempotency-Key",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
           }
         ],
         "responses" : {
@@ -2259,6 +2347,14 @@
           },
           {
             "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "Idempotency-Key",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -2502,6 +2598,14 @@
             "schema" : {
               "type" : "string"
             }
+          },
+          {
+            "name" : "Idempotency-Key",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
           }
         ],
         "responses" : {
@@ -2551,6 +2655,14 @@
           },
           {
             "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "Idempotency-Key",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -2741,6 +2853,14 @@
           },
           {
             "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "Idempotency-Key",
             "in" : "header",
             "required" : false,
             "schema" : {
@@ -4066,7 +4186,21 @@
             "type" : "string"
           },
           "code" : {
-            "type" : "string"
+            "type" : "string",
+            "enum" : [
+              "UNAUTHORIZED",
+              "FORBIDDEN",
+              "NOT_FOUND",
+              "VALIDATION_FAILED",
+              "UNSUPPORTED_MEDIA_TYPE",
+              "PAYLOAD_TOO_LARGE",
+              "CONFLICT",
+              "IDEMPOTENCY_IN_PROGRESS",
+              "IDEMPOTENCY_PAYLOAD_MISMATCH",
+              "TOO_MANY_REQUESTS",
+              "DEPENDENCY_FAILED",
+              "INTERNAL_ERROR"
+            ]
           }
         }
       },

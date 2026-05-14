@@ -22,8 +22,6 @@ final class InMemoryOcrJobCreationRepository[F[_]: MonadThrow](
   ): F[Unit] =
     val _ = queuePayload
     for
-      _ <- drafts.create(draft)
-      _ <- jobs.create(job)
       attached <- attachment match
         case None => true.pure[F]
         case Some(a) => matchDrafts.attachOcrArtifacts(
@@ -40,4 +38,6 @@ final class InMemoryOcrJobCreationRepository[F[_]: MonadThrow](
             case Some(a) => MonadThrow[F]
                 .raiseError(OcrJobCreationRepository.MatchDraftAttachFailed(a.draftId))
             case None => MonadThrow[F].unit
+      _ <- drafts.create(draft)
+      _ <- jobs.create(job)
     yield ()

@@ -53,25 +53,27 @@ object MatchesEndpoints:
       .out(jsonBody[MatchDetailResponse])
       .tag("matches")
 
-  type UpdateInput = (String, Option[String], Option[String], UpdateMatchRequest)
+  type UpdateInput = (String, Option[String], Option[String], Option[String], UpdateMatchRequest)
 
   val update: PublicEndpoint[UpdateInput, ProblemResponse, MatchDetailResponse, Any] = endpoint
     .put
     .in("api" / "matches" / path[String]("matchId"))
     .in(CommonEndpoint.accountHeader)
     .in(CommonEndpoint.csrfHeader)
+    .in(CommonEndpoint.idempotencyKeyHeader)
     .in(jsonBody[UpdateMatchRequest])
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[MatchDetailResponse])
     .tag("matches")
 
-  type DeleteInput = (String, Option[String], Option[String])
+  type DeleteInput = (String, Option[String], Option[String], Option[String])
 
   val delete: PublicEndpoint[DeleteInput, ProblemResponse, DeleteMatchResponse, Any] = endpoint
     .delete
     .in("api" / "matches" / path[String]("matchId"))
     .in(CommonEndpoint.accountHeader)
     .in(CommonEndpoint.csrfHeader)
+    .in(CommonEndpoint.idempotencyKeyHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[DeleteMatchResponse])
     .tag("matches")

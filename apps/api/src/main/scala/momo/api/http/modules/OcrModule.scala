@@ -26,31 +26,40 @@ object OcrModule:
       nowF: F[Instant],
       security: EndpointSecurity[F],
   ): List[ServerEndpoint[Any, F]] = List(
-    OcrJobEndpoints.create.serverLogic { case (accountHeader, csrfToken, idemKey, request) =>
-      security.authorizeMutation(accountHeader, csrfToken) { member =>
-        IdempotencyReplay.wrap[F, CreateOcrJobRequest, momo.api.endpoints.CreateOcrJobResponse](
-          idempotency,
-          idemKey,
-          member,
-          "POST /api/ocr-jobs",
-          request,
-          nowF,
-          security.respond(
-            createOcrJob.run(OcrJobCodec.toCreateCommand(request))
-          )(OcrJobCodec.toCreateResponse),
-        )
-      }
+    OcrJobEndpoints.create.serverLogic {
+      case (accountHeader, csrfToken, idemKey, requestId, request) => security
+          .authorizeMutation(accountHeader, csrfToken) { member =>
+            IdempotencyReplay.wrap[F, CreateOcrJobRequest, momo.api.endpoints.CreateOcrJobResponse](
+              idempotency,
+              idemKey,
+              member,
+              "POST /api/ocr-jobs",
+              request,
+              nowF,
+              security.respond(
+                createOcrJob.run(OcrJobCodec.toCreateCommand(request), requestId)
+              )(OcrJobCodec.toCreateResponse),
+            )
+          }
     },
     OcrJobEndpoints.get.serverLogic { case (jobId, accountHeader) =>
       security.authorizeRead(accountHeader)(_ =>
         security.respond(getOcrJob.run(OcrJobId.unsafeFromString(jobId)))(OcrJobResponse.from)
       )
     },
-    OcrJobEndpoints.cancel.serverLogic { case (jobId, accountHeader, csrfToken) =>
-      security.authorizeMutation(accountHeader, csrfToken) { _ =>
-        security.respond(
-          cancelOcrJob.run(OcrJobId.unsafeFromString(jobId))
-        )(_ => CancelOcrJobResponse(jobId, "cancelled"))
+    OcrJobEndpoints.cancel.serverLogic { case (jobId, accountHeader, csrfToken, idemKey) =>
+      security.authorizeMutation(accountHeader, csrfToken) { member =>
+        IdempotencyReplay.wrap[F, String, CancelOcrJobResponse](
+          idempotency,
+          idemKey,
+          member,
+          "DELETE /api/ocr-jobs",
+          jobId,
+          nowF,
+          security.respond(
+            cancelOcrJob.run(OcrJobId.unsafeFromString(jobId))
+          )(_ => CancelOcrJobResponse(jobId, "cancelled")),
+        )
       }
     },
     OcrDraftEndpoints.get.serverLogic { case (draftId, accountHeader) =>

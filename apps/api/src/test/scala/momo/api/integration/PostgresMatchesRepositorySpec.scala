@@ -6,6 +6,7 @@ import cats.effect.IO
 
 import momo.api.domain.*
 import momo.api.domain.ids.*
+import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.postgres.*
 
 final class PostgresMatchesRepositorySpec extends IntegrationSuite:
@@ -21,6 +22,7 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
   private def seasonMasters = new PostgresSeasonMastersRepository[IO](transactor)
   private def heldEvents = new PostgresHeldEventsRepository[IO](transactor)
   private def matches = new PostgresMatchesRepository[IO](transactor)
+  private def confirmations = new PostgresMatchConfirmationRepository[IO](transactor)
 
   /** Insert a complete prerequisite graph: game/map/season/held_event. */
   private def seedPrereqs: IO[Unit] =
@@ -171,6 +173,16 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       assertEquals(ponta.totalAssetsManYen.value, 1000)
       assertEquals(ponta.incidents.destination.value, 0)
 
+  test("update maps concurrently missing match to NotFound"):
+    val rec = sampleMatch("match_missing_update", 1)
+    for
+      _ <- seedPrereqs
+      result <- matches.update(rec, now.plusSeconds(60)).attempt
+    yield result match
+      case Left(error: AppException) =>
+        assertEquals(error.error, AppError.NotFound("match", rec.id.value))
+      case other => fail(s"expected AppException(NotFound), got $other")
+
   test("countByHeldEvents returns zero for unknown event ids"):
     for
       _ <- seedPrereqs
@@ -196,4 +208,19 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       yield e
     program
       .map(result => assert(result.isLeft, s"expected duplicate match_no to fail, got $result"))
+
+  test("confirmation maps duplicate match_no_in_event to Conflict"):
+    val rec1 = sampleMatch("match_confirm_001", 1)
+    val rec2 = sampleMatch("match_confirm_002", 1)
+    for
+      _ <- seedPrereqs
+      inserted <- confirmations.confirm(rec1, None, now)
+      result <- confirmations.confirm(rec2, None, now).attempt
+    yield
+      assertEquals(inserted, true)
+      result match
+        case Left(error: AppException) => error.error match
+            case _: AppError.Conflict => ()
+            case other => fail(s"expected Conflict, got $other")
+        case other => fail(s"expected AppException(Conflict), got $other")
 end PostgresMatchesRepositorySpec

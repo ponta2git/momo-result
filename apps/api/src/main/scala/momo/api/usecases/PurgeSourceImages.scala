@@ -18,12 +18,13 @@ final class PurgeSourceImages[F[_]: Sync](
   def run(draftId: MatchDraftId, now: Instant): F[Unit] =
     for
       maybeDraft <- matchDrafts.find(draftId)
-      _ <- maybeDraft.traverse_(deleteSourceImages)
-      _ <- matchDrafts.markSourceImagesRetention(
-        draftId = draftId,
-        retainedUntil = Some(now),
-        deletedAt = Some(now),
-        updatedAt = now,
+      _ <- maybeDraft.traverse_(draft =>
+        matchDrafts.markSourceImagesRetention(
+          draftId = draftId,
+          retainedUntil = Some(now),
+          deletedAt = Some(now),
+          updatedAt = now,
+        ).flatMap(marked => deleteSourceImages(draft).whenA(marked))
       )
     yield ()
 

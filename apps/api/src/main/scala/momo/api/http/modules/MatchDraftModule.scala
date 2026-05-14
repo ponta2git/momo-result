@@ -78,11 +78,19 @@ object MatchDraftModule:
         )(MatchDraftDetailResponse.from)
       }
     },
-    MatchDraftEndpoints.cancel.serverLogic { case (draftId, accountHeader, csrfToken) =>
+    MatchDraftEndpoints.cancel.serverLogic { case (draftId, accountHeader, csrfToken, idemKey) =>
       security.authorizeMutation(accountHeader, csrfToken) { member =>
-        security.respond(
-          cancelMatchDraft.run(MatchDraftId.unsafeFromString(draftId), member.accountId)
-        )(_ => CancelMatchDraftResponse(matchDraftId = draftId, status = "cancelled"))
+        IdempotencyReplay.wrap[F, String, CancelMatchDraftResponse](
+          idempotency,
+          idemKey,
+          member,
+          s"POST /api/match-drafts/$draftId/cancel",
+          draftId,
+          nowF,
+          security.respond(
+            cancelMatchDraft.run(MatchDraftId.unsafeFromString(draftId), member.accountId)
+          )(_ => CancelMatchDraftResponse(matchDraftId = draftId, status = "cancelled")),
+        )
       }
     },
     MatchDraftEndpoints.listSourceImages.serverLogic { case (draftId, accountHeader) =>

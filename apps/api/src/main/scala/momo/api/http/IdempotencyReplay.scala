@@ -75,16 +75,18 @@ private[http] object IdempotencyReplay:
           expiresAt = ts.plusMillis(RetentionMillis),
         )
         idempotency.reserve(pending).flatMap {
-          case IdempotencyReservation.Reserved => run
-              .flatMap(handleFreshResult(idempotency, rawKey, account, endpoint, requestHash, _))
+          case IdempotencyReservation.Reserved => run.handleErrorWith(error =>
+              logIdempotencyFailure(endpoint, account, rawKey, "run mutation", error) >>
+                Async[F].raiseError(error)
+            ).flatMap(handleFreshResult(idempotency, rawKey, account, endpoint, requestHash, _))
           case IdempotencyReservation.Replay(response) => replayStoredBody[F, Resp](response)
-          case IdempotencyReservation.InProgress => Async[F].pure(Left(
-              ProblemDetails
-                .from(AppError.Conflict("Idempotency-Key is already processing. Retry later."))
-            ))
-          case IdempotencyReservation.Conflict => Async[F].pure(Left(ProblemDetails.from(
-              AppError.Conflict("Idempotency-Key was reused with a different request payload.")
+          case IdempotencyReservation.InProgress => Async[F].pure(Left(ProblemDetails.from(
+              AppError.IdempotencyInProgress("Idempotency-Key is already processing. Retry later.")
             )))
+          case IdempotencyReservation.Conflict => Async[F]
+              .pure(Left(ProblemDetails.from(AppError.IdempotencyPayloadMismatch(
+                "Idempotency-Key was reused with a different request payload."
+              ))))
         }
       }
 

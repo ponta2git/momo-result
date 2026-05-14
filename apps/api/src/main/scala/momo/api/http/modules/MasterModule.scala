@@ -14,7 +14,8 @@ import momo.api.endpoints.{
   GameTitlesEndpoints, IncidentMasterListResponse, IncidentMasterResponse, IncidentMastersEndpoints,
   MapMasterListResponse, MapMasterResponse, MapMastersEndpoints, MemberAliasListResponse,
   MemberAliasResponse, MemberAliasesEndpoints, SeasonMasterListResponse, SeasonMasterResponse,
-  SeasonMastersEndpoints,
+  SeasonMastersEndpoints, UpdateGameTitleRequest, UpdateMapMasterRequest, UpdateMemberAliasRequest,
+  UpdateSeasonMasterRequest,
 }
 import momo.api.http.{EndpointSecurity, IdempotencyReplay}
 import momo.api.repositories.IdempotencyRepository
@@ -69,18 +70,35 @@ object MasterModule:
         )
       }
     },
-    GameTitlesEndpoints.update.serverLogic { case (id, accountHeader, csrfToken, request) =>
-      security.authorizeMasterManagementMutation(accountHeader, csrfToken) { _ =>
-        security.respond(
-          updateGameTitle.run(MasterCodec.toUpdateGameTitleCommand(id, request))
-        )(GameTitleResponse.from)
-      }
+    GameTitlesEndpoints.update.serverLogic {
+      case (id, accountHeader, csrfToken, idemKey, request) => security
+          .authorizeMasterManagementMutation(accountHeader, csrfToken) { member =>
+            IdempotencyReplay.wrap[F, (String, UpdateGameTitleRequest), GameTitleResponse](
+              idempotency,
+              idemKey,
+              member,
+              "PATCH /api/game-titles",
+              (id, request),
+              nowF,
+              security.respond(
+                updateGameTitle.run(MasterCodec.toUpdateGameTitleCommand(id, request))
+              )(GameTitleResponse.from),
+            )
+          }
     },
-    GameTitlesEndpoints.delete.serverLogic { case (id, accountHeader, csrfToken) =>
-      security.authorizeMasterManagementMutation(accountHeader, csrfToken) { _ =>
-        security.respond(
-          deleteGameTitle.run(momo.api.domain.ids.GameTitleId.unsafeFromString(id))
-        )(_ => DeleteMasterResponse(id, deleted = true))
+    GameTitlesEndpoints.delete.serverLogic { case (id, accountHeader, csrfToken, idemKey) =>
+      security.authorizeMasterManagementMutation(accountHeader, csrfToken) { member =>
+        IdempotencyReplay.wrap[F, String, DeleteMasterResponse](
+          idempotency,
+          idemKey,
+          member,
+          "DELETE /api/game-titles",
+          id,
+          nowF,
+          security.respond(
+            deleteGameTitle.run(momo.api.domain.ids.GameTitleId.unsafeFromString(id))
+          )(_ => DeleteMasterResponse(id, deleted = true)),
+        )
       }
     },
     MapMastersEndpoints.list.serverLogic { case (gameTitleId, accountHeader) =>
@@ -104,18 +122,35 @@ object MasterModule:
         )
       }
     },
-    MapMastersEndpoints.update.serverLogic { case (id, accountHeader, csrfToken, request) =>
-      security.authorizeMasterManagementMutation(accountHeader, csrfToken) { _ =>
-        security.respond(
-          updateMapMaster.run(MasterCodec.toUpdateMapMasterCommand(id, request))
-        )(MapMasterResponse.from)
-      }
+    MapMastersEndpoints.update.serverLogic {
+      case (id, accountHeader, csrfToken, idemKey, request) => security
+          .authorizeMasterManagementMutation(accountHeader, csrfToken) { member =>
+            IdempotencyReplay.wrap[F, (String, UpdateMapMasterRequest), MapMasterResponse](
+              idempotency,
+              idemKey,
+              member,
+              "PATCH /api/map-masters",
+              (id, request),
+              nowF,
+              security.respond(
+                updateMapMaster.run(MasterCodec.toUpdateMapMasterCommand(id, request))
+              )(MapMasterResponse.from),
+            )
+          }
     },
-    MapMastersEndpoints.delete.serverLogic { case (id, accountHeader, csrfToken) =>
-      security.authorizeMasterManagementMutation(accountHeader, csrfToken) { _ =>
-        security.respond(
-          deleteMapMaster.run(momo.api.domain.ids.MapMasterId.unsafeFromString(id))
-        )(_ => DeleteMasterResponse(id, deleted = true))
+    MapMastersEndpoints.delete.serverLogic { case (id, accountHeader, csrfToken, idemKey) =>
+      security.authorizeMasterManagementMutation(accountHeader, csrfToken) { member =>
+        IdempotencyReplay.wrap[F, String, DeleteMasterResponse](
+          idempotency,
+          idemKey,
+          member,
+          "DELETE /api/map-masters",
+          id,
+          nowF,
+          security.respond(
+            deleteMapMaster.run(momo.api.domain.ids.MapMasterId.unsafeFromString(id))
+          )(_ => DeleteMasterResponse(id, deleted = true)),
+        )
       }
     },
     SeasonMastersEndpoints.list.serverLogic { case (gameTitleId, accountHeader) =>
@@ -139,18 +174,35 @@ object MasterModule:
         )
       }
     },
-    SeasonMastersEndpoints.update.serverLogic { case (id, accountHeader, csrfToken, request) =>
-      security.authorizeMasterManagementMutation(accountHeader, csrfToken) { _ =>
-        security.respond(
-          updateSeasonMaster.run(MasterCodec.toUpdateSeasonMasterCommand(id, request))
-        )(SeasonMasterResponse.from)
-      }
+    SeasonMastersEndpoints.update.serverLogic {
+      case (id, accountHeader, csrfToken, idemKey, request) => security
+          .authorizeMasterManagementMutation(accountHeader, csrfToken) { member =>
+            IdempotencyReplay.wrap[F, (String, UpdateSeasonMasterRequest), SeasonMasterResponse](
+              idempotency,
+              idemKey,
+              member,
+              "PATCH /api/season-masters",
+              (id, request),
+              nowF,
+              security.respond(
+                updateSeasonMaster.run(MasterCodec.toUpdateSeasonMasterCommand(id, request))
+              )(SeasonMasterResponse.from),
+            )
+          }
     },
-    SeasonMastersEndpoints.delete.serverLogic { case (id, accountHeader, csrfToken) =>
-      security.authorizeMasterManagementMutation(accountHeader, csrfToken) { _ =>
-        security.respond(
-          deleteSeasonMaster.run(momo.api.domain.ids.SeasonMasterId.unsafeFromString(id))
-        )(_ => DeleteMasterResponse(id, deleted = true))
+    SeasonMastersEndpoints.delete.serverLogic { case (id, accountHeader, csrfToken, idemKey) =>
+      security.authorizeMasterManagementMutation(accountHeader, csrfToken) { member =>
+        IdempotencyReplay.wrap[F, String, DeleteMasterResponse](
+          idempotency,
+          idemKey,
+          member,
+          "DELETE /api/season-masters",
+          id,
+          nowF,
+          security.respond(
+            deleteSeasonMaster.run(momo.api.domain.ids.SeasonMasterId.unsafeFromString(id))
+          )(_ => DeleteMasterResponse(id, deleted = true)),
+        )
       }
     },
     IncidentMastersEndpoints.list.serverLogic { accountHeader =>
@@ -181,16 +233,33 @@ object MasterModule:
         )
       }
     },
-    MemberAliasesEndpoints.update.serverLogic { case (id, accountHeader, csrfToken, request) =>
-      security.authorizeMasterManagementMutation(accountHeader, csrfToken) { _ =>
-        security.respond(
-          updateMemberAlias.run(MasterCodec.toUpdateMemberAliasCommand(id, request))
-        )(MemberAliasResponse.from)
-      }
+    MemberAliasesEndpoints.update.serverLogic {
+      case (id, accountHeader, csrfToken, idemKey, request) => security
+          .authorizeMasterManagementMutation(accountHeader, csrfToken) { member =>
+            IdempotencyReplay.wrap[F, (String, UpdateMemberAliasRequest), MemberAliasResponse](
+              idempotency,
+              idemKey,
+              member,
+              "PATCH /api/member-aliases",
+              (id, request),
+              nowF,
+              security.respond(
+                updateMemberAlias.run(MasterCodec.toUpdateMemberAliasCommand(id, request))
+              )(MemberAliasResponse.from),
+            )
+          }
     },
-    MemberAliasesEndpoints.delete.serverLogic { case (id, accountHeader, csrfToken) =>
-      security.authorizeMasterManagementMutation(accountHeader, csrfToken) { _ =>
-        security.respond(deleteMemberAlias.run(id))(_ => DeleteMasterResponse(id, deleted = true))
+    MemberAliasesEndpoints.delete.serverLogic { case (id, accountHeader, csrfToken, idemKey) =>
+      security.authorizeMasterManagementMutation(accountHeader, csrfToken) { member =>
+        IdempotencyReplay.wrap[F, String, DeleteMasterResponse](
+          idempotency,
+          idemKey,
+          member,
+          "DELETE /api/member-aliases",
+          id,
+          nowF,
+          security.respond(deleteMemberAlias.run(id))(_ => DeleteMasterResponse(id, deleted = true)),
+        )
       }
     },
   )

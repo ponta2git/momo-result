@@ -28,7 +28,9 @@ final class CancelMatchDraft[F[_]: MonadThrow](
     _ <- EitherT.fromEither[F](authorize(draft.createdByAccountId, accountId))
     _ <- EitherT.fromEither[F](canCancel(draft.status))
     at <- EitherT.liftF(now)
-    _ <- matchDrafts.cancel(draftId, at).ensureFoundF("match draft", draftId.value)
+    _ <- matchDrafts.cancel(draftId, at).ensureF(AppError.Conflict(
+      "match draft was changed to a terminal status before it could be cancelled."
+    ))
     _ <- EitherT.liftF(sourceImageRetention.runBestEffort(draftId, at))
   yield ()).value
 

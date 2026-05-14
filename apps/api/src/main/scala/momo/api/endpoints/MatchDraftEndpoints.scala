@@ -11,7 +11,7 @@ object MatchDraftEndpoints:
   type GetInput = (String, Option[String])
   type UpdateInput =
     (String, Option[String], Option[String], Option[String], UpdateMatchDraftRequest)
-  type CancelInput = (String, Option[String], Option[String])
+  type CancelInput = (String, Option[String], Option[String], Option[String])
 
   val create: PublicEndpoint[CreateInput, ProblemResponse, MatchDraftResponse, Any] = endpoint
     .post
@@ -48,6 +48,7 @@ object MatchDraftEndpoints:
     .in("api" / "match-drafts" / path[String]("draftId") / "cancel")
     .in(CommonEndpoint.accountHeader)
     .in(CommonEndpoint.csrfHeader)
+    .in(CommonEndpoint.idempotencyKeyHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[CancelMatchDraftResponse])
     .tag("match-drafts")

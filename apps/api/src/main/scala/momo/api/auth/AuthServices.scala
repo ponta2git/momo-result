@@ -8,14 +8,19 @@ import java.time.Instant
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
+import scala.concurrent.duration.DurationInt
+
 import cats.Functor
 import cats.effect.std.SecureRandom
 import cats.effect.{Async, Ref, Resource, Sync}
 import cats.syntax.all.*
+import dev.profunktor.redis4cats.data.RedisCodec
+import dev.profunktor.redis4cats.effect.Log.NoOp.*
+import dev.profunktor.redis4cats.{Redis, RedisCommands}
 import io.circe.Decoder
 import io.circe.parser.decode
 
-import momo.api.config.AuthConfig
+import momo.api.config.{AuthConfig, RedisConfig}
 import momo.api.domain.LoginAccount
 import momo.api.errors.AppError
 import momo.api.repositories.{AppSession, AppSessionsRepository, LoginAccountsRepository}
@@ -238,12 +243,15 @@ final class OAuthStateCodec[F[_]: Sync: SecureRandom](config: AuthConfig, now: F
     Base64Url.encode(mac.doFinal(payload.getBytes(StandardCharsets.UTF_8)))
   }
 
+trait RateLimiter[F[_]]:
+  def allow(key: String): F[Boolean]
+
 final class LoginRateLimiter[F[_]: Sync] private (
     ref: Ref[F, Map[String, LoginRateLimiter.Bucket]],
     maxPerMinute: Int,
     now: F[Instant],
     retainWindows: Long,
-):
+) extends RateLimiter[F]:
   def allow(key: String): F[Boolean] =
     for
       current <- now
@@ -266,6 +274,30 @@ object LoginRateLimiter:
 
   def create[F[_]: Sync](maxPerMinute: Int, now: F[Instant]): F[LoginRateLimiter[F]] = Ref
     .of[F, Map[String, Bucket]](Map.empty).map(LoginRateLimiter(_, maxPerMinute, now, 2L))
+
+final class RedisRateLimiter[F[_]: Sync] private (
+    commands: RedisCommands[F, String, String],
+    namespace: String,
+    maxPerMinute: Int,
+    now: F[Instant],
+) extends RateLimiter[F]:
+  def allow(key: String): F[Boolean] =
+    for
+      current <- now
+      minute = current.getEpochSecond / 60
+      redisKey = s"momo:rate-limit:$namespace:$key:$minute"
+      count <- commands.incr(redisKey)
+      _ <- if count == 1L then commands.expire(redisKey, 2.minutes).void else Sync[F].unit
+    yield count <= maxPerMinute.toLong
+
+object RedisRateLimiter:
+  def resource[F[_]: Async](
+      config: RedisConfig,
+      namespace: String,
+      maxPerMinute: Int,
+      now: F[Instant],
+  ): Resource[F, RedisRateLimiter[F]] = Redis[F].simple(config.url, RedisCodec.Utf8)
+    .map(commands => RedisRateLimiter(commands, namespace, maxPerMinute, now))
 
 object SecureTokenGenerator:
   def token[F[_]: Functor: SecureRandom](byteLength: Int): F[String] = SecureRandom[F]

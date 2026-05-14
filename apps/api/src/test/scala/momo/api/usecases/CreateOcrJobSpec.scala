@@ -13,8 +13,11 @@ import momo.api.adapters.{
   LocalFsImageStore,
 }
 import momo.api.codec.OcrHintsCodec.given
-import momo.api.domain.ids.{ImageId, MemberId, OcrJobId}
-import momo.api.domain.{MemberAlias, OcrFailure, OcrJob, OcrJobHints, PlayerAliasHint, StoredImage}
+import momo.api.domain.ids.{AccountId, ImageId, MatchDraftId, MemberId, OcrJobId}
+import momo.api.domain.{
+  MatchDraft, MatchDraftStatus, MemberAlias, OcrFailure, OcrJob, OcrJobHints, PlayerAliasHint,
+  StoredImage,
+}
 import momo.api.errors.AppError
 import momo.api.repositories.{ImageStore, OcrJobsRepository, OcrQueuePayload, QueueProducer}
 import momo.api.usecases.testing.CapturingLoggerFactory
@@ -40,9 +43,10 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
       for
         image <- fixture.savePng
         usecase <- fixture.usecase
-        created <- usecase
-          .run(CreateOcrJobCommand(image.imageId, "total_assets", OcrJobHints.empty, None))
-          .flatMap(fromAppEither)
+        created <- usecase.run(
+          CreateOcrJobCommand(image.imageId, "total_assets", OcrJobHints.empty, None),
+          fixture.requestId,
+        ).flatMap(fromAppEither)
         foundJob <- fixture.jobs.find(created.job.id)
         foundDraft <- fixture.drafts.find(created.draft.id)
         published <- fixture.queue.published
@@ -71,18 +75,21 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
           createdAt = now,
         ))
         usecase <- fixture.usecase
-        _ <- usecase.run(CreateOcrJobCommand(
-          image.imageId,
-          "total_assets",
-          OcrJobHints(
-            gameTitle = None,
-            layoutFamily = None,
-            knownPlayerAliases =
-              List(PlayerAliasHint(MemberId.unsafeFromString("member_ponta"), List("ぽんた"))),
-            computerPlayerAliases = Nil,
+        _ <- usecase.run(
+          CreateOcrJobCommand(
+            image.imageId,
+            "total_assets",
+            OcrJobHints(
+              gameTitle = None,
+              layoutFamily = None,
+              knownPlayerAliases =
+                List(PlayerAliasHint(MemberId.unsafeFromString("member_ponta"), List("ぽんた"))),
+              computerPlayerAliases = Nil,
+            ),
+            None,
           ),
-          None,
-        )).flatMap(fromAppEither)
+          fixture.requestId,
+        ).flatMap(fromAppEither)
         published <- fixture.queue.published
         hintsJson = published.head.fields("ocrHintsJson")
         parsed = io.circe.parser.decode[OcrJobHints](hintsJson)
@@ -109,8 +116,10 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
       for
         image <- fixture.savePng
         usecase <- fixture.usecase
-        result <- usecase
-          .run(CreateOcrJobCommand(image.imageId, "total_assets", OcrJobHints.empty, None))
+        result <- usecase.run(
+          CreateOcrJobCommand(image.imageId, "total_assets", OcrJobHints.empty, None),
+          fixture.requestId,
+        )
       yield result match
         case Left(_: AppError.DependencyFailed) => ()
         case other => fail(s"expected Left(AppError.DependencyFailed), got: $other")
@@ -130,8 +139,10 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
       for
         image <- fixture.savePng
         usecase <- fixture.usecase
-        _ <- usecase
-          .run(CreateOcrJobCommand(image.imageId, "total_assets", OcrJobHints.empty, None))
+        _ <- usecase.run(
+          CreateOcrJobCommand(image.imageId, "total_assets", OcrJobHints.empty, None),
+          fixture.requestId,
+        )
         found <- fixture.jobs.find(OcrJobId.unsafeFromString("job-1"))
       yield
         val failure = found.flatMap(OcrJob.failure).getOrElse(fail("expected failed job"))
@@ -148,22 +159,50 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
     ).use { fixture =>
       for
         usecase <- fixture.usecase
-        result <- usecase.run(CreateOcrJobCommand(
-          ImageId.unsafeFromString("missing-image"),
-          "total_assets",
-          OcrJobHints(
-            gameTitle = None,
-            layoutFamily = None,
-            knownPlayerAliases =
-              List(PlayerAliasHint(MemberId.unsafeFromString("member-1"), List.fill(9)("alias"))),
-            computerPlayerAliases = Nil,
+        result <- usecase.run(
+          CreateOcrJobCommand(
+            ImageId.unsafeFromString("missing-image"),
+            "total_assets",
+            OcrJobHints(
+              gameTitle = None,
+              layoutFamily = None,
+              knownPlayerAliases =
+                List(PlayerAliasHint(MemberId.unsafeFromString("member-1"), List.fill(9)("alias"))),
+              computerPlayerAliases = Nil,
+            ),
+            None,
           ),
-          None,
-        ))
+          fixture.requestId,
+        )
       yield result match
         case Left(AppError.ValidationFailed(detail)) =>
           assert(detail.contains("ocrHints.knownPlayerAliases[0].aliases"))
         case other => fail(s"expected Left(AppError.ValidationFailed), got: $other")
+    }
+  }
+
+  test("rejects auto screen type when attaching OCR to an existing match draft") {
+    inMemoryQueueFixture(
+      prefix = "momo-api-create-job-auto-match-draft",
+      idSeed = List("job-1", "draft-1"),
+      requestId = None,
+    ).use { fixture =>
+      val matchDraftId = MatchDraftId.unsafeFromString("match-draft-auto-rejected")
+      for
+        image <- fixture.savePng
+        _ <- fixture.matchDrafts.create(editableDraft(matchDraftId))
+        usecase <- fixture.usecase
+        result <- usecase.run(
+          CreateOcrJobCommand(image.imageId, "auto", OcrJobHints.empty, Some(matchDraftId)),
+          fixture.requestId,
+        )
+        published <- fixture.queue.published
+      yield
+        result match
+          case Left(AppError.ValidationFailed(detail)) =>
+            assert(detail.contains("requestedScreenType=auto"))
+          case other => fail(s"expected Left(AppError.ValidationFailed), got: $other")
+        assertEquals(published, Vector.empty)
     }
   }
 
@@ -184,8 +223,10 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         given LoggerFactory[IO] = factory
         image <- fixture.savePng
         usecase <- fixture.usecase
-        result <- usecase
-          .run(CreateOcrJobCommand(image.imageId, "total_assets", OcrJobHints.empty, None))
+        result <- usecase.run(
+          CreateOcrJobCommand(image.imageId, "total_assets", OcrJobHints.empty, None),
+          fixture.requestId,
+        )
         logged <- ref.get
       yield
         // Original dependency failure is still surfaced to the caller (enqueue failure not swallowed).
@@ -261,6 +302,32 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
     override def cancelQueued(jobId: OcrJobId, now: Instant): IO[Boolean] = delegate
       .cancelQueued(jobId, now)
 
+  private def editableDraft(id: MatchDraftId): MatchDraft = MatchDraft.fromInputs(
+    id = id,
+    createdByAccountId = AccountId.unsafeFromString("account_ponta"),
+    createdByMemberId = Some(MemberId.unsafeFromString("member_ponta")),
+    status = MatchDraftStatus.DraftReady,
+    heldEventId = None,
+    matchNoInEvent = None,
+    gameTitleId = None,
+    layoutFamily = None,
+    seasonMasterId = None,
+    ownerMemberId = None,
+    mapMasterId = None,
+    playedAt = None,
+    totalAssetsImageId = None,
+    revenueImageId = None,
+    incidentLogImageId = None,
+    totalAssetsDraftId = None,
+    revenueDraftId = None,
+    incidentLogDraftId = None,
+    sourceImagesRetainedUntil = None,
+    sourceImagesDeletedAt = None,
+    confirmedMatchId = None,
+    createdAt = now,
+    updatedAt = now,
+  ).getOrElse(fail("test fixture draft should be valid"))
+
   private final case class Fixture[Q <: QueueProducer[IO]](
       imageStore: ImageStore[IO],
       jobs: OcrJobsRepository[IO],
@@ -286,7 +353,6 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
             case head :: tail => tail -> head
             case Nil => Nil -> "unexpected"
           },
-          requestIdLookup = IO.pure(requestId),
           memberAliases = memberAliases,
         )
       }

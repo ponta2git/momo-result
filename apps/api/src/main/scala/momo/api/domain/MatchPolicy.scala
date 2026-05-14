@@ -18,35 +18,37 @@ object MatchPolicy:
       players: List[PlayerResult.Input],
   )
 
-  def validate(input: Input, allowedMemberIds: Set[MemberId]): Validated[MatchRecord.ValidatedInput] =
-    (
-      validateHeldEventId(input.heldEventId),
-      MatchNoInEvent.fromInt(input.matchNoInEvent).toEitherNec,
-      validateGameTitleId(input.gameTitleId),
-      validateSeasonMasterId(input.seasonMasterId),
-      validateOwnerMemberId(input.ownerMemberId, allowedMemberIds),
-      validateMapMasterId(input.mapMasterId),
-      validatePlayers(input.players, allowedMemberIds),
-    ).parMapN { (heldEventId, matchNo, gameTitleId, seasonId, owner, mapId, players) =>
-      MatchRecord.ValidatedInput(
-        heldEventId = heldEventId,
-        matchNoInEvent = matchNo,
-        gameTitleId = gameTitleId,
-        seasonMasterId = seasonId,
-        ownerMemberId = owner,
-        mapMasterId = mapId,
-        players = players,
-      )
-    }
+  def validate(
+      input: Input,
+      allowedMemberIds: Set[MemberId],
+  ): Validated[MatchRecord.ValidatedInput] = (
+    validateHeldEventId(input.heldEventId),
+    MatchNoInEvent.fromInt(input.matchNoInEvent).toEitherNec,
+    validateGameTitleId(input.gameTitleId),
+    validateSeasonMasterId(input.seasonMasterId),
+    validateOwnerMemberId(input.ownerMemberId, allowedMemberIds),
+    validateMapMasterId(input.mapMasterId),
+    validatePlayers(input.players, allowedMemberIds),
+  ).parMapN { (heldEventId, matchNo, gameTitleId, seasonId, owner, mapId, players) =>
+    MatchRecord.ValidatedInput(
+      heldEventId = heldEventId,
+      matchNoInEvent = matchNo,
+      gameTitleId = gameTitleId,
+      seasonMasterId = seasonId,
+      ownerMemberId = owner,
+      mapMasterId = mapId,
+      players = players,
+    )
+  }
 
-  def toMessage(errors: NonEmptyChain[MatchValidationError]): String =
-    errors.toList.map(_.message).mkString("; ")
+  def toMessage(errors: NonEmptyChain[MatchValidationError]): String = errors.toList.map(_.message)
+    .mkString("; ")
 
   private def validatePlayers(
       players: List[PlayerResult.Input],
       allowedMemberIds: Set[MemberId],
-  ): Validated[FourPlayers] =
-    players.traverse(PlayerResult.fromInput).flatMap(FourPlayers.fromList(_, allowedMemberIds))
+  ): Validated[FourPlayers] = players.traverse(PlayerResult.fromInput)
+    .flatMap(FourPlayers.fromList(_, allowedMemberIds))
 
   private def validateHeldEventId(id: HeldEventId): Validated[HeldEventId] =
     if id.value.trim.isEmpty then MatchValidationError.HeldEventIdRequired.leftNec else id.rightNec

@@ -18,10 +18,12 @@ addCommandAlias("apiCheck", "apiQuality; test")
 addCommandAlias("apiFullCheck", "apiCheck; apiDbQuality; apiRedisQuality")
 addCommandAlias(
   "apiRedisQuality",
-  "set Test / fork := true; " +
+    "set Test / fork := true; " +
     "set Test / parallelExecution := false; " +
     "set Test / testOptions := Seq(); " +
-    "testOnly momo.api.adapters.RedisQueueProducerSpec -- --include-tags=Integration",
+    "testOnly momo.api.adapters.RedisQueueProducerSpec " +
+    "momo.api.auth.AuthServicesSpec " +
+    "-- --include-tags=Integration",
 )
 addCommandAlias(
   "apiDbQuality",
@@ -35,7 +37,10 @@ addCommandAlias(
     "momo.api.integration.PostgresIdempotencyRepositoryContractSpec " +
     "momo.api.integration.PostgresOcrJobCreationRepositorySpec " +
     "momo.api.integration.PostgresOcrJobMaintenanceRepositorySpec " +
+    "momo.api.integration.PostgresOcrJobsRepositorySpec " +
     "momo.api.integration.PostgresOcrQueueOutboxRepositorySpec " +
+    "momo.api.integration.PostgresMatchDraftsRepositorySpec " +
+    "momo.api.integration.PostgresImageReferenceRepositorySpec " +
     "momo.api.integration.PostgresMasterRepositoriesSpec " +
     "momo.api.integration.PostgresMatchesRepositorySpec " +
     "momo.api.integration.PostgresMatchListReadModelSpec " +

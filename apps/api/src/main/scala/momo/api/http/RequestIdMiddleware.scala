@@ -19,14 +19,13 @@ import org.typelevel.ci.CIString
  *   - echo it back as a response `X-Request-Id` header so the client can reference it when
  *     reporting issues.
  *
- * The MDC value is also surfaced via [[RequestIdLookup]] so application code (e.g.
- * [[momo.api.usecases.CreateOcrJob]]) can capture it into background payloads (Redis, DB) without
- * threading the value through every method.
+ * The normalized request id is also written back into the request headers before routing, so Tapir
+ * endpoints can thread it into background payloads (Redis, DB) without relying on thread-local MDC.
  *
  * MDC is thread-local. cats-effect / Tapir typically execute the request body on the same fiber on
  * which the middleware ran, so synchronous `Sync.delay` calls inside the handler observe the value.
- * Logs emitted on other thread pools (Hikari, etc.) may not carry the MDC; that is acceptable for
- * MVP.
+ * Logs emitted on other thread pools (Hikari, etc.) may not carry the MDC; structured cross-system
+ * correlation should use the explicit `X-Request-Id` value on request inputs and persisted payloads.
  */
 object RequestIdMiddleware:
   val HeaderName: CIString = CIString("X-Request-Id")
@@ -44,7 +43,10 @@ object RequestIdMiddleware:
       case Some(id) => Sync[F].pure(id)
       case None => Sync[F].delay(UUID.randomUUID().toString)
 
-    effect.flatMap(id => runWithMdc(id)(http.run(request)).map(addHeader(_, id)))
+    effect.flatMap { id =>
+      val requestWithId = request.putHeaders(Header.Raw(HeaderName, id))
+      runWithMdc(id)(http.run(requestWithId)).map(addHeader(_, id))
+    }
   }
 
   /** Wrap http4s `HttpRoutes` (vs HttpApp) — convenience for nested wiring. */
@@ -55,7 +57,8 @@ object RequestIdMiddleware:
       case None => Sync[F].delay(UUID.randomUUID().toString)
 
     OptionT(effect.flatMap { id =>
-      runWithMdc(id)(rs.run(request).value).map(_.map(resp => addHeader(resp, id)))
+      val requestWithId = request.putHeaders(Header.Raw(HeaderName, id))
+      runWithMdc(id)(rs.run(requestWithId).value).map(_.map(resp => addHeader(resp, id)))
     })
   }
 

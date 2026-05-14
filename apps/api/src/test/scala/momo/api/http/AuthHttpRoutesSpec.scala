@@ -75,8 +75,8 @@ final class AuthHttpRoutesSpec extends MomoCatsEffectSuite:
     }
   }
 
-  private def authApp: IO[Http4sApp[IO]] = SecureRandom.javaSecuritySecureRandom[IO].flatMap {
-    random =>
+  private def authApp: IO[Http4sApp[IO]] = SecureRandom.javaSecuritySecureRandom[IO]
+    .flatMap { random =>
       given SecureRandom[IO] = random
       for
         sessionsRepo <- InMemoryAppSessionsRepository.create[IO]
@@ -93,11 +93,11 @@ final class AuthHttpRoutesSpec extends MomoCatsEffectSuite:
         accounts = accounts,
         rateLimiter = limiter,
       ).orNotFound
-  }
+    }
 
   private final class SuccessfulOAuth(userId: String) extends DiscordOAuthClient[IO]:
-    override def authorizationUrl(state: String, prompt: Option[String]): IO[String] =
-      IO.pure(s"https://discord.example/oauth?state=$state")
+    override def authorizationUrl(state: String, prompt: Option[String]): IO[String] = IO
+      .pure(s"https://discord.example/oauth?state=$state")
     override def fetchUser(code: String): IO[Either[momo.api.errors.AppError, DiscordUser]] =
       val _ = code
       IO.pure(Right(DiscordUser(userId)))

@@ -187,7 +187,7 @@ object AppConfig:
         (!config.sessionCookieName.startsWith("__Host-") ||
           !config.stateCookieName.startsWith("__Host-"))
     )("AUTH_COOKIE_HOST_PREFIX requires __Host- session and OAuth state cookie names")
-    val redirect = Option.when(!isSafeCallbackRedirectPath(config.callbackRedirectPath))(
+    val redirect = Option.when(!RedirectPath.isSafe(config.callbackRedirectPath))(
       "AUTH_CALLBACK_REDIRECT_PATH must be a root-relative path"
     )
     missing ++ List(secureCookie, hostPrefix, redirect).flatten
@@ -347,9 +347,6 @@ object AppConfig:
   private def appendJdbcQueryParam(jdbcUrl: String, key: String, value: String): String =
     val separator = if jdbcUrl.contains("?") then "&" else "?"
     s"$jdbcUrl$separator$key=$value"
-
-  private def isSafeCallbackRedirectPath(value: String): Boolean = value.startsWith("/") &&
-    !value.startsWith("//") && !value.exists(ch => ch == '\r' || ch == '\n')
 
 object AuthConfig:
   def defaults(appEnv: AppEnv): AuthConfig = AuthConfig(

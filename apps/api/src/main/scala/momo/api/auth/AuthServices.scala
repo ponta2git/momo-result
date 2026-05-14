@@ -20,7 +20,7 @@ import dev.profunktor.redis4cats.{Redis, RedisCommands}
 import io.circe.Decoder
 import io.circe.parser.decode
 
-import momo.api.config.{AuthConfig, RedisConfig}
+import momo.api.config.{AuthConfig, RedirectPath, RedisConfig}
 import momo.api.domain.LoginAccount
 import momo.api.errors.AppError
 import momo.api.repositories.{AppSession, AppSessionsRepository, LoginAccountsRepository}
@@ -209,7 +209,7 @@ final class OAuthStateCodec[F[_]: Sync: SecureRandom](config: AuthConfig, now: F
       current <- now
       nonce <- SecureTokenGenerator.token[F](24)
       marker = if silent then silentMarker else interactiveMarker
-      redirect = redirectPath.filter(isSafeRedirectPath)
+      redirect = redirectPath.flatMap(RedirectPath.sanitize)
         .map(path => Base64Url.encode(path.getBytes(StandardCharsets.UTF_8))).getOrElse("")
       payload =
         s"$nonce:${current.plusSeconds(config.stateTtl.toSeconds).getEpochSecond}:$marker:$redirect"
@@ -252,10 +252,7 @@ final class OAuthStateCodec[F[_]: Sync: SecureRandom](config: AuthConfig, now: F
 
   private def decodeRedirectPath(value: String): Option[String] = Option.when(value.nonEmpty)(value)
     .flatMap(Base64Url.decode).map(bytes => String(bytes, StandardCharsets.UTF_8))
-    .filter(isSafeRedirectPath)
-
-  private def isSafeRedirectPath(value: String): Boolean = value.startsWith("/") &&
-    !value.startsWith("//") && !value.exists(ch => ch == '\r' || ch == '\n')
+    .flatMap(RedirectPath.sanitize)
 
   private def sign(payload: String): F[String] = Sync[F].delay {
     val key = config.stateSigningKey.getOrElse("development-only-oauth-state-signing-key")

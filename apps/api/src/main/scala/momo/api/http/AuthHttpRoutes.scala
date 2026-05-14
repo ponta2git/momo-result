@@ -1,8 +1,5 @@
 package momo.api.http
 
-import java.net.URLEncoder
-import java.nio.charset.StandardCharsets
-
 import cats.effect.Async
 import cats.syntax.all.*
 import io.circe.syntax.*
@@ -17,7 +14,7 @@ import momo.api.auth.{
   AuthHeaderNames, CsrfTokenService, DiscordOAuthClient, OAuthStateCodec, RateLimiter,
   SessionService,
 }
-import momo.api.config.{AppConfig, AppEnv}
+import momo.api.config.{AppConfig, AppEnv, RedirectPath}
 import momo.api.domain.ids.*
 import momo.api.endpoints.{AuthMeResponse, ProblemDetails}
 import momo.api.errors.AppError
@@ -40,7 +37,7 @@ private[http] object AuthHttpRoutes:
           case Right(_) =>
             for
               silent = request.uri.query.params.get("silent").contains("1")
-              next = request.uri.query.params.get("next").flatMap(sanitizeRedirectPath)
+              next = request.uri.query.params.get("next").flatMap(RedirectPath.sanitize)
               state <- stateCodec.create(silent, next)
               location <- oauth.authorizationUrl(state, if silent then Some("none") else None)
               response <- redirect(location).map(_.addCookie(stateCookie(config, state)))
@@ -156,7 +153,7 @@ private[http] object AuthHttpRoutes:
 
     def interactiveLoginPath(next: Option[String]): String = next match
       case None => "/api/auth/login"
-      case Some(path) => s"/api/auth/login?next=${URLEncoder.encode(path, StandardCharsets.UTF_8)}"
+      case Some(path) => s"/api/auth/login?next=${RedirectPath.encodeQueryValue(path)}"
 
     def noContent: F[Response[F]] = Response[F](Status.NoContent).pure[F]
 
@@ -209,10 +206,5 @@ private[http] object AuthHttpRoutes:
     )
 
     def clientKey(request: Request[F]): String = ClientIp.of(request)
-
-    def sanitizeRedirectPath(value: String): Option[String] = Option.when(
-      value.startsWith("/") && !value.startsWith("//") &&
-        !value.exists(ch => ch == '\r' || ch == '\n')
-    )(value)
 
     routes

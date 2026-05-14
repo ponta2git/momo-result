@@ -40,9 +40,10 @@ final class CreateLoginAccount[F[_]: MonadThrow](
     nextId: F[String],
 ):
   def run(command: CreateLoginAccountCommand): F[Either[AppError, LoginAccount]] = (for
-    discordUserId <- EitherT.fromEither[F](validateDiscordUserId(command.discordUserId))
-    displayName <- EitherT.fromEither[F](validateDisplayName(command.displayName))
-    playerMemberId <- EitherT.fromEither[F](command.playerMemberId.traverse(validateMemberId))
+    discordUserId <- EitherT.fromEither[F](LoginAccountField.discordUserId(command.discordUserId))
+    displayName <- EitherT.fromEither[F](LoginAccountField.displayName(command.displayName))
+    playerMemberId <- EitherT
+      .fromEither[F](command.playerMemberId.traverse(LoginAccountField.playerMemberId))
     _ <- playerMemberId.traverse(id => members.find(id).orNotFound("member", id.value)).void
     existing <- EitherT.liftF(accounts.findByDiscordUserId(discordUserId))
     _ <- EitherT.fromEither[F](
@@ -62,30 +63,6 @@ final class CreateLoginAccount[F[_]: MonadThrow](
     )))
   yield created).value
 
-  private def validateDiscordUserId(value: String): Either[AppError, UserId] =
-    val trimmed = value.trim
-    Either.cond(
-      trimmed.matches("^[0-9]{5,32}$"),
-      UserId.unsafeFromString(trimmed),
-      AppError.ValidationFailed("discordUserId must be a Discord snowflake-like numeric id."),
-    )
-
-  private def validateDisplayName(value: String): Either[AppError, String] =
-    val trimmed = value.trim
-    Either.cond(
-      trimmed.nonEmpty && trimmed.length <= 64,
-      trimmed,
-      AppError.ValidationFailed("displayName must be 1 to 64 characters."),
-    )
-
-  private def validateMemberId(value: String): Either[AppError, MemberId] =
-    val trimmed = value.trim
-    Either.cond(
-      trimmed.nonEmpty,
-      MemberId.unsafeFromString(trimmed),
-      AppError.ValidationFailed("playerMemberId must not be blank."),
-    )
-
 final class UpdateLoginAccount[F[_]: MonadThrow](
     accounts: LoginAccountsRepository[F],
     members: MembersRepository[F],
@@ -95,9 +72,11 @@ final class UpdateLoginAccount[F[_]: MonadThrow](
   def run(id: AccountId, command: UpdateLoginAccountCommand): F[Either[AppError, LoginAccount]] =
     (for
       existing <- accounts.find(id).orNotFound("login account", id.value)
-      displayName <- EitherT.fromEither[F](command.displayName.traverse(validateDisplayName))
-      playerMemberId <- EitherT
-        .fromEither[F](command.playerMemberId.traverse(_.traverse(validateMemberId)))
+      displayName <- EitherT
+        .fromEither[F](command.displayName.traverse(LoginAccountField.displayName))
+      playerMemberId <- EitherT.fromEither[F](command.playerMemberId.traverse(_.traverse(
+        LoginAccountField.playerMemberId
+      )))
       _ <- playerMemberId.flatten.traverse(mid => members.find(mid).orNotFound("member", mid.value))
         .void
       nextLoginEnabled = command.loginEnabled.getOrElse(existing.loginEnabled)
@@ -145,18 +124,30 @@ final class UpdateLoginAccount[F[_]: MonadThrow](
   private val lastAdminConflict: AppError = AppError
     .Conflict("At least one enabled administrator account is required.")
 
-  private def validateDisplayName(value: String): Either[AppError, String] =
+private[usecases] object LoginAccountField:
+  private val DiscordUserIdPattern = "^[0-9]{5,32}$".r
+  private val MaxDisplayNameLength = 64
+
+  def discordUserId(value: String): Either[AppError, UserId] =
     val trimmed = value.trim
     Either.cond(
-      trimmed.nonEmpty && trimmed.length <= 64,
-      trimmed,
-      AppError.ValidationFailed("displayName must be 1 to 64 characters."),
+      DiscordUserIdPattern.pattern.matcher(trimmed).matches(),
+      UserId.unsafeFromString(trimmed),
+      AppError.ValidationFailed("discordUserId must be a Discord snowflake-like numeric id."),
     )
 
-  private def validateMemberId(value: String): Either[AppError, MemberId] =
+  def displayName(value: String): Either[AppError, String] =
+    boundedText(field = "displayName", value = value, maxLength = MaxDisplayNameLength)
+
+  def playerMemberId(value: String): Either[AppError, MemberId] =
+    val trimmed = value.trim
+    if trimmed.isEmpty then Left(AppError.ValidationFailed("playerMemberId must not be blank."))
+    else Right(MemberId.unsafeFromString(trimmed))
+
+  private def boundedText(field: String, value: String, maxLength: Int): Either[AppError, String] =
     val trimmed = value.trim
     Either.cond(
-      trimmed.nonEmpty,
-      MemberId.unsafeFromString(trimmed),
-      AppError.ValidationFailed("playerMemberId must not be blank."),
+      trimmed.nonEmpty && trimmed.length <= maxLength,
+      trimmed,
+      AppError.ValidationFailed(s"$field must be 1 to ${maxLength.toString} characters."),
     )

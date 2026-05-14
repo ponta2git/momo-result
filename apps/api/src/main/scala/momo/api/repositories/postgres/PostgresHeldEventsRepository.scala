@@ -2,17 +2,23 @@ package momo.api.repositories.postgres
 
 import java.time.{LocalDate, ZoneId}
 
+import cats.MonadThrow
 import cats.effect.MonadCancelThrow
-import cats.syntax.functor.*
+import cats.syntax.all.*
 import doobie.*
+import doobie.enumerated.SqlState
 import doobie.implicits.*
 import doobie.postgres.implicits.*
+import doobie.postgres.sqlstate
 
 import momo.api.db.Database
 import momo.api.domain.HeldEvent
 import momo.api.domain.ids.HeldEventId
 import momo.api.repositories.postgres.PostgresMeta.given
-import momo.api.repositories.{HeldEventsAlg, HeldEventsRepository}
+import momo.api.repositories.{
+  HeldEventDeletionAlg, HeldEventDeletionRepository, HeldEventDeletionResult, HeldEventsAlg,
+  HeldEventsRepository,
+}
 
 /**
  * `held_events` の純粋 [[HeldEventsAlg]] と、それを `Transactor[F]` で持ち上げた facade。
@@ -51,6 +57,48 @@ object PostgresHeldEvents:
       """.update.run.map(_ > 0)
 end PostgresHeldEvents
 
+object PostgresHeldEventDeletion:
+  private def isForeignKeyViolation(state: SqlState): Boolean = state.value ==
+    sqlstate.class23.FOREIGN_KEY_VIOLATION.value
+
+  private type DeletionState = (Boolean, Boolean, Boolean, Boolean)
+
+  val alg: HeldEventDeletionAlg[ConnectionIO] = new HeldEventDeletionAlg[ConnectionIO]:
+    override def deleteIfUnreferenced(id: HeldEventId): ConnectionIO[HeldEventDeletionResult] =
+      sql"""
+        WITH target AS (
+          SELECT id FROM held_events WHERE id = $id
+        ),
+        reference_state AS (
+          SELECT
+            EXISTS(SELECT 1 FROM matches WHERE held_event_id = $id) AS has_matches,
+            EXISTS(SELECT 1 FROM match_drafts WHERE held_event_id = $id) AS has_drafts
+        ),
+        deleted AS (
+          DELETE FROM held_events
+          WHERE id = $id
+            AND EXISTS (SELECT 1 FROM target)
+            AND NOT EXISTS (SELECT 1 FROM matches WHERE held_event_id = $id)
+            AND NOT EXISTS (SELECT 1 FROM match_drafts WHERE held_event_id = $id)
+          RETURNING id
+        )
+        SELECT
+          EXISTS(SELECT 1 FROM target) AS found,
+          (SELECT has_matches FROM reference_state) AS has_matches,
+          (SELECT has_drafts FROM reference_state) AS has_drafts,
+          EXISTS(SELECT 1 FROM deleted) AS deleted
+      """.query[DeletionState].unique.map {
+        case (_, _, _, true) => HeldEventDeletionResult.Deleted
+        case (false, _, _, false) => HeldEventDeletionResult.NotFound
+        case (true, true, _, false) => HeldEventDeletionResult.HasConfirmedMatches
+        case (true, false, true, false) => HeldEventDeletionResult.HasMatchDrafts
+        case _ => HeldEventDeletionResult.Referenced
+      }.exceptSomeSqlState {
+        case state if isForeignKeyViolation(state) =>
+          MonadThrow[ConnectionIO].pure(HeldEventDeletionResult.Referenced)
+      }
+end PostgresHeldEventDeletion
+
 /**
  * Backwards-compatible class facade so existing wiring (`new PostgresHeldEventsRepository(xa)`)
  * keeps working while new callers may consume [[PostgresHeldEvents.alg]] in `ConnectionIO`.
@@ -62,3 +110,11 @@ final class PostgresHeldEventsRepository[F[_]: MonadCancelThrow](transactor: Tra
 
   export delegate.*
 end PostgresHeldEventsRepository
+
+final class PostgresHeldEventDeletionRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
+    extends HeldEventDeletionRepository[F]:
+  private val delegate: HeldEventDeletionRepository[F] = HeldEventDeletionRepository
+    .fromConnectionIO(PostgresHeldEventDeletion.alg, Database.transactK(transactor))
+
+  export delegate.*
+end PostgresHeldEventDeletionRepository

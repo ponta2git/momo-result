@@ -32,6 +32,7 @@ addCommandAlias(
     "set Test / testOptions := Seq(); " +
     "testOnly " +
     "momo.api.integration.DbContractSpec " +
+    "momo.api.integration.PostgresHeldEventDeletionRepositorySpec " +
     "momo.api.integration.PostgresHeldEventsRepositoryContractSpec " +
     "momo.api.integration.PostgresAppSessionsRepositorySpec " +
     "momo.api.integration.PostgresIdempotencyRepositoryContractSpec " +

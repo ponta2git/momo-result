@@ -6,7 +6,8 @@ import cats.effect.IO
 import munit.CatsEffectSuite
 
 import momo.api.adapters.{
-  InMemoryHeldEventsRepository, InMemoryMatchDraftsRepository, InMemoryMatchesRepository,
+  InMemoryHeldEventDeletionRepository, InMemoryHeldEventsRepository, InMemoryMatchDraftsRepository,
+  InMemoryMatchesRepository,
 }
 import momo.api.domain.*
 import momo.api.domain.ids.*
@@ -28,7 +29,8 @@ final class DeleteHeldEventSpec extends CatsEffectSuite:
       events <- InMemoryHeldEventsRepository.create[IO]
       matches <- InMemoryMatchesRepository.create[IO]
       drafts <- InMemoryMatchDraftsRepository.create[IO]
-    yield (events, matches, drafts, DeleteHeldEvent[IO](events, matches, drafts))
+      deletions = InMemoryHeldEventDeletionRepository[IO](events, matches, drafts)
+    yield (events, matches, drafts, DeleteHeldEvent[IO](deletions))
 
   private def sampleMatch: MatchRecord = MatchRecord(
     id = MatchId.unsafeFromString("match-delete-usecase"),

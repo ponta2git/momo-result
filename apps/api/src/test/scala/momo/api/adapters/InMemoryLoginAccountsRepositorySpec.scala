@@ -20,11 +20,9 @@ final class InMemoryLoginAccountsRepositorySpec extends MomoCatsEffectSuite:
       accounts <- InMemoryLoginAccountsRepository.create[IO](Nil)
       _ <- accounts.create(createData(primaryId, primaryDiscordId))
       duplicateId <- accounts
-        .create(createData(primaryId, UserId.unsafeFromString("223456789012345678")))
-        .attempt
+        .create(createData(primaryId, UserId.unsafeFromString("223456789012345678"))).attempt
       duplicateDiscord <- accounts
-        .create(createData(AccountId.unsafeFromString("account-other"), primaryDiscordId))
-        .attempt
+        .create(createData(AccountId.unsafeFromString("account-other"), primaryDiscordId)).attempt
       listed <- accounts.list
     yield
       assertAppError(

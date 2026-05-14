@@ -107,8 +107,9 @@ object AppConfig:
           .raiseError(new IllegalArgumentException("DATABASE_URL is required in prod APP_ENV"))
       case None => MonadThrow[F].pure(None)
       case Some(rawUrl) =>
-        val (jdbcUrl, urlUser, urlPassword) = toJdbcUrl(rawUrl)
         for
+          parsed <- toJdbcUrl(rawUrl).liftTo[F]
+          (jdbcUrl, urlUser, urlPassword) = parsed
           safeJdbcUrl <- ensureProdSslMode(jdbcUrl, appEnv).liftTo[F]
           poolSize <- parsePositiveInt(env, "DB_POOL_SIZE", default = 2).liftTo[F]
         yield Some(DatabaseConfig(
@@ -299,23 +300,43 @@ object AppConfig:
    * Returns (jdbcUrl, userOption, passwordOption). Already-prefixed jdbc:postgresql:// URLs are
    * passed through unchanged.
    */
-  private[config] def toJdbcUrl(raw: String): (String, Option[String], Option[String]) =
-    if raw.startsWith("jdbc:") then (raw, None, None)
+  private[config] def toJdbcUrl(
+      raw: String
+  ): Either[Throwable, (String, Option[String], Option[String])] =
+    if raw.startsWith("jdbc:postgresql://") then Right((raw, None, None))
+    else if raw.startsWith("jdbc:") then
+      Left(new IllegalArgumentException(
+        "DATABASE_URL must use jdbc:postgresql://, postgres://, or postgresql://"
+      ))
     else
-      val normalized = raw.replaceFirst("^postgres(ql)?://", "postgresql://")
-      val uri = URI.create(normalized)
-      val userInfo = Option(uri.getUserInfo)
-      val (user, pass) = userInfo match
-        case None => (None, None)
-        case Some(info) =>
-          val parts = info.split(":", 2)
-          (Some(parts(0)).filter(_.nonEmpty), if parts.length > 1 then Some(parts(1)) else None)
-      val host = Option(uri.getHost).getOrElse("localhost")
-      val port = if uri.getPort > 0 then s":${uri.getPort}" else ""
-      val path = Option(uri.getRawPath).getOrElse("")
-      val query = Option(uri.getRawQuery).map(q => s"?$q").getOrElse("")
-      val jdbcUrl = s"jdbc:postgresql://$host$port$path$query"
-      (jdbcUrl, user, pass)
+      Either.catchNonFatal(URI.create(raw.replaceFirst("^postgres(ql)?://", "postgresql://")))
+        .flatMap { uri =>
+          Option(uri.getScheme).filter(_ == "postgresql").toRight(new IllegalArgumentException(
+            "DATABASE_URL must use jdbc:postgresql://, postgres://, or postgresql://"
+          )).flatMap(_ =>
+            Option(uri.getHost).filter(_.trim.nonEmpty)
+              .toRight(new IllegalArgumentException("DATABASE_URL must include a database host"))
+              .map(host => (uri, host))
+          )
+        }.map { case (uri, host) =>
+          val userInfo = Option(uri.getUserInfo)
+          val (user, pass) = userInfo match
+            case None => (None, None)
+            case Some(info) =>
+              val parts = info.split(":", 2)
+              (Some(parts(0)).filter(_.nonEmpty), if parts.length > 1 then Some(parts(1)) else None)
+          val port = if uri.getPort > 0 then s":${uri.getPort}" else ""
+          val path = Option(uri.getRawPath).getOrElse("")
+          val query = Option(uri.getRawQuery).map(q => s"?$q").getOrElse("")
+          val jdbcUrl = s"jdbc:postgresql://$host$port$path$query"
+          (jdbcUrl, user, pass)
+        }.leftMap {
+          case error: IllegalArgumentException => error
+          case error => new IllegalArgumentException(
+              s"DATABASE_URL must be a valid Postgres URL: ${error.getMessage}",
+              error,
+            )
+        }
 
   private[config] def ensureProdSslMode(
       jdbcUrl: String,

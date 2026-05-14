@@ -18,15 +18,19 @@ class AppConfigSpec extends CatsEffectSuite:
   private def load(env: Map[String, String]): IO[Either[Throwable, AppConfig]] = AppConfig
     .loadFromEnv[IO](env).attempt
 
+  private def parsedDatabaseUrl(raw: String): (String, Option[String], Option[String]) = AppConfig
+    .toJdbcUrl(raw)
+    .fold(error => fail(s"expected valid DATABASE_URL: ${error.getMessage}"), identity)
+
   test("toJdbcUrl: converts postgres:// URL and extracts credentials") {
-    val (url, user, pass) = AppConfig.toJdbcUrl("postgres://summit:summit@localhost:5433/summit")
+    val (url, user, pass) = parsedDatabaseUrl("postgres://summit:summit@localhost:5433/summit")
     assertEquals(url, "jdbc:postgresql://localhost:5433/summit")
     assertEquals(user, Some("summit"))
     assertEquals(pass, Some("summit"))
   }
 
   test("toJdbcUrl: converts postgresql:// URL") {
-    val (url, user, pass) = AppConfig.toJdbcUrl("postgresql://user:secret@db.example.com/mydb")
+    val (url, user, pass) = parsedDatabaseUrl("postgresql://user:secret@db.example.com/mydb")
     assertEquals(url, "jdbc:postgresql://db.example.com/mydb")
     assertEquals(user, Some("user"))
     assertEquals(pass, Some("secret"))
@@ -34,24 +38,37 @@ class AppConfigSpec extends CatsEffectSuite:
 
   test("toJdbcUrl: passes through jdbc:postgresql:// URLs unchanged") {
     val raw = "jdbc:postgresql://localhost:5432/mydb"
-    val (url, user, pass) = AppConfig.toJdbcUrl(raw)
+    val (url, user, pass) = parsedDatabaseUrl(raw)
     assertEquals(url, raw)
     assertEquals(user, None)
     assertEquals(pass, None)
   }
 
   test("toJdbcUrl: handles URL with query params (e.g. sslmode=require)") {
-    val (url, user, pass) = AppConfig.toJdbcUrl("postgres://u:p@host/db?sslmode=require")
+    val (url, user, pass) = parsedDatabaseUrl("postgres://u:p@host/db?sslmode=require")
     assertEquals(url, "jdbc:postgresql://host/db?sslmode=require")
     assertEquals(user, Some("u"))
     assertEquals(pass, Some("p"))
   }
 
   test("toJdbcUrl: handles URL without credentials") {
-    val (url, user, pass) = AppConfig.toJdbcUrl("postgres://localhost:5432/summit")
+    val (url, user, pass) = parsedDatabaseUrl("postgres://localhost:5432/summit")
     assertEquals(url, "jdbc:postgresql://localhost:5432/summit")
     assertEquals(user, None)
     assertEquals(pass, None)
+  }
+
+  test("toJdbcUrl: rejects non-Postgres URLs instead of converting them") {
+    val rawUrl = AppConfig.toJdbcUrl("mysql://user:secret@db.example.com/mydb")
+    val jdbcUrl = AppConfig.toJdbcUrl("jdbc:mysql://db.example.com/mydb")
+
+    assert(rawUrl.left.exists(_.getMessage.contains("DATABASE_URL must use")))
+    assert(jdbcUrl.left.exists(_.getMessage.contains("DATABASE_URL must use")))
+  }
+
+  test("loadFromEnv rejects unsupported production DATABASE_URL schemes") {
+    load(prodEnv + ("DATABASE_URL" -> "mysql://user:secret@db.example.com/mydb"))
+      .map(result => assert(result.left.exists(_.getMessage.contains("DATABASE_URL must use"))))
   }
 
   test("ensureProdSslMode: appends sslmode=require in prod when missing") {

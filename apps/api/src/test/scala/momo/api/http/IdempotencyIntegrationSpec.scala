@@ -1,6 +1,6 @@
 package momo.api.http
 
-import cats.effect.{Deferred, IO}
+import cats.effect.{Deferred, IO, Ref}
 import io.circe.Json
 import org.http4s.circe.*
 import org.http4s.implicits.*
@@ -10,6 +10,7 @@ import momo.api.MomoCatsEffectSuite
 import momo.api.adapters.InMemoryIdempotencyRepository
 import momo.api.auth.AuthenticatedAccount
 import momo.api.domain.ids.{AccountId, MemberId}
+import momo.api.endpoints.ProblemDetails
 import momo.api.http.HttpAssertions.{assertProblem, jsonField}
 
 final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
@@ -87,6 +88,44 @@ final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite with HttpAppT
         assertEquals(status, sttp.model.StatusCode.Conflict)
         assertEquals(problem.code, "IDEMPOTENCY_IN_PROGRESS")
       case Right(value) => fail(s"expected in-progress problem, got replay: $value")
+  }
+
+  test("idempotency: raised mutation errors abandon the reservation for retries") {
+    val account = AuthenticatedAccount(
+      accountId = AccountId.unsafeFromString("account_ponta"),
+      displayName = "ponta",
+      isAdmin = true,
+      playerMemberId = Some(MemberId.unsafeFromString("member_ponta")),
+    )
+    val request = Json.obj("value" -> Json.fromString("same"))
+    val ok = Json.obj("ok" -> Json.fromBoolean(true))
+    for
+      repo <- InMemoryIdempotencyRepository.create[IO]
+      attempts <- Ref.of[IO, Int](0)
+      first <- IdempotencyReplay.wrap[IO, Json, Json](
+        repo,
+        Some("key-failed-mutation"),
+        account,
+        "POST /api/testing/idempotency",
+        request,
+        IO.pure(java.time.Instant.parse("2026-05-14T00:00:00Z")),
+        attempts.update(_ + 1) *>
+          IO.raiseError[Either[ProblemDetails.ProblemResponse, Json]](RuntimeException("boom")),
+      ).attempt
+      second <- IdempotencyReplay.wrap[IO, Json, Json](
+        repo,
+        Some("key-failed-mutation"),
+        account,
+        "POST /api/testing/idempotency",
+        request,
+        IO.pure(java.time.Instant.parse("2026-05-14T00:00:01Z")),
+        attempts.update(_ + 1) *> IO.pure(Right(ok)),
+      )
+      attemptCount <- attempts.get
+    yield
+      assert(first.isLeft, s"expected first mutation to raise, got $first")
+      assertEquals(second, Right(ok))
+      assertEquals(attemptCount, 2)
   }
 
   app.test("idempotency: different keys produce two separate entities") { httpApp =>

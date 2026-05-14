@@ -75,10 +75,14 @@ private[http] object IdempotencyReplay:
           expiresAt = ts.plusMillis(RetentionMillis),
         )
         idempotency.reserve(pending).flatMap {
-          case IdempotencyReservation.Reserved => run.handleErrorWith(error =>
-              logIdempotencyFailure(endpoint, account, rawKey, "run mutation", error) >>
-                Async[F].raiseError(error)
-            ).flatMap(handleFreshResult(idempotency, rawKey, account, endpoint, requestHash, _))
+          case IdempotencyReservation.Reserved => run.attempt.flatMap {
+              case Right(result) =>
+                handleFreshResult(idempotency, rawKey, account, endpoint, requestHash, result)
+              case Left(error) =>
+                logIdempotencyFailure(endpoint, account, rawKey, "run mutation", error) >>
+                  abandonReservation(idempotency, rawKey, account, endpoint, requestHash) >>
+                  Async[F].raiseError(error)
+            }
           case IdempotencyReservation.Replay(response) => replayStoredBody[F, Resp](response)
           case IdempotencyReservation.InProgress => Async[F].pure(Left(ProblemDetails.from(
               AppError.IdempotencyInProgress("Idempotency-Key is already processing. Retry later.")
@@ -90,6 +94,17 @@ private[http] object IdempotencyReplay:
         }
       }
 
+  private def abandonReservation[F[_]: Async](
+      idempotency: IdempotencyRepository[F],
+      key: String,
+      account: AuthenticatedAccount,
+      endpoint: String,
+      requestHash: Vector[Byte],
+  ): F[Unit] = idempotency.abandon(key, account.accountId, endpoint, requestHash).attempt.flatMap {
+    case Right(_) => Async[F].unit
+    case Left(error) => logIdempotencyFailure(endpoint, account, key, "abandon", error)
+  }
+
   private def handleFreshResult[F[_]: Async, Resp: Encoder](
       idempotency: IdempotencyRepository[F],
       key: String,
@@ -98,12 +113,8 @@ private[http] object IdempotencyReplay:
       requestHash: Vector[Byte],
       result: Either[ProblemDetails.ProblemResponse, Resp],
   ): F[Either[ProblemDetails.ProblemResponse, Resp]] = result match
-    case left @ Left(_) => idempotency.abandon(key, account.accountId, endpoint, requestHash)
-        .attempt.flatMap {
-          case Right(_) => Async[F].pure(left)
-          case Left(error) => logIdempotencyFailure(endpoint, account, key, "abandon", error)
-              .as(left)
-        }
+    case left @ Left(_) => abandonReservation(idempotency, key, account, endpoint, requestHash)
+        .as(left)
     case right @ Right(value) =>
       val response = IdempotencyResponse(
         status = 200,

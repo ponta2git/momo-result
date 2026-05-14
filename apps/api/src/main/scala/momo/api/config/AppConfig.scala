@@ -66,8 +66,9 @@ object AppConfig:
   private val DefaultDevMemberIds: List[String] =
     List("member_ponta", "member_akane_mami", "member_otaka", "member_eu")
 
-  def load[F[_]: MonadThrow]: F[AppConfig] =
-    val env = sys.env
+  def load[F[_]: MonadThrow]: F[AppConfig] = loadFromEnv(sys.env)
+
+  private[config] def loadFromEnv[F[_]: MonadThrow](env: Map[String, String]): F[AppConfig] =
     val rawAppEnv = env.getOrElse("APP_ENV", "dev")
     AppEnv.fromString(rawAppEnv).leftMap(new IllegalArgumentException(_)).liftTo[F]
       .flatMap { appEnv =>
@@ -76,11 +77,12 @@ object AppConfig:
           loadRedis[F](env, appEnv),
           loadAuth[F](env, appEnv),
           loadResourceLimits[F](env),
-        ).mapN { (database, redis, auth, resourceLimits) =>
+          parsePort(env, "HTTP_PORT", default = 8080).liftTo[F],
+        ).mapN { (database, redis, auth, resourceLimits, httpPort) =>
           AppConfig(
             appEnv = appEnv,
             httpHost = env.getOrElse("HTTP_HOST", "0.0.0.0"),
-            httpPort = env.get("HTTP_PORT").flatMap(_.toIntOption).getOrElse(8080),
+            httpPort = httpPort,
             imageTmpDir = Path.of(env.getOrElse("IMAGE_TMP_DIR", "/tmp/momo-result/uploads"))
               .toAbsolutePath,
             devMemberIds = env.get("DEV_MEMBER_IDS")
@@ -165,20 +167,30 @@ object AppConfig:
     }.liftTo[F].flatMap(validateAuth[F](_, appEnv))
 
   private def validateAuth[F[_]: MonadThrow](config: AuthConfig, appEnv: AppEnv): F[AuthConfig] =
-    val missing =
-      if appEnv == AppEnv.Prod then
-        List(
-          "DISCORD_CLIENT_ID" -> config.discordClientId,
-          "DISCORD_CLIENT_SECRET" -> config.discordClientSecret,
-          "DISCORD_REDIRECT_URI" -> config.discordRedirectUri,
-          "AUTH_STATE_SIGNING_KEY" -> config.stateSigningKey,
-        ).collect { case (name, None) => name }
-      else Nil
-    if missing.nonEmpty then
-      MonadThrow[F].raiseError(new IllegalArgumentException(
-        s"Missing required production auth config: ${missing.mkString(", ")}"
-      ))
+    val problems = if appEnv == AppEnv.Prod then prodAuthProblems(config) else Nil
+    if problems.nonEmpty then
+      MonadThrow[F]
+        .raiseError(new IllegalArgumentException(s"Invalid production auth config: ${problems
+            .mkString(", ")}"))
     else MonadThrow[F].pure(config)
+
+  private def prodAuthProblems(config: AuthConfig): List[String] =
+    val missing = List(
+      "DISCORD_CLIENT_ID" -> config.discordClientId,
+      "DISCORD_CLIENT_SECRET" -> config.discordClientSecret,
+      "DISCORD_REDIRECT_URI" -> config.discordRedirectUri,
+      "AUTH_STATE_SIGNING_KEY" -> config.stateSigningKey,
+    ).collect { case (name, None) => s"$name is required" }
+    val secureCookie = Option.when(!config.useSecureCookies)("AUTH_COOKIE_SECURE must be true")
+    val hostPrefix = Option.when(
+      config.useHostPrefix &&
+        (!config.sessionCookieName.startsWith("__Host-") ||
+          !config.stateCookieName.startsWith("__Host-"))
+    )("AUTH_COOKIE_HOST_PREFIX requires __Host- session and OAuth state cookie names")
+    val redirect = Option.when(!isSafeCallbackRedirectPath(config.callbackRedirectPath))(
+      "AUTH_CALLBACK_REDIRECT_PATH must be a root-relative path"
+    )
+    missing ++ List(secureCookie, hostPrefix, redirect).flatten
 
   private def loadResourceLimits[F[_]: MonadThrow](
       env: Map[String, String]
@@ -238,6 +250,18 @@ object AppConfig:
       name: String,
       default: Long,
   ): Either[Throwable, Long] = parseLong(env, name, default, _ > 0L, "positive integer")
+
+  private[config] def parsePort(
+      env: Map[String, String],
+      name: String,
+      default: Int,
+  ): Either[Throwable, Int] = parseInt(
+    env,
+    name,
+    default,
+    value => value > 0 && value <= 65535,
+    "TCP port between 1 and 65535",
+  )
 
   private[config] def parseBoolean(
       env: Map[String, String],
@@ -323,6 +347,9 @@ object AppConfig:
   private def appendJdbcQueryParam(jdbcUrl: String, key: String, value: String): String =
     val separator = if jdbcUrl.contains("?") then "&" else "?"
     s"$jdbcUrl$separator$key=$value"
+
+  private def isSafeCallbackRedirectPath(value: String): Boolean = value.startsWith("/") &&
+    !value.startsWith("//") && !value.exists(ch => ch == '\r' || ch == '\n')
 
 object AuthConfig:
   def defaults(appEnv: AppEnv): AuthConfig = AuthConfig(

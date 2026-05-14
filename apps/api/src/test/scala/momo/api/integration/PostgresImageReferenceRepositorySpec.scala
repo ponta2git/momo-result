@@ -20,7 +20,12 @@ final class PostgresImageReferenceRepositorySpec extends IntegrationSuite:
       _ <- insertOcrDraft("draft-active-image", "job-active-image")
       _ <- insertOcrDraft("draft-completed-image", "job-completed-image")
       _ <- insertOcrJob("job-active-image", "draft-active-image", "image-active-job", "queued")
-      _ <- insertOcrJob("job-completed-image", "draft-completed-image", "image-completed-job", "succeeded")
+      _ <- insertOcrJob(
+        "job-completed-image",
+        "draft-completed-image",
+        "image-completed-job",
+        "succeeded",
+      )
       _ <- insertMatchDraft("match-draft-active-image", "draft_ready", Some("image-active-draft"))
       _ <- insertMatchDraft("match-draft-terminal-image", "cancelled", Some("image-terminal-draft"))
       referenced <- repo.referencedImageIds
@@ -39,12 +44,8 @@ final class PostgresImageReferenceRepositorySpec extends IntegrationSuite:
     )
   """.update.run.transact(transactor)
 
-  private def insertOcrJob(
-      id: String,
-      draftId: String,
-      imageId: String,
-      status: String,
-  ): IO[Int] = sql"""
+  private def insertOcrJob(id: String, draftId: String, imageId: String, status: String): IO[Int] =
+    sql"""
     INSERT INTO ocr_jobs (
       id, draft_id, image_id, image_path, requested_screen_type, detected_screen_type, status,
       attempt_count, started_at, finished_at, duration_ms, created_at, updated_at

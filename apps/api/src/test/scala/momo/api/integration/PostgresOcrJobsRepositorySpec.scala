@@ -80,12 +80,8 @@ final class PostgresOcrJobsRepositorySpec extends IntegrationSuite:
     )
   """.update.run.transact(transactor)
 
-  private def insertOcrJob(
-      id: String,
-      draftId: String,
-      imageId: String,
-      status: String,
-  ): IO[Int] = sql"""
+  private def insertOcrJob(id: String, draftId: String, imageId: String, status: String): IO[Int] =
+    sql"""
     INSERT INTO ocr_jobs (
       id, draft_id, image_id, image_path, requested_screen_type, status, attempt_count,
       created_at, updated_at

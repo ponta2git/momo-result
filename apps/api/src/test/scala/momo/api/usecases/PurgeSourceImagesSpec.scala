@@ -108,11 +108,22 @@ final class PurgeSourceImagesSpec extends MomoCatsEffectSuite:
         result <- service.run(draft.id, finalizedAt).attempt
         updatedDraft <- matchDrafts.find(draft.id)
         imageAfter <- imageStore.find(totalAssets.imageId)
+        sourceImages = GetMatchDraftSourceImages[IO](matchDrafts, imageStore)
+        listed <- sourceImages.list(draft.id, AccountId.unsafeFromString("account-1"))
+        streamed <- sourceImages.stream(
+          draft.id,
+          MatchDraftSourceImageKind.TotalAssets.wire,
+          AccountId.unsafeFromString("account-1"),
+        )
       yield
         assertEquals(result.swap.toOption, Some(deleteError))
         assertEquals(updatedDraft.flatMap(_.sourceImagesRetainedUntil), Some(finalizedAt))
         assertEquals(updatedDraft.flatMap(_.sourceImagesDeletedAt), Some(finalizedAt))
         assert(imageAfter.nonEmpty)
+        assertEquals(listed, Right(Nil))
+        streamed match
+          case Left(AppError.NotFound(_, _)) => ()
+          case other => fail(s"expected source image to be hidden after retention mark, got $other")
     }
   }
 

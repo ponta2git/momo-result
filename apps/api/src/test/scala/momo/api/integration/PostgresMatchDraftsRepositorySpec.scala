@@ -96,10 +96,8 @@ final class PostgresMatchDraftsRepositorySpec extends IntegrationSuite:
       assertEquals(slot, Some("ocr-draft-replacement-slot"))
       assertEquals(status, "ocr_running")
 
-  private def insertDraft(
-      id: String,
-      status: String,
-  ): IO[Int] = insertDraftWithSlot(id, status, None)
+  private def insertDraft(id: String, status: String): IO[Int] =
+    insertDraftWithSlot(id, status, None)
 
   private def insertDraftWithSlot(
       id: String,
@@ -114,12 +112,8 @@ final class PostgresMatchDraftsRepositorySpec extends IntegrationSuite:
     )
   """.update.run.transact(transactor)
 
-  private def insertOcrJob(
-      id: String,
-      draftId: String,
-      imageId: String,
-      status: String,
-  ): IO[Int] = sql"""
+  private def insertOcrJob(id: String, draftId: String, imageId: String, status: String): IO[Int] =
+    sql"""
     INSERT INTO ocr_jobs (
       id, draft_id, image_id, image_path, requested_screen_type, status, attempt_count,
       created_at, updated_at
@@ -137,8 +131,8 @@ final class PostgresMatchDraftsRepositorySpec extends IntegrationSuite:
     SELECT total_assets_draft_id FROM match_drafts WHERE id = $id
   """.query[Option[String]].unique.transact(transactor)
 
-  private def editableDraft(id: MatchDraftId, status: MatchDraftStatus): MatchDraft =
-    MatchDraft.fromInputs(
+  private def editableDraft(id: MatchDraftId, status: MatchDraftStatus): MatchDraft = MatchDraft
+    .fromInputs(
       id = id,
       createdByAccountId = AccountId.unsafeFromString("account_ponta"),
       createdByMemberId = Some(MemberId.unsafeFromString("member_ponta")),

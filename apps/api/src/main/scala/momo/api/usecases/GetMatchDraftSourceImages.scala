@@ -37,24 +37,28 @@ final class GetMatchDraftSourceImages[F[_]: MonadThrow](
       accountId: AccountId,
   ): F[Either[AppError, List[MatchDraftSourceImage]]] = (for
     draft <- EitherT(loadAuthorizedDraft(draftId, accountId))
-    entries <- EitherT.liftF(
-      List(
-        MatchDraftSourceImageKind.TotalAssets -> draft.totalAssetsImageId,
-        MatchDraftSourceImageKind.Revenue -> draft.revenueImageId,
-        MatchDraftSourceImageKind.IncidentLog -> draft.incidentLogImageId,
-      ).traverse {
-        case (_, None) => Option.empty[MatchDraftSourceImage].pure[F]
-        case (kind, Some(imageId)) => imageStore.find(imageId).map {
-            case None => Option.empty[MatchDraftSourceImage]
-            case Some(image) => Some(MatchDraftSourceImage(
-                kind = kind,
-                contentType = Some(image.mediaType),
-                createdAt = draft.updatedAt,
-                imageUrl = s"/api/match-drafts/${draftId.value}/source-images/${kind.wire}",
-              ))
+    entries <-
+      if draft.sourceImagesDeletedAt.nonEmpty then
+        EitherT.rightT[F, AppError](List.empty[Option[MatchDraftSourceImage]])
+      else
+        EitherT.liftF(
+          List(
+            MatchDraftSourceImageKind.TotalAssets -> draft.totalAssetsImageId,
+            MatchDraftSourceImageKind.Revenue -> draft.revenueImageId,
+            MatchDraftSourceImageKind.IncidentLog -> draft.incidentLogImageId,
+          ).traverse {
+            case (_, None) => Option.empty[MatchDraftSourceImage].pure[F]
+            case (kind, Some(imageId)) => imageStore.find(imageId).map {
+                case None => Option.empty[MatchDraftSourceImage]
+                case Some(image) => Some(MatchDraftSourceImage(
+                    kind = kind,
+                    contentType = Some(image.mediaType),
+                    createdAt = draft.updatedAt,
+                    imageUrl = s"/api/match-drafts/${draftId.value}/source-images/${kind.wire}",
+                  ))
+              }
           }
-      }
-    )
+        )
   yield entries.flatten).value
 
   def stream(
@@ -66,6 +70,11 @@ final class GetMatchDraftSourceImages[F[_]: MonadThrow](
       AppError.ValidationFailed("kind must be total_assets, revenue, or incident_log.")
     ))
     draft <- EitherT(loadAuthorizedDraft(draftId, accountId))
+    _ <- EitherT.cond[F](
+      draft.sourceImagesDeletedAt.isEmpty,
+      (),
+      AppError.NotFound("source image", s"${draftId.value}:${kind.wire}"),
+    )
     imageId <- EitherT.fromEither[F](sourceImageId(draft, kind).toRight(
       AppError.NotFound("source image", s"${draftId.value}:${kind.wire}")
     ))

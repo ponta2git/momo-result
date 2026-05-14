@@ -37,6 +37,5 @@ final class PurgeSourceImages[F[_]: Sync](
       ))
     }
 
-  private def deleteSourceImages(draft: momo.api.domain.MatchDraft): F[Unit] =
-    List(draft.totalAssetsImageId, draft.revenueImageId, draft.incidentLogImageId).flatten.distinct
-      .traverse_(rawId => imageStore.delete(rawId).void)
+  private def deleteSourceImages(draft: momo.api.domain.MatchDraft): F[Unit] = draft.sourceImageIds
+    .distinct.traverse_(rawId => imageStore.delete(rawId).void)

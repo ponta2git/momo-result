@@ -138,4 +138,22 @@ final class MatchDraftLifecycleSpec extends CatsEffectSuite:
       MatchDraftOcrStatus.project(MatchDraftStatus.NeedsReview, List(slot(None, warnings = false))),
       MatchDraftStatus.NeedsReview,
     )
+
+  test("slot accessors expose source images and OCR drafts in screen order"):
+    val totalImage = ImageId.unsafeFromString("image-total")
+    val revenueImage = ImageId.unsafeFromString("image-revenue")
+    val totalDraft = OcrDraftId.unsafeFromString("draft-total")
+    val incidentDraft = OcrDraftId.unsafeFromString("draft-incident")
+    val draft = newEditing(MatchDraftStatus.DraftReady).withCommon(_.copy(
+      totalAssetsImageId = Some(totalImage),
+      revenueImageId = Some(revenueImage),
+      totalAssetsDraftId = Some(totalDraft),
+      incidentLogDraftId = Some(incidentDraft),
+    ))
+
+    assertEquals(draft.sourceImageIds, List(totalImage, revenueImage))
+    assertEquals(draft.ocrDraftIds, List(totalDraft, incidentDraft))
+    assertEquals(draft.sourceImageId(ScreenType.TotalAssets), Some(totalImage))
+    assertEquals(draft.sourceImageId(ScreenType.Auto), None)
+    assertEquals(draft.ocrDraftId(ScreenType.IncidentLog), Some(incidentDraft))
 end MatchDraftLifecycleSpec

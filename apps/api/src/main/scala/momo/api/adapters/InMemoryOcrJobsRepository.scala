@@ -97,5 +97,4 @@ object InMemoryOcrJobsRepository:
       case _ => Sync[F].unit
   }
 
-  private def draftOcrDraftIds(draft: MatchDraft): Set[OcrDraftId] =
-    List(draft.totalAssetsDraftId, draft.revenueDraftId, draft.incidentLogDraftId).flatten.toSet
+  private def draftOcrDraftIds(draft: MatchDraft): Set[OcrDraftId] = draft.ocrDraftIds.toSet

@@ -110,6 +110,24 @@ sealed trait MatchDraft derives CanEqual:
   def createdAt: Instant = common.createdAt
   def updatedAt: Instant = common.updatedAt
 
+  def sourceImageIds: List[ImageId] = List(totalAssetsImageId, revenueImageId, incidentLogImageId)
+    .flatten
+
+  def ocrDraftIds: List[OcrDraftId] = List(totalAssetsDraftId, revenueDraftId, incidentLogDraftId)
+    .flatten
+
+  def sourceImageId(screenType: ScreenType): Option[ImageId] = screenType match
+    case ScreenType.TotalAssets => totalAssetsImageId
+    case ScreenType.Revenue => revenueImageId
+    case ScreenType.IncidentLog => incidentLogImageId
+    case ScreenType.Auto => None
+
+  def ocrDraftId(screenType: ScreenType): Option[OcrDraftId] = screenType match
+    case ScreenType.TotalAssets => totalAssetsDraftId
+    case ScreenType.Revenue => revenueDraftId
+    case ScreenType.IncidentLog => incidentLogDraftId
+    case ScreenType.Auto => None
+
   /** Apply a transformation to the shared fields without changing the variant. */
   def withCommon(f: MatchDraftCommon => MatchDraftCommon): MatchDraft = this match
     case d: MatchDraft.OcrRunning => d.copy(common = f(d.common))

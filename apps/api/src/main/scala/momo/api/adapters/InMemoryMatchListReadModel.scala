@@ -106,8 +106,7 @@ final class InMemoryMatchListReadModel[F[_]: Monad](
       filter.limit.fold(ordered)(ordered.take)
 
   private def projectedStatus(draft: MatchDraft): F[MatchDraftStatus] =
-    val draftIds = List(draft.totalAssetsDraftId, draft.revenueDraftId, draft.incidentLogDraftId)
-      .flatten
+    val draftIds = draft.ocrDraftIds
 
     (ocrJobs, ocrDrafts) match
       case (Some(jobs), Some(drafts))

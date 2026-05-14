@@ -6,6 +6,7 @@ import cats.MonadThrow
 import cats.data.EitherT
 import cats.syntax.all.*
 
+import momo.api.domain.ScreenType
 import momo.api.domain.ids.{ImageId, *}
 import momo.api.errors.AppError
 import momo.api.repositories.{ImageStore, MatchDraftsRepository}
@@ -15,6 +16,11 @@ enum MatchDraftSourceImageKind(val wire: String) derives CanEqual:
   case TotalAssets extends MatchDraftSourceImageKind("total_assets")
   case Revenue extends MatchDraftSourceImageKind("revenue")
   case IncidentLog extends MatchDraftSourceImageKind("incident_log")
+
+  def screenType: ScreenType = this match
+    case TotalAssets => ScreenType.TotalAssets
+    case Revenue => ScreenType.Revenue
+    case IncidentLog => ScreenType.IncidentLog
 
 object MatchDraftSourceImageKind:
   def fromWire(value: String): Option[MatchDraftSourceImageKind] = values.find(_.wire == value)
@@ -42,22 +48,19 @@ final class GetMatchDraftSourceImages[F[_]: MonadThrow](
         EitherT.rightT[F, AppError](List.empty[Option[MatchDraftSourceImage]])
       else
         EitherT.liftF(
-          List(
-            MatchDraftSourceImageKind.TotalAssets -> draft.totalAssetsImageId,
-            MatchDraftSourceImageKind.Revenue -> draft.revenueImageId,
-            MatchDraftSourceImageKind.IncidentLog -> draft.incidentLogImageId,
-          ).traverse {
-            case (_, None) => Option.empty[MatchDraftSourceImage].pure[F]
-            case (kind, Some(imageId)) => imageStore.find(imageId).map {
-                case None => Option.empty[MatchDraftSourceImage]
-                case Some(image) => Some(MatchDraftSourceImage(
-                    kind = kind,
-                    contentType = Some(image.mediaType),
-                    createdAt = draft.updatedAt,
-                    imageUrl = s"/api/match-drafts/${draftId.value}/source-images/${kind.wire}",
-                  ))
-              }
-          }
+          MatchDraftSourceImageKind.values.toList
+            .map(kind => kind -> draft.sourceImageId(kind.screenType)).traverse {
+              case (_, None) => Option.empty[MatchDraftSourceImage].pure[F]
+              case (kind, Some(imageId)) => imageStore.find(imageId).map {
+                  case None => Option.empty[MatchDraftSourceImage]
+                  case Some(image) => Some(MatchDraftSourceImage(
+                      kind = kind,
+                      contentType = Some(image.mediaType),
+                      createdAt = draft.updatedAt,
+                      imageUrl = s"/api/match-drafts/${draftId.value}/source-images/${kind.wire}",
+                    ))
+                }
+            }
         )
   yield entries.flatten).value
 
@@ -97,7 +100,4 @@ final class GetMatchDraftSourceImages[F[_]: MonadThrow](
   private def sourceImageId(
       draft: momo.api.domain.MatchDraft,
       kind: MatchDraftSourceImageKind,
-  ): Option[ImageId] = kind match
-    case MatchDraftSourceImageKind.TotalAssets => draft.totalAssetsImageId
-    case MatchDraftSourceImageKind.Revenue => draft.revenueImageId
-    case MatchDraftSourceImageKind.IncidentLog => draft.incidentLogImageId
+  ): Option[ImageId] = draft.sourceImageId(kind.screenType)

@@ -100,3 +100,17 @@ final class PostgresOcrJobCreationRepositorySpec extends IntegrationSuite with J
     yield
       assert(result.isLeft, s"expected failed attachment to rollback, got $result")
       assertEquals(counts, (0L, 0L, 0L))
+
+  test("createQueuedJob rejects invalid draft JSON before inserting related rows"):
+    val invalidDraft = draft.copy(payloadJson = "{")
+    for
+      result <- repo.createQueuedJob(invalidDraft, job, None, payload).attempt
+      counts <- sql"""
+        SELECT
+          (SELECT count(*) FROM ocr_drafts WHERE id = ${draftId.value}),
+          (SELECT count(*) FROM ocr_jobs WHERE id = ${jobId.value}),
+          (SELECT count(*) FROM ocr_queue_outbox WHERE job_id = ${jobId.value})
+      """.query[(Long, Long, Long)].unique.transact(transactor)
+    yield
+      assert(result.left.exists(_.getMessage.contains("payloadJson")))
+      assertEquals(counts, (0L, 0L, 0L))

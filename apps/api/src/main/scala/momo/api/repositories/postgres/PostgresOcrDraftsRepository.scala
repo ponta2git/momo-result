@@ -44,14 +44,18 @@ object PostgresOcrDrafts:
     updatedAt = r._10,
   )
 
-  private def asJson(raw: String): Json = parser.parse(raw).getOrElse(Json.Null)
+  private def asJson(raw: String, fieldName: String): ConnectionIO[Json] = parser.parse(raw)
+    .leftMap(error =>
+      new IllegalArgumentException(s"ocr draft $fieldName must be valid JSON: ${error.message}")
+    ).liftTo[ConnectionIO]
 
   val alg: OcrDraftsAlg[ConnectionIO] = new OcrDraftsAlg[ConnectionIO]:
     override def create(draft: OcrDraft): ConnectionIO[Unit] =
-      val payload = asJson(draft.payloadJson)
-      val warnings = asJson(draft.warningsJson)
-      val timings = asJson(draft.timingsMsJson)
-      sql"""
+      for
+        payload <- asJson(draft.payloadJson, "payloadJson")
+        warnings <- asJson(draft.warningsJson, "warningsJson")
+        timings <- asJson(draft.timingsMsJson, "timingsMsJson")
+        _ <- sql"""
         INSERT INTO ocr_drafts (
           id, job_id,
           requested_screen_type, detected_screen_type, profile_id,
@@ -64,6 +68,7 @@ object PostgresOcrDrafts:
           ${draft.createdAt}, ${draft.updatedAt}
         )
       """.update.run.void
+      yield ()
 
     override def find(draftId: OcrDraftId): ConnectionIO[Option[OcrDraft]] = sql"""
         SELECT id, job_id, requested_screen_type, detected_screen_type, profile_id,

@@ -3,6 +3,7 @@ package momo.api.http.modules
 import java.time.Instant
 
 import cats.effect.Async
+import cats.syntax.all.*
 import sttp.tapir.server.ServerEndpoint
 
 import momo.api.domain.ids.{OcrDraftId, OcrJobId}
@@ -64,8 +65,10 @@ object OcrModule:
     },
     OcrDraftEndpoints.get.serverLogic { case (draftId, accountHeader) =>
       security.authorizeRead(accountHeader)(_ =>
-        security
-          .respond(getOcrDraft.run(OcrDraftId.unsafeFromString(draftId)))(OcrDraftResponse.from)
+        security.respond(
+          getOcrDraft.run(OcrDraftId.unsafeFromString(draftId))
+            .map(_.flatMap(OcrDraftResponse.from))
+        )(identity)
       )
     },
     OcrDraftEndpoints.listByIds.serverLogic { case (ids, accountHeader) =>
@@ -73,8 +76,10 @@ object OcrModule:
         security.respond(
           OcrDraftCodec.toDraftIds(ids) match
             case Left(error) => Async[F].pure(Left(error))
-            case Right(draftIds) => getOcrDraftsBulk.run(draftIds)
-        )(items => OcrDraftListResponse(items.map(OcrDraftResponse.from)))
+            case Right(draftIds) => getOcrDraftsBulk.run(draftIds).map(_.flatMap(items =>
+                items.traverse(OcrDraftResponse.from).map(OcrDraftListResponse(_))
+              ))
+        )(identity)
       }
     },
   )

@@ -2,11 +2,13 @@ package momo.api.endpoints
 
 import java.time.format.DateTimeFormatter
 
+import cats.syntax.all.*
 import io.circe.{Codec, Json}
 import sttp.tapir.Schema
 
 import momo.api.domain.ids.*
 import momo.api.domain.{OcrDraft, OcrJob, OcrJobHints, PlayerAliasHint, StoredImage}
+import momo.api.errors.AppError
 
 final case class AuthMeResponse(
     accountId: String,
@@ -108,17 +110,26 @@ final case class OcrDraftResponse(
 ) derives Codec.AsObject
 
 object OcrDraftResponse:
-  def from(draft: OcrDraft): OcrDraftResponse = OcrDraftResponse(
-    draftId = draft.id.value,
-    jobId = draft.jobId.value,
-    requestedScreenType = draft.requestedScreenType.wire,
-    detectedScreenType = draft.detectedScreenType.map(_.wire),
-    profileId = draft.profileId,
-    payloadJson = io.circe.parser.parse(draft.payloadJson).getOrElse(Json.Null),
-    warningsJson = io.circe.parser.parse(draft.warningsJson).getOrElse(Json.Null),
-    timingsMsJson = io.circe.parser.parse(draft.timingsMsJson).getOrElse(Json.Null),
-    createdAt = DateTimeFormatter.ISO_INSTANT.format(draft.createdAt),
-    updatedAt = DateTimeFormatter.ISO_INSTANT.format(draft.updatedAt),
-  )
+  def from(draft: OcrDraft): Either[AppError, OcrDraftResponse] = (
+    parseJson(draft.payloadJson, "payloadJson"),
+    parseJson(draft.warningsJson, "warningsJson"),
+    parseJson(draft.timingsMsJson, "timingsMsJson"),
+  ).mapN { (payload, warnings, timings) =>
+    OcrDraftResponse(
+      draftId = draft.id.value,
+      jobId = draft.jobId.value,
+      requestedScreenType = draft.requestedScreenType.wire,
+      detectedScreenType = draft.detectedScreenType.map(_.wire),
+      profileId = draft.profileId,
+      payloadJson = payload,
+      warningsJson = warnings,
+      timingsMsJson = timings,
+      createdAt = DateTimeFormatter.ISO_INSTANT.format(draft.createdAt),
+      updatedAt = DateTimeFormatter.ISO_INSTANT.format(draft.updatedAt),
+    )
+  }
+
+  private def parseJson(raw: String, fieldName: String): Either[AppError, Json] = io.circe.parser
+    .parse(raw).leftMap(_ => AppError.Internal(s"Stored OCR draft $fieldName is invalid JSON."))
 
 final case class CancelOcrJobResponse(jobId: String, status: String) derives Codec.AsObject

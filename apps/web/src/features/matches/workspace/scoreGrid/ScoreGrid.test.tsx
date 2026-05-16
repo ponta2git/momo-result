@@ -146,6 +146,21 @@ describe("ScoreGrid", () => {
     expect(incidentChanges.at(-1)).toEqual([0, "destination", 7]);
   });
 
+  it("allows editing the member on mobile cards", async () => {
+    matchMedia = installMatchMediaController(true);
+    const user = userEvent.setup();
+    const onPlayerChange =
+      vi.fn<(index: number, patch: Partial<MatchFormValues["players"][number]>) => void>();
+
+    render(<ScoreGridHarness onPlayerChange={onPlayerChange} />);
+
+    const memberSelect = screen.getByLabelText("メンバー");
+    await user.selectOptions(memberSelect, "member_eu");
+
+    expect(onPlayerChange).toHaveBeenLastCalledWith(0, { memberId: "member_eu" });
+    expect(memberSelect).toHaveValue("member_eu");
+  });
+
   it("does not commit NaN when a mobile numeric draft is incomplete", async () => {
     matchMedia = installMatchMediaController(true);
     const user = userEvent.setup();

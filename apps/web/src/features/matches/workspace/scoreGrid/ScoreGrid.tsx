@@ -441,6 +441,25 @@ export function ScoreGrid({
                 </button>
                 {expandedMobilePlayer === index ? (
                   <div className="mt-3 space-y-2">
+                    <label className="grid gap-1 text-xs text-[var(--color-text-secondary)]">
+                      メンバー
+                      <select
+                        className={memberSelectClass}
+                        value={player.memberId}
+                        onChange={(event) => {
+                          onPlayerChange(index, {
+                            memberId: event.target
+                              .value as MatchFormValues["players"][number]["memberId"],
+                          });
+                        }}
+                      >
+                        {fixedMembers.map((member) => (
+                          <option key={member.memberId} value={member.memberId}>
+                            {member.displayName}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                     <div className="grid grid-cols-2 gap-2">
                       <label className="grid gap-1 text-xs text-[var(--color-text-secondary)]">
                         プレー順

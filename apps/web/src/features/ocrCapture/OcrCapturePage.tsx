@@ -34,6 +34,7 @@ export function OcrCapturePage() {
     selectedSlotLabels,
     setSetup,
     setup,
+    setupOptions,
     slotsFull,
     submission,
   } = useOcrCapturePageController();
@@ -73,7 +74,7 @@ export function OcrCapturePage() {
               value={setup}
               onChange={setSetup}
               enabled={auth.ready}
-              authAccountId={auth.accountId}
+              options={setupOptions}
             />
           </section>
 

@@ -1,12 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { slotDefinitions } from "@/features/ocrCapture/captureState";
+import { buildOcrHints } from "@/features/ocrCapture/hints";
 import { defaultSetupValues } from "@/features/ocrCapture/schema";
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
 import { isWorkingStatus } from "@/features/ocrCapture/slotPolicy";
 import { useOcrCaptureDraftFlow } from "@/features/ocrCapture/useOcrCaptureDraftFlow";
 import { useOcrCaptureMutations } from "@/features/ocrCapture/useOcrCaptureMutations";
 import { useOcrCaptureQueries } from "@/features/ocrCapture/useOcrCaptureQueries";
+import { useOcrSetupOptions } from "@/features/ocrCapture/useOcrSetupOptions";
+import { parseLayoutFamily } from "@/shared/api/enums";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
@@ -15,7 +18,24 @@ export function useOcrCapturePageController() {
   const [notice, setNotice] = useState("");
   const [partialStartAcknowledged, setPartialStartAcknowledged] = useState(false);
 
-  const { auth, gameTitlesQuery, hints } = useOcrCaptureQueries(setup.gameTitleId);
+  const { auth, memberAliasDirectory } = useOcrCaptureQueries();
+  const setupOptions = useOcrSetupOptions({
+    authAccountId: auth.accountId,
+    enabled: auth.ready,
+    onChange: setSetup,
+    value: setup,
+  });
+  const hints = useMemo(() => {
+    const input: { gameTitleName?: string; layoutFamily?: "momotetsu_2" | "world" | "reiwa" } = {};
+    if (setupOptions.selectedGameTitle?.name) {
+      input.gameTitleName = setupOptions.selectedGameTitle.name;
+    }
+    const layoutFamily = parseLayoutFamily(setupOptions.selectedGameTitle?.layoutFamily);
+    if (layoutFamily) {
+      input.layoutFamily = layoutFamily;
+    }
+    return buildOcrHints(input, memberAliasDirectory);
+  }, [memberAliasDirectory, setupOptions.selectedGameTitle]);
   const flow = useOcrCaptureDraftFlow();
   const submission = useOcrCaptureMutations(hints);
 
@@ -57,12 +77,9 @@ export function useOcrCapturePageController() {
       );
       return;
     }
-    const selectedGameTitle = gameTitlesQuery.data?.items?.find(
-      (item) => item.id === setup.gameTitleId,
-    );
     await submission.submit({
       notify,
-      selectedGameTitle,
+      selectedGameTitle: setupOptions.selectedGameTitle,
       setup,
       slots: flow.slots,
       updateSlot: flow.updateSlot,
@@ -87,6 +104,7 @@ export function useOcrCapturePageController() {
     selectedSlotLabels,
     setSetup,
     setup,
+    setupOptions,
     slotsFull,
     submission,
   };

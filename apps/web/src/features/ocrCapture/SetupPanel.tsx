@@ -1,21 +1,21 @@
 import { useId } from "react";
 
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
-import { useOcrSetupOptions } from "@/features/ocrCapture/useOcrSetupOptions";
+import type { OcrSetupOptions } from "@/features/ocrCapture/useOcrSetupOptions";
 import { fixedMembers } from "@/shared/domain/members";
 import { Field } from "@/shared/ui/forms/Field";
 
 type SetupPanelProps = {
   value: SetupFormValues;
   onChange: (value: SetupFormValues) => void;
-  enabled?: boolean;
-  authAccountId?: string | undefined;
+  enabled: boolean;
+  options: OcrSetupOptions;
 };
 
 const selectClass =
   "w-full rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] transition hover:bg-[var(--color-surface-subtle)] disabled:cursor-not-allowed disabled:opacity-60";
 
-export function SetupPanel({ value, onChange, enabled = true, authAccountId }: SetupPanelProps) {
+export function SetupPanel({ value, onChange, enabled, options }: SetupPanelProps) {
   const fieldIdPrefix = useId();
   const {
     gameTitles,
@@ -27,12 +27,7 @@ export function SetupPanel({ value, onChange, enabled = true, authAccountId }: S
     seasonMasters,
     seasonMastersError,
     seasonMastersPlaceholder,
-  } = useOcrSetupOptions({
-    authAccountId,
-    enabled,
-    onChange,
-    value,
-  });
+  } = options;
 
   const gameTitleId = `${fieldIdPrefix}-game-title`;
   const seasonMasterId = `${fieldIdPrefix}-season-master`;

@@ -85,6 +85,7 @@ export function useOcrSetupOptions({
   const gameTitles = gameTitlesQuery.data?.items ?? emptyGameTitles;
   const mapMasters = mapMastersQuery.data?.items ?? emptyMapMasters;
   const seasonMasters = seasonMastersQuery.data?.items ?? emptySeasonMasters;
+  const selectedGameTitle = gameTitles.find((gameTitle) => gameTitle.id === value.gameTitleId);
   const gameTitlesLoadFailed = shouldShowQueryError(gameTitlesQuery);
   const mapMastersLoadFailed = shouldShowQueryError(mapMastersQuery);
   const seasonMastersLoadFailed = shouldShowQueryError(seasonMastersQuery);
@@ -148,5 +149,8 @@ export function useOcrSetupOptions({
       gameTitleId: value.gameTitleId,
       loading: seasonMastersQuery.isLoading,
     }),
+    selectedGameTitle,
   };
 }
+
+export type OcrSetupOptions = ReturnType<typeof useOcrSetupOptions>;

@@ -39,7 +39,11 @@ import {
   buildWorkspacePageCopy,
   latestHeldEventPatch,
 } from "@/features/matches/workspace/workspaceViewModel";
-import { shouldShowQueryError } from "@/shared/api/queryErrorState";
+import {
+  isInitialQueryLoading,
+  shouldShowBlockingQueryError,
+  shouldShowQueryError,
+} from "@/shared/api/queryErrorState";
 import { isCancelableDraftStatus } from "@/shared/domain/draftStatus";
 
 export type MatchWorkspaceControllerParams = {
@@ -301,6 +305,9 @@ export function useMatchWorkspaceController({
     const action = document.getElementById("workspace-primary-action");
     action?.focus();
   }, []);
+  const refreshReviewStatus = useCallback(async () => {
+    await Promise.all([draftDetailQuery.refetch(), ocrDraftsQuery.refetch()]);
+  }, [draftDetailQuery, ocrDraftsQuery]);
 
   return {
     baseErrors,
@@ -311,7 +318,8 @@ export function useMatchWorkspaceController({
     confirmAction,
     confirmOpen,
     createEventMutation,
-    draftDetailQuery,
+    editLoadFailed: mode === "edit" && shouldShowBlockingQueryError(matchDetailQuery),
+    editLoading: mode === "edit" && isInitialQueryLoading(matchDetailQuery),
     eventDraftValue,
     gameTitleItems,
     hasSourceImagePanel,
@@ -321,13 +329,12 @@ export function useMatchWorkspaceController({
     isOcrRunningBlocked,
     heldEvents,
     mapItems,
-    matchDetailQuery,
     matchDraftIdForImages,
     notice,
-    ocrDraftsQuery,
     pageDescription: pageCopy.description,
     pageTitle: pageCopy.title,
     preferredImageKind,
+    refreshReviewStatus,
     refreshingReviewStatus,
     returnTo,
     reviewStatus,
@@ -342,7 +349,7 @@ export function useMatchWorkspaceController({
     setShowValidationErrors,
     setValidationMessage,
     showValidationErrors,
-    sourceImageQuery,
+    sourceImageLoading: sourceImageQuery.isLoading,
     sourceImages,
     state,
     updateMutation,

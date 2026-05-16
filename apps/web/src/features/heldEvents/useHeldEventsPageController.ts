@@ -93,6 +93,9 @@ export function useHeldEventsPageController() {
     () => rows.reduce((sum, event) => sum + event.matchCount, 0),
     [rows],
   );
+  const refresh = () => {
+    void heldEventsQuery.refetch();
+  };
 
   return {
     createAction,
@@ -101,11 +104,12 @@ export function useHeldEventsPageController() {
     deleteTarget,
     errorMessage,
     heldAtDraft,
-    heldEventsQuery,
     latestEvent: rows[0],
     liveMessage: notice || errorMessage,
     loadFailed: shouldShowBlockingQueryError(heldEventsQuery),
     loading: isInitialQueryLoading(heldEventsQuery),
+    refreshing: heldEventsQuery.isFetching,
+    refresh,
     rows,
     setDeleteTarget,
     setHeldAtDraft,

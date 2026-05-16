@@ -7,7 +7,6 @@ import { MatchSetupSection } from "@/features/matches/workspace/MatchSetupSectio
 import { ScoreGrid } from "@/features/matches/workspace/scoreGrid/ScoreGrid";
 import { SourceImagePanel } from "@/features/matches/workspace/sourceImages/SourceImagePanel";
 import { useMatchWorkspaceController } from "@/features/matches/workspace/useMatchWorkspaceController";
-import { isInitialQueryLoading, shouldShowBlockingQueryError } from "@/shared/api/queryErrorState";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
@@ -39,7 +38,8 @@ export function MatchWorkspacePage({
     confirmAction,
     confirmOpen,
     createEventMutation,
-    draftDetailQuery,
+    editLoadFailed,
+    editLoading,
     eventDraftValue,
     gameTitleItems,
     handleCancelDraftConfirmed,
@@ -49,10 +49,8 @@ export function MatchWorkspacePage({
     isMutating,
     isOcrRunningBlocked,
     mapItems,
-    matchDetailQuery,
     matchDraftIdForImages,
     notice,
-    ocrDraftsQuery,
     onCreateEvent,
     onGameTitleChange,
     onIncidentChange,
@@ -63,6 +61,7 @@ export function MatchWorkspacePage({
     onRequestSubmitFocus,
     pageDescription,
     pageTitle,
+    refreshReviewStatus,
     refreshingReviewStatus,
     returnTo,
     seasonItems,
@@ -73,7 +72,7 @@ export function MatchWorkspacePage({
     setCancelDraftConfirmOpen,
     setEventDraftValue,
     setPreferredImageKind,
-    sourceImageQuery,
+    sourceImageLoading,
     sourceImages,
     state,
     useSampleDrafts,
@@ -83,7 +82,7 @@ export function MatchWorkspacePage({
     workspaceData,
   } = controller;
 
-  if (mode === "edit" && isInitialQueryLoading(matchDetailQuery)) {
+  if (editLoading) {
     return (
       <PageFrame>
         <p className="text-[var(--color-text-secondary)]">読み込んでいます…</p>
@@ -91,7 +90,7 @@ export function MatchWorkspacePage({
     );
   }
 
-  if (mode === "edit" && shouldShowBlockingQueryError(matchDetailQuery)) {
+  if (editLoadFailed) {
     return (
       <PageFrame>
         <Notice tone="danger" title="試合が見つかりませんでした">
@@ -171,9 +170,7 @@ export function MatchWorkspacePage({
             <Button
               disabled={refreshingReviewStatus}
               variant="secondary"
-              onClick={async () => {
-                await Promise.all([draftDetailQuery.refetch(), ocrDraftsQuery.refetch()]);
-              }}
+              onClick={refreshReviewStatus}
             >
               {refreshingReviewStatus ? "更新中…" : "状態を更新"}
             </Button>
@@ -236,7 +233,7 @@ export function MatchWorkspacePage({
 
             {hasSourceImagePanel && matchDraftIdForImages ? (
               <SourceImagePanel
-                loading={sourceImageQuery.isLoading}
+                loading={sourceImageLoading}
                 preferredKind={controller.preferredImageKind}
                 sourceImages={sourceImages}
               />

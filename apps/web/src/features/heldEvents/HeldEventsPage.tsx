@@ -37,11 +37,12 @@ export function HeldEventsPage() {
     deleteTarget,
     errorMessage,
     heldAtDraft,
-    heldEventsQuery,
     latestEvent,
     liveMessage,
     loadFailed,
     loading,
+    refresh,
+    refreshing,
     rows,
     setDeleteTarget,
     setHeldAtDraft,
@@ -118,10 +119,10 @@ export function HeldEventsPage() {
         actions={
           <Button
             icon={<RefreshCw className="size-4" />}
-            pending={heldEventsQuery.isFetching}
+            pending={refreshing}
             pendingLabel="更新中…"
             variant="quiet"
-            onClick={() => void heldEventsQuery.refetch()}
+            onClick={refresh}
           >
             最新情報に更新
           </Button>

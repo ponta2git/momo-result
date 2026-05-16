@@ -10,7 +10,7 @@ import io.circe.{Json, Printer}
 
 import momo.api.codec.OcrHintsCodec.given
 import momo.api.domain.ids.*
-import momo.api.domain.{OcrJobHints, ScreenType}
+import momo.api.domain.{OcrJobHints, RequestId, ScreenType}
 
 final case class OcrQueuePayloadV1(
     jobId: OcrJobId,
@@ -83,7 +83,7 @@ object OcrQueuePayload:
       if value.hints.isEmpty then base
       else base + (HintsKey -> printer.print(value.hints.asJson.deepDropNullValues))
 
-    value.requestId.filter(_.nonEmpty) match
+    value.requestId.flatMap(RequestId.sanitize) match
       case Some(id) => withHints + (RequestIdKey -> id)
       case None => withHints
 
@@ -130,7 +130,10 @@ object OcrQueuePayload:
         Either.catchNonFatal(Instant.parse(value)).left.map(_ => "enqueuedAt must be ISO-8601")
       )
       hintsJson <- optional(HintsKey)
-      requestId <- optional(RequestIdKey)
+      requestId <- optional(RequestIdKey).flatMap {
+        case None => Right(None)
+        case Some(value) => RequestId.sanitize(value).toRight(RequestId.Description).map(Some(_))
+      }
       hints <- hintsJson match
         case None => Right(OcrJobHints.empty)
         case Some(raw) => io.circe.parser.decode[OcrJobHints](raw).left.map(_.getMessage)

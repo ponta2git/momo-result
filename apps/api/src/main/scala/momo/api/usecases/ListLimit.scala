@@ -10,7 +10,8 @@ private[usecases] object ListLimit:
 
   def validate(field: String, value: Option[Int], policy: Policy): Either[AppError, Int] =
     val limit = value.getOrElse(policy.default)
-    if limit < 1 then Left(AppError.ValidationFailed(s"$field must be between 1 and ${policy.maximum}."))
+    if limit < 1 then
+      Left(AppError.ValidationFailed(s"$field must be between 1 and ${policy.maximum}."))
     else if limit > policy.maximum then
       Left(AppError.ValidationFailed(s"$field must be between 1 and ${policy.maximum}."))
     else Right(limit)

@@ -132,7 +132,7 @@ final class OcrQueuePayloadSpec extends FunSuite with JsonSchemaAssertions:
     assertOcrQueuePayloadSchemaValid(payload)
   }
 
-  test("includes requestId when provided and omits it when empty/None") {
+  test("includes requestId when provided and omits it when empty/invalid/None") {
     val basePayload = OcrQueuePayload.build(
       jobId = OcrJobId.unsafeFromString("job-3"),
       draftId = OcrDraftId.unsafeFromString("draft-3"),
@@ -171,6 +171,19 @@ final class OcrQueuePayloadSpec extends FunSuite with JsonSchemaAssertions:
       requestId = Some(""),
     )
     assertEquals(withEmpty.fields.get(OcrQueuePayload.RequestIdKey), None)
+
+    val withInvalid = OcrQueuePayload.build(
+      jobId = OcrJobId.unsafeFromString("job-3"),
+      draftId = OcrDraftId.unsafeFromString("draft-3"),
+      imageId = ImageId.unsafeFromString("image-3"),
+      imagePath = Path.of("/tmp/momo-result/uploads/image-3.png"),
+      requestedScreenType = ScreenType.TotalAssets,
+      attempt = 1,
+      enqueuedAt = Instant.parse("2026-04-29T11:40:16Z"),
+      hints = OcrJobHints.empty,
+      requestId = Some("bad value"),
+    )
+    assertEquals(withInvalid.fields.get(OcrQueuePayload.RequestIdKey), None)
   }
 
   test("fieldsAsJson is deterministic by key order") {
@@ -194,6 +207,12 @@ final class OcrQueuePayloadSpec extends FunSuite with JsonSchemaAssertions:
     assertEquals(
       OcrQueuePayload.fromJson(json.mapObject(_.add("attempt", Json.fromInt(1)))),
       Left("field attempt must be a string"),
+    )
+    assertEquals(
+      OcrQueuePayload.fromJson(
+        json.mapObject(_.add(OcrQueuePayload.RequestIdKey, Json.fromString("bad value")))
+      ),
+      Left("requestId must match ^[A-Za-z0-9_-]{1,64}$."),
     )
   }
 

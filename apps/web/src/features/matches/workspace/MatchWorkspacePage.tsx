@@ -1,3 +1,4 @@
+import { useCallback, useRef } from "react";
 import { Link } from "react-router-dom";
 
 import { MatchConfirmDialog } from "@/features/matches/workspace/MatchConfirmDialog";
@@ -30,6 +31,10 @@ export function MatchWorkspacePage({
   mode,
 }: MatchWorkspacePageProps) {
   const controller = useMatchWorkspaceController({ matchDraftId, matchId, matchSessionId, mode });
+  const primaryActionRef = useRef<HTMLButtonElement>(null);
+  const onRequestSubmitFocus = useCallback(() => {
+    primaryActionRef.current?.focus();
+  }, []);
   const {
     baseErrors,
     canCancelDraft,
@@ -58,7 +63,6 @@ export function MatchWorkspacePage({
     onPlayerChange,
     onPlayOrderChange,
     onPrimaryAction,
-    onRequestSubmitFocus,
     pageDescription,
     pageTitle,
     refreshReviewStatus,
@@ -255,6 +259,7 @@ export function MatchWorkspacePage({
                 : (validation.firstMessage ?? "入力内容を確認してください")
             }
             pending={isMutating}
+            primaryActionRef={primaryActionRef}
             onPrimaryAction={onPrimaryAction}
           />
         </>

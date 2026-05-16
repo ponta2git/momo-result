@@ -306,10 +306,6 @@ export function useMatchWorkspaceController({
     update: updateMutation.mutate,
     values: state.values,
   });
-  const onRequestSubmitFocus = useCallback(() => {
-    const action = document.getElementById("workspace-primary-action");
-    action?.focus();
-  }, []);
   const refreshReviewStatus = useCallback(async () => {
     await Promise.all([draftDetailQuery.refetch(), ocrDraftsQuery.refetch()]);
   }, [draftDetailQuery, ocrDraftsQuery]);
@@ -370,6 +366,5 @@ export function useMatchWorkspaceController({
     onPlayerChange,
     onPlayOrderChange,
     onPrimaryAction,
-    onRequestSubmitFocus,
   };
 }

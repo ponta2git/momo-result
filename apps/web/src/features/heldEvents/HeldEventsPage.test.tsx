@@ -71,7 +71,7 @@ describe("HeldEventsPage", () => {
 
     await waitFor(() => expect(screen.getAllByRole("link", { name: "試合" })).toHaveLength(2));
     expect(screen.queryByText("held-created")).not.toBeInTheDocument();
-    expect((await screen.findAllByText(/開催履歴（/u)).length).toBeGreaterThan(0);
+    expect(screen.getByText("2開催 / 0試合")).toBeInTheDocument();
   });
 
   it("deletes an empty held event after confirmation", async () => {
@@ -96,7 +96,8 @@ describe("HeldEventsPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "削除する" }));
 
     await screen.findByText("開催履歴がまだありません");
-    expect((await screen.findAllByText("開催履歴を削除しました。")).length).toBeGreaterThan(0);
+    expect(screen.getByText("0開催 / 0試合")).toBeInTheDocument();
+    expect(screen.getByText("開催履歴を削除しました。")).toBeInTheDocument();
   });
 
   it("keeps deletion disabled for events with confirmed matches", async () => {
@@ -144,7 +145,7 @@ describe("HeldEventsPage", () => {
     expect(screen.getByText("開催履歴を削除しますか？")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "削除する" }));
 
-    expect((await screen.findAllByText(/held event has match drafts/u)).length).toBeGreaterThan(0);
+    expect(await screen.findByRole("alert")).toHaveTextContent("held event has match drafts.");
     expect(screen.getByRole("button", { name: "削除する" })).toBeInTheDocument();
   });
 });

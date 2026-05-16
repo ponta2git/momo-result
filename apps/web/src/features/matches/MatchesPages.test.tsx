@@ -40,7 +40,7 @@ describe("MatchesListPage", () => {
 
     expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
     const detailLinks = await screen.findAllByRole("link", { name: "詳細を見る" });
-    expect(detailLinks.length).toBeGreaterThan(0);
+    expect(detailLinks).toHaveLength(2);
     detailLinks.forEach((link) => expect(link).toHaveAttribute("href", "/matches/match-1"));
   });
 

@@ -70,7 +70,7 @@ describe("DraftReviewPage", () => {
     expect(screen.getByRole("button", { name: "作成して選択" })).toBeVisible();
   });
 
-  it("shows review notices as dismissible top toast", async () => {
+  it("announces held event creation and selects the created option", async () => {
     window.localStorage.setItem("momoresult.devUser", "account_ponta");
     const heldEvents = [{ id: "held-1", heldAt: "2026-01-01T00:00:00.000Z", matchCount: 0 }];
     const createdHeldEvent = {
@@ -103,7 +103,11 @@ describe("DraftReviewPage", () => {
     const heldEventSelect = screen.getByLabelText(/開催履歴/u) as HTMLSelectElement;
     await waitFor(() => expect(heldEventSelect).toHaveValue("held-created"));
     expect([...heldEventSelect.options].map((option) => option.value)).toContain("held-created");
-    expect((await screen.findAllByText(/開催履歴（/u)).length).toBeGreaterThan(0);
+    expect(
+      screen.getByText(
+        `開催履歴（${new Date(createdHeldEvent.heldAt).toLocaleString()}）を作成して選択しました。`,
+      ),
+    ).toBeInTheDocument();
   });
 
   it("renders the development sample drafts without OCR worker data", async () => {
@@ -205,8 +209,8 @@ describe("DraftReviewPage", () => {
     );
 
     expect(
-      (await screen.findAllByText("設定管理から戻ったため、入力内容を復元しました。")).length,
-    ).toBeGreaterThan(0);
+      await screen.findByText("設定管理から戻ったため、入力内容を復元しました。"),
+    ).toBeInTheDocument();
     expect(screen.getByLabelText("試合番号")).toHaveValue("9");
     expect(screen.getByLabelText("ぽんた rank")).toHaveValue("4");
     expect(screen.getByDisplayValue("777")).toBeInTheDocument();

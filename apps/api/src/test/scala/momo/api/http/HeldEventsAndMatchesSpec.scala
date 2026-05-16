@@ -72,6 +72,12 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
     }
   }
 
+  app.test("GET /api/held-events rejects out-of-range limit") { httpApp =>
+    val req = Request[IO](Method.GET, uri"/api/held-events?limit=101").putHeaders(devReadHeader())
+    httpApp.run(req)
+      .flatMap(res => assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "limit"))
+  }
+
   app.test("DELETE /api/held-events/:id deletes an empty held event") { httpApp =>
     for
       id <- createEvent(httpApp)
@@ -133,6 +139,12 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
     httpApp
       .run(Request[IO](Method.GET, uri"/api/ocr-drafts?ids=missing").putHeaders(devReadHeader()))
       .flatMap(res => assertProblem(res, Status.NotFound, "NOT_FOUND", "ocr draft was not found"))
+  }
+
+  app.test("GET /api/matches rejects negative limit before repository access") { httpApp =>
+    val req = Request[IO](Method.GET, uri"/api/matches?limit=-1").putHeaders(devReadHeader())
+    httpApp.run(req)
+      .flatMap(res => assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "limit"))
   }
 
   private def confirmBody(heldEventId: String): Json = confirmBody(heldEventId, 1)

@@ -16,7 +16,7 @@ object HeldEventsEndpoints:
     .get
     .in("api" / "held-events")
     .in(query[Option[String]]("q"))
-    .in(query[Option[Int]]("limit"))
+    .in(query[Option[Int]]("limit").description("1..100; defaults to 20."))
     .in(CommonEndpoint.accountHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[HeldEventListResponse])

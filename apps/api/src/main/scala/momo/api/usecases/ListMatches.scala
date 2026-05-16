@@ -19,6 +19,7 @@ final case class ListMatchesCommand(
 
 final class ListMatches[F[_]: Monad](repository: MatchListReadModel[F]):
   def run(command: ListMatchesCommand): F[Either[AppError, List[MatchListItem]]] = (for
+    limit <- EitherT.fromEither[F](ListLimit.validate("limit", command.limit, ListLimit.Matches))
     statusFilter <- EitherT.fromEither[F](parseStatus(command.status))
     kindFilter <- EitherT.fromEither[F](parseKind(command.kind))
     items <- EitherT.liftF(repository.list(MatchListReadModel.Filter(
@@ -27,7 +28,7 @@ final class ListMatches[F[_]: Monad](repository: MatchListReadModel[F]):
       seasonMasterId = command.seasonMasterId,
       status = statusFilter,
       kind = kindFilter,
-      limit = command.limit,
+      limit = Some(limit),
     )))
   yield items).value
 

@@ -3,7 +3,6 @@ package momo.api.http.modules
 import java.time.Instant
 
 import cats.effect.Async
-import cats.syntax.all.*
 import sttp.tapir.server.ServerEndpoint
 
 import momo.api.domain.ids.HeldEventId
@@ -27,9 +26,9 @@ object HeldEventModule:
   ): List[ServerEndpoint[Any, F]] = List(
     HeldEventsEndpoints.list.serverLogic { case (q, limit, accountHeader) =>
       security.authorizeRead(accountHeader) { _ =>
-        listHeldEvents.run(q, limit).map(items =>
-          Right(HeldEventListResponse(items.map((e, c) => HeldEventResponse.from(e, c))))
-        )
+        security.respond(
+          listHeldEvents.run(q, limit)
+        )(items => HeldEventListResponse(items.map((e, c) => HeldEventResponse.from(e, c))))
       }
     },
     HeldEventsEndpoints.create.serverLogic { case (accountHeader, csrfToken, idemKey, request) =>

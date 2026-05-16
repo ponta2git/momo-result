@@ -38,7 +38,7 @@ object MatchesEndpoints:
     .in(query[Option[String]]("seasonMasterId"))
     .in(query[Option[String]]("status"))
     .in(query[Option[String]]("kind"))
-    .in(query[Option[Int]]("limit"))
+    .in(query[Option[Int]]("limit").description("1..200; defaults to 100."))
     .in(CommonEndpoint.accountHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[MatchListResponse])

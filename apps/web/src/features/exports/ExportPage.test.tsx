@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { ExportPage } from "@/features/exports/ExportPage";
 import { createDeferred } from "@/test/deferred";
+import { installAnchorClickMock } from "@/test/doubles/dom";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
@@ -22,6 +23,7 @@ type RenderOptions = {
 
 let queryClient: QueryClient;
 let user: ReturnType<typeof userEvent.setup>;
+let anchorClick: ReturnType<typeof installAnchorClickMock>;
 
 function renderPage({ downloadTimeoutMs, path = "/exports", slowThresholdMs }: RenderOptions = {}) {
   window.localStorage.setItem("momoresult.devUser", "account_ponta");
@@ -45,6 +47,7 @@ describe("ExportPage", () => {
   beforeEach(() => {
     queryClient = createTestQueryClient();
     user = userEvent.setup();
+    anchorClick = installAnchorClickMock();
   });
 
   it("downloads all matches as CSV by default", async () => {
@@ -68,6 +71,7 @@ describe("ExportPage", () => {
     await waitFor(() => expect(captured?.searchParams.get("format")).toBe("csv"));
     expect(captured?.searchParams.has("matchId")).toBe(false);
     expect(await screen.findByText("ダウンロードを開始しました")).toBeInTheDocument();
+    expect(anchorClick.clickedAnchors[0]?.download).toBe("momo-results-all.csv");
   });
 
   it("prefills match scope from deep link and downloads TSV for a single match", async () => {
@@ -122,6 +126,7 @@ describe("ExportPage", () => {
     expect(capturedExport?.searchParams.get("matchId")).toBe("match-1");
     expect(capturedMatchList?.searchParams.get("status")).toBe("confirmed");
     expect(capturedMatchList?.searchParams.get("kind")).toBe("match");
+    expect(anchorClick.clickedAnchors[0]?.download).toBe("momo-results-match-match-1.tsv");
   });
 
   it("syncs scope changes to one URL scope and shows empty actions", async () => {

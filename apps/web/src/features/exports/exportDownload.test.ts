@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { installObjectUrlMock } from "@/test/doubles/dom";
+import { installAnchorClickMock, installObjectUrlMock } from "@/test/doubles/dom";
 
 import { downloadExportMatches } from "./exportDownload";
 
 describe("exportDownload", () => {
   it("starts the browser download and revokes the blob URL", async () => {
+    const anchorClick = installAnchorClickMock();
     const objectUrls = installObjectUrlMock({ createObjectURL: () => "blob:test-download" });
     vi.stubGlobal(
       "fetch",
@@ -27,6 +28,9 @@ describe("exportDownload", () => {
       format: "csv",
       kind: "download_started",
     });
+    expect(anchorClick.click).toHaveBeenCalledTimes(1);
+    expect(anchorClick.clickedAnchors[0]?.getAttribute("href")).toBe("blob:test-download");
+    expect(anchorClick.clickedAnchors[0]?.download).toBe("momo-results.csv");
     expect(objectUrls.revokeObjectURL).toHaveBeenCalledWith("blob:test-download");
   });
 

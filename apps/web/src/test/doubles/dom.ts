@@ -153,6 +153,19 @@ export function fetchCallsOf(fetchMock: ReturnType<typeof vi.fn>): FetchCall[] {
   return fetchMock.mock.calls as unknown as FetchCall[];
 }
 
+export function installAnchorClickMock(): {
+  click: ReturnType<typeof vi.fn<() => void>>;
+  clickedAnchors: HTMLAnchorElement[];
+} {
+  const clickedAnchors: HTMLAnchorElement[] = [];
+  const click = vi
+    .spyOn(HTMLAnchorElement.prototype, "click")
+    .mockImplementation(function (this: HTMLAnchorElement) {
+      clickedAnchors.push(this);
+    });
+  return { click, clickedAnchors };
+}
+
 export type ObjectUrlMock = {
   createObjectURL: ReturnType<typeof vi.fn>;
   revokeObjectURL: ReturnType<typeof vi.fn>;

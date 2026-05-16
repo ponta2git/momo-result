@@ -1,4 +1,4 @@
-import type { HeldEventListResponse, HeldEventResponse } from "@/shared/api/heldEvents";
+import type { HeldEventResponse } from "@/shared/api/heldEvents";
 
 export const emptyHeldEvents: HeldEventResponse[] = [];
 
@@ -33,28 +33,4 @@ export function formatDateKey(value: string): string {
   const mm = String(date.getMonth() + 1).padStart(2, "0");
   const dd = String(date.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
-}
-
-export function upsertHeldEventList(
-  current: HeldEventListResponse | undefined,
-  event: HeldEventResponse,
-): HeldEventListResponse {
-  const existingItems = current?.items ?? [];
-  const withoutDuplicate = existingItems.filter((item) => item.id !== event.id);
-  return {
-    items: [event, ...withoutDuplicate].toSorted(
-      (left, right) =>
-        new Date(right.heldAt).getTime() - new Date(left.heldAt).getTime() ||
-        right.id.localeCompare(left.id),
-    ),
-  };
-}
-
-export function removeHeldEventFromList(
-  current: HeldEventListResponse | undefined,
-  heldEventId: string,
-): HeldEventListResponse {
-  return {
-    items: (current?.items ?? []).filter((item) => item.id !== heldEventId),
-  };
 }

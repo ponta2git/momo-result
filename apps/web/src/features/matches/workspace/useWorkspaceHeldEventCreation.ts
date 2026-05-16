@@ -1,26 +1,11 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { createHeldEvent } from "@/shared/api/heldEvents";
+import { createHeldEvent, upsertHeldEventList } from "@/shared/api/heldEvents";
 import type { HeldEventListResponse, HeldEventResponse } from "@/shared/api/heldEvents";
 import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { formatApiError } from "@/shared/api/problemDetails";
 import { heldEventKeys } from "@/shared/api/queryKeys";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
-
-function upsertHeldEventList(
-  current: HeldEventListResponse | undefined,
-  event: HeldEventResponse,
-): HeldEventListResponse {
-  const existingItems = current?.items ?? [];
-  const withoutDuplicate = existingItems.filter((item) => item.id !== event.id);
-  return {
-    items: [event, ...withoutDuplicate].toSorted(
-      (left, right) =>
-        new Date(right.heldAt).getTime() - new Date(left.heldAt).getTime() ||
-        right.id.localeCompare(left.id),
-    ),
-  };
-}
 
 export function useWorkspaceHeldEventCreation(args: {
   onError: (message: string) => void;

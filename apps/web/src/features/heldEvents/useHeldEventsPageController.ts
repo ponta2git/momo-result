@@ -5,11 +5,15 @@ import {
   currentLocalIsoMinute,
   emptyHeldEvents,
   formatDateTime,
-  removeHeldEventFromList,
   toIsoFromLocal,
-  upsertHeldEventList,
 } from "@/features/heldEvents/heldEventViewModel";
-import { createHeldEvent, deleteHeldEvent, listHeldEvents } from "@/shared/api/heldEvents";
+import {
+  createHeldEvent,
+  deleteHeldEvent,
+  listHeldEvents,
+  removeHeldEventFromList,
+  upsertHeldEventList,
+} from "@/shared/api/heldEvents";
 import type { HeldEventListResponse, HeldEventResponse } from "@/shared/api/heldEvents";
 import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { formatApiError } from "@/shared/api/problemDetails";

@@ -69,9 +69,13 @@ export function useMatchWorkspaceController({
   const [eventDraftValue, setEventDraftValue] = useState<string>(currentLocalIsoMinute);
   const [workspaceData, setWorkspaceData] = useState<MatchWorkspaceInitialData | null>(null);
   const [preferredImageKind, setPreferredImageKind] = useState<SourceImageKind>("total_assets");
-  const [state, dispatch] = useReducer(
-    matchFormReducer,
-    createMatchFormReducerState(createEmptyMatchForm(new Date().toISOString())),
+  const nowIsoFactory = useCallback(() => new Date().toISOString(), []);
+  const emptyFormFactory = useCallback(
+    () => createEmptyMatchForm(nowIsoFactory()),
+    [nowIsoFactory],
+  );
+  const [state, dispatch] = useReducer(matchFormReducer, null, () =>
+    createMatchFormReducerState(emptyFormFactory()),
   );
 
   const useSampleDrafts = mode === "review" && searchParams.get("sample") === "1";
@@ -132,7 +136,7 @@ export function useMatchWorkspaceController({
   const { isInitialized } = useMatchWorkspaceInit({
     draftDetail: draftDetailQuery.data ?? undefined,
     draftDetailLoading: draftDetailQuery.isLoading,
-    emptyFormFactory: () => createEmptyMatchForm(new Date().toISOString()),
+    emptyFormFactory,
     matchDetail: matchDetailQuery.data ?? undefined,
     matchDraftId,
     matchId,
@@ -144,6 +148,7 @@ export function useMatchWorkspaceController({
       dispatch({ payload: values, type: "replace" });
       setWorkspaceData(workspaceInitial);
     },
+    nowIsoFactory,
     reviewDraftIdList,
     reviewDraftIds,
     useSampleDrafts,

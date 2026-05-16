@@ -38,6 +38,7 @@ export type MatchWorkspaceInitParams = {
   reviewDraftIds: SlotMap<string>;
   useSampleDrafts: boolean;
   emptyFormFactory: () => MatchFormValues;
+  nowIsoFactory: () => string;
 };
 
 /**
@@ -62,6 +63,7 @@ export function useMatchWorkspaceInit({
   reviewDraftIds,
   useSampleDrafts,
   emptyFormFactory,
+  nowIsoFactory,
 }: MatchWorkspaceInitParams): { isInitialized: boolean } {
   const initializedKeyRef = useRef<string | null>(null);
 
@@ -117,7 +119,7 @@ export function useMatchWorkspaceInit({
         ...(draftDetail ? { draftSummary: draftDetail } : {}),
         ...(matchDraftId ? { matchDraftId } : {}),
         memberDirectory: buildMemberAliasDirectory(memberAliases),
-        nowIso: new Date().toISOString(),
+        nowIso: nowIsoFactory(),
       });
 
       onInitialize(prepared.values, prepared.initialData);
@@ -138,6 +140,7 @@ export function useMatchWorkspaceInit({
     reviewDraftIds,
     useSampleDrafts,
     emptyFormFactory,
+    nowIsoFactory,
   ]);
 
   return { isInitialized: initializedKeyRef.current != null };

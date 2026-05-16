@@ -12,7 +12,6 @@ import {
   createMapMasterId,
   createSeasonMasterId,
 } from "@/features/masters/masterId";
-import { masterQueryKeys } from "@/features/masters/masterQueries";
 import {
   invalidateMasterResourceCaches,
   invalidateMemberAliasCaches,
@@ -80,11 +79,10 @@ export function useMasterCreateActions(input: {
         postGameTitle(request, options),
       );
       input.setSelectedGameTitleId(created.id);
-      await invalidateMasterResourceCaches(
-        input.queryClient,
-        masterQueryKeys.gameTitles(input.authScope),
-        "game-titles",
-      );
+      await invalidateMasterResourceCaches(input.queryClient, {
+        authScope: input.authScope,
+        resource: "game-titles",
+      });
       return { error: undefined, version: prev.version + 1 };
     } catch (error) {
       return { ...prev, error: formatApiError(error, "作品の追加に失敗しました") };
@@ -117,11 +115,11 @@ export function useMasterCreateActions(input: {
           name,
         };
         await runIdempotentOperationAttempt(attempt, (options) => postMapMaster(request, options));
-        await invalidateMasterResourceCaches(
-          input.queryClient,
-          masterQueryKeys.mapMasters(input.authScope, gameTitleId),
-          "map-masters",
-        );
+        await invalidateMasterResourceCaches(input.queryClient, {
+          authScope: input.authScope,
+          gameTitleId,
+          resource: "map-masters",
+        });
         return { error: undefined, version: prev.version + 1 };
       } catch (error) {
         return { ...prev, error: formatApiError(error, "マップの追加に失敗しました") };
@@ -158,11 +156,11 @@ export function useMasterCreateActions(input: {
         name,
       };
       await runIdempotentOperationAttempt(attempt, (options) => postSeasonMaster(request, options));
-      await invalidateMasterResourceCaches(
-        input.queryClient,
-        masterQueryKeys.seasonMasters(input.authScope, gameTitleId),
-        "season-masters",
-      );
+      await invalidateMasterResourceCaches(input.queryClient, {
+        authScope: input.authScope,
+        gameTitleId,
+        resource: "season-masters",
+      });
       return { error: undefined, version: prev.version + 1 };
     } catch (error) {
       return { ...prev, error: formatApiError(error, "シーズンの追加に失敗しました") };

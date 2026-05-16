@@ -5,6 +5,21 @@ import { masterKeys } from "@/shared/api/queryKeys";
 
 export type MasterResourceKind = "game-titles" | "map-masters" | "season-masters";
 
+export type MasterResourceInvalidationTarget =
+  | { authScope: string; resource: "game-titles" }
+  | { authScope: string; gameTitleId: string; resource: "map-masters" }
+  | { authScope: string; gameTitleId: string; resource: "season-masters" };
+
+function adminResourceKey(target: MasterResourceInvalidationTarget) {
+  if (target.resource === "game-titles") {
+    return masterQueryKeys.gameTitles(target.authScope);
+  }
+  if (target.resource === "map-masters") {
+    return masterQueryKeys.mapMasters(target.authScope, target.gameTitleId);
+  }
+  return masterQueryKeys.seasonMasters(target.authScope, target.gameTitleId);
+}
+
 function consumerResourceKey(resource: MasterResourceKind) {
   if (resource === "game-titles") {
     return masterKeys.gameTitles.all();
@@ -17,12 +32,11 @@ function consumerResourceKey(resource: MasterResourceKind) {
 
 export async function invalidateMasterResourceCaches(
   queryClient: QueryClient,
-  adminQueryKey: readonly unknown[],
-  resource: MasterResourceKind,
+  target: MasterResourceInvalidationTarget,
 ) {
   await Promise.all([
-    queryClient.invalidateQueries({ queryKey: adminQueryKey }),
-    queryClient.invalidateQueries({ queryKey: consumerResourceKey(resource) }),
+    queryClient.invalidateQueries({ queryKey: adminResourceKey(target) }),
+    queryClient.invalidateQueries({ queryKey: consumerResourceKey(target.resource) }),
   ]);
 }
 

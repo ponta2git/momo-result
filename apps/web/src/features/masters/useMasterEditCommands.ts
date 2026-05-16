@@ -11,7 +11,6 @@ import {
   removeMemberAlias,
   removeSeasonMaster,
 } from "@/features/masters/masterCommands";
-import { masterQueryKeys } from "@/features/masters/masterQueries";
 import {
   invalidateMasterResourceCaches,
   invalidateMemberAliasCaches,
@@ -54,11 +53,10 @@ export function useMasterEditCommands(input: {
         name: normalizeName(request.name),
         layoutFamily,
       });
-      await invalidateMasterResourceCaches(
-        queryClient,
-        masterQueryKeys.gameTitles(authScope),
-        "game-titles",
-      );
+      await invalidateMasterResourceCaches(queryClient, {
+        authScope,
+        resource: "game-titles",
+      });
     },
     [authScope, queryClient, setOperationError],
   );
@@ -67,11 +65,11 @@ export function useMasterEditCommands(input: {
     async (id: string, request: { name: string }) => {
       setOperationError(undefined);
       await patchMapMaster(id, { name: normalizeName(request.name) });
-      await invalidateMasterResourceCaches(
-        queryClient,
-        masterQueryKeys.mapMasters(authScope, selectedGameTitleId),
-        "map-masters",
-      );
+      await invalidateMasterResourceCaches(queryClient, {
+        authScope,
+        gameTitleId: selectedGameTitleId,
+        resource: "map-masters",
+      });
     },
     [authScope, queryClient, selectedGameTitleId, setOperationError],
   );
@@ -80,11 +78,11 @@ export function useMasterEditCommands(input: {
     async (id: string, request: { name: string }) => {
       setOperationError(undefined);
       await patchSeasonMaster(id, { name: normalizeName(request.name) });
-      await invalidateMasterResourceCaches(
-        queryClient,
-        masterQueryKeys.seasonMasters(authScope, selectedGameTitleId),
-        "season-masters",
-      );
+      await invalidateMasterResourceCaches(queryClient, {
+        authScope,
+        gameTitleId: selectedGameTitleId,
+        resource: "season-masters",
+      });
     },
     [authScope, queryClient, selectedGameTitleId, setOperationError],
   );
@@ -108,20 +106,19 @@ export function useMasterEditCommands(input: {
         if (selectedGameTitleId === id) {
           setSelectedGameTitleId("");
         }
-        await invalidateMasterResourceCaches(
-          queryClient,
-          masterQueryKeys.gameTitles(authScope),
-          "game-titles",
-        );
+        await invalidateMasterResourceCaches(queryClient, {
+          authScope,
+          resource: "game-titles",
+        });
       }, "作品の削除に失敗しました"),
     deleteMapMaster: (id: string) =>
       deleteWithNotice(async () => {
         await removeMapMaster(id);
-        await invalidateMasterResourceCaches(
-          queryClient,
-          masterQueryKeys.mapMasters(authScope, selectedGameTitleId),
-          "map-masters",
-        );
+        await invalidateMasterResourceCaches(queryClient, {
+          authScope,
+          gameTitleId: selectedGameTitleId,
+          resource: "map-masters",
+        });
       }, "マップの削除に失敗しました"),
     deleteMemberAlias: (id: string) =>
       deleteWithNotice(async () => {
@@ -131,11 +128,11 @@ export function useMasterEditCommands(input: {
     deleteSeasonMaster: (id: string) =>
       deleteWithNotice(async () => {
         await removeSeasonMaster(id);
-        await invalidateMasterResourceCaches(
-          queryClient,
-          masterQueryKeys.seasonMasters(authScope, selectedGameTitleId),
-          "season-masters",
-        );
+        await invalidateMasterResourceCaches(queryClient, {
+          authScope,
+          gameTitleId: selectedGameTitleId,
+          resource: "season-masters",
+        });
       }, "シーズンの削除に失敗しました"),
     updateGameTitle,
     updateMapMaster,

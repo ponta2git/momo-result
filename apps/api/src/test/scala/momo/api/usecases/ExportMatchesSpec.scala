@@ -34,6 +34,12 @@ final class ExportMatchesSpec extends MomoCatsEffectSuite:
       result <- usecase.run("csv", Some(seasonId), Some(heldEventId), None)
     yield assertAppError(result, "VALIDATION_FAILED", "Specify at most one export scope")
 
+  test("rejects blank export scopes instead of falling back to all matches"):
+    for
+      usecase <- createUsecase()
+      result <- usecase.run("csv", Some(SeasonMasterId.unsafeFromString(" ")), None, None)
+    yield assertAppError(result, "VALIDATION_FAILED", "seasonMasterId must not be blank")
+
   test("returns not found for an unknown match scope"):
     for
       usecase <- createUsecase()

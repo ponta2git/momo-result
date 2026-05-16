@@ -92,17 +92,26 @@ final class ExportMatches[F[_]: Monad](
       heldEventId: Option[HeldEventId],
       matchId: Option[MatchId],
   ): Either[AppError, MatchExportScope] =
-    val scopes = List(
-      seasonMasterId.filter(_.value.trim.nonEmpty).map(MatchExportScope.Season(_)),
-      heldEventId.filter(_.value.trim.nonEmpty).map(MatchExportScope.HeldEvent(_)),
-      matchId.filter(_.value.trim.nonEmpty).map(MatchExportScope.Match(_)),
-    ).flatten
-    scopes match
-      case Nil => Right(MatchExportScope.All)
-      case one :: Nil => Right(one)
-      case _ => Left(AppError.ValidationFailed(
-          "Specify at most one export scope: seasonMasterId, heldEventId, or matchId."
-        ))
+    def scope[A](field: String, value: String, build: A => MatchExportScope)(
+        id: A
+    ): Either[AppError, MatchExportScope] = Either
+      .cond(value.trim.nonEmpty, build(id), AppError.ValidationFailed(s"$field must not be blank."))
+
+    for
+      scopes <- List(
+        seasonMasterId
+          .traverse(id => scope("seasonMasterId", id.value, MatchExportScope.Season(_))(id)),
+        heldEventId
+          .traverse(id => scope("heldEventId", id.value, MatchExportScope.HeldEvent(_))(id)),
+        matchId.traverse(id => scope("matchId", id.value, MatchExportScope.Match(_))(id)),
+      ).sequence.map(_.flatten)
+      result <- scopes match
+        case Nil => Right(MatchExportScope.All)
+        case one :: Nil => Right(one)
+        case _ => Left(AppError.ValidationFailed(
+            "Specify at most one export scope: seasonMasterId, heldEventId, or matchId."
+          ))
+    yield result
 
   private def buildRows(
       selected: List[MatchRecord],

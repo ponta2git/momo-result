@@ -1,5 +1,4 @@
 // @vitest-environment node
-import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -9,6 +8,7 @@ import {
 } from "@/shared/api/heldEventCache";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { heldEventKeys } from "@/shared/api/queryKeys";
+import { createTestQueryClient } from "@/test/queryClient";
 
 const olderEvent: HeldEventResponse = {
   id: "held-old",
@@ -33,7 +33,7 @@ describe("held event cache contract", () => {
   });
 
   it("updates the scoped list and invalidates all held event caches after create", async () => {
-    const queryClient = new QueryClient();
+    const queryClient = createTestQueryClient();
     queryClient.setQueryData(heldEventKeys.scope("workspace"), { items: [olderEvent] });
     queryClient.setQueryData(heldEventKeys.scope("held-events-page"), { items: [olderEvent] });
 
@@ -49,7 +49,7 @@ describe("held event cache contract", () => {
   });
 
   it("updates the scoped list and invalidates all held event caches after delete", async () => {
-    const queryClient = new QueryClient();
+    const queryClient = createTestQueryClient();
     queryClient.setQueryData(heldEventKeys.scope("held-events-page"), {
       items: [newerEvent, olderEvent],
     });

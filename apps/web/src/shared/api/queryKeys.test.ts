@@ -1,13 +1,13 @@
 // @vitest-environment node
-import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 
 import { invalidateAfterMatchConfirmed } from "@/shared/api/cacheInvalidation";
 import { heldEventKeys, matchKeys, ocrDraftKeys } from "@/shared/api/queryKeys";
+import { createTestQueryClient } from "@/test/queryClient";
 
 describe("shared query keys", () => {
   it("invalidates match, draft, OCR, and held event caches after match confirmation", async () => {
-    const queryClient = new QueryClient();
+    const queryClient = createTestQueryClient();
     queryClient.setQueryData(matchKeys.list({ status: "confirmed" }), { items: [] });
     queryClient.setQueryData(matchKeys.draft.detail("draft-1"), { matchDraftId: "draft-1" });
     queryClient.setQueryData(matchKeys.draft.sourceImages("draft-1"), { items: [] });

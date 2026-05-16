@@ -1,13 +1,13 @@
 // @vitest-environment node
-import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 
 import { invalidateAdminAccountCaches } from "@/features/adminAccounts/adminAccountCache";
 import { adminAccountsQueryKeys } from "@/features/adminAccounts/queryKeys";
+import { createTestQueryClient } from "@/test/queryClient";
 
 describe("admin account cache contract", () => {
   it("invalidates the admin account list", async () => {
-    const queryClient = new QueryClient();
+    const queryClient = createTestQueryClient();
     queryClient.setQueryData(adminAccountsQueryKeys.all(), { items: [] });
 
     await invalidateAdminAccountCaches(queryClient);

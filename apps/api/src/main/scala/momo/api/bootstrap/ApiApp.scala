@@ -1,4 +1,4 @@
-package momo.api.http
+package momo.api.bootstrap
 
 import cats.effect.std.SecureRandom
 import cats.effect.{Async, Clock, Resource}
@@ -26,6 +26,7 @@ import momo.api.db.Database
 import momo.api.domain.ids.*
 import momo.api.domain.{LoginAccount, Member}
 import momo.api.endpoints.HealthEndpoints.HealthDetailsResponse
+import momo.api.http.{HttpRateLimiters, HttpRoutes}
 import momo.api.repositories.postgres.*
 import momo.api.repositories.{
   AppSessionsRepository, GameTitlesRepository, HeldEventDeletionRepository, HeldEventsRepository,
@@ -48,9 +49,9 @@ import momo.api.usecases.{
   UpdateMemberAlias, UpdateSeasonMaster, UploadImage,
 }
 
-object HttpApp:
-  /** Test-only handle for specs that need direct access to in-memory master repositories. */
-  final case class Wired[F[_]](
+object ApiApp:
+  /** Fully wired runtime. Specs use the exposed repositories to seed in-memory resources. */
+  final case class Runtime[F[_]](
       app: Http4sApp[F],
       gameTitles: momo.api.repositories.GameTitlesRepository[F],
       mapMasters: momo.api.repositories.MapMastersRepository[F],
@@ -67,7 +68,7 @@ object HttpApp:
    * Build all dependencies. When `config.database` is set we use PostgreSQL repositories backed by
    * HikariCP; otherwise we wire up InMemory adapters (used by tests and the early dev environment).
    */
-  def wired[F[_]: Async](config: AppConfig): Resource[F, Wired[F]] = Resource
+  def wired[F[_]: Async](config: AppConfig): Resource[F, Runtime[F]] = Resource
     .eval(SecureRandom.javaSecuritySecureRandom[F]).flatMap { case given SecureRandom[F] =>
       JavaDiscordOAuthClient.resource[F](config.auth)
         .flatMap(oauthClient => wiredInner[F](config, oauthClient))
@@ -76,7 +77,7 @@ object HttpApp:
   private def wiredInner[F[_]: Async: SecureRandom](
       config: AppConfig,
       oauthClient: DiscordOAuthClient[F],
-  ): Resource[F, Wired[F]] = config.database match
+  ): Resource[F, Runtime[F]] = config.database match
     case Some(db) => Resource.eval(Async[F].executionContext).flatMap { connectExecutionContext =>
         (Database.transactor[F](db, connectExecutionContext), queueResource[F](config)).tupled
           .flatMap { (transactor, queue) =>
@@ -396,7 +397,7 @@ object HttpApp:
       oauthClient: DiscordOAuthClient[F],
       loginRateLimiter: RateLimiter[F],
       rateLimiters: HttpRateLimiters[F],
-  ): F[Wired[F]] =
+  ): F[Runtime[F]] =
     val roster = MemberRoster.dev(config.devMemberIds)
     val uploadImage = UploadImage[F](imageStore)
     val nowF = Clock[F].realTimeInstant
@@ -542,7 +543,7 @@ object HttpApp:
       healthDetails = healthDetails,
       nowF = nowF,
     ))
-    Wired(
+    Runtime(
       app,
       gameTitles,
       mapMasters,

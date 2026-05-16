@@ -8,6 +8,7 @@ import org.typelevel.ci.CIString
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.auth.AuthHeaderNames
+import momo.api.bootstrap.ApiApp
 import momo.api.config.{AppConfig, AppEnv}
 
 trait HttpAppTestFixtures:
@@ -31,7 +32,7 @@ trait HttpAppTestFixtures:
 
   protected def seededWiredHttpAppResource(
       prefix: String,
-      seed: HttpApp.Wired[IO] => IO[Unit],
+      seed: ApiApp.Runtime[IO] => IO[Unit],
   ): Resource[IO, TestHttpApp] = wiredHttpAppResourceWith(prefix, identity, seed)
 
   protected def devReadHeader(): Header.Raw = devReadHeader("account_ponta")
@@ -49,14 +50,14 @@ trait HttpAppTestFixtures:
       appEnv: AppEnv,
       configure: AppConfig => AppConfig,
   ): Resource[IO, TestHttpApp] = tempDirectory(prefix)
-    .flatMap(dir => HttpApp.resource[IO](configure(defaultConfig(dir, appEnv))))
+    .flatMap(dir => ApiApp.resource[IO](configure(defaultConfig(dir, appEnv))))
 
   private def wiredHttpAppResourceWith(
       prefix: String,
       configure: AppConfig => AppConfig,
-      seed: HttpApp.Wired[IO] => IO[Unit],
+      seed: ApiApp.Runtime[IO] => IO[Unit],
   ): Resource[IO, TestHttpApp] = tempDirectory(prefix).flatMap { dir =>
-    HttpApp.wired[IO](configure(defaultConfig(dir, AppEnv.Test))).evalTap(seed).map(_.app)
+    ApiApp.wired[IO](configure(defaultConfig(dir, AppEnv.Test))).evalTap(seed).map(_.app)
   }
 
   private def devWriteHeaders(

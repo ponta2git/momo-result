@@ -11,6 +11,7 @@ import org.http4s.{MediaType, Method, Request, Status, Uri}
 import org.typelevel.ci.CIString
 
 import momo.api.MomoCatsEffectSuite
+import momo.api.bootstrap.ApiApp
 import momo.api.http.HttpAssertions.{assertProblem, headerValue, jsonField, optionalHeaderValue}
 
 final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
@@ -20,7 +21,7 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
 
   private val app = ResourceFunFixture(seededWiredHttpAppResource("momo-api-held", seedMasters))
 
-  private def seedMasters(wired: HttpApp.Wired[IO]): IO[Unit] =
+  private def seedMasters(wired: ApiApp.Runtime[IO]): IO[Unit] =
     val now = Instant.parse("2024-01-01T00:00:00Z")
     for
       _ <- wired.gameTitles.create(

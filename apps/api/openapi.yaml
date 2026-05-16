@@ -25,6 +25,26 @@
         }
       }
     },
+    "/healthz/details" : {
+      "get" : {
+        "tags" : [
+          "health"
+        ],
+        "operationId" : "getHealthzDetails",
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HealthDetailsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/auth/login" : {
       "get" : {
         "tags" : [
@@ -3365,6 +3385,26 @@
             "format" : "int32"
           },
           "createdAt" : {
+            "type" : "string"
+          }
+        }
+      },
+      "HealthDetailsResponse" : {
+        "title" : "HealthDetailsResponse",
+        "type" : "object",
+        "required" : [
+          "status",
+          "database",
+          "redis"
+        ],
+        "properties" : {
+          "status" : {
+            "type" : "string"
+          },
+          "database" : {
+            "type" : "string"
+          },
+          "redis" : {
             "type" : "string"
           }
         }

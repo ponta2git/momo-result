@@ -36,7 +36,6 @@
       <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
         <encoder class="net.logstash.logback.encoder.LogstashEncoder">
           <includeMdcKeyName>request_id</includeMdcKeyName>
-          <includeMdcKeyName>session_id</includeMdcKeyName>
           <includeMdcKeyName>member_id</includeMdcKeyName>
           <includeMdcKeyName>job_id</includeMdcKeyName>
           <includeMdcKeyName>image_type</includeMdcKeyName>

@@ -21,6 +21,8 @@
 - `apps/api/openapi.yaml` は生成物だが、web 型生成入力なので差分を確認する。
 - HTTP endpoint、入力検証、認証/CSRF、usecase、repository を分離する。
 - HTTP層にDB・Redis・業務分岐を直接詰め込まない。
+- API の composition root は `momo.api.bootstrap` に置き、HTTP 層は endpoint/module/middleware
+  に閉じる。DB/Redis/in-memory adapter の起動時配線を `momo.api.http` へ戻さない。
 - DBアクセスは Doobie repository に閉じる。SQL実行責務は `docs/test-rule.md` の DB-backed API ルールに従う。
 - エラーは業務、認証、権限、入力、外部依存を区別し、UIが説明できる形に正規化する。
 - JSON、CSV/TSV、Problem Details、OpenAPI はテストで固定する。

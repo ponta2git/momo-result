@@ -15,6 +15,7 @@ const initialSearch: MatchListSearch = {
 
 describe("MatchesListFilters", () => {
   it("updates sort filter without reading the event inside the state updater", async () => {
+    const user = userEvent.setup();
     const onApply = vi.fn();
 
     render(
@@ -28,7 +29,7 @@ describe("MatchesListFilters", () => {
       />,
     );
 
-    await userEvent.selectOptions(screen.getByLabelText("表の並び順"), "updated_desc");
+    await user.selectOptions(screen.getByLabelText("表の並び順"), "updated_desc");
 
     expect(onApply).toHaveBeenCalledWith({
       ...initialSearch,

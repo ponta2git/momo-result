@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import {
   createInitialSlot,
@@ -7,7 +7,7 @@ import {
   requestedScreenTypeForSlot,
   validateImageFile,
 } from "@/features/ocrCapture/captureState";
-import { createMockMediaStream } from "@/test/doubles/dom";
+import { createMockMediaStream, installObjectUrlMock } from "@/test/doubles/dom";
 
 describe("captureState", () => {
   it("uses the final classification tray as the OCR screen type hint", () => {
@@ -27,7 +27,7 @@ describe("captureState", () => {
   });
 
   it("releases object URLs and camera tracks", () => {
-    const revoke = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+    const objectUrls = installObjectUrlMock();
     const { stream, track } = createMockMediaStream();
 
     releaseSlotResources({
@@ -36,7 +36,7 @@ describe("captureState", () => {
       cameraStream: stream,
     });
 
-    expect(revoke).toHaveBeenCalledWith("blob:test");
+    expect(objectUrls.revokeObjectURL).toHaveBeenCalledWith("blob:test");
     expect(track.stop).toHaveBeenCalledOnce();
   });
 });

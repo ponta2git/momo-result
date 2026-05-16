@@ -23,8 +23,11 @@ setupMsw();
 
 describe("DraftReviewPage", () => {
   let queryClient: QueryClient;
+  let user: ReturnType<typeof userEvent.setup>;
+
   beforeEach(() => {
     queryClient = createTestQueryClient();
+    user = userEvent.setup();
   });
 
   it("loads OCR drafts and opens confirmation after validation passes", async () => {
@@ -44,7 +47,7 @@ describe("DraftReviewPage", () => {
     expect(await screen.findByRole("heading", { name: "OCR結果の確認" })).toBeInTheDocument();
     expect(await screen.findByDisplayValue("あかねまみ")).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "確定前の確認へ進む" }));
+    await user.click(screen.getByRole("button", { name: "確定前の確認へ進む" }));
     expect(
       await screen.findByRole("heading", { name: "この内容で確定しますか？" }),
     ).toBeInTheDocument();
@@ -66,7 +69,7 @@ describe("DraftReviewPage", () => {
     expect(await screen.findByText("一覧にない開催履歴を追加する")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "作成して選択" })).not.toBeVisible();
 
-    await userEvent.click(screen.getByText("一覧にない開催履歴を追加する"));
+    await user.click(screen.getByText("一覧にない開催履歴を追加する"));
     expect(screen.getByRole("button", { name: "作成して選択" })).toBeVisible();
   });
 
@@ -97,8 +100,8 @@ describe("DraftReviewPage", () => {
     );
 
     await screen.findByText("一覧にない開催履歴を追加する");
-    await userEvent.click(screen.getByText("一覧にない開催履歴を追加する"));
-    await userEvent.click(screen.getByRole("button", { name: "作成して選択" }));
+    await user.click(screen.getByText("一覧にない開催履歴を追加する"));
+    await user.click(screen.getByRole("button", { name: "作成して選択" }));
 
     const heldEventSelect = screen.getByLabelText(/開催履歴/u) as HTMLSelectElement;
     await waitFor(() => expect(heldEventSelect).toHaveValue("held-created"));
@@ -156,10 +159,10 @@ describe("DraftReviewPage", () => {
     await screen.findByText("サンプルの読み取り結果で表示中");
     const rankInput = screen.getByLabelText("ぽんた rank");
 
-    await userEvent.clear(rankInput);
+    await user.clear(rankInput);
     expect(rankInput).toHaveValue("");
 
-    await userEvent.type(rankInput, "03");
+    await user.type(rankInput, "03");
     expect(rankInput).toHaveValue("3");
     expect(screen.getByText("手修正")).toBeInTheDocument();
   });

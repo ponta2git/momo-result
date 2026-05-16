@@ -10,6 +10,34 @@ export type MockMediaStream = {
   track: FakeMediaTrack;
 };
 
+type GetUserMedia = (constraints?: MediaStreamConstraints) => Promise<MediaStream>;
+
+export type GetUserMediaController = {
+  getUserMedia: ReturnType<typeof vi.fn<GetUserMedia>>;
+  restore: () => void;
+};
+
+export function installGetUserMediaMock(implementation: GetUserMedia): GetUserMediaController {
+  const originalMediaDevices = Object.getOwnPropertyDescriptor(navigator, "mediaDevices");
+  const getUserMedia = vi.fn<GetUserMedia>(implementation);
+
+  Object.defineProperty(navigator, "mediaDevices", {
+    configurable: true,
+    value: { getUserMedia },
+  });
+
+  return {
+    getUserMedia,
+    restore: () => {
+      if (originalMediaDevices) {
+        Object.defineProperty(navigator, "mediaDevices", originalMediaDevices);
+        return;
+      }
+      delete (navigator as unknown as Record<string, unknown>)["mediaDevices"];
+    },
+  };
+}
+
 export function createMockMediaStream(): MockMediaStream {
   const track: FakeMediaTrack = {
     stop: vi.fn(() => {
@@ -123,6 +151,26 @@ export type FetchCall = [RequestInfo | URL, RequestInit | undefined];
 
 export function fetchCallsOf(fetchMock: ReturnType<typeof vi.fn>): FetchCall[] {
   return fetchMock.mock.calls as unknown as FetchCall[];
+}
+
+export type ObjectUrlMock = {
+  createObjectURL: ReturnType<typeof vi.fn>;
+  revokeObjectURL: ReturnType<typeof vi.fn>;
+};
+
+export function installObjectUrlMock(
+  options: {
+    createObjectURL?: (value: Parameters<typeof URL.createObjectURL>[0]) => string;
+    revokeObjectURL?: (url: string) => void;
+  } = {},
+): ObjectUrlMock {
+  const createObjectURL = vi
+    .spyOn(URL, "createObjectURL")
+    .mockImplementation(options.createObjectURL ?? (() => "blob:test"));
+  const revokeObjectURL = vi
+    .spyOn(URL, "revokeObjectURL")
+    .mockImplementation(options.revokeObjectURL ?? (() => undefined));
+  return { createObjectURL, revokeObjectURL };
 }
 
 export type MatchMediaController = {

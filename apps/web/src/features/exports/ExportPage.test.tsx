@@ -1,6 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -21,6 +21,7 @@ type RenderOptions = {
 };
 
 let queryClient: QueryClient;
+let user: ReturnType<typeof userEvent.setup>;
 
 function renderPage({ downloadTimeoutMs, path = "/exports", slowThresholdMs }: RenderOptions = {}) {
   window.localStorage.setItem("momoresult.devUser", "account_ponta");
@@ -43,6 +44,7 @@ function renderPage({ downloadTimeoutMs, path = "/exports", slowThresholdMs }: R
 describe("ExportPage", () => {
   beforeEach(() => {
     queryClient = createTestQueryClient();
+    user = userEvent.setup();
   });
 
   it("downloads all matches as CSV by default", async () => {
@@ -61,7 +63,7 @@ describe("ExportPage", () => {
 
     renderPage();
     await screen.findByRole("heading", { name: "CSV / TSV 出力" });
-    await userEvent.click(screen.getByRole("button", { name: "CSVをダウンロード" }));
+    await user.click(screen.getByRole("button", { name: "CSVをダウンロード" }));
 
     await waitFor(() => expect(captured?.searchParams.get("format")).toBe("csv"));
     expect(captured?.searchParams.has("matchId")).toBe(false);
@@ -114,7 +116,7 @@ describe("ExportPage", () => {
     expect(await screen.findByLabelText("試合")).toHaveValue("match-1");
     expect(screen.queryByText("draft-1")).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "TSVをダウンロード" }));
+    await user.click(screen.getByRole("button", { name: "TSVをダウンロード" }));
 
     await waitFor(() => expect(capturedExport?.searchParams.get("format")).toBe("tsv"));
     expect(capturedExport?.searchParams.get("matchId")).toBe("match-1");
@@ -123,7 +125,6 @@ describe("ExportPage", () => {
   });
 
   it("syncs scope changes to one URL scope and shows empty actions", async () => {
-    const user = userEvent.setup();
     server.use(http.get("/api/season-masters", () => HttpResponse.json({ items: [] })));
 
     renderPage();
@@ -153,7 +154,7 @@ describe("ExportPage", () => {
 
     renderPage();
     await screen.findByRole("heading", { name: "CSV / TSV 出力" });
-    await userEvent.click(screen.getByRole("button", { name: "CSVをダウンロード" }));
+    await user.click(screen.getByRole("button", { name: "CSVをダウンロード" }));
 
     expect(await screen.findByText("Validation Failed")).toBeInTheDocument();
     expect(screen.getByText("Specify at most one export scope.")).toBeInTheDocument();
@@ -178,11 +179,11 @@ describe("ExportPage", () => {
 
     renderPage();
     await screen.findByRole("heading", { name: "CSV / TSV 出力" });
-    await userEvent.click(screen.getByRole("button", { name: "CSVをダウンロード" }));
+    await user.click(screen.getByRole("button", { name: "CSVをダウンロード" }));
 
     expect(screen.getByRole("button", { name: "作成中…" })).toBeDisabled();
     expect(screen.getByText("出力ファイルを作成しています")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "作成中…" }));
+    await user.click(screen.getByRole("button", { name: "作成中…" }));
     expect(requests).toBe(1);
 
     responseGate.resolve();
@@ -207,7 +208,7 @@ describe("ExportPage", () => {
 
     renderPage();
     await screen.findByRole("heading", { name: "CSV / TSV 出力" });
-    await userEvent.click(screen.getByRole("button", { name: "CSVをダウンロード" }));
+    await user.click(screen.getByRole("button", { name: "CSVをダウンロード" }));
 
     expect(await screen.findByText("出力が完了しませんでした")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "作成中…" })).not.toBeInTheDocument();

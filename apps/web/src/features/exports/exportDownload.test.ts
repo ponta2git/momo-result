@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { installObjectUrlMock } from "@/test/doubles/dom";
+
 import { downloadExportMatches } from "./exportDownload";
 
 describe("exportDownload", () => {
   it("starts the browser download and revokes the blob URL", async () => {
-    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:test-download");
-    const revokeSpy = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+    const objectUrls = installObjectUrlMock({ createObjectURL: () => "blob:test-download" });
     vi.stubGlobal(
       "fetch",
       vi.fn(
@@ -26,7 +27,7 @@ describe("exportDownload", () => {
       format: "csv",
       kind: "download_started",
     });
-    expect(revokeSpy).toHaveBeenCalledWith("blob:test-download");
+    expect(objectUrls.revokeObjectURL).toHaveBeenCalledWith("blob:test-download");
   });
 
   it("returns timeout when the client abort timer fires", async () => {

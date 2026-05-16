@@ -13,6 +13,8 @@ import { createTestQueryClient } from "@/test/queryClient";
 
 setupMsw();
 
+let user: ReturnType<typeof userEvent.setup>;
+
 function LocationProbe() {
   const location = useLocation();
   return <output aria-label="current location">{`${location.pathname}${location.search}`}</output>;
@@ -22,6 +24,7 @@ describe("MatchesListPage", () => {
   let queryClient: QueryClient;
   beforeEach(() => {
     queryClient = createTestQueryClient();
+    user = userEvent.setup();
   });
 
   it("renders matches and links to detail", async () => {
@@ -69,7 +72,7 @@ describe("MatchesListPage", () => {
     const heldEventSelect = screen.getAllByLabelText("開催")[0] as HTMLSelectElement;
     await waitFor(() => expect(heldEventSelect.options.length).toBeGreaterThan(1));
 
-    await userEvent.selectOptions(heldEventSelect, "held-1");
+    await user.selectOptions(heldEventSelect, "held-1");
 
     await waitFor(() =>
       expect(screen.getByLabelText("current location")).toHaveTextContent("heldEventId=held-1"),
@@ -98,7 +101,7 @@ describe("MatchesListPage", () => {
     );
 
     expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
-    await userEvent.selectOptions(screen.getByLabelText("表の並び順"), "updated_desc");
+    await user.selectOptions(screen.getByLabelText("表の並び順"), "updated_desc");
 
     await waitFor(() =>
       expect(screen.getByLabelText("current location")).toHaveTextContent("sort=updated_desc"),
@@ -136,7 +139,7 @@ describe("MatchesListPage", () => {
     );
 
     expect(await screen.findByRole("heading", { name: "試合の新規作成" })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "設定管理へ" }));
+    await user.click(screen.getByRole("button", { name: "設定管理へ" }));
 
     await waitFor(() =>
       expect(screen.getByLabelText("current location")).toHaveTextContent("/admin/masters"),
@@ -152,6 +155,7 @@ describe("MatchDetailPage", () => {
   let queryClient: QueryClient;
   beforeEach(() => {
     queryClient = createTestQueryClient();
+    user = userEvent.setup();
   });
 
   it("shows delete confirmation modal when 削除 clicked", async () => {
@@ -170,11 +174,11 @@ describe("MatchDetailPage", () => {
 
     expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "削除" }));
+    await user.click(screen.getByRole("button", { name: "削除" }));
     expect(screen.getByRole("heading", { name: "試合を削除しますか？" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "削除する" })).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "キャンセル" }));
+    await user.click(screen.getByRole("button", { name: "キャンセル" }));
     await waitFor(() =>
       expect(
         screen.queryByRole("heading", { name: "試合を削除しますか？" }),

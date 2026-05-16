@@ -29,10 +29,12 @@ function renderPage(path = "/held-events") {
 }
 
 let queryClient: QueryClient;
+let user: ReturnType<typeof userEvent.setup>;
 
 describe("HeldEventsPage", () => {
   beforeEach(() => {
     queryClient = createTestQueryClient();
+    user = userEvent.setup();
   });
 
   it("renders held events with match and export links", async () => {
@@ -65,9 +67,9 @@ describe("HeldEventsPage", () => {
     renderPage();
 
     expect(await screen.findByRole("link", { name: "試合" })).toBeInTheDocument();
-    await userEvent.clear(screen.getByLabelText("開催日時"));
-    await userEvent.type(screen.getByLabelText("開催日時"), "2026-01-02T12:04");
-    await userEvent.click(screen.getByRole("button", { name: "開催履歴を作成" }));
+    await user.clear(screen.getByLabelText("開催日時"));
+    await user.type(screen.getByLabelText("開催日時"), "2026-01-02T12:04");
+    await user.click(screen.getByRole("button", { name: "開催履歴を作成" }));
 
     await waitFor(() => expect(screen.getAllByRole("link", { name: "試合" })).toHaveLength(2));
     expect(screen.queryByText("held-created")).not.toBeInTheDocument();
@@ -91,9 +93,9 @@ describe("HeldEventsPage", () => {
     renderPage();
 
     expect(await screen.findByRole("button", { name: "削除" })).toBeEnabled();
-    await userEvent.click(screen.getByRole("button", { name: "削除" }));
+    await user.click(screen.getByRole("button", { name: "削除" }));
     expect(screen.getByText("開催履歴を削除しますか？")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "削除する" }));
+    await user.click(screen.getByRole("button", { name: "削除する" }));
 
     await screen.findByText("開催履歴がまだありません");
     expect(screen.getByText("0開催 / 0試合")).toBeInTheDocument();
@@ -141,9 +143,9 @@ describe("HeldEventsPage", () => {
     renderPage();
 
     expect(await screen.findByRole("button", { name: "削除" })).toBeEnabled();
-    await userEvent.click(screen.getByRole("button", { name: "削除" }));
+    await user.click(screen.getByRole("button", { name: "削除" }));
     expect(screen.getByText("開催履歴を削除しますか？")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "削除する" }));
+    await user.click(screen.getByRole("button", { name: "削除する" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("held event has match drafts.");
     expect(screen.getByRole("button", { name: "削除する" })).toBeInTheDocument();

@@ -3,12 +3,12 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { SourceImagePanel } from "@/features/matches/workspace/sourceImages/SourceImagePanel";
-import { fetchCallsOf } from "@/test/doubles/dom";
+import { fetchCallsOf, installObjectUrlMock } from "@/test/doubles/dom";
 
 describe("SourceImagePanel", () => {
   it("loads source images through the API client so dev auth headers are sent", async () => {
     window.localStorage.setItem("momoresult.devUser", "account_ponta");
-    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:source-image");
+    installObjectUrlMock({ createObjectURL: () => "blob:source-image" });
     const fetchMock = vi.fn(
       async () =>
         new Response(new Blob(["mock-image"], { type: "image/png" }), {
@@ -46,7 +46,7 @@ describe("SourceImagePanel", () => {
 
   it("opens the source image preview in a modal dialog", async () => {
     const user = userEvent.setup();
-    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:source-image");
+    installObjectUrlMock({ createObjectURL: () => "blob:source-image" });
     vi.stubGlobal(
       "fetch",
       vi.fn(

@@ -2,7 +2,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { ErrorBoundary } from "@/app/ErrorBoundary";
 import { appRoutes } from "@/app/router";
@@ -10,6 +10,8 @@ import { setupMsw } from "@/test/msw/lifecycle";
 import { createTestQueryClient } from "@/test/queryClient";
 
 setupMsw();
+
+let user: ReturnType<typeof userEvent.setup>;
 
 function renderApp(initialEntry: string) {
   const queryClient = createTestQueryClient();
@@ -29,6 +31,10 @@ function renderApp(initialEntry: string) {
 }
 
 describe("app routing", () => {
+  beforeEach(() => {
+    user = userEvent.setup();
+  });
+
   afterEach(() => {
     window.localStorage.clear();
   });
@@ -76,7 +82,7 @@ describe("app routing", () => {
     const { router } = renderApp("/matches");
 
     expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "ログアウト" }));
+    await user.click(screen.getByRole("button", { name: "ログアウト" }));
 
     await waitFor(() => {
       expect(window.localStorage.getItem("momoresult.devUser")).toBeNull();

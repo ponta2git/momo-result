@@ -5,18 +5,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CameraCapture } from "@/features/ocrCapture/CameraCapture";
 import {
   createMockMediaStream,
+  installGetUserMediaMock,
   installCanvasElementSpies,
   installVideoElementSpies,
   installVideoReadyController,
 } from "@/test/doubles/dom";
 import type {
   CanvasElementSpies,
+  GetUserMediaController,
   VideoElementSpies,
   VideoReadyController,
 } from "@/test/doubles/dom";
 
 describe("CameraCapture", () => {
-  const originalGetUserMedia = navigator.mediaDevices?.getUserMedia;
+  let getUserMedia: GetUserMediaController | undefined;
   let videoSpies: VideoElementSpies;
   let canvasSpies: CanvasElementSpies;
   let videoReady: VideoReadyController;
@@ -29,25 +31,17 @@ describe("CameraCapture", () => {
   });
 
   afterEach(() => {
+    getUserMedia?.restore();
+    getUserMedia = undefined;
     videoReady.restore();
     canvasSpies.restore();
     videoSpies.restore();
-    vi.clearAllMocks();
-    if (originalGetUserMedia && navigator.mediaDevices) {
-      Object.defineProperty(navigator.mediaDevices, "getUserMedia", {
-        configurable: true,
-        value: originalGetUserMedia,
-      });
-    }
   });
 
   it("disables 撮影 / 停止 until the camera is active and stops the stream on 停止", async () => {
     const user = userEvent.setup();
     const { stream, track } = createMockMediaStream();
-    Object.defineProperty(navigator, "mediaDevices", {
-      configurable: true,
-      value: { getUserMedia: vi.fn(() => Promise.resolve(stream)) },
-    });
+    getUserMedia = installGetUserMediaMock(() => Promise.resolve(stream));
 
     const onSelect = vi.fn();
     const onValidationError = vi.fn();
@@ -78,10 +72,7 @@ describe("CameraCapture", () => {
   it("rejects capture when the video is not yet ready", async () => {
     const user = userEvent.setup();
     const { stream } = createMockMediaStream();
-    Object.defineProperty(navigator, "mediaDevices", {
-      configurable: true,
-      value: { getUserMedia: vi.fn(() => Promise.resolve(stream)) },
-    });
+    getUserMedia = installGetUserMediaMock(() => Promise.resolve(stream));
 
     const onSelect = vi.fn();
     const onValidationError = vi.fn();
@@ -100,16 +91,12 @@ describe("CameraCapture", () => {
   it("guards against double-clicking カメラ開始 while the previous start is in flight", async () => {
     const user = userEvent.setup();
     let resolveStream!: (stream: MediaStream) => void;
-    const getUserMedia = vi.fn(
+    getUserMedia = installGetUserMediaMock(
       () =>
         new Promise<MediaStream>((resolve) => {
           resolveStream = resolve;
         }),
     );
-    Object.defineProperty(navigator, "mediaDevices", {
-      configurable: true,
-      value: { getUserMedia },
-    });
 
     render(<CameraCapture slotLabel="事件簿" onSelect={vi.fn()} onValidationError={vi.fn()} />);
 
@@ -117,17 +104,14 @@ describe("CameraCapture", () => {
     await user.click(startButton);
     await user.click(screen.getByRole("button", { name: /起動中/u }));
 
-    expect(getUserMedia).toHaveBeenCalledTimes(1);
+    expect(getUserMedia.getUserMedia).toHaveBeenCalledTimes(1);
     resolveStream(createMockMediaStream().stream);
   });
 
   it("captures and emits a file with source=camera once ready", async () => {
     const user = userEvent.setup();
     const { stream } = createMockMediaStream();
-    Object.defineProperty(navigator, "mediaDevices", {
-      configurable: true,
-      value: { getUserMedia: vi.fn(() => Promise.resolve(stream)) },
-    });
+    getUserMedia = installGetUserMediaMock(() => Promise.resolve(stream));
 
     const onSelect = vi.fn();
     render(<CameraCapture slotLabel="総資産" onSelect={onSelect} onValidationError={vi.fn()} />);

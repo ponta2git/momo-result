@@ -4,10 +4,11 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import { OcrCapturePage } from "@/features/ocrCapture/OcrCapturePage";
 import { DevUserPicker } from "@/shared/auth/DevUserPicker";
+import { installObjectUrlMock } from "@/test/doubles/dom";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
@@ -31,6 +32,7 @@ type MatchDraftRequestBody = {
 };
 
 let queryClient: QueryClient;
+let user: ReturnType<typeof userEvent.setup>;
 
 function renderCaptureRoute() {
   return render(
@@ -46,18 +48,19 @@ function renderCaptureRoute() {
 }
 
 async function startOcrAllowingPartialTray() {
-  await userEvent.click(screen.getByRole("button", { name: "読み取りを開始して試合一覧へ" }));
+  await user.click(screen.getByRole("button", { name: "読み取りを開始して試合一覧へ" }));
   expect(
     await screen.findByText(
       "3種類すべての画像は揃っていません。このまま進める場合は、もう一度開始してください。",
     ),
   ).toBeInTheDocument();
-  await userEvent.click(screen.getByRole("button", { name: "このまま読み取りを開始" }));
+  await user.click(screen.getByRole("button", { name: "このまま読み取りを開始" }));
 }
 
 describe("OcrCapturePage", () => {
   beforeEach(() => {
     queryClient = createTestQueryClient();
+    user = userEvent.setup();
   });
 
   it("reloads protected master selects after selecting a dev user", async () => {
@@ -90,10 +93,7 @@ describe("OcrCapturePage", () => {
     expect(screen.getByLabelText(/作品/u)).toBeDisabled();
     expect(authRequests).toBe(0);
 
-    await userEvent.selectOptions(
-      await screen.findByLabelText("操作用アカウント"),
-      "account_ponta",
-    );
+    await user.selectOptions(await screen.findByLabelText("操作用アカウント"), "account_ponta");
 
     expect(await screen.findByLabelText(/作品/u)).toBeEnabled();
     expect(screen.getByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
@@ -130,7 +130,7 @@ describe("OcrCapturePage", () => {
 
     expect(await screen.findByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
     const input = await screen.findByLabelText("OCRの画像をアップロード");
-    await userEvent.upload(input, new File(["image"], "assets.png", { type: "image/png" }));
+    await user.upload(input, new File(["image"], "assets.png", { type: "image/png" }));
     await startOcrAllowingPartialTray();
 
     expect(await screen.findByText("matches-page")).toBeInTheDocument();
@@ -163,9 +163,9 @@ describe("OcrCapturePage", () => {
   it("uses the final tray position as the OCR image type hint", async () => {
     window.localStorage.setItem("momoresult.devUser", "account_ponta");
     const createdJobs: OcrJobRequestBody[] = [];
-    vi.spyOn(URL, "createObjectURL").mockImplementation((value) =>
-      value instanceof File ? `blob:${value.name}` : "blob:unknown",
-    );
+    installObjectUrlMock({
+      createObjectURL: (value) => (value instanceof File ? `blob:${value.name}` : "blob:unknown"),
+    });
     let uploadCount = 0;
 
     server.use(
@@ -192,9 +192,9 @@ describe("OcrCapturePage", () => {
 
     expect(await screen.findByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
     const input = await screen.findByLabelText("OCRの画像をアップロード");
-    await userEvent.upload(input, new File(["first"], "first.png", { type: "image/png" }));
-    await userEvent.upload(input, new File(["second"], "second.png", { type: "image/png" }));
-    await userEvent.click(screen.getAllByRole("button", { name: "次の分類へ" })[0]!);
+    await user.upload(input, new File(["first"], "first.png", { type: "image/png" }));
+    await user.upload(input, new File(["second"], "second.png", { type: "image/png" }));
+    await user.click(screen.getAllByRole("button", { name: "次の分類へ" })[0]!);
     expect(screen.getByAltText("総資産プレビュー")).toHaveAttribute("src", "blob:second.png");
     expect(screen.getByAltText("収益プレビュー")).toHaveAttribute("src", "blob:first.png");
 
@@ -247,7 +247,7 @@ describe("OcrCapturePage", () => {
 
     expect(await screen.findByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
     const input = await screen.findByLabelText("OCRの画像をアップロード");
-    await userEvent.upload(input, new File(["image"], "assets.png", { type: "image/png" }));
+    await user.upload(input, new File(["image"], "assets.png", { type: "image/png" }));
     await startOcrAllowingPartialTray();
 
     await waitFor(() => expect(cancelledDraftIds).toEqual(["draft-created-1"]));
@@ -259,7 +259,7 @@ describe("OcrCapturePage", () => {
     renderCaptureRoute();
 
     const input = await screen.findByLabelText("OCRの画像をアップロード");
-    await userEvent.upload(input, new File(["image"], "assets.png", { type: "image/png" }));
+    await user.upload(input, new File(["image"], "assets.png", { type: "image/png" }));
 
     expect(
       screen.queryByRole("button", { name: "読み取り結果を確認する" }),

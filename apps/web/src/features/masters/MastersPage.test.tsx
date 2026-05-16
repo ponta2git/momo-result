@@ -22,6 +22,7 @@ import { createTestQueryClient } from "@/test/queryClient";
 setupMsw();
 
 let queryClient: QueryClient;
+let user: ReturnType<typeof userEvent.setup>;
 
 function renderPage(entry = "/admin/masters") {
   return render(
@@ -36,6 +37,7 @@ function renderPage(entry = "/admin/masters") {
 describe("MastersPage", () => {
   beforeEach(() => {
     queryClient = createTestQueryClient();
+    user = userEvent.setup();
   });
 
   it("renders relation board headings", async () => {
@@ -55,8 +57,8 @@ describe("MastersPage", () => {
 
     expect(await screen.findByRole("button", { name: /桃太郎電鉄2/u })).toBeInTheDocument();
 
-    await userEvent.type(screen.getByPlaceholderText("例: 桃太郎電鉄2"), "桃太郎電鉄ワールド");
-    await userEvent.click(screen.getByRole("button", { name: "作品を追加" }));
+    await user.type(screen.getByPlaceholderText("例: 桃太郎電鉄2"), "桃太郎電鉄ワールド");
+    await user.click(screen.getByRole("button", { name: "作品を追加" }));
 
     expect(await screen.findByRole("button", { name: /桃太郎電鉄ワールド/u })).toBeInTheDocument();
   });
@@ -69,8 +71,8 @@ describe("MastersPage", () => {
 
     expect(await screen.findByRole("button", { name: /桃太郎電鉄2/u })).toBeInTheDocument();
 
-    await userEvent.type(screen.getByPlaceholderText("例: 桃太郎電鉄2"), "桃太郎電鉄ワールド");
-    await userEvent.click(screen.getByRole("button", { name: "作品を追加" }));
+    await user.type(screen.getByPlaceholderText("例: 桃太郎電鉄2"), "桃太郎電鉄ワールド");
+    await user.click(screen.getByRole("button", { name: "作品を追加" }));
 
     await waitFor(() => {
       expect(
@@ -101,8 +103,8 @@ describe("MastersPage", () => {
     renderPage();
     expect(await screen.findByRole("button", { name: /桃太郎電鉄2/u })).toBeInTheDocument();
 
-    await userEvent.type(screen.getByPlaceholderText("例: 桃太郎電鉄2"), "桃鉄DX");
-    await userEvent.click(screen.getByRole("button", { name: "作品を追加" }));
+    await user.type(screen.getByPlaceholderText("例: 桃太郎電鉄2"), "桃鉄DX");
+    await user.click(screen.getByRole("button", { name: "作品を追加" }));
 
     expect(await screen.findByText("(追加中…)")).toBeInTheDocument();
     expect(
@@ -117,7 +119,7 @@ describe("MastersPage", () => {
     window.localStorage.setItem("momoresult.devUser", "account_ponta");
     renderPage();
 
-    await userEvent.click(await screen.findByRole("button", { name: "事件簿" }));
+    await user.click(await screen.findByRole("button", { name: "事件簿" }));
     expect(await screen.findByText("目的地")).toBeInTheDocument();
     expect(screen.getByText("プラス駅")).toBeInTheDocument();
     expect(screen.getByText("マイナス駅")).toBeInTheDocument();
@@ -132,11 +134,11 @@ describe("MastersPage", () => {
 
     expect(await screen.findByRole("button", { name: /桃太郎電鉄2/u })).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "作品を編集" }));
+    await user.click(screen.getByRole("button", { name: "作品を編集" }));
     const nameInput = screen.getByDisplayValue("桃太郎電鉄2");
-    await userEvent.clear(nameInput);
-    await userEvent.type(nameInput, "桃太郎電鉄2 DX");
-    await userEvent.click(screen.getByRole("button", { name: "保存" }));
+    await user.clear(nameInput);
+    await user.type(nameInput, "桃太郎電鉄2 DX");
+    await user.click(screen.getByRole("button", { name: "保存" }));
 
     expect(await screen.findByRole("button", { name: /桃太郎電鉄2 DX/u })).toBeInTheDocument();
   });
@@ -145,7 +147,7 @@ describe("MastersPage", () => {
     window.localStorage.setItem("momoresult.devUser", "account_ponta");
     renderPage();
 
-    await userEvent.click(await screen.findByRole("button", { name: "メンバー名寄せ" }));
+    await user.click(await screen.findByRole("button", { name: "メンバー名寄せ" }));
     expect(await screen.findByRole("heading", { name: "プレーヤー名の別名" })).toBeInTheDocument();
     expect(screen.getByText("NO11")).toBeInTheDocument();
     const aliasPanel = screen
@@ -156,16 +158,16 @@ describe("MastersPage", () => {
     }
     const aliasPanelScreen = within(aliasPanel);
 
-    await userEvent.type(aliasPanelScreen.getByPlaceholderText("例: NO11社長"), "ポン太");
-    await userEvent.click(aliasPanelScreen.getByRole("button", { name: "追加" }));
+    await user.type(aliasPanelScreen.getByPlaceholderText("例: NO11社長"), "ポン太");
+    await user.click(aliasPanelScreen.getByRole("button", { name: "追加" }));
     expect(await screen.findByText("ポン太")).toBeInTheDocument();
 
     const no11Row = screen.getByText("NO11").closest("li");
     if (!no11Row) {
       throw new Error("NO11 alias row was not rendered");
     }
-    await userEvent.click(within(no11Row).getByRole("button", { name: "別名を削除" }));
-    await userEvent.click(screen.getByRole("button", { name: "削除" }));
+    await user.click(within(no11Row).getByRole("button", { name: "別名を削除" }));
+    await user.click(screen.getByRole("button", { name: "削除" }));
 
     await waitFor(() => expect(screen.queryByText("NO11")).not.toBeInTheDocument());
   });

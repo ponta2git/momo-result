@@ -1,67 +1,16 @@
-import { useEffect, useState } from "react";
-
-import { getOcrDraft } from "@/features/ocrCapture/api";
-import type { OcrDraftResponse } from "@/features/ocrCapture/api";
 import { CameraCapture } from "@/features/ocrCapture/CameraCapture";
 import { CaptureRail } from "@/features/ocrCapture/CaptureRail";
-import { detectedKindFromResponse, slotDefinitions } from "@/features/ocrCapture/captureState";
-import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
+import { slotDefinitions } from "@/features/ocrCapture/captureState";
 import { ImageInput } from "@/features/ocrCapture/ImageInput";
-import { defaultSetupValues } from "@/features/ocrCapture/schema";
-import type { SetupFormValues } from "@/features/ocrCapture/schema";
+import { OcrJobSlotWatcher } from "@/features/ocrCapture/OcrJobSlotWatcher";
 import { SetupPanel } from "@/features/ocrCapture/SetupPanel";
-import { isWorkingStatus } from "@/features/ocrCapture/slotPolicy";
-import { useOcrCaptureDraftFlow } from "@/features/ocrCapture/useOcrCaptureDraftFlow";
-import { useOcrCaptureMutations } from "@/features/ocrCapture/useOcrCaptureMutations";
-import { useOcrCaptureQueries } from "@/features/ocrCapture/useOcrCaptureQueries";
-import { useOcrJobPolling } from "@/features/ocrCapture/useOcrJobPolling";
-import type { SlotKind } from "@/shared/api/enums";
-import { parseOcrJobStatus } from "@/shared/api/enums";
+import { useOcrCapturePageController } from "@/features/ocrCapture/useOcrCapturePageController";
 import { AuthPanel } from "@/shared/auth/AuthPanel";
-import { useDistinctMarkerEffect } from "@/shared/lib/useDistinctMarkerEffect";
 import { Button } from "@/shared/ui/actions/Button";
 import { LiveRegion } from "@/shared/ui/feedback/LiveRegion";
 import { Notice } from "@/shared/ui/feedback/Notice";
-import { showToast } from "@/shared/ui/feedback/Toast";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
-
-type SlotWatcherProps = {
-  slot: CaptureSlotState;
-  onUpdate: (slot: CaptureSlotState) => void;
-  onDraft: (kind: SlotKind, draft: OcrDraftResponse) => void;
-};
-
-function SlotWatcher({ slot, onUpdate, onDraft }: SlotWatcherProps) {
-  const query = useOcrJobPolling({ jobId: slot.jobId, attempts: slot.pollAttempts });
-
-  const marker =
-    query.data && slot.jobId
-      ? `${slot.jobId}:${query.data.status}:${query.data.updatedAt}:${query.data.draftId ?? ""}`
-      : null;
-
-  useDistinctMarkerEffect(marker, () => {
-    if (!query.data) {
-      return;
-    }
-    const status = parseOcrJobStatus(query.data.status);
-    const nextStatus = status === "unknown" ? slot.status : status;
-    onUpdate({
-      ...slot,
-      status: nextStatus,
-      detectedKind: detectedKindFromResponse(query.data.detectedScreenType),
-      draftId: query.data.draftId,
-      jobFailure: query.data.failure,
-      pollAttempts: slot.pollAttempts + 1,
-    });
-
-    if (status === "succeeded") {
-      void getOcrDraft(query.data.draftId).then((draft) => onDraft(slot.kind, draft));
-    }
-  });
-
-  return null;
-}
 
 const panelClass =
   "rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4";
@@ -71,63 +20,23 @@ const panelTitleClass = "text-lg font-semibold text-[var(--color-text-primary)]"
 const panelLeadClass = "mt-1 text-sm leading-6 text-[var(--color-text-secondary)]";
 
 export function OcrCapturePage() {
-  const [setup, setSetup] = useState<SetupFormValues>(defaultSetupValues);
-  const [notice, setNotice] = useState("");
-  const [partialStartAcknowledged, setPartialStartAcknowledged] = useState(false);
-
-  const { auth, gameTitlesQuery, hints } = useOcrCaptureQueries(setup.gameTitleId);
-  const flow = useOcrCaptureDraftFlow();
-  const submission = useOcrCaptureMutations(hints);
-
-  function notify(message: string, tone: "info" | "success" | "warning" = "info") {
-    setNotice(message);
-    showToast({ title: message, tone });
-  }
-
-  function handleValidationError(message: string) {
-    notify(message);
-  }
-
-  async function handleStartOcr() {
-    if (ocrReadyCount < slotDefinitions.length && !partialStartAcknowledged) {
-      setPartialStartAcknowledged(true);
-      notify(
-        "3種類すべての画像は揃っていません。このまま進める場合は、もう一度開始してください。",
-        "warning",
-      );
-      return;
-    }
-    const selectedGameTitle = gameTitlesQuery.data?.items?.find(
-      (item) => item.id === setup.gameTitleId,
-    );
-    await submission.submit({
-      notify,
-      selectedGameTitle,
-      setup,
-      slots: flow.slots,
-      updateSlot: flow.updateSlot,
-    });
-  }
-
-  const ocrReadyCount = flow.slots.filter(
-    (slot) => slot.file && ["selected", "failed", "cancelled"].includes(slot.status),
-  ).length;
-  const hasWorkingSlot = flow.slots.some((slot) => isWorkingStatus(slot.status));
-  const slotsFull = flow.slots.every((slot) => Boolean(slot.file));
-  const selectedSlotLabels = slotDefinitions
-    .filter((definition) =>
-      flow.slots.some(
-        (slot) =>
-          slot.kind === definition.kind &&
-          slot.file &&
-          ["selected", "failed", "cancelled"].includes(slot.status),
-      ),
-    )
-    .map((definition) => definition.label);
-
-  useEffect(() => {
-    setPartialStartAcknowledged(false);
-  }, [ocrReadyCount]);
+  const {
+    auth,
+    flow,
+    handleDraftLoadError,
+    handleStartOcr,
+    handleValidationError,
+    hasWorkingSlot,
+    notice,
+    notify,
+    ocrReadyCount,
+    partialStartAcknowledged,
+    selectedSlotLabels,
+    setSetup,
+    setup,
+    slotsFull,
+    submission,
+  } = useOcrCapturePageController();
 
   return (
     <PageFrame className="gap-5" width="workspace">
@@ -254,11 +163,12 @@ export function OcrCapturePage() {
       </section>
 
       {flow.slots.map((slot) => (
-        <SlotWatcher
+        <OcrJobSlotWatcher
           key={slot.kind}
           slot={slot}
           onUpdate={flow.updateSlot}
           onDraft={flow.setDraft}
+          onDraftLoadError={handleDraftLoadError}
         />
       ))}
     </PageFrame>

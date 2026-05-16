@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import { confirmMatch } from "@/shared/api/matches";
+import { setupMsw } from "@/test/msw/lifecycle";
+
+setupMsw();
 
 describe("matches api", () => {
   it("confirms match", async () => {

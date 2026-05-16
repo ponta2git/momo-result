@@ -1,8 +1,5 @@
 import "@testing-library/jest-dom/vitest";
-import { afterAll, afterEach, beforeAll, vi } from "vitest";
-
-import { resetMswStores } from "@/test/msw/handlers";
-import { server } from "@/test/msw/server";
+import { afterEach, vi } from "vitest";
 
 const hasDom = typeof window !== "undefined";
 
@@ -15,10 +12,7 @@ if (hasDom) {
   }
 }
 
-beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 afterEach(() => {
-  server.resetHandlers();
-  resetMswStores();
   if (hasDom) {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -26,4 +20,3 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.useRealTimers();
 });
-afterAll(() => server.close());

@@ -14,8 +14,11 @@ import {
   saveMasterHandoff,
 } from "@/shared/workflows/matchWorkspaceMasterHandoff";
 import { makeMatchWorkspaceMasterHandoffValues } from "@/test/factories";
+import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
+
+setupMsw();
 
 let queryClient: QueryClient;
 

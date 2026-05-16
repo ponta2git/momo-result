@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import { getOcrDraft, getOcrDraftsBulk } from "@/shared/api/ocrDrafts";
+import { setupMsw } from "@/test/msw/lifecycle";
+
+setupMsw();
 
 describe("ocr drafts api", () => {
   it("loads a single OCR draft", async () => {

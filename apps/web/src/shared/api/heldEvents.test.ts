@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import { createHeldEvent, deleteHeldEvent, listHeldEvents } from "@/shared/api/heldEvents";
+import { setupMsw } from "@/test/msw/lifecycle";
+
+setupMsw();
 
 describe("held events api", () => {
   it("loads held events", async () => {

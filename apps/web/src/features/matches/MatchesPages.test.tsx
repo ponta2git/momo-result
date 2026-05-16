@@ -8,7 +8,10 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { MatchCreatePage } from "@/features/matches/MatchCreatePage";
 import { MatchDetailPage } from "@/features/matches/MatchDetailPage";
 import { MatchesListPage } from "@/features/matches/MatchesListPage";
+import { setupMsw } from "@/test/msw/lifecycle";
 import { createTestQueryClient } from "@/test/queryClient";
+
+setupMsw();
 
 function LocationProbe() {
   const location = useLocation();

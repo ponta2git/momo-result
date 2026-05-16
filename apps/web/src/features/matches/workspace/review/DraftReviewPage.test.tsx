@@ -15,8 +15,11 @@ import {
   makeMatchWorkspaceMasterHandoffValues,
   makeFourReviewPlayerInputs,
 } from "@/test/factories";
+import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
+
+setupMsw();
 
 describe("DraftReviewPage", () => {
   let queryClient: QueryClient;

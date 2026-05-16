@@ -5,7 +5,10 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { AdminAccountsPage } from "@/features/adminAccounts/AdminAccountsPage";
+import { setupMsw } from "@/test/msw/lifecycle";
 import { createTestQueryClient } from "@/test/queryClient";
+
+setupMsw();
 
 let queryClient: QueryClient;
 

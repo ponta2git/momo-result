@@ -8,8 +8,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { OcrCapturePage } from "@/features/ocrCapture/OcrCapturePage";
 import { DevUserPicker } from "@/shared/auth/DevUserPicker";
+import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
+
+setupMsw();
 
 type OcrJobRequestBody = {
   imageId: string;

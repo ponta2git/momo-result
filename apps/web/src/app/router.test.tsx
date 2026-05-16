@@ -6,7 +6,10 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { ErrorBoundary } from "@/app/ErrorBoundary";
 import { appRoutes } from "@/app/router";
+import { setupMsw } from "@/test/msw/lifecycle";
 import { createTestQueryClient } from "@/test/queryClient";
+
+setupMsw();
 
 function renderApp(initialEntry: string) {
   const queryClient = createTestQueryClient();

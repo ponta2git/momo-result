@@ -6,8 +6,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
 import { OcrJobSlotWatcher } from "@/features/ocrCapture/OcrJobSlotWatcher";
+import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
+
+setupMsw();
 
 let queryClient: QueryClient;
 

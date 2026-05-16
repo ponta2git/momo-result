@@ -1,4 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+// @vitest-environment jsdom
+
+import { describe, expect, it, vi } from "vitest";
 
 import { getAuthMe } from "@/shared/api/auth";
 import { apiDownload, apiRequest } from "@/shared/api/client";
@@ -12,14 +14,6 @@ function requireInit(init: RequestInit | undefined): RequestInit {
 }
 
 describe("apiRequest", () => {
-  beforeEach(() => {
-    window.localStorage.clear();
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
   it("adds dev auth and csrf headers only when appropriate", async () => {
     window.localStorage.setItem("momoresult.devUser", "account_ponta");
     const fetchMock = vi.fn(async () => Response.json({ ok: true }));

@@ -2,7 +2,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import { ErrorBoundary } from "@/app/ErrorBoundary";
 import { appRoutes } from "@/app/router";
@@ -33,10 +33,6 @@ function renderApp(initialEntry: string) {
 describe("app routing", () => {
   beforeEach(() => {
     user = userEvent.setup();
-  });
-
-  afterEach(() => {
-    window.localStorage.clear();
   });
 
   it("redirects / to /login when unauthenticated", async () => {

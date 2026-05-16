@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it } from "vitest";
+// @vitest-environment jsdom
+
+import { describe, expect, it } from "vitest";
 
 import {
   appendHandoffIdToReturnTo,
@@ -39,10 +41,6 @@ function handoffPlayers(
 }
 
 describe("matchWorkspaceMasterHandoff", () => {
-  beforeEach(() => {
-    window.sessionStorage.clear();
-  });
-
   it("accepts app-internal returnTo paths and rejects external urls", () => {
     expect(sanitizeReturnTo("/review/session-1?sample=1")).toBe("/review/session-1?sample=1");
     expect(sanitizeReturnTo("https://example.com/review/session-1")).toBeUndefined();

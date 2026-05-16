@@ -24,6 +24,42 @@ export default defineConfig({
     proxy: backendProxy,
   },
   test: {
+    coverage: {
+      exclude: [
+        "src/**/*.d.ts",
+        "src/**/*.test.{ts,tsx}",
+        "src/**/*.tsx",
+        "src/shared/api/generated.ts",
+        "src/test/**",
+      ],
+      include: ["src/app/**/*.ts", "src/features/**/*.ts", "src/shared/**/*.ts"],
+      provider: "v8",
+      reporter: ["text", "lcov"],
+      thresholds: {
+        "src/features/masters/masterResourceCache.ts": {
+          branches: 100,
+          functions: 100,
+          lines: 100,
+          statements: 100,
+        },
+        "src/features/matches/workspace/scoreGrid/ScoreGridKeyboard.ts": {
+          branches: 95,
+          functions: 100,
+          lines: 95,
+          statements: 95,
+        },
+        "src/shared/api/queryErrorState.ts": {
+          branches: 100,
+          functions: 100,
+          lines: 100,
+          statements: 100,
+        },
+        branches: 70,
+        functions: 77,
+        lines: 78,
+        statements: 78,
+      },
+    },
     environment: "jsdom",
     globals: true,
     setupFiles: ["./src/test/setup.ts"],

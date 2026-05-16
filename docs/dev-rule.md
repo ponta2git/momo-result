@@ -72,6 +72,7 @@ root からの web 起動は `pnpm web:dev` でもよい。
 | lint | `pnpm lint` |
 | typecheck | `pnpm typecheck` |
 | test | `pnpm test:run` |
+| coverage | `pnpm test:coverage` |
 | build | `pnpm build` |
 
 ### api (`apps/api`)
@@ -99,7 +100,7 @@ root からの web 起動は `pnpm web:dev` でもよい。
 
 ## 5. 変更別ゲート
 
-- web 変更: `generate:api` が関係する場合は先に実行し、`format:check`、`lint`、`typecheck`、`test:run`、必要なら `build`。
+- web 変更: `generate:api` が関係する場合は先に実行し、`format:check`、`lint`、`typecheck`、`test:run`、`test:coverage`、必要なら `build`。
 - api endpoint / OpenAPI 変更: `apiQuality`（OpenAPI生成確認を含む）、`test` 後に web の `generate:api`。
 - PostgreSQL repository / migration 前提の変更: `apiDbQuality` を追加し、実行した spec 名を報告する。
 - Redis Streams / OCR queue 変更: `apiRedisQuality` を追加する。

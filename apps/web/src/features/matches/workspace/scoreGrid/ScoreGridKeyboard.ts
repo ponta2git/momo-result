@@ -1,13 +1,20 @@
-import type { KeyboardEvent } from "react";
-
 export type GridPosition = {
   col: number;
   row: number;
 };
 
+export type ScoreGridKeyboardEvent = {
+  ctrlKey: boolean;
+  key: string;
+  metaKey: boolean;
+  nativeEvent: unknown;
+  preventDefault: () => void;
+  shiftKey: boolean;
+};
+
 export type ScoreGridKeyArgs = {
   colCount: number;
-  event: KeyboardEvent<HTMLElement>;
+  event: ScoreGridKeyboardEvent;
   getCellId: (position: GridPosition) => string;
   horizontalEnterFromCol?: number | undefined;
   onFocusCell: (cellId: string) => void;
@@ -65,6 +72,7 @@ function moveByEnter(args: ScoreGridKeyArgs, reverse: boolean) {
 
 export function handleScoreGridKeydown(args: ScoreGridKeyArgs): void {
   const isComposing =
+    args.event.nativeEvent !== null &&
     typeof args.event.nativeEvent === "object" &&
     "isComposing" in args.event.nativeEvent &&
     Boolean(args.event.nativeEvent.isComposing);

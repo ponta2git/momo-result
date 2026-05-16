@@ -1,4 +1,4 @@
-import type { OcrDraftResponse } from "@/features/ocrCapture/api";
+import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
 
 type DraftPreviewProps = {
   draft?: OcrDraftResponse | undefined;

@@ -1,10 +1,10 @@
-import { getOcrDraft } from "@/features/ocrCapture/api";
-import type { OcrDraftResponse } from "@/features/ocrCapture/api";
 import { detectedKindFromResponse } from "@/features/ocrCapture/captureState";
 import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
 import { useOcrJobPolling } from "@/features/ocrCapture/useOcrJobPolling";
 import type { SlotKind } from "@/shared/api/enums";
 import { parseOcrJobStatus } from "@/shared/api/enums";
+import { getOcrDraft } from "@/shared/api/ocrDrafts";
+import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
 import { normalizeDisplayApiError } from "@/shared/api/problemDetails";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
 import { useDistinctMarkerEffect } from "@/shared/lib/useDistinctMarkerEffect";

@@ -1,10 +1,10 @@
 import type { DragEvent } from "react";
 
-import type { OcrDraftResponse } from "@/features/ocrCapture/api";
 import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
 import { DraftPreview } from "@/features/ocrCapture/DraftPreview";
 import type { SlotKind } from "@/shared/api/enums";
 import { parseSlotKind } from "@/shared/api/enums";
+import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 

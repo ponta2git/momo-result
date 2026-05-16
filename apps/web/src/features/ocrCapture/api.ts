@@ -6,7 +6,6 @@ export type UploadImageResponse = components["schemas"]["UploadImageResponse"];
 export type CreateOcrJobRequest = components["schemas"]["CreateOcrJobRequest"];
 export type CreateOcrJobResponse = components["schemas"]["CreateOcrJobResponse"];
 export type OcrJobResponse = components["schemas"]["OcrJobResponse"];
-export type OcrDraftResponse = components["schemas"]["OcrDraftResponse"];
 export type CancelOcrJobResponse = components["schemas"]["CancelOcrJobResponse"];
 
 export async function uploadImage(file: File): Promise<UploadImageResponse> {
@@ -31,10 +30,6 @@ export async function createOcrJob(
 
 export async function getOcrJob(jobId: string): Promise<OcrJobResponse> {
   return apiRequest<OcrJobResponse>(`/api/ocr-jobs/${encodeURIComponent(jobId)}`);
-}
-
-export async function getOcrDraft(draftId: string): Promise<OcrDraftResponse> {
-  return apiRequest<OcrDraftResponse>(`/api/ocr-drafts/${encodeURIComponent(draftId)}`);
 }
 
 export async function cancelOcrJob(jobId: string): Promise<CancelOcrJobResponse> {

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { cancelOcrJob } from "@/features/ocrCapture/api";
-import type { OcrDraftResponse } from "@/features/ocrCapture/api";
 import {
   createInitialSlot,
   createInitialSlots,
@@ -11,6 +10,7 @@ import {
 import type { CaptureSlotState, InputSource } from "@/features/ocrCapture/captureState";
 import { isWorkingStatus, keepImageOnly } from "@/features/ocrCapture/slotPolicy";
 import type { SlotKind } from "@/shared/api/enums";
+import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
 import type { SlotMap } from "@/shared/lib/slotMap";
 
 export type OcrCaptureDraftFlow = {

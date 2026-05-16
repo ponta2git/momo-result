@@ -1,8 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import { getOcrDraftsBulk } from "@/shared/api/ocrDrafts";
+import { getOcrDraft, getOcrDraftsBulk } from "@/shared/api/ocrDrafts";
 
 describe("ocr drafts api", () => {
+  it("loads a single OCR draft", async () => {
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+
+    await expect(getOcrDraft("draft-1")).resolves.toMatchObject({
+      draftId: "draft-1",
+    });
+  });
+
   it("loads OCR drafts in bulk", async () => {
     window.localStorage.setItem("momoresult.devUser", "account_ponta");
 

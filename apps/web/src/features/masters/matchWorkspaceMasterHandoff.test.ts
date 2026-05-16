@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import {
   appendHandoffIdToReturnTo,
@@ -51,6 +51,7 @@ describe("matchWorkspaceMasterHandoff", () => {
 
   it("saves and loads draft review handoff payload", () => {
     const payload = createMatchWorkspaceMasterHandoffPayload({
+      createdAt: "2026-01-01T00:00:00.000Z",
       matchSessionId: "session-1",
       returnTo: "/review/session-1?totalAssets=draft-1",
       values: {
@@ -75,18 +76,20 @@ describe("matchWorkspaceMasterHandoff", () => {
       },
     });
 
-    const handoffId = saveMasterHandoff(payload);
-    expect(handoffId).toBeDefined();
+    const handoffId = saveMasterHandoff(payload, { createId: () => "handoff-1" });
+    expect(handoffId).toBe("handoff-1");
 
     const status = inspectMasterHandoff({
       expectedReturnTo: "/review/session-1?totalAssets=draft-1",
       handoffId,
+      nowMs: Date.parse("2026-01-01T00:30:00.000Z"),
     });
     expect(status.status).toBe("available");
 
     const loaded = loadMasterHandoff({
       expectedReturnTo: "/review/session-1?totalAssets=draft-1",
       handoffId,
+      nowMs: Date.parse("2026-01-01T00:30:00.000Z"),
     });
 
     expect(loaded?.matchSessionId).toBe("session-1");
@@ -96,11 +99,12 @@ describe("matchWorkspaceMasterHandoff", () => {
       "/review/session-1?totalAssets=draft-1",
       handoffId ?? "",
     );
-    expect(destination).toContain("handoffId=");
+    expect(destination).toContain("handoffId=handoff-1");
   });
 
   it("marks an old handoff as expired", () => {
     const payload = createMatchWorkspaceMasterHandoffPayload({
+      createdAt: "2026-01-01T00:00:00.000Z",
       matchSessionId: "session-1",
       returnTo: "/review/session-1",
       values: {
@@ -115,9 +119,8 @@ describe("matchWorkspaceMasterHandoff", () => {
         seasonMasterId: "season-1",
       },
     });
-    payload.createdAt = "2026-01-01T00:00:00.000Z";
 
-    const handoffId = saveMasterHandoff(payload);
+    const handoffId = saveMasterHandoff(payload, { createId: () => "expired-handoff" });
     const status = inspectMasterHandoff({
       expectedReturnTo: "/review/session-1",
       handoffId,
@@ -128,13 +131,21 @@ describe("matchWorkspaceMasterHandoff", () => {
   });
 
   it("does not build a master route when session storage cannot persist the handoff", () => {
-    const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
-      throw new Error("storage unavailable");
-    });
+    const unavailableStorage = {
+      getItem: () => null,
+      key: () => null,
+      length: 0,
+      removeItem: () => undefined,
+      setItem: () => {
+        throw new Error("storage unavailable");
+      },
+    };
 
     const result = prepareMatchWorkspaceMasterHandoffRoute({
+      createId: () => "unavailable-handoff",
       matchSessionId: "session-1",
       returnTo: "/review/session-1",
+      storage: unavailableStorage,
       values: {
         draftIds: {},
         gameTitleId: "gt_momotetsu_2",
@@ -149,7 +160,6 @@ describe("matchWorkspaceMasterHandoff", () => {
     });
 
     expect(result.status).toBe("unavailable");
-    setItem.mockRestore();
   });
 
   it("finds latest handoff only through validated return and session contracts", () => {
@@ -165,28 +175,28 @@ describe("matchWorkspaceMasterHandoff", () => {
       seasonMasterId: "season-1",
     };
     const foreign = createMatchWorkspaceMasterHandoffPayload({
+      createdAt: "2026-01-01T02:00:00.000Z",
       matchSessionId: "session-2",
       returnTo: "/review/session-1",
       values: baseValues,
     });
-    foreign.createdAt = "2026-01-01T02:00:00.000Z";
-    saveMasterHandoff(foreign);
+    saveMasterHandoff(foreign, { createId: () => "foreign-handoff" });
 
     const expired = createMatchWorkspaceMasterHandoffPayload({
+      createdAt: "2026-01-01T00:00:00.000Z",
       matchSessionId: "session-1",
       returnTo: "/review/session-1",
       values: baseValues,
     });
-    expired.createdAt = "2026-01-01T00:00:00.000Z";
-    saveMasterHandoff(expired);
+    saveMasterHandoff(expired, { createId: () => "old-handoff" });
 
     const valid = createMatchWorkspaceMasterHandoffPayload({
+      createdAt: "2026-01-01T01:30:00.000Z",
       matchSessionId: "session-1",
       returnTo: "/review/session-1",
       values: baseValues,
     });
-    valid.createdAt = "2026-01-01T01:30:00.000Z";
-    const validId = saveMasterHandoff(valid);
+    const validId = saveMasterHandoff(valid, { createId: () => "valid-handoff" });
 
     const latest = findLatestMasterHandoff({
       expectedMatchSessionId: "session-1",

@@ -59,6 +59,17 @@ export type MatchWorkspaceMasterHandoffValues = MatchWorkspaceHandoffValues;
 
 export type MasterHandoffPayload = z.infer<typeof masterHandoffPayloadSchema>;
 
+type MasterHandoffStorage = Pick<Storage, "getItem" | "key" | "length" | "removeItem" | "setItem">;
+
+type MasterHandoffSaveOptions = {
+  createId?: () => string;
+  storage?: MasterHandoffStorage;
+};
+
+type MasterHandoffReadOptions = {
+  storage?: MasterHandoffStorage;
+};
+
 function pickIncidents(incidents: IncidentCountsByKey): IncidentCountsByKey {
   return Object.fromEntries(
     incidentDefinitions.map((definition) => [definition.key, incidents[definition.key]]),
@@ -102,11 +113,18 @@ export function appendHandoffIdToReturnTo(returnTo: string, handoffId: string): 
   return `${base.pathname}${base.search}${base.hash}`;
 }
 
-function randomHandoffId(): string {
+function defaultHandoffId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
   }
   return `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+function browserSessionStorage(): MasterHandoffStorage | undefined {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+  return window.sessionStorage;
 }
 
 function storageKey(handoffId: string): string {
@@ -130,12 +148,13 @@ function isExpired(createdAt: string, nowMs: number): boolean {
 }
 
 export function createMatchWorkspaceHandoffPayload(input: {
+  createdAt?: string;
   matchSessionId: string;
   returnTo: string;
   values: MatchWorkspaceHandoffValues;
 }): MasterHandoffPayload {
   return {
-    createdAt: new Date().toISOString(),
+    createdAt: input.createdAt ?? new Date().toISOString(),
     matchSessionId: input.matchSessionId,
     returnTo: input.returnTo,
     schemaVersion: handoffSchemaVersion,
@@ -167,13 +186,17 @@ export function createMatchWorkspaceHandoffPayload(input: {
 
 export const createMatchWorkspaceMasterHandoffPayload = createMatchWorkspaceHandoffPayload;
 
-export function saveMasterHandoff(payload: MasterHandoffPayload): string | undefined {
-  if (typeof window === "undefined") {
+export function saveMasterHandoff(
+  payload: MasterHandoffPayload,
+  options: MasterHandoffSaveOptions = {},
+): string | undefined {
+  const storage = options.storage ?? browserSessionStorage();
+  if (!storage) {
     return undefined;
   }
   try {
-    const handoffId = randomHandoffId();
-    window.sessionStorage.setItem(storageKey(handoffId), JSON.stringify(payload));
+    const handoffId = (options.createId ?? defaultHandoffId)();
+    storage.setItem(storageKey(handoffId), JSON.stringify(payload));
     return handoffId;
   } catch {
     return undefined;
@@ -185,12 +208,22 @@ export type MatchWorkspaceMasterHandoffRouteResult =
   | { reason: "storage_unavailable"; status: "unavailable" };
 
 export function prepareMatchWorkspaceMasterHandoffRoute(input: {
+  createdAt?: string;
+  createId?: () => string;
   matchSessionId: string;
   returnTo: string;
+  storage?: MasterHandoffStorage;
   values: MatchWorkspaceHandoffValues;
 }): MatchWorkspaceMasterHandoffRouteResult {
   const payload = createMatchWorkspaceMasterHandoffPayload(input);
-  const handoffId = saveMasterHandoff(payload);
+  const saveOptions: MasterHandoffSaveOptions = {};
+  if (input.createId) {
+    saveOptions.createId = input.createId;
+  }
+  if (input.storage) {
+    saveOptions.storage = input.storage;
+  }
+  const handoffId = saveMasterHandoff(payload, saveOptions);
   if (!handoffId) {
     return { reason: "storage_unavailable", status: "unavailable" };
   }
@@ -201,18 +234,21 @@ export function prepareMatchWorkspaceMasterHandoffRoute(input: {
   };
 }
 
-export function inspectMasterHandoff(input: {
-  expectedMatchSessionId?: string | undefined;
-  expectedReturnTo: string;
-  handoffId: string | null | undefined;
-  nowMs?: number;
-}): HandoffInspectResult {
-  if (!input.handoffId || typeof window === "undefined") {
+export function inspectMasterHandoff(
+  input: {
+    expectedMatchSessionId?: string | undefined;
+    expectedReturnTo: string;
+    handoffId: string | null | undefined;
+    nowMs?: number;
+  } & MasterHandoffReadOptions,
+): HandoffInspectResult {
+  const storage = input.storage ?? browserSessionStorage();
+  if (!input.handoffId || !storage) {
     return { status: "missing" };
   }
 
   try {
-    const raw = window.sessionStorage.getItem(storageKey(input.handoffId));
+    const raw = storage.getItem(storageKey(input.handoffId));
     if (!raw) {
       return { status: "missing" };
     }
@@ -238,18 +274,21 @@ export function inspectMasterHandoff(input: {
   }
 }
 
-export function loadMasterHandoff(input: {
-  expectedMatchSessionId?: string | undefined;
-  expectedReturnTo: string;
-  handoffId: string | null | undefined;
-  nowMs?: number;
-}): MasterHandoffPayload | undefined {
-  if (!input.handoffId || typeof window === "undefined") {
+export function loadMasterHandoff(
+  input: {
+    expectedMatchSessionId?: string | undefined;
+    expectedReturnTo: string;
+    handoffId: string | null | undefined;
+    nowMs?: number;
+  } & MasterHandoffReadOptions,
+): MasterHandoffPayload | undefined {
+  const storage = input.storage ?? browserSessionStorage();
+  if (!input.handoffId || !storage) {
     return undefined;
   }
 
   try {
-    const raw = window.sessionStorage.getItem(storageKey(input.handoffId));
+    const raw = storage.getItem(storageKey(input.handoffId));
     if (!raw) {
       return undefined;
     }
@@ -275,34 +314,42 @@ export function loadMasterHandoff(input: {
   }
 }
 
-export function findLatestMasterHandoff(input: {
-  expectedMatchSessionId: string;
-  expectedReturnTo: string;
-  nowMs?: number;
-}): { handoffId: string; payload: MasterHandoffPayload } | undefined {
-  if (typeof window === "undefined") {
+export function findLatestMasterHandoff(
+  input: {
+    expectedMatchSessionId: string;
+    expectedReturnTo: string;
+    nowMs?: number;
+  } & MasterHandoffReadOptions,
+): { handoffId: string; payload: MasterHandoffPayload } | undefined {
+  const storage = input.storage ?? browserSessionStorage();
+  if (!storage) {
     return undefined;
   }
 
   const candidates: Array<{ handoffId: string; payload: MasterHandoffPayload }> = [];
-  for (let index = 0; index < window.sessionStorage.length; index += 1) {
-    const key = window.sessionStorage.key(index);
-    if (!key?.startsWith(handoffStoragePrefix)) {
-      continue;
+  try {
+    for (let index = 0; index < storage.length; index += 1) {
+      const key = storage.key(index);
+      if (!key?.startsWith(handoffStoragePrefix)) {
+        continue;
+      }
+      const handoffId = key.slice(handoffStoragePrefix.length);
+      const loadInput: Parameters<typeof loadMasterHandoff>[0] = {
+        expectedMatchSessionId: input.expectedMatchSessionId,
+        expectedReturnTo: input.expectedReturnTo,
+        handoffId,
+        storage,
+      };
+      if (typeof input.nowMs === "number") {
+        loadInput.nowMs = input.nowMs;
+      }
+      const payload = loadMasterHandoff(loadInput);
+      if (payload) {
+        candidates.push({ handoffId, payload });
+      }
     }
-    const handoffId = key.slice(handoffStoragePrefix.length);
-    const loadInput: Parameters<typeof loadMasterHandoff>[0] = {
-      expectedMatchSessionId: input.expectedMatchSessionId,
-      expectedReturnTo: input.expectedReturnTo,
-      handoffId,
-    };
-    if (typeof input.nowMs === "number") {
-      loadInput.nowMs = input.nowMs;
-    }
-    const payload = loadMasterHandoff(loadInput);
-    if (payload) {
-      candidates.push({ handoffId, payload });
-    }
+  } catch {
+    return undefined;
   }
 
   return candidates.toSorted(
@@ -310,12 +357,16 @@ export function findLatestMasterHandoff(input: {
   )[0];
 }
 
-export function removeMasterHandoff(handoffId: string | null | undefined): void {
-  if (!handoffId || typeof window === "undefined") {
+export function removeMasterHandoff(
+  handoffId: string | null | undefined,
+  options: MasterHandoffReadOptions = {},
+): void {
+  const storage = options.storage ?? browserSessionStorage();
+  if (!handoffId || !storage) {
     return;
   }
   try {
-    window.sessionStorage.removeItem(storageKey(handoffId));
+    storage.removeItem(storageKey(handoffId));
   } catch {
     // no-op: best effort cleanup
   }

@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useActionState } from "react";
 
+import { invalidateAdminAccountCaches } from "@/features/adminAccounts/adminAccountCache";
+import { adminAccountsQueryKeys } from "@/features/adminAccounts/queryKeys";
 import {
   createLoginAccount,
   listLoginAccounts,
@@ -14,7 +16,6 @@ import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { formatApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 
-const adminAccountsQueryKey = ["admin", "login-accounts"] as const;
 const initialCreateAccountState = { error: "", version: 0 };
 
 export function useAdminAccountsPageController() {
@@ -22,7 +23,7 @@ export function useAdminAccountsPageController() {
   const idempotencyKeys = useIdempotencyKeyStore();
 
   const accountsQuery = useQuery({
-    queryKey: adminAccountsQueryKey,
+    queryKey: adminAccountsQueryKeys.all(),
     queryFn: listLoginAccounts,
   });
 
@@ -44,7 +45,7 @@ export function useAdminAccountsPageController() {
           request,
           (options) => createLoginAccount(request, options),
         );
-        await queryClient.invalidateQueries({ queryKey: adminAccountsQueryKey });
+        await invalidateAdminAccountCaches(queryClient);
         return { error: "", version: previous.version + 1 };
       } catch (error) {
         return {
@@ -65,7 +66,7 @@ export function useAdminAccountsPageController() {
       request: UpdateLoginAccountRequest;
     }) => updateLoginAccount(accountId, request),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: adminAccountsQueryKey });
+      await invalidateAdminAccountCaches(queryClient);
     },
   });
 

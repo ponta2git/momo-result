@@ -1,6 +1,5 @@
 import { useEffect, useRef } from "react";
 
-import type { getMatchDraftDetail } from "@/features/matches/workspace/api";
 import { draftToMatchForm } from "@/features/matches/workspace/draftToMatchForm";
 import { matchDetailToMatchForm } from "@/features/matches/workspace/matchDetailToMatchForm";
 import type {
@@ -13,6 +12,7 @@ import {
   draftsByKind,
   prefillFromDraftSummary,
 } from "@/features/matches/workspace/workspaceDerivations";
+import type { getMatchDraftDetail } from "@/shared/api/matchDrafts";
 import type { getMatch } from "@/shared/api/matches";
 import type { getOcrDraftsBulk } from "@/shared/api/ocrDrafts";
 import { buildMemberAliasDirectory } from "@/shared/domain/memberDirectory";

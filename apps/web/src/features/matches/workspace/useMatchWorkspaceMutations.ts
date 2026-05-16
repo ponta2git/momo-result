@@ -1,7 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
-import { cancelMatchDraft } from "@/features/matches/workspace/api";
 import { toUpdateMatchRequest } from "@/features/matches/workspace/matchFormToRequest";
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
 import {
@@ -10,6 +9,7 @@ import {
   invalidateAfterMatchUpdated,
 } from "@/shared/api/cacheInvalidation";
 import { runIdempotentMutation } from "@/shared/api/idempotency";
+import { cancelMatchDraft } from "@/shared/api/matchDrafts";
 import { confirmMatch, updateMatch } from "@/shared/api/matches";
 import { formatApiError } from "@/shared/api/problemDetails";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";

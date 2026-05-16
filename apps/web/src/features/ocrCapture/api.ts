@@ -1,12 +1,6 @@
 import { apiRequest } from "@/shared/api/client";
 import type { IdempotencyRequestOptions } from "@/shared/api/client";
 import type { components } from "@/shared/api/generated";
-export { cancelMatchDraft, createMatchDraft } from "@/shared/api/matchDrafts";
-export type {
-  CancelMatchDraftResponse,
-  CreateMatchDraftRequest,
-  MatchDraftResponse,
-} from "@/shared/api/matchDrafts";
 
 export type UploadImageResponse = components["schemas"]["UploadImageResponse"];
 export type CreateOcrJobRequest = components["schemas"]["CreateOcrJobRequest"];

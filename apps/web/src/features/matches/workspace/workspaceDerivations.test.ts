@@ -1,7 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 
-import type { MatchDraftDetailResponse } from "@/features/matches/workspace/api";
 import { createEmptyMatchForm } from "@/features/matches/workspace/matchFormTypes";
 import { createSampleDraft } from "@/features/matches/workspace/review/sampleDrafts";
 import {
@@ -12,6 +11,7 @@ import {
   prefillFromDraftSummary,
   toIsoFromLocal,
 } from "@/features/matches/workspace/workspaceDerivations";
+import type { MatchDraftDetailResponse } from "@/shared/api/matchDrafts";
 
 describe("draftIdsFromParams", () => {
   it("maps URL search params to slot keys", () => {

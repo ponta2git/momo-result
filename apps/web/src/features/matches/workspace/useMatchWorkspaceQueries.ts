@@ -2,8 +2,6 @@ import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import type { UseQueryResult, UseSuspenseQueryResult } from "@tanstack/react-query";
 import { useMemo } from "react";
 
-import type { MatchDraftDetailResponse } from "@/features/matches/workspace/api";
-import { getMatchDraftDetail, listMatchDraftSourceImages } from "@/features/matches/workspace/api";
 import type { WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
 import {
   draftIdsFromDetail,
@@ -17,6 +15,8 @@ import {
   listMemberAliases,
   listSeasonMasters,
 } from "@/shared/api/masters";
+import { getMatchDraftDetail, listMatchDraftSourceImages } from "@/shared/api/matchDrafts";
+import type { MatchDraftDetailResponse } from "@/shared/api/matchDrafts";
 import { getMatch } from "@/shared/api/matches";
 import { getOcrDraftsBulk } from "@/shared/api/ocrDrafts";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";

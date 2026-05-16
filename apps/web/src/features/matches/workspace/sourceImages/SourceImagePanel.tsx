@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { downloadMatchDraftSourceImage } from "@/features/matches/workspace/api";
 import { SourceImagePreviewDialog } from "@/features/matches/workspace/sourceImages/SourceImagePreviewDialog";
 import { SourceImageTabs } from "@/features/matches/workspace/sourceImages/SourceImageTabs";
 import { sourceImageKindLabels } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
@@ -9,6 +8,7 @@ import type {
   SourceImageKind,
 } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
 import { toSourceImageStates } from "@/features/matches/workspace/sourceImages/sourceImageViewModel";
+import { downloadMatchDraftSourceImage } from "@/shared/api/matchDrafts";
 import { Button } from "@/shared/ui/actions/Button";
 import { Card } from "@/shared/ui/layout/Card";
 

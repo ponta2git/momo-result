@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { useMasterCreateActions } from "@/features/masters/useMasterCreateActions";
@@ -34,6 +34,7 @@ export function useMastersPageController() {
   const queryClient = useQueryClient();
   const idempotencyKeys = useIdempotencyKeyStore();
   const navigate = useNavigate();
+  const nowIsoFactory = useCallback(() => new Date().toISOString(), []);
   const [, startReturnTransition] = useTransition();
   const navigateWithTransition = (to: string) => {
     startReturnTransition(() => {
@@ -76,6 +77,7 @@ export function useMastersPageController() {
     addOptimisticSeasonMaster: optimisticCatalog.addOptimisticSeasonMaster,
     authScope,
     idempotencyKeys,
+    nowIsoFactory,
     optimisticGameTitleCount: optimisticCatalog.optimisticGameTitles.length,
     queryClient,
     selectedMapMasterCount: viewModel.selectedMapMasters.length,

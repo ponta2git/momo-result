@@ -13,17 +13,17 @@ function seedSuffix(seed: number | string): string {
     .slice(0, 18);
 }
 
-export function createGameTitleId(name: string, seed: number | string = Date.now()): string {
+export function createGameTitleId(name: string, seed: number | string): string {
   const suffix = slugify(name) || "game_title";
   return `gt_${suffix}_${seedSuffix(seed)}`;
 }
 
-export function createMapMasterId(name: string, seed: number | string = Date.now()): string {
+export function createMapMasterId(name: string, seed: number | string): string {
   const suffix = slugify(name) || "map";
   return `map_master_${suffix}_${seedSuffix(seed)}`;
 }
 
-export function createSeasonMasterId(name: string, seed: number | string = Date.now()): string {
+export function createSeasonMasterId(name: string, seed: number | string): string {
   const suffix = slugify(name) || "season";
   return `season_master_${suffix}_${seedSuffix(seed)}`;
 }

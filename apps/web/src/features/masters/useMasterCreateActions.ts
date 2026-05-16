@@ -38,6 +38,7 @@ export function useMasterCreateActions(input: {
   addOptimisticSeasonMaster: (item: OptimisticSeasonMaster) => void;
   authScope: string;
   idempotencyKeys: IdempotencyKeyStore;
+  nowIsoFactory: () => string;
   optimisticGameTitleCount: number;
   queryClient: QueryClient;
   selectedMapMasterCount: number;
@@ -60,12 +61,13 @@ export function useMasterCreateActions(input: {
     const intent = { layoutFamily, name };
     const attempt = input.idempotencyKeys.begin("masters.createGameTitle", intent);
     const draftId = createGameTitleId(name, attempt.key);
+    const createdAt = input.nowIsoFactory();
     input.addOptimisticGameTitle({
       id: draftId,
       layoutFamily,
       name,
       displayOrder: input.optimisticGameTitleCount,
-      createdAt: new Date().toISOString(),
+      createdAt,
       pending: true,
     });
     try {
@@ -99,12 +101,13 @@ export function useMasterCreateActions(input: {
       const intent = { gameTitleId, name };
       const attempt = input.idempotencyKeys.begin("masters.createMapMaster", intent);
       const draftId = createMapMasterId(name, attempt.key);
+      const createdAt = input.nowIsoFactory();
       input.addOptimisticMapMaster({
         id: draftId,
         gameTitleId,
         name,
         displayOrder: input.selectedMapMasterCount,
-        createdAt: new Date().toISOString(),
+        createdAt,
         pending: true,
       });
       try {
@@ -139,12 +142,13 @@ export function useMasterCreateActions(input: {
     const intent = { gameTitleId, name };
     const attempt = input.idempotencyKeys.begin("masters.createSeasonMaster", intent);
     const draftId = createSeasonMasterId(name, attempt.key);
+    const createdAt = input.nowIsoFactory();
     input.addOptimisticSeasonMaster({
       id: draftId,
       gameTitleId,
       name,
       displayOrder: input.selectedSeasonMasterCount,
-      createdAt: new Date().toISOString(),
+      createdAt,
       pending: true,
     });
     try {

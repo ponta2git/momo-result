@@ -18,6 +18,7 @@ export type OcrSubmissionResult =
 export type OcrSubmissionWorkflowParams = {
   cancelDraft: (matchDraftId: string) => Promise<unknown>;
   createDraft: (request: CreateMatchDraftRequest) => Promise<MatchDraftResponse>;
+  createPlayedAtIso: () => string;
   createUploadJob: (params: {
     file: File;
     matchDraftId: string;
@@ -36,6 +37,7 @@ export type OcrSubmissionWorkflowParams = {
 export async function runOcrSubmissionWorkflow({
   cancelDraft,
   createDraft,
+  createPlayedAtIso,
   createUploadJob,
   onReady,
   selectedGameTitle,
@@ -64,7 +66,7 @@ export async function runOcrSubmissionWorkflow({
       ...(selectedGameTitle?.layoutFamily ? { layoutFamily: selectedGameTitle.layoutFamily } : {}),
       mapMasterId: setup.mapMasterId,
       ownerMemberId: setup.ownerMemberId,
-      playedAt: new Date().toISOString(),
+      playedAt: createPlayedAtIso(),
       seasonMasterId: setup.seasonMasterId,
       status: "ocr_running",
     });

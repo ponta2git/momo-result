@@ -42,6 +42,7 @@ export function useOcrCaptureMutations(hints: Record<string, unknown>): OcrCaptu
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const idempotencyKeys = useIdempotencyKeyStore();
+  const createPlayedAtIso = useCallback(() => new Date().toISOString(), []);
 
   const uploadMutation = useMutation({
     mutationFn: async ({
@@ -84,6 +85,7 @@ export function useOcrCaptureMutations(hints: Record<string, unknown>): OcrCaptu
             request,
             (options) => createMatchDraft(request, options),
           ),
+        createPlayedAtIso,
         createUploadJob: ({ file, matchDraftId, slot }) =>
           uploadMutation.mutateAsync({ file, matchDraftId, slot }),
         onReady: (targetCount) =>
@@ -133,7 +135,7 @@ export function useOcrCaptureMutations(hints: Record<string, unknown>): OcrCaptu
 
       notify("読み取り処理を開始できませんでした。確定前の記録は取り消しました。");
     },
-    [idempotencyKeys, navigate, queryClient, uploadMutation],
+    [createPlayedAtIso, idempotencyKeys, navigate, queryClient, uploadMutation],
   );
 
   return {

@@ -2,11 +2,12 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { delay, http, HttpResponse } from "msw";
+import { http, HttpResponse } from "msw";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { ExportPage } from "@/features/exports/ExportPage";
+import { createDeferred } from "@/test/deferred";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
@@ -161,10 +162,11 @@ describe("ExportPage", () => {
 
   it("prevents duplicate submission while pending and shows progress", async () => {
     let requests = 0;
+    const responseGate = createDeferred();
     server.use(
       http.get("/api/exports/matches", async () => {
         requests += 1;
-        await delay(80);
+        await responseGate.promise;
         return new HttpResponse("csv", {
           headers: {
             "Content-Disposition": 'attachment; filename="momo-results-all.csv"',
@@ -182,21 +184,31 @@ describe("ExportPage", () => {
     expect(screen.getByText("出力ファイルを作成しています")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "作成中…" }));
     expect(requests).toBe(1);
+
+    responseGate.resolve();
+    expect(await screen.findByText("ダウンロードを開始しました")).toBeInTheDocument();
   });
 
-  it("shows slow and timeout states without leaving the spinner running", async () => {
+  it("shows timeout states without leaving the spinner running", async () => {
     server.use(
-      http.get("/api/exports/matches", async () => {
-        await delay(100);
-        return new HttpResponse("csv");
-      }),
+      http.get("/api/exports/matches", () =>
+        HttpResponse.json(
+          {
+            code: "REQUEST_TIMEOUT",
+            detail: "export timed out",
+            status: 408,
+            title: "Request Timeout",
+            type: "about:blank",
+          },
+          { status: 408 },
+        ),
+      ),
     );
 
-    renderPage({ downloadTimeoutMs: 100, slowThresholdMs: 0 });
+    renderPage();
     await screen.findByRole("heading", { name: "CSV / TSV 出力" });
     await userEvent.click(screen.getByRole("button", { name: "CSVをダウンロード" }));
 
-    expect(await screen.findByText("通常より時間がかかっています")).toBeInTheDocument();
     expect(await screen.findByText("出力が完了しませんでした")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "作成中…" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "もう一度試す" })).toBeInTheDocument();

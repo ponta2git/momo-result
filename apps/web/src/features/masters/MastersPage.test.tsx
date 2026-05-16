@@ -2,7 +2,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { http, HttpResponse, delay } from "msw";
+import { http, HttpResponse } from "msw";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
@@ -13,6 +13,7 @@ import {
   createMatchWorkspaceMasterHandoffPayload,
   saveMasterHandoff,
 } from "@/shared/workflows/matchWorkspaceMasterHandoff";
+import { createDeferred } from "@/test/deferred";
 import { makeMatchWorkspaceMasterHandoffValues } from "@/test/factories";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
@@ -83,10 +84,11 @@ describe("MastersPage", () => {
 
   it("shows the new game title optimistically while the server is responding", async () => {
     window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    const responseGate = createDeferred();
     server.use(
       http.post("/api/game-titles", async ({ request }) => {
         const body = (await request.json()) as { id: string; name: string; layoutFamily: string };
-        await delay(120);
+        await responseGate.promise;
         const created = {
           ...body,
           displayOrder: 99,
@@ -107,6 +109,7 @@ describe("MastersPage", () => {
       screen.getByText((_, node) => node?.textContent === "桃鉄DX(追加中…)"),
     ).toBeInTheDocument();
 
+    responseGate.resolve();
     await waitFor(() => expect(screen.queryByText("(追加中…)")).not.toBeInTheDocument());
   });
 
@@ -212,34 +215,31 @@ describe("MastersPage", () => {
       })
       .catch(() => undefined);
 
-    let resolveResponse!: () => void;
-    const requestStarted = new Promise<void>((requestSeen) => {
-      server.use(
-        http.get("/api/game-titles", async () => {
-          requestSeen();
-          await new Promise<void>((resolve) => {
-            resolveResponse = resolve;
-          });
-          return HttpResponse.json({
-            items: [
-              {
-                id: "gt_recovered",
-                name: "復旧済み作品",
-                layoutFamily: "momotetsu_2",
-                displayOrder: 1,
-                createdAt: "2026-01-01T00:00:00.000Z",
-              },
-            ],
-          });
-        }),
-      );
-    });
+    const requestStarted = createDeferred();
+    const responseGate = createDeferred();
+    server.use(
+      http.get("/api/game-titles", async () => {
+        requestStarted.resolve();
+        await responseGate.promise;
+        return HttpResponse.json({
+          items: [
+            {
+              id: "gt_recovered",
+              name: "復旧済み作品",
+              layoutFamily: "momotetsu_2",
+              displayOrder: 1,
+              createdAt: "2026-01-01T00:00:00.000Z",
+            },
+          ],
+        });
+      }),
+    );
 
     renderPage();
 
-    await requestStarted;
+    await requestStarted.promise;
     expect(screen.queryByText("作品を読み込めませんでした")).not.toBeInTheDocument();
-    resolveResponse();
+    responseGate.resolve();
     expect(await screen.findByText("復旧済み作品")).toBeInTheDocument();
   });
 

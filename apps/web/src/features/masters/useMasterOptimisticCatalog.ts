@@ -11,6 +11,10 @@ export type OptimisticGameTitle = GameTitleResponse & { pending?: boolean };
 export type OptimisticMapMaster = MapMasterResponse & { pending?: boolean };
 export type OptimisticSeasonMaster = SeasonMasterResponse & { pending?: boolean };
 
+function appendOptimisticItem<T extends { id: string }>(state: T[], item: T): T[] {
+  return state.some((current) => current.id === item.id) ? state : [...state, item];
+}
+
 export function useMasterOptimisticCatalog(input: {
   gameTitles: GameTitleResponse[];
   mapMasters: MapMasterResponse[];
@@ -20,17 +24,17 @@ export function useMasterOptimisticCatalog(input: {
   const [optimisticGameTitles, addOptimisticGameTitle] = useOptimistic<
     OptimisticGameTitle[],
     OptimisticGameTitle
-  >(input.gameTitles, (state, item) => [...state, item]);
+  >(input.gameTitles, appendOptimisticItem);
 
   const [optimisticMapMasters, addOptimisticMapMaster] = useOptimistic<
     OptimisticMapMaster[],
     OptimisticMapMaster
-  >(input.mapMasters, (state, item) => [...state, item]);
+  >(input.mapMasters, appendOptimisticItem);
 
   const [optimisticSeasonMasters, addOptimisticSeasonMaster] = useOptimistic<
     OptimisticSeasonMaster[],
     OptimisticSeasonMaster
-  >(input.seasonMasters, (state, item) => [...state, item]);
+  >(input.seasonMasters, appendOptimisticItem);
 
   const viewModel = useMemo(
     () =>

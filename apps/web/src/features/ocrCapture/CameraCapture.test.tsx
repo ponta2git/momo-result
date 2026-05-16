@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -105,7 +105,10 @@ describe("CameraCapture", () => {
     await user.click(screen.getByRole("button", { name: /起動中/u }));
 
     expect(getUserMedia.getUserMedia).toHaveBeenCalledTimes(1);
-    resolveStream(createMockMediaStream().stream);
+    await act(async () => {
+      resolveStream(createMockMediaStream().stream);
+    });
+    expect(screen.getByRole("button", { name: "カメラ使用中" })).toBeDisabled();
   });
 
   it("captures and emits a file with source=camera once ready", async () => {

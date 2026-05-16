@@ -66,6 +66,10 @@ const scoreGridColumns: ScoreGridColumnDescriptor[] = [
 const gridColumns = scoreGridColumns.map((column) => column.column);
 const incidentScoreGridColumns = scoreGridColumns.filter(isIncidentScoreGridColumn);
 
+function playerSlotKey(index: number): string {
+  return fixedMembers[index]?.memberId ?? `extra-player-${index}`;
+}
+
 const baseInputClass =
   "w-full min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-2 text-sm text-[var(--color-text-primary)] transition-colors duration-150 hover:bg-[var(--color-surface-subtle)]";
 const textNumericShortClass = `${baseInputClass} min-w-[6ch] text-center tabular-nums`;
@@ -215,7 +219,7 @@ export function ScoreGrid({
           const originalRow = originalPlayers?.[rowIndex];
           const originalByOrder = originalByPlayOrder.get(player.playOrder);
           return (
-            <tr key={player.memberId} className="bg-[var(--color-surface-subtle)]">
+            <tr key={playerSlotKey(rowIndex)} className="bg-[var(--color-surface-subtle)]">
               <td className="sticky left-0 z-[var(--z-sticky)] rounded-l-[var(--radius-md)] bg-[var(--color-surface-subtle)] px-2 py-3 align-top">
                 <select
                   ref={(node) => {
@@ -422,7 +426,7 @@ export function ScoreGrid({
             const originalByOrder = originalByPlayOrder.get(player.playOrder);
             return (
               <article
-                key={player.memberId}
+                key={playerSlotKey(index)}
                 className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
               >
                 <button

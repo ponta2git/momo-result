@@ -61,7 +61,9 @@ export default defineConfig({
       },
     },
     environment: "jsdom",
+    fileParallelism: true,
     globals: true,
+    isolate: true,
     setupFiles: ["./src/test/setup.ts"],
   },
 });

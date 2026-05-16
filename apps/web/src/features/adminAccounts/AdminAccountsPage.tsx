@@ -1,21 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ShieldCheck } from "lucide-react";
-import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
-import {
-  createLoginAccount,
-  listLoginAccounts,
-  updateLoginAccount,
-} from "@/shared/api/adminAccounts";
-import type {
-  CreateLoginAccountRequest,
-  LoginAccountResponse,
-  UpdateLoginAccountRequest,
-} from "@/shared/api/adminAccounts";
-import { runIdempotentMutation } from "@/shared/api/idempotency";
-import { formatApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
-import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
+import { useAdminAccountsPageController } from "@/features/adminAccounts/useAdminAccountsPageController";
+import type { LoginAccountResponse, UpdateLoginAccountRequest } from "@/shared/api/adminAccounts";
 import { fixedMembers, memberDisplayName } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
@@ -23,67 +10,12 @@ import { Field } from "@/shared/ui/forms/Field";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
-const queryKey = ["admin", "login-accounts"] as const;
-const initialCreateAccountState = { error: "", version: 0 };
-
 const inputClass =
   "w-full rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)]";
 
 export function AdminAccountsPage() {
-  const queryClient = useQueryClient();
-  const idempotencyKeys = useIdempotencyKeyStore();
-
-  const accountsQuery = useQuery({
-    queryKey,
-    queryFn: listLoginAccounts,
-  });
-
-  const [createState, createAction] = useActionState<typeof initialCreateAccountState, FormData>(
-    async (previous, formData) => {
-      const playerMemberId = String(formData.get("playerMemberId") ?? "");
-      const request: CreateLoginAccountRequest = {
-        discordUserId: String(formData.get("discordUserId") ?? ""),
-        displayName: String(formData.get("displayName") ?? ""),
-        isAdmin: formData.get("isAdmin") === "on",
-        loginEnabled: formData.get("loginEnabled") === "on",
-        ...(playerMemberId ? { playerMemberId } : {}),
-      };
-
-      try {
-        await runIdempotentMutation(
-          idempotencyKeys,
-          "adminAccounts.createLoginAccount",
-          request,
-          (options) => createLoginAccount(request, options),
-        );
-        await queryClient.invalidateQueries({ queryKey });
-        return { error: "", version: previous.version + 1 };
-      } catch (error) {
-        return {
-          error: formatApiError(error, "ログインアカウントの作成に失敗しました"),
-          version: previous.version,
-        };
-      }
-    },
-    initialCreateAccountState,
-  );
-
-  const updateMutation = useMutation({
-    mutationFn: ({
-      accountId,
-      request,
-    }: {
-      accountId: string;
-      request: UpdateLoginAccountRequest;
-    }) => updateLoginAccount(accountId, request),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey });
-    },
-  });
-
-  const error = updateMutation.error ?? accountsQuery.error;
-  const normalizedError = error ? normalizeUnknownApiError(error) : undefined;
-  const accounts = accountsQuery.data?.items ?? [];
+  const { accounts, createAction, createState, normalizedError, updateMutation } =
+    useAdminAccountsPageController();
 
   return (
     <PageFrame className="gap-5">

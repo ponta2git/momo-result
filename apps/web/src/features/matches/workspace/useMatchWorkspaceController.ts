@@ -39,6 +39,7 @@ import {
   buildWorkspacePageCopy,
   latestHeldEventPatch,
 } from "@/features/matches/workspace/workspaceViewModel";
+import { shouldShowQueryError } from "@/shared/api/queryErrorState";
 import { isCancelableDraftStatus } from "@/shared/domain/draftStatus";
 
 export type MatchWorkspaceControllerParams = {
@@ -134,7 +135,7 @@ export function useMatchWorkspaceController({
     memberAliases: memberAliasesQuery.data?.items ?? [],
     mode,
     ocrDrafts: ocrDraftsQuery.data ?? undefined,
-    ocrDraftsError: ocrDraftsQuery.isError,
+    ocrDraftsError: shouldShowQueryError(ocrDraftsQuery),
     onInitialize: (values, workspaceInitial) => {
       dispatch({ payload: values, type: "replace" });
       setWorkspaceData(workspaceInitial);

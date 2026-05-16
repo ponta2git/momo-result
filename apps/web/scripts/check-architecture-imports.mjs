@@ -92,6 +92,8 @@ for (const file of walk(root)) {
   const sourceLayer = layer(relativePath);
   const sourceFeature = topLevelFeature(relativePath);
   const sourceMatchesSubArea = matchesSubArea(relativePath);
+  const isFeaturePage =
+    productionSource && sourceLayer === "features" && relativePath.endsWith("Page.tsx");
 
   for (const match of source.matchAll(importPattern)) {
     const specifier = match[1] ?? match[2] ?? "";
@@ -128,6 +130,18 @@ for (const file of walk(root)) {
 
     if (productionSource && resolvedImport?.startsWith("shared/api/msw/")) {
       violations.push(`${relativePath}: production code must not import ${specifier}`);
+    }
+
+    if (isFeaturePage && specifier === "@tanstack/react-query") {
+      violations.push(
+        `${relativePath}: feature Page components must keep TanStack Query in use* hooks/controllers`,
+      );
+    }
+
+    if (productionSource && sourceLayer === "features" && specifier.startsWith("@base-ui/react")) {
+      violations.push(
+        `${relativePath}: feature code must use shared/ui wrappers instead of ${specifier}`,
+      );
     }
   }
 }

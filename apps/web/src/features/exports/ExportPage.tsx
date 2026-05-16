@@ -1,32 +1,10 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
-
 import {
-  DEFAULT_EXPORT_SLOW_THRESHOLD_MS,
   DEFAULT_EXPORT_TIMEOUT_MS,
-  downloadExportMatches,
+  DEFAULT_EXPORT_SLOW_THRESHOLD_MS,
 } from "@/features/exports/exportDownload";
-import type { ExportCandidate, ExportFormat, ExportScope } from "@/features/exports/exportTypes";
-import {
-  buildExportSearchParams,
-  parseExportSearchParams,
-  selectedIdForScope,
-} from "@/features/exports/exportUrlState";
-import {
-  buildCandidateView,
-  buildExportViewModel,
-  failedResultView,
-  formatDateTime,
-} from "@/features/exports/exportViewModel";
-import type { ExportDownloadResultView } from "@/features/exports/exportViewModel";
 import { ExportWorkspace } from "@/features/exports/ExportWorkspace";
-import { listHeldEvents } from "@/shared/api/heldEvents";
-import { listSeasonMasters } from "@/shared/api/masters";
-import { listMatches } from "@/shared/api/matches";
-import { heldEventKeys, masterKeys, matchKeys } from "@/shared/api/queryKeys";
+import { useExportPageController } from "@/features/exports/useExportPageController";
 import { LiveRegion } from "@/shared/ui/feedback/LiveRegion";
-import { showToast } from "@/shared/ui/feedback/Toast";
 
 type ExportPageProps = {
   downloadTimeoutMs?: number | undefined;
@@ -37,207 +15,18 @@ export function ExportPage({
   downloadTimeoutMs = DEFAULT_EXPORT_TIMEOUT_MS,
   slowThresholdMs = DEFAULT_EXPORT_SLOW_THRESHOLD_MS,
 }: ExportPageProps) {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const urlState = parseExportSearchParams(searchParams);
-  const [lastResult, setLastResult] = useState<ExportDownloadResultView | undefined>();
-  const [downloadStartedAt, setDownloadStartedAt] = useState<number | null>(null);
-  const [elapsedMs, setElapsedMs] = useState(0);
-
-  const seasonsQuery = useQuery({
-    queryFn: () => listSeasonMasters(),
-    queryKey: masterKeys.seasonMasters.list("exports"),
-  });
-  const heldEventsQuery = useQuery({
-    queryFn: () => listHeldEvents("", 100),
-    queryKey: heldEventKeys.scope("exports"),
-  });
-  const matchesQuery = useQuery({
-    queryFn: () => listMatches({ kind: "match", limit: 100, status: "confirmed" }),
-    queryKey: matchKeys.exports({ kind: "match", status: "confirmed" }),
-  });
-
-  const seasonCandidates = useMemo<ExportCandidate[]>(
-    () =>
-      (seasonsQuery.data?.items ?? []).map((season) => ({
-        label: season.name,
-        value: season.id,
-      })),
-    [seasonsQuery.data],
-  );
-  const heldEventCandidates = useMemo<ExportCandidate[]>(
-    () =>
-      (heldEventsQuery.data?.items ?? []).map((event) => ({
-        description: `${event.matchCount}試合`,
-        label: formatDateTime(event.heldAt),
-        value: event.id,
-      })),
-    [heldEventsQuery.data],
-  );
-  const matchCandidates = useMemo<ExportCandidate[]>(() => {
-    const heldEventsById = new Map(
-      (heldEventsQuery.data?.items ?? []).map((event) => [event.id, event]),
-    );
-    const seasonsById = new Map(
-      (seasonsQuery.data?.items ?? []).map((season) => [season.id, season]),
-    );
-    return (matchesQuery.data?.items ?? [])
-      .filter((match) => match.kind === "match" && match.status === "confirmed" && match.matchId)
-      .map((match) => {
-        const heldAt = match.heldEventId
-          ? heldEventsById.get(match.heldEventId)?.heldAt
-          : undefined;
-        return {
-          description: seasonsById.get(match.seasonMasterId ?? "")?.name ?? "シーズン未設定",
-          label: `${heldAt ? formatDateTime(heldAt) : "開催未設定"} / 第${match.matchNoInEvent ?? "-"}試合`,
-          value: match.matchId ?? "",
-        };
-      });
-  }, [heldEventsQuery.data, matchesQuery.data, seasonsQuery.data]);
-
-  const candidates =
-    urlState.scope === "season"
-      ? seasonCandidates
-      : urlState.scope === "heldEvent"
-        ? heldEventCandidates
-        : urlState.scope === "match"
-          ? matchCandidates
-          : [];
-  const candidateLoading =
-    urlState.scope === "season"
-      ? seasonsQuery.isLoading
-      : urlState.scope === "heldEvent"
-        ? heldEventsQuery.isLoading
-        : urlState.scope === "match"
-          ? seasonsQuery.isLoading || heldEventsQuery.isLoading || matchesQuery.isLoading
-          : false;
-  const candidateError =
-    urlState.scope === "season"
-      ? seasonsQuery.isError
-      : urlState.scope === "heldEvent"
-        ? heldEventsQuery.isError
-        : urlState.scope === "match"
-          ? seasonsQuery.isError || heldEventsQuery.isError || matchesQuery.isError
-          : false;
-
-  const candidateView = buildCandidateView({
-    candidates,
-    error: candidateError,
-    loading: candidateLoading,
-    scope: urlState.scope,
-    selectedId: selectedIdForScope(urlState, urlState.scope),
-  });
-
-  useEffect(() => {
-    if (
-      urlState.errors.length === 0 &&
-      urlState.scope !== "all" &&
-      !selectedIdForScope(urlState, urlState.scope) &&
-      candidateView.kind === "ready" &&
-      candidateView.selectedId
-    ) {
-      setSearchParams(
-        buildExportSearchParams({
-          format: urlState.format,
-          scope: urlState.scope,
-          selectedId: candidateView.selectedId,
-        }),
-        { replace: true },
-      );
-    }
-  }, [candidateView, setSearchParams, urlState]);
-
-  useEffect(() => {
-    if (downloadStartedAt === null) {
-      setElapsedMs(0);
-      return;
-    }
-    const intervalId = window.setInterval(() => {
-      setElapsedMs(Date.now() - downloadStartedAt);
-    }, 250);
-    return () => window.clearInterval(intervalId);
-  }, [downloadStartedAt]);
-
-  const mutation = useMutation({
-    mutationFn: () => {
-      setDownloadStartedAt(Date.now());
-      setElapsedMs(0);
-      setLastResult(undefined);
-      return downloadExportMatches(
-        {
-          format: urlState.format,
-          scope: urlState.scope,
-          heldEventId: urlState.heldEventId,
-          matchId: urlState.matchId,
-          seasonMasterId: urlState.seasonMasterId,
-        },
-        { timeoutMs: downloadTimeoutMs },
-      );
-    },
-    onSettled: () => setDownloadStartedAt(null),
-    onSuccess: (outcome) => {
-      if (outcome.kind === "download_started") {
-        setLastResult({
-          fileName: outcome.fileName,
-          format: outcome.format,
-          kind: "success",
-          startedAt: outcome.startedAt,
-        });
-        showToast({
-          description: outcome.fileName,
-          title: "ダウンロードを開始しました",
-          tone: "success",
-        });
-        return;
-      }
-      if (outcome.kind === "timeout") {
-        setLastResult({
-          detail: outcome.detail,
-          kind: "timeout",
-          title: outcome.title,
-        });
-        showToast({ title: outcome.title, tone: "warning" });
-        return;
-      }
-      const failed = failedResultView(outcome.error);
-      setLastResult(failed);
-      showToast({
-        description: failed.detail,
-        title: failed.title,
-        tone: "danger",
-      });
-    },
-  });
-
-  const view = buildExportViewModel({
-    candidate: candidateView,
-    elapsedMs,
-    isPending: mutation.isPending,
-    lastResult,
-    slowThresholdMs,
-    urlState,
-  });
-
-  function updateSearch(format: ExportFormat, scope: ExportScope, selectedId?: string): void {
-    setLastResult(undefined);
-    setSearchParams(buildExportSearchParams({ format, scope, selectedId }), { replace: true });
-  }
-
-  const liveMessage = lastResult?.kind === "success" ? "ダウンロードを開始しました" : "";
+  const controller = useExportPageController({ downloadTimeoutMs, slowThresholdMs });
 
   return (
     <>
-      <LiveRegion message={liveMessage} />
+      <LiveRegion message={controller.liveMessage} />
       <ExportWorkspace
-        isPending={mutation.isPending}
-        view={view}
-        onCandidateChange={(selectedId) =>
-          updateSearch(urlState.format, urlState.scope, selectedId)
-        }
-        onDownload={() => mutation.mutate()}
-        onFormatChange={(nextFormat) =>
-          updateSearch(nextFormat, urlState.scope, selectedIdForScope(urlState, urlState.scope))
-        }
-        onScopeChange={(nextScope) => updateSearch(urlState.format, nextScope)}
+        isPending={controller.isPending}
+        view={controller.view}
+        onCandidateChange={controller.onCandidateChange}
+        onDownload={controller.onDownload}
+        onFormatChange={controller.onFormatChange}
+        onScopeChange={controller.onScopeChange}
       />
     </>
   );

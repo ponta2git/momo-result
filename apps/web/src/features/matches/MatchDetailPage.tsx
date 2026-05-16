@@ -1,16 +1,11 @@
-import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 
-import { invalidateAfterMatchDeleted } from "@/shared/api/cacheInvalidation";
-import { listHeldEvents } from "@/shared/api/heldEvents";
-import { runIdempotentMutation } from "@/shared/api/idempotency";
-import { listGameTitles, listMapMasters, listSeasonMasters } from "@/shared/api/masters";
-import { deleteMatch, getMatch } from "@/shared/api/matches";
-import type { MatchDetailResponse } from "@/shared/api/matches";
-import { formatApiError } from "@/shared/api/problemDetails";
-import { heldEventKeys, masterKeys, matchKeys } from "@/shared/api/queryKeys";
-import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
+import {
+  formatMatchDetailDate,
+  formatMatchDetailDateOnly,
+} from "@/features/matches/matchDetailViewModel";
+import type { MatchDetailPlayerResult } from "@/features/matches/matchDetailViewModel";
+import { useMatchDetailPageController } from "@/features/matches/useMatchDetailPageController";
 import { incidentColumns } from "@/shared/domain/incidents";
 import { memberDisplayName } from "@/shared/domain/members";
 import { formatManYen } from "@/shared/lib/formatters";
@@ -22,138 +17,28 @@ import { Card } from "@/shared/ui/layout/Card";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
-type PlayerResult = NonNullable<MatchDetailResponse["players"]>[number];
-type SortKey =
-  | "cardShop"
-  | "cardStation"
-  | "destination"
-  | "member"
-  | "minusStation"
-  | "playOrder"
-  | "plusStation"
-  | "rank"
-  | "revenueManYen"
-  | "suriNoGinji"
-  | "totalAssetsManYen";
-type SortState = {
-  direction: "asc" | "desc";
-  key: SortKey;
-};
-
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mi = String(d.getMinutes()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
-}
-
-function formatDateOnly(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-function sortValue(player: PlayerResult, key: SortKey): number | string {
-  if (key === "member") return memberDisplayName(player.memberId);
-  if (key in player.incidents) return player.incidents[key as keyof PlayerResult["incidents"]];
-  return player[
-    key as keyof Pick<PlayerResult, "playOrder" | "rank" | "revenueManYen" | "totalAssetsManYen">
-  ];
-}
-
-function nextSort(current: SortState, key: SortKey): SortState {
-  if (current.key === key) {
-    return { key, direction: current.direction === "asc" ? "desc" : "asc" };
-  }
-  return { key, direction: "asc" };
-}
-
 export function MatchDetailPage() {
-  const { matchId = "" } = useParams<{ matchId: string }>();
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const idempotencyKeys = useIdempotencyKeyStore();
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [sort, setSort] = useState<SortState>({ key: "playOrder", direction: "asc" });
-
-  const matchQuery = useSuspenseQuery({
-    queryFn: () => getMatch(matchId),
-    queryKey: matchKeys.detail(matchId),
-  });
-
-  const heldEventsQuery = useSuspenseQuery({
-    queryFn: () => listHeldEvents("", 100),
-    queryKey: heldEventKeys.scope("all"),
-  });
-  const gameTitlesQuery = useSuspenseQuery({
-    queryFn: () => listGameTitles(),
-    queryKey: masterKeys.gameTitles.list("match-detail"),
-  });
-  const seasonsQuery = useSuspenseQuery({
-    queryFn: () => listSeasonMasters(),
-    queryKey: masterKeys.seasonMasters.list("match-detail"),
-  });
-  const mapsQuery = useSuspenseQuery({
-    queryFn: () => listMapMasters(),
-    queryKey: masterKeys.mapMasters.list("match-detail"),
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: async () => {
-      const payload = { matchId };
-      return runIdempotentMutation(idempotencyKeys, "matchDetail.deleteMatch", payload, (options) =>
-        deleteMatch(matchId, options),
-      );
-    },
-    onError: (error) => {
-      setErrorMessage(formatApiError(error, "削除に失敗しました"));
-    },
-    onSuccess: async () => {
-      await invalidateAfterMatchDeleted(queryClient);
-      navigate("/matches", { replace: true });
-    },
-  });
-
-  const match = matchQuery.data;
-  const heldEvent = (heldEventsQuery.data?.items ?? []).find(
-    (event) => event.id === match.heldEventId,
-  );
-  const gameTitle = (gameTitlesQuery.data?.items ?? []).find(
-    (item) => item.id === match.gameTitleId,
-  );
-  const season = (seasonsQuery.data?.items ?? []).find((item) => item.id === match.seasonMasterId);
-  const map = (mapsQuery.data?.items ?? []).find((item) => item.id === match.mapMasterId);
-  const heldAt = heldEvent?.heldAt ?? match.playedAt;
-  const players = useMemo(() => {
-    return (match.players ?? []).toSorted((left, right) => {
-      const leftValue = sortValue(left, sort.key);
-      const rightValue = sortValue(right, sort.key);
-      const direction = sort.direction === "asc" ? 1 : -1;
-
-      if (typeof leftValue === "string" || typeof rightValue === "string") {
-        return String(leftValue).localeCompare(String(rightValue), "ja-JP") * direction;
-      }
-
-      return (leftValue - rightValue) * direction;
-    });
-  }, [match.players, sort]);
-  const rankedPlayers = useMemo(
-    () => (match.players ?? []).toSorted((left, right) => left.rank - right.rank),
-    [match.players],
-  );
+  const {
+    confirmDelete,
+    errorMessage,
+    gameTitle,
+    heldAt,
+    isDeletePending,
+    map,
+    match,
+    players,
+    rankedPlayers,
+    season,
+    setShowConfirm,
+    setSortKey,
+    showConfirm,
+    sort,
+  } = useMatchDetailPageController();
 
   return (
     <PageFrame className="gap-5" width="wide">
       <PageHeader
-        description={`${formatDate(heldAt)} 開催 / ${gameTitle?.name ?? "作品未設定"} / ${
+        description={`${formatMatchDetailDate(heldAt)} 開催 / ${gameTitle?.name ?? "作品未設定"} / ${
           map?.name ?? "マップ未設定"
         }`}
         eyebrow="試合記録"
@@ -168,8 +53,8 @@ export function MatchDetailPage() {
             </Link>
             <AlertDialog
               cancelLabel="キャンセル"
-              confirmLabel={deleteMutation.isPending ? "削除中…" : "削除する"}
-              pending={deleteMutation.isPending}
+              confirmLabel={isDeletePending ? "削除中…" : "削除する"}
+              pending={isDeletePending}
               description={`第${match.matchNoInEvent}試合を完全に削除します。この操作は取り消せません。`}
               open={showConfirm}
               title="試合を削除しますか？"
@@ -179,8 +64,7 @@ export function MatchDetailPage() {
                 </Button>
               }
               onConfirm={async () => {
-                setErrorMessage(null);
-                await deleteMutation.mutateAsync();
+                await confirmDelete();
               }}
               onOpenChange={setShowConfirm}
             />
@@ -199,7 +83,7 @@ export function MatchDetailPage() {
           <div className="border-b border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-5 lg:border-r lg:border-b-0">
             <p className="text-xs font-semibold text-[var(--color-text-secondary)]">開催</p>
             <p className="mt-1 text-2xl font-semibold text-balance text-[var(--color-text-primary)]">
-              {formatDateOnly(heldAt)}
+              {formatMatchDetailDateOnly(heldAt)}
             </p>
             <p className="mt-3 inline-flex rounded-full border border-[var(--color-action)]/45 bg-[var(--color-action)]/10 px-3 py-1 text-sm font-semibold text-[var(--color-text-primary)]">
               第{match.matchNoInEvent}試合
@@ -224,11 +108,11 @@ export function MatchDetailPage() {
             </div>
             <div>
               <dt className="text-xs font-semibold text-[var(--color-text-secondary)]">対戦日時</dt>
-              <dd className="mt-1 tabular-nums">{formatDate(match.playedAt)}</dd>
+              <dd className="mt-1 tabular-nums">{formatMatchDetailDate(match.playedAt)}</dd>
             </div>
             <div>
               <dt className="text-xs font-semibold text-[var(--color-text-secondary)]">確定日時</dt>
-              <dd className="mt-1 tabular-nums">{formatDate(match.createdAt)}</dd>
+              <dd className="mt-1 tabular-nums">{formatMatchDetailDate(match.createdAt)}</dd>
             </div>
           </dl>
         </div>
@@ -292,7 +176,7 @@ export function MatchDetailPage() {
               header: "プレー順",
               key: "playOrder",
               minWidth: "6rem",
-              onSort: () => setSort((current) => nextSort(current, "playOrder")),
+              onSort: () => setSortKey("playOrder"),
               renderCell: (player) => player.playOrder,
               sortDirection: sort.key === "playOrder" ? sort.direction : undefined,
               sortable: true,
@@ -301,7 +185,7 @@ export function MatchDetailPage() {
               header: "プレーヤー",
               key: "member",
               minWidth: "10rem",
-              onSort: () => setSort((current) => nextSort(current, "member")),
+              onSort: () => setSortKey("member"),
               renderCell: (player) => memberDisplayName(player.memberId),
               sortDirection: sort.key === "member" ? sort.direction : undefined,
               sortable: true,
@@ -311,7 +195,7 @@ export function MatchDetailPage() {
               header: "順位",
               key: "rank",
               minWidth: "5rem",
-              onSort: () => setSort((current) => nextSort(current, "rank")),
+              onSort: () => setSortKey("rank"),
               renderCell: (player) => player.rank,
               sortDirection: sort.key === "rank" ? sort.direction : undefined,
               sortable: true,
@@ -321,7 +205,7 @@ export function MatchDetailPage() {
               header: "総資産",
               key: "totalAssetsManYen",
               minWidth: "9rem",
-              onSort: () => setSort((current) => nextSort(current, "totalAssetsManYen")),
+              onSort: () => setSortKey("totalAssetsManYen"),
               renderCell: (player) => (
                 <span className="tabular-nums">{formatManYen(player.totalAssetsManYen)}</span>
               ),
@@ -333,7 +217,7 @@ export function MatchDetailPage() {
               header: "収益",
               key: "revenueManYen",
               minWidth: "9rem",
-              onSort: () => setSort((current) => nextSort(current, "revenueManYen")),
+              onSort: () => setSortKey("revenueManYen"),
               renderCell: (player) => (
                 <span className="tabular-nums">{formatManYen(player.revenueManYen)}</span>
               ),
@@ -345,8 +229,8 @@ export function MatchDetailPage() {
               header: label,
               key,
               minWidth: "6rem",
-              onSort: () => setSort((current) => nextSort(current, key)),
-              renderCell: (player: PlayerResult) => (
+              onSort: () => setSortKey(key),
+              renderCell: (player: MatchDetailPlayerResult) => (
                 <span className="tabular-nums">{player.incidents[key]}</span>
               ),
               sortDirection: sort.key === key ? sort.direction : undefined,

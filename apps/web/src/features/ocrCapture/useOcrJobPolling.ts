@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { getOcrJob } from "@/features/ocrCapture/api";
+import { ocrJobKeys } from "@/features/ocrCapture/queryKeys";
 import { isTerminalJobStatus } from "@/shared/api/enums";
-import { ocrJobKeys } from "@/shared/api/queryKeys";
 
 export const maxPollAttempts = 15;
 export const pollIntervalMs = 2_000;

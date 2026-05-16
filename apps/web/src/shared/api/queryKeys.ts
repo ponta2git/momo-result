@@ -15,11 +15,6 @@ export const ocrDraftKeys = {
   bulk: (draftIdsKey: string) => ["ocr-drafts-bulk", draftIdsKey] as const,
 };
 
-export const ocrJobKeys = {
-  all: () => ["ocr-job"] as const,
-  detail: (jobId: string | undefined) => ["ocr-job", jobId] as const,
-};
-
 export const masterKeys = {
   all: () => ["masters"] as const,
   gameTitles: {

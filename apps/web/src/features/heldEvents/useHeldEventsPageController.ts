@@ -7,14 +7,9 @@ import {
   formatDateTime,
   toIsoFromLocal,
 } from "@/features/heldEvents/heldEventViewModel";
-import {
-  createHeldEvent,
-  deleteHeldEvent,
-  listHeldEvents,
-  removeHeldEventFromList,
-  upsertHeldEventList,
-} from "@/shared/api/heldEvents";
-import type { HeldEventListResponse, HeldEventResponse } from "@/shared/api/heldEvents";
+import { syncHeldEventCreatedCache, syncHeldEventDeletedCache } from "@/shared/api/heldEventCache";
+import { createHeldEvent, deleteHeldEvent, listHeldEvents } from "@/shared/api/heldEvents";
+import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { formatApiError } from "@/shared/api/problemDetails";
 import { isInitialQueryLoading, shouldShowBlockingQueryError } from "@/shared/api/queryErrorState";
@@ -54,11 +49,7 @@ export function useHeldEventsPageController() {
           request,
           (options) => createHeldEvent(request, options),
         );
-        queryClient.setQueryData<HeldEventListResponse>(
-          heldEventKeys.scope("held-events-page"),
-          (current) => upsertHeldEventList(current, event),
-        );
-        void queryClient.invalidateQueries({ queryKey: heldEventKeys.all() });
+        await syncHeldEventCreatedCache(queryClient, "held-events-page", event);
         setHeldAtDraft(currentLocalIsoMinute());
         setErrorMessage("");
         setNotice(`開催履歴（${formatDateTime(event.heldAt)}）を作成しました。`);
@@ -75,12 +66,8 @@ export function useHeldEventsPageController() {
 
   const deleteMutation = useMutation({
     mutationFn: (event: HeldEventResponse) => deleteHeldEvent(event.id),
-    onSuccess: (response) => {
-      queryClient.setQueryData<HeldEventListResponse>(
-        heldEventKeys.scope("held-events-page"),
-        (current) => removeHeldEventFromList(current, response.heldEventId),
-      );
-      void queryClient.invalidateQueries({ queryKey: heldEventKeys.all() });
+    onSuccess: async (response) => {
+      await syncHeldEventDeletedCache(queryClient, "held-events-page", response.heldEventId);
       setDeleteTarget(null);
       setErrorMessage("");
       setNotice("開催履歴を削除しました。");

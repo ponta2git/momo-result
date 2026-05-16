@@ -7,30 +7,6 @@ export type HeldEventListResponse = components["schemas"]["HeldEventListResponse
 export type CreateHeldEventRequest = components["schemas"]["CreateHeldEventRequest"];
 export type DeleteHeldEventResponse = components["schemas"]["DeleteHeldEventResponse"];
 
-export function upsertHeldEventList(
-  current: HeldEventListResponse | undefined,
-  event: HeldEventResponse,
-): HeldEventListResponse {
-  const existingItems = current?.items ?? [];
-  const withoutDuplicate = existingItems.filter((item) => item.id !== event.id);
-  return {
-    items: [event, ...withoutDuplicate].toSorted(
-      (left, right) =>
-        new Date(right.heldAt).getTime() - new Date(left.heldAt).getTime() ||
-        right.id.localeCompare(left.id),
-    ),
-  };
-}
-
-export function removeHeldEventFromList(
-  current: HeldEventListResponse | undefined,
-  heldEventId: string,
-): HeldEventListResponse {
-  return {
-    items: (current?.items ?? []).filter((item) => item.id !== heldEventId),
-  };
-}
-
 export async function listHeldEvents(query = "", limit = 10): Promise<HeldEventListResponse> {
   const params = new URLSearchParams({ limit: String(limit) });
   if (query.trim()) {

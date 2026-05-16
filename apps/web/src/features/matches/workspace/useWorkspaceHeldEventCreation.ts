@@ -1,10 +1,10 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { createHeldEvent, upsertHeldEventList } from "@/shared/api/heldEvents";
-import type { HeldEventListResponse, HeldEventResponse } from "@/shared/api/heldEvents";
+import { syncHeldEventCreatedCache } from "@/shared/api/heldEventCache";
+import { createHeldEvent } from "@/shared/api/heldEvents";
+import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { formatApiError } from "@/shared/api/problemDetails";
-import { heldEventKeys } from "@/shared/api/queryKeys";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 
 export function useWorkspaceHeldEventCreation(args: {
@@ -24,11 +24,8 @@ export function useWorkspaceHeldEventCreation(args: {
         (options) => createHeldEvent(request, options),
       );
     },
-    onSuccess: (event) => {
-      queryClient.setQueryData<HeldEventListResponse>(heldEventKeys.scope("workspace"), (current) =>
-        upsertHeldEventList(current, event),
-      );
-      void queryClient.invalidateQueries({ queryKey: heldEventKeys.all() });
+    onSuccess: async (event) => {
+      await syncHeldEventCreatedCache(queryClient, "workspace", event);
       args.onSelectCreatedEvent(event);
       args.onSuccessNotice(
         `開催履歴（${new Date(event.heldAt).toLocaleString()}）を作成して選択しました。`,

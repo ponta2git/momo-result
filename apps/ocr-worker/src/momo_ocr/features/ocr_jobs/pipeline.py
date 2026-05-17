@@ -61,7 +61,7 @@ def run_pipeline(deps: JobRunnerDependencies, delivery: PulledJob) -> OcrJobStat
 def _phase_lookup_record(deps: JobRunnerDependencies, delivery: PulledJob) -> OcrJobStatus | None:
     """Look up the canonical job record; return a terminal status if not runnable."""
     message = delivery.message
-    record = deps.repository.get_for_update(message.job_id)
+    record = deps.repository.get_record(message.job_id)
     if record is None:
         # The DB is the source of truth; an unknown job_id means the job
         # was never persisted (or was hard-deleted). Ack the delivery so

@@ -19,7 +19,7 @@ def test_postgres_repository_transitions_job_lifecycle() -> None:
         with ConnectionPool(conninfo, min_size=1, max_size=2, open=True) as pool:
             repository = PostgresOcrJobRepository(pool)
 
-            record = repository.get_for_update("job-1")
+            record = repository.get_record("job-1")
             assert record is not None
             assert record.status is OcrJobStatus.QUEUED
 

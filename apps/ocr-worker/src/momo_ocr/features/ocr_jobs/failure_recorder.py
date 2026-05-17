@@ -47,7 +47,7 @@ def _read_record_for_failure(
     failure: OcrFailure,
 ) -> tuple[bool, OcrJobRecord | None]:
     try:
-        return True, deps.repository.get_for_update(job_id)
+        return True, deps.repository.get_record(job_id)
     except Exception:
         logger.exception(
             "Failed to read OCR job before terminal-failure recording",

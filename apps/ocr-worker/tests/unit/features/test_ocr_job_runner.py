@@ -326,7 +326,7 @@ class _FailingTerminalRepository(InMemoryOcrJobRepository):
 
 
 class _AdminShutdownRepository(InMemoryOcrJobRepository):
-    def get_for_update(self, job_id: str) -> OcrJobRecord | None:
+    def get_record(self, job_id: str) -> OcrJobRecord | None:
         del job_id
         message = "terminating connection due to administrator command"
         raise psycopg.errors.AdminShutdown(message)

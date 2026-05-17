@@ -20,7 +20,7 @@ from momo_ocr.features.ocr_jobs.models import (
 from momo_ocr.features.ocr_jobs.result_writer import OcrResultRecord, persist_result_record
 from momo_ocr.shared.errors import FailureCode, OcrError, OcrFailure
 
-_SELECT_JOB_FOR_UPDATE = """
+_SELECT_JOB = """
     SELECT
       id, draft_id, image_id, image_path,
       requested_screen_type, detected_screen_type,
@@ -28,12 +28,11 @@ _SELECT_JOB_FOR_UPDATE = """
       failure_code, failure_message, failure_retryable, failure_user_action
     FROM ocr_jobs
     WHERE id = %s
-    FOR UPDATE
 """
 
 
 class OcrJobRepository(Protocol):
-    def get_for_update(self, job_id: str) -> OcrJobRecord | None:
+    def get_record(self, job_id: str) -> OcrJobRecord | None:
         raise NotImplementedError
 
     def transition_to_running(self, job_id: str, *, worker_id: str) -> None:
@@ -75,7 +74,7 @@ class InMemoryOcrJobRepository:
         with self._lock:
             self.records[record.job_id] = record
 
-    def get_for_update(self, job_id: str) -> OcrJobRecord | None:
+    def get_record(self, job_id: str) -> OcrJobRecord | None:
         with self._lock:
             return self.records.get(job_id)
 
@@ -163,10 +162,10 @@ class PostgresOcrJobRepository:
     def __init__(self, pool: ConnectionPool) -> None:
         self._pool = pool
 
-    def get_for_update(self, job_id: str) -> OcrJobRecord | None:
-        with self._pool.connection() as conn, conn.transaction():
+    def get_record(self, job_id: str) -> OcrJobRecord | None:
+        with self._pool.connection() as conn:
             row = conn.execute(
-                _SELECT_JOB_FOR_UPDATE,
+                _SELECT_JOB,
                 (job_id,),
             ).fetchone()
             return _row_to_record(row)

@@ -6,7 +6,9 @@ import cats.effect.IO
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.domain.ids.*
-import momo.api.domain.{MatchDraft, MatchDraftStatus, MatchListItemKind}
+import momo.api.domain.{
+  MatchDraft, MatchDraftStatus, MatchListItemKind, MatchListKindFilter, MatchListStatusFilter,
+}
 import momo.api.repositories.MatchListReadModel
 import momo.api.usecases.testing.MatchFixtures
 
@@ -37,14 +39,14 @@ final class InMemoryMatchListReadModelSpec extends MomoCatsEffectSuite:
       ))
       _ <- drafts.create(draft(MatchDraftId.unsafeFromString("draft-read-model")))
       model = InMemoryMatchListReadModel[IO](matches, drafts)
-      ocrRunning <- model.list(MatchListReadModel.Filter(
-        kind = MatchListReadModel.KindFilter.All,
-        status = MatchListReadModel.StatusFilter.OcrRunning,
-      ))
-      confirmed <- model.list(MatchListReadModel.Filter(
-        kind = MatchListReadModel.KindFilter.All,
-        status = MatchListReadModel.StatusFilter.Confirmed,
-      ))
+      ocrRunning <- model.list(
+        MatchListReadModel
+          .Filter(kind = MatchListKindFilter.All, status = MatchListStatusFilter.OcrRunning)
+      )
+      confirmed <- model.list(
+        MatchListReadModel
+          .Filter(kind = MatchListKindFilter.All, status = MatchListStatusFilter.Confirmed)
+      )
     yield
       assertEquals(ocrRunning.map(_.kind), List(MatchListItemKind.MatchDraft))
       assertEquals(confirmed.map(_.kind), List(MatchListItemKind.Match))

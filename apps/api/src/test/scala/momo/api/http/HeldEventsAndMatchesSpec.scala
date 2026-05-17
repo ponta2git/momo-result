@@ -178,6 +178,17 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
     }
   }
 
+  app.test("GET /api/matches rejects unknown list filters at the HTTP boundary") { httpApp =>
+    for
+      statusRes <- httpApp
+        .run(Request[IO](Method.GET, uri"/api/matches?status=unknown").putHeaders(devReadHeader()))
+      _ <- assertProblem(statusRes, Status.UnprocessableContent, "VALIDATION_FAILED", "status")
+      kindRes <- httpApp
+        .run(Request[IO](Method.GET, uri"/api/matches?kind=unknown").putHeaders(devReadHeader()))
+      _ <- assertProblem(kindRes, Status.UnprocessableContent, "VALIDATION_FAILED", "kind")
+    yield ()
+  }
+
   app.test("POST /api/matches rejects invalid playedAt at the HTTP boundary") { httpApp =>
     for
       id <- createEvent(httpApp)

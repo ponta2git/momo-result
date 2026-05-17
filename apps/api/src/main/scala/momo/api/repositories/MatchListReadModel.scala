@@ -4,7 +4,7 @@ import cats.~>
 import doobie.ConnectionIO
 
 import momo.api.domain.ids.{GameTitleId, HeldEventId, SeasonMasterId}
-import momo.api.domain.{MatchDraftStatus, MatchListItem}
+import momo.api.domain.{MatchListItem, MatchListKindFilter, MatchListStatusFilter}
 
 trait MatchListAlg[F0[_]]:
   def list(filter: MatchListReadModel.Filter): F0[List[MatchListItem]]
@@ -13,33 +13,13 @@ trait MatchListReadModel[F[_]]:
   def list(filter: MatchListReadModel.Filter): F[List[MatchListItem]]
 
 object MatchListReadModel:
-  enum StatusFilter derives CanEqual:
-    case All
-    case Incomplete
-    case OcrRunning
-    case PreConfirm
-    case NeedsReview
-    case Confirmed
-
-  enum KindFilter derives CanEqual:
-    case All
-    case Match
-    case MatchDraft
-
   final case class Filter(
       heldEventId: Option[HeldEventId] = None,
       gameTitleId: Option[GameTitleId] = None,
       seasonMasterId: Option[SeasonMasterId] = None,
-      status: StatusFilter = StatusFilter.All,
-      kind: KindFilter = KindFilter.All,
+      status: MatchListStatusFilter = MatchListStatusFilter.All,
+      kind: MatchListKindFilter = MatchListKindFilter.All,
       limit: Option[Int] = None,
-  )
-
-  val IncompleteStatuses: Set[MatchDraftStatus] = Set(
-    MatchDraftStatus.OcrRunning,
-    MatchDraftStatus.OcrFailed,
-    MatchDraftStatus.DraftReady,
-    MatchDraftStatus.NeedsReview,
   )
 
   def fromConnectionIO[F[_]](

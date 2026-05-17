@@ -137,12 +137,11 @@ final class PostgresMatchListReadModelSpec extends IntegrationSuite:
         MatchDraftStatus.Cancelled,
         Instant.parse("2026-04-30T03:00:00Z"),
       ))
-      confirmed <- matchList.list(MatchListReadModel.Filter(
-        kind = MatchListReadModel.KindFilter.Match,
-        status = MatchListReadModel.StatusFilter.Confirmed,
-      ))
-      draftsOnly <- matchList
-        .list(MatchListReadModel.Filter(kind = MatchListReadModel.KindFilter.MatchDraft))
+      confirmed <- matchList.list(
+        MatchListReadModel
+          .Filter(kind = MatchListKindFilter.Match, status = MatchListStatusFilter.Confirmed)
+      )
+      draftsOnly <- matchList.list(MatchListReadModel.Filter(kind = MatchListKindFilter.MatchDraft))
     yield
       assertEquals(confirmed.map(_.id), List("match_confirmed"))
       assertEquals(draftsOnly.map(_.id), List("draft_ready"))

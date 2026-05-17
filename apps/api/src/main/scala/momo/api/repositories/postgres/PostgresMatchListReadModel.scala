@@ -13,8 +13,8 @@ import doobie.util.fragments
 import momo.api.db.Database
 import momo.api.domain.ids.*
 import momo.api.domain.{
-  MatchDraftStatus, MatchListItem, MatchListItemKind, MatchListRankEntry, MatchNoInEvent, PlayOrder,
-  Rank,
+  MatchDraftStatus, MatchListItem, MatchListItemKind, MatchListKindFilter, MatchListRankEntry,
+  MatchListStatusFilter, MatchNoInEvent, PlayOrder, Rank,
 }
 import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.repositories.{MatchListAlg, MatchListReadModel}
@@ -177,12 +177,12 @@ object PostgresMatchList:
         Some(fr"d.persisted_status <> ${MatchDraftStatus.Confirmed}"),
       ).flatten
       val draftStatusCondition = filter.status match
-        case MatchListReadModel.StatusFilter.All => None
-        case MatchListReadModel.StatusFilter.Incomplete =>
-          Some(statusIn("d.computed_status", MatchListReadModel.IncompleteStatuses))
-        case MatchListReadModel.StatusFilter.OcrRunning =>
+        case MatchListStatusFilter.All => None
+        case MatchListStatusFilter.Incomplete =>
+          Some(statusIn("d.computed_status", MatchListStatusFilter.incompleteStatuses))
+        case MatchListStatusFilter.OcrRunning =>
           Some(fr"d.computed_status = ${MatchDraftStatus.OcrRunning}")
-        case MatchListReadModel.StatusFilter.PreConfirm => Some(statusIn(
+        case MatchListStatusFilter.PreConfirm => Some(statusIn(
             "d.computed_status",
             Set(
               MatchDraftStatus.OcrFailed,
@@ -190,23 +190,21 @@ object PostgresMatchList:
               MatchDraftStatus.NeedsReview,
             ),
           ))
-        case MatchListReadModel.StatusFilter.NeedsReview =>
+        case MatchListStatusFilter.NeedsReview =>
           Some(fr"d.computed_status = ${MatchDraftStatus.NeedsReview}")
-        case MatchListReadModel.StatusFilter.Confirmed => Some(fr"FALSE")
+        case MatchListStatusFilter.Confirmed => Some(fr"FALSE")
       val draftSelect = draftBase ++
         fragments.whereAndOpt(draftConditionsCommon ++ draftStatusCondition.toList)
 
       val includeMatches = filter.kind match
-        case MatchListReadModel.KindFilter.Match => true
-        case MatchListReadModel.KindFilter.MatchDraft => false
-        case MatchListReadModel.KindFilter.All =>
-          filter.status == MatchListReadModel.StatusFilter.All ||
-          filter.status == MatchListReadModel.StatusFilter.Confirmed
+        case MatchListKindFilter.Match => true
+        case MatchListKindFilter.MatchDraft => false
+        case MatchListKindFilter.All => filter.status == MatchListStatusFilter.All ||
+          filter.status == MatchListStatusFilter.Confirmed
       val includeDrafts = filter.kind match
-        case MatchListReadModel.KindFilter.Match => false
-        case MatchListReadModel.KindFilter.MatchDraft => true
-        case MatchListReadModel.KindFilter.All => filter.status !=
-            MatchListReadModel.StatusFilter.Confirmed
+        case MatchListKindFilter.Match => false
+        case MatchListKindFilter.MatchDraft => true
+        case MatchListKindFilter.All => filter.status != MatchListStatusFilter.Confirmed
 
       val unionSelect = (includeMatches, includeDrafts) match
         case (true, true) => Some(confirmedSelect ++ fr"UNION ALL" ++ draftSelect)

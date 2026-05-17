@@ -6,7 +6,8 @@ import io.circe.parser.parse
 
 import momo.api.domain.{
   MatchDraft, MatchDraftOcrSlot, MatchDraftOcrStatus, MatchDraftStatus, MatchListItem,
-  MatchListItemKind, MatchListRankEntry, OcrDraft, OcrJobStatus,
+  MatchListItemKind, MatchListKindFilter, MatchListRankEntry, MatchListStatusFilter, OcrDraft,
+  OcrJobStatus,
 }
 import momo.api.repositories.{
   MatchDraftsRepository, MatchListReadModel, MatchesRepository, OcrDraftsRepository,
@@ -81,16 +82,14 @@ final class InMemoryMatchListReadModel[F[_]: Monad](
       }
 
       val includeMatches = filter.kind match
-        case MatchListReadModel.KindFilter.Match => true
-        case MatchListReadModel.KindFilter.MatchDraft => false
-        case MatchListReadModel.KindFilter.All =>
-          filter.status == MatchListReadModel.StatusFilter.All ||
-          filter.status == MatchListReadModel.StatusFilter.Confirmed
+        case MatchListKindFilter.Match => true
+        case MatchListKindFilter.MatchDraft => false
+        case MatchListKindFilter.All => filter.status == MatchListStatusFilter.All ||
+          filter.status == MatchListStatusFilter.Confirmed
       val includeDrafts = filter.kind match
-        case MatchListReadModel.KindFilter.Match => false
-        case MatchListReadModel.KindFilter.MatchDraft => true
-        case MatchListReadModel.KindFilter.All => filter.status !=
-            MatchListReadModel.StatusFilter.Confirmed
+        case MatchListKindFilter.Match => false
+        case MatchListKindFilter.MatchDraft => true
+        case MatchListKindFilter.All => filter.status != MatchListStatusFilter.Confirmed
       val combined = (includeMatches, includeDrafts) match
         case (true, true) => confirmedItems ++ draftItems
         case (true, false) => confirmedItems
@@ -130,14 +129,14 @@ final class InMemoryMatchListReadModel[F[_]: Monad](
 
   private def draftMatchesStatus(
       status: MatchDraftStatus,
-      statusFilter: MatchListReadModel.StatusFilter,
+      statusFilter: MatchListStatusFilter,
   ): Boolean = statusFilter match
-    case MatchListReadModel.StatusFilter.All => true
-    case MatchListReadModel.StatusFilter.Incomplete => MatchListReadModel.IncompleteStatuses
+    case MatchListStatusFilter.All => true
+    case MatchListStatusFilter.Incomplete => MatchListStatusFilter.incompleteStatuses
         .contains(status)
-    case MatchListReadModel.StatusFilter.OcrRunning => status == MatchDraftStatus.OcrRunning
-    case MatchListReadModel.StatusFilter.PreConfirm =>
+    case MatchListStatusFilter.OcrRunning => status == MatchDraftStatus.OcrRunning
+    case MatchListStatusFilter.PreConfirm =>
       Set(MatchDraftStatus.OcrFailed, MatchDraftStatus.DraftReady, MatchDraftStatus.NeedsReview)
         .contains(status)
-    case MatchListReadModel.StatusFilter.NeedsReview => status == MatchDraftStatus.NeedsReview
-    case MatchListReadModel.StatusFilter.Confirmed => false
+    case MatchListStatusFilter.NeedsReview => status == MatchDraftStatus.NeedsReview
+    case MatchListStatusFilter.Confirmed => false

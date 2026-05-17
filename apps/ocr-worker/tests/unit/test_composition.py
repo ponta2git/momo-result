@@ -13,6 +13,7 @@ from momo_ocr.app.composition import (
     redis_consumer_from_config,
 )
 from momo_ocr.app.config import WorkerConfig
+from momo_ocr.features.ocr_jobs.consumer import RedisConsumerRetryConfig
 from momo_ocr.features.ocr_jobs.dependencies import JobRunnerDependencies
 from momo_ocr.features.text_recognition.factory import (
     default_text_recognition_engine,
@@ -108,6 +109,44 @@ def test_redis_consumer_from_config_bounds_redis_socket_waits(
     assert captured["socket_keepalive"] is True
     assert captured["socket_connect_timeout"] == 5.0
     assert captured["socket_timeout"] == 5.0
+
+
+def test_redis_consumer_from_config_uses_independent_claim_idle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class _StubRedis:
+        @classmethod
+        def from_url(cls, url: str, **kwargs: object) -> _StubRedis:
+            del url, kwargs
+            return cls()
+
+    class _StubConsumer:
+        def __init__(
+            self,
+            _client: object,
+            *,
+            stream: str,
+            group: str,
+            consumer_name: str,
+            retry_config: RedisConsumerRetryConfig,
+        ) -> None:
+            del stream, group, consumer_name
+            captured["claim_idle_ms"] = retry_config.claim_idle_ms
+
+    monkeypatch.setattr(composition_module, "Redis", _StubRedis)
+    monkeypatch.setattr(composition_module, "RedisOcrJobConsumer", _StubConsumer)
+
+    config = WorkerConfig(
+        redis_url="redis://example:6379/0",
+        worker_id="w-1",
+        ocr_timeout_seconds=30,
+        redis_claim_idle_seconds=450,
+    )
+    redis_consumer_from_config(config)
+
+    assert captured["claim_idle_ms"] == 450_000
 
 
 @dataclass

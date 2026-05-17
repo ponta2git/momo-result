@@ -14,6 +14,7 @@ def test_load_worker_config_reads_redis_and_database_urls() -> None:
             "OCR_REDIS_STREAM": "custom-stream",
             "OCR_REDIS_GROUP": "custom-group",
             "OCR_WORKER_CONCURRENCY": "2",
+            "OCR_REDIS_CLAIM_IDLE_SECONDS": "450",
             "IMAGE_TMP_DIR": "/tmp/custom-images",
             "MOMO_OCR_FAST_PATH": "yes",
             "MOMO_OCR_DEBUG_DIR": "/tmp/ocr-debug",
@@ -27,6 +28,7 @@ def test_load_worker_config_reads_redis_and_database_urls() -> None:
     assert config.redis_stream == "custom-stream"
     assert config.redis_group == "custom-group"
     assert config.concurrency == 2
+    assert config.redis_claim_idle_seconds == 450
     assert str(config.temp_root) == "/tmp/custom-images"
     assert config.fast_path_enabled is True
     assert config.debug_dir_base is not None

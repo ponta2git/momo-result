@@ -74,6 +74,8 @@ Runtime payload parsing applies the same JSON Schemas before converting the stre
 
 The production worker defaults to the in-process `tesserocr` engine for throughput. The engine passes `OCR_TIMEOUT_SECONDS` to Tesseract's native recognition timeout; set `MOMO_OCR_ENGINE=subprocess` only when a deployment needs a hard per-call process boundary more than the in-process speedup. `MOMO_OCR_FAST_PATH=1` is an opt-in canary flag for lower-latency incident-log OCR; the worker reads it at process startup and passes the boolean through the analysis context so parser code does not read process environment directly.
 
+Redis pending recovery uses `OCR_REDIS_CLAIM_IDLE_SECONDS` (default `300`) independently from `OCR_TIMEOUT_SECONDS`. Keep claim idle at or above the API stale-job reaper threshold so a valid long-running OCR job is not reclaimed or moved to DLQ while its owning worker is still processing it.
+
 The worker reads only temporary images that resolve under `IMAGE_TMP_DIR` (default `/tmp/momo-result/uploads`) and re-validates the 3MB upload limit before OCR. It does not delete source images. The API keeps source images until the draft is confirmed or cancelled, then applies the server-side retention cleanup policy.
 
 ## Development commands

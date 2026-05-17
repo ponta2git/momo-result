@@ -48,7 +48,7 @@ def redis_consumer_from_config(config: WorkerConfig) -> RedisOcrJobConsumer:
         retry_config=RedisConsumerRetryConfig(
             max_attempts=config.max_attempts,
             dead_letter_stream=config.redis_dead_letter_stream,
-            claim_idle_ms=config.ocr_timeout_seconds * 1000,
+            claim_idle_ms=config.redis_claim_idle_seconds * 1000,
             pending_scan_count=10,
         ),
     )

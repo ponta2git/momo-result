@@ -1,7 +1,7 @@
 package momo.api.endpoints.codec
 
-import momo.api.domain.OcrJobHints
 import momo.api.domain.ids.*
+import momo.api.domain.{OcrJobHints, ScreenType}
 import momo.api.endpoints.{CreateOcrJobRequest, CreateOcrJobResponse, OcrJobHintsRequest}
 import momo.api.errors.AppError
 import momo.api.usecases.{CreateOcrJobCommand, CreatedOcrJob}
@@ -11,12 +11,16 @@ object OcrJobCodec:
   def toCreateCommand(request: CreateOcrJobRequest): Either[AppError, CreateOcrJobCommand] =
     for
       imageId <- BoundaryId.required("imageId", request.imageId)(ImageId.fromString)
+      requestedScreenType <- ScreenType.fromWire(request.requestedScreenType)
+        .toRight(AppError.ValidationFailed(
+          "requestedScreenType must be auto, total_assets, revenue, or incident_log."
+        ))
       hints <- request.ocrHints.fold(Right(OcrJobHints.empty))(OcrJobHintsRequest.asDomain)
       matchDraftId <- BoundaryId
         .optional("matchDraftId", request.matchDraftId)(MatchDraftId.fromString)
     yield CreateOcrJobCommand(
       imageId = imageId,
-      requestedScreenType = request.requestedScreenType,
+      requestedScreenType = requestedScreenType,
       ocrHints = hints,
       matchDraftId = matchDraftId,
     )

@@ -151,6 +151,14 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
     }
   }
 
+  app.test("POST /api/ocr-jobs rejects unknown screen type at the HTTP boundary") { httpApp =>
+    val req = Request[IO](Method.POST, uri"/api/ocr-jobs").putHeaders(devWriteHeaders()*)
+      .withEntity(HttpRequestBodies.Matches.createOcrJob("image-1", "unknown"))
+    httpApp.run(req).flatMap { res =>
+      assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "requestedScreenType")
+    }
+  }
+
   app.test("GET /api/matches rejects blank id query filters at the HTTP boundary") { httpApp =>
     val req = Request[IO](Method.GET, uri"/api/matches?heldEventId=%20").putHeaders(devReadHeader())
     httpApp.run(req).flatMap { res =>

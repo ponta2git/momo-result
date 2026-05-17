@@ -16,7 +16,7 @@ import momo.api.codec.OcrHintsCodec.given
 import momo.api.domain.ids.{AccountId, ImageId, MatchDraftId, MemberId, OcrJobId}
 import momo.api.domain.{
   MatchDraft, MatchDraftStatus, MemberAlias, OcrFailure, OcrJob, OcrJobHints, PlayerAliasHint,
-  StoredImage,
+  ScreenType, StoredImage,
 }
 import momo.api.errors.AppError
 import momo.api.repositories.{ImageStore, OcrJobsRepository, OcrQueuePayload, QueueProducer}
@@ -44,7 +44,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         image <- fixture.savePng
         usecase <- fixture.usecase
         created <- usecase.run(
-          CreateOcrJobCommand(image.imageId, "total_assets", OcrJobHints.empty, None),
+          CreateOcrJobCommand(image.imageId, ScreenType.TotalAssets, OcrJobHints.empty, None),
           fixture.requestId,
         ).flatMap(fromAppEither)
         foundJob <- fixture.jobs.find(created.job.id)
@@ -78,7 +78,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         _ <- usecase.run(
           CreateOcrJobCommand(
             image.imageId,
-            "total_assets",
+            ScreenType.TotalAssets,
             OcrJobHints(
               gameTitle = None,
               layoutFamily = None,
@@ -117,7 +117,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         image <- fixture.savePng
         usecase <- fixture.usecase
         result <- usecase.run(
-          CreateOcrJobCommand(image.imageId, "total_assets", OcrJobHints.empty, None),
+          CreateOcrJobCommand(image.imageId, ScreenType.TotalAssets, OcrJobHints.empty, None),
           fixture.requestId,
         )
       yield result match
@@ -140,7 +140,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         image <- fixture.savePng
         usecase <- fixture.usecase
         _ <- usecase.run(
-          CreateOcrJobCommand(image.imageId, "total_assets", OcrJobHints.empty, None),
+          CreateOcrJobCommand(image.imageId, ScreenType.TotalAssets, OcrJobHints.empty, None),
           fixture.requestId,
         )
         found <- fixture.jobs.find(OcrJobId.unsafeFromString("job-1"))
@@ -162,7 +162,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         result <- usecase.run(
           CreateOcrJobCommand(
             ImageId.unsafeFromString("missing-image"),
-            "total_assets",
+            ScreenType.TotalAssets,
             OcrJobHints(
               gameTitle = None,
               layoutFamily = None,
@@ -193,7 +193,12 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         _ <- fixture.matchDrafts.create(editableDraft(matchDraftId))
         usecase <- fixture.usecase
         result <- usecase.run(
-          CreateOcrJobCommand(image.imageId, "auto", OcrJobHints.empty, Some(matchDraftId)),
+          CreateOcrJobCommand(
+            image.imageId,
+            ScreenType.Auto,
+            OcrJobHints.empty,
+            Some(matchDraftId),
+          ),
           fixture.requestId,
         )
         published <- fixture.queue.published
@@ -224,7 +229,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         image <- fixture.savePng
         usecase <- fixture.usecase
         result <- usecase.run(
-          CreateOcrJobCommand(image.imageId, "total_assets", OcrJobHints.empty, None),
+          CreateOcrJobCommand(image.imageId, ScreenType.TotalAssets, OcrJobHints.empty, None),
           fixture.requestId,
         )
         logged <- ref.get

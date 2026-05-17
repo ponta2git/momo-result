@@ -21,6 +21,7 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
   private val titleId = GameTitleId.unsafeFromString("title_world")
   private val mapId = MapMasterId.unsafeFromString("map_east")
   private val seasonId = SeasonMasterId.unsafeFromString("season_spring")
+  private val playedAt = Instant.parse("2026-05-06T20:00:00Z")
   private val memberValues = MatchFixtures.DevMemberValues
   private val allowedMembers = MatchFixtures.allowedMembers(memberValues)
 
@@ -120,7 +121,7 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
     seasonMasterId = seasonId,
     ownerMemberId = MemberId.unsafeFromString("ponta"),
     mapMasterId = mapId,
-    playedAt = "2026-05-06T20:00:00Z",
+    playedAt = playedAt,
     matchDraftId = None,
     draftRefs = ConfirmMatch.DraftRefs(None, None, None),
     players = players,

@@ -158,6 +158,16 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
     }
   }
 
+  app.test("POST /api/matches rejects invalid playedAt at the HTTP boundary") { httpApp =>
+    for
+      id <- createEvent(httpApp)
+      req = Request[IO](Method.POST, uri"/api/matches").putHeaders(devWriteHeaders()*)
+        .withEntity(confirmBody(id).deepMerge(Json.obj("playedAt" -> Json.fromString("bad"))))
+      res <- httpApp.run(req)
+      _ <- assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "playedAt")
+    yield ()
+  }
+
   app.test("GET /api/ocr-drafts bulk returns 404 when a draft is missing") { httpApp =>
     httpApp
       .run(Request[IO](Method.GET, uri"/api/ocr-drafts?ids=missing").putHeaders(devReadHeader()))

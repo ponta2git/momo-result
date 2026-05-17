@@ -17,6 +17,7 @@ import momo.api.usecases.testing.MatchFixtures
 final class UpdateMatchSpec extends MomoCatsEffectSuite:
   private val createdAt = Instant.parse("2026-05-08T11:00:00Z")
   private val updatedAt = Instant.parse("2026-05-08T11:05:00Z")
+  private val playedAt = Instant.parse("2026-05-08T20:00:00Z")
   private val heldEventId = HeldEventId.unsafeFromString("held-update-match")
   private val titleId = GameTitleId.unsafeFromString("title_world")
   private val otherTitleId = GameTitleId.unsafeFromString("title_japan")
@@ -48,7 +49,7 @@ final class UpdateMatchSpec extends MomoCatsEffectSuite:
       val updated = assertRight(result)
       assertEquals(updated.matchNoInEvent.value, 2)
       assertEquals(updated.layoutFamily, "world")
-      assertEquals(updated.playedAt, Instant.parse("2026-05-08T20:00:00Z"))
+      assertEquals(updated.playedAt, playedAt)
       assertEquals(updated.totalAssetsDraftId, Some(OcrDraftId.unsafeFromString("draft-total-old")))
       assertEquals(updated.revenueDraftId, Some(OcrDraftId.unsafeFromString("draft-revenue-new")))
       assertEquals(
@@ -107,7 +108,7 @@ final class UpdateMatchSpec extends MomoCatsEffectSuite:
     seasonMasterId = seasonId,
     ownerMemberId = MemberId.unsafeFromString("ponta"),
     mapMasterId = mapId,
-    playedAt = "2026-05-08T20:00:00Z",
+    playedAt = playedAt,
     draftRefs = draftRefs,
     players = defaultPlayers,
   )

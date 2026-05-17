@@ -1,5 +1,8 @@
 package momo.api.endpoints.codec
 
+import java.time.Instant
+import java.time.format.DateTimeParseException
+
 import cats.syntax.all.*
 
 import momo.api.domain.ids.*
@@ -10,6 +13,10 @@ import momo.api.usecases.{ConfirmMatch, UpdateMatch}
 
 /** DTO ↔ usecase command conversions for `MatchesEndpoints`. */
 object MatchCodec:
+  private def parseInstant(field: String, value: String): Either[AppError, Instant] = Either
+    .catchOnly[DateTimeParseException](Instant.parse(value))
+    .leftMap(_ => AppError.ValidationFailed(s"$field must be ISO8601 instant."))
+
   def toPlayerResult(player: PlayerResultRequest): Either[AppError, PlayerResult.Input] = BoundaryId
     .required("players.memberId", player.memberId)(MemberId.fromString).map { memberId =>
       PlayerResult.Input(
@@ -40,6 +47,7 @@ object MatchCodec:
       mapMasterId <- BoundaryId.required("mapMasterId", request.mapMasterId)(MapMasterId.fromString)
       matchDraftId <- BoundaryId
         .optional("matchDraftId", request.matchDraftId)(MatchDraftId.fromString)
+      playedAt <- parseInstant("playedAt", request.playedAt)
       totalAssetsDraftId <- BoundaryId
         .optional("draftIds.totalAssets", request.draftIds.totalAssets)(OcrDraftId.fromString)
       revenueDraftId <- BoundaryId
@@ -54,7 +62,7 @@ object MatchCodec:
       seasonMasterId = seasonMasterId,
       ownerMemberId = ownerMemberId,
       mapMasterId = mapMasterId,
-      playedAt = request.playedAt,
+      playedAt = playedAt,
       matchDraftId = matchDraftId,
       draftRefs = ConfirmMatch.DraftRefs(
         totalAssets = totalAssetsDraftId,
@@ -73,6 +81,7 @@ object MatchCodec:
       ownerMemberId <- BoundaryId
         .required("ownerMemberId", request.ownerMemberId)(MemberId.fromString)
       mapMasterId <- BoundaryId.required("mapMasterId", request.mapMasterId)(MapMasterId.fromString)
+      playedAt <- parseInstant("playedAt", request.playedAt)
       totalAssetsDraftId <- BoundaryId
         .optional("draftIds.totalAssets", request.draftIds.totalAssets)(OcrDraftId.fromString)
       revenueDraftId <- BoundaryId
@@ -87,7 +96,7 @@ object MatchCodec:
       seasonMasterId = seasonMasterId,
       ownerMemberId = ownerMemberId,
       mapMasterId = mapMasterId,
-      playedAt = request.playedAt,
+      playedAt = playedAt,
       draftRefs = ConfirmMatch.DraftRefs(
         totalAssets = totalAssetsDraftId,
         revenue = revenueDraftId,

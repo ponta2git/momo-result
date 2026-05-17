@@ -2,8 +2,6 @@ package momo.api.usecases
 
 import java.time.Instant
 
-import scala.util.Try
-
 import cats.MonadThrow
 import cats.data.EitherT
 import cats.syntax.all.*
@@ -52,9 +50,6 @@ final class ConfirmMatch[F[_]: MonadThrow](
         allowed,
       ).leftMap(errors => AppError.ValidationFailed(MatchPolicy.toMessage(errors)))
     )
-    playedAt <- EitherT.fromEither[F](Try(Instant.parse(command.playedAt)).toEither.left.map(_ =>
-      AppError.ValidationFailed("playedAt must be ISO8601 instant.")
-    ))
     _ <- heldEvents.find(command.heldEventId).orNotFound("held event", command.heldEventId.value)
       .void
     title <- gameTitles.find(command.gameTitleId)
@@ -87,7 +82,7 @@ final class ConfirmMatch[F[_]: MonadThrow](
     record = toMatchRecord(
       MatchId.unsafeFromString(id),
       createdAt,
-      playedAt,
+      command.playedAt,
       title.layoutFamily,
       createdBy,
       playerMemberId,
@@ -122,7 +117,7 @@ object ConfirmMatch:
       seasonMasterId: SeasonMasterId,
       ownerMemberId: MemberId,
       mapMasterId: MapMasterId,
-      playedAt: String,
+      playedAt: Instant,
       matchDraftId: Option[MatchDraftId],
       draftRefs: DraftRefs,
       players: List[PlayerResult.Input],

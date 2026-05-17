@@ -59,7 +59,7 @@ final class PurgeSourceImagesSpec extends MomoCatsEffectSuite:
         incidentAfter <- imageStore.find(incidentLog.imageId)
         updatedDraft <- matchDrafts.find(draft.id)
       yield
-        assert(beforeCleanup.nonEmpty)
+        assertEquals(beforeCleanup, Some(totalAssets))
         assertEquals(totalAfter, None)
         assertEquals(revenueAfter, None)
         assertEquals(incidentAfter, None)
@@ -119,7 +119,7 @@ final class PurgeSourceImagesSpec extends MomoCatsEffectSuite:
         assertEquals(result.swap.toOption, Some(deleteError))
         assertEquals(updatedDraft.flatMap(_.sourceImagesRetainedUntil), Some(finalizedAt))
         assertEquals(updatedDraft.flatMap(_.sourceImagesDeletedAt), Some(finalizedAt))
-        assert(imageAfter.nonEmpty)
+        assertEquals(imageAfter, Some(totalAssets))
         assertEquals(listed, Right(Nil))
         streamed match
           case Left(AppError.NotFound(_, _)) => ()

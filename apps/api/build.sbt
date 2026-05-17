@@ -16,6 +16,7 @@ addCommandAlias("apiFix", "scalafixAll")
 addCommandAlias("apiQuality", "apiFormatCheck; apiLint; Test / compile; apiOpenApiCheck")
 addCommandAlias("apiCheck", "apiQuality; test")
 addCommandAlias("apiFullCheck", "apiCheck; apiDbQuality; apiRedisQuality")
+addCommandAlias("apiCoverage", "clean; coverageOff; coverage; test; coverageReport; coverageOff")
 addCommandAlias(
   "apiRedisQuality",
     "set Test / fork := true; " +
@@ -84,6 +85,17 @@ lazy val root = (project in file("."))
     Test / parallelExecution := true,
     Test / fork := false,
     Test / envVars ++= testcontainersDockerEnv.value,
+    coverageFailOnMinimum := true,
+    coverageMinimumStmtTotal := 70,
+    coverageMinimumBranchTotal := 65,
+    coverageExcludedPackages := Seq(
+      "momo\\.api\\.Main",
+      "momo\\.api\\.openapi\\..*",
+    ).mkString(";"),
+    coverageExcludedFiles := Seq(
+      ".*/momo/api/repositories/postgres/.*",
+      ".*/momo/api/adapters/RedisQueueProducer.scala",
+    ).mkString(";"),
     testcontainersDockerEnv := {
       val apiVersionEnv = Map(
         // docker-java 3.4.x defaults to API 1.32; Docker 29+ rejects it because its minimum is 1.40.

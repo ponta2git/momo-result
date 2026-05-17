@@ -57,12 +57,12 @@ final class RedisQueueProducerIntegrationSpec extends RedisIntegrationSuite:
     requestId = None,
   )
 
-  private def redisStreamFixture: Resource[IO, RedisStreamFixture] = redisUrlResource.flatMap {
-    redisUrl =>
+  private def redisStreamFixture: Resource[IO, RedisStreamFixture] = redisUrlResource
+    .flatMap { redisUrl =>
       Resource.make {
         IO.pure(RedisStreamFixture(redisUrl, s"momo:ocr:jobs:test:${UUID.randomUUID().toString}"))
       }(fixture => deleteStream(fixture.redisUrl, fixture.streamName))
-  }
+    }
 
   private def deleteStream(redisUrl: String, streamName: String): IO[Unit] = Redis[IO]
     .simple(redisUrl, RedisCodec.Utf8).use(_.del(streamName).void).handleErrorWith(_ => IO.unit)

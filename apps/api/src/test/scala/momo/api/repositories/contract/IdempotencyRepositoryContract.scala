@@ -84,11 +84,12 @@ trait IdempotencyRepositoryContract:
 
   test("record fails when the same composite key is reused"):
     val entry = completedRecord("k-duplicate")
-    val effect = for
-      repo <- freshRepo
-      _ <- repo.record(entry)
-      _ <- repo.record(entry)
-    yield ()
+    val effect =
+      for
+        repo <- freshRepo
+        _ <- repo.record(entry)
+        _ <- repo.record(entry)
+      yield ()
 
     effect.attempt.map(result => assert(result.isLeft, "expected duplicate insert to fail"))
 
@@ -106,7 +107,8 @@ trait IdempotencyRepositoryContract:
       assertEquals(gotSecond, Some(second))
 
   test("cleanup deletes records whose expiresAt is at or before now and leaves future records"):
-    val expired = record("expired", draftEndpoint, defaultHash, now.minusSeconds(1), defaultResponse)
+    val expired =
+      record("expired", draftEndpoint, defaultHash, now.minusSeconds(1), defaultResponse)
     val boundary = record("boundary", draftEndpoint, defaultHash, now, defaultResponse)
     val live = record("live", draftEndpoint, defaultHash, now.plusSeconds(60), defaultResponse)
     for

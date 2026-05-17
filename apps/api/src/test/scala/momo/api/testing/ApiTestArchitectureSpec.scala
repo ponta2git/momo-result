@@ -12,13 +12,14 @@ final class ApiTestArchitectureSpec extends FunSuite:
   private val integrationRoot = testRoot.resolve("momo/api/integration")
   private val redisIntegrationRoot = integrationRoot.resolve("redis")
   private val buildFile = Paths.get("build.sbt")
+  private val pluginsFile = Paths.get("project/plugins.sbt")
+  private val testRuleFile = Paths.get("../../docs/test-rule.md")
   private val localIntegrationTagSyntax = "new munit.Tag(" + "\"Integration\"" + ")"
 
   test("integration tags are defined only through TestTags"):
     val violations = scalaFiles(testRoot).filterNot(_.endsWith(Paths.get("TestTags.scala")))
       .flatMap { path =>
-        if read(path).contains(localIntegrationTagSyntax) then Some(path.toString)
-        else None
+        if read(path).contains(localIntegrationTagSyntax) then Some(path.toString) else None
       }.sorted
 
     assertEquals(violations, Nil)
@@ -26,8 +27,7 @@ final class ApiTestArchitectureSpec extends FunSuite:
   test("DB integration specs extend IntegrationSuite so they receive DB tags and cleanup"):
     val violations = scalaFiles(integrationRoot)
       .filterNot(path => path.startsWith(redisIntegrationRoot))
-      .filter(path => path.getFileName.toString.endsWith("Spec.scala"))
-      .flatMap { path =>
+      .filter(path => path.getFileName.toString.endsWith("Spec.scala")).flatMap { path =>
         if read(path).contains("extends IntegrationSuite") then None else Some(path.toString)
       }.sorted
 
@@ -36,8 +36,7 @@ final class ApiTestArchitectureSpec extends FunSuite:
   test("DB integration specs are discoverable by the apiDbQuality class pattern"):
     val violations = scalaFiles(integrationRoot)
       .filterNot(path => path.startsWith(redisIntegrationRoot))
-      .filter(path => path.getFileName.toString.endsWith("Spec.scala"))
-      .flatMap { path =>
+      .filter(path => path.getFileName.toString.endsWith("Spec.scala")).flatMap { path =>
         val fileName = path.getFileName.toString
         if fileName.startsWith("Postgres") || fileName == "DbContractSpec.scala" then None
         else Some(path.toString)
@@ -47,8 +46,7 @@ final class ApiTestArchitectureSpec extends FunSuite:
 
   test("Redis integration specs extend RedisIntegrationSuite so they receive Redis tags"):
     val violations = scalaFiles(redisIntegrationRoot)
-      .filter(path => path.getFileName.toString.endsWith("Spec.scala"))
-      .flatMap { path =>
+      .filter(path => path.getFileName.toString.endsWith("Spec.scala")).flatMap { path =>
         if read(path).contains("extends RedisIntegrationSuite") then None else Some(path.toString)
       }.sorted
 
@@ -74,6 +72,22 @@ final class ApiTestArchitectureSpec extends FunSuite:
     assert(text.contains("momo.api.integration.DbContractSpec"))
     assert(text.contains("testOnly momo.api.integration.redis.*"))
     assert(!text.contains("--include-tags=Integration\","))
+
+  test("API coverage gate is explicit and C2 policy is documented"):
+    val buildText = read(buildFile)
+    val pluginsText = read(pluginsFile)
+    val testRuleText = read(testRuleFile)
+
+    assert(pluginsText.contains("sbt-scoverage"))
+    assert(buildText.contains("addCommandAlias(\"apiCoverage\""))
+    assert(buildText.contains("coverageFailOnMinimum := true"))
+    assert(buildText.contains("coverageMinimumStmtTotal :="))
+    assert(buildText.contains("coverageMinimumBranchTotal :="))
+    assert(buildText.contains("coverageExcludedPackages :="))
+    assert(buildText.contains("coverageExcludedFiles :="))
+    assert(testRuleText.contains("sbt apiCoverage"))
+    assert(testRuleText.contains("C2"))
+    assert(testRuleText.contains("table-driven test"))
 
   private def scalaFiles(root: Path): List[Path] =
     val stream = Files.walk(root)

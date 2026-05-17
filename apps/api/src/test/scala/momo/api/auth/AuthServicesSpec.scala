@@ -95,8 +95,11 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       )
       val csrf = CsrfTokenService()
 
-      assert(csrf.verify(session, Some("secret")).isRight)
-      assert(csrf.verify(session, Some("bad")).isLeft)
+      assertEquals(csrf.verify(session, Some("secret")), Right(()))
+      assertEquals(
+        csrf.verify(session, Some("bad")),
+        Left(momo.api.errors.AppError.Forbidden("A valid CSRF token is required.")),
+      )
 
   test("SessionService stores only token hashes and authenticates the v1 cookie"):
     for
@@ -112,8 +115,10 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       assertNotEquals(stored.idHash, tokens.sessionToken)
       assertNotEquals(stored.csrfSecretHash, tokens.csrfToken)
       assertEquals(snapshot.sessions.keySet, Set(stored.idHash))
-      assert(authenticated.isRight, s"expected authenticated session, got $authenticated")
-      assertEquals(authenticated.toOption.map(_.csrfToken), Some(tokens.csrfToken))
+      assertEquals(
+        authenticated.map(auth => (auth.account.accountId, auth.csrfToken)),
+        Right(account.id -> tokens.csrfToken),
+      )
 
   test("SessionService rejects legacy raw session cookies"):
     for
@@ -134,7 +139,7 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       result <- service.authenticate(Some(created.cookieValue))
       snapshot <- repo.snapshot
     yield
-      assert(result.isRight, s"expected authenticated session, got $result")
+      assertEquals(result.map(_.account.accountId), Right(account.id))
       assertEquals(snapshot.renews, 0)
 
   test("SessionService renews only after less than half the session TTL remains"):
@@ -149,7 +154,7 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       snapshot <- repo.snapshot
       stored = snapshot.sessions.values.headOption.getOrElse(fail("session not stored"))
     yield
-      assert(result.isRight, s"expected authenticated session, got $result")
+      assertEquals(result.map(_.account.accountId), Right(account.id))
       assertEquals(snapshot.renews, 1)
       assertEquals(stored.lastSeenAt, instant.plusSeconds(6.minutes.toSeconds))
       assertEquals(stored.expiresAt, instant.plusSeconds(16.minutes.toSeconds))

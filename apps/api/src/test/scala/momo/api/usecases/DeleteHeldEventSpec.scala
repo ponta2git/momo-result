@@ -136,10 +136,7 @@ final class DeleteHeldEventSpec extends CatsEffectSuite:
       result <- usecase.run(heldEventId)
       found <- events.find(heldEventId)
     yield
-      assert(result.exists(_ == ()) == false)
-      result match
-        case Left(_: AppError.Conflict) => ()
-        case other => fail(s"expected Conflict, got $other")
+      assertEquals(result, Left(AppError.Conflict("held event has confirmed matches.")))
       assertEquals(found, Some(HeldEvent(heldEventId, now)))
 
   test("rejects held events with match drafts"):
@@ -150,7 +147,5 @@ final class DeleteHeldEventSpec extends CatsEffectSuite:
       result <- usecase.run(heldEventId)
       found <- events.find(heldEventId)
     yield
-      result match
-        case Left(_: AppError.Conflict) => ()
-        case other => fail(s"expected Conflict, got $other")
+      assertEquals(result, Left(AppError.Conflict("held event has match drafts.")))
       assertEquals(found, Some(HeldEvent(heldEventId, now)))

@@ -62,6 +62,7 @@ root からの web 起動は `pnpm web:dev` でもよい。
 | web typecheck | `pnpm web:typecheck` |
 | api quality | `pnpm api:quality` |
 | api test | `pnpm api:test` |
+| api coverage | `pnpm api:coverage` |
 
 ### web (`apps/web`)
 
@@ -83,11 +84,12 @@ root からの web 起動は `pnpm web:dev` でもよい。
 | lint | `sbt apiLint` |
 | compile + OpenAPI | `sbt apiQuality` |
 | unit / non-integration test | `sbt test` |
+| coverage | `sbt apiCoverage` |
 | DB integration | `sbt apiDbQuality` |
 | Redis integration | `sbt apiRedisQuality` |
 | full local gate | `sbt apiFullCheck` |
 
-`sbt test` は `Integration` tag と `momo.api.integration.*` を除外する。DB/Redis の wire 動作は `DbIntegration` / `RedisIntegration` tag を使って `apiDbQuality` / `apiRedisQuality` で明示的に実行する。
+`sbt test` と `sbt apiCoverage` は `Integration` tag と `momo.api.integration.*` を除外する。DB/Redis の wire 動作は `DbIntegration` / `RedisIntegration` tag を使って `apiDbQuality` / `apiRedisQuality` で明示的に実行する。
 
 ### ocr-worker (`apps/ocr-worker`)
 
@@ -101,7 +103,7 @@ root からの web 起動は `pnpm web:dev` でもよい。
 ## 5. 変更別ゲート
 
 - web 変更: `generate:api` が関係する場合は先に実行し、`format:check`、`lint`、`typecheck`、`test:run`、`test:coverage`、必要なら `build`。
-- api endpoint / OpenAPI 変更: `apiQuality`（OpenAPI生成確認を含む）、`test` 後に web の `generate:api`。
+- api endpoint / OpenAPI 変更: `apiQuality`（OpenAPI生成確認を含む）、`test`、C1/C2対象変更なら `apiCoverage` 後に web の `generate:api`。
 - PostgreSQL repository / migration 前提の変更: `apiDbQuality` を追加し、実行した spec 名を報告する。
 - Redis Streams / OCR queue 変更: `apiRedisQuality` を追加する。
 - ocr-worker 変更: `ruff format --check`、`ruff check`、`mypy`、`pytest`。Docker-backed integration に依存する失敗は未検証として扱わない。

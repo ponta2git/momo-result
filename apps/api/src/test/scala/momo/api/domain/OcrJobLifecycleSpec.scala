@@ -54,10 +54,20 @@ final class OcrJobLifecycleSpec extends CatsEffectSuite:
       cancelled1 <- repo.cancelQueued(queued.id, laterAt)
       _ = assert(cancelled1)
       after <- repo.find(queued.id)
-      _ = assert(after.exists {
-        case _: OcrJob.Cancelled => true
-        case _ => false
-      })
+      _ = assertEquals(
+        after,
+        Some(OcrJob.Cancelled(
+          id = queued.id,
+          draftId = queued.draftId,
+          imageId = queued.imageId,
+          imagePath = queued.imagePath,
+          requestedScreenType = queued.requestedScreenType,
+          attemptCount = queued.attemptCount,
+          cancelledFinishedAt = laterAt,
+          createdAt = queued.createdAt,
+          updatedAt = laterAt,
+        )),
+      )
       cancelled2 <- repo.cancelQueued(queued.id, laterAt)
     yield assert(!cancelled2)
 

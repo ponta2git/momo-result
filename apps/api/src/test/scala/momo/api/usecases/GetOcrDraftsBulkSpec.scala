@@ -40,10 +40,10 @@ final class GetOcrDraftsBulkSpec extends MomoCatsEffectSuite:
     for
       repo <- InMemoryOcrDraftsRepository.create[IO]
       result <- GetOcrDraftsBulk[IO](repo).run(Nil)
-    yield assert(result.swap.exists {
-      case _: AppError.ValidationFailed => true
-      case _ => false
-    })
+    yield assertEquals(
+      result,
+      Left(AppError.ValidationFailed("ids query must contain at least 1 id.")),
+    )
   }
 
   test("returns not found when any requested draft is missing") {
@@ -52,8 +52,5 @@ final class GetOcrDraftsBulkSpec extends MomoCatsEffectSuite:
       _ <- repo.create(draft("draft-1", "job-1"))
       result <- GetOcrDraftsBulk[IO](repo)
         .run(List(OcrDraftId.unsafeFromString("draft-1"), OcrDraftId.unsafeFromString("missing")))
-    yield assert(result.swap.exists {
-      case _: AppError.NotFound => true
-      case _ => false
-    })
+    yield assertEquals(result, Left(AppError.NotFound("ocr draft", "missing")))
   }

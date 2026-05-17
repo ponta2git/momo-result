@@ -25,29 +25,24 @@ final class ApiEndpointsArchitectureSpec extends FunSuite:
 
   test("every non-auth Tapir endpoint has server logic"):
     val serverRefs = scalaFiles(httpDir).map(path => read(path))
-      .flatMap(ServerLogicRef.findAllMatchIn)
-      .map(_.group(1)).toSet
-    val missing = definedEndpointRefs
-      .filterNot(_.startsWith("AuthEndpoints."))
-      .filterNot(serverRefs.contains)
-      .sorted
+      .flatMap(ServerLogicRef.findAllMatchIn).map(_.group(1)).toSet
+    val missing = definedEndpointRefs.filterNot(_.startsWith("AuthEndpoints."))
+      .filterNot(serverRefs.contains).sorted
 
     assertEquals(missing, Nil)
 
   private def definedEndpointRefs: List[String] = scalaFiles(endpointDir).flatMap { path =>
     ObjectBlock.findAllMatchIn(read(path)).flatMap { objectMatch =>
       val objectName = objectMatch.group(1)
-      PublicEndpointVal.findAllMatchIn(objectMatch.group(2)).map(valueMatch =>
-        s"$objectName.${valueMatch.group(1)}"
-      )
+      PublicEndpointVal.findAllMatchIn(objectMatch.group(2))
+        .map(valueMatch => s"$objectName.${valueMatch.group(1)}")
     }
   }.sorted
 
   private def scalaFiles(root: Path): List[Path] =
     val stream = Files.walk(root)
     try stream.iterator.asScala
-        .filter(path => Files.isRegularFile(path) && path.toString.endsWith(".scala"))
-        .toList
+        .filter(path => Files.isRegularFile(path) && path.toString.endsWith(".scala")).toList
     finally stream.close()
 
   private def read(path: Path): String = Files.readString(path, StandardCharsets.UTF_8)

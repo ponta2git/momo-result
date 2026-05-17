@@ -71,6 +71,12 @@ class AppConfigSpec extends CatsEffectSuite:
       .map(result => assert(result.left.exists(_.getMessage.contains("DATABASE_URL must use"))))
   }
 
+  test("toJdbcUrl rejects malformed DATABASE_URL without echoing credentials") {
+    val result = AppConfig.toJdbcUrl("postgres://user:secret with spaces@db.example.com/mydb")
+    assert(result.left.exists(_.getMessage == "DATABASE_URL must be a valid Postgres URL."))
+    assert(!result.left.exists(_.getMessage.contains("secret")))
+  }
+
   test("ensureProdSslMode: appends sslmode=require in prod when missing") {
     val result = AppConfig.ensureProdSslMode("jdbc:postgresql://db.example.com/mydb", AppEnv.Prod)
     assertEquals(result, Right("jdbc:postgresql://db.example.com/mydb?sslmode=require"))

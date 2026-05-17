@@ -310,7 +310,9 @@ object AppConfig:
       ))
     else
       Either.catchNonFatal(URI.create(raw.replaceFirst("^postgres(ql)?://", "postgresql://")))
-        .flatMap { uri =>
+        .leftMap(error =>
+          new IllegalArgumentException("DATABASE_URL must be a valid Postgres URL.", error)
+        ).flatMap { uri =>
           Option(uri.getScheme).filter(_ == "postgresql").toRight(new IllegalArgumentException(
             "DATABASE_URL must use jdbc:postgresql://, postgres://, or postgresql://"
           )).flatMap(_ =>
@@ -330,12 +332,6 @@ object AppConfig:
           val query = Option(uri.getRawQuery).map(q => s"?$q").getOrElse("")
           val jdbcUrl = s"jdbc:postgresql://$host$port$path$query"
           (jdbcUrl, user, pass)
-        }.leftMap {
-          case error: IllegalArgumentException => error
-          case error => new IllegalArgumentException(
-              s"DATABASE_URL must be a valid Postgres URL: ${error.getMessage}",
-              error,
-            )
         }
 
   private[config] def ensureProdSslMode(

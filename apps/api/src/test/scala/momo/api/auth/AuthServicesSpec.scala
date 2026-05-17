@@ -1,9 +1,14 @@
 package momo.api.auth
 
+import java.net.http.{HttpClient, HttpRequest, HttpResponse}
+import java.net.{Authenticator, CookieHandler, ProxySelector}
 import java.nio.charset.StandardCharsets
 import java.time.Instant
+import java.util.Optional
+import java.util.concurrent.{CompletableFuture, Executor}
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
+import javax.net.ssl.{SSLContext, SSLParameters}
 
 import scala.concurrent.duration.*
 
@@ -14,6 +19,7 @@ import momo.api.adapters.InMemoryLoginAccountsRepository
 import momo.api.config.{AppEnv, AuthConfig}
 import momo.api.domain.LoginAccount
 import momo.api.domain.ids.{AccountId, MemberId, UserId}
+import momo.api.errors.AppError
 import momo.api.repositories.AppSession
 import momo.api.testing.RecordingAppSessionsRepository
 
@@ -81,6 +87,23 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
 
     codec.validate(legacy)
       .map(result => assertEquals(result, Some(codec.Payload(silent = true, redirectPath = None))))
+  }
+
+  test("JavaDiscordOAuthClient maps token exchange transport failures to dependency errors") {
+    val client = JavaDiscordOAuthClient[IO](
+      config.copy(
+        discordClientId = Some("client-id"),
+        discordClientSecret = Some("client-secret"),
+        discordRedirectUri = Some("https://example.com/api/auth/callback"),
+      ),
+      ThrowingHttpClient(RuntimeException("discord unavailable")),
+    )
+
+    client.fetchUser("code").map {
+      case Left(error: AppError.DependencyFailed) =>
+        assertEquals(error.detail, "Discord OAuth provider request failed.")
+      case other => fail(s"expected dependency failure, got $other")
+    }
   }
 
   test("CsrfTokenService verifies the hashed session csrf secret"):
@@ -198,3 +221,27 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
     ))
     val signature = Base64Url.encode(mac.doFinal(payloadBytes))
     s"${Base64Url.encode(payloadBytes)}.$signature"
+
+  private final case class ThrowingHttpClient(error: RuntimeException) extends HttpClient:
+    override def cookieHandler(): Optional[CookieHandler] = Optional.empty()
+    override def connectTimeout(): Optional[java.time.Duration] = Optional.empty()
+    override def followRedirects(): HttpClient.Redirect = HttpClient.Redirect.NEVER
+    override def proxy(): Optional[ProxySelector] = Optional.empty()
+    override def sslContext(): SSLContext = SSLContext.getDefault
+    override def sslParameters(): SSLParameters = SSLParameters()
+    override def authenticator(): Optional[Authenticator] = Optional.empty()
+    override def version(): HttpClient.Version = HttpClient.Version.HTTP_1_1
+    override def executor(): Optional[Executor] = Optional.empty()
+    override def send[T](
+        request: HttpRequest,
+        responseBodyHandler: HttpResponse.BodyHandler[T],
+    ): HttpResponse[T] = Optional.empty[HttpResponse[T]].orElseThrow(() => error)
+    override def sendAsync[T](
+        request: HttpRequest,
+        responseBodyHandler: HttpResponse.BodyHandler[T],
+    ): CompletableFuture[HttpResponse[T]] = CompletableFuture.failedFuture(error)
+    override def sendAsync[T](
+        request: HttpRequest,
+        responseBodyHandler: HttpResponse.BodyHandler[T],
+        pushPromiseHandler: HttpResponse.PushPromiseHandler[T],
+    ): CompletableFuture[HttpResponse[T]] = CompletableFuture.failedFuture(error)

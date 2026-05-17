@@ -53,6 +53,16 @@ def test_read_image_metadata_rejects_images_above_4k_dimensions(tmp_path: Path) 
     assert exc_info.value.code is FailureCode.IMAGE_TOO_LARGE
 
 
+def test_open_decoded_image_rejects_images_above_4k_before_conversion(tmp_path: Path) -> None:
+    image_path = tmp_path / "too-large.png"
+    Image.new("RGB", (3841, 2161), color="white").save(image_path, format="PNG")
+
+    with pytest.raises(OcrError) as exc_info:
+        open_decoded_image(image_path)
+
+    assert exc_info.value.code is FailureCode.IMAGE_TOO_LARGE
+
+
 def test_open_decoded_image_reports_missing_temp_image(tmp_path: Path) -> None:
     missing_path = tmp_path / "missing.jpg"
 

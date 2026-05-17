@@ -65,6 +65,8 @@ def read_image_metadata(path: Path, *, enforce_size_limit: bool = True) -> Image
 def open_decoded_image(path: Path) -> Image.Image:
     try:
         with Image.open(path) as image:
+            width, height = image.size
+            ensure_supported_dimensions(Size(width=width, height=height))
             return image.convert("RGB")
     except FileNotFoundError as exc:
         raise OcrError(

@@ -69,9 +69,9 @@ class InMemoryOcrJobConsumer:
     """Test double implementing :class:`OcrJobConsumer`.
 
     Deliveries are queued by tests via :meth:`enqueue` and pulled in FIFO
-    order. ``ack``/``nack`` calls are recorded on the instance so that tests
-    can assert the exact sequence of acknowledgements without needing to
-    inspect a real broker.
+    order. ``ack`` calls are recorded on the instance so that tests can assert
+    the exact sequence of acknowledgements without needing to inspect a real
+    broker.
     """
 
     def __init__(self) -> None:

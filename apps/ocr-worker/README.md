@@ -76,7 +76,7 @@ The production worker defaults to the in-process `tesserocr` engine for throughp
 
 Redis pending recovery uses `OCR_REDIS_CLAIM_IDLE_SECONDS` (default `300`) independently from `OCR_TIMEOUT_SECONDS`. Keep claim idle at or above the API stale-job reaper threshold so a valid long-running OCR job is not reclaimed or moved to DLQ while its owning worker is still processing it.
 
-The worker reads only temporary images that resolve under `IMAGE_TMP_DIR` (default `/tmp/momo-result/uploads`) and re-validates the 3MB upload limit before OCR. It does not delete source images. The API keeps source images until the draft is confirmed or cancelled, then applies the server-side retention cleanup policy.
+The worker reads only temporary images that resolve under `IMAGE_TMP_DIR` (default `/tmp/momo-result/uploads`) and re-validates the 3MB upload limit plus a 4K dimension limit before OCR. It does not delete source images. The API keeps source images until the draft is confirmed or cancelled, then applies the server-side retention cleanup policy.
 
 ## Development commands
 

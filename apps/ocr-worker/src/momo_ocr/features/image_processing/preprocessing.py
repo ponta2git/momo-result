@@ -7,6 +7,8 @@ from momo_ocr.shared.errors import FailureCode, OcrError
 
 MIN_RELIABLE_WIDTH = 640
 MIN_RELIABLE_HEIGHT = 360
+MAX_SUPPORTED_WIDTH = 3840
+MAX_SUPPORTED_HEIGHT = 2160
 
 
 def to_grayscale(image: Image.Image) -> Image.Image:
@@ -24,6 +26,11 @@ def ensure_supported_dimensions(size: Size) -> None:
         raise OcrError(FailureCode.INVALID_IMAGE, "Image dimensions must be positive.")
     if size.width < MIN_RELIABLE_WIDTH or size.height < MIN_RELIABLE_HEIGHT:
         raise OcrError(FailureCode.LAYOUT_UNSUPPORTED, "Image is too small for reliable OCR.")
+    if size.width > MAX_SUPPORTED_WIDTH or size.height > MAX_SUPPORTED_HEIGHT:
+        raise OcrError(
+            FailureCode.IMAGE_TOO_LARGE,
+            "Image dimensions exceed the 4K OCR processing limit.",
+        )
 
 
 def otsu_binarize(image: Image.Image) -> Image.Image:

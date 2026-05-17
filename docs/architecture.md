@@ -111,7 +111,7 @@
 - Secrets をリポジトリにコミットしない。`.env` はローカル専用、非秘密のキー名だけ `.env.example` に置く。
 - ログに画像内容、セッションID、OAuth token、CSRF token、個人情報、Secrets を出さない。
 - 例外ログは throwable の message/stack trace を直接出さず、`SafeLog.throwableClasses` などで例外クラス列だけを出す。
-- アップロード画像は PNG/JPEG/WebP、1枚3MBまで。形式、サイズ、実体を検証する。
+- アップロード画像は PNG/JPEG/WebP、1枚3MBまで、OCR処理は最大4K（3840x2160）まで。形式、サイズ、寸法、実体を検証する。
 - OCRに送信した元画像は下書き確定またはキャンセルまで保持し、その後削除する。恒久保存しない。
 - DBには画像実体、内部path、長寿命URLを保存・公開しない。参照IDと短命なAPI経路だけを扱う。
 - ログイン、画像アップロード、CSV/TSV出力にはレート制限を入れる。

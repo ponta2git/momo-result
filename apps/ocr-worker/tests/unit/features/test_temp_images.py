@@ -43,6 +43,16 @@ def test_read_image_metadata_reports_missing_temp_image(tmp_path: Path) -> None:
     assert exc_info.value.user_action == "Re-upload the screenshot and run OCR again."
 
 
+def test_read_image_metadata_rejects_images_above_4k_dimensions(tmp_path: Path) -> None:
+    image_path = tmp_path / "too-large.png"
+    Image.new("RGB", (3841, 2161), color="white").save(image_path, format="PNG")
+
+    with pytest.raises(OcrError) as exc_info:
+        read_image_metadata(image_path, enforce_size_limit=False)
+
+    assert exc_info.value.code is FailureCode.IMAGE_TOO_LARGE
+
+
 def test_open_decoded_image_reports_missing_temp_image(tmp_path: Path) -> None:
     missing_path = tmp_path / "missing.jpg"
 

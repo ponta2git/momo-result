@@ -22,8 +22,8 @@ import momo.api.repositories.{MatchDraftsAlg, MatchDraftsRepository}
  * single style.
  */
 object PostgresMatchDrafts:
-  private def isEditable(status: MatchDraftStatus): Boolean =
-    status != MatchDraftStatus.Confirmed && status != MatchDraftStatus.Cancelled
+  private def isUserEditable(status: MatchDraftStatus): Boolean = MatchDraftStatus
+    .userEditableStatuses.contains(status)
 
   private final case class Row(
       id: MatchDraftId,
@@ -115,7 +115,7 @@ object PostgresMatchDrafts:
     """.update.run.void
 
     override def update(draft: MatchDraft, updatedAt: Instant): ConnectionIO[Boolean] =
-      if !isEditable(draft.status) then false.pure[ConnectionIO]
+      if !isUserEditable(draft.status) then false.pure[ConnectionIO]
       else
         sql"""
       UPDATE match_drafts SET
@@ -139,8 +139,12 @@ object PostgresMatchDrafts:
         confirmed_match_id = ${draft.confirmedMatchId},
         updated_at = $updatedAt
       WHERE id = ${draft.id}
-        AND status <> ${MatchDraftStatus.Confirmed}
-        AND status <> ${MatchDraftStatus.Cancelled}
+        AND updated_at = ${draft.updatedAt}
+        AND status IN (
+          ${MatchDraftStatus.OcrFailed},
+          ${MatchDraftStatus.DraftReady},
+          ${MatchDraftStatus.NeedsReview}
+        )
     """.update.run.map(_ > 0)
 
     override def find(id: MatchDraftId): ConnectionIO[Option[MatchDraft]] =

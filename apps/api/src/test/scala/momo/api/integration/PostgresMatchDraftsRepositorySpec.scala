@@ -27,6 +27,30 @@ final class PostgresMatchDraftsRepositorySpec extends IntegrationSuite:
       assertEquals(updated, false)
       assertEquals(status, "cancelled")
 
+  test("update refuses a draft changed after the caller snapshot"):
+    val draftId = MatchDraftId.unsafeFromString("match-draft-stale-update")
+    for
+      _ <- insertDraft(draftId.value, "draft_ready")
+      _ <- setUpdatedAt(draftId.value, updatedAt)
+      updated <- repo
+        .update(editableDraft(draftId, MatchDraftStatus.DraftReady), updatedAt.plusSeconds(1))
+      status <- draftStatus(draftId.value)
+      rowUpdatedAt <- draftUpdatedAt(draftId.value)
+    yield
+      assertEquals(updated, false)
+      assertEquals(status, "draft_ready")
+      assertEquals(rowUpdatedAt, updatedAt)
+
+  test("update refuses to overwrite an OCR-running draft"):
+    val draftId = MatchDraftId.unsafeFromString("match-draft-ocr-running-update")
+    for
+      _ <- insertDraft(draftId.value, "ocr_running")
+      updated <- repo.update(editableDraft(draftId, MatchDraftStatus.DraftReady), updatedAt)
+      status <- draftStatus(draftId.value)
+    yield
+      assertEquals(updated, false)
+      assertEquals(status, "ocr_running")
+
   test("cancel and markOcrFailed refuse terminal drafts"):
     val draftId = MatchDraftId.unsafeFromString("match-draft-terminal-transition")
     for
@@ -126,6 +150,14 @@ final class PostgresMatchDraftsRepositorySpec extends IntegrationSuite:
   private def draftStatus(id: String): IO[String] = sql"""
     SELECT status FROM match_drafts WHERE id = $id
   """.query[String].unique.transact(transactor)
+
+  private def draftUpdatedAt(id: String): IO[Instant] = sql"""
+    SELECT updated_at FROM match_drafts WHERE id = $id
+  """.query[Instant].unique.transact(transactor)
+
+  private def setUpdatedAt(id: String, value: Instant): IO[Int] = sql"""
+    UPDATE match_drafts SET updated_at = $value WHERE id = $id
+  """.update.run.transact(transactor)
 
   private def totalAssetsDraftId(id: String): IO[Option[String]] = sql"""
     SELECT total_assets_draft_id FROM match_drafts WHERE id = $id

@@ -6,7 +6,7 @@ import cats.effect.{Ref, Sync}
 import cats.syntax.all.*
 
 import momo.api.domain.ids.*
-import momo.api.domain.{MatchDraft, ScreenType}
+import momo.api.domain.{MatchDraft, MatchDraftStatus, ScreenType}
 import momo.api.repositories.MatchDraftsRepository
 
 final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
@@ -16,7 +16,8 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
 
   override def update(draft: MatchDraft, updatedAt: Instant): F[Boolean] = ref.modify { current =>
     (current.get(draft.id), draft) match
-      case (Some(_: MatchDraft.Editable), _: MatchDraft.Editable) =>
+      case (Some(existing: MatchDraft.Editable), _: MatchDraft.Editable)
+          if canApplyUserUpdate(existing, draft) =>
         val next = draft.withCommon(_.copy(updatedAt = updatedAt))
         (current + (draft.id -> next), true)
       case _ => (current, false)
@@ -113,6 +114,11 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
       case ScreenType.Revenue => draft.revenueDraftId.isEmpty
       case ScreenType.IncidentLog => draft.incidentLogDraftId.isEmpty
       case ScreenType.Auto => false
+
+  private def canApplyUserUpdate(existing: MatchDraft.Editable, draft: MatchDraft): Boolean =
+    MatchDraftStatus.userEditableStatuses.contains(existing.status) &&
+      MatchDraftStatus.userEditableStatuses.contains(draft.status) &&
+      existing.updatedAt.equals(draft.updatedAt)
 
 object InMemoryMatchDraftsRepository:
   def create[F[_]: Sync]: F[InMemoryMatchDraftsRepository[F]] = Ref

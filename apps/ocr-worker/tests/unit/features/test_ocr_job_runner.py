@@ -72,6 +72,7 @@ def _seed_record(
     payload: dict[str, str],
     *,
     status: OcrJobStatus = OcrJobStatus.QUEUED,
+    worker_id: str | None = None,
 ) -> None:
     msg = parse_job_message(payload)
     repo.seed(
@@ -84,7 +85,7 @@ def _seed_record(
             detected_screen_type=None,
             status=status,
             attempt_count=0,
-            worker_id=None,
+            worker_id=worker_id,
             failure=None,
         )
     )
@@ -194,6 +195,36 @@ def test_happy_path_persists_result_and_acks() -> None:
     assert record.attempt_count == 1
     assert "job-1" in repository.result_records
     assert repository.result_records["job-1"].draft_id == "draft-1"
+    assert consumer.acked == ["d1"]
+
+
+def test_running_duplicate_delivery_is_acked_without_false_failure() -> None:
+    consumer = InMemoryOcrJobConsumer()
+    repository = InMemoryOcrJobRepository()
+    payload = _make_payload()
+    _seed_record(
+        repository,
+        payload,
+        status=OcrJobStatus.RUNNING,
+        worker_id="worker-already-running",
+    )
+    consumer.enqueue(payload, delivery_tag="d1")
+
+    deps = _make_deps(
+        consumer=consumer,
+        repository=repository,
+        cancellation=InMemoryCancellationChecker(),
+        analyze=lambda **_: pytest.fail("duplicate RUNNING delivery must not run OCR"),
+    )
+
+    outcome = run_one_job(deps)
+
+    assert outcome.pulled is True
+    assert outcome.status is OcrJobStatus.RUNNING
+    record = repository.records["job-1"]
+    assert record.status is OcrJobStatus.RUNNING
+    assert record.failure is None
+    assert record.worker_id == "worker-already-running"
     assert consumer.acked == ["d1"]
 
 

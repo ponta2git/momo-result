@@ -112,6 +112,19 @@ def _phase_lookup_record(deps: PipelineDependencies, delivery: PulledJob) -> Ocr
         # Duplicate delivery after a persisted terminal state: DB is the source
         # of truth, so no retry or compensating transition is needed.
         return record.status
+    if record.status is OcrJobStatus.RUNNING:
+        # Redis may redeliver or XCLAIM a pending message while the original
+        # worker still owns the DB job. Treat DB as authoritative and ack this
+        # duplicate instead of running OCR twice or writing a false failure.
+        logger.warning(
+            "OCR queue delivery references an already running job; acknowledging duplicate",
+            extra={
+                "job_id": message.job_id,
+                "delivery_tag": delivery.delivery_tag,
+                "worker_id": record.worker_id,
+            },
+        )
+        return record.status
     _ensure_payload_matches_record(message, record)
     return None
 

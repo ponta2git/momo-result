@@ -108,9 +108,10 @@ Dispatcher invariants:
 
 worker invariants:
 
-- Terminal DB write before `XACK`。`succeeded`, `failed`, `cancelled` の永続化前に ack しない。
+- Terminal DB write before `XACK`。`succeeded`, `failed`, `cancelled` の永続化前に ack しない。ただし DB 正本上すでに実行不要と判断できる重複配送は下記の例外として ack する。
 - Unknown `jobId` は DB 正本に存在しない残骸として ack して破棄する。
 - Already terminal `jobId` は再実行せず ack して破棄する。
+- Already running `jobId` は他 worker がDB上で実行権を持つ重複配送として、再実行も失敗書き込みもせず ack する。crash 等で残った stale running job の terminal failure 化は API maintenance が担う。
 - Malformed payload は `jobId` が読める場合、`QUEUE_FAILURE` として DB に terminal failure を書いてから ack する。
 - Terminal failure の DB 書き込みに失敗した場合は ack せず、PEL claim / DLQ に任せる。
 - `OCR_MAX_ATTEMPTS` を超えた stale pending delivery は DLQ へ `XADD` してから元 message を ack する。

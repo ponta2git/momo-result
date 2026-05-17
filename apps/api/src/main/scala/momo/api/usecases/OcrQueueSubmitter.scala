@@ -9,6 +9,7 @@ import org.typelevel.log4cats.LoggerFactory
 import momo.api.domain.ids.*
 import momo.api.domain.{FailureCode, OcrFailure}
 import momo.api.errors.AppError
+import momo.api.logging.SafeLog
 import momo.api.repositories.{
   MatchDraftsRepository, OcrJobsRepository, OcrQueuePayload, QueueProducer,
 }
@@ -40,9 +41,10 @@ object OcrQueueSubmitter:
     override def submit(context: Context): F[Either[AppError, Unit]] = queue
       .publish(context.payload).redeemWith(
         error =>
+          val originalErrorClasses = SafeLog.throwableClasses(error)
           val logOriginal = logger.error(s"OCR enqueue publish failed jobId=${context.jobId
               .value} draftId=${context.draftId.value} matchDraftId=${context.matchDraftId
-              .fold("none")(_.value)} errorClass=${error.getClass.getName}")
+              .fold("none")(_.value)} errorClasses=$originalErrorClasses")
           val markDraftFailure = context.matchDraftId match
             case Some(id) => matchDrafts.markOcrFailed(id, context.createdAt).void
             case None => MonadThrow[F].unit
@@ -52,11 +54,15 @@ object OcrQueueSubmitter:
             (jobs.markFailed(context.jobId, queueFailure, context.createdAt) >> markDraftFailure)
               .attempt.flatMap {
                 case Right(_) => MonadThrow[F].unit
-                case Left(compensationError) => logger
-                    .error(compensationError)(s"OCR enqueue compensation failed jobId=${context
-                        .jobId.value} draftId=${context.draftId
-                        .value}" + s" matchDraftId=${context.matchDraftId
-                        .fold("none")(_.value)} originalError=" + s"${error.getClass.getName}")
+                case Left(compensationError) =>
+                  val compensationErrorClasses = SafeLog.throwableClasses(compensationError)
+                  val matchDraftId = context.matchDraftId.fold("none")(_.value)
+                  logger.error(
+                    s"OCR enqueue compensation failed jobId=${context.jobId.value} draftId=${context
+                        .draftId.value} matchDraftId=$matchDraftId " +
+                      s"originalErrorClasses=$originalErrorClasses " +
+                      s"compensationErrorClasses=$compensationErrorClasses"
+                  )
               }
           logOriginal >> compensate >> AppError.DependencyFailed("Failed to enqueue OCR job.")
             .asLeft[Unit].pure[F]

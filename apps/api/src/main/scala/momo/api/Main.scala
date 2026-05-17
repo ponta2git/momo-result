@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory
 
 import momo.api.bootstrap.ApiApp
 import momo.api.config.AppConfig
+import momo.api.logging.SafeLog
 
 object Main extends IOApp:
   private val logger = LoggerFactory.getLogger(getClass)
@@ -24,7 +25,8 @@ object Main extends IOApp:
       }
     }
   }.as(ExitCode.Success).handleErrorWith { error =>
-    IO.delay(logger.error("momo_result_api_fatal", error)).as(ExitCode.Error)
+    val classes = SafeLog.throwableClasses(error)
+    IO.delay(logger.error(s"momo_result_api_fatal errorClasses=$classes")).as(ExitCode.Error)
   }
 
   private[api] def bindAddress(config: AppConfig): IO[(Host, Port)] = (

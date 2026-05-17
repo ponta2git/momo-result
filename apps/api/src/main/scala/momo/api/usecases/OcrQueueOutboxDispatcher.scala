@@ -9,6 +9,7 @@ import cats.effect.{Clock, Resource, Temporal}
 import cats.syntax.all.*
 import org.typelevel.log4cats.LoggerFactory
 
+import momo.api.logging.SafeLog
 import momo.api.repositories.{OcrQueueOutboxRecord, OcrQueueOutboxRepository, QueueProducer}
 
 final case class OcrQueueOutboxDispatcherConfig(
@@ -27,8 +28,8 @@ final class OcrQueueOutboxDispatcher[F[_]: Temporal: Clock: LoggerFactory](
 
   def run: F[Unit] =
     (runOnce.handleErrorWith { error =>
-      logger.error(error)(s"OCR queue outbox dispatcher tick failed errorClass=${error.getClass
-          .getName}")
+      val classes = SafeLog.throwableClasses(error)
+      logger.error(s"OCR queue outbox dispatcher tick failed errorClasses=$classes")
     } >> Temporal[F].sleep(config.pollInterval)).foreverM
 
   def runOnce: F[Unit] =
@@ -54,9 +55,10 @@ final class OcrQueueOutboxDispatcher[F[_]: Temporal: Clock: LoggerFactory](
           now <- Clock[F].realTimeInstant
           nextAttemptAt = plus(now, nextBackoff(row.attemptCount + 1))
           sanitized = sanitizeError(error)
-          _ <- logger.error(error)(s"OCR queue outbox publish failed outboxId=${row.id} jobId=${row
-              .jobId.value} attempt=${row.attemptCount +
-              1} nextAttemptAt=$nextAttemptAt " + s"errorClass=${error.getClass.getName}")
+          errorClasses = SafeLog.throwableClasses(error)
+          _ <- logger.error(s"OCR queue outbox publish failed outboxId=${row.id} jobId=${row.jobId
+              .value} attempt=${row.attemptCount +
+              1} nextAttemptAt=$nextAttemptAt errorClasses=$errorClasses")
           released <- outbox
             .releaseForRetry(row.id, row.claimExpiresAt, sanitized, nextAttemptAt, now)
           _ <-

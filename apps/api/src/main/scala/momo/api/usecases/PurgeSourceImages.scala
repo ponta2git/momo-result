@@ -7,6 +7,7 @@ import cats.syntax.all.*
 import org.slf4j.LoggerFactory
 
 import momo.api.domain.ids.MatchDraftId
+import momo.api.logging.SafeLog
 import momo.api.repositories.{ImageStore, MatchDraftsRepository}
 
 final class PurgeSourceImages[F[_]: Sync](
@@ -30,11 +31,9 @@ final class PurgeSourceImages[F[_]: Sync](
 
   def runBestEffort(draftId: MatchDraftId, now: Instant): F[Unit] = run(draftId, now)
     .handleErrorWith { error =>
-      Sync[F].delay(logger.error(
-        s"Source image retention cleanup failed draftId=${draftId.value} errorClass=${error.getClass
-            .getName}",
-        error,
-      ))
+      val classes = SafeLog.throwableClasses(error)
+      Sync[F].delay(logger.error(s"Source image retention cleanup failed draftId=${draftId
+          .value} errorClasses=$classes"))
     }
 
   private def deleteSourceImages(draft: momo.api.domain.MatchDraft): F[Unit] = draft.sourceImageIds

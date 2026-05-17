@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory
 import momo.api.auth.AuthenticatedAccount
 import momo.api.endpoints.ProblemDetails
 import momo.api.errors.AppError
+import momo.api.logging.SafeLog
 import momo.api.repositories.{
   IdempotencyRecord, IdempotencyRepository, IdempotencyReservation, IdempotencyResponse,
 }
@@ -154,10 +155,8 @@ private[http] object IdempotencyReplay:
       operation: String,
       error: Throwable,
   ): F[Unit] = Async[F].delay {
-    logger.error(
-      s"Failed to $operation idempotency response endpoint=$endpoint accountId=${account.accountId
-          .value} keyLength=${key.length} errorClass=${error.getClass.getName}",
-      error,
-    )
+    val classes = SafeLog.throwableClasses(error)
+    logger.error(s"Failed to $operation idempotency response endpoint=$endpoint accountId=${account
+        .accountId.value} keyLength=${key.length} errorClasses=$classes")
   }
 end IdempotencyReplay

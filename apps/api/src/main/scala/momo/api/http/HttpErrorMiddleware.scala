@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory
 
 import momo.api.endpoints.ProblemDetails
 import momo.api.errors.{AppError, AppException}
+import momo.api.logging.SafeLog
 
 private[http] object HttpErrorMiddleware:
   private val logger = LoggerFactory.getLogger("momo.api.http.HttpErrorMiddleware")
@@ -39,11 +40,14 @@ private[http] object HttpErrorMiddleware:
     case _ if hasCause(error)(isIoError) => AppError.Internal("File operation failed.")
     case _ => AppError.Internal("Unexpected server error.")
 
-  private def log(request: Request[?], appError: AppError, error: Throwable): Unit = logger.error(
-    s"Unhandled HTTP error method=${request.method.name} path=${request.uri.path.renderString} " +
-      s"problemCode=${appError.code} errorClass=${error.getClass.getName}",
-    error,
-  )
+  private def log(request: Request[?], appError: AppError, error: Throwable): Unit =
+    val method = request.method.name
+    val path = request.uri.path.renderString
+    val code = appError.code
+    val classes = SafeLog.throwableClasses(error)
+    logger.error(
+      s"Unhandled HTTP error method=$method path=$path problemCode=$code errorClasses=$classes"
+    )
 
   private def hasCause(error: Throwable)(predicate: Throwable => Boolean): Boolean =
     findCause(error)(predicate).isDefined

@@ -236,7 +236,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         // Original publish failure and secondary compensation failure are both logged.
         assertEquals(logged.size, 2)
         val entry = logged(1)
-        assertEquals(entry.throwable, Some(markFailedError))
+        assertEquals(entry.throwable, None)
         assert(
           entry.message.contains("jobId=job-log-1"),
           s"message missing jobId: ${entry.message}",
@@ -248,6 +248,10 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         assert(
           entry.message.contains("compensation"),
           s"message missing 'compensation' marker: ${entry.message}",
+        )
+        assert(
+          entry.message.contains(s"compensationErrorClasses=${markFailedError.getClass.getName}"),
+          s"message missing compensation error class: ${entry.message}",
         )
     }
   }

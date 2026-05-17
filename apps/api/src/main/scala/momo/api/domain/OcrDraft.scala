@@ -21,3 +21,6 @@ final case class OcrDraft(
     createdAt: Instant,
     updatedAt: Instant,
 )
+
+object OcrDraft:
+  val MaxBulkIds = 20

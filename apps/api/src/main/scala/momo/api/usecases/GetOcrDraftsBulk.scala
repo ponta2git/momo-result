@@ -12,6 +12,9 @@ final class GetOcrDraftsBulk[F[_]: Monad](drafts: OcrDraftsRepository[F]):
   def run(ids: List[OcrDraftId]): F[Either[AppError, List[OcrDraft]]] =
     if ids.isEmpty then
       Monad[F].pure(Left(AppError.ValidationFailed("ids query must contain at least 1 id.")))
+    else if ids.size > OcrDraft.MaxBulkIds then
+      Monad[F].pure(Left(AppError.ValidationFailed(s"ids query must contain at most ${OcrDraft
+          .MaxBulkIds.toString} ids.")))
     else
       ids.traverse(id => drafts.find(id).map(_.toRight(id))).map { results =>
         val missing = results.collect { case Left(id) => id }

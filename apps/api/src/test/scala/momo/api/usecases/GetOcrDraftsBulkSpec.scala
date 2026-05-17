@@ -46,6 +46,19 @@ final class GetOcrDraftsBulkSpec extends MomoCatsEffectSuite:
     )
   }
 
+  test("rejects too many ids before repository lookups") {
+    val ids = (1 to (OcrDraft.MaxBulkIds + 1)).toList
+      .map(index => OcrDraftId.unsafeFromString(s"draft-$index"))
+    for
+      repo <- InMemoryOcrDraftsRepository.create[IO]
+      result <- GetOcrDraftsBulk[IO](repo).run(ids)
+    yield assertEquals(
+      result,
+      Left(AppError.ValidationFailed(s"ids query must contain at most ${OcrDraft.MaxBulkIds
+          .toString} ids.")),
+    )
+  }
+
   test("returns not found when any requested draft is missing") {
     for
       repo <- InMemoryOcrDraftsRepository.create[IO]

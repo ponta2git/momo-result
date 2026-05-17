@@ -547,6 +547,7 @@
           {
             "name" : "ids",
             "in" : "query",
+            "description" : "1..20 comma-separated ids.",
             "required" : true,
             "schema" : {
               "type" : "string"

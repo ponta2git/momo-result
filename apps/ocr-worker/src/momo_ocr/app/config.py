@@ -31,6 +31,7 @@ class WorkerConfig:
     temp_root: Path = DEFAULT_TEMP_ROOT
     fast_path_enabled: bool = False
     debug_dir_base: Path | None = None
+    ocr_engine: str | None = None
 
 
 def load_worker_config(env: Mapping[str, str] | None = None) -> WorkerConfig:
@@ -56,6 +57,7 @@ def load_worker_config(env: Mapping[str, str] | None = None) -> WorkerConfig:
         temp_root=Path(source.get("IMAGE_TMP_DIR", str(DEFAULT_TEMP_ROOT))).absolute(),
         fast_path_enabled=parse_fast_path_flag(source.get("MOMO_OCR_FAST_PATH")),
         debug_dir_base=_optional_path(source, "MOMO_OCR_DEBUG_DIR"),
+        ocr_engine=_optional_non_empty(source, "MOMO_OCR_ENGINE"),
     )
 
 

@@ -14,7 +14,7 @@ from momo_ocr.app.composition import (
 )
 from momo_ocr.app.config import WorkerConfig
 from momo_ocr.features.ocr_jobs.runner import JobRunnerDependencies
-from momo_ocr.features.text_recognition.factory import text_recognition_engine_from_env
+from momo_ocr.features.text_recognition.factory import text_recognition_engine_from_name
 from momo_ocr.features.text_recognition.tesseract import TesseractEngine
 from momo_ocr.features.text_recognition.tesserocr_engine import TesserocrEngine
 from momo_ocr.shared.errors import FailureCode, OcrError
@@ -47,19 +47,19 @@ def test_respects_explicit_sslmode_in_url() -> None:
 
 def test_text_recognition_engine_default_is_tesserocr() -> None:
     """After Phase C canary parity, the default engine flipped to tesserocr."""
-    engine = text_recognition_engine_from_env(None)
+    engine = text_recognition_engine_from_name(None)
     assert isinstance(engine, TesserocrEngine)
     engine.close()
 
 
 def test_text_recognition_engine_subprocess_override() -> None:
-    engine = text_recognition_engine_from_env("subprocess")
+    engine = text_recognition_engine_from_name("subprocess")
     assert isinstance(engine, TesseractEngine)
 
 
 def test_text_recognition_engine_unknown_value_raises() -> None:
     with pytest.raises(OcrError) as excinfo:
-        text_recognition_engine_from_env("paddleocr")
+        text_recognition_engine_from_name("paddleocr")
     assert excinfo.value.code is FailureCode.OCR_ENGINE_UNAVAILABLE
 
 

@@ -12,7 +12,7 @@ from momo_ocr.app.config import WorkerConfig, require_production_config
 from momo_ocr.features.ocr_jobs.cancellation import RepositoryCancellationChecker
 from momo_ocr.features.ocr_jobs.consumer import RedisConsumerRetryConfig, RedisOcrJobConsumer
 from momo_ocr.features.ocr_jobs.repository import PostgresOcrJobRepository
-from momo_ocr.features.text_recognition.factory import default_text_recognition_engine
+from momo_ocr.features.text_recognition.factory import text_recognition_engine_from_name
 
 if TYPE_CHECKING:
     from momo_ocr.features.ocr_jobs.runner import JobRunnerDependencies
@@ -126,7 +126,10 @@ def production_worker_runtime(config: WorkerConfig) -> WorkerRuntime:
         repository = PostgresOcrJobRepository(pool)
         # Construct one OCR engine for the entire worker process so expensive
         # engine setup is paid once and the runner re-uses it for every job.
-        text_engine = default_text_recognition_engine(timeout_seconds=config.ocr_timeout_seconds)
+        text_engine = text_recognition_engine_from_name(
+            config.ocr_engine,
+            timeout_seconds=config.ocr_timeout_seconds,
+        )
         deps = JobRunnerDependencies(
             consumer=consumer,
             repository=repository,

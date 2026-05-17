@@ -17,6 +17,7 @@ def test_load_worker_config_reads_redis_and_database_urls() -> None:
             "IMAGE_TMP_DIR": "/tmp/custom-images",
             "MOMO_OCR_FAST_PATH": "yes",
             "MOMO_OCR_DEBUG_DIR": "/tmp/ocr-debug",
+            "MOMO_OCR_ENGINE": "subprocess",
         }
     )
 
@@ -30,6 +31,7 @@ def test_load_worker_config_reads_redis_and_database_urls() -> None:
     assert config.fast_path_enabled is True
     assert config.debug_dir_base is not None
     assert str(config.debug_dir_base) == "/tmp/ocr-debug"
+    assert config.ocr_engine == "subprocess"
 
 
 def test_require_production_config_rejects_missing_urls() -> None:

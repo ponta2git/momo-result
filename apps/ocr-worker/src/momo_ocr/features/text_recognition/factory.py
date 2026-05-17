@@ -16,18 +16,18 @@ _VALID_ENGINES = ("subprocess", "tesserocr")
 
 
 def default_text_recognition_engine(*, timeout_seconds: int | None = None) -> TextRecognitionEngine:
-    return text_recognition_engine_from_env(
+    return text_recognition_engine_from_name(
         os.environ.get(_ENV_OCR_ENGINE),
         timeout_seconds=timeout_seconds,
     )
 
 
-def text_recognition_engine_from_env(
+def text_recognition_engine_from_name(
     value: str | None,
     *,
     timeout_seconds: int | None = None,
 ) -> TextRecognitionEngine:
-    """Build the engine selected by ``MOMO_OCR_ENGINE``.
+    """Build the engine selected by a configured engine name.
 
     Default is in-process tesserocr for throughput. Set
     ``MOMO_OCR_ENGINE=subprocess`` when a deployment needs a hard per-call

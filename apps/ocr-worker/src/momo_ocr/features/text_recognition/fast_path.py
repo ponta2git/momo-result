@@ -13,17 +13,9 @@ the resulting boolean explicitly through the analysis context.
 
 from __future__ import annotations
 
-import os
-
-_ENV_NAME = "MOMO_OCR_FAST_PATH"
 _TRUTHY_VALUES: frozenset[str] = frozenset({"1", "true", "yes", "on"})
 
 
 def parse_fast_path_flag(value: str | None) -> bool:
     """Return True when a raw flag value enables fast-path behavior."""
     return (value or "").strip().lower() in _TRUTHY_VALUES
-
-
-def is_fast_path_enabled() -> bool:
-    """Return True when the fast-path env flag is enabled."""
-    return parse_fast_path_flag(os.environ.get(_ENV_NAME))

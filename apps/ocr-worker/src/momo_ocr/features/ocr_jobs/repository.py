@@ -46,7 +46,7 @@ class OcrJobRepository(Protocol):
     ) -> None:
         raise NotImplementedError
 
-    def transition_to_failed_terminal(self, job_id: str, result: OcrJobExecutionResult) -> None:
+    def complete_non_success(self, job_id: str, result: OcrJobExecutionResult) -> None:
         raise NotImplementedError
 
     def get_status(self, job_id: str) -> OcrJobStatus | None:
@@ -105,11 +105,11 @@ class InMemoryOcrJobRepository:
             result_record=result_record,
         )
 
-    def transition_to_failed_terminal(self, job_id: str, result: OcrJobExecutionResult) -> None:
+    def complete_non_success(self, job_id: str, result: OcrJobExecutionResult) -> None:
         if result.status not in {OcrJobStatus.FAILED, OcrJobStatus.CANCELLED}:
             raise OcrError(
                 FailureCode.DB_WRITE_FAILED,
-                f"Failed-terminal transition received non-failure status: {result.status.value}.",
+                f"Non-success completion received success status: {result.status.value}.",
             )
         self._terminal_transition(job_id, result, expected=result.status)
 
@@ -216,11 +216,11 @@ class PostgresOcrJobRepository:
             result_record=result_record,
         )
 
-    def transition_to_failed_terminal(self, job_id: str, result: OcrJobExecutionResult) -> None:
+    def complete_non_success(self, job_id: str, result: OcrJobExecutionResult) -> None:
         if result.status not in {OcrJobStatus.FAILED, OcrJobStatus.CANCELLED}:
             raise OcrError(
                 FailureCode.DB_WRITE_FAILED,
-                f"Failed-terminal transition received non-failure status: {result.status.value}.",
+                f"Non-success completion received success status: {result.status.value}.",
             )
         self._terminal_transition(job_id, result, expected=result.status)
 

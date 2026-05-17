@@ -321,7 +321,7 @@ def test_ocr_error_in_analyze_is_recorded_with_its_failure_metadata() -> None:
 
 
 class _FailingTerminalRepository(InMemoryOcrJobRepository):
-    def transition_to_failed_terminal(self, job_id: str, result: OcrJobExecutionResult) -> None:
+    def complete_non_success(self, job_id: str, result: OcrJobExecutionResult) -> None:
         del job_id, result
         raise OcrError(FailureCode.DB_WRITE_FAILED, "db unavailable", retryable=True)
 

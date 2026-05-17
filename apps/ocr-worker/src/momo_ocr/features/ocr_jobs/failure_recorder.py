@@ -82,7 +82,7 @@ def _transition_to_failed(
     failure: OcrFailure,
 ) -> bool:
     try:
-        repository.transition_to_failed_terminal(
+        repository.complete_non_success(
             job_id,
             OcrJobExecutionResult(
                 status=OcrJobStatus.FAILED,

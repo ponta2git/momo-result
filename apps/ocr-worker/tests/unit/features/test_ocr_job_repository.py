@@ -58,7 +58,7 @@ def test_failed_terminal_requires_failure_metadata() -> None:
     repository = _running_repository()
 
     with pytest.raises(OcrError, match="requires failure metadata"):
-        repository.transition_to_failed_terminal(
+        repository.complete_non_success(
             "job-1",
             OcrJobExecutionResult(
                 status=OcrJobStatus.FAILED,

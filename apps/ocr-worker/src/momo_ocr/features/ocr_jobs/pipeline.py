@@ -139,7 +139,7 @@ def _phase_pre_run_cancellation(
 ) -> OcrJobStatus | None:
     if not deps.cancellation.is_cancelled(message.job_id):
         return None
-    deps.repository.transition_to_failed_terminal(message.job_id, _cancelled_result())
+    deps.repository.complete_non_success(message.job_id, _cancelled_result())
     return OcrJobStatus.CANCELLED
 
 
@@ -149,7 +149,7 @@ def _phase_post_running_cancellation(
     """Honour cancellation that arrived between transition_to_running and OCR start."""
     if not deps.cancellation.is_cancelled(message.job_id):
         return None
-    deps.repository.transition_to_failed_terminal(message.job_id, _cancelled_result())
+    deps.repository.complete_non_success(message.job_id, _cancelled_result())
     return OcrJobStatus.CANCELLED
 
 
@@ -189,7 +189,7 @@ def _persist_analysis_result(
             retryable=analysis.failure_retryable,
             user_action=analysis.failure_user_action,
         )
-        deps.repository.transition_to_failed_terminal(
+        deps.repository.complete_non_success(
             message.job_id,
             OcrJobExecutionResult(
                 status=OcrJobStatus.FAILED,
@@ -211,7 +211,7 @@ def _persist_analysis_result(
             retryable=False,
             user_action="Re-upload a clearer screenshot or fill in the result manually.",
         )
-        deps.repository.transition_to_failed_terminal(
+        deps.repository.complete_non_success(
             message.job_id,
             OcrJobExecutionResult(
                 status=OcrJobStatus.FAILED,

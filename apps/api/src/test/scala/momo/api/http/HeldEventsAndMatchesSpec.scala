@@ -135,6 +135,21 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
       .flatMap(res => assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "ids"))
   }
 
+  app.test("POST /api/ocr-jobs rejects blank image id at the HTTP boundary") { httpApp =>
+    val req = Request[IO](Method.POST, uri"/api/ocr-jobs").putHeaders(devWriteHeaders()*)
+      .withEntity(HttpRequestBodies.Matches.createOcrJob(" ", "total_assets"))
+    httpApp.run(req).flatMap { res =>
+      assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "imageId")
+    }
+  }
+
+  app.test("GET /api/matches rejects blank id query filters at the HTTP boundary") { httpApp =>
+    val req = Request[IO](Method.GET, uri"/api/matches?heldEventId=%20").putHeaders(devReadHeader())
+    httpApp.run(req).flatMap { res =>
+      assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "heldEventId")
+    }
+  }
+
   app.test("GET /api/ocr-drafts bulk returns 404 when a draft is missing") { httpApp =>
     httpApp
       .run(Request[IO](Method.GET, uri"/api/ocr-drafts?ids=missing").putHeaders(devReadHeader()))
@@ -244,6 +259,24 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
       )
       _ <- assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "players.rank")
     yield ()
+  }
+
+  app.test("POST /api/matches rejects blank player member id at the HTTP boundary") { httpApp =>
+    val body = HttpRequestBodies.Matches.confirmMatchWithPlayers(
+      "held-any",
+      1,
+      players = List(
+        HttpRequestBodies.Matches.player(" ", 1, 1),
+        HttpRequestBodies.Matches.player("member_akane_mami", 2, 2),
+        HttpRequestBodies.Matches.player("member_otaka", 3, 3),
+        HttpRequestBodies.Matches.player("member_eu", 4, 4),
+      ),
+    )
+    val req = Request[IO](Method.POST, uri"/api/matches").putHeaders(devWriteHeaders()*)
+      .withEntity(body)
+    httpApp.run(req).flatMap { res =>
+      assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "players.memberId")
+    }
   }
 
   app.test("GET /api/exports/matches downloads CSV for confirmed matches") { httpApp =>

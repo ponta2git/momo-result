@@ -93,6 +93,14 @@ final class MasterEndpointsSpec extends MomoCatsEffectSuite with HttpAppTestFixt
     }
   }
 
+  app.test("POST /api/game-titles rejects blank id at the HTTP boundary") { http =>
+    val req = Request[IO](Method.POST, uri"/api/game-titles").withHeaders(devWriteHeaders()*)
+      .withEntity(HttpRequestBodies.Master.createGameTitle(" ", "x", "world"))
+    http.run(req).flatMap { r =>
+      assertProblem(r, Status.UnprocessableContent, "VALIDATION_FAILED", "id must not be blank")
+    }
+  }
+
   app.test("POST /api/game-titles is restricted to administrators") { http =>
     val req = Request[IO](Method.POST, uri"/api/game-titles").withHeaders(nonAdminWriteHeaders()*)
       .withEntity(HttpRequestBodies.Master.gameTitleWorld)
@@ -177,6 +185,14 @@ final class MasterEndpointsSpec extends MomoCatsEffectSuite with HttpAppTestFixt
       seasonList <- listedSeasons.as[SeasonMasterListResponse]
       _ = assertEquals(seasonList.items, List(createdSeason))
     yield ()
+  }
+
+  app.test("GET /api/map-masters rejects blank game title filter at the HTTP boundary") { http =>
+    val req = Request[IO](Method.GET, uri"/api/map-masters?gameTitleId=%20")
+      .withHeaders(devReadHeader())
+    http.run(req).flatMap { r =>
+      assertProblem(r, Status.UnprocessableContent, "VALIDATION_FAILED", "gameTitleId")
+    }
   }
 
   app.test("POST /api/game-titles without CSRF token is rejected") { http =>

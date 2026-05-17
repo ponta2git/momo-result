@@ -1,6 +1,7 @@
 package momo.api.endpoints.codec
 
 import momo.api.domain.ids.*
+import momo.api.errors.AppError
 import momo.api.usecases.ListMatchesCommand
 
 /** Query-parameter ↔ command conversion for `MatchesEndpoints.list`. */
@@ -12,12 +13,18 @@ object MatchListCodec:
       status: Option[String],
       kind: Option[String],
       limit: Option[Int],
-  ): ListMatchesCommand = ListMatchesCommand(
-    heldEventId = heldEventId.map(HeldEventId.unsafeFromString(_)),
-    gameTitleId = gameTitleId.map(GameTitleId.unsafeFromString(_)),
-    seasonMasterId = seasonMasterId.map(SeasonMasterId.unsafeFromString(_)),
-    status = status,
-    kind = kind,
-    limit = limit,
-  )
+  ): Either[AppError, ListMatchesCommand] =
+    for
+      parsedHeldEventId <- BoundaryId.optional("heldEventId", heldEventId)(HeldEventId.fromString)
+      parsedGameTitleId <- BoundaryId.optional("gameTitleId", gameTitleId)(GameTitleId.fromString)
+      parsedSeasonMasterId <- BoundaryId
+        .optional("seasonMasterId", seasonMasterId)(SeasonMasterId.fromString)
+    yield ListMatchesCommand(
+      heldEventId = parsedHeldEventId,
+      gameTitleId = parsedGameTitleId,
+      seasonMasterId = parsedSeasonMasterId,
+      status = status,
+      kind = kind,
+      limit = limit,
+    )
 end MatchListCodec

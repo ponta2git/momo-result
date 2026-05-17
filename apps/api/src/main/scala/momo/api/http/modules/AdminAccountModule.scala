@@ -7,6 +7,7 @@ import cats.syntax.all.*
 import sttp.tapir.server.ServerEndpoint
 
 import momo.api.domain.ids.AccountId
+import momo.api.endpoints.codec.BoundaryId
 import momo.api.endpoints.{
   AdminAccountEndpoints, CreateLoginAccountRequest, LoginAccountListResponse, LoginAccountResponse,
   UpdateLoginAccountRequest,
@@ -56,9 +57,12 @@ object AdminAccountModule:
               "PATCH /api/admin/login-accounts",
               (accountId, request),
               nowF,
-              security.respond(
-                updateLoginAccount.run(AccountId.unsafeFromString(accountId), toCommand(request))
-              )(LoginAccountResponse.from),
+              security
+                .decode(BoundaryId.required("accountId", accountId)(AccountId.fromString)) { id =>
+                  security.respond(
+                    updateLoginAccount.run(id, toCommand(request))
+                  )(LoginAccountResponse.from)
+                },
             )
           }
     },

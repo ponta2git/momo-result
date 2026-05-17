@@ -6,7 +6,7 @@ import cats.effect.Async
 import sttp.tapir.server.ServerEndpoint
 
 import momo.api.domain.ids.HeldEventId
-import momo.api.endpoints.codec.HeldEventCodec
+import momo.api.endpoints.codec.{BoundaryId, HeldEventCodec}
 import momo.api.endpoints.{
   CreateHeldEventRequest, DeleteHeldEventResponse, HeldEventListResponse, HeldEventResponse,
   HeldEventsEndpoints,
@@ -56,9 +56,13 @@ object HeldEventModule:
               "DELETE /api/held-events",
               heldEventId,
               nowF,
-              security.respond(deleteHeldEvent.run(HeldEventId.unsafeFromString(heldEventId))) { _ =>
-                DeleteHeldEventResponse(heldEventId = heldEventId, deleted = true)
-              },
+              security.decode(
+                BoundaryId.required("heldEventId", heldEventId)(HeldEventId.fromString)
+              )(id =>
+                security.respond(deleteHeldEvent.run(id)) { _ =>
+                  DeleteHeldEventResponse(heldEventId = heldEventId, deleted = true)
+                }
+              ),
             )
           }
     },

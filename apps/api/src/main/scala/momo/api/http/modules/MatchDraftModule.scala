@@ -7,7 +7,7 @@ import cats.syntax.all.*
 import sttp.tapir.server.ServerEndpoint
 
 import momo.api.domain.ids.MatchDraftId
-import momo.api.endpoints.codec.MatchDraftCodec
+import momo.api.endpoints.codec.{BoundaryId, MatchDraftCodec}
 import momo.api.endpoints.{
   CancelMatchDraftResponse, CreateMatchDraftRequest, MatchDraftDetailResponse, MatchDraftEndpoints,
   MatchDraftResponse, MatchDraftSourceImageListResponse, MatchDraftSourceImageResponse,
@@ -62,20 +62,25 @@ object MatchDraftModule:
               nowF,
               MatchDraftCodec.parseInstantOption[F](request.playedAt).flatMap {
                 case Left(error) => Async[F].pure(Left(security.toProblem(error)))
-                case Right(playedAt) => security.respond(updateMatchDraft.run(
-                    MatchDraftId.unsafeFromString(draftId),
-                    MatchDraftCodec.toUpdateCommand(request, playedAt),
-                    member.accountId,
-                  ))(MatchDraftResponse.from)
+                case Right(playedAt) => security
+                    .decode(BoundaryId.required("matchDraftId", draftId)(MatchDraftId.fromString)) {
+                      id =>
+                        security
+                          .decode(MatchDraftCodec.toUpdateCommand(request, playedAt)) { command =>
+                            security.respond(
+                              updateMatchDraft.run(id, command, member.accountId)
+                            )(MatchDraftResponse.from)
+                          }
+                    }
               },
             )
           }
     },
     MatchDraftEndpoints.get.serverLogic { case (draftId, accountHeader) =>
       security.authorizeRead(accountHeader) { member =>
-        security.respond(
-          getMatchDraft.run(MatchDraftId.unsafeFromString(draftId), member.accountId)
-        )(MatchDraftDetailResponse.from)
+        security.decode(BoundaryId.required("matchDraftId", draftId)(MatchDraftId.fromString))(id =>
+          security.respond(getMatchDraft.run(id, member.accountId))(MatchDraftDetailResponse.from)
+        )
       }
     },
     MatchDraftEndpoints.cancel.serverLogic { case (draftId, accountHeader, csrfToken, idemKey) =>
@@ -87,25 +92,31 @@ object MatchDraftModule:
           s"POST /api/match-drafts/$draftId/cancel",
           draftId,
           nowF,
-          security.respond(
-            cancelMatchDraft.run(MatchDraftId.unsafeFromString(draftId), member.accountId)
-          )(_ => CancelMatchDraftResponse(matchDraftId = draftId, status = "cancelled")),
+          security
+            .decode(BoundaryId.required("matchDraftId", draftId)(MatchDraftId.fromString)) { id =>
+              security.respond(
+                cancelMatchDraft.run(id, member.accountId)
+              )(_ => CancelMatchDraftResponse(matchDraftId = draftId, status = "cancelled"))
+            },
         )
       }
     },
     MatchDraftEndpoints.listSourceImages.serverLogic { case (draftId, accountHeader) =>
       security.authorizeRead(accountHeader) { member =>
-        security.respond(
-          getMatchDraftSourceImages.list(MatchDraftId.unsafeFromString(draftId), member.accountId)
-        )(items => MatchDraftSourceImageListResponse(items.map(MatchDraftSourceImageResponse.from)))
+        security.decode(BoundaryId.required("matchDraftId", draftId)(MatchDraftId.fromString))(id =>
+          security.respond(getMatchDraftSourceImages.list(id, member.accountId))(items =>
+            MatchDraftSourceImageListResponse(items.map(MatchDraftSourceImageResponse.from))
+          )
+        )
       }
     },
     MatchDraftEndpoints.getSourceImage.serverLogic { case (draftId, kind, accountHeader) =>
       security.authorizeRead(accountHeader) { member =>
-        security.respond(
-          getMatchDraftSourceImages
-            .stream(MatchDraftId.unsafeFromString(draftId), kind, member.accountId)
-        )(image => (image.contentType, "private, no-store", "nosniff", image.bytes))
+        security.decode(BoundaryId.required("matchDraftId", draftId)(MatchDraftId.fromString))(id =>
+          security.respond(
+            getMatchDraftSourceImages.stream(id, kind, member.accountId)
+          )(image => (image.contentType, "private, no-store", "nosniff", image.bytes))
+        )
       }
     },
   )

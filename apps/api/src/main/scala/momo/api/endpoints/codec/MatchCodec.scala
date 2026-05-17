@@ -1,58 +1,98 @@
 package momo.api.endpoints.codec
 
+import cats.syntax.all.*
+
 import momo.api.domain.ids.*
 import momo.api.domain.{IncidentCounts, PlayerResult}
 import momo.api.endpoints.{ConfirmMatchRequest, PlayerResultRequest, UpdateMatchRequest}
+import momo.api.errors.AppError
 import momo.api.usecases.{ConfirmMatch, UpdateMatch}
 
 /** DTO ↔ usecase command conversions for `MatchesEndpoints`. */
 object MatchCodec:
-  def toPlayerResult(player: PlayerResultRequest): PlayerResult.Input = PlayerResult.Input(
-    memberId = MemberId.unsafeFromString(player.memberId),
-    playOrder = player.playOrder,
-    rank = player.rank,
-    totalAssetsManYen = player.totalAssetsManYen,
-    revenueManYen = player.revenueManYen,
-    incidents = IncidentCounts.Input(
-      destination = player.incidents.destination,
-      plusStation = player.incidents.plusStation,
-      minusStation = player.incidents.minusStation,
-      cardStation = player.incidents.cardStation,
-      cardShop = player.incidents.cardShop,
-      suriNoGinji = player.incidents.suriNoGinji,
-    ),
-  )
+  def toPlayerResult(player: PlayerResultRequest): Either[AppError, PlayerResult.Input] = BoundaryId
+    .required("players.memberId", player.memberId)(MemberId.fromString).map { memberId =>
+      PlayerResult.Input(
+        memberId = memberId,
+        playOrder = player.playOrder,
+        rank = player.rank,
+        totalAssetsManYen = player.totalAssetsManYen,
+        revenueManYen = player.revenueManYen,
+        incidents = IncidentCounts.Input(
+          destination = player.incidents.destination,
+          plusStation = player.incidents.plusStation,
+          minusStation = player.incidents.minusStation,
+          cardStation = player.incidents.cardStation,
+          cardShop = player.incidents.cardShop,
+          suriNoGinji = player.incidents.suriNoGinji,
+        ),
+      )
+    }
 
-  def toConfirmCommand(request: ConfirmMatchRequest): ConfirmMatch.Command = ConfirmMatch.Command(
-    heldEventId = HeldEventId.unsafeFromString(request.heldEventId),
-    matchNoInEvent = request.matchNoInEvent,
-    gameTitleId = GameTitleId.unsafeFromString(request.gameTitleId),
-    seasonMasterId = SeasonMasterId.unsafeFromString(request.seasonMasterId),
-    ownerMemberId = MemberId.unsafeFromString(request.ownerMemberId),
-    mapMasterId = MapMasterId.unsafeFromString(request.mapMasterId),
-    playedAt = request.playedAt,
-    matchDraftId = request.matchDraftId.map(MatchDraftId.unsafeFromString(_)),
-    draftRefs = ConfirmMatch.DraftRefs(
-      totalAssets = request.draftIds.totalAssets.map(OcrDraftId.unsafeFromString(_)),
-      revenue = request.draftIds.revenue.map(OcrDraftId.unsafeFromString(_)),
-      incidentLog = request.draftIds.incidentLog.map(OcrDraftId.unsafeFromString(_)),
-    ),
-    players = request.players.map(toPlayerResult),
-  )
+  def toConfirmCommand(request: ConfirmMatchRequest): Either[AppError, ConfirmMatch.Command] =
+    for
+      heldEventId <- BoundaryId.required("heldEventId", request.heldEventId)(HeldEventId.fromString)
+      gameTitleId <- BoundaryId.required("gameTitleId", request.gameTitleId)(GameTitleId.fromString)
+      seasonMasterId <- BoundaryId
+        .required("seasonMasterId", request.seasonMasterId)(SeasonMasterId.fromString)
+      ownerMemberId <- BoundaryId
+        .required("ownerMemberId", request.ownerMemberId)(MemberId.fromString)
+      mapMasterId <- BoundaryId.required("mapMasterId", request.mapMasterId)(MapMasterId.fromString)
+      matchDraftId <- BoundaryId
+        .optional("matchDraftId", request.matchDraftId)(MatchDraftId.fromString)
+      totalAssetsDraftId <- BoundaryId
+        .optional("draftIds.totalAssets", request.draftIds.totalAssets)(OcrDraftId.fromString)
+      revenueDraftId <- BoundaryId
+        .optional("draftIds.revenue", request.draftIds.revenue)(OcrDraftId.fromString)
+      incidentLogDraftId <- BoundaryId
+        .optional("draftIds.incidentLog", request.draftIds.incidentLog)(OcrDraftId.fromString)
+      players <- request.players.traverse(toPlayerResult)
+    yield ConfirmMatch.Command(
+      heldEventId = heldEventId,
+      matchNoInEvent = request.matchNoInEvent,
+      gameTitleId = gameTitleId,
+      seasonMasterId = seasonMasterId,
+      ownerMemberId = ownerMemberId,
+      mapMasterId = mapMasterId,
+      playedAt = request.playedAt,
+      matchDraftId = matchDraftId,
+      draftRefs = ConfirmMatch.DraftRefs(
+        totalAssets = totalAssetsDraftId,
+        revenue = revenueDraftId,
+        incidentLog = incidentLogDraftId,
+      ),
+      players = players,
+    )
 
-  def toUpdateCommand(request: UpdateMatchRequest): UpdateMatch.Command = UpdateMatch.Command(
-    heldEventId = HeldEventId.unsafeFromString(request.heldEventId),
-    matchNoInEvent = request.matchNoInEvent,
-    gameTitleId = GameTitleId.unsafeFromString(request.gameTitleId),
-    seasonMasterId = SeasonMasterId.unsafeFromString(request.seasonMasterId),
-    ownerMemberId = MemberId.unsafeFromString(request.ownerMemberId),
-    mapMasterId = MapMasterId.unsafeFromString(request.mapMasterId),
-    playedAt = request.playedAt,
-    draftRefs = ConfirmMatch.DraftRefs(
-      totalAssets = request.draftIds.totalAssets.map(OcrDraftId.unsafeFromString(_)),
-      revenue = request.draftIds.revenue.map(OcrDraftId.unsafeFromString(_)),
-      incidentLog = request.draftIds.incidentLog.map(OcrDraftId.unsafeFromString(_)),
-    ),
-    players = request.players.map(toPlayerResult),
-  )
+  def toUpdateCommand(request: UpdateMatchRequest): Either[AppError, UpdateMatch.Command] =
+    for
+      heldEventId <- BoundaryId.required("heldEventId", request.heldEventId)(HeldEventId.fromString)
+      gameTitleId <- BoundaryId.required("gameTitleId", request.gameTitleId)(GameTitleId.fromString)
+      seasonMasterId <- BoundaryId
+        .required("seasonMasterId", request.seasonMasterId)(SeasonMasterId.fromString)
+      ownerMemberId <- BoundaryId
+        .required("ownerMemberId", request.ownerMemberId)(MemberId.fromString)
+      mapMasterId <- BoundaryId.required("mapMasterId", request.mapMasterId)(MapMasterId.fromString)
+      totalAssetsDraftId <- BoundaryId
+        .optional("draftIds.totalAssets", request.draftIds.totalAssets)(OcrDraftId.fromString)
+      revenueDraftId <- BoundaryId
+        .optional("draftIds.revenue", request.draftIds.revenue)(OcrDraftId.fromString)
+      incidentLogDraftId <- BoundaryId
+        .optional("draftIds.incidentLog", request.draftIds.incidentLog)(OcrDraftId.fromString)
+      players <- request.players.traverse(toPlayerResult)
+    yield UpdateMatch.Command(
+      heldEventId = heldEventId,
+      matchNoInEvent = request.matchNoInEvent,
+      gameTitleId = gameTitleId,
+      seasonMasterId = seasonMasterId,
+      ownerMemberId = ownerMemberId,
+      mapMasterId = mapMasterId,
+      playedAt = request.playedAt,
+      draftRefs = ConfirmMatch.DraftRefs(
+        totalAssets = totalAssetsDraftId,
+        revenue = revenueDraftId,
+        incidentLog = incidentLogDraftId,
+      ),
+      players = players,
+    )
 end MatchCodec

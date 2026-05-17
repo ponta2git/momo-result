@@ -119,6 +119,9 @@ object OcrQueuePayload:
       jobId <- required("jobId")
       draftId <- required("draftId")
       imageId <- required("imageId")
+      parsedJobId <- OcrJobId.fromString(jobId).leftMap(_ => "jobId must not be blank")
+      parsedDraftId <- OcrDraftId.fromString(draftId).leftMap(_ => "draftId must not be blank")
+      parsedImageId <- ImageId.fromString(imageId).leftMap(_ => "imageId must not be blank")
       imagePath <- required("imagePath")
       requested <- required("requestedScreenType")
       screenType <- ScreenType.fromWire(requested)
@@ -137,10 +140,13 @@ object OcrQueuePayload:
       hints <- hintsJson match
         case None => Right(OcrJobHints.empty)
         case Some(raw) => io.circe.parser.decode[OcrJobHints](raw).left.map(_.getMessage)
+      _ <- OcrJobHints.validationErrors(hints) match
+        case Nil => Right(())
+        case errors => Left(errors.mkString(" "))
     yield OcrQueuePayload(OcrQueuePayloadV1(
-      jobId = OcrJobId.unsafeFromString(jobId),
-      draftId = OcrDraftId.unsafeFromString(draftId),
-      imageId = ImageId.unsafeFromString(imageId),
+      jobId = parsedJobId,
+      draftId = parsedDraftId,
+      imageId = parsedImageId,
       imagePath = java.nio.file.Paths.get(imagePath),
       requestedScreenType = screenType,
       attempt = attemptValue,

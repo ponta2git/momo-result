@@ -8,6 +8,7 @@ import sttp.tapir.Schema
 
 import momo.api.domain.ids.*
 import momo.api.domain.{OcrDraft, OcrJob, OcrJobHints, PlayerAliasHint, StoredImage}
+import momo.api.endpoints.codec.BoundaryId
 import momo.api.errors.AppError
 
 final case class AuthMeResponse(
@@ -39,17 +40,24 @@ final case class OcrJobHintsRequest(
     layoutFamily: Option[String],
     knownPlayerAliases: List[PlayerAliasHintRequest],
     computerPlayerAliases: List[String],
-) derives Codec.AsObject:
-  def asDomain: OcrJobHints = OcrJobHints(
-    gameTitle = gameTitle,
-    layoutFamily = layoutFamily,
-    knownPlayerAliases = knownPlayerAliases
-      .map(hint => PlayerAliasHint(MemberId.unsafeFromString(hint.memberId), hint.aliases)),
-    computerPlayerAliases = computerPlayerAliases,
-  )
+) derives Codec.AsObject
 
 object OcrJobHintsRequest:
   given Schema[OcrJobHintsRequest] = Schema.derived
+
+  def asDomain(request: OcrJobHintsRequest): Either[AppError, OcrJobHints] = request
+    .knownPlayerAliases.traverse { hint =>
+      BoundaryId
+        .required("ocrHints.knownPlayerAliases.memberId", hint.memberId)(MemberId.fromString)
+        .map(PlayerAliasHint(_, hint.aliases))
+    }.map(knownAliases =>
+      OcrJobHints(
+        gameTitle = request.gameTitle,
+        layoutFamily = request.layoutFamily,
+        knownPlayerAliases = knownAliases,
+        computerPlayerAliases = request.computerPlayerAliases,
+      )
+    )
 
 final case class CreateOcrJobRequest(
     imageId: String,

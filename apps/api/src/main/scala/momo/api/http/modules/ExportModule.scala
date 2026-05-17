@@ -7,6 +7,7 @@ import sttp.tapir.server.ServerEndpoint
 import momo.api.auth.RateLimiter
 import momo.api.domain.ids.{HeldEventId, MatchId, SeasonMasterId}
 import momo.api.endpoints.ExportEndpoints
+import momo.api.endpoints.codec.BoundaryId
 import momo.api.errors.AppError
 import momo.api.http.EndpointSecurity
 import momo.api.usecases.ExportMatches
@@ -23,14 +24,20 @@ object ExportModule:
             case false => Async[F].pure(Left(
                 security.toProblem(AppError.TooManyRequests("Too many exports. Try again later."))
               ))
-            case true => exportMatches.run(
-                format,
-                seasonMasterId.map(SeasonMasterId.unsafeFromString(_)),
-                heldEventId.map(HeldEventId.unsafeFromString(_)),
-                matchId.map(MatchId.unsafeFromString(_)),
-              ).map(_.leftMap(security.toProblem).map(file =>
-                (file.contentDisposition, file.contentType, file.body)
-              ))
+            case true =>
+              val decoded =
+                for
+                  season <- BoundaryId
+                    .optional("seasonMasterId", seasonMasterId)(SeasonMasterId.fromString)
+                  event <- BoundaryId.optional("heldEventId", heldEventId)(HeldEventId.fromString)
+                  matchValue <- BoundaryId.optional("matchId", matchId)(MatchId.fromString)
+                yield (season, event, matchValue)
+              security.decode(decoded) { case (season, event, matchValue) =>
+                exportMatches.run(format, season, event, matchValue).map(
+                  _.leftMap(security.toProblem)
+                    .map(file => (file.contentDisposition, file.contentType, file.body))
+                )
+              }
           }
         }
   })

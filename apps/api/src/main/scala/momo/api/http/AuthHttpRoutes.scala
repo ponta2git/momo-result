@@ -70,33 +70,38 @@ private[http] object AuthHttpRoutes:
                               case Left(error) => problem(error).map(_.addCookie(
                                   clearCookie(config.auth.stateCookieName, config)
                                 ))
-                              case Right(discordUser) => accounts
-                                  .findByDiscordUserId(UserId.unsafeFromString(discordUser.id))
-                                  .flatMap {
-                                    case None => problem(AppError.Forbidden(
-                                        "This Discord user is not allowed to log in."
-                                      )).map(_.addCookie(
-                                        clearCookie(config.auth.stateCookieName, config)
-                                      ))
-                                    case Some(account) if !account.loginEnabled =>
-                                      problem(
-                                        AppError.Forbidden("This account is not allowed to log in.")
-                                      ).map(_.addCookie(
-                                        clearCookie(config.auth.stateCookieName, config)
-                                      ))
-                                    case Some(account) => sessions.create(account)
-                                        .flatMap { session =>
-                                          redirect(
-                                            context.redirectPath
-                                              .getOrElse(config.auth.callbackRedirectPath)
-                                          ).map(
-                                            _.addCookie(sessionCookie(config, session.cookieValue))
-                                              .addCookie(
-                                                clearCookie(config.auth.stateCookieName, config)
+                              case Right(discordUser) => UserId.fromString(discordUser.id) match
+                                  case Left(_) => problem(AppError.Forbidden(
+                                      "This Discord user is not allowed to log in."
+                                    )).map(_.addCookie(
+                                      clearCookie(config.auth.stateCookieName, config)
+                                    ))
+                                  case Right(userId) => accounts.findByDiscordUserId(userId)
+                                      .flatMap {
+                                        case None => problem(AppError.Forbidden(
+                                            "This Discord user is not allowed to log in."
+                                          )).map(_.addCookie(
+                                            clearCookie(config.auth.stateCookieName, config)
+                                          ))
+                                        case Some(account) if !account.loginEnabled =>
+                                          problem(AppError.Forbidden(
+                                            "This account is not allowed to log in."
+                                          )).map(_.addCookie(
+                                            clearCookie(config.auth.stateCookieName, config)
+                                          ))
+                                        case Some(account) => sessions.create(account)
+                                            .flatMap { session =>
+                                              redirect(context.redirectPath.getOrElse(
+                                                config.auth.callbackRedirectPath
+                                              )).map(
+                                                _.addCookie(
+                                                  sessionCookie(config, session.cookieValue)
+                                                ).addCookie(
+                                                  clearCookie(config.auth.stateCookieName, config)
+                                                )
                                               )
-                                          )
-                                        }
-                                  }
+                                            }
+                                      }
                             }
                           case None => problem(
                               AppError
@@ -124,21 +129,25 @@ private[http] object AuthHttpRoutes:
       case request if request.method.name == "GET" && path(request) == "/api/auth/me" =>
         config.appEnv match
           case AppEnv.Dev | AppEnv.Test => devAccountHeader(request) match
-              case Some(accountId) => accounts.find(AccountId.unsafeFromString(accountId)).flatMap {
-                  case Some(account) if account.loginEnabled =>
-                    json(AuthMeResponse(
-                      accountId = account.id.value,
-                      displayName = account.displayName,
-                      isAdmin = account.isAdmin,
-                      memberId = account.playerMemberId.map(_.value),
-                      csrfToken = Some(CsrfMiddleware.DevToken),
-                    ))
-                  case Some(_) =>
-                    problem(AppError.Forbidden("This account is not allowed to log in."))
-                  case None => problem(
+              case Some(accountId) => AccountId.fromString(accountId) match
+                  case Left(_) => problem(
                       AppError.Forbidden("Account header is not one of the allowed accounts.")
                     )
-                }
+                  case Right(parsedAccountId) => accounts.find(parsedAccountId).flatMap {
+                      case Some(account) if account.loginEnabled =>
+                        json(AuthMeResponse(
+                          accountId = account.id.value,
+                          displayName = account.displayName,
+                          isAdmin = account.isAdmin,
+                          memberId = account.playerMemberId.map(_.value),
+                          csrfToken = Some(CsrfMiddleware.DevToken),
+                        ))
+                      case Some(_) =>
+                        problem(AppError.Forbidden("This account is not allowed to log in."))
+                      case None => problem(
+                          AppError.Forbidden("Account header is not one of the allowed accounts.")
+                        )
+                    }
               case None => sessionAuthMe(request)
           case AppEnv.Prod => sessionAuthMe(request)
     }

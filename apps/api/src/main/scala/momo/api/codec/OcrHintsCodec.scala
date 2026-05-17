@@ -1,7 +1,7 @@
 package momo.api.codec
 
 import io.circe.syntax.*
-import io.circe.{Codec, Decoder, Encoder, HCursor, Json, JsonObject}
+import io.circe.{Codec, Decoder, DecodingFailure, Encoder, HCursor, Json, JsonObject}
 
 import momo.api.domain.ids.MemberId
 import momo.api.domain.{OcrJobHints, PlayerAliasHint}
@@ -26,7 +26,9 @@ object OcrHintsCodec:
     override def apply(cursor: HCursor): Decoder.Result[PlayerAliasHint] =
       for
         memberId <- cursor.downField("memberId").as[String]
+        parsedMemberId <- MemberId.fromString(memberId).left
+          .map(_ => DecodingFailure("memberId must not be blank", cursor.history))
         aliases <- cursor.downField("aliases").as[List[String]]
-      yield PlayerAliasHint(MemberId.unsafeFromString(memberId), aliases)
+      yield PlayerAliasHint(parsedMemberId, aliases)
 
   given Codec.AsObject[OcrJobHints] = Codec.AsObject.derived

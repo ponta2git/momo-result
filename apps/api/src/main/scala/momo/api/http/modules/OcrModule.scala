@@ -7,7 +7,7 @@ import cats.syntax.all.*
 import sttp.tapir.server.ServerEndpoint
 
 import momo.api.domain.ids.{OcrDraftId, OcrJobId}
-import momo.api.endpoints.codec.{OcrDraftCodec, OcrJobCodec}
+import momo.api.endpoints.codec.{BoundaryId, OcrDraftCodec, OcrJobCodec}
 import momo.api.endpoints.{
   CancelOcrJobResponse, CreateOcrJobRequest, OcrDraftEndpoints, OcrDraftListResponse,
   OcrDraftResponse, OcrJobEndpoints, OcrJobResponse,
@@ -37,15 +37,17 @@ object OcrModule:
               "POST /api/ocr-jobs",
               request,
               nowF,
-              security.respond(
-                createOcrJob.run(OcrJobCodec.toCreateCommand(request), requestId)
-              )(OcrJobCodec.toCreateResponse),
+              security.decode(OcrJobCodec.toCreateCommand(request))(command =>
+                security.respond(createOcrJob.run(command, requestId))(OcrJobCodec.toCreateResponse)
+              ),
             )
           }
     },
     OcrJobEndpoints.get.serverLogic { case (jobId, accountHeader) =>
       security.authorizeRead(accountHeader)(_ =>
-        security.respond(getOcrJob.run(OcrJobId.unsafeFromString(jobId)))(OcrJobResponse.from)
+        security.decode(
+          BoundaryId.required("jobId", jobId)(OcrJobId.fromString)
+        )(id => security.respond(getOcrJob.run(id))(OcrJobResponse.from))
       )
     },
     OcrJobEndpoints.cancel.serverLogic { case (jobId, accountHeader, csrfToken, idemKey) =>
@@ -57,18 +59,17 @@ object OcrModule:
           "DELETE /api/ocr-jobs",
           jobId,
           nowF,
-          security.respond(
-            cancelOcrJob.run(OcrJobId.unsafeFromString(jobId))
-          )(_ => CancelOcrJobResponse(jobId, "cancelled")),
+          security.decode(BoundaryId.required("jobId", jobId)(OcrJobId.fromString))(id =>
+            security.respond(cancelOcrJob.run(id))(_ => CancelOcrJobResponse(jobId, "cancelled"))
+          ),
         )
       }
     },
     OcrDraftEndpoints.get.serverLogic { case (draftId, accountHeader) =>
       security.authorizeRead(accountHeader)(_ =>
-        security.respond(
-          getOcrDraft.run(OcrDraftId.unsafeFromString(draftId))
-            .map(_.flatMap(OcrDraftResponse.from))
-        )(identity)
+        security.decode(BoundaryId.required("draftId", draftId)(OcrDraftId.fromString))(id =>
+          security.respond(getOcrDraft.run(id).map(_.flatMap(OcrDraftResponse.from)))(identity)
+        )
       )
     },
     OcrDraftEndpoints.listByIds.serverLogic { case (ids, accountHeader) =>

@@ -41,18 +41,20 @@ private final class ProductionAuthPolicy[F[_]: Async](accounts: LoginAccountsRep
   override def authenticate(
       accountHeader: Option[String]
   ): F[Either[ProblemDetails.ProblemResponse, AuthenticatedAccount]] = accountHeader match
-    case Some(value) => accounts.find(AccountId.unsafeFromString(value)).map {
-        case Some(account) if account.loginEnabled =>
-          Right(AuthenticatedAccount(
-            account.id,
-            account.displayName,
-            account.isAdmin,
-            account.playerMemberId,
-          ))
-        case Some(_) =>
-          Left(toProblem(AppError.Forbidden("This account is not allowed to log in.")))
-        case None => Left(toProblem(AppError.Unauthorized()))
-      }
+    case Some(value) => AccountId.fromString(value) match
+        case Left(_) => Async[F].pure(Left(toProblem(AppError.Unauthorized())))
+        case Right(accountId) => accounts.find(accountId).map {
+            case Some(account) if account.loginEnabled =>
+              Right(AuthenticatedAccount(
+                account.id,
+                account.displayName,
+                account.isAdmin,
+                account.playerMemberId,
+              ))
+            case Some(_) =>
+              Left(toProblem(AppError.Forbidden("This account is not allowed to log in.")))
+            case None => Left(toProblem(AppError.Unauthorized()))
+          }
     case None => Async[F].pure(Left(toProblem(AppError.Unauthorized())))
 
   override def verifyCsrf(
@@ -72,20 +74,24 @@ private final class DevAuthPolicy[F[_]: Async](
   ): F[Either[ProblemDetails.ProblemResponse, AuthenticatedAccount]] = accountHeader match
     case Some(value) => DevAuthMiddleware.authenticate(config.appEnv, roster, value).flatMap {
         case Right(account) => Async[F].pure(Right(account))
-        case Left(_) => accounts.find(AccountId.unsafeFromString(value)).map {
-            case Some(account) if account.loginEnabled =>
-              Right(AuthenticatedAccount(
-                account.id,
-                account.displayName,
-                account.isAdmin,
-                account.playerMemberId,
-              ))
-            case Some(_) =>
-              Left(toProblem(AppError.Forbidden("This account is not allowed to log in.")))
-            case None => Left(
+        case Left(_) => AccountId.fromString(value) match
+            case Left(_) => Async[F].pure(Left(
                 toProblem(AppError.Forbidden("Account header is not one of the allowed accounts."))
-              )
-          }
+              ))
+            case Right(accountId) => accounts.find(accountId).map {
+                case Some(account) if account.loginEnabled =>
+                  Right(AuthenticatedAccount(
+                    account.id,
+                    account.displayName,
+                    account.isAdmin,
+                    account.playerMemberId,
+                  ))
+                case Some(_) =>
+                  Left(toProblem(AppError.Forbidden("This account is not allowed to log in.")))
+                case None => Left(toProblem(
+                    AppError.Forbidden("Account header is not one of the allowed accounts.")
+                  ))
+              }
       }
     case None => Async[F].pure(Left(toProblem(AppError.Unauthorized())))
 

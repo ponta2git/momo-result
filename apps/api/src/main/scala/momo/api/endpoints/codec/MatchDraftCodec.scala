@@ -31,32 +31,49 @@ object MatchDraftCodec:
   def toCreateCommand(
       request: CreateMatchDraftRequest,
       playedAt: Option[Instant],
-  ): Either[AppError, CreateMatchDraftCommand] = parseStatusOption(request.status).map { status =>
-    CreateMatchDraftCommand(
-      heldEventId = request.heldEventId.map(HeldEventId.unsafeFromString(_)),
+  ): Either[AppError, CreateMatchDraftCommand] =
+    for
+      status <- parseStatusOption(request.status)
+      heldEventId <- BoundaryId.optional("heldEventId", request.heldEventId)(HeldEventId.fromString)
+      gameTitleId <- BoundaryId.optional("gameTitleId", request.gameTitleId)(GameTitleId.fromString)
+      seasonMasterId <- BoundaryId
+        .optional("seasonMasterId", request.seasonMasterId)(SeasonMasterId.fromString)
+      ownerMemberId <- BoundaryId
+        .optional("ownerMemberId", request.ownerMemberId)(MemberId.fromString)
+      mapMasterId <- BoundaryId.optional("mapMasterId", request.mapMasterId)(MapMasterId.fromString)
+    yield CreateMatchDraftCommand(
+      heldEventId = heldEventId,
       matchNoInEvent = request.matchNoInEvent,
-      gameTitleId = request.gameTitleId.map(GameTitleId.unsafeFromString(_)),
+      gameTitleId = gameTitleId,
       layoutFamily = request.layoutFamily,
-      seasonMasterId = request.seasonMasterId.map(SeasonMasterId.unsafeFromString(_)),
-      ownerMemberId = request.ownerMemberId.map(MemberId.unsafeFromString(_)),
-      mapMasterId = request.mapMasterId.map(MapMasterId.unsafeFromString(_)),
+      seasonMasterId = seasonMasterId,
+      ownerMemberId = ownerMemberId,
+      mapMasterId = mapMasterId,
       playedAt = playedAt,
       status = status,
     )
-  }
 
   def toUpdateCommand(
       request: UpdateMatchDraftRequest,
       playedAt: Option[Instant],
-  ): UpdateMatchDraftCommand = UpdateMatchDraftCommand(
-    heldEventId = request.heldEventId.map(HeldEventId.unsafeFromString(_)),
-    matchNoInEvent = request.matchNoInEvent,
-    gameTitleId = request.gameTitleId.map(GameTitleId.unsafeFromString(_)),
-    layoutFamily = request.layoutFamily,
-    seasonMasterId = request.seasonMasterId.map(SeasonMasterId.unsafeFromString(_)),
-    ownerMemberId = request.ownerMemberId.map(MemberId.unsafeFromString(_)),
-    mapMasterId = request.mapMasterId.map(MapMasterId.unsafeFromString(_)),
-    playedAt = playedAt,
-    status = request.status,
-  )
+  ): Either[AppError, UpdateMatchDraftCommand] =
+    for
+      heldEventId <- BoundaryId.optional("heldEventId", request.heldEventId)(HeldEventId.fromString)
+      gameTitleId <- BoundaryId.optional("gameTitleId", request.gameTitleId)(GameTitleId.fromString)
+      seasonMasterId <- BoundaryId
+        .optional("seasonMasterId", request.seasonMasterId)(SeasonMasterId.fromString)
+      ownerMemberId <- BoundaryId
+        .optional("ownerMemberId", request.ownerMemberId)(MemberId.fromString)
+      mapMasterId <- BoundaryId.optional("mapMasterId", request.mapMasterId)(MapMasterId.fromString)
+    yield UpdateMatchDraftCommand(
+      heldEventId = heldEventId,
+      matchNoInEvent = request.matchNoInEvent,
+      gameTitleId = gameTitleId,
+      layoutFamily = request.layoutFamily,
+      seasonMasterId = seasonMasterId,
+      ownerMemberId = ownerMemberId,
+      mapMasterId = mapMasterId,
+      playedAt = playedAt,
+      status = request.status,
+    )
 end MatchDraftCodec

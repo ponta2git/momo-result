@@ -10,6 +10,9 @@ import munit.FunSuite
 final class ApiEndpointsArchitectureSpec extends FunSuite:
   private val endpointDir = Paths.get("src/main/scala/momo/api/endpoints")
   private val httpDir = Paths.get("src/main/scala/momo/api/http")
+  private val codecDir = Paths.get("src/main/scala/momo/api/codec")
+  private val redisQueuePayload = Paths
+    .get("src/main/scala/momo/api/repositories/OcrQueuePayload.scala")
 
   private val ObjectBlock =
     raw"(?s)object\s+([A-Za-z0-9_]+Endpoints):(.+?)(?=\nobject\s+[A-Za-z0-9_]+Endpoints:|\z)".r
@@ -30,6 +33,15 @@ final class ApiEndpointsArchitectureSpec extends FunSuite:
       .filterNot(serverRefs.contains).sorted
 
     assertEquals(missing, Nil)
+
+  test("API boundaries parse ids before constructing domain id types"):
+    val boundaryFiles = scalaFiles(endpointDir) ++ scalaFiles(httpDir) ++ scalaFiles(codecDir) ++
+      List(redisQueuePayload)
+    val violations = boundaryFiles.flatMap { path =>
+      if read(path).contains("unsafeFromString") then Some(path.toString) else None
+    }.sorted
+
+    assertEquals(violations, Nil)
 
   private def definedEndpointRefs: List[String] = scalaFiles(endpointDir).flatMap { path =>
     ObjectBlock.findAllMatchIn(read(path)).flatMap { objectMatch =>

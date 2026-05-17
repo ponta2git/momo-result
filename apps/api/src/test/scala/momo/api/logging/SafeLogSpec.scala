@@ -20,10 +20,7 @@ final class SafeLogSpec extends FunSuite:
 
     val rendered = SafeLog.throwableClasses(error)
 
-    assertEquals(
-      rendered,
-      "java.lang.IllegalStateException>java.lang.IllegalArgumentException",
-    )
+    assertEquals(rendered, "java.lang.IllegalStateException>java.lang.IllegalArgumentException")
     assert(!rendered.contains("secret"))
     assert(!rendered.contains("secret_table"))
 

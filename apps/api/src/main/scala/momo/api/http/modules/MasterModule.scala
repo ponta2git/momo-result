@@ -6,8 +6,8 @@ import cats.effect.Async
 import cats.syntax.all.*
 import sttp.tapir.server.ServerEndpoint
 
-import momo.api.domain.ids.GameTitleId
-import momo.api.endpoints.codec.MasterCodec
+import momo.api.domain.ids.{GameTitleId, MapMasterId, SeasonMasterId}
+import momo.api.endpoints.codec.{BoundaryId, MasterCodec}
 import momo.api.endpoints.{
   CreateGameTitleRequest, CreateMapMasterRequest, CreateMemberAliasRequest,
   CreateSeasonMasterRequest, DeleteMasterResponse, GameTitleListResponse, GameTitleResponse,
@@ -64,9 +64,9 @@ object MasterModule:
           "POST /api/game-titles",
           request,
           nowF,
-          security.respond(
-            createGameTitle.run(MasterCodec.toCreateGameTitleCommand(request))
-          )(GameTitleResponse.from),
+          security.decode(
+            MasterCodec.toCreateGameTitleCommand(request)
+          )(command => security.respond(createGameTitle.run(command))(GameTitleResponse.from)),
         )
       }
     },
@@ -80,9 +80,9 @@ object MasterModule:
               "PATCH /api/game-titles",
               (id, request),
               nowF,
-              security.respond(
-                updateGameTitle.run(MasterCodec.toUpdateGameTitleCommand(id, request))
-              )(GameTitleResponse.from),
+              security.decode(
+                MasterCodec.toUpdateGameTitleCommand(id, request)
+              )(command => security.respond(updateGameTitle.run(command))(GameTitleResponse.from)),
             )
           }
     },
@@ -95,16 +95,20 @@ object MasterModule:
           "DELETE /api/game-titles",
           id,
           nowF,
-          security.respond(
-            deleteGameTitle.run(momo.api.domain.ids.GameTitleId.unsafeFromString(id))
-          )(_ => DeleteMasterResponse(id, deleted = true)),
+          security.decode(BoundaryId.required("id", id)(GameTitleId.fromString))(parsedId =>
+            security
+              .respond(deleteGameTitle.run(parsedId))(_ => DeleteMasterResponse(id, deleted = true))
+          ),
         )
       }
     },
     MapMastersEndpoints.list.serverLogic { case (gameTitleId, accountHeader) =>
       security.authorizeRead(accountHeader) { _ =>
-        listMapMasters.run(gameTitleId.map(GameTitleId.unsafeFromString(_)))
-          .map(items => Right(MapMasterListResponse(items.map(MapMasterResponse.from))))
+        security.decode(BoundaryId.optional("gameTitleId", gameTitleId)(GameTitleId.fromString)) {
+          parsedGameTitleId =>
+            listMapMasters.run(parsedGameTitleId)
+              .map(items => Right(MapMasterListResponse(items.map(MapMasterResponse.from))))
+        }
       }
     },
     MapMastersEndpoints.create.serverLogic { case (accountHeader, csrfToken, idemKey, request) =>
@@ -116,9 +120,9 @@ object MasterModule:
           "POST /api/map-masters",
           request,
           nowF,
-          security.respond(
-            createMapMaster.run(MasterCodec.toCreateMapMasterCommand(request))
-          )(MapMasterResponse.from),
+          security.decode(
+            MasterCodec.toCreateMapMasterCommand(request)
+          )(command => security.respond(createMapMaster.run(command))(MapMasterResponse.from)),
         )
       }
     },
@@ -132,9 +136,9 @@ object MasterModule:
               "PATCH /api/map-masters",
               (id, request),
               nowF,
-              security.respond(
-                updateMapMaster.run(MasterCodec.toUpdateMapMasterCommand(id, request))
-              )(MapMasterResponse.from),
+              security.decode(
+                MasterCodec.toUpdateMapMasterCommand(id, request)
+              )(command => security.respond(updateMapMaster.run(command))(MapMasterResponse.from)),
             )
           }
     },
@@ -147,16 +151,20 @@ object MasterModule:
           "DELETE /api/map-masters",
           id,
           nowF,
-          security.respond(
-            deleteMapMaster.run(momo.api.domain.ids.MapMasterId.unsafeFromString(id))
-          )(_ => DeleteMasterResponse(id, deleted = true)),
+          security.decode(BoundaryId.required("id", id)(MapMasterId.fromString))(parsedId =>
+            security
+              .respond(deleteMapMaster.run(parsedId))(_ => DeleteMasterResponse(id, deleted = true))
+          ),
         )
       }
     },
     SeasonMastersEndpoints.list.serverLogic { case (gameTitleId, accountHeader) =>
       security.authorizeRead(accountHeader) { _ =>
-        listSeasonMasters.run(gameTitleId.map(GameTitleId.unsafeFromString(_)))
-          .map(items => Right(SeasonMasterListResponse(items.map(SeasonMasterResponse.from))))
+        security.decode(BoundaryId.optional("gameTitleId", gameTitleId)(GameTitleId.fromString)) {
+          parsedGameTitleId =>
+            listSeasonMasters.run(parsedGameTitleId)
+              .map(items => Right(SeasonMasterListResponse(items.map(SeasonMasterResponse.from))))
+        }
       }
     },
     SeasonMastersEndpoints.create.serverLogic { case (accountHeader, csrfToken, idemKey, request) =>
@@ -168,9 +176,9 @@ object MasterModule:
           "POST /api/season-masters",
           request,
           nowF,
-          security.respond(
-            createSeasonMaster.run(MasterCodec.toCreateSeasonMasterCommand(request))
-          )(SeasonMasterResponse.from),
+          security.decode(
+            MasterCodec.toCreateSeasonMasterCommand(request)
+          )(command => security.respond(createSeasonMaster.run(command))(SeasonMasterResponse.from)),
         )
       }
     },
@@ -184,9 +192,9 @@ object MasterModule:
               "PATCH /api/season-masters",
               (id, request),
               nowF,
-              security.respond(
-                updateSeasonMaster.run(MasterCodec.toUpdateSeasonMasterCommand(id, request))
-              )(SeasonMasterResponse.from),
+              security.decode(MasterCodec.toUpdateSeasonMasterCommand(id, request))(command =>
+                security.respond(updateSeasonMaster.run(command))(SeasonMasterResponse.from)
+              ),
             )
           }
     },
@@ -199,9 +207,11 @@ object MasterModule:
           "DELETE /api/season-masters",
           id,
           nowF,
-          security.respond(
-            deleteSeasonMaster.run(momo.api.domain.ids.SeasonMasterId.unsafeFromString(id))
-          )(_ => DeleteMasterResponse(id, deleted = true)),
+          security.decode(BoundaryId.required("id", id)(SeasonMasterId.fromString))(parsedId =>
+            security.respond(
+              deleteSeasonMaster.run(parsedId)
+            )(_ => DeleteMasterResponse(id, deleted = true))
+          ),
         )
       }
     },
@@ -243,9 +253,9 @@ object MasterModule:
               "PATCH /api/member-aliases",
               (id, request),
               nowF,
-              security.respond(
-                updateMemberAlias.run(MasterCodec.toUpdateMemberAliasCommand(id, request))
-              )(MemberAliasResponse.from),
+              security.decode(MasterCodec.toUpdateMemberAliasCommand(id, request))(command =>
+                security.respond(updateMemberAlias.run(command))(MemberAliasResponse.from)
+              ),
             )
           }
     },
@@ -258,7 +268,11 @@ object MasterModule:
           "DELETE /api/member-aliases",
           id,
           nowF,
-          security.respond(deleteMemberAlias.run(id))(_ => DeleteMasterResponse(id, deleted = true)),
+          security.decode(BoundaryId.nonBlank("id", id))(parsedId =>
+            security.respond(
+              deleteMemberAlias.run(parsedId)
+            )(_ => DeleteMasterResponse(id, deleted = true))
+          ),
         )
       }
     },

@@ -59,3 +59,9 @@ private[http] final class EndpointSecurity[F[_]: Async](
   def respond[A, B](result: F[Either[AppError, A]])(
       onSuccess: A => B
   ): F[Either[ProblemDetails.ProblemResponse, B]] = result.map(_.leftMap(toProblem).map(onSuccess))
+
+  def decode[A, B](decoded: Either[AppError, A])(
+      onSuccess: A => F[Either[ProblemDetails.ProblemResponse, B]]
+  ): F[Either[ProblemDetails.ProblemResponse, B]] = decoded match
+    case Left(error) => Async[F].pure(Left(toProblem(error)))
+    case Right(value) => onSuccess(value)

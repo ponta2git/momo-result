@@ -6,6 +6,7 @@ import momo.api.endpoints.{
   CreateSeasonMasterRequest, UpdateGameTitleRequest, UpdateMapMasterRequest,
   UpdateMemberAliasRequest, UpdateSeasonMasterRequest,
 }
+import momo.api.errors.AppError
 import momo.api.usecases.{
   CreateGameTitleCommand, CreateMapMasterCommand, CreateMemberAliasCommand,
   CreateSeasonMasterCommand, UpdateGameTitleCommand, UpdateMapMasterCommand,
@@ -14,43 +15,46 @@ import momo.api.usecases.{
 
 /** DTO ↔ usecase command conversions for master-data endpoints. */
 object MasterCodec:
-  def toCreateGameTitleCommand(request: CreateGameTitleRequest): CreateGameTitleCommand =
-    CreateGameTitleCommand(
-      GameTitleId.unsafeFromString(request.id),
-      request.name,
-      request.layoutFamily,
-    )
+  def toCreateGameTitleCommand(
+      request: CreateGameTitleRequest
+  ): Either[AppError, CreateGameTitleCommand] = BoundaryId
+    .required("id", request.id)(GameTitleId.fromString)
+    .map(id => CreateGameTitleCommand(id, request.name, request.layoutFamily))
 
-  def toCreateMapMasterCommand(request: CreateMapMasterRequest): CreateMapMasterCommand =
-    CreateMapMasterCommand(
-      MapMasterId.unsafeFromString(request.id),
-      GameTitleId.unsafeFromString(request.gameTitleId),
-      request.name,
-    )
+  def toCreateMapMasterCommand(
+      request: CreateMapMasterRequest
+  ): Either[AppError, CreateMapMasterCommand] =
+    for
+      id <- BoundaryId.required("id", request.id)(MapMasterId.fromString)
+      gameTitleId <- BoundaryId.required("gameTitleId", request.gameTitleId)(GameTitleId.fromString)
+    yield CreateMapMasterCommand(id, gameTitleId, request.name)
 
-  def toCreateSeasonMasterCommand(request: CreateSeasonMasterRequest): CreateSeasonMasterCommand =
-    CreateSeasonMasterCommand(
-      SeasonMasterId.unsafeFromString(request.id),
-      GameTitleId.unsafeFromString(request.gameTitleId),
-      request.name,
-    )
+  def toCreateSeasonMasterCommand(
+      request: CreateSeasonMasterRequest
+  ): Either[AppError, CreateSeasonMasterCommand] =
+    for
+      id <- BoundaryId.required("id", request.id)(SeasonMasterId.fromString)
+      gameTitleId <- BoundaryId.required("gameTitleId", request.gameTitleId)(GameTitleId.fromString)
+    yield CreateSeasonMasterCommand(id, gameTitleId, request.name)
 
   def toUpdateGameTitleCommand(
       id: String,
       request: UpdateGameTitleRequest,
-  ): UpdateGameTitleCommand =
-    UpdateGameTitleCommand(GameTitleId.unsafeFromString(id), request.name, request.layoutFamily)
+  ): Either[AppError, UpdateGameTitleCommand] = BoundaryId
+    .required("id", id)(GameTitleId.fromString)
+    .map(UpdateGameTitleCommand(_, request.name, request.layoutFamily))
 
   def toUpdateMapMasterCommand(
       id: String,
       request: UpdateMapMasterRequest,
-  ): UpdateMapMasterCommand = UpdateMapMasterCommand(MapMasterId.unsafeFromString(id), request.name)
+  ): Either[AppError, UpdateMapMasterCommand] = BoundaryId
+    .required("id", id)(MapMasterId.fromString).map(UpdateMapMasterCommand(_, request.name))
 
   def toUpdateSeasonMasterCommand(
       id: String,
       request: UpdateSeasonMasterRequest,
-  ): UpdateSeasonMasterCommand =
-    UpdateSeasonMasterCommand(SeasonMasterId.unsafeFromString(id), request.name)
+  ): Either[AppError, UpdateSeasonMasterCommand] = BoundaryId
+    .required("id", id)(SeasonMasterId.fromString).map(UpdateSeasonMasterCommand(_, request.name))
 
   def toCreateMemberAliasCommand(request: CreateMemberAliasRequest): CreateMemberAliasCommand =
     CreateMemberAliasCommand(request.memberId, request.alias)
@@ -58,5 +62,6 @@ object MasterCodec:
   def toUpdateMemberAliasCommand(
       id: String,
       request: UpdateMemberAliasRequest,
-  ): UpdateMemberAliasCommand = UpdateMemberAliasCommand(id, request.memberId, request.alias)
+  ): Either[AppError, UpdateMemberAliasCommand] = BoundaryId.nonBlank("id", id)
+    .map(UpdateMemberAliasCommand(_, request.memberId, request.alias))
 end MasterCodec

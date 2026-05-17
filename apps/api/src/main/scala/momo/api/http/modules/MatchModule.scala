@@ -7,7 +7,7 @@ import cats.effect.Async
 import sttp.tapir.server.ServerEndpoint
 
 import momo.api.domain.ids.MatchId
-import momo.api.endpoints.codec.{MatchCodec, MatchListCodec}
+import momo.api.endpoints.codec.{BoundaryId, MatchCodec, MatchListCodec}
 import momo.api.endpoints.{
   ConfirmMatchRequest, ConfirmMatchResponse, DeleteMatchResponse, MatchDetailResponse,
   MatchListResponse, MatchSummaryResponse, MatchesEndpoints, UpdateMatchRequest,
@@ -36,16 +36,16 @@ object MatchModule:
           "POST /api/matches",
           request,
           nowF,
-          security.respond(
-            confirmMatch
-              .run(MatchCodec.toConfirmCommand(request), member.accountId, member.playerMemberId)
-          )(record =>
-            ConfirmMatchResponse(
-              matchId = record.id.value,
-              heldEventId = record.heldEventId.value,
-              matchNoInEvent = record.matchNoInEvent.value,
-              createdAt = DateTimeFormatter.ISO_INSTANT.format(record.createdAt),
-            )
+          security.decode(MatchCodec.toConfirmCommand(request))(command =>
+            security
+              .respond(confirmMatch.run(command, member.accountId, member.playerMemberId))(record =>
+                ConfirmMatchResponse(
+                  matchId = record.id.value,
+                  heldEventId = record.heldEventId.value,
+                  matchNoInEvent = record.matchNoInEvent.value,
+                  createdAt = DateTimeFormatter.ISO_INSTANT.format(record.createdAt),
+                )
+              )
           ),
         )
       }
@@ -53,15 +53,21 @@ object MatchModule:
     MatchesEndpoints.list.serverLogic {
       case (heldEventId, gameTitleId, seasonMasterId, status, kind, limit, accountHeader) =>
         security.authorizeRead(accountHeader) { _ =>
-          security.respond(listMatches.run(
+          security.decode(
             MatchListCodec
               .toListCommand(heldEventId, gameTitleId, seasonMasterId, status, kind, limit)
-          ))(items => MatchListResponse(items.map(MatchSummaryResponse.from)))
+          )(command =>
+            security.respond(
+              listMatches.run(command)
+            )(items => MatchListResponse(items.map(MatchSummaryResponse.from)))
+          )
         }
     },
     MatchesEndpoints.get.serverLogic { case (matchId, accountHeader) =>
       security.authorizeRead(accountHeader) { _ =>
-        security.respond(getMatch.run(MatchId.unsafeFromString(matchId)))(MatchDetailResponse.from)
+        security.decode(
+          BoundaryId.required("matchId", matchId)(MatchId.fromString)
+        )(id => security.respond(getMatch.run(id))(MatchDetailResponse.from))
       }
     },
     MatchesEndpoints.update.serverLogic {
@@ -74,10 +80,11 @@ object MatchModule:
               s"PUT /api/matches/$matchId",
               request,
               nowF,
-              security.respond(
-                updateMatch
-                  .run(MatchId.unsafeFromString(matchId), MatchCodec.toUpdateCommand(request))
-              )(MatchDetailResponse.from),
+              security.decode(BoundaryId.required("matchId", matchId)(MatchId.fromString)) { id =>
+                security.decode(MatchCodec.toUpdateCommand(request))(command =>
+                  security.respond(updateMatch.run(id, command))(MatchDetailResponse.from)
+                )
+              },
             )
           }
     },
@@ -90,9 +97,9 @@ object MatchModule:
           s"DELETE /api/matches/$matchId",
           matchId,
           nowF,
-          security.respond(
-            deleteMatch.run(MatchId.unsafeFromString(matchId))
-          )(_ => DeleteMatchResponse(matchId, deleted = true)),
+          security.decode(BoundaryId.required("matchId", matchId)(MatchId.fromString))(id =>
+            security.respond(deleteMatch.run(id))(_ => DeleteMatchResponse(matchId, deleted = true))
+          ),
         )
       }
     },

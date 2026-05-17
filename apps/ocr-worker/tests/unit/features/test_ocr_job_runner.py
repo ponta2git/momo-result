@@ -9,9 +9,8 @@ production runner is responsible for, independently of any real transport.
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any
 
 import psycopg
 import pytest
@@ -37,7 +36,11 @@ from momo_ocr.features.ocr_jobs.models import (
 from momo_ocr.features.ocr_jobs.queue_contract import parse_job_message, to_stream_payload
 from momo_ocr.features.ocr_jobs.repository import InMemoryOcrJobRepository
 from momo_ocr.features.ocr_jobs.runner import run_one_job
-from momo_ocr.features.ocr_results.player_aliases import _normalize_name_for_match
+from momo_ocr.features.ocr_results.player_aliases import (
+    PlayerAliasResolver,
+    _normalize_name_for_match,
+)
+from momo_ocr.features.text_recognition.engine import TextRecognitionEngine
 from momo_ocr.shared.errors import FailureCode, OcrError
 
 WORKER_ID = "worker-test"
@@ -132,6 +135,46 @@ def _failure_analysis() -> AnalysisResult:
     )
 
 
+@dataclass
+class _AnalyzeStub:
+    result: AnalysisResult | None = None
+    exception: BaseException | None = None
+    fail_message: str | None = None
+    captured: dict[str, object] = field(default_factory=dict)
+
+    def __call__(  # noqa: PLR0913 - exact test double for AnalyzeImageFn.
+        self,
+        *,
+        image_path: Path,
+        requested_screen_type: str,
+        debug_dir: Path | None,
+        include_raw_text: bool,
+        text_engine: TextRecognitionEngine | None = None,
+        layout_family_hint: str | None = None,
+        alias_resolver: PlayerAliasResolver | None = None,
+        image_root: Path | None = None,
+        enforce_size_limit: bool = False,
+        fast_path_enabled: bool = False,
+    ) -> AnalysisResult:
+        self.captured = {
+            "image_path": image_path,
+            "requested_screen_type": requested_screen_type,
+            "debug_dir": debug_dir,
+            "include_raw_text": include_raw_text,
+            "text_engine": text_engine,
+            "layout_family_hint": layout_family_hint,
+            "alias_resolver": alias_resolver,
+            "image_root": image_root,
+            "enforce_size_limit": enforce_size_limit,
+            "fast_path_enabled": fast_path_enabled,
+        }
+        if self.fail_message is not None:
+            pytest.fail(self.fail_message)
+        if self.exception is not None:
+            raise self.exception
+        return self.result or _success_analysis()
+
+
 def _make_deps(  # noqa: PLR0913 - test helper mirrors JobRunnerDependencies wiring.
     *,
     consumer: InMemoryOcrJobConsumer,
@@ -161,7 +204,7 @@ def test_run_one_job_returns_not_pulled_when_queue_is_empty() -> None:
         consumer=consumer,
         repository=repository,
         cancellation=InMemoryCancellationChecker(),
-        analyze=lambda **_: pytest.fail("analyze should not be called when queue is empty"),
+        analyze=_AnalyzeStub(fail_message="analyze should not be called when queue is empty"),
     )
 
     outcome = run_one_job(deps)
@@ -182,7 +225,7 @@ def test_happy_path_persists_result_and_acks() -> None:
         consumer=consumer,
         repository=repository,
         cancellation=InMemoryCancellationChecker(),
-        analyze=lambda **_: _success_analysis(),
+        analyze=_AnalyzeStub(result=_success_analysis()),
     )
 
     outcome = run_one_job(deps)
@@ -214,7 +257,7 @@ def test_running_duplicate_delivery_is_acked_without_false_failure() -> None:
         consumer=consumer,
         repository=repository,
         cancellation=InMemoryCancellationChecker(),
-        analyze=lambda **_: pytest.fail("duplicate RUNNING delivery must not run OCR"),
+        analyze=_AnalyzeStub(fail_message="duplicate RUNNING delivery must not run OCR"),
     )
 
     outcome = run_one_job(deps)
@@ -244,12 +287,14 @@ def test_success_persists_parser_payload_warnings_for_review_status() -> None:
         consumer=consumer,
         repository=repository,
         cancellation=InMemoryCancellationChecker(),
-        analyze=lambda **_: _success_analysis(
-            OcrDraftPayload(
-                requested_screen_type=ScreenType.TOTAL_ASSETS,
-                detected_screen_type=ScreenType.TOTAL_ASSETS,
-                profile_id="total_assets:basic",
-                warnings=[parser_warning],
+        analyze=_AnalyzeStub(
+            result=_success_analysis(
+                OcrDraftPayload(
+                    requested_screen_type=ScreenType.TOTAL_ASSETS,
+                    detected_screen_type=ScreenType.TOTAL_ASSETS,
+                    profile_id="total_assets:basic",
+                    warnings=[parser_warning],
+                )
             )
         ),
     )
@@ -273,7 +318,7 @@ def test_failure_analysis_records_failed_terminal_status_with_metadata() -> None
         consumer=consumer,
         repository=repository,
         cancellation=InMemoryCancellationChecker(),
-        analyze=lambda **_: _failure_analysis(),
+        analyze=_AnalyzeStub(result=_failure_analysis()),
     )
 
     outcome = run_one_job(deps)
@@ -297,15 +342,11 @@ def test_unexpected_exception_in_analyze_is_converted_to_failed_terminal() -> No
     _seed_record(repository, payload)
     consumer.enqueue(payload, delivery_tag="d1")
 
-    def boom(**_: Any) -> AnalysisResult:  # noqa: ANN401
-        msg = "kaboom"
-        raise RuntimeError(msg)
-
     deps = _make_deps(
         consumer=consumer,
         repository=repository,
         cancellation=InMemoryCancellationChecker(),
-        analyze=boom,
+        analyze=_AnalyzeStub(exception=RuntimeError("kaboom")),
     )
 
     outcome = run_one_job(deps)
@@ -326,19 +367,18 @@ def test_ocr_error_in_analyze_is_recorded_with_its_failure_metadata() -> None:
     _seed_record(repository, payload)
     consumer.enqueue(payload, delivery_tag="d1")
 
-    def raise_ocr_error(**_: Any) -> AnalysisResult:  # noqa: ANN401
-        raise OcrError(
-            FailureCode.TEMP_IMAGE_MISSING,
-            "image gone",
-            retryable=True,
-            user_action="re-upload",
-        )
-
     deps = _make_deps(
         consumer=consumer,
         repository=repository,
         cancellation=InMemoryCancellationChecker(),
-        analyze=raise_ocr_error,
+        analyze=_AnalyzeStub(
+            exception=OcrError(
+                FailureCode.TEMP_IMAGE_MISSING,
+                "image gone",
+                retryable=True,
+                user_action="re-upload",
+            )
+        ),
     )
 
     outcome = run_one_job(deps)
@@ -371,14 +411,11 @@ def test_terminal_failure_write_failure_leaves_delivery_pending() -> None:
     _seed_record(repository, payload)
     consumer.enqueue(payload, delivery_tag="d1")
 
-    def raise_ocr_error(**_: Any) -> AnalysisResult:  # noqa: ANN401
-        raise OcrError(FailureCode.PARSER_FAILED, "parser failed")
-
     deps = _make_deps(
         consumer=consumer,
         repository=repository,
         cancellation=InMemoryCancellationChecker(),
-        analyze=raise_ocr_error,
+        analyze=_AnalyzeStub(exception=OcrError(FailureCode.PARSER_FAILED, "parser failed")),
     )
 
     outcome = run_one_job(deps)
@@ -397,7 +434,7 @@ def test_database_shutdown_during_lookup_leaves_delivery_pending() -> None:
         consumer=consumer,
         repository=repository,
         cancellation=InMemoryCancellationChecker(),
-        analyze=lambda **_: pytest.fail("analyze should not run when job lookup fails"),
+        analyze=_AnalyzeStub(fail_message="analyze should not run when job lookup fails"),
     )
 
     outcome = run_one_job(deps)
@@ -419,7 +456,7 @@ def test_malformed_queue_payload_with_job_id_is_failed_before_ack() -> None:
         consumer=consumer,
         repository=repository,
         cancellation=InMemoryCancellationChecker(),
-        analyze=lambda **_: pytest.fail("analyze should not run for malformed queue payloads"),
+        analyze=_AnalyzeStub(fail_message="analyze should not run for malformed queue payloads"),
     )
 
     outcome = run_one_job(deps)
@@ -445,7 +482,7 @@ def test_malformed_queue_payload_write_failure_leaves_delivery_pending() -> None
         consumer=consumer,
         repository=repository,
         cancellation=InMemoryCancellationChecker(),
-        analyze=lambda **_: pytest.fail("analyze should not run for malformed queue payloads"),
+        analyze=_AnalyzeStub(fail_message="analyze should not run for malformed queue payloads"),
     )
 
     outcome = run_one_job(deps)
@@ -467,7 +504,7 @@ def test_pre_running_cancellation_skips_analyze_and_marks_cancelled() -> None:
         consumer=consumer,
         repository=repository,
         cancellation=cancellation,
-        analyze=lambda **_: pytest.fail("analyze should not run for cancelled jobs"),
+        analyze=_AnalyzeStub(fail_message="analyze should not run for cancelled jobs"),
     )
 
     outcome = run_one_job(deps)
@@ -495,7 +532,7 @@ def test_already_terminal_record_is_acked_without_repository_writes(
         consumer=consumer,
         repository=repository,
         cancellation=InMemoryCancellationChecker(),
-        analyze=lambda **_: pytest.fail("analyze should not run for terminal jobs"),
+        analyze=_AnalyzeStub(fail_message="analyze should not run for terminal jobs"),
     )
 
     outcome = run_one_job(deps)
@@ -516,7 +553,7 @@ def test_unknown_job_id_is_acked_and_dropped() -> None:
         consumer=consumer,
         repository=repository,
         cancellation=InMemoryCancellationChecker(),
-        analyze=lambda **_: pytest.fail("analyze should not run for unknown jobs"),
+        analyze=_AnalyzeStub(fail_message="analyze should not run for unknown jobs"),
     )
 
     outcome = run_one_job(deps)
@@ -545,7 +582,7 @@ def test_queue_payload_mismatch_with_db_record_is_failed_before_analyze() -> Non
         consumer=consumer,
         repository=repository,
         cancellation=InMemoryCancellationChecker(),
-        analyze=lambda **_: pytest.fail("analyze should not run for payload/DB mismatches"),
+        analyze=_AnalyzeStub(fail_message="analyze should not run for payload/DB mismatches"),
     )
 
     outcome = run_one_job(deps)
@@ -574,24 +611,21 @@ def test_hints_are_merged_into_alias_resolver_passed_to_analyze() -> None:
     _seed_record(repository, payload)
     consumer.enqueue(payload, delivery_tag="d1")
 
-    captured: dict[str, Any] = {}
-
-    def capturing_analyze(**kwargs: Any) -> AnalysisResult:  # noqa: ANN401
-        captured.update(kwargs)
-        return _success_analysis()
+    analyze = _AnalyzeStub(result=_success_analysis())
 
     deps = _make_deps(
         consumer=consumer,
         repository=repository,
         cancellation=InMemoryCancellationChecker(),
-        analyze=capturing_analyze,
+        analyze=analyze,
     )
 
     outcome = run_one_job(deps)
 
     assert outcome.status is OcrJobStatus.SUCCEEDED
-    assert captured["layout_family_hint"] == "reiwa"
-    resolver = captured["alias_resolver"]
+    assert analyze.captured["layout_family_hint"] == "reiwa"
+    resolver = analyze.captured["alias_resolver"]
+    assert isinstance(resolver, PlayerAliasResolver)
     # The resolver normalizes the alias surface but expects the input text to
     # already be normalized (callers in ``player_aliases`` do that step). Mirror
     # that here so the substring match runs against comparable forms.
@@ -611,17 +645,13 @@ def test_worker_analyze_enforces_temp_root_and_upload_size_limit(tmp_path: Path)
     payload = _make_payload(image_path=image_path)
     _seed_record(repository, payload)
     consumer.enqueue(payload, delivery_tag="d1")
-    captured: dict[str, Any] = {}
-
-    def capturing_analyze(**kwargs: Any) -> AnalysisResult:  # noqa: ANN401
-        captured.update(kwargs)
-        return _success_analysis()
+    analyze = _AnalyzeStub(result=_success_analysis())
 
     deps = _make_deps(
         consumer=consumer,
         repository=repository,
         cancellation=InMemoryCancellationChecker(),
-        analyze=capturing_analyze,
+        analyze=analyze,
         temp_root=image_root,
         fast_path_enabled=True,
         debug_dir_base=debug_dir_base,
@@ -630,11 +660,13 @@ def test_worker_analyze_enforces_temp_root_and_upload_size_limit(tmp_path: Path)
     outcome = run_one_job(deps)
 
     assert outcome.status is OcrJobStatus.SUCCEEDED
-    assert captured["image_root"] == image_root
-    assert captured["enforce_size_limit"] is True
-    assert captured["fast_path_enabled"] is True
-    assert captured["debug_dir"] == debug_dir_base / "abc__job-1"
-    assert captured["debug_dir"].is_dir()
+    assert analyze.captured["image_root"] == image_root
+    assert analyze.captured["enforce_size_limit"] is True
+    assert analyze.captured["fast_path_enabled"] is True
+    debug_dir = analyze.captured["debug_dir"]
+    assert isinstance(debug_dir, Path)
+    assert debug_dir == debug_dir_base / "abc__job-1"
+    assert debug_dir.is_dir()
 
 
 class _ToggleAfterFirstCallCancellation:
@@ -657,6 +689,18 @@ class _ToggleAfterFirstCallCancellation:
         return self._calls >= self._threshold
 
 
+class _AckObserverConsumer(InMemoryOcrJobConsumer):
+    def __init__(self, repository: InMemoryOcrJobRepository, job_id: str) -> None:
+        super().__init__()
+        self._repository = repository
+        self._job_id = job_id
+        self.observed_status_at_ack: list[OcrJobStatus | None] = []
+
+    def ack(self, delivery_tag: str) -> None:
+        self.observed_status_at_ack.append(self._repository.records[self._job_id].status)
+        super().ack(delivery_tag)
+
+
 def test_post_running_cancellation_is_honoured_before_analyze() -> None:
     consumer = InMemoryOcrJobConsumer()
     repository = InMemoryOcrJobRepository()
@@ -669,8 +713,8 @@ def test_post_running_cancellation_is_honoured_before_analyze() -> None:
         consumer=consumer,
         repository=repository,
         cancellation=cancellation,
-        analyze=lambda **_: pytest.fail(
-            "analyze must not run when cancellation appears post-running"
+        analyze=_AnalyzeStub(
+            fail_message="analyze must not run when cancellation appears post-running"
         ),
     )
 
@@ -688,29 +732,20 @@ def test_post_running_cancellation_is_honoured_before_analyze() -> None:
 
 def test_ack_runs_only_after_terminal_status_is_persisted() -> None:
     """Invariant: the queue ack must observe a terminal repository status."""
-    consumer = InMemoryOcrJobConsumer()
     repository = InMemoryOcrJobRepository()
+    consumer = _AckObserverConsumer(repository, "job-1")
     payload = _make_payload()
     _seed_record(repository, payload)
     consumer.enqueue(payload, delivery_tag="d1")
-
-    observed_status_at_ack: list[OcrJobStatus | None] = []
-    original_ack = consumer.ack
-
-    def spy_ack(delivery_tag: str) -> None:
-        observed_status_at_ack.append(repository.records["job-1"].status)
-        original_ack(delivery_tag)
-
-    consumer.ack = spy_ack  # type: ignore[method-assign]
 
     deps = _make_deps(
         consumer=consumer,
         repository=repository,
         cancellation=InMemoryCancellationChecker(),
-        analyze=lambda **_: _success_analysis(),
+        analyze=_AnalyzeStub(result=_success_analysis()),
     )
 
     outcome = run_one_job(deps)
 
     assert outcome.status is OcrJobStatus.SUCCEEDED
-    assert observed_status_at_ack == [OcrJobStatus.SUCCEEDED]
+    assert consumer.observed_status_at_ack == [OcrJobStatus.SUCCEEDED]

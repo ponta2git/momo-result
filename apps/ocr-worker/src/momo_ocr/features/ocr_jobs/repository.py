@@ -17,7 +17,7 @@ from momo_ocr.features.ocr_jobs.models import (
     OcrJobRecord,
     OcrJobStatus,
 )
-from momo_ocr.features.ocr_jobs.result_writer import OcrResultRecord, persist_result_record
+from momo_ocr.features.ocr_jobs.result_records import OcrResultRecord, persist_result_record
 from momo_ocr.shared.errors import FailureCode, OcrError, OcrFailure
 
 _SELECT_JOB = """
@@ -149,7 +149,7 @@ class PostgresOcrJobRepository:
     """Postgres adapter that serves every call from a shared connection pool.
 
     The pool is owned by the caller (typically the worker composition root)
-    so multiple repositories / writers can share a single set of warm
+    so repository calls can share a single set of warm
     connections. We never open a connection per call: that pattern caused
     one TLS+auth round-trip per state transition (≈6 per job) which is
     expensive against Neon and unfriendly to its connection cap.

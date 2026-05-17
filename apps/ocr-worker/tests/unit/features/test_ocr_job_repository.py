@@ -11,7 +11,7 @@ from momo_ocr.features.ocr_jobs.models import (
     OcrJobStatus,
 )
 from momo_ocr.features.ocr_jobs.repository import InMemoryOcrJobRepository
-from momo_ocr.features.ocr_jobs.result_writer import OcrResultRecord
+from momo_ocr.features.ocr_jobs.result_records import OcrResultRecord
 from momo_ocr.shared.errors import FailureCode, OcrError
 
 

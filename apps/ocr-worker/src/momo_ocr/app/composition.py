@@ -86,8 +86,8 @@ class WorkerRuntime:
 
     Owns the lifecycle of pool + consumer + text engine; `close()` is
     idempotent and safe to call from a `finally` block. The pool is
-    shared between repository and writer so a job uses a single warm
-    connection across its 5–6 state transitions instead of opening one
+    shared across repository calls so a job uses a single warm connection
+    across its 5–6 state transitions instead of opening one
     per call. The text engine caches PyTessBaseAPI handles and must be
     `End()`-ed at shutdown to release Tesseract's native resources
     deterministically (otherwise we leak them until interpreter exit).

@@ -8,7 +8,7 @@ from psycopg_pool import ConnectionPool
 from momo_ocr.features.ocr_domain.models import OcrDraftPayload, ScreenType
 from momo_ocr.features.ocr_jobs.models import OcrJobExecutionResult, OcrJobStatus
 from momo_ocr.features.ocr_jobs.repository import PostgresOcrJobRepository
-from momo_ocr.features.ocr_jobs.result_writer import OcrResultRecord
+from momo_ocr.features.ocr_jobs.result_records import OcrResultRecord
 from tests.integration.momo_db import migrated_postgres_conninfo
 
 

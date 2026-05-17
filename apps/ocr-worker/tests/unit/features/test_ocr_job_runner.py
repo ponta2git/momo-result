@@ -1,7 +1,7 @@
 """Unit tests for the OCR job runner orchestration.
 
 These tests exercise :func:`run_one_job` against in-memory fakes for the
-queue, repository, result writer, and cancellation source, and a stub
+queue, repository, result-record persistence, and cancellation source, and a stub
 ``analyze`` callable in place of the real OCR pipeline. The goal is to
 validate the lifecycle, ack semantics, and hint propagation that the
 production runner is responsible for, independently of any real transport.

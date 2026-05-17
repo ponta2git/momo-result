@@ -27,7 +27,7 @@ from momo_ocr.features.ocr_jobs.models import (
     OcrJobStatus,
     PulledJob,
 )
-from momo_ocr.features.ocr_jobs.result_writer import OcrResultRecord
+from momo_ocr.features.ocr_jobs.result_records import OcrResultRecord
 from momo_ocr.features.ocr_results.payload_warnings import attach_warnings_to_payload
 from momo_ocr.shared.errors import FailureCode, OcrError, OcrFailure
 

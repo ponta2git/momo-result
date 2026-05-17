@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import closing
 from pathlib import Path
 
 from momo_ocr.features.ocr_analysis.report import AnalysisResult
@@ -63,81 +64,83 @@ def analyze_image(  # noqa: PLR0913
         # Decode the image exactly once for the entire analyze pipeline.
         # Screen detection, player-order detection, and the screen parser
         # all read from this single decoded RGB Image instance via
-        # ScreenParseContext.image.
-        decoded_image = open_decoded_image(resolved_path)
+        # ScreenParseContext.image. Closing at scope exit releases the pixel
+        # buffer deterministically for long-running workers.
+        with closing(open_decoded_image(resolved_path)) as decoded_image:
+            with record_duration_ms(timings, "detect_screen"):
+                if requested_type == ScreenType.AUTO:
+                    try:
+                        evidence = recognize_title_evidence(
+                            decoded_image,
+                            engine,
+                            debug_dir=(
+                                debug_dir / "screen_detection" if debug_dir is not None else None
+                            ),
+                        )
+                        detection = classify_screen_type(requested_type, evidence)
+                    except OcrError as exc:
+                        detection = detection_failure(
+                            requested_type,
+                            message=f"Screen type detection failed: {exc.message}",
+                        )
+                else:
+                    detection = classify_screen_type(requested_type, {})
 
-        with record_duration_ms(timings, "detect_screen"):
-            if requested_type == ScreenType.AUTO:
-                try:
-                    evidence = recognize_title_evidence(
-                        decoded_image,
-                        engine,
-                        debug_dir=debug_dir / "screen_detection" if debug_dir is not None else None,
-                    )
-                    detection = classify_screen_type(requested_type, evidence)
-                except OcrError as exc:
-                    detection = detection_failure(
-                        requested_type,
-                        message=f"Screen type detection failed: {exc.message}",
-                    )
-            else:
-                detection = classify_screen_type(requested_type, {})
-
-        with record_duration_ms(timings, "detect_player_order"):
-            player_order_detection = detect_player_order(
-                decoded_image,
-                text_engine=engine,
-                debug_dir=debug_dir / "player_order" if debug_dir is not None else None,
-            )
-
-        warnings = list(detection.warnings)
-        warnings.extend(player_order_detection.warnings)
-        if debug_dir is not None:
-            debug_dir.mkdir(parents=True, exist_ok=True)
-            warnings.append(
-                OcrWarning(
-                    code=WarningCode.DEBUG_OUTPUT_ENABLED,
-                    message=(
-                        "Debug directory was created; screen-detection and parser artifacts "
-                        "may be written."
-                    ),
-                    severity=WarningSeverity.INFO,
-                )
-            )
-
-        if detection.detected_type is None or detection.profile_id is None:
-            parsed = None
-        else:
-            parser = registry.get(detection.detected_type)
-            parsed = parser.parse(
-                ScreenParseContext(
-                    image_path=resolved_path,
-                    requested_screen_type=requested_type,
-                    detected_screen_type=detection.detected_type,
-                    profile_id=detection.profile_id,
-                    debug_dir=debug_dir,
-                    include_raw_text=include_raw_text,
+            with record_duration_ms(timings, "detect_player_order"):
+                player_order_detection = detect_player_order(
+                    decoded_image,
                     text_engine=engine,
-                    player_order_detection=player_order_detection,
-                    warnings=tuple(warnings),
-                    layout_family_hint=layout_family_hint,
-                    alias_resolver=resolved_alias_resolver,
-                    fast_path_enabled=fast_path_enabled,
-                    image=decoded_image,
+                    debug_dir=debug_dir / "player_order" if debug_dir is not None else None,
                 )
-            )
 
-        return AnalysisResult(
-            input=metadata,
-            detection=detection,
-            result=parsed,
-            warnings=warnings,
-            failure_code=None,
-            failure_message=None,
-            failure_retryable=False,
-            failure_user_action=None,
-            timings_ms=timings,
-        )
+            warnings = list(detection.warnings)
+            warnings.extend(player_order_detection.warnings)
+            if debug_dir is not None:
+                debug_dir.mkdir(parents=True, exist_ok=True)
+                warnings.append(
+                    OcrWarning(
+                        code=WarningCode.DEBUG_OUTPUT_ENABLED,
+                        message=(
+                            "Debug directory was created; screen-detection and parser artifacts "
+                            "may be written."
+                        ),
+                        severity=WarningSeverity.INFO,
+                    )
+                )
+
+            if detection.detected_type is None or detection.profile_id is None:
+                parsed = None
+            else:
+                parser = registry.get(detection.detected_type)
+                parsed = parser.parse(
+                    ScreenParseContext(
+                        image_path=resolved_path,
+                        requested_screen_type=requested_type,
+                        detected_screen_type=detection.detected_type,
+                        profile_id=detection.profile_id,
+                        debug_dir=debug_dir,
+                        include_raw_text=include_raw_text,
+                        text_engine=engine,
+                        player_order_detection=player_order_detection,
+                        warnings=tuple(warnings),
+                        layout_family_hint=layout_family_hint,
+                        alias_resolver=resolved_alias_resolver,
+                        fast_path_enabled=fast_path_enabled,
+                        image=decoded_image,
+                    )
+                )
+
+            return AnalysisResult(
+                input=metadata,
+                detection=detection,
+                result=parsed,
+                warnings=warnings,
+                failure_code=None,
+                failure_message=None,
+                failure_retryable=False,
+                failure_user_action=None,
+                timings_ms=timings,
+            )
     except OcrError as exc:
         return AnalysisResult(
             input=metadata,

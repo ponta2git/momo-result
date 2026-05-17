@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from PIL import Image
 
 from momo_ocr.features.ocr_analysis.analyze_image import analyze_image
@@ -30,6 +31,42 @@ def test_analyze_image_returns_metadata_and_parser_result(tmp_path: Path) -> Non
     assert result.detection.profile_id == "full-hd-total-assets-v1"
     assert result.result is not None
     assert result.result.category_payload["status"] == "parsed"
+
+
+def test_analyze_image_closes_decoded_image_after_parse(tmp_path: Path) -> None:
+    image_path = tmp_path / "assets.jpg"
+    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    parsed_images: list[Image.Image] = []
+
+    class _CapturingParser:
+        @property
+        def screen_type(self) -> ScreenType:
+            return ScreenType.TOTAL_ASSETS
+
+        def parse(self, context: ScreenParseContext) -> OcrDraftPayload:
+            image = context.image
+            assert image is not None
+            assert image.getbbox() is not None
+            parsed_images.append(image)
+            return OcrDraftPayload(
+                requested_screen_type=context.requested_screen_type,
+                detected_screen_type=context.detected_screen_type,
+                profile_id=context.profile_id,
+            )
+
+    result = analyze_image(
+        image_path=image_path,
+        requested_screen_type="total_assets",
+        debug_dir=None,
+        include_raw_text=False,
+        text_engine=FakeTextRecognitionEngine("unused"),
+        parser_registry=ParserRegistry({ScreenType.TOTAL_ASSETS: _CapturingParser()}),
+    )
+
+    assert result.failure_code is None
+    assert len(parsed_images) == 1
+    with pytest.raises(ValueError, match="closed image"):
+        parsed_images[0].getbbox()
 
 
 def test_analyze_image_can_use_fake_engine_for_auto_detection(tmp_path: Path) -> None:

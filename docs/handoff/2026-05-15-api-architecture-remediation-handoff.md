@@ -3,7 +3,6 @@
 ## 対象
 
 - `apps/web`
-- `apps/ocr-worker`
 
 ## 概要
 
@@ -33,13 +32,3 @@
 - `held event is still referenced.`
 
 detail 文字列への厳密分岐は避け、`CONFLICT` を削除不可として扱うのが望ましい。
-
-## apps/ocr-worker への申し送り
-
-### 1. 追加対応は不要
-
-- OCR queue payload は変更していない。
-- `ocr-queue-payload-v1` の field 名・必須 field・Redis Streams 契約は変更なし。
-- outbox 生成経路も公開契約としては変更なし。
-
-worker 側 parser / schema / ack 処理の変更は不要。

@@ -3,7 +3,6 @@
 ## 対象
 
 - `apps/web`
-- `apps/ocr-worker`
 
 ## web への申し送り
 
@@ -18,7 +17,6 @@
 
 - API はローカルファイルパスを公開しない方針へ変更された。
 - `imageId`, `mediaType`, `sizeBytes` は引き続き利用可能。
-- OCR worker 向け Redis payload の `imagePath` は変更なし。
 
 対応方法:
 
@@ -91,44 +89,3 @@
 - web は retry 時に同一 mutation/payload へ同一 key を再利用する。
 - 処理中の `409` は少し待って同一 key で再試行するか、ユーザーに「処理中」と表示する。
 - payload を変えた再送では新しい key を発行する。
-
-## ocr-worker への申し送り
-
-完了状況（2026-05-17）:
-
-- `requestedScreenType` への更新、旧 `requestedImageType` 参照削除、Redis payload schema test / integration test 更新は完了済み。
-- worker は現在、`imagePath` を `IMAGE_TMP_DIR` 配下へ解決できる場合だけ読み、3MB 上限を再検証する。
-
-### 1. Redis Streams / OCR payload contract が破壊的に変わった
-
-変更:
-
-- 旧: `requestedImageType`
-- 新: `requestedScreenType`
-
-内容:
-
-- `ocr-queue-payload-v1` の `imagePath` は引き続き送信される。ただし worker が読める `IMAGE_TMP_DIR` 配下の絶対パスである必要がある。
-- `schemaVersion`, `jobId`, `draftId`, `imageId`, `imagePath`, `requestedScreenType`, `attempt`, `enqueuedAt` が現在の必須 field。
-- `requestedImageType` は送信されない。互換 field はない。
-- 今回削除された `imagePath` は公開 HTTP API レスポンス上の話で、worker 入力ではない。
-
-対応方法:
-
-- ocr-worker 側の payload parser / schema / worker 実装を `requestedScreenType` に更新する。
-- 旧 `requestedImageType` 参照を削除する。
-- Redis integration / payload schema test を `docs/schemas/ocr-queue-payload-v1.schema.json` に合わせて更新する。
-
-### 2. source image の保存寿命管理は API 側で強化された
-
-内容:
-
-- orphan image reaper は `ImageOrphanStore` port 経由へ整理された。
-- worker が読む queue payload のパス自体は変わらない。
-- API 側の retention / orphan cleanup により、完了済み・参照切れ画像は削除され得る。
-
-対応方法:
-
-- worker は queue 受信後、従来どおり速やかに `imagePath` を読む。
-- ファイルが存在しない場合は、既存どおり retryable / non-retryable の方針に従って失敗を記録する。
-- worker 側で long-running の前処理を追加する場合は、画像ファイルを先に読み込むか、API 側 retention 設計と再確認する。

@@ -21,15 +21,6 @@ final class ExportMatches[F[_]: Monad](
 ):
   def run(
       format: MatchExportFormat,
-      seasonMasterId: Option[SeasonMasterId],
-      heldEventId: Option[HeldEventId],
-      matchId: Option[MatchId],
-  ): F[Either[AppError, MatchExportFile]] = parseScope(seasonMasterId, heldEventId, matchId) match
-    case Left(error) => error.asLeft[MatchExportFile].pure[F]
-    case Right(scope) => build(format, scope)
-
-  private def build(
-      format: MatchExportFormat,
       scope: MatchExportScope,
   ): F[Either[AppError, MatchExportFile]] =
     for
@@ -82,32 +73,6 @@ final class ExportMatches[F[_]: Monad](
         byGame <- gameTitleIds
           .flatTraverse(id => matches.list(MatchesRepository.ListFilter(gameTitleId = Some(id))))
       yield (bySeason ++ byGame).distinctBy(_.id)
-
-  private def parseScope(
-      seasonMasterId: Option[SeasonMasterId],
-      heldEventId: Option[HeldEventId],
-      matchId: Option[MatchId],
-  ): Either[AppError, MatchExportScope] =
-    def scope[A](field: String, value: String, build: A => MatchExportScope)(
-        id: A
-    ): Either[AppError, MatchExportScope] = Either
-      .cond(value.trim.nonEmpty, build(id), AppError.ValidationFailed(s"$field must not be blank."))
-
-    for
-      scopes <- List(
-        seasonMasterId
-          .traverse(id => scope("seasonMasterId", id.value, MatchExportScope.Season(_))(id)),
-        heldEventId
-          .traverse(id => scope("heldEventId", id.value, MatchExportScope.HeldEvent(_))(id)),
-        matchId.traverse(id => scope("matchId", id.value, MatchExportScope.Match(_))(id)),
-      ).sequence.map(_.flatten)
-      result <- scopes match
-        case Nil => Right(MatchExportScope.All)
-        case one :: Nil => Right(one)
-        case _ => Left(AppError.ValidationFailed(
-            "Specify at most one export scope: seasonMasterId, heldEventId, or matchId."
-          ))
-    yield result
 
   private def buildRows(
       selected: List[MatchRecord],

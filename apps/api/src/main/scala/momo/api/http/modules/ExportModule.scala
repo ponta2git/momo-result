@@ -5,9 +5,8 @@ import cats.syntax.all.*
 import sttp.tapir.server.ServerEndpoint
 
 import momo.api.auth.RateLimiter
-import momo.api.domain.ids.{HeldEventId, MatchId, SeasonMasterId}
 import momo.api.endpoints.ExportEndpoints
-import momo.api.endpoints.codec.{BoundaryId, ExportCodec}
+import momo.api.endpoints.codec.ExportCodec
 import momo.api.errors.AppError
 import momo.api.http.EndpointSecurity
 import momo.api.usecases.ExportMatches
@@ -28,17 +27,14 @@ object ExportModule:
               val decoded =
                 for
                   exportFormat <- ExportCodec.parseFormat(format)
-                  season <- BoundaryId
-                    .optional("seasonMasterId", seasonMasterId)(SeasonMasterId.fromString)
-                  event <- BoundaryId.optional("heldEventId", heldEventId)(HeldEventId.fromString)
-                  matchValue <- BoundaryId.optional("matchId", matchId)(MatchId.fromString)
-                yield (exportFormat, season, event, matchValue)
-              security.decode(decoded) { case (exportFormat, season, event, matchValue) =>
-                exportMatches.run(exportFormat, season, event, matchValue).map(
-                  _.leftMap(security.toProblem)
-                    .map(file => (file.contentDisposition, file.contentType, file.body))
-                )
-              }
+                  scope <- ExportCodec.parseScope(seasonMasterId, heldEventId, matchId)
+                yield (exportFormat, scope)
+              security
+                .decode(decoded) { case (exportFormat, scope) =>
+                  exportMatches.run(exportFormat, scope).map(_.leftMap(security.toProblem).map(
+                    file => (file.contentDisposition, file.contentType, file.body)
+                  ))
+                }
           }
         }
   })

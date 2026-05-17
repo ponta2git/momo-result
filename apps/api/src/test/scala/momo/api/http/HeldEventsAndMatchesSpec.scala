@@ -418,3 +418,25 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
       assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "format")
     }
   }
+
+  app.test("GET /api/exports/matches rejects invalid scopes at the HTTP boundary") { httpApp =>
+    for
+      blankScope <- httpApp.run(
+        Request[IO](Method.GET, uri"/api/exports/matches?format=csv&seasonMasterId=%20")
+          .putHeaders(devReadHeader())
+      )
+      _ <- assertProblem(
+        blankScope,
+        Status.UnprocessableContent,
+        "VALIDATION_FAILED",
+        "seasonMasterId",
+      )
+      multiScope <- httpApp.run(
+        Request[IO](
+          Method.GET,
+          uri"/api/exports/matches?format=csv&seasonMasterId=season_1&heldEventId=held_1",
+        ).putHeaders(devReadHeader())
+      )
+      _ <- assertProblem(multiScope, Status.UnprocessableContent, "VALIDATION_FAILED", "scope")
+    yield ()
+  }

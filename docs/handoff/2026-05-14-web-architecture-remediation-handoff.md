@@ -34,6 +34,11 @@ web の低レベル `apiRequest` は `idempotency: "auto"` と `idempotencyKey` 
 
 ## apps/ocr-worker への申し送り
 
+完了状況（2026-05-17）:
+
+- 収益 OCR の重複 member 解決は worker 側でも `DUPLICATE_MEMBER_ALIAS` warning として検出済み。
+- incident 名・順序は現行 shared domain 契約どおり維持している。
+
 ### 1. 事件簿名の順序と表記
 
 web は事件簿の key / 表示名 / OCR 名を shared domain 定義へ集約した。OCR payload の `players[].incidents` は引き続き次の日本語名を期待する。

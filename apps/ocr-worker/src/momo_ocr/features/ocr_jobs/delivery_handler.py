@@ -4,16 +4,19 @@ from __future__ import annotations
 
 import logging
 
-from momo_ocr.features.ocr_jobs.dependencies import JobRunnerDependencies
+from momo_ocr.features.ocr_jobs.consumer import OcrJobConsumer
 from momo_ocr.features.ocr_jobs.models import MalformedPulledJob, PulledJob
 
 logger = logging.getLogger(__name__)
 
 
-def ack_delivery(deps: JobRunnerDependencies, delivery: PulledJob | MalformedPulledJob) -> None:
+def ack_delivery(
+    consumer: OcrJobConsumer,
+    delivery: PulledJob | MalformedPulledJob,
+) -> None:
     """Best-effort ack. Failures are logged so the broker controls redelivery."""
     try:
-        deps.consumer.ack(delivery.delivery_tag)
+        consumer.ack(delivery.delivery_tag)
     except Exception:
         job_id = (
             delivery.message.job_id

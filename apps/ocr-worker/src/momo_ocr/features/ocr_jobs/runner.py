@@ -76,7 +76,12 @@ def run_one_job(deps: JobRunnerDependencies) -> JobRunOutcome:
         should_ack = False
         outcome_status = None
     except OcrError as exc:
-        should_ack = record_terminal_failure(deps, delivery.message.job_id, exc.to_failure())
+        should_ack = record_terminal_failure(
+            deps.repository,
+            worker_id=deps.worker_id,
+            job_id=delivery.message.job_id,
+            failure=exc.to_failure(),
+        )
         outcome_status = OcrJobStatus.FAILED
     except Exception:
         logger.exception("Unhandled error in OCR job runner", extra=log_extra)
@@ -85,10 +90,15 @@ def run_one_job(deps: JobRunnerDependencies) -> JobRunOutcome:
             message="Unexpected OCR worker error.",
             retryable=False,
         )
-        should_ack = record_terminal_failure(deps, delivery.message.job_id, failure)
+        should_ack = record_terminal_failure(
+            deps.repository,
+            worker_id=deps.worker_id,
+            job_id=delivery.message.job_id,
+            failure=failure,
+        )
         outcome_status = OcrJobStatus.FAILED
     if should_ack:
-        ack_delivery(deps, delivery)
+        ack_delivery(deps.consumer, delivery)
     else:
         logger.error(
             "OCR job did not reach a persisted terminal state; leaving delivery pending",
@@ -110,9 +120,14 @@ def _handle_malformed_delivery(
     job_id = delivery.raw_fields.get("jobId")
     should_ack = True
     if job_id:
-        should_ack = record_terminal_failure(deps, job_id, delivery.failure)
+        should_ack = record_terminal_failure(
+            deps.repository,
+            worker_id=deps.worker_id,
+            job_id=job_id,
+            failure=delivery.failure,
+        )
     if should_ack:
-        ack_delivery(deps, delivery)
+        ack_delivery(deps.consumer, delivery)
     else:
         logger.error(
             "Malformed OCR queue delivery could not be persisted as failed; leaving pending",

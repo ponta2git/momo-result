@@ -31,6 +31,9 @@
 - 部分更新の usecase では、入力差分だけで不変条件を判定しない。既存値と入力値をマージした保存予定の
   実効状態に対して、外部キー所属関係やドメイン不変条件を検証する。
 - DBアクセスは Doobie repository に閉じる。SQL実行責務は `docs/test-rule.md` の DB-backed API ルールに従う。
+- 読み取りで検証した行を後続の更新で確定する usecase は、repository 契約に検証済みスナップショット
+  （例: `updated_at` や検証した参照ID）を渡し、PostgreSQL の `UPDATE ... WHERE` で同時に照合する。
+  `id` と状態だけを渡して「読んだ時点の前提」を暗黙にしない。
 - エラーは業務、認証、権限、入力、外部依存を区別し、UIが説明できる形に正規化する。
 - JSON、CSV/TSV、Problem Details、OpenAPI はテストで固定する。
 

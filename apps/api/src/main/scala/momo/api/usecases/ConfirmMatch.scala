@@ -11,7 +11,7 @@ import momo.api.domain.{MatchPolicy, MatchRecord, PlayerResult}
 import momo.api.errors.AppError
 import momo.api.repositories.{
   GameTitlesRepository, HeldEventsRepository, MapMastersRepository, MatchConfirmationRepository,
-  MatchDraftsRepository, MatchesRepository, SeasonMastersRepository,
+  MatchDraftConfirmation, MatchDraftsRepository, MatchesRepository, SeasonMastersRepository,
 }
 import momo.api.usecases.syntax.UseCaseSyntax.*
 
@@ -96,7 +96,7 @@ final class ConfirmMatch[F[_]: MonadThrow](
             EitherT.fromEither[F](validateDraftForConfirm(draft, command.draftRefs))
               .map(_ => Some(draft))
           }
-    _ <- confirmations.confirm(record, maybeDraft.map(_.id), createdAt)
+    _ <- confirmations.confirm(record, maybeDraft.map(MatchDraftConfirmation.from), createdAt)
       .ensureF(AppError.Conflict("Failed to confirm match from the draft."))
     _ <- maybeDraft match
       case None => EitherT.rightT[F, AppError](())

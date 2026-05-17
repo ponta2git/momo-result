@@ -5,14 +5,39 @@ import java.time.Instant
 import cats.~>
 import doobie.ConnectionIO
 
-import momo.api.domain.MatchRecord
-import momo.api.domain.ids.MatchDraftId
+import momo.api.domain.ids.{MatchDraftId, OcrDraftId}
+import momo.api.domain.{MatchDraft, MatchRecord}
+
+final case class MatchDraftConfirmation(
+    draftId: MatchDraftId,
+    updatedAt: Instant,
+    totalAssetsDraftId: Option[OcrDraftId],
+    revenueDraftId: Option[OcrDraftId],
+    incidentLogDraftId: Option[OcrDraftId],
+)
+
+object MatchDraftConfirmation:
+  def from(draft: MatchDraft): MatchDraftConfirmation = MatchDraftConfirmation(
+    draftId = draft.id,
+    updatedAt = draft.updatedAt,
+    totalAssetsDraftId = draft.totalAssetsDraftId,
+    revenueDraftId = draft.revenueDraftId,
+    incidentLogDraftId = draft.incidentLogDraftId,
+  )
 
 trait MatchConfirmationAlg[F0[_]]:
-  def confirm(record: MatchRecord, draftId: Option[MatchDraftId], updatedAt: Instant): F0[Boolean]
+  def confirm(
+      record: MatchRecord,
+      draft: Option[MatchDraftConfirmation],
+      updatedAt: Instant,
+  ): F0[Boolean]
 
 trait MatchConfirmationRepository[F[_]]:
-  def confirm(record: MatchRecord, draftId: Option[MatchDraftId], updatedAt: Instant): F[Boolean]
+  def confirm(
+      record: MatchRecord,
+      draft: Option[MatchDraftConfirmation],
+      updatedAt: Instant,
+  ): F[Boolean]
 
 object MatchConfirmationRepository:
   def fromConnectionIO[F[_]](
@@ -21,9 +46,9 @@ object MatchConfirmationRepository:
   ): MatchConfirmationRepository[F] = new MatchConfirmationRepository[F]:
     def confirm(
         record: MatchRecord,
-        draftId: Option[MatchDraftId],
+        draft: Option[MatchDraftConfirmation],
         updatedAt: Instant,
-    ): F[Boolean] = transactK(alg.confirm(record, draftId, updatedAt))
+    ): F[Boolean] = transactK(alg.confirm(record, draft, updatedAt))
 
   def liftIdentity[F[_]](alg: MatchConfirmationAlg[F]): MatchConfirmationRepository[F] =
     new MatchConfirmationRepository[F]:

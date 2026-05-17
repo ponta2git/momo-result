@@ -3,12 +3,14 @@ package momo.api.adapters
 import java.time.Instant
 
 import cats.Monad
+import cats.syntax.applicative.*
 import cats.syntax.flatMap.*
 import cats.syntax.functor.*
 
-import momo.api.domain.MatchRecord
-import momo.api.domain.ids.MatchDraftId
-import momo.api.repositories.{MatchConfirmationRepository, MatchDraftsRepository, MatchesRepository}
+import momo.api.domain.{MatchDraft, MatchRecord}
+import momo.api.repositories.{
+  MatchConfirmationRepository, MatchDraftConfirmation, MatchDraftsRepository, MatchesRepository,
+}
 
 final class InMemoryMatchConfirmationRepository[F[_]: Monad](
     matches: MatchesRepository[F],
@@ -16,12 +18,22 @@ final class InMemoryMatchConfirmationRepository[F[_]: Monad](
 ) extends MatchConfirmationRepository[F]:
   override def confirm(
       record: MatchRecord,
-      draftId: Option[MatchDraftId],
+      draft: Option[MatchDraftConfirmation],
       updatedAt: Instant,
-  ): F[Boolean] = draftId match
+  ): F[Boolean] = draft match
     case None => matches.create(record).as(true)
-    case Some(id) =>
+    case Some(expected) =>
       for
-        updated <- matchDrafts.markConfirmed(id, record.id, updatedAt)
+        current <- matchDrafts.find(expected.draftId)
+        updated <-
+          if current.exists(matchesSnapshot(_, expected)) then
+            matchDrafts.markConfirmed(expected.draftId, record.id, updatedAt)
+          else false.pure[F]
         _ <- if updated then matches.create(record) else Monad[F].unit
       yield updated
+
+  private def matchesSnapshot(draft: MatchDraft, expected: MatchDraftConfirmation): Boolean = draft
+    .updatedAt.equals(expected.updatedAt) &&
+    draft.totalAssetsDraftId == expected.totalAssetsDraftId &&
+    draft.revenueDraftId == expected.revenueDraftId &&
+    draft.incidentLogDraftId == expected.incidentLogDraftId

@@ -14,9 +14,9 @@ import doobie.postgres.sqlstate
 import momo.api.domain.ids.*
 import momo.api.domain.{MatchDraftStatus, MatchRecord}
 import momo.api.errors.{AppError, AppException}
-import momo.api.repositories.MatchConfirmationRepository
 import momo.api.repositories.postgres.PostgresMatchInsertOps.insertMatchCascade
 import momo.api.repositories.postgres.PostgresMeta.given
+import momo.api.repositories.{MatchConfirmationRepository, MatchDraftConfirmation}
 
 final class PostgresMatchConfirmationRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends MatchConfirmationRepository[F]:
@@ -28,19 +28,23 @@ final class PostgresMatchConfirmationRepository[F[_]: MonadCancelThrow](transact
 
   override def confirm(
       record: MatchRecord,
-      draftId: Option[MatchDraftId],
+      draft: Option[MatchDraftConfirmation],
       updatedAt: Instant,
   ): F[Boolean] =
     val program =
       for
-        updated <- draftId match
+        updated <- draft match
           case None => true.pure[ConnectionIO]
-          case Some(id) => sql"""
+          case Some(expected) => sql"""
             UPDATE match_drafts SET
               status = ${MatchDraftStatus.Confirmed},
               confirmed_match_id = ${record.id},
               updated_at = $updatedAt
-            WHERE id = $id
+            WHERE id = ${expected.draftId}
+              AND updated_at = ${expected.updatedAt}
+              AND total_assets_draft_id IS NOT DISTINCT FROM ${expected.totalAssetsDraftId}
+              AND revenue_draft_id IS NOT DISTINCT FROM ${expected.revenueDraftId}
+              AND incident_log_draft_id IS NOT DISTINCT FROM ${expected.incidentLogDraftId}
               AND status IN (${MatchDraftStatus.DraftReady}, ${MatchDraftStatus
                 .NeedsReview}, ${MatchDraftStatus.OcrFailed})
           """.update.run.map(_ > 0)

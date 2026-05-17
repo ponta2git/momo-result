@@ -3,11 +3,15 @@ package momo.api.integration
 import java.time.Instant
 
 import cats.effect.IO
+import doobie.implicits.*
+import doobie.postgres.implicits.*
 
 import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.errors.{AppError, AppException}
+import momo.api.repositories.MatchDraftConfirmation
 import momo.api.repositories.postgres.*
+import momo.api.repositories.postgres.PostgresMeta.given
 
 final class PostgresMatchesRepositorySpec extends IntegrationSuite:
 
@@ -223,4 +227,44 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
             case _: AppError.Conflict => ()
             case other => fail(s"expected Conflict, got $other")
         case other => fail(s"expected AppException(Conflict), got $other")
+
+  test("confirmation refuses a draft changed after the validated snapshot"):
+    val draftId = MatchDraftId.unsafeFromString("match-draft-confirm-stale")
+    val rec = sampleMatch("match_confirm_stale", 1)
+    val snapshot = MatchDraftConfirmation(
+      draftId = draftId,
+      updatedAt = now,
+      totalAssetsDraftId = None,
+      revenueDraftId = None,
+      incidentLogDraftId = None,
+    )
+    for
+      _ <- seedPrereqs
+      _ <- insertMatchDraft(draftId, now)
+      _ <- touchMatchDraft(draftId, now.plusSeconds(1))
+      confirmed <- confirmations.confirm(rec, Some(snapshot), now.plusSeconds(2))
+      found <- matches.find(rec.id)
+      status <- draftStatus(draftId)
+    yield
+      assertEquals(confirmed, false)
+      assertEquals(found, None)
+      assertEquals(status, (MatchDraftStatus.DraftReady, Option.empty[MatchId]))
+
+  private def insertMatchDraft(draftId: MatchDraftId, updatedAt: Instant): IO[Int] = sql"""
+    INSERT INTO match_drafts (
+      id, created_by_account_id, created_by_member_id, status, created_at, updated_at
+    ) VALUES (
+      $draftId, 'account_ponta', 'member_ponta', ${MatchDraftStatus.DraftReady}, $now, $updatedAt
+    )
+  """.update.run.transact(transactor)
+
+  private def touchMatchDraft(draftId: MatchDraftId, updatedAt: Instant): IO[Int] = sql"""
+    UPDATE match_drafts
+    SET match_no_in_event = 99, updated_at = $updatedAt
+    WHERE id = $draftId
+  """.update.run.transact(transactor)
+
+  private def draftStatus(draftId: MatchDraftId): IO[(MatchDraftStatus, Option[MatchId])] = sql"""
+    SELECT status, confirmed_match_id FROM match_drafts WHERE id = $draftId
+  """.query[(MatchDraftStatus, Option[MatchId])].unique.transact(transactor)
 end PostgresMatchesRepositorySpec

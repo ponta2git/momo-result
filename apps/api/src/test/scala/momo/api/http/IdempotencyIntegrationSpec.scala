@@ -135,6 +135,46 @@ final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite with HttpAppT
       assertEquals(attemptCount, 2)
   }
 
+  test("idempotency: undecodable stored replay returns an internal problem") {
+    val account = AuthenticatedAccount(
+      accountId = AccountId.unsafeFromString("account_ponta"),
+      displayName = "ponta",
+      isAdmin = true,
+      playerMemberId = Some(MemberId.unsafeFromString("member_ponta")),
+    )
+    val request = Json.obj("value" -> Json.fromString("same"))
+    val stored = Json.obj("ok" -> Json.fromBoolean(true))
+    for
+      repo <- InMemoryIdempotencyRepository.create[IO]
+      first <- IdempotencyReplay.wrap[IO, Json, Json](
+        repo,
+        Some("key-undecodable-replay"),
+        account,
+        "POST /api/testing/idempotency",
+        request,
+        IO.pure(java.time.Instant.parse("2026-05-14T00:00:00Z")),
+        IO.pure(Right(stored)),
+      )
+      second <- IdempotencyReplay.wrap[IO, Json, Int](
+        repo,
+        Some("key-undecodable-replay"),
+        account,
+        "POST /api/testing/idempotency",
+        request,
+        IO.pure(java.time.Instant.parse("2026-05-14T00:00:01Z")),
+        IO.raiseError[Either[ProblemDetails.ProblemResponse, Int]](RuntimeException(
+          "replay should not run the mutation"
+        )),
+      )
+    yield
+      assertEquals(first, Right(stored))
+      second match
+        case Left((status, problem)) =>
+          assertEquals(status, sttp.model.StatusCode.InternalServerError)
+          assertEquals(problem.code, "INTERNAL_ERROR")
+        case Right(value) => fail(s"expected stored response decode failure, got replay: $value")
+  }
+
   app.test("idempotency: different keys produce two separate entities") { httpApp =>
     for
       first <- httpApp.run(heldEventReq(Some("key-3a"), "2024-04-01T00:00:00Z"))

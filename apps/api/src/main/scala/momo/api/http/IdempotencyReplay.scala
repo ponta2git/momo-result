@@ -84,7 +84,8 @@ private[http] object IdempotencyReplay:
                   abandonReservation(idempotency, rawKey, account, endpoint, requestHash) >>
                   Async[F].raiseError(error)
             }
-          case IdempotencyReservation.Replay(response) => replayStoredBody[F, Resp](response)
+          case IdempotencyReservation.Replay(response) =>
+            replayStoredBody[F, Resp](endpoint, account, rawKey, response)
           case IdempotencyReservation.InProgress => Async[F].pure(Left(ProblemDetails.from(
               AppError.IdempotencyInProgress("Idempotency-Key is already processing. Retry later.")
             )))
@@ -141,12 +142,17 @@ private[http] object IdempotencyReplay:
     circeDecode[A](new String(bytes.toArray, StandardCharsets.UTF_8))
 
   private def replayStoredBody[F[_]: Async, A: Decoder](
-      response: IdempotencyResponse
+      endpoint: String,
+      account: AuthenticatedAccount,
+      key: String,
+      response: IdempotencyResponse,
   ): F[Either[ProblemDetails.ProblemResponse, A]] = decodeStoredBody[A](response.body) match
     case Right(replay) => Async[F].pure(Right(replay))
-    case Left(_) => Async[F].pure(Left(
-        ProblemDetails.from(AppError.Internal("Stored idempotency response could not be decoded."))
-      ))
+    case Left(error) => logIdempotencyFailure(endpoint, account, key, "decode stored", error) >>
+        Async[F].pure(Left(
+          ProblemDetails
+            .from(AppError.Internal("Stored idempotency response could not be decoded."))
+        ))
 
   private def logIdempotencyFailure[F[_]: Async](
       endpoint: String,

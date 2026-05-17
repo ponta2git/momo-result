@@ -25,7 +25,7 @@ final case class UpdateMatchDraftCommand(
     ownerMemberId: Option[MemberId],
     mapMasterId: Option[MapMasterId],
     playedAt: Option[Instant],
-    status: Option[String],
+    status: Option[MatchDraftStatus],
 )
 
 final class UpdateMatchDraft[F[_]: MonadThrow](
@@ -91,15 +91,13 @@ final class UpdateMatchDraft[F[_]: MonadThrow](
   )
 
   private def resolveStatus(
-      wire: Option[String],
+      status: Option[MatchDraftStatus],
       current: MatchDraftStatus,
-  ): Either[AppError, MatchDraftStatus] = wire match
+  ): Either[AppError, MatchDraftStatus] = status match
     case None => Right(current)
-    case Some(value) => MatchDraftStatus.fromWire(value)
-        .toRight(AppError.ValidationFailed(s"unknown match draft status: $value")).flatMap { parsed =>
-          if MatchDraftStatus.userEditableStatuses.contains(parsed) then Right(parsed)
-          else Left(AppError.Conflict(s"status ${parsed.wire} cannot be set from this endpoint."))
-        }
+    case Some(parsed) =>
+      if MatchDraftStatus.userEditableStatuses.contains(parsed) then Right(parsed)
+      else Left(AppError.Conflict(s"status ${parsed.wire} cannot be set from this endpoint."))
 
   private def nextReferences(
       command: UpdateMatchDraftCommand,

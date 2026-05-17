@@ -138,6 +138,18 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
     }
   }
 
+  app
+    .test("PATCH /api/match-drafts/:draftId rejects unknown status at the HTTP boundary") { httpApp =>
+      for
+        draftId <- createMatchDraft(httpApp)
+        req = Request[IO](Method.PATCH, Uri.unsafeFromString(s"/api/match-drafts/$draftId"))
+          .putHeaders(devWriteHeaders()*)
+          .withEntity(Json.obj("status" -> Json.fromString("not_a_status")))
+        res <- httpApp.run(req)
+        _ <- assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "status")
+      yield ()
+    }
+
   app.test("GET /api/ocr-drafts bulk rejects empty ids") { httpApp =>
     httpApp.run(Request[IO](Method.GET, uri"/api/ocr-drafts?ids=").putHeaders(devReadHeader()))
       .flatMap(res => assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "ids"))

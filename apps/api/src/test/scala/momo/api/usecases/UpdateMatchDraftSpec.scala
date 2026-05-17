@@ -40,7 +40,7 @@ final class UpdateMatchDraftSpec extends MomoCatsEffectSuite:
           ownerMemberId = Some(MemberId.unsafeFromString("ponta")),
           mapMasterId = Some(mapId),
           playedAt = Some(updatedAt),
-          status = Some("needs_review"),
+          status = Some(MatchDraftStatus.NeedsReview),
         ),
         AccountId.unsafeFromString("ponta"),
       )
@@ -62,7 +62,7 @@ final class UpdateMatchDraftSpec extends MomoCatsEffectSuite:
       _ <- fixture.matchDrafts.create(editingDraft(draftId, MatchDraftStatus.DraftReady))
       result <- fixture.usecase.run(
         draftId,
-        blankCommand.copy(status = Some("needs_review")),
+        blankCommand.copy(status = Some(MatchDraftStatus.NeedsReview)),
         AccountId.unsafeFromString("otaka"),
       )
       found <- fixture.matchDrafts.find(draftId)
@@ -90,24 +90,18 @@ final class UpdateMatchDraftSpec extends MomoCatsEffectSuite:
         Some(MatchId.unsafeFromString("match-confirmed-1")),
       )
 
-  test("rejects unknown and terminal status values from the update endpoint"):
+  test("rejects terminal status values from the update endpoint"):
     for
       fixture <- Fixture.create
       _ <- fixture.seedPrereqs()
       _ <- fixture.matchDrafts.create(editingDraft(draftId, MatchDraftStatus.DraftReady))
-      unknown <- fixture.usecase.run(
-        draftId,
-        blankCommand.copy(status = Some("not_a_status")),
-        AccountId.unsafeFromString("ponta"),
-      )
       terminal <- fixture.usecase.run(
         draftId,
-        blankCommand.copy(status = Some("confirmed")),
+        blankCommand.copy(status = Some(MatchDraftStatus.Confirmed)),
         AccountId.unsafeFromString("ponta"),
       )
       found <- fixture.matchDrafts.find(draftId)
     yield
-      assertAppError(unknown, "VALIDATION_FAILED", "unknown match draft status")
       assertAppError(terminal, "CONFLICT", "cannot be set")
       assertEquals(found.map(_.status), Some(MatchDraftStatus.DraftReady))
 

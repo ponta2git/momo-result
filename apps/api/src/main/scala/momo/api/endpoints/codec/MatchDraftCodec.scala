@@ -65,6 +65,7 @@ object MatchDraftCodec:
       ownerMemberId <- BoundaryId
         .optional("ownerMemberId", request.ownerMemberId)(MemberId.fromString)
       mapMasterId <- BoundaryId.optional("mapMasterId", request.mapMasterId)(MapMasterId.fromString)
+      status <- parseStatusOption(request.status)
     yield UpdateMatchDraftCommand(
       heldEventId = heldEventId,
       matchNoInEvent = request.matchNoInEvent,
@@ -74,6 +75,6 @@ object MatchDraftCodec:
       ownerMemberId = ownerMemberId,
       mapMasterId = mapMasterId,
       playedAt = playedAt,
-      status = request.status,
+      status = status,
     )
 end MatchDraftCodec

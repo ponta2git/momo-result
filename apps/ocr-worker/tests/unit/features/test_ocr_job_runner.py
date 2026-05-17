@@ -137,6 +137,7 @@ def _make_deps(
     cancellation: CancellationChecker,
     analyze: AnalyzeImageFn,
     temp_root: Path | None = None,
+    fast_path_enabled: bool = False,
 ) -> JobRunnerDependencies:
     return JobRunnerDependencies(
         consumer=consumer,
@@ -145,6 +146,7 @@ def _make_deps(
         worker_id=WORKER_ID,
         analyze=analyze,
         temp_root=temp_root,
+        fast_path_enabled=fast_path_enabled,
     )
 
 
@@ -586,6 +588,7 @@ def test_worker_analyze_enforces_temp_root_and_upload_size_limit(tmp_path: Path)
         cancellation=InMemoryCancellationChecker(),
         analyze=capturing_analyze,
         temp_root=image_root,
+        fast_path_enabled=True,
     )
 
     outcome = run_one_job(deps)
@@ -593,6 +596,7 @@ def test_worker_analyze_enforces_temp_root_and_upload_size_limit(tmp_path: Path)
     assert outcome.status is OcrJobStatus.SUCCEEDED
     assert captured["image_root"] == image_root
     assert captured["enforce_size_limit"] is True
+    assert captured["fast_path_enabled"] is True
 
 
 class _ToggleAfterFirstCallCancellation:

@@ -15,6 +15,7 @@ def test_load_worker_config_reads_redis_and_database_urls() -> None:
             "OCR_REDIS_GROUP": "custom-group",
             "OCR_WORKER_CONCURRENCY": "2",
             "IMAGE_TMP_DIR": "/tmp/custom-images",
+            "MOMO_OCR_FAST_PATH": "yes",
         }
     )
 
@@ -25,6 +26,7 @@ def test_load_worker_config_reads_redis_and_database_urls() -> None:
     assert config.redis_group == "custom-group"
     assert config.concurrency == 2
     assert str(config.temp_root) == "/tmp/custom-images"
+    assert config.fast_path_enabled is True
 
 
 def test_require_production_config_rejects_missing_urls() -> None:

@@ -40,7 +40,6 @@ from momo_ocr.features.ocr_domain.models import (
 from momo_ocr.features.ocr_results.parsing import ScreenParseContext
 from momo_ocr.features.player_order.detector import apply_player_order_to_column_players
 from momo_ocr.features.temp_images.validation import open_decoded_image
-from momo_ocr.features.text_recognition.fast_path import is_fast_path_enabled
 
 PLAYER_COUNT = 4
 
@@ -63,7 +62,6 @@ class IncidentLogParser:
         # profile recognises every cell (missing_count == 0) the remaining
         # profiles cannot improve on it, so skip them. Default behaviour
         # evaluates all profiles for highest recall.
-        fast_path = is_fast_path_enabled()
         attempts: list[IncidentParseAttempt] = []
         for profile in profiles:
             attempts.append(
@@ -76,7 +74,7 @@ class IncidentLogParser:
                     isolate_debug=len(profiles) > 1,
                 )
             )
-            if fast_path and attempts[-1].missing_count == 0:
+            if context.fast_path_enabled and attempts[-1].missing_count == 0:
                 break
         selected_attempt = min(attempts, key=lambda attempt: attempt.missing_count)
 

@@ -6,6 +6,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+from momo_ocr.features.text_recognition.fast_path import parse_fast_path_flag
+
 DEFAULT_TEMP_ROOT = Path("/tmp/momo-result/uploads")  # noqa: S108
 DEFAULT_REDIS_STREAM = "momo:ocr:jobs"
 DEFAULT_REDIS_GROUP = "momo-ocr-workers"
@@ -27,6 +29,7 @@ class WorkerConfig:
     ocr_timeout_seconds: int = DEFAULT_OCR_TIMEOUT_SECONDS
     max_attempts: int = DEFAULT_MAX_ATTEMPTS
     temp_root: Path = DEFAULT_TEMP_ROOT
+    fast_path_enabled: bool = False
 
 
 def load_worker_config(env: Mapping[str, str] | None = None) -> WorkerConfig:
@@ -50,6 +53,7 @@ def load_worker_config(env: Mapping[str, str] | None = None) -> WorkerConfig:
         ),
         max_attempts=_int_from_env(source, "OCR_MAX_ATTEMPTS", DEFAULT_MAX_ATTEMPTS),
         temp_root=Path(source.get("IMAGE_TMP_DIR", str(DEFAULT_TEMP_ROOT))).absolute(),
+        fast_path_enabled=parse_fast_path_flag(source.get("MOMO_OCR_FAST_PATH")),
     )
 
 

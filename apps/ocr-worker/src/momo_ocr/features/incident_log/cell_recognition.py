@@ -21,7 +21,6 @@ from momo_ocr.features.incident_log.voting import (
     vote_count,
 )
 from momo_ocr.features.ocr_results.parsing import ScreenParseContext
-from momo_ocr.features.text_recognition.fast_path import is_fast_path_enabled
 from momo_ocr.features.text_recognition.models import RecognitionConfig, RecognitionField
 from momo_ocr.features.text_recognition.postprocess import normalize_ocr_text
 
@@ -69,8 +68,8 @@ def recognize_count_cell(
     corrected by the fallback variants. Early-return is intentionally
     avoided in the default path.
 
-    When ``MOMO_OCR_FAST_PATH=1`` is set, fallback variants are skipped if
-    the primary variant produced a plausible (≤ ``max_plausible_count``)
+    When ``context.fast_path_enabled`` is true, fallback variants are skipped
+    if the primary variant produced a plausible (≤ ``max_plausible_count``)
     digit count with confidence ≥ :data:`FAST_PATH_CONFIDENCE_THRESHOLD`.
     """
     max_count = max_plausible_cell_count(incident_name)
@@ -96,7 +95,7 @@ def recognize_count_cell(
     # framing-noise misreads that would otherwise short-circuit on a wrong
     # value (e.g. 10 → "lo" on the ginji column whose plausible cap is 2).
     if (
-        is_fast_path_enabled()
+        context.fast_path_enabled
         and primary.count is not None
         and primary.count <= max_count
         and (primary.confidence or 0.0) >= FAST_PATH_CONFIDENCE_THRESHOLD
@@ -128,7 +127,7 @@ def _recognize_count_cell_image(
     # 旧実装は raw_text を " | " で連結して parse_count に渡していたが、
     # parse_count は reversed で最後の候補を優先するため "0 | lo" → 10 の
     # ような後勝ち誤読が起きていた。
-    fast_path = is_fast_path_enabled()
+    fast_path = context.fast_path_enabled
     attempts: list[PsmAttempt] = []
     snippets: list[str] = []
     for psm in COUNT_OCR_PSMS:

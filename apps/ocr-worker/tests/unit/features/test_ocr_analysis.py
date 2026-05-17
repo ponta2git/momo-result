@@ -118,6 +118,38 @@ def test_analyze_image_forwards_explicit_layout_family_hint(tmp_path: Path) -> N
     assert captured_hints == ["momotetsu_2"]
 
 
+def test_analyze_image_forwards_explicit_fast_path_flag(tmp_path: Path) -> None:
+    image_path = tmp_path / "assets.jpg"
+    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    captured_flags: list[bool] = []
+
+    class _CapturingParser:
+        @property
+        def screen_type(self) -> ScreenType:
+            return ScreenType.TOTAL_ASSETS
+
+        def parse(self, context: ScreenParseContext) -> OcrDraftPayload:
+            captured_flags.append(context.fast_path_enabled)
+            return OcrDraftPayload(
+                requested_screen_type=context.requested_screen_type,
+                detected_screen_type=context.detected_screen_type,
+                profile_id=context.profile_id,
+            )
+
+    result = analyze_image(
+        image_path=image_path,
+        requested_screen_type="total_assets",
+        debug_dir=None,
+        include_raw_text=False,
+        text_engine=FakeTextRecognitionEngine("unused"),
+        parser_registry=ParserRegistry({ScreenType.TOTAL_ASSETS: _CapturingParser()}),
+        fast_path_enabled=True,
+    )
+
+    assert result.failure_code is None
+    assert captured_flags == [True]
+
+
 def test_analyze_image_returns_temp_image_missing_failure(tmp_path: Path) -> None:
     result = analyze_image(
         image_path=tmp_path / "missing.jpg",

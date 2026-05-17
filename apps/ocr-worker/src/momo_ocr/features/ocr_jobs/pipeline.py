@@ -130,6 +130,7 @@ def _phase_execute(deps: JobRunnerDependencies, message: OcrJobMessage) -> OcrJo
         alias_resolver=alias_resolver_from_hints(message.hints),
         image_root=deps.temp_root,
         enforce_size_limit=True,
+        fast_path_enabled=deps.fast_path_enabled,
     )
     duration_ms = (time.monotonic() - started) * 1000.0
     return _persist_analysis_result(deps, message, analysis, duration_ms)

@@ -25,6 +25,7 @@ from momo_ocr.features.text_recognition.engine import (
     FakeTextRecognitionEngine,
     TextRecognitionEngine,
 )
+from momo_ocr.features.text_recognition.fast_path import is_fast_path_enabled
 from momo_ocr.features.text_recognition.tesseract import TesseractEngine
 from momo_ocr.features.text_recognition.tesserocr_engine import TesserocrEngine
 from momo_ocr.shared.json import write_json
@@ -83,6 +84,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             include_raw_text=args.include_raw_text,
             text_engine=text_engine,
             layout_family_hint=detect_layout_family_from_filename(args.image),
+            fast_path_enabled=is_fast_path_enabled(),
         )
         if args.output is not None:
             write_json(args.output, result)
@@ -100,6 +102,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             text_engine=text_engine,
             include_raw_text=args.include_raw_text,
             evaluation_set=args.evaluation_set,
+            fast_path_enabled=is_fast_path_enabled(),
         )
         if args.report is not None:
             write_json(args.report, report)

@@ -134,6 +134,7 @@ def production_worker_runtime(config: WorkerConfig) -> WorkerRuntime:
             worker_id=config.worker_id,
             text_engine=text_engine,
             temp_root=config.temp_root,
+            fast_path_enabled=config.fast_path_enabled,
         )
     except BaseException:
         # If anything between pool creation and runtime assembly fails we

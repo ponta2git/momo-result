@@ -39,6 +39,7 @@ def analyze_image(  # noqa: PLR0913
     alias_resolver: PlayerAliasResolver | None = None,
     image_root: Path | None = None,
     enforce_size_limit: bool = False,
+    fast_path_enabled: bool = False,
 ) -> AnalysisResult:
     timings: dict[str, float] = {}
     metadata = None
@@ -121,6 +122,7 @@ def analyze_image(  # noqa: PLR0913
                     warnings=warnings,
                     layout_family_hint=layout_family_hint,
                     alias_resolver=resolved_alias_resolver,
+                    fast_path_enabled=fast_path_enabled,
                     image=decoded_image,
                 )
             )

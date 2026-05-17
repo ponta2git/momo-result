@@ -7,9 +7,8 @@ from dataclasses import dataclass
 from threading import Lock
 from typing import Any, Protocol, cast
 
-from redis import Redis
 from redis.exceptions import ResponseError
-from redis.typing import EncodableT
+from redis.typing import EncodableT, KeyT
 
 from momo_ocr.features.ocr_jobs.models import MalformedPulledJob, OcrQueueDelivery, PulledJob
 from momo_ocr.features.ocr_jobs.queue_contract import parse_job_message
@@ -44,8 +43,10 @@ DEFAULT_REDIS_RETRY_CONFIG = RedisConsumerRetryConfig(
     pending_scan_count=10,
 )
 
+type RedisStreamId = int | bytes | str | memoryview[int]
 
-class OcrJobConsumer(Protocol):
+
+class OcrJobConsumer(Protocol):  # pragma: no cover
     """Pull-based consumer of OCR job deliveries.
 
     Implementations wrap a transport (e.g. Redis Streams XREADGROUP). The
@@ -69,6 +70,66 @@ class OcrJobConsumer(Protocol):
         persisted to the source-of-truth DB. If the consumer is unable to
         acknowledge, it should raise rather than silently swallow the failure.
         """
+        raise NotImplementedError
+
+
+class RedisStreamClient(Protocol):  # pragma: no cover
+    """Minimal redis-py surface used by :class:`RedisOcrJobConsumer`."""
+
+    def xgroup_create(
+        self,
+        name: KeyT,
+        groupname: KeyT,
+        stream_id: RedisStreamId,
+        /,
+        *,
+        mkstream: bool,
+    ) -> object:
+        raise NotImplementedError
+
+    def xreadgroup(
+        self,
+        groupname: str,
+        consumername: str,
+        streams: dict[KeyT, RedisStreamId],
+        /,
+        *,
+        count: int,
+        block: int,
+    ) -> object:
+        raise NotImplementedError
+
+    def xpending_range(
+        self,
+        name: KeyT,
+        groupname: KeyT,
+        min_id: RedisStreamId,
+        max_id: RedisStreamId,
+        /,
+        *,
+        count: int,
+    ) -> object:
+        raise NotImplementedError
+
+    def xclaim(
+        self,
+        name: KeyT,
+        groupname: KeyT,
+        consumername: KeyT,
+        /,
+        *,
+        min_idle_time: int,
+        message_ids: list[RedisStreamId] | tuple[RedisStreamId],
+    ) -> object:
+        raise NotImplementedError
+
+    def xadd(self, name: KeyT, fields: dict[EncodableT, EncodableT], /) -> object:
+        raise NotImplementedError
+
+    def xack(self, name: KeyT, groupname: KeyT, delivery_tag: RedisStreamId, /) -> object:
+        raise NotImplementedError
+
+    def close(self) -> None:
         raise NotImplementedError
 
 
@@ -128,7 +189,7 @@ class RedisOcrJobConsumer:
 
     def __init__(
         self,
-        redis_client: Redis,
+        redis_client: RedisStreamClient,
         *,
         stream: str,
         group: str,
@@ -149,10 +210,11 @@ class RedisOcrJobConsumer:
         if pending is not None:
             return pending
 
+        streams: dict[KeyT, RedisStreamId] = {self._stream: ">"}
         raw_deliveries = self._redis.xreadgroup(
-            groupname=self._group,
-            consumername=self._consumer_name,
-            streams={self._stream: ">"},
+            self._group,
+            self._consumer_name,
+            streams,
             count=1,
             block=self._block_ms,
         )
@@ -187,6 +249,7 @@ class RedisOcrJobConsumer:
         message_id = str(entry["message_id"])
         deliveries = _int_from_mapping(entry, "times_delivered", default=1)
 
+        message_ids: list[RedisStreamId] = [message_id]
         claimed = cast(
             "list[tuple[str, dict[str, object]]]",
             self._redis.xclaim(
@@ -194,7 +257,7 @@ class RedisOcrJobConsumer:
                 self._group,
                 self._consumer_name,
                 min_idle_time=self._retry_config.claim_idle_ms,
-                message_ids=[message_id],
+                message_ids=message_ids,
             ),
         )
         delivery: OcrQueueDelivery | None = None
@@ -215,8 +278,8 @@ class RedisOcrJobConsumer:
             self._redis.xpending_range(
                 self._stream,
                 self._group,
-                min="-",
-                max="+",
+                "-",
+                "+",
                 count=self._retry_config.pending_scan_count,
             ),
         )
@@ -260,9 +323,9 @@ class RedisOcrJobConsumer:
     def _ensure_group(self) -> None:
         try:
             self._redis.xgroup_create(
-                name=self._stream,
-                groupname=self._group,
-                id="0",
+                self._stream,
+                self._group,
+                "0",
                 mkstream=True,
             )
         except ResponseError as exc:

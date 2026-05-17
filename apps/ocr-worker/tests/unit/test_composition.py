@@ -95,8 +95,16 @@ def test_redis_consumer_from_config_bounds_redis_socket_waits(
             captured.update(kwargs)
             return cls()
 
-        def xgroup_create(self, **_kwargs: object) -> None:
-            pass
+        def xgroup_create(
+            self,
+            _name: object,
+            _groupname: object,
+            _stream_id: object,
+            /,
+            *,
+            mkstream: bool,
+        ) -> None:
+            captured["mkstream"] = mkstream
 
     monkeypatch.setattr(composition_module, "Redis", _StubRedis)
 
@@ -109,6 +117,7 @@ def test_redis_consumer_from_config_bounds_redis_socket_waits(
     assert captured["socket_keepalive"] is True
     assert captured["socket_connect_timeout"] == 5.0
     assert captured["socket_timeout"] == 5.0
+    assert captured["mkstream"] is True
 
 
 def test_redis_consumer_from_config_uses_independent_claim_idle(

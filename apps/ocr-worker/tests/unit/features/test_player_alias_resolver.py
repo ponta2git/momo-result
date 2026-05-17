@@ -66,3 +66,8 @@ def test_custom_alias_resolver_matches_momotetsu_president_suffix_without_seed()
 
 def test_default_alias_resolver_is_resolver_instance() -> None:
     assert isinstance(DEFAULT_ALIAS_RESOLVER, PlayerAliasResolver)
+
+
+def test_default_alias_resolver_matches_momotetsu_2_name_noise() -> None:
+    assert extract_player_name_candidate("a と & | ローゆー社長 2億6000万円") == "いーゆー社長"
+    assert extract_player_name_candidate("のシーンいと コーツ力社長 1800万円") == "オータカ社長"

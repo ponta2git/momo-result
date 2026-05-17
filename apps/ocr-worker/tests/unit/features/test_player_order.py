@@ -103,6 +103,38 @@ def test_apply_player_order_matches_ranked_name_missing_leading_i() -> None:
     assert updated[0].play_order.value == 3
 
 
+def test_apply_player_order_matches_momotetsu_2_name_noise() -> None:
+    detection = PlayerOrderDetection(
+        slots=[
+            PlayerOrderSlot(
+                play_order=1,
+                expected_color=PlayerColor.BLUE,
+                detected_color=PlayerColor.BLUE,
+                raw_player_name="ローゆー社長",
+                color_confidence=0.9,
+                name_confidence=0.8,
+            ),
+            PlayerOrderSlot(
+                play_order=2,
+                expected_color=PlayerColor.RED,
+                detected_color=PlayerColor.RED,
+                raw_player_name="コーツ力社長",
+                color_confidence=0.9,
+                name_confidence=0.8,
+            ),
+        ],
+        confidence=0.9,
+    )
+    players = [
+        PlayerResultDraft(raw_player_name=OcrField(value="いーゆー社長")),
+        PlayerResultDraft(raw_player_name=OcrField(value="オータカ社長")),
+    ]
+
+    updated = apply_player_order_to_ranked_players(players, detection)
+
+    assert [player.play_order.value for player in updated] == [1, 2]
+
+
 def test_apply_player_order_assigns_column_players_by_slot() -> None:
     detection = _sample_detection()
     players = [PlayerResultDraft() for _ in range(4)]

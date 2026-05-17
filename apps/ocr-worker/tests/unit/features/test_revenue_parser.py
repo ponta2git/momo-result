@@ -27,6 +27,10 @@ def test_parse_man_yen_handles_zero_yen_revenue() -> None:
     )
     assert parse_man_yen("9100万円") == 9100
     assert parse_man_yen("0円") == 0
+    assert parse_man_yen("オータカ社長 OF a") == 0
+    assert parse_man_yen("ぽんた社長 on FX") == 0
+    assert parse_man_yen("ぽんた社長 Om fae") == 0
+    assert parse_man_yen("random of noise") is None
 
 
 def test_revenue_parser_extracts_ranked_players_and_amounts(tmp_path: Path) -> None:
@@ -80,7 +84,7 @@ def test_revenue_parser_extracts_ranked_players_and_amounts(tmp_path: Path) -> N
 def test_revenue_parser_warns_for_unreadable_row(tmp_path: Path) -> None:
     image_path = tmp_path / "revenue.jpg"
     Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
-    engine = SequenceTextRecognitionEngine(["unknown"] * 24)
+    engine = SequenceTextRecognitionEngine(["unknown"] * 32)
 
     payload = RevenueParser().parse(
         ScreenParseContext(

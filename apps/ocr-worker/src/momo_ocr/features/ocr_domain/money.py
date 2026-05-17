@@ -35,6 +35,12 @@ _OKU_CONFUSION_RE = re.compile(
 _YEN_CONFUSION_RE = re.compile(
     r"(?<=\d)\s*(" + "|".join(_YEN_CONFUSIONS) + r")(?=\s|$|\W)",
 )
+_MINUS_FIVE_CONFUSION_RE = re.compile(
+    _MINUS_LOOKBEHIND + r"([" + _MINUS_SIGN_CHARS + r"])\s*ら(?=\s*\d{3}\s*万)"
+)
+_PARTIAL_OKU_MAN_RE = re.compile(
+    _MINUS_LOOKBEHIND + r"([" + _MINUS_SIGN_CHARS + r"])?\s*(\d+)\s*億\s*(\d{3,4})(?!\d)"
+)
 
 
 @dataclass(frozen=True)
@@ -46,6 +52,7 @@ class MoneyCandidate:
 def parse_man_yen(value: str) -> int | None:
     normalized = _normalize_units(value).replace(",", "").replace("，", "")
     candidates = _unit_candidates(normalized)
+    candidates.extend(_partial_oku_man_candidates(normalized))
     if not any(candidate.amount_man_yen != 0 for candidate in candidates):
         candidates.extend(_digit_fallback_candidates(normalized))
     if not candidates:
@@ -55,7 +62,8 @@ def parse_man_yen(value: str) -> int | None:
 
 def _normalize_units(value: str) -> str:
     normalized = _OKU_CONFUSION_RE.sub("億", value)
-    return _YEN_CONFUSION_RE.sub("円", normalized)
+    normalized = _YEN_CONFUSION_RE.sub("円", normalized)
+    return _MINUS_FIVE_CONFUSION_RE.sub(r"\g<1>5", normalized)
 
 
 def _unit_candidates(value: str) -> list[MoneyCandidate]:
@@ -95,6 +103,19 @@ def _digit_fallback_candidates(value: str) -> list[MoneyCandidate]:
             candidates.append(MoneyCandidate(amount_man_yen=int(digits[:-2]), score=0))
         else:
             candidates.append(MoneyCandidate(amount_man_yen=int(digits[:-1]), score=0))
+    return candidates
+
+
+def _partial_oku_man_candidates(value: str) -> list[MoneyCandidate]:
+    candidates: list[MoneyCandidate] = []
+    for match in _PARTIAL_OKU_MAN_RE.finditer(value):
+        sign = -1 if match.group(1) else 1
+        candidates.append(
+            MoneyCandidate(
+                amount_man_yen=sign * (int(match.group(2)) * 10000 + int(match.group(3))),
+                score=3,
+            )
+        )
     return candidates
 
 

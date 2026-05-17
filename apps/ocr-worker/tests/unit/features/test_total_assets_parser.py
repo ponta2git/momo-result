@@ -29,6 +29,9 @@ def test_parse_man_yen_handles_oku_and_man_units() -> None:
     assert parse_man_yen("オータカ社長 214105 ie | オータカ社長 test 11 0万円") == 21410
     assert parse_man_yen("2190万口") == 2190
     assert parse_man_yen("-120万円") == -120
+    assert parse_man_yen("オータカ社長 1億6620") == 16620
+    assert parse_man_yen("ot GB 億6620万円 FE @ オータカ社長 1億6620 a1") == 16620
+    assert parse_man_yen("いーゆー社長 -ら290万円") == -5290
     assert parse_man_yen("10547059") == 105470
     assert parse_man_yen("21105") == 2110
 
@@ -94,7 +97,7 @@ def test_total_assets_parser_extracts_ranked_players_and_amounts(tmp_path: Path)
 def test_total_assets_parser_warns_for_unreadable_row(tmp_path: Path) -> None:
     image_path = tmp_path / "assets.jpg"
     Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
-    engine = SequenceTextRecognitionEngine(["unknown"] * 24)
+    engine = SequenceTextRecognitionEngine(["unknown"] * 32)
 
     payload = TotalAssetsParser().parse(
         ScreenParseContext(

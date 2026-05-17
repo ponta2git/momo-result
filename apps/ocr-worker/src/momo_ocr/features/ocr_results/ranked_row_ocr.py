@@ -13,6 +13,7 @@ from momo_ocr.features.text_recognition.models import RecognitionConfig, Recogni
 from momo_ocr.features.text_recognition.postprocess import normalize_ocr_text
 
 ROW_OCR_PSMS = (6, 7)
+ROW_SPARSE_FALLBACK_OCR_PSMS = (11,)
 _INVERTED_LUMINANCE_THRESHOLD = 110.0
 
 
@@ -58,6 +59,14 @@ def recognize_ranked_row_text(
     _try_variants(primary_variants[1:], text_engine, snippets, confidences)
     if not _has_money_and_name(snippets):
         _try_variants(secondary_variants, text_engine, snippets, confidences)
+    if not _has_money_and_name(snippets):
+        _try_variants(
+            primary_variants,
+            text_engine,
+            snippets,
+            confidences,
+            psms=ROW_SPARSE_FALLBACK_OCR_PSMS,
+        )
 
     confidence = max(confidences) if confidences else None
     return RankedRowOcrResult(text=" | ".join(snippets), confidence=confidence)
@@ -75,11 +84,13 @@ def _try_variants(
     text_engine: TextRecognitionEngine,
     snippets: list[str],
     confidences: list[float],
+    *,
+    psms: tuple[int, ...] = ROW_OCR_PSMS,
 ) -> None:
     for variant in variants:
         if _has_money_and_name(snippets):
             return
-        _run_variant(variant, text_engine, snippets, confidences)
+        _run_variant(variant, text_engine, snippets, confidences, psms=psms)
 
 
 def _run_variant(
@@ -87,8 +98,10 @@ def _run_variant(
     text_engine: TextRecognitionEngine,
     snippets: list[str],
     confidences: list[float],
+    *,
+    psms: tuple[int, ...] = ROW_OCR_PSMS,
 ) -> None:
-    for psm in ROW_OCR_PSMS:
+    for psm in psms:
         recognized = text_engine.recognize(
             candidate_image,
             field=RecognitionField.GENERIC,

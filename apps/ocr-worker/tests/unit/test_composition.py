@@ -14,7 +14,10 @@ from momo_ocr.app.composition import (
 )
 from momo_ocr.app.config import WorkerConfig
 from momo_ocr.features.ocr_jobs.runner import JobRunnerDependencies
-from momo_ocr.features.text_recognition.factory import text_recognition_engine_from_name
+from momo_ocr.features.text_recognition.factory import (
+    default_text_recognition_engine,
+    text_recognition_engine_from_name,
+)
 from momo_ocr.features.text_recognition.tesseract import TesseractEngine
 from momo_ocr.features.text_recognition.tesserocr_engine import TesserocrEngine
 from momo_ocr.shared.errors import FailureCode, OcrError
@@ -48,6 +51,17 @@ def test_respects_explicit_sslmode_in_url() -> None:
 def test_text_recognition_engine_default_is_tesserocr() -> None:
     """After Phase C canary parity, the default engine flipped to tesserocr."""
     engine = text_recognition_engine_from_name(None)
+    assert isinstance(engine, TesserocrEngine)
+    engine.close()
+
+
+def test_default_text_recognition_engine_does_not_read_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("MOMO_OCR_ENGINE", "subprocess")
+
+    engine = default_text_recognition_engine()
+
     assert isinstance(engine, TesserocrEngine)
     engine.close()
 

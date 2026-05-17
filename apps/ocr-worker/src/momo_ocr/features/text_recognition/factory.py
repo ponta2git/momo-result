@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from dataclasses import replace
 
 from momo_ocr.features.text_recognition.engine import TextRecognitionEngine
@@ -17,7 +16,7 @@ _VALID_ENGINES = ("subprocess", "tesserocr")
 
 def default_text_recognition_engine(*, timeout_seconds: int | None = None) -> TextRecognitionEngine:
     return text_recognition_engine_from_name(
-        os.environ.get(_ENV_OCR_ENGINE),
+        None,
         timeout_seconds=timeout_seconds,
     )
 

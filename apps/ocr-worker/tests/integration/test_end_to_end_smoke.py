@@ -8,8 +8,6 @@ from psycopg.types.json import Jsonb
 from psycopg_pool import ConnectionPool
 from redis import Redis
 from redis.typing import EncodableT
-from testcontainers.core.container import DockerContainer
-from testcontainers.core.wait_strategies import ExecWaitStrategy
 
 from momo_ocr.features.ocr_analysis.report import AnalysisResult
 from momo_ocr.features.ocr_domain.models import OcrDraftPayload, ScreenType
@@ -20,77 +18,90 @@ from momo_ocr.features.ocr_jobs.models import OcrJobHints, OcrJobMessage, OcrJob
 from momo_ocr.features.ocr_jobs.queue_contract import to_stream_payload
 from momo_ocr.features.ocr_jobs.repository import PostgresOcrJobRepository
 from momo_ocr.features.ocr_jobs.runner import run_one_job
-from tests.integration.momo_db import migrated_postgres_conninfo
+from momo_ocr.features.ocr_results.player_aliases import PlayerAliasResolver
+from momo_ocr.features.text_recognition.engine import TextRecognitionEngine
+from tests.integration.resources import OcrJobIds, RedisNames
 
 pytestmark = [pytest.mark.integration, pytest.mark.e2e]
 
 
-def test_redis_to_worker_to_postgres_smoke() -> None:
-    redis_container = (
-        DockerContainer("redis:7-alpine")
-        .with_exposed_ports(6379)
-        .waiting_for(ExecWaitStrategy(["redis-cli", "ping"]))
+def test_redis_to_worker_to_postgres_smoke(
+    redis_client: Redis,
+    redis_names: RedisNames,
+    postgres_conninfo: str,
+    ocr_job_ids: OcrJobIds,
+) -> None:
+    _insert_job(postgres_conninfo, ids=ocr_job_ids)
+
+    message = OcrJobMessage(
+        job_id=ocr_job_ids.job_id,
+        draft_id=ocr_job_ids.draft_id,
+        image_id=ocr_job_ids.image_id,
+        image_path=Path(ocr_job_ids.image_path),
+        requested_screen_type=ScreenType.TOTAL_ASSETS,
+        attempt=1,
+        enqueued_at="2026-04-29T10:00:00Z",
+        hints=OcrJobHints(),
     )
-    try:
-        redis_container.start()
-    except Exception as exc:  # noqa: BLE001
-        pytest.skip(f"Docker is not available for OCR smoke Testcontainers: {exc}")
-    try:
-        redis_url = (
-            f"redis://{redis_container.get_container_host_ip()}:"
-            f"{redis_container.get_exposed_port(6379)}/0"
+    stream_payload: dict[EncodableT, EncodableT] = dict(to_stream_payload(message).items())
+    redis_client.xadd(redis_names.stream, stream_payload)
+
+    consumer = RedisOcrJobConsumer(
+        redis_client,
+        stream=redis_names.stream,
+        group=redis_names.group,
+        consumer_name=redis_names.consumer,
+        block_ms=100,
+    )
+    repository: PostgresOcrJobRepository
+    with ConnectionPool(postgres_conninfo, min_size=1, max_size=2, open=True) as pool:
+        repository = PostgresOcrJobRepository(pool)
+        deps = JobRunnerDependencies(
+            consumer=consumer,
+            repository=repository,
+            cancellation=RepositoryCancellationChecker(repository),
+            worker_id=redis_names.consumer,
+            analyze=_fake_success_analysis,
         )
-        with migrated_postgres_conninfo() as conninfo:
-            _insert_job(conninfo)
 
-            redis_client = Redis.from_url(redis_url, decode_responses=True)
-            message = OcrJobMessage(
-                job_id="job-1",
-                draft_id="draft-1",
-                image_id="image-1",
-                image_path=Path("/tmp/image.png"),
-                requested_screen_type=ScreenType.TOTAL_ASSETS,
-                attempt=1,
-                enqueued_at="2026-04-29T10:00:00Z",
-                hints=OcrJobHints(),
-            )
-            stream_payload: dict[EncodableT, EncodableT] = dict(to_stream_payload(message).items())
-            redis_client.xadd("momo:ocr:jobs", stream_payload)
+        outcome = run_one_job(deps)
 
-            consumer = RedisOcrJobConsumer(
-                redis_client,
-                stream="momo:ocr:jobs",
-                group="momo-ocr-workers",
-                consumer_name="worker-it",
-                block_ms=100,
-            )
-            repository: PostgresOcrJobRepository
-            with ConnectionPool(conninfo, min_size=1, max_size=2, open=True) as pool:
-                repository = PostgresOcrJobRepository(pool)
-                deps = JobRunnerDependencies(
-                    consumer=consumer,
-                    repository=repository,
-                    cancellation=RepositoryCancellationChecker(repository),
-                    worker_id="worker-it",
-                    analyze=_fake_success_analysis,
-                )
-
-                outcome = run_one_job(deps)
-
-            assert outcome.status is OcrJobStatus.SUCCEEDED
-            with psycopg.connect(conninfo) as conn:
-                row = conn.execute(
-                    "SELECT j.status, j.attempt_count, d.profile_id "
-                    "FROM ocr_jobs j JOIN ocr_drafts d ON d.job_id = j.id "
-                    "WHERE j.id = %s",
-                    ("job-1",),
-                ).fetchone()
-            assert row == ("succeeded", 1, "smoke-profile")
-    finally:
-        redis_container.stop()
+    assert outcome.status is OcrJobStatus.SUCCEEDED
+    with psycopg.connect(postgres_conninfo) as conn:
+        row = conn.execute(
+            "SELECT j.status, j.attempt_count, d.profile_id "
+            "FROM ocr_jobs j JOIN ocr_drafts d ON d.job_id = j.id "
+            "WHERE j.id = %s",
+            (ocr_job_ids.job_id,),
+        ).fetchone()
+    assert row == ("succeeded", 1, "smoke-profile")
 
 
-def _fake_success_analysis(**_kwargs: object) -> AnalysisResult:
+def _fake_success_analysis(  # noqa: PLR0913 - exact test double for AnalyzeImageFn.
+    *,
+    image_path: Path,
+    requested_screen_type: str,
+    debug_dir: Path | None,
+    include_raw_text: bool,
+    text_engine: TextRecognitionEngine | None = None,
+    layout_family_hint: str | None = None,
+    alias_resolver: PlayerAliasResolver | None = None,
+    image_root: Path | None = None,
+    enforce_size_limit: bool = False,
+    fast_path_enabled: bool = False,
+) -> AnalysisResult:
+    del (
+        image_path,
+        requested_screen_type,
+        debug_dir,
+        include_raw_text,
+        text_engine,
+        layout_family_hint,
+        alias_resolver,
+        image_root,
+        enforce_size_limit,
+        fast_path_enabled,
+    )
     return AnalysisResult(
         input=None,
         detection=None,
@@ -108,22 +119,23 @@ def _fake_success_analysis(**_kwargs: object) -> AnalysisResult:
     )
 
 
-def _insert_job(conninfo: str) -> None:
+def _insert_job(conninfo: str, *, ids: OcrJobIds) -> None:
     with psycopg.connect(conninfo) as conn:
         conn.execute(
             """
             INSERT INTO ocr_jobs (
               id, draft_id, image_id, image_path,
               requested_screen_type, status, attempt_count
-            ) VALUES ('job-1', 'draft-1', 'image-1', '/tmp/image.png', 'total_assets', 'queued', 0)
-            """
+            ) VALUES (%s, %s, %s, %s, 'total_assets', 'queued', 0)
+            """,
+            (ids.job_id, ids.draft_id, ids.image_id, ids.image_path),
         )
         conn.execute(
             """
             INSERT INTO ocr_drafts (
               id, job_id, requested_screen_type,
               payload_json, warnings_json, timings_ms_json
-            ) VALUES ('draft-1', 'job-1', 'total_assets', %s, %s, %s)
+            ) VALUES (%s, %s, 'total_assets', %s, %s, %s)
             """,
-            (Jsonb({}), Jsonb([]), Jsonb({})),
+            (ids.draft_id, ids.job_id, Jsonb({}), Jsonb([]), Jsonb({})),
         )

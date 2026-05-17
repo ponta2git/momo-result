@@ -14,11 +14,14 @@ from __future__ import annotations
 
 import logging
 import time
+from pathlib import Path
+from typing import Protocol
 
 from momo_ocr.features.ocr_analysis.report import AnalysisResult
 from momo_ocr.features.ocr_jobs.aliases import alias_resolver_from_hints
+from momo_ocr.features.ocr_jobs.cancellation import CancellationChecker
 from momo_ocr.features.ocr_jobs.debug_dir import resolve_debug_dir
-from momo_ocr.features.ocr_jobs.dependencies import JobRunnerDependencies
+from momo_ocr.features.ocr_jobs.dependencies import AnalyzeImageFn
 from momo_ocr.features.ocr_jobs.lifecycle import is_terminal
 from momo_ocr.features.ocr_jobs.models import (
     OcrJobExecutionResult,
@@ -27,14 +30,50 @@ from momo_ocr.features.ocr_jobs.models import (
     OcrJobStatus,
     PulledJob,
 )
+from momo_ocr.features.ocr_jobs.repository import OcrJobRepository
 from momo_ocr.features.ocr_jobs.result_records import OcrResultRecord
 from momo_ocr.features.ocr_results.payload_warnings import attach_warnings_to_payload
+from momo_ocr.features.text_recognition.engine import TextRecognitionEngine
 from momo_ocr.shared.errors import FailureCode, OcrError, OcrFailure
 
 logger = logging.getLogger(__name__)
 
 
-def run_pipeline(deps: JobRunnerDependencies, delivery: PulledJob) -> OcrJobStatus:
+class PipelineDependencies(Protocol):
+    @property
+    def repository(self) -> OcrJobRepository:
+        raise NotImplementedError
+
+    @property
+    def cancellation(self) -> CancellationChecker:
+        raise NotImplementedError
+
+    @property
+    def worker_id(self) -> str:
+        raise NotImplementedError
+
+    @property
+    def analyze(self) -> AnalyzeImageFn:
+        raise NotImplementedError
+
+    @property
+    def text_engine(self) -> TextRecognitionEngine:
+        raise NotImplementedError
+
+    @property
+    def temp_root(self) -> Path | None:
+        raise NotImplementedError
+
+    @property
+    def fast_path_enabled(self) -> bool:
+        raise NotImplementedError
+
+    @property
+    def debug_dir_base(self) -> Path | None:
+        raise NotImplementedError
+
+
+def run_pipeline(deps: PipelineDependencies, delivery: PulledJob) -> OcrJobStatus:
     """Walk the per-delivery state machine and return the terminal status."""
     message = delivery.message
 
@@ -55,7 +94,7 @@ def run_pipeline(deps: JobRunnerDependencies, delivery: PulledJob) -> OcrJobStat
     return _phase_execute(deps, message)
 
 
-def _phase_lookup_record(deps: JobRunnerDependencies, delivery: PulledJob) -> OcrJobStatus | None:
+def _phase_lookup_record(deps: PipelineDependencies, delivery: PulledJob) -> OcrJobStatus | None:
     """Look up the canonical job record; return a terminal status if not runnable."""
     message = delivery.message
     record = deps.repository.get_record(message.job_id)
@@ -96,7 +135,7 @@ def _ensure_payload_matches_record(message: OcrJobMessage, record: OcrJobRecord)
 
 
 def _phase_pre_run_cancellation(
-    deps: JobRunnerDependencies, message: OcrJobMessage
+    deps: PipelineDependencies, message: OcrJobMessage
 ) -> OcrJobStatus | None:
     if not deps.cancellation.is_cancelled(message.job_id):
         return None
@@ -105,7 +144,7 @@ def _phase_pre_run_cancellation(
 
 
 def _phase_post_running_cancellation(
-    deps: JobRunnerDependencies, message: OcrJobMessage
+    deps: PipelineDependencies, message: OcrJobMessage
 ) -> OcrJobStatus | None:
     """Honour cancellation that arrived between transition_to_running and OCR start."""
     if not deps.cancellation.is_cancelled(message.job_id):
@@ -114,7 +153,7 @@ def _phase_post_running_cancellation(
     return OcrJobStatus.CANCELLED
 
 
-def _phase_execute(deps: JobRunnerDependencies, message: OcrJobMessage) -> OcrJobStatus:
+def _phase_execute(deps: PipelineDependencies, message: OcrJobMessage) -> OcrJobStatus:
     started = time.monotonic()
     debug_dir = resolve_debug_dir(
         message.job_id,
@@ -138,7 +177,7 @@ def _phase_execute(deps: JobRunnerDependencies, message: OcrJobMessage) -> OcrJo
 
 
 def _persist_analysis_result(
-    deps: JobRunnerDependencies,
+    deps: PipelineDependencies,
     message: OcrJobMessage,
     analysis: AnalysisResult,
     duration_ms: float,

@@ -4,9 +4,9 @@ from pathlib import Path
 
 from PIL import Image
 
+from momo_ocr.features.ocr_analysis.analyze_image import analyze_image
 from momo_ocr.features.ocr_domain.models import OcrDraftPayload, ScreenType
 from momo_ocr.features.ocr_results.parsing import ParserRegistry, ScreenParseContext
-from momo_ocr.features.standalone_analysis.analyze_image import analyze_image
 from momo_ocr.features.temp_images.validation import MAX_IMAGE_BYTES
 from momo_ocr.features.text_recognition.engine import FakeTextRecognitionEngine
 

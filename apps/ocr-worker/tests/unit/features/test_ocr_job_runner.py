@@ -16,6 +16,7 @@ from typing import Any
 import psycopg
 import pytest
 
+from momo_ocr.features.ocr_analysis.report import AnalysisResult
 from momo_ocr.features.ocr_domain.models import (
     OcrDraftPayload,
     OcrWarning,
@@ -36,7 +37,6 @@ from momo_ocr.features.ocr_jobs.queue_contract import parse_job_message, to_stre
 from momo_ocr.features.ocr_jobs.repository import InMemoryOcrJobRepository
 from momo_ocr.features.ocr_jobs.runner import AnalyzeImageFn, JobRunnerDependencies, run_one_job
 from momo_ocr.features.ocr_results.player_aliases import _normalize_name_for_match
-from momo_ocr.features.standalone_analysis.report import AnalysisResult
 from momo_ocr.shared.errors import FailureCode, OcrError
 
 WORKER_ID = "worker-test"

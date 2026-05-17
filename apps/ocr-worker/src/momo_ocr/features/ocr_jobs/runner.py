@@ -23,6 +23,8 @@ from typing import Protocol
 
 import psycopg
 
+from momo_ocr.features.ocr_analysis.analyze_image import analyze_image
+from momo_ocr.features.ocr_analysis.report import AnalysisResult
 from momo_ocr.features.ocr_jobs.cancellation import CancellationChecker
 from momo_ocr.features.ocr_jobs.consumer import OcrJobConsumer
 from momo_ocr.features.ocr_jobs.delivery_handler import ack_delivery
@@ -31,8 +33,6 @@ from momo_ocr.features.ocr_jobs.models import MalformedPulledJob, OcrJobStatus
 from momo_ocr.features.ocr_jobs.pipeline import run_pipeline
 from momo_ocr.features.ocr_jobs.repository import OcrJobRepository
 from momo_ocr.features.ocr_results.player_aliases import PlayerAliasResolver
-from momo_ocr.features.standalone_analysis.analyze_image import analyze_image
-from momo_ocr.features.standalone_analysis.report import AnalysisResult
 from momo_ocr.features.text_recognition.engine import (
     FakeTextRecognitionEngine,
     TextRecognitionEngine,

@@ -4,9 +4,9 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Literal
 
-from momo_ocr.features.standalone_analysis.analyze_image import analyze_image
+from momo_ocr.features.ocr_analysis.analyze_image import analyze_image
+from momo_ocr.features.ocr_analysis.report import BatchReport
 from momo_ocr.features.standalone_analysis.layout_family import detect_layout_family_from_filename
-from momo_ocr.features.standalone_analysis.report import BatchReport
 from momo_ocr.features.text_recognition.engine import TextRecognitionEngine
 
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}

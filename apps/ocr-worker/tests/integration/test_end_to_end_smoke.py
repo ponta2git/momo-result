@@ -11,6 +11,7 @@ from redis.typing import EncodableT
 from testcontainers.core.container import DockerContainer
 from testcontainers.core.wait_strategies import ExecWaitStrategy
 
+from momo_ocr.features.ocr_analysis.report import AnalysisResult
 from momo_ocr.features.ocr_domain.models import OcrDraftPayload, ScreenType
 from momo_ocr.features.ocr_jobs.cancellation import RepositoryCancellationChecker
 from momo_ocr.features.ocr_jobs.consumer import RedisOcrJobConsumer
@@ -18,7 +19,6 @@ from momo_ocr.features.ocr_jobs.models import OcrJobHints, OcrJobMessage, OcrJob
 from momo_ocr.features.ocr_jobs.queue_contract import to_stream_payload
 from momo_ocr.features.ocr_jobs.repository import PostgresOcrJobRepository
 from momo_ocr.features.ocr_jobs.runner import JobRunnerDependencies, run_one_job
-from momo_ocr.features.standalone_analysis.report import AnalysisResult
 from tests.integration.momo_db import migrated_postgres_conninfo
 
 

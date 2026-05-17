@@ -14,13 +14,13 @@ from momo_ocr.app.composition import production_worker_runtime
 from momo_ocr.app.config import load_worker_config
 from momo_ocr.app.logging import configure_logging
 from momo_ocr.app.worker_process import WorkerLoopConfig, run_worker_process
-from momo_ocr.features.standalone_analysis.analyze_image import analyze_image
+from momo_ocr.features.ocr_analysis.analyze_image import analyze_image
+from momo_ocr.features.ocr_analysis.report import AnalysisResult, BatchReport
 from momo_ocr.features.standalone_analysis.batch_calibration import (
     EVALUATION_SET_CHOICES,
     analyze_directory,
 )
 from momo_ocr.features.standalone_analysis.layout_family import detect_layout_family_from_filename
-from momo_ocr.features.standalone_analysis.report import AnalysisResult, BatchReport
 from momo_ocr.features.text_recognition.engine import (
     FakeTextRecognitionEngine,
     TextRecognitionEngine,

@@ -1,1 +1,1 @@
-"""Standalone local OCR accuracy analysis."""
+"""Standalone local OCR calibration helpers."""

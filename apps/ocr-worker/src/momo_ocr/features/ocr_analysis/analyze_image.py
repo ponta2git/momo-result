@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from momo_ocr.features.ocr_analysis.report import AnalysisResult
 from momo_ocr.features.ocr_domain.models import (
     OcrWarning,
     ScreenType,
@@ -18,7 +19,6 @@ from momo_ocr.features.player_order.detector import detect_player_order
 from momo_ocr.features.player_order.models import PlayerOrderDetection
 from momo_ocr.features.screen_detection.classifier import classify_screen_type, detection_failure
 from momo_ocr.features.screen_detection.title_evidence import recognize_title_evidence
-from momo_ocr.features.standalone_analysis.report import AnalysisResult
 from momo_ocr.features.temp_images.storage import resolve_local_image
 from momo_ocr.features.temp_images.validation import open_decoded_image, read_image_metadata
 from momo_ocr.features.text_recognition.engine import TextRecognitionEngine

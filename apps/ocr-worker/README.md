@@ -88,12 +88,15 @@ uv run ruff format --check
 uv run ruff check
 uv run mypy
 uv run pytest
+uv run pytest --cov=momo_ocr --cov-report=term-missing:skip-covered
 uv run pytest -m integration
 ```
 
 `uv run pytest` is the fast deterministic unit/contract gate; `pyproject.toml` excludes tests
 marked `integration` by default. Use `uv run pytest -m integration` for Docker-backed
 Redis/Postgres checks and the native `tesserocr` smoke tests.
+Use `uv run pytest --cov=momo_ocr --cov-report=term-missing:skip-covered` to enforce the
+line and branch coverage baseline configured in `pyproject.toml`.
 
 Postgres integration tests start a Postgres Testcontainer and apply the `momo-db/drizzle` SQL files.
 If `momo-db` is not available as a sibling checkout or under `_deps/momo-db`, set
@@ -102,7 +105,7 @@ If `momo-db` is not available as a sibling checkout or under `_deps/momo-db`, se
 Use the fix commands before committing local edits. The strict verification gate is:
 
 ```sh
-uv run ruff format --check && uv run ruff check && uv run mypy && uv run pytest && uv run pytest -m integration
+uv run ruff format --check && uv run ruff check && uv run mypy && uv run pytest && uv run pytest --cov=momo_ocr --cov-report=term-missing:skip-covered && uv run pytest -m integration
 ```
 
 Quality policy:
@@ -111,4 +114,5 @@ Quality policy:
 - Ruff owns import sorting and formatting.
 - Mypy runs in `strict` mode for `src` and `tests`.
 - Tests are annotated too, so fixtures and helper types stay explicit.
+- Coverage runs with branch coverage enabled and a baseline fail-under threshold in `pyproject.toml`.
 - Real screenshot calibration files stay outside git under repository-root `ocr_samples/`.

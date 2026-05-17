@@ -21,6 +21,7 @@ momo-ocr = "momo_ocr.main:main"
 dev = [
   "mypy>=1.19.0",
   "pytest>=9.0.2",
+  "pytest-cov>=7.1.0",
   "ruff>=0.14.9",
   "testcontainers[postgres,redis]>=4.9.0",
   "types-jsonschema>=4.25.1.20250822",
@@ -108,6 +109,16 @@ markers = [
   "integration: tests that require Docker/Testcontainers, live Redis/PostgreSQL, native OCR engine/tessdata, or another external runtime dependency",
   "e2e: cross-boundary smoke tests that exercise the worker through multiple production adapters",
 ]
+
+[tool.coverage.run]
+branch = true
+source = ["momo_ocr"]
+
+[tool.coverage.report]
+fail_under = 87.3
+precision = 1
+show_missing = true
+skip_covered = true
 
 [tool.mypy]
 python_version = "3.14"

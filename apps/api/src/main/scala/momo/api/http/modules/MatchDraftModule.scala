@@ -40,9 +40,9 @@ object MatchDraftModule:
           request,
           nowF,
           MatchDraftCodec.parseInstantOption[F](request.playedAt).flatMap {
-            case Left(error) => Async[F].pure(Left(security.toProblem(error)))
+            case Left(error) => security.toProblemF(error).map(Left(_))
             case Right(playedAt) => MatchDraftCodec.toCreateCommand(request, playedAt) match
-                case Left(error) => Async[F].pure(Left(security.toProblem(error)))
+                case Left(error) => security.toProblemF(error).map(Left(_))
                 case Right(command) => security.respond(
                     createMatchDraft.run(command, member.accountId, member.playerMemberId)
                   )(MatchDraftResponse.from)
@@ -61,7 +61,7 @@ object MatchDraftModule:
               (draftId, request),
               nowF,
               MatchDraftCodec.parseInstantOption[F](request.playedAt).flatMap {
-                case Left(error) => Async[F].pure(Left(security.toProblem(error)))
+                case Left(error) => security.toProblemF(error).map(Left(_))
                 case Right(playedAt) => security
                     .decode(BoundaryId.required("matchDraftId", draftId)(MatchDraftId.fromString)) {
                       id =>

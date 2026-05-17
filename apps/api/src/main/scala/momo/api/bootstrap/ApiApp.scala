@@ -78,86 +78,82 @@ object ApiApp:
       config: AppConfig,
       oauthClient: DiscordOAuthClient[F],
   ): Resource[F, Runtime[F]] = config.database match
-    case Some(db) => Resource.eval(Async[F].executionContext).flatMap { connectExecutionContext =>
-        (Database.transactor[F](db, connectExecutionContext), queueResource[F](config)).tupled
-          .flatMap { (transactor, queue) =>
-            given LoggerFactory[F] = Slf4jFactory.create[F]
-            val jobs: OcrJobsRepository[F] = PostgresOcrJobsRepository[F](transactor)
-            val drafts: OcrDraftsRepository[F] = PostgresOcrDraftsRepository[F](transactor)
-            val ocrJobCreation: OcrJobCreationRepository[F] =
-              PostgresOcrJobCreationRepository[F](transactor)
-            val ocrQueueOutbox = PostgresOcrQueueOutboxRepository[F](transactor)
-            val heldEvents: HeldEventsRepository[F] = PostgresHeldEventsRepository[F](transactor)
-            val heldEventDeletion: HeldEventDeletionRepository[F] =
-              PostgresHeldEventDeletionRepository[F](transactor)
-            val matches: MatchesRepository[F] = PostgresMatchesRepository[F](transactor)
-            val matchDrafts: MatchDraftsRepository[F] = PostgresMatchDraftsRepository[F](transactor)
-            val matchList: MatchListReadModel[F] = PostgresMatchListReadModel[F](transactor)
-            val matchConfirmation: MatchConfirmationRepository[F] =
-              PostgresMatchConfirmationRepository[F](transactor)
-            val appSessions: AppSessionsRepository[F] = PostgresAppSessionsRepository[F](transactor)
-            val members: MembersRepository[F] = PostgresMembersRepository[F](transactor)
-            val loginAccounts: LoginAccountsRepository[F] =
-              PostgresLoginAccountsRepository[F](transactor)
-            val gameTitles: GameTitlesRepository[F] = PostgresGameTitlesRepository[F](transactor)
-            val mapMasters: MapMastersRepository[F] = PostgresMapMastersRepository[F](transactor)
-            val seasonMasters: SeasonMastersRepository[F] =
-              PostgresSeasonMastersRepository[F](transactor)
-            val incidentMasters: IncidentMastersRepository[F] =
-              PostgresIncidentMastersRepository[F](transactor)
-            val memberAliases: MemberAliasesRepository[F] =
-              PostgresMemberAliasesRepository[F](transactor)
-            val idempotency: IdempotencyRepository[F] = PostgresIdempotencyRepository[F](transactor)
-            val imageStore = LocalFsImageStore[F](config.imageTmpDir)
-            val imageReferences: ImageReferenceRepository[F] =
-              PostgresImageReferenceRepository[F](transactor)
-            val ocrMaintenance: OcrJobMaintenanceRepository[F] =
-              PostgresOcrJobMaintenanceRepository[F](transactor)
-            val health = healthDetails[F](
-              Some(Database.ping[F](transactor)),
-              config.redis.map(_ => queue.ping),
-            )
-            OcrQueueOutboxDispatcher.resource[F](ocrQueueOutbox, queue).flatMap { _ =>
-              runtimeMaintenance(
-                config = config,
-                imageStore = imageStore,
-                imageReferences = imageReferences,
-                ocrMaintenance = ocrMaintenance,
-                appSessions = appSessions,
-                idempotency = idempotency,
-                now = Clock[F].realTimeInstant,
-              ).flatMap(_ => rateLimitersResource[F](config, Clock[F].realTimeInstant)).evalMap {
-                case (loginRateLimiter, rateLimiters) => assemble(
-                    config = config,
-                    imageStore = imageStore,
-                    healthDetails = health,
-                    ocrQueueSubmitter = OcrQueueSubmitter.deferred[F],
-                    ocrJobCreation = ocrJobCreation,
-                    jobs = jobs,
-                    drafts = drafts,
-                    heldEvents = heldEvents,
-                    heldEventDeletion = heldEventDeletion,
-                    matches = matches,
-                    matchDrafts = matchDrafts,
-                    matchList = matchList,
-                    matchConfirmation = matchConfirmation,
-                    appSessions = appSessions,
-                    members = members,
-                    loginAccounts = loginAccounts,
-                    gameTitles = gameTitles,
-                    mapMasters = mapMasters,
-                    seasonMasters = seasonMasters,
-                    incidentMasters = incidentMasters,
-                    memberAliases = memberAliases,
-                    idempotency = idempotency,
-                    oauthClient = oauthClient,
-                    loginRateLimiter = loginRateLimiter,
-                    rateLimiters = rateLimiters,
-                  )
-              }
+    case Some(db) => (Database.transactor[F](db), queueResource[F](config)).tupled
+        .flatMap { (transactor, queue) =>
+          given LoggerFactory[F] = Slf4jFactory.create[F]
+          val jobs: OcrJobsRepository[F] = PostgresOcrJobsRepository[F](transactor)
+          val drafts: OcrDraftsRepository[F] = PostgresOcrDraftsRepository[F](transactor)
+          val ocrJobCreation: OcrJobCreationRepository[F] =
+            PostgresOcrJobCreationRepository[F](transactor)
+          val ocrQueueOutbox = PostgresOcrQueueOutboxRepository[F](transactor)
+          val heldEvents: HeldEventsRepository[F] = PostgresHeldEventsRepository[F](transactor)
+          val heldEventDeletion: HeldEventDeletionRepository[F] =
+            PostgresHeldEventDeletionRepository[F](transactor)
+          val matches: MatchesRepository[F] = PostgresMatchesRepository[F](transactor)
+          val matchDrafts: MatchDraftsRepository[F] = PostgresMatchDraftsRepository[F](transactor)
+          val matchList: MatchListReadModel[F] = PostgresMatchListReadModel[F](transactor)
+          val matchConfirmation: MatchConfirmationRepository[F] =
+            PostgresMatchConfirmationRepository[F](transactor)
+          val appSessions: AppSessionsRepository[F] = PostgresAppSessionsRepository[F](transactor)
+          val members: MembersRepository[F] = PostgresMembersRepository[F](transactor)
+          val loginAccounts: LoginAccountsRepository[F] =
+            PostgresLoginAccountsRepository[F](transactor)
+          val gameTitles: GameTitlesRepository[F] = PostgresGameTitlesRepository[F](transactor)
+          val mapMasters: MapMastersRepository[F] = PostgresMapMastersRepository[F](transactor)
+          val seasonMasters: SeasonMastersRepository[F] =
+            PostgresSeasonMastersRepository[F](transactor)
+          val incidentMasters: IncidentMastersRepository[F] =
+            PostgresIncidentMastersRepository[F](transactor)
+          val memberAliases: MemberAliasesRepository[F] =
+            PostgresMemberAliasesRepository[F](transactor)
+          val idempotency: IdempotencyRepository[F] = PostgresIdempotencyRepository[F](transactor)
+          val imageStore = LocalFsImageStore[F](config.imageTmpDir)
+          val imageReferences: ImageReferenceRepository[F] =
+            PostgresImageReferenceRepository[F](transactor)
+          val ocrMaintenance: OcrJobMaintenanceRepository[F] =
+            PostgresOcrJobMaintenanceRepository[F](transactor)
+          val health =
+            healthDetails[F](Some(Database.ping[F](transactor)), config.redis.map(_ => queue.ping))
+          OcrQueueOutboxDispatcher.resource[F](ocrQueueOutbox, queue).flatMap { _ =>
+            runtimeMaintenance(
+              config = config,
+              imageStore = imageStore,
+              imageReferences = imageReferences,
+              ocrMaintenance = ocrMaintenance,
+              appSessions = appSessions,
+              idempotency = idempotency,
+              now = Clock[F].realTimeInstant,
+            ).flatMap(_ => rateLimitersResource[F](config, Clock[F].realTimeInstant)).evalMap {
+              case (loginRateLimiter, rateLimiters) => assemble(
+                  config = config,
+                  imageStore = imageStore,
+                  healthDetails = health,
+                  ocrQueueSubmitter = OcrQueueSubmitter.deferred[F],
+                  ocrJobCreation = ocrJobCreation,
+                  jobs = jobs,
+                  drafts = drafts,
+                  heldEvents = heldEvents,
+                  heldEventDeletion = heldEventDeletion,
+                  matches = matches,
+                  matchDrafts = matchDrafts,
+                  matchList = matchList,
+                  matchConfirmation = matchConfirmation,
+                  appSessions = appSessions,
+                  members = members,
+                  loginAccounts = loginAccounts,
+                  gameTitles = gameTitles,
+                  mapMasters = mapMasters,
+                  seasonMasters = seasonMasters,
+                  incidentMasters = incidentMasters,
+                  memberAliases = memberAliases,
+                  idempotency = idempotency,
+                  oauthClient = oauthClient,
+                  loginRateLimiter = loginRateLimiter,
+                  rateLimiters = rateLimiters,
+                )
             }
           }
-      }
+        }
     case None => queueResource[F](config).flatMap { queue =>
         given LoggerFactory[F] = Slf4jFactory.create[F]
         Resource.eval(

@@ -29,12 +29,13 @@ object ExportModule:
                   exportFormat <- ExportCodec.parseFormat(format)
                   scope <- ExportCodec.parseScope(seasonMasterId, heldEventId, matchId)
                 yield (exportFormat, scope)
-              security
-                .decode(decoded) { case (exportFormat, scope) =>
-                  exportMatches.run(exportFormat, scope).map(_.leftMap(security.toProblem).map(
-                    file => (file.contentDisposition, file.contentType, file.body)
-                  ))
+              security.decode(decoded) { case (exportFormat, scope) =>
+                exportMatches.run(exportFormat, scope).flatMap {
+                  case Left(error) => security.toProblemF(error).map(Left(_))
+                  case Right(file) => Async[F]
+                      .pure(Right((file.contentDisposition, file.contentType, file.body)))
                 }
+              }
           }
         }
   })

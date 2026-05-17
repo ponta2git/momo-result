@@ -10,10 +10,9 @@ import momo.api.errors.AppError
 
 private[http] final class EndpointSecurity[F[_]: Async](
     policy: AuthPolicy[F],
-    masterManagementPolicy: MasterManagementPolicy = new MasterManagementPolicy,
+    masterManagementPolicy: MasterManagementPolicy,
+    incidentLogger: AppError => F[Unit],
 ):
-  private val logger = LoggerFactory.getLogger("momo.api.http.EndpointSecurity")
-
   def authorizeRead[A](accountHeader: Option[String])(
       authorized: AuthenticatedAccount => F[Either[ProblemDetails.ProblemResponse, A]]
   ): F[Either[ProblemDetails.ProblemResponse, A]] = policy.authenticate(accountHeader).flatMap {
@@ -57,20 +56,40 @@ private[http] final class EndpointSecurity[F[_]: Async](
         case Left(error) => Async[F].pure(Left(toProblem(error)))
   }
 
-  def toProblem(error: AppError): ProblemDetails.ProblemResponse =
-    if isIncident(error) then
-      logger.error(s"HTTP endpoint returned incident problemCode=${error.code}")
-    ProblemDetails.from(error)
+  def toProblem(error: AppError): ProblemDetails.ProblemResponse = ProblemDetails.from(error)
 
-  def respond[A, B](result: F[Either[AppError, A]])(
-      onSuccess: A => B
-  ): F[Either[ProblemDetails.ProblemResponse, B]] = result.map(_.leftMap(toProblem).map(onSuccess))
+  def toProblemF(error: AppError): F[ProblemDetails.ProblemResponse] = logIncident(error)
+    .as(ProblemDetails.from(error))
+
+  def respond[A, B](
+      result: F[Either[AppError, A]]
+  )(onSuccess: A => B): F[Either[ProblemDetails.ProblemResponse, B]] = result.flatMap {
+    case Left(error) => toProblemF(error).map(Left(_))
+    case Right(value) => Async[F].pure(Right(onSuccess(value)))
+  }
 
   def decode[A, B](decoded: Either[AppError, A])(
       onSuccess: A => F[Either[ProblemDetails.ProblemResponse, B]]
   ): F[Either[ProblemDetails.ProblemResponse, B]] = decoded match
-    case Left(error) => Async[F].pure(Left(toProblem(error)))
+    case Left(error) => toProblemF(error).map(Left(_))
     case Right(value) => onSuccess(value)
+
+  private def logIncident(error: AppError): F[Unit] =
+    if EndpointSecurity.isIncident(error) then incidentLogger(error) else Async[F].unit
+
+object EndpointSecurity:
+  private val logger = LoggerFactory.getLogger("momo.api.http.EndpointSecurity")
+
+  def apply[F[_]: Async](policy: AuthPolicy[F]): EndpointSecurity[F] =
+    new EndpointSecurity(policy, new MasterManagementPolicy, defaultIncidentLogger[F])
+
+  def apply[F[_]: Async](
+      policy: AuthPolicy[F],
+      incidentLogger: AppError => F[Unit],
+  ): EndpointSecurity[F] = new EndpointSecurity(policy, new MasterManagementPolicy, incidentLogger)
+
+  private def defaultIncidentLogger[F[_]: Async](error: AppError): F[Unit] = Async[F]
+    .delay(logger.error(s"HTTP endpoint returned incident problemCode=${error.code}"))
 
   private def isIncident(error: AppError): Boolean = error match
     case _: AppError.DependencyFailed => true

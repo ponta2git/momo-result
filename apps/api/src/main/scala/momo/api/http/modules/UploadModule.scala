@@ -1,7 +1,7 @@
 package momo.api.http.modules
 
 import cats.effect.Async
-import cats.syntax.flatMap.*
+import cats.syntax.all.*
 import sttp.tapir.server.ServerEndpoint
 
 import momo.api.auth.RateLimiter
@@ -24,7 +24,7 @@ object UploadModule:
                   .toProblem(AppError.TooManyRequests("Too many image uploads. Try again later."))
               ))
             case true => MultipartUpload.file(parts) match
-                case Left(error) => Async[F].pure(Left(security.toProblem(error)))
+                case Left(error) => security.toProblemF(error).map(Left(_))
                 case Right(upload) => security.respond(
                     uploadImage.run(upload.fileName, upload.contentType, upload.bytes)
                   )(UploadImageResponse.from)

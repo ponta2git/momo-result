@@ -38,7 +38,7 @@ API は `XADD` する。worker は `XGROUP CREATE ... MKSTREAM` を許容し、`
 | `jobId` | yes | DB `ocr_jobs.id`。worker の idempotency key |
 | `draftId` | yes | DB `ocr_drafts.id` |
 | `imageId` | yes | API 側の一時画像論理 ID |
-| `imagePath` | yes | worker が読める絶対パス |
+| `imagePath` | yes | worker が読める `IMAGE_TMP_DIR` 配下の絶対パス |
 | `requestedScreenType` | yes | `auto`, `total_assets`, `revenue`, `incident_log` |
 | `attempt` | yes | API が payload 作成時に入れる正整数。現行実装では常に `1` |
 | `enqueuedAt` | yes | API が payload を作成した ISO-8601 UTC timestamp |
@@ -114,6 +114,7 @@ worker invariants:
 - Malformed payload は `jobId` が読める場合、`QUEUE_FAILURE` として DB に terminal failure を書いてから ack する。
 - Terminal failure の DB 書き込みに失敗した場合は ack せず、PEL claim / DLQ に任せる。
 - `OCR_MAX_ATTEMPTS` を超えた stale pending delivery は DLQ へ `XADD` してから元 message を ack する。
+- worker は `imagePath` を `IMAGE_TMP_DIR` 配下へ解決できる場合だけ読み、3MB 上限を再検証する。
 
 worker が実行できる状態遷移:
 

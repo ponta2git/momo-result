@@ -6,6 +6,7 @@ import pytest
 from PIL import Image
 
 from momo_ocr.features.temp_images.cleanup import delete_if_exists
+from momo_ocr.features.temp_images.storage import resolve_local_image
 from momo_ocr.features.temp_images.validation import open_decoded_image, read_image_metadata
 from momo_ocr.shared.errors import FailureCode, OcrError
 
@@ -50,6 +51,37 @@ def test_open_decoded_image_reports_missing_temp_image(tmp_path: Path) -> None:
 
     assert exc_info.value.code is FailureCode.TEMP_IMAGE_MISSING
     assert exc_info.value.user_action == "Re-upload the screenshot and run OCR again."
+
+
+def test_resolve_local_image_rejects_path_outside_configured_root(tmp_path: Path) -> None:
+    root = tmp_path / "uploads"
+    outside = tmp_path / "outside"
+    root.mkdir()
+    outside.mkdir()
+    image_path = outside / "sample.jpg"
+    image_path.write_bytes(b"not used")
+
+    with pytest.raises(OcrError) as exc_info:
+        resolve_local_image(image_path, root=root)
+
+    assert exc_info.value.code is FailureCode.QUEUE_FAILURE
+    assert str(image_path) not in exc_info.value.message
+
+
+def test_resolve_local_image_rejects_symlink_escaping_configured_root(tmp_path: Path) -> None:
+    root = tmp_path / "uploads"
+    outside = tmp_path / "outside"
+    root.mkdir()
+    outside.mkdir()
+    target = outside / "sample.jpg"
+    target.write_bytes(b"not used")
+    link = root / "linked.jpg"
+    link.symlink_to(target)
+
+    with pytest.raises(OcrError) as exc_info:
+        resolve_local_image(link, root=root)
+
+    assert exc_info.value.code is FailureCode.QUEUE_FAILURE
 
 
 def test_delete_if_exists_removes_file(tmp_path: Path) -> None:

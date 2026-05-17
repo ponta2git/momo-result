@@ -53,6 +53,8 @@ class AnalyzeImageFn(Protocol):
         text_engine: TextRecognitionEngine | None = None,
         layout_family_hint: str | None = None,
         alias_resolver: PlayerAliasResolver | None = None,
+        image_root: Path | None = None,
+        enforce_size_limit: bool = False,
     ) -> AnalysisResult:
         raise NotImplementedError
 
@@ -79,6 +81,7 @@ class JobRunnerDependencies:
     worker_id: str
     analyze: AnalyzeImageFn = analyze_image
     text_engine: TextRecognitionEngine = field(default_factory=FakeTextRecognitionEngine)
+    temp_root: Path | None = None
 
 
 @dataclass(frozen=True)

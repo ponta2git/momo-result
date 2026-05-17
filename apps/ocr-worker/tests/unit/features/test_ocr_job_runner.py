@@ -136,6 +136,7 @@ def _make_deps(
     repository: InMemoryOcrJobRepository,
     cancellation: CancellationChecker,
     analyze: AnalyzeImageFn,
+    temp_root: Path | None = None,
 ) -> JobRunnerDependencies:
     return JobRunnerDependencies(
         consumer=consumer,
@@ -143,6 +144,7 @@ def _make_deps(
         cancellation=cancellation,
         worker_id=WORKER_ID,
         analyze=analyze,
+        temp_root=temp_root,
     )
 
 
@@ -561,6 +563,36 @@ def test_hints_are_merged_into_alias_resolver_passed_to_analyze() -> None:
     assert match is not None
     assert match.display_name == "PONTAプレイヤー"
     assert match.member_id == "ぽんた社長"
+
+
+def test_worker_analyze_enforces_temp_root_and_upload_size_limit(tmp_path: Path) -> None:
+    consumer = InMemoryOcrJobConsumer()
+    repository = InMemoryOcrJobRepository()
+    image_root = tmp_path / "uploads"
+    image_root.mkdir()
+    image_path = image_root / "abc.jpg"
+    payload = _make_payload(image_path=image_path)
+    _seed_record(repository, payload)
+    consumer.enqueue(payload, delivery_tag="d1")
+    captured: dict[str, Any] = {}
+
+    def capturing_analyze(**kwargs: Any) -> AnalysisResult:  # noqa: ANN401
+        captured.update(kwargs)
+        return _success_analysis()
+
+    deps = _make_deps(
+        consumer=consumer,
+        repository=repository,
+        cancellation=InMemoryCancellationChecker(),
+        analyze=capturing_analyze,
+        temp_root=image_root,
+    )
+
+    outcome = run_one_job(deps)
+
+    assert outcome.status is OcrJobStatus.SUCCEEDED
+    assert captured["image_root"] == image_root
+    assert captured["enforce_size_limit"] is True
 
 
 class _ToggleAfterFirstCallCancellation:

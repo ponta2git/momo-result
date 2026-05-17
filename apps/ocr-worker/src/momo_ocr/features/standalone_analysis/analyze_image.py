@@ -38,6 +38,8 @@ def analyze_image(  # noqa: PLR0913
     parser_registry: ParserRegistry | None = None,
     layout_family_hint: str | None = None,
     alias_resolver: PlayerAliasResolver | None = None,
+    image_root: Path | None = None,
+    enforce_size_limit: bool = False,
 ) -> AnalysisResult:
     timings: dict[str, float] = {}
     metadata = None
@@ -58,8 +60,8 @@ def analyze_image(  # noqa: PLR0913
 
     try:
         with record_duration_ms(timings, "validate_image"):
-            resolved_path = resolve_local_image(image_path)
-            metadata = read_image_metadata(resolved_path, enforce_size_limit=False)
+            resolved_path = resolve_local_image(image_path, root=image_root)
+            metadata = read_image_metadata(resolved_path, enforce_size_limit=enforce_size_limit)
 
         # Decode the image exactly once for the entire analyze pipeline.
         # Screen detection, player-order detection, and the screen parser

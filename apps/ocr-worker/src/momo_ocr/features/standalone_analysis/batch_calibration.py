@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Literal
 
 from momo_ocr.features.standalone_analysis.analyze_image import analyze_image
+from momo_ocr.features.standalone_analysis.layout_family import detect_layout_family_from_filename
 from momo_ocr.features.standalone_analysis.report import BatchReport
 from momo_ocr.features.text_recognition.engine import TextRecognitionEngine
 
@@ -45,6 +46,7 @@ def analyze_directory(
             debug_dir=(debug_dir / image.stem) if debug_dir is not None else None,
             include_raw_text=include_raw_text,
             text_engine=text_engine,
+            layout_family_hint=detect_layout_family_from_filename(image),
         )
         for image in images
     ]

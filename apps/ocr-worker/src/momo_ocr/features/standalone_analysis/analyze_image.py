@@ -18,7 +18,6 @@ from momo_ocr.features.player_order.detector import detect_player_order
 from momo_ocr.features.player_order.models import PlayerOrderDetection
 from momo_ocr.features.screen_detection.classifier import classify_screen_type, detection_failure
 from momo_ocr.features.screen_detection.title_evidence import recognize_title_evidence
-from momo_ocr.features.standalone_analysis.layout_family import detect_layout_family_from_filename
 from momo_ocr.features.standalone_analysis.report import AnalysisResult
 from momo_ocr.features.temp_images.storage import resolve_local_image
 from momo_ocr.features.temp_images.validation import open_decoded_image, read_image_metadata
@@ -51,9 +50,6 @@ def analyze_image(  # noqa: PLR0913
     # default branch only fires for one-off CLI / eval invocations.
     engine = text_engine if text_engine is not None else default_text_recognition_engine()
     registry = parser_registry if parser_registry is not None else default_parser_registry()
-    resolved_layout_family_hint = layout_family_hint or detect_layout_family_from_filename(
-        image_path,
-    )
     resolved_alias_resolver = (
         alias_resolver if alias_resolver is not None else DEFAULT_ALIAS_RESOLVER
     )
@@ -123,7 +119,7 @@ def analyze_image(  # noqa: PLR0913
                     text_engine=engine,
                     player_order_detection=player_order_detection,
                     warnings=warnings,
-                    layout_family_hint=resolved_layout_family_hint,
+                    layout_family_hint=layout_family_hint,
                     alias_resolver=resolved_alias_resolver,
                     image=decoded_image,
                 )

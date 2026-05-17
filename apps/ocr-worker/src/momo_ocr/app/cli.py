@@ -19,6 +19,7 @@ from momo_ocr.features.standalone_analysis.batch_calibration import (
     EVALUATION_SET_CHOICES,
     analyze_directory,
 )
+from momo_ocr.features.standalone_analysis.layout_family import detect_layout_family_from_filename
 from momo_ocr.features.standalone_analysis.report import AnalysisResult, BatchReport
 from momo_ocr.features.text_recognition.engine import (
     FakeTextRecognitionEngine,
@@ -81,6 +82,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             debug_dir=debug_dir,
             include_raw_text=args.include_raw_text,
             text_engine=text_engine,
+            layout_family_hint=detect_layout_family_from_filename(args.image),
         )
         if args.output is not None:
             write_json(args.output, result)

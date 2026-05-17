@@ -15,7 +15,7 @@ from momo_ocr.features.ocr_jobs.repository import PostgresOcrJobRepository
 from momo_ocr.features.text_recognition.factory import text_recognition_engine_from_name
 
 if TYPE_CHECKING:
-    from momo_ocr.features.ocr_jobs.runner import JobRunnerDependencies
+    from momo_ocr.features.ocr_jobs.dependencies import JobRunnerDependencies
 
 
 logger = logging.getLogger(__name__)
@@ -117,7 +117,7 @@ class WorkerRuntime:
 
 
 def production_worker_runtime(config: WorkerConfig) -> WorkerRuntime:
-    from momo_ocr.features.ocr_jobs.runner import JobRunnerDependencies  # noqa: PLC0415
+    from momo_ocr.features.ocr_jobs.dependencies import JobRunnerDependencies  # noqa: PLC0415
 
     require_production_config(config)
     pool = production_pool_from_config(config)

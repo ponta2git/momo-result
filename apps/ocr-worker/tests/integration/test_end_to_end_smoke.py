@@ -15,10 +15,11 @@ from momo_ocr.features.ocr_analysis.report import AnalysisResult
 from momo_ocr.features.ocr_domain.models import OcrDraftPayload, ScreenType
 from momo_ocr.features.ocr_jobs.cancellation import RepositoryCancellationChecker
 from momo_ocr.features.ocr_jobs.consumer import RedisOcrJobConsumer
+from momo_ocr.features.ocr_jobs.dependencies import JobRunnerDependencies
 from momo_ocr.features.ocr_jobs.models import OcrJobHints, OcrJobMessage, OcrJobStatus
 from momo_ocr.features.ocr_jobs.queue_contract import to_stream_payload
 from momo_ocr.features.ocr_jobs.repository import PostgresOcrJobRepository
-from momo_ocr.features.ocr_jobs.runner import JobRunnerDependencies, run_one_job
+from momo_ocr.features.ocr_jobs.runner import run_one_job
 from tests.integration.momo_db import migrated_postgres_conninfo
 
 

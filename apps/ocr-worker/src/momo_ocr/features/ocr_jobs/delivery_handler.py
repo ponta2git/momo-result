@@ -3,12 +3,9 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
 
+from momo_ocr.features.ocr_jobs.dependencies import JobRunnerDependencies
 from momo_ocr.features.ocr_jobs.models import MalformedPulledJob, PulledJob
-
-if TYPE_CHECKING:
-    from momo_ocr.features.ocr_jobs.runner import JobRunnerDependencies
 
 logger = logging.getLogger(__name__)
 

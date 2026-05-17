@@ -8,8 +8,9 @@ import pytest
 
 from momo_ocr.app import worker_process as worker_process_module
 from momo_ocr.app.worker_process import WorkerLoopConfig, run_worker_process
+from momo_ocr.features.ocr_jobs.dependencies import JobRunnerDependencies
 from momo_ocr.features.ocr_jobs.models import OcrJobStatus
-from momo_ocr.features.ocr_jobs.runner import JobRunnerDependencies, JobRunOutcome
+from momo_ocr.features.ocr_jobs.runner import JobRunOutcome
 
 
 @dataclass

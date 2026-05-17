@@ -14,11 +14,11 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import TYPE_CHECKING
 
 from momo_ocr.features.ocr_analysis.report import AnalysisResult
 from momo_ocr.features.ocr_jobs.aliases import alias_resolver_from_hints
 from momo_ocr.features.ocr_jobs.debug_dir import resolve_debug_dir
+from momo_ocr.features.ocr_jobs.dependencies import JobRunnerDependencies
 from momo_ocr.features.ocr_jobs.lifecycle import is_terminal
 from momo_ocr.features.ocr_jobs.models import (
     OcrJobExecutionResult,
@@ -30,9 +30,6 @@ from momo_ocr.features.ocr_jobs.models import (
 from momo_ocr.features.ocr_jobs.result_records import OcrResultRecord
 from momo_ocr.features.ocr_results.payload_warnings import attach_warnings_to_payload
 from momo_ocr.shared.errors import FailureCode, OcrError, OcrFailure
-
-if TYPE_CHECKING:
-    from momo_ocr.features.ocr_jobs.runner import JobRunnerDependencies
 
 logger = logging.getLogger(__name__)
 

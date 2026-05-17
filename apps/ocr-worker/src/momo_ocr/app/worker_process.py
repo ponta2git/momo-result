@@ -12,7 +12,8 @@ import logging
 import threading
 from dataclasses import dataclass
 
-from momo_ocr.features.ocr_jobs.runner import JobRunnerDependencies, run_one_job
+from momo_ocr.features.ocr_jobs.dependencies import JobRunnerDependencies
+from momo_ocr.features.ocr_jobs.runner import run_one_job
 
 logger = logging.getLogger(__name__)
 

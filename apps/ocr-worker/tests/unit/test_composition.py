@@ -13,7 +13,7 @@ from momo_ocr.app.composition import (
     redis_consumer_from_config,
 )
 from momo_ocr.app.config import WorkerConfig
-from momo_ocr.features.ocr_jobs.runner import JobRunnerDependencies
+from momo_ocr.features.ocr_jobs.dependencies import JobRunnerDependencies
 from momo_ocr.features.text_recognition.factory import (
     default_text_recognition_engine,
     text_recognition_engine_from_name,

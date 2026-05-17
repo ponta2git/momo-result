@@ -25,6 +25,7 @@ from momo_ocr.features.ocr_domain.models import (
 )
 from momo_ocr.features.ocr_jobs.cancellation import CancellationChecker, InMemoryCancellationChecker
 from momo_ocr.features.ocr_jobs.consumer import InMemoryOcrJobConsumer
+from momo_ocr.features.ocr_jobs.dependencies import AnalyzeImageFn, JobRunnerDependencies
 from momo_ocr.features.ocr_jobs.models import (
     OcrJobExecutionResult,
     OcrJobHints,
@@ -35,7 +36,7 @@ from momo_ocr.features.ocr_jobs.models import (
 )
 from momo_ocr.features.ocr_jobs.queue_contract import parse_job_message, to_stream_payload
 from momo_ocr.features.ocr_jobs.repository import InMemoryOcrJobRepository
-from momo_ocr.features.ocr_jobs.runner import AnalyzeImageFn, JobRunnerDependencies, run_one_job
+from momo_ocr.features.ocr_jobs.runner import run_one_job
 from momo_ocr.features.ocr_results.player_aliases import _normalize_name_for_match
 from momo_ocr.shared.errors import FailureCode, OcrError
 

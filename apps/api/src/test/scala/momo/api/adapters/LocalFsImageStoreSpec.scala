@@ -74,6 +74,20 @@ final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:
     }
   }
 
+  test("rejects WebP containers without raster payload chunks") {
+    tempDirectory("momo-api-image-store").use { dir =>
+      val store = LocalFsImageStore[IO](dir)
+      val canvasOnlyWebp = Array('R', 'I', 'F', 'F').map(_.toByte) ++ Array[Byte](22, 0, 0, 0) ++
+        Array('W', 'E', 'B', 'P', 'V', 'P', '8', 'X').map(_.toByte) ++ Array[Byte](10, 0, 0, 0) ++
+        Array.fill[Byte](10)(0.toByte)
+      store.save(Some("canvas.webp"), Some("image/webp"), canvasOnlyWebp).map {
+        case Left(error: AppError.UnsupportedMediaType) =>
+          assert(error.detail.contains("dimensions"))
+        case other => fail(s"expected unsupported media type, got $other")
+      }
+    }
+  }
+
   test("rejects images larger than 3MB") {
     tempDirectory("momo-api-image-store").use { dir =>
       val store = LocalFsImageStore[IO](dir)

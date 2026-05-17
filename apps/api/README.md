@@ -8,7 +8,7 @@ Scala 3 / sbt / Tapir / http4s / Cats Effect による API サーバーです。
 - `GET /openapi.yaml`
 - 開発用スタブ認証 `X-Momo-Account-Id`
 - 開発用 CSRF `X-CSRF-Token: dev`
-- 一時画像保存（PNG/JPEG/WebP、3MB上限、4K寸法上限、マジックバイト検証）
+- 一時画像保存（PNG/JPEG/WebP、3MB上限、4K寸法上限、マジックバイト・コンテナ検証）
 - OCRジョブ作成、取得、キャンセル
 - OCRドラフト取得
 - インメモリ / PostgreSQL の repository adapter

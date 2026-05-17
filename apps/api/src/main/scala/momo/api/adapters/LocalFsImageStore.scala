@@ -115,6 +115,8 @@ object LocalFsImageStore:
   val SupportedImageTypes: List[ImageType] = List(Png, Jpeg, Webp)
   private val JpegStartOfFrameMarkers: Set[Int] =
     Set(0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf)
+  private val JpegStartOfScanMarker = 0xda
+  private val JpegEndMarker = 0xd9
 
   def normalizeMediaType(value: String): String = value.takeWhile(_ != ';').trim.toLowerCase
 
@@ -141,60 +143,107 @@ object LocalFsImageStore:
     bytes.length >= 33 && bigEndian32(bytes, 8) == 13L &&
       matches(bytes, 12, Array('I', 'H', 'D', 'R').map(_.toByte))
   )(ImageDimensions(bigEndian32(bytes, 16), bigEndian32(bytes, 20)))
+    .filter(_ => pngHasRasterPayloadAndEnd(bytes, offset = 33, sawImageData = false))
+
+  @tailrec
+  private def pngHasRasterPayloadAndEnd(
+      bytes: Array[Byte],
+      offset: Int,
+      sawImageData: Boolean,
+  ): Boolean =
+    if offset + 8 > bytes.length then false
+    else
+      val chunkSize = bigEndian32(bytes, offset)
+      val dataEnd = offset.toLong + 8L + chunkSize
+      val nextChunk = dataEnd + 4L
+      if chunkSize > Int.MaxValue.toLong || nextChunk > bytes.length.toLong then false
+      else if matches(bytes, offset + 4, Array('I', 'E', 'N', 'D').map(_.toByte)) then
+        sawImageData && chunkSize == 0L && nextChunk == bytes.length.toLong
+      else
+        val nextSawImageData = sawImageData ||
+          (chunkSize > 0L && matches(bytes, offset + 4, Array('I', 'D', 'A', 'T').map(_.toByte)))
+        pngHasRasterPayloadAndEnd(bytes, nextChunk.toInt, nextSawImageData)
 
   private def jpegDimensions(bytes: Array[Byte]): Option[ImageDimensions] =
     @tailrec
-    def scan(offset: Int): Option[ImageDimensions] =
+    def scan(offset: Int, maybeDimensions: Option[ImageDimensions]): Option[ImageDimensions] =
       if offset + 3 >= bytes.length then None
-      else if unsignedByte(bytes, offset) != 0xff then scan(offset + 1)
+      else if unsignedByte(bytes, offset) != 0xff then scan(offset + 1, maybeDimensions)
       else
         val markerOffset = skipJpegFill(bytes, offset + 1)
         if markerOffset >= bytes.length then None
         else
           val marker = unsignedByte(bytes, markerOffset)
           val next = markerOffset + 1
-          if isStandaloneJpegMarker(marker) then scan(next)
+          if isStandaloneJpegMarker(marker) then scan(next, maybeDimensions)
           else if next + 2 > bytes.length then None
           else
             val length = bigEndian16(bytes, next).toInt
             val dataStart = next + 2
             val nextSegment = dataStart + length - 2
             if length < 2 || nextSegment > bytes.length then None
+            else if marker == JpegStartOfScanMarker then
+              scanJpegEntropy(bytes, nextSegment, maybeDimensions)
             else if isJpegStartOfFrame(marker) && length >= 7 then
-              Some(ImageDimensions(
-                bigEndian16(bytes, dataStart + 3),
-                bigEndian16(bytes, dataStart + 1),
-              ))
-            else scan(nextSegment)
+              scan(
+                nextSegment,
+                Some(ImageDimensions(
+                  bigEndian16(bytes, dataStart + 3),
+                  bigEndian16(bytes, dataStart + 1),
+                )),
+              )
+            else scan(nextSegment, maybeDimensions)
 
-    Option.when(bytes.length >= 4)(()).flatMap(_ => scan(2))
+    Option.when(bytes.length >= 4)(()).flatMap(_ => scan(2, None))
+
+  @tailrec
+  private def scanJpegEntropy(
+      bytes: Array[Byte],
+      offset: Int,
+      maybeDimensions: Option[ImageDimensions],
+  ): Option[ImageDimensions] =
+    if offset + 1 >= bytes.length then None
+    else if unsignedByte(bytes, offset) == 0xff && unsignedByte(bytes, offset + 1) == JpegEndMarker
+    then maybeDimensions
+    else scanJpegEntropy(bytes, offset + 1, maybeDimensions)
 
   private def webpDimensions(bytes: Array[Byte]): Option[ImageDimensions] =
+    val riffSize = Option.when(bytes.length >= 12)(littleEndian32(bytes, 4))
+    val riffEnd = riffSize.map(8L + _)
+
     @tailrec
-    def scan(offset: Int): Option[ImageDimensions] =
-      if offset + 8 > bytes.length then None
+    def scan(offset: Int, canvasDimensions: Option[ImageDimensions]): Option[ImageDimensions] =
+      if offset + 8 > riffEnd.getOrElse(0L) then None
       else
         val chunkSize = littleEndian32(bytes, offset + 4)
         val dataStart = offset + 8
         val dataEnd = dataStart.toLong + chunkSize
         val paddedEnd = dataEnd + (chunkSize % 2L)
-        if chunkSize > Int.MaxValue.toLong || dataEnd > bytes.length then None
+        if chunkSize > Int.MaxValue.toLong || dataEnd > riffEnd.getOrElse(0L) ||
+          paddedEnd > riffEnd.getOrElse(0L)
+        then None
         else if matches(bytes, offset, Array('V', 'P', '8', 'X').map(_.toByte)) && chunkSize >= 10L
         then
-          Some(ImageDimensions(
+          val dimensions = ImageDimensions(
             littleEndian24(bytes, dataStart + 4) + 1L,
             littleEndian24(bytes, dataStart + 7) + 1L,
-          ))
+          )
+          scan(paddedEnd.toInt, Some(dimensions))
         else if matches(bytes, offset, Array('V', 'P', '8', 'L').map(_.toByte)) && chunkSize >= 5L
-        then webpLosslessDimensions(bytes, dataStart)
+        then
+          webpLosslessDimensions(bytes, dataStart)
+            .map(dimensions => canvasDimensions.getOrElse(dimensions))
         else if matches(bytes, offset, Array('V', 'P', '8', ' ').map(_.toByte)) && chunkSize >= 10L
-        then webpLossyDimensions(bytes, dataStart)
-        else scan(paddedEnd.toInt)
+        then
+          webpLossyDimensions(bytes, dataStart)
+            .map(dimensions => canvasDimensions.getOrElse(dimensions))
+        else scan(paddedEnd.toInt, canvasDimensions)
 
     Option.when(
-      bytes.length >= 20 && matches(bytes, 0, Array('R', 'I', 'F', 'F').map(_.toByte)) &&
+      bytes.length >= 20 && riffEnd.exists(_ == bytes.length.toLong) &&
+        matches(bytes, 0, Array('R', 'I', 'F', 'F').map(_.toByte)) &&
         matches(bytes, 8, Array('W', 'E', 'B', 'P').map(_.toByte))
-    )(()).flatMap(_ => scan(12))
+    )(()).flatMap(_ => scan(12, None))
 
   private def webpLosslessDimensions(bytes: Array[Byte], dataStart: Int): Option[ImageDimensions] =
     Option.when(unsignedByte(bytes, dataStart) == 0x2f) {

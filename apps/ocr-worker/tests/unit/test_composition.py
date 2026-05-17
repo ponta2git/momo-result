@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import cast
 
 import pytest
-from psycopg_pool import ConnectionPool
 
 from momo_ocr.app import composition as composition_module
 from momo_ocr.app.composition import (
@@ -13,8 +11,19 @@ from momo_ocr.app.composition import (
     redis_consumer_from_config,
 )
 from momo_ocr.app.config import WorkerConfig
-from momo_ocr.features.ocr_jobs.consumer import RedisConsumerRetryConfig
+from momo_ocr.features.ocr_jobs.cancellation import InMemoryCancellationChecker
+from momo_ocr.features.ocr_jobs.consumer import (
+    InMemoryOcrJobConsumer,
+    OcrJobConsumer,
+    RedisConsumerRetryConfig,
+)
 from momo_ocr.features.ocr_jobs.dependencies import JobRunnerDependencies
+from momo_ocr.features.ocr_jobs.models import OcrQueueDelivery
+from momo_ocr.features.ocr_jobs.repository import InMemoryOcrJobRepository
+from momo_ocr.features.text_recognition.engine import (
+    FakeTextRecognitionEngine,
+    TextRecognitionEngine,
+)
 from momo_ocr.features.text_recognition.factory import (
     default_text_recognition_engine,
     text_recognition_engine_from_name,
@@ -172,26 +181,56 @@ class _RecordingCloseable:
 
 
 @dataclass
-class _FakeDeps:
-    text_engine: object
-    consumer: object
+class _RecordingConsumer:
+    name: str
+    closes: list[str] = field(default_factory=list)
+    raise_on_close: bool = False
+
+    def pull(self) -> OcrQueueDelivery | None:
+        return None
+
+    def ack(self, delivery_tag: str) -> None:
+        del delivery_tag
+
+    def close(self) -> None:
+        self.closes.append(self.name)
+        if self.raise_on_close:
+            msg = "boom"
+            raise RuntimeError(msg)
+
+
+class _RecordingTextEngine(FakeTextRecognitionEngine):
+    def __init__(self, name: str, *, raise_on_close: bool = False) -> None:
+        super().__init__()
+        self.name = name
+        self.closes: list[str] = []
+        self.raise_on_close = raise_on_close
+
+    def close(self) -> None:
+        self.closes.append(self.name)
+        if self.raise_on_close:
+            msg = "boom"
+            raise RuntimeError(msg)
 
 
 def _make_runtime(
-    text_engine: object,
-    consumer: object,
-    pool: object,
+    text_engine: TextRecognitionEngine,
+    consumer: OcrJobConsumer,
+    pool: _RecordingCloseable,
 ) -> WorkerRuntime:
-    deps = _FakeDeps(text_engine=text_engine, consumer=consumer)
-    return WorkerRuntime(
-        deps=cast("JobRunnerDependencies", deps),
-        pool=cast("ConnectionPool", pool),
+    deps = JobRunnerDependencies(
+        consumer=consumer,
+        repository=InMemoryOcrJobRepository(),
+        cancellation=InMemoryCancellationChecker(),
+        worker_id="worker-test",
+        text_engine=text_engine,
     )
+    return WorkerRuntime(deps=deps, pool=pool)
 
 
 def test_worker_runtime_close_releases_text_engine_consumer_and_pool() -> None:
-    text_engine = _RecordingCloseable("engine")
-    consumer = _RecordingCloseable("consumer")
+    text_engine = _RecordingTextEngine("engine")
+    consumer = _RecordingConsumer("consumer")
     pool = _RecordingCloseable("pool")
     runtime = _make_runtime(text_engine, consumer, pool)
 
@@ -203,8 +242,8 @@ def test_worker_runtime_close_releases_text_engine_consumer_and_pool() -> None:
 
 
 def test_worker_runtime_close_releases_pool_even_if_engine_close_raises() -> None:
-    text_engine = _RecordingCloseable("engine", raise_on_close=True)
-    consumer = _RecordingCloseable("consumer")
+    text_engine = _RecordingTextEngine("engine", raise_on_close=True)
+    consumer = _RecordingConsumer("consumer")
     pool = _RecordingCloseable("pool")
     runtime = _make_runtime(text_engine, consumer, pool)
 
@@ -215,11 +254,12 @@ def test_worker_runtime_close_releases_pool_even_if_engine_close_raises() -> Non
 
 
 def test_worker_runtime_close_tolerates_engine_without_close_method() -> None:
-    class _EngineWithoutClose:
-        pass
-
     pool = _RecordingCloseable("pool")
-    runtime = _make_runtime(_EngineWithoutClose(), _RecordingCloseable("consumer"), pool)
+    runtime = _make_runtime(
+        FakeTextRecognitionEngine(),
+        InMemoryOcrJobConsumer(),
+        pool,
+    )
 
     runtime.close()
 

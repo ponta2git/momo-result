@@ -1,25 +1,26 @@
 from __future__ import annotations
 
 import threading
-from dataclasses import dataclass
-from typing import cast
 
 import pytest
 
 from momo_ocr.app import worker_process as worker_process_module
 from momo_ocr.app.worker_process import WorkerLoopConfig, run_worker_process
+from momo_ocr.features.ocr_jobs.cancellation import InMemoryCancellationChecker
+from momo_ocr.features.ocr_jobs.consumer import InMemoryOcrJobConsumer
 from momo_ocr.features.ocr_jobs.dependencies import JobRunnerDependencies
 from momo_ocr.features.ocr_jobs.models import OcrJobStatus
+from momo_ocr.features.ocr_jobs.repository import InMemoryOcrJobRepository
 from momo_ocr.features.ocr_jobs.runner import JobRunOutcome
 
 
-@dataclass
-class _FakeDeps:
-    worker_id: str = "worker-test"
-
-
 def _deps() -> JobRunnerDependencies:
-    return cast("JobRunnerDependencies", _FakeDeps())
+    return JobRunnerDependencies(
+        consumer=InMemoryOcrJobConsumer(),
+        repository=InMemoryOcrJobRepository(),
+        cancellation=InMemoryCancellationChecker(),
+        worker_id="worker-test",
+    )
 
 
 def test_worker_loop_retries_after_iteration_exception(

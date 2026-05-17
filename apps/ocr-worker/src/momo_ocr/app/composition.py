@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from psycopg_pool import ConnectionPool
@@ -85,6 +85,11 @@ def production_pool_from_config(config: WorkerConfig) -> ConnectionPool:
     )
 
 
+class CloseableResource(Protocol):  # pragma: no cover
+    def close(self) -> None:
+        raise NotImplementedError
+
+
 @dataclass(frozen=True)
 class WorkerRuntime:
     """Process-wide resources backing one worker run.
@@ -99,7 +104,7 @@ class WorkerRuntime:
     """
 
     deps: JobRunnerDependencies
-    pool: ConnectionPool
+    pool: CloseableResource
 
     def close(self) -> None:
         # Close in reverse order of acquisition: text engine (per-process

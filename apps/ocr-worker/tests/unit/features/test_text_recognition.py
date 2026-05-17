@@ -123,6 +123,41 @@ def test_tesseract_engine_reports_timeout(monkeypatch: pytest.MonkeyPatch) -> No
     assert exc_info.value.retryable
 
 
+def test_tesseract_engine_sanitizes_process_failure_stderr(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_which(executable: str) -> str:
+        assert executable == "tesseract"
+        return "/usr/bin/tesseract"
+
+    def fake_run(
+        command: list[str],
+        *,
+        check: bool,
+        capture_output: bool,
+        text: bool,
+        timeout: float,
+    ) -> subprocess.CompletedProcess[str]:
+        del check, capture_output, text, timeout
+        raise subprocess.CalledProcessError(
+            returncode=1,
+            cmd=command,
+            stderr="secret tessdata path: /tmp/momo/input.png",
+        )
+
+    monkeypatch.setattr(shutil, "which", fake_which)
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    with pytest.raises(OcrError) as exc_info:
+        TesseractEngine().recognize(Image.new("RGB", (1, 1)))
+
+    assert exc_info.value.code == FailureCode.PARSER_FAILED
+    assert exc_info.value.message == "Tesseract command failed."
+    assert "secret" not in exc_info.value.message
+    assert "/tmp" not in exc_info.value.message
+    assert exc_info.value.user_action is not None
+
+
 def _remove_spaces(text: str) -> str:
     return text.replace(" ", "")
 

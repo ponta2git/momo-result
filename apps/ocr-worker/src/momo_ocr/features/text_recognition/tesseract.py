@@ -113,8 +113,9 @@ class TesseractEngine(TextRecognitionEngine):
             except subprocess.CalledProcessError as exc:
                 raise OcrError(
                     FailureCode.PARSER_FAILED,
-                    exc.stderr.strip() or "Tesseract failed.",
+                    "Tesseract command failed.",
                     retryable=False,
+                    user_action="Try manual entry or contact operations if OCR keeps failing.",
                 ) from exc
 
             txt_path = output_base.with_suffix(".txt")

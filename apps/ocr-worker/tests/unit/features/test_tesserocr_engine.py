@@ -17,6 +17,7 @@ from momo_ocr.features.text_recognition.models import (
     RecognitionConfig,
 )
 from momo_ocr.features.text_recognition.tesserocr_engine import TesserocrEngine
+from momo_ocr.shared.errors import FailureCode, OcrError
 
 
 @dataclass
@@ -29,6 +30,7 @@ class _FakeApi:
     calls: list[tuple[str, tuple[Any, ...]]] = field(default_factory=list)
     text: str = "hello"
     confidence: int = 87
+    get_text_error: str | None = None
 
     def SetPageSegMode(self, psm: int) -> None:  # noqa: N802 - tesserocr API
         self.calls.append(("SetPageSegMode", (psm,)))
@@ -41,6 +43,8 @@ class _FakeApi:
 
     def GetUTF8Text(self) -> str:  # noqa: N802
         self.calls.append(("GetUTF8Text", ()))
+        if self.get_text_error is not None:
+            raise RuntimeError(self.get_text_error)
         return self.text + "\n"
 
     def MeanTextConf(self) -> int:  # noqa: N802
@@ -184,6 +188,43 @@ def test_negative_confidence_becomes_none() -> None:
     result = engine.recognize(_img(), config=RecognitionConfig(language="jpn+eng"))
 
     assert result.confidence is None
+
+
+def test_api_initialization_failure_message_is_sanitized() -> None:
+    def factory(*, language: str, oem: int, tessdata_path: str | None) -> _FakeApi:
+        del language, oem, tessdata_path
+        detail = "secret native tessdata path /opt/private/tessdata"
+        raise RuntimeError(detail)
+
+    engine = TesserocrEngine(
+        field_configs={},
+        tessdata_path=None,
+        api_factory=factory,
+    )
+
+    with pytest.raises(OcrError) as exc_info:
+        engine.recognize(_img(), config=RecognitionConfig(language="jpn+eng"))
+
+    assert exc_info.value.code == FailureCode.OCR_ENGINE_UNAVAILABLE
+    assert exc_info.value.message == "Failed to initialize tesserocr API."
+    assert "secret" not in exc_info.value.message
+    assert "/opt/private" not in exc_info.value.message
+    assert exc_info.value.user_action is not None
+
+
+def test_recognition_failure_message_is_sanitized() -> None:
+    engine, apis = _make_engine()
+
+    engine.recognize(_img(), config=RecognitionConfig(language="jpn+eng"))
+    apis[0].get_text_error = "secret image detail /tmp/private/input.png"
+
+    with pytest.raises(OcrError) as exc_info:
+        engine.recognize(_img(), config=RecognitionConfig(language="jpn+eng"))
+
+    assert exc_info.value.code == FailureCode.PARSER_FAILED
+    assert exc_info.value.message == "tesserocr recognition failed."
+    assert "secret" not in exc_info.value.message
+    assert "/tmp/private" not in exc_info.value.message
 
 
 def test_variable_changes_overwrite_without_double_reset() -> None:

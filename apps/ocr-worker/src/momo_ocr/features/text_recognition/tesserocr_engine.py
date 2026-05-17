@@ -215,7 +215,7 @@ class TesserocrEngine(TextRecognitionEngine):
             except OcrError:
                 raise
             except Exception as exc:
-                msg = f"Failed to initialize tesserocr API for ({language}, oem={oem}): {exc}"
+                msg = "Failed to initialize tesserocr API."
                 raise OcrError(
                     FailureCode.OCR_ENGINE_UNAVAILABLE,
                     msg,
@@ -243,7 +243,7 @@ class TesserocrEngine(TextRecognitionEngine):
                 raw_text = api.GetUTF8Text()
                 confidence_raw = api.MeanTextConf()
             except Exception as exc:
-                msg = f"tesserocr recognize failed: {exc}"
+                msg = "tesserocr recognition failed."
                 raise OcrError(FailureCode.PARSER_FAILED, msg, retryable=False) from exc
             finally:
                 clear_adaptive = getattr(api, "ClearAdaptiveClassifier", None)

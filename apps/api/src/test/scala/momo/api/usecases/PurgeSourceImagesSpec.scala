@@ -112,7 +112,7 @@ final class PurgeSourceImagesSpec extends MomoCatsEffectSuite:
         listed <- sourceImages.list(draft.id, AccountId.unsafeFromString("account-1"))
         streamed <- sourceImages.stream(
           draft.id,
-          MatchDraftSourceImageKind.TotalAssets.wire,
+          MatchDraftSourceImageKind.TotalAssets,
           AccountId.unsafeFromString("account-1"),
         )
       yield

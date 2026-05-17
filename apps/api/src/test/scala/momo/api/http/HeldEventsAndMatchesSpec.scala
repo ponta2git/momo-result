@@ -279,6 +279,19 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
       assertEquals(body.toVector, pngBytes.toVector)
   }
 
+  app.test("GET /api/match-drafts/:draftId/source-images/:kind rejects unknown kind") { httpApp =>
+    for
+      matchDraftId <- createMatchDraft(httpApp)
+      sourceImageRes <- httpApp.run(
+        Request[IO](
+          Method.GET,
+          Uri.unsafeFromString(s"/api/match-drafts/$matchDraftId/source-images/unknown"),
+        ).putHeaders(devReadHeader())
+      )
+      _ <- assertProblem(sourceImageRes, Status.UnprocessableContent, "VALIDATION_FAILED", "kind")
+    yield ()
+  }
+
   app.test("POST /api/matches maps validation failures to ProblemDetails") { httpApp =>
     for
       id <- createEvent(httpApp)

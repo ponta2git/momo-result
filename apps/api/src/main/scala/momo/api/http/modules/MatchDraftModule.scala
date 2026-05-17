@@ -112,11 +112,16 @@ object MatchDraftModule:
     },
     MatchDraftEndpoints.getSourceImage.serverLogic { case (draftId, kind, accountHeader) =>
       security.authorizeRead(accountHeader) { member =>
-        security.decode(BoundaryId.required("matchDraftId", draftId)(MatchDraftId.fromString))(id =>
+        val decoded =
+          for
+            id <- BoundaryId.required("matchDraftId", draftId)(MatchDraftId.fromString)
+            parsedKind <- MatchDraftCodec.parseSourceImageKind(kind)
+          yield (id, parsedKind)
+        security.decode(decoded) { case (id, parsedKind) =>
           security.respond(
-            getMatchDraftSourceImages.stream(id, kind, member.accountId)
+            getMatchDraftSourceImages.stream(id, parsedKind, member.accountId)
           )(image => (image.contentType, "private, no-store", "nosniff", image.bytes))
-        )
+        }
       }
     },
   )

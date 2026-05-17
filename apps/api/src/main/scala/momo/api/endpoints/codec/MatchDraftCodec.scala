@@ -9,7 +9,9 @@ import momo.api.domain.MatchDraftStatus
 import momo.api.domain.ids.*
 import momo.api.endpoints.{CreateMatchDraftRequest, UpdateMatchDraftRequest}
 import momo.api.errors.AppError
-import momo.api.usecases.{CreateMatchDraftCommand, UpdateMatchDraftCommand}
+import momo.api.usecases.{
+  CreateMatchDraftCommand, MatchDraftSourceImageKind, UpdateMatchDraftCommand,
+}
 
 /** DTO ↔ usecase command conversions for `MatchDraftEndpoints`. */
 object MatchDraftCodec:
@@ -27,6 +29,10 @@ object MatchDraftCodec:
         MatchDraftStatus.fromWire(raw).map(Some(_)).toRight(AppError.ValidationFailed(
           s"status must be one of ocr_running, ocr_failed, draft_ready, needs_review, confirmed, cancelled: $raw"
         ))
+
+  def parseSourceImageKind(value: String): Either[AppError, MatchDraftSourceImageKind] =
+    MatchDraftSourceImageKind.fromWire(value)
+      .toRight(AppError.ValidationFailed("kind must be total_assets, revenue, or incident_log."))
 
   def toCreateCommand(
       request: CreateMatchDraftRequest,

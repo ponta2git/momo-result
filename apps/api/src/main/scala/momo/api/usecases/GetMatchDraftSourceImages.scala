@@ -66,12 +66,9 @@ final class GetMatchDraftSourceImages[F[_]: MonadThrow](
 
   def stream(
       draftId: MatchDraftId,
-      kindWire: String,
+      kind: MatchDraftSourceImageKind,
       accountId: AccountId,
   ): F[Either[AppError, MatchDraftSourceImageBinary]] = (for
-    kind <- EitherT.fromEither[F](MatchDraftSourceImageKind.fromWire(kindWire).toRight(
-      AppError.ValidationFailed("kind must be total_assets, revenue, or incident_log.")
-    ))
     draft <- EitherT(loadAuthorizedDraft(draftId, accountId))
     _ <- EitherT.cond[F](
       draft.sourceImagesDeletedAt.isEmpty,

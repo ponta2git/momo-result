@@ -20,7 +20,7 @@ import momo.api.domain.{
 }
 import momo.api.errors.AppError
 import momo.api.repositories.{ImageStore, OcrJobsRepository, QueueProducer}
-import momo.api.testing.{FailingMarkFailedOcrJobsRepository, FailingQueueProducer}
+import momo.api.testing.{FailingMarkFailedOcrJobsRepository, FailingQueueProducer, TestImages}
 import momo.api.usecases.testing.CapturingLoggerFactory
 
 final class CreateOcrJobSpec extends MomoCatsEffectSuite:
@@ -28,8 +28,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
 
   private val now = Instant.parse("2026-04-29T11:40:16Z")
 
-  private val pngBytes: Array[Byte] =
-    Array[Byte](0x89.toByte, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)
+  private val pngBytes: Array[Byte] = TestImages.png1x1
 
   private def fromAppEither[A](value: Either[AppError, A]): IO[A] = value match
     case Right(result) => IO.pure(result)

@@ -3,6 +3,7 @@ package momo.api.adapters
 import java.nio.file.{Files, Path}
 import java.time.Instant
 
+import scala.annotation.tailrec
 import scala.jdk.CollectionConverters.*
 
 import cats.effect.Sync
@@ -83,20 +84,37 @@ final class LocalFsImageStore[F[_]: Sync: Random](root: Path)
       detected match
         case None =>
           Left(AppError.UnsupportedMediaType("Only PNG, JPEG, and WebP images are supported."))
-        case Some(imageType)
-            if contentType.exists(ct => normalizeMediaType(ct) != imageType.mediaType) =>
-          Left(AppError.UnsupportedMediaType("Content-Type does not match the image bytes."))
-        case Some(imageType) => Right(imageType)
+        case Some(imageType) =>
+          val maybeDimensions = dimensions(bytes, imageType)
+          maybeDimensions match
+            case None => Left(AppError.UnsupportedMediaType("Image dimensions could not be read."))
+            case Some(imageDimensions) if imageDimensions.exceedsLimit =>
+              Left(
+                AppError
+                  .PayloadTooLarge(s"Image dimensions must be $MaxDimensionsLabel or smaller.")
+              )
+            case Some(_)
+                if contentType.exists(ct => normalizeMediaType(ct) != imageType.mediaType) =>
+              Left(AppError.UnsupportedMediaType("Content-Type does not match the image bytes."))
+            case Some(_) => Right(imageType)
 
 object LocalFsImageStore:
   val MaxBytes = 3 * 1024 * 1024
+  val MaxWidth = 3840
+  val MaxHeight = 2160
+  val MaxDimensionsLabel = s"${MaxWidth.toString}x${MaxHeight.toString}"
 
   final case class ImageType(mediaType: String, extension: String)
+  private final case class ImageDimensions(width: Long, height: Long):
+    def exceedsLimit: Boolean = width <= 0L || height <= 0L || width > MaxWidth.toLong ||
+      height > MaxHeight.toLong
 
   val Png: ImageType = ImageType("image/png", "png")
   val Jpeg: ImageType = ImageType("image/jpeg", "jpg")
   val Webp: ImageType = ImageType("image/webp", "webp")
   val SupportedImageTypes: List[ImageType] = List(Png, Jpeg, Webp)
+  private val JpegStartOfFrameMarkers: Set[Int] =
+    Set(0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf)
 
   def normalizeMediaType(value: String): String = value.takeWhile(_ != ';').trim.toLowerCase
 
@@ -113,3 +131,116 @@ object LocalFsImageStore:
       bytes(9) == 'E'.toByte && bytes(10) == 'B'.toByte && bytes(11) == 'P'.toByte
     then Some(Webp)
     else None
+
+  private def dimensions(bytes: Array[Byte], imageType: ImageType): Option[ImageDimensions] =
+    if imageType.mediaType == Png.mediaType then pngDimensions(bytes)
+    else if imageType.mediaType == Jpeg.mediaType then jpegDimensions(bytes)
+    else webpDimensions(bytes)
+
+  private def pngDimensions(bytes: Array[Byte]): Option[ImageDimensions] = Option.when(
+    bytes.length >= 33 && bigEndian32(bytes, 8) == 13L &&
+      matches(bytes, 12, Array('I', 'H', 'D', 'R').map(_.toByte))
+  )(ImageDimensions(bigEndian32(bytes, 16), bigEndian32(bytes, 20)))
+
+  private def jpegDimensions(bytes: Array[Byte]): Option[ImageDimensions] =
+    @tailrec
+    def scan(offset: Int): Option[ImageDimensions] =
+      if offset + 3 >= bytes.length then None
+      else if unsignedByte(bytes, offset) != 0xff then scan(offset + 1)
+      else
+        val markerOffset = skipJpegFill(bytes, offset + 1)
+        if markerOffset >= bytes.length then None
+        else
+          val marker = unsignedByte(bytes, markerOffset)
+          val next = markerOffset + 1
+          if isStandaloneJpegMarker(marker) then scan(next)
+          else if next + 2 > bytes.length then None
+          else
+            val length = bigEndian16(bytes, next).toInt
+            val dataStart = next + 2
+            val nextSegment = dataStart + length - 2
+            if length < 2 || nextSegment > bytes.length then None
+            else if isJpegStartOfFrame(marker) && length >= 7 then
+              Some(ImageDimensions(
+                bigEndian16(bytes, dataStart + 3),
+                bigEndian16(bytes, dataStart + 1),
+              ))
+            else scan(nextSegment)
+
+    Option.when(bytes.length >= 4)(()).flatMap(_ => scan(2))
+
+  private def webpDimensions(bytes: Array[Byte]): Option[ImageDimensions] =
+    @tailrec
+    def scan(offset: Int): Option[ImageDimensions] =
+      if offset + 8 > bytes.length then None
+      else
+        val chunkSize = littleEndian32(bytes, offset + 4)
+        val dataStart = offset + 8
+        val dataEnd = dataStart.toLong + chunkSize
+        val paddedEnd = dataEnd + (chunkSize % 2L)
+        if chunkSize > Int.MaxValue.toLong || dataEnd > bytes.length then None
+        else if matches(bytes, offset, Array('V', 'P', '8', 'X').map(_.toByte)) && chunkSize >= 10L
+        then
+          Some(ImageDimensions(
+            littleEndian24(bytes, dataStart + 4) + 1L,
+            littleEndian24(bytes, dataStart + 7) + 1L,
+          ))
+        else if matches(bytes, offset, Array('V', 'P', '8', 'L').map(_.toByte)) && chunkSize >= 5L
+        then webpLosslessDimensions(bytes, dataStart)
+        else if matches(bytes, offset, Array('V', 'P', '8', ' ').map(_.toByte)) && chunkSize >= 10L
+        then webpLossyDimensions(bytes, dataStart)
+        else scan(paddedEnd.toInt)
+
+    Option.when(
+      bytes.length >= 20 && matches(bytes, 0, Array('R', 'I', 'F', 'F').map(_.toByte)) &&
+        matches(bytes, 8, Array('W', 'E', 'B', 'P').map(_.toByte))
+    )(()).flatMap(_ => scan(12))
+
+  private def webpLosslessDimensions(bytes: Array[Byte], dataStart: Int): Option[ImageDimensions] =
+    Option.when(unsignedByte(bytes, dataStart) == 0x2f) {
+      val bits = littleEndian32(bytes, dataStart + 1)
+      ImageDimensions((bits & 0x3fffL) + 1L, ((bits >> 14) & 0x3fffL) + 1L)
+    }
+
+  private def webpLossyDimensions(bytes: Array[Byte], dataStart: Int): Option[ImageDimensions] =
+    Option.when(matches(bytes, dataStart + 3, Array(0x9d.toByte, 0x01.toByte, 0x2a.toByte))) {
+      ImageDimensions(
+        littleEndian16(bytes, dataStart + 6) & 0x3fffL,
+        littleEndian16(bytes, dataStart + 8) & 0x3fffL,
+      )
+    }
+
+  private def isJpegStartOfFrame(marker: Int): Boolean = JpegStartOfFrameMarkers.contains(marker)
+
+  private def isStandaloneJpegMarker(marker: Int): Boolean = marker == 0x01 || marker == 0xd8 ||
+    marker == 0xd9 || (marker >= 0xd0 && marker <= 0xd7)
+
+  @tailrec
+  private def skipJpegFill(bytes: Array[Byte], offset: Int): Int =
+    if offset < bytes.length && unsignedByte(bytes, offset) == 0xff then
+      skipJpegFill(bytes, offset + 1)
+    else offset
+
+  private def matches(bytes: Array[Byte], offset: Int, expected: Array[Byte]): Boolean =
+    offset >= 0 && offset + expected.length <= bytes.length &&
+      expected.indices.forall(index => bytes(offset + index) == expected(index))
+
+  private def unsignedByte(bytes: Array[Byte], offset: Int): Int = bytes(offset) & 0xff
+
+  private def bigEndian16(bytes: Array[Byte], offset: Int): Long =
+    (unsignedByte(bytes, offset).toLong << 8) | unsignedByte(bytes, offset + 1).toLong
+
+  private def bigEndian32(bytes: Array[Byte], offset: Int): Long =
+    (unsignedByte(bytes, offset).toLong << 24) | (unsignedByte(bytes, offset + 1).toLong << 16) |
+      (unsignedByte(bytes, offset + 2).toLong << 8) | unsignedByte(bytes, offset + 3).toLong
+
+  private def littleEndian16(bytes: Array[Byte], offset: Int): Long = unsignedByte(bytes, offset)
+    .toLong | (unsignedByte(bytes, offset + 1).toLong << 8)
+
+  private def littleEndian24(bytes: Array[Byte], offset: Int): Long = unsignedByte(bytes, offset)
+    .toLong | (unsignedByte(bytes, offset + 1).toLong << 8) |
+    (unsignedByte(bytes, offset + 2).toLong << 16)
+
+  private def littleEndian32(bytes: Array[Byte], offset: Int): Long = unsignedByte(bytes, offset)
+    .toLong | (unsignedByte(bytes, offset + 1).toLong << 8) |
+    (unsignedByte(bytes, offset + 2).toLong << 16) | (unsignedByte(bytes, offset + 3).toLong << 24)

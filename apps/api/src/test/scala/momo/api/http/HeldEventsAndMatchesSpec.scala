@@ -13,6 +13,7 @@ import org.typelevel.ci.CIString
 import momo.api.MomoCatsEffectSuite
 import momo.api.bootstrap.ApiApp
 import momo.api.http.HttpAssertions.{assertProblem, headerValue, jsonField, optionalHeaderValue}
+import momo.api.testing.TestImages
 
 final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
   import java.time.Instant
@@ -43,8 +44,7 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
       ))
     yield ()
 
-  private val pngBytes: Array[Byte] =
-    Array[Byte](0x89.toByte, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)
+  private val pngBytes: Array[Byte] = TestImages.png1x1
 
   app.test("POST /api/held-events creates event and lists it") { httpApp =>
     val createReq = Request[IO](Method.POST, uri"/api/held-events").putHeaders(devWriteHeaders()*)

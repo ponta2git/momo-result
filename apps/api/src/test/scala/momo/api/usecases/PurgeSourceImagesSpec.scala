@@ -9,11 +9,10 @@ import momo.api.adapters.{InMemoryMatchDraftsRepository, LocalFsImageStore}
 import momo.api.domain.ids.*
 import momo.api.domain.{MatchDraft, MatchDraftStatus}
 import momo.api.errors.AppError
-import momo.api.testing.FailingDeleteImageStore
+import momo.api.testing.{FailingDeleteImageStore, TestImages}
 
 final class PurgeSourceImagesSpec extends MomoCatsEffectSuite:
-  private val pngBytes: Array[Byte] =
-    Array[Byte](0x89.toByte, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)
+  private val pngBytes: Array[Byte] = TestImages.png1x1
 
   test("keeps source images before cleanup and deletes them at cleanup time") {
     val createdAt = Instant.parse("2026-05-04T01:00:00Z")

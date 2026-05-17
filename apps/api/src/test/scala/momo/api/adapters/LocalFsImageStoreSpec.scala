@@ -9,10 +9,10 @@ import cats.effect.IO
 import momo.api.MomoCatsEffectSuite
 import momo.api.domain.ids.ImageId
 import momo.api.errors.AppError
+import momo.api.testing.TestImages
 
 final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:
-  private val pngBytes: Array[Byte] =
-    Array[Byte](0x89.toByte, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)
+  private val pngBytes: Array[Byte] = TestImages.png1x1
 
   test("stores PNG images after magic byte and content type validation") {
     tempDirectory("momo-api-image-store").use { dir =>
@@ -21,6 +21,32 @@ final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:
         case Right(image) => IO.blocking(Files.exists(image.path)).assertEquals(true) *>
             IO(assertEquals(image.mediaType, "image/png")) *>
             IO(assertEquals(image.sizeBytes, pngBytes.length.toLong))
+        case Left(error) => fail(s"expected image to be stored: $error")
+      }
+    }
+  }
+
+  test("stores JPEG images after magic byte and dimension validation") {
+    tempDirectory("momo-api-image-store").use { dir =>
+      val store = LocalFsImageStore[IO](dir)
+      val bytes = TestImages.jpeg(width = 1280, height = 720)
+      store.save(Some("sample.jpg"), Some("image/jpeg"), bytes).flatMap {
+        case Right(image) => IO.blocking(Files.exists(image.path)).assertEquals(true) *>
+            IO(assertEquals(image.mediaType, "image/jpeg")) *>
+            IO(assertEquals(image.sizeBytes, bytes.length.toLong))
+        case Left(error) => fail(s"expected image to be stored: $error")
+      }
+    }
+  }
+
+  test("stores WebP images after magic byte and dimension validation") {
+    tempDirectory("momo-api-image-store").use { dir =>
+      val store = LocalFsImageStore[IO](dir)
+      val bytes = TestImages.webp(width = 1280, height = 720)
+      store.save(Some("sample.webp"), Some("image/webp"), bytes).flatMap {
+        case Right(image) => IO.blocking(Files.exists(image.path)).assertEquals(true) *>
+            IO(assertEquals(image.mediaType, "image/webp")) *>
+            IO(assertEquals(image.sizeBytes, bytes.length.toLong))
         case Left(error) => fail(s"expected image to be stored: $error")
       }
     }
@@ -36,6 +62,18 @@ final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:
     }
   }
 
+  test("rejects image bytes whose dimensions cannot be read") {
+    tempDirectory("momo-api-image-store").use { dir =>
+      val store = LocalFsImageStore[IO](dir)
+      val headerOnlyPng = Array[Byte](0x89.toByte, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)
+      store.save(Some("sample.png"), Some("image/png"), headerOnlyPng).map {
+        case Left(error: AppError.UnsupportedMediaType) =>
+          assert(error.detail.contains("dimensions"))
+        case other => fail(s"expected unsupported media type, got $other")
+      }
+    }
+  }
+
   test("rejects images larger than 3MB") {
     tempDirectory("momo-api-image-store").use { dir =>
       val store = LocalFsImageStore[IO](dir)
@@ -43,6 +81,18 @@ final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:
       store.save(Some("large.png"), Some("image/png"), tooLarge).map {
         case Left(error: AppError.PayloadTooLarge) =>
           assert(error.detail.contains(LocalFsImageStore.MaxBytes.toString))
+        case other => fail(s"expected payload too large, got $other")
+      }
+    }
+  }
+
+  test("rejects images larger than 4K dimensions") {
+    tempDirectory("momo-api-image-store").use { dir =>
+      val store = LocalFsImageStore[IO](dir)
+      val tooWide = TestImages.png(width = LocalFsImageStore.MaxWidth + 1, height = 1)
+      store.save(Some("wide.png"), Some("image/png"), tooWide).map {
+        case Left(error: AppError.PayloadTooLarge) =>
+          assert(error.detail.contains(LocalFsImageStore.MaxDimensionsLabel))
         case other => fail(s"expected payload too large, got $other")
       }
     }

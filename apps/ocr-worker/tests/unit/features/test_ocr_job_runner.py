@@ -9,6 +9,7 @@ production runner is responsible for, independently of any real transport.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -450,6 +451,45 @@ def test_unknown_job_id_is_acked_and_dropped() -> None:
     outcome = run_one_job(deps)
 
     assert outcome.status is OcrJobStatus.FAILED
+    assert consumer.acked == ["d1"]
+
+
+def test_queue_payload_mismatch_with_db_record_is_failed_before_analyze() -> None:
+    consumer = InMemoryOcrJobConsumer()
+    repository = InMemoryOcrJobRepository()
+    payload = _make_payload(image_path=Path("/tmp/momo/message.jpg"))
+    _seed_record(repository, payload)
+    repository.seed(
+        replace(
+            repository.records["job-1"],
+            draft_id="draft-from-db",
+            image_id="image-from-db",
+            image_path=Path("/tmp/momo/db.jpg"),
+            requested_screen_type=ScreenType.REVENUE,
+        )
+    )
+    consumer.enqueue(payload, delivery_tag="d1")
+
+    deps = _make_deps(
+        consumer=consumer,
+        repository=repository,
+        cancellation=InMemoryCancellationChecker(),
+        analyze=lambda **_: pytest.fail("analyze should not run for payload/DB mismatches"),
+    )
+
+    outcome = run_one_job(deps)
+
+    assert outcome.status is OcrJobStatus.FAILED
+    record = repository.records["job-1"]
+    assert record.status is OcrJobStatus.FAILED
+    assert record.attempt_count == 1
+    assert record.failure is not None
+    assert record.failure.code is FailureCode.QUEUE_FAILURE
+    assert "draftId" in record.failure.message
+    assert "imageId" in record.failure.message
+    assert "imagePath" in record.failure.message
+    assert "requestedScreenType" in record.failure.message
+    assert "job-1" not in repository.result_records
     assert consumer.acked == ["d1"]
 
 

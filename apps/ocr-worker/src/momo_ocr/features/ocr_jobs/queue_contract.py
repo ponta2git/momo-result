@@ -31,12 +31,12 @@ def parse_job_message(payload: Mapping[str, object]) -> OcrJobMessage:
     image_path = _parse_absolute_path(raw_payload["imagePath"])
 
     try:
-        requested_screen_type = ScreenType(raw_payload["requestedImageType"])
+        requested_screen_type = ScreenType(raw_payload["requestedScreenType"])
     except ValueError as exc:
         raise OcrError(
             FailureCode.QUEUE_FAILURE,
-            "Unsupported requestedImageType in OCR queue message: "
-            f"{raw_payload['requestedImageType']}",
+            "Unsupported requestedScreenType in OCR queue message: "
+            f"{raw_payload['requestedScreenType']}",
         ) from exc
 
     return OcrJobMessage(
@@ -59,7 +59,7 @@ def to_stream_payload(message: OcrJobMessage) -> dict[str, str]:
         "draftId": message.draft_id,
         "imageId": message.image_id,
         "imagePath": str(message.image_path),
-        "requestedImageType": message.requested_screen_type.value,
+        "requestedScreenType": message.requested_screen_type.value,
         "attempt": str(message.attempt),
         "enqueuedAt": message.enqueued_at,
     }

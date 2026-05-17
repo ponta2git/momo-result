@@ -22,13 +22,14 @@ from momo_ocr.features.ocr_jobs.lifecycle import is_terminal
 from momo_ocr.features.ocr_jobs.models import (
     OcrJobExecutionResult,
     OcrJobMessage,
+    OcrJobRecord,
     OcrJobStatus,
     PulledJob,
 )
 from momo_ocr.features.ocr_jobs.result_writer import OcrResultRecord
 from momo_ocr.features.ocr_results.payload_warnings import attach_warnings_to_payload
 from momo_ocr.features.standalone_analysis.report import AnalysisResult
-from momo_ocr.shared.errors import FailureCode, OcrFailure
+from momo_ocr.shared.errors import FailureCode, OcrError, OcrFailure
 
 if TYPE_CHECKING:
     from momo_ocr.features.ocr_jobs.runner import JobRunnerDependencies
@@ -75,7 +76,26 @@ def _phase_lookup_record(deps: JobRunnerDependencies, delivery: PulledJob) -> Oc
         # Duplicate delivery after a persisted terminal state: DB is the source
         # of truth, so no retry or compensating transition is needed.
         return record.status
+    _ensure_payload_matches_record(message, record)
     return None
+
+
+def _ensure_payload_matches_record(message: OcrJobMessage, record: OcrJobRecord) -> None:
+    mismatched_fields = []
+    if message.draft_id != record.draft_id:
+        mismatched_fields.append("draftId")
+    if message.image_id != record.image_id:
+        mismatched_fields.append("imageId")
+    if message.image_path != record.image_path:
+        mismatched_fields.append("imagePath")
+    if message.requested_screen_type is not record.requested_screen_type:
+        mismatched_fields.append("requestedScreenType")
+    if not mismatched_fields:
+        return
+    raise OcrError(
+        FailureCode.QUEUE_FAILURE,
+        f"OCR queue payload does not match DB job record: {', '.join(mismatched_fields)}.",
+    )
 
 
 def _phase_pre_run_cancellation(

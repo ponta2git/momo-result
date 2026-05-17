@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from typing import Any
 
 # Extra fields, when set on a LogRecord (via `logger.info(..., extra={...})`),
@@ -21,6 +22,8 @@ _EXTRA_KEYS: tuple[str, ...] = (
     "delivery_tag",
     "resource",
 )
+_EXC_INFO_MIN_LENGTH = 2
+_EXC_INFO_VALUE_INDEX = 1
 
 
 class JsonFormatter(logging.Formatter):
@@ -36,11 +39,48 @@ class JsonFormatter(logging.Formatter):
             if value is not None:
                 payload[key] = value
         if record.exc_info:
-            payload["exception"] = self.formatException(record.exc_info)
+            payload["exception_classes"] = _exception_classes_from_exc_info(record.exc_info)
         return json.dumps(payload, ensure_ascii=False, sort_keys=True)
 
 
-def configure_logging(level: int = logging.INFO) -> None:
+class SafeTextFormatter(logging.Formatter):
+    def formatException(self, exc_info: object) -> str:  # noqa: N802 - logging override.
+        classes = _exception_classes_from_exc_info(exc_info)
+        return f"exception_classes={','.join(classes)}"
+
+
+def configure_logging(level: int = logging.INFO, *, log_format: str | None = None) -> None:
     handler = logging.StreamHandler()
-    handler.setFormatter(JsonFormatter())
+    handler.setFormatter(_formatter_for(log_format or os.environ.get("MOMO_LOG_FORMAT", "json")))
     logging.basicConfig(level=level, handlers=[handler], force=True)
+
+
+def _formatter_for(log_format: str) -> logging.Formatter:
+    if log_format.strip().lower() == "text":
+        return SafeTextFormatter("%(levelname)s %(name)s %(message)s")
+    return JsonFormatter()
+
+
+def _exception_classes_from_exc_info(exc_info: object) -> list[str]:
+    exc = _exception_from_exc_info(exc_info)
+    if exc is None:
+        return []
+
+    classes: list[str] = []
+    current: BaseException | None = exc
+    while current is not None:
+        classes.append(type(current).__name__)
+        if current.__cause__ is not None:
+            current = current.__cause__
+        elif current.__suppress_context__:
+            current = None
+        else:
+            current = current.__context__
+    return classes
+
+
+def _exception_from_exc_info(exc_info: object) -> BaseException | None:
+    if not isinstance(exc_info, tuple) or len(exc_info) < _EXC_INFO_MIN_LENGTH:
+        return None
+    exc_value = exc_info[_EXC_INFO_VALUE_INDEX]
+    return exc_value if isinstance(exc_value, BaseException) else None

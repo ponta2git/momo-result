@@ -34,7 +34,7 @@ def test_redis_consumer_reads_stream_delivery_from_testcontainer() -> None:
             "draftId": "draft-1",
             "imageId": "image-1",
             "imagePath": "/tmp/sample.jpg",
-            "requestedImageType": "total_assets",
+            "requestedScreenType": "total_assets",
             "attempt": "1",
             "enqueuedAt": "2026-04-29T10:00:00Z",
         }

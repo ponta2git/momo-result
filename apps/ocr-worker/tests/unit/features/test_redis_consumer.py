@@ -60,7 +60,7 @@ def test_redis_consumer_pulls_and_parses_valid_delivery() -> None:
                             "draftId": "draft-1",
                             "imageId": "image-1",
                             "imagePath": "/tmp/sample.jpg",
-                            "requestedImageType": "total_assets",
+                            "requestedScreenType": "total_assets",
                             "attempt": "1",
                             "enqueuedAt": "2026-04-29T10:00:00Z",
                         },

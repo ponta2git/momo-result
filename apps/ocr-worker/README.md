@@ -44,7 +44,7 @@ Required stream fields:
   "draftId": "uuid",
   "imageId": "uuid",
   "imagePath": "/tmp/momo-result/uploads/image.jpg",
-  "requestedImageType": "auto | total_assets | revenue | incident_log",
+  "requestedScreenType": "auto | total_assets | revenue | incident_log",
   "attempt": "1",
   "enqueuedAt": "2026-04-29T10:00:00Z",
   "requestId": "optional-correlation-id"
@@ -64,7 +64,7 @@ Optional OCR hints are encoded as a single `ocrHintsJson` string field so the st
 }
 ```
 
-These values are hints only. `requestedImageType` may come from the upload slot or manual UI selection; `gameTitle`/`layoutFamily` may select parser profiles; aliases may improve name matching. The worker must still return raw OCR values, warnings, and draft data for user review instead of treating hints as authoritative results.
+These values are hints only. `requestedScreenType` may come from the upload slot or manual UI selection; `gameTitle`/`layoutFamily` may select parser profiles; aliases may improve name matching. The worker must still return raw OCR values, warnings, and draft data for user review instead of treating hints as authoritative results.
 
 The API producer emits `schemaVersion: "1"` and the worker rejects missing or non-`"1"` versions. `ocrHintsJson` is capped at 8192 characters, with per-field hint limits defined by the JSON Schema.
 

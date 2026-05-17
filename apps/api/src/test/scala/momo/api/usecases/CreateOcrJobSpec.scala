@@ -15,11 +15,12 @@ import momo.api.adapters.{
 import momo.api.codec.OcrHintsCodec.given
 import momo.api.domain.ids.{AccountId, ImageId, MatchDraftId, MemberAliasId, MemberId, OcrJobId}
 import momo.api.domain.{
-  MatchDraft, MatchDraftStatus, MemberAlias, OcrFailure, OcrJob, OcrJobHints, PlayerAliasHint,
-  ScreenType, StoredImage,
+  MatchDraft, MatchDraftStatus, MemberAlias, OcrJob, OcrJobHints, PlayerAliasHint, ScreenType,
+  StoredImage,
 }
 import momo.api.errors.AppError
-import momo.api.repositories.{ImageStore, OcrJobsRepository, OcrQueuePayload, QueueProducer}
+import momo.api.repositories.{ImageStore, OcrJobsRepository, QueueProducer}
+import momo.api.testing.{FailingMarkFailedOcrJobsRepository, FailingQueueProducer}
 import momo.api.usecases.testing.CapturingLoggerFactory
 
 final class CreateOcrJobSpec extends MomoCatsEffectSuite:
@@ -108,10 +109,10 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
 
     fixtureResource(
       prefix = "momo-api-create-job-fail",
-      queue = failingQueue(queueError),
+      queue = FailingQueueProducer(queueError),
       idSeed = List("job-1", "draft-1"),
       requestId = None,
-      decorateJobs = failingJobs(_, markFailedError),
+      decorateJobs = delegate => FailingMarkFailedOcrJobsRepository(delegate, markFailedError),
     ).use { fixture =>
       for
         image <- fixture.savePng
@@ -131,7 +132,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
 
     fixtureResource(
       prefix = "momo-api-create-job-sanitized-failure",
-      queue = failingQueue(queueError),
+      queue = FailingQueueProducer(queueError),
       idSeed = List("job-1", "draft-1"),
       requestId = None,
       decorateJobs = identity[OcrJobsRepository[IO]],
@@ -217,10 +218,10 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
 
     fixtureResource(
       prefix = "momo-api-create-job-log",
-      queue = failingQueue(queueError),
+      queue = FailingQueueProducer(queueError),
       idSeed = List("job-log-1", "draft-log-1"),
       requestId = None,
-      decorateJobs = failingJobs(_, markFailedError),
+      decorateJobs = delegate => FailingMarkFailedOcrJobsRepository(delegate, markFailedError),
     ).use { fixture =>
       for
         capture <- CapturingLoggerFactory.create[IO]
@@ -292,24 +293,6 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
       jobs = decorateJobs(jobsBase)
     yield Fixture(imageStore, jobs, drafts, matchDrafts, memberAliases, queue, idSeed, requestId)
   }
-
-  private def failingQueue(error: Throwable): QueueProducer[IO] = new QueueProducer[IO]:
-    override def publish(payload: OcrQueuePayload): IO[String] =
-      val _ = payload
-      IO.raiseError(error)
-    override def ping: IO[Unit] = IO.unit
-
-  private def failingJobs(
-      delegate: OcrJobsRepository[IO],
-      markFailedError: Throwable,
-  ): OcrJobsRepository[IO] = new OcrJobsRepository[IO]:
-    override def create(job: OcrJob): IO[Unit] = delegate.create(job)
-    override def find(jobId: OcrJobId): IO[Option[OcrJob]] = delegate.find(jobId)
-    override def markFailed(jobId: OcrJobId, failure: OcrFailure, now: Instant): IO[Unit] =
-      val _ = (jobId, failure, now)
-      IO.raiseError(markFailedError)
-    override def cancelQueued(jobId: OcrJobId, now: Instant): IO[Boolean] = delegate
-      .cancelQueued(jobId, now)
 
   private def editableDraft(id: MatchDraftId): MatchDraft = MatchDraft.fromInputs(
     id = id,

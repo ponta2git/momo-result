@@ -7,9 +7,9 @@ import cats.effect.IO
 import momo.api.MomoCatsEffectSuite
 import momo.api.adapters.{InMemoryMatchDraftsRepository, LocalFsImageStore}
 import momo.api.domain.ids.*
-import momo.api.domain.{MatchDraft, MatchDraftStatus, StoredImage}
+import momo.api.domain.{MatchDraft, MatchDraftStatus}
 import momo.api.errors.AppError
-import momo.api.repositories.ImageStore
+import momo.api.testing.FailingDeleteImageStore
 
 final class PurgeSourceImagesSpec extends MomoCatsEffectSuite:
   private val pngBytes: Array[Byte] =
@@ -103,7 +103,7 @@ final class PurgeSourceImagesSpec extends MomoCatsEffectSuite:
           updatedAt = createdAt,
         ).getOrElse(fail("invalid draft fixture"))
         _ <- matchDrafts.create(draft)
-        failingStore = failingDeleteStore(imageStore, deleteError)
+        failingStore = FailingDeleteImageStore(imageStore, deleteError)
         service = PurgeSourceImages[IO](matchDrafts, failingStore)
         result <- service.run(draft.id, finalizedAt).attempt
         updatedDraft <- matchDrafts.find(draft.id)
@@ -135,18 +135,3 @@ final class PurgeSourceImagesSpec extends MomoCatsEffectSuite:
       case Right(image) => IO.pure(image)
       case Left(error) => fail(s"expected image to be stored: $error")
     }
-
-  private def failingDeleteStore(
-      delegate: LocalFsImageStore[IO],
-      error: Throwable,
-  ): ImageStore[IO] = new ImageStore[IO]:
-    override def save(
-        fileName: Option[String],
-        contentType: Option[String],
-        bytes: Array[Byte],
-    ): IO[Either[AppError, StoredImage]] = delegate.save(fileName, contentType, bytes)
-    override def find(imageId: ImageId): IO[Option[StoredImage]] = delegate.find(imageId)
-    override def readBytes(image: StoredImage): IO[Array[Byte]] = delegate.readBytes(image)
-    override def delete(imageId: ImageId): IO[Boolean] =
-      val _ = imageId
-      IO.raiseError(error)

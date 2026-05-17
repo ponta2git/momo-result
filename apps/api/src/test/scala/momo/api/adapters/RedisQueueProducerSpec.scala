@@ -3,12 +3,13 @@ package momo.api.adapters
 import java.nio.file.Path
 import java.time.Instant
 
-import cats.effect.{IO, Ref}
+import cats.effect.IO
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.domain.ids.*
 import momo.api.domain.{OcrJobHints, ScreenType}
 import momo.api.repositories.OcrQueuePayload
+import momo.api.testing.{RecordingRedisStreamClient, RedisXAddCall}
 
 final class RedisQueueProducerSpec extends MomoCatsEffectSuite:
   private def payloadFor(jobId: String): OcrQueuePayload = OcrQueuePayload.build(
@@ -25,15 +26,11 @@ final class RedisQueueProducerSpec extends MomoCatsEffectSuite:
 
   test("publishes OCR payload fields to the configured Redis stream"):
     for
-      ref <- Ref.of[IO, Vector[(String, Map[String, String])]](Vector.empty)
-      client = new RedisStreamClient[IO]:
-        override def xadd(stream: String, fields: Map[String, String]): IO[String] = ref
-          .update(_ :+ (stream -> fields)).as("1-0")
-        override def ping: IO[Unit] = IO.unit
+      client <- RecordingRedisStreamClient.create
       producer = RedisQueueProducer[IO]("momo:ocr:jobs", client)
       payload = payloadFor("job-1")
       messageId <- producer.publish(payload)
-      published <- ref.get
+      published <- client.calls
     yield
       assertEquals(messageId, "1-0")
-      assertEquals(published, Vector("momo:ocr:jobs" -> payload.fields))
+      assertEquals(published, Vector(RedisXAddCall("momo:ocr:jobs", payload.fields)))

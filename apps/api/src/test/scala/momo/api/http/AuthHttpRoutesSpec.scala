@@ -11,14 +11,12 @@ import org.typelevel.ci.CIString
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.adapters.{InMemoryAppSessionsRepository, InMemoryLoginAccountsRepository}
-import momo.api.auth.{
-  CsrfTokenService, DiscordOAuthClient, DiscordUser, LoginRateLimiter, OAuthStateCodec,
-  SessionService,
-}
+import momo.api.auth.{CsrfTokenService, LoginRateLimiter, OAuthStateCodec, SessionService}
 import momo.api.config.{AppConfig, AppEnv, AuthConfig}
 import momo.api.domain.LoginAccount
 import momo.api.domain.ids.{AccountId, MemberId, UserId}
 import momo.api.http.HttpAssertions.headerValue
+import momo.api.testing.SuccessfulDiscordOAuthClient
 
 final class AuthHttpRoutesSpec extends MomoCatsEffectSuite:
   private val now = Instant.parse("2026-05-14T00:00:00Z")
@@ -86,7 +84,7 @@ final class AuthHttpRoutesSpec extends MomoCatsEffectSuite:
         stateCodec = OAuthStateCodec[IO](authConfig, IO.pure(now))
       yield AuthHttpRoutes.routes[IO](
         config = config,
-        oauth = new SuccessfulOAuth(account.discordUserId.value),
+        oauth = SuccessfulDiscordOAuthClient(account.discordUserId.value),
         stateCodec = stateCodec,
         sessions = sessions,
         csrf = CsrfTokenService(),
@@ -94,10 +92,3 @@ final class AuthHttpRoutesSpec extends MomoCatsEffectSuite:
         rateLimiter = limiter,
       ).orNotFound
     }
-
-  private final class SuccessfulOAuth(userId: String) extends DiscordOAuthClient[IO]:
-    override def authorizationUrl(state: String, prompt: Option[String]): IO[String] = IO
-      .pure(s"https://discord.example/oauth?state=$state")
-    override def fetchUser(code: String): IO[Either[momo.api.errors.AppError, DiscordUser]] =
-      val _ = code
-      IO.pure(Right(DiscordUser(userId)))

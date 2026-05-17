@@ -11,6 +11,8 @@ final class ApiTestArchitectureSpec extends FunSuite:
   private val testRoot = Paths.get("src/test/scala")
   private val integrationRoot = testRoot.resolve("momo/api/integration")
   private val redisIntegrationRoot = integrationRoot.resolve("redis")
+  private val testingRoot = testRoot.resolve("momo/api/testing")
+  private val usecaseTestingRoot = testRoot.resolve("momo/api/usecases/testing")
   private val buildFile = Paths.get("build.sbt")
   private val pluginsFile = Paths.get("project/plugins.sbt")
   private val testRuleFile = Paths.get("../../docs/test-rule.md")
@@ -88,6 +90,29 @@ final class ApiTestArchitectureSpec extends FunSuite:
     assert(testRuleText.contains("sbt apiCoverage"))
     assert(testRuleText.contains("C2"))
     assert(testRuleText.contains("table-driven test"))
+
+  test("stateful API test doubles live in typed test support"):
+    val forbiddenInlineDoubles = List(
+      "new QueueProducer[IO]",
+      "new OcrQueueOutboxRepository[IO]",
+      "new OcrJobsRepository[IO]",
+      "new ImageStore[IO]",
+      "new RedisStreamClient[IO]",
+      "new DiscordOAuthClient[IO]",
+      "extends AppSessionsRepository[IO]",
+    )
+    val supportFiles = Set(
+      Paths.get("src/test/scala/momo/api/testing/TestDoubles.scala"),
+      Paths.get("src/test/scala/momo/api/usecases/testing/CapturingLoggerFactory.scala"),
+    )
+    val violations = scalaFiles(testRoot).filterNot(path => path.startsWith(testingRoot))
+      .filterNot(path => path.startsWith(usecaseTestingRoot)).filterNot(supportFiles.contains)
+      .flatMap { path =>
+        val text = read(path)
+        forbiddenInlineDoubles.filter(text.contains).map(pattern => s"$path: $pattern")
+      }.sorted
+
+    assertEquals(violations, Nil)
 
   private def scalaFiles(root: Path): List[Path] =
     val stream = Files.walk(root)

@@ -7,14 +7,15 @@ import javax.crypto.spec.SecretKeySpec
 
 import scala.concurrent.duration.*
 
-import cats.effect.{IO, Ref}
+import cats.effect.IO
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.adapters.InMemoryLoginAccountsRepository
 import momo.api.config.{AppEnv, AuthConfig}
 import momo.api.domain.LoginAccount
 import momo.api.domain.ids.{AccountId, MemberId, UserId}
-import momo.api.repositories.{AppSession, AppSessionsRepository}
+import momo.api.repositories.AppSession
+import momo.api.testing.RecordingAppSessionsRepository
 
 final class AuthServicesSpec extends MomoCatsEffectSuite:
   private val config = AuthConfig.defaults(AppEnv.Test).copy(
@@ -197,45 +198,3 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
     ))
     val signature = Base64Url.encode(mac.doFinal(payloadBytes))
     s"${Base64Url.encode(payloadBytes)}.$signature"
-
-private final case class SessionRepoSnapshot(
-    sessions: Map[String, AppSession],
-    renews: Int,
-    deletes: List[String],
-)
-
-private final class RecordingAppSessionsRepository(ref: Ref[IO, SessionRepoSnapshot])
-    extends AppSessionsRepository[IO]:
-  def snapshot: IO[SessionRepoSnapshot] = ref.get
-
-  override def find(idHash: String): IO[Option[AppSession]] = ref.get.map(_.sessions.get(idHash))
-
-  override def upsert(session: AppSession): IO[Unit] = ref
-    .update(s => s.copy(sessions = s.sessions.updated(session.idHash, session)))
-
-  override def delete(idHash: String): IO[Unit] = ref
-    .update(s => s.copy(sessions = s.sessions - idHash, deletes = idHash :: s.deletes))
-
-  override def deleteByAccount(accountId: AccountId): IO[Int] = ref.modify { s =>
-    val retained = s.sessions.filter { case (_, session) => session.accountId != accountId }
-    (s.copy(sessions = retained), s.sessions.size - retained.size)
-  }
-
-  override def renew(idHash: String, lastSeenAt: Instant, expiresAt: Instant): IO[Unit] = ref
-    .update { s =>
-      s.copy(
-        sessions = s.sessions
-          .updatedWith(idHash)(_.map(_.copy(lastSeenAt = lastSeenAt, expiresAt = expiresAt))),
-        renews = s.renews + 1,
-      )
-    }
-
-  override def deleteExpired(now: Instant): IO[Int] = ref.modify { s =>
-    val retained = s.sessions.filter { case (_, session) => !session.expiresAt.isBefore(now) }
-    (s.copy(sessions = retained), s.sessions.size - retained.size)
-  }
-
-private object RecordingAppSessionsRepository:
-  def create: IO[RecordingAppSessionsRepository] = Ref
-    .of[IO, SessionRepoSnapshot](SessionRepoSnapshot(Map.empty, 0, Nil))
-    .map(RecordingAppSessionsRepository(_))

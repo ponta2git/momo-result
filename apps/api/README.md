@@ -55,6 +55,8 @@ API テストは、値オブジェクト・codec・usecase の軽量テストを
 
 Repository adapter のうち本番 adapter と in-memory adapter の両方を持つものは、重要な共有挙動を `momo.api.repositories.contract` の契約テストに寄せます。実装固有の SQL、transaction、index 前提、Redis wire だけを DB/Redis 統合 spec に置きます。
 
+Usecase / domain / HTTP 境界は in-memory repository と実 DTO/codec を使う Detroit 寄りのテストを基本にします。外部副作用、失敗注入、ログ観測、固定時刻など London 寄りの確認が必要な場合は `momo.api.testing.TestDoubles` の typed double を使い、spec 内で副作用付き匿名 double を量産しません。
+
 ### コーディング規約（lint / scalac で強制）
 
 - Scala 3 新構文へ自動変換（`rewrite.scala3.convertToNewSyntax`）

@@ -21,6 +21,11 @@ logger = logging.getLogger(__name__)
 class WorkerLoopConfig:
     idle_sleep_seconds: float = 1.0
 
+    def __post_init__(self) -> None:
+        if self.idle_sleep_seconds <= 0:
+            msg = "idle_sleep_seconds must be a positive number."
+            raise ValueError(msg)
+
 
 def run_worker_process(
     deps: JobRunnerDependencies,
@@ -31,7 +36,15 @@ def run_worker_process(
     cfg = config or WorkerLoopConfig()
     logger.info("OCR worker loop starting", extra={"worker_id": deps.worker_id})
     while not shutdown_event.is_set():
-        outcome = run_one_job(deps)
+        try:
+            outcome = run_one_job(deps)
+        except Exception:
+            logger.exception(
+                "OCR worker loop iteration failed; backing off before retry",
+                extra={"worker_id": deps.worker_id},
+            )
+            shutdown_event.wait(cfg.idle_sleep_seconds)
+            continue
         if not outcome.pulled:
             shutdown_event.wait(cfg.idle_sleep_seconds)
             continue

@@ -5,7 +5,6 @@ from threading import Lock
 from typing import Protocol
 
 from momo_ocr.features.ocr_jobs.models import OcrJobStatus
-from momo_ocr.features.ocr_jobs.repository import OcrJobRepository
 
 
 class CancellationChecker(Protocol):
@@ -20,14 +19,19 @@ class CancellationChecker(Protocol):
         raise NotImplementedError
 
 
+class OcrJobStatusReader(Protocol):
+    def get_status(self, job_id: str) -> OcrJobStatus | None:
+        raise NotImplementedError
+
+
 @dataclass(frozen=True)
 class RepositoryCancellationChecker:
-    """Cancellation source backed by an :class:`OcrJobRepository`."""
+    """Cancellation source backed by the source-of-truth job status."""
 
-    repository: OcrJobRepository
+    status_reader: OcrJobStatusReader
 
     def is_cancelled(self, job_id: str) -> bool:
-        status = self.repository.get_status(job_id)
+        status = self.status_reader.get_status(job_id)
         return status is OcrJobStatus.CANCELLED
 
 

@@ -20,14 +20,13 @@ final class ExportMatches[F[_]: Monad](
     seasonMasters: SeasonMastersRepository[F],
 ):
   def run(
-      formatValue: String,
+      format: MatchExportFormat,
       seasonMasterId: Option[SeasonMasterId],
       heldEventId: Option[HeldEventId],
       matchId: Option[MatchId],
-  ): F[Either[AppError, MatchExportFile]] =
-    (parseFormat(formatValue), parseScope(seasonMasterId, heldEventId, matchId)).tupled match
-      case Left(error) => error.asLeft[MatchExportFile].pure[F]
-      case Right((format, scope)) => build(format, scope)
+  ): F[Either[AppError, MatchExportFile]] = parseScope(seasonMasterId, heldEventId, matchId) match
+    case Left(error) => error.asLeft[MatchExportFile].pure[F]
+    case Right(scope) => build(format, scope)
 
   private def build(
       format: MatchExportFormat,
@@ -83,9 +82,6 @@ final class ExportMatches[F[_]: Monad](
         byGame <- gameTitleIds
           .flatTraverse(id => matches.list(MatchesRepository.ListFilter(gameTitleId = Some(id))))
       yield (bySeason ++ byGame).distinctBy(_.id)
-
-  private def parseFormat(value: String): Either[AppError, MatchExportFormat] = MatchExportFormat
-    .fromWire(value).toRight(AppError.ValidationFailed("format must be one of: csv, tsv."))
 
   private def parseScope(
       seasonMasterId: Option[SeasonMasterId],

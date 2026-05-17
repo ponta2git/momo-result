@@ -9,8 +9,8 @@ import momo.api.adapters.{
   InMemoryGameTitlesRepository, InMemoryMapMastersRepository, InMemoryMatchesRepository,
   InMemoryMembersRepository, InMemorySeasonMastersRepository,
 }
-import momo.api.domain.MatchRecord
 import momo.api.domain.ids.*
+import momo.api.domain.{MatchExportFormat, MatchRecord}
 import momo.api.errors.AppError
 import momo.api.usecases.testing.MatchFixtures
 
@@ -22,34 +22,31 @@ final class ExportMatchesSpec extends MomoCatsEffectSuite:
   private val mapId = MapMasterId.unsafeFromString("map_east")
   private val memberValues = MatchFixtures.DevMemberValues
 
-  test("rejects invalid format before querying export data"):
-    for
-      usecase <- createUsecase()
-      result <- usecase.run("xlsx", None, None, None)
-    yield assertAppError(result, "VALIDATION_FAILED", "format must be one of")
-
   test("rejects multiple export scopes"):
     for
       usecase <- createUsecase()
-      result <- usecase.run("csv", Some(seasonId), Some(heldEventId), None)
+      result <- usecase.run(MatchExportFormat.Csv, Some(seasonId), Some(heldEventId), None)
     yield assertAppError(result, "VALIDATION_FAILED", "Specify at most one export scope")
 
   test("rejects blank export scopes instead of falling back to all matches"):
     for
       usecase <- createUsecase()
-      result <- usecase.run("csv", Some(SeasonMasterId.unsafeFromString(" ")), None, None)
+      result <- usecase
+        .run(MatchExportFormat.Csv, Some(SeasonMasterId.unsafeFromString(" ")), None, None)
     yield assertAppError(result, "VALIDATION_FAILED", "seasonMasterId must not be blank")
 
   test("returns not found for an unknown match scope"):
     for
       usecase <- createUsecase()
-      result <- usecase.run("csv", None, None, Some(MatchId.unsafeFromString("missing")))
+      result <- usecase
+        .run(MatchExportFormat.Csv, None, None, Some(MatchId.unsafeFromString("missing")))
     yield assertAppError(result, "NOT_FOUND", "match was not found")
 
   test("builds a scoped TSV export with stable filename and content type"):
     for
       usecase <- createUsecaseWithMatch()
-      result <- usecase.run("tsv", None, None, Some(MatchId.unsafeFromString("match-1")))
+      result <- usecase
+        .run(MatchExportFormat.Tsv, None, None, Some(MatchId.unsafeFromString("match-1")))
     yield
       val file = result.getOrElse(fail(s"expected export file, got $result"))
       assertEquals(file.fileName, "momo-results-match-match-1.tsv")

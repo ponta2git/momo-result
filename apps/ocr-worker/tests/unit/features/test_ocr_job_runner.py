@@ -190,6 +190,39 @@ def test_happy_path_persists_result_and_acks() -> None:
     assert consumer.acked == ["d1"]
 
 
+def test_success_persists_parser_payload_warnings_for_review_status() -> None:
+    consumer = InMemoryOcrJobConsumer()
+    repository = InMemoryOcrJobRepository()
+    payload = _make_payload()
+    _seed_record(repository, payload)
+    consumer.enqueue(payload, delivery_tag="d1")
+    parser_warning = OcrWarning(
+        code=WarningCode.MISSING_AMOUNT,
+        message="Could not read total assets for rank 1.",
+        field_path="players[0].total_assets_man_yen",
+    )
+
+    deps = _make_deps(
+        consumer=consumer,
+        repository=repository,
+        cancellation=InMemoryCancellationChecker(),
+        analyze=lambda **_: _success_analysis(
+            OcrDraftPayload(
+                requested_screen_type=ScreenType.TOTAL_ASSETS,
+                detected_screen_type=ScreenType.TOTAL_ASSETS,
+                profile_id="total_assets:basic",
+                warnings=[parser_warning],
+            )
+        ),
+    )
+
+    outcome = run_one_job(deps)
+
+    assert outcome.status is OcrJobStatus.SUCCEEDED
+    assert repository.result_records["job-1"].warnings == (parser_warning,)
+    assert repository.result_records["job-1"].payload.warnings == [parser_warning]
+
+
 def test_failure_analysis_records_failed_terminal_status_with_metadata() -> None:
     consumer = InMemoryOcrJobConsumer()
     repository = InMemoryOcrJobRepository()

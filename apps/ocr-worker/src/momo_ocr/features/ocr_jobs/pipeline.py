@@ -185,7 +185,7 @@ def _persist_analysis_result(
         job_id=message.job_id,
         draft_id=message.draft_id,
         payload=payload,
-        warnings=tuple(analysis.warnings),
+        warnings=tuple(payload.warnings),
         timings_ms=dict(analysis.timings_ms),
     )
     deps.repository.complete_success(

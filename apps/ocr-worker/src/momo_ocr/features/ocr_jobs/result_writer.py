@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from threading import Lock
-from typing import Protocol
+from dataclasses import dataclass
 
 import psycopg
 from psycopg.types.json import Jsonb
-from psycopg_pool import ConnectionPool
 
 from momo_ocr.features.ocr_domain.models import OcrDraftPayload, OcrWarning
 from momo_ocr.shared.json import to_jsonable
@@ -19,45 +16,6 @@ class OcrResultRecord:
     payload: OcrDraftPayload
     warnings: tuple[OcrWarning, ...]
     timings_ms: dict[str, float]
-
-
-class OcrResultWriter(Protocol):
-    """Persists a successful OCR draft for a given job.
-
-    The writer is invoked exactly once per job before the queue is acked. It
-    must be idempotent on ``job_id``: a successful retry of the same job (e.g.
-    after a worker crash before ack) must not produce duplicate drafts.
-    """
-
-    def persist(self, record: OcrResultRecord) -> None:
-        raise NotImplementedError
-
-
-@dataclass
-class InMemoryOcrResultWriter:
-    """Test double implementing :class:`OcrResultWriter`.
-
-    Records writes keyed by ``job_id`` so tests can assert that each job
-    persists at most one draft, regardless of redeliveries.
-    """
-
-    records: dict[str, OcrResultRecord] = field(default_factory=dict)
-    _lock: Lock = field(default_factory=Lock, repr=False, compare=False)
-
-    def persist(self, record: OcrResultRecord) -> None:
-        with self._lock:
-            self.records[record.job_id] = record
-
-
-class PostgresOcrResultWriter:
-    """Pool-backed adapter; the pool is owned by the composition root."""
-
-    def __init__(self, pool: ConnectionPool) -> None:
-        self._pool = pool
-
-    def persist(self, record: OcrResultRecord) -> None:
-        with self._pool.connection() as conn, conn.transaction():
-            persist_result_record(conn, record)
 
 
 def persist_result_record(

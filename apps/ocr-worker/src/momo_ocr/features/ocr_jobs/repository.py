@@ -38,9 +38,6 @@ class OcrJobRepository(Protocol):
     def transition_to_running(self, job_id: str, *, worker_id: str) -> None:
         raise NotImplementedError
 
-    def complete(self, job_id: str, result: OcrJobExecutionResult) -> None:
-        raise NotImplementedError
-
     def complete_success(
         self,
         job_id: str,
@@ -93,9 +90,6 @@ class InMemoryOcrJobRepository:
                 worker_id=worker_id,
                 attempt_count=current.attempt_count + 1,
             )
-
-    def complete(self, job_id: str, result: OcrJobExecutionResult) -> None:
-        self._terminal_transition(job_id, result, expected=OcrJobStatus.SUCCEEDED)
 
     def complete_success(
         self,
@@ -199,9 +193,6 @@ class PostgresOcrJobRepository:
                 f"OCR job {job_id} was not claimed for running.",
                 retryable=True,
             )
-
-    def complete(self, job_id: str, result: OcrJobExecutionResult) -> None:
-        self._terminal_transition(job_id, result, expected=OcrJobStatus.SUCCEEDED)
 
     def complete_success(
         self,

@@ -25,7 +25,7 @@ def resolve_debug_dir(job_id: object, image_path: Path) -> Path | None:
     try:
         debug_dir.mkdir(parents=True, exist_ok=True)
     except OSError:
-        logger.warning("Failed to create MOMO_OCR_DEBUG_DIR=%s; disabling debug dump", debug_dir)
+        logger.warning("Failed to create MOMO_OCR_DEBUG_DIR; disabling debug dump")
         return None
     return debug_dir
 

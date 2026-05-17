@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from PIL import Image
 
 from momo_ocr.features.temp_images.cleanup import delete_if_exists
 from momo_ocr.features.temp_images.validation import open_decoded_image, read_image_metadata
+from momo_ocr.shared.errors import FailureCode, OcrError
 
 
 def test_read_image_metadata_allows_local_sample_without_size_limit(tmp_path: Path) -> None:
@@ -28,6 +30,26 @@ def test_open_decoded_image_returns_rgb(tmp_path: Path) -> None:
 
     assert image.mode == "RGB"
     assert image.size == (640, 360)
+
+
+def test_read_image_metadata_reports_missing_temp_image(tmp_path: Path) -> None:
+    missing_path = tmp_path / "missing.jpg"
+
+    with pytest.raises(OcrError) as exc_info:
+        read_image_metadata(missing_path)
+
+    assert exc_info.value.code is FailureCode.TEMP_IMAGE_MISSING
+    assert exc_info.value.user_action == "Re-upload the screenshot and run OCR again."
+
+
+def test_open_decoded_image_reports_missing_temp_image(tmp_path: Path) -> None:
+    missing_path = tmp_path / "missing.jpg"
+
+    with pytest.raises(OcrError) as exc_info:
+        open_decoded_image(missing_path)
+
+    assert exc_info.value.code is FailureCode.TEMP_IMAGE_MISSING
+    assert exc_info.value.user_action == "Re-upload the screenshot and run OCR again."
 
 
 def test_delete_if_exists_removes_file(tmp_path: Path) -> None:

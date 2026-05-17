@@ -27,7 +27,7 @@ class OcrFailure:
     user_action: str | None = None
 
 
-@dataclass(frozen=True)
+@dataclass
 class OcrError(Exception):
     code: FailureCode
     message: str

@@ -48,3 +48,16 @@ def test_analyze_image_can_use_fake_engine_for_auto_detection(tmp_path: Path) ->
     assert result.result is not None
     assert result.result.category_payload["include_raw_text"]
     assert (debug_dir / "screen_detection" / "incident_log_title.png").exists()
+
+
+def test_analyze_image_returns_temp_image_missing_failure(tmp_path: Path) -> None:
+    result = analyze_image(
+        image_path=tmp_path / "missing.jpg",
+        requested_screen_type="total_assets",
+        debug_dir=None,
+        include_raw_text=False,
+        text_engine=FakeTextRecognitionEngine("unused"),
+    )
+
+    assert result.failure_code == "TEMP_IMAGE_MISSING"
+    assert result.failure_user_action == "Re-upload the screenshot and run OCR again."

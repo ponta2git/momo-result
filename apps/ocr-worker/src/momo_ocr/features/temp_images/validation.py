@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import stat
 from pathlib import Path
 
 from PIL import Image, UnidentifiedImageError
@@ -11,15 +12,25 @@ from momo_ocr.shared.errors import FailureCode, OcrError
 
 ALLOWED_FORMATS = {"JPEG", "PNG", "WEBP"}
 MAX_IMAGE_BYTES = 3 * 1024 * 1024
+_MISSING_TEMP_IMAGE_ACTION = "Re-upload the screenshot and run OCR again."
 
 
 def read_image_metadata(path: Path, *, enforce_size_limit: bool = True) -> ImageMetadata:
-    if not path.exists():
-        raise OcrError(FailureCode.TEMP_IMAGE_MISSING, "Temporary image file does not exist.")
-    if not path.is_file():
+    try:
+        stat_result = path.stat()
+    except FileNotFoundError as exc:
+        raise OcrError(
+            FailureCode.TEMP_IMAGE_MISSING,
+            "Temporary image file does not exist.",
+            user_action=_MISSING_TEMP_IMAGE_ACTION,
+        ) from exc
+    except OSError as exc:
+        raise OcrError(FailureCode.INVALID_IMAGE, "Image file metadata could not be read.") from exc
+
+    if not stat.S_ISREG(stat_result.st_mode):
         raise OcrError(FailureCode.INVALID_IMAGE, "Image path is not a file.")
 
-    size_bytes = path.stat().st_size
+    size_bytes = stat_result.st_size
     if enforce_size_limit and size_bytes > MAX_IMAGE_BYTES:
         raise OcrError(FailureCode.IMAGE_TOO_LARGE, "Image exceeds the 3MB upload limit.")
 
@@ -29,7 +40,15 @@ def read_image_metadata(path: Path, *, enforce_size_limit: bool = True) -> Image
         with Image.open(path) as image:
             image_format = image.format or "UNKNOWN"
             width, height = image.size
+    except FileNotFoundError as exc:
+        raise OcrError(
+            FailureCode.TEMP_IMAGE_MISSING,
+            "Temporary image file disappeared before it could be decoded.",
+            user_action=_MISSING_TEMP_IMAGE_ACTION,
+        ) from exc
     except UnidentifiedImageError as exc:
+        raise OcrError(FailureCode.DECODE_FAILED, "Image could not be decoded.") from exc
+    except OSError as exc:
         raise OcrError(FailureCode.DECODE_FAILED, "Image could not be decoded.") from exc
 
     if image_format not in ALLOWED_FORMATS:
@@ -47,5 +66,13 @@ def open_decoded_image(path: Path) -> Image.Image:
     try:
         with Image.open(path) as image:
             return image.convert("RGB")
+    except FileNotFoundError as exc:
+        raise OcrError(
+            FailureCode.TEMP_IMAGE_MISSING,
+            "Temporary image file disappeared before OCR could start.",
+            user_action=_MISSING_TEMP_IMAGE_ACTION,
+        ) from exc
     except UnidentifiedImageError as exc:
+        raise OcrError(FailureCode.DECODE_FAILED, "Image could not be decoded.") from exc
+    except OSError as exc:
         raise OcrError(FailureCode.DECODE_FAILED, "Image could not be decoded.") from exc

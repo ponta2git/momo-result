@@ -25,6 +25,8 @@
   に閉じる。DB/Redis/in-memory adapter の起動時配線を `momo.api.http` へ戻さない。
 - HTTP/DTO/queue payload などの外部境界では raw String の ID を `BoundaryId` や各 ID の
   `fromString` で検証してから domain ID 型へ変換する。境界で `unsafeFromString` を直接使わない。
+- 部分更新の usecase では、入力差分だけで不変条件を判定しない。既存値と入力値をマージした保存予定の
+  実効状態に対して、外部キー所属関係やドメイン不変条件を検証する。
 - DBアクセスは Doobie repository に閉じる。SQL実行責務は `docs/test-rule.md` の DB-backed API ルールに従う。
 - エラーは業務、認証、権限、入力、外部依存を区別し、UIが説明できる形に正規化する。
 - JSON、CSV/TSV、Problem Details、OpenAPI はテストで固定する。

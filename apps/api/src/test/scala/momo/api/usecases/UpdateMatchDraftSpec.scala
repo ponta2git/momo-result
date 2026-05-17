@@ -10,7 +10,7 @@ import momo.api.adapters.{
   InMemoryMatchDraftsRepository, InMemorySeasonMastersRepository,
 }
 import momo.api.domain.ids.*
-import momo.api.domain.{GameTitle, MatchDraft, MatchDraftStatus}
+import momo.api.domain.{GameTitle, MapMaster, MatchDraft, MatchDraftStatus}
 import momo.api.errors.AppError
 import momo.api.usecases.testing.MatchFixtures
 
@@ -131,6 +131,31 @@ final class UpdateMatchDraftSpec extends MomoCatsEffectSuite:
       assertAppError(result, "VALIDATION_FAILED", "mapMasterId")
       assertEquals(found.map(_.gameTitleId), Some(None))
 
+  test("rejects partial updates whose effective references become inconsistent"):
+    val otherMapId = MapMasterId.unsafeFromString("map_japan")
+    for
+      fixture <- Fixture.create
+      _ <- fixture.seedPrereqs()
+      _ <- fixture.gameTitles.create(GameTitle(otherTitleId, "Japan", "japan", 2, createdAt))
+      _ <- fixture.mapMasters.create(MapMaster(otherMapId, otherTitleId, "西日本編", 2, createdAt))
+      _ <- fixture.matchDrafts.create(referencedDraft(draftId))
+      titleChange <- fixture.usecase.run(
+        draftId,
+        blankCommand.copy(gameTitleId = Some(otherTitleId)),
+        AccountId.unsafeFromString("ponta"),
+      )
+      mapChange <- fixture.usecase.run(
+        draftId,
+        blankCommand.copy(mapMasterId = Some(otherMapId)),
+        AccountId.unsafeFromString("ponta"),
+      )
+      found <- fixture.matchDrafts.find(draftId)
+    yield
+      assertAppError(titleChange, "VALIDATION_FAILED", "mapMasterId")
+      assertAppError(mapChange, "VALIDATION_FAILED", "mapMasterId")
+      assertEquals(found.flatMap(_.gameTitleId), Some(titleId))
+      assertEquals(found.flatMap(_.mapMasterId), Some(mapId))
+
   private def blankCommand: UpdateMatchDraftCommand = UpdateMatchDraftCommand(
     heldEventId = None,
     matchNoInEvent = None,
@@ -145,6 +170,13 @@ final class UpdateMatchDraftSpec extends MomoCatsEffectSuite:
 
   private def editingDraft(id: MatchDraftId, status: MatchDraftStatus): MatchDraft =
     draft(id, status, confirmedMatchId = None)
+
+  private def referencedDraft(id: MatchDraftId): MatchDraft = editingDraft(
+    id,
+    MatchDraftStatus.DraftReady,
+  ).withCommon(
+    _.copy(gameTitleId = Some(titleId), seasonMasterId = Some(seasonId), mapMasterId = Some(mapId))
+  )
 
   private def confirmedDraft(id: MatchDraftId): MatchDraft = draft(
     id,

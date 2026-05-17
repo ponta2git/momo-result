@@ -48,7 +48,7 @@ final class UpdateMatchDraft[F[_]: MonadThrow](
     _ <- EitherT.fromEither[F](authorize(existing, accountId))
     _ <- EitherT.fromEither[F](ensureEditable(existing.status))
     matchNoInEvent <- EitherT.fromEither[F](validateMatchNo(command.matchNoInEvent))
-    _ <- validateForeignKeys(command)
+    _ <- validateForeignKeys(nextReferences(command, existing))
     status <- EitherT.fromEither[F](resolveStatus(command.status, existing.status))
     at <- EitherT.liftF(now)
     updated <- EitherT.fromEither[F](
@@ -104,12 +104,17 @@ final class UpdateMatchDraft[F[_]: MonadThrow](
           else Left(AppError.Conflict(s"status ${parsed.wire} cannot be set from this endpoint."))
         }
 
-  private def validateForeignKeys(command: UpdateMatchDraftCommand): EitherT[F, AppError, Unit] =
-    MatchDraftForeignKeyValidation.validate(heldEvents, gameTitles, mapMasters, seasonMasters)(
-      MatchDraftForeignKeyValidation.Input(
-        heldEventId = command.heldEventId,
-        gameTitleId = command.gameTitleId,
-        mapMasterId = command.mapMasterId,
-        seasonMasterId = command.seasonMasterId,
-      )
-    )
+  private def nextReferences(
+      command: UpdateMatchDraftCommand,
+      existing: MatchDraft,
+  ): MatchDraftForeignKeyValidation.Input = MatchDraftForeignKeyValidation.Input(
+    heldEventId = command.heldEventId.orElse(existing.heldEventId),
+    gameTitleId = command.gameTitleId.orElse(existing.gameTitleId),
+    mapMasterId = command.mapMasterId.orElse(existing.mapMasterId),
+    seasonMasterId = command.seasonMasterId.orElse(existing.seasonMasterId),
+  )
+
+  private def validateForeignKeys(
+      input: MatchDraftForeignKeyValidation.Input
+  ): EitherT[F, AppError, Unit] = MatchDraftForeignKeyValidation
+    .validate(heldEvents, gameTitles, mapMasters, seasonMasters)(input)

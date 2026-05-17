@@ -16,9 +16,10 @@ import momo.api.usecases.syntax.UseCaseSyntax.*
  * Shared foreign-key validation for match draft create/update flows.
  *
  * Input is reduced to the four FK fields that both `CreateMatchDraftCommand` and
- * `UpdateMatchDraftCommand` share. Behavior is byte-identical to the original duplicated blocks:
- * each present id is checked for existence; when both `gameTitleId` and `mapMasterId` (or
- * `seasonMasterId`) are supplied, the referenced master must belong to the supplied game title.
+ * `UpdateMatchDraftCommand` share. Callers must pass the effective draft state that will be saved
+ * after caller-specific partial-update merging. Each present id is checked for existence; when both
+ * `gameTitleId` and `mapMasterId` (or `seasonMasterId`) are present, the referenced master must
+ * belong to the supplied game title.
  */
 object MatchDraftForeignKeyValidation:
 

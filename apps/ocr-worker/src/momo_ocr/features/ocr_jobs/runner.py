@@ -84,6 +84,7 @@ class JobRunnerDependencies:
     text_engine: TextRecognitionEngine = field(default_factory=FakeTextRecognitionEngine)
     temp_root: Path | None = None
     fast_path_enabled: bool = False
+    debug_dir_base: Path | None = None
 
 
 @dataclass(frozen=True)

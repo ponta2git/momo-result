@@ -153,7 +153,7 @@ def _parse_profile(
                 cell_image.save(profile_debug_dir / f"{suffix}_cell.png")
                 prepared_cell.save(profile_debug_dir / f"{suffix}_cell_prepared.png")
                 # DEBUG: 各セルの PSM 試行を後から検証できるよう構造化ログを溜める。
-                # MOMO_OCR_DEBUG_DIR が無効なら profile_debug_dir 自体が None なので
+                # debug_dir が未設定なら profile_debug_dir 自体が None なので
                 # 通常運用では完全に no-op。
                 cell_debug = {
                     "incident_name": row_profile.incident_name,

@@ -1,27 +1,26 @@
-"""Helpers for resolving the per-job MOMO_OCR_DEBUG_DIR path."""
+"""Helpers for resolving per-job OCR debug output paths."""
 
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 
-def resolve_debug_dir(job_id: object, image_path: Path) -> Path | None:
-    """Return a per-job debug directory when MOMO_OCR_DEBUG_DIR is set.
+def resolve_debug_dir(job_id: object, image_path: Path, *, base_dir: Path | None) -> Path | None:
+    """Return a per-job debug directory when a base directory is configured.
 
-    DEBUG: opt-in。環境変数が未設定/空なら `None` を返し、本番パイプラインに
-    一切の副作用を与えない。設定時は ``<base>/<image_stem>__<job_id>/`` を返し、
-    ファイル名から該当画像のディレクトリを特定しやすくする。
+    DEBUG: opt-in。base が未設定なら `None` を返し、本番パイプラインに一切の
+    副作用を与えない。設定時は ``<base>/<image_stem>__<job_id>/`` を返し、
+    ファイル名から該当画像のディレクトリを特定しやすくする。環境変数の読み取りは
+    app/config 境界で行い、この関数は渡された設定だけを扱う。
     """
-    base = os.environ.get("MOMO_OCR_DEBUG_DIR", "").strip()
-    if not base:
+    if base_dir is None:
         return None
     safe_id = _sanitize_debug_segment(str(job_id))
     safe_stem = _sanitize_debug_segment(image_path.stem) or "image"
-    debug_dir = Path(base).expanduser() / f"{safe_stem}__{safe_id}"
+    debug_dir = base_dir / f"{safe_stem}__{safe_id}"
     try:
         debug_dir.mkdir(parents=True, exist_ok=True)
     except OSError:

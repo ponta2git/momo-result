@@ -30,6 +30,7 @@ class WorkerConfig:
     max_attempts: int = DEFAULT_MAX_ATTEMPTS
     temp_root: Path = DEFAULT_TEMP_ROOT
     fast_path_enabled: bool = False
+    debug_dir_base: Path | None = None
 
 
 def load_worker_config(env: Mapping[str, str] | None = None) -> WorkerConfig:
@@ -54,6 +55,7 @@ def load_worker_config(env: Mapping[str, str] | None = None) -> WorkerConfig:
         max_attempts=_int_from_env(source, "OCR_MAX_ATTEMPTS", DEFAULT_MAX_ATTEMPTS),
         temp_root=Path(source.get("IMAGE_TMP_DIR", str(DEFAULT_TEMP_ROOT))).absolute(),
         fast_path_enabled=parse_fast_path_flag(source.get("MOMO_OCR_FAST_PATH")),
+        debug_dir_base=_optional_path(source, "MOMO_OCR_DEBUG_DIR"),
     )
 
 
@@ -80,6 +82,13 @@ def _optional_non_empty(env: Mapping[str, str], key: str) -> str | None:
     if value is None or value == "":
         return None
     return value
+
+
+def _optional_path(env: Mapping[str, str], key: str) -> Path | None:
+    value = _optional_non_empty(env, key)
+    if value is None or value.strip() == "":
+        return None
+    return Path(value).expanduser().absolute()
 
 
 def _int_from_env(env: Mapping[str, str], key: str, default: int) -> int:

@@ -16,6 +16,7 @@ def test_load_worker_config_reads_redis_and_database_urls() -> None:
             "OCR_WORKER_CONCURRENCY": "2",
             "IMAGE_TMP_DIR": "/tmp/custom-images",
             "MOMO_OCR_FAST_PATH": "yes",
+            "MOMO_OCR_DEBUG_DIR": "/tmp/ocr-debug",
         }
     )
 
@@ -27,6 +28,8 @@ def test_load_worker_config_reads_redis_and_database_urls() -> None:
     assert config.concurrency == 2
     assert str(config.temp_root) == "/tmp/custom-images"
     assert config.fast_path_enabled is True
+    assert config.debug_dir_base is not None
+    assert str(config.debug_dir_base) == "/tmp/ocr-debug"
 
 
 def test_require_production_config_rejects_missing_urls() -> None:

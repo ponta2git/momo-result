@@ -119,7 +119,11 @@ def _phase_post_running_cancellation(
 
 def _phase_execute(deps: JobRunnerDependencies, message: OcrJobMessage) -> OcrJobStatus:
     started = time.monotonic()
-    debug_dir = resolve_debug_dir(message.job_id, message.image_path)
+    debug_dir = resolve_debug_dir(
+        message.job_id,
+        message.image_path,
+        base_dir=deps.debug_dir_base,
+    )
     analysis = deps.analyze(
         image_path=message.image_path,
         requested_screen_type=message.requested_screen_type.value,

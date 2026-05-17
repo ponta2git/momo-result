@@ -130,7 +130,7 @@ def _failure_analysis() -> AnalysisResult:
     )
 
 
-def _make_deps(
+def _make_deps(  # noqa: PLR0913 - test helper mirrors JobRunnerDependencies wiring.
     *,
     consumer: InMemoryOcrJobConsumer,
     repository: InMemoryOcrJobRepository,
@@ -138,6 +138,7 @@ def _make_deps(
     analyze: AnalyzeImageFn,
     temp_root: Path | None = None,
     fast_path_enabled: bool = False,
+    debug_dir_base: Path | None = None,
 ) -> JobRunnerDependencies:
     return JobRunnerDependencies(
         consumer=consumer,
@@ -147,6 +148,7 @@ def _make_deps(
         analyze=analyze,
         temp_root=temp_root,
         fast_path_enabled=fast_path_enabled,
+        debug_dir_base=debug_dir_base,
     )
 
 
@@ -571,6 +573,7 @@ def test_worker_analyze_enforces_temp_root_and_upload_size_limit(tmp_path: Path)
     consumer = InMemoryOcrJobConsumer()
     repository = InMemoryOcrJobRepository()
     image_root = tmp_path / "uploads"
+    debug_dir_base = tmp_path / "debug"
     image_root.mkdir()
     image_path = image_root / "abc.jpg"
     payload = _make_payload(image_path=image_path)
@@ -589,6 +592,7 @@ def test_worker_analyze_enforces_temp_root_and_upload_size_limit(tmp_path: Path)
         analyze=capturing_analyze,
         temp_root=image_root,
         fast_path_enabled=True,
+        debug_dir_base=debug_dir_base,
     )
 
     outcome = run_one_job(deps)
@@ -597,6 +601,8 @@ def test_worker_analyze_enforces_temp_root_and_upload_size_limit(tmp_path: Path)
     assert captured["image_root"] == image_root
     assert captured["enforce_size_limit"] is True
     assert captured["fast_path_enabled"] is True
+    assert captured["debug_dir"] == debug_dir_base / "abc__job-1"
+    assert captured["debug_dir"].is_dir()
 
 
 class _ToggleAfterFirstCallCancellation:

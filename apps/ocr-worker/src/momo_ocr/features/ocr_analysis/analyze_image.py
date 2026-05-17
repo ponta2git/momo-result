@@ -119,7 +119,7 @@ def analyze_image(  # noqa: PLR0913
                     include_raw_text=include_raw_text,
                     text_engine=engine,
                     player_order_detection=player_order_detection,
-                    warnings=warnings,
+                    warnings=tuple(warnings),
                     layout_family_hint=layout_family_hint,
                     alias_resolver=resolved_alias_resolver,
                     fast_path_enabled=fast_path_enabled,

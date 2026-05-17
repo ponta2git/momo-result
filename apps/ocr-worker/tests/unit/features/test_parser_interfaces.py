@@ -16,6 +16,20 @@ def test_default_parser_registry_returns_category_parser() -> None:
     assert parser.screen_type == ScreenType.TOTAL_ASSETS
 
 
+def test_screen_parse_context_warnings_default_to_immutable_tuple(tmp_path: Path) -> None:
+    context = ScreenParseContext(
+        image_path=tmp_path / "image.jpg",
+        requested_screen_type=ScreenType.AUTO,
+        detected_screen_type=ScreenType.TOTAL_ASSETS,
+        profile_id="full-hd-total-assets-v1",
+        debug_dir=None,
+        include_raw_text=False,
+        text_engine=FakeTextRecognitionEngine(""),
+    )
+
+    assert context.warnings == ()
+
+
 def test_category_parser_returns_payload_with_profile_context(tmp_path: Path) -> None:
     image_path = tmp_path / "incident.jpg"
     Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
@@ -34,7 +34,7 @@ class ScreenParseContext:
     player_order_detection: PlayerOrderDetection | None = None
     alias_resolver: PlayerAliasResolver = DEFAULT_ALIAS_RESOLVER
     fast_path_enabled: bool = False
-    warnings: list[OcrWarning] = field(default_factory=list)
+    warnings: tuple[OcrWarning, ...] = ()
     # Pre-decoded RGB image to avoid re-decoding the same file across
     # parser stages. Optional for backwards compatibility with tests that
     # only pass image_path; production callers (analyze_image / runner)

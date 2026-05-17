@@ -98,9 +98,12 @@ class InMemoryOcrJobRepository:
         result: OcrJobExecutionResult,
     ) -> None:
         _ensure_success_result(result_record, result)
-        self._terminal_transition(job_id, result, expected=OcrJobStatus.SUCCEEDED)
-        with self._lock:
-            self.result_records[result_record.job_id] = result_record
+        self._terminal_transition(
+            job_id,
+            result,
+            expected=OcrJobStatus.SUCCEEDED,
+            result_record=result_record,
+        )
 
     def transition_to_failed_terminal(self, job_id: str, result: OcrJobExecutionResult) -> None:
         if result.status not in {OcrJobStatus.FAILED, OcrJobStatus.CANCELLED}:
@@ -121,6 +124,7 @@ class InMemoryOcrJobRepository:
         result: OcrJobExecutionResult,
         *,
         expected: OcrJobStatus,
+        result_record: OcrResultRecord | None = None,
     ) -> None:
         _ensure_terminal_result(result, expected)
         with self._lock:
@@ -143,6 +147,8 @@ class InMemoryOcrJobRepository:
                 failure=result.failure,
             )
             self.completions[job_id] = result
+            if result_record is not None:
+                self.result_records[result_record.job_id] = result_record
 
 
 class PostgresOcrJobRepository:

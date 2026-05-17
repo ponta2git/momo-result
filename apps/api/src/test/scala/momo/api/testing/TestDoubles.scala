@@ -28,16 +28,15 @@ final class RecordingQueueProducer private (
     ref: Ref[IO, Vector[OcrQueuePayload]],
     messageId: OcrQueuePayload => String,
 ) extends QueueProducer[IO]:
-  override def publish(payload: OcrQueuePayload): IO[String] = ref
-    .update(_ :+ payload).as(messageId(payload))
+  override def publish(payload: OcrQueuePayload): IO[String] = ref.update(_ :+ payload)
+    .as(messageId(payload))
   override def ping: IO[Unit] = IO.unit
 
   def published: IO[Vector[OcrQueuePayload]] = ref.get
 
 object RecordingQueueProducer:
-  def create: IO[RecordingQueueProducer] = createWithMessageId(payload =>
-    s"redis-${payload.fields("jobId")}"
-  )
+  def create: IO[RecordingQueueProducer] =
+    createWithMessageId(payload => s"redis-${payload.fields("jobId")}")
 
   def createWithMessageId(messageId: OcrQueuePayload => String): IO[RecordingQueueProducer] = Ref
     .of[IO, Vector[OcrQueuePayload]](Vector.empty)
@@ -74,8 +73,7 @@ final case class FailingDeleteImageStore(delegate: ImageStore[IO], deleteError: 
     val _ = imageId
     IO.raiseError(deleteError)
 
-final case class OutboxClaimDueCall(limit: Int, now: Instant, claimUntil: Instant)
-    derives CanEqual
+final case class OutboxClaimDueCall(limit: Int, now: Instant, claimUntil: Instant) derives CanEqual
 
 final case class OutboxMarkDeliveredCall(
     id: String,
@@ -164,8 +162,8 @@ final class RecordingRedisStreamClient private (ref: Ref[IO, Vector[RedisXAddCal
   def calls: IO[Vector[RedisXAddCall]] = ref.get
 
 object RecordingRedisStreamClient:
-  def create: IO[RecordingRedisStreamClient] = Ref
-    .of[IO, Vector[RedisXAddCall]](Vector.empty).map(new RecordingRedisStreamClient(_))
+  def create: IO[RecordingRedisStreamClient] = Ref.of[IO, Vector[RedisXAddCall]](Vector.empty)
+    .map(new RecordingRedisStreamClient(_))
 
 final case class SuccessfulDiscordOAuthClient(userId: String) extends DiscordOAuthClient[IO]:
   override def authorizationUrl(state: String, prompt: Option[String]): IO[String] =

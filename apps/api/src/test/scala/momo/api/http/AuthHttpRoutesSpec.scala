@@ -1,10 +1,9 @@
 package momo.api.http
 
-import java.nio.file.Path
 import java.time.Instant
 
-import cats.effect.IO
 import cats.effect.std.SecureRandom
+import cats.effect.{IO, Resource}
 import org.http4s.implicits.*
 import org.http4s.{Header, HttpApp as Http4sApp, Method, Request, Status}
 import org.typelevel.ci.CIString
@@ -27,11 +26,11 @@ final class AuthHttpRoutesSpec extends MomoCatsEffectSuite:
     stateSigningKey = Some("state-signing-key"),
     callbackRedirectPath = "/fallback",
   )
-  private val config = AppConfig(
+  private def configFor(imageTmpDir: java.nio.file.Path) = AppConfig(
     appEnv = AppEnv.Test,
     httpHost = "127.0.0.1",
     httpPort = 0,
-    imageTmpDir = Path.of("/tmp/momo-result-auth-routes-test"),
+    imageTmpDir = imageTmpDir,
     devMemberIds = Nil,
     auth = authConfig,
   )
@@ -47,7 +46,7 @@ final class AuthHttpRoutesSpec extends MomoCatsEffectSuite:
   )
 
   test("OAuth callback redirects to the signed safe next path after successful login") {
-    authApp.flatMap { app =>
+    authApp.use { app =>
       val loginRequest = Request[IO](
         Method.GET,
         uri"/api/auth/login".withQueryParam("silent", "1")
@@ -73,22 +72,24 @@ final class AuthHttpRoutesSpec extends MomoCatsEffectSuite:
     }
   }
 
-  private def authApp: IO[Http4sApp[IO]] = SecureRandom.javaSecuritySecureRandom[IO]
-    .flatMap { random =>
-      given SecureRandom[IO] = random
-      for
-        sessionsRepo <- InMemoryAppSessionsRepository.create[IO]
-        accounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
-        limiter <- LoginRateLimiter.create[IO](10, IO.pure(now))
-        sessions = SessionService[IO](sessionsRepo, accounts, authConfig, IO.pure(now))
-        stateCodec = OAuthStateCodec[IO](authConfig, IO.pure(now))
-      yield AuthHttpRoutes.routes[IO](
-        config = config,
-        oauth = SuccessfulDiscordOAuthClient(account.discordUserId.value),
-        stateCodec = stateCodec,
-        sessions = sessions,
-        csrf = CsrfTokenService(),
-        accounts = accounts,
-        rateLimiter = limiter,
-      ).orNotFound
+  private def authApp: Resource[IO, Http4sApp[IO]] = tempDirectory("momo-result-auth-routes-test")
+    .evalMap { imageTmpDir =>
+      SecureRandom.javaSecuritySecureRandom[IO].flatMap { random =>
+        given SecureRandom[IO] = random
+        for
+          sessionsRepo <- InMemoryAppSessionsRepository.create[IO]
+          accounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
+          limiter <- LoginRateLimiter.create[IO](10, IO.pure(now))
+          sessions = SessionService[IO](sessionsRepo, accounts, authConfig, IO.pure(now))
+          stateCodec = OAuthStateCodec[IO](authConfig, IO.pure(now))
+        yield AuthHttpRoutes.routes[IO](
+          config = configFor(imageTmpDir),
+          oauth = SuccessfulDiscordOAuthClient(account.discordUserId.value),
+          stateCodec = stateCodec,
+          sessions = sessions,
+          csrf = CsrfTokenService(),
+          accounts = accounts,
+          rateLimiter = limiter,
+        ).orNotFound
+      }
     }

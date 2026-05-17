@@ -56,11 +56,20 @@ final class ApiTestArchitectureSpec extends FunSuite:
 
   test("Redis Testcontainer specs are explicitly tagged for the Redis gate"):
     val violations = scalaFiles(testRoot).filterNot(path => path.startsWith(redisIntegrationRoot))
-      .filterNot(path => path.getFileName.toString == "ApiTestArchitectureSpec.scala")
-      .flatMap { path =>
+      .filterNot(isArchitectureSpec).flatMap { path =>
         val text = read(path)
         val usesRedisContainer = text.contains("GenericContainer") && text.contains("redis:7")
         if usesRedisContainer then Some(path.toString) else None
+      }.sorted
+
+    assertEquals(violations, Nil)
+
+  test("Testcontainers are limited to integration suites"):
+    val forbiddenPatterns = List("org.testcontainers", "GenericContainer", "PostgreSQLContainer")
+    val violations = scalaFiles(testRoot).filterNot(path => path.startsWith(integrationRoot))
+      .filterNot(isArchitectureSpec).flatMap { path =>
+        val text = read(path)
+        forbiddenPatterns.filter(text.contains).map(pattern => s"$path: $pattern")
       }.sorted
 
     assertEquals(violations, Nil)
@@ -74,6 +83,16 @@ final class ApiTestArchitectureSpec extends FunSuite:
     assert(text.contains("momo.api.integration.DbContractSpec"))
     assert(text.contains("testOnly momo.api.integration.redis.*"))
     assert(!text.contains("--include-tags=Integration\","))
+
+  test("normal API tests stay parallel while external-service gates stay isolated"):
+    val text = read(buildFile)
+
+    assert(text.contains("Test / parallelExecution := true"))
+    assert(text.contains("Test / fork := false"))
+    assert(text.contains("--exclude-tags=Integration"))
+    assert(text.contains("set Test / fork := true;"))
+    assert(text.contains("set Test / parallelExecution := false;"))
+    assert(text.contains("set Test / testOptions := Seq();"))
 
   test("API coverage gate is explicit and C2 policy is documented"):
     val buildText = read(buildFile)
@@ -114,11 +133,28 @@ final class ApiTestArchitectureSpec extends FunSuite:
 
     assertEquals(violations, Nil)
 
+  test("lower-level API tests avoid wall-clock waits and shared writable temp config"):
+    val forbiddenPatterns =
+      List("Thread.sleep", "IO.sleep", "System.currentTimeMillis", "Instant.now(", "LocalDate.now(")
+    val hardcodedWritableTempPatterns =
+      List("imageTmpDir = Path.of(\"/tmp", "imageTmpDir = Paths.get(\"/tmp")
+    val violations = scalaFiles(testRoot).filterNot(path => path.startsWith(integrationRoot))
+      .filterNot(isArchitectureSpec).flatMap { path =>
+        val text = read(path)
+        forbiddenPatterns.filter(text.contains).map(pattern => s"$path: $pattern") ++
+          hardcodedWritableTempPatterns.filter(text.contains).map(pattern => s"$path: $pattern")
+      }.sorted
+
+    assertEquals(violations, Nil)
+
   private def scalaFiles(root: Path): List[Path] =
     val stream = Files.walk(root)
     try stream.iterator.asScala
         .filter(path => Files.isRegularFile(path) && path.toString.endsWith(".scala")).toList
     finally stream.close()
+
+  private def isArchitectureSpec(path: Path): Boolean = path.getFileName.toString ==
+    "ApiTestArchitectureSpec.scala"
 
   private def read(path: Path): String = Files.readString(path, StandardCharsets.UTF_8)
 end ApiTestArchitectureSpec

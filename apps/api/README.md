@@ -57,6 +57,8 @@ Repository adapter のうち本番 adapter と in-memory adapter の両方を持
 
 Usecase / domain / HTTP 境界は in-memory repository と実 DTO/codec を使う Detroit 寄りのテストを基本にします。外部副作用、失敗注入、ログ観測、固定時刻など London 寄りの確認が必要な場合は `momo.api.testing.TestDoubles` の typed double を使い、spec 内で副作用付き匿名 double を量産しません。
 
+通常の `sbt test` は並列実行されるため、各テストは実行順に依存しない前提で書きます。外部サービス、固定 writable `/tmp`、module-scope mutable state、実時間 sleep / wall clock は通常テストに持ち込まず、一時ディレクトリは `MomoCatsEffectSuite.tempDirectory`、DB/Redis wire 動作は `apiDbQuality` / `apiRedisQuality` に分離します。
+
 ### コーディング規約（lint / scalac で強制）
 
 - Scala 3 新構文へ自動変換（`rewrite.scala3.convertToNewSyntax`）

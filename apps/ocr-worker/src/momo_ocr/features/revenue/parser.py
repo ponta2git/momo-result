@@ -19,6 +19,7 @@ _REVENUE_SPEC = RankedAmountScreenSpec(
     parse_amount=parse_man_yen,
     amount_field="revenue_man_yen",
     amount_warning_message=lambda rank: f"Could not read revenue for rank {rank}.",
+    warn_duplicate_members=True,
 )
 
 

@@ -60,6 +60,7 @@ class RankedAmountScreenSpec:
     parse_amount: Callable[[str], int | None]
     amount_field: AmountFieldName
     amount_warning_message: Callable[[int], str]
+    warn_duplicate_members: bool = False
 
 
 def parse_ranked_amount_screen(
@@ -133,6 +134,8 @@ def parse_ranked_amount_screen(
         )
 
     players = apply_player_order_to_ranked_players(players, context.player_order_detection)
+    if spec.warn_duplicate_members:
+        warnings.extend(_duplicate_member_warnings(players, parser_name=spec.parser_name))
     return OcrDraftPayload(
         requested_screen_type=context.requested_screen_type,
         detected_screen_type=context.detected_screen_type,
@@ -148,6 +151,33 @@ def parse_ranked_amount_screen(
         warnings=warnings,
         raw_snippets=raw_snippets if context.include_raw_text else None,
     )
+
+
+def _duplicate_member_warnings(
+    players: Sequence[PlayerResultDraft],
+    *,
+    parser_name: str,
+) -> list[OcrWarning]:
+    warnings: list[OcrWarning] = []
+    first_index_by_member: dict[str, int] = {}
+    for index, player in enumerate(players):
+        if player.member_id is None:
+            continue
+        previous_index = first_index_by_member.get(player.member_id)
+        if previous_index is None:
+            first_index_by_member[player.member_id] = index
+            continue
+        warnings.append(
+            OcrWarning(
+                code=WarningCode.DUPLICATE_MEMBER_ALIAS,
+                message=(
+                    f"Multiple {parser_name} OCR rows resolved to the same member; "
+                    f"first row index {previous_index} will be used for review."
+                ),
+                field_path=f"players[{index}].member_id",
+            )
+        )
+    return warnings
 
 
 def _row_warnings(

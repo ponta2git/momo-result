@@ -6,6 +6,7 @@ from pathlib import Path
 
 from PIL import Image
 
+from momo_ocr.features.image_processing.preprocessing import MIN_RELIABLE_HEIGHT, MIN_RELIABLE_WIDTH
 from momo_ocr.features.standalone_analysis.batch_calibration import (
     HOLDOUT_DIRECTORY_NAME,
     analyze_directory,
@@ -15,7 +16,9 @@ from momo_ocr.features.text_recognition.engine import FakeTextRecognitionEngine
 
 def _write_image(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    Image.new("RGB", (1280, 720), color="white").save(path, format="JPEG")
+    Image.new("RGB", (MIN_RELIABLE_WIDTH, MIN_RELIABLE_HEIGHT), color="white").save(
+        path, format="JPEG"
+    )
 
 
 def _setup_input(tmp_path: Path) -> Path:

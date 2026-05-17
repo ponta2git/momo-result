@@ -109,8 +109,8 @@ class InMemoryOcrJobConsumer:
 class RedisOcrJobConsumer:
     """Redis Streams-backed OCR job consumer.
 
-    Invalid queue messages are acknowledged and dropped inside ``pull`` so the
-    worker does not enter an infinite redelivery loop for malformed payloads.
+    Invalid queue messages are surfaced as :class:`MalformedPulledJob` so the
+    runner can persist a terminal failure before acknowledging the delivery.
     """
 
     def __init__(

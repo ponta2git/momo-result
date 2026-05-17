@@ -6,10 +6,11 @@ from typing import TYPE_CHECKING
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from psycopg_pool import ConnectionPool
+from redis import Redis
 
 from momo_ocr.app.config import WorkerConfig, require_production_config
 from momo_ocr.features.ocr_jobs.cancellation import RepositoryCancellationChecker
-from momo_ocr.features.ocr_jobs.consumer import RedisOcrJobConsumer
+from momo_ocr.features.ocr_jobs.consumer import RedisConsumerRetryConfig, RedisOcrJobConsumer
 from momo_ocr.features.ocr_jobs.repository import PostgresOcrJobRepository
 from momo_ocr.features.text_recognition.factory import default_text_recognition_engine
 
@@ -21,7 +22,33 @@ logger = logging.getLogger(__name__)
 
 
 def redis_consumer_from_config(config: WorkerConfig) -> RedisOcrJobConsumer:
-    return RedisOcrJobConsumer.from_config(config)
+    if config.redis_url is None:
+        msg = "REDIS_URL is required to create RedisOcrJobConsumer."
+        raise ValueError(msg)
+    # health_check_interval forces redis-py to PING idle connections so
+    # silently-dropped TCP sessions (Fly.io <-> Upstash NAT timeouts, ~5min)
+    # surface as a fast reconnect instead of hanging the next blocking
+    # XREADGROUP. socket_keepalive nudges the kernel to do the same at the TCP
+    # layer; defaults to off otherwise. We deliberately do not set
+    # socket_timeout: XREADGROUP block_ms (1s) is the upper bound for any
+    # single call, so adding a socket-level timeout would only fight the loop.
+    client = Redis.from_url(
+        config.redis_url,
+        decode_responses=True,
+        health_check_interval=30,
+        socket_keepalive=True,
+    )
+    return RedisOcrJobConsumer(
+        client,
+        stream=config.redis_stream,
+        group=config.redis_group,
+        consumer_name=config.worker_id,
+        retry_config=RedisConsumerRetryConfig(
+            max_attempts=config.max_attempts,
+            dead_letter_stream=config.redis_dead_letter_stream,
+            claim_idle_ms=config.ocr_timeout_seconds * 1000,
+        ),
+    )
 
 
 # Pool sizing: a single worker process serializes job processing, so 1 active

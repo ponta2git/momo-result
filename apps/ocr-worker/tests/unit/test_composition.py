@@ -6,10 +6,13 @@ from typing import cast
 import pytest
 from psycopg_pool import ConnectionPool
 
+from momo_ocr.app import composition as composition_module
 from momo_ocr.app.composition import (
     WorkerRuntime,
     _with_sslmode_require,
+    redis_consumer_from_config,
 )
+from momo_ocr.app.config import WorkerConfig
 from momo_ocr.features.ocr_jobs.runner import JobRunnerDependencies
 from momo_ocr.features.text_recognition.factory import text_recognition_engine_from_env
 from momo_ocr.features.text_recognition.tesseract import TesseractEngine
@@ -58,6 +61,37 @@ def test_text_recognition_engine_unknown_value_raises() -> None:
     with pytest.raises(OcrError) as excinfo:
         text_recognition_engine_from_env("paddleocr")
     assert excinfo.value.code is FailureCode.OCR_ENGINE_UNAVAILABLE
+
+
+def test_redis_consumer_from_config_enables_health_check_and_keepalive(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Composition root wires Redis keepalive + periodic PING.
+
+    Fly.io <-> Upstash NAT silently drops idle TCP sessions, which would
+    otherwise leave ``XREADGROUP`` blocking forever on the dead socket.
+    """
+    captured: dict[str, object] = {}
+
+    class _StubRedis:
+        @classmethod
+        def from_url(cls, url: str, **kwargs: object) -> _StubRedis:
+            captured["url"] = url
+            captured.update(kwargs)
+            return cls()
+
+        def xgroup_create(self, **_kwargs: object) -> None:
+            pass
+
+    monkeypatch.setattr(composition_module, "Redis", _StubRedis)
+
+    config = WorkerConfig(redis_url="redis://example:6379/0", worker_id="w-1")
+    redis_consumer_from_config(config)
+
+    assert captured["url"] == "redis://example:6379/0"
+    assert captured["decode_responses"] is True
+    assert captured["health_check_interval"] == 30
+    assert captured["socket_keepalive"] is True
 
 
 @dataclass

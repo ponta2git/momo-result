@@ -11,7 +11,6 @@ from redis import Redis
 from redis.exceptions import ResponseError
 from redis.typing import EncodableT
 
-from momo_ocr.app.config import WorkerConfig
 from momo_ocr.features.ocr_jobs.models import MalformedPulledJob, OcrQueueDelivery, PulledJob
 from momo_ocr.features.ocr_jobs.queue_contract import parse_job_message
 from momo_ocr.shared.errors import FailureCode, OcrError, OcrFailure
@@ -143,37 +142,6 @@ class RedisOcrJobConsumer:
         self._block_ms = block_ms
         self._retry_config = retry_config
         self._ensure_group()
-
-    @classmethod
-    def from_config(cls, config: WorkerConfig) -> RedisOcrJobConsumer:
-        if config.redis_url is None:
-            msg = "REDIS_URL is required to create RedisOcrJobConsumer."
-            raise ValueError(msg)
-        # health_check_interval forces redis-py to PING idle connections so
-        # silently-dropped TCP sessions (Fly.io <-> Upstash NAT timeouts,
-        # ~5min) surface as a fast reconnect instead of hanging the next
-        # blocking XREADGROUP. socket_keepalive nudges the kernel to do the
-        # same at the TCP layer; defaults to off otherwise. We deliberately
-        # do not set socket_timeout: XREADGROUP block_ms (1s) is the upper
-        # bound for any single call, so adding a socket-level timeout would
-        # only fight with that loop.
-        client = Redis.from_url(
-            config.redis_url,
-            decode_responses=True,
-            health_check_interval=30,
-            socket_keepalive=True,
-        )
-        return cls(
-            client,
-            stream=config.redis_stream,
-            group=config.redis_group,
-            consumer_name=config.worker_id,
-            retry_config=RedisConsumerRetryConfig(
-                max_attempts=config.max_attempts,
-                dead_letter_stream=config.redis_dead_letter_stream,
-                claim_idle_ms=config.ocr_timeout_seconds * 1000,
-            ),
-        )
 
     def pull(self) -> OcrQueueDelivery | None:
         pending = self._claim_pending_delivery()

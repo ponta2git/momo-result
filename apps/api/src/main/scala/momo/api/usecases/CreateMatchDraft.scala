@@ -42,6 +42,7 @@ final class CreateMatchDraft[F[_]: MonadThrow](
       playerMemberId: Option[MemberId],
   ): F[Either[AppError, MatchDraft]] = (for
     matchNoInEvent <- EitherT.fromEither[F](validateMatchNo(command.matchNoInEvent))
+    status <- EitherT.fromEither[F](validateInitialStatus(command.status))
     _ <- validateForeignKeys(command)
     id <- EitherT.liftF(nextId)
     at <- EitherT.liftF(now)
@@ -50,7 +51,7 @@ final class CreateMatchDraft[F[_]: MonadThrow](
         id = MatchDraftId.unsafeFromString(id),
         createdByAccountId = createdBy,
         createdByMemberId = playerMemberId,
-        status = command.status.getOrElse(MatchDraftStatus.DraftReady),
+        status = status,
         heldEventId = command.heldEventId,
         matchNoInEvent = matchNoInEvent,
         gameTitleId = command.gameTitleId,
@@ -80,6 +81,16 @@ final class CreateMatchDraft[F[_]: MonadThrow](
   ): Either[AppError, Option[MatchNoInEvent]] = matchNoInEvent.traverse(value =>
     MatchNoInEvent.fromInt(value).left.map(err => AppError.ValidationFailed(err.message))
   )
+
+  private def validateInitialStatus(
+      status: Option[MatchDraftStatus]
+  ): Either[AppError, MatchDraftStatus] =
+    val resolved = status.getOrElse(MatchDraftStatus.DraftReady)
+    Either.cond(
+      MatchDraftStatus.nonTerminalStatuses.contains(resolved),
+      resolved,
+      AppError.ValidationFailed(s"status ${resolved.wire} cannot be set when creating a draft."),
+    )
 
   private def validateForeignKeys(command: CreateMatchDraftCommand): EitherT[F, AppError, Unit] =
     MatchDraftForeignKeyValidation.validate(heldEvents, gameTitles, mapMasters, seasonMasters)(

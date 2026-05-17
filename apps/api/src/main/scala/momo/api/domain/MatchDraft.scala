@@ -13,6 +13,19 @@ enum MatchDraftStatus(val wire: String) derives CanEqual:
   case Cancelled extends MatchDraftStatus("cancelled")
 
 object MatchDraftStatus:
+  val terminalStatuses: Set[MatchDraftStatus] =
+    Set(MatchDraftStatus.Confirmed, MatchDraftStatus.Cancelled)
+
+  val nonTerminalStatuses: Set[MatchDraftStatus] = Set(
+    MatchDraftStatus.OcrRunning,
+    MatchDraftStatus.OcrFailed,
+    MatchDraftStatus.DraftReady,
+    MatchDraftStatus.NeedsReview,
+  )
+
+  val userEditableStatuses: Set[MatchDraftStatus] =
+    Set(MatchDraftStatus.OcrFailed, MatchDraftStatus.DraftReady, MatchDraftStatus.NeedsReview)
+
   def fromWire(value: String): Option[MatchDraftStatus] = values.find(_.wire == value)
 
 final case class MatchDraftOcrSlot(jobStatus: Option[OcrJobStatus], hasWarnings: Boolean)

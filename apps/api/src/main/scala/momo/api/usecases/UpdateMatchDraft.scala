@@ -36,9 +36,6 @@ final class UpdateMatchDraft[F[_]: MonadThrow](
     matchDrafts: MatchDraftsRepository[F],
     now: F[Instant],
 ):
-  private val editableStatuses =
-    Set(MatchDraftStatus.DraftReady, MatchDraftStatus.NeedsReview, MatchDraftStatus.OcrFailed)
-
   def run(
       draftId: MatchDraftId,
       command: UpdateMatchDraftCommand,
@@ -82,7 +79,7 @@ final class UpdateMatchDraft[F[_]: MonadThrow](
     )
 
   private def ensureEditable(status: MatchDraftStatus): Either[AppError, Unit] = Either.cond(
-    editableStatuses.contains(status),
+    MatchDraftStatus.userEditableStatuses.contains(status),
     (),
     AppError.Conflict(s"match draft in status=${status.wire} cannot be edited."),
   )
@@ -100,7 +97,7 @@ final class UpdateMatchDraft[F[_]: MonadThrow](
     case None => Right(current)
     case Some(value) => MatchDraftStatus.fromWire(value)
         .toRight(AppError.ValidationFailed(s"unknown match draft status: $value")).flatMap { parsed =>
-          if editableStatuses.contains(parsed) then Right(parsed)
+          if MatchDraftStatus.userEditableStatuses.contains(parsed) then Right(parsed)
           else Left(AppError.Conflict(s"status ${parsed.wire} cannot be set from this endpoint."))
         }
 

@@ -130,6 +130,14 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
     yield ()
   }
 
+  app.test("POST /api/match-drafts rejects terminal initial statuses") { httpApp =>
+    val req = Request[IO](Method.POST, uri"/api/match-drafts").putHeaders(devWriteHeaders()*)
+      .withEntity(Json.obj("status" -> Json.fromString("cancelled")))
+    httpApp.run(req).flatMap { res =>
+      assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "status")
+    }
+  }
+
   app.test("GET /api/ocr-drafts bulk rejects empty ids") { httpApp =>
     httpApp.run(Request[IO](Method.GET, uri"/api/ocr-drafts?ids=").putHeaders(devReadHeader()))
       .flatMap(res => assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "ids"))

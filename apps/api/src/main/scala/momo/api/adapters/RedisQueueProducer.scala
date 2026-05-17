@@ -25,9 +25,13 @@ object RedisQueueProducer:
   def apply[F[_]](stream: String, client: RedisStreamClient[F]): RedisQueueProducer[F] =
     new RedisQueueProducer(stream, client)
 
+  def fromCommands[F[_]: Functor](
+      stream: String,
+      commands: RedisCommands[F, String, String],
+  ): RedisQueueProducer[F] = RedisQueueProducer(stream, Redis4CatsStreamClient(commands))
+
   def resource[F[_]: Async](config: RedisConfig): Resource[F, RedisQueueProducer[F]] = Redis[F]
-    .simple(config.url, RedisCodec.Utf8)
-    .map(commands => RedisQueueProducer(config.stream, Redis4CatsStreamClient(commands)))
+    .simple(config.url, RedisCodec.Utf8).map(commands => fromCommands(config.stream, commands))
 
 private final class Redis4CatsStreamClient[F[_]: Functor](
     commands: RedisCommands[F, String, String]

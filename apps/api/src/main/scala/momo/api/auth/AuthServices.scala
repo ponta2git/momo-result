@@ -340,13 +340,20 @@ final class RedisRateLimiter[F[_]: Sync] private (
     yield count <= maxPerMinute.toLong
 
 object RedisRateLimiter:
+  def fromCommands[F[_]: Sync](
+      commands: RedisCommands[F, String, String],
+      namespace: String,
+      maxPerMinute: Int,
+      now: F[Instant],
+  ): RedisRateLimiter[F] = RedisRateLimiter(commands, namespace, maxPerMinute, now)
+
   def resource[F[_]: Async](
       config: RedisConfig,
       namespace: String,
       maxPerMinute: Int,
       now: F[Instant],
   ): Resource[F, RedisRateLimiter[F]] = Redis[F].simple(config.url, RedisCodec.Utf8)
-    .map(commands => RedisRateLimiter(commands, namespace, maxPerMinute, now))
+    .map(commands => fromCommands(commands, namespace, maxPerMinute, now))
 
 object SecureTokenGenerator:
   def token[F[_]: Functor: SecureRandom](byteLength: Int): F[String] = SecureRandom[F]

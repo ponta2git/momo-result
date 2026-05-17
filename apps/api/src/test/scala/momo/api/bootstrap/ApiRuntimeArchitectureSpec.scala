@@ -18,5 +18,14 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
     assert(databaseText.contains("ExecutionContexts.fixedThreadPool[F](config.poolSize)"))
     assert(databaseText.contains("connectEC = connectExecutionContext"))
 
+  test("API runtime shares one Redis client across queue and rate limiters"):
+    val apiAppText = read(apiAppFile)
+
+    assert(apiAppText.contains("Redis[F].simple(redis.url, RedisCodec.Utf8).map"))
+    assert(apiAppText.contains("RedisQueueProducer.fromCommands(redis.stream, commands)"))
+    assert(apiAppText.contains(".fromCommands(commands, \"login\""))
+    assert(!apiAppText.contains("RedisQueueProducer.resource[F](redis)"))
+    assert(!apiAppText.contains("RedisRateLimiter.resource[F](redis"))
+
   private def read(path: Path): String = Files.readString(path, StandardCharsets.UTF_8)
 end ApiRuntimeArchitectureSpec

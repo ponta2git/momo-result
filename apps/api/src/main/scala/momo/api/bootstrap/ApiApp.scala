@@ -3,6 +3,9 @@ package momo.api.bootstrap
 import cats.effect.std.SecureRandom
 import cats.effect.{Async, Clock, Resource}
 import cats.syntax.all.*
+import dev.profunktor.redis4cats.Redis
+import dev.profunktor.redis4cats.data.RedisCodec
+import dev.profunktor.redis4cats.effect.Log.NoOp.*
 import org.http4s.HttpApp as Http4sApp
 import org.typelevel.log4cats.LoggerFactory
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -61,6 +64,12 @@ object ApiApp:
       createSession: LoginAccount => F[CreatedSession],
   )
 
+  private final case class RuntimeInfrastructure[F[_]](
+      queue: QueueProducer[F],
+      loginRateLimiter: RateLimiter[F],
+      rateLimiters: HttpRateLimiters[F],
+  )
+
   def resource[F[_]: Async](config: AppConfig): Resource[F, Http4sApp[F]] = wired[F](config)
     .map(_.app)
 
@@ -78,189 +87,194 @@ object ApiApp:
       config: AppConfig,
       oauthClient: DiscordOAuthClient[F],
   ): Resource[F, Runtime[F]] = config.database match
-    case Some(db) => (Database.transactor[F](db), queueResource[F](config)).tupled
-        .flatMap { (transactor, queue) =>
-          given LoggerFactory[F] = Slf4jFactory.create[F]
-          val jobs: OcrJobsRepository[F] = PostgresOcrJobsRepository[F](transactor)
-          val drafts: OcrDraftsRepository[F] = PostgresOcrDraftsRepository[F](transactor)
-          val ocrJobCreation: OcrJobCreationRepository[F] =
-            PostgresOcrJobCreationRepository[F](transactor)
-          val ocrQueueOutbox = PostgresOcrQueueOutboxRepository[F](transactor)
-          val heldEvents: HeldEventsRepository[F] = PostgresHeldEventsRepository[F](transactor)
-          val heldEventDeletion: HeldEventDeletionRepository[F] =
-            PostgresHeldEventDeletionRepository[F](transactor)
-          val matches: MatchesRepository[F] = PostgresMatchesRepository[F](transactor)
-          val matchDrafts: MatchDraftsRepository[F] = PostgresMatchDraftsRepository[F](transactor)
-          val matchList: MatchListReadModel[F] = PostgresMatchListReadModel[F](transactor)
-          val matchConfirmation: MatchConfirmationRepository[F] =
-            PostgresMatchConfirmationRepository[F](transactor)
-          val appSessions: AppSessionsRepository[F] = PostgresAppSessionsRepository[F](transactor)
-          val members: MembersRepository[F] = PostgresMembersRepository[F](transactor)
-          val loginAccounts: LoginAccountsRepository[F] =
-            PostgresLoginAccountsRepository[F](transactor)
-          val gameTitles: GameTitlesRepository[F] = PostgresGameTitlesRepository[F](transactor)
-          val mapMasters: MapMastersRepository[F] = PostgresMapMastersRepository[F](transactor)
-          val seasonMasters: SeasonMastersRepository[F] =
-            PostgresSeasonMastersRepository[F](transactor)
-          val incidentMasters: IncidentMastersRepository[F] =
-            PostgresIncidentMastersRepository[F](transactor)
-          val memberAliases: MemberAliasesRepository[F] =
-            PostgresMemberAliasesRepository[F](transactor)
-          val idempotency: IdempotencyRepository[F] = PostgresIdempotencyRepository[F](transactor)
-          val imageStore = LocalFsImageStore[F](config.imageTmpDir)
-          val imageReferences: ImageReferenceRepository[F] =
-            PostgresImageReferenceRepository[F](transactor)
-          val ocrMaintenance: OcrJobMaintenanceRepository[F] =
-            PostgresOcrJobMaintenanceRepository[F](transactor)
-          val health =
-            healthDetails[F](Some(Database.ping[F](transactor)), config.redis.map(_ => queue.ping))
-          OcrQueueOutboxDispatcher.resource[F](ocrQueueOutbox, queue).flatMap { _ =>
-            runtimeMaintenance(
+    case Some(db) => (
+        Database.transactor[F](db),
+        runtimeInfrastructureResource[F](config, Clock[F].realTimeInstant),
+      ).tupled.flatMap { (transactor, infrastructure) =>
+        given LoggerFactory[F] = Slf4jFactory.create[F]
+        val queue = infrastructure.queue
+        val jobs: OcrJobsRepository[F] = PostgresOcrJobsRepository[F](transactor)
+        val drafts: OcrDraftsRepository[F] = PostgresOcrDraftsRepository[F](transactor)
+        val ocrJobCreation: OcrJobCreationRepository[F] =
+          PostgresOcrJobCreationRepository[F](transactor)
+        val ocrQueueOutbox = PostgresOcrQueueOutboxRepository[F](transactor)
+        val heldEvents: HeldEventsRepository[F] = PostgresHeldEventsRepository[F](transactor)
+        val heldEventDeletion: HeldEventDeletionRepository[F] =
+          PostgresHeldEventDeletionRepository[F](transactor)
+        val matches: MatchesRepository[F] = PostgresMatchesRepository[F](transactor)
+        val matchDrafts: MatchDraftsRepository[F] = PostgresMatchDraftsRepository[F](transactor)
+        val matchList: MatchListReadModel[F] = PostgresMatchListReadModel[F](transactor)
+        val matchConfirmation: MatchConfirmationRepository[F] =
+          PostgresMatchConfirmationRepository[F](transactor)
+        val appSessions: AppSessionsRepository[F] = PostgresAppSessionsRepository[F](transactor)
+        val members: MembersRepository[F] = PostgresMembersRepository[F](transactor)
+        val loginAccounts: LoginAccountsRepository[F] =
+          PostgresLoginAccountsRepository[F](transactor)
+        val gameTitles: GameTitlesRepository[F] = PostgresGameTitlesRepository[F](transactor)
+        val mapMasters: MapMastersRepository[F] = PostgresMapMastersRepository[F](transactor)
+        val seasonMasters: SeasonMastersRepository[F] =
+          PostgresSeasonMastersRepository[F](transactor)
+        val incidentMasters: IncidentMastersRepository[F] =
+          PostgresIncidentMastersRepository[F](transactor)
+        val memberAliases: MemberAliasesRepository[F] =
+          PostgresMemberAliasesRepository[F](transactor)
+        val idempotency: IdempotencyRepository[F] = PostgresIdempotencyRepository[F](transactor)
+        val imageStore = LocalFsImageStore[F](config.imageTmpDir)
+        val imageReferences: ImageReferenceRepository[F] =
+          PostgresImageReferenceRepository[F](transactor)
+        val ocrMaintenance: OcrJobMaintenanceRepository[F] =
+          PostgresOcrJobMaintenanceRepository[F](transactor)
+        val health =
+          healthDetails[F](Some(Database.ping[F](transactor)), config.redis.map(_ => queue.ping))
+        OcrQueueOutboxDispatcher.resource[F](ocrQueueOutbox, queue).flatMap { _ =>
+          runtimeMaintenance(
+            config = config,
+            imageStore = imageStore,
+            imageReferences = imageReferences,
+            ocrMaintenance = ocrMaintenance,
+            appSessions = appSessions,
+            idempotency = idempotency,
+            now = Clock[F].realTimeInstant,
+          ).evalMap { _ =>
+            assemble(
               config = config,
               imageStore = imageStore,
-              imageReferences = imageReferences,
-              ocrMaintenance = ocrMaintenance,
+              healthDetails = health,
+              ocrQueueSubmitter = OcrQueueSubmitter.deferred[F],
+              ocrJobCreation = ocrJobCreation,
+              jobs = jobs,
+              drafts = drafts,
+              heldEvents = heldEvents,
+              heldEventDeletion = heldEventDeletion,
+              matches = matches,
+              matchDrafts = matchDrafts,
+              matchList = matchList,
+              matchConfirmation = matchConfirmation,
               appSessions = appSessions,
+              members = members,
+              loginAccounts = loginAccounts,
+              gameTitles = gameTitles,
+              mapMasters = mapMasters,
+              seasonMasters = seasonMasters,
+              incidentMasters = incidentMasters,
+              memberAliases = memberAliases,
               idempotency = idempotency,
-              now = Clock[F].realTimeInstant,
-            ).flatMap(_ => rateLimitersResource[F](config, Clock[F].realTimeInstant)).evalMap {
-              case (loginRateLimiter, rateLimiters) => assemble(
-                  config = config,
-                  imageStore = imageStore,
-                  healthDetails = health,
-                  ocrQueueSubmitter = OcrQueueSubmitter.deferred[F],
-                  ocrJobCreation = ocrJobCreation,
-                  jobs = jobs,
-                  drafts = drafts,
-                  heldEvents = heldEvents,
-                  heldEventDeletion = heldEventDeletion,
-                  matches = matches,
-                  matchDrafts = matchDrafts,
-                  matchList = matchList,
-                  matchConfirmation = matchConfirmation,
-                  appSessions = appSessions,
-                  members = members,
-                  loginAccounts = loginAccounts,
-                  gameTitles = gameTitles,
-                  mapMasters = mapMasters,
-                  seasonMasters = seasonMasters,
-                  incidentMasters = incidentMasters,
-                  memberAliases = memberAliases,
-                  idempotency = idempotency,
-                  oauthClient = oauthClient,
-                  loginRateLimiter = loginRateLimiter,
-                  rateLimiters = rateLimiters,
-                )
-            }
+              oauthClient = oauthClient,
+              loginRateLimiter = infrastructure.loginRateLimiter,
+              rateLimiters = infrastructure.rateLimiters,
+            )
           }
         }
-    case None => queueResource[F](config).flatMap { queue =>
-        given LoggerFactory[F] = Slf4jFactory.create[F]
-        Resource.eval(
-          for
-            matchDrafts <- InMemoryMatchDraftsRepository.create[F]
-            jobs <- InMemoryOcrJobsRepository.createWithDraftCancelSync[F](matchDrafts)
-            drafts <- InMemoryOcrDraftsRepository.create[F]
-            heldEvents <- InMemoryHeldEventsRepository.create[F]
-            matches <- InMemoryMatchesRepository.create[F]
-            matchList = InMemoryMatchListReadModel[F](
-              matches,
-              matchDrafts,
-              ocrJobs = Some(jobs),
-              ocrDrafts = Some(drafts),
-            )
-            matchConfirmation = InMemoryMatchConfirmationRepository[F](matches, matchDrafts)
-            heldEventDeletion =
-              InMemoryHeldEventDeletionRepository[F](heldEvents, matches, matchDrafts)
-            appSessions <- InMemoryAppSessionsRepository.create[F]
-            members <- InMemoryMembersRepository.create[F](config.devMemberIds.map(id =>
-              Member(
-                MemberId.unsafeFromString(id),
-                UserId.unsafeFromString(id),
-                id,
-                java.time.Instant.EPOCH,
-              )
-            ))
-            loginAccounts <- InMemoryLoginAccountsRepository
-              .create[F](config.devMemberIds.zipWithIndex.map { (id, index) =>
-                LoginAccount(
-                  MemberRoster.devAccountIdFor(id),
-                  UserId.unsafeFromString(id),
-                  id,
-                  Some(MemberId.unsafeFromString(id)),
-                  loginEnabled = true,
-                  isAdmin = index == 0,
-                  createdAt = java.time.Instant.EPOCH,
-                  updatedAt = java.time.Instant.EPOCH,
-                )
-              })
-            gameTitles <- InMemoryGameTitlesRepository.create[F]
-            mapMasters <- InMemoryMapMastersRepository.create[F]
-            seasonMasters <- InMemorySeasonMastersRepository.create[F]
-            incidentMasters <- InMemoryIncidentMastersRepository.create[F]
-            memberAliases <- InMemoryMemberAliasesRepository.create[F]
-            idempotency <- InMemoryIdempotencyRepository.create[F]
-            ocrJobCreation = InMemoryOcrJobCreationRepository[F](drafts, jobs, matchDrafts)
-            ocrQueueSubmitter = OcrQueueSubmitter.direct[F](jobs, matchDrafts, queue)
-          yield (
-            jobs,
-            drafts,
-            heldEvents,
-            matches,
-            matchDrafts,
-            heldEventDeletion,
-            matchList,
-            matchConfirmation,
-            appSessions,
-            members,
-            loginAccounts,
-            gameTitles,
-            mapMasters,
-            seasonMasters,
-            incidentMasters,
-            memberAliases,
-            idempotency,
-            ocrJobCreation,
-            ocrQueueSubmitter,
-          )
-        ).flatMap {
-          case (
-                jobs,
-                drafts,
-                heldEvents,
+      }
+    case None => runtimeInfrastructureResource[F](config, Clock[F].realTimeInstant)
+        .flatMap { infrastructure =>
+          val queue = infrastructure.queue
+          given LoggerFactory[F] = Slf4jFactory.create[F]
+          Resource.eval(
+            for
+              matchDrafts <- InMemoryMatchDraftsRepository.create[F]
+              jobs <- InMemoryOcrJobsRepository.createWithDraftCancelSync[F](matchDrafts)
+              drafts <- InMemoryOcrDraftsRepository.create[F]
+              heldEvents <- InMemoryHeldEventsRepository.create[F]
+              matches <- InMemoryMatchesRepository.create[F]
+              matchList = InMemoryMatchListReadModel[F](
                 matches,
                 matchDrafts,
-                heldEventDeletion,
-                matchList,
-                matchConfirmation,
-                appSessions,
-                members,
-                loginAccounts,
-                gameTitles,
-                mapMasters,
-                seasonMasters,
-                incidentMasters,
-                memberAliases,
-                idempotency,
-                ocrJobCreation,
-                ocrQueueSubmitter,
-              ) =>
-            val imageStore = LocalFsImageStore[F](config.imageTmpDir)
-            val imageReferences: ImageReferenceRepository[F] =
-              new InMemoryImageReferenceRepository[F]
-            val ocrMaintenance: OcrJobMaintenanceRepository[F] =
-              new InMemoryOcrJobMaintenanceRepository[F]
-            val health = healthDetails[F](None, config.redis.map(_ => queue.ping))
-            runtimeMaintenance(
-              config = config,
-              imageStore = imageStore,
-              imageReferences = imageReferences,
-              ocrMaintenance = ocrMaintenance,
-              appSessions = appSessions,
-              idempotency = idempotency,
-              now = Clock[F].realTimeInstant,
-            ).flatMap(_ => rateLimitersResource[F](config, Clock[F].realTimeInstant)).evalMap {
-              case (loginRateLimiter, rateLimiters) => assemble(
+                ocrJobs = Some(jobs),
+                ocrDrafts = Some(drafts),
+              )
+              matchConfirmation = InMemoryMatchConfirmationRepository[F](matches, matchDrafts)
+              heldEventDeletion =
+                InMemoryHeldEventDeletionRepository[F](heldEvents, matches, matchDrafts)
+              appSessions <- InMemoryAppSessionsRepository.create[F]
+              members <- InMemoryMembersRepository.create[F](config.devMemberIds.map(id =>
+                Member(
+                  MemberId.unsafeFromString(id),
+                  UserId.unsafeFromString(id),
+                  id,
+                  java.time.Instant.EPOCH,
+                )
+              ))
+              loginAccounts <- InMemoryLoginAccountsRepository
+                .create[F](config.devMemberIds.zipWithIndex.map { (id, index) =>
+                  LoginAccount(
+                    MemberRoster.devAccountIdFor(id),
+                    UserId.unsafeFromString(id),
+                    id,
+                    Some(MemberId.unsafeFromString(id)),
+                    loginEnabled = true,
+                    isAdmin = index == 0,
+                    createdAt = java.time.Instant.EPOCH,
+                    updatedAt = java.time.Instant.EPOCH,
+                  )
+                })
+              gameTitles <- InMemoryGameTitlesRepository.create[F]
+              mapMasters <- InMemoryMapMastersRepository.create[F]
+              seasonMasters <- InMemorySeasonMastersRepository.create[F]
+              incidentMasters <- InMemoryIncidentMastersRepository.create[F]
+              memberAliases <- InMemoryMemberAliasesRepository.create[F]
+              idempotency <- InMemoryIdempotencyRepository.create[F]
+              ocrJobCreation = InMemoryOcrJobCreationRepository[F](drafts, jobs, matchDrafts)
+              ocrQueueSubmitter = OcrQueueSubmitter.direct[F](jobs, matchDrafts, queue)
+            yield (
+              jobs,
+              drafts,
+              heldEvents,
+              matches,
+              matchDrafts,
+              heldEventDeletion,
+              matchList,
+              matchConfirmation,
+              appSessions,
+              members,
+              loginAccounts,
+              gameTitles,
+              mapMasters,
+              seasonMasters,
+              incidentMasters,
+              memberAliases,
+              idempotency,
+              ocrJobCreation,
+              ocrQueueSubmitter,
+            )
+          ).flatMap {
+            case (
+                  jobs,
+                  drafts,
+                  heldEvents,
+                  matches,
+                  matchDrafts,
+                  heldEventDeletion,
+                  matchList,
+                  matchConfirmation,
+                  appSessions,
+                  members,
+                  loginAccounts,
+                  gameTitles,
+                  mapMasters,
+                  seasonMasters,
+                  incidentMasters,
+                  memberAliases,
+                  idempotency,
+                  ocrJobCreation,
+                  ocrQueueSubmitter,
+                ) =>
+              val imageStore = LocalFsImageStore[F](config.imageTmpDir)
+              val imageReferences: ImageReferenceRepository[F] =
+                new InMemoryImageReferenceRepository[F]
+              val ocrMaintenance: OcrJobMaintenanceRepository[F] =
+                new InMemoryOcrJobMaintenanceRepository[F]
+              val health = healthDetails[F](None, config.redis.map(_ => queue.ping))
+              runtimeMaintenance(
+                config = config,
+                imageStore = imageStore,
+                imageReferences = imageReferences,
+                ocrMaintenance = ocrMaintenance,
+                appSessions = appSessions,
+                idempotency = idempotency,
+                now = Clock[F].realTimeInstant,
+              ).evalMap { _ =>
+                assemble(
                   config = config,
                   imageStore = imageStore,
                   healthDetails = health,
@@ -284,39 +298,35 @@ object ApiApp:
                   memberAliases = memberAliases,
                   idempotency = idempotency,
                   oauthClient = oauthClient,
-                  loginRateLimiter = loginRateLimiter,
-                  rateLimiters = rateLimiters,
+                  loginRateLimiter = infrastructure.loginRateLimiter,
+                  rateLimiters = infrastructure.rateLimiters,
                 )
-            }
+              }
+          }
         }
-      }
 
-  private def queueResource[F[_]: Async](config: AppConfig): Resource[F, QueueProducer[F]] =
-    config.redis match
-      case Some(redis) => RedisQueueProducer.resource[F](redis).widen
-      case None => Resource.eval(InMemoryQueueProducer.create[F]).widen
-
-  private def rateLimitersResource[F[_]: Async](
+  private def runtimeInfrastructureResource[F[_]: Async](
       config: AppConfig,
       now: F[java.time.Instant],
-  ): Resource[F, (RateLimiter[F], HttpRateLimiters[F])] = config.redis match
-    case Some(redis) => (
-        RedisRateLimiter.resource[F](redis, "login", config.auth.rateLimitPerMinute, now),
-        RedisRateLimiter
-          .resource[F](redis, "upload", config.resourceLimits.uploadRateLimitPerMinute, now),
-        RedisRateLimiter
-          .resource[F](redis, "export", config.resourceLimits.exportRateLimitPerMinute, now),
-      ).mapN((login, upload, exportLimiter) =>
-        (login: RateLimiter[F], HttpRateLimiters(upload, exportLimiter))
-      )
+  ): Resource[F, RuntimeInfrastructure[F]] = config.redis match
+    case Some(redis) => Redis[F].simple(redis.url, RedisCodec.Utf8).map { commands =>
+        val queue: QueueProducer[F] = RedisQueueProducer.fromCommands(redis.stream, commands)
+        val login: RateLimiter[F] = RedisRateLimiter
+          .fromCommands(commands, "login", config.auth.rateLimitPerMinute, now)
+        val upload: RateLimiter[F] = RedisRateLimiter
+          .fromCommands(commands, "upload", config.resourceLimits.uploadRateLimitPerMinute, now)
+        val exportLimiter: RateLimiter[F] = RedisRateLimiter
+          .fromCommands(commands, "export", config.resourceLimits.exportRateLimitPerMinute, now)
+        RuntimeInfrastructure(queue, login, HttpRateLimiters(upload, exportLimiter))
+      }
     case None => Resource.eval(
-        (
-          LoginRateLimiter.create[F](config.auth.rateLimitPerMinute, now),
-          LoginRateLimiter.create[F](config.resourceLimits.uploadRateLimitPerMinute, now),
-          LoginRateLimiter.create[F](config.resourceLimits.exportRateLimitPerMinute, now),
-        ).mapN((login, upload, exportLimiter) =>
-          (login: RateLimiter[F], HttpRateLimiters(upload, exportLimiter))
-        )
+        for
+          queue <- InMemoryQueueProducer.create[F]
+          login <- LoginRateLimiter.create[F](config.auth.rateLimitPerMinute, now)
+          upload <- LoginRateLimiter.create[F](config.resourceLimits.uploadRateLimitPerMinute, now)
+          exportLimiter <- LoginRateLimiter
+            .create[F](config.resourceLimits.exportRateLimitPerMinute, now)
+        yield RuntimeInfrastructure(queue, login, HttpRateLimiters(upload, exportLimiter))
       )
 
   private def runtimeMaintenance[F[_]: Async: LoggerFactory](

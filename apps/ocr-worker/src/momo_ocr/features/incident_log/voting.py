@@ -14,6 +14,8 @@ GINJI_INCIDENT_NAME = "スリの銀次"
 MAX_PLAUSIBLE_STOP_COUNT = 12
 MAX_PLAUSIBLE_STOP_TOTAL = 14
 MAX_PLAUSIBLE_GINJI_TOTAL = 2
+SHARPENED_CONFLICT_CONFIDENCE_THRESHOLD = 0.6
+MIN_FALLBACK_VARIANTS_FOR_OTSU_RECOVERY = 2
 
 
 def max_plausible_cell_count(incident_name: str) -> int:
@@ -91,6 +93,18 @@ def select_count_recognition(
             count=count,
             confidence=confidence,
         )
+    otsu_recovery = _recover_otsu_digit_from_zero_alias_conflict(
+        primary,
+        fallback_results,
+        max_plausible_count=max_plausible_count,
+    )
+    if otsu_recovery is not None:
+        count, confidence = otsu_recovery
+        return CountRecognitionResult(
+            raw_text=" | ".join(dict.fromkeys(snippets)),
+            count=count,
+            confidence=confidence,
+        )
     pool = plausible or valid
     by_count: dict[int, list[CountRecognitionResult]] = {}
     for result in pool:
@@ -135,6 +149,58 @@ def select_count_recognition(
         count=chosen_count,
         confidence=final_confidence,
     )
+
+
+def _recover_otsu_digit_from_zero_alias_conflict(
+    primary: CountRecognitionResult,
+    fallback_results: list[CountRecognitionResult],
+    *,
+    max_plausible_count: int,
+) -> tuple[int, float | None] | None:
+    """Prefer Otsu when the primary zero is a letter-alias shadow read.
+
+    Compact incident cells can show a crisp white digit on a dark badge with a
+    right-edge decoration. For visible ``3`` cells, primary may read only the
+    shadow as ``o`` (=0), sharpened may hallucinate the curved edge as ``2``,
+    while Otsu isolates the actual digit. Keep this recovery narrow so normal
+    zero cells and high-confidence sharpened reads are unaffected.
+    """
+
+    recovery: tuple[int, float | None] | None = None
+    if len(fallback_results) >= MIN_FALLBACK_VARIANTS_FOR_OTSU_RECOVERY:
+        sharpened = fallback_results[0]
+        otsu = fallback_results[1]
+        zero_alias_primary = primary.count == 0 and not _contains_digit(primary.raw_text)
+        otsu_digit = _is_single_plausible_nonzero_digit(otsu, max_plausible_count)
+        sharpened_digit = _is_single_plausible_nonzero_digit(
+            sharpened,
+            max_plausible_count,
+        )
+        sharpened_confidence = sharpened.confidence or 0.0
+        should_recover = (
+            zero_alias_primary
+            and otsu_digit
+            and sharpened_digit
+            and otsu.count != sharpened.count
+            and sharpened_confidence < SHARPENED_CONFLICT_CONFIDENCE_THRESHOLD
+        )
+        if should_recover and otsu.count is not None:
+            recovery = otsu.count, otsu.confidence
+    return recovery
+
+
+def _contains_digit(text: str) -> bool:
+    return any(char.isdigit() for char in text)
+
+
+def _is_single_plausible_nonzero_digit(
+    result: CountRecognitionResult,
+    max_plausible_count: int,
+) -> bool:
+    if result.count is None or not 0 < result.count <= min(9, max_plausible_count):
+        return False
+    pieces = [piece.strip() for piece in result.raw_text.split("|") if piece.strip()]
+    return any(piece == str(result.count) for piece in pieces)
 
 
 def _recover_plausible_leading_digit(

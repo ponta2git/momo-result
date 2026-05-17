@@ -18,8 +18,8 @@ from eval_lib.types import (
     FilenameMeta,
     ImageEval,
 )
-from momo_ocr.features.standalone_analysis.analyze_image import analyze_image
-from momo_ocr.features.standalone_analysis.report import AnalysisResult
+from momo_ocr.features.ocr_analysis.analyze_image import analyze_image
+from momo_ocr.features.ocr_analysis.report import AnalysisResult
 from momo_ocr.features.text_recognition.engine import TextRecognitionEngine
 
 _FILENAME_RE = re.compile(

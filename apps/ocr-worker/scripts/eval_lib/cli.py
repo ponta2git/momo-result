@@ -16,7 +16,7 @@ from eval_lib.runner import (
     resolve_debug_dir,
     select_files,
 )
-from momo_ocr.app.composition import default_text_recognition_engine
+from momo_ocr.features.text_recognition.factory import default_text_recognition_engine
 
 
 def _build_parser() -> argparse.ArgumentParser:

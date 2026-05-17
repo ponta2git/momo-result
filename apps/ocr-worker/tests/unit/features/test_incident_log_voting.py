@@ -90,6 +90,34 @@ def test_select_count_recognition_uses_count_tie_breaker_for_single_vote_digits(
     assert selected.count == 3
 
 
+def test_select_count_recognition_prefers_otsu_when_zero_alias_conflicts_with_sharpened() -> None:
+    primary = CountRecognitionResult(raw_text="o", count=0, confidence=0.0)
+    sharpened = CountRecognitionResult(raw_text="2", count=2, confidence=0.45)
+    otsu = CountRecognitionResult(raw_text="3", count=3, confidence=0.0)
+
+    selected = select_count_recognition(
+        primary,
+        [sharpened, otsu],
+        max_plausible_count=MAX_PLAUSIBLE_STOP_COUNT,
+    )
+
+    assert selected.count == 3
+
+
+def test_select_count_recognition_keeps_high_confidence_sharpened_digit() -> None:
+    primary = CountRecognitionResult(raw_text="o", count=0, confidence=0.0)
+    sharpened = CountRecognitionResult(raw_text="2", count=2, confidence=0.9)
+    otsu = CountRecognitionResult(raw_text="3", count=3, confidence=0.0)
+
+    selected = select_count_recognition(
+        primary,
+        [sharpened, otsu],
+        max_plausible_count=MAX_PLAUSIBLE_STOP_COUNT,
+    )
+
+    assert selected.count == 2
+
+
 def test_select_count_recognition_attenuates_confidence_by_agreement() -> None:
     # 1 票だけ → agreement=1/3, confidence factor = 0.5 + 0.5/3 ≈ 0.667
     primary = CountRecognitionResult(raw_text="3", count=3, confidence=1.0)

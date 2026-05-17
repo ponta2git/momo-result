@@ -67,7 +67,7 @@ object MasterCodec:
       request: UpdateMemberAliasRequest,
   ): Either[AppError, UpdateMemberAliasCommand] =
     for
-      parsedId <- BoundaryId.nonBlank("id", id)
+      parsedId <- BoundaryId.required("id", id)(MemberAliasId.fromString)
       memberId <- BoundaryId.required("memberId", request.memberId)(MemberId.fromString)
     yield UpdateMemberAliasCommand(parsedId, memberId, request.alias)
 end MasterCodec

@@ -20,6 +20,7 @@ object PostgresMeta:
   given Meta[OcrDraftId] = Meta[String].imap(OcrDraftId.unsafeFromString)(_.value)
   given Meta[ImageId] = Meta[String].imap(ImageId.unsafeFromString)(_.value)
   given Meta[MemberId] = Meta[String].imap(MemberId.unsafeFromString)(_.value)
+  given Meta[MemberAliasId] = Meta[String].imap(MemberAliasId.unsafeFromString)(_.value)
   given Meta[AccountId] = Meta[String].imap(AccountId.unsafeFromString)(_.value)
   given Meta[HeldEventId] = Meta[String].imap(HeldEventId.unsafeFromString)(_.value)
   given Meta[MatchId] = Meta[String].imap(MatchId.unsafeFromString)(_.value)

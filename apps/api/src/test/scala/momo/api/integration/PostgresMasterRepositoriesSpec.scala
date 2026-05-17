@@ -84,7 +84,7 @@ final class PostgresMasterRepositoriesSpec extends IntegrationSuite:
     val missingSeason =
       SeasonMaster(SeasonMasterId.unsafeFromString("season_missing"), titleId, "missing", 1, now)
     val missingAlias = MemberAlias(
-      id = "alias-missing",
+      id = MemberAliasId.unsafeFromString("alias-missing"),
       memberId = MemberId.unsafeFromString("member_ponta"),
       alias = "missing",
       createdAt = now,
@@ -105,8 +105,8 @@ final class PostgresMasterRepositoriesSpec extends IntegrationSuite:
       assertAppError(deleteMap, AppError.NotFound("map master", missingMap.id.value))
       assertAppError(updateSeason, AppError.NotFound("season master", missingSeason.id.value))
       assertAppError(deleteSeason, AppError.NotFound("season master", missingSeason.id.value))
-      assertAppError(updateAlias, AppError.NotFound("member alias", missingAlias.id))
-      assertAppError(deleteAlias, AppError.NotFound("member alias", missingAlias.id))
+      assertAppError(updateAlias, AppError.NotFound("member alias", missingAlias.id.value))
+      assertAppError(deleteAlias, AppError.NotFound("member alias", missingAlias.id.value))
 
   test("member aliases create, list, update, reject duplicates, and delete"):
     val create =
@@ -121,16 +121,18 @@ final class PostgresMasterRepositoriesSpec extends IntegrationSuite:
       duplicate <- createDuplicateId
         .run(CreateMemberAliasCommand(MemberId.unsafeFromString("member_otaka"), "ポン太社長"))
       list <- memberAliases.list(Some(MemberId.unsafeFromString("member_ponta")))
-      updated <- update.run(
-        UpdateMemberAliasCommand("alias-ponta", MemberId.unsafeFromString("member_otaka"), "おたか社長")
-      )
-      found <- memberAliases.find("alias-ponta")
-      deleted <- delete.run("alias-ponta")
-      afterDelete <- memberAliases.find("alias-ponta")
+      updated <- update.run(UpdateMemberAliasCommand(
+        MemberAliasId.unsafeFromString("alias-ponta"),
+        MemberId.unsafeFromString("member_otaka"),
+        "おたか社長",
+      ))
+      found <- memberAliases.find(MemberAliasId.unsafeFromString("alias-ponta"))
+      deleted <- delete.run(MemberAliasId.unsafeFromString("alias-ponta"))
+      afterDelete <- memberAliases.find(MemberAliasId.unsafeFromString("alias-ponta"))
     yield
       assertEquals(created.map(_.alias), Right("ポン太社長"))
       assertEquals(duplicate, Left(AppError.Conflict("member alias already exists: ポン太社長")))
-      assertEquals(list.map(_.id), List("alias-ponta"))
+      assertEquals(list.map(_.id.value), List("alias-ponta"))
       assertEquals(updated.map(_.memberId), Right(MemberId.unsafeFromString("member_otaka")))
       assertEquals(found.map(_.alias), Some("おたか社長"))
       assertEquals(deleted, Right(()))

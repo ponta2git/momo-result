@@ -101,7 +101,7 @@ final case class MemberAliasResponse(id: String, memberId: String, alias: String
 
 object MemberAliasResponse:
   def from(a: MemberAlias): MemberAliasResponse = MemberAliasResponse(
-    id = a.id,
+    id = a.id.value,
     memberId = a.memberId.value,
     alias = a.alias,
     createdAt = DateTimeFormatter.ISO_INSTANT.format(a.createdAt),

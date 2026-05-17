@@ -287,7 +287,7 @@ object PostgresMemberAliases:
       val order = fr"ORDER BY member_id, alias, id"
       (base ++ where ++ order).query[MemberAlias].to[List]
 
-    override def find(id: String): ConnectionIO[Option[MemberAlias]] = sql"""
+    override def find(id: MemberAliasId): ConnectionIO[Option[MemberAlias]] = sql"""
         SELECT id, member_id, alias, created_at
         FROM member_aliases
         WHERE id = $id
@@ -307,16 +307,16 @@ object PostgresMemberAliases:
         WHERE id = ${alias.id}
       """.update.run.flatMap {
       case 1 => ().pure[ConnectionIO]
-      case _ => notFound("member alias", alias.id)
+      case _ => notFound("member alias", alias.id.value)
     }.exceptSomeSqlState {
       case state if isUniqueViolation(state) =>
         conflict(s"member alias already exists: ${alias.alias}")
     }
 
-    override def delete(id: String): ConnectionIO[Unit] =
+    override def delete(id: MemberAliasId): ConnectionIO[Unit] =
       sql"DELETE FROM member_aliases WHERE id = $id".update.run.flatMap {
         case 1 => ().pure[ConnectionIO]
-        case _ => notFound("member alias", id)
+        case _ => notFound("member alias", id.value)
       }
 end PostgresMemberAliases
 
@@ -327,7 +327,7 @@ final class PostgresMemberAliasesRepository[F[_]: MonadCancelThrow](transactor: 
   override def list(memberId: Option[MemberId]): F[List[MemberAlias]] =
     transactK(PostgresMemberAliases.alg.list(memberId))
 
-  override def find(id: String): F[Option[MemberAlias]] =
+  override def find(id: MemberAliasId): F[Option[MemberAlias]] =
     transactK(PostgresMemberAliases.alg.find(id))
 
   override def create(alias: MemberAlias): F[Unit] =
@@ -336,5 +336,5 @@ final class PostgresMemberAliasesRepository[F[_]: MonadCancelThrow](transactor: 
   override def update(alias: MemberAlias): F[Unit] =
     transactK(PostgresMemberAliases.alg.update(alias))
 
-  override def delete(id: String): F[Unit] = transactK(PostgresMemberAliases.alg.delete(id))
+  override def delete(id: MemberAliasId): F[Unit] = transactK(PostgresMemberAliases.alg.delete(id))
 end PostgresMemberAliasesRepository

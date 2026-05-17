@@ -13,7 +13,7 @@ import momo.api.adapters.{
   LocalFsImageStore,
 }
 import momo.api.codec.OcrHintsCodec.given
-import momo.api.domain.ids.{AccountId, ImageId, MatchDraftId, MemberId, OcrJobId}
+import momo.api.domain.ids.{AccountId, ImageId, MatchDraftId, MemberAliasId, MemberId, OcrJobId}
 import momo.api.domain.{
   MatchDraft, MatchDraftStatus, MemberAlias, OcrFailure, OcrJob, OcrJobHints, PlayerAliasHint,
   ScreenType, StoredImage,
@@ -69,7 +69,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
       for
         image <- fixture.savePng
         _ <- fixture.memberAliases.create(MemberAlias(
-          id = "alias-1",
+          id = MemberAliasId.unsafeFromString("alias-1"),
           memberId = MemberId.unsafeFromString("member_ponta"),
           alias = "ポン太社長",
           createdAt = now,

@@ -130,17 +130,17 @@ end IncidentMastersRepository
 
 trait MemberAliasesAlg[F0[_]]:
   def list(memberId: Option[MemberId]): F0[List[MemberAlias]]
-  def find(id: String): F0[Option[MemberAlias]]
+  def find(id: MemberAliasId): F0[Option[MemberAlias]]
   def create(alias: MemberAlias): F0[Unit]
   def update(alias: MemberAlias): F0[Unit]
-  def delete(id: String): F0[Unit]
+  def delete(id: MemberAliasId): F0[Unit]
 
 trait MemberAliasesRepository[F[_]]:
   def list(memberId: Option[MemberId]): F[List[MemberAlias]]
-  def find(id: String): F[Option[MemberAlias]]
+  def find(id: MemberAliasId): F[Option[MemberAlias]]
   def create(alias: MemberAlias): F[Unit]
   def update(alias: MemberAlias): F[Unit]
-  def delete(id: String): F[Unit]
+  def delete(id: MemberAliasId): F[Unit]
 
 trait MembersAlg[F0[_]]:
   def list: F0[List[momo.api.domain.Member]]

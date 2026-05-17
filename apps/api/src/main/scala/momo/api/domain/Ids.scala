@@ -45,6 +45,11 @@ object ids:
     protected def make(s: String): MemberId = s
     protected def underlying(id: MemberId): String = id
 
+  opaque type MemberAliasId = String
+  object MemberAliasId extends IdCompanion[MemberAliasId]:
+    protected def make(s: String): MemberAliasId = s
+    protected def underlying(id: MemberAliasId): String = id
+
   opaque type AccountId = String
   object AccountId extends IdCompanion[AccountId]:
     protected def make(s: String): AccountId = s

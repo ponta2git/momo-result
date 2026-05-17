@@ -6,7 +6,7 @@ import cats.effect.Async
 import cats.syntax.all.*
 import sttp.tapir.server.ServerEndpoint
 
-import momo.api.domain.ids.{GameTitleId, MapMasterId, MemberId, SeasonMasterId}
+import momo.api.domain.ids.{GameTitleId, MapMasterId, MemberAliasId, MemberId, SeasonMasterId}
 import momo.api.endpoints.codec.{BoundaryId, MasterCodec}
 import momo.api.endpoints.{
   CreateGameTitleRequest, CreateMapMasterRequest, CreateMemberAliasRequest,
@@ -271,7 +271,7 @@ object MasterModule:
           "DELETE /api/member-aliases",
           id,
           nowF,
-          security.decode(BoundaryId.nonBlank("id", id))(parsedId =>
+          security.decode(BoundaryId.required("id", id)(MemberAliasId.fromString))(parsedId =>
             security.respond(
               deleteMemberAlias.run(parsedId)
             )(_ => DeleteMasterResponse(id, deleted = true))

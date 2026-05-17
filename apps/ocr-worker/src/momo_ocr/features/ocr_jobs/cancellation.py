@@ -45,8 +45,3 @@ class InMemoryCancellationChecker:
     def is_cancelled(self, job_id: str) -> bool:
         with self._lock:
             return job_id in self.cancelled_job_ids
-
-
-def should_cancel() -> bool:
-    """Compatibility shim retained for legacy callers; always returns False."""
-    return False

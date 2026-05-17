@@ -58,14 +58,6 @@ class OcrJobConsumer(Protocol):
         """
         raise NotImplementedError
 
-    def nack(self, delivery_tag: str) -> None:
-        """Release the delivery back to the queue for redelivery.
-
-        Used when processing failed in a way the runner deems retryable and
-        the worker is the wrong place to mutate attempt counts.
-        """
-        raise NotImplementedError
-
 
 @dataclass
 class _FakeDelivery:
@@ -86,7 +78,6 @@ class InMemoryOcrJobConsumer:
         self._deliveries: deque[_FakeDelivery] = deque()
         self._lock = Lock()
         self.acked: list[str] = []
-        self.nacked: list[str] = []
 
     def enqueue(self, payload: Mapping[str, str], *, delivery_tag: str) -> None:
         with self._lock:
@@ -109,9 +100,6 @@ class InMemoryOcrJobConsumer:
 
     def ack(self, delivery_tag: str) -> None:
         self.acked.append(delivery_tag)
-
-    def nack(self, delivery_tag: str) -> None:
-        self.nacked.append(delivery_tag)
 
     def pending(self) -> int:
         with self._lock:
@@ -174,13 +162,6 @@ class RedisOcrJobConsumer:
 
     def ack(self, delivery_tag: str) -> None:
         self._redis.xack(self._stream, self._group, delivery_tag)
-
-    def nack(self, delivery_tag: str) -> None:
-        msg = (
-            "Redis Streams does not support immediate nack; delivery "
-            f"{delivery_tag} remains pending until it is claimed."
-        )
-        raise NotImplementedError(msg)
 
     def close(self) -> None:
         self._redis.close()

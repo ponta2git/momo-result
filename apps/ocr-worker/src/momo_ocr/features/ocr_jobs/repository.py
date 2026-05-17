@@ -97,6 +97,7 @@ class InMemoryOcrJobRepository:
         result_record: OcrResultRecord,
         result: OcrJobExecutionResult,
     ) -> None:
+        _ensure_success_result(result_record, result)
         self._terminal_transition(job_id, result, expected=OcrJobStatus.SUCCEEDED)
         with self._lock:
             self.result_records[result_record.job_id] = result_record
@@ -121,6 +122,7 @@ class InMemoryOcrJobRepository:
         *,
         expected: OcrJobStatus,
     ) -> None:
+        _ensure_terminal_result(result, expected)
         with self._lock:
             current = self.records.get(job_id)
             if current is None:
@@ -200,6 +202,7 @@ class PostgresOcrJobRepository:
         result_record: OcrResultRecord,
         result: OcrJobExecutionResult,
     ) -> None:
+        _ensure_success_result(result_record, result)
         self._terminal_transition(
             job_id,
             result,
@@ -227,6 +230,7 @@ class PostgresOcrJobRepository:
         expected: OcrJobStatus,
         result_record: OcrResultRecord | None = None,
     ) -> None:
+        _ensure_terminal_result(result, expected)
         detected_screen_type = (
             result.draft_payload.detected_screen_type.value
             if result.draft_payload is not None
@@ -282,6 +286,46 @@ class PostgresOcrJobRepository:
             # back, and we must not lose the terminal job update above.
             with suppress(psycopg.errors.UndefinedTable), conn.transaction():
                 _sync_match_draft_status_for_terminal_job(conn, job_id)
+
+
+def _ensure_success_result(
+    result_record: OcrResultRecord,
+    result: OcrJobExecutionResult,
+) -> None:
+    if result.draft_payload != result_record.payload:
+        raise OcrError(
+            FailureCode.DB_WRITE_FAILED,
+            "Successful OCR completion must persist the same payload it reports.",
+        )
+    _ensure_terminal_result(result, OcrJobStatus.SUCCEEDED)
+
+
+def _ensure_terminal_result(result: OcrJobExecutionResult, expected: OcrJobStatus) -> None:
+    if result.status is not expected:
+        raise OcrError(
+            FailureCode.DB_WRITE_FAILED,
+            (
+                "OCR execution result status does not match terminal transition: "
+                f"{result.status.value} != {expected.value}."
+            ),
+        )
+    if expected is OcrJobStatus.SUCCEEDED:
+        if result.draft_payload is None or result.failure is not None:
+            raise OcrError(
+                FailureCode.DB_WRITE_FAILED,
+                "Successful OCR completion requires a draft payload and no failure.",
+            )
+        return
+    if expected is OcrJobStatus.FAILED and result.failure is None:
+        raise OcrError(
+            FailureCode.DB_WRITE_FAILED,
+            "Failed OCR completion requires failure metadata.",
+        )
+    if result.draft_payload is not None:
+        raise OcrError(
+            FailureCode.DB_WRITE_FAILED,
+            "Non-success OCR completion must not include a draft payload.",
+        )
 
 
 def _select_status(conn: psycopg.Connection[TupleRow], job_id: str) -> OcrJobStatus | None:

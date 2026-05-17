@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import io
 import shutil
 import subprocess
 from pathlib import Path
@@ -53,7 +52,9 @@ def test_recognize_does_not_call_shutil_which(monkeypatch: pytest.MonkeyPatch) -
         kwargs = _kwargs
         cmd = _args[0] if _args else kwargs.get("args", [])
         # Locate "out" base path passed as second-to-last positional arg.
-        out_base = Path(cmd[2])  # type: ignore[index]
+        assert isinstance(cmd, list | tuple)
+        assert len(cmd) > 2
+        out_base = Path(str(cmd[2]))
         out_base.with_suffix(".txt").write_text("hello\n", encoding="utf-8")
         return _StubCompleted()
 
@@ -74,7 +75,3 @@ def test_missing_binary_raises_lazily_on_recognize(monkeypatch: pytest.MonkeyPat
     with pytest.raises(OcrError) as exc_info:
         engine.recognize(image)
     assert exc_info.value.code == FailureCode.OCR_ENGINE_UNAVAILABLE
-
-
-# Reference io to avoid F401 if other helpers are added later.
-_ = io

@@ -77,10 +77,10 @@ def test_text_recognition_engine_unknown_value_raises() -> None:
     assert excinfo.value.code is FailureCode.OCR_ENGINE_UNAVAILABLE
 
 
-def test_redis_consumer_from_config_enables_health_check_and_keepalive(
+def test_redis_consumer_from_config_bounds_redis_socket_waits(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Composition root wires Redis keepalive + periodic PING.
+    """Composition root wires Redis keepalive, periodic PING, and socket bounds.
 
     Fly.io <-> Upstash NAT silently drops idle TCP sessions, which would
     otherwise leave ``XREADGROUP`` blocking forever on the dead socket.
@@ -106,6 +106,8 @@ def test_redis_consumer_from_config_enables_health_check_and_keepalive(
     assert captured["decode_responses"] is True
     assert captured["health_check_interval"] == 30
     assert captured["socket_keepalive"] is True
+    assert captured["socket_connect_timeout"] == 5.0
+    assert captured["socket_timeout"] == 5.0
 
 
 @dataclass

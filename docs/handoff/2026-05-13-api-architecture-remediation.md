@@ -94,6 +94,11 @@
 
 ## ocr-worker への申し送り
 
+完了状況（2026-05-17）:
+
+- `requestedScreenType` への更新、旧 `requestedImageType` 参照削除、Redis payload schema test / integration test 更新は完了済み。
+- worker は現在、`imagePath` を `IMAGE_TMP_DIR` 配下へ解決できる場合だけ読み、3MB 上限を再検証する。
+
 ### 1. Redis Streams / OCR payload contract が破壊的に変わった
 
 変更:
@@ -103,7 +108,7 @@
 
 内容:
 
-- `ocr-queue-payload-v1` の `imagePath` は引き続き送信される。
+- `ocr-queue-payload-v1` の `imagePath` は引き続き送信される。ただし worker が読める `IMAGE_TMP_DIR` 配下の絶対パスである必要がある。
 - `schemaVersion`, `jobId`, `draftId`, `imageId`, `imagePath`, `requestedScreenType`, `attempt`, `enqueuedAt` が現在の必須 field。
 - `requestedImageType` は送信されない。互換 field はない。
 - 今回削除された `imagePath` は公開 HTTP API レスポンス上の話で、worker 入力ではない。

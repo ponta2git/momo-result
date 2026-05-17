@@ -98,7 +98,8 @@ root からの web 起動は `pnpm web:dev` でもよい。
 | format | `uv run ruff format --check .` |
 | lint | `uv run ruff check .` |
 | typecheck | `uv run mypy` |
-| test | `uv run pytest` |
+| unit test | `uv run pytest` |
+| integration test | `uv run pytest -m integration` |
 
 ## 5. 変更別ゲート
 
@@ -106,7 +107,7 @@ root からの web 起動は `pnpm web:dev` でもよい。
 - api endpoint / OpenAPI 変更: `apiQuality`（OpenAPI生成確認を含む）、`test`、C1/C2対象変更なら `apiCoverage` 後に web の `generate:api`。
 - PostgreSQL repository / migration 前提の変更: `apiDbQuality` を追加し、実行した spec 名を報告する。
 - Redis Streams / OCR queue 変更: `apiRedisQuality` を追加する。
-- ocr-worker 変更: `ruff format --check`、`ruff check`、`mypy`、`pytest`。Docker-backed integration に依存する失敗は未検証として扱わない。
+- ocr-worker 変更: `ruff format --check`、`ruff check`、`mypy`、`pytest`。Redis/Postgres/native OCR など外部 wire 動作に触れた場合は `pytest -m integration` も実行する。integration が skip / 未実行なら、その外部依存挙動は未検証として扱う。
 
 CI の API / OCR worker は `momo-db` を checkout し、`MOMO_DB_MIGRATIONS_DIR` で migration ディレクトリを指定する。ローカルで兄弟 repo がない場合も同 env で `drizzle/` を指定できる。
 

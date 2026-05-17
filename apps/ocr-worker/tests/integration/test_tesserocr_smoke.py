@@ -6,6 +6,7 @@ production OCR engine initializes and produces text.
 
 from __future__ import annotations
 
+import pytest
 from PIL import Image, ImageDraw, ImageFont
 
 from momo_ocr.features.text_recognition.models import (
@@ -15,6 +16,8 @@ from momo_ocr.features.text_recognition.models import (
 from momo_ocr.features.text_recognition.tesserocr_engine import (
     TesserocrEngine,
 )
+
+pytestmark = pytest.mark.integration
 
 
 def _render_text_image(text: str, *, size: tuple[int, int] = (240, 80)) -> Image.Image:

@@ -22,8 +22,9 @@ from momo_ocr.features.ocr_jobs.repository import PostgresOcrJobRepository
 from momo_ocr.features.ocr_jobs.runner import run_one_job
 from tests.integration.momo_db import migrated_postgres_conninfo
 
+pytestmark = [pytest.mark.integration, pytest.mark.e2e]
 
-@pytest.mark.integration
+
 def test_redis_to_worker_to_postgres_smoke() -> None:
     redis_container = (
         DockerContainer("redis:7-alpine")

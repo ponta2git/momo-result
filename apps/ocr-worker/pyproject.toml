@@ -100,10 +100,13 @@ addopts = [
   "--import-mode=importlib",
   "--strict-config",
   "--strict-markers",
+  "-m",
+  "not integration",
 ]
 xfail_strict = true
 markers = [
-  "integration: tests that require Docker-backed Testcontainers",
+  "integration: tests that require Docker/Testcontainers, live Redis/PostgreSQL, native OCR engine/tessdata, or another external runtime dependency",
+  "e2e: cross-boundary smoke tests that exercise the worker through multiple production adapters",
 ]
 
 [tool.mypy]

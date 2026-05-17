@@ -88,16 +88,21 @@ uv run ruff format --check
 uv run ruff check
 uv run mypy
 uv run pytest
+uv run pytest -m integration
 ```
+
+`uv run pytest` is the fast deterministic unit/contract gate; `pyproject.toml` excludes tests
+marked `integration` by default. Use `uv run pytest -m integration` for Docker-backed
+Redis/Postgres checks and the native `tesserocr` smoke tests.
 
 Postgres integration tests start a Postgres Testcontainer and apply the `momo-db/drizzle` SQL files.
 If `momo-db` is not available as a sibling checkout or under `_deps/momo-db`, set
-`MOMO_DB_MIGRATIONS_DIR` to the `drizzle/` directory before running `uv run pytest`.
+`MOMO_DB_MIGRATIONS_DIR` to the `drizzle/` directory before running `uv run pytest -m integration`.
 
 Use the fix commands before committing local edits. The strict verification gate is:
 
 ```sh
-uv run ruff format --check && uv run ruff check && uv run mypy && uv run pytest
+uv run ruff format --check && uv run ruff check && uv run mypy && uv run pytest && uv run pytest -m integration
 ```
 
 Quality policy:

@@ -1,130 +1,21 @@
 package momo.api.integration
 
-import java.time.Instant
-
 import cats.effect.IO
 
-import momo.api.domain.ids.AccountId
+import momo.api.repositories.IdempotencyRepository
+import momo.api.repositories.contract.IdempotencyRepositoryContract
 import momo.api.repositories.postgres.PostgresIdempotencyRepository
-import momo.api.repositories.{
-  IdempotencyRecord, IdempotencyRepository, IdempotencyReservation, IdempotencyResponse,
-}
 
 /**
- * Postgres-backed contract verification for [[IdempotencyRepository]]. Mirrors
- * `InMemoryIdempotencyRepositorySpec` so behavior parity between the two adapters is enforced.
+ * Drives [[IdempotencyRepositoryContract]] against the Postgres adapter.
+ *
+ * Per-test isolation comes from [[IntegrationSuite.beforeEach]], which truncates `idempotency_keys`
+ * before each test. `freshRepo` is `IO.delay` so the transactor fixture is read after the suite's
+ * `beforeAll`/`beforeEach` have run.
  */
-final class PostgresIdempotencyRepositoryContractSpec extends IntegrationSuite:
+final class PostgresIdempotencyRepositoryContractSpec
+    extends IntegrationSuite with IdempotencyRepositoryContract:
 
-  private val now = Instant.parse("2026-04-30T12:00:00Z")
-  private val later = now.plusSeconds(60 * 60 * 24)
-  private val member = AccountId.unsafeFromString("account_ponta")
-
-  private def freshRepo: IdempotencyRepository[IO] =
-    new PostgresIdempotencyRepository[IO](transactor)
-
-  private def buildRecord(
-      key: String,
-      endpoint: String,
-      hash: Vector[Byte],
-      expiresAt: Instant,
-      body: Vector[Byte],
-  ): IdempotencyRecord = IdempotencyRecord(
-    key = key,
-    accountId = member,
-    endpoint = endpoint,
-    requestHash = hash,
-    response = IdempotencyResponse(
-      status = 201,
-      headers = Map("Content-Type" -> "application/json"),
-      body = body,
-    ),
-    createdAt = now,
-    expiresAt = expiresAt,
-  )
-
-  private val draftEndpoint = "POST /api/match-drafts"
-  private val ocrEndpoint = "POST /api/ocr-jobs"
-  private val defaultHash = Vector(1.toByte, 2.toByte, 3.toByte)
-
-  test("lookup returns None when no record exists"):
-    val repo = freshRepo
-    repo.lookup("missing", member, draftEndpoint).map(got => assertEquals(got, None))
-
-  test("record + lookup round-trips a stored entry, preserving bytes and headers"):
-    val repo = freshRepo
-    val r = buildRecord("k1", draftEndpoint, defaultHash, later, Vector(9.toByte, 8.toByte))
-    for
-      _ <- repo.record(r)
-      got <- repo.lookup(r.key, r.accountId, r.endpoint)
-    yield assertEquals(got, Some(r))
-
-  test("record with empty body round-trips as empty body"):
-    val repo = freshRepo
-    val r = buildRecord("k-empty", draftEndpoint, defaultHash, later, Vector.empty)
-    for
-      _ <- repo.record(r)
-      got <- repo.lookup(r.key, r.accountId, r.endpoint)
-    yield assertEquals(got.map(_.response.body), Some(Vector.empty[Byte]))
-
-  test("record fails when the same composite key is reused"):
-    val repo = freshRepo
-    val r = buildRecord("k-dup", draftEndpoint, defaultHash, later, Vector.empty)
-    val effect = repo.record(r) *> repo.record(r)
-    effect.attempt.map(result => assert(result.isLeft, s"expected conflict, got $result"))
-
-  test("the same key on a different endpoint is treated as a different record"):
-    val repo = freshRepo
-    val a = buildRecord("kshared", draftEndpoint, defaultHash, later, Vector.empty)
-    val b = buildRecord("kshared", ocrEndpoint, defaultHash, later, Vector.empty)
-    for
-      _ <- repo.record(a)
-      _ <- repo.record(b)
-      gotA <- repo.lookup("kshared", member, draftEndpoint)
-      gotB <- repo.lookup("kshared", member, ocrEndpoint)
-    yield
-      assertEquals(gotA, Some(a))
-      assertEquals(gotB, Some(b))
-
-  test("cleanup deletes records whose expires_at has passed and leaves the rest"):
-    val repo = freshRepo
-    val expired =
-      buildRecord("expired", draftEndpoint, defaultHash, now.minusSeconds(1), Vector.empty)
-    val live = buildRecord("live", draftEndpoint, defaultHash, now.plusSeconds(60), Vector.empty)
-    for
-      _ <- repo.record(expired)
-      _ <- repo.record(live)
-      removed <- repo.cleanup(now)
-      gotExpired <- repo.lookup(expired.key, member, expired.endpoint)
-      gotLive <- repo.lookup(live.key, member, live.endpoint)
-    yield
-      assertEquals(removed, 1)
-      assertEquals(gotExpired, None)
-      assertEquals(gotLive, Some(live))
-
-  test("reserve, complete, replay, conflict, and abandon form the atomic lifecycle"):
-    val repo = freshRepo
-    val pending =
-      buildRecord("k-reserve-lifecycle", draftEndpoint, defaultHash, later, Vector.empty)
-        .copy(response = IdempotencyResponse(0, Map.empty, Vector.empty))
-    val completed = IdempotencyResponse(200, Map("Content-Type" -> "application/json"), Vector(1))
-    val abandoned = pending.copy(key = "k-abandon-lifecycle")
-    for
-      first <- repo.reserve(pending)
-      second <- repo.reserve(pending)
-      conflict <- repo.reserve(pending.copy(requestHash = Vector(9.toByte)))
-      _ <- repo
-        .complete(pending.key, pending.accountId, pending.endpoint, pending.requestHash, completed)
-      replay <- repo.reserve(pending)
-      reserved <- repo.reserve(abandoned)
-      _ <- repo
-        .abandon(abandoned.key, abandoned.accountId, abandoned.endpoint, abandoned.requestHash)
-      reservedAgain <- repo.reserve(abandoned)
-    yield
-      assertEquals(first, IdempotencyReservation.Reserved)
-      assertEquals(second, IdempotencyReservation.InProgress)
-      assertEquals(conflict, IdempotencyReservation.Conflict)
-      assertEquals(replay, IdempotencyReservation.Replay(completed))
-      assertEquals(reserved, IdempotencyReservation.Reserved)
-      assertEquals(reservedAgain, IdempotencyReservation.Reserved)
+  override protected def freshRepo: IO[IdempotencyRepository[IO]] = IO
+    .delay(new PostgresIdempotencyRepository[IO](transactor))
 end PostgresIdempotencyRepositoryContractSpec

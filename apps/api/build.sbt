@@ -21,31 +21,15 @@ addCommandAlias(
     "set Test / fork := true; " +
     "set Test / parallelExecution := false; " +
     "set Test / testOptions := Seq(); " +
-    "testOnly momo.api.adapters.RedisQueueProducerSpec " +
-    "momo.api.auth.AuthServicesSpec " +
-    "-- --include-tags=Integration",
+    "testOnly momo.api.integration.redis.* -- --include-tags=RedisIntegration",
 )
 addCommandAlias(
   "apiDbQuality",
   "set Test / fork := true; " +
     "set Test / parallelExecution := false; " +
     "set Test / testOptions := Seq(); " +
-    "testOnly " +
-    "momo.api.integration.DbContractSpec " +
-    "momo.api.integration.PostgresHeldEventDeletionRepositorySpec " +
-    "momo.api.integration.PostgresHeldEventsRepositoryContractSpec " +
-    "momo.api.integration.PostgresAppSessionsRepositorySpec " +
-    "momo.api.integration.PostgresIdempotencyRepositoryContractSpec " +
-    "momo.api.integration.PostgresOcrJobCreationRepositorySpec " +
-    "momo.api.integration.PostgresOcrJobMaintenanceRepositorySpec " +
-    "momo.api.integration.PostgresOcrJobsRepositorySpec " +
-    "momo.api.integration.PostgresOcrQueueOutboxRepositorySpec " +
-    "momo.api.integration.PostgresMatchDraftsRepositorySpec " +
-    "momo.api.integration.PostgresImageReferenceRepositorySpec " +
-    "momo.api.integration.PostgresMasterRepositoriesSpec " +
-    "momo.api.integration.PostgresMatchesRepositorySpec " +
-    "momo.api.integration.PostgresMatchListReadModelSpec " +
-    "-- --include-tags=Integration",
+    "testOnly momo.api.integration.Postgres* momo.api.integration.DbContractSpec " +
+    "-- --include-tags=DbIntegration",
 )
 
 lazy val apiOpenApi = taskKey[File]("Generate OpenAPI from Tapir endpoint definitions")

@@ -87,7 +87,7 @@ root からの web 起動は `pnpm web:dev` でもよい。
 | Redis integration | `sbt apiRedisQuality` |
 | full local gate | `sbt apiFullCheck` |
 
-`sbt test` は `Integration` tag と `momo.api.integration.*` を除外する。DB/Redis の wire 動作は `apiDbQuality` / `apiRedisQuality` で明示的に実行する。
+`sbt test` は `Integration` tag と `momo.api.integration.*` を除外する。DB/Redis の wire 動作は `DbIntegration` / `RedisIntegration` tag を使って `apiDbQuality` / `apiRedisQuality` で明示的に実行する。
 
 ### ocr-worker (`apps/ocr-worker`)
 

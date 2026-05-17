@@ -7,6 +7,8 @@ import scala.concurrent.duration.DurationInt
 import cats.effect.IO
 import munit.{AnyFixture, CatsEffectSuite}
 
+import momo.api.testing.TestTags
+
 /**
  * Base for tests that hit an isolated Postgres Testcontainer migrated with momo-db SQL.
  *
@@ -19,11 +21,10 @@ import munit.{AnyFixture, CatsEffectSuite}
  */
 // scalafix:off DisableSyntax.noUnsafeRunSync
 abstract class IntegrationSuite extends CatsEffectSuite:
-  private val Integration = new munit.Tag("Integration")
-
   override def munitIOTimeout = 30.seconds
 
-  override def munitTests(): Seq[munit.Test] = super.munitTests().map(_.tag(Integration))
+  override def munitTests(): Seq[munit.Test] = super.munitTests()
+    .map(_.tag(TestTags.Integration).tag(TestTags.DbIntegration))
 
   protected val dbFixture: Fixture[IntegrationDb.DbFixture] =
     new Fixture[IntegrationDb.DbFixture]("momo-it-db"):

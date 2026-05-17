@@ -11,9 +11,10 @@ Scala 3 / sbt / Tapir / http4s / Cats Effect による API サーバーです。
 - 一時画像保存（PNG/JPEG/WebP、3MB上限、マジックバイト検証）
 - OCRジョブ作成、取得、キャンセル
 - OCRドラフト取得
-- インメモリのジョブ・ドラフト・キュープロデューサ
+- インメモリ / PostgreSQL の repository adapter
+- Redis Streams キュープロデューサ
 
-Discord OAuth、PostgreSQL/Redis の本物アダプタは次フェーズで実装します。
+Discord OAuth、PostgreSQL、Redis Streams の本番 adapter を含みます。
 
 CIでは stale class 起因のハングを避けるため、`clean Test/compile` を実行してからテストします。Cats Effect 系のMUnitテストは共通 `MomoCatsEffectSuite` で30秒タイムアウトを設定しています。
 
@@ -44,6 +45,12 @@ sbt apiOpenApiCheck
 | `apiFullCheck` | `apiCheck`、`apiDbQuality`、`apiRedisQuality` を順に実行するローカル完全ゲート |
 
 PRを出す前にローカルで `sbt apiCheck` が通ることを確認してください。DB/Redis 経路に触れた場合、または CI 相当の確認をしたい場合は、Docker/Testcontainers 利用可能な状態で `sbt apiFullCheck` を実行してください。DB ゲートは momo-db migration 適用済みの Testcontainers Postgres、Redis ゲートは Testcontainers Redis を使います。
+
+### テストレベル
+
+API テストは、値オブジェクト・codec・usecase の軽量テストを厚めに置き、HTTP では認証/CSRF/Problem Details/DTO境界を代表経路に絞って確認します。PostgreSQL/Redis の wire 動作は `Integration` に加えて `DbIntegration` / `RedisIntegration` tag を付け、通常の `sbt test` から分離します。DB spec は `momo.api.integration` の `Postgres*Spec` と `DbContractSpec`、Redis spec は `momo.api.integration.redis` に置き、品質ゲートは class/package pattern と tag で対象を発見します。
+
+Repository adapter のうち本番 adapter と in-memory adapter の両方を持つものは、重要な共有挙動を `momo.api.repositories.contract` の契約テストに寄せます。実装固有の SQL、transaction、index 前提、Redis wire だけを DB/Redis 統合 spec に置きます。
 
 ### コーディング規約（lint / scalac で強制）
 

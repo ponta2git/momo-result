@@ -24,7 +24,7 @@ private[http] object HttpErrorMiddleware:
   def apply[F[_]: Async](http: HttpApp[F]): HttpApp[F] = Kleisli { request =>
     http.run(request).handleErrorWith { error =>
       val appError = classify(error)
-      Async[F].delay(log(request, appError, error)) *> problem[F](appError)
+      logIncident[F](request, appError, error) *> problem[F](appError)
     }
   }
 
@@ -40,14 +40,26 @@ private[http] object HttpErrorMiddleware:
     case _ if hasCause(error)(isIoError) => AppError.Internal("File operation failed.")
     case _ => AppError.Internal("Unexpected server error.")
 
+  private def logIncident[F[_]: Async](
+      request: Request[?],
+      appError: AppError,
+      error: Throwable,
+  ): F[Unit] =
+    if isIncident(appError) then Async[F].delay(log(request, appError, error)) else Async[F].unit
+
   private def log(request: Request[?], appError: AppError, error: Throwable): Unit =
     val method = request.method.name
     val path = request.uri.path.renderString
     val code = appError.code
     val classes = SafeLog.throwableClasses(error)
     logger.error(
-      s"Unhandled HTTP error method=$method path=$path problemCode=$code errorClasses=$classes"
+      s"HTTP request failed method=$method path=$path problemCode=$code errorClasses=$classes"
     )
+
+  private def isIncident(error: AppError): Boolean = error match
+    case _: AppError.DependencyFailed => true
+    case _: AppError.Internal => true
+    case _ => false
 
   private def hasCause(error: Throwable)(predicate: Throwable => Boolean): Boolean =
     findCause(error)(predicate).isDefined

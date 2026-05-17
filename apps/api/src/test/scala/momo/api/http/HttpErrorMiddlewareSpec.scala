@@ -13,6 +13,7 @@ import org.http4s.{HttpRoutes, Request, Status, Uri}
 import org.slf4j.LoggerFactory
 
 import momo.api.MomoCatsEffectSuite
+import momo.api.errors.{AppError, AppException}
 
 final class HttpErrorMiddlewareSpec extends MomoCatsEffectSuite:
   test("maps database exceptions to sanitized dependency ProblemDetails") {
@@ -45,6 +46,36 @@ final class HttpErrorMiddlewareSpec extends MomoCatsEffectSuite:
       assert(!rendered.contains("secret_table"))
       assert(!rendered.contains(secret))
       assert(events.forall(event => Option(event.getThrowableProxy).isEmpty))
+  }
+
+  test("does not log expected application errors as incidents") {
+    val app = HttpErrorMiddleware[IO](HttpRoutes.of[IO] { case _ =>
+      IO.raiseError(new AppException(AppError.Conflict("match already exists")))
+    }.orNotFound)
+
+    for
+      (response, events) <-
+        captureHttpErrorLogs(app.run(Request[IO](uri = Uri.unsafeFromString("/conflict"))))
+      body <- response.as[String]
+      json <- IO.fromEither(parse(body))
+    yield
+      assertEquals(response.status, Status.Conflict)
+      assertEquals(json.hcursor.get[String]("code"), Right("CONFLICT"))
+      assert(events.isEmpty)
+  }
+
+  test("logs application internal errors as incidents") {
+    val app = HttpErrorMiddleware[IO](HttpRoutes.of[IO] { case _ =>
+      IO.raiseError(new AppException(AppError.Internal("Stored response could not be decoded.")))
+    }.orNotFound)
+
+    for
+      (_, events) <-
+        captureHttpErrorLogs(app.run(Request[IO](uri = Uri.unsafeFromString("/internal"))))
+      rendered = events.map(_.getFormattedMessage).mkString("\n")
+    yield
+      assert(rendered.contains("problemCode=INTERNAL_ERROR"))
+      assert(rendered.contains(classOf[AppException].getName))
   }
 
   private def captureHttpErrorLogs[A](fa: IO[A]): IO[(A, Vector[ILoggingEvent])] =

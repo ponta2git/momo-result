@@ -94,6 +94,7 @@
 - HTTP呼び出しは `shared/api/client.ts` を通す。credential、CSRF、Problem Details 正規化を各 feature で再実装しない。auth / admin account などの resource API は client 本体へ混在させない。
 - 横断 API client は `shared/api/<resource>.ts` に置く。feature 専用の変換は feature 側で行う。
 - JSON mutation の retry は同じ操作・同じ payload に同じ `Idempotency-Key` を再利用する。payload が変わった場合は新しい key を発行する。UI は 409 の処理中/別 payload と 413 の payload 超過を汎用内部エラーに潰さない。
+- API の idempotency endpoint label は concrete path ではなく route template とする。path parameter が mutation の同一性に関わる場合は、endpoint label へ実IDを埋め込まず、request hash 入力へ path parameter を含める。
 
 ## 4. OCR Worker
 

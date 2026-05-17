@@ -73,12 +73,12 @@ object MatchModule:
     MatchesEndpoints.update.serverLogic {
       case (matchId, accountHeader, csrfToken, idemKey, request) => security
           .authorizeMutation(accountHeader, csrfToken) { member =>
-            IdempotencyReplay.wrap[F, UpdateMatchRequest, MatchDetailResponse](
+            IdempotencyReplay.wrap[F, (String, UpdateMatchRequest), MatchDetailResponse](
               idempotency,
               idemKey,
               member,
-              s"PUT /api/matches/$matchId",
-              request,
+              "PUT /api/matches/:id",
+              (matchId, request),
               nowF,
               security.decode(BoundaryId.required("matchId", matchId)(MatchId.fromString)) { id =>
                 security.decode(MatchCodec.toUpdateCommand(request))(command =>
@@ -94,7 +94,7 @@ object MatchModule:
           idempotency,
           idemKey,
           member,
-          s"DELETE /api/matches/$matchId",
+          "DELETE /api/matches/:id",
           matchId,
           nowF,
           security.decode(BoundaryId.required("matchId", matchId)(MatchId.fromString))(id =>

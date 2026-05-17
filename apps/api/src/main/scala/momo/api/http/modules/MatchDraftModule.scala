@@ -53,12 +53,12 @@ object MatchDraftModule:
     MatchDraftEndpoints.update.serverLogic {
       case (draftId, accountHeader, csrfToken, idemKey, request) => security
           .authorizeMutation(accountHeader, csrfToken) { member =>
-            IdempotencyReplay.wrap[F, UpdateMatchDraftRequest, MatchDraftResponse](
+            IdempotencyReplay.wrap[F, (String, UpdateMatchDraftRequest), MatchDraftResponse](
               idempotency,
               idemKey,
               member,
-              s"PATCH /api/match-drafts/$draftId",
-              request,
+              "PATCH /api/match-drafts/:id",
+              (draftId, request),
               nowF,
               MatchDraftCodec.parseInstantOption[F](request.playedAt).flatMap {
                 case Left(error) => Async[F].pure(Left(security.toProblem(error)))
@@ -89,7 +89,7 @@ object MatchDraftModule:
           idempotency,
           idemKey,
           member,
-          s"POST /api/match-drafts/$draftId/cancel",
+          "POST /api/match-drafts/:id/cancel",
           draftId,
           nowF,
           security

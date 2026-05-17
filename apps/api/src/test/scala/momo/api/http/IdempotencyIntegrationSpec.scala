@@ -26,6 +26,13 @@ final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite with HttpAppT
     Request[IO](Method.DELETE, Uri.unsafeFromString(s"/api/held-events/$heldEventId"))
       .putHeaders(devWriteHeadersWithIdempotency(idemKey)*)
 
+  private def createMatchDraftReq: Request[IO] = Request[IO](Method.POST, uri"/api/match-drafts")
+    .putHeaders(devWriteHeaders()*).withEntity(HttpRequestBodies.Matches.emptyMatchDraft)
+
+  private def cancelMatchDraftReq(idemKey: Option[String], matchDraftId: String): Request[IO] =
+    Request[IO](Method.POST, Uri.unsafeFromString(s"/api/match-drafts/$matchDraftId/cancel"))
+      .putHeaders(devWriteHeadersWithIdempotency(idemKey)*)
+
   app.test("idempotency: same key + same body replays response and skips side-effect") { httpApp =>
     for
       first <- httpApp.run(heldEventReq(Some("key-1"), "2024-01-01T00:00:00Z"))
@@ -161,6 +168,33 @@ final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite with HttpAppT
         assertEquals(first.status, Status.Ok)
         assertEquals(second.status, Status.Ok)
         assertEquals(firstBody, secondBody)
+  }
+
+  app.test("idempotency: same path mutation key with a different id returns 409") { httpApp =>
+    for
+      draft1 <- httpApp.run(createMatchDraftReq)
+      _ = assertEquals(draft1.status, Status.Ok)
+      draft1Body <- draft1.as[Json]
+      draft2 <- httpApp.run(createMatchDraftReq)
+      _ = assertEquals(draft2.status, Status.Ok)
+      draft2Body <- draft2.as[Json]
+      draft1Id = jsonField[String](draft1Body, "matchDraftId")
+      draft2Id = jsonField[String](draft2Body, "matchDraftId")
+      firstCancel <- httpApp.run(cancelMatchDraftReq(Some("key-cancel-draft"), draft1Id))
+      _ = assertEquals(firstCancel.status, Status.Ok)
+      secondCancel <- httpApp.run(cancelMatchDraftReq(Some("key-cancel-draft"), draft2Id))
+      _ <- assertProblem(
+        secondCancel,
+        Status.Conflict,
+        "IDEMPOTENCY_PAYLOAD_MISMATCH",
+        "Idempotency-Key",
+      )
+      draft2Get <- httpApp.run(
+        Request[IO](Method.GET, Uri.unsafeFromString(s"/api/match-drafts/$draft2Id"))
+          .putHeaders(devReadHeader())
+      )
+      draft2GetBody <- draft2Get.as[Json]
+    yield assertEquals(jsonField[String](draft2GetBody, "status"), "draft_ready")
   }
 
   app.test("idempotency: missing key still works (creates entity normally)") { httpApp =>

@@ -240,6 +240,35 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
     }
   }
 
+  app.test("admin login account mutations reject blank ids at the HTTP boundary") { httpApp =>
+    val create = Request[IO](Method.POST, uri"/api/admin/login-accounts")
+      .putHeaders(devWriteHeaders()*).withEntity(Json.obj(
+        "discordUserId" -> Json.fromString(" "),
+        "displayName" -> Json.fromString("operator"),
+        "playerMemberId" -> Json.Null,
+        "loginEnabled" -> Json.fromBoolean(true),
+        "isAdmin" -> Json.fromBoolean(false),
+      ))
+    val update = Request[IO](Method.PATCH, uri"/api/admin/login-accounts/account_ponta")
+      .putHeaders(devWriteHeaders()*).withEntity(Json.obj("playerMemberId" -> Json.fromString(" ")))
+    for
+      createResponse <- httpApp.run(create)
+      _ <- assertProblemDetailEquals(
+        createResponse,
+        Status.UnprocessableContent,
+        "VALIDATION_FAILED",
+        "discordUserId must not be blank.",
+      )
+      updateResponse <- httpApp.run(update)
+      _ <- assertProblemDetailEquals(
+        updateResponse,
+        Status.UnprocessableContent,
+        "VALIDATION_FAILED",
+        "playerMemberId must not be blank.",
+      )
+    yield ()
+  }
+
   app.test("PATCH /api/admin/login-accounts keeps at least one enabled administrator") { httpApp =>
     val request = Request[IO](Method.PATCH, uri"/api/admin/login-accounts/account_ponta")
       .putHeaders(devWriteHeaders()*)

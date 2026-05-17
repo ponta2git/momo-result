@@ -16,16 +16,16 @@ import momo.api.repositories.{
 import momo.api.usecases.syntax.UseCaseSyntax.*
 
 final case class CreateLoginAccountCommand(
-    discordUserId: String,
+    discordUserId: UserId,
     displayName: String,
-    playerMemberId: Option[String],
+    playerMemberId: Option[MemberId],
     loginEnabled: Boolean,
     isAdmin: Boolean,
 )
 
 final case class UpdateLoginAccountCommand(
     displayName: Option[String],
-    playerMemberId: Option[Option[String]],
+    playerMemberId: Option[Option[MemberId]],
     loginEnabled: Option[Boolean],
     isAdmin: Option[Boolean],
 )
@@ -42,9 +42,7 @@ final class CreateLoginAccount[F[_]: MonadThrow](
   def run(command: CreateLoginAccountCommand): F[Either[AppError, LoginAccount]] = (for
     discordUserId <- EitherT.fromEither[F](LoginAccountField.discordUserId(command.discordUserId))
     displayName <- EitherT.fromEither[F](LoginAccountField.displayName(command.displayName))
-    playerMemberId <- EitherT
-      .fromEither[F](command.playerMemberId.traverse(LoginAccountField.playerMemberId))
-    _ <- playerMemberId.traverse(id => members.find(id).orNotFound("member", id.value)).void
+    _ <- command.playerMemberId.traverse(id => members.find(id).orNotFound("member", id.value)).void
     existing <- EitherT.liftF(accounts.findByDiscordUserId(discordUserId))
     _ <- EitherT.fromEither[F](
       Either.cond(existing.isEmpty, (), AppError.Conflict("discordUserId is already registered."))
@@ -55,7 +53,7 @@ final class CreateLoginAccount[F[_]: MonadThrow](
       id = id,
       discordUserId = discordUserId,
       displayName = displayName,
-      playerMemberId = playerMemberId,
+      playerMemberId = command.playerMemberId,
       loginEnabled = command.loginEnabled,
       isAdmin = command.isAdmin,
       createdAt = at,
@@ -74,11 +72,8 @@ final class UpdateLoginAccount[F[_]: MonadThrow](
       existing <- accounts.find(id).orNotFound("login account", id.value)
       displayName <- EitherT
         .fromEither[F](command.displayName.traverse(LoginAccountField.displayName))
-      playerMemberId <- EitherT.fromEither[F](command.playerMemberId.traverse(_.traverse(
-        LoginAccountField.playerMemberId
-      )))
-      _ <- playerMemberId.flatten.traverse(mid => members.find(mid).orNotFound("member", mid.value))
-        .void
+      _ <- command.playerMemberId.flatten
+        .traverse(mid => members.find(mid).orNotFound("member", mid.value)).void
       nextLoginEnabled = command.loginEnabled.getOrElse(existing.loginEnabled)
       nextIsAdmin = command.isAdmin.getOrElse(existing.isAdmin)
       _ <- ensureLastAdminIsKept(existing, nextLoginEnabled, nextIsAdmin)
@@ -87,7 +82,7 @@ final class UpdateLoginAccount[F[_]: MonadThrow](
         id,
         UpdateLoginAccountData(
           displayName = displayName,
-          playerMemberId = playerMemberId,
+          playerMemberId = command.playerMemberId,
           loginEnabled = command.loginEnabled,
           isAdmin = command.isAdmin,
           updatedAt = at,
@@ -128,21 +123,14 @@ private[usecases] object LoginAccountField:
   private val DiscordUserIdPattern = "^[0-9]{5,32}$".r
   private val MaxDisplayNameLength = 64
 
-  def discordUserId(value: String): Either[AppError, UserId] =
-    val trimmed = value.trim
-    Either.cond(
-      DiscordUserIdPattern.pattern.matcher(trimmed).matches(),
-      UserId.unsafeFromString(trimmed),
-      AppError.ValidationFailed("discordUserId must be a Discord snowflake-like numeric id."),
-    )
+  def discordUserId(value: UserId): Either[AppError, UserId] = Either.cond(
+    DiscordUserIdPattern.pattern.matcher(value.value).matches(),
+    value,
+    AppError.ValidationFailed("discordUserId must be a Discord snowflake-like numeric id."),
+  )
 
   def displayName(value: String): Either[AppError, String] =
     boundedText(field = "displayName", value = value, maxLength = MaxDisplayNameLength)
-
-  def playerMemberId(value: String): Either[AppError, MemberId] =
-    val trimmed = value.trim
-    if trimmed.isEmpty then Left(AppError.ValidationFailed("playerMemberId must not be blank."))
-    else Right(MemberId.unsafeFromString(trimmed))
 
   private def boundedText(field: String, value: String, maxLength: Int): Either[AppError, String] =
     val trimmed = value.trim

@@ -6,12 +6,13 @@ import cats.effect.Async
 import cats.syntax.all.*
 import sttp.tapir.server.ServerEndpoint
 
-import momo.api.domain.ids.AccountId
+import momo.api.domain.ids.{AccountId, MemberId, UserId}
 import momo.api.endpoints.codec.BoundaryId
 import momo.api.endpoints.{
   AdminAccountEndpoints, CreateLoginAccountRequest, LoginAccountListResponse, LoginAccountResponse,
   UpdateLoginAccountRequest,
 }
+import momo.api.errors.AppError
 import momo.api.http.{EndpointSecurity, IdempotencyReplay}
 import momo.api.repositories.IdempotencyRepository
 import momo.api.usecases.{
@@ -43,7 +44,9 @@ object AdminAccountModule:
           "POST /api/admin/login-accounts",
           request,
           nowF,
-          security.respond(createLoginAccount.run(toCommand(request)))(LoginAccountResponse.from),
+          security.decode(
+            toCommand(request)
+          )(command => security.respond(createLoginAccount.run(command))(LoginAccountResponse.from)),
         )
       }
     },
@@ -57,30 +60,42 @@ object AdminAccountModule:
               "PATCH /api/admin/login-accounts",
               (accountId, request),
               nowF,
-              security
-                .decode(BoundaryId.required("accountId", accountId)(AccountId.fromString)) { id =>
-                  security.respond(
-                    updateLoginAccount.run(id, toCommand(request))
-                  )(LoginAccountResponse.from)
-                },
+              security.decode(BoundaryId.required("accountId", accountId)(AccountId.fromString)) {
+                id =>
+                  security.decode(toCommand(request))(command =>
+                    security.respond(updateLoginAccount.run(id, command))(LoginAccountResponse.from)
+                  )
+              },
             )
           }
     },
   )
 
-  private def toCommand(request: CreateLoginAccountRequest): CreateLoginAccountCommand =
-    CreateLoginAccountCommand(
-      discordUserId = request.discordUserId,
+  private def toCommand(
+      request: CreateLoginAccountRequest
+  ): Either[AppError, CreateLoginAccountCommand] =
+    for
+      discordUserId <- BoundaryId
+        .required("discordUserId", request.discordUserId)(UserId.fromString)
+      playerMemberId <- BoundaryId
+        .optional("playerMemberId", request.playerMemberId)(MemberId.fromString)
+    yield CreateLoginAccountCommand(
+      discordUserId = discordUserId,
       displayName = request.displayName,
-      playerMemberId = request.playerMemberId,
+      playerMemberId = playerMemberId,
       loginEnabled = request.loginEnabled,
       isAdmin = request.isAdmin,
     )
 
-  private def toCommand(request: UpdateLoginAccountRequest): UpdateLoginAccountCommand =
-    UpdateLoginAccountCommand(
-      displayName = request.displayName,
-      playerMemberId = request.playerMemberId,
-      loginEnabled = request.loginEnabled,
-      isAdmin = request.isAdmin,
+  private def toCommand(
+      request: UpdateLoginAccountRequest
+  ): Either[AppError, UpdateLoginAccountCommand] = request.playerMemberId
+    .traverse(_.traverse(id => BoundaryId.required("playerMemberId", id)(MemberId.fromString)))
+    .map(playerMemberId =>
+      UpdateLoginAccountCommand(
+        displayName = request.displayName,
+        playerMemberId = playerMemberId,
+        loginEnabled = request.loginEnabled,
+        isAdmin = request.isAdmin,
+      )
     )

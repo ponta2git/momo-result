@@ -37,7 +37,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
 from types import MappingProxyType
-from typing import Protocol, cast
+from typing import NoReturn, Protocol, cast
 
 from PIL import Image
 
@@ -81,6 +81,9 @@ class _TesserocrApi(Protocol):
         raise NotImplementedError
 
     def SetImage(self, image: Image.Image) -> None:  # noqa: N802
+        raise NotImplementedError
+
+    def Recognize(self, timeout: int = 0) -> bool:  # noqa: N802
         raise NotImplementedError
 
     def GetUTF8Text(self) -> str:  # noqa: N802
@@ -240,8 +243,12 @@ class TesserocrEngine(TextRecognitionEngine):
             self._sync_variables(entry=entry, variables=config.variables)
             try:
                 api.SetImage(image)
+                if not api.Recognize(timeout=_timeout_milliseconds(config)):
+                    _raise_timeout_error(config)
                 raw_text = api.GetUTF8Text()
                 confidence_raw = api.MeanTextConf()
+            except OcrError:
+                raise
             except Exception as exc:
                 msg = "tesserocr recognition failed."
                 raise OcrError(FailureCode.PARSER_FAILED, msg, retryable=False) from exc
@@ -273,6 +280,27 @@ class TesserocrEngine(TextRecognitionEngine):
         # "" still counts as a "we touched this" state we must rewind on the
         # next call if a different value is asked for.
         entry.set_variable_keys.update(variables.keys())
+
+
+def _timeout_milliseconds(config: RecognitionConfig) -> int:
+    timeout_seconds = config.timeout_seconds
+    if timeout_seconds is None or timeout_seconds <= 0:
+        raise OcrError(
+            FailureCode.PARSER_FAILED,
+            "tesserocr timeout must be a positive number of seconds.",
+        )
+    return max(1, round(timeout_seconds * 1000))
+
+
+def _raise_timeout_error(config: RecognitionConfig) -> NoReturn:
+    timeout_seconds = config.timeout_seconds
+    timeout_text = "configured" if timeout_seconds is None else f"{timeout_seconds:g} seconds"
+    raise OcrError(
+        FailureCode.OCR_TIMEOUT,
+        f"tesserocr timed out after {timeout_text}.",
+        retryable=True,
+        user_action="Try the upload again or use manual entry if OCR keeps timing out.",
+    )
 
 
 def _merge_config(base: RecognitionConfig, override: RecognitionConfig) -> RecognitionConfig:

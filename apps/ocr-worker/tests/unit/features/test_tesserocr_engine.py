@@ -30,6 +30,7 @@ class _FakeApi:
     calls: list[tuple[str, tuple[Any, ...]]] = field(default_factory=list)
     text: str = "hello"
     confidence: int = 87
+    recognize_success: bool = True
     get_text_error: str | None = None
 
     def SetPageSegMode(self, psm: int) -> None:  # noqa: N802 - tesserocr API
@@ -40,6 +41,10 @@ class _FakeApi:
 
     def SetImage(self, image: Image.Image) -> None:  # noqa: N802
         self.calls.append(("SetImage", (image.mode,)))
+
+    def Recognize(self, timeout: int = 0) -> bool:  # noqa: N802
+        self.calls.append(("Recognize", (timeout,)))
+        return self.recognize_success
 
     def GetUTF8Text(self) -> str:  # noqa: N802
         self.calls.append(("GetUTF8Text", ()))
@@ -161,6 +166,38 @@ def test_image_is_passed_through_to_set_image_in_native_mode() -> None:
     set_image_calls = _calls_of(apis[0], {"SetImage"})
     # _img() is RGB; we must NOT downcast to L.
     assert set_image_calls == [("SetImage", ("RGB",))]
+
+
+def test_recognize_passes_timeout_to_native_recognize() -> None:
+    engine, apis = _make_engine()
+
+    engine.recognize(
+        _img(),
+        config=RecognitionConfig(language="jpn+eng", timeout_seconds=1.25),
+    )
+
+    recognize_calls = _calls_of(apis[0], {"Recognize"})
+    assert recognize_calls == [("Recognize", (1250,))]
+
+
+def test_recognize_reports_timeout_when_native_recognize_times_out() -> None:
+    engine, apis = _make_engine()
+
+    engine.recognize(_img(), config=RecognitionConfig(language="jpn+eng"))
+    apis[0].recognize_success = False
+
+    with pytest.raises(OcrError) as exc_info:
+        engine.recognize(
+            _img(),
+            config=RecognitionConfig(language="jpn+eng", timeout_seconds=0.25),
+        )
+
+    assert exc_info.value.code == FailureCode.OCR_TIMEOUT
+    assert exc_info.value.retryable
+    timeout_attempt_calls = apis[0].calls[-4:]
+    assert ("SetImage", ("RGB",)) in timeout_attempt_calls
+    assert ("Recognize", (250,)) in timeout_attempt_calls
+    assert ("GetUTF8Text", ()) not in timeout_attempt_calls
 
 
 def test_recognize_returns_text_and_normalized_confidence() -> None:

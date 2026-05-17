@@ -2,6 +2,7 @@ package momo.api.http
 
 import cats.effect.Async
 import cats.syntax.all.*
+import org.slf4j.LoggerFactory
 
 import momo.api.auth.AuthenticatedAccount
 import momo.api.endpoints.ProblemDetails
@@ -11,6 +12,8 @@ private[http] final class EndpointSecurity[F[_]: Async](
     policy: AuthPolicy[F],
     masterManagementPolicy: MasterManagementPolicy = new MasterManagementPolicy,
 ):
+  private val logger = LoggerFactory.getLogger("momo.api.http.EndpointSecurity")
+
   def authorizeRead[A](accountHeader: Option[String])(
       authorized: AuthenticatedAccount => F[Either[ProblemDetails.ProblemResponse, A]]
   ): F[Either[ProblemDetails.ProblemResponse, A]] = policy.authenticate(accountHeader).flatMap {
@@ -54,7 +57,10 @@ private[http] final class EndpointSecurity[F[_]: Async](
         case Left(error) => Async[F].pure(Left(toProblem(error)))
   }
 
-  def toProblem(error: AppError): ProblemDetails.ProblemResponse = ProblemDetails.from(error)
+  def toProblem(error: AppError): ProblemDetails.ProblemResponse =
+    if isIncident(error) then
+      logger.error(s"HTTP endpoint returned incident problemCode=${error.code}")
+    ProblemDetails.from(error)
 
   def respond[A, B](result: F[Either[AppError, A]])(
       onSuccess: A => B
@@ -65,3 +71,8 @@ private[http] final class EndpointSecurity[F[_]: Async](
   ): F[Either[ProblemDetails.ProblemResponse, B]] = decoded match
     case Left(error) => Async[F].pure(Left(toProblem(error)))
     case Right(value) => onSuccess(value)
+
+  private def isIncident(error: AppError): Boolean = error match
+    case _: AppError.DependencyFailed => true
+    case _: AppError.Internal => true
+    case _ => false

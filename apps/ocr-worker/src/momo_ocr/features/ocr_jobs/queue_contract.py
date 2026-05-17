@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from functools import lru_cache
 from pathlib import Path
 from typing import cast
@@ -111,9 +111,92 @@ def _validate_json_schema(
 
 def _schema_error_detail(error: ValidationError) -> str:
     path = error.json_path
+    detail = _sanitized_schema_violation(error)
     if path == "$":
-        return error.message
-    return f"{path}: {error.message}"
+        return detail
+    return f"{path}: {detail}"
+
+
+def _sanitized_schema_violation(error: ValidationError) -> str:
+    """Return schema error details without echoing user-provided values."""
+    validator = str(error.validator)
+    handler = _SCHEMA_VIOLATION_HANDLERS.get(validator)
+    if handler is None:
+        return f"violates {validator} constraint"
+    return handler(error)
+
+
+def _required_violation(error: ValidationError) -> str:
+    missing = _missing_required_properties(error)
+    if missing:
+        return f"missing required properties: {', '.join(missing)}"
+    return "missing required properties"
+
+
+def _additional_properties_violation(error: ValidationError) -> str:
+    extras = _additional_properties(error)
+    if extras:
+        return f"has additional properties: {', '.join(extras)}"
+    return "has additional properties"
+
+
+def _type_violation(error: ValidationError) -> str:
+    expected = error.validator_value
+    if isinstance(expected, list):
+        expected_text = " or ".join(str(item) for item in expected)
+    else:
+        expected_text = str(expected)
+    return f"expected type {expected_text}"
+
+
+def _format_violation(error: ValidationError) -> str:
+    return f"must be a valid {error.validator_value}"
+
+
+def _min_length_violation(error: ValidationError) -> str:
+    return "should be non-empty" if error.validator_value == 1 else "is too short"
+
+
+def _min_items_violation(error: ValidationError) -> str:
+    return "should be non-empty" if error.validator_value == 1 else "has too few items"
+
+
+def _fixed_violation(message: str) -> Callable[[ValidationError], str]:
+    def format_violation(_error: ValidationError) -> str:
+        return message
+
+    return format_violation
+
+
+_SCHEMA_VIOLATION_HANDLERS: Mapping[str, Callable[[ValidationError], str]] = {
+    "required": _required_violation,
+    "additionalProperties": _additional_properties_violation,
+    "type": _type_violation,
+    "enum": _fixed_violation("must be one of allowed values"),
+    "const": _fixed_violation("must equal required constant"),
+    "pattern": _fixed_violation("does not match required pattern"),
+    "format": _format_violation,
+    "minLength": _min_length_violation,
+    "maxLength": _fixed_violation("is too long"),
+    "minItems": _min_items_violation,
+    "maxItems": _fixed_violation("has too many items"),
+}
+
+
+def _missing_required_properties(error: ValidationError) -> list[str]:
+    required = error.validator_value
+    instance = error.instance
+    if not isinstance(required, list) or not isinstance(instance, Mapping):
+        return []
+    return sorted(str(key) for key in required if key not in instance)
+
+
+def _additional_properties(error: ValidationError) -> list[str]:
+    instance = error.instance
+    properties = error.schema.get("properties") if isinstance(error.schema, Mapping) else None
+    if not isinstance(instance, Mapping) or not isinstance(properties, Mapping):
+        return []
+    return sorted(str(key) for key in instance if key not in properties)
 
 
 @lru_cache(maxsize=1)

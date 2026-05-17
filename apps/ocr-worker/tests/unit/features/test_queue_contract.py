@@ -147,17 +147,20 @@ def test_parse_job_message_rejects_schema_invalid_top_level_payloads() -> None:
     payload = _schema_valid_payload()
 
     invalid_payloads: list[tuple[Mapping[str, object], tuple[str, ...]]] = [
-        ({**payload, "attempt": 1}, ("$.attempt", "not of type 'string'")),
-        ({**payload, "unknownField": "value"}, ("Additional properties", "unknownField")),
+        ({**payload, "attempt": 1}, ("$.attempt", "expected type string")),
+        ({**payload, "unknownField": "value"}, ("additional properties", "unknownField")),
         (
             {key: value for key, value in payload.items() if key != "schemaVersion"},
-            ("'schemaVersion' is a required property",),
+            ("missing required properties", "schemaVersion"),
         ),
         ({**payload, "jobId": ""}, ("$.jobId", "should be non-empty")),
-        ({**payload, "imagePath": "relative/image.png"}, ("$.imagePath", "does not match '^/'")),
-        ({**payload, "attempt": "01"}, ("$.attempt", "does not match")),
-        ({**payload, "enqueuedAt": "not-a-date-time"}, ("$.enqueuedAt", "not-a-date-time")),
-        ({**payload, "schemaVersion": "2"}, ("$.schemaVersion", "'1' was expected")),
+        (
+            {**payload, "imagePath": "relative/image.png"},
+            ("$.imagePath", "does not match required pattern"),
+        ),
+        ({**payload, "attempt": "01"}, ("$.attempt", "does not match required pattern")),
+        ({**payload, "enqueuedAt": "not-a-date-time"}, ("$.enqueuedAt", "valid date-time")),
+        ({**payload, "schemaVersion": "2"}, ("$.schemaVersion", "required constant")),
         ({**payload, "ocrHintsJson": "x" * 8193}, ("$.ocrHintsJson", "is too long")),
     ]
 
@@ -213,14 +216,14 @@ def test_parse_job_message_rejects_invalid_alias_hint_shape() -> None:
 def test_parse_job_message_rejects_schema_invalid_hint_payloads() -> None:
     payload = _schema_valid_payload()
     invalid_hints = [
-        ('{"unknownField":"value"}', ("Additional properties", "unknownField")),
+        ('{"unknownField":"value"}', ("additional properties", "unknownField")),
         (
             '{"knownPlayerAliases":[{"memberId":"member-1"}]}',
-            ("$.knownPlayerAliases[0]", "aliases"),
+            ("$.knownPlayerAliases[0]", "missing required properties", "aliases"),
         ),
         (
             '{"knownPlayerAliases":[{"memberId":"member-1","aliases":[],"extra":"value"}]}',
-            ("$.knownPlayerAliases[0]", "Additional properties", "extra"),
+            ("$.knownPlayerAliases[0]", "additional properties", "extra"),
         ),
         (
             '{"knownPlayerAliases":[{"memberId":"member-1","aliases":[]}]}',
@@ -228,7 +231,7 @@ def test_parse_job_message_rejects_schema_invalid_hint_payloads() -> None:
         ),
         (
             '{"knownPlayerAliases":[{"memberId":"member-1","aliases":["a","b","c","d","e","f","g","h","i"]}]}',
-            ("$.knownPlayerAliases[0].aliases", "is too long"),
+            ("$.knownPlayerAliases[0].aliases", "has too many items"),
         ),
         (
             '{"computerPlayerAliases":["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]}',
@@ -298,6 +301,32 @@ def test_invalid_request_id_is_rejected_by_runtime_schema_validation() -> None:
 
     assert error.value.code.value == "QUEUE_FAILURE"
     assert "$.requestId" in error.value.message
+
+
+def test_schema_validation_errors_do_not_echo_invalid_payload_values() -> None:
+    private_screen = "private-screen-type"
+    private_hint = "private-player-alias-" + ("x" * 65)
+
+    invalid_payloads = [
+        ({**_schema_valid_payload(), "requestedScreenType": private_screen}, private_screen),
+        (
+            {
+                **_schema_valid_payload(),
+                "ocrHintsJson": json.dumps(
+                    {"computerPlayerAliases": [private_hint]},
+                    ensure_ascii=False,
+                ),
+            },
+            private_hint,
+        ),
+    ]
+
+    for invalid_payload, private_value in invalid_payloads:
+        with pytest.raises(OcrError) as error:
+            parse_job_message(invalid_payload)
+
+        assert error.value.code.value == "QUEUE_FAILURE"
+        assert private_value not in error.value.message
 
 
 def test_stream_payload_schema_rejects_non_string_and_unknown_fields() -> None:

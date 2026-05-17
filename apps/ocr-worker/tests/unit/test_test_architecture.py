@@ -33,7 +33,7 @@ def test_coverage_gate_tracks_line_and_branch_baseline() -> None:
         "src/momo_ocr/features/ocr_results/ranked_rows.py",
     ]
     assert coverage_run["source"] == ["momo_ocr"]
-    assert coverage_report["fail_under"] == 88.1
+    assert coverage_report["fail_under"] == 88.2
     assert coverage_report["show_missing"] is True
     assert coverage_report["skip_covered"] is True
 

@@ -23,12 +23,25 @@ class RedisConsumerRetryConfig:
     max_attempts: int
     dead_letter_stream: str | None
     claim_idle_ms: int
+    pending_scan_count: int
+
+    def __post_init__(self) -> None:
+        if self.max_attempts < 1:
+            msg = "max_attempts must be a positive integer."
+            raise ValueError(msg)
+        if self.claim_idle_ms < 1:
+            msg = "claim_idle_ms must be a positive integer."
+            raise ValueError(msg)
+        if self.pending_scan_count < 1:
+            msg = "pending_scan_count must be a positive integer."
+            raise ValueError(msg)
 
 
 DEFAULT_REDIS_RETRY_CONFIG = RedisConsumerRetryConfig(
     max_attempts=1,
     dead_letter_stream=None,
     claim_idle_ms=30_000,
+    pending_scan_count=10,
 )
 
 
@@ -204,14 +217,16 @@ class RedisOcrJobConsumer:
                 self._group,
                 min="-",
                 max="+",
-                count=1,
+                count=self._retry_config.pending_scan_count,
             ),
         )
         if not pending_entries:
             return None
-        entry = pending_entries[0]
-        idle_ms = _int_from_mapping(entry, "time_since_delivered", default=0)
-        return entry if idle_ms >= self._retry_config.claim_idle_ms else None
+        for entry in pending_entries:
+            idle_ms = _int_from_mapping(entry, "time_since_delivered", default=0)
+            if idle_ms >= self._retry_config.claim_idle_ms:
+                return entry
+        return None
 
     def _dead_letter(self, message_id: str, fields: dict[str, str], deliveries: int) -> None:
         if self._retry_config.dead_letter_stream is None:

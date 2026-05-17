@@ -243,6 +243,21 @@ final class MasterEndpointsSpec extends MomoCatsEffectSuite with HttpAppTestFixt
     yield ()
   }
 
+  app.test("member alias endpoints reject blank member ids at the HTTP boundary") { http =>
+    val createBody = Json.obj("memberId" -> Json.fromString(" "), "alias" -> Json.fromString("x"))
+    for
+      createResp <- http.run(
+        Request[IO](Method.POST, uri"/api/member-aliases").withHeaders(devWriteHeaders()*)
+          .withEntity(createBody)
+      )
+      _ <- assertProblem(createResp, Status.UnprocessableContent, "VALIDATION_FAILED", "memberId")
+      listResp <- http.run(
+        Request[IO](Method.GET, uri"/api/member-aliases?memberId=%20").withHeaders(devReadHeader())
+      )
+      _ <- assertProblem(listResp, Status.UnprocessableContent, "VALIDATION_FAILED", "memberId")
+    yield ()
+  }
+
   app.test("GET /api/game-titles without auth returns 401") { http =>
     val req = Request[IO](Method.GET, uri"/api/game-titles")
     http.run(req).flatMap { r =>

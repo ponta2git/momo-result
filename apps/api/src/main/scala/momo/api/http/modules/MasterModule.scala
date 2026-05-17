@@ -6,7 +6,7 @@ import cats.effect.Async
 import cats.syntax.all.*
 import sttp.tapir.server.ServerEndpoint
 
-import momo.api.domain.ids.{GameTitleId, MapMasterId, SeasonMasterId}
+import momo.api.domain.ids.{GameTitleId, MapMasterId, MemberId, SeasonMasterId}
 import momo.api.endpoints.codec.{BoundaryId, MasterCodec}
 import momo.api.endpoints.{
   CreateGameTitleRequest, CreateMapMasterRequest, CreateMemberAliasRequest,
@@ -223,9 +223,12 @@ object MasterModule:
     },
     MemberAliasesEndpoints.list.serverLogic { case (memberId, accountHeader) =>
       security.authorizeRead(accountHeader) { _ =>
-        security.respond(
-          listMemberAliases.run(memberId)
-        )(items => MemberAliasListResponse(items.map(MemberAliasResponse.from)))
+        security
+          .decode(BoundaryId.optional("memberId", memberId)(MemberId.fromString)) { parsedMemberId =>
+            security.respond(
+              listMemberAliases.run(parsedMemberId)
+            )(items => MemberAliasListResponse(items.map(MemberAliasResponse.from)))
+          }
       }
     },
     MemberAliasesEndpoints.create.serverLogic { case (accountHeader, csrfToken, idemKey, request) =>
@@ -237,9 +240,9 @@ object MasterModule:
           "POST /api/member-aliases",
           request,
           nowF,
-          security.respond(
-            createMemberAlias.run(MasterCodec.toCreateMemberAliasCommand(request))
-          )(MemberAliasResponse.from),
+          security.decode(
+            MasterCodec.toCreateMemberAliasCommand(request)
+          )(command => security.respond(createMemberAlias.run(command))(MemberAliasResponse.from)),
         )
       }
     },

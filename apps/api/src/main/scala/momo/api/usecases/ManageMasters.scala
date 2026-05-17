@@ -2,9 +2,9 @@ package momo.api.usecases
 
 import java.time.Instant
 
-import cats.MonadThrow
 import cats.data.EitherT
 import cats.syntax.all.*
+import cats.{Functor, MonadThrow}
 
 import momo.api.domain.ids.*
 import momo.api.domain.{GameTitle, MapMaster, MemberAlias, SeasonMaster}
@@ -75,14 +75,12 @@ final class ListSeasonMasters[F[_]](seasons: SeasonMastersRepository[F]):
 final class ListIncidentMasters[F[_]](incidents: IncidentMastersRepository[F]):
   def run: F[List[momo.api.domain.IncidentMaster]] = incidents.list
 
-final case class CreateMemberAliasCommand(memberId: String, alias: String)
-final case class UpdateMemberAliasCommand(id: String, memberId: String, alias: String)
+final case class CreateMemberAliasCommand(memberId: MemberId, alias: String)
+final case class UpdateMemberAliasCommand(id: String, memberId: MemberId, alias: String)
 
-final class ListMemberAliases[F[_]: MonadThrow](aliases: MemberAliasesRepository[F]):
-  def run(memberId: Option[String]): F[Either[AppError, List[MemberAlias]]] = memberId
-    .traverse(validateMemberId) match
-    case Left(error) => MonadThrow[F].pure(Left(error))
-    case Right(id) => aliases.list(id).map(_.asRight[AppError])
+final class ListMemberAliases[F[_]: Functor](aliases: MemberAliasesRepository[F]):
+  def run(memberId: Option[MemberId]): F[Either[AppError, List[MemberAlias]]] = aliases
+    .list(memberId).map(_.asRight[AppError])
 
 final class CreateMemberAlias[F[_]: MonadThrow](
     aliases: MemberAliasesRepository[F],
@@ -91,13 +89,12 @@ final class CreateMemberAlias[F[_]: MonadThrow](
     nextId: F[String],
 ):
   def run(command: CreateMemberAliasCommand): F[Either[AppError, MemberAlias]] = (for
-    memberId <- EitherT.fromEither[F](validateMemberId(command.memberId))
     alias <- EitherT.fromEither[F](validateAlias(command.alias))
-    _ <- members.find(memberId).orNotFound("member", memberId.value)
+    _ <- members.find(command.memberId).orNotFound("member", command.memberId.value)
     _ <- ensureAliasAvailable(aliases, alias, exceptId = None)
     id <- EitherT.liftF(nextId)
     createdAt <- EitherT.liftF(now)
-    row = MemberAlias(id = id, memberId = memberId, alias = alias, createdAt = createdAt)
+    row = MemberAlias(id = id, memberId = command.memberId, alias = alias, createdAt = createdAt)
     _ <- EitherT.liftF(aliases.create(row))
   yield row).value
 
@@ -107,11 +104,10 @@ final class UpdateMemberAlias[F[_]: MonadThrow](
 ):
   def run(command: UpdateMemberAliasCommand): F[Either[AppError, MemberAlias]] = (for
     existing <- aliases.find(command.id).orNotFound("member alias", command.id)
-    memberId <- EitherT.fromEither[F](validateMemberId(command.memberId))
     alias <- EitherT.fromEither[F](validateAlias(command.alias))
-    _ <- members.find(memberId).orNotFound("member", memberId.value)
+    _ <- members.find(command.memberId).orNotFound("member", command.memberId.value)
     _ <- ensureAliasAvailable(aliases, alias, exceptId = Some(existing.id))
-    updated = existing.copy(memberId = memberId, alias = alias)
+    updated = existing.copy(memberId = command.memberId, alias = alias)
     _ <- EitherT.liftF(aliases.update(updated))
   yield updated).value
 
@@ -120,14 +116,6 @@ final class DeleteMemberAlias[F[_]: MonadThrow](aliases: MemberAliasesRepository
     _ <- aliases.find(id).orNotFound("member alias", id)
     _ <- EitherT.liftF(aliases.delete(id))
   yield ()).value
-
-private def validateMemberId(value: String): Either[AppError, MemberId] =
-  val trimmed = value.trim
-  Either.cond(
-    trimmed.nonEmpty,
-    MemberId.unsafeFromString(trimmed),
-    AppError.ValidationFailed("memberId must not be blank."),
-  )
 
 private def validateAlias(value: String): Either[AppError, String] =
   val trimmed = value.trim

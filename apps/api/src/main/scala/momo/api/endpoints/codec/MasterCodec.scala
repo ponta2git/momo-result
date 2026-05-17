@@ -56,12 +56,18 @@ object MasterCodec:
   ): Either[AppError, UpdateSeasonMasterCommand] = BoundaryId
     .required("id", id)(SeasonMasterId.fromString).map(UpdateSeasonMasterCommand(_, request.name))
 
-  def toCreateMemberAliasCommand(request: CreateMemberAliasRequest): CreateMemberAliasCommand =
-    CreateMemberAliasCommand(request.memberId, request.alias)
+  def toCreateMemberAliasCommand(
+      request: CreateMemberAliasRequest
+  ): Either[AppError, CreateMemberAliasCommand] = BoundaryId
+    .required("memberId", request.memberId)(MemberId.fromString)
+    .map(memberId => CreateMemberAliasCommand(memberId, request.alias))
 
   def toUpdateMemberAliasCommand(
       id: String,
       request: UpdateMemberAliasRequest,
-  ): Either[AppError, UpdateMemberAliasCommand] = BoundaryId.nonBlank("id", id)
-    .map(UpdateMemberAliasCommand(_, request.memberId, request.alias))
+  ): Either[AppError, UpdateMemberAliasCommand] =
+    for
+      parsedId <- BoundaryId.nonBlank("id", id)
+      memberId <- BoundaryId.required("memberId", request.memberId)(MemberId.fromString)
+    yield UpdateMemberAliasCommand(parsedId, memberId, request.alias)
 end MasterCodec

@@ -116,10 +116,14 @@ final class PostgresMasterRepositoriesSpec extends IntegrationSuite:
     val update = new UpdateMemberAlias[IO](memberAliases, members)
     val delete = new DeleteMemberAlias[IO](memberAliases)
     for
-      created <- create.run(CreateMemberAliasCommand("member_ponta", "  ポン太社長  "))
-      duplicate <- createDuplicateId.run(CreateMemberAliasCommand("member_otaka", "ポン太社長"))
+      created <- create
+        .run(CreateMemberAliasCommand(MemberId.unsafeFromString("member_ponta"), "  ポン太社長  "))
+      duplicate <- createDuplicateId
+        .run(CreateMemberAliasCommand(MemberId.unsafeFromString("member_otaka"), "ポン太社長"))
       list <- memberAliases.list(Some(MemberId.unsafeFromString("member_ponta")))
-      updated <- update.run(UpdateMemberAliasCommand("alias-ponta", "member_otaka", "おたか社長"))
+      updated <- update.run(
+        UpdateMemberAliasCommand("alias-ponta", MemberId.unsafeFromString("member_otaka"), "おたか社長")
+      )
       found <- memberAliases.find("alias-ponta")
       deleted <- delete.run("alias-ponta")
       afterDelete <- memberAliases.find("alias-ponta")

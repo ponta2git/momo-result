@@ -228,6 +228,27 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
             case other => fail(s"expected Conflict, got $other")
         case other => fail(s"expected AppException(Conflict), got $other")
 
+  test("confirmation from draft persists match and confirmed draft link"):
+    val draftId = MatchDraftId.unsafeFromString("match-draft-confirm-success")
+    val rec = sampleMatch("match_confirm_success", 1)
+    val snapshot = MatchDraftConfirmation(
+      draftId = draftId,
+      updatedAt = now,
+      totalAssetsDraftId = None,
+      revenueDraftId = None,
+      incidentLogDraftId = None,
+    )
+    for
+      _ <- seedPrereqs
+      _ <- insertMatchDraft(draftId, now)
+      confirmed <- confirmations.confirm(rec, Some(snapshot), now.plusSeconds(2))
+      found <- matches.find(rec.id)
+      status <- draftStatus(draftId)
+    yield
+      assertEquals(confirmed, true)
+      assertEquals(found.map(_.id), Some(rec.id))
+      assertEquals(status, (MatchDraftStatus.Confirmed, Some(rec.id)))
+
   test("confirmation refuses a draft changed after the validated snapshot"):
     val draftId = MatchDraftId.unsafeFromString("match-draft-confirm-stale")
     val rec = sampleMatch("match_confirm_stale", 1)

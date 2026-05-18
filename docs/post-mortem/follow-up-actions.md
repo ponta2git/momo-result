@@ -1,6 +1,6 @@
 # Postmortem Follow-up Actions
 
-Last reviewed: 2026-05-10
+Last reviewed: 2026-05-18
 
 このファイルは `docs/post-mortem/*.md` の `Follow-up Actions` を横断して、対応状況と優先度を管理するための一覧である。新しいポストモーテムで follow-up action を追加した場合は、このファイルにも同じ action を追加し、未対応 action 全体の優先度を再評価して並べ直す。
 
@@ -48,9 +48,13 @@ Last reviewed: 2026-05-10
 | 2026-05-10 | `2026-05-10-frontend-ocr-confirm-match-draft-id-dropped.md` | P0 | Keep a durable test rule that schema/DTO transforms must preserve hidden workflow identifiers required by the target mutation. | `docs/test-rule.md` | Web test rules mention route/prefill-only identifiers and outgoing request payload assertions. | `docs/test-rule.md` now has Form schema / request transform rules. `confirmMatchFormSchema.test.ts` and `matchFormToRequest.test.ts` cover `matchDraftId` preservation/omission. |
 | 2026-05-10 | `2026-05-10-frontend-ocr-confirm-match-draft-id-dropped.md` | P0 | Keep a short lessons prompt for frontend form-to-request transforms. | `docs/post-mortem/lessons.md` | `lessons.md` points future form/schema changes to this failure mode. | `lessons.md` now asks whether hidden workflow identifiers survive schema parse / transform and points to the postmortem. |
 | 2026-05-10 | `2026-05-10-frontend-ocr-confirm-match-draft-id-dropped.md` | P0 | Document the two match confirmation modes and the role of `matchDraftId` versus `draftIds`. | `docs/domain-rule.md` | Domain rules state that `matchDraftId` closes the source draft and `draftIds` are OCR provenance only. | `docs/domain-rule.md` now has "試合確定の2経路" and distinguishes direct/manual creation from OCR-source draft confirmation. |
+| 2026-05-18 | `2026-05-18-backend-match-confirmation-fk-order.md` | P0 | Add PostgreSQL integration coverage for successful draft confirmation and persisted `confirmed_match_id`. | `apps/api/src/test/scala/momo/api/integration/PostgresMatchesRepositorySpec.scala` | `sbt apiDbQuality` | `PostgresMatchesRepositorySpec` now includes `confirmation from draft persists match and confirmed draft link`; `sbt apiDbQuality` passed. |
+| 2026-05-18 | `2026-05-18-backend-match-confirmation-fk-order.md` | P0 | Keep a durable DB-backed test rule for same-transaction FK-linked writes. | `docs/test-rule.md` | Document review plus `sbt apiCheck` | `docs/test-rule.md` DB-backed API rules now require PostgreSQL integration coverage for same-transaction FK-linked writes; `sbt apiCheck` passed. |
+| 2026-05-18 | `2026-05-18-backend-match-confirmation-fk-order.md` | P0 | Keep a short lessons prompt for PostgreSQL FK check timing. | `docs/post-mortem/lessons.md` | Document review | `lessons.md` now asks whether non-deferrable FK statement order and linked row values were verified. |
 
 ## Review Notes
 
+- 2026-05-18 の match confirmation FK order actions は、修正・integration coverage・規約更新まで同一作業で完了。
 - 2026-05-10 の create mutation audit は完了。新たに具体的な同種未修正箇所は見つからなかった。
 - backend startup DB contract behavior は実装作業ではなく設計判断待ちとして扱う。
 - `/matches` filter E2E は E2E smoke scope 拡大時の候補であり、直近の component/page 回帰対策は完了済み。

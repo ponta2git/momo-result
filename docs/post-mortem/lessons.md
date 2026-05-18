@@ -32,6 +32,8 @@
 
 - 接続先DBに必要な migration が適用済みであることを確認したか。
 - 変更した repository/query を実PostgreSQLで実行したか。
+- 同一 transaction で FK 関連 row を作成・更新する場合、非 deferrable FK の statement
+  order と成功 path の linked row values を integration test で確認したか。
 - DB contract、repository integration、HTTP/usecase test の責務を混同していないか。
 - integration test が skip された場合、そのDB動作を未検証として扱っているか。
 
@@ -41,6 +43,7 @@
 - DB-backed API の検証責務: `docs/test-rule.md`
 - ローカルDB起動と検証コマンド: `docs/dev-rule.md`
 - 元事象: `docs/post-mortem/2026-05-03-backend-matches-list-db-errors.md`
+- 元事象: `docs/post-mortem/2026-05-18-backend-match-confirmation-fk-order.md`
 
 ### テストレイヤ選択
 

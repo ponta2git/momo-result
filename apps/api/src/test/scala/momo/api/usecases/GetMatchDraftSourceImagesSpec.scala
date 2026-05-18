@@ -79,7 +79,10 @@ final class GetMatchDraftSourceImagesSpec extends MomoCatsEffectSuite:
         val file = archive.getOrElse(fail("expected archive"))
         assertEquals(file.fileName, "momo-ocr-images-20260518.zip")
         assertEquals(file.imageCount, 2)
-        assertEquals(zipEntries(file.bytes).keySet, Set("01-total-assets.png", "03-incident-log.webp"))
+        assertEquals(
+          zipEntries(file.bytes).keySet,
+          Set("01-total-assets.png", "03-incident-log.webp"),
+        )
     }
   }
 

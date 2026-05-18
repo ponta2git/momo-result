@@ -46,10 +46,10 @@ import momo.api.usecases.{
   DeleteMemberAlias, DeleteSeasonMaster, ExpiredSessionPruner, ExportMatches, GetMatch,
   GetMatchDraft, GetMatchDraftSourceImages, GetOcrDraft, GetOcrDraftsBulk, GetOcrJob,
   ListGameTitles, ListHeldEvents, ListIncidentMasters, ListLoginAccounts, ListMapMasters,
-  ListMatches, ListMemberAliases, ListSeasonMasters, OcrQueueOutboxDispatcher, OcrQueueSubmitter,
-  PeriodicMaintenance, PurgeSourceImages, SourceImageOrphanReaper, StaleOcrJobReaper,
-  UpdateGameTitle, UpdateLoginAccount, UpdateMapMaster, UpdateMatch, UpdateMatchDraft,
-  UpdateMemberAlias, UpdateSeasonMaster, UploadImage,
+  ListMatches, ListMemberAliases, ListSeasonMasters, OcrQueueOutboxDispatcher,
+  OcrQueueOutboxDispatcherConfig, OcrQueueSubmitter, PeriodicMaintenance, PurgeSourceImages,
+  SourceImageOrphanReaper, StaleOcrJobReaper, UpdateGameTitle, UpdateLoginAccount, UpdateMapMaster,
+  UpdateMatch, UpdateMatchDraft, UpdateMemberAlias, UpdateSeasonMaster, UploadImage,
 }
 
 object ApiApp:
@@ -126,7 +126,13 @@ object ApiApp:
           PostgresOcrJobMaintenanceRepository[F](transactor)
         val health =
           healthDetails[F](Some(Database.ping[F](transactor)), config.redis.map(_ => queue.ping))
-        OcrQueueOutboxDispatcher.resource[F](ocrQueueOutbox, queue).flatMap { _ =>
+        OcrQueueOutboxDispatcher.resource[F](
+          ocrQueueOutbox,
+          queue,
+          OcrQueueOutboxDispatcherConfig(pollInterval =
+            config.resourceLimits.ocrOutboxRecoveryInterval
+          ),
+        ).flatMap { _ =>
           runtimeMaintenance(
             config = config,
             imageStore = imageStore,
@@ -140,7 +146,7 @@ object ApiApp:
               config = config,
               imageStore = imageStore,
               healthDetails = health,
-              ocrQueueSubmitter = OcrQueueSubmitter.deferred[F],
+              ocrQueueSubmitter = OcrQueueSubmitter.outboxBacked[F](ocrQueueOutbox, queue),
               ocrJobCreation = ocrJobCreation,
               jobs = jobs,
               drafts = drafts,

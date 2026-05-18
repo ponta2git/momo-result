@@ -125,7 +125,7 @@ def test_redis_consumer_from_config_bounds_redis_socket_waits(
     assert captured["health_check_interval"] == 30
     assert captured["socket_keepalive"] is True
     assert captured["socket_connect_timeout"] == 5.0
-    assert captured["socket_timeout"] == 5.0
+    assert captured["socket_timeout"] == 35.0
     assert captured["mkstream"] is True
 
 
@@ -148,9 +148,11 @@ def test_redis_consumer_from_config_uses_independent_claim_idle(
             stream: str,
             group: str,
             consumer_name: str,
+            block_ms: int,
             retry_config: RedisConsumerRetryConfig,
         ) -> None:
             del stream, group, consumer_name
+            captured["block_ms"] = block_ms
             captured["claim_idle_ms"] = retry_config.claim_idle_ms
 
     monkeypatch.setattr(composition_module, "Redis", _StubRedis)
@@ -165,6 +167,7 @@ def test_redis_consumer_from_config_uses_independent_claim_idle(
     redis_consumer_from_config(config)
 
     assert captured["claim_idle_ms"] == 450_000
+    assert captured["block_ms"] == 30_000
 
 
 @dataclass

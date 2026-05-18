@@ -31,6 +31,7 @@ class FakeRedis:
         self.pending_range_counts: list[int] = []
         self.claimed_message_ids: list[list[str]] = []
         self.claim_idle_ms: list[int] = []
+        self.blocks: list[int] = []
         self.closed = False
 
     def xgroup_create(
@@ -57,6 +58,7 @@ class FakeRedis:
     ) -> object:
         assert count == 1
         assert block > 0
+        self.blocks.append(block)
         return self.deliveries
 
     def xpending_range(
@@ -162,6 +164,24 @@ def test_redis_consumer_pulls_and_parses_valid_delivery(
     assert isinstance(pulled, PulledJob)
     assert pulled.delivery_tag == "1-0"
     assert pulled.message.job_id == "job-1"
+
+
+def test_redis_consumer_uses_configured_block_ms(
+    valid_stream_payload: dict[str, str],
+) -> None:
+    redis = FakeRedis([("momo:ocr:jobs", [("1-0", valid_stream_payload)])])
+    consumer = RedisOcrJobConsumer(
+        redis,
+        stream="momo:ocr:jobs",
+        group="momo-ocr-workers",
+        consumer_name="worker-1",
+        block_ms=30_000,
+    )
+
+    pulled = consumer.pull()
+
+    assert isinstance(pulled, PulledJob)
+    assert redis.blocks == [30_000]
 
 
 def test_redis_consumer_returns_malformed_delivery_for_runner_to_persist(

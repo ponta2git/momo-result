@@ -37,6 +37,8 @@ Redis は配送路であり、ジョブ状態の正本ではない。worker は 
 | Worker concurrency | `1` | `OCR_WORKER_CONCURRENCY` |
 | Max delivery attempts | `1` | `OCR_MAX_ATTEMPTS` |
 | Pending claim idle | `300000ms` | `OCR_REDIS_CLAIM_IDLE_SECONDS` |
+| Worker blocking read | `30000ms` | `OCR_REDIS_BLOCK_SECONDS` |
+| Outbox recovery poll | `900s` | `OCR_OUTBOX_RECOVERY_INTERVAL_SECONDS` |
 
 Rules:
 
@@ -46,6 +48,7 @@ Rules:
 - 即時 nack は使わない。
 - `OCR_TIMEOUT_SECONDS` はOCR認識timeout。`OCR_REDIS_CLAIM_IDLE_SECONDS` はPEL回収待機時間。混同しない。
 - claim idle は、正当な長時間ジョブを重複配送しないよう API stale job reaper の基準値以上にする。
+- worker の blocking read は、空 queue で Redis commands を増やしすぎないため長めに取る。メッセージ到着時は block 終了を待たずに返るため、通常の OCR 開始遅延にはしない。
 
 ## 3. Stream Payload v1
 
@@ -103,7 +106,7 @@ worker は hints を補助情報として扱う。画面種別、プレイヤー
 
 ## 5. API Outbox
 
-API は OCR job 作成 transaction 内で `ocr_drafts`、`ocr_jobs`、`ocr_queue_outbox` を作成する。HTTP success は Redis publish 完了ではなく、DB に durable enqueue intent が残ったことを意味する。
+API は OCR job 作成 transaction 内で `ocr_drafts`、`ocr_jobs`、`ocr_queue_outbox` を作成する。DB commit 後、通常経路では作成した outbox 行を即時 claim して `XADD` を試みる。HTTP success は Redis publish 完了ではなく、DB に durable enqueue intent が残ったことを意味する。即時 publish に失敗した場合は outbox 行を backoff 後の `PENDING` へ戻す。outbox recovery dispatcher は低頻度に残りの `PENDING` / stale `IN_FLIGHT` を再配送する。
 
 Lifecycle:
 
@@ -116,7 +119,8 @@ Rules:
 
 - `ocr_queue_outbox.stream_payload` は Stream Payload v1 object。`jobId` だけから再構築しない。
 - `requestId` と OCR hints は API request 時点の値を保持する。
-- dispatcher は due `PENDING` と expired `IN_FLIGHT` を `FOR UPDATE SKIP LOCKED` で claim する。
+- API の即時 publish は作成した `PENDING` 行を id 指定で claim する。
+- recovery dispatcher は due `PENDING` と expired `IN_FLIGHT` を `FOR UPDATE SKIP LOCKED` で claim する。
 - `XADD` 成功後に `DELIVERED`, `redis_message_id`, `delivered_at` を記録する。
 - `XADD` 失敗時は秘密情報を含まない error class だけを `last_error` に記録し、backoff 後の `PENDING` に戻す。
 
@@ -160,6 +164,7 @@ queued -> cancelled
 - `ocr_drafts.payload_json`, `warnings_json`, `timings_ms_json` は worker の OCR domain model を JSON 化した値。
 - 1 job につき最大1 draft。ack 前 crash の再処理では同じ `job_id` を upsert する。
 - `ocr_queue_outbox` は Redis publish intent の正本。DB schema 変更は `momo-db` migration と consumer 側検証を揃える。
+- Redis publish は at-least-once。`XADD` 成功後に `DELIVERED` 更新が失敗すると recovery で再 publish され得る。worker は `ocr_jobs` の状態確認により terminal / running job を再実行せず ack する。
 
 ## 8. Compatibility
 

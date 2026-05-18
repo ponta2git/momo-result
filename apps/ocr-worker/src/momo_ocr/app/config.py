@@ -16,6 +16,7 @@ DEFAULT_WORKER_CONCURRENCY = 1
 DEFAULT_OCR_TIMEOUT_SECONDS = 30
 DEFAULT_MAX_ATTEMPTS = 1
 DEFAULT_REDIS_CLAIM_IDLE_SECONDS = 300
+DEFAULT_REDIS_BLOCK_SECONDS = 30
 
 
 @dataclass(frozen=True)
@@ -30,6 +31,7 @@ class WorkerConfig:
     ocr_timeout_seconds: int = DEFAULT_OCR_TIMEOUT_SECONDS
     max_attempts: int = DEFAULT_MAX_ATTEMPTS
     redis_claim_idle_seconds: int = DEFAULT_REDIS_CLAIM_IDLE_SECONDS
+    redis_block_seconds: int = DEFAULT_REDIS_BLOCK_SECONDS
     temp_root: Path = DEFAULT_TEMP_ROOT
     fast_path_enabled: bool = False
     debug_dir_base: Path | None = None
@@ -60,6 +62,11 @@ def load_worker_config(env: Mapping[str, str] | None = None) -> WorkerConfig:
             source,
             "OCR_REDIS_CLAIM_IDLE_SECONDS",
             DEFAULT_REDIS_CLAIM_IDLE_SECONDS,
+        ),
+        redis_block_seconds=_int_from_env(
+            source,
+            "OCR_REDIS_BLOCK_SECONDS",
+            DEFAULT_REDIS_BLOCK_SECONDS,
         ),
         temp_root=Path(source.get("IMAGE_TMP_DIR", str(DEFAULT_TEMP_ROOT))).absolute(),
         fast_path_enabled=parse_fast_path_flag(source.get("MOMO_OCR_FAST_PATH")),

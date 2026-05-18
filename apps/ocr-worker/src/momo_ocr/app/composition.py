@@ -28,8 +28,8 @@ def redis_consumer_from_config(config: WorkerConfig) -> RedisOcrJobConsumer:
     # health_check_interval forces redis-py to PING idle connections so
     # silently-dropped TCP sessions (Fly.io <-> Upstash NAT timeouts, ~5min)
     # surface as a fast reconnect. socket_keepalive nudges the kernel to do
-    # the same at the TCP layer. socket timeouts are intentionally longer than
-    # the consumer's XREADGROUP block_ms (1s): normal empty-poll behavior still
+    # the same at the TCP layer. socket timeout is intentionally longer than
+    # the consumer's XREADGROUP block window: normal empty-poll behavior still
     # returns via Redis, while network stalls have a hard bound so shutdown and
     # worker-loop backoff can proceed.
     client = Redis.from_url(
@@ -38,13 +38,14 @@ def redis_consumer_from_config(config: WorkerConfig) -> RedisOcrJobConsumer:
         health_check_interval=30,
         socket_keepalive=True,
         socket_connect_timeout=_REDIS_SOCKET_CONNECT_TIMEOUT_SECONDS,
-        socket_timeout=_REDIS_SOCKET_TIMEOUT_SECONDS,
+        socket_timeout=_redis_socket_timeout_seconds(config),
     )
     return RedisOcrJobConsumer(
         client,
         stream=config.redis_stream,
         group=config.redis_group,
         consumer_name=config.worker_id,
+        block_ms=config.redis_block_seconds * 1000,
         retry_config=RedisConsumerRetryConfig(
             max_attempts=config.max_attempts,
             dead_letter_stream=config.redis_dead_letter_stream,
@@ -66,7 +67,11 @@ _POOL_MAX_SIZE = 2
 # handshake cost on every job.
 _POOL_MAX_IDLE_SECONDS = 60.0
 _REDIS_SOCKET_CONNECT_TIMEOUT_SECONDS = 5.0
-_REDIS_SOCKET_TIMEOUT_SECONDS = 5.0
+_REDIS_SOCKET_TIMEOUT_MARGIN_SECONDS = 5.0
+
+
+def _redis_socket_timeout_seconds(config: WorkerConfig) -> float:
+    return float(config.redis_block_seconds) + _REDIS_SOCKET_TIMEOUT_MARGIN_SECONDS
 
 
 def production_pool_from_config(config: WorkerConfig) -> ConnectionPool:

@@ -49,6 +49,28 @@ final class PostgresOcrQueueOutboxRepository[F[_]: MonadCancelThrow](transactor:
     extends OcrQueueOutboxRepository[F]:
   import PostgresOcrQueueOutbox.*
 
+  override def claimById(
+      id: String,
+      now: Instant,
+      claimUntil: Instant,
+  ): F[Option[OcrQueueOutboxRecord]] = sql"""
+      WITH candidate AS (
+        SELECT id
+        FROM ocr_queue_outbox
+        WHERE id = $id
+          AND status = ${OcrQueueOutboxStatus.Pending}
+        FOR UPDATE SKIP LOCKED
+      )
+      UPDATE ocr_queue_outbox q
+      SET
+        status = ${OcrQueueOutboxStatus.InFlight},
+        claim_expires_at = $claimUntil,
+        updated_at = $now
+      FROM candidate
+      WHERE q.id = candidate.id
+      RETURNING q.id, q.job_id, q.stream_payload, q.attempt_count, q.claim_expires_at
+    """.query[Row].option.flatMap(_.traverse(toRecord)).transact(transactor)
+
   override def claimDue(
       limit: Int,
       now: Instant,

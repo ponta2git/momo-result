@@ -30,16 +30,20 @@ final case class OcrQueueOutboxDraft(
 )
 
 object OcrQueueOutboxDraft:
+  def idForJob(jobId: OcrJobId): String = s"ocr-outbox-${jobId.value}"
+  def dedupeKeyForJob(jobId: OcrJobId): String = s"ocr-job:${jobId.value}"
+
   def forJob(jobId: OcrJobId, payload: OcrQueuePayload, createdAt: Instant): OcrQueueOutboxDraft =
     OcrQueueOutboxDraft(
-      id = s"ocr-outbox-${jobId.value}",
+      id = idForJob(jobId),
       jobId = jobId,
-      dedupeKey = s"ocr-job:${jobId.value}",
+      dedupeKey = dedupeKeyForJob(jobId),
       payload = payload,
       createdAt = createdAt,
     )
 
 trait OcrQueueOutboxRepository[F[_]]:
+  def claimById(id: String, now: Instant, claimUntil: Instant): F[Option[OcrQueueOutboxRecord]]
   def claimDue(limit: Int, now: Instant, claimUntil: Instant): F[List[OcrQueueOutboxRecord]]
   def markDelivered(
       id: String,

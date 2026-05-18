@@ -91,6 +91,8 @@ afterAll { teardownIo.unsafeRunSync() }
 | `HTTP_PORT` | `8080` | bind port |
 | `IMAGE_TMP_DIR` | 一時ディレクトリ配下の共有パス | OCR Worker と共有する一時画像ディレクトリ |
 | `DEV_MEMBER_IDS` | 開発用メンバーIDのカンマ区切り | 試合参加者として許可する固定4名の `member_*` ID |
+| `OCR_OUTBOX_RECOVERY_INTERVAL_SECONDS` | `900` | Redis publish の即時配送に失敗した OCR outbox を再配送する低頻度 recovery 間隔 |
+| `STALE_OCR_JOB_REAPER_INTERVAL_SECONDS` | `900` | stale OCR job を失敗化する maintenance 間隔 |
 
 `APP_ENV=prod` では開発用認証は拒否されます。
 

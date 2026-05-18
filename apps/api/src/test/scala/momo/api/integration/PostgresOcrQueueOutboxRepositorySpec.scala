@@ -146,6 +146,86 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
         ),
       )
 
+  test("claimById claims only the requested pending row"):
+    val targetJobId = OcrJobId.unsafeFromString("job-outbox-claim-target")
+    val otherJobId = OcrJobId.unsafeFromString("job-outbox-claim-other")
+    for
+      _ <- insertOcrRows(
+        targetJobId,
+        OcrDraftId.unsafeFromString("draft-outbox-claim-target"),
+        now.minusSeconds(120),
+      )
+      _ <- insertOcrRows(
+        otherJobId,
+        OcrDraftId.unsafeFromString("draft-outbox-claim-other"),
+        now.minusSeconds(60),
+      )
+      _ <- insertOutbox(
+        id = "outbox-claim-target",
+        jobId = targetJobId,
+        status = OcrQueueOutboxStatus.Pending,
+        attemptCount = 0,
+        nextAttemptAt = now.plusSeconds(3600),
+        claimExpiresAt = None,
+        createdAt = now.minusSeconds(120),
+      )
+      _ <- insertOutbox(
+        id = "outbox-claim-other",
+        jobId = otherJobId,
+        status = OcrQueueOutboxStatus.Pending,
+        attemptCount = 0,
+        nextAttemptAt = now.minusSeconds(1),
+        claimExpiresAt = None,
+        createdAt = now.minusSeconds(60),
+      )
+      claimed <- repo.claimById("outbox-claim-target", now = now, claimUntil = claimUntil)
+      states <- sql"""
+        SELECT id, status, claim_expires_at
+        FROM ocr_queue_outbox
+        WHERE id IN ('outbox-claim-target', 'outbox-claim-other')
+        ORDER BY id
+      """.query[(String, String, Option[Instant])].to[List].transact(transactor)
+    yield
+      assertEquals(claimed.map(_.id), Some("outbox-claim-target"))
+      assertEquals(claimed.map(_.payload.fields("jobId")), Some(targetJobId.value))
+      assertEquals(claimed.map(_.claimExpiresAt), Some(claimUntil))
+      assertEquals(
+        states,
+        List(
+          ("outbox-claim-other", "PENDING", None),
+          ("outbox-claim-target", "IN_FLIGHT", Some(claimUntil)),
+        ),
+      )
+
+  test("claimById ignores delivered and missing rows"):
+    val jobId = OcrJobId.unsafeFromString("job-outbox-claim-delivered")
+    for
+      _ <- insertOcrRows(
+        jobId,
+        OcrDraftId.unsafeFromString("draft-outbox-claim-delivered"),
+        now.minusSeconds(60),
+      )
+      _ <- insertOutbox(
+        id = "outbox-claim-delivered",
+        jobId = jobId,
+        status = OcrQueueOutboxStatus.Delivered,
+        attemptCount = 1,
+        nextAttemptAt = now.minusSeconds(1),
+        claimExpiresAt = None,
+        createdAt = now.minusSeconds(60),
+      )
+      delivered <- repo.claimById("outbox-claim-delivered", now = now, claimUntil = claimUntil)
+      missing <- repo.claimById("outbox-claim-missing", now = now, claimUntil = claimUntil)
+      row <- sql"""
+        SELECT status, claim_expires_at
+        FROM ocr_queue_outbox
+        WHERE id = 'outbox-claim-delivered'
+      """.query[(String, Option[Instant])].unique.transact(transactor)
+    yield
+      assertEquals(delivered, None)
+      assertEquals(missing, None)
+      assertEquals(row, ("DELIVERED", None))
+
   test("markDelivered stores Redis message id and clears the claim"):
     val jobId = OcrJobId.unsafeFromString("job-outbox-delivered")
     val deliveredAt = now.plusSeconds(10)

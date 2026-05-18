@@ -22,6 +22,7 @@ final case class ResourceLimitsConfig(
     staleOcrJobAfter: FiniteDuration,
     staleOcrJobReaperInterval: FiniteDuration,
     sessionPruneInterval: FiniteDuration,
+    ocrOutboxRecoveryInterval: FiniteDuration,
 )
 
 final case class AuthConfig(
@@ -207,8 +208,9 @@ object AppConfig:
     parsePositiveLong(env, "IMAGE_ORPHAN_OLDER_THAN_MINUTES", default = 60L),
     parsePositiveLong(env, "IMAGE_ORPHAN_REAPER_INTERVAL_MINUTES", default = 60L),
     parsePositiveLong(env, "STALE_OCR_JOB_AFTER_SECONDS", default = 300L),
-    parsePositiveLong(env, "STALE_OCR_JOB_REAPER_INTERVAL_SECONDS", default = 60L),
+    parsePositiveLong(env, "STALE_OCR_JOB_REAPER_INTERVAL_SECONDS", default = 900L),
     parsePositiveLong(env, "SESSION_PRUNE_INTERVAL_MINUTES", default = 60L),
+    parsePositiveLong(env, "OCR_OUTBOX_RECOVERY_INTERVAL_SECONDS", default = 900L),
   ).mapN {
     (
         uploadRateLimit,
@@ -220,6 +222,7 @@ object AppConfig:
         staleOcrJobAfter,
         staleOcrJobReaperInterval,
         sessionPruneInterval,
+        ocrOutboxRecoveryInterval,
     ) =>
       ResourceLimitsConfig(
         uploadRateLimitPerMinute = uploadRateLimit,
@@ -231,6 +234,7 @@ object AppConfig:
         staleOcrJobAfter = staleOcrJobAfter.seconds,
         staleOcrJobReaperInterval = staleOcrJobReaperInterval.seconds,
         sessionPruneInterval = sessionPruneInterval.minutes,
+        ocrOutboxRecoveryInterval = ocrOutboxRecoveryInterval.seconds,
       )
   }.liftTo[F]
 
@@ -395,6 +399,7 @@ object ResourceLimitsConfig:
     imageOrphanOlderThan = 60.minutes,
     imageOrphanReaperInterval = 60.minutes,
     staleOcrJobAfter = 300.seconds,
-    staleOcrJobReaperInterval = 60.seconds,
+    staleOcrJobReaperInterval = 900.seconds,
     sessionPruneInterval = 60.minutes,
+    ocrOutboxRecoveryInterval = 900.seconds,
   )

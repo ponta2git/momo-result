@@ -24,8 +24,11 @@ final class OcrQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
   private given LoggerFactory[IO] = NoOpFactory[IO]
   private val fixedNow = Instant.parse("2026-05-09T00:00:00Z")
 
-  private def rowAt(claimExpiresAt: Instant) = OcrQueueOutboxRecord(
-    id = "outbox-1",
+  private def rowAt(claimExpiresAt: Instant): OcrQueueOutboxRecord =
+    rowAt(claimExpiresAt, "outbox-1")
+
+  private def rowAt(claimExpiresAt: Instant, id: String) = OcrQueueOutboxRecord(
+    id = id,
     jobId = OcrJobId.unsafeFromString("job-1"),
     payload = OcrQueuePayload.build(
       jobId = OcrJobId.unsafeFromString("job-1"),
@@ -83,3 +86,52 @@ final class OcrQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
         Vector("outbox-1" -> classOf[RuntimeException].getName),
       )
       assertEquals(got.map(_.nextAttemptAt), Vector(fixedNow.plusSeconds(2)))
+
+  test("outbox-backed submitter claims the created outbox row and marks it delivered"):
+    val outboxId = "ocr-outbox-job-1"
+    for
+      repo <- RecordingOcrQueueOutboxRepository
+        .createWithClaimById(call => Some(rowAt(call.claimUntil, outboxId)))
+      queue <- RecordingQueueProducer.create
+      submitter = withFixedClock:
+        OcrQueueSubmitter.outboxBacked[IO](repo, queue)
+      result <- submitter.submit(context)
+      gotClaims <- repo.claimByIds
+      gotDelivered <- repo.deliveries
+    yield
+      assertEquals(result, Right(()))
+      assertEquals(gotClaims.map(_.id), Vector(outboxId))
+      assertEquals(
+        gotDelivered,
+        Vector(OutboxMarkDeliveredCall(outboxId, fixedNow.plusSeconds(30), "redis-job-1", fixedNow)),
+      )
+
+  test("outbox-backed submitter keeps the API result successful when immediate publish fails"):
+    val queueError = new RuntimeException("redis://secret-host/boom")
+    val outboxId = "ocr-outbox-job-1"
+    for
+      repo <- RecordingOcrQueueOutboxRepository
+        .createWithClaimById(call => Some(rowAt(call.claimUntil, outboxId)))
+      submitter = withFixedClock:
+        OcrQueueSubmitter.outboxBacked[IO](repo, FailingQueueProducer(queueError))
+      result <- submitter.submit(context)
+      got <- repo.releases
+    yield
+      assertEquals(result, Right(()))
+      assertEquals(
+        got.map(call => call.id -> call.lastError),
+        Vector(outboxId -> classOf[RuntimeException].getName),
+      )
+      assertEquals(got.map(_.nextAttemptAt), Vector(fixedNow.plusSeconds(2)))
+
+  private def withFixedClock[A](body: Clock[IO] ?=> A): A =
+    given Clock[IO] = FixedClock.at(fixedNow)
+    body
+
+  private def context: OcrQueueSubmitter.Context = OcrQueueSubmitter.Context(
+    payload = rowAt(fixedNow.plusSeconds(30)).payload,
+    jobId = OcrJobId.unsafeFromString("job-1"),
+    draftId = OcrDraftId.unsafeFromString("draft-1"),
+    matchDraftId = None,
+    createdAt = fixedNow,
+  )

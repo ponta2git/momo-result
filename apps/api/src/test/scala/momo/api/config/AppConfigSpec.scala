@@ -135,6 +135,18 @@ class AppConfigSpec extends CatsEffectSuite:
     }
   }
 
+  test("loadFromEnv reads low-frequency OCR maintenance intervals") {
+    load(
+      prodEnv ++ Map(
+        "OCR_OUTBOX_RECOVERY_INTERVAL_SECONDS" -> "1200",
+        "STALE_OCR_JOB_REAPER_INTERVAL_SECONDS" -> "1800",
+      )
+    ).map { result =>
+      assertEquals(result.map(_.resourceLimits.ocrOutboxRecoveryInterval.toSeconds), Right(1200L))
+      assertEquals(result.map(_.resourceLimits.staleOcrJobReaperInterval.toSeconds), Right(1800L))
+    }
+  }
+
   test("loadFromEnv rejects insecure production auth cookies") {
     load(prodEnv + ("AUTH_COOKIE_SECURE" -> "false")).map { result =>
       assert(result.left.exists(_.getMessage.contains("AUTH_COOKIE_SECURE must be true")))

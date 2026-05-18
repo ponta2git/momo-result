@@ -11,8 +11,7 @@ final class OcrDraftCodecSpec extends FunSuite:
 
     assertEquals(
       OcrDraftCodec.toDraftIds(ids),
-      Left(AppError.ValidationFailed(
-        s"ids query must contain at most ${OcrDraft.MaxBulkIds.toString} ids."
-      )),
+      Left(AppError.ValidationFailed(s"ids query must contain at most ${OcrDraft.MaxBulkIds
+          .toString} ids.")),
     )
 end OcrDraftCodecSpec

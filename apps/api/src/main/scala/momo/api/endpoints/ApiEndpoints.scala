@@ -25,6 +25,7 @@ object ApiEndpoints:
     MatchDraftEndpoints.update,
     MatchDraftEndpoints.cancel,
     MatchDraftEndpoints.listSourceImages,
+    MatchDraftEndpoints.downloadSourceImages,
     MatchDraftEndpoints.getSourceImage,
     MatchesEndpoints.confirm,
     MatchesEndpoints.list,

@@ -110,6 +110,21 @@ object MatchDraftModule:
         )
       }
     },
+    MatchDraftEndpoints.downloadSourceImages.serverLogic { case (draftId, accountHeader) =>
+      security.authorizeRead(accountHeader) { member =>
+        security.decode(BoundaryId.required("matchDraftId", draftId)(MatchDraftId.fromString))(id =>
+          security.respond(getMatchDraftSourceImages.archive(id, member.accountId))(archive =>
+            (
+              archive.contentType,
+              s"""attachment; filename="${archive.fileName}"""",
+              "private, no-store",
+              "nosniff",
+              archive.bytes,
+            )
+          )
+        )
+      }
+    },
     MatchDraftEndpoints.getSourceImage.serverLogic { case (draftId, kind, accountHeader) =>
       security.authorizeRead(accountHeader) { member =>
         val decoded =

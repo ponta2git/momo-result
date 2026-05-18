@@ -2,18 +2,27 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { SourceImagePreviewDialog } from "@/features/matches/workspace/sourceImages/SourceImagePreviewDialog";
 import { SourceImageTabs } from "@/features/matches/workspace/sourceImages/SourceImageTabs";
-import { sourceImageKindLabels } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
+import {
+  sourceImageKindLabels,
+  sourceImageKinds,
+} from "@/features/matches/workspace/sourceImages/sourceImageTypes";
 import type {
   SourceImageItem,
   SourceImageKind,
 } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
 import { toSourceImageStates } from "@/features/matches/workspace/sourceImages/sourceImageViewModel";
-import { downloadMatchDraftSourceImage } from "@/shared/api/matchDrafts";
+import {
+  downloadMatchDraftSourceImage,
+  downloadMatchDraftSourceImagesArchive,
+} from "@/shared/api/matchDrafts";
+import { triggerBrowserDownload } from "@/shared/browser/downloadFile";
 import { Button } from "@/shared/ui/actions/Button";
+import { Dialog } from "@/shared/ui/feedback/Dialog";
 import { Card } from "@/shared/ui/layout/Card";
 
 type SourceImagePanelProps = {
   loading: boolean;
+  matchDraftId: string;
   preferredKind: SourceImageKind | undefined;
   sourceImages: SourceImageItem[] | undefined;
 };
@@ -26,12 +35,23 @@ type LoadedSourceImage =
   | { objectUrl: string; status: "ready"; url: string }
   | { status: "error"; url: string };
 
-export function SourceImagePanel({ loading, preferredKind, sourceImages }: SourceImagePanelProps) {
+const archiveDownloadError =
+  "元画像を保存できませんでした。確定または削除により画像が利用できなくなった可能性があります。必要な場合は画像を再アップロードしてください。";
+
+export function SourceImagePanel({
+  loading,
+  matchDraftId,
+  preferredKind,
+  sourceImages,
+}: SourceImagePanelProps) {
   const states = useMemo(() => toSourceImageStates(sourceImages), [sourceImages]);
   const [activeKind, setActiveKind] = useState<SourceImageKind>(preferredKind ?? "total_assets");
   const [previewKind, setPreviewKind] = useState<SourceImageKind | null>(null);
   const [manualSwitchAt, setManualSwitchAt] = useState<number>(0);
   const [loadedImage, setLoadedImage] = useState<LoadedSourceImage>({ status: "idle" });
+  const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
+  const [archiveSaving, setArchiveSaving] = useState(false);
+  const [archiveError, setArchiveError] = useState("");
   const previewTriggerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -54,6 +74,10 @@ export function SourceImagePanel({ loading, preferredKind, sourceImages }: Sourc
       ? loadedImage.objectUrl
       : undefined;
   const previewUrl = previewKind === activeKind ? displayUrl : undefined;
+  const availableImageCount = states.filter((state) => state.status === "available").length;
+  const expectedImageCount = sourceImageKinds.length;
+  const archiveSaveDisabled = loading || archiveSaving || availableImageCount === 0;
+  const archivePendingLabel = "保存中…";
 
   useEffect(() => {
     if (!activeImageUrl) {
@@ -91,17 +115,64 @@ export function SourceImagePanel({ loading, preferredKind, sourceImages }: Sourc
     };
   }, [activeImageUrl]);
 
+  const saveArchive = async () => {
+    setArchiveError("");
+    setArchiveSaving(true);
+    try {
+      const result = await downloadMatchDraftSourceImagesArchive(matchDraftId);
+      triggerBrowserDownload(result);
+    } catch {
+      setArchiveError(archiveDownloadError);
+    } finally {
+      setArchiveSaving(false);
+    }
+  };
+
+  const handleArchiveSaveRequest = () => {
+    setArchiveError("");
+    if (availableImageCount < expectedImageCount) {
+      setArchiveConfirmOpen(true);
+      return;
+    }
+    void saveArchive();
+  };
+
+  const handleArchiveSaveConfirmed = () => {
+    setArchiveConfirmOpen(false);
+    void saveArchive();
+  };
+
   return (
     <Card className="h-fit p-4 lg:sticky lg:top-4 lg:w-[22rem] xl:w-[26rem]">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-base font-semibold text-[var(--color-text-primary)]">元画像参照</h2>
-        <span className="text-xs font-semibold text-[var(--color-text-secondary)]">
-          {sourceImageKindLabels[activeKind]}
-        </span>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold text-[var(--color-text-primary)]">元画像参照</h2>
+          <span className="text-xs font-semibold text-[var(--color-text-secondary)]">
+            {sourceImageKindLabels[activeKind]}
+          </span>
+        </div>
+        <Button
+          disabled={archiveSaveDisabled}
+          pending={archiveSaving}
+          pendingLabel={archivePendingLabel}
+          size="sm"
+          variant="secondary"
+          onClick={handleArchiveSaveRequest}
+        >
+          元画像を保存
+        </Button>
       </div>
       <p className="mt-1 text-xs text-pretty text-[var(--color-text-secondary)]">
         入力中セルに応じて参照画像を切り替えます。手動で選んだタブはしばらく固定されます。
       </p>
+      {!loading && availableImageCount === 0 ? (
+        <p className="mt-2 text-xs text-[var(--color-text-secondary)]">
+          保存できる元画像がありません。
+        </p>
+      ) : null}
+      {archiveError ? (
+        <p className="mt-2 text-sm text-[var(--color-danger)]">{archiveError}</p>
+      ) : null}
 
       <div className="mt-3">
         <SourceImageTabs
@@ -166,6 +237,30 @@ export function SourceImagePanel({ loading, preferredKind, sourceImages }: Sourc
             previewTriggerRef.current?.focus();
           }}
         />
+      ) : null}
+
+      {archiveConfirmOpen ? (
+        <Dialog
+          open
+          title="元画像がすべてそろっていません"
+          onOpenChange={(open) => setArchiveConfirmOpen(open)}
+        >
+          <p className="text-sm leading-6 text-pretty text-[var(--color-text-secondary)]">
+            {`保存できる元画像は${expectedImageCount}枚中${availableImageCount}枚です。不足している画像はZIPに含まれません。このまま保存しますか？`}
+          </p>
+          <div className="mt-4 flex flex-wrap justify-end gap-2">
+            <Button variant="secondary" onClick={() => setArchiveConfirmOpen(false)}>
+              キャンセル
+            </Button>
+            <Button
+              pending={archiveSaving}
+              pendingLabel={archivePendingLabel}
+              onClick={handleArchiveSaveConfirmed}
+            >
+              保存する
+            </Button>
+          </div>
+        </Dialog>
       ) : null}
     </Card>
   );

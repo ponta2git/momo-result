@@ -1,6 +1,9 @@
 package momo.api.usecases
 
-import java.time.Instant
+import java.io.ByteArrayOutputStream
+import java.time.format.DateTimeFormatter
+import java.time.{Instant, ZoneId}
+import java.util.zip.{ZipEntry, ZipOutputStream}
 
 import cats.MonadThrow
 import cats.data.EitherT
@@ -33,6 +36,13 @@ final case class MatchDraftSourceImage(
 )
 
 final case class MatchDraftSourceImageBinary(contentType: String, bytes: Array[Byte])
+
+final case class MatchDraftSourceImageArchive(
+    contentType: String,
+    fileName: String,
+    bytes: Array[Byte],
+    imageCount: Int,
+)
 
 final class GetMatchDraftSourceImages[F[_]: MonadThrow](
     matchDrafts: MatchDraftsRepository[F],
@@ -82,6 +92,26 @@ final class GetMatchDraftSourceImages[F[_]: MonadThrow](
     bytes <- EitherT.liftF(imageStore.readBytes(image))
   yield MatchDraftSourceImageBinary(image.mediaType, bytes)).value
 
+  def archive(
+      draftId: MatchDraftId,
+      accountId: AccountId,
+  ): F[Either[AppError, MatchDraftSourceImageArchive]] = (for
+    draft <- EitherT(loadAuthorizedDraft(draftId, accountId))
+    _ <- EitherT.cond[F](
+      draft.sourceImagesDeletedAt.isEmpty,
+      (),
+      AppError.NotFound("source images", draftId.value),
+    )
+    entries <- EitherT.liftF(archiveEntries(draft))
+    _ <- EitherT.cond[F](entries.nonEmpty, (), AppError.NotFound("source images", draftId.value))
+    bytes <- EitherT.liftF(makeZip(entries))
+  yield MatchDraftSourceImageArchive(
+    contentType = "application/zip",
+    fileName = archiveFileName(draft),
+    bytes = bytes,
+    imageCount = entries.size,
+  )).value
+
   private def loadAuthorizedDraft(
       draftId: MatchDraftId,
       accountId: AccountId,
@@ -98,3 +128,63 @@ final class GetMatchDraftSourceImages[F[_]: MonadThrow](
       draft: momo.api.domain.MatchDraft,
       kind: MatchDraftSourceImageKind,
   ): Option[ImageId] = draft.sourceImageId(kind.screenType)
+
+  private final case class ArchiveEntry(name: String, bytes: Array[Byte])
+
+  private def archiveEntries(draft: momo.api.domain.MatchDraft): F[List[ArchiveEntry]] =
+    MatchDraftSourceImageKind.values.toList.zipWithIndex.traverse { case (kind, index) =>
+      draft.sourceImageId(kind.screenType) match
+        case None => Option.empty[ArchiveEntry].pure[F]
+        case Some(imageId) => imageStore.find(imageId).flatMap {
+            case None => Option.empty[ArchiveEntry].pure[F]
+            case Some(image) => imageStore.readBytes(image).map(bytes =>
+                Some(ArchiveEntry(
+                  name = archiveEntryName(kind, index + 1, image.mediaType),
+                  bytes = bytes,
+                ))
+              )
+          }
+    }.map(_.flatten)
+
+  private def makeZip(entries: List[ArchiveEntry]): F[Array[Byte]] = MonadThrow[F].pure {
+    val out = ByteArrayOutputStream()
+    val zip = ZipOutputStream(out)
+    try entries.foreach { entry =>
+        val zipEntry = ZipEntry(entry.name)
+        zipEntry.setTime(0L)
+        zip.putNextEntry(zipEntry)
+        zip.write(entry.bytes)
+        zip.closeEntry()
+      }
+    finally zip.close()
+    out.toByteArray
+  }
+
+  private def archiveEntryName(
+      kind: MatchDraftSourceImageKind,
+      oneBasedIndex: Int,
+      mediaType: String,
+  ): String =
+    val label = kind match
+      case MatchDraftSourceImageKind.TotalAssets => "total-assets"
+      case MatchDraftSourceImageKind.Revenue => "revenue"
+      case MatchDraftSourceImageKind.IncidentLog => "incident-log"
+    val ext = extension(mediaType)
+    f"$oneBasedIndex%02d-$label.$ext"
+
+  private def extension(mediaType: String): String = mediaType match
+    case "image/png" => "png"
+    case "image/jpeg" => "jpg"
+    case "image/webp" => "webp"
+    case _ => "bin"
+
+  private def archiveFileName(draft: momo.api.domain.MatchDraft): String =
+    val date = ArchiveDate.format(draft.playedAt.getOrElse(draft.createdAt))
+    draft.matchNoInEvent match
+      case Some(no) => f"momo-ocr-images-$date-match-${no.value}%02d.zip"
+      case None => s"momo-ocr-images-$date.zip"
+
+  private object ArchiveDate:
+    private val Formatter = DateTimeFormatter.ofPattern("yyyyMMdd")
+      .withZone(ZoneId.of("Asia/Tokyo"))
+    def format(value: Instant): String = Formatter.format(value)

@@ -1,9 +1,31 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { SourceImagePanel } from "@/features/matches/workspace/sourceImages/SourceImagePanel";
-import { fetchCallsOf, installObjectUrlMock } from "@/test/doubles/dom";
+import { fetchCallsOf, installAnchorClickMock, installObjectUrlMock } from "@/test/doubles/dom";
+
+const draftId = "draft-1";
+const sourceImages = [
+  {
+    contentType: "image/png",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    imageUrl: "/api/match-drafts/draft-1/source-images/total_assets",
+    kind: "total_assets" as const,
+  },
+  {
+    contentType: "image/png",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    imageUrl: "/api/match-drafts/draft-1/source-images/revenue",
+    kind: "revenue" as const,
+  },
+  {
+    contentType: "image/png",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    imageUrl: "/api/match-drafts/draft-1/source-images/incident_log",
+    kind: "incident_log" as const,
+  },
+];
 
 describe("SourceImagePanel", () => {
   it("loads source images through the API client so dev auth headers are sent", async () => {
@@ -20,15 +42,9 @@ describe("SourceImagePanel", () => {
     render(
       <SourceImagePanel
         loading={false}
+        matchDraftId={draftId}
         preferredKind="total_assets"
-        sourceImages={[
-          {
-            contentType: "image/png",
-            createdAt: "2026-01-01T00:00:00.000Z",
-            imageUrl: "/api/match-drafts/draft-1/source-images/total_assets",
-            kind: "total_assets",
-          },
-        ]}
+        sourceImages={sourceImages.slice(0, 1)}
       />,
     );
 
@@ -60,15 +76,9 @@ describe("SourceImagePanel", () => {
     render(
       <SourceImagePanel
         loading={false}
+        matchDraftId={draftId}
         preferredKind="total_assets"
-        sourceImages={[
-          {
-            contentType: "image/png",
-            createdAt: "2026-01-01T00:00:00.000Z",
-            imageUrl: "/api/match-drafts/draft-1/source-images/total_assets",
-            kind: "total_assets",
-          },
-        ]}
+        sourceImages={sourceImages.slice(0, 1)}
       />,
     );
 
@@ -88,5 +98,169 @@ describe("SourceImagePanel", () => {
     await user.click(within(dialog).getByRole("button", { name: "ダイアログを閉じる" }));
 
     expect(screen.queryByRole("dialog", { name: "総資産の拡大表示" })).not.toBeInTheDocument();
+  });
+
+  it("downloads a zip archive immediately when all source images are available", async () => {
+    const user = userEvent.setup();
+    const anchorClick = installAnchorClickMock();
+    installObjectUrlMock({
+      createObjectURL: (value) =>
+        value instanceof Blob && value.type === "application/zip"
+          ? "blob:zip"
+          : "blob:source-image",
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/source-images.zip")) {
+        return new Response(new Blob(["zip"], { type: "application/zip" }), {
+          headers: {
+            "Content-Disposition": 'attachment; filename="momo-ocr-images-20260518.zip"',
+            "Content-Type": "application/zip",
+          },
+        });
+      }
+      return new Response(new Blob(["mock-image"], { type: "image/png" }), {
+        headers: { "Content-Type": "image/png" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <SourceImagePanel
+        loading={false}
+        matchDraftId={draftId}
+        preferredKind="total_assets"
+        sourceImages={sourceImages}
+      />,
+    );
+
+    await screen.findByRole("img", { name: "総資産の元画像" });
+    await user.click(screen.getByRole("button", { name: "元画像を保存" }));
+
+    await waitFor(() => expect(anchorClick.click).toHaveBeenCalledTimes(1));
+    expect(anchorClick.clickedAnchors[0]?.getAttribute("href")).toBe("blob:zip");
+    expect(anchorClick.clickedAnchors[0]?.download).toBe("momo-ocr-images-20260518.zip");
+    expect(
+      fetchCallsOf(fetchMock).some(([url]) => String(url).endsWith("/source-images.zip")),
+    ).toBe(true);
+  });
+
+  it("asks for confirmation before downloading a partial source image archive", async () => {
+    const user = userEvent.setup();
+    const anchorClick = installAnchorClickMock();
+    installObjectUrlMock({
+      createObjectURL: (value) =>
+        value instanceof Blob && value.type === "application/zip"
+          ? "blob:zip"
+          : "blob:source-image",
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/source-images.zip")) {
+        return new Response(new Blob(["zip"], { type: "application/zip" }), {
+          headers: {
+            "Content-Disposition": 'attachment; filename="momo-ocr-images-20260518.zip"',
+            "Content-Type": "application/zip",
+          },
+        });
+      }
+      return new Response(new Blob(["mock-image"], { type: "image/png" }), {
+        headers: { "Content-Type": "image/png" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <SourceImagePanel
+        loading={false}
+        matchDraftId={draftId}
+        preferredKind="total_assets"
+        sourceImages={sourceImages.slice(0, 2)}
+      />,
+    );
+
+    await screen.findByRole("img", { name: "総資産の元画像" });
+    await user.click(screen.getByRole("button", { name: "元画像を保存" }));
+
+    const dialog = await screen.findByRole("dialog", {
+      name: "元画像がすべてそろっていません",
+    });
+    expect(within(dialog).getByText(/保存できる元画像は3枚中2枚です/u)).toBeInTheDocument();
+    expect(anchorClick.click).not.toHaveBeenCalled();
+
+    await user.click(within(dialog).getByRole("button", { name: "キャンセル" }));
+    expect(
+      screen.queryByRole("dialog", { name: "元画像がすべてそろっていません" }),
+    ).not.toBeInTheDocument();
+    expect(
+      fetchCallsOf(fetchMock).some(([url]) => String(url).endsWith("/source-images.zip")),
+    ).toBe(false);
+
+    await user.click(screen.getByRole("button", { name: "元画像を保存" }));
+    const confirmDialog = await screen.findByRole("dialog", {
+      name: "元画像がすべてそろっていません",
+    });
+    await user.click(within(confirmDialog).getByRole("button", { name: "保存する" }));
+
+    await waitFor(() => expect(anchorClick.click).toHaveBeenCalledTimes(1));
+    expect(anchorClick.clickedAnchors[0]?.download).toBe("momo-ocr-images-20260518.zip");
+  });
+
+  it("disables archive downloads when no source images are available", () => {
+    render(
+      <SourceImagePanel
+        loading={false}
+        matchDraftId={draftId}
+        preferredKind="total_assets"
+        sourceImages={[]}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "元画像を保存" })).toBeDisabled();
+    expect(screen.getByText("保存できる元画像がありません。")).toBeInTheDocument();
+  });
+
+  it("shows a useful message when the archive download fails", async () => {
+    const user = userEvent.setup();
+    installObjectUrlMock({ createObjectURL: () => "blob:source-image" });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith("/source-images.zip")) {
+          return Response.json(
+            {
+              code: "NOT_FOUND",
+              detail: "source images were not found",
+              status: 404,
+              title: "Not Found",
+              type: "about:blank",
+            },
+            { status: 404 },
+          );
+        }
+        return new Response(new Blob(["mock-image"], { type: "image/png" }), {
+          headers: { "Content-Type": "image/png" },
+        });
+      }),
+    );
+
+    render(
+      <SourceImagePanel
+        loading={false}
+        matchDraftId={draftId}
+        preferredKind="total_assets"
+        sourceImages={sourceImages}
+      />,
+    );
+
+    await screen.findByRole("img", { name: "総資産の元画像" });
+    await user.click(screen.getByRole("button", { name: "元画像を保存" }));
+
+    expect(
+      await screen.findByText(
+        "元画像を保存できませんでした。確定または削除により画像が利用できなくなった可能性があります。必要な場合は画像を再アップロードしてください。",
+      ),
+    ).toBeInTheDocument();
   });
 });

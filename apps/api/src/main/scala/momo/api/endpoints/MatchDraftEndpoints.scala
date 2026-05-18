@@ -80,3 +80,19 @@ object MatchDraftEndpoints:
       .out(header[String]("X-Content-Type-Options"))
       .out(byteArrayBody)
       .tag("match-drafts")
+
+  type SourceImageArchiveOutput = (String, String, String, String, Array[Byte])
+
+  val downloadSourceImages
+      : PublicEndpoint[(String, Option[String]), ProblemResponse, SourceImageArchiveOutput, Any] =
+    endpoint
+      .get
+      .in("api" / "match-drafts" / path[String]("draftId") / "source-images.zip")
+      .in(CommonEndpoint.accountHeader)
+      .errorOut(CommonEndpoint.errorOut)
+      .out(header[String]("Content-Type"))
+      .out(header[String]("Content-Disposition"))
+      .out(header[String]("Cache-Control"))
+      .out(header[String]("X-Content-Type-Options"))
+      .out(byteArrayBody)
+      .tag("match-drafts")

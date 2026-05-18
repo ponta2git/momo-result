@@ -1216,6 +1216,81 @@
         }
       }
     },
+    "/api/match-drafts/{draftId}/source-images.zip" : {
+      "get" : {
+        "tags" : [
+          "match-drafts"
+        ],
+        "operationId" : "getApiMatch-draftsDraftidSource-images.zip",
+        "parameters" : [
+          {
+            "name" : "draftId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "headers" : {
+              "Content-Type" : {
+                "required" : true,
+                "schema" : {
+                  "type" : "string"
+                }
+              },
+              "Content-Disposition" : {
+                "required" : true,
+                "schema" : {
+                  "type" : "string"
+                }
+              },
+              "Cache-Control" : {
+                "required" : true,
+                "schema" : {
+                  "type" : "string"
+                }
+              },
+              "X-Content-Type-Options" : {
+                "required" : true,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "content" : {
+              "application/octet-stream" : {
+                "schema" : {
+                  "type" : "string",
+                  "format" : "binary"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/match-drafts/{draftId}/source-images/{kind}" : {
       "get" : {
         "tags" : [

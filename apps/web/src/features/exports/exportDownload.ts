@@ -1,5 +1,6 @@
 import type { ApiDownloadResult } from "@/shared/api/client";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
+import { triggerBrowserDownload } from "@/shared/browser/downloadFile";
 
 import { exportMatches } from "./exportApi";
 import type { ExportDownloadOutcome, ExportMatchesRequest } from "./exportTypes";
@@ -12,17 +13,7 @@ const timeoutDetail =
   "通信または処理に時間がかかっています。条件を確認して、もう一度お試しください。";
 
 export function triggerDownload(result: ApiDownloadResult): void {
-  const url = URL.createObjectURL(result.blob);
-  try {
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = result.fileName;
-    document.body.append(anchor);
-    anchor.click();
-    anchor.remove();
-  } finally {
-    URL.revokeObjectURL(url);
-  }
+  triggerBrowserDownload(result);
 }
 
 export async function downloadExportMatches(

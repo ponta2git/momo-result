@@ -238,6 +238,7 @@ export function MatchWorkspacePage({
             {hasSourceImagePanel && matchDraftIdForImages ? (
               <SourceImagePanel
                 loading={sourceImageLoading}
+                matchDraftId={matchDraftIdForImages}
                 preferredKind={controller.preferredImageKind}
                 sourceImages={sourceImages}
               />

@@ -41,6 +41,13 @@ export async function downloadMatchDraftSourceImage(
   return result.blob;
 }
 
+export async function downloadMatchDraftSourceImagesArchive(draftId: string, signal?: AbortSignal) {
+  return apiDownload(
+    `/api/match-drafts/${encodeURIComponent(draftId)}/source-images.zip`,
+    signal ? { signal } : {},
+  );
+}
+
 export async function cancelMatchDraft(
   draftId: string,
   options: IdempotencyRequestOptions,

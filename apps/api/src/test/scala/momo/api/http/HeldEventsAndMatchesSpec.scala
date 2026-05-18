@@ -1,5 +1,8 @@
 package momo.api.http
 
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
+import java.util.zip.ZipInputStream
+
 import cats.effect.IO
 import fs2.Stream
 import io.circe.Json
@@ -251,6 +254,24 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
       assertEquals(response.status, Status.Ok)
       jsonField[String](body, "imageId")
 
+  private def zipEntryNames(bytes: Array[Byte]): Set[String] =
+    val names = scala.collection.mutable.Set.empty[String]
+    val zip = ZipInputStream(ByteArrayInputStream(bytes))
+    try
+      @annotation.tailrec
+      def readNext(): Unit = Option(zip.getNextEntry) match
+        case None => ()
+        case Some(entry) =>
+          names += entry.getName
+          val out = ByteArrayOutputStream()
+          zip.transferTo(out)
+          zip.closeEntry()
+          readNext()
+
+      readNext()
+    finally zip.close()
+    names.toSet
+
   app.test("POST /api/matches confirms with valid body") { httpApp =>
     for
       id <- createEvent(httpApp)
@@ -288,6 +309,65 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
       assertEquals(sourceImageRes.status, Status.Ok)
       assertEquals(optionalHeaderValue(sourceImageRes, CIString("Content-Type")), Some("image/png"))
       assertEquals(body.toVector, pngBytes.toVector)
+  }
+
+  app.test("GET /api/match-drafts/:draftId/source-images.zip downloads source images as zip") {
+    httpApp =>
+      for
+        matchDraftId <- createMatchDraft(httpApp)
+        totalAssetsImageId <- uploadPng(httpApp)
+        revenueImageId <- uploadPng(httpApp)
+        incidentLogImageId <- uploadPng(httpApp)
+        totalAssetsJobRes <- httpApp.run(
+          Request[IO](Method.POST, uri"/api/ocr-jobs").putHeaders(devWriteHeaders()*).withEntity(
+            HttpRequestBodies.Matches
+              .createOcrJobForDraft(totalAssetsImageId, "total_assets", matchDraftId)
+          )
+        )
+        _ = assertEquals(totalAssetsJobRes.status, Status.Ok)
+        revenueJobRes <- httpApp.run(
+          Request[IO](Method.POST, uri"/api/ocr-jobs").putHeaders(devWriteHeaders()*).withEntity(
+            HttpRequestBodies.Matches.createOcrJobForDraft(revenueImageId, "revenue", matchDraftId)
+          )
+        )
+        _ = assertEquals(revenueJobRes.status, Status.Ok)
+        incidentLogJobRes <- httpApp.run(
+          Request[IO](Method.POST, uri"/api/ocr-jobs").putHeaders(devWriteHeaders()*).withEntity(
+            HttpRequestBodies.Matches
+              .createOcrJobForDraft(incidentLogImageId, "incident_log", matchDraftId)
+          )
+        )
+        _ = assertEquals(incidentLogJobRes.status, Status.Ok)
+        archiveRes <- httpApp.run(
+          Request[IO](
+            Method.GET,
+            Uri.unsafeFromString(s"/api/match-drafts/$matchDraftId/source-images.zip"),
+          ).putHeaders(devReadHeader())
+        )
+        body <- archiveRes.as[Array[Byte]]
+      yield
+        assertEquals(archiveRes.status, Status.Ok)
+        assertEquals(
+          optionalHeaderValue(archiveRes, CIString("Content-Type")),
+          Some("application/zip"),
+        )
+        assertEquals(
+          optionalHeaderValue(archiveRes, CIString("Cache-Control")),
+          Some("private, no-store"),
+        )
+        assertEquals(
+          optionalHeaderValue(archiveRes, CIString("X-Content-Type-Options")),
+          Some("nosniff"),
+        )
+        val disposition = optionalHeaderValue(archiveRes, CIString("Content-Disposition"))
+          .getOrElse(fail("expected Content-Disposition"))
+        assert(disposition.startsWith("attachment; filename=\"momo-ocr-images-"))
+        assert(disposition.endsWith(".zip\""))
+        assert(!disposition.contains(matchDraftId))
+        assertEquals(
+          zipEntryNames(body),
+          Set("01-total-assets.png", "02-revenue.png", "03-incident-log.png"),
+        )
   }
 
   app.test("GET /api/match-drafts/:draftId/source-images/:kind rejects unknown kind") { httpApp =>

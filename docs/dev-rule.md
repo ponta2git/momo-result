@@ -1,121 +1,135 @@
 # 開発作業規約
 
-この文書はローカル起動、検証コマンド、Git運用の正本である。DB所有権は `docs/db-rule.md`、テスト選択は `docs/test-rule.md` を参照する。
+目的: ローカル起動、検証コマンド、Git運用の正本。
 
-## 1. 必要ツール
+読む条件:
 
-| ツール | 目安 | 用途 |
-|---|---|---|
-| Node.js | CI は 24 | web |
-| pnpm | 10.10.0 | workspace / web |
-| Java | 25 | api |
-| sbt | 1.12 系 | api |
-| Python | 3.14 | ocr-worker |
-| uv | lockfile 対応版 | ocr-worker |
-| Docker | Testcontainers 対応 | DB/Redis integration |
-| Tesseract | 5+ | OCR |
+- 開発環境を起動する。
+- 変更範囲に対して実行する quality gate を選ぶ。
+- Git branch / commit / PR を作る。
 
-## 2. 環境変数
+判断:
 
-- ローカルは `.env` を使う。コミットしない。
+- テスト選択は `docs/test-rule.md`。
+- DB所有権と migration は `docs/db-rule.md`。
+
+## 1. Toolchain
+
+| 領域 | ツール |
+|---|---|
+| web | Node.js 24, pnpm 10.10.0 |
+| api | Java 25, sbt 1.12 系 |
+| ocr-worker | Python 3.14, uv |
+| integration | Docker / Testcontainers |
+| OCR runtime | Tesseract 5+ |
+
+## 2. Environment
+
+- ローカル secret は `.env` に置き、コミットしない。
 - 必要なキー名は `.env.example` を参照する。
-- Scala API と Python worker は `.env` を自動読み込みしない。root の `.env` を shell に読み込んでから起動する。
-- Web で root `.env` の `VITE_*` を使う場合も、同じ shell で `.env` を読み込んでから `pnpm dev` する。
-- 本番 secrets は `fly secrets`、CI secrets は GitHub Actions secrets で管理する。
+- Scala API と Python worker は root `.env` を自動読み込みしない。起動前に shell へ読み込む。
+- Web の `VITE_*` も、root `.env` を使う場合は同じ shell で読み込んでから起動する。
+- 本番 secret は `fly secrets`、CI secret は GitHub Actions secrets で管理する。
 - `MOMO_LOG_FORMAT=json` は本番向け1行JSON、`MOMO_LOG_FORMAT=text` はローカル向け。
 
-## 3. ローカル起動
-
-Redis はこのリポジトリの compose で起動する。
+## 3. Local Run
 
 ```sh
 docker compose up -d
-```
-
-PostgreSQL と migration は `../momo-db` 側で管理する。
-
-```sh
 pnpm --dir ../momo-db db:up
 pnpm --dir ../momo-db db:migrate
 ```
 
-起動順序:
+```sh
+set -a; source .env; set +a
+cd apps/api && sbt run
+```
 
-1. Redis: `docker compose up -d`
-2. PostgreSQL: `pnpm --dir ../momo-db db:up`
-3. migration: `pnpm --dir ../momo-db db:migrate`
-4. API: `set -a; source .env; set +a; cd apps/api && sbt run`
-5. OCR worker: `set -a; source .env; set +a; uv run --directory apps/ocr-worker momo-ocr worker`
-6. Web: `cd apps/web && pnpm dev`
+```sh
+set -a; source .env; set +a
+uv run --directory apps/ocr-worker momo-ocr worker
+```
 
-root からの web 起動は `pnpm web:dev` でもよい。
+```sh
+pnpm web:dev
+```
 
-## 4. 標準検証コマンド
+## 4. Standard Commands
 
-### root
+### Root
 
 | 目的 | コマンド |
 |---|---|
 | web dev | `pnpm web:dev` |
 | web build | `pnpm web:build` |
+| web lint | `pnpm web:lint` |
 | web test | `pnpm web:test` |
 | web typecheck | `pnpm web:typecheck` |
 | api quality | `pnpm api:quality` |
 | api test | `pnpm api:test` |
 | api coverage | `pnpm api:coverage` |
 
-### web (`apps/web`)
+### Web
 
-| 目的 | コマンド |
+```sh
+cd apps/web
+pnpm generate:api
+pnpm format:check
+pnpm lint
+pnpm typecheck
+pnpm test:run
+pnpm test:coverage
+pnpm build
+```
+
+### API
+
+```sh
+cd apps/api
+sbt apiQuality
+sbt test
+sbt apiCoverage
+sbt apiDbQuality
+sbt apiRedisQuality
+sbt apiFullCheck
+```
+
+`sbt test` は integration を除外する。DB/Redis wire 動作は `apiDbQuality` / `apiRedisQuality` で明示的に実行する。
+
+### OCR Worker
+
+```sh
+cd apps/ocr-worker
+uv run ruff format --check .
+uv run ruff check .
+uv run mypy
+uv run pytest
+uv run pytest --cov=momo_ocr --cov-report=term-missing:skip-covered
+uv run pytest -m integration
+```
+
+## 5. Change Gates
+
+| 変更 | 必須ゲート |
 |---|---|
-| OpenAPI型生成 | `pnpm generate:api` |
-| format | `pnpm format:check` |
-| lint | `pnpm lint` |
-| typecheck | `pnpm typecheck` |
-| test | `pnpm test:run` |
-| coverage | `pnpm test:coverage` |
-| build | `pnpm build` |
+| web production code | `format:check`, `lint`, `typecheck`, `test:run` |
+| web API DTO / generated type | `generate:api`, `lint`, `typecheck`, `test:run` |
+| web build/runtime config | 上記 + `build` |
+| api endpoint / OpenAPI | `apiQuality`, `test`; 必要なら web `generate:api` |
+| api usecase / domain / codec | `apiQuality`, `test`; C1/C2対象なら `apiCoverage` |
+| PostgreSQL repository / DB前提 | 上記 + `apiDbQuality` |
+| Redis Streams / OCR queue | 上記 + `apiRedisQuality` |
+| ocr-worker production code | ruff format, ruff check, mypy, pytest |
+| ocr-worker external runtime | 上記 + `pytest -m integration` |
+| coverage対象ロジック | 各領域の coverage gate |
+| docs only | `git diff --check` |
 
-### api (`apps/api`)
-
-| 目的 | コマンド |
-|---|---|
-| format | `sbt apiFormatCheck` |
-| lint | `sbt apiLint` |
-| compile + OpenAPI | `sbt apiQuality` |
-| unit / non-integration test | `sbt test` |
-| coverage | `sbt apiCoverage` |
-| DB integration | `sbt apiDbQuality` |
-| Redis integration | `sbt apiRedisQuality` |
-| full local gate | `sbt apiFullCheck` |
-
-`sbt test` と `sbt apiCoverage` は `Integration` tag と `momo.api.integration.*` を除外する。DB/Redis の wire 動作は `DbIntegration` / `RedisIntegration` tag を使って `apiDbQuality` / `apiRedisQuality` で明示的に実行する。
-
-### ocr-worker (`apps/ocr-worker`)
-
-| 目的 | コマンド |
-|---|---|
-| format | `uv run ruff format --check .` |
-| lint | `uv run ruff check .` |
-| typecheck | `uv run mypy` |
-| unit test | `uv run pytest` |
-| coverage | `uv run pytest --cov=momo_ocr --cov-report=term-missing:skip-covered` |
-| integration test | `uv run pytest -m integration` |
-
-## 5. 変更別ゲート
-
-- web 変更: `generate:api` が関係する場合は先に実行し、`format:check`、`lint`、`typecheck`、`test:run`、`test:coverage`、必要なら `build`。
-- api endpoint / OpenAPI 変更: `apiQuality`（OpenAPI生成確認を含む）、`test`、C1/C2対象変更なら `apiCoverage` 後に web の `generate:api`。
-- PostgreSQL repository / migration 前提の変更: `apiDbQuality` を追加し、実行した spec 名を報告する。
-- Redis Streams / OCR queue 変更: `apiRedisQuality` を追加する。
-- ocr-worker 変更: `uv run ruff format --check .`、`uv run ruff check .`、`uv run mypy`、`uv run pytest`、C1/C2対象変更では `uv run pytest --cov=momo_ocr --cov-report=term-missing:skip-covered`。Redis/Postgres/native OCR など外部 wire 動作に触れた場合は `uv run pytest -m integration` も実行する。integration が skip / 未実行なら、その外部依存挙動は未検証として扱う。
-
-CI の API / OCR worker は `momo-db` を checkout し、`MOMO_DB_MIGRATIONS_DIR` で migration ディレクトリを指定する。ローカルで兄弟 repo がない場合も同 env で `drizzle/` を指定できる。
+外部依存 gate を skip / 未実行にした場合、その外部 wire 動作は未検証として報告する。
 
 ## 6. Git
 
-- ブランチ名: `<type>/<short-description>`。type は `feat` / `fix` / `refactor` / `test` / `chore` / `docs`。
-- コミットメッセージ: `<type>: <概要>`。
-- PR は小さく保つ。
-- merge 前に該当領域の format / lint / typecheck / test を通す。
+- branch: `<type>/<short-description>`
+- type: `feat` / `fix` / `refactor` / `test` / `docs` / `chore`
+- commit: `<type>: <概要>`
+- PR は小さく保ち、merge 前に変更範囲の gate を通す。
 - squash merge を基本とする。

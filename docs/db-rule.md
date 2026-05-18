@@ -1,61 +1,69 @@
 # DB利用規約
 
-この文書は DB 所有権、migration、consumer 側検証の正本である。テスト層の責務は `docs/test-rule.md`、コマンドは `docs/dev-rule.md` を参照する。
+目的: 共有 PostgreSQL の所有権、migration、consumer 側検証を迷わないための正本。
 
-## 1. 所有権
+読む条件:
+
+- DB table / column / seed / nullable / default に依存する変更をする。
+- PostgreSQL repository、Doobie query、DB-backed API を触る。
+- `relation does not exist`、存在しない column、SQLSTATE を含むエラーを扱う。
+
+参照:
+
+- テスト層: `docs/test-rule.md`
+- コマンド: `docs/dev-rule.md`
+- ドメイン状態遷移: `docs/domain-rule.md`
+
+## 1. Ownership
 
 - Neon PostgreSQL は summit アプリと共有する。
-- schema / migration の正本は `../momo-db`。このリポジトリで schema を直接所有しない。
-- schema 定義は `../momo-db/src/schema.ts`、migration SQL は `../momo-db/drizzle/` を参照する。
-- 本リポジトリが DB schema 変更を必要とする場合は、先に `momo-db` で schema / migration を変更し、consumer への影響と deploy 順序を明示する。
+- schema / migration / seed の正本は `../momo-db`。
+- このリポジトリは DB schema を所有しない。必要な schema 変更は先に `momo-db` へ入れる。
+- `momo-db` の migration が存在することと、API接続先DBに適用済みであることは別問題として確認する。
 
-## 2. 参照する主なテーブル
+## 2. Tables Used By This App
 
 | 種別 | テーブル |
 |---|---|
-| summit 共有 | `members`, `held_events`, `held_event_participants`, `app_sessions` |
+| summit共有 | `members`, `held_events`, `held_event_participants`, `app_sessions` |
 | 認証・権限 | `momo_login_accounts` |
 | 試合結果 | `match_drafts`, `matches`, `match_players`, `match_incidents` |
 | OCR | `ocr_drafts`, `ocr_jobs`, `ocr_queue_outbox` |
 | マスタ | `game_titles`, `map_masters`, `season_masters`, `incident_masters`, `member_aliases` |
 | 冪等性 | `idempotency_keys` |
 
-`held_events.session_id` は nullable。summit 作成分は session に紐づき、本アプリ作成分は `NULL` になり得る。
+注意:
 
-`momo_login_accounts` は momo-result のログイン主体を管理する。`members` は試合参加者マスタとして扱い、ログインアカウントとは `player_member_id` で任意に紐づける。
+- `held_events.session_id` は nullable。本アプリ作成分は `NULL` になり得る。
+- `momo_login_accounts` はログイン主体。`members` は試合参加者マスタ。
+- OCR元画像の実体、内部path、長寿命URLはDBに保存しない。DBに置くのは参照ID、保持期限、削除時刻などの管理情報だけ。
 
-## 3. 画像データ
+## 3. Consumer Contract
 
-- OCR元画像の実体は DB に保存しない。
-- DB には `match_drafts` の slot 別 source image ID と保持期限・削除時刻だけを置く。
-- 内部ファイルパスと長寿命URLを公開契約にしない。
-- 画像実体は下書き確定またはキャンセルまで保持し、その後 API 側の保持ポリシーで削除する。
+DB-backed API を触る変更では、次を同じ変更内で確認する。
 
-## 4. Consumer 側の必須確認
+- API が必要とする table / column / seed / nullable / default を明示する。
+- 新しい DB 前提は `DbContractSpec` に追加する。
+- 変更した repository method は Testcontainers PostgreSQL で実行する。
+- 同一 transaction で FK 関連 row を作成・更新する場合、statement order と保存後の linked row values を integration test で確認する。
+- integration が skip / 未実行なら、その DB 挙動は未検証として報告する。
 
-`momo-db` に migration があることと、API の接続先 DB に適用済みであることは別である。DB-backed API を触るときは、本リポジトリ側でも契約を確認する。
-
-必須:
-
-- API変更が要求する table / column / seed / nullable / default を明示する。
-- 新しい DB 前提は `apps/api/src/test/scala/momo/api/integration/DbContractSpec.scala` に追加する。
-- repository SQL は Testcontainers Postgres に `momo-db` migration を適用して実行する。
-- `relation does not exist`、存在しない column、SQLSTATE を含むエラーでは、APIコード修正前に接続先DBの migration 状態を確認する。
-
-標準確認:
+標準コマンド:
 
 ```sh
 cd apps/api
 sbt apiDbQuality
 ```
 
-`apiDbQuality` は `DbContractSpec` と PostgreSQL repository specs を実行する。CI では `MOMO_DB_MIGRATIONS_DIR` で checkout 済みの `momo-db/drizzle` を指定する。
+## 4. Deployment
 
-## 5. Deploy 順序
+後方互換なDB変更:
 
-1. `momo-db` に後方互換な migration を追加する。
+1. `momo-db` に migration を追加する。
 2. migration 適用を確認する。
 3. consumer 側 API / worker / web を deploy する。
-4. 旧 schema の削除や破壊的変更は、consumer deploy 後の別 migration に分ける。
 
-破壊的変更、NOT NULL 追加、型変更、大量 backfill が必要な場合は、実装前に deploy 手順を設計する。
+破壊的変更、NOT NULL 追加、型変更、大量 backfill、旧 schema 削除:
+
+- consumer deploy と別 migration に分ける。
+- deploy 順序、rollback、未移行データの扱いを実装前に決める。

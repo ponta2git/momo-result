@@ -14,7 +14,7 @@ import momo.api.repositories.{OcrQueueOutboxRecord, OcrQueueOutboxRepository, Qu
 
 final case class OcrQueueOutboxDispatcherConfig(
     batchSize: Int = 10,
-    pollInterval: FiniteDuration = 15.minutes,
+    pollInterval: FiniteDuration = 30.minutes,
     claimTtl: FiniteDuration = 30.seconds,
     maxBackoff: FiniteDuration = 60.seconds,
 )

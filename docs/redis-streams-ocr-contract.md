@@ -38,7 +38,7 @@ Redis は配送路であり、ジョブ状態の正本ではない。worker は 
 | Max delivery attempts | `1` | `OCR_MAX_ATTEMPTS` |
 | Pending claim idle | `300000ms` | `OCR_REDIS_CLAIM_IDLE_SECONDS` |
 | Worker blocking read | `30000ms` | `OCR_REDIS_BLOCK_SECONDS` |
-| Outbox recovery poll | `900s` | `OCR_OUTBOX_RECOVERY_INTERVAL_SECONDS` |
+| Outbox recovery poll | `1800s` | `OCR_OUTBOX_RECOVERY_INTERVAL_SECONDS` |
 
 Rules:
 

@@ -39,6 +39,10 @@ Redis は配送路であり、ジョブ状態の正本ではない。worker は 
 | Pending claim idle | `300000ms` | `OCR_REDIS_CLAIM_IDLE_SECONDS` |
 | Worker blocking read | `30000ms` | `OCR_REDIS_BLOCK_SECONDS` |
 | Outbox recovery poll | `1800s` | `OCR_OUTBOX_RECOVERY_INTERVAL_SECONDS` |
+| Outbox due backlog admission limit | `24` | `OCR_OUTBOX_DUE_BACKLOG_LIMIT` |
+| Outbox active backlog admission limit | `48` | `OCR_OUTBOX_ACTIVE_BACKLOG_LIMIT` |
+| Oldest due outbox max delay | `600s` | `OCR_OUTBOX_OLDEST_DUE_MAX_DELAY_SECONDS` |
+| Dead-letter backlog admission limit | `24` | `OCR_DEAD_LETTER_BACKLOG_LIMIT` |
 
 Rules:
 
@@ -107,6 +111,8 @@ worker は hints を補助情報として扱う。画面種別、プレイヤー
 ## 5. API Outbox
 
 API は OCR job 作成 transaction 内で `ocr_drafts`、`ocr_jobs`、`ocr_queue_outbox` を作成する。DB commit 後、通常経路では作成した outbox 行を即時 claim して `XADD` を試みる。HTTP success は Redis publish 完了ではなく、DB に durable enqueue intent が残ったことを意味する。即時 publish に失敗した場合は outbox 行を backoff 後の `PENDING` へ戻す。outbox recovery dispatcher は低頻度に残りの `PENDING` / stale `IN_FLIGHT` を再配送する。
+
+API は OCR job / draft / outbox 作成前に admission guard を実行する。Redis ping 失敗、due `PENDING` + expired `IN_FLIGHT` backlog 超過、`PENDING` + `IN_FLIGHT` active backlog 超過、oldest due outbox 遅延超過、dead-letter stream length 超過のいずれかでは、DB row を作らず `503 SERVICE_UNAVAILABLE` Problem Details で fail-fast する。閾値は通常利用（週1開催、1開催4〜6試合、担当者1人が試合後都度OCR）を妨げない初期値として設定し、env で変更可能にする。
 
 Lifecycle:
 

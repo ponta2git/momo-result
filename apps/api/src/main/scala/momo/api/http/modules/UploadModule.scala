@@ -26,7 +26,8 @@ object UploadModule:
             case true => MultipartUpload.file(parts) match
                 case Left(error) => security.toProblemF(error).map(Left(_))
                 case Right(upload) => security.respond(
-                    uploadImage.run(upload.fileName, upload.contentType, upload.bytes)
+                    uploadImage
+                      .run(member.accountId, upload.fileName, upload.contentType, upload.bytes)
                   )(UploadImageResponse.from)
           }
         }

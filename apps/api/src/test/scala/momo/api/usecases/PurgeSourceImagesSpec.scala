@@ -129,7 +129,8 @@ final class PurgeSourceImagesSpec extends MomoCatsEffectSuite:
   private def saveImage(
       imageStore: LocalFsImageStore[IO],
       fileName: String,
-  ): IO[momo.api.domain.StoredImage] = imageStore.save(Some(fileName), Some("image/png"), pngBytes)
+  ): IO[momo.api.domain.StoredImage] = imageStore
+    .save(AccountId.unsafeFromString("account-1"), Some(fileName), Some("image/png"), pngBytes)
     .flatMap {
       case Right(image) => IO.pure(image)
       case Left(error) => fail(s"expected image to be stored: $error")

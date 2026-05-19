@@ -20,12 +20,21 @@ import momo.api.domain.{OcrJobHints, ScreenType}
 import momo.api.repositories.OcrQueuePayload
 
 final class RedisQueueProducerIntegrationSpec extends RedisIntegrationSuite:
-  private final case class RedisStreamFixture(redisUrl: String, streamName: String)
+  private final case class RedisStreamFixture(
+      redisUrl: String,
+      streamName: String,
+      deadLetterStreamName: String,
+  )
 
   test("publishes OCR payload fields to a Redis Streams Testcontainer"):
     val payload = payloadFor("job-redis")
     redisStreamFixture.use { fixture =>
-      val config = RedisConfig(fixture.redisUrl, fixture.streamName, "momo-ocr-workers")
+      val config = RedisConfig(
+        fixture.redisUrl,
+        fixture.streamName,
+        "momo-ocr-workers",
+        fixture.deadLetterStreamName,
+      )
       RedisQueueProducer.resource[IO](config).use { producer =>
         producer.publish(payload).flatMap { messageId =>
           Redis[IO].simple(fixture.redisUrl, RedisCodec.Utf8).use { commands =>
@@ -45,6 +54,23 @@ final class RedisQueueProducerIntegrationSpec extends RedisIntegrationSuite:
       }
     }
 
+  test("health probe reports dead-letter stream length"):
+    redisStreamFixture.use { fixture =>
+      Redis[IO].simple(fixture.redisUrl, RedisCodec.Utf8).use { commands =>
+        val probe = RedisQueueProducer
+          .healthProbeFromCommands[IO](fixture.deadLetterStreamName, commands)
+        for
+          empty <- probe.deadLetterLength
+          _ <- commands.unsafe(
+            _.xadd(fixture.deadLetterStreamName, Map("deadLetterReason" -> "QUEUE_FAILURE").asJava)
+          )
+          nonEmpty <- probe.deadLetterLength
+        yield
+          assertEquals(empty, 0L)
+          assertEquals(nonEmpty, 1L)
+      }
+    }
+
   private def payloadFor(jobId: String): OcrQueuePayload = OcrQueuePayload.build(
     jobId = OcrJobId.unsafeFromString(jobId),
     draftId = OcrDraftId.unsafeFromString(s"draft-$jobId"),
@@ -57,12 +83,21 @@ final class RedisQueueProducerIntegrationSpec extends RedisIntegrationSuite:
     requestId = None,
   )
 
-  private def redisStreamFixture: Resource[IO, RedisStreamFixture] = redisUrlResource
-    .flatMap { redisUrl =>
+  private def redisStreamFixture: Resource[IO, RedisStreamFixture] = redisUrlResource.flatMap {
+    redisUrl =>
       Resource.make {
-        IO.pure(RedisStreamFixture(redisUrl, s"momo:ocr:jobs:test:${UUID.randomUUID().toString}"))
-      }(fixture => deleteStream(fixture.redisUrl, fixture.streamName))
-    }
+        IO.delay(UUID.randomUUID().toString).map { suffix =>
+          RedisStreamFixture(
+            redisUrl,
+            s"momo:ocr:jobs:test:$suffix",
+            s"momo:ocr:jobs:dead:test:$suffix",
+          )
+        }
+      }(fixture =>
+        deleteStream(fixture.redisUrl, fixture.streamName) >>
+          deleteStream(fixture.redisUrl, fixture.deadLetterStreamName)
+      )
+  }
 
   private def deleteStream(redisUrl: String, streamName: String): IO[Unit] = Redis[IO]
     .simple(redisUrl, RedisCodec.Utf8).use(_.del(streamName).void).handleErrorWith(_ => IO.unit)

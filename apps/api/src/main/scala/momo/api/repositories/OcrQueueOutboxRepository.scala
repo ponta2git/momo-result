@@ -21,6 +21,16 @@ final case class OcrQueueOutboxRecord(
     claimExpiresAt: Instant,
 )
 
+final case class OcrQueueBacklogSnapshot(
+    pendingCount: Long,
+    inFlightCount: Long,
+    expiredInFlightCount: Long,
+    duePendingCount: Long,
+    oldestDueNextAttemptAt: Option[Instant],
+) derives CanEqual:
+  def dueBacklogCount: Long = duePendingCount + expiredInFlightCount
+  def activeBacklogCount: Long = pendingCount + inFlightCount
+
 final case class OcrQueueOutboxDraft(
     id: String,
     jobId: OcrJobId,
@@ -45,6 +55,7 @@ object OcrQueueOutboxDraft:
 trait OcrQueueOutboxRepository[F[_]]:
   def claimById(id: String, now: Instant, claimUntil: Instant): F[Option[OcrQueueOutboxRecord]]
   def claimDue(limit: Int, now: Instant, claimUntil: Instant): F[List[OcrQueueOutboxRecord]]
+  def backlogSnapshot(now: Instant): F[OcrQueueBacklogSnapshot]
   def markDelivered(
       id: String,
       claimExpiresAt: Instant,

@@ -7,8 +7,12 @@ import sttp.tapir.{PublicEndpoint, *}
 
 object HealthEndpoints:
   final case class HealthResponse(status: String) derives Codec.AsObject
-  final case class HealthDetailsResponse(status: String, database: String, redis: String)
-      derives Codec.AsObject
+  final case class HealthDetailsResponse(
+      status: String,
+      database: String,
+      redis: String,
+      ocrAdmission: String,
+  ) derives Codec.AsObject
 
   val health: PublicEndpoint[Unit, Unit, HealthResponse, Any] = endpoint
     .get

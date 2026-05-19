@@ -23,6 +23,7 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
 
     assert(apiAppText.contains("Redis[F].simple(redis.url, RedisCodec.Utf8).map"))
     assert(apiAppText.contains("RedisQueueProducer.fromCommands(redis.stream, commands)"))
+    assert(apiAppText.contains("healthProbeFromCommands(redis.deadLetterStream"))
     assert(apiAppText.contains(".fromCommands(commands, \"login\""))
     assert(apiAppText.contains("\"ocr-job-create\""))
     assert(apiAppText.contains("\"ocr-job-create-global\""))

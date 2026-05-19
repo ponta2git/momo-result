@@ -7,17 +7,19 @@ import java.time.Instant
 import cats.effect.IO
 
 import momo.api.MomoCatsEffectSuite
-import momo.api.domain.ids.ImageId
+import momo.api.domain.ids.{AccountId, ImageId}
 import momo.api.errors.AppError
 import momo.api.testing.TestImages
 
 final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:
+  private val accountId = AccountId.unsafeFromString("account-1")
+  private val otherAccountId = AccountId.unsafeFromString("account-2")
   private val pngBytes: Array[Byte] = TestImages.png1x1
 
   test("stores PNG images after magic byte and content type validation") {
     tempDirectory("momo-api-image-store").use { dir =>
       val store = LocalFsImageStore[IO](dir)
-      store.save(Some("sample.png"), Some("image/png"), pngBytes).flatMap {
+      store.save(accountId, Some("sample.png"), Some("image/png"), pngBytes).flatMap {
         case Right(image) => IO.blocking(Files.exists(image.path)).assertEquals(true) *>
             IO(assertEquals(image.mediaType, "image/png")) *>
             IO(assertEquals(image.sizeBytes, pngBytes.length.toLong))
@@ -30,7 +32,7 @@ final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:
     tempDirectory("momo-api-image-store").use { dir =>
       val store = LocalFsImageStore[IO](dir)
       val bytes = TestImages.jpeg(width = 1280, height = 720)
-      store.save(Some("sample.jpg"), Some("image/jpeg"), bytes).flatMap {
+      store.save(accountId, Some("sample.jpg"), Some("image/jpeg"), bytes).flatMap {
         case Right(image) => IO.blocking(Files.exists(image.path)).assertEquals(true) *>
             IO(assertEquals(image.mediaType, "image/jpeg")) *>
             IO(assertEquals(image.sizeBytes, bytes.length.toLong))
@@ -43,7 +45,7 @@ final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:
     tempDirectory("momo-api-image-store").use { dir =>
       val store = LocalFsImageStore[IO](dir)
       val bytes = TestImages.webp(width = 1280, height = 720)
-      store.save(Some("sample.webp"), Some("image/webp"), bytes).flatMap {
+      store.save(accountId, Some("sample.webp"), Some("image/webp"), bytes).flatMap {
         case Right(image) => IO.blocking(Files.exists(image.path)).assertEquals(true) *>
             IO(assertEquals(image.mediaType, "image/webp")) *>
             IO(assertEquals(image.sizeBytes, bytes.length.toLong))
@@ -52,10 +54,37 @@ final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:
     }
   }
 
+  test("tracks unreferenced usage separately for each account") {
+    tempDirectory("momo-api-image-store").use { dir =>
+      val store = LocalFsImageStore[IO](dir)
+      for
+        first <- store.save(accountId, Some("first.png"), Some("image/png"), pngBytes).flatMap {
+          case Right(image) => IO.pure(image)
+          case Left(error) => fail(s"expected image to be stored: $error")
+        }
+        second <- store.save(otherAccountId, Some("second.png"), Some("image/png"), pngBytes)
+          .flatMap {
+            case Right(image) => IO.pure(image)
+            case Left(error) => fail(s"expected image to be stored: $error")
+          }
+        firstUsage <- store.unreferencedUsage(accountId, Set.empty)
+        firstReferencedUsage <- store.unreferencedUsage(accountId, Set(first.imageId))
+        secondUsage <- store.unreferencedUsage(otherAccountId, Set.empty)
+        foundSecond <- store.find(second.imageId)
+      yield
+        assertEquals(firstUsage.fileCount, 1)
+        assertEquals(firstUsage.sizeBytes, pngBytes.length.toLong)
+        assertEquals(firstReferencedUsage.fileCount, 0)
+        assertEquals(firstReferencedUsage.sizeBytes, 0L)
+        assertEquals(secondUsage.fileCount, 1)
+        assertEquals(foundSecond.map(_.imageId), Some(second.imageId))
+    }
+  }
+
   test("rejects unsupported bytes") {
     tempDirectory("momo-api-image-store").use { dir =>
       val store = LocalFsImageStore[IO](dir)
-      store.save(Some("sample.txt"), Some("text/plain"), Array[Byte](1, 2, 3)).map {
+      store.save(accountId, Some("sample.txt"), Some("text/plain"), Array[Byte](1, 2, 3)).map {
         case Left(error: AppError.UnsupportedMediaType) => assert(error.detail.contains("PNG"))
         case other => fail(s"expected unsupported media type, got $other")
       }
@@ -66,7 +95,7 @@ final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:
     tempDirectory("momo-api-image-store").use { dir =>
       val store = LocalFsImageStore[IO](dir)
       val headerOnlyPng = Array[Byte](0x89.toByte, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)
-      store.save(Some("sample.png"), Some("image/png"), headerOnlyPng).map {
+      store.save(accountId, Some("sample.png"), Some("image/png"), headerOnlyPng).map {
         case Left(error: AppError.UnsupportedMediaType) =>
           assert(error.detail.contains("dimensions"))
         case other => fail(s"expected unsupported media type, got $other")
@@ -80,7 +109,7 @@ final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:
       val canvasOnlyWebp = Array('R', 'I', 'F', 'F').map(_.toByte) ++ Array[Byte](22, 0, 0, 0) ++
         Array('W', 'E', 'B', 'P', 'V', 'P', '8', 'X').map(_.toByte) ++ Array[Byte](10, 0, 0, 0) ++
         Array.fill[Byte](10)(0.toByte)
-      store.save(Some("canvas.webp"), Some("image/webp"), canvasOnlyWebp).map {
+      store.save(accountId, Some("canvas.webp"), Some("image/webp"), canvasOnlyWebp).map {
         case Left(error: AppError.UnsupportedMediaType) =>
           assert(error.detail.contains("dimensions"))
         case other => fail(s"expected unsupported media type, got $other")
@@ -92,7 +121,7 @@ final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:
     tempDirectory("momo-api-image-store").use { dir =>
       val store = LocalFsImageStore[IO](dir)
       val tooLarge = Array.fill[Byte](LocalFsImageStore.MaxBytes + 1)(0.toByte)
-      store.save(Some("large.png"), Some("image/png"), tooLarge).map {
+      store.save(accountId, Some("large.png"), Some("image/png"), tooLarge).map {
         case Left(error: AppError.PayloadTooLarge) =>
           assert(error.detail.contains(LocalFsImageStore.MaxBytes.toString))
         case other => fail(s"expected payload too large, got $other")
@@ -104,7 +133,7 @@ final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:
     tempDirectory("momo-api-image-store").use { dir =>
       val store = LocalFsImageStore[IO](dir)
       val tooWide = TestImages.png(width = LocalFsImageStore.MaxWidth + 1, height = 1)
-      store.save(Some("wide.png"), Some("image/png"), tooWide).map {
+      store.save(accountId, Some("wide.png"), Some("image/png"), tooWide).map {
         case Left(error: AppError.PayloadTooLarge) =>
           assert(error.detail.contains(LocalFsImageStore.MaxDimensionsLabel))
         case other => fail(s"expected payload too large, got $other")
@@ -116,7 +145,7 @@ final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:
     tempDirectory("momo-api-image-store").use { dir =>
       val store = LocalFsImageStore[IO](dir)
       for
-        stored <- store.save(Some("sample.png"), Some("image/png"), pngBytes).flatMap {
+        stored <- store.save(accountId, Some("sample.png"), Some("image/png"), pngBytes).flatMap {
           case Right(image) => IO.pure(image)
           case Left(error) => fail(s"expected image to be stored: $error")
         }
@@ -161,5 +190,31 @@ final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:
         assert(keptExists)
         assert(!orphanExists)
         assert(recentExists)
+    }
+  }
+
+  test("deleteOrphans removes old unreferenced images from account directories") {
+    tempDirectory("momo-api-image-store").use { dir =>
+      val store = LocalFsImageStore[IO](dir)
+      val now = Instant.parse("2026-05-08T12:00:00Z")
+      val old = FileTime.from(now.minusSeconds(3600))
+      for
+        kept <- store.save(accountId, Some("kept.png"), Some("image/png"), pngBytes).flatMap {
+          case Right(image) => IO.pure(image)
+          case Left(error) => fail(s"expected image to be stored: $error")
+        }
+        orphan <- store.save(accountId, Some("orphan.png"), Some("image/png"), pngBytes).flatMap {
+          case Right(image) => IO.pure(image)
+          case Left(error) => fail(s"expected image to be stored: $error")
+        }
+        _ <- IO.blocking(Files.setLastModifiedTime(kept.path, old))
+        _ <- IO.blocking(Files.setLastModifiedTime(orphan.path, old))
+        deleted <- store.deleteOrphans(Set(kept.imageId), now.minusSeconds(60))
+        keptExists <- IO.blocking(Files.exists(kept.path))
+        orphanExists <- IO.blocking(Files.exists(orphan.path))
+      yield
+        assertEquals(deleted, 1)
+        assert(keptExists)
+        assert(!orphanExists)
     }
   }

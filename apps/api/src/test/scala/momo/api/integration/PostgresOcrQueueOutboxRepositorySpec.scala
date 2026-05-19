@@ -226,6 +226,93 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
       assertEquals(missing, None)
       assertEquals(row, ("DELIVERED", None))
 
+  test("backlogSnapshot summarizes pending, due, and in-flight backlog"):
+    val dueJobId = OcrJobId.unsafeFromString("job-outbox-snapshot-due")
+    val futureJobId = OcrJobId.unsafeFromString("job-outbox-snapshot-future")
+    val expiredJobId = OcrJobId.unsafeFromString("job-outbox-snapshot-expired")
+    val activeJobId = OcrJobId.unsafeFromString("job-outbox-snapshot-active")
+    val deliveredJobId = OcrJobId.unsafeFromString("job-outbox-snapshot-delivered")
+    for
+      _ <- insertOcrRows(
+        dueJobId,
+        OcrDraftId.unsafeFromString("draft-outbox-snapshot-due"),
+        now.minusSeconds(300),
+      )
+      _ <- insertOcrRows(
+        futureJobId,
+        OcrDraftId.unsafeFromString("draft-outbox-snapshot-future"),
+        now.minusSeconds(240),
+      )
+      _ <- insertOcrRows(
+        expiredJobId,
+        OcrDraftId.unsafeFromString("draft-outbox-snapshot-expired"),
+        now.minusSeconds(180),
+      )
+      _ <- insertOcrRows(
+        activeJobId,
+        OcrDraftId.unsafeFromString("draft-outbox-snapshot-active"),
+        now.minusSeconds(120),
+      )
+      _ <- insertOcrRows(
+        deliveredJobId,
+        OcrDraftId.unsafeFromString("draft-outbox-snapshot-delivered"),
+        now.minusSeconds(60),
+      )
+      _ <- insertOutbox(
+        id = "outbox-snapshot-due",
+        jobId = dueJobId,
+        status = OcrQueueOutboxStatus.Pending,
+        attemptCount = 1,
+        nextAttemptAt = now.minusSeconds(120),
+        claimExpiresAt = None,
+        createdAt = now.minusSeconds(300),
+      )
+      _ <- insertOutbox(
+        id = "outbox-snapshot-future",
+        jobId = futureJobId,
+        status = OcrQueueOutboxStatus.Pending,
+        attemptCount = 0,
+        nextAttemptAt = now.plusSeconds(120),
+        claimExpiresAt = None,
+        createdAt = now.minusSeconds(240),
+      )
+      _ <- insertOutbox(
+        id = "outbox-snapshot-expired",
+        jobId = expiredJobId,
+        status = OcrQueueOutboxStatus.InFlight,
+        attemptCount = 2,
+        nextAttemptAt = now.minusSeconds(180),
+        claimExpiresAt = Some(now.minusSeconds(1)),
+        createdAt = now.minusSeconds(180),
+      )
+      _ <- insertOutbox(
+        id = "outbox-snapshot-active",
+        jobId = activeJobId,
+        status = OcrQueueOutboxStatus.InFlight,
+        attemptCount = 0,
+        nextAttemptAt = now.minusSeconds(60),
+        claimExpiresAt = Some(now.plusSeconds(60)),
+        createdAt = now.minusSeconds(120),
+      )
+      _ <- insertOutbox(
+        id = "outbox-snapshot-delivered",
+        jobId = deliveredJobId,
+        status = OcrQueueOutboxStatus.Delivered,
+        attemptCount = 0,
+        nextAttemptAt = now.minusSeconds(60),
+        claimExpiresAt = None,
+        createdAt = now.minusSeconds(60),
+      )
+      snapshot <- repo.backlogSnapshot(now)
+    yield
+      assertEquals(snapshot.pendingCount, 2L)
+      assertEquals(snapshot.inFlightCount, 2L)
+      assertEquals(snapshot.expiredInFlightCount, 1L)
+      assertEquals(snapshot.duePendingCount, 1L)
+      assertEquals(snapshot.dueBacklogCount, 2L)
+      assertEquals(snapshot.activeBacklogCount, 4L)
+      assertEquals(snapshot.oldestDueNextAttemptAt, Some(now.minusSeconds(120)))
+
   test("markDelivered stores Redis message id and clears the claim"):
     val jobId = OcrJobId.unsafeFromString("job-outbox-delivered")
     val deliveredAt = now.plusSeconds(10)

@@ -10,7 +10,12 @@ import cats.syntax.all.*
 
 final case class DatabaseConfig(jdbcUrl: String, user: String, password: String, poolSize: Int)
 
-final case class RedisConfig(url: String, stream: String, group: String)
+final case class RedisConfig(
+    url: String,
+    stream: String,
+    group: String,
+    deadLetterStream: String = RedisConfig.DefaultDeadLetterStream,
+)
 
 final case class ResourceLimitsConfig(
     uploadRateLimitPerMinute: Int,
@@ -20,12 +25,20 @@ final case class ResourceLimitsConfig(
     ocrActiveJobLimit: Int,
     requestMaxBytes: Long,
     uploadRequestMaxBytes: Long,
+    imageUploadUnreferencedCountLimit: Int,
+    imageUploadUnreferencedBytesLimit: Long,
+    imageUploadStorageMinFreeBytes: Long,
+    imageUploadStorageMaxUsedPercent: Int,
     imageOrphanOlderThan: FiniteDuration,
     imageOrphanReaperInterval: FiniteDuration,
     staleOcrJobAfter: FiniteDuration,
     staleOcrJobReaperInterval: FiniteDuration,
     sessionPruneInterval: FiniteDuration,
     ocrOutboxRecoveryInterval: FiniteDuration,
+    ocrOutboxDueBacklogLimit: Int,
+    ocrOutboxActiveBacklogLimit: Int,
+    ocrOutboxOldestDueMaxDelay: FiniteDuration,
+    ocrDeadLetterBacklogLimit: Int,
 )
 
 final case class AuthConfig(
@@ -138,6 +151,8 @@ object AppConfig:
           url = url,
           stream = env.getOrElse("OCR_REDIS_STREAM", "momo:ocr:jobs"),
           group = env.getOrElse("OCR_REDIS_GROUP", "momo-ocr-workers"),
+          deadLetterStream = env
+            .getOrElse("OCR_REDIS_DEAD_LETTER_STREAM", RedisConfig.DefaultDeadLetterStream),
         )))
 
   private def loadAuth[F[_]: MonadThrow](env: Map[String, String], appEnv: AppEnv): F[AuthConfig] =
@@ -211,12 +226,28 @@ object AppConfig:
       "UPLOAD_REQUEST_MAX_BYTES",
       ResourceLimitsConfig.DefaultUploadRequestMaxBytes,
     ),
-    parsePositiveLong(env, "IMAGE_ORPHAN_OLDER_THAN_MINUTES", default = 60L),
-    parsePositiveLong(env, "IMAGE_ORPHAN_REAPER_INTERVAL_MINUTES", default = 60L),
+    parseNonNegativeInt(env, "IMAGE_UPLOAD_UNREFERENCED_COUNT_LIMIT", default = 24),
+    parsePositiveLong(
+      env,
+      "IMAGE_UPLOAD_UNREFERENCED_BYTES_LIMIT",
+      ResourceLimitsConfig.DefaultImageUploadUnreferencedBytesLimit,
+    ),
+    parsePositiveLong(
+      env,
+      "IMAGE_UPLOAD_STORAGE_MIN_FREE_BYTES",
+      ResourceLimitsConfig.DefaultImageUploadStorageMinFreeBytes,
+    ),
+    parsePercent(env, "IMAGE_UPLOAD_STORAGE_MAX_USED_PERCENT", default = 90),
+    parsePositiveLong(env, "IMAGE_ORPHAN_OLDER_THAN_MINUTES", default = 15L),
+    parsePositiveLong(env, "IMAGE_ORPHAN_REAPER_INTERVAL_MINUTES", default = 5L),
     parsePositiveLong(env, "STALE_OCR_JOB_AFTER_SECONDS", default = 300L),
     parsePositiveLong(env, "STALE_OCR_JOB_REAPER_INTERVAL_SECONDS", default = 1800L),
     parsePositiveLong(env, "SESSION_PRUNE_INTERVAL_MINUTES", default = 60L),
     parsePositiveLong(env, "OCR_OUTBOX_RECOVERY_INTERVAL_SECONDS", default = 1800L),
+    parseNonNegativeInt(env, "OCR_OUTBOX_DUE_BACKLOG_LIMIT", default = 24),
+    parseNonNegativeInt(env, "OCR_OUTBOX_ACTIVE_BACKLOG_LIMIT", default = 48),
+    parsePositiveLong(env, "OCR_OUTBOX_OLDEST_DUE_MAX_DELAY_SECONDS", default = 600L),
+    parseNonNegativeInt(env, "OCR_DEAD_LETTER_BACKLOG_LIMIT", default = 24),
   ).mapN {
     (
         uploadRateLimit,
@@ -226,12 +257,20 @@ object AppConfig:
         ocrActiveJobLimit,
         requestMaxBytes,
         uploadRequestMaxBytes,
+        imageUploadUnreferencedCountLimit,
+        imageUploadUnreferencedBytesLimit,
+        imageUploadStorageMinFreeBytes,
+        imageUploadStorageMaxUsedPercent,
         orphanOlderThan,
         orphanReaperInterval,
         staleOcrJobAfter,
         staleOcrJobReaperInterval,
         sessionPruneInterval,
         ocrOutboxRecoveryInterval,
+        ocrOutboxDueBacklogLimit,
+        ocrOutboxActiveBacklogLimit,
+        ocrOutboxOldestDueMaxDelay,
+        ocrDeadLetterBacklogLimit,
     ) =>
       ResourceLimitsConfig(
         uploadRateLimitPerMinute = uploadRateLimit,
@@ -241,12 +280,20 @@ object AppConfig:
         ocrActiveJobLimit = ocrActiveJobLimit,
         requestMaxBytes = requestMaxBytes,
         uploadRequestMaxBytes = uploadRequestMaxBytes,
+        imageUploadUnreferencedCountLimit = imageUploadUnreferencedCountLimit,
+        imageUploadUnreferencedBytesLimit = imageUploadUnreferencedBytesLimit,
+        imageUploadStorageMinFreeBytes = imageUploadStorageMinFreeBytes,
+        imageUploadStorageMaxUsedPercent = imageUploadStorageMaxUsedPercent,
         imageOrphanOlderThan = orphanOlderThan.minutes,
         imageOrphanReaperInterval = orphanReaperInterval.minutes,
         staleOcrJobAfter = staleOcrJobAfter.seconds,
         staleOcrJobReaperInterval = staleOcrJobReaperInterval.seconds,
         sessionPruneInterval = sessionPruneInterval.minutes,
         ocrOutboxRecoveryInterval = ocrOutboxRecoveryInterval.seconds,
+        ocrOutboxDueBacklogLimit = ocrOutboxDueBacklogLimit,
+        ocrOutboxActiveBacklogLimit = ocrOutboxActiveBacklogLimit,
+        ocrOutboxOldestDueMaxDelay = ocrOutboxOldestDueMaxDelay.seconds,
+        ocrDeadLetterBacklogLimit = ocrDeadLetterBacklogLimit,
       )
   }.liftTo[F]
 
@@ -278,6 +325,18 @@ object AppConfig:
     default,
     value => value > 0 && value <= 65535,
     "TCP port between 1 and 65535",
+  )
+
+  private[config] def parsePercent(
+      env: Map[String, String],
+      name: String,
+      default: Int,
+  ): Either[Throwable, Int] = parseInt(
+    env,
+    name,
+    default,
+    value => value >= 1 && value <= 100,
+    "integer percentage between 1 and 100",
   )
 
   private[config] def parseBoolean(
@@ -399,9 +458,14 @@ object AuthConfig:
     useHostPrefix = appEnv == AppEnv.Prod,
   )
 
+object RedisConfig:
+  val DefaultDeadLetterStream: String = "momo:ocr:jobs:dead"
+
 object ResourceLimitsConfig:
   val DefaultRequestMaxBytes: Long = 256L * 1024L
   val DefaultUploadRequestMaxBytes: Long = 3L * 1024L * 1024L + 64L * 1024L
+  val DefaultImageUploadUnreferencedBytesLimit: Long = 64L * 1024L * 1024L
+  val DefaultImageUploadStorageMinFreeBytes: Long = 256L * 1024L * 1024L
 
   val defaults: ResourceLimitsConfig = ResourceLimitsConfig(
     uploadRateLimitPerMinute = 20,
@@ -411,10 +475,18 @@ object ResourceLimitsConfig:
     ocrActiveJobLimit = 12,
     requestMaxBytes = DefaultRequestMaxBytes,
     uploadRequestMaxBytes = DefaultUploadRequestMaxBytes,
-    imageOrphanOlderThan = 60.minutes,
-    imageOrphanReaperInterval = 60.minutes,
+    imageUploadUnreferencedCountLimit = 24,
+    imageUploadUnreferencedBytesLimit = DefaultImageUploadUnreferencedBytesLimit,
+    imageUploadStorageMinFreeBytes = DefaultImageUploadStorageMinFreeBytes,
+    imageUploadStorageMaxUsedPercent = 90,
+    imageOrphanOlderThan = 15.minutes,
+    imageOrphanReaperInterval = 5.minutes,
     staleOcrJobAfter = 300.seconds,
     staleOcrJobReaperInterval = 1800.seconds,
     sessionPruneInterval = 60.minutes,
     ocrOutboxRecoveryInterval = 1800.seconds,
+    ocrOutboxDueBacklogLimit = 24,
+    ocrOutboxActiveBacklogLimit = 48,
+    ocrOutboxOldestDueMaxDelay = 600.seconds,
+    ocrDeadLetterBacklogLimit = 24,
   )

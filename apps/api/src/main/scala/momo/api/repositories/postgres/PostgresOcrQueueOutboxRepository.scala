@@ -14,8 +14,8 @@ import io.circe.Json
 import momo.api.domain.ids.OcrJobId
 import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.repositories.{
-  OcrQueueOutboxDraft, OcrQueueOutboxRecord, OcrQueueOutboxRepository, OcrQueueOutboxStatus,
-  OcrQueuePayload,
+  OcrQueueBacklogSnapshot, OcrQueueOutboxDraft, OcrQueueOutboxRecord, OcrQueueOutboxRepository,
+  OcrQueueOutboxStatus, OcrQueuePayload,
 }
 
 object PostgresOcrQueueOutbox:
@@ -95,6 +95,36 @@ final class PostgresOcrQueueOutboxRepository[F[_]: MonadCancelThrow](transactor:
       WHERE q.id = candidate.id
       RETURNING q.id, q.job_id, q.stream_payload, q.attempt_count, q.claim_expires_at
     """.query[Row].to[List].flatMap(_.traverse(toRecord)).transact(transactor)
+
+  override def backlogSnapshot(now: Instant): F[OcrQueueBacklogSnapshot] = sql"""
+      SELECT
+        COUNT(*) FILTER (WHERE status = ${OcrQueueOutboxStatus.Pending}) AS pending_count,
+        COUNT(*) FILTER (WHERE status = ${OcrQueueOutboxStatus.InFlight}) AS in_flight_count,
+        COUNT(*) FILTER (
+          WHERE status = ${OcrQueueOutboxStatus.InFlight}
+            AND claim_expires_at < $now
+        ) AS expired_in_flight_count,
+        COUNT(*) FILTER (
+          WHERE status = ${OcrQueueOutboxStatus.Pending}
+            AND next_attempt_at <= $now
+        ) AS due_pending_count,
+        MIN(next_attempt_at) FILTER (
+          WHERE status = ${OcrQueueOutboxStatus.Pending}
+            AND next_attempt_at <= $now
+        ) AS oldest_due_next_attempt_at
+      FROM ocr_queue_outbox
+      WHERE status = ${OcrQueueOutboxStatus.Pending}
+         OR status = ${OcrQueueOutboxStatus.InFlight}
+    """.query[(Long, Long, Long, Long, Option[Instant])].unique
+    .map { case (pendingCount, inFlightCount, expiredInFlightCount, duePendingCount, oldestDue) =>
+      OcrQueueBacklogSnapshot(
+        pendingCount = pendingCount,
+        inFlightCount = inFlightCount,
+        expiredInFlightCount = expiredInFlightCount,
+        duePendingCount = duePendingCount,
+        oldestDueNextAttemptAt = oldestDue,
+      )
+    }.transact(transactor)
 
   override def markDelivered(
       id: String,

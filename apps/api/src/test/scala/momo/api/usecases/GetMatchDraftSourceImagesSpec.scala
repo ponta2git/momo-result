@@ -136,7 +136,7 @@ final class GetMatchDraftSourceImagesSpec extends MomoCatsEffectSuite:
       imageStore: LocalFsImageStore[IO],
       bytes: Array[Byte],
       contentType: String,
-  ): IO[StoredImage] = imageStore.save(None, Some(contentType), bytes).flatMap {
+  ): IO[StoredImage] = imageStore.save(accountId, None, Some(contentType), bytes).flatMap {
     case Right(image) => IO.pure(image)
     case Left(error) => fail(s"expected image to be stored: $error")
   }

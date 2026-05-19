@@ -37,20 +37,9 @@ import momo.api.repositories.{
   LoginAccountsRepository, MapMastersRepository, MatchConfirmationRepository, MatchDraftsRepository,
   MatchListReadModel, MatchesRepository, MemberAliasesRepository, MembersRepository,
   OcrDraftsRepository, OcrJobCreationRepository, OcrJobMaintenanceRepository, OcrJobsRepository,
-  QueueProducer, SeasonMastersRepository,
+  QueueHealthProbe, QueueProducer, SeasonMastersRepository,
 }
-import momo.api.usecases.{
-  CancelMatchDraft, CancelOcrJob, ConfirmMatch, CreateGameTitle, CreateHeldEvent,
-  CreateLoginAccount, CreateMapMaster, CreateMatchDraft, CreateMemberAlias, CreateOcrJob,
-  CreateSeasonMaster, DeleteGameTitle, DeleteHeldEvent, DeleteMapMaster, DeleteMatch,
-  DeleteMemberAlias, DeleteSeasonMaster, ExpiredSessionPruner, ExportMatches, GetMatch,
-  GetMatchDraft, GetMatchDraftSourceImages, GetOcrDraft, GetOcrDraftsBulk, GetOcrJob,
-  ListGameTitles, ListHeldEvents, ListIncidentMasters, ListLoginAccounts, ListMapMasters,
-  ListMatches, ListMemberAliases, ListSeasonMasters, OcrQueueOutboxDispatcher,
-  OcrQueueOutboxDispatcherConfig, OcrQueueSubmitter, PeriodicMaintenance, PurgeSourceImages,
-  SourceImageOrphanReaper, StaleOcrJobReaper, UpdateGameTitle, UpdateLoginAccount, UpdateMapMaster,
-  UpdateMatch, UpdateMatchDraft, UpdateMemberAlias, UpdateSeasonMaster, UploadImage,
-}
+import momo.api.usecases.*
 
 object ApiApp:
   /** Fully wired runtime. Specs use the exposed repositories to seed in-memory resources. */
@@ -66,6 +55,7 @@ object ApiApp:
 
   private final case class RuntimeInfrastructure[F[_]](
       queue: QueueProducer[F],
+      queueHealth: QueueHealthProbe[F],
       loginRateLimiter: RateLimiter[F],
       rateLimiters: HttpRateLimiters[F],
   )
@@ -124,8 +114,16 @@ object ApiApp:
           PostgresImageReferenceRepository[F](transactor)
         val ocrMaintenance: OcrJobMaintenanceRepository[F] =
           PostgresOcrJobMaintenanceRepository[F](transactor)
-        val health =
-          healthDetails[F](Some(Database.ping[F](transactor)), config.redis.map(_ => queue.ping))
+        val ocrAdmissionGuard = OcrAdmissionGuard.from[F](
+          ocrQueueOutbox,
+          infrastructure.queueHealth,
+          OcrAdmissionGuard.Config.fromResourceLimits(config.resourceLimits),
+        )
+        val health = healthDetails[F](
+          Some(Database.ping[F](transactor)),
+          config.redis.map(_ => infrastructure.queueHealth.ping),
+          Some(ocrAdmissionGuard.healthStatus),
+        )
         OcrQueueOutboxDispatcher.resource[F](
           ocrQueueOutbox,
           queue,
@@ -145,8 +143,10 @@ object ApiApp:
             assemble(
               config = config,
               imageStore = imageStore,
+              imageReferences = imageReferences,
               healthDetails = health,
               ocrQueueSubmitter = OcrQueueSubmitter.outboxBacked[F](ocrQueueOutbox, queue),
+              ocrAdmissionGuard = ocrAdmissionGuard,
               ocrJobCreation = ocrJobCreation,
               jobs = jobs,
               drafts = drafts,
@@ -222,6 +222,7 @@ object ApiApp:
               idempotency <- InMemoryIdempotencyRepository.create[F]
               ocrJobCreation = InMemoryOcrJobCreationRepository[F](drafts, jobs, matchDrafts)
               ocrQueueSubmitter = OcrQueueSubmitter.direct[F](jobs, matchDrafts, queue)
+              ocrAdmissionGuard = OcrAdmissionGuard.allowAll[F]
             yield (
               jobs,
               drafts,
@@ -242,6 +243,7 @@ object ApiApp:
               idempotency,
               ocrJobCreation,
               ocrQueueSubmitter,
+              ocrAdmissionGuard,
             )
           ).flatMap {
             case (
@@ -264,13 +266,15 @@ object ApiApp:
                   idempotency,
                   ocrJobCreation,
                   ocrQueueSubmitter,
+                  ocrAdmissionGuard,
                 ) =>
               val imageStore = LocalFsImageStore[F](config.imageTmpDir)
               val imageReferences: ImageReferenceRepository[F] =
                 new InMemoryImageReferenceRepository[F]
               val ocrMaintenance: OcrJobMaintenanceRepository[F] =
                 new InMemoryOcrJobMaintenanceRepository[F]
-              val health = healthDetails[F](None, config.redis.map(_ => queue.ping))
+              val health =
+                healthDetails[F](None, config.redis.map(_ => infrastructure.queueHealth.ping), None)
               runtimeMaintenance(
                 config = config,
                 imageStore = imageStore,
@@ -283,8 +287,10 @@ object ApiApp:
                 assemble(
                   config = config,
                   imageStore = imageStore,
+                  imageReferences = imageReferences,
                   healthDetails = health,
                   ocrQueueSubmitter = ocrQueueSubmitter,
+                  ocrAdmissionGuard = ocrAdmissionGuard,
                   ocrJobCreation = ocrJobCreation,
                   jobs = jobs,
                   drafts = drafts,
@@ -317,6 +323,8 @@ object ApiApp:
   ): Resource[F, RuntimeInfrastructure[F]] = config.redis match
     case Some(redis) => Redis[F].simple(redis.url, RedisCodec.Utf8).map { commands =>
         val queue: QueueProducer[F] = RedisQueueProducer.fromCommands(redis.stream, commands)
+        val queueHealth: QueueHealthProbe[F] = RedisQueueProducer
+          .healthProbeFromCommands(redis.deadLetterStream, commands)
         val login: RateLimiter[F] = RedisRateLimiter
           .fromCommands(commands, "login", config.auth.rateLimitPerMinute, now)
         val upload: RateLimiter[F] = RedisRateLimiter
@@ -337,6 +345,7 @@ object ApiApp:
         )
         RuntimeInfrastructure(
           queue,
+          queueHealth,
           login,
           HttpRateLimiters(upload, exportLimiter, ocrJobCreate, ocrJobCreateGlobal),
         )
@@ -344,6 +353,7 @@ object ApiApp:
     case None => Resource.eval(
         for
           queue <- InMemoryQueueProducer.create[F]
+          queueHealth = QueueHealthProbe.healthy[F]
           login <- LoginRateLimiter.create[F](config.auth.rateLimitPerMinute, now)
           upload <- LoginRateLimiter.create[F](config.resourceLimits.uploadRateLimitPerMinute, now)
           exportLimiter <- LoginRateLimiter
@@ -354,6 +364,7 @@ object ApiApp:
             .create[F](config.resourceLimits.ocrJobCreateGlobalRateLimitPerMinute, now)
         yield RuntimeInfrastructure(
           queue,
+          queueHealth,
           login,
           HttpRateLimiters(upload, exportLimiter, ocrJobCreate, ocrJobCreateGlobal),
         )
@@ -396,22 +407,31 @@ object ApiApp:
   private def healthDetails[F[_]: Async](
       database: Option[F[Unit]],
       redis: Option[F[Unit]],
+      ocrAdmission: Option[F[String]],
   ): F[HealthDetailsResponse] =
     def check(probe: Option[F[Unit]]): F[String] = probe match
       case None => Async[F].pure("disabled")
       case Some(value) => value.attempt.map(_.fold(_ => "unavailable", _ => "ok"))
 
-    (check(database), check(redis)).mapN { (databaseStatus, redisStatus) =>
-      val required = List(databaseStatus, redisStatus).filterNot(_ == "disabled")
-      val status = if required.forall(_ == "ok") then "ok" else "degraded"
-      HealthDetailsResponse(status, databaseStatus, redisStatus)
+    def checkStatus(probe: Option[F[String]]): F[String] = probe match
+      case None => Async[F].pure("disabled")
+      case Some(value) => value.handleError(_ => "unavailable")
+
+    (check(database), check(redis), checkStatus(ocrAdmission)).mapN {
+      (databaseStatus, redisStatus, ocrAdmissionStatus) =>
+        val required = List(databaseStatus, redisStatus, ocrAdmissionStatus)
+          .filterNot(_ == "disabled")
+        val status = if required.forall(_ == "ok") then "ok" else "degraded"
+        HealthDetailsResponse(status, databaseStatus, redisStatus, ocrAdmissionStatus)
     }
 
-  private def assemble[F[_]: Async: SecureRandom](
+  private def assemble[F[_]: Async: SecureRandom: LoggerFactory](
       config: AppConfig,
       imageStore: LocalFsImageStore[F],
+      imageReferences: ImageReferenceRepository[F],
       healthDetails: F[HealthDetailsResponse],
       ocrQueueSubmitter: OcrQueueSubmitter[F],
+      ocrAdmissionGuard: OcrAdmissionGuard[F],
       ocrJobCreation: OcrJobCreationRepository[F],
       jobs: OcrJobsRepository[F],
       drafts: OcrDraftsRepository[F],
@@ -435,7 +455,12 @@ object ApiApp:
       rateLimiters: HttpRateLimiters[F],
   ): F[Runtime[F]] =
     val roster = MemberRoster.dev(config.devMemberIds)
-    val uploadImage = UploadImage[F](imageStore)
+    val imageStorageAdmission = ImageStorageAdmission.from[F](
+      imageStore,
+      imageReferences,
+      ImageStorageAdmission.Config.fromResourceLimits(config.resourceLimits),
+    )
+    val uploadImage = UploadImage[F](imageStore, imageStorageAdmission)
     val nowF = Clock[F].realTimeInstant
     val nextId = OcrJobId.fresh[F].map(_.value)
     val sessionService = SessionService[F](appSessions, loginAccounts, config.auth, nowF)
@@ -446,6 +471,7 @@ object ApiApp:
       creation = ocrJobCreation,
       matchDrafts = matchDrafts,
       queueSubmitter = ocrQueueSubmitter,
+      admissionGuard = ocrAdmissionGuard,
       now = nowF,
       nextId = nextId,
       memberAliases = memberAliases,

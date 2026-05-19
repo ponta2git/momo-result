@@ -13,8 +13,8 @@ import momo.api.domain.ids.{AccountId, ImageId, OcrJobId}
 import momo.api.domain.{OcrFailure, OcrJob, StoredImage}
 import momo.api.errors.AppError
 import momo.api.repositories.{
-  AppSession, AppSessionsRepository, ImageStore, OcrJobsRepository, OcrQueueOutboxRecord,
-  OcrQueueOutboxRepository, OcrQueuePayload, QueueProducer,
+  AppSession, AppSessionsRepository, ImageStore, OcrJobsRepository, OcrQueueBacklogSnapshot,
+  OcrQueueOutboxRecord, OcrQueueOutboxRepository, OcrQueuePayload, QueueHealthProbe, QueueProducer,
 }
 
 object FixedClock:
@@ -64,10 +64,11 @@ final case class FailingMarkFailedOcrJobsRepository(
 final case class FailingDeleteImageStore(delegate: ImageStore[IO], deleteError: Throwable)
     extends ImageStore[IO]:
   override def save(
+      ownerAccountId: AccountId,
       fileName: Option[String],
       contentType: Option[String],
       bytes: Array[Byte],
-  ): IO[Either[AppError, StoredImage]] = delegate.save(fileName, contentType, bytes)
+  ): IO[Either[AppError, StoredImage]] = delegate.save(ownerAccountId, fileName, contentType, bytes)
   override def find(imageId: ImageId): IO[Option[StoredImage]] = delegate.find(imageId)
   override def readBytes(image: StoredImage): IO[Array[Byte]] = delegate.readBytes(image)
   override def delete(imageId: ImageId): IO[Boolean] =
@@ -76,6 +77,7 @@ final case class FailingDeleteImageStore(delegate: ImageStore[IO], deleteError: 
 
 final case class OutboxClaimDueCall(limit: Int, now: Instant, claimUntil: Instant) derives CanEqual
 final case class OutboxClaimByIdCall(id: String, now: Instant, claimUntil: Instant) derives CanEqual
+final case class OutboxBacklogSnapshotCall(now: Instant) derives CanEqual
 
 final case class OutboxMarkDeliveredCall(
     id: String,
@@ -95,10 +97,12 @@ final case class OutboxReleaseForRetryCall(
 final class RecordingOcrQueueOutboxRepository private (
     claimRows: OutboxClaimDueCall => List[OcrQueueOutboxRecord],
     claimByIdRows: OutboxClaimByIdCall => Option[OcrQueueOutboxRecord],
+    backlogSnapshotRows: Instant => OcrQueueBacklogSnapshot,
     markDeliveredResult: Boolean,
     releaseForRetryResult: Boolean,
     claimsRef: Ref[IO, Vector[OutboxClaimDueCall]],
     claimByIdsRef: Ref[IO, Vector[OutboxClaimByIdCall]],
+    backlogSnapshotsRef: Ref[IO, Vector[OutboxBacklogSnapshotCall]],
     deliveriesRef: Ref[IO, Vector[OutboxMarkDeliveredCall]],
     releasesRef: Ref[IO, Vector[OutboxReleaseForRetryCall]],
 ) extends OcrQueueOutboxRepository[IO]:
@@ -117,6 +121,9 @@ final class RecordingOcrQueueOutboxRepository private (
   ): IO[List[OcrQueueOutboxRecord]] =
     val call = OutboxClaimDueCall(limit, now, claimUntil)
     claimsRef.update(_ :+ call).as(claimRows(call))
+
+  override def backlogSnapshot(now: Instant): IO[OcrQueueBacklogSnapshot] = backlogSnapshotsRef
+    .update(_ :+ OutboxBacklogSnapshotCall(now)).as(backlogSnapshotRows(now))
 
   override def markDelivered(
       id: String,
@@ -139,10 +146,19 @@ final class RecordingOcrQueueOutboxRepository private (
 
   def claims: IO[Vector[OutboxClaimDueCall]] = claimsRef.get
   def claimByIds: IO[Vector[OutboxClaimByIdCall]] = claimByIdsRef.get
+  def backlogSnapshots: IO[Vector[OutboxBacklogSnapshotCall]] = backlogSnapshotsRef.get
   def deliveries: IO[Vector[OutboxMarkDeliveredCall]] = deliveriesRef.get
   def releases: IO[Vector[OutboxReleaseForRetryCall]] = releasesRef.get
 
 object RecordingOcrQueueOutboxRepository:
+  private val emptyBacklog = OcrQueueBacklogSnapshot(
+    pendingCount = 0,
+    inFlightCount = 0,
+    expiredInFlightCount = 0,
+    duePendingCount = 0,
+    oldestDueNextAttemptAt = None,
+  )
+
   def createWithRows(rows: List[OcrQueueOutboxRecord]): IO[RecordingOcrQueueOutboxRepository] =
     create(_ => rows, markDeliveredResult = true, releaseForRetryResult = true)
 
@@ -163,19 +179,36 @@ object RecordingOcrQueueOutboxRepository:
       claimByIdRows: OutboxClaimByIdCall => Option[OcrQueueOutboxRecord],
       markDeliveredResult: Boolean,
       releaseForRetryResult: Boolean,
+  ): IO[RecordingOcrQueueOutboxRepository] = createWithBacklog(
+    claimRows,
+    claimByIdRows,
+    markDeliveredResult,
+    releaseForRetryResult,
+    _ => emptyBacklog,
+  )
+
+  def createWithBacklog(
+      claimRows: OutboxClaimDueCall => List[OcrQueueOutboxRecord],
+      claimByIdRows: OutboxClaimByIdCall => Option[OcrQueueOutboxRecord],
+      markDeliveredResult: Boolean,
+      releaseForRetryResult: Boolean,
+      backlogSnapshotRows: Instant => OcrQueueBacklogSnapshot,
   ): IO[RecordingOcrQueueOutboxRepository] =
     for
       claims <- Ref.of[IO, Vector[OutboxClaimDueCall]](Vector.empty)
       claimByIds <- Ref.of[IO, Vector[OutboxClaimByIdCall]](Vector.empty)
+      backlogSnapshots <- Ref.of[IO, Vector[OutboxBacklogSnapshotCall]](Vector.empty)
       deliveries <- Ref.of[IO, Vector[OutboxMarkDeliveredCall]](Vector.empty)
       releases <- Ref.of[IO, Vector[OutboxReleaseForRetryCall]](Vector.empty)
     yield new RecordingOcrQueueOutboxRepository(
       claimRows,
       claimByIdRows,
+      backlogSnapshotRows,
       markDeliveredResult,
       releaseForRetryResult,
       claims,
       claimByIds,
+      backlogSnapshots,
       deliveries,
       releases,
     )
@@ -186,6 +219,9 @@ final class RecordingRedisStreamClient private (ref: Ref[IO, Vector[RedisXAddCal
     extends RedisStreamClient[IO]:
   override def xadd(stream: String, fields: Map[String, String]): IO[String] = ref
     .update(_ :+ RedisXAddCall(stream, fields)).as("1-0")
+  override def xlen(stream: String): IO[Long] =
+    val _ = stream
+    IO.pure(0L)
   override def ping: IO[Unit] = IO.unit
 
   def calls: IO[Vector[RedisXAddCall]] = ref.get
@@ -193,6 +229,22 @@ final class RecordingRedisStreamClient private (ref: Ref[IO, Vector[RedisXAddCal
 object RecordingRedisStreamClient:
   def create: IO[RecordingRedisStreamClient] = Ref.of[IO, Vector[RedisXAddCall]](Vector.empty)
     .map(new RecordingRedisStreamClient(_))
+
+final case class StaticQueueHealthProbe(deadLetterLengthValue: Long = 0L)
+    extends QueueHealthProbe[IO]:
+  override def ping: IO[Unit] = IO.unit
+  override def deadLetterLength: IO[Long] = IO.pure(deadLetterLengthValue)
+
+final case class FailingQueueHealthProbe(
+    pingError: Option[Throwable],
+    deadLetterLengthError: Option[Throwable],
+) extends QueueHealthProbe[IO]:
+  override def ping: IO[Unit] = pingError match
+    case None => IO.unit
+    case Some(error) => IO.raiseError(error)
+  override def deadLetterLength: IO[Long] = deadLetterLengthError match
+    case None => IO.pure(0L)
+    case Some(error) => IO.raiseError(error)
 
 final case class SuccessfulDiscordOAuthClient(userId: String) extends DiscordOAuthClient[IO]:
   override def authorizationUrl(state: String, prompt: Option[String]): IO[String] =

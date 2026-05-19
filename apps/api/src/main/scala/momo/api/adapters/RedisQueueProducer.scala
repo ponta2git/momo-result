@@ -10,10 +10,11 @@ import dev.profunktor.redis4cats.effect.Log.NoOp.*
 import dev.profunktor.redis4cats.{Redis, RedisCommands}
 
 import momo.api.config.RedisConfig
-import momo.api.repositories.{OcrQueuePayload, QueueProducer}
+import momo.api.repositories.{OcrQueuePayload, QueueHealthProbe, QueueProducer}
 
 trait RedisStreamClient[F[_]]:
   def xadd(stream: String, fields: Map[String, String]): F[String]
+  def xlen(stream: String): F[Long]
   def ping: F[Unit]
 
 final class RedisQueueProducer[F[_]] private (stream: String, client: RedisStreamClient[F])
@@ -30,6 +31,11 @@ object RedisQueueProducer:
       commands: RedisCommands[F, String, String],
   ): RedisQueueProducer[F] = RedisQueueProducer(stream, Redis4CatsStreamClient(commands))
 
+  def healthProbeFromCommands[F[_]: Functor](
+      deadLetterStream: String,
+      commands: RedisCommands[F, String, String],
+  ): QueueHealthProbe[F] = RedisQueueHealthProbe(deadLetterStream, Redis4CatsStreamClient(commands))
+
   def resource[F[_]: Async](config: RedisConfig): Resource[F, RedisQueueProducer[F]] = Redis[F]
     .simple(config.url, RedisCodec.Utf8).map(commands => fromCommands(config.stream, commands))
 
@@ -38,4 +44,13 @@ private final class Redis4CatsStreamClient[F[_]: Functor](
 ) extends RedisStreamClient[F]:
   override def xadd(stream: String, fields: Map[String, String]): F[String] = commands
     .unsafe(_.xadd(stream, fields.asJava))
+  override def xlen(stream: String): F[Long] = commands.unsafe[java.lang.Long](_.xlen(stream))
+    .map(_.longValue)
   override def ping: F[Unit] = commands.ping.void
+
+private final class RedisQueueHealthProbe[F[_]](
+    deadLetterStream: String,
+    client: RedisStreamClient[F],
+) extends QueueHealthProbe[F]:
+  override def ping: F[Unit] = client.ping
+  override def deadLetterLength: F[Long] = client.xlen(deadLetterStream)

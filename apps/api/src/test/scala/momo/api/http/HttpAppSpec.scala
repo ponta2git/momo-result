@@ -57,6 +57,18 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
     "momo-api-upload-limit",
     _.copy(resourceLimits = ResourceLimitsConfig.defaults.copy(uploadRequestMaxBytes = 1L)),
   ))
+  private val uploadStorageQuotaApp = ResourceFunFixture(configuredHttpAppResource(
+    "momo-api-upload-storage-quota",
+    _.copy(resourceLimits =
+      ResourceLimitsConfig.defaults.copy(imageUploadUnreferencedCountLimit = 0)
+    ),
+  ))
+  private val uploadStorageDiskFullApp = ResourceFunFixture(configuredHttpAppResource(
+    "momo-api-upload-storage-disk-full",
+    _.copy(resourceLimits =
+      ResourceLimitsConfig.defaults.copy(imageUploadStorageMinFreeBytes = Long.MaxValue)
+    ),
+  ))
   private val requestLimitApp = ResourceFunFixture(configuredHttpAppResource(
     "momo-api-request-limit",
     _.copy(resourceLimits = ResourceLimitsConfig.defaults.copy(requestMaxBytes = 1L)),
@@ -102,6 +114,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
           assertEquals(jsonField[String](body, "status"), "ok")
           assertEquals(jsonField[String](body, "database"), "disabled")
           assertEquals(jsonField[String](body, "redis"), "disabled")
+          assertEquals(jsonField[String](body, "ocrAdmission"), "disabled")
         }
       }
   }
@@ -427,6 +440,32 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
       )
     }
 
+  uploadStorageQuotaApp.test("upload endpoint rejects account storage quota overflow") { httpApp =>
+    uploadPngRequest.flatMap(request =>
+      httpApp.run(request).flatMap(response =>
+        assertProblem(
+          response,
+          Status.TooManyRequests,
+          "TOO_MANY_REQUESTS",
+          "Too many unprocessed image uploads",
+        )
+      )
+    )
+  }
+
+  uploadStorageDiskFullApp.test("upload endpoint rejects disk waterline overflow") { httpApp =>
+    uploadPngRequest.flatMap(request =>
+      httpApp.run(request).flatMap(response =>
+        assertProblem(
+          response,
+          Status.ServiceUnavailable,
+          "SERVICE_UNAVAILABLE",
+          "Image upload storage is temporarily unavailable",
+        )
+      )
+    )
+  }
+
   requestLimitApp
     .test("oversized mutation requests are rejected before endpoint decoding") { httpApp =>
       val request = Request[IO](Method.POST, uri"/api/match-drafts")
@@ -502,7 +541,16 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
   private def sessionCookieHeader(value: String): Header.Raw = Header
     .Raw(CIString("Cookie"), s"momo_result_session=$value")
 
-  private def uploadPng(httpApp: TestHttpApp): IO[String] =
+  private def uploadPng(httpApp: TestHttpApp): IO[String] = uploadPngRequest.flatMap { request =>
+    for
+      response <- httpApp.run(request)
+      body <- response.as[Json]
+    yield
+      assertEquals(response.status, Status.Ok)
+      jsonField[String](body, "imageId")
+  }
+
+  private def uploadPngRequest: IO[Request[IO]] =
     val part = Part.fileData[IO](
       "file",
       "source.png",
@@ -512,11 +560,5 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
     for
       multiparts <- Multiparts.forSync[IO]
       multipart <- multiparts.multipart(Vector(part))
-      response <- httpApp.run(
-        Request[IO](Method.POST, uri"/api/uploads/images").putHeaders(devWriteHeaders()*)
-          .putHeaders(multipart.headers).withEntity(multipart)
-      )
-      body <- response.as[Json]
-    yield
-      assertEquals(response.status, Status.Ok)
-      jsonField[String](body, "imageId")
+    yield Request[IO](Method.POST, uri"/api/uploads/images").putHeaders(devWriteHeaders()*)
+      .putHeaders(multipart.headers).withEntity(multipart)

@@ -125,6 +125,7 @@ apps/
 - Redis Streamsは配送キューとして使う。
 - API は OCR job 作成 transaction 内で `ocr_drafts`、`ocr_jobs`、`ocr_queue_outbox` を作成する。
 - `ocr_queue_outbox` が durable enqueue intent の正本であり、Redis publish 完了前でも HTTP request は成功し得る。
+- API は OCR job 作成前に Redis health、`ocr_queue_outbox` backlog、dead-letter stream length を確認し、配送基盤が degraded の場合はDB行を作成せず `503` Problem Details で新規受付を一時停止する。
 - OCRワーカーの同時処理数は設定値で変更可能にする。
 - MVP初期値は1ジョブ直列処理とする。
 - worker は terminal DB write before `XACK` を原則とする。
@@ -152,9 +153,12 @@ OCRジョブのタイムアウト初期値は `OCR_TIMEOUT_SECONDS` で管理す
 - アップロード可能な画像形式は PNG/JPEG/WebP とする。
 - 画像ファイルは1枚3MBまでに制限する。
 - upload request 全体の上限は `UPLOAD_REQUEST_MAX_BYTES` で管理する。
+- OCR へ進んでいない未参照 upload は account 別に件数・容量上限を持つ。上限は `IMAGE_UPLOAD_UNREFERENCED_COUNT_LIMIT` と `IMAGE_UPLOAD_UNREFERENCED_BYTES_LIMIT` で管理し、超過時は `429` Problem Details で拒否する。
+- 一時ディスクの空き容量・使用率水位は `IMAGE_UPLOAD_STORAGE_MIN_FREE_BYTES` と `IMAGE_UPLOAD_STORAGE_MAX_USED_PERCENT` で管理し、超過時は `503` Problem Details で upload 受付を一時停止する。
 - OCR worker はデコード後メモリ保護のため、4K（3840x2160）を超える寸法の画像を処理しない。
 - アップロード画像はFly.io VMの一時ディスクに保存する。
 - OCR完了時点では画像を削除しない。下書き確定またはキャンセルまで保持し、その後削除する。
+- OCR へ進まない未参照 upload は `IMAGE_ORPHAN_OLDER_THAN_MINUTES` より古くなった時点で orphan reaper の削除対象とする。MVP既定値は15分、reaper interval は5分とする。
 - OCR待ち中にVM再起動などで一時画像が失われた場合は、ジョブを失敗扱いにし、ユーザーに再アップロードを求める。
 - 画像はサーバーに恒久保存しない。
 - DBには画像実体、内部ファイルパス、長寿命URLを保存・公開しない。

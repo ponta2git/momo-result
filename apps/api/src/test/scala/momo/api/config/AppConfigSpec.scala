@@ -112,6 +112,13 @@ class AppConfigSpec extends CatsEffectSuite:
     assert(AppConfig.parsePositiveInt(Map("DB_POOL_SIZE" -> "0"), "DB_POOL_SIZE", 2).isLeft)
     assert(AppConfig.parsePort(Map("HTTP_PORT" -> "0"), "HTTP_PORT", 8080).isLeft)
     assert(AppConfig.parsePort(Map("HTTP_PORT" -> "70000"), "HTTP_PORT", 8080).isLeft)
+    assert(
+      AppConfig.parsePercent(
+        Map("IMAGE_UPLOAD_STORAGE_MAX_USED_PERCENT" -> "101"),
+        "IMAGE_UPLOAD_STORAGE_MAX_USED_PERCENT",
+        90,
+      ).isLeft
+    )
     assertEquals(
       AppConfig.parseNonNegativeInt(
         Map("EXPORT_RATE_LIMIT_PER_MINUTE" -> "0"),
@@ -147,17 +154,58 @@ class AppConfigSpec extends CatsEffectSuite:
     }
   }
 
+  test("loadFromEnv reads image upload storage limits") {
+    load(
+      prodEnv ++ Map(
+        "IMAGE_UPLOAD_UNREFERENCED_COUNT_LIMIT" -> "12",
+        "IMAGE_UPLOAD_UNREFERENCED_BYTES_LIMIT" -> "33554432",
+        "IMAGE_UPLOAD_STORAGE_MIN_FREE_BYTES" -> "134217728",
+        "IMAGE_UPLOAD_STORAGE_MAX_USED_PERCENT" -> "85",
+        "IMAGE_ORPHAN_OLDER_THAN_MINUTES" -> "15",
+        "IMAGE_ORPHAN_REAPER_INTERVAL_MINUTES" -> "5",
+      )
+    ).map { result =>
+      assertEquals(result.map(_.resourceLimits.imageUploadUnreferencedCountLimit), Right(12))
+      assertEquals(result.map(_.resourceLimits.imageUploadUnreferencedBytesLimit), Right(33554432L))
+      assertEquals(result.map(_.resourceLimits.imageUploadStorageMinFreeBytes), Right(134217728L))
+      assertEquals(result.map(_.resourceLimits.imageUploadStorageMaxUsedPercent), Right(85))
+      assertEquals(result.map(_.resourceLimits.imageOrphanOlderThan.toMinutes), Right(15L))
+      assertEquals(result.map(_.resourceLimits.imageOrphanReaperInterval.toMinutes), Right(5L))
+    }
+  }
+
   test("loadFromEnv reads OCR admission limits") {
     load(
       prodEnv ++ Map(
         "OCR_JOB_CREATE_RATE_LIMIT_PER_MINUTE" -> "8",
         "OCR_JOB_CREATE_GLOBAL_RATE_LIMIT_PER_MINUTE" -> "16",
         "OCR_ACTIVE_JOB_LIMIT" -> "9",
+        "OCR_OUTBOX_DUE_BACKLOG_LIMIT" -> "30",
+        "OCR_OUTBOX_ACTIVE_BACKLOG_LIMIT" -> "60",
+        "OCR_OUTBOX_OLDEST_DUE_MAX_DELAY_SECONDS" -> "900",
+        "OCR_DEAD_LETTER_BACKLOG_LIMIT" -> "12",
       )
     ).map { result =>
       assertEquals(result.map(_.resourceLimits.ocrJobCreateRateLimitPerMinute), Right(8))
       assertEquals(result.map(_.resourceLimits.ocrJobCreateGlobalRateLimitPerMinute), Right(16))
       assertEquals(result.map(_.resourceLimits.ocrActiveJobLimit), Right(9))
+      assertEquals(result.map(_.resourceLimits.ocrOutboxDueBacklogLimit), Right(30))
+      assertEquals(result.map(_.resourceLimits.ocrOutboxActiveBacklogLimit), Right(60))
+      assertEquals(result.map(_.resourceLimits.ocrOutboxOldestDueMaxDelay.toSeconds), Right(900L))
+      assertEquals(result.map(_.resourceLimits.ocrDeadLetterBacklogLimit), Right(12))
+      assertEquals(
+        result.flatMap(_.redis.map(_.deadLetterStream).toRight(new RuntimeException())),
+        Right("momo:ocr:jobs:dead"),
+      )
+    }
+  }
+
+  test("loadFromEnv reads OCR dead-letter stream name") {
+    load(prodEnv + ("OCR_REDIS_DEAD_LETTER_STREAM" -> "momo:ocr:jobs:dead:test")).map { result =>
+      assertEquals(
+        result.flatMap(_.redis.map(_.deadLetterStream).toRight(new RuntimeException())),
+        Right("momo:ocr:jobs:dead:test"),
+      )
     }
   }
 

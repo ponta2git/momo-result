@@ -29,6 +29,7 @@ final class CreateOcrJob[F[_]: MonadThrow](
     creation: OcrJobCreationRepository[F],
     matchDrafts: MatchDraftsRepository[F],
     queueSubmitter: OcrQueueSubmitter[F],
+    admissionGuard: OcrAdmissionGuard[F],
     now: F[Instant],
     nextId: F[String],
     memberAliases: MemberAliasesRepository[F],
@@ -44,6 +45,7 @@ final class CreateOcrJob[F[_]: MonadThrow](
       validateMatchDraftScreenType(command.requestedScreenType, command.matchDraftId)
     )
     _ <- EitherT.fromEither[F](validateOcrHints(command.ocrHints))
+    _ <- EitherT(admissionGuard.ensureAvailable)
     hintsWithAliases <- EitherT.liftF(mergeMemberAliases(command.ocrHints))
     draftForMatch <- command.matchDraftId match
       case None => EitherT.rightT[F, AppError](Option.empty[momo.api.domain.MatchDraft])

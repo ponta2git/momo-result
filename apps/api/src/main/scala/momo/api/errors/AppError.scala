@@ -49,6 +49,10 @@ object AppError:
     val code = "TOO_MANY_REQUESTS"
     val title = "Too Many Requests"
 
+  final case class ServiceUnavailable(detail: String) extends AppError:
+    val code = "SERVICE_UNAVAILABLE"
+    val title = "Service Unavailable"
+
   final case class DependencyFailed(detail: String) extends AppError:
     val code = "DEPENDENCY_FAILED"
     val title = "Dependency Failed"

@@ -28,6 +28,7 @@ object ProblemDetails:
     "IDEMPOTENCY_IN_PROGRESS",
     "IDEMPOTENCY_PAYLOAD_MISMATCH",
     "TOO_MANY_REQUESTS",
+    "SERVICE_UNAVAILABLE",
     "DEPENDENCY_FAILED",
     "INTERNAL_ERROR",
   )
@@ -54,5 +55,6 @@ object ProblemDetails:
     case _: AppError.IdempotencyInProgress => StatusCode.Conflict
     case _: AppError.IdempotencyPayloadMismatch => StatusCode.Conflict
     case _: AppError.TooManyRequests => StatusCode.TooManyRequests
+    case _: AppError.ServiceUnavailable => StatusCode.ServiceUnavailable
     case _: AppError.DependencyFailed => StatusCode.ServiceUnavailable
     case _: AppError.Internal => StatusCode.InternalServerError

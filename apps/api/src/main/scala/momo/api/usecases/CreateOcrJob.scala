@@ -32,6 +32,7 @@ final class CreateOcrJob[F[_]: MonadThrow](
     now: F[Instant],
     nextId: F[String],
     memberAliases: MemberAliasesRepository[F],
+    activeJobLimit: Int,
 ):
   import CreateOcrJob.*
 
@@ -95,8 +96,10 @@ final class CreateOcrJob[F[_]: MonadThrow](
       attachment: Option[OcrJobDraftAttachment],
       payload: OcrQueuePayload,
   ): EitherT[F, AppError, Unit] = EitherT(
-    creation.createQueuedJob(draft, job, attachment, payload).attempt.flatMap {
+    creation.createQueuedJob(draft, job, attachment, payload, activeJobLimit).attempt.flatMap {
       case Right(_) => ().asRight[AppError].pure[F]
+      case Left(_: OcrJobCreationRepository.ActiveJobLimitExceeded) => AppError
+          .ServiceUnavailable("OCR queue is currently full. Try again later.").asLeft[Unit].pure[F]
       case Left(_: OcrJobCreationRepository.MatchDraftAttachFailed) => AppError
           .Conflict("match draft could not be attached to the OCR job.").asLeft[Unit].pure[F]
       case Left(error) => MonadThrow[F].raiseError[Either[AppError, Unit]](error)

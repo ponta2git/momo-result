@@ -15,6 +15,23 @@ final class PostgresOcrJobsRepositorySpec extends IntegrationSuite:
 
   private def repo = PostgresOcrJobsRepository[IO](transactor)
 
+  test("countActive counts queued and running jobs only"):
+    for
+      _ <- insertOcrDraft("draft-count-queued", "job-count-queued")
+      _ <- insertOcrDraft("draft-count-running", "job-count-running")
+      _ <- insertOcrDraft("draft-count-succeeded", "job-count-succeeded")
+      _ <- insertOcrJob("job-count-queued", "draft-count-queued", "image-count-queued", "queued")
+      _ <-
+        insertOcrJob("job-count-running", "draft-count-running", "image-count-running", "running")
+      _ <- insertOcrJob(
+        "job-count-succeeded",
+        "draft-count-succeeded",
+        "image-count-succeeded",
+        "succeeded",
+      )
+      active <- repo.countActive
+    yield assertEquals(active, 2L)
+
   test("cancelQueued marks the queued job cancelled and syncs the attached draft to OCR failed"):
     for
       _ <- insertOcrDraft("draft-cancel-one", "job-cancel-one")

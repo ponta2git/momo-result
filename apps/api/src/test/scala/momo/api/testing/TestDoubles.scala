@@ -54,6 +54,7 @@ final case class FailingMarkFailedOcrJobsRepository(
 ) extends OcrJobsRepository[IO]:
   override def create(job: OcrJob): IO[Unit] = delegate.create(job)
   override def find(jobId: OcrJobId): IO[Option[OcrJob]] = delegate.find(jobId)
+  override def countActive: IO[Long] = delegate.countActive
   override def markFailed(jobId: OcrJobId, failure: OcrFailure, now: Instant): IO[Unit] =
     val _ = (jobId, failure, now)
     IO.raiseError(markFailedError)

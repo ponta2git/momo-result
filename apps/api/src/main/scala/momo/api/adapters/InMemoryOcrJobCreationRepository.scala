@@ -19,9 +19,15 @@ final class InMemoryOcrJobCreationRepository[F[_]: MonadThrow](
       job: OcrJob,
       attachment: Option[OcrJobDraftAttachment],
       queuePayload: OcrQueuePayload,
+      activeJobLimit: Int,
   ): F[Unit] =
     val _ = queuePayload
     for
+      active <- jobs.countActive
+      _ <-
+        if active >= activeJobLimit.toLong then
+          MonadThrow[F].raiseError(OcrJobCreationRepository.ActiveJobLimitExceeded(activeJobLimit))
+        else MonadThrow[F].unit
       attached <- attachment match
         case None => true.pure[F]
         case Some(a) => matchDrafts.attachOcrArtifacts(

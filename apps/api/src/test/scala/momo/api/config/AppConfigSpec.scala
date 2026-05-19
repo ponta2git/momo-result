@@ -147,6 +147,20 @@ class AppConfigSpec extends CatsEffectSuite:
     }
   }
 
+  test("loadFromEnv reads OCR admission limits") {
+    load(
+      prodEnv ++ Map(
+        "OCR_JOB_CREATE_RATE_LIMIT_PER_MINUTE" -> "8",
+        "OCR_JOB_CREATE_GLOBAL_RATE_LIMIT_PER_MINUTE" -> "16",
+        "OCR_ACTIVE_JOB_LIMIT" -> "9",
+      )
+    ).map { result =>
+      assertEquals(result.map(_.resourceLimits.ocrJobCreateRateLimitPerMinute), Right(8))
+      assertEquals(result.map(_.resourceLimits.ocrJobCreateGlobalRateLimitPerMinute), Right(16))
+      assertEquals(result.map(_.resourceLimits.ocrActiveJobLimit), Right(9))
+    }
+  }
+
   test("loadFromEnv rejects insecure production auth cookies") {
     load(prodEnv + ("AUTH_COOKIE_SECURE" -> "false")).map { result =>
       assert(result.left.exists(_.getMessage.contains("AUTH_COOKIE_SECURE must be true")))

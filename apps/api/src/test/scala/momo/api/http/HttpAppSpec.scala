@@ -1,10 +1,13 @@
 package momo.api.http
 
 import cats.effect.IO
+import fs2.Stream
 import io.circe.Json
 import org.http4s.circe.*
+import org.http4s.headers.`Content-Type`
 import org.http4s.implicits.*
-import org.http4s.{Header, Method, Request, Status}
+import org.http4s.multipart.{Multiparts, Part}
+import org.http4s.{Header, MediaType, Method, Request, Status}
 import org.typelevel.ci.CIString
 
 import momo.api.MomoCatsEffectSuite
@@ -15,6 +18,7 @@ import momo.api.domain.ids.AccountId
 import momo.api.http.HttpAssertions.{
   assertProblem, assertProblemDetailEquals, headerValue, jsonField, optionalHeaderValue,
 }
+import momo.api.testing.TestImages
 
 final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
   private final case class SessionBackedHttpApp(
@@ -61,6 +65,25 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
     "momo-api-export-rate",
     _.copy(resourceLimits = ResourceLimitsConfig.defaults.copy(exportRateLimitPerMinute = 0)),
   ))
+  private val ocrAccountRateLimitApp = ResourceFunFixture(configuredHttpAppResource(
+    "momo-api-ocr-account-rate",
+    _.copy(resourceLimits = ResourceLimitsConfig.defaults.copy(ocrJobCreateRateLimitPerMinute = 0)),
+  ))
+  private val ocrGlobalRateLimitApp = ResourceFunFixture(configuredHttpAppResource(
+    "momo-api-ocr-global-rate",
+    _.copy(resourceLimits =
+      ResourceLimitsConfig.defaults.copy(ocrJobCreateGlobalRateLimitPerMinute = 0)
+    ),
+  ))
+  private val ocrActiveLimitApp = ResourceFunFixture(configuredHttpAppResource(
+    "momo-api-ocr-active-limit",
+    _.copy(resourceLimits = ResourceLimitsConfig.defaults.copy(ocrActiveJobLimit = 0)),
+  ))
+  private val ocrReplayRateLimitApp = ResourceFunFixture(configuredHttpAppResource(
+    "momo-api-ocr-replay-rate",
+    _.copy(resourceLimits = ResourceLimitsConfig.defaults.copy(ocrJobCreateRateLimitPerMinute = 1)),
+  ))
+  private val pngBytes: Array[Byte] = TestImages.png1x1
 
   app.test("GET /healthz returns ok") { httpApp =>
     httpApp.run(Request[IO](Method.GET, uri"/healthz")).flatMap { response =>
@@ -422,5 +445,78 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
     )
   }
 
+  ocrAccountRateLimitApp.test("OCR create endpoint applies per-account rate limits") { httpApp =>
+    val request = Request[IO](Method.POST, uri"/api/ocr-jobs").putHeaders(devWriteHeaders()*)
+      .withEntity(HttpRequestBodies.Matches.createOcrJob("image-1", "total_assets"))
+    httpApp.run(request).flatMap(response =>
+      assertProblem(response, Status.TooManyRequests, "TOO_MANY_REQUESTS", "Too many OCR jobs")
+    )
+  }
+
+  ocrGlobalRateLimitApp.test("OCR create endpoint applies global rate limits") { httpApp =>
+    val request = Request[IO](Method.POST, uri"/api/ocr-jobs").putHeaders(devWriteHeaders()*)
+      .withEntity(HttpRequestBodies.Matches.createOcrJob("image-1", "total_assets"))
+    httpApp.run(request).flatMap(response =>
+      assertProblem(
+        response,
+        Status.TooManyRequests,
+        "TOO_MANY_REQUESTS",
+        "Too many OCR jobs are being created",
+      )
+    )
+  }
+
+  ocrActiveLimitApp.test("OCR create endpoint returns 503 when the active queue is full") { httpApp =>
+    for
+      imageId <- uploadPng(httpApp)
+      response <- httpApp.run(
+        Request[IO](Method.POST, uri"/api/ocr-jobs").putHeaders(devWriteHeaders()*)
+          .withEntity(HttpRequestBodies.Matches.createOcrJob(imageId, "total_assets"))
+      )
+      _ <- assertProblem(
+        response,
+        Status.ServiceUnavailable,
+        "SERVICE_UNAVAILABLE",
+        "OCR queue is currently full",
+      )
+    yield ()
+  }
+
+  ocrReplayRateLimitApp
+    .test("OCR idempotency replay does not consume another create rate-limit token") { httpApp =>
+      for
+        imageId <- uploadPng(httpApp)
+        request = Request[IO](Method.POST, uri"/api/ocr-jobs")
+          .putHeaders(devWriteHeadersWithIdempotency(Some("ocr-replay-key"))*)
+          .withEntity(HttpRequestBodies.Matches.createOcrJob(imageId, "total_assets"))
+        first <- httpApp.run(request)
+        firstBody <- first.as[Json]
+        second <- httpApp.run(request)
+        secondBody <- second.as[Json]
+      yield
+        assertEquals(first.status, Status.Ok)
+        assertEquals(second.status, Status.Ok)
+        assertEquals(jsonField[String](secondBody, "jobId"), jsonField[String](firstBody, "jobId"))
+    }
+
   private def sessionCookieHeader(value: String): Header.Raw = Header
     .Raw(CIString("Cookie"), s"momo_result_session=$value")
+
+  private def uploadPng(httpApp: TestHttpApp): IO[String] =
+    val part = Part.fileData[IO](
+      "file",
+      "source.png",
+      Stream.emits(pngBytes).covary[IO],
+      `Content-Type`(MediaType.image.png),
+    )
+    for
+      multiparts <- Multiparts.forSync[IO]
+      multipart <- multiparts.multipart(Vector(part))
+      response <- httpApp.run(
+        Request[IO](Method.POST, uri"/api/uploads/images").putHeaders(devWriteHeaders()*)
+          .putHeaders(multipart.headers).withEntity(multipart)
+      )
+      body <- response.as[Json]
+    yield
+      assertEquals(response.status, Status.Ok)
+      jsonField[String](body, "imageId")

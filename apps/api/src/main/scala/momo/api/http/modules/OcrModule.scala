@@ -6,12 +6,14 @@ import cats.effect.Async
 import cats.syntax.all.*
 import sttp.tapir.server.ServerEndpoint
 
+import momo.api.auth.RateLimiter
 import momo.api.domain.ids.{OcrDraftId, OcrJobId}
 import momo.api.endpoints.codec.{BoundaryId, OcrDraftCodec, OcrJobCodec}
 import momo.api.endpoints.{
   CancelOcrJobResponse, CreateOcrJobRequest, OcrDraftEndpoints, OcrDraftListResponse,
   OcrDraftResponse, OcrJobEndpoints, OcrJobResponse,
 }
+import momo.api.errors.AppError
 import momo.api.http.{EndpointSecurity, IdempotencyReplay}
 import momo.api.repositories.IdempotencyRepository
 import momo.api.usecases.{CancelOcrJob, CreateOcrJob, GetOcrDraft, GetOcrDraftsBulk, GetOcrJob}
@@ -23,6 +25,8 @@ object OcrModule:
       cancelOcrJob: CancelOcrJob[F],
       getOcrDraft: GetOcrDraft[F],
       getOcrDraftsBulk: GetOcrDraftsBulk[F],
+      createRateLimiter: RateLimiter[F],
+      globalCreateRateLimiter: RateLimiter[F],
       idempotency: IdempotencyRepository[F],
       nowF: F[Instant],
       security: EndpointSecurity[F],
@@ -38,7 +42,20 @@ object OcrModule:
               request,
               nowF,
               security.decode(OcrJobCodec.toCreateCommand(request))(command =>
-                security.respond(createOcrJob.run(command, requestId))(OcrJobCodec.toCreateResponse)
+                createRateLimiter.allow(s"ocr-job-create:${member.accountId.value}").flatMap {
+                  case false => Async[F].pure(Left(
+                      security
+                        .toProblem(AppError.TooManyRequests("Too many OCR jobs. Try again later."))
+                    ))
+                  case true => globalCreateRateLimiter.allow("global").flatMap {
+                      case false => Async[F].pure(Left(security.toProblem(AppError.TooManyRequests(
+                          "Too many OCR jobs are being created. Try again later."
+                        ))))
+                      case true => security.respond(
+                          createOcrJob.run(command, requestId)
+                        )(OcrJobCodec.toCreateResponse)
+                    }
+                }
               ),
             )
           }

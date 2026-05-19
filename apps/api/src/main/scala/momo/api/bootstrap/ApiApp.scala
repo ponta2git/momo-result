@@ -323,7 +323,23 @@ object ApiApp:
           .fromCommands(commands, "upload", config.resourceLimits.uploadRateLimitPerMinute, now)
         val exportLimiter: RateLimiter[F] = RedisRateLimiter
           .fromCommands(commands, "export", config.resourceLimits.exportRateLimitPerMinute, now)
-        RuntimeInfrastructure(queue, login, HttpRateLimiters(upload, exportLimiter))
+        val ocrJobCreate: RateLimiter[F] = RedisRateLimiter.fromCommands(
+          commands,
+          "ocr-job-create",
+          config.resourceLimits.ocrJobCreateRateLimitPerMinute,
+          now,
+        )
+        val ocrJobCreateGlobal: RateLimiter[F] = RedisRateLimiter.fromCommands(
+          commands,
+          "ocr-job-create-global",
+          config.resourceLimits.ocrJobCreateGlobalRateLimitPerMinute,
+          now,
+        )
+        RuntimeInfrastructure(
+          queue,
+          login,
+          HttpRateLimiters(upload, exportLimiter, ocrJobCreate, ocrJobCreateGlobal),
+        )
       }
     case None => Resource.eval(
         for
@@ -332,7 +348,15 @@ object ApiApp:
           upload <- LoginRateLimiter.create[F](config.resourceLimits.uploadRateLimitPerMinute, now)
           exportLimiter <- LoginRateLimiter
             .create[F](config.resourceLimits.exportRateLimitPerMinute, now)
-        yield RuntimeInfrastructure(queue, login, HttpRateLimiters(upload, exportLimiter))
+          ocrJobCreate <- LoginRateLimiter
+            .create[F](config.resourceLimits.ocrJobCreateRateLimitPerMinute, now)
+          ocrJobCreateGlobal <- LoginRateLimiter
+            .create[F](config.resourceLimits.ocrJobCreateGlobalRateLimitPerMinute, now)
+        yield RuntimeInfrastructure(
+          queue,
+          login,
+          HttpRateLimiters(upload, exportLimiter, ocrJobCreate, ocrJobCreateGlobal),
+        )
       )
 
   private def runtimeMaintenance[F[_]: Async: LoggerFactory](
@@ -425,6 +449,7 @@ object ApiApp:
       now = nowF,
       nextId = nextId,
       memberAliases = memberAliases,
+      activeJobLimit = config.resourceLimits.ocrActiveJobLimit,
     )
     val getOcrJob = GetOcrJob[F](jobs)
     val getOcrDraft = GetOcrDraft[F](drafts)

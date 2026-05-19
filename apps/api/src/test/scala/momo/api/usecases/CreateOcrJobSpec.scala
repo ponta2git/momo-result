@@ -39,6 +39,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
       prefix = "momo-api-create-job",
       idSeed = List("job-1", "draft-1"),
       requestId = Some("test-req-id"),
+      activeJobLimit = 12,
     ).use { fixture =>
       for
         image <- fixture.savePng
@@ -65,6 +66,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
       prefix = "momo-api-create-job-aliases",
       idSeed = List("job-1", "draft-1"),
       requestId = None,
+      activeJobLimit = 12,
     ).use { fixture =>
       for
         image <- fixture.savePng
@@ -112,6 +114,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
       idSeed = List("job-1", "draft-1"),
       requestId = None,
       decorateJobs = delegate => FailingMarkFailedOcrJobsRepository(delegate, markFailedError),
+      activeJobLimit = 12,
     ).use { fixture =>
       for
         image <- fixture.savePng
@@ -135,6 +138,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
       idSeed = List("job-1", "draft-1"),
       requestId = None,
       decorateJobs = identity[OcrJobsRepository[IO]],
+      activeJobLimit = 12,
     ).use { fixture =>
       for
         image <- fixture.savePng
@@ -156,6 +160,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
       prefix = "momo-api-create-job-hints-limit",
       idSeed = List("job-1", "draft-1"),
       requestId = None,
+      activeJobLimit = 12,
     ).use { fixture =>
       for
         usecase <- fixture.usecase
@@ -181,11 +186,38 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
     }
   }
 
+  test("rejects when the active OCR job limit is reached") {
+    inMemoryQueueFixture(
+      prefix = "momo-api-create-job-active-limit",
+      idSeed = List("job-1", "draft-1"),
+      requestId = None,
+      activeJobLimit = 0,
+    ).use { fixture =>
+      for
+        image <- fixture.savePng
+        usecase <- fixture.usecase
+        result <- usecase.run(
+          CreateOcrJobCommand(image.imageId, ScreenType.TotalAssets, OcrJobHints.empty, None),
+          fixture.requestId,
+        )
+        published <- fixture.queue.published
+        active <- fixture.jobs.countActive
+      yield
+        result match
+          case Left(AppError.ServiceUnavailable(detail)) =>
+            assert(detail.contains("OCR queue is currently full"))
+          case other => fail(s"expected Left(AppError.ServiceUnavailable), got: $other")
+        assertEquals(published, Vector.empty)
+        assertEquals(active, 0L)
+    }
+  }
+
   test("rejects auto screen type when attaching OCR to an existing match draft") {
     inMemoryQueueFixture(
       prefix = "momo-api-create-job-auto-match-draft",
       idSeed = List("job-1", "draft-1"),
       requestId = None,
+      activeJobLimit = 12,
     ).use { fixture =>
       val matchDraftId = MatchDraftId.unsafeFromString("match-draft-auto-rejected")
       for
@@ -221,6 +253,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
       idSeed = List("job-log-1", "draft-log-1"),
       requestId = None,
       decorateJobs = delegate => FailingMarkFailedOcrJobsRepository(delegate, markFailedError),
+      activeJobLimit = 12,
     ).use { fixture =>
       for
         capture <- CapturingLoggerFactory.create[IO]
@@ -265,6 +298,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
       prefix: String,
       idSeed: List[String],
       requestId: Option[String],
+      activeJobLimit: Int,
   ): Resource[IO, Fixture[InMemoryQueueProducer[IO]]] = Resource
     .eval(InMemoryQueueProducer.create[IO]).flatMap(queue =>
       fixtureResource(
@@ -273,6 +307,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         idSeed = idSeed,
         requestId = requestId,
         decorateJobs = identity[OcrJobsRepository[IO]],
+        activeJobLimit = activeJobLimit,
       )
     )
 
@@ -282,6 +317,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
       idSeed: List[String],
       requestId: Option[String],
       decorateJobs: OcrJobsRepository[IO] => OcrJobsRepository[IO],
+      activeJobLimit: Int,
   ): Resource[IO, Fixture[Q]] = tempDirectory(prefix).evalMap { dir =>
     for
       jobsBase <- InMemoryOcrJobsRepository.create[IO]
@@ -290,7 +326,17 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
       memberAliases <- InMemoryMemberAliasesRepository.create[IO]
       imageStore = LocalFsImageStore[IO](dir)
       jobs = decorateJobs(jobsBase)
-    yield Fixture(imageStore, jobs, drafts, matchDrafts, memberAliases, queue, idSeed, requestId)
+    yield Fixture(
+      imageStore,
+      jobs,
+      drafts,
+      matchDrafts,
+      memberAliases,
+      queue,
+      idSeed,
+      requestId,
+      activeJobLimit,
+    )
   }
 
   private def editableDraft(id: MatchDraftId): MatchDraft = MatchDraft.fromInputs(
@@ -328,6 +374,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
       queue: Q,
       idSeed: List[String],
       requestId: Option[String],
+      activeJobLimit: Int,
   ):
     def savePng: IO[StoredImage] = imageStore.save(Some("sample.png"), Some("image/png"), pngBytes)
       .flatMap(fromAppEither)
@@ -345,6 +392,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
             case Nil => Nil -> "unexpected"
           },
           memberAliases = memberAliases,
+          activeJobLimit = activeJobLimit,
         )
       }
     }.flatten

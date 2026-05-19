@@ -4342,6 +4342,7 @@
               "IDEMPOTENCY_IN_PROGRESS",
               "IDEMPOTENCY_PAYLOAD_MISMATCH",
               "TOO_MANY_REQUESTS",
+              "SERVICE_UNAVAILABLE",
               "DEPENDENCY_FAILED",
               "INTERNAL_ERROR"
             ]

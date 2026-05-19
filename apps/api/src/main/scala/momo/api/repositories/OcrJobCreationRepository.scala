@@ -19,8 +19,11 @@ trait OcrJobCreationRepository[F[_]]:
       job: OcrJob,
       attachment: Option[OcrJobDraftAttachment],
       queuePayload: OcrQueuePayload,
+      activeJobLimit: Int,
   ): F[Unit]
 
 object OcrJobCreationRepository:
   final class MatchDraftAttachFailed(val draftId: MatchDraftId)
       extends RuntimeException(s"match draft ${draftId.value} could not be attached to OCR job")
+  final class ActiveJobLimitExceeded(val limit: Int)
+      extends RuntimeException(s"active OCR job limit exceeded: ${limit.toString}")

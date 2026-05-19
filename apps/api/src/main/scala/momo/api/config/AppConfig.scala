@@ -15,6 +15,9 @@ final case class RedisConfig(url: String, stream: String, group: String)
 final case class ResourceLimitsConfig(
     uploadRateLimitPerMinute: Int,
     exportRateLimitPerMinute: Int,
+    ocrJobCreateRateLimitPerMinute: Int,
+    ocrJobCreateGlobalRateLimitPerMinute: Int,
+    ocrActiveJobLimit: Int,
     requestMaxBytes: Long,
     uploadRequestMaxBytes: Long,
     imageOrphanOlderThan: FiniteDuration,
@@ -199,6 +202,9 @@ object AppConfig:
   ): F[ResourceLimitsConfig] = (
     parseNonNegativeInt(env, "UPLOAD_RATE_LIMIT_PER_MINUTE", default = 20),
     parseNonNegativeInt(env, "EXPORT_RATE_LIMIT_PER_MINUTE", default = 30),
+    parseNonNegativeInt(env, "OCR_JOB_CREATE_RATE_LIMIT_PER_MINUTE", default = 10),
+    parseNonNegativeInt(env, "OCR_JOB_CREATE_GLOBAL_RATE_LIMIT_PER_MINUTE", default = 20),
+    parseNonNegativeInt(env, "OCR_ACTIVE_JOB_LIMIT", default = 12),
     parsePositiveLong(env, "REQUEST_MAX_BYTES", ResourceLimitsConfig.DefaultRequestMaxBytes),
     parsePositiveLong(
       env,
@@ -215,6 +221,9 @@ object AppConfig:
     (
         uploadRateLimit,
         exportRateLimit,
+        ocrJobCreateRateLimit,
+        ocrJobCreateGlobalRateLimit,
+        ocrActiveJobLimit,
         requestMaxBytes,
         uploadRequestMaxBytes,
         orphanOlderThan,
@@ -227,6 +236,9 @@ object AppConfig:
       ResourceLimitsConfig(
         uploadRateLimitPerMinute = uploadRateLimit,
         exportRateLimitPerMinute = exportRateLimit,
+        ocrJobCreateRateLimitPerMinute = ocrJobCreateRateLimit,
+        ocrJobCreateGlobalRateLimitPerMinute = ocrJobCreateGlobalRateLimit,
+        ocrActiveJobLimit = ocrActiveJobLimit,
         requestMaxBytes = requestMaxBytes,
         uploadRequestMaxBytes = uploadRequestMaxBytes,
         imageOrphanOlderThan = orphanOlderThan.minutes,
@@ -394,6 +406,9 @@ object ResourceLimitsConfig:
   val defaults: ResourceLimitsConfig = ResourceLimitsConfig(
     uploadRateLimitPerMinute = 20,
     exportRateLimitPerMinute = 30,
+    ocrJobCreateRateLimitPerMinute = 10,
+    ocrJobCreateGlobalRateLimitPerMinute = 20,
+    ocrActiveJobLimit = 12,
     requestMaxBytes = DefaultRequestMaxBytes,
     uploadRequestMaxBytes = DefaultUploadRequestMaxBytes,
     imageOrphanOlderThan = 60.minutes,

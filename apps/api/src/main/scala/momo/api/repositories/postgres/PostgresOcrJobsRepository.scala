@@ -178,6 +178,13 @@ object PostgresOcrJobs:
         case Some(row) => toJob(row).map(Some(_))
       }
 
+    override def countActive: ConnectionIO[Long] = sql"""
+        SELECT COUNT(*)
+        FROM ocr_jobs
+        WHERE status = ${OcrJobStatus.Queued}
+           OR status = ${OcrJobStatus.Running}
+      """.query[Long].unique
+
     override def markFailed(
         jobId: OcrJobId,
         failure: OcrFailure,

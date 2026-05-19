@@ -85,6 +85,8 @@ object HttpRoutes:
         deps.cancelOcrJob,
         deps.getOcrDraft,
         deps.getOcrDraftsBulk,
+        deps.rateLimiters.ocrJobCreate,
+        deps.rateLimiters.ocrJobCreateGlobal,
         deps.idempotency,
         deps.nowF,
         security,

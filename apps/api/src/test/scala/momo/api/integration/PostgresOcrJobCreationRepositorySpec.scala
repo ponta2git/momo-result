@@ -11,7 +11,7 @@ import io.circe.Json
 import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.repositories.postgres.PostgresOcrJobCreationRepository
-import momo.api.repositories.{OcrJobDraftAttachment, OcrQueuePayload}
+import momo.api.repositories.{OcrJobCreationRepository, OcrJobDraftAttachment, OcrQueuePayload}
 import momo.api.testing.JsonSchemaAssertions
 
 final class PostgresOcrJobCreationRepositorySpec extends IntegrationSuite with JsonSchemaAssertions:
@@ -67,7 +67,7 @@ final class PostgresOcrJobCreationRepositorySpec extends IntegrationSuite with J
 
   test("createQueuedJob inserts OCR records and durable outbox intent in one transaction"):
     for
-      _ <- repo.createQueuedJob(draft, job, None, payload)
+      _ <- repo.createQueuedJob(draft, job, None, payload, activeJobLimit = 12)
       row <- sql"""
         SELECT status, attempt_count, stream_payload->>'jobId', stream_payload->>'requestId',
                stream_payload
@@ -81,6 +81,21 @@ final class PostgresOcrJobCreationRepositorySpec extends IntegrationSuite with J
       assertEquals(row._4, "req-outbox-1")
       assertOcrQueuePayloadSchemaValid(row._5)
 
+  test("createQueuedJob rejects over the active job limit before inserting related rows"):
+    for
+      result <- repo.createQueuedJob(draft, job, None, payload, activeJobLimit = 0).attempt
+      counts <- sql"""
+        SELECT
+          (SELECT count(*) FROM ocr_drafts WHERE id = ${draftId.value}),
+          (SELECT count(*) FROM ocr_jobs WHERE id = ${jobId.value}),
+          (SELECT count(*) FROM ocr_queue_outbox WHERE job_id = ${jobId.value})
+      """.query[(Long, Long, Long)].unique.transact(transactor)
+    yield
+      result match
+        case Left(_: OcrJobCreationRepository.ActiveJobLimitExceeded) => ()
+        case other => fail(s"expected active limit rejection, got $other")
+      assertEquals(counts, (0L, 0L, 0L))
+
   test("createQueuedJob rolls back OCR records when match draft attachment fails"):
     val attachment = OcrJobDraftAttachment(
       draftId = MatchDraftId.unsafeFromString("missing-match-draft"),
@@ -90,7 +105,8 @@ final class PostgresOcrJobCreationRepositorySpec extends IntegrationSuite with J
       updatedAt = now,
     )
     for
-      result <- repo.createQueuedJob(draft, job, Some(attachment), payload).attempt
+      result <- repo.createQueuedJob(draft, job, Some(attachment), payload, activeJobLimit = 12)
+        .attempt
       counts <- sql"""
         SELECT
           (SELECT count(*) FROM ocr_drafts WHERE id = ${draftId.value}),
@@ -104,7 +120,7 @@ final class PostgresOcrJobCreationRepositorySpec extends IntegrationSuite with J
   test("createQueuedJob rejects invalid draft JSON before inserting related rows"):
     val invalidDraft = draft.copy(payloadJson = "{")
     for
-      result <- repo.createQueuedJob(invalidDraft, job, None, payload).attempt
+      result <- repo.createQueuedJob(invalidDraft, job, None, payload, activeJobLimit = 12).attempt
       counts <- sql"""
         SELECT
           (SELECT count(*) FROM ocr_drafts WHERE id = ${draftId.value}),

@@ -19,6 +19,9 @@ final class InMemoryOcrJobsRepository[F[_]: Sync] private (
 
   override def find(jobId: OcrJobId): F[Option[OcrJob]] = ref.get.map(_.get(jobId.value))
 
+  override def countActive: F[Long] = ref.get
+    .map(_.values.count(job => Set("queued", "running").contains(job.status.wire)).toLong)
+
   override def markFailed(jobId: OcrJobId, failure: OcrFailure, now: Instant): F[Unit] = ref
     .update(jobs => jobs.updatedWith(jobId.value)(_.map(toFailed(_, failure, now))))
 

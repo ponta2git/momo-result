@@ -331,6 +331,12 @@ object ApiApp:
           .fromCommands(commands, "upload", config.resourceLimits.uploadRateLimitPerMinute, now)
         val exportLimiter: RateLimiter[F] = RedisRateLimiter
           .fromCommands(commands, "export", config.resourceLimits.exportRateLimitPerMinute, now)
+        val sourceImageDownload: RateLimiter[F] = RedisRateLimiter.fromCommands(
+          commands,
+          "source-image-download",
+          config.resourceLimits.sourceImageDownloadRateLimitPerMinute,
+          now,
+        )
         val ocrJobCreate: RateLimiter[F] = RedisRateLimiter.fromCommands(
           commands,
           "ocr-job-create",
@@ -347,7 +353,13 @@ object ApiApp:
           queue,
           queueHealth,
           login,
-          HttpRateLimiters(upload, exportLimiter, ocrJobCreate, ocrJobCreateGlobal),
+          HttpRateLimiters(
+            upload,
+            exportLimiter,
+            sourceImageDownload,
+            ocrJobCreate,
+            ocrJobCreateGlobal,
+          ),
         )
       }
     case None => Resource.eval(
@@ -358,6 +370,8 @@ object ApiApp:
           upload <- LoginRateLimiter.create[F](config.resourceLimits.uploadRateLimitPerMinute, now)
           exportLimiter <- LoginRateLimiter
             .create[F](config.resourceLimits.exportRateLimitPerMinute, now)
+          sourceImageDownload <- LoginRateLimiter
+            .create[F](config.resourceLimits.sourceImageDownloadRateLimitPerMinute, now)
           ocrJobCreate <- LoginRateLimiter
             .create[F](config.resourceLimits.ocrJobCreateRateLimitPerMinute, now)
           ocrJobCreateGlobal <- LoginRateLimiter
@@ -366,7 +380,13 @@ object ApiApp:
           queue,
           queueHealth,
           login,
-          HttpRateLimiters(upload, exportLimiter, ocrJobCreate, ocrJobCreateGlobal),
+          HttpRateLimiters(
+            upload,
+            exportLimiter,
+            sourceImageDownload,
+            ocrJobCreate,
+            ocrJobCreateGlobal,
+          ),
         )
       )
 
@@ -503,7 +523,11 @@ object ApiApp:
       now = nowF,
     )
     val cancelMatchDraft = CancelMatchDraft[F](matchDrafts, sourceImageRetention, nowF)
-    val getMatchDraftSourceImages = GetMatchDraftSourceImages[F](matchDrafts, imageStore)
+    val getMatchDraftSourceImages = GetMatchDraftSourceImages[F](
+      matchDrafts,
+      imageStore,
+      config.resourceLimits.sourceImageArchiveMaxBytes,
+    )
     val confirmMatch = ConfirmMatch[F](
       heldEvents = heldEvents,
       matches = matches,

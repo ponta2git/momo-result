@@ -1,5 +1,6 @@
 package momo.api.testing
 
+import java.nio.file.Path
 import java.time.Instant
 
 import scala.concurrent.duration.*
@@ -74,6 +75,29 @@ final case class FailingDeleteImageStore(delegate: ImageStore[IO], deleteError: 
   override def delete(imageId: ImageId): IO[Boolean] =
     val _ = imageId
     IO.raiseError(deleteError)
+
+final case class NoReadImageStore(image: StoredImage) extends ImageStore[IO]:
+  override def save(
+      ownerAccountId: AccountId,
+      fileName: Option[String],
+      contentType: Option[String],
+      bytes: Array[Byte],
+  ): IO[Either[AppError, StoredImage]] = failIfCalled("save")
+  override def find(imageId: ImageId): IO[Option[StoredImage]] = IO
+    .pure(Option.when(imageId == image.imageId)(image))
+  override def readBytes(image: StoredImage): IO[Array[Byte]] = failIfCalled("readBytes")
+  override def delete(imageId: ImageId): IO[Boolean] = failIfCalled("delete")
+
+  private def failIfCalled[A](method: String): IO[A] = IO
+    .raiseError(new AssertionError(s"$method should not be called"))
+
+object NoReadImageStore:
+  def storedPng(imageId: ImageId, sizeBytes: Long): StoredImage = StoredImage(
+    imageId = imageId,
+    path = Path.of("/tmp/not-read-source-image.png"),
+    mediaType = "image/png",
+    sizeBytes = sizeBytes,
+  )
 
 final case class OutboxClaimDueCall(limit: Int, now: Instant, claimUntil: Instant) derives CanEqual
 final case class OutboxClaimByIdCall(id: String, now: Instant, claimUntil: Instant) derives CanEqual

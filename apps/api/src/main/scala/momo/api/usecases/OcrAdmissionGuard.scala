@@ -85,14 +85,13 @@ private final class LiveOcrAdmissionGuard[F[_]: MonadThrow: Clock: LoggerFactory
   import OcrAdmissionGuard.*
 
   private val logger = LoggerFactory[F].getLoggerFromClass(classOf[LiveOcrAdmissionGuard[F]])
-  private val serviceUnavailable = AppError.ServiceUnavailable(
-    "OCR queue is temporarily unavailable. Try again later."
-  )
+  private val serviceUnavailable = AppError
+    .ServiceUnavailable("OCR queue is temporarily unavailable. Try again later.")
 
   override def ensureAvailable: F[Either[AppError, Unit]] = decision.flatMap {
     case Decision.Allowed => ().asRight[AppError].pure[F]
-    case Decision.Rejected(rejection) =>
-      logger.warn(s"OCR admission rejected ${rejection.logFields}") >>
+    case Decision.Rejected(rejection) => logger
+        .warn(s"OCR admission rejected ${rejection.logFields}") >>
         serviceUnavailable.asLeft[Unit].pure[F]
   }
 
@@ -102,19 +101,18 @@ private final class LiveOcrAdmissionGuard[F[_]: MonadThrow: Clock: LoggerFactory
   }
 
   private def decision: F[Decision] = queueHealth.ping.attempt.flatMap {
-    case Left(error) => Decision.Rejected(Rejection.RedisUnavailable(SafeLog.throwableClasses(error)))
-        .pure[F]
-    case Right(_) => for
+    case Left(error) => Decision
+        .Rejected(Rejection.RedisUnavailable(SafeLog.throwableClasses(error))).pure[F]
+    case Right(_) =>
+      for
         now <- Clock[F].realTimeInstant
         snapshotResult <- outbox.backlogSnapshot(now).attempt
         decision <- snapshotResult match
-          case Left(error) =>
-            Decision.Rejected(Rejection.OutboxStatusUnavailable(SafeLog.throwableClasses(error)))
-              .pure[F]
+          case Left(error) => Decision
+              .Rejected(Rejection.OutboxStatusUnavailable(SafeLog.throwableClasses(error))).pure[F]
           case Right(snapshot) => queueHealth.deadLetterLength.attempt.map {
-              case Left(error) =>
-                Decision.Rejected(Rejection
-                  .DeadLetterStatusUnavailable(SafeLog.throwableClasses(error)))
+              case Left(error) => Decision
+                  .Rejected(Rejection.DeadLetterStatusUnavailable(SafeLog.throwableClasses(error)))
               case Right(deadLetterLength) => evaluate(snapshot, deadLetterLength, now)
             }
       yield decision

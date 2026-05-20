@@ -32,9 +32,8 @@ final class ImageStorageAdmissionSpec extends MomoCatsEffectSuite:
       config = config,
     )
 
-    admission.ensureCanAccept(accountId, incomingBytes = 10).map { result =>
-      assertEquals(result, Right(()))
-    }
+    admission.ensureCanAccept(accountId, incomingBytes = 10)
+      .map(result => assertEquals(result, Right(())))
   }
 
   test("rejects uploads that exceed the unreferenced image count quota") {
@@ -101,10 +100,8 @@ final class ImageStorageAdmissionSpec extends MomoCatsEffectSuite:
     }
   }
 
-  private final case class FixedInspector(
-      usage: IO[ImageStorageUsage],
-      disk: IO[ImageDiskUsage],
-  ) extends ImageStorageInspector[IO]:
+  private final case class FixedInspector(usage: IO[ImageStorageUsage], disk: IO[ImageDiskUsage])
+      extends ImageStorageInspector[IO]:
     override def unreferencedUsage(
         ownerAccountId: AccountId,
         referenced: Set[ImageId],

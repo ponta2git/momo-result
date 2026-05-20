@@ -263,4 +263,48 @@ describe("SourceImagePanel", () => {
       ),
     ).toBeInTheDocument();
   });
+
+  it("shows a retry message when archive download is rate-limited", async () => {
+    const user = userEvent.setup();
+    installObjectUrlMock({ createObjectURL: () => "blob:source-image" });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith("/source-images.zip")) {
+          return Response.json(
+            {
+              code: "TOO_MANY_REQUESTS",
+              detail: "元画像の取得が短時間に集中しています。少し待ってから再度お試しください。",
+              status: 429,
+              title: "Too Many Requests",
+              type: "about:blank",
+            },
+            { status: 429 },
+          );
+        }
+        return new Response(new Blob(["mock-image"], { type: "image/png" }), {
+          headers: { "Content-Type": "image/png" },
+        });
+      }),
+    );
+
+    render(
+      <SourceImagePanel
+        loading={false}
+        matchDraftId={draftId}
+        preferredKind="total_assets"
+        sourceImages={sourceImages}
+      />,
+    );
+
+    await screen.findByRole("img", { name: "総資産の元画像" });
+    await user.click(screen.getByRole("button", { name: "元画像を保存" }));
+
+    expect(
+      await screen.findByText(
+        "元画像の保存が短時間に集中しています。少し待ってから再度お試しください。",
+      ),
+    ).toBeInTheDocument();
+  });
 });

@@ -61,13 +61,12 @@ object ImageStorageAdmission:
         s"reason=$reason usedPercentAfter=$usedPercentAfter limit=$limit"
 
     def error: AppError = this match
-      case UnreferencedCountExceeded(_, _) | UnreferencedBytesExceeded(_, _) =>
-        AppError.TooManyRequests(
-          "Too many unprocessed image uploads. Start OCR or wait for old uploads to expire."
-        )
-      case _ => AppError.ServiceUnavailable(
-          "Image upload storage is temporarily unavailable. Try again later."
-        )
+      case UnreferencedCountExceeded(_, _) | UnreferencedBytesExceeded(_, _) => AppError
+          .TooManyRequests(
+            "Too many unprocessed image uploads. Start OCR or wait for old uploads to expire."
+          )
+      case _ => AppError
+          .ServiceUnavailable("Image upload storage is temporarily unavailable. Try again later.")
 
   def allowAll[F[_]: Applicative]: ImageStorageAdmission[F] = new ImageStorageAdmission[F]:
     override def ensureCanAccept(
@@ -94,10 +93,8 @@ private final class LiveImageStorageAdmission[F[_]: MonadThrow: LoggerFactory](
       ownerAccountId: AccountId,
       incomingBytes: Long,
   ): F[Either[AppError, Unit]] = references.referencedImageIds.attempt.flatMap {
-    case Left(error) => reject(
-        ownerAccountId,
-        Rejection.ReferenceStatusUnavailable(SafeLog.throwableClasses(error)),
-      )
+    case Left(error) =>
+      reject(ownerAccountId, Rejection.ReferenceStatusUnavailable(SafeLog.throwableClasses(error)))
     case Right(referenced) => inspector.unreferencedUsage(ownerAccountId, referenced).attempt
         .flatMap {
           case Left(error) => reject(
@@ -108,34 +105,29 @@ private final class LiveImageStorageAdmission[F[_]: MonadThrow: LoggerFactory](
             val countAfter = usage.fileCount.toLong + 1L
             val bytesAfter = saturatedAdd(usage.sizeBytes, incomingBytes)
             if countAfter > config.unreferencedCountLimit.toLong then
-              reject(ownerAccountId, Rejection.UnreferencedCountExceeded(
-                countAfter,
-                config.unreferencedCountLimit,
-              ))
+              reject(
+                ownerAccountId,
+                Rejection.UnreferencedCountExceeded(countAfter, config.unreferencedCountLimit),
+              )
             else if bytesAfter > config.unreferencedBytesLimit then
-              reject(ownerAccountId, Rejection.UnreferencedBytesExceeded(
-                bytesAfter,
-                config.unreferencedBytesLimit,
-              ))
+              reject(
+                ownerAccountId,
+                Rejection.UnreferencedBytesExceeded(bytesAfter, config.unreferencedBytesLimit),
+              )
             else checkDisk(ownerAccountId, incomingBytes)
         }
   }
 
-  private def checkDisk(
-      ownerAccountId: AccountId,
-      incomingBytes: Long,
-  ): F[Either[AppError, Unit]] = inspector.diskUsage.attempt.flatMap {
-    case Left(error) =>
-      reject(ownerAccountId, Rejection.DiskStatusUnavailable(SafeLog.throwableClasses(error)))
-    case Right(disk) => evaluateDisk(disk, incomingBytes) match
-        case Some(rejection) => reject(ownerAccountId, rejection)
-        case None => ().asRight[AppError].pure[F]
-  }
+  private def checkDisk(ownerAccountId: AccountId, incomingBytes: Long): F[Either[AppError, Unit]] =
+    inspector.diskUsage.attempt.flatMap {
+      case Left(error) =>
+        reject(ownerAccountId, Rejection.DiskStatusUnavailable(SafeLog.throwableClasses(error)))
+      case Right(disk) => evaluateDisk(disk, incomingBytes) match
+          case Some(rejection) => reject(ownerAccountId, rejection)
+          case None => ().asRight[AppError].pure[F]
+    }
 
-  private def evaluateDisk(
-      disk: ImageDiskUsage,
-      incomingBytes: Long,
-  ): Option[Rejection] =
+  private def evaluateDisk(disk: ImageDiskUsage, incomingBytes: Long): Option[Rejection] =
     val usableAfter = disk.usableBytes - incomingBytes
     if usableAfter < config.storageMinFreeBytes then
       Some(Rejection.DiskFreeBytesBelowReserve(usableAfter, config.storageMinFreeBytes))
@@ -147,12 +139,9 @@ private final class LiveImageStorageAdmission[F[_]: MonadThrow: LoggerFactory](
         Rejection.DiskUsedPercentExceeded(usedPercentAfter, config.storageMaxUsedPercent)
       )
 
-  private def reject(
-      ownerAccountId: AccountId,
-      rejection: Rejection,
-  ): F[Either[AppError, Unit]] =
-    logger.warn(s"image_upload_admission rejected accountId=${ownerAccountId.value} ${rejection.logFields}") >>
-      rejection.error.asLeft[Unit].pure[F]
+  private def reject(ownerAccountId: AccountId, rejection: Rejection): F[Either[AppError, Unit]] =
+    logger.warn(s"image_upload_admission rejected accountId=${ownerAccountId.value} ${rejection
+        .logFields}") >> rejection.error.asLeft[Unit].pure[F]
 
   private def saturatedAdd(left: Long, right: Long): Long =
     if right > 0L && left > Long.MaxValue - right then Long.MaxValue else left + right

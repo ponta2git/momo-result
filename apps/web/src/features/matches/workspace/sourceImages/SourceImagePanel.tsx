@@ -15,6 +15,7 @@ import {
   downloadMatchDraftSourceImage,
   downloadMatchDraftSourceImagesArchive,
 } from "@/shared/api/matchDrafts";
+import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { triggerBrowserDownload } from "@/shared/browser/downloadFile";
 import { Button } from "@/shared/ui/actions/Button";
 import { Dialog } from "@/shared/ui/feedback/Dialog";
@@ -37,6 +38,10 @@ type LoadedSourceImage =
 
 const archiveDownloadError =
   "元画像を保存できませんでした。確定または削除により画像が利用できなくなった可能性があります。必要な場合は画像を再アップロードしてください。";
+const archiveRateLimitError =
+  "元画像の保存が短時間に集中しています。少し待ってから再度お試しください。";
+const archiveTooLargeError =
+  "元画像ZIPのサイズが上限を超えています。必要な画像を個別に保存してください。";
 
 export function SourceImagePanel({
   loading,
@@ -121,8 +126,15 @@ export function SourceImagePanel({
     try {
       const result = await downloadMatchDraftSourceImagesArchive(matchDraftId);
       triggerBrowserDownload(result);
-    } catch {
-      setArchiveError(archiveDownloadError);
+    } catch (error) {
+      const normalized = normalizeUnknownApiError(error);
+      if (normalized.status === 429 || normalized.code === "TOO_MANY_REQUESTS") {
+        setArchiveError(archiveRateLimitError);
+      } else if (normalized.category === "payload_too_large") {
+        setArchiveError(archiveTooLargeError);
+      } else {
+        setArchiveError(archiveDownloadError);
+      }
     } finally {
       setArchiveSaving(false);
     }

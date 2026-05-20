@@ -103,6 +103,7 @@ object HttpRoutes:
         deps.updateMatchDraft,
         deps.cancelMatchDraft,
         deps.getMatchDraftSourceImages,
+        deps.rateLimiters.sourceImageDownload,
         deps.idempotency,
         deps.nowF,
         security,

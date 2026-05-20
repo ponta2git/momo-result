@@ -5,6 +5,7 @@ import momo.api.auth.RateLimiter
 final case class HttpRateLimiters[F[_]](
     upload: RateLimiter[F],
     matchExport: RateLimiter[F],
+    sourceImageDownload: RateLimiter[F],
     ocrJobCreate: RateLimiter[F],
     ocrJobCreateGlobal: RateLimiter[F],
 )

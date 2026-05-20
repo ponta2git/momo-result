@@ -7,7 +7,7 @@ import org.http4s.circe.*
 import org.http4s.headers.`Content-Type`
 import org.http4s.implicits.*
 import org.http4s.multipart.{Multiparts, Part}
-import org.http4s.{Header, MediaType, Method, Request, Status}
+import org.http4s.{Header, MediaType, Method, Request, Status, Uri}
 import org.typelevel.ci.CIString
 
 import momo.api.MomoCatsEffectSuite
@@ -76,6 +76,12 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
   private val exportRateLimitApp = ResourceFunFixture(configuredHttpAppResource(
     "momo-api-export-rate",
     _.copy(resourceLimits = ResourceLimitsConfig.defaults.copy(exportRateLimitPerMinute = 0)),
+  ))
+  private val sourceImageDownloadRateLimitApp = ResourceFunFixture(configuredHttpAppResource(
+    "momo-api-source-image-download-rate",
+    _.copy(resourceLimits =
+      ResourceLimitsConfig.defaults.copy(sourceImageDownloadRateLimitPerMinute = 0)
+    ),
   ))
   private val ocrAccountRateLimitApp = ResourceFunFixture(configuredHttpAppResource(
     "momo-api-ocr-account-rate",
@@ -484,6 +490,34 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
     )
   }
 
+  sourceImageDownloadRateLimitApp
+    .test("source image endpoint applies per-member rate limits") { httpApp =>
+      for
+        matchDraftId <- createDraftWithSourceImage(httpApp)
+        response <- httpApp.run(
+          Request[IO](
+            Method.GET,
+            Uri.unsafeFromString(s"/api/match-drafts/$matchDraftId/source-images/total_assets"),
+          ).putHeaders(devReadHeader())
+        )
+        _ <- assertProblem(response, Status.TooManyRequests, "TOO_MANY_REQUESTS", "元画像の取得")
+      yield ()
+    }
+
+  sourceImageDownloadRateLimitApp
+    .test("source image archive endpoint applies per-member rate limits") { httpApp =>
+      for
+        matchDraftId <- createDraftWithSourceImage(httpApp)
+        response <- httpApp.run(
+          Request[IO](
+            Method.GET,
+            Uri.unsafeFromString(s"/api/match-drafts/$matchDraftId/source-images.zip"),
+          ).putHeaders(devReadHeader())
+        )
+        _ <- assertProblem(response, Status.TooManyRequests, "TOO_MANY_REQUESTS", "元画像の取得")
+      yield ()
+    }
+
   ocrAccountRateLimitApp.test("OCR create endpoint applies per-account rate limits") { httpApp =>
     val request = Request[IO](Method.POST, uri"/api/ocr-jobs").putHeaders(devWriteHeaders()*)
       .withEntity(HttpRequestBodies.Matches.createOcrJob("image-1", "total_assets"))
@@ -549,6 +583,23 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
       assertEquals(response.status, Status.Ok)
       jsonField[String](body, "imageId")
   }
+
+  private def createDraftWithSourceImage(httpApp: TestHttpApp): IO[String] =
+    for
+      draftResponse <- httpApp.run(
+        Request[IO](Method.POST, uri"/api/match-drafts").putHeaders(devWriteHeaders()*)
+          .withEntity(HttpRequestBodies.Matches.emptyMatchDraft)
+      )
+      draftBody <- draftResponse.as[Json]
+      _ = assertEquals(draftResponse.status, Status.Ok)
+      draftId = jsonField[String](draftBody, "matchDraftId")
+      imageId <- uploadPng(httpApp)
+      createJobResponse <- httpApp
+        .run(Request[IO](Method.POST, uri"/api/ocr-jobs").putHeaders(devWriteHeaders()*).withEntity(
+          HttpRequestBodies.Matches.createOcrJobForDraft(imageId, "total_assets", draftId)
+        ))
+      _ = assertEquals(createJobResponse.status, Status.Ok)
+    yield draftId
 
   private def uploadPngRequest: IO[Request[IO]] =
     val part = Part.fileData[IO](

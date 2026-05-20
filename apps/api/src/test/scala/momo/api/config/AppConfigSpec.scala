@@ -174,6 +174,18 @@ class AppConfigSpec extends CatsEffectSuite:
     }
   }
 
+  test("loadFromEnv reads source image download limits") {
+    load(
+      prodEnv ++ Map(
+        "SOURCE_IMAGE_DOWNLOAD_RATE_LIMIT_PER_MINUTE" -> "90",
+        "SOURCE_IMAGE_ARCHIVE_MAX_BYTES" -> "12582912",
+      )
+    ).map { result =>
+      assertEquals(result.map(_.resourceLimits.sourceImageDownloadRateLimitPerMinute), Right(90))
+      assertEquals(result.map(_.resourceLimits.sourceImageArchiveMaxBytes), Right(12582912L))
+    }
+  }
+
   test("loadFromEnv reads OCR admission limits") {
     load(
       prodEnv ++ Map(

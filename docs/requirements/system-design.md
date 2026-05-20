@@ -163,6 +163,8 @@ OCRジョブのタイムアウト初期値は `OCR_TIMEOUT_SECONDS` で管理す
 - 画像はサーバーに恒久保存しない。
 - DBには画像実体、内部ファイルパス、長寿命URLを保存・公開しない。
 - 下書きに紐づく source image は認証付きAPI経由でプレビュー・個別取得・zipダウンロードできる。
+- source image の個別取得・zipダウンロードには account 別の分間 rate limit を適用する。上限は `SOURCE_IMAGE_DOWNLOAD_RATE_LIMIT_PER_MINUTE` で管理し、既定値は60回/分とする。
+- source image zip は生成前に元画像合計サイズを検査し、`SOURCE_IMAGE_ARCHIVE_MAX_BYTES` を超える場合は拒否する。既定値は10MiBとする。
 
 ---
 

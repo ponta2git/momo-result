@@ -5,12 +5,13 @@ import java.time.format.DateTimeFormatter
 import java.time.{Instant, ZoneId}
 import java.util.zip.{ZipEntry, ZipOutputStream}
 
-import cats.MonadThrow
 import cats.data.EitherT
+import cats.effect.Sync
 import cats.syntax.all.*
+import org.slf4j.LoggerFactory
 
-import momo.api.domain.ScreenType
 import momo.api.domain.ids.{ImageId, *}
+import momo.api.domain.{ScreenType, StoredImage}
 import momo.api.errors.AppError
 import momo.api.repositories.{ImageStore, MatchDraftsRepository}
 import momo.api.usecases.syntax.UseCaseSyntax.*
@@ -44,10 +45,13 @@ final case class MatchDraftSourceImageArchive(
     imageCount: Int,
 )
 
-final class GetMatchDraftSourceImages[F[_]: MonadThrow](
+final class GetMatchDraftSourceImages[F[_]: Sync](
     matchDrafts: MatchDraftsRepository[F],
     imageStore: ImageStore[F],
+    sourceImageArchiveMaxBytes: Long = GetMatchDraftSourceImages.DefaultArchiveMaxBytes,
 ):
+  private val logger = LoggerFactory.getLogger("momo.api.usecases.GetMatchDraftSourceImages")
+
   def list(
       draftId: MatchDraftId,
       accountId: AccountId,
@@ -102,8 +106,24 @@ final class GetMatchDraftSourceImages[F[_]: MonadThrow](
       (),
       AppError.NotFound("source images", draftId.value),
     )
-    entries <- EitherT.liftF(archiveEntries(draft))
-    _ <- EitherT.cond[F](entries.nonEmpty, (), AppError.NotFound("source images", draftId.value))
+    sources <- EitherT.liftF(archiveSources(draft))
+    _ <- EitherT.cond[F](sources.nonEmpty, (), AppError.NotFound("source images", draftId.value))
+    totalSourceBytes = sources.foldMap(_.image.sizeBytes)
+    allowed <- EitherT.liftF(Sync[F].delay {
+      val allowed = totalSourceBytes <= sourceImageArchiveMaxBytes
+      if !allowed then
+        logger.warn(s"source_image_archive_rejected accountId=${accountId.value} draftId=${draftId
+            .value} sourceBytes=${totalSourceBytes.toString} maxBytes=${sourceImageArchiveMaxBytes
+            .toString} imageCount=${sources.size.toString}")
+      allowed
+    })
+    _ <- EitherT.cond[F](
+      allowed,
+      (),
+      AppError
+        .PayloadTooLarge("Source image archive is too large. Please download images individually."),
+    )
+    entries <- EitherT.liftF(archiveEntries(sources))
     bytes <- EitherT.liftF(makeZip(entries))
   yield MatchDraftSourceImageArchive(
     contentType = "application/zip",
@@ -129,24 +149,28 @@ final class GetMatchDraftSourceImages[F[_]: MonadThrow](
       kind: MatchDraftSourceImageKind,
   ): Option[ImageId] = draft.sourceImageId(kind.screenType)
 
+  private final case class ArchiveSource(name: String, image: StoredImage)
   private final case class ArchiveEntry(name: String, bytes: Array[Byte])
 
-  private def archiveEntries(draft: momo.api.domain.MatchDraft): F[List[ArchiveEntry]] =
+  private def archiveSources(draft: momo.api.domain.MatchDraft): F[List[ArchiveSource]] =
     MatchDraftSourceImageKind.values.toList.zipWithIndex.traverse { case (kind, index) =>
       draft.sourceImageId(kind.screenType) match
-        case None => Option.empty[ArchiveEntry].pure[F]
+        case None => Option.empty[ArchiveSource].pure[F]
         case Some(imageId) => imageStore.find(imageId).flatMap {
-            case None => Option.empty[ArchiveEntry].pure[F]
-            case Some(image) => imageStore.readBytes(image).map(bytes =>
-                Some(ArchiveEntry(
-                  name = archiveEntryName(kind, index + 1, image.mediaType),
-                  bytes = bytes,
-                ))
-              )
+            case None => Option.empty[ArchiveSource].pure[F]
+            case Some(image) => Some(ArchiveSource(
+                name = archiveEntryName(kind, index + 1, image.mediaType),
+                image = image,
+              )).pure[F]
           }
     }.map(_.flatten)
 
-  private def makeZip(entries: List[ArchiveEntry]): F[Array[Byte]] = MonadThrow[F].pure {
+  private def archiveEntries(sources: List[ArchiveSource]): F[List[ArchiveEntry]] = sources
+    .traverse(source =>
+      imageStore.readBytes(source.image).map(bytes => ArchiveEntry(source.name, bytes))
+    )
+
+  private def makeZip(entries: List[ArchiveEntry]): F[Array[Byte]] = Sync[F].delay {
     val out = ByteArrayOutputStream()
     val zip = ZipOutputStream(out)
     try entries.foreach { entry =>
@@ -188,3 +212,6 @@ final class GetMatchDraftSourceImages[F[_]: MonadThrow](
     private val Formatter = DateTimeFormatter.ofPattern("yyyyMMdd")
       .withZone(ZoneId.of("Asia/Tokyo"))
     def format(value: Instant): String = Formatter.format(value)
+
+object GetMatchDraftSourceImages:
+  val DefaultArchiveMaxBytes: Long = 10L * 1024L * 1024L

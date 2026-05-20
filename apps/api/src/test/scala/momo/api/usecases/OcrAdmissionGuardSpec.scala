@@ -12,8 +12,8 @@ import momo.api.MomoCatsEffectSuite
 import momo.api.errors.AppError
 import momo.api.repositories.OcrQueueBacklogSnapshot
 import momo.api.testing.{
-  FailingQueueHealthProbe, FixedClock, OutboxBacklogSnapshotCall,
-  RecordingOcrQueueOutboxRepository, StaticQueueHealthProbe,
+  FailingQueueHealthProbe, FixedClock, OutboxBacklogSnapshotCall, RecordingOcrQueueOutboxRepository,
+  StaticQueueHealthProbe,
 }
 
 final class OcrAdmissionGuardSpec extends MomoCatsEffectSuite:
@@ -90,10 +90,10 @@ final class OcrAdmissionGuardSpec extends MomoCatsEffectSuite:
 
   test("rejects when oldest due outbox row is delayed too long"):
     for
-      repo <- repoWithSnapshot(emptySnapshot.copy(
-        duePendingCount = 1,
-        oldestDueNextAttemptAt = Some(now.minusSeconds(601)),
-      ))
+      repo <- repoWithSnapshot(
+        emptySnapshot
+          .copy(duePendingCount = 1, oldestDueNextAttemptAt = Some(now.minusSeconds(601)))
+      )
       guard = guardAt(repo, StaticQueueHealthProbe(), config)
       result <- guard.ensureAvailable
       health <- guard.healthStatus

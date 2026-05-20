@@ -11,7 +11,7 @@ import momo.api.adapters.{InMemoryMatchDraftsRepository, LocalFsImageStore}
 import momo.api.domain.ids.*
 import momo.api.domain.{MatchDraft, MatchDraftStatus, MatchNoInEvent, StoredImage}
 import momo.api.errors.AppError
-import momo.api.testing.TestImages
+import momo.api.testing.{NoReadImageStore, TestImages}
 
 final class GetMatchDraftSourceImagesSpec extends MomoCatsEffectSuite:
   private val accountId = AccountId.unsafeFromString("account-1")
@@ -84,6 +84,30 @@ final class GetMatchDraftSourceImagesSpec extends MomoCatsEffectSuite:
           Set("01-total-assets.png", "03-incident-log.webp"),
         )
     }
+  }
+
+  test("rejects oversized archives before reading image bytes") {
+    val imageId = ImageId.unsafeFromString("image-too-large")
+    val imageStore = NoReadImageStore(NoReadImageStore.storedPng(imageId, sizeBytes = 2L))
+
+    for
+      matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
+      draft = draftWithImages(
+        totalAssets = Some(imageId),
+        revenue = None,
+        incidentLog = None,
+        matchNo = None,
+        playedAt = None,
+        sourceImagesDeletedAt = None,
+      )
+      _ <- matchDrafts.create(draft)
+      service =
+        GetMatchDraftSourceImages[IO](matchDrafts, imageStore, sourceImageArchiveMaxBytes = 1L)
+      archive <- service.archive(draft.id, accountId)
+    yield archive match
+      case Left(error: AppError.PayloadTooLarge) =>
+        assert(error.detail.contains("archive is too large"))
+      case other => fail(s"expected archive size rejection, got $other")
   }
 
   test("does not expose source image archives after retention is closed") {

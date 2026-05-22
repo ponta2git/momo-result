@@ -8,6 +8,7 @@ import org.http4s.headers.`Content-Type`
 import org.http4s.{
   Header, HttpRoutes, MediaType, Request, Response, ResponseCookie, SameSite, Status,
 }
+import org.slf4j.LoggerFactory
 import org.typelevel.ci.CIString
 
 import momo.api.auth.{
@@ -21,6 +22,8 @@ import momo.api.errors.AppError
 import momo.api.repositories.LoginAccountsRepository
 
 private[http] object AuthHttpRoutes:
+  private val logger = LoggerFactory.getLogger("momo.api.http.AuthHttpRoutes")
+
   def routes[F[_]: Async](
       config: AppConfig,
       oauth: DiscordOAuthClient[F],
@@ -57,43 +60,59 @@ private[http] object AuthHttpRoutes:
             (state, cookieState) match
               case (Some(stateValue), Some(cookieValue)) if stateValue == cookieValue =>
                 stateCodec.validate(stateValue).flatMap {
-                  case None => problem(AppError.Forbidden("OAuth state is invalid or expired."))
+                  case None => callbackProblem(
+                      "state_invalid_or_expired",
+                      AppError.Forbidden("OAuth state is invalid or expired."),
+                    )
                   case Some(context) => oauthError match
                       case Some(_) if context.silent =>
-                        redirect(interactiveLoginPath(context.redirectPath))
+                        Async[F].delay(logger.warn(
+                          "auth_callback_rejected reason=provider_denied_silent"
+                        )) *> redirect(interactiveLoginPath(context.redirectPath))
                           .map(_.addCookie(clearCookie(config.auth.stateCookieName, config)))
-                      case Some(_) =>
-                        problem(AppError.Forbidden("Discord OAuth was cancelled or denied."))
-                          .map(_.addCookie(clearCookie(config.auth.stateCookieName, config)))
+                      case Some(_) => callbackProblem(
+                          "provider_denied",
+                          AppError.Forbidden("Discord OAuth was cancelled or denied."),
+                        ).map(_.addCookie(clearCookie(config.auth.stateCookieName, config)))
                       case None => code match
                           case Some(codeValue) => oauth.fetchUser(codeValue).flatMap {
-                              case Left(error) => problem(error).map(_.addCookie(
-                                  clearCookie(config.auth.stateCookieName, config)
-                                ))
+                              case Left(error) => callbackProblem("provider_error", error).map(
+                                  _.addCookie(clearCookie(config.auth.stateCookieName, config))
+                                )
                               case Right(discordUser) => UserId.fromString(discordUser.id) match
-                                  case Left(_) => problem(AppError.Forbidden(
-                                      "This Discord user is not allowed to log in."
-                                    )).map(_.addCookie(
+                                  case Left(_) => callbackProblem(
+                                      "invalid_discord_user_id",
+                                      AppError
+                                        .Forbidden("This Discord user is not allowed to log in."),
+                                    ).map(_.addCookie(
                                       clearCookie(config.auth.stateCookieName, config)
                                     ))
                                   case Right(userId) => accounts.findByDiscordUserId(userId)
                                       .flatMap {
-                                        case None => problem(AppError.Forbidden(
-                                            "This Discord user is not allowed to log in."
-                                          )).map(_.addCookie(
+                                        case None => callbackProblem(
+                                            "discord_user_not_allowed",
+                                            AppError.Forbidden(
+                                              "This Discord user is not allowed to log in."
+                                            ),
+                                          ).map(_.addCookie(
                                             clearCookie(config.auth.stateCookieName, config)
                                           ))
                                         case Some(account) if !account.loginEnabled =>
-                                          problem(AppError.Forbidden(
-                                            "This account is not allowed to log in."
-                                          )).map(_.addCookie(
+                                          callbackProblem(
+                                            "login_disabled",
+                                            AppError
+                                              .Forbidden("This account is not allowed to log in."),
+                                          ).map(_.addCookie(
                                             clearCookie(config.auth.stateCookieName, config)
                                           ))
                                         case Some(account) => sessions.create(account)
                                             .flatMap { session =>
-                                              redirect(context.redirectPath.getOrElse(
-                                                config.auth.callbackRedirectPath
-                                              )).map(
+                                              val event = s"auth_login_completed accountId=${account
+                                                  .id.value}"
+                                              Async[F].delay(logger.info(event)) *> redirect(
+                                                context.redirectPath
+                                                  .getOrElse(config.auth.callbackRedirectPath)
+                                              ).map(
                                                 _.addCookie(
                                                   sessionCookie(config, session.cookieValue)
                                                 ).addCookie(
@@ -103,14 +122,16 @@ private[http] object AuthHttpRoutes:
                                             }
                                       }
                             }
-                          case None => problem(
+                          case None => callbackProblem(
+                              "missing_code",
                               AppError
-                                .Forbidden("OAuth callback is missing or has mismatched state.")
+                                .Forbidden("OAuth callback is missing or has mismatched state."),
                             ).map(_.addCookie(clearCookie(config.auth.stateCookieName, config)))
                 }
-              case _ =>
-                problem(AppError.Forbidden("OAuth callback is missing or has mismatched state."))
-                  .map(_.addCookie(clearCookie(config.auth.stateCookieName, config)))
+              case _ => callbackProblem(
+                  "state_mismatch",
+                  AppError.Forbidden("OAuth callback is missing or has mismatched state."),
+                ).map(_.addCookie(clearCookie(config.auth.stateCookieName, config)))
         }
 
       case request if request.method.name == "POST" && path(request) == "/api/auth/logout" =>
@@ -182,12 +203,18 @@ private[http] object AuthHttpRoutes:
           ))
       }
 
-    def rateLimit(request: Request[F]): F[Either[F[Response[F]], Unit]] = rateLimiter
-      .allow(clientKey(request)).map {
-        case true => Right(())
-        case false =>
-          Left(problem(AppError.TooManyRequests("Too many login attempts. Try again later.")))
+    def rateLimit(request: Request[F]): F[Either[F[Response[F]], Unit]] =
+      val key = clientKey(request)
+      rateLimiter.allow(key).flatMap {
+        case true => Async[F].pure(Right(()))
+        case false => Async[F].delay(logger.warn("auth_login_rate_limited")) *> Async[F].pure(Left(
+            problem(AppError.TooManyRequests("Too many login attempts. Try again later."))
+          ))
       }
+
+    def callbackProblem(reason: String, error: AppError): F[Response[F]] = Async[F]
+      .delay(logger.warn(s"auth_callback_rejected reason=$reason problemCode=${error.code}")) *>
+      problem(error)
 
     def problem(error: AppError): F[Response[F]] =
       val (status, body) = ProblemDetails.from(error)

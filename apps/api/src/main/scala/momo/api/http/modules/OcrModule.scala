@@ -4,21 +4,26 @@ import java.time.Instant
 
 import cats.effect.Async
 import cats.syntax.all.*
+import org.slf4j.LoggerFactory
 import sttp.tapir.server.ServerEndpoint
 
 import momo.api.auth.RateLimiter
 import momo.api.domain.ids.{OcrDraftId, OcrJobId}
 import momo.api.endpoints.codec.{BoundaryId, OcrDraftCodec, OcrJobCodec}
 import momo.api.endpoints.{
-  CancelOcrJobResponse, CreateOcrJobRequest, OcrDraftEndpoints, OcrDraftListResponse,
-  OcrDraftResponse, OcrJobEndpoints, OcrJobResponse,
+  CancelOcrJobResponse, CreateOcrJobRequest, CreateOcrJobResponse, OcrDraftEndpoints,
+  OcrDraftListResponse, OcrDraftResponse, OcrJobEndpoints, OcrJobResponse, ProblemDetails,
 }
 import momo.api.errors.AppError
 import momo.api.http.{EndpointSecurity, IdempotencyReplay}
 import momo.api.repositories.IdempotencyRepository
-import momo.api.usecases.{CancelOcrJob, CreateOcrJob, GetOcrDraft, GetOcrDraftsBulk, GetOcrJob}
+import momo.api.usecases.{
+  CancelOcrJob, CreateOcrJob, CreatedOcrJob, GetOcrDraft, GetOcrDraftsBulk, GetOcrJob,
+}
 
 object OcrModule:
+  private val logger = LoggerFactory.getLogger("momo.api.http.modules.OcrModule")
+
   def routes[F[_]: Async](
       createOcrJob: CreateOcrJob[F],
       getOcrJob: GetOcrJob[F],
@@ -34,7 +39,7 @@ object OcrModule:
     OcrJobEndpoints.create.serverLogic {
       case (accountHeader, csrfToken, idemKey, requestId, request) => security
           .authorizeMutation(accountHeader, csrfToken) { member =>
-            IdempotencyReplay.wrap[F, CreateOcrJobRequest, momo.api.endpoints.CreateOcrJobResponse](
+            IdempotencyReplay.wrap[F, CreateOcrJobRequest, CreateOcrJobResponse](
               idempotency,
               idemKey,
               member,
@@ -43,17 +48,24 @@ object OcrModule:
               nowF,
               security.decode(OcrJobCodec.toCreateCommand(request))(command =>
                 createRateLimiter.allow(s"ocr-job-create:${member.accountId.value}").flatMap {
-                  case false => Async[F].pure(Left(
-                      security
-                        .toProblem(AppError.TooManyRequests("Too many OCR jobs. Try again later."))
-                    ))
+                  case false => ocrCreateRateLimited(
+                      scope = "account",
+                      accountId = member.accountId.value,
+                      detail = "Too many OCR jobs. Try again later.",
+                    )
                   case true => globalCreateRateLimiter.allow("global").flatMap {
-                      case false => Async[F].pure(Left(security.toProblem(AppError.TooManyRequests(
-                          "Too many OCR jobs are being created. Try again later."
-                        ))))
-                      case true => security.respond(
-                          createOcrJob.run(command, requestId)
-                        )(OcrJobCodec.toCreateResponse)
+                      case false => ocrCreateRateLimited(
+                          scope = "global",
+                          accountId = member.accountId.value,
+                          detail = "Too many OCR jobs are being created. Try again later.",
+                        )
+                      case true => respondCreate(
+                          createOcrJob.run(command, requestId),
+                          accountId = member.accountId.value,
+                          request = request,
+                          requestId = requestId,
+                          security = security,
+                        )
                     }
                 }
               ),
@@ -101,3 +113,30 @@ object OcrModule:
       }
     },
   )
+
+  private def respondCreate[F[_]: Async](
+      result: F[Either[AppError, CreatedOcrJob]],
+      accountId: String,
+      request: CreateOcrJobRequest,
+      requestId: Option[String],
+      security: EndpointSecurity[F],
+  ): F[Either[ProblemDetails.ProblemResponse, CreateOcrJobResponse]] = result.flatMap {
+    case Left(error) => security.toProblemF(error).map(Left(_))
+    case Right(created) =>
+      val response = OcrJobCodec.toCreateResponse(created)
+      val matchDraftId = request.matchDraftId.getOrElse("none")
+      val requestIdValue = requestId.getOrElse("none")
+      val event = s"ocr_job_accepted accountId=$accountId jobId=${created.job.id.value} " +
+        s"draftId=${created.draft.id.value} imageId=${request.imageId} " +
+        s"requestedScreenType=${request.requestedScreenType} matchDraftId=$matchDraftId " +
+        s"requestId=$requestIdValue"
+      Async[F].delay(logger.info(event)) *> Async[F].pure(Right(response))
+  }
+
+  private def ocrCreateRateLimited[F[_]: Async, A](
+      scope: String,
+      accountId: String,
+      detail: String,
+  ): F[Either[ProblemDetails.ProblemResponse, A]] = Async[F]
+    .delay(logger.warn(s"ocr_job_create_rate_limited scope=$scope accountId=$accountId")) *>
+    Async[F].pure(Left(ProblemDetails.from(AppError.TooManyRequests(detail))))

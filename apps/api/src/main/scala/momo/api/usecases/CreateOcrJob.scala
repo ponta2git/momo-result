@@ -5,6 +5,7 @@ import java.time.Instant
 import cats.MonadThrow
 import cats.data.EitherT
 import cats.syntax.all.*
+import org.typelevel.log4cats.LoggerFactory
 
 import momo.api.domain.*
 import momo.api.domain.ids.*
@@ -34,8 +35,10 @@ final class CreateOcrJob[F[_]: MonadThrow](
     nextId: F[String],
     memberAliases: MemberAliasesRepository[F],
     activeJobLimit: Int,
-):
+)(using LoggerFactory[F]):
   import CreateOcrJob.*
+
+  private val logger = LoggerFactory[F].getLoggerFromClass(classOf[CreateOcrJob[F]])
 
   def run(
       command: CreateOcrJobCommand,
@@ -100,8 +103,10 @@ final class CreateOcrJob[F[_]: MonadThrow](
   ): EitherT[F, AppError, Unit] = EitherT(
     creation.createQueuedJob(draft, job, attachment, payload, activeJobLimit).attempt.flatMap {
       case Right(_) => ().asRight[AppError].pure[F]
-      case Left(_: OcrJobCreationRepository.ActiveJobLimitExceeded) => AppError
-          .ServiceUnavailable("OCR queue is currently full. Try again later.").asLeft[Unit].pure[F]
+      case Left(_: OcrJobCreationRepository.ActiveJobLimitExceeded) => logger.warn(
+          s"ocr_job_create_rejected reason=active_job_limit_exceeded limit=$activeJobLimit"
+        ) >> AppError.ServiceUnavailable("OCR queue is currently full. Try again later.")
+          .asLeft[Unit].pure[F]
       case Left(_: OcrJobCreationRepository.MatchDraftAttachFailed) => AppError
           .Conflict("match draft could not be attached to the OCR job.").asLeft[Unit].pure[F]
       case Left(error) => MonadThrow[F].raiseError[Either[AppError, Unit]](error)

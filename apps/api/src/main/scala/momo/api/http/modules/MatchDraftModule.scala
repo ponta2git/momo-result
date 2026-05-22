@@ -126,16 +126,21 @@ object MatchDraftModule:
                   draftId = id.value,
                   detail = None,
                 )
-              case true => security
-                  .respond(getMatchDraftSourceImages.archive(id, member.accountId))(archive =>
-                    (
+              case true => getMatchDraftSourceImages.archive(id, member.accountId).flatMap {
+                  case Left(error) => security.toProblemF(error).map(Left(_))
+                  case Right(archive) =>
+                    val event =
+                      s"source_image_archive_downloaded accountId=${member.accountId.value} " +
+                        s"draftId=${id.value} imageCount=${archive.imageCount.toString} " +
+                        s"archiveBytes=${archive.bytes.length.toString}"
+                    Async[F].delay(logger.info(event)) *> Async[F].pure(Right((
                       archive.contentType,
                       s"""attachment; filename="${archive.fileName}"""",
                       "private, no-store",
                       "nosniff",
                       archive.bytes,
-                    )
-                  )
+                    )))
+                }
             }
         )
       }
@@ -156,9 +161,17 @@ object MatchDraftModule:
                   draftId = id.value,
                   detail = Some(parsedKind.wire),
                 )
-              case true => security.respond(
-                  getMatchDraftSourceImages.stream(id, parsedKind, member.accountId)
-                )(image => (image.contentType, "private, no-store", "nosniff", image.bytes))
+              case true => getMatchDraftSourceImages.stream(id, parsedKind, member.accountId)
+                  .flatMap {
+                    case Left(error) => security.toProblemF(error).map(Left(_))
+                    case Right(image) =>
+                      val event = s"source_image_downloaded accountId=${member.accountId.value} " +
+                        s"draftId=${id.value} kind=${parsedKind.wire} " +
+                        s"bodyBytes=${image.bytes.length.toString}"
+                      Async[F].delay(logger.info(event)) *> Async[F].pure(Right(
+                        (image.contentType, "private, no-store", "nosniff", image.bytes)
+                      ))
+                  }
             }
         }
       }

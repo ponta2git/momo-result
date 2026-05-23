@@ -65,6 +65,7 @@ RUN apt-get update \
     libicu-dev \
     libleptonica-dev \
     libpango1.0-dev \
+    libpq5 \
     ninja-build \
     pkg-config \
   && rm -rf /var/lib/apt/lists/*
@@ -115,6 +116,7 @@ COPY apps/ocr-worker/src src
 RUN --mount=type=cache,id=uv-cache,target=/root/.cache/uv,sharing=locked \
   uv sync --locked --no-dev --no-editable --no-binary-package tesserocr \
   && tesseract --version | grep "tesseract ${TESSERACT_VERSION}" \
+  && "${UV_PROJECT_ENVIRONMENT}/bin/python" -c "import psycopg" \
   && "${UV_PROJECT_ENVIRONMENT}/bin/python" -c "import tesserocr; print(tesserocr.tesseract_version())" \
     | grep "tesseract ${TESSERACT_VERSION}"
 
@@ -163,6 +165,7 @@ RUN apt-get update \
     libarchive13 \
     libcurl4 \
     liblept5 \
+    libpq5 \
     nginx \
     supervisor \
   && rm -rf /var/lib/apt/lists/* \

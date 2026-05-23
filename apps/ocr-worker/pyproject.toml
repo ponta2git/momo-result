@@ -8,7 +8,7 @@ dependencies = [
   "jsonschema[format-nongpl]>=4.25.0",
   "opencv-python-headless>=4.12.0.88",
   "pillow>=12.0.0",
-  "psycopg[binary]>=3.2.0",
+  "psycopg>=3.2.0",
   "psycopg-pool>=3.2.0",
   "redis>=5.0.0",
   "tesserocr>=2.7.0",
@@ -20,6 +20,7 @@ momo-ocr = "momo_ocr.main:main"
 [dependency-groups]
 dev = [
   "mypy>=1.19.0",
+  "psycopg-binary>=3.2.0",
   "pytest>=9.0.2",
   "pytest-cov>=7.1.0",
   "ruff>=0.14.9",

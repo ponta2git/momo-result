@@ -16,6 +16,7 @@ on:
       - ".github/workflows/deploy.yml"
   push:
     branches:
+      - master
       - main
   workflow_dispatch:
 
@@ -165,6 +166,9 @@ jobs:
     timeout-minutes: 30
     needs: runtime-smoke
     if: github.event_name != 'pull_request'
+    environment:
+      name: production
+      url: https://momo-result.fly.dev
     steps:
       - uses: actions/checkout@v5
 

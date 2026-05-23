@@ -33,5 +33,12 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
     assert(!apiAppText.contains("RedisRateLimiter.resource[F](redis"))
     assert(!apiAppText.contains("RedisOAuthProviderBackoff.resource[F](redis"))
 
+  test("API runtime validates dev identities before constructing domain ids"):
+    val apiAppText = read(apiAppFile)
+
+    assert(apiAppText.contains("MemberRoster.devIdentities(config.devMemberIds)"))
+    assert(apiAppText.contains("MemberRoster.devFromMemberIds(config.devMemberIds)"))
+    assert(!apiAppText.contains("unsafeFromString"))
+
   private def read(path: Path): String = Files.readString(path, StandardCharsets.UTF_8)
 end ApiRuntimeArchitectureSpec

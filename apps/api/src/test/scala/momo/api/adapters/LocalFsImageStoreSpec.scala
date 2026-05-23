@@ -193,6 +193,26 @@ final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:
     }
   }
 
+  test("deleteOrphans ignores files whose names are not valid image ids") {
+    tempDirectory("momo-api-image-store").use { dir =>
+      val store = LocalFsImageStore[IO](dir)
+      val now = Instant.parse("2026-05-08T12:00:00Z")
+      val invalidPath = dir.resolve(".png")
+      for
+        _ <- IO.blocking(Files.write(invalidPath, pngBytes))
+        _ <- IO
+          .blocking(Files.setLastModifiedTime(invalidPath, FileTime.from(now.minusSeconds(3600))))
+        usage <- store.unreferencedUsage(accountId, Set.empty)
+        deleted <- store.deleteOrphans(Set.empty, now.minusSeconds(60))
+        invalidExists <- IO.blocking(Files.exists(invalidPath))
+      yield
+        assertEquals(usage.fileCount, 0)
+        assertEquals(usage.sizeBytes, 0L)
+        assertEquals(deleted, 0)
+        assert(invalidExists)
+    }
+  }
+
   test("deleteOrphans removes old unreferenced images from account directories") {
     tempDirectory("momo-api-image-store").use { dir =>
       val store = LocalFsImageStore[IO](dir)

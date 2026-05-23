@@ -127,8 +127,8 @@ final class LocalFsImageStore[F[_]: Sync: Random](root: Path)
     val fileName = path.getFileName.toString
     SupportedImageTypes.collectFirst {
       case imageType if fileName.endsWith(s".${imageType.extension}") =>
-        ImageId.unsafeFromString(fileName.stripSuffix(s".${imageType.extension}"))
-    }
+        fileName.stripSuffix(s".${imageType.extension}")
+    }.flatMap(ImageId.fromString(_).toOption)
 
   private def validate(
       bytes: Array[Byte],

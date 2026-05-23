@@ -151,6 +151,7 @@ ENV DB_POOL_SIZE=2
 ENV JAVA_OPTS="-XX:MaxRAMPercentage=70 -Djava.security.egd=file:/dev/./urandom"
 ENV JAVA_HOME=/opt/java/openjdk
 ENV LD_LIBRARY_PATH="/opt/tesseract/lib"
+ENV MOMO_OCR_SCHEMA_DIR=/opt/momo-result/docs/schemas
 ENV TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata
 ENV PATH="${JAVA_HOME}/bin:/opt/tesseract/bin:/opt/momo-result/ocr-worker/.venv/bin:${PATH}"
 COPY --from=java-runtime /opt/java/openjdk /opt/java/openjdk
@@ -178,6 +179,7 @@ RUN tesseract --version | grep "tesseract ${TESSERACT_VERSION}"
 COPY --from=api-builder /workspace/apps/api/target/universal/stage /opt/momo-result/api
 COPY --from=worker-builder /opt/momo-result/ocr-worker/.venv /opt/momo-result/ocr-worker/.venv
 COPY --from=web-builder /workspace/apps/web/dist /srv/momo-result/web
+COPY docs/schemas /opt/momo-result/docs/schemas
 COPY deploy/nginx.conf /etc/nginx/nginx.conf
 COPY deploy/supervisord.conf /etc/supervisor/conf.d/momo-result.conf
 

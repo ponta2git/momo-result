@@ -11,6 +11,7 @@ from redis import Redis
 from momo_ocr.app.config import WorkerConfig, require_production_config
 from momo_ocr.features.ocr_jobs.cancellation import RepositoryCancellationChecker
 from momo_ocr.features.ocr_jobs.consumer import RedisConsumerRetryConfig, RedisOcrJobConsumer
+from momo_ocr.features.ocr_jobs.queue_contract import validate_queue_contract_schemas
 from momo_ocr.features.ocr_jobs.repository import PostgresOcrJobRepository
 from momo_ocr.features.text_recognition.factory import text_recognition_engine_from_name
 
@@ -135,6 +136,7 @@ def production_worker_runtime(config: WorkerConfig) -> WorkerRuntime:
     from momo_ocr.features.ocr_jobs.dependencies import JobRunnerDependencies  # noqa: PLC0415
 
     require_production_config(config)
+    validate_queue_contract_schemas()
     pool = production_pool_from_config(config)
     try:
         consumer = redis_consumer_from_config(config)

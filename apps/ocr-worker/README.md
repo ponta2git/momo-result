@@ -71,6 +71,7 @@ The API producer emits `schemaVersion: "1"` and the worker rejects missing or no
 The canonical contract lives in `../../docs/redis-streams-ocr-contract.md`.
 `tests/unit/features/test_queue_contract.py` validates the worker serializer against `../../docs/schemas/ocr-queue-payload-v1.schema.json`, then parses `ocrHintsJson` and validates it against `../../docs/schemas/ocr-hints-v1.schema.json`.
 Runtime payload parsing applies the same JSON Schemas before converting the stream fields into an `OcrJobMessage`.
+The production Docker image copies those schemas to `/opt/momo-result/docs/schemas` and sets `MOMO_OCR_SCHEMA_DIR` so the installed wheel does not depend on repository-relative paths. Worker startup validates both schema files before opening Redis/Postgres resources.
 
 The production worker defaults to the in-process `tesserocr` engine for throughput. The engine passes `OCR_TIMEOUT_SECONDS` to Tesseract's native recognition timeout; set `MOMO_OCR_ENGINE=subprocess` only when a deployment needs a hard per-call process boundary more than the in-process speedup. `MOMO_OCR_FAST_PATH=1` is an opt-in canary flag for lower-latency incident-log OCR; the worker reads it at process startup and passes the boolean through the analysis context so parser code does not read process environment directly.
 

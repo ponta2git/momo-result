@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from collections.abc import Mapping
 from pathlib import Path
 from typing import cast
@@ -10,8 +11,14 @@ from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError
 
 from momo_ocr.features.ocr_domain.models import ScreenType
+from momo_ocr.features.ocr_jobs import queue_contract as contract
 from momo_ocr.features.ocr_jobs.models import OcrJobHints, OcrJobMessage, PlayerAliasHint
-from momo_ocr.features.ocr_jobs.queue_contract import parse_job_message, to_stream_payload
+from momo_ocr.features.ocr_jobs.queue_contract import (
+    parse_job_message,
+    reset_queue_contract_schema_cache,
+    to_stream_payload,
+    validate_queue_contract_schemas,
+)
 from momo_ocr.shared.errors import OcrError
 
 REPO_ROOT = Path(__file__).resolve().parents[5]
@@ -342,6 +349,42 @@ def test_stream_payload_schema_rejects_non_string_and_unknown_fields() -> None:
         _stream_payload_validator().validate({**payload, "enqueuedAt": "not-a-date-time"})
 
 
+def test_parse_job_message_loads_schemas_from_configured_runtime_dir(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _copy_schema_files(tmp_path)
+    monkeypatch.setenv(contract.SCHEMA_DIR_ENV, str(tmp_path))
+    _clear_runtime_schema_validator_cache()
+
+    try:
+        validate_queue_contract_schemas()
+        message = parse_job_message(_schema_valid_payload())
+    finally:
+        _clear_runtime_schema_validator_cache()
+
+    assert message.job_id == "job-schema-1"
+
+
+def test_validate_queue_contract_schemas_fails_fast_when_configured_dir_is_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    missing_dir = tmp_path / "missing"
+    monkeypatch.setenv(contract.SCHEMA_DIR_ENV, str(missing_dir))
+    _clear_runtime_schema_validator_cache()
+
+    try:
+        with pytest.raises(OcrError) as error:
+            validate_queue_contract_schemas()
+    finally:
+        _clear_runtime_schema_validator_cache()
+
+    assert error.value.code.value == "QUEUE_FAILURE"
+    assert "OCR queue schema file is unavailable" in error.value.message
+    assert "ocr-queue-payload-v1.schema.json" in error.value.message
+
+
 def _schema_valid_payload() -> dict[str, str]:
     return to_stream_payload(
         OcrJobMessage(
@@ -397,3 +440,12 @@ def _load_json_object(raw_json: str) -> dict[str, object]:
         msg = "JSON Schema contract data must be a JSON object"
         raise TypeError(msg)
     return cast("dict[str, object]", raw)
+
+
+def _copy_schema_files(schema_dir: Path) -> None:
+    for schema_path in (STREAM_PAYLOAD_SCHEMA_PATH, OCR_HINTS_SCHEMA_PATH):
+        shutil.copyfile(schema_path, schema_dir / schema_path.name)
+
+
+def _clear_runtime_schema_validator_cache() -> None:
+    reset_queue_contract_schema_cache()

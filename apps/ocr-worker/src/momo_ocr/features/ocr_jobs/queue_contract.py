@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from collections.abc import Callable, Mapping
 from functools import lru_cache
@@ -19,9 +20,23 @@ SCHEMA_VERSION_KEY = "schemaVersion"
 SCHEMA_VERSION = "1"
 REQUEST_ID_KEY = "requestId"
 REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+SCHEMA_DIR_ENV = "MOMO_OCR_SCHEMA_DIR"
+STREAM_PAYLOAD_SCHEMA_FILE = "ocr-queue-payload-v1.schema.json"
+OCR_HINTS_SCHEMA_FILE = "ocr-hints-v1.schema.json"
 REPO_ROOT = Path(__file__).resolve().parents[6]
-STREAM_PAYLOAD_SCHEMA_PATH = REPO_ROOT / "docs" / "schemas" / "ocr-queue-payload-v1.schema.json"
-OCR_HINTS_SCHEMA_PATH = REPO_ROOT / "docs" / "schemas" / "ocr-hints-v1.schema.json"
+DEFAULT_SCHEMA_DIR = REPO_ROOT / "docs" / "schemas"
+
+
+def validate_queue_contract_schemas() -> None:
+    """Fail fast when packaged runtime schemas are missing or invalid."""
+    _stream_payload_validator()
+    _ocr_hints_validator()
+
+
+def reset_queue_contract_schema_cache() -> None:
+    """Clear cached validators after changing the schema directory."""
+    _stream_payload_validator.cache_clear()
+    _ocr_hints_validator.cache_clear()
 
 
 def parse_job_message(payload: Mapping[str, object]) -> OcrJobMessage:
@@ -201,12 +216,19 @@ def _additional_properties(error: ValidationError) -> list[str]:
 
 @lru_cache(maxsize=1)
 def _stream_payload_validator() -> Draft202012Validator:
-    return _validator_for(STREAM_PAYLOAD_SCHEMA_PATH)
+    return _validator_for(_schema_path(STREAM_PAYLOAD_SCHEMA_FILE))
 
 
 @lru_cache(maxsize=1)
 def _ocr_hints_validator() -> Draft202012Validator:
-    return _validator_for(OCR_HINTS_SCHEMA_PATH)
+    return _validator_for(_schema_path(OCR_HINTS_SCHEMA_FILE))
+
+
+def _schema_path(filename: str) -> Path:
+    configured = os.environ.get(SCHEMA_DIR_ENV)
+    if configured is not None and configured.strip() != "":
+        return Path(configured).expanduser() / filename
+    return DEFAULT_SCHEMA_DIR / filename
 
 
 def _validator_for(schema_path: Path) -> Draft202012Validator:

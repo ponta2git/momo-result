@@ -115,6 +115,7 @@ jobs:
           docker run --rm "${IMAGE_NAME}" nginx -t -c /etc/nginx/nginx.conf
           docker run --rm "${IMAGE_NAME}" test -x /opt/momo-result/api/bin/momo-result-api
           docker run --rm "${IMAGE_NAME}" momo-ocr --help
+          docker run --rm "${IMAGE_NAME}" python -c 'from momo_ocr.features.ocr_jobs.queue_contract import parse_job_message; parse_job_message({"schemaVersion":"1","jobId":"job-smoke","draftId":"draft-smoke","imageId":"image-smoke","imagePath":"/tmp/momo-result/uploads/image-smoke.png","requestedScreenType":"total_assets","attempt":"1","enqueuedAt":"2026-05-24T00:00:00Z"})'
 
       - name: Start runtime container
         run: |

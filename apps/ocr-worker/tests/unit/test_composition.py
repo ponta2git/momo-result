@@ -8,6 +8,7 @@ from momo_ocr.app import composition as composition_module
 from momo_ocr.app.composition import (
     WorkerRuntime,
     _with_sslmode_require,
+    production_worker_runtime,
     redis_consumer_from_config,
 )
 from momo_ocr.app.config import WorkerConfig
@@ -85,6 +86,41 @@ def test_text_recognition_engine_unknown_value_raises() -> None:
     with pytest.raises(OcrError) as excinfo:
         text_recognition_engine_from_name("paddleocr")
     assert excinfo.value.code is FailureCode.OCR_ENGINE_UNAVAILABLE
+
+
+def test_production_runtime_validates_queue_contract_before_opening_pool(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    def validate_queue_contract_schemas() -> None:
+        calls.append("schema")
+        raise OcrError(FailureCode.QUEUE_FAILURE, "schema unavailable")
+
+    def production_pool_from_config(_config: WorkerConfig) -> object:
+        calls.append("pool")
+        return object()
+
+    monkeypatch.setattr(
+        composition_module,
+        "validate_queue_contract_schemas",
+        validate_queue_contract_schemas,
+    )
+    monkeypatch.setattr(
+        composition_module,
+        "production_pool_from_config",
+        production_pool_from_config,
+    )
+
+    with pytest.raises(OcrError):
+        production_worker_runtime(
+            WorkerConfig(
+                database_url="postgres://user:pass@db.example/momo",
+                redis_url="redis://example:6379/0",
+            )
+        )
+
+    assert calls == ["schema"]
 
 
 def test_redis_consumer_from_config_bounds_redis_socket_waits(

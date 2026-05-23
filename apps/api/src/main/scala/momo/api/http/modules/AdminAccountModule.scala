@@ -13,7 +13,7 @@ import momo.api.endpoints.{
   UpdateLoginAccountRequest,
 }
 import momo.api.errors.AppError
-import momo.api.http.{EndpointSecurity, IdempotencyReplay}
+import momo.api.http.{EndpointSecurity, HttpOperation, IdempotencyReplay}
 import momo.api.usecases.{
   CreateLoginAccount, CreateLoginAccountCommand, ListLoginAccounts, UpdateLoginAccount,
   UpdateLoginAccountCommand,
@@ -40,7 +40,7 @@ object AdminAccountModule:
           idempotency,
           idemKey,
           account,
-          "POST /api/admin/login-accounts",
+          HttpOperation.CreateLoginAccount,
           request,
           nowF,
           security.decode(
@@ -56,7 +56,7 @@ object AdminAccountModule:
               idempotency,
               idemKey,
               account,
-              "PATCH /api/admin/login-accounts",
+              HttpOperation.UpdateLoginAccount,
               (accountId, request),
               nowF,
               security.decode(BoundaryId.required("accountId", accountId)(AccountId.fromString)) {

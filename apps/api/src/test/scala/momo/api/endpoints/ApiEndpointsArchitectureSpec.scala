@@ -10,16 +10,19 @@ import munit.FunSuite
 final class ApiEndpointsArchitectureSpec extends FunSuite:
   private val endpointDir = Paths.get("src/main/scala/momo/api/endpoints")
   private val httpDir = Paths.get("src/main/scala/momo/api/http")
+  private val httpModulesDir = httpDir.resolve("modules")
   private val codecDir = Paths.get("src/main/scala/momo/api/codec")
   private val redisQueuePayload = Paths
     .get("src/main/scala/momo/api/repositories/OcrQueuePayload.scala")
   private val authHttpRoutes = Paths.get("src/main/scala/momo/api/http/AuthHttpRoutes.scala")
+  private val httpOperation = Paths.get("src/main/scala/momo/api/http/HttpOperation.scala")
 
   private val ObjectBlock =
     raw"(?s)object\s+([A-Za-z0-9_]+Endpoints):(.+?)(?=\nobject\s+[A-Za-z0-9_]+Endpoints:|\z)".r
   private val PublicEndpointVal = raw"val\s+([A-Za-z0-9_]+)\s*:\s*PublicEndpoint".r
   private val ServerLogicRef =
     raw"([A-Za-z0-9_]+Endpoints\.[A-Za-z0-9_]+)\s*\.serverLogic(?:Success)?".r
+  private val OperationLabelLiteral = raw""""(?:GET|POST|PUT|PATCH|DELETE) /api[^"]*"""".r
 
   test("ApiEndpoints.all includes every Tapir endpoint definition"):
     val apiEndpointsText = read(endpointDir.resolve("ApiEndpoints.scala"))
@@ -55,6 +58,18 @@ final class ApiEndpointsArchitectureSpec extends FunSuite:
     assert(!text.contains("\"/api/auth/callback\""))
     assert(!text.contains("\"/api/auth/logout\""))
     assert(!text.contains("\"/api/auth/me\""))
+
+  test("HTTP modules use shared operation labels for cross-cutting scopes"):
+    val violations = scalaFiles(httpModulesDir).flatMap { path =>
+      OperationLabelLiteral.findAllMatchIn(read(path)).map(m => s"$path: ${m.matched}")
+    }.sorted
+    val operationText = read(httpOperation)
+
+    assertEquals(violations, Nil)
+    assert(operationText.contains("object HttpOperation"))
+    assert(operationText.contains("val ConfirmMatch"))
+    assert(operationText.contains("val CreateOcrJob"))
+    assert(operationText.contains("val CreateGameTitle"))
 
   private def definedEndpointRefs: List[String] = scalaFiles(endpointDir).flatMap { path =>
     ObjectBlock.findAllMatchIn(read(path)).flatMap { objectMatch =>

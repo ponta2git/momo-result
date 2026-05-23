@@ -15,7 +15,7 @@ import momo.api.endpoints.{
   MatchDraftResponse, MatchDraftSourceImageListResponse, MatchDraftSourceImageResponse,
   ProblemDetails, UpdateMatchDraftRequest,
 }
-import momo.api.http.{EndpointSecurity, IdempotencyReplay}
+import momo.api.http.{EndpointSecurity, HttpOperation, IdempotencyReplay}
 import momo.api.usecases.{
   CancelMatchDraft, CreateMatchDraft, GetMatchDraft, GetMatchDraftSourceImages, UpdateMatchDraft,
 }
@@ -40,7 +40,7 @@ object MatchDraftModule:
           idempotency,
           idemKey,
           member,
-          "POST /api/match-drafts",
+          HttpOperation.CreateMatchDraft,
           request,
           nowF,
           MatchDraftCodec.parseInstantOption[F](request.playedAt).flatMap {
@@ -61,7 +61,7 @@ object MatchDraftModule:
               idempotency,
               idemKey,
               member,
-              "PATCH /api/match-drafts/:id",
+              HttpOperation.UpdateMatchDraft,
               (draftId, request),
               nowF,
               MatchDraftCodec.parseInstantOption[F](request.playedAt).flatMap {
@@ -93,7 +93,7 @@ object MatchDraftModule:
           idempotency,
           idemKey,
           member,
-          "POST /api/match-drafts/:id/cancel",
+          HttpOperation.CancelMatchDraft,
           draftId,
           nowF,
           security

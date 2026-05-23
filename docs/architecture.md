@@ -36,6 +36,7 @@
 - Auth のように Tapir 定義と手書き http4s route が分かれる場合も、path / header などの wire 契約は共有定数から参照し、OpenAPI と実ルーティングの文字列を二重管理しない。
 - HTTP endpoint、入力検証、認証/CSRF、usecase、repository を分離する。HTTP層へDB・Redis・業務分岐を直接詰め込まない。
 - composition root は `momo.api.bootstrap`。HTTP module は endpoint / middleware / routing に閉じる。
+- idempotency / rate limit / logging で使う HTTP operation label は `momo.api.http.HttpOperation` に集約する。label は replay scope として永続化されるため、route 変更時も値の変更は互換性判断として扱う。
 - path / query / body / queue payload の raw value は境界で domain/application 型へ変換する。usecase に wire 表現を渡さない。
 - raw String ID は `BoundaryId` または各 ID の `fromString` で検証する。境界で `unsafeFromString` を使わない。
 - optional field の有無で mode や副作用が変わる場合、その field は mode discriminator として扱う。意味論は生成 OpenAPI だけに置かず、要件・ドメイン・API規約に文章で残す。

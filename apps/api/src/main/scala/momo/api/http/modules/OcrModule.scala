@@ -15,7 +15,7 @@ import momo.api.endpoints.{
   OcrDraftListResponse, OcrDraftResponse, OcrJobEndpoints, OcrJobResponse, ProblemDetails,
 }
 import momo.api.errors.AppError
-import momo.api.http.{EndpointSecurity, IdempotencyReplay}
+import momo.api.http.{EndpointSecurity, HttpOperation, IdempotencyReplay}
 import momo.api.usecases.{
   CancelOcrJob, CreateOcrJob, CreatedOcrJob, GetOcrDraft, GetOcrDraftsBulk, GetOcrJob,
 }
@@ -43,7 +43,7 @@ object OcrModule:
               idempotency,
               idemKey,
               member,
-              "POST /api/ocr-jobs",
+              HttpOperation.CreateOcrJob,
               request,
               nowF,
               security.decode(OcrJobCodec.toCreateCommand(request))(command =>
@@ -74,7 +74,7 @@ object OcrModule:
     },
     OcrJobEndpoints.get.serverLogic { case (jobId, accountHeader) =>
       security.authorizeRead(accountHeader) { member =>
-        ReadRateLimit.enforce(readRateLimiter, member.accountId.value, "GET /api/ocr-jobs/:id") {
+        ReadRateLimit.enforce(readRateLimiter, member.accountId.value, HttpOperation.GetOcrJob) {
           security.decode(
             BoundaryId.required("jobId", jobId)(OcrJobId.fromString)
           )(id => security.respond(getOcrJob.run(id))(OcrJobResponse.from))
@@ -87,7 +87,7 @@ object OcrModule:
           idempotency,
           idemKey,
           member,
-          "DELETE /api/ocr-jobs",
+          HttpOperation.CancelOcrJob,
           jobId,
           nowF,
           security.decode(BoundaryId.required("jobId", jobId)(OcrJobId.fromString))(id =>
@@ -98,7 +98,7 @@ object OcrModule:
     },
     OcrDraftEndpoints.get.serverLogic { case (draftId, accountHeader) =>
       security.authorizeRead(accountHeader) { member =>
-        ReadRateLimit.enforce(readRateLimiter, member.accountId.value, "GET /api/ocr-drafts/:id") {
+        ReadRateLimit.enforce(readRateLimiter, member.accountId.value, HttpOperation.GetOcrDraft) {
           security.decode(BoundaryId.required("draftId", draftId)(OcrDraftId.fromString))(id =>
             security.respond(getOcrDraft.run(id).map(_.flatMap(OcrDraftResponse.from)))(identity)
           )
@@ -107,7 +107,7 @@ object OcrModule:
     },
     OcrDraftEndpoints.listByIds.serverLogic { case (ids, accountHeader) =>
       security.authorizeRead(accountHeader) { member =>
-        ReadRateLimit.enforce(readRateLimiter, member.accountId.value, "GET /api/ocr-drafts") {
+        ReadRateLimit.enforce(readRateLimiter, member.accountId.value, HttpOperation.ListOcrDrafts) {
           security.respond(
             OcrDraftCodec.toDraftIds(ids) match
               case Left(error) => Async[F].pure(Left(error))

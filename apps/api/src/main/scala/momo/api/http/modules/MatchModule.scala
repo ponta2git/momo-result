@@ -13,7 +13,7 @@ import momo.api.endpoints.{
   ConfirmMatchRequest, ConfirmMatchResponse, DeleteMatchResponse, MatchDetailResponse,
   MatchListResponse, MatchSummaryResponse, MatchesEndpoints, UpdateMatchRequest,
 }
-import momo.api.http.{EndpointSecurity, IdempotencyReplay}
+import momo.api.http.{EndpointSecurity, HttpOperation, IdempotencyReplay}
 import momo.api.usecases.{ConfirmMatch, DeleteMatch, GetMatch, ListMatches, UpdateMatch}
 
 object MatchModule:
@@ -34,7 +34,7 @@ object MatchModule:
           idempotency,
           idemKey,
           member,
-          "POST /api/matches",
+          HttpOperation.ConfirmMatch,
           request,
           nowF,
           security.decode(MatchCodec.toConfirmCommand(request))(command =>
@@ -54,7 +54,7 @@ object MatchModule:
     MatchesEndpoints.list.serverLogic {
       case (heldEventId, gameTitleId, seasonMasterId, status, kind, limit, accountHeader) =>
         security.authorizeRead(accountHeader) { member =>
-          ReadRateLimit.enforce(readRateLimiter, member.accountId.value, "GET /api/matches") {
+          ReadRateLimit.enforce(readRateLimiter, member.accountId.value, HttpOperation.ListMatches) {
             security.decode(
               MatchListCodec
                 .toListCommand(heldEventId, gameTitleId, seasonMasterId, status, kind, limit)
@@ -80,7 +80,7 @@ object MatchModule:
               idempotency,
               idemKey,
               member,
-              "PUT /api/matches/:id",
+              HttpOperation.UpdateMatch,
               (matchId, request),
               nowF,
               security.decode(BoundaryId.required("matchId", matchId)(MatchId.fromString)) { id =>
@@ -97,7 +97,7 @@ object MatchModule:
           idempotency,
           idemKey,
           member,
-          "DELETE /api/matches/:id",
+          HttpOperation.DeleteMatch,
           matchId,
           nowF,
           security.decode(BoundaryId.required("matchId", matchId)(MatchId.fromString))(id =>

@@ -11,7 +11,7 @@ import momo.api.endpoints.{
   CreateHeldEventRequest, DeleteHeldEventResponse, HeldEventListResponse, HeldEventResponse,
   HeldEventsEndpoints,
 }
-import momo.api.http.{EndpointSecurity, IdempotencyReplay}
+import momo.api.http.{EndpointSecurity, HttpOperation, IdempotencyReplay}
 import momo.api.usecases.{CreateHeldEvent, DeleteHeldEvent, ListHeldEvents}
 
 object HeldEventModule:
@@ -36,7 +36,7 @@ object HeldEventModule:
           idempotency,
           idemKey,
           member,
-          "POST /api/held-events",
+          HttpOperation.CreateHeldEvent,
           request,
           nowF,
           security.decode(HeldEventCodec.toCreateCommand(request))(command =>
@@ -53,7 +53,7 @@ object HeldEventModule:
               idempotency,
               idemKey,
               member,
-              "DELETE /api/held-events",
+              HttpOperation.DeleteHeldEvent,
               heldEventId,
               nowF,
               security.decode(

@@ -17,7 +17,7 @@ import momo.api.endpoints.{
   SeasonMastersEndpoints, UpdateGameTitleRequest, UpdateMapMasterRequest, UpdateMemberAliasRequest,
   UpdateSeasonMasterRequest,
 }
-import momo.api.http.{EndpointSecurity, IdempotencyReplay}
+import momo.api.http.{EndpointSecurity, HttpOperation, IdempotencyReplay}
 import momo.api.usecases.{
   CreateGameTitle, CreateMapMaster, CreateMemberAlias, CreateSeasonMaster, DeleteGameTitle,
   DeleteMapMaster, DeleteMemberAlias, DeleteSeasonMaster, ListGameTitles, ListIncidentMasters,
@@ -60,7 +60,7 @@ object MasterModule:
           idempotency,
           idemKey,
           member,
-          "POST /api/game-titles",
+          HttpOperation.CreateGameTitle,
           request,
           nowF,
           security.decode(
@@ -76,7 +76,7 @@ object MasterModule:
               idempotency,
               idemKey,
               member,
-              "PATCH /api/game-titles",
+              HttpOperation.UpdateGameTitle,
               (id, request),
               nowF,
               security.decode(
@@ -91,7 +91,7 @@ object MasterModule:
           idempotency,
           idemKey,
           member,
-          "DELETE /api/game-titles",
+          HttpOperation.DeleteGameTitle,
           id,
           nowF,
           security.decode(BoundaryId.required("id", id)(GameTitleId.fromString))(parsedId =>
@@ -116,7 +116,7 @@ object MasterModule:
           idempotency,
           idemKey,
           member,
-          "POST /api/map-masters",
+          HttpOperation.CreateMapMaster,
           request,
           nowF,
           security.decode(
@@ -132,7 +132,7 @@ object MasterModule:
               idempotency,
               idemKey,
               member,
-              "PATCH /api/map-masters",
+              HttpOperation.UpdateMapMaster,
               (id, request),
               nowF,
               security.decode(
@@ -147,7 +147,7 @@ object MasterModule:
           idempotency,
           idemKey,
           member,
-          "DELETE /api/map-masters",
+          HttpOperation.DeleteMapMaster,
           id,
           nowF,
           security.decode(BoundaryId.required("id", id)(MapMasterId.fromString))(parsedId =>
@@ -172,7 +172,7 @@ object MasterModule:
           idempotency,
           idemKey,
           member,
-          "POST /api/season-masters",
+          HttpOperation.CreateSeasonMaster,
           request,
           nowF,
           security.decode(
@@ -188,7 +188,7 @@ object MasterModule:
               idempotency,
               idemKey,
               member,
-              "PATCH /api/season-masters",
+              HttpOperation.UpdateSeasonMaster,
               (id, request),
               nowF,
               security.decode(MasterCodec.toUpdateSeasonMasterCommand(id, request))(command =>
@@ -203,7 +203,7 @@ object MasterModule:
           idempotency,
           idemKey,
           member,
-          "DELETE /api/season-masters",
+          HttpOperation.DeleteSeasonMaster,
           id,
           nowF,
           security.decode(BoundaryId.required("id", id)(SeasonMasterId.fromString))(parsedId =>
@@ -236,7 +236,7 @@ object MasterModule:
           idempotency,
           idemKey,
           member,
-          "POST /api/member-aliases",
+          HttpOperation.CreateMemberAlias,
           request,
           nowF,
           security.decode(
@@ -252,7 +252,7 @@ object MasterModule:
               idempotency,
               idemKey,
               member,
-              "PATCH /api/member-aliases",
+              HttpOperation.UpdateMemberAlias,
               (id, request),
               nowF,
               security.decode(MasterCodec.toUpdateMemberAliasCommand(id, request))(command =>
@@ -267,7 +267,7 @@ object MasterModule:
           idempotency,
           idemKey,
           member,
-          "DELETE /api/member-aliases",
+          HttpOperation.DeleteMemberAlias,
           id,
           nowF,
           security.decode(BoundaryId.required("id", id)(MemberAliasId.fromString))(parsedId =>

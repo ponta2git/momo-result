@@ -155,6 +155,7 @@ ENV TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata
 ENV PATH="${JAVA_HOME}/bin:/opt/tesseract/bin:/opt/momo-result/ocr-worker/.venv/bin:${PATH}"
 COPY --from=java-runtime /opt/java/openjdk /opt/java/openjdk
 RUN apt-get update \
+  && apt-get upgrade -y \
   && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \

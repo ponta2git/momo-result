@@ -155,6 +155,23 @@ lazy val root = (project in file("."))
         "org.typelevel" %% "munit-cats-effect" % munitCatsEffectVersion % Test
       )
     },
+    dependencyOverrides ++= {
+      val nettyVersion = "4.1.133.Final"
+
+      Seq(
+        "io.netty" % "netty-buffer" % nettyVersion,
+        "io.netty" % "netty-codec" % nettyVersion,
+        "io.netty" % "netty-codec-dns" % nettyVersion,
+        "io.netty" % "netty-common" % nettyVersion,
+        "io.netty" % "netty-handler" % nettyVersion,
+        "io.netty" % "netty-resolver" % nettyVersion,
+        "io.netty" % "netty-resolver-dns" % nettyVersion,
+        "io.netty" % "netty-transport" % nettyVersion,
+        "io.netty" % "netty-transport-native-unix-common" % nettyVersion,
+        "org.postgresql" % "postgresql" % "42.7.11",
+        "tools.jackson.core" % "jackson-core" % "3.1.1",
+      )
+    },
     apiOpenApi := {
       val output = baseDirectory.value / "openapi.yaml"
       val result = (Compile / runner).value.run(

@@ -17,7 +17,7 @@ import momo.api.auth.{
 }
 import momo.api.config.{AppConfig, AppEnv, RedirectPath}
 import momo.api.domain.ids.*
-import momo.api.endpoints.{AuthMeResponse, ProblemDetails}
+import momo.api.endpoints.{AuthMeResponse, AuthPaths, ProblemDetails}
 import momo.api.errors.AppError
 import momo.api.repositories.LoginAccountsRepository
 
@@ -36,7 +36,7 @@ private[http] object AuthHttpRoutes:
       providerBackoff: OAuthProviderBackoff[F],
   ): HttpRoutes[F] =
     lazy val routes: HttpRoutes[F] = HttpRoutes.of[F] {
-      case request if request.method.name == "GET" && path(request) == "/api/auth/login" =>
+      case request if request.method.name == "GET" && path(request) == AuthPaths.LoginPath =>
         rateLimit(request).flatMap {
           case Left(response) => response
           case Right(_) =>
@@ -49,7 +49,7 @@ private[http] object AuthHttpRoutes:
             yield response
         }
 
-      case request if request.method.name == "GET" && path(request) == "/api/auth/callback" =>
+      case request if request.method.name == "GET" && path(request) == AuthPaths.CallbackPath =>
         rateLimit(request).flatMap {
           case Left(response) => response
           case Right(_) =>
@@ -144,7 +144,7 @@ private[http] object AuthHttpRoutes:
                 ).map(_.addCookie(clearCookie(config.auth.stateCookieName, config)))
         }
 
-      case request if request.method.name == "POST" && path(request) == "/api/auth/logout" =>
+      case request if request.method.name == "POST" && path(request) == AuthPaths.LogoutPath =>
         val sessionId = request.cookies.find(_.name == config.auth.sessionCookieName).map(_.content)
         sessions.authenticate(sessionId).flatMap {
           case Left(error) => problem(error)
@@ -157,7 +157,7 @@ private[http] object AuthHttpRoutes:
                   noContent.map(_.addCookie(clearCookie(config.auth.sessionCookieName, config)))
         }
 
-      case request if request.method.name == "GET" && path(request) == "/api/auth/me" =>
+      case request if request.method.name == "GET" && path(request) == AuthPaths.MePath =>
         config.appEnv match
           case AppEnv.Dev | AppEnv.Test => devAccountHeader(request) match
               case Some(accountId) => AccountId.fromString(accountId) match
@@ -192,8 +192,8 @@ private[http] object AuthHttpRoutes:
       .putHeaders(Header.Raw(CIString("Location"), location)).pure[F]
 
     def interactiveLoginPath(next: Option[String]): String = next match
-      case None => "/api/auth/login"
-      case Some(path) => s"/api/auth/login?next=${RedirectPath.encodeQueryValue(path)}"
+      case None => AuthPaths.LoginPath
+      case Some(path) => s"${AuthPaths.LoginPath}?next=${RedirectPath.encodeQueryValue(path)}"
 
     def noContent: F[Response[F]] = Response[F](Status.NoContent).pure[F]
 

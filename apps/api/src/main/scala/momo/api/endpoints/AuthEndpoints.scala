@@ -10,7 +10,7 @@ object AuthEndpoints:
   val login: PublicEndpoint[(Option[String], Option[String]), ProblemResponse, String, Any] =
     endpoint
       .get
-      .in("api" / "auth" / "login")
+      .in(AuthPaths.Api / AuthPaths.Auth / AuthPaths.Login)
       .in(query[Option[String]]("silent"))
       .in(query[Option[String]]("next"))
       .errorOut(CommonEndpoint.errorOut)
@@ -26,7 +26,7 @@ object AuthEndpoints:
     Any,
   ] = endpoint
     .get
-    .in("api" / "auth" / "callback")
+    .in(AuthPaths.Api / AuthPaths.Auth / AuthPaths.Callback)
     .in(query[Option[String]]("code"))
     .in(query[Option[String]]("state"))
     .in(query[Option[String]]("error"))
@@ -38,7 +38,7 @@ object AuthEndpoints:
 
   val logout: PublicEndpoint[Option[String], ProblemResponse, Unit, Any] = endpoint
     .post
-    .in("api" / "auth" / "logout")
+    .in(AuthPaths.Api / AuthPaths.Auth / AuthPaths.Logout)
     .in(CommonEndpoint.csrfHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(statusCode(sttp.model.StatusCode.NoContent))
@@ -46,7 +46,7 @@ object AuthEndpoints:
 
   val me: PublicEndpoint[Option[String], ProblemResponse, AuthMeResponse, Any] = endpoint
     .get
-    .in("api" / "auth" / "me")
+    .in(AuthPaths.Api / AuthPaths.Auth / AuthPaths.Me)
     .in(CommonEndpoint.accountHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[AuthMeResponse])

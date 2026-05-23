@@ -33,6 +33,7 @@
 ### 2.1 Boundaries
 
 - API仕様の正本は Tapir endpoint 定義。`apps/api/openapi.yaml` は生成物だが、web 型生成入力なので差分確認対象。
+- Auth のように Tapir 定義と手書き http4s route が分かれる場合も、path / header などの wire 契約は共有定数から参照し、OpenAPI と実ルーティングの文字列を二重管理しない。
 - HTTP endpoint、入力検証、認証/CSRF、usecase、repository を分離する。HTTP層へDB・Redis・業務分岐を直接詰め込まない。
 - composition root は `momo.api.bootstrap`。HTTP module は endpoint / middleware / routing に閉じる。
 - path / query / body / queue payload の raw value は境界で domain/application 型へ変換する。usecase に wire 表現を渡さない。

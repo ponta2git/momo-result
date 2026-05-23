@@ -13,6 +13,7 @@ final class ApiEndpointsArchitectureSpec extends FunSuite:
   private val codecDir = Paths.get("src/main/scala/momo/api/codec")
   private val redisQueuePayload = Paths
     .get("src/main/scala/momo/api/repositories/OcrQueuePayload.scala")
+  private val authHttpRoutes = Paths.get("src/main/scala/momo/api/http/AuthHttpRoutes.scala")
 
   private val ObjectBlock =
     raw"(?s)object\s+([A-Za-z0-9_]+Endpoints):(.+?)(?=\nobject\s+[A-Za-z0-9_]+Endpoints:|\z)".r
@@ -42,6 +43,18 @@ final class ApiEndpointsArchitectureSpec extends FunSuite:
     }.sorted
 
     assertEquals(violations, Nil)
+
+  test("hand-written auth routes share the same path contract as Tapir auth endpoints"):
+    val text = read(authHttpRoutes)
+
+    assert(text.contains("AuthPaths.LoginPath"))
+    assert(text.contains("AuthPaths.CallbackPath"))
+    assert(text.contains("AuthPaths.LogoutPath"))
+    assert(text.contains("AuthPaths.MePath"))
+    assert(!text.contains("\"/api/auth/login\""))
+    assert(!text.contains("\"/api/auth/callback\""))
+    assert(!text.contains("\"/api/auth/logout\""))
+    assert(!text.contains("\"/api/auth/me\""))
 
   private def definedEndpointRefs: List[String] = scalaFiles(endpointDir).flatMap { path =>
     ObjectBlock.findAllMatchIn(read(path)).flatMap { objectMatch =>

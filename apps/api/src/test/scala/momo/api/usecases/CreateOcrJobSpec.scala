@@ -280,6 +280,87 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
     }
   }
 
+  test("rejects re-running a draft OCR slot while its previous job is active") {
+    inMemoryQueueFixture(
+      prefix = "momo-api-create-job-active-slot",
+      idSeed = List("job-new-slot", "draft-new-slot"),
+      requestId = None,
+      activeJobLimit = 12,
+    ).use { fixture =>
+      val matchDraftId = MatchDraftId.unsafeFromString("match-draft-active-slot")
+      val oldDraftId = OcrDraftId.unsafeFromString("draft-active-slot")
+      val oldJobId = OcrJobId.unsafeFromString("job-active-slot")
+      val oldImageId = ImageId.unsafeFromString("image-active-slot")
+      for
+        image <- fixture.savePng
+        _ <- fixture.matchDrafts.create(draftWithTotalAssetsSlot(
+          matchDraftId,
+          oldDraftId,
+          oldImageId,
+          MatchDraftStatus.OcrRunning,
+        ))
+        _ <- fixture.jobs.create(queuedJob(oldJobId, oldDraftId, oldImageId, image.path))
+        usecase <- fixture.usecase
+        result <- usecase.run(
+          CreateOcrJobCommand(
+            image.imageId,
+            ScreenType.TotalAssets,
+            OcrJobHints.empty,
+            Some(matchDraftId),
+          ),
+          fixture.requestId,
+        )
+        found <- fixture.matchDrafts.find(matchDraftId)
+        published <- fixture.queue.published
+      yield
+        result match
+          case Left(AppError.Conflict(detail)) =>
+            assert(detail.contains("match draft could not be attached"))
+          case other => fail(s"expected Left(AppError.Conflict), got: $other")
+        assertEquals(found.flatMap(_.totalAssetsDraftId), Some(oldDraftId))
+        assertEquals(published, Vector.empty)
+    }
+  }
+
+  test("allows re-running a draft OCR slot after its previous job is terminal") {
+    inMemoryQueueFixture(
+      prefix = "momo-api-create-job-terminal-slot",
+      idSeed = List("job-new-slot", "draft-new-slot"),
+      requestId = None,
+      activeJobLimit = 12,
+    ).use { fixture =>
+      val matchDraftId = MatchDraftId.unsafeFromString("match-draft-terminal-slot")
+      val oldDraftId = OcrDraftId.unsafeFromString("draft-terminal-slot")
+      val oldJobId = OcrJobId.unsafeFromString("job-terminal-slot")
+      val oldImageId = ImageId.unsafeFromString("image-terminal-slot")
+      val newDraftId = OcrDraftId.unsafeFromString("draft-new-slot")
+      for
+        image <- fixture.savePng
+        _ <- fixture.matchDrafts.create(
+          draftWithTotalAssetsSlot(matchDraftId, oldDraftId, oldImageId, MatchDraftStatus.OcrFailed)
+        )
+        _ <- fixture.jobs.create(queuedJob(oldJobId, oldDraftId, oldImageId, image.path))
+        _ <- fixture.jobs.cancelQueued(oldJobId, now)
+        usecase <- fixture.usecase
+        created <- usecase.run(
+          CreateOcrJobCommand(
+            image.imageId,
+            ScreenType.TotalAssets,
+            OcrJobHints.empty,
+            Some(matchDraftId),
+          ),
+          fixture.requestId,
+        ).flatMap(fromAppEither)
+        found <- fixture.matchDrafts.find(matchDraftId)
+        published <- fixture.queue.published
+      yield
+        assertEquals(created.draft.id, newDraftId)
+        assertEquals(found.flatMap(_.totalAssetsDraftId), Some(newDraftId))
+        assertEquals(found.map(_.status), Some(MatchDraftStatus.OcrRunning))
+        assertEquals(published.map(_.fields("jobId")), Vector("job-new-slot"))
+    }
+  }
+
   test("logs publish and compensation failures when both queue.publish and markFailed fail") {
     val queueError = new RuntimeException("boom-queue")
     val markFailedError = new RuntimeException("boom-markFailed")
@@ -397,6 +478,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
       drafts,
       matchDrafts,
       memberAliases,
+      jobsBase.existsActiveByDraft,
       queue,
       idSeed,
       requestId,
@@ -431,12 +513,40 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
     updatedAt = now,
   ).getOrElse(fail("test fixture draft should be valid"))
 
+  private def draftWithTotalAssetsSlot(
+      id: MatchDraftId,
+      ocrDraftId: OcrDraftId,
+      imageId: ImageId,
+      status: MatchDraftStatus,
+  ): MatchDraft = MatchDraft.editable(
+    editableDraft(id).common
+      .copy(totalAssetsImageId = Some(imageId), totalAssetsDraftId = Some(ocrDraftId)),
+    status,
+  ).getOrElse(fail("test fixture draft should be editable"))
+
+  private def queuedJob(
+      id: OcrJobId,
+      draftId: OcrDraftId,
+      imageId: ImageId,
+      imagePath: java.nio.file.Path,
+  ): OcrJob = OcrJob.Queued(
+    id = id,
+    draftId = draftId,
+    imageId = imageId,
+    imagePath = imagePath,
+    requestedScreenType = ScreenType.TotalAssets,
+    attemptCount = 0,
+    createdAt = now,
+    updatedAt = now,
+  )
+
   private final case class Fixture[Q <: QueueProducer[IO]](
       imageStore: ImageStore[IO],
       jobs: OcrJobsRepository[IO],
       drafts: InMemoryOcrDraftsRepository[IO],
       matchDrafts: InMemoryMatchDraftsRepository[IO],
       memberAliases: InMemoryMemberAliasesRepository[IO],
+      activeJobForDraft: OcrDraftId => IO[Boolean],
       queue: Q,
       idSeed: List[String],
       requestId: Option[String],
@@ -454,7 +564,8 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
       IO.pure {
         CreateOcrJob[IO](
           imageStore = imageStore,
-          creation = InMemoryOcrJobCreationRepository[IO](drafts, jobs, matchDrafts),
+          creation =
+            InMemoryOcrJobCreationRepository[IO](drafts, jobs, matchDrafts, activeJobForDraft),
           matchDrafts = matchDrafts,
           queueSubmitter = OcrQueueSubmitter.direct[IO](jobs, matchDrafts, queue),
           admissionGuard = admissionGuard,

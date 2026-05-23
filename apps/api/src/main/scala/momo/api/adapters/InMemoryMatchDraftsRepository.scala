@@ -76,7 +76,7 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
       updatedAt: Instant,
   ): F[Boolean] = ref.modify { current =>
     current.get(draftId) match
-      case Some(e: MatchDraft.Editable) if slotIsAvailable(e, screenType) =>
+      case Some(e: MatchDraft.Editable) if canAttachScreenType(screenType) =>
         val withArtifacts = screenType match
           case ScreenType.TotalAssets => e.common
               .copy(totalAssetsImageId = Some(sourceImageId), totalAssetsDraftId = Some(ocrDraftId))
@@ -108,12 +108,7 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
         (current + (draftId -> next), true)
   }
 
-  private def slotIsAvailable(draft: MatchDraft.Editable, screenType: ScreenType): Boolean =
-    screenType match
-      case ScreenType.TotalAssets => draft.totalAssetsDraftId.isEmpty
-      case ScreenType.Revenue => draft.revenueDraftId.isEmpty
-      case ScreenType.IncidentLog => draft.incidentLogDraftId.isEmpty
-      case ScreenType.Auto => false
+  private def canAttachScreenType(screenType: ScreenType): Boolean = screenType != ScreenType.Auto
 
   private def canApplyUserUpdate(existing: MatchDraft.Editable, draft: MatchDraft): Boolean =
     MatchDraftStatus.userEditableStatuses.contains(existing.status) &&

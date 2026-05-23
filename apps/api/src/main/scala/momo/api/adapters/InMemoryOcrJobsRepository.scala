@@ -8,6 +8,7 @@ import cats.syntax.all.*
 import momo.api.domain.ids.*
 import momo.api.domain.{
   MatchDraft, MatchDraftOcrSlot, MatchDraftOcrStatus, MatchDraftStatus, OcrFailure, OcrJob,
+  OcrJobStatus,
 }
 import momo.api.repositories.{MatchDraftsRepository, OcrJobsRepository}
 
@@ -20,7 +21,10 @@ final class InMemoryOcrJobsRepository[F[_]: Sync] private (
   override def find(jobId: OcrJobId): F[Option[OcrJob]] = ref.get.map(_.get(jobId.value))
 
   override def countActive: F[Long] = ref.get
-    .map(_.values.count(job => Set("queued", "running").contains(job.status.wire)).toLong)
+    .map(_.values.count(job => isActive(job.status)).toLong)
+
+  def existsActiveByDraft(draftId: OcrDraftId): F[Boolean] = ref.get
+    .map(_.values.exists(job => job.draftId == draftId && isActive(job.status)))
 
   override def markFailed(jobId: OcrJobId, failure: OcrFailure, now: Instant): F[Unit] = ref
     .update(jobs => jobs.updatedWith(jobId.value)(_.map(toFailed(_, failure, now))))
@@ -64,6 +68,9 @@ final class InMemoryOcrJobsRepository[F[_]: Sync] private (
       createdAt = job.createdAt,
       updatedAt = now,
     )
+
+  private def isActive(status: OcrJobStatus): Boolean = status == OcrJobStatus.Queued ||
+    status == OcrJobStatus.Running
 
 object InMemoryOcrJobsRepository:
   def create[F[_]: Sync]: F[InMemoryOcrJobsRepository[F]] = Ref

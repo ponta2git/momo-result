@@ -3,6 +3,7 @@ package momo.api.adapters
 import cats.MonadThrow
 import cats.syntax.all.*
 
+import momo.api.domain.ids.OcrDraftId
 import momo.api.domain.{OcrDraft, OcrJob}
 import momo.api.repositories.{
   MatchDraftsRepository, OcrDraftsRepository, OcrJobCreationRepository, OcrJobDraftAttachment,
@@ -13,6 +14,7 @@ final class InMemoryOcrJobCreationRepository[F[_]: MonadThrow](
     drafts: OcrDraftsRepository[F],
     jobs: OcrJobsRepository[F],
     matchDrafts: MatchDraftsRepository[F],
+    activeJobForDraft: OcrDraftId => F[Boolean],
 ) extends OcrJobCreationRepository[F]:
   override def createQueuedJob(
       draft: OcrDraft,
@@ -28,6 +30,7 @@ final class InMemoryOcrJobCreationRepository[F[_]: MonadThrow](
         if active >= activeJobLimit.toLong then
           MonadThrow[F].raiseError(OcrJobCreationRepository.ActiveJobLimitExceeded(activeJobLimit))
         else MonadThrow[F].unit
+      _ <- attachment.traverse(rejectActiveSlot)
       attached <- attachment match
         case None => true.pure[F]
         case Some(a) => matchDrafts.attachOcrArtifacts(
@@ -47,3 +50,17 @@ final class InMemoryOcrJobCreationRepository[F[_]: MonadThrow](
       _ <- drafts.create(draft)
       _ <- jobs.create(job)
     yield ()
+
+  private def rejectActiveSlot(attachment: OcrJobDraftAttachment): F[Unit] =
+    slotHasActiveJob(attachment).flatMap {
+      case true => MonadThrow[F]
+          .raiseError(OcrJobCreationRepository.MatchDraftAttachFailed(attachment.draftId))
+      case false => MonadThrow[F].unit
+    }
+
+  private def slotHasActiveJob(attachment: OcrJobDraftAttachment): F[Boolean] = matchDrafts
+    .find(attachment.draftId).flatMap {
+      case None => false.pure[F]
+      case Some(draft) => draft.ocrDraftId(attachment.screenType)
+          .fold(false.pure[F])(activeJobForDraft)
+    }

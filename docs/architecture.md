@@ -46,6 +46,7 @@
 - usecase は状態遷移、整合性、副作用を扱う。repository は SQL とDB入出力に閉じる。
 - 部分更新は入力差分だけで判定しない。既存値と入力値をマージした保存予定の実効状態で不変条件を検証する。
 - 読み取りで検証した前提を後続更新で使う場合は、検証済みスナップショットを repository 契約に渡し、`UPDATE ... WHERE` で同時に照合する。
+- usecase / HTTP test で使う in-memory adapter は、DB adapter の状態遷移 guard と同じ契約を表現する。DB側の guard が複数 table にまたがる場合は、対応する composite adapter 側で等価の判定を持つ。
 - PostgreSQL repository / migration 前提に触れたら `docs/db-rule.md` と `docs/test-rule.md` の DB-backed API ルールに従う。
 
 ### 2.3 Error / Auth

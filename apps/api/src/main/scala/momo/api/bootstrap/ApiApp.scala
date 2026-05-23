@@ -227,7 +227,12 @@ object ApiApp:
               incidentMasters <- InMemoryIncidentMastersRepository.create[F]
               memberAliases <- InMemoryMemberAliasesRepository.create[F]
               idempotency <- InMemoryIdempotencyRepository.create[F]
-              ocrJobCreation = InMemoryOcrJobCreationRepository[F](drafts, jobs, matchDrafts)
+              ocrJobCreation = InMemoryOcrJobCreationRepository[F](
+                drafts,
+                jobs,
+                matchDrafts,
+                jobs.existsActiveByDraft,
+              )
               ocrQueueSubmitter = OcrQueueSubmitter.direct[F](jobs, matchDrafts, queue)
               ocrAdmissionGuard = OcrAdmissionGuard.allowAll[F]
             yield (

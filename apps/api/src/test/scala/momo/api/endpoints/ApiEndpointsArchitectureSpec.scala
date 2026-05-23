@@ -22,7 +22,7 @@ final class ApiEndpointsArchitectureSpec extends FunSuite:
   private val PublicEndpointVal = raw"val\s+([A-Za-z0-9_]+)\s*:\s*PublicEndpoint".r
   private val ServerLogicRef =
     raw"([A-Za-z0-9_]+Endpoints\.[A-Za-z0-9_]+)\s*\.serverLogic(?:Success)?".r
-  private val OperationLabelLiteral = raw""""(?:GET|POST|PUT|PATCH|DELETE) /api[^"]*"""".r
+  private val OperationLabelLiteral = """"(?:GET|POST|PUT|PATCH|DELETE) /api[^"]*"""".r
 
   test("ApiEndpoints.all includes every Tapir endpoint definition"):
     val apiEndpointsText = read(endpointDir.resolve("ApiEndpoints.scala"))

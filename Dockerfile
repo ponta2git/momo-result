@@ -168,7 +168,7 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/* \
   && mkdir -p "${TESSDATA_PREFIX}" \
   && rm -f /etc/nginx/sites-enabled/default \
-  && mkdir -p /run/nginx /srv/momo-result/web /tmp/momo-result/uploads
+  && mkdir -p /opt/momo-result/bin /run/nginx /srv/momo-result/web /tmp/momo-result/uploads
 
 FROM runtime-base AS runtime
 ARG TESSERACT_VERSION=5.5.2
@@ -180,8 +180,11 @@ COPY --from=api-builder /workspace/apps/api/target/universal/stage /opt/momo-res
 COPY --from=worker-builder /opt/momo-result/ocr-worker/.venv /opt/momo-result/ocr-worker/.venv
 COPY --from=web-builder /workspace/apps/web/dist /srv/momo-result/web
 COPY docs/schemas /opt/momo-result/docs/schemas
-COPY deploy/nginx.conf /etc/nginx/nginx.conf
+COPY deploy/nginx.conf /etc/nginx/nginx.conf.template
+COPY deploy/render-nginx-conf.py /opt/momo-result/bin/render-nginx-conf
+COPY deploy/start-runtime.sh /opt/momo-result/bin/start-runtime
 COPY deploy/supervisord.conf /etc/supervisor/conf.d/momo-result.conf
+RUN chmod +x /opt/momo-result/bin/render-nginx-conf /opt/momo-result/bin/start-runtime
 
 EXPOSE 8080
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/momo-result.conf"]
+CMD ["/opt/momo-result/bin/start-runtime"]

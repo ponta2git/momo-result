@@ -2,7 +2,7 @@
 
 目的: 初回デプロイ後の通常運用、障害確認、rollback、secret rotation、カスタムドメイン導入の手順をまとめる。
 
-本番 URL は初期状態では `https://momo-result.fly.dev`。DB は summit と共用の Neon PostgreSQL、Redis は Upstash Redis、runtime は Fly.io の単一 app `momo-result`。
+本番 URL は `https://momo-result.ponta.me`。Cloudflare proxy を正規入口にし、`https://momo-result.fly.dev` は nginx の Host / origin lock で通常アクセスを拒否する。DB は summit と共用の Neon PostgreSQL、Redis は Upstash Redis、runtime は Fly.io の単一 app `momo-result`。
 現在の Fly VM は `shared-cpu-1x` / memory `1gb` を前提にする。256MB では Java API と OCR worker が同居できず、nginx の `/healthz` upstream が `connection refused` になる。
 
 ## 1. 通常 deploy
@@ -18,7 +18,7 @@
 確認コマンド:
 
 ```sh
-curl -fsS https://momo-result.fly.dev/healthz
+curl -fsS https://momo-result.ponta.me/healthz
 flyctl logs --app momo-result --no-tail
 ```
 
@@ -57,7 +57,7 @@ flyctl deploy --remote-only --app momo-result
 軽量 health:
 
 ```sh
-curl -fsS https://momo-result.fly.dev/healthz
+curl -fsS https://momo-result.ponta.me/healthz
 ```
 
 詳細 health:
@@ -140,7 +140,7 @@ flyctl deploy --app momo-result --image <previous-image>
 rollback 後:
 
 ```sh
-curl -fsS https://momo-result.fly.dev/healthz
+curl -fsS https://momo-result.ponta.me/healthz
 flyctl logs --app momo-result --no-tail
 ```
 
@@ -164,30 +164,43 @@ flyctl secrets import --app momo-result
 
 ```sh
 flyctl secrets list --app momo-result
-curl -fsS https://momo-result.fly.dev/healthz
+curl -fsS https://momo-result.ponta.me/healthz
 ```
 
 Discord secret rotation 後は OAuth login を確認する。Redis / DB secret rotation 後は `/healthz/details` と OCR受付を確認する。
+
+`MOMO_ORIGIN_LOCK_TOKEN` を rotation する場合は、Cloudflare Request Header Transform Rule の `X-Momo-Origin-Lock` と Fly secret を同じ値に更新する。値がずれると `momo-result.ponta.me` の通常 path が `421` になるため、更新後は `/healthz`、ログイン画面、`/api/auth/me` 相当の認証確認を行う。
 
 ## 9. カスタムドメイン導入
 
 1. Fly certificate を追加する。
 
 ```sh
-flyctl certs add <domain> --app momo-result
-flyctl certs check <domain> --app momo-result
+flyctl certs add momo-result.ponta.me --app momo-result
+flyctl certs check momo-result.ponta.me --app momo-result
 ```
 
-2. DNS を Fly.io の表示に従って設定する。
-3. Discord OAuth redirect URI に `https://<domain>/api/auth/callback` を追加する。
-4. Fly secret を更新する。
+2. Cloudflare DNS に `_fly-ownership.momo-result.ponta.me` TXT を DNS-only で追加する。
+3. `momo-result.ponta.me` の Web traffic 用 DNS record を Cloudflare Proxied で追加する。
+4. Cloudflare SSL/TLS mode を `Full (strict)` にする。
+5. Cloudflare Request Header Transform Rule で `X-Momo-Origin-Lock` を `MOMO_ORIGIN_LOCK_TOKEN` と同じ値に設定する。
+6. Discord OAuth redirect URI に `https://momo-result.ponta.me/api/auth/callback` を追加する。
+7. Fly secret を更新する。
 
 ```sh
-flyctl secrets set DISCORD_REDIRECT_URI=https://<domain>/api/auth/callback --app momo-result
+flyctl secrets import --app momo-result
 ```
 
-5. GitHub Environment `production` の URL を `https://<domain>` に更新する。
-6. 新ドメインで `/healthz`, 管理者ログイン後の `/healthz/details`, OAuth login を確認する。
+入力する値:
+
+```text
+DISCORD_REDIRECT_URI=https://momo-result.ponta.me/api/auth/callback
+MOMO_ORIGIN_LOCK_TOKEN=...
+```
+
+8. GitHub Environment `production` の URL を `https://momo-result.ponta.me` に更新する。
+9. 新ドメインで `/healthz`, 管理者ログイン後の `/healthz/details`, OAuth login を確認する。
+10. `https://momo-result.fly.dev/` が `421` になることを確認する。
 
 ## 10. エスカレーション基準
 

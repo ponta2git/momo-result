@@ -2,7 +2,7 @@
 
 目的: `momo-result` を初めて Fly.io 本番環境へデプロイするための手順を固定する。
 
-本番は `https://momo-result.fly.dev` から開始し、カスタムドメインは後日導入する。DB は summit と共用の Neon PostgreSQL を使い、スキーマと migration は `../momo-db` を正本にする。
+本番は Cloudflare で管理する `https://momo-result.ponta.me` を正規入口にする。`https://momo-result.fly.dev` は edge WAF / rate limit を迂回できるため、nginx の Host / origin lock で通常アクセスを拒否する。DB は summit と共用の Neon PostgreSQL を使い、スキーマと migration は `../momo-db` を正本にする。
 
 ## 1. 方針
 
@@ -55,10 +55,32 @@ flyctl status --app momo-result
 - app: `momo-result`
 - primary region: `nrt`
 - runtime VM: `shared-cpu-1x`, memory `1gb`
-- public URL: `https://momo-result.fly.dev`
+- public URL: `https://momo-result.ponta.me`
 - health check: `/healthz`
 
-### 2.4 Upstash Redis
+### 2.4 Cloudflare / custom domain
+
+Cloudflare で取得済みの `ponta.me` 配下に `momo-result.ponta.me` を作る。
+
+1. Fly.io に証明書を追加する。
+
+```sh
+flyctl certs add momo-result.ponta.me --app momo-result
+flyctl certs check momo-result.ponta.me --app momo-result
+```
+
+2. `flyctl certs check` が要求する `_fly-ownership.momo-result.ponta.me` TXT を Cloudflare DNS に追加する。TXT は DNS-only にする。
+3. Fly.io の指示に従い、`momo-result.ponta.me` の Web traffic 用 DNS record を Cloudflare に追加し、Proxy status は Proxied にする。
+4. Cloudflare SSL/TLS mode は `Full (strict)` にする。
+5. Cloudflare Request Header Transform Rule で、origin へ送るすべてのリクエストに次の header を設定する。
+
+```text
+X-Momo-Origin-Lock: <MOMO_ORIGIN_LOCK_TOKEN と同じ十分長いランダム値>
+```
+
+この header は Cloudflare から origin への秘密値として扱う。チャット、Issue、PR本文、ログへ貼らない。
+
+### 2.5 Upstash Redis
 
 OCR queue と rate limit 用に Upstash Redis を作成する。
 
@@ -76,12 +98,12 @@ flyctl redis create \
 
 Fly.io 上の Upstash Redis URL を `REDIS_URL` として使う。
 
-### 2.5 Discord OAuth
+### 2.6 Discord OAuth
 
 Discord Developer Portal で application を作成し、OAuth2 redirect URI に以下を登録する。
 
 ```text
-https://momo-result.fly.dev/api/auth/callback
+https://momo-result.ponta.me/api/auth/callback
 ```
 
 取得する値:
@@ -91,7 +113,7 @@ https://momo-result.fly.dev/api/auth/callback
 
 このアプリは OAuth scope `identify` だけを使う。
 
-### 2.6 Neon / momo-db migration
+### 2.7 Neon / momo-db migration
 
 本番 DB は summit と共用する。アプリ deploy 前に `momo-db` の本番 migration が適用済みであることを確認する。
 
@@ -131,8 +153,9 @@ Fly.io app に secrets を設定する。
 | `REDIS_URL` | Upstash Redis connection string |
 | `DISCORD_CLIENT_ID` | Discord OAuth application の Client ID |
 | `DISCORD_CLIENT_SECRET` | Discord OAuth application の Client Secret |
-| `DISCORD_REDIRECT_URI` | `https://momo-result.fly.dev/api/auth/callback` |
+| `DISCORD_REDIRECT_URI` | `https://momo-result.ponta.me/api/auth/callback` |
 | `AUTH_STATE_SIGNING_KEY` | OAuth state 署名用の十分長いランダム値 |
+| `MOMO_ORIGIN_LOCK_TOKEN` | Cloudflare Request Header Transform Rule と同じ十分長いランダム値 |
 
 任意で明示:
 
@@ -160,8 +183,9 @@ DATABASE_URL=postgres://...
 REDIS_URL=redis://...
 DISCORD_CLIENT_ID=...
 DISCORD_CLIENT_SECRET=...
-DISCORD_REDIRECT_URI=https://momo-result.fly.dev/api/auth/callback
+DISCORD_REDIRECT_URI=https://momo-result.ponta.me/api/auth/callback
 AUTH_STATE_SIGNING_KEY=...
+MOMO_ORIGIN_LOCK_TOKEN=...
 AUTH_COOKIE_SECURE=true
 AUTH_COOKIE_HOST_PREFIX=true
 ```
@@ -200,17 +224,18 @@ flyctl releases --app momo-result --image
 HTTP health:
 
 ```sh
-curl -fsS https://momo-result.fly.dev/healthz
+curl -fsS https://momo-result.ponta.me/healthz
 ```
 
 期待値:
 
 - `/healthz`: `{"status":"ok"}`
 - `/healthz/details`: 未認証では 401。管理者ログイン後に `status`, `database`, `redis`, `ocrAdmission` が `ok` であることを確認する。
+- `https://momo-result.fly.dev/`: `421`
 
 人間 smoke:
 
-1. `https://momo-result.fly.dev` を開く。
+1. `https://momo-result.ponta.me` を開く。
 2. Discord OAuth で「ぽんた」アカウントとしてログインできる。
 3. 管理画面でログインアカウント一覧が見える。
 4. 開催履歴を1件作成できる。
@@ -236,21 +261,18 @@ flyctl deploy --app momo-result --image <previous-image>
 
 DB migration は自動で戻らない。`momo-db` migration 適用後に問題が出た場合は、アプリ rollback だけで戻せるかを先に判断し、DB 変更の reverse / point-in-time restore は別途人間判断にする。
 
-## 7. カスタムドメイン導入時
+## 7. Host / origin lock 確認
 
-後日カスタムドメインへ切り替えるときの作業:
-
-1. Fly.io に証明書を追加する。
+本番 deploy 後に、正規入口と迂回経路を分けて確認する。
 
 ```sh
-flyctl certs add <domain> --app momo-result
-flyctl certs check <domain> --app momo-result
+curl -fsS https://momo-result.ponta.me/healthz
+curl -sS -o /dev/null -w "%{http_code}\n" https://momo-result.fly.dev/
 ```
 
-2. DNS を Fly.io の指示通り設定する。
-3. Discord OAuth redirect URI に `https://<domain>/api/auth/callback` を追加する。
-4. Fly secret `DISCORD_REDIRECT_URI` を新ドメインへ更新する。
-5. GitHub Environment の URL を新ドメインへ更新する。
-6. `https://<domain>/healthz` と OAuth login を確認する。
+期待値:
 
-切替直後は `momo-result.fly.dev` も残し、ログイン確認後に必要なら旧 redirect URI を整理する。
+- `https://momo-result.ponta.me/healthz`: `200`
+- `https://momo-result.fly.dev/`: `421`
+
+Fly health check は `fly.toml` で `Host: momo-result.ponta.me` を送る。Cloudflare を経由しない通常 path は `X-Momo-Origin-Lock` が付かないため拒否される。

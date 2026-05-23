@@ -53,6 +53,9 @@ primary_region = "nrt"
     timeout = "5s"
     path = "/healthz"
 
+    [http_service.checks.headers]
+      Host = "momo-result.ponta.me"
+
 [[vm]]
   cpu_kind = "shared"
   cpus = 1

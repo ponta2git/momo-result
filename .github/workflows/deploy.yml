@@ -112,7 +112,10 @@ jobs:
 
       - name: Validate runtime executables
         run: |
-          docker run --rm "${IMAGE_NAME}" nginx -t -c /etc/nginx/nginx.conf
+          docker run --rm \
+            -e MOMO_ORIGIN_LOCK_TOKEN=ci-origin-lock-token \
+            "${IMAGE_NAME}" \
+            /bin/sh -c '/opt/momo-result/bin/render-nginx-conf && nginx -t -c /etc/nginx/nginx.conf'
           docker run --rm "${IMAGE_NAME}" test -x /opt/momo-result/api/bin/momo-result-api
           docker run --rm "${IMAGE_NAME}" momo-ocr --help
           docker run --rm "${IMAGE_NAME}" python -c 'from momo_ocr.features.ocr_jobs.queue_contract import parse_job_message; parse_job_message({"schemaVersion":"1","jobId":"job-smoke","draftId":"draft-smoke","imageId":"image-smoke","imagePath":"/tmp/momo-result/uploads/image-smoke.png","requestedScreenType":"total_assets","attempt":"1","enqueuedAt":"2026-05-24T00:00:00Z"})'
@@ -128,7 +131,9 @@ jobs:
             -e HTTP_HOST=127.0.0.1 \
             -e HTTP_PORT=8081 \
             -e IMAGE_TMP_DIR=/tmp/momo-result/uploads \
+            -e MOMO_CANONICAL_HOST=momo-result.ponta.me \
             -e MOMO_LOG_FORMAT=json \
+            -e MOMO_ORIGIN_LOCK_TOKEN=ci-origin-lock-token \
             -e REDIS_URL="${REDIS_URL}" \
             "${IMAGE_NAME}"
           for attempt in {1..60}; do
@@ -143,6 +148,9 @@ jobs:
 
       - name: Runtime HTTP smoke
         run: scripts/ci/runtime-smoke.sh
+        env:
+          MOMO_CANONICAL_HOST: momo-result.ponta.me
+          MOMO_ORIGIN_LOCK_TOKEN: ci-origin-lock-token
         timeout-minutes: 2
 
       - name: Playwright E2E smoke
@@ -169,7 +177,7 @@ jobs:
     if: github.event_name != 'pull_request'
     environment:
       name: production
-      url: https://momo-result.fly.dev
+      url: https://momo-result.ponta.me
     steps:
       - uses: actions/checkout@v5
 

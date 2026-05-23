@@ -21,8 +21,9 @@ import momo.api.adapters.{
   InMemorySeasonMastersRepository, LocalFsImageStore, RedisQueueProducer,
 }
 import momo.api.auth.{
-  CreatedSession, CsrfTokenService, DiscordOAuthClient, JavaDiscordOAuthClient, LoginRateLimiter,
-  MemberRoster, OAuthStateCodec, RateLimiter, RedisRateLimiter, SessionService,
+  CreatedSession, CsrfTokenService, DiscordOAuthClient, InMemoryOAuthProviderBackoff,
+  JavaDiscordOAuthClient, LoginRateLimiter, MemberRoster, OAuthProviderBackoff, OAuthStateCodec,
+  RateLimiter, RedisOAuthProviderBackoff, RedisRateLimiter, SessionService,
 }
 import momo.api.config.AppConfig
 import momo.api.db.Database
@@ -57,6 +58,8 @@ object ApiApp:
       queue: QueueProducer[F],
       queueHealth: QueueHealthProbe[F],
       loginRateLimiter: RateLimiter[F],
+      authCallbackStateRateLimiter: RateLimiter[F],
+      oauthProviderBackoff: OAuthProviderBackoff[F],
       rateLimiters: HttpRateLimiters[F],
   )
 
@@ -167,6 +170,8 @@ object ApiApp:
               idempotency = idempotency,
               oauthClient = oauthClient,
               loginRateLimiter = infrastructure.loginRateLimiter,
+              authCallbackStateRateLimiter = infrastructure.authCallbackStateRateLimiter,
+              oauthProviderBackoff = infrastructure.oauthProviderBackoff,
               rateLimiters = infrastructure.rateLimiters,
             )
           }
@@ -311,6 +316,8 @@ object ApiApp:
                   idempotency = idempotency,
                   oauthClient = oauthClient,
                   loginRateLimiter = infrastructure.loginRateLimiter,
+                  authCallbackStateRateLimiter = infrastructure.authCallbackStateRateLimiter,
+                  oauthProviderBackoff = infrastructure.oauthProviderBackoff,
                   rateLimiters = infrastructure.rateLimiters,
                 )
               }
@@ -327,6 +334,19 @@ object ApiApp:
           .healthProbeFromCommands(redis.deadLetterStream, commands)
         val login: RateLimiter[F] = RedisRateLimiter
           .fromCommands(commands, "login", config.auth.rateLimitPerMinute, now)
+        val authCallbackState: RateLimiter[F] = RedisRateLimiter.fromCommands(
+          commands,
+          "auth-callback-state",
+          config.auth.callbackStateRateLimitPerMinute,
+          now,
+        )
+        val oauthProviderBackoff: OAuthProviderBackoff[F] = RedisOAuthProviderBackoff.fromCommands(
+          commands,
+          "discord",
+          config.auth.providerFailureThreshold,
+          config.auth.providerBackoff,
+          now,
+        )
         val upload: RateLimiter[F] = RedisRateLimiter
           .fromCommands(commands, "upload", config.resourceLimits.uploadRateLimitPerMinute, now)
         val exportLimiter: RateLimiter[F] = RedisRateLimiter
@@ -355,6 +375,8 @@ object ApiApp:
           queue,
           queueHealth,
           login,
+          authCallbackState,
+          oauthProviderBackoff,
           HttpRateLimiters(
             upload,
             exportLimiter,
@@ -370,6 +392,10 @@ object ApiApp:
           queue <- InMemoryQueueProducer.create[F]
           queueHealth = QueueHealthProbe.healthy[F]
           login <- LoginRateLimiter.create[F](config.auth.rateLimitPerMinute, now)
+          authCallbackState <- LoginRateLimiter
+            .create[F](config.auth.callbackStateRateLimitPerMinute, now)
+          oauthProviderBackoff <- InMemoryOAuthProviderBackoff
+            .create[F](config.auth.providerFailureThreshold, config.auth.providerBackoff, now)
           upload <- LoginRateLimiter.create[F](config.resourceLimits.uploadRateLimitPerMinute, now)
           exportLimiter <- LoginRateLimiter
             .create[F](config.resourceLimits.exportRateLimitPerMinute, now)
@@ -385,6 +411,8 @@ object ApiApp:
           queue,
           queueHealth,
           login,
+          authCallbackState,
+          oauthProviderBackoff,
           HttpRateLimiters(
             upload,
             exportLimiter,
@@ -478,6 +506,8 @@ object ApiApp:
       idempotency: IdempotencyRepository[F],
       oauthClient: DiscordOAuthClient[F],
       loginRateLimiter: RateLimiter[F],
+      authCallbackStateRateLimiter: RateLimiter[F],
+      oauthProviderBackoff: OAuthProviderBackoff[F],
       rateLimiters: HttpRateLimiters[F],
   ): F[Runtime[F]] =
     val roster = MemberRoster.dev(config.devMemberIds)
@@ -631,6 +661,8 @@ object ApiApp:
       csrfTokenService = csrfTokenService,
       oauthStateCodec = oauthStateCodec,
       loginRateLimiter = loginRateLimiter,
+      authCallbackStateRateLimiter = authCallbackStateRateLimiter,
+      oauthProviderBackoff = oauthProviderBackoff,
       rateLimiters = rateLimiters,
       idempotency = idempotency,
       healthDetails = healthDetails,

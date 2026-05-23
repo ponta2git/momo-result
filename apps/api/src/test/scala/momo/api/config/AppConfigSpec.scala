@@ -142,6 +142,20 @@ class AppConfigSpec extends CatsEffectSuite:
     }
   }
 
+  test("loadFromEnv reads OAuth abuse protection limits") {
+    load(
+      prodEnv ++ Map(
+        "AUTH_CALLBACK_STATE_RATE_LIMIT_PER_MINUTE" -> "2",
+        "AUTH_PROVIDER_FAILURE_THRESHOLD" -> "4",
+        "AUTH_PROVIDER_BACKOFF_SECONDS" -> "120",
+      )
+    ).map { result =>
+      assertEquals(result.map(_.auth.callbackStateRateLimitPerMinute), Right(2))
+      assertEquals(result.map(_.auth.providerFailureThreshold), Right(4))
+      assertEquals(result.map(_.auth.providerBackoff.toSeconds), Right(120L))
+    }
+  }
+
   test("loadFromEnv reads low-frequency OCR maintenance intervals") {
     load(
       prodEnv ++ Map(

@@ -25,10 +25,13 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
     assert(apiAppText.contains("RedisQueueProducer.fromCommands(redis.stream, commands)"))
     assert(apiAppText.contains("healthProbeFromCommands(redis.deadLetterStream"))
     assert(apiAppText.contains(".fromCommands(commands, \"login\""))
+    assert(apiAppText.contains("\"auth-callback-state\""))
+    assert(apiAppText.contains("RedisOAuthProviderBackoff.fromCommands"))
     assert(apiAppText.contains("\"ocr-job-create\""))
     assert(apiAppText.contains("\"ocr-job-create-global\""))
     assert(!apiAppText.contains("RedisQueueProducer.resource[F](redis)"))
     assert(!apiAppText.contains("RedisRateLimiter.resource[F](redis"))
+    assert(!apiAppText.contains("RedisOAuthProviderBackoff.resource[F](redis"))
 
   private def read(path: Path): String = Files.readString(path, StandardCharsets.UTF_8)
 end ApiRuntimeArchitectureSpec

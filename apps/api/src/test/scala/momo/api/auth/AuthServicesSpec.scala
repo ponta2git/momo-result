@@ -1,14 +1,15 @@
 package momo.api.auth
 
-import java.net.http.{HttpClient, HttpRequest, HttpResponse}
-import java.net.{Authenticator, CookieHandler, ProxySelector}
+import java.net.http.{HttpClient, HttpHeaders, HttpRequest, HttpResponse}
+import java.net.{Authenticator, CookieHandler, ProxySelector, URI}
+import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.time.Instant
 import java.util.Optional
-import java.util.concurrent.{CompletableFuture, Executor}
+import java.util.concurrent.{CompletableFuture, Executor, Flow}
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
-import javax.net.ssl.{SSLContext, SSLParameters}
+import javax.net.ssl.{SSLContext, SSLParameters, SSLSession}
 
 import scala.concurrent.duration.*
 
@@ -103,6 +104,40 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       case Left(error: AppError.DependencyFailed) =>
         assertEquals(error.detail, "Discord OAuth provider request failed.")
       case other => fail(s"expected dependency failure, got $other")
+    }
+  }
+
+  test("JavaDiscordOAuthClient maps provider 429 token exchange responses to dependency errors") {
+    val client = JavaDiscordOAuthClient[IO](
+      config.copy(
+        discordClientId = Some("client-id"),
+        discordClientSecret = Some("client-secret"),
+        discordRedirectUri = Some("https://example.com/api/auth/callback"),
+      ),
+      StaticHttpClient(429, "{}"),
+    )
+
+    client.fetchUser("code").map {
+      case Left(error: AppError.DependencyFailed) =>
+        assertEquals(error.detail, "Discord OAuth provider request failed.")
+      case other => fail(s"expected dependency failure, got $other")
+    }
+  }
+
+  test("JavaDiscordOAuthClient maps provider 400 token exchange responses to forbidden errors") {
+    val client = JavaDiscordOAuthClient[IO](
+      config.copy(
+        discordClientId = Some("client-id"),
+        discordClientSecret = Some("client-secret"),
+        discordRedirectUri = Some("https://example.com/api/auth/callback"),
+      ),
+      StaticHttpClient(400, "{}"),
+    )
+
+    client.fetchUser("code").map {
+      case Left(error: AppError.Forbidden) =>
+        assertEquals(error.detail, "Discord OAuth token exchange failed.")
+      case other => fail(s"expected forbidden failure, got $other")
     }
   }
 
@@ -210,6 +245,26 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       assertEquals(countAfter, 1)
   }
 
+  test("InMemoryOAuthProviderBackoff opens after dependency failures and resets after cooldown") {
+    for
+      nowRef <- IO.ref(Instant.parse("2026-01-01T00:00:00Z"))
+      backoff <- InMemoryOAuthProviderBackoff.create[IO](2, 60.seconds, nowRef.get)
+      initiallyBlocked <- backoff.isBlocked
+      firstOpened <- backoff.recordFailure(AppError.DependencyFailed("provider failed"))
+      blockedAfterFirst <- backoff.isBlocked
+      secondOpened <- backoff.recordFailure(AppError.DependencyFailed("provider failed"))
+      blockedAfterSecond <- backoff.isBlocked
+      _ <- nowRef.set(Instant.parse("2026-01-01T00:01:01Z"))
+      blockedAfterCooldown <- backoff.isBlocked
+    yield
+      assert(!initiallyBlocked)
+      assert(!firstOpened)
+      assert(!blockedAfterFirst)
+      assert(secondOpened)
+      assert(blockedAfterSecond)
+      assert(!blockedAfterCooldown)
+  }
+
   private def signedLegacyState(nonce: String, expires: String, marker: String): String =
     val payload = s"$nonce:$expires:$marker"
     val payloadBytes = payload.getBytes(StandardCharsets.UTF_8)
@@ -245,3 +300,64 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
         responseBodyHandler: HttpResponse.BodyHandler[T],
         pushPromiseHandler: HttpResponse.PushPromiseHandler[T],
     ): CompletableFuture[HttpResponse[T]] = CompletableFuture.failedFuture(error)
+
+  private final case class StaticHttpClient(status: Int, responseBody: String) extends HttpClient:
+    override def cookieHandler(): Optional[CookieHandler] = Optional.empty()
+    override def connectTimeout(): Optional[java.time.Duration] = Optional.empty()
+    override def followRedirects(): HttpClient.Redirect = HttpClient.Redirect.NEVER
+    override def proxy(): Optional[ProxySelector] = Optional.empty()
+    override def sslContext(): SSLContext = SSLContext.getDefault
+    override def sslParameters(): SSLParameters = SSLParameters()
+    override def authenticator(): Optional[Authenticator] = Optional.empty()
+    override def version(): HttpClient.Version = HttpClient.Version.HTTP_1_1
+    override def executor(): Optional[Executor] = Optional.empty()
+    override def send[T](
+        request: HttpRequest,
+        responseBodyHandler: HttpResponse.BodyHandler[T],
+    ): HttpResponse[T] =
+      val responseInfo = StaticResponseInfo(status)
+      val subscriber = responseBodyHandler(responseInfo)
+      subscriber.onSubscribe(
+        new Flow.Subscription:
+          override def request(n: Long): Unit =
+            val _ = n
+            ()
+          override def cancel(): Unit = ()
+      )
+      subscriber
+        .onNext(java.util.List.of(ByteBuffer.wrap(responseBody.getBytes(StandardCharsets.UTF_8))))
+      subscriber.onComplete()
+      StaticHttpResponse(status, subscriber.getBody.toCompletableFuture.get(), request)
+    override def sendAsync[T](
+        request: HttpRequest,
+        responseBodyHandler: HttpResponse.BodyHandler[T],
+    ): CompletableFuture[HttpResponse[T]] = CompletableFuture
+      .completedFuture(send(request, responseBodyHandler))
+    override def sendAsync[T](
+        request: HttpRequest,
+        responseBodyHandler: HttpResponse.BodyHandler[T],
+        pushPromiseHandler: HttpResponse.PushPromiseHandler[T],
+    ): CompletableFuture[HttpResponse[T]] =
+      val _ = pushPromiseHandler
+      CompletableFuture.completedFuture(send(request, responseBodyHandler))
+
+  private final case class StaticResponseInfo(status: Int) extends HttpResponse.ResponseInfo:
+    override def statusCode(): Int = status
+    override def headers(): HttpHeaders = HttpHeaders
+      .of(java.util.Collections.emptyMap[String, java.util.List[String]](), (_, _) => true)
+    override def version(): HttpClient.Version = HttpClient.Version.HTTP_1_1
+
+  private final case class StaticHttpResponse[T](
+      status: Int,
+      responseBody: T,
+      httpRequest: HttpRequest,
+  ) extends HttpResponse[T]:
+    override def statusCode(): Int = status
+    override def request(): HttpRequest = httpRequest
+    override def previousResponse(): Optional[HttpResponse[T]] = Optional.empty()
+    override def headers(): HttpHeaders = HttpHeaders
+      .of(java.util.Collections.emptyMap[String, java.util.List[String]](), (_, _) => true)
+    override def body(): T = responseBody
+    override def sslSession(): Optional[SSLSession] = Optional.empty()
+    override def uri(): URI = httpRequest.uri()
+    override def version(): HttpClient.Version = HttpClient.Version.HTTP_1_1

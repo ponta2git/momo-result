@@ -8,7 +8,8 @@ import sttp.tapir.server.ServerEndpoint
 import sttp.tapir.server.http4s.Http4sServerInterpreter
 
 import momo.api.auth.{
-  CsrfTokenService, DiscordOAuthClient, MemberRoster, OAuthStateCodec, RateLimiter, SessionService,
+  CsrfTokenService, DiscordOAuthClient, MemberRoster, OAuthProviderBackoff, OAuthStateCodec,
+  RateLimiter, SessionService,
 }
 import momo.api.config.AppConfig
 import momo.api.http.modules.{
@@ -68,6 +69,8 @@ object HttpRoutes:
       csrfTokenService: CsrfTokenService,
       oauthStateCodec: OAuthStateCodec[F],
       loginRateLimiter: RateLimiter[F],
+      authCallbackStateRateLimiter: RateLimiter[F],
+      oauthProviderBackoff: OAuthProviderBackoff[F],
       rateLimiters: HttpRateLimiters[F],
       idempotency: IdempotencyRepository[F],
       healthDetails: F[momo.api.endpoints.HealthEndpoints.HealthDetailsResponse],
@@ -164,6 +167,8 @@ object HttpRoutes:
       csrf = deps.csrfTokenService,
       accounts = deps.loginAccounts,
       rateLimiter = deps.loginRateLimiter,
+      callbackStateRateLimiter = deps.authCallbackStateRateLimiter,
+      providerBackoff = deps.oauthProviderBackoff,
     )
 
     RequestIdMiddleware[F](SecurityHeadersMiddleware[F](deps.config.appEnv)(HttpErrorMiddleware[F](

@@ -54,6 +54,9 @@ final case class AuthConfig(
     sessionTtl: FiniteDuration,
     stateTtl: FiniteDuration,
     rateLimitPerMinute: Int,
+    callbackStateRateLimitPerMinute: Int,
+    providerFailureThreshold: Int,
+    providerBackoff: FiniteDuration,
     callbackRedirectPath: String,
     useSecureCookies: Boolean,
     useHostPrefix: Boolean,
@@ -163,30 +166,46 @@ object AppConfig:
       parsePositiveLong(env, "SESSION_TTL_DAYS", default = 30L),
       parsePositiveLong(env, "OAUTH_STATE_TTL_SECONDS", default = 300L),
       parseNonNegativeInt(env, "AUTH_RATE_LIMIT_PER_MINUTE", default = 10),
+      parseNonNegativeInt(env, "AUTH_CALLBACK_STATE_RATE_LIMIT_PER_MINUTE", default = 3),
+      parsePositiveInt(env, "AUTH_PROVIDER_FAILURE_THRESHOLD", default = 3),
+      parsePositiveLong(env, "AUTH_PROVIDER_BACKOFF_SECONDS", default = 60L),
       parseBoolean(env, "AUTH_COOKIE_SECURE", default = appEnv == AppEnv.Prod),
       parseBoolean(env, "AUTH_COOKIE_HOST_PREFIX", default = appEnv == AppEnv.Prod),
-    ).mapN { (sessionTtlDays, stateTtlSeconds, rateLimit, secureCookies, hostPrefix) =>
-      AuthConfig(
-        discordClientId = env.get("DISCORD_CLIENT_ID").filter(_.nonEmpty),
-        discordClientSecret = env.get("DISCORD_CLIENT_SECRET").filter(_.nonEmpty),
-        discordRedirectUri = env.get("DISCORD_REDIRECT_URI").filter(_.nonEmpty),
-        stateSigningKey = env.get("AUTH_STATE_SIGNING_KEY").filter(_.nonEmpty),
-        sessionCookieName = env.getOrElse(
-          "SESSION_COOKIE_NAME",
-          if appEnv == AppEnv.Prod then "__Host-momo_result_session" else "momo_result_session",
-        ),
-        stateCookieName = env.getOrElse(
-          "OAUTH_STATE_COOKIE_NAME",
-          if appEnv == AppEnv.Prod then "__Host-momo_result_oauth_state"
-          else "momo_result_oauth_state",
-        ),
-        sessionTtl = sessionTtlDays.days,
-        stateTtl = stateTtlSeconds.seconds,
-        rateLimitPerMinute = rateLimit,
-        callbackRedirectPath = env.getOrElse("AUTH_CALLBACK_REDIRECT_PATH", "/"),
-        useSecureCookies = secureCookies,
-        useHostPrefix = hostPrefix,
-      )
+    ).mapN {
+      (
+          sessionTtlDays,
+          stateTtlSeconds,
+          rateLimit,
+          callbackStateRateLimit,
+          providerFailureThreshold,
+          providerBackoffSeconds,
+          secureCookies,
+          hostPrefix,
+      ) =>
+        AuthConfig(
+          discordClientId = env.get("DISCORD_CLIENT_ID").filter(_.nonEmpty),
+          discordClientSecret = env.get("DISCORD_CLIENT_SECRET").filter(_.nonEmpty),
+          discordRedirectUri = env.get("DISCORD_REDIRECT_URI").filter(_.nonEmpty),
+          stateSigningKey = env.get("AUTH_STATE_SIGNING_KEY").filter(_.nonEmpty),
+          sessionCookieName = env.getOrElse(
+            "SESSION_COOKIE_NAME",
+            if appEnv == AppEnv.Prod then "__Host-momo_result_session" else "momo_result_session",
+          ),
+          stateCookieName = env.getOrElse(
+            "OAUTH_STATE_COOKIE_NAME",
+            if appEnv == AppEnv.Prod then "__Host-momo_result_oauth_state"
+            else "momo_result_oauth_state",
+          ),
+          sessionTtl = sessionTtlDays.days,
+          stateTtl = stateTtlSeconds.seconds,
+          rateLimitPerMinute = rateLimit,
+          callbackStateRateLimitPerMinute = callbackStateRateLimit,
+          providerFailureThreshold = providerFailureThreshold,
+          providerBackoff = providerBackoffSeconds.seconds,
+          callbackRedirectPath = env.getOrElse("AUTH_CALLBACK_REDIRECT_PATH", "/"),
+          useSecureCookies = secureCookies,
+          useHostPrefix = hostPrefix,
+        )
     }.liftTo[F].flatMap(validateAuth[F](_, appEnv))
 
   private def validateAuth[F[_]: MonadThrow](config: AuthConfig, appEnv: AppEnv): F[AuthConfig] =
@@ -472,6 +491,9 @@ object AuthConfig:
     sessionTtl = 30.days,
     stateTtl = 300.seconds,
     rateLimitPerMinute = 10,
+    callbackStateRateLimitPerMinute = 3,
+    providerFailureThreshold = 3,
+    providerBackoff = 60.seconds,
     callbackRedirectPath = "/",
     useSecureCookies = appEnv == AppEnv.Prod,
     useHostPrefix = appEnv == AppEnv.Prod,

@@ -12,8 +12,8 @@ import org.slf4j.LoggerFactory
 import org.typelevel.ci.CIString
 
 import momo.api.auth.{
-  AuthHeaderNames, CsrfTokenService, DiscordOAuthClient, OAuthStateCodec, RateLimiter,
-  SessionService,
+  AuthHeaderNames, CsrfTokenService, DiscordOAuthClient, OAuthProviderBackoff, OAuthStateCodec,
+  RateLimiter, SessionService, SessionTokenHash,
 }
 import momo.api.config.{AppConfig, AppEnv, RedirectPath}
 import momo.api.domain.ids.*
@@ -32,6 +32,8 @@ private[http] object AuthHttpRoutes:
       csrf: CsrfTokenService,
       accounts: LoginAccountsRepository[F],
       rateLimiter: RateLimiter[F],
+      callbackStateRateLimiter: RateLimiter[F],
+      providerBackoff: OAuthProviderBackoff[F],
   ): HttpRoutes[F] =
     lazy val routes: HttpRoutes[F] = HttpRoutes.of[F] {
       case request if request.method.name == "GET" && path(request) == "/api/auth/login" =>
@@ -59,74 +61,82 @@ private[http] object AuthHttpRoutes:
               .map(_.content)
             (state, cookieState) match
               case (Some(stateValue), Some(cookieValue)) if stateValue == cookieValue =>
-                stateCodec.validate(stateValue).flatMap {
-                  case None => callbackProblem(
-                      "state_invalid_or_expired",
-                      AppError.Forbidden("OAuth state is invalid or expired."),
-                    )
-                  case Some(context) => oauthError match
-                      case Some(_) if context.silent =>
-                        Async[F].delay(logger.warn(
-                          "auth_callback_rejected reason=provider_denied_silent"
-                        )) *> redirect(interactiveLoginPath(context.redirectPath))
-                          .map(_.addCookie(clearCookie(config.auth.stateCookieName, config)))
-                      case Some(_) => callbackProblem(
-                          "provider_denied",
-                          AppError.Forbidden("Discord OAuth was cancelled or denied."),
-                        ).map(_.addCookie(clearCookie(config.auth.stateCookieName, config)))
-                      case None => code match
-                          case Some(codeValue) => oauth.fetchUser(codeValue).flatMap {
-                              case Left(error) => callbackProblem("provider_error", error).map(
-                                  _.addCookie(clearCookie(config.auth.stateCookieName, config))
-                                )
-                              case Right(discordUser) => UserId.fromString(discordUser.id) match
-                                  case Left(_) => callbackProblem(
-                                      "invalid_discord_user_id",
-                                      AppError
-                                        .Forbidden("This Discord user is not allowed to log in."),
-                                    ).map(_.addCookie(
-                                      clearCookie(config.auth.stateCookieName, config)
-                                    ))
-                                  case Right(userId) => accounts.findByDiscordUserId(userId)
-                                      .flatMap {
-                                        case None => callbackProblem(
-                                            "discord_user_not_allowed",
-                                            AppError.Forbidden(
-                                              "This Discord user is not allowed to log in."
-                                            ),
-                                          ).map(_.addCookie(
-                                            clearCookie(config.auth.stateCookieName, config)
-                                          ))
-                                        case Some(account) if !account.loginEnabled =>
-                                          callbackProblem(
-                                            "login_disabled",
-                                            AppError
-                                              .Forbidden("This account is not allowed to log in."),
-                                          ).map(_.addCookie(
-                                            clearCookie(config.auth.stateCookieName, config)
-                                          ))
-                                        case Some(account) => sessions.create(account)
-                                            .flatMap { session =>
-                                              val event = s"auth_login_completed accountId=${account
-                                                  .id.value}"
-                                              Async[F].delay(logger.info(event)) *> redirect(
-                                                context.redirectPath
-                                                  .getOrElse(config.auth.callbackRedirectPath)
-                                              ).map(
-                                                _.addCookie(
-                                                  sessionCookie(config, session.cookieValue)
-                                                ).addCookie(
-                                                  clearCookie(config.auth.stateCookieName, config)
-                                                )
-                                              )
-                                            }
-                                      }
-                            }
-                          case None => callbackProblem(
-                              "missing_code",
-                              AppError
-                                .Forbidden("OAuth callback is missing or has mismatched state."),
+                rateLimitCallbackState(stateValue).flatMap {
+                  case Left(response) => response
+                      .map(_.addCookie(clearCookie(config.auth.stateCookieName, config)))
+                  case Right(_) => stateCodec.validate(stateValue).flatMap {
+                      case None => callbackProblem(
+                          "state_invalid_or_expired",
+                          AppError.Forbidden("OAuth state is invalid or expired."),
+                        )
+                      case Some(context) => oauthError match
+                          case Some(_) if context.silent =>
+                            Async[F].delay(logger.warn(
+                              "auth_callback_rejected reason=provider_denied_silent"
+                            )) *> redirect(interactiveLoginPath(context.redirectPath))
+                              .map(_.addCookie(clearCookie(config.auth.stateCookieName, config)))
+                          case Some(_) => callbackProblem(
+                              "provider_denied",
+                              AppError.Forbidden("Discord OAuth was cancelled or denied."),
                             ).map(_.addCookie(clearCookie(config.auth.stateCookieName, config)))
+                          case None => code match
+                              case Some(codeValue) => fetchUserWithBackoff(codeValue).flatMap {
+                                  case Left(error) => callbackProblem("provider_error", error).map(
+                                      _.addCookie(clearCookie(config.auth.stateCookieName, config))
+                                    )
+                                  case Right(discordUser) => UserId.fromString(discordUser.id) match
+                                      case Left(_) => callbackProblem(
+                                          "invalid_discord_user_id",
+                                          AppError.Forbidden(
+                                            "This Discord user is not allowed to log in."
+                                          ),
+                                        ).map(_.addCookie(
+                                          clearCookie(config.auth.stateCookieName, config)
+                                        ))
+                                      case Right(userId) => accounts.findByDiscordUserId(userId)
+                                          .flatMap {
+                                            case None => callbackProblem(
+                                                "discord_user_not_allowed",
+                                                AppError.Forbidden(
+                                                  "This Discord user is not allowed to log in."
+                                                ),
+                                              ).map(_.addCookie(
+                                                clearCookie(config.auth.stateCookieName, config)
+                                              ))
+                                            case Some(account) if !account.loginEnabled =>
+                                              callbackProblem(
+                                                "login_disabled",
+                                                AppError.Forbidden(
+                                                  "This account is not allowed to log in."
+                                                ),
+                                              ).map(_.addCookie(
+                                                clearCookie(config.auth.stateCookieName, config)
+                                              ))
+                                            case Some(account) => sessions.create(account)
+                                                .flatMap { session =>
+                                                  val event =
+                                                    s"auth_login_completed accountId=${account.id
+                                                        .value}"
+                                                  Async[F].delay(logger.info(event)) *> redirect(
+                                                    context.redirectPath
+                                                      .getOrElse(config.auth.callbackRedirectPath)
+                                                  ).map(
+                                                    _.addCookie(
+                                                      sessionCookie(config, session.cookieValue)
+                                                    ).addCookie(clearCookie(
+                                                      config.auth.stateCookieName,
+                                                      config,
+                                                    ))
+                                                  )
+                                                }
+                                          }
+                                }
+                              case None => callbackProblem(
+                                  "missing_code",
+                                  AppError
+                                    .Forbidden("OAuth callback is missing or has mismatched state."),
+                                ).map(_.addCookie(clearCookie(config.auth.stateCookieName, config)))
+                    }
                 }
               case _ => callbackProblem(
                   "state_mismatch",
@@ -210,6 +220,32 @@ private[http] object AuthHttpRoutes:
         case false => Async[F].delay(logger.warn("auth_login_rate_limited")) *> Async[F].pure(Left(
             problem(AppError.TooManyRequests("Too many login attempts. Try again later."))
           ))
+      }
+
+    def rateLimitCallbackState(state: String): F[Either[F[Response[F]], Unit]] = SessionTokenHash
+      .sha256[F](state).flatMap { stateHash =>
+        callbackStateRateLimiter.allow(stateHash).flatMap {
+          case true => Async[F].pure(Right(()))
+          case false => Async[F].delay(logger.warn("auth_callback_state_rate_limited")) *>
+              Async[F].pure(Left(problem(
+                AppError.TooManyRequests("Too many OAuth callback attempts. Start login again.")
+              )))
+        }
+      }
+
+    def fetchUserWithBackoff(code: String): F[Either[AppError, momo.api.auth.DiscordUser]] =
+      providerBackoff.isBlocked.flatMap {
+        case true => Async[F].delay(logger.warn("auth_oauth_provider_backoff_active")) *>
+            AppError.DependencyFailed(
+              "Discord OAuth provider is temporarily unavailable. Try again later."
+            ).asLeft[momo.api.auth.DiscordUser].pure[F]
+        case false => oauth.fetchUser(code).flatTap {
+            case Left(error) => providerBackoff.recordFailure(error).flatMap { opened =>
+                if opened then Async[F].delay(logger.warn("auth_oauth_provider_backoff_opened"))
+                else Async[F].unit
+              }
+            case Right(_) => providerBackoff.recordSuccess
+          }
       }
 
     def callbackProblem(reason: String, error: AppError): F[Response[F]] = Async[F]

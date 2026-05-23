@@ -295,6 +295,11 @@ final class OAuthStateCodec[F[_]: Sync: SecureRandom](config: AuthConfig, now: F
 trait RateLimiter[F[_]]:
   def allow(key: String): F[Boolean]
 
+trait OAuthProviderBackoff[F[_]]:
+  def isBlocked: F[Boolean]
+  def recordFailure(error: AppError): F[Boolean]
+  def recordSuccess: F[Unit]
+
 final class LoginRateLimiter[F[_]: Sync] private (
     ref: Ref[F, Map[String, LoginRateLimiter.Bucket]],
     maxPerMinute: Int,
@@ -354,6 +359,103 @@ object RedisRateLimiter:
       now: F[Instant],
   ): Resource[F, RedisRateLimiter[F]] = Redis[F].simple(config.url, RedisCodec.Utf8)
     .map(commands => fromCommands(commands, namespace, maxPerMinute, now))
+
+final class InMemoryOAuthProviderBackoff[F[_]: Sync] private (
+    ref: Ref[F, InMemoryOAuthProviderBackoff.State],
+    failureThreshold: Int,
+    backoff: scala.concurrent.duration.FiniteDuration,
+    now: F[Instant],
+) extends OAuthProviderBackoff[F]:
+  import InMemoryOAuthProviderBackoff.State
+
+  override def isBlocked: F[Boolean] = now.flatMap { current =>
+    ref.modify { state =>
+      state.blockedUntil match
+        case Some(until) if until.isAfter(current) => state -> true
+        case Some(_) => State.empty -> false
+        case None => state -> false
+    }
+  }
+
+  override def recordFailure(error: AppError): F[Boolean] = error match
+    case _: AppError.DependencyFailed => now.flatMap { current =>
+        ref.modify { state =>
+          val activeState = state.blockedUntil match
+            case Some(until) if until.isAfter(current) => state
+            case Some(_) => State.empty
+            case None => state
+          val nextFailures = activeState.failures + 1
+          if nextFailures >= failureThreshold then
+            State(0, Some(current.plusSeconds(backoff.toSeconds))) -> true
+          else activeState.copy(failures = nextFailures) -> false
+        }
+      }
+    case _ => recordSuccess.as(false)
+
+  override def recordSuccess: F[Unit] = ref.set(State.empty)
+
+object InMemoryOAuthProviderBackoff:
+  final case class State(failures: Int, blockedUntil: Option[Instant])
+  object State:
+    val empty: State = State(0, None)
+
+  def create[F[_]: Sync](
+      failureThreshold: Int,
+      backoff: scala.concurrent.duration.FiniteDuration,
+      now: F[Instant],
+  ): F[InMemoryOAuthProviderBackoff[F]] = Ref.of[F, State](State.empty)
+    .map(InMemoryOAuthProviderBackoff(_, failureThreshold, backoff, now))
+
+final class RedisOAuthProviderBackoff[F[_]: Sync] private (
+    commands: RedisCommands[F, String, String],
+    namespace: String,
+    failureThreshold: Int,
+    backoff: scala.concurrent.duration.FiniteDuration,
+    now: F[Instant],
+) extends OAuthProviderBackoff[F]:
+  private val backoffKey = s"momo:oauth-provider:$namespace:backoff"
+  private val failuresKey = s"momo:oauth-provider:$namespace:failures"
+
+  override def isBlocked: F[Boolean] = commands.get(backoffKey).map(_.isDefined)
+
+  override def recordFailure(error: AppError): F[Boolean] = error match
+    case _: AppError.DependencyFailed =>
+      for
+        count <- commands.incr(failuresKey)
+        _ <- if count == 1L then commands.expire(failuresKey, backoff).void else Sync[F].unit
+        opened <- if count >= failureThreshold.toLong then openBackoff else Sync[F].pure(false)
+      yield opened
+    case _ => recordSuccess.as(false)
+
+  override def recordSuccess: F[Unit] = commands.del(failuresKey).void
+
+  private def openBackoff: F[Boolean] =
+    for
+      current <- now
+      until = current.plusSeconds(backoff.toSeconds).getEpochSecond.toString
+      _ <- commands.set(backoffKey, until)
+      _ <- commands.expire(backoffKey, backoff).void
+      _ <- commands.del(failuresKey).void
+    yield true
+
+object RedisOAuthProviderBackoff:
+  def fromCommands[F[_]: Sync](
+      commands: RedisCommands[F, String, String],
+      namespace: String,
+      failureThreshold: Int,
+      backoff: scala.concurrent.duration.FiniteDuration,
+      now: F[Instant],
+  ): RedisOAuthProviderBackoff[F] =
+    RedisOAuthProviderBackoff(commands, namespace, failureThreshold, backoff, now)
+
+  def resource[F[_]: Async](
+      config: RedisConfig,
+      namespace: String,
+      failureThreshold: Int,
+      backoff: scala.concurrent.duration.FiniteDuration,
+      now: F[Instant],
+  ): Resource[F, RedisOAuthProviderBackoff[F]] = Redis[F].simple(config.url, RedisCodec.Utf8)
+    .map(commands => fromCommands(commands, namespace, failureThreshold, backoff, now))
 
 object SecureTokenGenerator:
   def token[F[_]: Functor: SecureRandom](byteLength: Int): F[String] = SecureRandom[F]

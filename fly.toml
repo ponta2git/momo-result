@@ -47,3 +47,8 @@ primary_region = "nrt"
     method = "GET"
     timeout = "5s"
     path = "/healthz"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory = "1gb"

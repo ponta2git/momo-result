@@ -54,6 +54,7 @@ flyctl status --app momo-result
 
 - app: `momo-result`
 - primary region: `nrt`
+- runtime VM: `shared-cpu-1x`, memory `1gb`
 - public URL: `https://momo-result.fly.dev`
 - health check: `/healthz`
 
@@ -200,13 +201,12 @@ HTTP health:
 
 ```sh
 curl -fsS https://momo-result.fly.dev/healthz
-curl -fsS https://momo-result.fly.dev/healthz/details
 ```
 
 期待値:
 
 - `/healthz`: `{"status":"ok"}`
-- `/healthz/details`: `status`, `database`, `redis`, `ocrAdmission` が `ok`
+- `/healthz/details`: 未認証では 401。管理者ログイン後に `status`, `database`, `redis`, `ocrAdmission` が `ok` であることを確認する。
 
 人間 smoke:
 

@@ -3,6 +3,7 @@
 目的: 初回デプロイ後の通常運用、障害確認、rollback、secret rotation、カスタムドメイン導入の手順をまとめる。
 
 本番 URL は初期状態では `https://momo-result.fly.dev`。DB は summit と共用の Neon PostgreSQL、Redis は Upstash Redis、runtime は Fly.io の単一 app `momo-result`。
+現在の Fly VM は `shared-cpu-1x` / memory `1gb` を前提にする。256MB では Java API と OCR worker が同居できず、nginx の `/healthz` upstream が `connection refused` になる。
 
 ## 1. 通常 deploy
 
@@ -18,7 +19,6 @@
 
 ```sh
 curl -fsS https://momo-result.fly.dev/healthz
-curl -fsS https://momo-result.fly.dev/healthz/details
 flyctl logs --app momo-result --no-tail
 ```
 
@@ -62,9 +62,7 @@ curl -fsS https://momo-result.fly.dev/healthz
 
 詳細 health:
 
-```sh
-curl -fsS https://momo-result.fly.dev/healthz/details
-```
+`/healthz/details` は管理者認証が必要。未認証の `curl` は 401 になる。
 
 期待値:
 
@@ -143,7 +141,6 @@ rollback 後:
 
 ```sh
 curl -fsS https://momo-result.fly.dev/healthz
-curl -fsS https://momo-result.fly.dev/healthz/details
 flyctl logs --app momo-result --no-tail
 ```
 
@@ -167,7 +164,7 @@ flyctl secrets import --app momo-result
 
 ```sh
 flyctl secrets list --app momo-result
-curl -fsS https://momo-result.fly.dev/healthz/details
+curl -fsS https://momo-result.fly.dev/healthz
 ```
 
 Discord secret rotation 後は OAuth login を確認する。Redis / DB secret rotation 後は `/healthz/details` と OCR受付を確認する。
@@ -190,7 +187,7 @@ flyctl secrets set DISCORD_REDIRECT_URI=https://<domain>/api/auth/callback --app
 ```
 
 5. GitHub Environment `production` の URL を `https://<domain>` に更新する。
-6. 新ドメインで `/healthz`, `/healthz/details`, OAuth login を確認する。
+6. 新ドメインで `/healthz`, 管理者ログイン後の `/healthz/details`, OAuth login を確認する。
 
 ## 10. エスカレーション基準
 

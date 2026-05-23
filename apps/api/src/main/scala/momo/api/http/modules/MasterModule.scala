@@ -18,7 +18,6 @@ import momo.api.endpoints.{
   UpdateSeasonMasterRequest,
 }
 import momo.api.http.{EndpointSecurity, IdempotencyReplay}
-import momo.api.repositories.IdempotencyRepository
 import momo.api.usecases.{
   CreateGameTitle, CreateMapMaster, CreateMemberAlias, CreateSeasonMaster, DeleteGameTitle,
   DeleteMapMaster, DeleteMemberAlias, DeleteSeasonMaster, ListGameTitles, ListIncidentMasters,
@@ -45,7 +44,7 @@ object MasterModule:
       createMemberAlias: CreateMemberAlias[F],
       updateMemberAlias: UpdateMemberAlias[F],
       deleteMemberAlias: DeleteMemberAlias[F],
-      idempotency: IdempotencyRepository[F],
+      idempotency: IdempotencyReplay.Guard[F],
       nowF: F[Instant],
       security: EndpointSecurity[F],
   ): List[ServerEndpoint[Any, F]] = List(

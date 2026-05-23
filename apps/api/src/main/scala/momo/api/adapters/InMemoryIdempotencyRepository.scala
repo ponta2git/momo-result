@@ -53,6 +53,27 @@ final class InMemoryIdempotencyRepository[F[_]: MonadThrow] private (
           case Some(existing) => (state, IdempotencyReservation.Replay(existing.response))
       }
 
+    override def reserveWithinAccountLimit(
+        entry: IdempotencyRecord,
+        now: Instant,
+        activeKeyLimitPerAccount: Int,
+    ): F[IdempotencyReservation] =
+      val pk = InMemoryIdempotencyRepository.Key(entry.key, entry.accountId, entry.endpoint)
+      ref.modify { state =>
+        state.get(pk) match
+          case Some(existing) if existing.requestHash != entry.requestHash =>
+            (state, IdempotencyReservation.Conflict)
+          case Some(existing) if existing.response.status == 0 =>
+            (state, IdempotencyReservation.InProgress)
+          case Some(existing) => (state, IdempotencyReservation.Replay(existing.response))
+          case None =>
+            val activeCount = state.values
+              .count(record => record.accountId == entry.accountId && record.expiresAt.isAfter(now))
+            if activeCount >= activeKeyLimitPerAccount then
+              (state, IdempotencyReservation.AccountLimitExceeded)
+            else (state.updated(pk, entry), IdempotencyReservation.Reserved)
+      }
+
     override def complete(
         key: String,
         accountId: AccountId,
@@ -97,6 +118,12 @@ final class InMemoryIdempotencyRepository[F[_]: MonadThrow] private (
   override def record(entry: IdempotencyRecord): F[Unit] = delegate.record(entry)
   override def reserve(entry: IdempotencyRecord): F[IdempotencyReservation] = delegate
     .reserve(entry)
+  override def reserveWithinAccountLimit(
+      entry: IdempotencyRecord,
+      now: Instant,
+      activeKeyLimitPerAccount: Int,
+  ): F[IdempotencyReservation] = delegate
+    .reserveWithinAccountLimit(entry, now, activeKeyLimitPerAccount)
   override def complete(
       key: String,
       accountId: AccountId,

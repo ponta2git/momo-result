@@ -12,7 +12,6 @@ import momo.api.endpoints.{
   HeldEventsEndpoints,
 }
 import momo.api.http.{EndpointSecurity, IdempotencyReplay}
-import momo.api.repositories.IdempotencyRepository
 import momo.api.usecases.{CreateHeldEvent, DeleteHeldEvent, ListHeldEvents}
 
 object HeldEventModule:
@@ -20,7 +19,7 @@ object HeldEventModule:
       listHeldEvents: ListHeldEvents[F],
       createHeldEvent: CreateHeldEvent[F],
       deleteHeldEvent: DeleteHeldEvent[F],
-      idempotency: IdempotencyRepository[F],
+      idempotency: IdempotencyReplay.Guard[F],
       nowF: F[Instant],
       security: EndpointSecurity[F],
   ): List[ServerEndpoint[Any, F]] = List(

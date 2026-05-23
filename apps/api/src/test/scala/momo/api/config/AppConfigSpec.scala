@@ -188,7 +188,7 @@ class AppConfigSpec extends CatsEffectSuite:
     }
   }
 
-  test("loadFromEnv reads export, read, and source image download limits") {
+  test("loadFromEnv reads export, read, mutation, and source image download limits") {
     load(
       prodEnv ++ Map(
         "EXPORT_ALL_RATE_LIMIT_PER_MINUTE" -> "4",
@@ -196,6 +196,8 @@ class AppConfigSpec extends CatsEffectSuite:
         "EXPORT_MAX_BYTES" -> "8388608",
         "SOURCE_IMAGE_DOWNLOAD_RATE_LIMIT_PER_MINUTE" -> "90",
         "READ_API_RATE_LIMIT_PER_MINUTE" -> "150",
+        "MUTATION_RATE_LIMIT_PER_MINUTE" -> "70",
+        "IDEMPOTENCY_ACTIVE_KEY_LIMIT_PER_ACCOUNT" -> "300",
         "SOURCE_IMAGE_ARCHIVE_MAX_BYTES" -> "12582912",
       )
     ).map { result =>
@@ -204,6 +206,8 @@ class AppConfigSpec extends CatsEffectSuite:
       assertEquals(result.map(_.resourceLimits.exportMaxBytes), Right(8388608L))
       assertEquals(result.map(_.resourceLimits.sourceImageDownloadRateLimitPerMinute), Right(90))
       assertEquals(result.map(_.resourceLimits.readApiRateLimitPerMinute), Right(150))
+      assertEquals(result.map(_.resourceLimits.mutationRateLimitPerMinute), Right(70))
+      assertEquals(result.map(_.resourceLimits.idempotencyActiveKeyLimitPerAccount), Right(300))
       assertEquals(result.map(_.resourceLimits.sourceImageArchiveMaxBytes), Right(12582912L))
     }
   }

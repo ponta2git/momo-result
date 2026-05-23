@@ -16,7 +16,6 @@ import momo.api.endpoints.{
   ProblemDetails, UpdateMatchDraftRequest,
 }
 import momo.api.http.{EndpointSecurity, IdempotencyReplay}
-import momo.api.repositories.IdempotencyRepository
 import momo.api.usecases.{
   CancelMatchDraft, CreateMatchDraft, GetMatchDraft, GetMatchDraftSourceImages, UpdateMatchDraft,
 }
@@ -31,7 +30,7 @@ object MatchDraftModule:
       cancelMatchDraft: CancelMatchDraft[F],
       getMatchDraftSourceImages: GetMatchDraftSourceImages[F],
       sourceImageDownloadRateLimiter: RateLimiter[F],
-      idempotency: IdempotencyRepository[F],
+      idempotency: IdempotencyReplay.Guard[F],
       nowF: F[Instant],
       security: EndpointSecurity[F],
   ): List[ServerEndpoint[Any, F]] = List(

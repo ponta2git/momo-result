@@ -14,7 +14,6 @@ import momo.api.endpoints.{
 }
 import momo.api.errors.AppError
 import momo.api.http.{EndpointSecurity, IdempotencyReplay}
-import momo.api.repositories.IdempotencyRepository
 import momo.api.usecases.{
   CreateLoginAccount, CreateLoginAccountCommand, ListLoginAccounts, UpdateLoginAccount,
   UpdateLoginAccountCommand,
@@ -25,7 +24,7 @@ object AdminAccountModule:
       listLoginAccounts: ListLoginAccounts[F],
       createLoginAccount: CreateLoginAccount[F],
       updateLoginAccount: UpdateLoginAccount[F],
-      idempotency: IdempotencyRepository[F],
+      idempotency: IdempotencyReplay.Guard[F],
       nowF: F[Instant],
       security: EndpointSecurity[F],
   ): List[ServerEndpoint[Any, F]] = List(

@@ -79,6 +79,11 @@ object HttpRoutes:
 
   def routes[F[_]: Async](deps: Dependencies[F]): Http4sApp[F] =
     val security = EndpointSecurity[F](AuthPolicy[F](deps.config, deps.roster, deps.loginAccounts))
+    val idempotencyGuard = IdempotencyReplay.Guard(
+      repository = deps.idempotency,
+      mutationRateLimiter = deps.rateLimiters.mutation,
+      activeKeyLimitPerAccount = deps.config.resourceLimits.idempotencyActiveKeyLimitPerAccount,
+    )
 
     val endpoints: List[ServerEndpoint[Any, F]] = HealthModule.routes[F](deps.healthDetails) :::
       UploadModule.routes[F](deps.uploadImage, deps.rateLimiters.upload, security) :::
@@ -91,14 +96,14 @@ object HttpRoutes:
         deps.rateLimiters.ocrJobCreate,
         deps.rateLimiters.ocrJobCreateGlobal,
         deps.rateLimiters.readApi,
-        deps.idempotency,
+        idempotencyGuard,
         deps.nowF,
         security,
       ) ::: HeldEventModule.routes[F](
         deps.listHeldEvents,
         deps.createHeldEvent,
         deps.deleteHeldEvent,
-        deps.idempotency,
+        idempotencyGuard,
         deps.nowF,
         security,
       ) ::: MatchDraftModule.routes[F](
@@ -108,7 +113,7 @@ object HttpRoutes:
         deps.cancelMatchDraft,
         deps.getMatchDraftSourceImages,
         deps.rateLimiters.sourceImageDownload,
-        deps.idempotency,
+        idempotencyGuard,
         deps.nowF,
         security,
       ) ::: ExportModule.routes[F](
@@ -123,7 +128,7 @@ object HttpRoutes:
         deps.updateMatch,
         deps.deleteMatch,
         deps.rateLimiters.readApi,
-        deps.idempotency,
+        idempotencyGuard,
         deps.nowF,
         security,
       ) ::: MasterModule.routes[F](
@@ -144,14 +149,14 @@ object HttpRoutes:
         deps.createMemberAlias,
         deps.updateMemberAlias,
         deps.deleteMemberAlias,
-        deps.idempotency,
+        idempotencyGuard,
         deps.nowF,
         security,
       ) ::: AdminAccountModule.routes[F](
         deps.listLoginAccounts,
         deps.createLoginAccount,
         deps.updateLoginAccount,
-        deps.idempotency,
+        idempotencyGuard,
         deps.nowF,
         security,
       )

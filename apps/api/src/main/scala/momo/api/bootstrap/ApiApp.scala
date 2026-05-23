@@ -365,6 +365,8 @@ object ApiApp:
         )
         val readApi: RateLimiter[F] = RedisRateLimiter
           .fromCommands(commands, "read-api", config.resourceLimits.readApiRateLimitPerMinute, now)
+        val mutation: RateLimiter[F] = RedisRateLimiter
+          .fromCommands(commands, "mutation", config.resourceLimits.mutationRateLimitPerMinute, now)
         val ocrJobCreate: RateLimiter[F] = RedisRateLimiter.fromCommands(
           commands,
           "ocr-job-create",
@@ -389,6 +391,7 @@ object ApiApp:
             exportAllLimiter,
             sourceImageDownload,
             readApi,
+            mutation,
             ocrJobCreate,
             ocrJobCreateGlobal,
           ),
@@ -412,6 +415,8 @@ object ApiApp:
             .create[F](config.resourceLimits.sourceImageDownloadRateLimitPerMinute, now)
           readApi <- LoginRateLimiter
             .create[F](config.resourceLimits.readApiRateLimitPerMinute, now)
+          mutation <- LoginRateLimiter
+            .create[F](config.resourceLimits.mutationRateLimitPerMinute, now)
           ocrJobCreate <- LoginRateLimiter
             .create[F](config.resourceLimits.ocrJobCreateRateLimitPerMinute, now)
           ocrJobCreateGlobal <- LoginRateLimiter
@@ -428,6 +433,7 @@ object ApiApp:
             exportAllLimiter,
             sourceImageDownload,
             readApi,
+            mutation,
             ocrJobCreate,
             ocrJobCreateGlobal,
           ),
@@ -442,31 +448,34 @@ object ApiApp:
       appSessions: AppSessionsRepository[F],
       idempotency: IdempotencyRepository[F],
       now: F[java.time.Instant],
-  ): Resource[F, Unit] = SourceImageOrphanReaper.resource[F](
-    imageStore = imageStore,
-    references = imageReferences,
-    olderThan = config.resourceLimits.imageOrphanOlderThan,
-    interval = config.resourceLimits.imageOrphanReaperInterval,
-    now = now,
-  ).flatMap(_ =>
-    StaleOcrJobReaper.resource[F](
-      jobs = ocrMaintenance,
-      staleAfter = config.resourceLimits.staleOcrJobAfter,
-      interval = config.resourceLimits.staleOcrJobReaperInterval,
+  ): Resource[F, Unit] =
+    val logger = LoggerFactory[F].getLogger
+    SourceImageOrphanReaper.resource[F](
+      imageStore = imageStore,
+      references = imageReferences,
+      olderThan = config.resourceLimits.imageOrphanOlderThan,
+      interval = config.resourceLimits.imageOrphanReaperInterval,
       now = now,
-    )
-  ).flatMap(_ =>
-    ExpiredSessionPruner.resource[F](
-      sessions = appSessions,
-      interval = config.resourceLimits.sessionPruneInterval,
-      now = now,
-    )
-  ).flatMap(_ =>
-    PeriodicMaintenance
-      .resource("idempotency_key_pruner", config.resourceLimits.sessionPruneInterval)(
-        now.flatMap(idempotency.cleanup).void
+    ).flatMap(_ =>
+      StaleOcrJobReaper.resource[F](
+        jobs = ocrMaintenance,
+        staleAfter = config.resourceLimits.staleOcrJobAfter,
+        interval = config.resourceLimits.staleOcrJobReaperInterval,
+        now = now,
       )
-  )
+    ).flatMap(_ =>
+      ExpiredSessionPruner.resource[F](
+        sessions = appSessions,
+        interval = config.resourceLimits.sessionPruneInterval,
+        now = now,
+      )
+    ).flatMap(_ =>
+      PeriodicMaintenance
+        .resource("idempotency_key_pruner", config.resourceLimits.sessionPruneInterval)(
+          now.flatMap(idempotency.cleanup)
+            .flatMap(deleted => logger.info(s"idempotency_key_pruner deleted=${deleted.toString}"))
+        )
+    )
 
   private def healthDetails[F[_]: Async](
       database: Option[F[Unit]],

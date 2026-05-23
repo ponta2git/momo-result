@@ -8,7 +8,8 @@ import org.http4s.{Method, Request, Status, Uri}
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.adapters.InMemoryIdempotencyRepository
-import momo.api.auth.AuthenticatedAccount
+import momo.api.auth.{AuthenticatedAccount, LoginRateLimiter}
+import momo.api.config.ResourceLimitsConfig
 import momo.api.domain.ids.{AccountId, MemberId}
 import momo.api.endpoints.ProblemDetails
 import momo.api.http.HttpAssertions.{assertProblem, jsonField}
@@ -16,6 +17,31 @@ import momo.api.http.HttpAssertions.{assertProblem, jsonField}
 final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
 
   private val app = ResourceFunFixture(wiredHttpAppResource("momo-api-idempotency"))
+  private val mutationRateLimitApp = ResourceFunFixture(configuredHttpAppResource(
+    "momo-api-mutation-rate-limit",
+    _.copy(resourceLimits = ResourceLimitsConfig.defaults.copy(mutationRateLimitPerMinute = 0)),
+  ))
+  private val activeKeyLimitApp = ResourceFunFixture(configuredHttpAppResource(
+    "momo-api-idempotency-active-key-limit",
+    _.copy(resourceLimits =
+      ResourceLimitsConfig.defaults
+        .copy(mutationRateLimitPerMinute = 100, idempotencyActiveKeyLimitPerAccount = 1)
+    ),
+  ))
+  private val directLimiterNow = java.time.Instant.parse("2026-05-14T00:00:00Z")
+
+  private def idempotencyGuard(
+      repo: InMemoryIdempotencyRepository[IO]
+  ): IO[IdempotencyReplay.Guard[IO]] =
+    idempotencyGuard(repo, mutationLimit = 100, activeKeyLimit = 100)
+
+  private def idempotencyGuard(
+      repo: InMemoryIdempotencyRepository[IO],
+      mutationLimit: Int,
+      activeKeyLimit: Int,
+  ): IO[IdempotencyReplay.Guard[IO]] = LoginRateLimiter
+    .create[IO](mutationLimit, IO.pure(directLimiterNow))
+    .map(limiter => IdempotencyReplay.Guard(repo, limiter, activeKeyLimit))
 
   private def heldEventReq(idemKey: Option[String], heldAt: String): Request[IO] =
     Request[IO](Method.POST, uri"/api/held-events")
@@ -59,6 +85,34 @@ final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite with HttpAppT
     yield ()
   }
 
+  mutationRateLimitApp.test(
+    "idempotency: JSON mutations without a key still use the common mutation rate limit"
+  ) { httpApp =>
+    httpApp.run(heldEventReq(None, "2024-02-02T00:00:00Z")).flatMap { response =>
+      assertProblem(response, Status.TooManyRequests, "TOO_MANY_REQUESTS", "mutation")
+    }
+  }
+
+  activeKeyLimitApp
+    .test("idempotency: active key limit blocks fresh keys but allows replay") { httpApp =>
+      for
+        first <- httpApp.run(heldEventReq(Some("key-limit-a"), "2024-02-03T00:00:00Z"))
+        _ = assertEquals(first.status, Status.Ok)
+        firstBody <- first.as[Json]
+        replay <- httpApp.run(heldEventReq(Some("key-limit-a"), "2024-02-03T00:00:00Z"))
+        replayBody <- replay.as[Json]
+        blocked <- httpApp.run(heldEventReq(Some("key-limit-b"), "2024-02-04T00:00:00Z"))
+        _ <- assertProblem(blocked, Status.TooManyRequests, "TOO_MANY_REQUESTS", "Idempotency-Key")
+        listRes <- httpApp
+          .run(Request[IO](Method.GET, uri"/api/held-events?limit=50").putHeaders(devReadHeader()))
+        listBody <- listRes.as[Json]
+      yield
+        assertEquals(replay.status, Status.Ok)
+        assertEquals(replayBody, firstBody)
+        val items = jsonField[List[Json]](listBody, "items")
+        assertEquals(items.size, 1)
+    }
+
   test("idempotency: in-flight same key returns a specific 409 code") {
     val account = AuthenticatedAccount(
       accountId = AccountId.unsafeFromString("account_ponta"),
@@ -69,9 +123,10 @@ final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite with HttpAppT
     val request = Json.obj("value" -> Json.fromString("same"))
     for
       repo <- InMemoryIdempotencyRepository.create[IO]
+      guard <- idempotencyGuard(repo)
       started <- Deferred[IO, Unit]
       first <- IdempotencyReplay.wrap[IO, Json, Json](
-        repo,
+        guard,
         Some("key-in-flight"),
         account,
         "POST /api/testing/idempotency",
@@ -81,7 +136,7 @@ final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite with HttpAppT
       ).start
       _ <- started.get
       second <- IdempotencyReplay.wrap[IO, Json, Json](
-        repo,
+        guard,
         Some("key-in-flight"),
         account,
         "POST /api/testing/idempotency",
@@ -108,9 +163,10 @@ final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite with HttpAppT
     val ok = Json.obj("ok" -> Json.fromBoolean(true))
     for
       repo <- InMemoryIdempotencyRepository.create[IO]
+      guard <- idempotencyGuard(repo)
       attempts <- Ref.of[IO, Int](0)
       first <- IdempotencyReplay.wrap[IO, Json, Json](
-        repo,
+        guard,
         Some("key-failed-mutation"),
         account,
         "POST /api/testing/idempotency",
@@ -120,7 +176,7 @@ final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite with HttpAppT
           IO.raiseError[Either[ProblemDetails.ProblemResponse, Json]](RuntimeException("boom")),
       ).attempt
       second <- IdempotencyReplay.wrap[IO, Json, Json](
-        repo,
+        guard,
         Some("key-failed-mutation"),
         account,
         "POST /api/testing/idempotency",
@@ -146,8 +202,9 @@ final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite with HttpAppT
     val stored = Json.obj("ok" -> Json.fromBoolean(true))
     for
       repo <- InMemoryIdempotencyRepository.create[IO]
+      guard <- idempotencyGuard(repo)
       first <- IdempotencyReplay.wrap[IO, Json, Json](
-        repo,
+        guard,
         Some("key-undecodable-replay"),
         account,
         "POST /api/testing/idempotency",
@@ -156,7 +213,7 @@ final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite with HttpAppT
         IO.pure(Right(stored)),
       )
       second <- IdempotencyReplay.wrap[IO, Json, Int](
-        repo,
+        guard,
         Some("key-undecodable-replay"),
         account,
         "POST /api/testing/idempotency",

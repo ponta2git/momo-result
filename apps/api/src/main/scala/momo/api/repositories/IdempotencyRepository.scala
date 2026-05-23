@@ -53,6 +53,7 @@ enum IdempotencyReservation derives CanEqual:
   case Replay(response: IdempotencyResponse)
   case InProgress
   case Conflict
+  case AccountLimitExceeded
 
 /**
  * Pure algebra for the `idempotency_keys` table. Mirrors the `HeldEventsAlg` shape so the same
@@ -80,6 +81,19 @@ trait IdempotencyAlg[F0[_]]:
    */
   def reserve(entry: IdempotencyRecord): F0[IdempotencyReservation]
 
+  /**
+   * Atomically reserve the composite key while capping live idempotency rows per account.
+   *
+   * Existing rows for the same `(key, accountId, endpoint)` must keep normal replay / conflict /
+   * in-progress semantics even when the account is already at the live-key limit. The limit applies
+   * only to fresh keys whose `expires_at` would still be in the future.
+   */
+  def reserveWithinAccountLimit(
+      entry: IdempotencyRecord,
+      now: Instant,
+      activeKeyLimitPerAccount: Int,
+  ): F0[IdempotencyReservation]
+
   def complete(
       key: String,
       accountId: AccountId,
@@ -106,6 +120,11 @@ trait IdempotencyRepository[F[_]]:
   def lookup(key: String, accountId: AccountId, endpoint: String): F[Option[IdempotencyRecord]]
   def record(entry: IdempotencyRecord): F[Unit]
   def reserve(entry: IdempotencyRecord): F[IdempotencyReservation]
+  def reserveWithinAccountLimit(
+      entry: IdempotencyRecord,
+      now: Instant,
+      activeKeyLimitPerAccount: Int,
+  ): F[IdempotencyReservation]
   def complete(
       key: String,
       accountId: AccountId,
@@ -132,6 +151,12 @@ object IdempotencyRepository:
       transactK(alg.lookup(key, accountId, endpoint))
     def record(entry: IdempotencyRecord): F[Unit] = transactK(alg.record(entry))
     def reserve(entry: IdempotencyRecord): F[IdempotencyReservation] = transactK(alg.reserve(entry))
+    def reserveWithinAccountLimit(
+        entry: IdempotencyRecord,
+        now: Instant,
+        activeKeyLimitPerAccount: Int,
+    ): F[IdempotencyReservation] =
+      transactK(alg.reserveWithinAccountLimit(entry, now, activeKeyLimitPerAccount))
     def complete(
         key: String,
         accountId: AccountId,

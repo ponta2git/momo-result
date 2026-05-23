@@ -8,6 +8,7 @@ final case class HttpRateLimiters[F[_]](
     matchExportAll: RateLimiter[F],
     sourceImageDownload: RateLimiter[F],
     readApi: RateLimiter[F],
+    mutation: RateLimiter[F],
     ocrJobCreate: RateLimiter[F],
     ocrJobCreateGlobal: RateLimiter[F],
 )

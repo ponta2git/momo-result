@@ -26,6 +26,8 @@ final case class ResourceLimitsConfig(
     sourceImageDownloadRateLimitPerMinute: Int,
     readApiRateLimitPerMinute: Int,
     sourceImageArchiveMaxBytes: Long,
+    mutationRateLimitPerMinute: Int,
+    idempotencyActiveKeyLimitPerAccount: Int,
     ocrJobCreateRateLimitPerMinute: Int,
     ocrJobCreateGlobalRateLimitPerMinute: Int,
     ocrActiveJobLimit: Int,
@@ -252,7 +254,7 @@ object AppConfig:
     (
       parseNonNegativeInt(env, "UPLOAD_RATE_LIMIT_PER_MINUTE", default = 20),
       loadExportResourceLimits(env),
-      parseNonNegativeInt(env, "READ_API_RATE_LIMIT_PER_MINUTE", default = 120),
+      loadApiResourceLimits(env),
       parseNonNegativeInt(env, "OCR_JOB_CREATE_RATE_LIMIT_PER_MINUTE", default = 10),
       parseNonNegativeInt(env, "OCR_JOB_CREATE_GLOBAL_RATE_LIMIT_PER_MINUTE", default = 20),
       parseNonNegativeInt(env, "OCR_ACTIVE_JOB_LIMIT", default = 12),
@@ -288,7 +290,7 @@ object AppConfig:
       (
           uploadRateLimit,
           exportLimits,
-          readApiRateLimit,
+          apiLimits,
           ocrJobCreateRateLimit,
           ocrJobCreateGlobalRateLimit,
           ocrActiveJobLimit,
@@ -316,8 +318,10 @@ object AppConfig:
           exportMaxRows = exportLimits.maxRows,
           exportMaxBytes = exportLimits.maxBytes,
           sourceImageDownloadRateLimitPerMinute = sourceImageDownloadRateLimit,
-          readApiRateLimitPerMinute = readApiRateLimit,
+          readApiRateLimitPerMinute = apiLimits.readRateLimitPerMinute,
           sourceImageArchiveMaxBytes = sourceImageArchiveMaxBytes,
+          mutationRateLimitPerMinute = apiLimits.mutationRateLimitPerMinute,
+          idempotencyActiveKeyLimitPerAccount = apiLimits.idempotencyActiveKeyLimitPerAccount,
           ocrJobCreateRateLimitPerMinute = ocrJobCreateRateLimit,
           ocrJobCreateGlobalRateLimitPerMinute = ocrJobCreateGlobalRateLimit,
           ocrActiveJobLimit = ocrActiveJobLimit,
@@ -348,6 +352,12 @@ object AppConfig:
       maxBytes: Long,
   )
 
+  private final case class ApiResourceLimits(
+      readRateLimitPerMinute: Int,
+      mutationRateLimitPerMinute: Int,
+      idempotencyActiveKeyLimitPerAccount: Int,
+  )
+
   private def loadExportResourceLimits(
       env: Map[String, String]
   ): Either[Throwable, ExportResourceLimits] = (
@@ -356,6 +366,14 @@ object AppConfig:
     parsePositiveInt(env, "EXPORT_MAX_ROWS", ResourceLimitsConfig.DefaultExportMaxRows),
     parsePositiveLong(env, "EXPORT_MAX_BYTES", ResourceLimitsConfig.DefaultExportMaxBytes),
   ).mapN(ExportResourceLimits.apply)
+
+  private def loadApiResourceLimits(
+      env: Map[String, String]
+  ): Either[Throwable, ApiResourceLimits] = (
+    parseNonNegativeInt(env, "READ_API_RATE_LIMIT_PER_MINUTE", default = 120),
+    parseNonNegativeInt(env, "MUTATION_RATE_LIMIT_PER_MINUTE", default = 60),
+    parseNonNegativeInt(env, "IDEMPOTENCY_ACTIVE_KEY_LIMIT_PER_ACCOUNT", default = 240),
+  ).mapN(ApiResourceLimits.apply)
 
   private[config] def parsePositiveInt(
       env: Map[String, String],
@@ -542,6 +560,8 @@ object ResourceLimitsConfig:
     sourceImageDownloadRateLimitPerMinute = 60,
     readApiRateLimitPerMinute = 120,
     sourceImageArchiveMaxBytes = DefaultSourceImageArchiveMaxBytes,
+    mutationRateLimitPerMinute = 60,
+    idempotencyActiveKeyLimitPerAccount = 240,
     ocrJobCreateRateLimitPerMinute = 10,
     ocrJobCreateGlobalRateLimitPerMinute = 20,
     ocrActiveJobLimit = 12,

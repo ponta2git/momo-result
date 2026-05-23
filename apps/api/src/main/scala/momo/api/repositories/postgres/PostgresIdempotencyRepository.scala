@@ -76,6 +76,53 @@ object PostgresIdempotency:
     expiresAt = row._9,
   )
 
+  private def classifyExisting(
+      existing: IdempotencyRecord,
+      entry: IdempotencyRecord,
+  ): IdempotencyReservation =
+    if existing.requestHash != entry.requestHash then IdempotencyReservation.Conflict
+    else if existing.response.status == 0 then IdempotencyReservation.InProgress
+    else IdempotencyReservation.Replay(existing.response)
+
+  private def lockAccount(accountId: AccountId): ConnectionIO[Unit] = sql"""
+        SELECT pg_advisory_xact_lock(hashtext(${accountId.value}), 0)
+      """.query[Unit].unique.void
+
+  private def activeKeyCount(accountId: AccountId, now: Instant): ConnectionIO[Long] = sql"""
+        SELECT count(*)
+        FROM idempotency_keys
+        WHERE account_id = $accountId
+          AND expires_at > $now
+      """.query[Long].unique
+
+  private def insertPending(entry: IdempotencyRecord): ConnectionIO[IdempotencyReservation] =
+    val hashArray = bytesToArray(entry.requestHash)
+    val headersJson = headersToJson(entry.response.headers)
+    sql"""
+        INSERT INTO idempotency_keys (
+          key, account_id, endpoint, request_hash, response_status,
+          response_headers, response_body, created_at, expires_at
+        ) VALUES (
+          ${entry.key}, ${entry.accountId}, ${entry.endpoint}, $hashArray,
+          ${entry.response.status}, $headersJson, ${Option.empty[Array[Byte]]},
+          ${entry.createdAt}, ${entry.expiresAt}
+        )
+        ON CONFLICT (key, account_id, endpoint) DO NOTHING
+      """.update.run.flatMap {
+      case 1 => IdempotencyReservation.Reserved.pure[ConnectionIO]
+      case _ => sql"""
+          SELECT key, account_id, endpoint, request_hash, response_status,
+                 response_headers, response_body, created_at, expires_at
+          FROM idempotency_keys
+          WHERE key = ${entry.key}
+            AND account_id = ${entry.accountId}
+            AND endpoint = ${entry.endpoint}
+        """.query[Row].option.map {
+          case Some(existing) => classifyExisting(toRecord(existing), entry)
+          case None => IdempotencyReservation.InProgress
+        }
+    }
+
   val alg: IdempotencyAlg[ConnectionIO] = new IdempotencyAlg[ConnectionIO]:
     override def lookup(
         key: String,
@@ -110,27 +157,19 @@ object PostgresIdempotency:
       }
 
     override def reserve(entry: IdempotencyRecord): ConnectionIO[IdempotencyReservation] =
-      val hashArray = bytesToArray(entry.requestHash)
-      val headersJson = headersToJson(entry.response.headers)
-      sql"""
-        INSERT INTO idempotency_keys (
-          key, account_id, endpoint, request_hash, response_status,
-          response_headers, response_body, created_at, expires_at
-        ) VALUES (
-          ${entry.key}, ${entry.accountId}, ${entry.endpoint}, $hashArray,
-          ${entry.response.status}, $headersJson, ${Option.empty[Array[Byte]]},
-          ${entry.createdAt}, ${entry.expiresAt}
-        )
-        ON CONFLICT (key, account_id, endpoint) DO NOTHING
-      """.update.run.flatMap {
-        case 1 => IdempotencyReservation.Reserved.pure[ConnectionIO]
-        case _ => lookup(entry.key, entry.accountId, entry.endpoint).map {
-            case Some(existing) if existing.requestHash != entry.requestHash =>
-              IdempotencyReservation.Conflict
-            case Some(existing) if existing.response.status == 0 =>
-              IdempotencyReservation.InProgress
-            case Some(existing) => IdempotencyReservation.Replay(existing.response)
-            case None => IdempotencyReservation.InProgress
+      insertPending(entry)
+
+    override def reserveWithinAccountLimit(
+        entry: IdempotencyRecord,
+        now: Instant,
+        activeKeyLimitPerAccount: Int,
+    ): ConnectionIO[IdempotencyReservation] = lockAccount(entry.accountId) *>
+      lookup(entry.key, entry.accountId, entry.endpoint).flatMap {
+        case Some(existing) => classifyExisting(existing, entry).pure[ConnectionIO]
+        case None => activeKeyCount(entry.accountId, now).flatMap { activeCount =>
+            if activeCount >= activeKeyLimitPerAccount.toLong then
+              IdempotencyReservation.AccountLimitExceeded.pure[ConnectionIO]
+            else insertPending(entry)
           }
       }
 

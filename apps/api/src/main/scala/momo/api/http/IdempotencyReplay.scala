@@ -11,7 +11,7 @@ import io.circe.syntax.*
 import io.circe.{Decoder, Encoder, Json, Printer}
 import org.slf4j.LoggerFactory
 
-import momo.api.auth.AuthenticatedAccount
+import momo.api.auth.{AuthenticatedAccount, RateLimiter}
 import momo.api.endpoints.ProblemDetails
 import momo.api.errors.AppError
 import momo.api.logging.SafeLog
@@ -37,6 +37,12 @@ private[http] object IdempotencyReplay:
   private val RetentionMillis: Long = 24L * 60L * 60L * 1000L
   private val ValidKeyPattern = "^[A-Za-z0-9._:-]{1,128}$".r
 
+  final case class Guard[F[_]](
+      repository: IdempotencyRepository[F],
+      mutationRateLimiter: RateLimiter[F],
+      activeKeyLimitPerAccount: Int,
+  )
+
   /**
    * @param key       the inbound `Idempotency-Key` header value
    * @param account   authenticated caller (PK component)
@@ -46,7 +52,7 @@ private[http] object IdempotencyReplay:
    * @param run       effect that performs the mutation; only invoked on Fresh
    */
   def wrap[F[_]: Async, Req, Resp](
-      idempotency: IdempotencyRepository[F],
+      guard: Guard[F],
       key: Option[String],
       account: AuthenticatedAccount,
       endpoint: String,
@@ -58,7 +64,11 @@ private[http] object IdempotencyReplay:
       Encoder[Resp],
       Decoder[Resp],
   ): F[Either[ProblemDetails.ProblemResponse, Resp]] = key match
-    case None => run
+    case None => enforceMutationRateLimit[F, Resp](guard, endpoint, account, keyPresent = false)
+        .flatMap {
+          case Some(problem) => Async[F].pure(Left(problem))
+          case None => run
+        }
     case Some(rawKey) if !isValidKey(rawKey) =>
       Async[F].pure(Left(ProblemDetails.from(AppError.ValidationFailed(
         "Idempotency-Key must be 1 to 128 characters using only A-Z, a-z, 0-9, dot, underscore, colon, or hyphen."
@@ -75,26 +85,74 @@ private[http] object IdempotencyReplay:
           createdAt = ts,
           expiresAt = ts.plusMillis(RetentionMillis),
         )
-        idempotency.reserve(pending).flatMap {
-          case IdempotencyReservation.Reserved => run.attempt.flatMap {
-              case Right(result) =>
-                handleFreshResult(idempotency, rawKey, account, endpoint, requestHash, result)
-              case Left(error) =>
-                logIdempotencyFailure(endpoint, account, rawKey, "run mutation", error) >>
-                  abandonReservation(idempotency, rawKey, account, endpoint, requestHash) >>
-                  Async[F].raiseError(error)
+        guard.repository.lookup(rawKey, account.accountId, endpoint).flatMap {
+          case Some(existing) =>
+            handleReservation(guard, rawKey, account, endpoint, requestHash, run)(
+              reservationForExisting(existing, requestHash)
+            )
+          case None =>
+            enforceMutationRateLimit[F, Resp](guard, endpoint, account, keyPresent = true).flatMap {
+              case Some(problem) => Async[F].pure(Left(problem))
+              case None => guard.repository
+                  .reserveWithinAccountLimit(pending, ts, guard.activeKeyLimitPerAccount)
+                  .flatMap(handleReservation(guard, rawKey, account, endpoint, requestHash, run))
             }
-          case IdempotencyReservation.Replay(response) =>
-            replayStoredBody[F, Resp](endpoint, account, rawKey, response)
-          case IdempotencyReservation.InProgress => Async[F].pure(Left(ProblemDetails.from(
-              AppError.IdempotencyInProgress("Idempotency-Key is already processing. Retry later.")
-            )))
-          case IdempotencyReservation.Conflict => Async[F]
-              .pure(Left(ProblemDetails.from(AppError.IdempotencyPayloadMismatch(
-                "Idempotency-Key was reused with a different request payload."
-              ))))
         }
       }
+
+  private def handleReservation[F[_]: Async, Resp: Encoder: Decoder](
+      guard: Guard[F],
+      key: String,
+      account: AuthenticatedAccount,
+      endpoint: String,
+      requestHash: Vector[Byte],
+      run: F[Either[ProblemDetails.ProblemResponse, Resp]],
+  )(reservation: IdempotencyReservation): F[Either[ProblemDetails.ProblemResponse, Resp]] =
+    reservation match
+      case IdempotencyReservation.Reserved => run.attempt.flatMap {
+          case Right(result) =>
+            handleFreshResult(guard.repository, key, account, endpoint, requestHash, result)
+          case Left(error) =>
+            logIdempotencyFailure(endpoint, account, key, "run mutation", error) >>
+              abandonReservation(guard.repository, key, account, endpoint, requestHash) >>
+              Async[F].raiseError(error)
+        }
+      case IdempotencyReservation.Replay(response) =>
+        replayStoredBody[F, Resp](endpoint, account, key, response)
+      case IdempotencyReservation.InProgress => Async[F].pure(Left(ProblemDetails.from(
+          AppError.IdempotencyInProgress("Idempotency-Key is already processing. Retry later.")
+        )))
+      case IdempotencyReservation.Conflict => Async[F]
+          .pure(Left(ProblemDetails.from(AppError.IdempotencyPayloadMismatch(
+            "Idempotency-Key was reused with a different request payload."
+          ))))
+      case IdempotencyReservation.AccountLimitExceeded =>
+        logAccountLimitExceeded(endpoint, account, guard.activeKeyLimitPerAccount) >>
+          Async[F].pure(Left(ProblemDetails.from(AppError.TooManyRequests(
+            "Too many active Idempotency-Key values. Retry later or reuse the key for the same operation."
+          ))))
+
+  private def reservationForExisting(
+      existing: IdempotencyRecord,
+      requestHash: Vector[Byte],
+  ): IdempotencyReservation =
+    if existing.requestHash != requestHash then IdempotencyReservation.Conflict
+    else if existing.response.status == 0 then IdempotencyReservation.InProgress
+    else IdempotencyReservation.Replay(existing.response)
+
+  private def enforceMutationRateLimit[F[_]: Async, A](
+      guard: Guard[F],
+      endpoint: String,
+      account: AuthenticatedAccount,
+      keyPresent: Boolean,
+  ): F[Option[ProblemDetails.ProblemResponse]] = guard.mutationRateLimiter
+    .allow(s"mutation:${account.accountId.value}").flatMap {
+      case true => Async[F].pure(None)
+      case false => logMutationRateLimited(endpoint, account, keyPresent) >> Async[F].pure(Some(
+          ProblemDetails
+            .from(AppError.TooManyRequests("Too many mutation requests. Try again later."))
+        ))
+    }
 
   private def abandonReservation[F[_]: Async](
       idempotency: IdempotencyRepository[F],
@@ -164,5 +222,24 @@ private[http] object IdempotencyReplay:
     val classes = SafeLog.throwableClasses(error)
     logger.error(s"Failed to $operation idempotency response endpoint=$endpoint accountId=${account
         .accountId.value} keyLength=${key.length} errorClasses=$classes")
+  }
+
+  private def logMutationRateLimited[F[_]: Async](
+      endpoint: String,
+      account: AuthenticatedAccount,
+      keyPresent: Boolean,
+  ): F[Unit] = Async[F].delay {
+    logger.warn(s"idempotency_mutation_rate_limited endpoint=$endpoint accountId=${account.accountId
+        .value} keyPresent=${keyPresent.toString}")
+  }
+
+  private def logAccountLimitExceeded[F[_]: Async](
+      endpoint: String,
+      account: AuthenticatedAccount,
+      limit: Int,
+  ): F[Unit] = Async[F].delay {
+    logger
+      .warn(s"idempotency_active_key_limit_exceeded endpoint=$endpoint accountId=${account.accountId
+          .value} limit=${limit.toString}")
   }
 end IdempotencyReplay

@@ -270,4 +270,14 @@ final class DbContractSpec extends IntegrationSuite:
     """.query[Int].option.transact(transactor)
     program.map(opt => assert(opt.isDefined, "idempotency_keys_expires_at_idx is missing"))
 
+  test("idempotency_keys has an account/expires_at index for active key limits"):
+    val program = sql"""
+      SELECT 1
+      FROM pg_indexes
+      WHERE schemaname = 'public'
+        AND tablename = 'idempotency_keys'
+        AND indexname = 'idempotency_keys_account_expires_at_idx'
+    """.query[Int].option.transact(transactor)
+    program.map(opt => assert(opt.isDefined, "idempotency_keys_account_expires_at_idx is missing"))
+
 end DbContractSpec

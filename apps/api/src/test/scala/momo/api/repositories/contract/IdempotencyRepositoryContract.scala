@@ -149,4 +149,39 @@ trait IdempotencyRepositoryContract:
       assertEquals(replay, IdempotencyReservation.Replay(completed))
       assertEquals(reserved, IdempotencyReservation.Reserved)
       assertEquals(reservedAgain, IdempotencyReservation.Reserved)
+
+  test("reserveWithinAccountLimit blocks fresh active keys but preserves existing key semantics"):
+    val pending = pendingRecord("k-account-limit-a")
+    val blocked = pendingRecord("k-account-limit-b")
+    val completed = IdempotencyResponse(200, Map("Content-Type" -> "application/json"), Vector(1))
+    for
+      repo <- freshRepo
+      first <- repo.reserveWithinAccountLimit(pending, now, activeKeyLimitPerAccount = 1)
+      inProgress <- repo.reserveWithinAccountLimit(pending, now, activeKeyLimitPerAccount = 1)
+      conflict <- repo.reserveWithinAccountLimit(
+        pending.copy(requestHash = Vector(9.toByte)),
+        now,
+        activeKeyLimitPerAccount = 1,
+      )
+      blockedResult <- repo.reserveWithinAccountLimit(blocked, now, activeKeyLimitPerAccount = 1)
+      blockedLookup <- repo.lookup(blocked.key, blocked.accountId, blocked.endpoint)
+      _ <- repo
+        .complete(pending.key, pending.accountId, pending.endpoint, pending.requestHash, completed)
+      replay <- repo.reserveWithinAccountLimit(pending, now, activeKeyLimitPerAccount = 1)
+    yield
+      assertEquals(first, IdempotencyReservation.Reserved)
+      assertEquals(inProgress, IdempotencyReservation.InProgress)
+      assertEquals(conflict, IdempotencyReservation.Conflict)
+      assertEquals(blockedResult, IdempotencyReservation.AccountLimitExceeded)
+      assertEquals(blockedLookup, None)
+      assertEquals(replay, IdempotencyReservation.Replay(completed))
+
+  test("reserveWithinAccountLimit does not count expired records"):
+    val expired = record("k-expired-limit", draftEndpoint, defaultHash, now, defaultResponse)
+    val fresh = pendingRecord("k-fresh-after-expired")
+    for
+      repo <- freshRepo
+      _ <- repo.record(expired)
+      reserved <- repo.reserveWithinAccountLimit(fresh, now, activeKeyLimitPerAccount = 1)
+    yield assertEquals(reserved, IdempotencyReservation.Reserved)
 end IdempotencyRepositoryContract

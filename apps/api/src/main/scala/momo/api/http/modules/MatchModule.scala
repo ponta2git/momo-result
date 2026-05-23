@@ -14,7 +14,6 @@ import momo.api.endpoints.{
   MatchListResponse, MatchSummaryResponse, MatchesEndpoints, UpdateMatchRequest,
 }
 import momo.api.http.{EndpointSecurity, IdempotencyReplay}
-import momo.api.repositories.IdempotencyRepository
 import momo.api.usecases.{ConfirmMatch, DeleteMatch, GetMatch, ListMatches, UpdateMatch}
 
 object MatchModule:
@@ -25,7 +24,7 @@ object MatchModule:
       updateMatch: UpdateMatch[F],
       deleteMatch: DeleteMatch[F],
       readRateLimiter: RateLimiter[F],
-      idempotency: IdempotencyRepository[F],
+      idempotency: IdempotencyReplay.Guard[F],
       nowF: F[Instant],
       security: EndpointSecurity[F],
   ): List[ServerEndpoint[Any, F]] = List(

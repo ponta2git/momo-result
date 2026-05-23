@@ -16,7 +16,6 @@ import momo.api.endpoints.{
 }
 import momo.api.errors.AppError
 import momo.api.http.{EndpointSecurity, IdempotencyReplay}
-import momo.api.repositories.IdempotencyRepository
 import momo.api.usecases.{
   CancelOcrJob, CreateOcrJob, CreatedOcrJob, GetOcrDraft, GetOcrDraftsBulk, GetOcrJob,
 }
@@ -33,7 +32,7 @@ object OcrModule:
       createRateLimiter: RateLimiter[F],
       globalCreateRateLimiter: RateLimiter[F],
       readRateLimiter: RateLimiter[F],
-      idempotency: IdempotencyRepository[F],
+      idempotency: IdempotencyReplay.Guard[F],
       nowF: F[Instant],
       security: EndpointSecurity[F],
   ): List[ServerEndpoint[Any, F]] = List(

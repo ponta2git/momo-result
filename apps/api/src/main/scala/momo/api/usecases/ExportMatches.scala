@@ -1,8 +1,11 @@
 package momo.api.usecases
 
+import java.nio.charset.StandardCharsets
+
 import cats.Monad
 import cats.syntax.all.*
 
+import momo.api.config.ResourceLimitsConfig
 import momo.api.domain.ids.*
 import momo.api.domain.{
   MapMaster, MatchExportFile, MatchExportFormat, MatchExportRow, MatchExportScope, MatchRecord,
@@ -18,33 +21,51 @@ final class ExportMatches[F[_]: Monad](
     members: MembersRepository[F],
     mapMasters: MapMastersRepository[F],
     seasonMasters: SeasonMastersRepository[F],
+    limits: ExportMatches.Limits = ExportMatches.Limits.defaults,
 ):
+  import ExportMatches.*
+
   def run(
       format: MatchExportFormat,
       scope: MatchExportScope,
   ): F[Either[AppError, MatchExportFile]] =
     for
-      selected <- matches.list(scopeToFilter(scope))
-      sequenceMatches <- loadSequenceMatches(scope, selected)
-      memberRows <- members.list
-      mapRows <- mapMasters.list(None)
-      seasonRows <- seasonMasters.list(None)
-    yield scope match
-      case MatchExportScope.Match(id) if selected.isEmpty =>
-        AppError.NotFound("match", id.value).asLeft
-      case _ => buildRows(
-          selected = selected,
-          allMatches = sequenceMatches,
-          members = memberRows,
-          maps = mapRows,
-          seasons = seasonRows,
-        ).map { rows =>
-          MatchExportFile(
-            fileName = s"momo-results-${scope.filePart}.${format.extension}",
-            contentType = format.contentType,
-            body = MatchExportRenderer.render(format, rows),
-          )
-        }
+      selected <- matches.list(scopeToFilter(scope).copy(limit = Some(selectedMatchLimit)))
+      result <- scope match
+        case MatchExportScope.Match(id) if selected.isEmpty =>
+          AppError.NotFound("match", id.value).asLeft[MatchExportFile].pure[F]
+        case _ => runBounded(format, scope, selected)
+    yield result
+
+  private def runBounded(
+      format: MatchExportFormat,
+      scope: MatchExportScope,
+      selected: List[MatchRecord],
+  ): F[Either[AppError, MatchExportFile]] = selectedRowsUpperBound(selected) match
+    case Some(rowCount) => rowLimitError(rowCount).asLeft[MatchExportFile].pure[F]
+    case None =>
+      for
+        sequenceMatches <- loadSequenceMatches(scope, selected)
+        memberRows <- members.list
+        mapRows <- mapMasters.list(None)
+        seasonRows <- seasonMasters.list(None)
+      yield buildRows(
+        selected = selected,
+        allMatches = sequenceMatches,
+        members = memberRows,
+        maps = mapRows,
+        seasons = seasonRows,
+      ).flatMap { rows =>
+        for
+          _ <- ensureRowLimit(rows.length)
+          body = MatchExportRenderer.render(format, rows)
+          _ <- ensureByteLimit(body)
+        yield MatchExportFile(
+          fileName = s"momo-results-${scope.filePart}.${format.extension}",
+          contentType = format.contentType,
+          body = body,
+        )
+      }
 
   private def scopeToFilter(scope: MatchExportScope): MatchesRepository.ListFilter = scope match
     case MatchExportScope.All => MatchesRepository.ListFilter()
@@ -141,3 +162,41 @@ final class ExportMatches[F[_]: Monad](
     val ak = (a.playedAt.toEpochMilli, a.heldEventId.value, a.matchNoInEvent.value, a.id.value)
     val bk = (b.playedAt.toEpochMilli, b.heldEventId.value, b.matchNoInEvent.value, b.id.value)
     ak < bk
+
+  private def selectedMatchLimit: Int =
+    ((limits.maxRows + MatchRowsPerMatch - 1) / MatchRowsPerMatch) + 1
+
+  private def selectedRowsUpperBound(selected: List[MatchRecord]): Option[Int] = Option
+    .when(selected.length >= selectedMatchLimit)(selected.length * MatchRowsPerMatch)
+
+  private def ensureRowLimit(rowCount: Int): Either[AppError, Unit] = Either
+    .cond(rowCount <= limits.maxRows, (), rowLimitError(rowCount))
+
+  private def ensureByteLimit(body: String): Either[AppError, Unit] =
+    val bodyBytes = body.getBytes(StandardCharsets.UTF_8).length
+    Either.cond(
+      bodyBytes.toLong <= limits.maxBytes,
+      (),
+      AppError.PayloadTooLarge(
+        s"Match export has $bodyBytes bytes, exceeding the configured limit of ${limits
+            .maxBytes} bytes. Narrow the export scope."
+      ),
+    )
+
+  private def rowLimitError(rowCount: Int): AppError = AppError
+    .PayloadTooLarge(s"Match export has $rowCount rows, exceeding the configured limit of ${limits
+        .maxRows} rows. Narrow the export scope.")
+
+object ExportMatches:
+  private val MatchRowsPerMatch: Int = 4
+
+  final case class Limits(maxRows: Int, maxBytes: Long)
+
+  object Limits:
+    val defaults: Limits = Limits(
+      maxRows = ResourceLimitsConfig.DefaultExportMaxRows,
+      maxBytes = ResourceLimitsConfig.DefaultExportMaxBytes,
+    )
+
+    def fromResourceLimits(config: ResourceLimitsConfig): Limits =
+      Limits(maxRows = config.exportMaxRows, maxBytes = config.exportMaxBytes)

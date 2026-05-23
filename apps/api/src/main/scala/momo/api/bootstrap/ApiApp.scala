@@ -351,6 +351,12 @@ object ApiApp:
           .fromCommands(commands, "upload", config.resourceLimits.uploadRateLimitPerMinute, now)
         val exportLimiter: RateLimiter[F] = RedisRateLimiter
           .fromCommands(commands, "export", config.resourceLimits.exportRateLimitPerMinute, now)
+        val exportAllLimiter: RateLimiter[F] = RedisRateLimiter.fromCommands(
+          commands,
+          "export-all",
+          config.resourceLimits.exportAllRateLimitPerMinute,
+          now,
+        )
         val sourceImageDownload: RateLimiter[F] = RedisRateLimiter.fromCommands(
           commands,
           "source-image-download",
@@ -380,6 +386,7 @@ object ApiApp:
           HttpRateLimiters(
             upload,
             exportLimiter,
+            exportAllLimiter,
             sourceImageDownload,
             readApi,
             ocrJobCreate,
@@ -399,6 +406,8 @@ object ApiApp:
           upload <- LoginRateLimiter.create[F](config.resourceLimits.uploadRateLimitPerMinute, now)
           exportLimiter <- LoginRateLimiter
             .create[F](config.resourceLimits.exportRateLimitPerMinute, now)
+          exportAllLimiter <- LoginRateLimiter
+            .create[F](config.resourceLimits.exportAllRateLimitPerMinute, now)
           sourceImageDownload <- LoginRateLimiter
             .create[F](config.resourceLimits.sourceImageDownloadRateLimitPerMinute, now)
           readApi <- LoginRateLimiter
@@ -416,6 +425,7 @@ object ApiApp:
           HttpRateLimiters(
             upload,
             exportLimiter,
+            exportAllLimiter,
             sourceImageDownload,
             readApi,
             ocrJobCreate,
@@ -578,7 +588,13 @@ object ApiApp:
       allowedMemberIds = members.list.map(_.map(_.id).toSet),
     )
     val listMatches = ListMatches[F](matchList)
-    val exportMatches = ExportMatches[F](matches, members, mapMasters, seasonMasters)
+    val exportMatches = ExportMatches[F](
+      matches,
+      members,
+      mapMasters,
+      seasonMasters,
+      ExportMatches.Limits.fromResourceLimits(config.resourceLimits),
+    )
     val getMatch = GetMatch[F](matches)
     val updateMatch = UpdateMatch[F](
       heldEvents = heldEvents,

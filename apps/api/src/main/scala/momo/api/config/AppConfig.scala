@@ -20,6 +20,9 @@ final case class RedisConfig(
 final case class ResourceLimitsConfig(
     uploadRateLimitPerMinute: Int,
     exportRateLimitPerMinute: Int,
+    exportAllRateLimitPerMinute: Int,
+    exportMaxRows: Int,
+    exportMaxBytes: Long,
     sourceImageDownloadRateLimitPerMinute: Int,
     readApiRateLimitPerMinute: Int,
     sourceImageArchiveMaxBytes: Long,
@@ -248,7 +251,7 @@ object AppConfig:
   ).flatMap { case (sourceImageDownloadRateLimit, sourceImageArchiveMaxBytes) =>
     (
       parseNonNegativeInt(env, "UPLOAD_RATE_LIMIT_PER_MINUTE", default = 20),
-      parseNonNegativeInt(env, "EXPORT_RATE_LIMIT_PER_MINUTE", default = 30),
+      loadExportResourceLimits(env),
       parseNonNegativeInt(env, "READ_API_RATE_LIMIT_PER_MINUTE", default = 120),
       parseNonNegativeInt(env, "OCR_JOB_CREATE_RATE_LIMIT_PER_MINUTE", default = 10),
       parseNonNegativeInt(env, "OCR_JOB_CREATE_GLOBAL_RATE_LIMIT_PER_MINUTE", default = 20),
@@ -284,7 +287,7 @@ object AppConfig:
     ).mapN {
       (
           uploadRateLimit,
-          exportRateLimit,
+          exportLimits,
           readApiRateLimit,
           ocrJobCreateRateLimit,
           ocrJobCreateGlobalRateLimit,
@@ -308,7 +311,10 @@ object AppConfig:
       ) =>
         ResourceLimitsConfig(
           uploadRateLimitPerMinute = uploadRateLimit,
-          exportRateLimitPerMinute = exportRateLimit,
+          exportRateLimitPerMinute = exportLimits.rateLimitPerMinute,
+          exportAllRateLimitPerMinute = exportLimits.allRateLimitPerMinute,
+          exportMaxRows = exportLimits.maxRows,
+          exportMaxBytes = exportLimits.maxBytes,
           sourceImageDownloadRateLimitPerMinute = sourceImageDownloadRateLimit,
           readApiRateLimitPerMinute = readApiRateLimit,
           sourceImageArchiveMaxBytes = sourceImageArchiveMaxBytes,
@@ -334,6 +340,22 @@ object AppConfig:
         )
     }
   }.liftTo[F]
+
+  private final case class ExportResourceLimits(
+      rateLimitPerMinute: Int,
+      allRateLimitPerMinute: Int,
+      maxRows: Int,
+      maxBytes: Long,
+  )
+
+  private def loadExportResourceLimits(
+      env: Map[String, String]
+  ): Either[Throwable, ExportResourceLimits] = (
+    parseNonNegativeInt(env, "EXPORT_RATE_LIMIT_PER_MINUTE", default = 30),
+    parseNonNegativeInt(env, "EXPORT_ALL_RATE_LIMIT_PER_MINUTE", default = 6),
+    parsePositiveInt(env, "EXPORT_MAX_ROWS", ResourceLimitsConfig.DefaultExportMaxRows),
+    parsePositiveLong(env, "EXPORT_MAX_BYTES", ResourceLimitsConfig.DefaultExportMaxBytes),
+  ).mapN(ExportResourceLimits.apply)
 
   private[config] def parsePositiveInt(
       env: Map[String, String],
@@ -505,6 +527,8 @@ object RedisConfig:
 object ResourceLimitsConfig:
   val DefaultRequestMaxBytes: Long = 256L * 1024L
   val DefaultUploadRequestMaxBytes: Long = 3L * 1024L * 1024L + 64L * 1024L
+  val DefaultExportMaxRows: Int = 20000
+  val DefaultExportMaxBytes: Long = 16L * 1024L * 1024L
   val DefaultSourceImageArchiveMaxBytes: Long = 10L * 1024L * 1024L
   val DefaultImageUploadUnreferencedBytesLimit: Long = 64L * 1024L * 1024L
   val DefaultImageUploadStorageMinFreeBytes: Long = 256L * 1024L * 1024L
@@ -512,6 +536,9 @@ object ResourceLimitsConfig:
   val defaults: ResourceLimitsConfig = ResourceLimitsConfig(
     uploadRateLimitPerMinute = 20,
     exportRateLimitPerMinute = 30,
+    exportAllRateLimitPerMinute = 6,
+    exportMaxRows = DefaultExportMaxRows,
+    exportMaxBytes = DefaultExportMaxBytes,
     sourceImageDownloadRateLimitPerMinute = 60,
     readApiRateLimitPerMinute = 120,
     sourceImageArchiveMaxBytes = DefaultSourceImageArchiveMaxBytes,

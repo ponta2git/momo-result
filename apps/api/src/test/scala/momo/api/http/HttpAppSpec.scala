@@ -77,6 +77,14 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
     "momo-api-export-rate",
     _.copy(resourceLimits = ResourceLimitsConfig.defaults.copy(exportRateLimitPerMinute = 0)),
   ))
+  private val exportAllRateLimitApp = ResourceFunFixture(configuredHttpAppResource(
+    "momo-api-export-all-rate",
+    _.copy(resourceLimits = ResourceLimitsConfig.defaults.copy(exportAllRateLimitPerMinute = 0)),
+  ))
+  private val exportSizeLimitApp = ResourceFunFixture(configuredHttpAppResource(
+    "momo-api-export-size",
+    _.copy(resourceLimits = ResourceLimitsConfig.defaults.copy(exportMaxBytes = 1L)),
+  ))
   private val sourceImageDownloadRateLimitApp = ResourceFunFixture(configuredHttpAppResource(
     "momo-api-source-image-download-rate",
     _.copy(resourceLimits =
@@ -486,13 +494,45 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
       )
     }
 
-  exportRateLimitApp.test("export endpoint applies per-member rate limits") { httpApp =>
-    val request = Request[IO](Method.GET, uri"/api/exports/matches?format=tsv")
+  exportRateLimitApp.test("scoped export endpoint applies per-member rate limits") { httpApp =>
+    val request = Request[IO](Method.GET, uri"/api/exports/matches?format=tsv&matchId=match-1")
       .putHeaders(devReadHeader())
     httpApp.run(request).flatMap(response =>
       assertProblem(response, Status.TooManyRequests, "TOO_MANY_REQUESTS", "Too many exports")
     )
   }
+
+  exportAllRateLimitApp
+    .test("all-match export endpoint uses a separate per-member rate limit") { httpApp =>
+      val request = Request[IO](Method.GET, uri"/api/exports/matches?format=tsv")
+        .putHeaders(devReadHeader())
+      httpApp.run(request).flatMap(response =>
+        assertProblem(response, Status.TooManyRequests, "TOO_MANY_REQUESTS", "Too many exports")
+      )
+    }
+
+  exportAllRateLimitApp
+    .test("all-match export rate limit does not block scoped exports") { httpApp =>
+      val request = Request[IO](Method.GET, uri"/api/exports/matches?format=tsv&matchId=missing")
+        .putHeaders(devReadHeader())
+      httpApp.run(request).flatMap(response =>
+        assertProblem(response, Status.NotFound, "NOT_FOUND", "match was not found")
+      )
+    }
+
+  exportSizeLimitApp
+    .test("export endpoint rejects responses above configured byte limit") { httpApp =>
+      val request = Request[IO](Method.GET, uri"/api/exports/matches?format=csv")
+        .putHeaders(devReadHeader())
+      httpApp.run(request).flatMap(response =>
+        assertProblem(
+          response,
+          Status.PayloadTooLarge,
+          "PAYLOAD_TOO_LARGE",
+          "exceeding the configured limit of 1 bytes",
+        )
+      )
+    }
 
   readRateLimitApp.test("matches list endpoint applies per-member read rate limits") { httpApp =>
     val request = Request[IO](Method.GET, uri"/api/matches").putHeaders(devReadHeader())

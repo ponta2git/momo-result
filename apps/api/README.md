@@ -92,6 +92,10 @@ afterAll { teardownIo.unsafeRunSync() }
 | `IMAGE_TMP_DIR` | 一時ディレクトリ配下の共有パス | OCR Worker と共有する一時画像ディレクトリ |
 | `DEV_MEMBER_IDS` | 開発用メンバーIDのカンマ区切り | 試合参加者として許可する固定4名の `member_*` ID |
 | `READ_API_RATE_LIMIT_PER_MINUTE` | `120` | OCR status / OCR draft / matches list の account 別 read API rate limit |
+| `EXPORT_RATE_LIMIT_PER_MINUTE` | `30` | scope指定CSV/TSV export の account 別 rate limit |
+| `EXPORT_ALL_RATE_LIMIT_PER_MINUTE` | `6` | 全件CSV/TSV export の account 別 rate limit |
+| `EXPORT_MAX_ROWS` | `20000` | 同期CSV/TSV export の最大明細行数 |
+| `EXPORT_MAX_BYTES` | `16777216` | 同期CSV/TSV export の最大レスポンスbytes |
 | `OCR_OUTBOX_RECOVERY_INTERVAL_SECONDS` | `1800` | Redis publish の即時配送に失敗した OCR outbox を再配送する低頻度 recovery 間隔 |
 | `OCR_REDIS_DEAD_LETTER_STREAM` | `momo:ocr:jobs:dead` | OCR worker が配送失敗を退避する dead-letter stream |
 | `OCR_OUTBOX_DUE_BACKLOG_LIMIT` | `24` | due `PENDING` + expired `IN_FLIGHT` outbox がこの件数を超えたら OCR 新規受付を一時停止 |

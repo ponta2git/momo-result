@@ -3,12 +3,14 @@ package momo.api.usecases
 import java.time.Instant
 
 import cats.effect.IO
+import cats.syntax.all.*
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.adapters.{
   InMemoryGameTitlesRepository, InMemoryMapMastersRepository, InMemoryMatchesRepository,
   InMemoryMembersRepository, InMemorySeasonMastersRepository,
 }
+import momo.api.config.ResourceLimitsConfig
 import momo.api.domain.ids.*
 import momo.api.domain.{MatchExportFormat, MatchExportScope, MatchRecord}
 import momo.api.errors.AppError
@@ -47,12 +49,40 @@ final class ExportMatchesSpec extends MomoCatsEffectSuite:
           "Spring\t1\tponta\tEast\t2026-05-07\t1\t4\teu\t4\t100\t50\t0\t0\t0\t0\t0\t0\r\n",
       )
 
+  test("rejects an export when rendered rows exceed the configured row limit"):
+    for
+      usecase <- createUsecaseWithMatches(
+        count = 2,
+        limits = ExportMatches.Limits(maxRows = 5, maxBytes = Long.MaxValue),
+      )
+      result <- usecase.run(MatchExportFormat.Csv, MatchExportScope.All)
+    yield assertAppError(result, "PAYLOAD_TOO_LARGE", "exceeding the configured limit of 5 rows")
+
+  test("rejects an export when rendered bytes exceed the configured byte limit"):
+    for
+      usecase <- createUsecaseWithMatches(
+        count = 1,
+        limits = ExportMatches
+          .Limits(maxRows = ResourceLimitsConfig.DefaultExportMaxRows, maxBytes = 10L),
+      )
+      result <- usecase.run(MatchExportFormat.Csv, MatchExportScope.All)
+    yield assertAppError(result, "PAYLOAD_TOO_LARGE", "exceeding the configured limit of 10 bytes")
+
   private def createUsecase(): IO[ExportMatches[IO]] = createUsecaseSeeded(seedMatch = false)
 
   private def createUsecaseWithMatch(): IO[ExportMatches[IO]] =
     createUsecaseSeeded(seedMatch = true)
 
   private def createUsecaseSeeded(seedMatch: Boolean): IO[ExportMatches[IO]] =
+    createUsecaseWithMatches(
+      count = if seedMatch then 1 else 0,
+      limits = ExportMatches.Limits.defaults,
+    )
+
+  private def createUsecaseWithMatches(
+      count: Int,
+      limits: ExportMatches.Limits,
+  ): IO[ExportMatches[IO]] =
     for
       matches <- InMemoryMatchesRepository.create[IO]
       members <- InMemoryMembersRepository.create[IO](MatchFixtures.members(memberValues, now))
@@ -60,18 +90,18 @@ final class ExportMatchesSpec extends MomoCatsEffectSuite:
       maps <- InMemoryMapMastersRepository.create[IO]
       seasons <- InMemorySeasonMastersRepository.create[IO]
       _ <- MatchFixtures.seedWorldMasters(gameTitles, maps, seasons, titleId, mapId, seasonId, now)
-      _ <- if seedMatch then matches.create(matchRecord()) else IO.unit
-    yield ExportMatches[IO](matches, members, maps, seasons)
+      _ <- (1 to count).toList.traverse_(index => matches.create(matchRecord(index)))
+    yield ExportMatches[IO](matches, members, maps, seasons, limits)
 
-  private def matchRecord(): MatchRecord = MatchFixtures.matchRecord(
-    id = MatchId.unsafeFromString("match-1"),
+  private def matchRecord(index: Int): MatchRecord = MatchFixtures.matchRecord(
+    id = MatchId.unsafeFromString(s"match-$index"),
     heldEventId = heldEventId,
-    matchNoInEvent = 1,
+    matchNoInEvent = index,
     titleId = titleId,
     seasonId = seasonId,
     mapId = mapId,
-    playedAt = now,
-    createdAt = now,
+    playedAt = now.plusSeconds(index.toLong),
+    createdAt = now.plusSeconds(index.toLong),
     memberValues = memberValues,
     totalAssetsDraftId = None,
     revenueDraftId = None,

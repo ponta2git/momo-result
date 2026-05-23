@@ -188,14 +188,20 @@ class AppConfigSpec extends CatsEffectSuite:
     }
   }
 
-  test("loadFromEnv reads read and source image download limits") {
+  test("loadFromEnv reads export, read, and source image download limits") {
     load(
       prodEnv ++ Map(
+        "EXPORT_ALL_RATE_LIMIT_PER_MINUTE" -> "4",
+        "EXPORT_MAX_ROWS" -> "12000",
+        "EXPORT_MAX_BYTES" -> "8388608",
         "SOURCE_IMAGE_DOWNLOAD_RATE_LIMIT_PER_MINUTE" -> "90",
         "READ_API_RATE_LIMIT_PER_MINUTE" -> "150",
         "SOURCE_IMAGE_ARCHIVE_MAX_BYTES" -> "12582912",
       )
     ).map { result =>
+      assertEquals(result.map(_.resourceLimits.exportAllRateLimitPerMinute), Right(4))
+      assertEquals(result.map(_.resourceLimits.exportMaxRows), Right(12000))
+      assertEquals(result.map(_.resourceLimits.exportMaxBytes), Right(8388608L))
       assertEquals(result.map(_.resourceLimits.sourceImageDownloadRateLimitPerMinute), Right(90))
       assertEquals(result.map(_.resourceLimits.readApiRateLimitPerMinute), Right(150))
       assertEquals(result.map(_.resourceLimits.sourceImageArchiveMaxBytes), Right(12582912L))

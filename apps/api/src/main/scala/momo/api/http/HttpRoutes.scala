@@ -111,8 +111,12 @@ object HttpRoutes:
         deps.idempotency,
         deps.nowF,
         security,
-      ) ::: ExportModule.routes[F](deps.exportMatches, deps.rateLimiters.matchExport, security) :::
-      MatchModule.routes[F](
+      ) ::: ExportModule.routes[F](
+        deps.exportMatches,
+        deps.rateLimiters.matchExport,
+        deps.rateLimiters.matchExportAll,
+        security,
+      ) ::: MatchModule.routes[F](
         deps.confirmMatch,
         deps.listMatches,
         deps.getMatch,

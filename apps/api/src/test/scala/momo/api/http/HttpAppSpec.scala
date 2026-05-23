@@ -83,6 +83,10 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
       ResourceLimitsConfig.defaults.copy(sourceImageDownloadRateLimitPerMinute = 0)
     ),
   ))
+  private val readRateLimitApp = ResourceFunFixture(configuredHttpAppResource(
+    "momo-api-read-rate",
+    _.copy(resourceLimits = ResourceLimitsConfig.defaults.copy(readApiRateLimitPerMinute = 0)),
+  ))
   private val ocrAccountRateLimitApp = ResourceFunFixture(configuredHttpAppResource(
     "momo-api-ocr-account-rate",
     _.copy(resourceLimits = ResourceLimitsConfig.defaults.copy(ocrJobCreateRateLimitPerMinute = 0)),
@@ -487,6 +491,30 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
       .putHeaders(devReadHeader())
     httpApp.run(request).flatMap(response =>
       assertProblem(response, Status.TooManyRequests, "TOO_MANY_REQUESTS", "Too many exports")
+    )
+  }
+
+  readRateLimitApp.test("matches list endpoint applies per-member read rate limits") { httpApp =>
+    val request = Request[IO](Method.GET, uri"/api/matches").putHeaders(devReadHeader())
+    httpApp.run(request).flatMap(response =>
+      assertProblem(response, Status.TooManyRequests, "TOO_MANY_REQUESTS", "Too many read requests")
+    )
+  }
+
+  readRateLimitApp.test("OCR status endpoint applies per-member read rate limits") { httpApp =>
+    val request = Request[IO](Method.GET, uri"/api/ocr-jobs/00000000-0000-0000-0000-000000000001")
+      .putHeaders(devReadHeader())
+    httpApp.run(request).flatMap(response =>
+      assertProblem(response, Status.TooManyRequests, "TOO_MANY_REQUESTS", "Too many read requests")
+    )
+  }
+
+  readRateLimitApp.test("OCR draft bulk endpoint applies per-member read rate limits") { httpApp =>
+    val request =
+      Request[IO](Method.GET, uri"/api/ocr-drafts?ids=00000000-0000-0000-0000-000000000001")
+        .putHeaders(devReadHeader())
+    httpApp.run(request).flatMap(response =>
+      assertProblem(response, Status.TooManyRequests, "TOO_MANY_REQUESTS", "Too many read requests")
     )
   }
 

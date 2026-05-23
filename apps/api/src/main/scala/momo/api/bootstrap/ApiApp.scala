@@ -337,6 +337,8 @@ object ApiApp:
           config.resourceLimits.sourceImageDownloadRateLimitPerMinute,
           now,
         )
+        val readApi: RateLimiter[F] = RedisRateLimiter
+          .fromCommands(commands, "read-api", config.resourceLimits.readApiRateLimitPerMinute, now)
         val ocrJobCreate: RateLimiter[F] = RedisRateLimiter.fromCommands(
           commands,
           "ocr-job-create",
@@ -357,6 +359,7 @@ object ApiApp:
             upload,
             exportLimiter,
             sourceImageDownload,
+            readApi,
             ocrJobCreate,
             ocrJobCreateGlobal,
           ),
@@ -372,6 +375,8 @@ object ApiApp:
             .create[F](config.resourceLimits.exportRateLimitPerMinute, now)
           sourceImageDownload <- LoginRateLimiter
             .create[F](config.resourceLimits.sourceImageDownloadRateLimitPerMinute, now)
+          readApi <- LoginRateLimiter
+            .create[F](config.resourceLimits.readApiRateLimitPerMinute, now)
           ocrJobCreate <- LoginRateLimiter
             .create[F](config.resourceLimits.ocrJobCreateRateLimitPerMinute, now)
           ocrJobCreateGlobal <- LoginRateLimiter
@@ -384,6 +389,7 @@ object ApiApp:
             upload,
             exportLimiter,
             sourceImageDownload,
+            readApi,
             ocrJobCreate,
             ocrJobCreateGlobal,
           ),

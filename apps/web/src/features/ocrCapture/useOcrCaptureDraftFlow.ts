@@ -168,7 +168,17 @@ export function useOcrCaptureDraftFlow(): OcrCaptureDraftFlow {
     const currentSlot = slotsRef.current.find((slot) => slot.kind === kind);
     if (!currentSlot) return;
     setSlots((current) =>
-      current.map((slot) => (slot.kind === kind ? { ...currentSlot, pollAttempts: 0 } : slot)),
+      current.map((slot) =>
+        slot.kind === kind
+          ? {
+              ...currentSlot,
+              pollingPausedReason: undefined,
+              pollAttempts: 0,
+              pollRefreshNonce: (currentSlot.pollRefreshNonce ?? 0) + 1,
+              transportError: undefined,
+            }
+          : slot,
+      ),
     );
   }, []);
 

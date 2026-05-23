@@ -17,6 +17,8 @@ export type SlotStatus =
   | "failed"
   | "cancelled";
 
+export type PollingPausedReason = "timeout" | "transient_errors";
+
 export type CaptureSlotState = {
   kind: SlotKind;
   source?: InputSource | undefined;
@@ -30,7 +32,9 @@ export type CaptureSlotState = {
   status: SlotStatus;
   transportError?: NormalizedApiError | undefined;
   jobFailure?: components["schemas"]["OcrFailureResponse"] | undefined;
+  pollingPausedReason?: PollingPausedReason | undefined;
   pollAttempts: number;
+  pollRefreshNonce?: number | undefined;
 };
 
 export const slotDefinitions: Array<{

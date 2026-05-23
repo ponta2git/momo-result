@@ -67,6 +67,11 @@ const statusLabel: Record<string, string> = {
   uploading: "画像送信中",
 };
 
+const pollingPausedMessage: Record<string, string> = {
+  timeout: "読み取り処理の自動確認を停止しました。状態を確認するには手動で更新してください。",
+  transient_errors: "状態確認リクエストが混雑しています。少し待ってから手動で更新してください。",
+};
+
 function CaptureStatusBadge({ status }: { status: string }) {
   return (
     <span
@@ -220,9 +225,9 @@ export function CaptureSlotCard({
         </div>
       ) : null}
 
-      {slot.pollAttempts >= 15 && !["succeeded", "failed", "cancelled"].includes(slot.status) ? (
+      {slot.pollingPausedReason && !["succeeded", "failed", "cancelled"].includes(slot.status) ? (
         <div className="mt-4 rounded-[var(--radius-md)] border border-[var(--color-warning)]/60 bg-[var(--color-warning)]/20 p-3 text-sm text-[var(--color-text-primary)]">
-          読み取り処理に接続できていない可能性があります。
+          {pollingPausedMessage[slot.pollingPausedReason]}
           <Button className="ml-3" variant="secondary" onClick={onManualRefresh}>
             状態を確認
           </Button>

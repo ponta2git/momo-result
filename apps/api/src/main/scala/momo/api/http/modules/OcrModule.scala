@@ -32,6 +32,7 @@ object OcrModule:
       getOcrDraftsBulk: GetOcrDraftsBulk[F],
       createRateLimiter: RateLimiter[F],
       globalCreateRateLimiter: RateLimiter[F],
+      readRateLimiter: RateLimiter[F],
       idempotency: IdempotencyRepository[F],
       nowF: F[Instant],
       security: EndpointSecurity[F],
@@ -73,11 +74,13 @@ object OcrModule:
           }
     },
     OcrJobEndpoints.get.serverLogic { case (jobId, accountHeader) =>
-      security.authorizeRead(accountHeader)(_ =>
-        security.decode(
-          BoundaryId.required("jobId", jobId)(OcrJobId.fromString)
-        )(id => security.respond(getOcrJob.run(id))(OcrJobResponse.from))
-      )
+      security.authorizeRead(accountHeader) { member =>
+        ReadRateLimit.enforce(readRateLimiter, member.accountId.value, "GET /api/ocr-jobs/:id") {
+          security.decode(
+            BoundaryId.required("jobId", jobId)(OcrJobId.fromString)
+          )(id => security.respond(getOcrJob.run(id))(OcrJobResponse.from))
+        }
+      }
     },
     OcrJobEndpoints.cancel.serverLogic { case (jobId, accountHeader, csrfToken, idemKey) =>
       security.authorizeMutation(accountHeader, csrfToken) { member =>
@@ -95,21 +98,25 @@ object OcrModule:
       }
     },
     OcrDraftEndpoints.get.serverLogic { case (draftId, accountHeader) =>
-      security.authorizeRead(accountHeader)(_ =>
-        security.decode(BoundaryId.required("draftId", draftId)(OcrDraftId.fromString))(id =>
-          security.respond(getOcrDraft.run(id).map(_.flatMap(OcrDraftResponse.from)))(identity)
-        )
-      )
+      security.authorizeRead(accountHeader) { member =>
+        ReadRateLimit.enforce(readRateLimiter, member.accountId.value, "GET /api/ocr-drafts/:id") {
+          security.decode(BoundaryId.required("draftId", draftId)(OcrDraftId.fromString))(id =>
+            security.respond(getOcrDraft.run(id).map(_.flatMap(OcrDraftResponse.from)))(identity)
+          )
+        }
+      }
     },
     OcrDraftEndpoints.listByIds.serverLogic { case (ids, accountHeader) =>
-      security.authorizeRead(accountHeader) { _ =>
-        security.respond(
-          OcrDraftCodec.toDraftIds(ids) match
-            case Left(error) => Async[F].pure(Left(error))
-            case Right(draftIds) => getOcrDraftsBulk.run(draftIds).map(_.flatMap(items =>
-                items.traverse(OcrDraftResponse.from).map(OcrDraftListResponse(_))
-              ))
-        )(identity)
+      security.authorizeRead(accountHeader) { member =>
+        ReadRateLimit.enforce(readRateLimiter, member.accountId.value, "GET /api/ocr-drafts") {
+          security.respond(
+            OcrDraftCodec.toDraftIds(ids) match
+              case Left(error) => Async[F].pure(Left(error))
+              case Right(draftIds) => getOcrDraftsBulk.run(draftIds).map(_.flatMap(items =>
+                  items.traverse(OcrDraftResponse.from).map(OcrDraftListResponse(_))
+                ))
+          )(identity)
+        }
       }
     },
   )

@@ -6,6 +6,7 @@ import java.time.format.DateTimeFormatter
 import cats.effect.Async
 import sttp.tapir.server.ServerEndpoint
 
+import momo.api.auth.RateLimiter
 import momo.api.domain.ids.MatchId
 import momo.api.endpoints.codec.{BoundaryId, MatchCodec, MatchListCodec}
 import momo.api.endpoints.{
@@ -23,6 +24,7 @@ object MatchModule:
       getMatch: GetMatch[F],
       updateMatch: UpdateMatch[F],
       deleteMatch: DeleteMatch[F],
+      readRateLimiter: RateLimiter[F],
       idempotency: IdempotencyRepository[F],
       nowF: F[Instant],
       security: EndpointSecurity[F],
@@ -52,15 +54,17 @@ object MatchModule:
     },
     MatchesEndpoints.list.serverLogic {
       case (heldEventId, gameTitleId, seasonMasterId, status, kind, limit, accountHeader) =>
-        security.authorizeRead(accountHeader) { _ =>
-          security.decode(
-            MatchListCodec
-              .toListCommand(heldEventId, gameTitleId, seasonMasterId, status, kind, limit)
-          )(command =>
-            security.respond(
-              listMatches.run(command)
-            )(items => MatchListResponse(items.map(MatchSummaryResponse.from)))
-          )
+        security.authorizeRead(accountHeader) { member =>
+          ReadRateLimit.enforce(readRateLimiter, member.accountId.value, "GET /api/matches") {
+            security.decode(
+              MatchListCodec
+                .toListCommand(heldEventId, gameTitleId, seasonMasterId, status, kind, limit)
+            )(command =>
+              security.respond(
+                listMatches.run(command)
+              )(items => MatchListResponse(items.map(MatchSummaryResponse.from)))
+            )
+          }
         }
     },
     MatchesEndpoints.get.serverLogic { case (matchId, accountHeader) =>

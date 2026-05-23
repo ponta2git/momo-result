@@ -1,11 +1,12 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
-import { render, waitFor } from "@testing-library/react";
+import { act, render, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
 import { OcrJobSlotWatcher } from "@/features/ocrCapture/OcrJobSlotWatcher";
+import { getInitialOcrPollDelayMs } from "@/features/ocrCapture/useOcrJobPolling";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
@@ -43,7 +44,12 @@ describe("OcrJobSlotWatcher", () => {
     queryClient = createTestQueryClient();
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("marks the slot failed when a succeeded job has an unreadable draft", async () => {
+    vi.useFakeTimers();
     server.use(
       http.get("/api/ocr-jobs/:jobId", () =>
         HttpResponse.json({
@@ -83,6 +89,11 @@ describe("OcrJobSlotWatcher", () => {
     const onUpdate = vi.fn();
 
     renderWatcher({ onDraft, onDraftLoadError, onUpdate, slot });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(getInitialOcrPollDelayMs("job-1"));
+    });
+    vi.useRealTimers();
 
     await waitFor(() =>
       expect(onUpdate).toHaveBeenCalledWith(

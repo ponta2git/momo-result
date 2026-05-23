@@ -22,11 +22,20 @@ export function OcrJobSlotWatcher({
   onUpdate,
   slot,
 }: OcrJobSlotWatcherProps) {
-  const query = useOcrJobPolling({ jobId: slot.jobId, attempts: slot.pollAttempts });
+  const query = useOcrJobPolling({
+    jobId: slot.jobId,
+    attempts: slot.pollAttempts,
+    resetToken: slot.pollRefreshNonce,
+  });
 
   const marker =
-    query.data && slot.jobId
-      ? `${slot.jobId}:${query.data.status}:${query.data.updatedAt}:${query.data.draftId ?? ""}`
+    query.data && slot.jobId && query.dataUpdatedAt > 0
+      ? `${slot.jobId}:${query.dataUpdatedAt}`
+      : null;
+
+  const pauseMarker =
+    query.pollingPausedReason && slot.jobId
+      ? `${slot.jobId}:${query.pollingPausedReason}:${query.transientErrorCount}`
       : null;
 
   useDistinctMarkerEffect(marker, () => {
@@ -42,7 +51,9 @@ export function OcrJobSlotWatcher({
       detectedKind: detectedKindFromResponse(query.data.detectedScreenType),
       draftId: query.data.draftId,
       jobFailure: query.data.failure,
+      pollingPausedReason: undefined,
       pollAttempts: slot.pollAttempts + 1,
+      transportError: undefined,
     };
     onUpdate(nextSlot);
 
@@ -67,6 +78,16 @@ export function OcrJobSlotWatcher({
         onUpdate({ ...nextSlot, status: "failed", transportError: error });
         onDraftLoadError?.(error);
       });
+  });
+
+  useDistinctMarkerEffect(pauseMarker, () => {
+    if (!query.pollingPausedReason) {
+      return;
+    }
+    onUpdate({
+      ...slot,
+      pollingPausedReason: query.pollingPausedReason,
+    });
   });
 
   return null;

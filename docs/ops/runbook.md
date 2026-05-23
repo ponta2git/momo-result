@@ -87,7 +87,35 @@ flyctl logs --app momo-result --no-tail
 - OCR raw text 全文
 - 例外 message / stack trace の直接出力
 
-## 5. OCR / Redis 障害対応
+## 5. 静的配信 cache と access log
+
+nginx は費用と調査量を抑えるため、次の成功系 access log を stdout に出さない。
+
+- `/healthz` の `200`
+- `/assets/*` の `200` / `304`
+
+異常系は残す。`/healthz` の `5xx`、`/assets/*` の `404` / `405`、Host / origin lock の `421`、`/api/*` は Fly logs で確認できる。
+
+cache 方針:
+
+| 経路 | Cache-Control | 理由 |
+|---|---|---|
+| `/assets/*` | `public, max-age=31536000, immutable` | Vite の hash 付き asset を長期 cache する |
+| `/` と SPA fallback | `no-cache` | `index.html` の stale による旧 bundle 参照を避ける |
+| `/api/*` | `no-store` | 認証・業務データ・download response を保存させない |
+| source image 個別 / zip | `private, no-store` | OCR 元画像は機微データ扱いで public edge cache しない |
+
+確認コマンド例:
+
+```sh
+curl -fsSI https://momo-result.ponta.me/healthz
+curl -fsSI https://momo-result.ponta.me/
+curl -fsSI "https://momo-result.ponta.me/assets/<built-asset>"
+```
+
+Cloudflare Cache Rules を変更する場合は、`/assets/*` の edge cache、`/api/*` と source image の bypass/no-store、rollback 手順を先に書き、人間承認後に実施する。
+
+## 6. OCR / Redis 障害対応
 
 見る順序:
 
@@ -109,7 +137,7 @@ Redis queue の契約は `docs/redis-streams-ocr-contract.md` を正本にする
 
 処理中画像は Fly VM の一時ディスクにある。VM restart 等で消えた場合は仕様上 OCR 失敗として扱い、ユーザーに再アップロードしてもらう。
 
-## 6. Discord OAuth 障害対応
+## 7. Discord OAuth 障害対応
 
 見る順序:
 
@@ -123,7 +151,7 @@ Redis queue の契約は `docs/redis-streams-ocr-contract.md` を正本にする
 
 本番では `AUTH_COOKIE_SECURE=true`、`AUTH_COOKIE_HOST_PREFIX=true` を維持する。
 
-## 7. Rollback
+## 8. Rollback
 
 release と image を確認する。
 
@@ -146,7 +174,7 @@ flyctl logs --app momo-result --no-tail
 
 DB migration は戻らない。schema 互換性が壊れている場合は、アプリ rollback だけで復旧しない可能性がある。
 
-## 8. Secret rotation
+## 9. Secret rotation
 
 Fly secrets を更新する。
 
@@ -171,7 +199,7 @@ Discord secret rotation 後は OAuth login を確認する。Redis / DB secret r
 
 `MOMO_ORIGIN_LOCK_TOKEN` を rotation する場合は、Cloudflare Request Header Transform Rule の `X-Momo-Origin-Lock` と Fly secret を同じ値に更新する。値がずれると `momo-result.ponta.me` の通常 path が `421` になるため、更新後は `/healthz`、ログイン画面、`/api/auth/me` 相当の認証確認を行う。
 
-## 9. カスタムドメイン導入
+## 10. カスタムドメイン導入
 
 1. Fly certificate を追加する。
 
@@ -202,7 +230,7 @@ MOMO_ORIGIN_LOCK_TOKEN=...
 9. 新ドメインで `/healthz`, 管理者ログイン後の `/healthz/details`, OAuth login を確認する。
 10. `https://momo-result.fly.dev/` が `421` になることを確認する。
 
-## 10. エスカレーション基準
+## 11. エスカレーション基準
 
 以下は作業を止めて人間判断にする。
 

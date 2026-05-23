@@ -113,7 +113,7 @@ jobs:
       - name: Validate runtime executables
         run: |
           docker run --rm \
-            -e MOMO_ORIGIN_LOCK_TOKEN=ci-origin-lock-token \
+            -e MOMO_ORIGIN_LOCK_TOKEN=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef \
             "${IMAGE_NAME}" \
             /bin/sh -c '/opt/momo-result/bin/render-nginx-conf && nginx -t -c /etc/nginx/nginx.conf'
           docker run --rm "${IMAGE_NAME}" test -x /opt/momo-result/api/bin/momo-result-api
@@ -133,7 +133,7 @@ jobs:
             -e IMAGE_TMP_DIR=/tmp/momo-result/uploads \
             -e MOMO_CANONICAL_HOST=momo-result.ponta.me \
             -e MOMO_LOG_FORMAT=json \
-            -e MOMO_ORIGIN_LOCK_TOKEN=ci-origin-lock-token \
+            -e MOMO_ORIGIN_LOCK_TOKEN=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef \
             -e REDIS_URL="${REDIS_URL}" \
             "${IMAGE_NAME}"
           for attempt in {1..60}; do
@@ -150,7 +150,7 @@ jobs:
         run: scripts/ci/runtime-smoke.sh
         env:
           MOMO_CANONICAL_HOST: momo-result.ponta.me
-          MOMO_ORIGIN_LOCK_TOKEN: ci-origin-lock-token
+          MOMO_ORIGIN_LOCK_TOKEN: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
         timeout-minutes: 2
 
       - name: Playwright E2E smoke

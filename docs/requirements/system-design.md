@@ -246,8 +246,9 @@ OCRジョブのタイムアウト初期値は `OCR_TIMEOUT_SECONDS` で管理す
 | web | OpenAPI型生成、format、lint、typecheck、Vitest、build |
 | api | format、lint、clean compile、unit / non-integration test、DB quality gate、Redis quality gate、OpenAPI生成チェック |
 | ocr-worker | format、lint、typecheck、pytest |
+| runtime / E2E | Docker build、runtime smoke、container image scan、Playwright E2E smoke |
 
-E2E smoke は現行CIの必須チェックではない。E2E smoke scope を拡大する場合は、対象フロー、実行環境、保守コストを決めてから追加する。
+Playwright E2E smoke はUX確定済みのログイン後主要フローに絞る。Vite dev buildで開発用認証ヘッダを使い、API / nginx / OCR worker はDocker runtime containerを実DB/Redis付きで起動して検証する。本番ビルドされたwebはdev auth headerを送らないため、runtime imageのweb検証は `/` と deep link fallback のHTTP smokeに留める。
 
 ### 10.2 フォーマッタ・リンタ
 

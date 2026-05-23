@@ -1,4 +1,6 @@
 dist/
 coverage/
 .cache/
+playwright-report/
+test-results/
 src/shared/api/generated.ts

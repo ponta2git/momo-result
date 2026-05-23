@@ -115,9 +115,10 @@ export function useMatchWorkspaceInit({
         : draftsByKind(reviewDraftIds, ocrDrafts?.items);
 
       const prepared = draftToMatchForm({
+        attachDraftIds: !useSampleDrafts,
         draftByKind,
         ...(draftDetail ? { draftSummary: draftDetail } : {}),
-        ...(matchDraftId ? { matchDraftId } : {}),
+        ...(matchDraftId && !useSampleDrafts ? { matchDraftId } : {}),
         memberDirectory: buildMemberAliasDirectory(memberAliases),
         nowIso: nowIsoFactory(),
       });

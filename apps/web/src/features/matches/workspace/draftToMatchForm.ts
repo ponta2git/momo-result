@@ -10,6 +10,7 @@ import { incidentCountsByLabelToKey } from "@/shared/domain/incidents";
 import type { MemberAliasDirectory } from "@/shared/domain/memberDirectory";
 
 export function draftToMatchForm(input: {
+  attachDraftIds?: boolean;
   draftByKind: DraftByKind;
   draftSummary?: MatchDraftSummary;
   matchDraftId?: string;
@@ -21,19 +22,22 @@ export function draftToMatchForm(input: {
 } {
   const merged = mergeDrafts(input.draftByKind, input.memberDirectory);
   const base = createEmptyMatchForm(input.nowIso);
+  const attachDraftIds = input.attachDraftIds ?? true;
 
   const values: MatchFormValues = {
     ...base,
     ...(input.matchDraftId ? { matchDraftId: input.matchDraftId } : {}),
-    draftIds: {
-      ...(input.draftByKind.total_assets
-        ? { totalAssets: input.draftByKind.total_assets.draftId }
-        : {}),
-      ...(input.draftByKind.revenue ? { revenue: input.draftByKind.revenue.draftId } : {}),
-      ...(input.draftByKind.incident_log
-        ? { incidentLog: input.draftByKind.incident_log.draftId }
-        : {}),
-    },
+    draftIds: attachDraftIds
+      ? {
+          ...(input.draftByKind.total_assets
+            ? { totalAssets: input.draftByKind.total_assets.draftId }
+            : {}),
+          ...(input.draftByKind.revenue ? { revenue: input.draftByKind.revenue.draftId } : {}),
+          ...(input.draftByKind.incident_log
+            ? { incidentLog: input.draftByKind.incident_log.draftId }
+            : {}),
+        }
+      : {},
     gameTitleId: input.draftSummary?.gameTitleId ?? "",
     heldEventId: input.draftSummary?.heldEventId ?? "",
     mapMasterId: input.draftSummary?.mapMasterId ?? "",

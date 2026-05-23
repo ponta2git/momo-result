@@ -18,10 +18,11 @@ apps/ocr-worker/local-expected/
 node_modules
 *.tsbuildinfo
 copilot-session-*.md
-docs/mvp-todos.md
 docs/frontend-rebuild/
 .env
 **/.env
 **/.pnpm-store/
 .serena/cache
 .playwright-mcp
+apps/web/playwright-report/
+apps/web/test-results/

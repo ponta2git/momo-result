@@ -63,6 +63,7 @@ pnpm web:dev
 | web dev | `pnpm web:dev` |
 | web build | `pnpm web:build` |
 | web lint | `pnpm web:lint` |
+| web e2e | `pnpm web:e2e` |
 | web test | `pnpm web:test` |
 | web typecheck | `pnpm web:typecheck` |
 | api quality | `pnpm api:quality` |
@@ -80,6 +81,7 @@ pnpm typecheck
 pnpm test:run
 pnpm test:coverage
 pnpm build
+pnpm e2e
 ```
 
 ### API
@@ -114,13 +116,14 @@ uv run pytest -m integration
 |---|---|
 | web production code | `format:check`, `lint`, `typecheck`, `test:run` |
 | web API DTO / generated type | `generate:api`, `lint`, `typecheck`, `test:run` |
-| web build/runtime config | 上記 + `build` |
+| web build/runtime config | 上記 + `build`; ログイン後主要フローに関わる場合は `e2e` |
 | api endpoint / OpenAPI | `apiQuality`, `test`; 必要なら web `generate:api` |
 | api usecase / domain / codec | `apiQuality`, `test`; C1/C2対象なら `apiCoverage` |
 | PostgreSQL repository / DB前提 | 上記 + `apiDbQuality` |
 | Redis Streams / OCR queue | 上記 + `apiRedisQuality` |
 | ocr-worker production code | ruff format, ruff check, mypy, pytest |
 | ocr-worker external runtime | 上記 + `pytest -m integration` |
+| Docker/Fly runtime config | `docker build`、`scripts/ci/runtime-smoke.sh`、container image scan、必要に応じて `pnpm web:e2e` |
 | coverage対象ロジック | 各領域の coverage gate |
 | docs only | `git diff --check` |
 

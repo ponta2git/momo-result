@@ -1,5 +1,7 @@
 import { fixedMembers } from "@/shared/domain/members";
 
+const maxAliasesPerPlayerHint = 8;
+
 export type MemberAliasRecord = {
   alias: string;
   memberId: string;
@@ -86,6 +88,6 @@ export function playerAliasHints(directory: MemberAliasDirectory): Array<{
 }> {
   return directory.memberIds.map((memberId) => ({
     memberId,
-    aliases: directory.aliasesByMemberId.get(memberId) ?? [],
+    aliases: (directory.aliasesByMemberId.get(memberId) ?? []).slice(0, maxAliasesPerPlayerHint),
   }));
 }

@@ -60,6 +60,21 @@ describe("buildOcrHints", () => {
     expect(aliases.find((alias) => alias.memberId === "member_eu")?.aliases).toContain("EU");
   });
 
+  it("caps aliases to the OCR hints contract limit", () => {
+    const directory = buildMemberAliasDirectory(
+      Array.from({ length: 12 }, (_, index) => ({
+        memberId: "member_ponta",
+        alias: `PONTA-${index.toString()}`,
+      })),
+    );
+
+    const aliases =
+      buildOcrHints({ gameTitleName: "桃太郎電鉄2", layoutFamily: "momotetsu_2" }, directory)
+        .knownPlayerAliases ?? [];
+
+    expect(aliases.find((alias) => alias.memberId === "member_ponta")?.aliases).toHaveLength(8);
+  });
+
   it("sends computer aliases only for the Reiwa layout family", () => {
     expect(
       buildOcrHints({ gameTitleName: "令和", layoutFamily: "reiwa" }).computerPlayerAliases,

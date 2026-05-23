@@ -110,7 +110,7 @@ export function useMatchWorkspaceQueries(
     key: matchKeys.draft.detail,
     id: matchDraftId,
     fetcher: getMatchDraftDetail,
-    enabled: mode !== "edit",
+    enabled: mode !== "edit" && !useSampleDrafts,
   });
 
   const reviewDraftIds = useMemo<SlotMap<string>>(() => {
@@ -149,7 +149,7 @@ export function useMatchWorkspaceQueries(
     key: matchKeys.draft.sourceImages,
     id: matchDraftSourceImagesId,
     fetcher: listMatchDraftSourceImages,
-    enabled: mode !== "edit" && !isOcrRunning(draftDetailQuery.data?.status),
+    enabled: mode !== "edit" && !useSampleDrafts && !isOcrRunning(draftDetailQuery.data?.status),
   });
 
   const reviewStatus = draftDetailQuery.data?.status;

@@ -2,7 +2,7 @@ import { fileURLToPath, URL } from "node:url";
 
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 const backendProxy = {
   "/api": "http://localhost:8080",
@@ -61,6 +61,7 @@ export default defineConfig({
       },
     },
     environment: "jsdom",
+    exclude: [...configDefaults.exclude, "e2e/**"],
     fileParallelism: true,
     globals: true,
     isolate: true,

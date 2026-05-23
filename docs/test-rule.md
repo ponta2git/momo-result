@@ -36,9 +36,11 @@
 | DB contract | table / column / seed / nullable / default | `sbt apiDbQuality` |
 | Redis integration | Redis Streams wire 動作、ack/claim/retry | `sbt apiRedisQuality`, worker integration |
 | OCR worker | 画面種別判定、解析、payload validation、失敗処理 | `uv run pytest` |
-| E2E smoke | ログイン後の主要結合フロー | Playwright |
+| E2E smoke | ログイン後の主要結合フロー、runtime proxy / API / DB / Redis 結合 | Playwright |
 
 通常の `sbt test` と `uv run pytest` は外部 integration を除外する。DB/Redis/native OCR などの wire 動作を検証したと言うには、対応する integration gate の成功が必要。
+
+Playwright E2E smoke は、開催作成、OCR取り込み開始、OCRレビュー確定、試合詳細、CSV/TSV出力、マスタ/alias管理などの主要UXを狭く通す。assertion は見出しの存在だけでなく、API response、URL、download scope、DB-backedに保存された結果など、壊れ方を捕まえる外部契約に置く。
 
 ## 3. Web Rules
 

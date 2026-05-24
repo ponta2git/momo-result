@@ -1,12 +1,15 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { http, HttpResponse } from "msw";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { ErrorBoundary } from "@/app/ErrorBoundary";
 import { appRoutes } from "@/app/router";
+import { createDeferred } from "@/test/deferred";
 import { setupMsw } from "@/test/msw/lifecycle";
+import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
 
 setupMsw();
@@ -55,6 +58,32 @@ describe("app routing", () => {
     expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/matches");
     expect(screen.getByRole("button", { name: "ログアウト" })).toBeInTheDocument();
+  });
+
+  it("shows a structured loading state while checking the login session", async () => {
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    const responseGate = createDeferred();
+    server.use(
+      http.get("/api/auth/me", async () => {
+        await responseGate.promise;
+        return HttpResponse.json({
+          accountId: "account_ponta",
+          csrfToken: "dev",
+          displayName: "ぽんた",
+          isAdmin: true,
+          memberId: "member_ponta",
+        });
+      }),
+    );
+
+    renderApp("/matches");
+
+    const loadingState = await screen.findByLabelText("ログイン状態を確認中");
+    expect(loadingState).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByText("ログイン状態を確認しています…")).toBeInTheDocument();
+
+    responseGate.resolve();
+    expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
   });
 
   it("redirects protected routes to /login with next query when unauthenticated", async () => {

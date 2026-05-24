@@ -9,6 +9,8 @@ import {
 import { useAuth } from "@/shared/auth/useAuth";
 import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
+import { Skeleton } from "@/shared/ui/feedback/Skeleton";
+import { Card } from "@/shared/ui/layout/Card";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 
 function StandaloneRouteMain({ children }: { children: ReactNode }) {
@@ -41,7 +43,13 @@ function RouteGuardFrame({
 function AuthLoading({ message, standalone = false }: { message: string; standalone?: boolean }) {
   return (
     <RouteGuardFrame standalone={standalone}>
-      <p className="text-sm text-[var(--color-text-secondary)]">{message}</p>
+      <Card aria-busy="true" aria-label="ログイン状態を確認中">
+        <p className="text-sm font-semibold text-[var(--color-text-primary)]">{message}</p>
+        <div className="mt-4 grid gap-3">
+          <Skeleton className="h-10 w-full max-w-md" />
+          <Skeleton className="h-20 w-full" />
+        </div>
+      </Card>
     </RouteGuardFrame>
   );
 }

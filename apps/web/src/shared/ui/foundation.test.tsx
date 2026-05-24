@@ -134,8 +134,12 @@ describe("ui foundation", () => {
     const station = container.querySelector('[data-illustration="momo-station"]');
 
     expect(station).not.toBeNull();
-    expect(station?.querySelector('[data-station-part="station-sign"]')).toHaveTextContent("駅");
+    expect(station).not.toHaveTextContent("駅");
+    expect(station?.querySelector('[data-station-part="station-roof"]')).not.toBeNull();
+    expect(station?.querySelector('[data-station-part="station-canopy"]')).not.toBeNull();
+    expect(station?.querySelector('[data-station-part="station-sign-board"]')).not.toBeNull();
     expect(station?.querySelector('[data-station-part="station-clock"]')).not.toBeNull();
+    expect(station?.querySelector('[data-station-part="ticket-gate"]')).not.toBeNull();
     expect(station?.querySelector('[data-station-part="platform"]')).not.toBeNull();
     expect(station?.querySelectorAll('[data-station-part="rail"]')).toHaveLength(2);
   });

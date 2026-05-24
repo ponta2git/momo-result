@@ -69,8 +69,12 @@ describe("MatchesListPage", () => {
 
     expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
     expect(await screen.findByText("まだ試合がありません")).toBeInTheDocument();
+    expect(container.querySelector('[data-illustration-backdrop="momo-station"]')).not.toBeNull();
     const station = container.querySelector('[data-illustration="momo-station"]');
-    expect(station?.querySelector('[data-station-part="station-sign"]')).toHaveTextContent("駅");
+    expect(station).not.toHaveTextContent("駅");
+    expect(station?.querySelector('[data-station-part="station-roof"]')).not.toBeNull();
+    expect(station?.querySelector('[data-station-part="station-clock"]')).not.toBeNull();
+    expect(station?.querySelector('[data-station-part="ticket-gate"]')).not.toBeNull();
   });
 
   it("preserves selected held-event filter in URL after submitting", async () => {

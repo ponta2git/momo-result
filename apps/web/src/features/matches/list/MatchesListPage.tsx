@@ -15,7 +15,7 @@ import { useMatchesListPageController } from "@/features/matches/list/useMatches
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
-import { MomoStationIllustration } from "@/shared/ui/feedback/MomoStationIllustration";
+import { MomoStationBackdrop } from "@/shared/ui/feedback/MomoStationBackdrop";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
@@ -62,7 +62,7 @@ export function MatchesListPage() {
   return (
     <PageFrame className="gap-5">
       <PageHeader
-        description="処理中、確認待ち、確定済みの試合記録を確認します。開催や作品で絞り込み、必要な記録をすばやく探せます。"
+        description="OCR中、確認待ち、確定済みの記録を一覧します。開催や作品で絞り込めます。"
         eyebrow="試合記録"
         title="試合一覧"
       />
@@ -175,18 +175,15 @@ export function MatchesListPage() {
                 </div>
               )
             }
-            className="relative min-h-[18rem] overflow-hidden"
+            className="relative min-h-[18rem] overflow-hidden sm:pr-64"
             description={
               <>
-                <span className="relative block max-w-[34rem]">
+                <span className="relative z-[var(--z-base)] block max-w-[34rem]">
                   {hasFilters
                     ? "状態や開催条件を広げると、他の試合記録も表示できます。"
-                    : "最初の試合は、OCR取り込みまたは手入力で登録してください。駅舎のホームから、最初の記録を追加します。"}
+                    : "まずはOCR取り込みか手入力で、最初の試合を登録します。"}
                 </span>
-                <MomoStationIllustration
-                  className="pointer-events-none absolute right-4 bottom-2 hidden max-w-48 opacity-[0.16] sm:block"
-                  tone={hasFilters ? "empty" : "ready"}
-                />
+                <MomoStationBackdrop tone={hasFilters ? "empty" : "ready"} />
               </>
             }
             icon={<AlertTriangle className="size-5" />}

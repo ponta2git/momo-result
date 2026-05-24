@@ -1,5 +1,6 @@
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
+import { MomoStationBackdrop } from "@/shared/ui/feedback/MomoStationBackdrop";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { SelectField } from "@/shared/ui/forms/SelectField";
@@ -54,7 +55,13 @@ export function ExportCandidateSelect({
             {view.actionLabel}
           </LinkButton>
         }
-        description={view.message}
+        className="relative min-h-52 overflow-hidden sm:pr-56"
+        description={
+          <>
+            <span className="relative z-[var(--z-base)] block max-w-[28rem]">{view.message}</span>
+            <MomoStationBackdrop />
+          </>
+        }
         title={view.title}
       />
     );

@@ -21,6 +21,7 @@ import type { DataTableColumn } from "@/shared/ui/data/DataTable";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { LiveRegion } from "@/shared/ui/feedback/LiveRegion";
+import { MomoStationBackdrop } from "@/shared/ui/feedback/MomoStationBackdrop";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { TextField } from "@/shared/ui/forms/TextField";
@@ -133,7 +134,7 @@ export function HeldEventsPage() {
             最新情報に更新
           </Button>
         }
-        description="1夜の開催回を作成し、試合記録やCSV/TSV出力の範囲として使います。"
+        description="開催回を作成し、試合一覧と出力の範囲に使います。"
         eyebrow="開催"
         title="開催履歴"
       />
@@ -207,7 +208,15 @@ export function HeldEventsPage() {
               columns={columns}
               emptyState={
                 <EmptyState
-                  description="最初の試合を作る前に、この画面で開催回を作成してください。"
+                  className="relative min-h-56 overflow-hidden sm:pr-64"
+                  description={
+                    <>
+                      <span className="relative z-[var(--z-base)] block max-w-[30rem]">
+                        まず開催回を作成します。試合は開催回に紐づけて記録します。
+                      </span>
+                      <MomoStationBackdrop tone="ready" />
+                    </>
+                  }
                   icon={<CalendarDays className="size-5" />}
                   title="開催履歴がまだありません"
                 />
@@ -225,7 +234,7 @@ export function HeldEventsPage() {
                 新しい開催回
               </h2>
               <p className="text-sm leading-6 text-[var(--color-text-secondary)]">
-                summit側で作られない場合に、ここから開催回を追加します。
+                自動作成されない場合に、ここから追加します。
               </p>
             </div>
             <TextField

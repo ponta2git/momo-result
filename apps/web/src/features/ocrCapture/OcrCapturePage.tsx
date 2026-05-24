@@ -8,7 +8,7 @@ import { useOcrCapturePageController } from "@/features/ocrCapture/useOcrCapture
 import { AuthPanel } from "@/shared/auth/AuthPanel";
 import { Button } from "@/shared/ui/actions/Button";
 import { LiveRegion } from "@/shared/ui/feedback/LiveRegion";
-import { MomoStationIllustration } from "@/shared/ui/feedback/MomoStationIllustration";
+import { MomoStationBackdrop } from "@/shared/ui/feedback/MomoStationBackdrop";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
@@ -46,7 +46,7 @@ export function OcrCapturePage() {
       <PageHeader
         eyebrow="OCR"
         title="OCR取り込み"
-        description="試合条件を選び、総資産・収益・事件簿の画像を分類して読み取ります。処理中の記録は試合一覧で確認できます。"
+        description="試合条件を選び、総資産・収益・事件簿の画像を読み取ります。処理状況は試合一覧で確認できます。"
       />
 
       {auth.error ? (
@@ -67,9 +67,7 @@ export function OcrCapturePage() {
           <section className={panelClass}>
             <div className="mb-4">
               <h2 className={panelTitleClass}>1. 試合設定</h2>
-              <p className={panelLeadClass}>
-                読み取り方式と、確認画面で使う開催情報を先に選びます。
-              </p>
+              <p className={panelLeadClass}>確認画面で使う開催情報を先に選びます。</p>
             </div>
             <SetupPanel
               value={setup}
@@ -83,7 +81,7 @@ export function OcrCapturePage() {
             <div className="mb-4">
               <h2 className={panelTitleClass}>2. 画像を入れる</h2>
               <p className={panelLeadClass}>
-                撮影または画像追加で、空いている分類へ自動で置きます。分類が違う場合は右側で入れ替えます。
+                撮影またはファイル追加で、空いている分類へ配置します。違う分類なら右側で入れ替えます。
               </p>
             </div>
             <div className="grid gap-4">
@@ -109,14 +107,9 @@ export function OcrCapturePage() {
             </div>
           </section>
 
-          <section className="momo-safe-bottom relative overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-4 shadow-sm">
-            {ocrReadyCount === 0 ? (
-              <MomoStationIllustration
-                className="pointer-events-none absolute right-4 bottom-0 hidden max-w-44 opacity-[0.14] sm:block"
-                tone="ready"
-              />
-            ) : null}
-            <div className="flex flex-wrap items-center justify-between gap-3">
+          <section className="momo-safe-bottom relative min-h-36 overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-4 shadow-sm sm:pr-64">
+            {ocrReadyCount === 0 ? <MomoStationBackdrop size="lg" tone="ready" /> : null}
+            <div className="relative z-[var(--z-base)] flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-[var(--color-text-primary)]">
                   {ocrReadyCount === 0 ? "画像を追加してください" : "読み取りを開始できます"}
@@ -124,7 +117,7 @@ export function OcrCapturePage() {
                 <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
                   {selectedSlotLabels.length > 0
                     ? `送信対象: ${selectedSlotLabels.join(" / ")}`
-                    : "画像は1枚から開始できます。完了状況は試合一覧で確認します。"}
+                    : "画像は1枚から開始できます。状況は試合一覧で確認できます。"}
                 </p>
                 {partialStartAcknowledged && ocrReadyCount < slotDefinitions.length ? (
                   <p className="mt-2 text-sm font-semibold text-[var(--color-review)]">
@@ -134,7 +127,7 @@ export function OcrCapturePage() {
                 ) : null}
                 {hasWorkingSlot ? (
                   <p className="mt-2 text-sm font-semibold text-[var(--color-action)]">
-                    読み取り中の画像は分類と削除を固定しています。状態は試合一覧で確認してください。
+                    読み取り中は分類と削除を固定します。状態は試合一覧で確認できます。
                   </p>
                 ) : null}
               </div>

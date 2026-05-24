@@ -69,8 +69,12 @@ describe("OcrCapturePage", () => {
     const { container } = renderCaptureRoute();
 
     expect(await screen.findByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
+    expect(container.querySelector('[data-illustration-backdrop="momo-station"]')).not.toBeNull();
     const station = container.querySelector('[data-illustration="momo-station"]');
-    expect(station?.querySelector('[data-station-part="station-sign"]')).toHaveTextContent("駅");
+    expect(station).not.toHaveTextContent("駅");
+    expect(station?.querySelector('[data-station-part="station-roof"]')).not.toBeNull();
+    expect(station?.querySelector('[data-station-part="station-clock"]')).not.toBeNull();
+    expect(station?.querySelector('[data-station-part="ticket-gate"]')).not.toBeNull();
     expect(screen.getByRole("button", { name: "読み取りを開始して試合一覧へ" })).toBeDisabled();
   });
 

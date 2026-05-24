@@ -13,6 +13,7 @@ import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";
 import { DataTable } from "@/shared/ui/data/DataTable";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
+import { MomoStationBackdrop } from "@/shared/ui/feedback/MomoStationBackdrop";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Card } from "@/shared/ui/layout/Card";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
@@ -39,7 +40,7 @@ export function MatchDetailPage() {
   return (
     <PageFrame className="gap-5" width="wide">
       <PageHeader
-        description={`${formatMatchDetailDate(heldAt)} 開催 / ${gameTitle?.name ?? "作品未設定"} / ${
+        description={`${formatMatchDetailDate(heldAt)} 開催。${gameTitle?.name ?? "作品未設定"} / ${
           map?.name ?? "マップ未設定"
         }`}
         eyebrow="試合記録"
@@ -80,8 +81,9 @@ export function MatchDetailPage() {
         </Notice>
       ) : null}
 
-      <Card className="overflow-hidden p-0">
-        <div className="grid gap-0 lg:grid-cols-[18rem_minmax(0,1fr)]">
+      <Card className="relative overflow-hidden p-0 sm:pr-56">
+        <MomoStationBackdrop className="opacity-[0.14]" />
+        <div className="relative z-[var(--z-base)] grid gap-0 lg:grid-cols-[18rem_minmax(0,1fr)]">
           <div className="border-b border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-5 lg:border-r lg:border-b-0">
             <p className="text-xs font-semibold text-[var(--color-text-secondary)]">開催</p>
             <p className="mt-1 text-2xl font-semibold text-balance text-[var(--color-text-primary)]">
@@ -181,7 +183,7 @@ export function MatchDetailPage() {
         <div className="mb-3">
           <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">成績詳細</h2>
           <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-            見出しを選ぶと、各項目で並び替えできます。
+            見出しで並び替えできます。
           </p>
         </div>
         <DataTable

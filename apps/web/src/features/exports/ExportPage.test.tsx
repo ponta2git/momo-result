@@ -191,6 +191,7 @@ describe("ExportPage", () => {
 
     expect(screen.getByRole("button", { name: "作成中…" })).toBeDisabled();
     expect(screen.getByText("出力ファイルを作成しています")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "試合一覧へ戻る" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "作成中…" }));
     expect(requests).toBe(1);
 

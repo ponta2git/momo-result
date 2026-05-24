@@ -18,6 +18,8 @@ apps/ocr-worker/local-expected/
 node_modules
 *.tsbuildinfo
 copilot-session-*.md
+.agents/
+.serena/
 docs/tmp/
 docs/ops/
 .env

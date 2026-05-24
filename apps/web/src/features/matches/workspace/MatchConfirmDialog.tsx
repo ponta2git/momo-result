@@ -22,8 +22,8 @@ function ConfirmActionButtons({ onCancel }: { onCancel: () => void }) {
       <Button variant="secondary" disabled={pending} onClick={onCancel} type="button">
         戻って修正
       </Button>
-      <Button disabled={pending} type="submit">
-        {pending ? "確定中…" : "確定する"}
+      <Button disabled={pending} pending={pending} pendingLabel="確定中…" type="submit">
+        確定する
       </Button>
     </div>
   );

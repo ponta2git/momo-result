@@ -9,7 +9,7 @@ type MatchMobileCardProps = {
 
 export function MatchMobileCard({ item }: MatchMobileCardProps) {
   return (
-    <article className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+    <article className="momo-enter flex min-h-56 flex-col rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
       <div className="flex items-start justify-between gap-3">
         <StatusPill {...(item.hasWarnings ? { note: "要確認" } : {})} status={item.status} />
         <div className="min-w-0 text-right text-xs text-[var(--color-text-secondary)]">
@@ -28,7 +28,7 @@ export function MatchMobileCard({ item }: MatchMobileCardProps) {
               "シーズン・マップ未設定"}
           </p>
         </div>
-        <p className="text-sm text-[var(--color-text-secondary)]">
+        <p className="line-clamp-2 text-sm leading-6 text-[var(--color-text-secondary)]">
           {item.ranks.length > 0
             ? item.ranks.map((rank) => `${rank.rank}位 ${rank.displayName}`).join(" / ")
             : "順位はまだ確定していません"}
@@ -38,7 +38,7 @@ export function MatchMobileCard({ item }: MatchMobileCardProps) {
         ) : null}
       </div>
 
-      <div className="mt-4">
+      <div className="mt-auto pt-4">
         <MatchListActions
           primaryAction={item.primaryAction}
           secondaryActions={item.secondaryActions}

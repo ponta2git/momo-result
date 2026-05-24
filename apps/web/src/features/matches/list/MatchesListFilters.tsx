@@ -15,6 +15,7 @@ type MatchesListFiltersProps = {
   gameTitles: GameTitleResponse[];
   heldEvents: HeldEventResponse[];
   initialSearch: MatchListSearch;
+  pending?: boolean;
   onApply: (nextSearch: MatchListSearch) => void;
   onClear: () => void;
   seasons: SeasonMasterResponse[];
@@ -54,6 +55,7 @@ export function MatchesListFilters({
   gameTitles,
   heldEvents,
   initialSearch,
+  pending = false,
   onApply,
   onClear,
   seasons,
@@ -98,10 +100,24 @@ export function MatchesListFilters({
   function patchSearch(patch: Partial<MatchListSearch>) {
     onApply({ ...initialSearch, ...patch });
   }
+  const hasDetailFilters = Boolean(
+    initialSearch.heldEventId || initialSearch.gameTitleId || initialSearch.seasonMasterId,
+  );
 
   return (
-    <section className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+    <section
+      aria-busy={pending || undefined}
+      className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
+    >
       <div className="grid gap-4">
+        <div className="flex min-w-0 items-center justify-between gap-3">
+          <p className="text-sm font-semibold text-[var(--color-text-primary)]">絞り込み</p>
+          {pending ? (
+            <span className="momo-enter rounded-full border border-[var(--color-action)]/30 bg-[var(--color-action)]/10 px-3 py-1 text-xs font-semibold text-[var(--color-text-secondary)]">
+              反映中
+            </span>
+          ) : null}
+        </div>
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_16rem] lg:items-end">
           <div className="min-w-0">
             <p className="mb-2 text-sm font-semibold text-[var(--color-text-primary)]">状態</p>
@@ -175,7 +191,7 @@ export function MatchesListFilters({
           </Button>
         </div>
 
-        <details className="md:hidden">
+        <details className="md:hidden" open={hasDetailFilters || undefined}>
           <summary className="cursor-pointer text-sm font-semibold text-[var(--color-text-primary)]">
             開催・作品・シーズンを絞る
           </summary>

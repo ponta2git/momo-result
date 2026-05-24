@@ -49,7 +49,7 @@ export function Button({
 }: ButtonProps) {
   const isDisabled = disabled || pending;
   const buttonClassName = cn(
-    "inline-flex w-auto min-w-0 items-center justify-center gap-2 rounded-[var(--radius-sm)] border font-semibold whitespace-normal break-words transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-60",
+    "momo-pressable inline-flex w-auto min-w-0 items-center justify-center gap-2 rounded-[var(--radius-sm)] border font-semibold whitespace-normal break-words disabled:cursor-not-allowed disabled:opacity-60",
     sizeClass[size],
     variantClass[variant],
     className,
@@ -65,20 +65,41 @@ export function Button({
   // `ButtonType` の判別を JSX 側で行いリテラルとして埋める。
   if (type === "submit") {
     return (
-      <button ref={ref} className={buttonClassName} disabled={isDisabled} type="submit" {...props}>
+      <button
+        ref={ref}
+        aria-busy={pending || undefined}
+        className={buttonClassName}
+        disabled={isDisabled}
+        type="submit"
+        {...props}
+      >
         {inner}
       </button>
     );
   }
   if (type === "reset") {
     return (
-      <button ref={ref} className={buttonClassName} disabled={isDisabled} type="reset" {...props}>
+      <button
+        ref={ref}
+        aria-busy={pending || undefined}
+        className={buttonClassName}
+        disabled={isDisabled}
+        type="reset"
+        {...props}
+      >
         {inner}
       </button>
     );
   }
   return (
-    <button ref={ref} className={buttonClassName} disabled={isDisabled} type="button" {...props}>
+    <button
+      ref={ref}
+      aria-busy={pending || undefined}
+      className={buttonClassName}
+      disabled={isDisabled}
+      type="button"
+      {...props}
+    >
       {inner}
     </button>
   );

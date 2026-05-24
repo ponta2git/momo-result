@@ -8,6 +8,7 @@ import { useOcrCapturePageController } from "@/features/ocrCapture/useOcrCapture
 import { AuthPanel } from "@/shared/auth/AuthPanel";
 import { Button } from "@/shared/ui/actions/Button";
 import { LiveRegion } from "@/shared/ui/feedback/LiveRegion";
+import { MomoStationIllustration } from "@/shared/ui/feedback/MomoStationIllustration";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
@@ -109,21 +110,26 @@ export function OcrCapturePage() {
           </section>
 
           <section className="momo-safe-bottom flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-lg)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-4 shadow-sm">
-            <div>
-              <p className="text-sm font-semibold text-[var(--color-text-primary)]">
-                {ocrReadyCount === 0 ? "画像を追加してください" : "読み取りを開始できます"}
-              </p>
-              <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-                {selectedSlotLabels.length > 0
-                  ? `送信対象: ${selectedSlotLabels.join(" / ")}`
-                  : "画像は1枚から開始できます。完了状況は試合一覧で確認します。"}
-              </p>
-              {partialStartAcknowledged && ocrReadyCount < slotDefinitions.length ? (
-                <p className="mt-2 text-sm font-semibold text-[var(--color-review)]">
-                  画像が{ocrReadyCount}
-                  件だけ選択されています。このまま進める場合は、もう一度開始してください。
-                </p>
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              {ocrReadyCount === 0 ? (
+                <MomoStationIllustration className="hidden max-w-28 sm:block" tone="ready" />
               ) : null}
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-[var(--color-text-primary)]">
+                  {ocrReadyCount === 0 ? "画像を追加してください" : "読み取りを開始できます"}
+                </p>
+                <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+                  {selectedSlotLabels.length > 0
+                    ? `送信対象: ${selectedSlotLabels.join(" / ")}`
+                    : "画像は1枚から開始できます。完了状況は試合一覧で確認します。"}
+                </p>
+                {partialStartAcknowledged && ocrReadyCount < slotDefinitions.length ? (
+                  <p className="mt-2 text-sm font-semibold text-[var(--color-review)]">
+                    画像が{ocrReadyCount}
+                    件だけ選択されています。このまま進める場合は、もう一度開始してください。
+                  </p>
+                ) : null}
+              </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-2 text-sm font-semibold text-[var(--color-text-primary)]">
@@ -132,12 +138,18 @@ export function OcrCapturePage() {
               <Button
                 onClick={handleStartOcr}
                 disabled={ocrReadyCount === 0 || hasWorkingSlot || submission.isSubmitting}
+                pending={submission.isSubmitting}
+                pendingLabel="読み取り開始中…"
               >
                 {partialStartAcknowledged && ocrReadyCount < slotDefinitions.length
                   ? "このまま読み取りを開始"
                   : "読み取りを開始して試合一覧へ"}
               </Button>
-              <Button variant="secondary" onClick={() => flow.handleResetAll(notify)}>
+              <Button
+                disabled={submission.isSubmitting}
+                variant="secondary"
+                onClick={() => flow.handleResetAll(notify)}
+              >
                 画像をすべて削除
               </Button>
             </div>

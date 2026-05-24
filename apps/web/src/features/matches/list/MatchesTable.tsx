@@ -24,7 +24,7 @@ export function MatchesTable({ items, sort, onSortChange }: MatchesTableProps) {
           minWidth: "9rem",
           renderCell: (item) => (
             <div className="grid gap-1">
-              <StatusRail compact={item.displayStatus === "confirmed"} status={item.status} />
+              <StatusRail status={item.status} />
               {item.statusDescription ? (
                 <p className="text-xs text-[var(--color-text-secondary)]">
                   {item.statusDescription}

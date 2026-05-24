@@ -84,6 +84,48 @@ select {
   outline-offset: 3px;
 }
 
+.momo-enter {
+  animation: momo-enter 160ms ease-out both;
+}
+
+.momo-pressable {
+  transition:
+    background-color 150ms ease-out,
+    border-color 150ms ease-out,
+    color 150ms ease-out,
+    opacity 150ms ease-out,
+    transform 150ms ease-out;
+}
+
+.momo-pressable:active:not(:disabled) {
+  transform: translateY(1px) scale(0.99);
+}
+
+@keyframes momo-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .momo-enter {
+    animation: none;
+  }
+
+  .momo-pressable {
+    transition: none;
+  }
+
+  .momo-pressable:active:not(:disabled) {
+    transform: none;
+  }
+}
+
 @utility momo-safe-top {
   top: max(calc(env(safe-area-inset-top) + 1rem), 1rem);
 }

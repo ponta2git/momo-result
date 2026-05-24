@@ -5,6 +5,7 @@ import { useSearchParams } from "react-router-dom";
 import { fetchMatchList, fetchMatchListSummary } from "@/features/matches/list/matchListQuery";
 import {
   buildMatchListSearchParams,
+  defaultMatchListSearch,
   hasMatchListFilters,
   parseMatchListSearchParams,
 } from "@/features/matches/list/matchListSearchParams";
@@ -26,16 +27,20 @@ export function useMatchesListPageController() {
     () => parseMatchListSearchParams(new URLSearchParams(rawSearchSignature)),
     [rawSearchSignature],
   );
-  const deferredSearch = useDeferredValue(search);
+  const [optimisticSearch, setOptimisticSearch] = useState<MatchListSearch | null>(null);
+  const activeSearch = optimisticSearch ?? search;
+  const deferredSearch = useDeferredValue(activeSearch);
   const [isFilterPending, startFilterTransition] = useTransition();
   const [isManualRefreshing, setIsManualRefreshing] = useState(false);
 
   const applySearch = (nextSearch: MatchListSearch) => {
+    setOptimisticSearch(nextSearch);
     startFilterTransition(() => {
       setSearchParams(buildMatchListSearchParams(nextSearch));
     });
   };
   const clearSearch = () => {
+    setOptimisticSearch(defaultMatchListSearch);
     startFilterTransition(() => {
       setSearchParams(new URLSearchParams());
     });
@@ -108,12 +113,28 @@ export function useMatchesListPageController() {
   }, [matchesDataUpdatedAt, refetchSummary, summaryDataUpdatedAt, summaryIsFetching]);
 
   const searchSignature = useMemo(() => buildMatchListSearchParams(search).toString(), [search]);
+  const activeSearchSignature = useMemo(
+    () => buildMatchListSearchParams(activeSearch).toString(),
+    [activeSearch],
+  );
   const deferredSearchSignature = useMemo(
     () => buildMatchListSearchParams(deferredSearch).toString(),
     [deferredSearch],
   );
 
+  useEffect(() => {
+    if (
+      optimisticSearch &&
+      searchSignature === buildMatchListSearchParams(optimisticSearch).toString()
+    ) {
+      setOptimisticSearch(null);
+    }
+  }, [optimisticSearch, searchSignature]);
+
   const handleManualRefresh = async () => {
+    if (isManualRefreshing) {
+      return;
+    }
     setIsManualRefreshing(true);
     try {
       await Promise.all([matchesQuery.refetch(), matchesSummaryQuery.refetch()]);
@@ -126,10 +147,13 @@ export function useMatchesListPageController() {
     applySearch,
     clearSearch,
     gameTitles: gameTitlesQuery.data?.items ?? [],
-    hasFilters: hasMatchListFilters(search),
+    hasFilters: hasMatchListFilters(activeSearch),
     heldEvents: heldEventsQuery.data?.items ?? [],
     isManualRefreshing,
-    isStale: isFilterPending || searchSignature !== deferredSearchSignature,
+    isStale:
+      isFilterPending ||
+      activeSearchSignature !== deferredSearchSignature ||
+      (matchesQuery.isFetching && !isInitialQueryLoading(matchesQuery)),
     items,
     masterLoadFailed:
       shouldShowBlockingQueryError(heldEventsQuery) ||
@@ -137,7 +161,7 @@ export function useMatchesListPageController() {
       shouldShowBlockingQueryError(seasonsQuery) ||
       shouldShowBlockingQueryError(mapsQuery),
     refresh: handleManualRefresh,
-    search,
+    search: activeSearch,
     seasons: seasonsQuery.data?.items ?? [],
     showMatchesError: shouldShowBlockingQueryError(matchesQuery),
     showMatchesLoading: isInitialQueryLoading(matchesQuery),

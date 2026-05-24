@@ -47,7 +47,7 @@ export function IconButton({
       ref={ref}
       aria-label={ariaLabel}
       className={cn(
-        "inline-flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] border transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-60",
+        "momo-pressable inline-flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] border disabled:cursor-not-allowed disabled:opacity-60",
         sizeClass[size],
         variantClass[variant],
         className,

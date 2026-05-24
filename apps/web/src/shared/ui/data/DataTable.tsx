@@ -48,7 +48,12 @@ export function DataTable<Row>({
   }, [columns]);
 
   return (
-    <div className={cn("min-w-0 overflow-x-auto", className)}>
+    <div
+      className={cn(
+        "min-w-0 overflow-x-auto rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]",
+        className,
+      )}
+    >
       <table className="w-full min-w-full border-separate border-spacing-0 text-sm">
         <thead>
           <tr>
@@ -65,7 +70,7 @@ export function DataTable<Row>({
                     : undefined
                 }
                 className={cn(
-                  "border-b border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3 py-2 text-xs font-semibold text-[var(--color-text-secondary)]",
+                  "sticky top-0 z-[var(--z-base)] border-b border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3 py-2 text-xs font-semibold text-[var(--color-text-secondary)]",
                   alignClass[column.align ?? "left"],
                 )}
                 style={columnStyleByKey.get(column.key)}
@@ -73,7 +78,7 @@ export function DataTable<Row>({
                 {column.sortable ? (
                   <button
                     className={cn(
-                      "inline-flex min-h-9 items-center gap-1 rounded-[var(--radius-xs)] px-1 py-1 text-left text-inherit",
+                      "momo-pressable inline-flex min-h-9 items-center gap-1 rounded-[var(--radius-xs)] px-1 py-1 text-left text-inherit",
                       "hover:bg-[var(--color-surface-subtle)]",
                       column.sortDirection
                         ? "bg-[var(--color-action)]/10 text-[var(--color-text-primary)]"
@@ -98,12 +103,15 @@ export function DataTable<Row>({
         </thead>
         <tbody>
           {rows.map((row, rowIndex) => (
-            <tr key={getRowKey(row, rowIndex)} className="border-b border-[var(--color-border)]">
+            <tr
+              key={getRowKey(row, rowIndex)}
+              className="group transition-colors duration-150 hover:bg-[var(--color-surface-subtle)] last:[&_td]:border-b-0"
+            >
               {columns.map((column) => (
                 <td
                   key={column.key}
                   className={cn(
-                    "px-3 py-2 align-top text-[var(--color-text-primary)]",
+                    "border-b border-[var(--color-border)] px-3 py-3 align-top text-[var(--color-text-primary)]",
                     alignClass[column.align ?? "left"],
                   )}
                   style={columnStyleByKey.get(column.key)}

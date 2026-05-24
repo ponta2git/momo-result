@@ -13,7 +13,7 @@ function ActionButton({ action }: { action: MatchListAction }) {
 
   if (action.href && !action.disabled) {
     return (
-      <Link to={action.href}>
+      <Link className="block w-full" to={action.href}>
         <Button className="w-full justify-center" size="sm" variant={variant}>
           {action.label}
         </Button>

@@ -2,13 +2,16 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { http, HttpResponse } from "msw";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { MatchCreatePage } from "@/features/matches/MatchCreatePage";
 import { MatchDetailPage } from "@/features/matches/MatchDetailPage";
 import { MatchesListPage } from "@/features/matches/MatchesListPage";
+import { createDeferred } from "@/test/deferred";
 import { setupMsw } from "@/test/msw/lifecycle";
+import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
 
 setupMsw();
@@ -106,6 +109,81 @@ describe("MatchesListPage", () => {
     await waitFor(() =>
       expect(screen.getByLabelText("current location")).toHaveTextContent("sort=updated_desc"),
     );
+  });
+
+  it("shows optimistic status selection while the filtered list is refetching", async () => {
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    const responseGate = createDeferred();
+    let needsReviewRequested = false;
+    const allItems = [
+      {
+        createdAt: "2026-01-01T00:00:00.000Z",
+        gameTitleId: "gt_momotetsu_2",
+        heldEventId: "held-1",
+        id: "draft-review-1",
+        kind: "match_draft",
+        mapMasterId: "map_east",
+        matchDraftId: "draft-review-1",
+        matchNoInEvent: 3,
+        ownerMemberId: "member_ponta",
+        playedAt: "2026-01-01T00:00:00.000Z",
+        ranks: [],
+        seasonMasterId: "season_current",
+        status: "needs_review",
+        updatedAt: "2026-01-02T02:00:00.000Z",
+      },
+      {
+        createdAt: "2026-01-01T00:00:00.000Z",
+        gameTitleId: "gt_momotetsu_2",
+        heldEventId: "held-1",
+        id: "match-1",
+        kind: "match",
+        mapMasterId: "map_east",
+        matchId: "match-1",
+        matchNoInEvent: 1,
+        ownerMemberId: "member_ponta",
+        playedAt: "2026-01-01T00:00:00.000Z",
+        ranks: [{ memberId: "member_ponta", playOrder: 1, rank: 1 }],
+        seasonMasterId: "season_current",
+        status: "confirmed",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+    ];
+    server.use(
+      http.get("/api/matches", async ({ request }) => {
+        const url = new URL(request.url);
+        if (url.searchParams.get("status") === "needs_review") {
+          needsReviewRequested = true;
+          await responseGate.promise;
+          return HttpResponse.json({
+            items: allItems.filter((item) => item.status === "needs_review"),
+          });
+        }
+        return HttpResponse.json({ items: allItems });
+      }),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches"]}>
+          <Routes>
+            <Route path="/matches" element={<MatchesListPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
+    const needsReviewButton = await screen.findByRole("button", { name: /要確認/u });
+
+    await user.click(needsReviewButton);
+
+    expect(needsReviewButton).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("条件を反映中")).toBeInTheDocument();
+    await waitFor(() => expect(needsReviewRequested).toBe(true));
+
+    responseGate.resolve();
+    expect(await screen.findAllByRole("link", { name: "確認事項を直す" })).not.toHaveLength(0);
   });
 
   it("opens master management from manual creation with return handoff", async () => {

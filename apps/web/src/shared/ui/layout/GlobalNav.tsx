@@ -46,6 +46,7 @@ function NavItemLink({ item }: { item: NavItem }) {
   return (
     <NavLink
       to={item.to}
+      aria-label={item.label}
       className={({ isActive }) =>
         cn(
           "inline-flex min-h-8 items-center gap-2 rounded-[var(--radius-sm)] border px-2.5 py-1 text-sm font-semibold transition-colors duration-150 lg:min-h-9 lg:px-3 lg:py-1.5",
@@ -57,7 +58,7 @@ function NavItemLink({ item }: { item: NavItem }) {
       }
     >
       <span aria-hidden="true">{item.icon}</span>
-      <span>{item.label}</span>
+      <span className="max-[26rem]:sr-only">{item.label}</span>
     </NavLink>
   );
 }

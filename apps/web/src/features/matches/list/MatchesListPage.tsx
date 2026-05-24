@@ -1,4 +1,11 @@
-import { AlertTriangle, Download, PenSquare, RefreshCw, ScanLine } from "lucide-react";
+import {
+  AlertTriangle,
+  Download,
+  LoaderCircle,
+  PenSquare,
+  RefreshCw,
+  ScanLine,
+} from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { MatchesListFilters } from "@/features/matches/list/MatchesListFilters";
@@ -8,18 +15,26 @@ import { MatchMobileCard } from "@/features/matches/list/MatchMobileCard";
 import { useMatchesListPageController } from "@/features/matches/list/useMatchesListPageController";
 import { Button } from "@/shared/ui/actions/Button";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
+import { MomoStationIllustration } from "@/shared/ui/feedback/MomoStationIllustration";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
-function TableSkeleton() {
+function ListSkeleton() {
   return (
-    <div className="grid gap-3">
-      <Skeleton className="min-h-10" />
-      {["s1", "s2", "s3", "s4", "s5"].map((id) => (
-        <Skeleton key={id} className="min-h-18" />
-      ))}
+    <div className="min-h-[24rem]">
+      <div className="hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 lg:grid lg:gap-3">
+        <Skeleton className="min-h-10" />
+        {["s1", "s2", "s3", "s4"].map((id) => (
+          <Skeleton key={id} className="min-h-24" />
+        ))}
+      </div>
+      <div className="grid gap-3 lg:hidden">
+        {["m1", "m2", "m3"].map((id) => (
+          <Skeleton key={id} className="min-h-56 rounded-[var(--radius-md)]" />
+        ))}
+      </div>
     </div>
   );
 }
@@ -52,25 +67,36 @@ export function MatchesListPage() {
         title="試合一覧"
       />
 
-      <section className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <Link to="/ocr/new">
-            <Button icon={<ScanLine className="size-4" />}>OCR取り込み</Button>
+      <section className="grid gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+          <Link className="col-span-2 sm:col-span-1" to="/ocr/new">
+            <Button className="w-full sm:w-auto" icon={<ScanLine className="size-4" />}>
+              OCR取り込み
+            </Button>
           </Link>
           <Link to="/matches/new">
-            <Button icon={<PenSquare className="size-4" />} variant="secondary">
+            <Button
+              className="w-full sm:w-auto"
+              icon={<PenSquare className="size-4" />}
+              variant="secondary"
+            >
               手入力で作成
             </Button>
           </Link>
           <Link to="/exports">
-            <Button icon={<Download className="size-4" />} variant="secondary">
+            <Button
+              className="w-full sm:w-auto"
+              icon={<Download className="size-4" />}
+              variant="secondary"
+            >
               CSV/TSV出力
             </Button>
           </Link>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2 md:justify-end">
           {isStale ? (
-            <span className="text-sm font-medium text-[var(--color-text-secondary)]">
+            <span className="momo-enter inline-flex items-center gap-2 rounded-full bg-[var(--color-action)]/10 px-3 py-1 text-sm font-medium text-[var(--color-text-secondary)]">
+              <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin" />
               条件を反映中
             </span>
           ) : null}
@@ -106,17 +132,23 @@ export function MatchesListPage() {
         gameTitles={gameTitles}
         heldEvents={heldEvents}
         initialSearch={search}
+        pending={isStale}
         onApply={applySearch}
         onClear={clearSearch}
         seasons={seasons}
       />
 
-      <section
-        aria-busy={isStale}
-        className={`grid gap-4 transition-opacity duration-150 ${isStale ? "opacity-70" : ""}`}
-      >
+      <section aria-busy={isStale} className="relative grid min-h-[24rem] gap-4">
+        {isStale && !showMatchesLoading ? (
+          <div className="momo-enter pointer-events-none absolute inset-x-0 top-0 z-[var(--z-base)] flex justify-center">
+            <span className="inline-flex items-center gap-2 rounded-b-[var(--radius-sm)] border-x border-b border-[var(--color-action)]/25 bg-[var(--color-surface)] px-3 py-1 text-xs font-semibold text-[var(--color-text-secondary)] shadow-sm">
+              <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin" />
+              一覧を更新中
+            </span>
+          </div>
+        ) : null}
         {showMatchesLoading ? (
-          <TableSkeleton />
+          <ListSkeleton />
         ) : showMatchesError ? (
           <Notice tone="danger" title="試合一覧を読み込めませんでした。">
             しばらくしてから再読み込みしてください。
@@ -139,10 +171,19 @@ export function MatchesListPage() {
                 </div>
               )
             }
+            className="min-h-[18rem]"
             description={
-              hasFilters
-                ? "状態や開催条件を広げると、他の試合記録も表示できます。"
-                : "最初の試合は、OCR取り込みまたは手入力で登録してください。"
+              <span className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
+                <span>
+                  {hasFilters
+                    ? "状態や開催条件を広げると、他の試合記録も表示できます。"
+                    : "最初の試合は、OCR取り込みまたは手入力で登録してください。"}
+                </span>
+                <MomoStationIllustration
+                  className="mx-auto max-w-36 sm:mr-0 sm:ml-auto"
+                  tone={hasFilters ? "empty" : "ready"}
+                />
+              </span>
             }
             icon={<AlertTriangle className="size-5" />}
             title={hasFilters ? "条件に合う試合がありません" : "まだ試合がありません"}

@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { OcrCapturePage } from "@/features/ocrCapture/OcrCapturePage";
 import { DevUserPicker } from "@/shared/auth/DevUserPicker";
+import { createDeferred } from "@/test/deferred";
 import { installObjectUrlMock } from "@/test/doubles/dom";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
@@ -158,6 +159,41 @@ describe("OcrCapturePage", () => {
         requestedScreenType: "total_assets",
       }),
     ]);
+  });
+
+  it("shows pending feedback immediately and prevents duplicate OCR starts", async () => {
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    const draftGate = createDeferred();
+    let createdDraftCount = 0;
+
+    server.use(
+      http.post("/api/match-drafts", async () => {
+        createdDraftCount += 1;
+        await draftGate.promise;
+        return HttpResponse.json({
+          matchDraftId: "draft-created-1",
+          status: "ocr_running",
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        });
+      }),
+    );
+
+    renderCaptureRoute();
+
+    expect(await screen.findByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
+    const input = await screen.findByLabelText("OCRの画像をアップロード");
+    await user.upload(input, new File(["image"], "assets.png", { type: "image/png" }));
+    await user.click(screen.getByRole("button", { name: "読み取りを開始して試合一覧へ" }));
+    await user.click(await screen.findByRole("button", { name: "このまま読み取りを開始" }));
+
+    const pendingButton = await screen.findByRole("button", { name: "読み取り開始中…" });
+    expect(pendingButton).toBeDisabled();
+    await user.click(pendingButton);
+    expect(createdDraftCount).toBe(1);
+
+    draftGate.resolve();
+    expect(await screen.findByText("matches-page")).toBeInTheDocument();
   });
 
   it("uses the final tray position as the OCR image type hint", async () => {

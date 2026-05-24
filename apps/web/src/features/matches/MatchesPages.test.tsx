@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { MatchCreatePage } from "@/features/matches/MatchCreatePage";
 import { MatchDetailPage } from "@/features/matches/MatchDetailPage";
+import { MatchEditPage } from "@/features/matches/MatchEditPage";
 import { MatchesListPage } from "@/features/matches/MatchesListPage";
 import { createDeferred } from "@/test/deferred";
 import { setupMsw } from "@/test/msw/lifecycle";
@@ -230,6 +231,115 @@ describe("MatchesListPage", () => {
       "returnTo=%2Fmatches%2Fnew",
     );
     expect(screen.getByLabelText("current location")).toHaveTextContent("handoffId=");
+  });
+});
+
+describe("MatchEditPage", () => {
+  let queryClient: QueryClient;
+  beforeEach(() => {
+    queryClient = createTestQueryClient();
+    user = userEvent.setup();
+  });
+
+  it("shows a structured loading shell while the saved match is loading", async () => {
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    const responseGate = createDeferred();
+    server.use(
+      http.get("/api/matches/:matchId", async ({ params }) => {
+        await responseGate.promise;
+        return HttpResponse.json({
+          createdAt: "2026-01-01T00:00:00.000Z",
+          createdByMemberId: "member_ponta",
+          gameTitleId: "gt_momotetsu_2",
+          heldEventId: "held-1",
+          layoutFamily: "momotetsu_2",
+          mapMasterId: "map_east",
+          matchId: params["matchId"],
+          matchNoInEvent: 1,
+          ownerMemberId: "member_ponta",
+          playedAt: "2026-01-01T00:00:00.000Z",
+          players: [
+            {
+              incidents: {
+                cardShop: 0,
+                cardStation: 0,
+                destination: 0,
+                minusStation: 0,
+                plusStation: 0,
+                suriNoGinji: 0,
+              },
+              memberId: "member_ponta",
+              playOrder: 1,
+              rank: 1,
+              revenueManYen: 200,
+              totalAssetsManYen: 1000,
+            },
+            {
+              incidents: {
+                cardShop: 0,
+                cardStation: 0,
+                destination: 0,
+                minusStation: 0,
+                plusStation: 0,
+                suriNoGinji: 0,
+              },
+              memberId: "member_akane_mami",
+              playOrder: 2,
+              rank: 2,
+              revenueManYen: 150,
+              totalAssetsManYen: 800,
+            },
+            {
+              incidents: {
+                cardShop: 0,
+                cardStation: 0,
+                destination: 0,
+                minusStation: 0,
+                plusStation: 0,
+                suriNoGinji: 0,
+              },
+              memberId: "member_otaka",
+              playOrder: 3,
+              rank: 3,
+              revenueManYen: 100,
+              totalAssetsManYen: 600,
+            },
+            {
+              incidents: {
+                cardShop: 0,
+                cardStation: 0,
+                destination: 0,
+                minusStation: 0,
+                plusStation: 0,
+                suriNoGinji: 0,
+              },
+              memberId: "member_eu",
+              playOrder: 4,
+              rank: 4,
+              revenueManYen: 50,
+              totalAssetsManYen: 400,
+            },
+          ],
+          seasonMasterId: "season_current",
+        });
+      }),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches/match-1/edit"]}>
+          <Routes>
+            <Route path="/matches/:matchId/edit" element={<MatchEditPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByLabelText("試合編集を読み込み中")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "試合編集を読み込み中" })).toBeInTheDocument();
+
+    responseGate.resolve();
+    expect(await screen.findByRole("heading", { name: "試合を編集" })).toBeInTheDocument();
   });
 });
 

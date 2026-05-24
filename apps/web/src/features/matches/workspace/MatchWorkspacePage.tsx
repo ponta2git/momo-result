@@ -14,6 +14,7 @@ import { cn } from "@/shared/ui/cn";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { LiveRegion } from "@/shared/ui/feedback/LiveRegion";
 import { Notice } from "@/shared/ui/feedback/Notice";
+import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { Card } from "@/shared/ui/layout/Card";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
@@ -24,6 +25,48 @@ type MatchWorkspacePageProps = {
   matchSessionId?: string;
   mode: WorkspaceMode;
 };
+
+function MatchWorkspaceLoading() {
+  return (
+    <PageFrame
+      aria-busy="true"
+      aria-label="試合編集を読み込み中"
+      className="gap-5"
+      width="workspace"
+    >
+      <PageHeader
+        description="保存済みの試合内容を取得しています。"
+        eyebrow="試合記録"
+        title="試合編集を読み込み中"
+      />
+
+      <Card>
+        <div className="grid gap-3 md:grid-cols-4">
+          <Skeleton className="h-10" />
+          <Skeleton className="h-10" />
+          <Skeleton className="h-10" />
+          <Skeleton className="h-10" />
+        </div>
+      </Card>
+
+      <Card className="p-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {["player-a", "player-b", "player-c", "player-d"].map((id) => (
+            <div
+              key={id}
+              className="grid gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] p-3"
+            >
+              <Skeleton className="h-6 w-2/3" />
+              <Skeleton className="h-10" />
+              <Skeleton className="h-10" />
+              <Skeleton className="h-10" />
+            </div>
+          ))}
+        </div>
+      </Card>
+    </PageFrame>
+  );
+}
 
 export function MatchWorkspacePage({
   matchDraftId,
@@ -88,11 +131,7 @@ export function MatchWorkspacePage({
   } = controller;
 
   if (editLoading) {
-    return (
-      <PageFrame>
-        <p className="text-[var(--color-text-secondary)]">読み込んでいます…</p>
-      </PageFrame>
-    );
+    return <MatchWorkspaceLoading />;
   }
 
   if (editLoadFailed) {

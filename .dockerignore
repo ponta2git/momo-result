@@ -1,5 +1,6 @@
 .git
 .github
+.agents
 .bloop
 .metals
 .scala-build
@@ -24,5 +25,7 @@ apps/ocr-worker/out
 apps/ocr-worker/local-expected
 docs/frontend-rebuild
 docs/mvp-todos.md
+docs/ops
+docs/tmp
 ocr_samples
 samples

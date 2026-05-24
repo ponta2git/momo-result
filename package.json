@@ -10,6 +10,7 @@
     "api:quality": "cd apps/api && sbt apiQuality",
     "api:test": "cd apps/api && sbt test",
     "api:coverage": "cd apps/api && sbt apiCoverage",
+    "public:safety:check": "scripts/ci/public-repo-safety-check.sh",
     "web:dev": "pnpm --filter web dev",
     "web:build": "pnpm --filter web build",
     "web:lint": "pnpm --filter web lint",

@@ -8,7 +8,6 @@ import type {
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import type { GameTitleResponse, SeasonMasterResponse } from "@/shared/api/masters";
 import { Button } from "@/shared/ui/actions/Button";
-import { SegmentedControl } from "@/shared/ui/forms/SegmentedControl";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 
 type MatchesListFiltersProps = {
@@ -118,30 +117,16 @@ export function MatchesListFilters({
             </span>
           ) : null}
         </div>
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_16rem] lg:items-end">
-          <div className="min-w-0">
-            <p className="mb-2 hidden text-sm font-semibold text-[var(--color-text-primary)] min-[44rem]:block">
-              状態
-            </p>
-            <div className="hidden min-[44rem]:block">
-              <SegmentedControl
-                className="w-full"
-                label="状態"
-                onValueChange={(value) => patchSearch({ status: value as MatchListStatusFilter })}
-                options={statusOptions}
-                value={initialSearch.status}
-              />
-            </div>
-            <div className="min-[44rem]:hidden">
-              <SegmentedControl
-                asSelect
-                label="状態"
-                onValueChange={(value) => patchSearch({ status: value as MatchListStatusFilter })}
-                options={statusOptions}
-                value={initialSearch.status}
-              />
-            </div>
-          </div>
+        <div className="grid gap-4 sm:grid-cols-[minmax(12rem,16rem)_minmax(12rem,16rem)] sm:items-end">
+          <SelectField
+            label="状態"
+            options={statusOptions}
+            value={initialSearch.status}
+            onChange={(event) => {
+              const value = event.currentTarget.value;
+              patchSearch({ status: value as MatchListStatusFilter });
+            }}
+          />
           <SelectField
             label="表の並び順"
             options={sortOptions}

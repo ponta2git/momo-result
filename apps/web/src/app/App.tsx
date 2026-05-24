@@ -5,7 +5,7 @@ import { RouteSuspenseFallback } from "@/shared/ui/feedback/RouteSuspenseFallbac
 
 export function App() {
   return (
-    <Suspense fallback={<RouteSuspenseFallback />}>
+    <Suspense fallback={<RouteSuspenseFallback asMain />}>
       <Outlet />
     </Suspense>
   );

@@ -47,9 +47,9 @@ function DialogContentFrame({
             {title}
           </BaseDialog.Title>
           {description ? (
-            <p className="mt-1 text-sm leading-6 text-pretty text-[var(--color-text-secondary)]">
+            <BaseDialog.Description className="mt-1 text-sm leading-6 text-pretty text-[var(--color-text-secondary)]">
               {description}
-            </p>
+            </BaseDialog.Description>
           ) : null}
         </div>
         <BaseDialog.Close
@@ -156,13 +156,13 @@ export function AlertDialog({
         <BaseAlertDialog.Popup className="fixed inset-0 z-[var(--z-dialog)] mx-auto flex w-full max-w-[40rem] items-center justify-center p-4">
           <div className="w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] shadow-lg">
             <div className="space-y-3">
-              <h2 className="text-lg font-semibold text-balance text-[var(--color-text-primary)]">
+              <BaseAlertDialog.Title className="text-lg font-semibold text-balance text-[var(--color-text-primary)]">
                 {title}
-              </h2>
+              </BaseAlertDialog.Title>
               {description ? (
-                <p className="text-sm leading-6 text-pretty text-[var(--color-text-secondary)]">
+                <BaseAlertDialog.Description className="text-sm leading-6 text-pretty text-[var(--color-text-secondary)]">
                   {description}
-                </p>
+                </BaseAlertDialog.Description>
               ) : null}
               <div className={cn("min-w-0", className)}>{children}</div>
               <div className="flex flex-wrap justify-end gap-2">

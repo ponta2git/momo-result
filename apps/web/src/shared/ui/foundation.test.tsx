@@ -6,7 +6,9 @@ import { describe, expect, it, vi } from "vitest";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";
+import { Dialog, AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
+import { RouteSuspenseFallback } from "@/shared/ui/feedback/RouteSuspenseFallback";
 import { NumberField } from "@/shared/ui/forms/NumberField";
 import { SegmentedControl } from "@/shared/ui/forms/SegmentedControl";
 import { StatusPill } from "@/shared/ui/status/StatusPill";
@@ -52,6 +54,59 @@ describe("ui foundation", () => {
     render(<Notice tone="danger">失敗</Notice>);
 
     expect(screen.getByRole("alert")).toHaveTextContent("失敗");
+  });
+
+  it("Dialog exposes its title and description to assistive technology", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <Dialog
+        description="保存前に内容を確認します。"
+        title="試合を確定"
+        trigger={<Button>開く</Button>}
+      >
+        <p>本文</p>
+      </Dialog>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "開く" }));
+
+    expect(
+      await screen.findByRole("dialog", {
+        description: "保存前に内容を確認します。",
+        name: "試合を確定",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("AlertDialog exposes its destructive context to assistive technology", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <AlertDialog
+        description="この操作は取り消せません。"
+        title="試合を削除しますか？"
+        trigger={<Button>削除</Button>}
+        onConfirm={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "削除" }));
+
+    expect(
+      await screen.findByRole("alertdialog", {
+        description: "この操作は取り消せません。",
+        name: "試合を削除しますか？",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("RouteSuspenseFallback can provide the root main landmark", () => {
+    render(<RouteSuspenseFallback asMain />);
+
+    const main = screen.getByRole("main");
+    expect(main).toHaveAttribute("aria-busy", "true");
+    expect(main).toHaveAttribute("id", "main-content");
   });
 
   it("StatusPill maps internal status to user-facing labels", () => {

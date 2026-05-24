@@ -11,11 +11,38 @@ import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 
-function AuthLoading({ message }: { message: string }) {
+function StandaloneRouteMain({ children }: { children: ReactNode }) {
   return (
-    <PageFrame>
+    <main
+      className="mx-auto flex min-h-dvh w-full flex-col px-3 py-4 sm:px-4 sm:py-6"
+      id="main-content"
+    >
+      {children}
+    </main>
+  );
+}
+
+function RouteGuardFrame({
+  children,
+  standalone = false,
+}: {
+  children: ReactNode;
+  standalone?: boolean;
+}) {
+  const frame = <PageFrame>{children}</PageFrame>;
+
+  if (standalone) {
+    return <StandaloneRouteMain>{frame}</StandaloneRouteMain>;
+  }
+
+  return frame;
+}
+
+function AuthLoading({ message, standalone = false }: { message: string; standalone?: boolean }) {
+  return (
+    <RouteGuardFrame standalone={standalone}>
       <p className="text-sm text-[var(--color-text-secondary)]">{message}</p>
-    </PageFrame>
+    </RouteGuardFrame>
   );
 }
 
@@ -23,7 +50,7 @@ export function RootRedirect() {
   const auth = useAuth();
 
   if (auth.isChecking) {
-    return <AuthLoading message="ログイン状態を確認しています…" />;
+    return <AuthLoading message="ログイン状態を確認しています…" standalone />;
   }
 
   if (auth.isForbidden) {
@@ -42,7 +69,7 @@ export function PublicOnlyRoute({ children }: { children: ReactNode }) {
   const [searchParams] = useSearchParams();
 
   if (auth.isChecking) {
-    return <AuthLoading message="ログイン状態を確認しています…" />;
+    return <AuthLoading message="ログイン状態を確認しています…" standalone />;
   }
 
   if (auth.isAuthenticated) {
@@ -58,7 +85,7 @@ export function AuthenticatedRoute({ children }: { children: ReactNode }) {
   const location = useLocation();
 
   if (auth.isChecking) {
-    return <AuthLoading message="ログイン状態を確認しています…" />;
+    return <AuthLoading message="ログイン状態を確認しています…" standalone />;
   }
 
   if (auth.isUnauthorized) {
@@ -68,17 +95,17 @@ export function AuthenticatedRoute({ children }: { children: ReactNode }) {
 
   if (auth.isForbidden) {
     return (
-      <PageFrame>
+      <RouteGuardFrame standalone>
         <Notice tone="danger" title="利用権限がありません">
           このアカウントは利用許可されていません。管理者に連絡してください。
         </Notice>
-      </PageFrame>
+      </RouteGuardFrame>
     );
   }
 
   if (auth.error) {
     return (
-      <PageFrame>
+      <RouteGuardFrame standalone>
         <Notice tone="danger" title={auth.error.title}>
           {auth.error.detail}
         </Notice>
@@ -87,7 +114,7 @@ export function AuthenticatedRoute({ children }: { children: ReactNode }) {
             再試行
           </Button>
         </div>
-      </PageFrame>
+      </RouteGuardFrame>
     );
   }
 

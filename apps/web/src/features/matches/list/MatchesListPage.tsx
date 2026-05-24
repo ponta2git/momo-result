@@ -11,7 +11,6 @@ import { MatchesListFilters } from "@/features/matches/list/MatchesListFilters";
 import { MatchesTable } from "@/features/matches/list/MatchesTable";
 import { MatchesWorkQueueSummary } from "@/features/matches/list/MatchesWorkQueueSummary";
 import { MatchMobileCard } from "@/features/matches/list/MatchMobileCard";
-import { MatchNightRecap } from "@/features/matches/list/MatchNightRecap";
 import { useMatchesListPageController } from "@/features/matches/list/useMatchesListPageController";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
@@ -57,7 +56,6 @@ export function MatchesListPage() {
     showMatchesError,
     showMatchesLoading,
     summaryCounts,
-    summaryItems,
     summaryLoading,
   } = useMatchesListPageController();
 
@@ -125,12 +123,6 @@ export function MatchesListPage() {
         onSelectStatus={(status) => {
           applySearch({ ...search, status });
         }}
-      />
-
-      <MatchNightRecap
-        incompleteCount={summaryCounts.incompleteCount}
-        items={summaryItems}
-        loading={summaryLoading}
       />
 
       {masterLoadFailed ? (

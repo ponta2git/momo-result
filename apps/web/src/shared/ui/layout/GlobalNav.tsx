@@ -89,7 +89,7 @@ export function GlobalNav({
           <div className="flex min-w-0 items-center gap-2 lg:col-start-1 lg:row-start-1">
             <Link
               className="rounded-[var(--radius-xs)] bg-[var(--color-surface-subtle)] px-2 py-1 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-surface-selected)]"
-              to="/matches"
+              to={isAuthenticated ? "/matches" : "/login"}
             >
               momo-result
             </Link>

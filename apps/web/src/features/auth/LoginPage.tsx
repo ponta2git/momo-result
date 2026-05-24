@@ -29,7 +29,12 @@ export function LoginPage() {
             </Notice>
           ) : null}
 
-          <AuthPanel auth={undefined} forceDevPicker={import.meta.env.DEV} loginNextPath={next} />
+          <AuthPanel
+            auth={undefined}
+            embedded
+            forceDevPicker={import.meta.env.DEV}
+            loginNextPath={next}
+          />
 
           <p className="text-xs leading-6 text-[var(--color-text-secondary)]">
             別のDiscordアカウントを使う場合は、Discord側でログアウトするか、シークレットウィンドウを利用してください。

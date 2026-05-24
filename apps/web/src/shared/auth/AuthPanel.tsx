@@ -4,14 +4,22 @@ import type { AuthMeResponse } from "@/shared/api/auth";
 import { logout } from "@/shared/api/auth";
 import { DevUserPicker } from "@/shared/auth/DevUserPicker";
 import { buildAuthLoginHref } from "@/shared/auth/redirectPath";
+import { Button, buttonClassName } from "@/shared/ui/actions/Button";
+import { cn } from "@/shared/ui/cn";
 
 type AuthPanelProps = {
   auth: AuthMeResponse | undefined;
+  embedded?: boolean;
   forceDevPicker?: boolean;
   loginNextPath?: string | undefined;
 };
 
-export function AuthPanel({ auth, forceDevPicker = false, loginNextPath }: AuthPanelProps) {
+export function AuthPanel({
+  auth,
+  embedded = false,
+  forceDevPicker = false,
+  loginNextPath,
+}: AuthPanelProps) {
   const queryClient = useQueryClient();
   const logoutMutation = useMutation({
     mutationFn: logout,
@@ -21,30 +29,43 @@ export function AuthPanel({ auth, forceDevPicker = false, loginNextPath }: AuthP
   });
 
   if (import.meta.env.DEV) {
-    return <DevUserPicker force={forceDevPicker} />;
+    return <DevUserPicker embedded={embedded} force={forceDevPicker} />;
   }
 
   return (
-    <div className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
-      <p className="text-xs font-semibold text-[var(--color-text-secondary)]">ログイン中</p>
+    <div
+      className={cn(
+        embedded
+          ? "grid gap-2"
+          : "rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3",
+      )}
+    >
+      <p className="text-xs font-semibold text-[var(--color-text-secondary)]">
+        {auth ? "ログイン中" : "Discordログイン"}
+      </p>
       {auth ? (
         <div className="mt-2 flex items-center justify-between gap-3">
           <p className="text-sm font-semibold text-[var(--color-text-primary)]">
             {auth.displayName}
           </p>
-          <button
-            type="button"
-            onClick={() => logoutMutation.mutate()}
+          <Button
             disabled={logoutMutation.isPending}
-            className="rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-2 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-surface-subtle)] disabled:opacity-60"
+            pending={logoutMutation.isPending}
+            pendingLabel="ログアウト中"
+            size="sm"
+            variant="secondary"
+            onClick={() => logoutMutation.mutate()}
           >
             ログアウト
-          </button>
+          </Button>
         </div>
       ) : (
         <a
           href={buildAuthLoginHref(loginNextPath)}
-          className="mt-2 inline-flex rounded-[var(--radius-sm)] bg-[var(--color-action)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 active:opacity-95"
+          className={buttonClassName({
+            className: "mt-1 w-fit",
+            variant: "primary",
+          })}
         >
           Discordでログインする
         </a>

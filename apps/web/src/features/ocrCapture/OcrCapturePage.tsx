@@ -58,7 +58,7 @@ export function OcrCapturePage() {
                 : auth.error.detail}
             </p>
           </Notice>
-          <AuthPanel auth={auth.data} forceDevPicker={auth.error.status === 401} />
+          <AuthPanel auth={auth.data} embedded forceDevPicker={auth.error.status === 401} />
         </div>
       ) : null}
 

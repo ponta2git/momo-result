@@ -3,12 +3,14 @@ import { useId } from "react";
 
 import { useDevUser } from "@/shared/auth/useDevUser";
 import { fixedMembers } from "@/shared/domain/members";
+import { cn } from "@/shared/ui/cn";
 
 type DevUserPickerProps = {
+  embedded?: boolean;
   force?: boolean;
 };
 
-export function DevUserPicker({ force = false }: DevUserPickerProps) {
+export function DevUserPicker({ embedded = false, force = false }: DevUserPickerProps) {
   const id = useId();
   const queryClient = useQueryClient();
   const { devUser, setDevUser, lockedByEnv } = useDevUser();
@@ -23,7 +25,13 @@ export function DevUserPicker({ force = false }: DevUserPickerProps) {
   }));
 
   return (
-    <div className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
+    <div
+      className={cn(
+        embedded
+          ? "grid gap-2"
+          : "rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3",
+      )}
+    >
       <label
         htmlFor={id}
         className="block text-xs font-semibold text-[var(--color-text-secondary)]"

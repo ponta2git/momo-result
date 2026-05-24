@@ -5,6 +5,7 @@ import { useAdminAccountsPageController } from "@/features/adminAccounts/useAdmi
 import type { LoginAccountResponse, UpdateLoginAccountRequest } from "@/shared/api/adminAccounts";
 import { fixedMembers, memberDisplayName } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
+import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
@@ -163,23 +164,54 @@ function AccountRow({
         {account.isAdmin ? "管理者" : "一般"} / {account.loginEnabled ? "許可" : "停止"}
       </td>
       <td className="flex flex-wrap gap-2 px-3 py-2">
-        <Button
+        <AccountActionConfirm
           disabled={isPending}
-          onClick={() => onPatch({ loginEnabled: !account.loginEnabled })}
-          size="sm"
-          variant="secondary"
-        >
-          {account.loginEnabled ? "ログイン停止" : "ログイン許可"}
-        </Button>
-        <Button
+          title={account.loginEnabled ? "ログインを停止しますか？" : "ログインを許可しますか？"}
+          description={`${account.displayName} のログイン状態を変更します。変更後すぐに利用可否へ反映されます。`}
+          label={account.loginEnabled ? "ログイン停止" : "ログイン許可"}
+          confirmLabel={account.loginEnabled ? "停止する" : "許可する"}
+          onConfirm={() => onPatch({ loginEnabled: !account.loginEnabled })}
+        />
+        <AccountActionConfirm
           disabled={isPending}
-          onClick={() => onPatch({ isAdmin: !account.isAdmin })}
-          size="sm"
-          variant="secondary"
-        >
-          {account.isAdmin ? "管理者解除" : "管理者にする"}
-        </Button>
+          title={account.isAdmin ? "管理者権限を解除しますか？" : "管理者権限を付与しますか？"}
+          description={`${account.displayName} の管理者権限を変更します。設定管理とアカウント管理の操作範囲が変わります。`}
+          label={account.isAdmin ? "管理者解除" : "管理者にする"}
+          confirmLabel={account.isAdmin ? "解除する" : "付与する"}
+          onConfirm={() => onPatch({ isAdmin: !account.isAdmin })}
+        />
       </td>
     </tr>
+  );
+}
+
+function AccountActionConfirm({
+  confirmLabel,
+  description,
+  disabled,
+  label,
+  onConfirm,
+  title,
+}: {
+  confirmLabel: string;
+  description: string;
+  disabled: boolean;
+  label: string;
+  onConfirm: () => void;
+  title: string;
+}) {
+  return (
+    <AlertDialog
+      cancelLabel="キャンセル"
+      confirmLabel={confirmLabel}
+      description={description}
+      title={title}
+      trigger={
+        <Button disabled={disabled} size="sm" variant="secondary">
+          {label}
+        </Button>
+      }
+      onConfirm={onConfirm}
+    />
   );
 }

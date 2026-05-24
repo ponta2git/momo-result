@@ -42,6 +42,8 @@
 
 Playwright E2E smoke は、開催作成、OCR取り込み開始、OCRレビュー確定、試合詳細、CSV/TSV出力、マスタ/alias管理などの主要UXを狭く通す。assertion は見出しの存在だけでなく、API response、URL、download scope、DB-backedに保存された結果など、壊れ方を捕まえる外部契約に置く。
 
+Playwright locator は、実際のアクセシブルロールと名前を組み合わせて対象を一意にする。フォーム項目とナビゲーション、tab と button など、同じ表示名が複数ロールに現れる画面では `getByLabel` や広い text locator だけで選ばず、`getByRole("combobox" | "tab" | "button" | "link", { name })` で操作対象を明示する。
+
 ## 3. Web Rules
 
 ### Query / API Error

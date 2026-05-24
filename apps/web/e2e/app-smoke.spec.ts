@@ -162,7 +162,7 @@ test("downloads an export for the confirmed match", async ({ page }) => {
   await page.goto(`/exports?matchId=${encodeURIComponent(matchId)}&format=tsv`);
 
   await expect(page.getByRole("heading", { exact: true, name: "CSV / TSV 出力" })).toBeVisible();
-  await expect(page.getByLabel("試合")).toHaveValue(matchId);
+  await expect(page.getByRole("combobox", { name: "試合" })).toHaveValue(matchId);
 
   const exportResponse = page.waitForResponse(
     (response) =>

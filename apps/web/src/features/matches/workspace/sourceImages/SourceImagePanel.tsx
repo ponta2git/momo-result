@@ -19,6 +19,7 @@ import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { triggerBrowserDownload } from "@/shared/browser/downloadFile";
 import { Button } from "@/shared/ui/actions/Button";
 import { Dialog } from "@/shared/ui/feedback/Dialog";
+import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { Card } from "@/shared/ui/layout/Card";
 
 type SourceImagePanelProps = {
@@ -42,6 +43,15 @@ const archiveRateLimitError =
   "元画像の保存が短時間に集中しています。少し待ってから再度お試しください。";
 const archiveTooLargeError =
   "元画像ZIPのサイズが上限を超えています。必要な画像を個別に保存してください。";
+
+function SourceImageLoadingFrame({ detail, label }: { detail: string; label: string }) {
+  return (
+    <div aria-busy="true" aria-label={label} className="grid min-h-[13rem] gap-3">
+      <Skeleton className="h-[10rem] w-full rounded-[var(--radius-sm)]" />
+      <p className="text-sm text-[var(--color-text-secondary)]">{detail}</p>
+    </div>
+  );
+}
 
 export function SourceImagePanel({
   loading,
@@ -198,11 +208,14 @@ export function SourceImagePanel({
 
       <div className="mt-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
         {loading ? (
-          <p className="text-sm text-[var(--color-text-secondary)]">画像を取得しています…</p>
+          <SourceImageLoadingFrame detail="画像一覧を取得しています。" label="元画像を取得中" />
         ) : null}
 
         {!loading && activeState?.status === "available" && loadedImage.status === "loading" ? (
-          <p className="text-sm text-[var(--color-text-secondary)]">画像を読み込んでいます…</p>
+          <SourceImageLoadingFrame
+            detail="元画像を読み込んでいます。"
+            label={`${sourceImageKindLabels[activeState.kind]}の元画像を読み込み中`}
+          />
         ) : null}
 
         {!loading && activeState?.status === "available" && loadedImage.status === "error" ? (

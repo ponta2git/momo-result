@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { SourceImagePanel } from "@/features/matches/workspace/sourceImages/SourceImagePanel";
+import { createDeferred } from "@/test/deferred";
 import { fetchCallsOf, installAnchorClickMock, installObjectUrlMock } from "@/test/doubles/dom";
 
 const draftId = "draft-1";
@@ -28,6 +29,53 @@ const sourceImages = [
 ];
 
 describe("SourceImagePanel", () => {
+  it("keeps a stable preview frame while the source image list is loading", () => {
+    render(
+      <SourceImagePanel
+        loading
+        matchDraftId={draftId}
+        preferredKind="total_assets"
+        sourceImages={undefined}
+      />,
+    );
+
+    const loadingFrame = screen.getByLabelText("元画像を取得中");
+    expect(loadingFrame).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByRole("button", { name: "元画像を保存" })).toBeDisabled();
+    expect(screen.queryByText("保存できる元画像がありません。")).not.toBeInTheDocument();
+  });
+
+  it("keeps a stable preview frame while the active source image is loading", async () => {
+    installObjectUrlMock({ createObjectURL: () => "blob:source-image" });
+    const responseGate = createDeferred<Response>();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => responseGate.promise),
+    );
+
+    render(
+      <SourceImagePanel
+        loading={false}
+        matchDraftId={draftId}
+        preferredKind="total_assets"
+        sourceImages={sourceImages.slice(0, 1)}
+      />,
+    );
+
+    const loadingFrame = await screen.findByLabelText("総資産の元画像を読み込み中");
+    expect(loadingFrame).toHaveAttribute("aria-busy", "true");
+
+    responseGate.resolve(
+      new Response(new Blob(["mock-image"], { type: "image/png" }), {
+        headers: { "Content-Type": "image/png" },
+      }),
+    );
+    expect(await screen.findByRole("img", { name: "総資産の元画像" })).toHaveAttribute(
+      "src",
+      "blob:source-image",
+    );
+  });
+
   it("loads source images through the API client so dev auth headers are sent", async () => {
     window.localStorage.setItem("momoresult.devUser", "account_ponta");
     installObjectUrlMock({ createObjectURL: () => "blob:source-image" });

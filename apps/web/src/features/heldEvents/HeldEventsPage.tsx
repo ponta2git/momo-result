@@ -250,11 +250,6 @@ export function HeldEventsPage() {
           description={`${formatDateTime(deleteTarget.heldAt)} の開催履歴を削除します。この操作は取り消せません。`}
           open={Boolean(deleteTarget)}
           title="開催履歴を削除しますか？"
-          trigger={
-            <button className="sr-only" type="button">
-              削除確認
-            </button>
-          }
           onConfirm={async () => {
             await deleteMutation.mutateAsync(deleteTarget);
           }}

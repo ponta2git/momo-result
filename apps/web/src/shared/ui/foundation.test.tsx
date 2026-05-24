@@ -101,6 +101,25 @@ describe("ui foundation", () => {
     ).toBeInTheDocument();
   });
 
+  it("AlertDialog supports controlled display without a hidden trigger", async () => {
+    render(
+      <AlertDialog
+        open
+        description="一覧から削除します。"
+        title="開催履歴を削除しますか？"
+        onConfirm={vi.fn()}
+      />,
+    );
+
+    expect(
+      await screen.findByRole("alertdialog", {
+        description: "一覧から削除します。",
+        name: "開催履歴を削除しますか？",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "削除確認" })).not.toBeInTheDocument();
+  });
+
   it("RouteSuspenseFallback can provide the root main landmark", () => {
     render(<RouteSuspenseFallback asMain />);
 

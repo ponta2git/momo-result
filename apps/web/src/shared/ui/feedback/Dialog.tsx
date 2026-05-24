@@ -30,7 +30,7 @@ type AlertDialogProps = DialogBaseProps & {
   confirmLabel?: ReactNode | undefined;
   onConfirm: () => Promise<void> | void;
   pending?: boolean | undefined;
-  trigger: ReactElement;
+  trigger?: ReactElement | undefined;
 };
 
 function DialogContentFrame({
@@ -150,7 +150,7 @@ export function AlertDialog({
 
   return (
     <BaseAlertDialog.Root onOpenChange={setOpen} open={actualOpen}>
-      <BaseAlertDialog.Trigger render={trigger} />
+      {trigger ? <BaseAlertDialog.Trigger render={trigger} /> : null}
       <BaseAlertDialog.Portal>
         <BaseAlertDialog.Backdrop className="fixed inset-0 z-[var(--z-dialog)] bg-[var(--momo-night-900)]/35" />
         <BaseAlertDialog.Popup className="fixed inset-0 z-[var(--z-dialog)] mx-auto flex w-full max-w-[40rem] items-center justify-center p-4">

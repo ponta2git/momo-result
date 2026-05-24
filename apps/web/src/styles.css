@@ -16,7 +16,7 @@
   --momo-ink-300: #8a949e;
   --momo-line: rgb(32 37 43 / 0.12);
   --momo-line-strong: rgb(32 37 43 / 0.22);
-  --momo-station-blue: #2f6f9f;
+  --momo-rail-blue: #2f6f9f;
   --momo-tray-assets: #4c7896;
   --momo-tray-revenue: #8c7651;
   --momo-tray-incident: #6f7d74;
@@ -36,7 +36,7 @@
   --color-text-muted: var(--momo-ink-300);
   --color-border: var(--momo-line);
   --color-border-strong: var(--momo-line-strong);
-  --color-action: var(--momo-station-blue);
+  --color-action: var(--momo-rail-blue);
   --color-success: var(--momo-route-green);
   --color-warning: var(--momo-ticket-yellow);
   --color-review: var(--momo-alert-orange);

@@ -15,7 +15,7 @@ import { useMatchesListPageController } from "@/features/matches/list/useMatches
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
-import { MomoStationBackdrop } from "@/shared/ui/feedback/MomoStationBackdrop";
+import { MomoTransitBackdrop } from "@/shared/ui/feedback/MomoTransitBackdrop";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
@@ -183,7 +183,7 @@ export function MatchesListPage() {
                     ? "状態や開催条件を広げると、他の試合記録も表示できます。"
                     : "まずはOCR取り込みか手入力で、最初の試合を登録します。"}
                 </span>
-                <MomoStationBackdrop tone={hasFilters ? "empty" : "ready"} />
+                <MomoTransitBackdrop tone={hasFilters ? "empty" : "ready"} />
               </>
             }
             icon={<AlertTriangle className="size-5" />}

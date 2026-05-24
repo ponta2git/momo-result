@@ -69,12 +69,12 @@ describe("MatchesListPage", () => {
 
     expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
     expect(await screen.findByText("まだ試合がありません")).toBeInTheDocument();
-    expect(container.querySelector('[data-illustration-backdrop="momo-station"]')).not.toBeNull();
-    const station = container.querySelector('[data-illustration="momo-station"]');
-    expect(station).not.toHaveTextContent("駅");
-    expect(station?.querySelector('[data-station-part="station-roof"]')).not.toBeNull();
-    expect(station?.querySelector('[data-station-part="station-clock"]')).not.toBeNull();
-    expect(station?.querySelector('[data-station-part="ticket-gate"]')).not.toBeNull();
+    expect(container.querySelector('[data-illustration-backdrop="momo-transit"]')).not.toBeNull();
+    const transit = container.querySelector('[data-illustration="momo-transit"]');
+    expect(transit).not.toHaveTextContent("駅");
+    expect(transit?.querySelector('[data-transit-part="ticket"]')).not.toBeNull();
+    expect(transit?.querySelector('[data-transit-part="train"]')).not.toBeNull();
+    expect(transit?.querySelector('[data-transit-part="rail"]')).not.toBeNull();
   });
 
   it("preserves selected held-event filter in URL after submitting", async () => {

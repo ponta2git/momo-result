@@ -64,17 +64,17 @@ describe("OcrCapturePage", () => {
     user = userEvent.setup();
   });
 
-  it("keeps the station illustration as a subtle background before images are selected", async () => {
+  it("keeps the transit illustration as a subtle background before images are selected", async () => {
     window.localStorage.setItem("momoresult.devUser", "account_ponta");
     const { container } = renderCaptureRoute();
 
     expect(await screen.findByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
-    expect(container.querySelector('[data-illustration-backdrop="momo-station"]')).not.toBeNull();
-    const station = container.querySelector('[data-illustration="momo-station"]');
-    expect(station).not.toHaveTextContent("駅");
-    expect(station?.querySelector('[data-station-part="station-roof"]')).not.toBeNull();
-    expect(station?.querySelector('[data-station-part="station-clock"]')).not.toBeNull();
-    expect(station?.querySelector('[data-station-part="ticket-gate"]')).not.toBeNull();
+    expect(container.querySelector('[data-illustration-backdrop="momo-transit"]')).not.toBeNull();
+    const transit = container.querySelector('[data-illustration="momo-transit"]');
+    expect(transit).not.toHaveTextContent("駅");
+    expect(transit?.querySelector('[data-transit-part="ticket"]')).not.toBeNull();
+    expect(transit?.querySelector('[data-transit-part="train"]')).not.toBeNull();
+    expect(transit?.querySelector('[data-transit-part="rail"]')).not.toBeNull();
     expect(screen.getByRole("button", { name: "読み取りを開始して試合一覧へ" })).toBeDisabled();
   });
 

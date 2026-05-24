@@ -21,7 +21,7 @@ import type { DataTableColumn } from "@/shared/ui/data/DataTable";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { LiveRegion } from "@/shared/ui/feedback/LiveRegion";
-import { MomoStationBackdrop } from "@/shared/ui/feedback/MomoStationBackdrop";
+import { MomoTransitBackdrop } from "@/shared/ui/feedback/MomoTransitBackdrop";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { TextField } from "@/shared/ui/forms/TextField";
@@ -214,7 +214,7 @@ export function HeldEventsPage() {
                       <span className="relative z-[var(--z-base)] block max-w-[30rem]">
                         まず開催回を作成します。試合は開催回に紐づけて記録します。
                       </span>
-                      <MomoStationBackdrop tone="ready" />
+                      <MomoTransitBackdrop tone="ready" />
                     </>
                   }
                   icon={<CalendarDays className="size-5" />}

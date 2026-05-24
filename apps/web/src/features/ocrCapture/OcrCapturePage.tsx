@@ -8,7 +8,7 @@ import { useOcrCapturePageController } from "@/features/ocrCapture/useOcrCapture
 import { AuthPanel } from "@/shared/auth/AuthPanel";
 import { Button } from "@/shared/ui/actions/Button";
 import { LiveRegion } from "@/shared/ui/feedback/LiveRegion";
-import { MomoStationBackdrop } from "@/shared/ui/feedback/MomoStationBackdrop";
+import { MomoTransitBackdrop } from "@/shared/ui/feedback/MomoTransitBackdrop";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
@@ -107,12 +107,20 @@ export function OcrCapturePage() {
             </div>
           </section>
 
-          <section className="momo-safe-bottom relative min-h-36 overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-4 shadow-sm sm:pr-64">
-            {ocrReadyCount === 0 ? <MomoStationBackdrop size="lg" tone="ready" /> : null}
-            <div className="relative z-[var(--z-base)] flex flex-wrap items-center justify-between gap-3">
-              <div className="min-w-0 flex-1">
+          <section className="momo-safe-bottom relative overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-4 shadow-sm sm:min-h-44 sm:pr-60">
+            {ocrReadyCount === 0 ? (
+              <MomoTransitBackdrop
+                className="right-5 bottom-5 opacity-[0.18]"
+                size="lg"
+                tone="ready"
+              />
+            ) : null}
+            <div className="relative z-[var(--z-base)] grid gap-4">
+              <div className="max-w-2xl min-w-0">
                 <p className="text-sm font-semibold text-[var(--color-text-primary)]">
-                  {ocrReadyCount === 0 ? "画像を追加してください" : "読み取りを開始できます"}
+                  {ocrReadyCount === 0
+                    ? "画像を入れると読み取りを開始できます"
+                    : "読み取りを開始できます"}
                 </p>
                 <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
                   {selectedSlotLabels.length > 0

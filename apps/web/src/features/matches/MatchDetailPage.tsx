@@ -13,7 +13,7 @@ import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";
 import { DataTable } from "@/shared/ui/data/DataTable";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
-import { MomoStationBackdrop } from "@/shared/ui/feedback/MomoStationBackdrop";
+import { MomoTransitBackdrop } from "@/shared/ui/feedback/MomoTransitBackdrop";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Card } from "@/shared/ui/layout/Card";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
@@ -82,7 +82,7 @@ export function MatchDetailPage() {
       ) : null}
 
       <Card className="relative overflow-hidden p-0 sm:pr-56">
-        <MomoStationBackdrop className="opacity-[0.14]" />
+        <MomoTransitBackdrop className="opacity-[0.14]" />
         <div className="relative z-[var(--z-base)] grid gap-0 lg:grid-cols-[18rem_minmax(0,1fr)]">
           <div className="border-b border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-5 lg:border-r lg:border-b-0">
             <p className="text-xs font-semibold text-[var(--color-text-secondary)]">開催</p>

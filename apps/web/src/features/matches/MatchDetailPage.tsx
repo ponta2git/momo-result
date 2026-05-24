@@ -3,12 +3,14 @@ import {
   formatMatchDetailDateOnly,
 } from "@/features/matches/matchDetailViewModel";
 import type { MatchDetailPlayerResult } from "@/features/matches/matchDetailViewModel";
+import { MatchResultIllustration } from "@/features/matches/MatchResultIllustration";
 import { useMatchDetailPageController } from "@/features/matches/useMatchDetailPageController";
 import { incidentColumns } from "@/shared/domain/incidents";
 import { memberDisplayName } from "@/shared/domain/members";
 import { formatManYen } from "@/shared/lib/formatters";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
+import { cn } from "@/shared/ui/cn";
 import { DataTable } from "@/shared/ui/data/DataTable";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
@@ -120,33 +122,48 @@ export function MatchDetailPage() {
 
       <Card>
         <div className="grid gap-3 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] md:items-start">
-          <div className="rounded-[var(--radius-md)] border border-[var(--color-action)]/45 bg-[var(--color-action)]/10 p-4">
-            <p className="text-xs font-semibold text-[var(--color-text-secondary)]">優勝</p>
-            <p className="mt-1 text-2xl font-semibold text-balance text-[var(--color-text-primary)]">
-              {rankedPlayers[0] ? memberDisplayName(rankedPlayers[0].memberId) : "未確定"}
-            </p>
-            {rankedPlayers[0] ? (
-              <div className="mt-3 grid gap-1 text-sm text-[var(--color-text-secondary)]">
-                <p>
-                  総資産{" "}
-                  <span className="font-semibold text-[var(--color-text-primary)] tabular-nums">
-                    {formatManYen(rankedPlayers[0].totalAssetsManYen)}
-                  </span>
+          <div className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-action)]/45 bg-[var(--color-action)]/10 p-4">
+            <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_9rem] sm:items-center">
+              <div className="min-w-0">
+                <p className="w-fit rounded-full border border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18 px-2.5 py-1 text-xs font-semibold text-[var(--color-text-primary)]">
+                  今日の主役
                 </p>
-                <p>
-                  収益{" "}
-                  <span className="font-semibold text-[var(--color-text-primary)] tabular-nums">
-                    {formatManYen(rankedPlayers[0].revenueManYen)}
-                  </span>
+                <p className="mt-3 text-xs font-semibold text-[var(--color-text-secondary)]">
+                  優勝
                 </p>
+                <p className="mt-1 text-2xl font-semibold text-balance text-[var(--color-text-primary)]">
+                  {rankedPlayers[0] ? memberDisplayName(rankedPlayers[0].memberId) : "未確定"}
+                </p>
+                {rankedPlayers[0] ? (
+                  <div className="mt-3 grid gap-1 text-sm text-[var(--color-text-secondary)]">
+                    <p>
+                      総資産{" "}
+                      <span className="font-semibold text-[var(--color-text-primary)] tabular-nums">
+                        {formatManYen(rankedPlayers[0].totalAssetsManYen)}
+                      </span>
+                    </p>
+                    <p>
+                      収益{" "}
+                      <span className="font-semibold text-[var(--color-text-primary)] tabular-nums">
+                        {formatManYen(rankedPlayers[0].revenueManYen)}
+                      </span>
+                    </p>
+                  </div>
+                ) : null}
               </div>
-            ) : null}
+              <MatchResultIllustration className="mx-auto max-w-36 sm:mr-0" />
+            </div>
           </div>
           <ol className="grid gap-2">
             {rankedPlayers.map((player) => (
               <li
                 key={player.memberId}
-                className="grid grid-cols-[3rem_minmax(0,1fr)_auto] items-center gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-2"
+                className={cn(
+                  "grid grid-cols-[3rem_minmax(0,1fr)_auto] items-center gap-3 rounded-[var(--radius-sm)] border px-3 py-2",
+                  player.rank === 1
+                    ? "border-[var(--color-warning)]/60 bg-[var(--color-warning)]/14"
+                    : "border-[var(--color-border)] bg-[var(--color-surface-subtle)]",
+                )}
               >
                 <span className="text-lg font-semibold text-[var(--color-text-primary)] tabular-nums">
                   {player.rank}位

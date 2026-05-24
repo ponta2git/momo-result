@@ -38,7 +38,7 @@ const statusViewModel: Record<MatchStatus, StatusViewModel> = {
       "border-[var(--color-warning)]/80 bg-[var(--color-warning)]/20 text-[var(--color-text-primary)]",
   },
   ocr_running: {
-    icon: <LoaderCircle className="size-4 animate-spin" />,
+    icon: <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" />,
     shortLabel: "処理中",
     toneClass:
       "border-[var(--color-action)]/60 bg-[var(--color-action)]/12 text-[var(--color-text-primary)]",

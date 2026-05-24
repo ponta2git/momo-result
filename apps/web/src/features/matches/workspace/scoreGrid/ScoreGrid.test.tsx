@@ -74,7 +74,7 @@ describe("ScoreGrid", () => {
     render(<ScoreGridHarness onPlayerChange={onPlayerChange} />);
 
     const revenueInput = screen.getByRole("textbox", {
-      name: "ぽんた revenueManYen",
+      name: "ぽんた 収益",
     });
 
     await user.clear(revenueInput);
@@ -132,7 +132,7 @@ describe("ScoreGrid", () => {
     render(<IncidentHarness />);
 
     const destinationInput = screen.getByRole("textbox", {
-      name: "ぽんた destination",
+      name: "ぽんた 目的地",
     });
 
     await user.clear(destinationInput);
@@ -170,7 +170,7 @@ describe("ScoreGrid", () => {
     render(<ScoreGridHarness onPlayerChange={onPlayerChange} />);
 
     const revenueInput = screen.getByRole("textbox", {
-      name: "ぽんた revenueManYen",
+      name: "ぽんた 収益",
     });
 
     await user.clear(revenueInput);

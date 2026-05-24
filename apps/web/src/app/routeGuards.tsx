@@ -31,7 +31,7 @@ export function RootRedirect() {
   }
 
   if (auth.isAuthenticated) {
-    return <Navigate to="/held-events" replace />;
+    return <Navigate to="/matches" replace />;
   }
 
   return <Navigate to="/login" replace />;
@@ -46,7 +46,7 @@ export function PublicOnlyRoute({ children }: { children: ReactNode }) {
   }
 
   if (auth.isAuthenticated) {
-    const destination = sanitizeAppRedirectPath(searchParams.get("next")) ?? "/held-events";
+    const destination = sanitizeAppRedirectPath(searchParams.get("next")) ?? "/matches";
     return <Navigate to={destination} replace />;
   }
 

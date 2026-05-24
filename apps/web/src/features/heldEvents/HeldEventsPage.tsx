@@ -10,12 +10,12 @@ import {
 } from "lucide-react";
 import { useMemo } from "react";
 import { useFormStatus } from "react-dom";
-import { Link } from "react-router-dom";
 
 import { formatDateKey, formatDateTime } from "@/features/heldEvents/heldEventViewModel";
 import { useHeldEventsPageController } from "@/features/heldEvents/useHeldEventsPageController";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { Button } from "@/shared/ui/actions/Button";
+import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { DataTable } from "@/shared/ui/data/DataTable";
 import type { DataTableColumn } from "@/shared/ui/data/DataTable";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
@@ -80,16 +80,22 @@ export function HeldEventsPage() {
         minWidth: "17rem",
         renderCell: (event) => (
           <div className="flex min-w-0 flex-wrap justify-end gap-2">
-            <Link to={`/matches?heldEventId=${encodeURIComponent(event.id)}`}>
-              <Button icon={<ListFilter className="size-4" />} size="sm" variant="secondary">
-                試合
-              </Button>
-            </Link>
-            <Link to={`/exports?heldEventId=${encodeURIComponent(event.id)}&format=csv`}>
-              <Button icon={<Download className="size-4" />} size="sm" variant="secondary">
-                出力
-              </Button>
-            </Link>
+            <LinkButton
+              icon={<ListFilter className="size-4" />}
+              size="sm"
+              to={`/matches?heldEventId=${encodeURIComponent(event.id)}`}
+              variant="secondary"
+            >
+              試合
+            </LinkButton>
+            <LinkButton
+              icon={<Download className="size-4" />}
+              size="sm"
+              to={`/exports?heldEventId=${encodeURIComponent(event.id)}&format=csv`}
+              variant="secondary"
+            >
+              出力
+            </LinkButton>
             {event.matchCount === 0 ? (
               <Button
                 disabled={deleteMutation.isPending}
@@ -151,19 +157,23 @@ export function HeldEventsPage() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2 md:justify-end">
-            <Link to="/ocr/new">
-              <Button icon={<ScanLine className="size-4" />}>OCR取り込み</Button>
-            </Link>
-            <Link to="/matches/new">
-              <Button icon={<PenSquare className="size-4" />} variant="secondary">
-                手入力で作成
-              </Button>
-            </Link>
-            <Link to={`/matches?heldEventId=${encodeURIComponent(latestEvent.id)}`}>
-              <Button icon={<ListFilter className="size-4" />} variant="secondary">
-                この開催の試合
-              </Button>
-            </Link>
+            <LinkButton icon={<ScanLine className="size-4" />} to="/ocr/new">
+              OCR取り込み
+            </LinkButton>
+            <LinkButton
+              icon={<PenSquare className="size-4" />}
+              to="/matches/new"
+              variant="secondary"
+            >
+              手入力で作成
+            </LinkButton>
+            <LinkButton
+              icon={<ListFilter className="size-4" />}
+              to={`/matches?heldEventId=${encodeURIComponent(latestEvent.id)}`}
+              variant="secondary"
+            >
+              この開催の試合
+            </LinkButton>
           </div>
         </Card>
       ) : null}

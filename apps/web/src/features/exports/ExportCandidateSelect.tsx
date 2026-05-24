@@ -1,6 +1,4 @@
-import { Link } from "react-router-dom";
-
-import { Button } from "@/shared/ui/actions/Button";
+import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
@@ -52,9 +50,9 @@ export function ExportCandidateSelect({
     return (
       <EmptyState
         action={
-          <Link to={view.actionHref}>
-            <Button variant="secondary">{view.actionLabel}</Button>
-          </Link>
+          <LinkButton to={view.actionHref} variant="secondary">
+            {view.actionLabel}
+          </LinkButton>
         }
         description={view.message}
         title={view.title}

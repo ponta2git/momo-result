@@ -157,7 +157,7 @@ describe("DraftReviewPage", () => {
     );
 
     await screen.findByText("サンプルの読み取り結果で表示中");
-    const rankInput = screen.getByLabelText("ぽんた rank");
+    const rankInput = screen.getByLabelText("ぽんた 順位");
 
     await user.clear(rankInput);
     expect(rankInput).toHaveValue("");
@@ -215,7 +215,7 @@ describe("DraftReviewPage", () => {
       await screen.findByText("設定管理から戻ったため、入力内容を復元しました。"),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("試合番号")).toHaveValue("9");
-    expect(screen.getByLabelText("ぽんた rank")).toHaveValue("4");
+    expect(screen.getByLabelText("ぽんた 順位")).toHaveValue("4");
     expect(screen.getByDisplayValue("777")).toBeInTheDocument();
   });
 });

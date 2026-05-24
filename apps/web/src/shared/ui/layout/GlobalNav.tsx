@@ -9,7 +9,7 @@ import {
   Trophy,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { NavLink } from "react-router-dom";
+import { Link, NavLink } from "react-router-dom";
 
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
@@ -21,9 +21,9 @@ type NavItem = {
 };
 
 const defaultItems: NavItem[] = [
-  { icon: <CalendarDays className="size-4" />, label: "開催", to: "/held-events" },
   { icon: <Trophy className="size-4" />, label: "試合", to: "/matches" },
   { icon: <ScanLine className="size-4" />, label: "OCR", to: "/ocr/new" },
+  { icon: <CalendarDays className="size-4" />, label: "開催", to: "/held-events" },
   { icon: <Download className="size-4" />, label: "出力", to: "/exports" },
 ];
 
@@ -87,9 +87,12 @@ export function GlobalNav({
       <div className="mx-auto grid w-full max-w-[75rem] min-w-0 grid-cols-1 gap-1.5 px-3 py-1.5 sm:px-4 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center lg:gap-2 lg:py-2">
         <div className="flex min-w-0 items-center justify-between gap-2 lg:contents">
           <div className="flex min-w-0 items-center gap-2 lg:col-start-1 lg:row-start-1">
-            <p className="rounded-[var(--radius-xs)] bg-[var(--color-surface-subtle)] px-2 py-1 text-sm font-semibold text-[var(--color-text-primary)]">
+            <Link
+              className="rounded-[var(--radius-xs)] bg-[var(--color-surface-subtle)] px-2 py-1 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-surface-selected)]"
+              to="/matches"
+            >
               momo-result
-            </p>
+            </Link>
             {import.meta.env.DEV ? (
               <span className="rounded-[var(--radius-xs)] border border-[var(--color-border)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-text-secondary)]">
                 DEV

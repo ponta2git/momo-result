@@ -1,5 +1,3 @@
-import { Activity } from "react";
-
 import { IncidentMasterPanel } from "@/features/masters/IncidentMasterPanel";
 import { MasterRelationBoard } from "@/features/masters/MasterRelationBoard";
 import { MasterReturnNotice } from "@/features/masters/MasterReturnNotice";
@@ -9,6 +7,7 @@ import { masterTabs, useMastersPageController } from "@/features/masters/useMast
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { Notice } from "@/shared/ui/feedback/Notice";
+import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/shared/ui/forms/Tabs";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
@@ -101,69 +100,74 @@ export function MastersPage() {
         </Notice>
       ) : null}
 
-      <section
-        aria-label="設定管理の表示切替"
-        className="flex flex-wrap gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2"
+      <TabsRoot
+        value={activeTab}
+        onValueChange={(value) => setActiveTab(value as typeof activeTab)}
       >
-        {masterTabs.map((tab) => (
-          <button
-            key={tab.id}
-            className={cn(
-              "min-h-9 rounded-[var(--radius-sm)] px-3 py-1.5 text-sm font-semibold transition-colors duration-150",
-              activeTab === tab.id
-                ? "bg-[var(--color-surface-selected)] text-[var(--color-text-primary)]"
-                : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-subtle)]",
-            )}
-            type="button"
-            onClick={() => setActiveTab(tab.id)}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </section>
+        <TabsList
+          activateOnFocus
+          aria-label="設定管理の表示切替"
+          className="flex flex-wrap gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2"
+        >
+          {masterTabs.map((tab) => (
+            <TabsTab
+              key={tab.id}
+              className={cn(
+                "min-h-9 rounded-[var(--radius-sm)] px-3 py-1.5 text-sm font-semibold transition-colors duration-150",
+                activeTab === tab.id
+                  ? "bg-[var(--color-surface-selected)] text-[var(--color-text-primary)]"
+                  : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-subtle)]",
+              )}
+              value={tab.id}
+            >
+              {tab.label}
+            </TabsTab>
+          ))}
+        </TabsList>
 
-      <Activity mode={activeTab === "catalog" ? "visible" : "hidden"} name="master-catalog">
-        <MasterRelationBoard
-          gameTitles={optimisticGameTitles}
-          selectedGameTitleId={viewModel.selectedGameTitleId}
-          selectedGameTitleName={viewModel.selectedGameTitle?.name}
-          onSelectGameTitle={setSelectedGameTitleId}
-          onUpdateGameTitle={updateGameTitle}
-          onDeleteGameTitle={deleteGameTitle}
-          gameTitleCreateAction={gameTitleCreateAction}
-          gameTitleCreateError={gameTitleCreateState.error}
-          gameTitleCreateFormKey={gameTitleCreateState.version}
-          gameTitleDefaultLayoutFamily={defaultLayoutFamily}
-          mapMasters={viewModel.selectedMapMasters}
-          onUpdateMapMaster={updateMapMaster}
-          onDeleteMapMaster={deleteMapMaster}
-          mapCreateAction={mapCreateAction}
-          mapCreateError={mapCreateState.error}
-          mapCreateFormKey={mapCreateState.version}
-          seasonMasters={viewModel.selectedSeasonMasters}
-          onUpdateSeasonMaster={updateSeasonMaster}
-          onDeleteSeasonMaster={deleteSeasonMaster}
-          seasonCreateAction={seasonCreateAction}
-          seasonCreateError={seasonCreateState.error}
-          seasonCreateFormKey={seasonCreateState.version}
-          scopedDisabledReason={viewModel.scopedDisabledReason}
-        />
-      </Activity>
+        <TabsPanel className="mt-4" keepMounted value="catalog">
+          <MasterRelationBoard
+            gameTitles={optimisticGameTitles}
+            selectedGameTitleId={viewModel.selectedGameTitleId}
+            selectedGameTitleName={viewModel.selectedGameTitle?.name}
+            onSelectGameTitle={setSelectedGameTitleId}
+            onUpdateGameTitle={updateGameTitle}
+            onDeleteGameTitle={deleteGameTitle}
+            gameTitleCreateAction={gameTitleCreateAction}
+            gameTitleCreateError={gameTitleCreateState.error}
+            gameTitleCreateFormKey={gameTitleCreateState.version}
+            gameTitleDefaultLayoutFamily={defaultLayoutFamily}
+            mapMasters={viewModel.selectedMapMasters}
+            onUpdateMapMaster={updateMapMaster}
+            onDeleteMapMaster={deleteMapMaster}
+            mapCreateAction={mapCreateAction}
+            mapCreateError={mapCreateState.error}
+            mapCreateFormKey={mapCreateState.version}
+            seasonMasters={viewModel.selectedSeasonMasters}
+            onUpdateSeasonMaster={updateSeasonMaster}
+            onDeleteSeasonMaster={deleteSeasonMaster}
+            seasonCreateAction={seasonCreateAction}
+            seasonCreateError={seasonCreateState.error}
+            seasonCreateFormKey={seasonCreateState.version}
+            scopedDisabledReason={viewModel.scopedDisabledReason}
+          />
+        </TabsPanel>
 
-      <Activity mode={activeTab === "aliases" ? "visible" : "hidden"} name="member-aliases">
-        <MemberAliasPanel
-          aliases={memberAliases}
-          createAction={aliasCreateAction}
-          createError={aliasCreateState.error}
-          createFormKey={aliasCreateState.version}
-          onDelete={deleteMemberAlias}
-          onUpdate={updateMemberAlias}
-        />
-      </Activity>
+        <TabsPanel className="mt-4" keepMounted value="aliases">
+          <MemberAliasPanel
+            aliases={memberAliases}
+            createAction={aliasCreateAction}
+            createError={aliasCreateState.error}
+            createFormKey={aliasCreateState.version}
+            onDelete={deleteMemberAlias}
+            onUpdate={updateMemberAlias}
+          />
+        </TabsPanel>
 
-      <Activity mode={activeTab === "incidents" ? "visible" : "hidden"} name="incident-masters">
-        <IncidentMasterPanel items={incidentMasters} />
-      </Activity>
+        <TabsPanel className="mt-4" keepMounted value="incidents">
+          <IncidentMasterPanel items={incidentMasters} />
+        </TabsPanel>
+      </TabsRoot>
 
       {hasInvalidReturnTo ? (
         <Notice tone="warning" title="戻り先を確認できませんでした">

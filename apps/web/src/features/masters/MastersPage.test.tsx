@@ -48,7 +48,7 @@ describe("MastersPage", () => {
     expect(screen.getByRole("heading", { name: "作品" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "マップ" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "シーズン" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "事件簿" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "事件簿" })).toBeInTheDocument();
   });
 
   it("creates a new game title and selects it", async () => {
@@ -119,7 +119,7 @@ describe("MastersPage", () => {
     window.localStorage.setItem("momoresult.devUser", "account_ponta");
     renderPage();
 
-    await user.click(await screen.findByRole("button", { name: "事件簿" }));
+    await user.click(await screen.findByRole("tab", { name: "事件簿" }));
     expect(await screen.findByText("目的地")).toBeInTheDocument();
     expect(screen.getByText("プラス駅")).toBeInTheDocument();
     expect(screen.getByText("マイナス駅")).toBeInTheDocument();
@@ -147,7 +147,7 @@ describe("MastersPage", () => {
     window.localStorage.setItem("momoresult.devUser", "account_ponta");
     renderPage();
 
-    await user.click(await screen.findByRole("button", { name: "メンバー名寄せ" }));
+    await user.click(await screen.findByRole("tab", { name: "メンバー名寄せ" }));
     expect(await screen.findByRole("heading", { name: "プレーヤー名の別名" })).toBeInTheDocument();
     expect(screen.getByText("NO11")).toBeInTheDocument();
     const aliasPanel = screen

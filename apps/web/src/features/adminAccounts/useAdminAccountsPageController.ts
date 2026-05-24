@@ -75,6 +75,7 @@ export function useAdminAccountsPageController() {
 
   return {
     accounts: accountsQuery.data?.items ?? [],
+    accountsLoading: accountsQuery.isLoading,
     createAction,
     createState,
     normalizedError,

@@ -1,8 +1,10 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import { Button } from "@/shared/ui/actions/Button";
+import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { NumberField } from "@/shared/ui/forms/NumberField";
@@ -31,6 +33,19 @@ describe("ui foundation", () => {
     const button = screen.getByRole("button", { name: "保存中" });
     expect(button).toBeDisabled();
     expect(button.querySelector("svg")).not.toBeNull();
+  });
+
+  it("LinkButton renders a link with button styling without nesting a button", () => {
+    render(
+      <MemoryRouter>
+        <LinkButton to="/matches/new">手入力で作成</LinkButton>
+      </MemoryRouter>,
+    );
+
+    const link = screen.getByRole("link", { name: "手入力で作成" });
+    expect(link).toHaveAttribute("href", "/matches/new");
+    expect(link.querySelector("button")).toBeNull();
+    expect(screen.queryByRole("button", { name: "手入力で作成" })).not.toBeInTheDocument();
   });
 
   it("danger Notice defaults role=alert", () => {

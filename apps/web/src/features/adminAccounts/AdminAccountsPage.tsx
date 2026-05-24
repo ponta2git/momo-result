@@ -5,7 +5,9 @@ import { useAdminAccountsPageController } from "@/features/adminAccounts/useAdmi
 import type { LoginAccountResponse, UpdateLoginAccountRequest } from "@/shared/api/adminAccounts";
 import { fixedMembers, memberDisplayName } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
+import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
+import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { Field } from "@/shared/ui/forms/Field";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
@@ -14,7 +16,7 @@ const inputClass =
   "w-full rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)]";
 
 export function AdminAccountsPage() {
-  const { accounts, createAction, createState, normalizedError, updateMutation } =
+  const { accounts, accountsLoading, createAction, createState, normalizedError, updateMutation } =
     useAdminAccountsPageController();
 
   return (
@@ -86,30 +88,47 @@ export function AdminAccountsPage() {
         </form>
       </section>
 
-      <section className="overflow-x-auto rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]">
-        <table className="w-full min-w-[44rem] text-left text-sm">
-          <thead className="bg-[var(--color-surface-subtle)] text-[var(--color-text-secondary)]">
-            <tr>
-              <th className="px-3 py-2">表示名</th>
-              <th className="px-3 py-2">DiscordユーザーID</th>
-              <th className="px-3 py-2">プレーヤー</th>
-              <th className="px-3 py-2">権限</th>
-              <th className="px-3 py-2">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {accounts.map((account) => (
-              <AccountRow
-                account={account}
-                isPending={updateMutation.isPending}
-                key={account.accountId}
-                onPatch={(request) =>
-                  updateMutation.mutate({ accountId: account.accountId, request })
-                }
-              />
-            ))}
-          </tbody>
-        </table>
+      <section className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]">
+        {accountsLoading ? (
+          <div className="grid gap-3 p-4" aria-label="ログインアカウントを読み込み中">
+            <Skeleton className="min-h-10" />
+            <Skeleton className="min-h-16" />
+            <Skeleton className="min-h-16" />
+          </div>
+        ) : accounts.length === 0 ? (
+          <EmptyState
+            className="border-0"
+            description="DiscordユーザーIDと表示名を入力して、最初のログイン可能アカウントを追加してください。"
+            icon={<ShieldCheck className="size-5" />}
+            title="ログイン可能なアカウントがありません"
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[44rem] text-left text-sm">
+              <thead className="bg-[var(--color-surface-subtle)] text-[var(--color-text-secondary)]">
+                <tr>
+                  <th className="px-3 py-2">表示名</th>
+                  <th className="px-3 py-2">DiscordユーザーID</th>
+                  <th className="px-3 py-2">プレーヤー</th>
+                  <th className="px-3 py-2">権限</th>
+                  <th className="px-3 py-2">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {accounts.map((account) => (
+                  <AccountRow
+                    account={account}
+                    isPending={updateMutation.isPending}
+                    key={account.accountId}
+                    onPatch={(request) =>
+                      updateMutation.mutate({ accountId: account.accountId, request })
+                    }
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
     </PageFrame>
   );

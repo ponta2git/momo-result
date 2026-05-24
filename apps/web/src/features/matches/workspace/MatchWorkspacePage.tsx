@@ -9,6 +9,7 @@ import { ScoreGrid } from "@/features/matches/workspace/scoreGrid/ScoreGrid";
 import { SourceImagePanel } from "@/features/matches/workspace/sourceImages/SourceImagePanel";
 import { useMatchWorkspaceController } from "@/features/matches/workspace/useMatchWorkspaceController";
 import { Button } from "@/shared/ui/actions/Button";
+import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { LiveRegion } from "@/shared/ui/feedback/LiveRegion";
@@ -100,9 +101,9 @@ export function MatchWorkspacePage({
         <Notice tone="danger" title="試合が見つかりませんでした">
           一覧に戻って、対象の試合を選び直してください。
         </Notice>
-        <Link to="/matches">
-          <Button variant="secondary">試合一覧へ戻る</Button>
-        </Link>
+        <LinkButton to="/matches" variant="secondary">
+          試合一覧へ戻る
+        </LinkButton>
       </PageFrame>
     );
   }

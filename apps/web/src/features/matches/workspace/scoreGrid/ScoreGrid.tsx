@@ -76,6 +76,11 @@ const textNumericShortClass = `${baseInputClass} min-w-[6ch] text-center tabular
 const textNumericClass = `${baseInputClass} min-w-[12ch] text-right tabular-nums`;
 const selectShortClass = `${baseInputClass} min-w-[6ch] text-center`;
 const memberSelectClass = `${baseInputClass} min-w-[10rem]`;
+const playerFieldLabels = {
+  rank: "順位",
+  revenueManYen: "収益",
+  totalAssetsManYen: "総資産",
+} as const satisfies Record<"rank" | "revenueManYen" | "totalAssetsManYen", string>;
 
 function keyToPath(row: number, column: GridColumn): string {
   if (column.startsWith("incident.")) {
@@ -230,7 +235,7 @@ export function ScoreGrid({
                       inputRefs.current.delete(cellId);
                     }
                   }}
-                  aria-label={`${memberDisplayName(player.memberId)} memberId`}
+                  aria-label={`${memberDisplayName(player.memberId)} メンバー`}
                   className={memberSelectClass}
                   value={player.memberId}
                   onChange={(event) => {
@@ -268,7 +273,7 @@ export function ScoreGrid({
                           inputRefs.current.delete(cellId);
                         }
                       }}
-                      aria-label={`${memberDisplayName(player.memberId)} playOrder`}
+                      aria-label={`${memberDisplayName(player.memberId)} プレー順`}
                       className={`${selectShortClass} ${
                         errorPathSet.has(keyToPath(rowIndex, "playOrder"))
                           ? "border-[var(--color-danger)]/65 bg-[var(--color-danger)]/10"
@@ -302,7 +307,7 @@ export function ScoreGrid({
               <td className="px-2 py-3 align-top">
                 <ScoreGridNumericEditor
                   allowSign={false}
-                  ariaLabel={`${memberDisplayName(player.memberId)} rank`}
+                  ariaLabel={`${memberDisplayName(player.memberId)} ${playerFieldLabels.rank}`}
                   baseClassName={textNumericShortClass}
                   cellId={getCellId(rowIndex, 2)}
                   col={2}
@@ -322,7 +327,7 @@ export function ScoreGrid({
               <td className="px-2 py-3 align-top">
                 <ScoreGridNumericEditor
                   allowSign
-                  ariaLabel={`${memberDisplayName(player.memberId)} totalAssetsManYen`}
+                  ariaLabel={`${memberDisplayName(player.memberId)} ${playerFieldLabels.totalAssetsManYen}`}
                   baseClassName={textNumericClass}
                   cellId={getCellId(rowIndex, 3)}
                   col={3}
@@ -344,7 +349,7 @@ export function ScoreGrid({
               <td className="px-2 py-3 align-top">
                 <ScoreGridNumericEditor
                   allowSign
-                  ariaLabel={`${memberDisplayName(player.memberId)} revenueManYen`}
+                  ariaLabel={`${memberDisplayName(player.memberId)} ${playerFieldLabels.revenueManYen}`}
                   baseClassName={textNumericClass}
                   cellId={getCellId(rowIndex, 4)}
                   col={4}
@@ -374,7 +379,7 @@ export function ScoreGrid({
                   >
                     <ScoreGridNumericEditor
                       allowSign={false}
-                      ariaLabel={`${memberDisplayName(player.memberId)} ${incidentKey}`}
+                      ariaLabel={`${memberDisplayName(player.memberId)} ${column.header}`}
                       baseClassName={textNumericShortClass}
                       cellId={cellId}
                       col={col}
@@ -431,6 +436,8 @@ export function ScoreGrid({
               >
                 <button
                   className="flex w-full items-center justify-between text-left"
+                  aria-controls={`mobile-player-${index}-fields`}
+                  aria-expanded={expandedMobilePlayer === index}
                   type="button"
                   onClick={() =>
                     setExpandedMobilePlayer((current) => (current === index ? -1 : index))
@@ -444,7 +451,7 @@ export function ScoreGrid({
                   </span>
                 </button>
                 {expandedMobilePlayer === index ? (
-                  <div className="mt-3 space-y-2">
+                  <div className="mt-3 space-y-2" id={`mobile-player-${index}-fields`}>
                     <label className="grid gap-1 text-xs text-[var(--color-text-secondary)]">
                       メンバー
                       <select
@@ -494,7 +501,7 @@ export function ScoreGrid({
                         順位
                         <ScoreGridNumericEditor
                           allowSign={false}
-                          ariaLabel={`${memberDisplayName(player.memberId)} rank`}
+                          ariaLabel={`${memberDisplayName(player.memberId)} ${playerFieldLabels.rank}`}
                           baseClassName={textNumericShortClass}
                           cellId={`mobile-${index}-rank`}
                           commitKind="player"
@@ -515,7 +522,7 @@ export function ScoreGrid({
                       総資産
                       <ScoreGridNumericEditor
                         allowSign
-                        ariaLabel={`${memberDisplayName(player.memberId)} totalAssetsManYen`}
+                        ariaLabel={`${memberDisplayName(player.memberId)} ${playerFieldLabels.totalAssetsManYen}`}
                         baseClassName={textNumericClass}
                         cellId={`mobile-${index}-totalAssetsManYen`}
                         commitKind="player"
@@ -537,7 +544,7 @@ export function ScoreGrid({
                       収益
                       <ScoreGridNumericEditor
                         allowSign
-                        ariaLabel={`${memberDisplayName(player.memberId)} revenueManYen`}
+                        ariaLabel={`${memberDisplayName(player.memberId)} ${playerFieldLabels.revenueManYen}`}
                         baseClassName={textNumericClass}
                         cellId={`mobile-${index}-revenueManYen`}
                         commitKind="player"
@@ -562,7 +569,7 @@ export function ScoreGrid({
                           {column.header}
                           <ScoreGridNumericEditor
                             allowSign={false}
-                            ariaLabel={`${memberDisplayName(player.memberId)} ${column.incidentKey}`}
+                            ariaLabel={`${memberDisplayName(player.memberId)} ${column.header}`}
                             baseClassName={textNumericShortClass}
                             cellId={`mobile-${index}-${column.incidentKey}`}
                             commitKind="incident"

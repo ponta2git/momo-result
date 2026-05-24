@@ -4,6 +4,7 @@ import type { MatchFormValues } from "@/features/matches/workspace/matchFormType
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { memberDisplayName } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
+import { Dialog } from "@/shared/ui/feedback/Dialog";
 
 type MatchConfirmDialogProps = {
   gameTitleName?: string | undefined;
@@ -39,17 +40,18 @@ export function MatchConfirmDialog({
   confirmAction,
 }: MatchConfirmDialogProps) {
   return (
-    <div className="fixed inset-0 z-[var(--z-dialog)] grid place-items-center bg-[var(--momo-night-900)]/35 p-4">
-      <form
-        action={confirmAction}
-        className="w-full max-w-xl rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-lg"
-      >
-        <p className="text-xs font-semibold text-[var(--color-text-secondary)]">確定前の確認</p>
-        <h2 className="mt-2 text-2xl font-semibold text-balance text-[var(--color-text-primary)]">
-          この内容で確定しますか？
-        </h2>
-
-        <dl className="mt-5 grid gap-2 text-sm text-[var(--color-text-primary)]">
+    <Dialog
+      open
+      description="確定前の確認"
+      title="この内容で確定しますか？"
+      onOpenChange={(open) => {
+        if (!open) {
+          onCancel();
+        }
+      }}
+    >
+      <form action={confirmAction} className="min-w-0">
+        <dl className="grid gap-2 text-sm text-[var(--color-text-primary)]">
           <div className="flex justify-between gap-4">
             <dt className="text-[var(--color-text-secondary)]">開催履歴</dt>
             <dd>{heldEvent ? new Date(heldEvent.heldAt).toLocaleString() : "未選択"}</dd>
@@ -82,6 +84,6 @@ export function MatchConfirmDialog({
 
         <ConfirmActionButtons onCancel={onCancel} />
       </form>
-    </div>
+    </Dialog>
   );
 }

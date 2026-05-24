@@ -1,7 +1,6 @@
-import { Link } from "react-router-dom";
-
 import type { MatchListAction } from "@/features/matches/list/matchListTypes";
 import { Button } from "@/shared/ui/actions/Button";
+import { LinkButton } from "@/shared/ui/actions/LinkButton";
 
 type MatchListActionsProps = {
   primaryAction: MatchListAction;
@@ -13,11 +12,9 @@ function ActionButton({ action }: { action: MatchListAction }) {
 
   if (action.href && !action.disabled) {
     return (
-      <Link className="block w-full" to={action.href}>
-        <Button className="w-full justify-center" size="sm" variant={variant}>
-          {action.label}
-        </Button>
-      </Link>
+      <LinkButton className="w-full justify-center" size="sm" to={action.href} variant={variant}>
+        {action.label}
+      </LinkButton>
     );
   }
 

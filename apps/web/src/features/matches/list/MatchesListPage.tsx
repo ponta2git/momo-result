@@ -6,7 +6,6 @@ import {
   RefreshCw,
   ScanLine,
 } from "lucide-react";
-import { Link } from "react-router-dom";
 
 import { MatchesListFilters } from "@/features/matches/list/MatchesListFilters";
 import { MatchesTable } from "@/features/matches/list/MatchesTable";
@@ -14,6 +13,7 @@ import { MatchesWorkQueueSummary } from "@/features/matches/list/MatchesWorkQueu
 import { MatchMobileCard } from "@/features/matches/list/MatchMobileCard";
 import { useMatchesListPageController } from "@/features/matches/list/useMatchesListPageController";
 import { Button } from "@/shared/ui/actions/Button";
+import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { MomoStationIllustration } from "@/shared/ui/feedback/MomoStationIllustration";
 import { Notice } from "@/shared/ui/feedback/Notice";
@@ -69,34 +69,37 @@ export function MatchesListPage() {
 
       <section className="grid gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
-          <Link className="col-span-2 sm:col-span-1" to="/ocr/new">
-            <Button className="w-full sm:w-auto" icon={<ScanLine className="size-4" />}>
-              OCR取り込み
-            </Button>
-          </Link>
-          <Link to="/matches/new">
-            <Button
-              className="w-full sm:w-auto"
-              icon={<PenSquare className="size-4" />}
-              variant="secondary"
-            >
-              手入力で作成
-            </Button>
-          </Link>
-          <Link to="/exports">
-            <Button
-              className="w-full sm:w-auto"
-              icon={<Download className="size-4" />}
-              variant="secondary"
-            >
-              CSV/TSV出力
-            </Button>
-          </Link>
+          <LinkButton
+            className="col-span-2 w-full sm:col-span-1 sm:w-auto"
+            icon={<ScanLine className="size-4" />}
+            to="/ocr/new"
+          >
+            OCR取り込み
+          </LinkButton>
+          <LinkButton
+            className="w-full sm:w-auto"
+            icon={<PenSquare className="size-4" />}
+            to="/matches/new"
+            variant="secondary"
+          >
+            手入力で作成
+          </LinkButton>
+          <LinkButton
+            className="w-full sm:w-auto"
+            icon={<Download className="size-4" />}
+            to="/exports"
+            variant="secondary"
+          >
+            CSV/TSV出力
+          </LinkButton>
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-2 md:justify-end">
           {isStale ? (
             <span className="momo-enter inline-flex items-center gap-2 rounded-full bg-[var(--color-action)]/10 px-3 py-1 text-sm font-medium text-[var(--color-text-secondary)]">
-              <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin" />
+              <LoaderCircle
+                aria-hidden="true"
+                className="size-3.5 animate-spin motion-reduce:animate-none"
+              />
               条件を反映中
             </span>
           ) : null}
@@ -142,7 +145,10 @@ export function MatchesListPage() {
         {isStale && !showMatchesLoading ? (
           <div className="momo-enter pointer-events-none absolute inset-x-0 top-0 z-[var(--z-base)] flex justify-center">
             <span className="inline-flex items-center gap-2 rounded-b-[var(--radius-sm)] border-x border-b border-[var(--color-action)]/25 bg-[var(--color-surface)] px-3 py-1 text-xs font-semibold text-[var(--color-text-secondary)] shadow-sm">
-              <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin" />
+              <LoaderCircle
+                aria-hidden="true"
+                className="size-3.5 animate-spin motion-reduce:animate-none"
+              />
               一覧を更新中
             </span>
           </div>
@@ -162,12 +168,10 @@ export function MatchesListPage() {
                 </Button>
               ) : (
                 <div className="flex flex-wrap gap-2">
-                  <Link to="/ocr/new">
-                    <Button>OCR取り込み</Button>
-                  </Link>
-                  <Link to="/matches/new">
-                    <Button variant="secondary">手入力で作成</Button>
-                  </Link>
+                  <LinkButton to="/ocr/new">OCR取り込み</LinkButton>
+                  <LinkButton to="/matches/new" variant="secondary">
+                    手入力で作成
+                  </LinkButton>
                 </div>
               )
             }

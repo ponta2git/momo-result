@@ -1,5 +1,3 @@
-import { Link } from "react-router-dom";
-
 import {
   formatMatchDetailDate,
   formatMatchDetailDateOnly,
@@ -10,6 +8,7 @@ import { incidentColumns } from "@/shared/domain/incidents";
 import { memberDisplayName } from "@/shared/domain/members";
 import { formatManYen } from "@/shared/lib/formatters";
 import { Button } from "@/shared/ui/actions/Button";
+import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { DataTable } from "@/shared/ui/data/DataTable";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
@@ -45,12 +44,13 @@ export function MatchDetailPage() {
         title={`第${match.matchNoInEvent}試合の結果`}
         actions={
           <>
-            <Link to={`/exports?matchId=${encodeURIComponent(match.matchId)}`}>
-              <Button variant="secondary">この試合を出力</Button>
-            </Link>
-            <Link to={`/matches/${encodeURIComponent(match.matchId)}/edit`}>
-              <Button>編集</Button>
-            </Link>
+            <LinkButton
+              to={`/exports?matchId=${encodeURIComponent(match.matchId)}`}
+              variant="secondary"
+            >
+              この試合を出力
+            </LinkButton>
+            <LinkButton to={`/matches/${encodeURIComponent(match.matchId)}/edit`}>編集</LinkButton>
             <AlertDialog
               cancelLabel="キャンセル"
               confirmLabel={isDeletePending ? "削除中…" : "削除する"}

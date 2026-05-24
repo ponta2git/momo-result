@@ -3,8 +3,8 @@ import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
 
 import { cn } from "@/shared/ui/cn";
 
-type ButtonVariant = "primary" | "secondary" | "quiet" | "danger";
-type ButtonSize = "sm" | "md" | "lg";
+export type ButtonVariant = "primary" | "secondary" | "quiet" | "danger";
+export type ButtonSize = "sm" | "md" | "lg";
 type ButtonType = "button" | "submit" | "reset";
 
 const variantClass = {
@@ -23,6 +23,23 @@ const sizeClass = {
   md: "min-h-10 px-4 py-2 text-sm",
   lg: "min-h-11 px-5 py-2.5 text-base",
 } as const satisfies Record<ButtonSize, string>;
+
+export function buttonClassName({
+  className,
+  size = "md",
+  variant = "primary",
+}: {
+  className?: string | undefined;
+  size?: ButtonSize | undefined;
+  variant?: ButtonVariant | undefined;
+}) {
+  return cn(
+    "momo-pressable inline-flex w-auto min-w-0 items-center justify-center gap-2 rounded-[var(--radius-sm)] border font-semibold whitespace-normal break-words disabled:cursor-not-allowed disabled:opacity-60",
+    sizeClass[size],
+    variantClass[variant],
+    className,
+  );
+}
 
 export type ButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "type"> & {
   icon?: ReactNode;
@@ -48,15 +65,17 @@ export function Button({
   ...props
 }: ButtonProps) {
   const isDisabled = disabled || pending;
-  const buttonClassName = cn(
-    "momo-pressable inline-flex w-auto min-w-0 items-center justify-center gap-2 rounded-[var(--radius-sm)] border font-semibold whitespace-normal break-words disabled:cursor-not-allowed disabled:opacity-60",
-    sizeClass[size],
-    variantClass[variant],
-    className,
-  );
+  const buttonClasses = buttonClassName({ className, size, variant });
   const inner = (
     <>
-      {pending ? <LoaderCircle aria-hidden="true" className="size-4 animate-spin" /> : icon}
+      {pending ? (
+        <LoaderCircle
+          aria-hidden="true"
+          className="size-4 animate-spin motion-reduce:animate-none"
+        />
+      ) : (
+        icon
+      )}
       <span>{pending ? (pendingLabel ?? children) : children}</span>
     </>
   );
@@ -68,7 +87,7 @@ export function Button({
       <button
         ref={ref}
         aria-busy={pending || undefined}
-        className={buttonClassName}
+        className={buttonClasses}
         disabled={isDisabled}
         type="submit"
         {...props}
@@ -82,7 +101,7 @@ export function Button({
       <button
         ref={ref}
         aria-busy={pending || undefined}
-        className={buttonClassName}
+        className={buttonClasses}
         disabled={isDisabled}
         type="reset"
         {...props}
@@ -95,7 +114,7 @@ export function Button({
     <button
       ref={ref}
       aria-busy={pending || undefined}
-      className={buttonClassName}
+      className={buttonClasses}
       disabled={isDisabled}
       type="button"
       {...props}

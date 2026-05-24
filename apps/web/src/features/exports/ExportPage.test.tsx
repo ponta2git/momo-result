@@ -137,7 +137,10 @@ describe("ExportPage", () => {
     await user.click(screen.getByRole("button", { name: "シーズン" }));
 
     expect(await screen.findByText("シーズン候補がありません")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "設定管理へ" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "設定管理へ" })).toHaveAttribute(
+      "href",
+      "/admin/masters",
+    );
     expect(screen.getByRole("button", { name: "CSVをダウンロード" })).toBeDisabled();
   });
 

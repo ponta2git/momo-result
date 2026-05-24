@@ -120,7 +120,9 @@ export function MatchesListFilters({
         </div>
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_16rem] lg:items-end">
           <div className="min-w-0">
-            <p className="mb-2 text-sm font-semibold text-[var(--color-text-primary)]">状態</p>
+            <p className="mb-2 hidden text-sm font-semibold text-[var(--color-text-primary)] min-[44rem]:block">
+              状態
+            </p>
             <div className="hidden min-[44rem]:block">
               <SegmentedControl
                 className="w-full"

@@ -18,7 +18,8 @@ apps/ocr-worker/local-expected/
 node_modules
 *.tsbuildinfo
 copilot-session-*.md
-docs/frontend-rebuild/
+docs/tmp
+docs/ops
 .env
 **/.env
 **/.pnpm-store/

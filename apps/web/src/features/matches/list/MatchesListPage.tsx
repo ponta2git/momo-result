@@ -175,19 +175,19 @@ export function MatchesListPage() {
                 </div>
               )
             }
-            className="min-h-[18rem]"
+            className="relative min-h-[18rem] overflow-hidden"
             description={
-              <span className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
-                <span>
+              <>
+                <span className="relative block max-w-[34rem]">
                   {hasFilters
                     ? "状態や開催条件を広げると、他の試合記録も表示できます。"
-                    : "最初の試合は、OCR取り込みまたは手入力で登録してください。"}
+                    : "最初の試合は、OCR取り込みまたは手入力で登録してください。駅舎のホームから、最初の記録を追加します。"}
                 </span>
                 <MomoStationIllustration
-                  className="mx-auto max-w-36 sm:mr-0 sm:ml-auto"
+                  className="pointer-events-none absolute right-4 bottom-2 hidden max-w-48 opacity-[0.16] sm:block"
                   tone={hasFilters ? "empty" : "ready"}
                 />
-              </span>
+              </>
             }
             icon={<AlertTriangle className="size-5" />}
             title={hasFilters ? "条件に合う試合がありません" : "まだ試合がありません"}

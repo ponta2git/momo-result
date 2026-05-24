@@ -109,12 +109,15 @@ export function OcrCapturePage() {
             </div>
           </section>
 
-          <section className="momo-safe-bottom flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-lg)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-4 shadow-sm">
-            <div className="flex min-w-0 flex-1 items-center gap-3">
-              {ocrReadyCount === 0 ? (
-                <MomoStationIllustration className="hidden max-w-28 sm:block" tone="ready" />
-              ) : null}
-              <div className="min-w-0">
+          <section className="momo-safe-bottom relative overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-4 shadow-sm">
+            {ocrReadyCount === 0 ? (
+              <MomoStationIllustration
+                className="pointer-events-none absolute right-4 bottom-0 hidden max-w-44 opacity-[0.14] sm:block"
+                tone="ready"
+              />
+            ) : null}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-[var(--color-text-primary)]">
                   {ocrReadyCount === 0 ? "画像を追加してください" : "読み取りを開始できます"}
                 </p>
@@ -135,28 +138,28 @@ export function OcrCapturePage() {
                   </p>
                 ) : null}
               </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-2 text-sm font-semibold text-[var(--color-text-primary)]">
-                {ocrReadyCount === 0 ? "画像未選択" : `送信対象 ${ocrReadyCount}件`}
-              </span>
-              <Button
-                onClick={handleStartOcr}
-                disabled={ocrReadyCount === 0 || hasWorkingSlot || submission.isSubmitting}
-                pending={submission.isSubmitting}
-                pendingLabel="読み取り開始中…"
-              >
-                {partialStartAcknowledged && ocrReadyCount < slotDefinitions.length
-                  ? "このまま読み取りを開始"
-                  : "読み取りを開始して試合一覧へ"}
-              </Button>
-              <Button
-                disabled={submission.isSubmitting || hasWorkingSlot}
-                variant="secondary"
-                onClick={() => flow.handleResetAll(notify)}
-              >
-                選択画像をすべて削除
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-2 text-sm font-semibold text-[var(--color-text-primary)]">
+                  {ocrReadyCount === 0 ? "画像未選択" : `送信対象 ${ocrReadyCount}件`}
+                </span>
+                <Button
+                  onClick={handleStartOcr}
+                  disabled={ocrReadyCount === 0 || hasWorkingSlot || submission.isSubmitting}
+                  pending={submission.isSubmitting}
+                  pendingLabel="読み取り開始中…"
+                >
+                  {partialStartAcknowledged && ocrReadyCount < slotDefinitions.length
+                    ? "このまま読み取りを開始"
+                    : "読み取りを開始して試合一覧へ"}
+                </Button>
+                <Button
+                  disabled={submission.isSubmitting || hasWorkingSlot}
+                  variant="secondary"
+                  onClick={() => flow.handleResetAll(notify)}
+                >
+                  選択画像をすべて削除
+                </Button>
+              </div>
             </div>
           </section>
         </div>

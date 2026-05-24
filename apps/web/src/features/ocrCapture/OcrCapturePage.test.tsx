@@ -64,6 +64,16 @@ describe("OcrCapturePage", () => {
     user = userEvent.setup();
   });
 
+  it("keeps the station illustration as a subtle background before images are selected", async () => {
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    const { container } = renderCaptureRoute();
+
+    expect(await screen.findByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
+    const station = container.querySelector('[data-illustration="momo-station"]');
+    expect(station?.querySelector('[data-station-part="station-sign"]')).toHaveTextContent("駅");
+    expect(screen.getByRole("button", { name: "読み取りを開始して試合一覧へ" })).toBeDisabled();
+  });
+
   it("reloads protected master selects after selecting a dev user", async () => {
     let authRequests = 0;
     server.use(

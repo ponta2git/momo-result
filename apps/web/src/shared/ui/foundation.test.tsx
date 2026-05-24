@@ -7,6 +7,7 @@ import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";
 import { Dialog, AlertDialog } from "@/shared/ui/feedback/Dialog";
+import { MomoStationIllustration } from "@/shared/ui/feedback/MomoStationIllustration";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { RouteSuspenseFallback } from "@/shared/ui/feedback/RouteSuspenseFallback";
 import { NumberField } from "@/shared/ui/forms/NumberField";
@@ -126,6 +127,17 @@ describe("ui foundation", () => {
     const main = screen.getByRole("main");
     expect(main).toHaveAttribute("aria-busy", "true");
     expect(main).toHaveAttribute("id", "main-content");
+  });
+
+  it("MomoStationIllustration keeps recognizable station landmarks", () => {
+    const { container } = render(<MomoStationIllustration />);
+    const station = container.querySelector('[data-illustration="momo-station"]');
+
+    expect(station).not.toBeNull();
+    expect(station?.querySelector('[data-station-part="station-sign"]')).toHaveTextContent("駅");
+    expect(station?.querySelector('[data-station-part="station-clock"]')).not.toBeNull();
+    expect(station?.querySelector('[data-station-part="platform"]')).not.toBeNull();
+    expect(station?.querySelectorAll('[data-station-part="rail"]')).toHaveLength(2);
   });
 
   it("StatusPill maps internal status to user-facing labels", () => {

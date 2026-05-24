@@ -47,9 +47,30 @@ describe("MatchesListPage", () => {
 
     expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
     expect(screen.queryByLabelText("開催の振り返り")).not.toBeInTheDocument();
+    expect((await screen.findAllByText("優勝 ぽんた")).length).toBeGreaterThanOrEqual(1);
     const detailLinks = await screen.findAllByRole("link", { name: "詳細を見る" });
     expect(detailLinks).toHaveLength(2);
     detailLinks.forEach((link) => expect(link).toHaveAttribute("href", "/matches/match-1"));
+  });
+
+  it("shows a recognizable station illustration behind the empty no-filter state", async () => {
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    server.use(http.get("/api/matches", () => HttpResponse.json({ items: [] })));
+
+    const { container } = render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches"]}>
+          <Routes>
+            <Route path="/matches" element={<MatchesListPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
+    expect(await screen.findByText("まだ試合がありません")).toBeInTheDocument();
+    const station = container.querySelector('[data-illustration="momo-station"]');
+    expect(station?.querySelector('[data-station-part="station-sign"]')).toHaveTextContent("駅");
   });
 
   it("preserves selected held-event filter in URL after submitting", async () => {

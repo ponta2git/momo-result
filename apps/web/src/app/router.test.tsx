@@ -113,7 +113,7 @@ describe("app routing", () => {
       expect(window.localStorage.getItem("momoresult.devUser")).toBeNull();
       expect(router.state.location.pathname).toBe("/login");
     });
-    expect(screen.getByRole("heading", { name: "ログイン" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "ログイン" })).toBeInTheDocument();
   });
 
   it("renders edit mode at /matches/:matchId/edit", async () => {

@@ -17,6 +17,7 @@ export function MomoStationIllustration({
     <svg
       aria-hidden="true"
       className={cn("h-auto w-full max-w-44 shrink-0", className)}
+      data-illustration="momo-station"
       fill="none"
       viewBox="0 0 180 132"
       xmlns="http://www.w3.org/2000/svg"
@@ -30,6 +31,7 @@ export function MomoStationIllustration({
       />
       <path
         d="M40 91h92l14 11H27l13-11Z"
+        data-station-part="platform"
         fill="var(--color-surface-subtle)"
         stroke="var(--color-border-strong)"
         strokeLinejoin="round"
@@ -37,21 +39,45 @@ export function MomoStationIllustration({
       />
       <path
         d="M50 46h80a8 8 0 0 1 8 8v37H42V54a8 8 0 0 1 8-8Z"
+        data-station-part="station-building"
         fill="var(--color-surface)"
         stroke="var(--color-border-strong)"
         strokeWidth="2"
       />
       <path
         d="M56 58h68v18H56V58Z"
+        data-station-part="station-sign-board"
         fill="var(--color-surface-subtle)"
         stroke="var(--color-border)"
         strokeWidth="2"
       />
-      <path
-        d="M62 63h18M90 63h28M62 70h34"
-        stroke="var(--color-text-muted)"
-        strokeLinecap="round"
+      <text
+        data-station-part="station-sign"
+        fill="var(--color-text-primary)"
+        fontSize="13"
+        fontWeight="700"
+        textAnchor="middle"
+        x="90"
+        y="71"
+      >
+        駅
+      </text>
+      <circle
+        cx="66"
+        cy="67"
+        data-station-part="station-clock"
+        fill="var(--color-surface)"
+        r="6"
+        stroke="var(--color-border-strong)"
+        strokeWidth="2"
       />
+      <path
+        d="M66 64v3l3 2"
+        stroke="var(--color-text-secondary)"
+        strokeLinecap="round"
+        strokeWidth="1.5"
+      />
+      <path d="M96 66h20" stroke="var(--color-text-muted)" strokeLinecap="round" />
       <path
         d="M65 91V76h50v15"
         stroke="var(--color-border-strong)"
@@ -85,12 +111,14 @@ export function MomoStationIllustration({
       />
       <path
         d="M39 108c10 8 91 8 102 0"
+        data-station-part="rail"
         stroke="var(--color-action)"
         strokeLinecap="round"
         strokeWidth="3"
       />
       <path
         d="M58 116h64"
+        data-station-part="rail"
         stroke="var(--color-border-strong)"
         strokeLinecap="round"
         strokeWidth="2"

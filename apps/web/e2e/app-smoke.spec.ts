@@ -69,7 +69,7 @@ test("creates a member alias through the admin UI", async ({ page }) => {
   await page.goto("/admin/masters");
 
   await expect(page.getByRole("heading", { exact: true, name: "設定管理" })).toBeVisible();
-  await page.getByRole("button", { name: "メンバー名寄せ" }).click();
+  await page.getByRole("tab", { name: "メンバー名寄せ" }).click();
   await expect(
     page.getByRole("heading", { exact: true, name: "プレーヤー名の別名" }),
   ).toBeVisible();

@@ -91,10 +91,12 @@ export function useMatchesListPageController() {
     return sortMatchListItems(views, deferredSearch.sort);
   }, [lookupMaps, matchesQuery.data, deferredSearch.sort]);
 
-  const summaryCounts = useMemo(() => {
-    const views = toMatchListItemViews(matchesSummaryQuery.data?.items ?? [], lookupMaps);
-    return summarizeMatchList(views);
-  }, [lookupMaps, matchesSummaryQuery.data]);
+  const summaryItems = useMemo(
+    () => toMatchListItemViews(matchesSummaryQuery.data?.items ?? [], lookupMaps),
+    [lookupMaps, matchesSummaryQuery.data],
+  );
+
+  const summaryCounts = useMemo(() => summarizeMatchList(summaryItems), [summaryItems]);
 
   const matchesDataUpdatedAt = matchesQuery.dataUpdatedAt;
   const summaryDataUpdatedAt = matchesSummaryQuery.dataUpdatedAt;
@@ -166,6 +168,7 @@ export function useMatchesListPageController() {
     showMatchesError: shouldShowBlockingQueryError(matchesQuery),
     showMatchesLoading: isInitialQueryLoading(matchesQuery),
     summaryCounts,
+    summaryItems,
     summaryLoading: matchesSummaryQuery.isLoading,
   };
 }

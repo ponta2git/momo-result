@@ -2,6 +2,7 @@ import type { DragEvent } from "react";
 
 import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
 import { DraftPreview } from "@/features/ocrCapture/DraftPreview";
+import { isWorkingStatus } from "@/features/ocrCapture/slotPolicy";
 import type { SlotKind } from "@/shared/api/enums";
 import { parseSlotKind } from "@/shared/api/enums";
 import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
@@ -101,9 +102,10 @@ export function CaptureSlotCard({
 }: CaptureSlotCardProps) {
   const mismatch = slot.detectedKind && slot.detectedKind !== slot.kind;
   const hasImage = Boolean(slot.previewUrl);
+  const isWorking = isWorkingStatus(slot.status);
 
   function handleDragStart(event: DragEvent<HTMLDivElement>) {
-    if (!hasImage) {
+    if (!hasImage || isWorking) {
       return;
     }
     event.dataTransfer.effectAllowed = "move";
@@ -150,8 +152,11 @@ export function CaptureSlotCard({
 
       {slot.previewUrl ? (
         <div
-          className="mt-4 cursor-grab rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--momo-night-900)] p-2 active:cursor-grabbing"
-          draggable
+          className={cn(
+            "mt-4 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--momo-night-900)] p-2",
+            isWorking ? "cursor-not-allowed opacity-85" : "cursor-grab active:cursor-grabbing",
+          )}
+          draggable={hasImage && !isWorking}
           onDragStart={handleDragStart}
         >
           <img
@@ -161,7 +166,7 @@ export function CaptureSlotCard({
           />
           <div className="mt-2 flex flex-wrap items-center justify-between gap-2 px-1 text-xs text-white/80">
             <span>{slot.source ? `${sourceLabels[slot.source]}した画像` : "配置済み画像"}</span>
-            <span>ドラッグして別の分類へ移動</span>
+            <span>{isWorking ? "読み取り中は分類を固定" : "ドラッグして別の分類へ移動"}</span>
           </div>
         </div>
       ) : (
@@ -175,20 +180,24 @@ export function CaptureSlotCard({
       )}
 
       <div className="mt-4 flex flex-wrap gap-2">
-        <Button variant="secondary" onClick={onClear} disabled={slot.status === "empty"}>
+        <Button
+          variant="secondary"
+          onClick={onClear}
+          disabled={slot.status === "empty" || isWorking}
+        >
           削除
         </Button>
         <Button
           variant="secondary"
           onClick={() => onMoveImage(-1)}
-          disabled={!hasImage || index === 0}
+          disabled={!hasImage || isWorking || index === 0}
         >
           前の分類へ
         </Button>
         <Button
           variant="secondary"
           onClick={() => onMoveImage(1)}
-          disabled={!hasImage || index === total - 1}
+          disabled={!hasImage || isWorking || index === total - 1}
         >
           次の分類へ
         </Button>

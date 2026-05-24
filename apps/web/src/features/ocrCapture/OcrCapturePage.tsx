@@ -129,6 +129,11 @@ export function OcrCapturePage() {
                     件だけ選択されています。このまま進める場合は、もう一度開始してください。
                   </p>
                 ) : null}
+                {hasWorkingSlot ? (
+                  <p className="mt-2 text-sm font-semibold text-[var(--color-action)]">
+                    読み取り中の画像は分類と削除を固定しています。状態は試合一覧で確認してください。
+                  </p>
+                ) : null}
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -146,11 +151,11 @@ export function OcrCapturePage() {
                   : "読み取りを開始して試合一覧へ"}
               </Button>
               <Button
-                disabled={submission.isSubmitting}
+                disabled={submission.isSubmitting || hasWorkingSlot}
                 variant="secondary"
                 onClick={() => flow.handleResetAll(notify)}
               >
-                画像をすべて削除
+                選択画像をすべて削除
               </Button>
             </div>
           </section>

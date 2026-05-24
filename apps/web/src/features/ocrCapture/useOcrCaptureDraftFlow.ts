@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { cancelOcrJob } from "@/features/ocrCapture/api";
 import {
   createInitialSlot,
   createInitialSlots,
@@ -96,10 +95,11 @@ export function useOcrCaptureDraftFlow(): OcrCaptureDraftFlow {
   const handleClear = useCallback((kind: SlotKind, notify: (message: string) => void) => {
     const currentSlot = slotsRef.current.find((slot) => slot.kind === kind);
     if (currentSlot) {
-      releaseSlotResources(currentSlot);
-      if (currentSlot.jobId && isWorkingStatus(currentSlot.status)) {
-        void cancelOcrJob(currentSlot.jobId).catch(() => undefined);
+      if (isWorkingStatus(currentSlot.status)) {
+        notify("読み取り中の画像は削除できません。試合一覧で状態を確認してください。");
+        return;
       }
+      releaseSlotResources(currentSlot);
     }
     setSlots((current) =>
       current.map((slot) => (slot.kind === kind ? createInitialSlot(kind) : slot)),
@@ -113,11 +113,12 @@ export function useOcrCaptureDraftFlow(): OcrCaptureDraftFlow {
   }, []);
 
   const handleResetAll = useCallback((notify: (message: string) => void) => {
+    if (slotsRef.current.some((slot) => isWorkingStatus(slot.status))) {
+      notify("読み取り中の画像は削除できません。試合一覧で状態を確認してください。");
+      return;
+    }
     for (const slot of slotsRef.current) {
       releaseSlotResources(slot);
-      if (slot.jobId && isWorkingStatus(slot.status)) {
-        void cancelOcrJob(slot.jobId).catch(() => undefined);
-      }
     }
     setSlots(createInitialSlots());
     setDrafts({});
@@ -130,10 +131,9 @@ export function useOcrCaptureDraftFlow(): OcrCaptureDraftFlow {
       const sourceSlot = slotsRef.current.find((slot) => slot.kind === sourceKind);
       const targetSlot = slotsRef.current.find((slot) => slot.kind === targetKind);
       if (!sourceSlot || !targetSlot || !sourceSlot.file) return;
-      for (const slot of [sourceSlot, targetSlot]) {
-        if (slot.jobId && isWorkingStatus(slot.status)) {
-          void cancelOcrJob(slot.jobId).catch(() => undefined);
-        }
+      if (isWorkingStatus(sourceSlot.status) || isWorkingStatus(targetSlot.status)) {
+        notify("読み取り中は分類を変更できません。試合一覧で状態を確認してください。");
+        return;
       }
       setSlots((current) =>
         current.map((slot) => {

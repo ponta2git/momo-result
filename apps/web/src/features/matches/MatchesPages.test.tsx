@@ -45,6 +45,10 @@ describe("MatchesListPage", () => {
     );
 
     expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
+    expect(await screen.findByLabelText("開催の振り返り")).toHaveTextContent(
+      "1試合確定、2件が未完了",
+    );
+    expect(screen.getByText("ぽんた 1勝")).toBeInTheDocument();
     const detailLinks = await screen.findAllByRole("link", { name: "詳細を見る" });
     expect(detailLinks).toHaveLength(2);
     detailLinks.forEach((link) => expect(link).toHaveAttribute("href", "/matches/match-1"));

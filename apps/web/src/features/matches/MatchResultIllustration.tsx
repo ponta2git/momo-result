@@ -16,86 +16,102 @@ export function MatchResultIllustration({ className, ...props }: MatchResultIllu
       {...props}
     >
       <path
-        d="M20 105h128"
+        d="M19 109h130"
         stroke="var(--color-border-strong)"
         strokeLinecap="round"
         strokeWidth="4"
       />
       <path
-        d="M37 91h94l13 14H24l13-14Z"
+        d="M28 84h34v25H28V84Z"
         fill="var(--color-surface-subtle)"
         stroke="var(--color-border-strong)"
-        strokeLinejoin="round"
         strokeWidth="2"
       />
       <path
-        d="M48 53h72a8 8 0 0 1 8 8v30H40V61a8 8 0 0 1 8-8Z"
-        fill="var(--color-surface)"
+        d="M63 66h42v43H63V66Z"
+        fill="var(--color-warning)"
+        opacity="0.26"
         stroke="var(--color-border-strong)"
         strokeWidth="2"
       />
       <path
-        d="M54 64h58v15H54V64Z"
+        d="M106 91h34v18h-34V91Z"
         fill="var(--color-surface-subtle)"
-        stroke="var(--color-border)"
+        stroke="var(--color-border-strong)"
         strokeWidth="2"
       />
+      <path d="M73 66h22v-8H73v8Z" fill="var(--color-warning)" opacity="0.75" />
       <path
-        d="M84 53V34"
-        stroke="var(--color-text-secondary)"
+        d="M79 58v-8h10v8"
+        stroke="var(--color-border-strong)"
         strokeLinecap="round"
-        strokeWidth="3"
+        strokeWidth="2"
       />
       <path
-        d="M84 36h28l-6 8 6 8H84V36Z"
+        d="M67 31h34l-5 19H72l-5-19Z"
         fill="var(--color-success)"
-        opacity="0.9"
+        opacity="0.82"
         stroke="var(--color-border-strong)"
         strokeLinejoin="round"
         strokeWidth="2"
       />
       <path
-        d="M62 91V78h44v13"
-        fill="var(--color-warning)"
-        opacity="0.22"
-        stroke="var(--color-border-strong)"
-        strokeLinejoin="round"
-        strokeWidth="2"
-      />
-      <path
-        d="M72 78v13M96 78v13"
+        d="M67 34h-9c-1 9 3 16 12 17M101 34h9c1 9-3 16-12 17"
         stroke="var(--color-border-strong)"
         strokeLinecap="round"
         strokeWidth="2"
       />
       <path
-        d="M76 78h16l4-13H72l4 13Z"
+        d="M84 37 87 44h7l-6 4 2 7-6-4-6 4 2-7-6-4h7l3-7Z"
         fill="var(--color-warning)"
         stroke="var(--color-border-strong)"
-        strokeLinejoin="round"
         strokeWidth="2"
       />
       <path
-        d="M84 61v8M79 65h10"
-        stroke="var(--color-text-primary)"
+        d="M84 16v8M58 22l5 7M111 22l-5 7"
+        stroke="var(--color-warning)"
         strokeLinecap="round"
         strokeWidth="2"
       />
-      <circle cx="45" cy="38" fill="var(--color-warning)" opacity="0.65" r="4" />
-      <circle cx="128" cy="33" fill="var(--color-action)" opacity="0.5" r="3.5" />
-      <circle cx="135" cy="68" fill="var(--color-success)" opacity="0.34" r="5" />
+      <circle cx="42" cy="34" fill="var(--color-action)" opacity="0.5" r="4" />
+      <circle cx="126" cy="43" fill="var(--color-success)" opacity="0.36" r="5" />
+      <circle cx="134" cy="70" fill="var(--color-warning)" opacity="0.55" r="3.5" />
       <path
-        d="M31 66h10M122 101c8 5 15 5 22 0M25 113c14 8 104 8 118 0"
+        d="M23 57h9M136 28h10M22 119c14 7 110 7 124 0"
         stroke="var(--color-action)"
         strokeLinecap="round"
         strokeWidth="3"
       />
-      <path
-        d="M54 117h60"
-        stroke="var(--color-border-strong)"
-        strokeLinecap="round"
-        strokeWidth="2"
-      />
+      <text
+        fill="var(--color-warning)"
+        fontSize="26"
+        fontWeight="700"
+        textAnchor="middle"
+        x="84"
+        y="97"
+      >
+        1
+      </text>
+      <text
+        fill="var(--color-text-secondary)"
+        fontSize="18"
+        fontWeight="700"
+        textAnchor="middle"
+        x="45"
+        y="103"
+      >
+        2
+      </text>
+      <text
+        fill="var(--color-text-secondary)"
+        fontSize="16"
+        fontWeight="700"
+        textAnchor="middle"
+        x="123"
+        y="105"
+      >
+        3
+      </text>
     </svg>
   );
 }

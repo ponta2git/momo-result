@@ -362,7 +362,7 @@ describe("MatchDetailPage", () => {
     );
 
     expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeInTheDocument();
-    expect(screen.getByText("今日の主役")).toBeInTheDocument();
+    expect(screen.queryByText("今日の主役")).not.toBeInTheDocument();
     expect(screen.getByText("優勝")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "削除" }));

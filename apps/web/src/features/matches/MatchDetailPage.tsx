@@ -126,12 +126,9 @@ export function MatchDetailPage() {
             <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_9rem] sm:items-center">
               <div className="min-w-0">
                 <p className="w-fit rounded-full border border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18 px-2.5 py-1 text-xs font-semibold text-[var(--color-text-primary)]">
-                  今日の主役
-                </p>
-                <p className="mt-3 text-xs font-semibold text-[var(--color-text-secondary)]">
                   優勝
                 </p>
-                <p className="mt-1 text-2xl font-semibold text-balance text-[var(--color-text-primary)]">
+                <p className="mt-3 text-2xl font-semibold text-balance text-[var(--color-text-primary)]">
                   {rankedPlayers[0] ? memberDisplayName(rankedPlayers[0].memberId) : "未確定"}
                 </p>
                 {rankedPlayers[0] ? (

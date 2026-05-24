@@ -107,7 +107,7 @@ export function OcrCapturePage() {
             </div>
           </section>
 
-          <section className="momo-safe-bottom relative overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-4 shadow-sm sm:min-h-44 sm:pr-60">
+          <section className="momo-safe-bottom relative mt-2 overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-4 shadow-sm sm:min-h-44 sm:pr-60">
             {ocrReadyCount === 0 ? (
               <MomoTransitBackdrop
                 className="right-5 bottom-5 opacity-[0.18]"

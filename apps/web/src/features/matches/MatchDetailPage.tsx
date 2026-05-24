@@ -124,7 +124,7 @@ export function MatchDetailPage() {
 
       <Card>
         <div className="grid gap-3 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] md:items-start">
-          <div className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-action)]/45 bg-[var(--color-action)]/10 p-4">
+          <div className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
             <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_9rem] sm:items-center">
               <div className="min-w-0">
                 <p className="w-fit rounded-full border border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18 px-2.5 py-1 text-xs font-semibold text-[var(--color-text-primary)]">

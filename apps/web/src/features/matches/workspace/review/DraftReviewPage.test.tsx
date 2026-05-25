@@ -46,6 +46,9 @@ describe("DraftReviewPage", () => {
 
     expect(await screen.findByRole("heading", { name: "OCR結果の確認" })).toBeInTheDocument();
     expect(await screen.findByDisplayValue("あかねまみ")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: /開催履歴/u })).toHaveValue("held-1"),
+    );
 
     await user.click(screen.getByRole("button", { name: "確定前の確認へ進む" }));
     expect(

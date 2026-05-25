@@ -6,6 +6,7 @@ import { http, HttpResponse } from "msw";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { formatCompactDateTime } from "@/features/matches/list/matchListFormat";
 import { MatchCreatePage } from "@/features/matches/MatchCreatePage";
 import { MatchDetailPage } from "@/features/matches/MatchDetailPage";
 import { MatchEditPage } from "@/features/matches/MatchEditPage";
@@ -49,29 +50,17 @@ describe("MatchesListPage", () => {
     expect(screen.queryByLabelText("開催の振り返り")).not.toBeInTheDocument();
     expect((await screen.findAllByText("優勝 ぽんた")).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByRole("columnheader", { name: /開催・試合/u })).toBeInTheDocument();
-    expect(
-      screen.getAllByText(
-        (_, element) => {
-          const text = element?.textContent ?? "";
-          return (
-            text.includes("01/01") &&
-            text.includes("09:00") &&
-            text.includes("桃太郎電鉄2") &&
-            text.includes("今シーズン")
-          );
-        },
-        { selector: "div" },
-      ).length,
-    ).toBeGreaterThanOrEqual(1);
-    expect(
-      screen.getAllByText(
-        (_, element) => {
-          const text = element?.textContent ?? "";
-          return text.includes("第1試合") && text.includes("東日本編");
-        },
-        { selector: "p" },
-      ).length,
-    ).toBeGreaterThanOrEqual(1);
+    const matchInfoCell = screen.getAllByRole("cell").find((cell) => {
+      const text = cell.textContent ?? "";
+      return [
+        formatCompactDateTime("2026-01-01T00:00:00.000Z"),
+        "桃太郎電鉄2",
+        "今シーズン",
+        "第1試合",
+        "東日本編",
+      ].every((part) => text.includes(part));
+    });
+    expect(matchInfoCell).toBeDefined();
     const detailLinks = await screen.findAllByRole("link", { name: "詳細を見る" });
     expect(detailLinks).toHaveLength(2);
     detailLinks.forEach((link) => expect(link).toHaveAttribute("href", "/matches/match-1"));

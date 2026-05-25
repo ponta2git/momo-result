@@ -1,4 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { LoaderCircle } from "lucide-react";
+import { useState } from "react";
 
 import type { AuthMeResponse } from "@/shared/api/auth";
 import { logout } from "@/shared/api/auth";
@@ -21,6 +23,7 @@ export function AuthPanel({
   loginNextPath,
 }: AuthPanelProps) {
   const queryClient = useQueryClient();
+  const [loginPending, setLoginPending] = useState(false);
   const logoutMutation = useMutation({
     mutationFn: logout,
     onSuccess: () => {
@@ -62,12 +65,20 @@ export function AuthPanel({
       ) : (
         <a
           href={buildAuthLoginHref(loginNextPath)}
+          aria-busy={loginPending || undefined}
           className={buttonClassName({
-            className: "mt-1 w-fit",
+            className: loginPending ? "mt-1 w-fit opacity-85" : "mt-1 w-fit",
             variant: "primary",
           })}
+          onClick={() => setLoginPending(true)}
         >
-          Discordでログインする
+          {loginPending ? (
+            <LoaderCircle
+              aria-hidden="true"
+              className="size-4 animate-spin motion-reduce:animate-none"
+            />
+          ) : null}
+          <span>{loginPending ? "Discordへ移動中…" : "Discordでログインする"}</span>
         </a>
       )}
     </div>

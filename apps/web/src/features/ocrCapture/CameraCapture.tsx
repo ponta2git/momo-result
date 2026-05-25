@@ -30,8 +30,10 @@ export function CameraCapture({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const startingRef = useRef(false);
+  const capturingRef = useRef(false);
   const [active, setActive] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [capturing, setCapturing] = useState(false);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [deviceId, setDeviceId] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -127,6 +129,9 @@ export function CameraCapture({
   }
 
   async function capture() {
+    if (capturingRef.current) {
+      return;
+    }
     const video = videoRef.current;
     const canvas = canvasRef.current;
     const stream = streamRef.current;
@@ -138,29 +143,36 @@ export function CameraCapture({
       return;
     }
 
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const context = canvas.getContext("2d");
-    if (!context) {
-      onValidationError("ブラウザで画像を生成できませんでした。");
-      return;
-    }
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise<Blob | null>((resolve) => {
-      canvas.toBlob(resolve, "image/png");
-    });
-    if (!blob) {
-      onValidationError("撮影画像を生成できませんでした。");
-      return;
-    }
+    capturingRef.current = true;
+    setCapturing(true);
+    try {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const context = canvas.getContext("2d");
+      if (!context) {
+        onValidationError("ブラウザで画像を生成できませんでした。");
+        return;
+      }
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise<Blob | null>((resolve) => {
+        canvas.toBlob(resolve, "image/png");
+      });
+      if (!blob) {
+        onValidationError("撮影画像を生成できませんでした。");
+        return;
+      }
 
-    const file = new File([blob], `${slotLabel}.png`, { type: "image/png" });
-    const validationError = validateImageFile(file);
-    if (validationError) {
-      onValidationError(validationError);
-      return;
+      const file = new File([blob], `${slotLabel}.png`, { type: "image/png" });
+      const validationError = validateImageFile(file);
+      if (validationError) {
+        onValidationError(validationError);
+        return;
+      }
+      onSelect(file, "camera");
+    } finally {
+      capturingRef.current = false;
+      setCapturing(false);
     }
-    onSelect(file, "camera");
   }
 
   return (
@@ -195,13 +207,24 @@ export function CameraCapture({
       </div>
       {error ? <p className="text-sm text-[var(--color-danger)]">{error}</p> : null}
       <div className="flex flex-wrap gap-2">
-        <Button variant="secondary" onClick={startCamera} disabled={disabled || starting || active}>
-          {starting ? "起動中…" : active ? "カメラ使用中" : "カメラ開始"}
+        <Button
+          variant="secondary"
+          pending={starting}
+          pendingLabel="起動中…"
+          onClick={startCamera}
+          disabled={disabled || active}
+        >
+          {active ? "カメラ使用中" : "カメラ開始"}
         </Button>
-        <Button onClick={capture} disabled={disabled || !active}>
+        <Button
+          pending={capturing}
+          pendingLabel="撮影中…"
+          onClick={capture}
+          disabled={disabled || !active}
+        >
           静止画を撮影
         </Button>
-        <Button variant="secondary" onClick={stop} disabled={!active}>
+        <Button variant="secondary" onClick={stop} disabled={!active || capturing}>
           停止
         </Button>
       </div>

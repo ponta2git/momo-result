@@ -30,6 +30,7 @@ export function MastersPage() {
     hasPendingMutation,
     handoffStatus,
     incidentMasters,
+    isReturnNavigationPending,
     mapCreateAction,
     mapCreateState,
     mapMastersLoadError,
@@ -59,6 +60,8 @@ export function MastersPage() {
         actions={
           returnDestination ? (
             <Button
+              pending={isReturnNavigationPending}
+              pendingLabel="移動中…"
               variant="secondary"
               onClick={() => navigateWithTransition(returnDestination ?? "/matches")}
             >
@@ -84,7 +87,8 @@ export function MastersPage() {
         <MasterReturnNotice
           destination={returnDestination}
           handoffStatus={handoffStatus}
-          disabled={hasPendingMutation}
+          disabled={hasPendingMutation || isReturnNavigationPending}
+          pending={isReturnNavigationPending}
           onReturn={() => navigateWithTransition(returnDestination)}
         />
       ) : null}

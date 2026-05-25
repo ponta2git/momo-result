@@ -10,6 +10,7 @@ type MasterReturnNoticeProps = {
   disabled?: boolean;
   handoffStatus: HandoffStatus;
   onReturn: () => void;
+  pending?: boolean;
 };
 
 export function MasterReturnNotice({
@@ -17,6 +18,7 @@ export function MasterReturnNotice({
   disabled = false,
   handoffStatus,
   onReturn,
+  pending = false,
 }: MasterReturnNoticeProps) {
   const shouldWarn = handoffStatus === "expired" || handoffStatus === "invalid";
 
@@ -26,7 +28,13 @@ export function MasterReturnNotice({
       title="必要な設定を追加したら、元の入力画面へ戻れます。"
       action={
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="primary" onClick={onReturn} disabled={disabled}>
+          <Button
+            variant="primary"
+            pending={pending}
+            pendingLabel="移動中…"
+            onClick={onReturn}
+            disabled={disabled}
+          >
             元の入力画面へ戻る
           </Button>
           <Link

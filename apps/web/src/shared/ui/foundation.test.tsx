@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
@@ -14,6 +14,7 @@ import { NumberField } from "@/shared/ui/forms/NumberField";
 import { SegmentedControl } from "@/shared/ui/forms/SegmentedControl";
 import { StatusPill } from "@/shared/ui/status/StatusPill";
 import { StatusRail } from "@/shared/ui/status/StatusRail";
+import { createDeferred } from "@/test/deferred";
 
 describe("ui foundation", () => {
   it("cn merges conflicting classes", () => {
@@ -119,6 +120,33 @@ describe("ui foundation", () => {
       }),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "削除確認" })).not.toBeInTheDocument();
+  });
+
+  it("AlertDialog shows pending feedback while confirm work is unresolved", async () => {
+    const user = userEvent.setup();
+    const deferred = createDeferred<void>();
+
+    render(
+      <AlertDialog
+        description="一覧から削除します。"
+        title="開催履歴を削除しますか？"
+        trigger={<Button>削除</Button>}
+        onConfirm={() => deferred.promise}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "削除" }));
+    await user.click(await screen.findByRole("button", { name: "実行" }));
+
+    const confirmButton = screen.getByRole("button", { name: "実行" });
+    expect(confirmButton).toHaveAttribute("aria-busy", "true");
+    expect(confirmButton).toBeDisabled();
+    expect(confirmButton.querySelector("svg")).not.toBeNull();
+
+    deferred.resolve();
+    await waitFor(() => {
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    });
   });
 
   it("RouteSuspenseFallback can provide the root main landmark", () => {

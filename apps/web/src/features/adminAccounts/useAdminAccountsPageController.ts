@@ -15,6 +15,7 @@ import type {
 import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { formatApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
+import { showToast } from "@/shared/ui/feedback/Toast";
 
 const initialCreateAccountState = { error: "", version: 0 };
 
@@ -67,6 +68,7 @@ export function useAdminAccountsPageController() {
     }) => updateLoginAccount(accountId, request),
     onSuccess: async () => {
       await invalidateAdminAccountCaches(queryClient);
+      showToast({ title: "アカウント設定を更新しました", tone: "success" });
     },
   });
 

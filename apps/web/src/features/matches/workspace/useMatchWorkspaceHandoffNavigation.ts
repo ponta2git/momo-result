@@ -13,10 +13,10 @@ export function useMatchWorkspaceHandoffNavigation(input: {
   values: MatchFormValues;
 }) {
   const navigate = useNavigate();
-  const [, startMastersTransition] = useTransition();
+  const [isPending, startMastersTransition] = useTransition();
   const { matchDraftId, matchSessionId, mode, notify, returnTo, values } = input;
 
-  return useCallback(() => {
+  const navigateToMasters = useCallback(() => {
     if (!returnTo) {
       return;
     }
@@ -45,4 +45,6 @@ export function useMatchWorkspaceHandoffNavigation(input: {
     startMastersTransition,
     values,
   ]);
+
+  return { isPending, navigateToMasters };
 }

@@ -118,7 +118,12 @@ export function AuthenticatedRoute({ children }: { children: ReactNode }) {
           {auth.error.detail}
         </Notice>
         <div>
-          <Button onClick={() => void auth.refetch()} variant="secondary">
+          <Button
+            pending={auth.isRefetching}
+            pendingLabel="再試行中…"
+            variant="secondary"
+            onClick={() => void auth.refetch()}
+          >
             再試行
           </Button>
         </div>

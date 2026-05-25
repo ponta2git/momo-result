@@ -35,7 +35,7 @@ export function useMastersPageController() {
   const idempotencyKeys = useIdempotencyKeyStore();
   const navigate = useNavigate();
   const nowIsoFactory = useCallback(() => new Date().toISOString(), []);
-  const [, startReturnTransition] = useTransition();
+  const [isReturnNavigationPending, startReturnTransition] = useTransition();
   const navigateWithTransition = (to: string) => {
     startReturnTransition(() => {
       navigate(to);
@@ -105,6 +105,7 @@ export function useMastersPageController() {
     auth,
     hasPendingMutation,
     incidentMasters: resourceQueries.incidentMasters,
+    isReturnNavigationPending,
     mapMastersLoadError: shouldShowQueryError(resourceQueries.mapMastersQuery)
       ? errorMessage(resourceQueries.mapMastersQuery.error)
       : undefined,

@@ -1,6 +1,6 @@
 import { AlertDialog as BaseAlertDialog } from "@base-ui/react/alert-dialog";
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
-import { X } from "lucide-react";
+import { LoaderCircle, X } from "lucide-react";
 import type { ReactElement, ReactNode } from "react";
 import { useState } from "react";
 
@@ -179,12 +179,18 @@ export function AlertDialog({
                 </BaseAlertDialog.Close>
                 <button
                   aria-busy={actualPending}
-                  className="inline-flex min-h-10 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-danger)] bg-[var(--color-danger)] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-danger)] bg-[var(--color-danger)] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
                   disabled={actualPending || confirmDisabled}
                   type="button"
                   onClick={handleConfirm}
                 >
-                  {confirmLabel}
+                  {actualPending ? (
+                    <LoaderCircle
+                      aria-hidden="true"
+                      className="size-4 animate-spin motion-reduce:animate-none"
+                    />
+                  ) : null}
+                  <span>{confirmLabel}</span>
                 </button>
               </div>
             </div>

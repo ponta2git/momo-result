@@ -233,14 +233,15 @@ export function useMatchWorkspaceController({
     await cancelDraftMutation.mutateAsync(targetDraftId);
   };
 
-  const handleNavigateToMasters = useMatchWorkspaceHandoffNavigation({
-    matchDraftId,
-    matchSessionId,
-    mode,
-    notify,
-    returnTo,
-    values: state.values,
-  });
+  const { isPending: isNavigatingToMasters, navigateToMasters: handleNavigateToMasters } =
+    useMatchWorkspaceHandoffNavigation({
+      matchDraftId,
+      matchSessionId,
+      mode,
+      notify,
+      returnTo,
+      values: state.values,
+    });
 
   const pageCopy = buildWorkspacePageCopy({ mode, reviewStatus });
 
@@ -326,6 +327,7 @@ export function useMatchWorkspaceController({
     hasSourceImagePanel,
     handleCancelDraftConfirmed,
     handleNavigateToMasters,
+    isNavigatingToMasters,
     isMutating,
     isOcrRunningBlocked,
     heldEvents,

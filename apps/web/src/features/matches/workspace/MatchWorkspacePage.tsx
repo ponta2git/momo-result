@@ -95,6 +95,7 @@ export function MatchWorkspacePage({
     handleNavigateToMasters,
     hasSourceImagePanel,
     heldEvents,
+    isNavigatingToMasters,
     isMutating,
     isOcrRunningBlocked,
     mapItems,
@@ -188,7 +189,12 @@ export function MatchWorkspacePage({
               />
             ) : null}
             {(mode === "review" || mode === "create") && returnTo ? (
-              <Button variant="secondary" onClick={handleNavigateToMasters}>
+              <Button
+                pending={isNavigatingToMasters}
+                pendingLabel="移動中…"
+                variant="secondary"
+                onClick={handleNavigateToMasters}
+              >
                 設定管理へ
               </Button>
             ) : null}
@@ -213,10 +219,12 @@ export function MatchWorkspacePage({
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <Button
               disabled={refreshingReviewStatus}
+              pending={refreshingReviewStatus}
+              pendingLabel="更新中…"
               variant="secondary"
               onClick={refreshReviewStatus}
             >
-              {refreshingReviewStatus ? "更新中…" : "状態を更新"}
+              状態を更新
             </Button>
             <Link
               className="text-sm font-semibold text-[var(--color-action)] hover:underline"

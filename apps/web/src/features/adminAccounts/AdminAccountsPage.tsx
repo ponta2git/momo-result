@@ -116,16 +116,25 @@ export function AdminAccountsPage() {
                 </tr>
               </thead>
               <tbody>
-                {accounts.map((account) => (
-                  <AccountRow
-                    account={account}
-                    isPending={updateMutation.isPending}
-                    key={account.accountId}
-                    onPatch={(request) =>
-                      updateMutation.mutate({ accountId: account.accountId, request })
-                    }
-                  />
-                ))}
+                {accounts.map((account) => {
+                  const rowPending =
+                    updateMutation.isPending &&
+                    updateMutation.variables?.accountId === account.accountId;
+                  return (
+                    <AccountRow
+                      account={account}
+                      isPending={updateMutation.isPending}
+                      key={account.accountId}
+                      pendingRequest={rowPending ? updateMutation.variables?.request : undefined}
+                      onPatch={async (request) => {
+                        await updateMutation.mutateAsync({
+                          accountId: account.accountId,
+                          request,
+                        });
+                      }}
+                    />
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -148,13 +157,21 @@ function AccountRow({
   account,
   isPending,
   onPatch,
+  pendingRequest,
 }: {
   account: LoginAccountResponse;
   isPending: boolean;
-  onPatch: (request: UpdateLoginAccountRequest) => void;
+  onPatch: (request: UpdateLoginAccountRequest) => Promise<void>;
+  pendingRequest?: UpdateLoginAccountRequest | undefined;
 }) {
+  const loginPending = pendingRequest?.loginEnabled !== undefined;
+  const adminPending = pendingRequest?.isAdmin !== undefined;
+
   return (
-    <tr className="border-t border-[var(--color-border)]">
+    <tr
+      aria-busy={Boolean(pendingRequest) || undefined}
+      className="border-t border-[var(--color-border)]"
+    >
       <td className="px-3 py-2 font-semibold">{account.displayName}</td>
       <td className="max-w-[14rem] truncate px-3 py-2 font-mono text-xs">
         {account.discordUserId}
@@ -169,7 +186,8 @@ function AccountRow({
           title={account.loginEnabled ? "ログインを停止しますか？" : "ログインを許可しますか？"}
           description={`${account.displayName} のログイン状態を変更します。変更後すぐに利用可否へ反映されます。`}
           label={account.loginEnabled ? "ログイン停止" : "ログイン許可"}
-          confirmLabel={account.loginEnabled ? "停止する" : "許可する"}
+          confirmLabel={loginPending ? "更新中…" : account.loginEnabled ? "停止する" : "許可する"}
+          pending={loginPending}
           onConfirm={() => onPatch({ loginEnabled: !account.loginEnabled })}
         />
         <AccountActionConfirm
@@ -177,7 +195,8 @@ function AccountRow({
           title={account.isAdmin ? "管理者権限を解除しますか？" : "管理者権限を付与しますか？"}
           description={`${account.displayName} の管理者権限を変更します。設定管理とアカウント管理の操作範囲が変わります。`}
           label={account.isAdmin ? "管理者解除" : "管理者にする"}
-          confirmLabel={account.isAdmin ? "解除する" : "付与する"}
+          confirmLabel={adminPending ? "更新中…" : account.isAdmin ? "解除する" : "付与する"}
+          pending={adminPending}
           onConfirm={() => onPatch({ isAdmin: !account.isAdmin })}
         />
       </td>
@@ -191,13 +210,15 @@ function AccountActionConfirm({
   disabled,
   label,
   onConfirm,
+  pending = false,
   title,
 }: {
   confirmLabel: string;
   description: string;
   disabled: boolean;
   label: string;
-  onConfirm: () => void;
+  onConfirm: () => Promise<void> | void;
+  pending?: boolean;
   title: string;
 }) {
   return (
@@ -205,6 +226,7 @@ function AccountActionConfirm({
       cancelLabel="キャンセル"
       confirmLabel={confirmLabel}
       description={description}
+      pending={pending}
       title={title}
       trigger={
         <Button disabled={disabled} size="sm" variant="secondary">

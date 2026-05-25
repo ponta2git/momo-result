@@ -229,6 +229,8 @@ export function MatchSetupSection({
           />
           <Button
             disabled={!eventDraftValue || createEventPending}
+            pending={createEventPending}
+            pendingLabel="作成中…"
             variant="secondary"
             onClick={onCreateEvent}
           >

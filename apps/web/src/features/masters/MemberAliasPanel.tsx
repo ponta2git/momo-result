@@ -1,5 +1,6 @@
 import { Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
+import { useFormStatus } from "react-dom";
 
 import type { MemberAliasResponse } from "@/shared/api/masters";
 import { formatApiError } from "@/shared/api/problemDetails";
@@ -66,7 +67,7 @@ export function MemberAliasPanel({
           <input className={inputClass} name="alias" placeholder="例: NO11社長" required />
         </Field>
         <div className="flex items-end">
-          <Button type="submit">追加</Button>
+          <MemberAliasCreateButton />
         </div>
         {createError ? (
           <p className="text-sm text-[var(--color-danger)] md:col-span-3" role="alert">
@@ -122,6 +123,15 @@ export function MemberAliasPanel({
         ))}
       </div>
     </section>
+  );
+}
+
+function MemberAliasCreateButton() {
+  const { pending } = useFormStatus();
+  return (
+    <Button pending={pending} pendingLabel="追加中" type="submit">
+      追加
+    </Button>
   );
 }
 

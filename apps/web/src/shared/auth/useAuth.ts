@@ -28,6 +28,7 @@ export function useAuth() {
     isAuthenticated: authQuery.isSuccess,
     isChecking: authQuery.isPending && authQuery.fetchStatus !== "idle",
     isForbidden: normalizedError?.status === 403,
+    isRefetching: authQuery.isFetching && !authQuery.isPending,
     isUnauthorized: normalizedError?.status === 401 || isMissingDevUser,
     isLogoutPending: logoutMutation.isPending,
     logout: () => logoutMutation.mutate(),

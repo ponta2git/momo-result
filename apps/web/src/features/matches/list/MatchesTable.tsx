@@ -1,5 +1,10 @@
 import { MatchListActions } from "@/features/matches/list/MatchListActions";
-import { formatDateTime, formatMatchNo } from "@/features/matches/list/matchListFormat";
+import {
+  formatCompactDateTime,
+  formatDateTime,
+  formatGameSeason,
+  formatMatchNo,
+} from "@/features/matches/list/matchListFormat";
 import type { MatchListItemView, MatchListSort } from "@/features/matches/list/matchListTypes";
 import { DataTable } from "@/shared/ui/data/DataTable";
 import { StatusPill } from "@/shared/ui/status/StatusPill";
@@ -12,6 +17,25 @@ type MatchesTableProps = {
 
 function nextHeldSort(sort: MatchListSort): MatchListSort {
   return sort === "held_desc" ? "held_asc" : "held_desc";
+}
+
+function HeldMatchLabel({ item }: { item: MatchListItemView }) {
+  return (
+    <div className="grid gap-1">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs font-medium text-[var(--color-text-secondary)]">
+        <span className="tabular-nums">{formatCompactDateTime(item.heldAt)}</span>
+        <span className="min-w-0 truncate">
+          {formatGameSeason(item.gameTitleName, item.seasonName)}
+        </span>
+      </div>
+      <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-semibold text-[var(--color-text-primary)]">
+        <span className="shrink-0">{formatMatchNo(item.matchNoInEvent)}</span>
+        <span className="min-w-0 truncate rounded-[var(--radius-xs)] bg-[var(--color-surface-subtle)] px-1.5 py-0.5">
+          {item.mapName ?? "マップ未設定"}
+        </span>
+      </p>
+    </div>
+  );
 }
 
 function RankSummary({ item }: { item: MatchListItemView }) {
@@ -41,27 +65,13 @@ export function MatchesTable({ items, sort, onSortChange }: MatchesTableProps) {
     <DataTable
       columns={[
         {
-          header: "試合",
+          header: "開催・試合",
           key: "match",
           minWidth: "17rem",
           onSort: () => onSortChange(nextHeldSort(sort)),
           renderCell: (item) => (
-            <div className="grid gap-1.5">
-              <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <span className="rounded-full border border-[var(--color-action)]/35 bg-[var(--color-action)]/10 px-2.5 py-1 text-xs font-semibold text-[var(--color-text-primary)]">
-                  {formatMatchNo(item.matchNoInEvent)}
-                </span>
-                <span className="text-xs text-[var(--color-text-secondary)] tabular-nums">
-                  {formatDateTime(item.heldAt)}
-                </span>
-              </div>
-              <p className="font-semibold text-[var(--color-text-primary)]">
-                {item.gameTitleName ?? "作品未設定"}
-              </p>
-              <p className="text-xs text-[var(--color-text-secondary)]">
-                {[item.seasonName, item.mapName].filter(Boolean).join(" / ") ||
-                  "シーズン・マップ未設定"}
-              </p>
+            <div className="grid gap-1">
+              <HeldMatchLabel item={item} />
             </div>
           ),
           ...(sort === "held_desc"

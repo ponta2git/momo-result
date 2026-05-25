@@ -21,7 +21,6 @@ import type { DataTableColumn } from "@/shared/ui/data/DataTable";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { LiveRegion } from "@/shared/ui/feedback/LiveRegion";
-import { MomoTransitBackdrop } from "@/shared/ui/feedback/MomoTransitBackdrop";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { TextField } from "@/shared/ui/forms/TextField";
@@ -208,15 +207,8 @@ export function HeldEventsPage() {
               columns={columns}
               emptyState={
                 <EmptyState
-                  className="relative min-h-56 overflow-hidden sm:pr-64"
-                  description={
-                    <>
-                      <span className="relative z-[var(--z-base)] block max-w-[30rem]">
-                        まず開催回を作成します。試合は開催回に紐づけて記録します。
-                      </span>
-                      <MomoTransitBackdrop tone="ready" />
-                    </>
-                  }
+                  className="min-h-56"
+                  description="まず開催回を作成します。試合は開催回に紐づけて記録します。"
                   icon={<CalendarDays className="size-5" />}
                   title="開催履歴がまだありません"
                 />

@@ -17,9 +17,18 @@ export function ExportTicket({ isPending, onDownload, view }: ExportTicketProps)
   return (
     <aside
       aria-busy={isPending || undefined}
-      className="grid gap-4 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] lg:sticky lg:top-4"
+      className="relative grid gap-4 overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] lg:sticky lg:top-4"
     >
-      <div>
+      <img
+        alt=""
+        aria-hidden="true"
+        className="pointer-events-none absolute top-3 right-3 hidden size-16 rotate-3 object-contain opacity-95 sm:block"
+        data-export-artwork="ticket"
+        decoding="async"
+        loading="lazy"
+        src="/ticket.png"
+      />
+      <div className="relative z-[var(--z-base)] pr-0 sm:pr-20">
         <p className="text-xs font-semibold text-[var(--color-text-muted)]">出力内容</p>
         <h2 className="mt-1 text-lg font-semibold text-[var(--color-text-primary)]">
           書き出し内容の確認

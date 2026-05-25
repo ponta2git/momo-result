@@ -13,7 +13,6 @@ import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";
 import { DataTable } from "@/shared/ui/data/DataTable";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
-import { MomoTransitBackdrop } from "@/shared/ui/feedback/MomoTransitBackdrop";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Card } from "@/shared/ui/layout/Card";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
@@ -81,9 +80,8 @@ export function MatchDetailPage() {
         </Notice>
       ) : null}
 
-      <Card className="relative overflow-hidden p-0 sm:pr-56">
-        <MomoTransitBackdrop className="opacity-[0.14]" />
-        <div className="relative z-[var(--z-base)] grid gap-0 lg:grid-cols-[18rem_minmax(0,1fr)]">
+      <Card className="overflow-hidden p-0">
+        <div className="grid gap-0 lg:grid-cols-[18rem_minmax(0,1fr)]">
           <div className="border-b border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-5 lg:border-r lg:border-b-0">
             <p className="text-xs font-semibold text-[var(--color-text-secondary)]">開催</p>
             <p className="mt-1 text-2xl font-semibold text-balance text-[var(--color-text-primary)]">
@@ -124,33 +122,31 @@ export function MatchDetailPage() {
 
       <Card>
         <div className="grid gap-3 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] md:items-start">
-          <div className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-            <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_9rem] sm:items-center">
-              <div className="min-w-0">
-                <p className="w-fit rounded-full border border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18 px-2.5 py-1 text-xs font-semibold text-[var(--color-text-primary)]">
-                  優勝
-                </p>
-                <p className="mt-3 text-2xl font-semibold text-balance text-[var(--color-text-primary)]">
-                  {rankedPlayers[0] ? memberDisplayName(rankedPlayers[0].memberId) : "未確定"}
-                </p>
-                {rankedPlayers[0] ? (
-                  <div className="mt-3 grid gap-1 text-sm text-[var(--color-text-secondary)]">
-                    <p>
-                      総資産{" "}
-                      <span className="font-semibold text-[var(--color-text-primary)] tabular-nums">
-                        {formatManYen(rankedPlayers[0].totalAssetsManYen)}
-                      </span>
-                    </p>
-                    <p>
-                      収益{" "}
-                      <span className="font-semibold text-[var(--color-text-primary)] tabular-nums">
-                        {formatManYen(rankedPlayers[0].revenueManYen)}
-                      </span>
-                    </p>
-                  </div>
-                ) : null}
-              </div>
-              <MatchResultIllustration className="mx-auto max-w-36 sm:mr-0" />
+          <div className="relative overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 sm:pr-36">
+            <MatchResultIllustration className="absolute top-3 right-3 hidden max-w-28 sm:block" />
+            <div className="min-w-0">
+              <p className="w-fit rounded-full border border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18 px-2.5 py-1 text-xs font-semibold text-[var(--color-text-primary)]">
+                優勝
+              </p>
+              <p className="mt-3 text-2xl font-semibold text-balance text-[var(--color-text-primary)]">
+                {rankedPlayers[0] ? memberDisplayName(rankedPlayers[0].memberId) : "未確定"}
+              </p>
+              {rankedPlayers[0] ? (
+                <div className="mt-3 grid gap-1 text-sm text-[var(--color-text-secondary)]">
+                  <p>
+                    総資産{" "}
+                    <span className="font-semibold text-[var(--color-text-primary)] tabular-nums">
+                      {formatManYen(rankedPlayers[0].totalAssetsManYen)}
+                    </span>
+                  </p>
+                  <p>
+                    収益{" "}
+                    <span className="font-semibold text-[var(--color-text-primary)] tabular-nums">
+                      {formatManYen(rankedPlayers[0].revenueManYen)}
+                    </span>
+                  </p>
+                </div>
+              ) : null}
             </div>
           </div>
           <ol className="grid gap-2">

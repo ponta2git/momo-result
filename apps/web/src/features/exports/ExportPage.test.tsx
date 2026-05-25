@@ -27,7 +27,7 @@ let anchorClick: ReturnType<typeof installAnchorClickMock>;
 
 function renderPage({ downloadTimeoutMs, path = "/exports", slowThresholdMs }: RenderOptions = {}) {
   window.localStorage.setItem("momoresult.devUser", "account_ponta");
-  render(
+  return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[path]}>
         <Routes>
@@ -64,8 +64,15 @@ describe("ExportPage", () => {
       }),
     );
 
-    renderPage();
+    const { container } = renderPage();
     await screen.findByRole("heading", { name: "CSV / TSV 出力" });
+    expect(container.querySelector('[data-export-artwork="ticket"]')).toHaveAttribute(
+      "src",
+      "/ticket.png",
+    );
+    expect(container.querySelector("[data-matches-artwork]")).toBeNull();
+    expect(container.querySelector("[data-ocr-artwork]")).toBeNull();
+    expect(container.querySelector("[data-result-asset]")).toBeNull();
     await user.click(screen.getByRole("button", { name: "CSVをダウンロード" }));
 
     await waitFor(() => expect(captured?.searchParams.get("format")).toBe("csv"));

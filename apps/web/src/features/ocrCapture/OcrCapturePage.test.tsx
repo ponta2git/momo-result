@@ -64,17 +64,18 @@ describe("OcrCapturePage", () => {
     user = userEvent.setup();
   });
 
-  it("keeps the transit illustration as a subtle background before images are selected", async () => {
+  it("uses the trains artwork on the OCR start section", async () => {
     window.localStorage.setItem("momoresult.devUser", "account_ponta");
     const { container } = renderCaptureRoute();
 
     expect(await screen.findByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
-    expect(container.querySelector('[data-illustration-backdrop="momo-transit"]')).not.toBeNull();
-    const transit = container.querySelector('[data-illustration="momo-transit"]');
-    expect(transit).not.toHaveTextContent("駅");
-    expect(transit?.querySelector('[data-transit-part="ticket"]')).not.toBeNull();
-    expect(transit?.querySelector('[data-transit-part="train"]')).not.toBeNull();
-    expect(transit?.querySelector('[data-transit-part="rail"]')).not.toBeNull();
+    expect(container.querySelector('[data-ocr-artwork="trains"]')).toHaveAttribute(
+      "src",
+      "/trains.png",
+    );
+    expect(container.querySelector("[data-matches-artwork]")).toBeNull();
+    expect(container.querySelector("[data-export-artwork]")).toBeNull();
+    expect(container.querySelector("[data-result-asset]")).toBeNull();
     expect(screen.getByRole("button", { name: "読み取りを開始して試合一覧へ" })).toBeDisabled();
   });
 

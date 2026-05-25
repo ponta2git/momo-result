@@ -7,7 +7,6 @@ import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";
 import { Dialog, AlertDialog } from "@/shared/ui/feedback/Dialog";
-import { MomoTransitIllustration } from "@/shared/ui/feedback/MomoTransitIllustration";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { RouteSuspenseFallback } from "@/shared/ui/feedback/RouteSuspenseFallback";
 import { NumberField } from "@/shared/ui/forms/NumberField";
@@ -155,21 +154,6 @@ describe("ui foundation", () => {
     const main = screen.getByRole("main");
     expect(main).toHaveAttribute("aria-busy", "true");
     expect(main).toHaveAttribute("id", "main-content");
-  });
-
-  it("MomoTransitIllustration keeps recognizable ticket, train, and rail landmarks", () => {
-    const { container } = render(<MomoTransitIllustration />);
-    const transit = container.querySelector('[data-illustration="momo-transit"]');
-
-    expect(transit).not.toBeNull();
-    expect(transit).not.toHaveTextContent("駅");
-    expect(transit?.querySelector('[data-transit-part="ticket"]')).not.toBeNull();
-    expect(transit?.querySelector('[data-transit-part="ticket-hole"]')).not.toBeNull();
-    expect(transit?.querySelector('[data-transit-part="train"]')).not.toBeNull();
-    expect(transit?.querySelector('[data-transit-part="train-window"]')).not.toBeNull();
-    expect(transit?.querySelectorAll('[data-transit-part="train-light"]')).toHaveLength(2);
-    expect(transit?.querySelectorAll('[data-transit-part="rail"]')).toHaveLength(1);
-    expect(transit?.querySelector('[data-transit-part="rail-sleeper"]')).not.toBeNull();
   });
 
   it("StatusPill maps internal status to user-facing labels", () => {

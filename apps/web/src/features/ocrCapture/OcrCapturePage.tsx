@@ -8,7 +8,6 @@ import { useOcrCapturePageController } from "@/features/ocrCapture/useOcrCapture
 import { AuthPanel } from "@/shared/auth/AuthPanel";
 import { Button } from "@/shared/ui/actions/Button";
 import { LiveRegion } from "@/shared/ui/feedback/LiveRegion";
-import { MomoTransitBackdrop } from "@/shared/ui/feedback/MomoTransitBackdrop";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
@@ -78,43 +77,47 @@ export function OcrCapturePage() {
           </section>
 
           <section className={panelClass}>
-            <div className="mb-4">
-              <h2 className={panelTitleClass}>2. 画像を入れる</h2>
-              <p className={panelLeadClass}>
-                撮影またはファイル追加で、空いている分類へ配置します。違う分類なら右側で入れ替えます。
-              </p>
-            </div>
-            <div className="grid gap-4">
-              <CameraCapture
-                disabled={slotsFull}
-                slotLabel="OCR"
-                onSelect={(file, source) => flow.handleAddImage(file, source, notify)}
-                onValidationError={handleValidationError}
-              />
-              <div className="flex flex-wrap items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
-                <ImageInput
+            <div className="relative z-[var(--z-base)]">
+              <div className="mb-4">
+                <h2 className={panelTitleClass}>2. 画像を入れる</h2>
+                <p className={panelLeadClass}>
+                  撮影またはファイル追加で、空いている分類へ配置します。違う分類なら右側で入れ替えます。
+                </p>
+              </div>
+              <div className="grid gap-4">
+                <CameraCapture
                   disabled={slotsFull}
                   slotLabel="OCR"
                   onSelect={(file, source) => flow.handleAddImage(file, source, notify)}
                   onValidationError={handleValidationError}
                 />
-                <p className="text-xs text-[var(--color-text-secondary)]">
-                  {slotsFull
-                    ? "3枚すべて配置済みのため、画像を追加できません。"
-                    : "カメラが使えない場合は画像ファイルを追加してください。"}
-                </p>
+                <div className="flex flex-wrap items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
+                  <ImageInput
+                    disabled={slotsFull}
+                    slotLabel="OCR"
+                    onSelect={(file, source) => flow.handleAddImage(file, source, notify)}
+                    onValidationError={handleValidationError}
+                  />
+                  <p className="text-xs text-[var(--color-text-secondary)]">
+                    {slotsFull
+                      ? "3枚すべて配置済みのため、画像を追加できません。"
+                      : "カメラが使えない場合は画像ファイルを追加してください。"}
+                  </p>
+                </div>
               </div>
             </div>
           </section>
 
-          <section className="momo-safe-bottom relative mt-2 overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-4 shadow-sm sm:min-h-44 sm:pr-60">
-            {ocrReadyCount === 0 ? (
-              <MomoTransitBackdrop
-                className="right-5 bottom-5 opacity-[0.18]"
-                size="lg"
-                tone="ready"
-              />
-            ) : null}
+          <section className="momo-safe-bottom relative mt-2 overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-4 shadow-sm sm:min-h-44 sm:pr-52">
+            <img
+              alt=""
+              aria-hidden="true"
+              className="pointer-events-none absolute top-4 right-4 hidden size-32 object-contain opacity-80 sm:block"
+              data-ocr-artwork="trains"
+              decoding="async"
+              loading="lazy"
+              src="/trains.png"
+            />
             <div className="relative z-[var(--z-base)] grid gap-4">
               <div className="max-w-2xl min-w-0">
                 <p className="text-sm font-semibold text-[var(--color-text-primary)]">

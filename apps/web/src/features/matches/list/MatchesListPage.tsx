@@ -15,7 +15,6 @@ import { useMatchesListPageController } from "@/features/matches/list/useMatches
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
-import { MomoTransitBackdrop } from "@/shared/ui/feedback/MomoTransitBackdrop";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
@@ -116,15 +115,6 @@ export function MatchesListPage() {
         </div>
       </section>
 
-      <MatchesWorkQueueSummary
-        counts={summaryCounts}
-        currentStatus={search.status}
-        loading={summaryLoading}
-        onSelectStatus={(status) => {
-          applySearch({ ...search, status });
-        }}
-      />
-
       {masterLoadFailed ? (
         <Notice tone="warning" title="絞り込み候補の一部を読み込めませんでした。">
           試合一覧は表示できます。開催、作品、シーズンの候補は再読み込み後に選択してください。
@@ -139,6 +129,15 @@ export function MatchesListPage() {
         onApply={applySearch}
         onClear={clearSearch}
         seasons={seasons}
+      />
+
+      <MatchesWorkQueueSummary
+        counts={summaryCounts}
+        currentStatus={search.status}
+        loading={summaryLoading}
+        onSelectStatus={(status) => {
+          applySearch({ ...search, status });
+        }}
       />
 
       <section aria-busy={isStale} className="relative grid min-h-[24rem] gap-4">
@@ -175,16 +174,11 @@ export function MatchesListPage() {
                 </div>
               )
             }
-            className="relative min-h-[18rem] overflow-hidden sm:pr-64"
+            className="min-h-[18rem]"
             description={
-              <>
-                <span className="relative z-[var(--z-base)] block max-w-[34rem]">
-                  {hasFilters
-                    ? "状態や開催条件を広げると、他の試合記録も表示できます。"
-                    : "まずはOCR取り込みか手入力で、最初の試合を登録します。"}
-                </span>
-                <MomoTransitBackdrop tone={hasFilters ? "empty" : "ready"} />
-              </>
+              hasFilters
+                ? "状態や開催条件を広げると、他の試合記録も表示できます。"
+                : "まずはOCR取り込みか手入力で、最初の試合を登録します。"
             }
             icon={<AlertTriangle className="size-5" />}
             title={hasFilters ? "条件に合う試合がありません" : "まだ試合がありません"}

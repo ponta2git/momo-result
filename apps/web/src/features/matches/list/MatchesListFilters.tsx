@@ -106,9 +106,18 @@ export function MatchesListFilters({
   return (
     <section
       aria-busy={pending || undefined}
-      className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
+      className="relative overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 lg:pr-40"
     >
-      <div className="grid gap-4">
+      <img
+        alt=""
+        aria-hidden="true"
+        className="pointer-events-none absolute top-4 right-4 hidden size-28 object-contain opacity-75 lg:block"
+        data-matches-artwork="station"
+        decoding="async"
+        loading="lazy"
+        src="/station.png"
+      />
+      <div className="relative z-[var(--z-base)] grid gap-4">
         <div className="flex min-w-0 items-center justify-between gap-3">
           <p className="text-sm font-semibold text-[var(--color-text-primary)]">絞り込み</p>
           {pending ? (

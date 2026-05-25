@@ -154,7 +154,7 @@ jobs:
         timeout-minutes: 2
 
       - name: Playwright E2E smoke
-        run: pnpm --filter web e2e
+        run: pnpm --filter web e2e:target
         timeout-minutes: 10
 
       - name: Upload Playwright report

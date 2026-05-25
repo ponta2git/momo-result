@@ -156,6 +156,51 @@ test("confirms the sample OCR review into a match detail", async ({ page }) => {
   await expect(page.getByText(gameTitleName, { exact: true })).toBeVisible();
 });
 
+test("filters and sorts the confirmed match list", async ({ page }) => {
+  expect(heldEventId).toBeTruthy();
+  expect(matchId).toBeTruthy();
+
+  await page.goto("/matches");
+
+  await expect(page.getByRole("heading", { exact: true, name: "試合一覧" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "詳細を見る" })).toBeVisible();
+
+  const statusResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      isMatchListResponse(response) &&
+      url.searchParams.get("status") === "confirmed" &&
+      url.searchParams.get("heldEventId") === null
+    );
+  });
+  await page.getByRole("combobox", { name: "状態" }).selectOption("confirmed");
+  expect((await statusResponse).ok()).toBe(true);
+  await expect(page).toHaveURL(/[?&]status=confirmed(?:&|$)/u);
+  await expect(page.getByRole("table").getByText(gameTitleName)).toBeVisible();
+  await expect(page.getByRole("link", { name: "詳細を見る" })).toHaveAttribute(
+    "href",
+    `/matches/${matchId}`,
+  );
+
+  const heldEventResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return isMatchListResponse(response) && url.searchParams.get("heldEventId") === heldEventId;
+  });
+  await page.getByRole("combobox", { name: "開催" }).selectOption(heldEventId);
+  expect((await heldEventResponse).ok()).toBe(true);
+  await expect(page).toHaveURL(new RegExp(`[?&]heldEventId=${heldEventId}(?:&|$)`, "u"));
+  await expect(page.getByRole("link", { name: "詳細を見る" })).toHaveAttribute(
+    "href",
+    `/matches/${matchId}`,
+  );
+
+  await page.getByRole("combobox", { name: "表の並び順" }).selectOption("updated_desc");
+  await expect(page).toHaveURL(/[?&]sort=updated_desc(?:&|$)/u);
+
+  await page.getByRole("button", { name: "開催・試合" }).click();
+  await expect(page).toHaveURL(/[?&]sort=held_desc(?:&|$)/u);
+});
+
 test("downloads an export for the confirmed match", async ({ page }) => {
   expect(matchId).toBeTruthy();
 
@@ -214,6 +259,11 @@ async function expectOk(response: APIResponse, label: string): Promise<void> {
     return;
   }
   throw new Error(`${label} failed with ${response.status()}: ${await response.text()}`);
+}
+
+function isMatchListResponse(response: APIResponse): boolean {
+  const url = new URL(response.url());
+  return url.pathname === "/api/matches" && response.request().method() === "GET";
 }
 
 async function selectSeedMasters(page: Page): Promise<void> {

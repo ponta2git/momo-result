@@ -4,10 +4,11 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { configDefaults, defineConfig } from "vitest/config";
 
+const apiProxyTarget = process.env["VITE_API_PROXY_TARGET"] ?? "http://localhost:8080";
 const backendProxy = {
-  "/api": "http://localhost:8080",
-  "/healthz": "http://localhost:8080",
-  "/openapi.yaml": "http://localhost:8080",
+  "/api": apiProxyTarget,
+  "/healthz": apiProxyTarget,
+  "/openapi.yaml": apiProxyTarget,
 } as const;
 
 export default defineConfig({

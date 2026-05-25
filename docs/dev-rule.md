@@ -64,6 +64,7 @@ pnpm web:dev
 | web build | `pnpm web:build` |
 | web lint | `pnpm web:lint` |
 | web e2e | `pnpm web:e2e` |
+| web e2e against an already-running target | `pnpm web:e2e:target` |
 | web test | `pnpm web:test` |
 | web typecheck | `pnpm web:typecheck` |
 | api quality | `pnpm api:quality` |
@@ -82,6 +83,7 @@ pnpm test:run
 pnpm test:coverage
 pnpm build
 pnpm e2e
+pnpm e2e:target
 ```
 
 ### API
@@ -117,17 +119,20 @@ uv run pytest -m integration
 | web production code | `format:check`, `lint`, `typecheck`, `test:run` |
 | web API DTO / generated type | `generate:api`, `lint`, `typecheck`, `test:run` |
 | web build/runtime config | 上記 + `build`; ログイン後主要フローに関わる場合は `e2e` |
+| ログイン後主要UX / UI flow | web production code gate + `pnpm web:e2e` |
 | api endpoint / OpenAPI | `apiQuality`, `test`; 必要なら web `generate:api` |
 | api usecase / domain / codec | `apiQuality`, `test`; C1/C2対象なら `apiCoverage` |
 | PostgreSQL repository / DB前提 | 上記 + `apiDbQuality` |
 | Redis Streams / OCR queue | 上記 + `apiRedisQuality` |
 | ocr-worker production code | ruff format, ruff check, mypy, pytest |
 | ocr-worker external runtime | 上記 + `pytest -m integration` |
-| Docker/Fly runtime config | `docker build`、`scripts/ci/runtime-smoke.sh`、container image scan、必要に応じて `pnpm web:e2e` |
+| Docker/Fly runtime config | `docker build`、`scripts/ci/runtime-smoke.sh`、container image scan、runtime container に当てる場合は `pnpm web:e2e:target` |
 | coverage対象ロジック | 各領域の coverage gate |
 | docs only | `git diff --check` |
 
 外部依存 gate を skip / 未実行にした場合、その外部 wire 動作は未検証として報告する。
+
+ローカルの `pnpm web:e2e` は Postgres / Redis Testcontainers と E2E専用APIを起動する隔離gateであり、普段使いのローカルDB/Redisへ接続しない。既に起動済みのruntime containerやCIのruntime smoke対象へPlaywrightだけを当てる場合は `pnpm web:e2e:target` を使い、接続先のDB/Redisが検証用に隔離されていることを事前に確認する。
 
 ## 6. Git
 

@@ -25,7 +25,7 @@ export function useAdminAccountsPageController() {
 
   const accountsQuery = useQuery({
     queryKey: adminAccountsQueryKeys.all(),
-    queryFn: listLoginAccounts,
+    queryFn: ({ signal }) => listLoginAccounts({ signal }),
   });
 
   const [createState, createAction] = useActionState<typeof initialCreateAccountState, FormData>(

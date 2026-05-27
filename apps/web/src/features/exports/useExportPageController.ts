@@ -43,15 +43,16 @@ export function useExportPageController({
   const [elapsedMs, setElapsedMs] = useState(0);
 
   const seasonsQuery = useQuery({
-    queryFn: () => listSeasonMasters(),
+    queryFn: ({ signal }) => listSeasonMasters(undefined, { signal }),
     queryKey: masterKeys.seasonMasters.list("exports"),
   });
   const heldEventsQuery = useQuery({
-    queryFn: () => listHeldEvents("", 100),
+    queryFn: ({ signal }) => listHeldEvents("", 100, { signal }),
     queryKey: heldEventKeys.scope("exports"),
   });
   const matchesQuery = useQuery({
-    queryFn: () => listMatches({ kind: "match", limit: 100, status: "confirmed" }),
+    queryFn: ({ signal }) =>
+      listMatches({ kind: "match", limit: 100, status: "confirmed" }, { signal }),
     queryKey: matchKeys.exports({ kind: "match", status: "confirmed" }),
   });
 
@@ -108,6 +109,16 @@ export function useExportPageController({
         ? heldEventsQuery.isLoading
         : urlState.scope === "match"
           ? seasonsQuery.isLoading || heldEventsQuery.isLoading || matchesQuery.isLoading
+          : false;
+  const candidateRefreshing =
+    urlState.scope === "season"
+      ? seasonsQuery.isFetching && !seasonsQuery.isLoading
+      : urlState.scope === "heldEvent"
+        ? heldEventsQuery.isFetching && !heldEventsQuery.isLoading
+        : urlState.scope === "match"
+          ? [seasonsQuery, heldEventsQuery, matchesQuery].some(
+              (query) => query.isFetching && !query.isLoading,
+            )
           : false;
   const candidateError =
     urlState.scope === "season"
@@ -214,6 +225,7 @@ export function useExportPageController({
 
   const view = buildExportViewModel({
     candidate: candidateView,
+    candidateRefreshing,
     elapsedMs,
     isPending: mutation.isPending,
     lastResult,
@@ -224,8 +236,10 @@ export function useExportPageController({
   return {
     isPending: mutation.isPending,
     liveMessage: lastResult?.kind === "success" ? "ダウンロードを開始しました" : "",
-    onCandidateChange: (selectedId: string) =>
-      updateSearch(urlState.format, urlState.scope, selectedId),
+    onCandidateChange: (selectedId: string) => {
+      if (candidateRefreshing) return;
+      updateSearch(urlState.format, urlState.scope, selectedId);
+    },
     onDownload: () => mutation.mutate(),
     onFormatChange: (nextFormat: ExportFormat) =>
       updateSearch(nextFormat, urlState.scope, selectedIdForScope(urlState, urlState.scope)),

@@ -38,7 +38,7 @@ export function useOcrCaptureQueries(): OcrCaptureQueries {
 
   const memberAliasesQuery = useQuery({
     queryKey: masterKeys.memberAliases.list(accountId ?? "anonymous"),
-    queryFn: () => listMemberAliases(),
+    queryFn: ({ signal }) => listMemberAliases(undefined, { signal }),
     enabled: ready,
   });
 

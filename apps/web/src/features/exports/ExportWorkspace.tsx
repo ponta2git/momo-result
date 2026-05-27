@@ -69,7 +69,7 @@ export function ExportWorkspace({
             </div>
 
             <ExportCandidateSelect
-              disabled={isPending}
+              disabled={isPending || view.candidateRefreshing}
               scope={view.scope}
               view={view.candidate}
               onChange={onCandidateChange}

@@ -7,6 +7,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { ExportPage } from "@/features/exports/ExportPage";
+import { matchKeys } from "@/shared/api/queryKeys";
 import { createDeferred } from "@/test/deferred";
 import { installAnchorClickMock } from "@/test/doubles/dom";
 import { setupMsw } from "@/test/msw/lifecycle";
@@ -176,6 +177,56 @@ describe("ExportPage", () => {
     expect(screen.getByRole("button", { name: "もう一度試す" })).toBeInTheDocument();
   });
 
+  it("keeps scoped export actions disabled while candidate data is refreshing", async () => {
+    const refetchGate = createDeferred();
+    let holdMatchRefetch = false;
+
+    server.use(
+      http.get("/api/matches", async ({ request }) => {
+        const url = new URL(request.url);
+        if (
+          holdMatchRefetch &&
+          url.searchParams.get("kind") === "match" &&
+          url.searchParams.get("status") === "confirmed"
+        ) {
+          await refetchGate.promise;
+        }
+        return HttpResponse.json({
+          items: [
+            {
+              createdAt: "2026-01-01T09:00:00.000Z",
+              heldEventId: "held-1",
+              id: "match-1",
+              kind: "match",
+              matchId: "match-1",
+              matchNoInEvent: 1,
+              status: "confirmed",
+              updatedAt: "2026-01-01T09:00:00.000Z",
+            },
+          ],
+        });
+      }),
+    );
+
+    renderPage({ path: "/exports?matchId=match-1&format=csv" });
+    expect(await screen.findByLabelText("試合")).toHaveValue("match-1");
+    expect(screen.getByRole("button", { name: "CSVをダウンロード" })).toBeEnabled();
+
+    holdMatchRefetch = true;
+    void queryClient.invalidateQueries({
+      queryKey: matchKeys.exports({ kind: "match", status: "confirmed" }),
+    });
+
+    expect(await screen.findByText("出力対象の候補を確認中です。")).toBeInTheDocument();
+    expect(screen.getByLabelText("試合")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "CSVをダウンロード" })).toBeDisabled();
+
+    refetchGate.resolve();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "CSVをダウンロード" })).toBeEnabled();
+    });
+  });
+
   it("prevents duplicate submission while pending and shows progress", async () => {
     let requests = 0;
     const responseGate = createDeferred();
@@ -197,6 +248,8 @@ describe("ExportPage", () => {
     await user.click(screen.getByRole("button", { name: "CSVをダウンロード" }));
 
     expect(screen.getByRole("button", { name: "作成中…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "CSV" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "全試合" })).toBeDisabled();
     expect(screen.getByText("出力ファイルを作成しています")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "試合一覧へ戻る" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "作成中…" }));

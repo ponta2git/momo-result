@@ -81,28 +81,28 @@ export function useMatchWorkspaceQueries(
 
   const heldEventsQuery = useSuspenseQuery({
     queryKey: heldEventKeys.scope("workspace"),
-    queryFn: () => listHeldEvents("", 100),
+    queryFn: ({ signal }) => listHeldEvents("", 100, { signal }),
   });
 
   const gameTitlesQuery = useSuspenseQuery({
     queryKey: masterKeys.gameTitles.list("workspace"),
-    queryFn: () => listGameTitles(),
+    queryFn: ({ signal }) => listGameTitles({ signal }),
   });
 
   const memberAliasesQuery = useSuspenseQuery({
     queryKey: masterKeys.memberAliases.list("workspace"),
-    queryFn: () => listMemberAliases(),
+    queryFn: ({ signal }) => listMemberAliases(undefined, { signal }),
   });
 
   const mapMastersQuery = useQuery({
     queryKey: masterKeys.mapMasters.list("workspace", gameTitleId),
-    queryFn: () => listMapMasters(gameTitleId || undefined),
+    queryFn: ({ signal }) => listMapMasters(gameTitleId || undefined, { signal }),
     enabled: Boolean(gameTitleId),
   });
 
   const seasonMastersQuery = useQuery({
     queryKey: masterKeys.seasonMasters.list("workspace", gameTitleId),
-    queryFn: () => listSeasonMasters(gameTitleId || undefined),
+    queryFn: ({ signal }) => listSeasonMasters(gameTitleId || undefined, { signal }),
     enabled: Boolean(gameTitleId),
   });
 
@@ -140,7 +140,7 @@ export function useMatchWorkspaceQueries(
 
   const ocrDraftsQuery = useQuery({
     queryKey: ocrDraftKeys.bulk(reviewDraftIdList.join(",")),
-    queryFn: () => getOcrDraftsBulk(reviewDraftIdList),
+    queryFn: ({ signal }) => getOcrDraftsBulk(reviewDraftIdList, { signal }),
     enabled: mode === "review" && !useSampleDrafts && reviewDraftIdList.length > 0,
     retry: false,
   });

@@ -12,6 +12,7 @@ type SegmentedOption = {
 export type SegmentedControlProps = {
   asSelect?: boolean;
   className?: string;
+  disabled?: boolean | undefined;
   label?: string;
   onValueChange: (value: string) => void;
   options: SegmentedOption[];
@@ -21,6 +22,7 @@ export type SegmentedControlProps = {
 export function SegmentedControl({
   asSelect = false,
   className,
+  disabled = false,
   label = "選択",
   onValueChange,
   options,
@@ -34,10 +36,11 @@ export function SegmentedControl({
         id={id}
         label={label}
         options={options.map((option) => ({
-          disabled: option.disabled,
+          disabled: disabled || option.disabled,
           label: option.label,
           value: option.value,
         }))}
+        disabled={disabled}
         value={value}
         onChange={(event) => onValueChange(event.currentTarget.value)}
       />
@@ -64,7 +67,7 @@ export function SegmentedControl({
               selected ? "bg-[var(--color-surface-selected)] text-[var(--color-text-primary)]" : "",
               "disabled:cursor-not-allowed disabled:opacity-50",
             )}
-            disabled={option.disabled}
+            disabled={disabled || option.disabled}
             type="button"
             onClick={() => onValueChange(option.value)}
           >

@@ -40,7 +40,7 @@ export function TextField({
       <input
         {...props}
         className={cn(
-          "min-h-10 w-full min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 leading-6 text-[var(--color-text-primary)]",
+          "min-h-10 w-full min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 leading-6 text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:bg-[var(--color-surface-subtle)] disabled:text-[var(--color-text-muted)] disabled:opacity-70",
           error ? "border-[var(--color-danger)]" : "",
           inputClassName,
         )}

@@ -11,9 +11,10 @@ type ExportScopeSelectorProps = {
 
 export function ExportScopeSelector({ disabled, onChange, scope }: ExportScopeSelectorProps) {
   return (
-    <div className={disabled ? "pointer-events-none opacity-60" : ""}>
+    <div>
       <SegmentedControl
         className="w-full"
+        disabled={disabled}
         label="出力範囲"
         options={exportScopes.map((item) => ({ label: item.label, value: item.value }))}
         value={scope}

@@ -156,6 +156,12 @@ describe("ui foundation", () => {
     expect(main).toHaveAttribute("id", "main-content");
   });
 
+  it("RouteSuspenseFallback matches workspace page width", () => {
+    render(<RouteSuspenseFallback pathname="/matches/new" />);
+
+    expect(screen.getByTestId("route-suspense-fallback")).toHaveClass("max-w-[90rem]");
+  });
+
   it("StatusPill maps internal status to user-facing labels", () => {
     render(
       <>
@@ -199,6 +205,32 @@ describe("ui foundation", () => {
     await user.keyboard("{Enter}");
 
     expect(onValueChange).toHaveBeenCalled();
+  });
+
+  it("SegmentedControl disables keyboard and pointer changes", async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+
+    render(
+      <SegmentedControl
+        disabled
+        label="出力形式"
+        options={[
+          { label: "CSV", value: "csv" },
+          { label: "TSV", value: "tsv" },
+        ]}
+        value="csv"
+        onValueChange={onValueChange}
+      />,
+    );
+
+    const second = screen.getByRole("button", { name: "TSV" });
+    expect(second).toBeDisabled();
+    await user.click(second);
+    second.focus();
+    await user.keyboard("{Enter}");
+
+    expect(onValueChange).not.toHaveBeenCalled();
   });
 
   it("NumberField uses text input with numeric mode and min-width contract", () => {

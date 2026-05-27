@@ -58,6 +58,32 @@ describe("exportViewModel", () => {
     expect(view.disableReason).toBe("書き出す対象を選択してください。");
   });
 
+  it("disables download while scoped candidates are refreshing", () => {
+    const view = buildExportViewModel({
+      candidate: {
+        candidates: [{ label: "2026-01-01 / #1", value: "match-1" }],
+        kind: "ready",
+        selectedId: "match-1",
+        selectedLabel: "2026-01-01 / #1",
+        selectedUnknown: false,
+      },
+      candidateRefreshing: true,
+      elapsedMs: 0,
+      isPending: false,
+      slowThresholdMs: 10_000,
+      urlState: {
+        errors: [],
+        format: "csv",
+        matchId: "match-1",
+        scope: "match",
+      },
+    });
+
+    expect(view.canDownload).toBe(false);
+    expect(view.disableReason).toBe("出力対象の候補を確認中です。");
+    expect(view.candidateRefreshing).toBe(true);
+  });
+
   it("shows slow state while a download is pending past threshold", () => {
     const view = buildExportViewModel({
       candidate: { kind: "hidden" },

@@ -87,14 +87,14 @@ export function Dialog({
         />
         <BaseDialog.Popup
           className={cn(
-            "fixed inset-0 z-[var(--z-dialog)] mx-auto flex w-full max-w-[40rem] items-center justify-center p-4",
+            "fixed inset-0 z-[var(--z-dialog)] mx-auto flex w-full max-w-[40rem] items-center justify-center overflow-y-auto p-4",
             popupClassName,
           )}
           initialFocus={true}
         >
           <div
             className={cn(
-              "w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] shadow-lg",
+              "max-h-[calc(100dvh-2rem)] w-full overflow-y-auto rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] shadow-lg",
               surfaceClassName,
             )}
           >
@@ -153,8 +153,8 @@ export function AlertDialog({
       {trigger ? <BaseAlertDialog.Trigger render={trigger} /> : null}
       <BaseAlertDialog.Portal>
         <BaseAlertDialog.Backdrop className="fixed inset-0 z-[var(--z-dialog)] bg-[var(--momo-night-900)]/35" />
-        <BaseAlertDialog.Popup className="fixed inset-0 z-[var(--z-dialog)] mx-auto flex w-full max-w-[40rem] items-center justify-center p-4">
-          <div className="w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] shadow-lg">
+        <BaseAlertDialog.Popup className="fixed inset-0 z-[var(--z-dialog)] mx-auto flex w-full max-w-[40rem] items-center justify-center overflow-y-auto p-4">
+          <div className="max-h-[calc(100dvh-2rem)] w-full overflow-y-auto rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] shadow-lg">
             <div className="space-y-3">
               <BaseAlertDialog.Title className="text-lg font-semibold text-balance text-[var(--color-text-primary)]">
                 {title}

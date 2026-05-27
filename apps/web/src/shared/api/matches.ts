@@ -1,5 +1,5 @@
 import { apiRequest } from "@/shared/api/client";
-import type { IdempotencyRequestOptions } from "@/shared/api/client";
+import type { ApiSignalOptions, IdempotencyRequestOptions } from "@/shared/api/client";
 import type { components } from "@/shared/api/generated";
 
 export type MatchSummaryResponse = components["schemas"]["MatchSummaryResponse"];
@@ -19,7 +19,10 @@ export type ListMatchesQuery = {
   limit?: number;
 };
 
-export async function listMatches(query: ListMatchesQuery = {}): Promise<MatchListResponse> {
+export async function listMatches(
+  query: ListMatchesQuery = {},
+  options: ApiSignalOptions = {},
+): Promise<MatchListResponse> {
   const params = new URLSearchParams();
   if (query.heldEventId) params.set("heldEventId", query.heldEventId);
   if (query.gameTitleId) params.set("gameTitleId", query.gameTitleId);
@@ -28,11 +31,14 @@ export async function listMatches(query: ListMatchesQuery = {}): Promise<MatchLi
   if (query.kind) params.set("kind", query.kind);
   if (query.limit !== undefined) params.set("limit", String(query.limit));
   const qs = params.toString();
-  return apiRequest<MatchListResponse>(`/api/matches${qs ? `?${qs}` : ""}`);
+  return apiRequest<MatchListResponse>(`/api/matches${qs ? `?${qs}` : ""}`, options);
 }
 
-export async function getMatch(matchId: string): Promise<MatchDetailResponse> {
-  return apiRequest<MatchDetailResponse>(`/api/matches/${encodeURIComponent(matchId)}`);
+export async function getMatch(
+  matchId: string,
+  options: ApiSignalOptions = {},
+): Promise<MatchDetailResponse> {
+  return apiRequest<MatchDetailResponse>(`/api/matches/${encodeURIComponent(matchId)}`, options);
 }
 
 export async function updateMatch(

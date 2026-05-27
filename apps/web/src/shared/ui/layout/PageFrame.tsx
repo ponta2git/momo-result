@@ -6,7 +6,7 @@ type PageFrameProps = HTMLAttributes<HTMLDivElement> & {
   width?: "narrow" | "standard" | "wide" | "workspace";
 };
 
-const widthClass = {
+export const pageFrameWidthClass = {
   narrow: "max-w-[48rem]",
   standard: "max-w-[75rem]",
   wide: "max-w-[82rem]",
@@ -16,7 +16,7 @@ const widthClass = {
 export function PageFrame({ className, width = "standard", ...props }: PageFrameProps) {
   return (
     <div
-      className={cn("mx-auto flex w-full flex-col gap-4", widthClass[width], className)}
+      className={cn("mx-auto flex w-full flex-col gap-4", pageFrameWidthClass[width], className)}
       {...props}
     />
   );

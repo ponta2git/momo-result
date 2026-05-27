@@ -11,7 +11,7 @@ export function authMeQueryKeyFor(devUser: string | undefined) {
 export function authQueryOptions(devUser?: string) {
   return queryOptions({
     queryKey: authMeQueryKeyFor(devUser),
-    queryFn: getAuthMe,
+    queryFn: ({ signal }) => getAuthMe({ signal }),
     enabled: !import.meta.env.DEV || Boolean(devUser),
   });
 }

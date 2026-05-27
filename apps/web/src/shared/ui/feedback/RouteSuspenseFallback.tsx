@@ -1,4 +1,5 @@
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
+import { pageFrameWidthClass } from "@/shared/ui/layout/PageFrame";
 
 type RouteSuspenseFallbackProps = {
   asMain?: boolean;
@@ -10,8 +11,9 @@ type RouteSuspenseFallbackProps = {
  * `<Suspense fallback={<RouteSuspenseFallback />}>` で利用する。
  */
 export function RouteSuspenseFallback({ asMain = false, pathname }: RouteSuspenseFallbackProps) {
-  const className = "mx-auto flex w-full max-w-[75rem] flex-col gap-5 px-4 py-8";
-  const content = <RouteSkeleton pathname={pathname} />;
+  const kind = routeSkeletonKind(pathname ?? "");
+  const className = `mx-auto flex w-full ${routeSkeletonWidthClass(kind)} flex-col gap-5 px-4 py-8`;
+  const content = <RouteSkeleton kind={kind} />;
 
   if (asMain) {
     return (
@@ -39,9 +41,7 @@ export function RouteSuspenseFallback({ asMain = false, pathname }: RouteSuspens
   );
 }
 
-function RouteSkeleton({ pathname = "" }: { pathname?: string | undefined }) {
-  const kind = routeSkeletonKind(pathname);
-
+function RouteSkeleton({ kind }: { kind: RouteSkeletonKind }) {
   if (kind === "list") {
     return (
       <>
@@ -139,9 +139,7 @@ function HeaderSkeleton() {
   );
 }
 
-function routeSkeletonKind(
-  pathname: string,
-): "detail" | "export" | "generic" | "list" | "masters" | "workspace" {
+function routeSkeletonKind(pathname: string): RouteSkeletonKind {
   if (pathname === "/matches" || pathname === "/held-events" || pathname === "/admin/accounts") {
     return "list";
   }
@@ -163,4 +161,16 @@ function routeSkeletonKind(
     return "export";
   }
   return "generic";
+}
+
+type RouteSkeletonKind = "detail" | "export" | "generic" | "list" | "masters" | "workspace";
+
+function routeSkeletonWidthClass(kind: RouteSkeletonKind): string {
+  if (kind === "workspace" || kind === "masters") {
+    return pageFrameWidthClass.workspace;
+  }
+  if (kind === "export") {
+    return pageFrameWidthClass.wide;
+  }
+  return pageFrameWidthClass.standard;
 }

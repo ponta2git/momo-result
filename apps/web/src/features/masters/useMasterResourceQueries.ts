@@ -13,29 +13,29 @@ import {
 export function useMasterResourceQueries(authScope: string, selectedGameTitleId: string) {
   const gameTitlesQuery = useSuspenseQuery({
     queryKey: masterQueryKeys.gameTitles(authScope),
-    queryFn: fetchGameTitles,
+    queryFn: ({ signal }) => fetchGameTitles({ signal }),
   });
 
   const mapMastersQuery = useQuery({
     queryKey: masterQueryKeys.mapMasters(authScope, selectedGameTitleId),
-    queryFn: () => fetchMapMasters(selectedGameTitleId),
+    queryFn: ({ signal }) => fetchMapMasters(selectedGameTitleId, { signal }),
     enabled: Boolean(selectedGameTitleId),
   });
 
   const seasonMastersQuery = useQuery({
     queryKey: masterQueryKeys.seasonMasters(authScope, selectedGameTitleId),
-    queryFn: () => fetchSeasonMasters(selectedGameTitleId),
+    queryFn: ({ signal }) => fetchSeasonMasters(selectedGameTitleId, { signal }),
     enabled: Boolean(selectedGameTitleId),
   });
 
   const incidentMastersQuery = useSuspenseQuery({
     queryKey: masterQueryKeys.incidentMasters(authScope),
-    queryFn: fetchIncidentMasters,
+    queryFn: ({ signal }) => fetchIncidentMasters({ signal }),
   });
 
   const memberAliasesQuery = useSuspenseQuery({
     queryKey: masterQueryKeys.memberAliases(authScope),
-    queryFn: fetchMemberAliases,
+    queryFn: ({ signal }) => fetchMemberAliases({ signal }),
   });
 
   const gameTitles = useMemo(() => gameTitlesQuery.data ?? [], [gameTitlesQuery.data]);

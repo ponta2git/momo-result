@@ -36,6 +36,7 @@ export type ExportDownloadResultView =
 export type ExportViewModel = {
   actionLabel: string;
   candidate: ExportCandidateView;
+  candidateRefreshing: boolean;
   canDownload: boolean;
   disableReason?: string | undefined;
   errors: string[];
@@ -161,6 +162,7 @@ function errorDetail(error: NormalizedApiError): string {
 
 export function buildExportViewModel(input: {
   candidate: ExportCandidateView;
+  candidateRefreshing?: boolean | undefined;
   elapsedMs: number;
   isPending: boolean;
   lastResult?: ExportDownloadResultView | undefined;
@@ -174,6 +176,7 @@ export function buildExportViewModel(input: {
   const disableReason =
     input.urlState.errors[0] ??
     (input.candidate.kind === "error" ? input.candidate.message : undefined) ??
+    (input.candidateRefreshing ? "出力対象の候補を確認中です。" : undefined) ??
     (candidateNeedsSelection ? "書き出す対象を選択してください。" : undefined);
   const selectedLabel =
     input.urlState.scope === "all"
@@ -186,6 +189,7 @@ export function buildExportViewModel(input: {
   return {
     actionLabel: `${formatLabel}をダウンロード`,
     candidate: input.candidate,
+    candidateRefreshing: input.candidateRefreshing === true,
     canDownload: !input.isPending && !disableReason,
     disableReason,
     errors: input.urlState.errors,

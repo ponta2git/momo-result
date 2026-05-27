@@ -1,5 +1,5 @@
 import { apiRequest } from "@/shared/api/client";
-import type { IdempotencyRequestOptions } from "@/shared/api/client";
+import type { ApiSignalOptions, IdempotencyRequestOptions } from "@/shared/api/client";
 import type { components } from "@/shared/api/generated";
 
 export type LoginAccountListResponse = components["schemas"]["LoginAccountListResponse"];
@@ -7,8 +7,10 @@ export type LoginAccountResponse = components["schemas"]["LoginAccountResponse"]
 export type CreateLoginAccountRequest = components["schemas"]["CreateLoginAccountRequest"];
 export type UpdateLoginAccountRequest = components["schemas"]["UpdateLoginAccountRequest"];
 
-export async function listLoginAccounts(): Promise<LoginAccountListResponse> {
-  return apiRequest<LoginAccountListResponse>("/api/admin/login-accounts");
+export async function listLoginAccounts(
+  options: ApiSignalOptions = {},
+): Promise<LoginAccountListResponse> {
+  return apiRequest<LoginAccountListResponse>("/api/admin/login-accounts", options);
 }
 
 export async function createLoginAccount(

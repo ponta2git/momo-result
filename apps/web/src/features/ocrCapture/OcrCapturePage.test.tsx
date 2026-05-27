@@ -79,6 +79,61 @@ describe("OcrCapturePage", () => {
     expect(screen.getByRole("button", { name: "読み取りを開始して試合一覧へ" })).toBeDisabled();
   });
 
+  it("blocks OCR start while dependent setup choices are still loading", async () => {
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    const setupGate = createDeferred();
+
+    server.use(
+      http.get("/api/map-masters", async () => {
+        await setupGate.promise;
+        return HttpResponse.json({
+          items: [
+            {
+              createdAt: "2026-01-01T00:00:00.000Z",
+              displayOrder: 1,
+              gameTitleId: "gt_momotetsu_2",
+              id: "map_east",
+              name: "東日本編",
+            },
+          ],
+        });
+      }),
+      http.get("/api/season-masters", async () => {
+        await setupGate.promise;
+        return HttpResponse.json({
+          items: [
+            {
+              createdAt: "2026-01-01T00:00:00.000Z",
+              displayOrder: 1,
+              gameTitleId: "gt_momotetsu_2",
+              id: "season_current",
+              name: "今シーズン",
+            },
+          ],
+        });
+      }),
+    );
+
+    renderCaptureRoute();
+
+    expect(await screen.findByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
+    const input = await screen.findByLabelText("OCRの画像をアップロード");
+    await user.upload(input, new File(["image"], "assets.png", { type: "image/png" }));
+
+    expect(await screen.findByText("試合設定の選択肢を確認しています。")).toBeInTheDocument();
+    expect(screen.getByLabelText(/シーズン/u)).toBeDisabled();
+    expect(screen.getByLabelText(/マップ/u)).toBeDisabled();
+    expect(screen.getByRole("button", { name: "読み取りを開始して試合一覧へ" })).toBeDisabled();
+
+    setupGate.resolve();
+    expect(await screen.findByRole("option", { name: "今シーズン" })).toBeInTheDocument();
+    expect(await screen.findByRole("option", { name: "東日本編" })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText("試合設定の選択肢を確認しています。")).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "読み取りを開始して試合一覧へ" })).toBeEnabled();
+    });
+  });
+
   it("reloads protected master selects after selecting a dev user", async () => {
     let authRequests = 0;
     server.use(

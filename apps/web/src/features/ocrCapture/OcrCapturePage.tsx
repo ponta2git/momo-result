@@ -34,7 +34,9 @@ export function OcrCapturePage() {
     selectedSlotLabels,
     setSetup,
     setup,
+    setupBlockedReason,
     setupOptions,
+    setupReady,
     slotsFull,
     submission,
   } = useOcrCapturePageController();
@@ -141,6 +143,11 @@ export function OcrCapturePage() {
                     読み取り中は分類と削除を固定します。状態は試合一覧で確認できます。
                   </p>
                 ) : null}
+                {setupBlockedReason ? (
+                  <p className="mt-2 text-sm font-semibold text-[var(--color-review)]">
+                    {setupBlockedReason}
+                  </p>
+                ) : null}
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-2 text-sm font-semibold text-[var(--color-text-primary)]">
@@ -148,7 +155,9 @@ export function OcrCapturePage() {
                 </span>
                 <Button
                   onClick={handleStartOcr}
-                  disabled={ocrReadyCount === 0 || hasWorkingSlot || submission.isSubmitting}
+                  disabled={
+                    ocrReadyCount === 0 || hasWorkingSlot || submission.isSubmitting || !setupReady
+                  }
                   pending={submission.isSubmitting}
                   pendingLabel="読み取り開始中…"
                 >

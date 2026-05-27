@@ -47,29 +47,29 @@ export function useMatchesListPageController() {
   };
 
   const heldEventsQuery = useQuery({
-    queryFn: () => listHeldEvents("", 100),
+    queryFn: ({ signal }) => listHeldEvents("", 100, { signal }),
     queryKey: heldEventKeys.scope("matches-list"),
   });
   const gameTitlesQuery = useQuery({
-    queryFn: () => listGameTitles(),
+    queryFn: ({ signal }) => listGameTitles({ signal }),
     queryKey: masterKeys.gameTitles.list("matches-list"),
   });
   const seasonsQuery = useQuery({
-    queryFn: () => listSeasonMasters(),
+    queryFn: ({ signal }) => listSeasonMasters(undefined, { signal }),
     queryKey: masterKeys.seasonMasters.list("matches-list"),
   });
   const mapsQuery = useQuery({
-    queryFn: () => listMapMasters(),
+    queryFn: ({ signal }) => listMapMasters(undefined, { signal }),
     queryKey: masterKeys.mapMasters.list("matches-list"),
   });
   const matchesQuery = useQuery({
     placeholderData: keepPreviousData,
-    queryFn: () => fetchMatchList(deferredSearch),
+    queryFn: ({ signal }) => fetchMatchList(deferredSearch, signal),
     queryKey: matchKeys.list(deferredSearch),
   });
   const matchesSummaryQuery = useQuery({
     placeholderData: keepPreviousData,
-    queryFn: () => fetchMatchListSummary(deferredSearch),
+    queryFn: ({ signal }) => fetchMatchListSummary(deferredSearch, signal),
     queryKey: matchKeys.summary({
       gameTitleId: deferredSearch.gameTitleId,
       heldEventId: deferredSearch.heldEventId,

@@ -1,5 +1,5 @@
 import { apiDownload, apiRequest } from "@/shared/api/client";
-import type { IdempotencyRequestOptions } from "@/shared/api/client";
+import type { ApiSignalOptions, IdempotencyRequestOptions } from "@/shared/api/client";
 import type { components } from "@/shared/api/generated";
 
 export type CreateMatchDraftRequest = components["schemas"]["CreateMatchDraftRequest"];
@@ -21,15 +21,23 @@ export async function createMatchDraft(
   });
 }
 
-export async function getMatchDraftDetail(draftId: string): Promise<MatchDraftDetailResponse> {
-  return apiRequest<MatchDraftDetailResponse>(`/api/match-drafts/${encodeURIComponent(draftId)}`);
+export async function getMatchDraftDetail(
+  draftId: string,
+  options: ApiSignalOptions = {},
+): Promise<MatchDraftDetailResponse> {
+  return apiRequest<MatchDraftDetailResponse>(
+    `/api/match-drafts/${encodeURIComponent(draftId)}`,
+    options,
+  );
 }
 
 export async function listMatchDraftSourceImages(
   draftId: string,
+  options: ApiSignalOptions = {},
 ): Promise<MatchDraftSourceImageListResponse> {
   return apiRequest<MatchDraftSourceImageListResponse>(
     `/api/match-drafts/${encodeURIComponent(draftId)}/source-images`,
+    options,
   );
 }
 

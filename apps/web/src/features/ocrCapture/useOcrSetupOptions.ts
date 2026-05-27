@@ -68,17 +68,17 @@ export function useOcrSetupOptions({
   const authScope = authAccountId ?? "anonymous";
   const gameTitlesQuery = useQuery({
     queryKey: masterKeys.gameTitles.list(authScope),
-    queryFn: listGameTitles,
+    queryFn: ({ signal }) => listGameTitles({ signal }),
     enabled,
   });
   const mapMastersQuery = useQuery({
     queryKey: masterKeys.mapMasters.list(authScope, value.gameTitleId),
-    queryFn: () => listMapMasters(value.gameTitleId || undefined),
+    queryFn: ({ signal }) => listMapMasters(value.gameTitleId || undefined, { signal }),
     enabled: enabled && Boolean(value.gameTitleId),
   });
   const seasonMastersQuery = useQuery({
     queryKey: masterKeys.seasonMasters.list(authScope, value.gameTitleId),
-    queryFn: () => listSeasonMasters(value.gameTitleId || undefined),
+    queryFn: ({ signal }) => listSeasonMasters(value.gameTitleId || undefined, { signal }),
     enabled: enabled && Boolean(value.gameTitleId),
   });
 
@@ -89,6 +89,18 @@ export function useOcrSetupOptions({
   const gameTitlesLoadFailed = shouldShowQueryError(gameTitlesQuery);
   const mapMastersLoadFailed = shouldShowQueryError(mapMastersQuery);
   const seasonMastersLoadFailed = shouldShowQueryError(seasonMastersQuery);
+  const loading =
+    gameTitlesQuery.isLoading ||
+    (Boolean(value.gameTitleId) && (mapMastersQuery.isLoading || seasonMastersQuery.isLoading));
+  const refreshing =
+    gameTitlesQuery.isFetching || mapMastersQuery.isFetching || seasonMastersQuery.isFetching;
+  const ready =
+    enabled &&
+    !loading &&
+    !gameTitlesLoadFailed &&
+    !mapMastersLoadFailed &&
+    !seasonMastersLoadFailed &&
+    Boolean(selectedGameTitle && value.mapMasterId && value.seasonMasterId && value.ownerMemberId);
 
   useEffect(() => {
     if (value.gameTitleId) {
@@ -150,6 +162,9 @@ export function useOcrSetupOptions({
       loading: seasonMastersQuery.isLoading,
     }),
     selectedGameTitle,
+    ready,
+    refreshing,
+    loading,
   };
 }
 

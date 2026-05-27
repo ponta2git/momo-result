@@ -33,24 +33,24 @@ export function useMatchDetailPageController() {
   });
 
   const matchQuery = useSuspenseQuery({
-    queryFn: () => getMatch(matchId),
+    queryFn: ({ signal }) => getMatch(matchId, { signal }),
     queryKey: matchKeys.detail(matchId),
   });
 
   const heldEventsQuery = useSuspenseQuery({
-    queryFn: () => listHeldEvents("", 100),
+    queryFn: ({ signal }) => listHeldEvents("", 100, { signal }),
     queryKey: heldEventKeys.scope("all"),
   });
   const gameTitlesQuery = useSuspenseQuery({
-    queryFn: () => listGameTitles(),
+    queryFn: ({ signal }) => listGameTitles({ signal }),
     queryKey: masterKeys.gameTitles.list("match-detail"),
   });
   const seasonsQuery = useSuspenseQuery({
-    queryFn: () => listSeasonMasters(),
+    queryFn: ({ signal }) => listSeasonMasters(undefined, { signal }),
     queryKey: masterKeys.seasonMasters.list("match-detail"),
   });
   const mapsQuery = useSuspenseQuery({
-    queryFn: () => listMapMasters(),
+    queryFn: ({ signal }) => listMapMasters(undefined, { signal }),
     queryKey: masterKeys.mapMasters.list("match-detail"),
   });
 

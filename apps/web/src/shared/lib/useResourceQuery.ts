@@ -1,6 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import type { UseQueryResult } from "@tanstack/react-query";
 
+import type { ApiSignalOptions } from "@/shared/api/client";
+
 /**
  * id が `string | undefined` のときに自動で disable し、id が定義済みのときだけ
  * fetcher(id) を呼ぶ react-query ラッパ。
@@ -14,17 +16,17 @@ import type { UseQueryResult } from "@tanstack/react-query";
 export function useResourceQuery<TData>(args: {
   key: (id: string | undefined) => readonly unknown[];
   id: string | undefined;
-  fetcher: (id: string) => Promise<TData>;
+  fetcher: (id: string, options?: ApiSignalOptions) => Promise<TData>;
   enabled?: boolean;
 }): UseQueryResult<TData> {
   const { key, id, fetcher, enabled = true } = args;
   return useQuery({
     queryKey: key(id),
-    queryFn: () => {
+    queryFn: ({ signal }) => {
       if (id === undefined) {
         throw new Error("useResourceQuery: id is undefined when queryFn invoked");
       }
-      return fetcher(id);
+      return fetcher(id, { signal });
     },
     enabled: enabled && id !== undefined,
   });

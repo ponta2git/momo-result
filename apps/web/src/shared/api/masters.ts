@@ -1,5 +1,5 @@
 import { apiRequest } from "@/shared/api/client";
-import type { IdempotencyRequestOptions } from "@/shared/api/client";
+import type { ApiSignalOptions, IdempotencyRequestOptions } from "@/shared/api/client";
 import type { components } from "@/shared/api/generated";
 
 export type GameTitleResponse = components["schemas"]["GameTitleResponse"];
@@ -26,8 +26,10 @@ export type CreateMemberAliasRequest = components["schemas"]["CreateMemberAliasR
 export type UpdateMemberAliasRequest = components["schemas"]["UpdateMemberAliasRequest"];
 export type DeleteMasterResponse = components["schemas"]["DeleteMasterResponse"];
 
-export async function listGameTitles(): Promise<GameTitleListResponse> {
-  return apiRequest<GameTitleListResponse>("/api/game-titles");
+export async function listGameTitles(
+  options: ApiSignalOptions = {},
+): Promise<GameTitleListResponse> {
+  return apiRequest<GameTitleListResponse>("/api/game-titles", options);
 }
 
 export async function createGameTitle(
@@ -57,11 +59,14 @@ export async function deleteGameTitle(id: string): Promise<DeleteMasterResponse>
   });
 }
 
-export async function listMapMasters(gameTitleId?: string): Promise<MapMasterListResponse> {
+export async function listMapMasters(
+  gameTitleId?: string,
+  options: ApiSignalOptions = {},
+): Promise<MapMasterListResponse> {
   const path = gameTitleId
     ? `/api/map-masters?gameTitleId=${encodeURIComponent(gameTitleId)}`
     : "/api/map-masters";
-  return apiRequest<MapMasterListResponse>(path);
+  return apiRequest<MapMasterListResponse>(path, options);
 }
 
 export async function createMapMaster(
@@ -91,11 +96,14 @@ export async function deleteMapMaster(id: string): Promise<DeleteMasterResponse>
   });
 }
 
-export async function listSeasonMasters(gameTitleId?: string): Promise<SeasonMasterListResponse> {
+export async function listSeasonMasters(
+  gameTitleId?: string,
+  options: ApiSignalOptions = {},
+): Promise<SeasonMasterListResponse> {
   const path = gameTitleId
     ? `/api/season-masters?gameTitleId=${encodeURIComponent(gameTitleId)}`
     : "/api/season-masters";
-  return apiRequest<SeasonMasterListResponse>(path);
+  return apiRequest<SeasonMasterListResponse>(path, options);
 }
 
 export async function createSeasonMaster(
@@ -125,15 +133,20 @@ export async function deleteSeasonMaster(id: string): Promise<DeleteMasterRespon
   });
 }
 
-export async function listIncidentMasters(): Promise<IncidentMasterListResponse> {
-  return apiRequest<IncidentMasterListResponse>("/api/incident-masters");
+export async function listIncidentMasters(
+  options: ApiSignalOptions = {},
+): Promise<IncidentMasterListResponse> {
+  return apiRequest<IncidentMasterListResponse>("/api/incident-masters", options);
 }
 
-export async function listMemberAliases(memberId?: string): Promise<MemberAliasListResponse> {
+export async function listMemberAliases(
+  memberId?: string,
+  options: ApiSignalOptions = {},
+): Promise<MemberAliasListResponse> {
   const path = memberId
     ? `/api/member-aliases?memberId=${encodeURIComponent(memberId)}`
     : "/api/member-aliases";
-  return apiRequest<MemberAliasListResponse>(path);
+  return apiRequest<MemberAliasListResponse>(path, options);
 }
 
 export async function createMemberAlias(

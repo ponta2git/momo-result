@@ -17,6 +17,10 @@ export type IdempotencyRequestOptions = {
   idempotencyKey: string;
 };
 
+export type ApiSignalOptions = {
+  signal?: AbortSignal;
+};
+
 export type ApiDownloadResult = {
   blob: Blob;
   fileName: string;

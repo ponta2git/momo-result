@@ -162,9 +162,9 @@ export function useOcrJobPolling({ jobId, attempts, resetToken }: UseOcrJobPolli
   const seed = jobId ?? "ocr-job";
   const query = useQuery({
     queryKey: ocrJobKeys.detail(jobId),
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       try {
-        const job = await getOcrJob(jobId ?? "");
+        const job = await getOcrJob(jobId ?? "", { signal });
         setTransientErrorCount(0);
         return job;
       } catch (error) {

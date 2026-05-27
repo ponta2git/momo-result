@@ -1,5 +1,5 @@
 import { apiRequest } from "@/shared/api/client";
-import type { IdempotencyRequestOptions } from "@/shared/api/client";
+import type { ApiSignalOptions, IdempotencyRequestOptions } from "@/shared/api/client";
 import type { components } from "@/shared/api/generated";
 
 export type UploadImageResponse = components["schemas"]["UploadImageResponse"];
@@ -28,8 +28,11 @@ export async function createOcrJob(
   });
 }
 
-export async function getOcrJob(jobId: string): Promise<OcrJobResponse> {
-  return apiRequest<OcrJobResponse>(`/api/ocr-jobs/${encodeURIComponent(jobId)}`);
+export async function getOcrJob(
+  jobId: string,
+  options: ApiSignalOptions = {},
+): Promise<OcrJobResponse> {
+  return apiRequest<OcrJobResponse>(`/api/ocr-jobs/${encodeURIComponent(jobId)}`, options);
 }
 
 export async function cancelOcrJob(jobId: string): Promise<CancelOcrJobResponse> {

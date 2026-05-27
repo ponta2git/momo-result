@@ -28,7 +28,7 @@ export function useHeldEventsPageController() {
   const idempotencyKeys = useIdempotencyKeyStore();
 
   const heldEventsQuery = useQuery({
-    queryFn: () => listHeldEvents("", 100),
+    queryFn: ({ signal }) => listHeldEvents("", 100, { signal }),
     queryKey: heldEventKeys.scope("held-events-page"),
   });
 

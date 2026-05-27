@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { slotDefinitions } from "@/features/ocrCapture/captureState";
 import { buildOcrHints } from "@/features/ocrCapture/hints";
-import { defaultSetupValues } from "@/features/ocrCapture/schema";
+import { defaultSetupValues, setupSchema } from "@/features/ocrCapture/schema";
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
 import { isWorkingStatus } from "@/features/ocrCapture/slotPolicy";
 import { useOcrCaptureDraftFlow } from "@/features/ocrCapture/useOcrCaptureDraftFlow";
@@ -53,6 +53,15 @@ export function useOcrCapturePageController() {
   ).length;
   const hasWorkingSlot = flow.slots.some((slot) => isWorkingStatus(slot.status));
   const slotsFull = flow.slots.every((slot) => Boolean(slot.file));
+  const setupValidation = setupSchema.safeParse(setup);
+  const setupReady = setupOptions.ready && setupValidation.success;
+  const setupBlockedReason = auth.ready
+    ? setupOptions.loading || setupOptions.refreshing
+      ? "試合設定の選択肢を確認しています。"
+      : setupValidation.success
+        ? undefined
+        : (setupValidation.error.issues[0]?.message ?? "試合設定を確認してください。")
+    : "ログイン状態を確認しています。";
   const selectedSlotLabels = slotDefinitions
     .filter((definition) =>
       flow.slots.some(
@@ -69,6 +78,10 @@ export function useOcrCapturePageController() {
   }, [ocrReadyCount]);
 
   async function handleStartOcr() {
+    if (!setupReady) {
+      notify(setupBlockedReason ?? "試合設定を確認してください。", "warning");
+      return;
+    }
     if (ocrReadyCount < slotDefinitions.length && !partialStartAcknowledged) {
       setPartialStartAcknowledged(true);
       notify(
@@ -104,7 +117,9 @@ export function useOcrCapturePageController() {
     selectedSlotLabels,
     setSetup,
     setup,
+    setupBlockedReason,
     setupOptions,
+    setupReady,
     slotsFull,
     submission,
   };

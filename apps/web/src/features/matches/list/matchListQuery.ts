@@ -20,10 +20,10 @@ export function buildMatchListSummaryQuery(search: MatchListSearch): ListMatches
   });
 }
 
-export async function fetchMatchList(search: MatchListSearch) {
-  return listMatches(buildMatchListApiQuery(search));
+export async function fetchMatchList(search: MatchListSearch, signal?: AbortSignal) {
+  return listMatches(buildMatchListApiQuery(search), signal ? { signal } : {});
 }
 
-export async function fetchMatchListSummary(search: MatchListSearch) {
-  return listMatches(buildMatchListSummaryQuery(search));
+export async function fetchMatchListSummary(search: MatchListSearch, signal?: AbortSignal) {
+  return listMatches(buildMatchListSummaryQuery(search), signal ? { signal } : {});
 }

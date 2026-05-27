@@ -187,7 +187,10 @@ object PostgresMatches:
       }
 
     override def delete(id: MatchId): ConnectionIO[Boolean] =
-      sql"DELETE FROM matches WHERE id = $id".update.run.map(_ > 0)
+      for
+        _ <- sql"DELETE FROM match_drafts WHERE confirmed_match_id = $id".update.run
+        deleted <- sql"DELETE FROM matches WHERE id = $id".update.run.map(_ > 0)
+      yield deleted
 
     override def find(id: MatchId): ConnectionIO[Option[MatchRecord]] =
       (selectMatch ++ fr"WHERE id = $id").query[MatchRow].option.flatMap {

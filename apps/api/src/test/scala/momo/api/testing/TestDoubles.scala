@@ -10,7 +10,7 @@ import cats.effect.{Clock, IO, Ref}
 
 import momo.api.adapters.RedisStreamClient
 import momo.api.auth.{DiscordOAuthClient, DiscordUser}
-import momo.api.domain.ids.{AccountId, ImageId, OcrJobId}
+import momo.api.domain.ids.{AccountId, ImageId, OcrDraftId, OcrJobId}
 import momo.api.domain.{OcrFailure, OcrJob, StoredImage}
 import momo.api.errors.AppError
 import momo.api.repositories.{
@@ -61,6 +61,8 @@ final case class FailingMarkFailedOcrJobsRepository(
     IO.raiseError(markFailedError)
   override def cancelQueued(jobId: OcrJobId, now: Instant): IO[Boolean] = delegate
     .cancelQueued(jobId, now)
+  override def cancelQueuedByDraftIds(draftIds: List[OcrDraftId], now: Instant): IO[Int] = delegate
+    .cancelQueuedByDraftIds(draftIds, now)
 
 final case class FailingDeleteImageStore(delegate: ImageStore[IO], deleteError: Throwable)
     extends ImageStore[IO]:

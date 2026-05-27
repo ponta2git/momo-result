@@ -3,11 +3,14 @@ package momo.api.integration
 import java.time.Instant
 
 import cats.effect.IO
+import doobie.implicits.*
+import doobie.postgres.implicits.*
 
 import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.postgres.*
+import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.usecases.*
 
 final class PostgresMasterRepositoriesSpec extends IntegrationSuite:
@@ -22,6 +25,7 @@ final class PostgresMasterRepositoriesSpec extends IntegrationSuite:
   private def seasonMasters = new PostgresSeasonMastersRepository[IO](transactor)
   private def memberAliases = new PostgresMemberAliasesRepository[IO](transactor)
   private def members = new PostgresMembersRepository[IO](transactor)
+  private def matchDrafts = new PostgresMatchDraftsRepository[IO](transactor)
 
   private def seedTitle: IO[Unit] = gameTitles
     .create(GameTitle(titleId, "テストタイトル", "world", 1, now))
@@ -75,6 +79,65 @@ final class PostgresMasterRepositoriesSpec extends IntegrationSuite:
       _ <- seedScopedMasters
       result <- delete.run(titleId)
     yield assertEquals(result, Left(AppError.Conflict("game title is still referenced.")))
+
+  test("discarded match drafts no longer block scoped master deletion"):
+    val draftId = MatchDraftId.unsafeFromString("draft_master_delete")
+    val deleteTitle = new DeleteGameTitle[IO](gameTitles)
+    val deleteMap = new DeleteMapMaster[IO](mapMasters)
+    val deleteSeason = new DeleteSeasonMaster[IO](seasonMasters)
+    for
+      _ <- seedScopedMasters
+      _ <- sql"""
+        INSERT INTO match_drafts (
+          id, created_by_account_id, created_by_member_id, status,
+          game_title_id, layout_family, season_master_id, map_master_id,
+          created_at, updated_at
+        ) VALUES (
+          $draftId, 'account_ponta', 'member_ponta', 'needs_review',
+          $titleId, 'world', $seasonId, $mapId,
+          $now, $now
+        )
+      """.update.run.transact(transactor)
+      blocked <- deleteMap.run(mapId)
+      cancelled <- matchDrafts.cancel(draftId, now.plusSeconds(1))
+      deletedMap <- deleteMap.run(mapId)
+      deletedSeason <- deleteSeason.run(seasonId)
+      deletedTitle <- deleteTitle.run(titleId)
+    yield
+      assertEquals(blocked, Left(AppError.Conflict("map master is still referenced.")))
+      assertEquals(cancelled, true)
+      assertEquals(deletedMap, Right(()))
+      assertEquals(deletedSeason, Right(()))
+      assertEquals(deletedTitle, Right(()))
+
+  test("legacy cancelled drafts are cleaned up before scoped master deletion"):
+    val deleteTitle = new DeleteGameTitle[IO](gameTitles)
+    val deleteMap = new DeleteMapMaster[IO](mapMasters)
+    val deleteSeason = new DeleteSeasonMaster[IO](seasonMasters)
+    for
+      _ <- seedScopedMasters
+      _ <- sql"""
+        INSERT INTO match_drafts (
+          id, created_by_account_id, created_by_member_id, status,
+          game_title_id, layout_family, season_master_id, map_master_id,
+          created_at, updated_at
+        ) VALUES (
+          'draft_master_delete_legacy', 'account_ponta', 'member_ponta', 'cancelled',
+          $titleId, 'world', $seasonId, $mapId,
+          $now, $now
+        )
+      """.update.run.transact(transactor)
+      deletedMap <- deleteMap.run(mapId)
+      deletedSeason <- deleteSeason.run(seasonId)
+      deletedTitle <- deleteTitle.run(titleId)
+      legacyExists <- sql"""
+        SELECT EXISTS(SELECT 1 FROM match_drafts WHERE id = 'draft_master_delete_legacy')
+      """.query[Boolean].unique.transact(transactor)
+    yield
+      assertEquals(deletedMap, Right(()))
+      assertEquals(deletedSeason, Right(()))
+      assertEquals(deletedTitle, Right(()))
+      assertEquals(legacyExists, false)
 
   test("master row writes report NotFound when the target row disappeared"):
     val missingTitle =

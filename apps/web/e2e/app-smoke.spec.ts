@@ -17,6 +17,7 @@ const png1x1 = Buffer.from(
 
 let heldEventId = "";
 let matchId = "";
+let uploadedDraftId = "";
 
 test.describe.configure({ mode: "serial" });
 
@@ -119,7 +120,12 @@ test("starts an OCR job from an uploaded image", async ({ page }) => {
   ).toBeVisible();
   await page.getByRole("button", { name: "このまま読み取りを開始" }).click();
 
-  expect((await draftResponse).ok()).toBe(true);
+  const draftCreateResponse = await draftResponse;
+  expect(draftCreateResponse.ok()).toBe(true);
+  const draftBody = (await draftCreateResponse.json()) as { matchDraftId?: string };
+  expect(draftBody.matchDraftId).toBeTruthy();
+  uploadedDraftId = draftBody.matchDraftId ?? "";
+
   expect((await jobResponse).ok()).toBe(true);
   await expect(page).toHaveURL(/\/matches(?:\?.*)?$/u);
   await expect(page.getByRole("heading", { exact: true, name: "試合一覧" })).toBeVisible();
@@ -225,6 +231,36 @@ test("downloads an export for the confirmed match", async ({ page }) => {
   ).toBeVisible();
 });
 
+test("deletes discarded OCR draft and scoped masters after deleting the confirmed match", async ({
+  request,
+}) => {
+  expect(uploadedDraftId).toBeTruthy();
+  expect(matchId).toBeTruthy();
+
+  const cancelResponse = await postMutation(request, `/api/match-drafts/${uploadedDraftId}/cancel`);
+  await expectOk(cancelResponse, "cancel uploaded draft");
+
+  const draftAfterCancel = await request.get(`/api/match-drafts/${uploadedDraftId}`, {
+    headers: {
+      "X-Momo-Account-Id": devAccountId,
+    },
+  });
+  expect(draftAfterCancel.status()).toBe(404);
+
+  const blockedMapDelete = await deleteJson(request, `/api/map-masters/${mapMasterId}`);
+  expect(blockedMapDelete.status()).toBe(409);
+
+  const matchDelete = await deleteJson(request, `/api/matches/${matchId}`);
+  await expectOk(matchDelete, "delete confirmed match");
+
+  await expectDeleted(await deleteJson(request, `/api/map-masters/${mapMasterId}`), mapMasterId);
+  await expectDeleted(
+    await deleteJson(request, `/api/season-masters/${seasonMasterId}`),
+    seasonMasterId,
+  );
+  await expectDeleted(await deleteJson(request, `/api/game-titles/${gameTitleId}`), gameTitleId);
+});
+
 function uniqueLocalDateTime(): string {
   const numericRunId = Number(runId.replaceAll(/\D/gu, "").slice(-8));
   const minutes = Number.isFinite(numericRunId) ? numericRunId % (20 * 24 * 60) : 0;
@@ -252,6 +288,34 @@ async function postJson(
   });
   await expectOk(response, path);
   return (await response.json()) as Record<string, unknown>;
+}
+
+async function deleteJson(request: APIRequestContext, path: string): Promise<APIResponse> {
+  return request.delete(path, {
+    headers: {
+      "Idempotency-Key": `e2e-${masterIdSuffix}-${path.replaceAll(/[^a-z0-9]+/giu, "-")}`,
+      "X-CSRF-Token": "dev",
+      "X-Momo-Account-Id": devAccountId,
+    },
+  });
+}
+
+async function postMutation(request: APIRequestContext, path: string): Promise<APIResponse> {
+  return request.post(path, {
+    headers: {
+      "Idempotency-Key": `e2e-${masterIdSuffix}-${path.replaceAll(/[^a-z0-9]+/giu, "-")}`,
+      "X-CSRF-Token": "dev",
+      "X-Momo-Account-Id": devAccountId,
+    },
+  });
+}
+
+async function expectDeleted(response: APIResponse, id: string): Promise<void> {
+  await expectOk(response, id);
+  expect((await response.json()) as { deleted?: boolean; id?: string }).toMatchObject({
+    deleted: true,
+    id,
+  });
 }
 
 async function expectOk(response: APIResponse, label: string): Promise<void> {

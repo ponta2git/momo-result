@@ -58,7 +58,7 @@ final class MatchDraftLifecycleSpec extends CatsEffectSuite:
       ok2 <- repo.markConfirmed(draft.id, MatchId.unsafeFromString("match_2"), laterAt)
     yield assert(!ok2)
 
-  test("cancel only succeeds on editable drafts; idempotent calls return false on Cancelled"):
+  test("cancel physically removes editable drafts; idempotent calls return false after deletion"):
     for
       repo <- InMemoryMatchDraftsRepository.create[IO]
       draft = newEditing(MatchDraftStatus.NeedsReview)
@@ -66,9 +66,7 @@ final class MatchDraftLifecycleSpec extends CatsEffectSuite:
       ok <- repo.cancel(draft.id, laterAt)
       _ = assert(ok)
       after <- repo.find(draft.id)
-      _ = after match
-        case Some(_: MatchDraft.Cancelled) => ()
-        case other => fail(s"expected Cancelled, got $other")
+      _ = assertEquals(after, None)
       ok2 <- repo.cancel(draft.id, laterAt)
     yield assert(!ok2)
 

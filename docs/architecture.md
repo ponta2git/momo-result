@@ -114,7 +114,7 @@
 - Secrets、session ID、OAuth token、CSRF token、Redis URL、DB URL、画像内容、OCR raw text 全文をログに出さない。
 - 例外ログは throwable の message / stack trace を直接出さず、例外クラス列などの安全な情報に絞る。
 - アップロード画像は PNG/JPEG/WebP、1枚3MBまで、OCR処理は最大4Kまで。形式、サイズ、寸法、実体を検証する。
-- OCR元画像は下書き確定またはキャンセルまで保持し、その後削除する。DBに画像実体、内部path、長寿命URLを保存・公開しない。
+- OCR元画像は下書き確定または下書き削除まで保持し、その後削除する。DBに画像実体、内部path、長寿命URLを保存・公開しない。
 - ログイン、OAuth callback state、画像アップロード、JSON mutation、CSV/TSV出力にはレート制限を入れる。
 - JSON mutation の retry replay は rate limit / key数上限で潰さず、新規 mutation だけ account 別 rate limit と未期限切れ `Idempotency-Key` 件数上限を適用する。上限値は `AppConfig` / env で管理する。
 - Discord OAuth provider の `429` / `5xx` / transport error が続く場合は短期 backoff で provider 呼び出しを抑制し、UIが扱える Problem Details と安全なログイベントへ正規化する。

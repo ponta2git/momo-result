@@ -63,6 +63,16 @@ final class PostgresMatchDraftsRepositorySpec extends IntegrationSuite:
       assertEquals(failed, false)
       assertEquals(status, "cancelled")
 
+  test("cancel physically removes non-terminal drafts"):
+    val draftId = MatchDraftId.unsafeFromString("match-draft-delete-cancel")
+    for
+      _ <- insertDraft(draftId.value, "needs_review")
+      cancelled <- repo.cancel(draftId, updatedAt)
+      exists <- draftExists(draftId.value)
+    yield
+      assertEquals(cancelled, true)
+      assertEquals(exists, false)
+
   test("attachOcrArtifacts refuses auto screen type for existing match drafts"):
     val draftId = MatchDraftId.unsafeFromString("match-draft-auto-attach")
     for
@@ -154,6 +164,10 @@ final class PostgresMatchDraftsRepositorySpec extends IntegrationSuite:
   private def draftUpdatedAt(id: String): IO[Instant] = sql"""
     SELECT updated_at FROM match_drafts WHERE id = $id
   """.query[Instant].unique.transact(transactor)
+
+  private def draftExists(id: String): IO[Boolean] = sql"""
+    SELECT EXISTS(SELECT 1 FROM match_drafts WHERE id = $id)
+  """.query[Boolean].unique.transact(transactor)
 
   private def setUpdatedAt(id: String, value: Instant): IO[Int] = sql"""
     UPDATE match_drafts SET updated_at = $value WHERE id = $id

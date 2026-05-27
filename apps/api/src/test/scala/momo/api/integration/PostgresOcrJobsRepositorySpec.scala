@@ -6,7 +6,7 @@ import cats.effect.IO
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
-import momo.api.domain.ids.OcrJobId
+import momo.api.domain.ids.{OcrDraftId, OcrJobId}
 import momo.api.repositories.postgres.PostgresOcrJobsRepository
 
 final class PostgresOcrJobsRepositorySpec extends IntegrationSuite:
@@ -87,6 +87,58 @@ final class PostgresOcrJobsRepositorySpec extends IntegrationSuite:
     yield
       assertEquals(cancelled, true)
       assertEquals(draftStatus, "ocr_running")
+
+  test("cancelQueuedByDraftIds cancels queued jobs for discarded draft slots"):
+    for
+      _ <- insertOcrDraft("draft-cancel-bulk-a", "job-cancel-bulk-a")
+      _ <- insertOcrDraft("draft-cancel-bulk-b", "job-cancel-bulk-b")
+      _ <- insertOcrDraft("draft-cancel-bulk-running", "job-cancel-bulk-running")
+      _ <- insertOcrJob(
+        id = "job-cancel-bulk-a",
+        draftId = "draft-cancel-bulk-a",
+        imageId = "image-cancel-bulk-a",
+        status = "queued",
+      )
+      _ <- insertOcrJob(
+        id = "job-cancel-bulk-b",
+        draftId = "draft-cancel-bulk-b",
+        imageId = "image-cancel-bulk-b",
+        status = "queued",
+      )
+      _ <- insertOcrJob(
+        id = "job-cancel-bulk-running",
+        draftId = "draft-cancel-bulk-running",
+        imageId = "image-cancel-bulk-running",
+        status = "running",
+      )
+      cancelled <- repo.cancelQueuedByDraftIds(
+        List(
+          OcrDraftId.unsafeFromString("draft-cancel-bulk-a"),
+          OcrDraftId.unsafeFromString("draft-cancel-bulk-b"),
+          OcrDraftId.unsafeFromString("draft-cancel-bulk-running"),
+        ),
+        now,
+      )
+      statuses <- sql"""
+        SELECT id, status
+        FROM ocr_jobs
+        WHERE id IN (
+          'job-cancel-bulk-a',
+          'job-cancel-bulk-b',
+          'job-cancel-bulk-running'
+        )
+        ORDER BY id
+      """.query[(String, String)].to[List].transact(transactor)
+    yield
+      assertEquals(cancelled, 2)
+      assertEquals(
+        statuses,
+        List(
+          "job-cancel-bulk-a" -> "cancelled",
+          "job-cancel-bulk-b" -> "cancelled",
+          "job-cancel-bulk-running" -> "running",
+        ),
+      )
 
   private def insertOcrDraft(id: String, jobId: String): IO[Int] = sql"""
     INSERT INTO ocr_drafts (

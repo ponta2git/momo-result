@@ -391,6 +391,7 @@ def _sync_match_draft_status_for_terminal_job(
         SET status = ns.status, updated_at = now()
         FROM next_status ns
         WHERE md.id = ns.match_draft_id
+          AND md.status NOT IN ('confirmed', 'cancelled')
           AND md.status <> ns.status
         """,
         (job_id,),

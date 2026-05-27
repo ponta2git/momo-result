@@ -51,6 +51,30 @@ final class InMemoryOcrJobsRepository[F[_]: Sync] private (
     case None => false.pure[F]
   }
 
+  override def cancelQueuedByDraftIds(draftIds: List[OcrDraftId], now: Instant): F[Int] =
+    val ids = draftIds.toSet
+    ref.modify { jobs =>
+      val (updated, cancelled) = jobs.foldLeft((jobs, List.empty[OcrJob.Cancelled])) {
+        case ((acc, cancelledAcc), (jobId, q: OcrJob.Queued)) if ids.contains(q.draftId) =>
+          val cancelled = OcrJob.Cancelled(
+            id = q.id,
+            draftId = q.draftId,
+            imageId = q.imageId,
+            imagePath = q.imagePath,
+            requestedScreenType = q.requestedScreenType,
+            attemptCount = q.attemptCount,
+            cancelledFinishedAt = now,
+            createdAt = q.createdAt,
+            updatedAt = now,
+          )
+          (acc.updated(jobId, cancelled), cancelled :: cancelledAcc)
+        case ((acc, cancelledAcc), _) => (acc, cancelledAcc)
+      }
+      updated -> (cancelled.reverse, updated.values.toList)
+    }.flatMap { case (cancelled, jobs) =>
+      cancelled.traverse_(job => onQueuedCancel(job, jobs)).as(cancelled.size)
+    }
+
   private def toFailed(job: OcrJob, failure: OcrFailure, now: Instant): OcrJob.Failed = OcrJob
     .Failed(
       id = job.id,

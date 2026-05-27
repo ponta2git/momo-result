@@ -62,9 +62,7 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
 
   override def cancel(draftId: MatchDraftId, updatedAt: Instant): F[Boolean] = ref.modify { current =>
     current.get(draftId) match
-      case Some(e: MatchDraft.Editable) =>
-        val next = MatchDraft.Cancelled(common = e.common.copy(updatedAt = updatedAt))
-        (current + (draftId -> next), true)
+      case Some(_: MatchDraft.Editable) => (current - draftId, true)
       case _ => (current, false)
   }
 

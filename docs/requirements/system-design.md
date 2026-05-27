@@ -157,7 +157,7 @@ OCRジョブのタイムアウト初期値は `OCR_TIMEOUT_SECONDS` で管理す
 - 一時ディスクの空き容量・使用率水位は `IMAGE_UPLOAD_STORAGE_MIN_FREE_BYTES` と `IMAGE_UPLOAD_STORAGE_MAX_USED_PERCENT` で管理し、超過時は `503` Problem Details で upload 受付を一時停止する。
 - OCR worker はデコード後メモリ保護のため、4K（3840x2160）を超える寸法の画像を処理しない。
 - アップロード画像はFly.io VMの一時ディスクに保存する。
-- OCR完了時点では画像を削除しない。下書き確定またはキャンセルまで保持し、その後削除する。
+- OCR完了時点では画像を削除しない。下書き確定または下書き削除まで保持し、その後削除する。
 - OCR へ進まない未参照 upload は `IMAGE_ORPHAN_OLDER_THAN_MINUTES` より古くなった時点で orphan reaper の削除対象とする。MVP既定値は15分、reaper interval は5分とする。
 - OCR待ち中にVM再起動などで一時画像が失われた場合は、ジョブを失敗扱いにし、ユーザーに再アップロードを求める。
 - 画像はサーバーに恒久保存しない。
@@ -284,7 +284,7 @@ Playwright E2E smoke はUX確定済みのログイン後主要フローに絞る
 - OAuth callback は IP 単位のログイン制限に加え、同一 state の callback 連打を provider 呼び出し前に抑制する。上限は `AUTH_CALLBACK_STATE_RATE_LIMIT_PER_MINUTE` で管理し、既定値は3回/分とする。
 - Discord OAuth provider の `429` / `5xx` / transport error が続く場合は、短時間 provider 呼び出しを止めて `503` Problem Details を返す。閾値は `AUTH_PROVIDER_FAILURE_THRESHOLD`、停止時間は `AUTH_PROVIDER_BACKOFF_SECONDS` で管理し、既定値は3回・60秒とする。
 - アップロード画像はサイズ、形式、寸法、実体を検証する。
-- 画像は下書き確定またはキャンセルまで保持し、その後削除する。サーバーに恒久保存しない。
+- 画像は下書き確定または下書き削除まで保持し、その後削除する。サーバーに恒久保存しない。
 - ログに画像内容、セッションID、OAuth token、CSRF token、個人情報、Secrets を出さない。
 
 ---

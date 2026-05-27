@@ -215,6 +215,26 @@ object PostgresOcrJobs:
           else ().pure[ConnectionIO]
       yield updated == 1
 
+    override def cancelQueuedByDraftIds(
+        draftIds: List[OcrDraftId],
+        now: Instant,
+    ): ConnectionIO[Int] =
+      if draftIds.isEmpty then 0.pure[ConnectionIO]
+      else
+        val ids = draftIds.map(_.value).toArray
+        for
+          cancelledJobIds <- sql"""
+            UPDATE ocr_jobs SET
+              status = ${OcrJobStatus.Cancelled},
+              finished_at = $now,
+              updated_at = $now
+            WHERE draft_id = ANY($ids)
+              AND status = ${OcrJobStatus.Queued}
+            RETURNING id
+          """.query[OcrJobId].to[List]
+          _ <- cancelledJobIds.traverse_(jobId => syncMatchDraftStatusForTerminalJob(jobId, now))
+        yield cancelledJobIds.size
+
   private def syncMatchDraftStatusForTerminalJob(
       jobId: OcrJobId,
       now: Instant,

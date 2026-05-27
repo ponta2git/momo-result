@@ -53,6 +53,28 @@ final class PostgresHeldEventDeletionRepositorySpec extends IntegrationSuite:
       assertEquals(result, HeldEventDeletionResult.HasMatchDrafts)
       assertEquals(found, Some(HeldEvent(eventId, now)))
 
+  test("deleteIfUnreferenced cleans legacy cancelled drafts before deleting"):
+    for
+      _ <- events.create(HeldEvent(eventId, now))
+      _ <- sql"""
+        INSERT INTO match_drafts (
+          id, created_by_account_id, created_by_member_id, status, held_event_id,
+          created_at, updated_at
+        ) VALUES (
+          'draft_delete_atomic_cancelled', 'account_ponta', 'member_ponta', 'cancelled', $eventId,
+          $now, $now
+        )
+      """.update.run.transact(transactor)
+      result <- deletions.deleteIfUnreferenced(eventId)
+      found <- events.find(eventId)
+      draftExists <- sql"""
+        SELECT EXISTS(SELECT 1 FROM match_drafts WHERE id = 'draft_delete_atomic_cancelled')
+      """.query[Boolean].unique.transact(transactor)
+    yield
+      assertEquals(result, HeldEventDeletionResult.Deleted)
+      assertEquals(found, None)
+      assertEquals(draftExists, false)
+
   test("deleteIfUnreferenced reports confirmed match references without deleting"):
     for
       _ <- events.create(HeldEvent(eventId, now))

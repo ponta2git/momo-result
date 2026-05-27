@@ -19,6 +19,8 @@ trait MatchDraftsAlg[F0[_]]:
       updatedAt: Instant,
   ): F0[Boolean]
   def markOcrFailed(draftId: MatchDraftId, updatedAt: Instant): F0[Boolean]
+
+  /** Physically remove a non-terminal draft when the user discards it. */
   def cancel(draftId: MatchDraftId, updatedAt: Instant): F0[Boolean]
   def attachOcrArtifacts(
       draftId: MatchDraftId,
@@ -45,6 +47,8 @@ trait MatchDraftsRepository[F[_]]:
       updatedAt: Instant,
   ): F[Boolean]
   def markOcrFailed(draftId: MatchDraftId, updatedAt: Instant): F[Boolean]
+
+  /** Physically remove a non-terminal draft when the user discards it. */
   def cancel(draftId: MatchDraftId, updatedAt: Instant): F[Boolean]
   def attachOcrArtifacts(
       draftId: MatchDraftId,

@@ -583,7 +583,7 @@ object ApiApp:
       matchDrafts = matchDrafts,
       now = nowF,
     )
-    val cancelMatchDraft = CancelMatchDraft[F](matchDrafts, sourceImageRetention, nowF)
+    val cancelMatchDraft = CancelMatchDraft[F](matchDrafts, jobs, sourceImageRetention, nowF)
     val getMatchDraftSourceImages = GetMatchDraftSourceImages[F](
       matchDrafts,
       imageStore,

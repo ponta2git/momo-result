@@ -11,7 +11,9 @@ import doobie.postgres.sqlstate
 
 import momo.api.db.Database
 import momo.api.domain.ids.*
-import momo.api.domain.{GameTitle, IncidentMaster, MapMaster, MemberAlias, SeasonMaster}
+import momo.api.domain.{
+  GameTitle, IncidentMaster, MapMaster, MatchDraftStatus, MemberAlias, SeasonMaster,
+}
 import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.repositories.{
@@ -33,6 +35,14 @@ private def conflict[A](message: String): ConnectionIO[A] = appError(AppError.Co
 
 private def notFound[A](resource: String, id: String): ConnectionIO[A] =
   appError(AppError.NotFound(resource, id))
+
+private def deleteDiscardedDrafts(where: Fragment): ConnectionIO[Int] =
+  (fr"DELETE FROM match_drafts WHERE" ++ where ++ fr"""
+    AND (
+      status = ${MatchDraftStatus.Cancelled}
+      OR (status = ${MatchDraftStatus.Confirmed} AND confirmed_match_id IS NULL)
+    )
+  """).update.run
 
 object PostgresGameTitles:
 
@@ -87,13 +97,14 @@ object PostgresGameTitles:
       case _ => notFound("game title", title.id.value)
     }
 
-    override def delete(id: GameTitleId): ConnectionIO[Unit] =
-      sql"DELETE FROM game_titles WHERE id = $id".update.run.flatMap {
-        case 1 => ().pure[ConnectionIO]
-        case _ => notFound("game title", id.value)
-      }.exceptSomeSqlState {
-        case state if isForeignKeyViolation(state) => conflict("game title is still referenced.")
-      }
+    override def delete(id: GameTitleId): ConnectionIO[Unit] = deleteDiscardedDrafts(
+      fr"game_title_id = $id"
+    ) *> sql"DELETE FROM game_titles WHERE id = $id".update.run.flatMap {
+      case 1 => ().pure[ConnectionIO]
+      case _ => notFound("game title", id.value)
+    }.exceptSomeSqlState {
+      case state if isForeignKeyViolation(state) => conflict("game title is still referenced.")
+    }
 
 end PostgresGameTitles
 
@@ -162,13 +173,14 @@ object PostgresMapMasters:
       case _ => notFound("map master", map.id.value)
     }
 
-    override def delete(id: MapMasterId): ConnectionIO[Unit] =
-      sql"DELETE FROM map_masters WHERE id = $id".update.run.flatMap {
-        case 1 => ().pure[ConnectionIO]
-        case _ => notFound("map master", id.value)
-      }.exceptSomeSqlState {
-        case state if isForeignKeyViolation(state) => conflict("map master is still referenced.")
-      }
+    override def delete(id: MapMasterId): ConnectionIO[Unit] = deleteDiscardedDrafts(
+      fr"map_master_id = $id"
+    ) *> sql"DELETE FROM map_masters WHERE id = $id".update.run.flatMap {
+      case 1 => ().pure[ConnectionIO]
+      case _ => notFound("map master", id.value)
+    }.exceptSomeSqlState {
+      case state if isForeignKeyViolation(state) => conflict("map master is still referenced.")
+    }
 
 end PostgresMapMasters
 
@@ -238,13 +250,14 @@ object PostgresSeasonMasters:
       case _ => notFound("season master", season.id.value)
     }
 
-    override def delete(id: SeasonMasterId): ConnectionIO[Unit] =
-      sql"DELETE FROM season_masters WHERE id = $id".update.run.flatMap {
-        case 1 => ().pure[ConnectionIO]
-        case _ => notFound("season master", id.value)
-      }.exceptSomeSqlState {
-        case state if isForeignKeyViolation(state) => conflict("season master is still referenced.")
-      }
+    override def delete(id: SeasonMasterId): ConnectionIO[Unit] = deleteDiscardedDrafts(
+      fr"season_master_id = $id"
+    ) *> sql"DELETE FROM season_masters WHERE id = $id".update.run.flatMap {
+      case 1 => ().pure[ConnectionIO]
+      case _ => notFound("season master", id.value)
+    }.exceptSomeSqlState {
+      case state if isForeignKeyViolation(state) => conflict("season master is still referenced.")
+    }
 
 end PostgresSeasonMasters
 

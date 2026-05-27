@@ -187,12 +187,14 @@ object PostgresMatchDrafts:
     """.update.run.map(_ > 0)
 
     override def cancel(draftId: MatchDraftId, updatedAt: Instant): ConnectionIO[Boolean] = sql"""
-      UPDATE match_drafts SET
-        status = ${MatchDraftStatus.Cancelled},
-        updated_at = $updatedAt
+      DELETE FROM match_drafts
       WHERE id = $draftId
-        AND status <> ${MatchDraftStatus.Confirmed}
-        AND status <> ${MatchDraftStatus.Cancelled}
+        AND status IN (
+          ${MatchDraftStatus.OcrRunning},
+          ${MatchDraftStatus.OcrFailed},
+          ${MatchDraftStatus.DraftReady},
+          ${MatchDraftStatus.NeedsReview}
+        )
     """.update.run.map(_ > 0)
 
     override def attachOcrArtifacts(

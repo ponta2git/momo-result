@@ -249,6 +249,29 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       assertEquals(found.map(_.id), Some(rec.id))
       assertEquals(status, (MatchDraftStatus.Confirmed, Some(rec.id)))
 
+  test("delete removes the confirmed draft that produced the match"):
+    val draftId = MatchDraftId.unsafeFromString("match-draft-delete-confirmed")
+    val rec = sampleMatch("match_delete_confirmed", 1)
+    val snapshot = MatchDraftConfirmation(
+      draftId = draftId,
+      updatedAt = now,
+      totalAssetsDraftId = None,
+      revenueDraftId = None,
+      incidentLogDraftId = None,
+    )
+    for
+      _ <- seedPrereqs
+      _ <- insertMatchDraft(draftId, now)
+      confirmed <- confirmations.confirm(rec, Some(snapshot), now.plusSeconds(2))
+      deleted <- matches.delete(rec.id)
+      found <- matches.find(rec.id)
+      draftStillExists <- draftExists(draftId)
+    yield
+      assertEquals(confirmed, true)
+      assertEquals(deleted, true)
+      assertEquals(found, None)
+      assertEquals(draftStillExists, false)
+
   test("confirmation refuses a draft changed after the validated snapshot"):
     val draftId = MatchDraftId.unsafeFromString("match-draft-confirm-stale")
     val rec = sampleMatch("match_confirm_stale", 1)
@@ -288,4 +311,8 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
   private def draftStatus(draftId: MatchDraftId): IO[(MatchDraftStatus, Option[MatchId])] = sql"""
     SELECT status, confirmed_match_id FROM match_drafts WHERE id = $draftId
   """.query[(MatchDraftStatus, Option[MatchId])].unique.transact(transactor)
+
+  private def draftExists(draftId: MatchDraftId): IO[Boolean] = sql"""
+    SELECT EXISTS(SELECT 1 FROM match_drafts WHERE id = $draftId)
+  """.query[Boolean].unique.transact(transactor)
 end PostgresMatchesRepositorySpec

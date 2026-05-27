@@ -51,6 +51,36 @@ describe("MastersPage", () => {
     expect(screen.getByRole("tab", { name: "事件簿" })).toBeInTheDocument();
   });
 
+  it("shows scoped skeletons while maps and seasons are loading", async () => {
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    const responseGate = createDeferred();
+    server.use(
+      http.get("/api/map-masters", async () => {
+        await responseGate.promise;
+        return HttpResponse.json({ items: [] });
+      }),
+      http.get("/api/season-masters", async () => {
+        await responseGate.promise;
+        return HttpResponse.json({ items: [] });
+      }),
+    );
+
+    renderPage();
+
+    expect(await screen.findByRole("heading", { name: "設定管理" })).toBeInTheDocument();
+    expect(await screen.findByLabelText("マップを読み込み中")).toHaveAttribute("aria-busy", "true");
+    expect(await screen.findByLabelText("シーズンを読み込み中")).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+
+    responseGate.resolve();
+    await waitFor(() =>
+      expect(screen.queryByLabelText("マップを読み込み中")).not.toBeInTheDocument(),
+    );
+    expect(screen.queryByLabelText("シーズンを読み込み中")).not.toBeInTheDocument();
+  });
+
   it("creates a new game title and selects it", async () => {
     window.localStorage.setItem("momoresult.devUser", "account_ponta");
     renderPage();

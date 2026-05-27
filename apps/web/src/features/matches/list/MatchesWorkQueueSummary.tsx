@@ -8,6 +8,7 @@ import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 type MatchesWorkQueueSummaryProps = {
   counts?: MatchListSummaryCounts;
   currentStatus: MatchListStatusFilter;
+  disabled?: boolean;
   loading?: boolean;
   onSelectStatus: (status: MatchListStatusFilter) => void;
 };
@@ -41,6 +42,7 @@ const items: Array<{
 export function MatchesWorkQueueSummary({
   counts,
   currentStatus,
+  disabled = false,
   loading = false,
   onSelectStatus,
 }: MatchesWorkQueueSummaryProps) {
@@ -88,6 +90,7 @@ export function MatchesWorkQueueSummary({
                     : "border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-surface-subtle)]",
               )}
               aria-pressed={selected}
+              disabled={disabled}
               onClick={() => onSelectStatus(selected ? "all" : item.status)}
               type="button"
             >

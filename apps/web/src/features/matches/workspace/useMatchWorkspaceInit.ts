@@ -107,6 +107,9 @@ export function useMatchWorkspaceInit({
     }
 
     if (mode === "review") {
+      if (!useSampleDrafts && matchDraftId && draftDetailLoading) {
+        return;
+      }
       if (!useSampleDrafts && reviewDraftIdList.length > 0 && !ocrDrafts && !ocrDraftsError) {
         return;
       }

@@ -106,6 +106,7 @@ export function useMastersPageController() {
     hasPendingMutation,
     incidentMasters: resourceQueries.incidentMasters,
     isReturnNavigationPending,
+    mapMastersLoading: resourceQueries.mapMastersQuery.isLoading,
     mapMastersLoadError: shouldShowQueryError(resourceQueries.mapMastersQuery)
       ? errorMessage(resourceQueries.mapMastersQuery.error)
       : undefined,
@@ -113,6 +114,7 @@ export function useMastersPageController() {
     navigateWithTransition,
     operationError,
     optimisticGameTitles: optimisticCatalog.optimisticGameTitles,
+    seasonMastersLoading: resourceQueries.seasonMastersQuery.isLoading,
     seasonMastersLoadError: shouldShowQueryError(resourceQueries.seasonMastersQuery)
       ? errorMessage(resourceQueries.seasonMastersQuery.error)
       : undefined,

@@ -26,19 +26,16 @@ type MatchWorkspacePageProps = {
   mode: WorkspaceMode;
 };
 
-function MatchWorkspaceLoading() {
+function MatchWorkspaceLoading({
+  description = "試合内容を取得しています。",
+  title = "試合フォームを読み込み中",
+}: {
+  description?: string;
+  title?: string;
+}) {
   return (
-    <PageFrame
-      aria-busy="true"
-      aria-label="試合編集を読み込み中"
-      className="gap-5"
-      width="workspace"
-    >
-      <PageHeader
-        description="保存済みの試合内容を取得しています。"
-        eyebrow="試合記録"
-        title="試合編集を読み込み中"
-      />
+    <PageFrame aria-busy="true" aria-label={title} className="gap-5" width="workspace">
+      <PageHeader description={description} eyebrow="試合記録" title={title} />
 
       <Card>
         <div className="grid gap-3 md:grid-cols-4">
@@ -128,11 +125,30 @@ export function MatchWorkspacePage({
     validation,
     validationMessage,
     visibleErrorPathSet,
+    workspaceLoading,
     workspaceData,
   } = controller;
 
   if (editLoading) {
-    return <MatchWorkspaceLoading />;
+    return (
+      <MatchWorkspaceLoading
+        description="保存済みの試合内容を取得しています。"
+        title="試合編集を読み込み中"
+      />
+    );
+  }
+
+  if (workspaceLoading) {
+    return (
+      <MatchWorkspaceLoading
+        description={
+          mode === "review"
+            ? "OCR結果と確定前の記録を取得しています。"
+            : "試合条件と入力フォームを準備しています。"
+        }
+        title={mode === "review" ? "OCR結果を読み込み中" : "試合作成を準備中"}
+      />
+    );
   }
 
   if (editLoadFailed) {
@@ -301,7 +317,7 @@ export function MatchWorkspacePage({
 
           <MatchFormActions
             actionLabel={mode === "edit" ? "保存" : "確定前の確認へ進む"}
-            disabled={false}
+            disabled={workspaceLoading}
             message={
               validation.success
                 ? "確定前の確認へ進めます"

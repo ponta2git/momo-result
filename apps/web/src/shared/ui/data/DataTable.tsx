@@ -12,6 +12,7 @@ export type DataTableColumn<Row> = {
   key: string;
   minWidth?: string;
   renderCell: (row: Row) => ReactNode;
+  sortDisabled?: boolean;
   sortDirection?: "asc" | "desc" | undefined;
   sortable?: boolean;
   onSort?: () => void;
@@ -79,11 +80,12 @@ export function DataTable<Row>({
                   <button
                     className={cn(
                       "momo-pressable inline-flex min-h-9 items-center gap-1 rounded-[var(--radius-xs)] px-1 py-1 text-left text-inherit",
-                      "hover:bg-[var(--color-surface-subtle)]",
+                      "hover:bg-[var(--color-surface-subtle)] disabled:cursor-not-allowed disabled:opacity-60",
                       column.sortDirection
                         ? "bg-[var(--color-action)]/10 text-[var(--color-text-primary)]"
                         : "",
                     )}
+                    disabled={column.sortDisabled}
                     onClick={column.onSort}
                     type="button"
                   >

@@ -8,6 +8,7 @@ import type { MatchListItemView } from "@/features/matches/list/matchListTypes";
 import { StatusPill } from "@/shared/ui/status/StatusPill";
 
 type MatchMobileCardProps = {
+  actionsDisabled?: boolean;
   item: MatchListItemView;
 };
 
@@ -26,7 +27,7 @@ function otherRanks(item: MatchListItemView): string {
     .join(" / ");
 }
 
-export function MatchMobileCard({ item }: MatchMobileCardProps) {
+export function MatchMobileCard({ actionsDisabled = false, item }: MatchMobileCardProps) {
   const ranksAside = otherRanks(item);
 
   return (
@@ -67,6 +68,7 @@ export function MatchMobileCard({ item }: MatchMobileCardProps) {
 
       <div className="mt-auto pt-4">
         <MatchListActions
+          disabled={actionsDisabled}
           primaryAction={item.primaryAction}
           secondaryActions={item.secondaryActions}
         />

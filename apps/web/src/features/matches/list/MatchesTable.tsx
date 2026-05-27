@@ -10,6 +10,7 @@ import { DataTable } from "@/shared/ui/data/DataTable";
 import { StatusPill } from "@/shared/ui/status/StatusPill";
 
 type MatchesTableProps = {
+  actionsDisabled?: boolean;
   items: MatchListItemView[];
   sort: MatchListSort;
   onSortChange: (sort: MatchListSort) => void;
@@ -60,7 +61,12 @@ function RankSummary({ item }: { item: MatchListItemView }) {
   );
 }
 
-export function MatchesTable({ items, sort, onSortChange }: MatchesTableProps) {
+export function MatchesTable({
+  actionsDisabled = false,
+  items,
+  sort,
+  onSortChange,
+}: MatchesTableProps) {
   return (
     <DataTable
       columns={[
@@ -79,6 +85,7 @@ export function MatchesTable({ items, sort, onSortChange }: MatchesTableProps) {
             : sort === "held_asc"
               ? { sortDirection: "asc" as const }
               : {}),
+          sortDisabled: actionsDisabled,
           sortable: true,
         },
         {
@@ -113,6 +120,7 @@ export function MatchesTable({ items, sort, onSortChange }: MatchesTableProps) {
             </p>
           ),
           ...(sort === "updated_desc" ? { sortDirection: "desc" as const } : {}),
+          sortDisabled: actionsDisabled,
           sortable: true,
         },
         {
@@ -121,6 +129,7 @@ export function MatchesTable({ items, sort, onSortChange }: MatchesTableProps) {
           minWidth: "9rem",
           renderCell: (item) => (
             <MatchListActions
+              disabled={actionsDisabled}
               primaryAction={item.primaryAction}
               secondaryActions={item.secondaryActions}
             />

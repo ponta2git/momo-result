@@ -133,6 +133,17 @@ export function useMatchesListPageController() {
     }
   }, [optimisticSearch, searchSignature]);
 
+  const initialMatchesLoading = isInitialQueryLoading(matchesQuery);
+  const filterSettling = isFilterPending || activeSearchSignature !== deferredSearchSignature;
+  const listHasPlaceholderData = matchesQuery.isPlaceholderData;
+  const summaryHasPlaceholderData = matchesSummaryQuery.isPlaceholderData;
+  const listBackgroundRefreshing = matchesQuery.isFetching && !initialMatchesLoading;
+  const isStale =
+    filterSettling ||
+    listHasPlaceholderData ||
+    summaryHasPlaceholderData ||
+    listBackgroundRefreshing;
+
   const handleManualRefresh = async () => {
     if (isManualRefreshing) {
       return;
@@ -152,10 +163,7 @@ export function useMatchesListPageController() {
     hasFilters: hasMatchListFilters(activeSearch),
     heldEvents: heldEventsQuery.data?.items ?? [],
     isManualRefreshing,
-    isStale:
-      isFilterPending ||
-      activeSearchSignature !== deferredSearchSignature ||
-      (matchesQuery.isFetching && !isInitialQueryLoading(matchesQuery)),
+    isStale,
     items,
     masterLoadFailed:
       shouldShowBlockingQueryError(heldEventsQuery) ||
@@ -166,7 +174,8 @@ export function useMatchesListPageController() {
     search: activeSearch,
     seasons: seasonsQuery.data?.items ?? [],
     showMatchesError: shouldShowBlockingQueryError(matchesQuery),
-    showMatchesLoading: isInitialQueryLoading(matchesQuery),
+    showMatchesLoading: initialMatchesLoading,
+    showStaleSkeleton: filterSettling || listHasPlaceholderData,
     summaryCounts,
     summaryLoading: matchesSummaryQuery.isLoading,
   };

@@ -54,6 +54,7 @@ export function MatchesListPage() {
     seasons,
     showMatchesError,
     showMatchesLoading,
+    showStaleSkeleton,
     summaryCounts,
     summaryLoading,
   } = useMatchesListPageController();
@@ -134,6 +135,7 @@ export function MatchesListPage() {
       <MatchesWorkQueueSummary
         counts={summaryCounts}
         currentStatus={search.status}
+        disabled={isStale}
         loading={summaryLoading}
         onSelectStatus={(status) => {
           applySearch({ ...search, status });
@@ -141,7 +143,7 @@ export function MatchesListPage() {
       />
 
       <section aria-busy={isStale} className="relative grid min-h-[24rem] gap-4">
-        {isStale && !showMatchesLoading ? (
+        {isStale && !showMatchesLoading && !showStaleSkeleton ? (
           <div className="momo-enter pointer-events-none absolute inset-x-0 top-0 z-[var(--z-base)] flex justify-center">
             <span className="inline-flex items-center gap-2 rounded-b-[var(--radius-sm)] border-x border-b border-[var(--color-action)]/25 bg-[var(--color-surface)] px-3 py-1 text-xs font-semibold text-[var(--color-text-secondary)] shadow-sm">
               <LoaderCircle
@@ -152,7 +154,7 @@ export function MatchesListPage() {
             </span>
           </div>
         ) : null}
-        {showMatchesLoading ? (
+        {showMatchesLoading || showStaleSkeleton ? (
           <ListSkeleton />
         ) : showMatchesError ? (
           <Notice tone="danger" title="試合一覧を読み込めませんでした。">
@@ -187,6 +189,7 @@ export function MatchesListPage() {
           <>
             <div className="hidden lg:block">
               <MatchesTable
+                actionsDisabled={isStale}
                 items={items}
                 onSortChange={(sort) => applySearch({ ...search, sort })}
                 sort={search.sort}
@@ -194,7 +197,7 @@ export function MatchesListPage() {
             </div>
             <div className="grid gap-3 lg:hidden">
               {items.map((item) => (
-                <MatchMobileCard key={item.id} item={item} />
+                <MatchMobileCard key={item.id} actionsDisabled={isStale} item={item} />
               ))}
             </div>
           </>

@@ -128,6 +128,7 @@ export function MatchesListFilters({
         </div>
         <div className="grid gap-4 sm:grid-cols-[minmax(12rem,16rem)_minmax(12rem,16rem)] sm:items-end">
           <SelectField
+            disabled={pending}
             label="状態"
             options={statusOptions}
             value={initialSearch.status}
@@ -137,6 +138,7 @@ export function MatchesListFilters({
             }}
           />
           <SelectField
+            disabled={pending}
             label="表の並び順"
             options={sortOptions}
             value={initialSearch.sort}
@@ -149,6 +151,7 @@ export function MatchesListFilters({
 
         <div className="hidden gap-4 md:grid md:grid-cols-[1fr_1fr_1fr_auto] md:items-end">
           <SelectField
+            disabled={pending}
             label="開催"
             options={heldEventOptions}
             value={initialSearch.heldEventId}
@@ -159,6 +162,7 @@ export function MatchesListFilters({
             }}
           />
           <SelectField
+            disabled={pending}
             label="作品"
             options={gameTitleOptions}
             value={initialSearch.gameTitleId}
@@ -173,6 +177,7 @@ export function MatchesListFilters({
             }}
           />
           <SelectField
+            disabled={pending}
             label="シーズン"
             options={seasonOptions}
             value={initialSearch.seasonMasterId}
@@ -182,7 +187,7 @@ export function MatchesListFilters({
               patchSearch({ seasonMasterId: value });
             }}
           />
-          <Button onClick={onClear} type="button" variant="secondary">
+          <Button disabled={pending} onClick={onClear} type="button" variant="secondary">
             条件をリセット
           </Button>
         </div>
@@ -193,6 +198,7 @@ export function MatchesListFilters({
           </summary>
           <div className="mt-3 grid gap-4">
             <SelectField
+              disabled={pending}
               label="開催"
               options={heldEventOptions}
               value={initialSearch.heldEventId}
@@ -203,6 +209,7 @@ export function MatchesListFilters({
               }}
             />
             <SelectField
+              disabled={pending}
               label="作品"
               options={gameTitleOptions}
               value={initialSearch.gameTitleId}
@@ -219,6 +226,7 @@ export function MatchesListFilters({
               }}
             />
             <SelectField
+              disabled={pending}
               label="シーズン"
               options={seasonOptions}
               value={initialSearch.seasonMasterId}
@@ -228,7 +236,7 @@ export function MatchesListFilters({
                 patchSearch({ seasonMasterId: value });
               }}
             />
-            <Button onClick={onClear} type="button" variant="secondary">
+            <Button disabled={pending} onClick={onClear} type="button" variant="secondary">
               条件をリセット
             </Button>
           </div>

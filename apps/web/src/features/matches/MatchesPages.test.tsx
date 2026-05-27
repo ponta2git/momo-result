@@ -229,7 +229,9 @@ describe("MatchesListPage", () => {
     await user.click(needsReviewButton);
 
     expect(needsReviewButton).toHaveAttribute("aria-pressed", "true");
+    expect(needsReviewButton).toBeDisabled();
     expect(screen.getByText("条件を反映中")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "確認事項を直す" })).not.toBeInTheDocument();
     await waitFor(() => expect(needsReviewRequested).toBe(true));
 
     responseGate.resolve();

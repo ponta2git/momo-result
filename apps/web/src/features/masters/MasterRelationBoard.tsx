@@ -22,6 +22,7 @@ type MasterRelationBoardProps = {
   mapCreateAction: (formData: FormData) => void | Promise<void>;
   mapCreateError?: string | undefined;
   mapCreateFormKey?: string | number | undefined;
+  mapMastersLoading?: boolean | undefined;
   mapMasters: ScopedMasterListItem[];
   onSelectGameTitle: (id: string) => void;
   onUpdateGameTitle: (id: string, request: { name: string; layoutFamily: string }) => Promise<void>;
@@ -31,6 +32,7 @@ type MasterRelationBoardProps = {
   seasonCreateAction: (formData: FormData) => void | Promise<void>;
   seasonCreateError?: string | undefined;
   seasonCreateFormKey?: string | number | undefined;
+  seasonMastersLoading?: boolean | undefined;
   seasonMasters: ScopedMasterListItem[];
   selectedGameTitleId: string;
   selectedGameTitleName?: string | undefined;
@@ -48,6 +50,7 @@ export function MasterRelationBoard({
   mapCreateAction,
   mapCreateError,
   mapCreateFormKey,
+  mapMastersLoading = false,
   mapMasters,
   onSelectGameTitle,
   onUpdateGameTitle,
@@ -57,6 +60,7 @@ export function MasterRelationBoard({
   seasonCreateAction,
   seasonCreateError,
   seasonCreateFormKey,
+  seasonMastersLoading = false,
   seasonMasters,
   selectedGameTitleId,
   selectedGameTitleName,
@@ -87,6 +91,7 @@ export function MasterRelationBoard({
         createError={mapCreateError}
         createFormKey={mapCreateFormKey}
         disabledReason={scopedDisabledReason}
+        loading={mapMastersLoading}
       />
 
       <ScopedMasterPanel
@@ -101,6 +106,7 @@ export function MasterRelationBoard({
         createError={seasonCreateError}
         createFormKey={seasonCreateFormKey}
         disabledReason={scopedDisabledReason}
+        loading={seasonMastersLoading}
       />
     </section>
   );

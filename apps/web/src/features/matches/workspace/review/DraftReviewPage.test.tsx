@@ -11,6 +11,7 @@ import {
   createMatchWorkspaceMasterHandoffPayload,
   saveMasterHandoff,
 } from "@/shared/workflows/matchWorkspaceMasterHandoff";
+import { createDeferred } from "@/test/deferred";
 import {
   makeMatchWorkspaceMasterHandoffValues,
   makeFourReviewPlayerInputs,
@@ -54,6 +55,56 @@ describe("DraftReviewPage", () => {
     expect(
       await screen.findByRole("heading", { name: "この内容で確定しますか？" }),
     ).toBeInTheDocument();
+  });
+
+  it("keeps the review form unavailable until the draft summary has loaded", async () => {
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    const responseGate = createDeferred();
+    server.use(
+      http.get("/api/match-drafts/:draftId", async ({ params }) => {
+        await responseGate.promise;
+        const draftId = String(params["draftId"]);
+        return HttpResponse.json({
+          createdAt: "2026-01-01T00:00:00.000Z",
+          gameTitleId: "gt_momotetsu_2",
+          heldEventId: "held-1",
+          incidentLogDraftId: `${draftId}-incident`,
+          incidentLogImageId: `${draftId}-img-incident`,
+          mapMasterId: "map_east",
+          matchDraftId: draftId,
+          matchNoInEvent: 3,
+          ownerMemberId: "member_ponta",
+          playedAt: "2026-01-01T00:00:00.000Z",
+          revenueDraftId: `${draftId}-revenue`,
+          revenueImageId: `${draftId}-img-revenue`,
+          seasonMasterId: "season_current",
+          status: "needs_review",
+          totalAssetsDraftId: `${draftId}-total`,
+          totalAssetsImageId: `${draftId}-img-total`,
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        });
+      }),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/review/session-delayed"]}>
+          <Routes>
+            <Route path="/review/:matchSessionId" element={<DraftReviewPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByLabelText("OCR結果を読み込み中")).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+    expect(screen.queryByRole("button", { name: "確定前の確認へ進む" })).not.toBeInTheDocument();
+
+    responseGate.resolve();
+    expect(await screen.findByRole("heading", { name: "OCR結果の確認" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "確定前の確認へ進む" })).toBeEnabled();
   });
 
   it("keeps held event creation collapsed until requested", async () => {

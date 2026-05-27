@@ -2,6 +2,7 @@ import { MasterDeleteDialog, MasterEditDialog } from "@/features/masters/MasterA
 import { MasterCreateForm } from "@/features/masters/MasterCreateForm";
 import type { MapMasterResponse, SeasonMasterResponse } from "@/shared/api/masters";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
+import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 
 type ScopedMasterItem = (MapMasterResponse | SeasonMasterResponse) & { pending?: boolean };
 
@@ -13,6 +14,7 @@ type ScopedMasterPanelProps = {
   emptyDescription: string;
   itemLabel: string;
   items: ScopedMasterItem[];
+  loading?: boolean | undefined;
   onDelete: (id: string) => Promise<void> | void;
   onUpdate: (id: string, request: { name: string }) => Promise<void>;
   selectedGameTitleName?: string | undefined;
@@ -29,6 +31,7 @@ export function ScopedMasterPanel({
   emptyDescription,
   itemLabel,
   items,
+  loading = false,
   onDelete,
   onUpdate,
   selectedGameTitleName,
@@ -46,7 +49,13 @@ export function ScopedMasterPanel({
         </p>
       </header>
 
-      {items.length === 0 ? (
+      {loading ? (
+        <div aria-busy="true" aria-label={`${itemLabel}を読み込み中`} className="mt-3 grid gap-2">
+          <Skeleton className="h-12 rounded-[var(--radius-sm)]" />
+          <Skeleton className="h-12 rounded-[var(--radius-sm)]" />
+          <Skeleton className="h-12 rounded-[var(--radius-sm)]" />
+        </div>
+      ) : items.length === 0 ? (
         <EmptyState className="mt-3" title="登録がありません" description={emptyDescription} />
       ) : (
         <ul className="mt-3 grid gap-2">
@@ -94,8 +103,8 @@ export function ScopedMasterPanel({
       <div className="mt-4">
         <MasterCreateForm
           action={createAction}
-          disabled={Boolean(disabledReason)}
-          disabledReason={disabledReason}
+          disabled={loading || Boolean(disabledReason)}
+          disabledReason={loading ? `${itemLabel}を読み込み中です。` : disabledReason}
           error={createError}
           formKey={createFormKey}
           label="名称"

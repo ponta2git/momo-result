@@ -33,6 +33,7 @@ export function MastersPage() {
     isReturnNavigationPending,
     mapCreateAction,
     mapCreateState,
+    mapMastersLoading,
     mapMastersLoadError,
     memberAliases,
     navigateWithTransition,
@@ -41,6 +42,7 @@ export function MastersPage() {
     returnDestination,
     seasonCreateAction,
     seasonCreateState,
+    seasonMastersLoading,
     seasonMastersLoadError,
     setActiveTab,
     setSelectedGameTitleId,
@@ -147,12 +149,14 @@ export function MastersPage() {
             mapCreateAction={mapCreateAction}
             mapCreateError={mapCreateState.error}
             mapCreateFormKey={mapCreateState.version}
+            mapMastersLoading={mapMastersLoading}
             seasonMasters={viewModel.selectedSeasonMasters}
             onUpdateSeasonMaster={updateSeasonMaster}
             onDeleteSeasonMaster={deleteSeasonMaster}
             seasonCreateAction={seasonCreateAction}
             seasonCreateError={seasonCreateState.error}
             seasonCreateFormKey={seasonCreateState.version}
+            seasonMastersLoading={seasonMastersLoading}
             scopedDisabledReason={viewModel.scopedDisabledReason}
           />
         </TabsPanel>

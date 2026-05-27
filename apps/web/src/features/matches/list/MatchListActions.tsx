@@ -3,14 +3,21 @@ import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 
 type MatchListActionsProps = {
+  disabled?: boolean;
   primaryAction: MatchListAction;
   secondaryActions: MatchListAction[];
 };
 
-function ActionButton({ action }: { action: MatchListAction }) {
+function ActionButton({
+  action,
+  disabled = false,
+}: {
+  action: MatchListAction;
+  disabled?: boolean;
+}) {
   const variant = action.variant ?? "primary";
 
-  if (action.href && !action.disabled) {
+  if (action.href && !action.disabled && !disabled) {
     return (
       <LinkButton className="w-full justify-center" size="sm" to={action.href} variant={variant}>
         {action.label}
@@ -21,7 +28,7 @@ function ActionButton({ action }: { action: MatchListAction }) {
   return (
     <Button
       className="w-full justify-center"
-      disabled={action.disabled}
+      disabled={action.disabled || disabled}
       size="sm"
       variant={variant}
     >
@@ -30,12 +37,20 @@ function ActionButton({ action }: { action: MatchListAction }) {
   );
 }
 
-export function MatchListActions({ primaryAction, secondaryActions }: MatchListActionsProps) {
+export function MatchListActions({
+  disabled = false,
+  primaryAction,
+  secondaryActions,
+}: MatchListActionsProps) {
   return (
     <div className="flex min-w-0 flex-col gap-2">
-      <ActionButton action={primaryAction} />
+      <ActionButton action={primaryAction} disabled={disabled} />
       {secondaryActions.map((action) => (
-        <ActionButton key={`${action.label}:${action.href ?? "disabled"}`} action={action} />
+        <ActionButton
+          key={`${action.label}:${action.href ?? "disabled"}`}
+          action={action}
+          disabled={disabled}
+        />
       ))}
     </div>
   );

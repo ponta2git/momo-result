@@ -45,8 +45,8 @@ object Database:
           Async[F].delay {
             ds.setMaximumPoolSize(config.poolSize)
             ds.setMinimumIdle(0)
-            ds.setKeepaliveTime(60_000L)
-            ds.setIdleTimeout(300_000L)
+            ds.setKeepaliveTime(0L)
+            ds.setIdleTimeout(600_000L)
             ds.setPoolName("momo-result-api")
           }
         }

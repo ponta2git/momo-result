@@ -10,7 +10,7 @@ import org.http4s.circe.*
 import org.http4s.headers.`Content-Type`
 import org.http4s.implicits.*
 import org.http4s.multipart.{Multiparts, Part}
-import org.http4s.{MediaType, Method, Request, Status, Uri}
+import org.http4s.{Header, MediaType, Method, Request, Status, Uri}
 import org.typelevel.ci.CIString
 
 import momo.api.MomoCatsEffectSuite
@@ -48,6 +48,9 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
     yield ()
 
   private val pngBytes: Array[Byte] = TestImages.png1x1
+
+  private def nonOwnerWriteHeaders(): List[Header.ToRaw] =
+    List(devReadHeader("account_eu"), Header.Raw(CIString("X-CSRF-Token"), "dev"))
 
   app.test("POST /api/held-events creates event and lists it") { httpApp =>
     val createReq = Request[IO](Method.POST, uri"/api/held-events").putHeaders(devWriteHeaders()*)
@@ -151,6 +154,52 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
         res <- httpApp.run(req)
         _ <- assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "status")
       yield ()
+    }
+
+  app.test("GET /api/match-drafts/:draftId allows a different account to read the draft") {
+    httpApp =>
+      for
+        draftId <- createMatchDraft(httpApp)
+        res <- httpApp.run(
+          Request[IO](Method.GET, Uri.unsafeFromString(s"/api/match-drafts/$draftId"))
+            .putHeaders(devReadHeader("account_eu"))
+        )
+        body <- res.as[Json]
+      yield
+        assertEquals(res.status, Status.Ok)
+        assertEquals(jsonField[String](body, "matchDraftId"), draftId)
+  }
+
+  app.test("PATCH /api/match-drafts/:draftId allows a different account to update the draft") {
+    httpApp =>
+      for
+        draftId <- createMatchDraft(httpApp)
+        res <- httpApp.run(
+          Request[IO](Method.PATCH, Uri.unsafeFromString(s"/api/match-drafts/$draftId"))
+            .putHeaders(nonOwnerWriteHeaders()*)
+            .withEntity(Json.obj("status" -> Json.fromString("needs_review")))
+        )
+        body <- res.as[Json]
+      yield
+        assertEquals(res.status, Status.Ok)
+        assertEquals(jsonField[String](body, "matchDraftId"), draftId)
+        assertEquals(jsonField[String](body, "status"), "needs_review")
+  }
+
+  app
+    .test("POST /api/match-drafts/:draftId/cancel allows a different account to cancel the draft") {
+      httpApp =>
+        for
+          draftId <- createMatchDraft(httpApp)
+          res <- httpApp.run(
+            Request[IO](Method.POST, Uri.unsafeFromString(s"/api/match-drafts/$draftId/cancel"))
+              .putHeaders(nonOwnerWriteHeaders()*)
+          )
+          body <- res.as[Json]
+        yield
+          assertEquals(res.status, Status.Ok)
+          assertEquals(jsonField[String](body, "matchDraftId"), draftId)
+          assertEquals(jsonField[String](body, "status"), "cancelled")
     }
 
   app.test("GET /api/ocr-drafts bulk rejects empty ids") { httpApp =>
@@ -298,14 +347,24 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
         ))
       _ = assertEquals(createJobRes.status, Status.Ok)
       _ <- createJobRes.as[Json]
+      sourceImageListRes <- httpApp.run(
+        Request[IO](
+          Method.GET,
+          Uri.unsafeFromString(s"/api/match-drafts/$matchDraftId/source-images"),
+        ).putHeaders(devReadHeader("account_eu"))
+      )
+      sourceImageListBody <- sourceImageListRes.as[Json]
       sourceImageRes <- httpApp.run(
         Request[IO](
           Method.GET,
           Uri.unsafeFromString(s"/api/match-drafts/$matchDraftId/source-images/total_assets"),
-        ).putHeaders(devReadHeader())
+        ).putHeaders(devReadHeader("account_eu"))
       )
       body <- sourceImageRes.as[Array[Byte]]
     yield
+      assertEquals(sourceImageListRes.status, Status.Ok)
+      val items = jsonField[List[Json]](sourceImageListBody, "items")
+      assertEquals(items.map(item => jsonField[String](item, "kind")), List("total_assets"))
       assertEquals(sourceImageRes.status, Status.Ok)
       assertEquals(optionalHeaderValue(sourceImageRes, CIString("Content-Type")), Some("image/png"))
       assertEquals(body.toVector, pngBytes.toVector)
@@ -342,7 +401,7 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
           Request[IO](
             Method.GET,
             Uri.unsafeFromString(s"/api/match-drafts/$matchDraftId/source-images.zip"),
-          ).putHeaders(devReadHeader())
+          ).putHeaders(devReadHeader("account_eu"))
         )
         body <- archiveRes.as[Array[Byte]]
       yield

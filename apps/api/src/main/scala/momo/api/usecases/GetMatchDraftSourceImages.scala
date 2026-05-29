@@ -52,11 +52,8 @@ final class GetMatchDraftSourceImages[F[_]: Sync](
 ):
   private val logger = LoggerFactory.getLogger("momo.api.usecases.GetMatchDraftSourceImages")
 
-  def list(
-      draftId: MatchDraftId,
-      accountId: AccountId,
-  ): F[Either[AppError, List[MatchDraftSourceImage]]] = (for
-    draft <- EitherT(loadAuthorizedDraft(draftId, accountId))
+  def list(draftId: MatchDraftId): F[Either[AppError, List[MatchDraftSourceImage]]] = (for
+    draft <- EitherT(loadDraft(draftId))
     entries <-
       if draft.sourceImagesDeletedAt.nonEmpty then
         EitherT.rightT[F, AppError](List.empty[Option[MatchDraftSourceImage]])
@@ -81,9 +78,8 @@ final class GetMatchDraftSourceImages[F[_]: Sync](
   def stream(
       draftId: MatchDraftId,
       kind: MatchDraftSourceImageKind,
-      accountId: AccountId,
   ): F[Either[AppError, MatchDraftSourceImageBinary]] = (for
-    draft <- EitherT(loadAuthorizedDraft(draftId, accountId))
+    draft <- EitherT(loadDraft(draftId))
     _ <- EitherT.cond[F](
       draft.sourceImagesDeletedAt.isEmpty,
       (),
@@ -100,7 +96,7 @@ final class GetMatchDraftSourceImages[F[_]: Sync](
       draftId: MatchDraftId,
       accountId: AccountId,
   ): F[Either[AppError, MatchDraftSourceImageArchive]] = (for
-    draft <- EitherT(loadAuthorizedDraft(draftId, accountId))
+    draft <- EitherT(loadDraft(draftId))
     _ <- EitherT.cond[F](
       draft.sourceImagesDeletedAt.isEmpty,
       (),
@@ -132,17 +128,9 @@ final class GetMatchDraftSourceImages[F[_]: Sync](
     imageCount = entries.size,
   )).value
 
-  private def loadAuthorizedDraft(
-      draftId: MatchDraftId,
-      accountId: AccountId,
-  ): F[Either[AppError, momo.api.domain.MatchDraft]] = (for
-    draft <- matchDrafts.find(draftId).orNotFound("match draft", draftId.value)
-    _ <- EitherT.fromEither[F](Either.cond(
-      draft.createdByAccountId == accountId,
-      (),
-      AppError.Forbidden("You cannot access source images for this draft."),
-    ))
-  yield draft).value
+  private def loadDraft(draftId: MatchDraftId): F[Either[AppError, momo.api.domain.MatchDraft]] =
+    (for draft <- matchDrafts.find(draftId).orNotFound("match draft", draftId.value) yield draft)
+      .value
 
   private def sourceImageId(
       draft: momo.api.domain.MatchDraft,

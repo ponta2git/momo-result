@@ -71,9 +71,8 @@ object MatchDraftModule:
                       id =>
                         security
                           .decode(MatchDraftCodec.toUpdateCommand(request, playedAt)) { command =>
-                            security.respond(
-                              updateMatchDraft.run(id, command, member.accountId)
-                            )(MatchDraftResponse.from)
+                            security
+                              .respond(updateMatchDraft.run(id, command))(MatchDraftResponse.from)
                           }
                     }
               },
@@ -81,10 +80,10 @@ object MatchDraftModule:
           }
     },
     MatchDraftEndpoints.get.serverLogic { case (draftId, accountHeader) =>
-      security.authorizeRead(accountHeader) { member =>
-        security.decode(BoundaryId.required("matchDraftId", draftId)(MatchDraftId.fromString))(id =>
-          security.respond(getMatchDraft.run(id, member.accountId))(MatchDraftDetailResponse.from)
-        )
+      security.authorizeRead(accountHeader) { _ =>
+        security.decode(
+          BoundaryId.required("matchDraftId", draftId)(MatchDraftId.fromString)
+        )(id => security.respond(getMatchDraft.run(id))(MatchDraftDetailResponse.from))
       }
     },
     MatchDraftEndpoints.cancel.serverLogic { case (draftId, accountHeader, csrfToken, idemKey) =>
@@ -99,16 +98,16 @@ object MatchDraftModule:
           security
             .decode(BoundaryId.required("matchDraftId", draftId)(MatchDraftId.fromString)) { id =>
               security.respond(
-                cancelMatchDraft.run(id, member.accountId)
+                cancelMatchDraft.run(id)
               )(_ => CancelMatchDraftResponse(matchDraftId = draftId, status = "cancelled"))
             },
         )
       }
     },
     MatchDraftEndpoints.listSourceImages.serverLogic { case (draftId, accountHeader) =>
-      security.authorizeRead(accountHeader) { member =>
+      security.authorizeRead(accountHeader) { _ =>
         security.decode(BoundaryId.required("matchDraftId", draftId)(MatchDraftId.fromString))(id =>
-          security.respond(getMatchDraftSourceImages.list(id, member.accountId))(items =>
+          security.respond(getMatchDraftSourceImages.list(id))(items =>
             MatchDraftSourceImageListResponse(items.map(MatchDraftSourceImageResponse.from))
           )
         )
@@ -160,17 +159,16 @@ object MatchDraftModule:
                   draftId = id.value,
                   detail = Some(parsedKind.wire),
                 )
-              case true => getMatchDraftSourceImages.stream(id, parsedKind, member.accountId)
-                  .flatMap {
-                    case Left(error) => security.toProblemF(error).map(Left(_))
-                    case Right(image) =>
-                      val event = s"source_image_downloaded accountId=${member.accountId.value} " +
-                        s"draftId=${id.value} kind=${parsedKind.wire} " +
-                        s"bodyBytes=${image.bytes.length.toString}"
-                      Async[F].delay(logger.info(event)) *> Async[F].pure(Right(
-                        (image.contentType, "private, no-store", "nosniff", image.bytes)
-                      ))
-                  }
+              case true => getMatchDraftSourceImages.stream(id, parsedKind).flatMap {
+                  case Left(error) => security.toProblemF(error).map(Left(_))
+                  case Right(image) =>
+                    val event = s"source_image_downloaded accountId=${member.accountId.value} " +
+                      s"draftId=${id.value} kind=${parsedKind.wire} " +
+                      s"bodyBytes=${image.bytes.length.toString}"
+                    Async[F].delay(logger.info(event)) *> Async[F].pure(Right(
+                      (image.contentType, "private, no-store", "nosniff", image.bytes)
+                    ))
+                }
             }
         }
       }

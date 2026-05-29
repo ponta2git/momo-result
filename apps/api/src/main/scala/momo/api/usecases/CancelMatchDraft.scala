@@ -24,9 +24,8 @@ final class CancelMatchDraft[F[_]: MonadThrow](
     MatchDraftStatus.NeedsReview,
   )
 
-  def run(draftId: MatchDraftId, accountId: AccountId): F[Either[AppError, Unit]] = (for
+  def run(draftId: MatchDraftId): F[Either[AppError, Unit]] = (for
     draft <- matchDrafts.find(draftId).orNotFound("match draft", draftId.value)
-    _ <- EitherT.fromEither[F](authorize(draft.createdByAccountId, accountId))
     _ <- EitherT.fromEither[F](canCancel(draft.status))
     at <- EitherT.liftF(now)
     _ <- EitherT.liftF(ocrJobs.cancelQueuedByDraftIds(draft.ocrDraftIds, at))
@@ -35,15 +34,6 @@ final class CancelMatchDraft[F[_]: MonadThrow](
       "match draft was changed to a terminal status before it could be deleted."
     ))
   yield ()).value
-
-  private def authorize(
-      createdByAccountId: AccountId,
-      accountId: AccountId,
-  ): Either[AppError, Unit] = Either.cond(
-    createdByAccountId == accountId,
-    (),
-    AppError.Forbidden("You cannot cancel this match draft."),
-  )
 
   private def canCancel(status: MatchDraftStatus): Either[AppError, Unit] = Either.cond(
     cancellableStatuses.contains(status),

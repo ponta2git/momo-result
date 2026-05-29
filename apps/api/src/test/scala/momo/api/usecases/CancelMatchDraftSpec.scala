@@ -11,13 +11,11 @@ import momo.api.adapters.{
 }
 import momo.api.domain.*
 import momo.api.domain.ids.*
-import momo.api.errors.AppError
 
 final class CancelMatchDraftSpec extends MomoCatsEffectSuite:
   private val createdAt = Instant.parse("2026-05-20T10:00:00Z")
   private val cancelledAt = Instant.parse("2026-05-20T10:05:00Z")
   private val ownerAccountId = AccountId.unsafeFromString("account_ponta")
-  private val otherAccountId = AccountId.unsafeFromString("account_otaka")
   private val draftId = MatchDraftId.unsafeFromString("draft-cancel-usecase")
   private val ocrDraftId = OcrDraftId.unsafeFromString("ocr-draft-cancel-usecase")
   private val jobId = OcrJobId.unsafeFromString("ocr-job-cancel-usecase")
@@ -35,7 +33,7 @@ final class CancelMatchDraftSpec extends MomoCatsEffectSuite:
           PurgeSourceImages[IO](matchDrafts, LocalFsImageStore[IO](dir)),
           IO.pure(cancelledAt),
         )
-        result <- usecase.run(draftId, ownerAccountId)
+        result <- usecase.run(draftId)
         foundDraft <- matchDrafts.find(draftId)
         foundJob <- ocrJobs.find(jobId)
       yield
@@ -44,8 +42,8 @@ final class CancelMatchDraftSpec extends MomoCatsEffectSuite:
         assertEquals(foundJob.map(_.status), Some(OcrJobStatus.Cancelled))
     }
 
-  test("rejects deletion by accounts that did not create the draft"):
-    tempDirectory("momo-api-cancel-match-draft-forbidden").use { dir =>
+  test("allows deletion by accounts that did not create the draft"):
+    tempDirectory("momo-api-cancel-match-draft-non-owner").use { dir =>
       for
         matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
         ocrJobs <- InMemoryOcrJobsRepository.create[IO]
@@ -56,11 +54,11 @@ final class CancelMatchDraftSpec extends MomoCatsEffectSuite:
           PurgeSourceImages[IO](matchDrafts, LocalFsImageStore[IO](dir)),
           IO.pure(cancelledAt),
         )
-        result <- usecase.run(draftId, otherAccountId)
+        result <- usecase.run(draftId)
         foundDraft <- matchDrafts.find(draftId)
       yield
-        assertEquals(result, Left(AppError.Forbidden("You cannot cancel this match draft.")))
-        assert(foundDraft.nonEmpty)
+        assertEquals(result, Right(()))
+        assertEquals(foundDraft, None)
     }
 
   private def sampleDraft(status: MatchDraftStatus): MatchDraft = MatchDraft.fromInputs(

@@ -133,8 +133,8 @@ final class GetMatchDraftSourceImagesSpec extends MomoCatsEffectSuite:
     }
   }
 
-  test("forbids archive downloads from other accounts") {
-    tempDirectory("momo-api-source-image-archive-forbidden").use { dir =>
+  test("allows archive downloads from accounts that did not create the draft") {
+    tempDirectory("momo-api-source-image-archive-non-owner").use { dir =>
       for
         imageStore <- IO.pure(LocalFsImageStore[IO](dir))
         totalAssets <- saveImage(imageStore, TestImages.png1x1, "image/png")
@@ -150,9 +150,9 @@ final class GetMatchDraftSourceImagesSpec extends MomoCatsEffectSuite:
         _ <- matchDrafts.create(draft)
         service = GetMatchDraftSourceImages[IO](matchDrafts, imageStore)
         archive <- service.archive(draft.id, otherAccountId)
-      yield archive match
-        case Left(AppError.Forbidden(_)) => ()
-        case other => fail(s"expected forbidden, got $other")
+      yield
+        val file = archive.getOrElse(fail("expected archive"))
+        assertEquals(file.imageCount, 1)
     }
   }
 

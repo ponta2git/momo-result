@@ -42,7 +42,6 @@ final class UpdateMatchDraftSpec extends MomoCatsEffectSuite:
           playedAt = Some(updatedAt),
           status = Some(MatchDraftStatus.NeedsReview),
         ),
-        AccountId.unsafeFromString("ponta"),
       )
       found <- fixture.matchDrafts.find(draftId)
     yield
@@ -55,32 +54,26 @@ final class UpdateMatchDraftSpec extends MomoCatsEffectSuite:
       assertEquals(found.map(_.status), Some(MatchDraftStatus.NeedsReview))
       assertEquals(found.map(_.updatedAt), Some(updatedAt))
 
-  test("rejects updates from a non-owner before changing the draft"):
+  test("allows updates from accounts that did not create the draft"):
     for
       fixture <- Fixture.create
       _ <- fixture.seedPrereqs()
       _ <- fixture.matchDrafts.create(editingDraft(draftId, MatchDraftStatus.DraftReady))
-      result <- fixture.usecase.run(
-        draftId,
-        blankCommand.copy(status = Some(MatchDraftStatus.NeedsReview)),
-        AccountId.unsafeFromString("otaka"),
-      )
+      result <- fixture.usecase
+        .run(draftId, blankCommand.copy(status = Some(MatchDraftStatus.NeedsReview)))
       found <- fixture.matchDrafts.find(draftId)
     yield
-      assertAppError(result, "FORBIDDEN", "cannot update")
-      assertEquals(found.map(_.status), Some(MatchDraftStatus.DraftReady))
-      assertEquals(found.map(_.updatedAt), Some(createdAt))
+      val updated = assertRight(result)
+      assertEquals(updated.status, MatchDraftStatus.NeedsReview)
+      assertEquals(found.map(_.status), Some(MatchDraftStatus.NeedsReview))
+      assertEquals(found.map(_.updatedAt), Some(updatedAt))
 
   test("rejects terminal drafts even when the requester owns them"):
     for
       fixture <- Fixture.create
       _ <- fixture.seedPrereqs()
       _ <- fixture.matchDrafts.create(confirmedDraft(draftId))
-      result <- fixture.usecase.run(
-        draftId,
-        blankCommand.copy(matchNoInEvent = Some(2)),
-        AccountId.unsafeFromString("ponta"),
-      )
+      result <- fixture.usecase.run(draftId, blankCommand.copy(matchNoInEvent = Some(2)))
       found <- fixture.matchDrafts.find(draftId)
     yield
       assertAppError(result, "CONFLICT", "cannot be edited")
@@ -95,11 +88,8 @@ final class UpdateMatchDraftSpec extends MomoCatsEffectSuite:
       fixture <- Fixture.create
       _ <- fixture.seedPrereqs()
       _ <- fixture.matchDrafts.create(editingDraft(draftId, MatchDraftStatus.DraftReady))
-      terminal <- fixture.usecase.run(
-        draftId,
-        blankCommand.copy(status = Some(MatchDraftStatus.Confirmed)),
-        AccountId.unsafeFromString("ponta"),
-      )
+      terminal <- fixture.usecase
+        .run(draftId, blankCommand.copy(status = Some(MatchDraftStatus.Confirmed)))
       found <- fixture.matchDrafts.find(draftId)
     yield
       assertAppError(terminal, "CONFLICT", "cannot be set")
@@ -118,7 +108,6 @@ final class UpdateMatchDraftSpec extends MomoCatsEffectSuite:
           mapMasterId = Some(mapId),
           seasonMasterId = Some(seasonId),
         ),
-        AccountId.unsafeFromString("ponta"),
       )
       found <- fixture.matchDrafts.find(draftId)
     yield
@@ -133,16 +122,9 @@ final class UpdateMatchDraftSpec extends MomoCatsEffectSuite:
       _ <- fixture.gameTitles.create(GameTitle(otherTitleId, "Japan", "japan", 2, createdAt))
       _ <- fixture.mapMasters.create(MapMaster(otherMapId, otherTitleId, "西日本編", 2, createdAt))
       _ <- fixture.matchDrafts.create(referencedDraft(draftId))
-      titleChange <- fixture.usecase.run(
-        draftId,
-        blankCommand.copy(gameTitleId = Some(otherTitleId)),
-        AccountId.unsafeFromString("ponta"),
-      )
-      mapChange <- fixture.usecase.run(
-        draftId,
-        blankCommand.copy(mapMasterId = Some(otherMapId)),
-        AccountId.unsafeFromString("ponta"),
-      )
+      titleChange <- fixture.usecase
+        .run(draftId, blankCommand.copy(gameTitleId = Some(otherTitleId)))
+      mapChange <- fixture.usecase.run(draftId, blankCommand.copy(mapMasterId = Some(otherMapId)))
       found <- fixture.matchDrafts.find(draftId)
     yield
       assertAppError(titleChange, "VALIDATION_FAILED", "mapMasterId")

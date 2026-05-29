@@ -368,7 +368,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
       assertEquals(header("X-Content-Type-Options"), Some("nosniff"))
       assertEquals(header("X-Frame-Options"), Some("DENY"))
       assertEquals(header("Referrer-Policy"), Some("no-referrer"))
-      assert(header("Permissions-Policy").exists(_.contains("camera=()")))
+      assert(header("Permissions-Policy").exists(_.contains("camera=(self)")))
       val csp = headerValue(response, org.typelevel.ci.CIString("Content-Security-Policy"))
       assert(csp.contains("default-src 'self'"), s"missing default-src in $csp")
       assert(csp.contains("frame-ancestors 'none'"), s"missing frame-ancestors in $csp")

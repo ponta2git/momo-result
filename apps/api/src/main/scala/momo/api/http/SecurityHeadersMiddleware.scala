@@ -17,8 +17,9 @@ import momo.api.config.AppEnv
  *     intermediaries still honour XFO.
  *   - `Referrer-Policy: no-referrer` — outbound links never leak the URL of in-app pages (which
  *     include OAuth flow markers).
- *   - `Permissions-Policy` — explicitly opt out of powerful APIs the app does not use, so a future
- *     XSS or third-party script cannot enable them.
+ *   - `Permissions-Policy` — allow the camera for the same-origin OCR capture UI while explicitly
+ *     opting out of other powerful APIs the app does not use, so a future XSS or third-party script
+ *     cannot enable them.
  *   - `Strict-Transport-Security` — pin TLS in production. Skipped in non-prod so local `http://`
  *     development is not poisoned.
  *   - `Content-Security-Policy` — restrict the SPA bundle's privileges. Tailwind requires
@@ -36,7 +37,7 @@ object SecurityHeadersMiddleware:
   private val Referrer = Header.Raw(CIString("Referrer-Policy"), "no-referrer")
   private val Permissions = Header.Raw(
     CIString("Permissions-Policy"),
-    "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()",
+    "camera=(self), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()",
   )
   private val Hsts = Header
     .Raw(CIString("Strict-Transport-Security"), "max-age=31536000; includeSubDomains")

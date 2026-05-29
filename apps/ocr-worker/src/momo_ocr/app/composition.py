@@ -85,6 +85,11 @@ def production_pool_from_config(config: WorkerConfig) -> ConnectionPool:
         min_size=_POOL_MIN_SIZE,
         max_size=_POOL_MAX_SIZE,
         max_idle=_POOL_MAX_IDLE_SECONDS,
+        # Validate a connection before handing it to the runner. Neon/Fly idle
+        # paths can leave the client pool holding a socket that is already gone;
+        # without this check the first job after an idle period can fail before
+        # it can persist a terminal OCR status.
+        check=ConnectionPool.check_connection,
         # Open eagerly so a misconfigured DSN fails fast at startup, not on
         # the first delivered job.
         open=True,

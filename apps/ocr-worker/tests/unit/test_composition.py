@@ -206,6 +206,32 @@ def test_redis_consumer_from_config_uses_independent_claim_idle(
     assert captured["block_ms"] == 30_000
 
 
+def test_production_pool_checks_connections_before_checkout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class _StubPool:
+        @staticmethod
+        def check_connection(_connection: object) -> None:
+            return None
+
+        def __init__(self, conninfo: str, **kwargs: object) -> None:
+            captured["conninfo"] = conninfo
+            captured.update(kwargs)
+
+    monkeypatch.setattr(composition_module, "ConnectionPool", _StubPool)
+
+    pool = composition_module.production_pool_from_config(
+        WorkerConfig(database_url="postgres://user:pass@db.example/momo")
+    )
+
+    assert isinstance(pool, _StubPool)
+    assert captured["check"] is _StubPool.check_connection
+    assert captured["open"] is True
+    assert "sslmode=require" in str(captured["conninfo"])
+
+
 @dataclass
 class _RecordingCloseable:
     name: str

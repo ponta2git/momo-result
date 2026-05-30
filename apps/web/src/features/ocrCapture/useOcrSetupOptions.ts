@@ -23,6 +23,61 @@ const emptyGameTitles: GameTitleResponse[] = [];
 const emptyMapMasters: MapMasterResponse[] = [];
 const emptySeasonMasters: SeasonMasterResponse[] = [];
 
+function sameSetupValue(left: SetupFormValues, right: SetupFormValues): boolean {
+  return (
+    left.gameTitleId === right.gameTitleId &&
+    left.mapMasterId === right.mapMasterId &&
+    left.ownerMemberId === right.ownerMemberId &&
+    left.seasonMasterId === right.seasonMasterId
+  );
+}
+
+function deriveValidSetupValue(args: {
+  gameTitles: GameTitleResponse[];
+  mapMasters: MapMasterResponse[];
+  seasonMasters: SeasonMasterResponse[];
+  value: SetupFormValues;
+}): SetupFormValues {
+  const { gameTitles, mapMasters, seasonMasters, value } = args;
+  let next = value;
+  const patch = (partial: Partial<SetupFormValues>) => {
+    next = { ...next, ...partial };
+  };
+
+  if (next.gameTitleId) {
+    const stillValid = gameTitles.some((gameTitle) => gameTitle.id === next.gameTitleId);
+    const first = gameTitles[0];
+    if (!stillValid && first) {
+      patch({ gameTitleId: first.id, mapMasterId: "", seasonMasterId: "" });
+    }
+  } else {
+    const fallback = gameTitles[0];
+    if (fallback) {
+      patch({ gameTitleId: fallback.id });
+    }
+  }
+
+  if (next.gameTitleId) {
+    const firstMap = mapMasters.find((item) => item.gameTitleId === next.gameTitleId);
+    const mapStillValid = mapMasters.some(
+      (item) => item.id === next.mapMasterId && item.gameTitleId === next.gameTitleId,
+    );
+    if (!mapStillValid && firstMap) {
+      patch({ mapMasterId: firstMap.id });
+    }
+
+    const firstSeason = seasonMasters.find((item) => item.gameTitleId === next.gameTitleId);
+    const seasonStillValid = seasonMasters.some(
+      (item) => item.id === next.seasonMasterId && item.gameTitleId === next.gameTitleId,
+    );
+    if (!seasonStillValid && firstSeason) {
+      patch({ seasonMasterId: firstSeason.id });
+    }
+  }
+
+  return next;
+}
+
 function queryErrorMessage(error: unknown): string | undefined {
   if (!error) {
     return undefined;
@@ -103,37 +158,11 @@ export function useOcrSetupOptions({
     Boolean(selectedGameTitle && value.mapMasterId && value.seasonMasterId && value.ownerMemberId);
 
   useEffect(() => {
-    if (value.gameTitleId) {
-      const stillValid = gameTitles.some((gameTitle) => gameTitle.id === value.gameTitleId);
-      const first = gameTitles[0];
-      if (!stillValid && first) {
-        onChange({ ...value, gameTitleId: first.id, mapMasterId: "", seasonMasterId: "" });
-      }
-      return;
+    const next = deriveValidSetupValue({ gameTitles, mapMasters, seasonMasters, value });
+    if (!sameSetupValue(next, value)) {
+      onChange(next);
     }
-    const fallback = gameTitles[0];
-    if (fallback) {
-      onChange({ ...value, gameTitleId: fallback.id });
-    }
-  }, [gameTitles, onChange, value]);
-
-  useEffect(() => {
-    if (!value.gameTitleId) return;
-    const first = mapMasters[0];
-    const stillValid = mapMasters.some((item) => item.id === value.mapMasterId);
-    if (!stillValid && first && first.gameTitleId === value.gameTitleId) {
-      onChange({ ...value, mapMasterId: first.id });
-    }
-  }, [mapMasters, onChange, value]);
-
-  useEffect(() => {
-    if (!value.gameTitleId) return;
-    const first = seasonMasters[0];
-    const stillValid = seasonMasters.some((item) => item.id === value.seasonMasterId);
-    if (!stillValid && first && first.gameTitleId === value.gameTitleId) {
-      onChange({ ...value, seasonMasterId: first.id });
-    }
-  }, [seasonMasters, onChange, value]);
+  }, [gameTitles, mapMasters, onChange, seasonMasters, value]);
 
   return {
     gameTitles,

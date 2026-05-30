@@ -121,6 +121,23 @@ final class AuthHttpRoutesSpec extends MomoCatsEffectSuite:
     }
   }
 
+  test("logout clears invalid session cookies") {
+    authApp.use { app =>
+      val request = Request[IO](Method.POST, uri"/api/auth/logout")
+        .putHeaders(Header.Raw(CIString("Cookie"), s"${authConfig.sessionCookieName}=stale"))
+
+      app.run(request).flatMap { response =>
+        val cleared = response.cookies.find(_.name == authConfig.sessionCookieName)
+          .getOrElse(fail("missing cleared session cookie"))
+        assertProblem(response, Status.Unauthorized, "UNAUTHORIZED", "Authentication is required.")
+          .map { _ =>
+            assertEquals(cleared.content, "")
+            assertEquals(cleared.maxAge, Some(0L))
+          }
+      }
+    }
+  }
+
   test("OAuth provider dependency failures open a short backoff before the next provider call") {
     val backoffConfig = authConfig.copy(providerFailureThreshold = 1, providerBackoff = 60.seconds)
     RecordingDiscordOAuthClient

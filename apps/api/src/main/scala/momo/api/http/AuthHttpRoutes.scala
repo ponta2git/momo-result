@@ -149,6 +149,7 @@ private[http] object AuthHttpRoutes:
         val sessionId = request.cookies.find(_.name == config.auth.sessionCookieName).map(_.content)
         sessions.authenticate(sessionId).flatMap {
           case Left(error) => problem(error)
+              .map(_.addCookie(clearCookie(config.auth.sessionCookieName, config)))
           case Right(authenticated) => csrf.verify(
               authenticated.session,
               request.headers.get(CIString(CsrfMiddleware.HeaderName)).flatMap(_.head.value.some),

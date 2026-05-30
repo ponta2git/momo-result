@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { ErrorBoundary } from "@/app/ErrorBoundary";
 import { appRoutes } from "@/app/router";
+import { matchKeys } from "@/shared/api/queryKeys";
 import { createDeferred } from "@/test/deferred";
 import { makeFourPlayerResults, makeMatchDetail } from "@/test/factories";
 import { setupMsw } from "@/test/msw/lifecycle";
@@ -143,13 +144,18 @@ describe("app routing", () => {
 
   it("logs out from the global nav in dev auth mode", async () => {
     window.localStorage.setItem("momoresult.devUser", "account_ponta");
-    const { router } = renderApp("/matches");
+    const { queryClient, router } = renderApp("/matches");
 
     expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
+    queryClient.setQueryData(matchKeys.detail("match-secret"), {
+      matchId: "match-secret",
+      privateNote: "previous session cache",
+    });
     await user.click(screen.getByRole("button", { name: "ログアウト" }));
 
     await waitFor(() => {
       expect(window.localStorage.getItem("momoresult.devUser")).toBeNull();
+      expect(queryClient.getQueryData(matchKeys.detail("match-secret"))).toBeUndefined();
       expect(router.state.location.pathname).toBe("/login");
     });
     expect(await screen.findByRole("heading", { name: "ログイン" })).toBeInTheDocument();

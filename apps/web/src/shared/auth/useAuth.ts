@@ -1,9 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 
 import { logout } from "@/shared/api/auth";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
-import { authMeQueryKey, authQueryOptions } from "@/shared/auth/authQueries";
+import { authQueryOptions } from "@/shared/auth/authQueries";
 import { useDevUser } from "@/shared/auth/useDevUser";
+
+async function clearSessionQueryCache(queryClient: QueryClient): Promise<void> {
+  await queryClient.cancelQueries();
+  queryClient.getQueryCache().clear();
+}
 
 export function useAuth() {
   const queryClient = useQueryClient();
@@ -18,7 +24,7 @@ export function useAuth() {
       if (import.meta.env.DEV && !lockedByEnv) {
         setDevUser("");
       }
-      await queryClient.invalidateQueries({ queryKey: authMeQueryKey });
+      await clearSessionQueryCache(queryClient);
     },
   });
 

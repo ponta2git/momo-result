@@ -53,10 +53,16 @@ def test_does_not_add_ssl_for_127_0_0_1() -> None:
 
 
 def test_respects_explicit_sslmode_in_url() -> None:
-    url = "postgres://user:pass@db.neon.tech/mydb?sslmode=disable"
+    url = "postgres://user:pass@db.neon.tech/mydb?sslmode=verify-full"
     result = _with_sslmode_require(url)
-    assert "sslmode=disable" in result
+    assert "sslmode=verify-full" in result
     assert result.count("sslmode=") == 1
+
+
+def test_rejects_weak_sslmode_for_remote_host() -> None:
+    url = "postgres://user:pass@db.neon.tech/mydb?sslmode=disable"
+    with pytest.raises(ValueError, match="DATABASE_URL sslmode"):
+        _with_sslmode_require(url)
 
 
 def test_text_recognition_engine_default_is_tesserocr() -> None:

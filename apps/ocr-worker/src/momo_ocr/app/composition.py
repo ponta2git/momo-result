@@ -191,11 +191,18 @@ def _close_startup_resource(resource: object | None, *, resource_name: str) -> N
 
 
 def _with_sslmode_require(database_url: str) -> str:
-    """Add sslmode=require unless the host is localhost/127.0.0.1 (local dev)."""
+    """Add strict sslmode unless the host is localhost/127.0.0.1 (local dev)."""
     parts = urlsplit(database_url)
     host = parts.hostname or ""
     _local_hosts = {"localhost", "127.0.0.1", "::1"}
     query = dict(parse_qsl(parts.query, keep_blank_values=True))
     if host not in _local_hosts:
-        query.setdefault("sslmode", "require")
+        sslmode = query.get("sslmode")
+        if sslmode is None:
+            query["sslmode"] = "require"
+        elif sslmode.lower() not in {"require", "verify-ca", "verify-full"}:
+            msg = (
+                "DATABASE_URL sslmode must be require, verify-ca, or verify-full for remote hosts."
+            )
+            raise ValueError(msg)
     return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))

@@ -143,6 +143,8 @@ def production_worker_runtime(config: WorkerConfig) -> WorkerRuntime:
     require_production_config(config)
     validate_queue_contract_schemas()
     pool = production_pool_from_config(config)
+    consumer: object | None = None
+    text_engine: object | None = None
     try:
         consumer = redis_consumer_from_config(config)
         repository = PostgresOcrJobRepository(pool)
@@ -164,10 +166,28 @@ def production_worker_runtime(config: WorkerConfig) -> WorkerRuntime:
         )
     except BaseException:
         # If anything between pool creation and runtime assembly fails we
-        # must release the eagerly-opened pool so the process exits cleanly.
-        pool.close()
+        # must release every resource already acquired so startup retries do
+        # not leak Redis sockets, native OCR handles, or Postgres connections.
+        _close_startup_resource(text_engine, resource_name="text_engine")
+        _close_startup_resource(consumer, resource_name="consumer")
+        _close_startup_resource(pool, resource_name="pool")
         raise
     return WorkerRuntime(deps=deps, pool=pool)
+
+
+def _close_startup_resource(resource: object | None, *, resource_name: str) -> None:
+    if resource is None:
+        return
+    close_fn = getattr(resource, "close", None)
+    if not callable(close_fn):
+        return
+    try:
+        close_fn()
+    except Exception:
+        logger.exception(
+            "Failed to close partially-created worker resource",
+            extra={"resource": resource_name},
+        )
 
 
 def _with_sslmode_require(database_url: str) -> str:

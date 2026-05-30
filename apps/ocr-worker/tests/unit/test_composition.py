@@ -303,6 +303,115 @@ def _make_runtime(
     return WorkerRuntime(deps=deps, pool=pool)
 
 
+def test_production_runtime_closes_partial_resources_if_engine_creation_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pool = _RecordingCloseable("pool")
+    consumer = _RecordingConsumer("consumer")
+
+    def production_pool_from_config(_config: WorkerConfig) -> _RecordingCloseable:
+        return pool
+
+    def redis_consumer_from_config(_config: WorkerConfig) -> _RecordingConsumer:
+        return consumer
+
+    def text_recognition_engine_from_name(
+        _value: str | None,
+        *,
+        timeout_seconds: int | None = None,
+    ) -> TextRecognitionEngine:
+        del timeout_seconds
+        raise OcrError(FailureCode.OCR_ENGINE_UNAVAILABLE, "engine unavailable")
+
+    monkeypatch.setattr(composition_module, "validate_queue_contract_schemas", lambda: None)
+    monkeypatch.setattr(
+        composition_module,
+        "production_pool_from_config",
+        production_pool_from_config,
+    )
+    monkeypatch.setattr(
+        composition_module,
+        "redis_consumer_from_config",
+        redis_consumer_from_config,
+    )
+    monkeypatch.setattr(
+        composition_module,
+        "text_recognition_engine_from_name",
+        text_recognition_engine_from_name,
+    )
+
+    with pytest.raises(OcrError):
+        production_worker_runtime(
+            WorkerConfig(
+                database_url="postgres://user:pass@db.example/momo",
+                redis_url="redis://example:6379/0",
+            )
+        )
+
+    assert consumer.closes == ["consumer"]
+    assert pool.closes == ["pool"]
+
+
+def test_production_runtime_closes_engine_consumer_and_pool_if_late_assembly_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pool = _RecordingCloseable("pool")
+    consumer = _RecordingConsumer("consumer")
+    text_engine = _RecordingTextEngine("engine")
+
+    def production_pool_from_config(_config: WorkerConfig) -> _RecordingCloseable:
+        return pool
+
+    def redis_consumer_from_config(_config: WorkerConfig) -> _RecordingConsumer:
+        return consumer
+
+    def text_recognition_engine_from_name(
+        _value: str | None,
+        *,
+        timeout_seconds: int | None = None,
+    ) -> TextRecognitionEngine:
+        del timeout_seconds
+        return text_engine
+
+    def repository_cancellation_checker(_repository: object) -> object:
+        msg = "late assembly failed"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(composition_module, "validate_queue_contract_schemas", lambda: None)
+    monkeypatch.setattr(
+        composition_module,
+        "production_pool_from_config",
+        production_pool_from_config,
+    )
+    monkeypatch.setattr(
+        composition_module,
+        "redis_consumer_from_config",
+        redis_consumer_from_config,
+    )
+    monkeypatch.setattr(
+        composition_module,
+        "text_recognition_engine_from_name",
+        text_recognition_engine_from_name,
+    )
+    monkeypatch.setattr(
+        composition_module,
+        "RepositoryCancellationChecker",
+        repository_cancellation_checker,
+    )
+
+    with pytest.raises(RuntimeError, match="late assembly failed"):
+        production_worker_runtime(
+            WorkerConfig(
+                database_url="postgres://user:pass@db.example/momo",
+                redis_url="redis://example:6379/0",
+            )
+        )
+
+    assert text_engine.closes == ["engine"]
+    assert consumer.closes == ["consumer"]
+    assert pool.closes == ["pool"]
+
+
 def test_worker_runtime_close_releases_text_engine_consumer_and_pool() -> None:
     text_engine = _RecordingTextEngine("engine")
     consumer = _RecordingConsumer("consumer")

@@ -40,9 +40,13 @@ object ProblemDetails:
     `type` = s"https://momo-result.local/problems/${error.code.toLowerCase}",
     title = error.title,
     status = statusOf(error).code,
-    detail = error.detail,
+    detail = publicDetail(error),
     code = error.code,
   )
+
+  private def publicDetail(error: AppError): String = error match
+    case _: AppError.Internal => "Unexpected server error."
+    case _ => error.detail
 
   private def statusOf(error: AppError): StatusCode = error match
     case _: AppError.Unauthorized => StatusCode.Unauthorized

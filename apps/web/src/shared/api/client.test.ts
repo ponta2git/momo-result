@@ -61,6 +61,42 @@ describe("apiRequest", () => {
     expect(postHeaders.get("X-CSRF-Token")).toBe("csrf-1");
   });
 
+  it("clears cached csrf token when auth state refresh fails", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({
+          accountId: "account_ponta",
+          displayName: "ぽんた",
+          isAdmin: true,
+          memberId: "member_ponta",
+          csrfToken: "csrf-1",
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json(
+          {
+            type: "about:blank",
+            title: "Unauthorized",
+            status: 401,
+            detail: "Authentication is required.",
+            code: "UNAUTHORIZED",
+          },
+          { status: 401 },
+        ),
+      )
+      .mockResolvedValueOnce(Response.json({ ok: true }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getAuthMe();
+    await expect(getAuthMe()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    await apiRequest("/api/example", { method: "POST", body: { ok: true } });
+
+    const calls = fetchCallsOf(fetchMock);
+    const postHeaders = requireInit(calls[2]?.[1]).headers as Headers;
+    expect(postHeaders.has("X-CSRF-Token")).toBe(false);
+  });
+
   it("rejects cross-origin API requests before attaching auth headers", async () => {
     window.localStorage.setItem("momoresult.devUser", "account_ponta");
     const fetchMock = vi.fn(async () => Response.json({ ok: true }));

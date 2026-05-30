@@ -186,8 +186,8 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
           seasonMasters = seasonMasters,
           now = IO.pure(now),
           nextId = ids.modify {
-            case head :: tail => tail -> head
-            case Nil => Nil -> "unexpected-match-id"
+            case head :: tail => tail -> MatchId.unsafeFromString(head)
+            case Nil => Nil -> MatchId.unsafeFromString("unexpected-match-id")
           },
           allowedMemberIds = IO.pure(allowedMembers),
         )

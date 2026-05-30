@@ -25,7 +25,7 @@ final class ConfirmMatch[F[_]: MonadThrow](
     mapMasters: MapMastersRepository[F],
     seasonMasters: SeasonMastersRepository[F],
     now: F[Instant],
-    nextId: F[String],
+    nextId: F[MatchId],
     allowedMemberIds: F[Set[MemberId]],
 ):
   import ConfirmMatch.*
@@ -80,7 +80,7 @@ final class ConfirmMatch[F[_]: MonadThrow](
     id <- EitherT.liftF(nextId)
     createdAt <- EitherT.liftF(now)
     record = toMatchRecord(
-      MatchId.unsafeFromString(id),
+      id,
       createdAt,
       command.playedAt,
       title.layoutFamily,

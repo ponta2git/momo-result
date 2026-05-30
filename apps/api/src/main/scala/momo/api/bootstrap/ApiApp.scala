@@ -543,7 +543,13 @@ object ApiApp:
     )
     val uploadImage = UploadImage[F](imageStore, imageStorageAdmission)
     val nowF = Clock[F].realTimeInstant
-    val nextId = OcrJobId.fresh[F].map(_.value)
+    val nextOcrJobId = OcrJobId.fresh[F]
+    val nextOcrDraftId = OcrDraftId.fresh[F]
+    val nextHeldEventId = HeldEventId.fresh[F]
+    val nextMatchDraftId = MatchDraftId.fresh[F]
+    val nextMatchId = MatchId.fresh[F]
+    val nextMemberAliasId = MemberAliasId.fresh[F]
+    val nextLoginAccountId = AccountId.fresh[F]
     val sessionService = SessionService[F](appSessions, loginAccounts, config.auth, nowF)
     val csrfTokenService = CsrfTokenService()
     val oauthStateCodec = OAuthStateCodec[F](config.auth, nowF)
@@ -554,7 +560,8 @@ object ApiApp:
       queueSubmitter = ocrQueueSubmitter,
       admissionGuard = ocrAdmissionGuard,
       now = nowF,
-      nextId = nextId,
+      nextJobId = nextOcrJobId,
+      nextDraftId = nextOcrDraftId,
       memberAliases = memberAliases,
       activeJobLimit = config.resourceLimits.ocrActiveJobLimit,
     )
@@ -563,7 +570,7 @@ object ApiApp:
     val getOcrDraftsBulk = GetOcrDraftsBulk[F](drafts)
     val cancelOcrJob = CancelOcrJob[F](jobs, nowF)
     val listHeldEvents = ListHeldEvents[F](heldEvents, matches)
-    val createHeldEvent = CreateHeldEvent[F](heldEvents, nextId)
+    val createHeldEvent = CreateHeldEvent[F](heldEvents, nextHeldEventId)
     val sourceImageRetention = PurgeSourceImages[F](matchDrafts, imageStore)
     val createMatchDraft = CreateMatchDraft[F](
       heldEvents = heldEvents,
@@ -572,7 +579,7 @@ object ApiApp:
       seasonMasters = seasonMasters,
       matchDrafts = matchDrafts,
       now = nowF,
-      nextId = nextId,
+      nextId = nextMatchDraftId,
     )
     val getMatchDraft = GetMatchDraft[F](matchDrafts)
     val updateMatchDraft = UpdateMatchDraft[F](
@@ -599,7 +606,7 @@ object ApiApp:
       mapMasters = mapMasters,
       seasonMasters = seasonMasters,
       now = nowF,
-      nextId = nextId,
+      nextId = nextMatchId,
       allowedMemberIds = members.list.map(_.map(_.id).toSet),
     )
     val listMatches = ListMatches[F](matchList)
@@ -636,11 +643,11 @@ object ApiApp:
     val deleteMapMaster = DeleteMapMaster[F](mapMasters)
     val deleteSeasonMaster = DeleteSeasonMaster[F](seasonMasters)
     val listMemberAliases = ListMemberAliases[F](memberAliases)
-    val createMemberAlias = CreateMemberAlias[F](memberAliases, members, nowF, nextId)
+    val createMemberAlias = CreateMemberAlias[F](memberAliases, members, nowF, nextMemberAliasId)
     val updateMemberAlias = UpdateMemberAlias[F](memberAliases, members)
     val deleteMemberAlias = DeleteMemberAlias[F](memberAliases)
     val listLoginAccounts = ListLoginAccounts[F](loginAccounts)
-    val createLoginAccount = CreateLoginAccount[F](loginAccounts, members, nowF, nextId)
+    val createLoginAccount = CreateLoginAccount[F](loginAccounts, members, nowF, nextLoginAccountId)
     val updateLoginAccount = UpdateLoginAccount[F](loginAccounts, members, appSessions, nowF)
 
     MemberRoster.devFromMemberIds(config.devMemberIds).leftMap(new IllegalArgumentException(_))

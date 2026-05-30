@@ -570,9 +570,13 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
           queueSubmitter = OcrQueueSubmitter.direct[IO](jobs, matchDrafts, queue),
           admissionGuard = admissionGuard,
           now = IO.pure(now),
-          nextId = ids.modify {
-            case head :: tail => tail -> head
-            case Nil => Nil -> "unexpected"
+          nextJobId = ids.modify {
+            case head :: tail => tail -> OcrJobId.unsafeFromString(head)
+            case Nil => Nil -> OcrJobId.unsafeFromString("unexpected-job")
+          },
+          nextDraftId = ids.modify {
+            case head :: tail => tail -> OcrDraftId.unsafeFromString(head)
+            case Nil => Nil -> OcrDraftId.unsafeFromString("unexpected-draft")
           },
           memberAliases = memberAliases,
           activeJobLimit = activeJobLimit,

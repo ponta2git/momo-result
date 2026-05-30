@@ -37,7 +37,7 @@ final class CreateLoginAccount[F[_]: MonadThrow](
     accounts: LoginAccountsRepository[F],
     members: MembersRepository[F],
     now: F[Instant],
-    nextId: F[String],
+    nextId: F[AccountId],
 ):
   def run(command: CreateLoginAccountCommand): F[Either[AppError, LoginAccount]] = (for
     discordUserId <- EitherT.fromEither[F](LoginAccountField.discordUserId(command.discordUserId))
@@ -47,7 +47,7 @@ final class CreateLoginAccount[F[_]: MonadThrow](
     _ <- EitherT.fromEither[F](
       Either.cond(existing.isEmpty, (), AppError.Conflict("discordUserId is already registered."))
     )
-    id <- EitherT.liftF(nextId.map(AccountId.unsafeFromString(_)))
+    id <- EitherT.liftF(nextId)
     at <- EitherT.liftF(now)
     created <- EitherT.liftF(accounts.create(CreateLoginAccountData(
       id = id,

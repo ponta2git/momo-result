@@ -86,7 +86,7 @@ final class CreateMemberAlias[F[_]: MonadThrow](
     aliases: MemberAliasesRepository[F],
     members: MembersRepository[F],
     now: F[Instant],
-    nextId: F[String],
+    nextId: F[MemberAliasId],
 ):
   def run(command: CreateMemberAliasCommand): F[Either[AppError, MemberAlias]] = (for
     alias <- EitherT.fromEither[F](validateAlias(command.alias))
@@ -94,12 +94,7 @@ final class CreateMemberAlias[F[_]: MonadThrow](
     _ <- ensureAliasAvailable(aliases, alias, exceptId = None)
     id <- EitherT.liftF(nextId)
     createdAt <- EitherT.liftF(now)
-    row = MemberAlias(
-      id = MemberAliasId.unsafeFromString(id),
-      memberId = command.memberId,
-      alias = alias,
-      createdAt = createdAt,
-    )
+    row = MemberAlias(id = id, memberId = command.memberId, alias = alias, createdAt = createdAt)
     _ <- EitherT.liftF(aliases.create(row))
   yield row).value
 

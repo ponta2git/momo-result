@@ -8,6 +8,14 @@ import munit.FunSuite
 final class ApiRuntimeArchitectureSpec extends FunSuite:
   private val apiAppFile = Paths.get("src/main/scala/momo/api/bootstrap/ApiApp.scala")
   private val databaseFile = Paths.get("src/main/scala/momo/api/db/Database.scala")
+  private val generatedIdUsecaseFiles = List(
+    Paths.get("src/main/scala/momo/api/usecases/AdminLoginAccounts.scala"),
+    Paths.get("src/main/scala/momo/api/usecases/ConfirmMatch.scala"),
+    Paths.get("src/main/scala/momo/api/usecases/CreateHeldEvent.scala"),
+    Paths.get("src/main/scala/momo/api/usecases/CreateMatchDraft.scala"),
+    Paths.get("src/main/scala/momo/api/usecases/CreateOcrJob.scala"),
+    Paths.get("src/main/scala/momo/api/usecases/ManageMasters.scala"),
+  )
 
   test("database connection acquisition does not run on the Cats Effect compute pool"):
     val apiAppText = read(apiAppFile)
@@ -39,6 +47,31 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
     assert(apiAppText.contains("MemberRoster.devIdentities(config.devMemberIds)"))
     assert(apiAppText.contains("MemberRoster.devFromMemberIds(config.devMemberIds)"))
     assert(!apiAppText.contains("unsafeFromString"))
+
+  test("API runtime wires generated ids with their domain types"):
+    val apiAppText = read(apiAppFile)
+    val missingRuntimeBindings = List(
+      "val nextOcrJobId = OcrJobId.fresh[F]",
+      "val nextOcrDraftId = OcrDraftId.fresh[F]",
+      "val nextHeldEventId = HeldEventId.fresh[F]",
+      "val nextMatchDraftId = MatchDraftId.fresh[F]",
+      "val nextMatchId = MatchId.fresh[F]",
+      "val nextMemberAliasId = MemberAliasId.fresh[F]",
+      "val nextLoginAccountId = AccountId.fresh[F]",
+    ).filterNot(apiAppText.contains)
+    val rawGeneratedIdViolations = generatedIdUsecaseFiles.flatMap { path =>
+      val text = read(path)
+      List(
+        "nextId: F[String]",
+        "nextJobId: F[String]",
+        "nextDraftId: F[String]",
+        "unsafeFromString(id)",
+        "unsafeFromString(_)",
+      ).filter(text.contains).map(pattern => s"$path: $pattern")
+    }.sorted
+
+    assertEquals(missingRuntimeBindings, Nil)
+    assertEquals(rawGeneratedIdViolations, Nil)
 
   private def read(path: Path): String = Files.readString(path, StandardCharsets.UTF_8)
 end ApiRuntimeArchitectureSpec

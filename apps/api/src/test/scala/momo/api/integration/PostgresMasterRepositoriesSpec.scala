@@ -172,10 +172,18 @@ final class PostgresMasterRepositoriesSpec extends IntegrationSuite:
       assertAppError(deleteAlias, AppError.NotFound("member alias", missingAlias.id.value))
 
   test("member aliases create, list, update, reject duplicates, and delete"):
-    val create =
-      new CreateMemberAlias[IO](memberAliases, members, IO.pure(now), IO.pure("alias-ponta"))
-    val createDuplicateId =
-      new CreateMemberAlias[IO](memberAliases, members, IO.pure(now), IO.pure("alias-otaka"))
+    val create = new CreateMemberAlias[IO](
+      memberAliases,
+      members,
+      IO.pure(now),
+      IO.pure(MemberAliasId.unsafeFromString("alias-ponta")),
+    )
+    val createDuplicateId = new CreateMemberAlias[IO](
+      memberAliases,
+      members,
+      IO.pure(now),
+      IO.pure(MemberAliasId.unsafeFromString("alias-otaka")),
+    )
     val update = new UpdateMemberAlias[IO](memberAliases, members)
     val delete = new DeleteMemberAlias[IO](memberAliases)
     for

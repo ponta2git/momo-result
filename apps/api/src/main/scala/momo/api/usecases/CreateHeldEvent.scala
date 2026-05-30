@@ -12,9 +12,12 @@ import momo.api.repositories.HeldEventsRepository
 
 final case class CreateHeldEventCommand(heldAt: Instant)
 
-final class CreateHeldEvent[F[_]: MonadThrow](events: HeldEventsRepository[F], nextId: F[String]):
+final class CreateHeldEvent[F[_]: MonadThrow](
+    events: HeldEventsRepository[F],
+    nextId: F[HeldEventId],
+):
   def run(command: CreateHeldEventCommand): F[Either[AppError, HeldEvent]] = (for
     id <- EitherT.liftF(nextId)
-    event = HeldEvent(id = HeldEventId.unsafeFromString(id), heldAt = command.heldAt)
+    event = HeldEvent(id = id, heldAt = command.heldAt)
     _ <- EitherT.liftF(events.create(event))
   yield event).value

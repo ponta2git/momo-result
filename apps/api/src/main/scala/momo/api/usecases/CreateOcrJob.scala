@@ -32,7 +32,8 @@ final class CreateOcrJob[F[_]: MonadThrow](
     queueSubmitter: OcrQueueSubmitter[F],
     admissionGuard: OcrAdmissionGuard[F],
     now: F[Instant],
-    nextId: F[String],
+    nextJobId: F[OcrJobId],
+    nextDraftId: F[OcrDraftId],
     memberAliases: MemberAliasesRepository[F],
     activeJobLimit: Int,
 )(using LoggerFactory[F]):
@@ -62,8 +63,8 @@ final class CreateOcrJob[F[_]: MonadThrow](
     imageId = command.imageId
     image <- imageStore.find(imageId).orNotFound("image", command.imageId.value)
     createdAt <- EitherT.liftF(now)
-    jobId <- EitherT.liftF(nextId.map(OcrJobId.unsafeFromString(_)))
-    draftId <- EitherT.liftF(nextId.map(OcrDraftId.unsafeFromString(_)))
+    jobId <- EitherT.liftF(nextJobId)
+    draftId <- EitherT.liftF(nextDraftId)
     draft = initialDraft(draftId, jobId, command.requestedScreenType, createdAt)
     job = queuedJob(jobId, draftId, imageId, image.path, command.requestedScreenType, createdAt)
     payload = queuePayload(

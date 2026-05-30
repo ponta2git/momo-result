@@ -34,7 +34,7 @@ final class CreateMatchDraft[F[_]: MonadThrow](
     seasonMasters: SeasonMastersRepository[F],
     matchDrafts: MatchDraftsRepository[F],
     now: F[Instant],
-    nextId: F[String],
+    nextId: F[MatchDraftId],
 ):
   def run(
       command: CreateMatchDraftCommand,
@@ -48,7 +48,7 @@ final class CreateMatchDraft[F[_]: MonadThrow](
     at <- EitherT.liftF(now)
     draft <- EitherT.fromEither[F](
       MatchDraft.fromInputs(
-        id = MatchDraftId.unsafeFromString(id),
+        id = id,
         createdByAccountId = createdBy,
         createdByMemberId = playerMemberId,
         status = status,

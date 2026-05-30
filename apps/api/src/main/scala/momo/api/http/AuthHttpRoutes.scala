@@ -41,8 +41,9 @@ private[http] object AuthHttpRoutes:
           case Left(response) => response
           case Right(_) =>
             for
-              silent = request.uri.query.params.get("silent").contains("1")
-              next = request.uri.query.params.get("next").flatMap(RedirectPath.sanitize)
+              silent = request.uri.query.params.get(AuthPaths.SilentQuery).contains("1")
+              next = request.uri.query.params.get(AuthPaths.NextQuery)
+                .flatMap(RedirectPath.sanitize)
               state <- stateCodec.create(silent, next)
               location <- oauth.authorizationUrl(state, if silent then Some("none") else None)
               response <- redirect(location).map(_.addCookie(stateCookie(config, state)))
@@ -54,9 +55,9 @@ private[http] object AuthHttpRoutes:
           case Left(response) => response
           case Right(_) =>
             val params = request.uri.query.params
-            val state = params.get("state")
-            val code = params.get("code")
-            val oauthError = params.get("error")
+            val state = params.get(AuthPaths.StateQuery)
+            val code = params.get(AuthPaths.CodeQuery)
+            val oauthError = params.get(AuthPaths.ErrorQuery)
             val cookieState = request.cookies.find(_.name == config.auth.stateCookieName)
               .map(_.content)
             (state, cookieState) match

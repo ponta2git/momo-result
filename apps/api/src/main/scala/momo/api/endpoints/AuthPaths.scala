@@ -9,6 +9,12 @@ object AuthPaths:
   val Logout: String = "logout"
   val Me: String = "me"
 
+  val SilentQuery: String = "silent"
+  val NextQuery: String = "next"
+  val CodeQuery: String = "code"
+  val StateQuery: String = "state"
+  val ErrorQuery: String = "error"
+
   val LoginPath: String = s"/$Api/$Auth/$Login"
   val CallbackPath: String = s"/$Api/$Auth/$Callback"
   val LogoutPath: String = s"/$Api/$Auth/$Logout"

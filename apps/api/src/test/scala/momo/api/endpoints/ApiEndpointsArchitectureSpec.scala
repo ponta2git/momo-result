@@ -49,15 +49,31 @@ final class ApiEndpointsArchitectureSpec extends FunSuite:
 
   test("hand-written auth routes share the same path contract as Tapir auth endpoints"):
     val text = read(authHttpRoutes)
+    val endpointText = read(endpointDir.resolve("AuthEndpoints.scala"))
 
     assert(text.contains("AuthPaths.LoginPath"))
     assert(text.contains("AuthPaths.CallbackPath"))
     assert(text.contains("AuthPaths.LogoutPath"))
     assert(text.contains("AuthPaths.MePath"))
+    assert(endpointText.contains("AuthPaths.SilentQuery"))
+    assert(endpointText.contains("AuthPaths.NextQuery"))
+    assert(endpointText.contains("AuthPaths.CodeQuery"))
+    assert(endpointText.contains("AuthPaths.StateQuery"))
+    assert(endpointText.contains("AuthPaths.ErrorQuery"))
+    assert(text.contains("AuthPaths.SilentQuery"))
+    assert(text.contains("AuthPaths.NextQuery"))
+    assert(text.contains("AuthPaths.CodeQuery"))
+    assert(text.contains("AuthPaths.StateQuery"))
+    assert(text.contains("AuthPaths.ErrorQuery"))
     assert(!text.contains("\"/api/auth/login\""))
     assert(!text.contains("\"/api/auth/callback\""))
     assert(!text.contains("\"/api/auth/logout\""))
     assert(!text.contains("\"/api/auth/me\""))
+    assert(!text.contains("params.get(\"silent\")"))
+    assert(!text.contains("params.get(\"next\")"))
+    assert(!text.contains("params.get(\"code\")"))
+    assert(!text.contains("params.get(\"state\")"))
+    assert(!text.contains("params.get(\"error\")"))
 
   test("HTTP modules use shared operation labels for cross-cutting scopes"):
     val violations = scalaFiles(httpModulesDir).flatMap { path =>

@@ -11,8 +11,8 @@ object AuthEndpoints:
     endpoint
       .get
       .in(AuthPaths.Api / AuthPaths.Auth / AuthPaths.Login)
-      .in(query[Option[String]]("silent"))
-      .in(query[Option[String]]("next"))
+      .in(query[Option[String]](AuthPaths.SilentQuery))
+      .in(query[Option[String]](AuthPaths.NextQuery))
       .errorOut(CommonEndpoint.errorOut)
       .out(statusCode(sttp.model.StatusCode.Found))
       .out(header[String]("Location"))
@@ -27,9 +27,9 @@ object AuthEndpoints:
   ] = endpoint
     .get
     .in(AuthPaths.Api / AuthPaths.Auth / AuthPaths.Callback)
-    .in(query[Option[String]]("code"))
-    .in(query[Option[String]]("state"))
-    .in(query[Option[String]]("error"))
+    .in(query[Option[String]](AuthPaths.CodeQuery))
+    .in(query[Option[String]](AuthPaths.StateQuery))
+    .in(query[Option[String]](AuthPaths.ErrorQuery))
     .errorOut(CommonEndpoint.errorOut)
     .out(statusCode(sttp.model.StatusCode.Found))
     .out(header[String]("Location"))

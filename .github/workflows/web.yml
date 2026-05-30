@@ -5,6 +5,9 @@ on:
     paths:
       - "apps/web/**"
       - "apps/api/openapi.yaml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
       - ".github/workflows/web.yml"
   push:
     branches:
@@ -13,6 +16,9 @@ on:
     paths:
       - "apps/web/**"
       - "apps/api/openapi.yaml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
       - ".github/workflows/web.yml"
 
 jobs:

@@ -10,6 +10,7 @@ on:
       - "docs/schemas/**"
       - "scripts/ci/**"
       - "Dockerfile"
+      - ".dockerignore"
       - "fly.toml"
       - "package.json"
       - "pnpm-lock.yaml"

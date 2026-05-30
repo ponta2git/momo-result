@@ -11,7 +11,9 @@ export async function getAuthMe(options: ApiSignalOptions = {}): Promise<AuthMeR
     setCsrfToken(response.csrfToken ?? undefined);
     return response;
   } catch (error) {
-    clearCsrfToken();
+    if (isAuthRejected(error)) {
+      clearCsrfToken();
+    }
     throw error;
   }
 }
@@ -19,4 +21,12 @@ export async function getAuthMe(options: ApiSignalOptions = {}): Promise<AuthMeR
 export async function logout(): Promise<void> {
   await apiRequest<void>("/api/auth/logout", { method: "POST" });
   clearCsrfToken();
+}
+
+function isAuthRejected(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+  const status = (error as { status?: unknown }).status;
+  return status === 401 || status === 403;
 }

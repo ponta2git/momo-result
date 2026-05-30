@@ -48,10 +48,11 @@ def load_worker_config(env: Mapping[str, str] | None = None) -> WorkerConfig:
         redis_url=_optional_non_empty(source, "REDIS_URL"),
         database_url=_optional_non_empty(source, "OCR_DATABASE_URL")
         or _optional_non_empty(source, "DATABASE_URL"),
-        worker_id=source.get("OCR_WORKER_ID", _default_worker_id()),
-        redis_stream=source.get("OCR_REDIS_STREAM", DEFAULT_REDIS_STREAM),
-        redis_group=source.get("OCR_REDIS_GROUP", DEFAULT_REDIS_GROUP),
-        redis_dead_letter_stream=source.get(
+        worker_id=_non_empty_or_default(source, "OCR_WORKER_ID", _default_worker_id()),
+        redis_stream=_non_empty_or_default(source, "OCR_REDIS_STREAM", DEFAULT_REDIS_STREAM),
+        redis_group=_non_empty_or_default(source, "OCR_REDIS_GROUP", DEFAULT_REDIS_GROUP),
+        redis_dead_letter_stream=_non_empty_or_default(
+            source,
             "OCR_REDIS_DEAD_LETTER_STREAM",
             DEFAULT_REDIS_DEAD_LETTER_STREAM,
         ),
@@ -102,6 +103,10 @@ def _optional_non_empty(env: Mapping[str, str], key: str) -> str | None:
     if value is None or value == "":
         return None
     return value
+
+
+def _non_empty_or_default(env: Mapping[str, str], key: str, default: str) -> str:
+    return _optional_non_empty(env, key) or default
 
 
 def _app_env_from_env(env: Mapping[str, str]) -> str:

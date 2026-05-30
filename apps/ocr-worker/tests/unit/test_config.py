@@ -5,7 +5,13 @@ from dataclasses import replace
 import pytest
 
 from momo_ocr.app.composition import _redis_socket_timeout_seconds
-from momo_ocr.app.config import load_worker_config, require_production_config
+from momo_ocr.app.config import (
+    DEFAULT_REDIS_DEAD_LETTER_STREAM,
+    DEFAULT_REDIS_GROUP,
+    DEFAULT_REDIS_STREAM,
+    load_worker_config,
+    require_production_config,
+)
 
 
 def test_load_worker_config_reads_redis_and_database_urls() -> None:
@@ -57,6 +63,22 @@ def test_require_production_config_rejects_missing_urls() -> None:
 def test_load_worker_config_rejects_unknown_app_env() -> None:
     with pytest.raises(ValueError, match="APP_ENV must be one of"):
         load_worker_config({"APP_ENV": "production"})
+
+
+def test_load_worker_config_ignores_blank_redis_identity_overrides() -> None:
+    config = load_worker_config(
+        {
+            "OCR_WORKER_ID": "",
+            "OCR_REDIS_STREAM": "",
+            "OCR_REDIS_GROUP": "",
+            "OCR_REDIS_DEAD_LETTER_STREAM": "",
+        }
+    )
+
+    assert config.worker_id
+    assert config.redis_stream == DEFAULT_REDIS_STREAM
+    assert config.redis_group == DEFAULT_REDIS_GROUP
+    assert config.redis_dead_letter_stream == DEFAULT_REDIS_DEAD_LETTER_STREAM
 
 
 def test_require_production_config_rejects_unknown_app_env() -> None:

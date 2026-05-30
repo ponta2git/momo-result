@@ -66,17 +66,16 @@ export function useMatchWorkspaceInit({
   nowIsoFactory,
 }: MatchWorkspaceInitParams): { isInitialized: boolean } {
   const initializedKeyRef = useRef<string | null>(null);
+  const initKey = JSON.stringify({
+    draftSummaryUpdatedAt: draftDetail?.updatedAt,
+    hasLegacyDrafts: reviewDraftIdList.join(","),
+    matchDraftId,
+    matchId,
+    mode,
+    sample: useSampleDrafts,
+  });
 
   useEffect(() => {
-    const initKey = JSON.stringify({
-      draftSummaryUpdatedAt: draftDetail?.updatedAt,
-      hasLegacyDrafts: reviewDraftIdList.join(","),
-      matchDraftId,
-      matchId,
-      mode,
-      sample: useSampleDrafts,
-    });
-
     if (initializedKeyRef.current === initKey) {
       return;
     }
@@ -144,8 +143,9 @@ export function useMatchWorkspaceInit({
     reviewDraftIds,
     useSampleDrafts,
     emptyFormFactory,
+    initKey,
     nowIsoFactory,
   ]);
 
-  return { isInitialized: initializedKeyRef.current != null };
+  return { isInitialized: initializedKeyRef.current === initKey };
 }

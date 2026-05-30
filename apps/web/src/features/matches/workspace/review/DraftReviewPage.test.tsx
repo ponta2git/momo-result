@@ -3,7 +3,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { Link, MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { DraftReviewPage } from "@/features/matches/workspace/DraftReviewPage";
@@ -105,6 +105,61 @@ describe("DraftReviewPage", () => {
     responseGate.resolve();
     expect(await screen.findByRole("heading", { name: "OCR結果の確認" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "確定前の確認へ進む" })).toBeEnabled();
+  });
+
+  it("returns to the loading shell when navigating to another review session", async () => {
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    const responseGate = createDeferred();
+    server.use(
+      http.get("/api/match-drafts/:draftId", async ({ params }) => {
+        const draftId = String(params["draftId"]);
+        if (draftId === "session-next") {
+          await responseGate.promise;
+        }
+        return HttpResponse.json({
+          createdAt: "2026-01-01T00:00:00.000Z",
+          gameTitleId: "gt_momotetsu_2",
+          heldEventId: "held-1",
+          incidentLogDraftId: `${draftId}-incident`,
+          incidentLogImageId: `${draftId}-img-incident`,
+          mapMasterId: "map_east",
+          matchDraftId: draftId,
+          matchNoInEvent: 3,
+          ownerMemberId: "member_ponta",
+          playedAt: "2026-01-01T00:00:00.000Z",
+          revenueDraftId: `${draftId}-revenue`,
+          revenueImageId: `${draftId}-img-revenue`,
+          seasonMasterId: "season_current",
+          status: "needs_review",
+          totalAssetsDraftId: `${draftId}-total`,
+          totalAssetsImageId: `${draftId}-img-total`,
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        });
+      }),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/review/session-1"]}>
+          <Link to="/review/session-next">別の確認へ</Link>
+          <Routes>
+            <Route path="/review/:matchSessionId" element={<DraftReviewPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "OCR結果の確認" })).toBeInTheDocument();
+    await user.click(screen.getByRole("link", { name: "別の確認へ" }));
+
+    expect(await screen.findByLabelText("OCR結果を読み込み中")).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+    expect(screen.queryByRole("button", { name: "確定前の確認へ進む" })).not.toBeInTheDocument();
+
+    responseGate.resolve();
+    expect(await screen.findByRole("heading", { name: "OCR結果の確認" })).toBeInTheDocument();
   });
 
   it("keeps held event creation collapsed until requested", async () => {

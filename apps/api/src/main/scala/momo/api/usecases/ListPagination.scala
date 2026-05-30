@@ -29,10 +29,10 @@ private[usecases] object ListPagination:
       pageSize: Option[Int],
       limit: Option[Int],
       policy: Policy,
-  ): Either[AppError, Int] =
-    pageSize match
-      case Some(value) => validateSize("pageSize", value, policy.maximumPageSize)
-      case None => validateSize("limit", limit.getOrElse(policy.defaultPageSize), policy.maximumPageSize)
+  ): Either[AppError, Int] = pageSize match
+    case Some(value) => validateSize("pageSize", value, policy.maximumPageSize)
+    case None =>
+      validateSize("limit", limit.getOrElse(policy.defaultPageSize), policy.maximumPageSize)
 
   private def validateSize(field: String, value: Int, maximum: Int): Either[AppError, Int] =
     if value < 1 then Left(AppError.ValidationFailed(s"$field must be between 1 and $maximum."))

@@ -10,6 +10,7 @@ import org.http4s.{Header, HttpApp as Http4sApp, HttpRoutes as Http4sRoutes, Req
 import org.slf4j.MDC
 import org.typelevel.ci.CIString
 
+import momo.api.auth.AuthHeaderNames
 import momo.api.domain.RequestId
 
 /**
@@ -30,7 +31,7 @@ import momo.api.domain.RequestId
  * correlation should use the explicit `X-Request-Id` value on request inputs and persisted payloads.
  */
 object RequestIdMiddleware:
-  val HeaderName: CIString = CIString("X-Request-Id")
+  val HeaderName: CIString = CIString(AuthHeaderNames.RequestId)
   val MdcKey: String = "request_id"
 
   /** Read the current request id (if any) from MDC. */

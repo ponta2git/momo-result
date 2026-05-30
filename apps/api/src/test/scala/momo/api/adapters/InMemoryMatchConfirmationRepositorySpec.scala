@@ -43,33 +43,31 @@ final class InMemoryMatchConfirmationRepositorySpec extends MomoCatsEffectSuite:
       assertEquals(existingFound.map(_.id), Some(existing.id))
       assertEquals(duplicateFound, None)
 
-  private def draft(): MatchDraft = MatchDraft
-    .fromInputs(
-      id = draftId,
-      createdByAccountId = AccountId.unsafeFromString(ownerMemberId.value),
-      createdByMemberId = Some(ownerMemberId),
-      status = MatchDraftStatus.DraftReady,
-      heldEventId = Some(heldEventId),
-      matchNoInEvent = Some(MatchNoInEvent.unsafeFromInt(1)),
-      gameTitleId = Some(titleId),
-      layoutFamily = Some("world"),
-      seasonMasterId = Some(seasonId),
-      ownerMemberId = Some(ownerMemberId),
-      mapMasterId = Some(mapId),
-      playedAt = Some(now),
-      totalAssetsImageId = None,
-      revenueImageId = None,
-      incidentLogImageId = None,
-      totalAssetsDraftId = None,
-      revenueDraftId = None,
-      incidentLogDraftId = None,
-      sourceImagesRetainedUntil = None,
-      sourceImagesDeletedAt = None,
-      confirmedMatchId = None,
-      createdAt = now,
-      updatedAt = now,
-    )
-    .fold(error => fail(error.message), identity)
+  private def draft(): MatchDraft = MatchDraft.fromInputs(
+    id = draftId,
+    createdByAccountId = AccountId.unsafeFromString(ownerMemberId.value),
+    createdByMemberId = Some(ownerMemberId),
+    status = MatchDraftStatus.DraftReady,
+    heldEventId = Some(heldEventId),
+    matchNoInEvent = Some(MatchNoInEvent.unsafeFromInt(1)),
+    gameTitleId = Some(titleId),
+    layoutFamily = Some("world"),
+    seasonMasterId = Some(seasonId),
+    ownerMemberId = Some(ownerMemberId),
+    mapMasterId = Some(mapId),
+    playedAt = Some(now),
+    totalAssetsImageId = None,
+    revenueImageId = None,
+    incidentLogImageId = None,
+    totalAssetsDraftId = None,
+    revenueDraftId = None,
+    incidentLogDraftId = None,
+    sourceImagesRetainedUntil = None,
+    sourceImagesDeletedAt = None,
+    confirmedMatchId = None,
+    createdAt = now,
+    updatedAt = now,
+  ).fold(error => fail(error.message), identity)
 
   private def record(id: String, matchNoInEvent: Int): MatchRecord = MatchFixtures.matchRecord(
     id = MatchId.unsafeFromString(id),

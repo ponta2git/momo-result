@@ -10,9 +10,8 @@ import momo.api.endpoints.ProblemDetails.ProblemResponse
  * Building blocks shared across every Tapir endpoint definition.
  *
  * The named header inputs centralize the wire-level header names used by the auth and
- * idempotency middleware so endpoint files don't repeat the strings. The semantics — authenticated
- * account dispatch on `X-Momo-Account-Id`, CSRF on `X-CSRF-Token`, idempotent replay on
- * `Idempotency-Key` —
+ * idempotency middleware so endpoint files don't repeat the strings. The semantics —
+ * authenticated account dispatch, CSRF, idempotent replay —
  * are documented in `apps/api/docs/proposals/idempotency-keys.md` and `architecture.md`.
  */
 object CommonEndpoint:
@@ -26,15 +25,16 @@ object CommonEndpoint:
     header[Option[String]](AuthHeaderNames.AccountId)
 
   /** CSRF token sent on every state-changing request alongside the session cookie. */
-  val csrfHeader: EndpointInput[Option[String]] = header[Option[String]]("X-CSRF-Token")
+  val csrfHeader: EndpointInput[Option[String]] = header[Option[String]](AuthHeaderNames.CsrfToken)
 
   /** Correlation id validated or minted by [[momo.api.http.RequestIdMiddleware]]. */
-  val requestIdHeader: EndpointInput[Option[String]] = header[Option[String]]("X-Request-Id")
+  val requestIdHeader: EndpointInput[Option[String]] =
+    header[Option[String]](AuthHeaderNames.RequestId)
 
   /**
    * Per-request `Idempotency-Key` header used by mutation endpoints to deduplicate retries.
    * Absent value means "pass through, don't dedupe"; non-empty means "store/replay".
    */
   val idempotencyKeyHeader: EndpointInput[Option[String]] =
-    header[Option[String]]("Idempotency-Key")
+    header[Option[String]](AuthHeaderNames.IdempotencyKey)
 end CommonEndpoint

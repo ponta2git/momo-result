@@ -64,10 +64,13 @@ trait HttpAppTestFixtures:
       accountId: String,
       idempotencyKey: Option[String],
   ): List[Header.ToRaw] =
-    val base =
-      List[Header.ToRaw](devReadHeader(accountId), Header.Raw(CIString("X-CSRF-Token"), "dev"))
-    idempotencyKey
-      .fold(base)(key => base :+ (Header.Raw(CIString("Idempotency-Key"), key): Header.ToRaw))
+    val base = List[Header.ToRaw](
+      devReadHeader(accountId),
+      Header.Raw(CIString(AuthHeaderNames.CsrfToken), "dev"),
+    )
+    idempotencyKey.fold(base)(key =>
+      base :+ (Header.Raw(CIString(AuthHeaderNames.IdempotencyKey), key): Header.ToRaw)
+    )
 
   private def defaultConfig(dir: Path, appEnv: AppEnv): AppConfig = AppConfig(
     appEnv = appEnv,

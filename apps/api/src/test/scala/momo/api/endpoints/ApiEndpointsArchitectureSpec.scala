@@ -15,6 +15,9 @@ final class ApiEndpointsArchitectureSpec extends FunSuite:
   private val redisQueuePayload = Paths
     .get("src/main/scala/momo/api/repositories/OcrQueuePayload.scala")
   private val authHttpRoutes = Paths.get("src/main/scala/momo/api/http/AuthHttpRoutes.scala")
+  private val commonEndpoint = endpointDir.resolve("CommonEndpoint.scala")
+  private val csrfMiddleware = httpDir.resolve("CsrfMiddleware.scala")
+  private val requestIdMiddleware = httpDir.resolve("RequestIdMiddleware.scala")
   private val httpOperation = Paths.get("src/main/scala/momo/api/http/HttpOperation.scala")
 
   private val ObjectBlock =
@@ -74,6 +77,23 @@ final class ApiEndpointsArchitectureSpec extends FunSuite:
     assert(!text.contains("params.get(\"code\")"))
     assert(!text.contains("params.get(\"state\")"))
     assert(!text.contains("params.get(\"error\")"))
+
+  test("Tapir endpoints and middleware share common HTTP header names"):
+    val endpointText = read(commonEndpoint)
+    val csrfText = read(csrfMiddleware)
+    val requestIdText = read(requestIdMiddleware)
+
+    assert(endpointText.contains("AuthHeaderNames.AccountId"))
+    assert(endpointText.contains("AuthHeaderNames.CsrfToken"))
+    assert(endpointText.contains("AuthHeaderNames.RequestId"))
+    assert(endpointText.contains("AuthHeaderNames.IdempotencyKey"))
+    assert(csrfText.contains("AuthHeaderNames.CsrfToken"))
+    assert(requestIdText.contains("AuthHeaderNames.RequestId"))
+    assert(!endpointText.contains("""header[Option[String]]("X-CSRF-Token")"""))
+    assert(!endpointText.contains("""header[Option[String]]("X-Request-Id")"""))
+    assert(!endpointText.contains("""header[Option[String]]("Idempotency-Key")"""))
+    assert(!csrfText.contains("""val HeaderName = "X-CSRF-Token""""))
+    assert(!requestIdText.contains("""CIString("X-Request-Id")"""))
 
   test("HTTP modules use shared operation labels for cross-cutting scopes"):
     val violations = scalaFiles(httpModulesDir).flatMap { path =>

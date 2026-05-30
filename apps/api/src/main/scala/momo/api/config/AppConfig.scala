@@ -495,15 +495,18 @@ object AppConfig:
   ): Either[Throwable, String] =
     if appEnv != AppEnv.Prod then Right(jdbcUrl)
     else
-      val sslMode = jdbcQueryParams(jdbcUrl).get("sslmode").flatMap(_.lastOption)
-      sslMode match
-        case Some(value)
+      val sslModes = jdbcQueryParams(jdbcUrl).getOrElse("sslmode", Nil)
+      sslModes match
+        case _ :: _ :: _ => Left(new IllegalArgumentException(
+            "DATABASE_URL sslmode must be specified at most once in prod APP_ENV"
+          ))
+        case value :: Nil
             if value.equalsIgnoreCase("require") || value.equalsIgnoreCase("verify-ca") ||
               value.equalsIgnoreCase("verify-full") => Right(jdbcUrl)
-        case Some(value) => Left(new IllegalArgumentException(
+        case value :: Nil => Left(new IllegalArgumentException(
             s"DATABASE_URL sslmode must be require, verify-ca, or verify-full in prod APP_ENV, got: $value"
           ))
-        case None => Right(appendJdbcQueryParam(jdbcUrl, "sslmode", "require"))
+        case Nil => Right(appendJdbcQueryParam(jdbcUrl, "sslmode", "require"))
 
   private def jdbcQueryParams(jdbcUrl: String): Map[String, List[String]] =
     val queryStart = jdbcUrl.indexOf('?')

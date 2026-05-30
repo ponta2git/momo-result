@@ -99,6 +99,14 @@ class AppConfigSpec extends CatsEffectSuite:
     assert(result.isLeft, s"expected weak sslmode to be rejected: $result")
   }
 
+  test("ensureProdSslMode: rejects duplicate sslmode in prod") {
+    val result = AppConfig.ensureProdSslMode(
+      "jdbc:postgresql://db.example.com/mydb?sslmode=disable&sslmode=require",
+      AppEnv.Prod,
+    )
+    assert(result.left.exists(_.getMessage.contains("specified at most once")))
+  }
+
   test("ensureProdSslMode: leaves non-prod URLs unchanged") {
     val result = AppConfig.ensureProdSslMode("jdbc:postgresql://localhost:5432/mydb", AppEnv.Test)
     assertEquals(result, Right("jdbc:postgresql://localhost:5432/mydb"))

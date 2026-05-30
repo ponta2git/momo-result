@@ -109,7 +109,7 @@ final class DbContractSpec extends IntegrationSuite:
       assert(missing.isEmpty, s"matches is missing columns: $missing (have $cols)")
     }
 
-  test("match_drafts table exposes the expected list columns"):
+  test("match_drafts table exposes the expected workflow and source-image columns"):
     columnsFor("match_drafts").map { cols =>
       val expected = Set(
         "id",
@@ -124,9 +124,14 @@ final class DbContractSpec extends IntegrationSuite:
         "owner_member_id",
         "map_master_id",
         "played_at",
+        "total_assets_image_id",
+        "revenue_image_id",
+        "incident_log_image_id",
         "total_assets_draft_id",
         "revenue_draft_id",
         "incident_log_draft_id",
+        "source_images_retained_until",
+        "source_images_deleted_at",
         "confirmed_match_id",
         "created_at",
         "updated_at",
@@ -159,18 +164,48 @@ final class DbContractSpec extends IntegrationSuite:
     """.query[String].unique.transact(transactor)
     program.map(v => assertEquals(v, "YES"))
 
-  test("ocr_jobs has the failure_* triplet used by the PostgreSQL job repository"):
-    val program = sql"""
-      SELECT column_name
-      FROM information_schema.columns
-      WHERE table_schema = 'public' AND table_name = 'ocr_jobs'
-        AND column_name IN ('failure_code','failure_message','failure_retryable','failure_user_action')
-    """.query[String].to[List].transact(transactor)
-    program.map { cols =>
-      assertEquals(
-        cols.toSet,
-        Set("failure_code", "failure_message", "failure_retryable", "failure_user_action"),
+  test("ocr_drafts exposes the payload columns used by the API and worker"):
+    columnsFor("ocr_drafts").map { cols =>
+      val expected = Set(
+        "id",
+        "job_id",
+        "requested_screen_type",
+        "detected_screen_type",
+        "profile_id",
+        "payload_json",
+        "warnings_json",
+        "timings_ms_json",
+        "created_at",
+        "updated_at",
       )
+      val missing = expected -- cols.toSet
+      assert(missing.isEmpty, s"ocr_drafts is missing columns: $missing (have $cols)")
+    }
+
+  test("ocr_jobs exposes the lifecycle columns used by the API and worker repositories"):
+    columnsFor("ocr_jobs").map { cols =>
+      val expected = Set(
+        "id",
+        "draft_id",
+        "image_id",
+        "image_path",
+        "requested_screen_type",
+        "detected_screen_type",
+        "status",
+        "attempt_count",
+        "worker_id",
+        "failure_code",
+        "failure_message",
+        "failure_retryable",
+        "failure_user_action",
+        "started_at",
+        "finished_at",
+        "duration_ms",
+        "created_at",
+        "updated_at",
+      )
+      val missing = expected -- cols.toSet
+      assert(missing.isEmpty, s"ocr_jobs is missing columns: $missing (have $cols)")
     }
 
   test("ocr_queue_outbox exposes the durable OCR enqueue contract"):

@@ -14,3 +14,19 @@ target を含み得る。現時点の緩和策は `error_log ... crit` とし、
 health / supervisor logs に寄せること。厳密な nginx error log の構造化が必要になった場合は、
 外部ログプロセッサ、別 reverse proxy、または sanitized structured error log を出せる nginx
 module の採用を検討する。
+
+## edge protection: Cloudflare WAF / rate limiting
+
+- 状態: handoff
+- 起点: 2026-05-30 system architecture cycle 20
+- 品質観点: security, reliability, cost operability
+
+アプリ内では login / upload / export rate limit、CSRF、session、body size limit、Host /
+origin lock を実装済み。ただし IP rotate / bot traffic が高コスト endpoint を連打する場合、
+アプリ内 limiter 到達前に bandwidth、TLS、nginx/API、Redis/DB を消費し得る。
+
+残課題: Cloudflare WAF / Rate Limiting Rules による edge 側の細粒度制御は、Cloudflare plan
+と provider 設定変更が前提になるため、このサイクルでは実装しない。現時点では
+`docs/tmp/todos.md` の `edge-waf-rate-limits` と `docs/ops/runbook.md` の費用増加攻撃
+手順を正とする。Pro+ で Host 条件を使える、または Fly / Cloudflare / API logs で OCR 作成、
+source image download、export、auth への高頻度 abuse が実測された場合に再開する。

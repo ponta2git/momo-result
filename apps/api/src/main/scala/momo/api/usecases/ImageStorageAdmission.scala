@@ -128,7 +128,7 @@ private final class LiveImageStorageAdmission[F[_]: MonadThrow: LoggerFactory](
     }
 
   private def evaluateDisk(disk: ImageDiskUsage, incomingBytes: Long): Option[Rejection] =
-    val usableAfter = disk.usableBytes - incomingBytes
+    val usableAfter = saturatedSubtract(disk.usableBytes, incomingBytes)
     if usableAfter < config.storageMinFreeBytes then
       Some(Rejection.DiskFreeBytesBelowReserve(usableAfter, config.storageMinFreeBytes))
     else if disk.totalBytes <= 0L then Some(Rejection.DiskStatusUnavailable("invalid_disk_total"))
@@ -145,6 +145,9 @@ private final class LiveImageStorageAdmission[F[_]: MonadThrow: LoggerFactory](
 
   private def saturatedAdd(left: Long, right: Long): Long =
     if right > 0L && left > Long.MaxValue - right then Long.MaxValue else left + right
+
+  private def saturatedSubtract(left: Long, right: Long): Long =
+    if right > 0L && left < Long.MinValue + right then Long.MinValue else left - right
 
   private def ceilPercent(value: Long, total: Long): Long =
     val percent = (BigInt(value) * 100 + BigInt(total) - 1) / BigInt(total)

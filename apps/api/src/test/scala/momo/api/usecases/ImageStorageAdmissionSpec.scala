@@ -84,6 +84,22 @@ final class ImageStorageAdmissionSpec extends MomoCatsEffectSuite:
     }
   }
 
+  test("rejects uploads when disk reserve subtraction would underflow") {
+    val admission = ImageStorageAdmission.from[IO](
+      inspector = FixedInspector(
+        usage = IO.pure(ImageStorageUsage(fileCount = 0, sizeBytes = 0)),
+        disk = IO.pure(ImageDiskUsage(totalBytes = Long.MaxValue, usableBytes = 1)),
+      ),
+      references = FixedReferences(IO.pure(Set.empty)),
+      config = config.copy(unreferencedBytesLimit = Long.MaxValue),
+    )
+
+    admission.ensureCanAccept(accountId, incomingBytes = Long.MaxValue).map {
+      case Left(error: AppError.ServiceUnavailable) => assert(error.detail.contains("storage"))
+      case other => fail(s"expected ServiceUnavailable, got $other")
+    }
+  }
+
   test("fails closed when referenced image status cannot be read") {
     val admission = ImageStorageAdmission.from[IO](
       inspector = FixedInspector(

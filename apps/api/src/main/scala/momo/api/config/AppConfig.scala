@@ -161,10 +161,10 @@ object AppConfig:
       case Some(url) => ensureProdRedisUrl(url, appEnv).liftTo[F].map(url =>
           Some(RedisConfig(
             url = url,
-            stream = env.getOrElse("OCR_REDIS_STREAM", "momo:ocr:jobs"),
-            group = env.getOrElse("OCR_REDIS_GROUP", "momo-ocr-workers"),
-            deadLetterStream = env
-              .getOrElse("OCR_REDIS_DEAD_LETTER_STREAM", RedisConfig.DefaultDeadLetterStream),
+            stream = envOrDefault(env, "OCR_REDIS_STREAM", "momo:ocr:jobs"),
+            group = envOrDefault(env, "OCR_REDIS_GROUP", "momo-ocr-workers"),
+            deadLetterStream =
+              envOrDefault(env, "OCR_REDIS_DEAD_LETTER_STREAM", RedisConfig.DefaultDeadLetterStream),
           ))
         )
 
@@ -451,6 +451,9 @@ object AppConfig:
     case None => Right(default)
     case Some(raw) => raw.toLongOption.filter(valid)
         .toRight(new IllegalArgumentException(s"$name must be a $description, got: $raw"))
+
+  private def envOrDefault(env: Map[String, String], name: String, default: String): String = env
+    .get(name).map(_.trim).filter(_.nonEmpty).getOrElse(default)
 
   /**
    * Convert a postgres:// or postgresql:// URL to a JDBC URL, extracting embedded credentials.

@@ -268,6 +268,29 @@ class AppConfigSpec extends CatsEffectSuite:
     }
   }
 
+  test("loadFromEnv ignores blank OCR Redis stream overrides") {
+    load(
+      prodEnv ++ Map(
+        "OCR_REDIS_STREAM" -> " ",
+        "OCR_REDIS_GROUP" -> "",
+        "OCR_REDIS_DEAD_LETTER_STREAM" -> "  ",
+      )
+    ).map { result =>
+      assertEquals(
+        result.flatMap(_.redis.map(_.stream).toRight(new RuntimeException())),
+        Right("momo:ocr:jobs"),
+      )
+      assertEquals(
+        result.flatMap(_.redis.map(_.group).toRight(new RuntimeException())),
+        Right("momo-ocr-workers"),
+      )
+      assertEquals(
+        result.flatMap(_.redis.map(_.deadLetterStream).toRight(new RuntimeException())),
+        Right("momo:ocr:jobs:dead"),
+      )
+    }
+  }
+
   test("loadFromEnv rejects insecure production auth cookies") {
     load(prodEnv + ("AUTH_COOKIE_SECURE" -> "false")).map { result =>
       assert(result.left.exists(_.getMessage.contains("AUTH_COOKIE_SECURE must be true")))

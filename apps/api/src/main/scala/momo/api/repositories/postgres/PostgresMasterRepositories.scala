@@ -22,8 +22,11 @@ import momo.api.repositories.{
   SeasonMastersRepository,
 }
 
-private def isForeignKeyViolation(state: SqlState): Boolean = state.value ==
-  sqlstate.class23.FOREIGN_KEY_VIOLATION.value
+private val RestrictViolationSqlState = "23001"
+
+private def isForeignKeyViolation(state: SqlState): Boolean =
+  state.value == sqlstate.class23.FOREIGN_KEY_VIOLATION.value ||
+    state.value == RestrictViolationSqlState
 
 private def isUniqueViolation(state: SqlState): Boolean = state.value ==
   sqlstate.class23.UNIQUE_VIOLATION.value

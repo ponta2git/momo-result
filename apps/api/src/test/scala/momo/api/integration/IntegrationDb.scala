@@ -25,7 +25,7 @@ import org.testcontainers.utility.DockerImageName
 // scalafix:off DisableSyntax.throw
 object IntegrationDb:
 
-  private val PostgresImage = DockerImageName.parse("postgres:16-alpine")
+  private val PostgresImage = DockerImageName.parse("postgres:18-alpine")
   private val DatabaseName = "summit"
   private val Username = "summit"
   private val Password = "summit"

@@ -18,13 +18,20 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
+from typing import cast
 
 import psycopg
 
 from momo_ocr.features.ocr_jobs.delivery_handler import ack_delivery
 from momo_ocr.features.ocr_jobs.dependencies import JobRunnerDependencies
 from momo_ocr.features.ocr_jobs.failure_recorder import record_terminal_failure
-from momo_ocr.features.ocr_jobs.models import MalformedPulledJob, OcrJobStatus
+from momo_ocr.features.ocr_jobs.models import (
+    MalformedPulledJob,
+    MaxAttemptsExceededPulledJob,
+    OcrJobStatus,
+    OcrQueueDelivery,
+    PulledJob,
+)
 from momo_ocr.features.ocr_jobs.pipeline import run_pipeline
 from momo_ocr.shared.errors import FailureCode, OcrError, OcrFailure
 
@@ -57,8 +64,10 @@ def run_one_job(deps: JobRunnerDependencies) -> JobRunOutcome:
     if delivery is None:
         return JobRunOutcome(pulled=False, job_id=None, status=None, duration_ms=0.0)
 
-    if isinstance(delivery, MalformedPulledJob):
-        return _handle_malformed_delivery(deps, delivery)
+    control_outcome = _handle_control_delivery(deps, delivery)
+    if control_outcome is not None:
+        return control_outcome
+    delivery = cast("PulledJob", delivery)
 
     job_id = delivery.message.job_id
     log_extra: dict[str, str] = {"job_id": job_id}
@@ -113,6 +122,17 @@ def run_one_job(deps: JobRunnerDependencies) -> JobRunOutcome:
     )
 
 
+def _handle_control_delivery(
+    deps: JobRunnerDependencies,
+    delivery: OcrQueueDelivery,
+) -> JobRunOutcome | None:
+    if isinstance(delivery, MalformedPulledJob):
+        return _handle_malformed_delivery(deps, delivery)
+    if isinstance(delivery, MaxAttemptsExceededPulledJob):
+        return _handle_max_attempts_delivery(deps, delivery)
+    return None
+
+
 def _handle_malformed_delivery(
     deps: JobRunnerDependencies,
     delivery: MalformedPulledJob,
@@ -131,6 +151,49 @@ def _handle_malformed_delivery(
     else:
         logger.error(
             "Malformed OCR queue delivery could not be persisted as failed; leaving pending",
+            extra={"job_id": job_id, "delivery_tag": delivery.delivery_tag},
+        )
+    return JobRunOutcome(
+        pulled=True,
+        job_id=job_id,
+        status=OcrJobStatus.FAILED,
+        duration_ms=0.0,
+    )
+
+
+def _handle_max_attempts_delivery(
+    deps: JobRunnerDependencies,
+    delivery: MaxAttemptsExceededPulledJob,
+) -> JobRunOutcome:
+    job_id = delivery.raw_fields.get("jobId")
+    should_dead_letter = True
+    if job_id:
+        should_dead_letter = record_terminal_failure(
+            deps.repository,
+            worker_id=deps.worker_id,
+            job_id=job_id,
+            failure=delivery.failure,
+        )
+    if should_dead_letter:
+        try:
+            deps.consumer.dead_letter(
+                delivery.delivery_tag,
+                delivery.raw_fields,
+                failure=delivery.failure,
+                deliveries=delivery.deliveries,
+            )
+        except Exception:
+            logger.exception(
+                "Failed to dead-letter OCR queue delivery; leaving pending",
+                extra={
+                    "job_id": job_id,
+                    "delivery_tag": delivery.delivery_tag,
+                    "failure_code": delivery.failure.code.value,
+                },
+            )
+    else:
+        logger.error(
+            "Max-attempt OCR delivery could not be persisted as failed; leaving pending",
             extra={"job_id": job_id, "delivery_tag": delivery.delivery_tag},
         )
     return JobRunOutcome(

@@ -10,7 +10,12 @@ from typing import Any, Protocol, cast
 from redis.exceptions import ResponseError
 from redis.typing import EncodableT, KeyT
 
-from momo_ocr.features.ocr_jobs.models import MalformedPulledJob, OcrQueueDelivery, PulledJob
+from momo_ocr.features.ocr_jobs.models import (
+    MalformedPulledJob,
+    MaxAttemptsExceededPulledJob,
+    OcrQueueDelivery,
+    PulledJob,
+)
 from momo_ocr.features.ocr_jobs.queue_contract import parse_job_message
 from momo_ocr.shared.errors import FailureCode, OcrError, OcrFailure
 
@@ -70,6 +75,17 @@ class OcrJobConsumer(Protocol):  # pragma: no cover
         persisted to the source-of-truth DB. If the consumer is unable to
         acknowledge, it should raise rather than silently swallow the failure.
         """
+        raise NotImplementedError
+
+    def dead_letter(
+        self,
+        delivery_tag: str,
+        raw_fields: Mapping[str, str],
+        *,
+        failure: OcrFailure,
+        deliveries: int,
+    ) -> None:
+        """Move the delivery to the transport DLQ and acknowledge the source."""
         raise NotImplementedError
 
 
@@ -152,6 +168,7 @@ class InMemoryOcrJobConsumer:
         self._deliveries: deque[_FakeDelivery] = deque()
         self._lock = Lock()
         self.acked: list[str] = []
+        self.dead_letters: list[tuple[str, Mapping[str, str], OcrFailure, int]] = []
 
     def enqueue(self, payload: Mapping[str, str], *, delivery_tag: str) -> None:
         with self._lock:
@@ -174,6 +191,17 @@ class InMemoryOcrJobConsumer:
 
     def ack(self, delivery_tag: str) -> None:
         self.acked.append(delivery_tag)
+
+    def dead_letter(
+        self,
+        delivery_tag: str,
+        raw_fields: Mapping[str, str],
+        *,
+        failure: OcrFailure,
+        deliveries: int,
+    ) -> None:
+        self.dead_letters.append((delivery_tag, dict(raw_fields), failure, deliveries))
+        self.ack(delivery_tag)
 
     def pending(self) -> int:
         with self._lock:
@@ -267,7 +295,12 @@ class RedisOcrJobConsumer:
         claimed_id, raw_fields = claimed[0]
         fields = {str(key): str(value) for key, value in raw_fields.items()}
         if deliveries >= self._retry_config.max_attempts:
-            self._dead_letter(str(claimed_id), fields, deliveries)
+            delivery = MaxAttemptsExceededPulledJob(
+                delivery_tag=str(claimed_id),
+                raw_fields=fields,
+                failure=_max_attempts_failure(),
+                deliveries=deliveries,
+            )
         else:
             delivery = self._delivery_from_fields(str(claimed_id), fields)
         return delivery
@@ -291,31 +324,35 @@ class RedisOcrJobConsumer:
                 return entry
         return None
 
-    def _dead_letter(self, message_id: str, fields: dict[str, str], deliveries: int) -> None:
+    def dead_letter(
+        self,
+        delivery_tag: str,
+        raw_fields: Mapping[str, str],
+        *,
+        failure: OcrFailure,
+        deliveries: int,
+    ) -> None:
         if self._retry_config.dead_letter_stream is None:
             logger.error(
                 "OCR queue delivery exceeded max attempts and no DLQ is configured",
-                extra={"delivery_tag": message_id},
+                extra={"delivery_tag": delivery_tag},
             )
-            return
-        failure = OcrFailure(
-            code=FailureCode.QUEUE_FAILURE,
-            message="OCR queue delivery exceeded max attempts.",
-            retryable=False,
-            user_action="運用に連絡してください",
-        )
+            raise OcrError(
+                FailureCode.QUEUE_FAILURE,
+                "OCR queue delivery exceeded max attempts but no DLQ is configured.",
+            )
         dlq_fields: dict[EncodableT, EncodableT] = {
-            cast("EncodableT", key): cast("EncodableT", value) for key, value in fields.items()
+            cast("EncodableT", key): cast("EncodableT", value) for key, value in raw_fields.items()
         }
         dlq_fields["deadLetterReason"] = failure.code.value
         dlq_fields["deadLetterMessage"] = failure.message
         dlq_fields["deadLetterDeliveries"] = str(deliveries)
         self._redis.xadd(self._retry_config.dead_letter_stream, dlq_fields)
-        self.ack(message_id)
+        self.ack(delivery_tag)
         logger.error(
             "Moved OCR queue delivery to dead-letter stream",
             extra={
-                "delivery_tag": message_id,
+                "delivery_tag": delivery_tag,
                 "failure_code": failure.code.value,
             },
         )
@@ -350,3 +387,12 @@ def _int_from_mapping(mapping: Mapping[str, object], key: str, *, default: int) 
     if isinstance(value, float):
         return int(value)
     return default
+
+
+def _max_attempts_failure() -> OcrFailure:
+    return OcrFailure(
+        code=FailureCode.QUEUE_FAILURE,
+        message="OCR queue delivery exceeded max attempts.",
+        retryable=False,
+        user_action="運用に連絡してください",
+    )

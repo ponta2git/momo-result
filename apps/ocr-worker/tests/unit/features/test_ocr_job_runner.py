@@ -26,11 +26,13 @@ from momo_ocr.features.ocr_jobs.cancellation import CancellationChecker, InMemor
 from momo_ocr.features.ocr_jobs.consumer import InMemoryOcrJobConsumer
 from momo_ocr.features.ocr_jobs.dependencies import AnalyzeImageFn, JobRunnerDependencies
 from momo_ocr.features.ocr_jobs.models import (
+    MaxAttemptsExceededPulledJob,
     OcrJobExecutionResult,
     OcrJobHints,
     OcrJobMessage,
     OcrJobRecord,
     OcrJobStatus,
+    OcrQueueDelivery,
     PlayerAliasHint,
 )
 from momo_ocr.features.ocr_jobs.queue_contract import parse_job_message, to_stream_payload
@@ -41,7 +43,7 @@ from momo_ocr.features.ocr_results.player_aliases import (
     _normalize_name_for_match,
 )
 from momo_ocr.features.text_recognition.engine import TextRecognitionEngine
-from momo_ocr.shared.errors import FailureCode, OcrError
+from momo_ocr.shared.errors import FailureCode, OcrError, OcrFailure
 
 WORKER_ID = "worker-test"
 
@@ -173,6 +175,17 @@ class _AnalyzeStub:
         if self.exception is not None:
             raise self.exception
         return self.result or _success_analysis()
+
+
+class _SingleDeliveryConsumer(InMemoryOcrJobConsumer):
+    def __init__(self, delivery: OcrQueueDelivery) -> None:
+        super().__init__()
+        self._delivery: OcrQueueDelivery | None = delivery
+
+    def pull(self) -> OcrQueueDelivery | None:
+        delivery = self._delivery
+        self._delivery = None
+        return delivery
 
 
 def _make_deps(  # noqa: PLR0913 - test helper mirrors JobRunnerDependencies wiring.
@@ -560,6 +573,70 @@ def test_malformed_queue_payload_write_failure_leaves_delivery_pending() -> None
     outcome = run_one_job(deps)
 
     assert outcome.status is OcrJobStatus.FAILED
+    assert consumer.acked == []
+
+
+def test_max_attempts_delivery_is_failed_before_dead_letter() -> None:
+    repository = InMemoryOcrJobRepository()
+    payload = _make_payload()
+    _seed_record(repository, payload)
+    delivery = MaxAttemptsExceededPulledJob(
+        delivery_tag="stale-1",
+        raw_fields=payload,
+        failure=OcrFailure(
+            FailureCode.QUEUE_FAILURE,
+            "OCR queue delivery exceeded max attempts.",
+            retryable=False,
+        ),
+        deliveries=2,
+    )
+    consumer = _SingleDeliveryConsumer(delivery)
+
+    deps = _make_deps(
+        consumer=consumer,
+        repository=repository,
+        cancellation=InMemoryCancellationChecker(),
+        analyze=_AnalyzeStub(fail_message="max-attempt deliveries must not run OCR"),
+    )
+
+    outcome = run_one_job(deps)
+
+    assert outcome.status is OcrJobStatus.FAILED
+    record = repository.records["job-1"]
+    assert record.status is OcrJobStatus.FAILED
+    assert record.failure is not None
+    assert record.failure.code is FailureCode.QUEUE_FAILURE
+    assert consumer.dead_letters[0][0] == "stale-1"
+    assert consumer.dead_letters[0][3] == 2
+    assert consumer.acked == ["stale-1"]
+
+
+def test_max_attempts_failure_write_failure_leaves_delivery_pending() -> None:
+    repository = _FailingTerminalRepository()
+    payload = _make_payload()
+    _seed_record(repository, payload)
+    delivery = MaxAttemptsExceededPulledJob(
+        delivery_tag="stale-1",
+        raw_fields=payload,
+        failure=OcrFailure(
+            FailureCode.QUEUE_FAILURE,
+            "OCR queue delivery exceeded max attempts.",
+        ),
+        deliveries=2,
+    )
+    consumer = _SingleDeliveryConsumer(delivery)
+
+    deps = _make_deps(
+        consumer=consumer,
+        repository=repository,
+        cancellation=InMemoryCancellationChecker(),
+        analyze=_AnalyzeStub(fail_message="max-attempt deliveries must not run OCR"),
+    )
+
+    outcome = run_one_job(deps)
+
+    assert outcome.status is OcrJobStatus.FAILED
+    assert consumer.dead_letters == []
     assert consumer.acked == []
 
 

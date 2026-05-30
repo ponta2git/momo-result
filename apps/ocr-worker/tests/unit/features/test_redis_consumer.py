@@ -11,7 +11,12 @@ from momo_ocr.features.ocr_jobs.consumer import (
     RedisOcrJobConsumer,
     RedisStreamId,
 )
-from momo_ocr.features.ocr_jobs.models import MalformedPulledJob, PulledJob
+from momo_ocr.features.ocr_jobs.models import (
+    MalformedPulledJob,
+    MaxAttemptsExceededPulledJob,
+    PulledJob,
+)
+from momo_ocr.shared.errors import FailureCode, OcrError, OcrFailure
 
 
 class FakeRedis:
@@ -197,7 +202,7 @@ def test_redis_consumer_returns_malformed_delivery_for_runner_to_persist(
     assert redis.acked == []
 
 
-def test_redis_consumer_moves_stale_delivery_to_dead_letter_after_max_attempts(
+def test_redis_consumer_returns_max_attempts_delivery_for_runner_to_dead_letter(
     redis_consumer_factory: RedisConsumerFactory,
 ) -> None:
     redis = FakeRedis(
@@ -223,10 +228,71 @@ def test_redis_consumer_moves_stale_delivery_to_dead_letter_after_max_attempts(
 
     pulled = consumer.pull()
 
-    assert pulled is None
+    assert isinstance(pulled, MaxAttemptsExceededPulledJob)
+    assert pulled.delivery_tag == "1-0"
+    assert pulled.raw_fields == {"jobId": "job-1"}
+    assert pulled.failure.code.value == "QUEUE_FAILURE"
+    assert pulled.deliveries == 1
+    assert redis.dead_letters == []
+    assert redis.acked == []
+
+
+def test_redis_consumer_dead_letters_and_acks_max_attempts_delivery(
+    redis_consumer_factory: RedisConsumerFactory,
+) -> None:
+    redis = FakeRedis([])
+    consumer = redis_consumer_factory(
+        redis,
+        retry_config=RedisConsumerRetryConfig(
+            max_attempts=1,
+            dead_letter_stream="momo:ocr:jobs:dead",
+            claim_idle_ms=30_000,
+            pending_scan_count=10,
+        ),
+    )
+
+    consumer.dead_letter(
+        "1-0",
+        {"jobId": "job-1"},
+        failure=OcrFailure(
+            code=FailureCode.QUEUE_FAILURE,
+            message="OCR queue delivery exceeded max attempts.",
+        ),
+        deliveries=1,
+    )
+
     assert redis.dead_letters[0][0] == "momo:ocr:jobs:dead"
     assert redis.dead_letters[0][1]["deadLetterReason"] == "QUEUE_FAILURE"
     assert redis.acked == [("momo:ocr:jobs", "momo-ocr-workers", "1-0")]
+
+
+def test_redis_consumer_dead_letter_without_dlq_raises_without_ack(
+    redis_consumer_factory: RedisConsumerFactory,
+) -> None:
+    redis = FakeRedis([])
+    consumer = redis_consumer_factory(
+        redis,
+        retry_config=RedisConsumerRetryConfig(
+            max_attempts=1,
+            dead_letter_stream=None,
+            claim_idle_ms=30_000,
+            pending_scan_count=10,
+        ),
+    )
+
+    with pytest.raises(OcrError):
+        consumer.dead_letter(
+            "1-0",
+            {"jobId": "job-1"},
+            failure=OcrFailure(
+                code=FailureCode.QUEUE_FAILURE,
+                message="OCR queue delivery exceeded max attempts.",
+            ),
+            deliveries=1,
+        )
+
+    assert redis.dead_letters == []
+    assert redis.acked == []
 
 
 def test_redis_consumer_scans_pending_entries_until_stale_delivery(

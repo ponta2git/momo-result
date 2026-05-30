@@ -257,6 +257,16 @@ class _RecordingConsumer:
     def ack(self, delivery_tag: str) -> None:
         del delivery_tag
 
+    def dead_letter(
+        self,
+        delivery_tag: str,
+        raw_fields: object,
+        *,
+        failure: object,
+        deliveries: int,
+    ) -> None:
+        del delivery_tag, raw_fields, failure, deliveries
+
     def close(self) -> None:
         self.closes.append(self.name)
         if self.raise_on_close:

@@ -144,7 +144,9 @@ Ack exceptions:
 | queued 確認後に別workerが先に running claim | already running と同じ扱いにし、再実行も失敗書き込みもせず ack |
 | malformed payload with readable `jobId` | `QUEUE_FAILURE` を terminal failure としてDBに書いてから ack |
 | malformed payload and failure write failed | ack せず PEL claim / DLQ に任せる |
-| max attempts exceeded | DLQへ `XADD` してから元messageを ack |
+| max attempts exceeded with readable `jobId` | `QUEUE_FAILURE` を terminal failure としてDBに書き、DLQへ `XADD` してから元messageを ack |
+| max attempts exceeded and failure write failed | DLQ/ack せず PEL claim に任せる |
+| max attempts exceeded without readable `jobId` | DLQへ `XADD` してから元messageを ack |
 
 Worker rules:
 

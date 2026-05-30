@@ -66,7 +66,17 @@ class MalformedPulledJob:
     failure: OcrFailure
 
 
-OcrQueueDelivery = PulledJob | MalformedPulledJob
+@dataclass(frozen=True)
+class MaxAttemptsExceededPulledJob:
+    """A stale delivery that must be dead-lettered after DB terminal handling."""
+
+    delivery_tag: str
+    raw_fields: Mapping[str, str]
+    failure: OcrFailure
+    deliveries: int
+
+
+OcrQueueDelivery = PulledJob | MalformedPulledJob | MaxAttemptsExceededPulledJob
 
 
 @dataclass(frozen=True)

@@ -27,9 +27,12 @@ final class InMemoryMatchConfirmationRepository[F[_]: Monad](
         current <- matchDrafts.find(expected.draftId)
         updated <-
           if current.exists(matchesSnapshot(_, expected)) then
-            matchDrafts.markConfirmed(expected.draftId, record.id, updatedAt)
+            matches.create(record) >>
+              matchDrafts.markConfirmed(expected.draftId, record.id, updatedAt).flatTap {
+                case true => Monad[F].unit
+                case false => matches.delete(record.id).void
+              }
           else false.pure[F]
-        _ <- if updated then matches.create(record) else Monad[F].unit
       yield updated
 
   private def matchesSnapshot(draft: MatchDraft, expected: MatchDraftConfirmation): Boolean = draft

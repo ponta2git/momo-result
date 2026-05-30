@@ -12,6 +12,8 @@ private[http] final case class MultipartUpload(
 
 private[http] object MultipartUpload:
   def file(parts: Seq[Part[Array[Byte]]]): Either[AppError, MultipartUpload] = parts
-    .find(_.name == "file")
-    .map(part => MultipartUpload(part.fileName, part.contentType.map(_.toString), part.body))
-    .toRight(AppError.ValidationFailed("Multipart field 'file' is required."))
+    .filter(_.name == "file").toList match
+    case Nil => Left(AppError.ValidationFailed("Multipart field 'file' is required."))
+    case part :: Nil =>
+      Right(MultipartUpload(part.fileName, part.contentType.map(_.toString), part.body))
+    case _ => Left(AppError.ValidationFailed("Multipart field 'file' must be provided once."))

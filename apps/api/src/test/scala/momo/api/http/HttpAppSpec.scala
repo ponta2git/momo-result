@@ -484,6 +484,19 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
     )
   }
 
+  app.test("upload endpoint rejects ambiguous multiple file parts") { httpApp =>
+    uploadPngRequest(filePartCount = 2).flatMap(request =>
+      httpApp.run(request).flatMap(response =>
+        assertProblem(
+          response,
+          Status.UnprocessableContent,
+          "VALIDATION_FAILED",
+          "Multipart field 'file' must be provided once.",
+        )
+      )
+    )
+  }
+
   requestLimitApp
     .test("oversized mutation requests are rejected before endpoint decoding") { httpApp =>
       val request = Request[IO](Method.POST, uri"/api/match-drafts")
@@ -669,15 +682,19 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
       _ = assertEquals(createJobResponse.status, Status.Ok)
     yield draftId
 
-  private def uploadPngRequest: IO[Request[IO]] =
-    val part = Part.fileData[IO](
-      "file",
-      "source.png",
-      Stream.emits(pngBytes).covary[IO],
-      `Content-Type`(MediaType.image.png),
-    )
+  private def uploadPngRequest: IO[Request[IO]] = uploadPngRequest(filePartCount = 1)
+
+  private def uploadPngRequest(filePartCount: Int): IO[Request[IO]] =
+    val parts = Vector.tabulate(filePartCount) { index =>
+      Part.fileData[IO](
+        "file",
+        s"source-${index + 1}.png",
+        Stream.emits(pngBytes).covary[IO],
+        `Content-Type`(MediaType.image.png),
+      )
+    }
     for
       multiparts <- Multiparts.forSync[IO]
-      multipart <- multiparts.multipart(Vector(part))
+      multipart <- multiparts.multipart(parts)
     yield Request[IO](Method.POST, uri"/api/uploads/images").putHeaders(devWriteHeaders()*)
       .putHeaders(multipart.headers).withEntity(multipart)

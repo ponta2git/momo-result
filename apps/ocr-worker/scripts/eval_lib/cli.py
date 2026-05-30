@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import sys
 from pathlib import Path
 from typing import Any
@@ -77,40 +78,54 @@ def main(argv: list[str] | None = None) -> int:
 
     records: list[ImageEval] = []
     text_engine = default_text_recognition_engine()
-    for meta in files:
-        debug_dir = resolve_debug_dir(meta, args.mode, args.debug_dir)
-        record = evaluate_one(
-            meta=meta,
-            expected_players=answers.get(meta.match_no),
-            debug_dir=debug_dir,
-            repeat=args.repeat if args.mode == "timing" else 1,
-            text_engine=text_engine,
-        )
-        records.append(record)
-        if not args.summary_only:
-            acc = f"{record.field_correct}/{record.field_total}" if record.field_total else "n/a"
-            sys.stderr.write(
-                f"[{meta.match_no:03d}/{meta.slot_prefix}] {meta.path.name} "
-                f"{acc} fields  {record.duration_ms_mean:.0f}ms"
-                f"{'  FAIL=' + record.failure if record.failure else ''}\n"
+    try:
+        for meta in files:
+            debug_dir = resolve_debug_dir(meta, args.mode, args.debug_dir)
+            record = evaluate_one(
+                meta=meta,
+                expected_players=answers.get(meta.match_no),
+                debug_dir=debug_dir,
+                repeat=args.repeat if args.mode == "timing" else 1,
+                text_engine=text_engine,
+            )
+            records.append(record)
+            if not args.summary_only:
+                acc = (
+                    f"{record.field_correct}/{record.field_total}" if record.field_total else "n/a"
+                )
+                sys.stderr.write(
+                    f"[{meta.match_no:03d}/{meta.slot_prefix}] {meta.path.name} "
+                    f"{acc} fields  {record.duration_ms_mean:.0f}ms"
+                    f"{'  FAIL=' + record.failure if record.failure else ''}\n"
+                )
+
+        summary = aggregate(records)
+
+        payload: dict[str, Any] = {
+            "mode": args.mode,
+            "repeat": args.repeat,
+            "samples_dir": str(samples_dir),
+            "summary": summary,
+            "results": [r.__dict__ for r in records],
+        }
+
+        if args.report is not None:
+            args.report.parent.mkdir(parents=True, exist_ok=True)
+            args.report.write_text(
+                json.dumps(payload, ensure_ascii=False, indent=2),
+                encoding="utf-8",
             )
 
-    summary = aggregate(records)
+        sys.stdout.write(json.dumps(summary, ensure_ascii=False, indent=2) + "\n")
+        return 0 if not summary["failures"] else 1
+    finally:
+        _close_text_engine(text_engine)
 
-    payload: dict[str, Any] = {
-        "mode": args.mode,
-        "repeat": args.repeat,
-        "samples_dir": str(samples_dir),
-        "summary": summary,
-        "results": [r.__dict__ for r in records],
-    }
 
-    if args.report is not None:
-        args.report.parent.mkdir(parents=True, exist_ok=True)
-        args.report.write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-
-    sys.stdout.write(json.dumps(summary, ensure_ascii=False, indent=2) + "\n")
-    return 0 if not summary["failures"] else 1
+def _close_text_engine(text_engine: object) -> None:
+    close_fn = getattr(text_engine, "close", None)
+    if callable(close_fn):
+        try:
+            close_fn()
+        except Exception:
+            logging.getLogger(__name__).exception("Failed to close OCR text engine.")

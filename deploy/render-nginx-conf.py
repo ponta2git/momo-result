@@ -29,11 +29,24 @@ def parse_hosts(raw: str) -> list[str]:
         host = part.strip().lower().rstrip(".")
         if not host:
             continue
-        if not HOST_PATTERN.fullmatch(host):
-            raise ValueError(f"invalid host value: {host}")
+        validate_host(host)
         if host not in hosts:
             hosts.append(host)
     return hosts
+
+
+def validate_host(host: str) -> None:
+    if len(host) > 253 or not HOST_PATTERN.fullmatch(host):
+        raise ValueError(f"invalid host value: {host}")
+    labels = host.split(".")
+    if any(not is_valid_host_label(label) for label in labels):
+        raise ValueError(f"invalid host value: {host}")
+
+
+def is_valid_host_label(label: str) -> bool:
+    if not 1 <= len(label) <= 63:
+        return False
+    return label[0].isalnum() and label[-1].isalnum()
 
 
 def map_entries(hosts: list[str], value: int) -> str:
@@ -90,6 +103,9 @@ def main() -> int:
         return 1
 
     allowed_hosts = parse_hosts(",".join([canonical_host, extra_hosts]))
+    if not allowed_hosts:
+        print("MOMO_CANONICAL_HOST or MOMO_EXTRA_ALLOWED_HOSTS must define a host.", file=sys.stderr)
+        return 1
     optional_origin_lock_hosts: list[str] = []
     if app_env != "prod":
         optional_origin_lock_hosts = parse_hosts(",".join(DEV_OPTIONAL_ORIGIN_LOCK_HOSTS))

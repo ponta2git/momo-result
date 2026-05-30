@@ -47,4 +47,25 @@ if APP_ENV=production \
   exit 1
 fi
 
+if APP_ENV=prod \
+  MOMO_CANONICAL_HOST="bad..host" \
+  MOMO_ORIGIN_LOCK_TOKEN="${safe_token}" \
+  MOMO_NGINX_TEMPLATE_PATH="${repo_root}/deploy/nginx.conf" \
+  MOMO_NGINX_OUTPUT_PATH="${tmp_dir}/invalid-host-nginx.conf" \
+  python3 "${repo_root}/deploy/render-nginx-conf.py" >/dev/null 2>&1; then
+  echo "nginx rendering must reject invalid allowed host values." >&2
+  exit 1
+fi
+
+if APP_ENV=prod \
+  MOMO_CANONICAL_HOST=" " \
+  MOMO_EXTRA_ALLOWED_HOSTS=" " \
+  MOMO_ORIGIN_LOCK_TOKEN="${safe_token}" \
+  MOMO_NGINX_TEMPLATE_PATH="${repo_root}/deploy/nginx.conf" \
+  MOMO_NGINX_OUTPUT_PATH="${tmp_dir}/empty-host-nginx.conf" \
+  python3 "${repo_root}/deploy/render-nginx-conf.py" >/dev/null 2>&1; then
+  echo "nginx rendering must reject an empty allowed host set." >&2
+  exit 1
+fi
+
 python3 -m py_compile "${repo_root}/deploy/render-nginx-conf.py"

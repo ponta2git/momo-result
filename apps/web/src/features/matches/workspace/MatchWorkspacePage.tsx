@@ -336,6 +336,7 @@ export function MatchWorkspacePage({
           heldEvent={selectedHeldEvent}
           mapName={selectedMap?.name}
           seasonName={selectedSeason?.name}
+          validationMessage={validationMessage}
           values={state.values}
           onCancel={controller.closeConfirm}
           confirmAction={confirmAction}

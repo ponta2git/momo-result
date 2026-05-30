@@ -9,7 +9,7 @@ import { StatusPill } from "@/shared/ui/status/StatusPill";
 
 type MatchMobileCardProps = {
   actionsDisabled?: boolean;
-  checkingDraftId?: string | null | undefined;
+  checkingDraftIds?: ReadonlySet<string> | undefined;
   item: MatchListItemView;
   onDraftStatusCheckAction: (action: MatchListItemView["primaryAction"]) => void;
 };
@@ -31,7 +31,7 @@ function otherRanks(item: MatchListItemView): string {
 
 export function MatchMobileCard({
   actionsDisabled = false,
-  checkingDraftId,
+  checkingDraftIds,
   item,
   onDraftStatusCheckAction,
 }: MatchMobileCardProps) {
@@ -75,7 +75,7 @@ export function MatchMobileCard({
 
       <div className="mt-auto pt-4">
         <MatchListActions
-          checkingDraftId={checkingDraftId}
+          checkingDraftIds={checkingDraftIds}
           disabled={actionsDisabled}
           onDraftStatusCheckAction={onDraftStatusCheckAction}
           primaryAction={item.primaryAction}

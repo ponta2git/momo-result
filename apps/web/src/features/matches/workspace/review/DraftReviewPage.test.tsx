@@ -1,6 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { Link, MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
@@ -242,6 +242,53 @@ describe("DraftReviewPage", () => {
     );
     expect(postCalled).toBe(true);
     expect(await screen.findAllByText(confirmedDraftMessages.confirmConflict)).not.toHaveLength(0);
+  });
+
+  it("shows status check failures inside the confirmation dialog", async () => {
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    queryClient.setDefaultOptions({ queries: { retry: false, staleTime: 10_000 } });
+    let draftDetailRequests = 0;
+    server.use(
+      http.get("/api/match-drafts/:draftId", ({ params }) => {
+        draftDetailRequests += 1;
+        if (draftDetailRequests >= 2) {
+          return HttpResponse.json(
+            {
+              code: "INTERNAL_SERVER_ERROR",
+              status: 500,
+              title: "Internal Server Error",
+              type: "about:blank",
+            },
+            { status: 500 },
+          );
+        }
+        return HttpResponse.json(matchDraftDetailResponse(String(params["draftId"])));
+      }),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/review/draft-status-check-fails"]}>
+          <Routes>
+            <Route path="/review/:matchSessionId" element={<DraftReviewPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "OCR結果の確認" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "確定前の確認へ進む" }));
+    const dialog = await screen.findByRole("dialog", { name: "この内容で確定しますか？" });
+    await user.click(within(dialog).getByRole("button", { name: "確定する" }));
+
+    await waitFor(() =>
+      expect(within(dialog).getByRole("alert")).toHaveTextContent(
+        confirmedDraftMessages.statusCheckFailed,
+      ),
+    );
+    await waitFor(() =>
+      expect(within(dialog).getByRole("button", { name: "確定する" })).toBeEnabled(),
+    );
   });
 
   it("keeps the review form unavailable until the draft summary has loaded", async () => {

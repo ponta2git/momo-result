@@ -1,5 +1,13 @@
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 import {
@@ -41,7 +49,8 @@ export function useMatchesListPageController() {
   const deferredSearch = useDeferredValue(activeSearch);
   const [isFilterPending, startFilterTransition] = useTransition();
   const [isManualRefreshing, setIsManualRefreshing] = useState(false);
-  const [checkingDraftId, setCheckingDraftId] = useState<string | null>(null);
+  const checkingDraftIdsRef = useRef(new Set<string>());
+  const [checkingDraftIds, setCheckingDraftIds] = useState<ReadonlySet<string>>(() => new Set());
 
   const applySearch = (nextSearch: MatchListSearch) => {
     setOptimisticSearch(nextSearch);
@@ -166,13 +175,24 @@ export function useMatchesListPageController() {
     }
   };
 
+  const setDraftStatusChecking = useCallback((draftId: string, checking: boolean) => {
+    const nextDraftIds = new Set(checkingDraftIdsRef.current);
+    if (checking) {
+      nextDraftIds.add(draftId);
+    } else {
+      nextDraftIds.delete(draftId);
+    }
+    checkingDraftIdsRef.current = nextDraftIds;
+    setCheckingDraftIds(nextDraftIds);
+  }, []);
+
   const handleDraftStatusCheckAction = async (action: MatchListAction) => {
     const draftId = action.draftStatusCheck?.draftId;
-    if (!draftId || !action.href || checkingDraftId) {
+    if (!draftId || !action.href || checkingDraftIdsRef.current.has(draftId)) {
       return;
     }
 
-    setCheckingDraftId(draftId);
+    setDraftStatusChecking(draftId, true);
     try {
       const detail = await queryClient.fetchQuery({
         queryKey: matchKeys.draft.detail(draftId),
@@ -180,7 +200,7 @@ export function useMatchesListPageController() {
         staleTime: 0,
       });
       const destination = confirmedDraftDestination(detail);
-      setCheckingDraftId(null);
+      setDraftStatusChecking(draftId, false);
       if (destination) {
         void invalidateAfterMatchConfirmed(queryClient);
         showToast({ title: confirmedDraftMessages.listRedirect, tone: "warning" });
@@ -190,14 +210,14 @@ export function useMatchesListPageController() {
 
       navigate(action.href);
     } catch {
-      setCheckingDraftId(null);
+      setDraftStatusChecking(draftId, false);
       showToast({ title: confirmedDraftMessages.statusCheckFailed, tone: "warning" });
     }
   };
 
   return {
     applySearch,
-    checkingDraftId,
+    checkingDraftIds,
     clearSearch,
     gameTitles: gameTitlesQuery.data?.items ?? [],
     hasFilters: hasMatchListFilters(activeSearch),

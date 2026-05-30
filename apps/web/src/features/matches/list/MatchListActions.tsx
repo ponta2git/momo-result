@@ -4,7 +4,7 @@ import { LinkButton } from "@/shared/ui/actions/LinkButton";
 
 type MatchListActionsProps = {
   disabled?: boolean;
-  checkingDraftId?: string | null | undefined;
+  checkingDraftIds?: ReadonlySet<string> | undefined;
   onDraftStatusCheckAction?: ((action: MatchListAction) => void) | undefined;
   primaryAction: MatchListAction;
   secondaryActions: MatchListAction[];
@@ -12,24 +12,30 @@ type MatchListActionsProps = {
 
 function ActionButton({
   action,
-  checkingDraftId,
+  checkingDraftIds,
   disabled = false,
   onDraftStatusCheckAction,
 }: {
   action: MatchListAction;
-  checkingDraftId?: string | null | undefined;
+  checkingDraftIds?: ReadonlySet<string> | undefined;
   disabled?: boolean;
   onDraftStatusCheckAction?: ((action: MatchListAction) => void) | undefined;
 }) {
   const variant = action.variant ?? "primary";
-  const isChecking = action.draftStatusCheck?.draftId === checkingDraftId;
-  const isDraftCheckBlocked = Boolean(action.draftStatusCheck && checkingDraftId && !isChecking);
+  const isChecking = action.draftStatusCheck
+    ? (checkingDraftIds?.has(action.draftStatusCheck.draftId) ?? false)
+    : false;
 
-  if (action.href && action.draftStatusCheck && !action.disabled && !disabled) {
+  if (
+    action.href &&
+    action.draftStatusCheck &&
+    !action.disabled &&
+    !disabled &&
+    onDraftStatusCheckAction
+  ) {
     return (
       <Button
         className="w-full justify-center"
-        disabled={isDraftCheckBlocked}
         pending={isChecking}
         pendingLabel="確認中…"
         size="sm"
@@ -62,7 +68,7 @@ function ActionButton({
 }
 
 export function MatchListActions({
-  checkingDraftId,
+  checkingDraftIds,
   disabled = false,
   onDraftStatusCheckAction,
   primaryAction,
@@ -72,7 +78,7 @@ export function MatchListActions({
     <div className="flex min-w-0 flex-col gap-2">
       <ActionButton
         action={primaryAction}
-        checkingDraftId={checkingDraftId}
+        checkingDraftIds={checkingDraftIds}
         disabled={disabled}
         onDraftStatusCheckAction={onDraftStatusCheckAction}
       />
@@ -80,7 +86,7 @@ export function MatchListActions({
         <ActionButton
           key={`${action.label}:${action.href ?? "disabled"}`}
           action={action}
-          checkingDraftId={checkingDraftId}
+          checkingDraftIds={checkingDraftIds}
           disabled={disabled}
           onDraftStatusCheckAction={onDraftStatusCheckAction}
         />

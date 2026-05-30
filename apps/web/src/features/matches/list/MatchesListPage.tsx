@@ -41,7 +41,7 @@ function ListSkeleton() {
 export function MatchesListPage() {
   const {
     applySearch,
-    checkingDraftId,
+    checkingDraftIds,
     clearSearch,
     gameTitles,
     hasFilters,
@@ -192,7 +192,7 @@ export function MatchesListPage() {
             <div className="hidden lg:block">
               <MatchesTable
                 actionsDisabled={isStale}
-                checkingDraftId={checkingDraftId}
+                checkingDraftIds={checkingDraftIds}
                 items={items}
                 onDraftStatusCheckAction={selectDraftAction}
                 onSortChange={(sort) => applySearch({ ...search, sort })}
@@ -204,7 +204,7 @@ export function MatchesListPage() {
                 <MatchMobileCard
                   key={item.id}
                   actionsDisabled={isStale}
-                  checkingDraftId={checkingDraftId}
+                  checkingDraftIds={checkingDraftIds}
                   item={item}
                   onDraftStatusCheckAction={selectDraftAction}
                 />

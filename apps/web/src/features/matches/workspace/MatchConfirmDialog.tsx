@@ -11,6 +11,7 @@ type MatchConfirmDialogProps = {
   heldEvent: HeldEventResponse | undefined;
   mapName?: string | undefined;
   seasonName?: string | undefined;
+  validationMessage?: string | undefined;
   values: MatchFormValues;
   onCancel: () => void;
   confirmAction: (formData: FormData) => void | Promise<void>;
@@ -35,6 +36,7 @@ export function MatchConfirmDialog({
   heldEvent,
   mapName,
   seasonName,
+  validationMessage,
   values,
   onCancel,
   confirmAction,
@@ -81,6 +83,15 @@ export function MatchConfirmDialog({
             </dd>
           </div>
         </dl>
+
+        {validationMessage ? (
+          <div
+            className="mt-4 rounded-[var(--radius-sm)] border border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18 px-3 py-2 text-sm text-[var(--color-text-primary)]"
+            role="alert"
+          >
+            {validationMessage}
+          </div>
+        ) : null}
 
         <ConfirmActionButtons onCancel={onCancel} />
       </form>

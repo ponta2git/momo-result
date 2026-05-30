@@ -3,7 +3,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { getAuthMe } from "@/shared/api/auth";
-import { apiDownload, apiRequest } from "@/shared/api/client";
+import { apiDownload, apiRequest, getStoredDevUser } from "@/shared/api/client";
 import { fetchCallsOf } from "@/test/doubles/dom";
 
 function requireInit(init: RequestInit | undefined): RequestInit {
@@ -14,6 +14,14 @@ function requireInit(init: RequestInit | undefined): RequestInit {
 }
 
 describe("apiRequest", () => {
+  it("treats blocked dev-user storage as absent", () => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new DOMException("blocked", "SecurityError");
+    });
+
+    expect(getStoredDevUser()).toBeUndefined();
+  });
+
   it("adds dev auth and csrf headers only when appropriate", async () => {
     window.localStorage.setItem("momoresult.devUser", "account_ponta");
     const fetchMock = vi.fn(async () => Response.json({ ok: true }));

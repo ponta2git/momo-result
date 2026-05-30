@@ -39,7 +39,11 @@ export function getStoredDevUser(): string | undefined {
   if (!import.meta.env.DEV || typeof window === "undefined") {
     return undefined;
   }
-  return window.localStorage.getItem("momoresult.devUser") ?? undefined;
+  try {
+    return window.localStorage.getItem("momoresult.devUser") ?? undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export function resolveDevUser(): string | undefined {

@@ -4,7 +4,36 @@ type StorageArea = "local" | "session";
 
 function getStorage(area: StorageArea): Storage | undefined {
   if (typeof window === "undefined") return undefined;
-  return area === "local" ? window.localStorage : window.sessionStorage;
+  try {
+    return area === "local" ? window.localStorage : window.sessionStorage;
+  } catch {
+    return undefined;
+  }
+}
+
+function readStorageValue(area: StorageArea, key: string): string {
+  try {
+    return getStorage(area)?.getItem(key) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function writeStorageValue(area: StorageArea, key: string, value: string): boolean {
+  const storage = getStorage(area);
+  if (!storage) {
+    return false;
+  }
+  try {
+    if (value) {
+      storage.setItem(key, value);
+    } else {
+      storage.removeItem(key);
+    }
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -41,7 +70,7 @@ export function useStorageValue(
 
   const getSnapshot = useCallback(() => {
     if (overrideValue) return overrideValue;
-    return getStorage(area)?.getItem(key) ?? "";
+    return readStorageValue(area, key);
   }, [area, key, overrideValue]);
 
   const getServerSnapshot = useCallback(() => overrideValue ?? "", [overrideValue]);
@@ -51,14 +80,9 @@ export function useStorageValue(
   const setValue = useCallback(
     (next: string) => {
       if (overrideValue) return;
-      const storage = getStorage(area);
-      if (!storage) return;
-      if (next) {
-        storage.setItem(key, next);
-      } else {
-        storage.removeItem(key);
+      if (writeStorageValue(area, key, next)) {
+        window.dispatchEvent(new Event(customEventName));
       }
-      window.dispatchEvent(new Event(customEventName));
     },
     [area, customEventName, key, overrideValue],
   );

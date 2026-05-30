@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 
+from momo_ocr.features.ocr_jobs.lifecycle import is_terminal
 from momo_ocr.features.ocr_jobs.models import OcrJobExecutionResult, OcrJobRecord, OcrJobStatus
 from momo_ocr.features.ocr_jobs.repository import OcrJobRepository
 from momo_ocr.shared.errors import OcrFailure
@@ -27,17 +28,16 @@ def record_terminal_failure(
     read_succeeded, record = _read_record_for_failure(repository, job_id, failure)
     if not read_succeeded:
         persisted = False
-    elif record is None or record.status not in {OcrJobStatus.QUEUED, OcrJobStatus.RUNNING}:
+    elif record is None or is_terminal(record.status):
         persisted = True
-    elif record.status is OcrJobStatus.QUEUED and not _transition_to_running_for_failure(
-        repository,
-        worker_id=worker_id,
-        job_id=job_id,
-        failure=failure,
-    ):
-        persisted = False
     else:
-        persisted = _transition_to_failed(repository, job_id, failure)
+        persisted = _claim_and_transition_to_failed(
+            repository,
+            worker_id=worker_id,
+            job_id=job_id,
+            record=record,
+            failure=failure,
+        )
     return persisted
 
 
@@ -56,24 +56,60 @@ def _read_record_for_failure(
         return False, None
 
 
-def _transition_to_running_for_failure(
+def _claim_and_transition_to_failed(
+    repository: OcrJobRepository,
+    *,
+    worker_id: str,
+    job_id: str,
+    record: OcrJobRecord,
+    failure: OcrFailure,
+) -> bool:
+    claim_succeeded = True
+    claimed: OcrJobRecord | None = record
+    if record.status is OcrJobStatus.QUEUED:
+        claim_succeeded, claimed = _claim_running_for_failure(
+            repository,
+            worker_id=worker_id,
+            job_id=job_id,
+            failure=failure,
+        )
+
+    if not claim_succeeded:
+        persisted = False
+    elif claimed is None or is_terminal(claimed.status):
+        persisted = True
+    elif claimed.status is OcrJobStatus.RUNNING and claimed.worker_id != worker_id:
+        logger.warning(
+            "Terminal-failure recording skipped because another worker owns the job",
+            extra={
+                "job_id": job_id,
+                "failure_code": failure.code.value,
+                "worker_id": claimed.worker_id,
+            },
+        )
+        persisted = True
+    elif claimed.status is OcrJobStatus.RUNNING:
+        persisted = _transition_to_failed(repository, job_id, failure)
+    else:
+        persisted = False
+    return persisted
+
+
+def _claim_running_for_failure(
     repository: OcrJobRepository,
     *,
     worker_id: str,
     job_id: str,
     failure: OcrFailure,
-) -> bool:
-    # Move to RUNNING first so the lifecycle invariants hold; this also
-    # records the worker that picked up the doomed delivery.
+) -> tuple[bool, OcrJobRecord | None]:
     try:
-        repository.transition_to_running(job_id, worker_id=worker_id)
+        return True, repository.claim_for_running(job_id, worker_id=worker_id)
     except Exception:
         logger.exception(
-            "Failed to transition job to RUNNING for terminal-failure recording",
+            "Failed to claim job for terminal-failure recording",
             extra={"job_id": job_id, "failure_code": failure.code.value},
         )
-        return False
-    return True
+        return False, None
 
 
 def _transition_to_failed(

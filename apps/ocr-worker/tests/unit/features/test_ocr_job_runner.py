@@ -271,6 +271,47 @@ def test_running_duplicate_delivery_is_acked_without_false_failure() -> None:
     assert consumer.acked == ["d1"]
 
 
+class _ClaimLostRepository(InMemoryOcrJobRepository):
+    def claim_for_running(self, job_id: str, *, worker_id: str) -> OcrJobRecord | None:
+        del worker_id
+        current = self.records.get(job_id)
+        if current is None:
+            return None
+        raced = replace(
+            current,
+            status=OcrJobStatus.RUNNING,
+            worker_id="worker-that-won-race",
+            attempt_count=current.attempt_count + 1,
+        )
+        self.seed(raced)
+        return raced
+
+
+def test_claim_race_to_running_is_acked_without_false_failure() -> None:
+    consumer = InMemoryOcrJobConsumer()
+    repository = _ClaimLostRepository()
+    payload = _make_payload()
+    _seed_record(repository, payload)
+    consumer.enqueue(payload, delivery_tag="d1")
+
+    deps = _make_deps(
+        consumer=consumer,
+        repository=repository,
+        cancellation=InMemoryCancellationChecker(),
+        analyze=_AnalyzeStub(fail_message="claim-lost duplicate must not run OCR"),
+    )
+
+    outcome = run_one_job(deps)
+
+    assert outcome.pulled is True
+    assert outcome.status is OcrJobStatus.RUNNING
+    record = repository.records["job-1"]
+    assert record.status is OcrJobStatus.RUNNING
+    assert record.failure is None
+    assert record.worker_id == "worker-that-won-race"
+    assert consumer.acked == ["d1"]
+
+
 def test_success_persists_parser_payload_warnings_for_review_status() -> None:
     consumer = InMemoryOcrJobConsumer()
     repository = InMemoryOcrJobRepository()
@@ -466,6 +507,37 @@ def test_malformed_queue_payload_with_job_id_is_failed_before_ack() -> None:
     assert record.status is OcrJobStatus.FAILED
     assert record.failure is not None
     assert record.failure.code is FailureCode.QUEUE_FAILURE
+    assert consumer.acked == ["bad-1"]
+
+
+def test_malformed_queue_payload_does_not_fail_job_owned_by_another_worker() -> None:
+    consumer = InMemoryOcrJobConsumer()
+    repository = InMemoryOcrJobRepository()
+    payload = _make_payload()
+    _seed_record(
+        repository,
+        payload,
+        status=OcrJobStatus.RUNNING,
+        worker_id="worker-already-running",
+    )
+    malformed = dict(payload)
+    del malformed["draftId"]
+    consumer.enqueue(malformed, delivery_tag="bad-1")
+
+    deps = _make_deps(
+        consumer=consumer,
+        repository=repository,
+        cancellation=InMemoryCancellationChecker(),
+        analyze=_AnalyzeStub(fail_message="analyze should not run for malformed queue payloads"),
+    )
+
+    outcome = run_one_job(deps)
+
+    assert outcome.status is OcrJobStatus.FAILED
+    record = repository.records["job-1"]
+    assert record.status is OcrJobStatus.RUNNING
+    assert record.failure is None
+    assert record.worker_id == "worker-already-running"
     assert consumer.acked == ["bad-1"]
 
 
@@ -673,8 +745,8 @@ class _ToggleAfterFirstCallCancellation:
     """Cancellation appears only after ``threshold`` is_cancelled calls.
 
     Used to simulate a CANCELLED status that becomes visible *between*
-    ``transition_to_running`` and ``analyze`` so we can pin the
-    post-running cancellation phase.
+    the running claim and ``analyze`` so we can pin the post-running
+    cancellation phase.
     """
 
     def __init__(self, job_id: str, *, threshold: int = 2) -> None:

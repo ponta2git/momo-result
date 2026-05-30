@@ -141,6 +141,7 @@ Ack exceptions:
 | unknown `jobId` | DB正本に存在しない残骸として ack して破棄 |
 | already terminal | 再実行せず ack |
 | already running | 他workerの実行権を尊重し、再実行も失敗書き込みもせず ack |
+| queued 確認後に別workerが先に running claim | already running と同じ扱いにし、再実行も失敗書き込みもせず ack |
 | malformed payload with readable `jobId` | `QUEUE_FAILURE` を terminal failure としてDBに書いてから ack |
 | malformed payload and failure write failed | ack せず PEL claim / DLQ に任せる |
 | max attempts exceeded | DLQへ `XADD` してから元messageを ack |

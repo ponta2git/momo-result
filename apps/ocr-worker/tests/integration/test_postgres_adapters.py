@@ -26,7 +26,10 @@ def test_postgres_repository_transitions_job_lifecycle(
         assert record is not None
         assert record.status is OcrJobStatus.QUEUED
 
-        repository.transition_to_running(ocr_job_ids.job_id, worker_id=worker_id)
+        claimed = repository.claim_for_running(ocr_job_ids.job_id, worker_id=worker_id)
+        assert claimed is not None
+        assert claimed.status is OcrJobStatus.RUNNING
+        assert claimed.worker_id == worker_id
         payload = OcrDraftPayload(
             requested_screen_type=ScreenType.TOTAL_ASSETS,
             detected_screen_type=ScreenType.TOTAL_ASSETS,
@@ -63,6 +66,28 @@ def test_postgres_repository_transitions_job_lifecycle(
         ).fetchone()
     assert job_row == ("succeeded", 1, worker_id, "total_assets", 12)
     assert draft_row == (1, f"total-assets-{ocr_job_ids.job_id}", "12.4")
+
+
+@pytest.mark.integration
+def test_postgres_repository_claim_returns_running_owner_after_claim_race(
+    postgres_conninfo: str,
+    ocr_job_ids: OcrJobIds,
+) -> None:
+    _insert_job(postgres_conninfo, ids=ocr_job_ids)
+    with ConnectionPool(postgres_conninfo, min_size=1, max_size=2, open=True) as pool:
+        repository = PostgresOcrJobRepository(pool)
+
+        claimed = repository.claim_for_running(ocr_job_ids.job_id, worker_id="worker-winner")
+        duplicate = repository.claim_for_running(ocr_job_ids.job_id, worker_id="worker-loser")
+
+    assert claimed is not None
+    assert claimed.status is OcrJobStatus.RUNNING
+    assert claimed.worker_id == "worker-winner"
+    assert claimed.attempt_count == 1
+    assert duplicate is not None
+    assert duplicate.status is OcrJobStatus.RUNNING
+    assert duplicate.worker_id == "worker-winner"
+    assert duplicate.attempt_count == 1
 
 
 def _insert_job(conninfo: str, *, ids: OcrJobIds) -> None:

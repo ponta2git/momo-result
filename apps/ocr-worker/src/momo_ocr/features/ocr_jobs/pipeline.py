@@ -77,17 +77,12 @@ def run_pipeline(deps: PipelineDependencies, delivery: PulledJob) -> OcrJobStatu
     """Walk the per-delivery state machine and return the terminal status."""
     message = delivery.message
 
-    status = _phase_lookup_record(deps, delivery)
-    if status is not None:
-        return status
-
-    status = _phase_pre_run_cancellation(deps, message)
-    if status is not None:
-        return status
-
-    deps.repository.transition_to_running(message.job_id, worker_id=deps.worker_id)
-
-    status = _phase_post_running_cancellation(deps, message)
+    status = (
+        _phase_lookup_record(deps, delivery)
+        or _phase_pre_run_cancellation(deps, message)
+        or _phase_claim_running(deps, delivery)
+        or _phase_post_running_cancellation(deps, message)
+    )
     if status is not None:
         return status
 
@@ -147,6 +142,37 @@ def _ensure_payload_matches_record(message: OcrJobMessage, record: OcrJobRecord)
     )
 
 
+def _phase_claim_running(deps: PipelineDependencies, delivery: PulledJob) -> OcrJobStatus | None:
+    """Claim execution ownership, treating claim races as duplicate deliveries."""
+    message = delivery.message
+    record = deps.repository.claim_for_running(message.job_id, worker_id=deps.worker_id)
+    if record is None:
+        logger.warning(
+            "OCR job disappeared before worker could claim it; dropping delivery",
+            extra={"job_id": message.job_id, "delivery_tag": delivery.delivery_tag},
+        )
+        return OcrJobStatus.FAILED
+    if record.status is OcrJobStatus.RUNNING and record.worker_id == deps.worker_id:
+        return None
+    if is_terminal(record.status):
+        return record.status
+    if record.status is OcrJobStatus.RUNNING:
+        logger.warning(
+            "OCR job claim was lost to another worker; acknowledging duplicate delivery",
+            extra={
+                "job_id": message.job_id,
+                "delivery_tag": delivery.delivery_tag,
+                "worker_id": record.worker_id,
+            },
+        )
+        return record.status
+    raise OcrError(
+        FailureCode.DB_WRITE_FAILED,
+        f"OCR job {message.job_id} was not claimed for running.",
+        retryable=True,
+    )
+
+
 def _phase_pre_run_cancellation(
     deps: PipelineDependencies, message: OcrJobMessage
 ) -> OcrJobStatus | None:
@@ -159,7 +185,7 @@ def _phase_pre_run_cancellation(
 def _phase_post_running_cancellation(
     deps: PipelineDependencies, message: OcrJobMessage
 ) -> OcrJobStatus | None:
-    """Honour cancellation that arrived between transition_to_running and OCR start."""
+    """Honour cancellation that arrived between running claim and OCR start."""
     if not deps.cancellation.is_cancelled(message.job_id):
         return None
     deps.repository.complete_non_success(message.job_id, _cancelled_result())

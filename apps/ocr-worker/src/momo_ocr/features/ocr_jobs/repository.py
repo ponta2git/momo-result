@@ -35,7 +35,13 @@ class OcrJobRepository(Protocol):
     def get_record(self, job_id: str) -> OcrJobRecord | None:
         raise NotImplementedError
 
-    def transition_to_running(self, job_id: str, *, worker_id: str) -> None:
+    def claim_for_running(self, job_id: str, *, worker_id: str) -> OcrJobRecord | None:
+        """Atomically claim a queued job, returning the canonical post-claim row.
+
+        Expected races are represented as the current DB row instead of an
+        exception: callers can ack duplicates for RUNNING/terminal jobs without
+        accidentally writing a false terminal failure.
+        """
         raise NotImplementedError
 
     def complete_success(
@@ -75,21 +81,21 @@ class InMemoryOcrJobRepository:
         with self._lock:
             return self.records.get(job_id)
 
-    def transition_to_running(self, job_id: str, *, worker_id: str) -> None:
+    def claim_for_running(self, job_id: str, *, worker_id: str) -> OcrJobRecord | None:
         with self._lock:
             current = self.records.get(job_id)
             if current is None:
-                raise OcrError(
-                    FailureCode.DB_WRITE_FAILED,
-                    f"OCR job {job_id} is not present; cannot transition to running.",
-                )
-            ensure_transition_allowed(current.status, OcrJobStatus.RUNNING)
-            self.records[job_id] = replace(
+                return None
+            if current.status is not OcrJobStatus.QUEUED:
+                return current
+            claimed = replace(
                 current,
                 status=OcrJobStatus.RUNNING,
                 worker_id=worker_id,
                 attempt_count=current.attempt_count + 1,
             )
+            self.records[job_id] = claimed
+            return claimed
 
     def complete_success(
         self,
@@ -172,9 +178,9 @@ class PostgresOcrJobRepository:
             ).fetchone()
             return _row_to_record(row)
 
-    def transition_to_running(self, job_id: str, *, worker_id: str) -> None:
+    def claim_for_running(self, job_id: str, *, worker_id: str) -> OcrJobRecord | None:
         with self._pool.connection() as conn, conn.transaction():
-            updated = conn.execute(
+            row = conn.execute(
                 """
                 UPDATE ocr_jobs SET
                   status = 'running',
@@ -183,24 +189,18 @@ class PostgresOcrJobRepository:
                   started_at = COALESCE(started_at, now()),
                   updated_at = now()
                 WHERE id = %s AND status = 'queued'
+                RETURNING
+                  id, draft_id, image_id, image_path,
+                  requested_screen_type, detected_screen_type,
+                  status, attempt_count, worker_id,
+                  failure_code, failure_message, failure_retryable, failure_user_action
                 """,
                 (worker_id, job_id),
-            ).rowcount
-            if updated == 1:
-                return
-            current = _select_status(conn, job_id)
-            if current is None:
-                raise OcrError(
-                    FailureCode.DB_WRITE_FAILED,
-                    f"OCR job {job_id} is not present; cannot transition to running.",
-                    retryable=True,
-                )
-            ensure_transition_allowed(current, OcrJobStatus.RUNNING)
-            raise OcrError(
-                FailureCode.DB_WRITE_FAILED,
-                f"OCR job {job_id} was not claimed for running.",
-                retryable=True,
-            )
+            ).fetchone()
+            if row is not None:
+                return _row_to_record(row)
+            row = conn.execute(_SELECT_JOB, (job_id,)).fetchone()
+            return _row_to_record(row)
 
     def complete_success(
         self,

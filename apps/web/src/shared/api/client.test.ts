@@ -61,6 +61,30 @@ describe("apiRequest", () => {
     expect(postHeaders.get("X-CSRF-Token")).toBe("csrf-1");
   });
 
+  it("rejects cross-origin API requests before attaching auth headers", async () => {
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    const fetchMock = vi.fn(async () => Response.json({ ok: true }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      apiRequest("https://evil.example/api/example", { method: "POST", body: { ok: true } }),
+    ).rejects.toMatchObject({
+      detail: "API requests must use same-origin paths.",
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("normalizes same-origin absolute API URLs to paths", async () => {
+    const fetchMock = vi.fn(async () => Response.json({ ok: true }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await apiRequest(`${window.location.origin}/api/example`);
+
+    const calls = fetchCallsOf(fetchMock);
+    expect(calls[0]?.[0]).toBe("/api/example");
+  });
+
   it("does not set multipart Content-Type manually", async () => {
     const fetchMock = vi.fn(async () => Response.json({ ok: true }));
     vi.stubGlobal("fetch", fetchMock);
@@ -171,5 +195,16 @@ describe("apiRequest", () => {
       detail: "format must be one of: csv, tsv.",
       code: "VALIDATION_FAILED",
     });
+  });
+
+  it("rejects protocol-relative download URLs", async () => {
+    const fetchMock = vi.fn(async () => new Response("ok"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(apiDownload("//evil.example/api/export")).rejects.toMatchObject({
+      detail: "API requests must use same-origin paths.",
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

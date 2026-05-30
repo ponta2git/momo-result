@@ -66,6 +66,20 @@ function resolveIdempotencyKey(options: ApiRequestOptions): string {
   throw new Error("Idempotency key was requested but not provided.");
 }
 
+function sameOriginRequestPath(path: string): string {
+  const baseOrigin =
+    typeof window === "undefined" ? "https://momo-result.local" : window.location.origin;
+  const parsed = new URL(path, baseOrigin);
+  const isRootRelative = path.startsWith("/") && !path.startsWith("//");
+  const isSameOriginAbsolute = path.startsWith(`${baseOrigin}/`);
+
+  if (parsed.origin !== baseOrigin || (!isRootRelative && !isSameOriginAbsolute)) {
+    throw new Error("API requests must use same-origin paths.");
+  }
+
+  return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+}
+
 function buildHeaders(method: HttpMethod, options: ApiRequestOptions): Headers {
   const headers = new Headers(options.headers);
   const devUser = resolveDevUser();
@@ -97,10 +111,10 @@ function buildHeaders(method: HttpMethod, options: ApiRequestOptions): Headers {
 }
 
 export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
-  const method = options.method ?? "GET";
-  const headers = buildHeaders(method, options);
-
   try {
+    const requestPath = sameOriginRequestPath(path);
+    const method = options.method ?? "GET";
+    const headers = buildHeaders(method, options);
     const init: RequestInit = {
       method,
       headers,
@@ -115,7 +129,7 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
       init.signal = options.signal;
     }
 
-    const response = await fetch(path, init);
+    const response = await fetch(requestPath, init);
 
     if (!response.ok) {
       throw await normalizeApiErrorResponse(response);
@@ -135,9 +149,9 @@ export async function apiDownload(
   path: string,
   options: Pick<ApiRequestOptions, "headers" | "signal"> = {},
 ): Promise<ApiDownloadResult> {
-  const headers = buildHeaders("GET", options);
-
   try {
+    const requestPath = sameOriginRequestPath(path);
+    const headers = buildHeaders("GET", options);
     const init: RequestInit = {
       method: "GET",
       headers,
@@ -146,7 +160,7 @@ export async function apiDownload(
     if (options.signal !== undefined) {
       init.signal = options.signal;
     }
-    const response = await fetch(path, init);
+    const response = await fetch(requestPath, init);
 
     if (!response.ok) {
       throw await normalizeApiErrorResponse(response);

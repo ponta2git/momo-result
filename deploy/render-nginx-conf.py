@@ -13,6 +13,7 @@ DEFAULT_CANONICAL_HOST = "momo-result.ponta.me"
 DEV_OPTIONAL_ORIGIN_LOCK_HOSTS = ("localhost", "127.0.0.1")
 HOST_PATTERN = re.compile(r"^[A-Za-z0-9.-]+$")
 ORIGIN_LOCK_TOKEN_MIN_LENGTH = 32
+VALID_APP_ENVS = frozenset({"dev", "test", "prod"})
 
 
 def nginx_quote(value: str) -> str:
@@ -54,6 +55,11 @@ def validate_origin_lock_token(token: str, app_env: str) -> None:
         )
 
 
+def validate_app_env(app_env: str) -> None:
+    if app_env not in VALID_APP_ENVS:
+        raise ValueError("APP_ENV must be one of: dev, test, prod.")
+
+
 def is_visible_ascii(value: str) -> bool:
     return all(33 <= ord(char) <= 126 for char in value)
 
@@ -65,6 +71,12 @@ def main() -> int:
     token = os.environ.get("MOMO_ORIGIN_LOCK_TOKEN", "")
     template_path = Path(os.environ.get("MOMO_NGINX_TEMPLATE_PATH", str(DEFAULT_TEMPLATE_PATH)))
     output_path = Path(os.environ.get("MOMO_NGINX_OUTPUT_PATH", str(DEFAULT_OUTPUT_PATH)))
+
+    try:
+        validate_app_env(app_env)
+    except ValueError as error:
+        print(str(error), file=sys.stderr)
+        return 1
 
     if not token:
         if app_env == "prod":

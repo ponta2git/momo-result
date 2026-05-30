@@ -45,11 +45,14 @@ object MaxBodySizeMiddleware:
 
   private def limitStream[F[_]: Async](body: fs2.Stream[F, Byte], limitBytes: Long) = body.chunks
     .evalMapAccumulate(0L) { (seen, chunk) =>
-      val next = seen + chunk.size.toLong
-      if next > limitBytes then
+      val chunkSize = chunk.size.toLong
+      if wouldExceedLimit(seen, chunkSize, limitBytes) then
         Async[F].raiseError[(Long, Chunk[Byte])](RequestBodyTooLarge(limitBytes))
-      else (next, chunk).pure[F]
+      else (seen + chunkSize, chunk).pure[F]
     }.flatMap { case (_, chunk) => fs2.Stream.chunk(chunk) }
+
+  private[http] def wouldExceedLimit(seenBytes: Long, chunkBytes: Long, limitBytes: Long): Boolean =
+    chunkBytes > limitBytes - seenBytes
 
   private def isUpload[F[_]](request: Request[F]): Boolean = request.method.name == "POST" &&
     request.uri.path.renderString == "/api/uploads/images"

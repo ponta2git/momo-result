@@ -52,7 +52,7 @@ def test_require_production_config_rejects_missing_urls() -> None:
     assert "OCR_DATABASE_URL" in str(error.value)
 
 
-def test_require_production_config_rejects_unsupported_concurrency() -> None:
+def test_require_production_config_allows_configured_concurrency() -> None:
     config = load_worker_config(
         {
             "REDIS_URL": "redis://localhost:6379/0",
@@ -61,8 +61,7 @@ def test_require_production_config_rejects_unsupported_concurrency() -> None:
         }
     )
 
-    with pytest.raises(ValueError, match="OCR_WORKER_CONCURRENCY"):
-        require_production_config(config)
+    require_production_config(config)
 
 
 def test_require_production_config_rejects_insecure_redis_url_in_prod() -> None:

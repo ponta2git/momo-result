@@ -235,7 +235,31 @@ def test_production_pool_checks_connections_before_checkout(
     assert isinstance(pool, _StubPool)
     assert captured["check"] is _StubPool.check_connection
     assert captured["open"] is True
+    assert captured["max_size"] == 2
     assert "sslmode=require" in str(captured["conninfo"])
+
+
+def test_production_pool_scales_with_worker_concurrency(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class _StubPool:
+        @staticmethod
+        def check_connection(_connection: object) -> None:
+            return None
+
+        def __init__(self, conninfo: str, **kwargs: object) -> None:
+            captured["conninfo"] = conninfo
+            captured.update(kwargs)
+
+    monkeypatch.setattr(composition_module, "ConnectionPool", _StubPool)
+
+    composition_module.production_pool_from_config(
+        WorkerConfig(database_url="postgres://user:pass@db.example/momo", concurrency=3)
+    )
+
+    assert captured["max_size"] == 4
 
 
 @dataclass

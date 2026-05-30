@@ -163,10 +163,13 @@ def _run_worker(args: argparse.Namespace) -> int:
 
     config = load_worker_config()
     runtime = production_worker_runtime(config)
-    loop_config = (
-        WorkerLoopConfig(idle_sleep_seconds=args.idle_sleep_seconds)
-        if args.idle_sleep_seconds is not None
-        else None
+    loop_config = WorkerLoopConfig(
+        idle_sleep_seconds=(
+            args.idle_sleep_seconds
+            if args.idle_sleep_seconds is not None
+            else WorkerLoopConfig().idle_sleep_seconds
+        ),
+        concurrency=config.concurrency,
     )
     try:
         run_worker_process(runtime.deps, shutdown_event=shutdown_event, config=loop_config)

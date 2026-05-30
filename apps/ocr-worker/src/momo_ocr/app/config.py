@@ -91,12 +91,6 @@ def require_production_config(config: WorkerConfig) -> None:
     if config.app_env == "prod" and not _redis_url_uses_tls(config.redis_url):
         msg = "REDIS_URL must use rediss:// when APP_ENV=prod."
         raise ValueError(msg)
-    if config.concurrency != DEFAULT_WORKER_CONCURRENCY:
-        msg = (
-            "OCR_WORKER_CONCURRENCY greater than 1 is not supported by this worker process yet; "
-            "run multiple worker processes only after DB/Redis capacity is reviewed."
-        )
-        raise ValueError(msg)
 
 
 def _optional_non_empty(env: Mapping[str, str], key: str) -> str | None:

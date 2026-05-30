@@ -56,13 +56,11 @@ def redis_consumer_from_config(config: WorkerConfig) -> RedisOcrJobConsumer:
     )
 
 
-# Pool sizing: a single worker process serializes job processing, so 1 active
-# connection covers steady-state. `max_size=2` leaves headroom for the
-# cancellation poll path that may fire concurrently with the runner. Neon's
-# pooler handles further multiplexing on the server side, so keeping our
-# client pool small is a feature, not a limitation.
+# Pool sizing: each concurrency slot can hold one active connection during
+# state transitions. One extra connection leaves headroom for cancellation
+# polling and duplicate-delivery checks without opening a large idle pool.
 _POOL_MIN_SIZE = 1
-_POOL_MAX_SIZE = 2
+_POOL_CONNECTION_HEADROOM = 1
 # Neon scales compute to zero when idle. Closing idle conns aggressively
 # avoids "stale connection" surprises on cold-start without paying TLS
 # handshake cost on every job.
@@ -83,7 +81,7 @@ def production_pool_from_config(config: WorkerConfig) -> ConnectionPool:
     return ConnectionPool(
         conninfo,
         min_size=_POOL_MIN_SIZE,
-        max_size=_POOL_MAX_SIZE,
+        max_size=_pool_max_size(config),
         max_idle=_POOL_MAX_IDLE_SECONDS,
         # Validate a connection before handing it to the runner. Neon/Fly idle
         # paths can leave the client pool holding a socket that is already gone;
@@ -94,6 +92,10 @@ def production_pool_from_config(config: WorkerConfig) -> ConnectionPool:
         # the first delivered job.
         open=True,
     )
+
+
+def _pool_max_size(config: WorkerConfig) -> int:
+    return max(_POOL_MIN_SIZE, config.concurrency + _POOL_CONNECTION_HEADROOM)
 
 
 class CloseableResource(Protocol):  # pragma: no cover

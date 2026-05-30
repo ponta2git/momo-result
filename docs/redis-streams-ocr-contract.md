@@ -44,6 +44,13 @@ Redis は配送路であり、ジョブ状態の正本ではない。worker は 
 | Oldest due outbox max delay | `600s` | `OCR_OUTBOX_OLDEST_DUE_MAX_DELAY_SECONDS` |
 | Dead-letter backlog admission limit | `24` | `OCR_DEAD_LETTER_BACKLOG_LIMIT` |
 
+`OCR_WORKER_CONCURRENCY` は1プロセス内の worker loop slot 数を表す。既定値は1。
+2以上の場合、各 slot は DB 上の `worker_id` に `<OCR_WORKER_ID>-<slot>` を書く。
+同一プロセス内の Redis pull は stale pending delivery の二重 claim を避けるため直列化し、
+OCR実行とDB状態遷移は slot ごとに並行実行する。worker DB pool の `max_size` は
+`OCR_WORKER_CONCURRENCY + 1` とし、追加の1接続は cancellation polling と重複配送確認の
+headroom として使う。
+
 Rules:
 
 - API は `XADD` する。

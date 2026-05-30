@@ -231,9 +231,14 @@ class RedisOcrJobConsumer:
         self._consumer_name = consumer_name
         self._block_ms = block_ms
         self._retry_config = retry_config
+        self._pull_lock = Lock()
         self._ensure_group()
 
     def pull(self) -> OcrQueueDelivery | None:
+        with self._pull_lock:
+            return self._pull_unlocked()
+
+    def _pull_unlocked(self) -> OcrQueueDelivery | None:
         pending = self._claim_pending_delivery()
         if pending is not None:
             return pending

@@ -54,7 +54,41 @@ def test_worker_loop_retries_after_iteration_exception(
     assert calls == 2
 
 
+def test_worker_loop_runs_configured_concurrency(monkeypatch: pytest.MonkeyPatch) -> None:
+    shutdown_event = threading.Event()
+    seen_worker_ids: set[str] = set()
+    seen_lock = threading.Lock()
+
+    def fake_run_one_job(deps: JobRunnerDependencies) -> JobRunOutcome:
+        with seen_lock:
+            seen_worker_ids.add(deps.worker_id)
+            if len(seen_worker_ids) >= 2:
+                shutdown_event.set()
+        return JobRunOutcome(
+            pulled=True,
+            job_id="job-1",
+            status=OcrJobStatus.SUCCEEDED,
+            duration_ms=1.0,
+        )
+
+    monkeypatch.setattr(worker_process_module, "run_one_job", fake_run_one_job)
+
+    run_worker_process(
+        _deps(),
+        shutdown_event=shutdown_event,
+        config=WorkerLoopConfig(idle_sleep_seconds=0.001, concurrency=2),
+    )
+
+    assert seen_worker_ids == {"worker-test-1", "worker-test-2"}
+
+
 @pytest.mark.parametrize("value", [0.0, -1.0])
 def test_worker_loop_config_rejects_non_positive_idle_sleep(value: float) -> None:
     with pytest.raises(ValueError, match="idle_sleep_seconds"):
         WorkerLoopConfig(idle_sleep_seconds=value)
+
+
+@pytest.mark.parametrize("value", [0, -1])
+def test_worker_loop_config_rejects_non_positive_concurrency(value: int) -> None:
+    with pytest.raises(ValueError, match="concurrency"):
+        WorkerLoopConfig(concurrency=value)

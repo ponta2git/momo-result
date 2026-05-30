@@ -1,5 +1,6 @@
 package momo.api.http
 
+import com.comcast.ip4s.IpAddress
 import org.http4s.Request
 import org.typelevel.ci.CIString
 
@@ -20,5 +21,5 @@ object ClientIp:
   private val FlyClientIp = CIString("Fly-Client-IP")
 
   def of[F[_]](request: Request[F]): String = request.headers.get(FlyClientIp)
-    .map(_.head.value.trim).filter(_.nonEmpty).orElse(request.remoteAddr.map(_.toString))
-    .getOrElse("unknown")
+    .map(_.head.value.trim).flatMap(IpAddress.fromString).map(_.toString)
+    .orElse(request.remoteAddr.map(_.toString)).getOrElse("unknown")

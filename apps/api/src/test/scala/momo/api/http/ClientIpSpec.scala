@@ -57,3 +57,9 @@ class ClientIpSpec extends CatsEffectSuite:
       .putHeaders(Header.Raw(CIString("Fly-Client-IP"), "   "))
     assertEquals(ClientIp.of(req), "unknown")
   }
+
+  test("ignores malformed Fly-Client-IP values") {
+    val req = Request[IO](Method.GET, uri"/healthz")
+      .putHeaders(Header.Raw(CIString("Fly-Client-IP"), "not-an-ip"))
+    assertEquals(ClientIp.of(req), "unknown")
+  }

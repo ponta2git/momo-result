@@ -1,7 +1,11 @@
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
+import {
+  confirmedDraftDestination,
+  confirmedDraftMessages,
+} from "@/features/matches/confirmedDraftNavigation";
 import { fetchMatchList, fetchMatchListSummary } from "@/features/matches/list/matchListQuery";
 import {
   buildMatchListSearchParams,
@@ -9,19 +13,24 @@ import {
   hasMatchListFilters,
   parseMatchListSearchParams,
 } from "@/features/matches/list/matchListSearchParams";
-import type { MatchListSearch } from "@/features/matches/list/matchListTypes";
+import type { MatchListAction, MatchListSearch } from "@/features/matches/list/matchListTypes";
 import {
   sortMatchListItems,
   summarizeMatchList,
   toMatchListItemViews,
 } from "@/features/matches/list/matchListViewModel";
+import { invalidateAfterMatchConfirmed } from "@/shared/api/cacheInvalidation";
 import { listHeldEvents } from "@/shared/api/heldEvents";
 import { listGameTitles, listMapMasters, listSeasonMasters } from "@/shared/api/masters";
+import { getMatchDraftDetail } from "@/shared/api/matchDrafts";
 import { isInitialQueryLoading, shouldShowBlockingQueryError } from "@/shared/api/queryErrorState";
 import { heldEventKeys, masterKeys, matchKeys } from "@/shared/api/queryKeys";
+import { showToast } from "@/shared/ui/feedback/Toast";
 
 export function useMatchesListPageController() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const rawSearchSignature = searchParams.toString();
   const search = useMemo(
     () => parseMatchListSearchParams(new URLSearchParams(rawSearchSignature)),
@@ -32,6 +41,7 @@ export function useMatchesListPageController() {
   const deferredSearch = useDeferredValue(activeSearch);
   const [isFilterPending, startFilterTransition] = useTransition();
   const [isManualRefreshing, setIsManualRefreshing] = useState(false);
+  const [checkingDraftId, setCheckingDraftId] = useState<string | null>(null);
 
   const applySearch = (nextSearch: MatchListSearch) => {
     setOptimisticSearch(nextSearch);
@@ -156,8 +166,38 @@ export function useMatchesListPageController() {
     }
   };
 
+  const handleDraftStatusCheckAction = async (action: MatchListAction) => {
+    const draftId = action.draftStatusCheck?.draftId;
+    if (!draftId || !action.href || checkingDraftId) {
+      return;
+    }
+
+    setCheckingDraftId(draftId);
+    try {
+      const detail = await queryClient.fetchQuery({
+        queryKey: matchKeys.draft.detail(draftId),
+        queryFn: ({ signal }) => getMatchDraftDetail(draftId, { signal }),
+        staleTime: 0,
+      });
+      const destination = confirmedDraftDestination(detail);
+      setCheckingDraftId(null);
+      if (destination) {
+        void invalidateAfterMatchConfirmed(queryClient);
+        showToast({ title: confirmedDraftMessages.listRedirect, tone: "warning" });
+        navigate(destination.path);
+        return;
+      }
+
+      navigate(action.href);
+    } catch {
+      setCheckingDraftId(null);
+      showToast({ title: confirmedDraftMessages.statusCheckFailed, tone: "warning" });
+    }
+  };
+
   return {
     applySearch,
+    checkingDraftId,
     clearSearch,
     gameTitles: gameTitlesQuery.data?.items ?? [],
     hasFilters: hasMatchListFilters(activeSearch),
@@ -173,6 +213,7 @@ export function useMatchesListPageController() {
     refresh: handleManualRefresh,
     search: activeSearch,
     seasons: seasonsQuery.data?.items ?? [],
+    selectDraftAction: handleDraftStatusCheckAction,
     showMatchesError: shouldShowBlockingQueryError(matchesQuery),
     showMatchesLoading: initialMatchesLoading,
     showStaleSkeleton: filterSettling || listHasPlaceholderData,

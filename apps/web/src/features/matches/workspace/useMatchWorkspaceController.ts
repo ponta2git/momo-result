@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useActionState,
   useCallback,
@@ -5,10 +6,15 @@ import {
   useEffect,
   useMemo,
   useReducer,
+  useRef,
   useState,
 } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
+import {
+  confirmedDraftDestination,
+  confirmedDraftMessages,
+} from "@/features/matches/confirmedDraftNavigation";
 import {
   createMatchFormReducerState,
   matchFormReducer,
@@ -39,11 +45,15 @@ import {
   buildWorkspacePageCopy,
   latestHeldEventPatch,
 } from "@/features/matches/workspace/workspaceViewModel";
+import { invalidateAfterMatchConfirmed } from "@/shared/api/cacheInvalidation";
+import { getMatchDraftDetail } from "@/shared/api/matchDrafts";
+import type { MatchDraftDetailResponse } from "@/shared/api/matchDrafts";
 import {
   isInitialQueryLoading,
   shouldShowBlockingQueryError,
   shouldShowQueryError,
 } from "@/shared/api/queryErrorState";
+import { matchKeys } from "@/shared/api/queryKeys";
 import { isCancelableDraftStatus } from "@/shared/domain/draftStatus";
 
 export type MatchWorkspaceControllerParams = {
@@ -60,15 +70,19 @@ export function useMatchWorkspaceController({
   mode,
 }: MatchWorkspaceControllerParams) {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const { notice, notify } = useWorkspaceNotice();
   const [validationMessage, setValidationMessage] = useState("");
   const [showValidationErrors, setShowValidationErrors] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmedDraftRedirecting, setConfirmedDraftRedirecting] = useState(false);
   const [cancelDraftConfirmOpen, setCancelDraftConfirmOpen] = useState(false);
   const [eventDraftValue, setEventDraftValue] = useState<string>(currentLocalIsoMinute);
   const [workspaceData, setWorkspaceData] = useState<MatchWorkspaceInitialData | null>(null);
   const [preferredImageKind, setPreferredImageKind] = useState<SourceImageKind>("total_assets");
+  const redirectedConfirmedDraftRef = useRef<string | null>(null);
   const nowIsoFactory = useCallback(() => new Date().toISOString(), []);
   const emptyFormFactory = useCallback(
     () => createEmptyMatchForm(nowIsoFactory()),
@@ -106,6 +120,48 @@ export function useMatchWorkspaceController({
     sourceImageQuery,
   } = queries;
 
+  const fetchLatestDraftDetail = useCallback(
+    (draftId: string) =>
+      queryClient.fetchQuery({
+        queryKey: matchKeys.draft.detail(draftId),
+        queryFn: ({ signal }) => getMatchDraftDetail(draftId, { signal }),
+        staleTime: 0,
+      }),
+    [queryClient],
+  );
+
+  const redirectConfirmedDraft = useCallback(
+    (detail: MatchDraftDetailResponse | undefined, message: string): boolean => {
+      const destination = confirmedDraftDestination(detail);
+      if (!destination) {
+        return false;
+      }
+      if (redirectedConfirmedDraftRef.current === destination.matchId) {
+        return true;
+      }
+
+      redirectedConfirmedDraftRef.current = destination.matchId;
+      setConfirmedDraftRedirecting(true);
+      void invalidateAfterMatchConfirmed(queryClient);
+      notify(message, "warning");
+      navigate(destination.path, { replace: true });
+      return true;
+    },
+    [navigate, notify, queryClient],
+  );
+
+  const handleConfirmConflict = useCallback(
+    async (draftId: string): Promise<boolean> => {
+      try {
+        const detail = await fetchLatestDraftDetail(draftId);
+        return redirectConfirmedDraft(detail, confirmedDraftMessages.confirmConflict);
+      } catch {
+        return false;
+      }
+    },
+    [fetchLatestDraftDetail, redirectConfirmedDraft],
+  );
+
   const createEventMutation = useWorkspaceHeldEventCreation({
     onError: setValidationMessage,
     onSelectCreatedEvent: (event) => {
@@ -124,12 +180,37 @@ export function useMatchWorkspaceController({
   const { cancelDraftMutation, confirmMutation, isMutating, updateMutation } =
     useMatchWorkspaceMutations({
       matchId,
+      onConfirmConflict: handleConfirmConflict,
       onConfirmSuccess: () => setConfirmOpen(false),
       onError: setValidationMessage,
     });
 
+  const ensureDraftIsOpenForConfirm = useCallback(
+    async (draftId: string | undefined): Promise<boolean> => {
+      if (!draftId || useSampleDrafts) {
+        return true;
+      }
+
+      setValidationMessage("");
+      try {
+        const detail = await fetchLatestDraftDetail(draftId);
+        return !redirectConfirmedDraft(detail, confirmedDraftMessages.confirmConflict);
+      } catch {
+        setValidationMessage(confirmedDraftMessages.statusCheckFailed);
+        return false;
+      }
+    },
+    [fetchLatestDraftDetail, redirectConfirmedDraft, useSampleDrafts],
+  );
+
   const [, confirmAction] = useActionState<null, FormData>(async () => {
-    await confirmMutation.mutateAsync(toConfirmMatchRequest(state.values));
+    const request = toConfirmMatchRequest(state.values);
+    const canConfirm = await ensureDraftIsOpenForConfirm(request.matchDraftId);
+    if (!canConfirm) {
+      return null;
+    }
+
+    await confirmMutation.mutateAsync(request).catch(() => undefined);
     return null;
   }, null);
 
@@ -196,6 +277,17 @@ export function useMatchWorkspaceController({
   const selectedSeason = seasonItems.find((item) => item.id === state.values.seasonMasterId);
   const matchDraftIdForImages = state.values.matchDraftId;
   const hasSourceImagePanel = mode !== "edit" && Boolean(matchDraftIdForImages);
+  const confirmedDraftLoaded =
+    mode !== "edit" &&
+    !useSampleDrafts &&
+    Boolean(confirmedDraftDestination(draftDetailQuery.data));
+
+  useEffect(() => {
+    if (mode === "edit" || useSampleDrafts) {
+      return;
+    }
+    redirectConfirmedDraft(draftDetailQuery.data, confirmedDraftMessages.loadRedirect);
+  }, [draftDetailQuery.data, mode, redirectConfirmedDraft, useSampleDrafts]);
 
   useEffect(() => {
     if (
@@ -361,7 +453,7 @@ export function useMatchWorkspaceController({
     validation,
     validationMessage,
     visibleErrorPathSet,
-    workspaceLoading: !isInitialized,
+    workspaceLoading: confirmedDraftRedirecting || confirmedDraftLoaded || !isInitialized,
     workspaceData,
     onCreateEvent,
     onGameTitleChange,

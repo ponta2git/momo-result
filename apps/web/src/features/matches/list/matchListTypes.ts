@@ -36,6 +36,9 @@ export type MatchListSearch = {
 
 export type MatchListAction = {
   disabled?: boolean;
+  draftStatusCheck?: {
+    draftId: string;
+  };
   href?: string;
   label: string;
   variant?: "primary" | "quiet" | "secondary";

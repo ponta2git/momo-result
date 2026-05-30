@@ -49,6 +49,7 @@ object MatchDraftResponse:
 final case class MatchDraftDetailResponse(
     matchDraftId: String,
     status: String,
+    confirmedMatchId: Option[String],
     heldEventId: Option[String],
     matchNoInEvent: Option[Int],
     gameTitleId: Option[String],
@@ -70,6 +71,7 @@ object MatchDraftDetailResponse:
   def from(draft: MatchDraft): MatchDraftDetailResponse = MatchDraftDetailResponse(
     matchDraftId = draft.id.value,
     status = draft.status.wire,
+    confirmedMatchId = draft.confirmedMatchId.map(_.value),
     heldEventId = draft.heldEventId.map(_.value),
     matchNoInEvent = draft.matchNoInEvent.map(_.value),
     gameTitleId = draft.gameTitleId.map(_.value),

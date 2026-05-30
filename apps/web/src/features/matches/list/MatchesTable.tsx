@@ -11,8 +11,10 @@ import { StatusPill } from "@/shared/ui/status/StatusPill";
 
 type MatchesTableProps = {
   actionsDisabled?: boolean;
+  checkingDraftId?: string | null | undefined;
   items: MatchListItemView[];
   sort: MatchListSort;
+  onDraftStatusCheckAction: (action: MatchListItemView["primaryAction"]) => void;
   onSortChange: (sort: MatchListSort) => void;
 };
 
@@ -63,8 +65,10 @@ function RankSummary({ item }: { item: MatchListItemView }) {
 
 export function MatchesTable({
   actionsDisabled = false,
+  checkingDraftId,
   items,
   sort,
+  onDraftStatusCheckAction,
   onSortChange,
 }: MatchesTableProps) {
   return (
@@ -129,7 +133,9 @@ export function MatchesTable({
           minWidth: "9rem",
           renderCell: (item) => (
             <MatchListActions
+              checkingDraftId={checkingDraftId}
               disabled={actionsDisabled}
+              onDraftStatusCheckAction={onDraftStatusCheckAction}
               primaryAction={item.primaryAction}
               secondaryActions={item.secondaryActions}
             />

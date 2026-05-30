@@ -35,6 +35,7 @@ function buildPrimaryAction(item: MatchListSourceItem, status: MatchListStatus) 
     case "draft_ready":
       return matchDraftId
         ? {
+            draftStatusCheck: { draftId: matchDraftId },
             href: `/review/${encodeURIComponent(matchDraftId)}`,
             label: "内容を確認",
             variant: "primary" as const,
@@ -43,6 +44,7 @@ function buildPrimaryAction(item: MatchListSourceItem, status: MatchListStatus) 
     case "needs_review":
       return matchDraftId
         ? {
+            draftStatusCheck: { draftId: matchDraftId },
             href: `/review/${encodeURIComponent(matchDraftId)}`,
             label: "確認事項を直す",
             variant: "primary" as const,
@@ -50,6 +52,7 @@ function buildPrimaryAction(item: MatchListSourceItem, status: MatchListStatus) 
         : { disabled: true, label: "確認事項を直す", variant: "primary" as const };
     case "ocr_failed":
       return {
+        ...(matchDraftId ? { draftStatusCheck: { draftId: matchDraftId } } : {}),
         href: matchDraftId
           ? `/matches/new?matchDraftId=${encodeURIComponent(matchDraftId)}`
           : "/matches/new",
@@ -65,6 +68,7 @@ function buildPrimaryAction(item: MatchListSourceItem, status: MatchListStatus) 
     case "unknown":
       return matchDraftId
         ? {
+            draftStatusCheck: { draftId: matchDraftId },
             href: `/review/${encodeURIComponent(matchDraftId)}`,
             label: "状態を確認",
             variant: "primary" as const,

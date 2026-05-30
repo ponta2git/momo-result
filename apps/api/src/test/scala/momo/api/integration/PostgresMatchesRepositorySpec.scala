@@ -294,6 +294,32 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       assertEquals(found, None)
       assertEquals(status, (MatchDraftStatus.DraftReady, Option.empty[MatchId]))
 
+  test("confirmation refuses a draft already confirmed by another request"):
+    val draftId = MatchDraftId.unsafeFromString("match-draft-confirm-race")
+    val firstRecord = sampleMatch("match_confirm_race_first", 1)
+    val secondRecord = sampleMatch("match_confirm_race_second", 2)
+    val snapshot = MatchDraftConfirmation(
+      draftId = draftId,
+      updatedAt = now,
+      totalAssetsDraftId = None,
+      revenueDraftId = None,
+      incidentLogDraftId = None,
+    )
+    for
+      _ <- seedPrereqs
+      _ <- insertMatchDraft(draftId, now)
+      first <- confirmations.confirm(firstRecord, Some(snapshot), now.plusSeconds(2))
+      second <- confirmations.confirm(secondRecord, Some(snapshot), now.plusSeconds(3))
+      foundFirst <- matches.find(firstRecord.id)
+      foundSecond <- matches.find(secondRecord.id)
+      status <- draftStatus(draftId)
+    yield
+      assertEquals(first, true)
+      assertEquals(second, false)
+      assertEquals(foundFirst.map(_.id), Some(firstRecord.id))
+      assertEquals(foundSecond, None)
+      assertEquals(status, (MatchDraftStatus.Confirmed, Some(firstRecord.id)))
+
   private def insertMatchDraft(draftId: MatchDraftId, updatedAt: Instant): IO[Int] = sql"""
     INSERT INTO match_drafts (
       id, created_by_account_id, created_by_member_id, status, created_at, updated_at

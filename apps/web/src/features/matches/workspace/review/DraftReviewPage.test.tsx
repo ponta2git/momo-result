@@ -3,10 +3,12 @@ import type { QueryClient } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { Link, MemoryRouter, Route, Routes } from "react-router-dom";
+import { Link, MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { confirmedDraftMessages } from "@/features/matches/confirmedDraftNavigation";
 import { DraftReviewPage } from "@/features/matches/workspace/DraftReviewPage";
+import { ToastHost } from "@/shared/ui/feedback/ToastHost";
 import {
   createMatchWorkspaceMasterHandoffPayload,
   saveMasterHandoff,
@@ -21,6 +23,37 @@ import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
 
 setupMsw();
+
+function LocationProbe() {
+  const location = useLocation();
+  return <output aria-label="current location">{`${location.pathname}${location.search}`}</output>;
+}
+
+function matchDraftDetailResponse(
+  draftId: string,
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    createdAt: "2026-01-01T00:00:00.000Z",
+    gameTitleId: "gt_momotetsu_2",
+    heldEventId: "held-1",
+    incidentLogDraftId: `${draftId}-incident`,
+    incidentLogImageId: `${draftId}-img-incident`,
+    mapMasterId: "map_east",
+    matchDraftId: draftId,
+    matchNoInEvent: 3,
+    ownerMemberId: "member_ponta",
+    playedAt: "2026-01-01T00:00:00.000Z",
+    revenueDraftId: `${draftId}-revenue`,
+    revenueImageId: `${draftId}-img-revenue`,
+    seasonMasterId: "season_current",
+    status: "needs_review",
+    totalAssetsDraftId: `${draftId}-total`,
+    totalAssetsImageId: `${draftId}-img-total`,
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    ...overrides,
+  };
+}
 
 describe("DraftReviewPage", () => {
   let queryClient: QueryClient;
@@ -55,6 +88,160 @@ describe("DraftReviewPage", () => {
     expect(
       await screen.findByRole("heading", { name: "この内容で確定しますか？" }),
     ).toBeInTheDocument();
+  });
+
+  it("redirects to the confirmed match when the draft is already confirmed on load", async () => {
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    server.use(
+      http.get("/api/match-drafts/:draftId", ({ params }) =>
+        HttpResponse.json(
+          matchDraftDetailResponse(String(params["draftId"]), {
+            confirmedMatchId: "match-confirmed-1",
+            status: "confirmed",
+          }),
+        ),
+      ),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/review/draft-confirmed-1"]}>
+          <ToastHost />
+          <LocationProbe />
+          <Routes>
+            <Route path="/review/:matchSessionId" element={<DraftReviewPage />} />
+            <Route path="/matches/:matchId" element={<p>試合詳細</p>} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("current location")).toHaveTextContent(
+        "/matches/match-confirmed-1",
+      ),
+    );
+    expect(await screen.findAllByText(confirmedDraftMessages.loadRedirect)).not.toHaveLength(0);
+  });
+
+  it("checks the latest draft before confirmation and skips POST when already confirmed", async () => {
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    queryClient.setDefaultOptions({ queries: { retry: false, staleTime: 10_000 } });
+    let draftDetailRequests = 0;
+    let postCalled = false;
+    server.use(
+      http.get("/api/match-drafts/:draftId", ({ params }) => {
+        draftDetailRequests += 1;
+        const draftId = String(params["draftId"]);
+        return HttpResponse.json(
+          matchDraftDetailResponse(
+            draftId,
+            draftDetailRequests >= 2
+              ? {
+                  confirmedMatchId: "match-confirmed-before-submit",
+                  status: "confirmed",
+                }
+              : {},
+          ),
+        );
+      }),
+      http.post("/api/matches", async () => {
+        postCalled = true;
+        return HttpResponse.json({
+          createdAt: "2026-01-01T00:00:00.000Z",
+          heldEventId: "held-1",
+          matchId: "unexpected-match",
+          matchNoInEvent: 3,
+        });
+      }),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/review/draft-race-before-submit"]}>
+          <ToastHost />
+          <LocationProbe />
+          <Routes>
+            <Route path="/review/:matchSessionId" element={<DraftReviewPage />} />
+            <Route path="/matches/:matchId" element={<p>試合詳細</p>} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "OCR結果の確認" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "確定前の確認へ進む" }));
+    await user.click(await screen.findByRole("button", { name: "確定する" }));
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("current location")).toHaveTextContent(
+        "/matches/match-confirmed-before-submit",
+      ),
+    );
+    expect(postCalled).toBe(false);
+    expect(await screen.findAllByText(confirmedDraftMessages.confirmConflict)).not.toHaveLength(0);
+  });
+
+  it("redirects after a confirm conflict when the draft was confirmed concurrently", async () => {
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    queryClient.setDefaultOptions({ queries: { retry: false, staleTime: 10_000 } });
+    let draftDetailRequests = 0;
+    let postCalled = false;
+    server.use(
+      http.get("/api/match-drafts/:draftId", ({ params }) => {
+        draftDetailRequests += 1;
+        const draftId = String(params["draftId"]);
+        return HttpResponse.json(
+          matchDraftDetailResponse(
+            draftId,
+            draftDetailRequests >= 3
+              ? {
+                  confirmedMatchId: "match-confirmed-after-conflict",
+                  status: "confirmed",
+                }
+              : {},
+          ),
+        );
+      }),
+      http.post("/api/matches", async () => {
+        postCalled = true;
+        return HttpResponse.json(
+          {
+            code: "CONFLICT",
+            detail: "Failed to confirm match from the draft.",
+            status: 409,
+            title: "Conflict",
+            type: "about:blank",
+          },
+          { status: 409 },
+        );
+      }),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/review/draft-race-after-post"]}>
+          <ToastHost />
+          <LocationProbe />
+          <Routes>
+            <Route path="/review/:matchSessionId" element={<DraftReviewPage />} />
+            <Route path="/matches/:matchId" element={<p>試合詳細</p>} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "OCR結果の確認" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "確定前の確認へ進む" }));
+    await user.click(await screen.findByRole("button", { name: "確定する" }));
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("current location")).toHaveTextContent(
+        "/matches/match-confirmed-after-conflict",
+      ),
+    );
+    expect(postCalled).toBe(true);
+    expect(await screen.findAllByText(confirmedDraftMessages.confirmConflict)).not.toHaveLength(0);
   });
 
   it("keeps the review form unavailable until the draft summary has loaded", async () => {

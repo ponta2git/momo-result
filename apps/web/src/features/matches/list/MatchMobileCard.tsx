@@ -9,7 +9,9 @@ import { StatusPill } from "@/shared/ui/status/StatusPill";
 
 type MatchMobileCardProps = {
   actionsDisabled?: boolean;
+  checkingDraftId?: string | null | undefined;
   item: MatchListItemView;
+  onDraftStatusCheckAction: (action: MatchListItemView["primaryAction"]) => void;
 };
 
 function rankSummary(item: MatchListItemView): string {
@@ -27,7 +29,12 @@ function otherRanks(item: MatchListItemView): string {
     .join(" / ");
 }
 
-export function MatchMobileCard({ actionsDisabled = false, item }: MatchMobileCardProps) {
+export function MatchMobileCard({
+  actionsDisabled = false,
+  checkingDraftId,
+  item,
+  onDraftStatusCheckAction,
+}: MatchMobileCardProps) {
   const ranksAside = otherRanks(item);
 
   return (
@@ -68,7 +75,9 @@ export function MatchMobileCard({ actionsDisabled = false, item }: MatchMobileCa
 
       <div className="mt-auto pt-4">
         <MatchListActions
+          checkingDraftId={checkingDraftId}
           disabled={actionsDisabled}
+          onDraftStatusCheckAction={onDraftStatusCheckAction}
           primaryAction={item.primaryAction}
           secondaryActions={item.secondaryActions}
         />

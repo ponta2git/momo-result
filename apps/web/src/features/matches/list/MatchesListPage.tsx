@@ -41,6 +41,7 @@ function ListSkeleton() {
 export function MatchesListPage() {
   const {
     applySearch,
+    checkingDraftId,
     clearSearch,
     gameTitles,
     hasFilters,
@@ -52,6 +53,7 @@ export function MatchesListPage() {
     refresh,
     search,
     seasons,
+    selectDraftAction,
     showMatchesError,
     showMatchesLoading,
     showStaleSkeleton,
@@ -190,14 +192,22 @@ export function MatchesListPage() {
             <div className="hidden lg:block">
               <MatchesTable
                 actionsDisabled={isStale}
+                checkingDraftId={checkingDraftId}
                 items={items}
+                onDraftStatusCheckAction={selectDraftAction}
                 onSortChange={(sort) => applySearch({ ...search, sort })}
                 sort={search.sort}
               />
             </div>
             <div className="grid gap-3 lg:hidden">
               {items.map((item) => (
-                <MatchMobileCard key={item.id} actionsDisabled={isStale} item={item} />
+                <MatchMobileCard
+                  key={item.id}
+                  actionsDisabled={isStale}
+                  checkingDraftId={checkingDraftId}
+                  item={item}
+                  onDraftStatusCheckAction={selectDraftAction}
+                />
               ))}
             </div>
           </>

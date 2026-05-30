@@ -3828,6 +3828,9 @@
           "status" : {
             "type" : "string"
           },
+          "confirmedMatchId" : {
+            "type" : "string"
+          },
           "heldEventId" : {
             "type" : "string"
           },

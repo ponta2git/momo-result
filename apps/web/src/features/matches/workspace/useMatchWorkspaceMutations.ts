@@ -11,15 +11,21 @@ import {
 import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { cancelMatchDraft } from "@/shared/api/matchDrafts";
 import { confirmMatch, updateMatch } from "@/shared/api/matches";
-import { formatApiError } from "@/shared/api/problemDetails";
+import { formatApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 import { assertDefined } from "@/shared/lib/invariant";
 
 export type MatchWorkspaceMutationsParams = {
   matchId: string | undefined;
+  onConfirmConflict?: (matchDraftId: string) => Promise<boolean>;
   onConfirmSuccess: () => void;
   onError: (message: string) => void;
 };
+
+function isConflict(error: unknown): boolean {
+  const normalized = normalizeUnknownApiError(error);
+  return normalized.status === 409 || normalized.code === "CONFLICT";
+}
 
 /**
  * confirm / update / cancel の 3 つの副作用を持つ操作を集約する。
@@ -28,6 +34,7 @@ export type MatchWorkspaceMutationsParams = {
  */
 export function useMatchWorkspaceMutations({
   matchId,
+  onConfirmConflict,
   onConfirmSuccess,
   onError,
 }: MatchWorkspaceMutationsParams) {
@@ -49,7 +56,13 @@ export function useMatchWorkspaceMutations({
       onConfirmSuccess();
       navigate(`/matches/${encodeURIComponent(response.matchId)}`);
     },
-    onError: (error) => {
+    onError: async (error, request) => {
+      if (request.matchDraftId && isConflict(error)) {
+        const handled = await onConfirmConflict?.(request.matchDraftId);
+        if (handled) {
+          return;
+        }
+      }
       onError(formatApiError(error, "確定に失敗しました"));
     },
   });

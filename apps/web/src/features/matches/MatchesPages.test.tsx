@@ -284,11 +284,84 @@ describe("MatchesListPage", () => {
     expect(needsReviewButton).toHaveAttribute("aria-pressed", "true");
     expect(needsReviewButton).toBeDisabled();
     expect(screen.getByText("条件を反映中")).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "確認事項を直す" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "確認事項を直す" })).not.toBeInTheDocument();
     await waitFor(() => expect(needsReviewRequested).toBe(true));
 
     responseGate.resolve();
-    expect(await screen.findAllByRole("link", { name: "確認事項を直す" })).not.toHaveLength(0);
+    await waitFor(() =>
+      screen
+        .getAllByRole("button", { name: "確認事項を直す" })
+        .forEach((button) => expect(button).toBeEnabled()),
+    );
+  });
+
+  it("checks a draft action before navigation and redirects to detail when already confirmed", async () => {
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    let draftDetailRequested = false;
+    server.use(
+      http.get("/api/matches", () =>
+        HttpResponse.json({
+          items: [
+            {
+              createdAt: "2026-01-01T00:00:00.000Z",
+              gameTitleId: "gt_momotetsu_2",
+              heldEventId: "held-1",
+              id: "draft-review-stale",
+              kind: "match_draft",
+              mapMasterId: "map_east",
+              matchDraftId: "draft-review-stale",
+              matchNoInEvent: 3,
+              ownerMemberId: "member_ponta",
+              playedAt: "2026-01-01T00:00:00.000Z",
+              ranks: [],
+              seasonMasterId: "season_current",
+              status: "needs_review",
+              updatedAt: "2026-01-02T02:00:00.000Z",
+            },
+          ],
+        }),
+      ),
+      http.get("/api/match-drafts/:draftId", ({ params }) => {
+        draftDetailRequested = true;
+        const draftId = String(params["draftId"]);
+        return HttpResponse.json({
+          confirmedMatchId: "match-from-stale-draft",
+          createdAt: "2026-01-01T00:00:00.000Z",
+          matchDraftId: draftId,
+          status: "confirmed",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        });
+      }),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches"]}>
+          <LocationProbe />
+          <Routes>
+            <Route path="/matches" element={<MatchesListPage />} />
+            <Route path="/matches/:matchId" element={<p>detail-page</p>} />
+            <Route path="/review/:matchSessionId" element={<p>review-page</p>} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
+    const draftActions = await screen.findAllByRole("button", { name: "確認事項を直す" });
+    const draftAction = draftActions[0];
+    if (!draftAction) {
+      throw new Error("expected a draft action");
+    }
+    await user.click(draftAction);
+
+    await waitFor(() => expect(draftDetailRequested).toBe(true));
+    await waitFor(() =>
+      expect(screen.getByLabelText("current location")).toHaveTextContent(
+        "/matches/match-from-stale-draft",
+      ),
+    );
+    expect(screen.queryByText("review-page")).not.toBeInTheDocument();
   });
 
   it("opens master management from manual creation with return handoff", async () => {

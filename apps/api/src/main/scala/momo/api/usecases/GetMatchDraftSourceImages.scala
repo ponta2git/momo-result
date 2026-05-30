@@ -121,6 +121,11 @@ final class GetMatchDraftSourceImages[F[_]: Sync](
     )
     entries <- EitherT.liftF(archiveEntries(sources))
     bytes <- EitherT.liftF(makeZip(entries))
+    _ <- EitherT.cond[F](
+      bytes.length.toLong <= sourceImageArchiveMaxBytes,
+      (),
+      archiveTooLarge(accountId, draftId, bytes.length.toLong, entries.size),
+    )
   yield MatchDraftSourceImageArchive(
     contentType = "application/zip",
     fileName = archiveFileName(draft),
@@ -171,6 +176,18 @@ final class GetMatchDraftSourceImages[F[_]: Sync](
     finally zip.close()
     out.toByteArray
   }
+
+  private def archiveTooLarge(
+      accountId: AccountId,
+      draftId: MatchDraftId,
+      archiveBytes: Long,
+      imageCount: Int,
+  ): AppError =
+    logger.warn(s"source_image_archive_rejected accountId=${accountId.value} draftId=${draftId
+        .value} archiveBytes=${archiveBytes.toString} maxBytes=${sourceImageArchiveMaxBytes
+        .toString} imageCount=${imageCount.toString}")
+    AppError
+      .PayloadTooLarge("Source image archive is too large. Please download images individually.")
 
   private def archiveEntryName(
       kind: MatchDraftSourceImageKind,

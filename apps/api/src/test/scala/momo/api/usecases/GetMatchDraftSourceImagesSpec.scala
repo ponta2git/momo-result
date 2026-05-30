@@ -110,6 +110,34 @@ final class GetMatchDraftSourceImagesSpec extends MomoCatsEffectSuite:
       case other => fail(s"expected archive size rejection, got $other")
   }
 
+  test("rejects archives whose zipped response exceeds the configured byte limit") {
+    tempDirectory("momo-api-source-image-archive-zipped-too-large").use { dir =>
+      for
+        imageStore <- IO.pure(LocalFsImageStore[IO](dir))
+        totalAssets <- saveImage(imageStore, TestImages.png1x1, "image/png")
+        matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
+        draft = draftWithImages(
+          totalAssets = Some(totalAssets.imageId),
+          revenue = None,
+          incidentLog = None,
+          matchNo = None,
+          playedAt = None,
+          sourceImagesDeletedAt = None,
+        )
+        _ <- matchDrafts.create(draft)
+        service = GetMatchDraftSourceImages[IO](
+          matchDrafts,
+          imageStore,
+          sourceImageArchiveMaxBytes = totalAssets.sizeBytes,
+        )
+        archive <- service.archive(draft.id, accountId)
+      yield archive match
+        case Left(error: AppError.PayloadTooLarge) =>
+          assert(error.detail.contains("archive is too large"))
+        case other => fail(s"expected zipped archive size rejection, got $other")
+    }
+  }
+
   test("does not expose source image archives after retention is closed") {
     tempDirectory("momo-api-source-image-archive-deleted").use { dir =>
       for

@@ -14,7 +14,8 @@ import momo.api.db.Database
 import momo.api.domain.ids.*
 import momo.api.domain.{
   MatchDraftStatus, MatchListItem, MatchListItemKind, MatchListKindFilter, MatchListRankEntry,
-  MatchListStatusFilter, MatchNoInEvent, PlayOrder, Rank,
+  MatchListSort, MatchListStatusFilter, MatchListSummary, MatchNoInEvent, PagedResult, PlayOrder,
+  Rank,
 }
 import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.repositories.{MatchListAlg, MatchListReadModel}
@@ -44,6 +45,7 @@ object PostgresMatchList:
       Option[Instant],
       Instant,
       Instant,
+      Instant,
   )
 
   private val confirmedBase = fr"""SELECT
@@ -60,8 +62,10 @@ object PostgresMatchList:
     m.owner_member_id,
     m.played_at,
     m.created_at,
-    m.updated_at
-  FROM matches m"""
+    m.updated_at,
+    COALESCE(he.start_at, m.played_at, m.updated_at) AS held_at_sort
+  FROM matches m
+  LEFT JOIN held_events he ON he.id = m.held_event_id"""
 
   private val draftBase = fr"""SELECT
     'match_draft' AS kind,
@@ -77,7 +81,8 @@ object PostgresMatchList:
     d.owner_member_id,
     d.played_at,
     d.created_at,
-    d.updated_at
+    d.updated_at,
+    COALESCE(he.start_at, d.played_at, d.updated_at) AS held_at_sort
   FROM (
     SELECT
       md.*,
@@ -117,7 +122,8 @@ object PostgresMatchList:
         ELSE 'draft_ready'
       END AS computed_status
     FROM match_drafts md
-  ) d"""
+  ) d
+  LEFT JOIN held_events he ON he.id = d.held_event_id"""
 
   private def loadRanks(
       matchIds: List[MatchId]
@@ -160,8 +166,33 @@ object PostgresMatchList:
     val nonEmpty = NonEmptyList.fromListUnsafe(statuses.toList)
     fragments.in(Fragment.const(column), nonEmpty)
 
+  private def orderBy(sort: MatchListSort): Fragment =
+    val tieBreaker = fr", combined.kind ASC, combined.id ASC"
+    sort match
+      case MatchListSort.StatusPriority =>
+        fr"""ORDER BY
+          CASE combined.status
+            WHEN 'ocr_running' THEN 0
+            WHEN 'needs_review' THEN 1
+            WHEN 'draft_ready' THEN 2
+            WHEN 'ocr_failed' THEN 4
+            WHEN 'confirmed' THEN 5
+            ELSE 3
+          END ASC,
+          combined.updated_at DESC""" ++ tieBreaker
+      case MatchListSort.UpdatedDesc => fr"ORDER BY combined.updated_at DESC" ++ tieBreaker
+      case MatchListSort.HeldDesc =>
+        fr"ORDER BY combined.held_at_sort DESC, combined.updated_at DESC" ++ tieBreaker
+      case MatchListSort.HeldAsc =>
+        fr"ORDER BY combined.held_at_sort ASC, combined.updated_at DESC" ++ tieBreaker
+      case MatchListSort.MatchNoAsc =>
+        fr"""ORDER BY
+          combined.match_no_in_event IS NULL ASC,
+          combined.match_no_in_event ASC,
+          combined.updated_at DESC""" ++ tieBreaker
+
   val alg: MatchListAlg[ConnectionIO] = new MatchListAlg[ConnectionIO]:
-    override def list(filter: MatchListReadModel.Filter): ConnectionIO[List[MatchListItem]] =
+    override def list(filter: MatchListReadModel.Filter): ConnectionIO[PagedResult[MatchListItem]] =
       val confirmedConditions = List(
         filter.heldEventId.map(v => fr"m.held_event_id = $v"),
         filter.gameTitleId.map(v => fr"m.game_title_id = $v"),
@@ -213,18 +244,53 @@ object PostgresMatchList:
         case (false, false) => None
 
       unionSelect match
-        case None => List.empty[MatchListItem].pure[ConnectionIO]
+        case None => PagedResult(List.empty[MatchListItem], filter.page, 0).pure[ConnectionIO]
         case Some(selectQuery) =>
-          val limit = filter.limit.map(v => fr"LIMIT $v").getOrElse(Fragment.empty)
+          val pageLimit = fr"LIMIT ${filter.page.pageSize} OFFSET ${filter.page.offset}"
           val ordered = fr"SELECT * FROM (" ++ selectQuery ++ fr""") AS combined
-                ORDER BY COALESCE(combined.played_at, combined.updated_at) DESC,
-                         combined.updated_at DESC,
-                         combined.created_at DESC""" ++ limit
+                """ ++ orderBy(filter.sort) ++ pageLimit
           for
+            total <- (fr"SELECT COUNT(*)::int FROM (" ++ selectQuery ++ fr") AS count_source")
+              .query[Int].unique
             rows <- ordered.query[Row].to[List]
             matchIds = rows.flatMap(_._3).distinct
             ranks <- loadRanks(matchIds)
-          yield rows.map(row => toItem(row, matchId => ranks.getOrElse(matchId, Nil)))
+          yield PagedResult(
+            rows.map(row => toItem(row, matchId => ranks.getOrElse(matchId, Nil))),
+            filter.page,
+            total,
+          )
+
+    override def summarize(
+        filter: MatchListReadModel.SummaryFilter
+    ): ConnectionIO[MatchListSummary] =
+      val draftConditionsCommon = List(
+        filter.heldEventId.map(v => fr"d.held_event_id = $v"),
+        filter.gameTitleId.map(v => fr"d.game_title_id = $v"),
+        filter.seasonMasterId.map(v => fr"d.season_master_id = $v"),
+        Some(fr"d.persisted_status <> ${MatchDraftStatus.Cancelled}"),
+        Some(fr"d.persisted_status <> ${MatchDraftStatus.Confirmed}"),
+      ).flatten
+      val draftSelect = draftBase ++ fragments.whereAndOpt(draftConditionsCommon)
+      val query =
+        fr"""SELECT
+          COUNT(*) FILTER (
+            WHERE combined.status IN ('ocr_running', 'ocr_failed', 'draft_ready', 'needs_review')
+          )::int,
+          COUNT(*) FILTER (WHERE combined.status = 'ocr_running')::int,
+          COUNT(*) FILTER (
+            WHERE combined.status IN ('ocr_failed', 'draft_ready', 'needs_review')
+          )::int,
+          COUNT(*) FILTER (WHERE combined.status = 'needs_review')::int
+        FROM (""" ++ draftSelect ++ fr") AS combined"
+      query.query[(Int, Int, Int, Int)].unique.map {
+        case (incomplete, running, preConfirm, needs) => MatchListSummary(
+            incompleteCount = incomplete,
+            ocrRunningCount = running,
+            preConfirmCount = preConfirm,
+            needsReviewCount = needs,
+          )
+      }
 end PostgresMatchList
 
 /** Backwards-compatible class facade. */

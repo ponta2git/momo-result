@@ -14,6 +14,7 @@ import { MatchMobileCard } from "@/features/matches/list/MatchMobileCard";
 import { useMatchesListPageController } from "@/features/matches/list/useMatchesListPageController";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
+import { PaginationControls } from "@/shared/ui/data/PaginationControls";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
@@ -50,6 +51,7 @@ export function MatchesListPage() {
     isStale,
     items,
     masterLoadFailed,
+    pagination,
     refresh,
     search,
     seasons,
@@ -59,6 +61,8 @@ export function MatchesListPage() {
     showStaleSkeleton,
     summaryCounts,
     summaryLoading,
+    updatePage,
+    updatePageSize,
   } = useMatchesListPageController();
 
   return (
@@ -140,7 +144,7 @@ export function MatchesListPage() {
         disabled={isStale}
         loading={summaryLoading}
         onSelectStatus={(status) => {
-          applySearch({ ...search, status });
+          applySearch({ ...search, page: 1, status });
         }}
       />
 
@@ -195,7 +199,7 @@ export function MatchesListPage() {
                 checkingDraftIds={checkingDraftIds}
                 items={items}
                 onDraftStatusCheckAction={selectDraftAction}
-                onSortChange={(sort) => applySearch({ ...search, sort })}
+                onSortChange={(sort) => applySearch({ ...search, page: 1, sort })}
                 sort={search.sort}
               />
             </div>
@@ -210,6 +214,15 @@ export function MatchesListPage() {
                 />
               ))}
             </div>
+            {pagination ? (
+              <PaginationControls
+                disabled={isStale}
+                pageSizeOptions={[25, 50, 100, 200]}
+                pagination={pagination}
+                onPageChange={updatePage}
+                onPageSizeChange={updatePageSize}
+              />
+            ) : null}
           </>
         )}
       </section>

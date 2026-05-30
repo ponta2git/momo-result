@@ -718,6 +718,26 @@
             }
           },
           {
+            "name" : "page",
+            "in" : "query",
+            "description" : "1-based page number; defaults to 1.",
+            "required" : false,
+            "schema" : {
+              "type" : "integer",
+              "format" : "int32"
+            }
+          },
+          {
+            "name" : "pageSize",
+            "in" : "query",
+            "description" : "1..100; overrides limit when present.",
+            "required" : false,
+            "schema" : {
+              "type" : "integer",
+              "format" : "int32"
+            }
+          },
+          {
             "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
@@ -738,7 +758,7 @@
             }
           },
           "400" : {
-            "description" : "Invalid value for: query parameter limit",
+            "description" : "Invalid value for: query parameter limit, Invalid value for: query parameter page, Invalid value for: query parameter pageSize",
             "content" : {
               "text/plain" : {
                 "schema" : {
@@ -1426,6 +1446,35 @@
             }
           },
           {
+            "name" : "page",
+            "in" : "query",
+            "description" : "1-based page number; defaults to 1.",
+            "required" : false,
+            "schema" : {
+              "type" : "integer",
+              "format" : "int32"
+            }
+          },
+          {
+            "name" : "pageSize",
+            "in" : "query",
+            "description" : "1..200; overrides limit when present.",
+            "required" : false,
+            "schema" : {
+              "type" : "integer",
+              "format" : "int32"
+            }
+          },
+          {
+            "name" : "sort",
+            "in" : "query",
+            "description" : "status_priority, updated_desc, held_desc, held_asc, or match_no_asc.",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
             "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
@@ -1446,7 +1495,7 @@
             }
           },
           "400" : {
-            "description" : "Invalid value for: query parameter limit",
+            "description" : "Invalid value for: query parameter limit, Invalid value for: query parameter page, Invalid value for: query parameter pageSize",
             "content" : {
               "text/plain" : {
                 "schema" : {
@@ -1525,6 +1574,70 @@
               "text/plain" : {
                 "schema" : {
                   "type" : "string"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/matches/summary" : {
+      "get" : {
+        "tags" : [
+          "matches"
+        ],
+        "operationId" : "getApiMatchesSummary",
+        "parameters" : [
+          {
+            "name" : "heldEventId",
+            "in" : "query",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "gameTitleId",
+            "in" : "query",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "seasonMasterId",
+            "in" : "query",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MatchListSummaryResponse"
                 }
               }
             }
@@ -3506,12 +3619,23 @@
       "HeldEventListResponse" : {
         "title" : "HeldEventListResponse",
         "type" : "object",
+        "required" : [
+          "pagination",
+          "totalMatchCount"
+        ],
         "properties" : {
           "items" : {
             "type" : "array",
             "items" : {
               "$ref" : "#/components/schemas/HeldEventResponse"
             }
+          },
+          "pagination" : {
+            "$ref" : "#/components/schemas/PaginationResponse"
+          },
+          "totalMatchCount" : {
+            "type" : "integer",
+            "format" : "int32"
           }
         }
       },
@@ -3941,12 +4065,46 @@
       "MatchListResponse" : {
         "title" : "MatchListResponse",
         "type" : "object",
+        "required" : [
+          "pagination"
+        ],
         "properties" : {
           "items" : {
             "type" : "array",
             "items" : {
               "$ref" : "#/components/schemas/MatchSummaryResponse"
             }
+          },
+          "pagination" : {
+            "$ref" : "#/components/schemas/PaginationResponse"
+          }
+        }
+      },
+      "MatchListSummaryResponse" : {
+        "title" : "MatchListSummaryResponse",
+        "type" : "object",
+        "required" : [
+          "incompleteCount",
+          "ocrRunningCount",
+          "preConfirmCount",
+          "needsReviewCount"
+        ],
+        "properties" : {
+          "incompleteCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "ocrRunningCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "preConfirmCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "needsReviewCount" : {
+            "type" : "integer",
+            "format" : "int32"
           }
         }
       },
@@ -4219,6 +4377,42 @@
           },
           "updatedAt" : {
             "type" : "string"
+          }
+        }
+      },
+      "PaginationResponse" : {
+        "title" : "PaginationResponse",
+        "type" : "object",
+        "required" : [
+          "page",
+          "pageSize",
+          "totalItems",
+          "totalPages",
+          "hasPreviousPage",
+          "hasNextPage"
+        ],
+        "properties" : {
+          "page" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "pageSize" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "totalItems" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "totalPages" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "hasPreviousPage" : {
+            "type" : "boolean"
+          },
+          "hasNextPage" : {
+            "type" : "boolean"
           }
         }
       },

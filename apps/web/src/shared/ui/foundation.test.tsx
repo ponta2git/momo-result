@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";
+import { PaginationControls } from "@/shared/ui/data/PaginationControls";
 import { Dialog, AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { RouteSuspenseFallback } from "@/shared/ui/feedback/RouteSuspenseFallback";
@@ -49,6 +50,38 @@ describe("ui foundation", () => {
     expect(link).toHaveAttribute("href", "/matches/new");
     expect(link.querySelector("button")).toBeNull();
     expect(screen.queryByRole("button", { name: "手入力で作成" })).not.toBeInTheDocument();
+  });
+
+  it("PaginationControls exposes compact icon navigation with callbacks", async () => {
+    const user = userEvent.setup();
+    const onPageChange = vi.fn();
+    const onPageSizeChange = vi.fn();
+
+    render(
+      <PaginationControls
+        pageSizeOptions={[25, 50]}
+        pagination={{
+          hasNextPage: true,
+          hasPreviousPage: true,
+          page: 2,
+          pageSize: 25,
+          totalItems: 75,
+          totalPages: 3,
+        }}
+        onPageChange={onPageChange}
+        onPageSizeChange={onPageSizeChange}
+      />,
+    );
+
+    expect(screen.getByRole("navigation", { name: "ページネーション" })).toBeInTheDocument();
+    expect(screen.getByText("26-50件 / 全75件")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "前のページへ" }));
+    await user.click(screen.getByRole("button", { name: "次のページへ" }));
+    await user.selectOptions(screen.getByLabelText("表示件数"), "50");
+
+    expect(onPageChange).toHaveBeenNthCalledWith(1, 1);
+    expect(onPageChange).toHaveBeenNthCalledWith(2, 3);
+    expect(onPageSizeChange).toHaveBeenCalledWith(50);
   });
 
   it("danger Notice defaults role=alert", () => {

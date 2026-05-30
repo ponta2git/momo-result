@@ -13,6 +13,8 @@ describe("held events api", () => {
 
     await expect(listHeldEvents()).resolves.toMatchObject({
       items: [{ id: "held-1" }],
+      pagination: { page: 1, pageSize: 10, totalItems: 1 },
+      totalMatchCount: 0,
     });
   });
 

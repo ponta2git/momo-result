@@ -41,6 +41,15 @@ describe("held event cache contract", () => {
 
     expect(queryClient.getQueryData(heldEventKeys.scope("workspace"))).toEqual({
       items: [newerEvent, olderEvent],
+      pagination: {
+        hasNextPage: false,
+        hasPreviousPage: false,
+        page: 1,
+        pageSize: 2,
+        totalItems: 2,
+        totalPages: 1,
+      },
+      totalMatchCount: 1,
     });
     expect(queryClient.getQueryState(heldEventKeys.scope("workspace"))?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(heldEventKeys.scope("held-events-page"))?.isInvalidated).toBe(
@@ -59,6 +68,15 @@ describe("held event cache contract", () => {
 
     expect(queryClient.getQueryData(heldEventKeys.scope("held-events-page"))).toEqual({
       items: [olderEvent],
+      pagination: {
+        hasNextPage: false,
+        hasPreviousPage: false,
+        page: 1,
+        pageSize: 1,
+        totalItems: 1,
+        totalPages: 1,
+      },
+      totalMatchCount: 1,
     });
     expect(queryClient.getQueryState(heldEventKeys.scope("held-events-page"))?.isInvalidated).toBe(
       true,

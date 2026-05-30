@@ -8,6 +8,8 @@ import type { MatchListSearch } from "@/features/matches/list/matchListTypes";
 const initialSearch: MatchListSearch = {
   gameTitleId: "",
   heldEventId: "",
+  page: 1,
+  pageSize: 25,
   seasonMasterId: "",
   sort: "status_priority",
   status: "all",

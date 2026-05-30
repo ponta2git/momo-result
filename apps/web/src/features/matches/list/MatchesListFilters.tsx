@@ -97,7 +97,7 @@ export function MatchesListFilters({
   const seasonsErrorProps = selectionErrors?.seasons ? { error: selectionErrors.seasons } : {};
 
   function patchSearch(patch: Partial<MatchListSearch>) {
-    onApply({ ...initialSearch, ...patch });
+    onApply({ ...initialSearch, ...patch, page: 1 });
   }
   const hasDetailFilters = Boolean(
     initialSearch.heldEventId || initialSearch.gameTitleId || initialSearch.seasonMasterId,

@@ -8,6 +8,7 @@
  */
 export const heldEventKeys = {
   all: () => ["held-events"] as const,
+  list: (params: unknown) => ["held-events", "list-response", params] as const,
   scope: (_scope: string) => ["held-events", "list-response"] as const,
 };
 

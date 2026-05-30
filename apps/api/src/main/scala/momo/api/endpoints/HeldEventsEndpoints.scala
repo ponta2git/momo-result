@@ -8,7 +8,7 @@ import momo.api.endpoints.ProblemDetails.ProblemResponse
 
 object HeldEventsEndpoints:
   val list: PublicEndpoint[
-    (Option[String], Option[Int], Option[String]),
+    (Option[String], Option[Int], Option[Int], Option[Int], Option[String]),
     ProblemResponse,
     HeldEventListResponse,
     Any,
@@ -17,6 +17,8 @@ object HeldEventsEndpoints:
     .in("api" / "held-events")
     .in(query[Option[String]]("q"))
     .in(query[Option[Int]]("limit").description("1..100; defaults to 20."))
+    .in(query[Option[Int]]("page").description("1-based page number; defaults to 1."))
+    .in(query[Option[Int]]("pageSize").description("1..100; overrides limit when present."))
     .in(CommonEndpoint.accountHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[HeldEventListResponse])

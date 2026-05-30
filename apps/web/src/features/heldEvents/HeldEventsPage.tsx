@@ -18,6 +18,7 @@ import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { DataTable } from "@/shared/ui/data/DataTable";
 import type { DataTableColumn } from "@/shared/ui/data/DataTable";
+import { PaginationControls } from "@/shared/ui/data/PaginationControls";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { LiveRegion } from "@/shared/ui/feedback/LiveRegion";
@@ -41,12 +42,15 @@ export function HeldEventsPage() {
     liveMessage,
     loadFailed,
     loading,
+    pagination,
     refresh,
     refreshing,
     rows,
     setDeleteTarget,
     setHeldAtDraft,
     totalMatches,
+    updatePage,
+    updatePageSize,
   } = controller;
 
   const columns = useMemo<Array<DataTableColumn<HeldEventResponse>>>(
@@ -188,7 +192,8 @@ export function HeldEventsPage() {
               </p>
             </div>
             <div className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-2 text-sm tabular-nums">
-              {rows.length.toLocaleString()}開催 / {totalMatches.toLocaleString()}試合
+              {(pagination?.totalItems ?? rows.length).toLocaleString()}開催 /{" "}
+              {totalMatches.toLocaleString()}試合
             </div>
           </div>
 
@@ -217,6 +222,16 @@ export function HeldEventsPage() {
               rows={rows}
             />
           )}
+          {pagination && pagination.totalItems > 0 && !loading && !loadFailed ? (
+            <PaginationControls
+              className="mt-3"
+              disabled={refreshing}
+              pageSizeOptions={[25, 50, 100]}
+              pagination={pagination}
+              onPageChange={updatePage}
+              onPageSizeChange={updatePageSize}
+            />
+          ) : null}
         </Card>
 
         <form key={createState.version} action={createAction}>

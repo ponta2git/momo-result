@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { confirmMatch } from "@/shared/api/matches";
+import { confirmMatch, getMatchListSummary, listMatches } from "@/shared/api/matches";
 import { setupMsw } from "@/test/msw/lifecycle";
 
 setupMsw();
@@ -27,5 +27,22 @@ describe("matches api", () => {
         { idempotencyKey: "confirm-match-key-1" },
       ),
     ).resolves.toMatchObject({ matchId: "match-1" });
+  });
+
+  it("loads paged match list and summary", async () => {
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+
+    await expect(
+      listMatches({ page: 1, pageSize: 2, sort: "status_priority" }),
+    ).resolves.toMatchObject({
+      items: [{ id: "draft-running-1" }, { id: "draft-review-1" }],
+      pagination: { page: 1, pageSize: 2, totalItems: 3, totalPages: 2 },
+    });
+    await expect(getMatchListSummary()).resolves.toMatchObject({
+      incompleteCount: 2,
+      needsReviewCount: 1,
+      ocrRunningCount: 1,
+      preConfirmCount: 1,
+    });
   });
 });

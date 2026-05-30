@@ -7,14 +7,25 @@ export type HeldEventListResponse = components["schemas"]["HeldEventListResponse
 export type CreateHeldEventRequest = components["schemas"]["CreateHeldEventRequest"];
 export type DeleteHeldEventResponse = components["schemas"]["DeleteHeldEventResponse"];
 
+export type ListHeldEventsQuery = {
+  limit?: number;
+  page?: number;
+  pageSize?: number;
+  q?: string;
+};
+
 export async function listHeldEvents(
-  query = "",
+  query: ListHeldEventsQuery | string = "",
   limit = 10,
   options: ApiSignalOptions = {},
 ): Promise<HeldEventListResponse> {
-  const params = new URLSearchParams({ limit: String(limit) });
-  if (query.trim()) {
-    params.set("q", query.trim());
+  const request = typeof query === "string" ? { limit, q: query } : query;
+  const params = new URLSearchParams();
+  if (request.limit !== undefined) params.set("limit", String(request.limit));
+  if (request.page !== undefined) params.set("page", String(request.page));
+  if (request.pageSize !== undefined) params.set("pageSize", String(request.pageSize));
+  if (request.q?.trim()) {
+    params.set("q", request.q.trim());
   }
   return apiRequest<HeldEventListResponse>(`/api/held-events?${params.toString()}`, options);
 }

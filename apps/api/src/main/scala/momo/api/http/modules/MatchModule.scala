@@ -11,7 +11,8 @@ import momo.api.domain.ids.MatchId
 import momo.api.endpoints.codec.{BoundaryId, MatchCodec, MatchListCodec}
 import momo.api.endpoints.{
   ConfirmMatchRequest, ConfirmMatchResponse, DeleteMatchResponse, MatchDetailResponse,
-  MatchListResponse, MatchSummaryResponse, MatchesEndpoints, UpdateMatchRequest,
+  MatchListResponse, MatchListSummaryResponse, MatchSummaryResponse, MatchesEndpoints,
+  PaginationResponse, UpdateMatchRequest,
 }
 import momo.api.http.{EndpointSecurity, HttpOperation, IdempotencyReplay}
 import momo.api.usecases.{ConfirmMatch, DeleteMatch, GetMatch, ListMatches, UpdateMatch}
@@ -52,19 +53,55 @@ object MatchModule:
       }
     },
     MatchesEndpoints.list.serverLogic {
-      case (heldEventId, gameTitleId, seasonMasterId, status, kind, limit, accountHeader) =>
-        security.authorizeRead(accountHeader) { member =>
+      case (
+            heldEventId,
+            gameTitleId,
+            seasonMasterId,
+            status,
+            kind,
+            limit,
+            page,
+            pageSize,
+            sort,
+            accountHeader,
+          ) => security.authorizeRead(accountHeader) { member =>
           ReadRateLimit.enforce(readRateLimiter, member.accountId.value, HttpOperation.ListMatches) {
-            security.decode(
-              MatchListCodec
-                .toListCommand(heldEventId, gameTitleId, seasonMasterId, status, kind, limit)
-            )(command =>
-              security.respond(
-                listMatches.run(command)
-              )(items => MatchListResponse(items.map(MatchSummaryResponse.from)))
+            security.decode(MatchListCodec.toListCommand(
+              heldEventId,
+              gameTitleId,
+              seasonMasterId,
+              status,
+              kind,
+              limit,
+              page,
+              pageSize,
+              sort,
+            ))(command =>
+              security.respond(listMatches.run(command))(result =>
+                MatchListResponse(
+                  items = result.items.map(MatchSummaryResponse.from),
+                  pagination = PaginationResponse.from(result),
+                )
+              )
             )
           }
         }
+    },
+    MatchesEndpoints.summary.serverLogic {
+      case (heldEventId, gameTitleId, seasonMasterId, accountHeader) => security
+          .authorizeRead(accountHeader) { member =>
+            ReadRateLimit
+              .enforce(readRateLimiter, member.accountId.value, HttpOperation.SummarizeMatches) {
+                security.decode(
+                  MatchListCodec.parseSummaryFilter(heldEventId, gameTitleId, seasonMasterId)
+                ) { case (parsedHeldEventId, parsedGameTitleId, parsedSeasonMasterId) =>
+                  security.respond(
+                    listMatches
+                      .summarize(parsedHeldEventId, parsedGameTitleId, parsedSeasonMasterId)
+                  )(MatchListSummaryResponse.from)
+                }
+              }
+          }
     },
     MatchesEndpoints.get.serverLogic { case (matchId, accountHeader) =>
       security.authorizeRead(accountHeader) { _ =>

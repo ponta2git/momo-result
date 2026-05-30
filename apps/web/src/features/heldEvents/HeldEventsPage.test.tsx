@@ -3,7 +3,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { HeldEventsPage } from "@/features/heldEvents/HeldEventsPage";
@@ -13,11 +13,17 @@ import { createTestQueryClient } from "@/test/queryClient";
 
 setupMsw();
 
+function LocationProbe() {
+  const location = useLocation();
+  return <output aria-label="current location">{`${location.pathname}${location.search}`}</output>;
+}
+
 function renderPage(path = "/held-events") {
   window.localStorage.setItem("momoresult.devUser", "account_ponta");
   render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[path]}>
+        <LocationProbe />
         <Routes>
           <Route element={<HeldEventsPage />} path="/held-events" />
           <Route element={<p>matches</p>} path="/matches" />
@@ -51,6 +57,62 @@ describe("HeldEventsPage", () => {
       "href",
       "/exports?heldEventId=held-1&format=csv",
     );
+  });
+
+  it("hides pagination controls when the list is empty", async () => {
+    server.use(
+      http.get("/api/held-events", () =>
+        HttpResponse.json({
+          items: [],
+          pagination: {
+            hasNextPage: false,
+            hasPreviousPage: false,
+            page: 1,
+            pageSize: 25,
+            totalItems: 0,
+            totalPages: 0,
+          },
+          totalMatchCount: 0,
+        }),
+      ),
+    );
+
+    renderPage();
+
+    expect(await screen.findByText("開催履歴がまだありません")).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "ページネーション" })).not.toBeInTheDocument();
+  });
+
+  it("corrects an out-of-range page before showing an empty-list state", async () => {
+    const heldEvents = [{ id: "held-1", heldAt: "2026-01-01T00:00:00.000Z", matchCount: 0 }];
+    server.use(
+      http.get("/api/held-events", ({ request }) => {
+        const url = new URL(request.url);
+        const page = Number(url.searchParams.get("page") ?? "1");
+        const pageSize = Number(url.searchParams.get("pageSize") ?? "25");
+        const offset = (page - 1) * pageSize;
+        return HttpResponse.json({
+          items: heldEvents.slice(offset, offset + pageSize),
+          pagination: {
+            hasNextPage: false,
+            hasPreviousPage: page > 1,
+            page,
+            pageSize,
+            totalItems: heldEvents.length,
+            totalPages: 1,
+          },
+          totalMatchCount: 0,
+        });
+      }),
+    );
+
+    renderPage("/held-events?page=99");
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("current location")).toHaveTextContent("/held-events"),
+    );
+    expect(await screen.findByRole("link", { name: "試合" })).toBeInTheDocument();
+    expect(screen.queryByText("開催履歴がまだありません")).not.toBeInTheDocument();
   });
 
   it("creates a held event and adds it to the visible list", async () => {

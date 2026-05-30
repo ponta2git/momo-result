@@ -20,3 +20,17 @@ enum MatchListKindFilter derives CanEqual:
   case All
   case Match
   case MatchDraft
+
+enum MatchListSort derives CanEqual:
+  case StatusPriority
+  case UpdatedDesc
+  case HeldDesc
+  case HeldAsc
+  case MatchNoAsc
+
+final case class MatchListSummary(
+    incompleteCount: Int,
+    ocrRunningCount: Int,
+    preConfirmCount: Int,
+    needsReviewCount: Int,
+)

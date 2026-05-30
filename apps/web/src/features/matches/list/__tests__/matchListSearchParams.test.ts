@@ -17,13 +17,15 @@ describe("matchListSearchParams", () => {
     const params = buildMatchListSearchParams({
       gameTitleId: "game-1",
       heldEventId: "",
+      page: 2,
+      pageSize: 50,
       seasonMasterId: "season-1",
       sort: "updated_desc",
       status: "needs_review",
     });
 
     expect(params.toString()).toBe(
-      "status=needs_review&gameTitleId=game-1&seasonMasterId=season-1&sort=updated_desc",
+      "status=needs_review&gameTitleId=game-1&page=2&pageSize=50&seasonMasterId=season-1&sort=updated_desc",
     );
   });
 });

@@ -2,6 +2,18 @@ import { http, HttpResponse } from "msw";
 
 import { mswState, now } from "@/test/msw/fixtures";
 
+function pagination(page: number, pageSize: number, totalItems: number) {
+  const totalPages = totalItems === 0 ? 0 : Math.ceil(totalItems / pageSize);
+  return {
+    hasNextPage: totalPages > 0 && page < totalPages,
+    hasPreviousPage: page > 1 && totalPages > 0,
+    page,
+    pageSize,
+    totalItems,
+    totalPages,
+  };
+}
+
 export const matchHandlers = [
   http.post("/api/match-drafts", async () =>
     HttpResponse.json({
@@ -88,6 +100,10 @@ export const matchHandlers = [
     const seasonMasterId = url.searchParams.get("seasonMasterId");
     const status = url.searchParams.get("status");
     const kind = url.searchParams.get("kind");
+    const page = Number(url.searchParams.get("page") ?? "1");
+    const pageSize = Number(
+      url.searchParams.get("pageSize") ?? url.searchParams.get("limit") ?? "100",
+    );
 
     const items = mswState.matchList.filter((item) => {
       if (heldEventId && item.heldEventId !== heldEventId) return false;
@@ -111,7 +127,31 @@ export const matchHandlers = [
       return true;
     });
 
-    return HttpResponse.json({ items });
+    const offset = (page - 1) * pageSize;
+    return HttpResponse.json({
+      items: items.slice(offset, offset + pageSize),
+      pagination: pagination(page, pageSize, items.length),
+    });
+  }),
+  http.get("/api/matches/summary", ({ request }) => {
+    const url = new URL(request.url);
+    const heldEventId = url.searchParams.get("heldEventId");
+    const gameTitleId = url.searchParams.get("gameTitleId");
+    const seasonMasterId = url.searchParams.get("seasonMasterId");
+    const items = mswState.matchList.filter((item) => {
+      if (heldEventId && item.heldEventId !== heldEventId) return false;
+      if (gameTitleId && item.gameTitleId !== gameTitleId) return false;
+      if (seasonMasterId && item.seasonMasterId !== seasonMasterId) return false;
+      return item.kind === "match_draft";
+    });
+    return HttpResponse.json({
+      incompleteCount: items.filter((item) => item.status !== "confirmed").length,
+      needsReviewCount: items.filter((item) => item.status === "needs_review").length,
+      ocrRunningCount: items.filter((item) => item.status === "ocr_running").length,
+      preConfirmCount: items.filter((item) =>
+        ["draft_ready", "needs_review", "ocr_failed"].includes(item.status),
+      ).length,
+    });
   }),
   http.get("/api/matches/:matchId", ({ params }) =>
     HttpResponse.json({

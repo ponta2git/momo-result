@@ -25,6 +25,7 @@ object HttpOperation:
 
   val ConfirmMatch = "POST /api/matches"
   val ListMatches = "GET /api/matches"
+  val SummarizeMatches = "GET /api/matches/summary"
   val UpdateMatch = "PUT /api/matches/:id"
   val DeleteMatch = "DELETE /api/matches/:id"
 

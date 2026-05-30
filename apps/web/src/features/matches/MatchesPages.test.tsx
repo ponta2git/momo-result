@@ -214,6 +214,67 @@ describe("MatchesListPage", () => {
     );
   });
 
+  it("corrects an out-of-range list page before showing an empty-list state", async () => {
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    const items = [
+      {
+        createdAt: "2026-01-01T00:00:00.000Z",
+        gameTitleId: "gt_momotetsu_2",
+        heldEventId: "held-1",
+        id: "match-1",
+        kind: "match",
+        mapMasterId: "map_east",
+        matchId: "match-1",
+        matchNoInEvent: 1,
+        ownerMemberId: "member_ponta",
+        playedAt: "2026-01-01T00:00:00.000Z",
+        ranks: [{ memberId: "member_ponta", playOrder: 1, rank: 1 }],
+        seasonMasterId: "season_current",
+        status: "confirmed",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+    ];
+    server.use(
+      http.get("/api/matches", ({ request }) => {
+        const url = new URL(request.url);
+        const page = Number(url.searchParams.get("page") ?? "1");
+        const pageSize = Number(url.searchParams.get("pageSize") ?? "25");
+        const offset = (page - 1) * pageSize;
+        return HttpResponse.json({
+          items: items.slice(offset, offset + pageSize),
+          pagination: {
+            hasNextPage: false,
+            hasPreviousPage: page > 1,
+            page,
+            pageSize,
+            totalItems: items.length,
+            totalPages: 1,
+          },
+        });
+      }),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches?page=99"]}>
+          <LocationProbe />
+          <Routes>
+            <Route path="/matches" element={<MatchesListPage />} />
+            <Route path="/matches/:matchId" element={<p>detail-page</p>} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByLabelText("current location")).toHaveTextContent("/matches"),
+    );
+    const detailLinks = await screen.findAllByRole("link", { name: "詳細を見る" });
+    detailLinks.forEach((link) => expect(link).toHaveAttribute("href", "/matches/match-1"));
+    expect(screen.queryByText("まだ試合がありません")).not.toBeInTheDocument();
+  });
+
   it("shows optimistic status selection while the filtered list is refetching", async () => {
     window.localStorage.setItem("momoresult.devUser", "account_ponta");
     const responseGate = createDeferred();

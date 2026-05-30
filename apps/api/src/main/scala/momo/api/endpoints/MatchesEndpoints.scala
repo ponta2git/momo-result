@@ -27,6 +27,9 @@ object MatchesEndpoints:
       Option[String],
       Option[String],
       Option[Int],
+      Option[Int],
+      Option[Int],
+      Option[String],
       Option[String],
   )
 
@@ -39,10 +42,29 @@ object MatchesEndpoints:
     .in(query[Option[String]]("status"))
     .in(query[Option[String]]("kind"))
     .in(query[Option[Int]]("limit").description("1..200; defaults to 100."))
+    .in(query[Option[Int]]("page").description("1-based page number; defaults to 1."))
+    .in(query[Option[Int]]("pageSize").description("1..200; overrides limit when present."))
+    .in(query[Option[String]]("sort").description(
+      "status_priority, updated_desc, held_desc, held_asc, or match_no_asc."
+    ))
     .in(CommonEndpoint.accountHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[MatchListResponse])
     .tag("matches")
+
+  type SummaryInput = (Option[String], Option[String], Option[String], Option[String])
+
+  val summary: PublicEndpoint[SummaryInput, ProblemResponse, MatchListSummaryResponse, Any] =
+    endpoint
+      .get
+      .in("api" / "matches" / "summary")
+      .in(query[Option[String]]("heldEventId"))
+      .in(query[Option[String]]("gameTitleId"))
+      .in(query[Option[String]]("seasonMasterId"))
+      .in(CommonEndpoint.accountHeader)
+      .errorOut(CommonEndpoint.errorOut)
+      .out(jsonBody[MatchListSummaryResponse])
+      .tag("matches")
 
   val get: PublicEndpoint[(String, Option[String]), ProblemResponse, MatchDetailResponse, Any] =
     endpoint

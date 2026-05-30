@@ -117,9 +117,12 @@ final class PostgresMatchListReadModelSpec extends IntegrationSuite:
       ))
       items <- matchList.list(MatchListReadModel.Filter())
     yield
-      assertEquals(items.map(_.id), List("draft_ready", "match_older"))
-      assertEquals(items.map(_.kind), List(MatchListItemKind.MatchDraft, MatchListItemKind.Match))
-      val confirmed = items.find(_.id == "match_older").getOrElse(fail("match row missing"))
+      assertEquals(items.items.map(_.id), List("draft_ready", "match_older"))
+      assertEquals(
+        items.items.map(_.kind),
+        List(MatchListItemKind.MatchDraft, MatchListItemKind.Match),
+      )
+      val confirmed = items.items.find(_.id == "match_older").getOrElse(fail("match row missing"))
       assertEquals(confirmed.ranks.map(_.playOrder.value), List(1, 2, 3, 4))
       assertEquals(confirmed.ranks.map(_.rank.value), List(1, 2, 3, 4))
 
@@ -143,10 +146,10 @@ final class PostgresMatchListReadModelSpec extends IntegrationSuite:
       )
       draftsOnly <- matchList.list(MatchListReadModel.Filter(kind = MatchListKindFilter.MatchDraft))
     yield
-      assertEquals(confirmed.map(_.id), List("match_confirmed"))
-      assertEquals(draftsOnly.map(_.id), List("draft_ready"))
+      assertEquals(confirmed.items.map(_.id), List("match_confirmed"))
+      assertEquals(draftsOnly.items.map(_.id), List("draft_ready"))
 
-  test("orders by playedAt or updatedAt before applying limit"):
+  test("applies status-priority ordering before pagination"):
     for
       _ <- seedPrereqs
       _ <- matches.create(sampleMatch("match_middle", 1, Instant.parse("2026-04-30T02:00:00Z")))
@@ -161,7 +164,31 @@ final class PostgresMatchListReadModelSpec extends IntegrationSuite:
         Instant.parse("2026-04-30T04:00:00Z"),
         playedAt = Some(Instant.parse("2026-04-30T01:00:00Z")),
       ))
-      items <- matchList.list(MatchListReadModel.Filter(limit = Some(2)))
-    yield assertEquals(items.map(_.id), List("draft_latest", "match_middle"))
+      items <- matchList.list(MatchListReadModel.Filter(page = PageRequest(page = 1, pageSize = 2)))
+    yield
+      assertEquals(items.items.map(_.id), List("draft_old_played", "draft_latest"))
+      assertEquals(items.totalItems, 3)
+      assertEquals(items.totalPages, 2)
+
+  test("summarizes active draft work independently of pagination"):
+    for
+      _ <- seedPrereqs
+      _ <- matches.create(sampleMatch("match_confirmed", 1, Instant.parse("2026-04-30T01:00:00Z")))
+      _ <- drafts.create(sampleDraft(
+        "draft_ready",
+        MatchDraftStatus.DraftReady,
+        Instant.parse("2026-04-30T02:00:00Z"),
+      ))
+      _ <- drafts.create(sampleDraft(
+        "draft_needs_review",
+        MatchDraftStatus.NeedsReview,
+        Instant.parse("2026-04-30T03:00:00Z"),
+      ))
+      summary <- matchList.summarize(MatchListReadModel.SummaryFilter())
+    yield
+      assertEquals(summary.incompleteCount, 2)
+      assertEquals(summary.ocrRunningCount, 0)
+      assertEquals(summary.preConfirmCount, 2)
+      assertEquals(summary.needsReviewCount, 1)
 
 end PostgresMatchListReadModelSpec

@@ -4,8 +4,8 @@ import cats.Monad
 import cats.effect.{Ref, Sync}
 import cats.syntax.all.*
 
-import momo.api.domain.HeldEvent
 import momo.api.domain.ids.HeldEventId
+import momo.api.domain.{HeldEvent, PageRequest, PagedResult}
 import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.{
   HeldEventDeletionAlg, HeldEventDeletionRepository, HeldEventDeletionResult, HeldEventsAlg,
@@ -18,6 +18,15 @@ final class InMemoryHeldEventsRepository[F[_]: Sync] private (
   private val alg: HeldEventsAlg[F] = new HeldEventsAlg[F]:
     override def list(query: Option[String], limit: Int): F[List[HeldEvent]] = ref.get
       .map(events => InMemoryHeldEventsRepository.filterAndSort(events.values, query, limit))
+    override def listPage(query: Option[String], page: PageRequest): F[PagedResult[HeldEvent]] = ref
+      .get.map { events =>
+        val all = InMemoryHeldEventsRepository.filterAndSort(events.values, query, Int.MaxValue)
+        val pageItems = all.slice(page.offset.toInt, page.offset.toInt + page.pageSize)
+        PagedResult(pageItems, page, all.size)
+      }
+    override def listIds(query: Option[String]): F[List[HeldEventId]] = ref.get.map(events =>
+      InMemoryHeldEventsRepository.filterAndSort(events.values, query, Int.MaxValue).map(_.id)
+    )
     override def find(id: HeldEventId): F[Option[HeldEvent]] = ref.get.map(_.get(id))
     override def create(event: HeldEvent): F[Unit] = ref.modify { current =>
       if current.contains(event.id) then (current, false) else (current + (event.id -> event), true)
@@ -34,6 +43,9 @@ final class InMemoryHeldEventsRepository[F[_]: Sync] private (
 
   override def list(query: Option[String], limit: Int): F[List[HeldEvent]] = delegate
     .list(query, limit)
+  override def listPage(query: Option[String], page: PageRequest): F[PagedResult[HeldEvent]] =
+    delegate.listPage(query, page)
+  override def listIds(query: Option[String]): F[List[HeldEventId]] = delegate.listIds(query)
   override def find(id: HeldEventId): F[Option[HeldEvent]] = delegate.find(id)
   override def create(event: HeldEvent): F[Unit] = delegate.create(event)
   override def delete(id: HeldEventId): F[Boolean] = delegate.delete(id)

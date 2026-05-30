@@ -29,6 +29,7 @@ object ApiEndpoints:
     MatchDraftEndpoints.getSourceImage,
     MatchesEndpoints.confirm,
     MatchesEndpoints.list,
+    MatchesEndpoints.summary,
     MatchesEndpoints.get,
     MatchesEndpoints.update,
     MatchesEndpoints.delete,

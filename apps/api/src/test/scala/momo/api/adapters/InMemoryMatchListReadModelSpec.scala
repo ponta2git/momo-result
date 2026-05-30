@@ -48,8 +48,8 @@ final class InMemoryMatchListReadModelSpec extends MomoCatsEffectSuite:
           .Filter(kind = MatchListKindFilter.All, status = MatchListStatusFilter.Confirmed)
       )
     yield
-      assertEquals(ocrRunning.map(_.kind), List(MatchListItemKind.MatchDraft))
-      assertEquals(confirmed.map(_.kind), List(MatchListItemKind.Match))
+      assertEquals(ocrRunning.items.map(_.kind), List(MatchListItemKind.MatchDraft))
+      assertEquals(confirmed.items.map(_.kind), List(MatchListItemKind.Match))
 
   private def draft(id: MatchDraftId): MatchDraft = MatchDraft.fromInputs(
     id = id,

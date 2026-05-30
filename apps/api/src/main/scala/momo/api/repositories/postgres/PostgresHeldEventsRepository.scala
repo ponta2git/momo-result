@@ -13,7 +13,7 @@ import doobie.postgres.sqlstate
 
 import momo.api.db.Database
 import momo.api.domain.ids.HeldEventId
-import momo.api.domain.{HeldEvent, MatchDraftStatus}
+import momo.api.domain.{HeldEvent, MatchDraftStatus, PageRequest, PagedResult}
 import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.repositories.{
@@ -36,16 +36,36 @@ object PostgresHeldEvents:
   private def conflict[A](detail: String): ConnectionIO[A] = MonadThrow[ConnectionIO]
     .raiseError[A](new AppException(AppError.Conflict(detail)))
 
+  private def whereQuery(query: Option[String]): Fragment = query.map(_.trim).filter(_.nonEmpty)
+    .fold(Fragment.empty) { q =>
+      val like = s"%$q%"
+      fr"WHERE id ILIKE $like"
+    }
+
   val alg: HeldEventsAlg[ConnectionIO] = new HeldEventsAlg[ConnectionIO]:
     override def list(query: Option[String], limit: Int): ConnectionIO[List[HeldEvent]] =
       val base = fr"SELECT id, start_at FROM held_events"
-      val where = query.map(_.trim).filter(_.nonEmpty).fold(Fragment.empty) { q =>
-        val like = s"%$q%"
-        fr"WHERE id ILIKE $like"
-      }
+      val where = whereQuery(query)
       val order = fr"ORDER BY start_at DESC, id DESC"
       val lim = fr"LIMIT ${math.max(limit, 0)}"
       (base ++ where ++ order ++ lim).query[HeldEvent].to[List]
+
+    override def listPage(
+        query: Option[String],
+        page: PageRequest,
+    ): ConnectionIO[PagedResult[HeldEvent]] =
+      val base = fr"SELECT id, start_at FROM held_events"
+      val where = whereQuery(query)
+      val order = fr"ORDER BY start_at DESC, id DESC"
+      val pageLimit = fr"LIMIT ${page.pageSize} OFFSET ${page.offset}"
+      for
+        total <- (fr"SELECT COUNT(*)::int FROM held_events" ++ where).query[Int].unique
+        items <- (base ++ where ++ order ++ pageLimit).query[HeldEvent].to[List]
+      yield PagedResult(items, page, total)
+
+    override def listIds(query: Option[String]): ConnectionIO[List[HeldEventId]] =
+      (fr"SELECT id FROM held_events" ++ whereQuery(query) ++ fr"ORDER BY start_at DESC, id DESC")
+        .query[HeldEventId].to[List]
 
     override def find(id: HeldEventId): ConnectionIO[Option[HeldEvent]] = sql"""
         SELECT id, start_at FROM held_events WHERE id = $id

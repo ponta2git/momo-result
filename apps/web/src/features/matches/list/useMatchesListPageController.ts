@@ -22,11 +22,7 @@ import {
   parseMatchListSearchParams,
 } from "@/features/matches/list/matchListSearchParams";
 import type { MatchListAction, MatchListSearch } from "@/features/matches/list/matchListTypes";
-import {
-  sortMatchListItems,
-  summarizeMatchList,
-  toMatchListItemViews,
-} from "@/features/matches/list/matchListViewModel";
+import { toMatchListItemViews } from "@/features/matches/list/matchListViewModel";
 import { invalidateAfterMatchConfirmed } from "@/shared/api/cacheInvalidation";
 import { listHeldEvents } from "@/shared/api/heldEvents";
 import { listGameTitles, listMapMasters, listSeasonMasters } from "@/shared/api/masters";
@@ -52,18 +48,21 @@ export function useMatchesListPageController() {
   const checkingDraftIdsRef = useRef(new Set<string>());
   const [checkingDraftIds, setCheckingDraftIds] = useState<ReadonlySet<string>>(() => new Set());
 
-  const applySearch = (nextSearch: MatchListSearch) => {
-    setOptimisticSearch(nextSearch);
-    startFilterTransition(() => {
-      setSearchParams(buildMatchListSearchParams(nextSearch));
-    });
-  };
-  const clearSearch = () => {
+  const applySearch = useCallback(
+    (nextSearch: MatchListSearch) => {
+      setOptimisticSearch(nextSearch);
+      startFilterTransition(() => {
+        setSearchParams(buildMatchListSearchParams(nextSearch));
+      });
+    },
+    [setSearchParams, startFilterTransition],
+  );
+  const clearSearch = useCallback(() => {
     setOptimisticSearch(defaultMatchListSearch);
     startFilterTransition(() => {
       setSearchParams(new URLSearchParams());
     });
-  };
+  }, [setSearchParams, startFilterTransition]);
 
   const heldEventsQuery = useQuery({
     queryFn: ({ signal }) => listHeldEvents("", 100, { signal }),
@@ -106,16 +105,15 @@ export function useMatchesListPageController() {
   }, [gameTitlesQuery.data, heldEventsQuery.data, mapsQuery.data, seasonsQuery.data]);
 
   const items = useMemo(() => {
-    const views = toMatchListItemViews(matchesQuery.data?.items ?? [], lookupMaps);
-    return sortMatchListItems(views, deferredSearch.sort);
-  }, [lookupMaps, matchesQuery.data, deferredSearch.sort]);
+    return toMatchListItemViews(matchesQuery.data?.items ?? [], lookupMaps);
+  }, [lookupMaps, matchesQuery.data]);
 
-  const summaryCountItems = useMemo(
-    () => toMatchListItemViews(matchesSummaryQuery.data?.items ?? [], lookupMaps),
-    [lookupMaps, matchesSummaryQuery.data],
-  );
-
-  const summaryCounts = useMemo(() => summarizeMatchList(summaryCountItems), [summaryCountItems]);
+  const summaryCounts = matchesSummaryQuery.data ?? {
+    incompleteCount: 0,
+    needsReviewCount: 0,
+    ocrRunningCount: 0,
+    preConfirmCount: 0,
+  };
 
   const matchesDataUpdatedAt = matchesQuery.dataUpdatedAt;
   const summaryDataUpdatedAt = matchesSummaryQuery.dataUpdatedAt;
@@ -152,6 +150,23 @@ export function useMatchesListPageController() {
     }
   }, [optimisticSearch, searchSignature]);
 
+  const pagination = matchesQuery.data?.pagination;
+  const pageCorrectionPending = Boolean(
+    pagination &&
+    !matchesQuery.isPlaceholderData &&
+    search.page > Math.max(pagination.totalPages, 1),
+  );
+
+  useEffect(() => {
+    if (!pagination || matchesQuery.isPlaceholderData) {
+      return;
+    }
+    const lastPage = Math.max(pagination.totalPages, 1);
+    if (search.page > lastPage) {
+      applySearch({ ...search, page: lastPage });
+    }
+  }, [applySearch, matchesQuery.isPlaceholderData, pagination, search]);
+
   const initialMatchesLoading = isInitialQueryLoading(matchesQuery);
   const filterSettling = isFilterPending || activeSearchSignature !== deferredSearchSignature;
   const listHasPlaceholderData = matchesQuery.isPlaceholderData;
@@ -161,7 +176,8 @@ export function useMatchesListPageController() {
     filterSettling ||
     listHasPlaceholderData ||
     summaryHasPlaceholderData ||
-    listBackgroundRefreshing;
+    listBackgroundRefreshing ||
+    pageCorrectionPending;
 
   const handleManualRefresh = async () => {
     if (isManualRefreshing) {
@@ -230,14 +246,21 @@ export function useMatchesListPageController() {
       shouldShowBlockingQueryError(gameTitlesQuery) ||
       shouldShowBlockingQueryError(seasonsQuery) ||
       shouldShowBlockingQueryError(mapsQuery),
+    pagination,
     refresh: handleManualRefresh,
     search: activeSearch,
     seasons: seasonsQuery.data?.items ?? [],
     selectDraftAction: handleDraftStatusCheckAction,
     showMatchesError: shouldShowBlockingQueryError(matchesQuery),
     showMatchesLoading: initialMatchesLoading,
-    showStaleSkeleton: filterSettling || listHasPlaceholderData,
+    showStaleSkeleton: filterSettling || listHasPlaceholderData || pageCorrectionPending,
     summaryCounts,
     summaryLoading: matchesSummaryQuery.isLoading,
+    updatePage: (page: number) => {
+      applySearch({ ...activeSearch, page });
+    },
+    updatePageSize: (pageSize: number) => {
+      applySearch({ ...activeSearch, page: 1, pageSize });
+    },
   };
 }

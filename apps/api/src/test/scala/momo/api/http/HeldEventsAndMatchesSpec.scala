@@ -84,6 +84,23 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
       .flatMap(res => assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "limit"))
   }
 
+  app.test("GET /api/held-events returns pagination metadata") { httpApp =>
+    for
+      _ <- createEvent(httpApp)
+      _ <- createEvent(httpApp)
+      res <- httpApp.run(
+        Request[IO](Method.GET, uri"/api/held-events?page=1&pageSize=1").putHeaders(devReadHeader())
+      )
+      body <- res.as[Json]
+      pagination = jsonField[Json](body, "pagination")
+    yield
+      assertEquals(res.status, Status.Ok)
+      assertEquals(jsonField[Int](pagination, "page"), 1)
+      assertEquals(jsonField[Int](pagination, "pageSize"), 1)
+      assertEquals(jsonField[Int](pagination, "totalItems"), 2)
+      assertEquals(jsonField[Boolean](pagination, "hasNextPage"), true)
+  }
+
   app.test("DELETE /api/held-events/:id deletes an empty held event") { httpApp =>
     for
       id <- createEvent(httpApp)
@@ -261,6 +278,55 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
     val req = Request[IO](Method.GET, uri"/api/matches?limit=-1").putHeaders(devReadHeader())
     httpApp.run(req)
       .flatMap(res => assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "limit"))
+  }
+
+  app.test("GET /api/matches rejects invalid pagination before repository access") { httpApp =>
+    val req = Request[IO](Method.GET, uri"/api/matches?page=0").putHeaders(devReadHeader())
+    httpApp.run(req)
+      .flatMap(res => assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "page"))
+  }
+
+  app.test("GET /api/matches returns pagination metadata") { httpApp =>
+    for
+      id <- createEvent(httpApp)
+      first <- httpApp.run(
+        Request[IO](Method.POST, uri"/api/matches").putHeaders(devWriteHeaders()*)
+          .withEntity(confirmBody(id, 1))
+      )
+      _ = assertEquals(first.status, Status.Ok)
+      second <- httpApp.run(
+        Request[IO](Method.POST, uri"/api/matches").putHeaders(devWriteHeaders()*)
+          .withEntity(confirmBody(id, 2))
+      )
+      _ = assertEquals(second.status, Status.Ok)
+      res <- httpApp.run(
+        Request[IO](Method.GET, uri"/api/matches?page=2&pageSize=1&sort=match_no_asc")
+          .putHeaders(devReadHeader())
+      )
+      body <- res.as[Json]
+      pagination = jsonField[Json](body, "pagination")
+      items = jsonField[List[Json]](body, "items")
+    yield
+      assertEquals(res.status, Status.Ok)
+      assertEquals(items.size, 1)
+      assertEquals(jsonField[Int](pagination, "page"), 2)
+      assertEquals(jsonField[Int](pagination, "pageSize"), 1)
+      assertEquals(jsonField[Int](pagination, "totalItems"), 2)
+      assertEquals(jsonField[Boolean](pagination, "hasPreviousPage"), true)
+  }
+
+  app.test("GET /api/matches/summary returns aggregate draft counts") { httpApp =>
+    for
+      _ <- createMatchDraft(httpApp)
+      res <- httpApp
+        .run(Request[IO](Method.GET, uri"/api/matches/summary").putHeaders(devReadHeader()))
+      body <- res.as[Json]
+    yield
+      assertEquals(res.status, Status.Ok)
+      assertEquals(jsonField[Int](body, "incompleteCount"), 1)
+      assertEquals(jsonField[Int](body, "ocrRunningCount"), 0)
+      assertEquals(jsonField[Int](body, "preConfirmCount"), 1)
+      assertEquals(jsonField[Int](body, "needsReviewCount"), 0)
   }
 
   private def confirmBody(heldEventId: String): Json = confirmBody(heldEventId, 1)

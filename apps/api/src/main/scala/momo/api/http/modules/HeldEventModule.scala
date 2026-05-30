@@ -9,7 +9,7 @@ import momo.api.domain.ids.HeldEventId
 import momo.api.endpoints.codec.{BoundaryId, HeldEventCodec}
 import momo.api.endpoints.{
   CreateHeldEventRequest, DeleteHeldEventResponse, HeldEventListResponse, HeldEventResponse,
-  HeldEventsEndpoints,
+  HeldEventsEndpoints, PaginationResponse,
 }
 import momo.api.http.{EndpointSecurity, HttpOperation, IdempotencyReplay}
 import momo.api.usecases.{CreateHeldEvent, DeleteHeldEvent, ListHeldEvents}
@@ -23,11 +23,15 @@ object HeldEventModule:
       nowF: F[Instant],
       security: EndpointSecurity[F],
   ): List[ServerEndpoint[Any, F]] = List(
-    HeldEventsEndpoints.list.serverLogic { case (q, limit, accountHeader) =>
+    HeldEventsEndpoints.list.serverLogic { case (q, limit, page, pageSize, accountHeader) =>
       security.authorizeRead(accountHeader) { _ =>
-        security.respond(
-          listHeldEvents.run(q, limit)
-        )(items => HeldEventListResponse(items.map((e, c) => HeldEventResponse.from(e, c))))
+        security.respond(listHeldEvents.run(q, limit, page, pageSize))(result =>
+          HeldEventListResponse(
+            items = result.items.map((e, c) => HeldEventResponse.from(e, c)),
+            pagination = PaginationResponse.from(result.pagination),
+            totalMatchCount = result.totalMatchCount,
+          )
+        )
       }
     },
     HeldEventsEndpoints.create.serverLogic { case (accountHeader, csrfToken, idemKey, request) =>

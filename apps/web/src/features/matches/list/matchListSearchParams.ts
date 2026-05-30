@@ -7,6 +7,8 @@ import type {
 export const defaultMatchListSearch: MatchListSearch = {
   heldEventId: "",
   gameTitleId: "",
+  page: 1,
+  pageSize: 25,
   seasonMasterId: "",
   status: "all",
   sort: "status_priority",
@@ -29,6 +31,16 @@ const sortOptions = new Set<MatchListSort>([
   "match_no_asc",
 ]);
 
+const pageSizeOptions = new Set([25, 50, 100, 200]);
+
+function parsePositiveInt(value: string | null, fallback: number): number {
+  if (!value) {
+    return fallback;
+  }
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed >= 1 ? parsed : fallback;
+}
+
 export function parseMatchListSearchParams(searchParams: URLSearchParams): MatchListSearch {
   const status = searchParams.get("status");
   const sort = searchParams.get("sort");
@@ -36,6 +48,10 @@ export function parseMatchListSearchParams(searchParams: URLSearchParams): Match
   return {
     heldEventId: searchParams.get("heldEventId") ?? "",
     gameTitleId: searchParams.get("gameTitleId") ?? "",
+    page: parsePositiveInt(searchParams.get("page"), defaultMatchListSearch.page),
+    pageSize: pageSizeOptions.has(Number(searchParams.get("pageSize")))
+      ? Number(searchParams.get("pageSize"))
+      : defaultMatchListSearch.pageSize,
     seasonMasterId: searchParams.get("seasonMasterId") ?? "",
     status:
       status && statusOptions.has(status as MatchListStatusFilter)
@@ -59,6 +75,12 @@ export function buildMatchListSearchParams(search: MatchListSearch): URLSearchPa
   }
   if (search.gameTitleId) {
     params.set("gameTitleId", search.gameTitleId);
+  }
+  if (search.page !== defaultMatchListSearch.page) {
+    params.set("page", String(search.page));
+  }
+  if (search.pageSize !== defaultMatchListSearch.pageSize) {
+    params.set("pageSize", String(search.pageSize));
   }
   if (search.seasonMasterId) {
     params.set("seasonMasterId", search.seasonMasterId);

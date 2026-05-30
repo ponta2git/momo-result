@@ -5,7 +5,26 @@ import java.time.format.DateTimeFormatter
 import io.circe.Codec
 import sttp.tapir.Schema
 
-import momo.api.domain.{HeldEvent, MatchListItem}
+import momo.api.domain.{HeldEvent, MatchListItem, MatchListSummary, PagedResult}
+
+final case class PaginationResponse(
+    page: Int,
+    pageSize: Int,
+    totalItems: Int,
+    totalPages: Int,
+    hasPreviousPage: Boolean,
+    hasNextPage: Boolean,
+) derives Codec.AsObject
+
+object PaginationResponse:
+  def from[A](result: PagedResult[A]): PaginationResponse = PaginationResponse(
+    page = result.page.page,
+    pageSize = result.page.pageSize,
+    totalItems = result.totalItems,
+    totalPages = result.totalPages,
+    hasPreviousPage = result.hasPreviousPage,
+    hasNextPage = result.hasNextPage,
+  )
 
 final case class HeldEventResponse(id: String, heldAt: String, matchCount: Int)
     derives Codec.AsObject
@@ -17,7 +36,11 @@ object HeldEventResponse:
     matchCount = matchCount,
   )
 
-final case class HeldEventListResponse(items: List[HeldEventResponse]) derives Codec.AsObject
+final case class HeldEventListResponse(
+    items: List[HeldEventResponse],
+    pagination: PaginationResponse,
+    totalMatchCount: Int,
+) derives Codec.AsObject
 
 final case class CreateHeldEventRequest(heldAt: String) derives Codec.AsObject
 
@@ -124,7 +147,25 @@ final case class MatchSummaryResponse(
 
 final case class MatchRankEntry(memberId: String, rank: Int, playOrder: Int) derives Codec.AsObject
 
-final case class MatchListResponse(items: List[MatchSummaryResponse]) derives Codec.AsObject
+final case class MatchListResponse(
+    items: List[MatchSummaryResponse],
+    pagination: PaginationResponse,
+) derives Codec.AsObject
+
+final case class MatchListSummaryResponse(
+    incompleteCount: Int,
+    ocrRunningCount: Int,
+    preConfirmCount: Int,
+    needsReviewCount: Int,
+) derives Codec.AsObject
+
+object MatchListSummaryResponse:
+  def from(summary: MatchListSummary): MatchListSummaryResponse = MatchListSummaryResponse(
+    incompleteCount = summary.incompleteCount,
+    ocrRunningCount = summary.ocrRunningCount,
+    preConfirmCount = summary.preConfirmCount,
+    needsReviewCount = summary.needsReviewCount,
+  )
 
 final case class MatchDetailResponse(
     matchId: String,

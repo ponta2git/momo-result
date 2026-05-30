@@ -5,8 +5,8 @@ import java.time.Instant
 import cats.effect.IO
 import munit.CatsEffectSuite
 
-import momo.api.domain.HeldEvent
 import momo.api.domain.ids.HeldEventId
+import momo.api.domain.{HeldEvent, PageRequest}
 import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.HeldEventsRepository
 
@@ -95,6 +95,35 @@ trait HeldEventsRepositoryContract:
       _ <- repo.create(c)
       list <- repo.list(query = None, limit = 2)
     yield assertEquals(list.size, 2)
+
+  test("listPage applies offset pagination and returns total count"):
+    val a = HeldEvent(HeldEventId.unsafeFromString("held_page_001"), at(0))
+    val b = HeldEvent(HeldEventId.unsafeFromString("held_page_002"), at(60))
+    val c = HeldEvent(HeldEventId.unsafeFromString("held_page_003"), at(120))
+    for
+      repo <- freshRepo
+      _ <- repo.create(a)
+      _ <- repo.create(b)
+      _ <- repo.create(c)
+      page <- repo.listPage(query = None, PageRequest(page = 2, pageSize = 2))
+    yield
+      assertEquals(page.items.map(_.id.value), List("held_page_001"))
+      assertEquals(page.totalItems, 3)
+      assertEquals(page.totalPages, 2)
+      assertEquals(page.hasPreviousPage, true)
+      assertEquals(page.hasNextPage, false)
+
+  test("listIds returns all filtered ids in list order"):
+    val a = HeldEvent(HeldEventId.unsafeFromString("held_ids_2026_a"), at(0))
+    val b = HeldEvent(HeldEventId.unsafeFromString("held_ids_2026_b"), at(60))
+    val c = HeldEvent(HeldEventId.unsafeFromString("held_ids_2025_c"), at(120))
+    for
+      repo <- freshRepo
+      _ <- repo.create(a)
+      _ <- repo.create(b)
+      _ <- repo.create(c)
+      ids <- repo.listIds(query = Some("2026"))
+    yield assertEquals(ids.map(_.value), List("held_ids_2026_b", "held_ids_2026_a"))
 
   test("list with negative limit returns no events"):
     val event = HeldEvent(HeldEventId.unsafeFromString("held_neg"), baseInstant)

@@ -1,5 +1,6 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useActionState, useMemo, useState } from "react";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useActionState, useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import {
   currentLocalIsoMinute,
@@ -7,7 +8,6 @@ import {
   formatDateTime,
   toIsoFromLocal,
 } from "@/features/heldEvents/heldEventViewModel";
-import { syncHeldEventCreatedCache, syncHeldEventDeletedCache } from "@/shared/api/heldEventCache";
 import { createHeldEvent, deleteHeldEvent, listHeldEvents } from "@/shared/api/heldEvents";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { runIdempotentMutation } from "@/shared/api/idempotency";
@@ -18,18 +18,62 @@ import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
 const initialCreateHeldEventState = { version: 0 };
+const defaultPagination = { page: 1, pageSize: 25 };
+const pageSizeOptions = new Set([25, 50, 100]);
+
+function parsePositiveInt(value: string | null, fallback: number): number {
+  if (!value) {
+    return fallback;
+  }
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed >= 1 ? parsed : fallback;
+}
 
 export function useHeldEventsPageController() {
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const paginationSearch = useMemo(() => {
+    const pageSize = Number(searchParams.get("pageSize"));
+    return {
+      page: parsePositiveInt(searchParams.get("page"), defaultPagination.page),
+      pageSize: pageSizeOptions.has(pageSize) ? pageSize : defaultPagination.pageSize,
+    };
+  }, [searchParams]);
   const [heldAtDraft, setHeldAtDraft] = useState(currentLocalIsoMinute);
   const [notice, setNotice] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<HeldEventResponse | null>(null);
   const idempotencyKeys = useIdempotencyKeyStore();
 
+  const updatePagination = useCallback(
+    (next: { page: number; pageSize: number }) => {
+      const params = new URLSearchParams(searchParams);
+      if (next.page === defaultPagination.page) {
+        params.delete("page");
+      } else {
+        params.set("page", String(next.page));
+      }
+      if (next.pageSize === defaultPagination.pageSize) {
+        params.delete("pageSize");
+      } else {
+        params.set("pageSize", String(next.pageSize));
+      }
+      setSearchParams(params);
+    },
+    [searchParams, setSearchParams],
+  );
+
   const heldEventsQuery = useQuery({
-    queryFn: ({ signal }) => listHeldEvents("", 100, { signal }),
-    queryKey: heldEventKeys.scope("held-events-page"),
+    placeholderData: keepPreviousData,
+    queryFn: ({ signal }) =>
+      listHeldEvents({ page: paginationSearch.page, pageSize: paginationSearch.pageSize }, 10, {
+        signal,
+      }),
+    queryKey: heldEventKeys.list(paginationSearch),
+  });
+  const latestHeldEventQuery = useQuery({
+    queryFn: ({ signal }) => listHeldEvents({ page: 1, pageSize: 1 }, 10, { signal }),
+    queryKey: heldEventKeys.list({ page: 1, pageSize: 1, scope: "latest" }),
   });
 
   const [createState, createAction] = useActionState<typeof initialCreateHeldEventState, FormData>(
@@ -49,7 +93,8 @@ export function useHeldEventsPageController() {
           request,
           (options) => createHeldEvent(request, options),
         );
-        await syncHeldEventCreatedCache(queryClient, "held-events-page", event);
+        updatePagination({ page: 1, pageSize: paginationSearch.pageSize });
+        await queryClient.invalidateQueries({ queryKey: heldEventKeys.all() });
         setHeldAtDraft(currentLocalIsoMinute());
         setErrorMessage("");
         setNotice(`開催履歴（${formatDateTime(event.heldAt)}）を作成しました。`);
@@ -66,8 +111,8 @@ export function useHeldEventsPageController() {
 
   const deleteMutation = useMutation({
     mutationFn: (event: HeldEventResponse) => deleteHeldEvent(event.id),
-    onSuccess: async (response) => {
-      await syncHeldEventDeletedCache(queryClient, "held-events-page", response.heldEventId);
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: heldEventKeys.all() });
       setDeleteTarget(null);
       setErrorMessage("");
       setNotice("開催履歴を削除しました。");
@@ -80,12 +125,27 @@ export function useHeldEventsPageController() {
   });
 
   const rows = heldEventsQuery.data?.items ?? emptyHeldEvents;
-  const totalMatches = useMemo(
-    () => rows.reduce((sum, event) => sum + event.matchCount, 0),
-    [rows],
+  const pagination = heldEventsQuery.data?.pagination;
+  const totalMatches = heldEventsQuery.data?.totalMatchCount ?? 0;
+  const pageCorrectionPending = Boolean(
+    pagination &&
+    !heldEventsQuery.isPlaceholderData &&
+    paginationSearch.page > Math.max(pagination.totalPages, 1),
   );
+
+  useEffect(() => {
+    if (!pagination || heldEventsQuery.isPlaceholderData) {
+      return;
+    }
+    const lastPage = Math.max(pagination.totalPages, 1);
+    if (paginationSearch.page > lastPage) {
+      updatePagination({ page: lastPage, pageSize: paginationSearch.pageSize });
+    }
+  }, [heldEventsQuery.isPlaceholderData, pagination, paginationSearch, updatePagination]);
+
   const refresh = () => {
     void heldEventsQuery.refetch();
+    void latestHeldEventQuery.refetch();
   };
 
   return {
@@ -95,15 +155,22 @@ export function useHeldEventsPageController() {
     deleteTarget,
     errorMessage,
     heldAtDraft,
-    latestEvent: rows[0],
+    latestEvent: latestHeldEventQuery.data?.items?.[0],
     liveMessage: notice || errorMessage,
     loadFailed: shouldShowBlockingQueryError(heldEventsQuery),
-    loading: isInitialQueryLoading(heldEventsQuery),
+    loading: isInitialQueryLoading(heldEventsQuery) || pageCorrectionPending,
+    pagination,
     refreshing: heldEventsQuery.isFetching,
     refresh,
     rows,
     setDeleteTarget,
     setHeldAtDraft,
     totalMatches,
+    updatePage: (page: number) => {
+      updatePagination({ page, pageSize: paginationSearch.pageSize });
+    },
+    updatePageSize: (pageSize: number) => {
+      updatePagination({ page: 1, pageSize });
+    },
   };
 }

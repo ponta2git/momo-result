@@ -29,6 +29,8 @@ export type MatchListSort =
 export type MatchListSearch = {
   gameTitleId: string;
   heldEventId: string;
+  page: number;
+  pageSize: number;
   seasonMasterId: string;
   sort: MatchListSort;
   status: MatchListStatusFilter;

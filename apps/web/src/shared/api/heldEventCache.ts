@@ -4,27 +4,48 @@ import type { HeldEventListResponse, HeldEventResponse } from "@/shared/api/held
 import { heldEventKeys } from "@/shared/api/queryKeys";
 
 export function upsertHeldEventList(
-  current: HeldEventListResponse | undefined,
+  current: Partial<HeldEventListResponse> | undefined,
   event: HeldEventResponse,
 ): HeldEventListResponse {
   const existingItems = current?.items ?? [];
   const withoutDuplicate = existingItems.filter((item) => item.id !== event.id);
+  const items = [event, ...withoutDuplicate].toSorted(
+    (left, right) =>
+      new Date(right.heldAt).getTime() - new Date(left.heldAt).getTime() ||
+      right.id.localeCompare(left.id),
+  );
   return {
-    items: [event, ...withoutDuplicate].toSorted(
-      (left, right) =>
-        new Date(right.heldAt).getTime() - new Date(left.heldAt).getTime() ||
-        right.id.localeCompare(left.id),
-    ),
+    items,
+    pagination: current?.pagination ?? fallbackPagination(items.length),
+    totalMatchCount: current?.totalMatchCount ?? totalMatches(items),
   };
 }
 
 export function removeHeldEventFromList(
-  current: HeldEventListResponse | undefined,
+  current: Partial<HeldEventListResponse> | undefined,
   heldEventId: string,
 ): HeldEventListResponse {
+  const items = (current?.items ?? []).filter((item) => item.id !== heldEventId);
   return {
-    items: (current?.items ?? []).filter((item) => item.id !== heldEventId),
+    items,
+    pagination: current?.pagination ?? fallbackPagination(items.length),
+    totalMatchCount: current?.totalMatchCount ?? totalMatches(items),
   };
+}
+
+function fallbackPagination(totalItems: number): HeldEventListResponse["pagination"] {
+  return {
+    hasNextPage: false,
+    hasPreviousPage: false,
+    page: 1,
+    pageSize: Math.max(totalItems, 1),
+    totalItems,
+    totalPages: totalItems === 0 ? 0 : 1,
+  };
+}
+
+function totalMatches(items: HeldEventResponse[]): number {
+  return items.reduce((sum, item) => sum + item.matchCount, 0);
 }
 
 export async function syncHeldEventCreatedCache(

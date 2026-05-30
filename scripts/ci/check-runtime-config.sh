@@ -5,7 +5,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "${tmp_dir}"' EXIT
 
-safe_token="0123456789abcdef0123456789abcdef"
+safe_token="0123456789abcdef0123456789abcdef=="
 rendered_nginx="${tmp_dir}/nginx.conf"
 
 APP_ENV=prod \

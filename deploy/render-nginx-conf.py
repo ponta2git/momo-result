@@ -13,7 +13,6 @@ DEFAULT_CANONICAL_HOST = "momo-result.ponta.me"
 DEV_OPTIONAL_ORIGIN_LOCK_HOSTS = ("localhost", "127.0.0.1")
 HOST_PATTERN = re.compile(r"^[A-Za-z0-9.-]+$")
 ORIGIN_LOCK_TOKEN_MIN_LENGTH = 32
-ORIGIN_LOCK_TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9._~:-]+$")
 
 
 def nginx_quote(value: str) -> str:
@@ -48,11 +47,15 @@ def validate_origin_lock_token(token: str, app_env: str) -> None:
             "MOMO_ORIGIN_LOCK_TOKEN must be at least "
             f"{ORIGIN_LOCK_TOKEN_MIN_LENGTH} characters when APP_ENV=prod."
         )
-    if not ORIGIN_LOCK_TOKEN_PATTERN.fullmatch(token):
+    if not is_visible_ascii(token):
         raise ValueError(
-            "MOMO_ORIGIN_LOCK_TOKEN must contain only URL/header-safe ASCII characters "
+            "MOMO_ORIGIN_LOCK_TOKEN must contain only visible ASCII characters "
             "when APP_ENV=prod."
         )
+
+
+def is_visible_ascii(value: str) -> bool:
+    return all(33 <= ord(char) <= 126 for char in value)
 
 
 def main() -> int:

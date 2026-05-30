@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { ErrorBoundary } from "@/app/ErrorBoundary";
 import { appRoutes } from "@/app/router";
 import { createDeferred } from "@/test/deferred";
+import { makeFourPlayerResults, makeMatchDetail } from "@/test/factories";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
@@ -100,6 +101,44 @@ describe("app routing", () => {
 
     expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/matches");
+  });
+
+  it("commits match detail navigation through the lazy route while the detail payload is loading", async () => {
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    const detailGate = createDeferred();
+    let detailRequested = false;
+    server.use(
+      http.get("/api/matches/:matchId", async ({ params }) => {
+        detailRequested = true;
+        await detailGate.promise;
+        return HttpResponse.json(
+          makeMatchDetail({
+            matchId: String(params["matchId"]),
+            players: makeFourPlayerResults(),
+          }),
+        );
+      }),
+    );
+    const { router } = renderApp("/matches");
+
+    expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
+
+    const detailLinks = await screen.findAllByRole("link", { name: "詳細を見る" });
+    const detailLink = detailLinks[0];
+    if (!detailLink) {
+      throw new Error("expected a detail link");
+    }
+    await user.click(detailLink);
+
+    await waitFor(() => expect(router.state.location.pathname).toBe("/matches/match-1"));
+    expect(await screen.findByLabelText("試合詳細を読み込み中")).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+    await waitFor(() => expect(detailRequested).toBe(true));
+
+    detailGate.resolve();
+    expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeInTheDocument();
   });
 
   it("logs out from the global nav in dev auth mode", async () => {

@@ -49,76 +49,87 @@ class IncidentLogParser:
     screen_type: ScreenType = ScreenType.INCIDENT_LOG
 
     def parse(self, context: ScreenParseContext) -> OcrDraftPayload:
-        image = (
-            context.image if context.image is not None else open_decoded_image(context.image_path)
-        )
-        image_size = Size(width=image.width, height=image.height)
-        debug_dir = context.debug_dir / "incident_log" if context.debug_dir is not None else None
-        if debug_dir is not None:
-            debug_dir.mkdir(parents=True, exist_ok=True)
+        image = context.image
+        owns_image = image is None
+        if image is None:
+            image = open_decoded_image(context.image_path)
+        try:
+            image_size = Size(width=image.width, height=image.height)
+            debug_dir = (
+                context.debug_dir / "incident_log" if context.debug_dir is not None else None
+            )
+            if debug_dir is not None:
+                debug_dir.mkdir(parents=True, exist_ok=True)
 
-        profiles = select_incident_log_profiles(context.layout_family_hint)
-        # Fast-path: incident_log profiles are tried in priority order; once a
-        # profile recognises every cell (missing_count == 0) the remaining
-        # profiles cannot improve on it, so skip them. Default behaviour
-        # evaluates all profiles for highest recall.
-        attempts: list[IncidentParseAttempt] = []
-        for profile in profiles:
-            attempts.append(
-                _parse_profile(
-                    context=context,
-                    image=image,
-                    image_size=image_size,
-                    profile=profile,
-                    debug_dir=debug_dir,
-                    isolate_debug=len(profiles) > 1,
+            profiles = select_incident_log_profiles(context.layout_family_hint)
+            # Fast-path: incident_log profiles are tried in priority order; once a
+            # profile recognises every cell (missing_count == 0) the remaining
+            # profiles cannot improve on it, so skip them. Default behaviour
+            # evaluates all profiles for highest recall.
+            attempts: list[IncidentParseAttempt] = []
+            for profile in profiles:
+                attempts.append(
+                    _parse_profile(
+                        context=context,
+                        image=image,
+                        image_size=image_size,
+                        profile=profile,
+                        debug_dir=debug_dir,
+                        isolate_debug=len(profiles) > 1,
+                    )
                 )
-            )
-            if context.fast_path_enabled and attempts[-1].missing_count == 0:
-                break
-        selected_attempt = min(attempts, key=lambda attempt: attempt.missing_count)
+                if context.fast_path_enabled and attempts[-1].missing_count == 0:
+                    break
+            selected_attempt = min(attempts, key=lambda attempt: attempt.missing_count)
 
-        warnings = [
-            *context.warnings,
-            *selected_attempt.warnings,
-            *plausibility_warnings(selected_attempt.player_counts),
-        ]
-        players = [PlayerResultDraft(incidents=counts) for counts in selected_attempt.player_counts]
-        players = apply_player_order_to_column_players(players, context.player_order_detection)
-        rows = [
-            IncidentLogRow(
-                raw_player_name=None,
-                counts={
-                    incident_name: selected_attempt.player_counts[player_index][incident_name].value
-                    for incident_name in MVP_INCIDENT_NAMES
+            warnings = [
+                *context.warnings,
+                *selected_attempt.warnings,
+                *plausibility_warnings(selected_attempt.player_counts),
+            ]
+            players = [
+                PlayerResultDraft(incidents=counts) for counts in selected_attempt.player_counts
+            ]
+            players = apply_player_order_to_column_players(players, context.player_order_detection)
+            rows = [
+                IncidentLogRow(
+                    raw_player_name=None,
+                    counts={
+                        incident_name: selected_attempt.player_counts[player_index][
+                            incident_name
+                        ].value
+                        for incident_name in MVP_INCIDENT_NAMES
+                    },
+                    confidence=None,
+                    warnings=[
+                        warning.code.value
+                        for warning in warnings
+                        if warning.field_path is not None
+                        and warning.field_path.startswith(f"players[{player_index}].")
+                    ],
+                )
+                for player_index in range(PLAYER_COUNT)
+            ]
+            return OcrDraftPayload(
+                requested_screen_type=context.requested_screen_type,
+                detected_screen_type=context.detected_screen_type,
+                profile_id=context.profile_id,
+                players=players,
+                category_payload={
+                    "status": "parsed",
+                    "parser": "incident_log",
+                    "layout_profile_id": selected_attempt.profile.id,
+                    "incident_names": MVP_INCIDENT_NAMES,
+                    "rows": rows,
+                    "player_order": context.player_order_detection,
+                    "include_raw_text": context.include_raw_text,
                 },
-                confidence=None,
-                warnings=[
-                    warning.code.value
-                    for warning in warnings
-                    if warning.field_path is not None
-                    and warning.field_path.startswith(f"players[{player_index}].")
-                ],
+                warnings=warnings,
+                raw_snippets=selected_attempt.raw_snippets if context.include_raw_text else None,
             )
-            for player_index in range(PLAYER_COUNT)
-        ]
-        return OcrDraftPayload(
-            requested_screen_type=context.requested_screen_type,
-            detected_screen_type=context.detected_screen_type,
-            profile_id=context.profile_id,
-            players=players,
-            category_payload={
-                "status": "parsed",
-                "parser": "incident_log",
-                "layout_profile_id": selected_attempt.profile.id,
-                "incident_names": MVP_INCIDENT_NAMES,
-                "rows": rows,
-                "player_order": context.player_order_detection,
-                "include_raw_text": context.include_raw_text,
-            },
-            warnings=warnings,
-            raw_snippets=selected_attempt.raw_snippets if context.include_raw_text else None,
-        )
+        finally:
+            if owns_image:
+                image.close()
 
 
 def _parse_profile(

@@ -68,89 +68,96 @@ def parse_ranked_amount_screen(
     context: ScreenParseContext,
     spec: RankedAmountScreenSpec,
 ) -> OcrDraftPayload:
-    image = context.image if context.image is not None else open_decoded_image(context.image_path)
-    image_size = Size(width=image.width, height=image.height)
-    rows: list[object] = []
-    players: list[PlayerResultDraft] = []
-    warnings = list(context.warnings)
-    raw_snippets: dict[str, str] = {}
+    image = context.image
+    owns_image = image is None
+    if image is None:
+        image = open_decoded_image(context.image_path)
+    try:
+        image_size = Size(width=image.width, height=image.height)
+        rows: list[object] = []
+        players: list[PlayerResultDraft] = []
+        warnings = list(context.warnings)
+        raw_snippets: dict[str, str] = {}
 
-    debug_dir = context.debug_dir / spec.parser_name if context.debug_dir is not None else None
-    if debug_dir is not None:
-        debug_dir.mkdir(parents=True, exist_ok=True)
-
-    for row_profile in spec.row_profiles:
-        row_image = crop_roi(
-            image,
-            scale_profile_rect_to_image(row_profile.row_roi, image_size),
-        )
-        prepared_row = prepare_ranked_row_image(row_image)
+        debug_dir = context.debug_dir / spec.parser_name if context.debug_dir is not None else None
         if debug_dir is not None:
-            save_debug_ranked_row(
-                row_image=row_image,
-                prepared_row=prepared_row,
-                debug_dir=debug_dir,
-                rank=row_profile.rank,
+            debug_dir.mkdir(parents=True, exist_ok=True)
+
+        for row_profile in spec.row_profiles:
+            row_image = crop_roi(
+                image,
+                scale_profile_rect_to_image(row_profile.row_roi, image_size),
             )
+            prepared_row = prepare_ranked_row_image(row_image)
+            if debug_dir is not None:
+                save_debug_ranked_row(
+                    row_image=row_image,
+                    prepared_row=prepared_row,
+                    debug_dir=debug_dir,
+                    rank=row_profile.rank,
+                )
 
-        recognized_row = recognize_ranked_row_text(
-            row_image,
-            text_engine=context.text_engine,
-            fallback_image=row_image,
-        )
-        player_identity = extract_player_identity(
-            recognized_row.text,
-            alias_resolver=context.alias_resolver,
-        )
-        amount_man_yen = spec.parse_amount(recognized_row.text)
-        row_warnings = _row_warnings(
-            rank=row_profile.rank,
-            raw_player_name=player_identity.raw_player_name,
-            amount_man_yen=amount_man_yen,
-            amount_field=spec.amount_field,
-            amount_warning_message=spec.amount_warning_message,
-        )
-        warnings.extend(row_warnings)
-        raw_snippets[f"rank_{row_profile.rank}"] = recognized_row.text
-
-        rows.append(
-            spec.row_factory(
+            recognized_row = recognize_ranked_row_text(
+                row_image,
+                text_engine=context.text_engine,
+                fallback_image=row_image,
+            )
+            player_identity = extract_player_identity(
+                recognized_row.text,
+                alias_resolver=context.alias_resolver,
+            )
+            amount_man_yen = spec.parse_amount(recognized_row.text)
+            row_warnings = _row_warnings(
                 rank=row_profile.rank,
                 raw_player_name=player_identity.raw_player_name,
                 amount_man_yen=amount_man_yen,
-                confidence=recognized_row.confidence,
-                warnings=[warning.code.value for warning in row_warnings],
-            )
-        )
-        players.append(
-            _ranked_amount_player(
-                rank=row_profile.rank,
-                player_identity=player_identity,
-                amount_man_yen=amount_man_yen,
                 amount_field=spec.amount_field,
-                raw_text=recognized_row.text,
-                confidence=recognized_row.confidence,
+                amount_warning_message=spec.amount_warning_message,
             )
-        )
+            warnings.extend(row_warnings)
+            raw_snippets[f"rank_{row_profile.rank}"] = recognized_row.text
 
-    players = apply_player_order_to_ranked_players(players, context.player_order_detection)
-    if spec.warn_duplicate_members:
-        warnings.extend(_duplicate_member_warnings(players, parser_name=spec.parser_name))
-    return OcrDraftPayload(
-        requested_screen_type=context.requested_screen_type,
-        detected_screen_type=context.detected_screen_type,
-        profile_id=context.profile_id,
-        players=players,
-        category_payload={
-            "status": "parsed",
-            "parser": spec.parser_name,
-            "rows": rows,
-            "player_order": context.player_order_detection,
-            "include_raw_text": context.include_raw_text,
-        },
-        warnings=warnings,
-        raw_snippets=raw_snippets if context.include_raw_text else None,
-    )
+            rows.append(
+                spec.row_factory(
+                    rank=row_profile.rank,
+                    raw_player_name=player_identity.raw_player_name,
+                    amount_man_yen=amount_man_yen,
+                    confidence=recognized_row.confidence,
+                    warnings=[warning.code.value for warning in row_warnings],
+                )
+            )
+            players.append(
+                _ranked_amount_player(
+                    rank=row_profile.rank,
+                    player_identity=player_identity,
+                    amount_man_yen=amount_man_yen,
+                    amount_field=spec.amount_field,
+                    raw_text=recognized_row.text,
+                    confidence=recognized_row.confidence,
+                )
+            )
+
+        players = apply_player_order_to_ranked_players(players, context.player_order_detection)
+        if spec.warn_duplicate_members:
+            warnings.extend(_duplicate_member_warnings(players, parser_name=spec.parser_name))
+        return OcrDraftPayload(
+            requested_screen_type=context.requested_screen_type,
+            detected_screen_type=context.detected_screen_type,
+            profile_id=context.profile_id,
+            players=players,
+            category_payload={
+                "status": "parsed",
+                "parser": spec.parser_name,
+                "rows": rows,
+                "player_order": context.player_order_detection,
+                "include_raw_text": context.include_raw_text,
+            },
+            warnings=warnings,
+            raw_snippets=raw_snippets if context.include_raw_text else None,
+        )
+    finally:
+        if owns_image:
+            image.close()
 
 
 def _duplicate_member_warnings(

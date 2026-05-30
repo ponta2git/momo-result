@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from PIL import Image
 
 from momo_ocr.features.ocr_domain.models import ScreenType
@@ -52,3 +53,66 @@ def test_category_parser_returns_payload_with_profile_context(tmp_path: Path) ->
     assert payload.profile_id == "full-hd-incident-log-v1"
     assert payload.category_payload["status"] == "parsed"
     assert payload.category_payload["parser"] == "incident_log"
+
+
+def test_ranked_amount_parser_closes_image_it_opens(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    image = Image.new("RGB", (1280, 720), color="white")
+
+    def open_image(_path: Path) -> Image.Image:
+        return image
+
+    monkeypatch.setattr(
+        "momo_ocr.features.ocr_results.ranked_amount_screen.open_decoded_image",
+        open_image,
+    )
+
+    parser = default_parser_registry().get(ScreenType.TOTAL_ASSETS)
+    parser.parse(
+        ScreenParseContext(
+            image_path=tmp_path / "assets.jpg",
+            requested_screen_type=ScreenType.TOTAL_ASSETS,
+            detected_screen_type=ScreenType.TOTAL_ASSETS,
+            profile_id="full-hd-total-assets-v1",
+            debug_dir=None,
+            include_raw_text=False,
+            text_engine=FakeTextRecognitionEngine("ぽんた社長 1万円"),
+        )
+    )
+
+    with pytest.raises(ValueError, match="closed image"):
+        image.getbbox()
+
+
+def test_incident_log_parser_closes_image_it_opens(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    image = Image.new("RGB", (1280, 720), color="white")
+
+    def open_image(_path: Path) -> Image.Image:
+        return image
+
+    monkeypatch.setattr(
+        "momo_ocr.features.incident_log.parser.open_decoded_image",
+        open_image,
+    )
+
+    parser = default_parser_registry().get(ScreenType.INCIDENT_LOG)
+    parser.parse(
+        ScreenParseContext(
+            image_path=tmp_path / "incident.jpg",
+            requested_screen_type=ScreenType.INCIDENT_LOG,
+            detected_screen_type=ScreenType.INCIDENT_LOG,
+            profile_id="full-hd-incident-log-v1",
+            debug_dir=None,
+            include_raw_text=False,
+            text_engine=FakeTextRecognitionEngine("0"),
+            layout_family_hint="world",
+        )
+    )
+
+    with pytest.raises(ValueError, match="closed image"):
+        image.getbbox()

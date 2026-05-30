@@ -1,7 +1,7 @@
 package momo.api.adapters
 
 import java.nio.charset.StandardCharsets
-import java.nio.file.{Files, LinkOption, Path}
+import java.nio.file.{Files, LinkOption, Path, StandardOpenOption}
 import java.security.MessageDigest
 import java.time.Instant
 
@@ -23,6 +23,8 @@ final class LocalFsImageStore[F[_]: Sync: Random](root: Path)
     extends ImageStore[F], ImageStorageInspector[F], ImageOrphanStore[F]:
   import LocalFsImageStore.*
 
+  private val rootDirectory: Path = root.toAbsolutePath.normalize()
+
   override def save(
       ownerAccountId: AccountId,
       fileName: Option[String],
@@ -34,7 +36,8 @@ final class LocalFsImageStore[F[_]: Sync: Random](root: Path)
       directory = accountDirectory(ownerAccountId)
       _ <- Sync[F].blocking(Files.createDirectories(directory))
       path = directory.resolve(s"${id.value}.${imageType.extension}").toAbsolutePath.normalize()
-      _ <- Sync[F].blocking(Files.write(path, bytes))
+      _ <- Sync[F]
+        .blocking(Files.write(path, bytes, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE))
     yield StoredImage(id, path, imageType.mediaType, bytes.length.toLong)
   }
 
@@ -67,15 +70,18 @@ final class LocalFsImageStore[F[_]: Sync: Random](root: Path)
   }
 
   override def diskUsage: F[ImageDiskUsage] = Sync[F].blocking {
-    Files.createDirectories(root)
-    ImageDiskUsage(totalBytes = root.toFile.getTotalSpace, usableBytes = root.toFile.getUsableSpace)
+    Files.createDirectories(rootDirectory)
+    ImageDiskUsage(
+      totalBytes = rootDirectory.toFile.getTotalSpace,
+      usableBytes = rootDirectory.toFile.getUsableSpace,
+    )
   }
 
   override def deleteOrphans(referenced: Set[ImageId], olderThan: Instant): F[Int] = Sync[F]
     .blocking {
-      if !Files.isDirectory(root) then 0
+      if !Files.isDirectory(rootDirectory) then 0
       else
-        val deleted = imageFiles(root).count { path =>
+        val deleted = imageFiles(rootDirectory).count { path =>
           fileImageId(path).exists(id => !referenced.contains(id)) &&
           Files.getLastModifiedTime(path).toInstant.isBefore(olderThan) &&
           Files.deleteIfExists(path)
@@ -84,22 +90,23 @@ final class LocalFsImageStore[F[_]: Sync: Random](root: Path)
         deleted
     }
 
-  private def accountDirectory(accountId: AccountId): Path = root
-    .resolve(s"account-${sha256Hex(accountId.value)}").toAbsolutePath.normalize()
+  private def accountDirectory(accountId: AccountId): Path = rootDirectory
+    .resolve(s"account-${sha256Hex(accountId.value)}").normalize()
 
-  private def flatImagePath(imageId: ImageId, imageType: ImageType): Path = root
-    .resolve(s"${imageId.value}.${imageType.extension}").toAbsolutePath.normalize()
+  private def flatImagePath(stem: String, imageType: ImageType): Path = rootDirectory
+    .resolve(s"$stem.${imageType.extension}").normalize()
 
   private def imagePaths(imageId: ImageId): List[(Path, ImageType)] =
-    val candidates = SupportedImageTypes
-      .map(imageType => flatImagePath(imageId, imageType) -> imageType)
-    val nested =
-      if !Files.isDirectory(root) then List.empty[(Path, ImageType)]
-      else
-        imageFiles(root).flatMap(path =>
+    val stem = safeImageFileStem(imageId)
+    val candidates = stem.toList.flatMap(value =>
+      SupportedImageTypes.map(imageType => flatImagePath(value, imageType) -> imageType)
+    )
+    val nested = stem match
+      case None => List.empty[(Path, ImageType)]
+      case Some(value) if !Files.isDirectory(rootDirectory) => List.empty[(Path, ImageType)]
+      case Some(value) => imageFiles(rootDirectory).flatMap(path =>
           SupportedImageTypes.collectFirst {
-            case imageType
-                if path.getFileName.toString == s"${imageId.value}.${imageType.extension}" =>
+            case imageType if path.getFileName.toString == s"$value.${imageType.extension}" =>
               path -> imageType
           }
         )
@@ -113,9 +120,9 @@ final class LocalFsImageStore[F[_]: Sync: Random](root: Path)
     finally paths.close()
 
   private def deleteEmptyDirectories(): Unit =
-    val paths = Files.walk(root, 2)
+    val paths = Files.walk(rootDirectory, 2)
     try paths.iterator().asScala.toList.sortBy(_.getNameCount).reverseIterator.foreach { path =>
-        if !path.equals(root) && Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS) then
+        if !path.equals(rootDirectory) && Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS) then
           val entries = Files.list(path)
           try if !entries.iterator().hasNext then
               val _ = Files.deleteIfExists(path)
@@ -128,7 +135,7 @@ final class LocalFsImageStore[F[_]: Sync: Random](root: Path)
     SupportedImageTypes.collectFirst {
       case imageType if fileName.endsWith(s".${imageType.extension}") =>
         fileName.stripSuffix(s".${imageType.extension}")
-    }.flatMap(ImageId.fromString(_).toOption)
+    }.filter(isSafeImageFileStem).flatMap(ImageId.fromString(_).toOption)
 
   private def validate(
       bytes: Array[Byte],
@@ -177,6 +184,18 @@ object LocalFsImageStore:
 
   private def sha256Hex(value: String): String = MessageDigest.getInstance("SHA-256")
     .digest(value.getBytes(StandardCharsets.UTF_8)).map(byte => f"${byte & 0xff}%02x").mkString
+
+  private def safeImageFileStem(imageId: ImageId): Option[String] = Option
+    .when(isSafeImageFileStem(imageId.value))(imageId.value)
+
+  private def isSafeImageFileStem(value: String): Boolean = value.nonEmpty &&
+    value
+      .forall(character => isAsciiLetterOrDigit(character) || character == '-' || character == '_')
+
+  private def isAsciiLetterOrDigit(character: Char): Boolean =
+    (character >= 'A' && character <= 'Z') ||
+      (character >= 'a' && character <= 'z') ||
+      (character >= '0' && character <= '9')
 
   def normalizeMediaType(value: String): String = value.takeWhile(_ != ';').trim.toLowerCase
 

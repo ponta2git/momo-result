@@ -81,6 +81,24 @@ final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:
     }
   }
 
+  test("does not resolve unsafe image ids outside the upload root") {
+    tempDirectory("momo-api-image-store-traversal").use { dir =>
+      val uploadRoot = dir.resolve("uploads")
+      val outsidePath = dir.resolve("outside.png")
+      val store = LocalFsImageStore[IO](uploadRoot)
+      val unsafeImageId = ImageId.unsafeFromString("../outside")
+      for
+        _ <- IO.blocking(Files.write(outsidePath, pngBytes))
+        found <- store.find(unsafeImageId)
+        deleted <- store.delete(unsafeImageId)
+        outsideStillExists <- IO.blocking(Files.exists(outsidePath))
+      yield
+        assertEquals(found, None)
+        assertEquals(deleted, false)
+        assert(outsideStillExists)
+    }
+  }
+
   test("rejects unsupported bytes") {
     tempDirectory("momo-api-image-store").use { dir =>
       val store = LocalFsImageStore[IO](dir)

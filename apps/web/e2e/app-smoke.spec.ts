@@ -207,6 +207,45 @@ test("filters and sorts the confirmed match list", async ({ page }) => {
   await expect(page).toHaveURL(/[?&]sort=held_desc(?:&|$)/u);
 });
 
+test("opens match detail immediately with a loading shell from the list", async ({ page }) => {
+  expect(matchId).toBeTruthy();
+
+  let releaseDetailResponse!: () => void;
+  let detailApiRequested = false;
+  const detailHold = new Promise<void>((resolve) => {
+    releaseDetailResponse = resolve;
+  });
+  const detailUrlPattern = `**/api/matches/${matchId}`;
+  await page.route(detailUrlPattern, async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.continue();
+      return;
+    }
+
+    detailApiRequested = true;
+    await detailHold;
+    await route.continue();
+  });
+
+  await page.goto("/matches?status=confirmed");
+
+  await expect(page.getByRole("heading", { exact: true, name: "試合一覧" })).toBeVisible();
+  const detailLink = page.getByRole("link", { name: "詳細を見る" });
+  await expect(detailLink).toHaveAttribute("href", `/matches/${matchId}`);
+  await detailLink.click();
+
+  await expect(page).toHaveURL(new RegExp(`/matches/${matchId}$`, "u"));
+  await expect(page.getByLabel("試合詳細を読み込み中")).toHaveAttribute("aria-busy", "true");
+  await expect(
+    page.getByRole("heading", { exact: true, name: "試合詳細を読み込み中" }),
+  ).toBeVisible();
+  await expect.poll(() => detailApiRequested).toBe(true);
+
+  releaseDetailResponse();
+  await expect(page.getByRole("heading", { name: /第\d+試合の結果/u })).toBeVisible();
+  await page.unroute(detailUrlPattern);
+});
+
 test("downloads an export for the confirmed match", async ({ page }) => {
   expect(matchId).toBeTruthy();
 

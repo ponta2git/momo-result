@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -17,6 +17,7 @@ import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { listGameTitles, listMapMasters, listSeasonMasters } from "@/shared/api/masters";
 import { deleteMatch, getMatch } from "@/shared/api/matches";
 import { formatApiError } from "@/shared/api/problemDetails";
+import { isInitialQueryLoading, shouldShowBlockingQueryError } from "@/shared/api/queryErrorState";
 import { heldEventKeys, masterKeys, matchKeys } from "@/shared/api/queryKeys";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 
@@ -32,24 +33,25 @@ export function useMatchDetailPageController() {
     direction: "asc",
   });
 
-  const matchQuery = useSuspenseQuery({
+  const matchQuery = useQuery({
+    enabled: matchId.trim().length > 0,
     queryFn: ({ signal }) => getMatch(matchId, { signal }),
     queryKey: matchKeys.detail(matchId),
   });
 
-  const heldEventsQuery = useSuspenseQuery({
+  const heldEventsQuery = useQuery({
     queryFn: ({ signal }) => listHeldEvents("", 100, { signal }),
     queryKey: heldEventKeys.scope("all"),
   });
-  const gameTitlesQuery = useSuspenseQuery({
+  const gameTitlesQuery = useQuery({
     queryFn: ({ signal }) => listGameTitles({ signal }),
     queryKey: masterKeys.gameTitles.list("match-detail"),
   });
-  const seasonsQuery = useSuspenseQuery({
+  const seasonsQuery = useQuery({
     queryFn: ({ signal }) => listSeasonMasters(undefined, { signal }),
     queryKey: masterKeys.seasonMasters.list("match-detail"),
   });
-  const mapsQuery = useSuspenseQuery({
+  const mapsQuery = useQuery({
     queryFn: ({ signal }) => listMapMasters(undefined, { signal }),
     queryKey: masterKeys.mapMasters.list("match-detail"),
   });
@@ -71,16 +73,20 @@ export function useMatchDetailPageController() {
   });
 
   const match = matchQuery.data;
-  const heldEvent = (heldEventsQuery.data?.items ?? []).find(
-    (event) => event.id === match.heldEventId,
-  );
-  const gameTitle = (gameTitlesQuery.data?.items ?? []).find(
-    (item) => item.id === match.gameTitleId,
-  );
-  const season = (seasonsQuery.data?.items ?? []).find((item) => item.id === match.seasonMasterId);
-  const map = (mapsQuery.data?.items ?? []).find((item) => item.id === match.mapMasterId);
-  const heldAt = heldEvent?.heldAt ?? match.playedAt;
-  const sourcePlayers = useMemo(() => match.players ?? [], [match.players]);
+  const heldEvent = match
+    ? (heldEventsQuery.data?.items ?? []).find((event) => event.id === match.heldEventId)
+    : undefined;
+  const gameTitle = match
+    ? (gameTitlesQuery.data?.items ?? []).find((item) => item.id === match.gameTitleId)
+    : undefined;
+  const season = match
+    ? (seasonsQuery.data?.items ?? []).find((item) => item.id === match.seasonMasterId)
+    : undefined;
+  const map = match
+    ? (mapsQuery.data?.items ?? []).find((item) => item.id === match.mapMasterId)
+    : undefined;
+  const heldAt = heldEvent?.heldAt ?? match?.playedAt ?? "";
+  const sourcePlayers = useMemo(() => match?.players ?? [], [match?.players]);
   const players = useMemo(() => sortMatchDetailPlayers(sourcePlayers, sort), [sourcePlayers, sort]);
   const rankedPlayers = useMemo(() => rankMatchDetailPlayers(sourcePlayers), [sourcePlayers]);
 
@@ -92,6 +98,28 @@ export function useMatchDetailPageController() {
     setErrorMessage(null);
     await deleteMutation.mutateAsync();
   };
+
+  const detailLoading =
+    isInitialQueryLoading(matchQuery) ||
+    isInitialQueryLoading(heldEventsQuery) ||
+    isInitialQueryLoading(gameTitlesQuery) ||
+    isInitialQueryLoading(seasonsQuery) ||
+    isInitialQueryLoading(mapsQuery);
+  const detailLoadFailed =
+    matchId.trim().length === 0 ||
+    shouldShowBlockingQueryError(matchQuery) ||
+    shouldShowBlockingQueryError(heldEventsQuery) ||
+    shouldShowBlockingQueryError(gameTitlesQuery) ||
+    shouldShowBlockingQueryError(seasonsQuery) ||
+    shouldShowBlockingQueryError(mapsQuery);
+
+  if (detailLoading) {
+    return { status: "loading" as const };
+  }
+
+  if (detailLoadFailed || !match) {
+    return { status: "loadFailed" as const };
+  }
 
   return {
     confirmDelete,
@@ -108,5 +136,6 @@ export function useMatchDetailPageController() {
     setSortKey,
     showConfirm,
     sort,
+    status: "ready" as const,
   };
 }

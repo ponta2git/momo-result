@@ -12,6 +12,7 @@ import { MatchDetailPage } from "@/features/matches/MatchDetailPage";
 import { MatchEditPage } from "@/features/matches/MatchEditPage";
 import { MatchesListPage } from "@/features/matches/MatchesListPage";
 import { createDeferred } from "@/test/deferred";
+import { makeFourPlayerResults, makeMatchDetail } from "@/test/factories";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
@@ -64,6 +65,58 @@ describe("MatchesListPage", () => {
     const detailLinks = await screen.findAllByRole("link", { name: "詳細を見る" });
     expect(detailLinks).toHaveLength(2);
     detailLinks.forEach((link) => expect(link).toHaveAttribute("href", "/matches/match-1"));
+  });
+
+  it("commits detail navigation immediately while the detail payload is loading", async () => {
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    const detailGate = createDeferred();
+    let detailRequested = false;
+    server.use(
+      http.get("/api/matches/:matchId", async ({ params }) => {
+        detailRequested = true;
+        await detailGate.promise;
+        return HttpResponse.json(
+          makeMatchDetail({
+            matchId: String(params["matchId"]),
+            players: makeFourPlayerResults(),
+          }),
+        );
+      }),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches"]}>
+          <LocationProbe />
+          <Routes>
+            <Route path="/matches" element={<MatchesListPage />} />
+            <Route path="/matches/:matchId" element={<MatchDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
+
+    const detailLinks = await screen.findAllByRole("link", { name: "詳細を見る" });
+    const detailLink = detailLinks[0];
+    if (!detailLink) {
+      throw new Error("expected a detail link");
+    }
+    await user.click(detailLink);
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("current location")).toHaveTextContent("/matches/match-1"),
+    );
+    expect(await screen.findByLabelText("試合詳細を読み込み中")).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+    expect(screen.getByRole("heading", { name: "試合詳細を読み込み中" })).toBeInTheDocument();
+    await waitFor(() => expect(detailRequested).toBe(true));
+
+    detailGate.resolve();
+    expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeInTheDocument();
   });
 
   it("shows a station artwork on the filter section", async () => {

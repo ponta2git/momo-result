@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import logging
 import sys
 from pathlib import Path
 from typing import Any
@@ -17,6 +16,7 @@ from eval_lib.runner import (
     resolve_debug_dir,
     select_files,
 )
+from momo_ocr.features.text_recognition.engine import close_text_engine
 from momo_ocr.features.text_recognition.factory import default_text_recognition_engine
 
 
@@ -119,13 +119,4 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.write(json.dumps(summary, ensure_ascii=False, indent=2) + "\n")
         return 0 if not summary["failures"] else 1
     finally:
-        _close_text_engine(text_engine)
-
-
-def _close_text_engine(text_engine: object) -> None:
-    close_fn = getattr(text_engine, "close", None)
-    if callable(close_fn):
-        try:
-            close_fn()
-        except Exception:
-            logging.getLogger(__name__).exception("Failed to close OCR text engine.")
+        close_text_engine(text_engine)

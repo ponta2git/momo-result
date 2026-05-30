@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
+import momo_ocr.features.ocr_analysis.analyze_image as analyze_module
 from momo_ocr.features.ocr_analysis.analyze_image import analyze_image
 from momo_ocr.features.ocr_domain.models import OcrDraftPayload, ScreenType
 from momo_ocr.features.ocr_results.parsing import ParserRegistry, ScreenParseContext
@@ -67,6 +68,32 @@ def test_analyze_image_closes_decoded_image_after_parse(tmp_path: Path) -> None:
     assert len(parsed_images) == 1
     with pytest.raises(ValueError, match="closed image"):
         parsed_images[0].getbbox()
+
+
+def test_analyze_image_closes_default_text_engine(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    image_path = tmp_path / "assets.jpg"
+    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    closes: list[str] = []
+    text_engine = _ClosableFakeEngine("ぽんた社長 1万円", closes)
+
+    monkeypatch.setattr(
+        analyze_module,
+        "default_text_recognition_engine",
+        lambda: text_engine,
+    )
+
+    result = analyze_image(
+        image_path=image_path,
+        requested_screen_type="total_assets",
+        debug_dir=None,
+        include_raw_text=False,
+    )
+
+    assert result.failure_code is None
+    assert closes == ["close"]
 
 
 def test_analyze_image_can_use_fake_engine_for_auto_detection(tmp_path: Path) -> None:
@@ -234,3 +261,12 @@ def test_analyze_image_rejects_path_outside_image_root(tmp_path: Path) -> None:
     )
 
     assert result.failure_code == "QUEUE_FAILURE"
+
+
+class _ClosableFakeEngine(FakeTextRecognitionEngine):
+    def __init__(self, text: str, closes: list[str]) -> None:
+        super().__init__(text)
+        self._closes = closes
+
+    def close(self) -> None:
+        self._closes.append("close")

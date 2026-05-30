@@ -22,7 +22,7 @@ from momo_ocr.features.screen_detection.classifier import classify_screen_type, 
 from momo_ocr.features.screen_detection.title_evidence import recognize_title_evidence
 from momo_ocr.features.temp_images.storage import resolve_local_image
 from momo_ocr.features.temp_images.validation import open_decoded_image, read_image_metadata
-from momo_ocr.features.text_recognition.engine import TextRecognitionEngine
+from momo_ocr.features.text_recognition.engine import TextRecognitionEngine, close_text_engine
 from momo_ocr.features.text_recognition.factory import default_text_recognition_engine
 from momo_ocr.shared.errors import OcrError
 from momo_ocr.shared.time import record_duration_ms
@@ -42,15 +42,46 @@ def analyze_image(  # noqa: PLR0913
     enforce_size_limit: bool = False,
     fast_path_enabled: bool = False,
 ) -> AnalysisResult:
+    owns_engine = text_engine is None
+    engine = text_engine if text_engine is not None else default_text_recognition_engine()
+    try:
+        return _analyze_image_with_engine(
+            image_path=image_path,
+            requested_screen_type=requested_screen_type,
+            debug_dir=debug_dir,
+            include_raw_text=include_raw_text,
+            engine=engine,
+            parser_registry=parser_registry,
+            layout_family_hint=layout_family_hint,
+            alias_resolver=alias_resolver,
+            image_root=image_root,
+            enforce_size_limit=enforce_size_limit,
+            fast_path_enabled=fast_path_enabled,
+        )
+    finally:
+        if owns_engine:
+            close_text_engine(engine)
+
+
+def _analyze_image_with_engine(  # noqa: PLR0913
+    *,
+    image_path: Path,
+    requested_screen_type: str,
+    debug_dir: Path | None,
+    include_raw_text: bool,
+    engine: TextRecognitionEngine,
+    parser_registry: ParserRegistry | None,
+    layout_family_hint: str | None,
+    alias_resolver: PlayerAliasResolver | None,
+    image_root: Path | None,
+    enforce_size_limit: bool,
+    fast_path_enabled: bool,
+) -> AnalysisResult:
     timings: dict[str, float] = {}
     metadata = None
     detection = None
     player_order_detection: PlayerOrderDetection | None = None
     requested_type = ScreenType(requested_screen_type)
-    # Engine and registry construction are intentionally cheap; in the
-    # production worker, the runner injects long-lived instances so this
-    # default branch only fires for one-off CLI / eval invocations.
-    engine = text_engine if text_engine is not None else default_text_recognition_engine()
     registry = parser_registry if parser_registry is not None else default_parser_registry()
     resolved_alias_resolver = (
         alias_resolver if alias_resolver is not None else DEFAULT_ALIAS_RESOLVER

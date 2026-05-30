@@ -24,6 +24,7 @@ from momo_ocr.features.standalone_analysis.layout_family import detect_layout_fa
 from momo_ocr.features.text_recognition.engine import (
     FakeTextRecognitionEngine,
     TextRecognitionEngine,
+    close_text_engine,
 )
 from momo_ocr.features.text_recognition.fast_path import parse_fast_path_flag
 from momo_ocr.features.text_recognition.tesseract import TesseractEngine
@@ -126,7 +127,7 @@ def _run_analyze(args: argparse.Namespace) -> int:
             sys.stdout.write(f"{result.to_json()}\n")
         return _analysis_exit_code(result)
     finally:
-        _close_text_engine(text_engine)
+        close_text_engine(text_engine)
 
 
 def _run_batch(args: argparse.Namespace) -> int:
@@ -148,16 +149,7 @@ def _run_batch(args: argparse.Namespace) -> int:
             sys.stdout.write(f"{report.to_json()}\n")
         return _batch_exit_code(report)
     finally:
-        _close_text_engine(text_engine)
-
-
-def _close_text_engine(text_engine: TextRecognitionEngine) -> None:
-    close_fn = getattr(text_engine, "close", None)
-    if callable(close_fn):
-        try:
-            close_fn()
-        except Exception:
-            logging.getLogger(__name__).exception("Failed to close OCR text engine.")
+        close_text_engine(text_engine)
 
 
 def _run_worker(args: argparse.Namespace) -> int:

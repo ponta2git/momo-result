@@ -7,6 +7,7 @@ on:
       - "apps/ocr-worker/**"
       - "apps/web/**"
       - "deploy/**"
+      - "docs/schemas/**"
       - "scripts/ci/**"
       - "Dockerfile"
       - "fly.toml"

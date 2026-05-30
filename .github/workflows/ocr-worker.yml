@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "apps/ocr-worker/**"
+      - "docs/schemas/**"
       - ".github/workflows/ocr-worker.yml"
   push:
     branches:
@@ -11,6 +12,7 @@ on:
       - main
     paths:
       - "apps/ocr-worker/**"
+      - "docs/schemas/**"
       - ".github/workflows/ocr-worker.yml"
 
 jobs:

@@ -82,6 +82,7 @@ function resolveLocalImport(sourceFile, specifier) {
 
 const importPattern =
   /(?:import|export)\s+(?:[^'"]*?\s+from\s+)?["']([^"']+)["']|import\(\s*["']([^"']+)["']\s*\)/gu;
+const staticImportPattern = /(?:import|export)\s+(?:[^'"]*?\s+from\s+)?["']([^"']+)["']/gu;
 
 const violations = [];
 
@@ -94,6 +95,20 @@ for (const file of walk(root)) {
   const sourceMatchesSubArea = matchesSubArea(relativePath);
   const isFeaturePage =
     productionSource && sourceLayer === "features" && relativePath.endsWith("Page.tsx");
+  const isAppRouteModule = relativePath === "app/routeModules.ts";
+
+  if (productionSource && sourceLayer === "app" && !isAppRouteModule) {
+    for (const match of source.matchAll(staticImportPattern)) {
+      const specifier = match[1] ?? "";
+      const resolvedImport = resolveLocalImport(relativePath, specifier);
+      const importedLayer = resolvedImport ? layer(resolvedImport) : undefined;
+      if (importedLayer === "features") {
+        violations.push(
+          `${relativePath}: app code must load feature modules through app/routeModules.ts instead of static import ${specifier}`,
+        );
+      }
+    }
+  }
 
   for (const match of source.matchAll(importPattern)) {
     const specifier = match[1] ?? match[2] ?? "";

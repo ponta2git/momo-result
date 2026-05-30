@@ -13,11 +13,11 @@ import {
   loadLoginPage,
   loadMastersPage,
   loadMatchCreatePage,
+  loadMatchDetailPage,
   loadMatchesListPage,
   loadMatchEditPage,
   loadOcrCapturePage,
 } from "@/app/routeModules";
-import { MatchDetailPage } from "@/features/matches/MatchDetailPage";
 
 const AdminAccountsPage = lazy(loadAdminAccountsPage);
 const LoginPage = lazy(loadLoginPage);
@@ -26,6 +26,7 @@ const ExportPage = lazy(loadExportPage);
 const HeldEventsPage = lazy(loadHeldEventsPage);
 const MastersPage = lazy(loadMastersPage);
 const MatchCreatePage = lazy(loadMatchCreatePage);
+const MatchDetailPage = lazy(loadMatchDetailPage);
 const MatchesListPage = lazy(loadMatchesListPage);
 const MatchEditPage = lazy(loadMatchEditPage);
 const OcrCapturePage = lazy(loadOcrCapturePage);

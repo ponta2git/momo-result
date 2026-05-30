@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Protocol
 
 import pytest
@@ -32,6 +33,8 @@ class FakeRedis:
         self.claimed = [] if claimed is None else claimed
         self.acked: list[tuple[str, str, str]] = []
         self.dead_letters: list[tuple[str, dict[str, str]]] = []
+        self.pipeline_transactions: list[bool] = []
+        self.pipeline_commands: list[tuple[str, ...]] = []
         self.group_created = False
         self.pending_range_counts: list[int] = []
         self.claimed_message_ids: list[list[str]] = []
@@ -102,8 +105,42 @@ class FakeRedis:
     def xack(self, stream: KeyT, group: KeyT, delivery_tag: RedisStreamId, /) -> None:
         self.acked.append((str(stream), str(group), str(delivery_tag)))
 
+    def pipeline(
+        self,
+        transaction: object | None = None,
+        shard_hint: object | None = None,
+    ) -> FakeRedisPipeline:
+        del shard_hint
+        self.pipeline_transactions.append(True if transaction is None else bool(transaction))
+        return FakeRedisPipeline(self)
+
     def close(self) -> None:
         self.closed = True
+
+
+class FakeRedisPipeline:
+    def __init__(self, redis: FakeRedis) -> None:
+        self._redis = redis
+        self._commands: list[Callable[[], object]] = []
+
+    def xadd(self, stream: KeyT, fields: dict[EncodableT, EncodableT], /) -> FakeRedisPipeline:
+        self._redis.pipeline_commands.append(("xadd", str(stream)))
+        self._commands.append(lambda: self._redis.xadd(stream, fields))
+        return self
+
+    def xack(
+        self,
+        stream: KeyT,
+        group: KeyT,
+        delivery_tag: RedisStreamId,
+        /,
+    ) -> FakeRedisPipeline:
+        self._redis.pipeline_commands.append(("xack", str(stream), str(group), str(delivery_tag)))
+        self._commands.append(lambda: self._redis.xack(stream, group, delivery_tag))
+        return self
+
+    def execute(self) -> list[object]:
+        return [command() for command in self._commands]
 
 
 class RedisConsumerFactory(Protocol):
@@ -264,6 +301,11 @@ def test_redis_consumer_dead_letters_and_acks_max_attempts_delivery(
     assert redis.dead_letters[0][0] == "momo:ocr:jobs:dead"
     assert redis.dead_letters[0][1]["deadLetterReason"] == "QUEUE_FAILURE"
     assert redis.acked == [("momo:ocr:jobs", "momo-ocr-workers", "1-0")]
+    assert redis.pipeline_transactions == [True]
+    assert redis.pipeline_commands == [
+        ("xadd", "momo:ocr:jobs:dead"),
+        ("xack", "momo:ocr:jobs", "momo-ocr-workers", "1-0"),
+    ]
 
 
 def test_redis_consumer_dead_letter_without_dlq_raises_without_ack(

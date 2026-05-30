@@ -89,6 +89,25 @@ class OcrJobConsumer(Protocol):  # pragma: no cover
         raise NotImplementedError
 
 
+class RedisPipeline(Protocol):  # pragma: no cover
+    """Minimal Redis transaction pipeline used for multi-command queue moves."""
+
+    def xadd(self, name: KeyT, fields: dict[EncodableT, EncodableT], /) -> RedisPipeline:
+        raise NotImplementedError
+
+    def xack(
+        self,
+        name: KeyT,
+        groupname: KeyT,
+        delivery_tag: RedisStreamId,
+        /,
+    ) -> RedisPipeline:
+        raise NotImplementedError
+
+    def execute(self) -> object:
+        raise NotImplementedError
+
+
 class RedisStreamClient(Protocol):  # pragma: no cover
     """Minimal redis-py surface used by :class:`RedisOcrJobConsumer`."""
 
@@ -139,10 +158,14 @@ class RedisStreamClient(Protocol):  # pragma: no cover
     ) -> object:
         raise NotImplementedError
 
-    def xadd(self, name: KeyT, fields: dict[EncodableT, EncodableT], /) -> object:
+    def xack(self, name: KeyT, groupname: KeyT, delivery_tag: RedisStreamId, /) -> object:
         raise NotImplementedError
 
-    def xack(self, name: KeyT, groupname: KeyT, delivery_tag: RedisStreamId, /) -> object:
+    def pipeline(
+        self,
+        transaction: object | None = None,
+        shard_hint: object | None = None,
+    ) -> object:
         raise NotImplementedError
 
     def close(self) -> None:
@@ -352,8 +375,10 @@ class RedisOcrJobConsumer:
         dlq_fields["deadLetterReason"] = failure.code.value
         dlq_fields["deadLetterMessage"] = failure.message
         dlq_fields["deadLetterDeliveries"] = str(deliveries)
-        self._redis.xadd(self._retry_config.dead_letter_stream, dlq_fields)
-        self.ack(delivery_tag)
+        pipeline = cast("RedisPipeline", self._redis.pipeline(transaction=True))
+        pipeline.xadd(self._retry_config.dead_letter_stream, dlq_fields)
+        pipeline.xack(self._stream, self._group, delivery_tag)
+        pipeline.execute()
         logger.error(
             "Moved OCR queue delivery to dead-letter stream",
             extra={

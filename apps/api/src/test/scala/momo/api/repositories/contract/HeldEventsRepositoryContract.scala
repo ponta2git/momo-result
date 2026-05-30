@@ -7,6 +7,7 @@ import munit.CatsEffectSuite
 
 import momo.api.domain.HeldEvent
 import momo.api.domain.ids.HeldEventId
+import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.HeldEventsRepository
 
 /**
@@ -40,6 +41,17 @@ trait HeldEventsRepositoryContract:
       _ <- repo.create(event)
       got <- repo.find(event.id)
     yield assertEquals(got, Some(event))
+
+  test("create rejects duplicate held event ids as a conflict"):
+    val event = HeldEvent(HeldEventId.unsafeFromString("held_duplicate"), baseInstant)
+    for
+      repo <- freshRepo
+      _ <- repo.create(event)
+      duplicate <- repo.create(event).attempt
+    yield duplicate match
+      case Left(error: AppException) =>
+        assertEquals(error.error, AppError.Conflict("held event already exists: held_duplicate"))
+      case other => fail(s"expected AppException(Conflict), got $other")
 
   test("delete removes an existing held event and returns false for missing ids"):
     val event = HeldEvent(HeldEventId.unsafeFromString("held_delete"), baseInstant)

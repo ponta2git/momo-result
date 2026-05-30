@@ -6,6 +6,7 @@ import cats.syntax.all.*
 
 import momo.api.domain.HeldEvent
 import momo.api.domain.ids.HeldEventId
+import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.{
   HeldEventDeletionAlg, HeldEventDeletionRepository, HeldEventDeletionResult, HeldEventsAlg,
   HeldEventsRepository, MatchDraftsRepository, MatchesRepository,
@@ -18,7 +19,14 @@ final class InMemoryHeldEventsRepository[F[_]: Sync] private (
     override def list(query: Option[String], limit: Int): F[List[HeldEvent]] = ref.get
       .map(events => InMemoryHeldEventsRepository.filterAndSort(events.values, query, limit))
     override def find(id: HeldEventId): F[Option[HeldEvent]] = ref.get.map(_.get(id))
-    override def create(event: HeldEvent): F[Unit] = ref.update(_ + (event.id -> event))
+    override def create(event: HeldEvent): F[Unit] = ref.modify { current =>
+      if current.contains(event.id) then (current, false) else (current + (event.id -> event), true)
+    }.flatMap {
+      case true => Sync[F].unit
+      case false => Sync[F]
+          .raiseError(new AppException(AppError.Conflict(s"held event already exists: ${event.id
+              .value}")))
+    }
     override def delete(id: HeldEventId): F[Boolean] = ref
       .modify(current => if current.contains(id) then (current - id, true) else (current, false))
 

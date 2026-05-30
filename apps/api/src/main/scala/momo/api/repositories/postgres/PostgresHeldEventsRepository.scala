@@ -14,6 +14,7 @@ import doobie.postgres.sqlstate
 import momo.api.db.Database
 import momo.api.domain.ids.HeldEventId
 import momo.api.domain.{HeldEvent, MatchDraftStatus}
+import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.repositories.{
   HeldEventDeletionAlg, HeldEventDeletionRepository, HeldEventDeletionResult, HeldEventsAlg,
@@ -29,6 +30,11 @@ import momo.api.repositories.{
 object PostgresHeldEvents:
 
   private val Jst = ZoneId.of("Asia/Tokyo")
+  private def isUniqueViolation(state: SqlState): Boolean = state.value ==
+    sqlstate.class23.UNIQUE_VIOLATION.value
+
+  private def conflict[A](detail: String): ConnectionIO[A] = MonadThrow[ConnectionIO]
+    .raiseError[A](new AppException(AppError.Conflict(detail)))
 
   val alg: HeldEventsAlg[ConnectionIO] = new HeldEventsAlg[ConnectionIO]:
     override def list(query: Option[String], limit: Int): ConnectionIO[List[HeldEvent]] =
@@ -50,7 +56,10 @@ object PostgresHeldEvents:
       sql"""
         INSERT INTO held_events (id, session_id, held_date_iso, start_at, created_at)
         VALUES (${event.id}, NULL, $heldDateIso, ${event.heldAt}, ${event.heldAt})
-      """.update.run.void
+      """.update.run.void.exceptSomeSqlState {
+        case state if isUniqueViolation(state) =>
+          conflict(s"held event already exists: ${event.id.value}")
+      }
 
     override def delete(id: HeldEventId): ConnectionIO[Boolean] = sql"""
         DELETE FROM held_events WHERE id = $id

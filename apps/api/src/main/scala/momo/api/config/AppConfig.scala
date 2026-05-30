@@ -158,13 +158,15 @@ object AppConfig:
         MonadThrow[F]
           .raiseError(new IllegalArgumentException("REDIS_URL is required in prod APP_ENV"))
       case None => MonadThrow[F].pure(None)
-      case Some(url) => MonadThrow[F].pure(Some(RedisConfig(
-          url = url,
-          stream = env.getOrElse("OCR_REDIS_STREAM", "momo:ocr:jobs"),
-          group = env.getOrElse("OCR_REDIS_GROUP", "momo-ocr-workers"),
-          deadLetterStream = env
-            .getOrElse("OCR_REDIS_DEAD_LETTER_STREAM", RedisConfig.DefaultDeadLetterStream),
-        )))
+      case Some(url) => ensureProdRedisUrl(url, appEnv).liftTo[F].map(url =>
+          Some(RedisConfig(
+            url = url,
+            stream = env.getOrElse("OCR_REDIS_STREAM", "momo:ocr:jobs"),
+            group = env.getOrElse("OCR_REDIS_GROUP", "momo-ocr-workers"),
+            deadLetterStream = env
+              .getOrElse("OCR_REDIS_DEAD_LETTER_STREAM", RedisConfig.DefaultDeadLetterStream),
+          ))
+        )
 
   private def loadAuth[F[_]: MonadThrow](env: Map[String, String], appEnv: AppEnv): F[AuthConfig] =
     (
@@ -517,6 +519,20 @@ object AppConfig:
   private def appendJdbcQueryParam(jdbcUrl: String, key: String, value: String): String =
     val separator = if jdbcUrl.contains("?") then "&" else "?"
     s"$jdbcUrl$separator$key=$value"
+
+  private[config] def ensureProdRedisUrl(raw: String, appEnv: AppEnv): Either[Throwable, String] =
+    if appEnv != AppEnv.Prod then Right(raw)
+    else
+      Either.catchNonFatal(URI.create(raw))
+        .leftMap(_ => new IllegalArgumentException("REDIS_URL must be a valid Redis URL."))
+        .flatMap { uri =>
+          Option(uri.getScheme).filter(_.equalsIgnoreCase("rediss"))
+            .toRight(new IllegalArgumentException("REDIS_URL must use rediss:// in prod APP_ENV."))
+            .flatMap(_ =>
+              Option(uri.getHost).filter(_.trim.nonEmpty)
+                .toRight(new IllegalArgumentException("REDIS_URL must include a Redis host."))
+            ).as(raw)
+        }
 
 object AuthConfig:
   def defaults(appEnv: AppEnv): AuthConfig = AuthConfig(

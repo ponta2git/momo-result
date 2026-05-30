@@ -9,6 +9,7 @@ from momo_ocr.app.config import load_worker_config, require_production_config
 def test_load_worker_config_reads_redis_and_database_urls() -> None:
     config = load_worker_config(
         {
+            "APP_ENV": "dev",
             "REDIS_URL": "redis://localhost:6379/0",
             "OCR_DATABASE_URL": "postgresql://user:pass@localhost:5432/db",
             "OCR_WORKER_ID": "worker-1",
@@ -25,6 +26,7 @@ def test_load_worker_config_reads_redis_and_database_urls() -> None:
     )
 
     assert config.redis_url == "redis://localhost:6379/0"
+    assert config.app_env == "dev"
     assert config.database_url == "postgresql://user:pass@localhost:5432/db"
     assert config.worker_id == "worker-1"
     assert config.redis_stream == "custom-stream"
@@ -61,3 +63,28 @@ def test_require_production_config_rejects_unsupported_concurrency() -> None:
 
     with pytest.raises(ValueError, match="OCR_WORKER_CONCURRENCY"):
         require_production_config(config)
+
+
+def test_require_production_config_rejects_insecure_redis_url_in_prod() -> None:
+    config = load_worker_config(
+        {
+            "APP_ENV": "prod",
+            "REDIS_URL": "redis://redis.example.com:6379/0",
+            "OCR_DATABASE_URL": "postgresql://user:pass@db.example.com/db",
+        }
+    )
+
+    with pytest.raises(ValueError, match="REDIS_URL must use rediss://"):
+        require_production_config(config)
+
+
+def test_require_production_config_allows_local_redis_url_outside_prod() -> None:
+    config = load_worker_config(
+        {
+            "APP_ENV": "dev",
+            "REDIS_URL": "redis://localhost:6379/0",
+            "OCR_DATABASE_URL": "postgresql://user:pass@localhost:5432/db",
+        }
+    )
+
+    require_production_config(config)

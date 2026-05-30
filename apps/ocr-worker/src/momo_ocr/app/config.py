@@ -5,6 +5,7 @@ import socket
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from momo_ocr.features.text_recognition.fast_path import parse_fast_path_flag
 
@@ -21,6 +22,7 @@ DEFAULT_REDIS_BLOCK_SECONDS = 30
 
 @dataclass(frozen=True)
 class WorkerConfig:
+    app_env: str = "dev"
     redis_url: str | None = None
     database_url: str | None = None
     worker_id: str = "momo-ocr-worker"
@@ -41,6 +43,7 @@ class WorkerConfig:
 def load_worker_config(env: Mapping[str, str] | None = None) -> WorkerConfig:
     source = os.environ if env is None else env
     return WorkerConfig(
+        app_env=source.get("APP_ENV", "dev").strip().lower(),
         redis_url=_optional_non_empty(source, "REDIS_URL"),
         database_url=_optional_non_empty(source, "OCR_DATABASE_URL")
         or _optional_non_empty(source, "DATABASE_URL"),
@@ -85,6 +88,9 @@ def require_production_config(config: WorkerConfig) -> None:
         joined = ", ".join(missing)
         msg = f"Missing required OCR worker config: {joined}"
         raise ValueError(msg)
+    if config.app_env == "prod" and not _redis_url_uses_tls(config.redis_url):
+        msg = "REDIS_URL must use rediss:// when APP_ENV=prod."
+        raise ValueError(msg)
     if config.concurrency != DEFAULT_WORKER_CONCURRENCY:
         msg = (
             "OCR_WORKER_CONCURRENCY greater than 1 is not supported by this worker process yet; "
@@ -98,6 +104,10 @@ def _optional_non_empty(env: Mapping[str, str], key: str) -> str | None:
     if value is None or value == "":
         return None
     return value
+
+
+def _redis_url_uses_tls(redis_url: str | None) -> bool:
+    return redis_url is not None and urlsplit(redis_url).scheme.lower() == "rediss"
 
 
 def _optional_path(env: Mapping[str, str], key: str) -> Path | None:

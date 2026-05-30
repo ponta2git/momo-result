@@ -8,7 +8,7 @@ class AppConfigSpec extends CatsEffectSuite:
   private val prodEnv: Map[String, String] = Map(
     "APP_ENV" -> "prod",
     "DATABASE_URL" -> "postgres://u:p@db.example.com/momo?sslmode=require",
-    "REDIS_URL" -> "redis://localhost:6379",
+    "REDIS_URL" -> "rediss://default:secret@redis.example.com:6379",
     "DISCORD_CLIENT_ID" -> "client-id",
     "DISCORD_CLIENT_SECRET" -> "client-secret",
     "DISCORD_REDIRECT_URI" -> "https://example.com/api/auth/callback",
@@ -102,6 +102,19 @@ class AppConfigSpec extends CatsEffectSuite:
   test("ensureProdSslMode: leaves non-prod URLs unchanged") {
     val result = AppConfig.ensureProdSslMode("jdbc:postgresql://localhost:5432/mydb", AppEnv.Test)
     assertEquals(result, Right("jdbc:postgresql://localhost:5432/mydb"))
+  }
+
+  test("ensureProdRedisUrl: rejects insecure Redis URLs in prod") {
+    val result = AppConfig.ensureProdRedisUrl("redis://redis.example.com:6379", AppEnv.Prod)
+    assertEquals(
+      result.left.map(_.getMessage),
+      Left("REDIS_URL must use rediss:// in prod APP_ENV."),
+    )
+  }
+
+  test("ensureProdRedisUrl: allows local Redis URLs outside prod") {
+    val result = AppConfig.ensureProdRedisUrl("redis://localhost:6379/0", AppEnv.Dev)
+    assertEquals(result, Right("redis://localhost:6379/0"))
   }
 
   test("numeric env parsing rejects malformed values instead of silently using defaults") {

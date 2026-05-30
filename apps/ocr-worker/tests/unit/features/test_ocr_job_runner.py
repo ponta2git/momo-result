@@ -761,6 +761,32 @@ class _ToggleAfterFirstCallCancellation:
         return self._calls >= self._threshold
 
 
+class _RepositoryCancellationOnCall:
+    """Simulate API-side cancellation becoming terminal in the DB."""
+
+    def __init__(
+        self,
+        repository: InMemoryOcrJobRepository,
+        job_id: str,
+        *,
+        threshold: int,
+    ) -> None:
+        self._repository = repository
+        self._job_id = job_id
+        self._threshold = threshold
+        self._calls = 0
+
+    def is_cancelled(self, job_id: str) -> bool:
+        if job_id != self._job_id:
+            return False
+        self._calls += 1
+        if self._calls < self._threshold:
+            return False
+        current = self._repository.records[job_id]
+        self._repository.seed(replace(current, status=OcrJobStatus.CANCELLED))
+        return True
+
+
 class _AckObserverConsumer(InMemoryOcrJobConsumer):
     def __init__(self, repository: InMemoryOcrJobRepository, job_id: str) -> None:
         super().__init__()
@@ -799,6 +825,57 @@ def test_post_running_cancellation_is_honoured_before_analyze() -> None:
     record = repository.records["job-1"]
     assert record.status is OcrJobStatus.CANCELLED
     # Ack still happens after the terminal status is recorded.
+    assert consumer.acked == ["d1"]
+
+
+def test_pre_running_db_cancel_race_is_acked_without_false_failure() -> None:
+    consumer = InMemoryOcrJobConsumer()
+    repository = InMemoryOcrJobRepository()
+    payload = _make_payload()
+    _seed_record(repository, payload)
+    consumer.enqueue(payload, delivery_tag="d1")
+    cancellation = _RepositoryCancellationOnCall(repository, "job-1", threshold=1)
+
+    deps = _make_deps(
+        consumer=consumer,
+        repository=repository,
+        cancellation=cancellation,
+        analyze=_AnalyzeStub(fail_message="analyze must not run after DB-side cancellation"),
+    )
+
+    outcome = run_one_job(deps)
+
+    assert outcome.status is OcrJobStatus.CANCELLED
+    record = repository.records["job-1"]
+    assert record.status is OcrJobStatus.CANCELLED
+    assert record.failure is None
+    assert record.attempt_count == 0
+    assert consumer.acked == ["d1"]
+
+
+def test_post_running_db_cancel_race_is_acked_without_false_failure() -> None:
+    consumer = InMemoryOcrJobConsumer()
+    repository = InMemoryOcrJobRepository()
+    payload = _make_payload()
+    _seed_record(repository, payload)
+    consumer.enqueue(payload, delivery_tag="d1")
+    cancellation = _RepositoryCancellationOnCall(repository, "job-1", threshold=2)
+
+    deps = _make_deps(
+        consumer=consumer,
+        repository=repository,
+        cancellation=cancellation,
+        analyze=_AnalyzeStub(fail_message="analyze must not run after DB-side cancellation"),
+    )
+
+    outcome = run_one_job(deps)
+
+    assert outcome.status is OcrJobStatus.CANCELLED
+    record = repository.records["job-1"]
+    assert record.status is OcrJobStatus.CANCELLED
+    assert record.failure is None
+    assert record.worker_id == WORKER_ID
+    assert record.attempt_count == 1
     assert consumer.acked == ["d1"]
 
 

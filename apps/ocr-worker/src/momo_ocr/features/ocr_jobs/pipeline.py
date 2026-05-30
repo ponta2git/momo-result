@@ -178,8 +178,7 @@ def _phase_pre_run_cancellation(
 ) -> OcrJobStatus | None:
     if not deps.cancellation.is_cancelled(message.job_id):
         return None
-    deps.repository.complete_non_success(message.job_id, _cancelled_result())
-    return OcrJobStatus.CANCELLED
+    return _complete_cancelled_job(deps, message)
 
 
 def _phase_post_running_cancellation(
@@ -188,7 +187,27 @@ def _phase_post_running_cancellation(
     """Honour cancellation that arrived between running claim and OCR start."""
     if not deps.cancellation.is_cancelled(message.job_id):
         return None
-    deps.repository.complete_non_success(message.job_id, _cancelled_result())
+    return _complete_cancelled_job(deps, message)
+
+
+def _complete_cancelled_job(
+    deps: PipelineDependencies,
+    message: OcrJobMessage,
+) -> OcrJobStatus:
+    record = deps.repository.get_record(message.job_id)
+    if record is None:
+        return OcrJobStatus.FAILED
+    if is_terminal(record.status):
+        return record.status
+    try:
+        deps.repository.complete_non_success(message.job_id, _cancelled_result())
+    except OcrError as exc:
+        if exc.code is not FailureCode.DB_WRITE_FAILED:
+            raise
+        refreshed = deps.repository.get_record(message.job_id)
+        if refreshed is not None and is_terminal(refreshed.status):
+            return refreshed.status
+        raise
     return OcrJobStatus.CANCELLED
 
 

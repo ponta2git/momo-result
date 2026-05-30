@@ -1,5 +1,8 @@
 package momo.api.http
 
+import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
+
 import cats.effect.Async
 import cats.syntax.all.*
 import io.circe.syntax.*
@@ -61,7 +64,8 @@ private[http] object AuthHttpRoutes:
             val cookieState = request.cookies.find(_.name == config.auth.stateCookieName)
               .map(_.content)
             (state, cookieState) match
-              case (Some(stateValue), Some(cookieValue)) if stateValue == cookieValue =>
+              case (Some(stateValue), Some(cookieValue))
+                  if stateMatchesCookie(stateValue, cookieValue) =>
                 rateLimitCallbackState(stateValue).flatMap {
                   case Left(response) => response
                       .map(_.addCookie(clearCookie(config.auth.stateCookieName, config)))
@@ -280,5 +284,11 @@ private[http] object AuthHttpRoutes:
     )
 
     def clientKey(request: Request[F]): String = ClientIp.of(request)
+
+    def stateMatchesCookie(stateValue: String, cookieValue: String): Boolean = MessageDigest
+      .isEqual(
+        stateValue.getBytes(StandardCharsets.UTF_8),
+        cookieValue.getBytes(StandardCharsets.UTF_8),
+      )
 
     routes

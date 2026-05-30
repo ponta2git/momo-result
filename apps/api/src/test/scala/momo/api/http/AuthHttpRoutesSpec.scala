@@ -121,6 +121,38 @@ final class AuthHttpRoutesSpec extends MomoCatsEffectSuite:
     }
   }
 
+  test("OAuth callback rejects mismatched state cookies before provider calls") {
+    RecordingDiscordOAuthClient.create(Right(DiscordUser(account.discordUserId.value))).flatMap {
+      oauth =>
+        authAppWith(oauth, authConfig).use { app =>
+          for
+            stateCookie <- loginStateCookie(app, authConfig)
+            request = Request[IO](
+              Method.GET,
+              uri"/api/auth/callback".withQueryParam("code", "ok")
+                .withQueryParam("state", s"${stateCookie.content}x"),
+            ).putHeaders(Header.Raw(
+              CIString("Cookie"),
+              s"${stateCookie.name}=${stateCookie.content}",
+            ))
+            response <- app.run(request)
+            _ <- assertProblem(
+              response,
+              Status.Forbidden,
+              "FORBIDDEN",
+              "OAuth callback is missing or has mismatched state.",
+            )
+            fetchCalls <- oauth.fetchCalls
+          yield
+            val cleared = response.cookies.find(_.name == authConfig.stateCookieName)
+              .getOrElse(fail("missing cleared OAuth state cookie"))
+            assertEquals(fetchCalls, 0)
+            assertEquals(cleared.content, "")
+            assertEquals(cleared.maxAge, Some(0L))
+        }
+    }
+  }
+
   test("logout clears invalid session cookies") {
     authApp.use { app =>
       val request = Request[IO](Method.POST, uri"/api/auth/logout")

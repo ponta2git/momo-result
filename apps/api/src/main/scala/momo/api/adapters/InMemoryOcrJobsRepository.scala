@@ -23,6 +23,9 @@ final class InMemoryOcrJobsRepository[F[_]: Sync] private (
   override def countActive: F[Long] = ref.get
     .map(_.values.count(job => isActive(job.status)).toLong)
 
+  def activeImageIds: F[Set[ImageId]] = ref.get
+    .map(_.values.collect { case job if isActive(job.status) => job.imageId }.toSet)
+
   def existsActiveByDraft(draftId: OcrDraftId): F[Boolean] = ref.get
     .map(_.values.exists(job => job.draftId == draftId && isActive(job.status)))
 

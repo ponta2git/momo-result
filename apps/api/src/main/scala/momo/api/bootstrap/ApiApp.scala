@@ -282,7 +282,7 @@ object ApiApp:
                 ) =>
               val imageStore = LocalFsImageStore[F](config.imageTmpDir)
               val imageReferences: ImageReferenceRepository[F] =
-                new InMemoryImageReferenceRepository[F]
+                InMemoryImageReferenceRepository[F](jobs, matchDrafts)
               val ocrMaintenance: OcrJobMaintenanceRepository[F] =
                 new InMemoryOcrJobMaintenanceRepository[F]
               val health =

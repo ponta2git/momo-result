@@ -75,40 +75,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "analyze":
-        text_engine = _build_text_engine(args)
-        debug_dir = _resolve_analyze_debug_dir(args.debug_dir, args.image)
-        result = analyze_image(
-            image_path=args.image,
-            requested_screen_type=args.type,
-            debug_dir=debug_dir,
-            include_raw_text=args.include_raw_text,
-            text_engine=text_engine,
-            layout_family_hint=detect_layout_family_from_filename(args.image),
-            fast_path_enabled=_fast_path_enabled_from_env(),
-        )
-        if args.output is not None:
-            write_json(args.output, result)
-        else:
-            sys.stdout.write(f"{result.to_json()}\n")
-        return _analysis_exit_code(result)
+        return _run_analyze(args)
 
     if args.command == "batch":
-        text_engine = _build_text_engine(args)
-        debug_dir = _resolve_batch_debug_dir(args.debug_dir)
-        report = analyze_directory(
-            input_dir=args.input_dir,
-            expected_dir=args.expected_dir,
-            debug_dir=debug_dir,
-            text_engine=text_engine,
-            include_raw_text=args.include_raw_text,
-            evaluation_set=args.evaluation_set,
-            fast_path_enabled=_fast_path_enabled_from_env(),
-        )
-        if args.report is not None:
-            write_json(args.report, report)
-        else:
-            sys.stdout.write(f"{report.to_json()}\n")
-        return _batch_exit_code(report)
+        return _run_batch(args)
 
     if args.command == "worker":
         return _run_worker(args)
@@ -135,6 +105,59 @@ def _build_text_engine(args: argparse.Namespace) -> TextRecognitionEngine:
         return TesserocrEngine()
     message = f"Unhandled OCR engine: {args.ocr_engine}"
     raise AssertionError(message)
+
+
+def _run_analyze(args: argparse.Namespace) -> int:
+    text_engine = _build_text_engine(args)
+    try:
+        debug_dir = _resolve_analyze_debug_dir(args.debug_dir, args.image)
+        result = analyze_image(
+            image_path=args.image,
+            requested_screen_type=args.type,
+            debug_dir=debug_dir,
+            include_raw_text=args.include_raw_text,
+            text_engine=text_engine,
+            layout_family_hint=detect_layout_family_from_filename(args.image),
+            fast_path_enabled=_fast_path_enabled_from_env(),
+        )
+        if args.output is not None:
+            write_json(args.output, result)
+        else:
+            sys.stdout.write(f"{result.to_json()}\n")
+        return _analysis_exit_code(result)
+    finally:
+        _close_text_engine(text_engine)
+
+
+def _run_batch(args: argparse.Namespace) -> int:
+    text_engine = _build_text_engine(args)
+    try:
+        debug_dir = _resolve_batch_debug_dir(args.debug_dir)
+        report = analyze_directory(
+            input_dir=args.input_dir,
+            expected_dir=args.expected_dir,
+            debug_dir=debug_dir,
+            text_engine=text_engine,
+            include_raw_text=args.include_raw_text,
+            evaluation_set=args.evaluation_set,
+            fast_path_enabled=_fast_path_enabled_from_env(),
+        )
+        if args.report is not None:
+            write_json(args.report, report)
+        else:
+            sys.stdout.write(f"{report.to_json()}\n")
+        return _batch_exit_code(report)
+    finally:
+        _close_text_engine(text_engine)
+
+
+def _close_text_engine(text_engine: TextRecognitionEngine) -> None:
+    close_fn = getattr(text_engine, "close", None)
+    if callable(close_fn):
+        try:
+            close_fn()
+        except Exception:
+            logging.getLogger(__name__).exception("Failed to close OCR text engine.")
 
 
 def _run_worker(args: argparse.Namespace) -> int:

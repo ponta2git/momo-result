@@ -69,7 +69,7 @@ private[http] object AuthHttpRoutes:
                       case None => callbackProblem(
                           "state_invalid_or_expired",
                           AppError.Forbidden("OAuth state is invalid or expired."),
-                        )
+                        ).map(_.addCookie(clearCookie(config.auth.stateCookieName, config)))
                       case Some(context) => oauthError match
                           case Some(_) if context.silent =>
                             Async[F].delay(logger.warn(

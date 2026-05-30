@@ -101,6 +101,26 @@ final class AuthHttpRoutesSpec extends MomoCatsEffectSuite:
     }
   }
 
+  test("OAuth callback clears invalid state cookies") {
+    authApp.use { app =>
+      val invalidState = "invalid-state"
+      val request = Request[IO](
+        Method.GET,
+        uri"/api/auth/callback".withQueryParam("code", "ok").withQueryParam("state", invalidState),
+      ).putHeaders(Header.Raw(CIString("Cookie"), s"${authConfig.stateCookieName}=$invalidState"))
+
+      app.run(request).flatMap { response =>
+        val cleared = response.cookies.find(_.name == authConfig.stateCookieName)
+          .getOrElse(fail("missing cleared OAuth state cookie"))
+        assertProblem(response, Status.Forbidden, "FORBIDDEN", "OAuth state is invalid or expired.")
+          .map { _ =>
+            assertEquals(cleared.content, "")
+            assertEquals(cleared.maxAge, Some(0L))
+          }
+      }
+    }
+  }
+
   test("OAuth provider dependency failures open a short backoff before the next provider call") {
     val backoffConfig = authConfig.copy(providerFailureThreshold = 1, providerBackoff = 60.seconds)
     RecordingDiscordOAuthClient

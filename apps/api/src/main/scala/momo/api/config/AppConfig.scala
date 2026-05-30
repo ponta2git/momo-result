@@ -231,6 +231,8 @@ object AppConfig:
       "AUTH_STATE_SIGNING_KEY" -> config.stateSigningKey,
     ).collect { case (name, None) => s"$name is required" }
     val secureCookie = Option.when(!config.useSecureCookies)("AUTH_COOKIE_SECURE must be true")
+    val hostPrefixEnabled = Option
+      .when(!config.useHostPrefix)("AUTH_COOKIE_HOST_PREFIX must be true")
     val hostPrefix = Option.when(
       config.useHostPrefix &&
         (!config.sessionCookieName.startsWith("__Host-") ||
@@ -239,7 +241,7 @@ object AppConfig:
     val redirect = Option.when(!RedirectPath.isSafe(config.callbackRedirectPath))(
       "AUTH_CALLBACK_REDIRECT_PATH must be a root-relative path"
     )
-    missing ++ List(secureCookie, hostPrefix, redirect).flatten
+    missing ++ List(secureCookie, hostPrefixEnabled, hostPrefix, redirect).flatten
 
   private def loadResourceLimits[F[_]: MonadThrow](
       env: Map[String, String]

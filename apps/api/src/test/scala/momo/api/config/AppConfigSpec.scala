@@ -280,6 +280,12 @@ class AppConfigSpec extends CatsEffectSuite:
     }
   }
 
+  test("loadFromEnv rejects disabled production __Host cookie prefix") {
+    load(prodEnv + ("AUTH_COOKIE_HOST_PREFIX" -> "false")).map { result =>
+      assert(result.left.exists(_.getMessage.contains("AUTH_COOKIE_HOST_PREFIX must be true")))
+    }
+  }
+
   test("loadFromEnv rejects external OAuth callback redirect paths") {
     (
       load(prodEnv + ("AUTH_CALLBACK_REDIRECT_PATH" -> "https://evil.example/")),

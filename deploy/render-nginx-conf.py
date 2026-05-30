@@ -12,6 +12,8 @@ DEFAULT_OUTPUT_PATH = Path("/etc/nginx/nginx.conf")
 DEFAULT_CANONICAL_HOST = "momo-result.ponta.me"
 DEV_OPTIONAL_ORIGIN_LOCK_HOSTS = ("localhost", "127.0.0.1")
 HOST_PATTERN = re.compile(r"^[A-Za-z0-9.-]+$")
+ORIGIN_LOCK_TOKEN_MIN_LENGTH = 32
+ORIGIN_LOCK_TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9._~:-]+$")
 
 
 def nginx_quote(value: str) -> str:
@@ -38,6 +40,21 @@ def map_entries(hosts: list[str], value: int) -> str:
     return "\n".join(f"    {nginx_quote(host)} {value};" for host in hosts)
 
 
+def validate_origin_lock_token(token: str, app_env: str) -> None:
+    if app_env != "prod":
+        return
+    if len(token) < ORIGIN_LOCK_TOKEN_MIN_LENGTH:
+        raise ValueError(
+            "MOMO_ORIGIN_LOCK_TOKEN must be at least "
+            f"{ORIGIN_LOCK_TOKEN_MIN_LENGTH} characters when APP_ENV=prod."
+        )
+    if not ORIGIN_LOCK_TOKEN_PATTERN.fullmatch(token):
+        raise ValueError(
+            "MOMO_ORIGIN_LOCK_TOKEN must contain only URL/header-safe ASCII characters "
+            "when APP_ENV=prod."
+        )
+
+
 def main() -> int:
     app_env = os.environ.get("APP_ENV", "prod").lower()
     canonical_host = os.environ.get("MOMO_CANONICAL_HOST", DEFAULT_CANONICAL_HOST)
@@ -51,6 +68,11 @@ def main() -> int:
             print("MOMO_ORIGIN_LOCK_TOKEN is required when APP_ENV=prod.", file=sys.stderr)
             return 1
         token = "dev-origin-lock"
+    try:
+        validate_origin_lock_token(token, app_env)
+    except ValueError as error:
+        print(str(error), file=sys.stderr)
+        return 1
 
     allowed_hosts = parse_hosts(",".join([canonical_host, extra_hosts]))
     optional_origin_lock_hosts: list[str] = []

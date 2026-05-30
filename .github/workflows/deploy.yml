@@ -91,6 +91,10 @@ jobs:
         run: pnpm --filter web exec playwright install --with-deps chromium
         timeout-minutes: 10
 
+      - name: Check runtime config
+        run: scripts/ci/check-runtime-config.sh
+        timeout-minutes: 2
+
       - name: Apply momo-db migrations
         run: scripts/ci/apply-momo-db-migrations.sh
         timeout-minutes: 5

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from momo_ocr.app.composition import _redis_socket_timeout_seconds
@@ -50,6 +52,23 @@ def test_require_production_config_rejects_missing_urls() -> None:
 
     assert "REDIS_URL" in str(error.value)
     assert "OCR_DATABASE_URL" in str(error.value)
+
+
+def test_load_worker_config_rejects_unknown_app_env() -> None:
+    with pytest.raises(ValueError, match="APP_ENV must be one of"):
+        load_worker_config({"APP_ENV": "production"})
+
+
+def test_require_production_config_rejects_unknown_app_env() -> None:
+    config = load_worker_config(
+        {
+            "REDIS_URL": "rediss://redis.example.com:6379/0",
+            "OCR_DATABASE_URL": "postgresql://user:pass@db.example.com/db",
+        }
+    )
+
+    with pytest.raises(ValueError, match="APP_ENV must be one of"):
+        require_production_config(replace(config, app_env="production"))
 
 
 def test_require_production_config_allows_configured_concurrency() -> None:

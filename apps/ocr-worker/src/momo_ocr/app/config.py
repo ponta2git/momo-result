@@ -18,6 +18,7 @@ DEFAULT_OCR_TIMEOUT_SECONDS = 30
 DEFAULT_MAX_ATTEMPTS = 1
 DEFAULT_REDIS_CLAIM_IDLE_SECONDS = 300
 DEFAULT_REDIS_BLOCK_SECONDS = 30
+VALID_APP_ENVS = frozenset({"dev", "test", "prod"})
 
 
 @dataclass(frozen=True)
@@ -43,7 +44,7 @@ class WorkerConfig:
 def load_worker_config(env: Mapping[str, str] | None = None) -> WorkerConfig:
     source = os.environ if env is None else env
     return WorkerConfig(
-        app_env=source.get("APP_ENV", "dev").strip().lower(),
+        app_env=_app_env_from_env(source),
         redis_url=_optional_non_empty(source, "REDIS_URL"),
         database_url=_optional_non_empty(source, "OCR_DATABASE_URL")
         or _optional_non_empty(source, "DATABASE_URL"),
@@ -79,6 +80,9 @@ def load_worker_config(env: Mapping[str, str] | None = None) -> WorkerConfig:
 
 
 def require_production_config(config: WorkerConfig) -> None:
+    if config.app_env not in VALID_APP_ENVS:
+        msg = "APP_ENV must be one of: dev, test, prod."
+        raise ValueError(msg)
     missing = []
     if config.redis_url is None:
         missing.append("REDIS_URL")
@@ -97,6 +101,14 @@ def _optional_non_empty(env: Mapping[str, str], key: str) -> str | None:
     value = env.get(key)
     if value is None or value == "":
         return None
+    return value
+
+
+def _app_env_from_env(env: Mapping[str, str]) -> str:
+    value = env.get("APP_ENV", "dev").strip().lower()
+    if value not in VALID_APP_ENVS:
+        msg = "APP_ENV must be one of: dev, test, prod."
+        raise ValueError(msg)
     return value
 
 

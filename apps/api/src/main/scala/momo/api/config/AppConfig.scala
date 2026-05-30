@@ -153,20 +153,23 @@ object AppConfig:
       appEnv: AppEnv,
   ): F[Option[RedisConfig]] =
     val urlOpt = env.get("REDIS_URL").filter(_.nonEmpty)
+    val allowPlaintextInProd = parseBoolean(env, "REDIS_ALLOW_PLAINTEXT_IN_PROD", default = false)
     urlOpt match
       case None if appEnv == AppEnv.Prod =>
         MonadThrow[F]
           .raiseError(new IllegalArgumentException("REDIS_URL is required in prod APP_ENV"))
       case None => MonadThrow[F].pure(None)
-      case Some(url) => ensureProdRedisUrl(url, appEnv).liftTo[F].map(url =>
-          Some(RedisConfig(
-            url = url,
-            stream = envOrDefault(env, "OCR_REDIS_STREAM", "momo:ocr:jobs"),
-            group = envOrDefault(env, "OCR_REDIS_GROUP", "momo-ocr-workers"),
-            deadLetterStream =
-              envOrDefault(env, "OCR_REDIS_DEAD_LETTER_STREAM", RedisConfig.DefaultDeadLetterStream),
-          ))
-        )
+      case Some(url) =>
+        for
+          allowPlaintext <- allowPlaintextInProd.liftTo[F]
+          safeUrl <- ensureProdRedisUrl(url, appEnv, allowPlaintext).liftTo[F]
+        yield Some(RedisConfig(
+          url = safeUrl,
+          stream = envOrDefault(env, "OCR_REDIS_STREAM", "momo:ocr:jobs"),
+          group = envOrDefault(env, "OCR_REDIS_GROUP", "momo-ocr-workers"),
+          deadLetterStream =
+            envOrDefault(env, "OCR_REDIS_DEAD_LETTER_STREAM", RedisConfig.DefaultDeadLetterStream),
+        ))
 
   private def loadAuth[F[_]: MonadThrow](env: Map[String, String], appEnv: AppEnv): F[AuthConfig] =
     (
@@ -529,13 +532,27 @@ object AppConfig:
     s"$jdbcUrl$separator$key=$value"
 
   private[config] def ensureProdRedisUrl(raw: String, appEnv: AppEnv): Either[Throwable, String] =
+    ensureProdRedisUrl(raw, appEnv, allowPlaintextInProd = false)
+
+  private[config] def ensureProdRedisUrl(
+      raw: String,
+      appEnv: AppEnv,
+      allowPlaintextInProd: Boolean,
+  ): Either[Throwable, String] =
     if appEnv != AppEnv.Prod then Right(raw)
     else
       Either.catchNonFatal(URI.create(raw))
         .leftMap(_ => new IllegalArgumentException("REDIS_URL must be a valid Redis URL."))
         .flatMap { uri =>
-          Option(uri.getScheme).filter(_.equalsIgnoreCase("rediss"))
-            .toRight(new IllegalArgumentException("REDIS_URL must use rediss:// in prod APP_ENV."))
+          val scheme = Option(uri.getScheme).map(_.toLowerCase)
+          val hasValidScheme = scheme.contains("rediss") ||
+            (allowPlaintextInProd && scheme.contains("redis"))
+          val invalidSchemeMessage =
+            if allowPlaintextInProd then
+              "REDIS_URL must use rediss://, or redis:// when REDIS_ALLOW_PLAINTEXT_IN_PROD=true."
+            else "REDIS_URL must use rediss:// in prod APP_ENV."
+
+          Either.cond(hasValidScheme, (), new IllegalArgumentException(invalidSchemeMessage))
             .flatMap(_ =>
               Option(uri.getHost).filter(_.trim.nonEmpty)
                 .toRight(new IllegalArgumentException("REDIS_URL must include a Redis host."))

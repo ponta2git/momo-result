@@ -112,7 +112,9 @@
 ## 5. Image / Security / Ops
 
 - Secrets、session ID、OAuth token、CSRF token、Redis URL、DB URL、画像内容、OCR raw text 全文をログに出さない。
-- 本番 `REDIS_URL` は `rediss://` を必須にし、Upstash Redis との通信を TLS 前提にする。
+- 本番 `REDIS_URL` は原則 `rediss://` を必須にする。Fly private network 内の Upstash Redis など、
+  provider が TLS 非対応の内部接続として案内している場合だけ、`REDIS_ALLOW_PLAINTEXT_IN_PROD=true`
+  を明示して `redis://` を許可する。
 - 例外ログは throwable の message / stack trace を直接出さず、例外クラス列などの安全な情報に絞る。
 - アップロード画像は PNG/JPEG/WebP、1枚3MBまで、OCR処理は最大4Kまで。形式、サイズ、寸法、実体を検証する。
 - OCR元画像は下書き確定または下書き削除まで保持し、その後削除する。DBに画像実体、内部path、長寿命URLを保存・公開しない。

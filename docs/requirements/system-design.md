@@ -11,6 +11,8 @@
 - 本番では低コスト運用を優先し、同一Fly.ioアプリ、同一ドメイン、同一VM内で稼働させる。
 - DBは summit アプリと共有する Neon PostgreSQL を利用する。
 - OCRジョブ配送には Upstash Redis Streams を利用する。
+- 本番 Redis 接続は原則 TLS を使う。Fly private network 内の Upstash Redis のように provider が
+  TLS 非対応の内部接続として案内している場合は、明示設定付きで `redis://` を許可する。
 - DB schema / migration は本リポジトリで直接所有せず、`../momo-db` を正本とする。
 
 ---

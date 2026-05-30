@@ -34,6 +34,7 @@ def test_load_worker_config_reads_redis_and_database_urls() -> None:
     )
 
     assert config.redis_url == "redis://localhost:6379/0"
+    assert config.redis_allow_plaintext_in_prod is False
     assert config.app_env == "dev"
     assert config.database_url == "postgresql://user:pass@localhost:5432/db"
     assert config.worker_id == "worker-1"
@@ -116,6 +117,32 @@ def test_require_production_config_rejects_insecure_redis_url_in_prod() -> None:
 
     with pytest.raises(ValueError, match="REDIS_URL must use rediss://"):
         require_production_config(config)
+
+
+def test_require_production_config_allows_plaintext_redis_in_prod_when_explicit() -> None:
+    config = load_worker_config(
+        {
+            "APP_ENV": "prod",
+            "REDIS_URL": "redis://redis.example.com:6379/0",
+            "REDIS_ALLOW_PLAINTEXT_IN_PROD": "true",
+            "OCR_DATABASE_URL": "postgresql://user:pass@db.example.com/db",
+        }
+    )
+
+    require_production_config(config)
+    assert config.redis_allow_plaintext_in_prod is True
+
+
+def test_load_worker_config_rejects_malformed_plaintext_redis_override() -> None:
+    with pytest.raises(ValueError, match="REDIS_ALLOW_PLAINTEXT_IN_PROD"):
+        load_worker_config(
+            {
+                "APP_ENV": "prod",
+                "REDIS_URL": "redis://redis.example.com:6379/0",
+                "REDIS_ALLOW_PLAINTEXT_IN_PROD": "maybe",
+                "OCR_DATABASE_URL": "postgresql://user:pass@db.example.com/db",
+            }
+        )
 
 
 def test_require_production_config_allows_local_redis_url_outside_prod() -> None:

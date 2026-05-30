@@ -25,6 +25,7 @@ VALID_APP_ENVS = frozenset({"dev", "test", "prod"})
 class WorkerConfig:
     app_env: str = "dev"
     redis_url: str | None = None
+    redis_allow_plaintext_in_prod: bool = False
     database_url: str | None = None
     worker_id: str = "momo-ocr-worker"
     redis_stream: str = DEFAULT_REDIS_STREAM
@@ -46,6 +47,11 @@ def load_worker_config(env: Mapping[str, str] | None = None) -> WorkerConfig:
     return WorkerConfig(
         app_env=_app_env_from_env(source),
         redis_url=_optional_non_empty(source, "REDIS_URL"),
+        redis_allow_plaintext_in_prod=_bool_from_env(
+            source,
+            "REDIS_ALLOW_PLAINTEXT_IN_PROD",
+            default=False,
+        ),
         database_url=_optional_non_empty(source, "OCR_DATABASE_URL")
         or _optional_non_empty(source, "DATABASE_URL"),
         worker_id=_non_empty_or_default(source, "OCR_WORKER_ID", _default_worker_id()),
@@ -93,8 +99,21 @@ def require_production_config(config: WorkerConfig) -> None:
         joined = ", ".join(missing)
         msg = f"Missing required OCR worker config: {joined}"
         raise ValueError(msg)
-    if config.app_env == "prod" and not _redis_url_uses_tls(config.redis_url):
+    if (
+        config.app_env == "prod"
+        and not config.redis_allow_plaintext_in_prod
+        and not _redis_url_uses_tls(config.redis_url)
+    ):
         msg = "REDIS_URL must use rediss:// when APP_ENV=prod."
+        raise ValueError(msg)
+    if (
+        config.app_env == "prod"
+        and config.redis_allow_plaintext_in_prod
+        and not _redis_url_valid(
+            config.redis_url,
+        )
+    ):
+        msg = "REDIS_URL must use rediss://, or redis:// when REDIS_ALLOW_PLAINTEXT_IN_PROD=true."
         raise ValueError(msg)
 
 
@@ -119,6 +138,24 @@ def _app_env_from_env(env: Mapping[str, str]) -> str:
 
 def _redis_url_uses_tls(redis_url: str | None) -> bool:
     return redis_url is not None and urlsplit(redis_url).scheme.lower() == "rediss"
+
+
+def _redis_url_valid(redis_url: str | None) -> bool:
+    if redis_url is None:
+        return False
+    return urlsplit(redis_url).scheme.lower() in {"redis", "rediss"}
+
+
+def _bool_from_env(env: Mapping[str, str], key: str, *, default: bool) -> bool:
+    raw = env.get(key)
+    if raw is None or raw == "":
+        return default
+    if raw.lower() == "true":
+        return True
+    if raw.lower() == "false":
+        return False
+    msg = f"{key} must be true or false."
+    raise ValueError(msg)
 
 
 def _optional_path(env: Mapping[str, str], key: str) -> Path | None:

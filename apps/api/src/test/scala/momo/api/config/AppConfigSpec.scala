@@ -120,6 +120,37 @@ class AppConfigSpec extends CatsEffectSuite:
     )
   }
 
+  test("ensureProdRedisUrl: allows plaintext Redis in prod only when explicitly enabled") {
+    val url = "redis://default:secret@fly-upstash-redis.example.com:6379"
+    val result = AppConfig.ensureProdRedisUrl(url, AppEnv.Prod, allowPlaintextInProd = true)
+    assertEquals(result, Right(url))
+  }
+
+  test("loadFromEnv allows plaintext Redis in prod only with explicit flag") {
+    val env = prodEnv ++ Map(
+      "REDIS_URL" -> "redis://default:secret@fly-upstash-redis.example.com:6379",
+      "REDIS_ALLOW_PLAINTEXT_IN_PROD" -> "true",
+    )
+
+    load(env).map { result =>
+      assertEquals(
+        result.flatMap(_.redis.map(_.url).toRight(new RuntimeException())),
+        Right(env("REDIS_URL")),
+      )
+    }
+  }
+
+  test("loadFromEnv rejects malformed plaintext Redis override") {
+    val env = prodEnv ++ Map(
+      "REDIS_URL" -> "redis://default:secret@fly-upstash-redis.example.com:6379",
+      "REDIS_ALLOW_PLAINTEXT_IN_PROD" -> "maybe",
+    )
+
+    load(env).map { result =>
+      assert(result.left.exists(_.getMessage.contains("REDIS_ALLOW_PLAINTEXT_IN_PROD")))
+    }
+  }
+
   test("ensureProdRedisUrl: allows local Redis URLs outside prod") {
     val result = AppConfig.ensureProdRedisUrl("redis://localhost:6379/0", AppEnv.Dev)
     assertEquals(result, Right("redis://localhost:6379/0"))

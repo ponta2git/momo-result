@@ -115,6 +115,18 @@ describe("seriesComparisonViewModel", () => {
     expect(roundedToThirty.spread).toBeCloseTo(0.2984);
   });
 
+  it("ignores null rank averages from optional API fields", () => {
+    const response = responseWithRankAverages([1.2, 1.5]);
+    const rank = response.metricsByPlayer?.[1]?.metrics.rank as { average: number | null };
+    rank.average = null;
+
+    expect(averageRankSpread(response)).toMatchObject({
+      label: "比較材料不足",
+      spread: undefined,
+      tone: "flat",
+    });
+  });
+
   it("summarizes ginji counts and abnormal multi-hit matches", () => {
     expect(ginjiSummary(responseWithGinji([0, 1, 2, 3]))).toEqual({
       abnormalMatches: 2,

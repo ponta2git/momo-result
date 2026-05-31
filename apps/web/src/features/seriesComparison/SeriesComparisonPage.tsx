@@ -40,33 +40,38 @@ type Player = NonNullable<SeriesComparisonResponse["players"]>[number];
 type MetricsEntry = NonNullable<SeriesComparisonResponse["metricsByPlayer"]>[number];
 type PlayerMetrics = MetricsEntry["metrics"];
 type MetricTone = "neutral" | "high" | "low";
+type NullableNumber = number | null | undefined;
 type NumericExtrema = {
   max: number | undefined;
   min: number | undefined;
 };
 
-function formatDecimal(value: number | undefined, digits = 2): string {
-  return value === undefined ? "-" : value.toFixed(digits);
+function isNumber(value: NullableNumber): value is number {
+  return typeof value === "number";
 }
 
-function formatSigned(value: number | undefined, unit = ""): string {
-  if (value === undefined) {
+function formatDecimal(value: NullableNumber, digits = 2): string {
+  return isNumber(value) ? value.toFixed(digits) : "-";
+}
+
+function formatSigned(value: NullableNumber, unit = ""): string {
+  if (!isNumber(value)) {
     return "-";
   }
   const sign = value > 0 ? "+" : "";
   return `${sign}${value.toFixed(2)}${unit}`;
 }
 
-function formatPercent(value: number | undefined): string {
-  return value === undefined ? "-" : `${(value * 100).toFixed(1)}%`;
+function formatPercent(value: NullableNumber): string {
+  return isNumber(value) ? `${(value * 100).toFixed(1)}%` : "-";
 }
 
-function formatMoney(value: number | undefined): string {
-  return value === undefined ? "-" : formatManYen(Math.round(value));
+function formatMoney(value: NullableNumber): string {
+  return isNumber(value) ? formatManYen(Math.round(value)) : "-";
 }
 
-function formatPlayOrderLabel(playOrder: number | undefined): string {
-  return playOrder === undefined ? "P不明" : `${playOrder}P`;
+function formatPlayOrderLabel(playOrder: NullableNumber): string {
+  return isNumber(playOrder) ? `${playOrder}P` : "P不明";
 }
 
 function metricsMap(response: SeriesComparisonResponse): Map<string, PlayerMetrics> {
@@ -75,23 +80,23 @@ function metricsMap(response: SeriesComparisonResponse): Map<string, PlayerMetri
 
 function numericExtrema(
   response: SeriesComparisonResponse,
-  select: (metrics: PlayerMetrics) => number | undefined,
+  select: (metrics: PlayerMetrics) => NullableNumber,
 ): NumericExtrema {
   const values = (response.metricsByPlayer ?? [])
     .map((entry) => select(entry.metrics))
-    .filter((value): value is number => value !== undefined);
+    .filter(isNumber);
   return values.length === 0
     ? { max: undefined, min: undefined }
     : { max: Math.max(...values), min: Math.min(...values) };
 }
 
 function extremumTone(
-  value: number | undefined,
+  value: NullableNumber,
   extrema: NumericExtrema,
   target: "max" | "min",
 ): MetricTone {
   const targetValue = extrema[target];
-  if (value === undefined || targetValue === undefined) {
+  if (!isNumber(value) || targetValue === undefined) {
     return "neutral";
   }
   return value === targetValue ? (target === "max" ? "high" : "low") : "neutral";
@@ -104,11 +109,10 @@ function leaderSummary(response: SeriesComparisonResponse): {
 } {
   const playersById = new Map((response.players ?? []).map((player) => [player.memberId, player]));
   const ranked = (response.metricsByPlayer ?? [])
-    .flatMap((entry) =>
-      entry.metrics.rank.average === undefined
-        ? []
-        : [{ averageRank: entry.metrics.rank.average, memberId: entry.memberId }],
-    )
+    .flatMap((entry) => {
+      const averageRank = entry.metrics.rank.average;
+      return isNumber(averageRank) ? [{ averageRank, memberId: entry.memberId }] : [];
+    })
     .toSorted((a, b) => a.averageRank - b.averageRank);
   const leader = ranked[0];
   if (!leader) {

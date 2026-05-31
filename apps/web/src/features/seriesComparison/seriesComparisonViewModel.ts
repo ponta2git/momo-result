@@ -19,6 +19,7 @@ export type SeriesComparisonScopeChoice = {
 
 type PlayerMetrics = NonNullable<SeriesComparisonResponse["metricsByPlayer"]>[number]["metrics"];
 type PlayOrderBreakdown = NonNullable<PlayerMetrics["playOrder"]["breakdown"]>[number];
+type NullableNumber = number | null | undefined;
 
 export type PlayOrderSignal = {
   best: PlayOrderBreakdown | undefined;
@@ -27,6 +28,10 @@ export type PlayOrderSignal = {
 };
 
 const scopeKinds = new Set(["overall", "season", "map"]);
+
+function isNumber(value: NullableNumber): value is number {
+  return typeof value === "number";
+}
 
 export function parseSeriesComparisonSearchParams(
   params: URLSearchParams,
@@ -155,7 +160,7 @@ export function averageRankSpread(response: SeriesComparisonResponse): {
 } {
   const values = (response.metricsByPlayer ?? [])
     .map((entry) => entry.metrics.rank.average)
-    .filter((value): value is number => value !== undefined);
+    .filter(isNumber);
   if (values.length < 2) {
     return { label: "比較材料不足", spread: undefined, tone: "flat" };
   }

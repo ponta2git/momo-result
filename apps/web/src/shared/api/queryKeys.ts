@@ -68,3 +68,9 @@ export const matchKeys = {
     summary: () => ["match-drafts", "summary"] as const,
   },
 };
+
+export const seriesComparisonKeys = {
+  all: () => ["series-comparison"] as const,
+  options: () => ["series-comparison", "options"] as const,
+  aggregate: (params: unknown) => ["series-comparison", "aggregate", params] as const,
+};

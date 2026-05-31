@@ -1,4 +1,5 @@
 import {
+  BarChart3,
   CalendarDays,
   Database,
   Download,
@@ -22,6 +23,7 @@ type NavItem = {
 
 const defaultItems: NavItem[] = [
   { icon: <Trophy className="size-4" />, label: "試合", to: "/matches" },
+  { icon: <BarChart3 className="size-4" />, label: "比較", to: "/analytics/series" },
   { icon: <ScanLine className="size-4" />, label: "OCR", to: "/ocr/new" },
   { icon: <CalendarDays className="size-4" />, label: "開催", to: "/held-events" },
   { icon: <Download className="size-4" />, label: "出力", to: "/exports" },

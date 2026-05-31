@@ -178,4 +178,15 @@ describe("app routing", () => {
     expect(router.state.location.pathname).toBe("/held-events");
     expect(screen.getByRole("link", { name: "開催" })).toBeInTheDocument();
   });
+
+  it("renders series comparison at /analytics/series for authenticated users", async () => {
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    const { router } = renderApp("/analytics/series");
+
+    expect(await screen.findByRole("heading", { name: "シリーズ比較" })).toBeInTheDocument();
+    expect(await screen.findByText("平均順位差")).toBeInTheDocument();
+    expect(await screen.findByText("スリの銀次")).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe("/analytics/series");
+    expect(screen.getByRole("link", { name: "比較" })).toBeInTheDocument();
+  });
 });

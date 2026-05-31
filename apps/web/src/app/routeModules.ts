@@ -47,6 +47,11 @@ export const loadOcrCapturePage = () =>
     default: module.OcrCapturePage,
   }));
 
+export const loadSeriesComparisonPage = () =>
+  import("@/features/seriesComparison/SeriesComparisonPage").then((module) => ({
+    default: module.SeriesComparisonPage,
+  }));
+
 const routePreloaders: Array<{
   matches: (pathname: string) => boolean;
   preload: () => Promise<unknown>;
@@ -59,6 +64,7 @@ const routePreloaders: Array<{
   { matches: (pathname) => /^\/matches\/[^/]+$/u.test(pathname), preload: loadMatchDetailPage },
   { matches: (pathname) => pathname === "/ocr/new", preload: loadOcrCapturePage },
   { matches: (pathname) => /^\/review\/[^/]+$/u.test(pathname), preload: loadDraftReviewPage },
+  { matches: (pathname) => pathname === "/analytics/series", preload: loadSeriesComparisonPage },
   { matches: (pathname) => pathname === "/exports", preload: loadExportPage },
   { matches: (pathname) => pathname === "/admin/masters", preload: loadMastersPage },
   { matches: (pathname) => pathname === "/admin/accounts", preload: loadAdminAccountsPage },

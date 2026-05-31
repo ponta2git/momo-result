@@ -97,6 +97,16 @@ function makeSeriesComparisonResponse(): SeriesComparisonResponse {
         playOrder: {
           assetsDiff: 200 - index * 80,
           assetsIndex: 1.08 - index * 0.03,
+          breakdown: [1, 2, 3, 4].map((playOrder) => {
+            const average = averages[index] ?? 2.5;
+            return {
+              assetsAverage: 2500 - index * 180 + playOrder * 70,
+              matchCount: 3,
+              playOrder,
+              rankAverage: Math.min(4, Math.max(1, average + (playOrder - 2.5) * 0.22)),
+              revenueAverage: 780 - index * 70 + playOrder * 25,
+            };
+          }),
           revenueDiff: 70 - index * 30,
           revenueIndex: 1.12 - index * 0.05,
         },
@@ -124,6 +134,7 @@ function makeSeriesComparisonResponse(): SeriesComparisonResponse {
       lowerHalfCumulativeRate: trend([0.1, 0.2, 0.25, 0.35]),
       podiumCumulativeRate: trend([0.9, 0.8, 0.7, 0.6]),
       rankCumulativeAverage: trend(averages),
+      rankCumulativeStandardDeviation: trend([0, 0.5, 0.75, 0.68]),
     },
   };
 }

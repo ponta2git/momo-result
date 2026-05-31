@@ -5424,6 +5424,12 @@
               "$ref" : "#/components/schemas/TrendSeriesResponse"
             }
           },
+          "rankCumulativeStandardDeviation" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/TrendSeriesResponse"
+            }
+          },
           "podiumCumulativeRate" : {
             "type" : "array",
             "items" : {

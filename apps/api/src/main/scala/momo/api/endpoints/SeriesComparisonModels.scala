@@ -179,6 +179,7 @@ object StabilityMetricsResponse:
 
 final case class SeriesComparisonTrendsResponse(
     rankCumulativeAverage: List[TrendSeriesResponse],
+    rankCumulativeStandardDeviation: List[TrendSeriesResponse],
     podiumCumulativeRate: List[TrendSeriesResponse],
     lowerHalfCumulativeRate: List[TrendSeriesResponse],
     ginjiCumulativeCount: List[TrendSeriesResponse],

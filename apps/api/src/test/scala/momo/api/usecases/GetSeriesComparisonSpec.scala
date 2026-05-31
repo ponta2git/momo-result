@@ -65,6 +65,12 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
       assertEquals(eu.ginji.maxInSingleMatch, 2)
 
       assertEquals(response.trends.rankCumulativeAverage.size, 4)
+      assertEquals(response.trends.rankCumulativeStandardDeviation.size, 4)
+      assertOptionDouble(
+        response.trends.rankCumulativeStandardDeviation.head.points.head.value,
+        0.0,
+      )
+      assertOptionDouble(response.trends.rankCumulativeStandardDeviation.head.points(1).value, 0.5)
       assertEquals(
         response.histograms.assets.series.map(_.memberId),
         response.players.map(_.memberId),

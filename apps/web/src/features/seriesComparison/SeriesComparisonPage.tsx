@@ -19,6 +19,7 @@ import {
 import {
   averageRankSpread,
   ginjiSummary,
+  playOrderSignal,
   qualitySummary,
 } from "@/features/seriesComparison/seriesComparisonViewModel";
 import { useSeriesComparisonPageController } from "@/features/seriesComparison/useSeriesComparisonPageController";
@@ -60,7 +61,7 @@ function formatMoney(value: number | undefined): string {
 }
 
 function formatPlayOrderLabel(playOrder: number | undefined): string {
-  return playOrder === undefined ? "プレー順不明" : `プレー順${playOrder}`;
+  return playOrder === undefined ? "P不明" : `${playOrder}P`;
 }
 
 function metricsMap(response: SeriesComparisonResponse): Map<string, PlayerMetrics> {
@@ -164,14 +165,33 @@ function PlayerMetricGrid({
   );
 }
 
-function MetricRow({ help, label, value }: { help?: ReactNode; label: string; value: ReactNode }) {
+function MetricRow({
+  help,
+  label,
+  tone = "neutral",
+  value,
+}: {
+  help?: ReactNode;
+  label: string;
+  tone?: "neutral" | "high" | "low";
+  value: ReactNode;
+}) {
   return (
     <div className="grid min-h-10 grid-cols-[minmax(0,1fr)_auto] items-baseline gap-3 border-b border-[var(--color-border)] pb-2 last:border-b-0 last:pb-0">
       <span className="inline-flex min-w-0 items-center gap-1.5 text-xs text-[var(--color-text-secondary)]">
         <span className="truncate">{label}</span>
         {help ? <FormulaHelp content={help} /> : null}
       </span>
-      <span className="text-right text-sm font-semibold text-[var(--color-text-primary)] tabular-nums">
+      <span
+        className={cn(
+          "text-right text-sm font-semibold tabular-nums",
+          tone === "high"
+            ? "text-[var(--color-success)]"
+            : tone === "low"
+              ? "text-[var(--color-review)]"
+              : "text-[var(--color-text-primary)]",
+        )}
+      >
         {value}
       </span>
     </div>
@@ -244,9 +264,7 @@ function SummaryBand({ response }: { response: SeriesComparisonResponse }) {
         label="順位の開き"
         value={formatDecimal(rankSpread.spread)}
         subLabel={
-          rankSpread.spread === undefined
-            ? rankSpread.label
-            : `平均順位の首位と最下位の差 / ${rankSpread.label}`
+          rankSpread.spread === undefined ? "平均順位の比較材料不足" : "平均順位の首位と最下位の差"
         }
       />
     </section>
@@ -332,8 +350,8 @@ function MoneyMetrics({ response }: { response: SeriesComparisonResponse }) {
         <PlayerMetricGrid metricsByMember={metricsByMember} players={players}>
           {(_, metrics) => (
             <>
-              <MetricRow label="最高額" value={formatMoney(metrics?.assets.max)} />
-              <MetricRow label="最低額" value={formatMoney(metrics?.assets.min)} />
+              <MetricRow label="最高額" tone="high" value={formatMoney(metrics?.assets.max)} />
+              <MetricRow label="最低額" tone="low" value={formatMoney(metrics?.assets.min)} />
               <MetricRow label="平均値" value={formatMoney(metrics?.assets.average)} />
               <MetricRow label="中央値" value={formatMoney(metrics?.assets.median)} />
             </>
@@ -349,7 +367,7 @@ function MoneyMetrics({ response }: { response: SeriesComparisonResponse }) {
         <PlayerMetricGrid metricsByMember={metricsByMember} players={players}>
           {(_, metrics) => (
             <>
-              <MetricRow label="最高額" value={formatMoney(metrics?.revenue.max)} />
+              <MetricRow label="最高額" tone="high" value={formatMoney(metrics?.revenue.max)} />
               <MetricRow label="平均値" value={formatMoney(metrics?.revenue.average)} />
               <MetricRow label="中央値" value={formatMoney(metrics?.revenue.median)} />
             </>
@@ -389,6 +407,11 @@ function RateMetrics({ response }: { response: SeriesComparisonResponse }) {
           </>
         )}
       </PlayerMetricGrid>
+      <LineChart
+        formatValue={(value) => value.toFixed(2)}
+        players={players}
+        series={response.trends.rankCumulativeStandardDeviation ?? []}
+      />
     </MetricSection>
   );
 }
@@ -398,100 +421,47 @@ function PlayOrderMetrics({ response }: { response: SeriesComparisonResponse }) 
   const metricsByMember = metricsMap(response);
   return (
     <MetricSection
-      description="同じプレーヤーが、どのプレー順でどの成績になっているかを見ます。全体平均は、プレー順自体の傾向を見るための基準です。"
+      description="プレー順ごとの平均順位から、得意なPと苦手なP、その差を見ます。P差は小さいほどプレー順による成績差が小さい状態です。"
       icon={<RefreshCw className="size-5" />}
       title="プレー順別成績"
     >
       <PlayerMetricGrid metricsByMember={metricsByMember} players={players}>
-        {(_, metrics) => <PlayOrderBreakdown breakdown={metrics?.playOrder.breakdown ?? []} />}
+        {(_, metrics) => <PlayOrderSignalRows metrics={metrics} />}
       </PlayerMetricGrid>
-      <PlayOrderBaselineTable response={response} />
     </MetricSection>
   );
 }
 
-function PlayOrderBreakdown({
-  breakdown,
-}: {
-  breakdown: NonNullable<PlayerMetrics["playOrder"]["breakdown"]>;
-}) {
-  if (breakdown.length === 0) {
+function PlayOrderSignalRows({ metrics }: { metrics: PlayerMetrics | undefined }) {
+  const signal = playOrderSignal(metrics);
+  if (!signal.best || !signal.worst) {
     return <p className="text-sm text-[var(--color-text-secondary)]">対象データなし</p>;
   }
   return (
-    <div className="grid gap-2">
-      {breakdown.map((item) => (
-        <div
-          key={item.playOrder}
-          className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2"
-        >
-          <div className="flex items-center justify-between gap-2 text-xs font-semibold text-[var(--color-text-primary)]">
-            <span>{formatPlayOrderLabel(item.playOrder)}</span>
-            <span className="text-[var(--color-text-secondary)] tabular-nums">
-              {item.matchCount}戦
-            </span>
-          </div>
-          <div className="mt-2 grid gap-1 text-xs">
-            <div className="flex items-baseline justify-between gap-2">
-              <span className="text-[var(--color-text-secondary)]">平均順位</span>
-              <span className="font-semibold text-[var(--color-text-primary)] tabular-nums">
-                {formatDecimal(item.rankAverage)}
-              </span>
-            </div>
-            <div className="flex items-baseline justify-between gap-2">
-              <span className="text-[var(--color-text-secondary)]">総資産</span>
-              <span className="text-right font-semibold text-[var(--color-text-primary)] tabular-nums">
-                {formatMoney(item.assetsAverage)}
-              </span>
-            </div>
-            <div className="flex items-baseline justify-between gap-2">
-              <span className="text-[var(--color-text-secondary)]">収益</span>
-              <span className="text-right font-semibold text-[var(--color-text-primary)] tabular-nums">
-                {formatMoney(item.revenueAverage)}
-              </span>
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
+    <>
+      <MetricRow label="得意P" value={<PlayOrderValue item={signal.best} />} />
+      <MetricRow label="苦手P" value={<PlayOrderValue item={signal.worst} />} />
+      <MetricRow
+        help="各プレーヤーのプレー順別平均順位の最大値 - 最小値。大きいほどプレー順で成績差が出ています。"
+        label="P差"
+        value={formatDecimal(signal.spread)}
+      />
+    </>
   );
 }
 
-function PlayOrderBaselineTable({ response }: { response: SeriesComparisonResponse }) {
-  const baselines = response.playOrderBaselines ?? [];
-  if (baselines.length === 0) {
-    return null;
-  }
+function PlayOrderValue({
+  item,
+}: {
+  item: NonNullable<PlayerMetrics["playOrder"]["breakdown"]>[number];
+}) {
   return (
-    <div className="grid gap-2">
-      <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">全体のプレー順平均</h3>
-      <div className="grid gap-3 md:grid-cols-4">
-        {baselines.map((baseline) => (
-          <div
-            key={baseline.playOrder}
-            className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3"
-            style={{
-              borderTopColor: playerColor(Math.max(0, baseline.playOrder - 1)),
-              borderTopWidth: 3,
-            }}
-          >
-            <div className="flex items-center gap-2 text-sm font-semibold text-[var(--color-text-primary)]">
-              <span
-                aria-hidden="true"
-                className="size-2.5 rounded-full"
-                style={{ backgroundColor: playerColor(Math.max(0, baseline.playOrder - 1)) }}
-              />
-              {formatPlayOrderLabel(baseline.playOrder)}
-            </div>
-            <div className="mt-3 grid gap-2">
-              <MetricRow label="総資産平均" value={formatMoney(baseline.assetsAverage)} />
-              <MetricRow label="収益平均" value={formatMoney(baseline.revenueAverage)} />
-              <MetricRow label="対象" value={`${baseline.matchCount}戦`} />
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
+    <span className="inline-flex flex-wrap justify-end gap-x-1.5 gap-y-0.5">
+      <span>{formatPlayOrderLabel(item.playOrder)}</span>
+      <span className="font-medium text-[var(--color-text-secondary)]">
+        平均順位 {formatDecimal(item.rankAverage)} / {item.matchCount}戦
+      </span>
+    </span>
   );
 }
 

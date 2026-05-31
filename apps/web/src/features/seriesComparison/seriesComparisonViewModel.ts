@@ -17,6 +17,15 @@ export type SeriesComparisonScopeChoice = {
   value: SeriesComparisonScopeKind;
 };
 
+type PlayerMetrics = NonNullable<SeriesComparisonResponse["metricsByPlayer"]>[number]["metrics"];
+type PlayOrderBreakdown = NonNullable<PlayerMetrics["playOrder"]["breakdown"]>[number];
+
+export type PlayOrderSignal = {
+  best: PlayOrderBreakdown | undefined;
+  spread: number | undefined;
+  worst: PlayOrderBreakdown | undefined;
+};
+
 const scopeKinds = new Set(["overall", "season", "map"]);
 
 export function parseSeriesComparisonSearchParams(
@@ -158,9 +167,25 @@ export function averageRankSpread(response: SeriesComparisonResponse): {
     return { label: "小差", spread, tone: "small" };
   }
   if (spread < 0.6) {
-    return { label: "差が見え始めた", spread, tone: "visible" };
+    return { label: "中差", spread, tone: "visible" };
   }
   return { label: "はっきり差", spread, tone: "large" };
+}
+
+export function playOrderSignal(metrics: PlayerMetrics | undefined): PlayOrderSignal {
+  const ranked = (metrics?.playOrder.breakdown ?? [])
+    .filter(
+      (item): item is PlayOrderBreakdown & { rankAverage: number } =>
+        typeof item.rankAverage === "number",
+    )
+    .toSorted((a, b) => a.rankAverage - b.rankAverage);
+  const best = ranked[0];
+  const worst = ranked.at(-1);
+  return {
+    best,
+    spread: best && worst && ranked.length >= 2 ? worst.rankAverage - best.rankAverage : undefined,
+    worst,
+  };
 }
 
 export function ginjiSummary(response: SeriesComparisonResponse): {

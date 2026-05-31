@@ -317,6 +317,10 @@ private object SeriesComparisonAggregation:
         val rows = rowsByPlayer(row.memberId).take(idx)
         averageUnsafe(rows.map(row => asDecimal(row.rank.value)))
       },
+      rankCumulativeStandardDeviation = series { (row, idx) =>
+        val rows = rowsByPlayer(row.memberId).take(idx)
+        stddev(rows.map(row => asDecimal(row.rank.value))).getOrElse(0.0)
+      },
       podiumCumulativeRate = series { (row, idx) =>
         val rows = rowsByPlayer(row.memberId).take(idx)
         asDecimal(rows.count(r => r.rank.value <= 2)) / asDecimal(idx)

@@ -12,6 +12,7 @@ import {
   ginjiSummary,
   normalizeSeriesComparisonSelection,
   parseSeriesComparisonSearchParams,
+  playOrderSignal,
   seriesComparisonQueryFromState,
 } from "./seriesComparisonViewModel";
 
@@ -100,7 +101,7 @@ describe("seriesComparisonViewModel", () => {
 
     const closeResponse = responseWithRankAverages([1.2, 1.5]);
     expect(averageRankSpread(closeResponse)).toMatchObject({
-      label: "差が見え始めた",
+      label: "中差",
       spread: 0.30000000000000004,
       tone: "visible",
     });
@@ -108,7 +109,7 @@ describe("seriesComparisonViewModel", () => {
     const roundedToThirtyResponse = responseWithRankAverages([2.3629, 2.6613]);
     const roundedToThirty = averageRankSpread(roundedToThirtyResponse);
     expect(roundedToThirty).toMatchObject({
-      label: "差が見え始めた",
+      label: "中差",
       tone: "visible",
     });
     expect(roundedToThirty.spread).toBeCloseTo(0.2984);
@@ -120,6 +121,23 @@ describe("seriesComparisonViewModel", () => {
       totalEncounters: 6,
       warningPlayerIds: ["p2", "p3"],
     });
+  });
+
+  it("summarizes play-order signal into best, worst, and spread", () => {
+    const metrics = baseMetrics({
+      playOrderBreakdown: [
+        { matchCount: 3, playOrder: 1, rankAverage: 2.5 },
+        { matchCount: 3, playOrder: 2, rankAverage: 1.8 },
+        { matchCount: 3, playOrder: 3, rankAverage: 3.1 },
+      ],
+    });
+
+    const signal = playOrderSignal(metrics);
+    expect(signal).toMatchObject({
+      best: { playOrder: 2 },
+      worst: { playOrder: 3 },
+    });
+    expect(signal.spread).toBeCloseTo(1.3);
   });
 });
 
@@ -161,10 +179,14 @@ function responseWithGinji(values: number[]): SeriesComparisonResponse {
 function baseMetrics({
   ginjiCount = 0,
   multiEncounterMatchCount = 0,
+  playOrderBreakdown = [],
   rankAverage = 1,
 }: {
   ginjiCount?: number;
   multiEncounterMatchCount?: number;
+  playOrderBreakdown?: NonNullable<
+    SeriesComparisonResponse["metricsByPlayer"]
+  >[number]["metrics"]["playOrder"]["breakdown"];
   rankAverage?: number;
 }) {
   return {
@@ -179,7 +201,7 @@ function baseMetrics({
     },
     lowerHalf: { count: 0 },
     nonRevenue: { highRevenueNoWinCount: 0, highRevenueTopCount: 0 },
-    playOrder: { breakdown: [] },
+    playOrder: { breakdown: playOrderBreakdown },
     podium: { count: 1 },
     rank: { average: rankAverage, distribution: [] },
     revenue: {},

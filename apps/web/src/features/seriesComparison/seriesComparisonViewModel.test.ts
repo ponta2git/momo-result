@@ -127,6 +127,16 @@ describe("seriesComparisonViewModel", () => {
     });
   });
 
+  it("ignores non-finite rank averages from defensive display helpers", () => {
+    const response = responseWithRankAverages([1.2, Number.NaN]);
+
+    expect(averageRankSpread(response)).toMatchObject({
+      label: "比較材料不足",
+      spread: undefined,
+      tone: "flat",
+    });
+  });
+
   it("summarizes ginji counts and abnormal multi-hit matches", () => {
     expect(ginjiSummary(responseWithGinji([0, 1, 2, 3]))).toEqual({
       abnormalMatches: 2,
@@ -150,6 +160,24 @@ describe("seriesComparisonViewModel", () => {
       worst: { playOrder: 3 },
     });
     expect(signal.spread).toBeCloseTo(1.3);
+  });
+
+  it("ignores null and non-finite play-order averages", () => {
+    const metrics = baseMetrics({
+      playOrderBreakdown: [
+        { matchCount: 3, playOrder: 1, rankAverage: Number.NaN },
+        { matchCount: 3, playOrder: 2, rankAverage: 1.8 },
+        { matchCount: 3, playOrder: 3, rankAverage: null as unknown as number },
+        { matchCount: 3, playOrder: 4, rankAverage: 2.7 },
+      ],
+    });
+
+    const signal = playOrderSignal(metrics);
+    expect(signal).toMatchObject({
+      best: { playOrder: 2 },
+      worst: { playOrder: 4 },
+    });
+    expect(signal.spread).toBeCloseTo(0.9);
   });
 });
 

@@ -47,7 +47,7 @@ type NumericExtrema = {
 };
 
 function isNumber(value: NullableNumber): value is number {
-  return typeof value === "number";
+  return typeof value === "number" && Number.isFinite(value);
 }
 
 function formatDecimal(value: NullableNumber, digits = 2): string {
@@ -72,6 +72,13 @@ function formatMoney(value: NullableNumber): string {
 
 function formatPlayOrderLabel(playOrder: NullableNumber): string {
   return isNumber(playOrder) ? `${playOrder}P` : "P不明";
+}
+
+function playOrderColor(playOrder: NullableNumber): string {
+  const colors = ["#2563eb", "#dc2626", "#d9a300", "#16a34a"];
+  return isNumber(playOrder)
+    ? (colors[playOrder - 1] ?? "var(--color-text-muted)")
+    : "var(--color-text-muted)";
 }
 
 function metricsMap(response: SeriesComparisonResponse): Map<string, PlayerMetrics> {
@@ -528,7 +535,14 @@ function PlayOrderValue({
 }) {
   return (
     <span className="inline-flex flex-wrap justify-end gap-x-1.5 gap-y-0.5">
-      <span>{formatPlayOrderLabel(item.playOrder)}</span>
+      <span className="inline-flex items-center gap-1">
+        <span
+          aria-hidden="true"
+          className="size-2 rounded-full"
+          style={{ backgroundColor: playOrderColor(item.playOrder) }}
+        />
+        {formatPlayOrderLabel(item.playOrder)}
+      </span>
       <span className="font-medium text-[var(--color-text-secondary)]">
         平均順位 {formatDecimal(item.rankAverage)} / {item.matchCount}戦
       </span>

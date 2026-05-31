@@ -30,7 +30,7 @@ export type PlayOrderSignal = {
 const scopeKinds = new Set(["overall", "season", "map"]);
 
 function isNumber(value: NullableNumber): value is number {
-  return typeof value === "number";
+  return typeof value === "number" && Number.isFinite(value);
 }
 
 export function parseSeriesComparisonSearchParams(
@@ -179,9 +179,8 @@ export function averageRankSpread(response: SeriesComparisonResponse): {
 
 export function playOrderSignal(metrics: PlayerMetrics | undefined): PlayOrderSignal {
   const ranked = (metrics?.playOrder.breakdown ?? [])
-    .filter(
-      (item): item is PlayOrderBreakdown & { rankAverage: number } =>
-        typeof item.rankAverage === "number",
+    .filter((item): item is PlayOrderBreakdown & { rankAverage: number } =>
+      isNumber(item.rankAverage),
     )
     .toSorted((a, b) => a.rankAverage - b.rankAverage);
   const best = ranked[0];

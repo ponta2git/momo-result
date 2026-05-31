@@ -184,8 +184,8 @@ describe("app routing", () => {
     const { router } = renderApp("/analytics/series");
 
     expect(await screen.findByRole("heading", { name: "シリーズ比較" })).toBeInTheDocument();
-    expect(await screen.findByText("平均順位差")).toBeInTheDocument();
-    expect(await screen.findByText("スリの銀次")).toBeInTheDocument();
+    expect(await screen.findByText("順位の開き")).toBeInTheDocument();
+    expect(await screen.findByText("銀次発生")).toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/analytics/series");
     expect(screen.getByRole("link", { name: "比較" })).toBeInTheDocument();
   });

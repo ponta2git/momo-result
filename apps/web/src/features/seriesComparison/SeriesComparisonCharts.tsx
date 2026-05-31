@@ -10,6 +10,10 @@ type HistogramBin = NonNullable<Histogram["bins"]>[number];
 
 const palette = ["#2563eb", "#dc2626", "#d9a300", "#16a34a", "#6f7d74", "#7b5aa6"];
 
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
 export function playerColor(index: number): string {
   return palette[index % palette.length] ?? "#2563eb";
 }
@@ -54,7 +58,7 @@ export function LineChart({
   const height = 300;
   const padding = { bottom: 42, left: 54, right: 24, top: 24 };
   const values = series.flatMap((item) =>
-    (item.points ?? []).flatMap((point) => (typeof point.value === "number" ? [point.value] : [])),
+    (item.points ?? []).flatMap((point) => (isFiniteNumber(point.value) ? [point.value] : [])),
   );
   const maxIndex = Math.max(
     1,
@@ -80,103 +84,108 @@ export function LineChart({
 
   return (
     <figure className={cn("grid gap-2", className)}>
-      <svg
-        aria-label="推移グラフ"
-        className="h-80 w-full overflow-visible rounded-[var(--radius-sm)] bg-[var(--color-surface)]"
-        role="img"
-        viewBox={`0 0 ${width} ${height}`}
-      >
-        <line
-          stroke="var(--color-border-strong)"
-          strokeWidth="1"
-          x1={padding.left}
-          x2={width - padding.right}
-          y1={height - padding.bottom}
-          y2={height - padding.bottom}
-        />
-        <line
-          stroke="var(--color-border)"
-          strokeWidth="1"
-          x1={padding.left}
-          x2={padding.left}
-          y1={padding.top}
-          y2={height - padding.bottom}
-        />
-        {ticks.map((value) => (
-          <g key={value}>
-            <line
-              stroke="var(--color-border)"
-              strokeDasharray="4 4"
-              strokeWidth="0.8"
-              x1={padding.left}
-              x2={width - padding.right}
-              y1={y(value)}
-              y2={y(value)}
-            />
-            <text
-              fill="var(--color-text-secondary)"
-              fontSize="12"
-              textAnchor="end"
-              x={padding.left - 8}
-              y={y(value) + 4}
-            >
-              {formatValue(value)}
-            </text>
-          </g>
-        ))}
-        {xTicks.map((value) => {
-          const xPosition = x(value);
-          return (
+      <div className="flex overflow-x-auto pb-1 md:justify-center">
+        <svg
+          aria-label="推移グラフ"
+          className="w-[760px] max-w-none shrink-0 overflow-visible rounded-[var(--radius-sm)] bg-[var(--color-surface)] md:w-full md:max-w-[980px]"
+          role="img"
+          style={{ aspectRatio: `${width} / ${height}` }}
+          viewBox={`0 0 ${width} ${height}`}
+        >
+          <line
+            stroke="var(--color-border-strong)"
+            strokeWidth="1"
+            x1={padding.left}
+            x2={width - padding.right}
+            y1={height - padding.bottom}
+            y2={height - padding.bottom}
+          />
+          <line
+            stroke="var(--color-border)"
+            strokeWidth="1"
+            x1={padding.left}
+            x2={padding.left}
+            y1={padding.top}
+            y2={height - padding.bottom}
+          />
+          {ticks.map((value) => (
             <g key={value}>
-              {value !== 1 && value !== maxIndex ? (
-                <line
-                  stroke="var(--color-border)"
-                  strokeDasharray="4 4"
-                  strokeWidth="0.8"
-                  x1={xPosition}
-                  x2={xPosition}
-                  y1={padding.top}
-                  y2={height - padding.bottom}
-                />
-              ) : null}
+              <line
+                stroke="var(--color-border)"
+                strokeDasharray="4 4"
+                strokeWidth="0.8"
+                x1={padding.left}
+                x2={width - padding.right}
+                y1={y(value)}
+                y2={y(value)}
+              />
               <text
                 fill="var(--color-text-secondary)"
                 fontSize="12"
-                textAnchor={value === maxIndex ? "end" : value === 1 ? "start" : "middle"}
-                x={xPosition}
-                y={height - 8}
+                textAnchor="end"
+                x={padding.left - 8}
+                y={y(value) + 4}
               >
-                {value === maxIndex ? `${value}戦` : value}
+                {formatValue(value)}
               </text>
             </g>
-          );
-        })}
-        {series.map((item) => {
-          const points = (item.points ?? []).flatMap((point) =>
-            typeof point.value === "number" ? [{ index: point.index, value: point.value }] : [],
-          );
-          const path = points
-            .map((point, index) => `${index === 0 ? "M" : "L"} ${x(point.index)} ${y(point.value)}`)
-            .join(" ");
-          const color = playerColor(playerIndex.get(item.memberId) ?? 0);
-          return (
-            <g key={item.memberId}>
-              <path d={path} fill="none" stroke={color} strokeLinecap="round" strokeWidth="1.8" />
-              {points.length <= 32
-                ? points.map((point) => (
-                    <circle
-                      key={`${item.memberId}-${point.index}`}
-                      cx={x(point.index)}
-                      cy={y(point.value)}
-                      fill={color}
-                      r="2.4"
-                    />
-                  ))
-                : null}
-            </g>
-          );
-        })}
-      </svg>
+          ))}
+          {xTicks.map((value) => {
+            const xPosition = x(value);
+            return (
+              <g key={value}>
+                {value !== 1 && value !== maxIndex ? (
+                  <line
+                    stroke="var(--color-border)"
+                    strokeDasharray="4 4"
+                    strokeWidth="0.8"
+                    x1={xPosition}
+                    x2={xPosition}
+                    y1={padding.top}
+                    y2={height - padding.bottom}
+                  />
+                ) : null}
+                <text
+                  fill="var(--color-text-secondary)"
+                  fontSize="12"
+                  textAnchor={value === maxIndex ? "end" : value === 1 ? "start" : "middle"}
+                  x={xPosition}
+                  y={height - 8}
+                >
+                  {value === maxIndex ? `${value}戦` : value}
+                </text>
+              </g>
+            );
+          })}
+          {series.map((item) => {
+            const points = (item.points ?? []).flatMap((point) =>
+              isFiniteNumber(point.value) ? [{ index: point.index, value: point.value }] : [],
+            );
+            const path = points
+              .map(
+                (point, index) => `${index === 0 ? "M" : "L"} ${x(point.index)} ${y(point.value)}`,
+              )
+              .join(" ");
+            const color = playerColor(playerIndex.get(item.memberId) ?? 0);
+            return (
+              <g key={item.memberId}>
+                <path d={path} fill="none" stroke={color} strokeLinecap="round" strokeWidth="1.8" />
+                {points.length <= 32
+                  ? points.map((point) => (
+                      <circle
+                        key={`${item.memberId}-${point.index}`}
+                        cx={x(point.index)}
+                        cy={y(point.value)}
+                        fill={color}
+                        r="2.4"
+                      />
+                    ))
+                  : null}
+              </g>
+            );
+          })}
+        </svg>
+      </div>
       <PlayerLegend players={players} />
     </figure>
   );

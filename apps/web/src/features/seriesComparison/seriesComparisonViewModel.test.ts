@@ -125,6 +125,7 @@ function responseWithRankAverages(values: number[]): SeriesComparisonResponse {
       memberId: `p${index}`,
       metrics: baseMetrics({ rankAverage: value }),
     })),
+    playOrderBaselines: [],
     players: values.map((_, index) => ({ displayName: `P${index}`, memberId: `p${index}` })),
     schemaVersion: 1,
     scope: {

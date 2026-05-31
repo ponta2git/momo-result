@@ -41,6 +41,7 @@ final case class SeriesComparisonResponse(
     metricsByPlayer: List[SeriesComparisonPlayerMetricsEntry],
     trends: SeriesComparisonTrendsResponse,
     histograms: SeriesComparisonHistogramsResponse,
+    playOrderBaselines: List[PlayOrderBaselineResponse],
     highlights: List[SeriesComparisonHighlightResponse],
     dataQuality: SeriesComparisonDataQualityResponse,
 ) derives Codec.AsObject
@@ -214,6 +215,15 @@ object HistogramBinResponse:
 final case class HistogramSeriesResponse(memberId: String, counts: List[Int]) derives Codec.AsObject
 object HistogramSeriesResponse:
   given Schema[HistogramSeriesResponse] = Schema.derived
+
+final case class PlayOrderBaselineResponse(
+    playOrder: Int,
+    assetsAverage: Option[Double],
+    revenueAverage: Option[Double],
+    matchCount: Int,
+) derives Codec.AsObject
+object PlayOrderBaselineResponse:
+  given Schema[PlayOrderBaselineResponse] = Schema.derived
 
 final case class SeriesComparisonHighlightResponse(
     id: String,

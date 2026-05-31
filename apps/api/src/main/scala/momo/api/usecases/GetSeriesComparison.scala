@@ -131,6 +131,7 @@ private object SeriesComparisonAggregation:
       ),
       trends = trends(playerOrder, rowsByPlayer),
       histograms = SeriesComparisonHistogramsResponse(assetsHistogram, revenueHistogram),
+      playOrderBaselines = playOrderBaselines(orderedRows),
       highlights = highlights(metrics),
       dataQuality = quality,
     )
@@ -212,6 +213,21 @@ private object SeriesComparisonAggregation:
       assetsIndex = index(row => asDecimal(row.totalAssetsManYen.value)),
       revenueIndex = index(row => asDecimal(row.revenueManYen.value)),
     )
+
+  private def playOrderBaselines(
+      rows: List[SeriesComparisonMatchPlayerRow]
+  ): List[PlayOrderBaselineResponse] =
+    if rows.isEmpty then Nil
+    else
+      (1 to 4).toList.map { playOrder =>
+        val targetRows = rows.filter(_.playOrder.value == playOrder)
+        PlayOrderBaselineResponse(
+          playOrder = playOrder,
+          assetsAverage = average(targetRows.map(row => asDecimal(row.totalAssetsManYen.value))),
+          revenueAverage = average(targetRows.map(row => asDecimal(row.revenueManYen.value))),
+          matchCount = targetRows.size,
+        )
+      }
 
   private def highRevenueNoWin(
       rows: List[SeriesComparisonMatchPlayerRow],
@@ -322,15 +338,30 @@ private object SeriesComparisonAggregation:
     case nonEmpty =>
       val min = nonEmpty.min
       val max = nonEmpty.max
-      if min == max then List(HistogramBinResponse(0, min, None, min.toString))
+      if min == max then List(HistogramBinResponse(0, min, None, s"$min+"))
       else
-        val binCount = math.min(8, math.max(1, nonEmpty.distinct.size))
-        val step = math.max(1, math.ceil(asDecimal(max - min + 1) / asDecimal(binCount)).toInt)
+        val targetBinCount = math.min(7, math.max(3, nonEmpty.distinct.size))
+        val step =
+          niceHistogramStep(math.ceil(asDecimal(max - min + 1) / asDecimal(targetBinCount)).toInt)
+        val lowerStart = math.floor(asDecimal(min) / asDecimal(step)).toInt * step
+        val upperEnd = (math.floor(asDecimal(max) / asDecimal(step)).toInt + 1) * step
+        val binCount = math.max(1, (upperEnd - lowerStart + step - 1) / step)
         (0 until binCount).toList.map { idx =>
-          val lower = min + step * idx
+          val lower = lowerStart + step * idx
           val upper = if idx == binCount - 1 then None else Some(lower + step)
           HistogramBinResponse(idx, lower, upper, upper.fold(s"$lower+")(u => s"$lower-${u - 1}"))
         }
+
+  private def niceHistogramStep(rawStep: Int): Int =
+    val safeStep = math.max(1, rawStep)
+    val magnitude = math.pow(10.0, math.floor(math.log10(asDecimal(safeStep)))).toInt
+    val normalized = math.ceil(asDecimal(safeStep) / asDecimal(magnitude)).toInt
+    val factor =
+      if normalized <= 1 then 1
+      else if normalized <= 2 then 2
+      else if normalized <= 5 then 5
+      else 10
+    factor * magnitude
 
   private def dataQuality(
       playerOrder: List[MemberId],

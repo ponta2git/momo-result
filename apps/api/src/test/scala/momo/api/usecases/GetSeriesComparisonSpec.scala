@@ -66,6 +66,13 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
         response.histograms.assets.series.map(_.memberId),
         response.players.map(_.memberId),
       )
+      assertEquals(
+        response.histograms.assets.bins.map(_.label),
+        List("0-499", "500-999", "1000-1499", "1500+"),
+      )
+      assertEquals(response.playOrderBaselines.map(_.playOrder), List(1, 2, 3, 4))
+      assertOptionDouble(response.playOrderBaselines.head.assetsAverage, 760.0)
+      assertOptionDouble(response.playOrderBaselines.head.revenueAverage, 180.0)
       assert(response.highlights.exists(_.id == "highlight.destinationIndependent"))
       assert(response.dataQuality.items.exists(item =>
         item.metricId == "ginji.resilienceRankAverage" && item.playerMemberId.contains("ponta") &&
@@ -80,6 +87,7 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
       assertEquals(response.matchCount, 0)
       assertEquals(response.players, Nil)
       assertEquals(response.metricsByPlayer, Nil)
+      assertEquals(response.playOrderBaselines, Nil)
       assertEquals(response.dataQuality.items, Nil)
 
   test("returns not found when the selected scope cannot be resolved"):

@@ -4744,6 +4744,32 @@
           }
         }
       },
+      "PlayOrderBaselineResponse" : {
+        "title" : "PlayOrderBaselineResponse",
+        "type" : "object",
+        "required" : [
+          "playOrder",
+          "matchCount"
+        ],
+        "properties" : {
+          "playOrder" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "assetsAverage" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "revenueAverage" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "matchCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
       "PlayOrderMetricsResponse" : {
         "title" : "PlayOrderMetricsResponse",
         "type" : "object",
@@ -5232,6 +5258,12 @@
           },
           "histograms" : {
             "$ref" : "#/components/schemas/SeriesComparisonHistogramsResponse"
+          },
+          "playOrderBaselines" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/PlayOrderBaselineResponse"
+            }
           },
           "highlights" : {
             "type" : "array",

@@ -12,10 +12,10 @@ import type { ReactNode } from "react";
 import {
   HistogramChart,
   LineChart,
+  playerColor,
   playerGridStyle,
 } from "@/features/seriesComparison/SeriesComparisonCharts";
 import {
-  averageRankSpread,
   ginjiSummary,
   qualitySummary,
 } from "@/features/seriesComparison/seriesComparisonViewModel";
@@ -49,7 +49,7 @@ function formatSigned(value: number | undefined, unit = ""): string {
 }
 
 function formatPercent(value: number | undefined): string {
-  return value === undefined ? "-" : `${Math.round(value * 100)}%`;
+  return value === undefined ? "-" : `${(value * 100).toFixed(1)}%`;
 }
 
 function formatMoney(value: number | undefined): string {
@@ -58,6 +58,48 @@ function formatMoney(value: number | undefined): string {
 
 function metricsMap(response: SeriesComparisonResponse): Map<string, PlayerMetrics> {
   return new Map((response.metricsByPlayer ?? []).map((entry) => [entry.memberId, entry.metrics]));
+}
+
+function leaderSummary(response: SeriesComparisonResponse): {
+  averageRank: number | undefined;
+  gapToSecond: number | undefined;
+  name: string | undefined;
+} {
+  const playersById = new Map((response.players ?? []).map((player) => [player.memberId, player]));
+  const ranked = (response.metricsByPlayer ?? [])
+    .flatMap((entry) =>
+      entry.metrics.rank.average === undefined
+        ? []
+        : [{ averageRank: entry.metrics.rank.average, memberId: entry.memberId }],
+    )
+    .toSorted((a, b) => a.averageRank - b.averageRank);
+  const leader = ranked[0];
+  if (!leader) {
+    return { averageRank: undefined, gapToSecond: undefined, name: undefined };
+  }
+  return {
+    averageRank: leader.averageRank,
+    gapToSecond: ranked[1] ? ranked[1].averageRank - leader.averageRank : undefined,
+    name: playersById.get(leader.memberId)?.displayName ?? leader.memberId,
+  };
+}
+
+function revenueMissSummary(response: SeriesComparisonResponse): {
+  noWinCount: number;
+  rate: number | undefined;
+  topCount: number;
+} {
+  const totals = (response.metricsByPlayer ?? []).reduce(
+    (acc, entry) => ({
+      noWinCount: acc.noWinCount + entry.metrics.nonRevenue.highRevenueNoWinCount,
+      topCount: acc.topCount + entry.metrics.nonRevenue.highRevenueTopCount,
+    }),
+    { noWinCount: 0, topCount: 0 },
+  );
+  return {
+    ...totals,
+    rate: totals.topCount > 0 ? totals.noWinCount / totals.topCount : undefined,
+  };
 }
 
 function MetricSection({
@@ -99,7 +141,7 @@ function PlayerMetricGrid({
   metricsByMember,
   players,
 }: {
-  children: (player: Player, metrics: PlayerMetrics | undefined) => ReactNode;
+  children: (player: Player, metrics: PlayerMetrics | undefined, index: number) => ReactNode;
   metricsByMember: Map<string, PlayerMetrics>;
   players: Player[];
 }) {
@@ -108,16 +150,27 @@ function PlayerMetricGrid({
       className="grid gap-3 sm:[grid-template-columns:repeat(var(--player-count),minmax(12rem,1fr))]"
       style={playerGridStyle(players.length)}
     >
-      {players.map((player) => (
+      {players.map((player, index) => (
         <div
           key={player.memberId}
           className="min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3"
+          style={{ borderTopColor: playerColor(index), borderTopWidth: 3 }}
         >
-          <h3 className="truncate text-sm font-semibold text-[var(--color-text-primary)]">
-            {player.displayName}
-          </h3>
+          <div className="flex min-w-0 items-center gap-2">
+            <span
+              aria-hidden="true"
+              className="size-2.5 shrink-0 rounded-full"
+              style={{ backgroundColor: playerColor(index) }}
+            />
+            <span className="shrink-0 text-xs font-medium text-[var(--color-text-secondary)]">
+              {index + 1}P
+            </span>
+            <h3 className="truncate text-sm font-semibold text-[var(--color-text-primary)]">
+              {player.displayName}
+            </h3>
+          </div>
           <div className="mt-3 grid gap-2">
-            {children(player, metricsByMember.get(player.memberId))}
+            {children(player, metricsByMember.get(player.memberId), index)}
           </div>
         </div>
       ))}
@@ -157,18 +210,25 @@ function ComparisonSkeleton() {
 }
 
 function SummaryBand({ response }: { response: SeriesComparisonResponse }) {
-  const spread = averageRankSpread(response);
   const ginji = ginjiSummary(response);
-  const quality = qualitySummary(response);
+  const leader = leaderSummary(response);
+  const revenueMiss = revenueMissSummary(response);
 
   return (
     <section className="grid gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 md:grid-cols-4">
       <SummaryItem label="対戦回数" value={`${response.matchCount}戦`} />
       <SummaryItem
-        label="平均順位差"
-        value={spread.spread === undefined ? "-" : spread.spread.toFixed(2)}
-        subLabel={spread.label}
-        tone={spread.tone === "flat" || spread.tone === "small" ? "neutral" : "notice"}
+        label="首位社長"
+        value={leader.name ?? "-"}
+        subLabel={
+          leader.averageRank === undefined
+            ? "平均順位なし"
+            : `平均順位 ${formatDecimal(leader.averageRank)}${
+                leader.gapToSecond === undefined
+                  ? ""
+                  : ` / 2位平均との差 ${leader.gapToSecond.toFixed(2)}`
+              }`
+        }
       />
       <SummaryItem
         label="銀次発生"
@@ -176,12 +236,11 @@ function SummaryBand({ response }: { response: SeriesComparisonResponse }) {
         subLabel={
           ginji.abnormalMatches > 0 ? `2回以上の試合 ${ginji.abnormalMatches}` : "2回以上なし"
         }
-        tone={ginji.abnormalMatches > 0 ? "danger" : "neutral"}
       />
       <SummaryItem
-        label="参考指標"
-        value={`${quality.referenceCount}件`}
-        subLabel={quality.noTargetCount > 0 ? `対象なし ${quality.noTargetCount}件` : "対象あり"}
+        label="稼ぎトップ未勝利"
+        value={formatPercent(revenueMiss.rate)}
+        subLabel={`${revenueMiss.noWinCount}/${revenueMiss.topCount}件`}
       />
     </section>
   );
@@ -195,51 +254,26 @@ function SummaryItem({
 }: {
   label: string;
   subLabel?: string;
-  tone?: "neutral" | "notice" | "danger";
+  tone?: "neutral" | "notice";
   value: string;
 }) {
   return (
     <div
       className={cn(
         "min-w-0 rounded-[var(--radius-sm)] border p-3",
-        tone === "danger"
-          ? "border-[var(--color-danger)]/40 bg-[var(--color-danger)]/8"
-          : tone === "notice"
-            ? "border-[var(--color-review)]/45 bg-[var(--color-review)]/10"
-            : "border-[var(--color-border)] bg-[var(--color-surface-subtle)]",
+        tone === "notice"
+          ? "border-[var(--color-review)]/45 bg-[var(--color-review)]/10"
+          : "border-[var(--color-border)] bg-[var(--color-surface-subtle)]",
       )}
     >
       <p className="text-xs font-medium text-[var(--color-text-secondary)]">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-[var(--color-text-primary)]">{value}</p>
+      <p className="mt-1 text-xl font-semibold break-words text-[var(--color-text-primary)] sm:text-2xl">
+        {value}
+      </p>
       {subLabel ? (
         <p className="mt-1 text-xs text-[var(--color-text-secondary)]">{subLabel}</p>
       ) : null}
     </div>
-  );
-}
-
-function Highlights({ response }: { response: SeriesComparisonResponse }) {
-  const highlights = response.highlights ?? [];
-  if (highlights.length === 0) {
-    return null;
-  }
-  const playersById = new Map((response.players ?? []).map((player) => [player.memberId, player]));
-  return (
-    <section className="flex min-w-0 flex-wrap gap-2">
-      {highlights.map((highlight) => (
-        <span
-          key={highlight.id}
-          className="inline-flex min-h-9 items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-sm shadow-sm"
-        >
-          <span className="font-semibold text-[var(--color-text-primary)]">{highlight.title}</span>
-          <span className="text-[var(--color-text-secondary)]">
-            {(highlight.winnerMemberIds ?? [])
-              .map((id) => playersById.get(id)?.displayName ?? id)
-              .join(" / ")}
-          </span>
-        </span>
-      ))}
-    </section>
   );
 }
 
@@ -248,9 +282,9 @@ function BasicMetrics({ response }: { response: SeriesComparisonResponse }) {
   const metricsByMember = metricsMap(response);
   return (
     <MetricSection
-      description="順位の平均と分布です。平均順位差は0.30を超えたら接戦ではなく、差が見え始めた扱いにします。"
+      description="まず勝敗の地力を見ます。平均順位は1に近いほど上位で、順位ごとの回数から勝ち方と沈み方も追えます。"
       icon={<Trophy className="size-5" />}
-      title="順位"
+      title="順位の地力"
     >
       <PlayerMetricGrid metricsByMember={metricsByMember} players={players}>
         {(_, metrics) => (
@@ -268,7 +302,7 @@ function BasicMetrics({ response }: { response: SeriesComparisonResponse }) {
       </PlayerMetricGrid>
       <LineChart
         domain={[1, 4]}
-        formatValue={(value) => `${value.toFixed(0)}位`}
+        formatValue={(value) => `${value.toFixed(Number.isInteger(value) ? 0 : 1)}位`}
         players={players}
         series={response.trends.rankCumulativeAverage ?? []}
       />
@@ -282,9 +316,9 @@ function MoneyMetrics({ response }: { response: SeriesComparisonResponse }) {
   return (
     <>
       <MetricSection
-        description="総資産は勝敗に近い状態指標として、最低値も含めて分布を見ます。"
+        description="試合後にどれだけ持ち物を残せたかを見ます。最高額だけでなく、落ち込んだ試合の底も比較します。"
         icon={<Coins className="size-5" />}
-        title="総資産"
+        title="総資産の残し方"
       >
         <PlayerMetricGrid metricsByMember={metricsByMember} players={players}>
           {(_, metrics) => (
@@ -299,9 +333,9 @@ function MoneyMetrics({ response }: { response: SeriesComparisonResponse }) {
         <HistogramChart histogram={response.histograms.assets} players={players} />
       </MetricSection>
       <MetricSection
-        description="収益の最低値は参考にしません。爆発力と普段の稼ぎ方を見る指標に絞ります。"
+        description="その試合でどれだけ稼げたかを見ます。最高額は爆発力、平均と中央値は普段の稼ぎ方の目安です。"
         icon={<BadgeDollarSign className="size-5" />}
-        title="収益"
+        title="稼ぎの強さ"
       >
         <PlayerMetricGrid metricsByMember={metricsByMember} players={players}>
           {(_, metrics) => (
@@ -323,9 +357,9 @@ function RateMetrics({ response }: { response: SeriesComparisonResponse }) {
   const metricsByMember = metricsMap(response);
   return (
     <MetricSection
-      description="1・2位を入賞、3・4位を下位として、勝ち切り方と沈み方を見ます。"
+      description="1・2位で終えた割合と、3・4位に沈んだ割合です。順位ブレは小さいほど安定しています。"
       icon={<BarChart3 className="size-5" />}
-      title="入賞率"
+      title="上位キープ"
     >
       <PlayerMetricGrid metricsByMember={metricsByMember} players={players}>
         {(_, metrics) => (
@@ -339,26 +373,12 @@ function RateMetrics({ response }: { response: SeriesComparisonResponse }) {
               value={`${metrics?.lowerHalf.count ?? 0}回 / ${formatPercent(metrics?.lowerHalf.rate)}`}
             />
             <MetricRow
-              label="順位の標準偏差"
+              label="順位ブレ"
               value={formatDecimal(metrics?.stability.rankStandardDeviation)}
             />
           </>
         )}
       </PlayerMetricGrid>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <LineChart
-          domain={[0, 1]}
-          formatValue={(value) => formatPercent(value)}
-          players={players}
-          series={response.trends.podiumCumulativeRate ?? []}
-        />
-        <LineChart
-          domain={[0, 1]}
-          formatValue={(value) => formatPercent(value)}
-          players={players}
-          series={response.trends.lowerHalfCumulativeRate ?? []}
-        />
-      </div>
     </MetricSection>
   );
 }
@@ -368,9 +388,9 @@ function CorrectionMetrics({ response }: { response: SeriesComparisonResponse })
   const metricsByMember = metricsMap(response);
   return (
     <MetricSection
-      description="同じプレー順の平均に対してどれだけ上振れ・下振れしたかを見ます。指数は1.00がプレー順平均です。"
+      description="同じ席番の平均からどれだけ上振れ・下振れしたかを見ます。倍率は1.00が席番平均です。席番の有利不利を完全に消すものではなく、読み解き用の参考値です。"
       icon={<RefreshCw className="size-5" />}
-      title="プレー順補正"
+      title="席順平均との差"
     >
       <PlayerMetricGrid metricsByMember={metricsByMember} players={players}>
         {(_, metrics) => (
@@ -383,12 +403,51 @@ function CorrectionMetrics({ response }: { response: SeriesComparisonResponse })
               label="収益差"
               value={formatSigned(metrics?.playOrder.revenueDiff, "万円")}
             />
-            <MetricRow label="総資産指数" value={formatDecimal(metrics?.playOrder.assetsIndex)} />
-            <MetricRow label="収益指数" value={formatDecimal(metrics?.playOrder.revenueIndex)} />
+            <MetricRow label="総資産倍率" value={formatDecimal(metrics?.playOrder.assetsIndex)} />
+            <MetricRow label="収益倍率" value={formatDecimal(metrics?.playOrder.revenueIndex)} />
           </>
         )}
       </PlayerMetricGrid>
+      <PlayOrderBaselineTable response={response} />
     </MetricSection>
+  );
+}
+
+function PlayOrderBaselineTable({ response }: { response: SeriesComparisonResponse }) {
+  const baselines = response.playOrderBaselines ?? [];
+  if (baselines.length === 0) {
+    return null;
+  }
+  return (
+    <div className="grid gap-2">
+      <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">席番別の平均</h3>
+      <div className="grid gap-3 md:grid-cols-4">
+        {baselines.map((baseline) => (
+          <div
+            key={baseline.playOrder}
+            className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3"
+            style={{
+              borderTopColor: playerColor(Math.max(0, baseline.playOrder - 1)),
+              borderTopWidth: 3,
+            }}
+          >
+            <div className="flex items-center gap-2 text-sm font-semibold text-[var(--color-text-primary)]">
+              <span
+                aria-hidden="true"
+                className="size-2.5 rounded-full"
+                style={{ backgroundColor: playerColor(Math.max(0, baseline.playOrder - 1)) }}
+              />
+              {baseline.playOrder}P
+            </div>
+            <div className="mt-3 grid gap-2">
+              <MetricRow label="総資産平均" value={formatMoney(baseline.assetsAverage)} />
+              <MetricRow label="収益平均" value={formatMoney(baseline.revenueAverage)} />
+              <MetricRow label="対象" value={`${baseline.matchCount}戦`} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -397,9 +456,9 @@ function GinjiMetrics({ response }: { response: SeriesComparisonResponse }) {
   const metricsByMember = metricsMap(response);
   return (
     <MetricSection
-      description="銀次は1回でも被害が大きく、2回以上はかなり異常な事故として扱います。"
+      description="銀次は1回でも試合を動かす事故です。2回以上の試合はかなり珍しい被害として分けて見ます。"
       icon={<ShieldAlert className="size-5" />}
-      title="スリの銀次"
+      title="銀次ダメージ"
     >
       <PlayerMetricGrid metricsByMember={metricsByMember} players={players}>
         {(_, metrics) => (
@@ -415,15 +474,15 @@ function GinjiMetrics({ response }: { response: SeriesComparisonResponse }) {
             />
             <MetricRow label="1試合最多" value={`${metrics?.ginji.maxInSingleMatch ?? 0}回`} />
             <MetricRow
-              label="銀次時の平均順位"
+              label="遭遇試合の平均順位"
               value={formatDecimal(metrics?.ginji.resilienceRankAverage)}
             />
             <MetricRow
-              label="銀次時の平均総資産"
+              label="遭遇試合の平均総資産"
               value={formatMoney(metrics?.ginji.resilienceAssetsAverage)}
             />
             <MetricRow
-              label="銀次時の平均収益"
+              label="遭遇試合の平均収益"
               value={formatMoney(metrics?.ginji.resilienceRevenueAverage)}
             />
           </>
@@ -443,24 +502,24 @@ function ContextMetrics({ response }: { response: SeriesComparisonResponse }) {
   const metricsByMember = metricsMap(response);
   return (
     <MetricSection
-      description="稼ぎや目的地到着が最終順位へ変換できているかを見ます。事件簿は合算しても総行動数にはしません。"
+      description="稼ぎや目的地到着を、最終順位にどれだけつなげられたかを見ます。差は「指標順位 - 最終順位」の平均で、マイナスほど指標の良さを順位に変えきれていません。事件簿は駅の種類ごとの記録で、合算して総行動数にはしません。"
       icon={<MapPinned className="size-5" />}
-      title="収益外成績・目的地依存"
+      title="稼ぎと目的地の変換"
     >
       <PlayerMetricGrid metricsByMember={metricsByMember} players={players}>
         {(_, metrics) => (
           <>
-            <MetricRow label="収益外順位" value={formatSigned(metrics?.nonRevenue.rankDelta)} />
+            <MetricRow label="稼ぎ順位との差" value={formatSigned(metrics?.nonRevenue.rankDelta)} />
             <MetricRow
-              label="高収益未勝利"
+              label="稼ぎトップ未勝利"
               value={`${metrics?.nonRevenue.highRevenueNoWinCount ?? 0}/${metrics?.nonRevenue.highRevenueTopCount ?? 0}・${formatPercent(metrics?.nonRevenue.highRevenueNoWinRate)}`}
             />
             <MetricRow
-              label="目的地変換差"
+              label="目的地順位との差"
               value={formatSigned(metrics?.destination.conversionDelta)}
             />
             <MetricRow
-              label="目的地依存度"
+              label="目的地で勝ち切り"
               value={formatSigned(metrics?.destination.dependenceScore)}
             />
           </>
@@ -477,7 +536,7 @@ function DataQualityNotice({ response }: { response: SeriesComparisonResponse })
   }
   return (
     <Notice tone="info" title="参考扱いの指標があります。">
-      銀次耐性、高収益未勝利率、目的地依存度は条件付き指標です。対象試合が少ない項目は参考扱いで表示します。
+      銀次遭遇試合の平均、稼ぎトップ未勝利、目的地で勝ち切りは条件付き指標です。対象試合が少ない項目は参考扱いで表示します。
     </Notice>
   );
 }
@@ -509,7 +568,7 @@ export function SeriesComparisonPage() {
             更新
           </Button>
         }
-        description="確定済みの戦績から、シリーズ単位で各プレーヤーの順位、資産、収益、銀次、目的地依存を比較します。"
+        description="確定済みの戦績から、シリーズ単位で各プレーヤーの順位、資産、稼ぎ、銀次、目的地の効き方を比較します。"
         eyebrow="分析"
         title="シリーズ比較"
       />
@@ -580,7 +639,6 @@ export function SeriesComparisonPage() {
                 {controller.selectedSeries?.name} / {controller.scopeName}
               </div>
               <SummaryBand response={controller.aggregate} />
-              <Highlights response={controller.aggregate} />
               <DataQualityNotice response={controller.aggregate} />
               <BasicMetrics response={controller.aggregate} />
               <MoneyMetrics response={controller.aggregate} />

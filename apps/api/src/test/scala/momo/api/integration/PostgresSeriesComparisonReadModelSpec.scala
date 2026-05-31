@@ -32,7 +32,8 @@ final class PostgresSeriesComparisonReadModelSpec extends IntegrationSuite:
       rows <- resolvedOverall match
         case Some(scope) => readModel.loadRows(scope)
         case None => IO(fail("overall scope was not resolved"))
-      resolvedSeason <- readModel.resolveScope(SeriesComparisonScope.Season(gameTitleId, seasonMasterId))
+      resolvedSeason <- readModel
+        .resolveScope(SeriesComparisonScope.Season(gameTitleId, seasonMasterId))
       seasonRows <- resolvedSeason match
         case Some(scope) => readModel.loadRows(scope)
         case None => IO(fail("season scope was not resolved"))

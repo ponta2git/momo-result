@@ -103,7 +103,7 @@ function extremumTone(
   target: "max" | "min",
 ): MetricTone {
   const targetValue = extrema[target];
-  if (!isNumber(value) || targetValue === undefined) {
+  if (!isNumber(value) || targetValue === undefined || extrema.max === extrema.min) {
     return "neutral";
   }
   return value === targetValue ? (target === "max" ? "high" : "low") : "neutral";
@@ -641,8 +641,8 @@ function DataQualityNotice({ response }: { response: SeriesComparisonResponse })
     return null;
   }
   return (
-    <Notice tone="info" title="参考扱いの指標があります。">
-      銀次遭遇試合の平均、収益トップ未勝利、目的地で勝ち切りは条件付き指標です。対象試合が少ない項目は参考扱いで表示します。
+    <Notice tone="info" title="条件付きの指標があります。">
+      銀次遭遇試合の平均、収益トップ未勝利、目的地で勝ち切りは条件付き指標です。対象試合がない項目は「-」、対象試合が少ない項目は参考値として表示します。
     </Notice>
   );
 }
@@ -685,13 +685,13 @@ export function SeriesComparisonPage() {
         </Notice>
       ) : null}
 
-      {seriesOptions.length === 0 ? (
+      {seriesOptions.length === 0 && !controller.hasOptionsError ? (
         <EmptyState
           icon={<BarChart3 className="size-5" />}
           title="比較できる戦績がありません"
           description="確定済みの試合と作品情報が揃うと、この画面で比較できます。"
         />
-      ) : (
+      ) : seriesOptions.length > 0 ? (
         <>
           <section className="grid gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 md:grid-cols-[auto_minmax(12rem,1fr)_minmax(12rem,1fr)] md:items-end">
             <div className="md:pb-1">
@@ -755,7 +755,7 @@ export function SeriesComparisonPage() {
             </>
           ) : null}
         </>
-      )}
+      ) : null}
     </PageFrame>
   );
 }

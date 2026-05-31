@@ -78,7 +78,7 @@ export function normalizeSeriesComparisonSelection(
   }
 
   const validKind = availableScopeKinds(selectedSeries).some(
-    (choice) => choice.value === state.scopeKind,
+    (choice) => !choice.disabled && choice.value === state.scopeKind,
   )
     ? state.scopeKind
     : "overall";

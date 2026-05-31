@@ -80,6 +80,32 @@ describe("seriesComparisonViewModel", () => {
     });
   });
 
+  it("falls back to overall when a scoped deep link has no selectable scopes", () => {
+    const noSeasonOptions: SeriesComparisonOptionsResponse = {
+      ...options,
+      latestConfirmedGameTitleId: "title-1",
+      series: [
+        {
+          ...options.series![0]!,
+          maps: [],
+          seasons: [],
+        },
+      ],
+    };
+
+    expect(
+      normalizeSeriesComparisonSelection(noSeasonOptions, {
+        gameTitleId: "title-1",
+        scopeId: "season-missing",
+        scopeKind: "season",
+      }),
+    ).toEqual({
+      gameTitleId: "title-1",
+      scopeId: undefined,
+      scopeKind: "overall",
+    });
+  });
+
   it("parses unknown scope kind as overall and removes scope id", () => {
     const params = new URLSearchParams("gameTitleId=title-1&scopeKind=bad&scopeId=season-1");
 

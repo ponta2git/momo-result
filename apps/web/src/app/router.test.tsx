@@ -189,4 +189,18 @@ describe("app routing", () => {
     expect(router.state.location.pathname).toBe("/analytics/series");
     expect(screen.getByRole("link", { name: "戦績比較" })).toBeInTheDocument();
   });
+
+  it("does not show an empty standings state when comparison options fail to load", async () => {
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    server.use(
+      http.get("/api/analytics/series-comparison/options", () =>
+        HttpResponse.json({ detail: "failed" }, { status: 500 }),
+      ),
+    );
+
+    renderApp("/analytics/series");
+
+    expect(await screen.findByText("対象作品を読み込めませんでした。")).toBeInTheDocument();
+    expect(screen.queryByText("比較できる戦績がありません")).not.toBeInTheDocument();
+  });
 });

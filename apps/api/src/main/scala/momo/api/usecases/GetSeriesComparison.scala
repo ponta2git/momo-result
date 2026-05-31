@@ -64,6 +64,8 @@ private object SeriesComparisonAggregation:
     "nonRevenue.highRevenueNoWinRate",
     "destination.dependenceScore",
   )
+  private val PreferredPlayerOrder =
+    Map("member_eu" -> 0, "member_ponta" -> 1, "member_akane_mami" -> 2, "member_otaka" -> 3)
 
   def aggregate(
       scope: SeriesComparisonResolvedScope,
@@ -80,9 +82,7 @@ private object SeriesComparisonAggregation:
     )
     val matchCount = orderedRows.map(_.matchId).distinct.size
     val rowsByPlayer = orderedRows.groupBy(_.memberId)
-    val playerOrder = rowsByPlayer.values.toList.map(_.head)
-      .sortBy(row => (row.playOrder.value, row.memberDisplayName, row.memberId.value))
-      .map(_.memberId)
+    val playerOrder = rowsByPlayer.values.toList.map(_.head).sortBy(playerSortKey).map(_.memberId)
     val players = playerOrder.map { memberId =>
       val first = rowsByPlayer(memberId).head
       SeriesComparisonPlayerResponse(memberId.value, first.memberDisplayName)
@@ -134,6 +134,15 @@ private object SeriesComparisonAggregation:
       playOrderBaselines = playOrderBaselines(orderedRows),
       highlights = highlights(metrics),
       dataQuality = quality,
+    )
+
+  private def playerSortKey(row: SeriesComparisonMatchPlayerRow): (Int, Int, String, String) =
+    val preferredOrder = PreferredPlayerOrder.getOrElse(row.memberId.value, Int.MaxValue)
+    (
+      preferredOrder,
+      if preferredOrder == Int.MaxValue then row.playOrder.value else 0,
+      row.memberDisplayName,
+      row.memberId.value,
     )
 
   private def playerMetrics(

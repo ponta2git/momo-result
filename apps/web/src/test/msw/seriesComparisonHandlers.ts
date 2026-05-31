@@ -3,10 +3,10 @@ import { http, HttpResponse } from "msw";
 import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
 
 const players = [
-  { displayName: "ぽんた", memberId: "member_ponta" },
-  { displayName: "あかね", memberId: "member_akane_mami" },
-  { displayName: "おたか", memberId: "member_otaka" },
   { displayName: "いーゆー", memberId: "member_eu" },
+  { displayName: "ぽんた", memberId: "member_ponta" },
+  { displayName: "あかねまみ", memberId: "member_akane_mami" },
+  { displayName: "おーたか", memberId: "member_otaka" },
 ];
 
 export const seriesComparisonHandlers = [

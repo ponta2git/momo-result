@@ -105,6 +105,23 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
     for result <- usecase.run(SeriesComparisonScope.Overall(titleId))
     yield assertAppError(result, "NOT_FOUND", "series comparison scope was not found")
 
+  test("orders real members by the fixed comparison order independent of play order"):
+    val rows = List(
+      row(1, "member_ponta", "ぽんた", 1, 1, 1000, 200, destination = 1, ginji = 0),
+      row(1, "member_akane_mami", "あかねまみ", 2, 2, 900, 180, destination = 1, ginji = 0),
+      row(1, "member_otaka", "おーたか", 3, 3, 800, 160, destination = 1, ginji = 0),
+      row(1, "member_eu", "いーゆー", 4, 4, 700, 140, destination = 1, ginji = 0),
+    )
+    val usecase = GetSeriesComparison[IO](StaticReadModel(Some(resolvedScope), rows))
+
+    for result <- usecase.run(SeriesComparisonScope.Overall(titleId)) yield
+      val response = result.getOrElse(fail(s"expected success, got $result"))
+      val expected = List("member_eu", "member_ponta", "member_akane_mami", "member_otaka")
+      assertEquals(response.players.map(_.memberId), expected)
+      assertEquals(response.metricsByPlayer.map(_.memberId), expected)
+      assertEquals(response.trends.rankCumulativeAverage.map(_.memberId), expected)
+      assertEquals(response.histograms.assets.series.map(_.memberId), expected)
+
   private def sampleRows: List[SeriesComparisonMatchPlayerRow] = List(
     row(1, "ponta", "ponta", 1, 1, 1000, 200, destination = 3, ginji = 1),
     row(1, "akane", "akane", 2, 2, 800, 250, destination = 1, ginji = 0),

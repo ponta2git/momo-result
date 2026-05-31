@@ -51,6 +51,9 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
       assertOptionDouble(ponta.ginji.resilienceRankAverage, 1.0)
       assertOptionDouble(ponta.playOrder.assetsDiff, 940.0 / 3.0)
       assertOptionDouble(ponta.playOrder.revenueDiff, 70.0 / 3.0)
+      assertEquals(ponta.playOrder.breakdown.map(_.playOrder), List(1, 2, 3, 4))
+      assertEquals(ponta.playOrder.breakdown.map(_.matchCount), List(1, 1, 1, 0))
+      assertOptionDouble(ponta.playOrder.breakdown.head.rankAverage, 1.0)
       assertOptionDouble(ponta.destination.conversionDelta, 4.0 / 3.0)
 
       assertEquals(akane.nonRevenue.highRevenueTopCount, 3)

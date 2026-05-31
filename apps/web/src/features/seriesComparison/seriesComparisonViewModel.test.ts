@@ -104,6 +104,14 @@ describe("seriesComparisonViewModel", () => {
       spread: 0.30000000000000004,
       tone: "visible",
     });
+
+    const roundedToThirtyResponse = responseWithRankAverages([2.3629, 2.6613]);
+    const roundedToThirty = averageRankSpread(roundedToThirtyResponse);
+    expect(roundedToThirty).toMatchObject({
+      label: "差が見え始めた",
+      tone: "visible",
+    });
+    expect(roundedToThirty.spread).toBeCloseTo(0.2984);
   });
 
   it("summarizes ginji counts and abnormal multi-hit matches", () => {
@@ -171,7 +179,7 @@ function baseMetrics({
     },
     lowerHalf: { count: 0 },
     nonRevenue: { highRevenueNoWinCount: 0, highRevenueTopCount: 0 },
-    playOrder: {},
+    playOrder: { breakdown: [] },
     podium: { count: 1 },
     rank: { average: rankAverage, distribution: [] },
     revenue: {},

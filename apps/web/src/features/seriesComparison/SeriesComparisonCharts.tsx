@@ -24,7 +24,6 @@ export function PlayerLegend({ players }: { players: Player[] }) {
             className="size-2.5 rounded-full"
             style={{ backgroundColor: playerColor(index) }}
           />
-          <span>{index + 1}P</span>
           <span className="font-medium text-[var(--color-text-primary)]">{player.displayName}</span>
         </span>
       ))}
@@ -36,43 +35,48 @@ export function LineChart({
   className,
   domain,
   formatValue,
+  lowValueAtTop = false,
   players,
   series,
+  yTicks,
 }: {
   className?: string;
   domain?: [number, number];
   formatValue: (value: number) => string;
+  lowValueAtTop?: boolean;
   players: Player[];
   series: TrendSeries[];
+  yTicks?: number[];
 }) {
   const width = 760;
   const height = 300;
   const padding = { bottom: 42, left: 54, right: 24, top: 24 };
   const values = series.flatMap((item) =>
-    (item.points ?? []).flatMap((point) => (point.value === undefined ? [] : [point.value])),
+    (item.points ?? []).flatMap((point) => (typeof point.value === "number" ? [point.value] : [])),
   );
   const maxIndex = Math.max(
     1,
     ...series.flatMap((item) => (item.points ?? []).map((point) => point.index)),
   );
-  const minValue = domain?.[0] ?? Math.min(...values, 0);
-  const maxValue = domain?.[1] ?? Math.max(...values, 1);
+  const minValue = domain?.[0] ?? 0;
+  const maxValue = domain?.[1] ?? niceCeil(Math.max(...values, 1));
   const ySpan = maxValue === minValue ? 1 : maxValue - minValue;
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
   const playerIndex = new Map(players.map((player, index) => [player.memberId, index]));
   const x = (index: number) =>
     padding.left + ((index - 1) / Math.max(1, maxIndex - 1)) * chartWidth;
-  const y = (value: number) => padding.top + (1 - (value - minValue) / ySpan) * chartHeight;
-  const yTicks = Array.from(
-    new Set([minValue, minValue + ySpan / 2, maxValue].map((value) => Number(value.toFixed(4)))),
-  );
+  const y = (value: number) => {
+    const ratio = (value - minValue) / ySpan;
+    return padding.top + (lowValueAtTop ? ratio : 1 - ratio) * chartHeight;
+  };
+  const ticks = yTicks ?? buildNumberTicks(minValue, maxValue, 5);
 
   return (
     <figure className={cn("grid gap-2", className)}>
       <svg
         aria-label="推移グラフ"
-        className="h-72 w-full overflow-visible rounded-[var(--radius-sm)] bg-[var(--color-surface)]"
+        className="h-80 w-full overflow-visible rounded-[var(--radius-sm)] bg-[var(--color-surface)]"
         role="img"
         viewBox={`0 0 ${width} ${height}`}
       >
@@ -92,7 +96,7 @@ export function LineChart({
           y1={padding.top}
           y2={height - padding.bottom}
         />
-        {yTicks.map((value) => (
+        {ticks.map((value) => (
           <g key={value}>
             <line
               stroke="var(--color-border)"
@@ -115,25 +119,24 @@ export function LineChart({
           </g>
         ))}
         {series.map((item) => {
-          const points = (item.points ?? []).filter((point) => point.value !== undefined);
+          const points = (item.points ?? []).flatMap((point) =>
+            typeof point.value === "number" ? [{ index: point.index, value: point.value }] : [],
+          );
           const path = points
-            .map(
-              (point, index) =>
-                `${index === 0 ? "M" : "L"} ${x(point.index)} ${y(point.value ?? 0)}`,
-            )
+            .map((point, index) => `${index === 0 ? "M" : "L"} ${x(point.index)} ${y(point.value)}`)
             .join(" ");
           const color = playerColor(playerIndex.get(item.memberId) ?? 0);
           return (
             <g key={item.memberId}>
-              <path d={path} fill="none" stroke={color} strokeLinecap="round" strokeWidth="2.2" />
+              <path d={path} fill="none" stroke={color} strokeLinecap="round" strokeWidth="1.8" />
               {points.length <= 32
                 ? points.map((point) => (
                     <circle
                       key={`${item.memberId}-${point.index}`}
                       cx={x(point.index)}
-                      cy={y(point.value ?? 0)}
+                      cy={y(point.value)}
                       fill={color}
-                      r="2.8"
+                      r="2.4"
                     />
                   ))
                 : null}
@@ -183,7 +186,6 @@ export function HistogramChart({
             counts={seriesByMember.get(player.memberId) ?? []}
             maxValue={maxValue}
             player={player}
-            playerIndex={index}
           />
         ))}
       </div>
@@ -200,22 +202,21 @@ function SingleHistogram({
   counts,
   maxValue,
   player,
-  playerIndex,
 }: {
   bins: HistogramBin[];
   color: string;
   counts: number[];
   maxValue: number;
   player: Player;
-  playerIndex: number;
 }) {
   const width = 320;
   const height = 220;
-  const padding = { bottom: 44, left: 36, right: 16, top: 18 };
+  const padding = { bottom: 56, left: 36, right: 16, top: 18 };
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
   const binWidth = chartWidth / Math.max(1, bins.length);
   const barWidth = Math.max(10, binWidth * 0.62);
+  const countTicks = buildNumberTicks(0, niceCeil(maxValue), 5);
 
   return (
     <div className="min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
@@ -225,14 +226,11 @@ function SingleHistogram({
           className="size-2.5 shrink-0 rounded-full"
           style={{ backgroundColor: color }}
         />
-        <span className="shrink-0 text-xs text-[var(--color-text-secondary)]">
-          {playerIndex + 1}P
-        </span>
         <span className="truncate">{player.displayName}</span>
       </div>
       <svg
         aria-label={`${player.displayName}のヒストグラム`}
-        className="h-48 w-full overflow-visible rounded-[var(--radius-sm)] bg-[var(--color-surface)]"
+        className="h-52 w-full overflow-visible rounded-[var(--radius-sm)] bg-[var(--color-surface)]"
         role="img"
         viewBox={`0 0 ${width} ${height}`}
       >
@@ -244,18 +242,34 @@ function SingleHistogram({
           y1={height - padding.bottom}
           y2={height - padding.bottom}
         />
-        <line
-          stroke="var(--color-border)"
-          strokeDasharray="4 4"
-          strokeWidth="0.8"
-          x1={padding.left}
-          x2={width - padding.right}
-          y1={padding.top}
-          y2={padding.top}
-        />
+        {countTicks.map((tick) => {
+          const y = height - padding.bottom - (tick / niceCeil(maxValue)) * chartHeight;
+          return (
+            <g key={tick}>
+              <line
+                stroke="var(--color-border)"
+                strokeDasharray={tick === 0 ? undefined : "4 4"}
+                strokeWidth="0.8"
+                x1={padding.left}
+                x2={width - padding.right}
+                y1={y}
+                y2={y}
+              />
+              <text
+                fill="var(--color-text-secondary)"
+                fontSize="11"
+                textAnchor="end"
+                x={padding.left - 8}
+                y={y + 4}
+              >
+                {tick}
+              </text>
+            </g>
+          );
+        })}
         {bins.map((bin, binIndex) => {
           const value = counts[binIndex] ?? 0;
-          const barHeight = (value / maxValue) * chartHeight;
+          const barHeight = (value / niceCeil(maxValue)) * chartHeight;
           return (
             <g key={bin.index}>
               <rect
@@ -269,7 +283,8 @@ function SingleHistogram({
               <text
                 fill="var(--color-text-secondary)"
                 fontSize="10"
-                textAnchor="middle"
+                textAnchor="end"
+                transform={`rotate(-30 ${padding.left + binIndex * binWidth + binWidth / 2} ${height - 16})`}
                 x={padding.left + binIndex * binWidth + binWidth / 2}
                 y={height - 16}
               >
@@ -278,15 +293,6 @@ function SingleHistogram({
             </g>
           );
         })}
-        <text
-          fill="var(--color-text-secondary)"
-          fontSize="11"
-          textAnchor="end"
-          x={padding.left - 8}
-          y={padding.top + 4}
-        >
-          {maxValue}
-        </text>
       </svg>
     </div>
   );
@@ -294,7 +300,7 @@ function SingleHistogram({
 
 function formatHistogramBinLabel(bin: HistogramBin): string {
   const lower = formatCompactManYen(bin.lowerInclusive ?? 0);
-  if (bin.upperExclusive === undefined) {
+  if (bin.upperExclusive == null) {
     return `${lower}+`;
   }
   return `${lower}〜${formatCompactManYen(bin.upperExclusive)}`;
@@ -314,6 +320,38 @@ function formatCompactManYen(value: number): string {
 
 function formatCompactNumber(value: number): string {
   return Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1);
+}
+
+function buildNumberTicks(minValue: number, maxValue: number, maxTickCount: number): number[] {
+  const span = Math.max(1, maxValue - minValue);
+  const rawStep = span / Math.max(1, maxTickCount - 1);
+  const step = niceStep(rawStep);
+  const first = Math.ceil(minValue / step) * step;
+  const ticks: number[] = [];
+  for (let value = first; value <= maxValue + step * 0.001; value += step) {
+    ticks.push(Number(value.toFixed(4)));
+  }
+  if (!ticks.includes(minValue)) {
+    ticks.unshift(minValue);
+  }
+  if (!ticks.includes(maxValue)) {
+    ticks.push(maxValue);
+  }
+  return Array.from(new Set(ticks)).toSorted((a, b) => a - b);
+}
+
+function niceCeil(value: number): number {
+  const step = niceStep(value / 4);
+  return Math.max(step, Math.ceil(value / step) * step);
+}
+
+function niceStep(rawStep: number): number {
+  const safeStep = Math.max(rawStep, 1);
+  const magnitude = 10 ** Math.floor(Math.log10(safeStep));
+  const normalized = safeStep / magnitude;
+  const factor =
+    normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 2.5 ? 2.5 : normalized <= 5 ? 5 : 10;
+  return factor * magnitude;
 }
 
 export function playerGridStyle(playerCount: number): CSSProperties {

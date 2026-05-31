@@ -126,9 +126,20 @@ final case class PlayOrderMetricsResponse(
     revenueDiff: Option[Double],
     assetsIndex: Option[Double],
     revenueIndex: Option[Double],
+    breakdown: List[PlayOrderBreakdownResponse],
 ) derives Codec.AsObject
 object PlayOrderMetricsResponse:
   given Schema[PlayOrderMetricsResponse] = Schema.derived
+
+final case class PlayOrderBreakdownResponse(
+    playOrder: Int,
+    matchCount: Int,
+    rankAverage: Option[Double],
+    assetsAverage: Option[Double],
+    revenueAverage: Option[Double],
+) derives Codec.AsObject
+object PlayOrderBreakdownResponse:
+  given Schema[PlayOrderBreakdownResponse] = Schema.derived
 
 final case class GinjiMetricsResponse(
     count: Int,

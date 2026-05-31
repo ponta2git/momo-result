@@ -212,7 +212,21 @@ private object SeriesComparisonAggregation:
       revenueDiff = diff(row => asDecimal(row.revenueManYen.value)),
       assetsIndex = index(row => asDecimal(row.totalAssetsManYen.value)),
       revenueIndex = index(row => asDecimal(row.revenueManYen.value)),
+      breakdown = playOrderBreakdown(rows),
     )
+
+  private def playOrderBreakdown(
+      rows: List[SeriesComparisonMatchPlayerRow]
+  ): List[PlayOrderBreakdownResponse] = (1 to 4).toList.map { playOrder =>
+    val targetRows = rows.filter(_.playOrder.value == playOrder)
+    PlayOrderBreakdownResponse(
+      playOrder = playOrder,
+      matchCount = targetRows.size,
+      rankAverage = average(targetRows.map(row => asDecimal(row.rank.value))),
+      assetsAverage = average(targetRows.map(row => asDecimal(row.totalAssetsManYen.value))),
+      revenueAverage = average(targetRows.map(row => asDecimal(row.revenueManYen.value))),
+    )
+  }
 
   private def playOrderBaselines(
       rows: List[SeriesComparisonMatchPlayerRow]
@@ -340,17 +354,49 @@ private object SeriesComparisonAggregation:
       val max = nonEmpty.max
       if min == max then List(HistogramBinResponse(0, min, None, s"$min+"))
       else
-        val targetBinCount = math.min(7, math.max(3, nonEmpty.distinct.size))
-        val step =
-          niceHistogramStep(math.ceil(asDecimal(max - min + 1) / asDecimal(targetBinCount)).toInt)
-        val lowerStart = math.floor(asDecimal(min) / asDecimal(step)).toInt * step
-        val upperEnd = (math.floor(asDecimal(max) / asDecimal(step)).toInt + 1) * step
-        val binCount = math.max(1, (upperEnd - lowerStart + step - 1) / step)
-        (0 until binCount).toList.map { idx =>
-          val lower = lowerStart + step * idx
-          val upper = if idx == binCount - 1 then None else Some(lower + step)
-          HistogramBinResponse(idx, lower, upper, upper.fold(s"$lower+")(u => s"$lower-${u - 1}"))
+        val sorted = nonEmpty.sorted
+        val lowerAnchor =
+          val p05 = percentile(sorted, 0.05)
+          if min < 0 && p05 >= 0 then 0 else math.floor(p05).toInt
+        val p95 = percentile(sorted, 0.95)
+        val targetBinCount = 6
+        val rawSpan = math.max(1, math.ceil(p95 - asDecimal(lowerAnchor)).toInt)
+        val step = niceHistogramStep(math.ceil(asDecimal(rawSpan) / targetBinCount).toInt)
+        val lowerStart = math.floor(asDecimal(lowerAnchor) / asDecimal(step)).toInt * step
+        val upperEnd = math.max(lowerStart + step, math.ceil(p95 / asDecimal(step)).toInt * step)
+        val centralBins = Iterator.iterate(lowerStart)(_ + step).takeWhile(_ < upperEnd)
+          .map(lower =>
+            HistogramBinResponse(
+              index = 0,
+              lowerInclusive = lower,
+              upperExclusive = Some(lower + step),
+              label = s"$lower-${lower + step - 1}",
+            )
+          ).toList
+        val lowerBin = Option.when(min < lowerStart)(HistogramBinResponse(
+          index = 0,
+          lowerInclusive = min,
+          upperExclusive = Some(lowerStart),
+          label = s"$min-${lowerStart - 1}",
+        ))
+        val upperBin = Option.when(max >= upperEnd)(HistogramBinResponse(
+          index = 0,
+          lowerInclusive = upperEnd,
+          upperExclusive = None,
+          label = s"$upperEnd+",
+        ))
+        (lowerBin.toList ++ centralBins ++ upperBin.toList).zipWithIndex.map { case (bin, index) =>
+          bin.copy(index = index)
         }
+
+  private def percentile(sortedValues: List[Int], probability: Double): Double =
+    val clamped = math.max(0.0, math.min(1.0, probability))
+    val rank = clamped * asDecimal(sortedValues.size - 1)
+    val lowerIndex = math.floor(rank).toInt
+    val upperIndex = math.ceil(rank).toInt
+    val weight = rank - lowerIndex
+    asDecimal(sortedValues(lowerIndex)) * (1.0 - weight) +
+      asDecimal(sortedValues(upperIndex)) * weight
 
   private def niceHistogramStep(rawStep: Int): Int =
     val safeStep = math.max(1, rawStep)
@@ -426,7 +472,7 @@ private object SeriesComparisonAggregation:
     ),
     highlightMax(
       "highlight.highRevenueNoWin",
-      "稼ぎ空振り注意報",
+      "収益空振り注意報",
       "nonRevenue.highRevenueNoWinRate",
       metrics,
       _.nonRevenue.highRevenueNoWinRate,

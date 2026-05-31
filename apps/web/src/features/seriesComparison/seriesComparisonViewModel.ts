@@ -154,7 +154,7 @@ export function averageRankSpread(response: SeriesComparisonResponse): {
   if (spread < 0.15) {
     return { label: "横一線", spread, tone: "flat" };
   }
-  if (spread < 0.3) {
+  if (spread < 0.25) {
     return { label: "小差", spread, tone: "small" };
   }
   if (spread < 0.6) {

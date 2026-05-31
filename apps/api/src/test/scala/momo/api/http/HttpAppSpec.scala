@@ -361,6 +361,47 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
     )
   }
 
+  app.test("series comparison endpoints are inside the authenticated read surface") { httpApp =>
+    httpApp.run(Request[IO](Method.GET, uri"/api/analytics/series-comparison/options"))
+      .flatMap(response =>
+        assertProblemDetailEquals(
+          response,
+          Status.Unauthorized,
+          "UNAUTHORIZED",
+          "Authentication is required.",
+        )
+      )
+  }
+
+  app.test("GET /api/analytics/series-comparison/options is wired for authenticated users") {
+    httpApp =>
+      val request = Request[IO](Method.GET, uri"/api/analytics/series-comparison/options")
+        .putHeaders(devReadHeader())
+      httpApp.run(request).flatMap { response =>
+        response.as[Json].map { body =>
+          assertEquals(response.status, Status.Ok)
+          assertEquals(jsonField[Int](body, "schemaVersion"), 1)
+          assert(body.hcursor.downField("series").focus.exists(_.isArray), body.noSpaces)
+        }
+      }
+  }
+
+  app.test("GET /api/analytics/series-comparison validates scope query at the HTTP boundary") {
+    httpApp =>
+      val request = Request[IO](
+        Method.GET,
+        uri"/api/analytics/series-comparison?gameTitleId=title_momotetsu_2&scopeKind=season",
+      ).putHeaders(devReadHeader())
+      httpApp.run(request).flatMap(response =>
+        assertProblemDetailEquals(
+          response,
+          Status.UnprocessableContent,
+          "VALIDATION_FAILED",
+          "scopeId is required for season scope.",
+        )
+      )
+  }
+
   app.test("security headers baseline is present on responses (non-prod)") { httpApp =>
     httpApp.run(Request[IO](Method.GET, uri"/healthz")).map { response =>
       def header(name: String): Option[String] =

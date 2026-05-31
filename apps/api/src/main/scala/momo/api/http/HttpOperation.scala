@@ -29,6 +29,9 @@ object HttpOperation:
   val UpdateMatch = "PUT /api/matches/:id"
   val DeleteMatch = "DELETE /api/matches/:id"
 
+  val GetSeriesComparisonOptions = "GET /api/analytics/series-comparison/options"
+  val GetSeriesComparison = "GET /api/analytics/series-comparison"
+
   val CreateGameTitle = "POST /api/game-titles"
   val UpdateGameTitle = "PATCH /api/game-titles"
   val DeleteGameTitle = "DELETE /api/game-titles"

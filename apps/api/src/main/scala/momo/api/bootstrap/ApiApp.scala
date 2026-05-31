@@ -18,7 +18,8 @@ import momo.api.adapters.{
   InMemoryMatchesRepository, InMemoryMemberAliasesRepository, InMemoryMembersRepository,
   InMemoryOcrDraftsRepository, InMemoryOcrJobCreationRepository,
   InMemoryOcrJobMaintenanceRepository, InMemoryOcrJobsRepository, InMemoryQueueProducer,
-  InMemorySeasonMastersRepository, LocalFsImageStore, RedisQueueProducer,
+  InMemorySeasonMastersRepository, InMemorySeriesComparisonReadModel, LocalFsImageStore,
+  RedisQueueProducer,
 }
 import momo.api.auth.{
   CreatedSession, CsrfTokenService, DiscordOAuthClient, InMemoryOAuthProviderBackoff,
@@ -38,7 +39,7 @@ import momo.api.repositories.{
   LoginAccountsRepository, MapMastersRepository, MatchConfirmationRepository, MatchDraftsRepository,
   MatchListReadModel, MatchesRepository, MemberAliasesRepository, MembersRepository,
   OcrDraftsRepository, OcrJobCreationRepository, OcrJobMaintenanceRepository, OcrJobsRepository,
-  QueueHealthProbe, QueueProducer, SeasonMastersRepository,
+  QueueHealthProbe, QueueProducer, SeasonMastersRepository, SeriesComparisonReadModel,
 }
 import momo.api.usecases.*
 
@@ -97,6 +98,8 @@ object ApiApp:
         val matches: MatchesRepository[F] = PostgresMatchesRepository[F](transactor)
         val matchDrafts: MatchDraftsRepository[F] = PostgresMatchDraftsRepository[F](transactor)
         val matchList: MatchListReadModel[F] = PostgresMatchListReadModel[F](transactor)
+        val seriesComparison: SeriesComparisonReadModel[F] =
+          PostgresSeriesComparisonReadModel[F](transactor)
         val matchConfirmation: MatchConfirmationRepository[F] =
           PostgresMatchConfirmationRepository[F](transactor)
         val appSessions: AppSessionsRepository[F] = PostgresAppSessionsRepository[F](transactor)
@@ -158,6 +161,7 @@ object ApiApp:
               matches = matches,
               matchDrafts = matchDrafts,
               matchList = matchList,
+              seriesComparison = seriesComparison,
               matchConfirmation = matchConfirmation,
               appSessions = appSessions,
               members = members,
@@ -224,6 +228,13 @@ object ApiApp:
               gameTitles <- InMemoryGameTitlesRepository.create[F]
               mapMasters <- InMemoryMapMastersRepository.create[F]
               seasonMasters <- InMemorySeasonMastersRepository.create[F]
+              seriesComparison = InMemorySeriesComparisonReadModel[F](
+                gameTitles,
+                mapMasters,
+                seasonMasters,
+                members,
+                matches,
+              )
               incidentMasters <- InMemoryIncidentMastersRepository.create[F]
               memberAliases <- InMemoryMemberAliasesRepository.create[F]
               idempotency <- InMemoryIdempotencyRepository.create[F]
@@ -243,6 +254,7 @@ object ApiApp:
               matchDrafts,
               heldEventDeletion,
               matchList,
+              seriesComparison,
               matchConfirmation,
               appSessions,
               members,
@@ -266,6 +278,7 @@ object ApiApp:
                   matchDrafts,
                   heldEventDeletion,
                   matchList,
+                  seriesComparison,
                   matchConfirmation,
                   appSessions,
                   members,
@@ -311,6 +324,7 @@ object ApiApp:
                   matches = matches,
                   matchDrafts = matchDrafts,
                   matchList = matchList,
+                  seriesComparison = seriesComparison,
                   matchConfirmation = matchConfirmation,
                   appSessions = appSessions,
                   members = members,
@@ -520,6 +534,7 @@ object ApiApp:
       matches: MatchesRepository[F],
       matchDrafts: MatchDraftsRepository[F],
       matchList: MatchListReadModel[F],
+      seriesComparison: SeriesComparisonReadModel[F],
       matchConfirmation: MatchConfirmationRepository[F],
       appSessions: AppSessionsRepository[F],
       members: MembersRepository[F],
@@ -610,6 +625,8 @@ object ApiApp:
       allowedMemberIds = members.list.map(_.map(_.id).toSet),
     )
     val listMatches = ListMatches[F](matchList)
+    val getSeriesComparisonOptions = GetSeriesComparisonOptions[F](seriesComparison)
+    val getSeriesComparison = GetSeriesComparison[F](seriesComparison)
     val exportMatches = ExportMatches[F](
       matches,
       members,
@@ -671,6 +688,8 @@ object ApiApp:
           getMatchDraftSourceImages = getMatchDraftSourceImages,
           confirmMatch = confirmMatch,
           exportMatches = exportMatches,
+          getSeriesComparisonOptions = getSeriesComparisonOptions,
+          getSeriesComparison = getSeriesComparison,
           listMatches = listMatches,
           getMatch = getMatch,
           updateMatch = updateMatch,

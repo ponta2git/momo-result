@@ -1847,6 +1847,120 @@
         }
       }
     },
+    "/api/analytics/series-comparison/options" : {
+      "get" : {
+        "tags" : [
+          "analytics"
+        ],
+        "operationId" : "getApiAnalyticsSeries-comparisonOptions",
+        "parameters" : [
+          {
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SeriesComparisonOptionsResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/analytics/series-comparison" : {
+      "get" : {
+        "tags" : [
+          "analytics"
+        ],
+        "operationId" : "getApiAnalyticsSeries-comparison",
+        "parameters" : [
+          {
+            "name" : "gameTitleId",
+            "in" : "query",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "scopeKind",
+            "in" : "query",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "scopeId",
+            "in" : "query",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SeriesComparisonResponse"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: query parameter gameTitleId",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/game-titles" : {
       "get" : {
         "tags" : [
@@ -3539,6 +3653,32 @@
           }
         }
       },
+      "DestinationMetricsResponse" : {
+        "title" : "DestinationMetricsResponse",
+        "type" : "object",
+        "required" : [
+          "upperTargetCount",
+          "lowerTargetCount"
+        ],
+        "properties" : {
+          "conversionDelta" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "dependenceScore" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "upperTargetCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "lowerTargetCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
       "GameTitleListResponse" : {
         "title" : "GameTitleListResponse",
         "type" : "object",
@@ -3577,6 +3717,50 @@
           },
           "createdAt" : {
             "type" : "string"
+          }
+        }
+      },
+      "GinjiMetricsResponse" : {
+        "title" : "GinjiMetricsResponse",
+        "type" : "object",
+        "required" : [
+          "count",
+          "encounterMatches",
+          "multiEncounterMatchCount",
+          "maxInSingleMatch"
+        ],
+        "properties" : {
+          "count" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "encounterMatches" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "encounterRate" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "multiEncounterMatchCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "maxInSingleMatch" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "resilienceRankAverage" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "resilienceAssetsAverage" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "resilienceRevenueAverage" : {
+            "type" : "number",
+            "format" : "double"
           }
         }
       },
@@ -3657,6 +3841,69 @@
           "matchCount" : {
             "type" : "integer",
             "format" : "int32"
+          }
+        }
+      },
+      "HistogramBinResponse" : {
+        "title" : "HistogramBinResponse",
+        "type" : "object",
+        "required" : [
+          "index",
+          "lowerInclusive",
+          "label"
+        ],
+        "properties" : {
+          "index" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "lowerInclusive" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "upperExclusive" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "label" : {
+            "type" : "string"
+          }
+        }
+      },
+      "HistogramResponse" : {
+        "title" : "HistogramResponse",
+        "type" : "object",
+        "properties" : {
+          "bins" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/HistogramBinResponse"
+            }
+          },
+          "series" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/HistogramSeriesResponse"
+            }
+          }
+        }
+      },
+      "HistogramSeriesResponse" : {
+        "title" : "HistogramSeriesResponse",
+        "type" : "object",
+        "required" : [
+          "memberId"
+        ],
+        "properties" : {
+          "memberId" : {
+            "type" : "string"
+          },
+          "counts" : {
+            "type" : "array",
+            "items" : {
+              "type" : "integer",
+              "format" : "int32"
+            }
           }
         }
       },
@@ -4228,6 +4475,87 @@
           }
         }
       },
+      "MetricQualityResponse" : {
+        "title" : "MetricQualityResponse",
+        "type" : "object",
+        "required" : [
+          "metricId",
+          "denominator",
+          "targetCount",
+          "status",
+          "hasTies"
+        ],
+        "properties" : {
+          "metricId" : {
+            "type" : "string"
+          },
+          "playerMemberId" : {
+            "type" : "string"
+          },
+          "denominator" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "targetCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "hasTies" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "MoneyDistributionMetricsResponse" : {
+        "title" : "MoneyDistributionMetricsResponse",
+        "type" : "object",
+        "properties" : {
+          "max" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "min" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "average" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "median" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        }
+      },
+      "NonRevenueMetricsResponse" : {
+        "title" : "NonRevenueMetricsResponse",
+        "type" : "object",
+        "required" : [
+          "highRevenueNoWinCount",
+          "highRevenueTopCount"
+        ],
+        "properties" : {
+          "rankDelta" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "highRevenueNoWinCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "highRevenueTopCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "highRevenueNoWinRate" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        }
+      },
       "OcrDraftListResponse" : {
         "title" : "OcrDraftListResponse",
         "type" : "object",
@@ -4416,6 +4744,28 @@
           }
         }
       },
+      "PlayOrderMetricsResponse" : {
+        "title" : "PlayOrderMetricsResponse",
+        "type" : "object",
+        "properties" : {
+          "assetsDiff" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "revenueDiff" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "assetsIndex" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "revenueIndex" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        }
+      },
       "PlayerAliasHintRequest" : {
         "title" : "PlayerAliasHintRequest",
         "type" : "object",
@@ -4550,6 +4900,83 @@
           }
         }
       },
+      "RankDistributionResponse" : {
+        "title" : "RankDistributionResponse",
+        "type" : "object",
+        "required" : [
+          "rank",
+          "count"
+        ],
+        "properties" : {
+          "rank" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "count" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "rate" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        }
+      },
+      "RankMetricsResponse" : {
+        "title" : "RankMetricsResponse",
+        "type" : "object",
+        "properties" : {
+          "average" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "distribution" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/RankDistributionResponse"
+            }
+          },
+          "standardDeviation" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        }
+      },
+      "RateCountMetricsResponse" : {
+        "title" : "RateCountMetricsResponse",
+        "type" : "object",
+        "required" : [
+          "count"
+        ],
+        "properties" : {
+          "count" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "rate" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        }
+      },
+      "RevenueDistributionMetricsResponse" : {
+        "title" : "RevenueDistributionMetricsResponse",
+        "type" : "object",
+        "properties" : {
+          "max" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "average" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "median" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        }
+      },
       "SeasonMasterListResponse" : {
         "title" : "SeasonMasterListResponse",
         "type" : "object",
@@ -4588,6 +5015,417 @@
           },
           "createdAt" : {
             "type" : "string"
+          }
+        }
+      },
+      "SeriesComparisonDataQualityResponse" : {
+        "title" : "SeriesComparisonDataQualityResponse",
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/MetricQualityResponse"
+            }
+          }
+        }
+      },
+      "SeriesComparisonHighlightResponse" : {
+        "title" : "SeriesComparisonHighlightResponse",
+        "type" : "object",
+        "required" : [
+          "id",
+          "title",
+          "metricId",
+          "targetCount",
+          "status"
+        ],
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "title" : {
+            "type" : "string"
+          },
+          "winnerMemberIds" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "metricId" : {
+            "type" : "string"
+          },
+          "value" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "targetCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        }
+      },
+      "SeriesComparisonHistogramsResponse" : {
+        "title" : "SeriesComparisonHistogramsResponse",
+        "type" : "object",
+        "required" : [
+          "assets",
+          "revenue"
+        ],
+        "properties" : {
+          "assets" : {
+            "$ref" : "#/components/schemas/HistogramResponse"
+          },
+          "revenue" : {
+            "$ref" : "#/components/schemas/HistogramResponse"
+          }
+        }
+      },
+      "SeriesComparisonOptionsResponse" : {
+        "title" : "SeriesComparisonOptionsResponse",
+        "type" : "object",
+        "required" : [
+          "schemaVersion"
+        ],
+        "properties" : {
+          "schemaVersion" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "latestConfirmedGameTitleId" : {
+            "type" : "string"
+          },
+          "series" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/SeriesComparisonSeriesOption"
+            }
+          }
+        }
+      },
+      "SeriesComparisonPlayerMetricsEntry" : {
+        "title" : "SeriesComparisonPlayerMetricsEntry",
+        "type" : "object",
+        "required" : [
+          "memberId",
+          "metrics"
+        ],
+        "properties" : {
+          "memberId" : {
+            "type" : "string"
+          },
+          "metrics" : {
+            "$ref" : "#/components/schemas/SeriesComparisonPlayerMetricsResponse"
+          }
+        }
+      },
+      "SeriesComparisonPlayerMetricsResponse" : {
+        "title" : "SeriesComparisonPlayerMetricsResponse",
+        "type" : "object",
+        "required" : [
+          "denominator",
+          "rank",
+          "assets",
+          "revenue",
+          "podium",
+          "lowerHalf",
+          "playOrder",
+          "ginji",
+          "nonRevenue",
+          "destination",
+          "stability"
+        ],
+        "properties" : {
+          "denominator" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "rank" : {
+            "$ref" : "#/components/schemas/RankMetricsResponse"
+          },
+          "assets" : {
+            "$ref" : "#/components/schemas/MoneyDistributionMetricsResponse"
+          },
+          "revenue" : {
+            "$ref" : "#/components/schemas/RevenueDistributionMetricsResponse"
+          },
+          "podium" : {
+            "$ref" : "#/components/schemas/RateCountMetricsResponse"
+          },
+          "lowerHalf" : {
+            "$ref" : "#/components/schemas/RateCountMetricsResponse"
+          },
+          "playOrder" : {
+            "$ref" : "#/components/schemas/PlayOrderMetricsResponse"
+          },
+          "ginji" : {
+            "$ref" : "#/components/schemas/GinjiMetricsResponse"
+          },
+          "nonRevenue" : {
+            "$ref" : "#/components/schemas/NonRevenueMetricsResponse"
+          },
+          "destination" : {
+            "$ref" : "#/components/schemas/DestinationMetricsResponse"
+          },
+          "stability" : {
+            "$ref" : "#/components/schemas/StabilityMetricsResponse"
+          }
+        }
+      },
+      "SeriesComparisonPlayerResponse" : {
+        "title" : "SeriesComparisonPlayerResponse",
+        "type" : "object",
+        "required" : [
+          "memberId",
+          "displayName"
+        ],
+        "properties" : {
+          "memberId" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          }
+        }
+      },
+      "SeriesComparisonResponse" : {
+        "title" : "SeriesComparisonResponse",
+        "type" : "object",
+        "required" : [
+          "schemaVersion",
+          "scope",
+          "matchCount",
+          "trends",
+          "histograms",
+          "dataQuality"
+        ],
+        "properties" : {
+          "schemaVersion" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "scope" : {
+            "$ref" : "#/components/schemas/SeriesComparisonScopeResponse"
+          },
+          "matchCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "players" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/SeriesComparisonPlayerResponse"
+            }
+          },
+          "metricsByPlayer" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/SeriesComparisonPlayerMetricsEntry"
+            }
+          },
+          "trends" : {
+            "$ref" : "#/components/schemas/SeriesComparisonTrendsResponse"
+          },
+          "histograms" : {
+            "$ref" : "#/components/schemas/SeriesComparisonHistogramsResponse"
+          },
+          "highlights" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/SeriesComparisonHighlightResponse"
+            }
+          },
+          "dataQuality" : {
+            "$ref" : "#/components/schemas/SeriesComparisonDataQualityResponse"
+          }
+        }
+      },
+      "SeriesComparisonScopeOption" : {
+        "title" : "SeriesComparisonScopeOption",
+        "type" : "object",
+        "required" : [
+          "id",
+          "name",
+          "displayOrder",
+          "confirmedMatchCount"
+        ],
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "displayOrder" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "confirmedMatchCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "SeriesComparisonScopeResponse" : {
+        "title" : "SeriesComparisonScopeResponse",
+        "type" : "object",
+        "required" : [
+          "gameTitleId",
+          "gameTitleName",
+          "layoutFamily",
+          "scopeKind",
+          "scopeName"
+        ],
+        "properties" : {
+          "gameTitleId" : {
+            "type" : "string"
+          },
+          "gameTitleName" : {
+            "type" : "string"
+          },
+          "layoutFamily" : {
+            "type" : "string"
+          },
+          "scopeKind" : {
+            "type" : "string"
+          },
+          "scopeId" : {
+            "type" : "string"
+          },
+          "scopeName" : {
+            "type" : "string"
+          }
+        }
+      },
+      "SeriesComparisonSeriesOption" : {
+        "title" : "SeriesComparisonSeriesOption",
+        "type" : "object",
+        "required" : [
+          "gameTitleId",
+          "name",
+          "layoutFamily",
+          "displayOrder",
+          "confirmedMatchCount"
+        ],
+        "properties" : {
+          "gameTitleId" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "layoutFamily" : {
+            "type" : "string"
+          },
+          "displayOrder" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "confirmedMatchCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "latestConfirmedPlayedAt" : {
+            "type" : "string"
+          },
+          "seasons" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/SeriesComparisonScopeOption"
+            }
+          },
+          "maps" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/SeriesComparisonScopeOption"
+            }
+          }
+        }
+      },
+      "SeriesComparisonTrendsResponse" : {
+        "title" : "SeriesComparisonTrendsResponse",
+        "type" : "object",
+        "properties" : {
+          "rankCumulativeAverage" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/TrendSeriesResponse"
+            }
+          },
+          "podiumCumulativeRate" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/TrendSeriesResponse"
+            }
+          },
+          "lowerHalfCumulativeRate" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/TrendSeriesResponse"
+            }
+          },
+          "ginjiCumulativeCount" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/TrendSeriesResponse"
+            }
+          }
+        }
+      },
+      "StabilityMetricsResponse" : {
+        "title" : "StabilityMetricsResponse",
+        "type" : "object",
+        "properties" : {
+          "rankStandardDeviation" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        }
+      },
+      "TrendPointResponse" : {
+        "title" : "TrendPointResponse",
+        "type" : "object",
+        "required" : [
+          "index",
+          "matchId",
+          "playedAt"
+        ],
+        "properties" : {
+          "index" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "matchId" : {
+            "type" : "string"
+          },
+          "playedAt" : {
+            "type" : "string"
+          },
+          "value" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        }
+      },
+      "TrendSeriesResponse" : {
+        "title" : "TrendSeriesResponse",
+        "type" : "object",
+        "required" : [
+          "memberId"
+        ],
+        "properties" : {
+          "memberId" : {
+            "type" : "string"
+          },
+          "points" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/TrendPointResponse"
+            }
           }
         }
       },

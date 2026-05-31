@@ -13,8 +13,8 @@ import momo.api.auth.{
 }
 import momo.api.config.AppConfig
 import momo.api.http.modules.{
-  AdminAccountModule, ExportModule, HealthModule, HeldEventModule, MasterModule, MatchDraftModule,
-  MatchModule, OcrModule, UploadModule,
+  AdminAccountModule, AnalyticsModule, ExportModule, HealthModule, HeldEventModule, MasterModule,
+  MatchDraftModule, MatchModule, OcrModule, UploadModule,
 }
 import momo.api.repositories.{IdempotencyRepository, LoginAccountsRepository}
 import momo.api.usecases.*
@@ -39,6 +39,8 @@ object HttpRoutes:
       getMatchDraftSourceImages: GetMatchDraftSourceImages[F],
       confirmMatch: ConfirmMatch[F],
       exportMatches: ExportMatches[F],
+      getSeriesComparisonOptions: GetSeriesComparisonOptions[F],
+      getSeriesComparison: GetSeriesComparison[F],
       listMatches: ListMatches[F],
       getMatch: GetMatch[F],
       updateMatch: UpdateMatch[F],
@@ -130,6 +132,11 @@ object HttpRoutes:
         deps.rateLimiters.readApi,
         idempotencyGuard,
         deps.nowF,
+        security,
+      ) ::: AnalyticsModule.routes[F](
+        deps.getSeriesComparisonOptions,
+        deps.getSeriesComparison,
+        deps.rateLimiters.readApi,
         security,
       ) ::: MasterModule.routes[F](
         deps.listGameTitles,

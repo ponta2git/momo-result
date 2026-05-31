@@ -33,6 +33,8 @@ object ApiEndpoints:
     MatchesEndpoints.get,
     MatchesEndpoints.update,
     MatchesEndpoints.delete,
+    SeriesComparisonEndpoints.options,
+    SeriesComparisonEndpoints.aggregate,
     GameTitlesEndpoints.list,
     GameTitlesEndpoints.create,
     GameTitlesEndpoints.update,

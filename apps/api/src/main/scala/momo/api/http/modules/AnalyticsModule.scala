@@ -22,23 +22,18 @@ object AnalyticsModule:
           readRateLimiter,
           member.accountId.value,
           HttpOperation.GetSeriesComparisonOptions,
-        ) {
-          security.respond(getOptions.run)(identity)
-        }
+        )(security.respond(getOptions.run)(identity))
       }
     },
     SeriesComparisonEndpoints.aggregate.serverLogic {
-      case (gameTitleId, scopeKind, scopeId, accountHeader) =>
-        security.authorizeRead(accountHeader) { member =>
-          ReadRateLimit.enforce(
-            readRateLimiter,
-            member.accountId.value,
-            HttpOperation.GetSeriesComparison,
-          ) {
-            security.decode(
-              SeriesComparisonCodec.parseAggregateQuery(gameTitleId, scopeKind, scopeId)
-            )(scope => security.respond(getComparison.run(scope))(identity))
+      case (gameTitleId, scopeKind, scopeId, accountHeader) => security
+          .authorizeRead(accountHeader) { member =>
+            ReadRateLimit
+              .enforce(readRateLimiter, member.accountId.value, HttpOperation.GetSeriesComparison) {
+                security.decode(
+                  SeriesComparisonCodec.parseAggregateQuery(gameTitleId, scopeKind, scopeId)
+                )(scope => security.respond(getComparison.run(scope))(identity))
+              }
           }
-        }
     },
   )

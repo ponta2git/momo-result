@@ -26,9 +26,8 @@ object SeriesComparisonReadModel:
     def options: F[SeriesComparisonOptionsData] = transactK(alg.options)
     def resolveScope(scope: SeriesComparisonScope): F[Option[SeriesComparisonResolvedScope]] =
       transactK(alg.resolveScope(scope))
-    def loadRows(
-        scope: SeriesComparisonResolvedScope
-    ): F[List[SeriesComparisonMatchPlayerRow]] = transactK(alg.loadRows(scope))
+    def loadRows(scope: SeriesComparisonResolvedScope): F[List[SeriesComparisonMatchPlayerRow]] =
+      transactK(alg.loadRows(scope))
 
   def liftIdentity[F[_]](alg: SeriesComparisonReadAlg[F]): SeriesComparisonReadModel[F] =
     new SeriesComparisonReadModel[F]:

@@ -13,22 +13,16 @@ final class SeriesComparisonCodecSpec extends MomoCatsEffectSuite:
       case other => fail(s"expected overall scope, got $other")
 
   test("requires scope id for season and map scopes"):
-    val season = SeriesComparisonCodec.parseAggregateQuery(
-      "title_momotetsu_2",
-      Some("season"),
-      None,
-    )
+    val season = SeriesComparisonCodec
+      .parseAggregateQuery("title_momotetsu_2", Some("season"), None)
     val map = SeriesComparisonCodec.parseAggregateQuery("title_momotetsu_2", Some("map"), None)
 
     assertValidationError(season, "scopeId is required for season scope")
     assertValidationError(map, "scopeId is required for map scope")
 
   test("rejects scope id on overall and unknown scope kinds"):
-    val overall = SeriesComparisonCodec.parseAggregateQuery(
-      "title_momotetsu_2",
-      Some("overall"),
-      Some("season_2026_spring"),
-    )
+    val overall = SeriesComparisonCodec
+      .parseAggregateQuery("title_momotetsu_2", Some("overall"), Some("season_2026_spring"))
     val unknown = SeriesComparisonCodec.parseAggregateQuery("title_momotetsu_2", Some("bad"), None)
 
     assertValidationError(overall, "scopeId must be omitted for overall")

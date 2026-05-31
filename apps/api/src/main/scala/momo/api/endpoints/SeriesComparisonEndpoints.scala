@@ -6,7 +6,8 @@ import sttp.tapir.{PublicEndpoint, *}
 import momo.api.endpoints.ProblemDetails.ProblemResponse
 
 object SeriesComparisonEndpoints:
-  val options: PublicEndpoint[Option[String], ProblemResponse, SeriesComparisonOptionsResponse, Any] =
+  val options
+      : PublicEndpoint[Option[String], ProblemResponse, SeriesComparisonOptionsResponse, Any] =
     endpoint
       .get
       .in("api" / "analytics" / "series-comparison" / "options")

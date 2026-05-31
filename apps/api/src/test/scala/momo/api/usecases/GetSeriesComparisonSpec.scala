@@ -32,8 +32,7 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
   test("aggregates strategic comparison metrics from confirmed match rows"):
     val usecase = GetSeriesComparison[IO](StaticReadModel(Some(resolvedScope), sampleRows))
 
-    for result <- usecase.run(SeriesComparisonScope.Overall(titleId))
-    yield
+    for result <- usecase.run(SeriesComparisonScope.Overall(titleId)) yield
       val response = result.getOrElse(fail(s"expected success, got $result"))
       assertEquals(response.matchCount, 3)
       assertEquals(response.players.map(_.memberId), List("ponta", "akane", "otaka", "eu"))
@@ -63,19 +62,20 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
       assertEquals(eu.ginji.maxInSingleMatch, 2)
 
       assertEquals(response.trends.rankCumulativeAverage.size, 4)
-      assertEquals(response.histograms.assets.series.map(_.memberId), response.players.map(_.memberId))
+      assertEquals(
+        response.histograms.assets.series.map(_.memberId),
+        response.players.map(_.memberId),
+      )
       assert(response.highlights.exists(_.id == "highlight.destinationIndependent"))
       assert(response.dataQuality.items.exists(item =>
-        item.metricId == "ginji.resilienceRankAverage" &&
-          item.playerMemberId.contains("ponta") &&
+        item.metricId == "ginji.resilienceRankAverage" && item.playerMemberId.contains("ponta") &&
           item.status == "reference"
       ))
 
   test("returns an empty aggregate when the selected scope has no confirmed matches"):
     val usecase = GetSeriesComparison[IO](StaticReadModel(Some(resolvedScope), Nil))
 
-    for result <- usecase.run(SeriesComparisonScope.Overall(titleId))
-    yield
+    for result <- usecase.run(SeriesComparisonScope.Overall(titleId)) yield
       val response = result.getOrElse(fail(s"expected success, got $result"))
       assertEquals(response.matchCount, 0)
       assertEquals(response.players, Nil)
@@ -137,17 +137,11 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
     ),
   )
 
-  private def assertOptionDouble(
-      actual: Option[Double],
-      expected: Double,
-      delta: Double,
-  ): Unit = actual match
-    case Some(value) =>
-      assert(
-        math.abs(value - expected) <= delta,
-        s"expected $expected within $delta, got $value",
-      )
-    case None => fail(s"expected $expected, got None")
+  private def assertOptionDouble(actual: Option[Double], expected: Double, delta: Double): Unit =
+    actual match
+      case Some(value) =>
+        assert(math.abs(value - expected) <= delta, s"expected $expected within $delta, got $value")
+      case None => fail(s"expected $expected, got None")
 
   private def assertOptionDouble(actual: Option[Double], expected: Double): Unit =
     assertOptionDouble(actual, expected, DoubleDelta)
@@ -166,8 +160,8 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
       resolved: Option[SeriesComparisonResolvedScope],
       rows: List[SeriesComparisonMatchPlayerRow],
   ) extends SeriesComparisonReadModel[IO]:
-    override def options: IO[SeriesComparisonOptionsData] =
-      IO.pure(SeriesComparisonOptionsData(None, Nil))
+    override def options: IO[SeriesComparisonOptionsData] = IO
+      .pure(SeriesComparisonOptionsData(None, Nil))
 
     override def resolveScope(
         scope: SeriesComparisonScope

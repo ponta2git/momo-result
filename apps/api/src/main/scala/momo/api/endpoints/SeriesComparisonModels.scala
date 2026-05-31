@@ -116,8 +116,7 @@ final case class RevenueDistributionMetricsResponse(
 object RevenueDistributionMetricsResponse:
   given Schema[RevenueDistributionMetricsResponse] = Schema.derived
 
-final case class RateCountMetricsResponse(count: Int, rate: Option[Double])
-    derives Codec.AsObject
+final case class RateCountMetricsResponse(count: Int, rate: Option[Double]) derives Codec.AsObject
 object RateCountMetricsResponse:
   given Schema[RateCountMetricsResponse] = Schema.derived
 
@@ -212,8 +211,7 @@ final case class HistogramBinResponse(
 object HistogramBinResponse:
   given Schema[HistogramBinResponse] = Schema.derived
 
-final case class HistogramSeriesResponse(memberId: String, counts: List[Int])
-    derives Codec.AsObject
+final case class HistogramSeriesResponse(memberId: String, counts: List[Int]) derives Codec.AsObject
 object HistogramSeriesResponse:
   given Schema[HistogramSeriesResponse] = Schema.derived
 

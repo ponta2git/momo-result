@@ -29,9 +29,8 @@ final class InMemorySeriesComparisonReadModel[F[_]: Monad](
       records <- matches.list(MatchesRepository.ListFilter(limit = None))
     yield
       val recordsByTitle = records.groupBy(_.gameTitleId)
-      val latest = records.sortBy(r =>
-        (-r.playedAt.toEpochMilli, r.gameTitleId.value, r.id.value)
-      ).headOption.map(_.gameTitleId)
+      val latest = records.sortBy(r => (-r.playedAt.toEpochMilli, r.gameTitleId.value, r.id.value))
+        .headOption.map(_.gameTitleId)
       SeriesComparisonOptionsData(
         latestConfirmedGameTitleId = latest,
         series = titles.map { title =>
@@ -76,10 +75,8 @@ final class InMemorySeriesComparisonReadModel[F[_]: Monad](
           scopeName = "総合",
         )
       ))
-    case SeriesComparisonScope.Season(gameTitleId, seasonMasterId) => (
-        gameTitles.find(gameTitleId),
-        seasonMasters.find(seasonMasterId),
-      ).mapN { (title, season) =>
+    case SeriesComparisonScope.Season(gameTitleId, seasonMasterId) =>
+      (gameTitles.find(gameTitleId), seasonMasters.find(seasonMasterId)).mapN { (title, season) =>
         for
           gt <- title
           s <- season if s.gameTitleId == gameTitleId
@@ -92,10 +89,8 @@ final class InMemorySeriesComparisonReadModel[F[_]: Monad](
           scopeName = s.name,
         )
       }
-    case SeriesComparisonScope.Map(gameTitleId, mapMasterId) => (
-        gameTitles.find(gameTitleId),
-        mapMasters.find(mapMasterId),
-      ).mapN { (title, map) =>
+    case SeriesComparisonScope.Map(gameTitleId, mapMasterId) =>
+      (gameTitles.find(gameTitleId), mapMasters.find(mapMasterId)).mapN { (title, map) =>
         for
           gt <- title
           m <- map if m.gameTitleId == gameTitleId
@@ -116,9 +111,8 @@ final class InMemorySeriesComparisonReadModel[F[_]: Monad](
       records <- matches.list(MatchesRepository.ListFilter(
         gameTitleId = Some(scope.gameTitleId),
         seasonMasterId =
-          if scope.scopeKind == "season" then scope.scopeId.flatMap(id =>
-            SeasonMasterId.fromString(id).toOption
-          )
+          if scope.scopeKind == "season" then
+            scope.scopeId.flatMap(id => SeasonMasterId.fromString(id).toOption)
           else None,
         limit = None,
       ))

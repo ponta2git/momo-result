@@ -14,17 +14,15 @@ object SeriesComparisonCodec:
       parsedGameTitleId <- BoundaryId.required("gameTitleId", gameTitleId)(GameTitleId.fromString)
       kind <- parseScopeKind(scopeKind)
       parsed <- kind match
-        case "overall" =>
-          scopeId.filter(_.trim.nonEmpty) match
+        case "overall" => scopeId.filter(_.trim.nonEmpty) match
             case Some(_) => Left(AppError.ValidationFailed("scopeId must be omitted for overall."))
             case None => Right(SeriesComparisonScope.Overall(parsedGameTitleId))
-        case "season" =>
-          BoundaryId.optional("scopeId", scopeId)(SeasonMasterId.fromString).flatMap {
-            case Some(id) => Right(SeriesComparisonScope.Season(parsedGameTitleId, id))
-            case None => Left(AppError.ValidationFailed("scopeId is required for season scope."))
-          }
-        case "map" =>
-          BoundaryId.optional("scopeId", scopeId)(MapMasterId.fromString).flatMap {
+        case "season" => BoundaryId.optional("scopeId", scopeId)(SeasonMasterId.fromString)
+            .flatMap {
+              case Some(id) => Right(SeriesComparisonScope.Season(parsedGameTitleId, id))
+              case None => Left(AppError.ValidationFailed("scopeId is required for season scope."))
+            }
+        case "map" => BoundaryId.optional("scopeId", scopeId)(MapMasterId.fromString).flatMap {
             case Some(id) => Right(SeriesComparisonScope.Map(parsedGameTitleId, id))
             case None => Left(AppError.ValidationFailed("scopeId is required for map scope."))
           }

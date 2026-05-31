@@ -44,8 +44,7 @@ object PostgresSeriesComparison:
 
   val alg: SeriesComparisonReadAlg[ConnectionIO] = new SeriesComparisonReadAlg[ConnectionIO]:
     override def options: ConnectionIO[SeriesComparisonOptionsData] =
-      val seriesQuery =
-        sql"""
+      val seriesQuery = sql"""
           SELECT
             gt.id,
             gt.name,
@@ -58,8 +57,7 @@ object PostgresSeriesComparison:
           GROUP BY gt.id, gt.name, gt.layout_family, gt.display_order
           ORDER BY gt.display_order, gt.name, gt.id
         """.query[SeriesRow].to[List]
-      val seasonQuery =
-        sql"""
+      val seasonQuery = sql"""
           SELECT
             s.game_title_id,
             s.id,
@@ -73,8 +71,7 @@ object PostgresSeriesComparison:
           GROUP BY s.game_title_id, s.id, s.name, s.display_order
           ORDER BY s.game_title_id, s.display_order, s.name, s.id
         """.query[ScopeOptionRow].to[List]
-      val mapQuery =
-        sql"""
+      val mapQuery = sql"""
           SELECT
             mm.game_title_id,
             mm.id,
@@ -96,12 +93,7 @@ object PostgresSeriesComparison:
         val seasonsByTitle = scopeOptionsByTitle(seasonRows)
         val mapsByTitle = scopeOptionsByTitle(mapRows)
         val latest = seriesRows.filter(_._5 > 0).sortBy(row =>
-          (
-            -row._6.map(_.toEpochMilli).getOrElse(Long.MinValue),
-            row._4,
-            row._2,
-            row._1.value,
-          )
+          (-row._6.map(_.toEpochMilli).getOrElse(Long.MinValue), row._4, row._2, row._1.value)
         ).headOption.map(_._1)
         SeriesComparisonOptionsData(
           latestConfirmedGameTitleId = latest,
@@ -122,8 +114,7 @@ object PostgresSeriesComparison:
     override def resolveScope(
         scope: SeriesComparisonScope
     ): ConnectionIO[Option[SeriesComparisonResolvedScope]] = scope match
-      case SeriesComparisonScope.Overall(gameTitleId) =>
-        sql"""
+      case SeriesComparisonScope.Overall(gameTitleId) => sql"""
           SELECT id, name, layout_family, display_order, created_at
           FROM game_titles
           WHERE id = $gameTitleId
@@ -137,8 +128,7 @@ object PostgresSeriesComparison:
             scopeName = "総合",
           )
         ))
-      case SeriesComparisonScope.Season(gameTitleId, seasonMasterId) =>
-        sql"""
+      case SeriesComparisonScope.Season(gameTitleId, seasonMasterId) => sql"""
           SELECT gt.name, gt.layout_family, s.name
           FROM season_masters s
           JOIN game_titles gt ON gt.id = s.game_title_id
@@ -153,8 +143,7 @@ object PostgresSeriesComparison:
             scopeName = name,
           )
         })
-      case SeriesComparisonScope.Map(gameTitleId, mapMasterId) =>
-        sql"""
+      case SeriesComparisonScope.Map(gameTitleId, mapMasterId) => sql"""
           SELECT gt.name, gt.layout_family, mm.name
           FROM map_masters mm
           JOIN game_titles gt ON gt.id = mm.game_title_id
@@ -183,7 +172,8 @@ object PostgresSeriesComparison:
         case "season" => scope.scopeId.fold(Fragment.empty)(id => fr"AND m.season_master_id = $id")
         case "map" => scope.scopeId.fold(Fragment.empty)(id => fr"AND m.map_master_id = $id")
         case _ => Fragment.empty
-      val query = fr"""
+      val query =
+        fr"""
           SELECT
             m.id,
             m.played_at,
@@ -228,8 +218,8 @@ object PostgresSeriesComparison:
 
   private def scopeOptionsByTitle(
       rows: List[ScopeOptionRow]
-  ): Map[GameTitleId, List[SeriesComparisonScopeOptionData]] = rows
-    .groupBy(_._1).view.mapValues(_.map(row =>
+  ): Map[GameTitleId, List[SeriesComparisonScopeOptionData]] = rows.groupBy(_._1).view
+    .mapValues(_.map(row =>
       SeriesComparisonScopeOptionData(
         id = row._2,
         name = row._3,

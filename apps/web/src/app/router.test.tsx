@@ -179,14 +179,14 @@ describe("app routing", () => {
     expect(screen.getByRole("link", { name: "開催" })).toBeInTheDocument();
   });
 
-  it("renders series comparison at /analytics/series for authenticated users", async () => {
+  it("renders standings comparison at /analytics/series for authenticated users", async () => {
     window.localStorage.setItem("momoresult.devUser", "account_ponta");
     const { router } = renderApp("/analytics/series");
 
-    expect(await screen.findByRole("heading", { name: "シリーズ比較" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "戦績比較" })).toBeInTheDocument();
     expect(await screen.findByText("順位の開き")).toBeInTheDocument();
     expect(await screen.findByText("銀次発生")).toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/analytics/series");
-    expect(screen.getByRole("link", { name: "比較" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "戦績比較" })).toBeInTheDocument();
   });
 });

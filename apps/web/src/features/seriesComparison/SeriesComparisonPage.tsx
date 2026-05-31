@@ -347,7 +347,7 @@ function BasicMetrics({ response }: { response: SeriesComparisonResponse }) {
   const metricsByMember = metricsMap(response);
   return (
     <MetricSection
-      description="まず勝敗の地力を見ます。平均順位は1に近いほど上位で、順位ごとの回数から勝ち方と沈み方も追えます。"
+      description="平均順位は1に近いほど上位です。順位ごとの回数で、勝ち方と沈み方を確認します。"
       icon={<Trophy className="size-5" />}
       title="順位の地力"
     >
@@ -392,9 +392,9 @@ function MoneyMetrics({ response }: { response: SeriesComparisonResponse }) {
   return (
     <>
       <MetricSection
-        description="試合後にどれだけ持ち物を残せたかを見ます。最高額だけでなく、落ち込んだ試合の底も比較します。"
+        description="試合後にどれだけ資産を残したかを見ます。最高額だけでなく、落ち込んだ試合の底も比較します。"
         icon={<Coins className="size-5" />}
-        title="総資産の残し方"
+        title="総資産"
       >
         <PlayerMetricGrid metricsByMember={metricsByMember} players={players}>
           {(_, metrics) => (
@@ -427,7 +427,7 @@ function MoneyMetrics({ response }: { response: SeriesComparisonResponse }) {
       <MetricSection
         description="その試合でどれだけ収益を出せたかを見ます。最高額は爆発力、平均と中央値は普段の収益力の目安です。"
         icon={<BadgeDollarSign className="size-5" />}
-        title="収益の強さ"
+        title="収益"
       >
         <PlayerMetricGrid metricsByMember={metricsByMember} players={players}>
           {(_, metrics) => (
@@ -463,7 +463,7 @@ function RateMetrics({ response }: { response: SeriesComparisonResponse }) {
     <MetricSection
       description="1・2位で終えた割合と、3・4位に沈んだ割合です。順位ブレは小さいほど安定しています。"
       icon={<BarChart3 className="size-5" />}
-      title="上位キープ"
+      title="上位率と順位ブレ"
     >
       <PlayerMetricGrid metricsByMember={metricsByMember} players={players}>
         {(_, metrics) => (
@@ -601,15 +601,15 @@ function ContextMetrics({ response }: { response: SeriesComparisonResponse }) {
   const metricsByMember = metricsMap(response);
   return (
     <MetricSection
-      description="収益や目的地到着を、最終順位にどれだけつなげられたかを見ます。事件簿は駅の種類ごとの記録で、合算して総行動数にはしません。"
+      description="収益や目的地到着が、最終順位にどれだけ効いているかを見ます。事件簿は駅の種類ごとの記録で、合算して総行動数にはしません。"
       icon={<MapPinned className="size-5" />}
-      title="収益と目的地の変換"
+      title="収益と目的地の効き方"
     >
       <PlayerMetricGrid metricsByMember={metricsByMember} players={players}>
         {(_, metrics) => (
           <>
             <MetricRow
-              help="各試合の「収益順位 - 最終順位」を平均。マイナスは収益順位ほど最終順位が伸びなかった状態です。"
+              help="各試合の「収益順位 - 最終順位」を平均。マイナスなら、収益順位に比べて最終順位が低めです。"
               label="収益順位との差"
               value={formatSigned(metrics?.nonRevenue.rankDelta)}
             />
@@ -619,7 +619,7 @@ function ContextMetrics({ response }: { response: SeriesComparisonResponse }) {
               value={`${metrics?.nonRevenue.highRevenueNoWinCount ?? 0}/${metrics?.nonRevenue.highRevenueTopCount ?? 0}・${formatPercent(metrics?.nonRevenue.highRevenueNoWinRate)}`}
             />
             <MetricRow
-              help="各試合の「目的地到着数順位 - 最終順位」を平均。マイナスは目的地到着数ほど最終順位が伸びなかった状態です。"
+              help="各試合の「目的地到着数順位 - 最終順位」を平均。マイナスなら、目的地到着数に比べて最終順位が低めです。"
               label="目的地順位との差"
               value={formatSigned(metrics?.destination.conversionDelta)}
             />
@@ -674,13 +674,13 @@ export function SeriesComparisonPage() {
             更新
           </Button>
         }
-        description="確定済みの戦績から、シリーズ単位で各プレーヤーの順位、総資産、収益、銀次、目的地の効き方を比較します。"
+        description="最新作品の確定済み戦績から、4人の順位、総資産、収益、銀次、目的地の効き方を比較します。"
         eyebrow="分析"
-        title="シリーズ比較"
+        title="戦績比較"
       />
 
       {controller.hasOptionsError ? (
-        <Notice tone="danger" title="シリーズ候補を読み込めませんでした。">
+        <Notice tone="danger" title="対象作品を読み込めませんでした。">
           通信状態を確認してから再読み込みしてください。
         </Notice>
       ) : null}
@@ -688,21 +688,15 @@ export function SeriesComparisonPage() {
       {seriesOptions.length === 0 ? (
         <EmptyState
           icon={<BarChart3 className="size-5" />}
-          title="比較できるシリーズがありません"
-          description="確定済みの試合とシリーズのマスタが揃うと、この画面で比較できます。"
+          title="比較できる戦績がありません"
+          description="確定済みの試合と作品情報が揃うと、この画面で比較できます。"
         />
       ) : (
         <>
-          <section className="grid gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 md:grid-cols-[minmax(12rem,1fr)_auto_minmax(12rem,1fr)] md:items-end">
-            <SelectField
-              label="シリーズ"
-              options={seriesOptions}
-              value={controller.state.gameTitleId ?? ""}
-              onChange={(event) => controller.updateGameTitle(event.currentTarget.value)}
-            />
+          <section className="grid gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 md:grid-cols-[auto_minmax(12rem,1fr)_minmax(12rem,1fr)] md:items-end">
             <div className="md:pb-1">
               <SegmentedControl
-                label="比較範囲"
+                label="表示範囲"
                 options={controller.scopeKinds}
                 value={controller.state.scopeKind}
                 onValueChange={(value) =>
@@ -711,7 +705,7 @@ export function SeriesComparisonPage() {
               />
             </div>
             {controller.state.scopeKind === "overall" ? (
-              <div className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-2 text-sm text-[var(--color-text-secondary)]">
+              <div className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-2 text-sm text-[var(--color-text-secondary)] md:mb-1">
                 全シーズン・全マップ
               </div>
             ) : (
@@ -725,10 +719,16 @@ export function SeriesComparisonPage() {
                 onChange={(event) => controller.updateScopeId(event.currentTarget.value)}
               />
             )}
+            <SelectField
+              label="対象作品"
+              options={seriesOptions}
+              value={controller.state.gameTitleId ?? ""}
+              onChange={(event) => controller.updateGameTitle(event.currentTarget.value)}
+            />
           </section>
 
           {controller.hasAggregateError ? (
-            <Notice tone="danger" title="比較データを読み込めませんでした。">
+            <Notice tone="danger" title="戦績データを読み込めませんでした。">
               条件を変えるか、少し時間を置いて再読み込みしてください。
             </Notice>
           ) : controller.aggregateLoading ? (

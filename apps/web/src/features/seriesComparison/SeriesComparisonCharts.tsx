@@ -36,6 +36,7 @@ export function LineChart({
   domain,
   formatValue,
   lowValueAtTop = false,
+  minYStep = 1,
   players,
   series,
   yTicks,
@@ -44,6 +45,7 @@ export function LineChart({
   domain?: [number, number];
   formatValue: (value: number) => string;
   lowValueAtTop?: boolean;
+  minYStep?: number;
   players: Player[];
   series: TrendSeries[];
   yTicks?: number[];
@@ -59,7 +61,10 @@ export function LineChart({
     ...series.flatMap((item) => (item.points ?? []).map((point) => point.index)),
   );
   const minValue = domain?.[0] ?? 0;
-  const maxValue = domain?.[1] ?? niceCeil(Math.max(...values, 1));
+  const observedMaxValue = values.length === 0 ? 1 : Math.max(...values);
+  const maxValue =
+    domain?.[1] ??
+    niceCeil(observedMaxValue <= minValue ? minValue + 1 : observedMaxValue, minYStep);
   const ySpan = maxValue === minValue ? 1 : maxValue - minValue;
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
@@ -70,7 +75,8 @@ export function LineChart({
     const ratio = (value - minValue) / ySpan;
     return padding.top + (lowValueAtTop ? ratio : 1 - ratio) * chartHeight;
   };
-  const ticks = yTicks ?? buildNumberTicks(minValue, maxValue, 5);
+  const ticks = yTicks ?? buildNumberTicks(minValue, maxValue, 5, minYStep);
+  const xTicks = buildIndexTicks(maxIndex, 6);
 
   return (
     <figure className={cn("grid gap-2", className)}>
@@ -118,6 +124,33 @@ export function LineChart({
             </text>
           </g>
         ))}
+        {xTicks.map((value) => {
+          const xPosition = x(value);
+          return (
+            <g key={value}>
+              {value !== 1 && value !== maxIndex ? (
+                <line
+                  stroke="var(--color-border)"
+                  strokeDasharray="4 4"
+                  strokeWidth="0.8"
+                  x1={xPosition}
+                  x2={xPosition}
+                  y1={padding.top}
+                  y2={height - padding.bottom}
+                />
+              ) : null}
+              <text
+                fill="var(--color-text-secondary)"
+                fontSize="12"
+                textAnchor={value === maxIndex ? "end" : value === 1 ? "start" : "middle"}
+                x={xPosition}
+                y={height - 8}
+              >
+                {value === maxIndex ? `${value}戦` : value}
+              </text>
+            </g>
+          );
+        })}
         {series.map((item) => {
           const points = (item.points ?? []).flatMap((point) =>
             typeof point.value === "number" ? [{ index: point.index, value: point.value }] : [],
@@ -143,18 +176,6 @@ export function LineChart({
             </g>
           );
         })}
-        <text fill="var(--color-text-secondary)" fontSize="12" x={padding.left} y={height - 8}>
-          1
-        </text>
-        <text
-          fill="var(--color-text-secondary)"
-          fontSize="12"
-          textAnchor="end"
-          x={width - padding.right}
-          y={height - 8}
-        >
-          {maxIndex}戦
-        </text>
       </svg>
       <PlayerLegend players={players} />
     </figure>
@@ -216,7 +237,8 @@ function SingleHistogram({
   const chartHeight = height - padding.top - padding.bottom;
   const binWidth = chartWidth / Math.max(1, bins.length);
   const barWidth = Math.max(10, binWidth * 0.62);
-  const countTicks = buildNumberTicks(0, niceCeil(maxValue), 5);
+  const countCeil = niceCeil(maxValue, 1);
+  const countTicks = buildNumberTicks(0, countCeil, 5, 1);
 
   return (
     <div className="min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
@@ -243,7 +265,7 @@ function SingleHistogram({
           y2={height - padding.bottom}
         />
         {countTicks.map((tick) => {
-          const y = height - padding.bottom - (tick / niceCeil(maxValue)) * chartHeight;
+          const y = height - padding.bottom - (tick / countCeil) * chartHeight;
           return (
             <g key={tick}>
               <line
@@ -269,7 +291,7 @@ function SingleHistogram({
         })}
         {bins.map((bin, binIndex) => {
           const value = counts[binIndex] ?? 0;
-          const barHeight = (value / niceCeil(maxValue)) * chartHeight;
+          const barHeight = (value / countCeil) * chartHeight;
           return (
             <g key={bin.index}>
               <rect
@@ -322,10 +344,15 @@ function formatCompactNumber(value: number): string {
   return Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1);
 }
 
-function buildNumberTicks(minValue: number, maxValue: number, maxTickCount: number): number[] {
-  const span = Math.max(1, maxValue - minValue);
+function buildNumberTicks(
+  minValue: number,
+  maxValue: number,
+  maxTickCount: number,
+  minStep = 0,
+): number[] {
+  const span = Math.max(Number.EPSILON, maxValue - minValue);
   const rawStep = span / Math.max(1, maxTickCount - 1);
-  const step = niceStep(rawStep);
+  const step = niceStep(rawStep, minStep);
   const first = Math.ceil(minValue / step) * step;
   const ticks: number[] = [];
   for (let value = first; value <= maxValue + step * 0.001; value += step) {
@@ -340,18 +367,31 @@ function buildNumberTicks(minValue: number, maxValue: number, maxTickCount: numb
   return Array.from(new Set(ticks)).toSorted((a, b) => a - b);
 }
 
-function niceCeil(value: number): number {
-  const step = niceStep(value / 4);
+function buildIndexTicks(maxIndex: number, maxTickCount: number): number[] {
+  if (maxIndex <= 1) {
+    return [1];
+  }
+  const step = niceStep((maxIndex - 1) / Math.max(1, maxTickCount - 1), 1);
+  const ticks = [1];
+  for (let value = Math.ceil(2 / step) * step; value < maxIndex; value += step) {
+    ticks.push(value);
+  }
+  ticks.push(maxIndex);
+  return Array.from(new Set(ticks.map((value) => Math.round(value)))).toSorted((a, b) => a - b);
+}
+
+function niceCeil(value: number, minStep = 0): number {
+  const step = niceStep(value / 4, minStep);
   return Math.max(step, Math.ceil(value / step) * step);
 }
 
-function niceStep(rawStep: number): number {
-  const safeStep = Math.max(rawStep, 1);
+function niceStep(rawStep: number, minStep = 0): number {
+  const safeStep = Math.max(rawStep, Number.EPSILON);
   const magnitude = 10 ** Math.floor(Math.log10(safeStep));
   const normalized = safeStep / magnitude;
   const factor =
     normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 2.5 ? 2.5 : normalized <= 5 ? 5 : 10;
-  return factor * magnitude;
+  return Math.max(factor * magnitude, minStep);
 }
 
 export function playerGridStyle(playerCount: number): CSSProperties {

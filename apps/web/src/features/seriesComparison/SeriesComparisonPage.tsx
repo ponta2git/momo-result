@@ -39,6 +39,11 @@ import { PageHeader } from "@/shared/ui/layout/PageHeader";
 type Player = NonNullable<SeriesComparisonResponse["players"]>[number];
 type MetricsEntry = NonNullable<SeriesComparisonResponse["metricsByPlayer"]>[number];
 type PlayerMetrics = MetricsEntry["metrics"];
+type MetricTone = "neutral" | "high" | "low";
+type NumericExtrema = {
+  max: number | undefined;
+  min: number | undefined;
+};
 
 function formatDecimal(value: number | undefined, digits = 2): string {
   return value === undefined ? "-" : value.toFixed(digits);
@@ -66,6 +71,30 @@ function formatPlayOrderLabel(playOrder: number | undefined): string {
 
 function metricsMap(response: SeriesComparisonResponse): Map<string, PlayerMetrics> {
   return new Map((response.metricsByPlayer ?? []).map((entry) => [entry.memberId, entry.metrics]));
+}
+
+function numericExtrema(
+  response: SeriesComparisonResponse,
+  select: (metrics: PlayerMetrics) => number | undefined,
+): NumericExtrema {
+  const values = (response.metricsByPlayer ?? [])
+    .map((entry) => select(entry.metrics))
+    .filter((value): value is number => value !== undefined);
+  return values.length === 0
+    ? { max: undefined, min: undefined }
+    : { max: Math.max(...values), min: Math.min(...values) };
+}
+
+function extremumTone(
+  value: number | undefined,
+  extrema: NumericExtrema,
+  target: "max" | "min",
+): MetricTone {
+  const targetValue = extrema[target];
+  if (value === undefined || targetValue === undefined) {
+    return "neutral";
+  }
+  return value === targetValue ? (target === "max" ? "high" : "low") : "neutral";
 }
 
 function leaderSummary(response: SeriesComparisonResponse): {
@@ -173,7 +202,7 @@ function MetricRow({
 }: {
   help?: ReactNode;
   label: string;
-  tone?: "neutral" | "high" | "low";
+  tone?: MetricTone;
   value: ReactNode;
 }) {
   return (
@@ -340,6 +369,15 @@ function BasicMetrics({ response }: { response: SeriesComparisonResponse }) {
 function MoneyMetrics({ response }: { response: SeriesComparisonResponse }) {
   const players = response.players ?? [];
   const metricsByMember = metricsMap(response);
+  const extrema = {
+    assetsAverage: numericExtrema(response, (metrics) => metrics.assets.average),
+    assetsMax: numericExtrema(response, (metrics) => metrics.assets.max),
+    assetsMedian: numericExtrema(response, (metrics) => metrics.assets.median),
+    assetsMin: numericExtrema(response, (metrics) => metrics.assets.min),
+    revenueAverage: numericExtrema(response, (metrics) => metrics.revenue.average),
+    revenueMax: numericExtrema(response, (metrics) => metrics.revenue.max),
+    revenueMedian: numericExtrema(response, (metrics) => metrics.revenue.median),
+  };
   return (
     <>
       <MetricSection
@@ -350,10 +388,26 @@ function MoneyMetrics({ response }: { response: SeriesComparisonResponse }) {
         <PlayerMetricGrid metricsByMember={metricsByMember} players={players}>
           {(_, metrics) => (
             <>
-              <MetricRow label="最高額" tone="high" value={formatMoney(metrics?.assets.max)} />
-              <MetricRow label="最低額" tone="low" value={formatMoney(metrics?.assets.min)} />
-              <MetricRow label="平均値" value={formatMoney(metrics?.assets.average)} />
-              <MetricRow label="中央値" value={formatMoney(metrics?.assets.median)} />
+              <MetricRow
+                label="最高額"
+                tone={extremumTone(metrics?.assets.max, extrema.assetsMax, "max")}
+                value={formatMoney(metrics?.assets.max)}
+              />
+              <MetricRow
+                label="最低額"
+                tone={extremumTone(metrics?.assets.min, extrema.assetsMin, "min")}
+                value={formatMoney(metrics?.assets.min)}
+              />
+              <MetricRow
+                label="平均値"
+                tone={extremumTone(metrics?.assets.average, extrema.assetsAverage, "max")}
+                value={formatMoney(metrics?.assets.average)}
+              />
+              <MetricRow
+                label="中央値"
+                tone={extremumTone(metrics?.assets.median, extrema.assetsMedian, "max")}
+                value={formatMoney(metrics?.assets.median)}
+              />
             </>
           )}
         </PlayerMetricGrid>
@@ -367,9 +421,21 @@ function MoneyMetrics({ response }: { response: SeriesComparisonResponse }) {
         <PlayerMetricGrid metricsByMember={metricsByMember} players={players}>
           {(_, metrics) => (
             <>
-              <MetricRow label="最高額" tone="high" value={formatMoney(metrics?.revenue.max)} />
-              <MetricRow label="平均値" value={formatMoney(metrics?.revenue.average)} />
-              <MetricRow label="中央値" value={formatMoney(metrics?.revenue.median)} />
+              <MetricRow
+                label="最高額"
+                tone={extremumTone(metrics?.revenue.max, extrema.revenueMax, "max")}
+                value={formatMoney(metrics?.revenue.max)}
+              />
+              <MetricRow
+                label="平均値"
+                tone={extremumTone(metrics?.revenue.average, extrema.revenueAverage, "max")}
+                value={formatMoney(metrics?.revenue.average)}
+              />
+              <MetricRow
+                label="中央値"
+                tone={extremumTone(metrics?.revenue.median, extrema.revenueMedian, "max")}
+                value={formatMoney(metrics?.revenue.median)}
+              />
             </>
           )}
         </PlayerMetricGrid>
@@ -409,6 +475,7 @@ function RateMetrics({ response }: { response: SeriesComparisonResponse }) {
       </PlayerMetricGrid>
       <LineChart
         formatValue={(value) => value.toFixed(2)}
+        minYStep={0.25}
         players={players}
         series={response.trends.rankCumulativeStandardDeviation ?? []}
       />

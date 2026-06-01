@@ -1,34 +1,35 @@
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "import", "typescript", "unicorn", "oxc", "promise", "jsx-a11y"],
-  "categories": {
-    "correctness": "error",
-    "suspicious": "error",
-    "perf": "warn",
-    "pedantic": "warn",
-    "style": "off",
-    "restriction": "off",
-    "nursery": "off"
+import { defineConfig } from "oxlint";
+
+export default defineConfig({
+  plugins: ["react", "import", "typescript", "unicorn", "oxc", "promise", "jsx-a11y"],
+  categories: {
+    correctness: "error",
+    suspicious: "error",
+    perf: "warn",
+    pedantic: "warn",
+    style: "off",
+    restriction: "off",
+    nursery: "off",
   },
-  "options": {
-    "reportUnusedDisableDirectives": "error"
+  options: {
+    reportUnusedDisableDirectives: "error",
   },
-  "rules": {
+  rules: {
     "typescript/consistent-type-imports": [
       "error",
-      { "prefer": "type-imports", "fixStyle": "separate-type-imports" }
+      { prefer: "type-imports", fixStyle: "separate-type-imports" },
     ],
     "typescript/consistent-type-definitions": ["error", "type"],
-    "typescript/array-type": ["error", { "default": "array-simple" }],
+    "typescript/array-type": ["error", { default: "array-simple" }],
     "typescript/no-explicit-any": "error",
     "typescript/no-non-null-assertion": "error",
     "typescript/no-import-type-side-effects": "error",
     "typescript/use-unknown-in-catch-callback-variable": "error",
     "typescript/switch-exhaustiveness-check": [
       "error",
-      { "considerDefaultExhaustiveForUnions": true }
+      { considerDefaultExhaustiveForUnions: true },
     ],
-    "typescript/no-misused-promises": ["error", { "checksVoidReturn": { "attributes": false } }],
+    "typescript/no-misused-promises": ["error", { checksVoidReturn: { attributes: false } }],
     "typescript/no-unsafe-type-assertion": "warn",
     "typescript/prefer-optional-chain": "warn",
     "typescript/prefer-nullish-coalescing": "warn",
@@ -64,9 +65,9 @@
     "unicorn/prefer-set-has": "warn",
     "unicorn/prefer-array-find": "warn",
 
-    "eqeqeq": ["error", "always", { "null": "ignore" }],
+    eqeqeq: ["error", "always", { null: "ignore" }],
     "no-console": "warn",
-    "no-param-reassign": ["error", { "props": false }],
+    "no-param-reassign": ["error", { props: false }],
     "no-throw-literal": "error",
     "no-implicit-coercion": "warn",
     "prefer-const": "error",
@@ -74,43 +75,43 @@
     "no-restricted-imports": [
       "error",
       {
-        "patterns": [
+        patterns: [
           {
-            "group": ["../../*", "../../../*"],
-            "message": "深い相対パスは禁止。'@/' エイリアスを使うこと。"
-          }
-        ]
-      }
-    ]
+            group: ["../../*", "../../../*"],
+            message: "深い相対パスは禁止。'@/' エイリアスを使うこと。",
+          },
+        ],
+      },
+    ],
   },
-  "env": {
-    "browser": true,
-    "builtin": true
+  env: {
+    browser: true,
+    builtin: true,
   },
-  "ignorePatterns": ["dist/**", "coverage/**", ".cache/**", "src/shared/api/generated.ts"],
-  "overrides": [
+  ignorePatterns: ["dist/**", "coverage/**", ".cache/**", "src/shared/api/generated.ts"],
+  overrides: [
     {
-      "files": ["src/**/*.d.ts"],
-      "rules": {
-        "typescript/consistent-type-definitions": "off"
-      }
+      files: ["src/**/*.d.ts"],
+      rules: {
+        "typescript/consistent-type-definitions": "off",
+      },
     },
     {
-      "files": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/test/**", "src/shared/api/msw/**"],
-      "rules": {
+      files: ["src/**/*.test.ts", "src/**/*.test.tsx", "src/test/**", "src/shared/api/msw/**"],
+      rules: {
         "no-console": "off",
         "typescript/no-non-null-assertion": "off",
         "typescript/no-explicit-any": "off",
         "typescript/no-unsafe-type-assertion": "off",
-        "react/no-array-index-key": "off"
-      }
+        "react/no-array-index-key": "off",
+      },
     },
     {
-      "files": ["scripts/**", "vite.config.ts"],
-      "rules": {
+      files: ["scripts/**", "vite.config.ts"],
+      rules: {
         "no-console": "off",
-        "no-restricted-imports": "off"
-      }
-    }
-  ]
-}
+        "no-restricted-imports": "off",
+      },
+    },
+  ],
+});

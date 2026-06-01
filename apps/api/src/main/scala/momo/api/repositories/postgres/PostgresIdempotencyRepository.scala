@@ -25,7 +25,7 @@ import momo.api.repositories.{
 /**
  * Postgres-backed [[IdempotencyAlg]].
  *
- * Schema is owned by momo-summit (see `apps/api/docs/proposals/idempotency-keys.md`). The actual
+ * Schema is owned by momo-db (see `apps/api/docs/proposals/idempotency-keys.md`). The actual
  * applied DDL matches the proposal: `(key, account_id, endpoint)` composite PK,
  * `request_hash bytea`, `response_status int`, `response_headers jsonb`, `response_body bytea`,
  * `created_at`/`expires_at` `timestamptz`.

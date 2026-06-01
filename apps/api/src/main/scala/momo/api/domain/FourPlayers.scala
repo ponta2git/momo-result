@@ -6,8 +6,8 @@ import cats.syntax.all.*
 import momo.api.domain.ids.MemberId
 
 /**
- * A set of exactly four [[PlayerResult]] entries with all invariants from
- * `requirements/base.md` §3 enforced at construction time:
+ * A set of exactly four [[PlayerResult]] entries with the match invariants from
+ * `docs/domain-rule.md` enforced at construction time:
  *
  *   - exactly 4 entries
  *   - memberId values are pairwise unique and all from the allowed member set

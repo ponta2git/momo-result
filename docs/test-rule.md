@@ -1,6 +1,6 @@
 # テスト・品質規約
 
-目的: テスト層、必須検証、品質ゲートの正本。
+目的: 変更種別ごとのテスト選択、oracle、品質ゲート判断の正本。
 
 読む条件:
 
@@ -11,14 +11,16 @@
 参照:
 
 - コマンド: `docs/dev-rule.md`
+- coverage / CI artifact / test size: `docs/test-architecture.md`
 - DB所有権: `docs/db-rule.md`
+- Redis/OCR queue契約: `docs/redis-streams-ocr-contract.md`
 - 最終チェック: `docs/post-mortem/lessons.md`
 
 ## 1. Principles
 
 - 変更した実行経路を直接通す。近いテストの成功で代用しない。
-- テスト層の責務を混同しない。
-- 障害対応では、報告された操作・query・endpoint そのものを回帰テストに含める。
+- テスト層の責務を混同しない。unit、HTTP、repository integration、E2E は別の失敗を捕まえる。
+- 障害対応では、報告された操作、query、endpoint、usecase分岐そのものを回帰テストに含める。
 - 外部サービス依存の検証が skip / 未実行なら、その挙動は未検証として報告する。
 - assertion はユーザー可視状態、request / response DTO、DB row、queue payload、state transition、Problem Details などの外部契約に置く。
 - `exists`、`length > 0`、成功/失敗 boolean だけで終えない。
@@ -29,22 +31,17 @@
 
 | 層 | 捕まえるもの | Gate |
 |---|---|---|
-| domain / usecase unit | 分岐、validation、状態遷移 | `sbt test`, `uv run pytest`, Vitest |
+| domain / pure logic | 不変条件、分岐、validation、parser、ViewModel | `sbt test`, `uv run pytest`, Vitest |
+| usecase / app service | 状態遷移、副作用境界、repository contract | `sbt test`, `uv run pytest` |
 | HTTP/API | request parsing、auth/CSRF、response encoding、error mapping | `sbt test` |
 | web component/page | UI状態、入力操作、APIエラー表示、query cache lifecycle | `pnpm test:run` |
 | PostgreSQL repository | SQL syntax、transaction、PostgreSQL固有挙動 | `sbt apiDbQuality` |
 | DB contract | table / column / seed / nullable / default | `sbt apiDbQuality` |
 | Redis integration | Redis Streams wire 動作、ack/claim/retry | `sbt apiRedisQuality`, worker integration |
 | OCR worker | 画面種別判定、解析、payload validation、失敗処理 | `uv run pytest` |
-| E2E smoke | ログイン後の主要結合フロー、runtime proxy / API / DB / Redis 結合 | Playwright |
+| Runtime / E2E smoke | nginx / API / DB / Redis / worker / browser 結合、ログイン後主要UX | deploy workflow, Playwright |
 
 通常の `sbt test` と `uv run pytest` は外部 integration を除外する。DB/Redis/native OCR などの wire 動作を検証したと言うには、対応する integration gate の成功が必要。
-
-Playwright E2E smoke は、開催作成、OCR取り込み開始、OCRレビュー確定、試合詳細、CSV/TSV出力、マスタ/alias管理などの主要UXを狭く通す。assertion は見出しの存在だけでなく、API response、URL、download scope、DB-backedに保存された結果など、壊れ方を捕まえる外部契約に置く。
-
-ローカルで実行する Playwright E2E smoke は、Postgres / Redis Testcontainers を使う隔離環境を標準とする。普段使いのローカルDB/Redisを接続先にしたE2E実行は、テストデータ汚染を起こすため quality gate として扱わない。CIやruntime smokeで既に検証用DB/Redisが外側から提供されている場合だけ、外部target向けの Playwright 実行を使う。
-
-Playwright locator は、実際のアクセシブルロールと名前を組み合わせて対象を一意にする。フォーム項目とナビゲーション、tab と button など、同じ表示名が複数ロールに現れる画面では `getByLabel` や広い text locator だけで選ばず、`getByRole("combobox" | "tab" | "button" | "link", { name })` で操作対象を明示する。
 
 ## 3. Web Rules
 
@@ -67,13 +64,21 @@ form、filter、select、input、button、Zod schema、request transform、mutat
 - optional field が mode discriminator なら、各 mode の payload と副作用を検証する。
 - PC用とモバイル用でUIが二重なら、検証した経路を明示する。
 
-### Test Foundation
+### Test Foundation / Doubles
 
 - 共通 setup、QueryClient、MSW lifecycle、factory、DOM double は既存の `apps/web/src/test/` 配下の helper を使う。
 - MSW の module-scope store を増やしたら reset 対象へ登録する。
 - 出現待ちは `findBy*` を優先する。`waitFor` は disappearance、複数 assertion、non-DOM assertion に限る。
 - pure logic は `node`、DOM / browser API / direct fetch 境界は `jsdom` のように、必要な test environment を明示する。
 - `console.error` / `console.warn` は失敗扱い。React `act` warning、duplicate key、未実装ブラウザ副作用を放置しない。
+- test double は production adapter の契約を弱めない。通すだけの mock より、request body、response shape、状態遷移を観測できる double を使う。
+
+### Locator / E2E
+
+- Playwright locator は、実際のアクセシブルロールと名前を組み合わせて対象を一意にする。
+- フォーム項目とナビゲーション、tab と button など、同じ表示名が複数ロールに現れる画面では `getByLabel` や広い text locator だけで選ばず、`getByRole("combobox" | "tab" | "button" | "link", { name })` で操作対象を明示する。
+- Playwright E2E smoke は、開催作成、OCR取り込み開始、OCRレビュー確定、試合詳細、CSV/TSV出力、マスタ/alias管理などの主要UXを狭く通す。
+- E2E assertion は見出しの存在だけでなく、API response、URL、download scope、DB-backedに保存された結果など、壊れ方を捕まえる外部契約に置く。
 
 ## 4. API Rules
 
@@ -82,6 +87,7 @@ form、filter、select、input、button、Zod schema、request transform、mutat
 - stateful test double は test ごとの `IO` / `Resource` / fixture で生成する。module-scope の `Ref` や可変状態を共有しない。
 - 値 fixture は意味のある factory / builder に寄せる。境界変換そのものを検証する場合を除き、raw map や文字列連結を主オラクルにしない。
 - HTTP app 起動は request parsing、auth/CSRF、response mapping が oracle のときに絞る。
+- architecture rule を追加した場合、可能なら `ApiEndpointsArchitectureSpec`、`ApiRuntimeArchitectureSpec`、または lint 相当の検査へ固定する。
 
 ### DB-backed API
 

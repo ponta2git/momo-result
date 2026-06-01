@@ -104,8 +104,8 @@ public repository に置くため、具体的な障害位置、再現手順、en
 **参照先**
 
 - `docs/architecture.md` の Form / React 19 と API Client
-- `docs/domain-rule.md` の 試合確定の2経路
-- `docs/test-rule.md` の Form / interaction と Form schema / request transform
+- `docs/domain-rule.md` の Match Confirmation Modes
+- `docs/test-rule.md` の Form / Interaction
 
 ### L5 Test double と oracle は通るだけのテストを作る
 
@@ -123,7 +123,7 @@ public repository に置くため、具体的な障害位置、再現手順、en
 
 **参照先**
 
-- `docs/test-rule.md` の Test foundation / Test double / Coverage and oracle
+- `docs/test-rule.md` の Test Foundation / Doubles と Coverage / C2
 - `docs/architecture.md` の Web
 - `apps/web/src/test/factories/`
 - `apps/web/src/test/msw/handlers.ts` の `resetMswStores`
@@ -145,7 +145,7 @@ public repository に置くため、具体的な障害位置、再現手順、en
 **参照先**
 
 - `docs/architecture.md` の Server State と Form / React 19
-- `docs/test-rule.md` の React performance / UX
+- `docs/test-rule.md` の Query / API Error、Form / Interaction、Locator / E2E
 
 ### L7 契約変更はコードだけでは伝わらない
 

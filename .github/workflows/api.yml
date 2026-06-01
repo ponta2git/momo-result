@@ -13,6 +13,9 @@ on:
       - "docs/schemas/**"
       - ".github/workflows/api.yml"
 
+permissions:
+  contents: read
+
 jobs:
   api:
     runs-on: ubuntu-latest
@@ -23,6 +26,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Checkout momo-db migrations
         uses: actions/checkout@v6
@@ -30,6 +35,8 @@ jobs:
           repository: ${{ github.repository_owner }}/momo-db
           path: _deps/momo-db
           token: ${{ secrets.MOMO_DB_READ_TOKEN || github.token }}
+          sparse-checkout: drizzle
+          persist-credentials: false
 
       - uses: actions/setup-java@v5
         with:
@@ -52,6 +59,10 @@ jobs:
         timeout-minutes: 10
         run: sbt clean Test/compile
 
+      - name: OpenAPI generation check
+        timeout-minutes: 5
+        run: sbt apiOpenApiCheck
+
       - name: Test
         timeout-minutes: 10
         run: sbt test
@@ -65,7 +76,3 @@ jobs:
       - name: Redis quality gate
         timeout-minutes: 5
         run: sbt apiRedisQuality
-
-      - name: OpenAPI generation check
-        timeout-minutes: 5
-        run: sbt apiOpenApiCheck

@@ -15,16 +15,21 @@ on:
       - "docs/schemas/**"
       - ".github/workflows/ocr-worker.yml"
 
+permissions:
+  contents: read
+
 jobs:
   ocr-worker:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: apps/ocr-worker
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Checkout momo-db migrations
         uses: actions/checkout@v6
@@ -32,6 +37,8 @@ jobs:
           repository: ${{ github.repository_owner }}/momo-db
           path: _deps/momo-db
           token: ${{ secrets.MOMO_DB_READ_TOKEN || github.token }}
+          sparse-checkout: drizzle
+          persist-credentials: false
 
       - name: Install uv
         uses: astral-sh/setup-uv@v8.1.0
@@ -72,3 +79,9 @@ jobs:
           MOMO_DB_MIGRATIONS_DIR: ../../_deps/momo-db/drizzle
         run: uv run pytest
         timeout-minutes: 10
+
+      - name: Integration test
+        env:
+          MOMO_DB_MIGRATIONS_DIR: ../../_deps/momo-db/drizzle
+        run: uv run pytest -m integration
+        timeout-minutes: 15

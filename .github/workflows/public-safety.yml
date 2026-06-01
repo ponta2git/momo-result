@@ -16,5 +16,7 @@ jobs:
     timeout-minutes: 3
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
       - name: Check public repository safety
         run: scripts/ci/public-repo-safety-check.sh

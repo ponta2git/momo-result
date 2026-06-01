@@ -21,12 +21,17 @@ on:
       - "pnpm-workspace.yaml"
       - ".github/workflows/web.yml"
 
+permissions:
+  contents: read
+
 jobs:
   web:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@v6
         with:
           version: 10.10.0
@@ -38,6 +43,9 @@ jobs:
         timeout-minutes: 5
       - run: pnpm --filter web generate:api
         timeout-minutes: 2
+      - name: Check generated API types are committed
+        run: git diff --exit-code -- apps/web/src/shared/api/generated.ts
+        timeout-minutes: 1
       - run: pnpm --filter web format:check
         timeout-minutes: 2
       - run: pnpm --filter web lint

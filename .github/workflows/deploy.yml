@@ -68,6 +68,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Checkout momo-db migrations
         uses: actions/checkout@v6
@@ -75,6 +77,8 @@ jobs:
           repository: ${{ github.repository_owner }}/momo-db
           path: _deps/momo-db
           token: ${{ secrets.MOMO_DB_READ_TOKEN || github.token }}
+          sparse-checkout: drizzle
+          persist-credentials: false
 
       - uses: pnpm/action-setup@v6
         with:
@@ -163,6 +167,19 @@ jobs:
         run: pnpm --filter web e2e:target
         timeout-minutes: 10
 
+      - name: Capture runtime container logs
+        if: failure()
+        run: docker logs momo-result-runtime > runtime-container.log 2>&1 || true
+
+      - name: Upload runtime container logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: runtime-container-logs
+          path: runtime-container.log
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v7
@@ -186,6 +203,8 @@ jobs:
       url: https://momo-result.ponta.me
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Setup flyctl
         uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1

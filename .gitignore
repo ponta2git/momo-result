@@ -20,8 +20,8 @@ node_modules
 copilot-session-*.md
 .agents/
 .serena/
-docs/tmp/
-docs/ops/
+private/
+docs/**/*.env
 .env
 **/.env
 **/.pnpm-store/

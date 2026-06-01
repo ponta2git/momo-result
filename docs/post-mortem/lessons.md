@@ -2,6 +2,8 @@
 
 この文書は、作業完了前に見落としやすい重要事項だけを反芻するための最終チェックリストである。
 実装規約・設計規約・契約仕様の正本ではない。
+public repository に置くため、具体的な障害位置、再現手順、endpoint / component 名、時系列詳細は含めない。
+個別の詳細記録は `private/post-mortem/` に置き、ユーザーが明示した場合だけ読む。
 
 恒久ルールは次へ置く。
 
@@ -17,7 +19,7 @@
 
 1. 変更対象に一致するカードだけ読む。
 2. 各カードの「確認」を、作業計画・実装・テスト選択のいずれかへ反映する。
-3. 判断に迷う場合は「参照先」の正本文書を読む。個別ポストモーテムは背景確認が必要なときだけ読む。
+3. 判断に迷う場合は「参照先」の正本文書を読む。
 4. 検証できない項目が残る場合は、最終報告で未検証として明記する。
 
 該当しないカードを無理に適用しない。ただし、なぜ該当しないかを説明できる状態にしておく。
@@ -44,8 +46,6 @@
 - `docs/db-rule.md`
 - `docs/test-rule.md` の DB-backed API / API テスト
 - `docs/dev-rule.md`
-- 背景: `docs/post-mortem/2026-05-03-backend-matches-list-db-errors.md`
-- 背景: `docs/post-mortem/2026-05-18-backend-match-confirmation-fk-order.md`
 
 ### L2 テストは失敗した実行経路を直接通す
 
@@ -84,9 +84,6 @@
 
 - `docs/architecture.md` の Server State
 - `docs/test-rule.md` の Query / API error
-- 背景: `docs/post-mortem/2026-05-03-frontend-masters-query-error-visibility.md`
-- 背景: `docs/post-mortem/2026-05-03-frontend-masters-query-key-shape-collision.md`
-- 背景: `docs/post-mortem/2026-05-10-frontend-held-event-create-cache.md`
 
 ### L4 Form / request transform は workflow identifier を落とす
 
@@ -109,9 +106,6 @@
 - `docs/architecture.md` の Form / React 19 と API Client
 - `docs/domain-rule.md` の 試合確定の2経路
 - `docs/test-rule.md` の Form / interaction と Form schema / request transform
-- 背景: `docs/post-mortem/2026-05-03-frontend-matches-filter-event-currenttarget.md`
-- 背景: `docs/post-mortem/2026-05-04-frontend-matches-sort-event-currenttarget-regression.md`
-- 背景: `docs/post-mortem/2026-05-10-frontend-ocr-confirm-match-draft-id-dropped.md`
 
 ### L5 Test double と oracle は通るだけのテストを作る
 

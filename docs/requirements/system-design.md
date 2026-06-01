@@ -303,7 +303,7 @@ Playwright E2E smoke はUX確定済みのログイン後主要フローに絞る
 
 - `/healthz` はAPIプロセスの生存のみ確認する。
 - DB/Redis接続は `/healthz/details` で確認する。
-- dev/prod startup 時のDB contract不一致を fail-fast にするか health warning にするかは未決の運用設計事項とし、`docs/post-mortem/follow-up-actions.md` で追跡する。
+- dev/prod startup 時のDB contract不一致を fail-fast にするか health warning にするかは未決の運用設計事項とし、詳細な follow-up tracking は private postmortem 側で扱う。
 
 ### 12.3 費用・攻撃観測
 

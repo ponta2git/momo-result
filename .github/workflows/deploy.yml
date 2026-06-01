@@ -25,15 +25,58 @@ on:
 permissions:
   contents: read
 
+env:
+  IMAGE_ARTIFACT_NAME: runtime-image
+  IMAGE_REF: registry.fly.io/momo-result:${{ github.sha }}
+
 concurrency:
   group: ${{ github.event_name == 'pull_request' && format('runtime-smoke-pr-{0}', github.event.pull_request.number) || 'fly-deploy-production' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  public-safety:
+    if: github.event_name != 'pull_request'
+    uses: ./.github/workflows/public-safety.yml
+
+  api:
+    needs: public-safety
+    if: github.event_name != 'pull_request'
+    uses: ./.github/workflows/api.yml
+    secrets: inherit
+
+  web:
+    needs: public-safety
+    if: github.event_name != 'pull_request'
+    uses: ./.github/workflows/web.yml
+
+  ocr-worker:
+    needs: public-safety
+    if: github.event_name != 'pull_request'
+    uses: ./.github/workflows/ocr-worker.yml
+    secrets: inherit
+
   runtime-smoke:
     name: Runtime smoke and E2E
     runs-on: ubuntu-latest
     timeout-minutes: 75
+    needs:
+      - public-safety
+      - api
+      - web
+      - ocr-worker
+    if: >-
+      ${{
+        always() &&
+        (
+          github.event_name == 'pull_request' ||
+          (
+            needs['public-safety'].result == 'success' &&
+            needs.api.result == 'success' &&
+            needs.web.result == 'success' &&
+            needs['ocr-worker'].result == 'success'
+          )
+        )
+      }}
 
     services:
       postgres:
@@ -62,7 +105,6 @@ jobs:
     env:
       DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/momo_result
       DEV_MEMBER_IDS: member_ponta,member_akane_mami,member_otaka,member_eu
-      IMAGE_NAME: momo-result:${{ github.sha }}
       MOMO_DB_MIGRATIONS_DIR: _deps/momo-db/drizzle
       REDIS_URL: redis://127.0.0.1:6379/0
 
@@ -106,13 +148,13 @@ jobs:
         timeout-minutes: 5
 
       - name: Build runtime image
-        run: docker build -t "${IMAGE_NAME}" .
+        run: docker build -t "${IMAGE_REF}" .
         timeout-minutes: 45
 
       - name: Scan runtime image
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: ${{ env.IMAGE_NAME }}
+          image-ref: ${{ env.IMAGE_REF }}
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           format: table
@@ -124,11 +166,11 @@ jobs:
         run: |
           docker run --rm \
             -e MOMO_ORIGIN_LOCK_TOKEN=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef \
-            "${IMAGE_NAME}" \
+            "${IMAGE_REF}" \
             /bin/sh -c '/opt/momo-result/bin/render-nginx-conf && nginx -t -c /etc/nginx/nginx.conf'
-          docker run --rm "${IMAGE_NAME}" test -x /opt/momo-result/api/bin/momo-result-api
-          docker run --rm "${IMAGE_NAME}" momo-ocr --help
-          docker run --rm "${IMAGE_NAME}" python -c 'from momo_ocr.features.ocr_jobs.queue_contract import parse_job_message; parse_job_message({"schemaVersion":"1","jobId":"job-smoke","draftId":"draft-smoke","imageId":"image-smoke","imagePath":"/tmp/momo-result/uploads/image-smoke.png","requestedScreenType":"total_assets","attempt":"1","enqueuedAt":"2026-05-24T00:00:00Z"})'
+          docker run --rm "${IMAGE_REF}" test -x /opt/momo-result/api/bin/momo-result-api
+          docker run --rm "${IMAGE_REF}" momo-ocr --help
+          docker run --rm "${IMAGE_REF}" python -c 'from momo_ocr.features.ocr_jobs.queue_contract import parse_job_message; parse_job_message({"schemaVersion":"1","jobId":"job-smoke","draftId":"draft-smoke","imageId":"image-smoke","imagePath":"/tmp/momo-result/uploads/image-smoke.png","requestedScreenType":"total_assets","attempt":"1","enqueuedAt":"2026-05-24T00:00:00Z"})'
 
       - name: Start runtime container
         run: |
@@ -145,7 +187,7 @@ jobs:
             -e MOMO_LOG_FORMAT=json \
             -e MOMO_ORIGIN_LOCK_TOKEN=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef \
             -e REDIS_URL="${REDIS_URL}" \
-            "${IMAGE_NAME}"
+            "${IMAGE_REF}"
           for attempt in {1..60}; do
             if curl -fsS http://127.0.0.1:8080/healthz >/dev/null; then
               exit 0
@@ -166,6 +208,27 @@ jobs:
       - name: Playwright E2E smoke
         run: pnpm --filter web e2e:target
         timeout-minutes: 10
+
+      - name: Record smoke-tested image metadata
+        if: github.event_name != 'pull_request'
+        run: |
+          mkdir -p "${IMAGE_ARTIFACT_NAME}"
+          printf "%s\n" "${IMAGE_REF}" > "${IMAGE_ARTIFACT_NAME}/image-ref.txt"
+          docker image inspect "${IMAGE_REF}" --format '{{.Id}}' > "${IMAGE_ARTIFACT_NAME}/image-id.txt"
+
+      - name: Save smoke-tested image
+        if: github.event_name != 'pull_request'
+        run: docker save "${IMAGE_REF}" | gzip -1 > "${IMAGE_ARTIFACT_NAME}/momo-result-image.tar.gz"
+        timeout-minutes: 10
+
+      - name: Upload smoke-tested image
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.IMAGE_ARTIFACT_NAME }}
+          path: ${{ env.IMAGE_ARTIFACT_NAME }}/
+          if-no-files-found: error
+          retention-days: 3
 
       - name: Capture runtime container logs
         if: failure()
@@ -193,10 +256,24 @@ jobs:
         if: always()
         run: docker rm -f momo-result-runtime || true
 
+  release-ready:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    needs:
+      - public-safety
+      - api
+      - web
+      - ocr-worker
+      - runtime-smoke
+    if: github.event_name != 'pull_request'
+    steps:
+      - name: Confirm release gates
+        run: echo "All release gates passed for ${IMAGE_REF}."
+
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    needs: runtime-smoke
+    timeout-minutes: 45
+    needs: release-ready
     if: github.event_name != 'pull_request'
     environment:
       name: production
@@ -206,10 +283,53 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Download smoke-tested image
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ env.IMAGE_ARTIFACT_NAME }}
+          path: ${{ env.IMAGE_ARTIFACT_NAME }}
+
+      - name: Load smoke-tested image
+        run: |
+          expected_ref="$(cat "${IMAGE_ARTIFACT_NAME}/image-ref.txt")"
+          if [ "${expected_ref}" != "${IMAGE_REF}" ]; then
+            echo "Expected image ref ${expected_ref}, got ${IMAGE_REF}." >&2
+            exit 1
+          fi
+
+          gunzip -c "${IMAGE_ARTIFACT_NAME}/momo-result-image.tar.gz" | docker load
+
+          expected_id="$(cat "${IMAGE_ARTIFACT_NAME}/image-id.txt")"
+          loaded_id="$(docker image inspect "${IMAGE_REF}" --format '{{.Id}}')"
+          if [ "${loaded_id}" != "${expected_id}" ]; then
+            echo "Loaded image id ${loaded_id} does not match smoke-tested id ${expected_id}." >&2
+            exit 1
+          fi
+        timeout-minutes: 10
+
       - name: Setup flyctl
         uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
+
+      - name: Authenticate Docker to Fly registry
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl auth docker
+
+      - name: Push smoke-tested image
+        run: |
+          docker push "${IMAGE_REF}"
+          docker manifest inspect "${IMAGE_REF}" > "${IMAGE_ARTIFACT_NAME}/registry-manifest.json"
+        timeout-minutes: 10
+
+      - name: Upload pushed image manifest
+        uses: actions/upload-artifact@v7
+        with:
+          name: runtime-image-registry-manifest
+          path: ${{ env.IMAGE_ARTIFACT_NAME }}/registry-manifest.json
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Deploy to Fly.io
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-        run: flyctl deploy --remote-only --app momo-result
+        run: flyctl deploy --app momo-result --image "${IMAGE_REF}" --yes

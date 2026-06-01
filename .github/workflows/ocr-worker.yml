@@ -1,15 +1,8 @@
 name: OCR worker
 
 on:
+  workflow_call:
   pull_request:
-    paths:
-      - "apps/ocr-worker/**"
-      - "docs/schemas/**"
-      - ".github/workflows/ocr-worker.yml"
-  push:
-    branches:
-      - master
-      - main
     paths:
       - "apps/ocr-worker/**"
       - "docs/schemas/**"

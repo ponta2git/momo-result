@@ -1,11 +1,8 @@
 name: public-safety
 
 on:
+  workflow_call:
   pull_request:
-  push:
-    branches:
-      - master
-      - main
 
 permissions:
   contents: read

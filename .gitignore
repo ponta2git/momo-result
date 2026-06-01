@@ -29,3 +29,7 @@ docs/ops/
 .playwright-mcp
 apps/web/playwright-report/
 apps/web/test-results/
+apps/ocr-worker/coverage.json
+apps/ocr-worker/coverage.xml
+apps/ocr-worker/htmlcov/
+coverage-summary/

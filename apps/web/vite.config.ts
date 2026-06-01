@@ -5,6 +5,35 @@ import react from "@vitejs/plugin-react";
 import { configDefaults, defineConfig } from "vitest/config";
 
 const apiProxyTarget = process.env["VITE_API_PROXY_TARGET"] ?? "http://localhost:8080";
+const coverageReportOnly = process.env["COVERAGE_REPORT_ONLY"] === "1";
+const coverageThresholds = coverageReportOnly
+  ? {}
+  : {
+      thresholds: {
+        "src/features/masters/masterResourceCache.ts": {
+          branches: 100,
+          functions: 100,
+          lines: 100,
+          statements: 100,
+        },
+        "src/features/matches/workspace/scoreGrid/ScoreGridKeyboard.ts": {
+          branches: 95,
+          functions: 100,
+          lines: 95,
+          statements: 95,
+        },
+        "src/shared/api/queryErrorState.ts": {
+          branches: 100,
+          functions: 100,
+          lines: 100,
+          statements: 100,
+        },
+        branches: 70,
+        functions: 77,
+        lines: 78,
+        statements: 78,
+      },
+    };
 const backendProxy = {
   "/api": apiProxyTarget,
   "/healthz": apiProxyTarget,
@@ -35,31 +64,8 @@ export default defineConfig({
       ],
       include: ["src/app/**/*.ts", "src/features/**/*.ts", "src/shared/**/*.ts"],
       provider: "v8",
-      reporter: ["text", "lcov"],
-      thresholds: {
-        "src/features/masters/masterResourceCache.ts": {
-          branches: 100,
-          functions: 100,
-          lines: 100,
-          statements: 100,
-        },
-        "src/features/matches/workspace/scoreGrid/ScoreGridKeyboard.ts": {
-          branches: 95,
-          functions: 100,
-          lines: 95,
-          statements: 95,
-        },
-        "src/shared/api/queryErrorState.ts": {
-          branches: 100,
-          functions: 100,
-          lines: 100,
-          statements: 100,
-        },
-        branches: 70,
-        functions: 77,
-        lines: 78,
-        statements: 78,
-      },
+      reporter: ["text", "lcov", "json-summary"],
+      ...coverageThresholds,
     },
     environment: "jsdom",
     exclude: [...configDefaults.exclude, "e2e/**"],

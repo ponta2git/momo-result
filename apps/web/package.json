@@ -17,6 +17,8 @@
     "test": "vitest",
     "pretest:coverage": "pnpm run generate:api",
     "test:coverage": "vitest run --coverage",
+    "pretest:coverage:report": "pnpm run generate:api",
+    "test:coverage:report": "COVERAGE_REPORT_ONLY=1 vitest run --coverage",
     "pretest:run": "pnpm run generate:api",
     "test:run": "vitest run",
     "prelint": "pnpm run generate:api",

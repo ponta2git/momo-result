@@ -66,10 +66,12 @@ pnpm web:dev
 | web e2e | `pnpm web:e2e` |
 | web e2e against an already-running target | `pnpm web:e2e:target` |
 | web test | `pnpm web:test` |
+| web coverage report | `pnpm web:test:coverage:report` |
 | web typecheck | `pnpm web:typecheck` |
 | api quality | `pnpm api:quality` |
 | api test | `pnpm api:test` |
 | api coverage | `pnpm api:coverage` |
+| api coverage report | `pnpm api:coverage:report` |
 
 ### Web
 
@@ -81,6 +83,7 @@ pnpm lint
 pnpm typecheck
 pnpm test:run
 pnpm test:coverage
+pnpm test:coverage:report
 pnpm build
 pnpm e2e
 pnpm e2e:target
@@ -93,6 +96,7 @@ cd apps/api
 sbt apiQuality
 sbt test
 sbt apiCoverage
+sbt apiCoverageReportOnly
 sbt apiDbQuality
 sbt apiRedisQuality
 sbt apiFullCheck
@@ -109,6 +113,7 @@ uv run ruff check .
 uv run mypy
 uv run pytest
 uv run pytest --cov=momo_ocr --cov-report=term-missing:skip-covered
+uv run pytest --cov=momo_ocr --cov-report=xml:coverage.xml --cov-report=json:coverage.json --cov-report=html:htmlcov --cov-fail-under=0
 uv run pytest -m integration
 ```
 

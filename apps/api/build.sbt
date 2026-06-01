@@ -18,6 +18,10 @@ addCommandAlias("apiCheck", "apiQuality; test")
 addCommandAlias("apiFullCheck", "apiCheck; apiDbQuality; apiRedisQuality")
 addCommandAlias("apiCoverage", "clean; coverageOff; coverage; test; coverageReport; coverageOff")
 addCommandAlias(
+  "apiCoverageReportOnly",
+  "clean; coverageOff; set coverageFailOnMinimum := false; coverage; test; coverageReport; coverageOff",
+)
+addCommandAlias(
   "apiRedisQuality",
     "set Test / fork := true; " +
     "set Test / parallelExecution := false; " +

@@ -17,7 +17,7 @@ permissions:
 jobs:
   web:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
         with:
@@ -44,5 +44,28 @@ jobs:
         timeout-minutes: 5
       - run: pnpm --filter web test:run
         timeout-minutes: 5
+      - name: Coverage report
+        run: pnpm --filter web test:coverage:report
+        continue-on-error: true
+        timeout-minutes: 5
+      - name: Summarize coverage
+        if: always()
+        run: |
+          python3 scripts/ci/write-coverage-summary.py web \
+            --root . \
+            --out coverage-summary/web \
+            --allow-missing
+          cat coverage-summary/web/summary.md >> "${GITHUB_STEP_SUMMARY}"
+        timeout-minutes: 1
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: web-coverage
+          path: |
+            apps/web/coverage/
+            coverage-summary/web/
+          if-no-files-found: ignore
+          retention-days: 30
       - run: pnpm --filter web build
         timeout-minutes: 5

@@ -14,7 +14,7 @@ permissions:
 jobs:
   api:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     defaults:
       run:
         working-directory: apps/api
@@ -71,3 +71,30 @@ jobs:
       - name: Redis quality gate
         timeout-minutes: 5
         run: sbt apiRedisQuality
+
+      - name: Coverage report
+        timeout-minutes: 10
+        run: sbt apiCoverageReportOnly
+        continue-on-error: true
+
+      - name: Summarize coverage
+        if: always()
+        timeout-minutes: 1
+        run: |
+          python3 ../../scripts/ci/write-coverage-summary.py api \
+            --root ../.. \
+            --out ../../coverage-summary/api \
+            --allow-missing
+          cat ../../coverage-summary/api/summary.md >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: api-coverage
+          path: |
+            apps/api/target/scala-*/scoverage-report/
+            apps/api/target/scala-*/coverage-report/
+            coverage-summary/api/
+          if-no-files-found: ignore
+          retention-days: 30

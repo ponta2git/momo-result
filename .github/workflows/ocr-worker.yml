@@ -14,7 +14,7 @@ permissions:
 jobs:
   ocr-worker:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     defaults:
       run:
         working-directory: apps/ocr-worker
@@ -72,6 +72,43 @@ jobs:
           MOMO_DB_MIGRATIONS_DIR: ../../_deps/momo-db/drizzle
         run: uv run pytest
         timeout-minutes: 10
+
+      - name: Coverage report
+        env:
+          MOMO_DB_MIGRATIONS_DIR: ../../_deps/momo-db/drizzle
+        run: >-
+          uv run pytest
+          --cov=momo_ocr
+          --cov-report=term-missing:skip-covered
+          --cov-report=xml:coverage.xml
+          --cov-report=json:coverage.json
+          --cov-report=html:htmlcov
+          --cov-fail-under=0
+        continue-on-error: true
+        timeout-minutes: 10
+
+      - name: Summarize coverage
+        if: always()
+        run: |
+          python3 ../../scripts/ci/write-coverage-summary.py ocr-worker \
+            --root ../.. \
+            --out ../../coverage-summary/ocr-worker \
+            --allow-missing
+          cat ../../coverage-summary/ocr-worker/summary.md >> "${GITHUB_STEP_SUMMARY}"
+        timeout-minutes: 1
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ocr-worker-coverage
+          path: |
+            apps/ocr-worker/coverage.xml
+            apps/ocr-worker/coverage.json
+            apps/ocr-worker/htmlcov/
+            coverage-summary/ocr-worker/
+          if-no-files-found: ignore
+          retention-days: 30
 
       - name: Integration test
         env:

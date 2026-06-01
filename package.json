@@ -10,6 +10,7 @@
     "api:quality": "cd apps/api && sbt apiQuality",
     "api:test": "cd apps/api && sbt test",
     "api:coverage": "cd apps/api && sbt apiCoverage",
+    "api:coverage:report": "cd apps/api && sbt apiCoverageReportOnly",
     "public:safety:check": "scripts/ci/public-repo-safety-check.sh",
     "web:dev": "pnpm --filter web dev",
     "web:build": "pnpm --filter web build",
@@ -17,6 +18,7 @@
     "web:e2e": "pnpm --filter web e2e",
     "web:e2e:target": "pnpm --filter web e2e:target",
     "web:test": "pnpm --filter web test:run",
+    "web:test:coverage:report": "pnpm --filter web test:coverage:report",
     "web:typecheck": "pnpm --filter web typecheck"
   }
 }

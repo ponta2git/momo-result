@@ -15,7 +15,7 @@ tracked_forbidden_paths="$(
       ($0 ~ /^ocr_samples\//) ||
       ($0 ~ /^samples\//) ||
       ($0 ~ /^\.serena\//) ||
-      ($0 ~ /^\.agents\//)) { print }
+      (($0 ~ /^\.agents\//) && ($0 !~ /^\.agents\/skills\/postmortem\//))) { print }
   ' || true
 )"
 

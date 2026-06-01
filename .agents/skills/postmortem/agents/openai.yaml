@@ -1,0 +1,4 @@
+interface:
+  display_name: "Postmortem"
+  short_description: "Create private postmortems and fold lessons into durable repo rules"
+  default_prompt: "Create a private postmortem for the incident and move durable lessons into the right project docs."

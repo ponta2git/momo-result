@@ -41,6 +41,12 @@ final case class SeriesComparisonResponse(
     metricsByPlayer: List[SeriesComparisonPlayerMetricsEntry],
     trends: SeriesComparisonTrendsResponse,
     histograms: SeriesComparisonHistogramsResponse,
+    headToHead: HeadToHeadResponse,
+    matchPlayerPoints: List[MatchPlayerPointResponse],
+    recentFormByPlayer: List[RecentFormPlayerResponse],
+    playerPerformanceProfiles: PlayerPerformanceProfilesResponse,
+    matchNoInEventBreakdown: List[MatchNoInEventBreakdownResponse],
+    matchTimeline: List[MatchTimelinePointResponse],
     playOrderBaselines: List[PlayOrderBaselineResponse],
     highlights: List[SeriesComparisonHighlightResponse],
     dataQuality: SeriesComparisonDataQualityResponse,
@@ -227,6 +233,106 @@ object HistogramBinResponse:
 final case class HistogramSeriesResponse(memberId: String, counts: List[Int]) derives Codec.AsObject
 object HistogramSeriesResponse:
   given Schema[HistogramSeriesResponse] = Schema.derived
+
+final case class HeadToHeadResponse(entries: List[HeadToHeadEntryResponse]) derives Codec.AsObject
+object HeadToHeadResponse:
+  given Schema[HeadToHeadResponse] = Schema.derived
+
+final case class HeadToHeadEntryResponse(
+    subjectMemberId: String,
+    opponentMemberId: String,
+    matchCount: Int,
+    betterRankCount: Int,
+    betterRankRate: Option[Double],
+    averageRankDiff: Option[Double],
+    averageAssetsDiff: Option[Double],
+    status: String,
+) derives Codec.AsObject
+object HeadToHeadEntryResponse:
+  given Schema[HeadToHeadEntryResponse] = Schema.derived
+
+final case class MatchPlayerPointResponse(
+    matchIndex: Int,
+    matchId: String,
+    playedAt: String,
+    memberId: String,
+    rank: Int,
+    totalAssets: Int,
+    revenue: Int,
+    revenueAssetRate: Option[Double],
+    assetsRank: Double,
+    revenueRank: Double,
+) derives Codec.AsObject
+object MatchPlayerPointResponse:
+  given Schema[MatchPlayerPointResponse] = Schema.derived
+
+final case class RecentFormPlayerResponse(
+    memberId: String,
+    windowSize: Int,
+    targetCount: Int,
+    averageRank: Option[Double],
+    podiumRate: Option[Double],
+    winStreak: Int,
+    podiumStreak: Int,
+    lowerHalfStreak: Int,
+    status: String,
+) derives Codec.AsObject
+object RecentFormPlayerResponse:
+  given Schema[RecentFormPlayerResponse] = Schema.derived
+
+final case class PlayerPerformanceProfilesResponse(
+    rankStandardDeviationMedian: Option[Double],
+    averageRankScoreMedian: Option[Double],
+    averageRevenueAssetRateMedian: Option[Double],
+    entries: List[PlayerPerformanceProfileResponse],
+) derives Codec.AsObject
+object PlayerPerformanceProfilesResponse:
+  given Schema[PlayerPerformanceProfilesResponse] = Schema.derived
+
+final case class PlayerPerformanceProfileResponse(
+    memberId: String,
+    rankStandardDeviation: Option[Double],
+    podiumRate: Option[Double],
+    averageRankScore: Option[Double],
+    averageRevenueAssetRate: Option[Double],
+    profileKind: Option[String],
+    strategyKind: Option[String],
+    status: String,
+) derives Codec.AsObject
+object PlayerPerformanceProfileResponse:
+  given Schema[PlayerPerformanceProfileResponse] = Schema.derived
+
+final case class MatchNoInEventBreakdownResponse(
+    matchNoInEvent: Int,
+    playerRows: List[MatchNoInEventPlayerBreakdownResponse],
+) derives Codec.AsObject
+object MatchNoInEventBreakdownResponse:
+  given Schema[MatchNoInEventBreakdownResponse] = Schema.derived
+
+final case class MatchNoInEventPlayerBreakdownResponse(
+    memberId: String,
+    targetCount: Int,
+    averageRank: Option[Double],
+    podiumRate: Option[Double],
+    status: String,
+) derives Codec.AsObject
+object MatchNoInEventPlayerBreakdownResponse:
+  given Schema[MatchNoInEventPlayerBreakdownResponse] = Schema.derived
+
+final case class MatchTimelinePointResponse(
+    matchIndex: Int,
+    matchId: String,
+    playedAt: String,
+    assetGapFirstToSecond: Option[Int],
+    assetGapFirstToLast: Option[Int],
+    totalGinjiCount: Int,
+    revenueTopMemberIds: List[String],
+    winnerMemberId: Option[String],
+    flags: List[String],
+    status: String,
+) derives Codec.AsObject
+object MatchTimelinePointResponse:
+  given Schema[MatchTimelinePointResponse] = Schema.derived
 
 final case class PlayOrderBaselineResponse(
     playOrder: Int,

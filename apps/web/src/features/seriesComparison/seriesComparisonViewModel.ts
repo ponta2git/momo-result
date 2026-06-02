@@ -27,6 +27,12 @@ export type PlayOrderSignal = {
   worst: PlayOrderBreakdown | undefined;
 };
 
+export type ProfileKind = NonNullable<
+  NonNullable<
+    SeriesComparisonResponse["playerPerformanceProfiles"]["entries"]
+  >[number]["profileKind"]
+>;
+
 const scopeKinds = new Set(["overall", "season", "map"]);
 
 function isNumber(value: NullableNumber): value is number {
@@ -219,4 +225,60 @@ export function qualitySummary(response: SeriesComparisonResponse): {
     noTargetCount: items.filter((item) => item.status === "no_target").length,
     referenceCount: items.filter((item) => item.status === "reference").length,
   };
+}
+
+export function profileKindLabel(kind: string | null | undefined): string {
+  switch (kind) {
+    case "steady_leader":
+      return "安定上位";
+    case "swing_leader":
+      return "爆発上位";
+    case "steady_chaser":
+      return "安定追走";
+    case "swing_chaser":
+      return "荒れ追走";
+    default:
+      return "判定なし";
+  }
+}
+
+export function strategyKindLabel(kind: string | null | undefined): string {
+  switch (kind) {
+    case "property_focused":
+      return "桃鉄型（物件重視）";
+    case "card_focused":
+      return "遊戯王型（カード重視）";
+    case "balanced":
+      return "バランス型";
+    default:
+      return "判定なし";
+  }
+}
+
+export function timelineFlagLabel(flag: string): string {
+  switch (flag) {
+    case "revenue_top_no_win":
+      return "収益ねじれ";
+    case "ginji_storm":
+      return "銀次多発";
+    case "close_finish":
+      return "接戦";
+    case "asset_blowout":
+      return "大差";
+    default:
+      return flag;
+  }
+}
+
+export function statusLabel(status: string | null | undefined): string | undefined {
+  switch (status) {
+    case "reference":
+      return "参考";
+    case "no_target":
+      return "対象なし";
+    case "self":
+      return undefined;
+    default:
+      return undefined;
+  }
 }

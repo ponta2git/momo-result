@@ -29,7 +29,7 @@ object GetSeriesComparison:
   def apply[F[_]: Monad](readModel: SeriesComparisonReadModel[F]): GetSeriesComparison[F] =
     new GetSeriesComparison(readModel)
 
-private object SeriesComparisonAggregation:
+private object SeriesComparisonAggregation {
   private val Formatter = DateTimeFormatter.ISO_INSTANT
   private val DenominatorMetricIds = List(
     "rank.average",
@@ -56,6 +56,12 @@ private object SeriesComparisonAggregation:
     "nonRevenue.rankDelta",
     "destination.conversionDelta",
     "stability.rankStandardDeviation",
+    "recentForm.averageRank",
+    "recentForm.podiumRate",
+    "playerPerformanceProfiles.averageRankScore",
+    "playerPerformanceProfiles.averageRevenueAssetRate",
+    "matchNoInEventBreakdown.averageRank",
+    "matchNoInEventBreakdown.podiumRate",
   )
   private val ConditionalMetricIds = List(
     "ginji.resilienceRankAverage",
@@ -83,11 +89,15 @@ private object SeriesComparisonAggregation:
     val matchCount = orderedRows.map(_.matchId).distinct.size
     val rowsByPlayer = orderedRows.groupBy(_.memberId)
     val playerOrder = rowsByPlayer.values.toList.map(_.head).sortBy(playerSortKey).map(_.memberId)
+    val matchGroups = orderedRows.groupBy(_.matchId).values.toList.sortBy(groupSortKey).zipWithIndex
+      .map { case (rows, index) => MatchGroup(index + 1, rows) }
+    val matchIndexById = matchGroups.map(group => group.matchId -> group.matchIndex).toMap
     val players = playerOrder.map { memberId =>
       val first = rowsByPlayer(memberId).head
       SeriesComparisonPlayerResponse(memberId.value, first.memberDisplayName)
     }
     val revenueRanks = rankByMatch(orderedRows, _.revenueManYen.value)
+    val assetsRanks = rankByMatch(orderedRows, _.totalAssetsManYen.value)
     val destinationRanks = rankByMatch(orderedRows, _.incidents.destination)
     val assetsHistogram = histogram(
       orderedRows.map(_.totalAssetsManYen.value),
@@ -115,7 +125,7 @@ private object SeriesComparisonAggregation:
     val quality =
       dataQuality(playerOrder, rowsByPlayer, orderedRows, revenueRanks, destinationRanks)
     SeriesComparisonResponse(
-      schemaVersion = 1,
+      schemaVersion = 3,
       scope = SeriesComparisonScopeResponse(
         gameTitleId = scope.gameTitleId.value,
         gameTitleName = scope.gameTitleName,
@@ -131,9 +141,30 @@ private object SeriesComparisonAggregation:
       ),
       trends = trends(playerOrder, rowsByPlayer),
       histograms = SeriesComparisonHistogramsResponse(assetsHistogram, revenueHistogram),
+      headToHead = headToHead(playerOrder, orderedRows),
+      matchPlayerPoints = matchPlayerPoints(orderedRows, matchIndexById, revenueRanks, assetsRanks),
+      recentFormByPlayer = recentFormByPlayer(playerOrder, rowsByPlayer),
+      playerPerformanceProfiles = playerPerformanceProfiles(playerOrder, rowsByPlayer, metrics),
+      matchNoInEventBreakdown = matchNoInEventBreakdown(playerOrder, orderedRows),
+      matchTimeline = matchTimeline(matchGroups),
       playOrderBaselines = playOrderBaselines(orderedRows),
       highlights = highlights(metrics),
       dataQuality = quality,
+    )
+
+  private final case class MatchGroup(matchIndex: Int, rows: List[SeriesComparisonMatchPlayerRow]):
+    val matchId: momo.api.domain.ids.MatchId = rows.head.matchId
+    val playedAt: java.time.Instant = rows.head.playedAt
+
+  private def groupSortKey(
+      rows: List[SeriesComparisonMatchPlayerRow]
+  ): (Long, String, Int, String) =
+    val first = rows.head
+    (
+      first.playedAt.toEpochMilli,
+      first.heldEventId.value,
+      first.matchNoInEvent.value,
+      first.matchId.value,
     )
 
   private def playerSortKey(row: SeriesComparisonMatchPlayerRow): (Int, Int, String, String) =
@@ -343,6 +374,244 @@ private object SeriesComparisonAggregation:
       },
     )
 
+  private def headToHead(
+      playerOrder: List[MemberId],
+      rows: List[SeriesComparisonMatchPlayerRow],
+  ): HeadToHeadResponse =
+    val rowsByMatchAndPlayer = rows.map(row => (row.matchId, row.memberId) -> row).toMap
+    HeadToHeadResponse(entries = playerOrder.flatMap { subjectId =>
+      playerOrder.map { opponentId =>
+        if subjectId == opponentId then
+          HeadToHeadEntryResponse(
+            subjectMemberId = subjectId.value,
+            opponentMemberId = opponentId.value,
+            matchCount = 0,
+            betterRankCount = 0,
+            betterRankRate = None,
+            averageRankDiff = None,
+            averageAssetsDiff = None,
+            status = "self",
+          )
+        else
+          val pairs = rows.filter(_.memberId == subjectId).flatMap(subject =>
+            rowsByMatchAndPlayer.get((subject.matchId, opponentId))
+              .map(opponent => subject -> opponent)
+          )
+          val matchCount = pairs.size
+          val betterRankCount = pairs.count { case (subject, opponent) =>
+            subject.rank.value < opponent.rank.value
+          }
+          HeadToHeadEntryResponse(
+            subjectMemberId = subjectId.value,
+            opponentMemberId = opponentId.value,
+            matchCount = matchCount,
+            betterRankCount = betterRankCount,
+            betterRankRate = rate(betterRankCount, matchCount),
+            averageRankDiff = average(pairs.map { case (subject, opponent) =>
+              asDecimal(opponent.rank.value - subject.rank.value)
+            }),
+            averageAssetsDiff = average(pairs.map { case (subject, opponent) =>
+              asDecimal(subject.totalAssetsManYen.value - opponent.totalAssetsManYen.value)
+            }),
+            status = normalStatus(matchCount),
+          )
+      }
+    })
+
+  private def matchPlayerPoints(
+      rows: List[SeriesComparisonMatchPlayerRow],
+      matchIndexById: Map[momo.api.domain.ids.MatchId, Int],
+      revenueRanks: Map[(String, String), Double],
+      assetsRanks: Map[(String, String), Double],
+  ): List[MatchPlayerPointResponse] = rows.map(row =>
+    MatchPlayerPointResponse(
+      matchIndex = matchIndexById.getOrElse(row.matchId, 0),
+      matchId = row.matchId.value,
+      playedAt = Formatter.format(row.playedAt),
+      memberId = row.memberId.value,
+      rank = row.rank.value,
+      totalAssets = row.totalAssetsManYen.value,
+      revenue = row.revenueManYen.value,
+      revenueAssetRate = revenueAssetRate(row),
+      assetsRank = assetsRanks.getOrElse(rankKey(row), 0.0),
+      revenueRank = revenueRanks.getOrElse(rankKey(row), 0.0),
+    )
+  )
+
+  private def recentFormByPlayer(
+      playerOrder: List[MemberId],
+      rowsByPlayer: Map[MemberId, List[SeriesComparisonMatchPlayerRow]],
+  ): List[RecentFormPlayerResponse] =
+    val windowSize = 8
+    playerOrder.map { memberId =>
+      val rows = sortedPlayerRows(rowsByPlayer.getOrElse(memberId, Nil))
+      val recent = rows.takeRight(windowSize)
+      RecentFormPlayerResponse(
+        memberId = memberId.value,
+        windowSize = windowSize,
+        targetCount = recent.size,
+        averageRank = average(recent.map(row => asDecimal(row.rank.value))),
+        podiumRate = rate(recent.count(_.rank.value <= 2), recent.size),
+        winStreak = suffixStreak(rows, _.rank.value == 1),
+        podiumStreak = suffixStreak(rows, _.rank.value <= 2),
+        lowerHalfStreak = suffixStreak(rows, _.rank.value >= 3),
+        status = normalStatus(recent.size),
+      )
+    }
+
+  private def playerPerformanceProfiles(
+      playerOrder: List[MemberId],
+      rowsByPlayer: Map[MemberId, List[SeriesComparisonMatchPlayerRow]],
+      metrics: Map[String, SeriesComparisonPlayerMetricsResponse],
+  ): PlayerPerformanceProfilesResponse =
+    val entriesBase = playerOrder.map { memberId =>
+      val rows = rowsByPlayer.getOrElse(memberId, Nil)
+      val rankScore = average(rows.map(row => asDecimal(5 - row.rank.value)))
+      val revenueAssetRates = rows.flatMap(revenueAssetRate)
+      val m = metrics.get(memberId.value)
+      ProfileBase(
+        memberId = memberId,
+        rankStandardDeviation = m.flatMap(_.stability.rankStandardDeviation),
+        podiumRate = m.flatMap(_.podium.rate),
+        averageRankScore = rankScore,
+        averageRevenueAssetRate = average(revenueAssetRates),
+        status = normalStatus(rows.size),
+      )
+    }
+    val riskMedian = medianDouble(entriesBase.flatMap(_.rankStandardDeviation))
+    val returnMedian = medianDouble(entriesBase.flatMap(_.averageRankScore))
+    val revenueAssetRateMedian = medianDouble(entriesBase.flatMap(_.averageRevenueAssetRate))
+    PlayerPerformanceProfilesResponse(
+      rankStandardDeviationMedian = riskMedian,
+      averageRankScoreMedian = returnMedian,
+      averageRevenueAssetRateMedian = revenueAssetRateMedian,
+      entries = entriesBase.zipWithIndex.map { case (entry, index) =>
+        val kind = (entry.rankStandardDeviation, entry.averageRankScore, riskMedian, returnMedian)
+          .mapN { (x, y, xMedian, yMedian) =>
+            if x <= xMedian && y >= yMedian then "steady_leader"
+            else if x > xMedian && y >= yMedian then "swing_leader"
+            else if x <= xMedian && y < yMedian then "steady_chaser"
+            else "swing_chaser"
+          }
+        PlayerPerformanceProfileResponse(
+          memberId = entry.memberId.value,
+          rankStandardDeviation = entry.rankStandardDeviation,
+          podiumRate = entry.podiumRate,
+          averageRankScore = entry.averageRankScore,
+          averageRevenueAssetRate = entry.averageRevenueAssetRate,
+          profileKind = kind,
+          strategyKind = strategyKind(entry, entriesBase, index),
+          status = entry.status,
+        )
+      },
+    )
+
+  private final case class ProfileBase(
+      memberId: MemberId,
+      rankStandardDeviation: Option[Double],
+      podiumRate: Option[Double],
+      averageRankScore: Option[Double],
+      averageRevenueAssetRate: Option[Double],
+      status: String,
+  )
+
+  private def matchNoInEventBreakdown(
+      playerOrder: List[MemberId],
+      rows: List[SeriesComparisonMatchPlayerRow],
+  ): List[MatchNoInEventBreakdownResponse] = rows.groupBy(_.matchNoInEvent.value).toList
+    .sortBy(_._1).map { case (matchNoInEvent, noRows) =>
+      MatchNoInEventBreakdownResponse(
+        matchNoInEvent = matchNoInEvent,
+        playerRows = playerOrder.map { memberId =>
+          val playerRows = sortedPlayerRows(noRows.filter(_.memberId == memberId))
+          MatchNoInEventPlayerBreakdownResponse(
+            memberId = memberId.value,
+            targetCount = playerRows.size,
+            averageRank = average(playerRows.map(row => asDecimal(row.rank.value))),
+            podiumRate = rate(playerRows.count(_.rank.value <= 2), playerRows.size),
+            status = normalStatus(playerRows.size),
+          )
+        },
+      )
+    }
+
+  private def matchTimeline(matchGroups: List[MatchGroup]): List[MatchTimelinePointResponse] =
+    val base = matchGroups.map { group =>
+      val byRank = group.rows.map(row => row.rank.value -> row).toMap
+      val winner = byRank.get(1)
+      val second = byRank.get(2)
+      val last = byRank.get(4)
+      val maxRevenue = group.rows.map(_.revenueManYen.value).maxOption
+      TimelineBase(
+        group = group,
+        gapFirstToSecond = (winner, second)
+          .mapN((a, b) => a.totalAssetsManYen.value - b.totalAssetsManYen.value),
+        gapFirstToLast = (winner, last)
+          .mapN((a, b) => a.totalAssetsManYen.value - b.totalAssetsManYen.value),
+        totalGinjiCount = group.rows.map(_.incidents.suriNoGinji).sum,
+        revenueTopMemberIds =
+          maxRevenue.toList.flatMap(value =>
+            group.rows.filter(_.revenueManYen.value == value).map(_.memberId.value)
+          ),
+        winnerMemberId = winner.map(_.memberId.value),
+      )
+    }
+    val closeThreshold = percentileDouble(base.flatMap(_.gapFirstToSecond).sorted, 0.25)
+    val blowoutThreshold = percentileDouble(base.flatMap(_.gapFirstToLast).sorted, 0.75)
+    val status =
+      if matchGroups.size == 0 then "no_target"
+      else if matchGroups.size < 3 then "reference"
+      else "ok"
+    val canUseRelativeFlags = status == "ok"
+    base.map { item =>
+      val flags = List(
+        Option.when(
+          item.winnerMemberId.exists(id => !item.revenueTopMemberIds.contains(id))
+        )("revenue_top_no_win"),
+        Option.when(item.totalGinjiCount >= 2)("ginji_storm"),
+        Option.when(
+          canUseRelativeFlags && (item.gapFirstToSecond, closeThreshold).mapN(_ <= _)
+            .getOrElse(false)
+        )("close_finish"),
+        Option.when(
+          canUseRelativeFlags && (item.gapFirstToLast, blowoutThreshold).mapN(_ >= _)
+            .getOrElse(false)
+        )("asset_blowout"),
+      ).flatten
+      MatchTimelinePointResponse(
+        matchIndex = item.group.matchIndex,
+        matchId = item.group.matchId.value,
+        playedAt = Formatter.format(item.group.playedAt),
+        assetGapFirstToSecond = item.gapFirstToSecond,
+        assetGapFirstToLast = item.gapFirstToLast,
+        totalGinjiCount = item.totalGinjiCount,
+        revenueTopMemberIds = item.revenueTopMemberIds,
+        winnerMemberId = item.winnerMemberId,
+        flags = flags,
+        status = status,
+      )
+    }
+
+  private final case class TimelineBase(
+      group: MatchGroup,
+      gapFirstToSecond: Option[Int],
+      gapFirstToLast: Option[Int],
+      totalGinjiCount: Int,
+      revenueTopMemberIds: List[String],
+      winnerMemberId: Option[String],
+  )
+
+  private def sortedPlayerRows(
+      rows: List[SeriesComparisonMatchPlayerRow]
+  ): List[SeriesComparisonMatchPlayerRow] = rows.sortBy(row =>
+    (row.playedAt.toEpochMilli, row.heldEventId.value, row.matchNoInEvent.value, row.matchId.value)
+  )
+
+  private def suffixStreak(
+      rows: List[SeriesComparisonMatchPlayerRow],
+      predicate: SeriesComparisonMatchPlayerRow => Boolean,
+  ): Int = rows.reverse.takeWhile(predicate).size
+
   private def histogram(
       allValues: List[Int],
       playerOrder: List[MemberId],
@@ -410,6 +679,18 @@ private object SeriesComparisonAggregation:
     val weight = rank - lowerIndex
     asDecimal(sortedValues(lowerIndex)) * (1.0 - weight) +
       asDecimal(sortedValues(upperIndex)) * weight
+
+  private def percentileDouble(sortedValues: List[Int], probability: Double): Option[Double] =
+    sortedValues match
+      case Nil => None
+      case nonEmpty => Some(percentile(nonEmpty, probability))
+
+  private def medianDouble(values: List[Double]): Option[Double] = values.sorted match
+    case Nil => None
+    case sorted if sorted.size % 2 == 1 => Some(sorted(sorted.size / 2))
+    case sorted =>
+      val upper = sorted.size / 2
+      Some((sorted(upper - 1) + sorted(upper)) / 2.0)
 
   private def niceHistogramStep(rawStep: Int): Int =
     val safeStep = math.max(1, rawStep)
@@ -626,6 +907,27 @@ private object SeriesComparisonAggregation:
   private def rate(count: Int, denominator: Int): Option[Double] = Option
     .when(denominator > 0)(asDecimal(count) / asDecimal(denominator))
 
+  private def revenueAssetRate(row: SeriesComparisonMatchPlayerRow): Option[Double] = Option.when(
+    row.totalAssetsManYen.value > 0
+  )(asDecimal(row.revenueManYen.value) / asDecimal(row.totalAssetsManYen.value))
+
+  private def strategyKind(
+      entry: ProfileBase,
+      entries: List[ProfileBase],
+      fallbackIndex: Int,
+  ): Option[String] = entry.averageRevenueAssetRate.map { value =>
+    val ordered = entries.zipWithIndex.flatMap { case (item, index) =>
+      item.averageRevenueAssetRate.map(rate => (index, rate))
+    }.sortBy(_._2)
+    if ordered.size < 3 then "balanced"
+    else
+      val lowest = ordered.head
+      val highest = ordered.last
+      if fallbackIndex == highest._1 && value > lowest._2 then "property_focused"
+      else if fallbackIndex == lowest._1 && value < highest._2 then "card_focused"
+      else "balanced"
+  }
+
   private def asDecimal(value: Int): Double = java.lang.Integer.valueOf(value).doubleValue()
 
   private def normalStatus(denominator: Int): String =
@@ -643,3 +945,4 @@ private object SeriesComparisonAggregation:
     else if metricId.startsWith("destination") then
       destinationRanks.values.exists(v => v != math.rint(v))
     else false
+}

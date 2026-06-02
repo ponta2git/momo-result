@@ -13,7 +13,11 @@ import {
   normalizeSeriesComparisonSelection,
   parseSeriesComparisonSearchParams,
   playOrderSignal,
+  profileKindLabel,
   seriesComparisonQueryFromState,
+  statusLabel,
+  strategyKindLabel,
+  timelineFlagLabel,
 } from "./seriesComparisonViewModel";
 
 describe("seriesComparisonViewModel", () => {
@@ -205,6 +209,16 @@ describe("seriesComparisonViewModel", () => {
     });
     expect(signal.spread).toBeCloseTo(0.9);
   });
+
+  it("formats profile kinds, timeline flags, and reference statuses", () => {
+    expect(profileKindLabel("steady_leader")).toBe("安定上位");
+    expect(profileKindLabel("swing_chaser")).toBe("荒れ追走");
+    expect(strategyKindLabel("property_focused")).toBe("桃鉄型（物件重視）");
+    expect(strategyKindLabel("card_focused")).toBe("遊戯王型（カード重視）");
+    expect(timelineFlagLabel("revenue_top_no_win")).toBe("収益ねじれ");
+    expect(statusLabel("reference")).toBe("参考");
+    expect(statusLabel("ok")).toBeUndefined();
+  });
 });
 
 function responseWithRankAverages(values: number[]): SeriesComparisonResponse {
@@ -212,14 +226,20 @@ function responseWithRankAverages(values: number[]): SeriesComparisonResponse {
     dataQuality: { items: [] },
     highlights: [],
     histograms: { assets: { bins: [], series: [] }, revenue: { bins: [], series: [] } },
+    headToHead: { entries: [] },
     matchCount: values.length,
+    matchNoInEventBreakdown: [],
+    matchPlayerPoints: [],
+    matchTimeline: [],
     metricsByPlayer: values.map((value, index) => ({
       memberId: `p${index}`,
       metrics: baseMetrics({ rankAverage: value }),
     })),
+    playerPerformanceProfiles: { entries: [] },
     playOrderBaselines: [],
     players: values.map((_, index) => ({ displayName: `P${index}`, memberId: `p${index}` })),
-    schemaVersion: 1,
+    recentFormByPlayer: [],
+    schemaVersion: 3,
     scope: {
       gameTitleId: "title",
       gameTitleName: "桃鉄",

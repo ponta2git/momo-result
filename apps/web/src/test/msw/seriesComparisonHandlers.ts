@@ -65,7 +65,74 @@ function makeSeriesComparisonResponse(): SeriesComparisonResponse {
       assets: histogram(),
       revenue: histogram(),
     },
+    headToHead: {
+      entries: players.flatMap((subject, subjectIndex) =>
+        players.map((opponent, opponentIndex) =>
+          subject.memberId === opponent.memberId
+            ? {
+                betterRankCount: 0,
+                matchCount: 0,
+                opponentMemberId: opponent.memberId,
+                status: "self",
+                subjectMemberId: subject.memberId,
+              }
+            : {
+                averageAssetsDiff: (opponentIndex - subjectIndex) * 320,
+                averageRankDiff: (opponentIndex - subjectIndex) * 0.35,
+                betterRankCount: Math.max(0, 8 - subjectIndex),
+                betterRankRate: Math.max(0.1, 0.72 - subjectIndex * 0.12),
+                matchCount: 12,
+                opponentMemberId: opponent.memberId,
+                status: "ok",
+                subjectMemberId: subject.memberId,
+              },
+        ),
+      ),
+    },
     matchCount: 12,
+    matchNoInEventBreakdown: [1, 2, 3, 4, 5].map((matchNoInEvent) => ({
+      matchNoInEvent,
+      playerRows: players.map((player, index) => ({
+        averageRank: Math.min(4, (averages[index] ?? 2.5) + matchNoInEvent * 0.08),
+        memberId: player.memberId,
+        podiumRate: Math.max(0.1, 0.75 - index * 0.12),
+        status: "ok",
+        targetCount: 4,
+      })),
+    })),
+    matchPlayerPoints: Array.from({ length: 12 }, (_, matchIndex) =>
+      players.map((player, playerIndex) => ({
+        assetsRank: playerIndex + 1,
+        matchId: `match-${matchIndex + 1}`,
+        matchIndex: matchIndex + 1,
+        memberId: player.memberId,
+        playedAt: "2026-05-10T12:00:00.000Z",
+        rank: Math.min(4, Math.max(1, ((matchIndex + playerIndex) % 4) + 1)),
+        revenue: 980 - playerIndex * 145 + matchIndex * 20,
+        revenueAssetRate:
+          (980 - playerIndex * 145 + matchIndex * 20) /
+          (2600 - playerIndex * 260 + matchIndex * 110),
+        revenueRank: playerIndex + 1,
+        totalAssets: 2600 - playerIndex * 260 + matchIndex * 110,
+      })),
+    ).flat(),
+    matchTimeline: Array.from({ length: 12 }, (_, index) => ({
+      assetGapFirstToLast: 2400 + index * 120,
+      assetGapFirstToSecond: 450 + index * 20,
+      flags:
+        index % 4 === 0
+          ? ["revenue_top_no_win", "ginji_storm"]
+          : index % 5 === 0
+            ? ["asset_blowout"]
+            : [],
+      matchId: `match-${index + 1}`,
+      matchIndex: index + 1,
+      playedAt: "2026-05-10T12:00:00.000Z",
+      revenueTopMemberIds: [players[(index + 1) % players.length]!.memberId],
+      status: "ok",
+      totalGinjiCount: index % 4 === 0 ? 2 : 0,
+      winnerMemberId: players[index % players.length]!.memberId,
+    })),
     metricsByPlayer: players.map((player, index) => ({
       memberId: player.memberId,
       metrics: {
@@ -120,8 +187,41 @@ function makeSeriesComparisonResponse(): SeriesComparisonResponse {
         stability: { rankStandardDeviation: 0.72 + index * 0.1 },
       },
     })),
+    playerPerformanceProfiles: {
+      averageRankScoreMedian: 2.5,
+      averageRevenueAssetRateMedian: 0.28,
+      entries: players.map((player, index) => ({
+        averageRankScore: 3.7 - index * 0.45,
+        averageRevenueAssetRate: 0.38 - index * 0.06,
+        memberId: player.memberId,
+        podiumRate: (10 - index * 2) / 12,
+        profileKind:
+          index === 0
+            ? "steady_leader"
+            : index === 1
+              ? "swing_leader"
+              : index === 2
+                ? "steady_chaser"
+                : "swing_chaser",
+        rankStandardDeviation: 0.62 + index * 0.18,
+        status: "ok",
+        strategyKind: index === 0 ? "property_focused" : index === 3 ? "card_focused" : "balanced",
+      })),
+      rankStandardDeviationMedian: 0.85,
+    },
     players,
-    schemaVersion: 1,
+    schemaVersion: 3,
+    recentFormByPlayer: players.map((player, index) => ({
+      averageRank: (averages[index] ?? 2.5) + 0.15,
+      lowerHalfStreak: index === 3 ? 2 : 0,
+      memberId: player.memberId,
+      podiumRate: Math.max(0.1, 0.8 - index * 0.16),
+      podiumStreak: Math.max(0, 4 - index),
+      status: "ok",
+      targetCount: 8,
+      windowSize: 8,
+      winStreak: index === 0 ? 2 : 0,
+    })),
     scope: {
       gameTitleId: "gt_momotetsu_2",
       gameTitleName: "桃太郎電鉄2",

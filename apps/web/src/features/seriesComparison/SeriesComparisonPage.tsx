@@ -1,18 +1,24 @@
 import {
+  Activity,
   BadgeDollarSign,
   BarChart3,
+  Clock3,
   Coins,
   HelpCircle,
   MapPinned,
   RefreshCw,
   ShieldAlert,
+  Swords,
   Trophy,
 } from "lucide-react";
 import type { ReactNode } from "react";
 
 import {
+  HeadToHeadMatrix,
   HistogramChart,
   LineChart,
+  StrategyProfileChart,
+  StrategyScatterPlot,
   playerColor,
   playerGridStyle,
 } from "@/features/seriesComparison/SeriesComparisonCharts";
@@ -21,6 +27,9 @@ import {
   ginjiSummary,
   playOrderSignal,
   qualitySummary,
+  statusLabel,
+  strategyKindLabel,
+  timelineFlagLabel,
 } from "@/features/seriesComparison/seriesComparisonViewModel";
 import { useSeriesComparisonPageController } from "@/features/seriesComparison/useSeriesComparisonPageController";
 import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
@@ -39,6 +48,11 @@ import { PageHeader } from "@/shared/ui/layout/PageHeader";
 type Player = NonNullable<SeriesComparisonResponse["players"]>[number];
 type MetricsEntry = NonNullable<SeriesComparisonResponse["metricsByPlayer"]>[number];
 type PlayerMetrics = MetricsEntry["metrics"];
+type RecentFormEntry = NonNullable<SeriesComparisonResponse["recentFormByPlayer"]>[number];
+type PerformanceProfileEntry = NonNullable<
+  SeriesComparisonResponse["playerPerformanceProfiles"]["entries"]
+>[number];
+type MatchNoBreakdown = NonNullable<SeriesComparisonResponse["matchNoInEventBreakdown"]>[number];
 type MetricTone = "neutral" | "high" | "low";
 type NullableNumber = number | null | undefined;
 type NumericExtrema = {
@@ -83,6 +97,22 @@ function playOrderColor(playOrder: NullableNumber): string {
 
 function metricsMap(response: SeriesComparisonResponse): Map<string, PlayerMetrics> {
   return new Map((response.metricsByPlayer ?? []).map((entry) => [entry.memberId, entry.metrics]));
+}
+
+function recentFormMap(response: SeriesComparisonResponse): Map<string, RecentFormEntry> {
+  return new Map((response.recentFormByPlayer ?? []).map((entry) => [entry.memberId, entry]));
+}
+
+function performanceProfileMap(
+  response: SeriesComparisonResponse,
+): Map<string, PerformanceProfileEntry> {
+  return new Map(
+    (response.playerPerformanceProfiles.entries ?? []).map((entry) => [entry.memberId, entry]),
+  );
+}
+
+function playerNameMap(players: Player[]): Map<string, string> {
+  return new Map(players.map((player) => [player.memberId, player.displayName]));
 }
 
 function numericExtrema(
@@ -252,6 +282,18 @@ function FormulaHelp({ content }: { content: ReactNode }) {
   );
 }
 
+function StatusBadge({ status }: { status: string | null | undefined }) {
+  const label = statusLabel(status);
+  if (!label) {
+    return null;
+  }
+  return (
+    <span className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-1.5 py-0.5 text-[11px] font-medium text-[var(--color-text-secondary)]">
+      {label}
+    </span>
+  );
+}
+
 function PageSkeleton() {
   return (
     <PageFrame className="gap-5" width="wide">
@@ -342,6 +384,39 @@ function SummaryItem({
   );
 }
 
+function RecentFormMetrics({ response }: { response: SeriesComparisonResponse }) {
+  const players = response.players ?? [];
+  const recentByMember = recentFormMap(response);
+  return (
+    <MetricSection
+      description="直近8戦の平均順位と入賞率、最新試合から続いている状態です。通常2開催日分を目安に見ます。対象3戦未満は参考値として扱います。"
+      icon={<Activity className="size-5" />}
+      title="直近フォーム"
+    >
+      <PlayerMetricGrid metricsByMember={metricsMap(response)} players={players}>
+        {(player) => {
+          const form = recentByMember.get(player.memberId);
+          return (
+            <>
+              <div className="flex justify-end">
+                <StatusBadge status={form?.status} />
+              </div>
+              <MetricRow
+                label="直近平均順位"
+                value={`${formatDecimal(form?.averageRank)} / ${form?.targetCount ?? 0}戦`}
+              />
+              <MetricRow label="直近入賞率" value={formatPercent(form?.podiumRate)} />
+              <MetricRow label="連勝" value={`${form?.winStreak ?? 0}戦`} />
+              <MetricRow label="連続入賞" value={`${form?.podiumStreak ?? 0}戦`} />
+              <MetricRow label="連続沈没" value={`${form?.lowerHalfStreak ?? 0}戦`} />
+            </>
+          );
+        }}
+      </PlayerMetricGrid>
+    </MetricSection>
+  );
+}
+
 function BasicMetrics({ response }: { response: SeriesComparisonResponse }) {
   const players = response.players ?? [];
   const metricsByMember = metricsMap(response);
@@ -373,6 +448,20 @@ function BasicMetrics({ response }: { response: SeriesComparisonResponse }) {
         series={response.trends.rankCumulativeAverage ?? []}
         yTicks={[1, 2, 3, 4]}
       />
+      <MatchResultStrip response={response} />
+    </MetricSection>
+  );
+}
+
+function HeadToHeadMetrics({ response }: { response: SeriesComparisonResponse }) {
+  const players = response.players ?? [];
+  return (
+    <MetricSection
+      description="行の社長が列の相手より上位だった割合です。セル内の件数を見て、少数試合の相性は参考として読みます。"
+      icon={<Swords className="size-5" />}
+      title="直接対決"
+    >
+      <HeadToHeadMatrix entries={response.headToHead.entries ?? []} players={players} />
     </MetricSection>
   );
 }
@@ -453,6 +542,49 @@ function MoneyMetrics({ response }: { response: SeriesComparisonResponse }) {
         <HistogramChart histogram={response.histograms.revenue} players={players} />
       </MetricSection>
     </>
+  );
+}
+
+function PerformanceShapeMetrics({ response }: { response: SeriesComparisonResponse }) {
+  const players = response.players ?? [];
+  const profileByMember = performanceProfileMap(response);
+  return (
+    <MetricSection
+      description="総資産に対して収益がどれだけ占めるかで勝ち筋を見ます。収益比率が高いほど桃鉄型（物件重視）、低いほど遊戯王型（カード重視）として読みます。"
+      icon={<BarChart3 className="size-5" />}
+      title="勝ち筋の形"
+    >
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)] xl:items-start">
+        <StrategyScatterPlot players={players} points={response.matchPlayerPoints ?? []} />
+        <StrategyProfileChart players={players} profiles={response.playerPerformanceProfiles} />
+      </div>
+      <PlayerMetricGrid metricsByMember={metricsMap(response)} players={players}>
+        {(player) => {
+          const profile = profileByMember.get(player.memberId);
+          return (
+            <>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-semibold text-[var(--color-text-primary)]">
+                  {strategyKindLabel(profile?.strategyKind)}
+                </span>
+                <StatusBadge status={profile?.status} />
+              </div>
+              <MetricRow
+                label="収益比率"
+                help="総資産が正の試合だけを対象にした、収益 / 総資産 の平均です。"
+                value={formatPercent(profile?.averageRevenueAssetRate)}
+              />
+              <MetricRow
+                label="順位スコア"
+                help="5 - 最終順位の平均。1位=4点、4位=1点として扱います。"
+                value={formatDecimal(profile?.averageRankScore)}
+              />
+              <MetricRow label="入賞率" value={formatPercent(profile?.podiumRate)} />
+            </>
+          );
+        }}
+      </PlayerMetricGrid>
+    </MetricSection>
   );
 }
 
@@ -635,6 +767,207 @@ function ContextMetrics({ response }: { response: SeriesComparisonResponse }) {
   );
 }
 
+function MatchResultStrip({ response }: { response: SeriesComparisonResponse }) {
+  const names = playerNameMap(response.players ?? []);
+  const timeline = response.matchTimeline ?? [];
+  const flagOrder = ["close_finish", "asset_blowout", "ginji_storm", "revenue_top_no_win"];
+  const flagCounts = new Map(
+    flagOrder.map((flag) => [
+      flag,
+      timeline.filter((point) => (point.flags ?? []).includes(flag)).length,
+    ]),
+  );
+  const flaggedTimeline = timeline
+    .filter((point) => (point.flags ?? []).length > 0)
+    .toReversed()
+    .slice(0, 8)
+    .toReversed();
+  return (
+    <div className="grid gap-3">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">
+          荒れ試合ダイジェスト
+        </h3>
+        <p className="text-xs text-pretty text-[var(--color-text-secondary)]">
+          全試合ではなく、荒れ要因の件数と該当試合だけを順位推移と合わせて確認します。
+        </p>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-4">
+        {flagOrder.map((flag) => (
+          <div
+            key={flag}
+            className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2.5 py-2"
+          >
+            <p className="text-xs text-[var(--color-text-secondary)]">{timelineFlagLabel(flag)}</p>
+            <p className="mt-0.5 text-sm font-semibold text-[var(--color-text-primary)] tabular-nums">
+              {flagCounts.get(flag) ?? 0}戦
+            </p>
+          </div>
+        ))}
+      </div>
+      {flaggedTimeline.length === 0 ? (
+        <p className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-2 text-sm text-[var(--color-text-secondary)]">
+          荒れ試合ラベルの付いた試合はありません。
+        </p>
+      ) : (
+        <div className="overflow-x-auto pb-1">
+          <div className="flex min-w-max gap-3">
+            {flaggedTimeline.map((point) => (
+              <article
+                key={point.matchId}
+                className="w-44 shrink-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-2.5"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-xs text-[var(--color-text-secondary)]">
+                      {point.matchIndex}戦目
+                    </p>
+                    <p className="mt-0.5 truncate text-sm font-semibold text-[var(--color-text-primary)]">
+                      {names.get(point.winnerMemberId ?? "") ?? "勝者不明"}
+                    </p>
+                  </div>
+                  <StatusBadge status={point.status} />
+                </div>
+                <div className="mt-2 grid gap-1 text-xs text-[var(--color-text-secondary)]">
+                  <div className="flex justify-between gap-2">
+                    <span>1-2位差</span>
+                    <span className="text-[var(--color-text-primary)] tabular-nums">
+                      {formatMoney(point.assetGapFirstToSecond)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <span>1-4位差</span>
+                    <span className="text-[var(--color-text-primary)] tabular-nums">
+                      {formatMoney(point.assetGapFirstToLast)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <span>銀次</span>
+                    <span className="text-[var(--color-text-primary)] tabular-nums">
+                      {point.totalGinjiCount}回
+                    </span>
+                  </div>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {(point.flags ?? []).map((flag) => (
+                    <span
+                      key={flag}
+                      className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-1.5 py-0.5 text-[11px] font-medium text-[var(--color-text-secondary)]"
+                    >
+                      {timelineFlagLabel(flag)}
+                    </span>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </div>
+          {flaggedTimeline.length <
+          timeline.filter((point) => (point.flags ?? []).length > 0).length ? (
+            <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
+              直近8件の荒れ試合だけを表示しています。
+            </p>
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MatchNoInEventMetrics({ response }: { response: SeriesComparisonResponse }) {
+  const players = response.players ?? [];
+  const breakdown = response.matchNoInEventBreakdown ?? [];
+  const breakdownByNo = new Map(breakdown.map((item) => [item.matchNoInEvent, item]));
+  const primaryBreakdown: MatchNoBreakdown[] = [1, 2, 3, 4].map(
+    (matchNoInEvent) => breakdownByNo.get(matchNoInEvent) ?? { matchNoInEvent, playerRows: [] },
+  );
+  const extraBreakdown = breakdown.filter((item) => item.matchNoInEvent > 4);
+  return (
+    <MetricSection
+      description="1開催4試合を基本として、第1〜第4試合の平均順位と入賞率を見ます。5試合目以降がある場合は折りたたんで表示します。"
+      icon={<Clock3 className="size-5" />}
+      title="開催回内の流れ"
+    >
+      <MatchNoTable breakdown={primaryBreakdown} players={players} />
+      {extraBreakdown.length > 0 ? (
+        <details className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
+          <summary className="cursor-pointer text-sm font-semibold text-[var(--color-text-primary)]">
+            第5試合以降を表示
+          </summary>
+          <div className="mt-3">
+            <MatchNoTable breakdown={extraBreakdown} players={players} />
+          </div>
+        </details>
+      ) : null}
+    </MetricSection>
+  );
+}
+
+function MatchNoTable({
+  breakdown,
+  players,
+}: {
+  breakdown: MatchNoBreakdown[];
+  players: Player[];
+}) {
+  return (
+    <div className="overflow-x-auto pb-1">
+      <div
+        className="grid min-w-[42rem] gap-1"
+        style={{
+          gridTemplateColumns: `7rem repeat(${Math.max(1, players.length)}, minmax(8rem, 1fr))`,
+        }}
+      >
+        <div aria-hidden="true" />
+        {players.map((player, index) => (
+          <div
+            key={player.memberId}
+            className="truncate rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-1.5 text-center text-xs font-semibold text-[var(--color-text-primary)]"
+            style={{ borderTopColor: playerColor(index), borderTopWidth: 3 }}
+          >
+            {player.displayName}
+          </div>
+        ))}
+        {breakdown.map((item) => (
+          <MatchNoRow key={item.matchNoInEvent} item={item} players={players} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MatchNoRow({ item, players }: { item: MatchNoBreakdown; players: Player[] }) {
+  const rowsByMember = new Map((item.playerRows ?? []).map((row) => [row.memberId, row]));
+  return (
+    <>
+      <div className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-3 text-sm font-semibold text-[var(--color-text-primary)]">
+        第{item.matchNoInEvent}試合
+      </div>
+      {players.map((player) => {
+        const row = rowsByMember.get(player.memberId);
+        return (
+          <div
+            key={player.memberId}
+            className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-2"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs text-[var(--color-text-secondary)]">
+                {row?.targetCount ?? 0}戦
+              </span>
+              <StatusBadge status={row?.status} />
+            </div>
+            <div className="mt-1 text-sm font-semibold text-[var(--color-text-primary)] tabular-nums">
+              平均 {formatDecimal(row?.averageRank)}
+            </div>
+            <div className="mt-0.5 text-xs text-[var(--color-text-secondary)] tabular-nums">
+              入賞 {formatPercent(row?.podiumRate)}
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 function DataQualityNotice({ response }: { response: SeriesComparisonResponse }) {
   const summary = qualitySummary(response);
   if (summary.referenceCount === 0 && summary.noTargetCount === 0) {
@@ -745,13 +1078,17 @@ export function SeriesComparisonPage() {
                 {controller.selectedSeries?.name} / {controller.scopeName}
               </div>
               <SummaryBand response={controller.aggregate} />
+              <RecentFormMetrics response={controller.aggregate} />
               <DataQualityNotice response={controller.aggregate} />
               <BasicMetrics response={controller.aggregate} />
+              <HeadToHeadMetrics response={controller.aggregate} />
               <MoneyMetrics response={controller.aggregate} />
+              <PerformanceShapeMetrics response={controller.aggregate} />
               <RateMetrics response={controller.aggregate} />
               <PlayOrderMetrics response={controller.aggregate} />
               <GinjiMetrics response={controller.aggregate} />
               <ContextMetrics response={controller.aggregate} />
+              <MatchNoInEventMetrics response={controller.aggregate} />
             </>
           ) : null}
         </>

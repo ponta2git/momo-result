@@ -3764,6 +3764,60 @@
           }
         }
       },
+      "HeadToHeadEntryResponse" : {
+        "title" : "HeadToHeadEntryResponse",
+        "type" : "object",
+        "required" : [
+          "subjectMemberId",
+          "opponentMemberId",
+          "matchCount",
+          "betterRankCount",
+          "status"
+        ],
+        "properties" : {
+          "subjectMemberId" : {
+            "type" : "string"
+          },
+          "opponentMemberId" : {
+            "type" : "string"
+          },
+          "matchCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "betterRankCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "betterRankRate" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "averageRankDiff" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "averageAssetsDiff" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        }
+      },
+      "HeadToHeadResponse" : {
+        "title" : "HeadToHeadResponse",
+        "type" : "object",
+        "properties" : {
+          "entries" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/HeadToHeadEntryResponse"
+            }
+          }
+        }
+      },
       "HealthDetailsResponse" : {
         "title" : "HealthDetailsResponse",
         "type" : "object",
@@ -4355,6 +4409,108 @@
           }
         }
       },
+      "MatchNoInEventBreakdownResponse" : {
+        "title" : "MatchNoInEventBreakdownResponse",
+        "type" : "object",
+        "required" : [
+          "matchNoInEvent"
+        ],
+        "properties" : {
+          "matchNoInEvent" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "playerRows" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/MatchNoInEventPlayerBreakdownResponse"
+            }
+          }
+        }
+      },
+      "MatchNoInEventPlayerBreakdownResponse" : {
+        "title" : "MatchNoInEventPlayerBreakdownResponse",
+        "type" : "object",
+        "required" : [
+          "memberId",
+          "targetCount",
+          "status"
+        ],
+        "properties" : {
+          "memberId" : {
+            "type" : "string"
+          },
+          "targetCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "averageRank" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "podiumRate" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        }
+      },
+      "MatchPlayerPointResponse" : {
+        "title" : "MatchPlayerPointResponse",
+        "type" : "object",
+        "required" : [
+          "matchIndex",
+          "matchId",
+          "playedAt",
+          "memberId",
+          "rank",
+          "totalAssets",
+          "revenue",
+          "assetsRank",
+          "revenueRank"
+        ],
+        "properties" : {
+          "matchIndex" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "matchId" : {
+            "type" : "string"
+          },
+          "playedAt" : {
+            "type" : "string"
+          },
+          "memberId" : {
+            "type" : "string"
+          },
+          "rank" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "totalAssets" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "revenue" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "revenueAssetRate" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "assetsRank" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "revenueRank" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        }
+      },
       "MatchRankEntry" : {
         "title" : "MatchRankEntry",
         "type" : "object",
@@ -4436,6 +4592,59 @@
             "items" : {
               "$ref" : "#/components/schemas/MatchRankEntry"
             }
+          }
+        }
+      },
+      "MatchTimelinePointResponse" : {
+        "title" : "MatchTimelinePointResponse",
+        "type" : "object",
+        "required" : [
+          "matchIndex",
+          "matchId",
+          "playedAt",
+          "totalGinjiCount",
+          "status"
+        ],
+        "properties" : {
+          "matchIndex" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "matchId" : {
+            "type" : "string"
+          },
+          "playedAt" : {
+            "type" : "string"
+          },
+          "assetGapFirstToSecond" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "assetGapFirstToLast" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "totalGinjiCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "revenueTopMemberIds" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "winnerMemberId" : {
+            "type" : "string"
+          },
+          "flags" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "status" : {
+            "type" : "string"
           }
         }
       },
@@ -4846,6 +5055,68 @@
           }
         }
       },
+      "PlayerPerformanceProfileResponse" : {
+        "title" : "PlayerPerformanceProfileResponse",
+        "type" : "object",
+        "required" : [
+          "memberId",
+          "status"
+        ],
+        "properties" : {
+          "memberId" : {
+            "type" : "string"
+          },
+          "rankStandardDeviation" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "podiumRate" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "averageRankScore" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "averageRevenueAssetRate" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "profileKind" : {
+            "type" : "string"
+          },
+          "strategyKind" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        }
+      },
+      "PlayerPerformanceProfilesResponse" : {
+        "title" : "PlayerPerformanceProfilesResponse",
+        "type" : "object",
+        "properties" : {
+          "rankStandardDeviationMedian" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "averageRankScoreMedian" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "averageRevenueAssetRateMedian" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "entries" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/PlayerPerformanceProfileResponse"
+            }
+          }
+        }
+      },
       "PlayerResultRequest" : {
         "title" : "PlayerResultRequest",
         "type" : "object",
@@ -5018,6 +5289,55 @@
           "rate" : {
             "type" : "number",
             "format" : "double"
+          }
+        }
+      },
+      "RecentFormPlayerResponse" : {
+        "title" : "RecentFormPlayerResponse",
+        "type" : "object",
+        "required" : [
+          "memberId",
+          "windowSize",
+          "targetCount",
+          "winStreak",
+          "podiumStreak",
+          "lowerHalfStreak",
+          "status"
+        ],
+        "properties" : {
+          "memberId" : {
+            "type" : "string"
+          },
+          "windowSize" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "targetCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "averageRank" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "podiumRate" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "winStreak" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "podiumStreak" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "lowerHalfStreak" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "status" : {
+            "type" : "string"
           }
         }
       },
@@ -5263,6 +5583,8 @@
           "matchCount",
           "trends",
           "histograms",
+          "headToHead",
+          "playerPerformanceProfiles",
           "dataQuality"
         ],
         "properties" : {
@@ -5294,6 +5616,36 @@
           },
           "histograms" : {
             "$ref" : "#/components/schemas/SeriesComparisonHistogramsResponse"
+          },
+          "headToHead" : {
+            "$ref" : "#/components/schemas/HeadToHeadResponse"
+          },
+          "matchPlayerPoints" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/MatchPlayerPointResponse"
+            }
+          },
+          "recentFormByPlayer" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/RecentFormPlayerResponse"
+            }
+          },
+          "playerPerformanceProfiles" : {
+            "$ref" : "#/components/schemas/PlayerPerformanceProfilesResponse"
+          },
+          "matchNoInEventBreakdown" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/MatchNoInEventBreakdownResponse"
+            }
+          },
+          "matchTimeline" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/MatchTimelinePointResponse"
+            }
           },
           "playOrderBaselines" : {
             "type" : "array",

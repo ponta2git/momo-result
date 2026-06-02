@@ -82,6 +82,62 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
       assertEquals(response.playOrderBaselines.map(_.playOrder), List(1, 2, 3, 4))
       assertOptionDouble(response.playOrderBaselines.head.assetsAverage, 760.0)
       assertOptionDouble(response.playOrderBaselines.head.revenueAverage, 180.0)
+      val pontaVsAkane = response.headToHead.entries
+        .find(entry => entry.subjectMemberId == "ponta" && entry.opponentMemberId == "akane")
+        .getOrElse(fail(s"ponta vs akane entry missing: ${response.headToHead.entries}"))
+      assertEquals(pontaVsAkane.matchCount, 3)
+      assertEquals(pontaVsAkane.betterRankCount, 2)
+      assertOptionDouble(pontaVsAkane.betterRankRate, 2.0 / 3.0)
+      assertOptionDouble(pontaVsAkane.averageRankDiff, 2.0 / 3.0)
+      assertOptionDouble(pontaVsAkane.averageAssetsDiff, 200.0)
+      assertEquals(response.matchPlayerPoints.size, 12)
+      val firstPoint = response.matchPlayerPoints
+        .find(point => point.matchIndex == 1 && point.memberId == "ponta")
+        .getOrElse(fail(s"first point missing: ${response.matchPlayerPoints}"))
+      assertEquals(firstPoint.totalAssets, 1000)
+      assertOptionDouble(firstPoint.revenueAssetRate, 0.2)
+      assertOptionDouble(Some(firstPoint.assetsRank), 1.0)
+      assertOptionDouble(Some(firstPoint.revenueRank), 2.0)
+      val pontaForm = response.recentFormByPlayer.find(_.memberId == "ponta")
+        .getOrElse(fail(s"ponta recent form missing: ${response.recentFormByPlayer}"))
+      assertEquals(pontaForm.windowSize, 8)
+      assertEquals(pontaForm.targetCount, 3)
+      assertOptionDouble(pontaForm.averageRank, 4.0 / 3.0)
+      assertOptionDouble(pontaForm.podiumRate, 1.0)
+      assertEquals(pontaForm.winStreak, 1)
+      assertEquals(pontaForm.podiumStreak, 3)
+      assertEquals(pontaForm.lowerHalfStreak, 0)
+      assertEquals(
+        response.playerPerformanceProfiles.entries.map(_.memberId),
+        response.players.map(_.memberId),
+      )
+      assert(response.playerPerformanceProfiles.entries.forall(_.profileKind.nonEmpty))
+      assert(response.playerPerformanceProfiles.entries.forall(_.strategyKind.nonEmpty))
+      val pontaProfile = response.playerPerformanceProfiles.entries.find(_.memberId == "ponta")
+        .getOrElse(fail(s"ponta profile missing: ${response.playerPerformanceProfiles.entries}"))
+      assertOptionDouble(pontaProfile.averageRevenueAssetRate, 0.2412698412)
+      assertEquals(pontaProfile.strategyKind, Some("card_focused"))
+      val euProfile = response.playerPerformanceProfiles.entries.find(_.memberId == "eu")
+        .getOrElse(fail(s"eu profile missing: ${response.playerPerformanceProfiles.entries}"))
+      assertEquals(euProfile.strategyKind, Some("property_focused"))
+      assertEquals(response.matchNoInEventBreakdown.map(_.matchNoInEvent), List(1, 2, 3))
+      assertEquals(
+        response.matchNoInEventBreakdown.head.playerRows.map(_.targetCount),
+        List(1, 1, 1, 1),
+      )
+      val firstTimeline = response.matchTimeline.head
+      assertEquals(firstTimeline.matchIndex, 1)
+      assertEquals(firstTimeline.winnerMemberId, Some("ponta"))
+      assertEquals(firstTimeline.revenueTopMemberIds, List("akane"))
+      assert(
+        firstTimeline.flags.contains("revenue_top_no_win"),
+        s"unexpected flags: ${firstTimeline.flags}",
+      )
+      assert(
+        firstTimeline.flags.contains("ginji_storm"),
+        s"unexpected flags: ${firstTimeline.flags}",
+      )
+      assert(response.matchTimeline.exists(_.flags.contains("asset_blowout")))
       assert(response.highlights.exists(_.id == "highlight.destinationIndependent"))
       assert(response.dataQuality.items.exists(item =>
         item.metricId == "ginji.resilienceRankAverage" && item.playerMemberId.contains("ponta") &&
@@ -96,6 +152,12 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
       assertEquals(response.matchCount, 0)
       assertEquals(response.players, Nil)
       assertEquals(response.metricsByPlayer, Nil)
+      assertEquals(response.headToHead.entries, Nil)
+      assertEquals(response.matchPlayerPoints, Nil)
+      assertEquals(response.recentFormByPlayer, Nil)
+      assertEquals(response.playerPerformanceProfiles.entries, Nil)
+      assertEquals(response.matchNoInEventBreakdown, Nil)
+      assertEquals(response.matchTimeline, Nil)
       assertEquals(response.playOrderBaselines, Nil)
       assertEquals(response.dataQuality.items, Nil)
 

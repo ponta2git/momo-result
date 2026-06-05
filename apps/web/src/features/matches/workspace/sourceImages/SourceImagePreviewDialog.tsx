@@ -1,3 +1,5 @@
+import { useCallback } from "react";
+
 import type { SourceImageKind } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
 import { sourceImageKindLabels } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
 import { Dialog } from "@/shared/ui/feedback/Dialog";
@@ -9,14 +11,21 @@ type SourceImagePreviewDialogProps = {
 };
 
 export function SourceImagePreviewDialog({ kind, onClose, url }: SourceImagePreviewDialogProps) {
+  const handleOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open) {
+        onClose();
+      }
+    },
+    [onClose],
+  );
+
   return (
     <Dialog
       backdropClassName="bg-[var(--momo-night-900)]/65"
       popupClassName="max-w-none p-0 px-3 py-6"
       open
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
+      onOpenChange={handleOpenChange}
       surfaceClassName="max-w-4xl"
       title={`${sourceImageKindLabels[kind]}の拡大表示`}
     >

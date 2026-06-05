@@ -1,4 +1,5 @@
-import { useId } from "react";
+import { useCallback, useId, useMemo } from "react";
+import type { ChangeEvent } from "react";
 
 import { cn } from "@/shared/ui/cn";
 import { SelectField } from "@/shared/ui/forms/SelectField";
@@ -29,20 +30,31 @@ export function SegmentedControl({
   value,
 }: SegmentedControlProps) {
   const id = useId();
+  const selectOptions = useMemo(
+    () =>
+      options.map((option) => ({
+        disabled: disabled || option.disabled,
+        label: option.label,
+        value: option.value,
+      })),
+    [disabled, options],
+  );
+  const handleSelectChange = useCallback(
+    (event: ChangeEvent<HTMLSelectElement>) => {
+      onValueChange(event.currentTarget.value);
+    },
+    [onValueChange],
+  );
 
   if (asSelect) {
     return (
       <SelectField
         id={id}
         label={label}
-        options={options.map((option) => ({
-          disabled: disabled || option.disabled,
-          label: option.label,
-          value: option.value,
-        }))}
+        options={selectOptions}
         disabled={disabled}
         value={value}
-        onChange={(event) => onValueChange(event.currentTarget.value)}
+        onChange={handleSelectChange}
       />
     );
   }
@@ -57,24 +69,48 @@ export function SegmentedControl({
       role="group"
     >
       {options.map((option) => {
-        const selected = option.value === value;
         return (
-          <button
+          <SegmentedButton
             key={option.value}
-            aria-pressed={selected}
-            className={cn(
-              "min-h-9 min-w-[5ch] rounded-[var(--radius-xs)] px-3 py-1.5 text-sm font-medium text-[var(--color-text-secondary)] transition-colors duration-150",
-              selected ? "bg-[var(--color-surface-selected)] text-[var(--color-text-primary)]" : "",
-              "disabled:cursor-not-allowed disabled:opacity-50",
-            )}
+            option={option}
             disabled={disabled || option.disabled}
-            type="button"
-            onClick={() => onValueChange(option.value)}
-          >
-            {option.label}
-          </button>
+            selected={option.value === value}
+            onValueChange={onValueChange}
+          />
         );
       })}
     </div>
+  );
+}
+
+function SegmentedButton({
+  disabled,
+  option,
+  selected,
+  onValueChange,
+}: {
+  disabled: boolean | undefined;
+  option: SegmentedOption;
+  selected: boolean;
+  onValueChange: (value: string) => void;
+}) {
+  const handleClick = useCallback(() => {
+    onValueChange(option.value);
+  }, [onValueChange, option.value]);
+
+  return (
+    <button
+      aria-pressed={selected}
+      className={cn(
+        "min-h-9 min-w-[5ch] rounded-[var(--radius-xs)] px-3 py-1.5 text-sm font-medium text-[var(--color-text-secondary)] transition-colors duration-150",
+        selected ? "bg-[var(--color-surface-selected)] text-[var(--color-text-primary)]" : "",
+        "disabled:cursor-not-allowed disabled:opacity-50",
+      )}
+      disabled={disabled}
+      type="button"
+      onClick={handleClick}
+    >
+      {option.label}
+    </button>
   );
 }

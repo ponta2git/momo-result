@@ -266,11 +266,9 @@ describe("SourceImagePanel", () => {
     await screen.findByRole("img", { name: "総資産の元画像" });
     await user.click(screen.getByRole("button", { name: "元画像を保存" }));
 
-    expect(
-      await screen.findByText(
-        "元画像を保存できませんでした。確定または削除により画像が利用できなくなった可能性があります。必要な場合は画像を再アップロードしてください。",
-      ),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "元画像を保存できませんでした。確定または削除により画像が利用できなくなった可能性があります。必要な場合は画像を再アップロードしてください。",
+    );
   });
 
   it("shows a retry message when archive download is rate-limited", async () => {
@@ -303,10 +301,8 @@ describe("SourceImagePanel", () => {
     await screen.findByRole("img", { name: "総資産の元画像" });
     await user.click(screen.getByRole("button", { name: "元画像を保存" }));
 
-    expect(
-      await screen.findByText(
-        "元画像の保存が短時間に集中しています。少し待ってから再度お試しください。",
-      ),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "元画像の保存が短時間に集中しています。少し待ってから再度お試しください。",
+    );
   });
 });

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { MouseEvent } from "react";
 
 import { SourceImagePreviewDialog } from "@/features/matches/workspace/sourceImages/SourceImagePreviewDialog";
 import { SourceImageTabs } from "@/features/matches/workspace/sourceImages/SourceImageTabs";
@@ -130,7 +131,7 @@ export function SourceImagePanel({
     };
   }, [activeImageUrl]);
 
-  const saveArchive = async () => {
+  const saveArchive = useCallback(async () => {
     setArchiveError("");
     setArchiveSaving(true);
     try {
@@ -148,21 +149,45 @@ export function SourceImagePanel({
     } finally {
       setArchiveSaving(false);
     }
-  };
+  }, [matchDraftId]);
 
-  const handleArchiveSaveRequest = () => {
+  const handleArchiveSaveRequest = useCallback(() => {
     setArchiveError("");
     if (availableImageCount < expectedImageCount) {
       setArchiveConfirmOpen(true);
       return;
     }
     void saveArchive();
-  };
+  }, [availableImageCount, expectedImageCount, saveArchive]);
 
-  const handleArchiveSaveConfirmed = () => {
+  const handleArchiveSaveConfirmed = useCallback(() => {
     setArchiveConfirmOpen(false);
     void saveArchive();
-  };
+  }, [saveArchive]);
+  const handleArchiveDialogOpenChange = useCallback((open: boolean) => {
+    setArchiveConfirmOpen(open);
+  }, []);
+  const handleArchiveCancel = useCallback(() => {
+    setArchiveConfirmOpen(false);
+  }, []);
+  const handleSourceImageTabChange = useCallback((kind: SourceImageKind) => {
+    setActiveKind(kind);
+    setManualSwitchAt(Date.now());
+  }, []);
+  const handlePreviewOpen = useCallback(
+    (event: MouseEvent<HTMLElement>) => {
+      if (activeState?.status !== "available") {
+        return;
+      }
+      previewTriggerRef.current = event.currentTarget;
+      setPreviewKind(activeState.kind);
+    },
+    [activeState],
+  );
+  const handlePreviewClose = useCallback(() => {
+    setPreviewKind(null);
+    previewTriggerRef.current?.focus();
+  }, []);
 
   return (
     <Card className="h-fit p-4 lg:sticky lg:top-4 lg:w-[22rem] xl:w-[26rem]">
@@ -193,17 +218,13 @@ export function SourceImagePanel({
         </p>
       ) : null}
       {archiveError ? (
-        <p className="mt-2 text-sm text-[var(--color-danger)]">{archiveError}</p>
+        <p className="mt-2 text-sm text-[var(--color-danger)]" role="alert">
+          {archiveError}
+        </p>
       ) : null}
 
       <div className="mt-3">
-        <SourceImageTabs
-          activeKind={activeKind}
-          onChange={(kind) => {
-            setActiveKind(kind);
-            setManualSwitchAt(Date.now());
-          }}
-        />
+        <SourceImageTabs activeKind={activeKind} onChange={handleSourceImageTabChange} />
       </div>
 
       <div className="mt-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
@@ -235,13 +256,7 @@ export function SourceImagePanel({
               <p className="text-xs text-[var(--color-text-secondary)]">
                 {activeState.description}
               </p>
-              <Button
-                variant="secondary"
-                onClick={(event) => {
-                  previewTriggerRef.current = event.currentTarget;
-                  setPreviewKind(activeState.kind);
-                }}
-              >
+              <Button variant="secondary" onClick={handlePreviewOpen}>
                 拡大
               </Button>
             </div>
@@ -257,10 +272,7 @@ export function SourceImagePanel({
         <SourceImagePreviewDialog
           kind={previewKind}
           url={previewUrl}
-          onClose={() => {
-            setPreviewKind(null);
-            previewTriggerRef.current?.focus();
-          }}
+          onClose={handlePreviewClose}
         />
       ) : null}
 
@@ -268,13 +280,13 @@ export function SourceImagePanel({
         <Dialog
           open
           title="元画像がすべてそろっていません"
-          onOpenChange={(open) => setArchiveConfirmOpen(open)}
+          onOpenChange={handleArchiveDialogOpenChange}
         >
           <p className="text-sm leading-6 text-pretty text-[var(--color-text-secondary)]">
             {`保存できる元画像は${expectedImageCount}枚中${availableImageCount}枚です。不足している画像はZIPに含まれません。このまま保存しますか？`}
           </p>
           <div className="mt-4 flex flex-wrap justify-end gap-2">
-            <Button variant="secondary" onClick={() => setArchiveConfirmOpen(false)}>
+            <Button variant="secondary" onClick={handleArchiveCancel}>
               キャンセル
             </Button>
             <Button

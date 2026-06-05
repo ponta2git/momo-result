@@ -1,5 +1,9 @@
 import type { CSSProperties } from "react";
 
+import {
+  formatPercent,
+  formatSigned,
+} from "@/features/seriesComparison/seriesComparisonPresentation";
 import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
 import { cn } from "@/shared/ui/cn";
 
@@ -758,17 +762,6 @@ function formatHistogramBinLabel(bin: HistogramBin): string {
     return `${lower}+`;
   }
   return `${lower}〜${formatCompactManYen(bin.upperExclusive)}`;
-}
-
-function formatPercent(value: number | null | undefined): string {
-  return isFiniteNumber(value) ? `${(value * 100).toFixed(1)}%` : "-";
-}
-
-function formatSigned(value: number | null | undefined): string {
-  if (!isFiniteNumber(value)) {
-    return "-";
-  }
-  return `${value > 0 ? "+" : ""}${value.toFixed(2)}`;
 }
 
 function medianNumber(values: number[]): number | undefined {

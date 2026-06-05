@@ -1,8 +1,13 @@
+import { useCallback, useMemo } from "react";
+
 import {
   formatMatchDetailDate,
   formatMatchDetailDateOnly,
 } from "@/features/matches/matchDetailViewModel";
-import type { MatchDetailPlayerResult } from "@/features/matches/matchDetailViewModel";
+import type {
+  MatchDetailPlayerResult,
+  MatchDetailSortKey,
+} from "@/features/matches/matchDetailViewModel";
 import { MatchResultIllustration } from "@/features/matches/MatchResultIllustration";
 import { useMatchDetailPageController } from "@/features/matches/useMatchDetailPageController";
 import { incidentColumns } from "@/shared/domain/incidents";
@@ -12,12 +17,19 @@ import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";
 import { DataTable } from "@/shared/ui/data/DataTable";
+import type { DataTableColumn } from "@/shared/ui/data/DataTable";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { Card } from "@/shared/ui/layout/Card";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
+
+const matchDetailPlayerRowKey = (player: MatchDetailPlayerResult) => player.memberId;
+type MatchDetailReadyController = Extract<
+  ReturnType<typeof useMatchDetailPageController>,
+  { status: "ready" }
+>;
 
 export function MatchDetailPage() {
   const controller = useMatchDetailPageController();
@@ -30,6 +42,10 @@ export function MatchDetailPage() {
     return <MatchDetailLoadFailed />;
   }
 
+  return <MatchDetailReadyContent controller={controller} />;
+}
+
+function MatchDetailReadyContent({ controller }: { controller: MatchDetailReadyController }) {
   const {
     confirmDelete,
     errorMessage,
@@ -46,6 +62,67 @@ export function MatchDetailPage() {
     showConfirm,
     sort,
   } = controller;
+  const openDeleteDialog = useCallback(() => {
+    setShowConfirm(true);
+  }, [setShowConfirm]);
+  const handleDeleteConfirm = useCallback(async () => {
+    await confirmDelete();
+  }, [confirmDelete]);
+  const columns = useMemo<Array<DataTableColumn<MatchDetailPlayerResult>>>(() => {
+    const sortable = (
+      key: MatchDetailSortKey,
+      column: Omit<DataTableColumn<MatchDetailPlayerResult>, "key" | "onSort" | "sortDirection">,
+    ): DataTableColumn<MatchDetailPlayerResult> => ({
+      ...column,
+      key,
+      onSort: () => setSortKey(key),
+      sortDirection: sort.key === key ? sort.direction : undefined,
+      sortable: true,
+    });
+
+    return [
+      sortable("playOrder", {
+        header: "プレー順",
+        minWidth: "6rem",
+        renderCell: (player) => player.playOrder,
+      }),
+      sortable("member", {
+        header: "プレーヤー",
+        minWidth: "10rem",
+        renderCell: (player) => memberDisplayName(player.memberId),
+      }),
+      sortable("rank", {
+        align: "right",
+        header: "順位",
+        minWidth: "5rem",
+        renderCell: (player) => player.rank,
+      }),
+      sortable("totalAssetsManYen", {
+        align: "right",
+        header: "総資産",
+        minWidth: "9rem",
+        renderCell: (player) => (
+          <span className="tabular-nums">{formatManYen(player.totalAssetsManYen)}</span>
+        ),
+      }),
+      sortable("revenueManYen", {
+        align: "right",
+        header: "収益",
+        minWidth: "9rem",
+        renderCell: (player) => (
+          <span className="tabular-nums">{formatManYen(player.revenueManYen)}</span>
+        ),
+      }),
+      ...incidentColumns.map(([key, label]) =>
+        sortable(key, {
+          align: "right",
+          header: label,
+          minWidth: "6rem",
+          renderCell: (player) => <span className="tabular-nums">{player.incidents[key]}</span>,
+        }),
+      ),
+    ];
+  }, [setSortKey, sort.direction, sort.key]);
 
   return (
     <PageFrame className="gap-5" width="wide">
@@ -72,13 +149,11 @@ export function MatchDetailPage() {
               open={showConfirm}
               title="試合を削除しますか？"
               trigger={
-                <Button variant="danger" onClick={() => setShowConfirm(true)}>
+                <Button variant="danger" onClick={openDeleteDialog}>
                   削除
                 </Button>
               }
-              onConfirm={async () => {
-                await confirmDelete();
-              }}
+              onConfirm={handleDeleteConfirm}
               onOpenChange={setShowConfirm}
             />
           </>
@@ -193,76 +268,7 @@ export function MatchDetailPage() {
             見出しで並び替えできます。
           </p>
         </div>
-        <DataTable
-          columns={[
-            {
-              header: "プレー順",
-              key: "playOrder",
-              minWidth: "6rem",
-              onSort: () => setSortKey("playOrder"),
-              renderCell: (player) => player.playOrder,
-              sortDirection: sort.key === "playOrder" ? sort.direction : undefined,
-              sortable: true,
-            },
-            {
-              header: "プレーヤー",
-              key: "member",
-              minWidth: "10rem",
-              onSort: () => setSortKey("member"),
-              renderCell: (player) => memberDisplayName(player.memberId),
-              sortDirection: sort.key === "member" ? sort.direction : undefined,
-              sortable: true,
-            },
-            {
-              align: "right",
-              header: "順位",
-              key: "rank",
-              minWidth: "5rem",
-              onSort: () => setSortKey("rank"),
-              renderCell: (player) => player.rank,
-              sortDirection: sort.key === "rank" ? sort.direction : undefined,
-              sortable: true,
-            },
-            {
-              align: "right",
-              header: "総資産",
-              key: "totalAssetsManYen",
-              minWidth: "9rem",
-              onSort: () => setSortKey("totalAssetsManYen"),
-              renderCell: (player) => (
-                <span className="tabular-nums">{formatManYen(player.totalAssetsManYen)}</span>
-              ),
-              sortDirection: sort.key === "totalAssetsManYen" ? sort.direction : undefined,
-              sortable: true,
-            },
-            {
-              align: "right",
-              header: "収益",
-              key: "revenueManYen",
-              minWidth: "9rem",
-              onSort: () => setSortKey("revenueManYen"),
-              renderCell: (player) => (
-                <span className="tabular-nums">{formatManYen(player.revenueManYen)}</span>
-              ),
-              sortDirection: sort.key === "revenueManYen" ? sort.direction : undefined,
-              sortable: true,
-            },
-            ...incidentColumns.map(([key, label]) => ({
-              align: "right" as const,
-              header: label,
-              key,
-              minWidth: "6rem",
-              onSort: () => setSortKey(key),
-              renderCell: (player: MatchDetailPlayerResult) => (
-                <span className="tabular-nums">{player.incidents[key]}</span>
-              ),
-              sortDirection: sort.key === key ? sort.direction : undefined,
-              sortable: true,
-            })),
-          ]}
-          getRowKey={(player) => player.memberId}
-          rows={players}
-        />
+        <DataTable columns={columns} getRowKey={matchDetailPlayerRowKey} rows={players} />
       </Card>
     </PageFrame>
   );

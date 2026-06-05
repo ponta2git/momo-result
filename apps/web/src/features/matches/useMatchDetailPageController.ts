@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import {
@@ -90,14 +90,14 @@ export function useMatchDetailPageController() {
   const players = useMemo(() => sortMatchDetailPlayers(sourcePlayers, sort), [sourcePlayers, sort]);
   const rankedPlayers = useMemo(() => rankMatchDetailPlayers(sourcePlayers), [sourcePlayers]);
 
-  const setSortKey = (key: MatchDetailSortKey) => {
+  const setSortKey = useCallback((key: MatchDetailSortKey) => {
     setSort((current) => nextMatchDetailSort(current, key));
-  };
+  }, []);
 
-  const confirmDelete = async () => {
+  const confirmDelete = useCallback(async () => {
     setErrorMessage(null);
     await deleteMutation.mutateAsync();
-  };
+  }, [deleteMutation]);
 
   const detailLoading =
     isInitialQueryLoading(matchQuery) ||

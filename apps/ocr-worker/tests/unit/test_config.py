@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
@@ -49,6 +50,18 @@ def test_load_worker_config_reads_redis_and_database_urls() -> None:
     assert str(config.debug_dir_base) == "/tmp/ocr-debug"
     assert config.ocr_engine == "subprocess"
     assert _redis_socket_timeout_seconds(config) == 50.0
+
+
+def test_load_worker_config_expands_temp_root_home(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+
+    config = load_worker_config({"IMAGE_TMP_DIR": "~/momo-images"})
+
+    assert config.temp_root == home / "momo-images"
 
 
 def test_require_production_config_rejects_missing_urls() -> None:

@@ -36,10 +36,9 @@ def read_image_metadata(path: Path, *, enforce_size_limit: bool = True) -> Image
 
     try:
         with Image.open(path) as image:
-            image.verify()
-        with Image.open(path) as image:
             image_format = image.format or "UNKNOWN"
             width, height = image.size
+            image.verify()
     except FileNotFoundError as exc:
         raise OcrError(
             FailureCode.TEMP_IMAGE_MISSING,

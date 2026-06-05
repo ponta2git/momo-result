@@ -79,7 +79,7 @@ def load_worker_config(env: Mapping[str, str] | None = None) -> WorkerConfig:
             "OCR_REDIS_BLOCK_SECONDS",
             DEFAULT_REDIS_BLOCK_SECONDS,
         ),
-        temp_root=Path(source.get("IMAGE_TMP_DIR", str(DEFAULT_TEMP_ROOT))).absolute(),
+        temp_root=_path_from_env(source, "IMAGE_TMP_DIR", DEFAULT_TEMP_ROOT),
         fast_path_enabled=parse_fast_path_flag(source.get("MOMO_OCR_FAST_PATH")),
         debug_dir_base=_optional_path(source, "MOMO_OCR_DEBUG_DIR"),
         ocr_engine=_optional_non_empty(source, "MOMO_OCR_ENGINE"),
@@ -162,6 +162,14 @@ def _optional_path(env: Mapping[str, str], key: str) -> Path | None:
     value = _optional_non_empty(env, key)
     if value is None or value.strip() == "":
         return None
+    return _normalized_path(value)
+
+
+def _path_from_env(env: Mapping[str, str], key: str, default: Path) -> Path:
+    return _normalized_path(env.get(key, str(default)))
+
+
+def _normalized_path(value: str) -> Path:
     return Path(value).expanduser().absolute()
 
 

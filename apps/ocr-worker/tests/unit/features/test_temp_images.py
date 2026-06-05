@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal, cast
 
 import pytest
+from PIL import Image
 
 from momo_ocr.features.temp_images.cleanup import delete_if_exists
 from momo_ocr.features.temp_images.storage import resolve_local_image
@@ -21,6 +23,33 @@ def test_read_image_metadata_allows_local_sample_without_size_limit(tmp_path: Pa
     assert metadata.width == 1920
     assert metadata.height == 1080
     assert metadata.size_bytes > 0
+
+
+def test_read_image_metadata_opens_image_file_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    image_path = tmp_path / "sample.jpg"
+    write_test_image(image_path, size=(640, 360))
+    real_open = Image.open
+    open_count = 0
+
+    def counting_open(
+        fp: str | bytes | Path,
+        mode: Literal["r"] = "r",
+        formats: list[str] | tuple[str, ...] | None = None,
+    ) -> Image.Image:
+        nonlocal open_count
+        open_count += 1
+        return cast("Image.Image", real_open(fp, mode=mode, formats=formats))
+
+    monkeypatch.setattr(Image, "open", counting_open)
+
+    metadata = read_image_metadata(image_path)
+
+    assert metadata.width == 640
+    assert metadata.height == 360
+    assert open_count == 1
 
 
 def test_open_decoded_image_returns_rgb(tmp_path: Path) -> None:

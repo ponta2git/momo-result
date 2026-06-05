@@ -477,7 +477,7 @@ describe("DraftReviewPage", () => {
     expect(
       matchSetupHeading.compareDocumentPosition(playerResultsHeading) &
         Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(screen.getByText(/この結果をどの開催履歴・作品として保存するか/u)).toBeInTheDocument();
     expect(await screen.findByDisplayValue("あかねまみ")).toBeInTheDocument();
     expect(await screen.findByDisplayValue("15420")).toBeInTheDocument();

@@ -205,7 +205,7 @@ describe("ui foundation", () => {
     );
 
     expect(screen.getByText("処理中")).toBeInTheDocument();
-    expect(screen.getAllByText("確認待ち").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("確認待ち")).toBeInTheDocument();
     expect(screen.getByText("確定済")).toBeInTheDocument();
     expect(screen.getByText("OCR失敗")).toBeInTheDocument();
   });

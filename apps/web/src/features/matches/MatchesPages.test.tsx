@@ -49,7 +49,7 @@ describe("MatchesListPage", () => {
 
     expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
     expect(screen.queryByLabelText("開催の振り返り")).not.toBeInTheDocument();
-    expect((await screen.findAllByText("優勝 ぽんた")).length).toBeGreaterThanOrEqual(1);
+    expect(await screen.findAllByText("優勝 ぽんた")).toHaveLength(2);
     expect(screen.getByRole("columnheader", { name: /開催・試合/u })).toBeInTheDocument();
     const matchInfoCell = screen.getAllByRole("cell").find((cell) => {
       const text = cell.textContent ?? "";

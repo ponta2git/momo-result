@@ -10,6 +10,7 @@ const seasonMasterId = `season_e2e_${masterIdSuffix}`;
 const mapMasterId = `map_e2e_${masterIdSuffix}`;
 const gameTitleName = `桃太郎電鉄2 E2E ${masterIdSuffix}`;
 const aliasName = `E2E-${runId}`;
+const generatedIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
 const png1x1 = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
   "base64",
@@ -61,7 +62,7 @@ test("creates a held event after dev login", async ({ page }) => {
   const response = await createResponse;
   expect(response.ok()).toBe(true);
   const body = (await response.json()) as { id?: string };
-  heldEventId = expectE2eId(body.id, "held_");
+  heldEventId = expectGeneratedId(body.id, "held event ID");
   await expect(page.getByText(/開催履歴（.+）を作成しました。/u)).toBeVisible();
 });
 
@@ -122,7 +123,7 @@ test("starts an OCR job from an uploaded image", async ({ page }) => {
   const draftCreateResponse = await draftResponse;
   expect(draftCreateResponse.ok()).toBe(true);
   const draftBody = (await draftCreateResponse.json()) as { matchDraftId?: string };
-  uploadedDraftId = expectE2eId(draftBody.matchDraftId, "draft_");
+  uploadedDraftId = expectGeneratedId(draftBody.matchDraftId, "match draft ID");
 
   expect((await jobResponse).ok()).toBe(true);
   await expect(page).toHaveURL(/\/matches(?:\?.*)?$/u);
@@ -130,7 +131,7 @@ test("starts an OCR job from an uploaded image", async ({ page }) => {
 });
 
 test("confirms the sample OCR review into a match detail", async ({ page }) => {
-  expectE2eId(heldEventId, "held_");
+  expectGeneratedId(heldEventId, "held event ID");
 
   await page.goto("/review/dev-sample?sample=1");
 
@@ -152,7 +153,7 @@ test("confirms the sample OCR review into a match detail", async ({ page }) => {
   const response = await confirmResponse;
   expect(response.ok()).toBe(true);
   const body = (await response.json()) as { matchId?: string };
-  matchId = expectE2eId(body.matchId, "match_");
+  matchId = expectGeneratedId(body.matchId, "match ID");
 
   await expect(page).toHaveURL(new RegExp(`/matches/${matchId}$`, "u"));
   await expect(page.getByRole("heading", { name: /第\d+試合の結果/u })).toBeVisible();
@@ -160,8 +161,8 @@ test("confirms the sample OCR review into a match detail", async ({ page }) => {
 });
 
 test("filters and sorts the confirmed match list", async ({ page }) => {
-  expectE2eId(heldEventId, "held_");
-  expectE2eId(matchId, "match_");
+  expectGeneratedId(heldEventId, "held event ID");
+  expectGeneratedId(matchId, "match ID");
 
   await page.goto("/matches");
 
@@ -205,7 +206,7 @@ test("filters and sorts the confirmed match list", async ({ page }) => {
 });
 
 test("opens match detail immediately with a loading shell from the list", async ({ page }) => {
-  expectE2eId(matchId, "match_");
+  expectGeneratedId(matchId, "match ID");
 
   let releaseDetailResponse!: () => void;
   let detailApiRequested = false;
@@ -244,7 +245,7 @@ test("opens match detail immediately with a loading shell from the list", async 
 });
 
 test("downloads an export for the confirmed match", async ({ page }) => {
-  expectE2eId(matchId, "match_");
+  expectGeneratedId(matchId, "match ID");
 
   await page.goto(`/exports?matchId=${encodeURIComponent(matchId)}&format=tsv`);
 
@@ -270,8 +271,8 @@ test("downloads an export for the confirmed match", async ({ page }) => {
 test("deletes discarded OCR draft and scoped masters after deleting the confirmed match", async ({
   request,
 }) => {
-  expectE2eId(uploadedDraftId, "draft_");
-  expectE2eId(matchId, "match_");
+  expectGeneratedId(uploadedDraftId, "match draft ID");
+  expectGeneratedId(matchId, "match ID");
 
   const cancelResponse = await postMutation(request, `/api/match-drafts/${uploadedDraftId}/cancel`);
   await expectOk(cancelResponse, "cancel uploaded draft");
@@ -361,12 +362,12 @@ async function expectOk(response: APIResponse, label: string): Promise<void> {
   throw new Error(`${label} failed with ${response.status()}: ${await response.text()}`);
 }
 
-function expectE2eId(value: string | undefined, prefix: string): string {
+function expectGeneratedId(value: string | undefined, label: string): string {
   expect(typeof value).toBe("string");
   if (typeof value !== "string") {
-    throw new TypeError(`Expected ${prefix} ID, but received ${String(value)}`);
+    throw new TypeError(`Expected ${label}, but received ${String(value)}`);
   }
-  expect(value).toEqual(expect.stringMatching(new RegExp(`^${prefix}[A-Za-z0-9_-]+$`, "u")));
+  expect(value).toEqual(expect.stringMatching(generatedIdPattern));
   return value;
 }
 

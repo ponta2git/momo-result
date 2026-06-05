@@ -8,6 +8,7 @@ import org.typelevel.ci.CIString
 
 import momo.api.auth.{AuthHeaderNames, CsrfTokenService, SessionService}
 import momo.api.config.{AppConfig, AppEnv}
+import momo.api.endpoints.HealthPaths
 import momo.api.errors.AppError
 
 private[http] final class ProductionSessionMiddleware[F[_]: Async](
@@ -54,7 +55,7 @@ private[http] final class ProductionSessionMiddleware[F[_]: Async](
 
   private def isPublic(request: Request[F], allowDetailedHealth: Boolean): Boolean =
     val path = request.uri.path.renderString
-    path == "/healthz" || (allowDetailedHealth && path == "/healthz/details")
+    path == HealthPaths.HealthPath || (allowDetailedHealth && path == HealthPaths.DetailsPath)
 
   private def problem(error: AppError): F[Response[F]] = HttpProblemResponse.fromError[F](error)
     .pure[F]

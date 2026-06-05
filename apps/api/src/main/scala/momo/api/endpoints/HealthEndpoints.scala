@@ -16,12 +16,12 @@ object HealthEndpoints:
 
   val health: PublicEndpoint[Unit, Unit, HealthResponse, Any] = endpoint
     .get
-    .in("healthz")
+    .in(HealthPaths.Health)
     .out(jsonBody[HealthResponse])
     .tag("health")
 
   val details: PublicEndpoint[Unit, Unit, HealthDetailsResponse, Any] = endpoint
     .get
-    .in("healthz" / "details")
+    .in(HealthPaths.Health / HealthPaths.Details)
     .out(jsonBody[HealthDetailsResponse])
     .tag("health")

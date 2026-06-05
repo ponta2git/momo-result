@@ -17,6 +17,8 @@ final class ApiEndpointsArchitectureSpec extends FunSuite:
   private val authHttpRoutes = Paths.get("src/main/scala/momo/api/http/AuthHttpRoutes.scala")
   private val commonEndpoint = endpointDir.resolve("CommonEndpoint.scala")
   private val csrfMiddleware = httpDir.resolve("CsrfMiddleware.scala")
+  private val maxBodySizeMiddleware = httpDir.resolve("MaxBodySizeMiddleware.scala")
+  private val productionSessionMiddleware = httpDir.resolve("ProductionSessionMiddleware.scala")
   private val requestIdMiddleware = httpDir.resolve("RequestIdMiddleware.scala")
   private val httpOperation = Paths.get("src/main/scala/momo/api/http/HttpOperation.scala")
 
@@ -94,6 +96,26 @@ final class ApiEndpointsArchitectureSpec extends FunSuite:
     assert(!endpointText.contains("""header[Option[String]]("Idempotency-Key")"""))
     assert(!csrfText.contains("""val HeaderName = "X-CSRF-Token""""))
     assert(!requestIdText.contains("""CIString("X-Request-Id")"""))
+
+  test("Tapir endpoints and middleware share common public path contracts"):
+    val healthEndpointText = read(endpointDir.resolve("HealthEndpoints.scala"))
+    val uploadEndpointText = read(endpointDir.resolve("UploadEndpoints.scala"))
+    val maxBodyText = read(maxBodySizeMiddleware)
+    val sessionText = read(productionSessionMiddleware)
+
+    assert(healthEndpointText.contains("HealthPaths.Health"))
+    assert(healthEndpointText.contains("HealthPaths.Details"))
+    assert(uploadEndpointText.contains("UploadPaths.Api"))
+    assert(uploadEndpointText.contains("UploadPaths.Uploads"))
+    assert(uploadEndpointText.contains("UploadPaths.Images"))
+    assert(sessionText.contains("HealthPaths.HealthPath"))
+    assert(sessionText.contains("HealthPaths.DetailsPath"))
+    assert(maxBodyText.contains("UploadPaths.ImageUploadPath"))
+    assert(!healthEndpointText.contains(""".in("healthz")"""))
+    assert(!healthEndpointText.contains(""""healthz" / "details""""))
+    assert(!uploadEndpointText.contains(""".in("api" / "uploads" / "images")"""))
+    assert(!sessionText.contains("\"/healthz\""))
+    assert(!maxBodyText.contains("\"/api/uploads/images\""))
 
   test("HTTP modules use shared operation labels for cross-cutting scopes"):
     val violations = scalaFiles(httpModulesDir).flatMap { path =>

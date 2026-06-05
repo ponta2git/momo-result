@@ -3,6 +3,7 @@ package momo.api.http
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 
+import cats.data.OptionT
 import cats.effect.Async
 import cats.syntax.all.*
 import io.circe.syntax.*
@@ -38,151 +39,147 @@ private[http] object AuthHttpRoutes:
       callbackStateRateLimiter: RateLimiter[F],
       providerBackoff: OAuthProviderBackoff[F],
   ): HttpRoutes[F] =
-    lazy val routes: HttpRoutes[F] = HttpRoutes.of[F] {
-      case request
-          if HttpMethodPredicates.isGet(request.method) && path(request) == AuthPaths.LoginPath =>
-        rateLimit(request).flatMap {
-          case Left(response) => response
-          case Right(_) =>
-            for
-              silent = request.uri.query.params.get(AuthPaths.SilentQuery).contains("1")
-              next = request.uri.query.params.get(AuthPaths.NextQuery)
-                .flatMap(RedirectPath.sanitize)
-              state <- stateCodec.create(silent, next)
-              location <- oauth.authorizationUrl(state, if silent then Some("none") else None)
-              response <- redirect(location).map(_.addCookie(stateCookie(config, state)))
-            yield response
-        }
+    lazy val routes: HttpRoutes[F] =
+      HttpRoutes[F](request => OptionT(dispatch(request, request.uri.path.renderString).sequence))
 
-      case request
-          if HttpMethodPredicates.isGet(request.method) &&
-            path(request) == AuthPaths.CallbackPath =>
-        rateLimit(request).flatMap {
-          case Left(response) => response
-          case Right(_) =>
-            val params = request.uri.query.params
-            val state = params.get(AuthPaths.StateQuery)
-            val code = params.get(AuthPaths.CodeQuery)
-            val oauthError = params.get(AuthPaths.ErrorQuery)
-            val cookieState = request.cookies.find(_.name == config.auth.stateCookieName)
-              .map(_.content)
-            (state, cookieState) match
-              case (Some(stateValue), Some(cookieValue))
-                  if stateMatchesCookie(stateValue, cookieValue) =>
-                rateLimitCallbackState(stateValue).flatMap {
-                  case Left(response) => response.map(clearStateCookie)
-                  case Right(_) => stateCodec.validate(stateValue).flatMap {
-                      case None => callbackProblem(
-                          "state_invalid_or_expired",
-                          AppError.Forbidden("OAuth state is invalid or expired."),
-                        )
-                      case Some(context) => oauthError match
-                          case Some(_) if context.silent =>
-                            Async[F].delay(logger.warn(
-                              "auth_callback_rejected reason=provider_denied_silent"
-                            )) *> redirect(interactiveLoginPath(context.redirectPath))
-                              .map(clearStateCookie)
-                          case Some(_) => callbackProblem(
-                              "provider_denied",
-                              AppError.Forbidden("Discord OAuth was cancelled or denied."),
-                            )
-                          case None => code match
-                              case Some(codeValue) => fetchUserWithBackoff(codeValue).flatMap {
-                                  case Left(error) => callbackProblem("provider_error", error)
-                                  case Right(discordUser) => UserId.fromString(discordUser.id) match
-                                      case Left(_) => callbackProblem(
-                                          "invalid_discord_user_id",
-                                          AppError.Forbidden(
-                                            "This Discord user is not allowed to log in."
-                                          ),
-                                        )
-                                      case Right(userId) => accounts.findByDiscordUserId(userId)
-                                          .flatMap {
-                                            case None => callbackProblem(
-                                                "discord_user_not_allowed",
-                                                AppError.Forbidden(
-                                                  "This Discord user is not allowed to log in."
-                                                ),
-                                              )
-                                            case Some(account) if !account.loginEnabled =>
-                                              callbackProblem(
-                                                "login_disabled",
-                                                AppError.Forbidden(
-                                                  "This account is not allowed to log in."
-                                                ),
-                                              )
-                                            case Some(account) => sessions.create(account)
-                                                .flatMap { session =>
-                                                  val event =
-                                                    s"auth_login_completed accountId=${account.id
-                                                        .value}"
-                                                  Async[F].delay(logger.info(event)) *> redirect(
-                                                    context.redirectPath
-                                                      .getOrElse(config.auth.callbackRedirectPath)
-                                                  ).map { response =>
-                                                    clearStateCookie(response.addCookie(
-                                                      sessionCookie(config, session.cookieValue)
-                                                    ))
-                                                  }
-                                                }
-                                          }
-                                }
-                              case None => callbackProblem(
-                                  "missing_code",
-                                  AppError
-                                    .Forbidden("OAuth callback is missing or has mismatched state."),
-                                )
-                    }
-                }
-              case _ => callbackProblem(
-                  "state_mismatch",
-                  AppError.Forbidden("OAuth callback is missing or has mismatched state."),
-                )
-        }
+    def dispatch(request: Request[F], requestPath: String): Option[F[Response[F]]] =
+      if HttpMethodPredicates.isGet(request.method) && requestPath == AuthPaths.LoginPath then
+        Some(login(request))
+      else if HttpMethodPredicates.isGet(request.method) && requestPath == AuthPaths.CallbackPath
+      then Some(callback(request))
+      else if HttpMethodPredicates.isPost(request.method) && requestPath == AuthPaths.LogoutPath
+      then Some(logout(request))
+      else if HttpMethodPredicates.isGet(request.method) && requestPath == AuthPaths.MePath then
+        Some(me(request))
+      else None
 
-      case request
-          if HttpMethodPredicates.isPost(request.method) && path(request) == AuthPaths.LogoutPath =>
-        val sessionId = request.cookies.find(_.name == config.auth.sessionCookieName).map(_.content)
-        sessions.authenticate(sessionId).flatMap {
-          case Left(error) => problem(error)
-              .map(_.addCookie(clearCookie(config.auth.sessionCookieName, config)))
-          case Right(authenticated) => csrf.verify(
-              authenticated.session,
-              request.headers.get(CIString(CsrfMiddleware.HeaderName)).flatMap(_.head.value.some),
-            ) match
-              case Left(error) => problem(error)
-              case Right(_) => sessions.delete(authenticated.session.idHash) *>
-                  noContent.map(_.addCookie(clearCookie(config.auth.sessionCookieName, config)))
-        }
-
-      case request
-          if HttpMethodPredicates.isGet(request.method) && path(request) == AuthPaths.MePath =>
-        config.appEnv match
-          case AppEnv.Dev | AppEnv.Test => devAccountHeader(request) match
-              case Some(accountId) => AccountId.fromString(accountId) match
-                  case Left(_) => problem(
-                      AppError.Forbidden("Account header is not one of the allowed accounts.")
-                    )
-                  case Right(parsedAccountId) => accounts.find(parsedAccountId).flatMap {
-                      case Some(account) if account.loginEnabled =>
-                        json(AuthMeResponse(
-                          accountId = account.id.value,
-                          displayName = account.displayName,
-                          isAdmin = account.isAdmin,
-                          memberId = account.playerMemberId.map(_.value),
-                          csrfToken = Some(CsrfMiddleware.DevToken),
-                        ))
-                      case Some(_) =>
-                        problem(AppError.Forbidden("This account is not allowed to log in."))
-                      case None => problem(
-                          AppError.Forbidden("Account header is not one of the allowed accounts.")
-                        )
-                    }
-              case None => sessionAuthMe(request)
-          case AppEnv.Prod => sessionAuthMe(request)
+    def login(request: Request[F]): F[Response[F]] = rateLimit(request).flatMap {
+      case Left(response) => response
+      case Right(_) =>
+        for
+          silent = request.uri.query.params.get(AuthPaths.SilentQuery).contains("1")
+          next = request.uri.query.params.get(AuthPaths.NextQuery).flatMap(RedirectPath.sanitize)
+          state <- stateCodec.create(silent, next)
+          location <- oauth.authorizationUrl(state, if silent then Some("none") else None)
+          response <- redirect(location).map(_.addCookie(stateCookie(config, state)))
+        yield response
     }
 
-    def path(request: Request[F]): String = request.uri.path.renderString
+    def callback(request: Request[F]): F[Response[F]] = rateLimit(request).flatMap {
+      case Left(response) => response
+      case Right(_) =>
+        val params = request.uri.query.params
+        val state = params.get(AuthPaths.StateQuery)
+        val code = params.get(AuthPaths.CodeQuery)
+        val oauthError = params.get(AuthPaths.ErrorQuery)
+        val cookieState = request.cookies.find(_.name == config.auth.stateCookieName).map(_.content)
+        (state, cookieState) match
+          case (Some(stateValue), Some(cookieValue))
+              if stateMatchesCookie(stateValue, cookieValue) =>
+            rateLimitCallbackState(stateValue).flatMap {
+              case Left(response) => response.map(clearStateCookie)
+              case Right(_) => stateCodec.validate(stateValue).flatMap {
+                  case None => callbackProblem(
+                      "state_invalid_or_expired",
+                      AppError.Forbidden("OAuth state is invalid or expired."),
+                    )
+                  case Some(context) => oauthError match
+                      case Some(_) if context.silent =>
+                        Async[F].delay(logger.warn(
+                          "auth_callback_rejected reason=provider_denied_silent"
+                        )) *> redirect(interactiveLoginPath(context.redirectPath))
+                          .map(clearStateCookie)
+                      case Some(_) => callbackProblem(
+                          "provider_denied",
+                          AppError.Forbidden("Discord OAuth was cancelled or denied."),
+                        )
+                      case None => code match
+                          case Some(codeValue) => fetchUserWithBackoff(codeValue).flatMap {
+                              case Left(error) => callbackProblem("provider_error", error)
+                              case Right(discordUser) => UserId.fromString(discordUser.id) match
+                                  case Left(_) => callbackProblem(
+                                      "invalid_discord_user_id",
+                                      AppError
+                                        .Forbidden("This Discord user is not allowed to log in."),
+                                    )
+                                  case Right(userId) => accounts.findByDiscordUserId(userId)
+                                      .flatMap {
+                                        case None => callbackProblem(
+                                            "discord_user_not_allowed",
+                                            AppError.Forbidden(
+                                              "This Discord user is not allowed to log in."
+                                            ),
+                                          )
+                                        case Some(account) if !account.loginEnabled =>
+                                          callbackProblem(
+                                            "login_disabled",
+                                            AppError
+                                              .Forbidden("This account is not allowed to log in."),
+                                          )
+                                        case Some(account) => sessions.create(account)
+                                            .flatMap { session =>
+                                              val event = s"auth_login_completed accountId=${account
+                                                  .id.value}"
+                                              Async[F].delay(logger.info(event)) *> redirect(
+                                                context.redirectPath
+                                                  .getOrElse(config.auth.callbackRedirectPath)
+                                              ).map { response =>
+                                                clearStateCookie(response.addCookie(
+                                                  sessionCookie(config, session.cookieValue)
+                                                ))
+                                              }
+                                            }
+                                      }
+                            }
+                          case None => callbackProblem(
+                              "missing_code",
+                              AppError
+                                .Forbidden("OAuth callback is missing or has mismatched state."),
+                            )
+                }
+            }
+          case _ => callbackProblem(
+              "state_mismatch",
+              AppError.Forbidden("OAuth callback is missing or has mismatched state."),
+            )
+    }
+
+    def logout(request: Request[F]): F[Response[F]] =
+      val sessionId = request.cookies.find(_.name == config.auth.sessionCookieName).map(_.content)
+      sessions.authenticate(sessionId).flatMap {
+        case Left(error) => problem(error)
+            .map(_.addCookie(clearCookie(config.auth.sessionCookieName, config)))
+        case Right(authenticated) => csrf.verify(
+            authenticated.session,
+            request.headers.get(CIString(CsrfMiddleware.HeaderName)).flatMap(_.head.value.some),
+          ) match
+            case Left(error) => problem(error)
+            case Right(_) => sessions.delete(authenticated.session.idHash) *>
+                noContent.map(_.addCookie(clearCookie(config.auth.sessionCookieName, config)))
+      }
+
+    def me(request: Request[F]): F[Response[F]] = config.appEnv match
+      case AppEnv.Dev | AppEnv.Test => devAccountHeader(request) match
+          case Some(accountId) => AccountId.fromString(accountId) match
+              case Left(_) =>
+                problem(AppError.Forbidden("Account header is not one of the allowed accounts."))
+              case Right(parsedAccountId) => accounts.find(parsedAccountId).flatMap {
+                  case Some(account) if account.loginEnabled =>
+                    json(AuthMeResponse(
+                      accountId = account.id.value,
+                      displayName = account.displayName,
+                      isAdmin = account.isAdmin,
+                      memberId = account.playerMemberId.map(_.value),
+                      csrfToken = Some(CsrfMiddleware.DevToken),
+                    ))
+                  case Some(_) =>
+                    problem(AppError.Forbidden("This account is not allowed to log in."))
+                  case None => problem(
+                      AppError.Forbidden("Account header is not one of the allowed accounts.")
+                    )
+                }
+          case None => sessionAuthMe(request)
+      case AppEnv.Prod => sessionAuthMe(request)
 
     def devAccountHeader(request: Request[F]): Option[String] = request.headers
       .get(CIString(AuthHeaderNames.AccountId)).map(_.head.value)

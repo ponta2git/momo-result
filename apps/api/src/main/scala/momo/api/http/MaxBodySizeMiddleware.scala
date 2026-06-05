@@ -7,6 +7,7 @@ import fs2.Chunk
 import org.http4s.headers.`Content-Length`
 import org.http4s.{HttpApp, Request, Response}
 
+import momo.api.endpoints.UploadPaths
 import momo.api.errors.AppError
 
 object MaxBodySizeMiddleware:
@@ -53,7 +54,7 @@ object MaxBodySizeMiddleware:
     chunkBytes > limitBytes - seenBytes
 
   private def isUpload[F[_]](request: Request[F]): Boolean = HttpMethodPredicates
-    .isPost(request.method) && request.uri.path.renderString == "/api/uploads/images"
+    .isPost(request.method) && request.uri.path.renderString == UploadPaths.ImageUploadPath
 
   private def problem[F[_]: Async](limitBytes: Long, label: String): F[Response[F]] =
     val error = AppError.PayloadTooLarge(s"$label must be ${limitBytes.toString} bytes or smaller.")

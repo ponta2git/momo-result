@@ -85,12 +85,13 @@ def run_one_job(deps: JobRunnerDependencies) -> JobRunOutcome:
         should_ack = False
         outcome_status = None
     except OcrError as exc:
-        should_ack = record_terminal_failure(
+        failure_recording = record_terminal_failure(
             deps.repository,
             worker_id=deps.worker_id,
             job_id=delivery.message.job_id,
             failure=exc.to_failure(),
         )
+        should_ack = failure_recording.delivery_can_be_removed
         outcome_status = OcrJobStatus.FAILED
     except Exception:
         logger.exception("Unhandled error in OCR job runner", extra=log_extra)
@@ -99,12 +100,13 @@ def run_one_job(deps: JobRunnerDependencies) -> JobRunOutcome:
             message="Unexpected OCR worker error.",
             retryable=False,
         )
-        should_ack = record_terminal_failure(
+        failure_recording = record_terminal_failure(
             deps.repository,
             worker_id=deps.worker_id,
             job_id=delivery.message.job_id,
             failure=failure,
         )
+        should_ack = failure_recording.delivery_can_be_removed
         outcome_status = OcrJobStatus.FAILED
     if should_ack:
         ack_delivery(deps.consumer, delivery)
@@ -140,12 +142,13 @@ def _handle_malformed_delivery(
     job_id = delivery.raw_fields.get("jobId")
     should_ack = True
     if job_id:
-        should_ack = record_terminal_failure(
+        failure_recording = record_terminal_failure(
             deps.repository,
             worker_id=deps.worker_id,
             job_id=job_id,
             failure=delivery.failure,
         )
+        should_ack = failure_recording.delivery_can_be_removed
     if should_ack:
         ack_delivery(deps.consumer, delivery)
     else:
@@ -168,12 +171,13 @@ def _handle_max_attempts_delivery(
     job_id = delivery.raw_fields.get("jobId")
     should_dead_letter = True
     if job_id:
-        should_dead_letter = record_terminal_failure(
+        failure_recording = record_terminal_failure(
             deps.repository,
             worker_id=deps.worker_id,
             job_id=job_id,
             failure=delivery.failure,
         )
+        should_dead_letter = failure_recording.delivery_can_be_removed
     if should_dead_letter:
         try:
             deps.consumer.dead_letter(

@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
+from enum import Enum
 from typing import Any
 
 # Extra fields, when set on a LogRecord (via `logger.info(..., extra={...})`),
@@ -24,6 +26,8 @@ _EXTRA_KEYS: tuple[str, ...] = (
 )
 _EXC_INFO_MIN_LENGTH = 2
 _EXC_INFO_VALUE_INDEX = 1
+_MAX_EXTRA_VALUE_LENGTH = 256
+type JsonLogExtraValue = bool | int | float | str
 
 
 class JsonFormatter(logging.Formatter):
@@ -37,10 +41,10 @@ class JsonFormatter(logging.Formatter):
         for key in _EXTRA_KEYS:
             value = record.__dict__.get(key)
             if value is not None:
-                payload[key] = value
+                payload[key] = _safe_extra_value(value)
         if record.exc_info:
             payload["exception_classes"] = _exception_classes_from_exc_info(record.exc_info)
-        return json.dumps(payload, ensure_ascii=False, sort_keys=True)
+        return json.dumps(payload, allow_nan=False, ensure_ascii=False, sort_keys=True)
 
 
 class SafeTextFormatter(logging.Formatter):
@@ -59,6 +63,27 @@ def _formatter_for(log_format: str) -> logging.Formatter:
     if log_format.strip().lower() == "text":
         return SafeTextFormatter("%(levelname)s %(name)s %(message)s")
     return JsonFormatter()
+
+
+def _safe_extra_value(value: object) -> JsonLogExtraValue:
+    normalized: JsonLogExtraValue
+    if isinstance(value, bool | int):
+        normalized = value
+    elif isinstance(value, float):
+        normalized = value if math.isfinite(value) else str(value)
+    elif isinstance(value, str):
+        normalized = _truncate_extra_value(value)
+    elif isinstance(value, Enum):
+        normalized = _safe_extra_value(value.value)
+    else:
+        normalized = type(value).__name__
+    return normalized
+
+
+def _truncate_extra_value(value: str) -> str:
+    if len(value) <= _MAX_EXTRA_VALUE_LENGTH:
+        return value
+    return f"{value[:_MAX_EXTRA_VALUE_LENGTH]}..."
 
 
 def _exception_classes_from_exc_info(exc_info: object) -> list[str]:

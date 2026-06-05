@@ -8,6 +8,7 @@ transition itself.
 from __future__ import annotations
 
 import logging
+from enum import Enum
 
 from momo_ocr.features.ocr_jobs.lifecycle import is_terminal
 from momo_ocr.features.ocr_jobs.models import OcrJobExecutionResult, OcrJobRecord, OcrJobStatus
@@ -17,28 +18,39 @@ from momo_ocr.shared.errors import OcrFailure
 logger = logging.getLogger(__name__)
 
 
+class TerminalFailureRecordingOutcome(Enum):
+    """Whether a failure-recording attempt made the queue delivery removable."""
+
+    DELIVERY_CAN_BE_REMOVED = "delivery_can_be_removed"
+    LEAVE_DELIVERY_PENDING = "leave_delivery_pending"
+
+    @property
+    def delivery_can_be_removed(self) -> bool:
+        return self is TerminalFailureRecordingOutcome.DELIVERY_CAN_BE_REMOVED
+
+
 def record_terminal_failure(
     repository: OcrJobRepository,
     *,
     worker_id: str,
     job_id: str,
     failure: OcrFailure,
-) -> bool:
+) -> TerminalFailureRecordingOutcome:
     """Persist a terminal ``FAILED`` status, transitioning through RUNNING if needed."""
     read_succeeded, record = _read_record_for_failure(repository, job_id, failure)
     if not read_succeeded:
-        persisted = False
+        outcome = TerminalFailureRecordingOutcome.LEAVE_DELIVERY_PENDING
     elif record is None or is_terminal(record.status):
-        persisted = True
+        outcome = TerminalFailureRecordingOutcome.DELIVERY_CAN_BE_REMOVED
     else:
-        persisted = _claim_and_transition_to_failed(
+        outcome = _claim_and_transition_to_failed(
             repository,
             worker_id=worker_id,
             job_id=job_id,
             record=record,
             failure=failure,
         )
-    return persisted
+    return outcome
 
 
 def _read_record_for_failure(
@@ -63,7 +75,7 @@ def _claim_and_transition_to_failed(
     job_id: str,
     record: OcrJobRecord,
     failure: OcrFailure,
-) -> bool:
+) -> TerminalFailureRecordingOutcome:
     claim_succeeded = True
     claimed: OcrJobRecord | None = record
     if record.status is OcrJobStatus.QUEUED:
@@ -75,9 +87,9 @@ def _claim_and_transition_to_failed(
         )
 
     if not claim_succeeded:
-        persisted = False
+        outcome = TerminalFailureRecordingOutcome.LEAVE_DELIVERY_PENDING
     elif claimed is None or is_terminal(claimed.status):
-        persisted = True
+        outcome = TerminalFailureRecordingOutcome.DELIVERY_CAN_BE_REMOVED
     elif claimed.status is OcrJobStatus.RUNNING and claimed.worker_id != worker_id:
         logger.warning(
             "Terminal-failure recording skipped because another worker owns the job",
@@ -87,12 +99,12 @@ def _claim_and_transition_to_failed(
                 "worker_id": claimed.worker_id,
             },
         )
-        persisted = True
+        outcome = TerminalFailureRecordingOutcome.DELIVERY_CAN_BE_REMOVED
     elif claimed.status is OcrJobStatus.RUNNING:
-        persisted = _transition_to_failed(repository, job_id, failure)
+        outcome = _transition_to_failed(repository, job_id, failure)
     else:
-        persisted = False
-    return persisted
+        outcome = TerminalFailureRecordingOutcome.LEAVE_DELIVERY_PENDING
+    return outcome
 
 
 def _claim_running_for_failure(
@@ -116,7 +128,7 @@ def _transition_to_failed(
     repository: OcrJobRepository,
     job_id: str,
     failure: OcrFailure,
-) -> bool:
+) -> TerminalFailureRecordingOutcome:
     try:
         repository.complete_non_success(
             job_id,
@@ -133,5 +145,5 @@ def _transition_to_failed(
             "Failed to persist terminal failure for OCR job",
             extra={"job_id": job_id, "failure_code": failure.code.value},
         )
-        return False
-    return True
+        return TerminalFailureRecordingOutcome.LEAVE_DELIVERY_PENDING
+    return TerminalFailureRecordingOutcome.DELIVERY_CAN_BE_REMOVED

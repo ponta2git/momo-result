@@ -39,6 +39,36 @@ def test_text_formatter_logs_exception_classes_without_message_or_traceback() ->
     assert "Traceback" not in rendered
 
 
+def test_json_formatter_safely_normalizes_extra_fields() -> None:
+    formatter = JsonFormatter()
+    leaked_marker = "sensitive-object-repr"
+    record = logging.getLogger("momo_ocr.test").makeRecord(
+        "momo_ocr.test",
+        logging.INFO,
+        __file__,
+        1,
+        "operation finished",
+        args=(),
+        exc_info=None,
+        func=None,
+        extra={
+            "job_id": "j" * 300,
+            "duration_ms": float("inf"),
+            "resource": _SecretRepr(leaked_marker),
+        },
+    )
+
+    rendered = formatter.format(record)
+
+    payload = cast("dict[str, object]", json.loads(rendered))
+    assert isinstance(payload["job_id"], str)
+    assert len(payload["job_id"]) == 259
+    assert payload["job_id"].endswith("...")
+    assert payload["duration_ms"] == "inf"
+    assert payload["resource"] == "_SecretRepr"
+    assert leaked_marker not in rendered
+
+
 def _record_with_current_exception() -> logging.LogRecord:
     return logging.getLogger("momo_ocr.test").makeRecord(
         "momo_ocr.test",
@@ -61,3 +91,11 @@ def _raise_runtime_error_with_secret() -> None:
 def _raise_value_error_with_secret() -> None:
     message = "database-url-secret"
     raise ValueError(message)
+
+
+class _SecretRepr:
+    def __init__(self, secret: str) -> None:
+        self._secret = secret
+
+    def __repr__(self) -> str:
+        return self._secret

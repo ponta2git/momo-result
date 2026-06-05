@@ -1,6 +1,6 @@
 import { http, HttpResponse } from "msw";
 
-import { makeSourceImageItems } from "@/test/factories/sourceImages";
+import { makeMatchDraftSourceImageResponses } from "@/test/factories/sourceImages";
 import { mswState, now } from "@/test/msw/fixtures";
 
 function pagination(page: number, pageSize: number, totalItems: number) {
@@ -54,7 +54,7 @@ export const matchHandlers = [
   }),
   http.get("/api/match-drafts/:draftId/source-images", ({ params }) =>
     HttpResponse.json({
-      items: makeSourceImageItems(String(params["draftId"])),
+      items: makeMatchDraftSourceImageResponses(String(params["draftId"])),
     }),
   ),
   http.get(

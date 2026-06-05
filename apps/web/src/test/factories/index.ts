@@ -15,4 +15,4 @@ export {
   makeFourReviewPlayerInputs,
   makeMatchWorkspaceMasterHandoffValues,
 } from "@/test/factories/draftReview";
-export { makeSourceImageItems } from "@/test/factories/sourceImages";
+export { makeMatchDraftSourceImageResponses } from "@/test/factories/sourceImages";

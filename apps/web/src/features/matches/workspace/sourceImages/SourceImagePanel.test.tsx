@@ -6,12 +6,12 @@ import { describe, expect, it } from "vitest";
 import { SourceImagePanel } from "@/features/matches/workspace/sourceImages/SourceImagePanel";
 import { createDeferred } from "@/test/deferred";
 import { installAnchorClickMock, installObjectUrlMock } from "@/test/doubles/dom";
-import { makeSourceImageItems } from "@/test/factories";
+import { makeMatchDraftSourceImageResponses } from "@/test/factories";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
 
 const draftId = "draft-1";
-const sourceImages = makeSourceImageItems(draftId);
+const sourceImages = makeMatchDraftSourceImageResponses(draftId);
 
 setupMsw();
 

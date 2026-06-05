@@ -4,12 +4,9 @@ import cats.data.Kleisli
 import cats.effect.Async
 import cats.syntax.all.*
 import fs2.Chunk
-import io.circe.syntax.*
-import org.http4s.circe.*
-import org.http4s.headers.{`Content-Length`, `Content-Type`}
-import org.http4s.{HttpApp, MediaType, Request, Response, Status}
+import org.http4s.headers.`Content-Length`
+import org.http4s.{HttpApp, Request, Response}
 
-import momo.api.endpoints.ProblemDetails
 import momo.api.errors.AppError
 
 object MaxBodySizeMiddleware:
@@ -25,7 +22,8 @@ object MaxBodySizeMiddleware:
       http: HttpApp[F]
   ): HttpApp[F] = Kleisli { request =>
     if isUpload(request) then applyLimit(request, uploadLimitBytes, "Upload request", http)
-    else if isMutating(request) then applyLimit(request, requestLimitBytes, "Request body", http)
+    else if HttpMethodPredicates.isMutating(request.method) then
+      applyLimit(request, requestLimitBytes, "Request body", http)
     else http.run(request)
   }
 
@@ -54,15 +52,9 @@ object MaxBodySizeMiddleware:
   private[http] def wouldExceedLimit(seenBytes: Long, chunkBytes: Long, limitBytes: Long): Boolean =
     chunkBytes > limitBytes - seenBytes
 
-  private def isUpload[F[_]](request: Request[F]): Boolean = request.method.name == "POST" &&
-    request.uri.path.renderString == "/api/uploads/images"
-
-  private def isMutating[F[_]](request: Request[F]): Boolean = request.method.name == "POST" ||
-    request.method.name == "PUT" || request.method.name == "PATCH" ||
-    request.method.name == "DELETE"
+  private def isUpload[F[_]](request: Request[F]): Boolean = HttpMethodPredicates
+    .isPost(request.method) && request.uri.path.renderString == "/api/uploads/images"
 
   private def problem[F[_]: Async](limitBytes: Long, label: String): F[Response[F]] =
-    val (status, body) = ProblemDetails
-      .from(AppError.PayloadTooLarge(s"$label must be ${limitBytes.toString} bytes or smaller."))
-    Response[F](Status.fromInt(status.code).getOrElse(Status.PayloadTooLarge))
-      .withEntity(body.asJson).putHeaders(`Content-Type`(MediaType.application.json)).pure[F]
+    val error = AppError.PayloadTooLarge(s"$label must be ${limitBytes.toString} bytes or smaller.")
+    HttpProblemResponse.fromError[F](error).pure[F]

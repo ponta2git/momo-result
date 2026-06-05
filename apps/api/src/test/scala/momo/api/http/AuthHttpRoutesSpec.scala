@@ -110,13 +110,8 @@ final class AuthHttpRoutesSpec extends MomoCatsEffectSuite:
       ).putHeaders(Header.Raw(CIString("Cookie"), s"${authConfig.stateCookieName}=$invalidState"))
 
       app.run(request).flatMap { response =>
-        val cleared = response.cookies.find(_.name == authConfig.stateCookieName)
-          .getOrElse(fail("missing cleared OAuth state cookie"))
         assertProblem(response, Status.Forbidden, "FORBIDDEN", "OAuth state is invalid or expired.")
-          .map { _ =>
-            assertEquals(cleared.content, "")
-            assertEquals(cleared.maxAge, Some(0L))
-          }
+          .map(_ => assertStateCookieCleared(response, authConfig))
       }
     }
   }
@@ -144,11 +139,8 @@ final class AuthHttpRoutesSpec extends MomoCatsEffectSuite:
             )
             fetchCalls <- oauth.fetchCalls
           yield
-            val cleared = response.cookies.find(_.name == authConfig.stateCookieName)
-              .getOrElse(fail("missing cleared OAuth state cookie"))
             assertEquals(fetchCalls, 0)
-            assertEquals(cleared.content, "")
-            assertEquals(cleared.maxAge, Some(0L))
+            assertStateCookieCleared(response, authConfig)
         }
     }
   }
@@ -173,29 +165,32 @@ final class AuthHttpRoutesSpec extends MomoCatsEffectSuite:
   test("OAuth provider dependency failures open a short backoff before the next provider call") {
     val backoffConfig = authConfig.copy(providerFailureThreshold = 1, providerBackoff = 60.seconds)
     RecordingDiscordOAuthClient
-      .create(Left(AppError.DependencyFailed("Discord OAuth provider request failed.")))
-      .flatMap { oauth =>
-        authAppWith(oauth, backoffConfig).use { app =>
-          for
-            firstCookie <- loginStateCookie(app, backoffConfig)
-            firstResponse <- app.run(callbackRequest(firstCookie))
-            _ <- assertProblem(
-              firstResponse,
-              Status.ServiceUnavailable,
-              "DEPENDENCY_FAILED",
-              "Discord OAuth provider request failed",
-            )
-            secondCookie <- loginStateCookie(app, backoffConfig)
-            secondResponse <- app.run(callbackRequest(secondCookie))
-            _ <- assertProblem(
-              secondResponse,
-              Status.ServiceUnavailable,
-              "DEPENDENCY_FAILED",
-              "temporarily unavailable",
-            )
-            fetchCalls <- oauth.fetchCalls
-          yield assertEquals(fetchCalls, 1)
-        }
+      .create(Left(AppError.DependencyFailed("Discord OAuth provider request failed."))).flatMap {
+        oauth =>
+          authAppWith(oauth, backoffConfig).use { app =>
+            for
+              firstCookie <- loginStateCookie(app, backoffConfig)
+              firstResponse <- app.run(callbackRequest(firstCookie))
+              _ <- assertProblem(
+                firstResponse,
+                Status.ServiceUnavailable,
+                "DEPENDENCY_FAILED",
+                "Discord OAuth provider request failed",
+              )
+              secondCookie <- loginStateCookie(app, backoffConfig)
+              secondResponse <- app.run(callbackRequest(secondCookie))
+              _ <- assertProblem(
+                secondResponse,
+                Status.ServiceUnavailable,
+                "DEPENDENCY_FAILED",
+                "temporarily unavailable",
+              )
+              fetchCalls <- oauth.fetchCalls
+            yield
+              assertStateCookieCleared(firstResponse, backoffConfig)
+              assertStateCookieCleared(secondResponse, backoffConfig)
+              assertEquals(fetchCalls, 1)
+          }
       }
   }
 
@@ -249,6 +244,15 @@ final class AuthHttpRoutesSpec extends MomoCatsEffectSuite:
     uri"/api/auth/callback".withQueryParam("code", "ok")
       .withQueryParam("state", stateCookie.content),
   ).putHeaders(Header.Raw(CIString("Cookie"), s"${stateCookie.name}=${stateCookie.content}"))
+
+  private def assertStateCookieCleared(
+      response: org.http4s.Response[IO],
+      config: AuthConfig,
+  ): Unit =
+    val cleared = response.cookies.find(_.name == config.stateCookieName)
+      .getOrElse(fail("missing cleared OAuth state cookie"))
+    assertEquals(cleared.content, "")
+    assertEquals(cleared.maxAge, Some(0L))
 
   private final class RecordingDiscordOAuthClient private (
       result: Either[AppError, DiscordUser],

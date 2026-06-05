@@ -75,7 +75,7 @@ private[http] final class EndpointSecurity[F[_]: Async](
     case Right(value) => onSuccess(value)
 
   private def logIncident(error: AppError): F[Unit] =
-    if EndpointSecurity.isIncident(error) then incidentLogger(error) else Async[F].unit
+    if HttpIncidentPolicy.shouldLog(error) then incidentLogger(error) else Async[F].unit
 
 object EndpointSecurity:
   private val logger = LoggerFactory.getLogger("momo.api.http.EndpointSecurity")
@@ -90,8 +90,3 @@ object EndpointSecurity:
 
   private def defaultIncidentLogger[F[_]: Async](error: AppError): F[Unit] = Async[F]
     .delay(logger.error(s"HTTP endpoint returned incident problemCode=${error.code}"))
-
-  private def isIncident(error: AppError): Boolean = error match
-    case _: AppError.DependencyFailed => true
-    case _: AppError.Internal => true
-    case _ => false

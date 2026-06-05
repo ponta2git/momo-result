@@ -24,12 +24,8 @@ object AppErrorAssertions:
       assert(error.detail.contains(detailContains), s"unexpected detail: ${error.detail}")
     case Right(value) => fail(s"expected $expectedCode, got success: $value")
 
-  def assertAppException[A](
-      result: Either[Throwable, A],
-      expected: AppError,
-  ): Unit = result match
-    case Left(error: AppException) =>
-      assertEquals(error.error, expected)
+  def assertAppException[A](result: Either[Throwable, A], expected: AppError): Unit = result match
+    case Left(error: AppException) => assertEquals(error.error, expected)
     case other => fail(s"expected AppException($expected), got $other")
 
   def assertAppException[A](

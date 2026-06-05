@@ -8,13 +8,9 @@ import scala.annotation.tailrec
 import cats.data.Kleisli
 import cats.effect.Async
 import cats.syntax.all.*
-import io.circe.syntax.*
-import org.http4s.circe.*
-import org.http4s.headers.`Content-Type`
-import org.http4s.{HttpApp, MediaType, Request, Response, Status}
+import org.http4s.{HttpApp, Request, Response}
 import org.slf4j.LoggerFactory
 
-import momo.api.endpoints.ProblemDetails
 import momo.api.errors.{AppError, AppException}
 import momo.api.logging.SafeLog
 
@@ -28,10 +24,8 @@ private[http] object HttpErrorMiddleware:
     }
   }
 
-  private def problem[F[_]: Async](error: AppError): F[Response[F]] =
-    val (status, body) = ProblemDetails.from(error)
-    Response[F](Status.fromInt(status.code).getOrElse(Status.InternalServerError))
-      .withEntity(body.asJson).putHeaders(`Content-Type`(MediaType.application.json)).pure[F]
+  private def problem[F[_]: Async](error: AppError): F[Response[F]] = HttpProblemResponse
+    .fromError[F](error).pure[F]
 
   private def classify(error: Throwable): AppError = findAppException(error) match
     case Some(app) => app.error
@@ -45,7 +39,8 @@ private[http] object HttpErrorMiddleware:
       appError: AppError,
       error: Throwable,
   ): F[Unit] =
-    if isIncident(appError) then Async[F].delay(log(request, appError, error)) else Async[F].unit
+    if HttpIncidentPolicy.shouldLog(appError) then Async[F].delay(log(request, appError, error))
+    else Async[F].unit
 
   private def log(request: Request[?], appError: AppError, error: Throwable): Unit =
     val method = request.method.name
@@ -55,11 +50,6 @@ private[http] object HttpErrorMiddleware:
     logger.error(
       s"HTTP request failed method=$method path=$path problemCode=$code errorClasses=$classes"
     )
-
-  private def isIncident(error: AppError): Boolean = error match
-    case _: AppError.DependencyFailed => true
-    case _: AppError.Internal => true
-    case _ => false
 
   private def hasCause(error: Throwable)(predicate: Throwable => Boolean): Boolean =
     findCause(error)(predicate).isDefined

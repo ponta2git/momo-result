@@ -15,6 +15,7 @@ import {
 } from "@/shared/workflows/matchWorkspaceMasterHandoff";
 import { createDeferred } from "@/test/deferred";
 import {
+  makeHeldEventResponse,
   makeMatchWorkspaceMasterHandoffValues,
   makeFourReviewPlayerInputs,
 } from "@/test/factories";
@@ -418,12 +419,11 @@ describe("DraftReviewPage", () => {
 
   it("announces held event creation and selects the created option", async () => {
     window.localStorage.setItem("momoresult.devUser", "account_ponta");
-    const heldEvents = [{ id: "held-1", heldAt: "2026-01-01T00:00:00.000Z", matchCount: 0 }];
-    const createdHeldEvent = {
-      id: "held-created",
+    const heldEvents = [makeHeldEventResponse()];
+    const createdHeldEvent = makeHeldEventResponse({
       heldAt: "2026-01-02T00:00:00.000Z",
-      matchCount: 0,
-    };
+      id: "held-created",
+    });
     server.use(
       http.get("/api/held-events", () => HttpResponse.json({ items: heldEvents })),
       http.post("/api/held-events", () => {

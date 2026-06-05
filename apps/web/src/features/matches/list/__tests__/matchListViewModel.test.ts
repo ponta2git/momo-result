@@ -10,6 +10,7 @@ import {
   summarizeMatchList,
   toMatchListItemView,
 } from "@/features/matches/list/matchListViewModel";
+import { makeHeldEventResponse } from "@/test/factories";
 
 const lookupMaps: MatchListLookupMaps = {
   gameTitlesById: new Map([
@@ -24,9 +25,7 @@ const lookupMaps: MatchListLookupMaps = {
       },
     ],
   ]),
-  heldEventsById: new Map([
-    ["held-1", { id: "held-1", heldAt: "2026-01-01T00:00:00.000Z", matchCount: 3 }],
-  ]),
+  heldEventsById: new Map([["held-1", makeHeldEventResponse({ matchCount: 3 })]]),
   mapsById: new Map([
     [
       "map-1",

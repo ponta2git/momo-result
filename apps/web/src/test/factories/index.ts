@@ -10,6 +10,7 @@ export type {
   PlayerResultResponse,
   IncidentCountsResponse,
 } from "@/test/factories/matchDetail";
+export { makeHeldEventResponse } from "@/test/factories/heldEvents";
 export {
   makeReviewPlayerInput,
   makeFourReviewPlayerInputs,

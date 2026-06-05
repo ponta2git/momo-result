@@ -7,6 +7,7 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { HeldEventsPage } from "@/features/heldEvents/HeldEventsPage";
+import { makeHeldEventResponse } from "@/test/factories";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
@@ -84,7 +85,7 @@ describe("HeldEventsPage", () => {
   });
 
   it("corrects an out-of-range page before showing an empty-list state", async () => {
-    const heldEvents = [{ id: "held-1", heldAt: "2026-01-01T00:00:00.000Z", matchCount: 0 }];
+    const heldEvents = [makeHeldEventResponse()];
     server.use(
       http.get("/api/held-events", ({ request }) => {
         const url = new URL(request.url);
@@ -116,8 +117,11 @@ describe("HeldEventsPage", () => {
   });
 
   it("creates a held event and adds it to the visible list", async () => {
-    const heldEvents = [{ id: "held-1", heldAt: "2026-01-01T00:00:00.000Z", matchCount: 0 }];
-    const created = { id: "held-created", heldAt: "2026-01-02T03:04:00.000Z", matchCount: 0 };
+    const heldEvents = [makeHeldEventResponse()];
+    const created = makeHeldEventResponse({
+      heldAt: "2026-01-02T03:04:00.000Z",
+      id: "held-created",
+    });
     server.use(
       http.get("/api/held-events", () => HttpResponse.json({ items: heldEvents })),
       http.post("/api/held-events", () => {
@@ -139,7 +143,7 @@ describe("HeldEventsPage", () => {
   });
 
   it("deletes an empty held event after confirmation", async () => {
-    const heldEvents = [{ id: "held-empty", heldAt: "2026-01-01T00:00:00.000Z", matchCount: 0 }];
+    const heldEvents = [makeHeldEventResponse({ id: "held-empty" })];
     server.use(
       http.get("/api/held-events", () => HttpResponse.json({ items: heldEvents })),
       http.delete("/api/held-events/:heldEventId", ({ params }) => {
@@ -168,7 +172,7 @@ describe("HeldEventsPage", () => {
     server.use(
       http.get("/api/held-events", () =>
         HttpResponse.json({
-          items: [{ id: "held-used", heldAt: "2026-01-01T00:00:00.000Z", matchCount: 2 }],
+          items: [makeHeldEventResponse({ id: "held-used", matchCount: 2 })],
         }),
       ),
     );
@@ -185,7 +189,7 @@ describe("HeldEventsPage", () => {
     server.use(
       http.get("/api/held-events", () =>
         HttpResponse.json({
-          items: [{ id: "held-draft", heldAt: "2026-01-01T00:00:00.000Z", matchCount: 0 }],
+          items: [makeHeldEventResponse({ id: "held-draft" })],
         }),
       ),
       http.delete("/api/held-events/:heldEventId", () =>

@@ -1,5 +1,6 @@
 import { http, HttpResponse } from "msw";
 
+import { makeHeldEventResponse } from "@/test/factories/heldEvents";
 import { now } from "@/test/msw/fixtures";
 
 function pagination(page: number, pageSize: number, totalItems: number) {
@@ -21,13 +22,7 @@ export const heldEventHandlers = [
     const pageSize = Number(
       url.searchParams.get("pageSize") ?? url.searchParams.get("limit") ?? "10",
     );
-    const items = [
-      {
-        heldAt: now,
-        id: "held-1",
-        matchCount: 0,
-      },
-    ];
+    const items = [makeHeldEventResponse({ heldAt: now })];
     const offset = (page - 1) * pageSize;
     return HttpResponse.json({
       items: items.slice(offset, offset + pageSize),
@@ -36,11 +31,7 @@ export const heldEventHandlers = [
     });
   }),
   http.post("/api/held-events", async () =>
-    HttpResponse.json({
-      heldAt: now,
-      id: "held-created",
-      matchCount: 0,
-    }),
+    HttpResponse.json(makeHeldEventResponse({ heldAt: now, id: "held-created" })),
   ),
   http.delete("/api/held-events/:heldEventId", ({ params }) =>
     HttpResponse.json({

@@ -5,12 +5,13 @@ const webServerUrl = new URL(baseURL);
 const webServerHost = webServerUrl.hostname || "127.0.0.1";
 const webServerPort = webServerUrl.port || "5173";
 const skipWebServer = process.env["PLAYWRIGHT_SKIP_WEB_SERVER"] === "1";
+const workers = process.env["PLAYWRIGHT_WORKERS"] ?? (process.env["CI"] ? "2" : undefined);
 
 export default defineConfig({
   testDir: "./e2e",
-  fullyParallel: false,
+  fullyParallel: true,
   retries: process.env["CI"] ? 1 : 0,
-  workers: 1,
+  workers,
   timeout: 45_000,
   expect: {
     timeout: 10_000,

@@ -4,13 +4,10 @@ import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 import java.util.zip.ZipInputStream
 
 import cats.effect.IO
-import fs2.Stream
 import io.circe.Json
 import org.http4s.circe.*
-import org.http4s.headers.`Content-Type`
 import org.http4s.implicits.*
-import org.http4s.multipart.{Multiparts, Part}
-import org.http4s.{Header, MediaType, Method, Request, Status, Uri}
+import org.http4s.{Method, Status, Uri}
 import org.typelevel.ci.CIString
 
 import momo.api.MomoCatsEffectSuite
@@ -49,19 +46,17 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
 
   private val pngBytes: Array[Byte] = TestImages.png1x1
 
-  private def nonOwnerWriteHeaders(): List[Header.ToRaw] =
-    List(devReadHeader("account_eu"), Header.Raw(CIString("X-CSRF-Token"), "dev"))
-
   app.test("POST /api/held-events creates event and lists it") { httpApp =>
-    val createReq = Request[IO](Method.POST, uri"/api/held-events").putHeaders(devWriteHeaders()*)
-      .withEntity(HttpRequestBodies.Matches.createHeldEvent("2024-01-01T00:00:00Z"))
+    val createReq = writePost(
+      uri"/api/held-events",
+      HttpRequestBodies.Matches.createHeldEvent("2024-01-01T00:00:00Z"),
+    )
     for
       createRes <- httpApp.run(createReq)
       _ = assertEquals(createRes.status, Status.Ok)
       body <- createRes.as[Json]
       id = jsonField[String](body, "id")
-      listRes <- httpApp
-        .run(Request[IO](Method.GET, uri"/api/held-events").putHeaders(devReadHeader()))
+      listRes <- httpApp.run(readGet(uri"/api/held-events"))
       _ = assertEquals(listRes.status, Status.Ok)
       listBody <- listRes.as[Json]
       items = jsonField[List[Json]](listBody, "items")
@@ -71,15 +66,15 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
   }
 
   app.test("POST /api/held-events with invalid heldAt returns 422") { httpApp =>
-    val req = Request[IO](Method.POST, uri"/api/held-events").putHeaders(devWriteHeaders()*)
-      .withEntity(HttpRequestBodies.Matches.createHeldEvent("not-an-instant"))
+    val req =
+      writePost(uri"/api/held-events", HttpRequestBodies.Matches.createHeldEvent("not-an-instant"))
     httpApp.run(req).flatMap { res =>
       assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "heldAt")
     }
   }
 
   app.test("GET /api/held-events rejects out-of-range limit") { httpApp =>
-    val req = Request[IO](Method.GET, uri"/api/held-events?limit=101").putHeaders(devReadHeader())
+    val req = readGet(uri"/api/held-events?limit=101")
     httpApp.run(req)
       .flatMap(res => assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "limit"))
   }
@@ -88,9 +83,7 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
     for
       _ <- createEvent(httpApp)
       _ <- createEvent(httpApp)
-      res <- httpApp.run(
-        Request[IO](Method.GET, uri"/api/held-events?page=1&pageSize=1").putHeaders(devReadHeader())
-      )
+      res <- httpApp.run(readGet(uri"/api/held-events?page=1&pageSize=1"))
       body <- res.as[Json]
       pagination = jsonField[Json](body, "pagination")
     yield
@@ -104,14 +97,10 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
   app.test("DELETE /api/held-events/:id deletes an empty held event") { httpApp =>
     for
       id <- createEvent(httpApp)
-      res <- httpApp.run(
-        Request[IO](Method.DELETE, Uri.unsafeFromString(s"/api/held-events/$id"))
-          .putHeaders(devWriteHeaders()*)
-      )
+      res <- httpApp.run(writeDelete(Uri.unsafeFromString(s"/api/held-events/$id")))
       _ = assertEquals(res.status, Status.Ok)
       body <- res.as[Json]
-      listRes <- httpApp
-        .run(Request[IO](Method.GET, uri"/api/held-events").putHeaders(devReadHeader()))
+      listRes <- httpApp.run(readGet(uri"/api/held-events"))
       listBody <- listRes.as[Json]
       items = jsonField[List[Json]](listBody, "items")
     yield
@@ -124,15 +113,9 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
     .test("DELETE /api/held-events/:id returns 409 when a confirmed match references it") { httpApp =>
       for
         id <- createEvent(httpApp)
-        createMatchRes <- httpApp.run(
-          Request[IO](Method.POST, uri"/api/matches").putHeaders(devWriteHeaders()*)
-            .withEntity(confirmBody(id))
-        )
+        createMatchRes <- httpApp.run(writePost(uri"/api/matches", confirmBody(id)))
         _ = assertEquals(createMatchRes.status, Status.Ok)
-        res <- httpApp.run(
-          Request[IO](Method.DELETE, Uri.unsafeFromString(s"/api/held-events/$id"))
-            .putHeaders(devWriteHeaders()*)
-        )
+        res <- httpApp.run(writeDelete(Uri.unsafeFromString(s"/api/held-events/$id")))
         _ <- assertProblem(res, Status.Conflict, "CONFLICT", "confirmed matches")
       yield ()
     }
@@ -141,21 +124,16 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
     for
       id <- createEvent(httpApp)
       createDraftRes <- httpApp.run(
-        Request[IO](Method.POST, uri"/api/match-drafts").putHeaders(devWriteHeaders()*)
-          .withEntity(HttpRequestBodies.Matches.matchDraftForHeldEvent(id))
+        writePost(uri"/api/match-drafts", HttpRequestBodies.Matches.matchDraftForHeldEvent(id))
       )
       _ = assertEquals(createDraftRes.status, Status.Ok)
-      res <- httpApp.run(
-        Request[IO](Method.DELETE, Uri.unsafeFromString(s"/api/held-events/$id"))
-          .putHeaders(devWriteHeaders()*)
-      )
+      res <- httpApp.run(writeDelete(Uri.unsafeFromString(s"/api/held-events/$id")))
       _ <- assertProblem(res, Status.Conflict, "CONFLICT", "match drafts")
     yield ()
   }
 
   app.test("POST /api/match-drafts rejects terminal initial statuses") { httpApp =>
-    val req = Request[IO](Method.POST, uri"/api/match-drafts").putHeaders(devWriteHeaders()*)
-      .withEntity(Json.obj("status" -> Json.fromString("cancelled")))
+    val req = writePost(uri"/api/match-drafts", Json.obj("status" -> Json.fromString("cancelled")))
     httpApp.run(req).flatMap { res =>
       assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "status")
     }
@@ -165,9 +143,10 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
     .test("PATCH /api/match-drafts/:draftId rejects unknown status at the HTTP boundary") { httpApp =>
       for
         draftId <- createMatchDraft(httpApp)
-        req = Request[IO](Method.PATCH, Uri.unsafeFromString(s"/api/match-drafts/$draftId"))
-          .putHeaders(devWriteHeaders()*)
-          .withEntity(Json.obj("status" -> Json.fromString("not_a_status")))
+        req = writePatch(
+          Uri.unsafeFromString(s"/api/match-drafts/$draftId"),
+          Json.obj("status" -> Json.fromString("not_a_status")),
+        )
         res <- httpApp.run(req)
         _ <- assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "status")
       yield ()
@@ -178,8 +157,7 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
       for
         draftId <- createMatchDraft(httpApp)
         res <- httpApp.run(
-          Request[IO](Method.GET, Uri.unsafeFromString(s"/api/match-drafts/$draftId"))
-            .putHeaders(devReadHeader("account_eu"))
+          readGet(Uri.unsafeFromString(s"/api/match-drafts/$draftId"), accountId = "account_eu")
         )
         body <- res.as[Json]
       yield
@@ -191,11 +169,11 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
     httpApp =>
       for
         draftId <- createMatchDraft(httpApp)
-        res <- httpApp.run(
-          Request[IO](Method.PATCH, Uri.unsafeFromString(s"/api/match-drafts/$draftId"))
-            .putHeaders(nonOwnerWriteHeaders()*)
-            .withEntity(Json.obj("status" -> Json.fromString("needs_review")))
-        )
+        res <- httpApp.run(writePatch(
+          Uri.unsafeFromString(s"/api/match-drafts/$draftId"),
+          Json.obj("status" -> Json.fromString("needs_review")),
+          accountId = "account_eu",
+        ))
         body <- res.as[Json]
       yield
         assertEquals(res.status, Status.Ok)
@@ -208,10 +186,11 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
       httpApp =>
         for
           draftId <- createMatchDraft(httpApp)
-          res <- httpApp.run(
-            Request[IO](Method.POST, Uri.unsafeFromString(s"/api/match-drafts/$draftId/cancel"))
-              .putHeaders(nonOwnerWriteHeaders()*)
-          )
+          res <- httpApp.run(writeRequest(
+            Method.POST,
+            Uri.unsafeFromString(s"/api/match-drafts/$draftId/cancel"),
+            accountId = "account_eu",
+          ))
           body <- res.as[Json]
         yield
           assertEquals(res.status, Status.Ok)
@@ -220,28 +199,28 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
     }
 
   app.test("GET /api/ocr-drafts bulk rejects empty ids") { httpApp =>
-    httpApp.run(Request[IO](Method.GET, uri"/api/ocr-drafts?ids=").putHeaders(devReadHeader()))
+    httpApp.run(readGet(uri"/api/ocr-drafts?ids="))
       .flatMap(res => assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "ids"))
   }
 
   app.test("POST /api/ocr-jobs rejects blank image id at the HTTP boundary") { httpApp =>
-    val req = Request[IO](Method.POST, uri"/api/ocr-jobs").putHeaders(devWriteHeaders()*)
-      .withEntity(HttpRequestBodies.Matches.createOcrJob(" ", "total_assets"))
+    val req =
+      writePost(uri"/api/ocr-jobs", HttpRequestBodies.Matches.createOcrJob(" ", "total_assets"))
     httpApp.run(req).flatMap { res =>
       assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "imageId")
     }
   }
 
   app.test("POST /api/ocr-jobs rejects unknown screen type at the HTTP boundary") { httpApp =>
-    val req = Request[IO](Method.POST, uri"/api/ocr-jobs").putHeaders(devWriteHeaders()*)
-      .withEntity(HttpRequestBodies.Matches.createOcrJob("image-1", "unknown"))
+    val req =
+      writePost(uri"/api/ocr-jobs", HttpRequestBodies.Matches.createOcrJob("image-1", "unknown"))
     httpApp.run(req).flatMap { res =>
       assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "requestedScreenType")
     }
   }
 
   app.test("GET /api/matches rejects blank id query filters at the HTTP boundary") { httpApp =>
-    val req = Request[IO](Method.GET, uri"/api/matches?heldEventId=%20").putHeaders(devReadHeader())
+    val req = readGet(uri"/api/matches?heldEventId=%20")
     httpApp.run(req).flatMap { res =>
       assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "heldEventId")
     }
@@ -249,11 +228,9 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
 
   app.test("GET /api/matches rejects unknown list filters at the HTTP boundary") { httpApp =>
     for
-      statusRes <- httpApp
-        .run(Request[IO](Method.GET, uri"/api/matches?status=unknown").putHeaders(devReadHeader()))
+      statusRes <- httpApp.run(readGet(uri"/api/matches?status=unknown"))
       _ <- assertProblem(statusRes, Status.UnprocessableContent, "VALIDATION_FAILED", "status")
-      kindRes <- httpApp
-        .run(Request[IO](Method.GET, uri"/api/matches?kind=unknown").putHeaders(devReadHeader()))
+      kindRes <- httpApp.run(readGet(uri"/api/matches?kind=unknown"))
       _ <- assertProblem(kindRes, Status.UnprocessableContent, "VALIDATION_FAILED", "kind")
     yield ()
   }
@@ -261,27 +238,28 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
   app.test("POST /api/matches rejects invalid playedAt at the HTTP boundary") { httpApp =>
     for
       id <- createEvent(httpApp)
-      req = Request[IO](Method.POST, uri"/api/matches").putHeaders(devWriteHeaders()*)
-        .withEntity(confirmBody(id).deepMerge(Json.obj("playedAt" -> Json.fromString("bad"))))
+      req = writePost(
+        uri"/api/matches",
+        confirmBody(id).deepMerge(Json.obj("playedAt" -> Json.fromString("bad"))),
+      )
       res <- httpApp.run(req)
       _ <- assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "playedAt")
     yield ()
   }
 
   app.test("GET /api/ocr-drafts bulk returns 404 when a draft is missing") { httpApp =>
-    httpApp
-      .run(Request[IO](Method.GET, uri"/api/ocr-drafts?ids=missing").putHeaders(devReadHeader()))
+    httpApp.run(readGet(uri"/api/ocr-drafts?ids=missing"))
       .flatMap(res => assertProblem(res, Status.NotFound, "NOT_FOUND", "ocr draft was not found"))
   }
 
   app.test("GET /api/matches rejects negative limit before repository access") { httpApp =>
-    val req = Request[IO](Method.GET, uri"/api/matches?limit=-1").putHeaders(devReadHeader())
+    val req = readGet(uri"/api/matches?limit=-1")
     httpApp.run(req)
       .flatMap(res => assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "limit"))
   }
 
   app.test("GET /api/matches rejects invalid pagination before repository access") { httpApp =>
-    val req = Request[IO](Method.GET, uri"/api/matches?page=0").putHeaders(devReadHeader())
+    val req = readGet(uri"/api/matches?page=0")
     httpApp.run(req)
       .flatMap(res => assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "page"))
   }
@@ -289,20 +267,11 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
   app.test("GET /api/matches returns pagination metadata") { httpApp =>
     for
       id <- createEvent(httpApp)
-      first <- httpApp.run(
-        Request[IO](Method.POST, uri"/api/matches").putHeaders(devWriteHeaders()*)
-          .withEntity(confirmBody(id, 1))
-      )
+      first <- httpApp.run(writePost(uri"/api/matches", confirmBody(id, 1)))
       _ = assertEquals(first.status, Status.Ok)
-      second <- httpApp.run(
-        Request[IO](Method.POST, uri"/api/matches").putHeaders(devWriteHeaders()*)
-          .withEntity(confirmBody(id, 2))
-      )
+      second <- httpApp.run(writePost(uri"/api/matches", confirmBody(id, 2)))
       _ = assertEquals(second.status, Status.Ok)
-      res <- httpApp.run(
-        Request[IO](Method.GET, uri"/api/matches?page=2&pageSize=1&sort=match_no_asc")
-          .putHeaders(devReadHeader())
-      )
+      res <- httpApp.run(readGet(uri"/api/matches?page=2&pageSize=1&sort=match_no_asc"))
       body <- res.as[Json]
       pagination = jsonField[Json](body, "pagination")
       items = jsonField[List[Json]](body, "items")
@@ -318,8 +287,7 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
   app.test("GET /api/matches/summary returns aggregate draft counts") { httpApp =>
     for
       _ <- createMatchDraft(httpApp)
-      res <- httpApp
-        .run(Request[IO](Method.GET, uri"/api/matches/summary").putHeaders(devReadHeader()))
+      res <- httpApp.run(readGet(uri"/api/matches/summary"))
       body <- res.as[Json]
     yield
       assertEquals(res.status, Status.Ok)
@@ -334,36 +302,25 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
   private def confirmBody(heldEventId: String, matchNo: Int): Json = HttpRequestBodies.Matches
     .confirmMatchWithNo(heldEventId, matchNo)
 
-  private def createEvent(httpApp: org.http4s.HttpApp[IO]): IO[String] = httpApp.run(
-    Request[IO](Method.POST, uri"/api/held-events").putHeaders(devWriteHeaders()*)
-      .withEntity(HttpRequestBodies.Matches.createHeldEvent("2024-01-01T00:00:00Z"))
-  ).flatMap { response =>
+  private def createEvent(httpApp: org.http4s.HttpApp[IO]): IO[String] = httpApp.run(writePost(
+    uri"/api/held-events",
+    HttpRequestBodies.Matches.createHeldEvent("2024-01-01T00:00:00Z"),
+  )).flatMap { response =>
     assertEquals(response.status, Status.Ok)
     response.as[Json].map(jsonField[String](_, "id"))
   }
 
-  private def createMatchDraft(httpApp: org.http4s.HttpApp[IO]): IO[String] = httpApp.run(
-    Request[IO](Method.POST, uri"/api/match-drafts").putHeaders(devWriteHeaders()*)
-      .withEntity(HttpRequestBodies.Matches.emptyMatchDraft)
-  ).flatMap { response =>
-    assertEquals(response.status, Status.Ok)
-    response.as[Json].map(jsonField[String](_, "matchDraftId"))
-  }
+  private def createMatchDraft(httpApp: org.http4s.HttpApp[IO]): IO[String] = httpApp
+    .run(writePost(uri"/api/match-drafts", HttpRequestBodies.Matches.emptyMatchDraft))
+    .flatMap { response =>
+      assertEquals(response.status, Status.Ok)
+      response.as[Json].map(jsonField[String](_, "matchDraftId"))
+    }
 
-  private def uploadPng(httpApp: org.http4s.HttpApp[IO]): IO[String] =
-    val part = Part.fileData[IO](
-      "file",
-      "source.png",
-      Stream.emits(pngBytes).covary[IO],
-      `Content-Type`(MediaType.image.png),
-    )
+  private def uploadPng(httpApp: TestHttpApp): IO[String] =
     for
-      multiparts <- Multiparts.forSync[IO]
-      multipart <- multiparts.multipart(Vector(part))
-      response <- httpApp.run(
-        Request[IO](Method.POST, uri"/api/uploads/images").putHeaders(devWriteHeaders()*)
-          .putHeaders(multipart.headers).withEntity(multipart)
-      )
+      request <- uploadPngRequest()
+      response <- httpApp.run(request)
       body <- response.as[Json]
     yield
       assertEquals(response.status, Status.Ok)
@@ -390,10 +347,7 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
   app.test("POST /api/matches confirms with valid body") { httpApp =>
     for
       id <- createEvent(httpApp)
-      res <- httpApp.run(
-        Request[IO](Method.POST, uri"/api/matches").putHeaders(devWriteHeaders()*)
-          .withEntity(confirmBody(id))
-      )
+      res <- httpApp.run(writePost(uri"/api/matches", confirmBody(id)))
       body <- res.as[Json]
     yield
       assertEquals(res.status, Status.Ok)
@@ -407,25 +361,21 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
     for
       matchDraftId <- createMatchDraft(httpApp)
       imageId <- uploadPng(httpApp)
-      createJobRes <- httpApp
-        .run(Request[IO](Method.POST, uri"/api/ocr-jobs").putHeaders(devWriteHeaders()*).withEntity(
-          HttpRequestBodies.Matches.createOcrJobForDraft(imageId, "total_assets", matchDraftId)
-        ))
+      createJobRes <- httpApp.run(writePost(
+        uri"/api/ocr-jobs",
+        HttpRequestBodies.Matches.createOcrJobForDraft(imageId, "total_assets", matchDraftId),
+      ))
       _ = assertEquals(createJobRes.status, Status.Ok)
       _ <- createJobRes.as[Json]
-      sourceImageListRes <- httpApp.run(
-        Request[IO](
-          Method.GET,
-          Uri.unsafeFromString(s"/api/match-drafts/$matchDraftId/source-images"),
-        ).putHeaders(devReadHeader("account_eu"))
-      )
+      sourceImageListRes <- httpApp.run(readGet(
+        Uri.unsafeFromString(s"/api/match-drafts/$matchDraftId/source-images"),
+        accountId = "account_eu",
+      ))
       sourceImageListBody <- sourceImageListRes.as[Json]
-      sourceImageRes <- httpApp.run(
-        Request[IO](
-          Method.GET,
-          Uri.unsafeFromString(s"/api/match-drafts/$matchDraftId/source-images/total_assets"),
-        ).putHeaders(devReadHeader("account_eu"))
-      )
+      sourceImageRes <- httpApp.run(readGet(
+        Uri.unsafeFromString(s"/api/match-drafts/$matchDraftId/source-images/total_assets"),
+        accountId = "account_eu",
+      ))
       body <- sourceImageRes.as[Array[Byte]]
     yield
       assertEquals(sourceImageListRes.status, Status.Ok)
@@ -443,32 +393,27 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
         totalAssetsImageId <- uploadPng(httpApp)
         revenueImageId <- uploadPng(httpApp)
         incidentLogImageId <- uploadPng(httpApp)
-        totalAssetsJobRes <- httpApp.run(
-          Request[IO](Method.POST, uri"/api/ocr-jobs").putHeaders(devWriteHeaders()*).withEntity(
-            HttpRequestBodies.Matches
-              .createOcrJobForDraft(totalAssetsImageId, "total_assets", matchDraftId)
-          )
-        )
+        totalAssetsJobRes <- httpApp.run(writePost(
+          uri"/api/ocr-jobs",
+          HttpRequestBodies.Matches
+            .createOcrJobForDraft(totalAssetsImageId, "total_assets", matchDraftId),
+        ))
         _ = assertEquals(totalAssetsJobRes.status, Status.Ok)
-        revenueJobRes <- httpApp.run(
-          Request[IO](Method.POST, uri"/api/ocr-jobs").putHeaders(devWriteHeaders()*).withEntity(
-            HttpRequestBodies.Matches.createOcrJobForDraft(revenueImageId, "revenue", matchDraftId)
-          )
-        )
+        revenueJobRes <- httpApp.run(writePost(
+          uri"/api/ocr-jobs",
+          HttpRequestBodies.Matches.createOcrJobForDraft(revenueImageId, "revenue", matchDraftId),
+        ))
         _ = assertEquals(revenueJobRes.status, Status.Ok)
-        incidentLogJobRes <- httpApp.run(
-          Request[IO](Method.POST, uri"/api/ocr-jobs").putHeaders(devWriteHeaders()*).withEntity(
-            HttpRequestBodies.Matches
-              .createOcrJobForDraft(incidentLogImageId, "incident_log", matchDraftId)
-          )
-        )
+        incidentLogJobRes <- httpApp.run(writePost(
+          uri"/api/ocr-jobs",
+          HttpRequestBodies.Matches
+            .createOcrJobForDraft(incidentLogImageId, "incident_log", matchDraftId),
+        ))
         _ = assertEquals(incidentLogJobRes.status, Status.Ok)
-        archiveRes <- httpApp.run(
-          Request[IO](
-            Method.GET,
-            Uri.unsafeFromString(s"/api/match-drafts/$matchDraftId/source-images.zip"),
-          ).putHeaders(devReadHeader("account_eu"))
-        )
+        archiveRes <- httpApp.run(readGet(
+          Uri.unsafeFromString(s"/api/match-drafts/$matchDraftId/source-images.zip"),
+          accountId = "account_eu",
+        ))
         body <- archiveRes.as[Array[Byte]]
       yield
         assertEquals(archiveRes.status, Status.Ok)
@@ -498,12 +443,9 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
   app.test("GET /api/match-drafts/:draftId/source-images/:kind rejects unknown kind") { httpApp =>
     for
       matchDraftId <- createMatchDraft(httpApp)
-      sourceImageRes <- httpApp.run(
-        Request[IO](
-          Method.GET,
-          Uri.unsafeFromString(s"/api/match-drafts/$matchDraftId/source-images/unknown"),
-        ).putHeaders(devReadHeader())
-      )
+      sourceImageRes <- httpApp.run(readGet(
+        Uri.unsafeFromString(s"/api/match-drafts/$matchDraftId/source-images/unknown")
+      ))
       _ <- assertProblem(sourceImageRes, Status.UnprocessableContent, "VALIDATION_FAILED", "kind")
     yield ()
   }
@@ -521,9 +463,7 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
           HttpRequestBodies.Matches.player("member_eu", 4, 4),
         ),
       )
-      res <- httpApp.run(
-        Request[IO](Method.POST, uri"/api/matches").putHeaders(devWriteHeaders()*).withEntity(body)
-      )
+      res <- httpApp.run(writePost(uri"/api/matches", body))
       _ <- assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "players.rank")
     yield ()
   }
@@ -539,8 +479,7 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
         HttpRequestBodies.Matches.player("member_eu", 4, 4),
       ),
     )
-    val req = Request[IO](Method.POST, uri"/api/matches").putHeaders(devWriteHeaders()*)
-      .withEntity(body)
+    val req = writePost(uri"/api/matches", body)
     httpApp.run(req).flatMap { res =>
       assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "players.memberId")
     }
@@ -549,15 +488,10 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
   app.test("GET /api/exports/matches downloads CSV for confirmed matches") { httpApp =>
     for
       id <- createEvent(httpApp)
-      create <- httpApp.run(
-        Request[IO](Method.POST, uri"/api/matches").putHeaders(devWriteHeaders()*)
-          .withEntity(confirmBody(id, 1))
-      )
+      create <- httpApp.run(writePost(uri"/api/matches", confirmBody(id, 1)))
       _ = assertEquals(create.status, Status.Ok)
       _ <- create.as[Json]
-      exportRes <- httpApp.run(
-        Request[IO](Method.GET, uri"/api/exports/matches?format=csv").putHeaders(devReadHeader())
-      )
+      exportRes <- httpApp.run(readGet(uri"/api/exports/matches?format=csv"))
       body <- exportRes.as[String]
     yield
       assertEquals(exportRes.status, Status.Ok)
@@ -581,18 +515,11 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
   app.test("GET /api/exports/matches supports TSV and match scope") { httpApp =>
     for
       id <- createEvent(httpApp)
-      create <- httpApp.run(
-        Request[IO](Method.POST, uri"/api/matches").putHeaders(devWriteHeaders()*)
-          .withEntity(confirmBody(id, 1))
-      )
+      create <- httpApp.run(writePost(uri"/api/matches", confirmBody(id, 1)))
       createBody <- create.as[Json]
       matchId = jsonField[String](createBody, "matchId")
-      exportRes <- httpApp.run(
-        Request[IO](
-          Method.GET,
-          Uri.unsafeFromString(s"/api/exports/matches?format=tsv&matchId=$matchId"),
-        ).putHeaders(devReadHeader())
-      )
+      exportRes <- httpApp
+        .run(readGet(Uri.unsafeFromString(s"/api/exports/matches?format=tsv&matchId=$matchId")))
       body <- exportRes.as[String]
     yield
       assertEquals(exportRes.status, Status.Ok)
@@ -617,8 +544,7 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
   }
 
   app.test("GET /api/exports/matches validates format and scope") { httpApp =>
-    val invalidFormat = Request[IO](Method.GET, uri"/api/exports/matches?format=x")
-      .putHeaders(devReadHeader())
+    val invalidFormat = readGet(uri"/api/exports/matches?format=x")
     httpApp.run(invalidFormat).flatMap { res =>
       assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "format")
     }
@@ -626,22 +552,16 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
 
   app.test("GET /api/exports/matches rejects invalid scopes at the HTTP boundary") { httpApp =>
     for
-      blankScope <- httpApp.run(
-        Request[IO](Method.GET, uri"/api/exports/matches?format=csv&seasonMasterId=%20")
-          .putHeaders(devReadHeader())
-      )
+      blankScope <- httpApp.run(readGet(uri"/api/exports/matches?format=csv&seasonMasterId=%20"))
       _ <- assertProblem(
         blankScope,
         Status.UnprocessableContent,
         "VALIDATION_FAILED",
         "seasonMasterId",
       )
-      multiScope <- httpApp.run(
-        Request[IO](
-          Method.GET,
-          uri"/api/exports/matches?format=csv&seasonMasterId=season_1&heldEventId=held_1",
-        ).putHeaders(devReadHeader())
-      )
+      multiScope <- httpApp.run(readGet(
+        uri"/api/exports/matches?format=csv&seasonMasterId=season_1&heldEventId=held_1"
+      ))
       _ <- assertProblem(multiScope, Status.UnprocessableContent, "VALIDATION_FAILED", "scope")
     yield ()
   }

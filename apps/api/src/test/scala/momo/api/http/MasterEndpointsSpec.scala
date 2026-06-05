@@ -7,8 +7,7 @@ import io.circe.Json
 import org.http4s.circe.*
 import org.http4s.circe.CirceEntityCodec.*
 import org.http4s.implicits.*
-import org.http4s.{Header, Method, Request, Status}
-import org.typelevel.ci.CIString
+import org.http4s.{Method, Request, Status, Uri}
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.endpoints.{
@@ -46,11 +45,8 @@ final class MasterEndpointsSpec extends MomoCatsEffectSuite with HttpAppTestFixt
     assertIsoInstant(actual.createdAt)
     assertEquals(actual.copy(createdAt = ""), expectedWithoutCreatedAt.copy(createdAt = ""))
 
-  private def nonAdminWriteHeaders(): List[Header.ToRaw] =
-    List(devReadHeader("account_eu"), Header.Raw(CIString("X-CSRF-Token"), "dev"))
-
   app.test("GET /api/incident-masters returns 6 fixed incidents") { http =>
-    val req = Request[IO](Method.GET, uri"/api/incident-masters").withHeaders(devReadHeader())
+    val req = readGet(uri"/api/incident-masters")
     http.run(req).flatMap { resp =>
       assertEquals(resp.status, Status.Ok)
       resp.as[IncidentMasterListResponse].map { body =>
@@ -70,9 +66,8 @@ final class MasterEndpointsSpec extends MomoCatsEffectSuite with HttpAppTestFixt
   }
 
   app.test("POST /api/game-titles creates a title and lists it") { http =>
-    val create = Request[IO](Method.POST, uri"/api/game-titles").withHeaders(devWriteHeaders()*)
-      .withEntity(HttpRequestBodies.Master.gameTitleWorld)
-    val list = Request[IO](Method.GET, uri"/api/game-titles").withHeaders(devReadHeader())
+    val create = writePost(uri"/api/game-titles", HttpRequestBodies.Master.gameTitleWorld)
+    val list = readGet(uri"/api/game-titles")
     for
       c <- http.run(create)
       _ = assertEquals(c.status, Status.Ok)
@@ -86,24 +81,29 @@ final class MasterEndpointsSpec extends MomoCatsEffectSuite with HttpAppTestFixt
   }
 
   app.test("POST /api/game-titles rejects invalid id") { http =>
-    val req = Request[IO](Method.POST, uri"/api/game-titles").withHeaders(devWriteHeaders()*)
-      .withEntity(HttpRequestBodies.Master.createGameTitle("Title-World", "x", "world"))
+    val req = writePost(
+      uri"/api/game-titles",
+      HttpRequestBodies.Master.createGameTitle("Title-World", "x", "world"),
+    )
     http.run(req).flatMap { r =>
       assertProblem(r, Status.UnprocessableContent, "VALIDATION_FAILED", "id must match")
     }
   }
 
   app.test("POST /api/game-titles rejects blank id at the HTTP boundary") { http =>
-    val req = Request[IO](Method.POST, uri"/api/game-titles").withHeaders(devWriteHeaders()*)
-      .withEntity(HttpRequestBodies.Master.createGameTitle(" ", "x", "world"))
+    val req =
+      writePost(uri"/api/game-titles", HttpRequestBodies.Master.createGameTitle(" ", "x", "world"))
     http.run(req).flatMap { r =>
       assertProblem(r, Status.UnprocessableContent, "VALIDATION_FAILED", "id must not be blank")
     }
   }
 
   app.test("POST /api/game-titles is restricted to administrators") { http =>
-    val req = Request[IO](Method.POST, uri"/api/game-titles").withHeaders(nonAdminWriteHeaders()*)
-      .withEntity(HttpRequestBodies.Master.gameTitleWorld)
+    val req = writePost(
+      uri"/api/game-titles",
+      HttpRequestBodies.Master.gameTitleWorld,
+      accountId = "account_eu",
+    )
     http.run(req).flatMap { r =>
       assertProblemDetailEquals(
         r,
@@ -115,16 +115,13 @@ final class MasterEndpointsSpec extends MomoCatsEffectSuite with HttpAppTestFixt
   }
 
   app.test("PATCH and DELETE /api/game-titles update and remove an unused title") { http =>
-    val create = Request[IO](Method.POST, uri"/api/game-titles").withHeaders(devWriteHeaders()*)
-      .withEntity(HttpRequestBodies.Master.gameTitleWorld)
-    val patch = Request[IO](Method.PATCH, uri"/api/game-titles/title_world")
-      .withHeaders(devWriteHeaders()*).withEntity(Json.obj(
-        "name" -> Json.fromString("桃太郎電鉄ワールドDX"),
-        "layoutFamily" -> Json.fromString("world"),
-      ))
-    val delete = Request[IO](Method.DELETE, uri"/api/game-titles/title_world")
-      .withHeaders(devWriteHeaders()*)
-    val list = Request[IO](Method.GET, uri"/api/game-titles").withHeaders(devReadHeader())
+    val create = writePost(uri"/api/game-titles", HttpRequestBodies.Master.gameTitleWorld)
+    val patch = writePatch(
+      uri"/api/game-titles/title_world",
+      Json.obj("name" -> Json.fromString("桃太郎電鉄ワールドDX"), "layoutFamily" -> Json.fromString("world")),
+    )
+    val delete = writeDelete(uri"/api/game-titles/title_world")
+    val list = readGet(uri"/api/game-titles")
     for
       created <- http.run(create)
       _ = assertEquals(created.status, Status.Ok)
@@ -141,10 +138,7 @@ final class MasterEndpointsSpec extends MomoCatsEffectSuite with HttpAppTestFixt
   }
 
   app.test("POST /api/map-masters and /api/season-masters happy path with display order") { http =>
-    def post(path: String, body: Json) = http.run(
-      Request[IO](Method.POST, org.http4s.Uri.unsafeFromString(path))
-        .withHeaders(devWriteHeaders()*).withEntity(body)
-    )
+    def post(path: String, body: Json) = http.run(writePost(Uri.unsafeFromString(path), body))
 
     val titleBody = HttpRequestBodies.Master.createGameTitle("title_world", "ワールド", "world")
     val map1 = HttpRequestBodies.Master.createMapMaster("map_east", "東日本編")
@@ -170,17 +164,11 @@ final class MasterEndpointsSpec extends MomoCatsEffectSuite with HttpAppTestFixt
         createdSeason,
         SeasonMasterResponse("season_2024_spring", "title_world", "2024春", 1, ""),
       )
-      listedMaps <- http.run(
-        Request[IO](Method.GET, uri"/api/map-masters?gameTitleId=title_world")
-          .withHeaders(devReadHeader())
-      )
+      listedMaps <- http.run(readGet(uri"/api/map-masters?gameTitleId=title_world"))
       _ = assertEquals(listedMaps.status, Status.Ok)
       mapList <- listedMaps.as[MapMasterListResponse]
       _ = assertEquals(mapList.items, List(createdMap1, createdMap2))
-      listedSeasons <- http.run(
-        Request[IO](Method.GET, uri"/api/season-masters?gameTitleId=title_world")
-          .withHeaders(devReadHeader())
-      )
+      listedSeasons <- http.run(readGet(uri"/api/season-masters?gameTitleId=title_world"))
       _ = assertEquals(listedSeasons.status, Status.Ok)
       seasonList <- listedSeasons.as[SeasonMasterListResponse]
       _ = assertEquals(seasonList.items, List(createdSeason))
@@ -188,15 +176,14 @@ final class MasterEndpointsSpec extends MomoCatsEffectSuite with HttpAppTestFixt
   }
 
   app.test("GET /api/map-masters rejects blank game title filter at the HTTP boundary") { http =>
-    val req = Request[IO](Method.GET, uri"/api/map-masters?gameTitleId=%20")
-      .withHeaders(devReadHeader())
+    val req = readGet(uri"/api/map-masters?gameTitleId=%20")
     http.run(req).flatMap { r =>
       assertProblem(r, Status.UnprocessableContent, "VALIDATION_FAILED", "gameTitleId")
     }
   }
 
   app.test("POST /api/game-titles without CSRF token is rejected") { http =>
-    val req = Request[IO](Method.POST, uri"/api/game-titles").withHeaders(devReadHeader())
+    val req = readRequest(Method.POST, uri"/api/game-titles")
       .withEntity(HttpRequestBodies.Master.createGameTitle("title_world", "x", "world"))
     http.run(req).flatMap(r =>
       assertProblemDetailEquals(
@@ -210,8 +197,7 @@ final class MasterEndpointsSpec extends MomoCatsEffectSuite with HttpAppTestFixt
 
   app.test("member alias CRUD lists, creates, updates, and deletes aliases") { http =>
     def writeReq(method: Method, path: String, body: Option[Json]): Request[IO] =
-      val base = Request[IO](method, org.http4s.Uri.unsafeFromString(path))
-        .withHeaders(devWriteHeaders()*)
+      val base = writeRequest(method, Uri.unsafeFromString(path))
       body.fold(base)(base.withEntity)
 
     val createBody = Json
@@ -223,8 +209,7 @@ final class MasterEndpointsSpec extends MomoCatsEffectSuite with HttpAppTestFixt
       _ = assertEquals(createdResp.status, Status.Ok)
       created <- createdResp.as[MemberAliasResponse]
       _ = assertEquals(created.memberId, "member_akane_mami")
-      listedResp <- http
-        .run(Request[IO](Method.GET, uri"/api/member-aliases").withHeaders(devReadHeader()))
+      listedResp <- http.run(readGet(uri"/api/member-aliases"))
       _ = assertEquals(listedResp.status, Status.Ok)
       listed <- listedResp.as[MemberAliasListResponse]
       _ = assertEquals(listed.items.map(_.alias), List("NO11社長"))
@@ -236,8 +221,7 @@ final class MasterEndpointsSpec extends MomoCatsEffectSuite with HttpAppTestFixt
       _ = assertEquals(updated.alias, "オータカ社長")
       deletedResp <- http.run(writeReq(Method.DELETE, s"/api/member-aliases/${created.id}", None))
       _ = assertEquals(deletedResp.status, Status.Ok)
-      emptyResp <- http
-        .run(Request[IO](Method.GET, uri"/api/member-aliases").withHeaders(devReadHeader()))
+      emptyResp <- http.run(readGet(uri"/api/member-aliases"))
       empty <- emptyResp.as[MemberAliasListResponse]
       _ = assertEquals(empty.items, Nil)
     yield ()
@@ -246,14 +230,9 @@ final class MasterEndpointsSpec extends MomoCatsEffectSuite with HttpAppTestFixt
   app.test("member alias endpoints reject blank member ids at the HTTP boundary") { http =>
     val createBody = Json.obj("memberId" -> Json.fromString(" "), "alias" -> Json.fromString("x"))
     for
-      createResp <- http.run(
-        Request[IO](Method.POST, uri"/api/member-aliases").withHeaders(devWriteHeaders()*)
-          .withEntity(createBody)
-      )
+      createResp <- http.run(writePost(uri"/api/member-aliases", createBody))
       _ <- assertProblem(createResp, Status.UnprocessableContent, "VALIDATION_FAILED", "memberId")
-      listResp <- http.run(
-        Request[IO](Method.GET, uri"/api/member-aliases?memberId=%20").withHeaders(devReadHeader())
-      )
+      listResp <- http.run(readGet(uri"/api/member-aliases?memberId=%20"))
       _ <- assertProblem(listResp, Status.UnprocessableContent, "VALIDATION_FAILED", "memberId")
     yield ()
   }

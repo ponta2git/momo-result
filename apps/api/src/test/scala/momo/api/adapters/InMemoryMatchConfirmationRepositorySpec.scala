@@ -7,8 +7,8 @@ import cats.effect.IO
 import momo.api.MomoCatsEffectSuite
 import momo.api.domain.ids.*
 import momo.api.domain.{MatchDraft, MatchDraftStatus, MatchNoInEvent, MatchRecord}
-import momo.api.errors.AppException
 import momo.api.repositories.MatchDraftConfirmation
+import momo.api.testing.AppErrorAssertions.assertAppException
 import momo.api.usecases.testing.MatchFixtures
 
 final class InMemoryMatchConfirmationRepositorySpec extends MomoCatsEffectSuite:
@@ -37,7 +37,7 @@ final class InMemoryMatchConfirmationRepositorySpec extends MomoCatsEffectSuite:
       existingFound <- matches.find(existing.id)
       duplicateFound <- matches.find(duplicate.id)
     yield
-      assertAppError(result, "CONFLICT", "already exists for held event")
+      assertAppException(result, "CONFLICT", "already exists for held event")
       assertEquals(storedDraft.map(_.status), Some(MatchDraftStatus.DraftReady))
       assertEquals(storedDraft.flatMap(_.confirmedMatchId), None)
       assertEquals(existingFound.map(_.id), Some(existing.id))
@@ -83,17 +83,3 @@ final class InMemoryMatchConfirmationRepositorySpec extends MomoCatsEffectSuite:
     revenueDraftId = None,
     incidentLogDraftId = None,
   )
-
-  private def assertAppError(
-      result: Either[Throwable, Boolean],
-      expectedCode: String,
-      detailContains: String,
-  ): Unit = result match
-    case Left(error: AppException) =>
-      assertEquals(error.error.code, expectedCode)
-      assert(
-        error.error.detail.contains(detailContains),
-        s"unexpected detail: ${error.error.detail}",
-      )
-    case Left(error) => fail(s"expected AppException($expectedCode), got $error")
-    case Right(value) => fail(s"expected AppException($expectedCode), got success: $value")

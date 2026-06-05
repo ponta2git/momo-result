@@ -8,9 +8,10 @@ import doobie.postgres.implicits.*
 
 import momo.api.domain.*
 import momo.api.domain.ids.*
-import momo.api.errors.{AppError, AppException}
+import momo.api.errors.AppError
 import momo.api.repositories.postgres.*
 import momo.api.repositories.postgres.PostgresMeta.given
+import momo.api.testing.AppErrorAssertions.assertAppException
 import momo.api.usecases.*
 
 final class PostgresMasterRepositoriesSpec extends IntegrationSuite:
@@ -162,14 +163,14 @@ final class PostgresMasterRepositoriesSpec extends IntegrationSuite:
       updateAlias <- memberAliases.update(missingAlias).attempt
       deleteAlias <- memberAliases.delete(missingAlias.id).attempt
     yield
-      assertAppError(updateTitle, AppError.NotFound("game title", missingTitle.id.value))
-      assertAppError(deleteTitle, AppError.NotFound("game title", missingTitle.id.value))
-      assertAppError(updateMap, AppError.NotFound("map master", missingMap.id.value))
-      assertAppError(deleteMap, AppError.NotFound("map master", missingMap.id.value))
-      assertAppError(updateSeason, AppError.NotFound("season master", missingSeason.id.value))
-      assertAppError(deleteSeason, AppError.NotFound("season master", missingSeason.id.value))
-      assertAppError(updateAlias, AppError.NotFound("member alias", missingAlias.id.value))
-      assertAppError(deleteAlias, AppError.NotFound("member alias", missingAlias.id.value))
+      assertAppException(updateTitle, AppError.NotFound("game title", missingTitle.id.value))
+      assertAppException(deleteTitle, AppError.NotFound("game title", missingTitle.id.value))
+      assertAppException(updateMap, AppError.NotFound("map master", missingMap.id.value))
+      assertAppException(deleteMap, AppError.NotFound("map master", missingMap.id.value))
+      assertAppException(updateSeason, AppError.NotFound("season master", missingSeason.id.value))
+      assertAppException(deleteSeason, AppError.NotFound("season master", missingSeason.id.value))
+      assertAppException(updateAlias, AppError.NotFound("member alias", missingAlias.id.value))
+      assertAppException(deleteAlias, AppError.NotFound("member alias", missingAlias.id.value))
 
   test("member aliases create, list, update, reject duplicates, and delete"):
     val create = new CreateMemberAlias[IO](
@@ -209,8 +210,4 @@ final class PostgresMasterRepositoriesSpec extends IntegrationSuite:
       assertEquals(deleted, Right(()))
       assertEquals(afterDelete, None)
 
-  private def assertAppError[A](result: Either[Throwable, A], expected: AppError): Unit =
-    result match
-      case Left(error: AppException) => assertEquals(error.error, expected)
-      case other => fail(s"expected AppException($expected), got $other")
 end PostgresMasterRepositoriesSpec

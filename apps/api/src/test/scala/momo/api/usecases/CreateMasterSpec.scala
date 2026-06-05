@@ -9,7 +9,7 @@ import momo.api.adapters.{
   InMemoryGameTitlesRepository, InMemoryMapMastersRepository, InMemorySeasonMastersRepository,
 }
 import momo.api.domain.ids.{GameTitleId, MapMasterId, SeasonMasterId}
-import momo.api.errors.AppError
+import momo.api.testing.AppErrorAssertions.assertAppError
 
 final class CreateMasterSpec extends MomoCatsEffectSuite:
   private val now = IO.pure(Instant.parse("2026-05-06T00:00:00Z"))
@@ -105,13 +105,3 @@ final class CreateMasterSpec extends MomoCatsEffectSuite:
     yield
       assertAppError(missing, "NOT_FOUND", "game_title was not found")
       assertAppError(duplicate, "CONFLICT", "already exists")
-
-  private def assertAppError[A](
-      result: Either[AppError, A],
-      expectedCode: String,
-      detailContains: String,
-  ): Unit = result match
-    case Left(error) =>
-      assertEquals(error.code, expectedCode)
-      assert(error.detail.contains(detailContains), s"unexpected detail: ${error.detail}")
-    case Right(value) => fail(s"expected $expectedCode, got success: $value")

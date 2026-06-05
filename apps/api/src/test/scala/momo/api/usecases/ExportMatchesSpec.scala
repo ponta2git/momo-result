@@ -13,7 +13,7 @@ import momo.api.adapters.{
 import momo.api.config.ResourceLimitsConfig
 import momo.api.domain.ids.*
 import momo.api.domain.{MatchExportFormat, MatchExportScope, MatchRecord}
-import momo.api.errors.AppError
+import momo.api.testing.AppErrorAssertions.assertAppError
 import momo.api.usecases.testing.MatchFixtures
 
 final class ExportMatchesSpec extends MomoCatsEffectSuite:
@@ -107,13 +107,3 @@ final class ExportMatchesSpec extends MomoCatsEffectSuite:
     revenueDraftId = None,
     incidentLogDraftId = None,
   )
-
-  private def assertAppError[A](
-      result: Either[AppError, A],
-      expectedCode: String,
-      detailContains: String,
-  ): Unit = result match
-    case Left(error) =>
-      assertEquals(error.code, expectedCode)
-      assert(error.detail.contains(detailContains), s"unexpected detail: ${error.detail}")
-    case Right(value) => fail(s"expected $expectedCode, got success: $value")

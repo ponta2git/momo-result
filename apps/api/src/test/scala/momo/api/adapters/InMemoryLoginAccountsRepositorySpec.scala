@@ -7,8 +7,9 @@ import cats.effect.IO
 import momo.api.MomoCatsEffectSuite
 import momo.api.domain.LoginAccount
 import momo.api.domain.ids.{AccountId, UserId}
-import momo.api.errors.{AppError, AppException}
+import momo.api.errors.AppError
 import momo.api.repositories.{CreateLoginAccountData, UpdateLoginAccountData}
+import momo.api.testing.AppErrorAssertions.assertAppException
 
 final class InMemoryLoginAccountsRepositorySpec extends MomoCatsEffectSuite:
   private val now = Instant.parse("2026-05-15T02:00:00Z")
@@ -25,11 +26,11 @@ final class InMemoryLoginAccountsRepositorySpec extends MomoCatsEffectSuite:
         .create(createData(AccountId.unsafeFromString("account-other"), primaryDiscordId)).attempt
       listed <- accounts.list
     yield
-      assertAppError(
+      assertAppException(
         duplicateId,
         AppError.Conflict("login account already exists for discord user 223456789012345678."),
       )
-      assertAppError(
+      assertAppException(
         duplicateDiscord,
         AppError.Conflict("login account already exists for discord user 123456789012345678."),
       )
@@ -103,8 +104,3 @@ final class InMemoryLoginAccountsRepositorySpec extends MomoCatsEffectSuite:
     createdAt = now,
     updatedAt = now,
   )
-
-  private def assertAppError[A](result: Either[Throwable, A], expected: AppError): Unit =
-    result match
-      case Left(error: AppException) => assertEquals(error.error, expected)
-      case other => fail(s"expected AppException($expected), got $other")

@@ -7,7 +7,7 @@ import cats.effect.IO
 import momo.api.MomoCatsEffectSuite
 import momo.api.domain.MatchRecord
 import momo.api.domain.ids.*
-import momo.api.errors.AppException
+import momo.api.testing.AppErrorAssertions.assertAppException
 import momo.api.usecases.testing.MatchFixtures
 
 final class InMemoryMatchesRepositorySpec extends MomoCatsEffectSuite:
@@ -26,7 +26,7 @@ final class InMemoryMatchesRepositorySpec extends MomoCatsEffectSuite:
       result <- matches.create(second).attempt
       listed <- matches.listByHeldEvent(heldEventId)
     yield
-      assertAppError(result, "CONFLICT", "already exists for held event")
+      assertAppException(result, "CONFLICT", "already exists for held event")
       assertEquals(listed.map(_.id), List(first.id))
 
   test("update rejects missing matches instead of inserting them"):
@@ -36,7 +36,7 @@ final class InMemoryMatchesRepositorySpec extends MomoCatsEffectSuite:
       result <- matches.update(missing, now.plusSeconds(60)).attempt
       found <- matches.find(missing.id)
     yield
-      assertAppError(result, "NOT_FOUND", "match was not found")
+      assertAppException(result, "NOT_FOUND", "match was not found")
       assertEquals(found, None)
 
   test("update rejects duplicate match number and preserves the existing record"):
@@ -49,7 +49,7 @@ final class InMemoryMatchesRepositorySpec extends MomoCatsEffectSuite:
       result <- matches.update(first.copy(matchNoInEvent = second.matchNoInEvent), now).attempt
       found <- matches.find(first.id)
     yield
-      assertAppError(result, "CONFLICT", "already exists for held event")
+      assertAppException(result, "CONFLICT", "already exists for held event")
       assertEquals(found.map(_.matchNoInEvent), Some(first.matchNoInEvent))
 
   private def record(id: String, matchNoInEvent: Int): MatchRecord = MatchFixtures.matchRecord(
@@ -66,17 +66,3 @@ final class InMemoryMatchesRepositorySpec extends MomoCatsEffectSuite:
     revenueDraftId = None,
     incidentLogDraftId = None,
   )
-
-  private def assertAppError(
-      result: Either[Throwable, Unit],
-      expectedCode: String,
-      detailContains: String,
-  ): Unit = result match
-    case Left(error: AppException) =>
-      assertEquals(error.error.code, expectedCode)
-      assert(
-        error.error.detail.contains(detailContains),
-        s"unexpected detail: ${error.error.detail}",
-      )
-    case Left(error) => fail(s"expected AppException($expectedCode), got $error")
-    case Right(_) => fail(s"expected AppException($expectedCode), got success")

@@ -1,13 +1,10 @@
 package momo.api.http
 
 import cats.effect.IO
-import fs2.Stream
 import io.circe.Json
 import org.http4s.circe.*
-import org.http4s.headers.`Content-Type`
 import org.http4s.implicits.*
-import org.http4s.multipart.{Multiparts, Part}
-import org.http4s.{Header, MediaType, Method, Request, Status, Uri}
+import org.http4s.{Header, Method, Request, Status, Uri}
 import org.typelevel.ci.CIString
 
 import momo.api.MomoCatsEffectSuite
@@ -18,7 +15,6 @@ import momo.api.domain.ids.AccountId
 import momo.api.http.HttpAssertions.{
   assertProblem, assertProblemDetailEquals, headerValue, jsonField, optionalHeaderValue,
 }
-import momo.api.testing.TestImages
 
 final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
   private final case class SessionBackedHttpApp(
@@ -113,7 +109,6 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
     "momo-api-ocr-replay-rate",
     _.copy(resourceLimits = ResourceLimitsConfig.defaults.copy(ocrJobCreateRateLimitPerMinute = 1)),
   ))
-  private val pngBytes: Array[Byte] = TestImages.png1x1
 
   app.test("GET /healthz returns ok") { httpApp =>
     httpApp.run(Request[IO](Method.GET, uri"/healthz")).flatMap { response =>
@@ -138,7 +133,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
   }
 
   app.test("GET /api/auth/me authenticates fixed dev member") { httpApp =>
-    val request = Request[IO](Method.GET, uri"/api/auth/me").putHeaders(devReadHeader())
+    val request = readGet(uri"/api/auth/me")
     httpApp.run(request).flatMap { response =>
       response.as[Json].map { body =>
         assertEquals(response.status, Status.Ok)
@@ -245,8 +240,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
     }
 
   app.test("GET /api/admin/login-accounts is restricted to administrator accounts") { httpApp =>
-    val request = Request[IO](Method.GET, uri"/api/admin/login-accounts")
-      .putHeaders(devReadHeader("account_akane_mami"))
+    val request = readGet(uri"/api/admin/login-accounts", accountId = "account_akane_mami")
     httpApp.run(request).flatMap(response =>
       assertProblemDetailEquals(
         response,
@@ -258,8 +252,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
   }
 
   app.test("GET /api/admin/login-accounts lists operator accounts for administrators") { httpApp =>
-    val request = Request[IO](Method.GET, uri"/api/admin/login-accounts")
-      .putHeaders(devReadHeader())
+    val request = readGet(uri"/api/admin/login-accounts")
     httpApp.run(request).flatMap { response =>
       response.as[Json].map { body =>
         assertEquals(response.status, Status.Ok)
@@ -276,14 +269,16 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
   }
 
   app.test("POST /api/admin/login-accounts creates an operator-only account") { httpApp =>
-    val request = Request[IO](Method.POST, uri"/api/admin/login-accounts")
-      .putHeaders(devWriteHeaders()*).withEntity(Json.obj(
+    val request = writePost(
+      uri"/api/admin/login-accounts",
+      Json.obj(
         "discordUserId" -> Json.fromString("123456789012345678"),
         "displayName" -> Json.fromString("operator"),
         "playerMemberId" -> Json.Null,
         "loginEnabled" -> Json.fromBoolean(true),
         "isAdmin" -> Json.fromBoolean(false),
-      ))
+      ),
+    )
     httpApp.run(request).flatMap { response =>
       response.as[Json].map { body =>
         assertEquals(response.status, Status.Ok)
@@ -295,16 +290,20 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
   }
 
   app.test("admin login account mutations reject blank ids at the HTTP boundary") { httpApp =>
-    val create = Request[IO](Method.POST, uri"/api/admin/login-accounts")
-      .putHeaders(devWriteHeaders()*).withEntity(Json.obj(
+    val create = writePost(
+      uri"/api/admin/login-accounts",
+      Json.obj(
         "discordUserId" -> Json.fromString(" "),
         "displayName" -> Json.fromString("operator"),
         "playerMemberId" -> Json.Null,
         "loginEnabled" -> Json.fromBoolean(true),
         "isAdmin" -> Json.fromBoolean(false),
-      ))
-    val update = Request[IO](Method.PATCH, uri"/api/admin/login-accounts/account_ponta")
-      .putHeaders(devWriteHeaders()*).withEntity(Json.obj("playerMemberId" -> Json.fromString(" ")))
+      ),
+    )
+    val update = writePatch(
+      uri"/api/admin/login-accounts/account_ponta",
+      Json.obj("playerMemberId" -> Json.fromString(" ")),
+    )
     for
       createResponse <- httpApp.run(create)
       _ <- assertProblemDetailEquals(
@@ -324,9 +323,10 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
   }
 
   app.test("PATCH /api/admin/login-accounts keeps at least one enabled administrator") { httpApp =>
-    val request = Request[IO](Method.PATCH, uri"/api/admin/login-accounts/account_ponta")
-      .putHeaders(devWriteHeaders()*)
-      .withEntity(Json.obj("loginEnabled" -> Json.fromBoolean(false)))
+    val request = writePatch(
+      uri"/api/admin/login-accounts/account_ponta",
+      Json.obj("loginEnabled" -> Json.fromBoolean(false)),
+    )
     httpApp.run(request).flatMap(response =>
       assertProblemDetailEquals(
         response,
@@ -338,7 +338,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
   }
 
   app.test("mutation without development CSRF token is rejected") { httpApp =>
-    val request = Request[IO](Method.POST, uri"/api/ocr-jobs").putHeaders(devReadHeader())
+    val request = readRequest(Method.POST, uri"/api/ocr-jobs")
       .withEntity(HttpRequestBodies.Matches.createOcrJob("missing", "auto"))
     httpApp.run(request).flatMap(response =>
       assertProblemDetailEquals(
@@ -375,8 +375,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
 
   app.test("GET /api/analytics/series-comparison/options is wired for authenticated users") {
     httpApp =>
-      val request = Request[IO](Method.GET, uri"/api/analytics/series-comparison/options")
-        .putHeaders(devReadHeader())
+      val request = readGet(uri"/api/analytics/series-comparison/options")
       httpApp.run(request).flatMap { response =>
         response.as[Json].map { body =>
           assertEquals(response.status, Status.Ok)
@@ -388,10 +387,9 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
 
   app.test("GET /api/analytics/series-comparison validates scope query at the HTTP boundary") {
     httpApp =>
-      val request = Request[IO](
-        Method.GET,
-        uri"/api/analytics/series-comparison?gameTitleId=title_momotetsu_2&scopeKind=season",
-      ).putHeaders(devReadHeader())
+      val request = readGet(
+        uri"/api/analytics/series-comparison?gameTitleId=title_momotetsu_2&scopeKind=season"
+      )
       httpApp.run(request).flatMap(response =>
         assertProblemDetailEquals(
           response,
@@ -463,7 +461,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
   prodHttpApp
     .test("prod protected endpoint rejects external account header without session cookie") {
       httpApp =>
-        val request = Request[IO](Method.GET, uri"/api/held-events").putHeaders(devReadHeader())
+        val request = readGet(uri"/api/held-events")
         httpApp.run(request).flatMap(response =>
           assertProblemDetailEquals(
             response,
@@ -475,7 +473,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
     }
 
   app.test("GET /openapi.yaml is not served by API routes") { httpApp =>
-    val request = Request[IO](Method.GET, uri"/openapi.yaml").putHeaders(devReadHeader())
+    val request = readGet(uri"/openapi.yaml")
     httpApp.run(request).map(response => assertEquals(response.status, Status.NotFound))
   }
 
@@ -500,7 +498,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
     }
 
   uploadStorageQuotaApp.test("upload endpoint rejects account storage quota overflow") { httpApp =>
-    uploadPngRequest.flatMap(request =>
+    uploadPngRequest().flatMap(request =>
       httpApp.run(request).flatMap(response =>
         assertProblem(
           response,
@@ -513,7 +511,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
   }
 
   uploadStorageDiskFullApp.test("upload endpoint rejects disk waterline overflow") { httpApp =>
-    uploadPngRequest.flatMap(request =>
+    uploadPngRequest().flatMap(request =>
       httpApp.run(request).flatMap(response =>
         assertProblem(
           response,
@@ -540,17 +538,15 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
 
   requestLimitApp
     .test("oversized mutation requests are rejected before endpoint decoding") { httpApp =>
-      val request = Request[IO](Method.POST, uri"/api/match-drafts")
-        .putHeaders(devWriteHeaders() :+ org.http4s.Header.Raw(CIString("Content-Length"), "2")*)
-        .withEntity("xx")
+      val request = writeRequest(Method.POST, uri"/api/match-drafts")
+        .putHeaders(Header.Raw(CIString("Content-Length"), "2")).withEntity("xx")
       httpApp.run(request).flatMap(response =>
         assertProblem(response, Status.PayloadTooLarge, "PAYLOAD_TOO_LARGE", "Request body")
       )
     }
 
   exportRateLimitApp.test("scoped export endpoint applies per-member rate limits") { httpApp =>
-    val request = Request[IO](Method.GET, uri"/api/exports/matches?format=tsv&matchId=match-1")
-      .putHeaders(devReadHeader())
+    val request = readGet(uri"/api/exports/matches?format=tsv&matchId=match-1")
     httpApp.run(request).flatMap(response =>
       assertProblem(response, Status.TooManyRequests, "TOO_MANY_REQUESTS", "Too many exports")
     )
@@ -558,8 +554,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
 
   exportAllRateLimitApp
     .test("all-match export endpoint uses a separate per-member rate limit") { httpApp =>
-      val request = Request[IO](Method.GET, uri"/api/exports/matches?format=tsv")
-        .putHeaders(devReadHeader())
+      val request = readGet(uri"/api/exports/matches?format=tsv")
       httpApp.run(request).flatMap(response =>
         assertProblem(response, Status.TooManyRequests, "TOO_MANY_REQUESTS", "Too many exports")
       )
@@ -567,8 +562,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
 
   exportAllRateLimitApp
     .test("all-match export rate limit does not block scoped exports") { httpApp =>
-      val request = Request[IO](Method.GET, uri"/api/exports/matches?format=tsv&matchId=missing")
-        .putHeaders(devReadHeader())
+      val request = readGet(uri"/api/exports/matches?format=tsv&matchId=missing")
       httpApp.run(request).flatMap(response =>
         assertProblem(response, Status.NotFound, "NOT_FOUND", "match was not found")
       )
@@ -576,8 +570,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
 
   exportSizeLimitApp
     .test("export endpoint rejects responses above configured byte limit") { httpApp =>
-      val request = Request[IO](Method.GET, uri"/api/exports/matches?format=csv")
-        .putHeaders(devReadHeader())
+      val request = readGet(uri"/api/exports/matches?format=csv")
       httpApp.run(request).flatMap(response =>
         assertProblem(
           response,
@@ -589,24 +582,21 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
     }
 
   readRateLimitApp.test("matches list endpoint applies per-member read rate limits") { httpApp =>
-    val request = Request[IO](Method.GET, uri"/api/matches").putHeaders(devReadHeader())
+    val request = readGet(uri"/api/matches")
     httpApp.run(request).flatMap(response =>
       assertProblem(response, Status.TooManyRequests, "TOO_MANY_REQUESTS", "Too many read requests")
     )
   }
 
   readRateLimitApp.test("OCR status endpoint applies per-member read rate limits") { httpApp =>
-    val request = Request[IO](Method.GET, uri"/api/ocr-jobs/00000000-0000-0000-0000-000000000001")
-      .putHeaders(devReadHeader())
+    val request = readGet(uri"/api/ocr-jobs/00000000-0000-0000-0000-000000000001")
     httpApp.run(request).flatMap(response =>
       assertProblem(response, Status.TooManyRequests, "TOO_MANY_REQUESTS", "Too many read requests")
     )
   }
 
   readRateLimitApp.test("OCR draft bulk endpoint applies per-member read rate limits") { httpApp =>
-    val request =
-      Request[IO](Method.GET, uri"/api/ocr-drafts?ids=00000000-0000-0000-0000-000000000001")
-        .putHeaders(devReadHeader())
+    val request = readGet(uri"/api/ocr-drafts?ids=00000000-0000-0000-0000-000000000001")
     httpApp.run(request).flatMap(response =>
       assertProblem(response, Status.TooManyRequests, "TOO_MANY_REQUESTS", "Too many read requests")
     )
@@ -616,12 +606,9 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
     .test("source image endpoint applies per-member rate limits") { httpApp =>
       for
         matchDraftId <- createDraftWithSourceImage(httpApp)
-        response <- httpApp.run(
-          Request[IO](
-            Method.GET,
-            Uri.unsafeFromString(s"/api/match-drafts/$matchDraftId/source-images/total_assets"),
-          ).putHeaders(devReadHeader())
-        )
+        response <- httpApp.run(readGet(
+          Uri.unsafeFromString(s"/api/match-drafts/$matchDraftId/source-images/total_assets")
+        ))
         _ <- assertProblem(response, Status.TooManyRequests, "TOO_MANY_REQUESTS", "元画像の取得")
       yield ()
     }
@@ -630,27 +617,27 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
     .test("source image archive endpoint applies per-member rate limits") { httpApp =>
       for
         matchDraftId <- createDraftWithSourceImage(httpApp)
-        response <- httpApp.run(
-          Request[IO](
-            Method.GET,
-            Uri.unsafeFromString(s"/api/match-drafts/$matchDraftId/source-images.zip"),
-          ).putHeaders(devReadHeader())
-        )
+        response <- httpApp
+          .run(readGet(Uri.unsafeFromString(s"/api/match-drafts/$matchDraftId/source-images.zip")))
         _ <- assertProblem(response, Status.TooManyRequests, "TOO_MANY_REQUESTS", "元画像の取得")
       yield ()
     }
 
   ocrAccountRateLimitApp.test("OCR create endpoint applies per-account rate limits") { httpApp =>
-    val request = Request[IO](Method.POST, uri"/api/ocr-jobs").putHeaders(devWriteHeaders()*)
-      .withEntity(HttpRequestBodies.Matches.createOcrJob("image-1", "total_assets"))
+    val request = writePost(
+      uri"/api/ocr-jobs",
+      HttpRequestBodies.Matches.createOcrJob("image-1", "total_assets"),
+    )
     httpApp.run(request).flatMap(response =>
       assertProblem(response, Status.TooManyRequests, "TOO_MANY_REQUESTS", "Too many OCR jobs")
     )
   }
 
   ocrGlobalRateLimitApp.test("OCR create endpoint applies global rate limits") { httpApp =>
-    val request = Request[IO](Method.POST, uri"/api/ocr-jobs").putHeaders(devWriteHeaders()*)
-      .withEntity(HttpRequestBodies.Matches.createOcrJob("image-1", "total_assets"))
+    val request = writePost(
+      uri"/api/ocr-jobs",
+      HttpRequestBodies.Matches.createOcrJob("image-1", "total_assets"),
+    )
     httpApp.run(request).flatMap(response =>
       assertProblem(
         response,
@@ -664,10 +651,10 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
   ocrActiveLimitApp.test("OCR create endpoint returns 503 when the active queue is full") { httpApp =>
     for
       imageId <- uploadPng(httpApp)
-      response <- httpApp.run(
-        Request[IO](Method.POST, uri"/api/ocr-jobs").putHeaders(devWriteHeaders()*)
-          .withEntity(HttpRequestBodies.Matches.createOcrJob(imageId, "total_assets"))
-      )
+      response <- httpApp.run(writePost(
+        uri"/api/ocr-jobs",
+        HttpRequestBodies.Matches.createOcrJob(imageId, "total_assets"),
+      ))
       _ <- assertProblem(
         response,
         Status.ServiceUnavailable,
@@ -681,9 +668,11 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
     .test("OCR idempotency replay does not consume another create rate-limit token") { httpApp =>
       for
         imageId <- uploadPng(httpApp)
-        request = Request[IO](Method.POST, uri"/api/ocr-jobs")
-          .putHeaders(devWriteHeadersWithIdempotency(Some("ocr-replay-key"))*)
-          .withEntity(HttpRequestBodies.Matches.createOcrJob(imageId, "total_assets"))
+        request = writePost(
+          uri"/api/ocr-jobs",
+          HttpRequestBodies.Matches.createOcrJob(imageId, "total_assets"),
+          idempotencyKey = Some("ocr-replay-key"),
+        )
         first <- httpApp.run(request)
         firstBody <- first.as[Json]
         second <- httpApp.run(request)
@@ -694,10 +683,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
         assertEquals(jsonField[String](secondBody, "jobId"), jsonField[String](firstBody, "jobId"))
     }
 
-  private def sessionCookieHeader(value: String): Header.Raw = Header
-    .Raw(CIString("Cookie"), s"momo_result_session=$value")
-
-  private def uploadPng(httpApp: TestHttpApp): IO[String] = uploadPngRequest.flatMap { request =>
+  private def uploadPng(httpApp: TestHttpApp): IO[String] = uploadPngRequest().flatMap { request =>
     for
       response <- httpApp.run(request)
       body <- response.as[Json]
@@ -708,34 +694,15 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
 
   private def createDraftWithSourceImage(httpApp: TestHttpApp): IO[String] =
     for
-      draftResponse <- httpApp.run(
-        Request[IO](Method.POST, uri"/api/match-drafts").putHeaders(devWriteHeaders()*)
-          .withEntity(HttpRequestBodies.Matches.emptyMatchDraft)
-      )
+      draftResponse <- httpApp
+        .run(writePost(uri"/api/match-drafts", HttpRequestBodies.Matches.emptyMatchDraft))
       draftBody <- draftResponse.as[Json]
       _ = assertEquals(draftResponse.status, Status.Ok)
       draftId = jsonField[String](draftBody, "matchDraftId")
       imageId <- uploadPng(httpApp)
-      createJobResponse <- httpApp
-        .run(Request[IO](Method.POST, uri"/api/ocr-jobs").putHeaders(devWriteHeaders()*).withEntity(
-          HttpRequestBodies.Matches.createOcrJobForDraft(imageId, "total_assets", draftId)
-        ))
+      createJobResponse <- httpApp.run(writePost(
+        uri"/api/ocr-jobs",
+        HttpRequestBodies.Matches.createOcrJobForDraft(imageId, "total_assets", draftId),
+      ))
       _ = assertEquals(createJobResponse.status, Status.Ok)
     yield draftId
-
-  private def uploadPngRequest: IO[Request[IO]] = uploadPngRequest(filePartCount = 1)
-
-  private def uploadPngRequest(filePartCount: Int): IO[Request[IO]] =
-    val parts = Vector.tabulate(filePartCount) { index =>
-      Part.fileData[IO](
-        "file",
-        s"source-${index + 1}.png",
-        Stream.emits(pngBytes).covary[IO],
-        `Content-Type`(MediaType.image.png),
-      )
-    }
-    for
-      multiparts <- Multiparts.forSync[IO]
-      multipart <- multiparts.multipart(parts)
-    yield Request[IO](Method.POST, uri"/api/uploads/images").putHeaders(devWriteHeaders()*)
-      .putHeaders(multipart.headers).withEntity(multipart)

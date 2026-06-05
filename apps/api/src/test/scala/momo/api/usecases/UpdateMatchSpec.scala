@@ -11,7 +11,7 @@ import momo.api.adapters.{
 }
 import momo.api.domain.ids.*
 import momo.api.domain.{GameTitle, MatchRecord, PlayerResult}
-import momo.api.errors.AppError
+import momo.api.testing.AppErrorAssertions.{assertAppError, assertRight}
 import momo.api.usecases.testing.MatchFixtures
 
 final class UpdateMatchSpec extends MomoCatsEffectSuite:
@@ -134,20 +134,6 @@ final class UpdateMatchSpec extends MomoCatsEffectSuite:
 
   private def defaultPlayers: List[PlayerResult.Input] = MatchFixtures
     .defaultPlayerInputs(memberValues)
-
-  private def assertRight(result: Either[AppError, MatchRecord]): MatchRecord = result match
-    case Right(value) => value
-    case Left(error) => fail(s"expected success, got: $error")
-
-  private def assertAppError[A](
-      result: Either[AppError, A],
-      expectedCode: String,
-      detailContains: String,
-  ): Unit = result match
-    case Left(error) =>
-      assertEquals(error.code, expectedCode)
-      assert(error.detail.contains(detailContains), s"unexpected detail: ${error.detail}")
-    case Right(value) => fail(s"expected $expectedCode, got success: $value")
 
   private final case class Fixture(
       heldEvents: InMemoryHeldEventsRepository[IO],

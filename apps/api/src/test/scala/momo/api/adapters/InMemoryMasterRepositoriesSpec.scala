@@ -7,7 +7,8 @@ import cats.effect.IO
 import momo.api.MomoCatsEffectSuite
 import momo.api.domain.ids.*
 import momo.api.domain.{GameTitle, MapMaster, MemberAlias, SeasonMaster}
-import momo.api.errors.{AppError, AppException}
+import momo.api.errors.AppError
+import momo.api.testing.AppErrorAssertions.assertAppException
 
 final class InMemoryMasterRepositoriesSpec extends MomoCatsEffectSuite:
   private val now = Instant.parse("2026-05-15T01:00:00Z")
@@ -38,14 +39,14 @@ final class InMemoryMasterRepositoriesSpec extends MomoCatsEffectSuite:
       updateAlias <- aliases.update(missingAlias).attempt
       deleteAlias <- aliases.delete(missingAlias.id).attempt
     yield
-      assertAppError(updateTitle, AppError.NotFound("game title", titleId.value))
-      assertAppError(deleteTitle, AppError.NotFound("game title", titleId.value))
-      assertAppError(updateMap, AppError.NotFound("map master", mapId.value))
-      assertAppError(deleteMap, AppError.NotFound("map master", mapId.value))
-      assertAppError(updateSeason, AppError.NotFound("season master", seasonId.value))
-      assertAppError(deleteSeason, AppError.NotFound("season master", seasonId.value))
-      assertAppError(updateAlias, AppError.NotFound("member alias", missingAlias.id.value))
-      assertAppError(deleteAlias, AppError.NotFound("member alias", missingAlias.id.value))
+      assertAppException(updateTitle, AppError.NotFound("game title", titleId.value))
+      assertAppException(deleteTitle, AppError.NotFound("game title", titleId.value))
+      assertAppException(updateMap, AppError.NotFound("map master", mapId.value))
+      assertAppException(deleteMap, AppError.NotFound("map master", mapId.value))
+      assertAppException(updateSeason, AppError.NotFound("season master", seasonId.value))
+      assertAppException(deleteSeason, AppError.NotFound("season master", seasonId.value))
+      assertAppException(updateAlias, AppError.NotFound("member alias", missingAlias.id.value))
+      assertAppException(deleteAlias, AppError.NotFound("member alias", missingAlias.id.value))
 
   test("master creates reject duplicate repository identities"):
     for
@@ -66,19 +67,19 @@ final class InMemoryMasterRepositoriesSpec extends MomoCatsEffectSuite:
       _ <- aliases.create(MemberAlias(aliasId1, memberId, "ポン太社長", now))
       duplicateAlias <- aliases.create(MemberAlias(aliasId2, memberId, "ポン太社長", now)).attempt
     yield
-      assertAppError(
+      assertAppException(
         duplicateTitle,
         AppError.Conflict("game_title already exists: title_other or World"),
       )
-      assertAppError(
+      assertAppException(
         duplicateMap,
         AppError.Conflict("map_master already exists: map_other or East"),
       )
-      assertAppError(
+      assertAppException(
         duplicateSeason,
         AppError.Conflict("season_master already exists: season_other or Spring"),
       )
-      assertAppError(duplicateAlias, AppError.Conflict("member alias already exists: ポン太社長"))
+      assertAppException(duplicateAlias, AppError.Conflict("member alias already exists: ポン太社長"))
 
   test("master updates reject duplicate repository identities"):
     for
@@ -104,19 +105,19 @@ final class InMemoryMasterRepositoriesSpec extends MomoCatsEffectSuite:
       _ <- aliases.create(MemberAlias(aliasId2, memberId, "おたか社長", now))
       duplicateAlias <- aliases.update(MemberAlias(aliasId2, memberId, "ポン太社長", now)).attempt
     yield
-      assertAppError(
+      assertAppException(
         duplicateTitle,
         AppError.Conflict("game_title already exists: title_other or World"),
       )
-      assertAppError(
+      assertAppException(
         duplicateMap,
         AppError.Conflict("map_master already exists: map_other or East"),
       )
-      assertAppError(
+      assertAppException(
         duplicateSeason,
         AppError.Conflict("season_master already exists: season_other or Spring"),
       )
-      assertAppError(duplicateAlias, AppError.Conflict("member alias already exists: ポン太社長"))
+      assertAppException(duplicateAlias, AppError.Conflict("member alias already exists: ポン太社長"))
 
   private def gameTitle(id: GameTitleId, name: String): GameTitle =
     GameTitle(id, name, "world", 1, now)
@@ -129,8 +130,3 @@ final class InMemoryMasterRepositoriesSpec extends MomoCatsEffectSuite:
       gameTitleId: GameTitleId,
       name: String,
   ): SeasonMaster = SeasonMaster(id, gameTitleId, name, 1, now)
-
-  private def assertAppError[A](result: Either[Throwable, A], expected: AppError): Unit =
-    result match
-      case Left(error: AppException) => assertEquals(error.error, expected)
-      case other => fail(s"expected AppException($expected), got $other")

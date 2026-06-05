@@ -11,7 +11,7 @@ import momo.api.adapters.{
 }
 import momo.api.domain.ids.*
 import momo.api.domain.{GameTitle, MapMaster, MatchDraft, MatchDraftStatus}
-import momo.api.errors.AppError
+import momo.api.testing.AppErrorAssertions.{assertAppError, assertRight}
 import momo.api.usecases.testing.MatchFixtures
 
 final class UpdateMatchDraftSpec extends MomoCatsEffectSuite:
@@ -189,20 +189,6 @@ final class UpdateMatchDraftSpec extends MomoCatsEffectSuite:
     createdAt = createdAt,
     updatedAt = createdAt,
   ).getOrElse(fail(s"invalid draft fixture id=${id.value} status=${status.wire}"))
-
-  private def assertRight(result: Either[AppError, MatchDraft]): MatchDraft = result match
-    case Right(value) => value
-    case Left(error) => fail(s"expected success, got: $error")
-
-  private def assertAppError[A](
-      result: Either[AppError, A],
-      expectedCode: String,
-      detailContains: String,
-  ): Unit = result match
-    case Left(error) =>
-      assertEquals(error.code, expectedCode)
-      assert(error.detail.contains(detailContains), s"unexpected detail: ${error.detail}")
-    case Right(value) => fail(s"expected $expectedCode, got success: $value")
 
   private final case class Fixture(
       heldEvents: InMemoryHeldEventsRepository[IO],

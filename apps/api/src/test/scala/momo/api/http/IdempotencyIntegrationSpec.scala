@@ -43,21 +43,28 @@ final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite with HttpAppT
     .create[IO](mutationLimit, IO.pure(directLimiterNow))
     .map(limiter => IdempotencyReplay.Guard(repo, limiter, activeKeyLimit))
 
-  private def heldEventReq(idemKey: Option[String], heldAt: String): Request[IO] =
-    Request[IO](Method.POST, uri"/api/held-events")
-      .putHeaders(devWriteHeadersWithIdempotency(idemKey)*)
-      .withEntity(HttpRequestBodies.Matches.createHeldEvent(heldAt))
+  private def heldEventReq(idemKey: Option[String], heldAt: String): Request[IO] = writePost(
+    uri"/api/held-events",
+    HttpRequestBodies.Matches.createHeldEvent(heldAt),
+    idempotencyKey = idemKey,
+  )
 
   private def deleteHeldEventReq(idemKey: Option[String], heldEventId: String): Request[IO] =
-    Request[IO](Method.DELETE, Uri.unsafeFromString(s"/api/held-events/$heldEventId"))
-      .putHeaders(devWriteHeadersWithIdempotency(idemKey)*)
+    writeRequest(
+      Method.DELETE,
+      Uri.unsafeFromString(s"/api/held-events/$heldEventId"),
+      idempotencyKey = idemKey,
+    )
 
-  private def createMatchDraftReq: Request[IO] = Request[IO](Method.POST, uri"/api/match-drafts")
-    .putHeaders(devWriteHeaders()*).withEntity(HttpRequestBodies.Matches.emptyMatchDraft)
+  private def createMatchDraftReq: Request[IO] =
+    writePost(uri"/api/match-drafts", HttpRequestBodies.Matches.emptyMatchDraft)
 
   private def cancelMatchDraftReq(idemKey: Option[String], matchDraftId: String): Request[IO] =
-    Request[IO](Method.POST, Uri.unsafeFromString(s"/api/match-drafts/$matchDraftId/cancel"))
-      .putHeaders(devWriteHeadersWithIdempotency(idemKey)*)
+    writeRequest(
+      Method.POST,
+      Uri.unsafeFromString(s"/api/match-drafts/$matchDraftId/cancel"),
+      idempotencyKey = idemKey,
+    )
 
   app.test("idempotency: same key + same body replays response and skips side-effect") { httpApp =>
     for
@@ -65,8 +72,7 @@ final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite with HttpAppT
       firstBody <- first.as[Json]
       second <- httpApp.run(heldEventReq(Some("key-1"), "2024-01-01T00:00:00Z"))
       secondBody <- second.as[Json]
-      listRes <- httpApp
-        .run(Request[IO](Method.GET, uri"/api/held-events?limit=50").putHeaders(devReadHeader()))
+      listRes <- httpApp.run(readGet(uri"/api/held-events?limit=50"))
       listBody <- listRes.as[Json]
     yield
       assertEquals(first.status, Status.Ok)
@@ -103,8 +109,7 @@ final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite with HttpAppT
         replayBody <- replay.as[Json]
         blocked <- httpApp.run(heldEventReq(Some("key-limit-b"), "2024-02-04T00:00:00Z"))
         _ <- assertProblem(blocked, Status.TooManyRequests, "TOO_MANY_REQUESTS", "Idempotency-Key")
-        listRes <- httpApp
-          .run(Request[IO](Method.GET, uri"/api/held-events?limit=50").putHeaders(devReadHeader()))
+        listRes <- httpApp.run(readGet(uri"/api/held-events?limit=50"))
         listBody <- listRes.as[Json]
       yield
         assertEquals(replay.status, Status.Ok)
@@ -240,8 +245,7 @@ final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite with HttpAppT
       second <- httpApp.run(heldEventReq(Some("key-3b"), "2024-04-02T00:00:00Z"))
       _ = assertEquals(second.status, Status.Ok)
       secondBody <- second.as[Json]
-      listRes <- httpApp
-        .run(Request[IO](Method.GET, uri"/api/held-events?limit=50").putHeaders(devReadHeader()))
+      listRes <- httpApp.run(readGet(uri"/api/held-events?limit=50"))
       listBody <- listRes.as[Json]
     yield
       val createdIds = Set(jsonField[String](firstBody, "id"), jsonField[String](secondBody, "id"))
@@ -286,10 +290,7 @@ final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite with HttpAppT
         "IDEMPOTENCY_PAYLOAD_MISMATCH",
         "Idempotency-Key",
       )
-      draft2Get <- httpApp.run(
-        Request[IO](Method.GET, Uri.unsafeFromString(s"/api/match-drafts/$draft2Id"))
-          .putHeaders(devReadHeader())
-      )
+      draft2Get <- httpApp.run(readGet(Uri.unsafeFromString(s"/api/match-drafts/$draft2Id")))
       draft2GetBody <- draft2Get.as[Json]
     yield assertEquals(jsonField[String](draft2GetBody, "status"), "draft_ready")
   }

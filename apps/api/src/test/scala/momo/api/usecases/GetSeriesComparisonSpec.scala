@@ -11,8 +11,8 @@ import momo.api.domain.{
   SeriesComparisonMatchPlayerRow, SeriesComparisonOptionsData, SeriesComparisonResolvedScope,
   SeriesComparisonScope,
 }
-import momo.api.errors.AppError
 import momo.api.repositories.SeriesComparisonReadModel
+import momo.api.testing.AppErrorAssertions.{assertAppError, assertRight}
 
 final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
   private val now = Instant.parse("2026-05-10T12:00:00Z")
@@ -33,7 +33,7 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
     val usecase = GetSeriesComparison[IO](StaticReadModel(Some(resolvedScope), sampleRows))
 
     for result <- usecase.run(SeriesComparisonScope.Overall(titleId)) yield
-      val response = result.getOrElse(fail(s"expected success, got $result"))
+      val response = assertRight(result)
       assertEquals(response.matchCount, 3)
       assertEquals(response.players.map(_.memberId), List("ponta", "akane", "otaka", "eu"))
 
@@ -148,7 +148,7 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
     val usecase = GetSeriesComparison[IO](StaticReadModel(Some(resolvedScope), Nil))
 
     for result <- usecase.run(SeriesComparisonScope.Overall(titleId)) yield
-      val response = result.getOrElse(fail(s"expected success, got $result"))
+      val response = assertRight(result)
       assertEquals(response.matchCount, 0)
       assertEquals(response.players, Nil)
       assertEquals(response.metricsByPlayer, Nil)
@@ -177,7 +177,7 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
     val usecase = GetSeriesComparison[IO](StaticReadModel(Some(resolvedScope), rows))
 
     for result <- usecase.run(SeriesComparisonScope.Overall(titleId)) yield
-      val response = result.getOrElse(fail(s"expected success, got $result"))
+      val response = assertRight(result)
       val expected = List("member_eu", "member_ponta", "member_akane_mami", "member_otaka")
       assertEquals(response.players.map(_.memberId), expected)
       assertEquals(response.metricsByPlayer.map(_.memberId), expected)
@@ -241,16 +241,6 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
 
   private def assertOptionDouble(actual: Option[Double], expected: Double): Unit =
     assertOptionDouble(actual, expected, DoubleDelta)
-
-  private def assertAppError[A](
-      result: Either[AppError, A],
-      expectedCode: String,
-      detailContains: String,
-  ): Unit = result match
-    case Left(error) =>
-      assertEquals(error.code, expectedCode)
-      assert(error.detail.contains(detailContains), s"unexpected detail: ${error.detail}")
-    case Right(value) => fail(s"expected $expectedCode, got success: $value")
 
   private final case class StaticReadModel(
       resolved: Option[SeriesComparisonResolvedScope],

@@ -13,6 +13,15 @@ from momo_ocr.features.text_recognition.engine import FakeTextRecognitionEngine
 from tests.support.images import write_test_image
 
 
+def test_cli_parser_accepts_all_domain_screen_types() -> None:
+    parser = cli_module.build_parser()
+
+    for screen_type in ScreenType:
+        args = parser.parse_args(["analyze", "--image", "sample.png", "--type", screen_type.value])
+
+        assert args.type == screen_type.value
+
+
 def test_cli_analyze_writes_json_and_returns_zero_with_fake_engine(tmp_path: Path) -> None:
     image_path = tmp_path / "assets.jpg"
     output_path = tmp_path / "result.json"

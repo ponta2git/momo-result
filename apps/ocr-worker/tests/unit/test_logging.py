@@ -54,6 +54,7 @@ def test_json_formatter_safely_normalizes_extra_fields() -> None:
         extra={
             "job_id": "j" * 300,
             "duration_ms": float("inf"),
+            "concurrency": 2,
             "resource": _SecretRepr(leaked_marker),
         },
     )
@@ -65,6 +66,7 @@ def test_json_formatter_safely_normalizes_extra_fields() -> None:
     assert len(payload["job_id"]) == 259
     assert payload["job_id"].endswith("...")
     assert payload["duration_ms"] == "inf"
+    assert payload["concurrency"] == 2
     assert payload["resource"] == "_SecretRepr"
     assert leaked_marker not in rendered
 

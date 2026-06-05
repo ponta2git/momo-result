@@ -16,6 +16,7 @@ from momo_ocr.app.logging import configure_logging
 from momo_ocr.app.worker_process import WorkerLoopConfig, run_worker_process
 from momo_ocr.features.ocr_analysis.analyze_image import analyze_image
 from momo_ocr.features.ocr_analysis.report import AnalysisResult, BatchReport
+from momo_ocr.features.ocr_domain.models import ScreenType
 from momo_ocr.features.standalone_analysis.batch_calibration import (
     EVALUATION_SET_CHOICES,
     analyze_directory,
@@ -32,11 +33,28 @@ from momo_ocr.features.text_recognition.tesserocr_engine import TesserocrEngine
 from momo_ocr.shared.json import write_json
 
 ENGINE_CHOICES = ("tesseract", "tesserocr", "fake")
-SCREEN_TYPE_CHOICES = ("auto", "total_assets", "revenue", "incident_log")
+SCREEN_TYPE_CHOICES = tuple(screen_type.value for screen_type in ScreenType)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     _configure_process_logging()
+    parser = build_parser()
+    args = parser.parse_args(argv)
+
+    if args.command == "analyze":
+        return _run_analyze(args)
+
+    if args.command == "batch":
+        return _run_batch(args)
+
+    if args.command == "worker":
+        return _run_worker(args)
+
+    message = f"Unhandled command: {args.command}"
+    raise AssertionError(message)
+
+
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="momo-ocr")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -73,19 +91,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="Override idle sleep interval for the worker loop.",
     )
 
-    args = parser.parse_args(argv)
-
-    if args.command == "analyze":
-        return _run_analyze(args)
-
-    if args.command == "batch":
-        return _run_batch(args)
-
-    if args.command == "worker":
-        return _run_worker(args)
-
-    message = f"Unhandled command: {args.command}"
-    raise AssertionError(message)
+    return parser
 
 
 def _add_engine_options(parser: argparse.ArgumentParser) -> None:

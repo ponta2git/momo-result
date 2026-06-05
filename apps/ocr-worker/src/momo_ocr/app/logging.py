@@ -22,6 +22,7 @@ _EXTRA_KEYS: tuple[str, ...] = (
     "failure_code",
     "duration_ms",
     "delivery_tag",
+    "concurrency",
     "resource",
 )
 _EXC_INFO_MIN_LENGTH = 2

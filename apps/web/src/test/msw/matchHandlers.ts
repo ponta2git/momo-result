@@ -1,5 +1,6 @@
 import { http, HttpResponse } from "msw";
 
+import { makeSourceImageItems } from "@/test/factories/sourceImages";
 import { mswState, now } from "@/test/msw/fixtures";
 
 function pagination(page: number, pageSize: number, totalItems: number) {
@@ -53,26 +54,7 @@ export const matchHandlers = [
   }),
   http.get("/api/match-drafts/:draftId/source-images", ({ params }) =>
     HttpResponse.json({
-      items: [
-        {
-          contentType: "image/png",
-          createdAt: now,
-          imageUrl: `/api/match-drafts/${params["draftId"]}/source-images/total_assets`,
-          kind: "total_assets",
-        },
-        {
-          contentType: "image/png",
-          createdAt: now,
-          imageUrl: `/api/match-drafts/${params["draftId"]}/source-images/revenue`,
-          kind: "revenue",
-        },
-        {
-          contentType: "image/png",
-          createdAt: now,
-          imageUrl: `/api/match-drafts/${params["draftId"]}/source-images/incident_log`,
-          kind: "incident_log",
-        },
-      ],
+      items: makeSourceImageItems(String(params["draftId"])),
     }),
   ),
   http.get(

@@ -1,32 +1,34 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { http, HttpResponse } from "msw";
+import { describe, expect, it } from "vitest";
 
 import { SourceImagePanel } from "@/features/matches/workspace/sourceImages/SourceImagePanel";
 import { createDeferred } from "@/test/deferred";
-import { fetchCallsOf, installAnchorClickMock, installObjectUrlMock } from "@/test/doubles/dom";
+import { installAnchorClickMock, installObjectUrlMock } from "@/test/doubles/dom";
+import { makeSourceImageItems } from "@/test/factories";
+import { setupMsw } from "@/test/msw/lifecycle";
+import { server } from "@/test/msw/server";
 
 const draftId = "draft-1";
-const sourceImages = [
-  {
-    contentType: "image/png",
-    createdAt: "2026-01-01T00:00:00.000Z",
-    imageUrl: "/api/match-drafts/draft-1/source-images/total_assets",
-    kind: "total_assets" as const,
-  },
-  {
-    contentType: "image/png",
-    createdAt: "2026-01-01T00:00:00.000Z",
-    imageUrl: "/api/match-drafts/draft-1/source-images/revenue",
-    kind: "revenue" as const,
-  },
-  {
-    contentType: "image/png",
-    createdAt: "2026-01-01T00:00:00.000Z",
-    imageUrl: "/api/match-drafts/draft-1/source-images/incident_log",
-    kind: "incident_log" as const,
-  },
-];
+const sourceImages = makeSourceImageItems(draftId);
+
+setupMsw();
+
+function sourceImageResponse(): Response {
+  return new HttpResponse("mock-image", {
+    headers: { "Content-Type": "image/png" },
+  });
+}
+
+function archiveResponse(): Response {
+  return new HttpResponse("zip", {
+    headers: {
+      "Content-Disposition": 'attachment; filename="momo-ocr-images-20260518.zip"',
+      "Content-Type": "application/zip",
+    },
+  });
+}
 
 describe("SourceImagePanel", () => {
   it("keeps a stable preview frame while the source image list is loading", () => {
@@ -48,9 +50,8 @@ describe("SourceImagePanel", () => {
   it("keeps a stable preview frame while the active source image is loading", async () => {
     installObjectUrlMock({ createObjectURL: () => "blob:source-image" });
     const responseGate = createDeferred<Response>();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => responseGate.promise),
+    server.use(
+      http.get("/api/match-drafts/:draftId/source-images/:kind", async () => responseGate.promise),
     );
 
     render(
@@ -65,11 +66,7 @@ describe("SourceImagePanel", () => {
     const loadingFrame = await screen.findByLabelText("総資産の元画像を読み込み中");
     expect(loadingFrame).toHaveAttribute("aria-busy", "true");
 
-    responseGate.resolve(
-      new Response(new Blob(["mock-image"], { type: "image/png" }), {
-        headers: { "Content-Type": "image/png" },
-      }),
-    );
+    responseGate.resolve(sourceImageResponse());
     expect(await screen.findByRole("img", { name: "総資産の元画像" })).toHaveAttribute(
       "src",
       "blob:source-image",
@@ -79,13 +76,13 @@ describe("SourceImagePanel", () => {
   it("loads source images through the API client so dev auth headers are sent", async () => {
     window.localStorage.setItem("momoresult.devUser", "account_ponta");
     installObjectUrlMock({ createObjectURL: () => "blob:source-image" });
-    const fetchMock = vi.fn(
-      async () =>
-        new Response(new Blob(["mock-image"], { type: "image/png" }), {
-          headers: { "Content-Type": "image/png" },
-        }),
+    let capturedRequest: Request | undefined;
+    server.use(
+      http.get("/api/match-drafts/:draftId/source-images/:kind", ({ request }) => {
+        capturedRequest = request;
+        return sourceImageResponse();
+      }),
     );
-    vi.stubGlobal("fetch", fetchMock);
 
     render(
       <SourceImagePanel
@@ -100,26 +97,16 @@ describe("SourceImagePanel", () => {
       "src",
       "blob:source-image",
     );
-    const init = fetchCallsOf(fetchMock)[0]?.[1];
-    if (!init) {
-      throw new Error("Expected fetch init");
+    if (!capturedRequest) {
+      throw new Error("Expected source image request");
     }
-    expect(init.credentials).toBe("include");
-    expect((init.headers as Headers).get("X-Momo-Account-Id")).toBe("account_ponta");
+    expect(capturedRequest.credentials).toBe("include");
+    expect(capturedRequest.headers.get("X-Momo-Account-Id")).toBe("account_ponta");
   });
 
   it("opens the source image preview in a modal dialog", async () => {
     const user = userEvent.setup();
     installObjectUrlMock({ createObjectURL: () => "blob:source-image" });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () =>
-          new Response(new Blob(["mock-image"], { type: "image/png" }), {
-            headers: { "Content-Type": "image/png" },
-          }),
-      ),
-    );
 
     render(
       <SourceImagePanel
@@ -157,21 +144,13 @@ describe("SourceImagePanel", () => {
           ? "blob:zip"
           : "blob:source-image",
     });
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.endsWith("/source-images.zip")) {
-        return new Response(new Blob(["zip"], { type: "application/zip" }), {
-          headers: {
-            "Content-Disposition": 'attachment; filename="momo-ocr-images-20260518.zip"',
-            "Content-Type": "application/zip",
-          },
-        });
-      }
-      return new Response(new Blob(["mock-image"], { type: "image/png" }), {
-        headers: { "Content-Type": "image/png" },
-      });
-    });
-    vi.stubGlobal("fetch", fetchMock);
+    let archiveRequested = false;
+    server.use(
+      http.get("/api/match-drafts/:draftId/source-images.zip", () => {
+        archiveRequested = true;
+        return archiveResponse();
+      }),
+    );
 
     render(
       <SourceImagePanel
@@ -188,9 +167,7 @@ describe("SourceImagePanel", () => {
     await waitFor(() => expect(anchorClick.click).toHaveBeenCalledTimes(1));
     expect(anchorClick.clickedAnchors[0]?.getAttribute("href")).toBe("blob:zip");
     expect(anchorClick.clickedAnchors[0]?.download).toBe("momo-ocr-images-20260518.zip");
-    expect(
-      fetchCallsOf(fetchMock).some(([url]) => String(url).endsWith("/source-images.zip")),
-    ).toBe(true);
+    expect(archiveRequested).toBe(true);
   });
 
   it("asks for confirmation before downloading a partial source image archive", async () => {
@@ -202,21 +179,13 @@ describe("SourceImagePanel", () => {
           ? "blob:zip"
           : "blob:source-image",
     });
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.endsWith("/source-images.zip")) {
-        return new Response(new Blob(["zip"], { type: "application/zip" }), {
-          headers: {
-            "Content-Disposition": 'attachment; filename="momo-ocr-images-20260518.zip"',
-            "Content-Type": "application/zip",
-          },
-        });
-      }
-      return new Response(new Blob(["mock-image"], { type: "image/png" }), {
-        headers: { "Content-Type": "image/png" },
-      });
-    });
-    vi.stubGlobal("fetch", fetchMock);
+    let archiveRequestCount = 0;
+    server.use(
+      http.get("/api/match-drafts/:draftId/source-images.zip", () => {
+        archiveRequestCount += 1;
+        return archiveResponse();
+      }),
+    );
 
     render(
       <SourceImagePanel
@@ -240,9 +209,7 @@ describe("SourceImagePanel", () => {
     expect(
       screen.queryByRole("dialog", { name: "元画像がすべてそろっていません" }),
     ).not.toBeInTheDocument();
-    expect(
-      fetchCallsOf(fetchMock).some(([url]) => String(url).endsWith("/source-images.zip")),
-    ).toBe(false);
+    expect(archiveRequestCount).toBe(0);
 
     await user.click(screen.getByRole("button", { name: "元画像を保存" }));
     const confirmDialog = await screen.findByRole("dialog", {
@@ -252,6 +219,7 @@ describe("SourceImagePanel", () => {
 
     await waitFor(() => expect(anchorClick.click).toHaveBeenCalledTimes(1));
     expect(anchorClick.clickedAnchors[0]?.download).toBe("momo-ocr-images-20260518.zip");
+    expect(archiveRequestCount).toBe(1);
   });
 
   it("disables archive downloads when no source images are available", () => {
@@ -271,26 +239,19 @@ describe("SourceImagePanel", () => {
   it("shows a useful message when the archive download fails", async () => {
     const user = userEvent.setup();
     installObjectUrlMock({ createObjectURL: () => "blob:source-image" });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        const url = String(input);
-        if (url.endsWith("/source-images.zip")) {
-          return Response.json(
-            {
-              code: "NOT_FOUND",
-              detail: "source images were not found",
-              status: 404,
-              title: "Not Found",
-              type: "about:blank",
-            },
-            { status: 404 },
-          );
-        }
-        return new Response(new Blob(["mock-image"], { type: "image/png" }), {
-          headers: { "Content-Type": "image/png" },
-        });
-      }),
+    server.use(
+      http.get("/api/match-drafts/:draftId/source-images.zip", () =>
+        HttpResponse.json(
+          {
+            code: "NOT_FOUND",
+            detail: "source images were not found",
+            status: 404,
+            title: "Not Found",
+            type: "about:blank",
+          },
+          { status: 404 },
+        ),
+      ),
     );
 
     render(
@@ -315,26 +276,19 @@ describe("SourceImagePanel", () => {
   it("shows a retry message when archive download is rate-limited", async () => {
     const user = userEvent.setup();
     installObjectUrlMock({ createObjectURL: () => "blob:source-image" });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        const url = String(input);
-        if (url.endsWith("/source-images.zip")) {
-          return Response.json(
-            {
-              code: "TOO_MANY_REQUESTS",
-              detail: "元画像の取得が短時間に集中しています。少し待ってから再度お試しください。",
-              status: 429,
-              title: "Too Many Requests",
-              type: "about:blank",
-            },
-            { status: 429 },
-          );
-        }
-        return new Response(new Blob(["mock-image"], { type: "image/png" }), {
-          headers: { "Content-Type": "image/png" },
-        });
-      }),
+    server.use(
+      http.get("/api/match-drafts/:draftId/source-images.zip", () =>
+        HttpResponse.json(
+          {
+            code: "TOO_MANY_REQUESTS",
+            detail: "元画像の取得が短時間に集中しています。少し待ってから再度お試しください。",
+            status: 429,
+            title: "Too Many Requests",
+            type: "about:blank",
+          },
+          { status: 429 },
+        ),
+      ),
     );
 
     render(

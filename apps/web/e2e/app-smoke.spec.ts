@@ -61,8 +61,7 @@ test("creates a held event after dev login", async ({ page }) => {
   const response = await createResponse;
   expect(response.ok()).toBe(true);
   const body = (await response.json()) as { id?: string };
-  expect(body.id).toBeTruthy();
-  heldEventId = body.id ?? "";
+  heldEventId = expectE2eId(body.id, "held_");
   await expect(page.getByText(/開催履歴（.+）を作成しました。/u)).toBeVisible();
 });
 
@@ -123,8 +122,7 @@ test("starts an OCR job from an uploaded image", async ({ page }) => {
   const draftCreateResponse = await draftResponse;
   expect(draftCreateResponse.ok()).toBe(true);
   const draftBody = (await draftCreateResponse.json()) as { matchDraftId?: string };
-  expect(draftBody.matchDraftId).toBeTruthy();
-  uploadedDraftId = draftBody.matchDraftId ?? "";
+  uploadedDraftId = expectE2eId(draftBody.matchDraftId, "draft_");
 
   expect((await jobResponse).ok()).toBe(true);
   await expect(page).toHaveURL(/\/matches(?:\?.*)?$/u);
@@ -132,7 +130,7 @@ test("starts an OCR job from an uploaded image", async ({ page }) => {
 });
 
 test("confirms the sample OCR review into a match detail", async ({ page }) => {
-  expect(heldEventId).toBeTruthy();
+  expectE2eId(heldEventId, "held_");
 
   await page.goto("/review/dev-sample?sample=1");
 
@@ -154,8 +152,7 @@ test("confirms the sample OCR review into a match detail", async ({ page }) => {
   const response = await confirmResponse;
   expect(response.ok()).toBe(true);
   const body = (await response.json()) as { matchId?: string };
-  expect(body.matchId).toBeTruthy();
-  matchId = body.matchId ?? "";
+  matchId = expectE2eId(body.matchId, "match_");
 
   await expect(page).toHaveURL(new RegExp(`/matches/${matchId}$`, "u"));
   await expect(page.getByRole("heading", { name: /第\d+試合の結果/u })).toBeVisible();
@@ -163,8 +160,8 @@ test("confirms the sample OCR review into a match detail", async ({ page }) => {
 });
 
 test("filters and sorts the confirmed match list", async ({ page }) => {
-  expect(heldEventId).toBeTruthy();
-  expect(matchId).toBeTruthy();
+  expectE2eId(heldEventId, "held_");
+  expectE2eId(matchId, "match_");
 
   await page.goto("/matches");
 
@@ -208,7 +205,7 @@ test("filters and sorts the confirmed match list", async ({ page }) => {
 });
 
 test("opens match detail immediately with a loading shell from the list", async ({ page }) => {
-  expect(matchId).toBeTruthy();
+  expectE2eId(matchId, "match_");
 
   let releaseDetailResponse!: () => void;
   let detailApiRequested = false;
@@ -247,7 +244,7 @@ test("opens match detail immediately with a loading shell from the list", async 
 });
 
 test("downloads an export for the confirmed match", async ({ page }) => {
-  expect(matchId).toBeTruthy();
+  expectE2eId(matchId, "match_");
 
   await page.goto(`/exports?matchId=${encodeURIComponent(matchId)}&format=tsv`);
 
@@ -273,8 +270,8 @@ test("downloads an export for the confirmed match", async ({ page }) => {
 test("deletes discarded OCR draft and scoped masters after deleting the confirmed match", async ({
   request,
 }) => {
-  expect(uploadedDraftId).toBeTruthy();
-  expect(matchId).toBeTruthy();
+  expectE2eId(uploadedDraftId, "draft_");
+  expectE2eId(matchId, "match_");
 
   const cancelResponse = await postMutation(request, `/api/match-drafts/${uploadedDraftId}/cancel`);
   await expectOk(cancelResponse, "cancel uploaded draft");
@@ -362,6 +359,15 @@ async function expectOk(response: APIResponse, label: string): Promise<void> {
     return;
   }
   throw new Error(`${label} failed with ${response.status()}: ${await response.text()}`);
+}
+
+function expectE2eId(value: string | undefined, prefix: string): string {
+  expect(typeof value).toBe("string");
+  if (typeof value !== "string") {
+    throw new TypeError(`Expected ${prefix} ID, but received ${String(value)}`);
+  }
+  expect(value).toEqual(expect.stringMatching(new RegExp(`^${prefix}[A-Za-z0-9_-]+$`, "u")));
+  return value;
 }
 
 function isMatchListResponse(response: APIResponse): boolean {

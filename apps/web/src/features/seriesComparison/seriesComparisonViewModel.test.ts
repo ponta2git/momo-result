@@ -20,6 +20,9 @@ import {
   timelineFlagLabel,
 } from "./seriesComparisonViewModel";
 
+type PlayerMetrics = NonNullable<SeriesComparisonResponse["metricsByPlayer"]>[number]["metrics"];
+type PlayOrderSignalInput = NonNullable<Parameters<typeof playOrderSignal>[0]>;
+
 describe("seriesComparisonViewModel", () => {
   const options: SeriesComparisonOptionsResponse = {
     latestConfirmedGameTitleId: "title-2",
@@ -120,29 +123,39 @@ describe("seriesComparisonViewModel", () => {
     });
   });
 
-  it("treats an average rank spread of 0.30 as a visible difference", () => {
-    const response = responseWithRankAverages([1.2, 1.5, 2.1, 2.4]);
+  it.each([
+    {
+      expected: { label: "比較材料不足", spread: undefined, tone: "flat" },
+      values: [1.2],
+    },
+    {
+      expected: { label: "横一線", spread: 0.10000000000000009, tone: "flat" },
+      values: [1.2, 1.3],
+    },
+    {
+      expected: { label: "小差", spread: 0.19999999999999996, tone: "small" },
+      values: [1.2, 1.4],
+    },
+    {
+      expected: { label: "中差", spread: 0.30000000000000004, tone: "visible" },
+      values: [1.2, 1.5],
+    },
+    {
+      expected: { label: "はっきり差", spread: 1.2, tone: "large" },
+      values: [1.2, 1.5, 2.1, 2.4],
+    },
+  ])("classifies average rank spread for $values", ({ expected, values }) => {
+    expect(averageRankSpread(responseWithRankAverages(values))).toEqual(expected);
+  });
 
-    expect(averageRankSpread(response)).toMatchObject({
-      label: "はっきり差",
-      spread: 1.2,
-      tone: "large",
-    });
+  it("uses the unrounded average rank spread for the 0.30 visible-difference boundary", () => {
+    const summary = averageRankSpread(responseWithRankAverages([2.3629, 2.6613]));
 
-    const closeResponse = responseWithRankAverages([1.2, 1.5]);
-    expect(averageRankSpread(closeResponse)).toMatchObject({
+    expect(summary).toMatchObject({
       label: "中差",
-      spread: 0.30000000000000004,
       tone: "visible",
     });
-
-    const roundedToThirtyResponse = responseWithRankAverages([2.3629, 2.6613]);
-    const roundedToThirty = averageRankSpread(roundedToThirtyResponse);
-    expect(roundedToThirty).toMatchObject({
-      label: "中差",
-      tone: "visible",
-    });
-    expect(roundedToThirty.spread).toBeCloseTo(0.2984);
+    expect(summary.spread).toBeCloseTo(0.2984);
   });
 
   it("ignores null rank averages from optional API fields", () => {
@@ -193,14 +206,17 @@ describe("seriesComparisonViewModel", () => {
   });
 
   it("ignores null and non-finite play-order averages", () => {
-    const metrics = baseMetrics({
-      playOrderBreakdown: [
-        { matchCount: 3, playOrder: 1, rankAverage: Number.NaN },
-        { matchCount: 3, playOrder: 2, rankAverage: 1.8 },
-        { matchCount: 3, playOrder: 3, rankAverage: null as unknown as number },
-        { matchCount: 3, playOrder: 4, rankAverage: 2.7 },
-      ],
-    });
+    const metrics: PlayOrderSignalInput = {
+      ...baseMetrics(),
+      playOrder: {
+        breakdown: [
+          { matchCount: 3, playOrder: 1, rankAverage: Number.NaN },
+          { matchCount: 3, playOrder: 2, rankAverage: 1.8 },
+          { matchCount: 3, playOrder: 3, rankAverage: null },
+          { matchCount: 3, playOrder: 4, rankAverage: 2.7 },
+        ],
+      },
+    };
 
     const signal = playOrderSignal(metrics);
     expect(signal).toMatchObject({
@@ -274,7 +290,7 @@ function baseMetrics({
     SeriesComparisonResponse["metricsByPlayer"]
   >[number]["metrics"]["playOrder"]["breakdown"];
   rankAverage?: number;
-}) {
+} = {}): PlayerMetrics {
   return {
     assets: {},
     denominator: 1,

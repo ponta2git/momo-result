@@ -6,6 +6,7 @@ import { http, HttpResponse } from "msw";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import type { CreateOcrJobRequest } from "@/features/ocrCapture/api";
 import { OcrCapturePage } from "@/features/ocrCapture/OcrCapturePage";
 import { DevUserPicker } from "@/shared/auth/DevUserPicker";
 import { createDeferred } from "@/test/deferred";
@@ -16,12 +17,7 @@ import { createTestQueryClient } from "@/test/queryClient";
 
 setupMsw();
 
-type OcrJobRequestBody = {
-  imageId: string;
-  matchDraftId?: string;
-  ocrHints?: unknown;
-  requestedScreenType: string;
-};
+type OcrJobRequestBody = CreateOcrJobRequest;
 
 type MatchDraftRequestBody = {
   gameTitleId?: string;
@@ -305,13 +301,25 @@ describe("OcrCapturePage", () => {
         imageId: "image-1",
         matchDraftId: "draft-created-1",
         requestedScreenType: "total_assets",
-        ocrHints: expect.any(Object),
+        ocrHints: expect.objectContaining({
+          gameTitle: "桃太郎電鉄2",
+          knownPlayerAliases: expect.arrayContaining([
+            expect.objectContaining({ aliases: expect.arrayContaining(["NO11"]) }),
+          ]),
+          layoutFamily: "momotetsu_2",
+        }),
       },
       {
         imageId: "image-2",
         matchDraftId: "draft-created-1",
         requestedScreenType: "revenue",
-        ocrHints: expect.any(Object),
+        ocrHints: expect.objectContaining({
+          gameTitle: "桃太郎電鉄2",
+          knownPlayerAliases: expect.arrayContaining([
+            expect.objectContaining({ aliases: expect.arrayContaining(["NO11"]) }),
+          ]),
+          layoutFamily: "momotetsu_2",
+        }),
       },
     ]);
   });

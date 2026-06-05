@@ -20,11 +20,20 @@ export type SeriesComparisonScopeChoice = {
 type PlayerMetrics = NonNullable<SeriesComparisonResponse["metricsByPlayer"]>[number]["metrics"];
 type PlayOrderBreakdown = NonNullable<PlayerMetrics["playOrder"]["breakdown"]>[number];
 type NullableNumber = number | null | undefined;
+type DefensivePlayOrderBreakdown = Omit<PlayOrderBreakdown, "rankAverage"> & {
+  rankAverage?: NullableNumber;
+};
+type DefensivePlayerMetrics = Omit<PlayerMetrics, "playOrder"> & {
+  playOrder: Omit<PlayerMetrics["playOrder"], "breakdown"> & {
+    breakdown?: DefensivePlayOrderBreakdown[];
+  };
+};
+type RankedPlayOrderBreakdown = PlayOrderBreakdown & { rankAverage: number };
 
 export type PlayOrderSignal = {
-  best: PlayOrderBreakdown | undefined;
+  best: RankedPlayOrderBreakdown | undefined;
   spread: number | undefined;
-  worst: PlayOrderBreakdown | undefined;
+  worst: RankedPlayOrderBreakdown | undefined;
 };
 
 export type ProfileKind = NonNullable<
@@ -183,11 +192,9 @@ export function averageRankSpread(response: SeriesComparisonResponse): {
   return { label: "はっきり差", spread, tone: "large" };
 }
 
-export function playOrderSignal(metrics: PlayerMetrics | undefined): PlayOrderSignal {
+export function playOrderSignal(metrics: DefensivePlayerMetrics | undefined): PlayOrderSignal {
   const ranked = (metrics?.playOrder.breakdown ?? [])
-    .filter((item): item is PlayOrderBreakdown & { rankAverage: number } =>
-      isNumber(item.rankAverage),
-    )
+    .filter((item): item is RankedPlayOrderBreakdown => isNumber(item.rankAverage))
     .toSorted((a, b) => a.rankAverage - b.rankAverage);
   const best = ranked[0];
   const worst = ranked.at(-1);

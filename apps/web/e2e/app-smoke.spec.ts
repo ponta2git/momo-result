@@ -1,305 +1,307 @@
+import { randomUUID } from "node:crypto";
+
 import { expect, test } from "@playwright/test";
 import type { APIRequestContext, APIResponse, Page } from "@playwright/test";
 
 const devAccountId = "account_ponta";
 const devUserStorageKey = "momoresult.devUser";
-const runId = `${Date.now()}-${process.pid}`;
-const masterIdSuffix = runId.replaceAll(/\D/gu, "").slice(-18) || "1";
+const runId = randomUUID().replaceAll("-", "");
+const masterIdSuffix = runId.slice(-18) || "1";
 const gameTitleId = `gt_e2e_${masterIdSuffix}`;
 const seasonMasterId = `season_e2e_${masterIdSuffix}`;
 const mapMasterId = `map_e2e_${masterIdSuffix}`;
 const gameTitleName = `桃太郎電鉄2 E2E ${masterIdSuffix}`;
-const aliasName = `E2E-${runId}`;
+const aliasName = `E2E-${masterIdSuffix}`;
 const generatedIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
 const png1x1 = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
   "base64",
 );
 
-let heldEventId = "";
-let matchId = "";
-let uploadedDraftId = "";
+test("completes the app smoke workflow with isolated scoped data", async ({ page, request }) => {
+  let heldEventId = "";
+  let matchId = "";
+  let uploadedDraftId = "";
 
-test.describe.configure({ mode: "serial" });
+  await test.step("seed scoped masters", async () => {
+    await postJson(request, "/api/game-titles", {
+      id: gameTitleId,
+      name: gameTitleName,
+      layoutFamily: "momotetsu_2",
+    });
+    await postJson(request, "/api/season-masters", {
+      id: seasonMasterId,
+      gameTitleId,
+      name: "E2Eシーズン",
+    });
+    await postJson(request, "/api/map-masters", {
+      id: mapMasterId,
+      gameTitleId,
+      name: "E2Eマップ",
+    });
+  });
 
-test.beforeAll(async ({ request }) => {
-  await postJson(request, "/api/game-titles", {
-    id: gameTitleId,
-    name: gameTitleName,
-    layoutFamily: "momotetsu_2",
-  });
-  await postJson(request, "/api/season-masters", {
-    id: seasonMasterId,
-    gameTitleId,
-    name: "E2Eシーズン",
-  });
-  await postJson(request, "/api/map-masters", {
-    id: mapMasterId,
-    gameTitleId,
-    name: "E2Eマップ",
-  });
-});
-
-test.beforeEach(async ({ page }) => {
   await page.addInitScript(
     ([key, value]) => window.localStorage.setItem(key, value),
     [devUserStorageKey, devAccountId],
   );
-});
 
-test("creates a held event after dev login", async ({ page }) => {
-  await page.goto("/held-events");
+  await test.step("create a held event after dev login", async () => {
+    await page.goto("/held-events");
 
-  await expect(page.getByRole("heading", { exact: true, name: "開催履歴" })).toBeVisible();
+    await expect(page.getByRole("heading", { exact: true, name: "開催履歴" })).toBeVisible();
 
-  const createResponse = page.waitForResponse(
-    (response) =>
-      response.url().includes("/api/held-events") && response.request().method() === "POST",
-  );
-  await page.getByLabel("開催日時").fill(uniqueLocalDateTime());
-  await page.getByRole("button", { name: "開催履歴を作成" }).click();
-
-  const response = await createResponse;
-  expect(response.ok()).toBe(true);
-  const body = (await response.json()) as { id?: string };
-  heldEventId = expectGeneratedId(body.id, "held event ID");
-  await expect(page.getByText(/開催履歴（.+）を作成しました。/u)).toBeVisible();
-});
-
-test("creates a member alias through the admin UI", async ({ page }) => {
-  await page.goto("/admin/masters");
-
-  await expect(page.getByRole("heading", { exact: true, name: "設定管理" })).toBeVisible();
-  await page.getByRole("tab", { name: "メンバー名寄せ" }).click();
-  await expect(
-    page.getByRole("heading", { exact: true, name: "プレーヤー名の別名" }),
-  ).toBeVisible();
-
-  const createResponse = page.waitForResponse(
-    (response) =>
-      response.url().includes("/api/member-aliases") && response.request().method() === "POST",
-  );
-  const createForm = page
-    .locator("form")
-    .filter({ has: page.getByRole("button", { name: "追加" }) });
-  await createForm.locator('input[name="alias"]').fill(aliasName);
-  await page.getByRole("button", { name: "追加" }).click();
-
-  const response = await createResponse;
-  expect(response.ok()).toBe(true);
-  await expect(page.getByText(aliasName)).toBeVisible();
-});
-
-test("starts an OCR job from an uploaded image", async ({ page }) => {
-  await page.goto("/ocr/new");
-
-  await expect(page.getByRole("heading", { exact: true, name: "OCR取り込み" })).toBeVisible();
-  await selectSeedMasters(page);
-
-  await page.getByLabel("OCRの画像をアップロード").setInputFiles({
-    buffer: png1x1,
-    mimeType: "image/png",
-    name: "total-assets.png",
-  });
-
-  const draftResponse = page.waitForResponse(
-    (response) =>
-      response.url().includes("/api/match-drafts") && response.request().method() === "POST",
-  );
-  const jobResponse = page.waitForResponse(
-    (response) =>
-      response.url().includes("/api/ocr-jobs") && response.request().method() === "POST",
-  );
-
-  await page.getByRole("button", { name: "読み取りを開始して試合一覧へ" }).click();
-  await expect(
-    page.getByRole("heading", {
-      exact: true,
-      name: "3種類すべての画像は揃っていません。このまま進める場合は、もう一度開始してください。",
-    }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "このまま読み取りを開始" }).click();
-
-  const draftCreateResponse = await draftResponse;
-  expect(draftCreateResponse.ok()).toBe(true);
-  const draftBody = (await draftCreateResponse.json()) as { matchDraftId?: string };
-  uploadedDraftId = expectGeneratedId(draftBody.matchDraftId, "match draft ID");
-
-  expect((await jobResponse).ok()).toBe(true);
-  await expect(page).toHaveURL(/\/matches(?:\?.*)?$/u);
-  await expect(page.getByRole("heading", { exact: true, name: "試合一覧" })).toBeVisible();
-});
-
-test("confirms the sample OCR review into a match detail", async ({ page }) => {
-  expectGeneratedId(heldEventId, "held event ID");
-
-  await page.goto("/review/dev-sample?sample=1");
-
-  await expect(page.getByRole("heading", { exact: true, name: "OCR結果の確認" })).toBeVisible();
-  await expect(page.getByText("サンプルの読み取り結果で表示中")).toBeVisible();
-  await page.getByLabel(/開催履歴/u).selectOption(heldEventId);
-  await expect(page.getByLabel(/開催履歴/u)).toHaveValue(heldEventId);
-  await selectSeedMasters(page);
-
-  const confirmResponse = page.waitForResponse(
-    (response) => response.url().endsWith("/api/matches") && response.request().method() === "POST",
-  );
-  await page.getByRole("button", { name: "確定前の確認へ進む" }).click();
-  await expect(
-    page.getByRole("heading", { exact: true, name: "この内容で確定しますか？" }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "確定する" }).click();
-
-  const response = await confirmResponse;
-  expect(response.ok()).toBe(true);
-  const body = (await response.json()) as { matchId?: string };
-  matchId = expectGeneratedId(body.matchId, "match ID");
-
-  await expect(page).toHaveURL(new RegExp(`/matches/${matchId}$`, "u"));
-  await expect(page.getByRole("heading", { name: /第\d+試合の結果/u })).toBeVisible();
-  await expect(page.getByText(gameTitleName, { exact: true })).toBeVisible();
-});
-
-test("filters and sorts the confirmed match list", async ({ page }) => {
-  expectGeneratedId(heldEventId, "held event ID");
-  expectGeneratedId(matchId, "match ID");
-
-  await page.goto("/matches");
-
-  await expect(page.getByRole("heading", { exact: true, name: "試合一覧" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "詳細を見る" })).toBeVisible();
-
-  const statusResponse = page.waitForResponse((response) => {
-    const url = new URL(response.url());
-    return (
-      isMatchListResponse(response) &&
-      url.searchParams.get("status") === "confirmed" &&
-      url.searchParams.get("heldEventId") === null
+    const createResponse = page.waitForResponse(
+      (response) =>
+        response.url().includes("/api/held-events") && response.request().method() === "POST",
     );
+    await page.getByLabel("開催日時").fill(uniqueLocalDateTime());
+    await page.getByRole("button", { name: "開催履歴を作成" }).click();
+
+    const response = await createResponse;
+    expect(response.ok()).toBe(true);
+    const body = (await response.json()) as { id?: string };
+    heldEventId = expectGeneratedId(body.id, "held event ID");
+    await expect(page.getByText(/開催履歴（.+）を作成しました。/u)).toBeVisible();
   });
-  await page.getByRole("combobox", { name: "状態" }).selectOption("confirmed");
-  expect((await statusResponse).ok()).toBe(true);
-  await expect(page).toHaveURL(/[?&]status=confirmed(?:&|$)/u);
-  await expect(page.getByRole("table").getByText(gameTitleName)).toBeVisible();
-  await expect(page.getByRole("link", { name: "詳細を見る" })).toHaveAttribute(
-    "href",
-    `/matches/${matchId}`,
-  );
 
-  const heldEventResponse = page.waitForResponse((response) => {
-    const url = new URL(response.url());
-    return isMatchListResponse(response) && url.searchParams.get("heldEventId") === heldEventId;
+  await test.step("create a member alias through the admin UI", async () => {
+    await page.goto("/admin/masters");
+
+    await expect(page.getByRole("heading", { exact: true, name: "設定管理" })).toBeVisible();
+    await page.getByRole("tab", { name: "メンバー名寄せ" }).click();
+    await expect(
+      page.getByRole("heading", { exact: true, name: "プレーヤー名の別名" }),
+    ).toBeVisible();
+
+    const createResponse = page.waitForResponse(
+      (response) =>
+        response.url().includes("/api/member-aliases") && response.request().method() === "POST",
+    );
+    const createForm = page
+      .locator("form")
+      .filter({ has: page.getByRole("button", { name: "追加" }) });
+    await createForm.locator('input[name="alias"]').fill(aliasName);
+    await page.getByRole("button", { name: "追加" }).click();
+
+    const response = await createResponse;
+    expect(response.ok()).toBe(true);
+    await expect(page.getByText(aliasName)).toBeVisible();
   });
-  await page.getByRole("combobox", { name: "開催" }).selectOption(heldEventId);
-  expect((await heldEventResponse).ok()).toBe(true);
-  await expect(page).toHaveURL(new RegExp(`[?&]heldEventId=${heldEventId}(?:&|$)`, "u"));
-  await expect(page.getByRole("link", { name: "詳細を見る" })).toHaveAttribute(
-    "href",
-    `/matches/${matchId}`,
-  );
 
-  await page.getByRole("combobox", { name: "表の並び順" }).selectOption("updated_desc");
-  await expect(page).toHaveURL(/[?&]sort=updated_desc(?:&|$)/u);
+  await test.step("start an OCR job from an uploaded image", async () => {
+    await page.goto("/ocr/new");
 
-  await page.getByRole("button", { name: "開催・試合" }).click();
-  await expect(page).toHaveURL(/[?&]sort=held_desc(?:&|$)/u);
-});
+    await expect(page.getByRole("heading", { exact: true, name: "OCR取り込み" })).toBeVisible();
+    await selectSeedMasters(page);
 
-test("opens match detail immediately with a loading shell from the list", async ({ page }) => {
-  expectGeneratedId(matchId, "match ID");
+    await page.getByLabel("OCRの画像をアップロード").setInputFiles({
+      buffer: png1x1,
+      mimeType: "image/png",
+      name: "total-assets.png",
+    });
 
-  let releaseDetailResponse!: () => void;
-  let detailApiRequested = false;
-  const detailHold = new Promise<void>((resolve) => {
-    releaseDetailResponse = resolve;
+    const draftResponse = page.waitForResponse(
+      (response) =>
+        response.url().includes("/api/match-drafts") && response.request().method() === "POST",
+    );
+    const jobResponse = page.waitForResponse(
+      (response) =>
+        response.url().includes("/api/ocr-jobs") && response.request().method() === "POST",
+    );
+
+    await page.getByRole("button", { name: "読み取りを開始して試合一覧へ" }).click();
+    await expect(
+      page.getByRole("heading", {
+        exact: true,
+        name: "3種類すべての画像は揃っていません。このまま進める場合は、もう一度開始してください。",
+      }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "このまま読み取りを開始" }).click();
+
+    const draftCreateResponse = await draftResponse;
+    expect(draftCreateResponse.ok()).toBe(true);
+    const draftBody = (await draftCreateResponse.json()) as { matchDraftId?: string };
+    uploadedDraftId = expectGeneratedId(draftBody.matchDraftId, "match draft ID");
+
+    expect((await jobResponse).ok()).toBe(true);
+    await expect(page).toHaveURL(/\/matches(?:\?.*)?$/u);
+    await expect(page.getByRole("heading", { exact: true, name: "試合一覧" })).toBeVisible();
   });
-  const detailUrlPattern = `**/api/matches/${matchId}`;
-  await page.route(detailUrlPattern, async (route) => {
-    if (route.request().method() !== "GET") {
+
+  await test.step("confirm the sample OCR review into a match detail", async () => {
+    expectGeneratedId(heldEventId, "held event ID");
+
+    await page.goto("/review/dev-sample?sample=1");
+
+    await expect(page.getByRole("heading", { exact: true, name: "OCR結果の確認" })).toBeVisible();
+    await expect(page.getByText("サンプルの読み取り結果で表示中")).toBeVisible();
+    await page.getByLabel(/開催履歴/u).selectOption(heldEventId);
+    await expect(page.getByLabel(/開催履歴/u)).toHaveValue(heldEventId);
+    await selectSeedMasters(page);
+
+    const confirmResponse = page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/api/matches") && response.request().method() === "POST",
+    );
+    await page.getByRole("button", { name: "確定前の確認へ進む" }).click();
+    await expect(
+      page.getByRole("heading", { exact: true, name: "この内容で確定しますか？" }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "確定する" }).click();
+
+    const response = await confirmResponse;
+    expect(response.ok()).toBe(true);
+    const body = (await response.json()) as { matchId?: string };
+    matchId = expectGeneratedId(body.matchId, "match ID");
+
+    await expect(page).toHaveURL(new RegExp(`/matches/${matchId}$`, "u"));
+    await expect(page.getByRole("heading", { name: /第\d+試合の結果/u })).toBeVisible();
+    await expect(page.getByText(gameTitleName, { exact: true })).toBeVisible();
+  });
+
+  await test.step("filter and sort the confirmed match list", async () => {
+    expectGeneratedId(heldEventId, "held event ID");
+    expectGeneratedId(matchId, "match ID");
+
+    await page.goto("/matches");
+
+    await expect(page.getByRole("heading", { exact: true, name: "試合一覧" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "詳細を見る" })).toBeVisible();
+
+    const statusResponse = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        isMatchListResponse(response) &&
+        url.searchParams.get("status") === "confirmed" &&
+        url.searchParams.get("heldEventId") === null
+      );
+    });
+    await page.getByRole("combobox", { name: "状態" }).selectOption("confirmed");
+    expect((await statusResponse).ok()).toBe(true);
+    await expect(page).toHaveURL(/[?&]status=confirmed(?:&|$)/u);
+    await expect(page.getByRole("table").getByText(gameTitleName)).toBeVisible();
+    await expect(page.getByRole("link", { name: "詳細を見る" })).toHaveAttribute(
+      "href",
+      `/matches/${matchId}`,
+    );
+
+    const heldEventResponse = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return isMatchListResponse(response) && url.searchParams.get("heldEventId") === heldEventId;
+    });
+    await page.getByRole("combobox", { name: "開催" }).selectOption(heldEventId);
+    expect((await heldEventResponse).ok()).toBe(true);
+    await expect(page).toHaveURL(new RegExp(`[?&]heldEventId=${heldEventId}(?:&|$)`, "u"));
+    await expect(page.getByRole("link", { name: "詳細を見る" })).toHaveAttribute(
+      "href",
+      `/matches/${matchId}`,
+    );
+
+    await page.getByRole("combobox", { name: "表の並び順" }).selectOption("updated_desc");
+    await expect(page).toHaveURL(/[?&]sort=updated_desc(?:&|$)/u);
+
+    await page.getByRole("button", { name: "開催・試合" }).click();
+    await expect(page).toHaveURL(/[?&]sort=held_desc(?:&|$)/u);
+  });
+
+  await test.step("open match detail immediately with a loading shell from the list", async () => {
+    expectGeneratedId(matchId, "match ID");
+
+    let releaseDetailResponse!: () => void;
+    let detailApiRequested = false;
+    const detailHold = new Promise<void>((resolve) => {
+      releaseDetailResponse = resolve;
+    });
+    const detailUrlPattern = `**/api/matches/${matchId}`;
+    await page.route(detailUrlPattern, async (route) => {
+      if (route.request().method() !== "GET") {
+        await route.continue();
+        return;
+      }
+
+      detailApiRequested = true;
+      await detailHold;
       await route.continue();
-      return;
-    }
+    });
 
-    detailApiRequested = true;
-    await detailHold;
-    await route.continue();
+    await page.goto("/matches?status=confirmed");
+
+    await expect(page.getByRole("heading", { exact: true, name: "試合一覧" })).toBeVisible();
+    const detailLink = page.getByRole("link", { name: "詳細を見る" });
+    await expect(detailLink).toHaveAttribute("href", `/matches/${matchId}`);
+    await detailLink.click();
+
+    await expect(page).toHaveURL(new RegExp(`/matches/${matchId}$`, "u"));
+    await expect(page.getByLabel("試合詳細を読み込み中")).toHaveAttribute("aria-busy", "true");
+    await expect(
+      page.getByRole("heading", { exact: true, name: "試合詳細を読み込み中" }),
+    ).toBeVisible();
+    await expect.poll(() => detailApiRequested).toBe(true);
+
+    releaseDetailResponse();
+    await expect(page.getByRole("heading", { name: /第\d+試合の結果/u })).toBeVisible();
+    await page.unroute(detailUrlPattern);
   });
 
-  await page.goto("/matches?status=confirmed");
+  await test.step("download an export for the confirmed match", async () => {
+    expectGeneratedId(matchId, "match ID");
 
-  await expect(page.getByRole("heading", { exact: true, name: "試合一覧" })).toBeVisible();
-  const detailLink = page.getByRole("link", { name: "詳細を見る" });
-  await expect(detailLink).toHaveAttribute("href", `/matches/${matchId}`);
-  await detailLink.click();
+    await page.goto(`/exports?matchId=${encodeURIComponent(matchId)}&format=tsv`);
 
-  await expect(page).toHaveURL(new RegExp(`/matches/${matchId}$`, "u"));
-  await expect(page.getByLabel("試合詳細を読み込み中")).toHaveAttribute("aria-busy", "true");
-  await expect(
-    page.getByRole("heading", { exact: true, name: "試合詳細を読み込み中" }),
-  ).toBeVisible();
-  await expect.poll(() => detailApiRequested).toBe(true);
+    await expect(page.getByRole("heading", { exact: true, name: "CSV / TSV 出力" })).toBeVisible();
+    await expect(page.getByRole("combobox", { name: "試合" })).toHaveValue(matchId);
 
-  releaseDetailResponse();
-  await expect(page.getByRole("heading", { name: /第\d+試合の結果/u })).toBeVisible();
-  await page.unroute(detailUrlPattern);
-});
+    const exportResponse = page.waitForResponse(
+      (response) =>
+        response.url().includes("/api/exports/matches") && response.request().method() === "GET",
+    );
+    await page.getByRole("button", { name: "TSVをダウンロード" }).click();
 
-test("downloads an export for the confirmed match", async ({ page }) => {
-  expectGeneratedId(matchId, "match ID");
-
-  await page.goto(`/exports?matchId=${encodeURIComponent(matchId)}&format=tsv`);
-
-  await expect(page.getByRole("heading", { exact: true, name: "CSV / TSV 出力" })).toBeVisible();
-  await expect(page.getByRole("combobox", { name: "試合" })).toHaveValue(matchId);
-
-  const exportResponse = page.waitForResponse(
-    (response) =>
-      response.url().includes("/api/exports/matches") && response.request().method() === "GET",
-  );
-  await page.getByRole("button", { name: "TSVをダウンロード" }).click();
-
-  const response = await exportResponse;
-  expect(response.ok()).toBe(true);
-  const url = new URL(response.url());
-  expect(url.searchParams.get("format")).toBe("tsv");
-  expect(url.searchParams.get("matchId")).toBe(matchId);
-  await expect(
-    page.getByRole("heading", { exact: true, name: "ダウンロードを開始しました" }),
-  ).toBeVisible();
-});
-
-test("deletes discarded OCR draft and scoped masters after deleting the confirmed match", async ({
-  request,
-}) => {
-  expectGeneratedId(uploadedDraftId, "match draft ID");
-  expectGeneratedId(matchId, "match ID");
-
-  const cancelResponse = await postMutation(request, `/api/match-drafts/${uploadedDraftId}/cancel`);
-  await expectOk(cancelResponse, "cancel uploaded draft");
-
-  const draftAfterCancel = await request.get(`/api/match-drafts/${uploadedDraftId}`, {
-    headers: {
-      "X-Momo-Account-Id": devAccountId,
-    },
+    const response = await exportResponse;
+    expect(response.ok()).toBe(true);
+    const url = new URL(response.url());
+    expect(url.searchParams.get("format")).toBe("tsv");
+    expect(url.searchParams.get("matchId")).toBe(matchId);
+    await expect(
+      page.getByRole("heading", { exact: true, name: "ダウンロードを開始しました" }),
+    ).toBeVisible();
   });
-  expect(draftAfterCancel.status()).toBe(404);
 
-  const blockedMapDelete = await deleteJson(request, `/api/map-masters/${mapMasterId}`);
-  expect(blockedMapDelete.status()).toBe(409);
+  await test.step("delete discarded OCR draft and scoped masters after deleting the match", async () => {
+    expectGeneratedId(uploadedDraftId, "match draft ID");
+    expectGeneratedId(matchId, "match ID");
 
-  const matchDelete = await deleteJson(request, `/api/matches/${matchId}`);
-  await expectOk(matchDelete, "delete confirmed match");
+    const cancelResponse = await postMutation(
+      request,
+      `/api/match-drafts/${uploadedDraftId}/cancel`,
+    );
+    await expectOk(cancelResponse, "cancel uploaded draft");
 
-  await expectDeleted(await deleteJson(request, `/api/map-masters/${mapMasterId}`), mapMasterId);
-  await expectDeleted(
-    await deleteJson(request, `/api/season-masters/${seasonMasterId}`),
-    seasonMasterId,
-  );
-  await expectDeleted(await deleteJson(request, `/api/game-titles/${gameTitleId}`), gameTitleId);
+    const draftAfterCancel = await request.get(`/api/match-drafts/${uploadedDraftId}`, {
+      headers: {
+        "X-Momo-Account-Id": devAccountId,
+      },
+    });
+    expect(draftAfterCancel.status()).toBe(404);
+
+    const blockedMapDelete = await deleteJson(request, `/api/map-masters/${mapMasterId}`);
+    expect(blockedMapDelete.status()).toBe(409);
+
+    const matchDelete = await deleteJson(request, `/api/matches/${matchId}`);
+    await expectOk(matchDelete, "delete confirmed match");
+
+    await expectDeleted(await deleteJson(request, `/api/map-masters/${mapMasterId}`), mapMasterId);
+    await expectDeleted(
+      await deleteJson(request, `/api/season-masters/${seasonMasterId}`),
+      seasonMasterId,
+    );
+    await expectDeleted(await deleteJson(request, `/api/game-titles/${gameTitleId}`), gameTitleId);
+  });
 });
 
 function uniqueLocalDateTime(): string {
-  const numericRunId = Number(runId.replaceAll(/\D/gu, "").slice(-8));
+  const numericRunId = Number.parseInt(masterIdSuffix.slice(-8), 16);
   const minutes = Number.isFinite(numericRunId) ? numericRunId % (20 * 24 * 60) : 0;
   const value = new Date(Date.UTC(2026, 4, 1, 0, minutes));
   return `${value.getUTCFullYear().toString().padStart(4, "0")}-${(value.getUTCMonth() + 1)

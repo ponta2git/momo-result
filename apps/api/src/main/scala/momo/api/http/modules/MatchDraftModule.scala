@@ -15,7 +15,7 @@ import momo.api.endpoints.{
   MatchDraftResponse, MatchDraftSourceImageListResponse, MatchDraftSourceImageResponse,
   ProblemDetails, UpdateMatchDraftRequest,
 }
-import momo.api.http.{EndpointSecurity, HttpOperation, IdempotencyReplay}
+import momo.api.http.{EndpointSecurity, HttpDownloadHeaders, HttpOperation, IdempotencyReplay}
 import momo.api.usecases.{
   CancelMatchDraft, CreateMatchDraft, GetMatchDraft, GetMatchDraftSourceImages, UpdateMatchDraft,
 }
@@ -131,13 +131,16 @@ object MatchDraftModule:
                       s"source_image_archive_downloaded accountId=${member.accountId.value} " +
                         s"draftId=${id.value} imageCount=${archive.imageCount.toString} " +
                         s"archiveBytes=${archive.bytes.length.toString}"
-                    Async[F].delay(logger.info(event)) *> Async[F].pure(Right((
-                      archive.contentType,
-                      s"""attachment; filename="${archive.fileName}"""",
-                      "private, no-store",
-                      "nosniff",
-                      archive.bytes,
-                    )))
+                    HttpDownloadHeaders.attachment(archive.fileName) match
+                      case Left(error) => security.toProblemF(error).map(Left(_))
+                      case Right(disposition) => Async[F].delay(logger.info(event)) *>
+                          Async[F].pure(Right((
+                            archive.contentType,
+                            disposition,
+                            HttpDownloadHeaders.PrivateNoStore,
+                            HttpDownloadHeaders.Nosniff,
+                            archive.bytes,
+                          )))
                 }
             }
         )
@@ -165,9 +168,12 @@ object MatchDraftModule:
                     val event = s"source_image_downloaded accountId=${member.accountId.value} " +
                       s"draftId=${id.value} kind=${parsedKind.wire} " +
                       s"bodyBytes=${image.bytes.length.toString}"
-                    Async[F].delay(logger.info(event)) *> Async[F].pure(Right(
-                      (image.contentType, "private, no-store", "nosniff", image.bytes)
-                    ))
+                    Async[F].delay(logger.info(event)) *> Async[F].pure(Right((
+                      image.contentType,
+                      HttpDownloadHeaders.PrivateNoStore,
+                      HttpDownloadHeaders.Nosniff,
+                      image.bytes,
+                    )))
                 }
             }
         }

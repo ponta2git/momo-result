@@ -53,5 +53,4 @@ final case class MatchExportRow(
     incidents: IncidentCounts,
 )
 
-final case class MatchExportFile(fileName: String, contentType: String, body: String):
-  def contentDisposition: String = s"attachment; filename=\"$fileName\""
+final case class MatchExportFile(fileName: String, contentType: String, body: String)

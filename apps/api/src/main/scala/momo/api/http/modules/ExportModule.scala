@@ -12,7 +12,7 @@ import momo.api.domain.MatchExportScope
 import momo.api.endpoints.codec.ExportCodec
 import momo.api.endpoints.{ExportEndpoints, ProblemDetails}
 import momo.api.errors.AppError
-import momo.api.http.EndpointSecurity
+import momo.api.http.{EndpointSecurity, HttpDownloadHeaders}
 import momo.api.usecases.ExportMatches
 
 object ExportModule:
@@ -45,9 +45,10 @@ object ExportModule:
                         val event = s"match_export_completed accountId=${member.accountId.value} " +
                           s"format=${exportFormat.wire} scope=${scope.filePart} " +
                           s"bodyBytes=${bodyBytes.toString}"
-                        Async[F].delay(logger.info(event)) *>
-                          Async[F]
-                            .pure(Right((file.contentDisposition, file.contentType, file.body)))
+                        HttpDownloadHeaders.attachment(file.fileName) match
+                          case Left(error) => security.toProblemF(error).map(Left(_))
+                          case Right(disposition) => Async[F].delay(logger.info(event)) *>
+                              Async[F].pure(Right((disposition, file.contentType, file.body)))
                     }
               }
           }

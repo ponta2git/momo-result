@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PIL import Image
-
 from momo_ocr.features.image_processing.geometry import (
     FULL_HD,
     Rect,
@@ -14,6 +12,7 @@ from momo_ocr.features.image_processing.geometry import (
 )
 from momo_ocr.features.image_processing.preprocessing import normalize_to_full_hd
 from momo_ocr.features.image_processing.roi import crop_roi, save_debug_roi
+from tests.support.images import make_test_image
 
 
 def test_scale_profile_rect_to_720p_image() -> None:
@@ -32,7 +31,7 @@ def test_aspect_ratio_accepts_16_by_9_sizes() -> None:
 
 
 def test_normalize_to_full_hd_resizes_720p_image() -> None:
-    image = Image.new("RGB", (1280, 720), color="white")
+    image = make_test_image(size=(1280, 720))
 
     normalized = normalize_to_full_hd(image)
 
@@ -40,7 +39,7 @@ def test_normalize_to_full_hd_resizes_720p_image() -> None:
 
 
 def test_crop_and_save_debug_roi(tmp_path: Path) -> None:
-    image = Image.new("RGB", (100, 50), color="white")
+    image = make_test_image(size=(100, 50))
     rect = Rect(x=10, y=5, width=20, height=10)
 
     cropped = crop_roi(image, rect)

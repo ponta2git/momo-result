@@ -1,21 +1,14 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
 from pathlib import Path
-
-from PIL import Image
 
 from momo_ocr.features.ocr_domain.models import ScreenType
 from momo_ocr.features.ocr_results.parsing import ScreenParseContext
 from momo_ocr.features.ocr_results.player_aliases import alias_resolver_from_member_aliases
 from momo_ocr.features.revenue.parser import RevenueParser
 from momo_ocr.features.revenue.postprocess import parse_man_yen
-from momo_ocr.features.text_recognition.engine import TextRecognitionEngine
-from momo_ocr.features.text_recognition.models import (
-    RecognitionConfig,
-    RecognitionField,
-    RecognizedText,
-)
+from tests.support.images import write_test_image
+from tests.support.text_recognition import SequenceTextRecognitionEngine
 
 
 def test_parse_man_yen_handles_zero_yen_revenue() -> None:
@@ -36,7 +29,7 @@ def test_parse_man_yen_handles_zero_yen_revenue() -> None:
 def test_revenue_parser_extracts_ranked_players_and_amounts(tmp_path: Path) -> None:
     image_path = tmp_path / "revenue.jpg"
     debug_dir = tmp_path / "debug"
-    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    write_test_image(image_path)
     engine = SequenceTextRecognitionEngine(
         [
             "] 《 NO1 1社長 1億5800万円 | 6",
@@ -83,7 +76,7 @@ def test_revenue_parser_extracts_ranked_players_and_amounts(tmp_path: Path) -> N
 
 def test_revenue_parser_warns_for_unreadable_row(tmp_path: Path) -> None:
     image_path = tmp_path / "revenue.jpg"
-    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    write_test_image(image_path)
     engine = SequenceTextRecognitionEngine(["unknown"] * 32)
 
     payload = RevenueParser().parse(
@@ -110,7 +103,7 @@ def test_revenue_parser_warns_when_multiple_rows_resolve_to_same_member(
     tmp_path: Path,
 ) -> None:
     image_path = tmp_path / "revenue.jpg"
-    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    write_test_image(image_path)
     engine = SequenceTextRecognitionEngine(
         [
             "PONTA社長 1億円",
@@ -154,19 +147,3 @@ def test_revenue_parser_warns_when_multiple_rows_resolve_to_same_member(
     ]
     assert len(duplicate_warnings) == 1
     assert duplicate_warnings[0].field_path == "players[1].member_id"
-
-
-class SequenceTextRecognitionEngine(TextRecognitionEngine):
-    def __init__(self, texts: Sequence[str]) -> None:
-        self._texts = list(texts)
-
-    def recognize(
-        self,
-        image: Image.Image,
-        *,
-        field: RecognitionField = RecognitionField.GENERIC,
-        psm: int | None = None,
-        config: RecognitionConfig | None = None,
-    ) -> RecognizedText:
-        del image, field, psm, config
-        return RecognizedText(text=self._texts.pop(0), confidence=0.9)

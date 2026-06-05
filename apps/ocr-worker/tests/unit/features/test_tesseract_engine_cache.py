@@ -7,10 +7,10 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from PIL import Image
 
 from momo_ocr.features.text_recognition.tesseract import TesseractEngine
 from momo_ocr.shared.errors import FailureCode, OcrError
+from tests.support.images import make_test_image
 
 
 def test_init_resolves_executable_once(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -60,7 +60,7 @@ def test_recognize_does_not_call_shutil_which(monkeypatch: pytest.MonkeyPatch) -
 
     monkeypatch.setattr(subprocess, "run", fake_run)
 
-    image = Image.new("RGB", (10, 10), color="white")
+    image = make_test_image(size=(10, 10))
     engine.recognize(image)
     engine.recognize(image)
 
@@ -71,7 +71,7 @@ def test_missing_binary_raises_lazily_on_recognize(monkeypatch: pytest.MonkeyPat
     """Construction must not raise even when tesseract is absent."""
     monkeypatch.setattr(shutil, "which", lambda _name: None)
     engine = TesseractEngine()  # must not raise
-    image = Image.new("RGB", (10, 10), color="white")
+    image = make_test_image(size=(10, 10))
     with pytest.raises(OcrError) as exc_info:
         engine.recognize(image)
     assert exc_info.value.code == FailureCode.OCR_ENGINE_UNAVAILABLE

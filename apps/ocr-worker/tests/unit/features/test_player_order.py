@@ -169,24 +169,6 @@ def _sample_detection() -> PlayerOrderDetection:
     )
 
 
-class SequenceTextRecognitionEngine(TextRecognitionEngine):
-    def __init__(self, texts: list[str]) -> None:
-        self._texts = texts
-
-    def recognize(
-        self,
-        image: Image.Image,
-        *,
-        field: RecognitionField = RecognitionField.GENERIC,
-        psm: int | None = None,
-        config: RecognitionConfig | None = None,
-    ) -> RecognizedText:
-        del image, field, psm, config
-        text = self._texts[0]
-        self._texts = self._texts[1:]
-        return RecognizedText(text=text, confidence=0.9)
-
-
 class SlotTextRecognitionEngine(TextRecognitionEngine):
     def __init__(self, texts: list[str]) -> None:
         self._texts = texts

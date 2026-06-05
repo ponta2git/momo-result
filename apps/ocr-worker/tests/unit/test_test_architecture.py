@@ -9,6 +9,8 @@ from typing import cast
 TESTS_ROOT = Path(__file__).resolve().parents[1]
 OCR_WORKER_ROOT = TESTS_ROOT.parent
 INTEGRATION_ROOT = TESTS_ROOT / "integration"
+UNIT_ROOT = TESTS_ROOT / "unit"
+EXTERNAL_RUNTIME_IMPORT_MODULES = {"redis", "psycopg_pool"}
 
 
 def test_default_pytest_gate_excludes_external_integration_tests() -> None:
@@ -48,6 +50,16 @@ def test_integration_tests_are_marked_for_explicit_gate() -> None:
     assert missing_marker == []
 
 
+def test_unit_tests_keep_external_runtime_imports_out_of_default_gate() -> None:
+    blocked_imports = [
+        f"{path.relative_to(TESTS_ROOT).as_posix()}: {import_name}"
+        for path in sorted(UNIT_ROOT.rglob("test_*.py"))
+        for import_name in _external_runtime_imports(path)
+    ]
+
+    assert blocked_imports == []
+
+
 def _pytest_addopts() -> list[str]:
     pytest_config = _table(_tool_config(), "pytest")
     ini_options = _table(pytest_config, "ini_options")
@@ -84,4 +96,25 @@ def _has_pytest_mark_integration(node: ast.AST) -> bool:
         and mark.attr == "mark"
         and isinstance(mark.value, ast.Name)
         and mark.value.id == "pytest"
+    )
+
+
+def _external_runtime_imports(path: Path) -> list[str]:
+    module = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    imports: list[str] = []
+    for node in ast.walk(module):
+        if isinstance(node, ast.Import):
+            imports.extend(
+                alias.name for alias in node.names if _is_external_runtime_module(alias.name)
+            )
+        elif isinstance(node, ast.ImportFrom):
+            module_name = node.module or ""
+            if _is_external_runtime_module(module_name):
+                imports.append(module_name)
+    return imports
+
+
+def _is_external_runtime_module(module_name: str) -> bool:
+    return module_name in EXTERNAL_RUNTIME_IMPORT_MODULES or module_name.startswith(
+        "testcontainers"
     )

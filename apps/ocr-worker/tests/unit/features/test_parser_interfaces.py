@@ -9,6 +9,7 @@ from momo_ocr.features.ocr_domain.models import ScreenType
 from momo_ocr.features.ocr_results.parsing import ScreenParseContext
 from momo_ocr.features.ocr_results.registry import default_parser_registry
 from momo_ocr.features.text_recognition.engine import FakeTextRecognitionEngine
+from tests.support.images import write_test_image
 
 
 def test_default_parser_registry_returns_category_parser() -> None:
@@ -33,7 +34,7 @@ def test_screen_parse_context_warnings_default_to_immutable_tuple(tmp_path: Path
 
 def test_category_parser_returns_payload_with_profile_context(tmp_path: Path) -> None:
     image_path = tmp_path / "incident.jpg"
-    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    write_test_image(image_path)
     parser = default_parser_registry().get(ScreenType.INCIDENT_LOG)
 
     payload = parser.parse(

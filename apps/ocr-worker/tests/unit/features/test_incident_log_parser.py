@@ -1,20 +1,13 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
 from pathlib import Path
-
-from PIL import Image
 
 from momo_ocr.features.incident_log.parser import IncidentLogParser
 from momo_ocr.features.incident_log.postprocess import is_pure_pipe_noise, parse_count
 from momo_ocr.features.ocr_domain.models import ScreenType
 from momo_ocr.features.ocr_results.parsing import ScreenParseContext
-from momo_ocr.features.text_recognition.engine import TextRecognitionEngine
-from momo_ocr.features.text_recognition.models import (
-    RecognitionConfig,
-    RecognitionField,
-    RecognizedText,
-)
+from tests.support.images import write_test_image
+from tests.support.text_recognition import SequenceTextRecognitionEngine
 
 PRIMARY_RECOGNITIONS_PER_CELL = 2
 RECOGNITIONS_PER_CELL_WITH_FALLBACK = 6
@@ -53,7 +46,7 @@ def test_is_pure_pipe_noise_detects_vertical_bar_only_strings() -> None:
 def test_incident_log_parser_extracts_fixed_incident_counts(tmp_path: Path) -> None:
     image_path = tmp_path / "incident.jpg"
     debug_dir = tmp_path / "debug"
-    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    write_test_image(image_path)
     counts_by_incident = [
         [0, 0, 0, 1],
         [5, 5, 7, 5],
@@ -92,7 +85,7 @@ def test_incident_log_parser_extracts_fixed_incident_counts(tmp_path: Path) -> N
 
 def test_incident_log_parser_warns_for_unreadable_count(tmp_path: Path) -> None:
     image_path = tmp_path / "incident.jpg"
-    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    write_test_image(image_path)
     engine = SequenceTextRecognitionEngine(
         [""] * INCIDENT_CELL_COUNT * RECOGNITIONS_PER_CELL_WITH_FALLBACK
     )
@@ -116,7 +109,7 @@ def test_incident_log_parser_warns_for_unreadable_count(tmp_path: Path) -> None:
 
 def test_incident_log_parser_uses_compact_layout_hint(tmp_path: Path) -> None:
     image_path = tmp_path / "incident.jpg"
-    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    write_test_image(image_path)
     engine = SequenceTextRecognitionEngine(
         ["0"] * INCIDENT_CELL_COUNT * RECOGNITIONS_PER_CELL_WITH_FALLBACK
     )
@@ -139,7 +132,7 @@ def test_incident_log_parser_uses_compact_layout_hint(tmp_path: Path) -> None:
 
 def test_incident_log_parser_auto_selects_profile_with_fewer_missing_counts(tmp_path: Path) -> None:
     image_path = tmp_path / "incident.jpg"
-    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    write_test_image(image_path)
     engine = SequenceTextRecognitionEngine(
         ([""] * INCIDENT_CELL_COUNT * RECOGNITIONS_PER_CELL_WITH_FALLBACK)
         + (["0"] * INCIDENT_CELL_COUNT * RECOGNITIONS_PER_CELL_WITH_FALLBACK)
@@ -165,7 +158,7 @@ def test_incident_log_parser_fallback_preprocessing_repairs_suspicious_digit_noi
     tmp_path: Path,
 ) -> None:
     image_path = tmp_path / "incident.jpg"
-    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    write_test_image(image_path)
     engine = SequenceTextRecognitionEngine(
         ["23", "23", "2", "2", "20", "20"]
         + (["0"] * (INCIDENT_CELL_COUNT - 1) * RECOGNITIONS_PER_CELL_WITH_FALLBACK)
@@ -195,7 +188,7 @@ def test_incident_log_parser_majority_vote_overrides_primary_misread(
     # Primary が "lo" (=10) と誤読し、fallback の 3 候補が "0" を返した場合、
     # 多数決により count=0 を採用すること。Bug "0→10" の回帰防止。
     image_path = tmp_path / "incident.jpg"
-    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    write_test_image(image_path)
     engine = SequenceTextRecognitionEngine(
         ["lo", "lo", "0", "0", "0", "0"]
         + (["0"] * (INCIDENT_CELL_COUNT - 1) * RECOGNITIONS_PER_CELL_WITH_FALLBACK)
@@ -222,7 +215,7 @@ def test_incident_log_parser_majority_vote_overrides_primary_misread(
 
 def test_incident_log_parser_uses_stricter_ginji_cell_fallback(tmp_path: Path) -> None:
     image_path = tmp_path / "incident.jpg"
-    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    write_test_image(image_path)
     # First 20 non-Ginji cells are zero, then first Ginji cell has primary 3 and fallback 0.
     engine = SequenceTextRecognitionEngine(
         (["0"] * 20 * RECOGNITIONS_PER_CELL_WITH_FALLBACK)
@@ -248,7 +241,7 @@ def test_incident_log_parser_uses_stricter_ginji_cell_fallback(tmp_path: Path) -
 
 def test_incident_log_parser_warns_for_domain_implausible_counts(tmp_path: Path) -> None:
     image_path = tmp_path / "incident.jpg"
-    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    write_test_image(image_path)
     counts_by_incident = [
         [4, 0, 0, 0],
         [4, 0, 0, 0],
@@ -285,41 +278,6 @@ def _all_recognition_texts_for_counts(counts_by_incident: list[list[int]]) -> li
     ]
 
 
-class SequenceTextRecognitionEngine(TextRecognitionEngine):
-    def __init__(self, texts: Sequence[str]) -> None:
-        self._texts = list(texts)
-
-    def recognize(
-        self,
-        image: Image.Image,
-        *,
-        field: RecognitionField = RecognitionField.GENERIC,
-        psm: int | None = None,
-        config: RecognitionConfig | None = None,
-    ) -> RecognizedText:
-        del image, field, psm, config
-        return RecognizedText(text=self._texts.pop(0), confidence=0.9)
-
-
-class SequenceTextRecognitionEngineWithConfidence(TextRecognitionEngine):
-    """各認識ごとに (text, confidence) を返すモック。"""
-
-    def __init__(self, items: Sequence[tuple[str, float]]) -> None:
-        self._items = list(items)
-
-    def recognize(
-        self,
-        image: Image.Image,
-        *,
-        field: RecognitionField = RecognitionField.GENERIC,
-        psm: int | None = None,
-        config: RecognitionConfig | None = None,
-    ) -> RecognizedText:
-        del image, field, psm, config
-        text, confidence = self._items.pop(0)
-        return RecognizedText(text=text, confidence=confidence)
-
-
 def test_incident_log_parser_prefers_digit_text_over_zero_alias_noise(
     tmp_path: Path,
 ) -> None:
@@ -330,7 +288,7 @@ def test_incident_log_parser_prefers_digit_text_over_zero_alias_noise(
     # has_digit ゲートにより「テキストに literal digit が含まれているか」を最優先
     # することで、conf=0 でも digit 票を勝たせる。
     image_path = tmp_path / "incident.jpg"
-    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    write_test_image(image_path)
     # 1 セル目 (player_1 / 目的地): primary 2 PSM = "3" conf 0.0,
     # fallback variants (sharpened, otsu) = "3"/"oo"/...
     # 合計 6 認識のうち 4 認識が "3" (digit), 2 認識が letter alias 由来の "0"。
@@ -345,7 +303,7 @@ def test_incident_log_parser_prefers_digit_text_over_zero_alias_noise(
         ("oo", 0.07),
     ]
     rest = [("0", 0.9)] * (INCIDENT_CELL_COUNT - 1) * RECOGNITIONS_PER_CELL_WITH_FALLBACK
-    engine = SequenceTextRecognitionEngineWithConfidence(cell_one + rest)
+    engine = SequenceTextRecognitionEngine(cell_one + rest)
 
     payload = IncidentLogParser().parse(
         ScreenParseContext(
@@ -369,9 +327,9 @@ def test_incident_log_parser_fast_path_skips_fallback_variants_and_psm(
     # Fast-path: primary variant + PSM 10 が plausible digit を高 conf で返したら
     # fallback variant も PSM 13 もスキップする。1 セルにつき OCR 呼び出し 1 回。
     image_path = tmp_path / "incident.jpg"
-    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    write_test_image(image_path)
     # 1 OCR call per cell × 24 cells = 24 calls.
-    engine = CountingTextRecognitionEngine(
+    engine = SequenceTextRecognitionEngine(
         [("0", 0.9)] * INCIDENT_CELL_COUNT * RECOGNITIONS_PER_CELL_WITH_FALLBACK
     )
 
@@ -395,8 +353,8 @@ def test_incident_log_parser_fast_path_disabled_evaluates_all_variants(
     tmp_path: Path,
 ) -> None:
     image_path = tmp_path / "incident.jpg"
-    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
-    engine = CountingTextRecognitionEngine(
+    write_test_image(image_path)
+    engine = SequenceTextRecognitionEngine(
         [("0", 0.9)] * INCIDENT_CELL_COUNT * RECOGNITIONS_PER_CELL_WITH_FALLBACK
     )
 
@@ -421,9 +379,9 @@ def test_incident_log_parser_fast_path_skips_subsequent_profiles_when_complete(
     # layout hint なしだと world + compact 両 profile を試行する。fast-path 有効で
     # 1 profile 目が missing_count==0 を返したら 2 profile 目はスキップ。
     image_path = tmp_path / "incident.jpg"
-    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    write_test_image(image_path)
     # First profile fully resolves (24 cells × 1 call each under fast-path).
-    engine = CountingTextRecognitionEngine(
+    engine = SequenceTextRecognitionEngine(
         [("0", 0.9)] * INCIDENT_CELL_COUNT * RECOGNITIONS_PER_CELL_WITH_FALLBACK * 2
     )
 
@@ -449,8 +407,8 @@ def test_incident_log_parser_fast_path_continues_on_low_confidence(
     # Below FAST_PATH_CONFIDENCE_THRESHOLD (0.85), short-circuit must not engage:
     # full PSM × variant exploration runs as in the default path.
     image_path = tmp_path / "incident.jpg"
-    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
-    engine = CountingTextRecognitionEngine(
+    write_test_image(image_path)
+    engine = SequenceTextRecognitionEngine(
         [("0", 0.5)] * INCIDENT_CELL_COUNT * RECOGNITIONS_PER_CELL_WITH_FALLBACK
     )
 
@@ -468,22 +426,3 @@ def test_incident_log_parser_fast_path_continues_on_low_confidence(
         )
     )
     assert engine.call_count == INCIDENT_CELL_COUNT * RECOGNITIONS_PER_CELL_WITH_FALLBACK
-
-
-class CountingTextRecognitionEngine(TextRecognitionEngine):
-    def __init__(self, items: Sequence[tuple[str, float]]) -> None:
-        self._items = list(items)
-        self.call_count = 0
-
-    def recognize(
-        self,
-        image: Image.Image,
-        *,
-        field: RecognitionField = RecognitionField.GENERIC,
-        psm: int | None = None,
-        config: RecognitionConfig | None = None,
-    ) -> RecognizedText:
-        del image, field, psm, config
-        text, confidence = self._items.pop(0)
-        self.call_count += 1
-        return RecognizedText(text=text, confidence=confidence)

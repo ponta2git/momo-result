@@ -11,11 +11,12 @@ from momo_ocr.features.ocr_domain.models import OcrDraftPayload, ScreenType
 from momo_ocr.features.ocr_results.parsing import ParserRegistry, ScreenParseContext
 from momo_ocr.features.temp_images.validation import MAX_IMAGE_BYTES
 from momo_ocr.features.text_recognition.engine import FakeTextRecognitionEngine
+from tests.support.images import write_test_image
 
 
 def test_analyze_image_returns_metadata_and_parser_result(tmp_path: Path) -> None:
     image_path = tmp_path / "assets.jpg"
-    Image.new("RGB", (1920, 1080), color="white").save(image_path, format="JPEG")
+    write_test_image(image_path, size=(1920, 1080))
 
     result = analyze_image(
         image_path=image_path,
@@ -36,7 +37,7 @@ def test_analyze_image_returns_metadata_and_parser_result(tmp_path: Path) -> Non
 
 def test_analyze_image_closes_decoded_image_after_parse(tmp_path: Path) -> None:
     image_path = tmp_path / "assets.jpg"
-    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    write_test_image(image_path)
     parsed_images: list[Image.Image] = []
 
     class _CapturingParser:
@@ -75,7 +76,7 @@ def test_analyze_image_closes_default_text_engine(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     image_path = tmp_path / "assets.jpg"
-    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    write_test_image(image_path)
     closes: list[str] = []
     text_engine = _ClosableFakeEngine("ぽんた社長 1万円", closes)
 
@@ -99,7 +100,7 @@ def test_analyze_image_closes_default_text_engine(
 def test_analyze_image_can_use_fake_engine_for_auto_detection(tmp_path: Path) -> None:
     image_path = tmp_path / "incident.jpg"
     debug_dir = tmp_path / "debug"
-    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    write_test_image(image_path)
 
     result = analyze_image(
         image_path=image_path,
@@ -121,7 +122,7 @@ def test_analyze_image_does_not_infer_layout_family_from_filename(tmp_path: Path
     sample_dir = tmp_path / "003_桃鉄2"
     sample_dir.mkdir()
     image_path = sample_dir / "assets.jpg"
-    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    write_test_image(image_path)
     captured_hints: list[str | None] = []
 
     class _CapturingParser:
@@ -152,7 +153,7 @@ def test_analyze_image_does_not_infer_layout_family_from_filename(tmp_path: Path
 
 def test_analyze_image_forwards_explicit_layout_family_hint(tmp_path: Path) -> None:
     image_path = tmp_path / "assets.jpg"
-    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    write_test_image(image_path)
     captured_hints: list[str | None] = []
 
     class _CapturingParser:
@@ -184,7 +185,7 @@ def test_analyze_image_forwards_explicit_layout_family_hint(tmp_path: Path) -> N
 
 def test_analyze_image_forwards_explicit_fast_path_flag(tmp_path: Path) -> None:
     image_path = tmp_path / "assets.jpg"
-    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    write_test_image(image_path)
     captured_flags: list[bool] = []
 
     class _CapturingParser:
@@ -249,7 +250,7 @@ def test_analyze_image_rejects_path_outside_image_root(tmp_path: Path) -> None:
     image_root.mkdir()
     outside.mkdir()
     image_path = outside / "sample.jpg"
-    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    write_test_image(image_path)
 
     result = analyze_image(
         image_path=image_path,

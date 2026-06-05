@@ -4,21 +4,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PIL import Image
-
 from momo_ocr.features.image_processing.preprocessing import MIN_RELIABLE_HEIGHT, MIN_RELIABLE_WIDTH
 from momo_ocr.features.standalone_analysis.batch_calibration import (
     HOLDOUT_DIRECTORY_NAME,
     analyze_directory,
 )
 from momo_ocr.features.text_recognition.engine import FakeTextRecognitionEngine
+from tests.support.images import write_test_image
 
 
 def _write_image(path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    Image.new("RGB", (MIN_RELIABLE_WIDTH, MIN_RELIABLE_HEIGHT), color="white").save(
-        path, format="JPEG"
-    )
+    write_test_image(path, size=(MIN_RELIABLE_WIDTH, MIN_RELIABLE_HEIGHT))
 
 
 def _setup_input(tmp_path: Path) -> Path:

@@ -18,6 +18,7 @@ from momo_ocr.features.text_recognition.models import (
 )
 from momo_ocr.features.text_recognition.tesserocr_engine import TesserocrEngine
 from momo_ocr.shared.errors import FailureCode, OcrError
+from tests.support.images import make_test_image
 
 
 @dataclass
@@ -80,7 +81,7 @@ def _make_engine() -> tuple[TesserocrEngine, list[_FakeApi]]:
 
 
 def _img() -> Image.Image:
-    return Image.new("RGB", (8, 8), color="white")
+    return make_test_image(size=(8, 8))
 
 
 def _calls_of(api: _FakeApi, names: Iterable[str]) -> list[tuple[str, tuple[Any, ...]]]:

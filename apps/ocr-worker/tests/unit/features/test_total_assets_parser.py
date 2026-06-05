@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
 from pathlib import Path
-
-from PIL import Image
 
 from momo_ocr.features.ocr_domain.models import ScreenType
 from momo_ocr.features.ocr_results.parsing import ScreenParseContext
@@ -11,14 +8,10 @@ from momo_ocr.features.ocr_results.player_aliases import (
     alias_resolver_from_member_aliases,
     extract_player_name_candidate,
 )
-from momo_ocr.features.text_recognition.engine import TextRecognitionEngine
-from momo_ocr.features.text_recognition.models import (
-    RecognitionConfig,
-    RecognitionField,
-    RecognizedText,
-)
 from momo_ocr.features.total_assets.parser import TotalAssetsParser
 from momo_ocr.features.total_assets.postprocess import parse_man_yen
+from tests.support.images import write_test_image
+from tests.support.text_recognition import SequenceTextRecognitionEngine
 
 
 def test_parse_man_yen_handles_oku_and_man_units() -> None:
@@ -49,7 +42,7 @@ def test_extract_player_name_candidate_normalizes_known_aliases() -> None:
 def test_total_assets_parser_extracts_ranked_players_and_amounts(tmp_path: Path) -> None:
     image_path = tmp_path / "assets.jpg"
     debug_dir = tmp_path / "debug"
-    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    write_test_image(image_path)
     engine = SequenceTextRecognitionEngine(
         [
             "| 《 NO1 1 社長 3億8480万円 | 7",
@@ -96,7 +89,7 @@ def test_total_assets_parser_extracts_ranked_players_and_amounts(tmp_path: Path)
 
 def test_total_assets_parser_warns_for_unreadable_row(tmp_path: Path) -> None:
     image_path = tmp_path / "assets.jpg"
-    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    write_test_image(image_path)
     engine = SequenceTextRecognitionEngine(["unknown"] * 32)
 
     payload = TotalAssetsParser().parse(
@@ -121,7 +114,7 @@ def test_total_assets_parser_warns_for_unreadable_row(tmp_path: Path) -> None:
 
 def test_total_assets_parser_sets_member_id_from_alias_hint(tmp_path: Path) -> None:
     image_path = tmp_path / "assets.jpg"
-    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    write_test_image(image_path)
     engine = SequenceTextRecognitionEngine(["PONTAプレイヤー社長 1億円"] * 8)
 
     payload = TotalAssetsParser().parse(
@@ -141,19 +134,3 @@ def test_total_assets_parser_sets_member_id_from_alias_hint(tmp_path: Path) -> N
 
     assert payload.players[0].raw_player_name.value == "PONTAプレイヤー社長"
     assert payload.players[0].member_id == "member-ponta"
-
-
-class SequenceTextRecognitionEngine(TextRecognitionEngine):
-    def __init__(self, texts: Sequence[str]) -> None:
-        self._texts = list(texts)
-
-    def recognize(
-        self,
-        image: Image.Image,
-        *,
-        field: RecognitionField = RecognitionField.GENERIC,
-        psm: int | None = None,
-        config: RecognitionConfig | None = None,
-    ) -> RecognizedText:
-        del image, field, psm, config
-        return RecognizedText(text=self._texts.pop(0), confidence=0.9)

@@ -5,11 +5,11 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from PIL import Image
 
 from momo_ocr.features.text_recognition.models import RecognitionConfig, RecognitionField
 from momo_ocr.features.text_recognition.tesseract import TesseractEngine
 from momo_ocr.shared.errors import FailureCode, OcrError
+from tests.support.images import make_test_image
 
 
 def test_tesseract_engine_uses_field_config_and_postprocessors(
@@ -49,7 +49,7 @@ def test_tesseract_engine_uses_field_config_and_postprocessors(
     monkeypatch.setattr(shutil, "which", fake_which)
     monkeypatch.setattr(subprocess, "run", fake_run)
 
-    image = Image.new("RGB", (20, 10), color="white")
+    image = make_test_image(size=(20, 10))
     result = TesseractEngine().recognize(
         image,
         field=RecognitionField.MONEY,
@@ -88,7 +88,7 @@ def test_tesseract_engine_reports_missing_executable(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(shutil, "which", fake_which)
 
     with pytest.raises(OcrError) as exc_info:
-        TesseractEngine().recognize(Image.new("RGB", (1, 1)))
+        TesseractEngine().recognize(make_test_image(size=(1, 1)))
 
     assert exc_info.value.code == FailureCode.OCR_ENGINE_UNAVAILABLE
     assert exc_info.value.user_action is not None
@@ -115,7 +115,7 @@ def test_tesseract_engine_reports_timeout(monkeypatch: pytest.MonkeyPatch) -> No
 
     with pytest.raises(OcrError) as exc_info:
         TesseractEngine().recognize(
-            Image.new("RGB", (1, 1)),
+            make_test_image(size=(1, 1)),
             config=RecognitionConfig(timeout_seconds=1.0),
         )
 
@@ -149,7 +149,7 @@ def test_tesseract_engine_sanitizes_process_failure_stderr(
     monkeypatch.setattr(subprocess, "run", fake_run)
 
     with pytest.raises(OcrError) as exc_info:
-        TesseractEngine().recognize(Image.new("RGB", (1, 1)))
+        TesseractEngine().recognize(make_test_image(size=(1, 1)))
 
     assert exc_info.value.code == FailureCode.PARSER_FAILED
     assert exc_info.value.message == "Tesseract command failed."
@@ -194,7 +194,7 @@ def test_tesseract_engine_returns_none_confidence_for_empty_stdout(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     engine = _make_tesseract_engine_with_stdout(monkeypatch, "")
-    result = engine.recognize(Image.new("RGB", (1, 1)))
+    result = engine.recognize(make_test_image(size=(1, 1)))
     assert result.text == ""
     assert result.confidence is None
 
@@ -206,7 +206,7 @@ def test_tesseract_engine_falls_back_when_tsv_header_missing(
     # text as-is with unknown confidence so that the rest of the pipeline
     # keeps working even if the tesseract version omits required columns.
     engine = _make_tesseract_engine_with_stdout(monkeypatch, "12 34\n")
-    result = engine.recognize(Image.new("RGB", (1, 1)))
+    result = engine.recognize(make_test_image(size=(1, 1)))
     assert result.raw_text == "12 34"
     assert result.confidence is None
 
@@ -224,7 +224,7 @@ def test_tesseract_engine_aggregates_word_confidence_excluding_negatives(
         "5\t1\t1\t1\t2\t1\t0\t10\t10\t10\t100\tB\n"
     )
     engine = _make_tesseract_engine_with_stdout(monkeypatch, stdout, text_stdout="A\nB\n")
-    result = engine.recognize(Image.new("RGB", (1, 1)))
+    result = engine.recognize(make_test_image(size=(1, 1)))
     # Empty text on the second word row is dropped; line break preserved.
     assert result.raw_text == "A\nB"
     assert result.confidence is not None

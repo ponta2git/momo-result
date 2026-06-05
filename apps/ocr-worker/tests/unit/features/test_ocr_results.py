@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
 from typing import cast
-
-from PIL import Image
 
 from momo_ocr.features.ocr_domain.models import (
     OcrDraftPayload,
@@ -15,13 +12,9 @@ from momo_ocr.features.ocr_domain.models import (
 )
 from momo_ocr.features.ocr_results.payload_warnings import attach_warnings_to_payload
 from momo_ocr.features.ocr_results.ranked_row_ocr import recognize_ranked_row_text
-from momo_ocr.features.text_recognition.engine import TextRecognitionEngine
-from momo_ocr.features.text_recognition.models import (
-    RecognitionConfig,
-    RecognitionField,
-    RecognizedText,
-)
 from momo_ocr.shared.json import JsonValue, to_jsonable
+from tests.support.images import make_test_image
+from tests.support.text_recognition import SequenceTextRecognitionEngine
 
 
 def test_ocr_draft_payload_serializes_warning_and_field_values() -> None:
@@ -57,13 +50,13 @@ def test_ranked_row_ocr_uses_sparse_text_fallback_when_standard_psms_miss() -> N
     )
 
     result = recognize_ranked_row_text(
-        Image.new("RGB", (1280, 120), color="white"),
+        make_test_image(size=(1280, 120)),
         text_engine=engine,
-        fallback_image=Image.new("RGB", (1280, 120), color="white"),
+        fallback_image=make_test_image(size=(1280, 120)),
     )
 
     assert result.text.endswith("オータカ社長 6930万円")
-    assert engine.psms == [6, 7, 6, 7, 6, 7, 11]
+    assert engine.config_psms == [6, 7, 6, 7, 6, 7, 11]
 
 
 def test_attach_warnings_to_payload_preserves_payload_when_no_runtime_warning() -> None:
@@ -140,21 +133,3 @@ def _payload_with_warning(warning: OcrWarning | None = None) -> OcrDraftPayload:
         ],
         raw_snippets={"rank_1": "ぽんた社長 ?万円"},
     )
-
-
-class SequenceTextRecognitionEngine(TextRecognitionEngine):
-    def __init__(self, texts: Sequence[str]) -> None:
-        self._texts = list(texts)
-        self.psms: list[int | None] = []
-
-    def recognize(
-        self,
-        image: Image.Image,
-        *,
-        field: RecognitionField = RecognitionField.GENERIC,
-        psm: int | None = None,
-        config: RecognitionConfig | None = None,
-    ) -> RecognizedText:
-        del image, field, psm
-        self.psms.append(config.psm if config is not None else None)
-        return RecognizedText(text=self._texts.pop(0), confidence=0.9)

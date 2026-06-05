@@ -3,17 +3,17 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from PIL import Image
 
 from momo_ocr.features.temp_images.cleanup import delete_if_exists
 from momo_ocr.features.temp_images.storage import resolve_local_image
 from momo_ocr.features.temp_images.validation import open_decoded_image, read_image_metadata
 from momo_ocr.shared.errors import FailureCode, OcrError
+from tests.support.images import write_test_image
 
 
 def test_read_image_metadata_allows_local_sample_without_size_limit(tmp_path: Path) -> None:
     image_path = tmp_path / "sample.jpg"
-    Image.new("RGB", (1920, 1080), color="white").save(image_path, format="JPEG")
+    write_test_image(image_path, size=(1920, 1080))
 
     metadata = read_image_metadata(image_path, enforce_size_limit=False)
 
@@ -25,7 +25,7 @@ def test_read_image_metadata_allows_local_sample_without_size_limit(tmp_path: Pa
 
 def test_open_decoded_image_returns_rgb(tmp_path: Path) -> None:
     image_path = tmp_path / "sample.jpg"
-    Image.new("L", (640, 360), color=255).save(image_path, format="JPEG")
+    write_test_image(image_path, size=(640, 360), mode="L", color=255)
 
     image = open_decoded_image(image_path)
 
@@ -45,7 +45,7 @@ def test_read_image_metadata_reports_missing_temp_image(tmp_path: Path) -> None:
 
 def test_read_image_metadata_rejects_images_above_4k_dimensions(tmp_path: Path) -> None:
     image_path = tmp_path / "too-large.png"
-    Image.new("RGB", (3841, 2161), color="white").save(image_path, format="PNG")
+    write_test_image(image_path, size=(3841, 2161), image_format="PNG")
 
     with pytest.raises(OcrError) as exc_info:
         read_image_metadata(image_path, enforce_size_limit=False)
@@ -55,7 +55,7 @@ def test_read_image_metadata_rejects_images_above_4k_dimensions(tmp_path: Path) 
 
 def test_open_decoded_image_rejects_images_above_4k_before_conversion(tmp_path: Path) -> None:
     image_path = tmp_path / "too-large.png"
-    Image.new("RGB", (3841, 2161), color="white").save(image_path, format="PNG")
+    write_test_image(image_path, size=(3841, 2161), image_format="PNG")
 
     with pytest.raises(OcrError) as exc_info:
         open_decoded_image(image_path)

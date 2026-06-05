@@ -1,18 +1,16 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
-from momo_ocr.features.ocr_domain.models import OcrDraftPayload, ScreenType
+from momo_ocr.features.ocr_domain.models import OcrDraftPayload
 from momo_ocr.features.ocr_jobs.models import (
     OcrJobExecutionResult,
-    OcrJobRecord,
     OcrJobStatus,
 )
 from momo_ocr.features.ocr_jobs.repository import InMemoryOcrJobRepository
 from momo_ocr.features.ocr_jobs.result_records import OcrResultRecord
 from momo_ocr.shared.errors import FailureCode, OcrError
+from tests.support.ocr_jobs import make_job_record, success_draft_payload
 
 
 def test_complete_success_rejects_result_status_mismatch() -> None:
@@ -72,29 +70,12 @@ def test_failed_terminal_requires_failure_metadata() -> None:
 
 def _running_repository() -> InMemoryOcrJobRepository:
     repository = InMemoryOcrJobRepository()
-    repository.seed(
-        OcrJobRecord(
-            job_id="job-1",
-            draft_id="draft-1",
-            image_id="image-1",
-            image_path=Path("/tmp/image.png"),
-            requested_screen_type=ScreenType.TOTAL_ASSETS,
-            detected_screen_type=None,
-            status=OcrJobStatus.RUNNING,
-            attempt_count=1,
-            worker_id="worker-1",
-            failure=None,
-        )
-    )
+    repository.seed(make_job_record(status=OcrJobStatus.RUNNING, worker_id="worker-1"))
     return repository
 
 
 def _payload(*, profile_id: str = "profile-1") -> OcrDraftPayload:
-    return OcrDraftPayload(
-        requested_screen_type=ScreenType.TOTAL_ASSETS,
-        detected_screen_type=ScreenType.TOTAL_ASSETS,
-        profile_id=profile_id,
-    )
+    return success_draft_payload(profile_id=profile_id)
 
 
 def _result_record(payload: OcrDraftPayload) -> OcrResultRecord:

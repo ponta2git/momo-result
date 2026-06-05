@@ -4,19 +4,19 @@ import json
 from pathlib import Path
 
 import pytest
-from PIL import Image
 
 from momo_ocr.app import cli as cli_module
 from momo_ocr.app.cli import main
 from momo_ocr.features.ocr_analysis.report import AnalysisResult, BatchReport
 from momo_ocr.features.ocr_domain.models import OcrDraftPayload, ScreenType
 from momo_ocr.features.text_recognition.engine import FakeTextRecognitionEngine
+from tests.support.images import write_test_image
 
 
 def test_cli_analyze_writes_json_and_returns_zero_with_fake_engine(tmp_path: Path) -> None:
     image_path = tmp_path / "assets.jpg"
     output_path = tmp_path / "result.json"
-    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    write_test_image(image_path)
 
     exit_code = main(
         [
@@ -45,7 +45,7 @@ def test_cli_analyze_returns_nonzero_when_auto_detection_cannot_parse(
 ) -> None:
     image_path = tmp_path / "unknown.jpg"
     output_path = tmp_path / "result.json"
-    Image.new("RGB", (1280, 720), color="white").save(image_path, format="JPEG")
+    write_test_image(image_path)
 
     exit_code = main(
         [

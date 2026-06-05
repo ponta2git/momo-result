@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from PIL import Image
-
 from momo_ocr.features.ocr_domain.models import ScreenType
 from momo_ocr.features.screen_detection.classifier import classify_screen_type
 from momo_ocr.features.screen_detection.title_evidence import recognize_title_evidence
 from momo_ocr.features.text_recognition.engine import FakeTextRecognitionEngine
+from tests.support.images import make_test_image
 
 
 def test_classify_screen_type_honors_requested_type_without_evidence() -> None:
@@ -75,7 +74,7 @@ def test_classify_screen_type_returns_warning_when_title_is_unknown() -> None:
 
 
 def test_recognize_title_evidence_uses_ocr_engine() -> None:
-    image = Image.new("RGB", (1280, 720), color="white")
+    image = make_test_image()
 
     evidence = recognize_title_evidence(image, FakeTextRecognitionEngine("桃鉄事件簿"))
 

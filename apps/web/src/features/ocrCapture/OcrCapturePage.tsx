@@ -115,7 +115,6 @@ export function OcrCapturePage() {
               alt=""
               aria-hidden="true"
               className="pointer-events-none absolute top-4 right-4 hidden size-32 object-contain opacity-80 sm:block"
-              data-ocr-artwork="trains"
               decoding="async"
               loading="lazy"
               src="/trains.png"

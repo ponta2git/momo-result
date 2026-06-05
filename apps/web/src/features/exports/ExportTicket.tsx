@@ -23,7 +23,6 @@ export function ExportTicket({ isPending, onDownload, view }: ExportTicketProps)
         alt=""
         aria-hidden="true"
         className="pointer-events-none absolute top-3 right-3 hidden size-16 rotate-3 object-contain opacity-95 sm:block"
-        data-export-artwork="ticket"
         decoding="async"
         loading="lazy"
         src="/ticket.png"

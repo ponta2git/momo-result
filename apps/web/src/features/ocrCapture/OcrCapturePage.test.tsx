@@ -64,18 +64,11 @@ describe("OcrCapturePage", () => {
     user = userEvent.setup();
   });
 
-  it("uses the trains artwork on the OCR start section", async () => {
+  it("keeps OCR start disabled until an image is selected", async () => {
     window.localStorage.setItem("momoresult.devUser", "account_ponta");
-    const { container } = renderCaptureRoute();
+    renderCaptureRoute();
 
     expect(await screen.findByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
-    expect(container.querySelector('[data-ocr-artwork="trains"]')).toHaveAttribute(
-      "src",
-      "/trains.png",
-    );
-    expect(container.querySelector("[data-matches-artwork]")).toBeNull();
-    expect(container.querySelector("[data-export-artwork]")).toBeNull();
-    expect(container.querySelector("[data-result-asset]")).toBeNull();
     expect(screen.getByRole("button", { name: "読み取りを開始して試合一覧へ" })).toBeDisabled();
   });
 

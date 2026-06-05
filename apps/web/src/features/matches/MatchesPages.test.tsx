@@ -119,11 +119,11 @@ describe("MatchesListPage", () => {
     expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeInTheDocument();
   });
 
-  it("shows a station artwork on the filter section", async () => {
+  it("shows empty-list state below the filter section", async () => {
     window.localStorage.setItem("momoresult.devUser", "account_ponta");
     server.use(http.get("/api/matches", () => HttpResponse.json({ items: [] })));
 
-    const { container } = render(
+    render(
       <QueryClientProvider client={queryClient}>
         <MemoryRouter initialEntries={["/matches"]}>
           <Routes>
@@ -143,14 +143,6 @@ describe("MatchesListPage", () => {
     expect(filterSection.compareDocumentPosition(workQueueSection)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
-    expect(container.querySelector('[data-matches-artwork="station"]')).toHaveAttribute(
-      "src",
-      "/station.png",
-    );
-    expect(container.querySelectorAll('[data-matches-artwork="station"]')).toHaveLength(1);
-    expect(container.querySelector("[data-ocr-artwork]")).toBeNull();
-    expect(container.querySelector("[data-export-artwork]")).toBeNull();
-    expect(container.querySelector("[data-result-asset]")).toBeNull();
   });
 
   it("preserves selected held-event filter in URL after submitting", async () => {
@@ -660,7 +652,7 @@ describe("MatchDetailPage", () => {
   it("shows delete confirmation modal when 削除 clicked", async () => {
     window.localStorage.setItem("momoresult.devUser", "account_ponta");
 
-    const { container } = render(
+    render(
       <QueryClientProvider client={queryClient}>
         <MemoryRouter initialEntries={["/matches/match-1"]}>
           <Routes>
@@ -674,13 +666,6 @@ describe("MatchDetailPage", () => {
     expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeInTheDocument();
     expect(screen.queryByText("今日の主役")).not.toBeInTheDocument();
     expect(screen.getByText("優勝")).toBeInTheDocument();
-    expect(container.querySelector('[data-result-asset="trophy"]')).toHaveAttribute(
-      "src",
-      "/trophy.png",
-    );
-    expect(container.querySelector("[data-matches-artwork]")).toBeNull();
-    expect(container.querySelector("[data-ocr-artwork]")).toBeNull();
-    expect(container.querySelector("[data-export-artwork]")).toBeNull();
 
     await user.click(screen.getByRole("button", { name: "削除" }));
     expect(screen.getByRole("heading", { name: "試合を削除しますか？" })).toBeInTheDocument();

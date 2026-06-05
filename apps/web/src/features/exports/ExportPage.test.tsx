@@ -65,15 +65,8 @@ describe("ExportPage", () => {
       }),
     );
 
-    const { container } = renderPage();
+    renderPage();
     await screen.findByRole("heading", { name: "CSV / TSV 出力" });
-    expect(container.querySelector('[data-export-artwork="ticket"]')).toHaveAttribute(
-      "src",
-      "/ticket.png",
-    );
-    expect(container.querySelector("[data-matches-artwork]")).toBeNull();
-    expect(container.querySelector("[data-ocr-artwork]")).toBeNull();
-    expect(container.querySelector("[data-result-asset]")).toBeNull();
     await user.click(screen.getByRole("button", { name: "CSVをダウンロード" }));
 
     await waitFor(() => expect(captured?.searchParams.get("format")).toBe("csv"));

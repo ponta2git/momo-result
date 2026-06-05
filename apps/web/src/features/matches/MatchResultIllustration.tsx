@@ -12,7 +12,6 @@ export function MatchResultIllustration({ className, ...props }: MatchResultIllu
         "relative aspect-square h-auto w-full max-w-40 shrink-0 overflow-visible",
         className,
       )}
-      data-illustration="match-result"
       {...props}
     >
       <div className="absolute inset-[14%] rounded-full bg-[var(--color-warning)]/16 ring-1 ring-[var(--color-warning)]/35" />
@@ -20,7 +19,6 @@ export function MatchResultIllustration({ className, ...props }: MatchResultIllu
       <img
         alt=""
         className="relative h-full w-full object-contain"
-        data-result-asset="trophy"
         decoding="async"
         loading="lazy"
         src="/trophy.png"

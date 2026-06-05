@@ -112,7 +112,6 @@ export function MatchesListFilters({
         alt=""
         aria-hidden="true"
         className="pointer-events-none absolute top-4 right-4 hidden size-28 object-contain opacity-75 lg:block"
-        data-matches-artwork="station"
         decoding="async"
         loading="lazy"
         src="/station.png"

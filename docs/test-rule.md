@@ -72,6 +72,7 @@ form、filter、select、input、button、Zod schema、request transform、mutat
 - pure logic は `node`、DOM / browser API / direct fetch 境界は `jsdom` のように、必要な test environment を明示する。
 - `console.error` / `console.warn` は失敗扱い。React `act` warning、duplicate key、未実装ブラウザ副作用を放置しない。
 - test double は production adapter の契約を弱めない。通すだけの mock より、request body、response shape、状態遷移を観測できる double を使う。
+- 装飾画像や装飾用 `data-*` 属性そのものを component / page test の主 oracle にしない。画像が機能要件なら、アクセシブル名、操作結果、download、navigation などユーザー可視の契約で検証する。
 
 ### Locator / E2E
 

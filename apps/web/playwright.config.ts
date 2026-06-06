@@ -5,7 +5,24 @@ const webServerUrl = new URL(baseURL);
 const webServerHost = webServerUrl.hostname || "127.0.0.1";
 const webServerPort = webServerUrl.port || "5173";
 const skipWebServer = process.env["PLAYWRIGHT_SKIP_WEB_SERVER"] === "1";
-const workers = process.env["PLAYWRIGHT_WORKERS"] ?? (process.env["CI"] ? "2" : undefined);
+const workers = resolveWorkers(process.env["PLAYWRIGHT_WORKERS"]);
+
+function resolveWorkers(value: string | undefined): number | string | undefined {
+  if (value === undefined || value === "") {
+    return process.env["CI"] ? 2 : undefined;
+  }
+
+  if (/^[1-9]\d*%$/u.test(value)) {
+    return value;
+  }
+
+  const workerCount = Number(value);
+  if (Number.isInteger(workerCount) && workerCount > 0) {
+    return workerCount;
+  }
+
+  throw new Error("PLAYWRIGHT_WORKERS must be a positive integer or percentage.");
+}
 
 export default defineConfig({
   testDir: "./e2e",

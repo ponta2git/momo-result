@@ -16,6 +16,7 @@ type MatchPlayerPoint = NonNullable<SeriesComparisonResponse["matchPlayerPoints"
 type PlayerPerformanceProfiles = SeriesComparisonResponse["playerPerformanceProfiles"];
 
 const palette = ["#2563eb", "#dc2626", "#d9a300", "#16a34a", "#6f7d74", "#7b5aa6"];
+const lineDashPatterns = ["", "6 4", "2 4", "8 3 2 3"];
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
@@ -25,16 +26,37 @@ export function playerColor(index: number): string {
   return palette[index % palette.length] ?? "#2563eb";
 }
 
-export function PlayerLegend({ players }: { players: Player[] }) {
+export function PlayerLegend({
+  players,
+  variant = "point",
+}: {
+  players: Player[];
+  variant?: "point" | "line";
+}) {
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--color-text-secondary)]">
       {players.map((player, index) => (
         <span key={player.memberId} className="inline-flex items-center gap-1.5">
-          <span
-            aria-hidden="true"
-            className="size-2.5 rounded-full"
-            style={{ backgroundColor: playerColor(index) }}
-          />
+          {variant === "line" ? (
+            <svg aria-hidden="true" className="size-7" viewBox="0 0 28 12">
+              <line
+                stroke={playerColor(index)}
+                strokeDasharray={lineDashPatterns[index % lineDashPatterns.length] || undefined}
+                strokeLinecap="round"
+                strokeWidth="2"
+                x1="2"
+                x2="26"
+                y1="6"
+                y2="6"
+              />
+            </svg>
+          ) : (
+            <span
+              aria-hidden="true"
+              className="size-2.5 rounded-full"
+              style={{ backgroundColor: playerColor(index) }}
+            />
+          )}
           <span className="font-medium text-[var(--color-text-primary)]">{player.displayName}</span>
         </span>
       ))}
@@ -44,6 +66,7 @@ export function PlayerLegend({ players }: { players: Player[] }) {
 
 export function LineChart({
   className,
+  ariaLabel,
   domain,
   formatValue,
   lowValueAtTop = false,
@@ -53,6 +76,7 @@ export function LineChart({
   yTicks,
 }: {
   className?: string;
+  ariaLabel: string;
   domain?: [number, number];
   formatValue: (value: number) => string;
   lowValueAtTop?: boolean;
@@ -93,7 +117,7 @@ export function LineChart({
     <figure className={cn("grid gap-2", className)}>
       <div className="flex overflow-x-auto pb-1 md:justify-center">
         <svg
-          aria-label="推移グラフ"
+          aria-label={ariaLabel}
           className="w-[760px] max-w-none shrink-0 overflow-visible rounded-[var(--radius-sm)] bg-[var(--color-surface)] md:w-full md:max-w-[980px]"
           role="img"
           style={{ aspectRatio: `${width} / ${height}` }}
@@ -168,15 +192,35 @@ export function LineChart({
             const points = (item.points ?? []).flatMap((point) =>
               isFiniteNumber(point.value) ? [{ index: point.index, value: point.value }] : [],
             );
+            const seriesIndex = playerIndex.get(item.memberId) ?? 0;
+            const playerName = players.find(
+              (player) => player.memberId === item.memberId,
+            )?.displayName;
+            const latestPoint = points.reduce<{ index: number; value: number } | null>(
+              (latest, point) => (latest === null || point.index > latest.index ? point : latest),
+              null,
+            );
+            const latestLabel =
+              latestPoint === null ? "データなし" : `最新 ${formatValue(latestPoint.value)}`;
             const path = points
               .map(
-                (point, index) => `${index === 0 ? "M" : "L"} ${x(point.index)} ${y(point.value)}`,
+                (point, pointIndex) =>
+                  `${pointIndex === 0 ? "M" : "L"} ${x(point.index)} ${y(point.value)}`,
               )
               .join(" ");
-            const color = playerColor(playerIndex.get(item.memberId) ?? 0);
+            const color = playerColor(seriesIndex);
+            const strokeDasharray = lineDashPatterns[seriesIndex % lineDashPatterns.length];
             return (
               <g key={item.memberId}>
-                <path d={path} fill="none" stroke={color} strokeLinecap="round" strokeWidth="1.8" />
+                <title>{`${playerName ?? "プレイヤー"} / ${latestLabel}`}</title>
+                <path
+                  d={path}
+                  fill="none"
+                  stroke={color}
+                  strokeDasharray={strokeDasharray || undefined}
+                  strokeLinecap="round"
+                  strokeWidth="1.8"
+                />
                 {points.length <= 32
                   ? points.map((point) => (
                       <circle
@@ -193,7 +237,7 @@ export function LineChart({
           })}
         </svg>
       </div>
-      <PlayerLegend players={players} />
+      <PlayerLegend players={players} variant="line" />
     </figure>
   );
 }

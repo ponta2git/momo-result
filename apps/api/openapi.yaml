@@ -3324,6 +3324,56 @@
           }
         }
       },
+      "ConditionalRankOutcomeResponse" : {
+        "title" : "ConditionalRankOutcomeResponse",
+        "type" : "object",
+        "required" : [
+          "targetCount",
+          "winCount",
+          "podiumCount",
+          "lowerHalfCount",
+          "status"
+        ],
+        "properties" : {
+          "targetCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "winCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "winRate" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "podiumCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "podiumRate" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "lowerHalfCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "lowerHalfRate" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "rankDistribution" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/RankDistributionResponse"
+            }
+          },
+          "status" : {
+            "type" : "string"
+          }
+        }
+      },
       "ConfirmMatchDraftIds" : {
         "title" : "ConfirmMatchDraftIds",
         "type" : "object",
@@ -3676,6 +3726,26 @@
           "lowerTargetCount" : {
             "type" : "integer",
             "format" : "int32"
+          }
+        }
+      },
+      "DestinationOutcomeMetricsResponse" : {
+        "title" : "DestinationOutcomeMetricsResponse",
+        "type" : "object",
+        "required" : [
+          "top",
+          "lowDestination",
+          "zeroDestination"
+        ],
+        "properties" : {
+          "top" : {
+            "$ref" : "#/components/schemas/ConditionalRankOutcomeResponse"
+          },
+          "lowDestination" : {
+            "$ref" : "#/components/schemas/ConditionalRankOutcomeResponse"
+          },
+          "zeroDestination" : {
+            "$ref" : "#/components/schemas/ConditionalRankOutcomeResponse"
           }
         }
       },
@@ -5359,6 +5429,27 @@
           }
         }
       },
+      "RevenueOutcomeMetricsResponse" : {
+        "title" : "RevenueOutcomeMetricsResponse",
+        "type" : "object",
+        "required" : [
+          "top",
+          "lowRevenue",
+          "nonTopWinCount"
+        ],
+        "properties" : {
+          "top" : {
+            "$ref" : "#/components/schemas/ConditionalRankOutcomeResponse"
+          },
+          "lowRevenue" : {
+            "$ref" : "#/components/schemas/ConditionalRankOutcomeResponse"
+          },
+          "nonTopWinCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
       "SeasonMasterListResponse" : {
         "title" : "SeasonMasterListResponse",
         "type" : "object",
@@ -5519,6 +5610,8 @@
           "ginji",
           "nonRevenue",
           "destination",
+          "revenueOutcome",
+          "destinationOutcome",
           "stability"
         ],
         "properties" : {
@@ -5552,6 +5645,12 @@
           },
           "destination" : {
             "$ref" : "#/components/schemas/DestinationMetricsResponse"
+          },
+          "revenueOutcome" : {
+            "$ref" : "#/components/schemas/RevenueOutcomeMetricsResponse"
+          },
+          "destinationOutcome" : {
+            "$ref" : "#/components/schemas/DestinationOutcomeMetricsResponse"
           },
           "stability" : {
             "$ref" : "#/components/schemas/StabilityMetricsResponse"

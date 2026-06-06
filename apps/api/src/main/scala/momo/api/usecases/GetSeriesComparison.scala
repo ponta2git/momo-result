@@ -69,6 +69,15 @@ private object SeriesComparisonAggregation {
     "ginji.resilienceRevenueAverage",
     "nonRevenue.highRevenueNoWinRate",
     "destination.dependenceScore",
+    "revenueOutcome.topWinRate",
+    "revenueOutcome.topPodiumRate",
+    "revenueOutcome.topLowerHalfRate",
+    "revenueOutcome.lowRevenuePodiumRate",
+    "destinationOutcome.topWinRate",
+    "destinationOutcome.topPodiumRate",
+    "destinationOutcome.topLowerHalfRate",
+    "destinationOutcome.lowDestinationPodiumRate",
+    "destinationOutcome.zeroDestinationPodiumRate",
   )
   private val PreferredPlayerOrder =
     Map("member_eu" -> 0, "member_ponta" -> 1, "member_akane_mami" -> 2, "member_otaka" -> 3)
@@ -125,7 +134,7 @@ private object SeriesComparisonAggregation {
     val quality =
       dataQuality(playerOrder, rowsByPlayer, orderedRows, revenueRanks, destinationRanks)
     SeriesComparisonResponse(
-      schemaVersion = 3,
+      schemaVersion = 4,
       scope = SeriesComparisonScopeResponse(
         gameTitleId = scope.gameTitleId.value,
         gameTitleName = scope.gameTitleName,
@@ -191,6 +200,8 @@ private object SeriesComparisonAggregation {
     val ginjiRows = rows.filter(_.incidents.suriNoGinji >= 1)
     val highRevenue = highRevenueNoWin(rows, allRows, revenueRanks)
     val destination = destinationMetrics(rows, destinationRanks)
+    val revenueOutcome = revenueOutcomeMetrics(rows, allRows, revenueRanks)
+    val destinationOutcome = destinationOutcomeMetrics(rows, allRows, destinationRanks)
     SeriesComparisonPlayerMetricsResponse(
       denominator = denominator,
       rank = RankMetricsResponse(
@@ -228,6 +239,8 @@ private object SeriesComparisonAggregation {
       ),
       nonRevenue = highRevenue,
       destination = destination,
+      revenueOutcome = revenueOutcome,
+      destinationOutcome = destinationOutcome,
       stability = StabilityMetricsResponse(stddev(ranks.map(asDecimal))),
     )
 
@@ -324,6 +337,65 @@ private object SeriesComparisonAggregation {
       dependenceScore = (average(upper), average(lower)).mapN(_ - _),
       upperTargetCount = upper.size,
       lowerTargetCount = lower.size,
+    )
+
+  private def revenueOutcomeMetrics(
+      rows: List[SeriesComparisonMatchPlayerRow],
+      allRows: List[SeriesComparisonMatchPlayerRow],
+      revenueRanks: Map[(String, String), Double],
+  ): RevenueOutcomeMetricsResponse =
+    val maxRevenueByMatch = allRows.groupBy(_.matchId).view
+      .mapValues(rs => rs.map(_.revenueManYen.value).max).toMap
+    val topRows = rows
+      .filter(row => maxRevenueByMatch.get(row.matchId).contains(row.revenueManYen.value))
+    val lowRevenueRows = rows.filter(row => revenueRanks.get(rankKey(row)).exists(_ > 2.5))
+    RevenueOutcomeMetricsResponse(
+      top = conditionalRankOutcome(topRows),
+      lowRevenue = conditionalRankOutcome(lowRevenueRows),
+      nonTopWinCount = rows.count(row =>
+        row.rank.value == 1 && !maxRevenueByMatch.get(row.matchId).contains(row.revenueManYen.value)
+      ),
+    )
+
+  private def destinationOutcomeMetrics(
+      rows: List[SeriesComparisonMatchPlayerRow],
+      allRows: List[SeriesComparisonMatchPlayerRow],
+      destinationRanks: Map[(String, String), Double],
+  ): DestinationOutcomeMetricsResponse =
+    val maxDestinationByMatch = allRows.groupBy(_.matchId).view
+      .mapValues(rs => rs.map(_.incidents.destination).max).toMap
+    val topRows = rows.filter(row =>
+      maxDestinationByMatch.get(row.matchId)
+        .exists(value => value > 0 && row.incidents.destination == value)
+    )
+    val lowDestinationRows = rows.filter(row => destinationRanks.get(rankKey(row)).exists(_ > 2.5))
+    val zeroDestinationRows = rows.filter(_.incidents.destination == 0)
+    DestinationOutcomeMetricsResponse(
+      top = conditionalRankOutcome(topRows),
+      lowDestination = conditionalRankOutcome(lowDestinationRows),
+      zeroDestination = conditionalRankOutcome(zeroDestinationRows),
+    )
+
+  private def conditionalRankOutcome(
+      rows: List[SeriesComparisonMatchPlayerRow]
+  ): ConditionalRankOutcomeResponse =
+    val targetCount = rows.size
+    val winCount = rows.count(_.rank.value == 1)
+    val podiumCount = rows.count(_.rank.value <= 2)
+    val lowerHalfCount = rows.count(_.rank.value >= 3)
+    ConditionalRankOutcomeResponse(
+      targetCount = targetCount,
+      winCount = winCount,
+      winRate = rate(winCount, targetCount),
+      podiumCount = podiumCount,
+      podiumRate = rate(podiumCount, targetCount),
+      lowerHalfCount = lowerHalfCount,
+      lowerHalfRate = rate(lowerHalfCount, targetCount),
+      rankDistribution = (1 to 4).toList.map { rank =>
+        val count = rows.count(_.rank.value == rank)
+        RankDistributionResponse(rank, count, rate(count, targetCount))
+      },
+      status = conditionalStatus(targetCount),
     )
 
   private def trends(
@@ -719,6 +791,8 @@ private object SeriesComparisonAggregation {
       val highRevenueTarget = rows
         .count(row => maxRevenueByMatch.get(row.matchId).contains(row.revenueManYen.value))
       val destinationMetric = destinationMetrics(rows, destinationRanks)
+      val revenueOutcome = revenueOutcomeMetrics(rows, allRows, revenueRanks)
+      val destinationOutcome = destinationOutcomeMetrics(rows, allRows, destinationRanks)
       val normal = DenominatorMetricIds.map(metricId =>
         MetricQualityResponse(
           metricId,
@@ -736,6 +810,17 @@ private object SeriesComparisonAggregation {
         "nonRevenue.highRevenueNoWinRate" -> highRevenueTarget,
         "destination.dependenceScore" ->
           math.min(destinationMetric.upperTargetCount, destinationMetric.lowerTargetCount),
+        "revenueOutcome.topWinRate" -> revenueOutcome.top.targetCount,
+        "revenueOutcome.topPodiumRate" -> revenueOutcome.top.targetCount,
+        "revenueOutcome.topLowerHalfRate" -> revenueOutcome.top.targetCount,
+        "revenueOutcome.lowRevenuePodiumRate" -> revenueOutcome.lowRevenue.targetCount,
+        "destinationOutcome.topWinRate" -> destinationOutcome.top.targetCount,
+        "destinationOutcome.topPodiumRate" -> destinationOutcome.top.targetCount,
+        "destinationOutcome.topLowerHalfRate" -> destinationOutcome.top.targetCount,
+        "destinationOutcome.lowDestinationPodiumRate" ->
+          destinationOutcome.lowDestination.targetCount,
+        "destinationOutcome.zeroDestinationPodiumRate" ->
+          destinationOutcome.zeroDestination.targetCount,
       )
       val conditional = ConditionalMetricIds.map { metricId =>
         val target = conditionalCounts.getOrElse(metricId, 0)
@@ -941,8 +1026,9 @@ private object SeriesComparisonAggregation {
       revenueRanks: Map[(String, String), Double],
       destinationRanks: Map[(String, String), Double],
   ): Boolean =
-    if metricId.startsWith("nonRevenue") then revenueRanks.values.exists(v => v != math.rint(v))
-    else if metricId.startsWith("destination") then
+    if metricId.startsWith("nonRevenue") || metricId.startsWith("revenueOutcome") then
+      revenueRanks.values.exists(v => v != math.rint(v))
+    else if metricId.startsWith("destination") || metricId.startsWith("destinationOutcome") then
       destinationRanks.values.exists(v => v != math.rint(v))
     else false
 }

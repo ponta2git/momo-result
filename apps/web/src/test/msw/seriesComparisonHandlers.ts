@@ -144,6 +144,26 @@ function makeSeriesComparisonResponse(): SeriesComparisonResponse {
           lowerTargetCount: 5,
           upperTargetCount: 7,
         },
+        destinationOutcome: {
+          lowDestination: outcome({
+            lowerHalfCount: index,
+            podiumCount: Math.max(0, 4 - index),
+            targetCount: 5,
+            winCount: index === 0 ? 2 : 0,
+          }),
+          top: outcome({
+            lowerHalfCount: index === 2 ? 2 : 1,
+            podiumCount: Math.max(1, 5 - index),
+            targetCount: 7,
+            winCount: Math.max(0, 3 - index),
+          }),
+          zeroDestination: outcome({
+            lowerHalfCount: index + 1,
+            podiumCount: Math.max(0, 3 - index),
+            targetCount: 4,
+            winCount: index === 3 ? 0 : 1,
+          }),
+        },
         ginji: {
           count: index === 3 ? 3 : index,
           encounterMatches: index === 3 ? 2 : index,
@@ -160,6 +180,21 @@ function makeSeriesComparisonResponse(): SeriesComparisonResponse {
           highRevenueNoWinRate: index === 1 ? 0.5 : 0,
           highRevenueTopCount: index === 1 ? 4 : 1,
           rankDelta: index === 0 ? -0.35 : 0.25,
+        },
+        revenueOutcome: {
+          lowRevenue: outcome({
+            lowerHalfCount: index + 1,
+            podiumCount: Math.max(0, 3 - index),
+            targetCount: 4,
+            winCount: index === 0 ? 1 : 0,
+          }),
+          nonTopWinCount: index === 0 ? 4 : 1,
+          top: outcome({
+            lowerHalfCount: index === 1 ? 2 : 1,
+            podiumCount: Math.max(1, 6 - index),
+            targetCount: 7,
+            winCount: Math.max(0, 3 - index),
+          }),
         },
         playOrder: {
           assetsDiff: 200 - index * 80,
@@ -210,7 +245,7 @@ function makeSeriesComparisonResponse(): SeriesComparisonResponse {
       rankStandardDeviationMedian: 0.85,
     },
     players,
-    schemaVersion: 3,
+    schemaVersion: 4,
     recentFormByPlayer: players.map((player, index) => ({
       averageRank: (averages[index] ?? 2.5) + 0.15,
       lowerHalfStreak: index === 3 ? 2 : 0,
@@ -236,6 +271,42 @@ function makeSeriesComparisonResponse(): SeriesComparisonResponse {
       rankCumulativeAverage: trend(averages),
       rankCumulativeStandardDeviation: trend([0, 0.5, 0.75, 0.68]),
     },
+  };
+}
+
+function outcome({
+  lowerHalfCount,
+  podiumCount,
+  targetCount,
+  winCount,
+}: {
+  lowerHalfCount: number;
+  podiumCount: number;
+  targetCount: number;
+  winCount: number;
+}) {
+  const safePodiumCount = Math.min(podiumCount, targetCount);
+  const safeLowerHalfCount = Math.max(0, targetCount - safePodiumCount);
+  const safeWinCount = Math.min(winCount, safePodiumCount);
+  const fourth = Math.min(safeLowerHalfCount, lowerHalfCount > 0 ? 1 : 0);
+  const third = Math.max(0, safeLowerHalfCount - fourth);
+  const second = Math.max(0, safePodiumCount - safeWinCount);
+  const first = safeWinCount;
+  return {
+    lowerHalfCount: safeLowerHalfCount,
+    lowerHalfRate: targetCount > 0 ? safeLowerHalfCount / targetCount : 0,
+    podiumCount: safePodiumCount,
+    podiumRate: targetCount > 0 ? safePodiumCount / targetCount : 0,
+    rankDistribution: [
+      { count: first, rank: 1, rate: targetCount > 0 ? first / targetCount : 0 },
+      { count: second, rank: 2, rate: targetCount > 0 ? second / targetCount : 0 },
+      { count: third, rank: 3, rate: targetCount > 0 ? third / targetCount : 0 },
+      { count: fourth, rank: 4, rate: targetCount > 0 ? fourth / targetCount : 0 },
+    ],
+    status: targetCount < 5 ? "reference" : "ok",
+    targetCount,
+    winCount: safeWinCount,
+    winRate: targetCount > 0 ? safeWinCount / targetCount : 0,
   };
 }
 

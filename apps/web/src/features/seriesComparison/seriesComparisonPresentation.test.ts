@@ -5,6 +5,7 @@ import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
 
 import {
   extremumTone,
+  formatCountRate,
   formatDecimal,
   formatMoney,
   formatPercent,
@@ -23,6 +24,8 @@ describe("seriesComparisonPresentation", () => {
     expect(formatDecimal(Number.NaN)).toBe("-");
     expect(formatPercent(0.456)).toBe("45.6%");
     expect(formatPercent(null)).toBe("-");
+    expect(formatCountRate({ count: 2, rate: 0.4, targetCount: 5 })).toBe("2/5戦・40.0%");
+    expect(formatCountRate({ count: 0, rate: undefined, targetCount: 0 })).toBe("対象なし");
     expect(formatSigned(1.2)).toBe("+1.20");
     expect(formatSigned(-1.2, "pt")).toBe("-1.20pt");
     expect(formatMoney(12_345.6)).toBe("1億2346万円");
@@ -94,7 +97,7 @@ function responseWithRankAverages(
     playOrderBaselines: [],
     players: values.map(([memberId, displayName]) => ({ displayName, memberId })),
     recentFormByPlayer: [],
-    schemaVersion: 3,
+    schemaVersion: 4,
     scope: {
       gameTitleId: "title",
       gameTitleName: "桃鉄",
@@ -111,6 +114,11 @@ function baseMetrics(rankAverage: number): PlayerMetrics {
     assets: {},
     denominator: 1,
     destination: { lowerTargetCount: 0, upperTargetCount: 0 },
+    destinationOutcome: {
+      lowDestination: emptyOutcome(),
+      top: emptyOutcome(),
+      zeroDestination: emptyOutcome(),
+    },
     ginji: {
       count: 0,
       encounterMatches: 0,
@@ -123,6 +131,22 @@ function baseMetrics(rankAverage: number): PlayerMetrics {
     podium: { count: 0 },
     rank: { average: rankAverage, distribution: [] },
     revenue: {},
+    revenueOutcome: {
+      lowRevenue: emptyOutcome(),
+      nonTopWinCount: 0,
+      top: emptyOutcome(),
+    },
     stability: {},
+  };
+}
+
+function emptyOutcome() {
+  return {
+    lowerHalfCount: 0,
+    rankDistribution: [],
+    podiumCount: 0,
+    status: "no_target",
+    targetCount: 0,
+    winCount: 0,
   };
 }

@@ -88,6 +88,8 @@ final case class SeriesComparisonPlayerMetricsResponse(
     ginji: GinjiMetricsResponse,
     nonRevenue: NonRevenueMetricsResponse,
     destination: DestinationMetricsResponse,
+    revenueOutcome: RevenueOutcomeMetricsResponse,
+    destinationOutcome: DestinationOutcomeMetricsResponse,
     stability: StabilityMetricsResponse,
 ) derives Codec.AsObject
 object SeriesComparisonPlayerMetricsResponse:
@@ -177,6 +179,36 @@ final case class DestinationMetricsResponse(
 ) derives Codec.AsObject
 object DestinationMetricsResponse:
   given Schema[DestinationMetricsResponse] = Schema.derived
+
+final case class ConditionalRankOutcomeResponse(
+    targetCount: Int,
+    winCount: Int,
+    winRate: Option[Double],
+    podiumCount: Int,
+    podiumRate: Option[Double],
+    lowerHalfCount: Int,
+    lowerHalfRate: Option[Double],
+    rankDistribution: List[RankDistributionResponse],
+    status: String,
+) derives Codec.AsObject
+object ConditionalRankOutcomeResponse:
+  given Schema[ConditionalRankOutcomeResponse] = Schema.derived
+
+final case class RevenueOutcomeMetricsResponse(
+    top: ConditionalRankOutcomeResponse,
+    lowRevenue: ConditionalRankOutcomeResponse,
+    nonTopWinCount: Int,
+) derives Codec.AsObject
+object RevenueOutcomeMetricsResponse:
+  given Schema[RevenueOutcomeMetricsResponse] = Schema.derived
+
+final case class DestinationOutcomeMetricsResponse(
+    top: ConditionalRankOutcomeResponse,
+    lowDestination: ConditionalRankOutcomeResponse,
+    zeroDestination: ConditionalRankOutcomeResponse,
+) derives Codec.AsObject
+object DestinationOutcomeMetricsResponse:
+  given Schema[DestinationOutcomeMetricsResponse] = Schema.derived
 
 final case class StabilityMetricsResponse(rankStandardDeviation: Option[Double])
     derives Codec.AsObject

@@ -35,6 +35,7 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
     for result <- usecase.run(SeriesComparisonScope.Overall(titleId)) yield
       val response = assertRight(result)
       assertEquals(response.matchCount, 3)
+      assertEquals(response.schemaVersion, 4)
       assertEquals(response.players.map(_.memberId), List("ponta", "akane", "otaka", "eu"))
 
       val metrics = response.metricsByPlayer.map(entry => entry.memberId -> entry.metrics).toMap
@@ -55,14 +56,36 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
       assertEquals(ponta.playOrder.breakdown.map(_.matchCount), List(1, 1, 1, 0))
       assertOptionDouble(ponta.playOrder.breakdown.head.rankAverage, 1.0)
       assertOptionDouble(ponta.destination.conversionDelta, 4.0 / 3.0)
+      assertEquals(ponta.revenueOutcome.top.targetCount, 0)
+      assertEquals(ponta.revenueOutcome.top.status, "no_target")
+      assertEquals(ponta.revenueOutcome.nonTopWinCount, 2)
+      assertEquals(ponta.revenueOutcome.lowRevenue.targetCount, 0)
+      assertEquals(ponta.destinationOutcome.top.targetCount, 0)
+      assertEquals(ponta.destinationOutcome.lowDestination.targetCount, 2)
+      assertEquals(ponta.destinationOutcome.lowDestination.podiumCount, 2)
+      assertOptionDouble(ponta.destinationOutcome.lowDestination.podiumRate, 1.0)
 
       assertEquals(akane.nonRevenue.highRevenueTopCount, 3)
       assertEquals(akane.nonRevenue.highRevenueNoWinCount, 2)
       assertOptionDouble(akane.nonRevenue.highRevenueNoWinRate, 2.0 / 3.0)
+      assertEquals(akane.revenueOutcome.top.targetCount, 3)
+      assertEquals(akane.revenueOutcome.top.winCount, 1)
+      assertOptionDouble(akane.revenueOutcome.top.winRate, 1.0 / 3.0)
+      assertEquals(akane.revenueOutcome.top.podiumCount, 2)
+      assertOptionDouble(akane.revenueOutcome.top.podiumRate, 2.0 / 3.0)
+      assertEquals(akane.revenueOutcome.top.lowerHalfCount, 1)
+      assertEquals(akane.revenueOutcome.top.rankDistribution.map(_.count), List(1, 1, 1, 0))
+      assertEquals(akane.destinationOutcome.top.targetCount, 2)
+      assertEquals(akane.destinationOutcome.top.winCount, 1)
+      assertEquals(akane.destinationOutcome.top.lowerHalfCount, 1)
+      assertEquals(akane.destinationOutcome.top.status, "reference")
 
       assertEquals(eu.ginji.count, 2)
       assertEquals(eu.ginji.multiEncounterMatchCount, 1)
       assertEquals(eu.ginji.maxInSingleMatch, 2)
+      assertEquals(eu.destinationOutcome.zeroDestination.targetCount, 3)
+      assertEquals(eu.destinationOutcome.zeroDestination.podiumCount, 0)
+      assertOptionDouble(eu.destinationOutcome.zeroDestination.lowerHalfRate, 1.0)
 
       assertEquals(response.trends.rankCumulativeAverage.size, 4)
       assertEquals(response.trends.rankCumulativeStandardDeviation.size, 4)
@@ -141,6 +164,15 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
       assert(response.highlights.exists(_.id == "highlight.destinationIndependent"))
       assert(response.dataQuality.items.exists(item =>
         item.metricId == "ginji.resilienceRankAverage" && item.playerMemberId.contains("ponta") &&
+          item.status == "reference"
+      ))
+      assert(response.dataQuality.items.exists(item =>
+        item.metricId == "revenueOutcome.topWinRate" && item.playerMemberId.contains("akane") &&
+          item.targetCount == 3 && item.status == "reference"
+      ))
+      assert(response.dataQuality.items.exists(item =>
+        item.metricId == "destinationOutcome.lowDestinationPodiumRate" &&
+          item.playerMemberId.contains("ponta") && item.targetCount == 2 &&
           item.status == "reference"
       ))
 

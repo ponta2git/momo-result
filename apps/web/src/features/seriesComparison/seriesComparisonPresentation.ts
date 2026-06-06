@@ -38,6 +38,23 @@ export function formatPercent(value: NullableNumber): string {
   return isNumber(value) ? `${(value * 100).toFixed(1)}%` : "-";
 }
 
+export function formatCountRate({
+  count,
+  rate,
+  targetCount,
+  unit = "戦",
+}: {
+  count?: NullableNumber;
+  rate?: NullableNumber;
+  targetCount?: NullableNumber;
+  unit?: string;
+}): string {
+  if (!isNumber(targetCount) || targetCount <= 0) {
+    return "対象なし";
+  }
+  return `${isNumber(count) ? count : 0}/${targetCount}${unit}・${formatPercent(rate)}`;
+}
+
 export function formatMoney(value: NullableNumber): string {
   return isNumber(value) ? formatManYen(Math.round(value)) : "-";
 }

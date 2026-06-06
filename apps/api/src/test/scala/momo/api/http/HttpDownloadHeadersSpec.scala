@@ -22,5 +22,8 @@ final class HttpDownloadHeadersSpec extends FunSuite:
     )
 
     unsafe.foreach { fileName =>
-      assert(HttpDownloadHeaders.attachment(fileName).isLeft, s"accepted unsafe filename: $fileName")
+      assert(
+        HttpDownloadHeaders.attachment(fileName).isLeft,
+        s"accepted unsafe filename: $fileName",
+      )
     }

@@ -255,7 +255,7 @@ function responseWithRankAverages(values: number[]): SeriesComparisonResponse {
     playOrderBaselines: [],
     players: values.map((_, index) => ({ displayName: `P${index}`, memberId: `p${index}` })),
     recentFormByPlayer: [],
-    schemaVersion: 3,
+    schemaVersion: 4,
     scope: {
       gameTitleId: "title",
       gameTitleName: "桃鉄",
@@ -295,6 +295,11 @@ function baseMetrics({
     assets: {},
     denominator: 1,
     destination: { lowerTargetCount: 0, upperTargetCount: 0 },
+    destinationOutcome: {
+      lowDestination: emptyOutcome(),
+      top: emptyOutcome(),
+      zeroDestination: emptyOutcome(),
+    },
     ginji: {
       count: ginjiCount,
       encounterMatches: ginjiCount > 0 ? 1 : 0,
@@ -307,6 +312,22 @@ function baseMetrics({
     podium: { count: 1 },
     rank: { average: rankAverage, distribution: [] },
     revenue: {},
+    revenueOutcome: {
+      lowRevenue: emptyOutcome(),
+      nonTopWinCount: 0,
+      top: emptyOutcome(),
+    },
     stability: {},
+  };
+}
+
+function emptyOutcome() {
+  return {
+    lowerHalfCount: 0,
+    rankDistribution: [],
+    podiumCount: 0,
+    status: "no_target",
+    targetCount: 0,
+    winCount: 0,
   };
 }

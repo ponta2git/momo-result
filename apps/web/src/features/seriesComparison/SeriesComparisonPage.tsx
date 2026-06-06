@@ -30,6 +30,7 @@ import type {
 } from "@/features/seriesComparison/seriesComparisonPresentation";
 import {
   extremumTone,
+  formatCountRate,
   formatDecimal,
   formatMoney,
   formatPercent,
@@ -631,42 +632,237 @@ function GinjiMetrics({ response }: { response: SeriesComparisonResponse }) {
   );
 }
 
-function ContextMetrics({ response }: { response: SeriesComparisonResponse }) {
+type RankOutcome = PlayerMetrics["revenueOutcome"]["top"];
+
+function RevenueOutcomeMetrics({ response }: { response: SeriesComparisonResponse }) {
   const players = response.players ?? [];
   const metricsByMember = metricsMap(response);
   return (
     <MetricSection
-      description="収益や目的地到着が、最終順位にどれだけ効いているかを見ます。事件簿は駅の種類ごとの記録で、合算して総行動数にはしません。"
-      icon={<MapPinned className="size-5" />}
-      title="収益と目的地の効き方"
+      description="収益トップだった試合で勝ち切れたか、逆に収益トップではない試合で勝てたかを見ます。金額そのものより、稼ぎが順位に変わったかを重視します。"
+      icon={<BadgeDollarSign className="size-5" />}
+      title="稼ぎは勝ちに変わったか"
     >
       <PlayerMetricGrid metricsByMember={metricsByMember} players={players}>
         {(_, metrics) => (
           <>
+            <div className="flex justify-end">
+              <StatusBadge status={metrics?.revenueOutcome.top.status} />
+            </div>
             <MetricRow
-              help="各試合の「収益順位 - 最終順位」を平均。マイナスなら、収益順位に比べて最終順位が低めです。"
-              label="収益順位との差"
-              value={formatSigned(metrics?.nonRevenue.rankDelta)}
+              help="その試合で収益が全員中トップだったとき、最終1位になった割合です。同値トップは全員をトップ扱いにします。"
+              label="トップ時勝利"
+              value={formatCountRate({
+                count: metrics?.revenueOutcome.top.winCount,
+                rate: metrics?.revenueOutcome.top.winRate,
+                targetCount: metrics?.revenueOutcome.top.targetCount,
+              })}
             />
             <MetricRow
-              help="収益が全員中トップだった試合のうち、最終1位ではなかった割合。"
-              label="収益トップ未勝利"
-              value={`${metrics?.nonRevenue.highRevenueNoWinCount ?? 0}/${metrics?.nonRevenue.highRevenueTopCount ?? 0}・${formatPercent(metrics?.nonRevenue.highRevenueNoWinRate)}`}
+              label="トップ時入賞"
+              value={formatCountRate({
+                count: metrics?.revenueOutcome.top.podiumCount,
+                rate: metrics?.revenueOutcome.top.podiumRate,
+                targetCount: metrics?.revenueOutcome.top.targetCount,
+              })}
             />
             <MetricRow
-              help="各試合の「目的地到着数順位 - 最終順位」を平均。マイナスなら、目的地到着数に比べて最終順位が低めです。"
-              label="目的地順位との差"
-              value={formatSigned(metrics?.destination.conversionDelta)}
+              label="トップ時沈没"
+              value={formatCountRate({
+                count: metrics?.revenueOutcome.top.lowerHalfCount,
+                rate: metrics?.revenueOutcome.top.lowerHalfRate,
+                targetCount: metrics?.revenueOutcome.top.targetCount,
+              })}
             />
             <MetricRow
-              help="目的地到着数が上位の試合で得た順位点から、下位の試合で得た順位点を引いた値。順位点は「5 - 最終順位」です。"
-              label="目的地で勝ち切り"
-              value={formatSigned(metrics?.destination.dependenceScore)}
+              help="収益トップではなかったのに最終1位だった試合数です。"
+              label="稼がず勝ち"
+              value={`${metrics?.revenueOutcome.nonTopWinCount ?? 0}戦`}
             />
+            <MetricRow
+              help="収益順位が下位（平均順位方式で2.5より大きい）だった試合で、1・2位に入った割合です。"
+              label="低収益入賞"
+              value={formatCountRate({
+                count: metrics?.revenueOutcome.lowRevenue.podiumCount,
+                rate: metrics?.revenueOutcome.lowRevenue.podiumRate,
+                targetCount: metrics?.revenueOutcome.lowRevenue.targetCount,
+              })}
+            />
+            <RankOutcomeStrip label="トップ時の着地" outcome={metrics?.revenueOutcome.top} />
+            <OutcomeDetails title="補助指標">
+              <MetricRow
+                help="各試合の「収益順位 - 最終順位」を平均。プラスなら、収益順位以上の最終順位を取っています。"
+                label="収益順位との差"
+                value={formatSigned(metrics?.nonRevenue.rankDelta)}
+              />
+              <MetricRow
+                help="収益が全員中トップだった試合のうち、最終1位ではなかった割合です。"
+                label="収益トップ未勝利"
+                value={`${metrics?.nonRevenue.highRevenueNoWinCount ?? 0}/${metrics?.nonRevenue.highRevenueTopCount ?? 0}戦・${formatPercent(metrics?.nonRevenue.highRevenueNoWinRate)}`}
+              />
+            </OutcomeDetails>
           </>
         )}
       </PlayerMetricGrid>
     </MetricSection>
+  );
+}
+
+function DestinationOutcomeMetrics({ response }: { response: SeriesComparisonResponse }) {
+  const players = response.players ?? [];
+  const metricsByMember = metricsMap(response);
+  return (
+    <MetricSection
+      description="目的地回数が多い試合で勝ち切れたか、目的地が少ない試合でも上位に入れたかを見ます。事件簿は記録対象の駅だけなので、合算して総ターン数にはしません。"
+      icon={<MapPinned className="size-5" />}
+      title="目的地は勝ち筋になったか"
+    >
+      <PlayerMetricGrid metricsByMember={metricsByMember} players={players}>
+        {(_, metrics) => (
+          <>
+            <div className="flex justify-end">
+              <StatusBadge status={metrics?.destinationOutcome.top.status} />
+            </div>
+            <MetricRow
+              help="目的地回数が全員中最多だった試合で、最終1位になった割合です。全員0回の試合は最多扱いにしません。"
+              label="最多時勝利"
+              value={formatCountRate({
+                count: metrics?.destinationOutcome.top.winCount,
+                rate: metrics?.destinationOutcome.top.winRate,
+                targetCount: metrics?.destinationOutcome.top.targetCount,
+              })}
+            />
+            <MetricRow
+              label="最多時入賞"
+              value={formatCountRate({
+                count: metrics?.destinationOutcome.top.podiumCount,
+                rate: metrics?.destinationOutcome.top.podiumRate,
+                targetCount: metrics?.destinationOutcome.top.targetCount,
+              })}
+            />
+            <MetricRow
+              label="最多時沈没"
+              value={formatCountRate({
+                count: metrics?.destinationOutcome.top.lowerHalfCount,
+                rate: metrics?.destinationOutcome.top.lowerHalfRate,
+                targetCount: metrics?.destinationOutcome.top.targetCount,
+              })}
+            />
+            <MetricRow
+              help="目的地順位が下位（平均順位方式で2.5より大きい）だった試合で、1・2位に入った割合です。"
+              label="目的地下位入賞"
+              value={formatCountRate({
+                count: metrics?.destinationOutcome.lowDestination.podiumCount,
+                rate: metrics?.destinationOutcome.lowDestination.podiumRate,
+                targetCount: metrics?.destinationOutcome.lowDestination.targetCount,
+              })}
+            />
+            <MetricRow
+              help="目的地0回だった試合で、1・2位に入った割合です。"
+              label="0回入賞"
+              value={formatCountRate({
+                count: metrics?.destinationOutcome.zeroDestination.podiumCount,
+                rate: metrics?.destinationOutcome.zeroDestination.podiumRate,
+                targetCount: metrics?.destinationOutcome.zeroDestination.targetCount,
+              })}
+            />
+            <RankOutcomeStrip label="最多時の着地" outcome={metrics?.destinationOutcome.top} />
+            <RankOutcomeStrip
+              label="0回時の着地"
+              outcome={metrics?.destinationOutcome.zeroDestination}
+            />
+            <OutcomeDetails title="補助指標">
+              <MetricRow
+                help="各試合の「目的地到着数順位 - 最終順位」を平均。プラスなら、目的地順位以上の最終順位を取っています。"
+                label="目的地順位との差"
+                value={formatSigned(metrics?.destination.conversionDelta)}
+              />
+              <MetricRow
+                help="目的地到着数が上位の試合で得た順位点から、下位の試合で得た順位点を引いた値。順位点は「5 - 最終順位」です。"
+                label="取れた日の成績差"
+                value={formatSigned(metrics?.destination.dependenceScore)}
+              />
+            </OutcomeDetails>
+          </>
+        )}
+      </PlayerMetricGrid>
+    </MetricSection>
+  );
+}
+
+function RankOutcomeStrip({
+  label,
+  outcome,
+}: {
+  label: string;
+  outcome: RankOutcome | undefined;
+}) {
+  const targetCount = outcome?.targetCount ?? 0;
+  const distribution = outcome?.rankDistribution ?? [];
+  return (
+    <div className="grid gap-1.5 rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium text-[var(--color-text-secondary)]">{label}</span>
+        <span className="text-xs text-[var(--color-text-secondary)] tabular-nums">
+          {targetCount > 0 ? `${targetCount}戦` : "対象なし"}
+        </span>
+      </div>
+      {targetCount > 0 ? (
+        <div
+          aria-label={`${label}: ${distribution
+            .map((item) => `${item.rank}位${item.count}回`)
+            .join("、")}`}
+          className="flex h-3 overflow-hidden rounded-full bg-[var(--color-surface-subtle)]"
+          role="img"
+        >
+          {distribution.map((item) =>
+            item.count > 0 ? (
+              <span
+                key={item.rank}
+                aria-hidden="true"
+                className="min-w-1"
+                style={{
+                  backgroundColor: rankOutcomeColor(item.rank),
+                  flexGrow: item.count,
+                }}
+              />
+            ) : null,
+          )}
+        </div>
+      ) : (
+        <div className="h-3 rounded-full bg-[var(--color-surface-subtle)]" />
+      )}
+      <div className="flex flex-wrap gap-x-2 gap-y-1 text-[11px] text-[var(--color-text-secondary)]">
+        {distribution.map((item) => (
+          <span key={item.rank} className="inline-flex items-center gap-1 tabular-nums">
+            <span
+              aria-hidden="true"
+              className="size-2 rounded-full"
+              style={{ backgroundColor: rankOutcomeColor(item.rank) }}
+            />
+            {item.rank}位 {item.count}回
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function rankOutcomeColor(rank: number): string {
+  if (rank === 1) return "#d9a300";
+  if (rank === 2) return "#2563eb";
+  if (rank === 3) return "#6f7d74";
+  return "#dc2626";
+}
+
+function OutcomeDetails({ children, title }: { children: ReactNode; title: string }) {
+  return (
+    <details className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5">
+      <summary className="cursor-pointer text-xs font-semibold text-[var(--color-text-secondary)]">
+        {title}
+      </summary>
+      <div className="mt-2 grid gap-2">{children}</div>
+    </details>
   );
 }
 
@@ -878,7 +1074,7 @@ function DataQualityNotice({ response }: { response: SeriesComparisonResponse })
   }
   return (
     <Notice tone="info" title="条件付きの指標があります。">
-      銀次遭遇試合の平均、収益トップ未勝利、目的地で勝ち切りは条件付き指標です。対象試合がない項目は「-」、対象試合が少ない項目は参考値として表示します。
+      銀次遭遇試合の平均、収益トップ時の成績、目的地最多時や0回時の成績は条件付き指標です。対象試合がない項目は「対象なし」、対象試合が少ない項目は参考値として表示します。
     </Notice>
   );
 }
@@ -910,7 +1106,7 @@ export function SeriesComparisonPage() {
             更新
           </Button>
         }
-        description="最新作品の確定済み戦績から、4人の順位、総資産、収益、銀次、目的地の効き方を比較します。"
+        description="最新作品の確定済み戦績から、4人の順位、総資産、収益、銀次、目的地が勝ちに変わったかを比較します。"
         eyebrow="分析"
         title="戦績比較"
       />
@@ -990,7 +1186,8 @@ export function SeriesComparisonPage() {
               <RateMetrics response={controller.aggregate} />
               <PlayOrderMetrics response={controller.aggregate} />
               <GinjiMetrics response={controller.aggregate} />
-              <ContextMetrics response={controller.aggregate} />
+              <RevenueOutcomeMetrics response={controller.aggregate} />
+              <DestinationOutcomeMetrics response={controller.aggregate} />
               <MatchNoInEventMetrics response={controller.aggregate} />
             </>
           ) : null}

@@ -186,6 +186,14 @@ describe("app routing", () => {
     expect(await screen.findByRole("heading", { name: "戦績比較" })).toBeInTheDocument();
     expect(await screen.findByText("順位の開き")).toBeInTheDocument();
     expect(await screen.findByText("銀次発生")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "稼ぎは勝ちに変わったか" }))
+      .toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "目的地は勝ち筋になったか" }))
+      .toBeInTheDocument();
+    expect(screen.getAllByText("トップ時勝利").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("最多時勝利").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("heading", { name: "収益と目的地の効き方" })).not
+      .toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/analytics/series");
     expect(screen.getByRole("link", { name: "戦績比較" })).toBeInTheDocument();
   });

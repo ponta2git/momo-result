@@ -8,10 +8,16 @@ export type RecentFormEntry = NonNullable<SeriesComparisonResponse["recentFormBy
 export type PerformanceProfileEntry = NonNullable<
   SeriesComparisonResponse["playerPerformanceProfiles"]["entries"]
 >[number];
+export type AssetStyleProfileEntry = NonNullable<
+  SeriesComparisonResponse["assetStyleProfiles"]["entries"]
+>[number];
 export type MatchNoBreakdown = NonNullable<
   SeriesComparisonResponse["matchNoInEventBreakdown"]
 >[number];
-export type MetricTone = "neutral" | "high" | "low";
+export type MetricEmphasis = {
+  kind: "evidence" | "leader" | "risk" | "strength";
+  label: string;
+};
 type NullableNumber = number | null | undefined;
 export type NumericExtrema = {
   max: number | undefined;
@@ -86,6 +92,14 @@ export function performanceProfileMap(
   );
 }
 
+export function assetStyleProfileMap(
+  response: SeriesComparisonResponse,
+): Map<string, AssetStyleProfileEntry> {
+  return new Map(
+    (response.assetStyleProfiles.entries ?? []).map((entry) => [entry.memberId, entry]),
+  );
+}
+
 export function playerNameMap(players: Player[]): Map<string, string> {
   return new Map(players.map((player) => [player.memberId, player.displayName]));
 }
@@ -102,16 +116,17 @@ export function numericExtrema(
     : { max: Math.max(...values), min: Math.min(...values) };
 }
 
-export function extremumTone(
+export function extremumEmphasis(
   value: NullableNumber,
   extrema: NumericExtrema,
   target: "max" | "min",
-): MetricTone {
+  emphasis: MetricEmphasis,
+): MetricEmphasis | undefined {
   const targetValue = extrema[target];
   if (!isNumber(value) || targetValue === undefined || extrema.max === extrema.min) {
-    return "neutral";
+    return undefined;
   }
-  return value === targetValue ? (target === "max" ? "high" : "low") : "neutral";
+  return value === targetValue ? emphasis : undefined;
 }
 
 export function leaderSummary(response: SeriesComparisonResponse): {

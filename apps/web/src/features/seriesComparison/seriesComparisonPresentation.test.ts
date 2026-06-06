@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
 
 import {
-  extremumTone,
+  extremumEmphasis,
   formatCountRate,
   formatDecimal,
   formatMoney,
@@ -54,19 +54,20 @@ describe("seriesComparisonPresentation", () => {
     });
   });
 
-  it("finds extrema and highlights only meaningful high or low values", () => {
+  it("finds extrema and returns emphasis only for meaningful target values", () => {
     const response = responseWithRankAverages([
       ["p0", "ポン太", 2.4],
       ["p1", "ルナ", 1.7],
       ["p2", "ナギ", 3.1],
     ]);
     const extrema = numericExtrema(response, (metrics) => metrics.rank.average);
+    const emphasis = { kind: "leader" as const, label: "4人内最高" };
 
     expect(extrema).toEqual({ max: 3.1, min: 1.7 });
-    expect(extremumTone(3.1, extrema, "max")).toBe("high");
-    expect(extremumTone(1.7, extrema, "min")).toBe("low");
-    expect(extremumTone(2.4, extrema, "max")).toBe("neutral");
-    expect(extremumTone(1.7, { max: 1.7, min: 1.7 }, "max")).toBe("neutral");
+    expect(extremumEmphasis(3.1, extrema, "max", emphasis)).toEqual(emphasis);
+    expect(extremumEmphasis(1.7, extrema, "min", emphasis)).toEqual(emphasis);
+    expect(extremumEmphasis(2.4, extrema, "max", emphasis)).toBeUndefined();
+    expect(extremumEmphasis(1.7, { max: 1.7, min: 1.7 }, "max", emphasis)).toBeUndefined();
   });
 
   it("maps play order labels and colors with a stable fallback", () => {
@@ -82,6 +83,8 @@ function responseWithRankAverages(
 ): SeriesComparisonResponse {
   return {
     dataQuality: { items: [] },
+    assetStyleProfiles: { entries: [] },
+    cardShopDestination: { entries: [] },
     highlights: [],
     histograms: { assets: { bins: [], series: [] }, revenue: { bins: [], series: [] } },
     headToHead: { entries: [] },
@@ -97,7 +100,7 @@ function responseWithRankAverages(
     playOrderBaselines: [],
     players: values.map(([memberId, displayName]) => ({ displayName, memberId })),
     recentFormByPlayer: [],
-    schemaVersion: 4,
+    schemaVersion: 6,
     scope: {
       gameTitleId: "title",
       gameTitleName: "桃鉄",

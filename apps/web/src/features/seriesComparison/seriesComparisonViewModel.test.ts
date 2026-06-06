@@ -8,6 +8,9 @@ import type {
 
 import {
   averageRankSpread,
+  assetStyleKindLabel,
+  assetStyleShapeLabel,
+  assetStyleTagLabel,
   buildSeriesComparisonSearchParams,
   ginjiSummary,
   normalizeSeriesComparisonSelection,
@@ -54,6 +57,7 @@ describe("seriesComparisonViewModel", () => {
       gameTitleId: "title-2",
       scopeId: undefined,
       scopeKind: "overall",
+      view: "overview",
     });
   });
 
@@ -74,6 +78,23 @@ describe("seriesComparisonViewModel", () => {
     );
   });
 
+  it("keeps the selected analysis view in the URL without adding it to the aggregate query", () => {
+    const state = normalizeSeriesComparisonSelection(options, {
+      gameTitleId: "title-1",
+      scopeKind: "overall",
+      view: "drivers",
+    });
+
+    expect(seriesComparisonQueryFromState(state)).toEqual({
+      gameTitleId: "title-1",
+      scopeKind: "overall",
+      scopeId: undefined,
+    });
+    expect(buildSeriesComparisonSearchParams(state).toString()).toBe(
+      "gameTitleId=title-1&scopeKind=overall&view=drivers",
+    );
+  });
+
   it("normalizes missing scoped ids to the first selectable scope", () => {
     expect(
       normalizeSeriesComparisonSelection(options, {
@@ -84,6 +105,7 @@ describe("seriesComparisonViewModel", () => {
       gameTitleId: "title-2",
       scopeId: "season-2",
       scopeKind: "season",
+      view: "overview",
     });
   });
 
@@ -110,16 +132,20 @@ describe("seriesComparisonViewModel", () => {
       gameTitleId: "title-1",
       scopeId: undefined,
       scopeKind: "overall",
+      view: "overview",
     });
   });
 
   it("parses unknown scope kind as overall and removes scope id", () => {
-    const params = new URLSearchParams("gameTitleId=title-1&scopeKind=bad&scopeId=season-1");
+    const params = new URLSearchParams(
+      "gameTitleId=title-1&scopeKind=bad&scopeId=season-1&view=bad",
+    );
 
     expect(parseSeriesComparisonSearchParams(params)).toEqual({
       gameTitleId: "title-1",
       scopeId: undefined,
       scopeKind: "overall",
+      view: "overview",
     });
   });
 
@@ -244,10 +270,14 @@ describe("seriesComparisonViewModel", () => {
 
   it("formats profile kinds, timeline flags, and reference statuses", () => {
     expect(profileKindLabel("steady_leader")).toBe("安定上位");
-    expect(profileKindLabel("swing_chaser")).toBe("荒れ追走");
+    expect(profileKindLabel("swing_chaser")).toBe("波あり追走");
     expect(strategyKindLabel("property_focused")).toBe("桃鉄型（物件重視）");
     expect(strategyKindLabel("card_focused")).toBe("遊戯王型（カード重視）");
-    expect(timelineFlagLabel("revenue_top_no_win")).toBe("収益ねじれ");
+    expect(assetStyleKindLabel("asset_explosion")).toBe("資産爆発型");
+    expect(assetStyleKindLabel("close_collector")).toBe("接戦回収型");
+    expect(assetStyleShapeLabel("upper_side")).toBe("低資産が少なく、高資産寄り");
+    expect(assetStyleTagLabel("mobility_collecting")).toBe("目的地寄り");
+    expect(timelineFlagLabel("revenue_top_no_win")).toBe("物件収益ねじれ");
     expect(statusLabel("reference")).toBe("参考");
     expect(statusLabel("ok")).toBeUndefined();
   });
@@ -259,6 +289,10 @@ function responseWithRankAverages(
 ): SeriesComparisonResponse {
   return {
     dataQuality: { items: [] },
+    assetStyleProfiles: {
+      entries: [],
+    },
+    cardShopDestination: { entries: [] },
     highlights: [],
     histograms: { assets: { bins: [], series: [] }, revenue: { bins: [], series: [] } },
     headToHead: { entries: [] },
@@ -274,7 +308,7 @@ function responseWithRankAverages(
     playOrderBaselines: [],
     players: values.map((_, index) => ({ displayName: `P${index}`, memberId: `p${index}` })),
     recentFormByPlayer: [],
-    schemaVersion: 4,
+    schemaVersion: 6,
     scope: {
       gameTitleId: "title",
       gameTitleName: "桃鉄",

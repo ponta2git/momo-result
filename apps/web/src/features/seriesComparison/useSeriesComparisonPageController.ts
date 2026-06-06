@@ -5,12 +5,14 @@ import { useSearchParams } from "react-router-dom";
 import {
   availableScopeKinds,
   buildSeriesComparisonSearchParams,
+  defaultSeriesComparisonView,
   findSelectedSeries,
   normalizeSeriesComparisonSelection,
   parseSeriesComparisonSearchParams,
   scopeNameForState,
   seriesComparisonQueryFromState,
 } from "@/features/seriesComparison/seriesComparisonViewModel";
+import type { SeriesComparisonViewId } from "@/features/seriesComparison/seriesComparisonViewModel";
 import { shouldShowBlockingQueryError, shouldShowQueryError } from "@/shared/api/queryErrorState";
 import { seriesComparisonKeys } from "@/shared/api/queryKeys";
 import { getSeriesComparison, getSeriesComparisonOptions } from "@/shared/api/seriesComparison";
@@ -88,7 +90,12 @@ export function useSeriesComparisonPageController() {
     scopeOptions,
     selectedSeries,
     state: normalizedState,
-    updateGameTitle: (gameTitleId: string) => updateState({ gameTitleId, scopeKind: "overall" }),
+    updateGameTitle: (gameTitleId: string) =>
+      updateState({
+        gameTitleId,
+        scopeKind: "overall",
+        view: normalizedState.view ?? defaultSeriesComparisonView,
+      }),
     updateScopeId: (scopeId: string) => updateState({ ...normalizedState, scopeId }),
     updateScopeKind: (scopeKind: SeriesComparisonScopeKind) => {
       const series = findSelectedSeries(optionsQuery.data, normalizedState.gameTitleId);
@@ -102,7 +109,9 @@ export function useSeriesComparisonPageController() {
         gameTitleId: normalizedState.gameTitleId,
         scopeKind,
         scopeId: scopeKind === "overall" ? undefined : firstScopeId,
+        view: normalizedState.view ?? defaultSeriesComparisonView,
       });
     },
+    updateView: (view: SeriesComparisonViewId) => updateState({ ...normalizedState, view }),
   };
 }

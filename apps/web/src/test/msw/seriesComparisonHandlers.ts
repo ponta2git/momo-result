@@ -244,8 +244,19 @@ function makeSeriesComparisonResponse(): SeriesComparisonResponse {
       })),
       rankStandardDeviationMedian: 0.85,
     },
+    assetStyleProfiles: {
+      blowoutWinThreshold: 4200,
+      entries: players.map((player, index) => assetStyleProfile(player.memberId, index)),
+      heavyLossThreshold: 7800,
+      highAssetThreshold: 7600,
+      lowAssetThreshold: 900,
+      nearMissSecondThreshold: 850,
+    },
+    cardShopDestination: {
+      entries: players.map((player, index) => cardShopDestinationEntry(player.memberId, index)),
+    },
     players,
-    schemaVersion: 4,
+    schemaVersion: 6,
     recentFormByPlayer: players.map((player, index) => ({
       averageRank: (averages[index] ?? 2.5) + 0.15,
       lowerHalfStreak: index === 3 ? 2 : 0,
@@ -271,6 +282,116 @@ function makeSeriesComparisonResponse(): SeriesComparisonResponse {
       rankCumulativeAverage: trend(averages),
       rankCumulativeStandardDeviation: trend([0, 0.5, 0.75, 0.68]),
     },
+  };
+}
+
+function cardShopDestinationEntry(memberId: string, index: number) {
+  const quadrants = [
+    quadrant("destination_with_shop", 3 + (index % 2), 12, 1.7 + index * 0.12, 6200 - index * 360),
+    quadrant("destination_without_shop", 2 + index, 12, 2.0 + index * 0.1, 5200 - index * 280),
+    quadrant(
+      "no_destination_with_shop",
+      Math.max(2, 5 - index),
+      12,
+      2.25 + index * 0.16,
+      4800 - index * 220,
+    ),
+    quadrant(
+      "no_destination_without_shop",
+      Math.max(1, 2 + (index % 2)),
+      12,
+      2.8 + index * 0.18,
+      2600 - index * 180,
+    ),
+  ];
+  const cardShopMatchCount = quadrants
+    .filter(
+      (item) => item.kind === "destination_with_shop" || item.kind === "no_destination_with_shop",
+    )
+    .reduce((sum, item) => sum + item.targetCount, 0);
+  const cardShopWithoutDestinationCount =
+    quadrants.find((item) => item.kind === "no_destination_with_shop")?.targetCount ?? 0;
+  return {
+    cardShopMatchCount,
+    cardShopRate: cardShopMatchCount / 12,
+    cardShopWithoutDestinationCount,
+    cardShopWithoutDestinationRate:
+      cardShopMatchCount > 0 ? cardShopWithoutDestinationCount / cardShopMatchCount : 0,
+    denominator: 12,
+    memberId,
+    quadrants,
+  };
+}
+
+function quadrant(
+  kind: string,
+  targetCount: number,
+  denominator: number,
+  averageRank: number,
+  averageAssets: number,
+) {
+  return {
+    averageAssets,
+    averageRank,
+    averageRevenue: Math.round(averageAssets * 0.26),
+    kind,
+    podiumRate: Math.max(0.1, Math.min(1, (5 - averageRank) / 4)),
+    rate: targetCount / denominator,
+    status: targetCount <= 0 ? "no_target" : targetCount < 3 ? "reference" : "ok",
+    targetCount,
+    winRate: Math.max(0, Math.min(1, (3 - averageRank) / 4)),
+  };
+}
+
+function assetStyleProfile(memberId: string, index: number) {
+  const kinds = [
+    "asset_explosion",
+    "close_collector",
+    "steady_accumulator",
+    "high_risk_breakthrough",
+  ];
+  const shapes = ["two_tailed", "thin_right_tail", "upper_side", "lower_tail"];
+  const tags = [
+    ["high_variance"],
+    ["mobility_collecting", "close_finish"],
+    ["upper_chaser", "property_base"],
+    ["downside_risk", "card_base"],
+  ];
+  const secondaryKind = tags[index]?.[0];
+  return {
+    memberId,
+    metrics: {
+      averageRevenueAssetRate: 0.34 - index * 0.025,
+      blowoutWinCount: Math.max(0, 4 - index),
+      destinationAverage: 0.35 + index * 0.08,
+      destinationPositiveRate: 0.25 + index * 0.08,
+      heavyLossCount: index + 1,
+      highAssetCount: Math.max(1, 5 - index),
+      highAssetRate: Math.max(0.05, 0.36 - index * 0.07),
+      lowAssetCount: index + 1,
+      lowAssetRate: 0.08 + index * 0.05,
+      lowerHalfMedianGap: 4200 + index * 900,
+      lowerHalfRate: 0.2 + index * 0.1,
+      medianAssets: 4200 - index * 350,
+      nearMissSecondCount: index + 1,
+      p10Assets: 700 + index * 120,
+      p90Assets: 8200 - index * 500,
+      p90P10Spread: 7500 - index * 620,
+      podiumRate: Math.max(0.3, 0.82 - index * 0.12),
+      secondCount: 3 + index,
+      secondMedianGap: 900 + index * 180,
+      secondRate: (3 + index) / 12,
+      winCount: Math.max(1, 5 - index),
+      winMedianAssets: 7200 - index * 550,
+      winMedianMargin: 2600 - index * 420,
+      winRate: Math.max(1, 5 - index) / 12,
+    },
+    primaryKind: kinds[index] ?? "balanced",
+    shapeKind: shapes[index] ?? "middle_heavy",
+    status: "ok",
+    tags: tags[index] ?? [],
+    targetCount: 12,
+    ...(secondaryKind ? { secondaryKind } : {}),
   };
 }
 

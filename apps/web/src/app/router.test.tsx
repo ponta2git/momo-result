@@ -184,30 +184,80 @@ describe("app routing", () => {
     const { router } = renderApp("/analytics/series");
 
     expect(await screen.findByRole("heading", { name: "戦績比較" })).toBeInTheDocument();
-    expect(await screen.findByText("順位の開き")).toBeInTheDocument();
-    expect(await screen.findByText("銀次発生")).toBeInTheDocument();
-    expect(
-      await screen.findByRole("heading", { name: "稼ぎは勝ちに変わったか" }),
-    ).toBeInTheDocument();
-    expect(
-      await screen.findByRole("heading", { name: "目的地は勝ち筋になったか" }),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("平均順位差")).toBeInTheDocument();
+    expect(await screen.findByText("スリの銀次")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "順位と相性" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     expect(await screen.findByRole("img", { name: "平均順位の推移グラフ" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "稼ぎ" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "安定性" })).toHaveAttribute("href", "#metric-rate");
+    expect(screen.queryByRole("heading", { name: "総資産と勝ち筋" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "物件収益トップを勝ちにできたか" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "勝ち筋" }));
+
+    expect(await screen.findByRole("heading", { name: "総資産と勝ち筋" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "資産と勝ち筋" })).toHaveAttribute(
+      "href",
+      "#metric-money",
+    );
+    expect(screen.queryByRole("link", { name: "桃鉄/遊戯王" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "物件収益額" })).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "桃鉄型 / 遊戯王型の根拠" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("強調ルール")).toBeInTheDocument();
+    expect(screen.getAllByText("強み").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("4人内最高").length).toBeGreaterThan(0);
+    expect(await screen.findByRole("heading", { name: "物件収益分布" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "物件収益トップを勝ちにできたか" }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "目的地到着を勝ちにできたか" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "物件収益と勝ち" })).toHaveAttribute(
       "href",
       "#metric-revenue-outcome",
     );
-    expect(screen.getByRole("link", { name: "荒れ試合" })).toHaveAttribute(
-      "href",
-      "#metric-match-digest",
-    );
-    expect(screen.getByRole("link", { name: "目的地" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "目的地と勝ち" })).toHaveAttribute(
       "href",
       "#metric-destination-outcome",
     );
+    expect(router.state.location.search).toContain("view=drivers");
+
+    await user.click(screen.getByRole("tab", { name: "流れと勢い" }));
+
+    expect(screen.getByRole("link", { name: "第n試合" })).toHaveAttribute(
+      "href",
+      "#metric-match-no",
+    );
+    expect(await screen.findByRole("heading", { name: "開催回内の流れ" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "番手と出来事" }));
+
+    expect(screen.getByRole("link", { name: "番手" })).toHaveAttribute(
+      "href",
+      "#metric-play-order",
+    );
+    expect(screen.getByRole("link", { name: "売り場×目的地" })).toHaveAttribute(
+      "href",
+      "#metric-card-shop-destination",
+    );
+    expect(screen.getByRole("link", { name: "スリの銀次" })).toHaveAttribute(
+      "href",
+      "#metric-ginji",
+    );
+    expect(
+      await screen.findByRole("heading", { name: "カード売り場と目的地" }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("到着あり × 売り場あり").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("到着なし × 売り場あり").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("link", { name: "安定性" })).not.toBeInTheDocument();
     expect(screen.queryAllByRole("heading", { name: "いーゆー" })).toHaveLength(0);
-    expect(screen.getAllByText("トップ時勝利").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("最多時勝利").length).toBeGreaterThan(0);
     expect(screen.queryByRole("heading", { name: "収益と目的地の効き方" })).not.toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/analytics/series");
     expect(screen.getByRole("link", { name: "戦績比較" })).toBeInTheDocument();

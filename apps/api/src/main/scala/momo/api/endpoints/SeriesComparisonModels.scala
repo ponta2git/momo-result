@@ -45,8 +45,10 @@ final case class SeriesComparisonResponse(
     matchPlayerPoints: List[MatchPlayerPointResponse],
     recentFormByPlayer: List[RecentFormPlayerResponse],
     playerPerformanceProfiles: PlayerPerformanceProfilesResponse,
+    assetStyleProfiles: AssetStyleProfilesResponse,
     matchNoInEventBreakdown: List[MatchNoInEventBreakdownResponse],
     matchTimeline: List[MatchTimelinePointResponse],
+    cardShopDestination: CardShopDestinationResponse,
     playOrderBaselines: List[PlayOrderBaselineResponse],
     highlights: List[SeriesComparisonHighlightResponse],
     dataQuality: SeriesComparisonDataQualityResponse,
@@ -210,6 +212,37 @@ final case class DestinationOutcomeMetricsResponse(
 object DestinationOutcomeMetricsResponse:
   given Schema[DestinationOutcomeMetricsResponse] = Schema.derived
 
+final case class CardShopDestinationResponse(entries: List[CardShopDestinationPlayerResponse])
+    derives Codec.AsObject
+object CardShopDestinationResponse:
+  given Schema[CardShopDestinationResponse] = Schema.derived
+
+final case class CardShopDestinationPlayerResponse(
+    memberId: String,
+    denominator: Int,
+    cardShopMatchCount: Int,
+    cardShopRate: Option[Double],
+    cardShopWithoutDestinationCount: Int,
+    cardShopWithoutDestinationRate: Option[Double],
+    quadrants: List[CardShopDestinationQuadrantResponse],
+) derives Codec.AsObject
+object CardShopDestinationPlayerResponse:
+  given Schema[CardShopDestinationPlayerResponse] = Schema.derived
+
+final case class CardShopDestinationQuadrantResponse(
+    kind: String,
+    targetCount: Int,
+    rate: Option[Double],
+    averageRank: Option[Double],
+    winRate: Option[Double],
+    podiumRate: Option[Double],
+    averageAssets: Option[Double],
+    averageRevenue: Option[Double],
+    status: String,
+) derives Codec.AsObject
+object CardShopDestinationQuadrantResponse:
+  given Schema[CardShopDestinationQuadrantResponse] = Schema.derived
+
 final case class StabilityMetricsResponse(rankStandardDeviation: Option[Double])
     derives Codec.AsObject
 object StabilityMetricsResponse:
@@ -333,6 +366,59 @@ final case class PlayerPerformanceProfileResponse(
 ) derives Codec.AsObject
 object PlayerPerformanceProfileResponse:
   given Schema[PlayerPerformanceProfileResponse] = Schema.derived
+
+final case class AssetStyleProfilesResponse(
+    lowAssetThreshold: Option[Int],
+    highAssetThreshold: Option[Int],
+    blowoutWinThreshold: Option[Int],
+    nearMissSecondThreshold: Option[Int],
+    heavyLossThreshold: Option[Int],
+    entries: List[AssetStyleProfileResponse],
+) derives Codec.AsObject
+object AssetStyleProfilesResponse:
+  given Schema[AssetStyleProfilesResponse] = Schema.derived
+
+final case class AssetStyleProfileResponse(
+    memberId: String,
+    targetCount: Int,
+    primaryKind: Option[String],
+    secondaryKind: Option[String],
+    shapeKind: Option[String],
+    tags: List[String],
+    metrics: AssetStyleMetricsResponse,
+    status: String,
+) derives Codec.AsObject
+object AssetStyleProfileResponse:
+  given Schema[AssetStyleProfileResponse] = Schema.derived
+
+final case class AssetStyleMetricsResponse(
+    p10Assets: Option[Double],
+    medianAssets: Option[Double],
+    p90Assets: Option[Double],
+    p90P10Spread: Option[Double],
+    highAssetCount: Int,
+    highAssetRate: Option[Double],
+    lowAssetCount: Int,
+    lowAssetRate: Option[Double],
+    winCount: Int,
+    winRate: Option[Double],
+    podiumRate: Option[Double],
+    secondCount: Int,
+    secondRate: Option[Double],
+    lowerHalfRate: Option[Double],
+    winMedianAssets: Option[Double],
+    winMedianMargin: Option[Double],
+    secondMedianGap: Option[Double],
+    lowerHalfMedianGap: Option[Double],
+    blowoutWinCount: Int,
+    nearMissSecondCount: Int,
+    heavyLossCount: Int,
+    averageRevenueAssetRate: Option[Double],
+    destinationAverage: Option[Double],
+    destinationPositiveRate: Option[Double],
+) derives Codec.AsObject
+object AssetStyleMetricsResponse:
+  given Schema[AssetStyleMetricsResponse] = Schema.derived
 
 final case class MatchNoInEventBreakdownResponse(
     matchNoInEvent: Int,

@@ -3266,6 +3266,189 @@
   },
   "components" : {
     "schemas" : {
+      "AssetStyleMetricsResponse" : {
+        "title" : "AssetStyleMetricsResponse",
+        "type" : "object",
+        "required" : [
+          "highAssetCount",
+          "lowAssetCount",
+          "winCount",
+          "secondCount",
+          "blowoutWinCount",
+          "nearMissSecondCount",
+          "heavyLossCount"
+        ],
+        "properties" : {
+          "p10Assets" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "medianAssets" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "p90Assets" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "p90P10Spread" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "highAssetCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "highAssetRate" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "lowAssetCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "lowAssetRate" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "winCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "winRate" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "podiumRate" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "secondCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "secondRate" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "lowerHalfRate" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "winMedianAssets" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "winMedianMargin" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "secondMedianGap" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "lowerHalfMedianGap" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "blowoutWinCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "nearMissSecondCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "heavyLossCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "averageRevenueAssetRate" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "destinationAverage" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "destinationPositiveRate" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        }
+      },
+      "AssetStyleProfileResponse" : {
+        "title" : "AssetStyleProfileResponse",
+        "type" : "object",
+        "required" : [
+          "memberId",
+          "targetCount",
+          "metrics",
+          "status"
+        ],
+        "properties" : {
+          "memberId" : {
+            "type" : "string"
+          },
+          "targetCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "primaryKind" : {
+            "type" : "string"
+          },
+          "secondaryKind" : {
+            "type" : "string"
+          },
+          "shapeKind" : {
+            "type" : "string"
+          },
+          "tags" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "metrics" : {
+            "$ref" : "#/components/schemas/AssetStyleMetricsResponse"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        }
+      },
+      "AssetStyleProfilesResponse" : {
+        "title" : "AssetStyleProfilesResponse",
+        "type" : "object",
+        "properties" : {
+          "lowAssetThreshold" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "highAssetThreshold" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "blowoutWinThreshold" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "nearMissSecondThreshold" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "heavyLossThreshold" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "entries" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/AssetStyleProfileResponse"
+            }
+          }
+        }
+      },
       "AuthMeResponse" : {
         "title" : "AuthMeResponse",
         "type" : "object",
@@ -3321,6 +3504,104 @@
           },
           "status" : {
             "type" : "string"
+          }
+        }
+      },
+      "CardShopDestinationPlayerResponse" : {
+        "title" : "CardShopDestinationPlayerResponse",
+        "type" : "object",
+        "required" : [
+          "memberId",
+          "denominator",
+          "cardShopMatchCount",
+          "cardShopWithoutDestinationCount"
+        ],
+        "properties" : {
+          "memberId" : {
+            "type" : "string"
+          },
+          "denominator" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "cardShopMatchCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "cardShopRate" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "cardShopWithoutDestinationCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "cardShopWithoutDestinationRate" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "quadrants" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/CardShopDestinationQuadrantResponse"
+            }
+          }
+        }
+      },
+      "CardShopDestinationQuadrantResponse" : {
+        "title" : "CardShopDestinationQuadrantResponse",
+        "type" : "object",
+        "required" : [
+          "kind",
+          "targetCount",
+          "status"
+        ],
+        "properties" : {
+          "kind" : {
+            "type" : "string"
+          },
+          "targetCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "rate" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "averageRank" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "winRate" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "podiumRate" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "averageAssets" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "averageRevenue" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        }
+      },
+      "CardShopDestinationResponse" : {
+        "title" : "CardShopDestinationResponse",
+        "type" : "object",
+        "properties" : {
+          "entries" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/CardShopDestinationPlayerResponse"
+            }
           }
         }
       },
@@ -5684,6 +5965,8 @@
           "histograms",
           "headToHead",
           "playerPerformanceProfiles",
+          "assetStyleProfiles",
+          "cardShopDestination",
           "dataQuality"
         ],
         "properties" : {
@@ -5734,6 +6017,9 @@
           "playerPerformanceProfiles" : {
             "$ref" : "#/components/schemas/PlayerPerformanceProfilesResponse"
           },
+          "assetStyleProfiles" : {
+            "$ref" : "#/components/schemas/AssetStyleProfilesResponse"
+          },
           "matchNoInEventBreakdown" : {
             "type" : "array",
             "items" : {
@@ -5745,6 +6031,9 @@
             "items" : {
               "$ref" : "#/components/schemas/MatchTimelinePointResponse"
             }
+          },
+          "cardShopDestination" : {
+            "$ref" : "#/components/schemas/CardShopDestinationResponse"
           },
           "playOrderBaselines" : {
             "type" : "array",

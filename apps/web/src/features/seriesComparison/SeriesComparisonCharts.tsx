@@ -215,7 +215,7 @@ export function LineChart({
             const color = playerColor(seriesIndex);
             return (
               <g key={item.memberId}>
-                <title>{`${playerName ?? "プレイヤー"} / ${latestLabel}`}</title>
+                <title>{`${playerName ?? "社長"}、${latestLabel}`}</title>
                 <path d={path} fill="none" stroke={color} strokeLinecap="round" strokeWidth="1.8" />
                 {points.length <= 32
                   ? points.map((point) => (
@@ -267,7 +267,7 @@ export function HistogramChart({
         ))}
       </div>
       <p className="text-xs leading-5 text-[var(--color-text-secondary)]">
-        ビン幅と縦軸は全員共通です。
+        金額の区切りと縦軸は全員共通です。
       </p>
     </figure>
   );
@@ -514,7 +514,7 @@ export function StrategyScatterPlot({
     <figure className="grid gap-2">
       <div className="flex overflow-x-auto pb-1 md:justify-center">
         <svg
-          aria-label="収益比率と総資産の散布図"
+          aria-label="物件収益比率と総資産の散布図"
           className="w-[760px] max-w-none shrink-0 overflow-visible rounded-[var(--radius-sm)] bg-[var(--color-surface)] md:w-full md:max-w-[980px]"
           role="img"
           style={{ aspectRatio: `${width} / ${height}` }}
@@ -583,7 +583,7 @@ export function StrategyScatterPlot({
             x={width - padding.right}
             y={height - 8}
           >
-            収益 / 総資産
+            物件収益÷総資産
           </text>
           <text fill="var(--color-text-secondary)" fontSize="12" x={8} y={padding.top + 2}>
             総資産
@@ -600,7 +600,7 @@ export function StrategyScatterPlot({
                 r="4"
               >
                 <title>
-                  {`${playerName.get(point.memberId) ?? point.memberId} / ${point.matchIndex}戦目 / 収益比率 ${formatPercent(point.revenueAssetRate)} / ${formatCompactManYen(point.totalAssets)} / ${point.rank}位`}
+                  {`${playerName.get(point.memberId) ?? point.memberId}、${point.matchIndex}戦目、物件収益比率 ${formatPercent(point.revenueAssetRate)}、総資産 ${formatCompactManYen(point.totalAssets)}、${point.rank}位`}
                 </title>
               </circle>
             );
@@ -608,7 +608,7 @@ export function StrategyScatterPlot({
         </svg>
       </div>
       <p className="text-center text-xs leading-5 text-pretty text-[var(--color-text-secondary)]">
-        横軸は収益比率です。左ほど遊戯王型（カード重視）、右ほど桃鉄型（物件重視）として読みます。
+        左ほど遊戯王型（カード重視）、右ほど桃鉄型（物件重視）です。
       </p>
       <PlayerLegend players={players} />
     </figure>
@@ -647,7 +647,7 @@ export function StrategyProfileChart({
     <figure className="grid gap-2">
       <div className="flex overflow-x-auto pb-1 md:justify-center">
         <svg
-          aria-label="勝ち筋スタイルと順位スコア"
+          aria-label="物件カード軸と順位スコア"
           className="w-[560px] max-w-none shrink-0 overflow-visible rounded-[var(--radius-sm)] bg-[var(--color-surface)]"
           role="img"
           style={{ aspectRatio: `${width} / ${height}` }}
@@ -706,7 +706,7 @@ export function StrategyProfileChart({
             x={padding.left + 8}
             y={height - padding.bottom - 10}
           >
-            遊戯王型で苦戦
+            遊戯王型で下位
           </text>
           <text
             fill="var(--color-text-secondary)"
@@ -715,7 +715,7 @@ export function StrategyProfileChart({
             x={width - padding.right - 8}
             y={height - padding.bottom - 10}
           >
-            桃鉄型で苦戦
+            桃鉄型で下位
           </text>
           {entries.map((entry) => {
             if (
@@ -734,7 +734,7 @@ export function StrategyProfileChart({
                   r="5"
                 >
                   <title>
-                    {`${playerName.get(entry.memberId) ?? entry.memberId} / 収益比率 ${formatPercent(entry.averageRevenueAssetRate)} / 順位スコア ${entry.averageRankScore.toFixed(2)}`}
+                    {`${playerName.get(entry.memberId) ?? entry.memberId}、物件収益比率 ${formatPercent(entry.averageRevenueAssetRate)}、順位スコア ${entry.averageRankScore.toFixed(2)}`}
                   </title>
                 </circle>
               </g>
@@ -747,7 +747,7 @@ export function StrategyProfileChart({
             x={width - padding.right}
             y={height - 10}
           >
-            収益比率
+            物件収益比率
           </text>
           <text fill="var(--color-text-secondary)" fontSize="12" x={8} y={padding.top + 2}>
             順位スコア
@@ -755,7 +755,7 @@ export function StrategyProfileChart({
         </svg>
       </div>
       <p className="text-center text-xs leading-5 text-pretty text-[var(--color-text-secondary)]">
-        縦線は4人の収益比率中央値、横線は順位スコア中央値です。
+        縦線は4人の物件収益比率中央値、横線は順位スコア中央値です。
       </p>
       <PlayerLegend players={players} />
     </figure>

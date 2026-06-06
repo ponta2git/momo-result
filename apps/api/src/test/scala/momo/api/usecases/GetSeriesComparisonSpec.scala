@@ -35,7 +35,7 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
     for result <- usecase.run(SeriesComparisonScope.Overall(titleId)) yield
       val response = assertRight(result)
       assertEquals(response.matchCount, 3)
-      assertEquals(response.schemaVersion, 4)
+      assertEquals(response.schemaVersion, 6)
       assertEquals(response.players.map(_.memberId), List("ponta", "akane", "otaka", "eu"))
 
       val metrics = response.metricsByPlayer.map(entry => entry.memberId -> entry.metrics).toMap
@@ -136,6 +136,11 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
       )
       assert(response.playerPerformanceProfiles.entries.forall(_.profileKind.nonEmpty))
       assert(response.playerPerformanceProfiles.entries.forall(_.strategyKind.nonEmpty))
+      assertEquals(
+        response.assetStyleProfiles.entries.map(_.memberId),
+        response.players.map(_.memberId),
+      )
+      assert(response.assetStyleProfiles.highAssetThreshold.nonEmpty)
       val akaneProfile = response.playerPerformanceProfiles.entries.find(_.memberId == "akane")
         .getOrElse(fail(s"akane profile missing: ${response.playerPerformanceProfiles.entries}"))
       val pontaProfile = response.playerPerformanceProfiles.entries.find(_.memberId == "ponta")
@@ -151,6 +156,43 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
         response.matchNoInEventBreakdown.head.playerRows.map(_.targetCount),
         List(1, 1, 1, 1),
       )
+      assertEquals(
+        response.cardShopDestination.entries.map(_.memberId),
+        response.players.map(_.memberId),
+      )
+      val cardShop = response.cardShopDestination.entries.map(entry => entry.memberId -> entry)
+        .toMap
+      val pontaCardShop = cardShop("ponta")
+      assertEquals(pontaCardShop.denominator, 3)
+      assertEquals(pontaCardShop.cardShopMatchCount, 1)
+      assertOptionDouble(pontaCardShop.cardShopRate, 1.0 / 3.0)
+      assertEquals(pontaCardShop.cardShopWithoutDestinationCount, 0)
+      assertOptionDouble(pontaCardShop.cardShopWithoutDestinationRate, 0.0)
+      val pontaDestinationWithShop = cardShopQuadrant(pontaCardShop, "destination_with_shop")
+      assertEquals(pontaDestinationWithShop.targetCount, 1)
+      assertOptionDouble(pontaDestinationWithShop.rate, 1.0 / 3.0)
+      assertOptionDouble(pontaDestinationWithShop.averageRank, 1.0)
+      assertOptionDouble(pontaDestinationWithShop.winRate, 1.0)
+      assertOptionDouble(pontaDestinationWithShop.podiumRate, 1.0)
+      assertOptionDouble(pontaDestinationWithShop.averageAssets, 1000.0)
+      assertOptionDouble(pontaDestinationWithShop.averageRevenue, 200.0)
+      assertEquals(pontaDestinationWithShop.status, "reference")
+      val pontaDestinationWithoutShop = cardShopQuadrant(pontaCardShop, "destination_without_shop")
+      assertEquals(pontaDestinationWithoutShop.targetCount, 2)
+      assertOptionDouble(pontaDestinationWithoutShop.averageRank, 1.5)
+      assertOptionDouble(pontaDestinationWithoutShop.winRate, 0.5)
+      assertOptionDouble(pontaDestinationWithoutShop.averageAssets, 1100.0)
+      val pontaNoDestinationWithShop = cardShopQuadrant(pontaCardShop, "no_destination_with_shop")
+      assertEquals(pontaNoDestinationWithShop.targetCount, 0)
+      assertEquals(pontaNoDestinationWithShop.averageRank, None)
+      assertEquals(pontaNoDestinationWithShop.status, "no_target")
+      val euCardShop = cardShop("eu")
+      assertEquals(euCardShop.cardShopWithoutDestinationCount, 1)
+      assertOptionDouble(euCardShop.cardShopWithoutDestinationRate, 1.0)
+      val euNoDestinationWithShop = cardShopQuadrant(euCardShop, "no_destination_with_shop")
+      assertEquals(euNoDestinationWithShop.targetCount, 1)
+      assertOptionDouble(euNoDestinationWithShop.averageRank, 4.0)
+      assertOptionDouble(euNoDestinationWithShop.averageAssets, 50.0)
       val firstTimeline = response.matchTimeline.head
       assertEquals(firstTimeline.matchIndex, 1)
       assertEquals(firstTimeline.winnerMemberId, Some("ponta"))
@@ -178,6 +220,11 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
           item.playerMemberId.contains("ponta") && item.targetCount == 2 &&
           item.status == "reference"
       ))
+      assert(response.dataQuality.items.exists(item =>
+        item.metricId == "cardShopDestination.destinationWithShop" &&
+          item.playerMemberId.contains("ponta") && item.targetCount == 1 &&
+          item.status == "reference"
+      ))
 
   test("returns an empty aggregate when the selected scope has no confirmed matches"):
     val usecase = GetSeriesComparison[IO](StaticReadModel(Some(resolvedScope), Nil))
@@ -191,8 +238,10 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
       assertEquals(response.matchPlayerPoints, Nil)
       assertEquals(response.recentFormByPlayer, Nil)
       assertEquals(response.playerPerformanceProfiles.entries, Nil)
+      assertEquals(response.assetStyleProfiles.entries, Nil)
       assertEquals(response.matchNoInEventBreakdown, Nil)
       assertEquals(response.matchTimeline, Nil)
+      assertEquals(response.cardShopDestination.entries, Nil)
       assertEquals(response.playOrderBaselines, Nil)
       assertEquals(response.dataQuality.items, Nil)
 
@@ -237,19 +286,72 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
       assertEquals(profiles("near_high"), Some("balanced"))
       assertEquals(profiles("high"), Some("property_focused"))
 
+  test("classifies asset style profiles from distribution shape and outcome gaps"):
+    val rows = styleRows
+    val usecase = GetSeriesComparison[IO](StaticReadModel(Some(resolvedScope), rows))
+
+    for result <- usecase.run(SeriesComparisonScope.Overall(titleId)) yield
+      val response = assertRight(result)
+      val profiles = response.assetStyleProfiles.entries.map(entry => entry.memberId -> entry).toMap
+
+      assert(response.assetStyleProfiles.lowAssetThreshold.nonEmpty)
+      assert(response.assetStyleProfiles.highAssetThreshold.nonEmpty)
+      assertEquals(profiles("steady").primaryKind, Some("steady_accumulator"))
+      assertEquals(profiles("steady").shapeKind, Some("upper_side"))
+      assert(profiles("steady").tags.contains("upper_chaser"))
+
+      assertEquals(profiles("boom").primaryKind, Some("asset_explosion"))
+      assertEquals(profiles("boom").shapeKind, Some("two_tailed"))
+      assert(profiles("boom").tags.contains("high_variance"))
+
+      assertEquals(profiles("risk").primaryKind, Some("high_risk_breakthrough"))
+      assertEquals(profiles("risk").shapeKind, Some("lower_tail"))
+      assert(profiles("risk").tags.contains("downside_risk"))
+
+      assertEquals(profiles("close").primaryKind, Some("close_collector"))
+      assertEquals(profiles("close").shapeKind, Some("thin_right_tail"))
+      assert(profiles("close").tags.contains("mobility_collecting"))
+
   private def sampleRows: List[SeriesComparisonMatchPlayerRow] = List(
-    row(1, "ponta", "ponta", 1, 1, 1000, 200, destination = 3, ginji = 1),
+    rowWithCardShop(1, "ponta", "ponta", 1, 1, 1000, 200, destination = 3, ginji = 1, cardShop = 1),
     row(1, "akane", "akane", 2, 2, 800, 250, destination = 1, ginji = 0),
-    row(1, "otaka", "otaka", 3, 3, 500, 100, destination = 5, ginji = 0),
+    rowWithCardShop(1, "otaka", "otaka", 3, 3, 500, 100, destination = 5, ginji = 0, cardShop = 1),
     row(1, "eu", "eu", 4, 4, 100, 50, destination = 0, ginji = 2),
-    row(2, "akane", "akane", 1, 1, 1200, 300, destination = 3, ginji = 1),
+    rowWithCardShop(2, "akane", "akane", 1, 1, 1200, 300, destination = 3, ginji = 1, cardShop = 1),
     row(2, "ponta", "ponta", 2, 2, 700, 180, destination = 1, ginji = 0),
     row(2, "otaka", "otaka", 3, 3, 400, 160, destination = 2, ginji = 0),
-    row(2, "eu", "eu", 4, 4, 50, 20, destination = 0, ginji = 0),
+    rowWithCardShop(2, "eu", "eu", 4, 4, 50, 20, destination = 0, ginji = 0, cardShop = 1),
     row(3, "eu", "eu", 1, 4, 80, 40, destination = 0, ginji = 0),
-    row(3, "akane", "akane", 2, 3, 600, 500, destination = 5, ginji = 0),
+    rowWithCardShop(3, "akane", "akane", 2, 3, 600, 500, destination = 5, ginji = 0, cardShop = 1),
     row(3, "ponta", "ponta", 3, 1, 1500, 400, destination = 1, ginji = 0),
     row(3, "otaka", "otaka", 4, 2, 1000, 350, destination = 2, ginji = 1),
+  )
+
+  private def styleRows: List[SeriesComparisonMatchPlayerRow] = List(
+    row(1, "boom", "boom", 1, 1, 120000, 24000, destination = 0, ginji = 0),
+    row(1, "steady", "steady", 2, 2, 80000, 32000, destination = 1, ginji = 0),
+    row(1, "close", "close", 3, 3, 50000, 18000, destination = 2, ginji = 0),
+    row(1, "risk", "risk", 4, 4, 10000, 2000, destination = 0, ginji = 0),
+    row(2, "risk", "risk", 1, 1, 90000, 18000, destination = 0, ginji = 0),
+    row(2, "steady", "steady", 2, 2, 80000, 34000, destination = 1, ginji = 0),
+    row(2, "close", "close", 3, 3, 60000, 20000, destination = 2, ginji = 0),
+    row(2, "boom", "boom", 4, 4, 5000, 1000, destination = 0, ginji = 0),
+    row(3, "boom", "boom", 1, 1, 140000, 26000, destination = 0, ginji = 0),
+    row(3, "close", "close", 2, 2, 90000, 25000, destination = 2, ginji = 0),
+    row(3, "steady", "steady", 3, 3, 76000, 31000, destination = 1, ginji = 0),
+    row(3, "risk", "risk", 4, 4, 6000, 1200, destination = 0, ginji = 0),
+    row(4, "steady", "steady", 1, 1, 100000, 36000, destination = 1, ginji = 0),
+    row(4, "close", "close", 2, 2, 80000, 24000, destination = 2, ginji = 0),
+    row(4, "risk", "risk", 3, 3, 25000, 5000, destination = 0, ginji = 0),
+    row(4, "boom", "boom", 4, 4, 8000, 1500, destination = 0, ginji = 0),
+    row(5, "close", "close", 1, 1, 78000, 21000, destination = 2, ginji = 0),
+    row(5, "steady", "steady", 2, 2, 74000, 30000, destination = 1, ginji = 0),
+    row(5, "boom", "boom", 3, 3, 70000, 16000, destination = 0, ginji = 0),
+    row(5, "risk", "risk", 4, 4, 9000, 1800, destination = 0, ginji = 0),
+    row(6, "risk", "risk", 1, 1, 95000, 19000, destination = 0, ginji = 0),
+    row(6, "steady", "steady", 2, 2, 85000, 33000, destination = 1, ginji = 0),
+    row(6, "close", "close", 3, 3, 60000, 22000, destination = 2, ginji = 0),
+    row(6, "boom", "boom", 4, 4, 7000, 1500, destination = 0, ginji = 0),
   )
 
   private def row(
@@ -262,6 +364,30 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
       revenue: Int,
       destination: Int,
       ginji: Int,
+  ): SeriesComparisonMatchPlayerRow = rowWithCardShop(
+    matchNo,
+    memberId,
+    displayName,
+    playOrder,
+    rank,
+    assets,
+    revenue,
+    destination,
+    ginji,
+    cardShop = 0,
+  )
+
+  private def rowWithCardShop(
+      matchNo: Int,
+      memberId: String,
+      displayName: String,
+      playOrder: Int,
+      rank: Int,
+      assets: Int,
+      revenue: Int,
+      destination: Int,
+      ginji: Int,
+      cardShop: Int,
   ): SeriesComparisonMatchPlayerRow = SeriesComparisonMatchPlayerRow(
     matchId = MatchId.unsafeFromString(s"match-$matchNo"),
     playedAt = now.plusSeconds(matchNo.toLong),
@@ -281,10 +407,16 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
       plusStation = 0,
       minusStation = 0,
       cardStation = 0,
-      cardShop = 0,
+      cardShop = cardShop,
       suriNoGinji = ginji,
     ),
   )
+
+  private def cardShopQuadrant(
+      entry: momo.api.endpoints.CardShopDestinationPlayerResponse,
+      kind: String,
+  ): momo.api.endpoints.CardShopDestinationQuadrantResponse = entry.quadrants.find(_.kind == kind)
+    .getOrElse(fail(s"$kind quadrant missing: ${entry.quadrants}"))
 
   private def assertOptionDouble(actual: Option[Double], expected: Double, delta: Double): Unit =
     actual match

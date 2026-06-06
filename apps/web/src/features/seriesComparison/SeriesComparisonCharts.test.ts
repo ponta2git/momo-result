@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { headToHeadCellTone, headToHeadToneLabel } from "./SeriesComparisonCharts";
+import {
+  headToHeadCellTone,
+  headToHeadToneLabel,
+  shouldShowRankStripMatchMarker,
+  syncRecentRankStripScroll,
+} from "./SeriesComparisonCharts";
 
 describe("headToHeadToneLabel", () => {
   it("uses early-scope battle significance thresholds", () => {
@@ -51,5 +56,32 @@ describe("headToHeadCellTone", () => {
     expect(headToHeadCellTone(0.445313, 128).rgb).toBe("220, 38, 38");
     expect(headToHeadCellTone(0.484375, 128, -0.1875).rgb).toBe("220, 38, 38");
     expect(headToHeadCellTone(0.515625, 128, 0.1875).rgb).toBe("37, 99, 235");
+  });
+});
+
+describe("shouldShowRankStripMatchMarker", () => {
+  it("marks the first point, every fifth match, and the latest point", () => {
+    expect(shouldShowRankStripMatchMarker(1, 0, 12)).toBe(true);
+    expect(shouldShowRankStripMatchMarker(2, 1, 12)).toBe(false);
+    expect(shouldShowRankStripMatchMarker(5, 4, 12)).toBe(true);
+    expect(shouldShowRankStripMatchMarker(10, 9, 12)).toBe(true);
+    expect(shouldShowRankStripMatchMarker(12, 11, 12)).toBe(true);
+  });
+});
+
+describe("syncRecentRankStripScroll", () => {
+  it("copies the source scroll position to the other strip rows", () => {
+    const source = document.createElement("div");
+    const target = document.createElement("div");
+    const untouchedSource = document.createElement("div");
+    source.scrollLeft = 128;
+    target.scrollLeft = 0;
+    untouchedSource.scrollLeft = 128;
+
+    syncRecentRankStripScroll([source, target, untouchedSource], source);
+
+    expect(source.scrollLeft).toBe(128);
+    expect(target.scrollLeft).toBe(128);
+    expect(untouchedSource.scrollLeft).toBe(128);
   });
 });

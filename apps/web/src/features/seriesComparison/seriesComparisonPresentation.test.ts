@@ -14,6 +14,10 @@ import {
   leaderSummary,
   numericExtrema,
   playOrderColor,
+  playOrderHeatmapRows,
+  rankDistributionBars,
+  recentRankStrips,
+  revenueRankConversionEntries,
 } from "./seriesComparisonPresentation";
 
 type PlayerMetrics = NonNullable<SeriesComparisonResponse["metricsByPlayer"]>[number]["metrics"];
@@ -75,6 +79,126 @@ describe("seriesComparisonPresentation", () => {
     expect(formatPlayOrderLabel(null)).toBe("P不明");
     expect(playOrderColor(1)).toBe("#2563eb");
     expect(playOrderColor(9)).toBe("var(--color-text-muted)");
+  });
+
+  it("derives full rank strips while keeping recent-window metadata", () => {
+    const response = responseWithRankAverages([["p0", "ポン太", 2.4]]);
+    response.recentFormByPlayer = [
+      {
+        averageRank: 2,
+        lowerHalfStreak: 0,
+        memberId: "p0",
+        podiumRate: 0.5,
+        podiumStreak: 1,
+        status: "normal",
+        targetCount: 3,
+        windowSize: 3,
+        winStreak: 0,
+      },
+    ];
+    response.matchPlayerPoints = [
+      matchPoint({ matchIndex: 1, rank: 4 }),
+      matchPoint({ matchIndex: 3, rank: 1 }),
+      matchPoint({ matchIndex: 2, rank: 2 }),
+      matchPoint({ matchIndex: 4, rank: 3 }),
+    ];
+
+    expect(recentRankStrips(response)).toEqual([
+      {
+        memberId: "p0",
+        points: [
+          { matchId: "match-1", matchIndex: 1, rank: 4 },
+          { matchId: "match-2", matchIndex: 2, rank: 2 },
+          { matchId: "match-3", matchIndex: 3, rank: 1 },
+          { matchId: "match-4", matchIndex: 4, rank: 3 },
+        ],
+        status: "normal",
+        targetCount: 3,
+        totalCount: 4,
+        windowSize: 3,
+      },
+    ]);
+  });
+
+  it("derives rank distribution bars in rank order", () => {
+    const response = responseWithRankAverages([["p0", "ポン太", 2.4]]);
+    const metrics = response.metricsByPlayer?.[0]?.metrics;
+    if (!metrics) throw new Error("metrics missing");
+    metrics.rank.distribution = [
+      { count: 1, rank: 2, rate: 0.25 },
+      { count: 3, rank: 1, rate: 0.75 },
+    ];
+
+    expect(rankDistributionBars(response)).toEqual([
+      {
+        memberId: "p0",
+        segments: [
+          { count: 3, rank: 1, rate: 0.75 },
+          { count: 1, rank: 2, rate: 0.25 },
+        ],
+        totalCount: 4,
+      },
+    ]);
+  });
+
+  it("derives play-order heatmap cells with empty play orders preserved", () => {
+    const response = responseWithRankAverages([["p0", "ポン太", 2.4]]);
+    const metrics = response.metricsByPlayer?.[0]?.metrics;
+    if (!metrics) throw new Error("metrics missing");
+    metrics.playOrder.breakdown = [
+      { matchCount: 2, playOrder: 2, rankAverage: 1.5 },
+      { matchCount: 3, playOrder: 4, rankAverage: 3 },
+    ];
+
+    expect(playOrderHeatmapRows(response)).toEqual([
+      {
+        memberId: "p0",
+        cells: [
+          { matchCount: 0, playOrder: 1, rankAverage: undefined },
+          { matchCount: 2, playOrder: 2, rankAverage: 1.5 },
+          { matchCount: 0, playOrder: 3, rankAverage: undefined },
+          { matchCount: 3, playOrder: 4, rankAverage: 3 },
+        ],
+      },
+    ]);
+  });
+
+  it("derives revenue-rank conversion rows and keeps tied revenue ranks", () => {
+    const response = responseWithRankAverages([["p0", "ポン太", 2.4]]);
+    response.matchPlayerPoints = [
+      matchPoint({ matchIndex: 1, rank: 1, revenueRank: 1 }),
+      matchPoint({ matchIndex: 2, rank: 2, revenueRank: 1 }),
+      matchPoint({ matchIndex: 3, rank: 4, revenueRank: 2.5 }),
+      matchPoint({ matchIndex: 4, rank: 2, revenueRank: 2.5 }),
+    ];
+
+    expect(revenueRankConversionEntries(response)).toEqual([
+      {
+        memberId: "p0",
+        rows: [
+          {
+            finalRankCounts: [
+              { count: 1, rank: 1, rate: 0.5 },
+              { count: 1, rank: 2, rate: 0.5 },
+              { count: 0, rank: 3, rate: 0 },
+              { count: 0, rank: 4, rate: 0 },
+            ],
+            revenueRank: 1,
+            targetCount: 2,
+          },
+          {
+            finalRankCounts: [
+              { count: 0, rank: 1, rate: 0 },
+              { count: 1, rank: 2, rate: 0.5 },
+              { count: 0, rank: 3, rate: 0 },
+              { count: 1, rank: 4, rate: 0.5 },
+            ],
+            revenueRank: 2.5,
+            targetCount: 2,
+          },
+        ],
+      },
+    ]);
   });
 });
 
@@ -151,5 +275,28 @@ function emptyOutcome() {
     status: "no_target",
     targetCount: 0,
     winCount: 0,
+  };
+}
+
+function matchPoint({
+  matchIndex,
+  rank,
+  revenueRank = rank,
+}: {
+  matchIndex: number;
+  rank: number;
+  revenueRank?: number;
+}): NonNullable<SeriesComparisonResponse["matchPlayerPoints"]>[number] {
+  return {
+    assetsRank: rank,
+    matchId: `match-${matchIndex}`,
+    matchIndex,
+    memberId: "p0",
+    playedAt: "2026-01-01T00:00:00Z",
+    rank,
+    revenue: 1000,
+    revenueAssetRate: 0.2,
+    revenueRank,
+    totalAssets: 5000,
   };
 }

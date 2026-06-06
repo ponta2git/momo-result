@@ -18,6 +18,10 @@ import {
   HeadToHeadMatrix,
   HistogramChart,
   LineChart,
+  PlayOrderHeatmap,
+  RankDistributionStackedBars,
+  RecentRankStrip,
+  RevenueRankConversionHeatmap,
   StrategyProfileChart,
   StrategyScatterPlot,
   playerColor,
@@ -44,9 +48,13 @@ import {
   metricsMap,
   numericExtrema,
   performanceProfileMap,
+  playOrderHeatmapRows,
   playOrderColor,
   playerNameMap,
+  rankDistributionBars,
   recentFormMap,
+  recentRankStrips,
+  revenueRankConversionEntries,
 } from "@/features/seriesComparison/seriesComparisonPresentation";
 import {
   averageRankSpread,
@@ -90,7 +98,7 @@ function MetricSection({
 }) {
   return (
     <section
-      className="grid gap-4 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-sm"
+      className="grid w-full max-w-full min-w-0 gap-4 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-sm"
       id={id}
     >
       <div className="flex min-w-0 items-start gap-3">
@@ -131,7 +139,7 @@ function PlayerMetricGrid({
 }) {
   const minWidth = `${Math.max(1, players.length) * minColumnWidthRem}rem`;
   return (
-    <div className="overflow-x-auto pb-1">
+    <div className="max-w-full min-w-0 overflow-x-auto pb-1">
       <div
         className="grid min-w-full gap-3"
         style={{
@@ -439,7 +447,7 @@ function AnalysisTabs({
   return (
     <div
       aria-label="分析サブページ"
-      className="grid gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
+      className="grid min-w-0 gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
       role="tablist"
       tabIndex={-1}
       onKeyDown={(event) => {
@@ -450,7 +458,7 @@ function AnalysisTabs({
         }
       }}
     >
-      <div className="flex [scrollbar-width:none] gap-2 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden">
+      <div className="flex min-w-0 [scrollbar-width:none] gap-2 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden">
         {perspectiveItems.map((item) => (
           <button
             aria-controls={`series-comparison-view-${item.id}`}
@@ -480,8 +488,8 @@ function AnalysisTabs({
 
 function SectionJumpLinks({ items }: { items: AnalysisViewDefinition["sections"] }) {
   return (
-    <nav aria-label="このサブページの観点">
-      <div className="flex flex-wrap gap-2">
+    <nav aria-label="このサブページの観点" className="min-w-0">
+      <div className="flex min-w-0 flex-wrap gap-2">
         {items.map((item) => (
           <a
             className="inline-flex rounded-full border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-1.5 text-xs font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-surface)]"
@@ -543,11 +551,17 @@ function RecentFormMetrics({ response }: { response: SeriesComparisonResponse })
   const recentByMember = recentFormMap(response);
   return (
     <MetricSection
-      description="直近8戦の順位、入賞率、連続状態です。3戦未満は参考です。"
+      description="直近8戦の調子指標と、全試合の順位推移です。3戦未満は参考です。"
       icon={<Activity className="size-5" />}
       title="直近の調子"
       id="metric-recent-form"
     >
+      <div className="grid gap-2">
+        <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">
+          直近順位ストリップ
+        </h3>
+        <RecentRankStrip entries={recentRankStrips(response)} players={players} />
+      </div>
       <PlayerMetricGrid metricsByMember={metricsMap(response)} players={players}>
         {(player) => {
           const form = recentByMember.get(player.memberId);
@@ -582,6 +596,10 @@ function BasicMetrics({ response }: { response: SeriesComparisonResponse }) {
       title="順位の地力"
       id="metric-basic"
     >
+      <div className="grid gap-2">
+        <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">順位分布</h3>
+        <RankDistributionStackedBars entries={rankDistributionBars(response)} players={players} />
+      </div>
       <PlayerMetricGrid metricsByMember={metricsByMember} players={players}>
         {(_, metrics) => (
           <>
@@ -733,7 +751,7 @@ function IntegratedMetricPanel({
   title: string;
 }) {
   return (
-    <div className="grid gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
+    <div className="grid w-full max-w-full min-w-0 gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
       <div className="grid gap-1">
         <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">{title}</h3>
         <p className="text-xs leading-5 text-pretty text-[var(--color-text-secondary)]">
@@ -1152,6 +1170,10 @@ function PlayOrderMetrics({ response }: { response: SeriesComparisonResponse }) 
       title="番手別成績"
       id="metric-play-order"
     >
+      <div className="grid gap-2">
+        <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">番手別平均順位</h3>
+        <PlayOrderHeatmap players={players} rows={playOrderHeatmapRows(response)} />
+      </div>
       <PlayerMetricGrid minColumnWidthRem={17} metricsByMember={metricsByMember} players={players}>
         {(_, metrics) => <PlayOrderSignalRows metrics={metrics} />}
       </PlayerMetricGrid>
@@ -1628,6 +1650,15 @@ function RevenueOutcomeMetrics({ response }: { response: SeriesComparisonRespons
           </>
         )}
       </PlayerMetricGrid>
+      <IntegratedMetricPanel
+        description="行は物件収益順位、列は最終順位です。同値の物件収益順位は平均順位方式の値として分けます。"
+        title="物件収益順位から最終順位への転換"
+      >
+        <RevenueRankConversionHeatmap
+          entries={revenueRankConversionEntries(response)}
+          players={players}
+        />
+      </IntegratedMetricPanel>
     </MetricSection>
   );
 }

@@ -1,8 +1,17 @@
-import type { CSSProperties } from "react";
+import { useEffect, useRef } from "react";
+import type { CSSProperties, UIEvent } from "react";
 
 import {
+  formatDecimal,
   formatPercent,
+  formatPlayOrderLabel,
   formatSigned,
+} from "@/features/seriesComparison/seriesComparisonPresentation";
+import type {
+  PlayOrderHeatmapRow,
+  RankDistributionBarEntry,
+  RecentRankStripEntry,
+  RevenueRankConversionEntry,
 } from "@/features/seriesComparison/seriesComparisonPresentation";
 import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
 import { cn } from "@/shared/ui/cn";
@@ -64,6 +73,341 @@ export function PlayerLegend({
           <span className="font-medium text-[var(--color-text-primary)]">{player.displayName}</span>
         </span>
       ))}
+    </div>
+  );
+}
+
+export function RecentRankStrip({
+  entries,
+  players,
+}: {
+  entries: RecentRankStripEntry[];
+  players: Player[];
+}) {
+  const entryByMember = new Map(entries.map((entry) => [entry.memberId, entry]));
+  const stripRefs = useRef(new Map<string, HTMLDivElement>());
+  const isSyncingRef = useRef(false);
+  const latestPointKey = entries
+    .map((entry) => {
+      const latestPoint = entry.points.at(-1);
+      return [
+        entry.memberId,
+        latestPoint?.matchId ?? "",
+        latestPoint?.matchIndex ?? "",
+        entry.points.length,
+        entry.windowSize,
+      ].join(":");
+    })
+    .join("|");
+
+  useEffect(() => {
+    for (const element of stripRefs.current.values()) {
+      element.scrollLeft = element.scrollWidth;
+    }
+  }, [latestPointKey]);
+
+  const registerStripRef = (memberId: string) => (element: HTMLDivElement | null) => {
+    if (element) {
+      stripRefs.current.set(memberId, element);
+      return;
+    }
+    stripRefs.current.delete(memberId);
+  };
+  const handleStripScroll = (event: UIEvent<HTMLDivElement>) => {
+    if (isSyncingRef.current) {
+      return;
+    }
+    isSyncingRef.current = true;
+    syncRecentRankStripScroll(Array.from(stripRefs.current.values()), event.currentTarget);
+    const resetSyncing = () => {
+      isSyncingRef.current = false;
+    };
+    if (typeof globalThis.requestAnimationFrame === "function") {
+      globalThis.requestAnimationFrame(resetSyncing);
+    } else {
+      globalThis.setTimeout(resetSyncing, 0);
+    }
+  };
+
+  return (
+    <div className="grid gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
+      {players.map((player, index) => {
+        const entry = entryByMember.get(player.memberId);
+        return (
+          <RecentRankStripPlayerRow
+            entry={entry}
+            onScroll={handleStripScroll}
+            index={index}
+            key={player.memberId}
+            player={player}
+            refCallback={registerStripRef(player.memberId)}
+            showMatchMarkers={index === 0}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function RecentRankStripPlayerRow({
+  entry,
+  index,
+  onScroll,
+  player,
+  refCallback,
+  showMatchMarkers,
+}: {
+  entry: RecentRankStripEntry | undefined;
+  index: number;
+  onScroll: (event: UIEvent<HTMLDivElement>) => void;
+  player: Player;
+  refCallback: (element: HTMLDivElement | null) => void;
+  showMatchMarkers: boolean;
+}) {
+  const points = entry?.points ?? [];
+  const latestPoint = points.at(-1);
+  const windowSize = entry?.windowSize ?? 8;
+  const visibleWindowSize = Math.max(1, windowSize);
+  const stripMaxWidthRem = visibleWindowSize * 2.25 + Math.max(0, visibleWindowSize - 1) * 0.25;
+  const label =
+    points.length === 0
+      ? `${player.displayName}: 対象なし`
+      : `${player.displayName}: 全${points.length}戦、左から時系列、最新は${latestPoint?.matchIndex ?? "-"}戦目${latestPoint?.rank ?? "-"}位`;
+
+  return (
+    <div className="grid gap-2 sm:grid-cols-[7rem_minmax(0,1fr)_7rem] sm:items-center">
+      <div
+        className="truncate text-sm font-semibold text-[var(--color-text-primary)]"
+        style={{ borderLeftColor: playerColor(index), borderLeftWidth: 3, paddingLeft: 8 }}
+      >
+        {player.displayName}
+      </div>
+      <div
+        aria-label={label}
+        className={cn(
+          "flex w-full [scrollbar-width:none] gap-1 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden",
+          showMatchMarkers ? "min-h-12 items-end" : "min-h-8 items-center",
+        )}
+        onScroll={onScroll}
+        ref={refCallback}
+        role="img"
+        style={{ maxWidth: `${stripMaxWidthRem}rem` }}
+      >
+        {points.length === 0 ? (
+          <span className="self-center text-sm text-[var(--color-text-secondary)]">対象なし</span>
+        ) : (
+          points.map((point, pointIndex) => {
+            const showMarker = shouldShowRankStripMatchMarker(
+              point.matchIndex,
+              pointIndex,
+              points.length,
+            );
+            return (
+              <span
+                className={cn(
+                  "grid w-9 shrink-0 justify-items-center",
+                  showMatchMarkers ? "grid-rows-[0.75rem_2rem] gap-1" : "grid-rows-[2rem]",
+                )}
+                key={`${point.matchId}-${point.matchIndex}`}
+              >
+                {showMatchMarkers ? (
+                  <span
+                    className={cn(
+                      "h-3 whitespace-nowrap text-[0.625rem] font-medium leading-3 text-[var(--color-text-muted)] tabular-nums",
+                      !showMarker && "invisible",
+                    )}
+                  >
+                    {point.matchIndex}戦
+                  </span>
+                ) : null}
+                <span
+                  className="grid size-8 place-items-center rounded-[var(--radius-xs)] border text-xs font-semibold text-white tabular-nums shadow-sm"
+                  style={{
+                    backgroundColor: rankColor(point.rank),
+                    borderColor: rankColor(point.rank),
+                  }}
+                  title={`${point.matchIndex}戦目 ${point.rank}位`}
+                >
+                  {point.rank}
+                </span>
+              </span>
+            );
+          })
+        )}
+      </div>
+      <div className="text-xs text-[var(--color-text-secondary)] tabular-nums sm:text-right">
+        直近{entry?.targetCount ?? 0}/{windowSize}戦
+        {entry?.totalCount ? `・全${entry.totalCount}戦` : ""}
+        {entry?.status === "reference" ? "・参考" : ""}
+      </div>
+    </div>
+  );
+}
+
+export function shouldShowRankStripMatchMarker(
+  matchIndex: number,
+  pointIndex: number,
+  pointCount: number,
+): boolean {
+  return (
+    pointIndex === 0 ||
+    pointIndex === pointCount - 1 ||
+    (Number.isInteger(matchIndex) && matchIndex % 5 === 0)
+  );
+}
+
+export function syncRecentRankStripScroll(
+  elements: HTMLDivElement[],
+  sourceElement: HTMLDivElement,
+): void {
+  for (const element of elements) {
+    if (element !== sourceElement && element.scrollLeft !== sourceElement.scrollLeft) {
+      element.scrollLeft = sourceElement.scrollLeft;
+    }
+  }
+}
+
+export function RankDistributionStackedBars({
+  entries,
+  players,
+}: {
+  entries: RankDistributionBarEntry[];
+  players: Player[];
+}) {
+  const entryByMember = new Map(entries.map((entry) => [entry.memberId, entry]));
+  return (
+    <div className="grid gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
+      <RankLegend />
+      <div className="grid gap-2">
+        {players.map((player, index) => {
+          const entry = entryByMember.get(player.memberId);
+          const totalCount = entry?.totalCount ?? 0;
+          const segments = entry?.segments ?? [];
+          const label =
+            totalCount === 0
+              ? `${player.displayName}: 対象なし`
+              : `${player.displayName}: ${segments
+                  .map((segment) => `${segment.rank}位${segment.count}回`)
+                  .join("、")}`;
+          return (
+            <div
+              className="grid gap-1 sm:grid-cols-[7rem_minmax(0,1fr)_4.5rem] sm:items-center"
+              key={player.memberId}
+            >
+              <div
+                className="truncate text-sm font-semibold text-[var(--color-text-primary)]"
+                style={{ borderLeftColor: playerColor(index), borderLeftWidth: 3, paddingLeft: 8 }}
+              >
+                {player.displayName}
+              </div>
+              <div
+                aria-label={label}
+                className="flex h-8 overflow-hidden rounded-[var(--radius-xs)] bg-[var(--color-surface)]"
+                role="img"
+              >
+                {totalCount > 0 ? (
+                  segments.map((segment) =>
+                    segment.count > 0 ? (
+                      <span
+                        aria-hidden="true"
+                        className="min-w-2"
+                        key={segment.rank}
+                        style={{
+                          backgroundColor: rankColor(segment.rank),
+                          flexBasis: `${(((segment.rate ?? segment.count / totalCount) || 0) * 100).toFixed(4)}%`,
+                          flexGrow: 0,
+                          flexShrink: 0,
+                        }}
+                        title={`${segment.rank}位 ${segment.count}回`}
+                      />
+                    ) : null,
+                  )
+                ) : (
+                  <span className="grid w-full place-items-center text-xs text-[var(--color-text-muted)]">
+                    対象なし
+                  </span>
+                )}
+              </div>
+              <div className="text-xs text-[var(--color-text-secondary)] tabular-nums sm:text-right">
+                {totalCount}戦
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export function PlayOrderHeatmap({
+  players,
+  rows,
+}: {
+  players: Player[];
+  rows: PlayOrderHeatmapRow[];
+}) {
+  const rowByMember = new Map(rows.map((row) => [row.memberId, row]));
+  const values = rows.flatMap((row) =>
+    row.cells.flatMap((cell) => (isFiniteNumber(cell.rankAverage) ? [cell.rankAverage] : [])),
+  );
+  const minValue = values.length === 0 ? undefined : Math.min(...values);
+  const maxValue = values.length === 0 ? undefined : Math.max(...values);
+  return (
+    <div className="overflow-x-auto pb-1">
+      <div
+        className="grid min-w-[42rem] gap-1"
+        style={{
+          gridTemplateColumns: "7rem repeat(4, minmax(7.5rem, 1fr))",
+        }}
+      >
+        <div aria-hidden="true" />
+        {[1, 2, 3, 4].map((playOrder) => (
+          <div
+            className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-1.5 text-center text-xs font-semibold text-[var(--color-text-primary)]"
+            key={playOrder}
+          >
+            {formatPlayOrderLabel(playOrder)}
+          </div>
+        ))}
+        {players.map((player, index) => {
+          const row = rowByMember.get(player.memberId);
+          return (
+            <PlayOrderHeatmapPlayerRow
+              index={index}
+              key={player.memberId}
+              maxValue={maxValue}
+              minValue={minValue}
+              player={player}
+              row={row}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export function RevenueRankConversionHeatmap({
+  entries,
+  players,
+}: {
+  entries: RevenueRankConversionEntry[];
+  players: Player[];
+}) {
+  const entryByMember = new Map(entries.map((entry) => [entry.memberId, entry]));
+  return (
+    <div className="grid w-full max-w-full min-w-0 gap-3 lg:grid-cols-2">
+      {players.map((player, index) => {
+        const entry = entryByMember.get(player.memberId);
+        return (
+          <RevenueRankConversionPlayerMatrix
+            entry={entry}
+            index={index}
+            key={player.memberId}
+            player={player}
+          />
+        );
+      })}
     </div>
   );
 }
@@ -760,6 +1104,206 @@ export function StrategyProfileChart({
       <PlayerLegend players={players} />
     </figure>
   );
+}
+
+function RankLegend() {
+  return (
+    <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-[var(--color-text-secondary)]">
+      {[1, 2, 3, 4].map((rank) => (
+        <span className="inline-flex items-center gap-1.5" key={rank}>
+          <span
+            aria-hidden="true"
+            className="size-2.5 rounded-full"
+            style={{ backgroundColor: rankColor(rank) }}
+          />
+          <span className="font-medium text-[var(--color-text-primary)]">{rank}位</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function PlayOrderHeatmapPlayerRow({
+  index,
+  maxValue,
+  minValue,
+  player,
+  row,
+}: {
+  index: number;
+  maxValue: number | undefined;
+  minValue: number | undefined;
+  player: Player;
+  row: PlayOrderHeatmapRow | undefined;
+}) {
+  const cellsByPlayOrder = new Map((row?.cells ?? []).map((cell) => [cell.playOrder, cell]));
+  return (
+    <>
+      <div
+        className="truncate rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-2 text-sm font-semibold text-[var(--color-text-primary)]"
+        style={{ borderLeftColor: playerColor(index), borderLeftWidth: 3 }}
+      >
+        {player.displayName}
+      </div>
+      {[1, 2, 3, 4].map((playOrder) => {
+        const cell = cellsByPlayOrder.get(playOrder);
+        const rankAverage = cell?.rankAverage;
+        const hasValue = isFiniteNumber(rankAverage) && (cell?.matchCount ?? 0) > 0;
+        return (
+          <div
+            aria-label={`${player.displayName} ${formatPlayOrderLabel(playOrder)} 平均順位 ${formatDecimal(rankAverage)} ${cell?.matchCount ?? 0}戦`}
+            className="rounded-[var(--radius-xs)] border px-2 py-2 text-center"
+            key={playOrder}
+            role="img"
+            style={{
+              backgroundColor: hasValue
+                ? rankAverageTone(rankAverage, minValue, maxValue)
+                : "var(--color-surface)",
+              borderColor: hasValue ? "rgba(111, 125, 116, 0.28)" : "var(--color-border)",
+            }}
+          >
+            <div className="text-sm font-semibold text-[var(--color-text-primary)] tabular-nums">
+              {formatDecimal(rankAverage)}
+            </div>
+            <div className="mt-0.5 text-[11px] text-[var(--color-text-secondary)] tabular-nums">
+              {cell?.matchCount ?? 0}戦
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+function RevenueRankConversionPlayerMatrix({
+  entry,
+  index,
+  player,
+}: {
+  entry: RevenueRankConversionEntry | undefined;
+  index: number;
+  player: Player;
+}) {
+  const rows = entry?.rows ?? [];
+  return (
+    <div className="min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
+      <div
+        className="mb-3 truncate text-sm font-semibold text-[var(--color-text-primary)]"
+        style={{ borderLeftColor: playerColor(index), borderLeftWidth: 3, paddingLeft: 8 }}
+      >
+        {player.displayName}
+      </div>
+      {rows.length === 0 ? (
+        <p className="text-sm text-[var(--color-text-secondary)]">対象データなし</p>
+      ) : (
+        <div className="max-w-full min-w-0 overflow-x-auto pb-1">
+          <div
+            className="grid min-w-[22rem] gap-1"
+            style={{
+              gridTemplateColumns: "5.5rem repeat(4, minmax(3.75rem, 1fr))",
+            }}
+          >
+            <div aria-hidden="true" />
+            {[1, 2, 3, 4].map((rank) => (
+              <div
+                className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-1.5 py-1 text-center text-[11px] font-semibold text-[var(--color-text-primary)]"
+                key={rank}
+              >
+                最終{rank}位
+              </div>
+            ))}
+            {rows.map((row) => (
+              <RevenueRankConversionRow key={row.revenueRank} player={player} row={row} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RevenueRankConversionRow({
+  player,
+  row,
+}: {
+  player: Player;
+  row: RevenueRankConversionEntry["rows"][number];
+}) {
+  return (
+    <>
+      <div className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-1.5 py-2 text-xs font-semibold text-[var(--color-text-primary)]">
+        収益{formatRevenueRank(row.revenueRank)}
+        <div className="mt-0.5 text-[10px] font-normal text-[var(--color-text-secondary)] tabular-nums">
+          {row.targetCount}戦
+        </div>
+      </div>
+      {row.finalRankCounts.map((item) => (
+        <div
+          aria-label={`${player.displayName}、物件収益${formatRevenueRank(row.revenueRank)}、最終${item.rank}位 ${item.count}回 ${formatPercent(item.rate)}`}
+          className="rounded-[var(--radius-xs)] border px-1.5 py-2 text-center"
+          key={item.rank}
+          role="img"
+          style={{
+            backgroundColor:
+              item.count > 0
+                ? rankBackgroundColor(item.rank, item.rate ?? 0)
+                : "var(--color-surface)",
+            borderColor: item.count > 0 ? rankBorderColor(item.rank) : "var(--color-border)",
+          }}
+        >
+          <div className="text-sm font-semibold text-[var(--color-text-primary)] tabular-nums">
+            {item.count}
+          </div>
+          <div className="mt-0.5 text-[10px] text-[var(--color-text-secondary)] tabular-nums">
+            {formatPercent(item.rate)}
+          </div>
+        </div>
+      ))}
+    </>
+  );
+}
+
+function rankColor(rank: number): string {
+  if (rank === 1) return "#d9a300";
+  if (rank === 2) return "#2563eb";
+  if (rank === 3) return "#6f7d74";
+  return "#dc2626";
+}
+
+function rankBackgroundColor(rank: number, rate: number): string {
+  const alpha = Math.min(0.4, Math.max(0.08, rate * 0.42));
+  if (rank === 1) return `rgba(217, 163, 0, ${alpha})`;
+  if (rank === 2) return `rgba(37, 99, 235, ${alpha})`;
+  if (rank === 3) return `rgba(111, 125, 116, ${alpha})`;
+  return `rgba(220, 38, 38, ${alpha})`;
+}
+
+function rankBorderColor(rank: number): string {
+  if (rank === 1) return "rgba(217, 163, 0, 0.45)";
+  if (rank === 2) return "rgba(37, 99, 235, 0.45)";
+  if (rank === 3) return "rgba(111, 125, 116, 0.45)";
+  return "rgba(220, 38, 38, 0.45)";
+}
+
+function rankAverageTone(
+  value: number,
+  minValue: number | undefined,
+  maxValue: number | undefined,
+): string {
+  if (!isFiniteNumber(minValue) || !isFiniteNumber(maxValue) || maxValue === minValue) {
+    return "rgba(111, 125, 116, 0.1)";
+  }
+  const ratio = (value - minValue) / (maxValue - minValue);
+  if (ratio <= 0.5) {
+    const alpha = 0.08 + (0.5 - ratio) * 0.54;
+    return `rgba(37, 99, 235, ${alpha})`;
+  }
+  const alpha = 0.08 + (ratio - 0.5) * 0.54;
+  return `rgba(220, 38, 38, ${alpha})`;
+}
+
+function formatRevenueRank(rank: number): string {
+  return Number.isInteger(rank) ? `${rank}位` : `同値${rank.toFixed(1)}位`;
 }
 
 function SingleHistogram({

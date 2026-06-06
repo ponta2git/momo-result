@@ -30,8 +30,17 @@ object GetSeriesComparison:
     new GetSeriesComparison(readModel)
 
 private object SeriesComparisonAggregation {
-  private val MinimumOkSampleSize = 3
-  private val StrategyKindMedianDeltaThreshold = 0.01
+  private object Thresholds:
+    val MinimumOkSampleSize = 3
+    val RecentFormWindowSize = 8
+    val HistogramLowerPercentile = 0.05
+    val HistogramUpperPercentile = 0.95
+    val HistogramTargetBinCount = 6
+    val StrategyKindMedianDeltaThreshold = 0.0035
+    val TimelineCloseFinishPercentile = 0.25
+    val TimelineAssetBlowoutPercentile = 0.75
+    val TimelineGinjiStormMinCount = 2
+
   private val Formatter = DateTimeFormatter.ISO_INSTANT
   private val DenominatorMetricIds = List(
     "rank.average",
@@ -516,7 +525,7 @@ private object SeriesComparisonAggregation {
       playerOrder: List[MemberId],
       rowsByPlayer: Map[MemberId, List[SeriesComparisonMatchPlayerRow]],
   ): List[RecentFormPlayerResponse] =
-    val windowSize = 8
+    val windowSize = Thresholds.RecentFormWindowSize
     playerOrder.map { memberId =>
       val rows = sortedPlayerRows(rowsByPlayer.getOrElse(memberId, Nil))
       val recent = rows.takeRight(windowSize)
@@ -630,11 +639,17 @@ private object SeriesComparisonAggregation {
         winnerMemberId = winner.map(_.memberId.value),
       )
     }
-    val closeThreshold = percentileDouble(base.flatMap(_.gapFirstToSecond).sorted, 0.25)
-    val blowoutThreshold = percentileDouble(base.flatMap(_.gapFirstToLast).sorted, 0.75)
+    val closeThreshold = percentileDouble(
+      base.flatMap(_.gapFirstToSecond).sorted,
+      Thresholds.TimelineCloseFinishPercentile,
+    )
+    val blowoutThreshold = percentileDouble(
+      base.flatMap(_.gapFirstToLast).sorted,
+      Thresholds.TimelineAssetBlowoutPercentile,
+    )
     val status =
       if matchGroups.size == 0 then "no_target"
-      else if matchGroups.size < 3 then "reference"
+      else if matchGroups.size < Thresholds.MinimumOkSampleSize then "reference"
       else "ok"
     val canUseRelativeFlags = status == "ok"
     base.map { item =>
@@ -642,7 +657,7 @@ private object SeriesComparisonAggregation {
         Option.when(
           item.winnerMemberId.exists(id => !item.revenueTopMemberIds.contains(id))
         )("revenue_top_no_win"),
-        Option.when(item.totalGinjiCount >= 2)("ginji_storm"),
+        Option.when(item.totalGinjiCount >= Thresholds.TimelineGinjiStormMinCount)("ginji_storm"),
         Option.when(
           canUseRelativeFlags && (item.gapFirstToSecond, closeThreshold).mapN(_ <= _)
             .getOrElse(false)
@@ -712,12 +727,13 @@ private object SeriesComparisonAggregation {
       else
         val sorted = nonEmpty.sorted
         val lowerAnchor =
-          val p05 = percentile(sorted, 0.05)
+          val p05 = percentile(sorted, Thresholds.HistogramLowerPercentile)
           if min < 0 && p05 >= 0 then 0 else math.floor(p05).toInt
-        val p95 = percentile(sorted, 0.95)
-        val targetBinCount = 6
+        val p95 = percentile(sorted, Thresholds.HistogramUpperPercentile)
         val rawSpan = math.max(1, math.ceil(p95 - asDecimal(lowerAnchor)).toInt)
-        val step = niceHistogramStep(math.ceil(asDecimal(rawSpan) / targetBinCount).toInt)
+        val step = niceHistogramStep(
+          math.ceil(asDecimal(rawSpan) / Thresholds.HistogramTargetBinCount).toInt
+        )
         val lowerStart = math.floor(asDecimal(lowerAnchor) / asDecimal(step)).toInt * step
         val upperEnd = math.max(lowerStart + step, math.ceil(p95 / asDecimal(step)).toInt * step)
         val centralBins = Iterator.iterate(lowerStart)(_ + step).takeWhile(_ < upperEnd)
@@ -849,7 +865,7 @@ private object SeriesComparisonAggregation {
       metrics,
       _.ginji.resilienceRankAverage,
       _.ginji.encounterMatches,
-      requireTarget = MinimumOkSampleSize,
+      requireTarget = Thresholds.MinimumOkSampleSize,
     ),
     highlightMax(
       "highlight.highRevenueNoWin",
@@ -858,7 +874,7 @@ private object SeriesComparisonAggregation {
       metrics,
       _.nonRevenue.highRevenueNoWinRate,
       _.nonRevenue.highRevenueTopCount,
-      requireTarget = MinimumOkSampleSize,
+      requireTarget = Thresholds.MinimumOkSampleSize,
     ),
     highlightMax(
       "highlight.destinationCraft",
@@ -867,7 +883,7 @@ private object SeriesComparisonAggregation {
       metrics,
       _.destination.dependenceScore,
       m => math.min(m.destination.upperTargetCount, m.destination.lowerTargetCount),
-      requireTarget = MinimumOkSampleSize,
+      requireTarget = Thresholds.MinimumOkSampleSize,
     ),
     highlightMax(
       "highlight.destinationIndependent",
@@ -876,7 +892,7 @@ private object SeriesComparisonAggregation {
       metrics,
       _.destination.conversionDelta,
       _.denominator,
-      requireTarget = MinimumOkSampleSize,
+      requireTarget = Thresholds.MinimumOkSampleSize,
     ),
     highlightMax(
       "highlight.assetsPeak",
@@ -885,7 +901,7 @@ private object SeriesComparisonAggregation {
       metrics,
       _.assets.max.map(asDecimal),
       _.denominator,
-      requireTarget = MinimumOkSampleSize,
+      requireTarget = Thresholds.MinimumOkSampleSize,
     ),
     highlightMax(
       "highlight.revenuePeak",
@@ -894,7 +910,7 @@ private object SeriesComparisonAggregation {
       metrics,
       _.revenue.max.map(asDecimal),
       _.denominator,
-      requireTarget = MinimumOkSampleSize,
+      requireTarget = Thresholds.MinimumOkSampleSize,
     ),
     highlightMin(
       "highlight.stability",
@@ -903,7 +919,7 @@ private object SeriesComparisonAggregation {
       metrics,
       _.stability.rankStandardDeviation,
       _.denominator,
-      requireTarget = MinimumOkSampleSize,
+      requireTarget = Thresholds.MinimumOkSampleSize,
     ),
   ).flatten
 
@@ -1004,9 +1020,9 @@ private object SeriesComparisonAggregation {
       median <- medianDouble(rates)
       value <- entry.averageRevenueAssetRate
     yield {
-      if rates.size < 3 then "balanced"
-      else if value >= median + StrategyKindMedianDeltaThreshold then "property_focused"
-      else if value <= median - StrategyKindMedianDeltaThreshold then "card_focused"
+      if rates.size < Thresholds.MinimumOkSampleSize then "balanced"
+      else if value >= median + Thresholds.StrategyKindMedianDeltaThreshold then "property_focused"
+      else if value <= median - Thresholds.StrategyKindMedianDeltaThreshold then "card_focused"
       else "balanced"
     }
 
@@ -1014,12 +1030,12 @@ private object SeriesComparisonAggregation {
 
   private def normalStatus(denominator: Int): String =
     if denominator == 0 then "no_target"
-    else if denominator < MinimumOkSampleSize then "reference"
+    else if denominator < Thresholds.MinimumOkSampleSize then "reference"
     else "ok"
 
   private def conditionalStatus(targetCount: Int): String =
     if targetCount == 0 then "no_target"
-    else if targetCount < MinimumOkSampleSize then "reference"
+    else if targetCount < Thresholds.MinimumOkSampleSize then "reference"
     else "ok"
 
   private def metricHasTies(

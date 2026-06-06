@@ -7,6 +7,8 @@ import {
 import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
 import { cn } from "@/shared/ui/cn";
 
+import { headToHeadBands, SERIES_COMPARISON_THRESHOLDS } from "./seriesComparisonThresholds";
+
 type Player = NonNullable<SeriesComparisonResponse["players"]>[number];
 type TrendSeries = NonNullable<SeriesComparisonResponse["trends"]["rankCumulativeAverage"]>[number];
 type Histogram = SeriesComparisonResponse["histograms"]["assets"];
@@ -16,7 +18,6 @@ type MatchPlayerPoint = NonNullable<SeriesComparisonResponse["matchPlayerPoints"
 type PlayerPerformanceProfiles = SeriesComparisonResponse["playerPerformanceProfiles"];
 
 const palette = ["#2563eb", "#dc2626", "#d9a300", "#16a34a", "#6f7d74", "#7b5aa6"];
-const lineDashPatterns = ["", "6 4", "2 4", "8 3 2 3"];
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
@@ -41,7 +42,6 @@ export function PlayerLegend({
             <svg aria-hidden="true" className="size-7" viewBox="0 0 28 12">
               <line
                 stroke={playerColor(index)}
-                strokeDasharray={lineDashPatterns[index % lineDashPatterns.length] || undefined}
                 strokeLinecap="round"
                 strokeWidth="2"
                 x1="2"
@@ -209,18 +209,10 @@ export function LineChart({
               )
               .join(" ");
             const color = playerColor(seriesIndex);
-            const strokeDasharray = lineDashPatterns[seriesIndex % lineDashPatterns.length];
             return (
               <g key={item.memberId}>
                 <title>{`${playerName ?? "プレイヤー"} / ${latestLabel}`}</title>
-                <path
-                  d={path}
-                  fill="none"
-                  stroke={color}
-                  strokeDasharray={strokeDasharray || undefined}
-                  strokeLinecap="round"
-                  strokeWidth="1.8"
-                />
+                <path d={path} fill="none" stroke={color} strokeLinecap="round" strokeWidth="1.8" />
                 {points.length <= 32
                   ? points.map((point) => (
                       <circle
@@ -390,13 +382,18 @@ export function headToHeadCellTone(
   borderAlpha: number;
   rgb: string;
 } {
-  if (matchCount != null && matchCount > 0 && matchCount <= 2) {
+  const bands = headToHeadBands(matchCount);
+  if (
+    matchCount != null &&
+    matchCount > 0 &&
+    matchCount <= SERIES_COMPARISON_THRESHOLDS.headToHead.referenceMaxMatchCount
+  ) {
     return { alpha: 0.08, borderAlpha: 0.2, rgb: "108, 117, 125" };
   }
   if (!isFiniteNumber(rate)) {
     return { alpha: 0, borderAlpha: 0.14, rgb: "111, 125, 116" };
   }
-  if (rate > 0.45 && rate < 0.55) {
+  if (rate > bands.slightDisadvantageTo && rate < bands.slightAdvantageFrom) {
     return { alpha: 0.08, borderAlpha: 0.2, rgb: "108, 117, 125" };
   }
   const distance = Math.abs(rate - 0.5);
@@ -407,7 +404,12 @@ export function headToHeadCellTone(
 }
 
 export function headToHeadToneLabel(rate: number | null | undefined, matchCount?: number): string {
-  if (matchCount != null && matchCount > 0 && matchCount <= 2) {
+  const bands = headToHeadBands(matchCount);
+  if (
+    matchCount != null &&
+    matchCount > 0 &&
+    matchCount <= SERIES_COMPARISON_THRESHOLDS.headToHead.referenceMaxMatchCount
+  ) {
     return "参考";
   }
   if (matchCount === 0) {
@@ -416,16 +418,16 @@ export function headToHeadToneLabel(rate: number | null | undefined, matchCount?
   if (!isFiniteNumber(rate)) {
     return "判定なし";
   }
-  if (rate >= 0.65) {
+  if (rate >= bands.strongAdvantageFrom) {
     return "優勢";
   }
-  if (rate >= 0.55) {
+  if (rate >= bands.slightAdvantageFrom) {
     return "やや優勢";
   }
-  if (rate <= 0.35) {
+  if (rate <= bands.strongDisadvantageTo) {
     return "劣勢";
   }
-  if (rate <= 0.45) {
+  if (rate <= bands.slightDisadvantageTo) {
     return "やや劣勢";
   }
   return "互角";

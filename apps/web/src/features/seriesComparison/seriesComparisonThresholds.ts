@@ -1,0 +1,47 @@
+export const SERIES_COMPARISON_THRESHOLDS = {
+  averageRankSpread: {
+    matureMatchCount: 50,
+    early: {
+      flatBelow: 0.2,
+      largeFrom: 0.6,
+      smallBelow: 0.35,
+    },
+    mature: {
+      flatBelow: 0.15,
+      largeFrom: 0.5,
+      smallBelow: 0.25,
+    },
+  },
+  headToHead: {
+    matureMatchCount: 50,
+    referenceMaxMatchCount: 2,
+    early: {
+      slightAdvantageFrom: 0.55,
+      slightDisadvantageTo: 0.45,
+      strongAdvantageFrom: 0.65,
+      strongDisadvantageTo: 0.35,
+    },
+    mature: {
+      slightAdvantageFrom: 0.54,
+      slightDisadvantageTo: 0.46,
+      strongAdvantageFrom: 0.6,
+      strongDisadvantageTo: 0.4,
+    },
+  },
+} as const;
+
+export function averageRankSpreadBands(matchCount: number | null | undefined) {
+  return isMatureSample(matchCount, SERIES_COMPARISON_THRESHOLDS.averageRankSpread.matureMatchCount)
+    ? SERIES_COMPARISON_THRESHOLDS.averageRankSpread.mature
+    : SERIES_COMPARISON_THRESHOLDS.averageRankSpread.early;
+}
+
+export function headToHeadBands(matchCount: number | null | undefined) {
+  return isMatureSample(matchCount, SERIES_COMPARISON_THRESHOLDS.headToHead.matureMatchCount)
+    ? SERIES_COMPARISON_THRESHOLDS.headToHead.mature
+    : SERIES_COMPARISON_THRESHOLDS.headToHead.early;
+}
+
+function isMatureSample(matchCount: number | null | undefined, threshold: number): boolean {
+  return typeof matchCount === "number" && Number.isFinite(matchCount) && matchCount >= threshold;
+}

@@ -5,6 +5,8 @@ import type {
   SeriesComparisonScopeKind,
 } from "@/shared/api/seriesComparison";
 
+import { averageRankSpreadBands } from "./seriesComparisonThresholds";
+
 export type SeriesComparisonUrlState = {
   gameTitleId?: string | undefined;
   scopeKind: SeriesComparisonScopeKind;
@@ -180,13 +182,14 @@ export function averageRankSpread(response: SeriesComparisonResponse): {
     return { label: "比較材料不足", spread: undefined, tone: "flat" };
   }
   const spread = Math.max(...values) - Math.min(...values);
-  if (spread < 0.2) {
+  const bands = averageRankSpreadBands(response.matchCount);
+  if (spread < bands.flatBelow) {
     return { label: "横一線", spread, tone: "flat" };
   }
-  if (spread < 0.35) {
+  if (spread < bands.smallBelow) {
     return { label: "小差", spread, tone: "small" };
   }
-  if (spread < 0.6) {
+  if (spread < bands.largeFrom) {
     return { label: "中差", spread, tone: "visible" };
   }
   return { label: "はっきり差", spread, tone: "large" };

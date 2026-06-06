@@ -162,6 +162,18 @@ describe("seriesComparisonViewModel", () => {
     expect(summary.spread).toBeCloseTo(0.35);
   });
 
+  it("uses tighter spread bands when the selected scope has enough matches", () => {
+    const summary = averageRankSpread(
+      responseWithRankAverages([2.367188, 2.445313, 2.554688, 2.632813], 128),
+    );
+
+    expect(summary).toMatchObject({
+      label: "中差",
+      tone: "visible",
+    });
+    expect(summary.spread).toBeCloseTo(0.265625);
+  });
+
   it("ignores null rank averages from optional API fields", () => {
     const response = responseWithRankAverages([1.2, 1.5]);
     const rank = response.metricsByPlayer?.[1]?.metrics.rank as { average: number | null };
@@ -241,13 +253,16 @@ describe("seriesComparisonViewModel", () => {
   });
 });
 
-function responseWithRankAverages(values: number[]): SeriesComparisonResponse {
+function responseWithRankAverages(
+  values: number[],
+  matchCount = values.length,
+): SeriesComparisonResponse {
   return {
     dataQuality: { items: [] },
     highlights: [],
     histograms: { assets: { bins: [], series: [] }, revenue: { bins: [], series: [] } },
     headToHead: { entries: [] },
-    matchCount: values.length,
+    matchCount,
     matchNoInEventBreakdown: [],
     matchPlayerPoints: [],
     matchTimeline: [],

@@ -341,7 +341,8 @@ function MatrixRow({
       {players.map((opponent) => {
         const entry = entryByPair.get(`${subject.memberId}:${opponent.memberId}`);
         const rate = entry?.betterRankRate;
-        const tone = headToHeadCellTone(rate);
+        const matchCount = entry?.matchCount;
+        const tone = headToHeadCellTone(rate, matchCount);
         const isSelf = subject.memberId === opponent.memberId;
         return (
           <div
@@ -364,7 +365,7 @@ function MatrixRow({
                   {formatPercent(rate)}
                 </div>
                 <div className="mt-0.5 text-[11px] font-medium text-[var(--color-text-secondary)]">
-                  {headToHeadToneLabel(rate)}
+                  {headToHeadToneLabel(rate, matchCount)}
                 </div>
                 <div className="mt-0.5 text-[11px] text-[var(--color-text-secondary)] tabular-nums">
                   {entry?.betterRankCount ?? 0}/{entry?.matchCount ?? 0}戦
@@ -381,13 +382,22 @@ function MatrixRow({
   );
 }
 
-function headToHeadCellTone(rate: number | null | undefined): {
+export function headToHeadCellTone(
+  rate: number | null | undefined,
+  matchCount?: number,
+): {
   alpha: number;
   borderAlpha: number;
   rgb: string;
 } {
+  if (matchCount != null && matchCount > 0 && matchCount <= 2) {
+    return { alpha: 0.08, borderAlpha: 0.2, rgb: "108, 117, 125" };
+  }
   if (!isFiniteNumber(rate)) {
     return { alpha: 0, borderAlpha: 0.14, rgb: "111, 125, 116" };
+  }
+  if (rate > 0.45 && rate < 0.55) {
+    return { alpha: 0.08, borderAlpha: 0.2, rgb: "108, 117, 125" };
   }
   const distance = Math.abs(rate - 0.5);
   const alpha = Math.min(0.46, distance < 0.001 ? 0.04 : 0.1 + distance * 0.92);
@@ -396,20 +406,26 @@ function headToHeadCellTone(rate: number | null | undefined): {
     : { alpha, borderAlpha: Math.min(0.66, alpha + 0.16), rgb: "220, 38, 38" };
 }
 
-function headToHeadToneLabel(rate: number | null | undefined): string {
+export function headToHeadToneLabel(rate: number | null | undefined, matchCount?: number): string {
+  if (matchCount != null && matchCount > 0 && matchCount <= 2) {
+    return "参考";
+  }
+  if (matchCount === 0) {
+    return "判定なし";
+  }
   if (!isFiniteNumber(rate)) {
     return "判定なし";
   }
-  if (rate >= 0.62) {
+  if (rate >= 0.65) {
     return "優勢";
   }
-  if (rate > 0.52) {
+  if (rate >= 0.55) {
     return "やや優勢";
   }
-  if (rate <= 0.38) {
+  if (rate <= 0.35) {
     return "劣勢";
   }
-  if (rate < 0.48) {
+  if (rate <= 0.45) {
     return "やや劣勢";
   }
   return "互角";

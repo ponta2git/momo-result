@@ -180,10 +180,10 @@ export function averageRankSpread(response: SeriesComparisonResponse): {
     return { label: "比較材料不足", spread: undefined, tone: "flat" };
   }
   const spread = Math.max(...values) - Math.min(...values);
-  if (spread < 0.15) {
+  if (spread < 0.2) {
     return { label: "横一線", spread, tone: "flat" };
   }
-  if (spread < 0.25) {
+  if (spread < 0.35) {
     return { label: "小差", spread, tone: "small" };
   }
   if (spread < 0.6) {

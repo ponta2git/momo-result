@@ -136,9 +136,12 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
       )
       assert(response.playerPerformanceProfiles.entries.forall(_.profileKind.nonEmpty))
       assert(response.playerPerformanceProfiles.entries.forall(_.strategyKind.nonEmpty))
+      val akaneProfile = response.playerPerformanceProfiles.entries.find(_.memberId == "akane")
+        .getOrElse(fail(s"akane profile missing: ${response.playerPerformanceProfiles.entries}"))
       val pontaProfile = response.playerPerformanceProfiles.entries.find(_.memberId == "ponta")
         .getOrElse(fail(s"ponta profile missing: ${response.playerPerformanceProfiles.entries}"))
       assertOptionDouble(pontaProfile.averageRevenueAssetRate, 0.2412698412)
+      assertEquals(akaneProfile.strategyKind, Some("property_focused"))
       assertEquals(pontaProfile.strategyKind, Some("card_focused"))
       val euProfile = response.playerPerformanceProfiles.entries.find(_.memberId == "eu")
         .getOrElse(fail(s"eu profile missing: ${response.playerPerformanceProfiles.entries}"))
@@ -168,7 +171,7 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
       ))
       assert(response.dataQuality.items.exists(item =>
         item.metricId == "revenueOutcome.topWinRate" && item.playerMemberId.contains("akane") &&
-          item.targetCount == 3 && item.status == "reference"
+          item.targetCount == 3 && item.status == "ok"
       ))
       assert(response.dataQuality.items.exists(item =>
         item.metricId == "destinationOutcome.lowDestinationPodiumRate" &&
@@ -215,6 +218,24 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
       assertEquals(response.metricsByPlayer.map(_.memberId), expected)
       assertEquals(response.trends.rankCumulativeAverage.map(_.memberId), expected)
       assertEquals(response.histograms.assets.series.map(_.memberId), expected)
+
+  test("classifies strategy kind only when revenue asset rate differs from the median threshold"):
+    val rows = List(
+      row(1, "low", "low", 1, 1, 1000, 290, destination = 0, ginji = 0),
+      row(1, "near_low", "near low", 2, 2, 1000, 305, destination = 0, ginji = 0),
+      row(1, "near_high", "near high", 3, 3, 1000, 310, destination = 0, ginji = 0),
+      row(1, "high", "high", 4, 4, 1000, 340, destination = 0, ginji = 0),
+    )
+    val usecase = GetSeriesComparison[IO](StaticReadModel(Some(resolvedScope), rows))
+
+    for result <- usecase.run(SeriesComparisonScope.Overall(titleId)) yield
+      val response = assertRight(result)
+      val profiles = response.playerPerformanceProfiles.entries
+        .map(entry => entry.memberId -> entry.strategyKind).toMap
+      assertEquals(profiles("low"), Some("card_focused"))
+      assertEquals(profiles("near_low"), Some("balanced"))
+      assertEquals(profiles("near_high"), Some("balanced"))
+      assertEquals(profiles("high"), Some("property_focused"))
 
   private def sampleRows: List[SeriesComparisonMatchPlayerRow] = List(
     row(1, "ponta", "ponta", 1, 1, 1000, 200, destination = 3, ginji = 1),

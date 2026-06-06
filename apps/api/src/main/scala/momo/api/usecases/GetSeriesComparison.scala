@@ -30,6 +30,8 @@ object GetSeriesComparison:
     new GetSeriesComparison(readModel)
 
 private object SeriesComparisonAggregation {
+  private val MinimumOkSampleSize = 3
+  private val StrategyKindMedianDeltaThreshold = 0.01
   private val Formatter = DateTimeFormatter.ISO_INSTANT
   private val DenominatorMetricIds = List(
     "rank.average",
@@ -557,7 +559,7 @@ private object SeriesComparisonAggregation {
       rankStandardDeviationMedian = riskMedian,
       averageRankScoreMedian = returnMedian,
       averageRevenueAssetRateMedian = revenueAssetRateMedian,
-      entries = entriesBase.zipWithIndex.map { case (entry, index) =>
+      entries = entriesBase.map { entry =>
         val kind = (entry.rankStandardDeviation, entry.averageRankScore, riskMedian, returnMedian)
           .mapN { (x, y, xMedian, yMedian) =>
             if x <= xMedian && y >= yMedian then "steady_leader"
@@ -572,7 +574,7 @@ private object SeriesComparisonAggregation {
           averageRankScore = entry.averageRankScore,
           averageRevenueAssetRate = entry.averageRevenueAssetRate,
           profileKind = kind,
-          strategyKind = strategyKind(entry, entriesBase, index),
+          strategyKind = strategyKind(entry, entriesBase),
           status = entry.status,
         )
       },
@@ -847,7 +849,7 @@ private object SeriesComparisonAggregation {
       metrics,
       _.ginji.resilienceRankAverage,
       _.ginji.encounterMatches,
-      requireTarget = 5,
+      requireTarget = MinimumOkSampleSize,
     ),
     highlightMax(
       "highlight.highRevenueNoWin",
@@ -856,7 +858,7 @@ private object SeriesComparisonAggregation {
       metrics,
       _.nonRevenue.highRevenueNoWinRate,
       _.nonRevenue.highRevenueTopCount,
-      requireTarget = 5,
+      requireTarget = MinimumOkSampleSize,
     ),
     highlightMax(
       "highlight.destinationCraft",
@@ -865,7 +867,7 @@ private object SeriesComparisonAggregation {
       metrics,
       _.destination.dependenceScore,
       m => math.min(m.destination.upperTargetCount, m.destination.lowerTargetCount),
-      requireTarget = 5,
+      requireTarget = MinimumOkSampleSize,
     ),
     highlightMax(
       "highlight.destinationIndependent",
@@ -874,7 +876,7 @@ private object SeriesComparisonAggregation {
       metrics,
       _.destination.conversionDelta,
       _.denominator,
-      requireTarget = 3,
+      requireTarget = MinimumOkSampleSize,
     ),
     highlightMax(
       "highlight.assetsPeak",
@@ -883,7 +885,7 @@ private object SeriesComparisonAggregation {
       metrics,
       _.assets.max.map(asDecimal),
       _.denominator,
-      requireTarget = 3,
+      requireTarget = MinimumOkSampleSize,
     ),
     highlightMax(
       "highlight.revenuePeak",
@@ -892,7 +894,7 @@ private object SeriesComparisonAggregation {
       metrics,
       _.revenue.max.map(asDecimal),
       _.denominator,
-      requireTarget = 3,
+      requireTarget = MinimumOkSampleSize,
     ),
     highlightMin(
       "highlight.stability",
@@ -901,7 +903,7 @@ private object SeriesComparisonAggregation {
       metrics,
       _.stability.rankStandardDeviation,
       _.denominator,
-      requireTarget = 3,
+      requireTarget = MinimumOkSampleSize,
     ),
   ).flatten
 
@@ -996,30 +998,29 @@ private object SeriesComparisonAggregation {
     row.totalAssetsManYen.value > 0
   )(asDecimal(row.revenueManYen.value) / asDecimal(row.totalAssetsManYen.value))
 
-  private def strategyKind(
-      entry: ProfileBase,
-      entries: List[ProfileBase],
-      fallbackIndex: Int,
-  ): Option[String] = entry.averageRevenueAssetRate.map { value =>
-    val ordered = entries.zipWithIndex.flatMap { case (item, index) =>
-      item.averageRevenueAssetRate.map(rate => (index, rate))
-    }.sortBy(_._2)
-    if ordered.size < 3 then "balanced"
-    else
-      val lowest = ordered.head
-      val highest = ordered.last
-      if fallbackIndex == highest._1 && value > lowest._2 then "property_focused"
-      else if fallbackIndex == lowest._1 && value < highest._2 then "card_focused"
+  private def strategyKind(entry: ProfileBase, entries: List[ProfileBase]): Option[String] =
+    val rates = entries.flatMap(_.averageRevenueAssetRate)
+    for
+      median <- medianDouble(rates)
+      value <- entry.averageRevenueAssetRate
+    yield {
+      if rates.size < 3 then "balanced"
+      else if value >= median + StrategyKindMedianDeltaThreshold then "property_focused"
+      else if value <= median - StrategyKindMedianDeltaThreshold then "card_focused"
       else "balanced"
-  }
+    }
 
   private def asDecimal(value: Int): Double = java.lang.Integer.valueOf(value).doubleValue()
 
   private def normalStatus(denominator: Int): String =
-    if denominator == 0 then "no_target" else if denominator < 3 then "reference" else "ok"
+    if denominator == 0 then "no_target"
+    else if denominator < MinimumOkSampleSize then "reference"
+    else "ok"
 
   private def conditionalStatus(targetCount: Int): String =
-    if targetCount == 0 then "no_target" else if targetCount < 5 then "reference" else "ok"
+    if targetCount == 0 then "no_target"
+    else if targetCount < MinimumOkSampleSize then "reference"
+    else "ok"
 
   private def metricHasTies(
       metricId: String,

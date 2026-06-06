@@ -303,7 +303,7 @@ function outcome({
       { count: third, rank: 3, rate: targetCount > 0 ? third / targetCount : 0 },
       { count: fourth, rank: 4, rate: targetCount > 0 ? fourth / targetCount : 0 },
     ],
-    status: targetCount < 5 ? "reference" : "ok",
+    status: targetCount <= 0 ? "no_target" : targetCount < 3 ? "reference" : "ok",
     targetCount,
     winCount: safeWinCount,
     winRate: targetCount > 0 ? safeWinCount / targetCount : 0,

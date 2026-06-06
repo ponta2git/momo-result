@@ -133,12 +133,16 @@ describe("seriesComparisonViewModel", () => {
       values: [1.2, 1.3],
     },
     {
-      expected: { label: "小差", spread: 0.19999999999999996, tone: "small" },
+      expected: { label: "横一線", spread: 0.19999999999999996, tone: "flat" },
       values: [1.2, 1.4],
     },
     {
-      expected: { label: "中差", spread: 0.30000000000000004, tone: "visible" },
+      expected: { label: "小差", spread: 0.30000000000000004, tone: "small" },
       values: [1.2, 1.5],
+    },
+    {
+      expected: { label: "中差", spread: 0.40000000000000013, tone: "visible" },
+      values: [1.2, 1.6],
     },
     {
       expected: { label: "はっきり差", spread: 1.2, tone: "large" },
@@ -148,14 +152,14 @@ describe("seriesComparisonViewModel", () => {
     expect(averageRankSpread(responseWithRankAverages(values))).toEqual(expected);
   });
 
-  it("uses the unrounded average rank spread for the 0.30 visible-difference boundary", () => {
-    const summary = averageRankSpread(responseWithRankAverages([2.3629, 2.6613]));
+  it("uses the unrounded average rank spread for the 0.35 visible-difference boundary", () => {
+    const summary = averageRankSpread(responseWithRankAverages([2.3629, 2.7129]));
 
     expect(summary).toMatchObject({
       label: "中差",
       tone: "visible",
     });
-    expect(summary.spread).toBeCloseTo(0.2984);
+    expect(summary.spread).toBeCloseTo(0.35);
   });
 
   it("ignores null rank averages from optional API fields", () => {

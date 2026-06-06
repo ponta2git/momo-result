@@ -20,6 +20,12 @@ describe("headToHeadToneLabel", () => {
     expect(headToHeadToneLabel(0.398438, 128)).toBe("劣勢");
   });
 
+  it("uses average rank diff when a mature pair rate is near even", () => {
+    expect(headToHeadToneLabel(0.484375, 128, -0.1875)).toBe("やや劣勢");
+    expect(headToHeadToneLabel(0.515625, 128, 0.1875)).toBe("やや優勢");
+    expect(headToHeadToneLabel(0.515625, 128, 0.078125)).toBe("互角");
+  });
+
   it("falls back labels by match count", () => {
     expect(headToHeadToneLabel(0.8, 2)).toBe("参考");
     expect(headToHeadToneLabel(0.5, 0)).toBe("判定なし");
@@ -43,5 +49,7 @@ describe("headToHeadCellTone", () => {
     expect(headToHeadCellTone(0.45).rgb).toBe("220, 38, 38");
     expect(headToHeadCellTone(0.35).rgb).toBe("220, 38, 38");
     expect(headToHeadCellTone(0.445313, 128).rgb).toBe("220, 38, 38");
+    expect(headToHeadCellTone(0.484375, 128, -0.1875).rgb).toBe("220, 38, 38");
+    expect(headToHeadCellTone(0.515625, 128, 0.1875).rgb).toBe("37, 99, 235");
   });
 });

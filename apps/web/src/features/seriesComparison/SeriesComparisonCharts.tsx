@@ -7,7 +7,11 @@ import {
 import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
 import { cn } from "@/shared/ui/cn";
 
-import { headToHeadBands, SERIES_COMPARISON_THRESHOLDS } from "./seriesComparisonThresholds";
+import {
+  headToHeadBands,
+  headToHeadRankDiffSignal,
+  SERIES_COMPARISON_THRESHOLDS,
+} from "./seriesComparisonThresholds";
 
 type Player = NonNullable<SeriesComparisonResponse["players"]>[number];
 type TrendSeries = NonNullable<SeriesComparisonResponse["trends"]["rankCumulativeAverage"]>[number];
@@ -334,7 +338,7 @@ function MatrixRow({
         const entry = entryByPair.get(`${subject.memberId}:${opponent.memberId}`);
         const rate = entry?.betterRankRate;
         const matchCount = entry?.matchCount;
-        const tone = headToHeadCellTone(rate, matchCount);
+        const tone = headToHeadCellTone(rate, matchCount, entry?.averageRankDiff);
         const isSelf = subject.memberId === opponent.memberId;
         return (
           <div
@@ -357,7 +361,7 @@ function MatrixRow({
                   {formatPercent(rate)}
                 </div>
                 <div className="mt-0.5 text-[11px] font-medium text-[var(--color-text-secondary)]">
-                  {headToHeadToneLabel(rate, matchCount)}
+                  {headToHeadToneLabel(rate, matchCount, entry?.averageRankDiff)}
                 </div>
                 <div className="mt-0.5 text-[11px] text-[var(--color-text-secondary)] tabular-nums">
                   {entry?.betterRankCount ?? 0}/{entry?.matchCount ?? 0}戦
@@ -377,6 +381,7 @@ function MatrixRow({
 export function headToHeadCellTone(
   rate: number | null | undefined,
   matchCount?: number,
+  averageRankDiff?: number | null,
 ): {
   alpha: number;
   borderAlpha: number;
@@ -394,6 +399,13 @@ export function headToHeadCellTone(
     return { alpha: 0, borderAlpha: 0.14, rgb: "111, 125, 116" };
   }
   if (rate > bands.slightDisadvantageTo && rate < bands.slightAdvantageFrom) {
+    const rankDiffSignal = headToHeadRankDiffSignal(averageRankDiff, matchCount);
+    if (rankDiffSignal === "strong_positive" || rankDiffSignal === "slight_positive") {
+      return directionalHeadToHeadTone("positive", averageRankDiff);
+    }
+    if (rankDiffSignal === "strong_negative" || rankDiffSignal === "slight_negative") {
+      return directionalHeadToHeadTone("negative", averageRankDiff);
+    }
     return { alpha: 0.08, borderAlpha: 0.2, rgb: "108, 117, 125" };
   }
   const distance = Math.abs(rate - 0.5);
@@ -403,7 +415,29 @@ export function headToHeadCellTone(
     : { alpha, borderAlpha: Math.min(0.66, alpha + 0.16), rgb: "220, 38, 38" };
 }
 
-export function headToHeadToneLabel(rate: number | null | undefined, matchCount?: number): string {
+function directionalHeadToHeadTone(
+  direction: "negative" | "positive",
+  averageRankDiff: number | null | undefined,
+): {
+  alpha: number;
+  borderAlpha: number;
+  rgb: string;
+} {
+  const distance = Math.min(
+    0.22,
+    Math.max(0.06, Math.abs(isFiniteNumber(averageRankDiff) ? averageRankDiff : 0) * 0.42),
+  );
+  const alpha = Math.min(0.46, 0.1 + distance * 0.92);
+  return direction === "positive"
+    ? { alpha, borderAlpha: Math.min(0.66, alpha + 0.16), rgb: "37, 99, 235" }
+    : { alpha, borderAlpha: Math.min(0.66, alpha + 0.16), rgb: "220, 38, 38" };
+}
+
+export function headToHeadToneLabel(
+  rate: number | null | undefined,
+  matchCount?: number,
+  averageRankDiff?: number | null,
+): string {
   const bands = headToHeadBands(matchCount);
   if (
     matchCount != null &&
@@ -428,6 +462,19 @@ export function headToHeadToneLabel(rate: number | null | undefined, matchCount?
     return "劣勢";
   }
   if (rate <= bands.slightDisadvantageTo) {
+    return "やや劣勢";
+  }
+  const rankDiffSignal = headToHeadRankDiffSignal(averageRankDiff, matchCount);
+  if (rankDiffSignal === "strong_positive") {
+    return "優勢";
+  }
+  if (rankDiffSignal === "slight_positive") {
+    return "やや優勢";
+  }
+  if (rankDiffSignal === "strong_negative") {
+    return "劣勢";
+  }
+  if (rankDiffSignal === "slight_negative") {
     return "やや劣勢";
   }
   return "互角";

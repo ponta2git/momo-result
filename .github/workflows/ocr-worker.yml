@@ -2,6 +2,12 @@ name: OCR worker
 
 on:
   workflow_call:
+    inputs:
+      report_coverage:
+        description: Run non-blocking coverage report steps.
+        required: false
+        type: boolean
+        default: true
   pull_request:
     paths:
       - "apps/ocr-worker/**"
@@ -74,6 +80,7 @@ jobs:
         timeout-minutes: 10
 
       - name: Coverage report
+        if: ${{ github.event_name != 'workflow_call' || inputs.report_coverage }}
         env:
           MOMO_DB_MIGRATIONS_DIR: ../../_deps/momo-db/drizzle
         run: >-
@@ -88,7 +95,7 @@ jobs:
         timeout-minutes: 10
 
       - name: Summarize coverage
-        if: always()
+        if: ${{ always() && (github.event_name != 'workflow_call' || inputs.report_coverage) }}
         run: |
           python3 ../../scripts/ci/write-coverage-summary.py ocr-worker \
             --root ../.. \
@@ -98,7 +105,7 @@ jobs:
         timeout-minutes: 1
 
       - name: Upload coverage report
-        if: always()
+        if: ${{ always() && (github.event_name != 'workflow_call' || inputs.report_coverage) }}
         uses: actions/upload-artifact@v7
         with:
           name: ocr-worker-coverage

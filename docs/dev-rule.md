@@ -90,6 +90,7 @@ pnpm web:dev
 | api test | `pnpm api:test` |
 | api coverage | `pnpm api:coverage` |
 | api coverage report | `pnpm api:coverage:report` |
+| GitHub Actions lint | `pnpm actionlint` |
 | public safety | `pnpm public:safety:check` |
 
 ### Web
@@ -173,6 +174,8 @@ uv run pytest -m integration
 | `.github/workflows/api.yml` | format、lint、clean compile、OpenAPI check、test、DB/Redis quality、coverage report |
 | `.github/workflows/ocr-worker.yml` | ruff format/check、mypy、pytest、coverage report、integration test |
 | `.github/workflows/deploy.yml` | runtime config check、momo-db migration適用、Docker build、image scan、runtime smoke、Playwright target smoke、Fly deploy |
+
+`deploy.yml` の production deploy 経路では、サブシステム quality gate、public safety、runtime image build / scan / smoke を可能な範囲で並列に進め、`release-ready` で合流させる。report-only coverage はPRレビュー補助の扱いとし、deploy 経由の release gate では待たない。
 
 CIの詳細なtimeout、サービス、artifact path は workflow を正とする。docs へ値を写す場合は、判断に必要な粒度だけに留める。
 

@@ -69,5 +69,5 @@
 
 - 実装が仕様を満たしている
 - `docs/post-mortem/lessons.md` を確認し、該当する教訓を検証している
-- クオリティゲート（format / lint / typecheck / test　/ 必要に応じてE2E）が通る
+- クオリティゲート（format / lint / typecheck / test　/ 必要に応じてE2E、actionlint）が通る
 - 主要な失敗ケースが考慮されている

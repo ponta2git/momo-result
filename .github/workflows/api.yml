@@ -2,6 +2,12 @@ name: API
 
 on:
   workflow_call:
+    inputs:
+      report_coverage:
+        description: Run non-blocking coverage report steps.
+        required: false
+        type: boolean
+        default: true
   pull_request:
     paths:
       - "apps/api/**"
@@ -73,12 +79,13 @@ jobs:
         run: sbt apiRedisQuality
 
       - name: Coverage report
+        if: ${{ github.event_name != 'workflow_call' || inputs.report_coverage }}
         timeout-minutes: 10
         run: sbt apiCoverageReportOnly
         continue-on-error: true
 
       - name: Summarize coverage
-        if: always()
+        if: ${{ always() && (github.event_name != 'workflow_call' || inputs.report_coverage) }}
         timeout-minutes: 1
         run: |
           python3 ../../scripts/ci/write-coverage-summary.py api \
@@ -88,7 +95,7 @@ jobs:
           cat ../../coverage-summary/api/summary.md >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Upload coverage report
-        if: always()
+        if: ${{ always() && (github.event_name != 'workflow_call' || inputs.report_coverage) }}
         uses: actions/upload-artifact@v7
         with:
           name: api-coverage

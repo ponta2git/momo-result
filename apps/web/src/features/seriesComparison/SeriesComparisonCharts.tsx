@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import type { CSSProperties, UIEvent } from "react";
+import type { CSSProperties } from "react";
 
 import {
   formatDecimal,
@@ -85,8 +85,17 @@ export function RecentRankStrip({
   players: Player[];
 }) {
   const entryByMember = new Map(entries.map((entry) => [entry.memberId, entry]));
-  const stripRefs = useRef(new Map<string, HTMLDivElement>());
-  const isSyncingRef = useRef(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const rows = players.map((player) => ({
+    entry: entryByMember.get(player.memberId),
+    player,
+  }));
+  const pointColumnCount = Math.max(0, ...rows.map((row) => row.entry?.points.length ?? 0));
+  const matchMarkerPoints =
+    rows.find((row) => (row.entry?.points.length ?? 0) === pointColumnCount)?.entry?.points ?? [];
+  const hasPoints = pointColumnCount > 0;
+  const hasReference = hasPoints && rows.some((row) => row.entry?.status === "reference");
+  const commonStatus = hasPoints ? (hasReference ? "参考" : undefined) : "対象なし";
   const latestPointKey = entries
     .map((entry) => {
       const latestPoint = entry.points.at(-1);
@@ -101,126 +110,133 @@ export function RecentRankStrip({
     .join("|");
 
   useEffect(() => {
-    for (const element of stripRefs.current.values()) {
+    const element = scrollContainerRef.current;
+    if (element) {
       element.scrollLeft = element.scrollWidth;
     }
   }, [latestPointKey]);
 
-  const registerStripRef = (memberId: string) => (element: HTMLDivElement | null) => {
-    if (element) {
-      stripRefs.current.set(memberId, element);
-      return;
-    }
-    stripRefs.current.delete(memberId);
-  };
-  const handleStripScroll = (event: UIEvent<HTMLDivElement>) => {
-    if (isSyncingRef.current) {
-      return;
-    }
-    isSyncingRef.current = true;
-    syncRecentRankStripScroll(Array.from(stripRefs.current.values()), event.currentTarget);
-    const resetSyncing = () => {
-      isSyncingRef.current = false;
-    };
-    if (typeof globalThis.requestAnimationFrame === "function") {
-      globalThis.requestAnimationFrame(resetSyncing);
-    } else {
-      globalThis.setTimeout(resetSyncing, 0);
-    }
-  };
-
   return (
     <div className="grid gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
-      {players.map((player, index) => {
-        const entry = entryByMember.get(player.memberId);
+      {commonStatus ? (
+        <div className="flex justify-end text-xs font-medium text-[var(--color-text-secondary)]">
+          {commonStatus}
+        </div>
+      ) : null}
+      {hasPoints ? (
+        <section
+          aria-label="直近順位ストリップ横スクロール"
+          className="w-full [scrollbar-width:thin] [scrollbar-color:var(--color-border)_transparent] [scrollbar-gutter:stable] overflow-x-auto pb-2 [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[var(--color-border)] [&::-webkit-scrollbar-track]:bg-transparent"
+          ref={scrollContainerRef}
+        >
+          <table
+            aria-label="直近順位ストリップ"
+            className="min-w-full border-separate border-spacing-x-1 border-spacing-y-2"
+            style={{ width: "max-content" }}
+          >
+            <thead>
+              <RecentRankStripMarkerRow
+                pointColumnCount={pointColumnCount}
+                points={matchMarkerPoints}
+              />
+            </thead>
+            <tbody>
+              {rows.map(({ entry, player }, index) => (
+                <RecentRankStripPlayerRow
+                  entry={entry}
+                  index={index}
+                  key={player.memberId}
+                  player={player}
+                  pointColumnCount={pointColumnCount}
+                />
+              ))}
+            </tbody>
+          </table>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+function RecentRankStripMarkerRow({
+  pointColumnCount,
+  points,
+}: {
+  pointColumnCount: number;
+  points: RecentRankStripEntry["points"];
+}) {
+  return (
+    <tr>
+      <th
+        className="sticky left-0 z-20 w-28 max-w-28 min-w-28 bg-[var(--color-surface-subtle)] pr-2"
+        scope="col"
+      >
+        <span className="sr-only">プレーヤー</span>
+      </th>
+      {Array.from({ length: pointColumnCount }, (_, pointIndex) => {
+        const point = points[pointIndex];
+        const showMarker =
+          point && shouldShowRankStripMatchMarker(point.matchIndex, pointIndex, points.length);
         return (
-          <RecentRankStripPlayerRow
-            entry={entry}
-            onScroll={handleStripScroll}
-            index={index}
-            key={player.memberId}
-            player={player}
-            refCallback={registerStripRef(player.memberId)}
-            showMatchMarkers={index === 0}
-          />
+          <th
+            className="w-9 min-w-9 px-0 text-center align-bottom"
+            key={point ? `${point.matchId}-${point.matchIndex}` : `marker-empty-${pointIndex}`}
+            scope="col"
+          >
+            {point ? (
+              <span
+                className={cn(
+                  "block h-3 whitespace-nowrap text-[0.625rem] font-medium leading-3 text-[var(--color-text-muted)] tabular-nums",
+                  !showMarker && "invisible",
+                )}
+              >
+                {point.matchIndex}戦
+              </span>
+            ) : (
+              <span aria-hidden="true" className="block h-3" />
+            )}
+          </th>
         );
       })}
-    </div>
+    </tr>
   );
 }
 
 function RecentRankStripPlayerRow({
   entry,
   index,
-  onScroll,
   player,
-  refCallback,
-  showMatchMarkers,
+  pointColumnCount,
 }: {
   entry: RecentRankStripEntry | undefined;
   index: number;
-  onScroll: (event: UIEvent<HTMLDivElement>) => void;
   player: Player;
-  refCallback: (element: HTMLDivElement | null) => void;
-  showMatchMarkers: boolean;
+  pointColumnCount: number;
 }) {
   const points = entry?.points ?? [];
-  const latestPoint = points.at(-1);
-  const windowSize = entry?.windowSize ?? 8;
-  const visibleWindowSize = Math.max(1, windowSize);
-  const stripMaxWidthRem = visibleWindowSize * 2.25 + Math.max(0, visibleWindowSize - 1) * 0.25;
-  const label =
-    points.length === 0
-      ? `${player.displayName}: 対象なし`
-      : `${player.displayName}: 全${points.length}戦、左から時系列、最新は${latestPoint?.matchIndex ?? "-"}戦目${latestPoint?.rank ?? "-"}位`;
 
   return (
-    <div className="grid gap-2 sm:grid-cols-[7rem_minmax(0,1fr)_7rem] sm:items-center">
-      <div
-        className="truncate text-sm font-semibold text-[var(--color-text-primary)]"
+    <tr>
+      <th
+        className="sticky left-0 z-10 w-28 max-w-28 min-w-28 bg-[var(--color-surface-subtle)] py-1 pr-2 text-left align-middle"
+        scope="row"
         style={{ borderLeftColor: playerColor(index), borderLeftWidth: 3, paddingLeft: 8 }}
       >
-        {player.displayName}
-      </div>
-      <div
-        aria-label={label}
-        className={cn(
-          "flex w-full [scrollbar-width:none] gap-1 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden",
-          showMatchMarkers ? "min-h-12 items-end" : "min-h-8 items-center",
-        )}
-        onScroll={onScroll}
-        ref={refCallback}
-        role="img"
-        style={{ maxWidth: `${stripMaxWidthRem}rem` }}
-      >
-        {points.length === 0 ? (
-          <span className="self-center text-sm text-[var(--color-text-secondary)]">対象なし</span>
-        ) : (
-          points.map((point, pointIndex) => {
-            const showMarker = shouldShowRankStripMatchMarker(
-              point.matchIndex,
-              pointIndex,
-              points.length,
-            );
-            return (
-              <span
-                className={cn(
-                  "grid w-9 shrink-0 justify-items-center",
-                  showMatchMarkers ? "grid-rows-[0.75rem_2rem] gap-1" : "grid-rows-[2rem]",
-                )}
-                key={`${point.matchId}-${point.matchIndex}`}
-              >
-                {showMatchMarkers ? (
-                  <span
-                    className={cn(
-                      "h-3 whitespace-nowrap text-[0.625rem] font-medium leading-3 text-[var(--color-text-muted)] tabular-nums",
-                      !showMarker && "invisible",
-                    )}
-                  >
-                    {point.matchIndex}戦
-                  </span>
-                ) : null}
+        <span className="block truncate text-sm font-semibold text-[var(--color-text-primary)]">
+          {player.displayName}
+        </span>
+      </th>
+      {Array.from({ length: pointColumnCount }, (_, pointIndex) => {
+        const point = points[pointIndex];
+        return (
+          <td
+            className="h-8 w-9 min-w-9 px-0 py-1 align-middle"
+            key={point ? `${point.matchId}-${point.matchIndex}` : `empty-${pointIndex}`}
+          >
+            {point ? (
+              <span className="grid w-9 grid-rows-[2rem] justify-items-center">
                 <span
+                  aria-label={`${player.displayName} ${point.matchIndex}戦目 ${point.rank}位`}
                   className="grid size-8 place-items-center rounded-[var(--radius-xs)] border text-xs font-semibold text-white tabular-nums shadow-sm"
                   style={{
                     backgroundColor: rankColor(point.rank),
@@ -231,16 +247,13 @@ function RecentRankStripPlayerRow({
                   {point.rank}
                 </span>
               </span>
-            );
-          })
-        )}
-      </div>
-      <div className="text-xs text-[var(--color-text-secondary)] tabular-nums sm:text-right">
-        直近{entry?.targetCount ?? 0}/{windowSize}戦
-        {entry?.totalCount ? `・全${entry.totalCount}戦` : ""}
-        {entry?.status === "reference" ? "・参考" : ""}
-      </div>
-    </div>
+            ) : (
+              <span aria-hidden="true" className="block size-8" />
+            )}
+          </td>
+        );
+      })}
+    </tr>
   );
 }
 
@@ -254,17 +267,6 @@ export function shouldShowRankStripMatchMarker(
     pointIndex === pointCount - 1 ||
     (Number.isInteger(matchIndex) && matchIndex % 5 === 0)
   );
-}
-
-export function syncRecentRankStripScroll(
-  elements: HTMLDivElement[],
-  sourceElement: HTMLDivElement,
-): void {
-  for (const element of elements) {
-    if (element !== sourceElement && element.scrollLeft !== sourceElement.scrollLeft) {
-      element.scrollLeft = sourceElement.scrollLeft;
-    }
-  }
 }
 
 export function RankDistributionStackedBars({

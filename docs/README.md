@@ -17,7 +17,7 @@
 | OCR worker | `docs/architecture.md` の OCR Worker | `docs/redis-streams-ocr-contract.md`, `docs/test-rule.md` |
 | テスト / coverage / CI | `docs/test-rule.md` | `docs/test-architecture.md`, `docs/dev-rule.md` |
 | ローカル起動 / コマンド / Git | `docs/dev-rule.md` | `docs/test-rule.md` |
-| 戦績比較ページ | `docs/requirements/series-comparison.md` | `docs/architecture.md`, `docs/test-rule.md` |
+| 戦績比較ページ | `docs/requirements/series-comparison.md` | 振り返り/次回プレイブックを触る場合は `docs/requirements/series-review-playbook.md`、必要に応じて `docs/architecture.md`, `docs/test-rule.md` |
 | docs 変更 | この文書 | 変更対象の正本、`docs/post-mortem/lessons.md` |
 
 長い要求仕様は、まず目次と該当章だけ読む。既に読んだ文書は再読せず、ファイル名と要点を再利用する。
@@ -30,6 +30,7 @@
 | 要求正本 | `docs/requirements/base.md` | 業務要件、MVP範囲、CSV/TSV列順 |
 | 要求正本 | `docs/requirements/system-design.md` | 技術構成、非機能、運用方針の高レベル要求 |
 | 要求正本 | `docs/requirements/series-comparison.md` | 戦績比較ページの要求、指標、API方針 |
+| 要求正本 | `docs/requirements/series-review-playbook.md` | 戦績比較ページ内の振り返り、開催回レビュー、次回プレイブック要求 |
 | 実装正本 | `docs/architecture.md` | API / web / OCR worker の構造、依存方向、実装規約 |
 | ドメイン正本 | `docs/domain-rule.md` | 用語、状態遷移、不変条件、認証主体と試合参加者の区別 |
 | DB正本 | `docs/db-rule.md` | 共有DB所有権、migration前提、consumer contract |

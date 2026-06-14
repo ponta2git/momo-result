@@ -87,6 +87,8 @@ final class InMemorySeriesComparisonReadModel[F[_]: Monad](
           scopeKind = "season",
           scopeId = Some(s.id.value),
           scopeName = s.name,
+          seasonMasterId = Some(s.id),
+          seasonName = Some(s.name),
         )
       }
     case SeriesComparisonScope.Map(gameTitleId, mapMasterId) =>
@@ -101,6 +103,30 @@ final class InMemorySeriesComparisonReadModel[F[_]: Monad](
           scopeKind = "map",
           scopeId = Some(m.id.value),
           scopeName = m.name,
+          mapMasterId = Some(m.id),
+          mapName = Some(m.name),
+        )
+      }
+    case SeriesComparisonScope.SeasonMap(gameTitleId, seasonMasterId, mapMasterId) => (
+        gameTitles.find(gameTitleId),
+        seasonMasters.find(seasonMasterId),
+        mapMasters.find(mapMasterId),
+      ).mapN { (title, season, map) =>
+        for
+          gt <- title
+          s <- season if s.gameTitleId == gameTitleId
+          m <- map if m.gameTitleId == gameTitleId
+        yield SeriesComparisonResolvedScope(
+          gameTitleId = gt.id,
+          gameTitleName = gt.name,
+          layoutFamily = gt.layoutFamily,
+          scopeKind = "season_map",
+          scopeId = None,
+          scopeName = s"${s.name} / ${m.name}",
+          seasonMasterId = Some(s.id),
+          seasonName = Some(s.name),
+          mapMasterId = Some(m.id),
+          mapName = Some(m.name),
         )
       }
 
@@ -110,20 +136,13 @@ final class InMemorySeriesComparisonReadModel[F[_]: Monad](
     for
       records <- matches.list(MatchesRepository.ListFilter(
         gameTitleId = Some(scope.gameTitleId),
-        seasonMasterId =
-          if scope.scopeKind == "season" then
-            scope.scopeId.flatMap(id => SeasonMasterId.fromString(id).toOption)
-          else None,
+        seasonMasterId = scope.seasonMasterId,
         limit = None,
       ))
       membersList <- members.list
     yield
       val memberNames = membersList.map(m => m.id -> m.displayName).toMap
-      val scopedRecords = scope.scopeKind match
-        case "map" =>
-          val mapId = scope.scopeId.flatMap(id => MapMasterId.fromString(id).toOption)
-          records.filter(r => mapId.contains(r.mapMasterId))
-        case _ => records
+      val scopedRecords = scope.mapMasterId.fold(records)(id => records.filter(_.mapMasterId == id))
       scopedRecords.sortBy(r =>
         (r.playedAt.toEpochMilli, r.heldEventId.value, r.matchNoInEvent.value, r.id.value)
       ).flatMap { record =>

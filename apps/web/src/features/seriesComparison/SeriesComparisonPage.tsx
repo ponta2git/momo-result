@@ -78,7 +78,6 @@ import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { Tooltip } from "@/shared/ui/feedback/Tooltip";
-import { SegmentedControl } from "@/shared/ui/forms/SegmentedControl";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
@@ -2051,6 +2050,20 @@ export function SeriesComparisonPage() {
     label: `${series.name} (${series.confirmedMatchCount}戦)`,
     value: series.gameTitleId,
   }));
+  const seasonOptions = [
+    { label: "全シーズン", value: "" },
+    ...controller.seasonOptions.map((option) => ({
+      label: option.name,
+      value: option.id,
+    })),
+  ];
+  const mapOptions = [
+    { label: "全マップ", value: "" },
+    ...controller.mapOptions.map((option) => ({
+      label: option.name,
+      value: option.id,
+    })),
+  ];
 
   return (
     <PageFrame className="gap-5" width="wide">
@@ -2086,32 +2099,19 @@ export function SeriesComparisonPage() {
         />
       ) : seriesOptions.length > 0 ? (
         <>
-          <section className="grid gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 md:grid-cols-[auto_minmax(12rem,1fr)_minmax(12rem,1fr)] md:items-end">
-            <div className="md:pb-1">
-              <SegmentedControl
-                label="表示範囲"
-                options={controller.scopeKinds}
-                value={controller.state.scopeKind}
-                onValueChange={(value) =>
-                  controller.updateScopeKind(value as "overall" | "season" | "map")
-                }
-              />
-            </div>
-            {controller.state.scopeKind === "overall" ? (
-              <div className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-2 text-sm text-[var(--color-text-secondary)] md:mb-1">
-                全シーズン・全マップ
-              </div>
-            ) : (
-              <SelectField
-                label={controller.state.scopeKind === "season" ? "シーズン" : "マップ"}
-                options={controller.scopeOptions.map((option) => ({
-                  label: `${option.name} (${option.confirmedMatchCount}戦)`,
-                  value: option.id,
-                }))}
-                value={controller.state.scopeId ?? ""}
-                onChange={(event) => controller.updateScopeId(event.currentTarget.value)}
-              />
-            )}
+          <section className="grid gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 md:grid-cols-[minmax(12rem,1fr)_minmax(12rem,1fr)_minmax(12rem,1fr)] md:items-end">
+            <SelectField
+              label="シーズン"
+              options={seasonOptions}
+              value={controller.state.seasonMasterId ?? ""}
+              onChange={(event) => controller.updateSeasonMasterId(event.currentTarget.value)}
+            />
+            <SelectField
+              label="マップ"
+              options={mapOptions}
+              value={controller.state.mapMasterId ?? ""}
+              onChange={(event) => controller.updateMapMasterId(event.currentTarget.value)}
+            />
             <SelectField
               label="対象作品"
               options={seriesOptions}

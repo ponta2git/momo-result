@@ -35,7 +35,7 @@ export const seriesComparisonHandlers = [
   ),
 ];
 
-function makeSeriesComparisonResponse(): SeriesComparisonResponse {
+export function makeSeriesComparisonResponse(): SeriesComparisonResponse {
   const averages = [1.2, 1.5, 2.4, 3.1];
   return {
     dataQuality: {
@@ -256,7 +256,7 @@ function makeSeriesComparisonResponse(): SeriesComparisonResponse {
       entries: players.map((player, index) => cardShopDestinationEntry(player.memberId, index)),
     },
     players,
-    schemaVersion: 6,
+    schemaVersion: 7,
     recentFormByPlayer: players.map((player, index) => ({
       averageRank: (averages[index] ?? 2.5) + 0.15,
       lowerHalfStreak: index === 3 ? 2 : 0,

@@ -26,13 +26,17 @@ object AnalyticsModule:
       }
     },
     SeriesComparisonEndpoints.aggregate.serverLogic {
-      case (gameTitleId, scopeKind, scopeId, accountHeader) => security
+      case (gameTitleId, scopeKind, scopeId, seasonMasterId, mapMasterId, accountHeader) => security
           .authorizeRead(accountHeader) { member =>
             ReadRateLimit
               .enforce(readRateLimiter, member.accountId.value, HttpOperation.GetSeriesComparison) {
-                security.decode(
-                  SeriesComparisonCodec.parseAggregateQuery(gameTitleId, scopeKind, scopeId)
-                )(scope => security.respond(getComparison.run(scope))(identity))
+                security.decode(SeriesComparisonCodec.parseAggregateQuery(
+                  gameTitleId,
+                  scopeKind,
+                  scopeId,
+                  seasonMasterId,
+                  mapMasterId,
+                ))(scope => security.respond(getComparison.run(scope))(identity))
               }
           }
     },

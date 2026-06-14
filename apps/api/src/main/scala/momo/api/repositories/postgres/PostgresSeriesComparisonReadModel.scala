@@ -141,6 +141,8 @@ object PostgresSeriesComparison:
             scopeKind = "season",
             scopeId = Some(seasonMasterId.value),
             scopeName = name,
+            seasonMasterId = Some(seasonMasterId),
+            seasonName = Some(name),
           )
         })
       case SeriesComparisonScope.Map(gameTitleId, mapMasterId) => sql"""
@@ -156,8 +158,33 @@ object PostgresSeriesComparison:
             scopeKind = "map",
             scopeId = Some(mapMasterId.value),
             scopeName = name,
+            mapMasterId = Some(mapMasterId),
+            mapName = Some(name),
           )
         })
+      case SeriesComparisonScope.SeasonMap(gameTitleId, seasonMasterId, mapMasterId) => sql"""
+          SELECT gt.name, gt.layout_family, s.name, mm.name
+          FROM game_titles gt
+          JOIN season_masters s ON s.game_title_id = gt.id
+          JOIN map_masters mm ON mm.game_title_id = gt.id
+          WHERE gt.id = $gameTitleId
+            AND s.id = $seasonMasterId
+            AND mm.id = $mapMasterId
+        """.query[(String, String, String, String)].option
+          .map(_.map { case (gameTitleName, layout, seasonName, mapName) =>
+            SeriesComparisonResolvedScope(
+              gameTitleId = gameTitleId,
+              gameTitleName = gameTitleName,
+              layoutFamily = layout,
+              scopeKind = "season_map",
+              scopeId = None,
+              scopeName = s"$seasonName / $mapName",
+              seasonMasterId = Some(seasonMasterId),
+              seasonName = Some(seasonName),
+              mapMasterId = Some(mapMasterId),
+              mapName = Some(mapName),
+            )
+          })
 
     override def loadRows(
         scope: SeriesComparisonResolvedScope
@@ -168,10 +195,10 @@ object PostgresSeriesComparison:
       val cardStationId = IncidentKindMapping.masterId(momo.api.domain.IncidentKind.CardStation)
       val cardShopId = IncidentKindMapping.masterId(momo.api.domain.IncidentKind.CardShop)
       val ginjiId = IncidentKindMapping.masterId(momo.api.domain.IncidentKind.SuriNoGinji)
-      val scopedCondition = scope.scopeKind match
-        case "season" => scope.scopeId.fold(Fragment.empty)(id => fr"AND m.season_master_id = $id")
-        case "map" => scope.scopeId.fold(Fragment.empty)(id => fr"AND m.map_master_id = $id")
-        case _ => Fragment.empty
+      val scopedCondition = List(
+        scope.seasonMasterId.map(id => fr"AND m.season_master_id = $id"),
+        scope.mapMasterId.map(id => fr"AND m.map_master_id = $id"),
+      ).flatten.foldLeft(Fragment.empty)(_ ++ _)
       val query =
         fr"""
           SELECT

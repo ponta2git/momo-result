@@ -72,5 +72,5 @@ export const matchKeys = {
 export const seriesComparisonKeys = {
   all: () => ["series-comparison"] as const,
   options: () => ["series-comparison", "options"] as const,
-  aggregate: (params: unknown) => ["series-comparison", "aggregate", "v6", params] as const,
+  aggregate: (params: unknown) => ["series-comparison", "aggregate", "v7", params] as const,
 };

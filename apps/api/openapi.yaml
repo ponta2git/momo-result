@@ -1919,6 +1919,22 @@
             }
           },
           {
+            "name" : "seasonMasterId",
+            "in" : "query",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "mapMasterId",
+            "in" : "query",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
             "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
@@ -6105,6 +6121,18 @@
             "type" : "string"
           },
           "scopeName" : {
+            "type" : "string"
+          },
+          "seasonMasterId" : {
+            "type" : "string"
+          },
+          "seasonName" : {
+            "type" : "string"
+          },
+          "mapMasterId" : {
+            "type" : "string"
+          },
+          "mapName" : {
             "type" : "string"
           }
         }

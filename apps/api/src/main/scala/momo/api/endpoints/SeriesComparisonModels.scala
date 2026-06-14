@@ -63,6 +63,10 @@ final case class SeriesComparisonScopeResponse(
     scopeKind: String,
     scopeId: Option[String],
     scopeName: String,
+    seasonMasterId: Option[String] = None,
+    seasonName: Option[String] = None,
+    mapMasterId: Option[String] = None,
+    mapName: Option[String] = None,
 ) derives Codec.AsObject
 object SeriesComparisonScopeResponse:
   given Schema[SeriesComparisonScopeResponse] = Schema.derived

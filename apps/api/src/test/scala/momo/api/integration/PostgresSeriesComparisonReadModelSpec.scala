@@ -13,7 +13,10 @@ final class PostgresSeriesComparisonReadModelSpec extends IntegrationSuite:
   private val now = Instant.parse("2026-05-20T12:00:00Z")
   private val gameTitleId = GameTitleId.unsafeFromString("title_series_comparison")
   private val mapMasterId = MapMasterId.unsafeFromString("map_series_comparison")
+  private val otherMapMasterId = MapMasterId.unsafeFromString("map_series_comparison_other")
   private val seasonMasterId = SeasonMasterId.unsafeFromString("season_series_comparison")
+  private val otherSeasonMasterId = SeasonMasterId
+    .unsafeFromString("season_series_comparison_other")
   private val heldEventId = HeldEventId.unsafeFromString("held_series_comparison")
 
   private def gameTitles = new PostgresGameTitlesRepository[IO](transactor)
@@ -27,6 +30,10 @@ final class PostgresSeriesComparisonReadModelSpec extends IntegrationSuite:
     for
       _ <- seedPrereqs
       _ <- matches.create(sampleMatch("match_series_comparison_1", 1))
+      _ <- matches
+        .create(sampleMatch("match_series_comparison_2", 2, seasonMasterId, otherMapMasterId))
+      _ <- matches
+        .create(sampleMatch("match_series_comparison_3", 3, otherSeasonMasterId, mapMasterId))
       options <- readModel.options
       resolvedOverall <- readModel.resolveScope(SeriesComparisonScope.Overall(gameTitleId))
       rows <- resolvedOverall match
@@ -41,20 +48,36 @@ final class PostgresSeriesComparisonReadModelSpec extends IntegrationSuite:
       mapRows <- resolvedMap match
         case Some(scope) => readModel.loadRows(scope)
         case None => IO(fail("map scope was not resolved"))
+      resolvedSeasonMap <- readModel
+        .resolveScope(SeriesComparisonScope.SeasonMap(gameTitleId, seasonMasterId, mapMasterId))
+      seasonMapRows <- resolvedSeasonMap match
+        case Some(scope) => readModel.loadRows(scope)
+        case None => IO(fail("season map scope was not resolved"))
     yield
       val series = options.series.find(_.gameTitleId == gameTitleId)
         .getOrElse(fail(s"series option missing: ${options.series}"))
       assertEquals(options.latestConfirmedGameTitleId, Some(gameTitleId))
-      assertEquals(series.confirmedMatchCount, 1)
-      assertEquals(series.seasons.map(_.confirmedMatchCount), List(1))
-      assertEquals(series.maps.map(_.confirmedMatchCount), List(1))
+      assertEquals(series.confirmedMatchCount, 3)
+      assertEquals(series.seasons.map(_.confirmedMatchCount), List(2, 1))
+      assertEquals(series.maps.map(_.confirmedMatchCount), List(2, 1))
 
-      assertEquals(rows.size, 4)
-      assertEquals(seasonRows.map(_.memberId), rows.map(_.memberId))
-      assertEquals(mapRows.map(_.memberId), rows.map(_.memberId))
+      assertEquals(rows.size, 12)
+      assertEquals(
+        seasonRows.map(_.matchId).distinct.map(_.value),
+        List("match_series_comparison_1", "match_series_comparison_2"),
+      )
+      assertEquals(
+        mapRows.map(_.matchId).distinct.map(_.value),
+        List("match_series_comparison_1", "match_series_comparison_3"),
+      )
+      assertEquals(
+        seasonMapRows.map(_.matchId).distinct.map(_.value),
+        List("match_series_comparison_1"),
+      )
+      assertEquals(seasonMapRows.map(_.memberId), rows.take(4).map(_.memberId))
 
-      val ponta = rows.find(_.memberId == MemberId.unsafeFromString("member_ponta"))
-        .getOrElse(fail(s"ponta row missing: $rows"))
+      val ponta = seasonMapRows.find(_.memberId == MemberId.unsafeFromString("member_ponta"))
+        .getOrElse(fail(s"ponta row missing: $seasonMapRows"))
       assertEquals(ponta.rank.value, 1)
       assertEquals(ponta.totalAssetsManYen.value, 10000)
       assertEquals(ponta.revenueManYen.value, 2500)
@@ -65,19 +88,29 @@ final class PostgresSeriesComparisonReadModelSpec extends IntegrationSuite:
     for
       _ <- gameTitles.create(GameTitle(gameTitleId, "Series Comparison", "momotetsu2", 1, now))
       _ <- mapMasters.create(MapMaster(mapMasterId, gameTitleId, "East", 1, now))
+      _ <- mapMasters.create(MapMaster(otherMapMasterId, gameTitleId, "West", 2, now))
       _ <- seasonMasters.create(SeasonMaster(seasonMasterId, gameTitleId, "Spring", 1, now))
+      _ <- seasonMasters.create(SeasonMaster(otherSeasonMasterId, gameTitleId, "Summer", 2, now))
       _ <- heldEvents.create(HeldEvent(heldEventId, now))
     yield ()
 
-  private def sampleMatch(id: String, matchNo: Int): MatchRecord = MatchRecord(
+  private def sampleMatch(id: String, matchNo: Int): MatchRecord =
+    sampleMatch(id, matchNo, seasonMasterId, mapMasterId)
+
+  private def sampleMatch(
+      id: String,
+      matchNo: Int,
+      seasonId: SeasonMasterId,
+      mapId: MapMasterId,
+  ): MatchRecord = MatchRecord(
     id = MatchId.unsafeFromString(id),
     heldEventId = heldEventId,
     matchNoInEvent = MatchNoInEvent.unsafeFromInt(matchNo),
     gameTitleId = gameTitleId,
     layoutFamily = "momotetsu2",
-    seasonMasterId = seasonMasterId,
+    seasonMasterId = seasonId,
     ownerMemberId = MemberId.unsafeFromString("member_ponta"),
-    mapMasterId = mapMasterId,
+    mapMasterId = mapId,
     playedAt = now,
     totalAssetsDraftId = None,
     revenueDraftId = None,

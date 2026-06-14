@@ -224,7 +224,7 @@ function responseWithRankAverages(
     playOrderBaselines: [],
     players: values.map(([memberId, displayName]) => ({ displayName, memberId })),
     recentFormByPlayer: [],
-    schemaVersion: 6,
+    schemaVersion: 7,
     scope: {
       gameTitleId: "title",
       gameTitleName: "桃鉄",

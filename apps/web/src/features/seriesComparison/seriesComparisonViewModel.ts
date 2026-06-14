@@ -2,25 +2,18 @@ import type {
   SeriesComparisonOptionsResponse,
   SeriesComparisonQuery,
   SeriesComparisonResponse,
-  SeriesComparisonScopeKind,
 } from "@/shared/api/seriesComparison";
 
 import { averageRankSpreadBands } from "./seriesComparisonThresholds";
 
 export type SeriesComparisonUrlState = {
   gameTitleId?: string | undefined;
-  scopeKind: SeriesComparisonScopeKind;
-  scopeId?: string | undefined;
+  mapMasterId?: string | undefined;
+  seasonMasterId?: string | undefined;
   view?: SeriesComparisonViewId | undefined;
 };
 
 export type SeriesComparisonViewId = "context" | "drivers" | "flow" | "overview";
-
-export type SeriesComparisonScopeChoice = {
-  disabled?: boolean;
-  label: string;
-  value: SeriesComparisonScopeKind;
-};
 
 type PlayerMetrics = NonNullable<SeriesComparisonResponse["metricsByPlayer"]>[number]["metrics"];
 type PlayOrderBreakdown = NonNullable<PlayerMetrics["playOrder"]["breakdown"]>[number];
@@ -47,7 +40,7 @@ export type ProfileKind = NonNullable<
   >[number]["profileKind"]
 >;
 
-const scopeKinds = new Set(["overall", "season", "map"]);
+const legacyScopeKinds = new Set(["overall", "season", "map"]);
 const viewIds = new Set(["overview", "flow", "drivers", "context"]);
 export const defaultSeriesComparisonView: SeriesComparisonViewId = "overview";
 
@@ -62,16 +55,27 @@ function normalizeView(value: string | undefined): SeriesComparisonViewId {
 export function parseSeriesComparisonSearchParams(
   params: URLSearchParams,
 ): SeriesComparisonUrlState {
+  const gameTitleId = params.get("gameTitleId")?.trim() || undefined;
+  const seasonMasterId = params.get("seasonMasterId")?.trim() || undefined;
+  const mapMasterId = params.get("mapMasterId")?.trim() || undefined;
+  const view = normalizeView(params.get("view")?.trim());
+  if (seasonMasterId || mapMasterId) {
+    return {
+      gameTitleId,
+      mapMasterId,
+      seasonMasterId,
+      view,
+    };
+  }
+
   const rawKind = params.get("scopeKind")?.trim();
-  const scopeKind = scopeKinds.has(rawKind ?? "")
-    ? (rawKind as SeriesComparisonScopeKind)
-    : "overall";
+  const scopeKind = legacyScopeKinds.has(rawKind ?? "") ? rawKind : "overall";
   const scopeId = params.get("scopeId")?.trim() || undefined;
   return {
-    gameTitleId: params.get("gameTitleId")?.trim() || undefined,
-    scopeKind,
-    scopeId: scopeKind === "overall" ? undefined : scopeId,
-    view: normalizeView(params.get("view")?.trim()),
+    gameTitleId,
+    mapMasterId: scopeKind === "map" ? scopeId : undefined,
+    seasonMasterId: scopeKind === "season" ? scopeId : undefined,
+    view,
   };
 }
 
@@ -83,9 +87,11 @@ export function buildSeriesComparisonSearchParams(
   if (state.gameTitleId) {
     params.set("gameTitleId", state.gameTitleId);
   }
-  params.set("scopeKind", state.scopeKind);
-  if (state.scopeKind !== "overall" && state.scopeId) {
-    params.set("scopeId", state.scopeId);
+  if (state.seasonMasterId) {
+    params.set("seasonMasterId", state.seasonMasterId);
+  }
+  if (state.mapMasterId) {
+    params.set("mapMasterId", state.mapMasterId);
   }
   if (view !== defaultSeriesComparisonView) {
     params.set("view", view);
@@ -106,30 +112,17 @@ export function normalizeSeriesComparisonSelection(
     series[0];
 
   if (!selectedSeries) {
-    return { gameTitleId: undefined, scopeKind: "overall", scopeId: undefined, view };
+    return { gameTitleId: undefined, mapMasterId: undefined, seasonMasterId: undefined, view };
   }
 
-  const validKind = availableScopeKinds(selectedSeries).some(
-    (choice) => !choice.disabled && choice.value === state.scopeKind,
-  )
-    ? state.scopeKind
-    : "overall";
-  if (validKind === "overall") {
-    return {
-      gameTitleId: selectedSeries.gameTitleId,
-      scopeKind: "overall",
-      scopeId: undefined,
-      view,
-    };
-  }
-
-  const candidates =
-    validKind === "season" ? (selectedSeries.seasons ?? []) : (selectedSeries.maps ?? []);
-  const selectedScope = candidates.find((item) => item.id === state.scopeId) ?? candidates[0];
+  const selectedSeason = (selectedSeries.seasons ?? []).find(
+    (item) => item.id === state.seasonMasterId,
+  );
+  const selectedMap = (selectedSeries.maps ?? []).find((item) => item.id === state.mapMasterId);
   return {
     gameTitleId: selectedSeries.gameTitleId,
-    scopeKind: validKind,
-    scopeId: selectedScope?.id,
+    mapMasterId: selectedMap?.id,
+    seasonMasterId: selectedSeason?.id,
     view,
   };
 }
@@ -140,13 +133,10 @@ export function seriesComparisonQueryFromState(
   if (!state.gameTitleId) {
     return undefined;
   }
-  if (state.scopeKind !== "overall" && !state.scopeId) {
-    return undefined;
-  }
   return {
     gameTitleId: state.gameTitleId,
-    scopeKind: state.scopeKind,
-    scopeId: state.scopeKind === "overall" ? undefined : state.scopeId,
+    mapMasterId: state.mapMasterId,
+    seasonMasterId: state.seasonMasterId,
   };
 }
 
@@ -157,24 +147,6 @@ export function findSelectedSeries(
   return (options?.series ?? []).find((series) => series.gameTitleId === gameTitleId);
 }
 
-export function availableScopeKinds(
-  series: NonNullable<SeriesComparisonOptionsResponse["series"]>[number],
-): SeriesComparisonScopeChoice[] {
-  return [
-    { label: "総合", value: "overall" },
-    {
-      disabled: (series.seasons ?? []).length === 0,
-      label: "シーズン",
-      value: "season",
-    },
-    {
-      disabled: (series.maps ?? []).length === 0,
-      label: "マップ",
-      value: "map",
-    },
-  ];
-}
-
 export function scopeNameForState(
   options: SeriesComparisonOptionsResponse | undefined,
   state: SeriesComparisonUrlState,
@@ -183,12 +155,15 @@ export function scopeNameForState(
   if (!selectedSeries) {
     return "";
   }
-  if (state.scopeKind === "overall") {
+  if (!state.seasonMasterId && !state.mapMasterId) {
     return "総合";
   }
-  const candidates =
-    state.scopeKind === "season" ? (selectedSeries.seasons ?? []) : (selectedSeries.maps ?? []);
-  return candidates.find((item) => item.id === state.scopeId)?.name ?? "";
+  const seasonName =
+    (selectedSeries.seasons ?? []).find((item) => item.id === state.seasonMasterId)?.name ??
+    "全シーズン";
+  const mapName =
+    (selectedSeries.maps ?? []).find((item) => item.id === state.mapMasterId)?.name ?? "全マップ";
+  return `${seasonName} / ${mapName}`;
 }
 
 export function averageRankSpread(response: SeriesComparisonResponse): {

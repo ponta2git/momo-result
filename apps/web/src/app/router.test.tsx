@@ -11,6 +11,7 @@ import { matchKeys } from "@/shared/api/queryKeys";
 import { createDeferred } from "@/test/deferred";
 import { makeFourPlayerResults, makeMatchDetail } from "@/test/factories";
 import { setupMsw } from "@/test/msw/lifecycle";
+import { makeSeriesComparisonResponse } from "@/test/msw/seriesComparisonHandlers";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
 
@@ -261,6 +262,35 @@ describe("app routing", () => {
     expect(screen.queryByRole("heading", { name: "収益と目的地の効き方" })).not.toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/analytics/series");
     expect(screen.getByRole("link", { name: "戦績比較" })).toBeInTheDocument();
+  });
+
+  it("requests standings comparison with season and map filters together", async () => {
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    const aggregateSearches: string[] = [];
+    server.use(
+      http.get("/api/analytics/series-comparison", ({ request }) => {
+        aggregateSearches.push(new URL(request.url).search);
+        return HttpResponse.json(makeSeriesComparisonResponse());
+      }),
+    );
+    const { router } = renderApp("/analytics/series");
+
+    expect(await screen.findByRole("heading", { name: "戦績比較" })).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "シーズン" }), "season_current");
+    await user.selectOptions(screen.getByRole("combobox", { name: "マップ" }), "map_east");
+
+    await waitFor(() => {
+      expect(router.state.location.search).toContain("seasonMasterId=season_current");
+      expect(router.state.location.search).toContain("mapMasterId=map_east");
+      expect(
+        aggregateSearches.some(
+          (search) =>
+            search.includes("seasonMasterId=season_current") &&
+            search.includes("mapMasterId=map_east"),
+        ),
+      ).toBe(true);
+    });
   });
 
   it("does not show an empty standings state when comparison options fail to load", async () => {

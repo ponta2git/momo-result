@@ -8,21 +8,35 @@ enum SeriesComparisonScope derives CanEqual:
   case Overall(gameTitleId: GameTitleId)
   case Season(gameTitleId: GameTitleId, seasonMasterId: SeasonMasterId)
   case Map(gameTitleId: GameTitleId, mapMasterId: MapMasterId)
+  case SeasonMap(gameTitleId: GameTitleId, seasonMasterId: SeasonMasterId, mapMasterId: MapMasterId)
 
   def selectedGameTitleId: GameTitleId = this match
     case Overall(id) => id
     case Season(id, _) => id
     case Map(id, _) => id
+    case SeasonMap(id, _, _) => id
 
   def kindWire: String = this match
     case Overall(_) => "overall"
     case Season(_, _) => "season"
     case Map(_, _) => "map"
+    case SeasonMap(_, _, _) => "season_map"
 
   def scopeIdValue: Option[String] = this match
     case Overall(_) => None
     case Season(_, id) => Some(id.value)
     case Map(_, id) => Some(id.value)
+    case SeasonMap(_, seasonId, mapId) => Some(s"${seasonId.value}:${mapId.value}")
+
+  def selectedSeasonMasterId: Option[SeasonMasterId] = this match
+    case Season(_, id) => Some(id)
+    case SeasonMap(_, id, _) => Some(id)
+    case Overall(_) | Map(_, _) => None
+
+  def selectedMapMasterId: Option[MapMasterId] = this match
+    case Map(_, id) => Some(id)
+    case SeasonMap(_, _, id) => Some(id)
+    case Overall(_) | Season(_, _) => None
 
 final case class SeriesComparisonResolvedScope(
     gameTitleId: GameTitleId,
@@ -31,6 +45,10 @@ final case class SeriesComparisonResolvedScope(
     scopeKind: String,
     scopeId: Option[String],
     scopeName: String,
+    seasonMasterId: Option[SeasonMasterId] = None,
+    seasonName: Option[String] = None,
+    mapMasterId: Option[MapMasterId] = None,
+    mapName: Option[String] = None,
 )
 
 final case class SeriesComparisonOptionsData(

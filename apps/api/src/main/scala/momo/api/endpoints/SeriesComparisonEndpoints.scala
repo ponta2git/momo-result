@@ -16,7 +16,8 @@ object SeriesComparisonEndpoints:
       .out(jsonBody[SeriesComparisonOptionsResponse])
       .tag("analytics")
 
-  type AggregateInput = (String, Option[String], Option[String], Option[String])
+  type AggregateInput =
+    (String, Option[String], Option[String], Option[String], Option[String], Option[String])
 
   val aggregate: PublicEndpoint[AggregateInput, ProblemResponse, SeriesComparisonResponse, Any] =
     endpoint
@@ -25,6 +26,8 @@ object SeriesComparisonEndpoints:
       .in(query[String]("gameTitleId"))
       .in(query[Option[String]]("scopeKind"))
       .in(query[Option[String]]("scopeId"))
+      .in(query[Option[String]]("seasonMasterId"))
+      .in(query[Option[String]]("mapMasterId"))
       .in(CommonEndpoint.accountHeader)
       .errorOut(CommonEndpoint.errorOut)
       .out(jsonBody[SeriesComparisonResponse])

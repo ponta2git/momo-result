@@ -166,7 +166,7 @@ private object SeriesComparisonAggregation {
     val quality =
       dataQuality(playerOrder, rowsByPlayer, orderedRows, revenueRanks, destinationRanks)
     SeriesComparisonResponse(
-      schemaVersion = 6,
+      schemaVersion = 7,
       scope = SeriesComparisonScopeResponse(
         gameTitleId = scope.gameTitleId.value,
         gameTitleName = scope.gameTitleName,
@@ -174,6 +174,10 @@ private object SeriesComparisonAggregation {
         scopeKind = scope.scopeKind,
         scopeId = scope.scopeId,
         scopeName = scope.scopeName,
+        seasonMasterId = scope.seasonMasterId.map(_.value),
+        seasonName = scope.seasonName,
+        mapMasterId = scope.mapMasterId.map(_.value),
+        mapName = scope.mapName,
       ),
       matchCount = matchCount,
       players = players,

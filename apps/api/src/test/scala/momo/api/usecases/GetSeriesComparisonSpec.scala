@@ -35,7 +35,7 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
     for result <- usecase.run(SeriesComparisonScope.Overall(titleId)) yield
       val response = assertRight(result)
       assertEquals(response.matchCount, 3)
-      assertEquals(response.schemaVersion, 6)
+      assertEquals(response.schemaVersion, 7)
       assertEquals(response.players.map(_.memberId), List("ponta", "akane", "otaka", "eu"))
 
       val metrics = response.metricsByPlayer.map(entry => entry.memberId -> entry.metrics).toMap

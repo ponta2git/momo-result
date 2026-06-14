@@ -3,7 +3,6 @@ import { useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import {
-  availableScopeKinds,
   buildSeriesComparisonSearchParams,
   defaultSeriesComparisonView,
   findSelectedSeries,
@@ -16,7 +15,6 @@ import type { SeriesComparisonViewId } from "@/features/seriesComparison/seriesC
 import { shouldShowBlockingQueryError, shouldShowQueryError } from "@/shared/api/queryErrorState";
 import { seriesComparisonKeys } from "@/shared/api/queryKeys";
 import { getSeriesComparison, getSeriesComparisonOptions } from "@/shared/api/seriesComparison";
-import type { SeriesComparisonScopeKind } from "@/shared/api/seriesComparison";
 
 export function useSeriesComparisonPageController() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -58,13 +56,8 @@ export function useSeriesComparisonPageController() {
   });
 
   const selectedSeries = findSelectedSeries(optionsQuery.data, normalizedState.gameTitleId);
-  const scopeKinds = selectedSeries ? availableScopeKinds(selectedSeries) : [];
-  const scopeOptions =
-    normalizedState.scopeKind === "season"
-      ? (selectedSeries?.seasons ?? [])
-      : normalizedState.scopeKind === "map"
-        ? (selectedSeries?.maps ?? [])
-        : [];
+  const seasonOptions = selectedSeries?.seasons ?? [];
+  const mapOptions = selectedSeries?.maps ?? [];
 
   const updateState = (next: typeof normalizedState): void => {
     setSearchParams(buildSeriesComparisonSearchParams(next), { replace: true });
@@ -85,33 +78,29 @@ export function useSeriesComparisonPageController() {
       void optionsQuery.refetch();
       void aggregateQuery.refetch();
     },
-    scopeKinds,
+    mapOptions,
     scopeName: scopeNameForState(optionsQuery.data, normalizedState),
-    scopeOptions,
+    seasonOptions,
     selectedSeries,
     state: normalizedState,
     updateGameTitle: (gameTitleId: string) =>
       updateState({
         gameTitleId,
-        scopeKind: "overall",
+        mapMasterId: undefined,
+        seasonMasterId: undefined,
         view: normalizedState.view ?? defaultSeriesComparisonView,
       }),
-    updateScopeId: (scopeId: string) => updateState({ ...normalizedState, scopeId }),
-    updateScopeKind: (scopeKind: SeriesComparisonScopeKind) => {
-      const series = findSelectedSeries(optionsQuery.data, normalizedState.gameTitleId);
-      const firstScopeId =
-        scopeKind === "season"
-          ? series?.seasons?.[0]?.id
-          : scopeKind === "map"
-            ? series?.maps?.[0]?.id
-            : undefined;
+    updateMapMasterId: (mapMasterId: string) =>
       updateState({
-        gameTitleId: normalizedState.gameTitleId,
-        scopeKind,
-        scopeId: scopeKind === "overall" ? undefined : firstScopeId,
+        ...normalizedState,
+        mapMasterId: mapMasterId || undefined,
+      }),
+    updateSeasonMasterId: (seasonMasterId: string) =>
+      updateState({
+        ...normalizedState,
+        seasonMasterId: seasonMasterId || undefined,
         view: normalizedState.view ?? defaultSeriesComparisonView,
-      });
-    },
+      }),
     updateView: (view: SeriesComparisonViewId) => updateState({ ...normalizedState, view }),
   };
 }

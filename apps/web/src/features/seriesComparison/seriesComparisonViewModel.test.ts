@@ -53,63 +53,63 @@ describe("seriesComparisonViewModel", () => {
   };
 
   it("defaults to the latest confirmed series and overall scope", () => {
-    expect(normalizeSeriesComparisonSelection(options, { scopeKind: "overall" })).toEqual({
+    expect(normalizeSeriesComparisonSelection(options, {})).toEqual({
       gameTitleId: "title-2",
-      scopeId: undefined,
-      scopeKind: "overall",
+      mapMasterId: undefined,
+      seasonMasterId: undefined,
       view: "overview",
     });
   });
 
-  it("keeps a valid scoped deep link and builds an aggregate query", () => {
+  it("keeps valid season and map filters and builds an aggregate query", () => {
     const state = normalizeSeriesComparisonSelection(options, {
       gameTitleId: "title-1",
-      scopeId: "map-1",
-      scopeKind: "map",
+      mapMasterId: "map-1",
+      seasonMasterId: "season-1",
     });
 
     expect(seriesComparisonQueryFromState(state)).toEqual({
       gameTitleId: "title-1",
-      scopeId: "map-1",
-      scopeKind: "map",
+      mapMasterId: "map-1",
+      seasonMasterId: "season-1",
     });
     expect(buildSeriesComparisonSearchParams(state).toString()).toBe(
-      "gameTitleId=title-1&scopeKind=map&scopeId=map-1",
+      "gameTitleId=title-1&seasonMasterId=season-1&mapMasterId=map-1",
     );
   });
 
   it("keeps the selected analysis view in the URL without adding it to the aggregate query", () => {
     const state = normalizeSeriesComparisonSelection(options, {
       gameTitleId: "title-1",
-      scopeKind: "overall",
       view: "drivers",
     });
 
     expect(seriesComparisonQueryFromState(state)).toEqual({
       gameTitleId: "title-1",
-      scopeKind: "overall",
-      scopeId: undefined,
+      mapMasterId: undefined,
+      seasonMasterId: undefined,
     });
     expect(buildSeriesComparisonSearchParams(state).toString()).toBe(
-      "gameTitleId=title-1&scopeKind=overall&view=drivers",
+      "gameTitleId=title-1&view=drivers",
     );
   });
 
-  it("normalizes missing scoped ids to the first selectable scope", () => {
+  it("normalizes invalid filters to the overall scope without selecting a sibling option", () => {
     expect(
       normalizeSeriesComparisonSelection(options, {
         gameTitleId: "title-2",
-        scopeKind: "season",
+        mapMasterId: "map-missing",
+        seasonMasterId: "season-missing",
       }),
     ).toEqual({
       gameTitleId: "title-2",
-      scopeId: "season-2",
-      scopeKind: "season",
+      mapMasterId: undefined,
+      seasonMasterId: undefined,
       view: "overview",
     });
   });
 
-  it("falls back to overall when a scoped deep link has no selectable scopes", () => {
+  it("falls back to overall when a filtered deep link has no selectable scopes", () => {
     const noSeasonOptions: SeriesComparisonOptionsResponse = {
       ...options,
       latestConfirmedGameTitleId: "title-1",
@@ -125,26 +125,45 @@ describe("seriesComparisonViewModel", () => {
     expect(
       normalizeSeriesComparisonSelection(noSeasonOptions, {
         gameTitleId: "title-1",
-        scopeId: "season-missing",
-        scopeKind: "season",
+        mapMasterId: "map-missing",
+        seasonMasterId: "season-missing",
       }),
     ).toEqual({
       gameTitleId: "title-1",
-      scopeId: undefined,
-      scopeKind: "overall",
+      mapMasterId: undefined,
+      seasonMasterId: undefined,
       view: "overview",
     });
   });
 
-  it("parses unknown scope kind as overall and removes scope id", () => {
+  it("parses legacy scoped links and rewrites them to the new query shape", () => {
+    const params = new URLSearchParams("gameTitleId=title-1&scopeKind=map&scopeId=map-1");
+
+    const state = normalizeSeriesComparisonSelection(
+      options,
+      parseSeriesComparisonSearchParams(params),
+    );
+
+    expect(state).toEqual({
+      gameTitleId: "title-1",
+      mapMasterId: "map-1",
+      seasonMasterId: undefined,
+      view: "overview",
+    });
+    expect(buildSeriesComparisonSearchParams(state).toString()).toBe(
+      "gameTitleId=title-1&mapMasterId=map-1",
+    );
+  });
+
+  it("parses unknown legacy scope kind as overall and removes scope id", () => {
     const params = new URLSearchParams(
       "gameTitleId=title-1&scopeKind=bad&scopeId=season-1&view=bad",
     );
 
     expect(parseSeriesComparisonSearchParams(params)).toEqual({
       gameTitleId: "title-1",
-      scopeId: undefined,
-      scopeKind: "overall",
+      mapMasterId: undefined,
+      seasonMasterId: undefined,
       view: "overview",
     });
   });
@@ -308,7 +327,7 @@ function responseWithRankAverages(
     playOrderBaselines: [],
     players: values.map((_, index) => ({ displayName: `P${index}`, memberId: `p${index}` })),
     recentFormByPlayer: [],
-    schemaVersion: 6,
+    schemaVersion: 7,
     scope: {
       gameTitleId: "title",
       gameTitleName: "桃鉄",

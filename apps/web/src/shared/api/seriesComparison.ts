@@ -5,12 +5,11 @@ import type { components } from "@/shared/api/generated";
 export type SeriesComparisonOptionsResponse =
   components["schemas"]["SeriesComparisonOptionsResponse"];
 export type SeriesComparisonResponse = components["schemas"]["SeriesComparisonResponse"];
-export type SeriesComparisonScopeKind = "overall" | "season" | "map";
 
 export type SeriesComparisonQuery = {
   gameTitleId: string;
-  scopeKind: SeriesComparisonScopeKind;
-  scopeId?: string | undefined;
+  mapMasterId?: string | undefined;
+  seasonMasterId?: string | undefined;
 };
 
 export async function getSeriesComparisonOptions(
@@ -25,10 +24,12 @@ export async function getSeriesComparisonOptions(
 export function buildSeriesComparisonPath(query: SeriesComparisonQuery): string {
   const params = new URLSearchParams({
     gameTitleId: query.gameTitleId,
-    scopeKind: query.scopeKind,
   });
-  if (query.scopeKind !== "overall" && query.scopeId) {
-    params.set("scopeId", query.scopeId);
+  if (query.seasonMasterId) {
+    params.set("seasonMasterId", query.seasonMasterId);
+  }
+  if (query.mapMasterId) {
+    params.set("mapMasterId", query.mapMasterId);
   }
   return `/api/analytics/series-comparison?${params.toString()}`;
 }

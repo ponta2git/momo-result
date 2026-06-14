@@ -160,7 +160,7 @@ lazy val root = (project in file("."))
       )
     },
     dependencyOverrides ++= {
-      val nettyVersion = "4.1.133.Final"
+      val nettyVersion = "4.1.135.Final"
 
       Seq(
         "io.netty" % "netty-buffer" % nettyVersion,

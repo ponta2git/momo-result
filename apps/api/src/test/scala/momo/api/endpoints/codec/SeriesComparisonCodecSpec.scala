@@ -52,6 +52,16 @@ final class SeriesComparisonCodecSpec extends MomoCatsEffectSuite:
         assertEquals(mapMasterId.value, "map_japan")
       case other => fail(s"expected combined scope, got $other")
 
+  test("parses review query as the selected analysis scope"):
+    val parsed = SeriesComparisonCodec
+      .parseReviewQuery("title_momotetsu_2", Some("season_2026_spring"), None)
+
+    parsed match
+      case Right(SeriesComparisonScope.Season(gameTitleId, seasonMasterId)) =>
+        assertEquals(gameTitleId.value, "title_momotetsu_2")
+        assertEquals(seasonMasterId.value, "season_2026_spring")
+      case other => fail(s"expected review season scope, got $other")
+
   test("rejects mixed legacy and filter scope query"):
     val mixed = SeriesComparisonCodec.parseAggregateQuery(
       "title_momotetsu_2",

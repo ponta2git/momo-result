@@ -17,6 +17,16 @@ object SeriesComparisonCodec:
       parsed <- parseScope(parsedGameTitleId, scopeKind, scopeId, seasonMasterId, mapMasterId)
     yield parsed
 
+  def parseReviewQuery(
+      gameTitleId: String,
+      seasonMasterId: Option[String],
+      mapMasterId: Option[String],
+  ): Either[AppError, SeriesComparisonScope] =
+    for
+      parsedGameTitleId <- BoundaryId.required("gameTitleId", gameTitleId)(GameTitleId.fromString)
+      scope <- parseFilterScope(parsedGameTitleId, seasonMasterId, mapMasterId)
+    yield scope
+
   private def parseScope(
       gameTitleId: GameTitleId,
       scopeKind: Option[String],

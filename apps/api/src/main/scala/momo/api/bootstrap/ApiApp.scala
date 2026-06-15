@@ -627,6 +627,7 @@ object ApiApp:
     val listMatches = ListMatches[F](matchList)
     val getSeriesComparisonOptions = GetSeriesComparisonOptions[F](seriesComparison)
     val getSeriesComparison = GetSeriesComparison[F](seriesComparison)
+    val getSeriesComparisonReview = GetSeriesComparisonReview[F](seriesComparison)
     val exportMatches = ExportMatches[F](
       matches,
       members,
@@ -690,6 +691,7 @@ object ApiApp:
           exportMatches = exportMatches,
           getSeriesComparisonOptions = getSeriesComparisonOptions,
           getSeriesComparison = getSeriesComparison,
+          getSeriesComparisonReview = getSeriesComparisonReview,
           listMatches = listMatches,
           getMatch = getMatch,
           updateMatch = updateMatch,

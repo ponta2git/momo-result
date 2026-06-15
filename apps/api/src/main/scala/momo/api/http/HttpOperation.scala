@@ -31,6 +31,7 @@ object HttpOperation:
 
   val GetSeriesComparisonOptions = "GET /api/analytics/series-comparison/options"
   val GetSeriesComparison = "GET /api/analytics/series-comparison"
+  val GetSeriesComparisonReview = "GET /api/analytics/series-comparison/review"
 
   val CreateGameTitle = "POST /api/game-titles"
   val UpdateGameTitle = "PATCH /api/game-titles"

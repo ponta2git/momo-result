@@ -1977,6 +1977,80 @@
         }
       }
     },
+    "/api/analytics/series-comparison/review" : {
+      "get" : {
+        "tags" : [
+          "analytics"
+        ],
+        "operationId" : "getApiAnalyticsSeries-comparisonReview",
+        "parameters" : [
+          {
+            "name" : "gameTitleId",
+            "in" : "query",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "seasonMasterId",
+            "in" : "query",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "mapMasterId",
+            "in" : "query",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SeriesComparisonReviewResponse"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: query parameter gameTitleId",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/game-titles" : {
       "get" : {
         "tags" : [
@@ -5788,6 +5862,49 @@
           }
         }
       },
+      "SeriesComparisonCommonPlaybookTopicResponse" : {
+        "title" : "SeriesComparisonCommonPlaybookTopicResponse",
+        "type" : "object",
+        "required" : [
+          "id",
+          "category",
+          "title",
+          "summary",
+          "actionHint",
+          "affectedPlayerCount",
+          "status"
+        ],
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "category" : {
+            "type" : "string"
+          },
+          "title" : {
+            "type" : "string"
+          },
+          "summary" : {
+            "type" : "string"
+          },
+          "actionHint" : {
+            "type" : "string"
+          },
+          "affectedPlayerCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "memberDisplayNames" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "status" : {
+            "type" : "string"
+          }
+        }
+      },
       "SeriesComparisonDataQualityResponse" : {
         "title" : "SeriesComparisonDataQualityResponse",
         "type" : "object",
@@ -5877,6 +5994,123 @@
           }
         }
       },
+      "SeriesComparisonPlaybookAnchorTargetResponse" : {
+        "title" : "SeriesComparisonPlaybookAnchorTargetResponse",
+        "type" : "object",
+        "required" : [
+          "view",
+          "sectionId",
+          "label"
+        ],
+        "properties" : {
+          "view" : {
+            "type" : "string"
+          },
+          "sectionId" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          }
+        }
+      },
+      "SeriesComparisonPlaybookCardResponse" : {
+        "title" : "SeriesComparisonPlaybookCardResponse",
+        "type" : "object",
+        "required" : [
+          "id",
+          "classification",
+          "category",
+          "actionHypothesis",
+          "triggerCondition",
+          "recommendedAction",
+          "avoidAction",
+          "dataReason",
+          "postMatchCheck",
+          "targetCount",
+          "status",
+          "anchorTarget",
+          "actionAdviceScore"
+        ],
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "classification" : {
+            "type" : "string"
+          },
+          "category" : {
+            "type" : "string"
+          },
+          "actionHypothesis" : {
+            "type" : "string"
+          },
+          "triggerCondition" : {
+            "type" : "string"
+          },
+          "recommendedAction" : {
+            "type" : "string"
+          },
+          "avoidAction" : {
+            "type" : "string"
+          },
+          "dataReason" : {
+            "type" : "string"
+          },
+          "postMatchCheck" : {
+            "type" : "string"
+          },
+          "targetCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "evidence" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/SeriesComparisonPlaybookEvidenceResponse"
+            }
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "anchorTarget" : {
+            "$ref" : "#/components/schemas/SeriesComparisonPlaybookAnchorTargetResponse"
+          },
+          "actionAdviceScore" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        }
+      },
+      "SeriesComparisonPlaybookEvidenceResponse" : {
+        "title" : "SeriesComparisonPlaybookEvidenceResponse",
+        "type" : "object",
+        "required" : [
+          "metricId",
+          "label",
+          "value",
+          "targetCount",
+          "status"
+        ],
+        "properties" : {
+          "metricId" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "value" : {
+            "type" : "string"
+          },
+          "targetCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        }
+      },
       "SeriesComparisonPlayerMetricsEntry" : {
         "title" : "SeriesComparisonPlayerMetricsEntry",
         "type" : "object",
@@ -5951,6 +6185,28 @@
           },
           "stability" : {
             "$ref" : "#/components/schemas/StabilityMetricsResponse"
+          }
+        }
+      },
+      "SeriesComparisonPlayerPlaybookResponse" : {
+        "title" : "SeriesComparisonPlayerPlaybookResponse",
+        "type" : "object",
+        "required" : [
+          "memberId",
+          "memberDisplayName"
+        ],
+        "properties" : {
+          "memberId" : {
+            "type" : "string"
+          },
+          "memberDisplayName" : {
+            "type" : "string"
+          },
+          "cards" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/SeriesComparisonPlaybookCardResponse"
+            }
           }
         }
       },
@@ -6061,6 +6317,68 @@
             "type" : "array",
             "items" : {
               "$ref" : "#/components/schemas/SeriesComparisonHighlightResponse"
+            }
+          },
+          "dataQuality" : {
+            "$ref" : "#/components/schemas/SeriesComparisonDataQualityResponse"
+          }
+        }
+      },
+      "SeriesComparisonReviewBaselineResponse" : {
+        "title" : "SeriesComparisonReviewBaselineResponse",
+        "type" : "object",
+        "required" : [
+          "scope",
+          "matchCount",
+          "playerCount",
+          "status"
+        ],
+        "properties" : {
+          "scope" : {
+            "$ref" : "#/components/schemas/SeriesComparisonScopeResponse"
+          },
+          "matchCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "playerCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "supplementalScopeName" : {
+            "type" : "string"
+          }
+        }
+      },
+      "SeriesComparisonReviewResponse" : {
+        "title" : "SeriesComparisonReviewResponse",
+        "type" : "object",
+        "required" : [
+          "schemaVersion",
+          "baseline",
+          "dataQuality"
+        ],
+        "properties" : {
+          "schemaVersion" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "baseline" : {
+            "$ref" : "#/components/schemas/SeriesComparisonReviewBaselineResponse"
+          },
+          "commonPlaybookTopics" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/SeriesComparisonCommonPlaybookTopicResponse"
+            }
+          },
+          "playbookByPlayer" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/SeriesComparisonPlayerPlaybookResponse"
             }
           },
           "dataQuality" : {

@@ -10,11 +10,16 @@ import {
   parseSeriesComparisonSearchParams,
   scopeNameForState,
   seriesComparisonQueryFromState,
+  seriesComparisonReviewQueryFromState,
 } from "@/features/seriesComparison/seriesComparisonViewModel";
 import type { SeriesComparisonViewId } from "@/features/seriesComparison/seriesComparisonViewModel";
 import { shouldShowBlockingQueryError, shouldShowQueryError } from "@/shared/api/queryErrorState";
 import { seriesComparisonKeys } from "@/shared/api/queryKeys";
-import { getSeriesComparison, getSeriesComparisonOptions } from "@/shared/api/seriesComparison";
+import {
+  getSeriesComparison,
+  getSeriesComparisonOptions,
+  getSeriesComparisonReview,
+} from "@/shared/api/seriesComparison";
 
 export function useSeriesComparisonPageController() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -31,6 +36,10 @@ export function useSeriesComparisonPageController() {
   );
   const aggregateQueryParams = useMemo(
     () => seriesComparisonQueryFromState(normalizedState),
+    [normalizedState],
+  );
+  const reviewQueryParams = useMemo(
+    () => seriesComparisonReviewQueryFromState(normalizedState),
     [normalizedState],
   );
 
@@ -54,13 +63,25 @@ export function useSeriesComparisonPageController() {
     },
     queryKey: seriesComparisonKeys.aggregate(aggregateQueryParams),
   });
+  const reviewEnabled =
+    reviewQueryParams !== undefined && normalizedState.view === defaultSeriesComparisonView;
+  const reviewQuery = useQuery({
+    enabled: reviewEnabled,
+    queryFn: ({ signal }) => {
+      if (!reviewQueryParams) {
+        throw new Error("series comparison review query is not ready");
+      }
+      return getSeriesComparisonReview(reviewQueryParams, { signal });
+    },
+    queryKey: seriesComparisonKeys.review(reviewQueryParams),
+  });
 
   const selectedSeries = findSelectedSeries(optionsQuery.data, normalizedState.gameTitleId);
   const seasonOptions = selectedSeries?.seasons ?? [];
   const mapOptions = selectedSeries?.maps ?? [];
 
-  const updateState = (next: typeof normalizedState): void => {
-    setSearchParams(buildSeriesComparisonSearchParams(next), { replace: true });
+  const updateState = (next: typeof normalizedState, options: { replace?: boolean } = {}): void => {
+    setSearchParams(buildSeriesComparisonSearchParams(next), { replace: options.replace ?? true });
   };
 
   return {
@@ -71,13 +92,22 @@ export function useSeriesComparisonPageController() {
     canRefresh: aggregateQueryParams !== undefined,
     hasAggregateError: shouldShowBlockingQueryError(aggregateQuery),
     hasOptionsError: shouldShowQueryError(optionsQuery),
+    hasReviewError: reviewEnabled && shouldShowBlockingQueryError(reviewQuery),
     options: optionsQuery.data,
     optionsLoading:
       optionsQuery.isLoading || (optionsQuery.data === undefined && optionsQuery.isFetching),
     refresh: () => {
       void optionsQuery.refetch();
       void aggregateQuery.refetch();
+      if (reviewEnabled) {
+        void reviewQuery.refetch();
+      }
     },
+    review: reviewQuery.data,
+    reviewLoading:
+      reviewEnabled &&
+      (reviewQuery.isLoading || (reviewQuery.data === undefined && reviewQuery.isFetching)),
+    reviewRefreshing: reviewEnabled && reviewQuery.isFetching && reviewQuery.data !== undefined,
     mapOptions,
     scopeName: scopeNameForState(optionsQuery.data, normalizedState),
     seasonOptions,
@@ -101,6 +131,7 @@ export function useSeriesComparisonPageController() {
         seasonMasterId: seasonMasterId || undefined,
         view: normalizedState.view ?? defaultSeriesComparisonView,
       }),
-    updateView: (view: SeriesComparisonViewId) => updateState({ ...normalizedState, view }),
+    updateView: (view: SeriesComparisonViewId, options?: { replace?: boolean }) =>
+      updateState({ ...normalizedState, view }, options),
   };
 }

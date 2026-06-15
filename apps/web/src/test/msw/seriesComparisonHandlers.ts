@@ -1,6 +1,9 @@
 import { http, HttpResponse } from "msw";
 
-import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
+import type {
+  SeriesComparisonResponse,
+  SeriesComparisonReviewResponse,
+} from "@/shared/api/seriesComparison";
 
 const players = [
   { displayName: "いーゆー", memberId: "member_eu" },
@@ -32,6 +35,9 @@ export const seriesComparisonHandlers = [
   ),
   http.get("/api/analytics/series-comparison", () =>
     HttpResponse.json(makeSeriesComparisonResponse()),
+  ),
+  http.get("/api/analytics/series-comparison/review", () =>
+    HttpResponse.json(makeSeriesComparisonReviewResponse()),
   ),
 ];
 
@@ -282,6 +288,145 @@ export function makeSeriesComparisonResponse(): SeriesComparisonResponse {
       rankCumulativeAverage: trend(averages),
       rankCumulativeStandardDeviation: trend([0, 0.5, 0.75, 0.68]),
     },
+  };
+}
+
+export function makeSeriesComparisonReviewResponse(): SeriesComparisonReviewResponse {
+  return {
+    baseline: {
+      matchCount: 12,
+      playerCount: players.length,
+      scope: {
+        gameTitleId: "gt_momotetsu_2",
+        gameTitleName: "桃太郎電鉄2",
+        layoutFamily: "momotetsu_2",
+        scopeKind: "overall",
+        scopeName: "総合",
+      },
+      status: "ok",
+    },
+    commonPlaybookTopics: [
+      {
+        actionHint:
+          "収益で上回った試合は、目的地到着、事故後の入賞維持、終盤の資産防衛のどれが順位差に近いかを振り返ります。",
+        affectedPlayerCount: 3,
+        category: "revenue",
+        id: "common-revenue",
+        memberDisplayNames: players.slice(0, 3).map((player) => player.displayName),
+        status: "ok",
+        summary:
+          "3人に物件収益先行時の候補が出ています。個人カードには、4人内で差が強い人だけを残しています。",
+        title: "収益先行後の勝ち切りが共通論点です",
+      },
+    ],
+    dataQuality: {
+      items: [
+        {
+          denominator: 12,
+          hasTies: false,
+          metricId: "review.revenue_top",
+          playerMemberId: "member_ponta",
+          status: "ok",
+          targetCount: 7,
+        },
+      ],
+    },
+    playbookByPlayer: players.map((player, index) => ({
+      cards: [
+        playbookCard(player.memberId, index, "reproduce"),
+        playbookCard(player.memberId, index, index % 2 === 0 ? "revise" : "verify"),
+      ],
+      memberDisplayName: player.displayName,
+      memberId: player.memberId,
+    })),
+    schemaVersion: 3,
+  };
+}
+
+function playbookCard(
+  memberId: string,
+  index: number,
+  classification: "reproduce" | "revise" | "verify",
+): NonNullable<
+  NonNullable<SeriesComparisonReviewResponse["playbookByPlayer"]>[number]["cards"]
+>[number] {
+  const isKeep = classification === "reproduce";
+  const metricId = isKeep ? "revenue.top.winRate" : "destination.zero.podiumRate";
+  return {
+    actionAdviceScore: isKeep ? 0.82 - index * 0.08 : 0.68 - index * 0.04,
+    actionHypothesis: isKeep
+      ? "収益先行時は目的地0回で終えない。"
+      : "目的地なしの展開では下位回避へ早めに切り替える。",
+    anchorTarget: {
+      label: isKeep ? "物件収益と勝ち" : "目的地と勝ち",
+      sectionId: isKeep ? "metric-revenue-outcome" : "metric-destination-outcome",
+      view: "drivers",
+    },
+    category: isKeep ? "revenue" : "destination",
+    classification,
+    dataReason: isKeep
+      ? "物件収益トップ時の1位率は57.1%で、本人全体の1位率33.3%を上回ります。落とした収益トップ試合では目的地平均が0.25回で、収益先行時も目的地到着が順位差に効いている可能性があります。"
+      : "目的地0回の順位スコアは2.58で、本人全体の3.00を下回ります。対象試合の総資産平均は4200万円で、目的地がない展開では資産維持が入賞の分岐になっている可能性があります。",
+    evidence: [
+      {
+        label: isKeep ? "物件収益トップ時の1位率" : "目的地なしの普段との差",
+        metricId,
+        status: index > 2 ? "reference" : "ok",
+        targetCount: Math.max(3, 7 - index),
+        value: isKeep ? "57.1%" : "-0.42",
+      },
+      {
+        label: isKeep ? "本人全体の1位率" : "目的地なしの順位スコア",
+        metricId: isKeep
+          ? `review.${classification}.${memberId}.baseline`
+          : `review.${classification}.${memberId}.score`,
+        status: index > 2 ? "reference" : "ok",
+        targetCount: 12,
+        value: isKeep ? "33.3%" : "2.58",
+      },
+      {
+        label: isKeep ? "勝てた収益トップ時の目的地平均" : "本人全体の順位スコア",
+        metricId: isKeep
+          ? `review.${classification}.${memberId}.wonDestination`
+          : `review.${classification}.${memberId}.baselineScore`,
+        status: "reference",
+        targetCount: 3,
+        value: isKeep ? "1.33回" : "3.00",
+      },
+      {
+        label: isKeep ? "落とした収益トップ時の目的地平均" : "目的地なしの総資産平均",
+        metricId: isKeep
+          ? `review.${classification}.${memberId}.missedDestination`
+          : `review.${classification}.${memberId}.assets`,
+        status: "reference",
+        targetCount: 4,
+        value: isKeep ? "0.25回" : "4200万円",
+      },
+      {
+        label: isKeep ? "落とした収益トップ時の銀次平均" : "目的地なしの銀次平均",
+        metricId: isKeep
+          ? `review.${classification}.${memberId}.missedGinji`
+          : `review.${classification}.${memberId}.ginji`,
+        status: "reference",
+        targetCount: 4,
+        value: isKeep ? "0.50回" : "0.25回",
+      },
+    ],
+    avoidAction: isKeep
+      ? "収益トップだから安全と見て、目的地0回のまま終盤へ入ること。"
+      : "目的地を取れないまま、資産も削る展開を続けること。",
+    id: `${memberId}-${classification}`,
+    postMatchCheck: isKeep
+      ? "次回、収益で上位だった試合を対象に、目的地0回で終えたか、入賞または下位回避できたかを振り返る。"
+      : "次回、目的地0回だった試合を対象に、総資産を残せたか、4位を避けられたかを振り返る。",
+    recommendedAction: isKeep
+      ? "追加収益より、目的地周辺への位置取り、到着、下位回避を優先する。"
+      : "一発逆転より、総資産を残す動きと事故回避を優先する。",
+    status: index > 2 ? "reference" : "ok",
+    targetCount: Math.max(3, 7 - index),
+    triggerCondition: isKeep
+      ? "中盤以降、物件収益で上位だが目的地到着がないとき。"
+      : "目的地到着がないまま中盤を過ぎ、総資産も伸びていないとき。",
   };
 }
 

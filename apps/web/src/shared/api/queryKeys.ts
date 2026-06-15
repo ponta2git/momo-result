@@ -73,4 +73,5 @@ export const seriesComparisonKeys = {
   all: () => ["series-comparison"] as const,
   options: () => ["series-comparison", "options"] as const,
   aggregate: (params: unknown) => ["series-comparison", "aggregate", "v7", params] as const,
+  review: (params: unknown) => ["series-comparison", "review", "v2", params] as const,
 };

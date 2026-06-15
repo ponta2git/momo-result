@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
@@ -186,11 +186,73 @@ describe("app routing", () => {
 
     expect(await screen.findByRole("heading", { name: "戦績比較" })).toBeInTheDocument();
     expect(await screen.findByText("平均順位差")).toBeInTheDocument();
-    expect(await screen.findByText("スリの銀次")).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "順位と相性" })).toHaveAttribute(
-      "aria-selected",
-      "true",
+    expect((await screen.findAllByText("スリの銀次")).length).toBeGreaterThan(0);
+    expect(screen.getByRole("tab", { name: "振り返り" })).toHaveAttribute("aria-selected", "true");
+    expect(await screen.findByRole("heading", { name: "行動プレイブック" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "行動プレイブック" })).toHaveAttribute(
+      "href",
+      "#review-playbook",
     );
+    expect(screen.queryByRole("heading", { name: "今回の要点" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/次回へ持ち越す論点/u)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "流れと勢いで根拠を見る" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "4試合の流れ" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "この回の見立て" })).not.toBeInTheDocument();
+    expect(screen.getByText("分析範囲")).toBeInTheDocument();
+    expect(screen.getByText("総合 / 12戦")).toBeInTheDocument();
+    expect(screen.getByText("卓全体で出やすい論点")).toBeInTheDocument();
+    expect(screen.getByText("収益先行後の勝ち切りが共通論点です")).toBeInTheDocument();
+    expect(screen.getAllByText("再現する").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("見直す").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("信頼度 高").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("発動条件").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("やること").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("避けること").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("データ上の理由").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("試合後の検証").length).toBeGreaterThan(0);
+    expect(screen.queryByText("読み取り")).not.toBeInTheDocument();
+    expect(screen.queryByText("次回の確認")).not.toBeInTheDocument();
+    expect(screen.queryByText("根拠あり")).not.toBeInTheDocument();
+    expect(screen.queryByText(/カード内/u)).not.toBeInTheDocument();
+    expect(screen.getAllByText("主要指標").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("収益先行時は目的地0回で終えない。").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("物件収益トップ時の1位率").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("本人全体の1位率").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("落とした収益トップ時の目的地平均").length).toBeGreaterThan(0);
+    expect(
+      screen.queryByText(
+        "次回も収益で上回った試合を拾い、勝てた試合と落とした試合で目的地回数や事故の差が出ているかを見ます。",
+      ),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "対象" })).not.toBeInTheDocument();
+    expect(screen.queryByText("member_eu")).not.toBeInTheDocument();
+    expect(screen.queryByText("member_otaka")).not.toBeInTheDocument();
+    expect(screen.queryByText("revenue")).not.toBeInTheDocument();
+    expect(screen.queryByText("play_order")).not.toBeInTheDocument();
+    expect(screen.queryByText("直す")).not.toBeInTheDocument();
+    expect(screen.queryByText("直近の下振れを確認する")).not.toBeInTheDocument();
+    const evidenceButtons = screen.getAllByRole("button", { name: "詳細: 物件収益と勝ちへ" });
+    await user.click(evidenceButtons[0]!);
+    await waitFor(() => expect(router.state.location.search).toContain("view=drivers"));
+    expect(
+      await screen.findByRole("heading", { name: "物件収益トップを勝ちにできたか" }),
+    ).toBeInTheDocument();
+    await act(async () => {
+      await router.navigate(-1);
+    });
+    await waitFor(() =>
+      expect(screen.getByRole("tab", { name: "振り返り" })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      ),
+    );
+    expect(await screen.findByRole("heading", { name: "行動プレイブック" })).toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: "平均順位の推移グラフ" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "順位と相性" }));
+
     expect(await screen.findByRole("img", { name: "平均順位の推移グラフ" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "安定性" })).toHaveAttribute("href", "#metric-rate");
     expect(screen.queryByRole("heading", { name: "総資産と勝ち筋" })).not.toBeInTheDocument();
@@ -232,11 +294,16 @@ describe("app routing", () => {
 
     await user.click(screen.getByRole("tab", { name: "流れと勢い" }));
 
-    expect(screen.getByRole("link", { name: "第n試合" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "期間内の荒れ" })).toHaveAttribute(
+      "href",
+      "#metric-match-digest",
+    );
+    expect(await screen.findByRole("heading", { name: "期間内の荒れ試合" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "第n試合傾向" })).toHaveAttribute(
       "href",
       "#metric-match-no",
     );
-    expect(await screen.findByRole("heading", { name: "開催回内の流れ" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "第n試合の傾向" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "番手と出来事" }));
 

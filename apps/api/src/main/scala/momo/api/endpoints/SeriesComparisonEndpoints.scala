@@ -32,3 +32,17 @@ object SeriesComparisonEndpoints:
       .errorOut(CommonEndpoint.errorOut)
       .out(jsonBody[SeriesComparisonResponse])
       .tag("analytics")
+
+  type ReviewInput = (String, Option[String], Option[String], Option[String])
+
+  val review: PublicEndpoint[ReviewInput, ProblemResponse, SeriesComparisonReviewResponse, Any] =
+    endpoint
+      .get
+      .in("api" / "analytics" / "series-comparison" / "review")
+      .in(query[String]("gameTitleId"))
+      .in(query[Option[String]]("seasonMasterId"))
+      .in(query[Option[String]]("mapMasterId"))
+      .in(CommonEndpoint.accountHeader)
+      .errorOut(CommonEndpoint.errorOut)
+      .out(jsonBody[SeriesComparisonReviewResponse])
+      .tag("analytics")

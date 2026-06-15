@@ -1,6 +1,7 @@
 import type {
   SeriesComparisonOptionsResponse,
   SeriesComparisonQuery,
+  SeriesComparisonReviewQuery,
   SeriesComparisonResponse,
 } from "@/shared/api/seriesComparison";
 
@@ -13,7 +14,7 @@ export type SeriesComparisonUrlState = {
   view?: SeriesComparisonViewId | undefined;
 };
 
-export type SeriesComparisonViewId = "context" | "drivers" | "flow" | "overview";
+export type SeriesComparisonViewId = "context" | "drivers" | "flow" | "overview" | "review";
 
 type PlayerMetrics = NonNullable<SeriesComparisonResponse["metricsByPlayer"]>[number]["metrics"];
 type PlayOrderBreakdown = NonNullable<PlayerMetrics["playOrder"]["breakdown"]>[number];
@@ -41,8 +42,8 @@ export type ProfileKind = NonNullable<
 >;
 
 const legacyScopeKinds = new Set(["overall", "season", "map"]);
-const viewIds = new Set(["overview", "flow", "drivers", "context"]);
-export const defaultSeriesComparisonView: SeriesComparisonViewId = "overview";
+const viewIds = new Set(["review", "overview", "flow", "drivers", "context"]);
+export const defaultSeriesComparisonView: SeriesComparisonViewId = "review";
 
 function isNumber(value: NullableNumber): value is number {
   return typeof value === "number" && Number.isFinite(value);
@@ -112,7 +113,12 @@ export function normalizeSeriesComparisonSelection(
     series[0];
 
   if (!selectedSeries) {
-    return { gameTitleId: undefined, mapMasterId: undefined, seasonMasterId: undefined, view };
+    return {
+      gameTitleId: undefined,
+      mapMasterId: undefined,
+      seasonMasterId: undefined,
+      view,
+    };
   }
 
   const selectedSeason = (selectedSeries.seasons ?? []).find(
@@ -137,6 +143,18 @@ export function seriesComparisonQueryFromState(
     gameTitleId: state.gameTitleId,
     mapMasterId: state.mapMasterId,
     seasonMasterId: state.seasonMasterId,
+  };
+}
+
+export function seriesComparisonReviewQueryFromState(
+  state: SeriesComparisonUrlState,
+): SeriesComparisonReviewQuery | undefined {
+  const query = seriesComparisonQueryFromState(state);
+  if (!query) {
+    return undefined;
+  }
+  return {
+    ...query,
   };
 }
 
@@ -340,7 +358,10 @@ export function statusLabel(status: string | null | undefined): string | undefin
     case "reference":
       return "参考";
     case "no_target":
+    case "empty":
       return "対象なし";
+    case "limited":
+      return "少数";
     case "self":
       return undefined;
     default:

@@ -18,6 +18,7 @@ import {
   playOrderSignal,
   profileKindLabel,
   seriesComparisonQueryFromState,
+  seriesComparisonReviewQueryFromState,
   statusLabel,
   strategyKindLabel,
   timelineFlagLabel,
@@ -57,7 +58,7 @@ describe("seriesComparisonViewModel", () => {
       gameTitleId: "title-2",
       mapMasterId: undefined,
       seasonMasterId: undefined,
-      view: "overview",
+      view: "review",
     });
   });
 
@@ -94,6 +95,27 @@ describe("seriesComparisonViewModel", () => {
     );
   });
 
+  it("drops obsolete review held event query state", () => {
+    const state = normalizeSeriesComparisonSelection(
+      options,
+      parseSeriesComparisonSearchParams(
+        new URLSearchParams("gameTitleId=title-1&reviewHeldEventId=held-event-1"),
+      ),
+    );
+
+    expect(seriesComparisonQueryFromState(state)).toEqual({
+      gameTitleId: "title-1",
+      mapMasterId: undefined,
+      seasonMasterId: undefined,
+    });
+    expect(seriesComparisonReviewQueryFromState(state)).toEqual({
+      gameTitleId: "title-1",
+      mapMasterId: undefined,
+      seasonMasterId: undefined,
+    });
+    expect(buildSeriesComparisonSearchParams(state).toString()).toBe("gameTitleId=title-1");
+  });
+
   it("normalizes invalid filters to the overall scope without selecting a sibling option", () => {
     expect(
       normalizeSeriesComparisonSelection(options, {
@@ -105,7 +127,7 @@ describe("seriesComparisonViewModel", () => {
       gameTitleId: "title-2",
       mapMasterId: undefined,
       seasonMasterId: undefined,
-      view: "overview",
+      view: "review",
     });
   });
 
@@ -132,7 +154,7 @@ describe("seriesComparisonViewModel", () => {
       gameTitleId: "title-1",
       mapMasterId: undefined,
       seasonMasterId: undefined,
-      view: "overview",
+      view: "review",
     });
   });
 
@@ -148,7 +170,7 @@ describe("seriesComparisonViewModel", () => {
       gameTitleId: "title-1",
       mapMasterId: "map-1",
       seasonMasterId: undefined,
-      view: "overview",
+      view: "review",
     });
     expect(buildSeriesComparisonSearchParams(state).toString()).toBe(
       "gameTitleId=title-1&mapMasterId=map-1",
@@ -164,7 +186,7 @@ describe("seriesComparisonViewModel", () => {
       gameTitleId: "title-1",
       mapMasterId: undefined,
       seasonMasterId: undefined,
-      view: "overview",
+      view: "review",
     });
   });
 

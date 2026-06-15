@@ -35,6 +35,7 @@ object ApiEndpoints:
     MatchesEndpoints.delete,
     SeriesComparisonEndpoints.options,
     SeriesComparisonEndpoints.aggregate,
+    SeriesComparisonEndpoints.review,
     GameTitlesEndpoints.list,
     GameTitlesEndpoints.create,
     GameTitlesEndpoints.update,

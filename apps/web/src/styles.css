@@ -45,6 +45,16 @@
   --color-tray-revenue: var(--momo-tray-revenue);
   --color-tray-incident: var(--momo-tray-incident);
   --color-tray-marker: var(--momo-tray-marker);
+  --color-player-1: var(--momo-rail-blue);
+  --color-player-2: var(--momo-danger-red);
+  --color-player-3: var(--momo-ticket-yellow);
+  --color-player-4: var(--momo-route-green);
+  --color-player-5: var(--momo-tray-incident);
+  --color-player-6: var(--momo-alert-orange);
+  --color-rank-1: var(--momo-ticket-yellow);
+  --color-rank-2: var(--momo-rail-blue);
+  --color-rank-3: var(--momo-tray-incident);
+  --color-rank-4: var(--momo-danger-red);
 
   --radius-xs: 4px;
   --radius-sm: 6px;

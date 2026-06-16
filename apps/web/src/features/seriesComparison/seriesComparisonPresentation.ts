@@ -127,7 +127,12 @@ export function formatPlayOrderLabel(playOrder: NullableNumber): string {
 }
 
 export function playOrderColor(playOrder: NullableNumber): string {
-  const colors = ["#2563eb", "#dc2626", "#d9a300", "#16a34a"];
+  const colors = [
+    "var(--color-player-1)",
+    "var(--color-player-2)",
+    "var(--color-player-3)",
+    "var(--color-player-4)",
+  ];
   return isNumber(playOrder)
     ? (colors[playOrder - 1] ?? "var(--color-text-muted)")
     : "var(--color-text-muted)";

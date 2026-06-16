@@ -82,7 +82,7 @@ describe("seriesComparisonPresentation", () => {
   it("maps play order labels and colors with a stable fallback", () => {
     expect(formatPlayOrderLabel(2)).toBe("2P");
     expect(formatPlayOrderLabel(null)).toBe("P不明");
-    expect(playOrderColor(1)).toBe("#2563eb");
+    expect(playOrderColor(1)).toBe("var(--color-player-1)");
     expect(playOrderColor(9)).toBe("var(--color-text-muted)");
   });
 

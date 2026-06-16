@@ -42,22 +42,22 @@ describe("headToHeadToneLabel", () => {
 
 describe("headToHeadCellTone", () => {
   it("uses neutral styling in the 0.45-0.55 band", () => {
-    expect(headToHeadCellTone(0.5).rgb).toBe("108, 117, 125");
+    expect(headToHeadCellTone(0.5).color).toBe("var(--color-tray-incident)");
     expect(headToHeadCellTone(0.46).alpha).toBeLessThan(0.2);
-    expect(headToHeadCellTone(0.46).rgb).toBe("108, 117, 125");
-    expect(headToHeadCellTone(0.515625, 128).rgb).toBe("108, 117, 125");
-    expect(headToHeadCellTone(1, 2).rgb).toBe("108, 117, 125");
+    expect(headToHeadCellTone(0.46).color).toBe("var(--color-tray-incident)");
+    expect(headToHeadCellTone(0.515625, 128).color).toBe("var(--color-tray-incident)");
+    expect(headToHeadCellTone(1, 2).color).toBe("var(--color-tray-incident)");
   });
 
   it("uses directional styling outside neutral band", () => {
-    expect(headToHeadCellTone(0.55).rgb).toBe("37, 99, 235");
-    expect(headToHeadCellTone(0.65).rgb).toBe("37, 99, 235");
-    expect(headToHeadCellTone(0.554688, 128).rgb).toBe("37, 99, 235");
-    expect(headToHeadCellTone(0.45).rgb).toBe("220, 38, 38");
-    expect(headToHeadCellTone(0.35).rgb).toBe("220, 38, 38");
-    expect(headToHeadCellTone(0.445313, 128).rgb).toBe("220, 38, 38");
-    expect(headToHeadCellTone(0.484375, 128, -0.1875).rgb).toBe("220, 38, 38");
-    expect(headToHeadCellTone(0.515625, 128, 0.1875).rgb).toBe("37, 99, 235");
+    expect(headToHeadCellTone(0.55).color).toBe("var(--color-action)");
+    expect(headToHeadCellTone(0.65).color).toBe("var(--color-action)");
+    expect(headToHeadCellTone(0.554688, 128).color).toBe("var(--color-action)");
+    expect(headToHeadCellTone(0.45).color).toBe("var(--color-danger)");
+    expect(headToHeadCellTone(0.35).color).toBe("var(--color-danger)");
+    expect(headToHeadCellTone(0.445313, 128).color).toBe("var(--color-danger)");
+    expect(headToHeadCellTone(0.484375, 128, -0.1875).color).toBe("var(--color-danger)");
+    expect(headToHeadCellTone(0.515625, 128, 0.1875).color).toBe("var(--color-action)");
   });
 });
 

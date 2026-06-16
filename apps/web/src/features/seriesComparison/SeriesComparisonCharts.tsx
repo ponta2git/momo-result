@@ -30,14 +30,21 @@ type HeadToHeadEntry = NonNullable<SeriesComparisonResponse["headToHead"]["entri
 type MatchPlayerPoint = NonNullable<SeriesComparisonResponse["matchPlayerPoints"]>[number];
 type PlayerPerformanceProfiles = SeriesComparisonResponse["playerPerformanceProfiles"];
 
-const palette = ["#2563eb", "#dc2626", "#d9a300", "#16a34a", "#6f7d74", "#7b5aa6"];
+const palette = [
+  "var(--color-player-1)",
+  "var(--color-player-2)",
+  "var(--color-player-3)",
+  "var(--color-player-4)",
+  "var(--color-player-5)",
+  "var(--color-player-6)",
+];
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
 export function playerColor(index: number): string {
-  return palette[index % palette.length] ?? "#2563eb";
+  return palette[index % palette.length] ?? "var(--color-action)";
 }
 
 export function PlayerLegend({
@@ -168,7 +175,7 @@ function RecentRankStripMarkerRow({
   return (
     <tr>
       <th
-        className="sticky left-0 z-20 w-28 max-w-28 min-w-28 bg-[var(--color-surface-subtle)] pr-2"
+        className="sticky left-0 z-[var(--z-sticky)] w-28 max-w-28 min-w-28 bg-[var(--color-surface-subtle)] pr-2"
         scope="col"
       >
         <span className="sr-only">プレーヤー</span>
@@ -218,11 +225,11 @@ function RecentRankStripPlayerRow({
   return (
     <tr>
       <th
-        className="sticky left-0 z-10 w-28 max-w-28 min-w-28 bg-[var(--color-surface-subtle)] py-1 pr-2 text-left align-middle"
+        className="sticky left-0 z-[var(--z-base)] w-28 max-w-28 min-w-28 bg-[var(--color-surface-subtle)] py-1 pr-2 text-left align-middle"
         scope="row"
         style={{ borderLeftColor: playerColor(index), borderLeftWidth: 3, paddingLeft: 8 }}
       >
-        <span className="block truncate text-sm font-semibold text-[var(--color-text-primary)]">
+        <span className="block min-w-0 text-sm leading-5 font-semibold break-words text-[var(--color-text-primary)]">
           {player.displayName}
         </span>
       </th>
@@ -237,10 +244,11 @@ function RecentRankStripPlayerRow({
               <span className="grid w-9 grid-rows-[2rem] justify-items-center">
                 <span
                   aria-label={`${player.displayName} ${point.matchIndex}戦目 ${point.rank}位`}
-                  className="grid size-8 place-items-center rounded-[var(--radius-xs)] border text-xs font-semibold text-white tabular-nums shadow-sm"
+                  className="grid size-8 place-items-center rounded-[var(--radius-xs)] border text-xs font-semibold tabular-nums shadow-sm"
                   style={{
                     backgroundColor: rankColor(point.rank),
                     borderColor: rankColor(point.rank),
+                    color: rankForegroundColor(point.rank),
                   }}
                   title={`${point.matchIndex}戦目 ${point.rank}位`}
                 >
@@ -297,7 +305,7 @@ export function RankDistributionStackedBars({
               key={player.memberId}
             >
               <div
-                className="truncate text-sm font-semibold text-[var(--color-text-primary)]"
+                className="text-sm font-semibold break-words text-[var(--color-text-primary)]"
                 style={{ borderLeftColor: playerColor(index), borderLeftWidth: 3, paddingLeft: 8 }}
               >
                 {player.displayName}
@@ -642,7 +650,7 @@ export function HeadToHeadMatrix({
         {players.map((player) => (
           <div
             key={player.memberId}
-            className="truncate rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-1.5 text-center text-xs font-semibold text-[var(--color-text-primary)]"
+            className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-1.5 text-center text-xs font-semibold break-words text-[var(--color-text-primary)]"
           >
             vs {player.displayName}
           </div>
@@ -675,7 +683,7 @@ function MatrixRow({
   return (
     <>
       <div
-        className="truncate rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-2 text-sm font-semibold text-[var(--color-text-primary)]"
+        className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-2 text-sm font-semibold break-words text-[var(--color-text-primary)]"
         style={{ borderLeftColor: playerColor(rowIndex), borderLeftWidth: 3 }}
       >
         {subject.displayName}
@@ -693,10 +701,8 @@ function MatrixRow({
             style={{
               backgroundColor: isSelf
                 ? "var(--color-surface-subtle)"
-                : `rgba(${tone.rgb}, ${tone.alpha})`,
-              borderColor: isSelf
-                ? "var(--color-border)"
-                : `rgba(${tone.rgb}, ${tone.borderAlpha})`,
+                : colorMix(tone.color, tone.alpha),
+              borderColor: isSelf ? "var(--color-border)" : colorMix(tone.color, tone.borderAlpha),
             }}
           >
             {isSelf ? (
@@ -731,7 +737,7 @@ export function headToHeadCellTone(
 ): {
   alpha: number;
   borderAlpha: number;
-  rgb: string;
+  color: string;
 } {
   const bands = headToHeadBands(matchCount);
   if (
@@ -739,10 +745,10 @@ export function headToHeadCellTone(
     matchCount > 0 &&
     matchCount <= SERIES_COMPARISON_THRESHOLDS.headToHead.referenceMaxMatchCount
   ) {
-    return { alpha: 0.08, borderAlpha: 0.2, rgb: "108, 117, 125" };
+    return { alpha: 0.08, borderAlpha: 0.2, color: "var(--color-tray-incident)" };
   }
   if (!isFiniteNumber(rate)) {
-    return { alpha: 0, borderAlpha: 0.14, rgb: "111, 125, 116" };
+    return { alpha: 0, borderAlpha: 0.14, color: "var(--color-tray-incident)" };
   }
   if (rate > bands.slightDisadvantageTo && rate < bands.slightAdvantageFrom) {
     const rankDiffSignal = headToHeadRankDiffSignal(averageRankDiff, matchCount);
@@ -752,13 +758,13 @@ export function headToHeadCellTone(
     if (rankDiffSignal === "strong_negative" || rankDiffSignal === "slight_negative") {
       return directionalHeadToHeadTone("negative", averageRankDiff);
     }
-    return { alpha: 0.08, borderAlpha: 0.2, rgb: "108, 117, 125" };
+    return { alpha: 0.08, borderAlpha: 0.2, color: "var(--color-tray-incident)" };
   }
   const distance = Math.abs(rate - 0.5);
   const alpha = Math.min(0.46, distance < 0.001 ? 0.04 : 0.1 + distance * 0.92);
   return rate >= 0.5
-    ? { alpha, borderAlpha: Math.min(0.66, alpha + 0.16), rgb: "37, 99, 235" }
-    : { alpha, borderAlpha: Math.min(0.66, alpha + 0.16), rgb: "220, 38, 38" };
+    ? { alpha, borderAlpha: Math.min(0.66, alpha + 0.16), color: "var(--color-action)" }
+    : { alpha, borderAlpha: Math.min(0.66, alpha + 0.16), color: "var(--color-danger)" };
 }
 
 function directionalHeadToHeadTone(
@@ -767,7 +773,7 @@ function directionalHeadToHeadTone(
 ): {
   alpha: number;
   borderAlpha: number;
-  rgb: string;
+  color: string;
 } {
   const distance = Math.min(
     0.22,
@@ -775,8 +781,8 @@ function directionalHeadToHeadTone(
   );
   const alpha = Math.min(0.46, 0.1 + distance * 0.92);
   return direction === "positive"
-    ? { alpha, borderAlpha: Math.min(0.66, alpha + 0.16), rgb: "37, 99, 235" }
-    : { alpha, borderAlpha: Math.min(0.66, alpha + 0.16), rgb: "220, 38, 38" };
+    ? { alpha, borderAlpha: Math.min(0.66, alpha + 0.16), color: "var(--color-action)" }
+    : { alpha, borderAlpha: Math.min(0.66, alpha + 0.16), color: "var(--color-danger)" };
 }
 
 export function headToHeadToneLabel(
@@ -1142,7 +1148,7 @@ function PlayOrderHeatmapPlayerRow({
   return (
     <>
       <div
-        className="truncate rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-2 text-sm font-semibold text-[var(--color-text-primary)]"
+        className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-2 text-sm font-semibold break-words text-[var(--color-text-primary)]"
         style={{ borderLeftColor: playerColor(index), borderLeftWidth: 3 }}
       >
         {player.displayName}
@@ -1161,7 +1167,9 @@ function PlayOrderHeatmapPlayerRow({
               backgroundColor: hasValue
                 ? rankAverageTone(rankAverage, minValue, maxValue)
                 : "var(--color-surface)",
-              borderColor: hasValue ? "rgba(111, 125, 116, 0.28)" : "var(--color-border)",
+              borderColor: hasValue
+                ? "color-mix(in srgb, var(--color-tray-incident) 28%, transparent)"
+                : "var(--color-border)",
             }}
           >
             <div className="text-sm font-semibold text-[var(--color-text-primary)] tabular-nums">
@@ -1190,7 +1198,7 @@ function RevenueRankConversionPlayerMatrix({
   return (
     <div className="min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
       <div
-        className="mb-3 truncate text-sm font-semibold text-[var(--color-text-primary)]"
+        className="mb-3 text-sm font-semibold break-words text-[var(--color-text-primary)]"
         style={{ borderLeftColor: playerColor(index), borderLeftWidth: 3, paddingLeft: 8 }}
       >
         {player.displayName}
@@ -1200,15 +1208,15 @@ function RevenueRankConversionPlayerMatrix({
       ) : (
         <div className="max-w-full min-w-0 overflow-x-auto pb-1">
           <div
-            className="grid min-w-[22rem] gap-1"
+            className="grid w-full min-w-0 gap-1"
             style={{
-              gridTemplateColumns: "5.5rem repeat(4, minmax(3.75rem, 1fr))",
+              gridTemplateColumns: "minmax(3.25rem, 0.85fr) repeat(4, minmax(3rem, 1fr))",
             }}
           >
             <div aria-hidden="true" />
             {[1, 2, 3, 4].map((rank) => (
               <div
-                className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-1.5 py-1 text-center text-[11px] font-semibold text-[var(--color-text-primary)]"
+                className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-1 text-center text-[11px] leading-4 font-semibold text-[var(--color-text-primary)]"
                 key={rank}
               >
                 最終{rank}位
@@ -1233,7 +1241,7 @@ function RevenueRankConversionRow({
 }) {
   return (
     <>
-      <div className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-1.5 py-2 text-xs font-semibold text-[var(--color-text-primary)]">
+      <div className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-2 text-[11px] leading-4 font-semibold text-[var(--color-text-primary)]">
         収益{formatRevenueRank(row.revenueRank)}
         <div className="mt-0.5 text-[10px] font-normal text-[var(--color-text-secondary)] tabular-nums">
           {row.targetCount}戦
@@ -1242,7 +1250,7 @@ function RevenueRankConversionRow({
       {row.finalRankCounts.map((item) => (
         <div
           aria-label={`${player.displayName}、物件収益${formatRevenueRank(row.revenueRank)}、最終${item.rank}位 ${item.count}回 ${formatPercent(item.rate)}`}
-          className="rounded-[var(--radius-xs)] border px-1.5 py-2 text-center"
+          className="rounded-[var(--radius-xs)] border px-1 py-2 text-center"
           key={item.rank}
           role="img"
           style={{
@@ -1266,25 +1274,27 @@ function RevenueRankConversionRow({
 }
 
 function rankColor(rank: number): string {
-  if (rank === 1) return "#d9a300";
-  if (rank === 2) return "#2563eb";
-  if (rank === 3) return "#6f7d74";
-  return "#dc2626";
+  if (rank === 1) return "var(--color-rank-1)";
+  if (rank === 2) return "var(--color-rank-2)";
+  if (rank === 3) return "var(--color-rank-3)";
+  return "var(--color-rank-4)";
+}
+
+function rankForegroundColor(rank: number): string {
+  return rank === 1 ? "var(--color-text-primary)" : "white";
+}
+
+function colorMix(color: string, alpha: number): string {
+  return `color-mix(in srgb, ${color} ${Math.round(alpha * 100)}%, transparent)`;
 }
 
 function rankBackgroundColor(rank: number, rate: number): string {
   const alpha = Math.min(0.4, Math.max(0.08, rate * 0.42));
-  if (rank === 1) return `rgba(217, 163, 0, ${alpha})`;
-  if (rank === 2) return `rgba(37, 99, 235, ${alpha})`;
-  if (rank === 3) return `rgba(111, 125, 116, ${alpha})`;
-  return `rgba(220, 38, 38, ${alpha})`;
+  return colorMix(rankColor(rank), alpha);
 }
 
 function rankBorderColor(rank: number): string {
-  if (rank === 1) return "rgba(217, 163, 0, 0.45)";
-  if (rank === 2) return "rgba(37, 99, 235, 0.45)";
-  if (rank === 3) return "rgba(111, 125, 116, 0.45)";
-  return "rgba(220, 38, 38, 0.45)";
+  return colorMix(rankColor(rank), 0.45);
 }
 
 function rankAverageTone(
@@ -1293,15 +1303,15 @@ function rankAverageTone(
   maxValue: number | undefined,
 ): string {
   if (!isFiniteNumber(minValue) || !isFiniteNumber(maxValue) || maxValue === minValue) {
-    return "rgba(111, 125, 116, 0.1)";
+    return colorMix("var(--color-tray-incident)", 0.1);
   }
   const ratio = (value - minValue) / (maxValue - minValue);
   if (ratio <= 0.5) {
     const alpha = 0.08 + (0.5 - ratio) * 0.54;
-    return `rgba(37, 99, 235, ${alpha})`;
+    return colorMix("var(--color-action)", alpha);
   }
   const alpha = 0.08 + (ratio - 0.5) * 0.54;
-  return `rgba(220, 38, 38, ${alpha})`;
+  return colorMix("var(--color-danger)", alpha);
 }
 
 function formatRevenueRank(rank: number): string {
@@ -1339,7 +1349,7 @@ function SingleHistogram({
           className="size-2.5 shrink-0 rounded-full"
           style={{ backgroundColor: color }}
         />
-        <span className="truncate">{player.displayName}</span>
+        <span className="min-w-0 break-words">{player.displayName}</span>
       </div>
       <svg
         aria-label={`${player.displayName}のヒストグラム`}

@@ -15,7 +15,7 @@ import {
   Target,
   Trophy,
 } from "lucide-react";
-import type { KeyboardEvent, ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 import {
   HeadToHeadMatrix,
@@ -65,12 +65,10 @@ import {
   revenueRankConversionEntries,
 } from "@/features/seriesComparison/seriesComparisonPresentation";
 import {
-  averageRankSpread,
   defaultSeriesComparisonView,
   assetStyleKindLabel,
   assetStyleShapeLabel,
   assetStyleTagLabel,
-  ginjiSummary,
   playOrderSignal,
   qualitySummary,
   statusLabel,
@@ -90,6 +88,7 @@ import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { Tooltip } from "@/shared/ui/feedback/Tooltip";
 import { SelectField } from "@/shared/ui/forms/SelectField";
+import { TabsList, TabsRoot, TabsTab } from "@/shared/ui/forms/Tabs";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
@@ -147,16 +146,15 @@ function PlayerMetricGrid({
   metricsByMember: Map<string, PlayerMetrics>;
   players: Player[];
 }) {
-  const minWidth = `${Math.max(1, players.length) * minColumnWidthRem}rem`;
+  const gridStyle = {
+    ...playerGridStyle(players.length),
+    "--player-column-min": `${minColumnWidthRem}rem`,
+  } as CSSProperties;
   return (
-    <div className="max-w-full min-w-0 overflow-x-auto pb-1">
+    <div className="max-w-full min-w-0 pb-1">
       <div
-        className="grid min-w-full gap-3"
-        style={{
-          ...playerGridStyle(players.length),
-          gridTemplateColumns: `repeat(var(--player-count), minmax(${minColumnWidthRem}rem, 1fr))`,
-          minWidth,
-        }}
+        className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-[repeat(var(--player-count),minmax(var(--player-column-min),1fr))]"
+        style={gridStyle}
       >
         {players.map((player, index) => (
           <div
@@ -173,7 +171,7 @@ function PlayerMetricGrid({
                 className="size-2.5 shrink-0 rounded-full"
                 style={{ backgroundColor: playerColor(index) }}
               />
-              <p className="truncate text-sm font-semibold text-[var(--color-text-primary)]">
+              <p className="min-w-0 text-sm font-semibold break-words text-[var(--color-text-primary)]">
                 {player.displayName}
               </p>
             </div>
@@ -203,14 +201,14 @@ function MetricRow({
   return (
     <div className="grid min-h-10 grid-cols-[minmax(0,1fr)_auto] items-start gap-3 border-b border-[var(--color-border)] pb-2 last:border-b-0 last:pb-0">
       <span className="inline-flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs leading-4 text-[var(--color-text-secondary)]">
-        <span className="min-w-0">{label}</span>
+        <span className="min-w-0 break-words">{label}</span>
         <StatusBadge status={status} />
         {emphasis ? <EmphasisBadge emphasis={emphasis} /> : null}
         {help ? <FormulaHelp content={help} label={label} /> : null}
       </span>
       <span
         className={cn(
-          "text-right text-sm font-semibold tabular-nums",
+          "min-w-0 text-right text-sm font-semibold break-words tabular-nums",
           emphasisTextClass(emphasis?.kind),
         )}
       >
@@ -305,9 +303,12 @@ function ComparisonSkeleton() {
 }
 
 function SummaryBand({ response }: { response: SeriesComparisonResponse }) {
-  const ginji = ginjiSummary(response);
   const leader = leaderSummary(response);
-  const rankSpread = averageRankSpread(response);
+  const quality = qualitySummary(response);
+  const qualityValue =
+    quality.referenceCount === 0 && quality.noTargetCount === 0
+      ? "通常"
+      : `参考 ${quality.referenceCount}件`;
 
   return (
     <section className="grid gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 md:grid-cols-4">
@@ -326,20 +327,15 @@ function SummaryBand({ response }: { response: SeriesComparisonResponse }) {
         }
       />
       <SummaryItem
-        label="スリの銀次"
-        value={`${ginji.totalEncounters}回`}
-        subLabel={
-          ginji.abnormalMatches > 0
-            ? `2回以上の試合 ${ginji.abnormalMatches}戦`
-            : "2回以上の試合なし"
-        }
+        label="集計対象"
+        value="確定済みのみ"
+        subLabel="下書きと未確定試合は含みません"
       />
       <SummaryItem
-        label="平均順位差"
-        value={formatDecimal(rankSpread.spread)}
-        subLabel={
-          rankSpread.spread === undefined ? "平均順位の比較材料不足" : "平均順位の首位と最下位の差"
-        }
+        label="データ注意"
+        tone={quality.referenceCount > 0 || quality.noTargetCount > 0 ? "notice" : "neutral"}
+        value={qualityValue}
+        subLabel={`対象なし ${quality.noTargetCount}件`}
       />
     </section>
   );
@@ -378,13 +374,15 @@ function SummaryItem({
 
 const perspectiveItems = [
   {
-    description: "次回4戦で試す行動仮説を、発動条件とデータ上の理由で絞ります。",
+    badge: "次回4戦",
+    description: "次回4戦で試す行動仮説を、発動条件と根拠で絞ります。",
     id: "review",
     label: "振り返り",
     sections: [{ id: "review-playbook", label: "行動プレイブック" }],
   },
   {
-    description: "平均順位、直接対決、順位ブレで社長ごとの地力と相性を見ます。",
+    badge: "根拠",
+    description: "平均順位、直接対決、順位ブレで、地力と相性を確認します。",
     id: "overview",
     label: "順位と相性",
     sections: [
@@ -394,7 +392,8 @@ const perspectiveItems = [
     ],
   },
   {
-    description: "総資産、物件収益、カード寄り、目的地到着から勝ち筋を見ます。",
+    badge: "根拠",
+    description: "総資産、物件収益、カード寄り、目的地到着から勝ち筋を確認します。",
     id: "drivers",
     label: "勝ち筋",
     sections: [
@@ -404,7 +403,8 @@ const perspectiveItems = [
     ],
   },
   {
-    description: "選択中範囲の全試合から、荒れ試合、直近8戦、切り替え、第n試合別の傾向を見ます。",
+    badge: "根拠",
+    description: "荒れ試合、直近8戦、切り替え、第n試合別の傾向を確認します。",
     id: "flow",
     label: "流れと勢い",
     sections: [
@@ -415,7 +415,8 @@ const perspectiveItems = [
     ],
   },
   {
-    description: "番手、カード売り場、スリの銀次など、試合条件と出来事を見ます。",
+    badge: "根拠",
+    description: "番手、カード売り場、スリの銀次など、試合条件と出来事を確認します。",
     id: "context",
     label: "番手と出来事",
     sections: [
@@ -427,6 +428,7 @@ const perspectiveItems = [
 ] satisfies AnalysisViewDefinition[];
 
 type AnalysisViewDefinition = {
+  badge: string;
   description: string;
   id: SeriesComparisonViewId;
   label: string;
@@ -443,19 +445,6 @@ function analysisViewFor(view: SeriesComparisonViewId | undefined): AnalysisView
   return perspectiveItems.find((item) => item.id === view) ?? fallback;
 }
 
-function moveAnalysisTabFocus(event: KeyboardEvent<HTMLDivElement>, direction: -1 | 1): void {
-  const tabs = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
-  if (tabs.length === 0) {
-    return;
-  }
-  event.preventDefault();
-  const currentIndex = tabs.findIndex((tab) => tab === document.activeElement);
-  const nextIndex =
-    currentIndex === -1 ? 0 : (currentIndex + direction + tabs.length) % tabs.length;
-  tabs[nextIndex]?.focus();
-  tabs[nextIndex]?.click();
-}
-
 function AnalysisTabs({
   activeView,
   onViewChange,
@@ -464,48 +453,53 @@ function AnalysisTabs({
   onViewChange: (view: SeriesComparisonViewId) => void;
 }) {
   return (
-    <div
-      aria-label="分析サブページ"
+    <TabsRoot
       className="grid min-w-0 gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
-      role="tablist"
-      tabIndex={-1}
-      onKeyDown={(event) => {
-        if (event.key === "ArrowLeft") {
-          moveAnalysisTabFocus(event, -1);
-        } else if (event.key === "ArrowRight") {
-          moveAnalysisTabFocus(event, 1);
+      value={activeView}
+      onValueChange={(value) => {
+        if (typeof value === "string" && isSeriesComparisonViewId(value)) {
+          onViewChange(value);
         }
       }}
     >
-      <div className="flex min-w-0 [scrollbar-width:none] gap-2 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden">
+      <TabsList aria-label="分析サブページ" className="flex min-w-0 flex-wrap gap-2">
         {perspectiveItems.map((item) => (
-          <button
-            aria-controls={`series-comparison-view-${item.id}`}
-            aria-selected={item.id === activeView}
+          <TabsTab
             className={cn(
-              "inline-flex min-h-10 shrink-0 items-center rounded-[var(--radius-sm)] border px-3 py-2 text-sm font-semibold transition-colors",
+              "inline-flex min-h-10 min-w-0 items-center gap-2 rounded-[var(--radius-sm)] border px-3 py-2 text-sm font-semibold transition-colors",
               item.id === activeView
                 ? "border-[var(--color-action)]/60 bg-[var(--color-action)]/12 text-[var(--color-text-primary)]"
                 : "border-[var(--color-border)] bg-[var(--color-surface-subtle)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface)]",
             )}
-            id={`series-comparison-tab-${item.id}`}
             key={item.id}
-            role="tab"
-            type="button"
-            onClick={() => onViewChange(item.id)}
+            value={item.id}
           >
-            {item.label}
-          </button>
+            <span>{item.label}</span>
+            <span
+              aria-hidden="true"
+              className={cn(
+                "rounded-[var(--radius-xs)] border px-1.5 py-0.5 text-[10px] leading-4",
+                item.id === "review"
+                  ? "border-[var(--color-success)]/45 bg-[var(--color-success)]/10 text-[var(--color-success)]"
+                  : "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)]",
+              )}
+            >
+              {item.badge}
+            </span>
+          </TabsTab>
         ))}
-      </div>
+      </TabsList>
       <p className="text-sm leading-6 text-pretty text-[var(--color-text-secondary)]">
         {analysisViewFor(activeView).description}
       </p>
-    </div>
+    </TabsRoot>
   );
 }
 
 function SectionJumpLinks({ items }: { items: AnalysisViewDefinition["sections"] }) {
+  if (items.length <= 1) {
+    return null;
+  }
   return (
     <nav aria-label="このサブページの観点" className="min-w-0">
       <div className="flex min-w-0 flex-wrap gap-2">
@@ -661,7 +655,7 @@ function ReviewPlaybookSection({
         }));
   return (
     <MetricSection
-      description="次回4戦で思い出す行動方針を、発動条件と試合後の振り返り観点までまとめます。"
+      description="次回4戦で試す行動仮説を、発動条件と試合後の確認方法までまとめます。"
       icon={<Target className="size-5" />}
       id="review-playbook"
       title="行動プレイブック"
@@ -677,7 +671,7 @@ function ReviewPlaybookSection({
           >
             <div className="flex min-w-0 items-start justify-between gap-3">
               <div className="min-w-0">
-                <h3 className="truncate text-sm font-semibold text-[var(--color-text-primary)]">
+                <h3 className="text-sm font-semibold break-words text-[var(--color-text-primary)]">
                   {player.displayName}
                 </h3>
               </div>
@@ -694,7 +688,7 @@ function ReviewPlaybookSection({
                   ))
               ) : (
                 <p className="rounded-[var(--radius-xs)] border border-dashed border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-3 text-sm leading-6 text-pretty text-[var(--color-text-secondary)]">
-                  この条件では、次回に持ち帰る仮説はありません。弱い差分は無理に採用していません。
+                  この条件で次回に持ち帰る仮説はありません。弱い差分は採用していません。
                 </p>
               )}
             </div>
@@ -1097,7 +1091,7 @@ function MomentumSwitchMetrics({ response }: { response: SeriesComparisonRespons
                   className="size-2.5 shrink-0 rounded-full"
                   style={{ backgroundColor: playerColor(index) }}
                 />
-                <p className="truncate text-sm font-semibold text-[var(--color-text-primary)]">
+                <p className="min-w-0 text-sm font-semibold break-words text-[var(--color-text-primary)]">
                   {player.displayName}
                 </p>
               </div>
@@ -1217,7 +1211,7 @@ function MomentumTransitionMatrix({
       style={{ borderTopColor: playerColor(index), borderTopWidth: 3 }}
     >
       <div className="flex min-w-0 items-center justify-between gap-2">
-        <span className="truncate text-sm font-semibold text-[var(--color-text-primary)]">
+        <span className="min-w-0 text-sm font-semibold break-words text-[var(--color-text-primary)]">
           {player.displayName}
         </span>
         <span className="shrink-0 text-xs font-medium text-[var(--color-text-secondary)]">
@@ -1666,13 +1660,15 @@ function FactChip({
   return (
     <div className="min-w-0 rounded-[var(--radius-xs)] bg-[var(--color-surface-subtle)] px-1.5 py-1">
       <div className="flex min-w-0 flex-wrap items-center gap-1">
-        <p className="truncate text-[10px] font-medium text-[var(--color-text-secondary)]">
+        <p className="min-w-0 text-[10px] leading-4 font-medium break-words text-[var(--color-text-secondary)]">
           {label}
         </p>
         {badge ? <EmphasisBadge emphasis={badge} /> : null}
       </div>
       {subLabel ? (
-        <p className="truncate text-[10px] text-[var(--color-text-muted)]">{subLabel}</p>
+        <p className="min-w-0 text-[10px] leading-4 break-words text-[var(--color-text-muted)]">
+          {subLabel}
+        </p>
       ) : null}
       <p
         className={cn(
@@ -1839,8 +1835,10 @@ function StrategyAxisSummary({
 function MiniFact({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0 rounded-[var(--radius-xs)] bg-[var(--color-surface)] px-1.5 py-1">
-      <p className="truncate text-[10px] text-[var(--color-text-secondary)]">{label}</p>
-      <p className="truncate text-[11px] font-semibold text-[var(--color-text-primary)] tabular-nums">
+      <p className="min-w-0 text-[10px] leading-4 break-words text-[var(--color-text-secondary)]">
+        {label}
+      </p>
+      <p className="min-w-0 text-[11px] leading-4 font-semibold break-words text-[var(--color-text-primary)] tabular-nums">
         {value}
       </p>
     </div>
@@ -1953,22 +1951,22 @@ type CardShopDestinationQuadrant = NonNullable<CardShopDestinationEntry["quadran
 
 const cardShopDestinationDefinitions = [
   {
-    color: "#0f766e",
+    color: "var(--color-success)",
     kind: "destination_with_shop",
     label: "到着あり × 売り場あり",
   },
   {
-    color: "#2563eb",
+    color: "var(--color-action)",
     kind: "destination_without_shop",
     label: "到着あり × 売り場なし",
   },
   {
-    color: "#d9a300",
+    color: "var(--color-warning)",
     kind: "no_destination_with_shop",
     label: "到着なし × 売り場あり",
   },
   {
-    color: "#6f7d74",
+    color: "var(--color-tray-incident)",
     kind: "no_destination_without_shop",
     label: "到着なし × 売り場なし",
   },
@@ -2542,10 +2540,10 @@ function RankOutcomeStrip({
 }
 
 function rankOutcomeColor(rank: number): string {
-  if (rank === 1) return "#d9a300";
-  if (rank === 2) return "#2563eb";
-  if (rank === 3) return "#6f7d74";
-  return "#dc2626";
+  if (rank === 1) return "var(--color-rank-1)";
+  if (rank === 2) return "var(--color-rank-2)";
+  if (rank === 3) return "var(--color-rank-3)";
+  return "var(--color-rank-4)";
 }
 
 function OutcomeDetails({ children, title }: { children: ReactNode; title: string }) {
@@ -2606,7 +2604,7 @@ function MatchResultStrip({ response }: { response: SeriesComparisonResponse }) 
                     <p className="text-xs text-[var(--color-text-secondary)]">
                       {point.matchIndex}戦目
                     </p>
-                    <p className="mt-0.5 truncate text-sm font-semibold text-[var(--color-text-primary)]">
+                    <p className="mt-0.5 text-sm font-semibold break-words text-[var(--color-text-primary)]">
                       {names.get(point.winnerMemberId ?? "") ?? "勝者不明"}
                     </p>
                   </div>
@@ -2706,7 +2704,7 @@ function MatchNoTable({
         {players.map((player, index) => (
           <div
             key={player.memberId}
-            className="truncate rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-1.5 text-center text-xs font-semibold text-[var(--color-text-primary)]"
+            className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-1.5 text-center text-xs font-semibold break-words text-[var(--color-text-primary)]"
             style={{ borderTopColor: playerColor(index), borderTopWidth: 3 }}
           >
             {player.displayName}
@@ -2759,8 +2757,8 @@ function DataQualityNotice({ response }: { response: SeriesComparisonResponse })
     return null;
   }
   return (
-    <Notice tone="info" title="対象試合が限られる指標があります。">
-      スリの銀次、物件収益トップ、目的地最多・0回、切り替え力の成績は条件付きです。対象試合がない項目は「対象なし」、少ない項目は参考値です。
+    <Notice tone="info" title="条件付き指標があります。">
+      スリの銀次、物件収益トップ、目的地最多・0回、切り替え力は対象条件があります。該当試合がない項目は「対象なし」、少ない項目は「参考」です。
     </Notice>
   );
 }
@@ -2826,6 +2824,12 @@ export function SeriesComparisonPage() {
       ) : seriesOptions.length > 0 ? (
         <>
           <section className="grid gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 md:grid-cols-[minmax(12rem,1fr)_minmax(12rem,1fr)_minmax(12rem,1fr)] md:items-end">
+            <div className="min-w-0 md:col-span-3">
+              <h2 className="text-sm font-semibold text-[var(--color-text-primary)]">表示範囲</h2>
+              <p className="mt-1 text-xs leading-5 text-pretty text-[var(--color-text-secondary)]">
+                シーズンとマップを同時に絞れます。対象作品の切り替えは過去作品を見るときに使います。
+              </p>
+            </div>
             <SelectField
               label="シーズン"
               options={seasonOptions}
@@ -2886,7 +2890,7 @@ function SeriesComparisonContent({
       <AnalysisTabs activeView={activeView} onViewChange={controller.updateView} />
       <DataQualityNotice response={controller.aggregate} />
       <div
-        aria-labelledby={`series-comparison-tab-${activeDefinition.id}`}
+        aria-label={`${activeDefinition.label}の内容`}
         id={`series-comparison-view-${activeDefinition.id}`}
         role="tabpanel"
       >

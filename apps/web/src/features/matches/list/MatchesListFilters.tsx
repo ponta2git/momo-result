@@ -118,7 +118,7 @@ export function MatchesListFilters({
       />
       <div className="relative z-[var(--z-base)] grid gap-4">
         <div className="flex min-w-0 items-center justify-between gap-3">
-          <p className="text-sm font-semibold text-[var(--color-text-primary)]">絞り込み</p>
+          <p className="text-sm font-semibold text-[var(--color-text-primary)]">表示条件</p>
           {pending ? (
             <span className="momo-enter rounded-full border border-[var(--color-action)]/30 bg-[var(--color-action)]/10 px-3 py-1 text-xs font-semibold text-[var(--color-text-secondary)]">
               反映中
@@ -138,7 +138,7 @@ export function MatchesListFilters({
           />
           <SelectField
             disabled={pending}
-            label="表の並び順"
+            label="並び順"
             options={sortOptions}
             value={initialSearch.sort}
             onChange={(event) => {
@@ -187,13 +187,13 @@ export function MatchesListFilters({
             }}
           />
           <Button disabled={pending} onClick={onClear} type="button" variant="secondary">
-            条件をリセット
+            条件をクリア
           </Button>
         </div>
 
         <details className="md:hidden" open={hasDetailFilters || undefined}>
           <summary className="cursor-pointer text-sm font-semibold text-[var(--color-text-primary)]">
-            開催・作品・シーズンを絞る
+            詳細条件
           </summary>
           <div className="mt-3 grid gap-4">
             <SelectField
@@ -236,7 +236,7 @@ export function MatchesListFilters({
               }}
             />
             <Button disabled={pending} onClick={onClear} type="button" variant="secondary">
-              条件をリセット
+              条件をクリア
             </Button>
           </div>
         </details>

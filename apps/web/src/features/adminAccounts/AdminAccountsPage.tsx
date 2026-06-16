@@ -24,8 +24,8 @@ export function AdminAccountsPage() {
     <PageFrame className="gap-5">
       <PageHeader
         eyebrow="管理"
-        title="ログインアカウント管理"
-        description="Discordでログインできるアカウントと管理者権限を管理します。試合参加者とは別に設定できます。"
+        title="ログインアカウント"
+        description="Discordでログインできるアカウントと管理者権限を管理します。試合参加者とは別に扱います。"
       />
 
       {createState.error || normalizedError ? (
@@ -99,9 +99,9 @@ export function AdminAccountsPage() {
         ) : accounts.length === 0 ? (
           <EmptyState
             className="border-0"
-            description="DiscordユーザーIDと表示名を入力して、最初のログイン可能アカウントを追加してください。"
+            description="DiscordユーザーIDと表示名を入力し、最初のアカウントを追加します。"
             icon={<ShieldCheck className="size-5" />}
-            title="ログイン可能なアカウントがありません"
+            title="ログイン可能なアカウントはまだありません"
           />
         ) : (
           <div className="overflow-x-auto">
@@ -173,7 +173,7 @@ function AccountRow({
       className="border-t border-[var(--color-border)]"
     >
       <td className="px-3 py-2 font-semibold">{account.displayName}</td>
-      <td className="max-w-[14rem] truncate px-3 py-2 font-mono text-xs">
+      <td className="momo-data max-w-[14rem] truncate px-3 py-2 text-xs">
         {account.discordUserId}
       </td>
       <td className="px-3 py-2">{memberDisplayName(account.playerMemberId)}</td>

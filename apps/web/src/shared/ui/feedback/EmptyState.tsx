@@ -25,11 +25,11 @@ export function EmptyState({ action, className, description, icon, title }: Empt
           </div>
         ) : null}
         <div className="min-w-0">
-          <h3 className="text-base font-semibold text-balance text-[var(--color-text-primary)]">
+          <h3 className="momo-heading text-base font-semibold text-[var(--color-text-primary)]">
             {title}
           </h3>
           {description ? (
-            <div className="mt-1 text-sm leading-6 text-pretty text-[var(--color-text-secondary)]">
+            <div className="momo-copy mt-1 text-sm text-[var(--color-text-secondary)]">
               {description}
             </div>
           ) : null}

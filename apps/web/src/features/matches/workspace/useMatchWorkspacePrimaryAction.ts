@@ -18,7 +18,7 @@ export function useMatchWorkspacePrimaryAction(input: {
     const nextValidation = validateMatchForm(values);
     if (!nextValidation.success) {
       setShowValidationErrors(true);
-      setValidationMessage(nextValidation.firstMessage ?? "入力内容を確認してください");
+      setValidationMessage(nextValidation.firstMessage ?? "入力内容に不足があります");
       return;
     }
     setShowValidationErrors(false);

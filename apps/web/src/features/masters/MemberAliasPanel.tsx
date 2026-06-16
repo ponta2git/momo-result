@@ -86,7 +86,7 @@ export function MemberAliasPanel({
               {member.displayName}
             </h3>
             {memberAliases.length === 0 ? (
-              <EmptyState className="mt-2" title="未登録" description="別名はまだありません。" />
+              <EmptyState className="mt-2" title="未登録" description="別名は未登録です。" />
             ) : (
               <ul className="mt-2 grid gap-2">
                 {memberAliases.map((alias) => (

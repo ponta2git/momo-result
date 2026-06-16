@@ -27,14 +27,16 @@ export function Notice({ action, children, className, role, title, tone = "info"
   return (
     <section
       className={cn(
-        "rounded-[var(--radius-md)] border p-3 text-sm leading-6",
+        "momo-copy rounded-[var(--radius-md)] border p-3 text-sm",
         toneClass[tone],
         className,
       )}
       role={role ?? (tone === "danger" ? "alert" : "status")}
     >
       {title ? (
-        <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">{title}</h3>
+        <h3 className="momo-heading text-sm font-semibold text-[var(--color-text-primary)]">
+          {title}
+        </h3>
       ) : null}
       <div className={cn("min-w-0 text-pretty", title ? "mt-1" : "")}>{children}</div>
       {action ? <div className="mt-2">{action}</div> : null}

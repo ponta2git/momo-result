@@ -67,7 +67,7 @@ export function MatchesWorkQueueSummary({
       aria-label={totalIncomplete === 0 ? "未完了の処理はありません" : "未完了の処理"}
     >
       <div className="flex min-w-0 items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-[var(--color-text-primary)]">未完了の状態</h2>
+        <h2 className="text-sm font-semibold text-[var(--color-text-primary)]">未完了タスク</h2>
         <p className="text-xs text-[var(--color-text-secondary)] tabular-nums">
           {totalIncomplete === 0 ? "対応なし" : `${totalIncomplete.toLocaleString()}件`}
         </p>
@@ -99,7 +99,7 @@ export function MatchesWorkQueueSummary({
                   {item.label}
                 </span>
                 <span className="mt-0.5 block text-xs leading-5 text-[var(--color-text-secondary)]">
-                  {empty ? "今はなし" : item.description}
+                  {empty ? "対応なし" : item.description}
                 </span>
               </span>
               <span className="text-xl font-semibold text-[var(--color-text-primary)] tabular-nums">

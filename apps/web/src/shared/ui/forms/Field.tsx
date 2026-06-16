@@ -38,7 +38,10 @@ export function Field({
   return (
     <div className={cn("flex min-w-0 flex-col gap-1.5", className)} {...props}>
       <label
-        className={cn("text-sm font-semibold text-[var(--color-text-primary)]", labelClassName)}
+        className={cn(
+          "text-sm leading-5 font-semibold text-[var(--color-text-primary)]",
+          labelClassName,
+        )}
         htmlFor={htmlFor}
       >
         {label}
@@ -48,7 +51,7 @@ export function Field({
       {description ? (
         <p
           id={resolvedDescriptionId}
-          className="min-w-0 text-xs leading-5 text-pretty text-[var(--color-text-secondary)]"
+          className="momo-copy min-w-0 text-xs text-[var(--color-text-secondary)]"
         >
           {description}
         </p>
@@ -56,7 +59,7 @@ export function Field({
       {error ? (
         <p
           id={resolvedErrorId}
-          className="min-w-0 text-xs leading-5 text-pretty text-[var(--color-danger)]"
+          className="momo-copy min-w-0 text-xs text-[var(--color-danger)]"
           role="alert"
         >
           {error}

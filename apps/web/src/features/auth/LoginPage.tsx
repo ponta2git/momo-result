@@ -25,14 +25,14 @@ export function LoginPage() {
           <section className="mx-auto w-full max-w-[34rem] space-y-4 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5 text-[var(--color-text-primary)]">
             <header>
               <h1 className="text-2xl font-semibold text-[var(--color-text-primary)]">ログイン</h1>
-              <p className="mt-2 text-sm leading-6 text-[var(--color-text-secondary)]">
-                Discordアカウントでログインして、試合一覧・OCR・出力機能を利用します。
+              <p className="momo-copy mt-2 text-sm text-[var(--color-text-secondary)]">
+                Discordでログインすると、試合一覧、OCR、CSV/TSV出力を使えます。
               </p>
             </header>
 
             {reason === "forbidden" ? (
               <Notice tone="warning" title="アクセス権限がありません">
-                このアカウントは利用許可されていません。管理者に連絡してください。
+                このアカウントでは利用できません。管理者に確認してください。
               </Notice>
             ) : null}
 
@@ -43,8 +43,8 @@ export function LoginPage() {
               loginNextPath={next}
             />
 
-            <p className="text-xs leading-6 text-[var(--color-text-secondary)]">
-              別のDiscordアカウントを使う場合は、Discord側でログアウトするか、シークレットウィンドウを利用してください。
+            <p className="momo-copy text-xs text-[var(--color-text-secondary)]">
+              別のDiscordアカウントを使う場合は、Discord側でログアウトするか、シークレットウィンドウで開きます。
             </p>
           </section>
         </PageFrame>

@@ -47,7 +47,7 @@ export function OcrCapturePage() {
       <PageHeader
         eyebrow="OCR"
         title="OCR取り込み"
-        description="試合条件を選び、総資産・収益・事件簿の画像を読み取ります。処理状況は試合一覧で確認できます。"
+        description="試合条件を選び、総資産・収益・事件簿の画像を読み取ります。進行中の状態は試合一覧で追跡できます。"
       />
 
       {auth.error ? (
@@ -68,7 +68,7 @@ export function OcrCapturePage() {
           <section className={panelClass}>
             <div className="mb-4">
               <h2 className={panelTitleClass}>1. 試合設定</h2>
-              <p className={panelLeadClass}>確認画面で使う開催情報を先に選びます。</p>
+              <p className={panelLeadClass}>確認画面に引き継ぐ開催情報を先に選びます。</p>
             </div>
             <SetupPanel
               value={setup}
@@ -83,7 +83,7 @@ export function OcrCapturePage() {
               <div className="mb-4">
                 <h2 className={panelTitleClass}>2. 画像を入れる</h2>
                 <p className={panelLeadClass}>
-                  撮影またはファイル追加で、空いている分類へ配置します。違う分類なら右側で入れ替えます。
+                  撮影またはファイル追加で、空いている分類へ入れます。違う分類なら右側で入れ替えます。
                 </p>
               </div>
               <div className="grid gap-4">
@@ -103,7 +103,7 @@ export function OcrCapturePage() {
                   <p className="text-xs text-[var(--color-text-secondary)]">
                     {slotsFull
                       ? "3枚すべて配置済みのため、画像を追加できません。"
-                      : "カメラが使えない場合は画像ファイルを追加してください。"}
+                      : "カメラが使えない場合は画像ファイルも追加できます。"}
                   </p>
                 </div>
               </div>
@@ -129,17 +129,17 @@ export function OcrCapturePage() {
                 <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
                   {selectedSlotLabels.length > 0
                     ? `送信対象: ${selectedSlotLabels.join(" / ")}`
-                    : "画像は1枚から開始できます。状況は試合一覧で確認できます。"}
+                    : "画像は1枚から開始できます。状況は試合一覧で追跡できます。"}
                 </p>
                 {partialStartAcknowledged && ocrReadyCount < slotDefinitions.length ? (
                   <p className="mt-2 text-sm font-semibold text-[var(--color-review)]">
                     画像が{ocrReadyCount}
-                    件だけ選択されています。このまま進める場合は、もう一度開始してください。
+                    件だけ選択されています。このまま進める場合は、もう一度開始ボタンを押してください。
                   </p>
                 ) : null}
                 {hasWorkingSlot ? (
                   <p className="mt-2 text-sm font-semibold text-[var(--color-action)]">
-                    読み取り中は分類と削除を固定します。状態は試合一覧で確認できます。
+                    読み取り中は分類と削除を固定します。状態は試合一覧で追跡できます。
                   </p>
                 ) : null}
                 {setupBlockedReason ? (
@@ -180,7 +180,7 @@ export function OcrCapturePage() {
           <div>
             <h2 className={panelTitleClass}>3. 分類トレイ</h2>
             <p className={panelLeadClass}>
-              分類名が読み取りの種類になります。違っていたらカード内の操作で入れ替えます。
+              分類名が読み取りの種類です。違っていたらカード内の操作で入れ替えます。
             </p>
           </div>
           <CaptureRail

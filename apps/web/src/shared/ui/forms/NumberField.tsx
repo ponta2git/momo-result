@@ -51,7 +51,7 @@ export function NumberField({
         <input
           {...props}
           className={cn(
-            "min-h-10 w-full min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[var(--color-text-primary)] tabular-nums",
+            "momo-data min-h-10 w-full min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[var(--color-text-primary)]",
             widthClass[width],
             error ? "border-[var(--color-danger)]" : "",
             className,

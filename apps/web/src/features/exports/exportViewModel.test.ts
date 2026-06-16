@@ -55,7 +55,7 @@ describe("exportViewModel", () => {
     });
 
     expect(view.canDownload).toBe(false);
-    expect(view.disableReason).toBe("書き出す対象を選択してください。");
+    expect(view.disableReason).toBe("書き出す対象が未選択です。");
   });
 
   it("disables download while scoped candidates are refreshing", () => {

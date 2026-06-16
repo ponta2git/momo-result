@@ -31,7 +31,7 @@ describe("MatchesListFilters", () => {
       />,
     );
 
-    await user.selectOptions(screen.getByLabelText("表の並び順"), "updated_desc");
+    await user.selectOptions(screen.getByLabelText("並び順"), "updated_desc");
 
     expect(onApply).toHaveBeenCalledWith({
       ...initialSearch,

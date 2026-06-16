@@ -1,10 +1,17 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif;
-  --font-display: "Dela Gothic One", "Zen Kaku Gothic New", sans-serif;
-  --font-momo-ui: "Noto Sans JP", "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif;
-  --font-momo-heading: "M PLUS Rounded 1c", "Noto Sans JP", "Zen Kaku Gothic New", sans-serif;
+  --font-sans: var(--font-momo-ui);
+  --font-display: var(--font-momo-heading);
+  --font-momo-ui:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN",
+    "Yu Gothic", YuGothic, Meiryo, sans-serif;
+  --font-momo-heading:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN",
+    "Yu Gothic", YuGothic, Meiryo, sans-serif;
+  --font-momo-data:
+    ui-monospace, "SFMono-Regular", "SF Mono", "Cascadia Mono", "Roboto Mono", "Yu Gothic",
+    YuGothic, monospace;
 
   --momo-mist-50: #f5f8f7;
   --momo-white: #ffffff;
@@ -81,12 +88,46 @@ body {
   background: var(--color-canvas);
   color: var(--color-text-primary);
   font-family: var(--font-momo-ui);
+  font-feature-settings: "palt" 1;
+  font-kerning: normal;
+  line-break: strict;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-momo-heading);
+  line-height: 1.35;
+  text-wrap: balance;
+}
+
+p,
+li,
+dd {
+  text-wrap: pretty;
 }
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
+}
+
+code,
+kbd,
+pre,
+samp {
+  font-family: var(--font-momo-data);
+  font-feature-settings: normal;
+}
+
+::placeholder {
+  color: var(--color-text-muted);
+  opacity: 1;
 }
 
 *:focus-visible {
@@ -146,4 +187,27 @@ select {
 
 @utility momo-safe-bottom {
   bottom: max(calc(env(safe-area-inset-bottom) + 1rem), 1rem);
+}
+
+@utility momo-copy {
+  line-height: 1.75;
+  text-wrap: pretty;
+}
+
+@utility momo-heading {
+  font-family: var(--font-momo-heading);
+  line-height: 1.35;
+  text-wrap: balance;
+}
+
+@utility momo-label {
+  font-size: 0.75rem;
+  font-weight: 650;
+  line-height: 1.5;
+}
+
+@utility momo-data {
+  font-family: var(--font-momo-data);
+  font-feature-settings: "tnum" 1;
+  font-variant-numeric: tabular-nums;
 }

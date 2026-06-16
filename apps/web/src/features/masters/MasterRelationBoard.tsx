@@ -86,7 +86,7 @@ export function MasterRelationBoard({
         onDelete={onDeleteMapMaster}
         onUpdate={onUpdateMapMaster}
         selectedGameTitleName={selectedGameTitleName}
-        emptyDescription="この作品に紐づくマップを追加してください。"
+        emptyDescription="この作品に紐づくマップは未登録です。"
         createAction={mapCreateAction}
         createError={mapCreateError}
         createFormKey={mapCreateFormKey}
@@ -101,7 +101,7 @@ export function MasterRelationBoard({
         onDelete={onDeleteSeasonMaster}
         onUpdate={onUpdateSeasonMaster}
         selectedGameTitleName={selectedGameTitleName}
-        emptyDescription="この作品に紐づくシーズンを追加してください。"
+        emptyDescription="この作品に紐づくシーズンは未登録です。"
         createAction={seasonCreateAction}
         createError={seasonCreateError}
         createFormKey={seasonCreateFormKey}

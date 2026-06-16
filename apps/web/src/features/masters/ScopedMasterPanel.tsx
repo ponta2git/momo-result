@@ -56,7 +56,7 @@ export function ScopedMasterPanel({
           <Skeleton className="h-12 rounded-[var(--radius-sm)]" />
         </div>
       ) : items.length === 0 ? (
-        <EmptyState className="mt-3" title="登録がありません" description={emptyDescription} />
+        <EmptyState className="mt-3" title="登録はまだありません" description={emptyDescription} />
       ) : (
         <ul className="mt-3 grid gap-2">
           {items.map((item) => {

@@ -48,7 +48,7 @@ describe("app routing", () => {
     expect(screen.getByRole("link", { name: "ログイン" })).toBeInTheDocument();
     expect(
       screen.getByText(
-        "別のDiscordアカウントを使う場合は、Discord側でログアウトするか、シークレットウィンドウを利用してください。",
+        "別のDiscordアカウントを使う場合は、Discord側でログアウトするか、シークレットウィンドウで開きます。",
       ),
     ).toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/login");
@@ -83,7 +83,7 @@ describe("app routing", () => {
 
     const loadingState = await screen.findByLabelText("ログイン状態を確認中");
     expect(loadingState).toHaveAttribute("aria-busy", "true");
-    expect(screen.getByText("ログイン状態を確認しています…")).toBeInTheDocument();
+    expect(screen.getByText("ログイン状態を確認中…")).toBeInTheDocument();
 
     responseGate.resolve();
     expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
@@ -368,7 +368,7 @@ describe("app routing", () => {
 
     renderApp("/analytics/series");
 
-    expect(await screen.findByText("対象作品を読み込めませんでした。")).toBeInTheDocument();
+    expect(await screen.findByText("対象作品を読み込めません")).toBeInTheDocument();
     expect(screen.queryByText("比較できる戦績がありません")).not.toBeInTheDocument();
   });
 });

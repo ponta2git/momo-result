@@ -601,8 +601,8 @@ function ReviewViewContent({
 }) {
   if (hasReviewError) {
     return (
-      <Notice tone="danger" title="振り返りを読み込めませんでした。">
-        条件を変えるか、少し時間を置いて再読み込みしてください。
+      <Notice tone="danger" title="振り返りを読み込めません">
+        条件を変えるか、時間をおいて再読み込みしてください。
       </Notice>
     );
   }
@@ -2810,8 +2810,8 @@ export function SeriesComparisonPage() {
       />
 
       {controller.hasOptionsError ? (
-        <Notice tone="danger" title="対象作品を読み込めませんでした。">
-          通信状態を確認してから再読み込みしてください。
+        <Notice tone="danger" title="対象作品を読み込めません">
+          通信状態を確認して、再読み込みしてください。
         </Notice>
       ) : null}
 
@@ -2851,8 +2851,8 @@ export function SeriesComparisonPage() {
           </section>
 
           {controller.hasAggregateError ? (
-            <Notice tone="danger" title="戦績データを読み込めませんでした。">
-              条件を変えるか、少し時間を置いて再読み込みしてください。
+            <Notice tone="danger" title="戦績データを読み込めません">
+              条件を変えるか、時間をおいて再読み込みしてください。
             </Notice>
           ) : controller.aggregateLoading ? (
             <ComparisonSkeleton />

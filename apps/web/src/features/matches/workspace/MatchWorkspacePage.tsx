@@ -227,10 +227,10 @@ export function MatchWorkspacePage({
       {isOcrRunningBlocked ? (
         <Card className="mt-5">
           <h2 className="text-xl font-semibold text-[var(--color-text-primary)]">
-            読み取り中のため編集できません
+            読み取り中は編集できません
           </h2>
           <p className="mt-2 text-sm text-pretty text-[var(--color-text-secondary)]">
-            読み取りが完了するまで結果確認画面には入れません。完了後に試合一覧の「確認待ち」から再度開いてください。
+            読み取りが終わるまで結果確認は開けません。完了後、試合一覧の「確認待ち」から開きます。
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <Button
@@ -240,7 +240,7 @@ export function MatchWorkspacePage({
               variant="secondary"
               onClick={refreshReviewStatus}
             >
-              状態を更新
+              状態を再確認
             </Button>
             <Link
               className="text-sm font-semibold text-[var(--color-action)] hover:underline"
@@ -321,7 +321,7 @@ export function MatchWorkspacePage({
             message={
               validation.success
                 ? "確定前の確認へ進めます"
-                : (validation.firstMessage ?? "入力内容を確認してください")
+                : (validation.firstMessage ?? "入力内容に不足があります")
             }
             pending={isMutating}
             primaryActionRef={primaryActionRef}

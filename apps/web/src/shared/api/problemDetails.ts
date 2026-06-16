@@ -13,11 +13,11 @@ export type NormalizedApiError = {
 };
 
 const idempotencyInProgressMessage =
-  "同じ操作を処理中です。しばらく待ってから、同じ内容でもう一度実行してください。";
+  "同じ操作を処理中です。少し待ってから、同じ内容で再実行してください。";
 const idempotencyPayloadMismatchMessage =
-  "送信内容が変更されています。現在の内容でもう一度実行してください。";
+  "送信内容が変わっています。現在の内容で再実行してください。";
 const payloadTooLargeMessage =
-  "送信内容が大きすぎます。入力内容を減らすか、画像ファイルは画像アップロードから送信してください。";
+  "送信内容が大きすぎます。入力を減らすか、画像アップロードを使ってください。";
 
 function isProblemDetails(value: unknown): value is ProblemDetails {
   if (!value || typeof value !== "object") {

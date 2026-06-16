@@ -80,7 +80,7 @@ describe("HeldEventsPage", () => {
 
     renderPage();
 
-    expect(await screen.findByText("開催履歴がまだありません")).toBeInTheDocument();
+    expect(await screen.findByText("開催履歴はまだありません")).toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "ページネーション" })).not.toBeInTheDocument();
   });
 
@@ -113,7 +113,7 @@ describe("HeldEventsPage", () => {
       expect(screen.getByLabelText("current location")).toHaveTextContent("/held-events"),
     );
     expect(await screen.findByRole("link", { name: "試合" })).toBeInTheDocument();
-    expect(screen.queryByText("開催履歴がまだありません")).not.toBeInTheDocument();
+    expect(screen.queryByText("開催履歴はまだありません")).not.toBeInTheDocument();
   });
 
   it("creates a held event and adds it to the visible list", async () => {
@@ -163,7 +163,7 @@ describe("HeldEventsPage", () => {
     expect(screen.getByText("開催履歴を削除しますか？")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "削除する" }));
 
-    await screen.findByText("開催履歴がまだありません");
+    await screen.findByText("開催履歴はまだありません");
     expect(screen.getByText("0開催 / 0試合")).toBeInTheDocument();
     expect(screen.getByText("開催履歴を削除しました。")).toBeInTheDocument();
   });

@@ -64,7 +64,7 @@ export function StatusPill({ className, hideIcon = false, note, status }: Status
   return (
     <span
       className={cn(
-        "inline-flex min-h-8 min-w-0 items-center gap-1.5 rounded-[var(--radius-xs)] border px-2 py-1 text-xs font-semibold leading-5",
+        "inline-flex min-h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[var(--radius-xs)] border px-2 py-1 text-xs font-semibold leading-5",
         model.toneClass,
         className,
       )}
@@ -74,8 +74,8 @@ export function StatusPill({ className, hideIcon = false, note, status }: Status
           {model.icon}
         </span>
       )}
-      <span className="truncate">{model.shortLabel}</span>
-      {note ? <span className="truncate text-[var(--color-text-secondary)]">{note}</span> : null}
+      <span>{model.shortLabel}</span>
+      {note ? <span className="text-[var(--color-text-secondary)]">{note}</span> : null}
     </span>
   );
 }

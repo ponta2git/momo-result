@@ -61,7 +61,7 @@ export function useOcrCapturePageController() {
       : setupValidation.success
         ? undefined
         : (setupValidation.error.issues[0]?.message ?? "試合設定を確認してください。")
-    : "ログイン状態を確認しています。";
+    : "ログイン状態を確認中です。";
   const selectedSlotLabels = slotDefinitions
     .filter((definition) =>
       flow.slots.some(
@@ -85,7 +85,7 @@ export function useOcrCapturePageController() {
     if (ocrReadyCount < slotDefinitions.length && !partialStartAcknowledged) {
       setPartialStartAcknowledged(true);
       notify(
-        "3種類すべての画像は揃っていません。このまま進める場合は、もう一度開始してください。",
+        "3種類すべての画像は揃っていません。このまま進める場合は、もう一度開始ボタンを押してください。",
         "warning",
       );
       return;

@@ -137,7 +137,7 @@ export function HeldEventsPage() {
             最新情報に更新
           </Button>
         }
-        description="開催回を作成し、試合一覧と出力の範囲に使います。"
+        description="開催回を作り、試合一覧と出力範囲の基準にします。"
         eyebrow="開催"
         title="開催履歴"
       />
@@ -155,7 +155,7 @@ export function HeldEventsPage() {
             <h2 className="mt-1 text-2xl font-semibold text-balance text-[var(--color-text-primary)]">
               {formatDateTime(latestEvent.heldAt)}
             </h2>
-            <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
+            <p className="momo-copy mt-2 text-sm text-[var(--color-text-secondary)]">
               現在 {latestEvent.matchCount.toLocaleString()}試合。次は第
               {(latestEvent.matchCount + 1).toLocaleString()}試合として記録します。
             </p>
@@ -187,8 +187,8 @@ export function HeldEventsPage() {
           <div className="mb-3 flex min-w-0 flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">開催回一覧</h2>
-              <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-                試合がない開催回だけ削除できます。
+              <p className="momo-copy mt-1 text-sm text-[var(--color-text-secondary)]">
+                試合がない開催回は削除できます。
               </p>
             </div>
             <div className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-2 text-sm tabular-nums">
@@ -204,8 +204,8 @@ export function HeldEventsPage() {
               <Skeleton className="min-h-24" />
             </div>
           ) : loadFailed ? (
-            <Notice tone="danger" title="開催履歴を読み込めませんでした。">
-              しばらくしてから再読み込みしてください。
+            <Notice tone="danger" title="開催履歴を読み込めません">
+              時間をおいて、再読み込みしてください。
             </Notice>
           ) : (
             <DataTable
@@ -213,9 +213,9 @@ export function HeldEventsPage() {
               emptyState={
                 <EmptyState
                   className="min-h-56"
-                  description="まず開催回を作成します。試合は開催回に紐づけて記録します。"
+                  description="最初に開催回を作ります。試合は開催回に紐づけて記録します。"
                   icon={<CalendarDays className="size-5" />}
-                  title="開催履歴がまだありません"
+                  title="開催履歴はまだありません"
                 />
               }
               getRowKey={(event) => event.id}
@@ -238,10 +238,10 @@ export function HeldEventsPage() {
           <Card className="grid gap-4">
             <div className="grid gap-1">
               <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">
-                新しい開催回
+                開催回を追加
               </h2>
               <p className="text-sm leading-6 text-[var(--color-text-secondary)]">
-                自動作成されない場合に、ここから追加します。
+                必要な開催回が一覧にないときに追加します。
               </p>
             </div>
             <TextField

@@ -58,7 +58,7 @@ export function MastersPage() {
       <PageHeader
         eyebrow="管理"
         title="設定管理"
-        description="作品、読み取り方式、マップ、シーズン、名前の読み替えを管理します。"
+        description="作品、読み取り方式、マップ、シーズン、名前の読み替えを整えます。"
         actions={
           returnDestination ? (
             <Button
@@ -184,8 +184,8 @@ export function MastersPage() {
       ) : null}
 
       {viewModel.shouldPromptGameTitleCreation ? (
-        <Notice tone="info" title="最初に作品を追加してください">
-          マップとシーズンは作品を選んでから追加できます。
+        <Notice tone="info" title="作品が必要です">
+          マップとシーズンは、作品を選ぶと追加できます。
         </Notice>
       ) : null}
     </PageFrame>

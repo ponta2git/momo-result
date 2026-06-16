@@ -34,7 +34,7 @@ export function buttonClassName({
   variant?: ButtonVariant | undefined;
 }) {
   return cn(
-    "momo-pressable inline-flex w-auto min-w-0 items-center justify-center gap-2 rounded-[var(--radius-sm)] border font-semibold whitespace-normal break-words disabled:cursor-not-allowed disabled:opacity-60",
+    "momo-pressable inline-flex w-auto min-w-0 items-center justify-center gap-2 rounded-[var(--radius-sm)] border leading-5 font-semibold whitespace-normal break-words disabled:cursor-not-allowed disabled:opacity-60",
     sizeClass[size],
     variantClass[variant],
     className,

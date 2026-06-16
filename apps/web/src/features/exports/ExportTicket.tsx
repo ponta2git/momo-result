@@ -30,10 +30,10 @@ export function ExportTicket({ isPending, onDownload, view }: ExportTicketProps)
       <div className="relative z-[var(--z-base)] pr-0 sm:pr-20">
         <p className="text-xs font-semibold text-[var(--color-text-muted)]">出力内容</p>
         <h2 className="mt-1 text-lg font-semibold text-[var(--color-text-primary)]">
-          書き出し内容の確認
+          書き出し内容
         </h2>
         <p className="mt-2 text-sm leading-6 text-[var(--color-text-secondary)]">
-          内容を確認してからファイルを作成します。
+          作成前に、範囲と形式を確認します。
         </p>
       </div>
 
@@ -48,12 +48,12 @@ export function ExportTicket({ isPending, onDownload, view }: ExportTicketProps)
         ))}
       </dl>
 
-      <Notice tone="info" title="ファイルの内容">
-        1プレーヤー1行で出力します。金額は万円単位です。
+      <Notice tone="info" title="ファイル仕様">
+        1プレーヤー1行で出力します。金額の単位は万円です。
       </Notice>
 
       {view.disableReason ? (
-        <Notice tone="warning" title="出力条件を確認してください">
+        <Notice tone="warning" title="出力条件を確認">
           {view.disableReason}
         </Notice>
       ) : null}

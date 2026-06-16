@@ -48,7 +48,7 @@ async function startOcrAllowingPartialTray() {
   await user.click(screen.getByRole("button", { name: "読み取りを開始して試合一覧へ" }));
   expect(
     await screen.findByText(
-      "3種類すべての画像は揃っていません。このまま進める場合は、もう一度開始してください。",
+      "3種類すべての画像は揃っていません。このまま進める場合は、もう一度開始ボタンを押してください。",
     ),
   ).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "このまま読み取りを開始" }));

@@ -58,7 +58,7 @@ export function RootRedirect() {
   const auth = useAuth();
 
   if (auth.isChecking) {
-    return <AuthLoading message="ログイン状態を確認しています…" standalone />;
+    return <AuthLoading message="ログイン状態を確認中…" standalone />;
   }
 
   if (auth.isForbidden) {
@@ -77,7 +77,7 @@ export function PublicOnlyRoute({ children }: { children: ReactNode }) {
   const [searchParams] = useSearchParams();
 
   if (auth.isChecking) {
-    return <AuthLoading message="ログイン状態を確認しています…" standalone />;
+    return <AuthLoading message="ログイン状態を確認中…" standalone />;
   }
 
   if (auth.isAuthenticated) {
@@ -93,7 +93,7 @@ export function AuthenticatedRoute({ children }: { children: ReactNode }) {
   const location = useLocation();
 
   if (auth.isChecking) {
-    return <AuthLoading message="ログイン状態を確認しています…" standalone />;
+    return <AuthLoading message="ログイン状態を確認中…" standalone />;
   }
 
   if (auth.isUnauthorized) {
@@ -105,7 +105,7 @@ export function AuthenticatedRoute({ children }: { children: ReactNode }) {
     return (
       <RouteGuardFrame standalone>
         <Notice tone="danger" title="利用権限がありません">
-          このアカウントは利用許可されていません。管理者に連絡してください。
+          このアカウントでは利用できません。管理者に確認してください。
         </Notice>
       </RouteGuardFrame>
     );
@@ -138,14 +138,14 @@ export function AdminRoute({ children }: { children: ReactNode }) {
   const auth = useAuth();
 
   if (auth.isChecking) {
-    return <AuthLoading message="ログイン状態を確認しています…" />;
+    return <AuthLoading message="ログイン状態を確認中…" />;
   }
 
   if (!auth.auth?.isAdmin) {
     return (
       <PageFrame>
         <Notice tone="danger" title="管理者権限が必要です">
-          この画面は管理者だけが利用できます。
+          この画面は管理者専用です。
         </Notice>
       </PageFrame>
     );

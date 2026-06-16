@@ -66,7 +66,7 @@ describe("ExportPage", () => {
     );
 
     renderPage();
-    await screen.findByRole("heading", { name: "CSV / TSV 出力" });
+    await screen.findByRole("heading", { name: "CSV/TSV出力" });
     await user.click(screen.getByRole("button", { name: "CSVをダウンロード" }));
 
     await waitFor(() => expect(captured?.searchParams.get("format")).toBe("csv"));
@@ -117,7 +117,7 @@ describe("ExportPage", () => {
     );
 
     renderPage({ path: "/exports?matchId=match-1&format=tsv" });
-    await screen.findByRole("heading", { name: "CSV / TSV 出力" });
+    await screen.findByRole("heading", { name: "CSV/TSV出力" });
     expect(await screen.findByLabelText("試合")).toHaveValue("match-1");
     expect(screen.queryByText("draft-1")).not.toBeInTheDocument();
 
@@ -134,7 +134,7 @@ describe("ExportPage", () => {
     server.use(http.get("/api/season-masters", () => HttpResponse.json({ items: [] })));
 
     renderPage();
-    await screen.findByRole("heading", { name: "CSV / TSV 出力" });
+    await screen.findByRole("heading", { name: "CSV/TSV出力" });
     await user.click(screen.getByRole("button", { name: "シーズン" }));
 
     expect(await screen.findByText("シーズン候補がありません")).toBeInTheDocument();
@@ -162,7 +162,7 @@ describe("ExportPage", () => {
     );
 
     renderPage();
-    await screen.findByRole("heading", { name: "CSV / TSV 出力" });
+    await screen.findByRole("heading", { name: "CSV/TSV出力" });
     await user.click(screen.getByRole("button", { name: "CSVをダウンロード" }));
 
     expect(await screen.findByText("Validation Failed")).toBeInTheDocument();
@@ -237,7 +237,7 @@ describe("ExportPage", () => {
     );
 
     renderPage();
-    await screen.findByRole("heading", { name: "CSV / TSV 出力" });
+    await screen.findByRole("heading", { name: "CSV/TSV出力" });
     await user.click(screen.getByRole("button", { name: "CSVをダウンロード" }));
 
     expect(screen.getByRole("button", { name: "作成中…" })).toBeDisabled();
@@ -269,7 +269,7 @@ describe("ExportPage", () => {
     );
 
     renderPage();
-    await screen.findByRole("heading", { name: "CSV / TSV 出力" });
+    await screen.findByRole("heading", { name: "CSV/TSV出力" });
     await user.click(screen.getByRole("button", { name: "CSVをダウンロード" }));
 
     expect(await screen.findByText("出力が完了しませんでした")).toBeInTheDocument();

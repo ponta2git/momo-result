@@ -58,15 +58,15 @@ export function GameTitleList({
         <p className={labelClass}>作品</p>
         <h2 className="mt-1 text-lg font-semibold text-[var(--color-text-primary)]">作品</h2>
         <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-          作品を選ぶと、対応するマップとシーズンが表示されます。
+          作品を選ぶと、対応するマップとシーズンを編集できます。
         </p>
       </header>
 
       {items.length === 0 ? (
         <EmptyState
           className="mt-3"
-          title="作品がまだありません"
-          description="まず作品を1件追加してください。"
+          title="作品はまだありません"
+          description="作品を追加すると、マップとシーズンを登録できます。"
         />
       ) : (
         <ul className="mt-3 grid gap-2">

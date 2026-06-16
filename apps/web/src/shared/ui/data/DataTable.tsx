@@ -55,7 +55,7 @@ export function DataTable<Row>({
         className,
       )}
     >
-      <table className="w-full min-w-full border-separate border-spacing-0 text-sm">
+      <table className="w-full min-w-full border-separate border-spacing-0 text-sm leading-6">
         <thead>
           <tr>
             {columns.map((column) => (
@@ -71,7 +71,7 @@ export function DataTable<Row>({
                     : undefined
                 }
                 className={cn(
-                  "sticky top-0 z-[var(--z-base)] border-b border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3 py-2 text-xs font-semibold text-[var(--color-text-secondary)]",
+                  "sticky top-0 z-[var(--z-base)] border-b border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3 py-2 text-xs leading-5 font-semibold text-[var(--color-text-secondary)]",
                   alignClass[column.align ?? "left"],
                 )}
                 style={columnStyleByKey.get(column.key)}

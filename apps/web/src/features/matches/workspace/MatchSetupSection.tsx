@@ -58,7 +58,7 @@ export function MatchSetupSection({
     cn(inputClass, errorPathSet.has(path) ? errorClass : "");
   const FieldError = ({ path }: { path: string }) =>
     errorPathSet.has(path) ? (
-      <span className="text-xs font-semibold text-[var(--color-danger)]">入力してください</span>
+      <span className="text-xs font-semibold text-[var(--color-danger)]">未入力です</span>
     ) : null;
 
   return (
@@ -66,10 +66,10 @@ export function MatchSetupSection({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h2 className="text-xl font-semibold text-[var(--color-text-primary)]">
-            記録先と試合条件
+            保存先と試合条件
           </h2>
           <p className="mt-1 text-sm text-pretty text-[var(--color-text-secondary)]">
-            この結果をどの開催履歴・作品として保存するかを先に決めます。開催履歴、シーズン、マップ、オーナーは後から変更できます。
+            保存先の開催履歴と作品情報を先に選びます。シーズン、マップ、オーナーは後から変更できます。
           </p>
         </div>
         {selectedHeldEvent ? (
@@ -100,7 +100,7 @@ export function MatchSetupSection({
               });
             }}
           >
-            <option value="">選択してください</option>
+            <option value="">未選択</option>
             {heldEvents.map((event) => (
               <option key={event.id} value={event.id}>
                 {new Date(event.heldAt).toLocaleString()}（{event.matchCount}試合）
@@ -148,7 +148,7 @@ export function MatchSetupSection({
             value={values.gameTitleId}
             onChange={(event) => onGameTitleChange(event.target.value)}
           >
-            <option value="">選択してください</option>
+            <option value="">未選択</option>
             {(gameTitleItems ?? []).map((gameTitle) => (
               <option key={gameTitle.id} value={gameTitle.id}>
                 {gameTitle.name}
@@ -167,7 +167,7 @@ export function MatchSetupSection({
             value={values.seasonMasterId}
             onChange={(event) => onPatchRoot({ seasonMasterId: event.target.value })}
           >
-            <option value="">選択してください</option>
+            <option value="">未選択</option>
             {(seasonItems ?? []).map((season) => (
               <option key={season.id} value={season.id}>
                 {season.name}
@@ -186,7 +186,7 @@ export function MatchSetupSection({
             value={values.mapMasterId}
             onChange={(event) => onPatchRoot({ mapMasterId: event.target.value })}
           >
-            <option value="">選択してください</option>
+            <option value="">未選択</option>
             {(mapItems ?? []).map((mapMaster) => (
               <option key={mapMaster.id} value={mapMaster.id}>
                 {mapMaster.name}

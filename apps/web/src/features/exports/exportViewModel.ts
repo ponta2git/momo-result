@@ -152,7 +152,7 @@ function errorDetail(error: NormalizedApiError): string {
     return "ログイン状態または利用権限を確認してください。";
   }
   if (error.status === 422) {
-    return error.detail || "出力条件を確認してください。";
+    return error.detail || "出力条件に問題があります。";
   }
   if (error.status === 404) {
     return error.detail || "選択した対象が見つかりませんでした。";
@@ -177,7 +177,7 @@ export function buildExportViewModel(input: {
     input.urlState.errors[0] ??
     (input.candidate.kind === "error" ? input.candidate.message : undefined) ??
     (input.candidateRefreshing ? "出力対象の候補を確認中です。" : undefined) ??
-    (candidateNeedsSelection ? "書き出す対象を選択してください。" : undefined);
+    (candidateNeedsSelection ? "書き出す対象が未選択です。" : undefined);
   const selectedLabel =
     input.urlState.scope === "all"
       ? "すべての確定済み試合"

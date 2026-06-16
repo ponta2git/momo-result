@@ -68,7 +68,7 @@ export function MatchesListPage() {
   return (
     <PageFrame className="gap-5">
       <PageHeader
-        description="OCR中、確認待ち、確定済みの記録を一覧します。開催や作品で絞り込めます。"
+        description="OCR中から確定済みまで、試合記録をまとめて管理します。開催や作品で絞り込めます。"
         eyebrow="試合記録"
         title="試合一覧"
       />
@@ -123,8 +123,8 @@ export function MatchesListPage() {
       </section>
 
       {masterLoadFailed ? (
-        <Notice tone="warning" title="絞り込み候補の一部を読み込めませんでした。">
-          試合一覧は表示できます。開催、作品、シーズンの候補は再読み込み後に選択してください。
+        <Notice tone="warning" title="絞り込み候補を一部読み込めません">
+          試合一覧は表示できます。開催、作品、シーズンの候補は再読み込み後に選べます。
         </Notice>
       ) : null}
 
@@ -163,8 +163,8 @@ export function MatchesListPage() {
         {showMatchesLoading || showStaleSkeleton ? (
           <ListSkeleton />
         ) : showMatchesError ? (
-          <Notice tone="danger" title="試合一覧を読み込めませんでした。">
-            しばらくしてから再読み込みしてください。
+          <Notice tone="danger" title="試合一覧を読み込めません">
+            時間をおいて、再読み込みしてください。
           </Notice>
         ) : items.length === 0 ? (
           <EmptyState
@@ -185,11 +185,11 @@ export function MatchesListPage() {
             className="min-h-[18rem]"
             description={
               hasFilters
-                ? "状態や開催条件を広げると、他の試合記録も表示できます。"
-                : "まずはOCR取り込みか手入力で、最初の試合を登録します。"
+                ? "状態や開催条件を広げると、他の試合記録を確認できます。"
+                : "OCR取り込みか手入力で、最初の試合を登録します。"
             }
             icon={<AlertTriangle className="size-5" />}
-            title={hasFilters ? "条件に合う試合がありません" : "まだ試合がありません"}
+            title={hasFilters ? "該当する試合はありません" : "試合はまだありません"}
           />
         ) : (
           <>

@@ -134,9 +134,9 @@ describe("MatchesListPage", () => {
     );
 
     expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
-    expect(await screen.findByText("まだ試合がありません")).toBeInTheDocument();
-    const filterSection = screen.getByText("絞り込み").closest("section");
-    const workQueueSection = screen.getByText("未完了の状態").closest("section");
+    expect(await screen.findByText("試合はまだありません")).toBeInTheDocument();
+    const filterSection = screen.getByText("表示条件").closest("section");
+    const workQueueSection = screen.getByText("未完了タスク").closest("section");
     if (!filterSection || !workQueueSection) {
       throw new Error("expected filter and work queue sections to be present");
     }
@@ -199,7 +199,7 @@ describe("MatchesListPage", () => {
     );
 
     expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
-    await user.selectOptions(screen.getByLabelText("表の並び順"), "updated_desc");
+    await user.selectOptions(screen.getByLabelText("並び順"), "updated_desc");
 
     await waitFor(() =>
       expect(screen.getByLabelText("current location")).toHaveTextContent("sort=updated_desc"),
@@ -264,7 +264,7 @@ describe("MatchesListPage", () => {
     );
     const detailLinks = await screen.findAllByRole("link", { name: "詳細を見る" });
     detailLinks.forEach((link) => expect(link).toHaveAttribute("href", "/matches/match-1"));
-    expect(screen.queryByText("まだ試合がありません")).not.toBeInTheDocument();
+    expect(screen.queryByText("試合はまだありません")).not.toBeInTheDocument();
   });
 
   it("shows optimistic status selection while the filtered list is refetching", async () => {

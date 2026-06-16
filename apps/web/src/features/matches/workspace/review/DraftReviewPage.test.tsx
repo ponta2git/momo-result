@@ -470,7 +470,7 @@ describe("DraftReviewPage", () => {
     );
 
     expect(await screen.findByText("サンプルの読み取り結果で表示中")).toBeInTheDocument();
-    const matchSetupHeading = screen.getByRole("heading", { name: "記録先と試合条件" });
+    const matchSetupHeading = screen.getByRole("heading", { name: "保存先と試合条件" });
     const playerResultsHeading = screen.getByRole("heading", {
       name: "4人分の結果を確認・修正",
     });
@@ -478,7 +478,7 @@ describe("DraftReviewPage", () => {
       matchSetupHeading.compareDocumentPosition(playerResultsHeading) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(screen.getByText(/この結果をどの開催履歴・作品として保存するか/u)).toBeInTheDocument();
+    expect(screen.getByText(/保存先の開催履歴と作品情報を先に選びます/u)).toBeInTheDocument();
     expect(await screen.findByDisplayValue("あかねまみ")).toBeInTheDocument();
     expect(await screen.findByDisplayValue("15420")).toBeInTheDocument();
     expect(screen.queryByText("OCR読み取り状況を確認")).not.toBeInTheDocument();

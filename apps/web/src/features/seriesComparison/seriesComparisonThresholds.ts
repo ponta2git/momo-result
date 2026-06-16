@@ -32,6 +32,14 @@ export const SERIES_COMPARISON_THRESHOLDS = {
       strongDisadvantageTo: 0.4,
     },
   },
+  momentumSwitch: {
+    minimumOkTargetCount: 8,
+    deltaPointThresholds: {
+      afterFourth: 0.1,
+      afterLower: 0.06,
+      afterPodium: 0.06,
+    },
+  },
 } as const;
 
 export function averageRankSpreadBands(matchCount: number | null | undefined) {

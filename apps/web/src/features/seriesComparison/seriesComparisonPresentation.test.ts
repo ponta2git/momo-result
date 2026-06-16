@@ -11,7 +11,10 @@ import {
   formatPercent,
   formatPlayOrderLabel,
   formatSigned,
+  formatSignedPercentPoint,
   leaderSummary,
+  momentumSwitchEmphasis,
+  momentumSwitchMap,
   numericExtrema,
   playOrderColor,
   playOrderHeatmapRows,
@@ -32,6 +35,8 @@ describe("seriesComparisonPresentation", () => {
     expect(formatCountRate({ count: 0, rate: undefined, targetCount: 0 })).toBe("対象なし");
     expect(formatSigned(1.2)).toBe("+1.20");
     expect(formatSigned(-1.2, "pt")).toBe("-1.20pt");
+    expect(formatSignedPercentPoint(0.084)).toBe("+8.4pt");
+    expect(formatSignedPercentPoint(-0.061)).toBe("-6.1pt");
     expect(formatMoney(12_345.6)).toBe("1億2346万円");
   });
 
@@ -163,6 +168,59 @@ describe("seriesComparisonPresentation", () => {
     ]);
   });
 
+  it("maps momentum switch entries and emphasizes only ok threshold deltas", () => {
+    const response = responseWithRankAverages([["p0", "ポン太", 2.4]]);
+    response.momentumSwitch = {
+      entries: [
+        {
+          afterFourth: {
+            baselineRate: 0.55,
+            deltaFromBaseline: -0.12,
+            rate: 0.43,
+            status: "ok",
+            successCount: 3,
+            targetCount: 8,
+          },
+          afterLower: {
+            baselineRate: 0.55,
+            deltaFromBaseline: 0.061,
+            rate: 0.611,
+            status: "ok",
+            successCount: 5,
+            targetCount: 8,
+          },
+          afterPodium: {
+            baselineRate: 0.45,
+            deltaFromBaseline: -0.061,
+            rate: 0.389,
+            status: "ok",
+            successCount: 3,
+            targetCount: 8,
+          },
+          denominator: 9,
+          memberId: "p0",
+          transitionCount: 8,
+          transitionRows: [],
+        },
+      ],
+    };
+
+    expect(momentumSwitchMap(response).get("p0")?.transitionCount).toBe(8);
+    expect(momentumSwitchEmphasis("afterLower", 0.061, "ok")).toEqual({
+      kind: "strength",
+      label: "強み",
+    });
+    expect(momentumSwitchEmphasis("afterFourth", -0.12, "ok")).toEqual({
+      kind: "risk",
+      label: "注意",
+    });
+    expect(momentumSwitchEmphasis("afterPodium", -0.061, "ok")).toEqual({
+      kind: "strength",
+      label: "強み",
+    });
+    expect(momentumSwitchEmphasis("afterLower", 0.2, "reference")).toBeUndefined();
+  });
+
   it("derives revenue-rank conversion rows and keeps tied revenue ranks", () => {
     const response = responseWithRankAverages([["p0", "ポン太", 2.4]]);
     response.matchPlayerPoints = [
@@ -220,11 +278,12 @@ function responseWithRankAverages(
       memberId,
       metrics: baseMetrics(rankAverage),
     })),
+    momentumSwitch: { entries: [] },
     playerPerformanceProfiles: { entries: [] },
     playOrderBaselines: [],
     players: values.map(([memberId, displayName]) => ({ displayName, memberId })),
     recentFormByPlayer: [],
-    schemaVersion: 7,
+    schemaVersion: 8,
     scope: {
       gameTitleId: "title",
       gameTitleName: "桃鉄",

@@ -345,11 +345,12 @@ function responseWithRankAverages(
       memberId: `p${index}`,
       metrics: baseMetrics({ rankAverage: value }),
     })),
+    momentumSwitch: { entries: [] },
     playerPerformanceProfiles: { entries: [] },
     playOrderBaselines: [],
     players: values.map((_, index) => ({ displayName: `P${index}`, memberId: `p${index}` })),
     recentFormByPlayer: [],
-    schemaVersion: 7,
+    schemaVersion: 8,
     scope: {
       gameTitleId: "title",
       gameTitleName: "桃鉄",

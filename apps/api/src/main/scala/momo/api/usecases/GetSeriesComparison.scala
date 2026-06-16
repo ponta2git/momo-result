@@ -32,6 +32,7 @@ object GetSeriesComparison:
 private object SeriesComparisonAggregation {
   private object Thresholds:
     val MinimumOkSampleSize = 3
+    val MomentumSwitchMinimumOkSampleSize = 8
     val RecentFormWindowSize = 8
     val HistogramLowerPercentile = 0.05
     val HistogramUpperPercentile = 0.95
@@ -111,6 +112,11 @@ private object SeriesComparisonAggregation {
     "cardShopDestination.noDestinationWithShop",
     "cardShopDestination.noDestinationWithoutShop",
   )
+  private val MomentumSwitchMetricIds = List(
+    "momentumSwitch.afterLowerPodiumRate",
+    "momentumSwitch.afterFourthPodiumRate",
+    "momentumSwitch.afterPodiumLowerRate",
+  )
   private val PreferredPlayerOrder =
     Map("member_eu" -> 0, "member_ponta" -> 1, "member_akane_mami" -> 2, "member_otaka" -> 3)
 
@@ -166,7 +172,7 @@ private object SeriesComparisonAggregation {
     val quality =
       dataQuality(playerOrder, rowsByPlayer, orderedRows, revenueRanks, destinationRanks)
     SeriesComparisonResponse(
-      schemaVersion = 7,
+      schemaVersion = 8,
       scope = SeriesComparisonScopeResponse(
         gameTitleId = scope.gameTitleId.value,
         gameTitleName = scope.gameTitleName,
@@ -189,6 +195,7 @@ private object SeriesComparisonAggregation {
       headToHead = headToHead(playerOrder, orderedRows),
       matchPlayerPoints = matchPlayerPoints(orderedRows, matchIndexById, revenueRanks, assetsRanks),
       recentFormByPlayer = recentFormByPlayer(playerOrder, rowsByPlayer),
+      momentumSwitch = momentumSwitchByPlayer(playerOrder, rowsByPlayer),
       playerPerformanceProfiles = playerPerformanceProfiles(playerOrder, rowsByPlayer, metrics),
       assetStyleProfiles = assetStyleProfiles(playerOrder, rowsByPlayer, orderedRows),
       matchNoInEventBreakdown = matchNoInEventBreakdown(playerOrder, orderedRows),
@@ -568,6 +575,87 @@ private object SeriesComparisonAggregation {
         status = normalStatus(recent.size),
       )
     }
+
+  private def momentumSwitchByPlayer(
+      playerOrder: List[MemberId],
+      rowsByPlayer: Map[MemberId, List[SeriesComparisonMatchPlayerRow]],
+  ): MomentumSwitchResponse = MomentumSwitchResponse(playerOrder.map { memberId =>
+    val rows = sortedPlayerRows(rowsByPlayer.getOrElse(memberId, Nil))
+    val transitions = rankTransitions(rows)
+    val podiumBaseline = rate(rows.count(_.rank.value <= 2), rows.size)
+    val lowerHalfBaseline = rate(rows.count(_.rank.value >= 3), rows.size)
+    MomentumSwitchPlayerResponse(
+      memberId = memberId.value,
+      denominator = rows.size,
+      transitionCount = transitions.size,
+      afterLower = momentumSwitchRate(
+        transitions,
+        previousMatches = _.rank.value >= 3,
+        currentMatches = _.rank.value <= 2,
+        baselineRate = podiumBaseline,
+      ),
+      afterFourth = momentumSwitchRate(
+        transitions,
+        previousMatches = _.rank.value == 4,
+        currentMatches = _.rank.value <= 2,
+        baselineRate = podiumBaseline,
+      ),
+      afterPodium = momentumSwitchRate(
+        transitions,
+        previousMatches = _.rank.value <= 2,
+        currentMatches = _.rank.value >= 3,
+        baselineRate = lowerHalfBaseline,
+      ),
+      transitionRows = momentumSwitchTransitionRows(transitions),
+    )
+  })
+
+  private def momentumSwitchRate(
+      transitions: List[RankTransition],
+      previousMatches: SeriesComparisonMatchPlayerRow => Boolean,
+      currentMatches: SeriesComparisonMatchPlayerRow => Boolean,
+      baselineRate: Option[Double],
+  ): MomentumSwitchRateResponse =
+    val targets = transitions.filter(transition => previousMatches(transition.previous))
+    val successCount = targets.count(transition => currentMatches(transition.current))
+    val switchRate = rate(successCount, targets.size)
+    MomentumSwitchRateResponse(
+      targetCount = targets.size,
+      successCount = successCount,
+      rate = switchRate,
+      baselineRate = baselineRate,
+      deltaFromBaseline = (switchRate, baselineRate).mapN(_ - _),
+      status = momentumSwitchStatus(targets.size),
+    )
+
+  private def momentumSwitchTransitionRows(
+      transitions: List[RankTransition]
+  ): List[MomentumSwitchTransitionRowResponse] = (1 to 4).toList.map { previousRank =>
+    val targets = transitions.filter(_.previous.rank.value == previousRank)
+    val targetCount = targets.size
+    MomentumSwitchTransitionRowResponse(
+      previousRank = previousRank,
+      targetCount = targetCount,
+      status = momentumSwitchStatus(targetCount),
+      cells = (1 to 4).toList.map { nextRank =>
+        val count = targets.count(_.current.rank.value == nextRank)
+        MomentumSwitchTransitionCellResponse(
+          nextRank = nextRank,
+          count = count,
+          rate = rate(count, targetCount),
+        )
+      },
+    )
+  }
+
+  private final case class RankTransition(
+      previous: SeriesComparisonMatchPlayerRow,
+      current: SeriesComparisonMatchPlayerRow,
+  )
+
+  private def rankTransitions(rows: List[SeriesComparisonMatchPlayerRow]): List[RankTransition] =
+    rows.sliding(2).collect { case List(previous, current) => RankTransition(previous, current) }
+      .toList
 
   private def playerPerformanceProfiles(
       playerOrder: List[MemberId],
@@ -1226,6 +1314,7 @@ private object SeriesComparisonAggregation {
       val destinationMetric = destinationMetrics(rows, destinationRanks)
       val revenueOutcome = revenueOutcomeMetrics(rows, allRows, revenueRanks)
       val destinationOutcome = destinationOutcomeMetrics(rows, allRows, destinationRanks)
+      val momentumTargetCounts = momentumSwitchTargetCounts(rows)
       val cardShopDestinationCounts = Map(
         "cardShopDestination.destinationWithShop" ->
           rows.count(row => row.incidents.destination > 0 && row.incidents.cardShop > 0),
@@ -1276,9 +1365,30 @@ private object SeriesComparisonAggregation {
           hasTies = metricHasTies(metricId, revenueRanks, destinationRanks),
         )
       }
-      normal ++ conditional
+      val momentumSwitch = MomentumSwitchMetricIds.map { metricId =>
+        val target = momentumTargetCounts.getOrElse(metricId, 0)
+        MetricQualityResponse(
+          metricId,
+          Some(memberId.value),
+          denominator,
+          target,
+          momentumSwitchStatus(target),
+          hasTies = false,
+        )
+      }
+      normal ++ conditional ++ momentumSwitch
     }
     SeriesComparisonDataQualityResponse(items)
+
+  private def momentumSwitchTargetCounts(
+      rows: List[SeriesComparisonMatchPlayerRow]
+  ): Map[String, Int] =
+    val transitions = rankTransitions(sortedPlayerRows(rows))
+    Map(
+      "momentumSwitch.afterLowerPodiumRate" -> transitions.count(_.previous.rank.value >= 3),
+      "momentumSwitch.afterFourthPodiumRate" -> transitions.count(_.previous.rank.value == 4),
+      "momentumSwitch.afterPodiumLowerRate" -> transitions.count(_.previous.rank.value <= 2),
+    )
 
   private def highlights(
       metrics: Map[String, SeriesComparisonPlayerMetricsResponse]
@@ -1461,6 +1571,11 @@ private object SeriesComparisonAggregation {
   private def conditionalStatus(targetCount: Int): String =
     if targetCount == 0 then "no_target"
     else if targetCount < Thresholds.MinimumOkSampleSize then "reference"
+    else "ok"
+
+  private def momentumSwitchStatus(targetCount: Int): String =
+    if targetCount == 0 then "no_target"
+    else if targetCount < Thresholds.MomentumSwitchMinimumOkSampleSize then "reference"
     else "ok"
 
   private def metricHasTies(

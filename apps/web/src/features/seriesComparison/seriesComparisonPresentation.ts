@@ -1,10 +1,16 @@
 import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
 import { formatManYen } from "@/shared/lib/formatters";
 
+import { SERIES_COMPARISON_THRESHOLDS } from "./seriesComparisonThresholds";
+
 export type Player = NonNullable<SeriesComparisonResponse["players"]>[number];
 type MetricsEntry = NonNullable<SeriesComparisonResponse["metricsByPlayer"]>[number];
 export type PlayerMetrics = MetricsEntry["metrics"];
 export type RecentFormEntry = NonNullable<SeriesComparisonResponse["recentFormByPlayer"]>[number];
+export type MomentumSwitchEntry = NonNullable<
+  SeriesComparisonResponse["momentumSwitch"]["entries"]
+>[number];
+export type MomentumSwitchRateKey = "afterFourth" | "afterLower" | "afterPodium";
 export type PerformanceProfileEntry = NonNullable<
   SeriesComparisonResponse["playerPerformanceProfiles"]["entries"]
 >[number];
@@ -82,6 +88,15 @@ export function formatSigned(value: NullableNumber, unit = ""): string {
   return `${sign}${value.toFixed(2)}${unit}`;
 }
 
+export function formatSignedPercentPoint(value: NullableNumber): string {
+  if (!isNumber(value)) {
+    return "-";
+  }
+  const point = value * 100;
+  const sign = point > 0 ? "+" : "";
+  return `${sign}${point.toFixed(1)}pt`;
+}
+
 export function formatPercent(value: NullableNumber): string {
   return isNumber(value) ? `${(value * 100).toFixed(1)}%` : "-";
 }
@@ -124,6 +139,39 @@ export function metricsMap(response: SeriesComparisonResponse): Map<string, Play
 
 export function recentFormMap(response: SeriesComparisonResponse): Map<string, RecentFormEntry> {
   return new Map((response.recentFormByPlayer ?? []).map((entry) => [entry.memberId, entry]));
+}
+
+export function momentumSwitchMap(
+  response: SeriesComparisonResponse,
+): Map<string, MomentumSwitchEntry> {
+  return new Map((response.momentumSwitch.entries ?? []).map((entry) => [entry.memberId, entry]));
+}
+
+export function momentumSwitchEmphasis(
+  kind: MomentumSwitchRateKey,
+  deltaFromBaseline: NullableNumber,
+  status: string | null | undefined,
+): MetricEmphasis | undefined {
+  if (status !== "ok" || !isNumber(deltaFromBaseline)) {
+    return undefined;
+  }
+  const threshold = SERIES_COMPARISON_THRESHOLDS.momentumSwitch.deltaPointThresholds[kind];
+  if (kind === "afterPodium") {
+    if (deltaFromBaseline <= -threshold) {
+      return { kind: "strength", label: "強み" };
+    }
+    if (deltaFromBaseline >= threshold) {
+      return { kind: "risk", label: "注意" };
+    }
+    return undefined;
+  }
+  if (deltaFromBaseline >= threshold) {
+    return { kind: "strength", label: "強み" };
+  }
+  if (deltaFromBaseline <= -threshold) {
+    return { kind: "risk", label: "注意" };
+  }
+  return undefined;
 }
 
 export function performanceProfileMap(

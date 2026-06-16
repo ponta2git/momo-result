@@ -139,6 +139,9 @@ export function makeSeriesComparisonResponse(): SeriesComparisonResponse {
       totalGinjiCount: index % 4 === 0 ? 2 : 0,
       winnerMemberId: players[index % players.length]!.memberId,
     })),
+    momentumSwitch: {
+      entries: players.map((player, index) => momentumSwitchEntry(player.memberId, index)),
+    },
     metricsByPlayer: players.map((player, index) => ({
       memberId: player.memberId,
       metrics: {
@@ -262,7 +265,7 @@ export function makeSeriesComparisonResponse(): SeriesComparisonResponse {
       entries: players.map((player, index) => cardShopDestinationEntry(player.memberId, index)),
     },
     players,
-    schemaVersion: 7,
+    schemaVersion: 8,
     recentFormByPlayer: players.map((player, index) => ({
       averageRank: (averages[index] ?? 2.5) + 0.15,
       lowerHalfStreak: index === 3 ? 2 : 0,
@@ -289,6 +292,82 @@ export function makeSeriesComparisonResponse(): SeriesComparisonResponse {
       rankCumulativeStandardDeviation: trend([0, 0.5, 0.75, 0.68]),
     },
   };
+}
+
+function momentumSwitchEntry(
+  memberId: string,
+  index: number,
+): NonNullable<SeriesComparisonResponse["momentumSwitch"]["entries"]>[number] {
+  const afterLowerTarget = Math.max(7, 10 - index);
+  const afterFourthTarget = [8, 8, 7, 9][index] ?? 8;
+  const afterPodiumTarget = [9, 10, 8, 7][index] ?? 8;
+  const afterLowerSuccess = [7, 5, 4, 3][index] ?? 4;
+  const afterFourthSuccess = [4, 3, 2, 6][index] ?? 3;
+  const afterPodiumSuccess = [6, 3, 4, 5][index] ?? 4;
+  return {
+    afterFourth: momentumRate(afterFourthTarget, afterFourthSuccess, 0.58 - index * 0.06),
+    afterLower: momentumRate(afterLowerTarget, afterLowerSuccess, 0.62 - index * 0.08),
+    afterPodium: momentumRate(afterPodiumTarget, afterPodiumSuccess, 0.38 + index * 0.04),
+    denominator: 12,
+    memberId,
+    transitionCount: 11,
+    transitionRows: [1, 2, 3, 4].map((previousRank) => {
+      const targetCount = [3, 3, 2, 3][previousRank - 1] ?? 0;
+      return {
+        cells: momentumTransitionCells(previousRank, targetCount, index),
+        previousRank,
+        status: targetCount >= 8 ? "ok" : targetCount > 0 ? "reference" : "no_target",
+        targetCount,
+      };
+    }),
+  };
+}
+
+function momentumTransitionCells(previousRank: number, targetCount: number, index: number) {
+  const ranks = [1, 2, 3, 4];
+  const rotation = (previousRank + index) % ranks.length;
+  const orderedRanks = [...ranks.slice(rotation), ...ranks.slice(0, rotation)];
+  const first = Math.ceil(targetCount / 2);
+  const second = Math.floor((targetCount - first) / 2);
+  const third = targetCount - first - second;
+  const countsByRank = new Map([
+    [orderedRanks[0]!, first],
+    [orderedRanks[1]!, second],
+    [orderedRanks[2]!, third],
+    [orderedRanks[3]!, 0],
+  ]);
+  return ranks.map((nextRank) => {
+    const count = countsByRank.get(nextRank) ?? 0;
+    return targetCount > 0
+      ? {
+          count,
+          nextRank,
+          rate: count / targetCount,
+        }
+      : {
+          count,
+          nextRank,
+        };
+  });
+}
+
+function momentumRate(targetCount: number, successCount: number, baselineRate: number) {
+  const rate = targetCount > 0 ? successCount / targetCount : undefined;
+  return rate === undefined
+    ? {
+        baselineRate,
+        status: targetCount >= 8 ? "ok" : targetCount > 0 ? "reference" : "no_target",
+        successCount,
+        targetCount,
+      }
+    : {
+        baselineRate,
+        deltaFromBaseline: rate - baselineRate,
+        rate,
+        status: targetCount >= 8 ? "ok" : targetCount > 0 ? "reference" : "no_target",
+        successCount,
+        targetCount,
+      };
 }
 
 export function makeSeriesComparisonReviewResponse(): SeriesComparisonReviewResponse {

@@ -5158,6 +5158,142 @@
           }
         }
       },
+      "MomentumSwitchPlayerResponse" : {
+        "title" : "MomentumSwitchPlayerResponse",
+        "type" : "object",
+        "required" : [
+          "memberId",
+          "denominator",
+          "transitionCount",
+          "afterLower",
+          "afterFourth",
+          "afterPodium"
+        ],
+        "properties" : {
+          "memberId" : {
+            "type" : "string"
+          },
+          "denominator" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "transitionCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "afterLower" : {
+            "$ref" : "#/components/schemas/MomentumSwitchRateResponse"
+          },
+          "afterFourth" : {
+            "$ref" : "#/components/schemas/MomentumSwitchRateResponse"
+          },
+          "afterPodium" : {
+            "$ref" : "#/components/schemas/MomentumSwitchRateResponse"
+          },
+          "transitionRows" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/MomentumSwitchTransitionRowResponse"
+            }
+          }
+        }
+      },
+      "MomentumSwitchRateResponse" : {
+        "title" : "MomentumSwitchRateResponse",
+        "type" : "object",
+        "required" : [
+          "targetCount",
+          "successCount",
+          "status"
+        ],
+        "properties" : {
+          "targetCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "successCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "rate" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "baselineRate" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "deltaFromBaseline" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        }
+      },
+      "MomentumSwitchResponse" : {
+        "title" : "MomentumSwitchResponse",
+        "type" : "object",
+        "properties" : {
+          "entries" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/MomentumSwitchPlayerResponse"
+            }
+          }
+        }
+      },
+      "MomentumSwitchTransitionCellResponse" : {
+        "title" : "MomentumSwitchTransitionCellResponse",
+        "type" : "object",
+        "required" : [
+          "nextRank",
+          "count"
+        ],
+        "properties" : {
+          "nextRank" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "count" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "rate" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        }
+      },
+      "MomentumSwitchTransitionRowResponse" : {
+        "title" : "MomentumSwitchTransitionRowResponse",
+        "type" : "object",
+        "required" : [
+          "previousRank",
+          "targetCount",
+          "status"
+        ],
+        "properties" : {
+          "previousRank" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "targetCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "cells" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/MomentumSwitchTransitionCellResponse"
+            }
+          }
+        }
+      },
       "MoneyDistributionMetricsResponse" : {
         "title" : "MoneyDistributionMetricsResponse",
         "type" : "object",
@@ -6236,6 +6372,7 @@
           "trends",
           "histograms",
           "headToHead",
+          "momentumSwitch",
           "playerPerformanceProfiles",
           "assetStyleProfiles",
           "cardShopDestination",
@@ -6285,6 +6422,9 @@
             "items" : {
               "$ref" : "#/components/schemas/RecentFormPlayerResponse"
             }
+          },
+          "momentumSwitch" : {
+            "$ref" : "#/components/schemas/MomentumSwitchResponse"
           },
           "playerPerformanceProfiles" : {
             "$ref" : "#/components/schemas/PlayerPerformanceProfilesResponse"

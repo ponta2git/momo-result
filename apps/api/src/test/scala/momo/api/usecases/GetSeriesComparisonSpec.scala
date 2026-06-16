@@ -35,7 +35,7 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
     for result <- usecase.run(SeriesComparisonScope.Overall(titleId)) yield
       val response = assertRight(result)
       assertEquals(response.matchCount, 3)
-      assertEquals(response.schemaVersion, 7)
+      assertEquals(response.schemaVersion, 8)
       assertEquals(response.players.map(_.memberId), List("ponta", "akane", "otaka", "eu"))
 
       val metrics = response.metricsByPlayer.map(entry => entry.memberId -> entry.metrics).toMap
@@ -130,6 +130,24 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
       assertEquals(pontaForm.winStreak, 1)
       assertEquals(pontaForm.podiumStreak, 3)
       assertEquals(pontaForm.lowerHalfStreak, 0)
+      val pontaSwitch = response.momentumSwitch.entries.find(_.memberId == "ponta")
+        .getOrElse(fail(s"ponta momentum switch missing: ${response.momentumSwitch.entries}"))
+      assertEquals(pontaSwitch.denominator, 3)
+      assertEquals(pontaSwitch.transitionCount, 2)
+      assertEquals(pontaSwitch.afterLower.targetCount, 0)
+      assertEquals(pontaSwitch.afterLower.status, "no_target")
+      assertEquals(pontaSwitch.afterFourth.targetCount, 0)
+      assertEquals(pontaSwitch.afterFourth.status, "no_target")
+      assertEquals(pontaSwitch.afterPodium.targetCount, 2)
+      assertEquals(pontaSwitch.afterPodium.successCount, 0)
+      assertOptionDouble(pontaSwitch.afterPodium.rate, 0.0)
+      assertOptionDouble(pontaSwitch.afterPodium.baselineRate, 0.0)
+      assertOptionDouble(pontaSwitch.afterPodium.deltaFromBaseline, 0.0)
+      assertEquals(pontaSwitch.afterPodium.status, "reference")
+      val afterFirst = pontaSwitch.transitionRows.find(_.previousRank == 1)
+        .getOrElse(fail(s"rank 1 row missing: $pontaSwitch"))
+      assertEquals(afterFirst.targetCount, 1)
+      assertEquals(afterFirst.cells.find(_.nextRank == 2).map(_.count), Some(1))
       assertEquals(
         response.playerPerformanceProfiles.entries.map(_.memberId),
         response.players.map(_.memberId),
@@ -225,6 +243,11 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
           item.playerMemberId.contains("ponta") && item.targetCount == 1 &&
           item.status == "reference"
       ))
+      assert(response.dataQuality.items.exists(item =>
+        item.metricId == "momentumSwitch.afterPodiumLowerRate" &&
+          item.playerMemberId.contains("ponta") && item.targetCount == 2 &&
+          item.status == "reference"
+      ))
 
   test("returns an empty aggregate when the selected scope has no confirmed matches"):
     val usecase = GetSeriesComparison[IO](StaticReadModel(Some(resolvedScope), Nil))
@@ -237,6 +260,7 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
       assertEquals(response.headToHead.entries, Nil)
       assertEquals(response.matchPlayerPoints, Nil)
       assertEquals(response.recentFormByPlayer, Nil)
+      assertEquals(response.momentumSwitch.entries, Nil)
       assertEquals(response.playerPerformanceProfiles.entries, Nil)
       assertEquals(response.assetStyleProfiles.entries, Nil)
       assertEquals(response.matchNoInEventBreakdown, Nil)
@@ -244,6 +268,41 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
       assertEquals(response.cardShopDestination.entries, Nil)
       assertEquals(response.playOrderBaselines, Nil)
       assertEquals(response.dataQuality.items, Nil)
+
+  test("marks momentum switch conditions ok only after eight targets"):
+    val rows = List.tabulate(17) { index =>
+      row(
+        index + 1,
+        "switcher",
+        "switcher",
+        (index % 4) + 1,
+        if index % 2 == 0 then 4 else 1,
+        1000 + index,
+        200 + index,
+        destination = 0,
+        ginji = 0,
+      )
+    }
+    val usecase = GetSeriesComparison[IO](StaticReadModel(Some(resolvedScope), rows))
+
+    for result <- usecase.run(SeriesComparisonScope.Overall(titleId)) yield
+      val response = assertRight(result)
+      val entry = response.momentumSwitch.entries.head
+      assertEquals(entry.memberId, "switcher")
+      assertEquals(entry.transitionCount, 16)
+      assertEquals(entry.afterLower.targetCount, 8)
+      assertEquals(entry.afterLower.successCount, 8)
+      assertOptionDouble(entry.afterLower.rate, 1.0)
+      assertEquals(entry.afterLower.status, "ok")
+      assertEquals(entry.afterFourth.targetCount, 8)
+      assertEquals(entry.afterFourth.status, "ok")
+      assertEquals(entry.afterPodium.targetCount, 8)
+      assertEquals(entry.afterPodium.successCount, 8)
+      assertEquals(entry.afterPodium.status, "ok")
+      assert(response.dataQuality.items.exists(item =>
+        item.metricId == "momentumSwitch.afterLowerPodiumRate" &&
+          item.playerMemberId.contains("switcher") && item.targetCount == 8 && item.status == "ok"
+      ))
 
   test("returns not found when the selected scope cannot be resolved"):
     val usecase = GetSeriesComparison[IO](StaticReadModel(None, Nil))

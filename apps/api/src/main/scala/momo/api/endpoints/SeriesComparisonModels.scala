@@ -44,6 +44,7 @@ final case class SeriesComparisonResponse(
     headToHead: HeadToHeadResponse,
     matchPlayerPoints: List[MatchPlayerPointResponse],
     recentFormByPlayer: List[RecentFormPlayerResponse],
+    momentumSwitch: MomentumSwitchResponse,
     playerPerformanceProfiles: PlayerPerformanceProfilesResponse,
     assetStyleProfiles: AssetStyleProfilesResponse,
     matchNoInEventBreakdown: List[MatchNoInEventBreakdownResponse],
@@ -426,6 +427,51 @@ final case class RecentFormPlayerResponse(
 ) derives Codec.AsObject
 object RecentFormPlayerResponse:
   given Schema[RecentFormPlayerResponse] = Schema.derived
+
+final case class MomentumSwitchResponse(entries: List[MomentumSwitchPlayerResponse])
+    derives Codec.AsObject
+object MomentumSwitchResponse:
+  given Schema[MomentumSwitchResponse] = Schema.derived
+
+final case class MomentumSwitchPlayerResponse(
+    memberId: String,
+    denominator: Int,
+    transitionCount: Int,
+    afterLower: MomentumSwitchRateResponse,
+    afterFourth: MomentumSwitchRateResponse,
+    afterPodium: MomentumSwitchRateResponse,
+    transitionRows: List[MomentumSwitchTransitionRowResponse],
+) derives Codec.AsObject
+object MomentumSwitchPlayerResponse:
+  given Schema[MomentumSwitchPlayerResponse] = Schema.derived
+
+final case class MomentumSwitchRateResponse(
+    targetCount: Int,
+    successCount: Int,
+    rate: Option[Double],
+    baselineRate: Option[Double],
+    deltaFromBaseline: Option[Double],
+    status: String,
+) derives Codec.AsObject
+object MomentumSwitchRateResponse:
+  given Schema[MomentumSwitchRateResponse] = Schema.derived
+
+final case class MomentumSwitchTransitionRowResponse(
+    previousRank: Int,
+    targetCount: Int,
+    status: String,
+    cells: List[MomentumSwitchTransitionCellResponse],
+) derives Codec.AsObject
+object MomentumSwitchTransitionRowResponse:
+  given Schema[MomentumSwitchTransitionRowResponse] = Schema.derived
+
+final case class MomentumSwitchTransitionCellResponse(
+    nextRank: Int,
+    count: Int,
+    rate: Option[Double],
+) derives Codec.AsObject
+object MomentumSwitchTransitionCellResponse:
+  given Schema[MomentumSwitchTransitionCellResponse] = Schema.derived
 
 final case class PlayerPerformanceProfilesResponse(
     rankStandardDeviationMedian: Option[Double],

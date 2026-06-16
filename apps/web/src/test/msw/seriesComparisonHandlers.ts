@@ -351,82 +351,82 @@ function playbookCard(
   NonNullable<SeriesComparisonReviewResponse["playbookByPlayer"]>[number]["cards"]
 >[number] {
   const isKeep = classification === "reproduce";
-  const metricId = isKeep ? "revenue.top.winRate" : "destination.zero.podiumRate";
+  const metricId = isKeep ? "revenue.top.winRate" : "momentumSwitch.afterLowerPodiumRate";
   return {
     actionAdviceScore: isKeep ? 0.82 - index * 0.08 : 0.68 - index * 0.04,
     actionHypothesis: isKeep
       ? "収益先行時は目的地0回で終えない。"
-      : "目的地なしの展開では下位回避へ早めに切り替える。",
+      : "前戦下位の次戦は、収益下位のまま終盤へ入らない。",
     anchorTarget: {
-      label: isKeep ? "物件収益と勝ち" : "目的地と勝ち",
-      sectionId: isKeep ? "metric-revenue-outcome" : "metric-destination-outcome",
-      view: "drivers",
+      label: isKeep ? "物件収益と勝ち" : "切り替え力",
+      sectionId: isKeep ? "metric-revenue-outcome" : "metric-momentum-switch",
+      view: isKeep ? "drivers" : "flow",
     },
-    category: isKeep ? "revenue" : "destination",
+    category: isKeep ? "revenue" : "recovery",
     classification,
     dataReason: isKeep
       ? "物件収益トップ時の1位率は57.1%で、本人全体の1位率33.3%を上回ります。落とした収益トップ試合では目的地平均が0.25回で、収益先行時も目的地到着が順位差に効いている可能性があります。"
-      : "目的地0回の順位スコアは2.58で、本人全体の3.00を下回ります。対象試合の総資産平均は4200万円で、目的地がない展開では資産維持が入賞の分岐になっている可能性があります。",
+      : "前戦下位後の入賞率は60.0%で、本人全体の入賞率50.0%との差は+10.0%です。入賞復帰試合の物件収益順位スコア平均は3.40、下位継続試合は2.10で、前戦下位後は収益基盤を作り直す動きが分岐になっている可能性があります。",
     evidence: [
       {
-        label: isKeep ? "物件収益トップ時の1位率" : "目的地なしの普段との差",
+        label: isKeep ? "物件収益トップ時の1位率" : "下位後入賞率",
         metricId,
         status: index > 2 ? "reference" : "ok",
         targetCount: Math.max(3, 7 - index),
-        value: isKeep ? "57.1%" : "-0.42",
+        value: isKeep ? "57.1%" : "60.0%",
       },
       {
-        label: isKeep ? "本人全体の1位率" : "目的地なしの順位スコア",
+        label: isKeep ? "本人全体の1位率" : "本人全体の入賞率",
         metricId: isKeep
           ? `review.${classification}.${memberId}.baseline`
-          : `review.${classification}.${memberId}.score`,
+          : `review.${classification}.${memberId}.baselinePodium`,
         status: index > 2 ? "reference" : "ok",
         targetCount: 12,
-        value: isKeep ? "33.3%" : "2.58",
+        value: isKeep ? "33.3%" : "50.0%",
       },
       {
-        label: isKeep ? "勝てた収益トップ時の目的地平均" : "本人全体の順位スコア",
+        label: isKeep ? "勝てた収益トップ時の目的地平均" : "復帰時の収益順位差",
         metricId: isKeep
           ? `review.${classification}.${memberId}.wonDestination`
-          : `review.${classification}.${memberId}.baselineScore`,
+          : `review.${classification}.${memberId}.recoveryRevenueDriver`,
         status: "reference",
         targetCount: 3,
-        value: isKeep ? "1.33回" : "3.00",
+        value: isKeep ? "1.33回" : "+0.62",
       },
       {
-        label: isKeep ? "落とした収益トップ時の目的地平均" : "目的地なしの総資産平均",
+        label: isKeep ? "落とした収益トップ時の目的地平均" : "復帰/下位継続件数",
         metricId: isKeep
           ? `review.${classification}.${memberId}.missedDestination`
-          : `review.${classification}.${memberId}.assets`,
+          : `review.${classification}.${memberId}.recoveryOutcomeCounts`,
         status: "reference",
         targetCount: 4,
-        value: isKeep ? "0.25回" : "4200万円",
+        value: isKeep ? "0.25回" : "6件 / 4件",
       },
       {
-        label: isKeep ? "落とした収益トップ時の銀次平均" : "目的地なしの銀次平均",
+        label: isKeep ? "落とした収益トップ時の銀次平均" : "下位後入賞率の下振れ込み目安",
         metricId: isKeep
           ? `review.${classification}.${memberId}.missedGinji`
-          : `review.${classification}.${memberId}.ginji`,
+          : `review.${classification}.${memberId}.wilsonLower`,
         status: "reference",
         targetCount: 4,
-        value: isKeep ? "0.50回" : "0.25回",
+        value: isKeep ? "0.50回" : "31.3%",
       },
     ],
     avoidAction: isKeep
       ? "収益トップだから安全と見て、目的地0回のまま終盤へ入ること。"
-      : "目的地を取れないまま、資産も削る展開を続けること。",
+      : "目的地が遠いまま、収益も作らず逆転待ちで終盤へ入ること。",
     id: `${memberId}-${classification}`,
     postMatchCheck: isKeep
       ? "次回、収益で上位だった試合を対象に、目的地0回で終えたか、入賞または下位回避できたかを振り返る。"
-      : "次回、目的地0回だった試合を対象に、総資産を残せたか、4位を避けられたかを振り返る。",
+      : "次回、前戦下位後の試合を対象に、物件収益順位を戻せたか、入賞圏へ戻せたかを振り返る。",
     recommendedAction: isKeep
       ? "追加収益より、目的地周辺への位置取り、到着、下位回避を優先する。"
-      : "一発逆転より、総資産を残す動きと事故回避を優先する。",
+      : "目的地だけを追い続ける前に、収益基盤と総資産を残す動きで2位圏へ戻す。",
     status: index > 2 ? "reference" : "ok",
     targetCount: Math.max(3, 7 - index),
     triggerCondition: isKeep
       ? "中盤以降、物件収益で上位だが目的地到着がないとき。"
-      : "目的地到着がないまま中盤を過ぎ、総資産も伸びていないとき。",
+      : "前戦が3位以下で、目的地が遠く物件収益順位も下がっていると感じるとき。",
   };
 }
 

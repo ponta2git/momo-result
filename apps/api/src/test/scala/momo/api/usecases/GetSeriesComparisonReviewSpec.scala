@@ -43,24 +43,27 @@ final class GetSeriesComparisonReviewSpec extends MomoCatsEffectSuite:
       assert(response.commonPlaybookTopics.forall(_.memberDisplayNames.forall(_.nonEmpty)))
 
       assertEquals(response.playbookByPlayer.map(_.memberId), List("ponta", "akane", "otaka", "eu"))
-      assertEquals(response.playbookByPlayer.map(_.memberDisplayName), List("ぽんた", "あかねまみ", "おーたか", "いーゆー"))
+      assertEquals(
+        response.playbookByPlayer.map(_.memberDisplayName),
+        List("ぽんた", "あかねまみ", "おーたか", "いーゆー"),
+      )
       assert(response.playbookByPlayer.forall(_.cards.size <= 3))
       val cards = response.playbookByPlayer.flatMap(_.cards)
       assert(cards.nonEmpty)
       assert(cards.forall(_.actionAdviceScore > 0.0))
       assert(cards.forall(card =>
-        card.actionHypothesis.nonEmpty &&
-          card.triggerCondition.nonEmpty &&
-          card.recommendedAction.nonEmpty &&
-          card.avoidAction.nonEmpty &&
-          card.dataReason.nonEmpty &&
-          card.postMatchCheck.nonEmpty &&
-          card.evidence.nonEmpty
+        card.actionHypothesis.nonEmpty && card.triggerCondition.nonEmpty &&
+          card.recommendedAction.nonEmpty && card.avoidAction.nonEmpty &&
+          card.dataReason.nonEmpty && card.postMatchCheck.nonEmpty && card.evidence.nonEmpty
       ))
-      assert(cards.forall(card => Set("reproduce", "revise", "verify").contains(card.classification)))
+      assert(
+        cards.forall(card => Set("reproduce", "revise", "verify").contains(card.classification))
+      )
       assert(!cards.exists(_.category == "recent"))
       assert(response.playbookByPlayer.exists(_.cards.exists(_.anchorTarget.view == "drivers")))
-      assert(cards.forall(card => Set("drivers", "context").contains(card.anchorTarget.view)))
+      assert(
+        cards.forall(card => Set("drivers", "flow", "context").contains(card.anchorTarget.view))
+      )
       assert(cards.exists(_.evidence.exists(_.label == "4人内での目立ち方")))
       val categoryCounts = cards.groupBy(_.category).view.mapValues(_.size).toMap
       assert(categoryCounts.values.forall(_ <= 2))
@@ -88,8 +91,29 @@ final class GetSeriesComparisonReviewSpec extends MomoCatsEffectSuite:
       assert(!cards.exists(card => card.recommendedAction.matches(""".*(確認|見る|切り分ける)。?$""")))
       assert(response.dataQuality.items.nonEmpty)
 
+  test("builds a practical recovery card from after-lower comeback drivers"):
+    val usecase = GetSeriesComparisonReview[IO](StaticReadModel(Some(resolvedScope), recoveryRows))
+
+    for result <- usecase.run(SeriesComparisonScope.Overall(titleId)) yield
+      val response = assertRight(result)
+      val cards = response.playbookByPlayer.flatMap(_.cards)
+      val recoveryCard = cards.find(_.category == "recovery")
+      assert(recoveryCard.nonEmpty)
+      assertEquals(recoveryCard.map(_.anchorTarget.view), Some("flow"))
+      assertEquals(recoveryCard.map(_.anchorTarget.sectionId), Some("metric-momentum-switch"))
+      assert(recoveryCard.exists(card =>
+        card.actionHypothesis.contains("前戦下位") && card.recommendedAction.contains("2位圏") &&
+          !card.recommendedAction.matches(""".*(確認|見る|切り分ける)。?$""")
+      ))
+      assert(recoveryCard.exists(_.dataReason.contains("入賞復帰試合の物件収益順位スコア平均")))
+      assert(recoveryCard.exists(card =>
+        card.evidence.exists(_.label == "下位後入賞率") && card.evidence.exists(_.label == "復帰時の収益順位差") &&
+          card.evidence.exists(_.label == "復帰/下位継続件数")
+      ))
+
   test("summarizes common categories and keeps only peer-distinctive player cards"):
-    val usecase = GetSeriesComparisonReview[IO](StaticReadModel(Some(resolvedScope), commonDestinationRows))
+    val usecase =
+      GetSeriesComparisonReview[IO](StaticReadModel(Some(resolvedScope), commonDestinationRows))
 
     for result <- usecase.run(SeriesComparisonScope.Overall(titleId)) yield
       val response = assertRight(result)
@@ -97,7 +121,8 @@ final class GetSeriesComparisonReviewSpec extends MomoCatsEffectSuite:
       assertEquals(response.commonPlaybookTopics.head.affectedPlayerCount, 3)
       assert(response.commonPlaybookTopics.head.memberDisplayNames.nonEmpty)
 
-      val destinationCards = response.playbookByPlayer.flatMap(_.cards).filter(_.category == "destination")
+      val destinationCards = response.playbookByPlayer.flatMap(_.cards)
+        .filter(_.category == "destination")
       assert(destinationCards.nonEmpty)
       assert(destinationCards.size <= 2)
       assert(destinationCards.forall(_.evidence.exists(_.label == "4人内での目立ち方")))
@@ -230,6 +255,60 @@ final class GetSeriesComparisonReviewSpec extends MomoCatsEffectSuite:
       PlayerRow("eu", "いーゆー", 4, 4, 1400, 800, 0, 0),
     ),
   ).flatten
+
+  private def recoveryRows: List[SeriesComparisonMatchPlayerRow] = List(
+    recoveryMatch(1, 3, 900, 0),
+    recoveryMatch(2, 1, 5200, 0),
+    recoveryMatch(3, 3, 900, 0),
+    recoveryMatch(4, 2, 5000, 0),
+    recoveryMatch(5, 4, 800, 0),
+    recoveryMatch(6, 1, 5300, 1),
+    recoveryMatch(7, 3, 900, 0),
+    recoveryMatch(8, 4, 700, 0),
+    recoveryMatch(9, 4, 800, 0),
+    recoveryMatch(10, 3, 900, 0),
+    recoveryMatch(11, 2, 5100, 0),
+    recoveryMatch(12, 4, 900, 0),
+    recoveryMatch(13, 3, 800, 0),
+    recoveryMatch(14, 2, 5400, 1),
+    recoveryMatch(15, 4, 900, 0),
+  ).flatten
+
+  private def recoveryMatch(
+      matchNo: Int,
+      pontaRank: Int,
+      pontaRevenue: Int,
+      pontaDestination: Int,
+  ): List[SeriesComparisonMatchPlayerRow] =
+    val otherRanks = (1 to 4).filterNot(_ == pontaRank).toList
+    val highRevenueByRank = Map(1 -> 4300, 2 -> 3600, 3 -> 3000, 4 -> 2400)
+    val rows = PlayerRow(
+      "ponta",
+      "ぽんた",
+      1,
+      pontaRank,
+      10000 - pontaRank * 1000,
+      pontaRevenue,
+      pontaDestination,
+      0,
+    ) +: List("akane" -> "あかねまみ", "otaka" -> "おーたか", "eu" -> "いーゆー").zip(otherRanks).map {
+      case ((memberId, displayName), rank) => PlayerRow(
+          memberId,
+          displayName,
+          rank,
+          rank,
+          10000 - rank * 1000,
+          highRevenueByRank(rank),
+          if rank == 1 then 1 else 0,
+          0,
+        )
+    }
+    matchRows(
+      matchNo,
+      if matchNo <= 8 then previousHeldEventId else latestHeldEventId,
+      ((matchNo - 1) % 4) + 1,
+      rows*
+    )
 
   private def matchRows(
       matchNo: Int,

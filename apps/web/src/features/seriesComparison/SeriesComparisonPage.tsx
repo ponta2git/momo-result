@@ -998,6 +998,8 @@ function playbookCategoryLabel(category: string): string {
       return "資産";
     case "playOrder":
       return "番手";
+    case "recovery":
+      return "下位後の戻し方";
     case "ginji":
       return "スリの銀次";
     default:

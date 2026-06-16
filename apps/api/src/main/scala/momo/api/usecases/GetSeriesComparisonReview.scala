@@ -12,23 +12,18 @@ import momo.api.errors.AppError
 import momo.api.repositories.SeriesComparisonReadModel
 
 final class GetSeriesComparisonReview[F[_]: Monad](readModel: SeriesComparisonReadModel[F]):
-  def run(
-      scope: SeriesComparisonScope
-  ): F[Either[AppError, SeriesComparisonReviewResponse]] = readModel.resolveScope(scope)
-    .flatMap {
+  def run(scope: SeriesComparisonScope): F[Either[AppError, SeriesComparisonReviewResponse]] =
+    readModel.resolveScope(scope).flatMap {
       case None => AppError
           .NotFound("series comparison scope", scope.scopeIdValue.getOrElse(scope.kindWire))
-          .asLeft[SeriesComparisonReviewResponse]
-          .pure[F]
-      case Some(resolved) => readModel.loadRows(resolved).map { rows =>
-          SeriesComparisonReviewAggregation.aggregate(resolved, rows).asRight
-        }
+          .asLeft[SeriesComparisonReviewResponse].pure[F]
+      case Some(resolved) => readModel.loadRows(resolved)
+          .map(rows => SeriesComparisonReviewAggregation.aggregate(resolved, rows).asRight)
     }
 
 object GetSeriesComparisonReview:
-  def apply[F[_]: Monad](
-      readModel: SeriesComparisonReadModel[F]
-  ): GetSeriesComparisonReview[F] = new GetSeriesComparisonReview(readModel)
+  def apply[F[_]: Monad](readModel: SeriesComparisonReadModel[F]): GetSeriesComparisonReview[F] =
+    new GetSeriesComparisonReview(readModel)
 
 private object SeriesComparisonReviewAggregation {
   private val SchemaVersion = 3
@@ -40,6 +35,8 @@ private object SeriesComparisonReviewAggregation {
     val PriorWeight = 8.0
     val SignificantScoreDelta = 0.35
     val MinimumContrast = 0.14
+    val RecoverySignificantRateDelta = 0.05
+    val RecoveryMinimumDriverContrast = 0.30
     val CommonTopicPlayerCount = 3
     val CommonTopicLimit = 2
   }
@@ -54,20 +51,18 @@ private object SeriesComparisonReviewAggregation {
     val statsByPlayer = playerOrder.map(memberId =>
       memberId -> PlayerStats.fromRows(memberId, rowsByPlayer(orderedRows, memberId), orderedRows)
     ).toMap
-    val allCandidates = playerOrder.flatMap(memberId =>
-      playbookCandidates(statsByPlayer(memberId), orderedRows)
-    )
+    val allCandidates = playerOrder
+      .flatMap(memberId => playbookCandidates(statsByPlayer(memberId), orderedRows))
     val scoredCandidates = scorePlaybookCandidates(allCandidates)
     val commonTopics = commonPlaybookTopics(scoredCandidates)
-    val playbook =
-      playerOrder.map(memberId =>
-        val stats = statsByPlayer(memberId)
-        SeriesComparisonPlayerPlaybookResponse(
-          memberId = memberId.value,
-          memberDisplayName = stats.displayName,
-          cards = playbookCards(memberId, scoredCandidates),
-        )
+    val playbook = playerOrder.map(memberId =>
+      val stats = statsByPlayer(memberId)
+      SeriesComparisonPlayerPlaybookResponse(
+        memberId = memberId.value,
+        memberDisplayName = stats.displayName,
+        cards = playbookCards(memberId, scoredCandidates),
       )
+    )
     SeriesComparisonReviewResponse(
       schemaVersion = SchemaVersion,
       baseline = SeriesComparisonReviewBaselineResponse(
@@ -101,18 +96,15 @@ private object SeriesComparisonReviewAggregation {
       mapName = scope.mapName,
     )
 
-  private final case class MatchGroup(
-      matchIndex: Int,
-      rows: List[SeriesComparisonMatchPlayerRow],
-  ):
+  private final case class MatchGroup(matchIndex: Int, rows: List[SeriesComparisonMatchPlayerRow]):
     val matchId = rows.head.matchId
     val playedAt = rows.head.playedAt
     val heldEventId = rows.head.heldEventId
     val matchNoInEvent = rows.head.matchNoInEvent
 
   private def matchGroupsFrom(rows: List[SeriesComparisonMatchPlayerRow]): List[MatchGroup] = rows
-    .groupBy(_.matchId).values.toList.sortBy(groupSortKey).zipWithIndex.map {
-      case (group, index) => MatchGroup(index + 1, sortedRows(group))
+    .groupBy(_.matchId).values.toList.sortBy(groupSortKey).zipWithIndex.map { case (group, index) =>
+      MatchGroup(index + 1, sortedRows(group))
     }
 
   private def groupSortKey(rows: List[SeriesComparisonMatchPlayerRow]) =
@@ -129,8 +121,7 @@ private object SeriesComparisonReviewAggregation {
     )
   )
 
-  private val PreferredPlayerOrder =
-    Map("ponta" -> 1, "akane" -> 2, "otaka" -> 3, "eu" -> 4)
+  private val PreferredPlayerOrder = Map("ponta" -> 1, "akane" -> 2, "otaka" -> 3, "eu" -> 4)
 
   private def playerOrderFrom(rows: List[SeriesComparisonMatchPlayerRow]): List[MemberId] = rows
     .groupBy(_.memberId).values.toList.map(_.head).sortBy(row =>
@@ -162,36 +153,32 @@ private object SeriesComparisonReviewAggregation {
   private def playbookCards(
       memberId: MemberId,
       scoredCandidates: List[ScoredPlaybookCandidate],
-  ): List[SeriesComparisonPlaybookCardResponse] =
-    scoredCandidates
-      .filter(_.candidate.memberId == memberId)
-      .filter(_.finalScore > 0.0)
-      .sortBy(scored =>
-        (-scored.finalScore, scored.candidate.card.category, scored.candidate.card.id)
-      )
-      .foldLeft(List.empty[SeriesComparisonPlaybookCardResponse]) { (selected, scored) =>
-        if selected.size >= 3 || selected.exists(_.category == scored.candidate.card.category) then selected
-        else selected :+ cardWithPeerContext(scored)
-      }
+  ): List[SeriesComparisonPlaybookCardResponse] = scoredCandidates
+    .filter(_.candidate.memberId == memberId).filter(_.finalScore > 0.0).sortBy(scored =>
+      (-scored.finalScore, scored.candidate.card.category, scored.candidate.card.id)
+    ).foldLeft(List.empty[SeriesComparisonPlaybookCardResponse]) { (selected, scored) =>
+      if selected.size >= 3 || selected.exists(_.category == scored.candidate.card.category) then
+        selected
+      else selected :+ cardWithPeerContext(scored)
+    }
 
   private def playbookCandidates(
       stats: PlayerStats,
       allRows: List[SeriesComparisonMatchPlayerRow],
-  ): List[PlaybookCandidate] =
-    List(
-      revenueTopCandidate(stats, allRows),
-      destinationZeroCandidate(stats),
-      lowAssetCandidate(stats, allRows),
-      playOrderCandidate(stats),
-      ginjiCandidate(stats),
-    ).flatten
+  ): List[PlaybookCandidate] = List(
+    revenueTopCandidate(stats, allRows),
+    destinationZeroCandidate(stats),
+    lowAssetCandidate(stats, allRows),
+    playOrderCandidate(stats),
+    recoveryCandidate(stats, allRows),
+    ginjiCandidate(stats),
+  ).flatten
 
   private def scorePlaybookCandidates(
       candidates: List[PlaybookCandidate]
   ): List[ScoredPlaybookCandidate] =
-    val visible = candidates.filter(candidate =>
-      candidate.card.status != "hidden" && candidate.baseScore > 0.0
-    )
+    val visible = candidates
+      .filter(candidate => candidate.card.status != "hidden" && candidate.baseScore > 0.0)
     visible.groupBy(_.card.category).values.toList.flatMap { categoryCandidates =>
       val ranked = categoryCandidates.sortBy(candidate =>
         (-math.abs(candidate.peerEffectValue), -candidate.baseScore, candidate.memberId.value)
@@ -201,10 +188,7 @@ private object SeriesComparisonReviewAggregation {
       ranked.zipWithIndex.map { case (candidate, rank) =>
         val rankWeight = peerRankWeight(rank, peerCount)
         val distinctivenessWeight = 0.55 + 0.45 * rankWeight
-        val commonPenalty =
-          if !commonCategory then 1.0
-          else if rank <= 1 then 0.86
-          else 0.0
+        val commonPenalty = if !commonCategory then 1.0 else if rank <= 1 then 0.86 else 0.0
         ScoredPlaybookCandidate(
           candidate = candidate,
           finalScore = candidate.baseScore * distinctivenessWeight * commonPenalty,
@@ -218,11 +202,12 @@ private object SeriesComparisonReviewAggregation {
 
   private def peerRankWeight(rank: Int, peerCount: Int): Double =
     if peerCount <= 1 then 1.0
-    else rank match
-      case 0 => 1.0
-      case 1 => 0.78
-      case 2 => 0.52
-      case _ => 0.35
+    else
+      rank match
+        case 0 => 1.0
+        case 1 => 0.78
+        case 2 => 0.52
+        case _ => 0.35
 
   private def cardWithPeerContext(
       scored: ScoredPlaybookCandidate
@@ -242,26 +227,20 @@ private object SeriesComparisonReviewAggregation {
     )
 
   private def peerRankLabel(scored: ScoredPlaybookCandidate): String =
-    if scored.peerCount <= 1 then "この人のみ"
-    else s"${scored.peerCount}人中${scored.peerRank + 1}番目"
+    if scored.peerCount <= 1 then "この人のみ" else s"${scored.peerCount}人中${scored.peerRank + 1}番目"
 
   private def peerReason(scored: ScoredPlaybookCandidate): String =
-    if scored.peerCount <= 1 then
-      "同じ条件の候補は他プレーヤーには出ていないため、個人差として扱います。"
+    if scored.peerCount <= 1 then "同じ条件の候補は他プレーヤーには出ていないため、個人差として扱います。"
     else if scored.commonCategory then
       s"同じカテゴリは${scored.peerCount}人に出ましたが、この候補は${peerRankLabel(scored)}に強く出たため個人カードとして残しています。"
     else s"同じ条件の候補内では${peerRankLabel(scored)}に強く出ており、個人差として扱います。"
 
   private def commonPlaybookTopics(
       scoredCandidates: List[ScoredPlaybookCandidate]
-  ): List[SeriesComparisonCommonPlaybookTopicResponse] =
-    scoredCandidates
-      .filter(_.commonCategory)
-      .groupBy(_.candidate.card.category)
-      .values.toList
-      .sortBy(group => -group.map(_.candidate.baseScore).maxOption.getOrElse(0.0))
-      .take(Thresholds.CommonTopicLimit)
-      .flatMap(buildCommonPlaybookTopic)
+  ): List[SeriesComparisonCommonPlaybookTopicResponse] = scoredCandidates.filter(_.commonCategory)
+    .groupBy(_.candidate.card.category).values.toList
+    .sortBy(group => -group.map(_.candidate.baseScore).maxOption.getOrElse(0.0))
+    .take(Thresholds.CommonTopicLimit).flatMap(buildCommonPlaybookTopic)
 
   private def buildCommonPlaybookTopic(
       scoredCandidates: List[ScoredPlaybookCandidate]
@@ -280,46 +259,43 @@ private object SeriesComparisonReviewAggregation {
         actionHint = actionHint,
         affectedPlayerCount = ranked.size,
         memberDisplayNames = ranked.map(_.candidate.memberDisplayName).distinct,
-        status =
-          if ranked.exists(_.candidate.card.status == "ok") then "ok"
-          else "reference",
+        status = if ranked.exists(_.candidate.card.status == "ok") then "ok" else "reference",
       )
     }
 
   private def commonTopicText(category: String, count: Int): (String, String, String) =
     category match
-      case "revenue" =>
-        (
+      case "revenue" => (
           "収益先行後の勝ち切りが共通論点です",
           s"${count}人に物件収益先行時の候補が出ています。個人カードには、4人内で差が強い人だけを残しています。",
           "収益で上回った試合は、目的地到着、事故後の入賞維持、終盤の資産防衛のどれが順位差に近いかを振り返ります。",
         )
-      case "destination" =>
-        (
+      case "destination" => (
           "目的地なし展開の下位回避が共通論点です",
           s"${count}人に目的地0回時の候補が出ています。個人カードには、落ち込みが相対的に大きい人だけを残しています。",
           "目的地が取れない試合は、逆転狙いを続ける前に資産を残す動きへ切り替えられたかを見ます。",
         )
-      case "assets" =>
-        (
+      case "assets" => (
           "低資産帯に入る前の切り替えが共通論点です",
           s"${count}人に低資産帯の候補が出ています。個人カードには、低資産帯率が4人内で目立つ人だけを残しています。",
           "総資産が伸びない試合は、目的地不足と事故のどちらで沈んだかを分けて振り返ります。",
         )
-      case "playOrder" =>
-        (
+      case "playOrder" => (
           "苦手番手の初動補正が共通論点です",
           s"${count}人に番手差の候補が出ています。個人カードには、番手差が相対的に大きい人だけを残しています。",
           "苦手番手では、目的地の遅れか資産の遅れかを早めに見て、補正する優先順位を決めます。",
         )
-      case "ginji" =>
-        (
+      case "ginji" => (
           "銀次被害後の方針転換が共通論点です",
           s"${count}人に銀次被害後の候補が出ています。個人カードには、被害時の落ち込みが相対的に大きい人だけを残しています。",
           "銀次被害後は、勝ち切り継続か入賞維持への切り替えかを、残せた資産と目的地回数で振り返ります。",
         )
-      case _ =>
-        (
+      case "recovery" => (
+          "下位後の戻し方が共通論点です",
+          s"${count}人に前戦下位後の候補が出ています。個人カードには、復帰ドライバーが相対的に強い人だけを残しています。",
+          "前戦下位の次戦は、目的地到着、収益基盤、事故後の資産維持のどれで2位圏へ戻せたかを振り返ります。",
+        )
+      case _ => (
           "複数人に共通する論点があります",
           s"${count}人に同じカテゴリの候補が出ています。個人カードには、相対的に強い候補だけを残しています。",
           "共通論点は全員分を繰り返さず、個人差が出た候補だけをカード化します。",
@@ -329,14 +305,13 @@ private object SeriesComparisonReviewAggregation {
       stats: PlayerStats,
       card: SeriesComparisonPlaybookCardResponse,
       peerEffectValue: Double,
-  ): PlaybookCandidate =
-    PlaybookCandidate(
-      memberId = stats.memberId,
-      memberDisplayName = stats.displayName,
-      card = card.copy(id = s"${stats.memberId.value}.${card.id}"),
-      peerEffectValue = peerEffectValue,
-      baseScore = card.actionAdviceScore,
-    )
+  ): PlaybookCandidate = PlaybookCandidate(
+    memberId = stats.memberId,
+    memberDisplayName = stats.displayName,
+    card = card.copy(id = s"${stats.memberId.value}.${card.id}"),
+    peerEffectValue = peerEffectValue,
+    baseScore = card.actionAdviceScore,
+  )
 
   private def revenueTopCandidate(
       stats: PlayerStats,
@@ -348,24 +323,27 @@ private object SeriesComparisonReviewAggregation {
       val nonWins = target.filterNot(_.rank.value == 1)
       val topWinRate = StatsKernel.rate(wins.size, target.size)
       val rawSymptom = topWinRate - stats.winRate
-      val destinationDelta = StatsKernel.standardizedDifference(
-        wins.map(destinationCount),
-        nonWins.map(destinationCount),
-      )
-      val destinationCliff = StatsKernel.cliffsDelta(wins.map(destinationCount), nonWins.map(destinationCount))
+      val destinationDelta = StatsKernel
+        .standardizedDifference(wins.map(destinationCount), nonWins.map(destinationCount))
+      val destinationCliff = StatsKernel
+        .cliffsDelta(wins.map(destinationCount), nonWins.map(destinationCount))
       val ginjiCliff = -StatsKernel.cliffsDelta(wins.map(ginjiCount), nonWins.map(ginjiCount))
-      val contrast = StatsKernel.clamp01(
-        math.max(math.abs(destinationCliff), math.max(math.abs(ginjiCliff), math.abs(destinationDelta) / 2.0))
-      )
+      val contrast = StatsKernel.clamp01(math.max(
+        math.abs(destinationCliff),
+        math.max(math.abs(ginjiCliff), math.abs(destinationDelta) / 2.0),
+      ))
       val odds = StatsKernel.logOddsRatio(wins.size, target.size, stats.winCount, stats.rows.size)
       val stability = eventStability(allRows, rawSymptom)(rows =>
         val reduced = PlayerStats.fromRows(stats.memberId, rowsByPlayer(rows, stats.memberId), rows)
         val reducedTarget = reduced.revenueTopRows
-        StatsKernel.rate(reducedTarget.count(_.rank.value == 1), reducedTarget.size) - reduced.winRate
+        StatsKernel.rate(reducedTarget.count(_.rank.value == 1), reducedTarget.size) -
+          reduced.winRate
       )
-      val classification = if rawSymptom < -0.05 then "revise" else if rawSymptom > 0.05 then "reproduce" else "verify"
+      val classification =
+        if rawSymptom < -0.05 then "revise" else if rawSymptom > 0.05 then "reproduce" else "verify"
       val score = adviceScore(
-        symptomStrength = math.max(math.abs(StatsKernel.shrink(rawSymptom, target.size)), math.abs(odds) / 4.0),
+        symptomStrength = math
+          .max(math.abs(StatsKernel.shrink(rawSymptom, target.size)), math.abs(odds) / 4.0),
         contrastStrength = contrast,
         exposure = target.size,
         status = conditionalStatus(target.size),
@@ -375,11 +353,9 @@ private object SeriesComparisonReviewAggregation {
       val status = conditionalStatus(target.size)
       val destinationDominant = math.abs(destinationCliff) >= math.abs(ginjiCliff)
       val actionHypothesis =
-        if destinationDominant then "収益先行時は目的地0回で終えない。"
-        else "収益先行後の事故は入賞維持へ早めに切り替える。"
+        if destinationDominant then "収益先行時は目的地0回で終えない。" else "収益先行後の事故は入賞維持へ早めに切り替える。"
       val triggerCondition =
-        if destinationDominant then "中盤以降、物件収益で上位だが目的地到着がないとき。"
-        else "物件収益で上位だが、銀次被害などで総資産差が詰まったとき。"
+        if destinationDominant then "中盤以降、物件収益で上位だが目的地到着がないとき。" else "物件収益で上位だが、銀次被害などで総資産差が詰まったとき。"
       val recommendedAction =
         if destinationDominant then "追加収益より、目的地周辺への位置取り、到着、下位回避を優先する。"
         else "勝ち切りだけに寄せず、被害後に総資産を残して入賞圏を守る。"
@@ -388,44 +364,88 @@ private object SeriesComparisonReviewAggregation {
         else "収益で先行していたことを理由に、被害後も1位狙いだけへ寄せ続けること。"
       val dataReason =
         if destinationDominant then
-          s"物件収益トップ時の1位率は${percent(topWinRate)}で、本人全体の1位率${percent(stats.winRate)}との差は${signed(rawSymptom)}です。勝ち切り試合の目的地平均は${averageEventValue(wins)(_.incidents.destination)}、非勝利試合は${averageEventValue(nonWins)(_.incidents.destination)}で、収益先行時も目的地到着が順位差に効いている可能性があります。"
+          s"物件収益トップ時の1位率は${percent(topWinRate)}で、本人全体の1位率${percent(stats.winRate)}との差は${signed(
+              rawSymptom
+            )}です。勝ち切り試合の目的地平均は${averageEventValue(wins)(
+              _.incidents.destination
+            )}、非勝利試合は${averageEventValue(nonWins)(
+              _.incidents.destination
+            )}で、収益先行時も目的地到着が順位差に効いている可能性があります。"
         else
-          s"物件収益トップ時の1位率は${percent(topWinRate)}で、本人全体の1位率${percent(stats.winRate)}との差は${signed(rawSymptom)}です。勝ち切り試合の銀次平均は${averageEventValue(wins)(_.incidents.suriNoGinji)}、非勝利試合は${averageEventValue(nonWins)(_.incidents.suriNoGinji)}で、収益先行後の事故対応が順位差に効いている可能性があります。"
+          s"物件収益トップ時の1位率は${percent(topWinRate)}で、本人全体の1位率${percent(stats.winRate)}との差は${signed(
+              rawSymptom
+            )}です。勝ち切り試合の銀次平均は${averageEventValue(wins)(
+              _.incidents.suriNoGinji
+            )}、非勝利試合は${averageEventValue(nonWins)(
+              _.incidents.suriNoGinji
+            )}で、収益先行後の事故対応が順位差に効いている可能性があります。"
       val postMatchCheck =
-        if destinationDominant then
-          "次回、収益で上位だった試合を対象に、目的地0回で終えたか、入賞または下位回避できたかを振り返る。"
-        else
-          "次回、収益で上位だった試合を対象に、銀次被害後も総資産を残して入賞または下位回避できたかを振り返る。"
+        if destinationDominant then "次回、収益で上位だった試合を対象に、目的地0回で終えたか、入賞または下位回避できたかを振り返る。"
+        else "次回、収益で上位だった試合を対象に、銀次被害後も総資産を残して入賞または下位回避できたかを振り返る。"
       val primaryContrastEvidence =
         if destinationDominant then
-          evidence("revenueOutcome.destinationContrast", "目的地差の偏り", signed(destinationCliff), target.size, status)
+          evidence(
+            "revenueOutcome.destinationContrast",
+            "目的地差の偏り",
+            signed(destinationCliff),
+            target.size,
+            status,
+          )
         else
-          evidence("revenueOutcome.ginjiContrast", "銀次差の偏り", signed(ginjiCliff), target.size, status)
-      playbookCandidate(stats, playbookCard(
-        id = "revenue-top",
-        classification = classification,
-        category = "revenue",
-        actionHypothesis = actionHypothesis,
-        triggerCondition = triggerCondition,
-        recommendedAction = recommendedAction,
-        avoidAction = avoidAction,
-        dataReason = dataReason,
-        postMatchCheck = postMatchCheck,
-        targetCount = target.size,
-        evidence = List(
-          evidence("revenueOutcome.topWinRate", "物件収益トップ時の1位率", percent(topWinRate), target.size, status),
-          evidence("revenueOutcome.baselineWinRate", "本人全体の1位率", percent(stats.winRate), stats.rows.size, normalStatus(stats.rows.size, Thresholds.MainNormalSample)),
-          primaryContrastEvidence,
-          evidence("revenueOutcome.wilsonLower", "1位率の下振れ込み目安", percent(StatsKernel.wilsonLower(wins.size, target.size)), target.size, status),
+          evidence(
+            "revenueOutcome.ginjiContrast",
+            "銀次差の偏り",
+            signed(ginjiCliff),
+            target.size,
+            status,
+          )
+      playbookCandidate(
+        stats,
+        playbookCard(
+          id = "revenue-top",
+          classification = classification,
+          category = "revenue",
+          actionHypothesis = actionHypothesis,
+          triggerCondition = triggerCondition,
+          recommendedAction = recommendedAction,
+          avoidAction = avoidAction,
+          dataReason = dataReason,
+          postMatchCheck = postMatchCheck,
+          targetCount = target.size,
+          evidence = List(
+            evidence(
+              "revenueOutcome.topWinRate",
+              "物件収益トップ時の1位率",
+              percent(topWinRate),
+              target.size,
+              status,
+            ),
+            evidence(
+              "revenueOutcome.baselineWinRate",
+              "本人全体の1位率",
+              percent(stats.winRate),
+              stats.rows.size,
+              normalStatus(stats.rows.size, Thresholds.MainNormalSample),
+            ),
+            primaryContrastEvidence,
+            evidence(
+              "revenueOutcome.wilsonLower",
+              "1位率の下振れ込み目安",
+              percent(StatsKernel.wilsonLower(wins.size, target.size)),
+              target.size,
+              status,
+            ),
+          ),
+          status = status,
+          anchor = SeriesComparisonPlaybookAnchorTargetResponse(
+            view = "drivers",
+            sectionId = "metric-revenue-outcome",
+            label = "物件収益と勝ち",
+          ),
+          score = if contrast >= Thresholds.MinimumContrast then score else 0.0,
         ),
-        status = status,
-        anchor = SeriesComparisonPlaybookAnchorTargetResponse(
-          view = "drivers",
-          sectionId = "metric-revenue-outcome",
-          label = "物件収益と勝ち",
-        ),
-        score = if contrast >= Thresholds.MinimumContrast then score else 0.0,
-      ), peerEffectValue = math.max(math.abs(rawSymptom), math.abs(odds) / 4.0))
+        peerEffectValue = math.max(math.abs(rawSymptom), math.abs(odds) / 4.0),
+      )
     }
 
   private def destinationZeroCandidate(stats: PlayerStats): Option[PlaybookCandidate] =
@@ -442,7 +462,10 @@ private object SeriesComparisonReviewAggregation {
         val reducedTarget = rows.filter(_.incidents.destination == 0)
         average(reducedTarget.map(rankScore)) - average(rows.map(rankScore))
       )
-      val classification = if rawSymptom < -Thresholds.SignificantScoreDelta then "revise" else if rawSymptom > Thresholds.SignificantScoreDelta then "reproduce" else "verify"
+      val classification =
+        if rawSymptom < -Thresholds.SignificantScoreDelta then "revise"
+        else if rawSymptom > Thresholds.SignificantScoreDelta then "reproduce"
+        else "verify"
       val status = conditionalStatus(target.size)
       val advice = adviceScore(
         symptomStrength = math.abs(StatsKernel.shrink(rawSymptom, target.size)),
@@ -454,53 +477,92 @@ private object SeriesComparisonReviewAggregation {
       )
       val assetDominant = math.abs(assetDelta) >= math.abs(ginjiDelta)
       val actionHypothesis =
-        if assetDominant then "目的地なしの展開では下位回避へ早めに切り替える。"
-        else "目的地なしで事故が重なったら入賞維持へ切り替える。"
+        if assetDominant then "目的地なしの展開では下位回避へ早めに切り替える。" else "目的地なしで事故が重なったら入賞維持へ切り替える。"
       val triggerCondition =
-        if assetDominant then "目的地到着がないまま中盤を過ぎ、総資産も伸びていないとき。"
-        else "目的地到着がないまま、銀次被害などで総資産差が広がったとき。"
+        if assetDominant then "目的地到着がないまま中盤を過ぎ、総資産も伸びていないとき。" else "目的地到着がないまま、銀次被害などで総資産差が広がったとき。"
       val recommendedAction =
-        if assetDominant then "一発逆転より、総資産を残す動きと事故回避を優先する。"
-        else "目的地を追い続けるより、被害後の資産維持と下位回避を優先する。"
+        if assetDominant then "一発逆転より、総資産を残す動きと事故回避を優先する。" else "目的地を追い続けるより、被害後の資産維持と下位回避を優先する。"
       val avoidAction =
-        if assetDominant then "目的地を取れないまま、資産も削る展開を続けること。"
-        else "目的地を取れない焦りで、被害後も大きな逆転狙いだけを続けること。"
+        if assetDominant then "目的地を取れないまま、資産も削る展開を続けること。" else "目的地を取れない焦りで、被害後も大きな逆転狙いだけを続けること。"
       val dataReason =
         if assetDominant then
-          s"目的地0回の試合は${target.size}件で、順位スコアは本人平均より${signed(rawSymptom)}です。上位試合の総資産平均は${averageMoneyValue(upper)}、下位試合は${averageMoneyValue(lower)}で、目的地がない展開では資産維持が入賞の分岐になっている可能性があります。"
+          s"目的地0回の試合は${target.size}件で、順位スコアは本人平均より${signed(
+              rawSymptom
+            )}です。上位試合の総資産平均は${averageMoneyValue(upper)}、下位試合は${averageMoneyValue(
+              lower
+            )}で、目的地がない展開では資産維持が入賞の分岐になっている可能性があります。"
         else
-          s"目的地0回の試合は${target.size}件で、順位スコアは本人平均より${signed(rawSymptom)}です。上位試合の銀次平均は${averageEventValue(upper)(_.incidents.suriNoGinji)}、下位試合は${averageEventValue(lower)(_.incidents.suriNoGinji)}で、目的地なし展開では事故後の方針転換が順位差に効いている可能性があります。"
+          s"目的地0回の試合は${target.size}件で、順位スコアは本人平均より${signed(
+              rawSymptom
+            )}です。上位試合の銀次平均は${averageEventValue(upper)(
+              _.incidents.suriNoGinji
+            )}、下位試合は${averageEventValue(lower)(
+              _.incidents.suriNoGinji
+            )}で、目的地なし展開では事故後の方針転換が順位差に効いている可能性があります。"
       val primaryContrastEvidence =
         if assetDominant then
-          evidence("destinationOutcome.assetContrast", "総資産差の偏り", signed(assetDelta), target.size, status)
+          evidence(
+            "destinationOutcome.assetContrast",
+            "総資産差の偏り",
+            signed(assetDelta),
+            target.size,
+            status,
+          )
         else
-          evidence("destinationOutcome.ginjiContrast", "銀次差の偏り", signed(ginjiDelta), target.size, status)
-      playbookCandidate(stats, playbookCard(
-        id = "destination-zero",
-        classification = classification,
-        category = "destination",
-        actionHypothesis = actionHypothesis,
-        triggerCondition = triggerCondition,
-        recommendedAction = recommendedAction,
-        avoidAction = avoidAction,
-        dataReason = dataReason,
-        postMatchCheck =
-          "次回、目的地0回だった試合を対象に、総資産を残せたか、4位を避けられたかを振り返る。",
-        targetCount = target.size,
-        evidence = List(
-          evidence("destinationOutcome.zeroDestinationRankScore", "目的地0回の順位スコア", decimal(score), target.size, status),
-          evidence("destinationOutcome.baselineRankScore", "本人全体の順位スコア", decimal(stats.averageRankScore), stats.rows.size, normalStatus(stats.rows.size, Thresholds.MainNormalSample)),
-          primaryContrastEvidence,
-          evidence("destinationOutcome.zeroDestinationLowerRate", "目的地0回の下位率", percent(StatsKernel.rate(lower.size, target.size)), target.size, status),
+          evidence(
+            "destinationOutcome.ginjiContrast",
+            "銀次差の偏り",
+            signed(ginjiDelta),
+            target.size,
+            status,
+          )
+      playbookCandidate(
+        stats,
+        playbookCard(
+          id = "destination-zero",
+          classification = classification,
+          category = "destination",
+          actionHypothesis = actionHypothesis,
+          triggerCondition = triggerCondition,
+          recommendedAction = recommendedAction,
+          avoidAction = avoidAction,
+          dataReason = dataReason,
+          postMatchCheck = "次回、目的地0回だった試合を対象に、総資産を残せたか、4位を避けられたかを振り返る。",
+          targetCount = target.size,
+          evidence = List(
+            evidence(
+              "destinationOutcome.zeroDestinationRankScore",
+              "目的地0回の順位スコア",
+              decimal(score),
+              target.size,
+              status,
+            ),
+            evidence(
+              "destinationOutcome.baselineRankScore",
+              "本人全体の順位スコア",
+              decimal(stats.averageRankScore),
+              stats.rows.size,
+              normalStatus(stats.rows.size, Thresholds.MainNormalSample),
+            ),
+            primaryContrastEvidence,
+            evidence(
+              "destinationOutcome.zeroDestinationLowerRate",
+              "目的地0回の下位率",
+              percent(StatsKernel.rate(lower.size, target.size)),
+              target.size,
+              status,
+            ),
+          ),
+          status = status,
+          anchor = SeriesComparisonPlaybookAnchorTargetResponse(
+            view = "drivers",
+            sectionId = "metric-destination-outcome",
+            label = "目的地と勝ち",
+          ),
+          score = if contrast >= Thresholds.MinimumContrast then advice else 0.0,
         ),
-        status = status,
-        anchor = SeriesComparisonPlaybookAnchorTargetResponse(
-          view = "drivers",
-          sectionId = "metric-destination-outcome",
-          label = "目的地と勝ち",
-        ),
-        score = if contrast >= Thresholds.MinimumContrast then advice else 0.0,
-      ), peerEffectValue = math.abs(rawSymptom))
+        peerEffectValue = math.abs(rawSymptom),
+      )
     }
 
   private def lowAssetCandidate(
@@ -516,7 +578,8 @@ private object SeriesComparisonReviewAggregation {
       val rawSymptom = 0.10 - lowRate
       val lowMatchIds = target.map(_.matchId).toSet
       val nonLow = stats.rows.filterNot(row => lowMatchIds.contains(row.matchId))
-      val destinationDelta = -StatsKernel.cliffsDelta(nonLow.map(destinationCount), target.map(destinationCount))
+      val destinationDelta =
+        -StatsKernel.cliffsDelta(nonLow.map(destinationCount), target.map(destinationCount))
       val ginjiDelta = StatsKernel.cliffsDelta(target.map(ginjiCount), nonLow.map(ginjiCount))
       val contrast = StatsKernel.clamp01(math.max(math.abs(destinationDelta), math.abs(ginjiDelta)))
       val stability = eventStability(stats.rows, rawSymptom)(rows =>
@@ -537,8 +600,7 @@ private object SeriesComparisonReviewAggregation {
       val highLowAssetRate = lowRate > 0.10
       val destinationDominant = math.abs(destinationDelta) >= math.abs(ginjiDelta)
       val actionHypothesis =
-        if destinationDominant then "低資産に沈む前に目的地優先へ切り替える。"
-        else "低資産に沈む前に事故回避を優先する。"
+        if destinationDominant then "低資産に沈む前に目的地優先へ切り替える。" else "低資産に沈む前に事故回避を優先する。"
       val triggerCondition =
         if destinationDominant then "総資産が伸びず、目的地回数でも遅れていると感じるとき。"
         else "総資産が伸びず、銀次被害などの事故で資産差が広がったとき。"
@@ -550,40 +612,85 @@ private object SeriesComparisonReviewAggregation {
         else "低資産のまま、事故後も同じ勝ち切り方に固執すること。"
       val dataReason =
         if destinationDominant then
-          s"選択範囲の低資産帯に入った試合は${percent(lowRate)}で、目安の10.0%より${signedPercent(lowRate - 0.10)}高いです。低資産帯の目的地平均は${averageEventValue(target)(_.incidents.destination)}、それ以外は${averageEventValue(nonLow)(_.incidents.destination)}で、資産が沈む前の目的地優先が分岐になっている可能性があります。"
+          s"選択範囲の低資産帯に入った試合は${percent(lowRate)}で、目安の10.0%より${signedPercent(
+              lowRate - 0.10
+            )}高いです。低資産帯の目的地平均は${averageEventValue(target)(
+              _.incidents.destination
+            )}、それ以外は${averageEventValue(nonLow)(
+              _.incidents.destination
+            )}で、資産が沈む前の目的地優先が分岐になっている可能性があります。"
         else
-          s"選択範囲の低資産帯に入った試合は${percent(lowRate)}で、目安の10.0%より${signedPercent(lowRate - 0.10)}高いです。低資産帯の銀次平均は${averageEventValue(target)(_.incidents.suriNoGinji)}、それ以外は${averageEventValue(nonLow)(_.incidents.suriNoGinji)}で、事故後の資産防衛が分岐になっている可能性があります。"
+          s"選択範囲の低資産帯に入った試合は${percent(lowRate)}で、目安の10.0%より${signedPercent(
+              lowRate - 0.10
+            )}高いです。低資産帯の銀次平均は${averageEventValue(target)(
+              _.incidents.suriNoGinji
+            )}、それ以外は${averageEventValue(nonLow)(
+              _.incidents.suriNoGinji
+            )}で、事故後の資産防衛が分岐になっている可能性があります。"
       val primaryContrastEvidence =
         if destinationDominant then
-          evidence("assetStyleProfiles.lowAssetDestinationContrast", "低資産帯の目的地差", signed(destinationDelta), target.size, status)
+          evidence(
+            "assetStyleProfiles.lowAssetDestinationContrast",
+            "低資産帯の目的地差",
+            signed(destinationDelta),
+            target.size,
+            status,
+          )
         else
-          evidence("assetStyleProfiles.lowAssetGinjiContrast", "低資産帯の銀次差", signed(ginjiDelta), target.size, status)
-      playbookCandidate(stats, playbookCard(
-        id = "low-assets",
-        classification = if rawSymptom < -0.05 then "revise" else "verify",
-        category = "assets",
-        actionHypothesis = actionHypothesis,
-        triggerCondition = triggerCondition,
-        recommendedAction = recommendedAction,
-        avoidAction = avoidAction,
-        dataReason = dataReason,
-        postMatchCheck =
-          "次回、総資産が伸びなかった試合を対象に、目的地不足と銀次被害のどちらが下位化に近かったかを振り返る。",
-        targetCount = target.size,
-        evidence = List(
-          evidence("assetStyleProfiles.lowAssetRate", "低資産帯率", percent(lowRate), stats.rows.size, normalStatus(stats.rows.size, Thresholds.MainNormalSample)),
-          evidence("assetStyleProfiles.lowAssetThreshold", "低資産帯の基準", threshold.fold("対象なし")(value => f"${value}%.0f万円以下"), allRows.size, normalStatus(allRows.size, Thresholds.MainNormalSample)),
-          primaryContrastEvidence,
-          evidence("assetStyleProfiles.lowAssetGinjiAverage", "低資産帯の銀次平均", averageEventValue(target)(_.incidents.suriNoGinji), target.size, status),
+          evidence(
+            "assetStyleProfiles.lowAssetGinjiContrast",
+            "低資産帯の銀次差",
+            signed(ginjiDelta),
+            target.size,
+            status,
+          )
+      playbookCandidate(
+        stats,
+        playbookCard(
+          id = "low-assets",
+          classification = if rawSymptom < -0.05 then "revise" else "verify",
+          category = "assets",
+          actionHypothesis = actionHypothesis,
+          triggerCondition = triggerCondition,
+          recommendedAction = recommendedAction,
+          avoidAction = avoidAction,
+          dataReason = dataReason,
+          postMatchCheck = "次回、総資産が伸びなかった試合を対象に、目的地不足と銀次被害のどちらが下位化に近かったかを振り返る。",
+          targetCount = target.size,
+          evidence = List(
+            evidence(
+              "assetStyleProfiles.lowAssetRate",
+              "低資産帯率",
+              percent(lowRate),
+              stats.rows.size,
+              normalStatus(stats.rows.size, Thresholds.MainNormalSample),
+            ),
+            evidence(
+              "assetStyleProfiles.lowAssetThreshold",
+              "低資産帯の基準",
+              threshold.fold("対象なし")(value => f"$value%.0f万円以下"),
+              allRows.size,
+              normalStatus(allRows.size, Thresholds.MainNormalSample),
+            ),
+            primaryContrastEvidence,
+            evidence(
+              "assetStyleProfiles.lowAssetGinjiAverage",
+              "低資産帯の銀次平均",
+              averageEventValue(target)(_.incidents.suriNoGinji),
+              target.size,
+              status,
+            ),
+          ),
+          status = status,
+          anchor = SeriesComparisonPlaybookAnchorTargetResponse(
+            view = "drivers",
+            sectionId = "metric-money",
+            label = "資産と勝ち筋",
+          ),
+          score = if contrast >= Thresholds.MinimumContrast && highLowAssetRate then advice else 0.0,
         ),
-        status = status,
-        anchor = SeriesComparisonPlaybookAnchorTargetResponse(
-          view = "drivers",
-          sectionId = "metric-money",
-          label = "資産と勝ち筋",
-        ),
-        score = if contrast >= Thresholds.MinimumContrast && highLowAssetRate then advice else 0.0,
-      ), peerEffectValue = math.max(0.0, lowRate - 0.10))
+        peerEffectValue = math.max(0.0, lowRate - 0.10),
+      )
     }
 
   private def playOrderCandidate(stats: PlayerStats): Option[PlaybookCandidate] =
@@ -597,13 +704,15 @@ private object SeriesComparisonReviewAggregation {
       val rawSymptom = best._2 - worst._2
       val worstRows = rowsByOrder.getOrElse(worst._1, Nil)
       val bestRows = rowsByOrder.getOrElse(best._1, Nil)
-      val destinationDelta = StatsKernel.cliffsDelta(bestRows.map(destinationCount), worstRows.map(destinationCount))
+      val destinationDelta = StatsKernel
+        .cliffsDelta(bestRows.map(destinationCount), worstRows.map(destinationCount))
       val assetDelta = StatsKernel.cliffsDelta(bestRows.map(assetValue), worstRows.map(assetValue))
       val contrast = StatsKernel.clamp01(math.max(math.abs(destinationDelta), math.abs(assetDelta)))
       val status = conditionalStatus(worstRows.size)
       val stability = eventStability(stats.rows, rawSymptom)(rows =>
         val byOrder = rows.groupBy(_.playOrder.value).toList.flatMap { case (_, orderRows) =>
-          Option.when(orderRows.size >= Thresholds.ReferenceSample)(average(orderRows.map(rankScore)))
+          Option
+            .when(orderRows.size >= Thresholds.ReferenceSample)(average(orderRows.map(rankScore)))
         }
         if byOrder.size < 2 then 0.0 else byOrder.max - byOrder.min
       )
@@ -617,8 +726,7 @@ private object SeriesComparisonReviewAggregation {
       )
       val destinationDominant = math.abs(destinationDelta) >= math.abs(assetDelta)
       val actionHypothesis =
-        if destinationDominant then "苦手番手では目的地の遅れを早めに補正する。"
-        else "苦手番手では資産の遅れを早めに補正する。"
+        if destinationDominant then "苦手番手では目的地の遅れを早めに補正する。" else "苦手番手では資産の遅れを早めに補正する。"
       val triggerCondition =
         if destinationDominant then s"${worst._1}番手に入り、目的地到着が遅れているとき。"
         else s"${worst._1}番手に入り、総資産が伸びないまま中盤へ入るとき。"
@@ -627,40 +735,216 @@ private object SeriesComparisonReviewAggregation {
         else "目的地を急ぐ前に、資産を残す進行と下位回避を優先する。"
       val dataReason =
         if destinationDominant then
-          s"得意番手の順位スコアは${decimal(best._2)}、苦手番手は${decimal(worst._2)}で、差は${decimal(rawSymptom)}です。苦手番手の目的地平均は${averageEventValue(worstRows)(_.incidents.destination)}、得意番手は${averageEventValue(bestRows)(_.incidents.destination)}で、番手差が出る場面では目的地の遅れが分岐になっている可能性があります。"
+          s"得意番手の順位スコアは${decimal(best._2)}、苦手番手は${decimal(worst._2)}で、差は${decimal(
+              rawSymptom
+            )}です。苦手番手の目的地平均は${averageEventValue(worstRows)(
+              _.incidents.destination
+            )}、得意番手は${averageEventValue(bestRows)(
+              _.incidents.destination
+            )}で、番手差が出る場面では目的地の遅れが分岐になっている可能性があります。"
         else
-          s"得意番手の順位スコアは${decimal(best._2)}、苦手番手は${decimal(worst._2)}で、差は${decimal(rawSymptom)}です。苦手番手の総資産平均は${averageMoneyValue(worstRows)}、得意番手は${averageMoneyValue(bestRows)}で、番手差が出る場面では資産の遅れが分岐になっている可能性があります。"
+          s"得意番手の順位スコアは${decimal(best._2)}、苦手番手は${decimal(worst._2)}で、差は${decimal(
+              rawSymptom
+            )}です。苦手番手の総資産平均は${averageMoneyValue(worstRows)}、得意番手は${averageMoneyValue(
+              bestRows
+            )}で、番手差が出る場面では資産の遅れが分岐になっている可能性があります。"
       val primaryContrastEvidence =
         if destinationDominant then
-          evidence("playOrder.destinationContrast", "得意番手との差: 目的地", signed(destinationDelta), worstRows.size, status)
+          evidence(
+            "playOrder.destinationContrast",
+            "得意番手との差: 目的地",
+            signed(destinationDelta),
+            worstRows.size,
+            status,
+          )
         else
-          evidence("playOrder.assetContrast", "得意番手との差: 総資産", signed(assetDelta), worstRows.size, status)
-      playbookCandidate(stats, playbookCard(
-        id = "play-order",
-        classification = "revise",
-        category = "playOrder",
-        actionHypothesis = actionHypothesis,
-        triggerCondition = triggerCondition,
-        recommendedAction = recommendedAction,
-        avoidAction = "番手差を無視して普段通りの優先順位で進め続けること。",
-        dataReason = dataReason,
-        postMatchCheck =
-          "次回、苦手番手だった試合で、目的地回数と総資産のどちらが遅れたかを振り返る。",
-        targetCount = worstRows.size,
-        evidence = List(
-          evidence("playOrder.bestRankScore", s"${best._1}番手の順位スコア", decimal(best._2), bestRows.size, conditionalStatus(bestRows.size)),
-          evidence("playOrder.worstRankScore", s"${worst._1}番手の順位スコア", decimal(worst._2), worstRows.size, status),
-          primaryContrastEvidence,
-          evidence("playOrder.worstAssetAverage", s"${worst._1}番手の総資産平均", averageMoneyValue(worstRows), worstRows.size, status),
+          evidence(
+            "playOrder.assetContrast",
+            "得意番手との差: 総資産",
+            signed(assetDelta),
+            worstRows.size,
+            status,
+          )
+      playbookCandidate(
+        stats,
+        playbookCard(
+          id = "play-order",
+          classification = "revise",
+          category = "playOrder",
+          actionHypothesis = actionHypothesis,
+          triggerCondition = triggerCondition,
+          recommendedAction = recommendedAction,
+          avoidAction = "番手差を無視して普段通りの優先順位で進め続けること。",
+          dataReason = dataReason,
+          postMatchCheck = "次回、苦手番手だった試合で、目的地回数と総資産のどちらが遅れたかを振り返る。",
+          targetCount = worstRows.size,
+          evidence = List(
+            evidence(
+              "playOrder.bestRankScore",
+              s"${best._1}番手の順位スコア",
+              decimal(best._2),
+              bestRows.size,
+              conditionalStatus(bestRows.size),
+            ),
+            evidence(
+              "playOrder.worstRankScore",
+              s"${worst._1}番手の順位スコア",
+              decimal(worst._2),
+              worstRows.size,
+              status,
+            ),
+            primaryContrastEvidence,
+            evidence(
+              "playOrder.worstAssetAverage",
+              s"${worst._1}番手の総資産平均",
+              averageMoneyValue(worstRows),
+              worstRows.size,
+              status,
+            ),
+          ),
+          status = status,
+          anchor = SeriesComparisonPlaybookAnchorTargetResponse(
+            view = "context",
+            sectionId = "metric-play-order",
+            label = "番手",
+          ),
+          score = if rawSymptom >= Thresholds.SignificantScoreDelta then advice else 0.0,
         ),
+        peerEffectValue = rawSymptom,
+      )
+    }
+
+  private def recoveryCandidate(
+      stats: PlayerStats,
+      allRows: List[SeriesComparisonMatchPlayerRow],
+  ): Option[PlaybookCandidate] =
+    val revenueRankScores = rankScoreByMatch(allRows, _.revenueManYen.value)
+    val destinationRankScores = rankScoreByMatch(allRows, _.incidents.destination)
+    val transitions = afterLowerTransitions(stats.rows).map { case (previous, current) =>
+      RecoveryTransition(
+        previous = previous,
+        current = current,
+        revenueRankScore = revenueRankScores.getOrElse(rankKey(current), rankScore(current)),
+        destinationRankScore =
+          destinationRankScores.getOrElse(rankKey(current), rankScore(current)),
+        accidentCount = accidentCount(current),
+      )
+    }
+    val recovered = transitions.filter(transition => isUpper(transition.current))
+    val lower = transitions.filterNot(transition => isUpper(transition.current))
+    Option.when(
+      transitions.size >= Thresholds.ReferenceSample &&
+        recovered.size >= Thresholds.ReferenceSample && lower.size >= Thresholds.ReferenceSample
+    ) {
+      val recoveryRate = StatsKernel.rate(recovered.size, transitions.size)
+      val rawSymptom = recoveryRate - stats.podiumRate
+      val destinationDelta = StatsKernel
+        .cliffsDelta(recovered.map(_.destinationRankScore), lower.map(_.destinationRankScore))
+      val revenueDelta = StatsKernel
+        .cliffsDelta(recovered.map(_.revenueRankScore), lower.map(_.revenueRankScore))
+      val accidentDelta =
+        -StatsKernel.cliffsDelta(recovered.map(_.accidentCount), lower.map(_.accidentCount))
+      val drivers = List(
+        RecoveryDriver("destination", math.max(0.0, destinationDelta), destinationDelta),
+        RecoveryDriver("revenue", math.max(0.0, revenueDelta), revenueDelta),
+        RecoveryDriver("accident", math.max(0.0, accidentDelta), accidentDelta),
+      )
+      val strongest = drivers.maxBy(_.strength)
+      val contrast = StatsKernel.clamp01(strongest.strength)
+      val status = conditionalStatus(transitions.size)
+      val odds = StatsKernel
+        .logOddsRatio(recovered.size, transitions.size, stats.rows.count(isUpper), stats.rows.size)
+      val stability = eventStability(stats.rows, rawSymptom)(recoveryRateDelta)
+      val symptomStrength = List(
+        math.abs(StatsKernel.shrink(rawSymptom, transitions.size)),
+        math.abs(odds) / 4.0,
+        contrast / 2.0,
+      ).max
+      val advice = adviceScore(
+        symptomStrength = symptomStrength,
+        contrastStrength = contrast,
+        exposure = transitions.size,
         status = status,
-        anchor = SeriesComparisonPlaybookAnchorTargetResponse(
-          view = "context",
-          sectionId = "metric-play-order",
-          label = "番手",
+        actionConnection = 0.85,
+        stability = stability,
+      )
+      val classification =
+        if rawSymptom >= Thresholds.RecoverySignificantRateDelta then "reproduce"
+        else if rawSymptom <= -Thresholds.RecoverySignificantRateDelta then "revise"
+        else "verify"
+      val text = recoveryText(strongest.kind)
+      val driverEvidence = recoveryDriverEvidence(
+        strongest,
+        destinationDelta,
+        revenueDelta,
+        accidentDelta,
+        transitions.size,
+        status,
+      )
+      val dataReason = recoveryDataReason(
+        recoveryRate = recoveryRate,
+        baselinePodiumRate = stats.podiumRate,
+        rawSymptom = rawSymptom,
+        recovered = recovered,
+        lower = lower,
+        driver = strongest,
+      )
+      val strongEnough = contrast >= Thresholds.RecoveryMinimumDriverContrast ||
+        math.abs(rawSymptom) >= Thresholds.RecoverySignificantRateDelta
+      playbookCandidate(
+        stats,
+        playbookCard(
+          id = s"recovery-${strongest.kind}",
+          classification = classification,
+          category = "recovery",
+          actionHypothesis = text.actionHypothesis,
+          triggerCondition = text.triggerCondition,
+          recommendedAction = text.recommendedAction,
+          avoidAction = text.avoidAction,
+          dataReason = dataReason,
+          postMatchCheck = text.postMatchCheck,
+          targetCount = transitions.size,
+          evidence = List(
+            evidence(
+              "momentumSwitch.afterLowerPodiumRate",
+              "下位後入賞率",
+              percent(recoveryRate),
+              transitions.size,
+              status,
+            ),
+            evidence(
+              "momentumSwitch.baselinePodiumRate",
+              "本人全体の入賞率",
+              percent(stats.podiumRate),
+              stats.rows.size,
+              normalStatus(stats.rows.size, Thresholds.MainNormalSample),
+            ),
+            driverEvidence,
+            evidence(
+              "momentumSwitch.recoveryOutcomeCounts",
+              "復帰/下位継続件数",
+              s"${recovered.size}件 / ${lower.size}件",
+              transitions.size,
+              status,
+            ),
+            evidence(
+              "momentumSwitch.afterLowerWilsonLower",
+              "下位後入賞率の下振れ込み目安",
+              percent(StatsKernel.wilsonLower(recovered.size, transitions.size)),
+              transitions.size,
+              status,
+            ),
+          ),
+          status = status,
+          anchor = SeriesComparisonPlaybookAnchorTargetResponse(
+            view = "flow",
+            sectionId = "metric-momentum-switch",
+            label = "切り替え力",
+          ),
+          score = if strongEnough then advice else 0.0,
         ),
-        score = if rawSymptom >= Thresholds.SignificantScoreDelta then advice else 0.0,
-      ), peerEffectValue = rawSymptom)
+        peerEffectValue = math.max(math.abs(rawSymptom), contrast),
+      )
     }
 
   private def ginjiCandidate(stats: PlayerStats): Option[PlaybookCandidate] =
@@ -671,7 +955,8 @@ private object SeriesComparisonReviewAggregation {
       val upper = target.filter(isUpper)
       val lower = target.filterNot(isUpper)
       val assetDelta = StatsKernel.cliffsDelta(upper.map(assetValue), lower.map(assetValue))
-      val destinationDelta = StatsKernel.cliffsDelta(upper.map(destinationCount), lower.map(destinationCount))
+      val destinationDelta = StatsKernel
+        .cliffsDelta(upper.map(destinationCount), lower.map(destinationCount))
       val contrast = StatsKernel.clamp01(math.max(math.abs(assetDelta), math.abs(destinationDelta)))
       val stability = eventStability(stats.rows, rawSymptom)(rows =>
         val reducedTarget = rows.filter(_.incidents.suriNoGinji > 0)
@@ -688,59 +973,173 @@ private object SeriesComparisonReviewAggregation {
       )
       val assetDominant = math.abs(assetDelta) >= math.abs(destinationDelta)
       val actionHypothesis =
-        if assetDominant then "銀次被害後は勝ち切りより入賞維持へ切り替える。"
-        else "銀次被害後は目的地で順位圏を戻しに行く。"
+        if assetDominant then "銀次被害後は勝ち切りより入賞維持へ切り替える。" else "銀次被害後は目的地で順位圏を戻しに行く。"
       val triggerCondition =
-        if assetDominant then "スリの銀次被害を受け、総資産差が広がったとき。"
-        else "スリの銀次被害後も、目的地到着で順位圏へ戻せる余地があるとき。"
+        if assetDominant then "スリの銀次被害を受け、総資産差が広がったとき。" else "スリの銀次被害後も、目的地到着で順位圏へ戻せる余地があるとき。"
       val recommendedAction =
         if assetDominant then "1位狙いを続けるかではなく、入賞・下位回避に必要な資産維持を優先する。"
         else "被害後の資産差だけを見ず、目的地周辺への位置取りで入賞圏へ戻す。"
       val avoidAction =
-        if assetDominant then "被害前と同じ勝ち切り方に固執すること。"
-        else "被害額だけで諦めて、目的地到着による順位回復を捨てること。"
+        if assetDominant then "被害前と同じ勝ち切り方に固執すること。" else "被害額だけで諦めて、目的地到着による順位回復を捨てること。"
       val dataReason =
         if assetDominant then
-          s"銀次被害時の順位スコアは${decimal(score)}で、本人平均との差は${signed(rawSymptom)}です。被害時の上位試合の総資産平均は${averageMoneyValue(upper)}、下位試合は${averageMoneyValue(lower)}で、被害後に資産を残せるかが入賞の分岐になっている可能性があります。"
+          s"銀次被害時の順位スコアは${decimal(score)}で、本人平均との差は${signed(
+              rawSymptom
+            )}です。被害時の上位試合の総資産平均は${averageMoneyValue(upper)}、下位試合は${averageMoneyValue(
+              lower
+            )}で、被害後に資産を残せるかが入賞の分岐になっている可能性があります。"
         else
-          s"銀次被害時の順位スコアは${decimal(score)}で、本人平均との差は${signed(rawSymptom)}です。被害時の上位試合の目的地平均は${averageEventValue(upper)(_.incidents.destination)}、下位試合は${averageEventValue(lower)(_.incidents.destination)}で、被害後も目的地到着が順位回復の分岐になっている可能性があります。"
+          s"銀次被害時の順位スコアは${decimal(score)}で、本人平均との差は${signed(
+              rawSymptom
+            )}です。被害時の上位試合の目的地平均は${averageEventValue(upper)(
+              _.incidents.destination
+            )}、下位試合は${averageEventValue(lower)(
+              _.incidents.destination
+            )}で、被害後も目的地到着が順位回復の分岐になっている可能性があります。"
       val primaryContrastEvidence =
         if assetDominant then
           evidence("ginji.assetContrast", "被害時の総資産差の偏り", signed(assetDelta), target.size, status)
         else
-          evidence("ginji.destinationContrast", "被害時の目的地差の偏り", signed(destinationDelta), target.size, status)
+          evidence(
+            "ginji.destinationContrast",
+            "被害時の目的地差の偏り",
+            signed(destinationDelta),
+            target.size,
+            status,
+          )
       val secondaryContrastEvidence =
         if assetDominant then
-          evidence("ginji.destinationContrast", "被害時の目的地差の偏り", signed(destinationDelta), target.size, status)
-        else
-          evidence("ginji.assetContrast", "被害時の総資産差の偏り", signed(assetDelta), target.size, status)
-      playbookCandidate(stats, playbookCard(
-        id = "ginji",
-        classification = if rawSymptom < -Thresholds.SignificantScoreDelta then "revise" else "verify",
-        category = "ginji",
-        actionHypothesis = actionHypothesis,
-        triggerCondition = triggerCondition,
-        recommendedAction = recommendedAction,
-        avoidAction = avoidAction,
-        dataReason = dataReason,
-        postMatchCheck =
-          "次回、銀次被害があった試合では、被害後に総資産を残して入賞または下位回避できたかを振り返る。",
-        targetCount = target.size,
-        evidence = List(
-          evidence("ginji.resilienceRankScore", "銀次被害時の順位スコア", decimal(score), target.size, status),
-          evidence("ginji.baselineRankScore", "本人全体の順位スコア", decimal(stats.averageRankScore), stats.rows.size, normalStatus(stats.rows.size, Thresholds.MainNormalSample)),
-          primaryContrastEvidence,
-          secondaryContrastEvidence,
+          evidence(
+            "ginji.destinationContrast",
+            "被害時の目的地差の偏り",
+            signed(destinationDelta),
+            target.size,
+            status,
+          )
+        else evidence("ginji.assetContrast", "被害時の総資産差の偏り", signed(assetDelta), target.size, status)
+      playbookCandidate(
+        stats,
+        playbookCard(
+          id = "ginji",
+          classification =
+            if rawSymptom < -Thresholds.SignificantScoreDelta then "revise" else "verify",
+          category = "ginji",
+          actionHypothesis = actionHypothesis,
+          triggerCondition = triggerCondition,
+          recommendedAction = recommendedAction,
+          avoidAction = avoidAction,
+          dataReason = dataReason,
+          postMatchCheck = "次回、銀次被害があった試合では、被害後に総資産を残して入賞または下位回避できたかを振り返る。",
+          targetCount = target.size,
+          evidence = List(
+            evidence(
+              "ginji.resilienceRankScore",
+              "銀次被害時の順位スコア",
+              decimal(score),
+              target.size,
+              status,
+            ),
+            evidence(
+              "ginji.baselineRankScore",
+              "本人全体の順位スコア",
+              decimal(stats.averageRankScore),
+              stats.rows.size,
+              normalStatus(stats.rows.size, Thresholds.MainNormalSample),
+            ),
+            primaryContrastEvidence,
+            secondaryContrastEvidence,
+          ),
+          status = status,
+          anchor = SeriesComparisonPlaybookAnchorTargetResponse(
+            view = "context",
+            sectionId = "metric-ginji",
+            label = "スリの銀次",
+          ),
+          score = if contrast >= Thresholds.MinimumContrast then advice else 0.0,
         ),
-        status = status,
-        anchor = SeriesComparisonPlaybookAnchorTargetResponse(
-          view = "context",
-          sectionId = "metric-ginji",
-          label = "スリの銀次",
-        ),
-        score = if contrast >= Thresholds.MinimumContrast then advice else 0.0,
-      ), peerEffectValue = math.abs(rawSymptom))
+        peerEffectValue = math.abs(rawSymptom),
+      )
     }
+
+  private def recoveryText(kind: String): RecoveryText = kind match
+    case "destination" => RecoveryText(
+        actionHypothesis = "前戦下位の次戦は、目的地0回で終盤へ入らない。",
+        triggerCondition = "前戦が3位以下で、次戦も中盤まで目的地到着がないとき。",
+        recommendedAction = "1位狙いを続ける前に、目的地周辺への位置取りと1回到着で2位圏へ戻す。",
+        avoidAction = "前戦の負けを取り返そうとして、目的地0回のまま終盤の一発逆転だけを待つこと。",
+        postMatchCheck = "次回、前戦下位後の試合を対象に、目的地0回で終盤へ入ったか、入賞圏へ戻せたかを振り返る。",
+      )
+    case "revenue" => RecoveryText(
+        actionHypothesis = "前戦下位の次戦は、収益下位のまま終盤へ入らない。",
+        triggerCondition = "前戦が3位以下で、目的地が遠く物件収益順位も下がっていると感じるとき。",
+        recommendedAction = "目的地だけを追い続ける前に、収益基盤と総資産を残す動きで2位圏へ戻す。",
+        avoidAction = "目的地が遠いまま、収益も作らず逆転待ちで終盤へ入ること。",
+        postMatchCheck = "次回、前戦下位後の試合を対象に、物件収益順位を戻せたか、入賞圏へ戻せたかを振り返る。",
+      )
+    case _ => RecoveryText(
+        actionHypothesis = "前戦下位の次戦は、下位連鎖を止める。",
+        triggerCondition = "前戦が3位以下で、銀次被害やマイナス駅で資産差が広がったとき。",
+        recommendedAction = "勝ち切りより、事故後に資産を残して入賞圏へ戻す進行を優先する。",
+        avoidAction = "被害後も1位狙いのまま、資産を削る展開を続けること。",
+        postMatchCheck = "次回、前戦下位後に事故が重なった試合で、資産を残して下位連鎖を止められたかを振り返る。",
+      )
+
+  private def recoveryDriverEvidence(
+      driver: RecoveryDriver,
+      destinationDelta: Double,
+      revenueDelta: Double,
+      accidentDelta: Double,
+      targetCount: Int,
+      status: String,
+  ): SeriesComparisonPlaybookEvidenceResponse = driver.kind match
+    case "destination" => evidence(
+        "momentumSwitch.recoveryDestinationDriver",
+        "復帰時の目的地順位差",
+        signed(destinationDelta),
+        targetCount,
+        status,
+      )
+    case "revenue" => evidence(
+        "momentumSwitch.recoveryRevenueDriver",
+        "復帰時の収益順位差",
+        signed(revenueDelta),
+        targetCount,
+        status,
+      )
+    case _ => evidence(
+        "momentumSwitch.recoveryAccidentDriver",
+        "復帰時の事故回避差",
+        signed(accidentDelta),
+        targetCount,
+        status,
+      )
+
+  private def recoveryDataReason(
+      recoveryRate: Double,
+      baselinePodiumRate: Double,
+      rawSymptom: Double,
+      recovered: List[RecoveryTransition],
+      lower: List[RecoveryTransition],
+      driver: RecoveryDriver,
+  ): String =
+    val opening = s"前戦下位後の入賞率は${percent(recoveryRate)}で、本人全体の入賞率${percent(
+        baselinePodiumRate
+      )}との差は${signedPercent(rawSymptom)}です。"
+    val comparison = driver.kind match
+      case "destination" => s"入賞復帰試合の目的地順位スコア平均は${decimal(
+            average(recovered.map(_.destinationRankScore))
+          )}、下位継続試合は${decimal(
+            average(lower.map(_.destinationRankScore))
+          )}で、前戦下位後は目的地到着で2位圏へ戻す動きが分岐になっている可能性があります。"
+      case "revenue" => s"入賞復帰試合の物件収益順位スコア平均は${decimal(
+            average(recovered.map(_.revenueRankScore))
+          )}、下位継続試合は${decimal(
+            average(lower.map(_.revenueRankScore))
+          )}で、前戦下位後は収益基盤を作り直す動きが分岐になっている可能性があります。"
+      case _ => s"入賞復帰試合の事故平均は${decimal(average(recovered.map(_.accidentCount)))}回、下位継続試合は${decimal(
+            average(lower.map(_.accidentCount))
+          )}回で、前戦下位後は事故後の資産維持が分岐になっている可能性があります。"
+    s"$opening $comparison"
 
   private def playbookCard(
       id: String,
@@ -757,23 +1156,22 @@ private object SeriesComparisonReviewAggregation {
       status: String,
       anchor: SeriesComparisonPlaybookAnchorTargetResponse,
       score: Double,
-  ): SeriesComparisonPlaybookCardResponse =
-    SeriesComparisonPlaybookCardResponse(
-      id = id,
-      classification = classification,
-      category = category,
-      actionHypothesis = actionHypothesis,
-      triggerCondition = triggerCondition,
-      recommendedAction = recommendedAction,
-      avoidAction = avoidAction,
-      dataReason = dataReason,
-      postMatchCheck = postMatchCheck,
-      targetCount = targetCount,
-      evidence = evidence,
-      status = status,
-      anchorTarget = anchor,
-      actionAdviceScore = rounded(score),
-    )
+  ): SeriesComparisonPlaybookCardResponse = SeriesComparisonPlaybookCardResponse(
+    id = id,
+    classification = classification,
+    category = category,
+    actionHypothesis = actionHypothesis,
+    triggerCondition = triggerCondition,
+    recommendedAction = recommendedAction,
+    avoidAction = avoidAction,
+    dataReason = dataReason,
+    postMatchCheck = postMatchCheck,
+    targetCount = targetCount,
+    evidence = evidence,
+    status = status,
+    anchorTarget = anchor,
+    actionAdviceScore = rounded(score),
+  )
 
   private final case class PlayerStats(
       memberId: MemberId,
@@ -786,6 +1184,24 @@ private object SeriesComparisonReviewAggregation {
       revenueTopRows: List[SeriesComparisonMatchPlayerRow],
   )
 
+  private final case class RecoveryTransition(
+      previous: SeriesComparisonMatchPlayerRow,
+      current: SeriesComparisonMatchPlayerRow,
+      revenueRankScore: Double,
+      destinationRankScore: Double,
+      accidentCount: Double,
+  )
+
+  private final case class RecoveryDriver(kind: String, strength: Double, effect: Double)
+
+  private final case class RecoveryText(
+      actionHypothesis: String,
+      triggerCondition: String,
+      recommendedAction: String,
+      avoidAction: String,
+      postMatchCheck: String,
+  )
+
   private object PlayerStats {
     def fromRows(
         memberId: MemberId,
@@ -793,8 +1209,8 @@ private object SeriesComparisonReviewAggregation {
         allRows: List[SeriesComparisonMatchPlayerRow],
     ): PlayerStats =
       val rows = sortedRows(playerRows)
-      val maxRevenueByMatch = allRows.groupBy(_.matchId).view.mapValues(_.map(_.revenueManYen.value).max)
-        .toMap
+      val maxRevenueByMatch = allRows.groupBy(_.matchId).view
+        .mapValues(_.map(_.revenueManYen.value).max).toMap
       val wins = rows.count(_.rank.value == 1)
       PlayerStats(
         memberId = memberId,
@@ -804,9 +1220,8 @@ private object SeriesComparisonReviewAggregation {
         winCount = wins,
         winRate = StatsKernel.rate(wins, rows.size),
         podiumRate = StatsKernel.rate(rows.count(isUpper), rows.size),
-        revenueTopRows = rows.filter(row =>
-          maxRevenueByMatch.get(row.matchId).contains(row.revenueManYen.value)
-        ),
+        revenueTopRows = rows
+          .filter(row => maxRevenueByMatch.get(row.matchId).contains(row.revenueManYen.value)),
       )
   }
 
@@ -816,8 +1231,8 @@ private object SeriesComparisonReviewAggregation {
     def rate(count: Int, denominator: Int): Double =
       if denominator <= 0 then 0.0 else asDouble(count) / asDouble(denominator)
 
-    def shrink(raw: Double, targetCount: Int): Double =
-      raw * asDouble(targetCount) / (asDouble(targetCount) + Thresholds.PriorWeight)
+    def shrink(raw: Double, targetCount: Int): Double = raw * asDouble(targetCount) /
+      (asDouble(targetCount) + Thresholds.PriorWeight)
 
     def standardizedDifference(a: List[Double], b: List[Double]): Double =
       if a.isEmpty || b.isEmpty then 0.0
@@ -828,10 +1243,11 @@ private object SeriesComparisonReviewAggregation {
     def cliffsDelta(a: List[Double], b: List[Double]): Double =
       if a.isEmpty || b.isEmpty then 0.0
       else
-        val pairs = for
-          left <- a
-          right <- b
-        yield if left > right then 1.0 else if left < right then -1.0 else 0.0
+        val pairs =
+          for
+            left <- a
+            right <- b
+          yield if left > right then 1.0 else if left < right then -1.0 else 0.0
         average(pairs)
 
     def wilsonLower(success: Int, total: Int): Double =
@@ -865,10 +1281,9 @@ private object SeriesComparisonReviewAggregation {
     def clamp01(value: Double): Double = math.max(0.0, math.min(1.0, value))
   }
 
-  private def eventStability(
-      rows: List[SeriesComparisonMatchPlayerRow],
-      fullEffect: Double,
-  )(compute: List[SeriesComparisonMatchPlayerRow] => Double): Double =
+  private def eventStability(rows: List[SeriesComparisonMatchPlayerRow], fullEffect: Double)(
+      compute: List[SeriesComparisonMatchPlayerRow] => Double
+  ): Double =
     val events = rows.groupBy(_.heldEventId).keys.toList
     if rows.size < Thresholds.MainConditionalSample || events.size < 2 then 0.75
     else
@@ -881,9 +1296,10 @@ private object SeriesComparisonReviewAggregation {
           reducedEffects.count(value => math.signum(value) == sign || math.abs(value) < 0.0001),
           reducedEffects.size,
         )
-        val magnitude = average(reducedEffects.map(value =>
-          StatsKernel.clamp01(math.abs(value) / (math.abs(fullEffect) + 0.0001))
-        ))
+        val magnitude = average(
+          reducedEffects
+            .map(value => StatsKernel.clamp01(math.abs(value) / (math.abs(fullEffect) + 0.0001)))
+        )
         StatsKernel.clamp01(0.35 + 0.65 * sameDirection * magnitude)
 
   private def adviceScore(
@@ -924,16 +1340,16 @@ private object SeriesComparisonReviewAggregation {
       value: String,
       targetCount: Int,
       status: String,
-  ): SeriesComparisonPlaybookEvidenceResponse =
-    SeriesComparisonPlaybookEvidenceResponse(
-      metricId = metricId,
-      label = label,
-      value = value,
-      targetCount = targetCount,
-      status = status,
-    )
+  ): SeriesComparisonPlaybookEvidenceResponse = SeriesComparisonPlaybookEvidenceResponse(
+    metricId = metricId,
+    label = label,
+    value = value,
+    targetCount = targetCount,
+    status = status,
+  )
 
-  private def rankScore(row: SeriesComparisonMatchPlayerRow): Double = 5.0 - asDouble(row.rank.value)
+  private def rankScore(row: SeriesComparisonMatchPlayerRow): Double = 5.0 -
+    asDouble(row.rank.value)
 
   private def destinationCount(row: SeriesComparisonMatchPlayerRow): Double =
     asDouble(row.incidents.destination)
@@ -941,16 +1357,47 @@ private object SeriesComparisonReviewAggregation {
   private def ginjiCount(row: SeriesComparisonMatchPlayerRow): Double =
     asDouble(row.incidents.suriNoGinji)
 
+  private def accidentCount(row: SeriesComparisonMatchPlayerRow): Double =
+    asDouble(row.incidents.minusStation + row.incidents.suriNoGinji)
+
   private def assetValue(row: SeriesComparisonMatchPlayerRow): Double =
     asDouble(row.totalAssetsManYen.value)
 
   private def isUpper(row: SeriesComparisonMatchPlayerRow): Boolean = row.rank.value <= 2
 
+  private def afterLowerTransitions(
+      rows: List[SeriesComparisonMatchPlayerRow]
+  ): List[(SeriesComparisonMatchPlayerRow, SeriesComparisonMatchPlayerRow)] = sortedRows(rows)
+    .sliding(2)
+    .collect { case List(previous, current) if previous.rank.value >= 3 => previous -> current }
+    .toList
+
+  private def recoveryRateDelta(rows: List[SeriesComparisonMatchPlayerRow]): Double =
+    val transitions = afterLowerTransitions(rows)
+    StatsKernel
+      .rate(transitions.count { case (_, current) => isUpper(current) }, transitions.size) -
+      StatsKernel.rate(rows.count(isUpper), rows.size)
+
+  private def rankScoreByMatch(
+      rows: List[SeriesComparisonMatchPlayerRow],
+      value: SeriesComparisonMatchPlayerRow => Int,
+  ): Map[(String, String), Double] = rows.groupBy(_.matchId).values.flatMap { matchRows =>
+    val sortedValues = matchRows.map(value).distinct.sorted(using Ordering.Int.reverse)
+    val ranksByValue = sortedValues.map { v =>
+      val positions = matchRows.sortBy(row => -value(row)).zipWithIndex
+        .collect { case (row, idx) if value(row) == v => idx + 1 }
+      v -> average(positions.map(asDouble))
+    }.toMap
+    matchRows.map(row => rankKey(row) -> (5.0 - ranksByValue(value(row))))
+  }.toMap
+
+  private def rankKey(row: SeriesComparisonMatchPlayerRow): (String, String) = row.matchId.value ->
+    row.memberId.value
+
   private def averageEventValue(
       rows: List[SeriesComparisonMatchPlayerRow]
   )(select: SeriesComparisonMatchPlayerRow => Int): String =
-    if rows.isEmpty then "対象なし"
-    else f"${average(rows.map(row => asDouble(select(row))))}%.2f回"
+    if rows.isEmpty then "対象なし" else f"${average(rows.map(row => asDouble(select(row))))}%.2f回"
 
   private def averageMoneyValue(rows: List[SeriesComparisonMatchPlayerRow]): String =
     if rows.isEmpty then "対象なし"
@@ -980,8 +1427,8 @@ private object SeriesComparisonReviewAggregation {
     val sign = if value > 0 then "+" else ""
     f"$sign${value * 100.0}%.1f%%"
 
-  private def rounded(value: Double): Double =
-    BigDecimal(value).setScale(4, BigDecimal.RoundingMode.HALF_UP).bigDecimal.doubleValue
+  private def rounded(value: Double): Double = BigDecimal(value)
+    .setScale(4, BigDecimal.RoundingMode.HALF_UP).bigDecimal.doubleValue
 
   private def normalStatus(targetCount: Int, okThreshold: Int): String =
     if targetCount <= 0 then "no_target"

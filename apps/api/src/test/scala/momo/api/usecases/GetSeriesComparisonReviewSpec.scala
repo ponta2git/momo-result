@@ -73,6 +73,26 @@ final class GetSeriesComparisonReviewSpec extends MomoCatsEffectSuite:
       assert(revenueCard.exists(_.evidence.exists(_.label == "物件収益トップ時の1位率")))
       assert(revenueCard.exists(_.evidence.exists(_.label == "目的地差の偏り")))
       assert(revenueCard.exists(_.evidence.exists(_.label == "1位率の下振れ込み目安")))
+      val practicalDriverLabels = Set(
+        "目的地0回時の収益順位差",
+        "目的地0回時の事故回避差",
+        "目的地0回時の売り場差",
+        "低資産帯の収益順位差",
+        "低資産帯の目的地差",
+        "低資産帯の銀次差",
+        "低資産帯のマイナス駅差",
+        "得意番手との差: 収益順位",
+        "得意番手との差: 目的地",
+        "得意番手との差: 事故回避",
+        "被害時の収益順位差",
+        "被害時の目的地順位差",
+        "被害時の追加事故回避差",
+      )
+      val driverBackedCategories = Set("destination", "assets", "ginji", "playOrder")
+      assert(cards.filter(card => driverBackedCategories.contains(card.category)).forall(card =>
+        card.evidence.exists(evidence => practicalDriverLabels.contains(evidence.label))
+      ))
+      assert(!cards.exists(_.evidence.exists(_.label.contains("総資産差"))))
       val visibleTexts = cards.flatMap(card =>
         List(
           card.actionHypothesis,
@@ -125,6 +145,10 @@ final class GetSeriesComparisonReviewSpec extends MomoCatsEffectSuite:
         .filter(_.category == "destination")
       assert(destinationCards.nonEmpty)
       assert(destinationCards.size <= 2)
+      assert(destinationCards.exists(card =>
+        card.actionHypothesis.contains("収益下位") && card.evidence.exists(_.label == "目的地0回時の収益順位差")
+      ))
+      assert(!destinationCards.exists(_.dataReason.contains("総資産平均")))
       assert(destinationCards.forall(_.evidence.exists(_.label == "4人内での目立ち方")))
 
   test("returns an empty review when the selected scope has no confirmed matches"):

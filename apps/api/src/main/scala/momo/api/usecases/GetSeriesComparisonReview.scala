@@ -35,6 +35,9 @@ private object SeriesComparisonReviewAggregation {
     val PriorWeight = 8.0
     val SignificantScoreDelta = 0.35
     val MinimumContrast = 0.14
+    val MinimumActionDriverEffect = 0.30
+    val ReferenceActionDriverEffect = 0.50
+    val ActionDriverTieDelta = 0.08
     val RecoverySignificantRateDelta = 0.05
     val RecoveryMinimumDriverContrast = 0.30
     val CommonTopicPlayerCount = 3
@@ -167,11 +170,11 @@ private object SeriesComparisonReviewAggregation {
       allRows: List[SeriesComparisonMatchPlayerRow],
   ): List[PlaybookCandidate] = List(
     revenueTopCandidate(stats, allRows),
-    destinationZeroCandidate(stats),
+    destinationZeroCandidate(stats, allRows),
     lowAssetCandidate(stats, allRows),
-    playOrderCandidate(stats),
+    playOrderCandidate(stats, allRows),
     recoveryCandidate(stats, allRows),
-    ginjiCandidate(stats),
+    ginjiCandidate(stats, allRows),
   ).flatten
 
   private def scorePlaybookCandidates(
@@ -268,27 +271,27 @@ private object SeriesComparisonReviewAggregation {
       case "revenue" => (
           "収益先行後の勝ち切りが共通論点です",
           s"${count}人に物件収益先行時の候補が出ています。個人カードには、4人内で差が強い人だけを残しています。",
-          "収益で上回った試合は、目的地到着、事故後の入賞維持、終盤の資産防衛のどれが順位差に近いかを振り返ります。",
+          "収益で上回った試合は、目的地到着、事故後の入賞維持、終盤の下位回避のどれが順位差に近いかを振り返ります。",
         )
       case "destination" => (
           "目的地なし展開の下位回避が共通論点です",
           s"${count}人に目的地0回時の候補が出ています。個人カードには、落ち込みが相対的に大きい人だけを残しています。",
-          "目的地が取れない試合は、逆転狙いを続ける前に資産を残す動きへ切り替えられたかを見ます。",
+          "目的地が取れない試合は、収益順位、事故回避、売り場経由のどれで2位圏へ戻せたかを見ます。",
         )
       case "assets" => (
           "低資産帯に入る前の切り替えが共通論点です",
           s"${count}人に低資産帯の候補が出ています。個人カードには、低資産帯率が4人内で目立つ人だけを残しています。",
-          "総資産が伸びない試合は、目的地不足と事故のどちらで沈んだかを分けて振り返ります。",
+          "総資産が伸びない試合は、収益順位、目的地不足、事故のどれで沈んだかを分けて振り返ります。",
         )
       case "playOrder" => (
           "苦手番手の初動補正が共通論点です",
           s"${count}人に番手差の候補が出ています。個人カードには、番手差が相対的に大きい人だけを残しています。",
-          "苦手番手では、目的地の遅れか資産の遅れかを早めに見て、補正する優先順位を決めます。",
+          "苦手番手では、収益順位、目的地、事故回避のどれを早めに補正するかを決めます。",
         )
       case "ginji" => (
           "銀次被害後の方針転換が共通論点です",
           s"${count}人に銀次被害後の候補が出ています。個人カードには、被害時の落ち込みが相対的に大きい人だけを残しています。",
-          "銀次被害後は、勝ち切り継続か入賞維持への切り替えかを、残せた資産と目的地回数で振り返ります。",
+          "銀次被害後は、収益順位、目的地順位、追加事故回避のどれで入賞圏へ戻せたかを振り返ります。",
         )
       case "recovery" => (
           "下位後の戻し方が共通論点です",
@@ -353,15 +356,15 @@ private object SeriesComparisonReviewAggregation {
       val status = conditionalStatus(target.size)
       val destinationDominant = math.abs(destinationCliff) >= math.abs(ginjiCliff)
       val actionHypothesis =
-        if destinationDominant then "収益先行時は目的地0回で終えない。" else "収益先行後の事故は入賞維持へ早めに切り替える。"
+        if destinationDominant then "収益先行時は目的地0回で終えない。" else "収益先行後の事故は目的地到着で入賞圏を守る。"
       val triggerCondition =
         if destinationDominant then "中盤以降、物件収益で上位だが目的地到着がないとき。" else "物件収益で上位だが、銀次被害などで総資産差が詰まったとき。"
       val recommendedAction =
         if destinationDominant then "追加収益より、目的地周辺への位置取り、到着、下位回避を優先する。"
-        else "勝ち切りだけに寄せず、被害後に総資産を残して入賞圏を守る。"
+        else "勝ち切りだけに寄せず、目的地周辺への位置取りと下位回避で入賞圏を守る。"
       val avoidAction =
         if destinationDominant then "収益トップだから安全と見て、目的地0回のまま終盤へ入ること。"
-        else "収益で先行していたことを理由に、被害後も1位狙いだけへ寄せ続けること。"
+        else "収益で先行していたことを理由に、被害後も追加収益と1位狙いだけへ寄せ続けること。"
       val dataReason =
         if destinationDominant then
           s"物件収益トップ時の1位率は${percent(topWinRate)}で、本人全体の1位率${percent(stats.winRate)}との差は${signed(
@@ -381,7 +384,7 @@ private object SeriesComparisonReviewAggregation {
             )}で、収益先行後の事故対応が順位差に効いている可能性があります。"
       val postMatchCheck =
         if destinationDominant then "次回、収益で上位だった試合を対象に、目的地0回で終えたか、入賞または下位回避できたかを振り返る。"
-        else "次回、収益で上位だった試合を対象に、銀次被害後も総資産を残して入賞または下位回避できたかを振り返る。"
+        else "次回、収益で上位だった試合を対象に、銀次被害後も目的地到着または下位回避で入賞圏を守れたかを振り返る。"
       val primaryContrastEvidence =
         if destinationDominant then
           evidence(
@@ -448,16 +451,31 @@ private object SeriesComparisonReviewAggregation {
       )
     }
 
-  private def destinationZeroCandidate(stats: PlayerStats): Option[PlaybookCandidate] =
+  private def destinationZeroCandidate(
+      stats: PlayerStats,
+      allRows: List[SeriesComparisonMatchPlayerRow],
+  ): Option[PlaybookCandidate] =
     val target = stats.rows.filter(_.incidents.destination == 0)
     Option.when(target.size >= Thresholds.ReferenceSample) {
+      val revenueRankScores = rankScoreByMatch(allRows, _.revenueManYen.value)
       val score = average(target.map(rankScore))
       val rawSymptom = score - stats.averageRankScore
       val upper = target.filter(isUpper)
       val lower = target.filterNot(isUpper)
-      val assetDelta = StatsKernel.cliffsDelta(upper.map(assetValue), lower.map(assetValue))
-      val ginjiDelta = -StatsKernel.cliffsDelta(upper.map(ginjiCount), lower.map(ginjiCount))
-      val contrast = StatsKernel.clamp01(math.max(math.abs(assetDelta), math.abs(ginjiDelta)))
+      val revenueRankDelta = StatsKernel.cliffsDelta(
+        upper.map(row => revenueRankScores.getOrElse(rankKey(row), rankScore(row))),
+        lower.map(row => revenueRankScores.getOrElse(rankKey(row), rankScore(row))),
+      )
+      val accidentDelta =
+        -StatsKernel.cliffsDelta(upper.map(accidentCount), lower.map(accidentCount))
+      val cardShopDelta = StatsKernel
+        .cliffsDelta(upper.map(cardShopCount), lower.map(cardShopCount))
+      val driver = selectPrimaryActionDriver(List(
+        ActionDriver("revenueRank", revenueRankDelta, 1.0),
+        ActionDriver("accidentAvoidance", accidentDelta, 0.85),
+        ActionDriver("cardShopRoute", cardShopDelta, 0.75),
+      ))
+      val contrast = driver.map(_.selectionStrength).getOrElse(0.0)
       val stability = eventStability(stats.rows, rawSymptom)(rows =>
         val reducedTarget = rows.filter(_.incidents.destination == 0)
         average(reducedTarget.map(rankScore)) - average(rows.map(rankScore))
@@ -475,59 +493,36 @@ private object SeriesComparisonReviewAggregation {
         actionConnection = 1.0,
         stability = stability,
       )
-      val assetDominant = math.abs(assetDelta) >= math.abs(ginjiDelta)
-      val actionHypothesis =
-        if assetDominant then "目的地なしの展開では下位回避へ早めに切り替える。" else "目的地なしで事故が重なったら入賞維持へ切り替える。"
-      val triggerCondition =
-        if assetDominant then "目的地到着がないまま中盤を過ぎ、総資産も伸びていないとき。" else "目的地到着がないまま、銀次被害などで総資産差が広がったとき。"
-      val recommendedAction =
-        if assetDominant then "一発逆転より、総資産を残す動きと事故回避を優先する。" else "目的地を追い続けるより、被害後の資産維持と下位回避を優先する。"
-      val avoidAction =
-        if assetDominant then "目的地を取れないまま、資産も削る展開を続けること。" else "目的地を取れない焦りで、被害後も大きな逆転狙いだけを続けること。"
-      val dataReason =
-        if assetDominant then
-          s"目的地0回の試合は${target.size}件で、順位スコアは本人平均より${signed(
-              rawSymptom
-            )}です。上位試合の総資産平均は${averageMoneyValue(upper)}、下位試合は${averageMoneyValue(
-              lower
-            )}で、目的地がない展開では資産維持が入賞の分岐になっている可能性があります。"
-        else
-          s"目的地0回の試合は${target.size}件で、順位スコアは本人平均より${signed(
-              rawSymptom
-            )}です。上位試合の銀次平均は${averageEventValue(upper)(
-              _.incidents.suriNoGinji
-            )}、下位試合は${averageEventValue(lower)(
-              _.incidents.suriNoGinji
-            )}で、目的地なし展開では事故後の方針転換が順位差に効いている可能性があります。"
-      val primaryContrastEvidence =
-        if assetDominant then
-          evidence(
-            "destinationOutcome.assetContrast",
-            "総資産差の偏り",
-            signed(assetDelta),
-            target.size,
-            status,
-          )
-        else
-          evidence(
-            "destinationOutcome.ginjiContrast",
-            "銀次差の偏り",
-            signed(ginjiDelta),
-            target.size,
-            status,
-          )
+      val text = destinationZeroText(driver.map(_.kind).getOrElse("revenueRank"))
+      val primaryContrastEvidence = destinationZeroDriverEvidence(
+        driver,
+        revenueRankDelta,
+        accidentDelta,
+        cardShopDelta,
+        target.size,
+        status,
+      )
+      val dataReason = destinationZeroDataReason(
+        targetCount = target.size,
+        rankScoreDelta = rawSymptom,
+        upper = upper,
+        lower = lower,
+        driverKind = driver.map(_.kind).getOrElse("revenueRank"),
+        revenueRankScores = revenueRankScores,
+      )
+      val strongEnough = driver.exists(actionDriverStrongEnough(_, status))
       playbookCandidate(
         stats,
         playbookCard(
           id = "destination-zero",
           classification = classification,
           category = "destination",
-          actionHypothesis = actionHypothesis,
-          triggerCondition = triggerCondition,
-          recommendedAction = recommendedAction,
-          avoidAction = avoidAction,
+          actionHypothesis = text.actionHypothesis,
+          triggerCondition = text.triggerCondition,
+          recommendedAction = text.recommendedAction,
+          avoidAction = text.avoidAction,
           dataReason = dataReason,
-          postMatchCheck = "次回、目的地0回だった試合を対象に、総資産を残せたか、4位を避けられたかを振り返る。",
+          postMatchCheck = text.postMatchCheck,
           targetCount = target.size,
           evidence = List(
             evidence(
@@ -559,7 +554,7 @@ private object SeriesComparisonReviewAggregation {
             sectionId = "metric-destination-outcome",
             label = "目的地と勝ち",
           ),
-          score = if contrast >= Thresholds.MinimumContrast then advice else 0.0,
+          score = if strongEnough then advice else 0.0,
         ),
         peerEffectValue = math.abs(rawSymptom),
       )
@@ -574,14 +569,27 @@ private object SeriesComparisonReviewAggregation {
       stats.rows.filter(_.totalAssetsManYen.value <= line)
     )
     Option.when(target.size >= Thresholds.ReferenceSample) {
+      val revenueRankScores = rankScoreByMatch(allRows, _.revenueManYen.value)
       val lowRate = StatsKernel.rate(target.size, stats.rows.size)
       val rawSymptom = 0.10 - lowRate
       val lowMatchIds = target.map(_.matchId).toSet
       val nonLow = stats.rows.filterNot(row => lowMatchIds.contains(row.matchId))
-      val destinationDelta =
-        -StatsKernel.cliffsDelta(nonLow.map(destinationCount), target.map(destinationCount))
+      val revenueRankDelta = StatsKernel.cliffsDelta(
+        nonLow.map(row => revenueRankScores.getOrElse(rankKey(row), rankScore(row))),
+        target.map(row => revenueRankScores.getOrElse(rankKey(row), rankScore(row))),
+      )
+      val destinationDelta = StatsKernel
+        .cliffsDelta(nonLow.map(destinationCount), target.map(destinationCount))
       val ginjiDelta = StatsKernel.cliffsDelta(target.map(ginjiCount), nonLow.map(ginjiCount))
-      val contrast = StatsKernel.clamp01(math.max(math.abs(destinationDelta), math.abs(ginjiDelta)))
+      val minusDelta = StatsKernel
+        .cliffsDelta(target.map(minusStationCount), nonLow.map(minusStationCount))
+      val driver = selectPrimaryActionDriver(List(
+        ActionDriver("revenueRank", revenueRankDelta, 1.0),
+        ActionDriver("destinationShortage", destinationDelta, 0.95),
+        ActionDriver("ginjiBias", ginjiDelta, 0.85),
+        ActionDriver("minusBias", minusDelta, 0.80),
+      ))
+      val contrast = driver.map(_.selectionStrength).getOrElse(0.0)
       val stability = eventStability(stats.rows, rawSymptom)(rows =>
         val reducedTarget = threshold.fold(List.empty[SeriesComparisonMatchPlayerRow])(line =>
           rows.filter(_.totalAssetsManYen.value <= line)
@@ -598,64 +606,36 @@ private object SeriesComparisonReviewAggregation {
         stability = stability,
       )
       val highLowAssetRate = lowRate > 0.10
-      val destinationDominant = math.abs(destinationDelta) >= math.abs(ginjiDelta)
-      val actionHypothesis =
-        if destinationDominant then "低資産に沈む前に目的地優先へ切り替える。" else "低資産に沈む前に事故回避を優先する。"
-      val triggerCondition =
-        if destinationDominant then "総資産が伸びず、目的地回数でも遅れていると感じるとき。"
-        else "総資産が伸びず、銀次被害などの事故で資産差が広がったとき。"
-      val recommendedAction =
-        if destinationDominant then "逆転狙いを続ける前に、目的地周辺への位置取りと下位回避を優先する。"
-        else "大きな上振れ狙いより、資産を残す選択と事故を受けにくい進行を優先する。"
-      val avoidAction =
-        if destinationDominant then "目的地も資産も遅れたまま、高収益だけで巻き返そうとすること。"
-        else "低資産のまま、事故後も同じ勝ち切り方に固執すること。"
-      val dataReason =
-        if destinationDominant then
-          s"選択範囲の低資産帯に入った試合は${percent(lowRate)}で、目安の10.0%より${signedPercent(
-              lowRate - 0.10
-            )}高いです。低資産帯の目的地平均は${averageEventValue(target)(
-              _.incidents.destination
-            )}、それ以外は${averageEventValue(nonLow)(
-              _.incidents.destination
-            )}で、資産が沈む前の目的地優先が分岐になっている可能性があります。"
-        else
-          s"選択範囲の低資産帯に入った試合は${percent(lowRate)}で、目安の10.0%より${signedPercent(
-              lowRate - 0.10
-            )}高いです。低資産帯の銀次平均は${averageEventValue(target)(
-              _.incidents.suriNoGinji
-            )}、それ以外は${averageEventValue(nonLow)(
-              _.incidents.suriNoGinji
-            )}で、事故後の資産防衛が分岐になっている可能性があります。"
-      val primaryContrastEvidence =
-        if destinationDominant then
-          evidence(
-            "assetStyleProfiles.lowAssetDestinationContrast",
-            "低資産帯の目的地差",
-            signed(destinationDelta),
-            target.size,
-            status,
-          )
-        else
-          evidence(
-            "assetStyleProfiles.lowAssetGinjiContrast",
-            "低資産帯の銀次差",
-            signed(ginjiDelta),
-            target.size,
-            status,
-          )
+      val text = lowAssetText(driver.map(_.kind).getOrElse("revenueRank"))
+      val primaryContrastEvidence = lowAssetDriverEvidence(
+        driver,
+        revenueRankDelta,
+        destinationDelta,
+        ginjiDelta,
+        minusDelta,
+        target.size,
+        status,
+      )
+      val dataReason = lowAssetDataReason(
+        lowRate = lowRate,
+        target = target,
+        nonLow = nonLow,
+        driverKind = driver.map(_.kind).getOrElse("revenueRank"),
+        revenueRankScores = revenueRankScores,
+      )
+      val strongEnough = driver.exists(actionDriverStrongEnough(_, status))
       playbookCandidate(
         stats,
         playbookCard(
           id = "low-assets",
           classification = if rawSymptom < -0.05 then "revise" else "verify",
           category = "assets",
-          actionHypothesis = actionHypothesis,
-          triggerCondition = triggerCondition,
-          recommendedAction = recommendedAction,
-          avoidAction = avoidAction,
+          actionHypothesis = text.actionHypothesis,
+          triggerCondition = text.triggerCondition,
+          recommendedAction = text.recommendedAction,
+          avoidAction = text.avoidAction,
           dataReason = dataReason,
-          postMatchCheck = "次回、総資産が伸びなかった試合を対象に、目的地不足と銀次被害のどちらが下位化に近かったかを振り返る。",
+          postMatchCheck = text.postMatchCheck,
           targetCount = target.size,
           evidence = List(
             evidence(
@@ -674,9 +654,11 @@ private object SeriesComparisonReviewAggregation {
             ),
             primaryContrastEvidence,
             evidence(
-              "assetStyleProfiles.lowAssetGinjiAverage",
-              "低資産帯の銀次平均",
-              averageEventValue(target)(_.incidents.suriNoGinji),
+              "assetStyleProfiles.lowAssetRevenueRankAverage",
+              "低資産帯の収益順位スコア平均",
+              decimal(average(
+                target.map(row => revenueRankScores.getOrElse(rankKey(row), rankScore(row)))
+              )),
               target.size,
               status,
             ),
@@ -687,13 +669,16 @@ private object SeriesComparisonReviewAggregation {
             sectionId = "metric-money",
             label = "資産と勝ち筋",
           ),
-          score = if contrast >= Thresholds.MinimumContrast && highLowAssetRate then advice else 0.0,
+          score = if strongEnough && highLowAssetRate then advice else 0.0,
         ),
         peerEffectValue = math.max(0.0, lowRate - 0.10),
       )
     }
 
-  private def playOrderCandidate(stats: PlayerStats): Option[PlaybookCandidate] =
+  private def playOrderCandidate(
+      stats: PlayerStats,
+      allRows: List[SeriesComparisonMatchPlayerRow],
+  ): Option[PlaybookCandidate] =
     val rowsByOrder = stats.rows.groupBy(_.playOrder.value)
     val scoredOrders = rowsByOrder.toList.flatMap { case (order, rows) =>
       Option.when(rows.size >= Thresholds.ReferenceSample)(order -> average(rows.map(rankScore)))
@@ -704,10 +689,21 @@ private object SeriesComparisonReviewAggregation {
       val rawSymptom = best._2 - worst._2
       val worstRows = rowsByOrder.getOrElse(worst._1, Nil)
       val bestRows = rowsByOrder.getOrElse(best._1, Nil)
+      val revenueRankScores = rankScoreByMatch(allRows, _.revenueManYen.value)
+      val revenueRankDelta = StatsKernel.cliffsDelta(
+        bestRows.map(row => revenueRankScores.getOrElse(rankKey(row), rankScore(row))),
+        worstRows.map(row => revenueRankScores.getOrElse(rankKey(row), rankScore(row))),
+      )
       val destinationDelta = StatsKernel
         .cliffsDelta(bestRows.map(destinationCount), worstRows.map(destinationCount))
-      val assetDelta = StatsKernel.cliffsDelta(bestRows.map(assetValue), worstRows.map(assetValue))
-      val contrast = StatsKernel.clamp01(math.max(math.abs(destinationDelta), math.abs(assetDelta)))
+      val accidentDelta =
+        -StatsKernel.cliffsDelta(bestRows.map(accidentCount), worstRows.map(accidentCount))
+      val driver = selectPrimaryActionDriver(List(
+        ActionDriver("revenueRank", revenueRankDelta, 1.0),
+        ActionDriver("destinationCount", destinationDelta, 0.95),
+        ActionDriver("accidentAvoidance", accidentDelta, 0.85),
+      ))
+      val contrast = driver.map(_.selectionStrength).getOrElse(0.0)
       val status = conditionalStatus(worstRows.size)
       val stability = eventStability(stats.rows, rawSymptom)(rows =>
         val byOrder = rows.groupBy(_.playOrder.value).toList.flatMap { case (_, orderRows) =>
@@ -724,59 +720,36 @@ private object SeriesComparisonReviewAggregation {
         actionConnection = 0.7,
         stability = stability,
       )
-      val destinationDominant = math.abs(destinationDelta) >= math.abs(assetDelta)
-      val actionHypothesis =
-        if destinationDominant then "苦手番手では目的地の遅れを早めに補正する。" else "苦手番手では資産の遅れを早めに補正する。"
-      val triggerCondition =
-        if destinationDominant then s"${worst._1}番手に入り、目的地到着が遅れているとき。"
-        else s"${worst._1}番手に入り、総資産が伸びないまま中盤へ入るとき。"
-      val recommendedAction =
-        if destinationDominant then "普段より早く目的地周辺への位置取りを優先し、到着なしで終盤へ入らない。"
-        else "目的地を急ぐ前に、資産を残す進行と下位回避を優先する。"
-      val dataReason =
-        if destinationDominant then
-          s"得意番手の順位スコアは${decimal(best._2)}、苦手番手は${decimal(worst._2)}で、差は${decimal(
-              rawSymptom
-            )}です。苦手番手の目的地平均は${averageEventValue(worstRows)(
-              _.incidents.destination
-            )}、得意番手は${averageEventValue(bestRows)(
-              _.incidents.destination
-            )}で、番手差が出る場面では目的地の遅れが分岐になっている可能性があります。"
-        else
-          s"得意番手の順位スコアは${decimal(best._2)}、苦手番手は${decimal(worst._2)}で、差は${decimal(
-              rawSymptom
-            )}です。苦手番手の総資産平均は${averageMoneyValue(worstRows)}、得意番手は${averageMoneyValue(
-              bestRows
-            )}で、番手差が出る場面では資産の遅れが分岐になっている可能性があります。"
-      val primaryContrastEvidence =
-        if destinationDominant then
-          evidence(
-            "playOrder.destinationContrast",
-            "得意番手との差: 目的地",
-            signed(destinationDelta),
-            worstRows.size,
-            status,
-          )
-        else
-          evidence(
-            "playOrder.assetContrast",
-            "得意番手との差: 総資産",
-            signed(assetDelta),
-            worstRows.size,
-            status,
-          )
+      val text = playOrderText(driver.map(_.kind).getOrElse("revenueRank"), worst._1)
+      val dataReason = playOrderDataReason(
+        best = best,
+        worst = worst,
+        bestRows = bestRows,
+        worstRows = worstRows,
+        driverKind = driver.map(_.kind).getOrElse("revenueRank"),
+        revenueRankScores = revenueRankScores,
+      )
+      val primaryContrastEvidence = playOrderDriverEvidence(
+        driver,
+        revenueRankDelta,
+        destinationDelta,
+        accidentDelta,
+        worstRows.size,
+        status,
+      )
+      val strongEnough = driver.exists(actionDriverStrongEnough(_, status))
       playbookCandidate(
         stats,
         playbookCard(
           id = "play-order",
           classification = "revise",
           category = "playOrder",
-          actionHypothesis = actionHypothesis,
-          triggerCondition = triggerCondition,
-          recommendedAction = recommendedAction,
-          avoidAction = "番手差を無視して普段通りの優先順位で進め続けること。",
+          actionHypothesis = text.actionHypothesis,
+          triggerCondition = text.triggerCondition,
+          recommendedAction = text.recommendedAction,
+          avoidAction = text.avoidAction,
           dataReason = dataReason,
-          postMatchCheck = "次回、苦手番手だった試合で、目的地回数と総資産のどちらが遅れたかを振り返る。",
+          postMatchCheck = text.postMatchCheck,
           targetCount = worstRows.size,
           evidence = List(
             evidence(
@@ -795,9 +768,11 @@ private object SeriesComparisonReviewAggregation {
             ),
             primaryContrastEvidence,
             evidence(
-              "playOrder.worstAssetAverage",
-              s"${worst._1}番手の総資産平均",
-              averageMoneyValue(worstRows),
+              "playOrder.worstRevenueRankAverage",
+              s"${worst._1}番手の収益順位スコア平均",
+              decimal(average(
+                worstRows.map(row => revenueRankScores.getOrElse(rankKey(row), rankScore(row)))
+              )),
               worstRows.size,
               status,
             ),
@@ -808,7 +783,8 @@ private object SeriesComparisonReviewAggregation {
             sectionId = "metric-play-order",
             label = "番手",
           ),
-          score = if rawSymptom >= Thresholds.SignificantScoreDelta then advice else 0.0,
+          score =
+            if rawSymptom >= Thresholds.SignificantScoreDelta && strongEnough then advice else 0.0,
         ),
         peerEffectValue = rawSymptom,
       )
@@ -947,17 +923,34 @@ private object SeriesComparisonReviewAggregation {
       )
     }
 
-  private def ginjiCandidate(stats: PlayerStats): Option[PlaybookCandidate] =
+  private def ginjiCandidate(
+      stats: PlayerStats,
+      allRows: List[SeriesComparisonMatchPlayerRow],
+  ): Option[PlaybookCandidate] =
     val target = stats.rows.filter(_.incidents.suriNoGinji > 0)
     Option.when(target.size >= Thresholds.ReferenceSample) {
+      val revenueRankScores = rankScoreByMatch(allRows, _.revenueManYen.value)
+      val destinationRankScores = rankScoreByMatch(allRows, _.incidents.destination)
       val score = average(target.map(rankScore))
       val rawSymptom = score - stats.averageRankScore
       val upper = target.filter(isUpper)
       val lower = target.filterNot(isUpper)
-      val assetDelta = StatsKernel.cliffsDelta(upper.map(assetValue), lower.map(assetValue))
-      val destinationDelta = StatsKernel
-        .cliffsDelta(upper.map(destinationCount), lower.map(destinationCount))
-      val contrast = StatsKernel.clamp01(math.max(math.abs(assetDelta), math.abs(destinationDelta)))
+      val revenueRankDelta = StatsKernel.cliffsDelta(
+        upper.map(row => revenueRankScores.getOrElse(rankKey(row), rankScore(row))),
+        lower.map(row => revenueRankScores.getOrElse(rankKey(row), rankScore(row))),
+      )
+      val destinationRankDelta = StatsKernel.cliffsDelta(
+        upper.map(row => destinationRankScores.getOrElse(rankKey(row), rankScore(row))),
+        lower.map(row => destinationRankScores.getOrElse(rankKey(row), rankScore(row))),
+      )
+      val accidentDelta =
+        -StatsKernel.cliffsDelta(upper.map(minusStationCount), lower.map(minusStationCount))
+      val driver = selectPrimaryActionDriver(List(
+        ActionDriver("revenueRank", revenueRankDelta, 1.0),
+        ActionDriver("destinationRank", destinationRankDelta, 0.95),
+        ActionDriver("accidentAvoidance", accidentDelta, 0.85),
+      ))
+      val contrast = driver.map(_.selectionStrength).getOrElse(0.0)
       val stability = eventStability(stats.rows, rawSymptom)(rows =>
         val reducedTarget = rows.filter(_.incidents.suriNoGinji > 0)
         average(reducedTarget.map(rankScore)) - average(rows.map(rankScore))
@@ -971,52 +964,32 @@ private object SeriesComparisonReviewAggregation {
         actionConnection = 0.75,
         stability = stability,
       )
-      val assetDominant = math.abs(assetDelta) >= math.abs(destinationDelta)
-      val actionHypothesis =
-        if assetDominant then "銀次被害後は勝ち切りより入賞維持へ切り替える。" else "銀次被害後は目的地で順位圏を戻しに行く。"
-      val triggerCondition =
-        if assetDominant then "スリの銀次被害を受け、総資産差が広がったとき。" else "スリの銀次被害後も、目的地到着で順位圏へ戻せる余地があるとき。"
-      val recommendedAction =
-        if assetDominant then "1位狙いを続けるかではなく、入賞・下位回避に必要な資産維持を優先する。"
-        else "被害後の資産差だけを見ず、目的地周辺への位置取りで入賞圏へ戻す。"
-      val avoidAction =
-        if assetDominant then "被害前と同じ勝ち切り方に固執すること。" else "被害額だけで諦めて、目的地到着による順位回復を捨てること。"
-      val dataReason =
-        if assetDominant then
-          s"銀次被害時の順位スコアは${decimal(score)}で、本人平均との差は${signed(
-              rawSymptom
-            )}です。被害時の上位試合の総資産平均は${averageMoneyValue(upper)}、下位試合は${averageMoneyValue(
-              lower
-            )}で、被害後に資産を残せるかが入賞の分岐になっている可能性があります。"
-        else
-          s"銀次被害時の順位スコアは${decimal(score)}で、本人平均との差は${signed(
-              rawSymptom
-            )}です。被害時の上位試合の目的地平均は${averageEventValue(upper)(
-              _.incidents.destination
-            )}、下位試合は${averageEventValue(lower)(
-              _.incidents.destination
-            )}で、被害後も目的地到着が順位回復の分岐になっている可能性があります。"
-      val primaryContrastEvidence =
-        if assetDominant then
-          evidence("ginji.assetContrast", "被害時の総資産差の偏り", signed(assetDelta), target.size, status)
-        else
-          evidence(
-            "ginji.destinationContrast",
-            "被害時の目的地差の偏り",
-            signed(destinationDelta),
-            target.size,
-            status,
-          )
-      val secondaryContrastEvidence =
-        if assetDominant then
-          evidence(
-            "ginji.destinationContrast",
-            "被害時の目的地差の偏り",
-            signed(destinationDelta),
-            target.size,
-            status,
-          )
-        else evidence("ginji.assetContrast", "被害時の総資産差の偏り", signed(assetDelta), target.size, status)
+      val text = ginjiText(driver.map(_.kind).getOrElse("revenueRank"))
+      val dataReason = ginjiDataReason(
+        score = score,
+        rawSymptom = rawSymptom,
+        upper = upper,
+        lower = lower,
+        driverKind = driver.map(_.kind).getOrElse("revenueRank"),
+        revenueRankScores = revenueRankScores,
+        destinationRankScores = destinationRankScores,
+      )
+      val primaryContrastEvidence = ginjiDriverEvidence(
+        driver,
+        revenueRankDelta,
+        destinationRankDelta,
+        accidentDelta,
+        target.size,
+        status,
+      )
+      val secondaryContrastEvidence = evidence(
+        "ginji.destinationRankContrast",
+        "被害時の目的地順位差",
+        signed(destinationRankDelta),
+        target.size,
+        status,
+      )
+      val strongEnough = driver.exists(actionDriverStrongEnough(_, status))
       playbookCandidate(
         stats,
         playbookCard(
@@ -1024,12 +997,12 @@ private object SeriesComparisonReviewAggregation {
           classification =
             if rawSymptom < -Thresholds.SignificantScoreDelta then "revise" else "verify",
           category = "ginji",
-          actionHypothesis = actionHypothesis,
-          triggerCondition = triggerCondition,
-          recommendedAction = recommendedAction,
-          avoidAction = avoidAction,
+          actionHypothesis = text.actionHypothesis,
+          triggerCondition = text.triggerCondition,
+          recommendedAction = text.recommendedAction,
+          avoidAction = text.avoidAction,
           dataReason = dataReason,
-          postMatchCheck = "次回、銀次被害があった試合では、被害後に総資産を残して入賞または下位回避できたかを振り返る。",
+          postMatchCheck = text.postMatchCheck,
           targetCount = target.size,
           evidence = List(
             evidence(
@@ -1055,11 +1028,370 @@ private object SeriesComparisonReviewAggregation {
             sectionId = "metric-ginji",
             label = "スリの銀次",
           ),
-          score = if contrast >= Thresholds.MinimumContrast then advice else 0.0,
+          score = if strongEnough then advice else 0.0,
         ),
         peerEffectValue = math.abs(rawSymptom),
       )
     }
+
+  private def selectPrimaryActionDriver(
+      drivers: List[ActionDriver]
+  ): Option[ActionDriverSelection] =
+    val ranked = drivers.map { driver =>
+      ActionDriverSelection(
+        kind = driver.kind,
+        effect = driver.effect,
+        effectStrength = math.max(0.0, driver.effect),
+        selectionStrength =
+          StatsKernel.clamp01(math.max(0.0, driver.effect) * driver.actionability),
+        closeToSecond = false,
+      )
+    }.filter(_.effectStrength > 0.0).sortBy(driver => (-driver.selectionStrength, driver.kind))
+    ranked match
+      case Nil => None
+      case head :: second :: _ => Some(head.copy(closeToSecond =
+          head.selectionStrength - second.selectionStrength <= Thresholds.ActionDriverTieDelta
+        ))
+      case head :: Nil => Some(head)
+
+  private def actionDriverStrongEnough(driver: ActionDriverSelection, status: String): Boolean =
+    val minimum =
+      if status == "reference" then Thresholds.ReferenceActionDriverEffect
+      else Thresholds.MinimumActionDriverEffect
+    driver.effectStrength >= minimum
+
+  private def destinationZeroText(kind: String): RecoveryText = kind match
+    case "accidentAvoidance" => RecoveryText(
+        actionHypothesis = "目的地なしで事故が重なったら下位連鎖を止める。",
+        triggerCondition = "目的地到着がないまま、銀次被害やマイナス駅で資産差が広がったとき。",
+        recommendedAction = "目的地を追い続けるより、追加事故を避けて入賞圏に戻す進行を優先する。",
+        avoidAction = "目的地を取れない焦りで、被害後も大きな逆転狙いだけを続けること。",
+        postMatchCheck = "次回、目的地0回だった試合を対象に、事故後に下位連鎖を止められたかを振り返る。",
+      )
+    case "cardShopRoute" => RecoveryText(
+        actionHypothesis = "目的地なしの展開では、売り場経由で到着準備を作る。",
+        triggerCondition = "目的地到着がないまま中盤を過ぎ、カード売り場に寄れるとき。",
+        recommendedAction = "直行で届かないなら、売り場経由で移動や妨害の選択肢を整えて次の到着機会を作る。",
+        avoidAction = "目的地が遠いまま、売り場にも寄らず終盤の一発逆転だけを待つこと。",
+        postMatchCheck = "次回、目的地0回だった試合を対象に、売り場経由で到着準備を作れたかを振り返る。",
+      )
+    case _ => RecoveryText(
+        actionHypothesis = "目的地なしの展開では、収益下位のまま終盤へ入らない。",
+        triggerCondition = "目的地到着がないまま中盤を過ぎ、物件収益順位も下がっているとき。",
+        recommendedAction = "目的地だけの一発逆転を待つ前に、物件収益順位を2位圏へ戻す。",
+        avoidAction = "目的地を取れないまま、収益順位も下げた状態で終盤へ入ること。",
+        postMatchCheck = "次回、目的地0回だった試合を対象に、物件収益順位を戻せたか、4位を避けられたかを振り返る。",
+      )
+
+  private def lowAssetText(kind: String): RecoveryText = kind match
+    case "destinationShortage" => RecoveryText(
+        actionHypothesis = "低資産に沈む前に目的地到着で戻す。",
+        triggerCondition = "総資産が伸びず、目的地回数でも遅れていると感じるとき。",
+        recommendedAction = "高収益だけで巻き返す前に、目的地周辺への位置取りと1回到着を優先する。",
+        avoidAction = "目的地も資産も遅れたまま、高収益だけで巻き返そうとすること。",
+        postMatchCheck = "次回、総資産が伸びなかった試合で、目的地到着を作れたかを振り返る。",
+      )
+    case "ginjiBias" | "minusBias" => RecoveryText(
+        actionHypothesis = "低資産に沈む前に事故連鎖を止める。",
+        triggerCondition = "総資産が伸びず、銀次被害やマイナス駅で資産差が広がったとき。",
+        recommendedAction = "大きな上振れ狙いより、追加事故を避けて入賞圏へ戻す進行を優先する。",
+        avoidAction = "低資産のまま、事故後も同じ勝ち切り方に固執すること。",
+        postMatchCheck = "次回、総資産が伸びなかった試合で、事故後に下位連鎖を止められたかを振り返る。",
+      )
+    case _ => RecoveryText(
+        actionHypothesis = "低資産に沈む前に収益順位を戻す。",
+        triggerCondition = "総資産が伸びず、物件収益順位も下がっているとき。",
+        recommendedAction = "目的地だけを追う前に、物件収益順位を2位圏へ戻す進行へ寄せる。",
+        avoidAction = "収益下位のまま、目的地か上振れだけで巻き返そうとすること。",
+        postMatchCheck = "次回、総資産が伸びなかった試合で、物件収益順位を戻せたかを振り返る。",
+      )
+
+  private def playOrderText(kind: String, order: Int): RecoveryText = kind match
+    case "destinationCount" => RecoveryText(
+        actionHypothesis = "苦手番手では目的地の遅れを早めに補正する。",
+        triggerCondition = s"${order}番手に入り、目的地到着が遅れているとき。",
+        recommendedAction = "普段より早く目的地周辺への位置取りを優先し、到着なしで終盤へ入らない。",
+        avoidAction = "番手差を無視して普段通りの優先順位で進め続けること。",
+        postMatchCheck = s"次回、${order}番手だった試合で、目的地回数を戻せたかを振り返る。",
+      )
+    case "accidentAvoidance" => RecoveryText(
+        actionHypothesis = "苦手番手では事故連鎖を早めに止める。",
+        triggerCondition = s"${order}番手に入り、銀次被害やマイナス駅で資産差が広がったとき。",
+        recommendedAction = "普段の勝ち筋を急ぐ前に、追加事故を避けて入賞圏へ戻す進行を優先する。",
+        avoidAction = "番手差と事故を無視して、普段通りの勝ち切り方へ寄せ続けること。",
+        postMatchCheck = s"次回、${order}番手だった試合で、事故後に下位連鎖を止められたかを振り返る。",
+      )
+    case _ => RecoveryText(
+        actionHypothesis = "苦手番手では収益順位の遅れを早めに補正する。",
+        triggerCondition = s"${order}番手に入り、物件収益順位が下がったまま中盤へ入るとき。",
+        recommendedAction = "目的地を急ぐ前に、物件収益順位を2位圏へ戻す進行を優先する。",
+        avoidAction = "番手差を無視して、収益下位のまま普段通りの優先順位で進め続けること。",
+        postMatchCheck = s"次回、${order}番手だった試合で、物件収益順位を戻せたかを振り返る。",
+      )
+
+  private def ginjiText(kind: String): RecoveryText = kind match
+    case "destinationRank" => RecoveryText(
+        actionHypothesis = "銀次被害後は目的地で順位圏を戻しに行く。",
+        triggerCondition = "スリの銀次被害後も、目的地到着で順位圏へ戻せる余地があるとき。",
+        recommendedAction = "被害額だけを見ず、目的地周辺への位置取りで入賞圏へ戻す。",
+        avoidAction = "被害額だけで諦めて、目的地到着による順位回復を捨てること。",
+        postMatchCheck = "次回、銀次被害があった試合で、目的地順位を戻して入賞圏へ戻れたかを振り返る。",
+      )
+    case "accidentAvoidance" => RecoveryText(
+        actionHypothesis = "銀次被害後は追加事故を避けて下位連鎖を止める。",
+        triggerCondition = "スリの銀次被害後に、さらにマイナス駅などで資産差が広がりそうなとき。",
+        recommendedAction = "1位狙いを続ける前に、追加事故を避けて入賞圏へ戻す進行を優先する。",
+        avoidAction = "被害後も同じ勝ち切り方に固執して、追加事故を受ける展開を続けること。",
+        postMatchCheck = "次回、銀次被害があった試合で、追加事故を避けて下位連鎖を止められたかを振り返る。",
+      )
+    case _ => RecoveryText(
+        actionHypothesis = "銀次被害後は収益順位を戻して入賞圏を守る。",
+        triggerCondition = "スリの銀次被害を受け、物件収益順位も下がっているとき。",
+        recommendedAction = "1位狙いを続ける前に、物件収益順位を2位圏へ戻して下位化を止める。",
+        avoidAction = "被害前と同じ勝ち切り方に固執して、収益下位のまま終盤へ入ること。",
+        postMatchCheck = "次回、銀次被害があった試合で、物件収益順位を戻して入賞圏を守れたかを振り返る。",
+      )
+
+  private def destinationZeroDriverEvidence(
+      driver: Option[ActionDriverSelection],
+      revenueRankDelta: Double,
+      accidentDelta: Double,
+      cardShopDelta: Double,
+      targetCount: Int,
+      status: String,
+  ): SeriesComparisonPlaybookEvidenceResponse = driver.map(_.kind).getOrElse("revenueRank") match
+    case "accidentAvoidance" => evidence(
+        "destinationOutcome.accidentAvoidanceContrast",
+        "目的地0回時の事故回避差",
+        signed(accidentDelta),
+        targetCount,
+        status,
+      )
+    case "cardShopRoute" => evidence(
+        "destinationOutcome.cardShopContrast",
+        "目的地0回時の売り場差",
+        signed(cardShopDelta),
+        targetCount,
+        status,
+      )
+    case _ => evidence(
+        "destinationOutcome.revenueRankContrast",
+        "目的地0回時の収益順位差",
+        signed(revenueRankDelta),
+        targetCount,
+        status,
+      )
+
+  private def lowAssetDriverEvidence(
+      driver: Option[ActionDriverSelection],
+      revenueRankDelta: Double,
+      destinationDelta: Double,
+      ginjiDelta: Double,
+      minusDelta: Double,
+      targetCount: Int,
+      status: String,
+  ): SeriesComparisonPlaybookEvidenceResponse = driver.map(_.kind).getOrElse("revenueRank") match
+    case "destinationShortage" => evidence(
+        "assetStyleProfiles.lowAssetDestinationContrast",
+        "低資産帯の目的地差",
+        signed(destinationDelta),
+        targetCount,
+        status,
+      )
+    case "ginjiBias" => evidence(
+        "assetStyleProfiles.lowAssetGinjiContrast",
+        "低資産帯の銀次差",
+        signed(ginjiDelta),
+        targetCount,
+        status,
+      )
+    case "minusBias" => evidence(
+        "assetStyleProfiles.lowAssetMinusContrast",
+        "低資産帯のマイナス駅差",
+        signed(minusDelta),
+        targetCount,
+        status,
+      )
+    case _ => evidence(
+        "assetStyleProfiles.lowAssetRevenueRankContrast",
+        "低資産帯の収益順位差",
+        signed(revenueRankDelta),
+        targetCount,
+        status,
+      )
+
+  private def playOrderDriverEvidence(
+      driver: Option[ActionDriverSelection],
+      revenueRankDelta: Double,
+      destinationDelta: Double,
+      accidentDelta: Double,
+      targetCount: Int,
+      status: String,
+  ): SeriesComparisonPlaybookEvidenceResponse = driver.map(_.kind).getOrElse("revenueRank") match
+    case "destinationCount" => evidence(
+        "playOrder.destinationContrast",
+        "得意番手との差: 目的地",
+        signed(destinationDelta),
+        targetCount,
+        status,
+      )
+    case "accidentAvoidance" => evidence(
+        "playOrder.accidentAvoidanceContrast",
+        "得意番手との差: 事故回避",
+        signed(accidentDelta),
+        targetCount,
+        status,
+      )
+    case _ => evidence(
+        "playOrder.revenueRankContrast",
+        "得意番手との差: 収益順位",
+        signed(revenueRankDelta),
+        targetCount,
+        status,
+      )
+
+  private def ginjiDriverEvidence(
+      driver: Option[ActionDriverSelection],
+      revenueRankDelta: Double,
+      destinationRankDelta: Double,
+      accidentDelta: Double,
+      targetCount: Int,
+      status: String,
+  ): SeriesComparisonPlaybookEvidenceResponse = driver.map(_.kind).getOrElse("revenueRank") match
+    case "destinationRank" => evidence(
+        "ginji.destinationRankContrast",
+        "被害時の目的地順位差",
+        signed(destinationRankDelta),
+        targetCount,
+        status,
+      )
+    case "accidentAvoidance" => evidence(
+        "ginji.accidentAvoidanceContrast",
+        "被害時の追加事故回避差",
+        signed(accidentDelta),
+        targetCount,
+        status,
+      )
+    case _ => evidence(
+        "ginji.revenueRankContrast",
+        "被害時の収益順位差",
+        signed(revenueRankDelta),
+        targetCount,
+        status,
+      )
+
+  private def destinationZeroDataReason(
+      targetCount: Int,
+      rankScoreDelta: Double,
+      upper: List[SeriesComparisonMatchPlayerRow],
+      lower: List[SeriesComparisonMatchPlayerRow],
+      driverKind: String,
+      revenueRankScores: Map[(String, String), Double],
+  ): String =
+    val opening = s"目的地0回の試合は${targetCount}件で、順位スコアは本人平均より${signed(rankScoreDelta)}です。"
+    val comparison = driverKind match
+      case "accidentAvoidance" =>
+        s"上位試合の事故平均は${decimal(average(upper.map(accidentCount)))}回、下位試合は${decimal(
+            average(lower.map(accidentCount))
+          )}回で、目的地なし展開では追加事故を避ける判断が順位差に効いている可能性があります。"
+      case "cardShopRoute" =>
+        s"上位試合のカード売り場平均は${averageEventValue(upper)(_.incidents.cardShop)}、下位試合は${averageEventValue(
+            lower
+          )(_.incidents.cardShop)}で、目的地なし展開では売り場経由で到着準備を作る動きが分岐になっている可能性があります。"
+      case _ =>
+        s"上位試合の物件収益順位スコア平均は${rankScoreAverage(upper, revenueRankScores)}、下位試合は${rankScoreAverage(
+            lower,
+            revenueRankScores,
+          )}で、目的地なし展開では収益順位を下げないことが分岐になっている可能性があります。"
+    s"$opening $comparison"
+
+  private def lowAssetDataReason(
+      lowRate: Double,
+      target: List[SeriesComparisonMatchPlayerRow],
+      nonLow: List[SeriesComparisonMatchPlayerRow],
+      driverKind: String,
+      revenueRankScores: Map[(String, String), Double],
+  ): String =
+    val opening =
+      s"選択範囲の低資産帯に入った試合は${percent(lowRate)}で、目安の10.0%より${signedPercent(lowRate - 0.10)}高いです。"
+    val comparison = driverKind match
+      case "destinationShortage" =>
+        s"低資産帯の目的地平均は${averageEventValue(target)(_.incidents.destination)}、それ以外は${averageEventValue(
+            nonLow
+          )(_.incidents.destination)}で、資産が沈む前の目的地到着が分岐になっている可能性があります。"
+      case "ginjiBias" =>
+        s"低資産帯の銀次平均は${averageEventValue(target)(_.incidents.suriNoGinji)}、それ以外は${averageEventValue(
+            nonLow
+          )(_.incidents.suriNoGinji)}で、資産が沈む前の銀次被害後の切り替えが分岐になっている可能性があります。"
+      case "minusBias" => s"低資産帯のマイナス駅平均は${averageEventValue(target)(
+            _.incidents.minusStation
+          )}、それ以外は${averageEventValue(nonLow)(
+            _.incidents.minusStation
+          )}で、資産が沈む前の追加事故回避が分岐になっている可能性があります。"
+      case _ =>
+        s"低資産帯の物件収益順位スコア平均は${rankScoreAverage(target, revenueRankScores)}、それ以外は${rankScoreAverage(
+            nonLow,
+            revenueRankScores,
+          )}で、資産が沈む前に収益順位を戻す動きが分岐になっている可能性があります。"
+    s"$opening $comparison"
+
+  private def playOrderDataReason(
+      best: (Int, Double),
+      worst: (Int, Double),
+      bestRows: List[SeriesComparisonMatchPlayerRow],
+      worstRows: List[SeriesComparisonMatchPlayerRow],
+      driverKind: String,
+      revenueRankScores: Map[(String, String), Double],
+  ): String =
+    val opening = s"得意番手の順位スコアは${decimal(best._2)}、苦手番手は${decimal(worst._2)}で、差は${decimal(
+        best._2 - worst._2
+      )}です。"
+    val comparison = driverKind match
+      case "destinationCount" => s"苦手番手の目的地平均は${averageEventValue(worstRows)(
+            _.incidents.destination
+          )}、得意番手は${averageEventValue(bestRows)(
+            _.incidents.destination
+          )}で、番手差が出る場面では目的地の遅れが分岐になっている可能性があります。"
+      case "accidentAvoidance" =>
+        s"苦手番手の事故平均は${decimal(average(worstRows.map(accidentCount)))}回、得意番手は${decimal(
+            average(bestRows.map(accidentCount))
+          )}回で、番手差が出る場面では事故連鎖を止める判断が分岐になっている可能性があります。"
+      case _ => s"苦手番手の物件収益順位スコア平均は${rankScoreAverage(
+            worstRows,
+            revenueRankScores,
+          )}、得意番手は${rankScoreAverage(
+            bestRows,
+            revenueRankScores,
+          )}で、番手差が出る場面では収益順位の遅れが分岐になっている可能性があります。"
+    s"$opening $comparison"
+
+  private def ginjiDataReason(
+      score: Double,
+      rawSymptom: Double,
+      upper: List[SeriesComparisonMatchPlayerRow],
+      lower: List[SeriesComparisonMatchPlayerRow],
+      driverKind: String,
+      revenueRankScores: Map[(String, String), Double],
+      destinationRankScores: Map[(String, String), Double],
+  ): String =
+    val opening = s"銀次被害時の順位スコアは${decimal(score)}で、本人平均との差は${signed(rawSymptom)}です。"
+    val comparison = driverKind match
+      case "destinationRank" => s"被害時の上位試合の目的地順位スコア平均は${rankScoreAverage(
+            upper,
+            destinationRankScores,
+          )}、下位試合は${rankScoreAverage(
+            lower,
+            destinationRankScores,
+          )}で、被害後も目的地到着で順位圏へ戻す動きが分岐になっている可能性があります。"
+      case "accidentAvoidance" =>
+        s"被害時の上位試合の追加事故平均は${decimal(average(upper.map(minusStationCount)))}回、下位試合は${decimal(
+            average(lower.map(minusStationCount))
+          )}回で、被害後に追加事故を避ける判断が分岐になっている可能性があります。"
+      case _ => s"被害時の上位試合の物件収益順位スコア平均は${rankScoreAverage(
+            upper,
+            revenueRankScores,
+          )}、下位試合は${rankScoreAverage(lower, revenueRankScores)}で、被害後に収益順位を戻す動きが分岐になっている可能性があります。"
+    s"$opening $comparison"
 
   private def recoveryText(kind: String): RecoveryText = kind match
     case "destination" => RecoveryText(
@@ -1072,7 +1404,7 @@ private object SeriesComparisonReviewAggregation {
     case "revenue" => RecoveryText(
         actionHypothesis = "前戦下位の次戦は、収益下位のまま終盤へ入らない。",
         triggerCondition = "前戦が3位以下で、目的地が遠く物件収益順位も下がっていると感じるとき。",
-        recommendedAction = "目的地だけを追い続ける前に、収益基盤と総資産を残す動きで2位圏へ戻す。",
+        recommendedAction = "目的地だけを追い続ける前に、物件収益順位を2位圏へ戻す。",
         avoidAction = "目的地が遠いまま、収益も作らず逆転待ちで終盤へ入ること。",
         postMatchCheck = "次回、前戦下位後の試合を対象に、物件収益順位を戻せたか、入賞圏へ戻せたかを振り返る。",
       )
@@ -1193,6 +1525,16 @@ private object SeriesComparisonReviewAggregation {
   )
 
   private final case class RecoveryDriver(kind: String, strength: Double, effect: Double)
+
+  private final case class ActionDriver(kind: String, effect: Double, actionability: Double)
+
+  private final case class ActionDriverSelection(
+      kind: String,
+      effect: Double,
+      effectStrength: Double,
+      selectionStrength: Double,
+      closeToSecond: Boolean,
+  )
 
   private final case class RecoveryText(
       actionHypothesis: String,
@@ -1357,11 +1699,14 @@ private object SeriesComparisonReviewAggregation {
   private def ginjiCount(row: SeriesComparisonMatchPlayerRow): Double =
     asDouble(row.incidents.suriNoGinji)
 
+  private def minusStationCount(row: SeriesComparisonMatchPlayerRow): Double =
+    asDouble(row.incidents.minusStation)
+
+  private def cardShopCount(row: SeriesComparisonMatchPlayerRow): Double =
+    asDouble(row.incidents.cardShop)
+
   private def accidentCount(row: SeriesComparisonMatchPlayerRow): Double =
     asDouble(row.incidents.minusStation + row.incidents.suriNoGinji)
-
-  private def assetValue(row: SeriesComparisonMatchPlayerRow): Double =
-    asDouble(row.totalAssetsManYen.value)
 
   private def isUpper(row: SeriesComparisonMatchPlayerRow): Boolean = row.rank.value <= 2
 
@@ -1399,9 +1744,12 @@ private object SeriesComparisonReviewAggregation {
   )(select: SeriesComparisonMatchPlayerRow => Int): String =
     if rows.isEmpty then "対象なし" else f"${average(rows.map(row => asDouble(select(row))))}%.2f回"
 
-  private def averageMoneyValue(rows: List[SeriesComparisonMatchPlayerRow]): String =
+  private def rankScoreAverage(
+      rows: List[SeriesComparisonMatchPlayerRow],
+      rankScores: Map[(String, String), Double],
+  ): String =
     if rows.isEmpty then "対象なし"
-    else f"${average(rows.map(row => asDouble(row.totalAssetsManYen.value)))}%.0f万円"
+    else decimal(average(rows.map(row => rankScores.getOrElse(rankKey(row), rankScore(row)))))
 
   private def average(values: List[Double]): Double = values match
     case Nil => 0.0

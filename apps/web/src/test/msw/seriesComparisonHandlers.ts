@@ -387,7 +387,7 @@ export function makeSeriesComparisonReviewResponse(): SeriesComparisonReviewResp
     commonPlaybookTopics: [
       {
         actionHint:
-          "収益で上回った試合は、目的地到着、事故後の入賞維持、終盤の資産防衛のどれが順位差に近いかを振り返ります。",
+          "収益で上回った試合は、目的地到着、事故後の入賞維持、終盤の下位回避のどれが順位差に近いかを振り返ります。",
         affectedPlayerCount: 3,
         category: "revenue",
         id: "common-revenue",
@@ -500,7 +500,7 @@ function playbookCard(
       : "次回、前戦下位後の試合を対象に、物件収益順位を戻せたか、入賞圏へ戻せたかを振り返る。",
     recommendedAction: isKeep
       ? "追加収益より、目的地周辺への位置取り、到着、下位回避を優先する。"
-      : "目的地だけを追い続ける前に、収益基盤と総資産を残す動きで2位圏へ戻す。",
+      : "目的地だけを追い続ける前に、物件収益順位を2位圏へ戻す。",
     status: index > 2 ? "reference" : "ok",
     targetCount: Math.max(3, 7 - index),
     triggerCondition: isKeep

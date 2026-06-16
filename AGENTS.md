@@ -62,6 +62,7 @@
 - 場当たり的な対応は避け、可能な限り本質的な実装をする
    - 規約拡張の必要性がある場合は、人間に相談する
 - 必要なタイミングでクオリティゲートを通過させる
+- UI / E2E 検証で in-app browser / iab が利用できない、または `backend-info-request/native pipe closed before response` などで失敗する場合は、作業を止めず Playwright MCP で代替検証する
 
 ---
 

@@ -114,7 +114,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     await expect(
       page.getByRole("heading", {
         exact: true,
-        name: "3種類すべての画像は揃っていません。このまま進める場合は、もう一度開始してください。",
+        name: "3種類すべての画像は揃っていません。このまま進める場合は、もう一度開始ボタンを押してください。",
       }),
     ).toBeVisible();
     await page.getByRole("button", { name: "このまま読み取りを開始" }).click();

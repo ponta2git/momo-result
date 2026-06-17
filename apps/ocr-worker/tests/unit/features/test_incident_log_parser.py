@@ -11,6 +11,7 @@ from tests.support.text_recognition import SequenceTextRecognitionEngine
 
 PRIMARY_RECOGNITIONS_PER_CELL = 2
 RECOGNITIONS_PER_CELL_WITH_FALLBACK = 6
+RECOGNITIONS_PER_CELL_WITH_DIGIT_ONLY_RECOVERY = 10
 INCIDENT_CELL_COUNT = 24
 
 
@@ -87,7 +88,7 @@ def test_incident_log_parser_warns_for_unreadable_count(tmp_path: Path) -> None:
     image_path = tmp_path / "incident.jpg"
     write_test_image(image_path)
     engine = SequenceTextRecognitionEngine(
-        [""] * INCIDENT_CELL_COUNT * RECOGNITIONS_PER_CELL_WITH_FALLBACK
+        [""] * INCIDENT_CELL_COUNT * RECOGNITIONS_PER_CELL_WITH_DIGIT_ONLY_RECOVERY
     )
 
     payload = IncidentLogParser().parse(
@@ -105,6 +106,31 @@ def test_incident_log_parser_warns_for_unreadable_count(tmp_path: Path) -> None:
 
     assert payload.players[0].incidents["目的地"].value is None
     assert {warning.code.value for warning in payload.warnings} == {"MISSING_INCIDENT_COUNT"}
+
+
+def test_incident_log_parser_recovers_visible_one_with_digit_only_fallback(
+    tmp_path: Path,
+) -> None:
+    image_path = tmp_path / "incident.jpg"
+    write_test_image(image_path)
+    cell_one = ["", "", "", "", "", "", "", "", "1", "1"]
+    rest = ["0"] * (INCIDENT_CELL_COUNT - 1) * RECOGNITIONS_PER_CELL_WITH_FALLBACK
+    engine = SequenceTextRecognitionEngine(cell_one + rest)
+
+    payload = IncidentLogParser().parse(
+        ScreenParseContext(
+            image_path=image_path,
+            requested_screen_type=ScreenType.INCIDENT_LOG,
+            detected_screen_type=ScreenType.INCIDENT_LOG,
+            profile_id="full-hd-incident-log-v1",
+            debug_dir=None,
+            include_raw_text=False,
+            text_engine=engine,
+            layout_family_hint="world",
+        )
+    )
+
+    assert payload.players[0].incidents["目的地"].value == 1
 
 
 def test_incident_log_parser_uses_compact_layout_hint(tmp_path: Path) -> None:
@@ -134,7 +160,7 @@ def test_incident_log_parser_auto_selects_profile_with_fewer_missing_counts(tmp_
     image_path = tmp_path / "incident.jpg"
     write_test_image(image_path)
     engine = SequenceTextRecognitionEngine(
-        ([""] * INCIDENT_CELL_COUNT * RECOGNITIONS_PER_CELL_WITH_FALLBACK)
+        ([""] * INCIDENT_CELL_COUNT * RECOGNITIONS_PER_CELL_WITH_DIGIT_ONLY_RECOVERY)
         + (["0"] * INCIDENT_CELL_COUNT * RECOGNITIONS_PER_CELL_WITH_FALLBACK)
     )
 

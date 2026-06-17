@@ -16,6 +16,9 @@ MAX_PLAUSIBLE_STOP_TOTAL = 14
 MAX_PLAUSIBLE_GINJI_TOTAL = 2
 SHARPENED_CONFLICT_CONFIDENCE_THRESHOLD = 0.6
 MIN_FALLBACK_VARIANTS_FOR_OTSU_RECOVERY = 2
+SEVEN_ONE_CONFLICT_CONFIDENCE_THRESHOLD = 0.75
+ONE_COUNT = 1
+SEVEN_ALIAS_COUNT = 7
 
 
 def max_plausible_cell_count(incident_name: str) -> int:
@@ -72,39 +75,27 @@ def select_count_recognition(
     """
     candidates = (primary, *fallback_results)
     snippets = [result.raw_text for result in candidates if result.raw_text]
+    raw_text = " | ".join(dict.fromkeys(snippets))
     valid = [result for result in candidates if result.count is not None]
     if not valid:
-        return CountRecognitionResult(
-            raw_text=" | ".join(dict.fromkeys(snippets)),
-            count=None,
-            confidence=None,
-        )
+        return _recognition(raw_text, count=None, confidence=None)
 
     plausible = [
         result
         for result in valid
         if result.count is not None and result.count <= max_plausible_count
     ]
-    recovered = _recover_plausible_leading_digit(valid, max_plausible_count=max_plausible_count)
-    if not plausible and recovered is not None:
-        count, confidence = recovered
-        return CountRecognitionResult(
-            raw_text=" | ".join(dict.fromkeys(snippets)),
-            count=count,
-            confidence=confidence,
-        )
-    otsu_recovery = _recover_otsu_digit_from_zero_alias_conflict(
+    recovered = _select_recovery(
         primary,
         fallback_results,
+        valid=valid,
+        plausible=plausible,
         max_plausible_count=max_plausible_count,
     )
-    if otsu_recovery is not None:
-        count, confidence = otsu_recovery
-        return CountRecognitionResult(
-            raw_text=" | ".join(dict.fromkeys(snippets)),
-            count=count,
-            confidence=confidence,
-        )
+    if recovered is not None:
+        count, confidence = recovered
+        return _recognition(raw_text, count=count, confidence=confidence)
+
     pool = plausible or valid
     by_count: dict[int, list[CountRecognitionResult]] = {}
     for result in pool:
@@ -144,11 +135,43 @@ def select_count_recognition(
     final_confidence = (
         base_confidence * (0.5 + 0.5 * agreement_factor) if base_confidence is not None else None
     )
-    return CountRecognitionResult(
-        raw_text=" | ".join(dict.fromkeys(snippets)),
-        count=chosen_count,
-        confidence=final_confidence,
-    )
+    return _recognition(raw_text, count=chosen_count, confidence=final_confidence)
+
+
+def _recognition(
+    raw_text: str,
+    *,
+    count: int | None,
+    confidence: float | None,
+) -> CountRecognitionResult:
+    return CountRecognitionResult(raw_text=raw_text, count=count, confidence=confidence)
+
+
+def _select_recovery(
+    primary: CountRecognitionResult,
+    fallback_results: list[CountRecognitionResult],
+    *,
+    valid: list[CountRecognitionResult],
+    plausible: list[CountRecognitionResult],
+    max_plausible_count: int,
+) -> tuple[int, float | None] | None:
+    recovered = None
+    leading = _recover_plausible_leading_digit(valid, max_plausible_count=max_plausible_count)
+    if not plausible and leading is not None:
+        recovered = leading
+    if recovered is None:
+        recovered = _recover_otsu_digit_from_zero_alias_conflict(
+            primary,
+            fallback_results,
+            max_plausible_count=max_plausible_count,
+        )
+    if recovered is None:
+        recovered = _recover_otsu_one_from_seven_alias_conflict(
+            primary,
+            fallback_results,
+            max_plausible_count=max_plausible_count,
+        )
+    return recovered
 
 
 def _recover_otsu_digit_from_zero_alias_conflict(
@@ -189,8 +212,51 @@ def _recover_otsu_digit_from_zero_alias_conflict(
     return recovery
 
 
+def _recover_otsu_one_from_seven_alias_conflict(
+    primary: CountRecognitionResult,
+    fallback_results: list[CountRecognitionResult],
+    *,
+    max_plausible_count: int,
+) -> tuple[int, float | None] | None:
+    """Prefer Otsu for FullHD compact cells where a visible 1 looks like 7.
+
+    Native 1920x1080 桃鉄2 captures keep the compact cell decoration crisp.
+    The primary and sharpened variants can then read the left stroke/shadow of
+    a visible ``1`` as ``7`` while Otsu isolates the foreground digit. Keep the
+    recovery narrow: only ``7``/missing non-Otsu candidates may conflict, the
+    Otsu candidate must be an exact single ``1``, and very high-confidence
+    seven reads are left alone.
+    """
+
+    recovery: tuple[int, float | None] | None = None
+    has_required_fallbacks = (
+        max_plausible_count >= SEVEN_ALIAS_COUNT
+        and len(fallback_results) >= MIN_FALLBACK_VARIANTS_FOR_OTSU_RECOVERY
+    )
+    if has_required_fallbacks:
+        sharpened = fallback_results[0]
+        otsu = fallback_results[1]
+        non_otsu = (primary, sharpened)
+        seven_candidates = [result for result in non_otsu if result.count == SEVEN_ALIAS_COUNT]
+        has_other_digit = any(
+            result.count is not None and result.count != SEVEN_ALIAS_COUNT for result in non_otsu
+        )
+        if _is_exact_single_digit(otsu, ONE_COUNT) and seven_candidates and not has_other_digit:
+            seven_confidence = max((result.confidence or 0.0) for result in seven_candidates)
+            if seven_confidence <= SEVEN_ONE_CONFLICT_CONFIDENCE_THRESHOLD:
+                recovery = ONE_COUNT, otsu.confidence
+    return recovery
+
+
 def _contains_digit(text: str) -> bool:
     return any(char.isdigit() for char in text)
+
+
+def _is_exact_single_digit(result: CountRecognitionResult, count: int) -> bool:
+    if result.count != count:
+        return False
+    pieces = [piece.strip() for piece in result.raw_text.split("|") if piece.strip()]
+    return any(piece == str(count) for piece in pieces)
 
 
 def _is_single_plausible_nonzero_digit(

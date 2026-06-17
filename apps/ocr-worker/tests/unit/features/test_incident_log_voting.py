@@ -118,6 +118,35 @@ def test_select_count_recognition_keeps_high_confidence_sharpened_digit() -> Non
     assert selected.count == 2
 
 
+def test_select_count_recognition_prefers_otsu_one_when_seven_alias_is_weak() -> None:
+    primary = CountRecognitionResult(raw_text="7", count=7, confidence=0.64)
+    sharpened = CountRecognitionResult(raw_text="7", count=7, confidence=0.61)
+    otsu = CountRecognitionResult(raw_text="1", count=1, confidence=0.44)
+
+    selected = select_count_recognition(
+        primary,
+        [sharpened, otsu],
+        max_plausible_count=MAX_PLAUSIBLE_STOP_COUNT,
+    )
+
+    assert selected.count == 1
+    assert selected.confidence == 0.44
+
+
+def test_select_count_recognition_keeps_high_confidence_seven_over_otsu_one() -> None:
+    primary = CountRecognitionResult(raw_text="7", count=7, confidence=0.91)
+    sharpened = CountRecognitionResult(raw_text="7", count=7, confidence=0.88)
+    otsu = CountRecognitionResult(raw_text="1", count=1, confidence=0.44)
+
+    selected = select_count_recognition(
+        primary,
+        [sharpened, otsu],
+        max_plausible_count=MAX_PLAUSIBLE_STOP_COUNT,
+    )
+
+    assert selected.count == 7
+
+
 def test_select_count_recognition_attenuates_confidence_by_agreement() -> None:
     # 1 票だけ → agreement=1/3, confidence factor = 0.5 + 0.5/3 ≈ 0.667
     primary = CountRecognitionResult(raw_text="3", count=3, confidence=1.0)

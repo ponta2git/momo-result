@@ -7,6 +7,7 @@ this module remains a thin engine driver.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +35,13 @@ PIPE_NOISE_CONFIDENCE_THRESHOLD = 0.6
 FAST_PATH_CONFIDENCE_THRESHOLD = 0.85
 
 
+@dataclass(frozen=True)
+class _DebugContext:
+    output_dir: Path | None
+    suffix: str | None
+    sink: dict[str, Any] | None
+
+
 def prepare_count_cell_image(image: Image.Image) -> Image.Image:
     gray = ImageOps.grayscale(image)
     enhanced = ImageEnhance.Contrast(gray).enhance(4.0)
@@ -49,6 +57,27 @@ def prepare_fallback_count_cell_images(image: Image.Image) -> tuple[Image.Image,
     return (
         sharpened.resize((inner.width * 5, inner.height * 5), Image.Resampling.LANCZOS),
         binary.resize((inner.width * 5, inner.height * 5), Image.Resampling.NEAREST),
+    )
+
+
+def prepare_digit_only_count_cell_images(image: Image.Image) -> tuple[Image.Image, ...]:
+    """Return fallback variants that discard compact-cell right-edge decoration.
+
+    Native FullHD 桃鉄2 cells can keep the right chevron crisp enough that
+    Tesseract reads no digit at all for visible ``1`` cells. This fallback is
+    only used after the normal variants fail, so the tighter crop does not
+    compete with already-readable cells.
+    """
+
+    right = min(image.width, 60)
+    lower = max(0, image.height - 5)
+    digit = image.crop((min(10, max(0, right - 1)), 6, right, lower))
+    gray = ImageOps.grayscale(digit)
+    sharpened = ImageEnhance.Contrast(gray.filter(ImageFilter.SHARPEN)).enhance(5.0)
+    binary = otsu_binarize(gray)
+    return (
+        sharpened.resize((digit.width * 5, digit.height * 5), Image.Resampling.LANCZOS),
+        binary.resize((digit.width * 5, digit.height * 5), Image.Resampling.NEAREST),
     )
 
 
@@ -73,6 +102,7 @@ def recognize_count_cell(
     digit count with confidence ≥ :data:`FAST_PATH_CONFIDENCE_THRESHOLD`.
     """
     max_count = max_plausible_cell_count(incident_name)
+    debug = _DebugContext(output_dir=debug_dir, suffix=debug_suffix, sink=debug_sink)
     primary_image = prepare_count_cell_image(image)
     fallback_images = prepare_fallback_count_cell_images(image)
     variant_specs = (
@@ -80,37 +110,105 @@ def recognize_count_cell(
         ("fb_sharpened", fallback_images[0]),
         ("fb_otsu", fallback_images[1]),
     )
-    if debug_dir is not None and debug_suffix is not None:
-        # DEBUG: primary は既に上位で保存済みなので fallback だけ追加保存。
-        for label, variant_image in variant_specs[1:]:
-            variant_image.save(debug_dir / f"{debug_suffix}_{label}.png")
+    # DEBUG: primary は既に上位で保存済みなので fallback だけ追加保存。
+    _save_debug_variants(variant_specs[1:], debug=debug)
 
-    primary_sink = _new_variant_sink("primary") if debug_sink is not None else None
-    primary = _recognize_count_cell_image(context, primary_image, debug_sink=primary_sink)
-    if debug_sink is not None and primary_sink is not None:
-        debug_sink["variants"].append(primary_sink)
+    primary = _recognize_variant(context, "primary", primary_image, debug)
 
     # Fast-path: skip fallback variants when primary already returned a
     # plausible high-confidence digit count. The plausibility cap rejects
     # framing-noise misreads that would otherwise short-circuit on a wrong
     # value (e.g. 10 → "lo" on the ginji column whose plausible cap is 2).
-    if (
+    if _can_use_fast_path(context, primary, max_count):
+        return primary
+
+    fallback_results = _recognize_variants(context, variant_specs[1:], debug)
+    selected = select_count_recognition(primary, fallback_results, max_plausible_count=max_count)
+    if selected.count is not None:
+        return selected
+
+    return _recognize_with_digit_only_recovery(
+        context=context,
+        image=image,
+        primary=primary,
+        fallback_results=fallback_results,
+        max_count=max_count,
+        debug=debug,
+    )
+
+
+def _can_use_fast_path(
+    context: ScreenParseContext,
+    primary: CountRecognitionResult,
+    max_count: int,
+) -> bool:
+    return (
         context.fast_path_enabled
         and primary.count is not None
         and primary.count <= max_count
         and (primary.confidence or 0.0) >= FAST_PATH_CONFIDENCE_THRESHOLD
-    ):
-        return primary
+    )
 
-    fallback_results: list[CountRecognitionResult] = []
-    for label, variant_image in variant_specs[1:]:
-        variant_sink = _new_variant_sink(label) if debug_sink is not None else None
-        result = _recognize_count_cell_image(context, variant_image, debug_sink=variant_sink)
-        fallback_results.append(result)
-        if debug_sink is not None and variant_sink is not None:
-            debug_sink["variants"].append(variant_sink)
 
-    return select_count_recognition(primary, fallback_results, max_plausible_count=max_count)
+def _recognize_with_digit_only_recovery(
+    *,
+    context: ScreenParseContext,
+    image: Image.Image,
+    primary: CountRecognitionResult,
+    fallback_results: list[CountRecognitionResult],
+    max_count: int,
+    debug: _DebugContext,
+) -> CountRecognitionResult:
+    digit_only_images = prepare_digit_only_count_cell_images(image)
+    digit_only_specs = tuple(
+        zip(
+            ("digit_sharpened", "digit_otsu"),
+            digit_only_images,
+            strict=True,
+        )
+    )
+    _save_debug_variants(digit_only_specs, debug=debug)
+    digit_only_results = _recognize_variants(context, digit_only_specs, debug)
+    return select_count_recognition(
+        primary,
+        [*fallback_results, *digit_only_results],
+        max_plausible_count=max_count,
+    )
+
+
+def _save_debug_variants(
+    variant_specs: tuple[tuple[str, Image.Image], ...],
+    *,
+    debug: _DebugContext,
+) -> None:
+    if debug.output_dir is None or debug.suffix is None:
+        return
+    for label, variant_image in variant_specs:
+        variant_image.save(debug.output_dir / f"{debug.suffix}_{label}.png")
+
+
+def _recognize_variants(
+    context: ScreenParseContext,
+    variant_specs: tuple[tuple[str, Image.Image], ...],
+    debug: _DebugContext,
+) -> list[CountRecognitionResult]:
+    return [
+        _recognize_variant(context, label, variant_image, debug)
+        for label, variant_image in variant_specs
+    ]
+
+
+def _recognize_variant(
+    context: ScreenParseContext,
+    label: str,
+    variant_image: Image.Image,
+    debug: _DebugContext,
+) -> CountRecognitionResult:
+    variant_sink = _new_variant_sink(label) if debug.sink is not None else None
+    result = _recognize_count_cell_image(context, variant_image, debug_sink=variant_sink)
+    if debug.sink is not None and variant_sink is not None:
+        debug.sink["variants"].append(variant_sink)
+    return result
 
 
 def _new_variant_sink(label: str) -> dict[str, Any]:

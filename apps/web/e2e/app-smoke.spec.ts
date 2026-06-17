@@ -167,7 +167,6 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     await page.goto("/matches");
 
     await expect(page.getByRole("heading", { exact: true, name: "試合一覧" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "詳細を見る" })).toBeVisible();
 
     const statusResponse = page.waitForResponse((response) => {
       const url = new URL(response.url());
@@ -177,35 +176,56 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
         url.searchParams.get("heldEventId") === null
       );
     });
-    await page.getByRole("combobox", { name: "状態" }).selectOption("confirmed");
+    const statusSelect = page.getByRole("combobox", { name: "状態" });
+    await expect(statusSelect).toBeEnabled();
+    await statusSelect.selectOption("confirmed");
     expect((await statusResponse).ok()).toBe(true);
     await expect(page).toHaveURL(/[?&]status=confirmed(?:&|$)/u);
-    await expect(page.getByRole("table").getByText(gameTitleName)).toBeVisible();
-    await expect(page.getByRole("link", { name: "詳細を見る" })).toHaveAttribute(
-      "href",
-      `/matches/${matchId}`,
-    );
 
     const heldEventResponse = page.waitForResponse((response) => {
       const url = new URL(response.url());
       return isMatchListResponse(response) && url.searchParams.get("heldEventId") === heldEventId;
     });
-    await page.getByRole("combobox", { name: "開催" }).selectOption(heldEventId);
+    const heldEventSelect = page.getByRole("combobox", { name: "開催" });
+    await expect(heldEventSelect).toBeEnabled();
+    await heldEventSelect.selectOption(heldEventId);
     expect((await heldEventResponse).ok()).toBe(true);
     await expect(page).toHaveURL(new RegExp(`[?&]heldEventId=${heldEventId}(?:&|$)`, "u"));
-    await expect(page.getByRole("link", { name: "詳細を見る" })).toHaveAttribute(
-      "href",
-      `/matches/${matchId}`,
-    );
+    const confirmedMatchRow = matchTableRow(page, matchId);
+    await expect(confirmedMatchRow).toBeVisible();
+    await expect(confirmedMatchRow.getByText(gameTitleName)).toBeVisible();
 
-    await page.getByRole("combobox", { name: "表の並び順" }).selectOption("updated_desc");
+    const sortResponse = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        isMatchListResponse(response) &&
+        url.searchParams.get("heldEventId") === heldEventId &&
+        url.searchParams.get("sort") === "updated_desc"
+      );
+    });
+    const sortSelect = page.getByRole("combobox", { name: "並び順" });
+    await expect(sortSelect).toBeEnabled();
+    await sortSelect.selectOption("updated_desc");
+    expect((await sortResponse).ok()).toBe(true);
     await expect(page).toHaveURL(/[?&]sort=updated_desc(?:&|$)/u);
 
-    await page.getByRole("button", { name: "開催・試合" }).click();
+    const heldSortResponse = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        isMatchListResponse(response) &&
+        url.searchParams.get("heldEventId") === heldEventId &&
+        url.searchParams.get("sort") === "held_desc"
+      );
+    });
+    const heldSortButton = page.getByRole("button", { name: "開催・試合" });
+    await expect(heldSortButton).toBeEnabled();
+    await heldSortButton.click();
+    expect((await heldSortResponse).ok()).toBe(true);
     await expect(page).toHaveURL(/[?&]sort=held_desc(?:&|$)/u);
   });
 
   await test.step("open match detail immediately with a loading shell from the list", async () => {
+    expectGeneratedId(heldEventId, "held event ID");
     expectGeneratedId(matchId, "match ID");
 
     let releaseDetailResponse!: () => void;
@@ -225,11 +245,12 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
       await route.continue();
     });
 
-    await page.goto("/matches?status=confirmed");
+    await page.goto(`/matches?status=confirmed&heldEventId=${heldEventId}`);
 
     await expect(page.getByRole("heading", { exact: true, name: "試合一覧" })).toBeVisible();
-    const detailLink = page.getByRole("link", { name: "詳細を見る" });
-    await expect(detailLink).toHaveAttribute("href", `/matches/${matchId}`);
+    const detailLink = matchDetailLink(page, matchId);
+    await expect(detailLink).toHaveCount(1);
+    await expect(detailLink).toBeVisible();
     await detailLink.click();
 
     await expect(page).toHaveURL(new RegExp(`/matches/${matchId}$`, "u"));
@@ -249,7 +270,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
 
     await page.goto(`/exports?matchId=${encodeURIComponent(matchId)}&format=tsv`);
 
-    await expect(page.getByRole("heading", { exact: true, name: "CSV / TSV 出力" })).toBeVisible();
+    await expect(page.getByRole("heading", { exact: true, name: "CSV/TSV出力" })).toBeVisible();
     await expect(page.getByRole("combobox", { name: "試合" })).toHaveValue(matchId);
 
     const exportResponse = page.waitForResponse(
@@ -376,6 +397,14 @@ function expectGeneratedId(value: string | undefined, label: string): string {
 function isMatchListResponse(response: APIResponse): boolean {
   const url = new URL(response.url());
   return url.pathname === "/api/matches" && response.request().method() === "GET";
+}
+
+function matchDetailLink(page: Page, matchId: string) {
+  return page.locator(`a[href="/matches/${matchId}"]:visible`, { hasText: "詳細を見る" });
+}
+
+function matchTableRow(page: Page, matchId: string) {
+  return page.getByRole("row").filter({ has: matchDetailLink(page, matchId) });
 }
 
 async function selectSeedMasters(page: Page): Promise<void> {

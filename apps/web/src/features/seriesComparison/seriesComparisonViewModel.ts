@@ -4,6 +4,7 @@ import type {
   SeriesComparisonReviewQuery,
   SeriesComparisonResponse,
 } from "@/shared/api/seriesComparison";
+import { matchFeatureLabel } from "@/shared/domain/matchFeatures";
 
 import { averageRankSpreadBands } from "./seriesComparisonThresholds";
 
@@ -339,18 +340,7 @@ export function assetStyleTagLabel(tag: string): string {
 }
 
 export function timelineFlagLabel(flag: string): string {
-  switch (flag) {
-    case "revenue_top_no_win":
-      return "物件収益ねじれ";
-    case "ginji_storm":
-      return "スリの銀次多発";
-    case "close_finish":
-      return "接戦";
-    case "asset_blowout":
-      return "大差";
-    default:
-      return flag;
-  }
+  return matchFeatureLabel(flag);
 }
 
 export function statusLabel(status: string | null | undefined): string | undefined {

@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import {
+  buildMatchFeatureBadges,
   nextMatchDetailSort,
   rankMatchDetailPlayers,
   sortMatchDetailPlayers,
@@ -18,7 +19,8 @@ import { listGameTitles, listMapMasters, listSeasonMasters } from "@/shared/api/
 import { deleteMatch, getMatch } from "@/shared/api/matches";
 import { formatApiError } from "@/shared/api/problemDetails";
 import { isInitialQueryLoading, shouldShowBlockingQueryError } from "@/shared/api/queryErrorState";
-import { heldEventKeys, masterKeys, matchKeys } from "@/shared/api/queryKeys";
+import { heldEventKeys, masterKeys, matchKeys, seriesComparisonKeys } from "@/shared/api/queryKeys";
+import { getSeriesComparison } from "@/shared/api/seriesComparison";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 
 export function useMatchDetailPageController() {
@@ -73,6 +75,20 @@ export function useMatchDetailPageController() {
   });
 
   const match = matchQuery.data;
+  const seriesComparisonQueryParams = useMemo(
+    () => (match ? { gameTitleId: match.gameTitleId } : undefined),
+    [match],
+  );
+  const seriesComparisonQuery = useQuery({
+    enabled: seriesComparisonQueryParams !== undefined,
+    queryFn: ({ signal }) => {
+      if (!seriesComparisonQueryParams) {
+        throw new Error("series comparison query is not ready");
+      }
+      return getSeriesComparison(seriesComparisonQueryParams, { signal });
+    },
+    queryKey: seriesComparisonKeys.aggregate(seriesComparisonQueryParams),
+  });
   const heldEvent = match
     ? (heldEventsQuery.data?.items ?? []).find((event) => event.id === match.heldEventId)
     : undefined;
@@ -89,6 +105,19 @@ export function useMatchDetailPageController() {
   const sourcePlayers = useMemo(() => match?.players ?? [], [match?.players]);
   const players = useMemo(() => sortMatchDetailPlayers(sourcePlayers, sort), [sourcePlayers, sort]);
   const rankedPlayers = useMemo(() => rankMatchDetailPlayers(sourcePlayers), [sourcePlayers]);
+  const featureBadges = useMemo(
+    () =>
+      match
+        ? buildMatchFeatureBadges({
+            match,
+            seriesComparison: seriesComparisonQuery.data,
+          })
+        : [],
+    [match, seriesComparisonQuery.data],
+  );
+  const featureScopeLabel = seriesComparisonQuery.data
+    ? "接戦・大差は同作品内基準です"
+    : "試合単体の記録から判定しています";
 
   const setSortKey = useCallback((key: MatchDetailSortKey) => {
     setSort((current) => nextMatchDetailSort(current, key));
@@ -124,6 +153,8 @@ export function useMatchDetailPageController() {
   return {
     confirmDelete,
     errorMessage,
+    featureBadges,
+    featureScopeLabel,
     gameTitle,
     heldAt,
     isDeletePending: deleteMutation.isPending,

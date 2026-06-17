@@ -12,8 +12,9 @@ import { MatchDetailPage } from "@/features/matches/MatchDetailPage";
 import { MatchEditPage } from "@/features/matches/MatchEditPage";
 import { MatchesListPage } from "@/features/matches/MatchesListPage";
 import { createDeferred } from "@/test/deferred";
-import { makeFourPlayerResults, makeMatchDetail } from "@/test/factories";
+import { makeFourPlayerResults, makeIncidents, makeMatchDetail } from "@/test/factories";
 import { setupMsw } from "@/test/msw/lifecycle";
+import { makeSeriesComparisonResponse } from "@/test/msw/seriesComparisonHandlers";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
 
@@ -677,5 +678,108 @@ describe("MatchDetailPage", () => {
         screen.queryByRole("heading", { name: "試合を削除しますか？" }),
       ).not.toBeInTheDocument(),
     );
+  });
+
+  it("shows match feature badges from the match record and same-series comparison", async () => {
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    server.use(
+      http.get("/api/matches/:matchId", () =>
+        HttpResponse.json(
+          makeMatchDetail({
+            players: makeFourPlayerResults([
+              {
+                incidents: makeIncidents({ suriNoGinji: 1 }),
+                rank: 2,
+                revenueManYen: 900,
+                totalAssetsManYen: -100,
+              },
+              {
+                incidents: makeIncidents({ suriNoGinji: 1 }),
+                rank: 1,
+                revenueManYen: 300,
+                totalAssetsManYen: 1000,
+              },
+              { rank: 3, revenueManYen: 700, totalAssetsManYen: 500 },
+              { rank: 4, revenueManYen: 600, totalAssetsManYen: 400 },
+            ]),
+          }),
+        ),
+      ),
+      http.get("/api/analytics/series-comparison", () =>
+        HttpResponse.json({
+          ...makeSeriesComparisonResponse(),
+          matchTimeline: [
+            {
+              assetGapFirstToLast: 1100,
+              assetGapFirstToSecond: 100,
+              flags: ["close_finish"],
+              matchId: "match-1",
+              matchIndex: 1,
+              playedAt: "2026-04-04T12:34:56.000Z",
+              revenueTopMemberIds: ["member_ponta"],
+              status: "ok",
+              totalGinjiCount: 0,
+              winnerMemberId: "member_akane_mami",
+            },
+          ],
+        }),
+      ),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches/match-1"]}>
+          <Routes>
+            <Route path="/matches/:matchId" element={<MatchDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "試合の特徴" })).toBeInTheDocument();
+    expect(await screen.findByText("接戦")).toBeInTheDocument();
+    expect(screen.getByText("物件収益ねじれ")).toBeInTheDocument();
+    expect(screen.getByText("スリの銀次多発")).toBeInTheDocument();
+    expect(screen.getByText("借金あり")).toBeInTheDocument();
+    expect(screen.getByText("目的地なし決着")).toBeInTheDocument();
+    expect(screen.getByText("低収益勝ち")).toBeInTheDocument();
+    expect(screen.getByText("同作品内")).toBeInTheDocument();
+    expect(screen.getAllByText("試合記録").length).toBeGreaterThan(0);
+  });
+
+  it("keeps match-record badges visible when series comparison loading fails", async () => {
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    server.use(
+      http.get("/api/matches/:matchId", () =>
+        HttpResponse.json(
+          makeMatchDetail({
+            players: makeFourPlayerResults([
+              { rank: 1, revenueManYen: 300 },
+              { rank: 2, revenueManYen: 400 },
+              { rank: 3, revenueManYen: 200 },
+              { rank: 4, revenueManYen: 100 },
+            ]),
+          }),
+        ),
+      ),
+      http.get("/api/analytics/series-comparison", () =>
+        HttpResponse.json({ title: "series unavailable" }, { status: 500 }),
+      ),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches/match-1"]}>
+          <Routes>
+            <Route path="/matches/:matchId" element={<MatchDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeInTheDocument();
+    expect(await screen.findByText("物件収益ねじれ")).toBeInTheDocument();
+    expect(screen.getByText("試合単体の記録から判定しています")).toBeInTheDocument();
+    expect(screen.queryByText("接戦")).not.toBeInTheDocument();
   });
 });

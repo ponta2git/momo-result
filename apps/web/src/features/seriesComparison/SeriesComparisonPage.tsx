@@ -66,9 +66,11 @@ import {
 } from "@/features/seriesComparison/seriesComparisonPresentation";
 import {
   defaultSeriesComparisonView,
+  averageRankSpread,
   assetStyleKindLabel,
   assetStyleShapeLabel,
   assetStyleTagLabel,
+  ginjiSummary,
   playOrderSignal,
   qualitySummary,
   statusLabel,
@@ -304,11 +306,8 @@ function ComparisonSkeleton() {
 
 function SummaryBand({ response }: { response: SeriesComparisonResponse }) {
   const leader = leaderSummary(response);
-  const quality = qualitySummary(response);
-  const qualityValue =
-    quality.referenceCount === 0 && quality.noTargetCount === 0
-      ? "通常"
-      : `参考 ${quality.referenceCount}件`;
+  const spread = averageRankSpread(response);
+  const ginji = ginjiSummary(response);
 
   return (
     <section className="grid gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 md:grid-cols-4">
@@ -327,15 +326,19 @@ function SummaryBand({ response }: { response: SeriesComparisonResponse }) {
         }
       />
       <SummaryItem
-        label="集計対象"
-        value="確定済みのみ"
-        subLabel="下書きと未確定試合は含みません"
+        label="順位差"
+        value={spread.label}
+        subLabel={
+          spread.spread === undefined
+            ? "平均順位の比較材料不足"
+            : `平均順位の最大差 ${spread.spread.toFixed(2)}`
+        }
       />
       <SummaryItem
-        label="データ注意"
-        tone={quality.referenceCount > 0 || quality.noTargetCount > 0 ? "notice" : "neutral"}
-        value={qualityValue}
-        subLabel={`対象なし ${quality.noTargetCount}件`}
+        label="銀次被害"
+        tone={ginji.abnormalMatches > 0 ? "notice" : "neutral"}
+        value={`${ginji.totalEncounters}回`}
+        subLabel={`2回以上の試合 ${ginji.abnormalMatches}件`}
       />
     </section>
   );
@@ -374,14 +377,12 @@ function SummaryItem({
 
 const perspectiveItems = [
   {
-    badge: "次回4戦",
     description: "次回4戦で試す行動仮説を、発動条件と根拠で絞ります。",
     id: "review",
     label: "振り返り",
     sections: [{ id: "review-playbook", label: "行動プレイブック" }],
   },
   {
-    badge: "根拠",
     description: "平均順位、直接対決、順位ブレで、地力と相性を確認します。",
     id: "overview",
     label: "順位と相性",
@@ -392,7 +393,6 @@ const perspectiveItems = [
     ],
   },
   {
-    badge: "根拠",
     description: "総資産、物件収益、カード寄り、目的地到着から勝ち筋を確認します。",
     id: "drivers",
     label: "勝ち筋",
@@ -403,7 +403,6 @@ const perspectiveItems = [
     ],
   },
   {
-    badge: "根拠",
     description: "荒れ試合、直近8戦、切り替え、第n試合別の傾向を確認します。",
     id: "flow",
     label: "流れと勢い",
@@ -415,7 +414,6 @@ const perspectiveItems = [
     ],
   },
   {
-    badge: "根拠",
     description: "番手、カード売り場、スリの銀次など、試合条件と出来事を確認します。",
     id: "context",
     label: "番手と出来事",
@@ -428,7 +426,6 @@ const perspectiveItems = [
 ] satisfies AnalysisViewDefinition[];
 
 type AnalysisViewDefinition = {
-  badge: string;
   description: string;
   id: SeriesComparisonViewId;
   label: string;
@@ -475,17 +472,6 @@ function AnalysisTabs({
             value={item.id}
           >
             <span>{item.label}</span>
-            <span
-              aria-hidden="true"
-              className={cn(
-                "rounded-[var(--radius-xs)] border px-1.5 py-0.5 text-[10px] leading-4",
-                item.id === "review"
-                  ? "border-[var(--color-success)]/45 bg-[var(--color-success)]/10 text-[var(--color-success)]"
-                  : "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)]",
-              )}
-            >
-              {item.badge}
-            </span>
           </TabsTab>
         ))}
       </TabsList>

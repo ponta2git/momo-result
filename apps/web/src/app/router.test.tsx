@@ -185,8 +185,10 @@ describe("app routing", () => {
     const { router } = renderApp("/analytics/series");
 
     expect(await screen.findByRole("heading", { name: "戦績比較" })).toBeInTheDocument();
-    expect(await screen.findByText("集計対象")).toBeInTheDocument();
-    expect(await screen.findByText("データ注意")).toBeInTheDocument();
+    expect(await screen.findByText("順位差")).toBeInTheDocument();
+    expect(await screen.findByText("銀次被害")).toBeInTheDocument();
+    expect(screen.queryByText("集計対象")).not.toBeInTheDocument();
+    expect(screen.queryByText("データ注意")).not.toBeInTheDocument();
     expect(await screen.findByText("条件付き指標があります。")).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "振り返り" })).toHaveAttribute("aria-selected", "true");
     expect(await screen.findByRole("heading", { name: "行動プレイブック" })).toBeInTheDocument();

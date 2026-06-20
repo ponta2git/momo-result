@@ -11,9 +11,10 @@ import momo.api.domain.{
 }
 import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.{
-  CreateLoginAccountData, GameTitlesRepository, IncidentMastersRepository, LoginAccountsRepository,
-  MapMastersRepository, MemberAliasesRepository, MembersRepository, SeasonMastersRepository,
-  UpdateLoginAccountData,
+  AppSessionsRepository, CreateLoginAccountData, GameTitlesRepository, IncidentMastersRepository,
+  LoginAccountAdministrationRepository, LoginAccountAdministrationUpdateResult,
+  LoginAccountsRepository, MapMastersRepository, MemberAliasesRepository, MembersRepository,
+  SeasonMastersRepository, UpdateLoginAccountData,
 }
 
 final class InMemoryGameTitlesRepository[F[_]: Sync] private (
@@ -366,6 +367,43 @@ final class InMemoryLoginAccountsRepository[F[_]: Sync] private (
     }
   override def enabledAdminCount: F[Int] = ref.get
     .map(_.values.count(a => a.loginEnabled && a.isAdmin))
+
+final class InMemoryLoginAccountAdministrationRepository[F[_]: Sync](
+    accounts: LoginAccountsRepository[F],
+    sessions: AppSessionsRepository[F],
+) extends LoginAccountAdministrationRepository[F]:
+  override def updateAndRevokeSessionsWhenDisabled(
+      id: AccountId,
+      data: UpdateLoginAccountData,
+  ): F[LoginAccountAdministrationUpdateResult] =
+    for
+      existing <- accounts.find(id)
+      result <- existing match
+        case None => Sync[F].pure(LoginAccountAdministrationUpdateResult.NotFound)
+        case Some(account) => updateExisting(account, data)
+    yield result
+
+  private def updateExisting(
+      existing: LoginAccount,
+      data: UpdateLoginAccountData,
+  ): F[LoginAccountAdministrationUpdateResult] = accounts.update(existing.id, data).flatMap {
+    case Some(updated) =>
+      val revokeSessions = existing.loginEnabled && !updated.loginEnabled
+      val revoke =
+        if revokeSessions then sessions.deleteByAccount(existing.id).void else Sync[F].unit
+      revoke.as(LoginAccountAdministrationUpdateResult.Updated(updated))
+    case None if wouldRemoveEnabledAdmin(existing, data) =>
+      Sync[F].pure(LoginAccountAdministrationUpdateResult.LastEnabledAdmin)
+    case None => Sync[F].pure(LoginAccountAdministrationUpdateResult.NotFound)
+  }
+
+  private def wouldRemoveEnabledAdmin(
+      existing: LoginAccount,
+      data: UpdateLoginAccountData,
+  ): Boolean =
+    val nextLoginEnabled = data.loginEnabled.getOrElse(existing.loginEnabled)
+    val nextIsAdmin = data.isAdmin.getOrElse(existing.isAdmin)
+    existing.loginEnabled && existing.isAdmin && (!nextLoginEnabled || !nextIsAdmin)
 
 object InMemoryLoginAccountsRepository:
   def create[F[_]: Sync](accounts: List[LoginAccount]): F[InMemoryLoginAccountsRepository[F]] = Ref

@@ -239,6 +239,46 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
       }
     }
 
+  sessionBackedApp.test("admin login disable revokes the account's active sessions") { fixture =>
+    val sessionHeaders: List[Header.ToRaw] = List(
+      sessionCookieHeader(fixture.sessionCookie),
+      Header.Raw(CIString("X-CSRF-Token"), fixture.csrfToken),
+    )
+    val createBackupAdmin = Request[IO](Method.POST, uri"/api/admin/login-accounts")
+      .putHeaders(sessionHeaders*).withEntity(Json.obj(
+        "discordUserId" -> Json.fromString("323456789012345678"),
+        "displayName" -> Json.fromString("backup-admin"),
+        "playerMemberId" -> Json.Null,
+        "loginEnabled" -> Json.fromBoolean(true),
+        "isAdmin" -> Json.fromBoolean(true),
+      ))
+    val disableCurrentAccount =
+      Request[IO](Method.PATCH, uri"/api/admin/login-accounts/account_ponta")
+        .putHeaders(sessionHeaders*).withEntity(Json.obj("loginEnabled" -> Json.fromBoolean(false)))
+    val readCurrentSession = Request[IO](Method.GET, uri"/api/auth/me")
+      .putHeaders(sessionCookieHeader(fixture.sessionCookie))
+
+    for
+      createResponse <- fixture.app.run(createBackupAdmin)
+      _ <- createResponse.as[Json].map { body =>
+        assertEquals(createResponse.status, Status.Ok)
+        assertEquals(jsonField[Boolean](body, "isAdmin"), true)
+      }
+      disableResponse <- fixture.app.run(disableCurrentAccount)
+      _ <- disableResponse.as[Json].map { body =>
+        assertEquals(disableResponse.status, Status.Ok)
+        assertEquals(jsonField[Boolean](body, "loginEnabled"), false)
+      }
+      meResponse <- fixture.app.run(readCurrentSession)
+      _ <- assertProblemDetailEquals(
+        meResponse,
+        Status.Unauthorized,
+        "UNAUTHORIZED",
+        "Authentication is required.",
+      )
+    yield ()
+  }
+
   app.test("GET /api/admin/login-accounts is restricted to administrator accounts") { httpApp =>
     val request = readGet(uri"/api/admin/login-accounts", accountId = "account_akane_mami")
     httpApp.run(request).flatMap(response =>

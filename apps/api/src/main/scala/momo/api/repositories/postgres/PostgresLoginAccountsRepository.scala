@@ -2,6 +2,7 @@ package momo.api.repositories.postgres
 
 import cats.MonadThrow
 import cats.effect.MonadCancelThrow
+import cats.syntax.all.*
 import doobie.*
 import doobie.enumerated.SqlState
 import doobie.implicits.*
@@ -14,7 +15,9 @@ import momo.api.domain.ids.{AccountId, UserId}
 import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.repositories.{
-  CreateLoginAccountData, LoginAccountsAlg, LoginAccountsRepository, UpdateLoginAccountData,
+  CreateLoginAccountData, LoginAccountAdministrationRepository,
+  LoginAccountAdministrationUpdateResult, LoginAccountsAlg, LoginAccountsRepository,
+  UpdateLoginAccountData,
 }
 
 private def isLoginAccountUniqueViolation(state: SqlState): Boolean = state.value ==
@@ -112,6 +115,43 @@ object PostgresLoginAccounts:
       """.query[Int].unique
 end PostgresLoginAccounts
 
+object PostgresLoginAccountAdministration:
+  def updateAndRevokeSessionsWhenDisabled(
+      id: AccountId,
+      data: UpdateLoginAccountData,
+  ): ConnectionIO[LoginAccountAdministrationUpdateResult] =
+    for
+      existing <- PostgresLoginAccounts.alg.find(id)
+      result <- existing match
+        case None => LoginAccountAdministrationUpdateResult.NotFound.pure[ConnectionIO]
+        case Some(account) => updateExisting(account, data)
+    yield result
+
+  private def updateExisting(
+      existing: LoginAccount,
+      data: UpdateLoginAccountData,
+  ): ConnectionIO[LoginAccountAdministrationUpdateResult] = PostgresLoginAccounts.alg
+    .update(existing.id, data).flatMap {
+      case Some(updated) =>
+        val revokeSessions = existing.loginEnabled && !updated.loginEnabled
+        val revoke =
+          if revokeSessions then PostgresAppSessions.alg.deleteByAccount(existing.id).void
+          else MonadThrow[ConnectionIO].unit
+        revoke.as(LoginAccountAdministrationUpdateResult.Updated(updated))
+      case None if wouldRemoveEnabledAdmin(existing, data) =>
+        LoginAccountAdministrationUpdateResult.LastEnabledAdmin.pure[ConnectionIO]
+      case None => LoginAccountAdministrationUpdateResult.NotFound.pure[ConnectionIO]
+    }
+
+  private def wouldRemoveEnabledAdmin(
+      existing: LoginAccount,
+      data: UpdateLoginAccountData,
+  ): Boolean =
+    val nextLoginEnabled = data.loginEnabled.getOrElse(existing.loginEnabled)
+    val nextIsAdmin = data.isAdmin.getOrElse(existing.isAdmin)
+    existing.loginEnabled && existing.isAdmin && (!nextLoginEnabled || !nextIsAdmin)
+end PostgresLoginAccountAdministration
+
 final class PostgresLoginAccountsRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends LoginAccountsRepository[F]:
   private val delegate: LoginAccountsRepository[F] = LoginAccountsRepository
@@ -119,3 +159,15 @@ final class PostgresLoginAccountsRepository[F[_]: MonadCancelThrow](transactor: 
 
   export delegate.*
 end PostgresLoginAccountsRepository
+
+final class PostgresLoginAccountAdministrationRepository[F[_]: MonadCancelThrow](
+    transactor: Transactor[F]
+) extends LoginAccountAdministrationRepository[F]:
+  private val transactK = Database.transactK(transactor)
+
+  override def updateAndRevokeSessionsWhenDisabled(
+      id: AccountId,
+      data: UpdateLoginAccountData,
+  ): F[LoginAccountAdministrationUpdateResult] =
+    transactK(PostgresLoginAccountAdministration.updateAndRevokeSessionsWhenDisabled(id, data))
+end PostgresLoginAccountAdministrationRepository

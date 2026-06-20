@@ -42,6 +42,17 @@ trait LoginAccountsRepository[F[_]]:
   def update(id: AccountId, data: UpdateLoginAccountData): F[Option[LoginAccount]]
   def enabledAdminCount: F[Int]
 
+enum LoginAccountAdministrationUpdateResult derives CanEqual:
+  case Updated(account: LoginAccount)
+  case NotFound
+  case LastEnabledAdmin
+
+trait LoginAccountAdministrationRepository[F[_]]:
+  def updateAndRevokeSessionsWhenDisabled(
+      id: AccountId,
+      data: UpdateLoginAccountData,
+  ): F[LoginAccountAdministrationUpdateResult]
+
 object LoginAccountsRepository:
   def fromAlg[F0[_], F[_]](alg: LoginAccountsAlg[F0], liftK: F0 ~> F): LoginAccountsRepository[F] =
     new LoginAccountsRepository[F]:

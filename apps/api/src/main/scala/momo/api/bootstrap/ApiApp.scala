@@ -13,7 +13,8 @@ import org.typelevel.log4cats.slf4j.Slf4jFactory
 import momo.api.adapters.{
   InMemoryAppSessionsRepository, InMemoryGameTitlesRepository, InMemoryHeldEventDeletionRepository,
   InMemoryHeldEventsRepository, InMemoryIdempotencyRepository, InMemoryImageReferenceRepository,
-  InMemoryIncidentMastersRepository, InMemoryLoginAccountsRepository, InMemoryMapMastersRepository,
+  InMemoryIncidentMastersRepository, InMemoryLoginAccountAdministrationRepository,
+  InMemoryLoginAccountsRepository, InMemoryMapMastersRepository,
   InMemoryMatchConfirmationRepository, InMemoryMatchDraftsRepository, InMemoryMatchListReadModel,
   InMemoryMatchesRepository, InMemoryMemberAliasesRepository, InMemoryMembersRepository,
   InMemoryOcrDraftsRepository, InMemoryOcrJobCreationRepository,
@@ -37,10 +38,11 @@ import momo.api.repositories.postgres.*
 import momo.api.repositories.{
   AppSessionsRepository, GameTitlesRepository, HeldEventDeletionRepository, HeldEventsRepository,
   IdempotencyRepository, ImageOrphanStore, ImageReferenceRepository, IncidentMastersRepository,
-  LoginAccountsRepository, MapMastersRepository, MatchConfirmationRepository, MatchDraftsRepository,
-  MatchListReadModel, MatchesRepository, MemberAliasesRepository, MembersRepository,
-  OcrDraftsRepository, OcrJobCreationRepository, OcrJobMaintenanceRepository, OcrJobsRepository,
-  QueueHealthProbe, QueueProducer, SeasonMastersRepository, SeriesComparisonReadModel,
+  LoginAccountAdministrationRepository, LoginAccountsRepository, MapMastersRepository,
+  MatchConfirmationRepository, MatchDraftsRepository, MatchListReadModel, MatchesRepository,
+  MemberAliasesRepository, MembersRepository, OcrDraftsRepository, OcrJobCreationRepository,
+  OcrJobMaintenanceRepository, OcrJobsRepository, QueueHealthProbe, QueueProducer,
+  SeasonMastersRepository, SeriesComparisonReadModel,
 }
 import momo.api.usecases.*
 
@@ -107,6 +109,8 @@ object ApiApp:
         val members: MembersRepository[F] = PostgresMembersRepository[F](transactor)
         val loginAccounts: LoginAccountsRepository[F] =
           PostgresLoginAccountsRepository[F](transactor)
+        val loginAccountAdministration: LoginAccountAdministrationRepository[F] =
+          PostgresLoginAccountAdministrationRepository[F](transactor)
         val gameTitles: GameTitlesRepository[F] = PostgresGameTitlesRepository[F](transactor)
         val mapMasters: MapMastersRepository[F] = PostgresMapMastersRepository[F](transactor)
         val seasonMasters: SeasonMastersRepository[F] =
@@ -167,6 +171,7 @@ object ApiApp:
               appSessions = appSessions,
               members = members,
               loginAccounts = loginAccounts,
+              loginAccountAdministration = loginAccountAdministration,
               gameTitles = gameTitles,
               mapMasters = mapMasters,
               seasonMasters = seasonMasters,
@@ -226,6 +231,8 @@ object ApiApp:
                     updatedAt = java.time.Instant.EPOCH,
                   )
                 })
+              loginAccountAdministration =
+                InMemoryLoginAccountAdministrationRepository[F](loginAccounts, appSessions)
               mapMasters <- InMemoryMapMastersRepository.createWithDeleteGuard[F](mapMasterId =>
                 ensureInMemoryMapMasterCanDelete(mapMasterId, matches, matchDrafts)
               )
@@ -273,6 +280,7 @@ object ApiApp:
               appSessions,
               members,
               loginAccounts,
+              loginAccountAdministration,
               gameTitles,
               mapMasters,
               seasonMasters,
@@ -297,6 +305,7 @@ object ApiApp:
                   appSessions,
                   members,
                   loginAccounts,
+                  loginAccountAdministration,
                   gameTitles,
                   mapMasters,
                   seasonMasters,
@@ -343,6 +352,7 @@ object ApiApp:
                   appSessions = appSessions,
                   members = members,
                   loginAccounts = loginAccounts,
+                  loginAccountAdministration = loginAccountAdministration,
                   gameTitles = gameTitles,
                   mapMasters = mapMasters,
                   seasonMasters = seasonMasters,
@@ -625,6 +635,7 @@ object ApiApp:
       appSessions: AppSessionsRepository[F],
       members: MembersRepository[F],
       loginAccounts: LoginAccountsRepository[F],
+      loginAccountAdministration: LoginAccountAdministrationRepository[F],
       gameTitles: GameTitlesRepository[F],
       mapMasters: MapMastersRepository[F],
       seasonMasters: SeasonMastersRepository[F],
@@ -749,7 +760,7 @@ object ApiApp:
     val deleteMemberAlias = DeleteMemberAlias[F](memberAliases)
     val listLoginAccounts = ListLoginAccounts[F](loginAccounts)
     val createLoginAccount = CreateLoginAccount[F](loginAccounts, members, nowF, nextLoginAccountId)
-    val updateLoginAccount = UpdateLoginAccount[F](loginAccounts, members, appSessions, nowF)
+    val updateLoginAccount = UpdateLoginAccount[F](loginAccountAdministration, members, nowF)
 
     MemberRoster.devFromMemberIds(config.devMemberIds).leftMap(new IllegalArgumentException(_))
       .liftTo[F].map { roster =>

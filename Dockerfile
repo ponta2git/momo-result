@@ -1,10 +1,10 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1.25.0@sha256:0adf442eae370b6087e08edc7c50b552d80ddf261576f4ebd6421006b2461f12
 
-ARG NODE_IMAGE=node:24-bookworm-slim@sha256:24dc26ef1e3c3690f27ebc4136c9c186c3133b25563ae4d7f0692e4d1fe5db0e
-ARG JAVA_JDK_IMAGE=eclipse-temurin:25-jdk-noble@sha256:29d2d8af5d12f9ee7aec18f4fb2cd8bc8e6501b748ac62631acd31c867cfa262
-ARG JAVA_JRE_IMAGE=eclipse-temurin:25-jre-noble@sha256:b27ca47660a8fa837e47a8533b9b1a3a430295cf29ca28d91af4fd121572dc29
-ARG PYTHON_IMAGE=python:3.14-slim-bookworm@sha256:cba2eed20b946f0fcf51f2e736f00b71921884b0704b4301febf8d01032b1792
-ARG UBUNTU_IMAGE=ubuntu:noble@sha256:c4a8d5503dfb2a3eb8ab5f807da5bc69a85730fb49b5cfca2330194ebcc41c7b
+ARG NODE_IMAGE=node:24-bookworm-slim@sha256:c2d5ade763cacfb03fe9cb8e8af5d1be5041ff331921fa26a9b231ca3a4f780a
+ARG JAVA_JDK_IMAGE=eclipse-temurin:25-jdk-noble@sha256:02aba7518e48cfed96403ac9634e357a40329d6ec9418feb0b32636e43b245a1
+ARG JAVA_JRE_IMAGE=eclipse-temurin:25-jre-noble@sha256:f9bd8815e73632c22985ebb133ec49b9fc4ad5ffe0657594ac02748ad0431ab7
+ARG PYTHON_IMAGE=python:3.14-slim-bookworm@sha256:a70519002c49552ea0a853de47599cf40479b001bd7a624f1112eaf44dcaccc7
+ARG UBUNTU_IMAGE=ubuntu:noble@sha256:786a8b558f7be160c6c8c4a54f9a57274f3b4fb1491cf65146521ae77ff1dc54
 
 FROM ${NODE_IMAGE} AS web-deps
 WORKDIR /workspace
@@ -23,7 +23,7 @@ RUN pnpm --filter web build
 FROM ${JAVA_JDK_IMAGE} AS api-deps
 WORKDIR /workspace/apps/api
 ENV SBT_OPTS="--enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow"
-ARG SBT_SHA256=cb23868a34fe2f4ce83c1ded7b0ab5efeba7de9a52f1e739b10b3ff8da844239
+ARG SBT_SHA256=84c6dd93c094577ce857d3b7ae450ef7ff88fceec099c8feb1cefac3e4b18a32
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates curl \
   && rm -rf /var/lib/apt/lists/*
@@ -93,10 +93,10 @@ ENV LD_LIBRARY_PATH="/opt/tesseract/lib"
 ENV PATH="/opt/tesseract/bin:${PATH}"
 ENV PKG_CONFIG_PATH="/opt/tesseract/lib/pkgconfig:${PKG_CONFIG_PATH}"
 WORKDIR /workspace/apps/ocr-worker
-ARG UV_VERSION=0.9.11
+ARG UV_VERSION=0.11.23
 ARG TARGETARCH
-ARG UV_AMD64_SHA256=817c0722b437b4b45b9a7e0231616a09db76bab1b8d178ba7a9680c690db19f0
-ARG UV_ARM64_SHA256=b695e1796449ea85f967b749f87283678ce284e2c042b4b6fa51fa36ec06f47c
+ARG UV_AMD64_SHA256=e12c4cda2fe8c305510a78380a88f2c32a27e90cdcd123cefd2873388f0ebb5f
+ARG UV_ARM64_SHA256=1873a77350f6621279ae1a0d2227f2bd8b67131598f14a7eb0ba2215d3da2c98
 RUN case "${TARGETARCH}" in \
     amd64) UV_TARGET="x86_64-unknown-linux-gnu"; UV_SHA256="${UV_AMD64_SHA256}" ;; \
     arm64) UV_TARGET="aarch64-unknown-linux-gnu"; UV_SHA256="${UV_ARM64_SHA256}" ;; \

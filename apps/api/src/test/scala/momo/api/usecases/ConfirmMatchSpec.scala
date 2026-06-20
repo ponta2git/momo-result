@@ -11,7 +11,9 @@ import momo.api.adapters.{
   InMemorySeasonMastersRepository, LocalFsImageStore,
 }
 import momo.api.domain.ids.*
-import momo.api.domain.{GameTitle, PlayerResult}
+import momo.api.domain.{GameTitle, MatchRecord, PlayerResult}
+import momo.api.errors.{AppError, AppException}
+import momo.api.repositories.{MatchConfirmationRepository, MatchDraftConfirmation}
 import momo.api.testing.AppErrorAssertions.assertAppError
 import momo.api.usecases.testing.MatchFixtures
 
@@ -84,6 +86,22 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
         assertAppError(second, "CONFLICT", "already exists for held event")
     }
 
+  test("maps confirmation repository conflicts into the usecase error channel"):
+    Fixture.resource.use { fixture =>
+      val usecase = fixture.usecaseWith(
+        ConfirmationConflictRepository,
+        IO.pure(MatchId.unsafeFromString("match-confirm-conflict")),
+      )
+      for
+        _ <- fixture.seedPrereqs()
+        result <- usecase.run(
+          command(),
+          AccountId.unsafeFromString("ponta"),
+          Some(MemberId.unsafeFromString("ponta")),
+        )
+      yield assertAppError(result, "CONFLICT", "confirmation conflict")
+    }
+
   test("rejects map and season that belong to a different game title"):
     Fixture.resource.use { fixture =>
       for
@@ -136,6 +154,8 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
       seasonMasters: InMemorySeasonMastersRepository[IO],
       heldEvents: InMemoryHeldEventsRepository[IO],
       matches: InMemoryMatchesRepository[IO],
+      matchDrafts: InMemoryMatchDraftsRepository[IO],
+      retention: PurgeSourceImages[IO],
       usecase: ConfirmMatch[IO],
   ):
     def seedPrereqs(): IO[Unit] = MatchFixtures.seedWorldPrereqs(
@@ -152,6 +172,23 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
 
     def seedMastersOnly(): IO[Unit] = MatchFixtures
       .seedWorldMasters(gameTitles, mapMasters, seasonMasters, titleId, mapId, seasonId, now)
+
+    def usecaseWith(
+        confirmations: MatchConfirmationRepository[IO],
+        nextId: IO[MatchId],
+    ): ConfirmMatch[IO] = ConfirmMatch[IO](
+      heldEvents = heldEvents,
+      matches = matches,
+      matchDrafts = matchDrafts,
+      confirmations = confirmations,
+      sourceImageRetention = retention,
+      gameTitles = gameTitles,
+      mapMasters = mapMasters,
+      seasonMasters = seasonMasters,
+      now = IO.pure(now),
+      nextId = nextId,
+      allowedMemberIds = IO.pure(allowedMembers),
+    )
 
   private object Fixture:
     def resource: Resource[IO, Fixture] = tempDirectory("momo-api-confirm-match").evalMap { dir =>
@@ -181,5 +218,21 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
           },
           allowedMemberIds = IO.pure(allowedMembers),
         )
-      yield Fixture(gameTitles, mapMasters, seasonMasters, heldEvents, matches, usecase)
+      yield Fixture(
+        gameTitles,
+        mapMasters,
+        seasonMasters,
+        heldEvents,
+        matches,
+        matchDrafts,
+        retention,
+        usecase,
+      )
     }
+
+  private object ConfirmationConflictRepository extends MatchConfirmationRepository[IO]:
+    override def confirm(
+        record: MatchRecord,
+        draft: Option[MatchDraftConfirmation],
+        updatedAt: Instant,
+    ): IO[Boolean] = IO.raiseError(new AppException(AppError.Conflict("confirmation conflict")))

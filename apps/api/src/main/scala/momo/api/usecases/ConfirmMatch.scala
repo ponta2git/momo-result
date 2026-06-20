@@ -96,8 +96,11 @@ final class ConfirmMatch[F[_]: MonadThrow](
             EitherT.fromEither[F](validateDraftForConfirm(draft, command.draftRefs))
               .map(_ => Some(draft))
           }
-    _ <- confirmations.confirm(record, maybeDraft.map(MatchDraftConfirmation.from), createdAt)
-      .ensureF(AppError.Conflict("Failed to confirm match from the draft."))
+    confirmed <- confirmations
+      .confirm(record, maybeDraft.map(MatchDraftConfirmation.from), createdAt).recoverAppError
+    _ <- EitherT.fromEither[F](
+      Either.cond(confirmed, (), AppError.Conflict("Failed to confirm match from the draft."))
+    )
     _ <- maybeDraft match
       case None => EitherT.rightT[F, AppError](())
       case Some(draft) => EitherT.liftF(sourceImageRetention.runBestEffort(draft.id, createdAt))

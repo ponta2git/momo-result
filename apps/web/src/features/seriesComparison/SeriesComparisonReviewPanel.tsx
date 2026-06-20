@@ -1,4 +1,4 @@
-import { ArrowRight, ClipboardList, Target } from "lucide-react";
+import { ArrowRight, ChevronDown, ClipboardList, Target } from "lucide-react";
 
 import { MetricSection } from "@/features/seriesComparison/SeriesComparisonMetricSection";
 import { playerColor } from "@/features/seriesComparison/SeriesComparisonPlayerVisuals";
@@ -15,6 +15,11 @@ import type {
 } from "@/shared/api/seriesComparison";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
+import {
+  CollapsiblePanel,
+  CollapsibleRoot,
+  CollapsibleTrigger,
+} from "@/shared/ui/data/Collapsible";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
@@ -284,8 +289,7 @@ function ReviewPlaybookCardView({
         <ReviewPlaybookText label="発動条件" text={card.triggerCondition} />
         <ReviewPlaybookText label="やること" text={card.recommendedAction} tone="action" />
         <ReviewPlaybookText label="避けること" text={card.avoidAction} tone="caution" />
-        <ReviewPlaybookText label="データ上の理由" text={card.dataReason} />
-        <ReviewPlaybookEvidenceList evidence={card.evidence ?? []} />
+        <ReviewPlaybookEvidenceDisclosure card={card} />
         <ReviewPlaybookText label="試合後の検証" text={card.postMatchCheck} />
       </div>
       <div className="flex min-w-0 justify-end">
@@ -303,10 +307,41 @@ function ReviewPlaybookCardView({
   );
 }
 
+function ReviewPlaybookEvidenceDisclosure({ card }: { card: ReviewPlaybookCard }) {
+  const evidence = card.evidence ?? [];
+  return (
+    <CollapsibleRoot className="min-w-0 rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)]">
+      <CollapsibleTrigger
+        aria-label="データ上の理由・主要指標"
+        className="group flex min-h-11 w-full min-w-0 items-center justify-between gap-3 rounded-[var(--radius-xs)] px-3 py-2 text-left hover:bg-[var(--color-surface)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-action)]"
+      >
+        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="text-xs font-semibold text-[var(--color-text-primary)]">
+            データ上の理由・主要指標
+          </span>
+          <span className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--color-text-secondary)]">
+            主要指標 {evidence.length}件
+          </span>
+        </span>
+        <ChevronDown
+          aria-hidden="true"
+          className="size-4 shrink-0 text-[var(--color-text-secondary)] group-data-[panel-open]:rotate-180"
+        />
+      </CollapsibleTrigger>
+      <CollapsiblePanel className="border-t border-[var(--color-border)] px-3 py-3">
+        <div className="grid min-w-0 gap-3">
+          <ReviewPlaybookText label="データ上の理由" text={card.dataReason} />
+          <ReviewPlaybookEvidenceList evidence={evidence} />
+        </div>
+      </CollapsiblePanel>
+    </CollapsibleRoot>
+  );
+}
+
 function ReviewPlaybookEvidenceList({ evidence }: { evidence: ReviewPlaybookEvidence[] }) {
   if (evidence.length === 0) {
     return (
-      <div className="min-w-0">
+      <div className="min-w-0 rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-2">
         <p className="text-[11px] font-semibold text-[var(--color-text-secondary)]">主要指標</p>
         <p className="mt-1 text-sm leading-6 text-pretty text-[var(--color-text-secondary)]">
           主要指標はありません。
@@ -317,12 +352,9 @@ function ReviewPlaybookEvidenceList({ evidence }: { evidence: ReviewPlaybookEvid
   return (
     <div className="min-w-0">
       <p className="text-[11px] font-semibold text-[var(--color-text-secondary)]">主要指標</p>
-      <div className="mt-1 grid min-w-0 border-y border-[var(--color-border)]">
+      <div className="mt-1.5 grid min-w-0 divide-y divide-[var(--color-border)] rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)]">
         {evidence.map((item) => (
-          <div
-            className="grid min-w-0 gap-1 border-t border-[var(--color-border)] py-1.5 first:border-t-0"
-            key={`${item.metricId}:${item.label}`}
-          >
+          <div className="grid min-w-0 gap-1 p-2" key={`${item.metricId}:${item.label}`}>
             <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
               <p className="min-w-0 text-xs leading-5 text-[var(--color-text-secondary)]">
                 {item.label}

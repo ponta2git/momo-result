@@ -227,6 +227,16 @@ describe("app routing", () => {
     expect(screen.queryByText("play_order")).not.toBeInTheDocument();
     expect(screen.queryByText("直す")).not.toBeInTheDocument();
     expect(screen.queryByText("直近の下振れを確認する")).not.toBeInTheDocument();
+    expect(screen.queryByText(/物件収益トップ時の1位率は57.1%/u)).not.toBeInTheDocument();
+    expect(screen.queryByText("物件収益トップ時の1位率")).not.toBeInTheDocument();
+    const evidenceToggles = screen.getAllByRole("button", {
+      name: "データ上の理由・主要指標",
+    });
+    expect(evidenceToggles[0]).toHaveAttribute("aria-expanded", "false");
+    await user.click(evidenceToggles[0]!);
+    expect(evidenceToggles[0]).toHaveAttribute("aria-expanded", "true");
+    expect(await screen.findByText(/物件収益トップ時の1位率は57.1%/u)).toBeInTheDocument();
+    expect(screen.getByText("物件収益トップ時の1位率")).toBeInTheDocument();
     const evidenceButtons = screen.getAllByRole("button", { name: "詳細: 物件収益と勝ちへ" });
     await user.click(evidenceButtons[0]!);
     await waitFor(() => expect(router.state.location.search).toContain("view=drivers"));

@@ -15,12 +15,12 @@ import momo.api.adapters.{
   InMemoryHeldEventsRepository, InMemoryIdempotencyRepository, InMemoryImageReferenceRepository,
   InMemoryIncidentMastersRepository, InMemoryLoginAccountAdministrationRepository,
   InMemoryLoginAccountsRepository, InMemoryMapMastersRepository,
-  InMemoryMatchConfirmationRepository, InMemoryMatchDraftsRepository, InMemoryMatchListReadModel,
-  InMemoryMatchesRepository, InMemoryMemberAliasesRepository, InMemoryMembersRepository,
-  InMemoryOcrDraftsRepository, InMemoryOcrJobCreationRepository,
-  InMemoryOcrJobMaintenanceRepository, InMemoryOcrJobsRepository, InMemoryQueueProducer,
-  InMemorySeasonMastersRepository, InMemorySeriesComparisonReadModel, LocalFsImageStore,
-  RedisQueueProducer,
+  InMemoryMatchConfirmationRepository, InMemoryMatchDraftCancellationRepository,
+  InMemoryMatchDraftsRepository, InMemoryMatchListReadModel, InMemoryMatchesRepository,
+  InMemoryMemberAliasesRepository, InMemoryMembersRepository, InMemoryOcrDraftsRepository,
+  InMemoryOcrJobCreationRepository, InMemoryOcrJobMaintenanceRepository, InMemoryOcrJobsRepository,
+  InMemoryQueueProducer, InMemorySeasonMastersRepository, InMemorySeriesComparisonReadModel,
+  LocalFsImageStore, RedisQueueProducer,
 }
 import momo.api.auth.{
   CreatedSession, CsrfTokenService, DiscordOAuthClient, InMemoryOAuthProviderBackoff,
@@ -39,10 +39,10 @@ import momo.api.repositories.{
   AppSessionsRepository, GameTitlesRepository, HeldEventDeletionRepository, HeldEventsRepository,
   IdempotencyRepository, ImageOrphanStore, ImageReferenceRepository, IncidentMastersRepository,
   LoginAccountAdministrationRepository, LoginAccountsRepository, MapMastersRepository,
-  MatchConfirmationRepository, MatchDraftsRepository, MatchListReadModel, MatchesRepository,
-  MemberAliasesRepository, MembersRepository, OcrDraftsRepository, OcrJobCreationRepository,
-  OcrJobMaintenanceRepository, OcrJobsRepository, QueueHealthProbe, QueueProducer,
-  SeasonMastersRepository, SeriesComparisonReadModel,
+  MatchConfirmationRepository, MatchDraftCancellationRepository, MatchDraftsRepository,
+  MatchListReadModel, MatchesRepository, MemberAliasesRepository, MembersRepository,
+  OcrDraftsRepository, OcrJobCreationRepository, OcrJobMaintenanceRepository, OcrJobsRepository,
+  QueueHealthProbe, QueueProducer, SeasonMastersRepository, SeriesComparisonReadModel,
 }
 import momo.api.usecases.*
 
@@ -100,6 +100,8 @@ object ApiApp:
           PostgresHeldEventDeletionRepository[F](transactor)
         val matches: MatchesRepository[F] = PostgresMatchesRepository[F](transactor)
         val matchDrafts: MatchDraftsRepository[F] = PostgresMatchDraftsRepository[F](transactor)
+        val matchDraftCancellation: MatchDraftCancellationRepository[F] =
+          PostgresMatchDraftCancellationRepository[F](transactor)
         val matchList: MatchListReadModel[F] = PostgresMatchListReadModel[F](transactor)
         val seriesComparison: SeriesComparisonReadModel[F] =
           PostgresSeriesComparisonReadModel[F](transactor)
@@ -165,6 +167,7 @@ object ApiApp:
               heldEventDeletion = heldEventDeletion,
               matches = matches,
               matchDrafts = matchDrafts,
+              matchDraftCancellation = matchDraftCancellation,
               matchList = matchList,
               seriesComparison = seriesComparison,
               matchConfirmation = matchConfirmation,
@@ -195,6 +198,8 @@ object ApiApp:
             for
               matchDrafts <- InMemoryMatchDraftsRepository.create[F]
               jobs <- InMemoryOcrJobsRepository.createWithDraftCancelSync[F](matchDrafts)
+              matchDraftCancellation =
+                InMemoryMatchDraftCancellationRepository[F](matchDrafts, jobs)
               drafts <- InMemoryOcrDraftsRepository.create[F]
               heldEvents <- InMemoryHeldEventsRepository.create[F]
               matches <- InMemoryMatchesRepository.create[F]
@@ -273,6 +278,7 @@ object ApiApp:
               heldEvents,
               matches,
               matchDrafts,
+              matchDraftCancellation,
               heldEventDeletion,
               matchList,
               seriesComparison,
@@ -298,6 +304,7 @@ object ApiApp:
                   heldEvents,
                   matches,
                   matchDrafts,
+                  matchDraftCancellation,
                   heldEventDeletion,
                   matchList,
                   seriesComparison,
@@ -346,6 +353,7 @@ object ApiApp:
                   heldEventDeletion = heldEventDeletion,
                   matches = matches,
                   matchDrafts = matchDrafts,
+                  matchDraftCancellation = matchDraftCancellation,
                   matchList = matchList,
                   seriesComparison = seriesComparison,
                   matchConfirmation = matchConfirmation,
@@ -629,6 +637,7 @@ object ApiApp:
       heldEventDeletion: HeldEventDeletionRepository[F],
       matches: MatchesRepository[F],
       matchDrafts: MatchDraftsRepository[F],
+      matchDraftCancellation: MatchDraftCancellationRepository[F],
       matchList: MatchListReadModel[F],
       seriesComparison: SeriesComparisonReadModel[F],
       matchConfirmation: MatchConfirmationRepository[F],
@@ -699,7 +708,7 @@ object ApiApp:
       matchDrafts = matchDrafts,
       now = nowF,
     )
-    val cancelMatchDraft = CancelMatchDraft[F](matchDrafts, jobs, sourceImageRetention, nowF)
+    val cancelMatchDraft = CancelMatchDraft[F](matchDraftCancellation, sourceImageRetention, nowF)
     val getMatchDraftSourceImages = GetMatchDraftSourceImages[F](
       matchDrafts,
       imageStore,

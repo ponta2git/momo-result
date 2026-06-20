@@ -63,6 +63,17 @@ trait MatchDraftsRepository[F[_]]:
       updatedAt: Instant,
   ): F[Boolean]
 
+enum MatchDraftCancellationResult derives CanEqual:
+  case Cancelled(sourceImageIds: List[ImageId])
+  case NotFound
+  case NotCancellable(status: MatchDraftStatus)
+
+trait MatchDraftCancellationRepository[F[_]]:
+  def cancelDraftAndQueuedOcrJobs(
+      draftId: MatchDraftId,
+      updatedAt: Instant,
+  ): F[MatchDraftCancellationResult]
+
 object MatchDraftsRepository:
   final case class ListFilter(
       heldEventId: Option[HeldEventId] = None,

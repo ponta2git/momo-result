@@ -6,7 +6,7 @@ import cats.effect.Sync
 import cats.syntax.all.*
 import org.slf4j.LoggerFactory
 
-import momo.api.domain.ids.MatchDraftId
+import momo.api.domain.ids.{ImageId, MatchDraftId}
 import momo.api.logging.SafeLog
 import momo.api.repositories.{ImageStore, MatchDraftsRepository}
 
@@ -36,5 +36,15 @@ final class PurgeSourceImages[F[_]: Sync](
           .value} errorClasses=$classes"))
     }
 
-  private def deleteSourceImages(draft: momo.api.domain.MatchDraft): F[Unit] = draft.sourceImageIds
-    .distinct.traverse_(rawId => imageStore.delete(rawId).void)
+  def deleteKnownBestEffort(draftId: MatchDraftId, imageIds: List[ImageId]): F[Unit] =
+    deleteSourceImages(imageIds).handleErrorWith { error =>
+      val classes = SafeLog.throwableClasses(error)
+      Sync[F].delay(logger.error(s"Source image delete failed draftId=${draftId
+          .value} errorClasses=$classes"))
+    }
+
+  private def deleteSourceImages(draft: momo.api.domain.MatchDraft): F[Unit] =
+    deleteSourceImages(draft.sourceImageIds)
+
+  private def deleteSourceImages(imageIds: List[ImageId]): F[Unit] = imageIds.distinct
+    .traverse_(rawId => imageStore.delete(rawId).void)

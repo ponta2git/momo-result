@@ -7,7 +7,8 @@ import cats.effect.IO
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.adapters.{
-  InMemoryMatchDraftsRepository, InMemoryOcrJobsRepository, LocalFsImageStore,
+  InMemoryMatchDraftCancellationRepository, InMemoryMatchDraftsRepository,
+  InMemoryOcrJobsRepository, LocalFsImageStore,
 }
 import momo.api.domain.*
 import momo.api.domain.ids.*
@@ -25,11 +26,11 @@ final class CancelMatchDraftSpec extends MomoCatsEffectSuite:
       for
         matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
         ocrJobs <- InMemoryOcrJobsRepository.createWithDraftCancelSync[IO](matchDrafts)
+        cancellation = InMemoryMatchDraftCancellationRepository[IO](matchDrafts, ocrJobs)
         _ <- matchDrafts.create(sampleDraft(MatchDraftStatus.OcrRunning))
         _ <- ocrJobs.create(sampleQueuedJob)
         usecase = CancelMatchDraft[IO](
-          matchDrafts,
-          ocrJobs,
+          cancellation,
           PurgeSourceImages[IO](matchDrafts, LocalFsImageStore[IO](dir)),
           IO.pure(cancelledAt),
         )
@@ -47,10 +48,10 @@ final class CancelMatchDraftSpec extends MomoCatsEffectSuite:
       for
         matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
         ocrJobs <- InMemoryOcrJobsRepository.create[IO]
+        cancellation = InMemoryMatchDraftCancellationRepository[IO](matchDrafts, ocrJobs)
         _ <- matchDrafts.create(sampleDraft(MatchDraftStatus.NeedsReview))
         usecase = CancelMatchDraft[IO](
-          matchDrafts,
-          ocrJobs,
+          cancellation,
           PurgeSourceImages[IO](matchDrafts, LocalFsImageStore[IO](dir)),
           IO.pure(cancelledAt),
         )

@@ -87,7 +87,7 @@ const staticImportPattern = /(?:import|export)\s+(?:[^'"]*?\s+from\s+)?["']([^"'
 const violations = [];
 
 for (const file of walk(root)) {
-  const relativePath = relative(root, file);
+  const relativePath = normalizedRelativePath(relative(root, file));
   const productionSource = isProductionSource(relativePath);
   const source = readFileSync(file, "utf8");
   const sourceLayer = layer(relativePath);

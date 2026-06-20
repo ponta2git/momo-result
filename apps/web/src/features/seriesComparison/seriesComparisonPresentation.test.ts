@@ -90,7 +90,7 @@ describe("seriesComparisonPresentation", () => {
     expect(playOrderColor(9)).toBe("var(--color-text-muted)");
   });
 
-  it("derives rank strips from the recent window while keeping total metadata", () => {
+  it("derives rank strips from all timeline points while keeping recent metadata", () => {
     const response = responseWithRankAverages([["p0", "ポン太", 2.4]]);
     response.recentFormByPlayer = [
       {
@@ -116,6 +116,7 @@ describe("seriesComparisonPresentation", () => {
       {
         memberId: "p0",
         points: [
+          { matchId: "match-1", matchIndex: 1, rank: 4 },
           { matchId: "match-2", matchIndex: 2, rank: 2 },
           { matchId: "match-3", matchIndex: 3, rank: 1 },
           { matchId: "match-4", matchIndex: 4, rank: 3 },

@@ -226,16 +226,16 @@ export function recentRankStrips(response: SeriesComparisonResponse): RecentRank
     const form = recentByMember.get(player.memberId);
     const windowSize = form?.windowSize ?? 8;
     const points = (pointsByMember.get(player.memberId) ?? []).toSorted(pointSort);
-    const recentPoints = points.slice(-windowSize);
+    const fallbackTargetCount = Math.min(points.length, windowSize);
     return {
       memberId: player.memberId,
-      points: recentPoints.map((point) => ({
+      points: points.map((point) => ({
         matchId: point.matchId,
         matchIndex: point.matchIndex,
         rank: point.rank,
       })),
-      status: form?.status ?? statusForTargetCount(recentPoints.length),
-      targetCount: form?.targetCount ?? recentPoints.length,
+      status: form?.status ?? statusForTargetCount(fallbackTargetCount),
+      targetCount: form?.targetCount ?? fallbackTargetCount,
       totalCount: points.length,
       windowSize,
     };

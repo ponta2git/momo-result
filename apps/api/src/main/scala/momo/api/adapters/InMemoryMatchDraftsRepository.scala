@@ -7,12 +7,23 @@ import cats.syntax.all.*
 
 import momo.api.domain.ids.*
 import momo.api.domain.{MatchDraft, MatchDraftStatus, ScreenType}
+import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.MatchDraftsRepository
 
 final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
     ref: Ref[F, Map[MatchDraftId, MatchDraft]]
 ) extends MatchDraftsRepository[F]:
-  override def create(draft: MatchDraft): F[Unit] = ref.update(_ + (draft.id -> draft))
+  override def create(draft: MatchDraft): F[Unit] = ref.modify { current =>
+    if current.contains(draft.id) then
+      (
+        current,
+        Left(new AppException(AppError.Conflict(s"match draft already exists: ${draft.id.value}"))),
+      )
+    else (current + (draft.id -> draft), Right(()))
+  }.flatMap {
+    case Right(()) => Sync[F].unit
+    case Left(error) => Sync[F].raiseError(error)
+  }
 
   override def update(draft: MatchDraft, updatedAt: Instant): F[Boolean] = ref.modify { current =>
     (current.get(draft.id), draft) match

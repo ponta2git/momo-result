@@ -14,6 +14,7 @@ import momo.api.repositories.{
   SeasonMastersRepository,
 }
 import momo.api.usecases.syntax.MatchDraftForeignKeyValidation
+import momo.api.usecases.syntax.UseCaseSyntax.*
 
 final case class CreateMatchDraftCommand(
     heldEventId: Option[HeldEventId],
@@ -75,7 +76,7 @@ final class CreateMatchDraft[F[_]: MonadThrow](
         updatedAt = at,
       ).left.map(err => AppError.ValidationFailed(err.message))
     )
-    _ <- EitherT.liftF(matchDrafts.create(draft))
+    _ <- matchDrafts.create(draft).recoverAppError
   yield draft).value
 
   private def validateMatchNo(

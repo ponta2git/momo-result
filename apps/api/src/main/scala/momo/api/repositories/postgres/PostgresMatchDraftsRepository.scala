@@ -6,13 +6,16 @@ import cats.MonadThrow
 import cats.effect.MonadCancelThrow
 import cats.syntax.all.*
 import doobie.*
+import doobie.enumerated.SqlState
 import doobie.implicits.*
 import doobie.postgres.implicits.*
+import doobie.postgres.sqlstate
 import doobie.util.fragments
 
 import momo.api.db.Database
 import momo.api.domain.ids.*
 import momo.api.domain.{MatchDraft, MatchDraftStatus, MatchNoInEvent, ScreenType}
+import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.repositories.{
   MatchDraftCancellationRepository, MatchDraftCancellationResult, MatchDraftsAlg,
@@ -25,6 +28,15 @@ import momo.api.repositories.{
  * single style.
  */
 object PostgresMatchDrafts:
+  private def isUniqueViolation(state: SqlState): Boolean = state.value ==
+    sqlstate.class23.UNIQUE_VIOLATION.value
+
+  private def isForeignKeyViolation(state: SqlState): Boolean = state.value ==
+    sqlstate.class23.FOREIGN_KEY_VIOLATION.value
+
+  private def appError[A](error: AppError): ConnectionIO[A] = MonadThrow[ConnectionIO]
+    .raiseError[A](new AppException(error))
+
   private def isUserEditable(status: MatchDraftStatus): Boolean = MatchDraftStatus
     .userEditableStatuses.contains(status)
 
@@ -115,7 +127,12 @@ object PostgresMatchDrafts:
         .confirmedMatchId},
         ${draft.createdAt}, ${draft.updatedAt}
       )
-    """.update.run.void
+    """.update.run.void.exceptSomeSqlState {
+      case state if isUniqueViolation(state) =>
+        appError(AppError.Conflict(s"match draft already exists: ${draft.id.value}"))
+      case state if isForeignKeyViolation(state) =>
+        appError(AppError.Conflict("match draft prerequisites changed before creation."))
+    }
 
     override def update(draft: MatchDraft, updatedAt: Instant): ConnectionIO[Boolean] =
       if !isUserEditable(draft.status) then false.pure[ConnectionIO]

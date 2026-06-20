@@ -8,6 +8,7 @@ import doobie.postgres.implicits.*
 
 import momo.api.domain.ids.{AccountId, ImageId, MatchDraftId, MemberId, OcrDraftId}
 import momo.api.domain.{MatchDraft, MatchDraftStatus, ScreenType}
+import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.postgres.PostgresMatchDraftsRepository
 
 final class PostgresMatchDraftsRepositorySpec extends IntegrationSuite:
@@ -16,6 +17,19 @@ final class PostgresMatchDraftsRepositorySpec extends IntegrationSuite:
   private val updatedAt = Instant.parse("2026-05-14T11:05:00Z")
 
   private def repo = PostgresMatchDraftsRepository[IO](transactor)
+
+  test("create rejects duplicate draft ids as a conflict"):
+    val draftId = MatchDraftId.unsafeFromString("match-draft-duplicate-create")
+    val draft = editableDraft(draftId, MatchDraftStatus.DraftReady)
+    for
+      _ <- repo.create(draft)
+      duplicate <- repo.create(draft).attempt
+    yield duplicate match
+      case Left(error: AppException) => assertEquals(
+          error.error,
+          AppError.Conflict("match draft already exists: match-draft-duplicate-create"),
+        )
+      case other => fail(s"expected AppException(Conflict), got $other")
 
   test("update refuses to overwrite a terminal draft"):
     val draftId = MatchDraftId.unsafeFromString("match-draft-terminal-update")

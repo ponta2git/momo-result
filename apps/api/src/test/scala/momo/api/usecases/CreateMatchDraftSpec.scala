@@ -39,6 +39,15 @@ final class CreateMatchDraftSpec extends MomoCatsEffectSuite:
       assertAppError(result, "VALIDATION_FAILED", "layoutFamily must match")
       assertEquals(found, None)
 
+  test("returns Conflict when the repository rejects a generated duplicate id"):
+    for
+      fixture <- Fixture.create
+      first <- fixture.usecase.run(blankCommand, accountId, memberId)
+      duplicate <- fixture.usecase.run(blankCommand, accountId, memberId)
+    yield
+      assertEquals(first.map(_.id), Right(draftId))
+      assertAppError(duplicate, "CONFLICT", "match draft already exists")
+
   private def blankCommand: CreateMatchDraftCommand = CreateMatchDraftCommand(
     heldEventId = None,
     matchNoInEvent = None,

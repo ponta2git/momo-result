@@ -24,11 +24,10 @@ final class AdminLoginAccountsSpec extends MomoCatsEffectSuite:
       assertEquals(first.map(_.id), Right(accountId))
       assertAppError(duplicate, "CONFLICT", "login account already exists")
 
-  private def command(discordUserId: UserId): CreateLoginAccountCommand =
-    CreateLoginAccountCommand(
-      discordUserId = discordUserId,
-      displayName = "duplicate id account",
-      playerMemberId = None,
-      loginEnabled = true,
-      isAdmin = false,
-    )
+  private def command(discordUserId: UserId): CreateLoginAccountCommand = CreateLoginAccountCommand(
+    discordUserId = discordUserId,
+    displayName = "duplicate id account",
+    playerMemberId = None,
+    loginEnabled = true,
+    isAdmin = false,
+  )

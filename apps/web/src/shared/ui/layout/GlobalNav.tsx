@@ -9,11 +9,13 @@ import {
   ShieldCheck,
   Trophy,
 } from "lucide-react";
+import { motion } from "motion/react";
 import type { ReactNode } from "react";
 import { Link, NavLink } from "react-router-dom";
 
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
+import { momoSpring } from "@/shared/ui/motion/variants";
 
 type NavItem = {
   icon: ReactNode;
@@ -51,16 +53,29 @@ function NavItemLink({ item }: { item: NavItem }) {
       aria-label={item.label}
       className={({ isActive }) =>
         cn(
-          "inline-flex min-h-8 items-center gap-2 rounded-[var(--radius-sm)] border px-2.5 py-1 text-sm font-semibold transition-colors duration-150 lg:min-h-9 lg:px-3 lg:py-1.5",
-          "shrink-0",
+          "relative isolate inline-flex min-h-8 shrink-0 items-center gap-2 overflow-hidden rounded-[var(--radius-sm)] border px-2.5 py-1 text-sm font-semibold transition-colors duration-150 lg:min-h-9 lg:px-3 lg:py-1.5",
           isActive
-            ? "border-[var(--color-action)]/60 bg-[var(--color-action)]/12 text-[var(--color-text-primary)]"
+            ? "border-[var(--color-action)]/60 text-[var(--color-text-primary)]"
             : "border-transparent text-[var(--color-text-secondary)] hover:border-[var(--color-border)] hover:bg-[var(--color-surface-subtle)]",
         )
       }
     >
-      <span aria-hidden="true">{item.icon}</span>
-      <span className="max-[26rem]:sr-only">{item.label}</span>
+      {({ isActive }) => (
+        <>
+          {isActive ? (
+            <motion.span
+              aria-hidden="true"
+              className="absolute inset-0 z-0 rounded-[var(--radius-sm)] bg-[var(--color-action)]/12"
+              layoutId="global-nav-active"
+              transition={momoSpring}
+            />
+          ) : null}
+          <span aria-hidden="true" className="relative z-[var(--z-base)]">
+            {item.icon}
+          </span>
+          <span className="relative z-[var(--z-base)] max-[26rem]:sr-only">{item.label}</span>
+        </>
+      )}
     </NavLink>
   );
 }

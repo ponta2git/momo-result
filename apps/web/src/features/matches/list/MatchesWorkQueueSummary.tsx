@@ -1,15 +1,19 @@
+import { motion } from "motion/react";
+
 import type {
   MatchListStatusFilter,
   MatchListSummaryCounts,
 } from "@/features/matches/list/matchListTypes";
 import { cn } from "@/shared/ui/cn";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
+import { momoTransition } from "@/shared/ui/motion/variants";
 
 type MatchesWorkQueueSummaryProps = {
   counts?: MatchListSummaryCounts;
   currentStatus: MatchListStatusFilter;
   disabled?: boolean;
   loading?: boolean;
+  masked?: boolean;
   onSelectStatus: (status: MatchListStatusFilter) => void;
 };
 
@@ -44,6 +48,7 @@ export function MatchesWorkQueueSummary({
   currentStatus,
   disabled = false,
   loading = false,
+  masked = false,
   onSelectStatus,
 }: MatchesWorkQueueSummaryProps) {
   if (loading) {
@@ -68,18 +73,22 @@ export function MatchesWorkQueueSummary({
     >
       <div className="flex min-w-0 items-center justify-between gap-3">
         <h2 className="text-sm font-semibold text-[var(--color-text-primary)]">未完了タスク</h2>
-        <p className="text-xs text-[var(--color-text-secondary)] tabular-nums">
-          {totalIncomplete === 0 ? "対応なし" : `${totalIncomplete.toLocaleString()}件`}
-        </p>
+        {masked ? (
+          <Skeleton className="h-4 w-16" />
+        ) : (
+          <p className="text-xs text-[var(--color-text-secondary)] tabular-nums">
+            {totalIncomplete === 0 ? "対応なし" : `${totalIncomplete.toLocaleString()}件`}
+          </p>
+        )}
       </div>
       <div className="grid gap-2 md:grid-cols-3">
         {items.map((item) => {
           const count = counts?.[item.countKey] ?? 0;
           const selected = currentStatus === item.status;
-          const empty = totalIncomplete === 0;
+          const empty = !masked && totalIncomplete === 0;
 
           return (
-            <button
+            <motion.button
               key={item.label}
               className={cn(
                 "momo-enter momo-pressable flex min-h-16 items-center justify-between gap-3 rounded-[var(--radius-md)] border px-4 py-3 text-left",
@@ -91,8 +100,11 @@ export function MatchesWorkQueueSummary({
               )}
               aria-pressed={selected}
               disabled={disabled}
+              layout
+              transition={momoTransition}
               onClick={() => onSelectStatus(selected ? "all" : item.status)}
               type="button"
+              {...(disabled ? {} : { whileTap: { scale: 0.99, y: 1 } })}
             >
               <span className="min-w-0">
                 <span className="block text-sm font-semibold text-[var(--color-text-primary)]">
@@ -102,10 +114,20 @@ export function MatchesWorkQueueSummary({
                   {empty ? "対応なし" : item.description}
                 </span>
               </span>
-              <span className="text-xl font-semibold text-[var(--color-text-primary)] tabular-nums">
-                {count}
-              </span>
-            </button>
+              {masked ? (
+                <Skeleton className="h-7 w-10 shrink-0" />
+              ) : (
+                <motion.span
+                  key={`${item.countKey}-${count}`}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="text-xl font-semibold text-[var(--color-text-primary)] tabular-nums"
+                  initial={{ opacity: 0, y: 3 }}
+                  transition={momoTransition}
+                >
+                  {count}
+                </motion.span>
+              )}
+            </motion.button>
           );
         })}
       </div>

@@ -1,3 +1,4 @@
+import { motion } from "motion/react";
 import { useEffect, useRef } from "react";
 
 import { playerColor } from "@/features/seriesComparison/SeriesComparisonPlayerVisuals";
@@ -15,6 +16,7 @@ import type {
 } from "@/features/seriesComparison/seriesComparisonPresentation";
 import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
 import { cn } from "@/shared/ui/cn";
+import { momoPanelTransition, momoTransition } from "@/shared/ui/motion/variants";
 
 import {
   headToHeadBands,
@@ -305,16 +307,20 @@ export function RankDistributionStackedBars({
                 {totalCount > 0 ? (
                   segments.map((segment) =>
                     segment.count > 0 ? (
-                      <span
+                      <motion.span
                         aria-hidden="true"
                         className="min-w-2"
+                        initial={{ scaleX: 0 }}
                         key={segment.rank}
+                        animate={{ scaleX: 1 }}
                         style={{
                           backgroundColor: rankColor(segment.rank),
                           flexBasis: `${(((segment.rate ?? segment.count / totalCount) || 0) * 100).toFixed(4)}%`,
                           flexGrow: 0,
                           flexShrink: 0,
+                          originX: 0,
                         }}
+                        transition={momoPanelTransition}
                         title={`${segment.rank}位 ${segment.count}回`}
                       />
                     ) : null,
@@ -557,15 +563,27 @@ export function LineChart({
             return (
               <g key={item.memberId}>
                 <title>{`${playerName ?? "社長"}、${latestLabel}`}</title>
-                <path d={path} fill="none" stroke={color} strokeLinecap="round" strokeWidth="1.8" />
+                <motion.path
+                  animate={{ opacity: 1, pathLength: 1 }}
+                  d={path}
+                  fill="none"
+                  initial={{ opacity: 0.35, pathLength: 0 }}
+                  stroke={color}
+                  strokeLinecap="round"
+                  strokeWidth="1.8"
+                  transition={{ ...momoPanelTransition, delay: seriesIndex * 0.035 }}
+                />
                 {points.length <= 32
                   ? points.map((point) => (
-                      <circle
+                      <motion.circle
                         key={`${item.memberId}-${point.index}`}
+                        animate={{ opacity: 1, scale: 1 }}
                         cx={x(point.index)}
                         cy={y(point.value)}
                         fill={color}
+                        initial={{ opacity: 0, scale: 0.65 }}
                         r="2.4"
+                        transition={momoTransition}
                       />
                     ))
                   : null}
@@ -930,18 +948,20 @@ export function StrategyScatterPlot({
           {plottedPoints.map((point) => {
             const color = playerColor(playerIndex.get(point.memberId) ?? 0);
             return (
-              <circle
+              <motion.circle
                 key={`${point.matchId}-${point.memberId}`}
+                animate={{ opacity: 0.78, scale: 1 }}
                 cx={x(point.revenueAssetRate ?? 0)}
                 cy={y(point.totalAssets)}
                 fill={color}
-                opacity="0.78"
+                initial={{ opacity: 0, scale: 0.7 }}
                 r="4"
+                transition={momoTransition}
               >
                 <title>
                   {`${playerName.get(point.memberId) ?? point.memberId}、${point.matchIndex}戦目、物件収益比率 ${formatPercent(point.revenueAssetRate)}、総資産 ${formatCompactManYen(point.totalAssets)}、${point.rank}位`}
                 </title>
-              </circle>
+              </motion.circle>
             );
           })}
         </svg>
@@ -1066,16 +1086,19 @@ export function StrategyProfileChart({
             const color = playerColor(playerIndex.get(entry.memberId) ?? 0);
             return (
               <g key={entry.memberId}>
-                <circle
+                <motion.circle
+                  animate={{ opacity: 1, scale: 1 }}
                   cx={x(entry.averageRevenueAssetRate)}
                   cy={y(entry.averageRankScore)}
                   fill={color}
+                  initial={{ opacity: 0, scale: 0.7 }}
                   r="5"
+                  transition={momoTransition}
                 >
                   <title>
                     {`${playerName.get(entry.memberId) ?? entry.memberId}、物件収益比率 ${formatPercent(entry.averageRevenueAssetRate)}、順位スコア ${entry.averageRankScore.toFixed(2)}`}
                   </title>
-                </circle>
+                </motion.circle>
               </g>
             );
           })}
@@ -1235,10 +1258,12 @@ function RevenueRankConversionRow({
         </div>
       </div>
       {row.finalRankCounts.map((item) => (
-        <div
+        <motion.div
           aria-label={`${player.displayName}、物件収益${formatRevenueRank(row.revenueRank)}、最終${item.rank}位 ${item.count}回 ${formatPercent(item.rate)}`}
           className="rounded-[var(--radius-xs)] border px-1 py-2 text-center"
           key={item.rank}
+          animate={{ opacity: 1 }}
+          initial={{ opacity: 0 }}
           role="img"
           style={{
             backgroundColor:
@@ -1247,6 +1272,7 @@ function RevenueRankConversionRow({
                 : "var(--color-surface)",
             borderColor: item.count > 0 ? rankBorderColor(item.rank) : "var(--color-border)",
           }}
+          transition={momoTransition}
         >
           <div className="text-sm font-semibold text-[var(--color-text-primary)] tabular-nums">
             {item.count}
@@ -1254,7 +1280,7 @@ function RevenueRankConversionRow({
           <div className="mt-0.5 text-[10px] text-[var(--color-text-secondary)] tabular-nums">
             {formatPercent(item.rate)}
           </div>
-        </div>
+        </motion.div>
       ))}
     </>
   );
@@ -1382,13 +1408,22 @@ function SingleHistogram({
           const barHeight = (value / countCeil) * chartHeight;
           return (
             <g key={bin.index}>
-              <rect
+              <motion.rect
+                animate={{
+                  height: barHeight,
+                  y: height - padding.bottom - barHeight,
+                }}
                 fill={color}
-                height={barHeight}
+                height={0}
+                initial={{
+                  height: 0,
+                  y: height - padding.bottom,
+                }}
                 rx="2"
                 width={barWidth}
                 x={padding.left + binIndex * binWidth + (binWidth - barWidth) / 2}
-                y={height - padding.bottom - barHeight}
+                y={height - padding.bottom}
+                transition={{ ...momoPanelTransition, delay: binIndex * 0.018 }}
               />
               <text
                 fill="var(--color-text-secondary)"

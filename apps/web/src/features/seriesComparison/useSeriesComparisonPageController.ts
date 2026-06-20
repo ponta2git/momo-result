@@ -1,5 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useCallback, useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import {
@@ -12,11 +12,15 @@ import {
   seriesComparisonQueryFromState,
   seriesComparisonReviewQueryFromState,
 } from "@/features/seriesComparison/seriesComparisonViewModel";
-import type { SeriesComparisonViewId } from "@/features/seriesComparison/seriesComparisonViewModel";
+import type {
+  SeriesComparisonUrlState,
+  SeriesComparisonViewId,
+} from "@/features/seriesComparison/seriesComparisonViewModel";
 import {
   isInitialQueryLoading,
   shouldShowBlockingQueryError,
   shouldShowQueryError,
+  shouldShowStaleShield,
 } from "@/shared/api/queryErrorState";
 import { seriesComparisonKeys } from "@/shared/api/queryKeys";
 import {
@@ -25,40 +29,71 @@ import {
   getSeriesComparisonReview,
 } from "@/shared/api/seriesComparison";
 
+function scopeSignature(state: SeriesComparisonUrlState): string {
+  return [state.gameTitleId ?? "", state.seasonMasterId ?? "", state.mapMasterId ?? ""].join("|");
+}
+
 export function useSeriesComparisonPageController() {
   const [searchParams, setSearchParams] = useSearchParams();
   const rawState = useMemo(() => parseSeriesComparisonSearchParams(searchParams), [searchParams]);
+  const [optimisticState, setOptimisticState] = useState<SeriesComparisonUrlState | null>(null);
+  const [, startStateTransition] = useTransition();
 
   const optionsQuery = useQuery({
     queryFn: ({ signal }) => getSeriesComparisonOptions({ signal }),
     queryKey: seriesComparisonKeys.options(),
   });
 
-  const normalizedState = useMemo(
+  const urlState = useMemo(
     () => normalizeSeriesComparisonSelection(optionsQuery.data, rawState),
     [optionsQuery.data, rawState],
   );
+  const normalizedState = useMemo(
+    () => normalizeSeriesComparisonSelection(optionsQuery.data, optimisticState ?? urlState),
+    [optimisticState, optionsQuery.data, urlState],
+  );
+  const deferredState = useDeferredValue(normalizedState);
   const aggregateQueryParams = useMemo(
-    () => seriesComparisonQueryFromState(normalizedState),
-    [normalizedState],
+    () => seriesComparisonQueryFromState(deferredState),
+    [deferredState],
   );
   const reviewQueryParams = useMemo(
-    () => seriesComparisonReviewQueryFromState(normalizedState),
+    () => seriesComparisonReviewQueryFromState(deferredState),
+    [deferredState],
+  );
+  const urlStateSignature = useMemo(
+    () => buildSeriesComparisonSearchParams(urlState).toString(),
+    [urlState],
+  );
+  const normalizedStateSignature = useMemo(
+    () => buildSeriesComparisonSearchParams(normalizedState).toString(),
     [normalizedState],
   );
+  const activeScopeSignature = useMemo(() => scopeSignature(normalizedState), [normalizedState]);
+  const deferredScopeSignature = useMemo(() => scopeSignature(deferredState), [deferredState]);
+  const scopeSettling = activeScopeSignature !== deferredScopeSignature;
+  const activeView = normalizedState.view ?? defaultSeriesComparisonView;
+  const reviewViewSettling = activeView !== (deferredState.view ?? defaultSeriesComparisonView);
 
   useEffect(() => {
-    if (!optionsQuery.data) {
+    if (!optionsQuery.data || optimisticState) {
       return;
     }
-    const next = buildSeriesComparisonSearchParams(normalizedState);
+    const next = buildSeriesComparisonSearchParams(urlState);
     if (next.toString() !== searchParams.toString()) {
       setSearchParams(next, { replace: true });
     }
-  }, [normalizedState, optionsQuery.data, searchParams, setSearchParams]);
+  }, [optimisticState, optionsQuery.data, searchParams, setSearchParams, urlState]);
+
+  useEffect(() => {
+    if (optimisticState && urlStateSignature === normalizedStateSignature) {
+      setOptimisticState(null);
+    }
+  }, [normalizedStateSignature, optimisticState, urlStateSignature]);
 
   const aggregateQuery = useQuery({
     enabled: aggregateQueryParams !== undefined,
+    placeholderData: keepPreviousData,
     queryFn: ({ signal }) => {
       if (!aggregateQueryParams) {
         throw new Error("series comparison query is not ready");
@@ -68,9 +103,10 @@ export function useSeriesComparisonPageController() {
     queryKey: seriesComparisonKeys.aggregate(aggregateQueryParams),
   });
   const reviewEnabled =
-    reviewQueryParams !== undefined && normalizedState.view === defaultSeriesComparisonView;
+    reviewQueryParams !== undefined && activeView === defaultSeriesComparisonView;
   const reviewQuery = useQuery({
     enabled: reviewEnabled,
+    placeholderData: keepPreviousData,
     queryFn: ({ signal }) => {
       if (!reviewQueryParams) {
         throw new Error("series comparison review query is not ready");
@@ -84,14 +120,41 @@ export function useSeriesComparisonPageController() {
   const seasonOptions = selectedSeries?.seasons ?? [];
   const mapOptions = selectedSeries?.maps ?? [];
 
-  const updateState = (next: typeof normalizedState, options: { replace?: boolean } = {}): void => {
-    setSearchParams(buildSeriesComparisonSearchParams(next), { replace: options.replace ?? true });
-  };
+  const updateState = useCallback(
+    (next: typeof normalizedState, options: { replace?: boolean } = {}): void => {
+      const nextState = normalizeSeriesComparisonSelection(optionsQuery.data, next);
+      setOptimisticState(nextState);
+      startStateTransition(() => {
+        setSearchParams(buildSeriesComparisonSearchParams(nextState), {
+          replace: options.replace ?? true,
+        });
+      });
+    },
+    [optionsQuery.data, setSearchParams, startStateTransition],
+  );
+
+  const aggregateLoading = isInitialQueryLoading(aggregateQuery);
+  const aggregateShielded = shouldShowStaleShield({
+    hasVisibleData: aggregateQuery.data !== undefined,
+    isPlaceholderData: aggregateQuery.isPlaceholderData,
+    isRefreshing: aggregateQuery.isFetching && aggregateQuery.data !== undefined,
+    isSettling: scopeSettling,
+  });
+  const reviewLoading = reviewEnabled && isInitialQueryLoading(reviewQuery);
+  const reviewShielded =
+    reviewEnabled &&
+    shouldShowStaleShield({
+      hasVisibleData: reviewQuery.data !== undefined,
+      isPlaceholderData: reviewQuery.isPlaceholderData,
+      isRefreshing: reviewQuery.isFetching && reviewQuery.data !== undefined,
+      isSettling: scopeSettling || reviewViewSettling,
+    });
 
   return {
     aggregate: aggregateQuery.data,
-    aggregateLoading: isInitialQueryLoading(aggregateQuery),
+    aggregateLoading,
     aggregateRefreshing: aggregateQuery.isFetching && aggregateQuery.data !== undefined,
+    aggregateShielded,
     canRefresh: aggregateQueryParams !== undefined,
     hasAggregateError: shouldShowBlockingQueryError(aggregateQuery),
     hasOptionsError: shouldShowQueryError(optionsQuery),
@@ -106,8 +169,9 @@ export function useSeriesComparisonPageController() {
       }
     },
     review: reviewQuery.data,
-    reviewLoading: reviewEnabled && isInitialQueryLoading(reviewQuery),
+    reviewLoading,
     reviewRefreshing: reviewEnabled && reviewQuery.isFetching && reviewQuery.data !== undefined,
+    reviewShielded,
     mapOptions,
     scopeName: scopeNameForState(optionsQuery.data, normalizedState),
     seasonOptions,

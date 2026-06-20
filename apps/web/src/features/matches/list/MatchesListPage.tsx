@@ -21,6 +21,7 @@ import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
+import { StaleShield } from "@/shared/ui/motion/StaleShield";
 
 function ListSkeleton() {
   return (
@@ -62,6 +63,7 @@ export function MatchesListPage() {
     showStaleSkeleton,
     summaryCounts,
     summaryLoading,
+    summaryMasked,
     updatePage,
     updatePageSize,
   } = useMatchesListPageController();
@@ -144,88 +146,82 @@ export function MatchesListPage() {
         currentStatus={search.status}
         disabled={isStale}
         loading={summaryLoading}
+        masked={summaryMasked}
         onSelectStatus={(status) => {
           applySearch({ ...search, page: 1, status });
         }}
       />
 
-      <section aria-busy={isStale} className="relative grid min-h-[24rem] gap-4">
-        {isStale && !showMatchesLoading && !showStaleSkeleton ? (
-          <div className="momo-enter pointer-events-none absolute inset-x-0 top-0 z-[var(--z-base)] flex justify-center">
-            <span className="inline-flex items-center gap-2 rounded-b-[var(--radius-sm)] border-x border-b border-[var(--color-action)]/25 bg-[var(--color-surface)] px-3 py-1 text-xs font-semibold text-[var(--color-text-secondary)] shadow-sm">
-              <LoaderCircle
-                aria-hidden="true"
-                className="size-3.5 animate-spin motion-reduce:animate-none"
-              />
-              一覧を更新中
-            </span>
-          </div>
-        ) : null}
-        {showMatchesLoading || showStaleSkeleton ? (
-          <ListSkeleton />
-        ) : showMatchesError ? (
-          <Notice tone="danger" title="試合一覧を読み込めません">
-            時間をおいて、再読み込みしてください。
-          </Notice>
-        ) : items.length === 0 ? (
-          <EmptyState
-            action={
-              hasFilters ? (
-                <Button onClick={clearSearch} variant="secondary">
-                  条件をクリア
-                </Button>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  <LinkButton to="/ocr/new">OCR取り込み</LinkButton>
-                  <LinkButton to="/matches/new" variant="secondary">
-                    手入力で作成
-                  </LinkButton>
-                </div>
-              )
-            }
-            className="min-h-[18rem]"
-            description={
-              hasFilters
-                ? "状態や開催条件を広げると、他の試合記録を確認できます。"
-                : "OCR取り込みか手入力で、最初の試合を登録します。"
-            }
-            icon={<AlertTriangle className="size-5" />}
-            title={hasFilters ? "該当する試合はありません" : "試合はまだありません"}
-          />
-        ) : (
-          <>
-            <div className="hidden lg:block">
-              <MatchesTable
-                actionsDisabled={isStale}
-                checkingDraftIds={checkingDraftIds}
-                items={items}
-                onDraftStatusCheckAction={selectDraftAction}
-                onSortChange={(sort) => applySearch({ ...search, page: 1, sort })}
-                sort={search.sort}
-              />
-            </div>
-            <div className="grid gap-3 lg:hidden">
-              {items.map((item) => (
-                <MatchMobileCard
-                  key={item.id}
+      <section aria-busy={isStale || undefined} className="relative grid min-h-[24rem] gap-4">
+        <StaleShield
+          active={showMatchesLoading || showStaleSkeleton}
+          contentClassName="grid gap-4"
+          fallback={<ListSkeleton />}
+        >
+          {showMatchesError ? (
+            <Notice tone="danger" title="試合一覧を読み込めません">
+              時間をおいて、再読み込みしてください。
+            </Notice>
+          ) : items.length === 0 ? (
+            <EmptyState
+              action={
+                hasFilters ? (
+                  <Button onClick={clearSearch} variant="secondary">
+                    条件をクリア
+                  </Button>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    <LinkButton to="/ocr/new">OCR取り込み</LinkButton>
+                    <LinkButton to="/matches/new" variant="secondary">
+                      手入力で作成
+                    </LinkButton>
+                  </div>
+                )
+              }
+              className="min-h-[18rem]"
+              description={
+                hasFilters
+                  ? "状態や開催条件を広げると、他の試合記録を確認できます。"
+                  : "OCR取り込みか手入力で、最初の試合を登録します。"
+              }
+              icon={<AlertTriangle className="size-5" />}
+              title={hasFilters ? "該当する試合はありません" : "試合はまだありません"}
+            />
+          ) : (
+            <>
+              <div className="hidden lg:block">
+                <MatchesTable
                   actionsDisabled={isStale}
                   checkingDraftIds={checkingDraftIds}
-                  item={item}
+                  items={items}
                   onDraftStatusCheckAction={selectDraftAction}
+                  onSortChange={(sort) => applySearch({ ...search, page: 1, sort })}
+                  sort={search.sort}
                 />
-              ))}
-            </div>
-            {pagination ? (
-              <PaginationControls
-                disabled={isStale}
-                pageSizeOptions={[...matchListPageSizeOptions]}
-                pagination={pagination}
-                onPageChange={updatePage}
-                onPageSizeChange={updatePageSize}
-              />
-            ) : null}
-          </>
-        )}
+              </div>
+              <div className="grid gap-3 lg:hidden">
+                {items.map((item) => (
+                  <MatchMobileCard
+                    key={item.id}
+                    actionsDisabled={isStale}
+                    checkingDraftIds={checkingDraftIds}
+                    item={item}
+                    onDraftStatusCheckAction={selectDraftAction}
+                  />
+                ))}
+              </div>
+              {pagination ? (
+                <PaginationControls
+                  disabled={isStale}
+                  pageSizeOptions={[...matchListPageSizeOptions]}
+                  pagination={pagination}
+                  onPageChange={updatePage}
+                  onPageSizeChange={updatePageSize}
+                />
+              ) : null}
+            </>
+          )}
+        </StaleShield>
       </section>
     </PageFrame>
   );

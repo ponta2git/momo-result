@@ -1,3 +1,4 @@
+import { AnimatePresence, motion } from "motion/react";
 import { Suspense, useCallback } from "react";
 import type { FocusEvent, MouseEvent, PointerEvent } from "react";
 import { Outlet, useLocation } from "react-router-dom";
@@ -8,6 +9,8 @@ import { RouteErrorBoundary } from "@/shared/ui/feedback/RouteErrorBoundary";
 import { RouteSuspenseFallback } from "@/shared/ui/feedback/RouteSuspenseFallback";
 import { ToastHost } from "@/shared/ui/feedback/ToastHost";
 import { GlobalNav } from "@/shared/ui/layout/GlobalNav";
+import { MotionProvider } from "@/shared/ui/motion/MotionProvider";
+import { routeTransition } from "@/shared/ui/motion/variants";
 
 function shouldPreloadAnchor(anchor: HTMLAnchorElement): boolean {
   if (anchor.target === "_blank" || anchor.hasAttribute("download")) {
@@ -32,6 +35,8 @@ export function AppShell() {
   const auth = useAuth();
   const location = useLocation();
   const routeResetKey = `${location.pathname}${location.search}${location.hash}`;
+  // Query/hash changes are in-page state changes; only pathname changes are route transitions.
+  const routeTransitionKey = location.pathname;
 
   const handlePreloadIntent = useCallback(
     (event: FocusEvent<HTMLElement> | PointerEvent<HTMLElement>) => {
@@ -73,7 +78,7 @@ export function AppShell() {
   }, []);
 
   return (
-    <>
+    <MotionProvider>
       <a
         className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[var(--z-tooltip)] focus:rounded-[var(--radius-sm)] focus:bg-[var(--color-surface)] focus:px-3 focus:py-2 focus:text-sm"
         href="#main-content"
@@ -102,11 +107,22 @@ export function AppShell() {
       >
         <RouteErrorBoundary resetKey={routeResetKey}>
           <Suspense fallback={<RouteSuspenseFallback pathname={location.pathname} />}>
-            <Outlet />
+            <AnimatePresence initial={false} mode="wait">
+              <motion.div
+                key={routeTransitionKey}
+                animate={{ opacity: 1, y: 0 }}
+                className="grid min-w-0"
+                exit={{ opacity: 0, y: -4 }}
+                initial={{ opacity: 0, y: 4 }}
+                transition={routeTransition}
+              >
+                <Outlet />
+              </motion.div>
+            </AnimatePresence>
           </Suspense>
         </RouteErrorBoundary>
       </main>
       <ToastHost />
-    </>
+    </MotionProvider>
   );
 }

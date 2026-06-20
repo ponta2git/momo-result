@@ -10,6 +10,7 @@ import {
   Swords,
   Trophy,
 } from "lucide-react";
+import { motion } from "motion/react";
 import type { ReactNode } from "react";
 
 import {
@@ -105,6 +106,8 @@ import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
+import { StaleShield } from "@/shared/ui/motion/StaleShield";
+import { momoPanelTransition, momoTransition } from "@/shared/ui/motion/variants";
 
 function PageSkeleton() {
   return (
@@ -132,7 +135,12 @@ function SummaryBand({ response }: { response: SeriesComparisonResponse }) {
   const ginji = ginjiSummary(response);
 
   return (
-    <section className="grid gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 md:grid-cols-4">
+    <motion.section
+      animate={{ opacity: 1, y: 0 }}
+      className="grid gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 md:grid-cols-4"
+      initial={{ opacity: 0, y: 4 }}
+      transition={momoPanelTransition}
+    >
       <SummaryItem label="対戦回数" value={`${response.matchCount}戦`} />
       <SummaryItem
         label="首位社長"
@@ -162,7 +170,7 @@ function SummaryBand({ response }: { response: SeriesComparisonResponse }) {
         value={`${ginji.totalEncounters}回`}
         subLabel={`2回以上の試合 ${ginji.abnormalMatches}件`}
       />
-    </section>
+    </motion.section>
   );
 }
 
@@ -178,13 +186,15 @@ function SummaryItem({
   value: string;
 }) {
   return (
-    <div
+    <motion.div
       className={cn(
         "min-w-0 rounded-[var(--radius-sm)] border p-3",
         tone === "notice"
           ? "border-[var(--color-review)]/45 bg-[var(--color-review)]/10"
           : "border-[var(--color-border)] bg-[var(--color-surface-subtle)]",
       )}
+      layout
+      transition={momoTransition}
     >
       <p className="text-xs font-medium text-[var(--color-text-secondary)]">{label}</p>
       <p className="mt-1 text-xl font-semibold break-words text-[var(--color-text-primary)] sm:text-2xl">
@@ -193,7 +203,7 @@ function SummaryItem({
       {subLabel ? (
         <p className="mt-1 text-xs text-[var(--color-text-secondary)]">{subLabel}</p>
       ) : null}
-    </div>
+    </motion.div>
   );
 }
 
@@ -1639,17 +1649,23 @@ export function SeriesComparisonPage() {
             <Notice tone="danger" title="戦績データを読み込めません">
               条件を変えるか、時間をおいて再読み込みしてください。
             </Notice>
-          ) : controller.aggregateLoading ? (
-            <ComparisonSkeleton />
-          ) : controller.aggregate && controller.aggregate.matchCount === 0 ? (
-            <EmptyState
-              icon={<BarChart3 className="size-5" />}
-              title="この範囲に確定済みの試合がありません"
-              description="総合、別シーズン、別マップを選ぶと表示できる場合があります。"
-            />
-          ) : controller.aggregate ? (
-            <SeriesComparisonContent controller={controller} />
-          ) : null}
+          ) : (
+            <StaleShield
+              active={controller.aggregateLoading || controller.aggregateShielded}
+              contentClassName="grid gap-5"
+              fallback={<ComparisonSkeleton />}
+            >
+              {controller.aggregate && controller.aggregate.matchCount === 0 ? (
+                <EmptyState
+                  icon={<BarChart3 className="size-5" />}
+                  title="この範囲に確定済みの試合がありません"
+                  description="総合、別シーズン、別マップを選ぶと表示できる場合があります。"
+                />
+              ) : controller.aggregate ? (
+                <SeriesComparisonContent controller={controller} />
+              ) : null}
+            </StaleShield>
+          )}
         </>
       ) : null}
     </PageFrame>
@@ -1684,8 +1700,8 @@ function SeriesComparisonContent({
           <AnalysisViewContent
             hasReviewError={controller.hasReviewError}
             response={controller.aggregate}
-            review={controller.review}
-            reviewLoading={controller.reviewLoading}
+            review={controller.reviewShielded ? undefined : controller.review}
+            reviewLoading={controller.reviewLoading || controller.reviewShielded}
             view={activeDefinition.id}
             onViewChange={controller.updateView}
           />

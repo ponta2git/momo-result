@@ -69,6 +69,11 @@
   --radius-lg: 12px;
   --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.05);
   --shadow-dialog: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --motion-fast: 120ms;
+  --motion-base: 180ms;
+  --motion-panel: 240ms;
+  --ease-momo-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-momo-in: cubic-bezier(0.55, 0, 1, 0.45);
 
   --z-base: 0;
   --z-sticky: 20;
@@ -136,16 +141,16 @@ samp {
 }
 
 .momo-enter {
-  animation: momo-enter 160ms ease-out both;
+  animation: momo-enter var(--motion-base) var(--ease-momo-out) both;
 }
 
 .momo-pressable {
   transition:
-    background-color 150ms ease-out,
-    border-color 150ms ease-out,
-    color 150ms ease-out,
-    opacity 150ms ease-out,
-    transform 150ms ease-out;
+    background-color var(--motion-fast) var(--ease-momo-out),
+    border-color var(--motion-fast) var(--ease-momo-out),
+    color var(--motion-fast) var(--ease-momo-out),
+    opacity var(--motion-fast) var(--ease-momo-out),
+    transform var(--motion-fast) var(--ease-momo-out);
 }
 
 .momo-pressable:active:not(:disabled) {

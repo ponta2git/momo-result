@@ -1,8 +1,10 @@
+import { motion } from "motion/react";
 import { useCallback, useId, useMemo } from "react";
 import type { ChangeEvent } from "react";
 
 import { cn } from "@/shared/ui/cn";
 import { SelectField } from "@/shared/ui/forms/SelectField";
+import { momoSpring } from "@/shared/ui/motion/variants";
 
 type SegmentedOption = {
   disabled?: boolean;
@@ -71,6 +73,7 @@ export function SegmentedControl({
         return (
           <SegmentedButton
             key={option.value}
+            indicatorId={`${id}-indicator`}
             option={option}
             disabled={disabled || option.disabled}
             selected={option.value === value}
@@ -84,11 +87,13 @@ export function SegmentedControl({
 
 function SegmentedButton({
   disabled,
+  indicatorId,
   option,
   selected,
   onValueChange,
 }: {
   disabled: boolean | undefined;
+  indicatorId: string;
   option: SegmentedOption;
   selected: boolean;
   onValueChange: (value: string) => void;
@@ -101,15 +106,23 @@ function SegmentedButton({
     <button
       aria-pressed={selected}
       className={cn(
-        "min-h-9 min-w-[5ch] rounded-[var(--radius-xs)] px-3 py-1.5 text-sm font-medium text-[var(--color-text-secondary)] transition-colors duration-150",
-        selected ? "bg-[var(--color-surface-selected)] text-[var(--color-text-primary)]" : "",
+        "relative isolate min-h-9 min-w-[5ch] overflow-hidden rounded-[var(--radius-xs)] px-3 py-1.5 text-sm font-medium text-[var(--color-text-secondary)] transition-colors duration-150",
+        selected ? "text-[var(--color-text-primary)]" : "",
         "disabled:cursor-not-allowed disabled:opacity-50",
       )}
       disabled={disabled}
       type="button"
       onClick={handleClick}
     >
-      {option.label}
+      {selected ? (
+        <motion.span
+          aria-hidden="true"
+          className="absolute inset-0 z-0 rounded-[var(--radius-xs)] bg-[var(--color-surface-selected)]"
+          layoutId={indicatorId}
+          transition={momoSpring}
+        />
+      ) : null}
+      <span className="relative z-[var(--z-base)]">{option.label}</span>
     </button>
   );
 }

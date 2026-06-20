@@ -12,6 +12,7 @@ import { Notice } from "@/shared/ui/feedback/Notice";
 import { RouteSuspenseFallback } from "@/shared/ui/feedback/RouteSuspenseFallback";
 import { NumberField } from "@/shared/ui/forms/NumberField";
 import { SegmentedControl } from "@/shared/ui/forms/SegmentedControl";
+import { StaleShield } from "@/shared/ui/motion/StaleShield";
 import { StatusPill } from "@/shared/ui/status/StatusPill";
 import { StatusRail } from "@/shared/ui/status/StatusRail";
 import { createDeferred } from "@/test/deferred";
@@ -193,6 +194,17 @@ describe("ui foundation", () => {
     render(<RouteSuspenseFallback pathname="/matches/new" />);
 
     expect(screen.getByTestId("route-suspense-fallback")).toHaveClass("max-w-[90rem]");
+  });
+
+  it("StaleShield removes shielded content from the readable tree", () => {
+    render(
+      <StaleShield active fallback={<div>読み込み中</div>}>
+        <div>表示中の集計値</div>
+      </StaleShield>,
+    );
+
+    expect(screen.getByText("読み込み中")).toBeInTheDocument();
+    expect(screen.queryByText("表示中の集計値")).not.toBeInTheDocument();
   });
 
   it("StatusPill maps internal status to user-facing labels", () => {

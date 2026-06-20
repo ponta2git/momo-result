@@ -5,6 +5,7 @@ import {
   isInitialQueryLoading,
   shouldShowBlockingQueryError,
   shouldShowQueryError,
+  shouldShowStaleShield,
 } from "./queryErrorState";
 
 describe("queryErrorState", () => {
@@ -156,5 +157,39 @@ describe("queryErrorState", () => {
     name: string;
   }>)("$name", ({ data, expected, isFetching, isLoading }) => {
     expect(isInitialQueryLoading({ data, isFetching, isLoading })).toBe(expected);
+  });
+
+  it.each([
+    {
+      expected: true,
+      name: "shields while UI state is settling",
+      state: { isSettling: true },
+    },
+    {
+      expected: true,
+      name: "shields placeholder data",
+      state: { isPlaceholderData: true },
+    },
+    {
+      expected: true,
+      name: "shields visible data during refresh",
+      state: { hasVisibleData: true, isRefreshing: true },
+    },
+    {
+      expected: false,
+      name: "does not shield initial refresh without visible data",
+      state: { hasVisibleData: false, isRefreshing: true },
+    },
+    {
+      expected: false,
+      name: "does not shield a settled fresh view",
+      state: {},
+    },
+  ] satisfies Array<{
+    expected: boolean;
+    name: string;
+    state: Parameters<typeof shouldShowStaleShield>[0];
+  }>)("$name", ({ expected, state }) => {
+    expect(shouldShowStaleShield(state)).toBe(expected);
   });
 });

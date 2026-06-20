@@ -1,7 +1,9 @@
 import { Download } from "lucide-react";
+import { motion } from "motion/react";
 
 import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
+import { momoPanelTransition, momoTransition } from "@/shared/ui/motion/variants";
 
 import { ExportDownloadProgress } from "./ExportDownloadProgress";
 import { ExportDownloadResult } from "./ExportDownloadResult";
@@ -15,9 +17,12 @@ type ExportTicketProps = {
 
 export function ExportTicket({ isPending, onDownload, view }: ExportTicketProps) {
   return (
-    <aside
+    <motion.aside
       aria-busy={isPending || undefined}
+      animate={{ opacity: 1, y: 0 }}
       className="relative grid gap-4 overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] lg:sticky lg:top-4"
+      initial={{ opacity: 0, y: 6 }}
+      transition={momoPanelTransition}
     >
       <img
         alt=""
@@ -39,12 +44,17 @@ export function ExportTicket({ isPending, onDownload, view }: ExportTicketProps)
 
       <dl className="grid gap-2 border-y border-[var(--color-border)] py-3">
         {view.ticketRows.map((row) => (
-          <div key={row.label} className="grid grid-cols-[6rem_1fr] gap-3 text-sm">
+          <motion.div
+            key={row.label}
+            className="grid grid-cols-[6rem_1fr] gap-3 text-sm"
+            layout
+            transition={momoTransition}
+          >
             <dt className="text-[var(--color-text-muted)]">{row.label}</dt>
             <dd className="min-w-0 font-medium break-words text-[var(--color-text-primary)]">
               {row.value}
             </dd>
-          </div>
+          </motion.div>
         ))}
       </dl>
 
@@ -72,6 +82,6 @@ export function ExportTicket({ isPending, onDownload, view }: ExportTicketProps)
 
       <ExportDownloadProgress isPending={isPending} isSlow={view.isSlow} />
       <ExportDownloadResult result={view.result} onRetry={onDownload} />
-    </aside>
+    </motion.aside>
   );
 }

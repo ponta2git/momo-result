@@ -1,3 +1,5 @@
+import { motion } from "motion/react";
+
 import type { SeriesComparisonViewId } from "@/features/seriesComparison/seriesComparisonViewModel";
 import {
   defaultSeriesComparisonView,
@@ -5,6 +7,7 @@ import {
 } from "@/features/seriesComparison/seriesComparisonViewModel";
 import { cn } from "@/shared/ui/cn";
 import { TabsList, TabsRoot, TabsTab } from "@/shared/ui/forms/Tabs";
+import { momoSpring } from "@/shared/ui/motion/variants";
 
 type AnalysisViewDefinition = {
   description: string;
@@ -106,16 +109,24 @@ export function AnalysisTabs({
           <TabsTab
             aria-controls={analysisPanelId(item.id)}
             className={cn(
-              "inline-flex min-h-10 min-w-0 items-center gap-2 rounded-[var(--radius-sm)] border px-3 py-2 text-sm font-semibold transition-colors",
+              "relative isolate inline-flex min-h-10 min-w-0 items-center gap-2 overflow-hidden rounded-[var(--radius-sm)] border px-3 py-2 text-sm font-semibold transition-colors",
               item.id === activeView
-                ? "border-[var(--color-action)]/60 bg-[var(--color-action)]/12 text-[var(--color-text-primary)]"
+                ? "border-[var(--color-action)]/60 text-[var(--color-text-primary)]"
                 : "border-[var(--color-border)] bg-[var(--color-surface-subtle)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface)]",
             )}
             id={analysisTabId(item.id)}
             key={item.id}
             value={item.id}
           >
-            <span>{item.label}</span>
+            {item.id === activeView ? (
+              <motion.span
+                aria-hidden="true"
+                className="absolute inset-0 z-0 rounded-[var(--radius-sm)] bg-[var(--color-action)]/12"
+                layoutId="series-analysis-tab-active"
+                transition={momoSpring}
+              />
+            ) : null}
+            <span className="relative z-[var(--z-base)]">{item.label}</span>
           </TabsTab>
         ))}
       </TabsList>

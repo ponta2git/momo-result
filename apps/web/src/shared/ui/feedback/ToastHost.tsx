@@ -1,8 +1,10 @@
 import { Toast } from "@base-ui/react/toast";
+import { AnimatePresence, motion } from "motion/react";
 
 import { IconButton } from "@/shared/ui/actions/IconButton";
 import { cn } from "@/shared/ui/cn";
 import { momoToastManager } from "@/shared/ui/feedback/Toast";
+import { momoPanelTransition } from "@/shared/ui/motion/variants";
 
 const toneClass: Record<string, string> = {
   danger: "border-[var(--color-danger)]/60 bg-[var(--color-surface)]",
@@ -28,31 +30,41 @@ function ToastRenderer() {
         aria-live="polite"
         className="momo-safe-right momo-safe-bottom fixed z-[var(--z-toast)] flex w-[min(24rem,calc(100vw-1rem))] flex-col gap-2 p-2"
       >
-        {toasts.map((toast) => (
-          <Toast.Root
-            key={toast.id}
-            className={cn(
-              "rounded-[var(--radius-lg)] border p-3 shadow-sm",
-              toneClass[toast.type ?? "info"] ?? toneClass["info"],
-            )}
-            toast={toast}
-          >
-            <Toast.Content>
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <Toast.Title className="text-sm font-semibold text-[var(--color-text-primary)]" />
-                  <Toast.Description className="mt-0.5 text-xs leading-5 text-[var(--color-text-secondary)]" />
-                </div>
-                <Toast.Close
-                  aria-label="通知を閉じる"
-                  render={
-                    <IconButton aria-label="通知を閉じる" icon="×" size="sm" variant="quiet" />
-                  }
-                />
-              </div>
-            </Toast.Content>
-          </Toast.Root>
-        ))}
+        <AnimatePresence initial={false}>
+          {toasts.map((toast) => (
+            <motion.div
+              key={toast.id}
+              animate={{ opacity: 1, x: 0, y: 0 }}
+              exit={{ opacity: 0, x: 12 }}
+              initial={{ opacity: 0, x: 12, y: 4 }}
+              layout
+              transition={momoPanelTransition}
+            >
+              <Toast.Root
+                className={cn(
+                  "rounded-[var(--radius-lg)] border p-3 shadow-sm",
+                  toneClass[toast.type ?? "info"] ?? toneClass["info"],
+                )}
+                toast={toast}
+              >
+                <Toast.Content>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <Toast.Title className="text-sm font-semibold text-[var(--color-text-primary)]" />
+                      <Toast.Description className="mt-0.5 text-xs leading-5 text-[var(--color-text-secondary)]" />
+                    </div>
+                    <Toast.Close
+                      aria-label="通知を閉じる"
+                      render={
+                        <IconButton aria-label="通知を閉じる" icon="×" size="sm" variant="quiet" />
+                      }
+                    />
+                  </div>
+                </Toast.Content>
+              </Toast.Root>
+            </motion.div>
+          ))}
+        </AnimatePresence>
       </Toast.Viewport>
     </Toast.Portal>
   );

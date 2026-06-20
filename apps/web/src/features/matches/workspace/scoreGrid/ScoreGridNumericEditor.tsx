@@ -1,7 +1,9 @@
+import { AnimatePresence, motion } from "motion/react";
 import { memo, useCallback, useRef, useState } from "react";
 import type { ChangeEvent, KeyboardEvent } from "react";
 
 import type { IncidentKey, MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
+import { momoTransition } from "@/shared/ui/motion/variants";
 
 export type NumericPlayerField = "rank" | "revenueManYen" | "totalAssetsManYen";
 export type PreferredImageKind = "incident_log" | "revenue" | "total_assets";
@@ -229,9 +231,20 @@ export const ScoreGridNumericEditor = memo(function ScoreGridNumericEditor({
         onFocus={handleFocus}
         onKeyDown={handleKeyDown}
       />
-      {showStateLabel && viewState.label ? (
-        <p className="mt-1 text-[0.68rem] text-[var(--color-text-secondary)]">{viewState.label}</p>
-      ) : null}
+      <AnimatePresence initial={false}>
+        {showStateLabel && viewState.label ? (
+          <motion.p
+            key={viewState.label}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-1 text-[0.68rem] text-[var(--color-text-secondary)]"
+            exit={{ opacity: 0, y: -2 }}
+            initial={{ opacity: 0, y: 2 }}
+            transition={momoTransition}
+          >
+            {viewState.label}
+          </motion.p>
+        ) : null}
+      </AnimatePresence>
     </>
   );
 });

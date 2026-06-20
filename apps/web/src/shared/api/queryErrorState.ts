@@ -14,6 +14,13 @@ type InitialQueryLoadingState = {
   isLoading: boolean;
 };
 
+type StaleShieldState = {
+  hasVisibleData?: boolean | undefined;
+  isPlaceholderData?: boolean | undefined;
+  isRefreshing?: boolean | undefined;
+  isSettling?: boolean | undefined;
+};
+
 export function shouldShowQueryError(query: QueryErrorState): boolean {
   return Boolean(query.error && !query.isFetching);
 }
@@ -24,4 +31,10 @@ export function shouldShowBlockingQueryError(query: BlockingQueryErrorState): bo
 
 export function isInitialQueryLoading(query: InitialQueryLoadingState): boolean {
   return query.isLoading || (query.data === undefined && query.isFetching);
+}
+
+export function shouldShowStaleShield(state: StaleShieldState): boolean {
+  return Boolean(
+    state.isSettling || state.isPlaceholderData || (state.hasVisibleData && state.isRefreshing),
+  );
 }

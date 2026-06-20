@@ -27,7 +27,11 @@ import { invalidateAfterMatchConfirmed } from "@/shared/api/cacheInvalidation";
 import { listHeldEvents } from "@/shared/api/heldEvents";
 import { listGameTitles, listMapMasters, listSeasonMasters } from "@/shared/api/masters";
 import { getMatchDraftDetail } from "@/shared/api/matchDrafts";
-import { isInitialQueryLoading, shouldShowBlockingQueryError } from "@/shared/api/queryErrorState";
+import {
+  isInitialQueryLoading,
+  shouldShowBlockingQueryError,
+  shouldShowStaleShield,
+} from "@/shared/api/queryErrorState";
 import { heldEventKeys, masterKeys, matchKeys } from "@/shared/api/queryKeys";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
@@ -172,12 +176,21 @@ export function useMatchesListPageController() {
   const listHasPlaceholderData = matchesQuery.isPlaceholderData;
   const summaryHasPlaceholderData = matchesSummaryQuery.isPlaceholderData;
   const listBackgroundRefreshing = matchesQuery.isFetching && !initialMatchesLoading;
-  const isStale =
-    filterSettling ||
-    listHasPlaceholderData ||
-    summaryHasPlaceholderData ||
-    listBackgroundRefreshing ||
-    pageCorrectionPending;
+  const summaryBackgroundRefreshing =
+    matchesSummaryQuery.isFetching && matchesSummaryQuery.data !== undefined;
+  const showListShield = shouldShowStaleShield({
+    hasVisibleData: matchesQuery.data !== undefined,
+    isPlaceholderData: listHasPlaceholderData,
+    isRefreshing: listBackgroundRefreshing,
+    isSettling: filterSettling || pageCorrectionPending,
+  });
+  const showSummaryShield = shouldShowStaleShield({
+    hasVisibleData: matchesSummaryQuery.data !== undefined,
+    isPlaceholderData: summaryHasPlaceholderData,
+    isRefreshing: summaryBackgroundRefreshing,
+    isSettling: filterSettling,
+  });
+  const isStale = showListShield || showSummaryShield;
 
   const handleManualRefresh = async () => {
     if (isManualRefreshing) {
@@ -253,9 +266,10 @@ export function useMatchesListPageController() {
     selectDraftAction: handleDraftStatusCheckAction,
     showMatchesError: shouldShowBlockingQueryError(matchesQuery),
     showMatchesLoading: initialMatchesLoading,
-    showStaleSkeleton: filterSettling || listHasPlaceholderData || pageCorrectionPending,
+    showStaleSkeleton: showListShield,
     summaryCounts,
     summaryLoading: matchesSummaryQuery.isLoading,
+    summaryMasked: showSummaryShield,
     updatePage: (page: number) => {
       applySearch({ ...activeSearch, page });
     },

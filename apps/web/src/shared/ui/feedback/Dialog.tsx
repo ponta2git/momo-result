@@ -1,11 +1,13 @@
 import { AlertDialog as BaseAlertDialog } from "@base-ui/react/alert-dialog";
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
 import { LoaderCircle, X } from "lucide-react";
+import { motion } from "motion/react";
 import type { ReactElement, ReactNode } from "react";
 import { useState } from "react";
 
 import { IconButton } from "@/shared/ui/actions/IconButton";
 import { cn } from "@/shared/ui/cn";
+import { momoPanelTransition, panelRevealVariants } from "@/shared/ui/motion/variants";
 
 type DialogBaseProps = {
   backdropClassName?: string | undefined;
@@ -92,16 +94,20 @@ export function Dialog({
           )}
           initialFocus={true}
         >
-          <div
+          <motion.div
+            animate="visible"
             className={cn(
               "max-h-[calc(100dvh-2rem)] w-full overflow-y-auto rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] shadow-lg",
               surfaceClassName,
             )}
+            initial="hidden"
+            transition={momoPanelTransition}
+            variants={panelRevealVariants}
           >
             <DialogContentFrame className={className} description={description} title={title}>
               {children}
             </DialogContentFrame>
-          </div>
+          </motion.div>
         </BaseDialog.Popup>
       </BaseDialog.Portal>
     </BaseDialog.Root>
@@ -154,7 +160,13 @@ export function AlertDialog({
       <BaseAlertDialog.Portal>
         <BaseAlertDialog.Backdrop className="fixed inset-0 z-[var(--z-dialog)] bg-[var(--momo-night-900)]/35" />
         <BaseAlertDialog.Popup className="fixed inset-0 z-[var(--z-dialog)] mx-auto flex w-full max-w-[40rem] items-center justify-center overflow-y-auto p-4">
-          <div className="max-h-[calc(100dvh-2rem)] w-full overflow-y-auto rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] shadow-lg">
+          <motion.div
+            animate="visible"
+            className="max-h-[calc(100dvh-2rem)] w-full overflow-y-auto rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] shadow-lg"
+            initial="hidden"
+            transition={momoPanelTransition}
+            variants={panelRevealVariants}
+          >
             <div className="space-y-3">
               <BaseAlertDialog.Title className="text-lg font-semibold text-balance text-[var(--color-text-primary)]">
                 {title}
@@ -195,7 +207,7 @@ export function AlertDialog({
                 </button>
               </div>
             </div>
-          </div>
+          </motion.div>
         </BaseAlertDialog.Popup>
       </BaseAlertDialog.Portal>
     </BaseAlertDialog.Root>

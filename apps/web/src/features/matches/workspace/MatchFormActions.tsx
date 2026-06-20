@@ -1,6 +1,8 @@
+import { motion } from "motion/react";
 import type { Ref } from "react";
 
 import { Button } from "@/shared/ui/actions/Button";
+import { momoPanelTransition } from "@/shared/ui/motion/variants";
 
 type MatchFormActionsProps = {
   actionLabel: string;
@@ -20,7 +22,12 @@ export function MatchFormActions({
   onPrimaryAction,
 }: MatchFormActionsProps) {
   return (
-    <div className="momo-safe-bottom sticky bottom-4 mt-8 rounded-[var(--radius-lg)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-4 shadow-sm">
+    <motion.div
+      animate={{ opacity: 1, y: 0 }}
+      className="momo-safe-bottom sticky bottom-4 mt-8 rounded-[var(--radius-lg)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-4 shadow-sm"
+      initial={{ opacity: 0, y: 8 }}
+      transition={momoPanelTransition}
+    >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-pretty text-[var(--color-text-secondary)]">{message}</p>
         <Button
@@ -33,6 +40,6 @@ export function MatchFormActions({
           {actionLabel}
         </Button>
       </div>
-    </div>
+    </motion.div>
   );
 }

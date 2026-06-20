@@ -1,27 +1,25 @@
 import { useCallback, useTransition } from "react";
 import { useNavigate } from "react-router-dom";
 
-import type { MatchFormValues, WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
+import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
 import { prepareMatchWorkspaceMasterHandoffRoute } from "@/shared/workflows/matchWorkspaceMasterHandoff";
 
 export function useMatchWorkspaceHandoffNavigation(input: {
-  matchDraftId: string | undefined;
-  matchSessionId: string | undefined;
-  mode: WorkspaceMode;
+  handoffSessionId: string;
   notify: (message: string, tone?: "info" | "success" | "warning") => void;
   returnTo: string | undefined;
   values: MatchFormValues;
 }) {
   const navigate = useNavigate();
   const [isPending, startMastersTransition] = useTransition();
-  const { matchDraftId, matchSessionId, mode, notify, returnTo, values } = input;
+  const { handoffSessionId, notify, returnTo, values } = input;
 
   const navigateToMasters = useCallback(() => {
     if (!returnTo) {
       return;
     }
     const route = prepareMatchWorkspaceMasterHandoffRoute({
-      matchSessionId: matchSessionId ?? matchDraftId ?? mode,
+      matchSessionId: handoffSessionId,
       returnTo,
       values,
     });
@@ -35,16 +33,7 @@ export function useMatchWorkspaceHandoffNavigation(input: {
     startMastersTransition(() => {
       navigate(route.route);
     });
-  }, [
-    matchDraftId,
-    matchSessionId,
-    mode,
-    navigate,
-    notify,
-    returnTo,
-    startMastersTransition,
-    values,
-  ]);
+  }, [handoffSessionId, navigate, notify, returnTo, startMastersTransition, values]);
 
   return { isPending, navigateToMasters };
 }

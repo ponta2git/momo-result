@@ -11,8 +11,13 @@ import { MatchCreatePage } from "@/features/matches/MatchCreatePage";
 import { MatchDetailPage } from "@/features/matches/MatchDetailPage";
 import { MatchEditPage } from "@/features/matches/MatchEditPage";
 import { MatchesListPage } from "@/features/matches/MatchesListPage";
+import {
+  createMatchWorkspaceMasterHandoffPayload,
+  saveMasterHandoff,
+} from "@/shared/workflows/matchWorkspaceMasterHandoff";
 import { createDeferred } from "@/test/deferred";
 import { makeFourPlayerResults, makeIncidents, makeMatchDetail } from "@/test/factories";
+import { makeMatchWorkspaceMasterHandoffValues } from "@/test/factories/draftReview";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { makeSeriesComparisonResponse } from "@/test/msw/seriesComparisonHandlers";
 import { server } from "@/test/msw/server";
@@ -531,6 +536,48 @@ describe("MatchesListPage", () => {
       "returnTo=%2Fmatches%2Fnew",
     );
     expect(screen.getByLabelText("current location")).toHaveTextContent("handoffId=");
+  });
+
+  it("does not restore manual creation values from a foreign handoff session", async () => {
+    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    const handoffId = saveMasterHandoff(
+      createMatchWorkspaceMasterHandoffPayload({
+        matchSessionId: "foreign-session",
+        returnTo: "/matches/new",
+        values: makeMatchWorkspaceMasterHandoffValues({ matchNoInEvent: 9 }),
+      }),
+    );
+    if (!handoffId) {
+      throw new Error("expected handoff to be saved");
+    }
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={[`/matches/new?handoffId=${handoffId}`]}>
+          <Routes>
+            <Route
+              path="/matches/new"
+              element={
+                <>
+                  <LocationProbe />
+                  <MatchCreatePage />
+                </>
+              }
+            />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(
+      await screen.findByText("設定管理から戻りましたが、入力内容を復元できませんでした。"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("設定管理から戻ったため、入力内容を復元しました。"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText("試合番号")).not.toHaveValue("9");
+    expect(screen.getByLabelText("current location")).toHaveTextContent("/matches/new");
+    expect(screen.getByLabelText("current location")).not.toHaveTextContent("handoffId=");
   });
 });
 

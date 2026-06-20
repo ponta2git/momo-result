@@ -12,8 +12,8 @@ import {
 import type { MasterHandoffPayload } from "@/shared/workflows/matchWorkspaceMasterHandoff";
 
 export type MasterHandoffRestoreParams = {
+  handoffSessionId: string;
   isInitialized: boolean;
-  matchSessionId: string | undefined;
   mode: WorkspaceMode;
   onRestore: (payload: MasterHandoffPayload) => void;
   onRestoreFailed: () => void;
@@ -33,8 +33,8 @@ export type MasterHandoffRestoreResult = {
  * - 復元結果は呼び出し側 onRestore コールバックで反映する
  */
 export function useMasterHandoffRestore({
+  handoffSessionId,
   isInitialized,
-  matchSessionId,
   mode,
   onRestore,
   onRestoreFailed,
@@ -69,26 +69,25 @@ export function useMasterHandoffRestore({
 
     const payload =
       loadMasterHandoff({
-        expectedMatchSessionId: matchSessionId,
+        expectedMatchSessionId: handoffSessionId,
         expectedReturnTo: returnTo,
         handoffId,
       }) ??
       loadMasterHandoff({
-        expectedMatchSessionId: matchSessionId,
+        expectedMatchSessionId: handoffSessionId,
         expectedReturnTo: location.pathname,
         handoffId,
       });
-    const fallbackRecord =
-      payload || !matchSessionId
-        ? undefined
-        : (findLatestMasterHandoff({
-            expectedMatchSessionId: matchSessionId,
-            expectedReturnTo: returnTo,
-          }) ??
-          findLatestMasterHandoff({
-            expectedMatchSessionId: matchSessionId,
-            expectedReturnTo: location.pathname,
-          }));
+    const fallbackRecord = payload
+      ? undefined
+      : (findLatestMasterHandoff({
+          expectedMatchSessionId: handoffSessionId,
+          expectedReturnTo: returnTo,
+        }) ??
+        findLatestMasterHandoff({
+          expectedMatchSessionId: handoffSessionId,
+          expectedReturnTo: location.pathname,
+        }));
     const restoredPayload = payload ?? fallbackRecord?.payload;
     const consumedHandoffId = payload ? handoffId : (fallbackRecord?.handoffId ?? handoffId);
 
@@ -109,7 +108,7 @@ export function useMasterHandoffRestore({
   }, [
     isInitialized,
     location.pathname,
-    matchSessionId,
+    handoffSessionId,
     mode,
     navigate,
     onRestore,

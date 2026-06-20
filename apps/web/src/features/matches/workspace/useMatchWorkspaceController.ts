@@ -94,6 +94,7 @@ export function useMatchWorkspaceController({
 
   const useSampleDrafts = mode === "review" && searchParams.get("sample") === "1";
   const hasHandoff = searchParams.has("handoffId");
+  const handoffSessionId = matchSessionId ?? matchDraftId ?? mode;
 
   const queries = useMatchWorkspaceQueries({
     gameTitleId: state.values.gameTitleId,
@@ -236,8 +237,8 @@ export function useMatchWorkspaceController({
   });
 
   const { returnTo } = useMasterHandoffRestore({
+    handoffSessionId,
     isInitialized,
-    matchSessionId,
     mode,
     onRestore: (payload) => {
       dispatch({
@@ -327,9 +328,7 @@ export function useMatchWorkspaceController({
 
   const { isPending: isNavigatingToMasters, navigateToMasters: handleNavigateToMasters } =
     useMatchWorkspaceHandoffNavigation({
-      matchDraftId,
-      matchSessionId,
-      mode,
+      handoffSessionId,
       notify,
       returnTo,
       values: state.values,

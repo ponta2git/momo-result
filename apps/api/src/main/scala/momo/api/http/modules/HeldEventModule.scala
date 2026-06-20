@@ -8,8 +8,12 @@ import sttp.tapir.server.ServerEndpoint
 import momo.api.domain.ids.HeldEventId
 import momo.api.endpoints.codec.{BoundaryId, HeldEventCodec}
 import momo.api.endpoints.{
-  CreateHeldEventRequest, DeleteHeldEventResponse, HeldEventListResponse, HeldEventResponse,
-  HeldEventsEndpoints, PaginationResponse,
+  CreateHeldEventRequest,
+  DeleteHeldEventResponse,
+  HeldEventListResponse,
+  HeldEventResponse,
+  HeldEventsEndpoints,
+  PaginationResponse
 }
 import momo.api.http.{EndpointSecurity, HttpOperation, IdempotencyReplay}
 import momo.api.usecases.{CreateHeldEvent, DeleteHeldEvent, ListHeldEvents}

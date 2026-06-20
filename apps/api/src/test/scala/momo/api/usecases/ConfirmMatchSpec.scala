@@ -6,9 +6,14 @@ import cats.effect.{IO, Resource}
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.adapters.{
-  InMemoryGameTitlesRepository, InMemoryHeldEventsRepository, InMemoryMapMastersRepository,
-  InMemoryMatchConfirmationRepository, InMemoryMatchDraftsRepository, InMemoryMatchesRepository,
-  InMemorySeasonMastersRepository, LocalFsImageStore,
+  InMemoryGameTitlesRepository,
+  InMemoryHeldEventsRepository,
+  InMemoryMapMastersRepository,
+  InMemoryMatchConfirmationRepository,
+  InMemoryMatchDraftsRepository,
+  InMemoryMatchesRepository,
+  InMemorySeasonMastersRepository,
+  LocalFsImageStore
 }
 import momo.api.domain.ids.*
 import momo.api.domain.{GameTitle, MatchRecord, PlayerResult}

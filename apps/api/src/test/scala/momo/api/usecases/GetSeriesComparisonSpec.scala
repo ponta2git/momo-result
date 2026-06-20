@@ -7,9 +7,15 @@ import cats.effect.IO
 import momo.api.MomoCatsEffectSuite
 import momo.api.domain.ids.*
 import momo.api.domain.{
-  ManYen, MatchNoInEvent, PlayOrder, Rank, SeriesComparisonIncidentCountsRow,
-  SeriesComparisonMatchPlayerRow, SeriesComparisonOptionsData, SeriesComparisonResolvedScope,
-  SeriesComparisonScope,
+  ManYen,
+  MatchNoInEvent,
+  PlayOrder,
+  Rank,
+  SeriesComparisonIncidentCountsRow,
+  SeriesComparisonMatchPlayerRow,
+  SeriesComparisonOptionsData,
+  SeriesComparisonResolvedScope,
+  SeriesComparisonScope
 }
 import momo.api.repositories.SeriesComparisonReadModel
 import momo.api.testing.AppErrorAssertions.{assertAppError, assertRight}

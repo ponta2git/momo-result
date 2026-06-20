@@ -17,8 +17,11 @@ import momo.api.domain.{HeldEvent, MatchDraftStatus, PageRequest, PagedResult}
 import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.repositories.{
-  HeldEventDeletionAlg, HeldEventDeletionRepository, HeldEventDeletionResult, HeldEventsAlg,
-  HeldEventsRepository,
+  HeldEventDeletionAlg,
+  HeldEventDeletionRepository,
+  HeldEventDeletionResult,
+  HeldEventsAlg,
+  HeldEventsRepository
 }
 
 /**

@@ -6,8 +6,11 @@ import cats.effect.IO
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.adapters.{
-  InMemoryGameTitlesRepository, InMemoryHeldEventsRepository, InMemoryMapMastersRepository,
-  InMemoryMatchDraftsRepository, InMemorySeasonMastersRepository,
+  InMemoryGameTitlesRepository,
+  InMemoryHeldEventsRepository,
+  InMemoryMapMastersRepository,
+  InMemoryMatchDraftsRepository,
+  InMemorySeasonMastersRepository
 }
 import momo.api.domain.ids.*
 import momo.api.domain.{GameTitle, MapMaster, MatchDraft, MatchDraftStatus}

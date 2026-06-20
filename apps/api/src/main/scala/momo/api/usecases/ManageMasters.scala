@@ -10,8 +10,12 @@ import momo.api.domain.ids.*
 import momo.api.domain.{GameTitle, MapMaster, MemberAlias, SeasonMaster}
 import momo.api.errors.AppError
 import momo.api.repositories.{
-  GameTitlesRepository, IncidentMastersRepository, MapMastersRepository, MemberAliasesRepository,
-  MembersRepository, SeasonMastersRepository,
+  GameTitlesRepository,
+  IncidentMastersRepository,
+  MapMastersRepository,
+  MemberAliasesRepository,
+  MembersRepository,
+  SeasonMastersRepository
 }
 import momo.api.usecases.syntax.UseCaseSyntax.*
 

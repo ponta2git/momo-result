@@ -10,14 +10,27 @@ import io.circe.syntax.*
 import org.http4s.circe.*
 import org.http4s.headers.`Content-Type`
 import org.http4s.{
-  Header, HttpRoutes, MediaType, Request, Response, ResponseCookie, SameSite, Status,
+  Header,
+  HttpRoutes,
+  MediaType,
+  Request,
+  Response,
+  ResponseCookie,
+  SameSite,
+  Status
 }
 import org.slf4j.LoggerFactory
 import org.typelevel.ci.CIString
 
 import momo.api.auth.{
-  AuthHeaderNames, CsrfTokenService, DiscordOAuthClient, OAuthProviderBackoff, OAuthStateCodec,
-  RateLimiter, SessionService, SessionTokenHash,
+  AuthHeaderNames,
+  CsrfTokenService,
+  DiscordOAuthClient,
+  OAuthProviderBackoff,
+  OAuthStateCodec,
+  RateLimiter,
+  SessionService,
+  SessionTokenHash
 }
 import momo.api.config.{AppConfig, AppEnv, RedirectPath}
 import momo.api.domain.ids.*

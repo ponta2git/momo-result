@@ -8,13 +8,26 @@ import sttp.tapir.server.ServerEndpoint
 import sttp.tapir.server.http4s.Http4sServerInterpreter
 
 import momo.api.auth.{
-  CsrfTokenService, DiscordOAuthClient, MemberRoster, OAuthProviderBackoff, OAuthStateCodec,
-  RateLimiter, SessionService,
+  CsrfTokenService,
+  DiscordOAuthClient,
+  MemberRoster,
+  OAuthProviderBackoff,
+  OAuthStateCodec,
+  RateLimiter,
+  SessionService
 }
 import momo.api.config.AppConfig
 import momo.api.http.modules.{
-  AdminAccountModule, AnalyticsModule, ExportModule, HealthModule, HeldEventModule, MasterModule,
-  MatchDraftModule, MatchModule, OcrModule, UploadModule,
+  AdminAccountModule,
+  AnalyticsModule,
+  ExportModule,
+  HealthModule,
+  HeldEventModule,
+  MasterModule,
+  MatchDraftModule,
+  MatchModule,
+  OcrModule,
+  UploadModule
 }
 import momo.api.repositories.{IdempotencyRepository, LoginAccountsRepository}
 import momo.api.usecases.*

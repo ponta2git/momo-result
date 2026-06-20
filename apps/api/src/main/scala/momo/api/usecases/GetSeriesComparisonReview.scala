@@ -5,8 +5,10 @@ import cats.syntax.all.*
 
 import momo.api.domain.ids.MemberId
 import momo.api.domain.{
-  SeriesComparisonMatchPlayerRow, SeriesComparisonPlayerOrder, SeriesComparisonResolvedScope,
-  SeriesComparisonScope,
+  SeriesComparisonMatchPlayerRow,
+  SeriesComparisonPlayerOrder,
+  SeriesComparisonResolvedScope,
+  SeriesComparisonScope
 }
 import momo.api.endpoints.*
 import momo.api.errors.AppError

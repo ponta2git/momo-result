@@ -12,7 +12,8 @@ import momo.api.domain.ids.HeldEventId
 import momo.api.repositories.HeldEventDeletionResult
 import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.repositories.postgres.{
-  PostgresHeldEventDeletionRepository, PostgresHeldEventsRepository,
+  PostgresHeldEventDeletionRepository,
+  PostgresHeldEventsRepository
 }
 
 final class PostgresHeldEventDeletionRepositorySpec extends IntegrationSuite:

@@ -7,8 +7,10 @@ import cats.effect.IO
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.adapters.{
-  InMemoryMatchDraftCancellationRepository, InMemoryMatchDraftsRepository,
-  InMemoryOcrJobsRepository, LocalFsImageStore,
+  InMemoryMatchDraftCancellationRepository,
+  InMemoryMatchDraftsRepository,
+  InMemoryOcrJobsRepository,
+  LocalFsImageStore
 }
 import momo.api.domain.*
 import momo.api.domain.ids.*

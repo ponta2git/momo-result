@@ -13,7 +13,11 @@ import momo.api.bootstrap.ApiApp
 import momo.api.config.{AppConfig, AppEnv, ResourceLimitsConfig}
 import momo.api.domain.ids.AccountId
 import momo.api.http.HttpAssertions.{
-  assertProblem, assertProblemDetailEquals, headerValue, jsonField, optionalHeaderValue,
+  assertProblem,
+  assertProblemDetailEquals,
+  headerValue,
+  jsonField,
+  optionalHeaderValue
 }
 
 final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:

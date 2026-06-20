@@ -9,20 +9,50 @@ import sttp.tapir.server.ServerEndpoint
 import momo.api.domain.ids.{GameTitleId, MapMasterId, MemberAliasId, MemberId, SeasonMasterId}
 import momo.api.endpoints.codec.{BoundaryId, MasterCodec}
 import momo.api.endpoints.{
-  CreateGameTitleRequest, CreateMapMasterRequest, CreateMemberAliasRequest,
-  CreateSeasonMasterRequest, DeleteMasterResponse, GameTitleListResponse, GameTitleResponse,
-  GameTitlesEndpoints, IncidentMasterListResponse, IncidentMasterResponse, IncidentMastersEndpoints,
-  MapMasterListResponse, MapMasterResponse, MapMastersEndpoints, MemberAliasListResponse,
-  MemberAliasResponse, MemberAliasesEndpoints, SeasonMasterListResponse, SeasonMasterResponse,
-  SeasonMastersEndpoints, UpdateGameTitleRequest, UpdateMapMasterRequest, UpdateMemberAliasRequest,
-  UpdateSeasonMasterRequest,
+  CreateGameTitleRequest,
+  CreateMapMasterRequest,
+  CreateMemberAliasRequest,
+  CreateSeasonMasterRequest,
+  DeleteMasterResponse,
+  GameTitleListResponse,
+  GameTitleResponse,
+  GameTitlesEndpoints,
+  IncidentMasterListResponse,
+  IncidentMasterResponse,
+  IncidentMastersEndpoints,
+  MapMasterListResponse,
+  MapMasterResponse,
+  MapMastersEndpoints,
+  MemberAliasListResponse,
+  MemberAliasResponse,
+  MemberAliasesEndpoints,
+  SeasonMasterListResponse,
+  SeasonMasterResponse,
+  SeasonMastersEndpoints,
+  UpdateGameTitleRequest,
+  UpdateMapMasterRequest,
+  UpdateMemberAliasRequest,
+  UpdateSeasonMasterRequest
 }
 import momo.api.http.{EndpointSecurity, HttpOperation, IdempotencyReplay}
 import momo.api.usecases.{
-  CreateGameTitle, CreateMapMaster, CreateMemberAlias, CreateSeasonMaster, DeleteGameTitle,
-  DeleteMapMaster, DeleteMemberAlias, DeleteSeasonMaster, ListGameTitles, ListIncidentMasters,
-  ListMapMasters, ListMemberAliases, ListSeasonMasters, UpdateGameTitle, UpdateMapMaster,
-  UpdateMemberAlias, UpdateSeasonMaster,
+  CreateGameTitle,
+  CreateMapMaster,
+  CreateMemberAlias,
+  CreateSeasonMaster,
+  DeleteGameTitle,
+  DeleteMapMaster,
+  DeleteMemberAlias,
+  DeleteSeasonMaster,
+  ListGameTitles,
+  ListIncidentMasters,
+  ListMapMasters,
+  ListMemberAliases,
+  ListSeasonMasters,
+  UpdateGameTitle,
+  UpdateMapMaster,
+  UpdateMemberAlias,
+  UpdateSeasonMaster
 }
 
 object MasterModule:
@@ -177,7 +207,9 @@ object MasterModule:
           nowF,
           security.decode(
             MasterCodec.toCreateSeasonMasterCommand(request)
-          )(command => security.respond(createSeasonMaster.run(command))(SeasonMasterResponse.from)),
+          )(command =>
+            security.respond(createSeasonMaster.run(command))(SeasonMasterResponse.from)
+          ),
         )
       }
     },

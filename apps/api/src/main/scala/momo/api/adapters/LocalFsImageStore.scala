@@ -16,7 +16,11 @@ import momo.api.domain.StoredImage
 import momo.api.domain.ids.*
 import momo.api.errors.AppError
 import momo.api.repositories.{
-  ImageDiskUsage, ImageOrphanStore, ImageStorageInspector, ImageStorageUsage, ImageStore,
+  ImageDiskUsage,
+  ImageOrphanStore,
+  ImageStorageInspector,
+  ImageStorageUsage,
+  ImageStore
 }
 
 final class LocalFsImageStore[F[_]: Sync: Random](root: Path)

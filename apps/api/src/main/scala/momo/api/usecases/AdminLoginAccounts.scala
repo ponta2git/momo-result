@@ -10,9 +10,12 @@ import momo.api.domain.LoginAccount
 import momo.api.domain.ids.{AccountId, MemberId, UserId}
 import momo.api.errors.AppError
 import momo.api.repositories.{
-  CreateLoginAccountData, LoginAccountAdministrationRepository,
-  LoginAccountAdministrationUpdateResult, LoginAccountsRepository, MembersRepository,
-  UpdateLoginAccountData,
+  CreateLoginAccountData,
+  LoginAccountAdministrationRepository,
+  LoginAccountAdministrationUpdateResult,
+  LoginAccountsRepository,
+  MembersRepository,
+  UpdateLoginAccountData
 }
 import momo.api.usecases.syntax.UseCaseSyntax.*
 

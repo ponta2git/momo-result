@@ -7,8 +7,11 @@ import cats.syntax.all.*
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.adapters.{
-  InMemoryGameTitlesRepository, InMemoryMapMastersRepository, InMemoryMatchesRepository,
-  InMemoryMembersRepository, InMemorySeasonMastersRepository,
+  InMemoryGameTitlesRepository,
+  InMemoryMapMastersRepository,
+  InMemoryMatchesRepository,
+  InMemoryMembersRepository,
+  InMemorySeasonMastersRepository
 }
 import momo.api.domain.ids.*
 import momo.api.domain.{MatchExportFormat, MatchExportScope, MatchRecord}

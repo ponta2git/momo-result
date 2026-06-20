@@ -8,7 +8,10 @@ import momo.api.MomoCatsEffectSuite
 import momo.api.domain.ids.{AccountId, ImageId}
 import momo.api.errors.AppError
 import momo.api.repositories.{
-  ImageDiskUsage, ImageReferenceRepository, ImageStorageInspector, ImageStorageUsage,
+  ImageDiskUsage,
+  ImageReferenceRepository,
+  ImageStorageInspector,
+  ImageStorageUsage
 }
 
 final class ImageStorageAdmissionSpec extends MomoCatsEffectSuite:

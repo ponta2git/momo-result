@@ -11,13 +11,25 @@ import momo.api.auth.RateLimiter
 import momo.api.domain.ids.{OcrDraftId, OcrJobId}
 import momo.api.endpoints.codec.{BoundaryId, OcrDraftCodec, OcrJobCodec}
 import momo.api.endpoints.{
-  CancelOcrJobResponse, CreateOcrJobRequest, CreateOcrJobResponse, OcrDraftEndpoints,
-  OcrDraftListResponse, OcrDraftResponse, OcrJobEndpoints, OcrJobResponse, ProblemDetails,
+  CancelOcrJobResponse,
+  CreateOcrJobRequest,
+  CreateOcrJobResponse,
+  OcrDraftEndpoints,
+  OcrDraftListResponse,
+  OcrDraftResponse,
+  OcrJobEndpoints,
+  OcrJobResponse,
+  ProblemDetails
 }
 import momo.api.errors.AppError
 import momo.api.http.{EndpointSecurity, HttpOperation, IdempotencyReplay}
 import momo.api.usecases.{
-  CancelOcrJob, CreateOcrJob, CreatedOcrJob, GetOcrDraft, GetOcrDraftsBulk, GetOcrJob,
+  CancelOcrJob,
+  CreateOcrJob,
+  CreatedOcrJob,
+  GetOcrDraft,
+  GetOcrDraftsBulk,
+  GetOcrJob
 }
 
 object OcrModule:

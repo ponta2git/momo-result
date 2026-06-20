@@ -9,14 +9,20 @@ import sttp.tapir.server.ServerEndpoint
 import momo.api.domain.ids.{AccountId, MemberId, UserId}
 import momo.api.endpoints.codec.BoundaryId
 import momo.api.endpoints.{
-  AdminAccountEndpoints, CreateLoginAccountRequest, LoginAccountListResponse, LoginAccountResponse,
-  UpdateLoginAccountRequest,
+  AdminAccountEndpoints,
+  CreateLoginAccountRequest,
+  LoginAccountListResponse,
+  LoginAccountResponse,
+  UpdateLoginAccountRequest
 }
 import momo.api.errors.AppError
 import momo.api.http.{EndpointSecurity, HttpOperation, IdempotencyReplay}
 import momo.api.usecases.{
-  CreateLoginAccount, CreateLoginAccountCommand, ListLoginAccounts, UpdateLoginAccount,
-  UpdateLoginAccountCommand,
+  CreateLoginAccount,
+  CreateLoginAccountCommand,
+  ListLoginAccounts,
+  UpdateLoginAccount,
+  UpdateLoginAccountCommand
 }
 
 object AdminAccountModule:
@@ -45,7 +51,9 @@ object AdminAccountModule:
           nowF,
           security.decode(
             toCommand(request)
-          )(command => security.respond(createLoginAccount.run(command))(LoginAccountResponse.from)),
+          )(command =>
+            security.respond(createLoginAccount.run(command))(LoginAccountResponse.from)
+          ),
         )
       }
     },

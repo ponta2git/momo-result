@@ -20,7 +20,8 @@ import momo.api.repositories.{AppSession, AppSessionsAlg, AppSessionsRepository}
 object PostgresAppSessions:
 
   val alg: AppSessionsAlg[ConnectionIO] = new AppSessionsAlg[ConnectionIO]:
-    override def find(idHash: String): ConnectionIO[Option[AppSession]] = sql"""
+    override def find(idHash: String): ConnectionIO[Option[AppSession]] =
+      sql"""
         SELECT id_hash, account_id, member_id, csrf_secret_hash, created_at, last_seen_at, expires_at
         FROM app_sessions
         WHERE id_hash = $idHash

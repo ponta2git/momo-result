@@ -15,9 +15,12 @@ import momo.api.domain.ids.{AccountId, UserId}
 import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.repositories.{
-  CreateLoginAccountData, LoginAccountAdministrationRepository,
-  LoginAccountAdministrationUpdateResult, LoginAccountsAlg, LoginAccountsRepository,
-  UpdateLoginAccountData,
+  CreateLoginAccountData,
+  LoginAccountAdministrationRepository,
+  LoginAccountAdministrationUpdateResult,
+  LoginAccountsAlg,
+  LoginAccountsRepository,
+  UpdateLoginAccountData
 }
 
 private def isLoginAccountUniqueViolation(state: SqlState): Boolean = state.value ==

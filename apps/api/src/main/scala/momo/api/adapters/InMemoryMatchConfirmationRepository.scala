@@ -9,7 +9,10 @@ import cats.syntax.functor.*
 
 import momo.api.domain.{MatchDraft, MatchRecord}
 import momo.api.repositories.{
-  MatchConfirmationRepository, MatchDraftConfirmation, MatchDraftsRepository, MatchesRepository,
+  MatchConfirmationRepository,
+  MatchDraftConfirmation,
+  MatchDraftsRepository,
+  MatchesRepository
 }
 
 final class InMemoryMatchConfirmationRepository[F[_]: Monad](

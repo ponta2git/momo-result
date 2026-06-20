@@ -5,13 +5,21 @@ import cats.syntax.all.*
 
 import momo.api.domain.ids.*
 import momo.api.domain.{
-  SeriesComparisonIncidentCountsRow, SeriesComparisonMatchPlayerRow, SeriesComparisonOptionsData,
-  SeriesComparisonResolvedScope, SeriesComparisonScope, SeriesComparisonScopeOptionData,
-  SeriesComparisonSeriesOptionData,
+  SeriesComparisonIncidentCountsRow,
+  SeriesComparisonMatchPlayerRow,
+  SeriesComparisonOptionsData,
+  SeriesComparisonResolvedScope,
+  SeriesComparisonScope,
+  SeriesComparisonScopeOptionData,
+  SeriesComparisonSeriesOptionData
 }
 import momo.api.repositories.{
-  GameTitlesRepository, MapMastersRepository, MatchesRepository, MembersRepository,
-  SeasonMastersRepository, SeriesComparisonReadModel,
+  GameTitlesRepository,
+  MapMastersRepository,
+  MatchesRepository,
+  MembersRepository,
+  SeasonMastersRepository,
+  SeriesComparisonReadModel
 }
 
 final class InMemorySeriesComparisonReadModel[F[_]: Monad](

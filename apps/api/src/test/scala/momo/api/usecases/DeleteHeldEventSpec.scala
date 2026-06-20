@@ -6,8 +6,10 @@ import cats.effect.IO
 import munit.CatsEffectSuite
 
 import momo.api.adapters.{
-  InMemoryHeldEventDeletionRepository, InMemoryHeldEventsRepository, InMemoryMatchDraftsRepository,
-  InMemoryMatchesRepository,
+  InMemoryHeldEventDeletionRepository,
+  InMemoryHeldEventsRepository,
+  InMemoryMatchDraftsRepository,
+  InMemoryMatchesRepository
 }
 import momo.api.domain.*
 import momo.api.domain.ids.*

@@ -8,8 +8,10 @@ import cats.syntax.all.*
 import momo.api.domain.MatchDraftStatus
 import momo.api.domain.ids.MatchDraftId
 import momo.api.repositories.{
-  MatchDraftCancellationRepository, MatchDraftCancellationResult, MatchDraftsRepository,
-  OcrJobsRepository,
+  MatchDraftCancellationRepository,
+  MatchDraftCancellationResult,
+  MatchDraftsRepository,
+  OcrJobsRepository
 }
 
 final class InMemoryMatchDraftCancellationRepository[F[_]: Sync](

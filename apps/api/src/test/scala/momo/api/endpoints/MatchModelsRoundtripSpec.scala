@@ -9,8 +9,16 @@ import munit.FunSuite
 
 import momo.api.domain.ids.*
 import momo.api.domain.{
-  FourPlayers, IncidentCounts, MatchListItem, MatchListItemKind, MatchListRankEntry, MatchNoInEvent,
-  MatchRecord, PlayOrder, PlayerResult, Rank,
+  FourPlayers,
+  IncidentCounts,
+  MatchListItem,
+  MatchListItemKind,
+  MatchListRankEntry,
+  MatchNoInEvent,
+  MatchRecord,
+  PlayOrder,
+  PlayerResult,
+  Rank
 }
 
 /**

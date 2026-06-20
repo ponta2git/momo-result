@@ -13,8 +13,13 @@ import org.typelevel.ci.CIString
 import momo.api.MomoCatsEffectSuite
 import momo.api.adapters.{InMemoryAppSessionsRepository, InMemoryLoginAccountsRepository}
 import momo.api.auth.{
-  CsrfTokenService, DiscordOAuthClient, DiscordUser, InMemoryOAuthProviderBackoff, LoginRateLimiter,
-  OAuthStateCodec, SessionService,
+  CsrfTokenService,
+  DiscordOAuthClient,
+  DiscordUser,
+  InMemoryOAuthProviderBackoff,
+  LoginRateLimiter,
+  OAuthStateCodec,
+  SessionService
 }
 import momo.api.config.{AppConfig, AppEnv, AuthConfig}
 import momo.api.domain.LoginAccount

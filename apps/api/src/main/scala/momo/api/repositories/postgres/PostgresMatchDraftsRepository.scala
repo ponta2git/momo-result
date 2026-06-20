@@ -18,8 +18,10 @@ import momo.api.domain.{MatchDraft, MatchDraftStatus, MatchNoInEvent, ScreenType
 import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.repositories.{
-  MatchDraftCancellationRepository, MatchDraftCancellationResult, MatchDraftsAlg,
-  MatchDraftsRepository,
+  MatchDraftCancellationRepository,
+  MatchDraftCancellationResult,
+  MatchDraftsAlg,
+  MatchDraftsRepository
 }
 
 /**

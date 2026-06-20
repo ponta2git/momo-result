@@ -4,9 +4,16 @@ import io.circe.Json
 import io.circe.syntax.*
 
 import momo.api.endpoints.{
-  ConfirmMatchDraftIds, ConfirmMatchRequest, CreateGameTitleRequest, CreateHeldEventRequest,
-  CreateMapMasterRequest, CreateMatchDraftRequest, CreateOcrJobRequest, CreateSeasonMasterRequest,
-  IncidentCountsRequest, PlayerResultRequest,
+  ConfirmMatchDraftIds,
+  ConfirmMatchRequest,
+  CreateGameTitleRequest,
+  CreateHeldEventRequest,
+  CreateMapMasterRequest,
+  CreateMatchDraftRequest,
+  CreateOcrJobRequest,
+  CreateSeasonMasterRequest,
+  IncidentCountsRequest,
+  PlayerResultRequest
 }
 
 object HttpRequestBodies:

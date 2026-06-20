@@ -15,12 +15,20 @@ import doobie.util.fragments
 import momo.api.db.Database
 import momo.api.domain.ids.*
 import momo.api.domain.{
-  FourPlayers, IncidentCounts, IncidentKind, ManYen, MatchNoInEvent, MatchRecord, PlayOrder,
-  PlayerResult, Rank,
+  FourPlayers,
+  IncidentCounts,
+  IncidentKind,
+  ManYen,
+  MatchNoInEvent,
+  MatchRecord,
+  PlayOrder,
+  PlayerResult,
+  Rank
 }
 import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.postgres.PostgresMatchInsertOps.{
-  insertMatchCascade, replaceMatchChildren,
+  insertMatchCascade,
+  replaceMatchChildren
 }
 import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.repositories.{MatchesAlg, MatchesRepository}

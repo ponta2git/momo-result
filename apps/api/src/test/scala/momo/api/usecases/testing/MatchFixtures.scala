@@ -6,11 +6,22 @@ import cats.effect.IO
 
 import momo.api.domain.ids.*
 import momo.api.domain.{
-  FourPlayers, GameTitle, HeldEvent, IncidentCounts, MapMaster, MatchNoInEvent, MatchRecord, Member,
-  PlayerResult, SeasonMaster,
+  FourPlayers,
+  GameTitle,
+  HeldEvent,
+  IncidentCounts,
+  MapMaster,
+  MatchNoInEvent,
+  MatchRecord,
+  Member,
+  PlayerResult,
+  SeasonMaster
 }
 import momo.api.repositories.{
-  GameTitlesRepository, HeldEventsRepository, MapMastersRepository, SeasonMastersRepository,
+  GameTitlesRepository,
+  HeldEventsRepository,
+  MapMastersRepository,
+  SeasonMastersRepository
 }
 
 object MatchFixtures:

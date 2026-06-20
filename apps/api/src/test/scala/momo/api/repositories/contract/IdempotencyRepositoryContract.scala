@@ -7,7 +7,10 @@ import munit.CatsEffectSuite
 
 import momo.api.domain.ids.AccountId
 import momo.api.repositories.{
-  IdempotencyRecord, IdempotencyRepository, IdempotencyReservation, IdempotencyResponse,
+  IdempotencyRecord,
+  IdempotencyRepository,
+  IdempotencyReservation,
+  IdempotencyResponse
 }
 
 /**

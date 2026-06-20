@@ -10,11 +10,16 @@ import doobie.postgres.implicits.*
 import momo.api.auth.SessionTokenHash
 import momo.api.domain.ids.{AccountId, MemberId, UserId}
 import momo.api.repositories.postgres.{
-  PostgresAppSessionsRepository, PostgresLoginAccountAdministrationRepository,
-  PostgresLoginAccountsRepository, PostgresMeta,
+  PostgresAppSessionsRepository,
+  PostgresLoginAccountAdministrationRepository,
+  PostgresLoginAccountsRepository,
+  PostgresMeta
 }
 import momo.api.repositories.{
-  AppSession, CreateLoginAccountData, LoginAccountAdministrationUpdateResult, UpdateLoginAccountData,
+  AppSession,
+  CreateLoginAccountData,
+  LoginAccountAdministrationUpdateResult,
+  UpdateLoginAccountData
 }
 
 import PostgresMeta.given

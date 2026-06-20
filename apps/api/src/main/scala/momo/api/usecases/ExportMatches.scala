@@ -7,12 +7,22 @@ import cats.syntax.all.*
 
 import momo.api.domain.ids.*
 import momo.api.domain.{
-  MapMaster, MatchExportFile, MatchExportFormat, MatchExportRow, MatchExportScope, MatchRecord,
-  Member, PlayerResult, SeasonMaster,
+  MapMaster,
+  MatchExportFile,
+  MatchExportFormat,
+  MatchExportRow,
+  MatchExportScope,
+  MatchRecord,
+  Member,
+  PlayerResult,
+  SeasonMaster
 }
 import momo.api.errors.AppError
 import momo.api.repositories.{
-  MapMastersRepository, MatchesRepository, MembersRepository, SeasonMastersRepository,
+  MapMastersRepository,
+  MatchesRepository,
+  MembersRepository,
+  SeasonMastersRepository
 }
 
 final class ExportMatches[F[_]: Monad](

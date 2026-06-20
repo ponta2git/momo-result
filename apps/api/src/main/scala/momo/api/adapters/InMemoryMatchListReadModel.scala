@@ -6,13 +6,27 @@ import io.circe.parser.parse
 
 import momo.api.domain.ids.{GameTitleId, HeldEventId, SeasonMasterId}
 import momo.api.domain.{
-  MatchDraft, MatchDraftOcrSlot, MatchDraftOcrStatus, MatchDraftStatus, MatchListItem,
-  MatchListItemKind, MatchListKindFilter, MatchListRankEntry, MatchListSort, MatchListStatusFilter,
-  MatchListSummary, OcrDraft, OcrJobStatus, PagedResult,
+  MatchDraft,
+  MatchDraftOcrSlot,
+  MatchDraftOcrStatus,
+  MatchDraftStatus,
+  MatchListItem,
+  MatchListItemKind,
+  MatchListKindFilter,
+  MatchListRankEntry,
+  MatchListSort,
+  MatchListStatusFilter,
+  MatchListSummary,
+  OcrDraft,
+  OcrJobStatus,
+  PagedResult
 }
 import momo.api.repositories.{
-  MatchDraftsRepository, MatchListReadModel, MatchesRepository, OcrDraftsRepository,
-  OcrJobsRepository,
+  MatchDraftsRepository,
+  MatchListReadModel,
+  MatchesRepository,
+  OcrDraftsRepository,
+  OcrJobsRepository
 }
 
 final class InMemoryMatchListReadModel[F[_]: Monad](

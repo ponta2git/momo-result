@@ -6,7 +6,9 @@ import cats.effect.IO
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.adapters.{
-  InMemoryGameTitlesRepository, InMemoryMapMastersRepository, InMemorySeasonMastersRepository,
+  InMemoryGameTitlesRepository,
+  InMemoryMapMastersRepository,
+  InMemorySeasonMastersRepository
 }
 import momo.api.domain.ids.{GameTitleId, MapMasterId, SeasonMasterId}
 import momo.api.testing.AppErrorAssertions.assertAppError

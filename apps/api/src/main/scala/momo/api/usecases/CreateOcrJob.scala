@@ -11,8 +11,12 @@ import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.errors.AppError
 import momo.api.repositories.{
-  ImageStore, MatchDraftsRepository, MemberAliasesRepository, OcrJobCreationRepository,
-  OcrJobDraftAttachment, OcrQueuePayload,
+  ImageStore,
+  MatchDraftsRepository,
+  MemberAliasesRepository,
+  OcrJobCreationRepository,
+  OcrJobDraftAttachment,
+  OcrQueuePayload
 }
 import momo.api.usecases.syntax.UseCaseSyntax.*
 

@@ -8,8 +8,13 @@ import momo.api.domain.ids.HeldEventId
 import momo.api.domain.{HeldEvent, PageRequest, PagedResult}
 import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.{
-  HeldEventDeletionAlg, HeldEventDeletionRepository, HeldEventDeletionResult, HeldEventsAlg,
-  HeldEventsRepository, MatchDraftsRepository, MatchesRepository,
+  HeldEventDeletionAlg,
+  HeldEventDeletionRepository,
+  HeldEventDeletionResult,
+  HeldEventsAlg,
+  HeldEventsRepository,
+  MatchDraftsRepository,
+  MatchesRepository
 }
 
 final class InMemoryHeldEventsRepository[F[_]: Sync] private (

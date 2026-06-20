@@ -8,17 +8,33 @@ import org.typelevel.log4cats.noop.NoOpFactory
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.adapters.{
-  InMemoryMatchDraftsRepository, InMemoryMemberAliasesRepository, InMemoryOcrDraftsRepository,
-  InMemoryOcrJobCreationRepository, InMemoryOcrJobsRepository, InMemoryQueueProducer,
-  LocalFsImageStore,
+  InMemoryMatchDraftsRepository,
+  InMemoryMemberAliasesRepository,
+  InMemoryOcrDraftsRepository,
+  InMemoryOcrJobCreationRepository,
+  InMemoryOcrJobsRepository,
+  InMemoryQueueProducer,
+  LocalFsImageStore
 }
 import momo.api.codec.OcrHintsCodec.given
 import momo.api.domain.ids.{
-  AccountId, ImageId, MatchDraftId, MemberAliasId, MemberId, OcrDraftId, OcrJobId,
+  AccountId,
+  ImageId,
+  MatchDraftId,
+  MemberAliasId,
+  MemberId,
+  OcrDraftId,
+  OcrJobId
 }
 import momo.api.domain.{
-  MatchDraft, MatchDraftStatus, MemberAlias, OcrJob, OcrJobHints, PlayerAliasHint, ScreenType,
-  StoredImage,
+  MatchDraft,
+  MatchDraftStatus,
+  MemberAlias,
+  OcrJob,
+  OcrJobHints,
+  PlayerAliasHint,
+  ScreenType,
+  StoredImage
 }
 import momo.api.errors.AppError
 import momo.api.repositories.{ImageStore, OcrJobsRepository, QueueProducer}

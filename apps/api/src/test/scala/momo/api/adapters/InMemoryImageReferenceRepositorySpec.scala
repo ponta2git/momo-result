@@ -8,7 +8,13 @@ import cats.effect.IO
 import momo.api.MomoCatsEffectSuite
 import momo.api.domain.ids.*
 import momo.api.domain.{
-  FailureCode, MatchDraft, MatchDraftStatus, MatchNoInEvent, OcrFailure, OcrJob, ScreenType,
+  FailureCode,
+  MatchDraft,
+  MatchDraftStatus,
+  MatchNoInEvent,
+  OcrFailure,
+  OcrJob,
+  ScreenType
 }
 
 final class InMemoryImageReferenceRepositorySpec extends MomoCatsEffectSuite:

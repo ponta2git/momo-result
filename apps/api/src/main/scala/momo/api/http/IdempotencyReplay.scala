@@ -16,7 +16,10 @@ import momo.api.endpoints.ProblemDetails
 import momo.api.errors.AppError
 import momo.api.logging.SafeLog
 import momo.api.repositories.{
-  IdempotencyRecord, IdempotencyRepository, IdempotencyReservation, IdempotencyResponse,
+  IdempotencyRecord,
+  IdempotencyRepository,
+  IdempotencyReservation,
+  IdempotencyResponse
 }
 
 /**

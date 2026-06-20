@@ -10,9 +10,17 @@ import doobie.postgres.implicits.*
 import momo.api.db.Database
 import momo.api.domain.ids.*
 import momo.api.domain.{
-  GameTitle, MatchNoInEvent, PlayOrder, Rank, SeriesComparisonIncidentCountsRow,
-  SeriesComparisonMatchPlayerRow, SeriesComparisonOptionsData, SeriesComparisonResolvedScope,
-  SeriesComparisonScope, SeriesComparisonScopeOptionData, SeriesComparisonSeriesOptionData,
+  GameTitle,
+  MatchNoInEvent,
+  PlayOrder,
+  Rank,
+  SeriesComparisonIncidentCountsRow,
+  SeriesComparisonMatchPlayerRow,
+  SeriesComparisonOptionsData,
+  SeriesComparisonResolvedScope,
+  SeriesComparisonScope,
+  SeriesComparisonScopeOptionData,
+  SeriesComparisonSeriesOptionData
 }
 import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.repositories.{SeriesComparisonReadAlg, SeriesComparisonReadModel}

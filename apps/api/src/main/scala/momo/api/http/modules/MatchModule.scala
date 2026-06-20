@@ -10,9 +10,16 @@ import momo.api.auth.RateLimiter
 import momo.api.domain.ids.MatchId
 import momo.api.endpoints.codec.{BoundaryId, MatchCodec, MatchListCodec}
 import momo.api.endpoints.{
-  ConfirmMatchRequest, ConfirmMatchResponse, DeleteMatchResponse, MatchDetailResponse,
-  MatchListResponse, MatchListSummaryResponse, MatchSummaryResponse, MatchesEndpoints,
-  PaginationResponse, UpdateMatchRequest,
+  ConfirmMatchRequest,
+  ConfirmMatchResponse,
+  DeleteMatchResponse,
+  MatchDetailResponse,
+  MatchListResponse,
+  MatchListSummaryResponse,
+  MatchSummaryResponse,
+  MatchesEndpoints,
+  PaginationResponse,
+  UpdateMatchRequest
 }
 import momo.api.http.{EndpointSecurity, HttpOperation, IdempotencyReplay}
 import momo.api.usecases.{ConfirmMatch, DeleteMatch, GetMatch, ListMatches, UpdateMatch}

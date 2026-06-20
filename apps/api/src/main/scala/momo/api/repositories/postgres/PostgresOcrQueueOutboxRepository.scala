@@ -14,8 +14,12 @@ import io.circe.Json
 import momo.api.domain.ids.OcrJobId
 import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.repositories.{
-  OcrQueueBacklogSnapshot, OcrQueueOutboxDraft, OcrQueueOutboxRecord, OcrQueueOutboxRepository,
-  OcrQueueOutboxStatus, OcrQueuePayload,
+  OcrQueueBacklogSnapshot,
+  OcrQueueOutboxDraft,
+  OcrQueueOutboxRecord,
+  OcrQueueOutboxRepository,
+  OcrQueueOutboxStatus,
+  OcrQueuePayload
 }
 
 object PostgresOcrQueueOutbox:

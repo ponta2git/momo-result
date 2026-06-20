@@ -3,8 +3,10 @@ package momo.api.repositories
 import cats.~>
 
 import momo.api.domain.{
-  SeriesComparisonMatchPlayerRow, SeriesComparisonOptionsData, SeriesComparisonResolvedScope,
-  SeriesComparisonScope,
+  SeriesComparisonMatchPlayerRow,
+  SeriesComparisonOptionsData,
+  SeriesComparisonResolvedScope,
+  SeriesComparisonScope
 }
 
 trait SeriesComparisonReadAlg[F0[_]]:

@@ -12,8 +12,11 @@ import momo.api.MomoCatsEffectSuite
 import momo.api.errors.AppError
 import momo.api.repositories.OcrQueueBacklogSnapshot
 import momo.api.testing.{
-  FailingQueueHealthProbe, FixedClock, OutboxBacklogSnapshotCall, RecordingOcrQueueOutboxRepository,
-  StaticQueueHealthProbe,
+  FailingQueueHealthProbe,
+  FixedClock,
+  OutboxBacklogSnapshotCall,
+  RecordingOcrQueueOutboxRepository,
+  StaticQueueHealthProbe
 }
 
 final class OcrAdmissionGuardSpec extends MomoCatsEffectSuite:

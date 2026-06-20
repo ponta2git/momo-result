@@ -8,7 +8,9 @@ import momo.api.endpoints.SeriesComparisonEndpoints
 import momo.api.endpoints.codec.SeriesComparisonCodec
 import momo.api.http.{EndpointSecurity, HttpOperation}
 import momo.api.usecases.{
-  GetSeriesComparison, GetSeriesComparisonOptions, GetSeriesComparisonReview,
+  GetSeriesComparison,
+  GetSeriesComparisonOptions,
+  GetSeriesComparisonReview
 }
 
 object AnalyticsModule:

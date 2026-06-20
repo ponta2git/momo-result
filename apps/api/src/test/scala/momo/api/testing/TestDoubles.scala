@@ -14,8 +14,16 @@ import momo.api.domain.ids.{AccountId, ImageId, OcrDraftId, OcrJobId}
 import momo.api.domain.{OcrFailure, OcrJob, StoredImage}
 import momo.api.errors.AppError
 import momo.api.repositories.{
-  AppSession, AppSessionsRepository, ImageStore, OcrJobsRepository, OcrQueueBacklogSnapshot,
-  OcrQueueOutboxRecord, OcrQueueOutboxRepository, OcrQueuePayload, QueueHealthProbe, QueueProducer,
+  AppSession,
+  AppSessionsRepository,
+  ImageStore,
+  OcrJobsRepository,
+  OcrQueueBacklogSnapshot,
+  OcrQueueOutboxRecord,
+  OcrQueueOutboxRepository,
+  OcrQueuePayload,
+  QueueHealthProbe,
+  QueueProducer
 }
 
 object FixedClock:

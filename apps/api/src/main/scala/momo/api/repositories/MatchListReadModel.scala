@@ -4,8 +4,13 @@ import cats.~>
 
 import momo.api.domain.ids.{GameTitleId, HeldEventId, SeasonMasterId}
 import momo.api.domain.{
-  MatchListItem, MatchListKindFilter, MatchListSort, MatchListStatusFilter, MatchListSummary,
-  PageRequest, PagedResult,
+  MatchListItem,
+  MatchListKindFilter,
+  MatchListSort,
+  MatchListStatusFilter,
+  MatchListSummary,
+  PageRequest,
+  PagedResult
 }
 
 trait MatchListAlg[F0[_]]:

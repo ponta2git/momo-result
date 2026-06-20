@@ -7,8 +7,12 @@ import momo.api.domain.ids.OcrDraftId
 import momo.api.domain.{OcrDraft, OcrJob}
 import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.{
-  MatchDraftsRepository, OcrDraftsRepository, OcrJobCreationRepository, OcrJobDraftAttachment,
-  OcrJobsRepository, OcrQueuePayload,
+  MatchDraftsRepository,
+  OcrDraftsRepository,
+  OcrJobCreationRepository,
+  OcrJobDraftAttachment,
+  OcrJobsRepository,
+  OcrQueuePayload
 }
 
 final class InMemoryOcrJobCreationRepository[F[_]: MonadThrow](

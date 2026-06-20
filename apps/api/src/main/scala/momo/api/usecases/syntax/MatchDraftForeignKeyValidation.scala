@@ -8,7 +8,10 @@ import momo.api.domain.GameTitle
 import momo.api.domain.ids.*
 import momo.api.errors.AppError
 import momo.api.repositories.{
-  GameTitlesRepository, HeldEventsRepository, MapMastersRepository, SeasonMastersRepository,
+  GameTitlesRepository,
+  HeldEventsRepository,
+  MapMastersRepository,
+  SeasonMastersRepository
 }
 import momo.api.usecases.syntax.UseCaseSyntax.*
 

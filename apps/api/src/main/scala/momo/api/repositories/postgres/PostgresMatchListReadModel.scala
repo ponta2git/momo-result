@@ -13,9 +13,18 @@ import doobie.util.fragments
 import momo.api.db.Database
 import momo.api.domain.ids.*
 import momo.api.domain.{
-  MatchDraftStatus, MatchListItem, MatchListItemKind, MatchListKindFilter, MatchListRankEntry,
-  MatchListSort, MatchListStatusFilter, MatchListSummary, MatchNoInEvent, PagedResult, PlayOrder,
-  Rank,
+  MatchDraftStatus,
+  MatchListItem,
+  MatchListItemKind,
+  MatchListKindFilter,
+  MatchListRankEntry,
+  MatchListSort,
+  MatchListStatusFilter,
+  MatchListSummary,
+  MatchNoInEvent,
+  PagedResult,
+  PlayOrder,
+  Rank
 }
 import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.repositories.{MatchListAlg, MatchListReadModel}

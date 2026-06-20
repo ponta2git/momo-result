@@ -12,14 +12,26 @@ import doobie.postgres.sqlstate
 import momo.api.db.Database
 import momo.api.domain.ids.*
 import momo.api.domain.{
-  GameTitle, IncidentMaster, MapMaster, MatchDraftStatus, MemberAlias, SeasonMaster,
+  GameTitle,
+  IncidentMaster,
+  MapMaster,
+  MatchDraftStatus,
+  MemberAlias,
+  SeasonMaster
 }
 import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.repositories.{
-  GameTitlesAlg, GameTitlesRepository, IncidentMastersAlg, IncidentMastersRepository, MapMastersAlg,
-  MapMastersRepository, MemberAliasesAlg, MemberAliasesRepository, SeasonMastersAlg,
-  SeasonMastersRepository,
+  GameTitlesAlg,
+  GameTitlesRepository,
+  IncidentMastersAlg,
+  IncidentMastersRepository,
+  MapMastersAlg,
+  MapMastersRepository,
+  MemberAliasesAlg,
+  MemberAliasesRepository,
+  SeasonMastersAlg,
+  SeasonMastersRepository
 }
 
 private val RestrictViolationSqlState = "23001"

@@ -6,8 +6,15 @@ import doobie.Meta
 
 import momo.api.domain.ids.*
 import momo.api.domain.{
-  FailureCode, IncidentCount, ManYen, MatchDraftStatus, MatchNoInEvent, OcrJobStatus, PlayOrder,
-  Rank, ScreenType,
+  FailureCode,
+  IncidentCount,
+  ManYen,
+  MatchDraftStatus,
+  MatchNoInEvent,
+  OcrJobStatus,
+  PlayOrder,
+  Rank,
+  ScreenType
 }
 import momo.api.repositories.OcrQueueOutboxStatus
 

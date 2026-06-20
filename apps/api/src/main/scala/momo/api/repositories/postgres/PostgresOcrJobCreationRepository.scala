@@ -8,7 +8,10 @@ import doobie.implicits.*
 import momo.api.domain.{OcrDraft, OcrJob, OcrJobStatus}
 import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.repositories.{
-  OcrJobCreationRepository, OcrJobDraftAttachment, OcrQueueOutboxDraft, OcrQueuePayload,
+  OcrJobCreationRepository,
+  OcrJobDraftAttachment,
+  OcrQueueOutboxDraft,
+  OcrQueuePayload
 }
 
 final class PostgresOcrJobCreationRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])

@@ -10,8 +10,14 @@ import momo.api.domain.ids.*
 import momo.api.domain.{MatchPolicy, MatchRecord, PlayerResult}
 import momo.api.errors.AppError
 import momo.api.repositories.{
-  GameTitlesRepository, HeldEventsRepository, MapMastersRepository, MatchConfirmationRepository,
-  MatchDraftConfirmation, MatchDraftsRepository, MatchesRepository, SeasonMastersRepository,
+  GameTitlesRepository,
+  HeldEventsRepository,
+  MapMastersRepository,
+  MatchConfirmationRepository,
+  MatchDraftConfirmation,
+  MatchDraftsRepository,
+  MatchesRepository,
+  SeasonMastersRepository
 }
 import momo.api.usecases.syntax.UseCaseSyntax.*
 

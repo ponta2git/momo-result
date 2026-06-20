@@ -7,8 +7,13 @@ import cats.syntax.all.*
 
 import momo.api.domain.ids.*
 import momo.api.domain.{
-  MatchDraft, MatchDraftOcrSlot, MatchDraftOcrStatus, MatchDraftStatus, OcrFailure, OcrJob,
-  OcrJobStatus,
+  MatchDraft,
+  MatchDraftOcrSlot,
+  MatchDraftOcrStatus,
+  MatchDraftStatus,
+  OcrFailure,
+  OcrJob,
+  OcrJobStatus
 }
 import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.{MatchDraftsRepository, OcrJobsRepository}

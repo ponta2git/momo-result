@@ -6,8 +6,12 @@ import cats.syntax.all.*
 
 import momo.api.domain.ids.*
 import momo.api.domain.{
-  MatchListItem, MatchListKindFilter, MatchListSort, MatchListStatusFilter, MatchListSummary,
-  PagedResult,
+  MatchListItem,
+  MatchListKindFilter,
+  MatchListSort,
+  MatchListStatusFilter,
+  MatchListSummary,
+  PagedResult
 }
 import momo.api.errors.AppError
 import momo.api.repositories.MatchListReadModel

@@ -7,14 +7,28 @@ import cats.syntax.all.*
 
 import momo.api.domain.ids.*
 import momo.api.domain.{
-  GameTitle, IncidentMaster, LoginAccount, MapMaster, Member, MemberAlias, SeasonMaster,
+  GameTitle,
+  IncidentMaster,
+  LoginAccount,
+  MapMaster,
+  Member,
+  MemberAlias,
+  SeasonMaster
 }
 import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.{
-  AppSessionsRepository, CreateLoginAccountData, GameTitlesRepository, IncidentMastersRepository,
-  LoginAccountAdministrationRepository, LoginAccountAdministrationUpdateResult,
-  LoginAccountsRepository, MapMastersRepository, MemberAliasesRepository, MembersRepository,
-  SeasonMastersRepository, UpdateLoginAccountData,
+  AppSessionsRepository,
+  CreateLoginAccountData,
+  GameTitlesRepository,
+  IncidentMastersRepository,
+  LoginAccountAdministrationRepository,
+  LoginAccountAdministrationUpdateResult,
+  LoginAccountsRepository,
+  MapMastersRepository,
+  MemberAliasesRepository,
+  MembersRepository,
+  SeasonMastersRepository,
+  UpdateLoginAccountData
 }
 
 final class InMemoryGameTitlesRepository[F[_]: Sync] private (

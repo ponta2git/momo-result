@@ -8,8 +8,11 @@ import cats.syntax.all.*
 
 import momo.api.domain.ids.AccountId
 import momo.api.repositories.{
-  IdempotencyAlg, IdempotencyRecord, IdempotencyRepository, IdempotencyReservation,
-  IdempotencyResponse,
+  IdempotencyAlg,
+  IdempotencyRecord,
+  IdempotencyRepository,
+  IdempotencyReservation,
+  IdempotencyResponse
 }
 
 /**

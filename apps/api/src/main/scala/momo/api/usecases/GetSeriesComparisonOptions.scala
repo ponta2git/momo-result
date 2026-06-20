@@ -6,7 +6,9 @@ import cats.Functor
 import cats.syntax.all.*
 
 import momo.api.endpoints.{
-  SeriesComparisonOptionsResponse, SeriesComparisonScopeOption, SeriesComparisonSeriesOption,
+  SeriesComparisonOptionsResponse,
+  SeriesComparisonScopeOption,
+  SeriesComparisonSeriesOption
 }
 import momo.api.errors.AppError
 import momo.api.repositories.SeriesComparisonReadModel

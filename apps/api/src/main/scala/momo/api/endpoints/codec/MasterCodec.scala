@@ -2,15 +2,25 @@ package momo.api.endpoints.codec
 
 import momo.api.domain.ids.*
 import momo.api.endpoints.{
-  CreateGameTitleRequest, CreateMapMasterRequest, CreateMemberAliasRequest,
-  CreateSeasonMasterRequest, UpdateGameTitleRequest, UpdateMapMasterRequest,
-  UpdateMemberAliasRequest, UpdateSeasonMasterRequest,
+  CreateGameTitleRequest,
+  CreateMapMasterRequest,
+  CreateMemberAliasRequest,
+  CreateSeasonMasterRequest,
+  UpdateGameTitleRequest,
+  UpdateMapMasterRequest,
+  UpdateMemberAliasRequest,
+  UpdateSeasonMasterRequest
 }
 import momo.api.errors.AppError
 import momo.api.usecases.{
-  CreateGameTitleCommand, CreateMapMasterCommand, CreateMemberAliasCommand,
-  CreateSeasonMasterCommand, UpdateGameTitleCommand, UpdateMapMasterCommand,
-  UpdateMemberAliasCommand, UpdateSeasonMasterCommand,
+  CreateGameTitleCommand,
+  CreateMapMasterCommand,
+  CreateMemberAliasCommand,
+  CreateSeasonMasterCommand,
+  UpdateGameTitleCommand,
+  UpdateMapMasterCommand,
+  UpdateMemberAliasCommand,
+  UpdateSeasonMasterCommand
 }
 
 /** DTO ↔ usecase command conversions for master-data endpoints. */

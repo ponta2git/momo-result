@@ -7,7 +7,11 @@ import cats.effect.IO
 import momo.api.MomoCatsEffectSuite
 import momo.api.domain.ids.*
 import momo.api.domain.{
-  MatchDraft, MatchDraftStatus, MatchListItemKind, MatchListKindFilter, MatchListStatusFilter,
+  MatchDraft,
+  MatchDraftStatus,
+  MatchListItemKind,
+  MatchListKindFilter,
+  MatchListStatusFilter
 }
 import momo.api.repositories.MatchListReadModel
 import momo.api.usecases.testing.MatchFixtures

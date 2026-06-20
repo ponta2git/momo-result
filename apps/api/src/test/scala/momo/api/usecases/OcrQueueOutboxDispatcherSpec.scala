@@ -13,11 +13,18 @@ import momo.api.MomoCatsEffectSuite
 import momo.api.domain.ids.*
 import momo.api.domain.{OcrJobHints, ScreenType}
 import momo.api.repositories.{
-  OcrQueueOutboxRecord, OcrQueueOutboxRepository, OcrQueuePayload, QueueProducer,
+  OcrQueueOutboxRecord,
+  OcrQueueOutboxRepository,
+  OcrQueuePayload,
+  QueueProducer
 }
 import momo.api.testing.{
-  FailingQueueProducer, FixedClock, OutboxClaimDueCall, OutboxMarkDeliveredCall,
-  RecordingOcrQueueOutboxRepository, RecordingQueueProducer,
+  FailingQueueProducer,
+  FixedClock,
+  OutboxClaimDueCall,
+  OutboxMarkDeliveredCall,
+  RecordingOcrQueueOutboxRepository,
+  RecordingQueueProducer
 }
 
 final class OcrQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
@@ -103,7 +110,12 @@ final class OcrQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
       assertEquals(gotClaims.map(_.id), Vector(outboxId))
       assertEquals(
         gotDelivered,
-        Vector(OutboxMarkDeliveredCall(outboxId, fixedNow.plusSeconds(30), "redis-job-1", fixedNow)),
+        Vector(OutboxMarkDeliveredCall(
+          outboxId,
+          fixedNow.plusSeconds(30),
+          "redis-job-1",
+          fixedNow
+        )),
       )
 
   test("outbox-backed submitter keeps the API result successful when immediate publish fails"):

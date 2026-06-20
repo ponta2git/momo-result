@@ -14,8 +14,12 @@ import momo.api.domain.{FailureCode, OcrFailure}
 import momo.api.errors.AppError
 import momo.api.logging.SafeLog
 import momo.api.repositories.{
-  MatchDraftsRepository, OcrJobsRepository, OcrQueueOutboxDraft, OcrQueueOutboxRepository,
-  OcrQueuePayload, QueueProducer,
+  MatchDraftsRepository,
+  OcrJobsRepository,
+  OcrQueueOutboxDraft,
+  OcrQueueOutboxRepository,
+  OcrQueuePayload,
+  QueueProducer
 }
 
 trait OcrQueueSubmitter[F[_]]:

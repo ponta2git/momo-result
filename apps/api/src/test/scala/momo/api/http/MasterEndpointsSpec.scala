@@ -11,9 +11,16 @@ import org.http4s.{Method, Request, Status, Uri}
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.endpoints.{
-  GameTitleListResponse, GameTitleResponse, IncidentMasterListResponse, IncidentMasterResponse,
-  MapMasterListResponse, MapMasterResponse, MemberAliasListResponse, MemberAliasResponse,
-  SeasonMasterListResponse, SeasonMasterResponse,
+  GameTitleListResponse,
+  GameTitleResponse,
+  IncidentMasterListResponse,
+  IncidentMasterResponse,
+  MapMasterListResponse,
+  MapMasterResponse,
+  MemberAliasListResponse,
+  MemberAliasResponse,
+  SeasonMasterListResponse,
+  SeasonMasterResponse
 }
 import momo.api.http.HttpAssertions.{assertProblem, assertProblemDetailEquals}
 
@@ -118,7 +125,10 @@ final class MasterEndpointsSpec extends MomoCatsEffectSuite with HttpAppTestFixt
     val create = writePost(uri"/api/game-titles", HttpRequestBodies.Master.gameTitleWorld)
     val patch = writePatch(
       uri"/api/game-titles/title_world",
-      Json.obj("name" -> Json.fromString("桃太郎電鉄ワールドDX"), "layoutFamily" -> Json.fromString("world")),
+      Json.obj(
+        "name" -> Json.fromString("桃太郎電鉄ワールドDX"),
+        "layoutFamily" -> Json.fromString("world")
+      ),
     )
     val delete = writeDelete(uri"/api/game-titles/title_world")
     val list = readGet(uri"/api/game-titles")

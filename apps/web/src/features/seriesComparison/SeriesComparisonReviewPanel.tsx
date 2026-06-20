@@ -151,57 +151,60 @@ function ReviewCommonPlaybookTopics({ topics }: { topics: ReviewCommonPlaybookTo
     return null;
   }
   return (
-    <div className="grid min-w-0 gap-3 border-b border-[var(--color-border)] pb-4">
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-xs font-semibold text-[var(--color-text-primary)]">
-            卓全体で出やすい論点
-          </p>
-          <p className="mt-0.5 text-xs leading-5 text-pretty text-[var(--color-text-secondary)]">
-            複数人に出た候補はここにまとめ、個人カードには4人内で強いものだけを残しています。
-          </p>
-        </div>
-        <span className="shrink-0 rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--color-text-secondary)]">
-          {topics.length}件
+    <CollapsibleRoot className="min-w-0 border-b border-[var(--color-border)] pb-3">
+      <CollapsibleTrigger
+        aria-label="卓全体の共通論点"
+        className="group flex min-h-10 w-full min-w-0 items-center justify-between gap-3 rounded-[var(--radius-xs)] px-2 py-1.5 text-left hover:bg-[var(--color-surface-subtle)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-action)]"
+      >
+        <span className="min-w-0">
+          <span className="block text-xs font-semibold text-[var(--color-text-primary)]">
+            卓全体の共通論点
+          </span>
+          <span className="block text-xs leading-5 text-[var(--color-text-secondary)]">
+            重複候補 {topics.length}件をまとめて確認
+          </span>
         </span>
-      </div>
-      <div className="grid min-w-0 gap-3 lg:grid-cols-2">
-        {topics.map((topic) => (
-          <div
-            className="grid min-w-0 gap-2 border-l-2 border-[var(--color-border)] pl-3"
-            key={topic.id}
-          >
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <span className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--color-text-secondary)]">
-                {playbookCategoryLabel(topic.category)}
-              </span>
-              <span className="text-xs text-[var(--color-text-secondary)]">
-                該当 {topic.affectedPlayerCount}人
-              </span>
-              <span className="text-xs text-[var(--color-text-secondary)]">
-                信頼度 {playbookEvidenceStatusLabel(topic.status)}
-              </span>
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm leading-6 font-semibold text-balance text-[var(--color-text-primary)]">
-                {topic.title}
-              </p>
-              <p className="mt-1 text-sm leading-6 text-pretty break-words text-[var(--color-text-secondary)]">
-                {topic.summary}
-              </p>
-              <p className="mt-1 text-sm leading-6 text-pretty break-words text-[var(--color-text-primary)]">
-                {topic.actionHint}
-              </p>
-              {(topic.memberDisplayNames ?? []).length > 0 ? (
-                <p className="mt-1 text-xs leading-5 text-pretty text-[var(--color-text-secondary)]">
-                  対象: {(topic.memberDisplayNames ?? []).join("、")}
+        <ChevronDown
+          aria-hidden="true"
+          className="size-4 shrink-0 text-[var(--color-text-secondary)] group-data-[panel-open]:rotate-180"
+        />
+      </CollapsibleTrigger>
+      <CollapsiblePanel className="pt-2">
+        <div className="grid min-w-0 gap-2 lg:grid-cols-2">
+          {topics.map((topic) => (
+            <div
+              className="grid min-w-0 gap-2 rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-2.5"
+              key={topic.id}
+            >
+              <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="text-[11px] font-semibold text-[var(--color-text-secondary)]">
+                  {playbookCategoryLabel(topic.category)}
+                </span>
+                <span className="text-[11px] text-[var(--color-text-secondary)]">
+                  該当 {topic.affectedPlayerCount}人
+                </span>
+                <span className="text-[11px] text-[var(--color-text-secondary)]">
+                  信頼度 {playbookEvidenceStatusLabel(topic.status)}
+                </span>
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm leading-6 font-semibold text-balance text-[var(--color-text-primary)]">
+                  {topic.title}
                 </p>
-              ) : null}
+                <p className="mt-1 text-sm leading-6 text-pretty break-words text-[var(--color-text-primary)]">
+                  {topic.actionHint}
+                </p>
+                {(topic.memberDisplayNames ?? []).length > 0 ? (
+                  <p className="mt-1 text-xs leading-5 text-pretty text-[var(--color-text-secondary)]">
+                    対象: {(topic.memberDisplayNames ?? []).join("、")}
+                  </p>
+                ) : null}
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
-    </div>
+          ))}
+        </div>
+      </CollapsiblePanel>
+    </CollapsibleRoot>
   );
 }
 
@@ -214,19 +217,28 @@ function ReviewPlaybookGuide({ review }: { review: SeriesComparisonReviewRespons
     { label: "検証する", text: "まだ断定せず、次回4戦で試す。" },
   ];
   return (
-    <div className="grid gap-3 border-y border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-3 lg:grid-cols-[minmax(12rem,0.7fr)_minmax(0,1fr)]">
-      <div className="min-w-0">
-        <p className="text-xs font-semibold text-[var(--color-text-primary)]">分析範囲</p>
-        <p className="mt-1 text-sm font-semibold text-[var(--color-text-primary)]">
-          {scopeName} / {review.baseline.matchCount}戦
-        </p>
-        <p className="mt-1 text-xs leading-5 text-[var(--color-text-secondary)]">
-          この範囲の確定戦績から、次回に持ち帰る仮説だけを残しています。
-        </p>
+    <CollapsibleRoot className="grid gap-2 border-y border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-2.5">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold text-[var(--color-text-secondary)]">分析範囲</p>
+          <p className="text-sm font-semibold text-[var(--color-text-primary)]">
+            {scopeName} / {review.baseline.matchCount}戦
+          </p>
+        </div>
+        <CollapsibleTrigger
+          aria-label="分類と信頼度の読み方"
+          className="group inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-subtle)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-action)]"
+        >
+          読み方
+          <ChevronDown aria-hidden="true" className="size-3.5 group-data-[panel-open]:rotate-180" />
+        </CollapsibleTrigger>
       </div>
-      <div className="grid min-w-0 gap-2 sm:grid-cols-3">
+      <CollapsiblePanel className="grid min-w-0 gap-2 pt-1 sm:grid-cols-3">
         {items.map((item) => (
-          <div className="min-w-0" key={item.label}>
+          <div
+            className="min-w-0 rounded-[var(--radius-xs)] bg-[var(--color-surface)] p-2"
+            key={item.label}
+          >
             <p className="text-xs font-semibold text-[var(--color-text-primary)]">{item.label}</p>
             <p className="mt-0.5 text-xs leading-5 text-[var(--color-text-secondary)]">
               {item.text}
@@ -237,8 +249,8 @@ function ReviewPlaybookGuide({ review }: { review: SeriesComparisonReviewRespons
           発動条件は試合中に自分で気づくための目印です。リアルタイム判定ではありません。
           信頼度は、高=十分な件数、参考=少数データ、件数少=扱い注意です。
         </p>
-      </div>
-    </div>
+      </CollapsiblePanel>
+    </CollapsibleRoot>
   );
 }
 
@@ -251,59 +263,72 @@ function ReviewPlaybookCardView({
 }) {
   const lane = reviewPlaybookLane(card);
   return (
-    <article className="grid h-full min-w-0 grid-rows-[auto_1fr_auto] gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 shadow-sm">
-      <header className="grid min-w-0 gap-2">
-        <div className="min-w-0">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <span
-              className={cn(
-                "rounded-[var(--radius-xs)] border px-1.5 py-0.5 text-[11px] font-semibold",
-                lane.className,
-              )}
-            >
-              {lane.label}
-            </span>
-            <span className="text-xs font-medium text-[var(--color-text-secondary)]">
-              {playbookCategoryLabel(card.category)}
-            </span>
-            <span className="text-xs text-[var(--color-text-secondary)]">
-              対象 {card.targetCount}戦
-            </span>
-            <span
-              className={cn(
-                "rounded-[var(--radius-xs)] border px-1.5 py-0.5 text-[10px] font-semibold",
-                card.status === "ok"
-                  ? "border-[var(--color-success)]/45 bg-[var(--color-success)]/10 text-[var(--color-success)]"
-                  : "border-[var(--color-border)] bg-[var(--color-surface-subtle)] text-[var(--color-text-secondary)]",
-              )}
-            >
-              信頼度 {playbookEvidenceStatusLabel(card.status)}
-            </span>
+    <article className="grid min-w-0 content-start gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 shadow-sm">
+      <header className="grid min-w-0 gap-2 border-b border-[var(--color-border)] pb-3">
+        <div className="flex min-w-0 items-start gap-2.5">
+          <span
+            className={cn(
+              "shrink-0 rounded-[var(--radius-xs)] border px-1.5 py-0.5 text-[11px] font-semibold",
+              lane.className,
+            )}
+          >
+            {lane.label}
+          </span>
+          <div className="min-w-0">
+            <h4 className="text-sm leading-6 font-semibold text-balance text-[var(--color-text-primary)]">
+              {card.actionHypothesis}
+            </h4>
+            <p className="mt-1 text-[11px] leading-4 text-[var(--color-text-secondary)]">
+              {playbookCategoryLabel(card.category)} / 対象 {card.targetCount}戦 / 信頼度{" "}
+              {playbookEvidenceStatusLabel(card.status)}
+            </p>
           </div>
-          <h4 className="mt-2 text-sm leading-6 font-semibold text-balance text-[var(--color-text-primary)]">
-            {card.actionHypothesis}
-          </h4>
         </div>
       </header>
-      <div className="grid min-w-0 content-start gap-3">
+      <div className="grid min-w-0 content-start gap-2.5">
         <ReviewPlaybookText label="発動条件" text={card.triggerCondition} />
         <ReviewPlaybookText label="やること" text={card.recommendedAction} tone="action" />
-        <ReviewPlaybookText label="避けること" text={card.avoidAction} tone="caution" />
+        <ReviewPlaybookSupportDisclosure card={card} />
         <ReviewPlaybookEvidenceDisclosure card={card} />
-        <ReviewPlaybookText label="試合後の検証" text={card.postMatchCheck} />
       </div>
       <div className="flex min-w-0 justify-end">
         <Button
           className="justify-center"
           icon={<ArrowRight className="size-4" />}
+          aria-label={`詳細: ${card.anchorTarget.label}へ`}
           size="sm"
           variant="secondary"
           onClick={() => jumpToReviewAnchor(card.anchorTarget, onViewChange)}
         >
-          詳細: {card.anchorTarget.label}へ
+          根拠を見る
         </Button>
       </div>
     </article>
+  );
+}
+
+function ReviewPlaybookSupportDisclosure({ card }: { card: ReviewPlaybookCard }) {
+  return (
+    <CollapsibleRoot className="min-w-0 rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)]">
+      <CollapsibleTrigger
+        aria-label="注意・試合後の検証"
+        className="group flex min-h-10 w-full min-w-0 items-center justify-between gap-3 rounded-[var(--radius-xs)] px-2.5 py-2 text-left hover:bg-[var(--color-surface)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-action)]"
+      >
+        <span className="text-xs font-semibold text-[var(--color-text-secondary)]">
+          注意・試合後の検証
+        </span>
+        <ChevronDown
+          aria-hidden="true"
+          className="size-4 shrink-0 text-[var(--color-text-secondary)] group-data-[panel-open]:rotate-180"
+        />
+      </CollapsibleTrigger>
+      <CollapsiblePanel className="border-t border-[var(--color-border)] px-2.5 py-2.5">
+        <div className="grid min-w-0 gap-3">
+          <ReviewPlaybookText label="避けること" text={card.avoidAction} tone="caution" />
+          <ReviewPlaybookText label="試合後の検証" text={card.postMatchCheck} />
+        </div>
+      </CollapsiblePanel>
+    </CollapsibleRoot>
   );
 }
 

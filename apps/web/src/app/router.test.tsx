@@ -209,8 +209,13 @@ describe("app routing", () => {
     expect(screen.queryByRole("heading", { name: "この回の見立て" })).not.toBeInTheDocument();
     expect(screen.getByText("分析範囲")).toBeInTheDocument();
     expect(screen.getByText("総合 / 12戦")).toBeInTheDocument();
-    expect(screen.getByText("卓全体で出やすい論点")).toBeInTheDocument();
-    expect(screen.getByText("収益先行後の勝ち切りが共通論点です")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "分類と信頼度の読み方" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    const commonTopicToggle = screen.getByRole("button", { name: "卓全体の共通論点" });
+    expect(commonTopicToggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("収益先行後の勝ち切りが共通論点です")).not.toBeInTheDocument();
     expect(screen.queryByText("読み取り")).not.toBeInTheDocument();
     expect(screen.queryByText("次回の確認")).not.toBeInTheDocument();
     expect(screen.queryByText("根拠あり")).not.toBeInTheDocument();
@@ -227,6 +232,21 @@ describe("app routing", () => {
     expect(screen.queryByText("play_order")).not.toBeInTheDocument();
     expect(screen.queryByText("直す")).not.toBeInTheDocument();
     expect(screen.queryByText("直近の下振れを確認する")).not.toBeInTheDocument();
+    await user.click(commonTopicToggle);
+    expect(commonTopicToggle).toHaveAttribute("aria-expanded", "true");
+    expect(await screen.findByText("収益先行後の勝ち切りが共通論点です")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "収益で上回った試合は、目的地到着、事故後の入賞維持、終盤の下位回避のどれが順位差に近いかを振り返ります。",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("複数人に出た候補はここにまとめ")).not.toBeInTheDocument();
+    expect(screen.queryByText(/収益トップだから安全/u)).not.toBeInTheDocument();
+    const supportToggles = screen.getAllByRole("button", { name: "注意・試合後の検証" });
+    expect(supportToggles[0]).toHaveAttribute("aria-expanded", "false");
+    await user.click(supportToggles[0]!);
+    expect(supportToggles[0]).toHaveAttribute("aria-expanded", "true");
+    expect(await screen.findByText(/収益トップだから安全/u)).toBeInTheDocument();
     expect(screen.queryByText(/物件収益トップ時の1位率は57.1%/u)).not.toBeInTheDocument();
     expect(screen.queryByText("物件収益トップ時の1位率")).not.toBeInTheDocument();
     const evidenceToggles = screen.getAllByRole("button", {

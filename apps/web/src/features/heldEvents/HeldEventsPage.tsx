@@ -12,7 +12,10 @@ import { useMemo } from "react";
 import { useFormStatus } from "react-dom";
 
 import { formatDateKey, formatDateTime } from "@/features/heldEvents/heldEventViewModel";
-import { useHeldEventsPageController } from "@/features/heldEvents/useHeldEventsPageController";
+import {
+  heldEventPageSizeOptions,
+  useHeldEventsPageController,
+} from "@/features/heldEvents/useHeldEventsPageController";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
@@ -226,7 +229,7 @@ export function HeldEventsPage() {
             <PaginationControls
               className="mt-3"
               disabled={refreshing}
-              pageSizeOptions={[25, 50, 100]}
+              pageSizeOptions={[...heldEventPageSizeOptions]}
               pagination={pagination}
               onPageChange={updatePage}
               onPageSizeChange={updatePageSize}

@@ -15,6 +15,12 @@ describe("matchListSearchParams", () => {
     expect(search).toEqual(defaultMatchListSearch);
   });
 
+  it("normalizes unsupported page sizes to the default page size", () => {
+    const search = parseMatchListSearchParams(new URLSearchParams("pageSize=100"));
+
+    expect(search.pageSize).toBe(10);
+  });
+
   it("trims filter ids and treats blank ids as defaults", () => {
     const search = parseMatchListSearchParams(
       new URLSearchParams("gameTitleId=%20game-1%20&heldEventId=%20&seasonMasterId=%20season-1%20"),

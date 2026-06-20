@@ -19,8 +19,9 @@ import { parsePositiveIntSearchParam } from "@/shared/lib/searchParams";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
 const initialCreateHeldEventState = { version: 0 };
-const defaultPagination = { page: 1, pageSize: 25 };
-const pageSizeOptions = new Set([25, 50, 100]);
+const defaultPagination = { page: 1, pageSize: 10 };
+export const heldEventPageSizeOptions = [10, 25, 50] as const;
+const pageSizeOptions = new Set<number>(heldEventPageSizeOptions);
 
 export function useHeldEventsPageController() {
   const queryClient = useQueryClient();

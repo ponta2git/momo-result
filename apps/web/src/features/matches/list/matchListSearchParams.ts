@@ -9,7 +9,7 @@ export const defaultMatchListSearch: MatchListSearch = {
   heldEventId: "",
   gameTitleId: "",
   page: 1,
-  pageSize: 25,
+  pageSize: 10,
   seasonMasterId: "",
   status: "all",
   sort: "status_priority",
@@ -32,7 +32,9 @@ const sortOptions = new Set<MatchListSort>([
   "match_no_asc",
 ]);
 
-const pageSizeOptions = new Set([25, 50, 100, 200]);
+export const matchListPageSizeOptions = [10, 25, 50] as const;
+
+const pageSizeOptions = new Set<number>(matchListPageSizeOptions);
 
 export function parseMatchListSearchParams(searchParams: URLSearchParams): MatchListSearch {
   const status = searchParams.get("status");

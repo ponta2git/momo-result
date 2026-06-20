@@ -70,7 +70,7 @@ describe("HeldEventsPage", () => {
             hasNextPage: false,
             hasPreviousPage: false,
             page: 1,
-            pageSize: 25,
+            pageSize: 10,
             totalItems: 0,
             totalPages: 0,
           },
@@ -91,7 +91,7 @@ describe("HeldEventsPage", () => {
       http.get("/api/held-events", ({ request }) => {
         const url = new URL(request.url);
         const page = Number(url.searchParams.get("page") ?? "1");
-        const pageSize = Number(url.searchParams.get("pageSize") ?? "25");
+        const pageSize = Number(url.searchParams.get("pageSize") ?? "10");
         const offset = (page - 1) * pageSize;
         return HttpResponse.json({
           items: heldEvents.slice(offset, offset + pageSize),
@@ -131,7 +131,7 @@ describe("HeldEventsPage", () => {
             hasNextPage: false,
             hasPreviousPage: false,
             page: 1,
-            pageSize: 25,
+            pageSize: 10,
             totalItems: 1,
             totalPages: 1,
           },
@@ -144,7 +144,25 @@ describe("HeldEventsPage", () => {
 
     expect(await screen.findByRole("link", { name: "試合" })).toBeInTheDocument();
     expect(captured?.searchParams.get("page")).toBe("1");
-    expect(captured?.searchParams.get("pageSize")).toBe("25");
+    expect(captured?.searchParams.get("pageSize")).toBe("10");
+  });
+
+  it("offers 10, 25, and 50 as held-event page sizes", async () => {
+    renderPage();
+
+    const pageSizeSelect = await screen.findByLabelText("表示件数");
+    expect([...pageSizeSelect.querySelectorAll("option")].map((option) => option.value)).toEqual([
+      "10",
+      "25",
+      "50",
+    ]);
+    expect(pageSizeSelect).toHaveValue("10");
+
+    await user.selectOptions(pageSizeSelect, "25");
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("current location")).toHaveTextContent("pageSize=25"),
+    );
   });
 
   it("creates a held event and adds it to the visible list", async () => {

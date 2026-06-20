@@ -10,6 +10,7 @@ import {
 import { MatchesListFilters } from "@/features/matches/list/MatchesListFilters";
 import { MatchesTable } from "@/features/matches/list/MatchesTable";
 import { MatchesWorkQueueSummary } from "@/features/matches/list/MatchesWorkQueueSummary";
+import { matchListPageSizeOptions } from "@/features/matches/list/matchListSearchParams";
 import { MatchMobileCard } from "@/features/matches/list/MatchMobileCard";
 import { useMatchesListPageController } from "@/features/matches/list/useMatchesListPageController";
 import { Button } from "@/shared/ui/actions/Button";
@@ -217,7 +218,7 @@ export function MatchesListPage() {
             {pagination ? (
               <PaginationControls
                 disabled={isStale}
-                pageSizeOptions={[25, 50, 100, 200]}
+                pageSizeOptions={[...matchListPageSizeOptions]}
                 pagination={pagination}
                 onPageChange={updatePage}
                 onPageSizeChange={updatePageSize}

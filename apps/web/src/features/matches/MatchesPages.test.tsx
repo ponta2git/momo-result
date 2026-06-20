@@ -247,7 +247,7 @@ describe("MatchesListPage", () => {
       http.get("/api/matches", ({ request }) => {
         const url = new URL(request.url);
         const page = Number(url.searchParams.get("page") ?? "1");
-        const pageSize = Number(url.searchParams.get("pageSize") ?? "25");
+        const pageSize = Number(url.searchParams.get("pageSize") ?? "10");
         const offset = (page - 1) * pageSize;
         return HttpResponse.json({
           items: items.slice(offset, offset + pageSize),
@@ -282,6 +282,36 @@ describe("MatchesListPage", () => {
     const detailLinks = await screen.findAllByRole("link", { name: "詳細を見る" });
     detailLinks.forEach((link) => expect(link).toHaveAttribute("href", "/matches/match-1"));
     expect(screen.queryByText("試合はまだありません")).not.toBeInTheDocument();
+  });
+
+  it("offers 10, 25, and 50 as match page sizes", async () => {
+    setDevUser();
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches"]}>
+          <LocationProbe />
+          <Routes>
+            <Route path="/matches" element={<MatchesListPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
+    const pageSizeSelect = await screen.findByLabelText("表示件数");
+    expect([...pageSizeSelect.querySelectorAll("option")].map((option) => option.value)).toEqual([
+      "10",
+      "25",
+      "50",
+    ]);
+    expect(pageSizeSelect).toHaveValue("10");
+
+    await user.selectOptions(pageSizeSelect, "25");
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("current location")).toHaveTextContent("pageSize=25"),
+    );
   });
 
   it("shows optimistic status selection while the filtered list is refetching", async () => {

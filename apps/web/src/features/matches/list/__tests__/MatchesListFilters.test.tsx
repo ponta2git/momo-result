@@ -9,7 +9,7 @@ const initialSearch: MatchListSearch = {
   gameTitleId: "",
   heldEventId: "",
   page: 1,
-  pageSize: 25,
+  pageSize: 10,
   seasonMasterId: "",
   sort: "status_priority",
   status: "all",

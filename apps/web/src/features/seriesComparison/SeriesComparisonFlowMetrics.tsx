@@ -34,7 +34,7 @@ export function RecentFormMetrics({ response }: { response: SeriesComparisonResp
   const recentByMember = recentFormMap(response);
   return (
     <MetricSection
-      description="直近8戦の調子指標と、全試合の順位推移です。3戦未満は参考です。"
+      description="直近8戦の調子指標と順位推移です。3戦未満は参考です。"
       icon={<Activity className="size-5" />}
       title="直近の調子"
       id="metric-recent-form"

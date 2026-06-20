@@ -4,6 +4,9 @@ import { describe, expect, it } from "vitest";
 import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
 
 import {
+  assetStyleEvidence,
+  cardShopDestinationDefinitions,
+  cardShopQuadrantsByKind,
   extremumEmphasis,
   formatCountRate,
   formatDecimal,
@@ -19,6 +22,7 @@ import {
   playOrderColor,
   playOrderHeatmapRows,
   rankDistributionBars,
+  rankOutcomeColor,
   recentRankStrips,
   revenueRankConversionEntries,
 } from "./seriesComparisonPresentation";
@@ -86,7 +90,7 @@ describe("seriesComparisonPresentation", () => {
     expect(playOrderColor(9)).toBe("var(--color-text-muted)");
   });
 
-  it("derives full rank strips while keeping recent-window metadata", () => {
+  it("derives rank strips from the recent window while keeping total metadata", () => {
     const response = responseWithRankAverages([["p0", "ポン太", 2.4]]);
     response.recentFormByPlayer = [
       {
@@ -112,7 +116,6 @@ describe("seriesComparisonPresentation", () => {
       {
         memberId: "p0",
         points: [
-          { matchId: "match-1", matchIndex: 1, rank: 4 },
           { matchId: "match-2", matchIndex: 2, rank: 2 },
           { matchId: "match-3", matchIndex: 3, rank: 1 },
           { matchId: "match-4", matchIndex: 4, rank: 3 },
@@ -164,6 +167,96 @@ describe("seriesComparisonPresentation", () => {
           { matchCount: 0, playOrder: 3, rankAverage: undefined },
           { matchCount: 3, playOrder: 4, rankAverage: 3 },
         ],
+      },
+    ]);
+  });
+
+  it("keeps rank outcome colors and card-shop quadrant order stable", () => {
+    expect(rankOutcomeColor(1)).toBe("var(--color-rank-1)");
+    expect(rankOutcomeColor(4)).toBe("var(--color-rank-4)");
+    expect(cardShopDestinationDefinitions.map((item) => item.kind)).toEqual([
+      "destination_with_shop",
+      "destination_without_shop",
+      "no_destination_with_shop",
+      "no_destination_without_shop",
+    ]);
+
+    const entry = {
+      cardShopMatchCount: 5,
+      cardShopWithoutDestinationCount: 2,
+      denominator: 8,
+      memberId: "p0",
+      quadrants: [
+        {
+          averageRank: 1.5,
+          kind: "destination_with_shop",
+          status: "ok",
+          targetCount: 3,
+        },
+        {
+          averageRank: 2.5,
+          kind: "no_destination_with_shop",
+          status: "reference",
+          targetCount: 2,
+        },
+      ],
+    } satisfies NonNullable<SeriesComparisonResponse["cardShopDestination"]["entries"]>[number];
+
+    const byKind = cardShopQuadrantsByKind(entry);
+    expect(byKind.get("destination_with_shop")?.targetCount).toBe(3);
+    expect(byKind.get("no_destination_with_shop")?.averageRank).toBe(2.5);
+  });
+
+  it("derives asset-style evidence by profile kind", () => {
+    const profile = {
+      memberId: "p0",
+      metrics: {
+        blowoutWinCount: 2,
+        heavyLossCount: 1,
+        highAssetCount: 4,
+        highAssetRate: 0.4,
+        lowAssetCount: 3,
+        lowAssetRate: 0.3,
+        lowerHalfMedianGap: 3200,
+        nearMissSecondCount: 1,
+        secondCount: 1,
+        winCount: 4,
+      },
+      primaryKind: "high_risk_breakthrough",
+      status: "ok",
+      targetCount: 10,
+    } satisfies NonNullable<SeriesComparisonResponse["assetStyleProfiles"]["entries"]>[number];
+
+    expect(
+      assetStyleEvidence(profile, {
+        blowoutWinThreshold: 2400,
+        entries: [],
+        highAssetThreshold: 9000,
+        lowAssetThreshold: 500,
+      }).map((item) => ({
+        emphasis: item.emphasis?.kind,
+        key: item.key,
+        label: item.label,
+        value: item.value,
+      })),
+    ).toEqual([
+      {
+        emphasis: "strength",
+        key: "high-assets",
+        label: "高資産帯",
+        value: "4/10戦・40.0%",
+      },
+      {
+        emphasis: "risk",
+        key: "low-assets-risk",
+        label: "低資産帯",
+        value: "3/10戦・30.0%",
+      },
+      {
+        emphasis: "risk",
+        key: "lower-gap",
+        label: "下位時の差",
+        value: "3200万円",
       },
     ]);
   });

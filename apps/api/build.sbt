@@ -3,7 +3,7 @@ import java.nio.file.{Files, Paths}
 import sbt.*
 import sbt.Keys.*
 
-ThisBuild / scalaVersion := "3.8.3"
+ThisBuild / scalaVersion := "3.8.4"
 ThisBuild / semanticdbEnabled := true
 ThisBuild / semanticdbVersion := scalafixSemanticdb.revision
 ThisBuild / evictionErrorLevel := Level.Warn
@@ -118,15 +118,15 @@ lazy val root = (project in file("."))
       val circeVersion = "0.14.15"
       val doobieVersion = "1.0.0-RC12"
       val http4sVersion = "0.23.34"
-      val logbackVersion = "1.5.32"
+      val logbackVersion = "1.5.34"
       val logstashEncoderVersion = "9.0"
       val janinoVersion = "3.1.12"
-      val jsonSchemaValidatorVersion = "3.0.2"
+      val jsonSchemaValidatorVersion = "3.0.4"
       val log4catsVersion = "2.8.0"
       val munitCatsEffectVersion = "2.2.0"
-      val munitVersion = "1.3.0"
-      val redis4catsVersion = "2.0.3"
-      val tapirVersion = "1.13.18"
+      val munitVersion = "1.3.3"
+      val redis4catsVersion = "2.0.4"
+      val tapirVersion = "1.13.23"
       val testcontainersPostgresVersion = "1.21.4"
       val testcontainersVersion = "2.0.5"
 
@@ -160,7 +160,7 @@ lazy val root = (project in file("."))
       )
     },
     dependencyOverrides ++= {
-      val nettyVersion = "4.1.135.Final"
+      val nettyVersion = "4.2.15.Final"
 
       Seq(
         "io.netty" % "netty-buffer" % nettyVersion,
@@ -173,7 +173,7 @@ lazy val root = (project in file("."))
         "io.netty" % "netty-transport" % nettyVersion,
         "io.netty" % "netty-transport-native-unix-common" % nettyVersion,
         "org.postgresql" % "postgresql" % "42.7.11",
-        "tools.jackson.core" % "jackson-core" % "3.1.1",
+        "tools.jackson.core" % "jackson-core" % "3.2.0",
       )
     },
     apiOpenApi := {

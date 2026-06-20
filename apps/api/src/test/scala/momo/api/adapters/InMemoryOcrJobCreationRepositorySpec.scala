@@ -7,9 +7,7 @@ import cats.effect.IO
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.domain.ids.*
-import momo.api.domain.{
-  MatchDraft, MatchDraftStatus, OcrDraft, OcrJob, OcrJobHints, ScreenType,
-}
+import momo.api.domain.{MatchDraft, MatchDraftStatus, OcrDraft, OcrJob, OcrJobHints, ScreenType}
 import momo.api.repositories.{OcrJobDraftAttachment, OcrQueuePayload}
 import momo.api.testing.AppErrorAssertions.assertAppException
 
@@ -65,12 +63,8 @@ final class InMemoryOcrJobCreationRepositorySpec extends MomoCatsEffectSuite:
       drafts <- InMemoryOcrDraftsRepository.create[IO]
       jobs <- InMemoryOcrJobsRepository.create[IO]
       matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
-      repository = InMemoryOcrJobCreationRepository[IO](
-        drafts,
-        jobs,
-        matchDrafts,
-        jobs.existsActiveByDraft,
-      )
+      repository =
+        InMemoryOcrJobCreationRepository[IO](drafts, jobs, matchDrafts, jobs.existsActiveByDraft)
     yield Fixture(drafts, jobs, matchDrafts, repository)
 
   private def editableMatchDraft: MatchDraft = MatchDraft.fromInputs(

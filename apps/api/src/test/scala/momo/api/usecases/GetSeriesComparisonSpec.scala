@@ -36,7 +36,7 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
       val response = assertRight(result)
       assertEquals(response.matchCount, 3)
       assertEquals(response.schemaVersion, 8)
-      assertEquals(response.players.map(_.memberId), List("ponta", "akane", "otaka", "eu"))
+      assertEquals(response.players.map(_.memberId), List("eu", "ponta", "akane", "otaka"))
 
       val metrics = response.metricsByPlayer.map(entry => entry.memberId -> entry.metrics).toMap
       val ponta = metrics("ponta")
@@ -89,11 +89,11 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
 
       assertEquals(response.trends.rankCumulativeAverage.size, 4)
       assertEquals(response.trends.rankCumulativeStandardDeviation.size, 4)
-      assertOptionDouble(
-        response.trends.rankCumulativeStandardDeviation.head.points.head.value,
-        0.0,
-      )
-      assertOptionDouble(response.trends.rankCumulativeStandardDeviation.head.points(1).value, 0.5)
+      val pontaRankDeviation = response.trends.rankCumulativeStandardDeviation
+        .find(_.memberId == "ponta")
+        .getOrElse(fail(s"ponta rank deviation missing: ${response.trends}"))
+      assertOptionDouble(pontaRankDeviation.points.head.value, 0.0)
+      assertOptionDouble(pontaRankDeviation.points(1).value, 0.5)
       assertEquals(
         response.histograms.assets.series.map(_.memberId),
         response.players.map(_.memberId),

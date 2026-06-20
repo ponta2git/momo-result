@@ -141,6 +141,7 @@ OCR下書き確定時は、request の `draftIds.totalAssets` / `draftIds.revenu
 - マスタは `momo-db` 管理。変更には `momo-db` の schema / migration / seed 変更が必要。
 - 対象マスタ: `game_titles`, `map_masters`, `season_masters`, `incident_masters`, `member_aliases`
 - `game_titles.layout_family` はOCR parser/profile selectionにも影響する。
+- `game_titles.layout_family` は安定した profile key として扱い、`^[a-z][a-z0-9_]{0,63}$` に合う lowercase snake key だけを保存する。
 - `map_masters` と `season_masters` は所属する `game_title_id` と矛盾してはならない。
 - MVP固定事件: 目的地、プラス駅、マイナス駅、カード駅、カード売り場、スリの銀次
 - 1つの開催回に複数試合を紐づけられる。

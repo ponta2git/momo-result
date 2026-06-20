@@ -99,3 +99,25 @@ final case class SeriesComparisonMatchPlayerRow(
     revenueManYen: ManYen,
     incidents: SeriesComparisonIncidentCountsRow,
 )
+
+object SeriesComparisonPlayerOrder:
+  private val PreferredMemberValues = List(
+    "member_eu" -> 0,
+    "eu" -> 0,
+    "member_ponta" -> 1,
+    "ponta" -> 1,
+    "member_akane_mami" -> 2,
+    "akane" -> 2,
+    "akane-mami" -> 2,
+    "member_otaka" -> 3,
+    "otaka" -> 3,
+  ).toMap
+
+  def rowSortKey(row: SeriesComparisonMatchPlayerRow): (Int, Int, String, String) =
+    val preferredOrder = PreferredMemberValues.getOrElse(row.memberId.value, Int.MaxValue)
+    (
+      preferredOrder,
+      if preferredOrder == Int.MaxValue then row.playOrder.value else 0,
+      row.memberDisplayName,
+      row.memberId.value,
+    )

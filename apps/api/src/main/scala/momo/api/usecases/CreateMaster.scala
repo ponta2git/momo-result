@@ -19,11 +19,20 @@ import momo.api.repositories.{GameTitlesRepository, MapMastersRepository, Season
  */
 private[usecases] object MasterField:
   private val Pattern = "^[a-z][a-z0-9_]{1,63}$".r
+  private val KeyPattern = "^[a-z][a-z0-9_]{0,63}$".r
   def slug(field: String, value: String): Either[AppError, String] =
     Pattern.pattern.matcher(value).matches() match
       case true => Right(value)
       case false => Left(AppError.ValidationFailed(
           s"$field must match ^[a-z][a-z0-9_]{1,63}$$ (lowercase, starts with a letter)."
+        ))
+
+  def stableKey(field: String, value: String): Either[AppError, String] =
+    val trimmed = value.trim
+    KeyPattern.pattern.matcher(trimmed).matches() match
+      case true => Right(trimmed)
+      case false => Left(AppError.ValidationFailed(
+          s"$field must match ^[a-z][a-z0-9_]{0,63}$$ (lowercase, starts with a letter)."
         ))
 
   def nonBlank(field: String, value: String): Either[AppError, String] =
@@ -39,7 +48,7 @@ final class CreateGameTitle[F[_]: MonadThrow](titles: GameTitlesRepository[F], n
       for
         id <- MasterField.slug("id", command.id.value)
         name <- MasterField.nonBlank("name", command.name)
-        layoutFamily <- MasterField.nonBlank("layoutFamily", command.layoutFamily)
+        layoutFamily <- MasterField.stableKey("layoutFamily", command.layoutFamily)
       yield (GameTitleId.unsafeFromString(id), name, layoutFamily)
 
     validated match

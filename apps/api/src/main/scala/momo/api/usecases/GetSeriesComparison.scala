@@ -7,7 +7,8 @@ import cats.syntax.all.*
 
 import momo.api.domain.ids.MemberId
 import momo.api.domain.{
-  SeriesComparisonMatchPlayerRow, SeriesComparisonResolvedScope, SeriesComparisonScope,
+  SeriesComparisonMatchPlayerRow, SeriesComparisonPlayerOrder, SeriesComparisonResolvedScope,
+  SeriesComparisonScope,
 }
 import momo.api.endpoints.*
 import momo.api.errors.AppError
@@ -117,9 +118,6 @@ private object SeriesComparisonAggregation {
     "momentumSwitch.afterFourthPodiumRate",
     "momentumSwitch.afterPodiumLowerRate",
   )
-  private val PreferredPlayerOrder =
-    Map("member_eu" -> 0, "member_ponta" -> 1, "member_akane_mami" -> 2, "member_otaka" -> 3)
-
   def aggregate(
       scope: SeriesComparisonResolvedScope,
       rows: List[SeriesComparisonMatchPlayerRow],
@@ -222,13 +220,7 @@ private object SeriesComparisonAggregation {
     )
 
   private def playerSortKey(row: SeriesComparisonMatchPlayerRow): (Int, Int, String, String) =
-    val preferredOrder = PreferredPlayerOrder.getOrElse(row.memberId.value, Int.MaxValue)
-    (
-      preferredOrder,
-      if preferredOrder == Int.MaxValue then row.playOrder.value else 0,
-      row.memberDisplayName,
-      row.memberId.value,
-    )
+    SeriesComparisonPlayerOrder.rowSortKey(row)
 
   private def playerMetrics(
       rows: List[SeriesComparisonMatchPlayerRow],

@@ -42,10 +42,10 @@ final class GetSeriesComparisonReviewSpec extends MomoCatsEffectSuite:
       assert(response.commonPlaybookTopics.forall(_.affectedPlayerCount >= 3))
       assert(response.commonPlaybookTopics.forall(_.memberDisplayNames.forall(_.nonEmpty)))
 
-      assertEquals(response.playbookByPlayer.map(_.memberId), List("ponta", "akane", "otaka", "eu"))
+      assertEquals(response.playbookByPlayer.map(_.memberId), List("eu", "ponta", "akane", "otaka"))
       assertEquals(
         response.playbookByPlayer.map(_.memberDisplayName),
-        List("ぽんた", "あかねまみ", "おーたか", "いーゆー"),
+        List("いーゆー", "ぽんた", "あかねまみ", "おーたか"),
       )
       assert(response.playbookByPlayer.forall(_.cards.size <= 3))
       val cards = response.playbookByPlayer.flatMap(_.cards)
@@ -165,6 +165,25 @@ final class GetSeriesComparisonReviewSpec extends MomoCatsEffectSuite:
 
     for result <- usecase.run(SeriesComparisonScope.Overall(titleId))
     yield assertAppError(result, "NOT_FOUND", "series comparison scope was not found")
+
+  test("orders real members with the same fixed comparison order as aggregate metrics"):
+    val rows = matchRows(
+      1,
+      previousHeldEventId,
+      1,
+      PlayerRow("member_ponta", "ぽんた", 1, 1, 1000, 200, 1, 0),
+      PlayerRow("member_akane_mami", "あかねまみ", 2, 2, 900, 180, 1, 0),
+      PlayerRow("member_otaka", "おーたか", 3, 3, 800, 160, 1, 0),
+      PlayerRow("member_eu", "いーゆー", 4, 4, 700, 140, 1, 0),
+    )
+    val usecase = GetSeriesComparisonReview[IO](StaticReadModel(Some(resolvedScope), rows))
+
+    for result <- usecase.run(SeriesComparisonScope.Overall(titleId)) yield
+      val response = assertRight(result)
+      assertEquals(
+        response.playbookByPlayer.map(_.memberId),
+        List("member_eu", "member_ponta", "member_akane_mami", "member_otaka"),
+      )
 
   private def reviewRows: List[SeriesComparisonMatchPlayerRow] = List(
     matchRows(

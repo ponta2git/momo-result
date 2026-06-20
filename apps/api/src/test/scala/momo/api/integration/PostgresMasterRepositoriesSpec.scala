@@ -43,13 +43,13 @@ final class PostgresMasterRepositoriesSpec extends IntegrationSuite:
     val delete = new DeleteGameTitle[IO](gameTitles)
     for
       _ <- seedTitle
-      updated <- update.run(UpdateGameTitleCommand(titleId, "更新済み", "2"))
+      updated <- update.run(UpdateGameTitleCommand(titleId, "更新済み", "momotetsu_2"))
       foundAfterUpdate <- gameTitles.find(titleId)
       deleted <- delete.run(titleId)
       foundAfterDelete <- gameTitles.find(titleId)
     yield
       assertEquals(updated.map(_.name), Right("更新済み"))
-      assertEquals(foundAfterUpdate.map(_.layoutFamily), Some("2"))
+      assertEquals(foundAfterUpdate.map(_.layoutFamily), Some("momotetsu_2"))
       assertEquals(deleted, Right(()))
       assertEquals(foundAfterDelete, None)
 

@@ -5,7 +5,8 @@ import cats.syntax.all.*
 
 import momo.api.domain.ids.MemberId
 import momo.api.domain.{
-  SeriesComparisonMatchPlayerRow, SeriesComparisonResolvedScope, SeriesComparisonScope,
+  SeriesComparisonMatchPlayerRow, SeriesComparisonPlayerOrder, SeriesComparisonResolvedScope,
+  SeriesComparisonScope,
 }
 import momo.api.endpoints.*
 import momo.api.errors.AppError
@@ -124,17 +125,9 @@ private object SeriesComparisonReviewAggregation {
     )
   )
 
-  private val PreferredPlayerOrder = Map("ponta" -> 1, "akane" -> 2, "otaka" -> 3, "eu" -> 4)
-
   private def playerOrderFrom(rows: List[SeriesComparisonMatchPlayerRow]): List[MemberId] = rows
-    .groupBy(_.memberId).values.toList.map(_.head).sortBy(row =>
-      (
-        PreferredPlayerOrder.getOrElse(row.memberId.value, Int.MaxValue),
-        row.playOrder.value,
-        row.memberDisplayName,
-        row.memberId.value,
-      )
-    ).map(_.memberId)
+    .groupBy(_.memberId).values.toList.map(_.head).sortBy(SeriesComparisonPlayerOrder.rowSortKey)
+    .map(_.memberId)
 
   private final case class PlaybookCandidate(
       memberId: MemberId,

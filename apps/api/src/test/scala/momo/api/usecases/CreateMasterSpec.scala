@@ -43,6 +43,22 @@ final class CreateMasterSpec extends MomoCatsEffectSuite:
       assertAppError(invalid, "VALIDATION_FAILED", "id must match")
       assertAppError(duplicate, "CONFLICT", "already exists")
 
+  test("game title create and update reject invalid layout family keys"):
+    for
+      titles <- InMemoryGameTitlesRepository.create[IO]
+      create = CreateGameTitle[IO](titles, now)
+      update = UpdateGameTitle[IO](titles)
+      invalidCreate <- create
+        .run(CreateGameTitleCommand(GameTitleId.unsafeFromString("title_invalid"), "Invalid", "2"))
+      _ <- create
+        .run(CreateGameTitleCommand(GameTitleId.unsafeFromString("title_world"), "World", "world"))
+      invalidUpdate <- update.run(
+        UpdateGameTitleCommand(GameTitleId.unsafeFromString("title_world"), "World", "World DX")
+      )
+    yield
+      assertAppError(invalidCreate, "VALIDATION_FAILED", "layoutFamily must match")
+      assertAppError(invalidUpdate, "VALIDATION_FAILED", "layoutFamily must match")
+
   test("CreateMapMaster requires an existing game title and assigns display order per title"):
     for
       titles <- InMemoryGameTitlesRepository.create[IO]

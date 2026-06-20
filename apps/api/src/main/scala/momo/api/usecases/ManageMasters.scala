@@ -8,7 +8,7 @@ import cats.{Functor, MonadThrow}
 
 import momo.api.domain.ids.*
 import momo.api.domain.{GameTitle, MapMaster, MemberAlias, SeasonMaster}
-import momo.api.errors.{AppError, AppException}
+import momo.api.errors.AppError
 import momo.api.repositories.{
   GameTitlesRepository, IncidentMastersRepository, MapMastersRepository, MemberAliasesRepository,
   MembersRepository, SeasonMastersRepository,
@@ -32,7 +32,7 @@ final class UpdateGameTitle[F[_]: MonadThrow](titles: GameTitlesRepository[F]):
 final class DeleteGameTitle[F[_]: MonadThrow](titles: GameTitlesRepository[F]):
   def run(id: GameTitleId): F[Either[AppError, Unit]] = (for
     _ <- titles.find(id).orNotFound("game title", id.value)
-    _ <- deleteRestricted(titles.delete(id))
+    _ <- titles.delete(id).recoverAppError
   yield ()).value
 
 final class UpdateMapMaster[F[_]: MonadThrow](maps: MapMastersRepository[F]):
@@ -46,7 +46,7 @@ final class UpdateMapMaster[F[_]: MonadThrow](maps: MapMastersRepository[F]):
 final class DeleteMapMaster[F[_]: MonadThrow](maps: MapMastersRepository[F]):
   def run(id: MapMasterId): F[Either[AppError, Unit]] = (for
     _ <- maps.find(id).orNotFound("map master", id.value)
-    _ <- deleteRestricted(maps.delete(id))
+    _ <- maps.delete(id).recoverAppError
   yield ()).value
 
 final class UpdateSeasonMaster[F[_]: MonadThrow](seasons: SeasonMastersRepository[F]):
@@ -60,7 +60,7 @@ final class UpdateSeasonMaster[F[_]: MonadThrow](seasons: SeasonMastersRepositor
 final class DeleteSeasonMaster[F[_]: MonadThrow](seasons: SeasonMastersRepository[F]):
   def run(id: SeasonMasterId): F[Either[AppError, Unit]] = (for
     _ <- seasons.find(id).orNotFound("season master", id.value)
-    _ <- deleteRestricted(seasons.delete(id))
+    _ <- seasons.delete(id).recoverAppError
   yield ()).value
 
 final class ListGameTitles[F[_]](titles: GameTitlesRepository[F]):
@@ -91,11 +91,10 @@ final class CreateMemberAlias[F[_]: MonadThrow](
   def run(command: CreateMemberAliasCommand): F[Either[AppError, MemberAlias]] = (for
     alias <- EitherT.fromEither[F](validateAlias(command.alias))
     _ <- members.find(command.memberId).orNotFound("member", command.memberId.value)
-    _ <- ensureAliasAvailable(aliases, alias, exceptId = None)
     id <- EitherT.liftF(nextId)
     createdAt <- EitherT.liftF(now)
     row = MemberAlias(id = id, memberId = command.memberId, alias = alias, createdAt = createdAt)
-    _ <- EitherT.liftF(aliases.create(row))
+    _ <- aliases.create(row).recoverAppError
   yield row).value
 
 final class UpdateMemberAlias[F[_]: MonadThrow](
@@ -106,15 +105,14 @@ final class UpdateMemberAlias[F[_]: MonadThrow](
     existing <- aliases.find(command.id).orNotFound("member alias", command.id.value)
     alias <- EitherT.fromEither[F](validateAlias(command.alias))
     _ <- members.find(command.memberId).orNotFound("member", command.memberId.value)
-    _ <- ensureAliasAvailable(aliases, alias, exceptId = Some(existing.id))
     updated = existing.copy(memberId = command.memberId, alias = alias)
-    _ <- EitherT.liftF(aliases.update(updated))
+    _ <- aliases.update(updated).recoverAppError
   yield updated).value
 
 final class DeleteMemberAlias[F[_]: MonadThrow](aliases: MemberAliasesRepository[F]):
   def run(id: MemberAliasId): F[Either[AppError, Unit]] = (for
     _ <- aliases.find(id).orNotFound("member alias", id.value)
-    _ <- EitherT.liftF(aliases.delete(id))
+    _ <- aliases.delete(id).recoverAppError
   yield ()).value
 
 private def validateAlias(value: String): Either[AppError, String] =
@@ -124,23 +122,3 @@ private def validateAlias(value: String): Either[AppError, String] =
     trimmed,
     AppError.ValidationFailed("alias must be 1 to 64 characters."),
   )
-
-private def ensureAliasAvailable[F[_]: MonadThrow](
-    aliases: MemberAliasesRepository[F],
-    alias: String,
-    exceptId: Option[MemberAliasId],
-): EitherT[F, AppError, Unit] = EitherT {
-  aliases.list(None).map { all =>
-    val duplicate = all.exists(row => row.alias == alias && !exceptId.contains(row.id))
-    Either.cond(!duplicate, (), AppError.Conflict(s"member alias already exists: $alias"))
-  }
-}
-
-private def deleteRestricted[F[_]: MonadThrow](action: F[Unit]): EitherT[F, AppError, Unit] =
-  EitherT {
-    action.attempt.flatMap {
-      case Right(_) => MonadThrow[F].pure(Right(()))
-      case Left(app: AppException) => MonadThrow[F].pure(Left(app.error))
-      case Left(error) => MonadThrow[F].raiseError[Either[AppError, Unit]](error)
-    }
-  }

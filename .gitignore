@@ -26,6 +26,7 @@ copilot-session-*.md
 .serena/
 private/
 docs/**/*.env
+docs/tmp/
 .env
 **/.env
 **/.pnpm-store/

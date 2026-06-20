@@ -16,6 +16,7 @@ final class InMemoryMasterRepositoriesSpec extends MomoCatsEffectSuite:
   private val mapId = MapMasterId.unsafeFromString("map_in_memory")
   private val seasonId = SeasonMasterId.unsafeFromString("season_in_memory")
   private val memberId = MemberId.unsafeFromString("member_ponta")
+  private val otherMemberId = MemberId.unsafeFromString("member_otaka")
   private val aliasId1 = MemberAliasId.unsafeFromString("alias-1")
   private val aliasId2 = MemberAliasId.unsafeFromString("alias-2")
 
@@ -65,7 +66,7 @@ final class InMemoryMasterRepositoriesSpec extends MomoCatsEffectSuite:
         .create(seasonMaster(SeasonMasterId.unsafeFromString("season_other"), titleId, "Spring"))
         .attempt
       _ <- aliases.create(MemberAlias(aliasId1, memberId, "ポン太社長", now))
-      duplicateAlias <- aliases.create(MemberAlias(aliasId2, memberId, "ポン太社長", now)).attempt
+      duplicateAlias <- aliases.create(MemberAlias(aliasId2, otherMemberId, "ポン太社長", now)).attempt
     yield
       assertAppException(
         duplicateTitle,
@@ -102,8 +103,8 @@ final class InMemoryMasterRepositoriesSpec extends MomoCatsEffectSuite:
         .update(seasonMaster(SeasonMasterId.unsafeFromString("season_other"), titleId, "Spring"))
         .attempt
       _ <- aliases.create(MemberAlias(aliasId1, memberId, "ポン太社長", now))
-      _ <- aliases.create(MemberAlias(aliasId2, memberId, "おたか社長", now))
-      duplicateAlias <- aliases.update(MemberAlias(aliasId2, memberId, "ポン太社長", now)).attempt
+      _ <- aliases.create(MemberAlias(aliasId2, otherMemberId, "おたか社長", now))
+      duplicateAlias <- aliases.update(MemberAlias(aliasId2, otherMemberId, "ポン太社長", now)).attempt
     yield
       assertAppException(
         duplicateTitle,

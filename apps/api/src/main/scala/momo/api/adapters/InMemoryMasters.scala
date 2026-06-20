@@ -294,9 +294,7 @@ final class InMemoryMemberAliasesRepository[F[_]: Sync] private (ref: Ref[F, Lis
       alias: MemberAlias,
       excluding: Option[MemberAliasId],
   ): Boolean = aliases.exists(existing =>
-    !excluding.contains(existing.id) &&
-      (existing.id == alias.id ||
-        (existing.memberId == alias.memberId && existing.alias == alias.alias))
+    !excluding.contains(existing.id) && (existing.id == alias.id || existing.alias == alias.alias)
   )
 
 object InMemoryMemberAliasesRepository:

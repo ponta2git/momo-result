@@ -293,9 +293,12 @@ end PostgresIncidentMastersRepository
 /**
  * `member_aliases` row.
  *
- * The unique index on `(member_id, alias)` protects against duplicate rows when writes race.
+ * Alias writes take a transaction-scoped advisory lock so the repository contract can keep OCR name
+ * resolution unambiguous even while the DB schema still exposes only per-member uniqueness.
  */
 object PostgresMemberAliases:
+  private val AliasWriteLockKey = "momo:member_aliases:alias"
+
   val alg: MemberAliasesAlg[ConnectionIO] = new MemberAliasesAlg[ConnectionIO]:
     override def list(memberId: Option[MemberId]): ConnectionIO[List[MemberAlias]] =
       val base = fr"SELECT id, member_id, alias, created_at FROM member_aliases"
@@ -309,22 +312,32 @@ object PostgresMemberAliases:
         WHERE id = $id
       """.query[MemberAlias].option
 
-    override def create(alias: MemberAlias): ConnectionIO[Unit] = sql"""
-        INSERT INTO member_aliases (id, member_id, alias, created_at)
-        VALUES (${alias.id}, ${alias.memberId}, ${alias.alias}, ${alias.createdAt})
-      """.update.run.void.exceptSomeSqlState {
+    override def create(alias: MemberAlias): ConnectionIO[Unit] = (for
+      _ <- lockAliasWrites
+      _ <- ensureAliasAvailable(alias.alias, excluding = None)
+      _ <- sql"""
+          INSERT INTO member_aliases (id, member_id, alias, created_at)
+          VALUES (${alias.id}, ${alias.memberId}, ${alias.alias}, ${alias.createdAt})
+        """.update.run.void
+    yield ()).exceptSomeSqlState {
       case state if isUniqueViolation(state) =>
         conflict(s"member alias already exists: ${alias.alias}")
     }
 
-    override def update(alias: MemberAlias): ConnectionIO[Unit] = sql"""
-        UPDATE member_aliases
-        SET member_id = ${alias.memberId}, alias = ${alias.alias}
-        WHERE id = ${alias.id}
-      """.update.run.flatMap {
-      case 1 => ().pure[ConnectionIO]
-      case _ => notFound("member alias", alias.id.value)
-    }.exceptSomeSqlState {
+    override def update(alias: MemberAlias): ConnectionIO[Unit] = (for
+      _ <- lockAliasWrites
+      existing <- find(alias.id)
+      _ <- existing.fold(notFound[Unit]("member alias", alias.id.value))(_ => ().pure[ConnectionIO])
+      _ <- ensureAliasAvailable(alias.alias, excluding = Some(alias.id))
+      _ <- sql"""
+          UPDATE member_aliases
+          SET member_id = ${alias.memberId}, alias = ${alias.alias}
+          WHERE id = ${alias.id}
+        """.update.run.flatMap {
+        case 1 => ().pure[ConnectionIO]
+        case _ => notFound("member alias", alias.id.value)
+      }
+    yield ()).exceptSomeSqlState {
       case state if isUniqueViolation(state) =>
         conflict(s"member alias already exists: ${alias.alias}")
     }
@@ -333,6 +346,20 @@ object PostgresMemberAliases:
       sql"DELETE FROM member_aliases WHERE id = $id".update.run.flatMap {
         case 1 => ().pure[ConnectionIO]
         case _ => notFound("member alias", id.value)
+      }
+
+  private def lockAliasWrites: ConnectionIO[Unit] =
+    sql"SELECT pg_advisory_xact_lock(hashtext($AliasWriteLockKey)::bigint)".query[Unit].unique
+
+  private def ensureAliasAvailable(
+      alias: String,
+      excluding: Option[MemberAliasId],
+  ): ConnectionIO[Unit] =
+    val excludingSelf = excluding.fold(Fragment.empty)(id => fr"AND id <> $id")
+    (fr"SELECT EXISTS(SELECT 1 FROM member_aliases WHERE alias = $alias" ++ excludingSelf ++ fr")")
+      .query[Boolean].unique.flatMap {
+        case false => ().pure[ConnectionIO]
+        case true => conflict(s"member alias already exists: $alias")
       }
 end PostgresMemberAliases
 

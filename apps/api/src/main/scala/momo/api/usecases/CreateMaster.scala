@@ -3,12 +3,13 @@ package momo.api.usecases
 import java.time.Instant
 
 import cats.MonadThrow
-import cats.syntax.all.*
+import cats.data.EitherT
 
 import momo.api.domain.ids.*
 import momo.api.domain.{GameTitle, MapMaster, SeasonMaster}
 import momo.api.errors.AppError
 import momo.api.repositories.{GameTitlesRepository, MapMastersRepository, SeasonMastersRepository}
+import momo.api.usecases.syntax.UseCaseSyntax.*
 
 final case class CreateGameTitleCommand(id: GameTitleId, name: String, layoutFamily: String)
 
@@ -23,22 +24,17 @@ final class CreateGameTitle[F[_]: MonadThrow](titles: GameTitlesRepository[F], n
 
     validated match
       case Left(err) => MonadThrow[F].pure(Left(err))
-      case Right((id, name, layoutFamily)) => titles.find(id).flatMap {
-          case Some(_) => MonadThrow[F]
-              .pure(Left(AppError.Conflict(s"game_title with id=${id.value} already exists.")))
-          case None =>
-            for
-              created <- now
-              title = GameTitle(
-                id = id,
-                name = name,
-                layoutFamily = layoutFamily,
-                displayOrder = 0,
-                createdAt = created,
-              )
-              inserted <- titles.createWithNextDisplayOrder(title)
-            yield Right(inserted)
-        }
+      case Right((id, name, layoutFamily)) => (for
+          created <- EitherT.liftF[F, AppError, Instant](now)
+          title = GameTitle(
+            id = id,
+            name = name,
+            layoutFamily = layoutFamily,
+            displayOrder = 0,
+            createdAt = created,
+          )
+          inserted <- titles.createWithNextDisplayOrder(title).recoverAppError
+        yield inserted).value
 
 final case class CreateMapMasterCommand(id: MapMasterId, gameTitleId: GameTitleId, name: String)
 
@@ -57,25 +53,18 @@ final class CreateMapMaster[F[_]: MonadThrow](
 
     validated match
       case Left(err) => MonadThrow[F].pure(Left(err))
-      case Right((id, gameTitleId, name)) => titles.find(gameTitleId).flatMap {
-          case None => MonadThrow[F].pure(Left(AppError.NotFound("game_title", gameTitleId.value)))
-          case Some(_) => maps.find(id).flatMap {
-              case Some(_) => MonadThrow[F]
-                  .pure(Left(AppError.Conflict(s"map_master with id=${id.value} already exists.")))
-              case None =>
-                for
-                  created <- now
-                  mapMaster = MapMaster(
-                    id = id,
-                    gameTitleId = gameTitleId,
-                    name = name,
-                    displayOrder = 0,
-                    createdAt = created,
-                  )
-                  inserted <- maps.createWithNextDisplayOrder(mapMaster)
-                yield Right(inserted)
-            }
-        }
+      case Right((id, gameTitleId, name)) => (for
+          _ <- titles.find(gameTitleId).orNotFound("game_title", gameTitleId.value)
+          created <- EitherT.liftF[F, AppError, Instant](now)
+          mapMaster = MapMaster(
+            id = id,
+            gameTitleId = gameTitleId,
+            name = name,
+            displayOrder = 0,
+            createdAt = created,
+          )
+          inserted <- maps.createWithNextDisplayOrder(mapMaster).recoverAppError
+        yield inserted).value
 
 final case class CreateSeasonMasterCommand(
     id: SeasonMasterId,
@@ -98,22 +87,15 @@ final class CreateSeasonMaster[F[_]: MonadThrow](
 
     validated match
       case Left(err) => MonadThrow[F].pure(Left(err))
-      case Right((id, gameTitleId, name)) => titles.find(gameTitleId).flatMap {
-          case None => MonadThrow[F].pure(Left(AppError.NotFound("game_title", gameTitleId.value)))
-          case Some(_) => seasons.find(id).flatMap {
-              case Some(_) => MonadThrow[F].pure(Left(AppError.Conflict(s"season_master with id=${id
-                    .value} already exists.")))
-              case None =>
-                for
-                  created <- now
-                  seasonMaster = SeasonMaster(
-                    id = id,
-                    gameTitleId = gameTitleId,
-                    name = name,
-                    displayOrder = 0,
-                    createdAt = created,
-                  )
-                  inserted <- seasons.createWithNextDisplayOrder(seasonMaster)
-                yield Right(inserted)
-            }
-        }
+      case Right((id, gameTitleId, name)) => (for
+          _ <- titles.find(gameTitleId).orNotFound("game_title", gameTitleId.value)
+          created <- EitherT.liftF[F, AppError, Instant](now)
+          seasonMaster = SeasonMaster(
+            id = id,
+            gameTitleId = gameTitleId,
+            name = name,
+            displayOrder = 0,
+            createdAt = created,
+          )
+          inserted <- seasons.createWithNextDisplayOrder(seasonMaster).recoverAppError
+        yield inserted).value

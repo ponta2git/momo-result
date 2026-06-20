@@ -143,6 +143,7 @@ OCR下書き確定時は、request の `draftIds.totalAssets` / `draftIds.revenu
 - `game_titles.layout_family` はOCR parser/profile selectionにも影響する。
 - `game_titles.layout_family` / `match_drafts.layout_family` は安定した profile key として扱い、`^[a-z][a-z0-9_]{0,63}$` に合う lowercase snake key だけを保存する。
 - `map_masters` と `season_masters` は所属する `game_title_id` と矛盾してはならない。
+- `member_aliases.alias` は OCR 名寄せの解決先を曖昧にしないため、全 member を通じて重複させない。
 - MVP固定事件: 目的地、プラス駅、マイナス駅、カード駅、カード売り場、スリの銀次
 - 1つの開催回に複数試合を紐づけられる。
 - 試合番号は同じ開催回内で採番し、必要に応じて手動変更できる。

@@ -192,6 +192,12 @@ final class PostgresMasterRepositoriesSpec extends IntegrationSuite:
         .run(CreateMemberAliasCommand(MemberId.unsafeFromString("member_ponta"), "  ポン太社長  "))
       duplicate <- createDuplicateId
         .run(CreateMemberAliasCommand(MemberId.unsafeFromString("member_otaka"), "ポン太社長"))
+      duplicateDirect <- memberAliases.create(MemberAlias(
+        id = MemberAliasId.unsafeFromString("alias-otaka"),
+        memberId = MemberId.unsafeFromString("member_otaka"),
+        alias = "ポン太社長",
+        createdAt = now,
+      )).attempt
       list <- memberAliases.list(Some(MemberId.unsafeFromString("member_ponta")))
       updated <- update.run(UpdateMemberAliasCommand(
         MemberAliasId.unsafeFromString("alias-ponta"),
@@ -204,10 +210,33 @@ final class PostgresMasterRepositoriesSpec extends IntegrationSuite:
     yield
       assertEquals(created.map(_.alias), Right("ポン太社長"))
       assertEquals(duplicate, Left(AppError.Conflict("member alias already exists: ポン太社長")))
+      assertAppException(duplicateDirect, AppError.Conflict("member alias already exists: ポン太社長"))
       assertEquals(list.map(_.id.value), List("alias-ponta"))
       assertEquals(updated.map(_.memberId), Right(MemberId.unsafeFromString("member_otaka")))
       assertEquals(found.map(_.alias), Some("おたか社長"))
       assertEquals(deleted, Right(()))
       assertEquals(afterDelete, None)
+
+  test("member alias repository update rejects aliases used by another member"):
+    for
+      _ <- memberAliases.create(MemberAlias(
+        id = MemberAliasId.unsafeFromString("alias-ponta"),
+        memberId = MemberId.unsafeFromString("member_ponta"),
+        alias = "ポン太社長",
+        createdAt = now,
+      ))
+      _ <- memberAliases.create(MemberAlias(
+        id = MemberAliasId.unsafeFromString("alias-otaka"),
+        memberId = MemberId.unsafeFromString("member_otaka"),
+        alias = "おたか社長",
+        createdAt = now,
+      ))
+      duplicate <- memberAliases.update(MemberAlias(
+        id = MemberAliasId.unsafeFromString("alias-otaka"),
+        memberId = MemberId.unsafeFromString("member_otaka"),
+        alias = "ポン太社長",
+        createdAt = now,
+      )).attempt
+    yield assertAppException(duplicate, AppError.Conflict("member alias already exists: ポン太社長"))
 
 end PostgresMasterRepositoriesSpec

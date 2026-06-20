@@ -42,6 +42,8 @@ final class CreateMatchDraft[F[_]: MonadThrow](
       playerMemberId: Option[MemberId],
   ): F[Either[AppError, MatchDraft]] = (for
     matchNoInEvent <- EitherT.fromEither[F](validateMatchNo(command.matchNoInEvent))
+    layoutFamily <- EitherT
+      .fromEither[F](UseCaseField.optionalStableKey("layoutFamily", command.layoutFamily))
     status <- EitherT.fromEither[F](validateInitialStatus(command.status))
     _ <- validateForeignKeys(command)
     id <- EitherT.liftF(nextId)
@@ -55,7 +57,7 @@ final class CreateMatchDraft[F[_]: MonadThrow](
         heldEventId = command.heldEventId,
         matchNoInEvent = matchNoInEvent,
         gameTitleId = command.gameTitleId,
-        layoutFamily = command.layoutFamily,
+        layoutFamily = layoutFamily,
         seasonMasterId = command.seasonMasterId,
         ownerMemberId = command.ownerMemberId,
         mapMasterId = command.mapMasterId,

@@ -10,45 +10,15 @@ import momo.api.domain.{GameTitle, MapMaster, SeasonMaster}
 import momo.api.errors.AppError
 import momo.api.repositories.{GameTitlesRepository, MapMastersRepository, SeasonMastersRepository}
 
-/**
- * Field-level validation rules shared across master creation use cases.
- *
- * Master IDs become FKs in `matches.*_id` columns; we restrict them to lowercase alphanumerics plus
- * underscore so they remain stable, URL-safe, and trivially comparable across summit and
- * momo-result.
- */
-private[usecases] object MasterField:
-  private val Pattern = "^[a-z][a-z0-9_]{1,63}$".r
-  private val KeyPattern = "^[a-z][a-z0-9_]{0,63}$".r
-  def slug(field: String, value: String): Either[AppError, String] =
-    Pattern.pattern.matcher(value).matches() match
-      case true => Right(value)
-      case false => Left(AppError.ValidationFailed(
-          s"$field must match ^[a-z][a-z0-9_]{1,63}$$ (lowercase, starts with a letter)."
-        ))
-
-  def stableKey(field: String, value: String): Either[AppError, String] =
-    val trimmed = value.trim
-    KeyPattern.pattern.matcher(trimmed).matches() match
-      case true => Right(trimmed)
-      case false => Left(AppError.ValidationFailed(
-          s"$field must match ^[a-z][a-z0-9_]{0,63}$$ (lowercase, starts with a letter)."
-        ))
-
-  def nonBlank(field: String, value: String): Either[AppError, String] =
-    val trimmed = value.trim
-    if trimmed.isEmpty then Left(AppError.ValidationFailed(s"$field must not be blank."))
-    else Right(trimmed)
-
 final case class CreateGameTitleCommand(id: GameTitleId, name: String, layoutFamily: String)
 
 final class CreateGameTitle[F[_]: MonadThrow](titles: GameTitlesRepository[F], now: F[Instant]):
   def run(command: CreateGameTitleCommand): F[Either[AppError, GameTitle]] =
     val validated =
       for
-        id <- MasterField.slug("id", command.id.value)
-        name <- MasterField.nonBlank("name", command.name)
-        layoutFamily <- MasterField.stableKey("layoutFamily", command.layoutFamily)
+        id <- UseCaseField.slug("id", command.id.value)
+        name <- UseCaseField.nonBlank("name", command.name)
+        layoutFamily <- UseCaseField.stableKey("layoutFamily", command.layoutFamily)
       yield (GameTitleId.unsafeFromString(id), name, layoutFamily)
 
     validated match
@@ -80,9 +50,9 @@ final class CreateMapMaster[F[_]: MonadThrow](
   def run(command: CreateMapMasterCommand): F[Either[AppError, MapMaster]] =
     val validated =
       for
-        id <- MasterField.slug("id", command.id.value)
-        gameTitleId <- MasterField.slug("gameTitleId", command.gameTitleId.value)
-        name <- MasterField.nonBlank("name", command.name)
+        id <- UseCaseField.slug("id", command.id.value)
+        gameTitleId <- UseCaseField.slug("gameTitleId", command.gameTitleId.value)
+        name <- UseCaseField.nonBlank("name", command.name)
       yield (MapMasterId.unsafeFromString(id), GameTitleId.unsafeFromString(gameTitleId), name)
 
     validated match
@@ -121,9 +91,9 @@ final class CreateSeasonMaster[F[_]: MonadThrow](
   def run(command: CreateSeasonMasterCommand): F[Either[AppError, SeasonMaster]] =
     val validated =
       for
-        id <- MasterField.slug("id", command.id.value)
-        gameTitleId <- MasterField.slug("gameTitleId", command.gameTitleId.value)
-        name <- MasterField.nonBlank("name", command.name)
+        id <- UseCaseField.slug("id", command.id.value)
+        gameTitleId <- UseCaseField.slug("gameTitleId", command.gameTitleId.value)
+        name <- UseCaseField.nonBlank("name", command.name)
       yield (SeasonMasterId.unsafeFromString(id), GameTitleId.unsafeFromString(gameTitleId), name)
 
     validated match

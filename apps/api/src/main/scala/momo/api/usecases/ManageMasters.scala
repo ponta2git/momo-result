@@ -22,9 +22,9 @@ final case class UpdateSeasonMasterCommand(id: SeasonMasterId, name: String)
 final class UpdateGameTitle[F[_]: MonadThrow](titles: GameTitlesRepository[F]):
   def run(command: UpdateGameTitleCommand): F[Either[AppError, GameTitle]] = (for
     existing <- titles.find(command.id).orNotFound("game title", command.id.value)
-    name <- EitherT.fromEither[F](MasterField.nonBlank("name", command.name))
+    name <- EitherT.fromEither[F](UseCaseField.nonBlank("name", command.name))
     layoutFamily <- EitherT
-      .fromEither[F](MasterField.stableKey("layoutFamily", command.layoutFamily))
+      .fromEither[F](UseCaseField.stableKey("layoutFamily", command.layoutFamily))
     updated = existing.copy(name = name, layoutFamily = layoutFamily)
     _ <- EitherT.liftF(titles.update(updated))
   yield updated).value
@@ -38,7 +38,7 @@ final class DeleteGameTitle[F[_]: MonadThrow](titles: GameTitlesRepository[F]):
 final class UpdateMapMaster[F[_]: MonadThrow](maps: MapMastersRepository[F]):
   def run(command: UpdateMapMasterCommand): F[Either[AppError, MapMaster]] = (for
     existing <- maps.find(command.id).orNotFound("map master", command.id.value)
-    name <- EitherT.fromEither[F](MasterField.nonBlank("name", command.name))
+    name <- EitherT.fromEither[F](UseCaseField.nonBlank("name", command.name))
     updated = existing.copy(name = name)
     _ <- EitherT.liftF(maps.update(updated))
   yield updated).value
@@ -52,7 +52,7 @@ final class DeleteMapMaster[F[_]: MonadThrow](maps: MapMastersRepository[F]):
 final class UpdateSeasonMaster[F[_]: MonadThrow](seasons: SeasonMastersRepository[F]):
   def run(command: UpdateSeasonMasterCommand): F[Either[AppError, SeasonMaster]] = (for
     existing <- seasons.find(command.id).orNotFound("season master", command.id.value)
-    name <- EitherT.fromEither[F](MasterField.nonBlank("name", command.name))
+    name <- EitherT.fromEither[F](UseCaseField.nonBlank("name", command.name))
     updated = existing.copy(name = name)
     _ <- EitherT.liftF(seasons.update(updated))
   yield updated).value

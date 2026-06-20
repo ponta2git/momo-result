@@ -95,6 +95,20 @@ final class UpdateMatchDraftSpec extends MomoCatsEffectSuite:
       assertAppError(terminal, "CONFLICT", "cannot be set")
       assertEquals(found.map(_.status), Some(MatchDraftStatus.DraftReady))
 
+  test("rejects invalid layout family keys without mutating the draft"):
+    for
+      fixture <- Fixture.create
+      _ <- fixture.seedPrereqs()
+      _ <- fixture.matchDrafts.create(
+        editingDraft(draftId, MatchDraftStatus.DraftReady)
+          .withCommon(_.copy(layoutFamily = Some("world")))
+      )
+      result <- fixture.usecase.run(draftId, blankCommand.copy(layoutFamily = Some("World DX")))
+      found <- fixture.matchDrafts.find(draftId)
+    yield
+      assertAppError(result, "VALIDATION_FAILED", "layoutFamily must match")
+      assertEquals(found.flatMap(_.layoutFamily), Some("world"))
+
   test("rejects map and season masters that do not belong to the supplied game title"):
     for
       fixture <- Fixture.create

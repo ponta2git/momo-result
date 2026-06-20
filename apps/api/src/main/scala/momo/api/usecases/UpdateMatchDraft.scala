@@ -43,6 +43,8 @@ final class UpdateMatchDraft[F[_]: MonadThrow](
     existing <- matchDrafts.find(draftId).orNotFound("match draft", draftId.value)
     _ <- EitherT.fromEither[F](ensureEditable(existing.status))
     matchNoInEvent <- EitherT.fromEither[F](validateMatchNo(command.matchNoInEvent))
+    layoutFamily <- EitherT
+      .fromEither[F](UseCaseField.optionalStableKey("layoutFamily", command.layoutFamily))
     _ <- validateForeignKeys(nextReferences(command, existing))
     status <- EitherT.fromEither[F](resolveStatus(command.status, existing.status))
     at <- EitherT.liftF(now)
@@ -53,7 +55,7 @@ final class UpdateMatchDraft[F[_]: MonadThrow](
               heldEventId = command.heldEventId.orElse(e.heldEventId),
               matchNoInEvent = matchNoInEvent.orElse(e.matchNoInEvent),
               gameTitleId = command.gameTitleId.orElse(e.gameTitleId),
-              layoutFamily = command.layoutFamily.orElse(e.layoutFamily),
+              layoutFamily = layoutFamily.orElse(e.layoutFamily),
               seasonMasterId = command.seasonMasterId.orElse(e.seasonMasterId),
               ownerMemberId = command.ownerMemberId.orElse(e.ownerMemberId),
               mapMasterId = command.mapMasterId.orElse(e.mapMasterId),

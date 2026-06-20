@@ -231,6 +231,22 @@ describe("apiRequest", () => {
     await expect(result.blob.text()).resolves.toBe("a,b\n");
   });
 
+  it("prefers RFC 5987 filename metadata during file download", async () => {
+    installFetchMock(
+      async () =>
+        new Response("a\tb\n", {
+          headers: {
+            "Content-Disposition":
+              "attachment; filename=\"fallback.tsv\"; filename*=UTF-8''momo-%E7%B5%90%E6%9E%9C.tsv",
+          },
+        }),
+    );
+
+    const result = await apiDownload("/api/exports/matches?format=tsv");
+
+    expect(result.fileName).toBe("momo-結果.tsv");
+  });
+
   it("normalizes problem responses during file download", async () => {
     installFetchMock(async () =>
       Response.json(

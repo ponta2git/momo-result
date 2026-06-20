@@ -185,10 +185,37 @@ function fileNameFromDisposition(disposition: string | null): string {
   if (!disposition) {
     return "momo-results.csv";
   }
+  const encoded = /(?:^|;)\s*filename\*\s*=\s*([^;]+)/iu.exec(disposition);
+  if (encoded?.[1]) {
+    const fileName = decodeRfc5987Filename(encoded[1]);
+    if (fileName) {
+      return fileName;
+    }
+  }
   const quoted = /filename="([^"]+)"/u.exec(disposition);
   if (quoted?.[1]) {
     return quoted[1];
   }
   const plain = /filename=([^;]+)/u.exec(disposition);
   return plain?.[1]?.trim() || "momo-results.csv";
+}
+
+function decodeRfc5987Filename(value: string): string | undefined {
+  const trimmed = value.trim();
+  const unquoted =
+    trimmed.startsWith('"') && trimmed.endsWith('"') ? trimmed.slice(1, -1) : trimmed;
+  const match = /^([^']*)'[^']*'(.*)$/u.exec(unquoted);
+  if (!match) {
+    return undefined;
+  }
+  const charset = match[1]?.toLowerCase();
+  const encoded = match[2];
+  if (!encoded || (charset && charset !== "utf-8")) {
+    return undefined;
+  }
+  try {
+    return decodeURIComponent(encoded);
+  } catch {
+    return undefined;
+  }
 }

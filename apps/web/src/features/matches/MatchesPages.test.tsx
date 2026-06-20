@@ -577,7 +577,9 @@ describe("MatchesListPage", () => {
     ).not.toBeInTheDocument();
     expect(screen.getByLabelText("試合番号")).not.toHaveValue("9");
     expect(screen.getByLabelText("current location")).toHaveTextContent("/matches/new");
-    expect(screen.getByLabelText("current location")).not.toHaveTextContent("handoffId=");
+    await waitFor(() =>
+      expect(screen.getByLabelText("current location")).not.toHaveTextContent("handoffId="),
+    );
   });
 });
 

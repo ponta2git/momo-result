@@ -9,7 +9,9 @@ import {
 
 describe("matchListSearchParams", () => {
   it("parses defaults when query values are missing or invalid", () => {
-    const search = parseMatchListSearchParams(new URLSearchParams("status=broken&sort=nope"));
+    const search = parseMatchListSearchParams(
+      new URLSearchParams("status=broken&sort=nope&page=2abc&pageSize=50x"),
+    );
     expect(search).toEqual(defaultMatchListSearch);
   });
 

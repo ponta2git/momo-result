@@ -3,6 +3,7 @@ import type {
   MatchListSort,
   MatchListStatusFilter,
 } from "@/features/matches/list/matchListTypes";
+import { parsePositiveIntSearchParam } from "@/shared/lib/searchParams";
 
 export const defaultMatchListSearch: MatchListSearch = {
   heldEventId: "",
@@ -33,25 +34,19 @@ const sortOptions = new Set<MatchListSort>([
 
 const pageSizeOptions = new Set([25, 50, 100, 200]);
 
-function parsePositiveInt(value: string | null, fallback: number): number {
-  if (!value) {
-    return fallback;
-  }
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) && parsed >= 1 ? parsed : fallback;
-}
-
 export function parseMatchListSearchParams(searchParams: URLSearchParams): MatchListSearch {
   const status = searchParams.get("status");
   const sort = searchParams.get("sort");
+  const pageSize = parsePositiveIntSearchParam(
+    searchParams.get("pageSize"),
+    defaultMatchListSearch.pageSize,
+  );
 
   return {
     heldEventId: searchParams.get("heldEventId") ?? "",
     gameTitleId: searchParams.get("gameTitleId") ?? "",
-    page: parsePositiveInt(searchParams.get("page"), defaultMatchListSearch.page),
-    pageSize: pageSizeOptions.has(Number(searchParams.get("pageSize")))
-      ? Number(searchParams.get("pageSize"))
-      : defaultMatchListSearch.pageSize,
+    page: parsePositiveIntSearchParam(searchParams.get("page"), defaultMatchListSearch.page),
+    pageSize: pageSizeOptions.has(pageSize) ? pageSize : defaultMatchListSearch.pageSize,
     seasonMasterId: searchParams.get("seasonMasterId") ?? "",
     status:
       status && statusOptions.has(status as MatchListStatusFilter)

@@ -116,6 +116,36 @@ describe("HeldEventsPage", () => {
     expect(screen.queryByText("開催履歴はまだありません")).not.toBeInTheDocument();
   });
 
+  it("uses default pagination for partial numeric query values", async () => {
+    let captured: URL | undefined;
+    server.use(
+      http.get("/api/held-events", ({ request }) => {
+        const url = new URL(request.url);
+        if (url.searchParams.get("pageSize") !== "1") {
+          captured = url;
+        }
+        return HttpResponse.json({
+          items: [makeHeldEventResponse()],
+          pagination: {
+            hasNextPage: false,
+            hasPreviousPage: false,
+            page: 1,
+            pageSize: 25,
+            totalItems: 1,
+            totalPages: 1,
+          },
+          totalMatchCount: 0,
+        });
+      }),
+    );
+
+    renderPage("/held-events?page=2abc&pageSize=50x");
+
+    expect(await screen.findByRole("link", { name: "試合" })).toBeInTheDocument();
+    expect(captured?.searchParams.get("page")).toBe("1");
+    expect(captured?.searchParams.get("pageSize")).toBe("25");
+  });
+
   it("creates a held event and adds it to the visible list", async () => {
     const heldEvents = [makeHeldEventResponse()];
     const created = makeHeldEventResponse({

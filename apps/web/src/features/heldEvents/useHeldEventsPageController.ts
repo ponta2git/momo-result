@@ -15,27 +15,23 @@ import { formatApiError } from "@/shared/api/problemDetails";
 import { isInitialQueryLoading, shouldShowBlockingQueryError } from "@/shared/api/queryErrorState";
 import { heldEventKeys } from "@/shared/api/queryKeys";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
+import { parsePositiveIntSearchParam } from "@/shared/lib/searchParams";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
 const initialCreateHeldEventState = { version: 0 };
 const defaultPagination = { page: 1, pageSize: 25 };
 const pageSizeOptions = new Set([25, 50, 100]);
 
-function parsePositiveInt(value: string | null, fallback: number): number {
-  if (!value) {
-    return fallback;
-  }
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) && parsed >= 1 ? parsed : fallback;
-}
-
 export function useHeldEventsPageController() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const paginationSearch = useMemo(() => {
-    const pageSize = Number(searchParams.get("pageSize"));
+    const pageSize = parsePositiveIntSearchParam(
+      searchParams.get("pageSize"),
+      defaultPagination.pageSize,
+    );
     return {
-      page: parsePositiveInt(searchParams.get("page"), defaultPagination.page),
+      page: parsePositiveIntSearchParam(searchParams.get("page"), defaultPagination.page),
       pageSize: pageSizeOptions.has(pageSize) ? pageSize : defaultPagination.pageSize,
     };
   }, [searchParams]);

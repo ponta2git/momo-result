@@ -3,13 +3,13 @@ import { describe, expect, it } from "vitest";
 
 import { assertDefined } from "@/shared/lib/invariant";
 
+function uppercaseMatchId(value: string | undefined): string {
+  assertDefined(value, "matchId");
+  return value.toUpperCase();
+}
+
 describe("assertDefined", () => {
   it("keeps a defined value available to the caller", () => {
-    function uppercaseMatchId(value: string | undefined): string {
-      assertDefined(value, "matchId");
-      return value.toUpperCase();
-    }
-
     expect(uppercaseMatchId("match-1")).toBe("MATCH-1");
   });
 

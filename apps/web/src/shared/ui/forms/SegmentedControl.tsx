@@ -60,14 +60,13 @@ export function SegmentedControl({
   }
 
   return (
-    <div
-      aria-label={label}
+    <fieldset
       className={cn(
         "inline-flex max-w-full min-w-0 flex-wrap items-stretch gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-1",
         className,
       )}
-      role="group"
     >
+      <legend className="sr-only">{label}</legend>
       {options.map((option) => {
         return (
           <SegmentedButton
@@ -79,7 +78,7 @@ export function SegmentedControl({
           />
         );
       })}
-    </div>
+    </fieldset>
   );
 }
 

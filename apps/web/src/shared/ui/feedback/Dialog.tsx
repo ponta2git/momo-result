@@ -169,6 +169,7 @@ export function AlertDialog({
                 <BaseAlertDialog.Close
                   render={
                     <button
+                      aria-label={typeof cancelLabel === "string" ? cancelLabel : "キャンセル"}
                       className="inline-flex min-h-10 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-sm font-semibold text-[var(--color-text-primary)]"
                       disabled={actualPending}
                       type="button"

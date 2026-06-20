@@ -59,7 +59,9 @@ export default defineConfig({
     "react/exhaustive-deps": "error",
     "react/jsx-no-constructed-context-values": "error",
     "react/no-array-index-key": "warn",
+    "react/no-unstable-nested-components": ["error", { allowAsProps: true }],
     "react/button-has-type": "error",
+    "jsx-a11y/prefer-tag-over-role": "off",
 
     "unicorn/prefer-array-flat-map": "warn",
     "unicorn/prefer-set-has": "warn",

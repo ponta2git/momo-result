@@ -38,6 +38,12 @@ type MatchSetupSectionProps = {
   onPatchRoot: (patch: Partial<MatchFormValues>) => void;
 };
 
+function FieldError({ errorPathSet, path }: { errorPathSet: Set<string>; path: string }) {
+  return errorPathSet.has(path) ? (
+    <span className="text-xs font-semibold text-[var(--color-danger)]">未入力です</span>
+  ) : null;
+}
+
 export function MatchSetupSection({
   createEventPending,
   errorPathSet,
@@ -56,10 +62,6 @@ export function MatchSetupSection({
   const errorClass = "border-[var(--color-danger)]/70 bg-[var(--color-danger)]/10";
   const inputStateClass = (path: string) =>
     cn(inputClass, errorPathSet.has(path) ? errorClass : "");
-  const FieldError = ({ path }: { path: string }) =>
-    errorPathSet.has(path) ? (
-      <span className="text-xs font-semibold text-[var(--color-danger)]">未入力です</span>
-    ) : null;
 
   return (
     <Card className="mt-4">
@@ -107,7 +109,7 @@ export function MatchSetupSection({
               </option>
             ))}
           </select>
-          <FieldError path="heldEventId" />
+          <FieldError errorPathSet={errorPathSet} path="heldEventId" />
         </label>
 
         <label className="grid gap-1 lg:col-span-2">
@@ -125,7 +127,7 @@ export function MatchSetupSection({
               })
             }
           />
-          <FieldError path="matchNoInEvent" />
+          <FieldError errorPathSet={errorPathSet} path="matchNoInEvent" />
         </label>
 
         <label className="grid gap-1 lg:col-span-5">
@@ -137,7 +139,7 @@ export function MatchSetupSection({
             value={toLocalDateTime(values.playedAt)}
             onChange={(event) => onPatchRoot({ playedAt: event.target.value })}
           />
-          <FieldError path="playedAt" />
+          <FieldError errorPathSet={errorPathSet} path="playedAt" />
         </label>
 
         <label className="grid gap-1 lg:col-span-3">
@@ -155,7 +157,7 @@ export function MatchSetupSection({
               </option>
             ))}
           </select>
-          <FieldError path="gameTitleId" />
+          <FieldError errorPathSet={errorPathSet} path="gameTitleId" />
         </label>
 
         <label className="grid gap-1 lg:col-span-3">
@@ -174,7 +176,7 @@ export function MatchSetupSection({
               </option>
             ))}
           </select>
-          <FieldError path="seasonMasterId" />
+          <FieldError errorPathSet={errorPathSet} path="seasonMasterId" />
         </label>
 
         <label className="grid gap-1 lg:col-span-3">
@@ -193,7 +195,7 @@ export function MatchSetupSection({
               </option>
             ))}
           </select>
-          <FieldError path="mapMasterId" />
+          <FieldError errorPathSet={errorPathSet} path="mapMasterId" />
         </label>
 
         <label className="grid gap-1 lg:col-span-3">
@@ -212,7 +214,7 @@ export function MatchSetupSection({
               </option>
             ))}
           </select>
-          <FieldError path="ownerMemberId" />
+          <FieldError errorPathSet={errorPathSet} path="ownerMemberId" />
         </label>
       </div>
 

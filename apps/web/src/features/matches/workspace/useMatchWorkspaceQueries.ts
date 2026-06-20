@@ -139,7 +139,7 @@ export function useMatchWorkspaceQueries(
   });
 
   const ocrDraftsQuery = useQuery({
-    queryKey: ocrDraftKeys.bulk(reviewDraftIdList.join(",")),
+    queryKey: ocrDraftKeys.bulk(reviewDraftIdList),
     queryFn: ({ signal }) => getOcrDraftsBulk(reviewDraftIdList, { signal }),
     enabled: mode === "review" && !useSampleDrafts && reviewDraftIdList.length > 0,
     retry: false,

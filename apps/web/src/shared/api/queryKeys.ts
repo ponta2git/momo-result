@@ -14,7 +14,7 @@ export const heldEventKeys = {
 
 export const ocrDraftKeys = {
   all: () => ["ocr-drafts-bulk"] as const,
-  bulk: (draftIdsKey: string) => ["ocr-drafts-bulk", draftIdsKey] as const,
+  bulk: (draftIds: readonly string[]) => ["ocr-drafts-bulk", draftIds] as const,
 };
 
 export const masterKeys = {

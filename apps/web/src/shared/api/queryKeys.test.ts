@@ -19,7 +19,7 @@ describe("shared query keys", () => {
     queryClient.setQueryData(matchKeys.list({ status: "confirmed" }), { items: [] });
     queryClient.setQueryData(matchKeys.draft.detail("draft-1"), { matchDraftId: "draft-1" });
     queryClient.setQueryData(matchKeys.draft.sourceImages("draft-1"), { items: [] });
-    queryClient.setQueryData(ocrDraftKeys.bulk("ocr-draft-1"), { items: [] });
+    queryClient.setQueryData(ocrDraftKeys.bulk(["ocr-draft-1"]), { items: [] });
     queryClient.setQueryData(heldEventKeys.scope("workspace"), { items: [] });
     queryClient.setQueryData(seriesComparisonKeys.aggregate({ gameTitleId: "gt-1" }), {
       matchTimeline: [],
@@ -34,7 +34,7 @@ describe("shared query keys", () => {
     expect(queryClient.getQueryState(matchKeys.draft.sourceImages("draft-1"))?.isInvalidated).toBe(
       true,
     );
-    expect(queryClient.getQueryState(ocrDraftKeys.bulk("ocr-draft-1"))?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(ocrDraftKeys.bulk(["ocr-draft-1"]))?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(heldEventKeys.scope("workspace"))?.isInvalidated).toBe(true);
     expect(
       queryClient.getQueryState(seriesComparisonKeys.aggregate({ gameTitleId: "gt-1" }))
@@ -56,5 +56,11 @@ describe("shared query keys", () => {
       queryClient.getQueryState(seriesComparisonKeys.aggregate({ gameTitleId: "gt-1" }))
         ?.isInvalidated,
     ).toBe(true);
+  });
+
+  it("preserves OCR draft id boundaries in bulk keys", () => {
+    expect(ocrDraftKeys.bulk(["draft-a,b", "draft-c"])).not.toEqual(
+      ocrDraftKeys.bulk(["draft-a", "b,draft-c"]),
+    );
   });
 });

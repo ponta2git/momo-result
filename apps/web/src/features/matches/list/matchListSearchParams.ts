@@ -3,7 +3,7 @@ import type {
   MatchListSort,
   MatchListStatusFilter,
 } from "@/features/matches/list/matchListTypes";
-import { parsePositiveIntSearchParam } from "@/shared/lib/searchParams";
+import { parsePositiveIntSearchParam, trimSearchParam } from "@/shared/lib/searchParams";
 
 export const defaultMatchListSearch: MatchListSearch = {
   heldEventId: "",
@@ -43,11 +43,11 @@ export function parseMatchListSearchParams(searchParams: URLSearchParams): Match
   );
 
   return {
-    heldEventId: searchParams.get("heldEventId") ?? "",
-    gameTitleId: searchParams.get("gameTitleId") ?? "",
+    heldEventId: trimSearchParam(searchParams.get("heldEventId")) ?? "",
+    gameTitleId: trimSearchParam(searchParams.get("gameTitleId")) ?? "",
     page: parsePositiveIntSearchParam(searchParams.get("page"), defaultMatchListSearch.page),
     pageSize: pageSizeOptions.has(pageSize) ? pageSize : defaultMatchListSearch.pageSize,
-    seasonMasterId: searchParams.get("seasonMasterId") ?? "",
+    seasonMasterId: trimSearchParam(searchParams.get("seasonMasterId")) ?? "",
     status:
       status && statusOptions.has(status as MatchListStatusFilter)
         ? (status as MatchListStatusFilter)

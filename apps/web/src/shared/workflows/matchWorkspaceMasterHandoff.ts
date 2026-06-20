@@ -134,7 +134,11 @@ function browserSessionStorage(): MasterHandoffStorage | undefined {
   if (typeof window === "undefined") {
     return undefined;
   }
-  return window.sessionStorage;
+  try {
+    return window.sessionStorage;
+  } catch {
+    return undefined;
+  }
 }
 
 function storageKey(handoffId: string): string {

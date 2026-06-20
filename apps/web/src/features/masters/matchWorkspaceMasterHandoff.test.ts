@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   appendHandoffIdToReturnTo,
@@ -41,6 +41,10 @@ function handoffPlayers(
 }
 
 describe("matchWorkspaceMasterHandoff", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("accepts app-internal returnTo paths and rejects external urls", () => {
     expect(sanitizeReturnTo("/review/session-1?sample=1")).toBe("/review/session-1?sample=1");
     expect(sanitizeReturnTo("https://example.com/review/session-1")).toBeUndefined();
@@ -185,6 +189,44 @@ describe("matchWorkspaceMasterHandoff", () => {
     });
 
     expect(result.status).toBe("unavailable");
+  });
+
+  it("treats unavailable browser session storage as missing handoff state", () => {
+    vi.spyOn(window, "sessionStorage", "get").mockImplementation(() => {
+      throw new Error("storage unavailable");
+    });
+    const payload = createMatchWorkspaceMasterHandoffPayload({
+      createdAt: "2026-01-01T00:00:00.000Z",
+      matchSessionId: "session-1",
+      returnTo: "/review/session-1",
+      values: {
+        draftIds: {},
+        gameTitleId: "gt_momotetsu_2",
+        heldEventId: "event-1",
+        mapMasterId: "map-east",
+        matchNoInEvent: 1,
+        ownerMemberId: "member_ponta",
+        playedAt: "2026-01-01T00:00:00.000Z",
+        players: handoffPlayers(),
+        seasonMasterId: "season-1",
+      },
+    });
+
+    expect(saveMasterHandoff(payload, { createId: () => "unavailable-handoff" })).toBeUndefined();
+    expect(
+      inspectMasterHandoff({
+        expectedReturnTo: "/review/session-1",
+        handoffId: "unavailable-handoff",
+      }).status,
+    ).toBe("missing");
+    expect(
+      prepareMatchWorkspaceMasterHandoffRoute({
+        createId: () => "unavailable-handoff",
+        matchSessionId: "session-1",
+        returnTo: "/review/session-1",
+        values: payload.values,
+      }).status,
+    ).toBe("unavailable");
   });
 
   it("finds latest handoff only through validated return and session contracts", () => {

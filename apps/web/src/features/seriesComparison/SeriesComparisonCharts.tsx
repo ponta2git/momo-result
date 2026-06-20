@@ -1439,7 +1439,10 @@ function formatHistogramBinLabel(bin: HistogramBin): string {
   if (bin.upperExclusive == null) {
     return `${lower}+`;
   }
-  return `${lower}〜${formatCompactManYen(bin.upperExclusive)}`;
+  if (bin.upperExclusive === bin.lowerInclusive + 1) {
+    return lower;
+  }
+  return `${lower}〜${formatCompactManYen(bin.upperExclusive - 1)}`;
 }
 
 function medianNumber(values: number[]): number | undefined {

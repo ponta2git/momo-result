@@ -157,6 +157,7 @@ private object SeriesComparisonAggregation {
       playerOrder,
       rowsByPlayer,
       row => row.revenueManYen.value,
+      revenueHistogramBins,
     )
     val metrics = playerOrder.map { memberId =>
       val playerRows = rowsByPlayer.getOrElse(memberId, Nil).sortBy(row =>
@@ -1204,8 +1205,16 @@ private object SeriesComparisonAggregation {
       playerOrder: List[MemberId],
       rowsByPlayer: Map[MemberId, List[SeriesComparisonMatchPlayerRow]],
       value: SeriesComparisonMatchPlayerRow => Int,
+  ): HistogramResponse = histogram(allValues, playerOrder, rowsByPlayer, value, histogramBins)
+
+  private def histogram(
+      allValues: List[Int],
+      playerOrder: List[MemberId],
+      rowsByPlayer: Map[MemberId, List[SeriesComparisonMatchPlayerRow]],
+      value: SeriesComparisonMatchPlayerRow => Int,
+      binsFor: List[Int] => List[HistogramBinResponse],
   ): HistogramResponse =
-    val bins = histogramBins(allValues)
+    val bins = binsFor(allValues)
     val series = playerOrder.map { memberId =>
       val counts = bins.map { bin =>
         rowsByPlayer.getOrElse(memberId, Nil).count(row =>
@@ -1215,6 +1224,32 @@ private object SeriesComparisonAggregation {
       HistogramSeriesResponse(memberId.value, counts)
     }
     HistogramResponse(bins, series)
+
+  private def revenueHistogramBins(values: List[Int]): List[HistogramBinResponse] =
+    if !values.contains(0) then histogramBins(values)
+    else
+      val baseBins = histogramBins(values.filterNot(_ == 0)).flatMap { bin =>
+        val containsZero = bin.lowerInclusive <= 0 && bin.upperExclusive.forall(_ > 0)
+        if !containsZero then List(bin)
+        else
+          val negativeBin = Option.when(bin.lowerInclusive < 0)(
+            bin.copy(
+              upperExclusive = Some(0),
+              label = histogramBinLabel(bin.lowerInclusive, Some(0)),
+            )
+          )
+          val positiveBin = Option.when(values.exists(_ > 0) && bin.upperExclusive.forall(_ > 1))(
+            bin.copy(
+              lowerInclusive = 1,
+              label = histogramBinLabel(1, bin.upperExclusive),
+            )
+          )
+          negativeBin.toList ++ positiveBin.toList
+      }
+      val (negativeBins, positiveBins) = baseBins.partition(_.lowerInclusive < 0)
+      reindexHistogramBins(
+        negativeBins ++ List(HistogramBinResponse(0, 0, Some(1), "0")) ++ positiveBins
+      )
 
   private def histogramBins(values: List[Int]): List[HistogramBinResponse] = values match
     case Nil => Nil
@@ -1240,24 +1275,31 @@ private object SeriesComparisonAggregation {
               index = 0,
               lowerInclusive = lower,
               upperExclusive = Some(lower + step),
-              label = s"$lower-${lower + step - 1}",
+              label = histogramBinLabel(lower, Some(lower + step)),
             )
           ).toList
         val lowerBin = Option.when(min < lowerStart)(HistogramBinResponse(
           index = 0,
           lowerInclusive = min,
           upperExclusive = Some(lowerStart),
-          label = s"$min-${lowerStart - 1}",
+          label = histogramBinLabel(min, Some(lowerStart)),
         ))
         val upperBin = Option.when(max >= upperEnd)(HistogramBinResponse(
           index = 0,
           lowerInclusive = upperEnd,
           upperExclusive = None,
-          label = s"$upperEnd+",
+          label = histogramBinLabel(upperEnd, None),
         ))
-        (lowerBin.toList ++ centralBins ++ upperBin.toList).zipWithIndex.map { case (bin, index) =>
-          bin.copy(index = index)
-        }
+        reindexHistogramBins(lowerBin.toList ++ centralBins ++ upperBin.toList)
+
+  private def histogramBinLabel(lowerInclusive: Int, upperExclusive: Option[Int]): String =
+    upperExclusive match
+      case Some(upper) if upper == lowerInclusive + 1 => s"$lowerInclusive"
+      case Some(upper) => s"$lowerInclusive-${upper - 1}"
+      case None => s"$lowerInclusive+"
+
+  private def reindexHistogramBins(bins: List[HistogramBinResponse]): List[HistogramBinResponse] =
+    bins.zipWithIndex.map { case (bin, index) => bin.copy(index = index) }
 
   private def percentile(sortedValues: List[Int], probability: Double): Double =
     val clamped = math.max(0.0, math.min(1.0, probability))

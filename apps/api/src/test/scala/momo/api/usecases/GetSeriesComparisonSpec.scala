@@ -333,6 +333,38 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
       assertEquals(response.trends.rankCumulativeAverage.map(_.memberId), expected)
       assertEquals(response.histograms.assets.series.map(_.memberId), expected)
 
+  test("isolates zero yen in the revenue histogram while preserving amount order"):
+    val rows = List(
+      row(1, "member_eu", "いーゆー", 1, 1, 1000, -5, destination = 1, ginji = 0),
+      row(1, "member_ponta", "ぽんた", 2, 2, 900, 0, destination = 1, ginji = 0),
+      row(1, "member_akane_mami", "あかねまみ", 3, 3, 800, 1, destination = 1, ginji = 0),
+      row(1, "member_otaka", "おーたか", 4, 4, 700, 0, destination = 1, ginji = 0),
+    )
+    val usecase = GetSeriesComparison[IO](StaticReadModel(Some(resolvedScope), rows))
+
+    for result <- usecase.run(SeriesComparisonScope.Overall(titleId)) yield
+      val response = assertRight(result)
+      val bins = response.histograms.revenue.bins
+      val zeroIndex =
+        bins.indexWhere(bin => bin.lowerInclusive == 0 && bin.upperExclusive.contains(1))
+      val negativeIndex = binIndexFor(bins, -5)
+      val positiveIndex = binIndexFor(bins, 1)
+      val countsByMember =
+        response.histograms.revenue.series.map(entry => entry.memberId -> entry.counts).toMap
+
+      assert(zeroIndex >= 0, s"zero-yen bin missing: $bins")
+      assertEquals(
+        bins.count(bin => 0 >= bin.lowerInclusive && bin.upperExclusive.forall(0 < _)),
+        1
+      )
+      assert(negativeIndex < zeroIndex, s"negative bin should precede zero bin: $bins")
+      assert(zeroIndex < positiveIndex, s"zero bin should precede positive bin: $bins")
+      assertEquals(bins(zeroIndex).label, "0")
+      assertEquals(countsByMember("member_ponta")(zeroIndex), 1)
+      assertEquals(countsByMember("member_otaka")(zeroIndex), 1)
+      assertEquals(countsByMember("member_eu")(zeroIndex), 0)
+      assertEquals(countsByMember("member_akane_mami")(zeroIndex), 0)
+
   test("classifies strategy kind only when revenue asset rate differs from the median threshold"):
     val rows = List(
       row(1, "low", "low", 1, 1, 1000, 290, destination = 0, ginji = 0),
@@ -491,6 +523,11 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
 
   private def assertOptionDouble(actual: Option[Double], expected: Double): Unit =
     assertOptionDouble(actual, expected, DoubleDelta)
+
+  private def binIndexFor(bins: List[momo.api.endpoints.HistogramBinResponse], value: Int): Int =
+    val index =
+      bins.indexWhere(bin => value >= bin.lowerInclusive && bin.upperExclusive.forall(value < _))
+    if index < 0 then fail(s"bin for $value missing: $bins") else index
 
   private final case class StaticReadModel(
       resolved: Option[SeriesComparisonResolvedScope],

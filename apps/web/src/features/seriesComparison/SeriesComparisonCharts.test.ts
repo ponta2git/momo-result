@@ -138,4 +138,29 @@ describe("HistogramChart", () => {
       expect(y + height).toBeLessThanOrEqual(baseline);
     }
   });
+
+  it("renders zero-only bins as a single zero label", () => {
+    const { container } = render(
+      createElement(HistogramChart, {
+        histogram: {
+          bins: [
+            { index: 0, label: "0", lowerInclusive: 0, upperExclusive: 1 },
+            { index: 1, label: "1-20", lowerInclusive: 1, upperExclusive: 21 },
+          ],
+          series: [
+            {
+              counts: [2, 1],
+              memberId: "member-1",
+            },
+          ],
+        },
+        players: [{ displayName: "桃太郎", memberId: "member-1" }],
+      }),
+    );
+    const axisLabels = [...container.querySelectorAll("text[transform^='rotate']")].map(
+      (node) => node.textContent,
+    );
+
+    expect(axisLabels).toEqual(["0", "1万〜20万"]);
+  });
 });

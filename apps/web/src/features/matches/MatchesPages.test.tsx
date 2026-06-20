@@ -550,6 +550,35 @@ describe("MatchesListPage", () => {
     expect(screen.getByLabelText("current location")).toHaveTextContent("handoffId=");
   });
 
+  it("trims match draft deep link ids before loading draft details", async () => {
+    setDevUser();
+    let requestedDraftId = "";
+    server.use(
+      http.get("/api/match-drafts/:draftId", ({ params }) => {
+        requestedDraftId = String(params["draftId"]);
+        return HttpResponse.json({
+          createdAt: "2026-01-01T00:00:00.000Z",
+          matchDraftId: requestedDraftId,
+          status: "needs_review",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        });
+      }),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches/new?matchDraftId=%20draft-trimmed%20"]}>
+          <Routes>
+            <Route path="/matches/new" element={<MatchCreatePage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "試合の新規作成" })).toBeInTheDocument();
+    await waitFor(() => expect(requestedDraftId).toBe("draft-trimmed"));
+  });
+
   it("does not restore manual creation values from a foreign handoff session", async () => {
     setDevUser();
     const handoffId = saveMasterHandoff(

@@ -70,6 +70,16 @@ type MasterHandoffReadOptions = {
   storage?: MasterHandoffStorage;
 };
 
+function pruneDraftIds(
+  values: MatchWorkspaceHandoffValues["draftIds"],
+): MatchWorkspaceHandoffValues["draftIds"] {
+  const next: MatchWorkspaceHandoffValues["draftIds"] = {};
+  if (values.totalAssets) next.totalAssets = values.totalAssets;
+  if (values.revenue) next.revenue = values.revenue;
+  if (values.incidentLog) next.incidentLog = values.incidentLog;
+  return next;
+}
+
 function pickIncidents(incidents: IncidentCountsByKey): IncidentCountsByKey {
   return Object.fromEntries(
     incidentDefinitions.map((definition) => [definition.key, incidents[definition.key]]),
@@ -160,11 +170,7 @@ export function createMatchWorkspaceHandoffPayload(input: {
     schemaVersion: handoffSchemaVersion,
     source: "matchWorkspace",
     values: {
-      draftIds: {
-        incidentLog: input.values.draftIds.incidentLog,
-        revenue: input.values.draftIds.revenue,
-        totalAssets: input.values.draftIds.totalAssets,
-      },
+      draftIds: pruneDraftIds(input.values.draftIds),
       gameTitleId: input.values.gameTitleId,
       heldEventId: input.values.heldEventId,
       mapMasterId: input.values.mapMasterId,

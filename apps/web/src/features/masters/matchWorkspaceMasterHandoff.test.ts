@@ -100,6 +100,33 @@ describe("matchWorkspaceMasterHandoff", () => {
     expect(destination).toContain("handoffId=handoff-1");
   });
 
+  it("removes empty draft id slots from the handoff payload", () => {
+    const payload = createMatchWorkspaceMasterHandoffPayload({
+      createdAt: "2026-01-01T00:00:00.000Z",
+      matchSessionId: "session-1",
+      returnTo: "/review/session-1?totalAssets=draft-1",
+      values: {
+        draftIds: {
+          incidentLog: undefined,
+          revenue: "",
+          totalAssets: "draft-1",
+        },
+        gameTitleId: "gt_momotetsu_2",
+        heldEventId: "event-1",
+        mapMasterId: "map-east",
+        matchNoInEvent: 1,
+        ownerMemberId: "member_ponta",
+        playedAt: "2026-01-01T00:00:00.000Z",
+        players: handoffPlayers(),
+        seasonMasterId: "season-1",
+      },
+    });
+
+    expect(payload.values.draftIds).toEqual({ totalAssets: "draft-1" });
+    expect(Object.keys(payload.values.draftIds)).not.toContain("incidentLog");
+    expect(Object.keys(payload.values.draftIds)).not.toContain("revenue");
+  });
+
   it("marks an old handoff as expired", () => {
     const payload = createMatchWorkspaceMasterHandoffPayload({
       createdAt: "2026-01-01T00:00:00.000Z",

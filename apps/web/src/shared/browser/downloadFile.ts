@@ -10,6 +10,6 @@ export function triggerBrowserDownload(result: ApiDownloadResult): void {
     anchor.click();
     anchor.remove();
   } finally {
-    URL.revokeObjectURL(url);
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 }

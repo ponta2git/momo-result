@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { installAnchorClickMock, installFetchMock, installObjectUrlMock } from "@/test/doubles/dom";
@@ -7,7 +8,7 @@ import { installAnchorClickMock, installFetchMock, installObjectUrlMock } from "
 import { downloadExportMatches } from "./exportDownload";
 
 describe("exportDownload", () => {
-  it("starts the browser download and revokes the blob URL", async () => {
+  it("starts the browser download before revoking the blob URL", async () => {
     const anchorClick = installAnchorClickMock();
     const objectUrls = installObjectUrlMock({ createObjectURL: () => "blob:test-download" });
     installFetchMock(
@@ -30,7 +31,10 @@ describe("exportDownload", () => {
     expect(anchorClick.click).toHaveBeenCalledTimes(1);
     expect(anchorClick.clickedAnchors[0]?.getAttribute("href")).toBe("blob:test-download");
     expect(anchorClick.clickedAnchors[0]?.download).toBe("momo-results.csv");
-    expect(objectUrls.revokeObjectURL).toHaveBeenCalledWith("blob:test-download");
+    expect(objectUrls.revokeObjectURL).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(objectUrls.revokeObjectURL).toHaveBeenCalledWith("blob:test-download"),
+    );
   });
 
   it("returns timeout when the client abort timer fires", async () => {

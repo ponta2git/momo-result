@@ -190,7 +190,13 @@ describe("app routing", () => {
     expect(screen.queryByText("集計対象")).not.toBeInTheDocument();
     expect(screen.queryByText("データ注意")).not.toBeInTheDocument();
     expect(await screen.findByText("条件付き指標があります。")).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "振り返り" })).toHaveAttribute("aria-selected", "true");
+    const reviewTab = screen.getByRole("tab", { name: "振り返り" });
+    expect(reviewTab).toHaveAttribute("aria-selected", "true");
+    expect(reviewTab).toHaveAttribute("aria-controls", "series-comparison-view-review");
+    expect(screen.getByRole("tabpanel", { name: "振り返り" })).toHaveAttribute(
+      "aria-labelledby",
+      "series-comparison-tab-review",
+    );
     expect(await screen.findByRole("heading", { name: "行動プレイブック" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "行動プレイブック" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "今回の要点" })).not.toBeInTheDocument();

@@ -76,6 +76,14 @@ export function analysisViewFor(view: SeriesComparisonViewId | undefined): Analy
   return analysisViews.find((item) => item.id === view) ?? fallback;
 }
 
+export function analysisTabId(view: SeriesComparisonViewId): string {
+  return `series-comparison-tab-${view}`;
+}
+
+export function analysisPanelId(view: SeriesComparisonViewId): string {
+  return `series-comparison-view-${view}`;
+}
+
 export function AnalysisTabs({
   activeView,
   onViewChange,
@@ -96,12 +104,14 @@ export function AnalysisTabs({
       <TabsList aria-label="分析サブページ" className="flex min-w-0 flex-wrap gap-2">
         {analysisViews.map((item) => (
           <TabsTab
+            aria-controls={analysisPanelId(item.id)}
             className={cn(
               "inline-flex min-h-10 min-w-0 items-center gap-2 rounded-[var(--radius-sm)] border px-3 py-2 text-sm font-semibold transition-colors",
               item.id === activeView
                 ? "border-[var(--color-action)]/60 bg-[var(--color-action)]/12 text-[var(--color-text-primary)]"
                 : "border-[var(--color-border)] bg-[var(--color-surface-subtle)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface)]",
             )}
+            id={analysisTabId(item.id)}
             key={item.id}
             value={item.id}
           >

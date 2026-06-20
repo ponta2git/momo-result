@@ -15,6 +15,8 @@ import type { ReactNode } from "react";
 import {
   AnalysisTabs,
   SectionJumpLinks,
+  analysisPanelId,
+  analysisTabId,
   analysisViewFor,
 } from "@/features/seriesComparison/SeriesComparisonAnalysisNavigation";
 import type { AnalysisViewChange } from "@/features/seriesComparison/SeriesComparisonAnalysisNavigation";
@@ -1673,8 +1675,8 @@ function SeriesComparisonContent({
       <AnalysisTabs activeView={activeView} onViewChange={controller.updateView} />
       <DataQualityNotice response={controller.aggregate} />
       <div
-        aria-label={`${activeDefinition.label}の内容`}
-        id={`series-comparison-view-${activeDefinition.id}`}
+        aria-labelledby={analysisTabId(activeDefinition.id)}
+        id={analysisPanelId(activeDefinition.id)}
         role="tabpanel"
       >
         <div className="grid gap-4" id={`analysis-${activeDefinition.id}`}>

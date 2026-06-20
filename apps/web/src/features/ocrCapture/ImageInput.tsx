@@ -48,7 +48,11 @@ export function ImageInput({
             event.currentTarget.value = "";
             return;
           }
-          onSelect(file, "upload");
+          try {
+            onSelect(file, "upload");
+          } finally {
+            event.currentTarget.value = "";
+          }
         }}
       />
       <Button disabled={disabled} variant="secondary" onClick={() => inputRef.current?.click()}>

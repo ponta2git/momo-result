@@ -19,15 +19,15 @@ function scopeFromKeys(searchParams: URLSearchParams): ExportScope {
   return "all";
 }
 
+function trimmedParam(searchParams: URLSearchParams, key: (typeof scopeKeys)[number]) {
+  return searchParams.has(key) ? (searchParams.get(key) ?? "").trim() : undefined;
+}
+
 export function parseExportSearchParams(searchParams: URLSearchParams): ExportUrlState {
   const ids = {
-    heldEventId: searchParams.has("heldEventId")
-      ? (searchParams.get("heldEventId") ?? "")
-      : undefined,
-    matchId: searchParams.has("matchId") ? (searchParams.get("matchId") ?? "") : undefined,
-    seasonMasterId: searchParams.has("seasonMasterId")
-      ? (searchParams.get("seasonMasterId") ?? "")
-      : undefined,
+    heldEventId: trimmedParam(searchParams, "heldEventId"),
+    matchId: trimmedParam(searchParams, "matchId"),
+    seasonMasterId: trimmedParam(searchParams, "seasonMasterId"),
   };
   const activeScopeCount = scopeKeys.filter((key) => searchParams.has(key)).length;
   const errors: string[] = [];

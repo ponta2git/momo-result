@@ -24,6 +24,13 @@ describe("exportUrlState", () => {
     expect(selectedIdForScope(state, "match")).toBe("match-1");
   });
 
+  it("trims scope ids from deep links", () => {
+    const state = parseExportSearchParams(new URLSearchParams("heldEventId=%20held-1%20"));
+
+    expect(state.scope).toBe("heldEvent");
+    expect(selectedIdForScope(state, "heldEvent")).toBe("held-1");
+  });
+
   it("reports multiple scope ids without dropping them", () => {
     const state = parseExportSearchParams(
       new URLSearchParams("seasonMasterId=season-1&matchId=match-1"),

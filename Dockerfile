@@ -16,7 +16,12 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store,sharing=locked \
   pnpm install --frozen-lockfile --store-dir "${PNPM_STORE_DIR}"
 
 FROM web-deps AS web-builder
-COPY apps/web apps/web
+COPY apps/web/index.html apps/web/index.html
+COPY apps/web/tsconfig.json apps/web/tsconfig.json
+COPY apps/web/vite.config.ts apps/web/vite.config.ts
+COPY apps/web/public apps/web/public
+COPY apps/web/scripts apps/web/scripts
+COPY apps/web/src apps/web/src
 COPY apps/api/openapi.yaml apps/api/openapi.yaml
 RUN pnpm --filter web build
 
@@ -39,7 +44,7 @@ COPY apps/api/project/plugins.sbt project/plugins.sbt
 COPY apps/api/build.sbt build.sbt
 
 FROM api-deps AS api-builder
-COPY apps/api/src src
+COPY apps/api/src/main src/main
 COPY apps/api/openapi.yaml openapi.yaml
 RUN --mount=type=cache,id=sbt-boot,target=/root/.sbt,sharing=locked \
   --mount=type=cache,id=coursier-cache,target=/root/.cache/coursier,sharing=locked \
@@ -153,15 +158,14 @@ ENV DB_POOL_SIZE=2
 ENV JAVA_OPTS="-XX:MaxRAMPercentage=70 -Djava.security.egd=file:/dev/./urandom"
 ENV JAVA_HOME=/opt/java/openjdk
 ENV LD_LIBRARY_PATH="/opt/tesseract/lib"
+ENV MOMO_NGINX_OUTPUT_PATH=/tmp/momo-result/nginx/nginx.conf
 ENV MOMO_OCR_SCHEMA_DIR=/opt/momo-result/docs/schemas
 ENV TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata
 ENV PATH="${JAVA_HOME}/bin:/opt/tesseract/bin:/opt/momo-result/ocr-worker/.venv/bin:${PATH}"
 COPY --from=java-runtime /opt/java/openjdk /opt/java/openjdk
 RUN apt-get update \
-  && apt-get upgrade -y \
   && apt-get install -y --no-install-recommends \
     ca-certificates \
-    curl \
     libarchive13 \
     libcurl4 \
     liblept5 \
@@ -169,9 +173,21 @@ RUN apt-get update \
     nginx \
     supervisor \
   && rm -rf /var/lib/apt/lists/* \
+  && groupadd --gid 10001 momo \
+  && useradd --uid 10001 --gid momo --home-dir /nonexistent --shell /usr/sbin/nologin --no-create-home momo \
   && mkdir -p "${TESSDATA_PREFIX}" \
   && rm -f /etc/nginx/sites-enabled/default \
-  && mkdir -p /opt/momo-result/bin /run/nginx /srv/momo-result/web /tmp/momo-result/uploads
+  && mkdir -p \
+    /opt/momo-result/bin \
+    /run/nginx \
+    /srv/momo-result/web \
+    /tmp/momo-result/nginx/client_body \
+    /tmp/momo-result/nginx/fastcgi \
+    /tmp/momo-result/nginx/proxy \
+    /tmp/momo-result/nginx/scgi \
+    /tmp/momo-result/nginx/uwsgi \
+    /tmp/momo-result/uploads \
+  && chown -R momo:momo /opt/momo-result /run/nginx /srv/momo-result /tmp/momo-result
 
 FROM runtime-base AS runtime
 ARG TESSERACT_VERSION=5.5.2
@@ -179,15 +195,16 @@ ENV TESSERACT_VERSION=${TESSERACT_VERSION}
 COPY --from=tesseract-builder /opt/tesseract /opt/tesseract
 COPY --from=tessdata /tessdata/ ${TESSDATA_PREFIX}/
 RUN tesseract --version | grep "tesseract ${TESSERACT_VERSION}"
-COPY --from=api-builder /workspace/apps/api/target/universal/stage /opt/momo-result/api
-COPY --from=worker-builder /opt/momo-result/ocr-worker/.venv /opt/momo-result/ocr-worker/.venv
-COPY --from=web-builder /workspace/apps/web/dist /srv/momo-result/web
-COPY docs/schemas /opt/momo-result/docs/schemas
+COPY --from=api-builder --chown=momo:momo /workspace/apps/api/target/universal/stage /opt/momo-result/api
+COPY --from=worker-builder --chown=momo:momo /opt/momo-result/ocr-worker/.venv /opt/momo-result/ocr-worker/.venv
+COPY --from=web-builder --chown=momo:momo /workspace/apps/web/dist /srv/momo-result/web
+COPY --chown=momo:momo docs/schemas /opt/momo-result/docs/schemas
 COPY deploy/nginx.conf /etc/nginx/nginx.conf.template
-COPY deploy/render-nginx-conf.py /opt/momo-result/bin/render-nginx-conf
-COPY deploy/start-runtime.sh /opt/momo-result/bin/start-runtime
+COPY --chown=momo:momo deploy/render-nginx-conf.py /opt/momo-result/bin/render-nginx-conf
+COPY --chown=momo:momo deploy/start-runtime.sh /opt/momo-result/bin/start-runtime
 COPY deploy/supervisord.conf /etc/supervisor/conf.d/momo-result.conf
 RUN chmod +x /opt/momo-result/bin/render-nginx-conf /opt/momo-result/bin/start-runtime
 
 EXPOSE 8080
+USER momo
 CMD ["/opt/momo-result/bin/start-runtime"]

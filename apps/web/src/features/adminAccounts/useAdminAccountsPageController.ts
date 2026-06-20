@@ -14,6 +14,7 @@ import type {
 } from "@/shared/api/adminAccounts";
 import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { formatApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
+import { isInitialQueryLoading, shouldShowQueryError } from "@/shared/api/queryErrorState";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
@@ -72,12 +73,13 @@ export function useAdminAccountsPageController() {
     },
   });
 
-  const error = updateMutation.error ?? accountsQuery.error;
+  const error =
+    updateMutation.error ?? (shouldShowQueryError(accountsQuery) ? accountsQuery.error : undefined);
   const normalizedError = error ? normalizeUnknownApiError(error) : undefined;
 
   return {
     accounts: accountsQuery.data?.items ?? [],
-    accountsLoading: accountsQuery.isLoading,
+    accountsLoading: isInitialQueryLoading(accountsQuery),
     createAction,
     createState,
     normalizedError,

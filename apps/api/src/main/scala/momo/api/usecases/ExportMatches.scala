@@ -5,7 +5,6 @@ import java.nio.charset.StandardCharsets
 import cats.Monad
 import cats.syntax.all.*
 
-import momo.api.config.ResourceLimitsConfig
 import momo.api.domain.ids.*
 import momo.api.domain.{
   MapMaster, MatchExportFile, MatchExportFormat, MatchExportRow, MatchExportScope, MatchRecord,
@@ -21,7 +20,7 @@ final class ExportMatches[F[_]: Monad](
     members: MembersRepository[F],
     mapMasters: MapMastersRepository[F],
     seasonMasters: SeasonMastersRepository[F],
-    limits: ExportMatches.Limits = ExportMatches.Limits.defaults,
+    limits: ExportMatches.Limits,
 ):
   import ExportMatches.*
 
@@ -191,12 +190,3 @@ object ExportMatches:
   private val MatchRowsPerMatch: Int = 4
 
   final case class Limits(maxRows: Int, maxBytes: Long)
-
-  object Limits:
-    val defaults: Limits = Limits(
-      maxRows = ResourceLimitsConfig.DefaultExportMaxRows,
-      maxBytes = ResourceLimitsConfig.DefaultExportMaxBytes,
-    )
-
-    def fromResourceLimits(config: ResourceLimitsConfig): Limits =
-      Limits(maxRows = config.exportMaxRows, maxBytes = config.exportMaxBytes)

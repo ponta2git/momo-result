@@ -9,7 +9,6 @@ import cats.syntax.all.*
 import cats.{Applicative, MonadThrow}
 import org.typelevel.log4cats.LoggerFactory
 
-import momo.api.config.ResourceLimitsConfig
 import momo.api.errors.AppError
 import momo.api.logging.SafeLog
 import momo.api.repositories.{OcrQueueBacklogSnapshot, OcrQueueOutboxRepository, QueueHealthProbe}
@@ -25,14 +24,6 @@ object OcrAdmissionGuard:
       oldestDueMaxDelay: FiniteDuration,
       deadLetterBacklogLimit: Int,
   )
-
-  object Config:
-    def fromResourceLimits(limits: ResourceLimitsConfig): Config = Config(
-      dueBacklogLimit = limits.ocrOutboxDueBacklogLimit,
-      activeBacklogLimit = limits.ocrOutboxActiveBacklogLimit,
-      oldestDueMaxDelay = limits.ocrOutboxOldestDueMaxDelay,
-      deadLetterBacklogLimit = limits.ocrDeadLetterBacklogLimit,
-    )
 
   enum Decision derives CanEqual:
     case Allowed

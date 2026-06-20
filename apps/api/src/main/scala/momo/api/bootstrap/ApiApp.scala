@@ -26,7 +26,7 @@ import momo.api.auth.{
   JavaDiscordOAuthClient, LoginRateLimiter, MemberRoster, OAuthProviderBackoff, OAuthStateCodec,
   RateLimiter, RedisOAuthProviderBackoff, RedisRateLimiter, SessionService,
 }
-import momo.api.config.AppConfig
+import momo.api.config.{AppConfig, ResourceLimitsConfig}
 import momo.api.db.Database
 import momo.api.domain.ids.*
 import momo.api.domain.{LoginAccount, Member}
@@ -124,7 +124,7 @@ object ApiApp:
         val ocrAdmissionGuard = OcrAdmissionGuard.from[F](
           ocrQueueOutbox,
           infrastructure.queueHealth,
-          OcrAdmissionGuard.Config.fromResourceLimits(config.resourceLimits),
+          ocrAdmissionGuardConfig(config.resourceLimits),
         )
         val health = healthDetails[F](
           Some(Database.ping[F](transactor)),
@@ -585,6 +585,26 @@ object ApiApp:
         HealthDetailsResponse(status, databaseStatus, redisStatus, ocrAdmissionStatus)
     }
 
+  private def ocrAdmissionGuardConfig(limits: ResourceLimitsConfig): OcrAdmissionGuard.Config =
+    OcrAdmissionGuard.Config(
+      dueBacklogLimit = limits.ocrOutboxDueBacklogLimit,
+      activeBacklogLimit = limits.ocrOutboxActiveBacklogLimit,
+      oldestDueMaxDelay = limits.ocrOutboxOldestDueMaxDelay,
+      deadLetterBacklogLimit = limits.ocrDeadLetterBacklogLimit,
+    )
+
+  private def imageStorageAdmissionConfig(
+      limits: ResourceLimitsConfig
+  ): ImageStorageAdmission.Config = ImageStorageAdmission.Config(
+    unreferencedCountLimit = limits.imageUploadUnreferencedCountLimit,
+    unreferencedBytesLimit = limits.imageUploadUnreferencedBytesLimit,
+    storageMinFreeBytes = limits.imageUploadStorageMinFreeBytes,
+    storageMaxUsedPercent = limits.imageUploadStorageMaxUsedPercent,
+  )
+
+  private def exportMatchLimits(limits: ResourceLimitsConfig): ExportMatches.Limits = ExportMatches
+    .Limits(maxRows = limits.exportMaxRows, maxBytes = limits.exportMaxBytes)
+
   private def assemble[F[_]: Async: SecureRandom: LoggerFactory](
       config: AppConfig,
       imageStore: LocalFsImageStore[F],
@@ -617,11 +637,8 @@ object ApiApp:
       oauthProviderBackoff: OAuthProviderBackoff[F],
       rateLimiters: HttpRateLimiters[F],
   ): F[Runtime[F]] =
-    val imageStorageAdmission = ImageStorageAdmission.from[F](
-      imageStore,
-      imageReferences,
-      ImageStorageAdmission.Config.fromResourceLimits(config.resourceLimits),
-    )
+    val imageStorageAdmission = ImageStorageAdmission
+      .from[F](imageStore, imageReferences, imageStorageAdmissionConfig(config.resourceLimits))
     val uploadImage = UploadImage[F](imageStore, imageStorageAdmission)
     val nowF = Clock[F].realTimeInstant
     val nextOcrJobId = OcrJobId.fresh[F]
@@ -699,7 +716,7 @@ object ApiApp:
       members,
       mapMasters,
       seasonMasters,
-      ExportMatches.Limits.fromResourceLimits(config.resourceLimits),
+      exportMatchLimits(config.resourceLimits),
     )
     val getMatch = GetMatch[F](matches)
     val updateMatch = UpdateMatch[F](

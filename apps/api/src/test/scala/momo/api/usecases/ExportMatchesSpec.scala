@@ -10,7 +10,6 @@ import momo.api.adapters.{
   InMemoryGameTitlesRepository, InMemoryMapMastersRepository, InMemoryMatchesRepository,
   InMemoryMembersRepository, InMemorySeasonMastersRepository,
 }
-import momo.api.config.ResourceLimitsConfig
 import momo.api.domain.ids.*
 import momo.api.domain.{MatchExportFormat, MatchExportScope, MatchRecord}
 import momo.api.testing.AppErrorAssertions.assertAppError
@@ -23,6 +22,7 @@ final class ExportMatchesSpec extends MomoCatsEffectSuite:
   private val seasonId = SeasonMasterId.unsafeFromString("season_spring")
   private val mapId = MapMasterId.unsafeFromString("map_east")
   private val memberValues = MatchFixtures.DevMemberValues
+  private val generousLimits = ExportMatches.Limits(maxRows = 20000, maxBytes = Long.MaxValue)
 
   test("returns not found for an unknown match scope"):
     for
@@ -60,11 +60,7 @@ final class ExportMatchesSpec extends MomoCatsEffectSuite:
 
   test("rejects an export when rendered bytes exceed the configured byte limit"):
     for
-      usecase <- createUsecaseWithMatches(
-        count = 1,
-        limits = ExportMatches
-          .Limits(maxRows = ResourceLimitsConfig.DefaultExportMaxRows, maxBytes = 10L),
-      )
+      usecase <- createUsecaseWithMatches(count = 1, limits = generousLimits.copy(maxBytes = 10L))
       result <- usecase.run(MatchExportFormat.Csv, MatchExportScope.All)
     yield assertAppError(result, "PAYLOAD_TOO_LARGE", "exceeding the configured limit of 10 bytes")
 
@@ -74,10 +70,7 @@ final class ExportMatchesSpec extends MomoCatsEffectSuite:
     createUsecaseSeeded(seedMatch = true)
 
   private def createUsecaseSeeded(seedMatch: Boolean): IO[ExportMatches[IO]] =
-    createUsecaseWithMatches(
-      count = if seedMatch then 1 else 0,
-      limits = ExportMatches.Limits.defaults,
-    )
+    createUsecaseWithMatches(count = if seedMatch then 1 else 0, limits = generousLimits)
 
   private def createUsecaseWithMatches(
       count: Int,

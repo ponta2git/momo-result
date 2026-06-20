@@ -4,7 +4,6 @@ import cats.syntax.all.*
 import cats.{Applicative, MonadThrow}
 import org.typelevel.log4cats.LoggerFactory
 
-import momo.api.config.ResourceLimitsConfig
 import momo.api.domain.ids.AccountId
 import momo.api.errors.AppError
 import momo.api.logging.SafeLog
@@ -20,14 +19,6 @@ object ImageStorageAdmission:
       storageMinFreeBytes: Long,
       storageMaxUsedPercent: Int,
   )
-
-  object Config:
-    def fromResourceLimits(limits: ResourceLimitsConfig): Config = Config(
-      unreferencedCountLimit = limits.imageUploadUnreferencedCountLimit,
-      unreferencedBytesLimit = limits.imageUploadUnreferencedBytesLimit,
-      storageMinFreeBytes = limits.imageUploadStorageMinFreeBytes,
-      storageMaxUsedPercent = limits.imageUploadStorageMaxUsedPercent,
-    )
 
   enum Rejection derives CanEqual:
     case ReferenceStatusUnavailable(errorClasses: String)

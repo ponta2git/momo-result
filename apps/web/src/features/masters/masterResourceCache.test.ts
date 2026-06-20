@@ -13,6 +13,7 @@ describe("masterResourceCache", () => {
       expectedKeys: [
         ["masters", "game-titles", "admin-list", "account-1"],
         ["masters", "game-titles"],
+        ["series-comparison"],
       ],
       name: "invalidates game title admin and consumer caches",
       target: { authScope: "account-1", resource: "game-titles" },
@@ -21,6 +22,7 @@ describe("masterResourceCache", () => {
       expectedKeys: [
         ["masters", "map-masters", "admin-list", "account-1", "game-1"],
         ["masters", "map-masters"],
+        ["series-comparison"],
       ],
       name: "invalidates map master admin and consumer caches",
       target: { authScope: "account-1", gameTitleId: "game-1", resource: "map-masters" },
@@ -29,6 +31,7 @@ describe("masterResourceCache", () => {
       expectedKeys: [
         ["masters", "season-masters", "admin-list", "account-1", "game-1"],
         ["masters", "season-masters"],
+        ["series-comparison"],
       ],
       name: "invalidates season master admin and consumer caches",
       target: { authScope: "account-1", gameTitleId: "game-1", resource: "season-masters" },

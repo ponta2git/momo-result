@@ -33,10 +33,11 @@ type SourceImagePanelProps = {
 const stickyDurationMs = 15_000;
 
 type LoadedSourceImage =
-  | { status: "idle" }
   | { status: "loading"; url: string }
   | { objectUrl: string; status: "ready"; url: string }
   | { status: "error"; url: string };
+
+type SourceImageCache = Record<string, LoadedSourceImage>;
 
 const archiveDownloadError =
   "元画像を保存できませんでした。確定または削除により画像が利用できなくなった可能性があります。必要な場合は画像を再アップロードしてください。";
@@ -64,11 +65,18 @@ export function SourceImagePanel({
   const [activeKind, setActiveKind] = useState<SourceImageKind>(preferredKind ?? "total_assets");
   const [previewKind, setPreviewKind] = useState<SourceImageKind | null>(null);
   const [manualSwitchAt, setManualSwitchAt] = useState<number>(0);
-  const [loadedImage, setLoadedImage] = useState<LoadedSourceImage>({ status: "idle" });
+  const [imageCache, setImageCache] = useState<SourceImageCache>({});
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
   const [archiveSaving, setArchiveSaving] = useState(false);
   const [archiveError, setArchiveError] = useState("");
   const previewTriggerRef = useRef<HTMLElement | null>(null);
+  const imageCacheRef = useRef<SourceImageCache>({});
+  const imageObjectUrlsRef = useRef(new Map<string, string>());
+  const imageLoadControllersRef = useRef(new Map<string, AbortController>());
+
+  useEffect(() => {
+    imageCacheRef.current = imageCache;
+  }, [imageCache]);
 
   useEffect(() => {
     if (!preferredKind) {
@@ -85,9 +93,10 @@ export function SourceImagePanel({
 
   const activeState = states.find((state) => state.kind === activeKind);
   const activeImageUrl = activeState?.status === "available" ? activeState.url : undefined;
+  const activeImage = activeImageUrl ? imageCache[activeImageUrl] : undefined;
   const displayUrl =
-    loadedImage.status === "ready" && loadedImage.url === activeImageUrl
-      ? loadedImage.objectUrl
+    activeImage?.status === "ready" && activeImage.url === activeImageUrl
+      ? activeImage.objectUrl
       : undefined;
   const previewUrl = previewKind === activeKind ? displayUrl : undefined;
   const availableImageCount = states.filter((state) => state.status === "available").length;
@@ -96,40 +105,82 @@ export function SourceImagePanel({
   const archivePendingLabel = "保存中…";
 
   useEffect(() => {
-    if (!activeImageUrl) {
-      setLoadedImage({ status: "idle" });
-      return;
-    }
+    const availableUrls = new Set(
+      states.flatMap((state) => (state.status === "available" ? [state.url] : [])),
+    );
 
-    const controller = new AbortController();
-    let objectUrl: string | undefined;
-
-    const loadImage = async () => {
-      try {
-        const blob = await downloadMatchDraftSourceImage(activeImageUrl, controller.signal);
-        if (controller.signal.aborted) {
-          return;
+    setImageCache((current) => {
+      let next = current;
+      for (const url of Object.keys(current)) {
+        if (!availableUrls.has(url)) {
+          imageLoadControllersRef.current.get(url)?.abort();
+          imageLoadControllersRef.current.delete(url);
+          const objectUrl = imageObjectUrlsRef.current.get(url);
+          if (objectUrl) {
+            URL.revokeObjectURL(objectUrl);
+            imageObjectUrlsRef.current.delete(url);
+          }
+          if (next === current) {
+            next = { ...current };
+          }
+          delete next[url];
         }
-        objectUrl = URL.createObjectURL(blob);
-        setLoadedImage({ objectUrl, status: "ready", url: activeImageUrl });
-      } catch {
-        if (controller.signal.aborted) {
-          return;
-        }
-        setLoadedImage({ status: "error", url: activeImageUrl });
       }
-    };
+      return next;
+    });
 
-    setLoadedImage({ status: "loading", url: activeImageUrl });
-    void loadImage();
+    for (const url of availableUrls) {
+      const cached = imageCacheRef.current[url];
+      if (cached?.status === "loading" || cached?.status === "ready") {
+        continue;
+      }
+      const controller = new AbortController();
+      imageLoadControllersRef.current.set(url, controller);
+      setImageCache((current) => {
+        const latest = current[url];
+        if (latest?.status === "loading" || latest?.status === "ready") {
+          return current;
+        }
+        return { ...current, [url]: { status: "loading", url } };
+      });
 
-    return () => {
-      controller.abort();
-      if (objectUrl) {
+      const preloadImage = async () => {
+        try {
+          const blob = await downloadMatchDraftSourceImage(url, controller.signal);
+          if (controller.signal.aborted) {
+            return;
+          }
+          const objectUrl = URL.createObjectURL(blob);
+          imageObjectUrlsRef.current.set(url, objectUrl);
+          setImageCache((current) => ({ ...current, [url]: { objectUrl, status: "ready", url } }));
+        } catch {
+          if (controller.signal.aborted) {
+            return;
+          }
+          setImageCache((current) => ({ ...current, [url]: { status: "error", url } }));
+        } finally {
+          if (imageLoadControllersRef.current.get(url) === controller) {
+            imageLoadControllersRef.current.delete(url);
+          }
+        }
+      };
+      void preloadImage();
+    }
+  }, [states]);
+
+  useEffect(
+    () => () => {
+      for (const controller of imageLoadControllersRef.current.values()) {
+        controller.abort();
+      }
+      imageLoadControllersRef.current.clear();
+      for (const objectUrl of imageObjectUrlsRef.current.values()) {
         URL.revokeObjectURL(objectUrl);
       }
-    };
-  }, [activeImageUrl]);
+      imageObjectUrlsRef.current.clear();
+    },
+    [],
+  );
 
   const saveArchive = useCallback(async () => {
     setArchiveError("");
@@ -232,14 +283,16 @@ export function SourceImagePanel({
           <SourceImageLoadingFrame detail="画像一覧を取得しています。" label="元画像を取得中" />
         ) : null}
 
-        {!loading && activeState?.status === "available" && loadedImage.status === "loading" ? (
+        {!loading &&
+        activeState?.status === "available" &&
+        (!activeImage || activeImage.status === "loading") ? (
           <SourceImageLoadingFrame
             detail="元画像を読み込んでいます。"
             label={`${sourceImageKindLabels[activeState.kind]}の元画像を読み込み中`}
           />
         ) : null}
 
-        {!loading && activeState?.status === "available" && loadedImage.status === "error" ? (
+        {!loading && activeState?.status === "available" && activeImage?.status === "error" ? (
           <p className="text-sm text-[var(--color-danger)]">
             元画像を読み込めませんでした。時間をおいて再度開いてください。
           </p>

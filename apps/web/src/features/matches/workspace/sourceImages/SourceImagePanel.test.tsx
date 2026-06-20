@@ -105,6 +105,57 @@ describe("SourceImagePanel", () => {
     expect(capturedRequest.headers.get("X-Momo-Account-Id")).toBe("account_ponta");
   });
 
+  it("preloads available source images and reuses them when switching tabs", async () => {
+    const user = userEvent.setup();
+    const objectUrls = installObjectUrlMock({
+      createObjectURL: (value) => (value instanceof Blob ? `blob:size-${value.size}` : "blob:0"),
+    });
+    const requestedKinds: string[] = [];
+    server.use(
+      http.get("/api/match-drafts/:draftId/source-images/:kind", ({ params }) => {
+        const kind = String(params["kind"]);
+        requestedKinds.push(kind);
+        const body =
+          kind === "total_assets"
+            ? "a"
+            : kind === "revenue"
+              ? "bb"
+              : kind === "incident_log"
+                ? "ccc"
+                : "x";
+        return new HttpResponse(body, {
+          headers: { "Content-Type": "image/png" },
+        });
+      }),
+    );
+
+    render(
+      <SourceImagePanel
+        loading={false}
+        matchDraftId={draftId}
+        preferredKind="total_assets"
+        sourceImages={sourceImages}
+      />,
+    );
+
+    expect(await screen.findByRole("img", { name: "総資産の元画像" })).toHaveAttribute(
+      "src",
+      "blob:size-1",
+    );
+    await waitFor(() => expect(objectUrls.createObjectURL).toHaveBeenCalledTimes(3));
+    expect([...new Set(requestedKinds)].toSorted()).toEqual([
+      "incident_log",
+      "revenue",
+      "total_assets",
+    ]);
+
+    await user.click(screen.getByRole("button", { name: "収益" }));
+
+    expect(screen.queryByLabelText("収益の元画像を読み込み中")).not.toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "収益の元画像" })).toHaveAttribute("src", "blob:size-2");
+    expect(requestedKinds).toHaveLength(3);
+  });
+
   it("opens the source image preview in a modal dialog", async () => {
     const user = userEvent.setup();
     installObjectUrlMock({ createObjectURL: () => "blob:source-image" });

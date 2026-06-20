@@ -1,3 +1,5 @@
+import { trimSearchParam } from "@/shared/lib/searchParams";
+
 import type { ExportFormat, ExportScope, ExportScopeIds } from "./exportTypes";
 
 const scopeKeys = ["seasonMasterId", "heldEventId", "matchId"] as const;
@@ -20,7 +22,7 @@ function scopeFromKeys(searchParams: URLSearchParams): ExportScope {
 }
 
 function trimmedParam(searchParams: URLSearchParams, key: (typeof scopeKeys)[number]) {
-  return searchParams.has(key) ? (searchParams.get(key) ?? "").trim() : undefined;
+  return searchParams.has(key) ? (trimSearchParam(searchParams.get(key)) ?? "") : undefined;
 }
 
 export function parseExportSearchParams(searchParams: URLSearchParams): ExportUrlState {

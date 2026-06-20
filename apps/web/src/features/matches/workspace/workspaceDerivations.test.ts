@@ -32,6 +32,12 @@ describe("draftIdsFromParams", () => {
     expect(draftIdsFromParams(params)).toEqual({ total_assets: "ta-1" });
   });
 
+  it("trims draft id params and omits blank values", () => {
+    const params = new URLSearchParams("totalAssets=%20ta-1%20&revenue=&incidentLog=%20");
+
+    expect(draftIdsFromParams(params)).toEqual({ total_assets: "ta-1" });
+  });
+
   it("returns an empty SlotMap when no slot params are present", () => {
     expect(draftIdsFromParams(new URLSearchParams())).toEqual({});
   });

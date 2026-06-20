@@ -90,6 +90,23 @@ describe("confirmMatchSchema", () => {
     expect(result.matchDraftId).toBe("match-draft-1");
   });
 
+  it("rejects invalid playedAt values", () => {
+    const result = confirmMatchSchema.safeParse({
+      ...valid,
+      playedAt: "not-a-date",
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toContainEqual(
+        expect.objectContaining({
+          message: "開催日時を正しく入力してください",
+          path: ["playedAt"],
+        }),
+      );
+    }
+  });
+
   it("rejects duplicated ranks", () => {
     const result = confirmMatchSchema.safeParse({
       ...valid,

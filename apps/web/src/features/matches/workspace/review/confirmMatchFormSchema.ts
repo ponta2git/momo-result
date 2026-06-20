@@ -23,6 +23,13 @@ const playerSchema = z.object({
   incidents: incidentSchema,
 });
 
+const playedAtSchema = z
+  .string()
+  .min(1, "開催日時を入力してください")
+  .refine((value) => !Number.isNaN(new Date(value).getTime()), {
+    message: "開催日時を正しく入力してください",
+  });
+
 export type ConfirmMatchRequest = components["schemas"]["ConfirmMatchRequest"];
 
 function toIsoFromLocal(value: string): string {
@@ -56,7 +63,7 @@ export const confirmMatchSchema = z
     seasonMasterId: z.string().min(1, "シーズンを選択してください"),
     ownerMemberId: z.enum(memberIds),
     mapMasterId: z.string().min(1, "マップを選択してください"),
-    playedAt: z.string().min(1, "開催日時を入力してください"),
+    playedAt: playedAtSchema,
     matchDraftId: z.string().optional(),
     draftIds: z.object({
       totalAssets: z.string().optional(),

@@ -56,17 +56,29 @@ jobs:
         timeout-minutes: 5
         run: sbt "scalafixAll --check"
 
-      - name: Clean compile
+      - name: Clean test compile
+        if: ${{ !(github.event_name == 'pull_request' || inputs.report_coverage) }}
         timeout-minutes: 10
         run: sbt clean Test/compile
+
+      - name: Clean production compile
+        if: ${{ github.event_name == 'pull_request' || inputs.report_coverage }}
+        timeout-minutes: 10
+        run: sbt clean Compile/compile
 
       - name: OpenAPI generation check
         timeout-minutes: 5
         run: sbt apiOpenApiCheck
 
       - name: Test
+        if: ${{ !(github.event_name == 'pull_request' || inputs.report_coverage) }}
         timeout-minutes: 10
         run: sbt test
+
+      - name: Test with coverage report
+        if: ${{ github.event_name == 'pull_request' || inputs.report_coverage }}
+        timeout-minutes: 10
+        run: sbt apiTestWithCoverageReportOnly
 
       - name: DB quality gate
         timeout-minutes: 10
@@ -78,14 +90,8 @@ jobs:
         timeout-minutes: 5
         run: sbt apiRedisQuality
 
-      - name: Coverage report
-        if: ${{ github.event_name != 'workflow_call' || inputs.report_coverage }}
-        timeout-minutes: 10
-        run: sbt apiCoverageReportOnly
-        continue-on-error: true
-
       - name: Summarize coverage
-        if: ${{ always() && (github.event_name != 'workflow_call' || inputs.report_coverage) }}
+        if: ${{ always() && (github.event_name == 'pull_request' || inputs.report_coverage) }}
         timeout-minutes: 1
         run: |
           python3 ../../scripts/ci/write-coverage-summary.py api \
@@ -95,7 +101,7 @@ jobs:
           cat ../../coverage-summary/api/summary.md >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Upload coverage report
-        if: ${{ always() && (github.event_name != 'workflow_call' || inputs.report_coverage) }}
+        if: ${{ always() && (github.event_name == 'pull_request' || inputs.report_coverage) }}
         uses: actions/upload-artifact@v7
         with:
           name: api-coverage

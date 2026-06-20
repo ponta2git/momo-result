@@ -74,13 +74,14 @@ jobs:
         timeout-minutes: 5
 
       - name: Test
+        if: ${{ !(github.event_name == 'pull_request' || inputs.report_coverage) }}
         env:
           MOMO_DB_MIGRATIONS_DIR: ../../_deps/momo-db/drizzle
         run: uv run pytest
         timeout-minutes: 10
 
-      - name: Coverage report
-        if: ${{ github.event_name != 'workflow_call' || inputs.report_coverage }}
+      - name: Test with coverage report
+        if: ${{ github.event_name == 'pull_request' || inputs.report_coverage }}
         env:
           MOMO_DB_MIGRATIONS_DIR: ../../_deps/momo-db/drizzle
         run: >-
@@ -91,11 +92,10 @@ jobs:
           --cov-report=json:coverage.json
           --cov-report=html:htmlcov
           --cov-fail-under=0
-        continue-on-error: true
         timeout-minutes: 10
 
       - name: Summarize coverage
-        if: ${{ always() && (github.event_name != 'workflow_call' || inputs.report_coverage) }}
+        if: ${{ always() && (github.event_name == 'pull_request' || inputs.report_coverage) }}
         run: |
           python3 ../../scripts/ci/write-coverage-summary.py ocr-worker \
             --root ../.. \
@@ -105,7 +105,7 @@ jobs:
         timeout-minutes: 1
 
       - name: Upload coverage report
-        if: ${{ always() && (github.event_name != 'workflow_call' || inputs.report_coverage) }}
+        if: ${{ always() && (github.event_name == 'pull_request' || inputs.report_coverage) }}
         uses: actions/upload-artifact@v7
         with:
           name: ocr-worker-coverage

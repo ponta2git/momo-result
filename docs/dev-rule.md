@@ -121,12 +121,13 @@ sbt apiQuality
 sbt test
 sbt apiCoverage
 sbt apiCoverageReportOnly
+sbt apiTestWithCoverageReportOnly
 sbt apiDbQuality
 sbt apiRedisQuality
 sbt apiFullCheck
 ```
 
-`sbt test` は integration を除外する。DB/Redis wire 動作は `apiDbQuality` / `apiRedisQuality` で明示的に実行する。
+`sbt test` は integration を除外する。CI report mode では `apiTestWithCoverageReportOnly` が通常テストの代わりに coverage artifact を生成し、`apiCoverageReportOnly` は単体実行向けに `clean` から始める。DB/Redis wire 動作は `apiDbQuality` / `apiRedisQuality` で明示的に実行する。
 
 ### OCR Worker
 
@@ -170,12 +171,12 @@ uv run pytest -m integration
 | Workflow | 実行内容 |
 |---|---|
 | `.github/workflows/public-safety.yml` | public repository safety check |
-| `.github/workflows/web.yml` | API型生成差分、format、lint、typecheck、Vitest、coverage report、build |
-| `.github/workflows/api.yml` | format、lint、clean compile、OpenAPI check、test、DB/Redis quality、coverage report |
-| `.github/workflows/ocr-worker.yml` | ruff format/check、mypy、pytest、coverage report、integration test |
+| `.github/workflows/web.yml` | API型生成差分、format、lint、typecheck、Vitestまたはcoverage付きVitest、build |
+| `.github/workflows/api.yml` | format、lint、clean compile、OpenAPI check、testまたはcoverage付きtest、DB/Redis quality |
+| `.github/workflows/ocr-worker.yml` | ruff format/check、mypy、pytestまたはcoverage付きpytest、integration test |
 | `.github/workflows/deploy.yml` | runtime config check、momo-db migration適用、Docker build、image scan、runtime smoke、Playwright target smoke、Fly deploy |
 
-`deploy.yml` の production deploy 経路では、サブシステム quality gate、public safety、runtime image build / scan / smoke を可能な範囲で並列に進め、`release-ready` で合流させる。report-only coverage はPRレビュー補助の扱いとし、deploy 経由の release gate では待たない。
+`deploy.yml` の production deploy 経路では、サブシステム quality gate、public safety、runtime image build / scan / smoke を可能な範囲で並列に進め、`release-ready` で合流させる。サブシステム workflow の `report_coverage` はPRレビュー補助の扱いとし、production deploy から呼ぶ場合は無効にして release gate では待たない。`report_coverage` が有効な場合、同じテスト集合の通常実行は省き、coverage付きテストをその gate とする。
 
 CIの詳細なtimeout、サービス、artifact path は workflow を正とする。docs へ値を写す場合は、判断に必要な粒度だけに留める。
 

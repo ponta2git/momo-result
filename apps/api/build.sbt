@@ -22,6 +22,10 @@ addCommandAlias(
   "clean; coverageOff; set coverageFailOnMinimum := false; coverage; test; coverageReport; coverageOff",
 )
 addCommandAlias(
+  "apiTestWithCoverageReportOnly",
+  "coverageOff; set coverageFailOnMinimum := false; coverage; test; coverageReport; coverageOff",
+)
+addCommandAlias(
   "apiRedisQuality",
     "set Test / fork := true; " +
     "set Test / parallelExecution := false; " +

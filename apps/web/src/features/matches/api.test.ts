@@ -3,13 +3,14 @@
 import { describe, expect, it } from "vitest";
 
 import { confirmMatch, getMatchListSummary, listMatches } from "@/shared/api/matches";
+import { setDevUser } from "@/test/auth";
 import { setupMsw } from "@/test/msw/lifecycle";
 
 setupMsw();
 
 describe("matches api", () => {
   it("confirms match", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
 
     await expect(
       confirmMatch(
@@ -30,7 +31,7 @@ describe("matches api", () => {
   });
 
   it("loads paged match list and summary", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
 
     await expect(
       listMatches({ page: 1, pageSize: 2, sort: "status_priority" }),

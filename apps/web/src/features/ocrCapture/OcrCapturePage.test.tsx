@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { CreateOcrJobRequest } from "@/features/ocrCapture/api";
 import { OcrCapturePage } from "@/features/ocrCapture/OcrCapturePage";
 import { DevUserPicker } from "@/shared/auth/DevUserPicker";
+import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { installObjectUrlMock } from "@/test/doubles/dom";
 import { setupMsw } from "@/test/msw/lifecycle";
@@ -61,7 +62,7 @@ describe("OcrCapturePage", () => {
   });
 
   it("keeps OCR start disabled until an image is selected", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     renderCaptureRoute();
 
     expect(await screen.findByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
@@ -69,7 +70,7 @@ describe("OcrCapturePage", () => {
   });
 
   it("blocks OCR start while dependent setup choices are still loading", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     const setupGate = createDeferred();
 
     server.use(
@@ -161,7 +162,7 @@ describe("OcrCapturePage", () => {
   });
 
   it("creates a match draft, starts OCR jobs, and returns to matches", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     const createdDrafts: MatchDraftRequestBody[] = [];
     const createdJobs: OcrJobRequestBody[] = [];
 
@@ -221,7 +222,7 @@ describe("OcrCapturePage", () => {
   });
 
   it("shows pending feedback immediately and prevents duplicate OCR starts", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     const draftGate = createDeferred();
     let createdDraftCount = 0;
 
@@ -256,7 +257,7 @@ describe("OcrCapturePage", () => {
   });
 
   it("uses the final tray position as the OCR image type hint", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     const createdJobs: OcrJobRequestBody[] = [];
     installObjectUrlMock({
       createObjectURL: (value) => (value instanceof File ? `blob:${value.name}` : "blob:unknown"),
@@ -325,7 +326,7 @@ describe("OcrCapturePage", () => {
   });
 
   it("cancels the created match draft when no OCR job is created", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     const cancelledDraftIds: string[] = [];
 
     server.use(
@@ -362,7 +363,7 @@ describe("OcrCapturePage", () => {
   });
 
   it("does not expose a direct review action for OCR-running drafts", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     renderCaptureRoute();
 
     const input = await screen.findByLabelText("OCRの画像をアップロード");

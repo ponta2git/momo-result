@@ -3,13 +3,14 @@
 import { describe, expect, it } from "vitest";
 
 import { createHeldEvent, deleteHeldEvent, listHeldEvents } from "@/shared/api/heldEvents";
+import { setDevUser } from "@/test/auth";
 import { setupMsw } from "@/test/msw/lifecycle";
 
 setupMsw();
 
 describe("held events api", () => {
   it("loads held events", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
 
     await expect(listHeldEvents()).resolves.toMatchObject({
       items: [{ id: "held-1" }],
@@ -19,7 +20,7 @@ describe("held events api", () => {
   });
 
   it("creates held event", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
 
     await expect(
       createHeldEvent(
@@ -30,7 +31,7 @@ describe("held events api", () => {
   });
 
   it("deletes held event", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
 
     await expect(deleteHeldEvent("held-1")).resolves.toMatchObject({
       deleted: true,

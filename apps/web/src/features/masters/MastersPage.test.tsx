@@ -13,6 +13,7 @@ import {
   createMatchWorkspaceMasterHandoffPayload,
   saveMasterHandoff,
 } from "@/shared/workflows/matchWorkspaceMasterHandoff";
+import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { makeMatchWorkspaceMasterHandoffValues } from "@/test/factories";
 import { setupMsw } from "@/test/msw/lifecycle";
@@ -41,7 +42,7 @@ describe("MastersPage", () => {
   });
 
   it("renders relation board headings", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     renderPage();
 
     expect(await screen.findByRole("heading", { name: "設定管理" })).toBeInTheDocument();
@@ -52,7 +53,7 @@ describe("MastersPage", () => {
   });
 
   it("shows scoped skeletons while maps and seasons are loading", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     const responseGate = createDeferred();
     server.use(
       http.get("/api/map-masters", async () => {
@@ -82,7 +83,7 @@ describe("MastersPage", () => {
   });
 
   it("creates a new game title and selects it", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     renderPage();
 
     expect(await screen.findByRole("button", { name: /桃太郎電鉄2/u })).toBeInTheDocument();
@@ -94,7 +95,7 @@ describe("MastersPage", () => {
   });
 
   it("invalidates consumer-facing master caches after creating a game title", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     queryClient.setQueryData(masterKeys.gameTitles.list("workspace"), { items: [] });
     queryClient.setQueryData(masterKeys.gameTitles.list("match-detail"), { items: [] });
     renderPage();
@@ -115,7 +116,7 @@ describe("MastersPage", () => {
   });
 
   it("shows the new game title optimistically while the server is responding", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     const responseGate = createDeferred();
     server.use(
       http.post("/api/game-titles", async ({ request }) => {
@@ -146,7 +147,7 @@ describe("MastersPage", () => {
   });
 
   it("shows the six fixed incident masters", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     renderPage();
 
     await user.click(await screen.findByRole("tab", { name: "事件簿" }));
@@ -159,7 +160,7 @@ describe("MastersPage", () => {
   });
 
   it("updates a game title from the admin controls", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     renderPage();
 
     expect(await screen.findByRole("button", { name: /桃太郎電鉄2/u })).toBeInTheDocument();
@@ -174,7 +175,7 @@ describe("MastersPage", () => {
   });
 
   it("creates and deletes member aliases", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     renderPage();
 
     await user.click(await screen.findByRole("tab", { name: "メンバー名寄せ" }));
@@ -203,7 +204,7 @@ describe("MastersPage", () => {
   });
 
   it("shows return action with handoff notice when returnTo is provided", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
 
     const handoffId = saveMasterHandoff(
       createMatchWorkspaceMasterHandoffPayload({
@@ -237,7 +238,7 @@ describe("MastersPage", () => {
   });
 
   it("does not show cached load error after remount while refetch is running", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     await queryClient
       .fetchQuery({
         queryKey: masterQueryKeys.gameTitles("account_ponta"),
@@ -276,7 +277,7 @@ describe("MastersPage", () => {
   });
 
   it("does not reuse list-response cache entries from OCR setup queries", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     queryClient.setQueryData(masterKeys.gameTitles.list("account_ponta"), {
       items: [
         {

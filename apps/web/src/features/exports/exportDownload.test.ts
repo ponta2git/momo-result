@@ -2,7 +2,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-import { installAnchorClickMock, installObjectUrlMock } from "@/test/doubles/dom";
+import { installAnchorClickMock, installFetchMock, installObjectUrlMock } from "@/test/doubles/dom";
 
 import { downloadExportMatches } from "./exportDownload";
 
@@ -10,17 +10,14 @@ describe("exportDownload", () => {
   it("starts the browser download and revokes the blob URL", async () => {
     const anchorClick = installAnchorClickMock();
     const objectUrls = installObjectUrlMock({ createObjectURL: () => "blob:test-download" });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () =>
-          new Response("csv", {
-            headers: {
-              "Content-Disposition": 'attachment; filename="momo-results.csv"',
-              "Content-Type": "text/csv",
-            },
-          }),
-      ),
+    installFetchMock(
+      async () =>
+        new Response("csv", {
+          headers: {
+            "Content-Disposition": 'attachment; filename="momo-results.csv"',
+            "Content-Type": "text/csv",
+          },
+        }),
     );
 
     const result = await downloadExportMatches({ format: "csv", scope: "all" });
@@ -38,16 +35,13 @@ describe("exportDownload", () => {
 
   it("returns timeout when the client abort timer fires", async () => {
     vi.useFakeTimers();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        (_path: RequestInfo | URL, init?: RequestInit) =>
-          new Promise<Response>((_resolve, reject) => {
-            init?.signal?.addEventListener("abort", () => {
-              reject(new DOMException("The operation was aborted.", "AbortError"));
-            });
-          }),
-      ),
+    installFetchMock(
+      (_path, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => {
+            reject(new DOMException("The operation was aborted.", "AbortError"));
+          });
+        }),
     );
 
     const resultPromise = downloadExportMatches({ format: "csv", scope: "all" }, { timeoutMs: 10 });

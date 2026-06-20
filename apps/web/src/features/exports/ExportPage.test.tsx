@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { ExportPage } from "@/features/exports/ExportPage";
 import { matchKeys } from "@/shared/api/queryKeys";
+import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { installAnchorClickMock } from "@/test/doubles/dom";
 import { setupMsw } from "@/test/msw/lifecycle";
@@ -27,7 +28,7 @@ let user: ReturnType<typeof userEvent.setup>;
 let anchorClick: ReturnType<typeof installAnchorClickMock>;
 
 function renderPage({ downloadTimeoutMs, path = "/exports", slowThresholdMs }: RenderOptions = {}) {
-  window.localStorage.setItem("momoresult.devUser", "account_ponta");
+  setDevUser();
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[path]}>

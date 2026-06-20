@@ -13,6 +13,7 @@ import {
   createMatchWorkspaceMasterHandoffPayload,
   saveMasterHandoff,
 } from "@/shared/workflows/matchWorkspaceMasterHandoff";
+import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import {
   makeHeldEventResponse,
@@ -66,7 +67,7 @@ describe("DraftReviewPage", () => {
   });
 
   it("loads OCR drafts and opens confirmation after validation passes", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
 
     render(
       <QueryClientProvider client={queryClient}>
@@ -92,7 +93,7 @@ describe("DraftReviewPage", () => {
   });
 
   it("redirects to the confirmed match when the draft is already confirmed on load", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     server.use(
       http.get("/api/match-drafts/:draftId", ({ params }) =>
         HttpResponse.json(
@@ -126,7 +127,7 @@ describe("DraftReviewPage", () => {
   });
 
   it("checks the latest draft before confirmation and skips POST when already confirmed", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     queryClient.setDefaultOptions({ queries: { retry: false, staleTime: 10_000 } });
     let draftDetailRequests = 0;
     let postCalled = false;
@@ -184,7 +185,7 @@ describe("DraftReviewPage", () => {
   });
 
   it("redirects after a confirm conflict when the draft was confirmed concurrently", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     queryClient.setDefaultOptions({ queries: { retry: false, staleTime: 10_000 } });
     let draftDetailRequests = 0;
     let postCalled = false;
@@ -246,7 +247,7 @@ describe("DraftReviewPage", () => {
   });
 
   it("shows status check failures inside the confirmation dialog", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     queryClient.setDefaultOptions({ queries: { retry: false, staleTime: 10_000 } });
     let draftDetailRequests = 0;
     server.use(
@@ -293,7 +294,7 @@ describe("DraftReviewPage", () => {
   });
 
   it("keeps the review form unavailable until the draft summary has loaded", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     const responseGate = createDeferred();
     server.use(
       http.get("/api/match-drafts/:draftId", async ({ params }) => {
@@ -343,7 +344,7 @@ describe("DraftReviewPage", () => {
   });
 
   it("returns to the loading shell when navigating to another review session", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     const responseGate = createDeferred();
     server.use(
       http.get("/api/match-drafts/:draftId", async ({ params }) => {
@@ -398,7 +399,7 @@ describe("DraftReviewPage", () => {
   });
 
   it("keeps held event creation collapsed until requested", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
 
     render(
       <QueryClientProvider client={queryClient}>
@@ -418,7 +419,7 @@ describe("DraftReviewPage", () => {
   });
 
   it("announces held event creation and selects the created option", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     const heldEvents = [makeHeldEventResponse()];
     const createdHeldEvent = makeHeldEventResponse({
       heldAt: "2026-01-02T00:00:00.000Z",
@@ -457,7 +458,7 @@ describe("DraftReviewPage", () => {
   });
 
   it("renders the development sample drafts without OCR worker data", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
 
     render(
       <QueryClientProvider client={queryClient}>
@@ -487,7 +488,7 @@ describe("DraftReviewPage", () => {
   });
 
   it("allows clearing and retyping numeric result cells without prefixing zero", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
 
     render(
       <QueryClientProvider client={queryClient}>
@@ -511,7 +512,7 @@ describe("DraftReviewPage", () => {
   });
 
   it("restores form values after returning from master management with handoffId", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
 
     const handoffId = saveMasterHandoff(
       createMatchWorkspaceMasterHandoffPayload({

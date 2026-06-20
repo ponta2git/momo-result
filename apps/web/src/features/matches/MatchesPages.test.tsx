@@ -15,6 +15,7 @@ import {
   createMatchWorkspaceMasterHandoffPayload,
   saveMasterHandoff,
 } from "@/shared/workflows/matchWorkspaceMasterHandoff";
+import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { makeFourPlayerResults, makeIncidents, makeMatchDetail } from "@/test/factories";
 import { makeMatchWorkspaceMasterHandoffValues } from "@/test/factories/draftReview";
@@ -40,7 +41,7 @@ describe("MatchesListPage", () => {
   });
 
   it("renders matches and links to detail", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
 
     render(
       <QueryClientProvider client={queryClient}>
@@ -82,7 +83,7 @@ describe("MatchesListPage", () => {
   });
 
   it("commits detail navigation immediately while the detail payload is loading", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     const detailGate = createDeferred();
     let detailRequested = false;
     server.use(
@@ -134,7 +135,7 @@ describe("MatchesListPage", () => {
   });
 
   it("shows empty-list state below the filter section", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     server.use(http.get("/api/matches", () => HttpResponse.json({ items: [] })));
 
     render(
@@ -160,7 +161,7 @@ describe("MatchesListPage", () => {
   });
 
   it("preserves selected held-event filter in URL after submitting", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
 
     render(
       <QueryClientProvider client={queryClient}>
@@ -194,7 +195,7 @@ describe("MatchesListPage", () => {
   });
 
   it("applies sort changes to the URL search params", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
 
     render(
       <QueryClientProvider client={queryClient}>
@@ -223,7 +224,7 @@ describe("MatchesListPage", () => {
   });
 
   it("corrects an out-of-range list page before showing an empty-list state", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     const items = [
       {
         createdAt: "2026-01-01T00:00:00.000Z",
@@ -284,7 +285,7 @@ describe("MatchesListPage", () => {
   });
 
   it("shows optimistic status selection while the filtered list is refetching", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     const responseGate = createDeferred();
     let needsReviewRequested = false;
     const allItems = [
@@ -365,7 +366,7 @@ describe("MatchesListPage", () => {
   });
 
   it("checks a draft action before navigation and redirects to detail when already confirmed", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     let draftDetailRequested = false;
     server.use(
       http.get("/api/matches", () =>
@@ -434,7 +435,7 @@ describe("MatchesListPage", () => {
   });
 
   it("keeps other draft actions usable while one draft status check is pending", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     const firstDraftGate = createDeferred();
     server.use(
       http.get("/api/matches", () =>
@@ -508,7 +509,7 @@ describe("MatchesListPage", () => {
   });
 
   it("opens master management from manual creation with return handoff", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
 
     render(
       <QueryClientProvider client={queryClient}>
@@ -550,7 +551,7 @@ describe("MatchesListPage", () => {
   });
 
   it("does not restore manual creation values from a foreign handoff session", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     const handoffId = saveMasterHandoff(
       createMatchWorkspaceMasterHandoffPayload({
         matchSessionId: "foreign-session",
@@ -602,7 +603,7 @@ describe("MatchEditPage", () => {
   });
 
   it("shows a structured loading shell while the saved match is loading", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     const responseGate = createDeferred();
     server.use(
       http.get("/api/matches/:matchId", async ({ params }) => {
@@ -711,7 +712,7 @@ describe("MatchDetailPage", () => {
   });
 
   it("shows delete confirmation modal when 削除 clicked", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
 
     render(
       <QueryClientProvider client={queryClient}>
@@ -741,7 +742,7 @@ describe("MatchDetailPage", () => {
   });
 
   it("shows match feature badges from the match record and same-series comparison", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     server.use(
       http.get("/api/matches/:matchId", () =>
         HttpResponse.json(
@@ -807,7 +808,7 @@ describe("MatchDetailPage", () => {
   });
 
   it("keeps match-record badges visible when series comparison loading fails", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     server.use(
       http.get("/api/matches/:matchId", () =>
         HttpResponse.json(

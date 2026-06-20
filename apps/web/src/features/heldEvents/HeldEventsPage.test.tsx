@@ -7,6 +7,7 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { HeldEventsPage } from "@/features/heldEvents/HeldEventsPage";
+import { setDevUser } from "@/test/auth";
 import { makeHeldEventResponse } from "@/test/factories";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
@@ -20,7 +21,7 @@ function LocationProbe() {
 }
 
 function renderPage(path = "/held-events") {
-  window.localStorage.setItem("momoresult.devUser", "account_ponta");
+  setDevUser();
   render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[path]}>

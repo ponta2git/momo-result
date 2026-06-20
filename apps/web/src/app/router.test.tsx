@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { ErrorBoundary } from "@/app/ErrorBoundary";
 import { appRoutes } from "@/app/router";
 import { matchKeys } from "@/shared/api/queryKeys";
+import { setDevUser, testDevUserStorageKey } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { makeFourPlayerResults, makeMatchDetail } from "@/test/factories";
 import { setupMsw } from "@/test/msw/lifecycle";
@@ -55,7 +56,7 @@ describe("app routing", () => {
   });
 
   it("redirects / to /matches when authenticated", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     const { router } = renderApp("/");
 
     expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
@@ -64,7 +65,7 @@ describe("app routing", () => {
   });
 
   it("shows a structured loading state while checking the login session", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     const responseGate = createDeferred();
     server.use(
       http.get("/api/auth/me", async () => {
@@ -98,7 +99,7 @@ describe("app routing", () => {
   });
 
   it("redirects /login to /matches when authenticated", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     const { router } = renderApp("/login");
 
     expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
@@ -106,7 +107,7 @@ describe("app routing", () => {
   });
 
   it("commits match detail navigation through the lazy route while the detail payload is loading", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     const detailGate = createDeferred();
     let detailRequested = false;
     server.use(
@@ -144,7 +145,7 @@ describe("app routing", () => {
   });
 
   it("logs out from the global nav in dev auth mode", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     const { queryClient, router } = renderApp("/matches");
 
     expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
@@ -155,7 +156,7 @@ describe("app routing", () => {
     await user.click(screen.getByRole("button", { name: "ログアウト" }));
 
     await waitFor(() => {
-      expect(window.localStorage.getItem("momoresult.devUser")).toBeNull();
+      expect(window.localStorage.getItem(testDevUserStorageKey)).toBeNull();
       expect(queryClient.getQueryData(matchKeys.detail("match-secret"))).toBeUndefined();
       expect(router.state.location.pathname).toBe("/login");
     });
@@ -163,7 +164,7 @@ describe("app routing", () => {
   });
 
   it("renders edit mode at /matches/:matchId/edit", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     const { router } = renderApp("/matches/match-1/edit");
 
     await waitFor(() => {
@@ -172,7 +173,7 @@ describe("app routing", () => {
   });
 
   it("renders held events at /held-events for authenticated users", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     const { router } = renderApp("/held-events");
 
     expect(await screen.findByRole("heading", { name: "開催履歴" })).toBeInTheDocument();
@@ -181,7 +182,7 @@ describe("app routing", () => {
   });
 
   it("renders standings comparison at /analytics/series for authenticated users", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     const { router } = renderApp("/analytics/series");
 
     expect(await screen.findByRole("heading", { name: "戦績比較" })).toBeInTheDocument();
@@ -321,7 +322,7 @@ describe("app routing", () => {
   });
 
   it("requests standings comparison with season and map filters together", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     const aggregateSearches: string[] = [];
     server.use(
       http.get("/api/analytics/series-comparison", ({ request }) => {
@@ -350,7 +351,7 @@ describe("app routing", () => {
   });
 
   it("does not show an empty standings state when comparison options fail to load", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     server.use(
       http.get("/api/analytics/series-comparison/options", () =>
         HttpResponse.json({ detail: "failed" }, { status: 500 }),

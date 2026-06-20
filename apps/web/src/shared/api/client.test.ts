@@ -4,7 +4,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import { getAuthMe } from "@/shared/api/auth";
 import { apiDownload, apiRequest, getStoredDevUser } from "@/shared/api/client";
-import { fetchCallsOf } from "@/test/doubles/dom";
+import { setDevUser } from "@/test/auth";
+import { fetchCallsOf, installFetchMock } from "@/test/doubles/dom";
 
 function requireInit(init: RequestInit | undefined): RequestInit {
   if (!init) {
@@ -23,9 +24,8 @@ describe("apiRequest", () => {
   });
 
   it("adds dev auth and csrf headers only when appropriate", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
-    const fetchMock = vi.fn(async () => Response.json({ ok: true }));
-    vi.stubGlobal("fetch", fetchMock);
+    setDevUser();
+    const fetchMock = installFetchMock(async () => Response.json({ ok: true }));
 
     await apiRequest("/api/example");
     await apiRequest("/api/example", { method: "POST", body: { ok: true } });
@@ -44,8 +44,7 @@ describe("apiRequest", () => {
   });
 
   it("uses csrf token returned from auth state for non-dev mutations", async () => {
-    const fetchMock = vi
-      .fn()
+    const fetchMock = installFetchMock()
       .mockResolvedValueOnce(
         Response.json({
           accountId: "account_ponta",
@@ -56,7 +55,6 @@ describe("apiRequest", () => {
         }),
       )
       .mockResolvedValueOnce(Response.json({ ok: true }));
-    vi.stubGlobal("fetch", fetchMock);
 
     await getAuthMe();
     await apiRequest("/api/example", { method: "POST", body: { ok: true } });
@@ -70,8 +68,7 @@ describe("apiRequest", () => {
   });
 
   it("clears cached csrf token when auth state refresh fails", async () => {
-    const fetchMock = vi
-      .fn()
+    const fetchMock = installFetchMock()
       .mockResolvedValueOnce(
         Response.json({
           accountId: "account_ponta",
@@ -94,7 +91,6 @@ describe("apiRequest", () => {
         ),
       )
       .mockResolvedValueOnce(Response.json({ ok: true }));
-    vi.stubGlobal("fetch", fetchMock);
 
     await getAuthMe();
     await expect(getAuthMe()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
@@ -106,8 +102,7 @@ describe("apiRequest", () => {
   });
 
   it("keeps cached csrf token when auth state refresh has a transient failure", async () => {
-    const fetchMock = vi
-      .fn()
+    const fetchMock = installFetchMock()
       .mockResolvedValueOnce(
         Response.json({
           accountId: "account_ponta",
@@ -119,7 +114,6 @@ describe("apiRequest", () => {
       )
       .mockRejectedValueOnce(new Error("network down"))
       .mockResolvedValueOnce(Response.json({ ok: true }));
-    vi.stubGlobal("fetch", fetchMock);
 
     await getAuthMe();
     await expect(getAuthMe()).rejects.toMatchObject({ detail: "network down" });
@@ -131,9 +125,8 @@ describe("apiRequest", () => {
   });
 
   it("rejects cross-origin API requests before attaching auth headers", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
-    const fetchMock = vi.fn(async () => Response.json({ ok: true }));
-    vi.stubGlobal("fetch", fetchMock);
+    setDevUser();
+    const fetchMock = installFetchMock(async () => Response.json({ ok: true }));
 
     await expect(
       apiRequest("https://evil.example/api/example", { method: "POST", body: { ok: true } }),
@@ -145,8 +138,7 @@ describe("apiRequest", () => {
   });
 
   it("normalizes same-origin absolute API URLs to paths", async () => {
-    const fetchMock = vi.fn(async () => Response.json({ ok: true }));
-    vi.stubGlobal("fetch", fetchMock);
+    const fetchMock = installFetchMock(async () => Response.json({ ok: true }));
 
     await apiRequest(`${window.location.origin}/api/example`);
 
@@ -155,8 +147,7 @@ describe("apiRequest", () => {
   });
 
   it("does not set multipart Content-Type manually", async () => {
-    const fetchMock = vi.fn(async () => Response.json({ ok: true }));
-    vi.stubGlobal("fetch", fetchMock);
+    const fetchMock = installFetchMock(async () => Response.json({ ok: true }));
 
     await apiRequest("/api/uploads/images", { method: "POST", formData: new FormData() });
 
@@ -167,8 +158,7 @@ describe("apiRequest", () => {
   });
 
   it("adds idempotency keys only when callers opt in", async () => {
-    const fetchMock = vi.fn(async () => Response.json({ ok: true }));
-    vi.stubGlobal("fetch", fetchMock);
+    const fetchMock = installFetchMock(async () => Response.json({ ok: true }));
 
     await apiRequest("/api/held-events", { method: "POST", body: { ok: true } });
     await apiRequest("/api/matches", {
@@ -191,8 +181,7 @@ describe("apiRequest", () => {
   });
 
   it("uses caller-provided idempotency key for manual retries", async () => {
-    const fetchMock = vi.fn(async () => Response.json({ ok: true }));
-    vi.stubGlobal("fetch", fetchMock);
+    const fetchMock = installFetchMock(async () => Response.json({ ok: true }));
 
     await apiRequest("/api/matches", {
       method: "POST",
@@ -206,8 +195,7 @@ describe("apiRequest", () => {
   });
 
   it("attaches caller-provided idempotency key to any JSON mutation", async () => {
-    const fetchMock = vi.fn(async () => Response.json({ ok: true }));
-    vi.stubGlobal("fetch", fetchMock);
+    const fetchMock = installFetchMock(async () => Response.json({ ok: true }));
 
     await apiRequest("/api/custom-mutation", {
       method: "POST",
@@ -221,8 +209,8 @@ describe("apiRequest", () => {
   });
 
   it("downloads non-JSON files with dev auth and filename metadata", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
-    const fetchMock = vi.fn(
+    setDevUser();
+    const fetchMock = installFetchMock(
       async () =>
         new Response("a,b\n", {
           headers: {
@@ -231,7 +219,6 @@ describe("apiRequest", () => {
           },
         }),
     );
-    vi.stubGlobal("fetch", fetchMock);
 
     const result = await apiDownload("/api/exports/matches?format=csv");
 
@@ -245,7 +232,7 @@ describe("apiRequest", () => {
   });
 
   it("normalizes problem responses during file download", async () => {
-    const fetchMock = vi.fn(async () =>
+    installFetchMock(async () =>
       Response.json(
         {
           type: "about:blank",
@@ -257,7 +244,6 @@ describe("apiRequest", () => {
         { status: 422 },
       ),
     );
-    vi.stubGlobal("fetch", fetchMock);
 
     await expect(apiDownload("/api/exports/matches?format=x")).rejects.toMatchObject({
       status: 422,
@@ -267,8 +253,7 @@ describe("apiRequest", () => {
   });
 
   it("rejects protocol-relative download URLs", async () => {
-    const fetchMock = vi.fn(async () => new Response("ok"));
-    vi.stubGlobal("fetch", fetchMock);
+    const fetchMock = installFetchMock(async () => new Response("ok"));
 
     await expect(apiDownload("//evil.example/api/export")).rejects.toMatchObject({
       detail: "API requests must use same-origin paths.",

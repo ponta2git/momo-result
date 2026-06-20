@@ -4,6 +4,7 @@ import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
 
 import { SourceImagePanel } from "@/features/matches/workspace/sourceImages/SourceImagePanel";
+import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { installAnchorClickMock, installObjectUrlMock } from "@/test/doubles/dom";
 import { makeMatchDraftSourceImageResponses } from "@/test/factories";
@@ -74,7 +75,7 @@ describe("SourceImagePanel", () => {
   });
 
   it("loads source images through the API client so dev auth headers are sent", async () => {
-    window.localStorage.setItem("momoresult.devUser", "account_ponta");
+    setDevUser();
     installObjectUrlMock({ createObjectURL: () => "blob:source-image" });
     let capturedRequest: Request | undefined;
     server.use(

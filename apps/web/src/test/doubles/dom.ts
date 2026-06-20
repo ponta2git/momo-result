@@ -147,10 +147,19 @@ export function installVideoReadyController(): VideoReadyController {
   };
 }
 
-export type FetchCall = [RequestInfo | URL, RequestInit | undefined];
+type FetchDouble = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
-export function fetchCallsOf(fetchMock: ReturnType<typeof vi.fn>): FetchCall[] {
-  return fetchMock.mock.calls as unknown as FetchCall[];
+export type FetchCall = [RequestInfo | URL, RequestInit | undefined];
+export type FetchMock = ReturnType<typeof vi.fn<FetchDouble>>;
+
+export function installFetchMock(implementation?: FetchDouble): FetchMock {
+  const fetchMock = implementation ? vi.fn<FetchDouble>(implementation) : vi.fn<FetchDouble>();
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
+export function fetchCallsOf(fetchMock: FetchMock): FetchCall[] {
+  return fetchMock.mock.calls.map(([input, init]) => [input, init]);
 }
 
 export function installAnchorClickMock(): {

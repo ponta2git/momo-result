@@ -19,7 +19,7 @@ final class MatchDraftModelsSpec extends FunSuite:
         heldEventId = None,
         matchNoInEvent = None,
         gameTitleId = None,
-        layoutFamily = None,
+        layoutFamily = Some("world"),
         seasonMasterId = None,
         ownerMemberId = None,
         mapMasterId = None,
@@ -42,3 +42,4 @@ final class MatchDraftModelsSpec extends FunSuite:
 
     assertEquals(response.status, "confirmed")
     assertEquals(response.confirmedMatchId, Some("match-confirmed-1"))
+    assertEquals(response.layoutFamily, Some("world"))

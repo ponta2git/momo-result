@@ -4707,6 +4707,9 @@
           "gameTitleId" : {
             "type" : "string"
           },
+          "layoutFamily" : {
+            "type" : "string"
+          },
           "seasonMasterId" : {
             "type" : "string"
           },

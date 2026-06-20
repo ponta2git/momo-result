@@ -281,7 +281,7 @@ end PostgresMatchDrafts
 final class PostgresMatchDraftsRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends MatchDraftsRepository[F]:
   private val delegate: MatchDraftsRepository[F] = MatchDraftsRepository
-    .fromConnectionIO(PostgresMatchDrafts.alg, Database.transactK(transactor))
+    .fromAlg(PostgresMatchDrafts.alg, Database.transactK(transactor))
 
   export delegate.*
 end PostgresMatchDraftsRepository

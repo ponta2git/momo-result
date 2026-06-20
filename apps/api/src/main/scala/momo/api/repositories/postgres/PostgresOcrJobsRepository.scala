@@ -293,7 +293,7 @@ end PostgresOcrJobs
 final class PostgresOcrJobsRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends OcrJobsRepository[F]:
   private val delegate: OcrJobsRepository[F] = OcrJobsRepository
-    .fromConnectionIO(PostgresOcrJobs.alg, Database.transactK(transactor))
+    .fromAlg(PostgresOcrJobs.alg, Database.transactK(transactor))
 
   export delegate.*
 end PostgresOcrJobsRepository

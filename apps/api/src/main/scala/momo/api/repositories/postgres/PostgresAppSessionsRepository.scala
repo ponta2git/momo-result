@@ -65,7 +65,7 @@ end PostgresAppSessions
 final class PostgresAppSessionsRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends AppSessionsRepository[F]:
   private val delegate: AppSessionsRepository[F] = AppSessionsRepository
-    .fromConnectionIO(PostgresAppSessions.alg, Database.transactK(transactor))
+    .fromAlg(PostgresAppSessions.alg, Database.transactK(transactor))
 
   export delegate.*
 end PostgresAppSessionsRepository

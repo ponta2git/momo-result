@@ -1,7 +1,6 @@
 package momo.api.repositories
 
 import cats.~>
-import doobie.ConnectionIO
 
 import momo.api.domain.{
   SeriesComparisonMatchPlayerRow, SeriesComparisonOptionsData, SeriesComparisonResolvedScope,
@@ -19,15 +18,15 @@ trait SeriesComparisonReadModel[F[_]]:
   def loadRows(scope: SeriesComparisonResolvedScope): F[List[SeriesComparisonMatchPlayerRow]]
 
 object SeriesComparisonReadModel:
-  def fromConnectionIO[F[_]](
-      alg: SeriesComparisonReadAlg[ConnectionIO],
-      transactK: ConnectionIO ~> F,
+  def fromAlg[F0[_], F[_]](
+      alg: SeriesComparisonReadAlg[F0],
+      liftK: F0 ~> F,
   ): SeriesComparisonReadModel[F] = new SeriesComparisonReadModel[F]:
-    def options: F[SeriesComparisonOptionsData] = transactK(alg.options)
+    def options: F[SeriesComparisonOptionsData] = liftK(alg.options)
     def resolveScope(scope: SeriesComparisonScope): F[Option[SeriesComparisonResolvedScope]] =
-      transactK(alg.resolveScope(scope))
+      liftK(alg.resolveScope(scope))
     def loadRows(scope: SeriesComparisonResolvedScope): F[List[SeriesComparisonMatchPlayerRow]] =
-      transactK(alg.loadRows(scope))
+      liftK(alg.loadRows(scope))
 
   def liftIdentity[F[_]](alg: SeriesComparisonReadAlg[F]): SeriesComparisonReadModel[F] =
     new SeriesComparisonReadModel[F]:

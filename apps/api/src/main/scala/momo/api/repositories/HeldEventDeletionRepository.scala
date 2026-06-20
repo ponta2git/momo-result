@@ -1,7 +1,6 @@
 package momo.api.repositories
 
 import cats.~>
-import doobie.ConnectionIO
 
 import momo.api.domain.ids.HeldEventId
 
@@ -19,12 +18,12 @@ trait HeldEventDeletionRepository[F[_]]:
   def deleteIfUnreferenced(id: HeldEventId): F[HeldEventDeletionResult]
 
 object HeldEventDeletionRepository:
-  def fromConnectionIO[F[_]](
-      alg: HeldEventDeletionAlg[ConnectionIO],
-      transactK: ConnectionIO ~> F,
+  def fromAlg[F0[_], F[_]](
+      alg: HeldEventDeletionAlg[F0],
+      liftK: F0 ~> F,
   ): HeldEventDeletionRepository[F] = new HeldEventDeletionRepository[F]:
     def deleteIfUnreferenced(id: HeldEventId): F[HeldEventDeletionResult] =
-      transactK(alg.deleteIfUnreferenced(id))
+      liftK(alg.deleteIfUnreferenced(id))
 
   def liftIdentity[F[_]](alg: HeldEventDeletionAlg[F]): HeldEventDeletionRepository[F] =
     new HeldEventDeletionRepository[F]:

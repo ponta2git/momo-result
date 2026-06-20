@@ -1,7 +1,6 @@
 package momo.api.repositories
 
 import cats.~>
-import doobie.ConnectionIO
 
 import momo.api.domain.ids.{GameTitleId, HeldEventId, SeasonMasterId}
 import momo.api.domain.{
@@ -34,12 +33,10 @@ object MatchListReadModel:
       seasonMasterId: Option[SeasonMasterId] = None,
   )
 
-  def fromConnectionIO[F[_]](
-      alg: MatchListAlg[ConnectionIO],
-      transactK: ConnectionIO ~> F,
-  ): MatchListReadModel[F] = new MatchListReadModel[F]:
-    def list(filter: Filter): F[PagedResult[MatchListItem]] = transactK(alg.list(filter))
-    def summarize(filter: SummaryFilter): F[MatchListSummary] = transactK(alg.summarize(filter))
+  def fromAlg[F0[_], F[_]](alg: MatchListAlg[F0], liftK: F0 ~> F): MatchListReadModel[F] =
+    new MatchListReadModel[F]:
+      def list(filter: Filter): F[PagedResult[MatchListItem]] = liftK(alg.list(filter))
+      def summarize(filter: SummaryFilter): F[MatchListSummary] = liftK(alg.summarize(filter))
 
   def liftIdentity[F[_]](alg: MatchListAlg[F]): MatchListReadModel[F] = new MatchListReadModel[F]:
     export alg.*

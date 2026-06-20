@@ -1,7 +1,6 @@
 package momo.api.repositories
 
 import cats.~>
-import doobie.ConnectionIO
 
 import momo.api.domain.ids.*
 import momo.api.domain.{GameTitle, IncidentMaster, MapMaster, MemberAlias, SeasonMaster}
@@ -23,17 +22,15 @@ trait GameTitlesRepository[F[_]]:
   def delete(id: GameTitleId): F[Unit]
 
 object GameTitlesRepository:
-  def fromConnectionIO[F[_]](
-      alg: GameTitlesAlg[ConnectionIO],
-      transactK: ConnectionIO ~> F,
-  ): GameTitlesRepository[F] = new GameTitlesRepository[F]:
-    def list: F[List[GameTitle]] = transactK(alg.list)
-    def find(id: GameTitleId): F[Option[GameTitle]] = transactK(alg.find(id))
-    def create(title: GameTitle): F[Unit] = transactK(alg.create(title))
-    def createWithNextDisplayOrder(title: GameTitle): F[GameTitle] =
-      transactK(alg.createWithNextDisplayOrder(title))
-    def update(title: GameTitle): F[Unit] = transactK(alg.update(title))
-    def delete(id: GameTitleId): F[Unit] = transactK(alg.delete(id))
+  def fromAlg[F0[_], F[_]](alg: GameTitlesAlg[F0], liftK: F0 ~> F): GameTitlesRepository[F] =
+    new GameTitlesRepository[F]:
+      def list: F[List[GameTitle]] = liftK(alg.list)
+      def find(id: GameTitleId): F[Option[GameTitle]] = liftK(alg.find(id))
+      def create(title: GameTitle): F[Unit] = liftK(alg.create(title))
+      def createWithNextDisplayOrder(title: GameTitle): F[GameTitle] =
+        liftK(alg.createWithNextDisplayOrder(title))
+      def update(title: GameTitle): F[Unit] = liftK(alg.update(title))
+      def delete(id: GameTitleId): F[Unit] = liftK(alg.delete(id))
 
   def liftIdentity[F[_]](alg: GameTitlesAlg[F]): GameTitlesRepository[F] =
     new GameTitlesRepository[F]:
@@ -57,18 +54,15 @@ trait MapMastersRepository[F[_]]:
   def delete(id: MapMasterId): F[Unit]
 
 object MapMastersRepository:
-  def fromConnectionIO[F[_]](
-      alg: MapMastersAlg[ConnectionIO],
-      transactK: ConnectionIO ~> F,
-  ): MapMastersRepository[F] = new MapMastersRepository[F]:
-    def list(gameTitleId: Option[GameTitleId]): F[List[MapMaster]] =
-      transactK(alg.list(gameTitleId))
-    def find(id: MapMasterId): F[Option[MapMaster]] = transactK(alg.find(id))
-    def create(map: MapMaster): F[Unit] = transactK(alg.create(map))
-    def createWithNextDisplayOrder(map: MapMaster): F[MapMaster] =
-      transactK(alg.createWithNextDisplayOrder(map))
-    def update(map: MapMaster): F[Unit] = transactK(alg.update(map))
-    def delete(id: MapMasterId): F[Unit] = transactK(alg.delete(id))
+  def fromAlg[F0[_], F[_]](alg: MapMastersAlg[F0], liftK: F0 ~> F): MapMastersRepository[F] =
+    new MapMastersRepository[F]:
+      def list(gameTitleId: Option[GameTitleId]): F[List[MapMaster]] = liftK(alg.list(gameTitleId))
+      def find(id: MapMasterId): F[Option[MapMaster]] = liftK(alg.find(id))
+      def create(map: MapMaster): F[Unit] = liftK(alg.create(map))
+      def createWithNextDisplayOrder(map: MapMaster): F[MapMaster] =
+        liftK(alg.createWithNextDisplayOrder(map))
+      def update(map: MapMaster): F[Unit] = liftK(alg.update(map))
+      def delete(id: MapMasterId): F[Unit] = liftK(alg.delete(id))
 
   def liftIdentity[F[_]](alg: MapMastersAlg[F]): MapMastersRepository[F] =
     new MapMastersRepository[F]:
@@ -92,18 +86,16 @@ trait SeasonMastersRepository[F[_]]:
   def delete(id: SeasonMasterId): F[Unit]
 
 object SeasonMastersRepository:
-  def fromConnectionIO[F[_]](
-      alg: SeasonMastersAlg[ConnectionIO],
-      transactK: ConnectionIO ~> F,
-  ): SeasonMastersRepository[F] = new SeasonMastersRepository[F]:
-    def list(gameTitleId: Option[GameTitleId]): F[List[SeasonMaster]] =
-      transactK(alg.list(gameTitleId))
-    def find(id: SeasonMasterId): F[Option[SeasonMaster]] = transactK(alg.find(id))
-    def create(season: SeasonMaster): F[Unit] = transactK(alg.create(season))
-    def createWithNextDisplayOrder(season: SeasonMaster): F[SeasonMaster] =
-      transactK(alg.createWithNextDisplayOrder(season))
-    def update(season: SeasonMaster): F[Unit] = transactK(alg.update(season))
-    def delete(id: SeasonMasterId): F[Unit] = transactK(alg.delete(id))
+  def fromAlg[F0[_], F[_]](alg: SeasonMastersAlg[F0], liftK: F0 ~> F): SeasonMastersRepository[F] =
+    new SeasonMastersRepository[F]:
+      def list(gameTitleId: Option[GameTitleId]): F[List[SeasonMaster]] =
+        liftK(alg.list(gameTitleId))
+      def find(id: SeasonMasterId): F[Option[SeasonMaster]] = liftK(alg.find(id))
+      def create(season: SeasonMaster): F[Unit] = liftK(alg.create(season))
+      def createWithNextDisplayOrder(season: SeasonMaster): F[SeasonMaster] =
+        liftK(alg.createWithNextDisplayOrder(season))
+      def update(season: SeasonMaster): F[Unit] = liftK(alg.update(season))
+      def delete(id: SeasonMasterId): F[Unit] = liftK(alg.delete(id))
 
   def liftIdentity[F[_]](alg: SeasonMastersAlg[F]): SeasonMastersRepository[F] =
     new SeasonMastersRepository[F]:
@@ -117,11 +109,11 @@ trait IncidentMastersRepository[F[_]]:
   def list: F[List[IncidentMaster]]
 
 object IncidentMastersRepository:
-  def fromConnectionIO[F[_]](
-      alg: IncidentMastersAlg[ConnectionIO],
-      transactK: ConnectionIO ~> F,
+  def fromAlg[F0[_], F[_]](
+      alg: IncidentMastersAlg[F0],
+      liftK: F0 ~> F,
   ): IncidentMastersRepository[F] = new IncidentMastersRepository[F]:
-    def list: F[List[IncidentMaster]] = transactK(alg.list)
+    def list: F[List[IncidentMaster]] = liftK(alg.list)
 
   def liftIdentity[F[_]](alg: IncidentMastersAlg[F]): IncidentMastersRepository[F] =
     new IncidentMastersRepository[F]:
@@ -153,14 +145,12 @@ trait MembersRepository[F[_]]:
   def findByDiscordUserId(userId: UserId): F[Option[momo.api.domain.Member]]
 
 object MembersRepository:
-  def fromConnectionIO[F[_]](
-      alg: MembersAlg[ConnectionIO],
-      transactK: ConnectionIO ~> F,
-  ): MembersRepository[F] = new MembersRepository[F]:
-    def list: F[List[momo.api.domain.Member]] = transactK(alg.list)
-    def find(id: MemberId): F[Option[momo.api.domain.Member]] = transactK(alg.find(id))
-    def findByDiscordUserId(userId: UserId): F[Option[momo.api.domain.Member]] =
-      transactK(alg.findByDiscordUserId(userId))
+  def fromAlg[F0[_], F[_]](alg: MembersAlg[F0], liftK: F0 ~> F): MembersRepository[F] =
+    new MembersRepository[F]:
+      def list: F[List[momo.api.domain.Member]] = liftK(alg.list)
+      def find(id: MemberId): F[Option[momo.api.domain.Member]] = liftK(alg.find(id))
+      def findByDiscordUserId(userId: UserId): F[Option[momo.api.domain.Member]] =
+        liftK(alg.findByDiscordUserId(userId))
 
   def liftIdentity[F[_]](alg: MembersAlg[F]): MembersRepository[F] = new MembersRepository[F]:
     export alg.*

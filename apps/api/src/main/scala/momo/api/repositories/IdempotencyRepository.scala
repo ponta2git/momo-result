@@ -3,7 +3,6 @@ package momo.api.repositories
 import java.time.Instant
 
 import cats.~>
-import doobie.ConnectionIO
 
 import momo.api.domain.ids.AccountId
 
@@ -57,9 +56,10 @@ enum IdempotencyReservation derives CanEqual:
 
 /**
  * Pure algebra for the `idempotency_keys` table. Mirrors the `HeldEventsAlg` shape so the same
- * `fromConnectionIO` / `liftIdentity` patterns work.
+ * `fromAlg` / `liftIdentity` patterns work.
  *
- * `F0` is `ConnectionIO` for Postgres and the user effect `F` for the in-memory adapter.
+ * `F0` is the adapter-local effect for database-backed implementations and the user effect `F` for
+ * the in-memory adapter.
  */
 trait IdempotencyAlg[F0[_]]:
 
@@ -142,35 +142,36 @@ trait IdempotencyRepository[F[_]]:
 
 object IdempotencyRepository:
 
-  /** Postgres facade: lift each Alg op into `F` via the supplied tx boundary. */
-  def fromConnectionIO[F[_]](
-      alg: IdempotencyAlg[ConnectionIO],
-      transactK: ConnectionIO ~> F,
-  ): IdempotencyRepository[F] = new IdempotencyRepository[F]:
-    def lookup(key: String, accountId: AccountId, endpoint: String): F[Option[IdempotencyRecord]] =
-      transactK(alg.lookup(key, accountId, endpoint))
-    def record(entry: IdempotencyRecord): F[Unit] = transactK(alg.record(entry))
-    def reserve(entry: IdempotencyRecord): F[IdempotencyReservation] = transactK(alg.reserve(entry))
-    def reserveWithinAccountLimit(
-        entry: IdempotencyRecord,
-        now: Instant,
-        activeKeyLimitPerAccount: Int,
-    ): F[IdempotencyReservation] =
-      transactK(alg.reserveWithinAccountLimit(entry, now, activeKeyLimitPerAccount))
-    def complete(
-        key: String,
-        accountId: AccountId,
-        endpoint: String,
-        requestHash: Vector[Byte],
-        response: IdempotencyResponse,
-    ): F[Unit] = transactK(alg.complete(key, accountId, endpoint, requestHash, response))
-    def abandon(
-        key: String,
-        accountId: AccountId,
-        endpoint: String,
-        requestHash: Vector[Byte],
-    ): F[Unit] = transactK(alg.abandon(key, accountId, endpoint, requestHash))
-    def cleanup(now: Instant): F[Int] = transactK(alg.cleanup(now))
+  /** Lift each Alg op into `F` via the supplied transaction or interpretation boundary. */
+  def fromAlg[F0[_], F[_]](alg: IdempotencyAlg[F0], liftK: F0 ~> F): IdempotencyRepository[F] =
+    new IdempotencyRepository[F]:
+      def lookup(
+          key: String,
+          accountId: AccountId,
+          endpoint: String,
+      ): F[Option[IdempotencyRecord]] = liftK(alg.lookup(key, accountId, endpoint))
+      def record(entry: IdempotencyRecord): F[Unit] = liftK(alg.record(entry))
+      def reserve(entry: IdempotencyRecord): F[IdempotencyReservation] = liftK(alg.reserve(entry))
+      def reserveWithinAccountLimit(
+          entry: IdempotencyRecord,
+          now: Instant,
+          activeKeyLimitPerAccount: Int,
+      ): F[IdempotencyReservation] =
+        liftK(alg.reserveWithinAccountLimit(entry, now, activeKeyLimitPerAccount))
+      def complete(
+          key: String,
+          accountId: AccountId,
+          endpoint: String,
+          requestHash: Vector[Byte],
+          response: IdempotencyResponse,
+      ): F[Unit] = liftK(alg.complete(key, accountId, endpoint, requestHash, response))
+      def abandon(
+          key: String,
+          accountId: AccountId,
+          endpoint: String,
+          requestHash: Vector[Byte],
+      ): F[Unit] = liftK(alg.abandon(key, accountId, endpoint, requestHash))
+      def cleanup(now: Instant): F[Int] = liftK(alg.cleanup(now))
 
   /** InMemory facade: the algebra already runs in `F`, so the lift is identity. */
   def liftIdentity[F[_]](alg: IdempotencyAlg[F]): IdempotencyRepository[F] =

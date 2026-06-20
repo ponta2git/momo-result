@@ -3,7 +3,6 @@ package momo.api.repositories
 import java.time.Instant
 
 import cats.~>
-import doobie.ConnectionIO
 
 import momo.api.domain.ids.{AccountId, MemberId}
 
@@ -45,17 +44,15 @@ trait AppSessionsRepository[F[_]]:
   def deleteExpired(now: Instant): F[Int]
 
 object AppSessionsRepository:
-  def fromConnectionIO[F[_]](
-      alg: AppSessionsAlg[ConnectionIO],
-      transactK: ConnectionIO ~> F,
-  ): AppSessionsRepository[F] = new AppSessionsRepository[F]:
-    def find(idHash: String): F[Option[AppSession]] = transactK(alg.find(idHash))
-    def upsert(session: AppSession): F[Unit] = transactK(alg.upsert(session))
-    def delete(idHash: String): F[Unit] = transactK(alg.delete(idHash))
-    def deleteByAccount(accountId: AccountId): F[Int] = transactK(alg.deleteByAccount(accountId))
-    def renew(idHash: String, lastSeenAt: Instant, expiresAt: Instant): F[Unit] =
-      transactK(alg.renew(idHash, lastSeenAt, expiresAt))
-    def deleteExpired(now: Instant): F[Int] = transactK(alg.deleteExpired(now))
+  def fromAlg[F0[_], F[_]](alg: AppSessionsAlg[F0], liftK: F0 ~> F): AppSessionsRepository[F] =
+    new AppSessionsRepository[F]:
+      def find(idHash: String): F[Option[AppSession]] = liftK(alg.find(idHash))
+      def upsert(session: AppSession): F[Unit] = liftK(alg.upsert(session))
+      def delete(idHash: String): F[Unit] = liftK(alg.delete(idHash))
+      def deleteByAccount(accountId: AccountId): F[Int] = liftK(alg.deleteByAccount(accountId))
+      def renew(idHash: String, lastSeenAt: Instant, expiresAt: Instant): F[Unit] =
+        liftK(alg.renew(idHash, lastSeenAt, expiresAt))
+      def deleteExpired(now: Instant): F[Int] = liftK(alg.deleteExpired(now))
 
   def liftIdentity[F[_]](alg: AppSessionsAlg[F]): AppSessionsRepository[F] =
     new AppSessionsRepository[F]:

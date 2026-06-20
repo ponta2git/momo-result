@@ -144,7 +144,7 @@ end PostgresHeldEventDeletion
 final class PostgresHeldEventsRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends HeldEventsRepository[F]:
   private val delegate: HeldEventsRepository[F] = HeldEventsRepository
-    .fromConnectionIO(PostgresHeldEvents.alg, Database.transactK(transactor))
+    .fromAlg(PostgresHeldEvents.alg, Database.transactK(transactor))
 
   export delegate.*
 end PostgresHeldEventsRepository
@@ -152,7 +152,7 @@ end PostgresHeldEventsRepository
 final class PostgresHeldEventDeletionRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends HeldEventDeletionRepository[F]:
   private val delegate: HeldEventDeletionRepository[F] = HeldEventDeletionRepository
-    .fromConnectionIO(PostgresHeldEventDeletion.alg, Database.transactK(transactor))
+    .fromAlg(PostgresHeldEventDeletion.alg, Database.transactK(transactor))
 
   export delegate.*
 end PostgresHeldEventDeletionRepository

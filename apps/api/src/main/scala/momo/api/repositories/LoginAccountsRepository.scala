@@ -3,7 +3,6 @@ package momo.api.repositories
 import java.time.Instant
 
 import cats.~>
-import doobie.ConnectionIO
 
 import momo.api.domain.LoginAccount
 import momo.api.domain.ids.{AccountId, MemberId, UserId}
@@ -44,18 +43,16 @@ trait LoginAccountsRepository[F[_]]:
   def enabledAdminCount: F[Int]
 
 object LoginAccountsRepository:
-  def fromConnectionIO[F[_]](
-      alg: LoginAccountsAlg[ConnectionIO],
-      transactK: ConnectionIO ~> F,
-  ): LoginAccountsRepository[F] = new LoginAccountsRepository[F]:
-    def list: F[List[LoginAccount]] = transactK(alg.list)
-    def find(id: AccountId): F[Option[LoginAccount]] = transactK(alg.find(id))
-    def findByDiscordUserId(userId: UserId): F[Option[LoginAccount]] =
-      transactK(alg.findByDiscordUserId(userId))
-    def create(account: CreateLoginAccountData): F[LoginAccount] = transactK(alg.create(account))
-    def update(id: AccountId, data: UpdateLoginAccountData): F[Option[LoginAccount]] =
-      transactK(alg.update(id, data))
-    def enabledAdminCount: F[Int] = transactK(alg.enabledAdminCount)
+  def fromAlg[F0[_], F[_]](alg: LoginAccountsAlg[F0], liftK: F0 ~> F): LoginAccountsRepository[F] =
+    new LoginAccountsRepository[F]:
+      def list: F[List[LoginAccount]] = liftK(alg.list)
+      def find(id: AccountId): F[Option[LoginAccount]] = liftK(alg.find(id))
+      def findByDiscordUserId(userId: UserId): F[Option[LoginAccount]] =
+        liftK(alg.findByDiscordUserId(userId))
+      def create(account: CreateLoginAccountData): F[LoginAccount] = liftK(alg.create(account))
+      def update(id: AccountId, data: UpdateLoginAccountData): F[Option[LoginAccount]] =
+        liftK(alg.update(id, data))
+      def enabledAdminCount: F[Int] = liftK(alg.enabledAdminCount)
 
   def liftIdentity[F[_]](alg: LoginAccountsAlg[F]): LoginAccountsRepository[F] =
     new LoginAccountsRepository[F]:

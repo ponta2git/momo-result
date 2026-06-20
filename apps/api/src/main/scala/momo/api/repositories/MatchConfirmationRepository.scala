@@ -3,7 +3,6 @@ package momo.api.repositories
 import java.time.Instant
 
 import cats.~>
-import doobie.ConnectionIO
 
 import momo.api.domain.ids.{MatchDraftId, OcrDraftId}
 import momo.api.domain.{MatchDraft, MatchRecord}
@@ -40,15 +39,15 @@ trait MatchConfirmationRepository[F[_]]:
   ): F[Boolean]
 
 object MatchConfirmationRepository:
-  def fromConnectionIO[F[_]](
-      alg: MatchConfirmationAlg[ConnectionIO],
-      transactK: ConnectionIO ~> F,
+  def fromAlg[F0[_], F[_]](
+      alg: MatchConfirmationAlg[F0],
+      liftK: F0 ~> F,
   ): MatchConfirmationRepository[F] = new MatchConfirmationRepository[F]:
     def confirm(
         record: MatchRecord,
         draft: Option[MatchDraftConfirmation],
         updatedAt: Instant,
-    ): F[Boolean] = transactK(alg.confirm(record, draft, updatedAt))
+    ): F[Boolean] = liftK(alg.confirm(record, draft, updatedAt))
 
   def liftIdentity[F[_]](alg: MatchConfirmationAlg[F]): MatchConfirmationRepository[F] =
     new MatchConfirmationRepository[F]:

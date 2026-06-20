@@ -37,7 +37,7 @@ end PostgresMembers
 final class PostgresMembersRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends MembersRepository[F]:
   private val delegate: MembersRepository[F] = MembersRepository
-    .fromConnectionIO(PostgresMembers.alg, Database.transactK(transactor))
+    .fromAlg(PostgresMembers.alg, Database.transactK(transactor))
 
   export delegate.*
 end PostgresMembersRepository

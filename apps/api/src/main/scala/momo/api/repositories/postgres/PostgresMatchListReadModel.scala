@@ -297,7 +297,7 @@ end PostgresMatchList
 final class PostgresMatchListReadModel[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends MatchListReadModel[F]:
   private val delegate: MatchListReadModel[F] = MatchListReadModel
-    .fromConnectionIO(PostgresMatchList.alg, Database.transactK(transactor))
+    .fromAlg(PostgresMatchList.alg, Database.transactK(transactor))
 
   export delegate.*
 end PostgresMatchListReadModel

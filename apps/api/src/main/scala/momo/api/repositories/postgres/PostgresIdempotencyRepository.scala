@@ -224,7 +224,7 @@ end PostgresIdempotency
 final class PostgresIdempotencyRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends IdempotencyRepository[F]:
   private val delegate: IdempotencyRepository[F] = IdempotencyRepository
-    .fromConnectionIO(PostgresIdempotency.alg, Database.transactK(transactor))
+    .fromAlg(PostgresIdempotency.alg, Database.transactK(transactor))
 
   export delegate.*
 end PostgresIdempotencyRepository

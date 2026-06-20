@@ -3,7 +3,6 @@ package momo.api.repositories
 import java.time.Instant
 
 import cats.~>
-import doobie.ConnectionIO
 
 import momo.api.domain.ids.*
 import momo.api.domain.{MatchDraft, MatchDraftStatus, ScreenType}
@@ -73,39 +72,37 @@ object MatchDraftsRepository:
       limit: Option[Int] = None,
   )
 
-  def fromConnectionIO[F[_]](
-      alg: MatchDraftsAlg[ConnectionIO],
-      transactK: ConnectionIO ~> F,
-  ): MatchDraftsRepository[F] = new MatchDraftsRepository[F]:
-    def create(draft: MatchDraft): F[Unit] = transactK(alg.create(draft))
-    def update(draft: MatchDraft, updatedAt: Instant): F[Boolean] =
-      transactK(alg.update(draft, updatedAt))
-    def find(id: MatchDraftId): F[Option[MatchDraft]] = transactK(alg.find(id))
-    def list(filter: ListFilter): F[List[MatchDraft]] = transactK(alg.list(filter))
-    def markConfirmed(
-        draftId: MatchDraftId,
-        confirmedMatchId: MatchId,
-        updatedAt: Instant,
-    ): F[Boolean] = transactK(alg.markConfirmed(draftId, confirmedMatchId, updatedAt))
-    def markOcrFailed(draftId: MatchDraftId, updatedAt: Instant): F[Boolean] =
-      transactK(alg.markOcrFailed(draftId, updatedAt))
-    def cancel(draftId: MatchDraftId, updatedAt: Instant): F[Boolean] =
-      transactK(alg.cancel(draftId, updatedAt))
-    def attachOcrArtifacts(
-        draftId: MatchDraftId,
-        screenType: ScreenType,
-        sourceImageId: ImageId,
-        ocrDraftId: OcrDraftId,
-        updatedAt: Instant,
-    ): F[Boolean] =
-      transactK(alg.attachOcrArtifacts(draftId, screenType, sourceImageId, ocrDraftId, updatedAt))
-    def markSourceImagesRetention(
-        draftId: MatchDraftId,
-        retainedUntil: Option[Instant],
-        deletedAt: Option[Instant],
-        updatedAt: Instant,
-    ): F[Boolean] =
-      transactK(alg.markSourceImagesRetention(draftId, retainedUntil, deletedAt, updatedAt))
+  def fromAlg[F0[_], F[_]](alg: MatchDraftsAlg[F0], liftK: F0 ~> F): MatchDraftsRepository[F] =
+    new MatchDraftsRepository[F]:
+      def create(draft: MatchDraft): F[Unit] = liftK(alg.create(draft))
+      def update(draft: MatchDraft, updatedAt: Instant): F[Boolean] =
+        liftK(alg.update(draft, updatedAt))
+      def find(id: MatchDraftId): F[Option[MatchDraft]] = liftK(alg.find(id))
+      def list(filter: ListFilter): F[List[MatchDraft]] = liftK(alg.list(filter))
+      def markConfirmed(
+          draftId: MatchDraftId,
+          confirmedMatchId: MatchId,
+          updatedAt: Instant,
+      ): F[Boolean] = liftK(alg.markConfirmed(draftId, confirmedMatchId, updatedAt))
+      def markOcrFailed(draftId: MatchDraftId, updatedAt: Instant): F[Boolean] =
+        liftK(alg.markOcrFailed(draftId, updatedAt))
+      def cancel(draftId: MatchDraftId, updatedAt: Instant): F[Boolean] =
+        liftK(alg.cancel(draftId, updatedAt))
+      def attachOcrArtifacts(
+          draftId: MatchDraftId,
+          screenType: ScreenType,
+          sourceImageId: ImageId,
+          ocrDraftId: OcrDraftId,
+          updatedAt: Instant,
+      ): F[Boolean] =
+        liftK(alg.attachOcrArtifacts(draftId, screenType, sourceImageId, ocrDraftId, updatedAt))
+      def markSourceImagesRetention(
+          draftId: MatchDraftId,
+          retainedUntil: Option[Instant],
+          deletedAt: Option[Instant],
+          updatedAt: Instant,
+      ): F[Boolean] =
+        liftK(alg.markSourceImagesRetention(draftId, retainedUntil, deletedAt, updatedAt))
 
   def liftIdentity[F[_]](alg: MatchDraftsAlg[F]): MatchDraftsRepository[F] =
     new MatchDraftsRepository[F]:

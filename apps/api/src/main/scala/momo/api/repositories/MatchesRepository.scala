@@ -1,7 +1,6 @@
 package momo.api.repositories
 
 import cats.~>
-import doobie.ConnectionIO
 
 import momo.api.domain.ids.*
 import momo.api.domain.{MatchNoInEvent, MatchRecord}
@@ -47,28 +46,26 @@ object MatchesRepository:
       limit: Option[Int] = None,
   )
 
-  def fromConnectionIO[F[_]](
-      alg: MatchesAlg[ConnectionIO],
-      transactK: ConnectionIO ~> F,
-  ): MatchesRepository[F] = new MatchesRepository[F]:
-    def create(record: MatchRecord): F[Unit] = transactK(alg.create(record))
-    def update(record: MatchRecord, updatedAt: java.time.Instant): F[Unit] =
-      transactK(alg.update(record, updatedAt))
-    def delete(id: MatchId): F[Boolean] = transactK(alg.delete(id))
-    def find(id: MatchId): F[Option[MatchRecord]] = transactK(alg.find(id))
-    def list(filter: ListFilter): F[List[MatchRecord]] = transactK(alg.list(filter))
-    def listByHeldEvent(heldEventId: HeldEventId): F[List[MatchRecord]] =
-      transactK(alg.listByHeldEvent(heldEventId))
-    def existsMatchNo(heldEventId: HeldEventId, matchNoInEvent: MatchNoInEvent): F[Boolean] =
-      transactK(alg.existsMatchNo(heldEventId, matchNoInEvent))
-    def existsMatchNoExcept(
-        heldEventId: HeldEventId,
-        matchNoInEvent: MatchNoInEvent,
-        excludeMatchId: MatchId,
-    ): F[Boolean] = transactK(alg.existsMatchNoExcept(heldEventId, matchNoInEvent, excludeMatchId))
-    def maxMatchNo(heldEventId: HeldEventId): F[Int] = transactK(alg.maxMatchNo(heldEventId))
-    def countByHeldEvents(heldEventIds: List[HeldEventId]): F[Map[HeldEventId, Int]] =
-      transactK(alg.countByHeldEvents(heldEventIds))
+  def fromAlg[F0[_], F[_]](alg: MatchesAlg[F0], liftK: F0 ~> F): MatchesRepository[F] =
+    new MatchesRepository[F]:
+      def create(record: MatchRecord): F[Unit] = liftK(alg.create(record))
+      def update(record: MatchRecord, updatedAt: java.time.Instant): F[Unit] =
+        liftK(alg.update(record, updatedAt))
+      def delete(id: MatchId): F[Boolean] = liftK(alg.delete(id))
+      def find(id: MatchId): F[Option[MatchRecord]] = liftK(alg.find(id))
+      def list(filter: ListFilter): F[List[MatchRecord]] = liftK(alg.list(filter))
+      def listByHeldEvent(heldEventId: HeldEventId): F[List[MatchRecord]] =
+        liftK(alg.listByHeldEvent(heldEventId))
+      def existsMatchNo(heldEventId: HeldEventId, matchNoInEvent: MatchNoInEvent): F[Boolean] =
+        liftK(alg.existsMatchNo(heldEventId, matchNoInEvent))
+      def existsMatchNoExcept(
+          heldEventId: HeldEventId,
+          matchNoInEvent: MatchNoInEvent,
+          excludeMatchId: MatchId,
+      ): F[Boolean] = liftK(alg.existsMatchNoExcept(heldEventId, matchNoInEvent, excludeMatchId))
+      def maxMatchNo(heldEventId: HeldEventId): F[Int] = liftK(alg.maxMatchNo(heldEventId))
+      def countByHeldEvents(heldEventIds: List[HeldEventId]): F[Map[HeldEventId, Int]] =
+        liftK(alg.countByHeldEvents(heldEventIds))
 
   def liftIdentity[F[_]](alg: MatchesAlg[F]): MatchesRepository[F] = new MatchesRepository[F]:
     export alg.*

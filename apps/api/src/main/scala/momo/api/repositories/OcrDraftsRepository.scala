@@ -1,7 +1,6 @@
 package momo.api.repositories
 
 import cats.~>
-import doobie.ConnectionIO
 
 import momo.api.domain.OcrDraft
 import momo.api.domain.ids.OcrDraftId
@@ -15,12 +14,10 @@ trait OcrDraftsRepository[F[_]]:
   def find(draftId: OcrDraftId): F[Option[OcrDraft]]
 
 object OcrDraftsRepository:
-  def fromConnectionIO[F[_]](
-      alg: OcrDraftsAlg[ConnectionIO],
-      transactK: ConnectionIO ~> F,
-  ): OcrDraftsRepository[F] = new OcrDraftsRepository[F]:
-    def create(draft: OcrDraft): F[Unit] = transactK(alg.create(draft))
-    def find(draftId: OcrDraftId): F[Option[OcrDraft]] = transactK(alg.find(draftId))
+  def fromAlg[F0[_], F[_]](alg: OcrDraftsAlg[F0], liftK: F0 ~> F): OcrDraftsRepository[F] =
+    new OcrDraftsRepository[F]:
+      def create(draft: OcrDraft): F[Unit] = liftK(alg.create(draft))
+      def find(draftId: OcrDraftId): F[Option[OcrDraft]] = liftK(alg.find(draftId))
 
   def liftIdentity[F[_]](alg: OcrDraftsAlg[F]): OcrDraftsRepository[F] = new OcrDraftsRepository[F]:
     export alg.*

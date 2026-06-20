@@ -284,7 +284,7 @@ end PostgresSeriesComparison
 final class PostgresSeriesComparisonReadModel[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends SeriesComparisonReadModel[F]:
   private val delegate: SeriesComparisonReadModel[F] = SeriesComparisonReadModel
-    .fromConnectionIO(PostgresSeriesComparison.alg, Database.transactK(transactor))
+    .fromAlg(PostgresSeriesComparison.alg, Database.transactK(transactor))
 
   export delegate.*
 end PostgresSeriesComparisonReadModel

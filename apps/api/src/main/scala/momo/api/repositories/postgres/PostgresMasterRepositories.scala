@@ -114,7 +114,7 @@ end PostgresGameTitles
 final class PostgresGameTitlesRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends GameTitlesRepository[F]:
   private val delegate: GameTitlesRepository[F] = GameTitlesRepository
-    .fromConnectionIO(PostgresGameTitles.alg, Database.transactK(transactor))
+    .fromAlg(PostgresGameTitles.alg, Database.transactK(transactor))
 
   export delegate.*
 end PostgresGameTitlesRepository
@@ -190,7 +190,7 @@ end PostgresMapMasters
 final class PostgresMapMastersRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends MapMastersRepository[F]:
   private val delegate: MapMastersRepository[F] = MapMastersRepository
-    .fromConnectionIO(PostgresMapMasters.alg, Database.transactK(transactor))
+    .fromAlg(PostgresMapMasters.alg, Database.transactK(transactor))
 
   export delegate.*
 end PostgresMapMastersRepository
@@ -267,7 +267,7 @@ end PostgresSeasonMasters
 final class PostgresSeasonMastersRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends SeasonMastersRepository[F]:
   private val delegate: SeasonMastersRepository[F] = SeasonMastersRepository
-    .fromConnectionIO(PostgresSeasonMasters.alg, Database.transactK(transactor))
+    .fromAlg(PostgresSeasonMasters.alg, Database.transactK(transactor))
 
   export delegate.*
 end PostgresSeasonMastersRepository
@@ -285,7 +285,7 @@ end PostgresIncidentMasters
 final class PostgresIncidentMastersRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends IncidentMastersRepository[F]:
   private val delegate: IncidentMastersRepository[F] = IncidentMastersRepository
-    .fromConnectionIO(PostgresIncidentMasters.alg, Database.transactK(transactor))
+    .fromAlg(PostgresIncidentMasters.alg, Database.transactK(transactor))
 
   export delegate.*
 end PostgresIncidentMastersRepository

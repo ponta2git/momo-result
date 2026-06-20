@@ -3,7 +3,6 @@ package momo.api.repositories
 import java.time.Instant
 
 import cats.~>
-import doobie.ConnectionIO
 
 import momo.api.domain.ids.{OcrDraftId, OcrJobId}
 import momo.api.domain.{OcrFailure, OcrJob}
@@ -25,19 +24,17 @@ trait OcrJobsRepository[F[_]]:
   def cancelQueuedByDraftIds(draftIds: List[OcrDraftId], now: Instant): F[Int]
 
 object OcrJobsRepository:
-  def fromConnectionIO[F[_]](
-      alg: OcrJobsAlg[ConnectionIO],
-      transactK: ConnectionIO ~> F,
-  ): OcrJobsRepository[F] = new OcrJobsRepository[F]:
-    def create(job: OcrJob): F[Unit] = transactK(alg.create(job))
-    def find(jobId: OcrJobId): F[Option[OcrJob]] = transactK(alg.find(jobId))
-    def countActive: F[Long] = transactK(alg.countActive)
-    def markFailed(jobId: OcrJobId, failure: OcrFailure, now: Instant): F[Unit] =
-      transactK(alg.markFailed(jobId, failure, now))
-    def cancelQueued(jobId: OcrJobId, now: Instant): F[Boolean] =
-      transactK(alg.cancelQueued(jobId, now))
-    def cancelQueuedByDraftIds(draftIds: List[OcrDraftId], now: Instant): F[Int] =
-      transactK(alg.cancelQueuedByDraftIds(draftIds, now))
+  def fromAlg[F0[_], F[_]](alg: OcrJobsAlg[F0], liftK: F0 ~> F): OcrJobsRepository[F] =
+    new OcrJobsRepository[F]:
+      def create(job: OcrJob): F[Unit] = liftK(alg.create(job))
+      def find(jobId: OcrJobId): F[Option[OcrJob]] = liftK(alg.find(jobId))
+      def countActive: F[Long] = liftK(alg.countActive)
+      def markFailed(jobId: OcrJobId, failure: OcrFailure, now: Instant): F[Unit] =
+        liftK(alg.markFailed(jobId, failure, now))
+      def cancelQueued(jobId: OcrJobId, now: Instant): F[Boolean] =
+        liftK(alg.cancelQueued(jobId, now))
+      def cancelQueuedByDraftIds(draftIds: List[OcrDraftId], now: Instant): F[Int] =
+        liftK(alg.cancelQueuedByDraftIds(draftIds, now))
 
   def liftIdentity[F[_]](alg: OcrJobsAlg[F]): OcrJobsRepository[F] = new OcrJobsRepository[F]:
     export alg.*

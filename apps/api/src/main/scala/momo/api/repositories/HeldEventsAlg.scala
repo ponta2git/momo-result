@@ -6,8 +6,9 @@ import momo.api.domain.{HeldEvent, PageRequest, PagedResult}
 /**
  * Pure algebra for `held_events` access.
  *
- * `F0` is the algebra-level effect: `ConnectionIO` for the Postgres adapter (so multiple Alg ops
- * can be composed inside one transaction), or the user effect `F` for the in-memory adapter.
+ * `F0` is the algebra-level effect: a transaction-capable effect for database adapters (so
+ * multiple Alg ops can be composed inside one transaction), or the user effect `F` for the
+ * in-memory adapter.
  *
  * Knows nothing about transactions — see [[HeldEventsRepository]] for the transactional facade.
  */

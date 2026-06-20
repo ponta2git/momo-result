@@ -115,7 +115,7 @@ end PostgresLoginAccounts
 final class PostgresLoginAccountsRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends LoginAccountsRepository[F]:
   private val delegate: LoginAccountsRepository[F] = LoginAccountsRepository
-    .fromConnectionIO(PostgresLoginAccounts.alg, Database.transactK(transactor))
+    .fromAlg(PostgresLoginAccounts.alg, Database.transactK(transactor))
 
   export delegate.*
 end PostgresLoginAccountsRepository

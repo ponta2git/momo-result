@@ -82,7 +82,7 @@ end PostgresOcrDrafts
 final class PostgresOcrDraftsRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends OcrDraftsRepository[F]:
   private val delegate: OcrDraftsRepository[F] = OcrDraftsRepository
-    .fromConnectionIO(PostgresOcrDrafts.alg, Database.transactK(transactor))
+    .fromAlg(PostgresOcrDrafts.alg, Database.transactK(transactor))
 
   export delegate.*
 end PostgresOcrDraftsRepository

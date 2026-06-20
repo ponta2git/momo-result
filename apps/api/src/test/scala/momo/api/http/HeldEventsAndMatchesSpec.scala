@@ -355,6 +355,24 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
       assertEquals(jsonField[Int](body, "matchNoInEvent"), 1)
   }
 
+  app.test("DELETE /api/matches/:id deletes the confirmed match draft") { httpApp =>
+    for
+      heldEventId <- createEvent(httpApp)
+      draftId <- createMatchDraft(httpApp)
+      createRes <- httpApp.run(writePost(
+        uri"/api/matches",
+        confirmBody(heldEventId).deepMerge(Json.obj("matchDraftId" -> Json.fromString(draftId))),
+      ))
+      createBody <- createRes.as[Json]
+      matchId = jsonField[String](createBody, "matchId")
+      _ = assertEquals(createRes.status, Status.Ok)
+      deleteRes <- httpApp.run(writeDelete(Uri.unsafeFromString(s"/api/matches/$matchId")))
+      _ = assertEquals(deleteRes.status, Status.Ok)
+      draftRes <- httpApp.run(readGet(Uri.unsafeFromString(s"/api/match-drafts/$draftId")))
+      _ <- assertProblem(draftRes, Status.NotFound, "NOT_FOUND", "match draft was not found")
+    yield ()
+  }
+
   app.test(
     "GET /api/match-drafts/:draftId/source-images/:kind returns the stored image media type"
   ) { httpApp =>

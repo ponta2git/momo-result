@@ -10,13 +10,24 @@ import momo.api.domain.{
   MatchDraft, MatchDraftOcrSlot, MatchDraftOcrStatus, MatchDraftStatus, OcrFailure, OcrJob,
   OcrJobStatus,
 }
+import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.{MatchDraftsRepository, OcrJobsRepository}
 
 final class InMemoryOcrJobsRepository[F[_]: Sync] private (
     ref: Ref[F, Map[String, OcrJob]],
     onQueuedCancel: (OcrJob.Cancelled, List[OcrJob]) => F[Unit],
 ) extends OcrJobsRepository[F]:
-  override def create(job: OcrJob): F[Unit] = ref.update(_ + (job.id.value -> job))
+  override def create(job: OcrJob): F[Unit] = ref.modify { current =>
+    if current.contains(job.id.value) then
+      (
+        current,
+        Left(new AppException(AppError.Conflict(s"ocr job already exists: ${job.id.value}"))),
+      )
+    else (current + (job.id.value -> job), Right(()))
+  }.flatMap {
+    case Right(()) => Sync[F].unit
+    case Left(error) => Sync[F].raiseError(error)
+  }
 
   override def find(jobId: OcrJobId): F[Option[OcrJob]] = ref.get.map(_.get(jobId.value))
 

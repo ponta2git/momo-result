@@ -209,6 +209,15 @@ final class OcrQueuePayloadSpec extends FunSuite with JsonSchemaAssertions:
       Left("field attempt must be a string"),
     )
     assertEquals(
+      OcrQueuePayload
+        .fromJson(json.mapObject(_.add("imagePath", Json.fromString("relative/image.png")))),
+      Left("imagePath must be an absolute path"),
+    )
+    assertEquals(
+      OcrQueuePayload.fromJson(json.mapObject(_.add("imagePath", Json.fromString("\u0000")))),
+      Left("imagePath must be a valid path"),
+    )
+    assertEquals(
       OcrQueuePayload.fromJson(
         json.mapObject(_.add(OcrQueuePayload.RequestIdKey, Json.fromString("bad value")))
       ),

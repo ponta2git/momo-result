@@ -129,6 +129,25 @@ final class ApiEndpointsArchitectureSpec extends FunSuite:
     assert(operationText.contains("val CreateOcrJob"))
     assert(operationText.contains("val CreateGameTitle"))
 
+  test("HTTP operation labels include item path placeholders for item mutations"):
+    val operationText = read(httpOperation)
+    val expected = List(
+      """val UpdateLoginAccount = "PATCH /api/admin/login-accounts/:id"""",
+      """val CancelOcrJob = "DELETE /api/ocr-jobs/:id"""",
+      """val DeleteHeldEvent = "DELETE /api/held-events/:id"""",
+      """val UpdateGameTitle = "PATCH /api/game-titles/:id"""",
+      """val DeleteGameTitle = "DELETE /api/game-titles/:id"""",
+      """val UpdateMapMaster = "PATCH /api/map-masters/:id"""",
+      """val DeleteMapMaster = "DELETE /api/map-masters/:id"""",
+      """val UpdateSeasonMaster = "PATCH /api/season-masters/:id"""",
+      """val DeleteSeasonMaster = "DELETE /api/season-masters/:id"""",
+      """val UpdateMemberAlias = "PATCH /api/member-aliases/:id"""",
+      """val DeleteMemberAlias = "DELETE /api/member-aliases/:id"""",
+    )
+    val missing = expected.filterNot(operationText.contains).sorted
+
+    assertEquals(missing, Nil)
+
   private def definedEndpointRefs: List[String] = scalaFiles(endpointDir).flatMap { path =>
     ObjectBlock.findAllMatchIn(read(path)).flatMap { objectMatch =>
       val objectName = objectMatch.group(1)

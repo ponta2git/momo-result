@@ -117,6 +117,12 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
         (current + (draftId -> next), true)
   }
 
+  def deleteConfirmedByMatchId(matchId: MatchId): F[Int] = ref.modify { current =>
+    val confirmed = current
+      .collect { case (id, draft) if draft.confirmedMatchId.contains(matchId) => id }.toSet
+    (current -- confirmed, confirmed.size)
+  }
+
   def deleteDiscardedByGameTitle(gameTitleId: GameTitleId): F[Int] =
     deleteDiscarded(draft => draft.gameTitleId.contains(gameTitleId))
 

@@ -123,6 +123,9 @@ object OcrQueuePayload:
       parsedDraftId <- OcrDraftId.fromString(draftId).leftMap(_ => "draftId must not be blank")
       parsedImageId <- ImageId.fromString(imageId).leftMap(_ => "imageId must not be blank")
       imagePath <- required("imagePath")
+      parsedImagePath <- Either.catchNonFatal(java.nio.file.Paths.get(imagePath)).left
+        .map(_ => "imagePath must be a valid path")
+      _ <- Either.cond(parsedImagePath.isAbsolute, (), "imagePath must be an absolute path")
       requested <- required("requestedScreenType")
       screenType <- ScreenType.fromWire(requested)
         .toRight(s"unknown requestedScreenType=$requested")
@@ -147,7 +150,7 @@ object OcrQueuePayload:
       jobId = parsedJobId,
       draftId = parsedDraftId,
       imageId = parsedImageId,
-      imagePath = java.nio.file.Paths.get(imagePath),
+      imagePath = parsedImagePath,
       requestedScreenType = screenType,
       attempt = attemptValue,
       enqueuedAt = enqueuedAt,

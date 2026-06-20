@@ -89,3 +89,41 @@ final class InMemoryMatchesRepository[F[_]: Sync] private (ref: Ref[F, Map[Match
 object InMemoryMatchesRepository:
   def create[F[_]: Sync]: F[InMemoryMatchesRepository[F]] = Ref
     .of[F, Map[MatchId, MatchRecord]](Map.empty).map(new InMemoryMatchesRepository(_))
+
+  def withConfirmedDraftCleanup[F[_]: Sync](
+      matches: InMemoryMatchesRepository[F],
+      matchDrafts: InMemoryMatchDraftsRepository[F],
+  ): MatchesRepository[F] = new MatchesRepository[F]:
+    override def create(record: MatchRecord): F[Unit] = matches.create(record)
+
+    override def update(record: MatchRecord, updatedAt: java.time.Instant): F[Unit] = matches
+      .update(record, updatedAt)
+
+    override def delete(id: MatchId): F[Boolean] = matches.delete(id).flatTap {
+      case true => matchDrafts.deleteConfirmedByMatchId(id).void
+      case false => Sync[F].unit
+    }
+
+    override def find(id: MatchId): F[Option[MatchRecord]] = matches.find(id)
+
+    override def list(filter: MatchesRepository.ListFilter): F[List[MatchRecord]] = matches
+      .list(filter)
+
+    override def listByHeldEvent(heldEventId: HeldEventId): F[List[MatchRecord]] = matches
+      .listByHeldEvent(heldEventId)
+
+    override def existsMatchNo(
+        heldEventId: HeldEventId,
+        matchNoInEvent: MatchNoInEvent,
+    ): F[Boolean] = matches.existsMatchNo(heldEventId, matchNoInEvent)
+
+    override def existsMatchNoExcept(
+        heldEventId: HeldEventId,
+        matchNoInEvent: MatchNoInEvent,
+        excludeMatchId: MatchId,
+    ): F[Boolean] = matches.existsMatchNoExcept(heldEventId, matchNoInEvent, excludeMatchId)
+
+    override def maxMatchNo(heldEventId: HeldEventId): F[Int] = matches.maxMatchNo(heldEventId)
+
+    override def countByHeldEvents(heldEventIds: List[HeldEventId]): F[Map[HeldEventId, Int]] =
+      matches.countByHeldEvents(heldEventIds)

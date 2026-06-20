@@ -202,7 +202,9 @@ object ApiApp:
                 InMemoryMatchDraftCancellationRepository[F](matchDrafts, jobs)
               drafts <- InMemoryOcrDraftsRepository.create[F]
               heldEvents <- InMemoryHeldEventsRepository.create[F]
-              matches <- InMemoryMatchesRepository.create[F]
+              matchesBase <- InMemoryMatchesRepository.create[F]
+              matches = InMemoryMatchesRepository
+                .withConfirmedDraftCleanup[F](matchesBase, matchDrafts)
               matchList = InMemoryMatchListReadModel[F](
                 matches,
                 matchDrafts,

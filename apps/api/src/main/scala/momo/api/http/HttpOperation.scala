@@ -8,16 +8,16 @@ package momo.api.http
  */
 object HttpOperation:
   val CreateLoginAccount = "POST /api/admin/login-accounts"
-  val UpdateLoginAccount = "PATCH /api/admin/login-accounts"
+  val UpdateLoginAccount = "PATCH /api/admin/login-accounts/:id"
 
   val CreateOcrJob = "POST /api/ocr-jobs"
   val GetOcrJob = "GET /api/ocr-jobs/:id"
-  val CancelOcrJob = "DELETE /api/ocr-jobs"
+  val CancelOcrJob = "DELETE /api/ocr-jobs/:id"
   val GetOcrDraft = "GET /api/ocr-drafts/:id"
   val ListOcrDrafts = "GET /api/ocr-drafts"
 
   val CreateHeldEvent = "POST /api/held-events"
-  val DeleteHeldEvent = "DELETE /api/held-events"
+  val DeleteHeldEvent = "DELETE /api/held-events/:id"
 
   val CreateMatchDraft = "POST /api/match-drafts"
   val UpdateMatchDraft = "PATCH /api/match-drafts/:id"
@@ -34,18 +34,18 @@ object HttpOperation:
   val GetSeriesComparisonReview = "GET /api/analytics/series-comparison/review"
 
   val CreateGameTitle = "POST /api/game-titles"
-  val UpdateGameTitle = "PATCH /api/game-titles"
-  val DeleteGameTitle = "DELETE /api/game-titles"
+  val UpdateGameTitle = "PATCH /api/game-titles/:id"
+  val DeleteGameTitle = "DELETE /api/game-titles/:id"
 
   val CreateMapMaster = "POST /api/map-masters"
-  val UpdateMapMaster = "PATCH /api/map-masters"
-  val DeleteMapMaster = "DELETE /api/map-masters"
+  val UpdateMapMaster = "PATCH /api/map-masters/:id"
+  val DeleteMapMaster = "DELETE /api/map-masters/:id"
 
   val CreateSeasonMaster = "POST /api/season-masters"
-  val UpdateSeasonMaster = "PATCH /api/season-masters"
-  val DeleteSeasonMaster = "DELETE /api/season-masters"
+  val UpdateSeasonMaster = "PATCH /api/season-masters/:id"
+  val DeleteSeasonMaster = "DELETE /api/season-masters/:id"
 
   val CreateMemberAlias = "POST /api/member-aliases"
-  val UpdateMemberAlias = "PATCH /api/member-aliases"
-  val DeleteMemberAlias = "DELETE /api/member-aliases"
+  val UpdateMemberAlias = "PATCH /api/member-aliases/:id"
+  val DeleteMemberAlias = "DELETE /api/member-aliases/:id"
 end HttpOperation

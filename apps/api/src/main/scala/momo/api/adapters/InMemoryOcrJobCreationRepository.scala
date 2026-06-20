@@ -5,6 +5,7 @@ import cats.syntax.all.*
 
 import momo.api.domain.ids.OcrDraftId
 import momo.api.domain.{OcrDraft, OcrJob}
+import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.{
   MatchDraftsRepository, OcrDraftsRepository, OcrJobCreationRepository, OcrJobDraftAttachment,
   OcrJobsRepository, OcrQueuePayload,
@@ -30,6 +31,7 @@ final class InMemoryOcrJobCreationRepository[F[_]: MonadThrow](
         if active >= activeJobLimit.toLong then
           MonadThrow[F].raiseError(OcrJobCreationRepository.ActiveJobLimitExceeded(activeJobLimit))
         else MonadThrow[F].unit
+      _ <- rejectDuplicateOcrRecords(draft, job)
       _ <- attachment.traverse(rejectActiveSlot)
       attached <- attachment match
         case None => true.pure[F]
@@ -50,6 +52,18 @@ final class InMemoryOcrJobCreationRepository[F[_]: MonadThrow](
       _ <- drafts.create(draft)
       _ <- jobs.create(job)
     yield ()
+
+  private def rejectDuplicateOcrRecords(draft: OcrDraft, job: OcrJob): F[Unit] =
+    (drafts.find(draft.id), jobs.find(job.id)).mapN {
+      case (Some(_), _) =>
+        Some(new AppException(AppError.Conflict(s"ocr draft already exists: ${draft.id.value}")))
+      case (_, Some(_)) =>
+        Some(new AppException(AppError.Conflict(s"ocr job already exists: ${job.id.value}")))
+      case _ => None
+    }.flatMap {
+      case Some(error) => MonadThrow[F].raiseError(error)
+      case None => MonadThrow[F].unit
+    }
 
   private def rejectActiveSlot(attachment: OcrJobDraftAttachment): F[Unit] =
     slotHasActiveJob(attachment).flatMap {

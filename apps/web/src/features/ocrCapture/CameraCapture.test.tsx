@@ -111,6 +111,23 @@ describe("CameraCapture", () => {
     expect(screen.getByRole("button", { name: "カメラ使用中" })).toBeDisabled();
   });
 
+  it("continues camera startup when device enumeration is blocked", async () => {
+    const user = userEvent.setup();
+    const { stream } = createMockMediaStream();
+    getUserMedia = installGetUserMediaMock(() => Promise.resolve(stream));
+    Object.assign(navigator.mediaDevices, {
+      enumerateDevices: vi.fn().mockRejectedValue(new DOMException("blocked", "NotAllowedError")),
+    });
+
+    render(<CameraCapture slotLabel="総資産" onSelect={vi.fn()} onValidationError={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: "カメラ開始" }));
+
+    expect(getUserMedia.getUserMedia).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "カメラ使用中" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "静止画を撮影" })).toBeEnabled();
+  });
+
   it("captures and emits a file with source=camera once ready", async () => {
     const user = userEvent.setup();
     const { stream } = createMockMediaStream();

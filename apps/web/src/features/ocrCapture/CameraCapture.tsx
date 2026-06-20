@@ -54,8 +54,12 @@ export function CameraCapture({
       return;
     }
     void (async () => {
-      const items = await navigator.mediaDevices.enumerateDevices();
-      setDevices(items.filter((item) => item.kind === "videoinput"));
+      try {
+        const items = await navigator.mediaDevices.enumerateDevices();
+        setDevices(items.filter((item) => item.kind === "videoinput"));
+      } catch {
+        setDevices([]);
+      }
     })();
   }, []);
 
@@ -93,8 +97,12 @@ export function CameraCapture({
       });
       streamRef.current = nextStream;
       if (navigator.mediaDevices.enumerateDevices) {
-        const items = await navigator.mediaDevices.enumerateDevices();
-        setDevices(items.filter((item) => item.kind === "videoinput"));
+        try {
+          const items = await navigator.mediaDevices.enumerateDevices();
+          setDevices(items.filter((item) => item.kind === "videoinput"));
+        } catch {
+          setDevices([]);
+        }
       }
 
       const video = videoRef.current;

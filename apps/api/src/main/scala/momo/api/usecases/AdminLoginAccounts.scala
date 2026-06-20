@@ -50,7 +50,7 @@ final class CreateLoginAccount[F[_]: MonadThrow](
     )
     id <- EitherT.liftF(nextId)
     at <- EitherT.liftF(now)
-    created <- EitherT.liftF(accounts.create(CreateLoginAccountData(
+    created <- accounts.create(CreateLoginAccountData(
       id = id,
       discordUserId = discordUserId,
       displayName = displayName,
@@ -59,7 +59,7 @@ final class CreateLoginAccount[F[_]: MonadThrow](
       isAdmin = command.isAdmin,
       createdAt = at,
       updatedAt = at,
-    )))
+    )).recoverAppError
   yield created).value
 
 final class UpdateLoginAccount[F[_]: MonadThrow](

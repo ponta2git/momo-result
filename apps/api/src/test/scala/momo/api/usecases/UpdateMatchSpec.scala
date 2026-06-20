@@ -10,7 +10,9 @@ import momo.api.adapters.{
   InMemoryMatchesRepository, InMemorySeasonMastersRepository,
 }
 import momo.api.domain.ids.*
-import momo.api.domain.{GameTitle, MatchRecord, PlayerResult}
+import momo.api.domain.{GameTitle, MatchNoInEvent, MatchRecord, PlayerResult}
+import momo.api.errors.{AppError, AppException}
+import momo.api.repositories.MatchesRepository
 import momo.api.testing.AppErrorAssertions.{assertAppError, assertRight}
 import momo.api.usecases.testing.MatchFixtures
 
@@ -70,6 +72,16 @@ final class UpdateMatchSpec extends MomoCatsEffectSuite:
     yield
       assertAppError(result, "CONFLICT", "already exists for held event")
       assertEquals(found.map(_.matchNoInEvent.value), Some(1))
+
+  test("maps repository update conflicts into the usecase error channel"):
+    for
+      fixture <- Fixture.create
+      _ <- fixture.seedPrereqs()
+      _ <- fixture.matches.create(sampleMatch(matchId, matchNoInEvent = 1))
+      conflictMatches = MatchesRepositoryWithUpdateConflict(fixture.matches)
+      usecase = fixture.usecaseWith(conflictMatches)
+      result <- usecase.run(matchId, command(matchNoInEvent = 2, gameTitleId = titleId))
+    yield assertAppError(result, "CONFLICT", "repository conflict")
 
   test("rejects map and season masters that do not belong to the supplied game title"):
     for
@@ -155,6 +167,16 @@ final class UpdateMatchSpec extends MomoCatsEffectSuite:
       createdAt,
     )
 
+    def usecaseWith(matchesRepository: MatchesRepository[IO]): UpdateMatch[IO] = UpdateMatch[IO](
+      heldEvents = heldEvents,
+      matches = matchesRepository,
+      gameTitles = gameTitles,
+      mapMasters = mapMasters,
+      seasonMasters = seasonMasters,
+      now = IO.pure(updatedAt),
+      allowedMemberIds = IO.pure(allowedMembers),
+    )
+
   private object Fixture:
     def create: IO[Fixture] =
       for
@@ -173,3 +195,31 @@ final class UpdateMatchSpec extends MomoCatsEffectSuite:
           allowedMemberIds = IO.pure(allowedMembers),
         )
       yield Fixture(heldEvents, gameTitles, mapMasters, seasonMasters, matches, usecase)
+
+  private final class MatchesRepositoryWithUpdateConflict(delegate: MatchesRepository[IO])
+      extends MatchesRepository[IO]:
+    override def create(record: MatchRecord): IO[Unit] = delegate.create(record)
+    override def update(record: MatchRecord, updatedAt: Instant): IO[Unit] = IO
+      .raiseError(new AppException(AppError.Conflict("repository conflict")))
+    override def delete(id: MatchId): IO[Boolean] = delegate.delete(id)
+    override def find(id: MatchId): IO[Option[MatchRecord]] = delegate.find(id)
+    override def list(filter: MatchesRepository.ListFilter): IO[List[MatchRecord]] = delegate
+      .list(filter)
+    override def listByHeldEvent(heldEventId: HeldEventId): IO[List[MatchRecord]] = delegate
+      .listByHeldEvent(heldEventId)
+    override def existsMatchNo(
+        heldEventId: HeldEventId,
+        matchNoInEvent: MatchNoInEvent,
+    ): IO[Boolean] = delegate.existsMatchNo(heldEventId, matchNoInEvent)
+    override def existsMatchNoExcept(
+        heldEventId: HeldEventId,
+        matchNoInEvent: MatchNoInEvent,
+        excludeMatchId: MatchId,
+    ): IO[Boolean] = IO.pure(false)
+    override def maxMatchNo(heldEventId: HeldEventId): IO[Int] = delegate.maxMatchNo(heldEventId)
+    override def countByHeldEvents(heldEventIds: List[HeldEventId]): IO[Map[HeldEventId, Int]] =
+      delegate.countByHeldEvents(heldEventIds)
+
+  private object MatchesRepositoryWithUpdateConflict:
+    def apply(delegate: MatchesRepository[IO]): MatchesRepositoryWithUpdateConflict =
+      new MatchesRepositoryWithUpdateConflict(delegate)

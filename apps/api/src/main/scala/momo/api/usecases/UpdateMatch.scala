@@ -87,7 +87,7 @@ final class UpdateMatch[F[_]: MonadThrow](
       incidentLogDraftId = command.draftRefs.incidentLog.orElse(existing.incidentLogDraftId),
       players = validated.players,
     )
-    _ <- EitherT.liftF(matches.update(record, updatedAt))
+    _ <- matches.update(record, updatedAt).recoverAppError
   yield record).value
 
 object UpdateMatch:

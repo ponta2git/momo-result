@@ -13,7 +13,11 @@ import {
   seriesComparisonReviewQueryFromState,
 } from "@/features/seriesComparison/seriesComparisonViewModel";
 import type { SeriesComparisonViewId } from "@/features/seriesComparison/seriesComparisonViewModel";
-import { shouldShowBlockingQueryError, shouldShowQueryError } from "@/shared/api/queryErrorState";
+import {
+  isInitialQueryLoading,
+  shouldShowBlockingQueryError,
+  shouldShowQueryError,
+} from "@/shared/api/queryErrorState";
 import { seriesComparisonKeys } from "@/shared/api/queryKeys";
 import {
   getSeriesComparison,
@@ -86,16 +90,14 @@ export function useSeriesComparisonPageController() {
 
   return {
     aggregate: aggregateQuery.data,
-    aggregateLoading:
-      aggregateQuery.isLoading || (aggregateQuery.data === undefined && aggregateQuery.isFetching),
+    aggregateLoading: isInitialQueryLoading(aggregateQuery),
     aggregateRefreshing: aggregateQuery.isFetching && aggregateQuery.data !== undefined,
     canRefresh: aggregateQueryParams !== undefined,
     hasAggregateError: shouldShowBlockingQueryError(aggregateQuery),
     hasOptionsError: shouldShowQueryError(optionsQuery),
     hasReviewError: reviewEnabled && shouldShowBlockingQueryError(reviewQuery),
     options: optionsQuery.data,
-    optionsLoading:
-      optionsQuery.isLoading || (optionsQuery.data === undefined && optionsQuery.isFetching),
+    optionsLoading: isInitialQueryLoading(optionsQuery),
     refresh: () => {
       void optionsQuery.refetch();
       void aggregateQuery.refetch();
@@ -104,9 +106,7 @@ export function useSeriesComparisonPageController() {
       }
     },
     review: reviewQuery.data,
-    reviewLoading:
-      reviewEnabled &&
-      (reviewQuery.isLoading || (reviewQuery.data === undefined && reviewQuery.isFetching)),
+    reviewLoading: reviewEnabled && isInitialQueryLoading(reviewQuery),
     reviewRefreshing: reviewEnabled && reviewQuery.isFetching && reviewQuery.data !== undefined,
     mapOptions,
     scopeName: scopeNameForState(optionsQuery.data, normalizedState),

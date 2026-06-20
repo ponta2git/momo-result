@@ -1,7 +1,7 @@
 import { ArrowRight, ClipboardList, Target } from "lucide-react";
 
-import { playerColor } from "@/features/seriesComparison/SeriesComparisonCharts";
 import { MetricSection } from "@/features/seriesComparison/SeriesComparisonMetricSection";
+import { playerColor } from "@/features/seriesComparison/SeriesComparisonPlayerVisuals";
 import type { Player } from "@/features/seriesComparison/seriesComparisonPresentation";
 import { playerNameMap } from "@/features/seriesComparison/seriesComparisonPresentation";
 import {

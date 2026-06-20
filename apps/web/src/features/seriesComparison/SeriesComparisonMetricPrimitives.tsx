@@ -1,7 +1,10 @@
 import { HelpCircle } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 
-import { playerColor, playerGridStyle } from "@/features/seriesComparison/SeriesComparisonCharts";
+import {
+  playerColor,
+  playerGridStyle,
+} from "@/features/seriesComparison/SeriesComparisonPlayerVisuals";
 import type {
   MetricEmphasis,
   Player,

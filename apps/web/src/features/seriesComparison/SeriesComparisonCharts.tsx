@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
-import type { CSSProperties } from "react";
 
+import { playerColor } from "@/features/seriesComparison/SeriesComparisonPlayerVisuals";
 import {
   formatDecimal,
   formatPercent,
@@ -30,21 +30,8 @@ type HeadToHeadEntry = NonNullable<SeriesComparisonResponse["headToHead"]["entri
 type MatchPlayerPoint = NonNullable<SeriesComparisonResponse["matchPlayerPoints"]>[number];
 type PlayerPerformanceProfiles = SeriesComparisonResponse["playerPerformanceProfiles"];
 
-const palette = [
-  "var(--color-player-1)",
-  "var(--color-player-2)",
-  "var(--color-player-3)",
-  "var(--color-player-4)",
-  "var(--color-player-5)",
-  "var(--color-player-6)",
-];
-
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
-}
-
-export function playerColor(index: number): string {
-  return palette[index % palette.length] ?? "var(--color-action)";
 }
 
 export function PlayerLegend({
@@ -1505,8 +1492,4 @@ function niceStep(rawStep: number, minStep = 0): number {
   const factor =
     normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 2.5 ? 2.5 : normalized <= 5 ? 5 : 10;
   return Math.max(factor * magnitude, minStep);
-}
-
-export function playerGridStyle(playerCount: number): CSSProperties {
-  return { "--player-count": String(Math.max(1, playerCount)) } as CSSProperties;
 }

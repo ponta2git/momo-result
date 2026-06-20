@@ -29,7 +29,6 @@ import {
   RevenueRankConversionHeatmap,
   StrategyProfileChart,
   StrategyScatterPlot,
-  playerColor,
 } from "@/features/seriesComparison/SeriesComparisonCharts";
 import {
   EmphasisBadge,
@@ -39,6 +38,7 @@ import {
   emphasisTextClass,
 } from "@/features/seriesComparison/SeriesComparisonMetricPrimitives";
 import { MetricSection } from "@/features/seriesComparison/SeriesComparisonMetricSection";
+import { playerColor } from "@/features/seriesComparison/SeriesComparisonPlayerVisuals";
 import type {
   AssetStyleProfileEntry,
   MatchNoBreakdown,

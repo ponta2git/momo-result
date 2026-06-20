@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { createElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-import { RecentRankStrip } from "./SeriesComparisonCharts";
+import { HistogramChart, RecentRankStrip } from "./SeriesComparisonCharts";
 
 describe("RecentRankStrip", () => {
   const players = [
@@ -102,5 +102,40 @@ describe("RecentRankStrip", () => {
     expect(
       screen.queryByRole("region", { name: "直近順位ストリップ横スクロール" }),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("HistogramChart", () => {
+  it("keeps bars inside the plot area", () => {
+    const { container } = render(
+      createElement(HistogramChart, {
+        histogram: {
+          bins: [
+            { index: 0, label: "0-1000", lowerInclusive: 0, upperExclusive: 1000 },
+            { index: 1, label: "1000-2000", lowerInclusive: 1000, upperExclusive: 2000 },
+            { index: 2, label: "2000+", lowerInclusive: 2000 },
+          ],
+          series: [
+            {
+              counts: [0, 5, 10],
+              memberId: "member-1",
+            },
+          ],
+        },
+        players: [{ displayName: "桃太郎", memberId: "member-1" }],
+      }),
+    );
+    const baseline = 164;
+    const plotTop = 18;
+    const bars = [...container.querySelectorAll("rect")];
+
+    expect(bars).toHaveLength(3);
+    for (const bar of bars) {
+      const y = Number(bar.getAttribute("y"));
+      const height = Number(bar.getAttribute("height"));
+
+      expect(y).toBeGreaterThanOrEqual(plotTop);
+      expect(y + height).toBeLessThanOrEqual(baseline);
+    }
   });
 });

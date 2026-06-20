@@ -1408,22 +1408,13 @@ function SingleHistogram({
           const barHeight = (value / countCeil) * chartHeight;
           return (
             <g key={bin.index}>
-              <motion.rect
-                animate={{
-                  height: barHeight,
-                  y: height - padding.bottom - barHeight,
-                }}
+              <rect
                 fill={color}
-                height={0}
-                initial={{
-                  height: 0,
-                  y: height - padding.bottom,
-                }}
+                height={barHeight}
                 rx="2"
                 width={barWidth}
                 x={padding.left + binIndex * binWidth + (binWidth - barWidth) / 2}
-                y={height - padding.bottom}
-                transition={{ ...momoPanelTransition, delay: binIndex * 0.018 }}
+                y={height - padding.bottom - barHeight}
               />
               <text
                 fill="var(--color-text-secondary)"

@@ -55,6 +55,24 @@ object HttpRequestBodies:
       status = None,
     ).asJson
 
+    def matchDraftForMasters(
+        gameTitleId: String,
+        layoutFamily: String,
+        seasonMasterId: String,
+        ownerMemberId: String,
+        mapMasterId: String,
+    ): Json = CreateMatchDraftRequest(
+      heldEventId = None,
+      matchNoInEvent = None,
+      gameTitleId = Some(gameTitleId),
+      layoutFamily = Some(layoutFamily),
+      seasonMasterId = Some(seasonMasterId),
+      ownerMemberId = Some(ownerMemberId),
+      mapMasterId = Some(mapMasterId),
+      playedAt = None,
+      status = None,
+    ).asJson
+
     def createOcrJob(imageId: String, requestedScreenType: String): Json =
       CreateOcrJobRequest(imageId = imageId, requestedScreenType = requestedScreenType).asJson
 

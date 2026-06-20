@@ -31,6 +31,7 @@ import momo.api.db.Database
 import momo.api.domain.ids.*
 import momo.api.domain.{LoginAccount, Member}
 import momo.api.endpoints.HealthEndpoints.HealthDetailsResponse
+import momo.api.errors.{AppError, AppException}
 import momo.api.http.{HttpRateLimiters, HttpRoutes}
 import momo.api.repositories.postgres.*
 import momo.api.repositories.{
@@ -225,9 +226,22 @@ object ApiApp:
                     updatedAt = java.time.Instant.EPOCH,
                   )
                 })
-              gameTitles <- InMemoryGameTitlesRepository.create[F]
-              mapMasters <- InMemoryMapMastersRepository.create[F]
-              seasonMasters <- InMemorySeasonMastersRepository.create[F]
+              mapMasters <- InMemoryMapMastersRepository.createWithDeleteGuard[F](mapMasterId =>
+                ensureInMemoryMapMasterCanDelete(mapMasterId, matches, matchDrafts)
+              )
+              seasonMasters <- InMemorySeasonMastersRepository
+                .createWithDeleteGuard[F](seasonMasterId =>
+                  ensureInMemorySeasonMasterCanDelete(seasonMasterId, matches, matchDrafts)
+                )
+              gameTitles <- InMemoryGameTitlesRepository.createWithDeleteGuard[F](gameTitleId =>
+                ensureInMemoryGameTitleCanDelete(
+                  gameTitleId,
+                  mapMasters,
+                  seasonMasters,
+                  matches,
+                  matchDrafts,
+                )
+              )
               seriesComparison = InMemorySeriesComparisonReadModel[F](
                 gameTitles,
                 mapMasters,
@@ -344,6 +358,58 @@ object ApiApp:
               }
           }
         }
+
+  private def ensureInMemoryGameTitleCanDelete[F[_]: Async](
+      gameTitleId: GameTitleId,
+      mapMasters: MapMastersRepository[F],
+      seasonMasters: SeasonMastersRepository[F],
+      matches: MatchesRepository[F],
+      matchDrafts: InMemoryMatchDraftsRepository[F],
+  ): F[Unit] =
+    for
+      scopedMaps <- mapMasters.list(Some(gameTitleId))
+      scopedSeasons <- seasonMasters.list(Some(gameTitleId))
+      matchRefs <- matches
+        .list(MatchesRepository.ListFilter(gameTitleId = Some(gameTitleId), limit = Some(1)))
+      draftRefs <- matchDrafts.existsBlockingReferenceToGameTitle(gameTitleId)
+      _ <-
+        if scopedMaps.nonEmpty || scopedSeasons.nonEmpty || matchRefs.nonEmpty || draftRefs then
+          inMemoryMasterDeleteConflict[F]("game title is still referenced.")
+        else matchDrafts.deleteDiscardedByGameTitle(gameTitleId).void
+    yield ()
+
+  private def ensureInMemoryMapMasterCanDelete[F[_]: Async](
+      mapMasterId: MapMasterId,
+      matches: MatchesRepository[F],
+      matchDrafts: InMemoryMatchDraftsRepository[F],
+  ): F[Unit] =
+    for
+      matchRefs <- matches.list(MatchesRepository.ListFilter())
+        .map(_.exists(_.mapMasterId == mapMasterId))
+      draftRefs <- matchDrafts.existsBlockingReferenceToMapMaster(mapMasterId)
+      _ <-
+        if matchRefs || draftRefs then
+          inMemoryMasterDeleteConflict[F]("map master is still referenced.")
+        else matchDrafts.deleteDiscardedByMapMaster(mapMasterId).void
+    yield ()
+
+  private def ensureInMemorySeasonMasterCanDelete[F[_]: Async](
+      seasonMasterId: SeasonMasterId,
+      matches: MatchesRepository[F],
+      matchDrafts: InMemoryMatchDraftsRepository[F],
+  ): F[Unit] =
+    for
+      matchRefs <- matches
+        .list(MatchesRepository.ListFilter(seasonMasterId = Some(seasonMasterId), limit = Some(1)))
+      draftRefs <- matchDrafts.existsBlockingReferenceToSeasonMaster(seasonMasterId)
+      _ <-
+        if matchRefs.nonEmpty || draftRefs then
+          inMemoryMasterDeleteConflict[F]("season master is still referenced.")
+        else matchDrafts.deleteDiscardedBySeasonMaster(seasonMasterId).void
+    yield ()
+
+  private def inMemoryMasterDeleteConflict[F[_]: Async](detail: String): F[Unit] = Async[F]
+    .raiseError(new AppException(AppError.Conflict(detail)))
 
   private def runtimeInfrastructureResource[F[_]: Async](
       config: AppConfig,

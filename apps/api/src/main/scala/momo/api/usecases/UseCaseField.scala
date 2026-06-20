@@ -14,12 +14,12 @@ private[usecases] object UseCaseField:
   private val SlugPattern = "^[a-z][a-z0-9_]{1,63}$".r
   private val StableKeyPattern = "^[a-z][a-z0-9_]{0,63}$".r
 
-  def slug(field: String, value: String): Either[AppError, String] =
-    SlugPattern.pattern.matcher(value).matches() match
-      case true => Right(value)
-      case false => Left(AppError.ValidationFailed(
-          s"$field must match ^[a-z][a-z0-9_]{1,63}$$ (lowercase, starts with a letter)."
-        ))
+  def slug(field: String, value: String): Either[AppError, String] = SlugPattern.pattern
+    .matcher(value).matches() match
+    case true => Right(value)
+    case false => Left(AppError.ValidationFailed(
+        s"$field must match ^[a-z][a-z0-9_]{1,63}$$ (lowercase, starts with a letter)."
+      ))
 
   def stableKey(field: String, value: String): Either[AppError, String] =
     val trimmed = value.trim

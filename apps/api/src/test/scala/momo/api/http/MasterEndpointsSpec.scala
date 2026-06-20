@@ -175,6 +175,42 @@ final class MasterEndpointsSpec extends MomoCatsEffectSuite with HttpAppTestFixt
     yield ()
   }
 
+  app.test("DELETE master endpoints reject active match draft references") { http =>
+    def post(path: String, body: Json) = http.run(writePost(Uri.unsafeFromString(path), body))
+
+    val titleBody = HttpRequestBodies.Master.createGameTitle("title_world", "ワールド", "world")
+    val mapBody = HttpRequestBodies.Master.createMapMaster("map_east", "東日本編")
+    val seasonBody = HttpRequestBodies.Master.createSeasonMaster("season_2024_spring", "2024春")
+    val draftBody = HttpRequestBodies.Matches.matchDraftForMasters(
+      gameTitleId = "title_world",
+      layoutFamily = "world",
+      seasonMasterId = "season_2024_spring",
+      ownerMemberId = "member_ponta",
+      mapMasterId = "map_east",
+    )
+    for
+      title <- post("/api/game-titles", titleBody)
+      _ = assertEquals(title.status, Status.Ok)
+      map <- post("/api/map-masters", mapBody)
+      _ = assertEquals(map.status, Status.Ok)
+      season <- post("/api/season-masters", seasonBody)
+      _ = assertEquals(season.status, Status.Ok)
+      draft <- http.run(writePost(uri"/api/match-drafts", draftBody))
+      _ = assertEquals(draft.status, Status.Ok)
+      mapDelete <- http.run(writeDelete(uri"/api/map-masters/map_east"))
+      _ <- assertProblem(mapDelete, Status.Conflict, "CONFLICT", "map master is still referenced")
+      seasonDelete <- http.run(writeDelete(uri"/api/season-masters/season_2024_spring"))
+      _ <- assertProblem(
+        seasonDelete,
+        Status.Conflict,
+        "CONFLICT",
+        "season master is still referenced",
+      )
+      titleDelete <- http.run(writeDelete(uri"/api/game-titles/title_world"))
+      _ <- assertProblem(titleDelete, Status.Conflict, "CONFLICT", "game title is still referenced")
+    yield ()
+  }
+
   app.test("GET /api/map-masters rejects blank game title filter at the HTTP boundary") { http =>
     val req = readGet(uri"/api/map-masters?gameTitleId=%20")
     http.run(req).flatMap { r =>

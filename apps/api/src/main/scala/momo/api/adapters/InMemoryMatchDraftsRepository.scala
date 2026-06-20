@@ -106,12 +106,43 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
         (current + (draftId -> next), true)
   }
 
+  def deleteDiscardedByGameTitle(gameTitleId: GameTitleId): F[Int] =
+    deleteDiscarded(draft => draft.gameTitleId.contains(gameTitleId))
+
+  def deleteDiscardedByMapMaster(mapMasterId: MapMasterId): F[Int] =
+    deleteDiscarded(draft => draft.mapMasterId.contains(mapMasterId))
+
+  def deleteDiscardedBySeasonMaster(seasonMasterId: SeasonMasterId): F[Int] =
+    deleteDiscarded(draft => draft.seasonMasterId.contains(seasonMasterId))
+
+  def existsBlockingReferenceToGameTitle(gameTitleId: GameTitleId): F[Boolean] =
+    existsBlockingReference(_.gameTitleId.contains(gameTitleId))
+
+  def existsBlockingReferenceToMapMaster(mapMasterId: MapMasterId): F[Boolean] =
+    existsBlockingReference(_.mapMasterId.contains(mapMasterId))
+
+  def existsBlockingReferenceToSeasonMaster(seasonMasterId: SeasonMasterId): F[Boolean] =
+    existsBlockingReference(_.seasonMasterId.contains(seasonMasterId))
+
   private def canAttachScreenType(screenType: ScreenType): Boolean = screenType != ScreenType.Auto
 
   private def canApplyUserUpdate(existing: MatchDraft.Editable, draft: MatchDraft): Boolean =
     MatchDraftStatus.userEditableStatuses.contains(existing.status) &&
       MatchDraftStatus.userEditableStatuses.contains(draft.status) &&
       existing.updatedAt.equals(draft.updatedAt)
+
+  private def deleteDiscarded(matchesScope: MatchDraft => Boolean): F[Int] = ref.modify { current =>
+    val discarded = current
+      .collect { case (id, draft) if matchesScope(draft) && isDiscarded(draft) => id }.toSet
+    (current -- discarded, discarded.size)
+  }
+
+  private def existsBlockingReference(matchesScope: MatchDraft => Boolean): F[Boolean] = ref.get
+    .map(_.values.exists(draft => matchesScope(draft) && !isDiscarded(draft)))
+
+  private def isDiscarded(draft: MatchDraft): Boolean =
+    draft.status == MatchDraftStatus.Cancelled ||
+      (draft.status == MatchDraftStatus.Confirmed && draft.confirmedMatchId.isEmpty)
 
 object InMemoryMatchDraftsRepository:
   def create[F[_]: Sync]: F[InMemoryMatchDraftsRepository[F]] = Ref

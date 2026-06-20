@@ -17,7 +17,8 @@ import momo.api.repositories.{
 }
 
 final class InMemoryGameTitlesRepository[F[_]: Sync] private (
-    ref: Ref[F, Map[GameTitleId, GameTitle]]
+    ref: Ref[F, Map[GameTitleId, GameTitle]],
+    beforeDelete: GameTitleId => F[Unit],
 ) extends GameTitlesRepository[F]:
   override def list: F[List[GameTitle]] = ref.get
     .map(_.values.toList.sortBy(t => (t.displayOrder, t.createdAt, t.id.value)))
@@ -50,10 +51,14 @@ final class InMemoryGameTitlesRepository[F[_]: Sync] private (
       )
     else (items.updated(title.id, title), Right(()))
   }.flatMap(completeUnit)
-  override def delete(id: GameTitleId): F[Unit] = ref.modify { items =>
-    if items.contains(id) then (items - id, Right(()))
-    else (items, Left(notFound("game title", id.value)))
-  }.flatMap(completeUnit)
+  override def delete(id: GameTitleId): F[Unit] = ref.get.flatMap { items =>
+    if !items.contains(id) then Sync[F].raiseError(notFound("game title", id.value))
+    else
+      beforeDelete(id) *> ref.modify { current =>
+        if current.contains(id) then (current - id, Right(()))
+        else (current, Left(notFound("game title", id.value)))
+      }.flatMap(completeUnit)
+  }
 
   private def containsGameTitleConflict(
       items: Map[GameTitleId, GameTitle],
@@ -65,10 +70,17 @@ final class InMemoryGameTitlesRepository[F[_]: Sync] private (
 
 object InMemoryGameTitlesRepository:
   def create[F[_]: Sync]: F[InMemoryGameTitlesRepository[F]] = Ref
-    .of[F, Map[GameTitleId, GameTitle]](Map.empty).map(new InMemoryGameTitlesRepository(_))
+    .of[F, Map[GameTitleId, GameTitle]](Map.empty)
+    .map(new InMemoryGameTitlesRepository(_, _ => Sync[F].unit))
+
+  def createWithDeleteGuard[F[_]: Sync](
+      beforeDelete: GameTitleId => F[Unit]
+  ): F[InMemoryGameTitlesRepository[F]] = Ref.of[F, Map[GameTitleId, GameTitle]](Map.empty)
+    .map(new InMemoryGameTitlesRepository(_, beforeDelete))
 
 final class InMemoryMapMastersRepository[F[_]: Sync] private (
-    ref: Ref[F, Map[MapMasterId, MapMaster]]
+    ref: Ref[F, Map[MapMasterId, MapMaster]],
+    beforeDelete: MapMasterId => F[Unit],
 ) extends MapMastersRepository[F]:
   override def list(gameTitleId: Option[GameTitleId]): F[List[MapMaster]] = ref.get.map { m =>
     val items = gameTitleId match
@@ -97,10 +109,14 @@ final class InMemoryMapMastersRepository[F[_]: Sync] private (
       (items, Left(masterConflict(s"map_master already exists: ${map.id.value} or ${map.name}")))
     else (items.updated(map.id, map), Right(()))
   }.flatMap(completeUnit)
-  override def delete(id: MapMasterId): F[Unit] = ref.modify { items =>
-    if items.contains(id) then (items - id, Right(()))
-    else (items, Left(notFound("map master", id.value)))
-  }.flatMap(completeUnit)
+  override def delete(id: MapMasterId): F[Unit] = ref.get.flatMap { items =>
+    if !items.contains(id) then Sync[F].raiseError(notFound("map master", id.value))
+    else
+      beforeDelete(id) *> ref.modify { current =>
+        if current.contains(id) then (current - id, Right(()))
+        else (current, Left(notFound("map master", id.value)))
+      }.flatMap(completeUnit)
+  }
 
   private def containsMapConflict(
       items: Map[MapMasterId, MapMaster],
@@ -114,10 +130,17 @@ final class InMemoryMapMastersRepository[F[_]: Sync] private (
 
 object InMemoryMapMastersRepository:
   def create[F[_]: Sync]: F[InMemoryMapMastersRepository[F]] = Ref
-    .of[F, Map[MapMasterId, MapMaster]](Map.empty).map(new InMemoryMapMastersRepository(_))
+    .of[F, Map[MapMasterId, MapMaster]](Map.empty)
+    .map(new InMemoryMapMastersRepository(_, _ => Sync[F].unit))
+
+  def createWithDeleteGuard[F[_]: Sync](
+      beforeDelete: MapMasterId => F[Unit]
+  ): F[InMemoryMapMastersRepository[F]] = Ref.of[F, Map[MapMasterId, MapMaster]](Map.empty)
+    .map(new InMemoryMapMastersRepository(_, beforeDelete))
 
 final class InMemorySeasonMastersRepository[F[_]: Sync] private (
-    ref: Ref[F, Map[SeasonMasterId, SeasonMaster]]
+    ref: Ref[F, Map[SeasonMasterId, SeasonMaster]],
+    beforeDelete: SeasonMasterId => F[Unit],
 ) extends SeasonMastersRepository[F]:
   override def list(gameTitleId: Option[GameTitleId]): F[List[SeasonMaster]] = ref.get.map { m =>
     val items = gameTitleId match
@@ -157,10 +180,14 @@ final class InMemorySeasonMastersRepository[F[_]: Sync] private (
       )
     else (items.updated(season.id, season), Right(()))
   }.flatMap(completeUnit)
-  override def delete(id: SeasonMasterId): F[Unit] = ref.modify { items =>
-    if items.contains(id) then (items - id, Right(()))
-    else (items, Left(notFound("season master", id.value)))
-  }.flatMap(completeUnit)
+  override def delete(id: SeasonMasterId): F[Unit] = ref.get.flatMap { items =>
+    if !items.contains(id) then Sync[F].raiseError(notFound("season master", id.value))
+    else
+      beforeDelete(id) *> ref.modify { current =>
+        if current.contains(id) then (current - id, Right(()))
+        else (current, Left(notFound("season master", id.value)))
+      }.flatMap(completeUnit)
+  }
 
   private def containsSeasonConflict(
       items: Map[SeasonMasterId, SeasonMaster],
@@ -174,7 +201,13 @@ final class InMemorySeasonMastersRepository[F[_]: Sync] private (
 
 object InMemorySeasonMastersRepository:
   def create[F[_]: Sync]: F[InMemorySeasonMastersRepository[F]] = Ref
-    .of[F, Map[SeasonMasterId, SeasonMaster]](Map.empty).map(new InMemorySeasonMastersRepository(_))
+    .of[F, Map[SeasonMasterId, SeasonMaster]](Map.empty)
+    .map(new InMemorySeasonMastersRepository(_, _ => Sync[F].unit))
+
+  def createWithDeleteGuard[F[_]: Sync](
+      beforeDelete: SeasonMasterId => F[Unit]
+  ): F[InMemorySeasonMastersRepository[F]] = Ref.of[F, Map[SeasonMasterId, SeasonMaster]](Map.empty)
+    .map(new InMemorySeasonMastersRepository(_, beforeDelete))
 
 final class InMemoryIncidentMastersRepository[F[_]] private (ref: Ref[F, List[IncidentMaster]])
     extends IncidentMastersRepository[F]:

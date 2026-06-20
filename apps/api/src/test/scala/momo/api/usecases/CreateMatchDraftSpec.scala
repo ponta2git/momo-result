@@ -21,11 +21,8 @@ final class CreateMatchDraftSpec extends MomoCatsEffectSuite:
   test("trims and stores layout family stable keys"):
     for
       fixture <- Fixture.create
-      result <- fixture.usecase.run(
-        blankCommand.copy(layoutFamily = Some(" world ")),
-        accountId,
-        memberId,
-      )
+      result <- fixture.usecase
+        .run(blankCommand.copy(layoutFamily = Some(" world ")), accountId, memberId)
       found <- fixture.matchDrafts.find(draftId)
     yield
       val draft = assertRight(result)
@@ -35,11 +32,8 @@ final class CreateMatchDraftSpec extends MomoCatsEffectSuite:
   test("rejects invalid layout family keys"):
     for
       fixture <- Fixture.create
-      result <- fixture.usecase.run(
-        blankCommand.copy(layoutFamily = Some("World DX")),
-        accountId,
-        memberId,
-      )
+      result <- fixture.usecase
+        .run(blankCommand.copy(layoutFamily = Some("World DX")), accountId, memberId)
       found <- fixture.matchDrafts.find(draftId)
     yield
       assertAppError(result, "VALIDATION_FAILED", "layoutFamily must match")

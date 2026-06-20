@@ -13,6 +13,7 @@ import {
   assetStyleTagLabel,
   buildSeriesComparisonSearchParams,
   ginjiSummary,
+  isSeriesComparisonViewId,
   normalizeSeriesComparisonSelection,
   parseSeriesComparisonSearchParams,
   playOrderSignal,
@@ -93,6 +94,13 @@ describe("seriesComparisonViewModel", () => {
     expect(buildSeriesComparisonSearchParams(state).toString()).toBe(
       "gameTitleId=title-1&view=drivers",
     );
+  });
+
+  it("recognizes supported analysis view ids", () => {
+    expect(isSeriesComparisonViewId("review")).toBe(true);
+    expect(isSeriesComparisonViewId("drivers")).toBe(true);
+    expect(isSeriesComparisonViewId("bad")).toBe(false);
+    expect(isSeriesComparisonViewId(undefined)).toBe(false);
   });
 
   it("drops obsolete review held event query state", () => {

@@ -50,8 +50,14 @@ function isNumber(value: NullableNumber): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
+export function isSeriesComparisonViewId(
+  value: string | null | undefined,
+): value is SeriesComparisonViewId {
+  return viewIds.has(value ?? "");
+}
+
 function normalizeView(value: string | undefined): SeriesComparisonViewId {
-  return viewIds.has(value ?? "") ? (value as SeriesComparisonViewId) : defaultSeriesComparisonView;
+  return isSeriesComparisonViewId(value) ? value : defaultSeriesComparisonView;
 }
 
 export function parseSeriesComparisonSearchParams(

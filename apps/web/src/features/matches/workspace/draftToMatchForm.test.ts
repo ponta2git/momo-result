@@ -86,8 +86,10 @@ describe("draftToMatchForm", () => {
     });
 
     const ponta = values.players.find((player) => player.memberId === "member_ponta");
-    expect(ponta).toBeDefined();
-    expect(ponta?.incidents).toEqual({
+    if (!ponta) {
+      throw new Error("expected the sample incident draft to include member_ponta");
+    }
+    expect(ponta.incidents).toEqual({
       destination: 2,
       plusStation: 8,
       minusStation: 4,

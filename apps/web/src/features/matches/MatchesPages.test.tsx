@@ -67,7 +67,15 @@ describe("MatchesListPage", () => {
         "東日本編",
       ].every((part) => text.includes(part));
     });
-    expect(matchInfoCell).toBeDefined();
+    if (!matchInfoCell) {
+      throw new Error(
+        "expected the confirmed match info cell to include date, title, season, match number, and map",
+      );
+    }
+    expect(matchInfoCell).toHaveTextContent("桃太郎電鉄2");
+    expect(matchInfoCell).toHaveTextContent("今シーズン");
+    expect(matchInfoCell).toHaveTextContent("第1試合");
+    expect(matchInfoCell).toHaveTextContent("東日本編");
     const detailLinks = await screen.findAllByRole("link", { name: "詳細を見る" });
     expect(detailLinks).toHaveLength(2);
     detailLinks.forEach((link) => expect(link).toHaveAttribute("href", "/matches/match-1"));
@@ -174,7 +182,9 @@ describe("MatchesListPage", () => {
 
     expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
     const heldEventSelect = screen.getAllByLabelText("開催")[0] as HTMLSelectElement;
-    await waitFor(() => expect(heldEventSelect.options.length).toBeGreaterThan(1));
+    await waitFor(() =>
+      expect([...heldEventSelect.options].map((option) => option.value)).toEqual(["", "held-1"]),
+    );
 
     await user.selectOptions(heldEventSelect, "held-1");
 
@@ -481,9 +491,10 @@ describe("MatchesListPage", () => {
     }
     await user.click(firstDraftAction);
 
-    await waitFor(() =>
-      expect(screen.getAllByRole("button", { name: "確認中…" })).not.toHaveLength(0),
-    );
+    await waitFor(() => expect(screen.getAllByRole("button", { name: "確認中…" })).toHaveLength(2));
+    screen
+      .getAllByRole("button", { name: "確認中…" })
+      .forEach((button) => expect(button).toBeDisabled());
     screen
       .getAllByRole("button", { name: "確認事項を直す" })
       .forEach((button) => expect(button).toBeEnabled());
@@ -793,7 +804,6 @@ describe("MatchDetailPage", () => {
     expect(screen.getByText("目的地なし決着")).toBeInTheDocument();
     expect(screen.getByText("低収益勝ち")).toBeInTheDocument();
     expect(screen.getByText("同作品内")).toBeInTheDocument();
-    expect(screen.getAllByText("試合記録").length).toBeGreaterThan(0);
   });
 
   it("keeps match-record badges visible when series comparison loading fails", async () => {

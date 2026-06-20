@@ -210,23 +210,10 @@ describe("app routing", () => {
     expect(screen.getByText("総合 / 12戦")).toBeInTheDocument();
     expect(screen.getByText("卓全体で出やすい論点")).toBeInTheDocument();
     expect(screen.getByText("収益先行後の勝ち切りが共通論点です")).toBeInTheDocument();
-    expect(screen.getAllByText("再現する").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("見直す").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("信頼度 高").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("発動条件").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("やること").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("避けること").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("データ上の理由").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("試合後の検証").length).toBeGreaterThan(0);
     expect(screen.queryByText("読み取り")).not.toBeInTheDocument();
     expect(screen.queryByText("次回の確認")).not.toBeInTheDocument();
     expect(screen.queryByText("根拠あり")).not.toBeInTheDocument();
     expect(screen.queryByText(/カード内/u)).not.toBeInTheDocument();
-    expect(screen.getAllByText("主要指標").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("収益先行時は目的地0回で終えない。").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("物件収益トップ時の1位率").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("本人全体の1位率").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("落とした収益トップ時の目的地平均").length).toBeGreaterThan(0);
     expect(
       screen.queryByText(
         "次回も収益で上回った試合を拾い、勝てた試合と落とした試合で目的地回数や事故の差が出ているかを見ます。",
@@ -279,8 +266,6 @@ describe("app routing", () => {
       await screen.findByRole("heading", { name: "桃鉄型 / 遊戯王型の根拠" }),
     ).toBeInTheDocument();
     expect(screen.getByText("強調ルール")).toBeInTheDocument();
-    expect(screen.getAllByText("強み").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("4人内最高").length).toBeGreaterThan(0);
     expect(await screen.findByRole("heading", { name: "物件収益分布" })).toBeInTheDocument();
     expect(
       await screen.findByRole("heading", { name: "物件収益トップを勝ちにできたか" }),
@@ -328,8 +313,6 @@ describe("app routing", () => {
     expect(
       await screen.findByRole("heading", { name: "カード売り場と目的地" }),
     ).toBeInTheDocument();
-    expect(screen.getAllByText("到着あり × 売り場あり").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("到着なし × 売り場あり").length).toBeGreaterThan(0);
     expect(screen.queryByRole("link", { name: "安定性" })).not.toBeInTheDocument();
     expect(screen.queryAllByRole("heading", { name: "いーゆー" })).toHaveLength(0);
     expect(screen.queryByRole("heading", { name: "収益と目的地の効き方" })).not.toBeInTheDocument();

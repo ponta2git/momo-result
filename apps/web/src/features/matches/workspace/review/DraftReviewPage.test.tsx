@@ -122,7 +122,7 @@ describe("DraftReviewPage", () => {
         "/matches/match-confirmed-1",
       ),
     );
-    expect(await screen.findAllByText(confirmedDraftMessages.loadRedirect)).not.toHaveLength(0);
+    expect(await screen.findAllByText(confirmedDraftMessages.loadRedirect)).toHaveLength(1);
   });
 
   it("checks the latest draft before confirmation and skips POST when already confirmed", async () => {
@@ -180,7 +180,7 @@ describe("DraftReviewPage", () => {
       ),
     );
     expect(postCalled).toBe(false);
-    expect(await screen.findAllByText(confirmedDraftMessages.confirmConflict)).not.toHaveLength(0);
+    expect(await screen.findAllByText(confirmedDraftMessages.confirmConflict)).toHaveLength(1);
   });
 
   it("redirects after a confirm conflict when the draft was confirmed concurrently", async () => {
@@ -242,7 +242,7 @@ describe("DraftReviewPage", () => {
       ),
     );
     expect(postCalled).toBe(true);
-    expect(await screen.findAllByText(confirmedDraftMessages.confirmConflict)).not.toHaveLength(0);
+    expect(await screen.findAllByText(confirmedDraftMessages.confirmConflict)).toHaveLength(1);
   });
 
   it("shows status check failures inside the confirmation dialog", async () => {

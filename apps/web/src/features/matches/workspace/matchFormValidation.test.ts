@@ -136,6 +136,6 @@ describe("validateMatchForm", () => {
     const result = validateMatchForm(values);
 
     expect(result.firstMessage).toBe(result.messages[0]);
-    expect(result.firstMessage).toBeDefined();
+    expect(result.firstMessage).toBe("開催履歴を選択してください");
   });
 });

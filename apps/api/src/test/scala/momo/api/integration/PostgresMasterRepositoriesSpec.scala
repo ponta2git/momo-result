@@ -74,6 +74,35 @@ final class PostgresMasterRepositoriesSpec extends IntegrationSuite:
       assertEquals(maps, Nil)
       assertEquals(seasons, Nil)
 
+  test("master updates report conflicts when unique names collide"):
+    val otherTitleId = GameTitleId.unsafeFromString("title_other")
+    val otherMapId = MapMasterId.unsafeFromString("map_other")
+    val otherSeasonId = SeasonMasterId.unsafeFromString("season_other")
+    val updateTitle = new UpdateGameTitle[IO](gameTitles)
+    val updateMap = new UpdateMapMaster[IO](mapMasters)
+    val updateSeason = new UpdateSeasonMaster[IO](seasonMasters)
+    for
+      _ <- seedScopedMasters
+      _ <- gameTitles.create(GameTitle(otherTitleId, "別タイトル", "world", 2, now))
+      _ <- mapMasters.create(MapMaster(otherMapId, titleId, "別マップ", 2, now))
+      _ <- seasonMasters.create(SeasonMaster(otherSeasonId, titleId, "別期間", 2, now))
+      titleConflict <- updateTitle.run(UpdateGameTitleCommand(otherTitleId, "テストタイトル", "world"))
+      mapConflict <- updateMap.run(UpdateMapMasterCommand(otherMapId, "テストマップ"))
+      seasonConflict <- updateSeason.run(UpdateSeasonMasterCommand(otherSeasonId, "テスト期間"))
+    yield
+      assertEquals(
+        titleConflict,
+        Left(AppError.Conflict("game_title already exists: title_other or テストタイトル")),
+      )
+      assertEquals(
+        mapConflict,
+        Left(AppError.Conflict("map_master already exists: map_other or テストマップ")),
+      )
+      assertEquals(
+        seasonConflict,
+        Left(AppError.Conflict("season_master already exists: season_other or テスト期間")),
+      )
+
   test("delete title reports conflict when scoped masters still reference it"):
     val delete = new DeleteGameTitle[IO](gameTitles)
     for

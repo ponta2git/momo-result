@@ -98,6 +98,9 @@ object PostgresGameTitles:
       """.update.run.flatMap {
       case 1 => ().pure[ConnectionIO]
       case _ => notFound("game title", title.id.value)
+    }.exceptSomeSqlState {
+      case state if isUniqueViolation(state) =>
+        conflict(s"game_title already exists: ${title.id.value} or ${title.name}")
     }
 
     override def delete(id: GameTitleId): ConnectionIO[Unit] = deleteDiscardedDrafts(
@@ -174,6 +177,9 @@ object PostgresMapMasters:
       """.update.run.flatMap {
       case 1 => ().pure[ConnectionIO]
       case _ => notFound("map master", map.id.value)
+    }.exceptSomeSqlState {
+      case state if isUniqueViolation(state) =>
+        conflict(s"map_master already exists: ${map.id.value} or ${map.name}")
     }
 
     override def delete(id: MapMasterId): ConnectionIO[Unit] = deleteDiscardedDrafts(
@@ -251,6 +257,9 @@ object PostgresSeasonMasters:
       """.update.run.flatMap {
       case 1 => ().pure[ConnectionIO]
       case _ => notFound("season master", season.id.value)
+    }.exceptSomeSqlState {
+      case state if isUniqueViolation(state) =>
+        conflict(s"season_master already exists: ${season.id.value} or ${season.name}")
     }
 
     override def delete(id: SeasonMasterId): ConnectionIO[Unit] = deleteDiscardedDrafts(

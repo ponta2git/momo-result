@@ -26,7 +26,7 @@ final class UpdateGameTitle[F[_]: MonadThrow](titles: GameTitlesRepository[F]):
     layoutFamily <- EitherT
       .fromEither[F](UseCaseField.stableKey("layoutFamily", command.layoutFamily))
     updated = existing.copy(name = name, layoutFamily = layoutFamily)
-    _ <- EitherT.liftF(titles.update(updated))
+    _ <- titles.update(updated).recoverAppError
   yield updated).value
 
 final class DeleteGameTitle[F[_]: MonadThrow](titles: GameTitlesRepository[F]):
@@ -40,7 +40,7 @@ final class UpdateMapMaster[F[_]: MonadThrow](maps: MapMastersRepository[F]):
     existing <- maps.find(command.id).orNotFound("map master", command.id.value)
     name <- EitherT.fromEither[F](UseCaseField.nonBlank("name", command.name))
     updated = existing.copy(name = name)
-    _ <- EitherT.liftF(maps.update(updated))
+    _ <- maps.update(updated).recoverAppError
   yield updated).value
 
 final class DeleteMapMaster[F[_]: MonadThrow](maps: MapMastersRepository[F]):
@@ -54,7 +54,7 @@ final class UpdateSeasonMaster[F[_]: MonadThrow](seasons: SeasonMastersRepositor
     existing <- seasons.find(command.id).orNotFound("season master", command.id.value)
     name <- EitherT.fromEither[F](UseCaseField.nonBlank("name", command.name))
     updated = existing.copy(name = name)
-    _ <- EitherT.liftF(seasons.update(updated))
+    _ <- seasons.update(updated).recoverAppError
   yield updated).value
 
 final class DeleteSeasonMaster[F[_]: MonadThrow](seasons: SeasonMastersRepository[F]):

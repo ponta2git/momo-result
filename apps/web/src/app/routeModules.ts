@@ -81,5 +81,9 @@ export function preloadRouteForPath(pathname: string): void {
   if (!route) {
     return;
   }
-  void route.preload();
+  preloadRouteModule(route.preload);
+}
+
+export function preloadRouteModule(preload: () => Promise<unknown>): void {
+  void preload().catch(() => undefined);
 }

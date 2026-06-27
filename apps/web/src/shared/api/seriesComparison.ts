@@ -7,6 +7,8 @@ export type SeriesComparisonOptionsResponse =
 export type SeriesComparisonResponse = components["schemas"]["SeriesComparisonResponse"];
 export type SeriesComparisonReviewResponse =
   components["schemas"]["SeriesComparisonReviewResponse"];
+export type SeriesComparisonDrilldownResponse =
+  components["schemas"]["SeriesComparisonDrilldownResponse"];
 
 export type SeriesComparisonQuery = {
   gameTitleId: string;
@@ -15,6 +17,11 @@ export type SeriesComparisonQuery = {
 };
 
 export type SeriesComparisonReviewQuery = SeriesComparisonQuery;
+
+export type SeriesComparisonDrilldownQuery = SeriesComparisonQuery & {
+  memberId: string;
+  metricId: "rank.averageHistory";
+};
 
 export async function getSeriesComparisonOptions(
   options: ApiSignalOptions = {},
@@ -51,6 +58,21 @@ export function buildSeriesComparisonReviewPath(query: SeriesComparisonReviewQue
   return `/api/analytics/series-comparison/review?${params.toString()}`;
 }
 
+export function buildSeriesComparisonDrilldownPath(query: SeriesComparisonDrilldownQuery): string {
+  const params = new URLSearchParams({
+    gameTitleId: query.gameTitleId,
+    memberId: query.memberId,
+    metricId: query.metricId,
+  });
+  if (query.seasonMasterId) {
+    params.set("seasonMasterId", query.seasonMasterId);
+  }
+  if (query.mapMasterId) {
+    params.set("mapMasterId", query.mapMasterId);
+  }
+  return `/api/analytics/series-comparison/drilldown?${params.toString()}`;
+}
+
 export async function getSeriesComparison(
   query: SeriesComparisonQuery,
   options: ApiSignalOptions = {},
@@ -64,6 +86,16 @@ export async function getSeriesComparisonReview(
 ): Promise<SeriesComparisonReviewResponse> {
   return apiRequest<SeriesComparisonReviewResponse>(
     buildSeriesComparisonReviewPath(query),
+    options,
+  );
+}
+
+export async function getSeriesComparisonDrilldown(
+  query: SeriesComparisonDrilldownQuery,
+  options: ApiSignalOptions = {},
+): Promise<SeriesComparisonDrilldownResponse> {
+  return apiRequest<SeriesComparisonDrilldownResponse>(
+    buildSeriesComparisonDrilldownPath(query),
     options,
   );
 }

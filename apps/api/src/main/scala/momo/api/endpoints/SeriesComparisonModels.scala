@@ -67,6 +67,58 @@ final case class SeriesComparisonReviewResponse(
 object SeriesComparisonReviewResponse:
   given Schema[SeriesComparisonReviewResponse] = Schema.derived
 
+final case class SeriesComparisonDrilldownResponse(
+    schemaVersion: Int,
+    metricId: String,
+    scope: SeriesComparisonScopeResponse,
+    player: SeriesComparisonPlayerResponse,
+    summary: SeriesComparisonRankAverageHistorySummaryResponse,
+    matchRows: List[SeriesComparisonRankAverageHistoryMatchRowResponse],
+    heldEventRows: List[SeriesComparisonRankAverageHistoryEventRowResponse],
+    dataQuality: SeriesComparisonDataQualityResponse,
+) derives Codec.AsObject
+object SeriesComparisonDrilldownResponse:
+  given Schema[SeriesComparisonDrilldownResponse] = Schema.derived
+
+final case class SeriesComparisonRankAverageHistorySummaryResponse(
+    targetCount: Int,
+    currentAverageRank: Option[Double],
+    averageRankDeltaFromFirst: Option[Double],
+    latestHeldEventAverageRankDelta: Option[Double],
+    status: String,
+) derives Codec.AsObject
+object SeriesComparisonRankAverageHistorySummaryResponse:
+  given Schema[SeriesComparisonRankAverageHistorySummaryResponse] = Schema.derived
+
+final case class SeriesComparisonRankAverageHistoryMatchRowResponse(
+    matchIndex: Int,
+    matchId: String,
+    playedAt: String,
+    heldEventId: String,
+    matchNoInEvent: Int,
+    rank: Int,
+    previousRank: Option[Int],
+    rankDelta: Option[Int],
+    cumulativeAverageRank: Double,
+    cumulativeAverageRankDelta: Option[Double],
+) derives Codec.AsObject
+object SeriesComparisonRankAverageHistoryMatchRowResponse:
+  given Schema[SeriesComparisonRankAverageHistoryMatchRowResponse] = Schema.derived
+
+final case class SeriesComparisonRankAverageHistoryEventRowResponse(
+    heldEventId: String,
+    firstPlayedAt: String,
+    matchCount: Int,
+    ranks: List[Int],
+    eventAverageRank: Double,
+    eventRankDelta: Option[Int],
+    cumulativeAverageBefore: Option[Double],
+    cumulativeAverageAfter: Double,
+    cumulativeAverageDelta: Option[Double],
+) derives Codec.AsObject
+object SeriesComparisonRankAverageHistoryEventRowResponse:
+  given Schema[SeriesComparisonRankAverageHistoryEventRowResponse] = Schema.derived
+
 final case class SeriesComparisonReviewBaselineResponse(
     scope: SeriesComparisonScopeResponse,
     matchCount: Int,

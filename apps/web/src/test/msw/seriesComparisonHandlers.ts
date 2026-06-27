@@ -1,6 +1,7 @@
 import { http, HttpResponse } from "msw";
 
 import type {
+  SeriesComparisonDrilldownResponse,
   SeriesComparisonResponse,
   SeriesComparisonReviewResponse,
 } from "@/shared/api/seriesComparison";
@@ -36,10 +37,126 @@ export const seriesComparisonHandlers = [
   http.get("/api/analytics/series-comparison", () =>
     HttpResponse.json(makeSeriesComparisonResponse()),
   ),
+  http.get("/api/analytics/series-comparison/drilldown", ({ request }) => {
+    const memberId = new URL(request.url).searchParams.get("memberId") ?? "member_ponta";
+    return HttpResponse.json(makeSeriesComparisonDrilldownResponse(memberId));
+  }),
   http.get("/api/analytics/series-comparison/review", () =>
     HttpResponse.json(makeSeriesComparisonReviewResponse()),
   ),
 ];
+
+export function makeSeriesComparisonDrilldownResponse(
+  memberId = "member_ponta",
+): SeriesComparisonDrilldownResponse {
+  const player = players.find((item) => item.memberId === memberId) ?? players[1] ?? players[0]!;
+  const nullNumber = null as unknown as number;
+  return {
+    dataQuality: {
+      items: [
+        {
+          denominator: 4,
+          hasTies: false,
+          metricId: "rank.averageHistory",
+          playerMemberId: player.memberId,
+          status: "ok",
+          targetCount: 4,
+        },
+      ],
+    },
+    heldEventRows: [
+      {
+        cumulativeAverageAfter: 2.5,
+        cumulativeAverageBefore: nullNumber,
+        cumulativeAverageDelta: nullNumber,
+        eventAverageRank: 2.5,
+        eventRankDelta: -3,
+        firstPlayedAt: "2026-05-10T12:00:00.000Z",
+        heldEventId: "held_2026_05_10",
+        matchCount: 2,
+        ranks: [4, 1],
+      },
+      {
+        cumulativeAverageAfter: 2.25,
+        cumulativeAverageBefore: 2.5,
+        cumulativeAverageDelta: -0.25,
+        eventAverageRank: 2.0,
+        eventRankDelta: 2,
+        firstPlayedAt: "2026-05-17T12:00:00.000Z",
+        heldEventId: "held_2026_05_17",
+        matchCount: 2,
+        ranks: [1, 3],
+      },
+    ],
+    matchRows: [
+      {
+        cumulativeAverageRank: 4,
+        heldEventId: "held_2026_05_10",
+        matchId: "match-1",
+        matchIndex: 1,
+        matchNoInEvent: 1,
+        playedAt: "2026-05-10T12:00:00.000Z",
+        previousRank: nullNumber,
+        rank: 4,
+        rankDelta: nullNumber,
+        cumulativeAverageRankDelta: nullNumber,
+      },
+      {
+        cumulativeAverageRank: 2.5,
+        cumulativeAverageRankDelta: -1.5,
+        heldEventId: "held_2026_05_10",
+        matchId: "match-2",
+        matchIndex: 2,
+        matchNoInEvent: 2,
+        playedAt: "2026-05-10T13:00:00.000Z",
+        previousRank: 4,
+        rank: 1,
+        rankDelta: -3,
+      },
+      {
+        cumulativeAverageRank: 2,
+        cumulativeAverageRankDelta: -0.5,
+        heldEventId: "held_2026_05_17",
+        matchId: "match-3",
+        matchIndex: 3,
+        matchNoInEvent: 1,
+        playedAt: "2026-05-17T12:00:00.000Z",
+        previousRank: 1,
+        rank: 1,
+        rankDelta: 0,
+      },
+      {
+        cumulativeAverageRank: 2.25,
+        cumulativeAverageRankDelta: 0.25,
+        heldEventId: "held_2026_05_17",
+        matchId: "match-4",
+        matchIndex: 4,
+        matchNoInEvent: 2,
+        playedAt: "2026-05-17T13:00:00.000Z",
+        previousRank: 1,
+        rank: 3,
+        rankDelta: 2,
+      },
+    ],
+    metricId: "rank.averageHistory",
+    player,
+    schemaVersion: 1,
+    scope: {
+      gameTitleId: "gt_momotetsu_2",
+      gameTitleName: "桃太郎電鉄2",
+      layoutFamily: "momotetsu_2",
+      scopeKind: "overall",
+      scopeName: "総合",
+    },
+    summary: {
+      averageRankDeltaFromFirst: -1.75,
+      currentAverageRank: 2.25,
+      latestHeldEventAverageRankDelta: -0.25,
+      status: "ok",
+      targetCount: 4,
+    },
+  };
+}
 
 export function makeSeriesComparisonResponse(): SeriesComparisonResponse {
   const averages = [1.2, 1.5, 2.4, 3.1];

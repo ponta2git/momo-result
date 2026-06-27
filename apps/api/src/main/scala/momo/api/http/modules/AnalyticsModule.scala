@@ -9,6 +9,7 @@ import momo.api.endpoints.codec.SeriesComparisonCodec
 import momo.api.http.{EndpointSecurity, HttpOperation}
 import momo.api.usecases.{
   GetSeriesComparison,
+  GetSeriesComparisonDrilldown,
   GetSeriesComparisonOptions,
   GetSeriesComparisonReview
 }
@@ -18,6 +19,7 @@ object AnalyticsModule:
       getOptions: GetSeriesComparisonOptions[F],
       getComparison: GetSeriesComparison[F],
       getReview: GetSeriesComparisonReview[F],
+      getDrilldown: GetSeriesComparisonDrilldown[F],
       readRateLimiter: RateLimiter[F],
       security: EndpointSecurity[F],
   ): List[ServerEndpoint[Any, F]] = List(
@@ -58,5 +60,27 @@ object AnalyticsModule:
               )(scope => security.respond(getReview.run(scope))(identity))
             }
           }
+    },
+    SeriesComparisonEndpoints.drilldown.serverLogic {
+      case (gameTitleId, metricId, memberId, seasonMasterId, mapMasterId, accountHeader) =>
+        security.authorizeRead(accountHeader) { member =>
+          ReadRateLimit.enforce(
+            readRateLimiter,
+            member.accountId.value,
+            HttpOperation.GetSeriesComparisonDrilldown,
+          ) {
+            security.decode(
+              SeriesComparisonCodec.parseDrilldownQuery(
+                gameTitleId,
+                metricId,
+                memberId,
+                seasonMasterId,
+                mapMasterId,
+              )
+            ) { case (scope, parsedMetricId, parsedMemberId) =>
+              security.respond(getDrilldown.run(scope, parsedMetricId, parsedMemberId))(identity)
+            }
+          }
+        }
     },
   )

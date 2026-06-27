@@ -1,7 +1,7 @@
 package momo.api.endpoints.codec
 
 import momo.api.domain.SeriesComparisonScope
-import momo.api.domain.ids.{GameTitleId, MapMasterId, SeasonMasterId}
+import momo.api.domain.ids.{GameTitleId, MapMasterId, MemberId, SeasonMasterId}
 import momo.api.errors.AppError
 
 object SeriesComparisonCodec:
@@ -26,6 +26,20 @@ object SeriesComparisonCodec:
       parsedGameTitleId <- BoundaryId.required("gameTitleId", gameTitleId)(GameTitleId.fromString)
       scope <- parseFilterScope(parsedGameTitleId, seasonMasterId, mapMasterId)
     yield scope
+
+  def parseDrilldownQuery(
+      gameTitleId: String,
+      metricId: String,
+      memberId: String,
+      seasonMasterId: Option[String],
+      mapMasterId: Option[String],
+  ): Either[AppError, (SeriesComparisonScope, String, MemberId)] =
+    for
+      parsedGameTitleId <- BoundaryId.required("gameTitleId", gameTitleId)(GameTitleId.fromString)
+      parsedMetricId <- parseMetricId(metricId)
+      parsedMemberId <- BoundaryId.required("memberId", memberId)(MemberId.fromString)
+      scope <- parseFilterScope(parsedGameTitleId, seasonMasterId, mapMasterId)
+    yield (scope, parsedMetricId, parsedMemberId)
 
   private def parseScope(
       gameTitleId: GameTitleId,
@@ -84,5 +98,10 @@ object SeriesComparisonCodec:
     val raw = nonBlank(value).getOrElse("overall")
     if Set("overall", "season", "map").contains(raw) then Right(raw)
     else Left(AppError.ValidationFailed("scopeKind must be overall, season, or map."))
+
+  private def parseMetricId(value: String): Either[AppError, String] =
+    val raw = value.trim
+    if raw == "rank.averageHistory" then Right(raw)
+    else Left(AppError.ValidationFailed("metricId must be rank.averageHistory."))
 
   private def nonBlank(value: Option[String]): Option[String] = value.map(_.trim).filter(_.nonEmpty)

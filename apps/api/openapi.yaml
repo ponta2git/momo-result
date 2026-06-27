@@ -2051,6 +2051,96 @@
         }
       }
     },
+    "/api/analytics/series-comparison/drilldown" : {
+      "get" : {
+        "tags" : [
+          "analytics"
+        ],
+        "operationId" : "getApiAnalyticsSeries-comparisonDrilldown",
+        "parameters" : [
+          {
+            "name" : "gameTitleId",
+            "in" : "query",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "metricId",
+            "in" : "query",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "memberId",
+            "in" : "query",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "seasonMasterId",
+            "in" : "query",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "mapMasterId",
+            "in" : "query",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SeriesComparisonDrilldownResponse"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: query parameter gameTitleId, Invalid value for: query parameter metricId, Invalid value for: query parameter memberId",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/game-titles" : {
       "get" : {
         "tags" : [
@@ -6056,6 +6146,51 @@
           }
         }
       },
+      "SeriesComparisonDrilldownResponse" : {
+        "title" : "SeriesComparisonDrilldownResponse",
+        "type" : "object",
+        "required" : [
+          "schemaVersion",
+          "metricId",
+          "scope",
+          "player",
+          "summary",
+          "dataQuality"
+        ],
+        "properties" : {
+          "schemaVersion" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "metricId" : {
+            "type" : "string"
+          },
+          "scope" : {
+            "$ref" : "#/components/schemas/SeriesComparisonScopeResponse"
+          },
+          "player" : {
+            "$ref" : "#/components/schemas/SeriesComparisonPlayerResponse"
+          },
+          "summary" : {
+            "$ref" : "#/components/schemas/SeriesComparisonRankAverageHistorySummaryResponse"
+          },
+          "matchRows" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/SeriesComparisonRankAverageHistoryMatchRowResponse"
+            }
+          },
+          "heldEventRows" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/SeriesComparisonRankAverageHistoryEventRowResponse"
+            }
+          },
+          "dataQuality" : {
+            "$ref" : "#/components/schemas/SeriesComparisonDataQualityResponse"
+          }
+        }
+      },
       "SeriesComparisonHighlightResponse" : {
         "title" : "SeriesComparisonHighlightResponse",
         "type" : "object",
@@ -6388,6 +6523,137 @@
             "type" : "string"
           },
           "displayName" : {
+            "type" : "string"
+          }
+        }
+      },
+      "SeriesComparisonRankAverageHistoryEventRowResponse" : {
+        "title" : "SeriesComparisonRankAverageHistoryEventRowResponse",
+        "type" : "object",
+        "required" : [
+          "heldEventId",
+          "firstPlayedAt",
+          "matchCount",
+          "eventAverageRank",
+          "cumulativeAverageAfter"
+        ],
+        "properties" : {
+          "heldEventId" : {
+            "type" : "string"
+          },
+          "firstPlayedAt" : {
+            "type" : "string"
+          },
+          "matchCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "ranks" : {
+            "type" : "array",
+            "items" : {
+              "type" : "integer",
+              "format" : "int32"
+            }
+          },
+          "eventAverageRank" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "eventRankDelta" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "cumulativeAverageBefore" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "cumulativeAverageAfter" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "cumulativeAverageDelta" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        }
+      },
+      "SeriesComparisonRankAverageHistoryMatchRowResponse" : {
+        "title" : "SeriesComparisonRankAverageHistoryMatchRowResponse",
+        "type" : "object",
+        "required" : [
+          "matchIndex",
+          "matchId",
+          "playedAt",
+          "heldEventId",
+          "matchNoInEvent",
+          "rank",
+          "cumulativeAverageRank"
+        ],
+        "properties" : {
+          "matchIndex" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "matchId" : {
+            "type" : "string"
+          },
+          "playedAt" : {
+            "type" : "string"
+          },
+          "heldEventId" : {
+            "type" : "string"
+          },
+          "matchNoInEvent" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "rank" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "previousRank" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "rankDelta" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "cumulativeAverageRank" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "cumulativeAverageRankDelta" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        }
+      },
+      "SeriesComparisonRankAverageHistorySummaryResponse" : {
+        "title" : "SeriesComparisonRankAverageHistorySummaryResponse",
+        "type" : "object",
+        "required" : [
+          "targetCount",
+          "status"
+        ],
+        "properties" : {
+          "targetCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "currentAverageRank" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "averageRankDeltaFromFirst" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "latestHeldEventAverageRankDelta" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "status" : {
             "type" : "string"
           }
         }

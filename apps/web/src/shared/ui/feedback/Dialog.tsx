@@ -42,7 +42,7 @@ function DialogContentFrame({
   title,
 }: Pick<DialogBaseProps, "children" | "className" | "description" | "title">) {
   return (
-    <div className="space-y-3">
+    <div className="flex h-full max-h-full min-h-0 flex-col gap-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <BaseDialog.Title className="text-lg font-semibold text-balance text-[var(--color-text-primary)]">
@@ -60,7 +60,7 @@ function DialogContentFrame({
           }
         />
       </div>
-      <div className={cn("min-w-0", className)}>{children}</div>
+      <div className={cn("min-h-0 min-w-0 flex-1", className)}>{children}</div>
     </div>
   );
 }

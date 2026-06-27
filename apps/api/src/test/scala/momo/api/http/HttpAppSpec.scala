@@ -406,15 +406,22 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
   }
 
   app.test("series comparison endpoints are inside the authenticated read surface") { httpApp =>
-    httpApp.run(Request[IO](Method.GET, uri"/api/analytics/series-comparison/options"))
-      .flatMap(response =>
-        assertProblemDetailEquals(
-          response,
-          Status.Unauthorized,
-          "UNAUTHORIZED",
-          "Authentication is required.",
+    val requests = List(
+      uri"/api/analytics/series-comparison/options",
+      uri"/api/analytics/series-comparison/drilldown?gameTitleId=gt&metricId=rank.averageHistory&memberId=member_ponta",
+    )
+    requests.foldLeft(IO.unit) { (acc, uri) =>
+      acc.flatMap(_ =>
+        httpApp.run(Request[IO](Method.GET, uri)).flatMap(response =>
+          assertProblemDetailEquals(
+            response,
+            Status.Unauthorized,
+            "UNAUTHORIZED",
+            "Authentication is required.",
+          )
         )
       )
+    }
   }
 
   app.test("GET /api/analytics/series-comparison/options is wired for authenticated users") {

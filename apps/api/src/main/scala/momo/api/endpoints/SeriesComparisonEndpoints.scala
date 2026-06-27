@@ -46,3 +46,20 @@ object SeriesComparisonEndpoints:
       .errorOut(CommonEndpoint.errorOut)
       .out(jsonBody[SeriesComparisonReviewResponse])
       .tag("analytics")
+
+  type DrilldownInput = (String, String, String, Option[String], Option[String], Option[String])
+
+  val drilldown
+      : PublicEndpoint[DrilldownInput, ProblemResponse, SeriesComparisonDrilldownResponse, Any] =
+    endpoint
+      .get
+      .in("api" / "analytics" / "series-comparison" / "drilldown")
+      .in(query[String]("gameTitleId"))
+      .in(query[String]("metricId"))
+      .in(query[String]("memberId"))
+      .in(query[Option[String]]("seasonMasterId"))
+      .in(query[Option[String]]("mapMasterId"))
+      .in(CommonEndpoint.accountHeader)
+      .errorOut(CommonEndpoint.errorOut)
+      .out(jsonBody[SeriesComparisonDrilldownResponse])
+      .tag("analytics")

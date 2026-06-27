@@ -55,6 +55,7 @@ object HttpRoutes:
       getSeriesComparisonOptions: GetSeriesComparisonOptions[F],
       getSeriesComparison: GetSeriesComparison[F],
       getSeriesComparisonReview: GetSeriesComparisonReview[F],
+      getSeriesComparisonDrilldown: GetSeriesComparisonDrilldown[F],
       listMatches: ListMatches[F],
       getMatch: GetMatch[F],
       updateMatch: UpdateMatch[F],
@@ -151,6 +152,7 @@ object HttpRoutes:
         deps.getSeriesComparisonOptions,
         deps.getSeriesComparison,
         deps.getSeriesComparisonReview,
+        deps.getSeriesComparisonDrilldown,
         deps.rateLimiters.readApi,
         security,
       ) ::: MasterModule.routes[F](

@@ -8,10 +8,12 @@ import {
   ShieldAlert,
   Store,
   Swords,
+  Table2,
   Trophy,
 } from "lucide-react";
 import { motion } from "motion/react";
 import type { ReactNode } from "react";
+import { useState } from "react";
 
 import {
   AnalysisTabs,
@@ -79,6 +81,7 @@ import {
   rankOutcomeColor,
   revenueRankConversionEntries,
 } from "@/features/seriesComparison/seriesComparisonPresentation";
+import { RankAverageHistoryDrilldownDialog } from "@/features/seriesComparison/SeriesComparisonRankDrilldown";
 import { ReviewViewContent } from "@/features/seriesComparison/SeriesComparisonReviewPanel";
 import {
   defaultSeriesComparisonView,
@@ -271,8 +274,21 @@ function AnalysisViewContent({
 function BasicMetrics({ response }: { response: SeriesComparisonResponse }) {
   const players = response.players ?? [];
   const metricsByMember = metricsMap(response);
+  const [drilldownMemberId, setDrilldownMemberId] = useState<string | null>(null);
   return (
     <MetricSection
+      action={
+        <Button
+          className="min-h-8 px-2.5 py-1 text-xs"
+          disabled={players.length === 0}
+          icon={<Table2 className="size-3.5" />}
+          size="sm"
+          variant="secondary"
+          onClick={() => setDrilldownMemberId(players[0]?.memberId ?? null)}
+        >
+          履歴
+        </Button>
+      }
       description="平均順位は小さいほど上位です。順位ごとの回数で、勝ち切りと下位落ちを見ます。"
       icon={<Trophy className="size-5" />}
       title="順位の地力"
@@ -304,6 +320,17 @@ function BasicMetrics({ response }: { response: SeriesComparisonResponse }) {
         players={players}
         series={response.trends.rankCumulativeAverage ?? []}
         yTicks={[1, 2, 3, 4]}
+      />
+      <RankAverageHistoryDrilldownDialog
+        open={drilldownMemberId !== null}
+        response={response}
+        selectedMemberId={drilldownMemberId}
+        onMemberChange={setDrilldownMemberId}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDrilldownMemberId(null);
+          }
+        }}
       />
     </MetricSection>
   );

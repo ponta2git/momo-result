@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
@@ -360,6 +360,38 @@ describe("app routing", () => {
     expect(screen.queryByRole("heading", { name: "収益と目的地の効き方" })).not.toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/analytics/series");
     expect(screen.getByRole("link", { name: "戦績比較" })).toBeInTheDocument();
+  });
+
+  it("opens rank average history drilldown from the standings overview", async () => {
+    setDevUser();
+    renderApp("/analytics/series");
+
+    await screen.findByRole("heading", { name: "戦績比較" });
+    await user.click(await screen.findByRole("tab", { name: "順位と相性" }));
+    expect(await screen.findByRole("heading", { name: "順位の地力" })).toBeInTheDocument();
+
+    expect(screen.getAllByRole("button", { name: "履歴" })).toHaveLength(1);
+    await user.click(screen.getByRole("button", { name: "履歴" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "順位の地力: いーゆー" });
+    expect(dialog).toHaveTextContent("現在の平均順位");
+    expect(dialog).toHaveTextContent("直近開催の平均変化");
+    expect(dialog).toHaveTextContent("0.25 改善");
+    expect(dialog).not.toHaveTextContent("初戦後から");
+    expect(dialog).not.toHaveTextContent("現在平均 - 初戦後平均");
+    expect(dialog).not.toHaveTextContent("状態");
+    expect(dialog).not.toHaveTextContent("データ信頼度");
+    expect(dialog).toHaveTextContent("開催による変動");
+    expect(within(dialog).getByLabelText("開催ごとの順位履歴")).toHaveClass("overflow-auto");
+    expect(within(dialog).getAllByRole("row")[1]).toHaveTextContent("1位 → 3位");
+
+    await user.click(screen.getByRole("button", { name: "試合ごと" }));
+
+    expect(dialog).toHaveTextContent("試合後平均順位");
+    expect(within(dialog).getByLabelText("試合ごとの順位履歴")).toHaveClass("overflow-auto");
+    expect(within(dialog).getAllByRole("row")[1]).toHaveTextContent("4戦目");
+    expect(dialog).toHaveTextContent("2戦目");
+    expect(dialog).toHaveTextContent("3位 改善");
   });
 
   it("requests standings comparison with season and map filters together", async () => {

@@ -6154,7 +6154,6 @@
           "metricId",
           "scope",
           "player",
-          "summary",
           "dataQuality"
         ],
         "properties" : {
@@ -6171,20 +6170,11 @@
           "player" : {
             "$ref" : "#/components/schemas/SeriesComparisonPlayerResponse"
           },
-          "summary" : {
-            "$ref" : "#/components/schemas/SeriesComparisonRankAverageHistorySummaryResponse"
+          "rankAverageHistory" : {
+            "$ref" : "#/components/schemas/SeriesComparisonRankAverageHistoryPayloadResponse"
           },
-          "matchRows" : {
-            "type" : "array",
-            "items" : {
-              "$ref" : "#/components/schemas/SeriesComparisonRankAverageHistoryMatchRowResponse"
-            }
-          },
-          "heldEventRows" : {
-            "type" : "array",
-            "items" : {
-              "$ref" : "#/components/schemas/SeriesComparisonRankAverageHistoryEventRowResponse"
-            }
+          "playOrderRankHistory" : {
+            "$ref" : "#/components/schemas/SeriesComparisonPlayOrderRankHistoryPayloadResponse"
           },
           "dataQuality" : {
             "$ref" : "#/components/schemas/SeriesComparisonDataQualityResponse"
@@ -6265,6 +6255,203 @@
             "items" : {
               "$ref" : "#/components/schemas/SeriesComparisonSeriesOption"
             }
+          }
+        }
+      },
+      "SeriesComparisonPlayOrderCountResponse" : {
+        "title" : "SeriesComparisonPlayOrderCountResponse",
+        "type" : "object",
+        "required" : [
+          "playOrder",
+          "matchCount"
+        ],
+        "properties" : {
+          "playOrder" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "matchCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "SeriesComparisonPlayOrderRankHistoryPayloadResponse" : {
+        "title" : "SeriesComparisonPlayOrderRankHistoryPayloadResponse",
+        "type" : "object",
+        "required" : [
+          "summary"
+        ],
+        "properties" : {
+          "summary" : {
+            "$ref" : "#/components/schemas/SeriesComparisonPlayOrderRankHistorySummaryResponse"
+          },
+          "averageTrendRows" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/SeriesComparisonPlayOrderRankHistoryTrendRowResponse"
+            }
+          },
+          "playOrderRows" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/SeriesComparisonPlayOrderRankHistoryPlayOrderRowResponse"
+            }
+          }
+        }
+      },
+      "SeriesComparisonPlayOrderRankHistoryPlayOrderRowResponse" : {
+        "title" : "SeriesComparisonPlayOrderRankHistoryPlayOrderRowResponse",
+        "type" : "object",
+        "required" : [
+          "playOrder",
+          "matchCount",
+          "podiumCount",
+          "lowerHalfCount"
+        ],
+        "properties" : {
+          "playOrder" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "matchCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "rankAverage" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "rankDistribution" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/RankDistributionResponse"
+            }
+          },
+          "podiumCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "podiumRate" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "lowerHalfCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "lowerHalfRate" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "baselineRankAverage" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "baselineDelta" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        }
+      },
+      "SeriesComparisonPlayOrderRankHistorySummaryResponse" : {
+        "title" : "SeriesComparisonPlayOrderRankHistorySummaryResponse",
+        "type" : "object",
+        "required" : [
+          "targetCount"
+        ],
+        "properties" : {
+          "targetCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "currentAverageRank" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "bestPlayOrder" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "bestPlayOrderAverageRank" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "worstPlayOrder" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "worstPlayOrderAverageRank" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "spread" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "countsByPlayOrder" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/SeriesComparisonPlayOrderCountResponse"
+            }
+          }
+        }
+      },
+      "SeriesComparisonPlayOrderRankHistoryTrendRowResponse" : {
+        "title" : "SeriesComparisonPlayOrderRankHistoryTrendRowResponse",
+        "type" : "object",
+        "required" : [
+          "matchIndex",
+          "matchId",
+          "playedAt",
+          "heldEventId",
+          "matchNoInEvent",
+          "playOrder",
+          "rank",
+          "playOrderOccurrenceIndex",
+          "cumulativeAverageRankByPlayOrder"
+        ],
+        "properties" : {
+          "matchIndex" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "matchId" : {
+            "type" : "string"
+          },
+          "playedAt" : {
+            "type" : "string"
+          },
+          "heldEventId" : {
+            "type" : "string"
+          },
+          "matchNoInEvent" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "playOrder" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "rank" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "playOrderOccurrenceIndex" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "cumulativeAverageRankByPlayOrder" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "previousCumulativeAverageRankByPlayOrder" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "cumulativeAverageRankDeltaByPlayOrder" : {
+            "type" : "number",
+            "format" : "double"
           }
         }
       },
@@ -6626,6 +6813,30 @@
           "cumulativeAverageRankDelta" : {
             "type" : "number",
             "format" : "double"
+          }
+        }
+      },
+      "SeriesComparisonRankAverageHistoryPayloadResponse" : {
+        "title" : "SeriesComparisonRankAverageHistoryPayloadResponse",
+        "type" : "object",
+        "required" : [
+          "summary"
+        ],
+        "properties" : {
+          "summary" : {
+            "$ref" : "#/components/schemas/SeriesComparisonRankAverageHistorySummaryResponse"
+          },
+          "matchRows" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/SeriesComparisonRankAverageHistoryMatchRowResponse"
+            }
+          },
+          "heldEventRows" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/SeriesComparisonRankAverageHistoryEventRowResponse"
+            }
           }
         }
       },

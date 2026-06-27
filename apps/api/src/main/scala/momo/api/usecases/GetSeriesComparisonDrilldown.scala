@@ -25,12 +25,14 @@ final class GetSeriesComparisonDrilldown[F[_]: Monad](readModel: SeriesCompariso
       case None => Monad[F]
           .pure(Left(AppError.NotFound("series comparison scope", scopeKey(scope))))
       case Some(resolved) => readModel.loadRows(resolved)
-          .map(rows => Right(SeriesComparisonDrilldownAggregation.aggregate(
-            resolved,
-            metricId,
-            memberId,
-            rows,
-          )))
+          .map(rows =>
+            Right(SeriesComparisonDrilldownAggregation.aggregate(
+              resolved,
+              metricId,
+              memberId,
+              rows,
+            ))
+          )
     }
 
   private def scopeKey(scope: SeriesComparisonScope): String = scope.scopeIdValue
@@ -55,15 +57,43 @@ private object SeriesComparisonDrilldownAggregation:
     val sortedRows = rows.sortBy(rowSortKey)
     val matchIndexById = matchIndexByIdFrom(sortedRows)
     val targetRows = sortedRows.filter(_.memberId == memberId)
-    val matchRows = rankAverageMatchRows(targetRows, matchIndexById)
-    val heldEventRows = rankAverageEventRows(matchRows)
     val status = statusFor(targetRows.size)
     val displayName = targetRows.headOption.map(_.memberDisplayName).getOrElse(memberId.value)
+    val rankAverageHistory =
+      Option.when(metricId == "rank.averageHistory")(
+        rankAverageHistoryPayload(targetRows, matchIndexById, status)
+      )
+    val playOrderRankHistory =
+      Option.when(metricId == "playOrder.rankHistory")(
+        playOrderRankHistoryPayload(targetRows, sortedRows, matchIndexById)
+      )
     SeriesComparisonDrilldownResponse(
       schemaVersion = SchemaVersion,
       metricId = metricId,
       scope = scopeResponse(scope),
       player = SeriesComparisonPlayerResponse(memberId = memberId.value, displayName = displayName),
+      rankAverageHistory = rankAverageHistory,
+      playOrderRankHistory = playOrderRankHistory,
+      dataQuality = SeriesComparisonDataQualityResponse(List(
+        MetricQualityResponse(
+          metricId = metricId,
+          playerMemberId = Some(memberId.value),
+          denominator = targetRows.size,
+          targetCount = targetRows.size,
+          status = status,
+          hasTies = false,
+        )
+      )),
+    )
+
+  private def rankAverageHistoryPayload(
+      targetRows: List[SeriesComparisonMatchPlayerRow],
+      matchIndexById: Map[MatchId, Int],
+      status: String,
+  ): SeriesComparisonRankAverageHistoryPayloadResponse =
+    val matchRows = rankAverageMatchRows(targetRows, matchIndexById)
+    val heldEventRows = rankAverageEventRows(matchRows)
+    SeriesComparisonRankAverageHistoryPayloadResponse(
       summary = SeriesComparisonRankAverageHistorySummaryResponse(
         targetCount = targetRows.size,
         currentAverageRank = matchRows.lastOption.map(_.cumulativeAverageRank),
@@ -77,16 +107,6 @@ private object SeriesComparisonDrilldownAggregation:
       ),
       matchRows = matchRows,
       heldEventRows = heldEventRows,
-      dataQuality = SeriesComparisonDataQualityResponse(List(
-        MetricQualityResponse(
-          metricId = metricId,
-          playerMemberId = Some(memberId.value),
-          denominator = targetRows.size,
-          targetCount = targetRows.size,
-          status = status,
-          hasTies = false,
-        )
-      )),
     )
 
   private def rankAverageMatchRows(
@@ -111,6 +131,95 @@ private object SeriesComparisonDrilldownAggregation:
         rankDelta = previousRank.map(previous => row.rank.value - previous),
         cumulativeAverageRank = currentAverage,
         cumulativeAverageRankDelta = previousAverage.map(currentAverage - _),
+      )
+    }
+
+  private def playOrderRankHistoryPayload(
+      targetRows: List[SeriesComparisonMatchPlayerRow],
+      allRows: List[SeriesComparisonMatchPlayerRow],
+      matchIndexById: Map[MatchId, Int],
+  ): SeriesComparisonPlayOrderRankHistoryPayloadResponse =
+    val baselineAverageByPlayOrder = (1 to 4).map { playOrder =>
+      val ranks = allRows.filter(_.playOrder.value == playOrder).map(_.rank.value)
+      playOrder -> average(ranks)
+    }.toMap
+    val playOrderRows = playOrderHistoryRows(targetRows, baselineAverageByPlayOrder)
+    val rankedPlayOrderRows = playOrderRows.filter(_.rankAverage.nonEmpty)
+      .sortBy(_.rankAverage.getOrElse(Double.MaxValue))
+    val best = rankedPlayOrderRows.headOption
+    val worst = rankedPlayOrderRows.lastOption
+    val averageTrendRows = playOrderAverageTrendRows(targetRows, matchIndexById)
+    SeriesComparisonPlayOrderRankHistoryPayloadResponse(
+      summary = SeriesComparisonPlayOrderRankHistorySummaryResponse(
+        targetCount = targetRows.size,
+        currentAverageRank = average(targetRows.map(_.rank.value)),
+        bestPlayOrder = best.map(_.playOrder),
+        bestPlayOrderAverageRank = best.flatMap(_.rankAverage),
+        worstPlayOrder = worst.map(_.playOrder),
+        worstPlayOrderAverageRank = worst.flatMap(_.rankAverage),
+        spread = Option.when(rankedPlayOrderRows.size >= 2)(
+          worst.flatMap(_.rankAverage).getOrElse(0.0) - best.flatMap(_.rankAverage).getOrElse(0.0)
+        ),
+        countsByPlayOrder = (1 to 4).toList.map(playOrder =>
+          SeriesComparisonPlayOrderCountResponse(
+            playOrder = playOrder,
+            matchCount = targetRows.count(_.playOrder.value == playOrder),
+          )
+        ),
+      ),
+      averageTrendRows = averageTrendRows,
+      playOrderRows = playOrderRows,
+    )
+
+  private def playOrderHistoryRows(
+      rows: List[SeriesComparisonMatchPlayerRow],
+      baselineAverageByPlayOrder: Map[Int, Option[Double]],
+  ): List[SeriesComparisonPlayOrderRankHistoryPlayOrderRowResponse] = (1 to 4).toList.map {
+    playOrder =>
+      val targetRows = rows.filter(_.playOrder.value == playOrder)
+      val ranks = targetRows.map(_.rank.value)
+      val rankAverage = average(ranks)
+      val podiumCount = ranks.count(rank => rank == 1 || rank == 2)
+      val lowerHalfCount = ranks.count(rank => rank == 3 || rank == 4)
+      val baseline = baselineAverageByPlayOrder.getOrElse(playOrder, None)
+      SeriesComparisonPlayOrderRankHistoryPlayOrderRowResponse(
+        playOrder = playOrder,
+        matchCount = targetRows.size,
+        rankAverage = rankAverage,
+        rankDistribution = (1 to 4).toList.map { rank =>
+          val count = ranks.count(_ == rank)
+          RankDistributionResponse(rank, count, rate(count, targetRows.size))
+        },
+        podiumCount = podiumCount,
+        podiumRate = rate(podiumCount, targetRows.size),
+        lowerHalfCount = lowerHalfCount,
+        lowerHalfRate = rate(lowerHalfCount, targetRows.size),
+        baselineRankAverage = baseline,
+        baselineDelta = (rankAverage, baseline).mapN(_ - _),
+      )
+  }
+
+  private def playOrderAverageTrendRows(
+      rows: List[SeriesComparisonMatchPlayerRow],
+      matchIndexById: Map[MatchId, Int],
+  ): List[SeriesComparisonPlayOrderRankHistoryTrendRowResponse] =
+    rows.zipWithIndex.map { case (row, index) =>
+      val playOrder = row.playOrder.value
+      val rowsForPlayOrder = rows.take(index + 1).filter(_.playOrder.value == playOrder)
+      val previousAverage = average(rowsForPlayOrder.dropRight(1).map(_.rank.value))
+      val currentAverage = averageUnsafe(rowsForPlayOrder.map(_.rank.value))
+      SeriesComparisonPlayOrderRankHistoryTrendRowResponse(
+        matchIndex = matchIndexById.getOrElse(row.matchId, index + 1),
+        matchId = row.matchId.value,
+        playedAt = Formatter.format(row.playedAt),
+        heldEventId = row.heldEventId.value,
+        matchNoInEvent = row.matchNoInEvent.value,
+        playOrder = playOrder,
+        rank = row.rank.value,
+        playOrderOccurrenceIndex = rowsForPlayOrder.size,
+        cumulativeAverageRankByPlayOrder = currentAverage,
+        previousCumulativeAverageRankByPlayOrder = previousAverage,
+        cumulativeAverageRankDeltaByPlayOrder = previousAverage.map(currentAverage - _),
       )
     }
 
@@ -158,6 +267,13 @@ private object SeriesComparisonDrilldownAggregation:
 
   private def averageUnsafe(values: List[Int]): Double =
     values.sum * 1.0d / values.size
+
+  private def average(values: List[Int]): Option[Double] = values match
+    case Nil => None
+    case xs => Some(averageUnsafe(xs))
+
+  private def rate(count: Int, denominator: Int): Option[Double] = Option
+    .when(denominator > 0)(count * 1.0d / denominator)
 
   private def statusFor(targetCount: Int): String =
     if targetCount <= 0 then "no_target" else if targetCount < 3 then "reference" else "ok"

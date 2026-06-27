@@ -22,8 +22,11 @@ import { Notice } from "@/shared/ui/feedback/Notice";
 import { SegmentedControl } from "@/shared/ui/forms/SegmentedControl";
 
 type DrilldownView = "events" | "matches";
-type MatchRow = NonNullable<SeriesComparisonDrilldownResponse["matchRows"]>[number];
-type EventRow = NonNullable<SeriesComparisonDrilldownResponse["heldEventRows"]>[number];
+type RankAverageHistoryPayload = NonNullable<
+  SeriesComparisonDrilldownResponse["rankAverageHistory"]
+>;
+type MatchRow = NonNullable<RankAverageHistoryPayload["matchRows"]>[number];
+type EventRow = NonNullable<RankAverageHistoryPayload["heldEventRows"]>[number];
 
 export function RankAverageHistoryDrilldownDialog({
   onMemberChange,
@@ -72,6 +75,7 @@ export function RankAverageHistoryDrilldownDialog({
     queryKey: seriesComparisonKeys.drilldown(query),
   });
   const data = drilldownQuery.data;
+  const payload = data?.rankAverageHistory;
   const loading = open && isInitialQueryLoading(drilldownQuery);
   const showError = shouldShowBlockingQueryError(drilldownQuery);
   const title = selectedPlayer ? `順位の地力: ${selectedPlayer.displayName}` : "順位の地力";
@@ -117,11 +121,19 @@ export function RankAverageHistoryDrilldownDialog({
           </Notice>
         ) : data ? (
           <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-3">
-            <RankHistorySummary data={data} />
-            {view === "events" ? (
-              <HeldEventHistoryTable rows={data.heldEventRows ?? []} />
+            {payload ? (
+              <>
+                <RankHistorySummary data={payload} />
+                {view === "events" ? (
+                  <HeldEventHistoryTable rows={payload.heldEventRows ?? []} />
+                ) : (
+                  <MatchHistoryTable rows={payload.matchRows ?? []} />
+                )}
+              </>
             ) : (
-              <MatchHistoryTable rows={data.matchRows ?? []} />
+              <Notice title="履歴を表示できません" tone="danger">
+                順位履歴の形式が想定と異なります。再読み込みしてください。
+              </Notice>
             )}
           </div>
         ) : (
@@ -168,7 +180,7 @@ function PlayerSelector({
   );
 }
 
-function RankHistorySummary({ data }: { data: SeriesComparisonDrilldownResponse }) {
+function RankHistorySummary({ data }: { data: RankAverageHistoryPayload }) {
   const summary = data.summary;
   const facts = [
     { label: "対象戦数", value: `${summary.targetCount}戦` },

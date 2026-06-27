@@ -46,6 +46,7 @@ import {
 } from "@/features/seriesComparison/SeriesComparisonMetricPrimitives";
 import { MetricSection } from "@/features/seriesComparison/SeriesComparisonMetricSection";
 import { playerColor } from "@/features/seriesComparison/SeriesComparisonPlayerVisuals";
+import { PlayOrderRankHistoryDrilldownDialog } from "@/features/seriesComparison/SeriesComparisonPlayOrderDrilldown";
 import type {
   AssetStyleEvidenceItem,
   AssetStyleProfileEntry,
@@ -749,8 +750,21 @@ function RateMetrics({ response }: { response: SeriesComparisonResponse }) {
 function PlayOrderMetrics({ response }: { response: SeriesComparisonResponse }) {
   const players = response.players ?? [];
   const metricsByMember = metricsMap(response);
+  const [drilldownMemberId, setDrilldownMemberId] = useState<string | null>(null);
   return (
     <MetricSection
+      action={
+        <Button
+          className="min-h-8 px-2.5 py-1 text-xs"
+          disabled={players.length === 0}
+          icon={<Table2 className="size-3.5" />}
+          size="sm"
+          variant="secondary"
+          onClick={() => setDrilldownMemberId(players[0]?.memberId ?? null)}
+        >
+          履歴
+        </Button>
+      }
       description="1P〜4Pの番手別成績です。番手差が小さいほど、席順の影響が小さい状態です。"
       icon={<RefreshCw className="size-5" />}
       title="番手別成績"
@@ -763,6 +777,17 @@ function PlayOrderMetrics({ response }: { response: SeriesComparisonResponse }) 
       <PlayerMetricGrid minColumnWidthRem={17} metricsByMember={metricsByMember} players={players}>
         {(_, metrics) => <PlayOrderSignalRows metrics={metrics} />}
       </PlayerMetricGrid>
+      <PlayOrderRankHistoryDrilldownDialog
+        open={drilldownMemberId !== null}
+        response={response}
+        selectedMemberId={drilldownMemberId}
+        onMemberChange={setDrilldownMemberId}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDrilldownMemberId(null);
+          }
+        }}
+      />
     </MetricSection>
   );
 }

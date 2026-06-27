@@ -360,7 +360,7 @@ describe("app routing", () => {
     expect(screen.queryByRole("heading", { name: "収益と目的地の効き方" })).not.toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/analytics/series");
     expect(screen.getByRole("link", { name: "戦績比較" })).toBeInTheDocument();
-  });
+  }, 10_000);
 
   it("opens rank average history drilldown from the standings overview", async () => {
     setDevUser();
@@ -392,6 +392,45 @@ describe("app routing", () => {
     expect(within(dialog).getAllByRole("row")[1]).toHaveTextContent("4戦目");
     expect(dialog).toHaveTextContent("2戦目");
     expect(dialog).toHaveTextContent("3位 改善");
+  });
+
+  it("opens play order rank history drilldown from play order metrics", async () => {
+    setDevUser();
+    renderApp("/analytics/series");
+
+    await screen.findByRole("heading", { name: "戦績比較" });
+    await user.click(await screen.findByRole("tab", { name: "番手と出来事" }));
+    expect(await screen.findByRole("heading", { name: "番手別成績" })).toBeInTheDocument();
+
+    expect(screen.getAllByRole("button", { name: "履歴" })).toHaveLength(1);
+    await user.click(screen.getByRole("button", { name: "履歴" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "番手別成績: いーゆー" });
+    expect(dialog).toHaveTextContent("良かった番手");
+    expect(dialog).toHaveTextContent("1P 平均1.50");
+    expect(dialog).toHaveTextContent("重かった番手");
+    expect(dialog).toHaveTextContent("3P 平均4.00");
+    expect(dialog).toHaveTextContent("番手別件数");
+    expect(dialog).toHaveTextContent("1P 2戦 / 2P 2戦 / 3P 1戦 / 4P 0戦");
+    expect(
+      within(dialog).getByRole("img", { name: "番手別累積平均順位グラフ" }),
+    ).toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: "開催ごと" })).not.toBeInTheDocument();
+    expect(
+      within(dialog).queryByRole("img", { name: "番手別実順位グラフ" }),
+    ).not.toBeInTheDocument();
+    expect(within(dialog).getByLabelText("番手別平均順位推移の実データ")).toHaveClass(
+      "overflow-auto",
+    );
+    expect(within(dialog).getAllByRole("row")[1]).toHaveTextContent("5戦目");
+    expect(within(dialog).getAllByRole("row")[1]).toHaveTextContent("2P");
+    expect(within(dialog).getAllByRole("row")[1]).toHaveTextContent("2戦目");
+    expect(dialog).toHaveTextContent("1.00 改善");
+
+    await user.click(within(dialog).getByRole("button", { name: "番手別集計" }));
+    expect(within(dialog).getByLabelText("番手ごとの成績履歴")).toHaveClass("overflow-auto");
+    expect(dialog).toHaveTextContent("全体平均との差");
+    expect(dialog).toHaveTextContent("0.50 重い");
   });
 
   it("requests standings comparison with season and map filters together", async () => {

@@ -20,7 +20,7 @@ export type SeriesComparisonReviewQuery = SeriesComparisonQuery;
 
 export type SeriesComparisonDrilldownQuery = SeriesComparisonQuery & {
   memberId: string;
-  metricId: "rank.averageHistory";
+  metricId: "playOrder.rankHistory" | "rank.averageHistory";
 };
 
 export async function getSeriesComparisonOptions(

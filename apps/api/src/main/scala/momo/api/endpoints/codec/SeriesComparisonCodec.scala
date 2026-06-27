@@ -101,7 +101,10 @@ object SeriesComparisonCodec:
 
   private def parseMetricId(value: String): Either[AppError, String] =
     val raw = value.trim
-    if raw == "rank.averageHistory" then Right(raw)
-    else Left(AppError.ValidationFailed("metricId must be rank.averageHistory."))
+    if Set("rank.averageHistory", "playOrder.rankHistory").contains(raw) then Right(raw)
+    else
+      Left(AppError.ValidationFailed(
+        "metricId must be rank.averageHistory or playOrder.rankHistory."
+      ))
 
   private def nonBlank(value: Option[String]): Option[String] = value.map(_.trim).filter(_.nonEmpty)

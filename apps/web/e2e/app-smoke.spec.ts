@@ -160,6 +160,47 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     await expect(page.getByText(gameTitleName, { exact: true })).toBeVisible();
   });
 
+  await test.step("inspect series comparison drilldowns for the confirmed match", async () => {
+    await page.goto(
+      `/analytics/series?gameTitleId=${encodeURIComponent(gameTitleId)}&seasonMasterId=${encodeURIComponent(
+        seasonMasterId,
+      )}&mapMasterId=${encodeURIComponent(mapMasterId)}`,
+    );
+
+    await expect(page.getByRole("heading", { exact: true, name: "戦績比較" })).toBeVisible();
+
+    await page.getByRole("tab", { name: "順位と相性" }).click();
+    await expect(page.getByRole("heading", { exact: true, name: "順位の地力" })).toBeVisible();
+    const rankDrilldownResponse = page.waitForResponse((response) =>
+      isSeriesDrilldownResponse(response, "rank.averageHistory"),
+    );
+    await page.getByRole("button", { name: "履歴" }).click();
+    expect((await rankDrilldownResponse).ok()).toBe(true);
+    const rankDialog = page.getByRole("dialog", { name: /順位の地力:/u });
+    await expect(rankDialog.getByLabel("開催ごとの順位履歴")).toBeVisible();
+    await rankDialog.getByRole("button", { name: "試合ごと" }).click();
+    await expect(rankDialog.getByLabel("試合ごとの順位履歴")).toBeVisible();
+    await rankDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
+    await expect(rankDialog).toBeHidden();
+
+    await page.getByRole("tab", { name: "番手と出来事" }).click();
+    await expect(page.getByRole("heading", { exact: true, name: "番手別成績" })).toBeVisible();
+    const playOrderDrilldownResponse = page.waitForResponse((response) =>
+      isSeriesDrilldownResponse(response, "playOrder.rankHistory"),
+    );
+    await page.getByRole("button", { name: "履歴" }).click();
+    expect((await playOrderDrilldownResponse).ok()).toBe(true);
+    const playOrderDialog = page.getByRole("dialog", { name: /番手別成績:/u });
+    await expect(
+      playOrderDialog.getByRole("img", { name: "番手別累積平均順位グラフ" }),
+    ).toBeVisible();
+    await expect(playOrderDialog.getByLabel("番手別平均順位推移の実データ")).toBeVisible();
+    await playOrderDialog.getByRole("button", { name: "番手別集計" }).click();
+    await expect(playOrderDialog.getByLabel("番手ごとの成績履歴")).toBeVisible();
+    await playOrderDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
+    await expect(playOrderDialog).toBeHidden();
+  });
+
   await test.step("filter and sort the confirmed match list", async () => {
     expectGeneratedId(heldEventId, "held event ID");
     expectGeneratedId(matchId, "match ID");
@@ -397,6 +438,15 @@ function expectGeneratedId(value: string | undefined, label: string): string {
 function isMatchListResponse(response: APIResponse): boolean {
   const url = new URL(response.url());
   return url.pathname === "/api/matches" && response.request().method() === "GET";
+}
+
+function isSeriesDrilldownResponse(response: APIResponse, metricId: string): boolean {
+  const url = new URL(response.url());
+  return (
+    url.pathname === "/api/analytics/series-comparison/drilldown" &&
+    url.searchParams.get("metricId") === metricId &&
+    response.request().method() === "GET"
+  );
 }
 
 function matchDetailLink(page: Page, matchId: string) {

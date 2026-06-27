@@ -113,26 +113,31 @@ private object SeriesComparisonDrilldownAggregation:
       rows: List[SeriesComparisonMatchPlayerRow],
       matchIndexById: Map[MatchId, Int],
   ): List[SeriesComparisonRankAverageHistoryMatchRowResponse] =
-    val ranks = rows.map(_.rank.value)
-    rows.zipWithIndex.map { case (row, index) =>
-      val currentRanks = ranks.take(index + 1)
-      val previousRanks = ranks.take(index)
-      val currentAverage = averageUnsafe(currentRanks)
-      val previousAverage = Option.when(previousRanks.nonEmpty)(averageUnsafe(previousRanks))
-      val previousRank = ranks.lift(index - 1)
-      SeriesComparisonRankAverageHistoryMatchRowResponse(
+    val initial = RankAverageAccumulationState(Nil, 0, 0, None, None)
+    rows.zipWithIndex.foldLeft(initial) { case (state, (row, index)) =>
+      val nextCount = state.count + 1
+      val nextRankTotal = state.rankTotal + row.rank.value
+      val currentAverage = nextRankTotal * 1.0d / nextCount
+      val response = SeriesComparisonRankAverageHistoryMatchRowResponse(
         matchIndex = matchIndexById.getOrElse(row.matchId, index + 1),
         matchId = row.matchId.value,
         playedAt = Formatter.format(row.playedAt),
         heldEventId = row.heldEventId.value,
         matchNoInEvent = row.matchNoInEvent.value,
         rank = row.rank.value,
-        previousRank = previousRank,
-        rankDelta = previousRank.map(previous => row.rank.value - previous),
+        previousRank = state.previousRank,
+        rankDelta = state.previousRank.map(previous => row.rank.value - previous),
         cumulativeAverageRank = currentAverage,
-        cumulativeAverageRankDelta = previousAverage.map(currentAverage - _),
+        cumulativeAverageRankDelta = state.previousAverage.map(currentAverage - _),
       )
-    }
+      RankAverageAccumulationState(
+        rows = response :: state.rows,
+        count = nextCount,
+        rankTotal = nextRankTotal,
+        previousRank = Some(row.rank.value),
+        previousAverage = Some(currentAverage),
+      )
+    }.rows.reverse
 
   private def playOrderRankHistoryPayload(
       targetRows: List[SeriesComparisonMatchPlayerRow],
@@ -203,12 +208,18 @@ private object SeriesComparisonDrilldownAggregation:
       rows: List[SeriesComparisonMatchPlayerRow],
       matchIndexById: Map[MatchId, Int],
   ): List[SeriesComparisonPlayOrderRankHistoryTrendRowResponse] =
-    rows.zipWithIndex.map { case (row, index) =>
+    val initial = PlayOrderAverageTrendState(Nil, Map.empty, Map.empty)
+    rows.zipWithIndex.foldLeft(initial) { case (state, (row, index)) =>
       val playOrder = row.playOrder.value
-      val rowsForPlayOrder = rows.take(index + 1).filter(_.playOrder.value == playOrder)
-      val previousAverage = average(rowsForPlayOrder.dropRight(1).map(_.rank.value))
-      val currentAverage = averageUnsafe(rowsForPlayOrder.map(_.rank.value))
-      SeriesComparisonPlayOrderRankHistoryTrendRowResponse(
+      val previousCount = state.countByPlayOrder.getOrElse(playOrder, 0)
+      val previousRankTotal = state.rankTotalByPlayOrder.getOrElse(playOrder, 0)
+      val currentCount = previousCount + 1
+      val currentRankTotal = previousRankTotal + row.rank.value
+      val previousAverage = Option.when(previousCount > 0)(
+        previousRankTotal * 1.0d / previousCount
+      )
+      val currentAverage = currentRankTotal * 1.0d / currentCount
+      val response = SeriesComparisonPlayOrderRankHistoryTrendRowResponse(
         matchIndex = matchIndexById.getOrElse(row.matchId, index + 1),
         matchId = row.matchId.value,
         playedAt = Formatter.format(row.playedAt),
@@ -216,12 +227,17 @@ private object SeriesComparisonDrilldownAggregation:
         matchNoInEvent = row.matchNoInEvent.value,
         playOrder = playOrder,
         rank = row.rank.value,
-        playOrderOccurrenceIndex = rowsForPlayOrder.size,
+        playOrderOccurrenceIndex = currentCount,
         cumulativeAverageRankByPlayOrder = currentAverage,
         previousCumulativeAverageRankByPlayOrder = previousAverage,
         cumulativeAverageRankDeltaByPlayOrder = previousAverage.map(currentAverage - _),
       )
-    }
+      PlayOrderAverageTrendState(
+        rows = response :: state.rows,
+        countByPlayOrder = state.countByPlayOrder.updated(playOrder, currentCount),
+        rankTotalByPlayOrder = state.rankTotalByPlayOrder.updated(playOrder, currentRankTotal),
+      )
+    }.rows.reverse
 
   private def rankAverageEventRows(
       rows: List[SeriesComparisonRankAverageHistoryMatchRowResponse]
@@ -291,3 +307,17 @@ private object SeriesComparisonDrilldownAggregation:
       mapMasterId = scope.mapMasterId.map(_.value),
       mapName = scope.mapName,
     )
+
+  private final case class RankAverageAccumulationState(
+      rows: List[SeriesComparisonRankAverageHistoryMatchRowResponse],
+      count: Int,
+      rankTotal: Int,
+      previousRank: Option[Int],
+      previousAverage: Option[Double],
+  )
+
+  private final case class PlayOrderAverageTrendState(
+      rows: List[SeriesComparisonPlayOrderRankHistoryTrendRowResponse],
+      countByPlayOrder: Map[Int, Int],
+      rankTotalByPlayOrder: Map[Int, Int],
+  )

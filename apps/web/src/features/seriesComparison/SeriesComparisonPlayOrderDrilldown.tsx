@@ -3,8 +3,14 @@ import { LoaderCircle } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
-import { playerColor } from "@/features/seriesComparison/SeriesComparisonPlayerVisuals";
-import type { Player } from "@/features/seriesComparison/seriesComparisonPresentation";
+import {
+  DrilldownPlayerSelector,
+  DrilldownStickyCell,
+  DrilldownTableCell,
+  DrilldownTableHeader,
+  DrilldownTableScroll,
+  LowerIsBetterDeltaBadge,
+} from "@/features/seriesComparison/SeriesComparisonDrilldownPrimitives";
 import {
   formatDecimal,
   formatPercent,
@@ -20,8 +26,6 @@ import type {
   SeriesComparisonDrilldownResponse,
   SeriesComparisonResponse,
 } from "@/shared/api/seriesComparison";
-import { Button } from "@/shared/ui/actions/Button";
-import { cn } from "@/shared/ui/cn";
 import { Dialog } from "@/shared/ui/feedback/Dialog";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
@@ -96,7 +100,7 @@ export function PlayOrderRankHistoryDrilldownDialog({
     >
       <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-3">
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)] lg:items-start">
-          <PlayerSelector
+          <DrilldownPlayerSelector
             players={players}
             selectedMemberId={selectedPlayer?.memberId}
             onMemberChange={onMemberChange}
@@ -139,39 +143,6 @@ export function PlayOrderRankHistoryDrilldownDialog({
         )}
       </div>
     </Dialog>
-  );
-}
-
-function PlayerSelector({
-  players,
-  selectedMemberId,
-  onMemberChange,
-}: {
-  players: Player[];
-  selectedMemberId: string | undefined;
-  onMemberChange: (memberId: string) => void;
-}) {
-  return (
-    <div className="flex min-w-0 flex-wrap gap-2">
-      {players.map((player, index) => {
-        const selected = player.memberId === selectedMemberId;
-        return (
-          <Button
-            key={player.memberId}
-            className={cn(
-              "justify-start border-l-4",
-              selected ? "bg-[var(--color-action)]/10" : "",
-            )}
-            size="sm"
-            style={{ borderLeftColor: playerColor(index) }}
-            variant={selected ? "secondary" : "quiet"}
-            onClick={() => onMemberChange(player.memberId)}
-          >
-            {player.displayName}
-          </Button>
-        );
-      })}
-    </div>
   );
 }
 
@@ -414,48 +385,56 @@ function PlayOrderBreakdownTable({ rows }: { rows: PlayOrderRow[] }) {
     return <EmptyState title="番手ごとの履歴がありません" description="対象試合がありません。" />;
   }
   return (
-    <TableScroll ariaLabel="番手ごとの成績履歴">
+    <DrilldownTableScroll ariaLabel="番手ごとの成績履歴">
       <table className="w-full min-w-[72rem] border-separate border-spacing-0 text-sm">
         <thead>
           <tr>
-            <TableHeader className="sticky left-0 z-[calc(var(--z-sticky)+1)]">番手</TableHeader>
-            <TableHeader align="right">対象戦数</TableHeader>
-            <TableHeader align="right">平均順位</TableHeader>
-            <TableHeader>順位分布</TableHeader>
-            <TableHeader align="right">入賞率</TableHeader>
-            <TableHeader align="right">下位率</TableHeader>
-            <TableHeader align="right">全体同番手平均</TableHeader>
-            <TableHeader>全体平均との差</TableHeader>
+            <DrilldownTableHeader className="sticky left-0 z-[calc(var(--z-sticky)+1)]">
+              番手
+            </DrilldownTableHeader>
+            <DrilldownTableHeader align="right">対象戦数</DrilldownTableHeader>
+            <DrilldownTableHeader align="right">平均順位</DrilldownTableHeader>
+            <DrilldownTableHeader>順位分布</DrilldownTableHeader>
+            <DrilldownTableHeader align="right">入賞率</DrilldownTableHeader>
+            <DrilldownTableHeader align="right">下位率</DrilldownTableHeader>
+            <DrilldownTableHeader align="right">全体同番手平均</DrilldownTableHeader>
+            <DrilldownTableHeader>全体平均との差</DrilldownTableHeader>
           </tr>
         </thead>
         <tbody>
           {rows.map((row) => (
             <tr className="group hover:bg-[var(--color-surface-subtle)]" key={row.playOrder}>
-              <StickyCell>
+              <DrilldownStickyCell>
                 <PlayOrderPill playOrder={row.playOrder} />
-              </StickyCell>
-              <TableCell align="right">{row.matchCount}戦</TableCell>
-              <TableCell align="right">{formatDecimal(row.rankAverage)}</TableCell>
-              <TableCell>{formatRankDistribution(row.rankDistribution ?? [])}</TableCell>
-              <TableCell align="right">
+              </DrilldownStickyCell>
+              <DrilldownTableCell align="right">{row.matchCount}戦</DrilldownTableCell>
+              <DrilldownTableCell align="right">
+                {formatDecimal(row.rankAverage)}
+              </DrilldownTableCell>
+              <DrilldownTableCell>
+                {formatRankDistribution(row.rankDistribution ?? [])}
+              </DrilldownTableCell>
+              <DrilldownTableCell align="right">
                 {row.matchCount > 0
                   ? `${row.podiumCount}回・${formatPercent(row.podiumRate)}`
                   : "-"}
-              </TableCell>
-              <TableCell align="right">
+              </DrilldownTableCell>
+              <DrilldownTableCell align="right">
                 {row.matchCount > 0
                   ? `${row.lowerHalfCount}回・${formatPercent(row.lowerHalfRate)}`
                   : "-"}
-              </TableCell>
-              <TableCell align="right">{formatDecimal(row.baselineRankAverage)}</TableCell>
-              <TableCell>
+              </DrilldownTableCell>
+              <DrilldownTableCell align="right">
+                {formatDecimal(row.baselineRankAverage)}
+              </DrilldownTableCell>
+              <DrilldownTableCell>
                 <BaselineDeltaBadge value={row.baselineDelta} />
-              </TableCell>
+              </DrilldownTableCell>
             </tr>
           ))}
         </tbody>
       </table>
-    </TableScroll>
+    </DrilldownTableScroll>
   );
 }
 
@@ -465,110 +444,53 @@ function PlayOrderTrendTable({ rows }: { rows: TrendRow[] }) {
     return <EmptyState title="推移データがありません" description="対象試合がありません。" />;
   }
   return (
-    <TableScroll ariaLabel="番手別平均順位推移の実データ">
+    <DrilldownTableScroll ariaLabel="番手別平均順位推移の実データ">
       <table className="w-full min-w-[78rem] border-separate border-spacing-0 text-sm">
         <thead>
           <tr>
-            <TableHeader className="sticky left-0 z-[calc(var(--z-sticky)+1)]">対戦順</TableHeader>
-            <TableHeader>開催</TableHeader>
-            <TableHeader align="right">第n試合</TableHeader>
-            <TableHeader>番手</TableHeader>
-            <TableHeader align="right">番手内</TableHeader>
-            <TableHeader align="right">順位</TableHeader>
-            <TableHeader align="right">試合後平均</TableHeader>
-            <TableHeader>平均変化</TableHeader>
+            <DrilldownTableHeader className="sticky left-0 z-[calc(var(--z-sticky)+1)]">
+              対戦順
+            </DrilldownTableHeader>
+            <DrilldownTableHeader>開催</DrilldownTableHeader>
+            <DrilldownTableHeader align="right">第n試合</DrilldownTableHeader>
+            <DrilldownTableHeader>番手</DrilldownTableHeader>
+            <DrilldownTableHeader align="right">番手内</DrilldownTableHeader>
+            <DrilldownTableHeader align="right">順位</DrilldownTableHeader>
+            <DrilldownTableHeader align="right">試合後平均</DrilldownTableHeader>
+            <DrilldownTableHeader>平均変化</DrilldownTableHeader>
           </tr>
         </thead>
         <tbody>
           {sortedRows.map((row) => (
             <tr className="group hover:bg-[var(--color-surface-subtle)]" key={row.matchId}>
-              <StickyCell>
+              <DrilldownStickyCell>
                 <span className="font-semibold tabular-nums">{row.matchIndex}戦目</span>
-              </StickyCell>
-              <TableCell>
+              </DrilldownStickyCell>
+              <DrilldownTableCell>
                 <span className="block">{formatDate(row.playedAt)}</span>
                 <span className="block text-[11px] text-[var(--color-text-muted)]">
                   {shortId(row.heldEventId)}
                 </span>
-              </TableCell>
-              <TableCell align="right">第{row.matchNoInEvent}試合</TableCell>
-              <TableCell>
+              </DrilldownTableCell>
+              <DrilldownTableCell align="right">第{row.matchNoInEvent}試合</DrilldownTableCell>
+              <DrilldownTableCell>
                 <PlayOrderPill playOrder={row.playOrder} />
-              </TableCell>
-              <TableCell align="right">{row.playOrderOccurrenceIndex}戦目</TableCell>
-              <TableCell align="right">{row.rank}位</TableCell>
-              <TableCell align="right">
+              </DrilldownTableCell>
+              <DrilldownTableCell align="right">
+                {row.playOrderOccurrenceIndex}戦目
+              </DrilldownTableCell>
+              <DrilldownTableCell align="right">{row.rank}位</DrilldownTableCell>
+              <DrilldownTableCell align="right">
                 {formatDecimal(row.cumulativeAverageRankByPlayOrder)}
-              </TableCell>
-              <TableCell>
+              </DrilldownTableCell>
+              <DrilldownTableCell>
                 <AverageDeltaBadge value={row.cumulativeAverageRankDeltaByPlayOrder} />
-              </TableCell>
+              </DrilldownTableCell>
             </tr>
           ))}
         </tbody>
       </table>
-    </TableScroll>
-  );
-}
-
-function TableScroll({ ariaLabel, children }: { ariaLabel: string; children: ReactNode }) {
-  return (
-    <div
-      aria-label={ariaLabel}
-      className="h-full min-h-0 overflow-auto rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]"
-    >
-      {children}
-    </div>
-  );
-}
-
-function TableHeader({
-  align = "left",
-  children,
-  className,
-}: {
-  align?: "left" | "right";
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <th
-      className={cn(
-        "sticky top-0 z-[var(--z-sticky)] border-b border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3 py-2 text-xs font-semibold text-[var(--color-text-secondary)]",
-        align === "right" ? "text-right" : "text-left",
-        className,
-      )}
-      scope="col"
-    >
-      {children}
-    </th>
-  );
-}
-
-function TableCell({
-  align = "left",
-  children,
-}: {
-  align?: "left" | "right";
-  children: ReactNode;
-}) {
-  return (
-    <td
-      className={cn(
-        "border-b border-[var(--color-border)] px-3 py-2.5 align-top text-[var(--color-text-primary)] tabular-nums group-last:border-b-0",
-        align === "right" ? "text-right" : "text-left",
-      )}
-    >
-      {children}
-    </td>
-  );
-}
-
-function StickyCell({ children }: { children: ReactNode }) {
-  return (
-    <td className="sticky left-0 z-[var(--z-base)] border-b border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 align-top text-[var(--color-text-primary)] tabular-nums group-last:border-b-0 group-hover:bg-[var(--color-surface-subtle)]">
-      {children}
-    </td>
+    </DrilldownTableScroll>
   );
 }
 
@@ -586,70 +508,38 @@ function PlayOrderPill({ playOrder }: { playOrder: number }) {
 }
 
 function BaselineDeltaBadge({ value }: { value: number | null | undefined }) {
-  if (!isNumber(value)) {
-    return <span className="text-[var(--color-text-muted)]">-</span>;
-  }
-  const tone = value < 0 ? "good" : value > 0 ? "heavy" : "flat";
   return (
-    <span
-      className={cn(
-        "inline-flex min-h-7 items-center rounded-[var(--radius-xs)] border px-2 py-0.5 text-xs font-semibold tabular-nums",
-        tone === "good" &&
-          "border-[var(--color-success)]/45 bg-[var(--color-success)]/10 text-[var(--color-text-primary)]",
-        tone === "heavy" &&
-          "border-[var(--color-review)]/45 bg-[var(--color-review)]/10 text-[var(--color-text-primary)]",
-        tone === "flat" &&
-          "border-[var(--color-border)] bg-[var(--color-surface-subtle)] text-[var(--color-text-secondary)]",
-      )}
-    >
-      {Math.abs(value).toFixed(2)} {baselineDeltaLabel(tone)}
-    </span>
+    <LowerIsBetterDeltaBadge
+      labels={baselineDeltaLabels}
+      nullLabel="-"
+      value={value}
+      valueKind="decimal"
+    />
   );
 }
 
 function AverageDeltaBadge({ value }: { value: number | null | undefined }) {
-  if (!isNumber(value)) {
-    return <span className="text-[var(--color-text-muted)]">-</span>;
-  }
-  const tone = value < 0 ? "good" : value > 0 ? "heavy" : "flat";
   return (
-    <span
-      className={cn(
-        "inline-flex min-h-7 items-center rounded-[var(--radius-xs)] border px-2 py-0.5 text-xs font-semibold tabular-nums",
-        tone === "good" &&
-          "border-[var(--color-success)]/45 bg-[var(--color-success)]/10 text-[var(--color-text-primary)]",
-        tone === "heavy" &&
-          "border-[var(--color-review)]/45 bg-[var(--color-review)]/10 text-[var(--color-text-primary)]",
-        tone === "flat" &&
-          "border-[var(--color-border)] bg-[var(--color-surface-subtle)] text-[var(--color-text-secondary)]",
-      )}
-    >
-      {Math.abs(value).toFixed(2)} {averageDeltaLabel(tone)}
-    </span>
+    <LowerIsBetterDeltaBadge
+      labels={averageDeltaLabels}
+      nullLabel="-"
+      value={value}
+      valueKind="decimal"
+    />
   );
 }
 
-function baselineDeltaLabel(tone: "flat" | "good" | "heavy"): string {
-  switch (tone) {
-    case "good":
-      return "良い";
-    case "heavy":
-      return "重い";
-    case "flat":
-      return "同等";
-  }
-}
+const baselineDeltaLabels = {
+  negative: "良い",
+  positive: "重い",
+  zero: "同等",
+} as const;
 
-function averageDeltaLabel(tone: "flat" | "good" | "heavy"): string {
-  switch (tone) {
-    case "good":
-      return "改善";
-    case "heavy":
-      return "後退";
-    case "flat":
-      return "維持";
-  }
-}
+const averageDeltaLabels = {
+  negative: "改善",
+  positive: "後退",
+  zero: "維持",
+} as const;
 
 function formatPlayOrderSummaryValue(
   playOrder: number | null | undefined,

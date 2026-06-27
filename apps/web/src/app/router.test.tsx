@@ -249,14 +249,25 @@ describe("app routing", () => {
     expect(await screen.findByText(/収益トップだから安全/u)).toBeInTheDocument();
     expect(screen.queryByText(/物件収益トップ時の1位率は57.1%/u)).not.toBeInTheDocument();
     expect(screen.queryByText("物件収益トップ時の1位率")).not.toBeInTheDocument();
+    expect(
+      screen.getAllByText(
+        "収益で先行した試合でも、目的地到着や事故後の立て直しで順位差が分かれています。",
+      )[0],
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Cliff's delta")).not.toBeInTheDocument();
+    expect(screen.queryByText("confidence interval")).not.toBeInTheDocument();
+    expect(screen.queryByText("bootstrap")).not.toBeInTheDocument();
     const evidenceToggles = screen.getAllByRole("button", {
-      name: "データ上の理由・主要指標",
+      name: "詳しい根拠",
     });
     expect(evidenceToggles[0]).toHaveAttribute("aria-expanded", "false");
     await user.click(evidenceToggles[0]!);
     expect(evidenceToggles[0]).toHaveAttribute("aria-expanded", "true");
     expect(await screen.findByText(/物件収益トップ時の1位率は57.1%/u)).toBeInTheDocument();
     expect(screen.getByText("物件収益トップ時の1位率")).toBeInTheDocument();
+    expect(screen.getByText("本人全体の1位率")).toBeInTheDocument();
+    expect(screen.getByText(/差の大きさ \+0.62/u)).toBeInTheDocument();
+    expect(screen.getByText(/ぶれ幅 \+0.31〜\+0.84/u)).toBeInTheDocument();
     const evidenceButtons = screen.getAllByRole("button", { name: "詳細: 物件収益と勝ちへ" });
     await user.click(evidenceButtons[0]!);
     await waitFor(() => expect(router.state.location.search).toContain("view=drivers"));

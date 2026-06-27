@@ -279,8 +279,8 @@ function ReviewPlaybookCardView({
               {card.actionHypothesis}
             </h4>
             <p className="mt-1 text-[11px] leading-4 text-[var(--color-text-secondary)]">
-              {playbookCategoryLabel(card.category)} / 対象 {card.targetCount}戦 / 信頼度{" "}
-              {playbookEvidenceStatusLabel(card.status)}
+              {playbookCategoryLabel(card.category)} / 根拠{" "}
+              {playbookEvidenceStrengthLabel(card.evidenceStrength)}
             </p>
           </div>
         </div>
@@ -288,6 +288,7 @@ function ReviewPlaybookCardView({
       <div className="grid min-w-0 content-start gap-2.5">
         <ReviewPlaybookText label="発動条件" text={card.triggerCondition} />
         <ReviewPlaybookText label="やること" text={card.recommendedAction} tone="action" />
+        <ReviewPlaybookText label="理由" text={card.plainReason} />
         <ReviewPlaybookSupportDisclosure card={card} />
         <ReviewPlaybookEvidenceDisclosure card={card} />
       </div>
@@ -337,15 +338,13 @@ function ReviewPlaybookEvidenceDisclosure({ card }: { card: ReviewPlaybookCard }
   return (
     <CollapsibleRoot className="min-w-0 rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)]">
       <CollapsibleTrigger
-        aria-label="データ上の理由・主要指標"
+        aria-label="詳しい根拠"
         className="group flex min-h-11 w-full min-w-0 items-center justify-between gap-3 rounded-[var(--radius-xs)] px-3 py-2 text-left hover:bg-[var(--color-surface)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-action)]"
       >
         <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-          <span className="text-xs font-semibold text-[var(--color-text-primary)]">
-            データ上の理由・主要指標
-          </span>
+          <span className="text-xs font-semibold text-[var(--color-text-primary)]">詳しい根拠</span>
           <span className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--color-text-secondary)]">
-            主要指標 {evidence.length}件
+            指標 {evidence.length}件
           </span>
         </span>
         <ChevronDown
@@ -376,7 +375,7 @@ function ReviewPlaybookEvidenceList({ evidence }: { evidence: ReviewPlaybookEvid
   }
   return (
     <div className="min-w-0">
-      <p className="text-[11px] font-semibold text-[var(--color-text-secondary)]">主要指標</p>
+      <p className="text-[11px] font-semibold text-[var(--color-text-secondary)]">詳しい指標</p>
       <div className="mt-1.5 grid min-w-0 divide-y divide-[var(--color-border)] rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)]">
         {evidence.map((item) => (
           <div className="grid min-w-0 gap-1 p-2" key={`${item.metricId}:${item.label}`}>
@@ -396,10 +395,33 @@ function ReviewPlaybookEvidenceList({ evidence }: { evidence: ReviewPlaybookEvid
                 {item.targetCount > 0 ? `対象 ${item.targetCount}戦` : "対象なし"}
               </p>
             </div>
+            <ReviewEvidenceStats item={item} />
           </div>
         ))}
       </div>
     </div>
+  );
+}
+
+function ReviewEvidenceStats({ item }: { item: ReviewPlaybookEvidence }) {
+  const effectEstimate = finiteNumberOrUndefined(item.effectEstimate);
+  const confidenceLow = finiteNumberOrUndefined(item.confidenceLow);
+  const confidenceHigh = finiteNumberOrUndefined(item.confidenceHigh);
+  const stability = finiteNumberOrUndefined(item.stability);
+  const stats = [
+    effectEstimate === undefined ? undefined : `差の大きさ ${signedDecimal(effectEstimate)}`,
+    confidenceLow === undefined || confidenceHigh === undefined
+      ? undefined
+      : `ぶれ幅 ${signedDecimal(confidenceLow)}〜${signedDecimal(confidenceHigh)}`,
+    stability === undefined ? undefined : `ぶれにくさ ${stabilityLabel(stability)}`,
+  ].filter((value): value is string => value !== undefined);
+  if (stats.length === 0) {
+    return null;
+  }
+  return (
+    <p className="text-[11px] leading-5 text-pretty text-[var(--color-text-secondary)]">
+      {stats.join(" / ")}
+    </p>
   );
 }
 
@@ -488,8 +510,12 @@ function playbookCategoryLabel(category: string): string {
   switch (category) {
     case "revenue":
       return "物件収益";
+    case "destinationPositive":
+      return "目的地後";
     case "destination":
       return "目的地";
+    case "accident":
+      return "事故後";
     case "assets":
       return "資産";
     case "playOrder":
@@ -500,6 +526,19 @@ function playbookCategoryLabel(category: string): string {
       return "スリの銀次";
     default:
       return "その他";
+  }
+}
+
+function playbookEvidenceStrengthLabel(strength: string): string {
+  switch (strength) {
+    case "strong":
+      return "強い";
+    case "diagnostic":
+      return "診断のみ";
+    case "verify":
+      return "検証向き";
+    default:
+      return "検証向き";
   }
 }
 
@@ -516,4 +555,23 @@ function playbookEvidenceStatusLabel(status: string): string {
     default:
       return "根拠";
   }
+}
+
+function signedDecimal(value: number): string {
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${value.toFixed(2)}`;
+}
+
+function finiteNumberOrUndefined(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function stabilityLabel(value: number): string {
+  if (value >= 0.75) {
+    return "高";
+  }
+  if (value >= 0.5) {
+    return "中";
+  }
+  return "低";
 }

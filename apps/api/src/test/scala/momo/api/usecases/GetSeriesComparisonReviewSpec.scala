@@ -41,7 +41,7 @@ final class GetSeriesComparisonReviewSpec extends MomoCatsEffectSuite:
 
     for result <- usecase.run(SeriesComparisonScope.Overall(titleId)) yield
       val response = assertRight(result)
-      assertEquals(response.schemaVersion, 3)
+      assertEquals(response.schemaVersion, 4)
       assertEquals(response.baseline.matchCount, 6)
       assertEquals(response.baseline.playerCount, 4)
       assert(response.commonPlaybookTopics.size <= 2)
@@ -60,8 +60,15 @@ final class GetSeriesComparisonReviewSpec extends MomoCatsEffectSuite:
       assert(cards.forall(card =>
         card.actionHypothesis.nonEmpty && card.triggerCondition.nonEmpty &&
           card.recommendedAction.nonEmpty && card.avoidAction.nonEmpty &&
-          card.dataReason.nonEmpty && card.postMatchCheck.nonEmpty && card.evidence.nonEmpty
+          card.dataReason.nonEmpty && card.plainReason.nonEmpty &&
+          card.postMatchCheck.nonEmpty && card.evidence.nonEmpty
       ))
+      assert(cards.forall(card =>
+        Set("strong", "verify", "diagnostic").contains(card.evidenceStrength)
+      ))
+      assert(!cards.exists(_.plainReason.contains("Cliff")))
+      assert(!cards.exists(_.plainReason.contains("confidence")))
+      assert(!cards.exists(_.plainReason.contains("bootstrap")))
       assert(
         cards.forall(card => Set("reproduce", "revise", "verify").contains(card.classification))
       )
@@ -156,6 +163,46 @@ final class GetSeriesComparisonReviewSpec extends MomoCatsEffectSuite:
       ))
       assert(!destinationCards.exists(_.dataReason.contains("総資産平均")))
       assert(destinationCards.forall(_.evidence.exists(_.label == "4人内での目立ち方")))
+
+  test("builds a low-density destination-after-arrival card with statistical detail metadata"):
+    val usecase =
+      GetSeriesComparisonReview[IO](StaticReadModel(Some(resolvedScope), destinationAfterRows))
+
+    for result <- usecase.run(SeriesComparisonScope.Overall(titleId)) yield
+      val response = assertRight(result)
+      val pontaCards = response.playbookByPlayer.find(_.memberId == "ponta").toList
+        .flatMap(_.cards)
+      val card = pontaCards.find(_.category == "destinationPositive")
+      assert(card.nonEmpty)
+      assertEquals(
+        card.map(_.plainReason),
+        Some("目的地を取れた試合でも、入賞できた試合は物件収益順位を保てている傾向があります。"),
+      )
+      assert(!card.exists(_.plainReason.contains("bootstrap")))
+      assert(card.exists(_.evidenceStrength == "strong"))
+      val driverEvidence = card.flatMap(_.evidence.find(_.metricId == "destinationPositive.driver"))
+      assert(driverEvidence.exists(_.method.contains("event_bootstrap")))
+      assert(driverEvidence.exists(_.effectEstimate.nonEmpty))
+      assert(driverEvidence.exists(_.confidenceLow.nonEmpty))
+      assert(driverEvidence.exists(_.confidenceHigh.nonEmpty))
+      assert(driverEvidence.exists(_.stability.nonEmpty))
+
+  test("builds an accident recovery card without exposing mathematical wording in the summary"):
+    val usecase =
+      GetSeriesComparisonReview[IO](StaticReadModel(Some(resolvedScope), accidentRows))
+
+    for result <- usecase.run(SeriesComparisonScope.Overall(titleId)) yield
+      val response = assertRight(result)
+      val pontaCards = response.playbookByPlayer.find(_.memberId == "ponta").toList
+        .flatMap(_.cards)
+      val card = pontaCards.find(_.category == "accident")
+      assert(card.nonEmpty)
+      assert(card.exists(_.actionHypothesis.contains("事故後")))
+      assert(card.exists(_.plainReason.contains("事故があった試合")))
+      assert(!card.exists(_.plainReason.contains("confidence")))
+      assert(card.exists(_.anchorTarget.view == "flow"))
+      val driverEvidence = card.flatMap(_.evidence.find(_.metricId == "accidentAny.driver"))
+      assert(driverEvidence.exists(_.effectEstimate.nonEmpty))
 
   test("returns an empty review when the selected scope has no confirmed matches"):
     val usecase = GetSeriesComparisonReview[IO](StaticReadModel(Some(resolvedScope), Nil))
@@ -323,6 +370,36 @@ final class GetSeriesComparisonReviewSpec extends MomoCatsEffectSuite:
     recoveryMatch(15, 4, 900, 0),
   ).flatten
 
+  private def destinationAfterRows: List[SeriesComparisonMatchPlayerRow] = List(
+    focusedPontaMatch(1, 1, 5400, 1, 0),
+    focusedPontaMatch(2, 2, 5000, 1, 0),
+    focusedPontaMatch(3, 1, 5300, 1, 0),
+    focusedPontaMatch(4, 2, 4900, 1, 0),
+    focusedPontaMatch(5, 3, 900, 1, 0),
+    focusedPontaMatch(6, 4, 800, 1, 0),
+    focusedPontaMatch(7, 3, 850, 1, 0),
+    focusedPontaMatch(8, 4, 750, 1, 0),
+    focusedPontaMatch(9, 4, 900, 0, 0),
+    focusedPontaMatch(10, 4, 850, 0, 0),
+    focusedPontaMatch(11, 4, 800, 0, 0),
+    focusedPontaMatch(12, 4, 750, 0, 0),
+  ).flatten
+
+  private def accidentRows: List[SeriesComparisonMatchPlayerRow] = List(
+    focusedPontaMatch(1, 1, 5300, 0, 0),
+    focusedPontaMatch(2, 2, 4800, 0, 0),
+    focusedPontaMatch(3, 1, 5200, 0, 0),
+    focusedPontaMatch(4, 2, 4700, 0, 0),
+    focusedPontaMatch(5, 1, 5100, 1, 1),
+    focusedPontaMatch(6, 2, 4600, 1, 1),
+    focusedPontaMatch(7, 2, 4500, 0, 1),
+    focusedPontaMatch(8, 3, 900, 0, 1),
+    focusedPontaMatch(9, 4, 800, 0, 1),
+    focusedPontaMatch(10, 3, 850, 0, 1),
+    focusedPontaMatch(11, 4, 780, 0, 1),
+    focusedPontaMatch(12, 4, 760, 0, 1),
+  ).flatten
+
   private def recoveryMatch(
       matchNo: Int,
       pontaRank: Int,
@@ -355,6 +432,43 @@ final class GetSeriesComparisonReviewSpec extends MomoCatsEffectSuite:
     matchRows(
       matchNo,
       if matchNo <= 8 then previousHeldEventId else latestHeldEventId,
+      ((matchNo - 1) % 4) + 1,
+      rows*
+    )
+
+  private def focusedPontaMatch(
+      matchNo: Int,
+      pontaRank: Int,
+      pontaRevenue: Int,
+      pontaDestination: Int,
+      pontaGinji: Int,
+  ): List[SeriesComparisonMatchPlayerRow] =
+    val otherRanks = (1 to 4).filterNot(_ == pontaRank).toList
+    val otherRevenueByRank = Map(1 -> 4300, 2 -> 3400, 3 -> 2400, 4 -> 1400)
+    val rows = PlayerRow(
+      "ponta",
+      "ぽんた",
+      1,
+      pontaRank,
+      10000 - pontaRank * 900,
+      pontaRevenue,
+      pontaDestination,
+      pontaGinji,
+    ) +: List("akane" -> "あかねまみ", "otaka" -> "おーたか", "eu" -> "いーゆー").zip(otherRanks).map {
+      case ((memberId, displayName), rank) => PlayerRow(
+          memberId,
+          displayName,
+          rank,
+          rank,
+          10000 - rank * 900,
+          otherRevenueByRank(rank),
+          if rank == 1 then 1 else 0,
+          0,
+        )
+    }
+    matchRows(
+      matchNo,
+      HeldEventId.unsafeFromString(s"held_focused_${((matchNo - 1) / 4) + 1}"),
       ((matchNo - 1) % 4) + 1,
       rows*
     )

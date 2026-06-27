@@ -418,7 +418,7 @@ export function makeSeriesComparisonReviewResponse(): SeriesComparisonReviewResp
       memberDisplayName: player.displayName,
       memberId: player.memberId,
     })),
-    schemaVersion: 3,
+    schemaVersion: 4,
   };
 }
 
@@ -446,6 +446,7 @@ function playbookCard(
     dataReason: isKeep
       ? "物件収益トップ時の1位率は57.1%で、本人全体の1位率33.3%を上回ります。落とした収益トップ試合では目的地平均が0.25回で、収益先行時も目的地到着が順位差に効いている可能性があります。"
       : "前戦下位後の入賞率は60.0%で、本人全体の入賞率50.0%との差は+10.0%です。入賞復帰試合の物件収益順位スコア平均は3.40、下位継続試合は2.10で、前戦下位後は収益基盤を作り直す動きが分岐になっている可能性があります。",
+    evidenceStrength: isKeep ? "strong" : "verify",
     evidence: [
       {
         label: isKeep ? "物件収益トップ時の1位率" : "下位後入賞率",
@@ -453,13 +454,27 @@ function playbookCard(
         status: index > 2 ? "reference" : "ok",
         targetCount: Math.max(3, 7 - index),
         value: isKeep ? "57.1%" : "60.0%",
+        ...(isKeep
+          ? {
+              confidenceHigh: 0.84,
+              confidenceLow: 0.31,
+              effectEstimate: 0.62,
+              method: "event_bootstrap",
+              stability: 0.82,
+            }
+          : {}),
       },
       {
         label: isKeep ? "本人全体の1位率" : "本人全体の入賞率",
         metricId: isKeep
           ? `review.${classification}.${memberId}.baseline`
           : `review.${classification}.${memberId}.baselinePodium`,
+        confidenceHigh: null as unknown as number,
+        confidenceLow: null as unknown as number,
+        effectEstimate: null as unknown as number,
+        method: null as unknown as string,
         status: index > 2 ? "reference" : "ok",
+        stability: null as unknown as number,
         targetCount: 12,
         value: isKeep ? "33.3%" : "50.0%",
       },
@@ -495,6 +510,9 @@ function playbookCard(
       ? "収益トップだから安全と見て、目的地0回のまま終盤へ入ること。"
       : "目的地が遠いまま、収益も作らず逆転待ちで終盤へ入ること。",
     id: `${memberId}-${classification}`,
+    plainReason: isKeep
+      ? "収益で先行した試合でも、目的地到着や事故後の立て直しで順位差が分かれています。"
+      : "前戦下位の次戦では、入賞圏へ戻せた試合ほど収益順位を立て直せています。",
     postMatchCheck: isKeep
       ? "次回、収益で上位だった試合を対象に、目的地0回で終えたか、入賞または下位回避できたかを振り返る。"
       : "次回、前戦下位後の試合を対象に、物件収益順位を戻せたか、入賞圏へ戻せたかを振り返る。",

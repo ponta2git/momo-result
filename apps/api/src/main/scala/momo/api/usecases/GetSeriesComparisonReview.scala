@@ -1,5 +1,7 @@
 package momo.api.usecases
 
+import scala.util.Random
+
 import cats.Monad
 import cats.syntax.all.*
 
@@ -29,7 +31,7 @@ object GetSeriesComparisonReview:
     new GetSeriesComparisonReview(readModel)
 
 private object SeriesComparisonReviewAggregation {
-  private val SchemaVersion = 3
+  private val SchemaVersion = 4
 
   private object Thresholds {
     val MainNormalSample = 20
@@ -43,6 +45,7 @@ private object SeriesComparisonReviewAggregation {
     val ActionDriverTieDelta = 0.08
     val RecoverySignificantRateDelta = 0.05
     val RecoveryMinimumDriverContrast = 0.30
+    val BootstrapIterations = 96
     val CommonTopicPlayerCount = 3
     val CommonTopicLimit = 2
   }
@@ -155,17 +158,30 @@ private object SeriesComparisonReviewAggregation {
     .filter(_.candidate.memberId == memberId).filter(_.finalScore > 0.0).sortBy(scored =>
       (-scored.finalScore, scored.candidate.card.category, scored.candidate.card.id)
     ).foldLeft(List.empty[SeriesComparisonPlaybookCardResponse]) { (selected, scored) =>
-      if selected.size >= 3 || selected.exists(_.category == scored.candidate.card.category) then
+      val card = scored.candidate.card
+      if selected.size >= 3 || selected.exists(_.category == card.category) ||
+        selected.count(existing => actionFamily(existing) == actionFamily(card)) >= 2
+      then
         selected
       else selected :+ cardWithPeerContext(scored)
     }
+
+  private def actionFamily(card: SeriesComparisonPlaybookCardResponse): String =
+    val text = s"${card.actionHypothesis} ${card.recommendedAction}"
+    if text.contains("収益順位") || text.contains("物件収益順位") then "revenue-rank"
+    else if text.contains("目的地") then "destination"
+    else if text.contains("事故") || text.contains("銀次") || text.contains("マイナス駅") then
+      "accident"
+    else card.category
 
   private def playbookCandidates(
       stats: PlayerStats,
       allRows: List[SeriesComparisonMatchPlayerRow],
   ): List[PlaybookCandidate] = List(
     revenueTopCandidate(stats, allRows),
+    destinationPositiveCandidate(stats, allRows),
     destinationZeroCandidate(stats, allRows),
+    accidentAnyCandidate(stats, allRows),
     lowAssetCandidate(stats, allRows),
     playOrderCandidate(stats, allRows),
     recoveryCandidate(stats, allRows),
@@ -272,6 +288,16 @@ private object SeriesComparisonReviewAggregation {
           "目的地なし展開の下位回避が共通論点です",
           s"${count}人に目的地0回時の候補が出ています。個人カードには、落ち込みが相対的に大きい人だけを残しています。",
           "目的地が取れない試合は、収益順位、事故回避、売り場経由のどれで2位圏へ戻せたかを見ます。",
+        )
+      case "destinationPositive" => (
+          "目的地後の収益維持が共通論点です",
+          s"${count}人に目的地到着後の候補が出ています。個人カードには、差が相対的に強い人だけを残しています。",
+          "目的地を取れた試合は、その後も収益順位、事故回避、次の到着準備のどれを保てたかを振り返ります。",
+        )
+      case "accident" => (
+          "事故後の入賞圏維持が共通論点です",
+          s"${count}人に事故後の候補が出ています。個人カードには、落ち込みや戻し方が相対的に強い人だけを残しています。",
+          "銀次被害やマイナス駅があった試合は、収益順位、目的地順位、追加事故回避のどれで入賞圏へ戻せたかを振り返ります。",
         )
       case "assets" => (
           "低資産帯に入る前の切り替えが共通論点です",
@@ -443,6 +469,229 @@ private object SeriesComparisonReviewAggregation {
           score = if contrast >= Thresholds.MinimumContrast then score else 0.0,
         ),
         peerEffectValue = math.max(math.abs(rawSymptom), math.abs(odds) / 4.0),
+      )
+    }
+
+  private def destinationPositiveCandidate(
+      stats: PlayerStats,
+      allRows: List[SeriesComparisonMatchPlayerRow],
+  ): Option[PlaybookCandidate] =
+    val target = stats.rows.filter(_.incidents.destination > 0)
+    Option.when(target.size >= Thresholds.ReferenceSample) {
+      val revenueRankScores = rankScoreByMatch(allRows, _.revenueManYen.value)
+      val upper = target.filter(isUpper)
+      val lower = target.filterNot(isUpper)
+      val rawSymptom = average(target.map(rankScore)) - stats.averageRankScore
+      val revenueDelta = StatsKernel.cliffsDelta(
+        upper.map(row => revenueRankScores.getOrElse(rankKey(row), rankScore(row))),
+        lower.map(row => revenueRankScores.getOrElse(rankKey(row), rankScore(row))),
+      )
+      val accidentDelta =
+        -StatsKernel.cliffsDelta(upper.map(accidentCount), lower.map(accidentCount))
+      val cardShopDelta = StatsKernel
+        .cliffsDelta(upper.map(cardShopCount), lower.map(cardShopCount))
+      val driver = selectPrimaryActionDriver(List(
+        ActionDriver("revenueKeep", revenueDelta, 1.0),
+        ActionDriver("accidentAvoidance", accidentDelta, 0.90),
+        ActionDriver("cardShopFollowup", cardShopDelta, 0.70),
+      ))
+      val status = conditionalStatus(target.size)
+      val contrast = driver.map(_.selectionStrength).getOrElse(0.0)
+      val stability = eventStability(stats.rows, rawSymptom)(rows =>
+        val reducedTarget = rows.filter(_.incidents.destination > 0)
+        average(reducedTarget.map(rankScore)) - average(rows.map(rankScore))
+      )
+      val driverInterval = driver.flatMap(selected =>
+        eventBootstrapInterval(
+          stats.rows,
+          seedFor(stats.memberId, s"destination-positive-${selected.kind}"),
+        )(rows => destinationPositiveDriverEffect(rows, revenueRankScores, selected.kind))
+      )
+      val advice = adviceScore(
+        symptomStrength = math.abs(StatsKernel.shrink(rawSymptom, target.size)),
+        contrastStrength = contrast,
+        exposure = target.size,
+        status = status,
+        actionConnection = 0.95,
+        stability = stability,
+      )
+      val selectedKind = driver.map(_.kind).getOrElse("revenueKeep")
+      val text = destinationPositiveText(selectedKind)
+      val strongEnough = driver.exists(actionDriverStrongEnough(_, status)) &&
+        upper.size >= Thresholds.ReferenceSample && lower.size >= Thresholds.ReferenceSample
+      val driverEffect = driver.map(_.effect).getOrElse(0.0)
+      playbookCandidate(
+        stats,
+        playbookCard(
+          id = s"destination-positive-$selectedKind",
+          classification =
+            if rawSymptom > Thresholds.SignificantScoreDelta then "reproduce" else "verify",
+          category = "destinationPositive",
+          actionHypothesis = text.actionHypothesis,
+          triggerCondition = text.triggerCondition,
+          recommendedAction = text.recommendedAction,
+          avoidAction = text.avoidAction,
+          dataReason = destinationPositiveDataReason(
+            target = target,
+            upper = upper,
+            lower = lower,
+            driverKind = selectedKind,
+            revenueRankScores = revenueRankScores,
+          ),
+          postMatchCheck = text.postMatchCheck,
+          targetCount = target.size,
+          evidence = List(
+            evidence(
+              "destinationPositive.rankScore",
+              "目的地あり時の順位スコア",
+              decimal(average(target.map(rankScore))),
+              target.size,
+              status,
+            ),
+            statisticalEvidence(
+              "destinationPositive.driver",
+              destinationPositiveDriverLabel(selectedKind),
+              signed(driverEffect),
+              target.size,
+              status,
+              "event_bootstrap",
+              driverEffect,
+              driverInterval.map(_.low),
+              driverInterval.map(_.high),
+              stability,
+            ),
+            evidence(
+              "destinationPositive.outcomeCounts",
+              "入賞/下位件数",
+              s"${upper.size}件 / ${lower.size}件",
+              target.size,
+              status,
+            ),
+          ),
+          status = status,
+          anchor = SeriesComparisonPlaybookAnchorTargetResponse(
+            view = "drivers",
+            sectionId = "metric-destination-outcome",
+            label = "目的地と勝ち",
+          ),
+          score = if strongEnough then advice else 0.0,
+        ),
+        peerEffectValue = math.max(math.abs(rawSymptom), math.abs(driverEffect)),
+      )
+    }
+
+  private def accidentAnyCandidate(
+      stats: PlayerStats,
+      allRows: List[SeriesComparisonMatchPlayerRow],
+  ): Option[PlaybookCandidate] =
+    val target = stats.rows.filter(row => accidentCount(row) > 0)
+    Option.when(target.size >= Thresholds.ReferenceSample) {
+      val revenueRankScores = rankScoreByMatch(allRows, _.revenueManYen.value)
+      val destinationRankScores = rankScoreByMatch(allRows, _.incidents.destination)
+      val upper = target.filter(isUpper)
+      val lower = target.filterNot(isUpper)
+      val rawSymptom = average(target.map(rankScore)) - stats.averageRankScore
+      val revenueDelta = StatsKernel.cliffsDelta(
+        upper.map(row => revenueRankScores.getOrElse(rankKey(row), rankScore(row))),
+        lower.map(row => revenueRankScores.getOrElse(rankKey(row), rankScore(row))),
+      )
+      val destinationDelta = StatsKernel.cliffsDelta(
+        upper.map(row => destinationRankScores.getOrElse(rankKey(row), rankScore(row))),
+        lower.map(row => destinationRankScores.getOrElse(rankKey(row), rankScore(row))),
+      )
+      val additionalAccidentDelta =
+        -StatsKernel.cliffsDelta(upper.map(minusStationCount), lower.map(minusStationCount))
+      val driver = selectPrimaryActionDriver(List(
+        ActionDriver("revenueRecovery", revenueDelta, 1.0),
+        ActionDriver("destinationRecovery", destinationDelta, 0.95),
+        ActionDriver("avoidFurtherMinus", additionalAccidentDelta, 0.85),
+      ))
+      val status = conditionalStatus(target.size)
+      val contrast = driver.map(_.selectionStrength).getOrElse(0.0)
+      val stability = eventStability(stats.rows, rawSymptom)(rows =>
+        val reducedTarget = rows.filter(row => accidentCount(row) > 0)
+        average(reducedTarget.map(rankScore)) - average(rows.map(rankScore))
+      )
+      val selectedKind = driver.map(_.kind).getOrElse("revenueRecovery")
+      val driverInterval = driver.flatMap(selected =>
+        eventBootstrapInterval(
+          stats.rows,
+          seedFor(stats.memberId, s"accident-any-${selected.kind}")
+        )(rows =>
+          accidentAnyDriverEffect(rows, revenueRankScores, destinationRankScores, selected.kind)
+        )
+      )
+      val advice = adviceScore(
+        symptomStrength = math.abs(StatsKernel.shrink(rawSymptom, target.size)),
+        contrastStrength = contrast,
+        exposure = target.size,
+        status = status,
+        actionConnection = 0.90,
+        stability = stability,
+      )
+      val text = accidentAnyText(selectedKind)
+      val strongEnough = rawSymptom < -0.10 && driver.exists(actionDriverStrongEnough(_, status)) &&
+        upper.size >= Thresholds.ReferenceSample && lower.size >= Thresholds.ReferenceSample
+      val driverEffect = driver.map(_.effect).getOrElse(0.0)
+      playbookCandidate(
+        stats,
+        playbookCard(
+          id = s"accident-any-$selectedKind",
+          classification =
+            if rawSymptom < -Thresholds.SignificantScoreDelta then "revise" else "verify",
+          category = "accident",
+          actionHypothesis = text.actionHypothesis,
+          triggerCondition = text.triggerCondition,
+          recommendedAction = text.recommendedAction,
+          avoidAction = text.avoidAction,
+          dataReason = accidentAnyDataReason(
+            score = average(target.map(rankScore)),
+            rawSymptom = rawSymptom,
+            upper = upper,
+            lower = lower,
+            driverKind = selectedKind,
+            revenueRankScores = revenueRankScores,
+            destinationRankScores = destinationRankScores,
+          ),
+          postMatchCheck = text.postMatchCheck,
+          targetCount = target.size,
+          evidence = List(
+            evidence(
+              "accidentAny.rankScore",
+              "事故あり時の順位スコア",
+              decimal(average(target.map(rankScore))),
+              target.size,
+              status,
+            ),
+            statisticalEvidence(
+              "accidentAny.driver",
+              accidentAnyDriverLabel(selectedKind),
+              signed(driverEffect),
+              target.size,
+              status,
+              "event_bootstrap",
+              driverEffect,
+              driverInterval.map(_.low),
+              driverInterval.map(_.high),
+              stability,
+            ),
+            evidence(
+              "accidentAny.outcomeCounts",
+              "入賞/下位件数",
+              s"${upper.size}件 / ${lower.size}件",
+              target.size,
+              status,
+            ),
+          ),
+          status = status,
+          anchor = SeriesComparisonPlaybookAnchorTargetResponse(
+            view = "flow",
+            sectionId = "metric-match-digest",
+            label = "期間内の荒れ",
+          ),
+          score = if strongEnough then advice else 0.0,
+        ),
+        peerEffectValue = math.max(math.abs(rawSymptom), math.abs(driverEffect)),
       )
     }
 
@@ -1055,6 +1304,159 @@ private object SeriesComparisonReviewAggregation {
       else Thresholds.MinimumActionDriverEffect
     driver.effectStrength >= minimum
 
+  private def destinationPositiveText(kind: String): RecoveryText = kind match
+    case "accidentAvoidance" => RecoveryText(
+        actionHypothesis = "目的地を取れた後は、追加事故で入賞圏を崩さない。",
+        triggerCondition = "目的地到着後、銀次被害やマイナス駅で資産差が詰まったとき。",
+        recommendedAction = "次の目的地だけを急がず、追加事故を避けて入賞圏を守る進行を優先する。",
+        avoidAction = "目的地を取れた安心で、事故後も勝ち切り方を変えずに終盤へ入ること。",
+        postMatchCheck = "次回、目的地を取れた試合を対象に、事故後も入賞圏を守れたかを振り返る。",
+      )
+    case "cardShopFollowup" => RecoveryText(
+        actionHypothesis = "目的地を取れた後は、売り場経由で次の到着準備を作る。",
+        triggerCondition = "目的地到着後、次の目的地が遠く売り場に寄れるとき。",
+        recommendedAction = "直行だけに寄せず、売り場経由で移動や妨害の選択肢を整える。",
+        avoidAction = "目的地を取った後、次の到着準備を作らないまま終盤へ入ること。",
+        postMatchCheck = "次回、目的地を取れた試合を対象に、売り場経由で次の到着準備を作れたかを振り返る。",
+      )
+    case _ => RecoveryText(
+        actionHypothesis = "目的地を取れた後も、収益順位を落としたまま終盤へ入らない。",
+        triggerCondition = "目的地到着後、次の目的地か収益作りかで迷うとき。",
+        recommendedAction = "次の到着だけに寄せず、物件収益順位を2位圏で保つ進行を優先する。",
+        avoidAction = "目的地を取れた安心で、収益順位を落としたまま終盤へ入ること。",
+        postMatchCheck = "次回、目的地を取れた試合を対象に、物件収益順位を保ったまま入賞圏に残れたかを振り返る。",
+      )
+
+  private def accidentAnyText(kind: String): RecoveryText = kind match
+    case "destinationRecovery" => RecoveryText(
+        actionHypothesis = "事故後は目的地順位を戻して入賞圏を守る。",
+        triggerCondition = "銀次被害やマイナス駅の後も、目的地到着で順位圏へ戻せる余地があるとき。",
+        recommendedAction = "被害額だけを見ず、目的地周辺への位置取りで入賞圏へ戻す。",
+        avoidAction = "事故後に目的地到着による順位回復を捨て、逆転待ちだけで終盤へ入ること。",
+        postMatchCheck = "次回、事故があった試合で、目的地順位を戻して入賞圏を守れたかを振り返る。",
+      )
+    case "avoidFurtherMinus" => RecoveryText(
+        actionHypothesis = "事故後は追加事故を避けて下位連鎖を止める。",
+        triggerCondition = "銀次被害やマイナス駅の後、さらに資産差が広がりそうなとき。",
+        recommendedAction = "1位狙いを続ける前に、追加事故を避けて入賞圏へ戻す進行を優先する。",
+        avoidAction = "事故後も同じ勝ち切り方に固執して、資産を削る展開を続けること。",
+        postMatchCheck = "次回、事故があった試合で、追加事故を避けて下位連鎖を止められたかを振り返る。",
+      )
+    case _ => RecoveryText(
+        actionHypothesis = "事故後は勝ち切り継続より、収益順位を戻して入賞圏を守る。",
+        triggerCondition = "銀次被害やマイナス駅の後、物件収益順位も下がっているとき。",
+        recommendedAction = "1位狙いを続ける前に、物件収益順位を2位圏へ戻して下位化を止める。",
+        avoidAction = "事故前と同じ勝ち切り方に固執して、収益下位のまま終盤へ入ること。",
+        postMatchCheck = "次回、事故があった試合で、物件収益順位を戻して入賞圏を守れたかを振り返る。",
+      )
+
+  private def destinationPositiveDriverLabel(kind: String): String = kind match
+    case "accidentAvoidance" => "目的地後の事故回避差"
+    case "cardShopFollowup" => "目的地後の売り場差"
+    case _ => "目的地後の収益順位差"
+
+  private def accidentAnyDriverLabel(kind: String): String = kind match
+    case "destinationRecovery" => "事故後の目的地順位差"
+    case "avoidFurtherMinus" => "事故後の追加事故回避差"
+    case _ => "事故後の収益順位差"
+
+  private def destinationPositiveDataReason(
+      target: List[SeriesComparisonMatchPlayerRow],
+      upper: List[SeriesComparisonMatchPlayerRow],
+      lower: List[SeriesComparisonMatchPlayerRow],
+      driverKind: String,
+      revenueRankScores: Map[(String, String), Double],
+  ): String =
+    val opening =
+      s"目的地を取れた試合は${target.size}件で、順位スコアは${decimal(average(target.map(rankScore)))}です。"
+    val comparison = driverKind match
+      case "accidentAvoidance" =>
+        s"入賞試合の事故平均は${decimal(average(upper.map(accidentCount)))}回、下位試合は${decimal(
+            average(lower.map(accidentCount))
+          )}回で、目的地後の追加事故回避が分岐になっている可能性があります。"
+      case "cardShopFollowup" =>
+        s"入賞試合のカード売り場平均は${averageEventValue(upper)(_.incidents.cardShop)}、下位試合は${averageEventValue(
+            lower
+          )(_.incidents.cardShop)}で、目的地後の到着準備が分岐になっている可能性があります。"
+      case _ =>
+        s"入賞試合の物件収益順位スコア平均は${rankScoreAverage(upper, revenueRankScores)}、下位試合は${rankScoreAverage(
+            lower,
+            revenueRankScores,
+          )}で、目的地後も収益順位を保つ動きが分岐になっている可能性があります。"
+    s"$opening $comparison"
+
+  private def accidentAnyDataReason(
+      score: Double,
+      rawSymptom: Double,
+      upper: List[SeriesComparisonMatchPlayerRow],
+      lower: List[SeriesComparisonMatchPlayerRow],
+      driverKind: String,
+      revenueRankScores: Map[(String, String), Double],
+      destinationRankScores: Map[(String, String), Double],
+  ): String =
+    val opening =
+      s"事故があった試合の順位スコアは${decimal(score)}で、本人平均との差は${signed(rawSymptom)}です。"
+    val comparison = driverKind match
+      case "destinationRecovery" => s"事故後の入賞試合の目的地順位スコア平均は${rankScoreAverage(
+            upper,
+            destinationRankScores,
+          )}、下位試合は${rankScoreAverage(
+            lower,
+            destinationRankScores,
+          )}で、事故後に目的地順位を戻す動きが分岐になっている可能性があります。"
+      case "avoidFurtherMinus" =>
+        s"事故後の入賞試合の追加事故平均は${decimal(average(upper.map(minusStationCount)))}回、下位試合は${decimal(
+            average(lower.map(minusStationCount))
+          )}回で、追加事故を避ける判断が分岐になっている可能性があります。"
+      case _ => s"事故後の入賞試合の物件収益順位スコア平均は${rankScoreAverage(
+            upper,
+            revenueRankScores,
+          )}、下位試合は${rankScoreAverage(lower, revenueRankScores)}で、事故後に収益順位を戻す動きが分岐になっている可能性があります。"
+    s"$opening $comparison"
+
+  private def destinationPositiveDriverEffect(
+      rows: List[SeriesComparisonMatchPlayerRow],
+      revenueRankScores: Map[(String, String), Double],
+      kind: String,
+  ): Double =
+    val target = rows.filter(_.incidents.destination > 0)
+    val upper = target.filter(isUpper)
+    val lower = target.filterNot(isUpper)
+    kind match
+      case "accidentAvoidance" => -StatsKernel.cliffsDelta(
+          upper.map(accidentCount),
+          lower.map(accidentCount),
+        )
+      case "cardShopFollowup" => StatsKernel
+          .cliffsDelta(upper.map(cardShopCount), lower.map(cardShopCount))
+      case _ => StatsKernel.cliffsDelta(
+          upper.map(row => revenueRankScores.getOrElse(rankKey(row), rankScore(row))),
+          lower.map(row => revenueRankScores.getOrElse(rankKey(row), rankScore(row))),
+        )
+
+  private def accidentAnyDriverEffect(
+      rows: List[SeriesComparisonMatchPlayerRow],
+      revenueRankScores: Map[(String, String), Double],
+      destinationRankScores: Map[(String, String), Double],
+      kind: String,
+  ): Double =
+    val target = rows.filter(row => accidentCount(row) > 0)
+    val upper = target.filter(isUpper)
+    val lower = target.filterNot(isUpper)
+    kind match
+      case "destinationRecovery" => StatsKernel.cliffsDelta(
+          upper.map(row => destinationRankScores.getOrElse(rankKey(row), rankScore(row))),
+          lower.map(row => destinationRankScores.getOrElse(rankKey(row), rankScore(row))),
+        )
+      case "avoidFurtherMinus" => -StatsKernel.cliffsDelta(
+          upper.map(minusStationCount),
+          lower.map(minusStationCount),
+        )
+      case _ => StatsKernel.cliffsDelta(
+          upper.map(row => revenueRankScores.getOrElse(rankKey(row), rankScore(row))),
+          lower.map(row => revenueRankScores.getOrElse(rankKey(row), rankScore(row))),
+        )
+
   private def destinationZeroText(kind: String): RecoveryText = kind match
     case "accidentAvoidance" => RecoveryText(
         actionHypothesis = "目的地なしで事故が重なったら下位連鎖を止める。",
@@ -1493,12 +1895,40 @@ private object SeriesComparisonReviewAggregation {
     avoidAction = avoidAction,
     dataReason = dataReason,
     postMatchCheck = postMatchCheck,
+    plainReason = defaultPlainReason(category),
+    evidenceStrength = defaultEvidenceStrength(status, score),
     targetCount = targetCount,
     evidence = evidence,
     status = status,
     anchorTarget = anchor,
     actionAdviceScore = rounded(score),
   )
+
+  private def defaultPlainReason(category: String): String = category match
+    case "revenue" =>
+      "収益で先行した試合でも、目的地到着や事故後の立て直しで順位差が分かれています。"
+    case "destinationPositive" =>
+      "目的地を取れた試合でも、入賞できた試合は物件収益順位を保てている傾向があります。"
+    case "destination" =>
+      "目的地が取れない試合では、収益順位や事故回避の差が入賞圏への戻り方に出ています。"
+    case "accident" =>
+      "事故があった試合では、入賞できた試合ほど収益順位を戻せている傾向があります。"
+    case "assets" =>
+      "資産が沈む試合では、収益順位、目的地、事故回避のどこで遅れたかが分岐になります。"
+    case "playOrder" =>
+      "苦手番手では、普段より早く収益順位や目的地の遅れを補正する必要が出ています。"
+    case "ginji" =>
+      "銀次被害後は、被害額だけでなく収益順位や目的地順位の戻し方が分岐になります。"
+    case "recovery" =>
+      "前戦下位の次戦では、入賞圏へ戻せた試合ほど収益順位や目的地順位を立て直せています。"
+    case _ =>
+      "選択範囲の試合で、次回に持ち帰れる差が出ています。"
+
+  private def defaultEvidenceStrength(status: String, score: Double): String =
+    if status == "ok" && score >= 0.08 then "strong"
+    else if status == "ok" then "verify"
+    else if status == "reference" then "verify"
+    else "diagnostic"
 
   private final case class PlayerStats(
       memberId: MemberId,
@@ -1639,6 +2069,37 @@ private object SeriesComparisonReviewAggregation {
         )
         StatsKernel.clamp01(0.35 + 0.65 * sameDirection * magnitude)
 
+  private final case class BootstrapInterval(low: Double, high: Double)
+
+  private def eventBootstrapInterval(
+      rows: List[SeriesComparisonMatchPlayerRow],
+      seed: Long,
+  )(
+      compute: List[SeriesComparisonMatchPlayerRow] => Double
+  ): Option[BootstrapInterval] =
+    val eventIds = rows.map(_.heldEventId).distinct.sortBy(_.value)
+    if eventIds.size < 3 || rows.size < Thresholds.MainConditionalSample then None
+    else
+      val rowsByEvent = rows.groupBy(_.heldEventId)
+      val random = new Random(seed)
+      val effects = List.fill(Thresholds.BootstrapIterations) {
+        val sampledRows = List.fill(eventIds.size) {
+          val eventId = eventIds(random.nextInt(eventIds.size))
+          rowsByEvent.getOrElse(eventId, Nil)
+        }.flatten
+        compute(sampledRows)
+      }.filter(value => !value.isNaN && !value.isInfinity).sorted
+      if effects.size < 8 then None
+      else
+        val lowIndex = math
+          .floor(asDouble(effects.size - 1) * 0.025).toInt.max(0).min(effects.size - 1)
+        val highIndex = math
+          .ceil(asDouble(effects.size - 1) * 0.975).toInt.max(0).min(effects.size - 1)
+        Some(BootstrapInterval(effects(lowIndex), effects(highIndex)))
+
+  private def seedFor(memberId: MemberId, category: String): Long =
+    31L * memberId.value.hashCode.toLong + category.hashCode.toLong
+
   private def adviceScore(
       symptomStrength: Double,
       contrastStrength: Double,
@@ -1683,6 +2144,35 @@ private object SeriesComparisonReviewAggregation {
     value = value,
     targetCount = targetCount,
     status = status,
+    method = None,
+    effectEstimate = None,
+    confidenceLow = None,
+    confidenceHigh = None,
+    stability = None,
+  )
+
+  private def statisticalEvidence(
+      metricId: String,
+      label: String,
+      value: String,
+      targetCount: Int,
+      status: String,
+      method: String,
+      effectEstimate: Double,
+      confidenceLow: Option[Double],
+      confidenceHigh: Option[Double],
+      stability: Double,
+  ): SeriesComparisonPlaybookEvidenceResponse = SeriesComparisonPlaybookEvidenceResponse(
+    metricId = metricId,
+    label = label,
+    value = value,
+    targetCount = targetCount,
+    status = status,
+    method = Some(method),
+    effectEstimate = Some(rounded(effectEstimate)),
+    confidenceLow = confidenceLow.map(rounded),
+    confidenceHigh = confidenceHigh.map(rounded),
+    stability = Some(rounded(stability)),
   )
 
   private def rankScore(row: SeriesComparisonMatchPlayerRow): Double = 5.0 -

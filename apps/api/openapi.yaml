@@ -6166,6 +6166,8 @@
           "avoidAction",
           "dataReason",
           "postMatchCheck",
+          "plainReason",
+          "evidenceStrength",
           "targetCount",
           "status",
           "anchorTarget",
@@ -6197,6 +6199,12 @@
             "type" : "string"
           },
           "postMatchCheck" : {
+            "type" : "string"
+          },
+          "plainReason" : {
+            "type" : "string"
+          },
+          "evidenceStrength" : {
             "type" : "string"
           },
           "targetCount" : {
@@ -6247,6 +6255,25 @@
           },
           "status" : {
             "type" : "string"
+          },
+          "method" : {
+            "type" : "string"
+          },
+          "effectEstimate" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "confidenceLow" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "confidenceHigh" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "stability" : {
+            "type" : "number",
+            "format" : "double"
           }
         }
       },

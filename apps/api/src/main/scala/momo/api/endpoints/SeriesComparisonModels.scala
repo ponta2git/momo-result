@@ -108,6 +108,8 @@ final case class SeriesComparisonPlaybookCardResponse(
     avoidAction: String,
     dataReason: String,
     postMatchCheck: String,
+    plainReason: String,
+    evidenceStrength: String,
     targetCount: Int,
     evidence: List[SeriesComparisonPlaybookEvidenceResponse],
     status: String,
@@ -123,6 +125,11 @@ final case class SeriesComparisonPlaybookEvidenceResponse(
     value: String,
     targetCount: Int,
     status: String,
+    method: Option[String] = None,
+    effectEstimate: Option[Double] = None,
+    confidenceLow: Option[Double] = None,
+    confidenceHigh: Option[Double] = None,
+    stability: Option[Double] = None,
 ) derives Codec.AsObject
 object SeriesComparisonPlaybookEvidenceResponse:
   given Schema[SeriesComparisonPlaybookEvidenceResponse] = Schema.derived

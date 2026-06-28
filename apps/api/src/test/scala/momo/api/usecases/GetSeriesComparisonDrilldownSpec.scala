@@ -5,6 +5,8 @@ import java.time.Instant
 import cats.effect.IO
 
 import momo.api.MomoCatsEffectSuite
+import momo.api.domain.constraints.BoundaryConstraints
+import momo.api.domain.constraints.BoundaryConstraints.{MetricIdString, MetricKey}
 import momo.api.domain.ids.*
 import momo.api.domain.{
   ManYen,
@@ -34,6 +36,8 @@ final class GetSeriesComparisonDrilldownSpec extends MomoCatsEffectSuite:
     scopeId = None,
     scopeName = "総合",
   )
+  private val rankAverageHistory = metricId("rank.averageHistory")
+  private val playOrderRankHistory = metricId("playOrder.rankHistory")
   private val DoubleDelta = 0.0001
 
   test("builds rank average history drilldown by match and held event"):
@@ -41,7 +45,7 @@ final class GetSeriesComparisonDrilldownSpec extends MomoCatsEffectSuite:
 
     for result <- usecase.run(
         SeriesComparisonScope.Overall(titleId),
-        "rank.averageHistory",
+        rankAverageHistory,
         memberId,
       )
     yield
@@ -79,7 +83,7 @@ final class GetSeriesComparisonDrilldownSpec extends MomoCatsEffectSuite:
 
     for result <- usecase.run(
         SeriesComparisonScope.Overall(titleId),
-        "playOrder.rankHistory",
+        playOrderRankHistory,
         memberId,
       )
     yield
@@ -145,7 +149,7 @@ final class GetSeriesComparisonDrilldownSpec extends MomoCatsEffectSuite:
 
     for result <- usecase.run(
         SeriesComparisonScope.Overall(titleId),
-        "rank.averageHistory",
+        rankAverageHistory,
         MemberId.unsafeFromString("absent"),
       )
     yield
@@ -162,20 +166,10 @@ final class GetSeriesComparisonDrilldownSpec extends MomoCatsEffectSuite:
 
     for result <- usecase.run(
         SeriesComparisonScope.Overall(titleId),
-        "rank.averageHistory",
+        rankAverageHistory,
         memberId,
       )
     yield assertAppError(result, "NOT_FOUND", "series comparison scope was not found")
-
-  test("rejects invalid metric id before resolving scope"):
-    val usecase = GetSeriesComparisonDrilldown[IO](StaticReadModel(None, Nil))
-
-    for result <- usecase.run(
-        SeriesComparisonScope.Overall(titleId),
-        "../rank.averageHistory",
-        memberId,
-      )
-    yield assertAppError(result, "VALIDATION_FAILED", "metricId")
 
   private def sampleRows: List[SeriesComparisonMatchPlayerRow] = List(
     row(1, "held_a", 1, "ponta", "ぽんた", 4),
@@ -260,6 +254,12 @@ final class GetSeriesComparisonDrilldownSpec extends MomoCatsEffectSuite:
         s"expected $expected within $DoubleDelta, got $value",
       )
     case None => fail(s"expected $expected, got None")
+
+  private def metricId(value: String): MetricIdString =
+    BoundaryConstraints.validate[String, MetricKey]("metricId", value).fold(
+      error => fail(error.detail),
+      identity,
+    )
 
   private final case class StaticReadModel(
       resolved: Option[SeriesComparisonResolvedScope],

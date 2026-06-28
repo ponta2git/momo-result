@@ -1,83 +1,80 @@
 package momo.api.config
 
+import ciris.{ConfigKey, ConfigValue, Effect}
+import io.github.iltotore.iron.*
+import io.github.iltotore.iron.ciris.given
+import io.github.iltotore.iron.constraint.all.*
+
+import momo.api.domain.constraints.BoundaryConstraints.{
+  NonNegative,
+  NonNegativeInt,
+  PortNumber,
+  PortRange,
+  PositiveInt,
+  PositiveLong
+}
+
 private[config] object ConfigParsers:
+  type PercentRange = GreaterEqual[1] & LessEqual[100]
+  type PercentInt = Int :| PercentRange
+
   private[config] def parsePositiveInt(
       env: Map[String, String],
       name: String,
       default: Int,
-  ): Either[Throwable, Int] = parseInt(env, name, default, _ > 0, "positive integer")
+  ): ConfigValue[Effect, Int] =
+    envValue(env, name).as[PositiveInt].default(default.refineUnsafe[Positive]).map(value => value)
 
   private[config] def parseNonNegativeInt(
       env: Map[String, String],
       name: String,
       default: Int,
-  ): Either[Throwable, Int] = parseInt(env, name, default, _ >= 0, "non-negative integer")
+  ): ConfigValue[Effect, Int] =
+    envValue(env, name).as[NonNegativeInt].default(default.refineUnsafe[NonNegative])
+      .map(value => value)
 
   private[config] def parsePositiveLong(
       env: Map[String, String],
       name: String,
       default: Long,
-  ): Either[Throwable, Long] = parseLong(env, name, default, _ > 0L, "positive integer")
+  ): ConfigValue[Effect, Long] =
+    envValue(env, name).as[PositiveLong].default(default.refineUnsafe[Positive])
+      .map(value => value)
 
   private[config] def parsePort(
       env: Map[String, String],
       name: String,
       default: Int,
-  ): Either[Throwable, Int] = parseInt(
-    env,
-    name,
-    default,
-    value => value > 0 && value <= 65535,
-    "TCP port between 1 and 65535",
-  )
+  ): ConfigValue[Effect, Int] =
+    envValue(env, name).as[PortNumber].default(default.refineUnsafe[PortRange])
+      .map(value => value)
 
   private[config] def parsePercent(
       env: Map[String, String],
       name: String,
       default: Int,
-  ): Either[Throwable, Int] = parseInt(
-    env,
-    name,
-    default,
-    value => value >= 1 && value <= 100,
-    "integer percentage between 1 and 100",
-  )
+  ): ConfigValue[Effect, Int] =
+    envValue(env, name).as[PercentInt].default(default.refineUnsafe[PercentRange])
+      .map(value => value)
 
   private[config] def parseBoolean(
       env: Map[String, String],
       name: String,
       default: Boolean,
-  ): Either[Throwable, Boolean] = env.get(name).filter(_.nonEmpty) match
-    case None => Right(default)
-    case Some(raw) => raw.toBooleanOption
-        .toRight(new IllegalArgumentException(s"$name must be true or false, got: $raw"))
-
-  private def parseInt(
-      env: Map[String, String],
-      name: String,
-      default: Int,
-      valid: Int => Boolean,
-      description: String,
-  ): Either[Throwable, Int] = env.get(name).filter(_.nonEmpty) match
-    case None => Right(default)
-    case Some(raw) => raw.toIntOption.filter(valid)
-        .toRight(new IllegalArgumentException(s"$name must be a $description, got: $raw"))
-
-  private def parseLong(
-      env: Map[String, String],
-      name: String,
-      default: Long,
-      valid: Long => Boolean,
-      description: String,
-  ): Either[Throwable, Long] = env.get(name).filter(_.nonEmpty) match
-    case None => Right(default)
-    case Some(raw) => raw.toLongOption.filter(valid)
-        .toRight(new IllegalArgumentException(s"$name must be a $description, got: $raw"))
+  ): ConfigValue[Effect, Boolean] = envValue(env, name).as[Boolean].default(default)
 
   private[config] def envOrDefault(
       env: Map[String, String],
       name: String,
       default: String
-  ): String =
-    env
-      .get(name).map(_.trim).filter(_.nonEmpty).getOrElse(default)
+  ): ConfigValue[Effect, String] = envValue(env, name).default(default)
+
+  private[config] def envValue(
+      env: Map[String, String],
+      name: String,
+  ): ConfigValue[Effect, String] = ConfigValue.suspend {
+    val key = ConfigKey.env(name)
+    env.get(name).map(_.trim).filter(_.nonEmpty) match
+      case Some(value) => ConfigValue.loaded(key, value)
+      case None => ConfigValue.missing(key)
+  }

@@ -2,15 +2,17 @@ package momo.api.endpoints.codec
 
 import cats.syntax.all.*
 
+import momo.api.domain.constraints.BoundaryConstraints
+import momo.api.domain.constraints.BoundaryConstraints.BoundaryText
 import momo.api.errors.AppError
 
 object BoundaryId:
   def nonBlank(field: String, value: String): Either[AppError, String] =
     val trimmed = value.trim
-    if trimmed.isEmpty then Left(AppError.ValidationFailed(s"$field must not be blank."))
-    else if containsControlCharacter(trimmed) then
-      Left(AppError.ValidationFailed(s"$field must not contain control characters."))
-    else Right(trimmed)
+    BoundaryConstraints.validate[String, BoundaryText](field, trimmed).leftMap { _ =>
+      if trimmed.isEmpty then AppError.ValidationFailed(s"$field must not be blank.")
+      else AppError.ValidationFailed(s"$field must not contain control characters.")
+    }.map(value => value)
 
   def required[A](field: String, value: String)(
       parse: String => Either[String, A]
@@ -21,5 +23,3 @@ object BoundaryId:
   def optional[A](field: String, value: Option[String])(
       parse: String => Either[String, A]
   ): Either[AppError, Option[A]] = value.traverse(required(field, _)(parse))
-
-  private def containsControlCharacter(value: String): Boolean = value.exists(_.isControl)

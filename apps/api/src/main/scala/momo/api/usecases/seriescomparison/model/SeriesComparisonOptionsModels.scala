@@ -1,6 +1,5 @@
 package momo.api.usecases.seriescomparison.model
 
-
 final case class SeriesComparisonOptionsResponse(
     schemaVersion: Int,
     latestConfirmedGameTitleId: Option[String],

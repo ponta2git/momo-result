@@ -62,6 +62,40 @@ final class SeriesComparisonCodecSpec extends MomoCatsEffectSuite:
         assertEquals(seasonMasterId.value, "season_2026_spring")
       case other => fail(s"expected review season scope, got $other")
 
+  test("parses drilldown metric id as a constrained supported key"):
+    val parsed = SeriesComparisonCodec.parseDrilldownQuery(
+      "title_momotetsu_2",
+      "rank.averageHistory",
+      "member_ponta",
+      None,
+      None,
+    )
+
+    parsed match
+      case Right((SeriesComparisonScope.Overall(_), metricId, memberId)) =>
+        assertEquals(metricId.toString, "rank.averageHistory")
+        assertEquals(memberId.value, "member_ponta")
+      case other => fail(s"expected drilldown scope and metric id, got $other")
+
+  test("rejects malformed and unsupported drilldown metric ids at the endpoint boundary"):
+    val malformed = SeriesComparisonCodec.parseDrilldownQuery(
+      "title_momotetsu_2",
+      "../rank.averageHistory",
+      "member_ponta",
+      None,
+      None,
+    )
+    val unsupported = SeriesComparisonCodec.parseDrilldownQuery(
+      "title_momotetsu_2",
+      "rank.unknown",
+      "member_ponta",
+      None,
+      None,
+    )
+
+    assertValidationError(malformed, "metricId")
+    assertValidationError(unsupported, "rank.averageHistory or playOrder.rankHistory")
+
   test("rejects mixed legacy and filter scope query"):
     val mixed = SeriesComparisonCodec.parseAggregateQuery(
       "title_momotetsu_2",
@@ -74,7 +108,7 @@ final class SeriesComparisonCodecSpec extends MomoCatsEffectSuite:
     assertValidationError(mixed, "scopeKind/scopeId or seasonMasterId/mapMasterId")
 
   private def assertValidationError(
-      result: Either[momo.api.errors.AppError, SeriesComparisonScope],
+      result: Either[momo.api.errors.AppError, ?],
       detailContains: String,
   ): Unit = result match
     case Left(error) =>

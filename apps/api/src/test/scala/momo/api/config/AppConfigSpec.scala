@@ -2,6 +2,7 @@ package momo.api.config
 
 import cats.effect.IO
 import cats.syntax.all.*
+import ciris.{ConfigValue, Effect}
 import munit.CatsEffectSuite
 
 class AppConfigSpec extends CatsEffectSuite:
@@ -17,6 +18,9 @@ class AppConfigSpec extends CatsEffectSuite:
 
   private def load(env: Map[String, String]): IO[Either[Throwable, AppConfig]] = AppConfig
     .loadFromEnv[IO](env).attempt
+
+  private def loadConfig[A](value: ConfigValue[Effect, A]): IO[Either[Throwable, A]] =
+    value.load[IO].attempt
 
   private def parsedDatabaseUrl(raw: String): (String, Option[String], Option[String]) =
     DatabaseUrlConfig
@@ -161,28 +165,38 @@ class AppConfigSpec extends CatsEffectSuite:
   }
 
   test("numeric env parsing rejects malformed values instead of silently using defaults") {
-    assert(
-      ConfigParsers.parsePositiveLong(Map("REQUEST_MAX_BYTES" -> "nope"), "REQUEST_MAX_BYTES", 1L)
-        .isLeft
-    )
-    assert(ConfigParsers.parsePositiveInt(Map("DB_POOL_SIZE" -> "0"), "DB_POOL_SIZE", 2).isLeft)
-    assert(ConfigParsers.parsePort(Map("HTTP_PORT" -> "0"), "HTTP_PORT", 8080).isLeft)
-    assert(ConfigParsers.parsePort(Map("HTTP_PORT" -> "70000"), "HTTP_PORT", 8080).isLeft)
-    assert(
-      ConfigParsers.parsePercent(
+    for
+      invalidLong <- loadConfig(
+        ConfigParsers.parsePositiveLong(
+          Map("REQUEST_MAX_BYTES" -> "nope"),
+          "REQUEST_MAX_BYTES",
+          1L,
+        )
+      )
+      invalidPositive <- loadConfig(
+        ConfigParsers.parsePositiveInt(Map("DB_POOL_SIZE" -> "0"), "DB_POOL_SIZE", 2)
+      )
+      zeroPort <- loadConfig(ConfigParsers.parsePort(Map("HTTP_PORT" -> "0"), "HTTP_PORT", 8080))
+      highPort <- loadConfig(
+        ConfigParsers.parsePort(Map("HTTP_PORT" -> "70000"), "HTTP_PORT", 8080)
+      )
+      invalidPercent <- loadConfig(ConfigParsers.parsePercent(
         Map("IMAGE_UPLOAD_STORAGE_MAX_USED_PERCENT" -> "101"),
         "IMAGE_UPLOAD_STORAGE_MAX_USED_PERCENT",
         90,
-      ).isLeft
-    )
-    assertEquals(
-      ConfigParsers.parseNonNegativeInt(
+      ))
+      nonNegative <- loadConfig(ConfigParsers.parseNonNegativeInt(
         Map("EXPORT_RATE_LIMIT_PER_MINUTE" -> "0"),
         "EXPORT_RATE_LIMIT_PER_MINUTE",
         30,
-      ),
-      Right(0),
-    )
+      ))
+    yield
+      assert(invalidLong.isLeft)
+      assert(invalidPositive.isLeft)
+      assert(zeroPort.isLeft)
+      assert(highPort.isLeft)
+      assert(invalidPercent.isLeft)
+      assertEquals(nonNegative, Right(0))
   }
 
   test("loadFromEnv rejects malformed HTTP_PORT instead of silently using the default") {

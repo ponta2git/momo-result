@@ -1,6 +1,8 @@
 package momo.api.endpoints.codec
 
 import momo.api.domain.SeriesComparisonScope
+import momo.api.domain.constraints.BoundaryConstraints
+import momo.api.domain.constraints.BoundaryConstraints.{MetricIdString, MetricKey}
 import momo.api.domain.ids.{GameTitleId, MapMasterId, MemberId, SeasonMasterId}
 import momo.api.errors.AppError
 
@@ -33,7 +35,7 @@ object SeriesComparisonCodec:
       memberId: String,
       seasonMasterId: Option[String],
       mapMasterId: Option[String],
-  ): Either[AppError, (SeriesComparisonScope, String, MemberId)] =
+  ): Either[AppError, (SeriesComparisonScope, MetricIdString, MemberId)] =
     for
       parsedGameTitleId <- BoundaryId.required("gameTitleId", gameTitleId)(GameTitleId.fromString)
       parsedMetricId <- parseMetricId(metricId)
@@ -99,12 +101,14 @@ object SeriesComparisonCodec:
     if Set("overall", "season", "map").contains(raw) then Right(raw)
     else Left(AppError.ValidationFailed("scopeKind must be overall, season, or map."))
 
-  private def parseMetricId(value: String): Either[AppError, String] =
-    val raw = value.trim
-    if Set("rank.averageHistory", "playOrder.rankHistory").contains(raw) then Right(raw)
-    else
-      Left(AppError.ValidationFailed(
-        "metricId must be rank.averageHistory or playOrder.rankHistory."
-      ))
+  private def parseMetricId(value: String): Either[AppError, MetricIdString] =
+    val supported = Set("rank.averageHistory", "playOrder.rankHistory")
+    BoundaryConstraints.validate[String, MetricKey]("metricId", value.trim).flatMap { metricId =>
+      if supported.contains(metricId) then Right(metricId)
+      else
+        Left(AppError.ValidationFailed(
+          "metricId must be rank.averageHistory or playOrder.rankHistory."
+        ))
+    }
 
   private def nonBlank(value: Option[String]): Option[String] = value.map(_.trim).filter(_.nonEmpty)

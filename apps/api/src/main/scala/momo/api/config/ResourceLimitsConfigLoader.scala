@@ -2,15 +2,18 @@ package momo.api.config
 
 import scala.concurrent.duration.*
 
-import cats.MonadThrow
+import cats.effect.Async
 import cats.syntax.all.*
+import ciris.{ConfigValue, Effect}
 
 import ConfigParsers.*
 
 private[config] object ResourceLimitsConfigLoader:
-  def load[F[_]: MonadThrow](
+  def load[F[_]: Async](
       env: Map[String, String]
-  ): F[ResourceLimitsConfig] = (
+  ): F[ResourceLimitsConfig] = config(env).load[F]
+
+  private def config(env: Map[String, String]): ConfigValue[Effect, ResourceLimitsConfig] = (
     parseNonNegativeInt(env, "SOURCE_IMAGE_DOWNLOAD_RATE_LIMIT_PER_MINUTE", default = 60),
     parsePositiveLong(
       env,
@@ -112,7 +115,7 @@ private[config] object ResourceLimitsConfigLoader:
           ocrDeadLetterBacklogLimit = ocrDeadLetterBacklogLimit,
         )
     }
-  }.liftTo[F]
+  }
 
   private final case class ExportResourceLimits(
       rateLimitPerMinute: Int,
@@ -129,7 +132,7 @@ private[config] object ResourceLimitsConfigLoader:
 
   private def loadExportResourceLimits(
       env: Map[String, String]
-  ): Either[Throwable, ExportResourceLimits] = (
+  ): ConfigValue[Effect, ExportResourceLimits] = (
     parseNonNegativeInt(env, "EXPORT_RATE_LIMIT_PER_MINUTE", default = 30),
     parseNonNegativeInt(env, "EXPORT_ALL_RATE_LIMIT_PER_MINUTE", default = 6),
     parsePositiveInt(env, "EXPORT_MAX_ROWS", ResourceLimitsConfig.DefaultExportMaxRows),
@@ -138,7 +141,7 @@ private[config] object ResourceLimitsConfigLoader:
 
   private def loadApiResourceLimits(
       env: Map[String, String]
-  ): Either[Throwable, ApiResourceLimits] = (
+  ): ConfigValue[Effect, ApiResourceLimits] = (
     parseNonNegativeInt(env, "READ_API_RATE_LIMIT_PER_MINUTE", default = 120),
     parseNonNegativeInt(env, "MUTATION_RATE_LIMIT_PER_MINUTE", default = 60),
     parseNonNegativeInt(env, "IDEMPOTENCY_ACTIVE_KEY_LIMIT_PER_ACCOUNT", default = 240),

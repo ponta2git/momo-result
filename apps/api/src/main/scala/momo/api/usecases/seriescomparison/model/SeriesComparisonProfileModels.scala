@@ -1,6 +1,5 @@
 package momo.api.usecases.seriescomparison.model
 
-
 final case class RecentFormPlayerResponse(
     memberId: String,
     windowSize: Int,
@@ -13,7 +12,7 @@ final case class RecentFormPlayerResponse(
     status: String,
 )
 final case class MomentumSwitchResponse(entries: List[MomentumSwitchPlayerResponse])
-   
+
 final case class MomentumSwitchPlayerResponse(
     memberId: String,
     denominator: Int,
@@ -141,7 +140,7 @@ final case class SeriesComparisonHighlightResponse(
     status: String,
 )
 final case class SeriesComparisonDataQualityResponse(items: List[MetricQualityResponse])
-   
+
 final case class MetricQualityResponse(
     metricId: String,
     playerMemberId: Option[String],

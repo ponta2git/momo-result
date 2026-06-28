@@ -1,6 +1,5 @@
 package momo.api.usecases.seriescomparison.model
 
-
 final case class SeriesComparisonResponse(
     schemaVersion: Int,
     scope: SeriesComparisonScopeResponse,

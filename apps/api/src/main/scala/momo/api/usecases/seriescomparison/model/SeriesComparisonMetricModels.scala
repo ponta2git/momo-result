@@ -1,6 +1,5 @@
 package momo.api.usecases.seriescomparison.model
 
-
 final case class SeriesComparisonScopeResponse(
     gameTitleId: String,
     gameTitleName: String,
@@ -14,7 +13,7 @@ final case class SeriesComparisonScopeResponse(
     mapName: Option[String] = None,
 )
 final case class SeriesComparisonPlayerResponse(memberId: String, displayName: String)
-   
+
 final case class SeriesComparisonPlayerMetricsEntry(
     memberId: String,
     metrics: SeriesComparisonPlayerMetricsResponse,
@@ -40,7 +39,7 @@ final case class RankMetricsResponse(
     standardDeviation: Option[Double],
 )
 final case class RankDistributionResponse(rank: Int, count: Int, rate: Option[Double])
-   
+
 final case class MoneyDistributionMetricsResponse(
     max: Option[Int],
     min: Option[Int],
@@ -111,7 +110,7 @@ final case class DestinationOutcomeMetricsResponse(
     zeroDestination: ConditionalRankOutcomeResponse,
 )
 final case class CardShopDestinationResponse(entries: List[CardShopDestinationPlayerResponse])
-   
+
 final case class CardShopDestinationPlayerResponse(
     memberId: String,
     denominator: Int,
@@ -133,4 +132,3 @@ final case class CardShopDestinationQuadrantResponse(
     status: String,
 )
 final case class StabilityMetricsResponse(rankStandardDeviation: Option[Double])
-   

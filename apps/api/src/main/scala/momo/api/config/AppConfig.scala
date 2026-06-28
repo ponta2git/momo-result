@@ -4,10 +4,7 @@ import java.nio.file.Path
 
 import cats.effect.Async
 import cats.syntax.all.*
-import ciris.{ConfigKey, ConfigValue, Effect}
-
-import momo.api.domain.constraints.BoundaryConstraints
-import momo.api.domain.constraints.BoundaryConstraints.PortRange
+import ciris.{ConfigValue, Effect}
 
 final case class AppConfig(
     appEnv: AppEnv,
@@ -37,50 +34,39 @@ object AppConfig:
 
   private[config] def loadFromEnv[F[_]: Async](env: Map[String, String]): F[AppConfig] =
     baseConfig(env).load[F].flatMap { base =>
-      (
-        AppEnv.fromString(base.rawAppEnv).leftMap(new IllegalArgumentException(_)),
-        BoundaryConstraints.validate[Int, PortRange]("HTTP_PORT", base.httpPort)
-          .leftMap(error => new IllegalArgumentException(error.detail)),
-      ).tupled.liftTo[F].flatMap { (appEnv, httpPort) =>
-        (
-          DatabaseConfigLoader.load[F](env, appEnv),
-          RedisConfigLoader.load[F](env, appEnv),
-          AuthConfigLoader.load[F](env, appEnv),
-          ResourceLimitsConfigLoader.load[F](env),
-        ).mapN { (database, redis, auth, resourceLimits) =>
-          AppConfig(
-            appEnv = appEnv,
-            httpHost = base.httpHost,
-            httpPort = httpPort,
-            imageTmpDir = Path.of(base.imageTmpDir).toAbsolutePath,
-            devMemberIds = base.rawDevMemberIds.map(parseDevMemberIds).getOrElse(
-              DefaultDevMemberIds
-            ),
-            auth = auth,
-            resourceLimits = resourceLimits,
-            database = database,
-            redis = redis,
-          )
+      AppEnv.fromString(base.rawAppEnv).leftMap(new IllegalArgumentException(_)).liftTo[F]
+        .flatMap { appEnv =>
+          (
+            DatabaseConfigLoader.load[F](env, appEnv),
+            RedisConfigLoader.load[F](env, appEnv),
+            AuthConfigLoader.load[F](env, appEnv),
+            ResourceLimitsConfigLoader.load[F](env),
+          ).mapN { (database, redis, auth, resourceLimits) =>
+            AppConfig(
+              appEnv = appEnv,
+              httpHost = base.httpHost,
+              httpPort = base.httpPort,
+              imageTmpDir = Path.of(base.imageTmpDir).toAbsolutePath,
+              devMemberIds = base.rawDevMemberIds.map(parseDevMemberIds).getOrElse(
+                DefaultDevMemberIds
+              ),
+              auth = auth,
+              resourceLimits = resourceLimits,
+              database = database,
+              redis = redis,
+            )
+          }
         }
-      }
     }
 
   private def baseConfig(env: Map[String, String]): ConfigValue[Effect, BaseConfigInput] =
     (
-      envValue(env, "APP_ENV").default("dev"),
-      envValue(env, "HTTP_HOST").default("0.0.0.0"),
-      envValue(env, "HTTP_PORT").as[Int].default(8080),
-      envValue(env, "IMAGE_TMP_DIR").default("/tmp/momo-result/uploads"),
-      envValue(env, "DEV_MEMBER_IDS").option,
+      ConfigParsers.envValue(env, "APP_ENV").default("dev"),
+      ConfigParsers.envValue(env, "HTTP_HOST").default("0.0.0.0"),
+      ConfigParsers.parsePort(env, "HTTP_PORT", default = 8080),
+      ConfigParsers.envValue(env, "IMAGE_TMP_DIR").default("/tmp/momo-result/uploads"),
+      ConfigParsers.envValue(env, "DEV_MEMBER_IDS").option,
     ).parMapN(BaseConfigInput.apply)
-
-  private def envValue(env: Map[String, String], name: String): ConfigValue[Effect, String] =
-    ConfigValue.suspend {
-      val key = ConfigKey.env(name)
-      env.get(name).map(_.trim).filter(_.nonEmpty) match
-        case Some(value) => ConfigValue.loaded(key, value)
-        case None => ConfigValue.missing(key)
-    }
 
   private def parseDevMemberIds(value: String): List[String] =
     value.split(",").iterator.map(_.trim).filter(_.nonEmpty).toList

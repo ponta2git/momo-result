@@ -2,11 +2,18 @@ package momo.api.config
 
 import scala.concurrent.duration.*
 
-import cats.MonadThrow
+import cats.effect.Async
 import cats.syntax.all.*
+import ciris.{ConfigValue, Effect}
 
 private[config] object AuthConfigLoader:
-  def load[F[_]: MonadThrow](env: Map[String, String], appEnv: AppEnv): F[AuthConfig] =
+  def load[F[_]: Async](env: Map[String, String], appEnv: AppEnv): F[AuthConfig] =
+    config(env, appEnv).load[F].flatMap(validateAuth[F](_, appEnv))
+
+  private def config(
+      env: Map[String, String],
+      appEnv: AppEnv,
+  ): ConfigValue[Effect, AuthConfig] =
     (
       ConfigParsers.parsePositiveLong(env, "SESSION_TTL_DAYS", default = 30L),
       ConfigParsers.parsePositiveLong(env, "OAUTH_STATE_TTL_SECONDS", default = 300L),
@@ -55,15 +62,15 @@ private[config] object AuthConfigLoader:
           useSecureCookies = secureCookies,
           useHostPrefix = hostPrefix,
         )
-    }.liftTo[F].flatMap(validateAuth[F](_, appEnv))
+    }
 
-  private def validateAuth[F[_]: MonadThrow](config: AuthConfig, appEnv: AppEnv): F[AuthConfig] =
+  private def validateAuth[F[_]: Async](config: AuthConfig, appEnv: AppEnv): F[AuthConfig] =
     val problems = if appEnv == AppEnv.Prod then prodAuthProblems(config) else Nil
     if problems.nonEmpty then
-      MonadThrow[F]
+      Async[F]
         .raiseError(new IllegalArgumentException(s"Invalid production auth config: ${problems
             .mkString(", ")}"))
-    else MonadThrow[F].pure(config)
+    else Async[F].pure(config)
 
   private def prodAuthProblems(config: AuthConfig): List[String] =
     val missing = List(

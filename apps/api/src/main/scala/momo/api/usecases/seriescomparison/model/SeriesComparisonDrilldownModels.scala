@@ -1,6 +1,5 @@
 package momo.api.usecases.seriescomparison.model
 
-
 final case class SeriesComparisonDrilldownResponse(
     schemaVersion: Int,
     metricId: String,
@@ -61,7 +60,7 @@ final case class SeriesComparisonPlayOrderRankHistorySummaryResponse(
     countsByPlayOrder: List[SeriesComparisonPlayOrderCountResponse],
 )
 final case class SeriesComparisonPlayOrderCountResponse(playOrder: Int, matchCount: Int)
-   
+
 final case class SeriesComparisonPlayOrderRankHistoryTrendRowResponse(
     matchIndex: Int,
     matchId: String,

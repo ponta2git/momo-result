@@ -1,6 +1,5 @@
 package momo.api.usecases.seriescomparison.model
 
-
 final case class SeriesComparisonTrendsResponse(
     rankCumulativeAverage: List[TrendSeriesResponse],
     rankCumulativeStandardDeviation: List[TrendSeriesResponse],
@@ -9,7 +8,7 @@ final case class SeriesComparisonTrendsResponse(
     ginjiCumulativeCount: List[TrendSeriesResponse],
 )
 final case class TrendSeriesResponse(memberId: String, points: List[TrendPointResponse])
-   
+
 final case class TrendPointResponse(
     index: Int,
     matchId: String,

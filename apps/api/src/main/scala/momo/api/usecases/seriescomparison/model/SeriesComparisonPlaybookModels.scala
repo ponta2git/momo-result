@@ -1,6 +1,5 @@
 package momo.api.usecases.seriescomparison.model
 
-
 final case class SeriesComparisonReviewBaselineResponse(
     scope: SeriesComparisonScopeResponse,
     matchCount: Int,

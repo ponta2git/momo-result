@@ -8,6 +8,9 @@ import momo.api.errors.AppError
 
 object BoundaryConstraints:
   type NonBlank = Not[Blank] DescribedAs "must not be blank"
+  type NoControlChars = Match["^[^\\p{Cntrl}]*$"] DescribedAs
+    "must not contain control characters"
+  type BoundaryText = NonBlank & NoControlChars
   type Slug = (Match["^[a-z0-9][a-z0-9_-]*$"] & MaxLength[80]) DescribedAs
     "must be a stable lowercase slug"
   type StableKey = (Match["^[A-Za-z0-9][A-Za-z0-9._-]*$"] & MaxLength[120]) DescribedAs
@@ -21,6 +24,7 @@ object BoundaryConstraints:
   type NonNegative = GreaterEqual[0]
 
   type NonBlankString = String :| NonBlank
+  type BoundaryTextString = String :| BoundaryText
   type SlugString = String :| Slug
   type StableKeyString = String :| StableKey
   type MetricIdString = String :| MetricKey

@@ -12,6 +12,12 @@ final class BoundaryIdSpec extends FunSuite:
       Right(MatchDraftId.unsafeFromString("draft-1")),
     )
 
+  test("required rejects blank boundary ids"):
+    assertEquals(
+      BoundaryId.required("matchDraftId", "   ")(MatchDraftId.fromString),
+      Left(AppError.ValidationFailed("matchDraftId must not be blank.")),
+    )
+
   test("required rejects control characters in boundary ids"):
     assertEquals(
       BoundaryId.required("matchDraftId", "draft-1\nother")(MatchDraftId.fromString),

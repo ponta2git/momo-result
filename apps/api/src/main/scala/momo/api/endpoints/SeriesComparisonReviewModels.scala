@@ -12,4 +12,3 @@ final case class SeriesComparisonReviewResponse(
 ) derives Codec.AsObject
 object SeriesComparisonReviewResponse:
   given Schema[SeriesComparisonReviewResponse] = Schema.derived
-

@@ -2,6 +2,7 @@ package momo.api.auth
 
 import java.time.Instant
 
+import cats.data.EitherT
 import cats.effect.Sync
 import cats.effect.std.SecureRandom
 import cats.syntax.all.*
@@ -45,47 +46,60 @@ final class SessionService[F[_]: Sync: SecureRandom](
     yield CreatedSession(SessionCookieCodec.encode(SessionCookieTokens(id, csrf)))
 
   def authenticate(sessionCookie: Option[String]): F[Either[AppError, AuthenticatedSession]] =
-    sessionCookie.flatMap(SessionCookieCodec.decode) match
-      case None => Sync[F].pure(Left(AppError.Unauthorized()))
-      case Some(tokens) =>
-        for
-          current <- now
-          idHash <- SessionTokenHash.sha256[F](tokens.sessionToken)
-          csrfMatches <- SessionTokenHash.matches[F](tokens.csrfToken)
-          maybeSession <- sessions.find(idHash)
-          result <- maybeSession match
-            case None => Sync[F].pure(Left(AppError.Unauthorized()))
-            case Some(session) if !session.expiresAt.isAfter(current) =>
-              sessions.delete(session.idHash)
-                .as(Left(AppError.Unauthorized("Session has expired.")))
-            case Some(session) if !csrfMatches(session.csrfSecretHash) =>
-              Sync[F].pure(Left(AppError.Unauthorized()))
-            case Some(session) => accounts.find(session.accountId).flatMap {
-                case None => sessions.delete(session.idHash).as(Left(AppError.Unauthorized()))
-                case Some(account) if !account.loginEnabled =>
-                  sessions.delete(session.idHash)
-                    .as(Left(AppError.Forbidden("This account is not allowed to log in.")))
-                case Some(account) =>
-                  val renewed = session.copy(
-                    lastSeenAt = current,
-                    expiresAt = current.plusSeconds(config.sessionTtl.toSeconds),
-                  )
-                  val accountAuth = AuthenticatedAccount(
-                    account.id,
-                    account.displayName,
-                    account.isAdmin,
-                    account.playerMemberId,
-                  )
-                  if shouldRenew(session, current) then
-                    sessions.renew(renewed.idHash, renewed.lastSeenAt, renewed.expiresAt)
-                      .as(Right(AuthenticatedSession(accountAuth, renewed, tokens.csrfToken)))
-                  else
-                    Sync[F]
-                      .pure(Right(AuthenticatedSession(accountAuth, session, tokens.csrfToken)))
-              }
-        yield result
+    (for
+      tokens <- EitherT.fromOption[F](
+        sessionCookie.flatMap(SessionCookieCodec.decode),
+        AppError.Unauthorized(),
+      )
+      current <- EitherT.liftF(now)
+      idHash <- EitherT.liftF(SessionTokenHash.sha256[F](tokens.sessionToken))
+      csrfMatches <- EitherT.liftF(SessionTokenHash.matches[F](tokens.csrfToken))
+      session <- EitherT.fromOptionF(sessions.find(idHash), AppError.Unauthorized())
+      _ <- EitherT(rejectExpired(session, current))
+      _ <- EitherT.cond[F](csrfMatches(session.csrfSecretHash), (), AppError.Unauthorized())
+      account <- EitherT(loadEnabledAccount(session))
+      authenticated <-
+        EitherT.liftF(completeAuthentication(session, account, tokens.csrfToken, current))
+    yield authenticated).value
 
   def delete(idHash: String): F[Unit] = sessions.delete(idHash)
+
+  private def rejectExpired(session: AppSession, current: Instant): F[Either[AppError, Unit]] =
+    if session.expiresAt.isAfter(current) then ().asRight[AppError].pure[F]
+    else sessions.delete(session.idHash).as(AppError.Unauthorized("Session has expired.").asLeft)
+
+  private def loadEnabledAccount(session: AppSession): F[Either[AppError, LoginAccount]] =
+    accounts.find(session.accountId).flatMap {
+      case None => sessions.delete(session.idHash).as(AppError.Unauthorized().asLeft)
+      case Some(account) if !account.loginEnabled =>
+        sessions.delete(session.idHash)
+          .as(AppError.Forbidden("This account is not allowed to log in.").asLeft)
+      case Some(account) => account.asRight[AppError].pure[F]
+    }
+
+  private def completeAuthentication(
+      session: AppSession,
+      account: LoginAccount,
+      csrfToken: String,
+      current: Instant,
+  ): F[AuthenticatedSession] =
+    val accountAuth = authenticatedAccount(account)
+    if shouldRenew(session, current) then
+      val renewed = session.copy(
+        lastSeenAt = current,
+        expiresAt = current.plusSeconds(config.sessionTtl.toSeconds),
+      )
+      sessions.renew(renewed.idHash, renewed.lastSeenAt, renewed.expiresAt)
+        .as(AuthenticatedSession(accountAuth, renewed, csrfToken))
+    else AuthenticatedSession(accountAuth, session, csrfToken).pure[F]
+
+  private def authenticatedAccount(account: LoginAccount): AuthenticatedAccount =
+    AuthenticatedAccount(
+      account.id,
+      account.displayName,
+      account.isAdmin,
+      account.playerMemberId,
+    )
 
   private def shouldRenew(session: AppSession, current: Instant): Boolean = current
     .isAfter(session.expiresAt.minusSeconds(config.sessionTtl.toSeconds / 2L))

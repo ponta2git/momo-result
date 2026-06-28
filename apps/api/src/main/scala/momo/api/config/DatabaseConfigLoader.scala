@@ -27,4 +27,3 @@ private[config] object DatabaseConfigLoader:
             .getOrElse(""),
           poolSize = poolSize,
         ))
-

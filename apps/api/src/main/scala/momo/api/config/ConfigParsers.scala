@@ -74,6 +74,10 @@ private[config] object ConfigParsers:
     case Some(raw) => raw.toLongOption.filter(valid)
         .toRight(new IllegalArgumentException(s"$name must be a $description, got: $raw"))
 
-  private[config] def envOrDefault(env: Map[String, String], name: String, default: String): String =
+  private[config] def envOrDefault(
+      env: Map[String, String],
+      name: String,
+      default: String
+  ): String =
     env
-    .get(name).map(_.trim).filter(_.nonEmpty).getOrElse(default)
+      .get(name).map(_.trim).filter(_.nonEmpty).getOrElse(default)

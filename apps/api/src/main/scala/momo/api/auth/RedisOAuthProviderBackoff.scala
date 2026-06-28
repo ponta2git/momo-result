@@ -61,4 +61,3 @@ object RedisOAuthProviderBackoff:
       now: F[Instant],
   ): Resource[F, RedisOAuthProviderBackoff[F]] = Redis[F].simple(config.url, RedisCodec.Utf8)
     .map(commands => fromCommands(commands, namespace, failureThreshold, backoff, now))
-

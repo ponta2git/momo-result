@@ -58,7 +58,10 @@ private[adapters] object LocalFsImageStoreSupport:
     then Some(Webp)
     else None
 
-  private[adapters] def dimensions(bytes: Array[Byte], imageType: ImageType): Option[ImageDimensions] =
+  private[adapters] def dimensions(
+      bytes: Array[Byte],
+      imageType: ImageType
+  ): Option[ImageDimensions] =
     if imageType.mediaType == Png.mediaType then pngDimensions(bytes)
     else if imageType.mediaType == Jpeg.mediaType then jpegDimensions(bytes)
     else webpDimensions(bytes)

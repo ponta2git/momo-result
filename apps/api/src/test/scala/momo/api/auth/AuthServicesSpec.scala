@@ -218,6 +218,39 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       assertEquals(stored.lastSeenAt, instant.plusSeconds(6.minutes.toSeconds))
       assertEquals(stored.expiresAt, instant.plusSeconds(16.minutes.toSeconds))
 
+  test("SessionService deletes expired sessions during authentication"):
+    for
+      repo <- RecordingAppSessionsRepository.create
+      accounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
+      nowRef <- IO.ref(instant)
+      service = SessionService[IO](repo, accounts, config, nowRef.get)
+      created <- service.create(account)
+      before <- repo.snapshot
+      stored = before.sessions.values.headOption.getOrElse(fail("session not stored"))
+      _ <- nowRef.set(instant.plusSeconds(config.sessionTtl.toSeconds + 1L))
+      result <- service.authenticate(Some(created.cookieValue))
+      after <- repo.snapshot
+    yield
+      assertEquals(result, Left(AppError.Unauthorized("Session has expired.")))
+      assertEquals(after.sessions.get(stored.idHash), None)
+      assertEquals(after.deletes, List(stored.idHash))
+
+  test("SessionService deletes sessions for disabled accounts during authentication"):
+    val disabled = account.copy(loginEnabled = false)
+    for
+      repo <- RecordingAppSessionsRepository.create
+      accounts <- InMemoryLoginAccountsRepository.create[IO](List(disabled))
+      service = SessionService[IO](repo, accounts, config, IO.pure(instant))
+      created <- service.create(disabled)
+      before <- repo.snapshot
+      stored = before.sessions.values.headOption.getOrElse(fail("session not stored"))
+      result <- service.authenticate(Some(created.cookieValue))
+      after <- repo.snapshot
+    yield
+      assertEquals(result, Left(AppError.Forbidden("This account is not allowed to log in.")))
+      assertEquals(after.sessions.get(stored.idHash), None)
+      assertEquals(after.deletes, List(stored.idHash))
+
   test("LoginRateLimiter rejects attempts over the configured minute bucket") {
     for
       limiter <- LoginRateLimiter.create[IO](2, IO.pure(Instant.parse("2026-01-01T00:00:00Z")))

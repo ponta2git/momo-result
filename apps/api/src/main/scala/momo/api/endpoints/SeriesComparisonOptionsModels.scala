@@ -32,4 +32,3 @@ final case class SeriesComparisonScopeOption(
 ) derives Codec.AsObject
 object SeriesComparisonScopeOption:
   given Schema[SeriesComparisonScopeOption] = Schema.derived
-

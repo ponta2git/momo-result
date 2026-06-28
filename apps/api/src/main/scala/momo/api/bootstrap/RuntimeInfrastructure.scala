@@ -20,14 +20,13 @@ import momo.api.http.HttpRateLimiters
 import momo.api.repositories.{QueueHealthProbe, QueueProducer}
 
 private[bootstrap] final case class RuntimeInfrastructure[F[_]](
-      queue: QueueProducer[F],
-      queueHealth: QueueHealthProbe[F],
-      loginRateLimiter: RateLimiter[F],
-      authCallbackStateRateLimiter: RateLimiter[F],
-      oauthProviderBackoff: OAuthProviderBackoff[F],
-      rateLimiters: HttpRateLimiters[F],
-  )
-
+    queue: QueueProducer[F],
+    queueHealth: QueueHealthProbe[F],
+    loginRateLimiter: RateLimiter[F],
+    authCallbackStateRateLimiter: RateLimiter[F],
+    oauthProviderBackoff: OAuthProviderBackoff[F],
+    rateLimiters: HttpRateLimiters[F],
+)
 
 private[bootstrap] object RuntimeInfrastructure:
   def resource[F[_]: Async](

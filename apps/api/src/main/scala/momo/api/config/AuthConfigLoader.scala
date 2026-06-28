@@ -11,7 +11,11 @@ private[config] object AuthConfigLoader:
       ConfigParsers.parsePositiveLong(env, "SESSION_TTL_DAYS", default = 30L),
       ConfigParsers.parsePositiveLong(env, "OAUTH_STATE_TTL_SECONDS", default = 300L),
       ConfigParsers.parseNonNegativeInt(env, "AUTH_RATE_LIMIT_PER_MINUTE", default = 10),
-      ConfigParsers.parseNonNegativeInt(env, "AUTH_CALLBACK_STATE_RATE_LIMIT_PER_MINUTE", default = 3),
+      ConfigParsers.parseNonNegativeInt(
+        env,
+        "AUTH_CALLBACK_STATE_RATE_LIMIT_PER_MINUTE",
+        default = 3
+      ),
       ConfigParsers.parsePositiveInt(env, "AUTH_PROVIDER_FAILURE_THRESHOLD", default = 3),
       ConfigParsers.parsePositiveLong(env, "AUTH_PROVIDER_BACKOFF_SECONDS", default = 60L),
       ConfigParsers.parseBoolean(env, "AUTH_COOKIE_SECURE", default = appEnv == AppEnv.Prod),

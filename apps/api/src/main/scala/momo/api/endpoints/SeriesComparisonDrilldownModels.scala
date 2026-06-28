@@ -118,4 +118,3 @@ final case class SeriesComparisonPlayOrderRankHistoryPlayOrderRowResponse(
 ) derives Codec.AsObject
 object SeriesComparisonPlayOrderRankHistoryPlayOrderRowResponse:
   given Schema[SeriesComparisonPlayOrderRankHistoryPlayOrderRowResponse] = Schema.derived
-

@@ -9,7 +9,8 @@ private[config] object RedisConfigLoader:
       appEnv: AppEnv,
   ): F[Option[RedisConfig]] =
     val urlOpt = env.get("REDIS_URL").filter(_.nonEmpty)
-    val allowPlaintextInProd = ConfigParsers.parseBoolean(env, "REDIS_ALLOW_PLAINTEXT_IN_PROD", default = false)
+    val allowPlaintextInProd =
+      ConfigParsers.parseBoolean(env, "REDIS_ALLOW_PLAINTEXT_IN_PROD", default = false)
     urlOpt match
       case None if appEnv == AppEnv.Prod =>
         MonadThrow[F]
@@ -24,5 +25,9 @@ private[config] object RedisConfigLoader:
           stream = ConfigParsers.envOrDefault(env, "OCR_REDIS_STREAM", "momo:ocr:jobs"),
           group = ConfigParsers.envOrDefault(env, "OCR_REDIS_GROUP", "momo-ocr-workers"),
           deadLetterStream =
-            ConfigParsers.envOrDefault(env, "OCR_REDIS_DEAD_LETTER_STREAM", RedisConfig.DefaultDeadLetterStream),
+            ConfigParsers.envOrDefault(
+              env,
+              "OCR_REDIS_DEAD_LETTER_STREAM",
+              RedisConfig.DefaultDeadLetterStream
+            ),
         ))

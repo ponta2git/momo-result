@@ -85,4 +85,3 @@ final case class MatchPlayerPointResponse(
 ) derives Codec.AsObject
 object MatchPlayerPointResponse:
   given Schema[MatchPlayerPointResponse] = Schema.derived
-

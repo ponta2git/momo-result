@@ -22,7 +22,8 @@ private[postgres] def isUniqueViolation(state: SqlState): Boolean = state.value 
 private[postgres] def appError[A](error: AppError): ConnectionIO[A] = MonadThrow[ConnectionIO]
   .raiseError[A](new AppException(error))
 
-private[postgres] def conflict[A](message: String): ConnectionIO[A] = appError(AppError.Conflict(message))
+private[postgres] def conflict[A](message: String): ConnectionIO[A] =
+  appError(AppError.Conflict(message))
 
 private[postgres] def notFound[A](resource: String, id: String): ConnectionIO[A] =
   appError(AppError.NotFound(resource, id))

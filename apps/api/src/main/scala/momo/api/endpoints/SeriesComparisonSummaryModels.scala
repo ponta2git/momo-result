@@ -26,4 +26,3 @@ final case class SeriesComparisonResponse(
 ) derives Codec.AsObject
 object SeriesComparisonResponse:
   given Schema[SeriesComparisonResponse] = Schema.derived
-

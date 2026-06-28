@@ -198,4 +198,3 @@ final case class StabilityMetricsResponse(rankStandardDeviation: Option[Double])
     derives Codec.AsObject
 object StabilityMetricsResponse:
   given Schema[StabilityMetricsResponse] = Schema.derived
-

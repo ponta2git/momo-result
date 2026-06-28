@@ -77,4 +77,3 @@ final case class SeriesComparisonPlaybookAnchorTargetResponse(
 ) derives Codec.AsObject
 object SeriesComparisonPlaybookAnchorTargetResponse:
   given Schema[SeriesComparisonPlaybookAnchorTargetResponse] = Schema.derived
-

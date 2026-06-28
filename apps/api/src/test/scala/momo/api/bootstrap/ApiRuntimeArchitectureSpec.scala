@@ -7,6 +7,9 @@ import munit.FunSuite
 
 final class ApiRuntimeArchitectureSpec extends FunSuite:
   private val apiAppFile = Paths.get("src/main/scala/momo/api/bootstrap/ApiApp.scala")
+  private val runtimeInfrastructureFile =
+    Paths.get("src/main/scala/momo/api/bootstrap/RuntimeInfrastructure.scala")
+  private val useCaseWiringFile = Paths.get("src/main/scala/momo/api/bootstrap/UseCaseWiring.scala")
   private val databaseFile = Paths.get("src/main/scala/momo/api/db/Database.scala")
   private val generatedIdUsecaseFiles = List(
     Paths.get("src/main/scala/momo/api/usecases/AdminLoginAccounts.scala"),
@@ -27,29 +30,33 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
     assert(databaseText.contains("connectEC = connectExecutionContext"))
 
   test("API runtime shares one Redis client across queue and rate limiters"):
-    val apiAppText = read(apiAppFile)
+    val runtimeInfrastructureText = read(runtimeInfrastructureFile)
 
-    assert(apiAppText.contains("Redis[F].simple(redis.url, RedisCodec.Utf8).map"))
-    assert(apiAppText.contains("RedisQueueProducer.fromCommands(redis.stream, commands)"))
-    assert(apiAppText.contains("healthProbeFromCommands(redis.deadLetterStream"))
-    assert(apiAppText.contains(".fromCommands(commands, \"login\""))
-    assert(apiAppText.contains("\"auth-callback-state\""))
-    assert(apiAppText.contains("RedisOAuthProviderBackoff.fromCommands"))
-    assert(apiAppText.contains("\"ocr-job-create\""))
-    assert(apiAppText.contains("\"ocr-job-create-global\""))
-    assert(!apiAppText.contains("RedisQueueProducer.resource[F](redis)"))
-    assert(!apiAppText.contains("RedisRateLimiter.resource[F](redis"))
-    assert(!apiAppText.contains("RedisOAuthProviderBackoff.resource[F](redis"))
+    assert(runtimeInfrastructureText.contains("Redis[F].simple(redis.url, RedisCodec.Utf8).map"))
+    assert(
+      runtimeInfrastructureText.contains("RedisQueueProducer.fromCommands(redis.stream, commands)")
+    )
+    assert(runtimeInfrastructureText.contains("healthProbeFromCommands(redis.deadLetterStream"))
+    assert(runtimeInfrastructureText.contains(".fromCommands(commands, \"login\""))
+    assert(runtimeInfrastructureText.contains("\"auth-callback-state\""))
+    assert(runtimeInfrastructureText.contains("RedisOAuthProviderBackoff.fromCommands"))
+    assert(runtimeInfrastructureText.contains("\"ocr-job-create\""))
+    assert(runtimeInfrastructureText.contains("\"ocr-job-create-global\""))
+    assert(!runtimeInfrastructureText.contains("RedisQueueProducer.resource[F](redis)"))
+    assert(!runtimeInfrastructureText.contains("RedisRateLimiter.resource[F](redis"))
+    assert(!runtimeInfrastructureText.contains("RedisOAuthProviderBackoff.resource[F](redis"))
 
   test("API runtime validates dev identities before constructing domain ids"):
     val apiAppText = read(apiAppFile)
+    val useCaseWiringText = read(useCaseWiringFile)
 
     assert(apiAppText.contains("MemberRoster.devIdentities(config.devMemberIds)"))
-    assert(apiAppText.contains("MemberRoster.devFromMemberIds(config.devMemberIds)"))
+    assert(useCaseWiringText.contains("MemberRoster.devFromMemberIds(config.devMemberIds)"))
     assert(!apiAppText.contains("unsafeFromString"))
+    assert(!useCaseWiringText.contains("unsafeFromString"))
 
   test("API runtime wires generated ids with their domain types"):
-    val apiAppText = read(apiAppFile)
+    val useCaseWiringText = read(useCaseWiringFile)
     val missingRuntimeBindings = List(
       "val nextOcrJobId = OcrJobId.fresh[F]",
       "val nextOcrDraftId = OcrDraftId.fresh[F]",
@@ -58,7 +65,7 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
       "val nextMatchId = MatchId.fresh[F]",
       "val nextMemberAliasId = MemberAliasId.fresh[F]",
       "val nextLoginAccountId = AccountId.fresh[F]",
-    ).filterNot(apiAppText.contains)
+    ).filterNot(useCaseWiringText.contains)
     val rawGeneratedIdViolations = generatedIdUsecaseFiles.flatMap { path =>
       val text = read(path)
       List(

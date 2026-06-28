@@ -18,9 +18,10 @@ class AppConfigSpec extends CatsEffectSuite:
   private def load(env: Map[String, String]): IO[Either[Throwable, AppConfig]] = AppConfig
     .loadFromEnv[IO](env).attempt
 
-  private def parsedDatabaseUrl(raw: String): (String, Option[String], Option[String]) = AppConfig
-    .toJdbcUrl(raw)
-    .fold(error => fail(s"expected valid DATABASE_URL: ${error.getMessage}"), identity)
+  private def parsedDatabaseUrl(raw: String): (String, Option[String], Option[String]) =
+    DatabaseUrlConfig
+      .toJdbcUrl(raw)
+      .fold(error => fail(s"expected valid DATABASE_URL: ${error.getMessage}"), identity)
 
   test("toJdbcUrl: converts postgres:// URL and extracts credentials") {
     val (url, user, pass) = parsedDatabaseUrl("postgres://summit:summit@localhost:5433/summit")
@@ -59,8 +60,8 @@ class AppConfigSpec extends CatsEffectSuite:
   }
 
   test("toJdbcUrl: rejects non-Postgres URLs instead of converting them") {
-    val rawUrl = AppConfig.toJdbcUrl("mysql://user:secret@db.example.com/mydb")
-    val jdbcUrl = AppConfig.toJdbcUrl("jdbc:mysql://db.example.com/mydb")
+    val rawUrl = DatabaseUrlConfig.toJdbcUrl("mysql://user:secret@db.example.com/mydb")
+    val jdbcUrl = DatabaseUrlConfig.toJdbcUrl("jdbc:mysql://db.example.com/mydb")
 
     assert(rawUrl.left.exists(_.getMessage.contains("DATABASE_URL must use")))
     assert(jdbcUrl.left.exists(_.getMessage.contains("DATABASE_URL must use")))
@@ -72,18 +73,20 @@ class AppConfigSpec extends CatsEffectSuite:
   }
 
   test("toJdbcUrl rejects malformed DATABASE_URL without echoing credentials") {
-    val result = AppConfig.toJdbcUrl("postgres://user:secret with spaces@db.example.com/mydb")
+    val result =
+      DatabaseUrlConfig.toJdbcUrl("postgres://user:secret with spaces@db.example.com/mydb")
     assert(result.left.exists(_.getMessage == "DATABASE_URL must be a valid Postgres URL."))
     assert(!result.left.exists(_.getMessage.contains("secret")))
   }
 
   test("ensureProdSslMode: appends sslmode=require in prod when missing") {
-    val result = AppConfig.ensureProdSslMode("jdbc:postgresql://db.example.com/mydb", AppEnv.Prod)
+    val result =
+      DatabaseUrlConfig.ensureProdSslMode("jdbc:postgresql://db.example.com/mydb", AppEnv.Prod)
     assertEquals(result, Right("jdbc:postgresql://db.example.com/mydb?sslmode=require"))
   }
 
   test("ensureProdSslMode: preserves existing strict sslmode in prod") {
-    val result = AppConfig.ensureProdSslMode(
+    val result = DatabaseUrlConfig.ensureProdSslMode(
       "jdbc:postgresql://db.example.com/mydb?connectTimeout=10&sslmode=verify-full",
       AppEnv.Prod,
     )
@@ -94,13 +97,13 @@ class AppConfigSpec extends CatsEffectSuite:
   }
 
   test("ensureProdSslMode: rejects weak sslmode in prod") {
-    val result = AppConfig
+    val result = DatabaseUrlConfig
       .ensureProdSslMode("jdbc:postgresql://db.example.com/mydb?sslmode=disable", AppEnv.Prod)
     assert(result.isLeft, s"expected weak sslmode to be rejected: $result")
   }
 
   test("ensureProdSslMode: rejects duplicate sslmode in prod") {
-    val result = AppConfig.ensureProdSslMode(
+    val result = DatabaseUrlConfig.ensureProdSslMode(
       "jdbc:postgresql://db.example.com/mydb?sslmode=disable&sslmode=require",
       AppEnv.Prod,
     )
@@ -108,12 +111,13 @@ class AppConfigSpec extends CatsEffectSuite:
   }
 
   test("ensureProdSslMode: leaves non-prod URLs unchanged") {
-    val result = AppConfig.ensureProdSslMode("jdbc:postgresql://localhost:5432/mydb", AppEnv.Test)
+    val result =
+      DatabaseUrlConfig.ensureProdSslMode("jdbc:postgresql://localhost:5432/mydb", AppEnv.Test)
     assertEquals(result, Right("jdbc:postgresql://localhost:5432/mydb"))
   }
 
   test("ensureProdRedisUrl: rejects insecure Redis URLs in prod") {
-    val result = AppConfig.ensureProdRedisUrl("redis://redis.example.com:6379", AppEnv.Prod)
+    val result = RedisUrlConfig.ensureProdRedisUrl("redis://redis.example.com:6379", AppEnv.Prod)
     assertEquals(
       result.left.map(_.getMessage),
       Left("REDIS_URL must use rediss:// in prod APP_ENV."),
@@ -122,7 +126,7 @@ class AppConfigSpec extends CatsEffectSuite:
 
   test("ensureProdRedisUrl: allows plaintext Redis in prod only when explicitly enabled") {
     val url = "redis://default:secret@fly-upstash-redis.example.com:6379"
-    val result = AppConfig.ensureProdRedisUrl(url, AppEnv.Prod, allowPlaintextInProd = true)
+    val result = RedisUrlConfig.ensureProdRedisUrl(url, AppEnv.Prod, allowPlaintextInProd = true)
     assertEquals(result, Right(url))
   }
 
@@ -152,27 +156,27 @@ class AppConfigSpec extends CatsEffectSuite:
   }
 
   test("ensureProdRedisUrl: allows local Redis URLs outside prod") {
-    val result = AppConfig.ensureProdRedisUrl("redis://localhost:6379/0", AppEnv.Dev)
+    val result = RedisUrlConfig.ensureProdRedisUrl("redis://localhost:6379/0", AppEnv.Dev)
     assertEquals(result, Right("redis://localhost:6379/0"))
   }
 
   test("numeric env parsing rejects malformed values instead of silently using defaults") {
     assert(
-      AppConfig.parsePositiveLong(Map("REQUEST_MAX_BYTES" -> "nope"), "REQUEST_MAX_BYTES", 1L)
+      ConfigParsers.parsePositiveLong(Map("REQUEST_MAX_BYTES" -> "nope"), "REQUEST_MAX_BYTES", 1L)
         .isLeft
     )
-    assert(AppConfig.parsePositiveInt(Map("DB_POOL_SIZE" -> "0"), "DB_POOL_SIZE", 2).isLeft)
-    assert(AppConfig.parsePort(Map("HTTP_PORT" -> "0"), "HTTP_PORT", 8080).isLeft)
-    assert(AppConfig.parsePort(Map("HTTP_PORT" -> "70000"), "HTTP_PORT", 8080).isLeft)
+    assert(ConfigParsers.parsePositiveInt(Map("DB_POOL_SIZE" -> "0"), "DB_POOL_SIZE", 2).isLeft)
+    assert(ConfigParsers.parsePort(Map("HTTP_PORT" -> "0"), "HTTP_PORT", 8080).isLeft)
+    assert(ConfigParsers.parsePort(Map("HTTP_PORT" -> "70000"), "HTTP_PORT", 8080).isLeft)
     assert(
-      AppConfig.parsePercent(
+      ConfigParsers.parsePercent(
         Map("IMAGE_UPLOAD_STORAGE_MAX_USED_PERCENT" -> "101"),
         "IMAGE_UPLOAD_STORAGE_MAX_USED_PERCENT",
         90,
       ).isLeft
     )
     assertEquals(
-      AppConfig.parseNonNegativeInt(
+      ConfigParsers.parseNonNegativeInt(
         Map("EXPORT_RATE_LIMIT_PER_MINUTE" -> "0"),
         "EXPORT_RATE_LIMIT_PER_MINUTE",
         30,

@@ -50,7 +50,14 @@ API境界の一部は `ApiEndpointsArchitectureSpec` と `ApiRuntimeArchitecture
 - usecase / HTTP test で使う in-memory adapter は、DB adapter の状態遷移 guard と同じ契約を表現する。DB側の guard が複数 table にまたがる場合は、対応する composite adapter 側で等価の判定を持つ。
 - PostgreSQL repository / migration 前提に触れたら `docs/db-rule.md` と `docs/test-rule.md` の DB-backed API ルールに従う。
 
-### 2.3 Error / Auth
+### 2.3 Module Layout
+
+- `momo.api.usecases` 直下は公開 usecase facade を置く。集計、採点、文言生成などの内部実装が大きくなる場合は `momo.api.usecases.<domain>` へ package-private object として分け、HTTP / repository から直接参照しない。
+- repository / adapter / endpoint model は、複数 resource や複数 runtime 責務を 1 ファイルへ詰めない。1 ファイルが概ね300行を超えたら、公開型、contract、SQL alg、facade、test double、DTO family のどれが混在しているかを確認し、同一 package 内の top-level 定義分割を優先する。
+- composition root は `momo.api.bootstrap.ApiApp` に置くが、`ApiApp` は runtime 実装セットの選択に寄せる。Redis / rate limit / queue の infrastructure、maintenance、health details、usecase-to-HTTP wiring は bootstrap 配下の helper object へ分ける。
+- 大きい純粋集計アルゴリズムを残す場合は、公開 facade から分離し、責務を名前で表す専用 package / file に置く。単に行数だけで細切れにせず、共通 mutable state や wire表現を漏らさない境界を優先する。
+
+### 2.4 Error / Auth
 
 - エラーは業務、認証、権限、入力、外部依存を区別し、UIが扱える Problem Details に正規化する。
 - Discord OAuth session は HttpOnly Cookie と PostgreSQL `app_sessions` で管理する。

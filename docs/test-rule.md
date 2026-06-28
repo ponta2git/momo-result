@@ -90,6 +90,7 @@ form、filter、select、input、button、Zod schema、request transform、mutat
 - HTTP app 起動は request parsing、auth/CSRF、response mapping が oracle のときに絞る。
 - architecture rule を追加した場合、可能なら `ApiEndpointsArchitectureSpec`、`ApiRuntimeArchitectureSpec`、または lint 相当の検査へ固定する。
 - Tapir security endpoint、Doobie named row mapping、戦績比較 engine / presenter 境界などの横断規約を追加した場合は、代表経路の unit / HTTP / integration test に加え、import 禁止や文字列パターン検査で architecture spec へ固定する。
+- Ciris / Iron による設定・endpoint境界制約を変更した場合は、対象 loader / codec の unit test に加え、`ConfigArchitectureSpec`、`BoundaryIdSpec`、該当 codec spec で「手書き parser へ戻っていないこと」と「不正 raw value を境界で落とすこと」を固定する。
 
 ### DB-backed API
 
@@ -100,7 +101,7 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
 - 変更した repository method を Testcontainers PostgreSQL で実行する。
 - 同一 transaction で FK 関連 row を作成・更新する method は、成功 path と保存後の linked row values を検証する。
 - 新しい table に書き込む integration test を追加したら cleanup 対象も更新する。
-- SQL shape と domain 変換を分けた場合、row mapping の成功 path と不正 DB 値の扱いを repository unit または integration test で確認する。tuple mapping を named row へ変えた場合も、対象 query を実PostgreSQLで実行する。
+- SQL shape と domain 変換を分けた場合、row mapping の成功 path と不正 DB 値の扱いを repository unit または integration test で確認する。tuple mapping を named row へ変えた場合も、対象 query を実PostgreSQLで実行し、必要なら repository architecture spec へ禁止パターンを追加する。
 
 実DB実行が特に必要なSQL:
 

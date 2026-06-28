@@ -40,6 +40,7 @@
 - path / query / body / queue payload の raw value は境界で domain/application 型へ変換する。usecase に wire表現を渡さない。
 - raw String ID は `BoundaryId` または各 ID の `fromString` で検証する。境界で `unsafeFromString` を使わない。
 - 新規 boundary value は Iron refined type または既存 domain value object で表現する。raw `String` / `Int` は endpoint input、DB row、外部 payload の直後で検証し、usecase / engine へ未検証値を渡さない。
+- API設定値は Ciris `ConfigValue` で読み込み、数値範囲や key 形式は Iron refined type で検証する。`sys.env` / `toIntOption` / `toLongOption` を loader ごとに直書きせず、共通 parser と architecture spec へ寄せる。
 - optional field の有無で mode や副作用が変わる場合、その field は mode discriminator として扱う。意味論は生成 OpenAPI だけに置かず、要件・ドメイン・API規約に文章で残す。
 
 API境界の一部は `ApiEndpointsArchitectureSpec` と `ApiRuntimeArchitectureSpec` で固定している。新しい境界規約を追加したら、文書だけでなく該当する architecture spec か lint へ寄せられないか確認する。
@@ -47,7 +48,7 @@ API境界の一部は `ApiEndpointsArchitectureSpec` と `ApiRuntimeArchitecture
 ### 2.2 Usecase / Repository
 
 - usecase は状態遷移、整合性、副作用を扱う。repository は SQL とDB入出力に閉じる。
-- PostgreSQL repository は、SQL fragment 構築、DB row shape、domain/application 変換、公開 repository facade を分ける。Doobie query は named row case class へ decode し、`row._N` や巨大 tuple alias で domain を組み立てない。
+- PostgreSQL repository は、SQL fragment 構築、DB row shape、domain/application 変換、公開 repository facade を分ける。Doobie query は named row case class へ decode し、`row._N` や巨大 tuple alias で domain を組み立てない。row から domain/application への変換は `fromRow` / `toItem` などの専用関数へ閉じる。
 - 部分更新は入力差分だけで判定しない。既存値と入力値をマージした保存予定の実効状態で不変条件を検証する。
 - 読み取りで検証した前提を後続更新で使う場合は、検証済みスナップショットを repository 契約に渡し、`UPDATE ... WHERE` で同時に照合する。
 - usecase / HTTP test で使う in-memory adapter は、DB adapter の状態遷移 guard と同じ契約を表現する。DB側の guard が複数 table にまたがる場合は、対応する composite adapter 側で等価の判定を持つ。
@@ -56,7 +57,7 @@ API境界の一部は `ApiEndpointsArchitectureSpec` と `ApiRuntimeArchitecture
 ### 2.3 Module Layout
 
 - `momo.api.usecases` 直下は公開 usecase facade を置く。集計、採点、文言生成などの内部実装が大きくなる場合は `momo.api.usecases.<domain>` へ package-private object として分け、HTTP / repository から直接参照しない。
-- 戦績比較の集計は engine / presenter に分ける。engine は endpoint DTO、HTTP、repository、effect type を import せず、dataset、metric catalog、sample status、evidence などの内部型だけを扱う。presenter が engine result を HTTP response へ変換する。
+- 戦績比較の集計は engine / aggregation / endpoint façade に分ける。engine と aggregation は endpoint DTO、HTTP、repository、effect type を import せず、`momo.api.usecases.seriescomparison.model` の内部結果型だけを扱う。Tapir / Circe / Schema は `momo.api.endpoints.SeriesComparisonApiModels` の alias façade に閉じる。
 - repository / adapter / endpoint model は、複数 resource や複数 runtime 責務を 1 ファイルへ詰めない。1 ファイルが概ね300行を超えたら、公開型、contract、SQL alg、facade、test double、DTO family のどれが混在しているかを確認し、同一 package 内の top-level 定義分割を優先する。
 - composition root は `momo.api.bootstrap.ApiApp` に置くが、`ApiApp` は runtime 実装セットの選択に寄せる。Redis / rate limit / queue の infrastructure、maintenance、health details、usecase-to-HTTP wiring は bootstrap 配下の helper object へ分ける。
 - 大きい純粋集計アルゴリズムを残す場合は、公開 facade から分離し、責務を名前で表す専用 package / file に置く。単に行数だけで細切れにせず、共通 mutable state や wire表現を漏らさない境界を優先する。

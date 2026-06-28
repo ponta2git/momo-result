@@ -66,7 +66,7 @@ DB-backed API / worker query を触る変更では、同じ変更内で次を確
 - 同一 transaction で FK 関連 row を作成・更新する場合、statement order と保存後の linked row values を integration test で確認する。
 - 新しい table に書き込む integration test を追加したら、`IntegrationDb.truncateAppTables` など cleanup 対象も更新する。
 - integration が skip / 未実行なら、そのDB挙動は未検証として報告する。
-- API の Doobie repository は DB row shape と domain 変換を明示的に分ける。query は named row case class へ decode し、domain/application 型への変換は `toDomain` / `toItem` などの専用関数へ閉じる。
+- API の Doobie repository は DB row shape と domain 変換を明示的に分ける。query は named row case class へ decode し、domain/application 型への変換は `fromRow` / `toItem` などの専用関数へ閉じる。
 - `row._1` のような tuple index に依存する mapping、10要素を超える tuple alias、unchecked default fallback による row decode は避ける。DB enum / status の不正値は repository 境界で `AppError` か integration failure として扱い、HTTP 層へ DB 由来の例外型を漏らさない。
 - dynamic SQL fragment は sealed enum、whitelist、または固定 fragment の選択で表す。`Fragment.const` を使う場合は、外部入力が混ざらないことを同じ関数内で読める形にする。
 

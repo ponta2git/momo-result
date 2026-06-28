@@ -28,14 +28,14 @@ private[usecases] object SeriesComparisonReviewAggregation {
     ).toMap
     val allCandidates = playerOrder
       .flatMap(memberId => playbookCandidates(statsByPlayer(memberId), orderedRows))
-    val scoredCandidates = scorePlaybookCandidates(allCandidates)
-    val commonTopics = commonPlaybookTopics(scoredCandidates)
+    val scoredCandidates = SeriesComparisonPlaybookScoring.score(allCandidates)
+    val commonTopics = SeriesComparisonPlaybookScoring.commonTopics(scoredCandidates)
     val playbook = playerOrder.map(memberId =>
       val stats = statsByPlayer(memberId)
       SeriesComparisonPlayerPlaybookResponse(
         memberId = memberId.value,
         memberDisplayName = stats.displayName,
-        cards = playbookCards(memberId, scoredCandidates),
+        cards = SeriesComparisonPlaybookScoring.cardsFor(memberId, scoredCandidates),
       )
     )
     SeriesComparisonReviewResponse(
@@ -49,7 +49,9 @@ private[usecases] object SeriesComparisonReviewAggregation {
       ),
       commonPlaybookTopics = commonTopics,
       playbookByPlayer = playbook,
-      dataQuality = SeriesComparisonDataQualityResponse(dataQualityItems(playbook)),
+      dataQuality = SeriesComparisonDataQualityResponse(
+        SeriesComparisonPlaybookScoring.dataQualityItems(playbook)
+      ),
     )
 
   private def rowsByPlayer(
@@ -100,46 +102,6 @@ private[usecases] object SeriesComparisonReviewAggregation {
     .groupBy(_.memberId).values.toList.map(_.head).sortBy(SeriesComparisonPlayerOrder.rowSortKey)
     .map(_.memberId)
 
-  private final case class PlaybookCandidate(
-      memberId: MemberId,
-      memberDisplayName: String,
-      card: SeriesComparisonPlaybookCardResponse,
-      peerEffectValue: Double,
-      baseScore: Double,
-  )
-
-  private final case class ScoredPlaybookCandidate(
-      candidate: PlaybookCandidate,
-      finalScore: Double,
-      peerRank: Int,
-      peerCount: Int,
-      peerDistinctiveness: Double,
-      commonCategory: Boolean,
-  )
-
-  private def playbookCards(
-      memberId: MemberId,
-      scoredCandidates: List[ScoredPlaybookCandidate],
-  ): List[SeriesComparisonPlaybookCardResponse] = scoredCandidates
-    .filter(_.candidate.memberId == memberId).filter(_.finalScore > 0.0).sortBy(scored =>
-      (-scored.finalScore, scored.candidate.card.category, scored.candidate.card.id)
-    ).foldLeft(List.empty[SeriesComparisonPlaybookCardResponse]) { (selected, scored) =>
-      val card = scored.candidate.card
-      if selected.size >= 3 || selected.exists(_.category == card.category) ||
-        selected.count(existing => actionFamily(existing) == actionFamily(card)) >= 2
-      then
-        selected
-      else selected :+ cardWithPeerContext(scored)
-    }
-
-  private def actionFamily(card: SeriesComparisonPlaybookCardResponse): String =
-    val text = s"${card.actionHypothesis} ${card.recommendedAction}"
-    if text.contains("収益順位") || text.contains("物件収益順位") then "revenue-rank"
-    else if text.contains("目的地") then "destination"
-    else if text.contains("事故") || text.contains("銀次") || text.contains("マイナス駅") then
-      "accident"
-    else card.category
-
   private def playbookCandidates(
       stats: PlayerStats,
       allRows: List[SeriesComparisonMatchPlayerRow],
@@ -153,95 +115,6 @@ private[usecases] object SeriesComparisonReviewAggregation {
     recoveryCandidate(stats, allRows),
     ginjiCandidate(stats, allRows),
   ).flatten
-
-  private def scorePlaybookCandidates(
-      candidates: List[PlaybookCandidate]
-  ): List[ScoredPlaybookCandidate] =
-    val visible = candidates
-      .filter(candidate => candidate.card.status != "hidden" && candidate.baseScore > 0.0)
-    visible.groupBy(_.card.category).values.toList.flatMap { categoryCandidates =>
-      val ranked = categoryCandidates.sortBy(candidate =>
-        (-math.abs(candidate.peerEffectValue), -candidate.baseScore, candidate.memberId.value)
-      )
-      val peerCount = ranked.size
-      val commonCategory = peerCount >= Thresholds.CommonTopicPlayerCount
-      ranked.zipWithIndex.map { case (candidate, rank) =>
-        val rankWeight = peerRankWeight(rank, peerCount)
-        val distinctivenessWeight = 0.55 + 0.45 * rankWeight
-        val commonPenalty = if !commonCategory then 1.0 else if rank <= 1 then 0.86 else 0.0
-        ScoredPlaybookCandidate(
-          candidate = candidate,
-          finalScore = candidate.baseScore * distinctivenessWeight * commonPenalty,
-          peerRank = rank,
-          peerCount = peerCount,
-          peerDistinctiveness = rankWeight,
-          commonCategory = commonCategory,
-        )
-      }
-    }
-
-  private def peerRankWeight(rank: Int, peerCount: Int): Double =
-    if peerCount <= 1 then 1.0
-    else
-      rank match
-        case 0 => 1.0
-        case 1 => 0.78
-        case 2 => 0.52
-        case _ => 0.35
-
-  private def cardWithPeerContext(
-      scored: ScoredPlaybookCandidate
-  ): SeriesComparisonPlaybookCardResponse =
-    val card = scored.candidate.card
-    val peerEvidence = evidence(
-      metricId = s"playbook.${card.category}.peerRank",
-      label = "4人内での目立ち方",
-      value = peerRankLabel(scored),
-      targetCount = card.targetCount,
-      status = card.status,
-    )
-    card.copy(
-      dataReason = s"${card.dataReason} ${peerReason(scored)}",
-      evidence = card.evidence :+ peerEvidence,
-      actionAdviceScore = rounded(scored.finalScore),
-    )
-
-  private def peerRankLabel(scored: ScoredPlaybookCandidate): String =
-    if scored.peerCount <= 1 then "この人のみ" else s"${scored.peerCount}人中${scored.peerRank + 1}番目"
-
-  private def peerReason(scored: ScoredPlaybookCandidate): String =
-    if scored.peerCount <= 1 then "同じ条件の候補は他プレーヤーには出ていないため、個人差として扱います。"
-    else if scored.commonCategory then
-      s"同じカテゴリは${scored.peerCount}人に出ましたが、この候補は${peerRankLabel(scored)}に強く出たため個人カードとして残しています。"
-    else s"同じ条件の候補内では${peerRankLabel(scored)}に強く出ており、個人差として扱います。"
-
-  private def commonPlaybookTopics(
-      scoredCandidates: List[ScoredPlaybookCandidate]
-  ): List[SeriesComparisonCommonPlaybookTopicResponse] = scoredCandidates.filter(_.commonCategory)
-    .groupBy(_.candidate.card.category).values.toList
-    .sortBy(group => -group.map(_.candidate.baseScore).maxOption.getOrElse(0.0))
-    .take(Thresholds.CommonTopicLimit).flatMap(buildCommonPlaybookTopic)
-
-  private def buildCommonPlaybookTopic(
-      scoredCandidates: List[ScoredPlaybookCandidate]
-  ): Option[SeriesComparisonCommonPlaybookTopicResponse] =
-    val ranked = scoredCandidates.sortBy(scored =>
-      (scored.peerRank, -scored.candidate.baseScore, scored.candidate.memberDisplayName)
-    )
-    ranked.headOption.map { first =>
-      val category = first.candidate.card.category
-      val (title, summary, actionHint) = commonTopicText(category, ranked.size)
-      SeriesComparisonCommonPlaybookTopicResponse(
-        id = s"common-$category",
-        category = category,
-        title = title,
-        summary = summary,
-        actionHint = actionHint,
-        affectedPlayerCount = ranked.size,
-        memberDisplayNames = ranked.map(_.candidate.memberDisplayName).distinct,
-        status = if ranked.exists(_.candidate.card.status == "ok") then "ok" else "reference",
-      )
-    }
 
   private def playbookCandidate(
       stats: PlayerStats,
@@ -1662,26 +1535,6 @@ private[usecases] object SeriesComparisonReviewAggregation {
       revenueTopRows: List[SeriesComparisonMatchPlayerRow],
   )
 
-  private final case class RecoveryTransition(
-      previous: SeriesComparisonMatchPlayerRow,
-      current: SeriesComparisonMatchPlayerRow,
-      revenueRankScore: Double,
-      destinationRankScore: Double,
-      accidentCount: Double,
-  )
-
-  private final case class RecoveryDriver(kind: String, strength: Double, effect: Double)
-
-  private final case class ActionDriver(kind: String, effect: Double, actionability: Double)
-
-  private final case class ActionDriverSelection(
-      kind: String,
-      effect: Double,
-      effectStrength: Double,
-      selectionStrength: Double,
-      closeToSecond: Boolean,
-  )
-
   private object PlayerStats {
     def fromRows(
         memberId: MemberId,
@@ -1726,8 +1579,6 @@ private[usecases] object SeriesComparisonReviewAggregation {
         )
         StatsKernel.clamp01(0.35 + 0.65 * sameDirection * magnitude)
 
-  private final case class BootstrapInterval(low: Double, high: Double)
-
   private def eventBootstrapInterval(
       rows: List[SeriesComparisonMatchPlayerRow],
       seed: Long,
@@ -1771,23 +1622,6 @@ private[usecases] object SeriesComparisonReviewAggregation {
       case "reference" => 0.62
       case _ => 0.0
     symptomStrength * contrastStrength * exposureWeight * reliability * actionConnection * stability
-
-  private def dataQualityItems(
-      playbook: List[SeriesComparisonPlayerPlaybookResponse]
-  ): List[MetricQualityResponse] = playbook.flatMap(entry =>
-    entry.cards.flatMap(card =>
-      card.evidence.map(evidence =>
-        MetricQualityResponse(
-          metricId = evidence.metricId,
-          playerMemberId = Some(entry.memberId),
-          denominator = evidence.targetCount,
-          targetCount = evidence.targetCount,
-          status = evidence.status,
-          hasTies = false,
-        )
-      )
-    )
-  )
 
   private def evidence(
       metricId: String,

@@ -100,6 +100,12 @@ private[usecases] object SeriesComparisonAggregation {
     "momentumSwitch.afterFourthPodiumRate",
     "momentumSwitch.afterPodiumLowerRate",
   )
+  private val HistogramConfig = SeriesComparisonHistogram.Config(
+    lowerPercentile = Thresholds.HistogramLowerPercentile,
+    upperPercentile = Thresholds.HistogramUpperPercentile,
+    targetBinCount = Thresholds.HistogramTargetBinCount,
+  )
+
   def aggregate(
       scope: SeriesComparisonResolvedScope,
       rows: List[SeriesComparisonMatchPlayerRow],
@@ -126,18 +132,19 @@ private[usecases] object SeriesComparisonAggregation {
     val revenueRanks = rankByMatch(orderedRows, _.revenueManYen.value)
     val assetsRanks = rankByMatch(orderedRows, _.totalAssetsManYen.value)
     val destinationRanks = rankByMatch(orderedRows, _.incidents.destination)
-    val assetsHistogram = histogram(
+    val assetsHistogram = SeriesComparisonHistogram.forPlayers(
       orderedRows.map(_.totalAssetsManYen.value),
       playerOrder,
       rowsByPlayer,
       row => row.totalAssetsManYen.value,
+      HistogramConfig,
     )
-    val revenueHistogram = histogram(
+    val revenueHistogram = SeriesComparisonHistogram.forPlayers(
       orderedRows.map(_.revenueManYen.value),
       playerOrder,
       rowsByPlayer,
       row => row.revenueManYen.value,
-      revenueHistogramBins,
+      SeriesComparisonHistogram.revenueBins(HistogramConfig),
     )
     val metrics = playerOrder.map { memberId =>
       val playerRows = rowsByPlayer.getOrElse(memberId, Nil).sortBy(row =>
@@ -1180,120 +1187,8 @@ private[usecases] object SeriesComparisonAggregation {
       predicate: SeriesComparisonMatchPlayerRow => Boolean,
   ): Int = rows.reverse.takeWhile(predicate).size
 
-  private def histogram(
-      allValues: List[Int],
-      playerOrder: List[MemberId],
-      rowsByPlayer: Map[MemberId, List[SeriesComparisonMatchPlayerRow]],
-      value: SeriesComparisonMatchPlayerRow => Int,
-  ): HistogramResponse = histogram(allValues, playerOrder, rowsByPlayer, value, histogramBins)
-
-  private def histogram(
-      allValues: List[Int],
-      playerOrder: List[MemberId],
-      rowsByPlayer: Map[MemberId, List[SeriesComparisonMatchPlayerRow]],
-      value: SeriesComparisonMatchPlayerRow => Int,
-      binsFor: List[Int] => List[HistogramBinResponse],
-  ): HistogramResponse =
-    val bins = binsFor(allValues)
-    val series = playerOrder.map { memberId =>
-      val counts = bins.map { bin =>
-        rowsByPlayer.getOrElse(memberId, Nil).count(row =>
-          value(row) >= bin.lowerInclusive && bin.upperExclusive.forall(value(row) < _)
-        )
-      }
-      HistogramSeriesResponse(memberId.value, counts)
-    }
-    HistogramResponse(bins, series)
-
-  private def revenueHistogramBins(values: List[Int]): List[HistogramBinResponse] =
-    if !values.contains(0) then histogramBins(values)
-    else
-      val baseBins = histogramBins(values.filterNot(_ == 0)).flatMap { bin =>
-        val containsZero = bin.lowerInclusive <= 0 && bin.upperExclusive.forall(_ > 0)
-        if !containsZero then List(bin)
-        else
-          val negativeBin = Option.when(bin.lowerInclusive < 0)(
-            bin.copy(
-              upperExclusive = Some(0),
-              label = histogramBinLabel(bin.lowerInclusive, Some(0)),
-            )
-          )
-          val positiveBin = Option.when(values.exists(_ > 0) && bin.upperExclusive.forall(_ > 1))(
-            bin.copy(
-              lowerInclusive = 1,
-              label = histogramBinLabel(1, bin.upperExclusive),
-            )
-          )
-          negativeBin.toList ++ positiveBin.toList
-      }
-      val (negativeBins, positiveBins) = baseBins.partition(_.lowerInclusive < 0)
-      reindexHistogramBins(
-        negativeBins ++ List(HistogramBinResponse(0, 0, Some(1), "0")) ++ positiveBins
-      )
-
-  private def histogramBins(values: List[Int]): List[HistogramBinResponse] = values match
-    case Nil => Nil
-    case nonEmpty =>
-      val min = nonEmpty.min
-      val max = nonEmpty.max
-      if min == max then List(HistogramBinResponse(0, min, None, s"$min+"))
-      else
-        val sorted = nonEmpty.sorted
-        val lowerAnchor =
-          val p05 = percentile(sorted, Thresholds.HistogramLowerPercentile)
-          if min < 0 && p05 >= 0 then 0 else math.floor(p05).toInt
-        val p95 = percentile(sorted, Thresholds.HistogramUpperPercentile)
-        val rawSpan = math.max(1, math.ceil(p95 - asDecimal(lowerAnchor)).toInt)
-        val step = niceHistogramStep(
-          math.ceil(asDecimal(rawSpan) / Thresholds.HistogramTargetBinCount).toInt
-        )
-        val lowerStart = math.floor(asDecimal(lowerAnchor) / asDecimal(step)).toInt * step
-        val upperEnd = math.max(lowerStart + step, math.ceil(p95 / asDecimal(step)).toInt * step)
-        val centralBins = Iterator.iterate(lowerStart)(_ + step).takeWhile(_ < upperEnd)
-          .map(lower =>
-            HistogramBinResponse(
-              index = 0,
-              lowerInclusive = lower,
-              upperExclusive = Some(lower + step),
-              label = histogramBinLabel(lower, Some(lower + step)),
-            )
-          ).toList
-        val lowerBin = Option.when(min < lowerStart)(HistogramBinResponse(
-          index = 0,
-          lowerInclusive = min,
-          upperExclusive = Some(lowerStart),
-          label = histogramBinLabel(min, Some(lowerStart)),
-        ))
-        val upperBin = Option.when(max >= upperEnd)(HistogramBinResponse(
-          index = 0,
-          lowerInclusive = upperEnd,
-          upperExclusive = None,
-          label = histogramBinLabel(upperEnd, None),
-        ))
-        reindexHistogramBins(lowerBin.toList ++ centralBins ++ upperBin.toList)
-
-  private def histogramBinLabel(lowerInclusive: Int, upperExclusive: Option[Int]): String =
-    upperExclusive match
-      case Some(upper) if upper == lowerInclusive + 1 => s"$lowerInclusive"
-      case Some(upper) => s"$lowerInclusive-${upper - 1}"
-      case None => s"$lowerInclusive+"
-
-  private def reindexHistogramBins(bins: List[HistogramBinResponse]): List[HistogramBinResponse] =
-    bins.zipWithIndex.map { case (bin, index) => bin.copy(index = index) }
-
-  private def percentile(sortedValues: List[Int], probability: Double): Double =
-    val clamped = math.max(0.0, math.min(1.0, probability))
-    val rank = clamped * asDecimal(sortedValues.size - 1)
-    val lowerIndex = math.floor(rank).toInt
-    val upperIndex = math.ceil(rank).toInt
-    val weight = rank - lowerIndex
-    asDecimal(sortedValues(lowerIndex)) * (1.0 - weight) +
-      asDecimal(sortedValues(upperIndex)) * weight
-
   private def percentileDouble(sortedValues: List[Int], probability: Double): Option[Double] =
-    sortedValues match
-      case Nil => None
-      case nonEmpty => Some(percentile(nonEmpty, probability))
+    StatsKernel.percentile(sortedValues, probability)
 
   private def medianDouble(values: List[Double]): Option[Double] = values.sorted match
     case Nil => None
@@ -1301,17 +1196,6 @@ private[usecases] object SeriesComparisonAggregation {
     case sorted =>
       val upper = sorted.size / 2
       Some((sorted(upper - 1) + sorted(upper)) / 2.0)
-
-  private def niceHistogramStep(rawStep: Int): Int =
-    val safeStep = math.max(1, rawStep)
-    val magnitude = math.pow(10.0, math.floor(math.log10(asDecimal(safeStep)))).toInt
-    val normalized = math.ceil(asDecimal(safeStep) / asDecimal(magnitude)).toInt
-    val factor =
-      if normalized <= 1 then 1
-      else if normalized <= 2 then 2
-      else if normalized <= 5 then 5
-      else 10
-    factor * magnitude
 
   private def dataQuality(
       playerOrder: List[MemberId],

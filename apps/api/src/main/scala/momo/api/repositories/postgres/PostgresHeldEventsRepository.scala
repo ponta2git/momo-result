@@ -33,6 +33,12 @@ import momo.api.repositories.{
 object PostgresHeldEvents:
 
   private val Jst = ZoneId.of("Asia/Tokyo")
+  private final case class HeldEventRow(id: HeldEventId, heldAt: java.time.Instant)
+
+  private val selectAll = fr"SELECT id, start_at FROM held_events"
+
+  private def fromRow(row: HeldEventRow): HeldEvent = HeldEvent(row.id, row.heldAt)
+
   private def isUniqueViolation(state: SqlState): Boolean = state.value ==
     sqlstate.class23.UNIQUE_VIOLATION.value
 
@@ -47,32 +53,30 @@ object PostgresHeldEvents:
 
   val alg: HeldEventsAlg[ConnectionIO] = new HeldEventsAlg[ConnectionIO]:
     override def list(query: Option[String], limit: Int): ConnectionIO[List[HeldEvent]] =
-      val base = fr"SELECT id, start_at FROM held_events"
       val where = whereQuery(query)
       val order = fr"ORDER BY start_at DESC, id DESC"
       val lim = fr"LIMIT ${math.max(limit, 0)}"
-      (base ++ where ++ order ++ lim).query[HeldEvent].to[List]
+      (selectAll ++ where ++ order ++ lim).query[HeldEventRow].to[List].map(_.map(fromRow))
 
     override def listPage(
         query: Option[String],
         page: PageRequest,
     ): ConnectionIO[PagedResult[HeldEvent]] =
-      val base = fr"SELECT id, start_at FROM held_events"
       val where = whereQuery(query)
       val order = fr"ORDER BY start_at DESC, id DESC"
       val pageLimit = fr"LIMIT ${page.pageSize} OFFSET ${page.offset}"
       for
         total <- (fr"SELECT COUNT(*)::int FROM held_events" ++ where).query[Int].unique
-        items <- (base ++ where ++ order ++ pageLimit).query[HeldEvent].to[List]
+        items <- (selectAll ++ where ++ order ++ pageLimit).query[HeldEventRow].to[List]
+          .map(_.map(fromRow))
       yield PagedResult(items, page, total)
 
     override def listIds(query: Option[String]): ConnectionIO[List[HeldEventId]] =
       (fr"SELECT id FROM held_events" ++ whereQuery(query) ++ fr"ORDER BY start_at DESC, id DESC")
         .query[HeldEventId].to[List]
 
-    override def find(id: HeldEventId): ConnectionIO[Option[HeldEvent]] = sql"""
-        SELECT id, start_at FROM held_events WHERE id = $id
-      """.query[HeldEvent].option
+    override def find(id: HeldEventId): ConnectionIO[Option[HeldEvent]] =
+      (selectAll ++ fr"WHERE id = $id").query[HeldEventRow].option.map(_.map(fromRow))
 
     override def create(event: HeldEvent): ConnectionIO[Unit] =
       val heldDateIso: LocalDate = event.heldAt.atZone(Jst).toLocalDate

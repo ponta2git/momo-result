@@ -57,61 +57,6 @@ object PostgresMatchList:
       heldAtSort: Instant,
   )
 
-  private given Read[Row] = Read[
-    (
-        String,
-        String,
-        Option[MatchId],
-        Option[MatchDraftId],
-        String,
-        Option[HeldEventId],
-        Option[MatchNoInEvent],
-        Option[GameTitleId],
-        Option[SeasonMasterId],
-        Option[MapMasterId],
-        Option[MemberId],
-        Option[Instant],
-        Instant,
-        Instant,
-        Instant,
-    )
-  ].map {
-    case (
-          kind,
-          id,
-          matchId,
-          matchDraftId,
-          status,
-          heldEventId,
-          matchNoInEvent,
-          gameTitleId,
-          seasonMasterId,
-          mapMasterId,
-          ownerMemberId,
-          playedAt,
-          createdAt,
-          updatedAt,
-          heldAtSort,
-        ) =>
-      Row(
-        kind = kind,
-        id = id,
-        matchId = matchId,
-        matchDraftId = matchDraftId,
-        status = status,
-        heldEventId = heldEventId,
-        matchNoInEvent = matchNoInEvent,
-        gameTitleId = gameTitleId,
-        seasonMasterId = seasonMasterId,
-        mapMasterId = mapMasterId,
-        ownerMemberId = ownerMemberId,
-        playedAt = playedAt,
-        createdAt = createdAt,
-        updatedAt = updatedAt,
-        heldAtSort = heldAtSort,
-      )
-  }
-
   private final case class RankRow(
       matchId: MatchId,
       memberId: MemberId,
@@ -120,15 +65,18 @@ object PostgresMatchList:
   ):
     def toEntry: MatchListRankEntry = MatchListRankEntry(memberId, rank, playOrder)
 
-  private given Read[RankRow] = Read[(MatchId, MemberId, Rank, PlayOrder)].map {
-    case (matchId, memberId, rank, playOrder) =>
-      RankRow(
-        matchId = matchId,
-        memberId = memberId,
-        rank = rank,
-        playOrder = playOrder,
-      )
-  }
+  private final case class SummaryRow(
+      incompleteCount: Int,
+      ocrRunningCount: Int,
+      preConfirmCount: Int,
+      needsReviewCount: Int,
+  ):
+    def toSummary: MatchListSummary = MatchListSummary(
+      incompleteCount = incompleteCount,
+      ocrRunningCount = ocrRunningCount,
+      preConfirmCount = preConfirmCount,
+      needsReviewCount = needsReviewCount,
+    )
 
   private val confirmedBase = fr"""SELECT
     'match' AS kind,
@@ -357,21 +305,14 @@ object PostgresMatchList:
         fr"""SELECT
           COUNT(*) FILTER (
             WHERE combined.status IN ('ocr_running', 'ocr_failed', 'draft_ready', 'needs_review')
-          )::int,
-          COUNT(*) FILTER (WHERE combined.status = 'ocr_running')::int,
+          )::int AS incomplete_count,
+          COUNT(*) FILTER (WHERE combined.status = 'ocr_running')::int AS ocr_running_count,
           COUNT(*) FILTER (
             WHERE combined.status IN ('ocr_failed', 'draft_ready', 'needs_review')
-          )::int,
-          COUNT(*) FILTER (WHERE combined.status = 'needs_review')::int
+          )::int AS pre_confirm_count,
+          COUNT(*) FILTER (WHERE combined.status = 'needs_review')::int AS needs_review_count
         FROM (""" ++ draftSelect ++ fr") AS combined"
-      query.query[(Int, Int, Int, Int)].unique.map {
-        case (incomplete, running, preConfirm, needs) => MatchListSummary(
-            incompleteCount = incomplete,
-            ocrRunningCount = running,
-            preConfirmCount = preConfirm,
-            needsReviewCount = needs,
-          )
-      }
+      query.query[SummaryRow].unique.map(_.toSummary)
 end PostgresMatchList
 
 /** Backwards-compatible class facade. */

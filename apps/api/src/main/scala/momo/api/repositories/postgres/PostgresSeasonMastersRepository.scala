@@ -1,5 +1,7 @@
 package momo.api.repositories.postgres
 
+import java.time.Instant
+
 import cats.effect.MonadCancelThrow
 import cats.syntax.all.*
 import doobie.*
@@ -14,19 +16,33 @@ import momo.api.repositories.*
 import momo.api.repositories.postgres.PostgresMeta.given
 
 object PostgresSeasonMasters:
+  private final case class SeasonMasterRow(
+      id: SeasonMasterId,
+      gameTitleId: GameTitleId,
+      name: String,
+      displayOrder: Int,
+      createdAt: Instant,
+  )
+
+  private val selectAll =
+    fr"SELECT id, game_title_id, name, display_order, created_at FROM season_masters"
+
+  private def fromRow(row: SeasonMasterRow): SeasonMaster = SeasonMaster(
+    id = row.id,
+    gameTitleId = row.gameTitleId,
+    name = row.name,
+    displayOrder = row.displayOrder,
+    createdAt = row.createdAt,
+  )
 
   val alg: SeasonMastersAlg[ConnectionIO] = new SeasonMastersAlg[ConnectionIO]:
     override def list(gameTitleId: Option[GameTitleId]): ConnectionIO[List[SeasonMaster]] =
-      val base = fr"SELECT id, game_title_id, name, display_order, created_at FROM season_masters"
       val where = gameTitleId.fold(Fragment.empty)(id => fr"WHERE game_title_id = $id")
       val order = fr"ORDER BY game_title_id, display_order, created_at, id"
-      (base ++ where ++ order).query[SeasonMaster].to[List]
+      (selectAll ++ where ++ order).query[SeasonMasterRow].to[List].map(_.map(fromRow))
 
-    override def find(id: SeasonMasterId): ConnectionIO[Option[SeasonMaster]] = sql"""
-        SELECT id, game_title_id, name, display_order, created_at
-        FROM season_masters
-        WHERE id = $id
-      """.query[SeasonMaster].option
+    override def find(id: SeasonMasterId): ConnectionIO[Option[SeasonMaster]] =
+      (selectAll ++ fr"WHERE id = $id").query[SeasonMasterRow].option.map(_.map(fromRow))
 
     override def create(season: SeasonMaster): ConnectionIO[Unit] = sql"""
         INSERT INTO season_masters (id, game_title_id, name, display_order, created_at)
@@ -55,7 +71,7 @@ object PostgresSeasonMasters:
           .name}, next_order.display_order, ${season.createdAt}
         FROM display_order_lock, next_order
         RETURNING id, game_title_id, name, display_order, created_at
-      """.query[SeasonMaster].unique.exceptSomeSqlState {
+      """.query[SeasonMasterRow].unique.map(fromRow).exceptSomeSqlState {
         case state if isUniqueViolation(state) =>
           conflict(s"season_master already exists: ${season.id.value} or ${season.name}")
         case state if isForeignKeyViolation(state) =>

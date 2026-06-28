@@ -10,7 +10,6 @@ import doobie.postgres.implicits.*
 import momo.api.db.Database
 import momo.api.domain.ids.*
 import momo.api.domain.{
-  GameTitle,
   MatchNoInEvent,
   PlayOrder,
   Rank,
@@ -35,27 +34,6 @@ object PostgresSeriesComparison:
       latestConfirmedPlayedAt: Option[Instant],
   )
 
-  private object SeriesRow:
-    given Read[SeriesRow] =
-      Read[(GameTitleId, String, String, Int, Int, Option[Instant])].map {
-        case (
-              gameTitleId,
-              name,
-              layoutFamily,
-              displayOrder,
-              confirmedMatchCount,
-              latestConfirmedPlayedAt,
-            ) =>
-          SeriesRow(
-            gameTitleId = gameTitleId,
-            name = name,
-            layoutFamily = layoutFamily,
-            displayOrder = displayOrder,
-            confirmedMatchCount = confirmedMatchCount,
-            latestConfirmedPlayedAt = latestConfirmedPlayedAt,
-          )
-      }
-
   private final case class ScopeOptionRow(
       gameTitleId: GameTitleId,
       id: String,
@@ -63,18 +41,6 @@ object PostgresSeriesComparison:
       displayOrder: Int,
       confirmedMatchCount: Int,
   )
-
-  private object ScopeOptionRow:
-    given Read[ScopeOptionRow] = Read[(GameTitleId, String, String, Int, Int)].map {
-      case (gameTitleId, id, name, displayOrder, confirmedMatchCount) =>
-        ScopeOptionRow(
-          gameTitleId = gameTitleId,
-          id = id,
-          name = name,
-          displayOrder = displayOrder,
-          confirmedMatchCount = confirmedMatchCount,
-        )
-    }
 
   private final case class PlayerRow(
       matchId: MatchId,
@@ -98,74 +64,24 @@ object PostgresSeriesComparison:
       suriNoGinjiCount: Int,
   )
 
-  private object PlayerRow:
-    given Read[PlayerRow] =
-      Read[
-        (
-            MatchId,
-            Instant,
-            HeldEventId,
-            MatchNoInEvent,
-            GameTitleId,
-            SeasonMasterId,
-            MapMasterId,
-            MemberId,
-            String,
-            PlayOrder,
-            Rank,
-            Int,
-            Int,
-            Int,
-            Int,
-            Int,
-            Int,
-            Int,
-            Int,
-        )
-      ].map {
-        case (
-              matchId,
-              playedAt,
-              heldEventId,
-              matchNoInEvent,
-              gameTitleId,
-              seasonMasterId,
-              mapMasterId,
-              memberId,
-              memberDisplayName,
-              playOrder,
-              rank,
-              totalAssetsManYen,
-              revenueManYen,
-              destinationCount,
-              plusStationCount,
-              minusStationCount,
-              cardStationCount,
-              cardShopCount,
-              suriNoGinjiCount,
-            ) =>
-          PlayerRow(
-            matchId = matchId,
-            playedAt = playedAt,
-            heldEventId = heldEventId,
-            matchNoInEvent = matchNoInEvent,
-            gameTitleId = gameTitleId,
-            seasonMasterId = seasonMasterId,
-            mapMasterId = mapMasterId,
-            memberId = memberId,
-            memberDisplayName = memberDisplayName,
-            playOrder = playOrder,
-            rank = rank,
-            totalAssetsManYen = totalAssetsManYen,
-            revenueManYen = revenueManYen,
-            destinationCount = destinationCount,
-            plusStationCount = plusStationCount,
-            minusStationCount = minusStationCount,
-            cardStationCount = cardStationCount,
-            cardShopCount = cardShopCount,
-            suriNoGinjiCount = suriNoGinjiCount,
-          )
-      }
+  private final case class OverallScopeRow(
+      gameTitleId: GameTitleId,
+      gameTitleName: String,
+      layoutFamily: String,
+  )
+
+  private final case class NamedScopeRow(
+      gameTitleName: String,
+      layoutFamily: String,
+      scopeName: String,
+  )
+
+  private final case class SeasonMapScopeRow(
+      gameTitleName: String,
+      layoutFamily: String,
+      seasonName: String,
+      mapName: String,
+  )
 
   val alg: SeriesComparisonReadAlg[ConnectionIO] = new SeriesComparisonReadAlg[ConnectionIO]:
     override def options: ConnectionIO[SeriesComparisonOptionsData] =
@@ -245,14 +161,14 @@ object PostgresSeriesComparison:
         scope: SeriesComparisonScope
     ): ConnectionIO[Option[SeriesComparisonResolvedScope]] = scope match
       case SeriesComparisonScope.Overall(gameTitleId) => sql"""
-          SELECT id, name, layout_family, display_order, created_at
+          SELECT id, name, layout_family
           FROM game_titles
           WHERE id = $gameTitleId
-        """.query[GameTitle].option.map(_.map(gt =>
+        """.query[OverallScopeRow].option.map(_.map(row =>
           SeriesComparisonResolvedScope(
-            gameTitleId = gt.id,
-            gameTitleName = gt.name,
-            layoutFamily = gt.layoutFamily,
+            gameTitleId = row.gameTitleId,
+            gameTitleName = row.gameTitleName,
+            layoutFamily = row.layoutFamily,
             scopeKind = "overall",
             scopeId = None,
             scopeName = "総合",
@@ -263,16 +179,16 @@ object PostgresSeriesComparison:
           FROM season_masters s
           JOIN game_titles gt ON gt.id = s.game_title_id
           WHERE s.id = $seasonMasterId AND s.game_title_id = $gameTitleId
-        """.query[(String, String, String)].option.map(_.map { case (gameTitleName, layout, name) =>
+        """.query[NamedScopeRow].option.map(_.map { row =>
           SeriesComparisonResolvedScope(
             gameTitleId = gameTitleId,
-            gameTitleName = gameTitleName,
-            layoutFamily = layout,
+            gameTitleName = row.gameTitleName,
+            layoutFamily = row.layoutFamily,
             scopeKind = "season",
             scopeId = Some(seasonMasterId.value),
-            scopeName = name,
+            scopeName = row.scopeName,
             seasonMasterId = Some(seasonMasterId),
-            seasonName = Some(name),
+            seasonName = Some(row.scopeName),
           )
         })
       case SeriesComparisonScope.Map(gameTitleId, mapMasterId) => sql"""
@@ -280,16 +196,16 @@ object PostgresSeriesComparison:
           FROM map_masters mm
           JOIN game_titles gt ON gt.id = mm.game_title_id
           WHERE mm.id = $mapMasterId AND mm.game_title_id = $gameTitleId
-        """.query[(String, String, String)].option.map(_.map { case (gameTitleName, layout, name) =>
+        """.query[NamedScopeRow].option.map(_.map { row =>
           SeriesComparisonResolvedScope(
             gameTitleId = gameTitleId,
-            gameTitleName = gameTitleName,
-            layoutFamily = layout,
+            gameTitleName = row.gameTitleName,
+            layoutFamily = row.layoutFamily,
             scopeKind = "map",
             scopeId = Some(mapMasterId.value),
-            scopeName = name,
+            scopeName = row.scopeName,
             mapMasterId = Some(mapMasterId),
-            mapName = Some(name),
+            mapName = Some(row.scopeName),
           )
         })
       case SeriesComparisonScope.SeasonMap(gameTitleId, seasonMasterId, mapMasterId) => sql"""
@@ -300,19 +216,19 @@ object PostgresSeriesComparison:
           WHERE gt.id = $gameTitleId
             AND s.id = $seasonMasterId
             AND mm.id = $mapMasterId
-        """.query[(String, String, String, String)].option
-          .map(_.map { case (gameTitleName, layout, seasonName, mapName) =>
+        """.query[SeasonMapScopeRow].option
+          .map(_.map { row =>
             SeriesComparisonResolvedScope(
               gameTitleId = gameTitleId,
-              gameTitleName = gameTitleName,
-              layoutFamily = layout,
+              gameTitleName = row.gameTitleName,
+              layoutFamily = row.layoutFamily,
               scopeKind = "season_map",
               scopeId = None,
-              scopeName = s"$seasonName / $mapName",
+              scopeName = s"${row.seasonName} / ${row.mapName}",
               seasonMasterId = Some(seasonMasterId),
-              seasonName = Some(seasonName),
+              seasonName = Some(row.seasonName),
               mapMasterId = Some(mapMasterId),
-              mapName = Some(mapName),
+              mapName = Some(row.mapName),
             )
           })
 

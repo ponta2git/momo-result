@@ -70,7 +70,8 @@ object AuthModule:
         authenticateLogout(config, sessions, csrf, csrfToken, cookies)
       }
       .serverLogic(authenticated =>
-        _ => sessions.delete(authenticated.session.idHash).as(Right(List(clearSessionCookie(config))))
+        _ =>
+          sessions.delete(authenticated.session.idHash).as(Right(List(clearSessionCookie(config))))
       ),
     AuthEndpoints.me
       .serverSecurityLogic { case (accountHeader, cookies) =>

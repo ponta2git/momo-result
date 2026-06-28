@@ -1,5 +1,7 @@
 package momo.api.repositories.postgres
 
+import java.time.Instant
+
 import cats.effect.MonadCancelThrow
 import cats.syntax.all.*
 import doobie.*
@@ -19,18 +21,30 @@ import momo.api.repositories.postgres.PostgresMeta.given
 object PostgresMemberAliases:
   private val AliasWriteLockKey = "momo:member_aliases:alias"
 
+  private final case class MemberAliasRow(
+      id: MemberAliasId,
+      memberId: MemberId,
+      alias: String,
+      createdAt: Instant,
+  )
+
+  private val selectAll = fr"SELECT id, member_id, alias, created_at FROM member_aliases"
+
+  private def fromRow(row: MemberAliasRow): MemberAlias = MemberAlias(
+    id = row.id,
+    memberId = row.memberId,
+    alias = row.alias,
+    createdAt = row.createdAt,
+  )
+
   val alg: MemberAliasesAlg[ConnectionIO] = new MemberAliasesAlg[ConnectionIO]:
     override def list(memberId: Option[MemberId]): ConnectionIO[List[MemberAlias]] =
-      val base = fr"SELECT id, member_id, alias, created_at FROM member_aliases"
       val where = memberId.fold(Fragment.empty)(id => fr"WHERE member_id = $id")
       val order = fr"ORDER BY member_id, alias, id"
-      (base ++ where ++ order).query[MemberAlias].to[List]
+      (selectAll ++ where ++ order).query[MemberAliasRow].to[List].map(_.map(fromRow))
 
-    override def find(id: MemberAliasId): ConnectionIO[Option[MemberAlias]] = sql"""
-        SELECT id, member_id, alias, created_at
-        FROM member_aliases
-        WHERE id = $id
-      """.query[MemberAlias].option
+    override def find(id: MemberAliasId): ConnectionIO[Option[MemberAlias]] =
+      (selectAll ++ fr"WHERE id = $id").query[MemberAliasRow].option.map(_.map(fromRow))
 
     override def create(alias: MemberAlias): ConnectionIO[Unit] = (for
       _ <- lockAliasWrites

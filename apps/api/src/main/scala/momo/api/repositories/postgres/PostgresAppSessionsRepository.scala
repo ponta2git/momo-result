@@ -18,14 +18,34 @@ import momo.api.repositories.{AppSession, AppSessionsAlg, AppSessionsRepository}
  * `new PostgresAppSessionsRepository(xa)` wiring while exposing a tx-agnostic algebra.
  */
 object PostgresAppSessions:
+  private final case class AppSessionRow(
+      idHash: String,
+      accountId: AccountId,
+      playerMemberId: Option[momo.api.domain.ids.MemberId],
+      csrfSecretHash: String,
+      createdAt: Instant,
+      lastSeenAt: Instant,
+      expiresAt: Instant,
+  )
+
+  private val selectAll = fr"""
+    SELECT id_hash, account_id, member_id, csrf_secret_hash, created_at, last_seen_at, expires_at
+    FROM app_sessions
+  """
+
+  private def fromRow(row: AppSessionRow): AppSession = AppSession(
+    idHash = row.idHash,
+    accountId = row.accountId,
+    playerMemberId = row.playerMemberId,
+    csrfSecretHash = row.csrfSecretHash,
+    createdAt = row.createdAt,
+    lastSeenAt = row.lastSeenAt,
+    expiresAt = row.expiresAt,
+  )
 
   val alg: AppSessionsAlg[ConnectionIO] = new AppSessionsAlg[ConnectionIO]:
     override def find(idHash: String): ConnectionIO[Option[AppSession]] =
-      sql"""
-        SELECT id_hash, account_id, member_id, csrf_secret_hash, created_at, last_seen_at, expires_at
-        FROM app_sessions
-        WHERE id_hash = $idHash
-      """.query[AppSession].option
+      (selectAll ++ fr"WHERE id_hash = $idHash").query[AppSessionRow].option.map(_.map(fromRow))
 
     override def upsert(session: AppSession): ConnectionIO[Unit] = sql"""
         INSERT INTO app_sessions

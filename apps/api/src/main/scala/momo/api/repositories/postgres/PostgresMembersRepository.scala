@@ -1,5 +1,7 @@
 package momo.api.repositories.postgres
 
+import java.time.Instant
+
 import cats.effect.MonadCancelThrow
 import doobie.*
 import doobie.implicits.*
@@ -12,25 +14,33 @@ import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.repositories.{MembersAlg, MembersRepository}
 
 object PostgresMembers:
+  private final case class MemberRow(
+      id: MemberId,
+      userId: UserId,
+      displayName: String,
+      createdAt: Instant,
+  )
+
+  private val selectAll = fr"SELECT id, user_id, display_name, created_at FROM members"
+
+  private def fromRow(row: MemberRow): Member = Member(
+    id = row.id,
+    userId = row.userId,
+    displayName = row.displayName,
+    createdAt = row.createdAt,
+  )
 
   val alg: MembersAlg[ConnectionIO] = new MembersAlg[ConnectionIO]:
-    override def list: ConnectionIO[List[Member]] = sql"""
-        SELECT id, user_id, display_name, created_at
-        FROM members
-        ORDER BY id
-      """.query[Member].to[List]
+    override def list
+        : ConnectionIO[List[Member]] = (selectAll ++ fr"ORDER BY id").query[MemberRow].to[List].map(
+      _.map(fromRow)
+    )
 
-    override def find(id: MemberId): ConnectionIO[Option[Member]] = sql"""
-        SELECT id, user_id, display_name, created_at
-        FROM members
-        WHERE id = $id
-      """.query[Member].option
+    override def find(id: MemberId): ConnectionIO[Option[Member]] =
+      (selectAll ++ fr"WHERE id = $id").query[MemberRow].option.map(_.map(fromRow))
 
-    override def findByDiscordUserId(userId: UserId): ConnectionIO[Option[Member]] = sql"""
-        SELECT id, user_id, display_name, created_at
-        FROM members
-        WHERE user_id = $userId
-      """.query[Member].option
+    override def findByDiscordUserId(userId: UserId): ConnectionIO[Option[Member]] =
+      (selectAll ++ fr"WHERE user_id = $userId").query[MemberRow].option.map(_.map(fromRow))
 end PostgresMembers
 
 /** Backwards-compatible class facade. */

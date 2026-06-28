@@ -4,13 +4,10 @@ import java.time.format.DateTimeFormatter
 
 import cats.syntax.all.*
 
+import momo.api.domain.SeriesComparisonMatchPlayerRow
 import momo.api.domain.ids.MemberId
-import momo.api.domain.{
-  SeriesComparisonMatchPlayerRow,
-  SeriesComparisonPlayerOrder,
-  SeriesComparisonResolvedScope
-}
 import momo.api.endpoints.*
+import momo.api.usecases.seriescomparison.engine.SeriesDataset
 
 private[usecases] object SeriesComparisonAggregation {
   private object Thresholds:
@@ -107,21 +104,13 @@ private[usecases] object SeriesComparisonAggregation {
   )
 
   def aggregate(
-      scope: SeriesComparisonResolvedScope,
-      rows: List[SeriesComparisonMatchPlayerRow],
+      dataset: SeriesDataset
   ): SeriesComparisonResponse =
-    val orderedRows = rows.sortBy(row =>
-      (
-        row.playedAt.toEpochMilli,
-        row.heldEventId.value,
-        row.matchNoInEvent.value,
-        row.matchId.value,
-        row.playOrder.value,
-      )
-    )
-    val matchCount = orderedRows.map(_.matchId).distinct.size
-    val rowsByPlayer = orderedRows.groupBy(_.memberId)
-    val playerOrder = rowsByPlayer.values.toList.map(_.head).sortBy(playerSortKey).map(_.memberId)
+    val scope = dataset.scope
+    val orderedRows = dataset.orderedRows
+    val matchCount = dataset.matchCount
+    val rowsByPlayer = dataset.rowsByPlayer
+    val playerOrder = dataset.playerOrder
     val matchGroups = orderedRows.groupBy(_.matchId).values.toList.sortBy(groupSortKey).zipWithIndex
       .map { case (rows, index) => MatchGroup(index + 1, rows) }
     val matchIndexById = matchGroups.map(group => group.matchId -> group.matchIndex).toMap
@@ -208,9 +197,6 @@ private[usecases] object SeriesComparisonAggregation {
       first.matchNoInEvent.value,
       first.matchId.value,
     )
-
-  private def playerSortKey(row: SeriesComparisonMatchPlayerRow): (Int, Int, String, String) =
-    SeriesComparisonPlayerOrder.rowSortKey(row)
 
   private def playerMetrics(
       rows: List[SeriesComparisonMatchPlayerRow],

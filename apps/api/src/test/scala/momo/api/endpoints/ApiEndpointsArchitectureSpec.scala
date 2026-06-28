@@ -24,9 +24,12 @@ final class ApiEndpointsArchitectureSpec extends FunSuite:
 
   private val ObjectBlock =
     raw"(?s)object\s+([A-Za-z0-9_]+Endpoints):(.+?)(?=\nobject\s+[A-Za-z0-9_]+Endpoints:|\z)".r
-  private val PublicEndpointVal = raw"val\s+([A-Za-z0-9_]+)\s*:\s*PublicEndpoint".r
+  private val EndpointVal =
+    raw"val\s+([A-Za-z0-9_]+)\s*:\s*(?:PublicEndpoint|SecuredRead|Endpoint)".r
   private val ServerLogicRef =
     raw"([A-Za-z0-9_]+Endpoints\.[A-Za-z0-9_]+)\s*\.serverLogic(?:Success)?".r
+  private val SecuredReadLogicRef =
+    raw"SecuredEndpoint\.readLogic\([^,]+,\s*([A-Za-z0-9_]+Endpoints\.[A-Za-z0-9_]+)\)".r
   private val OperationLabelLiteral = """"(?:GET|POST|PUT|PATCH|DELETE) /api[^"]*"""".r
 
   test("ApiEndpoints.all includes every Tapir endpoint definition"):
@@ -37,7 +40,10 @@ final class ApiEndpointsArchitectureSpec extends FunSuite:
 
   test("every non-auth Tapir endpoint has server logic"):
     val serverRefs = scalaFiles(httpDir).map(path => read(path))
-      .flatMap(ServerLogicRef.findAllMatchIn).map(_.group(1)).toSet
+      .flatMap(text =>
+        ServerLogicRef.findAllMatchIn(text).map(_.group(1)) ++
+          SecuredReadLogicRef.findAllMatchIn(text).map(_.group(1))
+      ).toSet
     val missing = definedEndpointRefs.filterNot(_.startsWith("AuthEndpoints."))
       .filterNot(serverRefs.contains).sorted
 
@@ -151,7 +157,7 @@ final class ApiEndpointsArchitectureSpec extends FunSuite:
   private def definedEndpointRefs: List[String] = scalaFiles(endpointDir).flatMap { path =>
     ObjectBlock.findAllMatchIn(read(path)).flatMap { objectMatch =>
       val objectName = objectMatch.group(1)
-      PublicEndpointVal.findAllMatchIn(objectMatch.group(2))
+      EndpointVal.findAllMatchIn(objectMatch.group(2))
         .map(valueMatch => s"$objectName.${valueMatch.group(1)}")
     }
   }.sorted

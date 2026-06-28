@@ -120,8 +120,10 @@ lazy val root = (project in file("."))
     libraryDependencies ++= {
       val catsEffectVersion = "3.7.0"
       val circeVersion = "0.14.15"
+      val cirisVersion = "3.15.0"
       val doobieVersion = "1.0.0-RC12"
       val http4sVersion = "0.23.34"
+      val ironVersion = "3.3.1"
       val logbackVersion = "1.5.34"
       val logstashEncoderVersion = "9.0"
       val janinoVersion = "3.1.12"
@@ -136,6 +138,7 @@ lazy val root = (project in file("."))
 
       Seq(
         "org.typelevel" %% "cats-effect" % catsEffectVersion,
+        "is.cir" %% "ciris" % cirisVersion,
         "org.typelevel" %% "log4cats-slf4j" % log4catsVersion,
         "org.http4s" %% "http4s-ember-server" % http4sVersion,
         "org.http4s" %% "http4s-dsl" % http4sVersion,
@@ -148,6 +151,9 @@ lazy val root = (project in file("."))
         "io.circe" %% "circe-core" % circeVersion,
         "io.circe" %% "circe-generic" % circeVersion,
         "io.circe" %% "circe-parser" % circeVersion,
+        "io.github.iltotore" %% "iron" % ironVersion,
+        "io.github.iltotore" %% "iron-circe" % ironVersion,
+        "io.github.iltotore" %% "iron-ciris" % ironVersion,
         "org.tpolecat" %% "doobie-core" % doobieVersion,
         "org.tpolecat" %% "doobie-postgres" % doobieVersion,
         "org.tpolecat" %% "doobie-postgres-circe" % doobieVersion,

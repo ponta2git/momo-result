@@ -7,7 +7,7 @@ import momo.api.domain.SeriesComparisonScope
 import momo.api.endpoints.SeriesComparisonReviewResponse
 import momo.api.errors.AppError
 import momo.api.repositories.SeriesComparisonReadModel
-import momo.api.usecases.seriescomparison.SeriesComparisonReviewAggregation
+import momo.api.usecases.seriescomparison.SeriesComparisonPresenter
 
 final class GetSeriesComparisonReview[F[_]: Monad](readModel: SeriesComparisonReadModel[F]):
   def run(scope: SeriesComparisonScope): F[Either[AppError, SeriesComparisonReviewResponse]] =
@@ -16,7 +16,7 @@ final class GetSeriesComparisonReview[F[_]: Monad](readModel: SeriesComparisonRe
           .NotFound("series comparison scope", scope.scopeIdValue.getOrElse(scope.kindWire))
           .asLeft[SeriesComparisonReviewResponse].pure[F]
       case Some(resolved) => readModel.loadRows(resolved)
-          .map(rows => SeriesComparisonReviewAggregation.aggregate(resolved, rows).asRight)
+          .map(rows => SeriesComparisonPresenter.review(resolved, rows).asRight)
     }
 
 object GetSeriesComparisonReview:

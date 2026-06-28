@@ -3,12 +3,9 @@ package momo.api.usecases.seriescomparison
 import scala.util.Random
 
 import momo.api.domain.ids.MemberId
-import momo.api.domain.{
-  SeriesComparisonMatchPlayerRow,
-  SeriesComparisonPlayerOrder,
-  SeriesComparisonResolvedScope
-}
+import momo.api.domain.{SeriesComparisonMatchPlayerRow, SeriesComparisonResolvedScope}
 import momo.api.endpoints.*
+import momo.api.usecases.seriescomparison.engine.SeriesDataset
 
 private[usecases] object SeriesComparisonReviewAggregation {
   private val SchemaVersion = 4
@@ -17,12 +14,12 @@ private[usecases] object SeriesComparisonReviewAggregation {
   import SeriesComparisonReviewText.*
 
   def aggregate(
-      scope: SeriesComparisonResolvedScope,
-      rows: List[SeriesComparisonMatchPlayerRow],
+      dataset: SeriesDataset
   ): SeriesComparisonReviewResponse =
-    val orderedRows = sortedRows(rows)
+    val scope = dataset.scope
+    val orderedRows = dataset.orderedRows
     val matchGroups = matchGroupsFrom(orderedRows)
-    val playerOrder = playerOrderFrom(orderedRows)
+    val playerOrder = dataset.playerOrder
     val statsByPlayer = playerOrder.map(memberId =>
       memberId -> PlayerStats.fromRows(memberId, rowsByPlayer(orderedRows, memberId), orderedRows)
     ).toMap
@@ -97,10 +94,6 @@ private[usecases] object SeriesComparisonReviewAggregation {
       row.playOrder.value,
     )
   )
-
-  private def playerOrderFrom(rows: List[SeriesComparisonMatchPlayerRow]): List[MemberId] = rows
-    .groupBy(_.memberId).values.toList.map(_.head).sortBy(SeriesComparisonPlayerOrder.rowSortKey)
-    .map(_.memberId)
 
   private def playbookCandidates(
       stats: PlayerStats,

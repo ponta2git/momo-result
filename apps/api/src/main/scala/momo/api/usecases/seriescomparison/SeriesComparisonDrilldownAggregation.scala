@@ -4,43 +4,46 @@ import java.time.format.DateTimeFormatter
 
 import cats.syntax.all.*
 
+import momo.api.domain.constraints.BoundaryConstraints.MetricIdString
 import momo.api.domain.ids.{MatchId, MemberId}
 import momo.api.domain.{SeriesComparisonMatchPlayerRow, SeriesComparisonResolvedScope}
 import momo.api.endpoints.*
+import momo.api.usecases.seriescomparison.engine.SeriesDataset
 
 private[usecases] object SeriesComparisonDrilldownAggregation:
   private val Formatter = DateTimeFormatter.ISO_INSTANT
   private val SchemaVersion = 1
 
   def aggregate(
-      scope: SeriesComparisonResolvedScope,
-      metricId: String,
+      dataset: SeriesDataset,
+      metricId: MetricIdString,
       memberId: MemberId,
-      rows: List[SeriesComparisonMatchPlayerRow],
   ): SeriesComparisonDrilldownResponse =
-    val sortedRows = rows.sortBy(rowSortKey)
-    val matchIndexById = matchIndexByIdFrom(sortedRows)
+    val scope = dataset.scope
+    val sortedRows = dataset.orderedRows
+    val matchIndexById = dataset.matchIndexById
+    val metricKey = metricId.toString
     val targetRows = sortedRows.filter(_.memberId == memberId)
     val status = statusFor(targetRows.size)
     val displayName = targetRows.headOption.map(_.memberDisplayName).getOrElse(memberId.value)
     val rankAverageHistory =
-      Option.when(metricId == "rank.averageHistory")(
+      Option.when(metricKey == "rank.averageHistory")(
         rankAverageHistoryPayload(targetRows, matchIndexById, status)
       )
     val playOrderRankHistory =
-      Option.when(metricId == "playOrder.rankHistory")(
+      Option.when(metricKey == "playOrder.rankHistory")(
         playOrderRankHistoryPayload(targetRows, sortedRows, matchIndexById)
       )
     SeriesComparisonDrilldownResponse(
       schemaVersion = SchemaVersion,
-      metricId = metricId,
+      metricId = metricKey,
       scope = scopeResponse(scope),
       player = SeriesComparisonPlayerResponse(memberId = memberId.value, displayName = displayName),
       rankAverageHistory = rankAverageHistory,
       playOrderRankHistory = playOrderRankHistory,
       dataQuality = SeriesComparisonDataQualityResponse(List(
         MetricQualityResponse(
-          metricId = metricId,
+          metricId = metricKey,
           playerMemberId = Some(memberId.value),
           denominator = targetRows.size,
           targetCount = targetRows.size,
@@ -228,22 +231,6 @@ private[usecases] object SeriesComparisonDrilldownAggregation:
         cumulativeAverageDelta = cumulativeAverageBefore.map(last.cumulativeAverageRank - _),
       )
     }
-
-  private def matchIndexByIdFrom(
-      rows: List[SeriesComparisonMatchPlayerRow]
-  ): Map[MatchId, Int] = rows.groupBy(_.matchId).toList.sortBy { case (_, groupRows) =>
-    val first = groupRows.sortBy(rowSortKey).head
-    rowSortKey(first)
-  }.zipWithIndex.map { case ((matchId, _), index) => matchId -> (index + 1) }.toMap
-
-  private def rowSortKey(row: SeriesComparisonMatchPlayerRow) =
-    (
-      row.playedAt.toEpochMilli,
-      row.heldEventId.value,
-      row.matchNoInEvent.value,
-      row.matchId.value,
-      row.memberId.value,
-    )
 
   private def averageUnsafe(values: List[Int]): Double =
     values.sum * 1.0d / values.size

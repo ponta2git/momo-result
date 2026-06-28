@@ -167,6 +167,16 @@ final class GetSeriesComparisonDrilldownSpec extends MomoCatsEffectSuite:
       )
     yield assertAppError(result, "NOT_FOUND", "series comparison scope was not found")
 
+  test("rejects invalid metric id before resolving scope"):
+    val usecase = GetSeriesComparisonDrilldown[IO](StaticReadModel(None, Nil))
+
+    for result <- usecase.run(
+        SeriesComparisonScope.Overall(titleId),
+        "../rank.averageHistory",
+        memberId,
+      )
+    yield assertAppError(result, "VALIDATION_FAILED", "metricId")
+
   private def sampleRows: List[SeriesComparisonMatchPlayerRow] = List(
     row(1, "held_a", 1, "ponta", "ぽんた", 4),
     row(1, "held_a", 1, "akane", "あかね", 1),

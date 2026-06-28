@@ -26,29 +26,146 @@ import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.repositories.{SeriesComparisonReadAlg, SeriesComparisonReadModel}
 
 object PostgresSeriesComparison:
-  private type SeriesRow = (GameTitleId, String, String, Int, Int, Option[Instant])
-  private type ScopeOptionRow = (GameTitleId, String, String, Int, Int)
-  private type PlayerRow = (
-      MatchId,
-      Instant,
-      HeldEventId,
-      MatchNoInEvent,
-      GameTitleId,
-      SeasonMasterId,
-      MapMasterId,
-      MemberId,
-      String,
-      PlayOrder,
-      Rank,
-      Int,
-      Int,
-      Int,
-      Int,
-      Int,
-      Int,
-      Int,
-      Int,
+  private final case class SeriesRow(
+      gameTitleId: GameTitleId,
+      name: String,
+      layoutFamily: String,
+      displayOrder: Int,
+      confirmedMatchCount: Int,
+      latestConfirmedPlayedAt: Option[Instant],
   )
+
+  private object SeriesRow:
+    given Read[SeriesRow] =
+      Read[(GameTitleId, String, String, Int, Int, Option[Instant])].map {
+        case (
+              gameTitleId,
+              name,
+              layoutFamily,
+              displayOrder,
+              confirmedMatchCount,
+              latestConfirmedPlayedAt,
+            ) =>
+          SeriesRow(
+            gameTitleId = gameTitleId,
+            name = name,
+            layoutFamily = layoutFamily,
+            displayOrder = displayOrder,
+            confirmedMatchCount = confirmedMatchCount,
+            latestConfirmedPlayedAt = latestConfirmedPlayedAt,
+          )
+      }
+
+  private final case class ScopeOptionRow(
+      gameTitleId: GameTitleId,
+      id: String,
+      name: String,
+      displayOrder: Int,
+      confirmedMatchCount: Int,
+  )
+
+  private object ScopeOptionRow:
+    given Read[ScopeOptionRow] = Read[(GameTitleId, String, String, Int, Int)].map {
+      case (gameTitleId, id, name, displayOrder, confirmedMatchCount) =>
+        ScopeOptionRow(
+          gameTitleId = gameTitleId,
+          id = id,
+          name = name,
+          displayOrder = displayOrder,
+          confirmedMatchCount = confirmedMatchCount,
+        )
+    }
+
+  private final case class PlayerRow(
+      matchId: MatchId,
+      playedAt: Instant,
+      heldEventId: HeldEventId,
+      matchNoInEvent: MatchNoInEvent,
+      gameTitleId: GameTitleId,
+      seasonMasterId: SeasonMasterId,
+      mapMasterId: MapMasterId,
+      memberId: MemberId,
+      memberDisplayName: String,
+      playOrder: PlayOrder,
+      rank: Rank,
+      totalAssetsManYen: Int,
+      revenueManYen: Int,
+      destinationCount: Int,
+      plusStationCount: Int,
+      minusStationCount: Int,
+      cardStationCount: Int,
+      cardShopCount: Int,
+      suriNoGinjiCount: Int,
+  )
+
+  private object PlayerRow:
+    given Read[PlayerRow] =
+      Read[
+        (
+            MatchId,
+            Instant,
+            HeldEventId,
+            MatchNoInEvent,
+            GameTitleId,
+            SeasonMasterId,
+            MapMasterId,
+            MemberId,
+            String,
+            PlayOrder,
+            Rank,
+            Int,
+            Int,
+            Int,
+            Int,
+            Int,
+            Int,
+            Int,
+            Int,
+        )
+      ].map {
+        case (
+              matchId,
+              playedAt,
+              heldEventId,
+              matchNoInEvent,
+              gameTitleId,
+              seasonMasterId,
+              mapMasterId,
+              memberId,
+              memberDisplayName,
+              playOrder,
+              rank,
+              totalAssetsManYen,
+              revenueManYen,
+              destinationCount,
+              plusStationCount,
+              minusStationCount,
+              cardStationCount,
+              cardShopCount,
+              suriNoGinjiCount,
+            ) =>
+          PlayerRow(
+            matchId = matchId,
+            playedAt = playedAt,
+            heldEventId = heldEventId,
+            matchNoInEvent = matchNoInEvent,
+            gameTitleId = gameTitleId,
+            seasonMasterId = seasonMasterId,
+            mapMasterId = mapMasterId,
+            memberId = memberId,
+            memberDisplayName = memberDisplayName,
+            playOrder = playOrder,
+            rank = rank,
+            totalAssetsManYen = totalAssetsManYen,
+            revenueManYen = revenueManYen,
+            destinationCount = destinationCount,
+            plusStationCount = plusStationCount,
+            minusStationCount = minusStationCount,
+            cardStationCount = cardStationCount,
+            cardShopCount = cardShopCount,
+            suriNoGinjiCount = suriNoGinjiCount,
+          )
+      }
 
   val alg: SeriesComparisonReadAlg[ConnectionIO] = new SeriesComparisonReadAlg[ConnectionIO]:
     override def options: ConnectionIO[SeriesComparisonOptionsData] =
@@ -100,21 +217,26 @@ object PostgresSeriesComparison:
       yield
         val seasonsByTitle = scopeOptionsByTitle(seasonRows)
         val mapsByTitle = scopeOptionsByTitle(mapRows)
-        val latest = seriesRows.filter(_._5 > 0).sortBy(row =>
-          (-row._6.map(_.toEpochMilli).getOrElse(Long.MinValue), row._4, row._2, row._1.value)
-        ).headOption.map(_._1)
+        val latest = seriesRows.filter(_.confirmedMatchCount > 0).sortBy(row =>
+          (
+            -row.latestConfirmedPlayedAt.map(_.toEpochMilli).getOrElse(Long.MinValue),
+            row.displayOrder,
+            row.name,
+            row.gameTitleId.value,
+          )
+        ).headOption.map(_.gameTitleId)
         SeriesComparisonOptionsData(
           latestConfirmedGameTitleId = latest,
           series = seriesRows.map { row =>
             SeriesComparisonSeriesOptionData(
-              gameTitleId = row._1,
-              name = row._2,
-              layoutFamily = row._3,
-              displayOrder = row._4,
-              confirmedMatchCount = row._5,
-              latestConfirmedPlayedAt = row._6,
-              seasons = seasonsByTitle.getOrElse(row._1, Nil),
-              maps = mapsByTitle.getOrElse(row._1, Nil),
+              gameTitleId = row.gameTitleId,
+              name = row.name,
+              layoutFamily = row.layoutFamily,
+              displayOrder = row.displayOrder,
+              confirmedMatchCount = row.confirmedMatchCount,
+              latestConfirmedPlayedAt = row.latestConfirmedPlayedAt,
+              seasons = seasonsByTitle.getOrElse(row.gameTitleId, Nil),
+              maps = mapsByTitle.getOrElse(row.gameTitleId, Nil),
             )
           },
         )
@@ -253,38 +375,38 @@ object PostgresSeriesComparison:
 
   private def scopeOptionsByTitle(
       rows: List[ScopeOptionRow]
-  ): Map[GameTitleId, List[SeriesComparisonScopeOptionData]] = rows.groupBy(_._1).view
+  ): Map[GameTitleId, List[SeriesComparisonScopeOptionData]] = rows.groupBy(_.gameTitleId).view
     .mapValues(_.map(row =>
       SeriesComparisonScopeOptionData(
-        id = row._2,
-        name = row._3,
-        displayOrder = row._4,
-        confirmedMatchCount = row._5,
+        id = row.id,
+        name = row.name,
+        displayOrder = row.displayOrder,
+        confirmedMatchCount = row.confirmedMatchCount,
       )
     )).toMap
 
   private def domainRow(row: PlayerRow): SeriesComparisonMatchPlayerRow =
     SeriesComparisonMatchPlayerRow(
-      matchId = row._1,
-      playedAt = row._2,
-      heldEventId = row._3,
-      matchNoInEvent = row._4,
-      gameTitleId = row._5,
-      seasonMasterId = row._6,
-      mapMasterId = row._7,
-      memberId = row._8,
-      memberDisplayName = row._9,
-      playOrder = row._10,
-      rank = row._11,
-      totalAssetsManYen = momo.api.domain.ManYen.fromInt(row._12),
-      revenueManYen = momo.api.domain.ManYen.fromInt(row._13),
+      matchId = row.matchId,
+      playedAt = row.playedAt,
+      heldEventId = row.heldEventId,
+      matchNoInEvent = row.matchNoInEvent,
+      gameTitleId = row.gameTitleId,
+      seasonMasterId = row.seasonMasterId,
+      mapMasterId = row.mapMasterId,
+      memberId = row.memberId,
+      memberDisplayName = row.memberDisplayName,
+      playOrder = row.playOrder,
+      rank = row.rank,
+      totalAssetsManYen = momo.api.domain.ManYen.fromInt(row.totalAssetsManYen),
+      revenueManYen = momo.api.domain.ManYen.fromInt(row.revenueManYen),
       incidents = SeriesComparisonIncidentCountsRow(
-        destination = row._14,
-        plusStation = row._15,
-        minusStation = row._16,
-        cardStation = row._17,
-        cardShop = row._18,
-        suriNoGinji = row._19,
+        destination = row.destinationCount,
+        plusStation = row.plusStationCount,
+        minusStation = row.minusStationCount,
+        cardStation = row.cardStationCount,
+        cardShop = row.cardShopCount,
+        suriNoGinji = row.suriNoGinjiCount,
       ),
     )
 end PostgresSeriesComparison

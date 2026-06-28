@@ -39,23 +39,96 @@ import momo.api.repositories.{MatchListAlg, MatchListReadModel}
  */
 object PostgresMatchList:
 
-  private type Row = (
-      String,
-      String,
-      Option[MatchId],
-      Option[MatchDraftId],
-      String,
-      Option[HeldEventId],
-      Option[MatchNoInEvent],
-      Option[GameTitleId],
-      Option[SeasonMasterId],
-      Option[MapMasterId],
-      Option[MemberId],
-      Option[Instant],
-      Instant,
-      Instant,
-      Instant,
+  private final case class Row(
+      kind: String,
+      id: String,
+      matchId: Option[MatchId],
+      matchDraftId: Option[MatchDraftId],
+      status: String,
+      heldEventId: Option[HeldEventId],
+      matchNoInEvent: Option[MatchNoInEvent],
+      gameTitleId: Option[GameTitleId],
+      seasonMasterId: Option[SeasonMasterId],
+      mapMasterId: Option[MapMasterId],
+      ownerMemberId: Option[MemberId],
+      playedAt: Option[Instant],
+      createdAt: Instant,
+      updatedAt: Instant,
+      heldAtSort: Instant,
   )
+
+  private given Read[Row] = Read[
+    (
+        String,
+        String,
+        Option[MatchId],
+        Option[MatchDraftId],
+        String,
+        Option[HeldEventId],
+        Option[MatchNoInEvent],
+        Option[GameTitleId],
+        Option[SeasonMasterId],
+        Option[MapMasterId],
+        Option[MemberId],
+        Option[Instant],
+        Instant,
+        Instant,
+        Instant,
+    )
+  ].map {
+    case (
+          kind,
+          id,
+          matchId,
+          matchDraftId,
+          status,
+          heldEventId,
+          matchNoInEvent,
+          gameTitleId,
+          seasonMasterId,
+          mapMasterId,
+          ownerMemberId,
+          playedAt,
+          createdAt,
+          updatedAt,
+          heldAtSort,
+        ) =>
+      Row(
+        kind = kind,
+        id = id,
+        matchId = matchId,
+        matchDraftId = matchDraftId,
+        status = status,
+        heldEventId = heldEventId,
+        matchNoInEvent = matchNoInEvent,
+        gameTitleId = gameTitleId,
+        seasonMasterId = seasonMasterId,
+        mapMasterId = mapMasterId,
+        ownerMemberId = ownerMemberId,
+        playedAt = playedAt,
+        createdAt = createdAt,
+        updatedAt = updatedAt,
+        heldAtSort = heldAtSort,
+      )
+  }
+
+  private final case class RankRow(
+      matchId: MatchId,
+      memberId: MemberId,
+      rank: Rank,
+      playOrder: PlayOrder,
+  ):
+    def toEntry: MatchListRankEntry = MatchListRankEntry(memberId, rank, playOrder)
+
+  private given Read[RankRow] = Read[(MatchId, MemberId, Rank, PlayOrder)].map {
+    case (matchId, memberId, rank, playOrder) =>
+      RankRow(
+        matchId = matchId,
+        memberId = memberId,
+        rank = rank,
+        playOrder = playOrder,
+      )
+  }
 
   private val confirmedBase = fr"""SELECT
     'match' AS kind,
@@ -145,29 +218,28 @@ object PostgresMatchList:
         FROM match_players
         WHERE """ ++ fragments.in(fr"match_id", ids) ++ fr"""
         ORDER BY match_id, play_order
-      """).query[(MatchId, MemberId, Rank, PlayOrder)].to[List].map { rows =>
-        rows.groupBy(_._1).view.mapValues(_.map(row => MatchListRankEntry(row._2, row._3, row._4)))
-          .toMap
+      """).query[RankRow].to[List].map { rows =>
+        rows.groupBy(_.matchId).view.mapValues(_.map(_.toEntry)).toMap
       }
 
   private def toItem(row: Row, getRanks: MatchId => List[MatchListRankEntry]): MatchListItem =
-    val kind = MatchListItemKind.fromWire(row._1).getOrElse(MatchListItemKind.Match)
-    val ranks = row._3.map(getRanks).getOrElse(Nil)
+    val kind = MatchListItemKind.fromWire(row.kind).getOrElse(MatchListItemKind.Match)
+    val ranks = row.matchId.map(getRanks).getOrElse(Nil)
     MatchListItem(
       kind = kind,
-      id = row._2,
-      matchId = row._3,
-      matchDraftId = row._4,
-      status = row._5,
-      heldEventId = row._6,
-      matchNoInEvent = row._7,
-      gameTitleId = row._8,
-      seasonMasterId = row._9,
-      mapMasterId = row._10,
-      ownerMemberId = row._11,
-      playedAt = row._12,
-      createdAt = row._13,
-      updatedAt = row._14,
+      id = row.id,
+      matchId = row.matchId,
+      matchDraftId = row.matchDraftId,
+      status = row.status,
+      heldEventId = row.heldEventId,
+      matchNoInEvent = row.matchNoInEvent,
+      gameTitleId = row.gameTitleId,
+      seasonMasterId = row.seasonMasterId,
+      mapMasterId = row.mapMasterId,
+      ownerMemberId = row.ownerMemberId,
+      playedAt = row.playedAt,
+      createdAt = row.createdAt,
+      updatedAt = row.updatedAt,
       ranks = ranks,
     )
 
@@ -262,7 +334,7 @@ object PostgresMatchList:
             total <- (fr"SELECT COUNT(*)::int FROM (" ++ selectQuery ++ fr") AS count_source")
               .query[Int].unique
             rows <- ordered.query[Row].to[List]
-            matchIds = rows.flatMap(_._3).distinct
+            matchIds = rows.flatMap(_.matchId).distinct
             ranks <- loadRanks(matchIds)
           yield PagedResult(
             rows.map(row => toItem(row, matchId => ranks.getOrElse(matchId, Nil))),

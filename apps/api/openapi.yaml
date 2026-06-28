@@ -1895,6 +1895,14 @@
         "operationId" : "getApiAnalyticsSeries-comparison",
         "parameters" : [
           {
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
             "name" : "gameTitleId",
             "in" : "query",
             "required" : true,
@@ -1929,14 +1937,6 @@
           {
             "name" : "mapMasterId",
             "in" : "query",
-            "required" : false,
-            "schema" : {
-              "type" : "string"
-            }
-          },
-          {
-            "name" : "X-Momo-Account-Id",
-            "in" : "header",
             "required" : false,
             "schema" : {
               "type" : "string"
@@ -1985,6 +1985,14 @@
         "operationId" : "getApiAnalyticsSeries-comparisonReview",
         "parameters" : [
           {
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
             "name" : "gameTitleId",
             "in" : "query",
             "required" : true,
@@ -2003,14 +2011,6 @@
           {
             "name" : "mapMasterId",
             "in" : "query",
-            "required" : false,
-            "schema" : {
-              "type" : "string"
-            }
-          },
-          {
-            "name" : "X-Momo-Account-Id",
-            "in" : "header",
             "required" : false,
             "schema" : {
               "type" : "string"
@@ -2059,6 +2059,14 @@
         "operationId" : "getApiAnalyticsSeries-comparisonDrilldown",
         "parameters" : [
           {
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
             "name" : "gameTitleId",
             "in" : "query",
             "required" : true,
@@ -2093,14 +2101,6 @@
           {
             "name" : "mapMasterId",
             "in" : "query",
-            "required" : false,
-            "schema" : {
-              "type" : "string"
-            }
-          },
-          {
-            "name" : "X-Momo-Account-Id",
-            "in" : "header",
             "required" : false,
             "schema" : {
               "type" : "string"

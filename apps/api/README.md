@@ -28,6 +28,14 @@ sbt apiOpenApi
 sbt apiOpenApiCheck
 ```
 
+## API実装規約
+
+- 認証付き Tapir endpoint は `securityIn` / `serverSecurityLogic` を使う共通基盤から定義する。HTTP module で account header / CSRF header tuple を直接分解しない。
+- 新規 boundary value は Iron refined type または既存 domain value object で検証する。usecase へ raw `String` / `Int` を渡さない。
+- 設定は Ciris の `ConfigValue` で読み込む。secret 値はログや例外文へ出さず、既存型を変更する場合は `ciris.Secret` を優先する。
+- Doobie repository は SQL fragment、DB row case class、domain/application 変換、公開 facade を分ける。`row._N` による mapping を増やさない。
+- 戦績比較の新規集計ロジックは engine / presenter 分離を守る。engine は endpoint DTO、HTTP、repository、effect type を import しない。
+
 `apiOpenApi` は Tapir のエンドポイント定義から `openapi.yaml` を生成します。現時点では JSON 形式で出力しています（JSON は YAML 1.2 としても有効です）。
 
 ### 品質ゲート（format / lint / compile / test）

@@ -79,11 +79,41 @@
                 "schema" : {
                   "type" : "string"
                 }
+              },
+              "Set-Cookie" : {
+                "required" : false,
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "type" : "string"
+                  }
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
               }
             }
           },
           "default" : {
             "description" : "",
+            "headers" : {
+              "Set-Cookie" : {
+                "required" : false,
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "type" : "string"
+                  }
+                }
+              }
+            },
             "content" : {
               "application/json" : {
                 "schema" : {
@@ -126,6 +156,17 @@
             "schema" : {
               "type" : "string"
             }
+          },
+          {
+            "name" : "Cookie",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            }
           }
         ],
         "responses" : {
@@ -137,11 +178,41 @@
                 "schema" : {
                   "type" : "string"
                 }
+              },
+              "Set-Cookie" : {
+                "required" : false,
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "type" : "string"
+                  }
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
               }
             }
           },
           "default" : {
             "description" : "",
+            "headers" : {
+              "Set-Cookie" : {
+                "required" : false,
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "type" : "string"
+                  }
+                }
+              }
+            },
             "content" : {
               "application/json" : {
                 "schema" : {
@@ -167,14 +238,47 @@
             "schema" : {
               "type" : "string"
             }
+          },
+          {
+            "name" : "Cookie",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            }
           }
         ],
         "responses" : {
           "204" : {
-            "description" : ""
+            "description" : "",
+            "headers" : {
+              "Set-Cookie" : {
+                "required" : false,
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "type" : "string"
+                  }
+                }
+              }
+            }
           },
           "default" : {
             "description" : "",
+            "headers" : {
+              "Set-Cookie" : {
+                "required" : false,
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "type" : "string"
+                  }
+                }
+              }
+            },
             "content" : {
               "application/json" : {
                 "schema" : {
@@ -200,6 +304,17 @@
             "schema" : {
               "type" : "string"
             }
+          },
+          {
+            "name" : "Cookie",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            }
           }
         ],
         "responses" : {
@@ -215,6 +330,17 @@
           },
           "default" : {
             "description" : "",
+            "headers" : {
+              "Set-Cookie" : {
+                "required" : false,
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "type" : "string"
+                  }
+                }
+              }
+            },
             "content" : {
               "application/json" : {
                 "schema" : {

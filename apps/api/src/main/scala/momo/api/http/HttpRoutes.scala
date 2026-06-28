@@ -20,6 +20,7 @@ import momo.api.config.AppConfig
 import momo.api.http.modules.{
   AdminAccountModule,
   AnalyticsModule,
+  AuthModule,
   ExportModule,
   HealthModule,
   HeldEventModule,
@@ -185,14 +186,15 @@ object HttpRoutes:
         security,
       )
 
-    val tapirRoutes = Http4sServerInterpreter[F]().toRoutes(endpoints)
+    val interpreter = Http4sServerInterpreter[F]()
+    val tapirRoutes = interpreter.toRoutes(endpoints)
 
     val protectedRoutes =
       ProductionSessionMiddleware[F](deps.config, deps.sessionService, deps.csrfTokenService)(
         tapirRoutes.orNotFound
       )
 
-    val authRoutes = AuthHttpRoutes.routes[F](
+    val authRoutes = interpreter.toRoutes(AuthModule.routes[F](
       config = deps.config,
       oauth = deps.oauthClient,
       stateCodec = deps.oauthStateCodec,
@@ -202,7 +204,7 @@ object HttpRoutes:
       rateLimiter = deps.loginRateLimiter,
       callbackStateRateLimiter = deps.authCallbackStateRateLimiter,
       providerBackoff = deps.oauthProviderBackoff,
-    )
+    ))
 
     RequestIdMiddleware[F](SecurityHeadersMiddleware[F](deps.config.appEnv)(HttpErrorMiddleware[F](
       MaxBodySizeMiddleware.requestAndUpload[F](

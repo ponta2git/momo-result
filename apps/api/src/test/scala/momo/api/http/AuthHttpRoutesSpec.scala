@@ -9,6 +9,7 @@ import cats.effect.{IO, Ref, Resource}
 import org.http4s.implicits.*
 import org.http4s.{Header, HttpApp as Http4sApp, Method, Request, ResponseCookie, Status}
 import org.typelevel.ci.CIString
+import sttp.tapir.server.http4s.Http4sServerInterpreter
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.adapters.{InMemoryAppSessionsRepository, InMemoryLoginAccountsRepository}
@@ -26,6 +27,7 @@ import momo.api.domain.LoginAccount
 import momo.api.domain.ids.{AccountId, MemberId, UserId}
 import momo.api.errors.AppError
 import momo.api.http.HttpAssertions.{assertProblem, headerValue}
+import momo.api.http.modules.AuthModule
 import momo.api.testing.SuccessfulDiscordOAuthClient
 
 final class AuthHttpRoutesSpec extends MomoCatsEffectSuite:
@@ -222,7 +224,7 @@ final class AuthHttpRoutesSpec extends MomoCatsEffectSuite:
           )
           sessions = SessionService[IO](sessionsRepo, accounts, authConfigValue, IO.pure(now))
           stateCodec = OAuthStateCodec[IO](authConfigValue, IO.pure(now))
-        yield AuthHttpRoutes.routes[IO](
+        yield Http4sServerInterpreter[IO]().toRoutes(AuthModule.routes[IO](
           config = configFor(imageTmpDir, authConfigValue),
           oauth = oauth,
           stateCodec = stateCodec,
@@ -232,7 +234,7 @@ final class AuthHttpRoutesSpec extends MomoCatsEffectSuite:
           rateLimiter = limiter,
           callbackStateRateLimiter = callbackStateLimiter,
           providerBackoff = providerBackoff,
-        ).orNotFound
+        )).orNotFound
       }
     }
 

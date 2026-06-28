@@ -14,7 +14,7 @@ final class ApiEndpointsArchitectureSpec extends FunSuite:
   private val codecDir = Paths.get("src/main/scala/momo/api/codec")
   private val redisQueuePayload = Paths
     .get("src/main/scala/momo/api/repositories/OcrQueuePayload.scala")
-  private val authHttpRoutes = Paths.get("src/main/scala/momo/api/http/AuthHttpRoutes.scala")
+  private val authModule = Paths.get("src/main/scala/momo/api/http/modules/AuthModule.scala")
   private val commonEndpoint = endpointDir.resolve("CommonEndpoint.scala")
   private val csrfMiddleware = httpDir.resolve("CsrfMiddleware.scala")
   private val maxBodySizeMiddleware = httpDir.resolve("MaxBodySizeMiddleware.scala")
@@ -27,7 +27,7 @@ final class ApiEndpointsArchitectureSpec extends FunSuite:
   private val EndpointVal =
     raw"val\s+([A-Za-z0-9_]+)\s*:\s*(?:PublicEndpoint|SecuredRead|Endpoint|CommonEndpoint\.Secured(?:Read|Mutation))".r
   private val ServerLogicRef =
-    raw"([A-Za-z0-9_]+Endpoints\.[A-Za-z0-9_]+)\s*\.serverLogic(?:Success)?".r
+    raw"([A-Za-z0-9_]+Endpoints\.[A-Za-z0-9_]+)\s*\.(?:serverLogic(?:Success)?|serverSecurityLogic)".r
   private val SecuredLogicRef =
     raw"SecuredEndpoint\s*\.\s*(?:readLogic|mutationLogic|adminReadLogic|adminMutationLogic|masterMutationLogic)\([^,]+,\s*([A-Za-z0-9_]+Endpoints\.[A-Za-z0-9_]+)\)".r
   private val OperationLabelLiteral = """"(?:GET|POST|PUT|PATCH|DELETE) /api[^"]*"""".r
@@ -44,8 +44,7 @@ final class ApiEndpointsArchitectureSpec extends FunSuite:
         ServerLogicRef.findAllMatchIn(text).map(_.group(1)) ++
           SecuredLogicRef.findAllMatchIn(text).map(_.group(1))
       ).toSet
-    val missing = definedEndpointRefs.filterNot(_.startsWith("AuthEndpoints."))
-      .filterNot(serverRefs.contains).sorted
+    val missing = definedEndpointRefs.filterNot(serverRefs.contains).sorted
 
     assertEquals(missing, Nil)
 
@@ -58,33 +57,29 @@ final class ApiEndpointsArchitectureSpec extends FunSuite:
 
     assertEquals(violations, Nil)
 
-  test("hand-written auth routes share the same path contract as Tapir auth endpoints"):
-    val text = read(authHttpRoutes)
+  test("Tapir auth routes share the same path contract as Tapir auth endpoints"):
+    val text = read(authModule)
     val endpointText = read(endpointDir.resolve("AuthEndpoints.scala"))
 
-    assert(text.contains("AuthPaths.LoginPath"))
-    assert(text.contains("AuthPaths.CallbackPath"))
-    assert(text.contains("AuthPaths.LogoutPath"))
-    assert(text.contains("AuthPaths.MePath"))
+    assert(text.contains("AuthEndpoints.login.serverLogic"))
+    assert(text.contains("AuthEndpoints.callback.serverLogic"))
+    assert(text.contains("AuthEndpoints.logout"))
+    assert(text.contains("AuthEndpoints.me"))
+    assert(endpointText.contains("AuthPaths.Api / AuthPaths.Auth / AuthPaths.Login"))
+    assert(endpointText.contains("AuthPaths.Api / AuthPaths.Auth / AuthPaths.Callback"))
+    assert(endpointText.contains("AuthPaths.Api / AuthPaths.Auth / AuthPaths.Logout"))
+    assert(endpointText.contains("AuthPaths.Api / AuthPaths.Auth / AuthPaths.Me"))
     assert(endpointText.contains("AuthPaths.SilentQuery"))
     assert(endpointText.contains("AuthPaths.NextQuery"))
     assert(endpointText.contains("AuthPaths.CodeQuery"))
     assert(endpointText.contains("AuthPaths.StateQuery"))
     assert(endpointText.contains("AuthPaths.ErrorQuery"))
-    assert(text.contains("AuthPaths.SilentQuery"))
-    assert(text.contains("AuthPaths.NextQuery"))
-    assert(text.contains("AuthPaths.CodeQuery"))
-    assert(text.contains("AuthPaths.StateQuery"))
-    assert(text.contains("AuthPaths.ErrorQuery"))
+    assert(text.contains("AuthPaths.LoginPath"))
     assert(!text.contains("\"/api/auth/login\""))
     assert(!text.contains("\"/api/auth/callback\""))
     assert(!text.contains("\"/api/auth/logout\""))
     assert(!text.contains("\"/api/auth/me\""))
-    assert(!text.contains("params.get(\"silent\")"))
-    assert(!text.contains("params.get(\"next\")"))
-    assert(!text.contains("params.get(\"code\")"))
-    assert(!text.contains("params.get(\"state\")"))
-    assert(!text.contains("params.get(\"error\")"))
+    assert(!Files.exists(httpDir.resolve("AuthHttpRoutes.scala")))
 
   test("Tapir endpoints and middleware share common HTTP header names"):
     val endpointText = read(commonEndpoint)

@@ -4,8 +4,8 @@ import scala.util.Random
 
 import momo.api.domain.ids.MemberId
 import momo.api.domain.{SeriesComparisonMatchPlayerRow, SeriesComparisonResolvedScope}
-import momo.api.endpoints.*
 import momo.api.usecases.seriescomparison.engine.SeriesDataset
+import momo.api.usecases.seriescomparison.model.*
 
 private[usecases] object SeriesComparisonReviewAggregation {
   private val SchemaVersion = 4

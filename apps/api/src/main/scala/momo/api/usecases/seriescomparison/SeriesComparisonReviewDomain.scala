@@ -2,7 +2,7 @@ package momo.api.usecases.seriescomparison
 
 import momo.api.domain.SeriesComparisonMatchPlayerRow
 import momo.api.domain.ids.MemberId
-import momo.api.endpoints.SeriesComparisonPlaybookCardResponse
+import momo.api.usecases.seriescomparison.model.SeriesComparisonPlaybookCardResponse
 
 private[seriescomparison] final case class PlaybookCandidate(
     memberId: MemberId,

@@ -7,8 +7,8 @@ import cats.syntax.all.*
 import momo.api.domain.constraints.BoundaryConstraints.MetricIdString
 import momo.api.domain.ids.{MatchId, MemberId}
 import momo.api.domain.{SeriesComparisonMatchPlayerRow, SeriesComparisonResolvedScope}
-import momo.api.endpoints.*
 import momo.api.usecases.seriescomparison.engine.SeriesDataset
+import momo.api.usecases.seriescomparison.model.*
 
 private[usecases] object SeriesComparisonDrilldownAggregation:
   private val Formatter = DateTimeFormatter.ISO_INSTANT

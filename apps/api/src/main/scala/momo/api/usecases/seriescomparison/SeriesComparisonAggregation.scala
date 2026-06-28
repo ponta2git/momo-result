@@ -6,8 +6,8 @@ import cats.syntax.all.*
 
 import momo.api.domain.SeriesComparisonMatchPlayerRow
 import momo.api.domain.ids.MemberId
-import momo.api.endpoints.*
 import momo.api.usecases.seriescomparison.engine.SeriesDataset
+import momo.api.usecases.seriescomparison.model.*
 
 private[usecases] object SeriesComparisonAggregation {
   private object Thresholds:

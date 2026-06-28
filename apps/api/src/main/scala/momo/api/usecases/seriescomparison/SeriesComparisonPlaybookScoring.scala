@@ -3,7 +3,7 @@ package momo.api.usecases.seriescomparison
 import cats.data.NonEmptyList
 
 import momo.api.domain.ids.MemberId
-import momo.api.endpoints.{
+import momo.api.usecases.seriescomparison.model.{
   MetricQualityResponse,
   SeriesComparisonCommonPlaybookTopicResponse,
   SeriesComparisonPlaybookCardResponse,

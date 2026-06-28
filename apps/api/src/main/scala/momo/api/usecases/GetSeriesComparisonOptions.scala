@@ -5,13 +5,13 @@ import java.time.format.DateTimeFormatter
 import cats.Functor
 import cats.syntax.all.*
 
-import momo.api.endpoints.{
+import momo.api.errors.AppError
+import momo.api.repositories.SeriesComparisonReadModel
+import momo.api.usecases.seriescomparison.model.{
   SeriesComparisonOptionsResponse,
   SeriesComparisonScopeOption,
   SeriesComparisonSeriesOption
 }
-import momo.api.errors.AppError
-import momo.api.repositories.SeriesComparisonReadModel
 
 final class GetSeriesComparisonOptions[F[_]: Functor](readModel: SeriesComparisonReadModel[F]):
   def run: F[Either[AppError, SeriesComparisonOptionsResponse]] = readModel.options.map { data =>

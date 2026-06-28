@@ -1,7 +1,5 @@
-package momo.api.endpoints
+package momo.api.usecases.seriescomparison.model
 
-import io.circe.Codec
-import sttp.tapir.Schema
 
 final case class SeriesComparisonReviewBaselineResponse(
     scope: SeriesComparisonScopeResponse,
@@ -9,10 +7,7 @@ final case class SeriesComparisonReviewBaselineResponse(
     playerCount: Int,
     status: String,
     supplementalScopeName: Option[String],
-) derives Codec.AsObject
-object SeriesComparisonReviewBaselineResponse:
-  given Schema[SeriesComparisonReviewBaselineResponse] = Schema.derived
-
+)
 final case class SeriesComparisonCommonPlaybookTopicResponse(
     id: String,
     category: String,
@@ -22,18 +17,12 @@ final case class SeriesComparisonCommonPlaybookTopicResponse(
     affectedPlayerCount: Int,
     memberDisplayNames: List[String],
     status: String,
-) derives Codec.AsObject
-object SeriesComparisonCommonPlaybookTopicResponse:
-  given Schema[SeriesComparisonCommonPlaybookTopicResponse] = Schema.derived
-
+)
 final case class SeriesComparisonPlayerPlaybookResponse(
     memberId: String,
     memberDisplayName: String,
     cards: List[SeriesComparisonPlaybookCardResponse],
-) derives Codec.AsObject
-object SeriesComparisonPlayerPlaybookResponse:
-  given Schema[SeriesComparisonPlayerPlaybookResponse] = Schema.derived
-
+)
 final case class SeriesComparisonPlaybookCardResponse(
     id: String,
     classification: String,
@@ -51,10 +40,7 @@ final case class SeriesComparisonPlaybookCardResponse(
     status: String,
     anchorTarget: SeriesComparisonPlaybookAnchorTargetResponse,
     actionAdviceScore: Double,
-) derives Codec.AsObject
-object SeriesComparisonPlaybookCardResponse:
-  given Schema[SeriesComparisonPlaybookCardResponse] = Schema.derived
-
+)
 final case class SeriesComparisonPlaybookEvidenceResponse(
     metricId: String,
     label: String,
@@ -66,14 +52,9 @@ final case class SeriesComparisonPlaybookEvidenceResponse(
     confidenceLow: Option[Double] = None,
     confidenceHigh: Option[Double] = None,
     stability: Option[Double] = None,
-) derives Codec.AsObject
-object SeriesComparisonPlaybookEvidenceResponse:
-  given Schema[SeriesComparisonPlaybookEvidenceResponse] = Schema.derived
-
+)
 final case class SeriesComparisonPlaybookAnchorTargetResponse(
     view: String,
     sectionId: String,
     label: String,
-) derives Codec.AsObject
-object SeriesComparisonPlaybookAnchorTargetResponse:
-  given Schema[SeriesComparisonPlaybookAnchorTargetResponse] = Schema.derived
+)

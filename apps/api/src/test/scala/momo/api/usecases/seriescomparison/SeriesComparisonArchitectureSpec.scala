@@ -12,6 +12,9 @@ final class SeriesComparisonArchitectureSpec extends FunSuite:
     Paths.get("src/main/scala/momo/api/usecases/seriescomparison/engine")
   private val comparisonRoot =
     Paths.get("src/main/scala/momo/api/usecases/seriescomparison")
+  private val usecaseRoot = Paths.get("src/main/scala/momo/api/usecases")
+  private val endpointModels =
+    Paths.get("src/main/scala/momo/api/endpoints/SeriesComparisonApiModels.scala")
 
   test("series comparison engine is independent from HTTP, repository, and endpoint DTO layers"):
     val forbiddenImports = List(
@@ -37,6 +40,37 @@ final class SeriesComparisonArchitectureSpec extends FunSuite:
     val violations = aggregateFiles.filterNot(path => read(path).contains("dataset: SeriesDataset"))
 
     assertEquals(violations, Nil)
+
+  test("series comparison usecases are independent from endpoint DTO and codec layers"):
+    val checkedFiles = scalaFiles(comparisonRoot) ++ List(
+      usecaseRoot.resolve("GetSeriesComparison.scala"),
+      usecaseRoot.resolve("GetSeriesComparisonOptions.scala"),
+      usecaseRoot.resolve("GetSeriesComparisonReview.scala"),
+      usecaseRoot.resolve("GetSeriesComparisonDrilldown.scala"),
+    )
+    val forbiddenImports = List(
+      "momo.api.endpoints",
+      "io.circe",
+      "sttp.tapir",
+    )
+    val violations = checkedFiles.flatMap { path =>
+      val text = read(path)
+      forbiddenImports.filter(text.contains).map(pattern => s"$path: $pattern")
+    }.sorted
+
+    assertEquals(violations, Nil)
+
+  test("series comparison endpoint models are codec schema facade aliases"):
+    val text = read(endpointModels)
+
+    assert(text.contains("type SeriesComparisonResponse = model.SeriesComparisonResponse"))
+    assert(
+      text.contains("type SeriesComparisonReviewResponse = model.SeriesComparisonReviewResponse")
+    )
+    assert(text.contains(
+      "type SeriesComparisonDrilldownResponse = model.SeriesComparisonDrilldownResponse"
+    ))
+    assert(!text.contains("final case class SeriesComparisonResponse"))
 
   private def scalaFiles(root: Path): List[Path] =
     val stream = Files.walk(root)

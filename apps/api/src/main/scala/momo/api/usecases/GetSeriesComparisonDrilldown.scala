@@ -7,10 +7,10 @@ import momo.api.domain.SeriesComparisonScope
 import momo.api.domain.constraints.BoundaryConstraints
 import momo.api.domain.constraints.BoundaryConstraints.MetricKey
 import momo.api.domain.ids.MemberId
-import momo.api.endpoints.SeriesComparisonDrilldownResponse
 import momo.api.errors.AppError
 import momo.api.repositories.SeriesComparisonReadModel
 import momo.api.usecases.seriescomparison.SeriesComparisonPresenter
+import momo.api.usecases.seriescomparison.model.SeriesComparisonDrilldownResponse
 
 final class GetSeriesComparisonDrilldown[F[_]: Monad](readModel: SeriesComparisonReadModel[F]):
   def run(

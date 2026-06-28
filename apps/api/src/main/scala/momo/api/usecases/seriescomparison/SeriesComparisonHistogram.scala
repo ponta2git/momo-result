@@ -4,7 +4,11 @@ import cats.data.NonEmptyList
 
 import momo.api.domain.SeriesComparisonMatchPlayerRow
 import momo.api.domain.ids.MemberId
-import momo.api.endpoints.{HistogramBinResponse, HistogramResponse, HistogramSeriesResponse}
+import momo.api.usecases.seriescomparison.model.{
+  HistogramBinResponse,
+  HistogramResponse,
+  HistogramSeriesResponse
+}
 
 private[seriescomparison] object SeriesComparisonHistogram:
   final case class Config(

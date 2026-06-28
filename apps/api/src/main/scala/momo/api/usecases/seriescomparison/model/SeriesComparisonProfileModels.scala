@@ -1,7 +1,5 @@
-package momo.api.endpoints
+package momo.api.usecases.seriescomparison.model
 
-import io.circe.Codec
-import sttp.tapir.Schema
 
 final case class RecentFormPlayerResponse(
     memberId: String,
@@ -13,15 +11,9 @@ final case class RecentFormPlayerResponse(
     podiumStreak: Int,
     lowerHalfStreak: Int,
     status: String,
-) derives Codec.AsObject
-object RecentFormPlayerResponse:
-  given Schema[RecentFormPlayerResponse] = Schema.derived
-
+)
 final case class MomentumSwitchResponse(entries: List[MomentumSwitchPlayerResponse])
-    derives Codec.AsObject
-object MomentumSwitchResponse:
-  given Schema[MomentumSwitchResponse] = Schema.derived
-
+   
 final case class MomentumSwitchPlayerResponse(
     memberId: String,
     denominator: Int,
@@ -30,10 +22,7 @@ final case class MomentumSwitchPlayerResponse(
     afterFourth: MomentumSwitchRateResponse,
     afterPodium: MomentumSwitchRateResponse,
     transitionRows: List[MomentumSwitchTransitionRowResponse],
-) derives Codec.AsObject
-object MomentumSwitchPlayerResponse:
-  given Schema[MomentumSwitchPlayerResponse] = Schema.derived
-
+)
 final case class MomentumSwitchRateResponse(
     targetCount: Int,
     successCount: Int,
@@ -41,36 +30,24 @@ final case class MomentumSwitchRateResponse(
     baselineRate: Option[Double],
     deltaFromBaseline: Option[Double],
     status: String,
-) derives Codec.AsObject
-object MomentumSwitchRateResponse:
-  given Schema[MomentumSwitchRateResponse] = Schema.derived
-
+)
 final case class MomentumSwitchTransitionRowResponse(
     previousRank: Int,
     targetCount: Int,
     status: String,
     cells: List[MomentumSwitchTransitionCellResponse],
-) derives Codec.AsObject
-object MomentumSwitchTransitionRowResponse:
-  given Schema[MomentumSwitchTransitionRowResponse] = Schema.derived
-
+)
 final case class MomentumSwitchTransitionCellResponse(
     nextRank: Int,
     count: Int,
     rate: Option[Double],
-) derives Codec.AsObject
-object MomentumSwitchTransitionCellResponse:
-  given Schema[MomentumSwitchTransitionCellResponse] = Schema.derived
-
+)
 final case class PlayerPerformanceProfilesResponse(
     rankStandardDeviationMedian: Option[Double],
     averageRankScoreMedian: Option[Double],
     averageRevenueAssetRateMedian: Option[Double],
     entries: List[PlayerPerformanceProfileResponse],
-) derives Codec.AsObject
-object PlayerPerformanceProfilesResponse:
-  given Schema[PlayerPerformanceProfilesResponse] = Schema.derived
-
+)
 final case class PlayerPerformanceProfileResponse(
     memberId: String,
     rankStandardDeviation: Option[Double],
@@ -80,10 +57,7 @@ final case class PlayerPerformanceProfileResponse(
     profileKind: Option[String],
     strategyKind: Option[String],
     status: String,
-) derives Codec.AsObject
-object PlayerPerformanceProfileResponse:
-  given Schema[PlayerPerformanceProfileResponse] = Schema.derived
-
+)
 final case class AssetStyleProfilesResponse(
     lowAssetThreshold: Option[Int],
     highAssetThreshold: Option[Int],
@@ -91,10 +65,7 @@ final case class AssetStyleProfilesResponse(
     nearMissSecondThreshold: Option[Int],
     heavyLossThreshold: Option[Int],
     entries: List[AssetStyleProfileResponse],
-) derives Codec.AsObject
-object AssetStyleProfilesResponse:
-  given Schema[AssetStyleProfilesResponse] = Schema.derived
-
+)
 final case class AssetStyleProfileResponse(
     memberId: String,
     targetCount: Int,
@@ -104,10 +75,7 @@ final case class AssetStyleProfileResponse(
     tags: List[String],
     metrics: AssetStyleMetricsResponse,
     status: String,
-) derives Codec.AsObject
-object AssetStyleProfileResponse:
-  given Schema[AssetStyleProfileResponse] = Schema.derived
-
+)
 final case class AssetStyleMetricsResponse(
     p10Assets: Option[Double],
     medianAssets: Option[Double],
@@ -133,27 +101,18 @@ final case class AssetStyleMetricsResponse(
     averageRevenueAssetRate: Option[Double],
     destinationAverage: Option[Double],
     destinationPositiveRate: Option[Double],
-) derives Codec.AsObject
-object AssetStyleMetricsResponse:
-  given Schema[AssetStyleMetricsResponse] = Schema.derived
-
+)
 final case class MatchNoInEventBreakdownResponse(
     matchNoInEvent: Int,
     playerRows: List[MatchNoInEventPlayerBreakdownResponse],
-) derives Codec.AsObject
-object MatchNoInEventBreakdownResponse:
-  given Schema[MatchNoInEventBreakdownResponse] = Schema.derived
-
+)
 final case class MatchNoInEventPlayerBreakdownResponse(
     memberId: String,
     targetCount: Int,
     averageRank: Option[Double],
     podiumRate: Option[Double],
     status: String,
-) derives Codec.AsObject
-object MatchNoInEventPlayerBreakdownResponse:
-  given Schema[MatchNoInEventPlayerBreakdownResponse] = Schema.derived
-
+)
 final case class MatchTimelinePointResponse(
     matchIndex: Int,
     matchId: String,
@@ -165,19 +124,13 @@ final case class MatchTimelinePointResponse(
     winnerMemberId: Option[String],
     flags: List[String],
     status: String,
-) derives Codec.AsObject
-object MatchTimelinePointResponse:
-  given Schema[MatchTimelinePointResponse] = Schema.derived
-
+)
 final case class PlayOrderBaselineResponse(
     playOrder: Int,
     assetsAverage: Option[Double],
     revenueAverage: Option[Double],
     matchCount: Int,
-) derives Codec.AsObject
-object PlayOrderBaselineResponse:
-  given Schema[PlayOrderBaselineResponse] = Schema.derived
-
+)
 final case class SeriesComparisonHighlightResponse(
     id: String,
     title: String,
@@ -186,15 +139,9 @@ final case class SeriesComparisonHighlightResponse(
     value: Option[Double],
     targetCount: Int,
     status: String,
-) derives Codec.AsObject
-object SeriesComparisonHighlightResponse:
-  given Schema[SeriesComparisonHighlightResponse] = Schema.derived
-
+)
 final case class SeriesComparisonDataQualityResponse(items: List[MetricQualityResponse])
-    derives Codec.AsObject
-object SeriesComparisonDataQualityResponse:
-  given Schema[SeriesComparisonDataQualityResponse] = Schema.derived
-
+   
 final case class MetricQualityResponse(
     metricId: String,
     playerMemberId: Option[String],
@@ -202,6 +149,4 @@ final case class MetricQualityResponse(
     targetCount: Int,
     status: String,
     hasTies: Boolean,
-) derives Codec.AsObject
-object MetricQualityResponse:
-  given Schema[MetricQualityResponse] = Schema.derived
+)

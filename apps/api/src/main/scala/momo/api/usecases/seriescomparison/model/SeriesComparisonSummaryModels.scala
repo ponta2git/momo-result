@@ -1,7 +1,5 @@
-package momo.api.endpoints
+package momo.api.usecases.seriescomparison.model
 
-import io.circe.Codec
-import sttp.tapir.Schema
 
 final case class SeriesComparisonResponse(
     schemaVersion: Int,
@@ -23,6 +21,4 @@ final case class SeriesComparisonResponse(
     playOrderBaselines: List[PlayOrderBaselineResponse],
     highlights: List[SeriesComparisonHighlightResponse],
     dataQuality: SeriesComparisonDataQualityResponse,
-) derives Codec.AsObject
-object SeriesComparisonResponse:
-  given Schema[SeriesComparisonResponse] = Schema.derived
+)

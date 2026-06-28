@@ -4,10 +4,10 @@ import cats.Monad
 import cats.syntax.all.*
 
 import momo.api.domain.SeriesComparisonScope
-import momo.api.endpoints.SeriesComparisonReviewResponse
 import momo.api.errors.AppError
 import momo.api.repositories.SeriesComparisonReadModel
 import momo.api.usecases.seriescomparison.SeriesComparisonPresenter
+import momo.api.usecases.seriescomparison.model.SeriesComparisonReviewResponse
 
 final class GetSeriesComparisonReview[F[_]: Monad](readModel: SeriesComparisonReadModel[F]):
   def run(scope: SeriesComparisonScope): F[Either[AppError, SeriesComparisonReviewResponse]] =

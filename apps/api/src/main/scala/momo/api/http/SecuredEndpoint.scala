@@ -24,6 +24,8 @@ object SecuredEndpoint:
   ]
 
   type ReadEndpoint[I, O] = Endpoint[Option[String], I, ProblemResponse, O, Any]
+  type MutationEndpoint[I, O] =
+    Endpoint[(Option[String], Option[String]), I, ProblemResponse, O, Any]
 
   def readLogic[F[_]: Async, I, O](
       security: EndpointSecurity[F],
@@ -34,6 +36,54 @@ object SecuredEndpoint:
     .serverSecurityLogic(accountHeader =>
       security.authorizeRead(accountHeader)(account => Async[F].pure(Right(account)))
     )
+    .serverLogic(logic)
+
+  def mutationLogic[F[_]: Async, I, O](
+      security: EndpointSecurity[F],
+      endpoint: MutationEndpoint[I, O],
+  )(
+      logic: AuthenticatedAccount => I => F[Either[ProblemResponse, O]]
+  ): ServerEndpoint[Any, F] = endpoint
+    .serverSecurityLogic { case (accountHeader, csrfToken) =>
+      security.authorizeMutation(accountHeader, csrfToken)(account => Async[F].pure(Right(account)))
+    }
+    .serverLogic(logic)
+
+  def adminReadLogic[F[_]: Async, I, O](
+      security: EndpointSecurity[F],
+      endpoint: ReadEndpoint[I, O],
+  )(
+      logic: AuthenticatedAccount => I => F[Either[ProblemResponse, O]]
+  ): ServerEndpoint[Any, F] = endpoint
+    .serverSecurityLogic(accountHeader =>
+      security.authorizeAdminRead(accountHeader)(account => Async[F].pure(Right(account)))
+    )
+    .serverLogic(logic)
+
+  def adminMutationLogic[F[_]: Async, I, O](
+      security: EndpointSecurity[F],
+      endpoint: MutationEndpoint[I, O],
+  )(
+      logic: AuthenticatedAccount => I => F[Either[ProblemResponse, O]]
+  ): ServerEndpoint[Any, F] = endpoint
+    .serverSecurityLogic { case (accountHeader, csrfToken) =>
+      security.authorizeAdminMutation(accountHeader, csrfToken)(account =>
+        Async[F].pure(Right(account))
+      )
+    }
+    .serverLogic(logic)
+
+  def masterMutationLogic[F[_]: Async, I, O](
+      security: EndpointSecurity[F],
+      endpoint: MutationEndpoint[I, O],
+  )(
+      logic: AuthenticatedAccount => I => F[Either[ProblemResponse, O]]
+  ): ServerEndpoint[Any, F] = endpoint
+    .serverSecurityLogic { case (accountHeader, csrfToken) =>
+      security.authorizeMasterManagementMutation(accountHeader, csrfToken)(account =>
+        Async[F].pure(Right(account))
+      )
+    }
     .serverLogic(logic)
 
   def read[F[_]: Async](security: EndpointSecurity[F]): Read[F, Unit, Unit] = endpoint

@@ -74,4 +74,9 @@ object SeriesComparisonEngine:
 
   private def matchGroupSortKey(rows: List[SeriesComparisonMatchPlayerRow]) =
     val first = rows.head
-    (first.playedAt.toEpochMilli, first.heldEventId.value, first.matchNoInEvent.value, first.matchId.value)
+    (
+      first.playedAt.toEpochMilli,
+      first.heldEventId.value,
+      first.matchNoInEvent.value,
+      first.matchId.value
+    )

@@ -34,7 +34,7 @@ import momo.api.endpoints.{
   UpdateMemberAliasRequest,
   UpdateSeasonMasterRequest
 }
-import momo.api.http.{EndpointSecurity, HttpOperation, IdempotencyReplay}
+import momo.api.http.{EndpointSecurity, HttpOperation, IdempotencyReplay, SecuredEndpoint}
 import momo.api.usecases.{
   CreateGameTitle,
   CreateMapMaster,
@@ -78,236 +78,240 @@ object MasterModule:
       nowF: F[Instant],
       security: EndpointSecurity[F],
   ): List[ServerEndpoint[Any, F]] = List(
-    GameTitlesEndpoints.list.serverLogic { accountHeader =>
-      security.authorizeRead(accountHeader) { _ =>
-        listGameTitles.run
-          .map(items => Right(GameTitleListResponse(items.map(GameTitleResponse.from))))
+    SecuredEndpoint.readLogic(security, GameTitlesEndpoints.list) { _ => _ =>
+      listGameTitles.run
+        .map(items => Right(GameTitleListResponse(items.map(GameTitleResponse.from))))
+    },
+    SecuredEndpoint.masterMutationLogic(security, GameTitlesEndpoints.create) { member =>
+      {
+        case (idemKey, request) =>
+          IdempotencyReplay.wrap[F, CreateGameTitleRequest, GameTitleResponse](
+            idempotency,
+            idemKey,
+            member,
+            HttpOperation.CreateGameTitle,
+            request,
+            nowF,
+            security.decode(
+              MasterCodec.toCreateGameTitleCommand(request)
+            )(command => security.respond(createGameTitle.run(command))(GameTitleResponse.from)),
+          )
       }
     },
-    GameTitlesEndpoints.create.serverLogic { case (accountHeader, csrfToken, idemKey, request) =>
-      security.authorizeMasterManagementMutation(accountHeader, csrfToken) { member =>
-        IdempotencyReplay.wrap[F, CreateGameTitleRequest, GameTitleResponse](
-          idempotency,
-          idemKey,
-          member,
-          HttpOperation.CreateGameTitle,
-          request,
-          nowF,
-          security.decode(
-            MasterCodec.toCreateGameTitleCommand(request)
-          )(command => security.respond(createGameTitle.run(command))(GameTitleResponse.from)),
-        )
+    SecuredEndpoint.masterMutationLogic(security, GameTitlesEndpoints.update) { member =>
+      {
+        case (id, idemKey, request) =>
+          IdempotencyReplay.wrap[F, (String, UpdateGameTitleRequest), GameTitleResponse](
+            idempotency,
+            idemKey,
+            member,
+            HttpOperation.UpdateGameTitle,
+            (id, request),
+            nowF,
+            security.decode(
+              MasterCodec.toUpdateGameTitleCommand(id, request)
+            )(command => security.respond(updateGameTitle.run(command))(GameTitleResponse.from)),
+          )
       }
     },
-    GameTitlesEndpoints.update.serverLogic {
-      case (id, accountHeader, csrfToken, idemKey, request) => security
-          .authorizeMasterManagementMutation(accountHeader, csrfToken) { member =>
-            IdempotencyReplay.wrap[F, (String, UpdateGameTitleRequest), GameTitleResponse](
-              idempotency,
-              idemKey,
-              member,
-              HttpOperation.UpdateGameTitle,
-              (id, request),
-              nowF,
-              security.decode(
-                MasterCodec.toUpdateGameTitleCommand(id, request)
-              )(command => security.respond(updateGameTitle.run(command))(GameTitleResponse.from)),
-            )
-          }
-    },
-    GameTitlesEndpoints.delete.serverLogic { case (id, accountHeader, csrfToken, idemKey) =>
-      security.authorizeMasterManagementMutation(accountHeader, csrfToken) { member =>
-        IdempotencyReplay.wrap[F, String, DeleteMasterResponse](
-          idempotency,
-          idemKey,
-          member,
-          HttpOperation.DeleteGameTitle,
-          id,
-          nowF,
-          security.decode(BoundaryId.required("id", id)(GameTitleId.fromString))(parsedId =>
-            security
-              .respond(deleteGameTitle.run(parsedId))(_ => DeleteMasterResponse(id, deleted = true))
-          ),
-        )
+    SecuredEndpoint.masterMutationLogic(security, GameTitlesEndpoints.delete) { member =>
+      {
+        case (id, idemKey) =>
+          IdempotencyReplay.wrap[F, String, DeleteMasterResponse](
+            idempotency,
+            idemKey,
+            member,
+            HttpOperation.DeleteGameTitle,
+            id,
+            nowF,
+            security.decode(BoundaryId.required("id", id)(GameTitleId.fromString))(parsedId =>
+              security
+                .respond(deleteGameTitle.run(parsedId))(_ =>
+                  DeleteMasterResponse(id, deleted = true)
+                )
+            ),
+          )
       }
     },
-    MapMastersEndpoints.list.serverLogic { case (gameTitleId, accountHeader) =>
-      security.authorizeRead(accountHeader) { _ =>
-        security.decode(BoundaryId.optional("gameTitleId", gameTitleId)(GameTitleId.fromString)) {
-          parsedGameTitleId =>
-            listMapMasters.run(parsedGameTitleId)
-              .map(items => Right(MapMasterListResponse(items.map(MapMasterResponse.from))))
+    SecuredEndpoint.readLogic(security, MapMastersEndpoints.list) { _ => gameTitleId =>
+      security.decode(BoundaryId.optional("gameTitleId", gameTitleId)(GameTitleId.fromString)) {
+        parsedGameTitleId =>
+          listMapMasters.run(parsedGameTitleId)
+            .map(items => Right(MapMasterListResponse(items.map(MapMasterResponse.from))))
+      }
+    },
+    SecuredEndpoint.masterMutationLogic(security, MapMastersEndpoints.create) { member =>
+      {
+        case (idemKey, request) =>
+          IdempotencyReplay.wrap[F, CreateMapMasterRequest, MapMasterResponse](
+            idempotency,
+            idemKey,
+            member,
+            HttpOperation.CreateMapMaster,
+            request,
+            nowF,
+            security.decode(
+              MasterCodec.toCreateMapMasterCommand(request)
+            )(command => security.respond(createMapMaster.run(command))(MapMasterResponse.from)),
+          )
+      }
+    },
+    SecuredEndpoint.masterMutationLogic(security, MapMastersEndpoints.update) { member =>
+      {
+        case (id, idemKey, request) =>
+          IdempotencyReplay.wrap[F, (String, UpdateMapMasterRequest), MapMasterResponse](
+            idempotency,
+            idemKey,
+            member,
+            HttpOperation.UpdateMapMaster,
+            (id, request),
+            nowF,
+            security.decode(
+              MasterCodec.toUpdateMapMasterCommand(id, request)
+            )(command => security.respond(updateMapMaster.run(command))(MapMasterResponse.from)),
+          )
+      }
+    },
+    SecuredEndpoint.masterMutationLogic(security, MapMastersEndpoints.delete) { member =>
+      {
+        case (id, idemKey) =>
+          IdempotencyReplay.wrap[F, String, DeleteMasterResponse](
+            idempotency,
+            idemKey,
+            member,
+            HttpOperation.DeleteMapMaster,
+            id,
+            nowF,
+            security.decode(BoundaryId.required("id", id)(MapMasterId.fromString))(parsedId =>
+              security
+                .respond(deleteMapMaster.run(parsedId))(_ =>
+                  DeleteMasterResponse(id, deleted = true)
+                )
+            ),
+          )
+      }
+    },
+    SecuredEndpoint.readLogic(security, SeasonMastersEndpoints.list) { _ => gameTitleId =>
+      security.decode(BoundaryId.optional("gameTitleId", gameTitleId)(GameTitleId.fromString)) {
+        parsedGameTitleId =>
+          listSeasonMasters.run(parsedGameTitleId)
+            .map(items => Right(SeasonMasterListResponse(items.map(SeasonMasterResponse.from))))
+      }
+    },
+    SecuredEndpoint.masterMutationLogic(security, SeasonMastersEndpoints.create) { member =>
+      {
+        case (idemKey, request) =>
+          IdempotencyReplay.wrap[F, CreateSeasonMasterRequest, SeasonMasterResponse](
+            idempotency,
+            idemKey,
+            member,
+            HttpOperation.CreateSeasonMaster,
+            request,
+            nowF,
+            security.decode(
+              MasterCodec.toCreateSeasonMasterCommand(request)
+            )(command =>
+              security.respond(createSeasonMaster.run(command))(SeasonMasterResponse.from)
+            ),
+          )
+      }
+    },
+    SecuredEndpoint.masterMutationLogic(security, SeasonMastersEndpoints.update) { member =>
+      {
+        case (id, idemKey, request) =>
+          IdempotencyReplay.wrap[F, (String, UpdateSeasonMasterRequest), SeasonMasterResponse](
+            idempotency,
+            idemKey,
+            member,
+            HttpOperation.UpdateSeasonMaster,
+            (id, request),
+            nowF,
+            security.decode(MasterCodec.toUpdateSeasonMasterCommand(id, request))(command =>
+              security.respond(updateSeasonMaster.run(command))(SeasonMasterResponse.from)
+            ),
+          )
+      }
+    },
+    SecuredEndpoint.masterMutationLogic(security, SeasonMastersEndpoints.delete) { member =>
+      {
+        case (id, idemKey) =>
+          IdempotencyReplay.wrap[F, String, DeleteMasterResponse](
+            idempotency,
+            idemKey,
+            member,
+            HttpOperation.DeleteSeasonMaster,
+            id,
+            nowF,
+            security.decode(BoundaryId.required("id", id)(SeasonMasterId.fromString))(parsedId =>
+              security.respond(
+                deleteSeasonMaster.run(parsedId)
+              )(_ => DeleteMasterResponse(id, deleted = true))
+            ),
+          )
+      }
+    },
+    SecuredEndpoint.readLogic(security, IncidentMastersEndpoints.list) { _ => _ =>
+      listIncidentMasters.run
+        .map(items => Right(IncidentMasterListResponse(items.map(IncidentMasterResponse.from))))
+    },
+    SecuredEndpoint.readLogic(security, MemberAliasesEndpoints.list) { _ => memberId =>
+      security
+        .decode(BoundaryId.optional("memberId", memberId)(MemberId.fromString)) { parsedMemberId =>
+          security.respond(
+            listMemberAliases.run(parsedMemberId)
+          )(items => MemberAliasListResponse(items.map(MemberAliasResponse.from)))
         }
+    },
+    SecuredEndpoint.masterMutationLogic(security, MemberAliasesEndpoints.create) { member =>
+      {
+        case (idemKey, request) =>
+          IdempotencyReplay.wrap[F, CreateMemberAliasRequest, MemberAliasResponse](
+            idempotency,
+            idemKey,
+            member,
+            HttpOperation.CreateMemberAlias,
+            request,
+            nowF,
+            security.decode(
+              MasterCodec.toCreateMemberAliasCommand(request)
+            )(command =>
+              security.respond(createMemberAlias.run(command))(MemberAliasResponse.from)
+            ),
+          )
       }
     },
-    MapMastersEndpoints.create.serverLogic { case (accountHeader, csrfToken, idemKey, request) =>
-      security.authorizeMasterManagementMutation(accountHeader, csrfToken) { member =>
-        IdempotencyReplay.wrap[F, CreateMapMasterRequest, MapMasterResponse](
-          idempotency,
-          idemKey,
-          member,
-          HttpOperation.CreateMapMaster,
-          request,
-          nowF,
-          security.decode(
-            MasterCodec.toCreateMapMasterCommand(request)
-          )(command => security.respond(createMapMaster.run(command))(MapMasterResponse.from)),
-        )
+    SecuredEndpoint.masterMutationLogic(security, MemberAliasesEndpoints.update) { member =>
+      {
+        case (id, idemKey, request) =>
+          IdempotencyReplay.wrap[F, (String, UpdateMemberAliasRequest), MemberAliasResponse](
+            idempotency,
+            idemKey,
+            member,
+            HttpOperation.UpdateMemberAlias,
+            (id, request),
+            nowF,
+            security.decode(MasterCodec.toUpdateMemberAliasCommand(id, request))(command =>
+              security.respond(updateMemberAlias.run(command))(MemberAliasResponse.from)
+            ),
+          )
       }
     },
-    MapMastersEndpoints.update.serverLogic {
-      case (id, accountHeader, csrfToken, idemKey, request) => security
-          .authorizeMasterManagementMutation(accountHeader, csrfToken) { member =>
-            IdempotencyReplay.wrap[F, (String, UpdateMapMasterRequest), MapMasterResponse](
-              idempotency,
-              idemKey,
-              member,
-              HttpOperation.UpdateMapMaster,
-              (id, request),
-              nowF,
-              security.decode(
-                MasterCodec.toUpdateMapMasterCommand(id, request)
-              )(command => security.respond(updateMapMaster.run(command))(MapMasterResponse.from)),
-            )
-          }
-    },
-    MapMastersEndpoints.delete.serverLogic { case (id, accountHeader, csrfToken, idemKey) =>
-      security.authorizeMasterManagementMutation(accountHeader, csrfToken) { member =>
-        IdempotencyReplay.wrap[F, String, DeleteMasterResponse](
-          idempotency,
-          idemKey,
-          member,
-          HttpOperation.DeleteMapMaster,
-          id,
-          nowF,
-          security.decode(BoundaryId.required("id", id)(MapMasterId.fromString))(parsedId =>
-            security
-              .respond(deleteMapMaster.run(parsedId))(_ => DeleteMasterResponse(id, deleted = true))
-          ),
-        )
-      }
-    },
-    SeasonMastersEndpoints.list.serverLogic { case (gameTitleId, accountHeader) =>
-      security.authorizeRead(accountHeader) { _ =>
-        security.decode(BoundaryId.optional("gameTitleId", gameTitleId)(GameTitleId.fromString)) {
-          parsedGameTitleId =>
-            listSeasonMasters.run(parsedGameTitleId)
-              .map(items => Right(SeasonMasterListResponse(items.map(SeasonMasterResponse.from))))
-        }
-      }
-    },
-    SeasonMastersEndpoints.create.serverLogic { case (accountHeader, csrfToken, idemKey, request) =>
-      security.authorizeMasterManagementMutation(accountHeader, csrfToken) { member =>
-        IdempotencyReplay.wrap[F, CreateSeasonMasterRequest, SeasonMasterResponse](
-          idempotency,
-          idemKey,
-          member,
-          HttpOperation.CreateSeasonMaster,
-          request,
-          nowF,
-          security.decode(
-            MasterCodec.toCreateSeasonMasterCommand(request)
-          )(command =>
-            security.respond(createSeasonMaster.run(command))(SeasonMasterResponse.from)
-          ),
-        )
-      }
-    },
-    SeasonMastersEndpoints.update.serverLogic {
-      case (id, accountHeader, csrfToken, idemKey, request) => security
-          .authorizeMasterManagementMutation(accountHeader, csrfToken) { member =>
-            IdempotencyReplay.wrap[F, (String, UpdateSeasonMasterRequest), SeasonMasterResponse](
-              idempotency,
-              idemKey,
-              member,
-              HttpOperation.UpdateSeasonMaster,
-              (id, request),
-              nowF,
-              security.decode(MasterCodec.toUpdateSeasonMasterCommand(id, request))(command =>
-                security.respond(updateSeasonMaster.run(command))(SeasonMasterResponse.from)
-              ),
-            )
-          }
-    },
-    SeasonMastersEndpoints.delete.serverLogic { case (id, accountHeader, csrfToken, idemKey) =>
-      security.authorizeMasterManagementMutation(accountHeader, csrfToken) { member =>
-        IdempotencyReplay.wrap[F, String, DeleteMasterResponse](
-          idempotency,
-          idemKey,
-          member,
-          HttpOperation.DeleteSeasonMaster,
-          id,
-          nowF,
-          security.decode(BoundaryId.required("id", id)(SeasonMasterId.fromString))(parsedId =>
-            security.respond(
-              deleteSeasonMaster.run(parsedId)
-            )(_ => DeleteMasterResponse(id, deleted = true))
-          ),
-        )
-      }
-    },
-    IncidentMastersEndpoints.list.serverLogic { accountHeader =>
-      security.authorizeRead(accountHeader) { _ =>
-        listIncidentMasters.run
-          .map(items => Right(IncidentMasterListResponse(items.map(IncidentMasterResponse.from))))
-      }
-    },
-    MemberAliasesEndpoints.list.serverLogic { case (memberId, accountHeader) =>
-      security.authorizeRead(accountHeader) { _ =>
-        security
-          .decode(BoundaryId.optional("memberId", memberId)(MemberId.fromString)) { parsedMemberId =>
-            security.respond(
-              listMemberAliases.run(parsedMemberId)
-            )(items => MemberAliasListResponse(items.map(MemberAliasResponse.from)))
-          }
-      }
-    },
-    MemberAliasesEndpoints.create.serverLogic { case (accountHeader, csrfToken, idemKey, request) =>
-      security.authorizeMasterManagementMutation(accountHeader, csrfToken) { member =>
-        IdempotencyReplay.wrap[F, CreateMemberAliasRequest, MemberAliasResponse](
-          idempotency,
-          idemKey,
-          member,
-          HttpOperation.CreateMemberAlias,
-          request,
-          nowF,
-          security.decode(
-            MasterCodec.toCreateMemberAliasCommand(request)
-          )(command => security.respond(createMemberAlias.run(command))(MemberAliasResponse.from)),
-        )
-      }
-    },
-    MemberAliasesEndpoints.update.serverLogic {
-      case (id, accountHeader, csrfToken, idemKey, request) => security
-          .authorizeMasterManagementMutation(accountHeader, csrfToken) { member =>
-            IdempotencyReplay.wrap[F, (String, UpdateMemberAliasRequest), MemberAliasResponse](
-              idempotency,
-              idemKey,
-              member,
-              HttpOperation.UpdateMemberAlias,
-              (id, request),
-              nowF,
-              security.decode(MasterCodec.toUpdateMemberAliasCommand(id, request))(command =>
-                security.respond(updateMemberAlias.run(command))(MemberAliasResponse.from)
-              ),
-            )
-          }
-    },
-    MemberAliasesEndpoints.delete.serverLogic { case (id, accountHeader, csrfToken, idemKey) =>
-      security.authorizeMasterManagementMutation(accountHeader, csrfToken) { member =>
-        IdempotencyReplay.wrap[F, String, DeleteMasterResponse](
-          idempotency,
-          idemKey,
-          member,
-          HttpOperation.DeleteMemberAlias,
-          id,
-          nowF,
-          security.decode(BoundaryId.required("id", id)(MemberAliasId.fromString))(parsedId =>
-            security.respond(
-              deleteMemberAlias.run(parsedId)
-            )(_ => DeleteMasterResponse(id, deleted = true))
-          ),
-        )
+    SecuredEndpoint.masterMutationLogic(security, MemberAliasesEndpoints.delete) { member =>
+      {
+        case (id, idemKey) =>
+          IdempotencyReplay.wrap[F, String, DeleteMasterResponse](
+            idempotency,
+            idemKey,
+            member,
+            HttpOperation.DeleteMemberAlias,
+            id,
+            nowF,
+            security.decode(BoundaryId.required("id", id)(MemberAliasId.fromString))(parsedId =>
+              security.respond(
+                deleteMemberAlias.run(parsedId)
+              )(_ => DeleteMasterResponse(id, deleted = true))
+            ),
+          )
       }
     },
   )

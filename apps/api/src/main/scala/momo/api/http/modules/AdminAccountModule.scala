@@ -16,7 +16,7 @@ import momo.api.endpoints.{
   UpdateLoginAccountRequest
 }
 import momo.api.errors.AppError
-import momo.api.http.{EndpointSecurity, HttpOperation, IdempotencyReplay}
+import momo.api.http.{EndpointSecurity, HttpOperation, IdempotencyReplay, SecuredEndpoint}
 import momo.api.usecases.{
   CreateLoginAccount,
   CreateLoginAccountCommand,
@@ -34,47 +34,45 @@ object AdminAccountModule:
       nowF: F[Instant],
       security: EndpointSecurity[F],
   ): List[ServerEndpoint[Any, F]] = List(
-    AdminAccountEndpoints.list.serverLogic { accountHeader =>
-      security.authorizeAdminRead(accountHeader) { _ =>
-        listLoginAccounts.run
-          .map(items => Right(LoginAccountListResponse(items.map(LoginAccountResponse.from))))
+    SecuredEndpoint.adminReadLogic(security, AdminAccountEndpoints.list) { _ => _ =>
+      listLoginAccounts.run
+        .map(items => Right(LoginAccountListResponse(items.map(LoginAccountResponse.from))))
+    },
+    SecuredEndpoint.adminMutationLogic(security, AdminAccountEndpoints.create) { account =>
+      {
+        case (idemKey, request) =>
+          IdempotencyReplay.wrap[F, CreateLoginAccountRequest, LoginAccountResponse](
+            idempotency,
+            idemKey,
+            account,
+            HttpOperation.CreateLoginAccount,
+            request,
+            nowF,
+            security.decode(
+              toCommand(request)
+            )(command =>
+              security.respond(createLoginAccount.run(command))(LoginAccountResponse.from)
+            ),
+          )
       }
     },
-    AdminAccountEndpoints.create.serverLogic { case (accountHeader, csrfToken, idemKey, request) =>
-      security.authorizeAdminMutation(accountHeader, csrfToken) { account =>
-        IdempotencyReplay.wrap[F, CreateLoginAccountRequest, LoginAccountResponse](
-          idempotency,
-          idemKey,
-          account,
-          HttpOperation.CreateLoginAccount,
-          request,
-          nowF,
-          security.decode(
-            toCommand(request)
-          )(command =>
-            security.respond(createLoginAccount.run(command))(LoginAccountResponse.from)
-          ),
-        )
+    SecuredEndpoint.adminMutationLogic(security, AdminAccountEndpoints.update) { account =>
+      {
+        case (accountId, idemKey, request) =>
+          IdempotencyReplay.wrap[F, (String, UpdateLoginAccountRequest), LoginAccountResponse](
+            idempotency,
+            idemKey,
+            account,
+            HttpOperation.UpdateLoginAccount,
+            (accountId, request),
+            nowF,
+            security.decode(BoundaryId.required("accountId", accountId)(AccountId.fromString)) { id =>
+              security.decode(toCommand(request))(command =>
+                security.respond(updateLoginAccount.run(id, command))(LoginAccountResponse.from)
+              )
+            },
+          )
       }
-    },
-    AdminAccountEndpoints.update.serverLogic {
-      case (accountId, accountHeader, csrfToken, idemKey, request) => security
-          .authorizeAdminMutation(accountHeader, csrfToken) { account =>
-            IdempotencyReplay.wrap[F, (String, UpdateLoginAccountRequest), LoginAccountResponse](
-              idempotency,
-              idemKey,
-              account,
-              HttpOperation.UpdateLoginAccount,
-              (accountId, request),
-              nowF,
-              security.decode(BoundaryId.required("accountId", accountId)(AccountId.fromString)) {
-                id =>
-                  security.decode(toCommand(request))(command =>
-                    security.respond(updateLoginAccount.run(id, command))(LoginAccountResponse.from)
-                  )
-              },
-            )
-          }
     },
   )
 

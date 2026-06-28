@@ -1,19 +1,16 @@
 package momo.api.endpoints
 
+import sttp.tapir.*
 import sttp.tapir.generic.auto.*
 import sttp.tapir.json.circe.*
-import sttp.tapir.{PublicEndpoint, *}
-
-import momo.api.endpoints.ProblemDetails.ProblemResponse
 
 object MatchesEndpoints:
-  type ConfirmInput = (Option[String], Option[String], Option[String], ConfirmMatchRequest)
+  type ConfirmInput = (Option[String], ConfirmMatchRequest)
 
-  val confirm: PublicEndpoint[ConfirmInput, ProblemResponse, ConfirmMatchResponse, Any] = endpoint
+  val confirm: CommonEndpoint.SecuredMutation[ConfirmInput, ConfirmMatchResponse] = endpoint
     .post
     .in("api" / "matches")
-    .in(CommonEndpoint.accountHeader)
-    .in(CommonEndpoint.csrfHeader)
+    .securityIn(CommonEndpoint.accountHeader.and(CommonEndpoint.csrfHeader))
     .in(CommonEndpoint.idempotencyKeyHeader)
     .in(jsonBody[ConfirmMatchRequest])
     .errorOut(CommonEndpoint.errorOut)
@@ -30,12 +27,12 @@ object MatchesEndpoints:
       Option[Int],
       Option[Int],
       Option[String],
-      Option[String],
   )
 
-  val list: PublicEndpoint[ListInput, ProblemResponse, MatchListResponse, Any] = endpoint
+  val list: CommonEndpoint.SecuredRead[ListInput, MatchListResponse] = endpoint
     .get
     .in("api" / "matches")
+    .securityIn(CommonEndpoint.accountHeader)
     .in(query[Option[String]]("heldEventId"))
     .in(query[Option[String]]("gameTitleId"))
     .in(query[Option[String]]("seasonMasterId"))
@@ -47,54 +44,51 @@ object MatchesEndpoints:
     .in(query[Option[String]]("sort").description(
       "status_priority, updated_desc, held_desc, held_asc, or match_no_asc."
     ))
-    .in(CommonEndpoint.accountHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[MatchListResponse])
     .tag("matches")
 
-  type SummaryInput = (Option[String], Option[String], Option[String], Option[String])
+  type SummaryInput = (Option[String], Option[String], Option[String])
 
-  val summary: PublicEndpoint[SummaryInput, ProblemResponse, MatchListSummaryResponse, Any] =
+  val summary: CommonEndpoint.SecuredRead[SummaryInput, MatchListSummaryResponse] =
     endpoint
       .get
       .in("api" / "matches" / "summary")
+      .securityIn(CommonEndpoint.accountHeader)
       .in(query[Option[String]]("heldEventId"))
       .in(query[Option[String]]("gameTitleId"))
       .in(query[Option[String]]("seasonMasterId"))
-      .in(CommonEndpoint.accountHeader)
       .errorOut(CommonEndpoint.errorOut)
       .out(jsonBody[MatchListSummaryResponse])
       .tag("matches")
 
-  val get: PublicEndpoint[(String, Option[String]), ProblemResponse, MatchDetailResponse, Any] =
+  val get: CommonEndpoint.SecuredRead[String, MatchDetailResponse] =
     endpoint
       .get
       .in("api" / "matches" / path[String]("matchId"))
-      .in(CommonEndpoint.accountHeader)
+      .securityIn(CommonEndpoint.accountHeader)
       .errorOut(CommonEndpoint.errorOut)
       .out(jsonBody[MatchDetailResponse])
       .tag("matches")
 
-  type UpdateInput = (String, Option[String], Option[String], Option[String], UpdateMatchRequest)
+  type UpdateInput = (String, Option[String], UpdateMatchRequest)
 
-  val update: PublicEndpoint[UpdateInput, ProblemResponse, MatchDetailResponse, Any] = endpoint
+  val update: CommonEndpoint.SecuredMutation[UpdateInput, MatchDetailResponse] = endpoint
     .put
     .in("api" / "matches" / path[String]("matchId"))
-    .in(CommonEndpoint.accountHeader)
-    .in(CommonEndpoint.csrfHeader)
+    .securityIn(CommonEndpoint.accountHeader.and(CommonEndpoint.csrfHeader))
     .in(CommonEndpoint.idempotencyKeyHeader)
     .in(jsonBody[UpdateMatchRequest])
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[MatchDetailResponse])
     .tag("matches")
 
-  type DeleteInput = (String, Option[String], Option[String], Option[String])
+  type DeleteInput = (String, Option[String])
 
-  val delete: PublicEndpoint[DeleteInput, ProblemResponse, DeleteMatchResponse, Any] = endpoint
+  val delete: CommonEndpoint.SecuredMutation[DeleteInput, DeleteMatchResponse] = endpoint
     .delete
     .in("api" / "matches" / path[String]("matchId"))
-    .in(CommonEndpoint.accountHeader)
-    .in(CommonEndpoint.csrfHeader)
+    .securityIn(CommonEndpoint.accountHeader.and(CommonEndpoint.csrfHeader))
     .in(CommonEndpoint.idempotencyKeyHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[DeleteMatchResponse])

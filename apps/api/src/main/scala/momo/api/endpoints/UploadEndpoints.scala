@@ -1,20 +1,17 @@
 package momo.api.endpoints
 
 import sttp.model.Part
+import sttp.tapir.*
 import sttp.tapir.generic.auto.*
 import sttp.tapir.json.circe.*
-import sttp.tapir.{PublicEndpoint, *}
-
-import momo.api.endpoints.ProblemDetails.ProblemResponse
 
 object UploadEndpoints:
-  type UploadInput = (Option[String], Option[String], Seq[Part[Array[Byte]]])
+  type UploadInput = Seq[Part[Array[Byte]]]
 
-  val uploadImage: PublicEndpoint[UploadInput, ProblemResponse, UploadImageResponse, Any] = endpoint
+  val uploadImage: CommonEndpoint.SecuredMutation[UploadInput, UploadImageResponse] = endpoint
     .post
     .in(UploadPaths.Api / UploadPaths.Uploads / UploadPaths.Images)
-    .in(CommonEndpoint.accountHeader)
-    .in(CommonEndpoint.csrfHeader)
+    .securityIn(CommonEndpoint.accountHeader.and(CommonEndpoint.csrfHeader))
     .in(multipartBody)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[UploadImageResponse])

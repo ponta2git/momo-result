@@ -387,17 +387,17 @@
         "operationId" : "getApiOcr-jobsJobid",
         "parameters" : [
           {
-            "name" : "jobId",
-            "in" : "path",
-            "required" : true,
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
             "schema" : {
               "type" : "string"
             }
           },
           {
-            "name" : "X-Momo-Account-Id",
-            "in" : "header",
-            "required" : false,
+            "name" : "jobId",
+            "in" : "path",
+            "required" : true,
             "schema" : {
               "type" : "string"
             }
@@ -433,14 +433,6 @@
         "operationId" : "deleteApiOcr-jobsJobid",
         "parameters" : [
           {
-            "name" : "jobId",
-            "in" : "path",
-            "required" : true,
-            "schema" : {
-              "type" : "string"
-            }
-          },
-          {
             "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
@@ -452,6 +444,14 @@
             "name" : "X-CSRF-Token",
             "in" : "header",
             "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "jobId",
+            "in" : "path",
+            "required" : true,
             "schema" : {
               "type" : "string"
             }
@@ -497,17 +497,17 @@
         "operationId" : "getApiOcr-draftsDraftid",
         "parameters" : [
           {
-            "name" : "draftId",
-            "in" : "path",
-            "required" : true,
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
             "schema" : {
               "type" : "string"
             }
           },
           {
-            "name" : "X-Momo-Account-Id",
-            "in" : "header",
-            "required" : false,
+            "name" : "draftId",
+            "in" : "path",
+            "required" : true,
             "schema" : {
               "type" : "string"
             }
@@ -545,18 +545,18 @@
         "operationId" : "getApiOcr-drafts",
         "parameters" : [
           {
-            "name" : "ids",
-            "in" : "query",
-            "description" : "1..20 comma-separated ids.",
-            "required" : true,
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
             "schema" : {
               "type" : "string"
             }
           },
           {
-            "name" : "X-Momo-Account-Id",
-            "in" : "header",
-            "required" : false,
+            "name" : "ids",
+            "in" : "query",
+            "description" : "1..20 comma-separated ids.",
+            "required" : true,
             "schema" : {
               "type" : "string"
             }
@@ -604,6 +604,14 @@
         "operationId" : "getApiExportsMatches",
         "parameters" : [
           {
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
             "name" : "format",
             "in" : "query",
             "required" : true,
@@ -630,14 +638,6 @@
           {
             "name" : "matchId",
             "in" : "query",
-            "required" : false,
-            "schema" : {
-              "type" : "string"
-            }
-          },
-          {
-            "name" : "X-Momo-Account-Id",
-            "in" : "header",
             "required" : false,
             "schema" : {
               "type" : "string"
@@ -700,6 +700,14 @@
         "operationId" : "getApiHeld-events",
         "parameters" : [
           {
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
             "name" : "q",
             "in" : "query",
             "required" : false,
@@ -735,14 +743,6 @@
             "schema" : {
               "type" : "integer",
               "format" : "int32"
-            }
-          },
-          {
-            "name" : "X-Momo-Account-Id",
-            "in" : "header",
-            "required" : false,
-            "schema" : {
-              "type" : "string"
             }
           }
         ],
@@ -862,14 +862,6 @@
         "operationId" : "deleteApiHeld-eventsHeldeventid",
         "parameters" : [
           {
-            "name" : "heldEventId",
-            "in" : "path",
-            "required" : true,
-            "schema" : {
-              "type" : "string"
-            }
-          },
-          {
             "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
@@ -881,6 +873,14 @@
             "name" : "X-CSRF-Token",
             "in" : "header",
             "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "heldEventId",
+            "in" : "path",
+            "required" : true,
             "schema" : {
               "type" : "string"
             }
@@ -1002,17 +1002,17 @@
         "operationId" : "getApiMatch-draftsDraftid",
         "parameters" : [
           {
-            "name" : "draftId",
-            "in" : "path",
-            "required" : true,
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
             "schema" : {
               "type" : "string"
             }
           },
           {
-            "name" : "X-Momo-Account-Id",
-            "in" : "header",
-            "required" : false,
+            "name" : "draftId",
+            "in" : "path",
+            "required" : true,
             "schema" : {
               "type" : "string"
             }
@@ -1048,14 +1048,6 @@
         "operationId" : "patchApiMatch-draftsDraftid",
         "parameters" : [
           {
-            "name" : "draftId",
-            "in" : "path",
-            "required" : true,
-            "schema" : {
-              "type" : "string"
-            }
-          },
-          {
             "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
@@ -1067,6 +1059,14 @@
             "name" : "X-CSRF-Token",
             "in" : "header",
             "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "draftId",
+            "in" : "path",
+            "required" : true,
             "schema" : {
               "type" : "string"
             }
@@ -1132,14 +1132,6 @@
         "operationId" : "postApiMatch-draftsDraftidCancel",
         "parameters" : [
           {
-            "name" : "draftId",
-            "in" : "path",
-            "required" : true,
-            "schema" : {
-              "type" : "string"
-            }
-          },
-          {
             "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
@@ -1151,6 +1143,14 @@
             "name" : "X-CSRF-Token",
             "in" : "header",
             "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "draftId",
+            "in" : "path",
+            "required" : true,
             "schema" : {
               "type" : "string"
             }
@@ -1196,17 +1196,17 @@
         "operationId" : "getApiMatch-draftsDraftidSource-images",
         "parameters" : [
           {
-            "name" : "draftId",
-            "in" : "path",
-            "required" : true,
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
             "schema" : {
               "type" : "string"
             }
           },
           {
-            "name" : "X-Momo-Account-Id",
-            "in" : "header",
-            "required" : false,
+            "name" : "draftId",
+            "in" : "path",
+            "required" : true,
             "schema" : {
               "type" : "string"
             }
@@ -1244,17 +1244,17 @@
         "operationId" : "getApiMatch-draftsDraftidSource-images.zip",
         "parameters" : [
           {
-            "name" : "draftId",
-            "in" : "path",
-            "required" : true,
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
             "schema" : {
               "type" : "string"
             }
           },
           {
-            "name" : "X-Momo-Account-Id",
-            "in" : "header",
-            "required" : false,
+            "name" : "draftId",
+            "in" : "path",
+            "required" : true,
             "schema" : {
               "type" : "string"
             }
@@ -1319,6 +1319,14 @@
         "operationId" : "getApiMatch-draftsDraftidSource-imagesKind",
         "parameters" : [
           {
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
             "name" : "draftId",
             "in" : "path",
             "required" : true,
@@ -1330,14 +1338,6 @@
             "name" : "kind",
             "in" : "path",
             "required" : true,
-            "schema" : {
-              "type" : "string"
-            }
-          },
-          {
-            "name" : "X-Momo-Account-Id",
-            "in" : "header",
-            "required" : false,
             "schema" : {
               "type" : "string"
             }
@@ -1395,6 +1395,14 @@
         ],
         "operationId" : "getApiMatches",
         "parameters" : [
+          {
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
           {
             "name" : "heldEventId",
             "in" : "query",
@@ -1469,14 +1477,6 @@
             "name" : "sort",
             "in" : "query",
             "description" : "status_priority, updated_desc, held_desc, held_asc, or match_no_asc.",
-            "required" : false,
-            "schema" : {
-              "type" : "string"
-            }
-          },
-          {
-            "name" : "X-Momo-Account-Id",
-            "in" : "header",
             "required" : false,
             "schema" : {
               "type" : "string"
@@ -1599,6 +1599,14 @@
         "operationId" : "getApiMatchesSummary",
         "parameters" : [
           {
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
             "name" : "heldEventId",
             "in" : "query",
             "required" : false,
@@ -1617,14 +1625,6 @@
           {
             "name" : "seasonMasterId",
             "in" : "query",
-            "required" : false,
-            "schema" : {
-              "type" : "string"
-            }
-          },
-          {
-            "name" : "X-Momo-Account-Id",
-            "in" : "header",
             "required" : false,
             "schema" : {
               "type" : "string"
@@ -1663,17 +1663,17 @@
         "operationId" : "getApiMatchesMatchid",
         "parameters" : [
           {
-            "name" : "matchId",
-            "in" : "path",
-            "required" : true,
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
             "schema" : {
               "type" : "string"
             }
           },
           {
-            "name" : "X-Momo-Account-Id",
-            "in" : "header",
-            "required" : false,
+            "name" : "matchId",
+            "in" : "path",
+            "required" : true,
             "schema" : {
               "type" : "string"
             }
@@ -1709,14 +1709,6 @@
         "operationId" : "putApiMatchesMatchid",
         "parameters" : [
           {
-            "name" : "matchId",
-            "in" : "path",
-            "required" : true,
-            "schema" : {
-              "type" : "string"
-            }
-          },
-          {
             "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
@@ -1728,6 +1720,14 @@
             "name" : "X-CSRF-Token",
             "in" : "header",
             "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "matchId",
+            "in" : "path",
+            "required" : true,
             "schema" : {
               "type" : "string"
             }
@@ -1791,14 +1791,6 @@
         "operationId" : "deleteApiMatchesMatchid",
         "parameters" : [
           {
-            "name" : "matchId",
-            "in" : "path",
-            "required" : true,
-            "schema" : {
-              "type" : "string"
-            }
-          },
-          {
             "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
@@ -1810,6 +1802,14 @@
             "name" : "X-CSRF-Token",
             "in" : "header",
             "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "matchId",
+            "in" : "path",
+            "required" : true,
             "schema" : {
               "type" : "string"
             }
@@ -2263,14 +2263,6 @@
         "operationId" : "deleteApiGame-titlesId",
         "parameters" : [
           {
-            "name" : "id",
-            "in" : "path",
-            "required" : true,
-            "schema" : {
-              "type" : "string"
-            }
-          },
-          {
             "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
@@ -2282,6 +2274,14 @@
             "name" : "X-CSRF-Token",
             "in" : "header",
             "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "id",
+            "in" : "path",
+            "required" : true,
             "schema" : {
               "type" : "string"
             }
@@ -2325,14 +2325,6 @@
         "operationId" : "patchApiGame-titlesId",
         "parameters" : [
           {
-            "name" : "id",
-            "in" : "path",
-            "required" : true,
-            "schema" : {
-              "type" : "string"
-            }
-          },
-          {
             "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
@@ -2344,6 +2336,14 @@
             "name" : "X-CSRF-Token",
             "in" : "header",
             "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "id",
+            "in" : "path",
+            "required" : true,
             "schema" : {
               "type" : "string"
             }
@@ -2409,16 +2409,16 @@
         "operationId" : "getApiMap-masters",
         "parameters" : [
           {
-            "name" : "gameTitleId",
-            "in" : "query",
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
             "required" : false,
             "schema" : {
               "type" : "string"
             }
           },
           {
-            "name" : "X-Momo-Account-Id",
-            "in" : "header",
+            "name" : "gameTitleId",
+            "in" : "query",
             "required" : false,
             "schema" : {
               "type" : "string"
@@ -2531,14 +2531,6 @@
         "operationId" : "deleteApiMap-mastersId",
         "parameters" : [
           {
-            "name" : "id",
-            "in" : "path",
-            "required" : true,
-            "schema" : {
-              "type" : "string"
-            }
-          },
-          {
             "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
@@ -2550,6 +2542,14 @@
             "name" : "X-CSRF-Token",
             "in" : "header",
             "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "id",
+            "in" : "path",
+            "required" : true,
             "schema" : {
               "type" : "string"
             }
@@ -2593,14 +2593,6 @@
         "operationId" : "patchApiMap-mastersId",
         "parameters" : [
           {
-            "name" : "id",
-            "in" : "path",
-            "required" : true,
-            "schema" : {
-              "type" : "string"
-            }
-          },
-          {
             "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
@@ -2612,6 +2604,14 @@
             "name" : "X-CSRF-Token",
             "in" : "header",
             "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "id",
+            "in" : "path",
+            "required" : true,
             "schema" : {
               "type" : "string"
             }
@@ -2677,16 +2677,16 @@
         "operationId" : "getApiSeason-masters",
         "parameters" : [
           {
-            "name" : "gameTitleId",
-            "in" : "query",
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
             "required" : false,
             "schema" : {
               "type" : "string"
             }
           },
           {
-            "name" : "X-Momo-Account-Id",
-            "in" : "header",
+            "name" : "gameTitleId",
+            "in" : "query",
             "required" : false,
             "schema" : {
               "type" : "string"
@@ -2799,14 +2799,6 @@
         "operationId" : "deleteApiSeason-mastersId",
         "parameters" : [
           {
-            "name" : "id",
-            "in" : "path",
-            "required" : true,
-            "schema" : {
-              "type" : "string"
-            }
-          },
-          {
             "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
@@ -2818,6 +2810,14 @@
             "name" : "X-CSRF-Token",
             "in" : "header",
             "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "id",
+            "in" : "path",
+            "required" : true,
             "schema" : {
               "type" : "string"
             }
@@ -2861,14 +2861,6 @@
         "operationId" : "patchApiSeason-mastersId",
         "parameters" : [
           {
-            "name" : "id",
-            "in" : "path",
-            "required" : true,
-            "schema" : {
-              "type" : "string"
-            }
-          },
-          {
             "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
@@ -2880,6 +2872,14 @@
             "name" : "X-CSRF-Token",
             "in" : "header",
             "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "id",
+            "in" : "path",
+            "required" : true,
             "schema" : {
               "type" : "string"
             }
@@ -2985,16 +2985,16 @@
         "operationId" : "getApiMember-aliases",
         "parameters" : [
           {
-            "name" : "memberId",
-            "in" : "query",
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
             "required" : false,
             "schema" : {
               "type" : "string"
             }
           },
           {
-            "name" : "X-Momo-Account-Id",
-            "in" : "header",
+            "name" : "memberId",
+            "in" : "query",
             "required" : false,
             "schema" : {
               "type" : "string"
@@ -3107,14 +3107,6 @@
         "operationId" : "deleteApiMember-aliasesId",
         "parameters" : [
           {
-            "name" : "id",
-            "in" : "path",
-            "required" : true,
-            "schema" : {
-              "type" : "string"
-            }
-          },
-          {
             "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
@@ -3126,6 +3118,14 @@
             "name" : "X-CSRF-Token",
             "in" : "header",
             "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "id",
+            "in" : "path",
+            "required" : true,
             "schema" : {
               "type" : "string"
             }
@@ -3169,14 +3169,6 @@
         "operationId" : "patchApiMember-aliasesId",
         "parameters" : [
           {
-            "name" : "id",
-            "in" : "path",
-            "required" : true,
-            "schema" : {
-              "type" : "string"
-            }
-          },
-          {
             "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
@@ -3188,6 +3180,14 @@
             "name" : "X-CSRF-Token",
             "in" : "header",
             "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "id",
+            "in" : "path",
+            "required" : true,
             "schema" : {
               "type" : "string"
             }
@@ -3367,14 +3367,6 @@
         "operationId" : "patchApiAdminLogin-accountsAccountid",
         "parameters" : [
           {
-            "name" : "accountId",
-            "in" : "path",
-            "required" : true,
-            "schema" : {
-              "type" : "string"
-            }
-          },
-          {
             "name" : "X-Momo-Account-Id",
             "in" : "header",
             "required" : false,
@@ -3386,6 +3378,14 @@
             "name" : "X-CSRF-Token",
             "in" : "header",
             "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "accountId",
+            "in" : "path",
+            "required" : true,
             "schema" : {
               "type" : "string"
             }

@@ -12,7 +12,7 @@ import momo.api.domain.MatchExportScope
 import momo.api.endpoints.codec.ExportCodec
 import momo.api.endpoints.{ExportEndpoints, ProblemDetails}
 import momo.api.errors.AppError
-import momo.api.http.{EndpointSecurity, HttpDownloadHeaders}
+import momo.api.http.{EndpointSecurity, HttpDownloadHeaders, SecuredEndpoint}
 import momo.api.usecases.ExportMatches
 
 object ExportModule:
@@ -23,9 +23,10 @@ object ExportModule:
       rateLimiter: RateLimiter[F],
       allRateLimiter: RateLimiter[F],
       security: EndpointSecurity[F],
-  ): List[ServerEndpoint[Any, F]] = List(ExportEndpoints.matches.serverLogic {
-    case (format, seasonMasterId, heldEventId, matchId, accountHeader) => security
-        .authorizeRead(accountHeader) { member =>
+  ): List[ServerEndpoint[Any, F]] = List(SecuredEndpoint
+    .readLogic(security, ExportEndpoints.matches) { member =>
+      {
+        case (format, seasonMasterId, heldEventId, matchId) =>
           val decoded =
             for
               exportFormat <- ExportCodec.parseFormat(format)
@@ -52,8 +53,8 @@ object ExportModule:
                     }
               }
           }
-        }
-  })
+      }
+    })
 
   private def selectedRateLimiter[F[_]](
       scope: MatchExportScope,

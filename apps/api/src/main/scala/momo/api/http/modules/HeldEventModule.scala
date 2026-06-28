@@ -15,7 +15,7 @@ import momo.api.endpoints.{
   HeldEventsEndpoints,
   PaginationResponse
 }
-import momo.api.http.{EndpointSecurity, HttpOperation, IdempotencyReplay}
+import momo.api.http.{EndpointSecurity, HttpOperation, IdempotencyReplay, SecuredEndpoint}
 import momo.api.usecases.{CreateHeldEvent, DeleteHeldEvent, ListHeldEvents}
 
 object HeldEventModule:
@@ -27,51 +27,54 @@ object HeldEventModule:
       nowF: F[Instant],
       security: EndpointSecurity[F],
   ): List[ServerEndpoint[Any, F]] = List(
-    HeldEventsEndpoints.list.serverLogic { case (q, limit, page, pageSize, accountHeader) =>
-      security.authorizeRead(accountHeader) { _ =>
-        security.respond(listHeldEvents.run(q, limit, page, pageSize))(result =>
-          HeldEventListResponse(
-            items = result.items.map((e, c) => HeldEventResponse.from(e, c)),
-            pagination = PaginationResponse.from(result.pagination),
-            totalMatchCount = result.totalMatchCount,
-          )
-        )
-      }
-    },
-    HeldEventsEndpoints.create.serverLogic { case (accountHeader, csrfToken, idemKey, request) =>
-      security.authorizeMutation(accountHeader, csrfToken) { member =>
-        IdempotencyReplay.wrap[F, CreateHeldEventRequest, HeldEventResponse](
-          idempotency,
-          idemKey,
-          member,
-          HttpOperation.CreateHeldEvent,
-          request,
-          nowF,
-          security.decode(HeldEventCodec.toCreateCommand(request))(command =>
-            security
-              .respond(createHeldEvent.run(command))(event => HeldEventResponse.from(event, 0))
-          ),
-        )
-      }
-    },
-    HeldEventsEndpoints.delete.serverLogic {
-      case (heldEventId, accountHeader, csrfToken, idemKey) => security
-          .authorizeMutation(accountHeader, csrfToken) { member =>
-            IdempotencyReplay.wrap[F, String, DeleteHeldEventResponse](
-              idempotency,
-              idemKey,
-              member,
-              HttpOperation.DeleteHeldEvent,
-              heldEventId,
-              nowF,
-              security.decode(
-                BoundaryId.required("heldEventId", heldEventId)(HeldEventId.fromString)
-              )(id =>
-                security.respond(deleteHeldEvent.run(id)) { _ =>
-                  DeleteHeldEventResponse(heldEventId = heldEventId, deleted = true)
-                }
-              ),
+    SecuredEndpoint.readLogic(security, HeldEventsEndpoints.list) { _ =>
+      {
+        case (q, limit, page, pageSize) =>
+          security.respond(listHeldEvents.run(q, limit, page, pageSize))(result =>
+            HeldEventListResponse(
+              items = result.items.map((e, c) => HeldEventResponse.from(e, c)),
+              pagination = PaginationResponse.from(result.pagination),
+              totalMatchCount = result.totalMatchCount,
             )
-          }
+          )
+      }
+    },
+    SecuredEndpoint.mutationLogic(security, HeldEventsEndpoints.create) { member =>
+      {
+        case (idemKey, request) =>
+          IdempotencyReplay.wrap[F, CreateHeldEventRequest, HeldEventResponse](
+            idempotency,
+            idemKey,
+            member,
+            HttpOperation.CreateHeldEvent,
+            request,
+            nowF,
+            security.decode(HeldEventCodec.toCreateCommand(request))(command =>
+              security
+                .respond(createHeldEvent.run(command))(event => HeldEventResponse.from(event, 0))
+            ),
+          )
+      }
+    },
+    SecuredEndpoint.mutationLogic(security, HeldEventsEndpoints.delete) { member =>
+      {
+        case (heldEventId, idemKey) =>
+          IdempotencyReplay.wrap[F, String, DeleteHeldEventResponse](
+            idempotency,
+            idemKey,
+            member,
+            HttpOperation.DeleteHeldEvent,
+            heldEventId,
+            nowF,
+            security.decode(BoundaryId.required(
+              "heldEventId",
+              heldEventId
+            )(HeldEventId.fromString))(id =>
+              security.respond(deleteHeldEvent.run(id)) { _ =>
+                DeleteHeldEventResponse(heldEventId = heldEventId, deleted = true)
+              }
+            ),
+          )
+      }
     },
   )

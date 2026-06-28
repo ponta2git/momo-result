@@ -1,21 +1,20 @@
 package momo.api.endpoints
 
+import sttp.tapir.*
 import sttp.tapir.generic.auto.*
 import sttp.tapir.json.circe.*
-import sttp.tapir.{PublicEndpoint, *}
-
-import momo.api.endpoints.ProblemDetails.ProblemResponse
 
 object OcrJobEndpoints:
-  type CreateInput =
-    (Option[String], Option[String], Option[String], Option[String], CreateOcrJobRequest)
-  type CancelInput = (String, Option[String], Option[String], Option[String])
+  type CreateInput = (Option[String], Option[String], CreateOcrJobRequest)
+  type CancelInput = (String, Option[String])
 
-  val create: PublicEndpoint[CreateInput, ProblemResponse, CreateOcrJobResponse, Any] = endpoint
+  val create: CommonEndpoint.SecuredMutation[
+    CreateInput,
+    CreateOcrJobResponse,
+  ] = endpoint
     .post
     .in("api" / "ocr-jobs")
-    .in(CommonEndpoint.accountHeader)
-    .in(CommonEndpoint.csrfHeader)
+    .securityIn(CommonEndpoint.accountHeader.and(CommonEndpoint.csrfHeader))
     .in(CommonEndpoint.idempotencyKeyHeader)
     .in(CommonEndpoint.requestIdHeader)
     .in(jsonBody[CreateOcrJobRequest])
@@ -23,19 +22,18 @@ object OcrJobEndpoints:
     .out(jsonBody[CreateOcrJobResponse])
     .tag("ocr")
 
-  val get: PublicEndpoint[(String, Option[String]), ProblemResponse, OcrJobResponse, Any] = endpoint
+  val get: CommonEndpoint.SecuredRead[String, OcrJobResponse] = endpoint
     .get
     .in("api" / "ocr-jobs" / path[String]("jobId"))
-    .in(CommonEndpoint.accountHeader)
+    .securityIn(CommonEndpoint.accountHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[OcrJobResponse])
     .tag("ocr")
 
-  val cancel: PublicEndpoint[CancelInput, ProblemResponse, CancelOcrJobResponse, Any] = endpoint
+  val cancel: CommonEndpoint.SecuredMutation[CancelInput, CancelOcrJobResponse] = endpoint
     .delete
     .in("api" / "ocr-jobs" / path[String]("jobId"))
-    .in(CommonEndpoint.accountHeader)
-    .in(CommonEndpoint.csrfHeader)
+    .securityIn(CommonEndpoint.accountHeader.and(CommonEndpoint.csrfHeader))
     .in(CommonEndpoint.idempotencyKeyHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[CancelOcrJobResponse])

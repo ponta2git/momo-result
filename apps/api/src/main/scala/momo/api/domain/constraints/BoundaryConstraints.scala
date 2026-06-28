@@ -12,8 +12,9 @@ object BoundaryConstraints:
     "must be a stable lowercase slug"
   type StableKey = (Match["^[A-Za-z0-9][A-Za-z0-9._-]*$"] & MaxLength[120]) DescribedAs
     "must be a stable key"
-  type MetricKey = (Match["^[A-Za-z][A-Za-z0-9]*(?:[.][A-Za-z][A-Za-z0-9]*)*$"] &
-    MaxLength[120]) DescribedAs "must be a dot-separated metric key"
+  type MetricKey =
+    (Match["^[A-Za-z][A-Za-z0-9]*(?:[.][A-Za-z][A-Za-z0-9]*)*$"] &
+      MaxLength[120]) DescribedAs "must be a dot-separated metric key"
   type ViewKey = (Match["^[a-z][a-z0-9-]*$"] & MaxLength[80]) DescribedAs
     "must be a stable view key"
   type PortRange = GreaterEqual[1] & LessEqual[65535]
@@ -31,6 +32,5 @@ object BoundaryConstraints:
   type NonNegativeLong = Long :| NonNegative
 
   inline def validate[A, C](field: String, value: A)(using
-      Constraint[A, C]
-  ): Either[AppError, A :| C] =
+      Constraint[A, C]): Either[AppError, A :| C] =
     value.refineEither[C].leftMap(message => AppError.ValidationFailed(s"$field $message"))

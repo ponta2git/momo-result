@@ -1,7 +1,7 @@
 package momo.api.endpoints
 
 import sttp.tapir.json.circe.*
-import sttp.tapir.{header, statusCode, EndpointInput, EndpointOutput}
+import sttp.tapir.{header, statusCode, Endpoint, EndpointInput, EndpointOutput}
 
 import momo.api.auth.AuthHeaderNames
 import momo.api.endpoints.ProblemDetails.ProblemResponse
@@ -15,6 +15,10 @@ import momo.api.endpoints.ProblemDetails.ProblemResponse
  * are documented in `apps/api/docs/proposals/idempotency-keys.md` and `architecture.md`.
  */
 object CommonEndpoint:
+  type SecuredRead[I, O] = Endpoint[Option[String], I, ProblemResponse, O, Any]
+  type SecuredMutation[I, O] =
+    Endpoint[(Option[String], Option[String]), I, ProblemResponse, O, Any]
+
   val errorOut: EndpointOutput[ProblemResponse] = statusCode.and(jsonBody[ProblemDetails])
 
   /**

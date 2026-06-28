@@ -1,47 +1,39 @@
 package momo.api.endpoints
 
+import sttp.tapir.*
 import sttp.tapir.generic.auto.*
 import sttp.tapir.json.circe.*
-import sttp.tapir.{PublicEndpoint, *}
-
-import momo.api.endpoints.ProblemDetails.ProblemResponse
 
 object AdminAccountEndpoints:
-  val list: PublicEndpoint[Option[String], ProblemResponse, LoginAccountListResponse, Any] =
+  val list: CommonEndpoint.SecuredRead[Unit, LoginAccountListResponse] =
     endpoint
       .get
       .in("api" / "admin" / "login-accounts")
-      .in(CommonEndpoint.accountHeader)
+      .securityIn(CommonEndpoint.accountHeader)
       .errorOut(CommonEndpoint.errorOut)
       .out(jsonBody[LoginAccountListResponse])
       .tag("admin")
 
-  val create: PublicEndpoint[
-    (Option[String], Option[String], Option[String], CreateLoginAccountRequest),
-    ProblemResponse,
+  val create: CommonEndpoint.SecuredMutation[
+    (Option[String], CreateLoginAccountRequest),
     LoginAccountResponse,
-    Any,
   ] = endpoint
     .post
     .in("api" / "admin" / "login-accounts")
-    .in(CommonEndpoint.accountHeader)
-    .in(CommonEndpoint.csrfHeader)
+    .securityIn(CommonEndpoint.accountHeader.and(CommonEndpoint.csrfHeader))
     .in(CommonEndpoint.idempotencyKeyHeader)
     .in(jsonBody[CreateLoginAccountRequest])
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[LoginAccountResponse])
     .tag("admin")
 
-  val update: PublicEndpoint[
-    (String, Option[String], Option[String], Option[String], UpdateLoginAccountRequest),
-    ProblemResponse,
+  val update: CommonEndpoint.SecuredMutation[
+    (String, Option[String], UpdateLoginAccountRequest),
     LoginAccountResponse,
-    Any,
   ] = endpoint
     .patch
     .in("api" / "admin" / "login-accounts" / path[String]("accountId"))
-    .in(CommonEndpoint.accountHeader)
-    .in(CommonEndpoint.csrfHeader)
+    .securityIn(CommonEndpoint.accountHeader.and(CommonEndpoint.csrfHeader))
     .in(CommonEndpoint.idempotencyKeyHeader)
     .in(jsonBody[UpdateLoginAccountRequest])
     .errorOut(CommonEndpoint.errorOut)

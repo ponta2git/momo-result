@@ -21,7 +21,7 @@ import momo.api.endpoints.{
   PaginationResponse,
   UpdateMatchRequest
 }
-import momo.api.http.{EndpointSecurity, HttpOperation, IdempotencyReplay}
+import momo.api.http.{EndpointSecurity, HttpOperation, IdempotencyReplay, SecuredEndpoint}
 import momo.api.usecases.{ConfirmMatch, DeleteMatch, GetMatch, ListMatches, UpdateMatch}
 
 object MatchModule:
@@ -36,42 +36,44 @@ object MatchModule:
       nowF: F[Instant],
       security: EndpointSecurity[F],
   ): List[ServerEndpoint[Any, F]] = List(
-    MatchesEndpoints.confirm.serverLogic { case (accountHeader, csrfToken, idemKey, request) =>
-      security.authorizeMutation(accountHeader, csrfToken) { member =>
-        IdempotencyReplay.wrap[F, ConfirmMatchRequest, ConfirmMatchResponse](
-          idempotency,
-          idemKey,
-          member,
-          HttpOperation.ConfirmMatch,
-          request,
-          nowF,
-          security.decode(MatchCodec.toConfirmCommand(request))(command =>
-            security
-              .respond(confirmMatch.run(command, member.accountId, member.playerMemberId))(record =>
-                ConfirmMatchResponse(
-                  matchId = record.id.value,
-                  heldEventId = record.heldEventId.value,
-                  matchNoInEvent = record.matchNoInEvent.value,
-                  createdAt = DateTimeFormatter.ISO_INSTANT.format(record.createdAt),
+    SecuredEndpoint.mutationLogic(security, MatchesEndpoints.confirm) { member =>
+      {
+        case (idemKey, request) =>
+          IdempotencyReplay.wrap[F, ConfirmMatchRequest, ConfirmMatchResponse](
+            idempotency,
+            idemKey,
+            member,
+            HttpOperation.ConfirmMatch,
+            request,
+            nowF,
+            security.decode(MatchCodec.toConfirmCommand(request))(command =>
+              security
+                .respond(confirmMatch.run(command, member.accountId, member.playerMemberId))(
+                  record =>
+                    ConfirmMatchResponse(
+                      matchId = record.id.value,
+                      heldEventId = record.heldEventId.value,
+                      matchNoInEvent = record.matchNoInEvent.value,
+                      createdAt = DateTimeFormatter.ISO_INSTANT.format(record.createdAt),
+                    )
                 )
-              )
-          ),
-        )
+            ),
+          )
       }
     },
-    MatchesEndpoints.list.serverLogic {
-      case (
-            heldEventId,
-            gameTitleId,
-            seasonMasterId,
-            status,
-            kind,
-            limit,
-            page,
-            pageSize,
-            sort,
-            accountHeader,
-          ) => security.authorizeRead(accountHeader) { member =>
+    SecuredEndpoint.readLogic(security, MatchesEndpoints.list) { member =>
+      {
+        case (
+              heldEventId,
+              gameTitleId,
+              seasonMasterId,
+              status,
+              kind,
+              limit,
+              page,
+              pageSize,
+              sort,
+            ) =>
           ReadRateLimit.enforce(readRateLimiter, member.accountId.value, HttpOperation.ListMatches) {
             security.decode(MatchListCodec.toListCommand(
               heldEventId,
@@ -92,62 +94,62 @@ object MatchModule:
               )
             )
           }
-        }
-    },
-    MatchesEndpoints.summary.serverLogic {
-      case (heldEventId, gameTitleId, seasonMasterId, accountHeader) => security
-          .authorizeRead(accountHeader) { member =>
-            ReadRateLimit
-              .enforce(readRateLimiter, member.accountId.value, HttpOperation.SummarizeMatches) {
-                security.decode(
-                  MatchListCodec.parseSummaryFilter(heldEventId, gameTitleId, seasonMasterId)
-                ) { case (parsedHeldEventId, parsedGameTitleId, parsedSeasonMasterId) =>
-                  security.respond(
-                    listMatches
-                      .summarize(parsedHeldEventId, parsedGameTitleId, parsedSeasonMasterId)
-                  )(MatchListSummaryResponse.from)
-                }
-              }
-          }
-    },
-    MatchesEndpoints.get.serverLogic { case (matchId, accountHeader) =>
-      security.authorizeRead(accountHeader) { _ =>
-        security.decode(
-          BoundaryId.required("matchId", matchId)(MatchId.fromString)
-        )(id => security.respond(getMatch.run(id))(MatchDetailResponse.from))
       }
     },
-    MatchesEndpoints.update.serverLogic {
-      case (matchId, accountHeader, csrfToken, idemKey, request) => security
-          .authorizeMutation(accountHeader, csrfToken) { member =>
-            IdempotencyReplay.wrap[F, (String, UpdateMatchRequest), MatchDetailResponse](
-              idempotency,
-              idemKey,
-              member,
-              HttpOperation.UpdateMatch,
-              (matchId, request),
-              nowF,
-              security.decode(BoundaryId.required("matchId", matchId)(MatchId.fromString)) { id =>
-                security.decode(MatchCodec.toUpdateCommand(request))(command =>
-                  security.respond(updateMatch.run(id, command))(MatchDetailResponse.from)
-                )
-              },
-            )
-          }
+    SecuredEndpoint.readLogic(security, MatchesEndpoints.summary) { member =>
+      {
+        case (heldEventId, gameTitleId, seasonMasterId) =>
+          ReadRateLimit
+            .enforce(readRateLimiter, member.accountId.value, HttpOperation.SummarizeMatches) {
+              security.decode(
+                MatchListCodec.parseSummaryFilter(heldEventId, gameTitleId, seasonMasterId)
+              ) { case (parsedHeldEventId, parsedGameTitleId, parsedSeasonMasterId) =>
+                security.respond(
+                  listMatches.summarize(parsedHeldEventId, parsedGameTitleId, parsedSeasonMasterId)
+                )(MatchListSummaryResponse.from)
+              }
+            }
+      }
     },
-    MatchesEndpoints.delete.serverLogic { case (matchId, accountHeader, csrfToken, idemKey) =>
-      security.authorizeMutation(accountHeader, csrfToken) { member =>
-        IdempotencyReplay.wrap[F, String, DeleteMatchResponse](
-          idempotency,
-          idemKey,
-          member,
-          HttpOperation.DeleteMatch,
-          matchId,
-          nowF,
-          security.decode(BoundaryId.required("matchId", matchId)(MatchId.fromString))(id =>
-            security.respond(deleteMatch.run(id))(_ => DeleteMatchResponse(matchId, deleted = true))
-          ),
-        )
+    SecuredEndpoint.readLogic(security, MatchesEndpoints.get) { _ => matchId =>
+      security.decode(
+        BoundaryId.required("matchId", matchId)(MatchId.fromString)
+      )(id => security.respond(getMatch.run(id))(MatchDetailResponse.from))
+    },
+    SecuredEndpoint.mutationLogic(security, MatchesEndpoints.update) { member =>
+      {
+        case (matchId, idemKey, request) =>
+          IdempotencyReplay.wrap[F, (String, UpdateMatchRequest), MatchDetailResponse](
+            idempotency,
+            idemKey,
+            member,
+            HttpOperation.UpdateMatch,
+            (matchId, request),
+            nowF,
+            security.decode(BoundaryId.required("matchId", matchId)(MatchId.fromString)) { id =>
+              security.decode(MatchCodec.toUpdateCommand(request))(command =>
+                security.respond(updateMatch.run(id, command))(MatchDetailResponse.from)
+              )
+            },
+          )
+      }
+    },
+    SecuredEndpoint.mutationLogic(security, MatchesEndpoints.delete) { member =>
+      {
+        case (matchId, idemKey) =>
+          IdempotencyReplay.wrap[F, String, DeleteMatchResponse](
+            idempotency,
+            idemKey,
+            member,
+            HttpOperation.DeleteMatch,
+            matchId,
+            nowF,
+            security.decode(BoundaryId.required("matchId", matchId)(MatchId.fromString))(id =>
+              security.respond(deleteMatch.run(id))(_ =>
+                DeleteMatchResponse(matchId, deleted = true)
+              )
+            ),
+          )
       }
     },
   )

@@ -1,258 +1,214 @@
 package momo.api.endpoints
 
+import sttp.tapir.*
 import sttp.tapir.generic.auto.*
 import sttp.tapir.json.circe.*
-import sttp.tapir.{PublicEndpoint, *}
-
-import momo.api.endpoints.ProblemDetails.ProblemResponse
 
 object GameTitlesEndpoints:
-  val list: PublicEndpoint[Option[String], ProblemResponse, GameTitleListResponse, Any] = endpoint
+  val list: CommonEndpoint.SecuredRead[Unit, GameTitleListResponse] = endpoint
     .get
     .in("api" / "game-titles")
-    .in(CommonEndpoint.accountHeader)
+    .securityIn(CommonEndpoint.accountHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[GameTitleListResponse])
     .tag("masters")
 
-  val create: PublicEndpoint[
-    (Option[String], Option[String], Option[String], CreateGameTitleRequest),
-    ProblemResponse,
+  val create: CommonEndpoint.SecuredMutation[
+    (Option[String], CreateGameTitleRequest),
     GameTitleResponse,
-    Any,
   ] = endpoint
     .post
     .in("api" / "game-titles")
-    .in(CommonEndpoint.accountHeader)
-    .in(CommonEndpoint.csrfHeader)
+    .securityIn(CommonEndpoint.accountHeader.and(CommonEndpoint.csrfHeader))
     .in(CommonEndpoint.idempotencyKeyHeader)
     .in(jsonBody[CreateGameTitleRequest])
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[GameTitleResponse])
     .tag("masters")
 
-  val update: PublicEndpoint[
-    (String, Option[String], Option[String], Option[String], UpdateGameTitleRequest),
-    ProblemResponse,
+  val update: CommonEndpoint.SecuredMutation[
+    (String, Option[String], UpdateGameTitleRequest),
     GameTitleResponse,
-    Any,
   ] = endpoint
     .patch
     .in("api" / "game-titles" / path[String]("id"))
-    .in(CommonEndpoint.accountHeader)
-    .in(CommonEndpoint.csrfHeader)
+    .securityIn(CommonEndpoint.accountHeader.and(CommonEndpoint.csrfHeader))
     .in(CommonEndpoint.idempotencyKeyHeader)
     .in(jsonBody[UpdateGameTitleRequest])
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[GameTitleResponse])
     .tag("masters")
 
-  val delete: PublicEndpoint[
-    (String, Option[String], Option[String], Option[String]),
-    ProblemResponse,
+  val delete: CommonEndpoint.SecuredMutation[
+    (String, Option[String]),
     DeleteMasterResponse,
-    Any,
   ] = endpoint
     .delete
     .in("api" / "game-titles" / path[String]("id"))
-    .in(CommonEndpoint.accountHeader)
-    .in(CommonEndpoint.csrfHeader)
+    .securityIn(CommonEndpoint.accountHeader.and(CommonEndpoint.csrfHeader))
     .in(CommonEndpoint.idempotencyKeyHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[DeleteMasterResponse])
     .tag("masters")
 
 object MapMastersEndpoints:
-  val list: PublicEndpoint[
-    (Option[String], Option[String]),
-    ProblemResponse,
+  val list: CommonEndpoint.SecuredRead[
+    Option[String],
     MapMasterListResponse,
-    Any,
   ] = endpoint
     .get
     .in("api" / "map-masters")
+    .securityIn(CommonEndpoint.accountHeader)
     .in(query[Option[String]]("gameTitleId"))
-    .in(CommonEndpoint.accountHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[MapMasterListResponse])
     .tag("masters")
 
-  val create: PublicEndpoint[
-    (Option[String], Option[String], Option[String], CreateMapMasterRequest),
-    ProblemResponse,
+  val create: CommonEndpoint.SecuredMutation[
+    (Option[String], CreateMapMasterRequest),
     MapMasterResponse,
-    Any,
   ] = endpoint
     .post
     .in("api" / "map-masters")
-    .in(CommonEndpoint.accountHeader)
-    .in(CommonEndpoint.csrfHeader)
+    .securityIn(CommonEndpoint.accountHeader.and(CommonEndpoint.csrfHeader))
     .in(CommonEndpoint.idempotencyKeyHeader)
     .in(jsonBody[CreateMapMasterRequest])
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[MapMasterResponse])
     .tag("masters")
 
-  val update: PublicEndpoint[
-    (String, Option[String], Option[String], Option[String], UpdateMapMasterRequest),
-    ProblemResponse,
+  val update: CommonEndpoint.SecuredMutation[
+    (String, Option[String], UpdateMapMasterRequest),
     MapMasterResponse,
-    Any,
   ] = endpoint
     .patch
     .in("api" / "map-masters" / path[String]("id"))
-    .in(CommonEndpoint.accountHeader)
-    .in(CommonEndpoint.csrfHeader)
+    .securityIn(CommonEndpoint.accountHeader.and(CommonEndpoint.csrfHeader))
     .in(CommonEndpoint.idempotencyKeyHeader)
     .in(jsonBody[UpdateMapMasterRequest])
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[MapMasterResponse])
     .tag("masters")
 
-  val delete: PublicEndpoint[
-    (String, Option[String], Option[String], Option[String]),
-    ProblemResponse,
+  val delete: CommonEndpoint.SecuredMutation[
+    (String, Option[String]),
     DeleteMasterResponse,
-    Any,
   ] = endpoint
     .delete
     .in("api" / "map-masters" / path[String]("id"))
-    .in(CommonEndpoint.accountHeader)
-    .in(CommonEndpoint.csrfHeader)
+    .securityIn(CommonEndpoint.accountHeader.and(CommonEndpoint.csrfHeader))
     .in(CommonEndpoint.idempotencyKeyHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[DeleteMasterResponse])
     .tag("masters")
 
 object SeasonMastersEndpoints:
-  val list: PublicEndpoint[
-    (Option[String], Option[String]),
-    ProblemResponse,
+  val list: CommonEndpoint.SecuredRead[
+    Option[String],
     SeasonMasterListResponse,
-    Any,
   ] = endpoint
     .get
     .in("api" / "season-masters")
+    .securityIn(CommonEndpoint.accountHeader)
     .in(query[Option[String]]("gameTitleId"))
-    .in(CommonEndpoint.accountHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[SeasonMasterListResponse])
     .tag("masters")
 
-  val create: PublicEndpoint[
-    (Option[String], Option[String], Option[String], CreateSeasonMasterRequest),
-    ProblemResponse,
+  val create: CommonEndpoint.SecuredMutation[
+    (Option[String], CreateSeasonMasterRequest),
     SeasonMasterResponse,
-    Any,
   ] = endpoint
     .post
     .in("api" / "season-masters")
-    .in(CommonEndpoint.accountHeader)
-    .in(CommonEndpoint.csrfHeader)
+    .securityIn(CommonEndpoint.accountHeader.and(CommonEndpoint.csrfHeader))
     .in(CommonEndpoint.idempotencyKeyHeader)
     .in(jsonBody[CreateSeasonMasterRequest])
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[SeasonMasterResponse])
     .tag("masters")
 
-  val update: PublicEndpoint[
-    (String, Option[String], Option[String], Option[String], UpdateSeasonMasterRequest),
-    ProblemResponse,
+  val update: CommonEndpoint.SecuredMutation[
+    (String, Option[String], UpdateSeasonMasterRequest),
     SeasonMasterResponse,
-    Any,
   ] = endpoint
     .patch
     .in("api" / "season-masters" / path[String]("id"))
-    .in(CommonEndpoint.accountHeader)
-    .in(CommonEndpoint.csrfHeader)
+    .securityIn(CommonEndpoint.accountHeader.and(CommonEndpoint.csrfHeader))
     .in(CommonEndpoint.idempotencyKeyHeader)
     .in(jsonBody[UpdateSeasonMasterRequest])
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[SeasonMasterResponse])
     .tag("masters")
 
-  val delete: PublicEndpoint[
-    (String, Option[String], Option[String], Option[String]),
-    ProblemResponse,
+  val delete: CommonEndpoint.SecuredMutation[
+    (String, Option[String]),
     DeleteMasterResponse,
-    Any,
   ] = endpoint
     .delete
     .in("api" / "season-masters" / path[String]("id"))
-    .in(CommonEndpoint.accountHeader)
-    .in(CommonEndpoint.csrfHeader)
+    .securityIn(CommonEndpoint.accountHeader.and(CommonEndpoint.csrfHeader))
     .in(CommonEndpoint.idempotencyKeyHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[DeleteMasterResponse])
     .tag("masters")
 
 object IncidentMastersEndpoints:
-  val list: PublicEndpoint[Option[String], ProblemResponse, IncidentMasterListResponse, Any] =
+  val list: CommonEndpoint.SecuredRead[Unit, IncidentMasterListResponse] =
     endpoint
       .get
       .in("api" / "incident-masters")
-      .in(CommonEndpoint.accountHeader)
+      .securityIn(CommonEndpoint.accountHeader)
       .errorOut(CommonEndpoint.errorOut)
       .out(jsonBody[IncidentMasterListResponse])
       .tag("masters")
 
 object MemberAliasesEndpoints:
-  val list: PublicEndpoint[
-    (Option[String], Option[String]),
-    ProblemResponse,
+  val list: CommonEndpoint.SecuredRead[
+    Option[String],
     MemberAliasListResponse,
-    Any,
   ] = endpoint
     .get
     .in("api" / "member-aliases")
+    .securityIn(CommonEndpoint.accountHeader)
     .in(query[Option[String]]("memberId"))
-    .in(CommonEndpoint.accountHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[MemberAliasListResponse])
     .tag("masters")
 
-  val create: PublicEndpoint[
-    (Option[String], Option[String], Option[String], CreateMemberAliasRequest),
-    ProblemResponse,
+  val create: CommonEndpoint.SecuredMutation[
+    (Option[String], CreateMemberAliasRequest),
     MemberAliasResponse,
-    Any,
   ] = endpoint
     .post
     .in("api" / "member-aliases")
-    .in(CommonEndpoint.accountHeader)
-    .in(CommonEndpoint.csrfHeader)
+    .securityIn(CommonEndpoint.accountHeader.and(CommonEndpoint.csrfHeader))
     .in(CommonEndpoint.idempotencyKeyHeader)
     .in(jsonBody[CreateMemberAliasRequest])
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[MemberAliasResponse])
     .tag("masters")
 
-  val update: PublicEndpoint[
-    (String, Option[String], Option[String], Option[String], UpdateMemberAliasRequest),
-    ProblemResponse,
+  val update: CommonEndpoint.SecuredMutation[
+    (String, Option[String], UpdateMemberAliasRequest),
     MemberAliasResponse,
-    Any,
   ] = endpoint
     .patch
     .in("api" / "member-aliases" / path[String]("id"))
-    .in(CommonEndpoint.accountHeader)
-    .in(CommonEndpoint.csrfHeader)
+    .securityIn(CommonEndpoint.accountHeader.and(CommonEndpoint.csrfHeader))
     .in(CommonEndpoint.idempotencyKeyHeader)
     .in(jsonBody[UpdateMemberAliasRequest])
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[MemberAliasResponse])
     .tag("masters")
 
-  val delete: PublicEndpoint[
-    (String, Option[String], Option[String], Option[String]),
-    ProblemResponse,
+  val delete: CommonEndpoint.SecuredMutation[
+    (String, Option[String]),
     DeleteMasterResponse,
-    Any,
   ] = endpoint
     .delete
     .in("api" / "member-aliases" / path[String]("id"))
-    .in(CommonEndpoint.accountHeader)
-    .in(CommonEndpoint.csrfHeader)
+    .securityIn(CommonEndpoint.accountHeader.and(CommonEndpoint.csrfHeader))
     .in(CommonEndpoint.idempotencyKeyHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[DeleteMasterResponse])

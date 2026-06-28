@@ -25,11 +25,11 @@ final class ApiEndpointsArchitectureSpec extends FunSuite:
   private val ObjectBlock =
     raw"(?s)object\s+([A-Za-z0-9_]+Endpoints):(.+?)(?=\nobject\s+[A-Za-z0-9_]+Endpoints:|\z)".r
   private val EndpointVal =
-    raw"val\s+([A-Za-z0-9_]+)\s*:\s*(?:PublicEndpoint|SecuredRead|Endpoint)".r
+    raw"val\s+([A-Za-z0-9_]+)\s*:\s*(?:PublicEndpoint|SecuredRead|Endpoint|CommonEndpoint\.Secured(?:Read|Mutation))".r
   private val ServerLogicRef =
     raw"([A-Za-z0-9_]+Endpoints\.[A-Za-z0-9_]+)\s*\.serverLogic(?:Success)?".r
-  private val SecuredReadLogicRef =
-    raw"SecuredEndpoint\.readLogic\([^,]+,\s*([A-Za-z0-9_]+Endpoints\.[A-Za-z0-9_]+)\)".r
+  private val SecuredLogicRef =
+    raw"SecuredEndpoint\s*\.\s*(?:readLogic|mutationLogic|adminReadLogic|adminMutationLogic|masterMutationLogic)\([^,]+,\s*([A-Za-z0-9_]+Endpoints\.[A-Za-z0-9_]+)\)".r
   private val OperationLabelLiteral = """"(?:GET|POST|PUT|PATCH|DELETE) /api[^"]*"""".r
 
   test("ApiEndpoints.all includes every Tapir endpoint definition"):
@@ -42,7 +42,7 @@ final class ApiEndpointsArchitectureSpec extends FunSuite:
     val serverRefs = scalaFiles(httpDir).map(path => read(path))
       .flatMap(text =>
         ServerLogicRef.findAllMatchIn(text).map(_.group(1)) ++
-          SecuredReadLogicRef.findAllMatchIn(text).map(_.group(1))
+          SecuredLogicRef.findAllMatchIn(text).map(_.group(1))
       ).toSet
     val missing = definedEndpointRefs.filterNot(_.startsWith("AuthEndpoints."))
       .filterNot(serverRefs.contains).sorted

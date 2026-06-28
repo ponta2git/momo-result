@@ -1,67 +1,59 @@
 package momo.api.endpoints
 
+import sttp.tapir.*
 import sttp.tapir.generic.auto.*
 import sttp.tapir.json.circe.*
-import sttp.tapir.{PublicEndpoint, *}
-
-import momo.api.endpoints.ProblemDetails.ProblemResponse
 
 object MatchDraftEndpoints:
-  type CreateInput = (Option[String], Option[String], Option[String], CreateMatchDraftRequest)
-  type GetInput = (String, Option[String])
-  type UpdateInput =
-    (String, Option[String], Option[String], Option[String], UpdateMatchDraftRequest)
-  type CancelInput = (String, Option[String], Option[String], Option[String])
+  type CreateInput = (Option[String], CreateMatchDraftRequest)
+  type GetInput = String
+  type UpdateInput = (String, Option[String], UpdateMatchDraftRequest)
+  type CancelInput = (String, Option[String])
 
-  val create: PublicEndpoint[CreateInput, ProblemResponse, MatchDraftResponse, Any] = endpoint
+  val create: CommonEndpoint.SecuredMutation[CreateInput, MatchDraftResponse] = endpoint
     .post
     .in("api" / "match-drafts")
-    .in(CommonEndpoint.accountHeader)
-    .in(CommonEndpoint.csrfHeader)
+    .securityIn(CommonEndpoint.accountHeader.and(CommonEndpoint.csrfHeader))
     .in(CommonEndpoint.idempotencyKeyHeader)
     .in(jsonBody[CreateMatchDraftRequest])
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[MatchDraftResponse])
     .tag("match-drafts")
 
-  val update: PublicEndpoint[UpdateInput, ProblemResponse, MatchDraftResponse, Any] = endpoint
+  val update: CommonEndpoint.SecuredMutation[UpdateInput, MatchDraftResponse] = endpoint
     .patch
     .in("api" / "match-drafts" / path[String]("draftId"))
-    .in(CommonEndpoint.accountHeader)
-    .in(CommonEndpoint.csrfHeader)
+    .securityIn(CommonEndpoint.accountHeader.and(CommonEndpoint.csrfHeader))
     .in(CommonEndpoint.idempotencyKeyHeader)
     .in(jsonBody[UpdateMatchDraftRequest])
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[MatchDraftResponse])
     .tag("match-drafts")
 
-  val get: PublicEndpoint[GetInput, ProblemResponse, MatchDraftDetailResponse, Any] = endpoint
+  val get: CommonEndpoint.SecuredRead[GetInput, MatchDraftDetailResponse] = endpoint
     .get
     .in("api" / "match-drafts" / path[String]("draftId"))
-    .in(CommonEndpoint.accountHeader)
+    .securityIn(CommonEndpoint.accountHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[MatchDraftDetailResponse])
     .tag("match-drafts")
 
-  val cancel: PublicEndpoint[CancelInput, ProblemResponse, CancelMatchDraftResponse, Any] = endpoint
+  val cancel: CommonEndpoint.SecuredMutation[CancelInput, CancelMatchDraftResponse] = endpoint
     .post
     .in("api" / "match-drafts" / path[String]("draftId") / "cancel")
-    .in(CommonEndpoint.accountHeader)
-    .in(CommonEndpoint.csrfHeader)
+    .securityIn(CommonEndpoint.accountHeader.and(CommonEndpoint.csrfHeader))
     .in(CommonEndpoint.idempotencyKeyHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[CancelMatchDraftResponse])
     .tag("match-drafts")
 
-  val listSourceImages: PublicEndpoint[
-    (String, Option[String]),
-    ProblemResponse,
+  val listSourceImages: CommonEndpoint.SecuredRead[
+    String,
     MatchDraftSourceImageListResponse,
-    Any,
   ] = endpoint
     .get
     .in("api" / "match-drafts" / path[String]("draftId") / "source-images")
-    .in(CommonEndpoint.accountHeader)
+    .securityIn(CommonEndpoint.accountHeader)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[MatchDraftSourceImageListResponse])
     .tag("match-drafts")
@@ -69,11 +61,11 @@ object MatchDraftEndpoints:
   type SourceImageOutput = (String, String, String, Array[Byte])
 
   val getSourceImage
-      : PublicEndpoint[(String, String, Option[String]), ProblemResponse, SourceImageOutput, Any] =
+      : CommonEndpoint.SecuredRead[(String, String), SourceImageOutput] =
     endpoint
       .get
       .in("api" / "match-drafts" / path[String]("draftId") / "source-images" / path[String]("kind"))
-      .in(CommonEndpoint.accountHeader)
+      .securityIn(CommonEndpoint.accountHeader)
       .errorOut(CommonEndpoint.errorOut)
       .out(header[String]("Content-Type"))
       .out(header[String]("Cache-Control"))
@@ -84,11 +76,11 @@ object MatchDraftEndpoints:
   type SourceImageArchiveOutput = (String, String, String, String, Array[Byte])
 
   val downloadSourceImages
-      : PublicEndpoint[(String, Option[String]), ProblemResponse, SourceImageArchiveOutput, Any] =
+      : CommonEndpoint.SecuredRead[String, SourceImageArchiveOutput] =
     endpoint
       .get
       .in("api" / "match-drafts" / path[String]("draftId") / "source-images.zip")
-      .in(CommonEndpoint.accountHeader)
+      .securityIn(CommonEndpoint.accountHeader)
       .errorOut(CommonEndpoint.errorOut)
       .out(header[String]("Content-Type"))
       .out(header[String]("Content-Disposition"))

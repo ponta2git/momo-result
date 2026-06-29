@@ -21,10 +21,11 @@ trait OcrJobCreationRepository[F[_]]:
       attachment: Option[OcrJobDraftAttachment],
       enqueueRequest: OcrJobEnqueueRequest,
       activeJobLimit: Int,
-  ): F[Unit]
+  ): F[OcrJobCreationRepository.CreateQueuedJobResult]
 
 object OcrJobCreationRepository:
-  final class MatchDraftAttachFailed(val draftId: MatchDraftId)
-      extends RuntimeException(s"match draft ${draftId.value} could not be attached to OCR job")
-  final class ActiveJobLimitExceeded(val limit: Int)
-      extends RuntimeException(s"active OCR job limit exceeded: ${limit.toString}")
+  type CreateQueuedJobResult = Either[CreateQueuedJobRejection, Unit]
+
+  enum CreateQueuedJobRejection derives CanEqual:
+    case ActiveJobLimitExceeded(limit: Int)
+    case MatchDraftAttachFailed(draftId: MatchDraftId)

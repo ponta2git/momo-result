@@ -72,8 +72,10 @@ final class CompleteOAuthLogin[F[_]: Sync](
           case Some(account) if !account.loginEnabled =>
             OAuthLoginFailure.LoginDisabled.asLeft[OAuthLoginCompletion].pure[F]
           case Some(account) => sessions.create(account)
-              .flatTap(_ => Sync[F].delay(
-                logger.info(s"auth_login_completed accountId=${account.id.value}")
-              ))
+              .flatTap(_ =>
+                Sync[F].delay(
+                  logger.info(s"auth_login_completed accountId=${account.id.value}")
+                )
+              )
               .map(session => OAuthLoginCompletion(account.id, session).asRight[OAuthLoginFailure])
         }

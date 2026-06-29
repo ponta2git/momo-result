@@ -18,6 +18,7 @@ import momo.api.repositories.{
   OcrJobCreationRepository,
   OcrJobDraftAttachment
 }
+import momo.api.repositories.OcrJobCreationRepository.CreateQueuedJobRejection
 import momo.api.usecases.syntax.UseCaseSyntax.*
 
 final case class CreateOcrJobCommand(
@@ -105,19 +106,22 @@ final class CreateOcrJob[F[_]: MonadThrow](
       job: OcrJob,
       attachment: Option[OcrJobDraftAttachment],
       enqueueRequest: OcrJobEnqueueRequest,
-  ): EitherT[F, AppError, Unit] = EitherT(
-    creation.createQueuedJob(draft, job, attachment, enqueueRequest, activeJobLimit).attempt
-      .flatMap {
-        case Right(_) => ().asRight[AppError].pure[F]
-        case Left(_: OcrJobCreationRepository.ActiveJobLimitExceeded) => logger.warn(
-            s"ocr_job_create_rejected reason=active_job_limit_exceeded limit=$activeJobLimit"
-          ) >> AppError.ServiceUnavailable("OCR queue is currently full. Try again later.")
-            .asLeft[Unit].pure[F]
-        case Left(_: OcrJobCreationRepository.MatchDraftAttachFailed) => AppError
-            .Conflict("match draft could not be attached to the OCR job.").asLeft[Unit].pure[F]
-        case Left(error) => MonadThrow[F].raiseError[Either[AppError, Unit]](error)
-      }
-  )
+  ): EitherT[F, AppError, Unit] = EitherT(creation
+    .createQueuedJob(draft, job, attachment, enqueueRequest, activeJobLimit)
+    .flatMap {
+      case Right(()) => ().asRight[AppError].pure[F]
+      case Left(rejection) => creationRejectionToAppError(rejection)
+    })
+
+  private def creationRejectionToAppError(
+      rejection: CreateQueuedJobRejection
+  ): F[Either[AppError, Unit]] = rejection match
+    case CreateQueuedJobRejection.ActiveJobLimitExceeded(limit) => logger.warn(
+        s"ocr_job_create_rejected reason=active_job_limit_exceeded limit=$limit"
+      ) >> AppError.ServiceUnavailable("OCR queue is currently full. Try again later.")
+        .asLeft[Unit].pure[F]
+    case CreateQueuedJobRejection.MatchDraftAttachFailed(_) => AppError
+        .Conflict("match draft could not be attached to the OCR job.").asLeft[Unit].pure[F]
 
   private def mergeMemberAliases(hints: OcrJobHints): F[OcrJobHints] = memberAliases.list(None)
     .map { rows =>

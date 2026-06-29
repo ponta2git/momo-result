@@ -11,6 +11,7 @@ import momo.api.domain.ids.*
 import momo.api.ports.queue.OcrJobEnqueueRequest
 import momo.api.repositories.postgres.PostgresOcrJobCreationRepository
 import momo.api.repositories.{OcrJobCreationRepository, OcrJobDraftAttachment}
+import momo.api.repositories.OcrJobCreationRepository.CreateQueuedJobRejection
 import momo.api.testing.JsonSchemaAssertions
 
 final class PostgresOcrJobCreationRepositorySpec extends IntegrationSuite with JsonSchemaAssertions:
@@ -66,7 +67,7 @@ final class PostgresOcrJobCreationRepositorySpec extends IntegrationSuite with J
 
   test("createQueuedJob inserts OCR records and durable outbox intent in one transaction"):
     for
-      _ <- repo.createQueuedJob(draft, job, None, enqueueRequest, activeJobLimit = 12)
+      result <- repo.createQueuedJob(draft, job, None, enqueueRequest, activeJobLimit = 12)
       row <- sql"""
         SELECT status, attempt_count, stream_payload->>'jobId', stream_payload->>'requestId',
                stream_payload
@@ -74,6 +75,7 @@ final class PostgresOcrJobCreationRepositorySpec extends IntegrationSuite with J
         WHERE job_id = ${jobId.value}
       """.query[(String, Int, String, String, Json)].unique.transact(transactor)
     yield
+      assertEquals(result, Right(()))
       assertEquals(row._1, "PENDING")
       assertEquals(row._2, 0)
       assertEquals(row._3, jobId.value)
@@ -82,7 +84,7 @@ final class PostgresOcrJobCreationRepositorySpec extends IntegrationSuite with J
 
   test("createQueuedJob rejects over the active job limit before inserting related rows"):
     for
-      result <- repo.createQueuedJob(draft, job, None, enqueueRequest, activeJobLimit = 0).attempt
+      result <- repo.createQueuedJob(draft, job, None, enqueueRequest, activeJobLimit = 0)
       counts <- sql"""
         SELECT
           (SELECT count(*) FROM ocr_drafts WHERE id = ${draftId.value}),
@@ -90,9 +92,7 @@ final class PostgresOcrJobCreationRepositorySpec extends IntegrationSuite with J
           (SELECT count(*) FROM ocr_queue_outbox WHERE job_id = ${jobId.value})
       """.query[(Long, Long, Long)].unique.transact(transactor)
     yield
-      result match
-        case Left(_: OcrJobCreationRepository.ActiveJobLimitExceeded) => ()
-        case other => fail(s"expected active limit rejection, got $other")
+      assertActiveLimit(result, 0)
       assertEquals(counts, (0L, 0L, 0L))
 
   test("createQueuedJob rolls back OCR records when match draft attachment fails"):
@@ -104,9 +104,14 @@ final class PostgresOcrJobCreationRepositorySpec extends IntegrationSuite with J
       updatedAt = now,
     )
     for
-      result <-
-        repo.createQueuedJob(draft, job, Some(attachment), enqueueRequest, activeJobLimit = 12)
-          .attempt
+      result <- repo.createQueuedJob(
+        draft,
+        job,
+        Some(attachment),
+        enqueueRequest,
+        activeJobLimit =
+          12
+      )
       counts <- sql"""
         SELECT
           (SELECT count(*) FROM ocr_drafts WHERE id = ${draftId.value}),
@@ -114,7 +119,7 @@ final class PostgresOcrJobCreationRepositorySpec extends IntegrationSuite with J
           (SELECT count(*) FROM ocr_queue_outbox WHERE job_id = ${jobId.value})
       """.query[(Long, Long, Long)].unique.transact(transactor)
     yield
-      assert(result.isLeft, s"expected failed attachment to rollback, got $result")
+      assertAttachFailed(result, attachment.draftId)
       assertEquals(counts, (0L, 0L, 0L))
 
   test("createQueuedJob rejects invalid draft JSON before inserting related rows"):
@@ -131,3 +136,19 @@ final class PostgresOcrJobCreationRepositorySpec extends IntegrationSuite with J
     yield
       assert(result.left.exists(_.getMessage.contains("payloadJson")))
       assertEquals(counts, (0L, 0L, 0L))
+
+  private def assertActiveLimit(
+      result: OcrJobCreationRepository.CreateQueuedJobResult,
+      limit: Int,
+  ): Unit = result match
+    case Left(CreateQueuedJobRejection.ActiveJobLimitExceeded(actualLimit)) =>
+      assertEquals(actualLimit, limit)
+    case other => fail(s"expected active limit rejection, got $other")
+
+  private def assertAttachFailed(
+      result: OcrJobCreationRepository.CreateQueuedJobResult,
+      draftId: MatchDraftId,
+  ): Unit = result match
+    case Left(CreateQueuedJobRejection.MatchDraftAttachFailed(actualDraftId)) =>
+      assertEquals(actualDraftId, draftId)
+    case other => fail(s"expected match draft attachment rejection, got $other")

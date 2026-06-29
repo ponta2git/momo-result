@@ -15,7 +15,8 @@ import momo.api.domain.{
   StoredImageLocation
 }
 import momo.api.ports.queue.OcrJobEnqueueRequest
-import momo.api.repositories.OcrJobDraftAttachment
+import momo.api.repositories.{OcrJobCreationRepository, OcrJobDraftAttachment}
+import momo.api.repositories.OcrJobCreationRepository.CreateQueuedJobRejection
 import momo.api.testing.AppErrorAssertions.assertAppException
 
 final class InMemoryOcrJobCreationRepositorySpec extends MomoCatsEffectSuite:
@@ -65,6 +66,44 @@ final class InMemoryOcrJobCreationRepositorySpec extends MomoCatsEffectSuite:
       assertAppException(result, "CONFLICT", "ocr job already exists")
       assertEquals(matchDraft.flatMap(_.totalAssetsDraftId), None)
       assertEquals(matchDraft.flatMap(_.totalAssetsImageId), None)
+
+  test("createQueuedJob returns active limit rejection without inserting OCR records"):
+    for
+      fixture <- newFixture
+      draft = ocrDraft("ocr-draft-active-limit", "ocr-job-active-limit")
+      job = queuedJob("ocr-job-active-limit", draft.id)
+      result <- fixture.repository.createQueuedJob(
+        draft,
+        job,
+        None,
+        enqueueRequest(job, draft),
+        activeJobLimit = 0,
+      )
+      storedDraft <- fixture.drafts.find(draft.id)
+      storedJob <- fixture.jobs.find(job.id)
+    yield
+      assertActiveLimit(result, 0)
+      assertEquals(storedDraft, None)
+      assertEquals(storedJob, None)
+
+  test("createQueuedJob returns match draft attachment rejection without inserting OCR records"):
+    for
+      fixture <- newFixture
+      draft = ocrDraft("ocr-draft-attach-failed", "ocr-job-attach-failed")
+      job = queuedJob("ocr-job-attach-failed", draft.id)
+      result <- fixture.repository.createQueuedJob(
+        draft,
+        job,
+        Some(attachment(draft.id)),
+        enqueueRequest(job, draft),
+        activeJobLimit = 10,
+      )
+      storedDraft <- fixture.drafts.find(draft.id)
+      storedJob <- fixture.jobs.find(job.id)
+    yield
+      assertAttachFailed(result, matchDraftId)
+      assertEquals(storedDraft, None)
+      assertEquals(storedJob, None)
 
   private def newFixture: IO[Fixture] =
     for
@@ -145,6 +184,22 @@ final class InMemoryOcrJobCreationRepositorySpec extends MomoCatsEffectSuite:
       hints = OcrJobHints.empty,
       requestId = None,
     )
+
+  private def assertActiveLimit(
+      result: OcrJobCreationRepository.CreateQueuedJobResult,
+      limit: Int,
+  ): Unit = result match
+    case Left(CreateQueuedJobRejection.ActiveJobLimitExceeded(actualLimit)) =>
+      assertEquals(actualLimit, limit)
+    case other => fail(s"expected active limit rejection, got $other")
+
+  private def assertAttachFailed(
+      result: OcrJobCreationRepository.CreateQueuedJobResult,
+      draftId: MatchDraftId,
+  ): Unit = result match
+    case Left(CreateQueuedJobRejection.MatchDraftAttachFailed(actualDraftId)) =>
+      assertEquals(actualDraftId, draftId)
+    case other => fail(s"expected match draft attachment rejection, got $other")
 
   private final case class Fixture(
       drafts: InMemoryOcrDraftsRepository[IO],

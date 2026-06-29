@@ -1,6 +1,6 @@
-package momo.api.usecases.seriescomparison.model
+package momo.api.usecases.seriescomparison.view
 
-final case class RecentFormPlayerResponse(
+final case class RecentFormPlayerView(
     memberId: String,
     windowSize: Int,
     targetCount: Int,
@@ -11,18 +11,18 @@ final case class RecentFormPlayerResponse(
     lowerHalfStreak: Int,
     status: String,
 )
-final case class MomentumSwitchResponse(entries: List[MomentumSwitchPlayerResponse])
+final case class MomentumSwitchView(entries: List[MomentumSwitchPlayerView])
 
-final case class MomentumSwitchPlayerResponse(
+final case class MomentumSwitchPlayerView(
     memberId: String,
     denominator: Int,
     transitionCount: Int,
-    afterLower: MomentumSwitchRateResponse,
-    afterFourth: MomentumSwitchRateResponse,
-    afterPodium: MomentumSwitchRateResponse,
-    transitionRows: List[MomentumSwitchTransitionRowResponse],
+    afterLower: MomentumSwitchRateView,
+    afterFourth: MomentumSwitchRateView,
+    afterPodium: MomentumSwitchRateView,
+    transitionRows: List[MomentumSwitchTransitionRowView],
 )
-final case class MomentumSwitchRateResponse(
+final case class MomentumSwitchRateView(
     targetCount: Int,
     successCount: Int,
     rate: Option[Double],
@@ -30,24 +30,24 @@ final case class MomentumSwitchRateResponse(
     deltaFromBaseline: Option[Double],
     status: String,
 )
-final case class MomentumSwitchTransitionRowResponse(
+final case class MomentumSwitchTransitionRowView(
     previousRank: Int,
     targetCount: Int,
     status: String,
-    cells: List[MomentumSwitchTransitionCellResponse],
+    cells: List[MomentumSwitchTransitionCellView],
 )
-final case class MomentumSwitchTransitionCellResponse(
+final case class MomentumSwitchTransitionCellView(
     nextRank: Int,
     count: Int,
     rate: Option[Double],
 )
-final case class PlayerPerformanceProfilesResponse(
+final case class PlayerPerformanceProfilesView(
     rankStandardDeviationMedian: Option[Double],
     averageRankScoreMedian: Option[Double],
     averageRevenueAssetRateMedian: Option[Double],
-    entries: List[PlayerPerformanceProfileResponse],
+    entries: List[PlayerPerformanceProfileView],
 )
-final case class PlayerPerformanceProfileResponse(
+final case class PlayerPerformanceProfileView(
     memberId: String,
     rankStandardDeviation: Option[Double],
     podiumRate: Option[Double],
@@ -57,25 +57,25 @@ final case class PlayerPerformanceProfileResponse(
     strategyKind: Option[String],
     status: String,
 )
-final case class AssetStyleProfilesResponse(
+final case class AssetStyleProfilesView(
     lowAssetThreshold: Option[Int],
     highAssetThreshold: Option[Int],
     blowoutWinThreshold: Option[Int],
     nearMissSecondThreshold: Option[Int],
     heavyLossThreshold: Option[Int],
-    entries: List[AssetStyleProfileResponse],
+    entries: List[AssetStyleProfileView],
 )
-final case class AssetStyleProfileResponse(
+final case class AssetStyleProfileView(
     memberId: String,
     targetCount: Int,
     primaryKind: Option[String],
     secondaryKind: Option[String],
     shapeKind: Option[String],
     tags: List[String],
-    metrics: AssetStyleMetricsResponse,
+    metrics: AssetStyleMetricsView,
     status: String,
 )
-final case class AssetStyleMetricsResponse(
+final case class AssetStyleMetricsView(
     p10Assets: Option[Double],
     medianAssets: Option[Double],
     p90Assets: Option[Double],
@@ -101,18 +101,18 @@ final case class AssetStyleMetricsResponse(
     destinationAverage: Option[Double],
     destinationPositiveRate: Option[Double],
 )
-final case class MatchNoInEventBreakdownResponse(
+final case class MatchNoInEventBreakdownView(
     matchNoInEvent: Int,
-    playerRows: List[MatchNoInEventPlayerBreakdownResponse],
+    playerRows: List[MatchNoInEventPlayerBreakdownView],
 )
-final case class MatchNoInEventPlayerBreakdownResponse(
+final case class MatchNoInEventPlayerBreakdownView(
     memberId: String,
     targetCount: Int,
     averageRank: Option[Double],
     podiumRate: Option[Double],
     status: String,
 )
-final case class MatchTimelinePointResponse(
+final case class MatchTimelinePointView(
     matchIndex: Int,
     matchId: String,
     playedAt: String,
@@ -124,13 +124,13 @@ final case class MatchTimelinePointResponse(
     flags: List[String],
     status: String,
 )
-final case class PlayOrderBaselineResponse(
+final case class PlayOrderBaselineView(
     playOrder: Int,
     assetsAverage: Option[Double],
     revenueAverage: Option[Double],
     matchCount: Int,
 )
-final case class SeriesComparisonHighlightResponse(
+final case class SeriesComparisonHighlightView(
     id: String,
     title: String,
     winnerMemberIds: List[String],
@@ -139,9 +139,9 @@ final case class SeriesComparisonHighlightResponse(
     targetCount: Int,
     status: String,
 )
-final case class SeriesComparisonDataQualityResponse(items: List[MetricQualityResponse])
+final case class SeriesComparisonDataQualityView(items: List[MetricQualityView])
 
-final case class MetricQualityResponse(
+final case class MetricQualityView(
     metricId: String,
     playerMemberId: Option[String],
     denominator: Int,

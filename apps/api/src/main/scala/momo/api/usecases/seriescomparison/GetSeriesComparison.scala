@@ -7,10 +7,10 @@ import momo.api.domain.SeriesComparisonScope
 import momo.api.errors.AppError
 import momo.api.repositories.SeriesComparisonReadModel
 import momo.api.usecases.seriescomparison.SeriesComparisonPresenter
-import momo.api.usecases.seriescomparison.model.SeriesComparisonResponse
+import momo.api.usecases.seriescomparison.view.SeriesComparisonView
 
 final class GetSeriesComparison[F[_]: Monad](readModel: SeriesComparisonReadModel[F]):
-  def run(scope: SeriesComparisonScope): F[Either[AppError, SeriesComparisonResponse]] = readModel
+  def run(scope: SeriesComparisonScope): F[Either[AppError, SeriesComparisonView]] = readModel
     .resolveScope(scope).flatMap {
       case None => Monad[F]
           .pure(Left(AppError.NotFound("series comparison scope", scopeKey(scope))))

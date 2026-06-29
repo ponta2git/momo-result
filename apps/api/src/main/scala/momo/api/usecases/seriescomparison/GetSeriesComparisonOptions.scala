@@ -7,15 +7,15 @@ import cats.syntax.all.*
 
 import momo.api.errors.AppError
 import momo.api.repositories.SeriesComparisonReadModel
-import momo.api.usecases.seriescomparison.model.{
-  SeriesComparisonOptionsResponse,
+import momo.api.usecases.seriescomparison.view.{
+  SeriesComparisonOptionsView,
   SeriesComparisonScopeOption,
   SeriesComparisonSeriesOption
 }
 
 final class GetSeriesComparisonOptions[F[_]: Functor](readModel: SeriesComparisonReadModel[F]):
-  def run: F[Either[AppError, SeriesComparisonOptionsResponse]] = readModel.options.map { data =>
-    Right(SeriesComparisonOptionsResponse(
+  def run: F[Either[AppError, SeriesComparisonOptionsView]] = readModel.options.map { data =>
+    Right(SeriesComparisonOptionsView(
       schemaVersion = 1,
       latestConfirmedGameTitleId = data.latestConfirmedGameTitleId.map(_.value),
       series = data.series.map(series =>

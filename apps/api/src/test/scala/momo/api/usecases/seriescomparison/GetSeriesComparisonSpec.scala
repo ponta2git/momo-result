@@ -19,6 +19,11 @@ import momo.api.domain.{
 }
 import momo.api.repositories.SeriesComparisonReadModel
 import momo.api.testing.AppErrorAssertions.{assertAppError, assertRight}
+import momo.api.usecases.seriescomparison.view.{
+  CardShopDestinationPlayerView,
+  CardShopDestinationQuadrantView,
+  HistogramBinView
+}
 
 final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
   private val now = Instant.parse("2026-05-10T12:00:00Z")
@@ -510,9 +515,9 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
   )
 
   private def cardShopQuadrant(
-      entry: momo.api.endpoints.CardShopDestinationPlayerResponse,
+      entry: CardShopDestinationPlayerView,
       kind: String,
-  ): momo.api.endpoints.CardShopDestinationQuadrantResponse = entry.quadrants.find(_.kind == kind)
+  ): CardShopDestinationQuadrantView = entry.quadrants.find(_.kind == kind)
     .getOrElse(fail(s"$kind quadrant missing: ${entry.quadrants}"))
 
   private def assertOptionDouble(actual: Option[Double], expected: Double, delta: Double): Unit =
@@ -524,7 +529,7 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
   private def assertOptionDouble(actual: Option[Double], expected: Double): Unit =
     assertOptionDouble(actual, expected, DoubleDelta)
 
-  private def binIndexFor(bins: List[momo.api.endpoints.HistogramBinResponse], value: Int): Int =
+  private def binIndexFor(bins: List[HistogramBinView], value: Int): Int =
     val index =
       bins.indexWhere(bin => value >= bin.lowerInclusive && bin.upperExclusive.forall(value < _))
     if index < 0 then fail(s"bin for $value missing: $bins") else index

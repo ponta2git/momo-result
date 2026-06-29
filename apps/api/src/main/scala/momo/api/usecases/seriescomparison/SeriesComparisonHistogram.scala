@@ -4,10 +4,10 @@ import cats.data.NonEmptyList
 
 import momo.api.domain.SeriesComparisonMatchPlayerRow
 import momo.api.domain.ids.MemberId
-import momo.api.usecases.seriescomparison.model.{
-  HistogramBinResponse,
-  HistogramResponse,
-  HistogramSeriesResponse
+import momo.api.usecases.seriescomparison.view.{
+  HistogramBinView,
+  HistogramView,
+  HistogramSeriesView
 }
 
 private[seriescomparison] object SeriesComparisonHistogram:
@@ -23,7 +23,7 @@ private[seriescomparison] object SeriesComparisonHistogram:
       rowsByPlayer: Map[MemberId, List[SeriesComparisonMatchPlayerRow]],
       value: SeriesComparisonMatchPlayerRow => Int,
       config: Config,
-  ): HistogramResponse = forPlayers(
+  ): HistogramView = forPlayers(
     allValues = allValues,
     playerOrder = playerOrder,
     rowsByPlayer = rowsByPlayer,
@@ -36,8 +36,8 @@ private[seriescomparison] object SeriesComparisonHistogram:
       playerOrder: List[MemberId],
       rowsByPlayer: Map[MemberId, List[SeriesComparisonMatchPlayerRow]],
       value: SeriesComparisonMatchPlayerRow => Int,
-      binsFor: List[Int] => List[HistogramBinResponse],
-  ): HistogramResponse =
+      binsFor: List[Int] => List[HistogramBinView],
+  ): HistogramView =
     val bins = binsFor(allValues)
     val series = playerOrder.map { memberId =>
       val counts = bins.map { bin =>
@@ -45,16 +45,16 @@ private[seriescomparison] object SeriesComparisonHistogram:
           value(row) >= bin.lowerInclusive && bin.upperExclusive.forall(value(row) < _)
         )
       }
-      HistogramSeriesResponse(memberId.value, counts)
+      HistogramSeriesView(memberId.value, counts)
     }
-    HistogramResponse(bins, series)
+    HistogramView(bins, series)
 
-  def standardBins(config: Config)(values: List[Int]): List[HistogramBinResponse] =
+  def standardBins(config: Config)(values: List[Int]): List[HistogramBinView] =
     NonEmptyList.fromList(values) match
       case None => Nil
       case Some(nonEmptyValues) => standardBinsFrom(nonEmptyValues, config)
 
-  def revenueBins(config: Config)(values: List[Int]): List[HistogramBinResponse] =
+  def revenueBins(config: Config)(values: List[Int]): List[HistogramBinView] =
     if !values.contains(0) then standardBins(config)(values)
     else
       val baseBins = standardBins(config)(values.filterNot(_ == 0)).flatMap { bin =>
@@ -76,16 +76,16 @@ private[seriescomparison] object SeriesComparisonHistogram:
           negativeBin.toList ++ positiveBin.toList
       }
       val (negativeBins, positiveBins) = baseBins.partition(_.lowerInclusive < 0)
-      reindex(negativeBins ++ List(HistogramBinResponse(0, 0, Some(1), "0")) ++ positiveBins)
+      reindex(negativeBins ++ List(HistogramBinView(0, 0, Some(1), "0")) ++ positiveBins)
 
   private def standardBinsFrom(
       values: NonEmptyList[Int],
       config: Config,
-  ): List[HistogramBinResponse] =
+  ): List[HistogramBinView] =
     val valueList = values.toList
     val min = valueList.min
     val max = valueList.max
-    if min == max then List(HistogramBinResponse(0, min, None, s"$min+"))
+    if min == max then List(HistogramBinView(0, min, None, s"$min+"))
     else
       val sorted = values.sorted
       val lowerAnchor =
@@ -98,20 +98,20 @@ private[seriescomparison] object SeriesComparisonHistogram:
       val upperEnd = math.max(lowerStart + step, math.ceil(p95 / asDecimal(step)).toInt * step)
       val centralBins = Iterator.iterate(lowerStart)(_ + step).takeWhile(_ < upperEnd)
         .map(lower =>
-          HistogramBinResponse(
+          HistogramBinView(
             index = 0,
             lowerInclusive = lower,
             upperExclusive = Some(lower + step),
             label = binLabel(lower, Some(lower + step)),
           )
         ).toList
-      val lowerBin = Option.when(min < lowerStart)(HistogramBinResponse(
+      val lowerBin = Option.when(min < lowerStart)(HistogramBinView(
         index = 0,
         lowerInclusive = min,
         upperExclusive = Some(lowerStart),
         label = binLabel(min, Some(lowerStart)),
       ))
-      val upperBin = Option.when(max >= upperEnd)(HistogramBinResponse(
+      val upperBin = Option.when(max >= upperEnd)(HistogramBinView(
         index = 0,
         lowerInclusive = upperEnd,
         upperExclusive = None,
@@ -125,7 +125,7 @@ private[seriescomparison] object SeriesComparisonHistogram:
       case Some(upper) => s"$lowerInclusive-${upper - 1}"
       case None => s"$lowerInclusive+"
 
-  private def reindex(bins: List[HistogramBinResponse]): List[HistogramBinResponse] =
+  private def reindex(bins: List[HistogramBinView]): List[HistogramBinView] =
     bins.zipWithIndex.map { case (bin, index) => bin.copy(index = index) }
 
   private def percentile(sortedValues: NonEmptyList[Int], probability: Double): Double =

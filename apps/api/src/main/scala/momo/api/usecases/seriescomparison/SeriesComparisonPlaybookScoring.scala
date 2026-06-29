@@ -3,12 +3,12 @@ package momo.api.usecases.seriescomparison
 import cats.data.NonEmptyList
 
 import momo.api.domain.ids.MemberId
-import momo.api.usecases.seriescomparison.model.{
-  MetricQualityResponse,
-  SeriesComparisonCommonPlaybookTopicResponse,
-  SeriesComparisonPlaybookCardResponse,
-  SeriesComparisonPlaybookEvidenceResponse,
-  SeriesComparisonPlayerPlaybookResponse
+import momo.api.usecases.seriescomparison.view.{
+  MetricQualityView,
+  SeriesComparisonCommonPlaybookTopicView,
+  SeriesComparisonPlaybookCardView,
+  SeriesComparisonPlaybookEvidenceView,
+  SeriesComparisonPlayerPlaybookView
 }
 
 private[seriescomparison] object SeriesComparisonPlaybookScoring:
@@ -26,10 +26,10 @@ private[seriescomparison] object SeriesComparisonPlaybookScoring:
   def cardsFor(
       memberId: MemberId,
       scoredCandidates: List[ScoredPlaybookCandidate],
-  ): List[SeriesComparisonPlaybookCardResponse] = scoredCandidates
+  ): List[SeriesComparisonPlaybookCardView] = scoredCandidates
     .filter(_.candidate.memberId == memberId).filter(_.finalScore > 0.0).sortBy(scored =>
       (-scored.finalScore, scored.candidate.card.category, scored.candidate.card.id)
-    ).foldLeft(List.empty[SeriesComparisonPlaybookCardResponse]) { (selected, scored) =>
+    ).foldLeft(List.empty[SeriesComparisonPlaybookCardView]) { (selected, scored) =>
       val card = scored.candidate.card
       if selected.size >= 3 || selected.exists(_.category == card.category) ||
         selected.count(existing => actionFamily(existing) == actionFamily(card)) >= 2
@@ -39,7 +39,7 @@ private[seriescomparison] object SeriesComparisonPlaybookScoring:
 
   def commonTopics(
       scoredCandidates: List[ScoredPlaybookCandidate]
-  ): List[SeriesComparisonCommonPlaybookTopicResponse] = scoredCandidates.filter(_.commonCategory)
+  ): List[SeriesComparisonCommonPlaybookTopicView] = scoredCandidates.filter(_.commonCategory)
     .groupBy(_.candidate.card.category).values.toList
     .sortBy(group => -group.map(_.candidate.baseScore).maxOption.getOrElse(0.0))
     .take(Thresholds.CommonTopicLimit).flatMap(group =>
@@ -47,11 +47,11 @@ private[seriescomparison] object SeriesComparisonPlaybookScoring:
     )
 
   def dataQualityItems(
-      playbook: List[SeriesComparisonPlayerPlaybookResponse]
-  ): List[MetricQualityResponse] = playbook.flatMap(entry =>
+      playbook: List[SeriesComparisonPlayerPlaybookView]
+  ): List[MetricQualityView] = playbook.flatMap(entry =>
     entry.cards.flatMap(card =>
       card.evidence.map(evidence =>
-        MetricQualityResponse(
+        MetricQualityView(
           metricId = evidence.metricId,
           playerMemberId = Some(entry.memberId),
           denominator = evidence.targetCount,
@@ -85,7 +85,7 @@ private[seriescomparison] object SeriesComparisonPlaybookScoring:
       )
     }
 
-  private def actionFamily(card: SeriesComparisonPlaybookCardResponse): String =
+  private def actionFamily(card: SeriesComparisonPlaybookCardView): String =
     val text = s"${card.actionHypothesis} ${card.recommendedAction}"
     if text.contains("収益順位") || text.contains("物件収益順位") then "revenue-rank"
     else if text.contains("目的地") then "destination"
@@ -104,7 +104,7 @@ private[seriescomparison] object SeriesComparisonPlaybookScoring:
 
   private def cardWithPeerContext(
       scored: ScoredPlaybookCandidate
-  ): SeriesComparisonPlaybookCardResponse =
+  ): SeriesComparisonPlaybookCardView =
     val card = scored.candidate.card
     val peerEvidence = evidence(
       metricId = s"playbook.${card.category}.peerRank",
@@ -130,14 +130,14 @@ private[seriescomparison] object SeriesComparisonPlaybookScoring:
 
   private def commonTopic(
       scoredCandidates: NonEmptyList[ScoredPlaybookCandidate]
-  ): SeriesComparisonCommonPlaybookTopicResponse =
+  ): SeriesComparisonCommonPlaybookTopicView =
     val ranked = scoredCandidates.sortBy(scored =>
       (scored.peerRank, -scored.candidate.baseScore, scored.candidate.memberDisplayName)
     )
     val first = ranked.head
     val category = first.candidate.card.category
     val (title, summary, actionHint) = commonTopicText(category, ranked.size)
-    SeriesComparisonCommonPlaybookTopicResponse(
+    SeriesComparisonCommonPlaybookTopicView(
       id = s"common-$category",
       category = category,
       title = title,
@@ -154,7 +154,7 @@ private[seriescomparison] object SeriesComparisonPlaybookScoring:
       value: String,
       targetCount: Int,
       status: String,
-  ): SeriesComparisonPlaybookEvidenceResponse = SeriesComparisonPlaybookEvidenceResponse(
+  ): SeriesComparisonPlaybookEvidenceView = SeriesComparisonPlaybookEvidenceView(
     metricId = metricId,
     label = label,
     value = value,

@@ -5,7 +5,7 @@ import scala.util.Random
 import momo.api.domain.ids.MemberId
 import momo.api.domain.{SeriesComparisonMatchPlayerRow, SeriesComparisonResolvedScope}
 import momo.api.usecases.seriescomparison.engine.SeriesDataset
-import momo.api.usecases.seriescomparison.model.*
+import momo.api.usecases.seriescomparison.view.*
 
 private[usecases] object SeriesComparisonReviewAggregation {
   private val SchemaVersion = 4
@@ -15,7 +15,7 @@ private[usecases] object SeriesComparisonReviewAggregation {
 
   def aggregate(
       dataset: SeriesDataset
-  ): SeriesComparisonReviewResponse =
+  ): SeriesComparisonReviewView =
     val scope = dataset.scope
     val orderedRows = dataset.orderedRows
     val matchGroups = matchGroupsFrom(orderedRows)
@@ -29,16 +29,16 @@ private[usecases] object SeriesComparisonReviewAggregation {
     val commonTopics = SeriesComparisonPlaybookScoring.commonTopics(scoredCandidates)
     val playbook = playerOrder.map(memberId =>
       val stats = statsByPlayer(memberId)
-      SeriesComparisonPlayerPlaybookResponse(
+      SeriesComparisonPlayerPlaybookView(
         memberId = memberId.value,
         memberDisplayName = stats.displayName,
         cards = SeriesComparisonPlaybookScoring.cardsFor(memberId, scoredCandidates),
       )
     )
-    SeriesComparisonReviewResponse(
+    SeriesComparisonReviewView(
       schemaVersion = SchemaVersion,
-      baseline = SeriesComparisonReviewBaselineResponse(
-        scope = scopeResponse(scope),
+      baseline = SeriesComparisonReviewBaselineView(
+        scope = scopeView(scope),
         matchCount = matchGroups.size,
         playerCount = playerOrder.size,
         status = normalStatus(matchGroups.size, Thresholds.MainNormalSample),
@@ -46,7 +46,7 @@ private[usecases] object SeriesComparisonReviewAggregation {
       ),
       commonPlaybookTopics = commonTopics,
       playbookByPlayer = playbook,
-      dataQuality = SeriesComparisonDataQualityResponse(
+      dataQuality = SeriesComparisonDataQualityView(
         SeriesComparisonPlaybookScoring.dataQualityItems(playbook)
       ),
     )
@@ -56,8 +56,8 @@ private[usecases] object SeriesComparisonReviewAggregation {
       memberId: MemberId,
   ): List[SeriesComparisonMatchPlayerRow] = rows.filter(_.memberId == memberId)
 
-  private def scopeResponse(scope: SeriesComparisonResolvedScope): SeriesComparisonScopeResponse =
-    SeriesComparisonScopeResponse(
+  private def scopeView(scope: SeriesComparisonResolvedScope): SeriesComparisonScopeView =
+    SeriesComparisonScopeView(
       gameTitleId = scope.gameTitleId.value,
       gameTitleName = scope.gameTitleName,
       layoutFamily = scope.layoutFamily,
@@ -111,7 +111,7 @@ private[usecases] object SeriesComparisonReviewAggregation {
 
   private def playbookCandidate(
       stats: PlayerStats,
-      card: SeriesComparisonPlaybookCardResponse,
+      card: SeriesComparisonPlaybookCardView,
       peerEffectValue: Double,
   ): PlaybookCandidate = PlaybookCandidate(
     memberId = stats.memberId,
@@ -245,7 +245,7 @@ private[usecases] object SeriesComparisonReviewAggregation {
             ),
           ),
           status = status,
-          anchor = SeriesComparisonPlaybookAnchorTargetResponse(
+          anchor = SeriesComparisonPlaybookAnchorTargetView(
             view = "drivers",
             sectionId = "metric-revenue-outcome",
             label = "物件収益と勝ち",
@@ -353,7 +353,7 @@ private[usecases] object SeriesComparisonReviewAggregation {
             ),
           ),
           status = status,
-          anchor = SeriesComparisonPlaybookAnchorTargetResponse(
+          anchor = SeriesComparisonPlaybookAnchorTargetView(
             view = "drivers",
             sectionId = "metric-destination-outcome",
             label = "目的地と勝ち",
@@ -468,7 +468,7 @@ private[usecases] object SeriesComparisonReviewAggregation {
             ),
           ),
           status = status,
-          anchor = SeriesComparisonPlaybookAnchorTargetResponse(
+          anchor = SeriesComparisonPlaybookAnchorTargetView(
             view = "flow",
             sectionId = "metric-match-digest",
             label = "期間内の荒れ",
@@ -577,7 +577,7 @@ private[usecases] object SeriesComparisonReviewAggregation {
             ),
           ),
           status = status,
-          anchor = SeriesComparisonPlaybookAnchorTargetResponse(
+          anchor = SeriesComparisonPlaybookAnchorTargetView(
             view = "drivers",
             sectionId = "metric-destination-outcome",
             label = "目的地と勝ち",
@@ -692,7 +692,7 @@ private[usecases] object SeriesComparisonReviewAggregation {
             ),
           ),
           status = status,
-          anchor = SeriesComparisonPlaybookAnchorTargetResponse(
+          anchor = SeriesComparisonPlaybookAnchorTargetView(
             view = "drivers",
             sectionId = "metric-money",
             label = "資産と勝ち筋",
@@ -806,7 +806,7 @@ private[usecases] object SeriesComparisonReviewAggregation {
             ),
           ),
           status = status,
-          anchor = SeriesComparisonPlaybookAnchorTargetResponse(
+          anchor = SeriesComparisonPlaybookAnchorTargetView(
             view = "context",
             sectionId = "metric-play-order",
             label = "番手",
@@ -940,7 +940,7 @@ private[usecases] object SeriesComparisonReviewAggregation {
             ),
           ),
           status = status,
-          anchor = SeriesComparisonPlaybookAnchorTargetResponse(
+          anchor = SeriesComparisonPlaybookAnchorTargetView(
             view = "flow",
             sectionId = "metric-momentum-switch",
             label = "切り替え力",
@@ -1051,7 +1051,7 @@ private[usecases] object SeriesComparisonReviewAggregation {
             secondaryContrastEvidence,
           ),
           status = status,
-          anchor = SeriesComparisonPlaybookAnchorTargetResponse(
+          anchor = SeriesComparisonPlaybookAnchorTargetView(
             view = "context",
             sectionId = "metric-ginji",
             label = "スリの銀次",
@@ -1192,7 +1192,7 @@ private[usecases] object SeriesComparisonReviewAggregation {
       cardShopDelta: Double,
       targetCount: Int,
       status: String,
-  ): SeriesComparisonPlaybookEvidenceResponse = driver.map(_.kind).getOrElse("revenueRank") match
+  ): SeriesComparisonPlaybookEvidenceView = driver.map(_.kind).getOrElse("revenueRank") match
     case "accidentAvoidance" => evidence(
         "destinationOutcome.accidentAvoidanceContrast",
         "目的地0回時の事故回避差",
@@ -1223,7 +1223,7 @@ private[usecases] object SeriesComparisonReviewAggregation {
       minusDelta: Double,
       targetCount: Int,
       status: String,
-  ): SeriesComparisonPlaybookEvidenceResponse = driver.map(_.kind).getOrElse("revenueRank") match
+  ): SeriesComparisonPlaybookEvidenceView = driver.map(_.kind).getOrElse("revenueRank") match
     case "destinationShortage" => evidence(
         "assetStyleProfiles.lowAssetDestinationContrast",
         "低資産帯の目的地差",
@@ -1260,7 +1260,7 @@ private[usecases] object SeriesComparisonReviewAggregation {
       accidentDelta: Double,
       targetCount: Int,
       status: String,
-  ): SeriesComparisonPlaybookEvidenceResponse = driver.map(_.kind).getOrElse("revenueRank") match
+  ): SeriesComparisonPlaybookEvidenceView = driver.map(_.kind).getOrElse("revenueRank") match
     case "destinationCount" => evidence(
         "playOrder.destinationContrast",
         "得意番手との差: 目的地",
@@ -1290,7 +1290,7 @@ private[usecases] object SeriesComparisonReviewAggregation {
       accidentDelta: Double,
       targetCount: Int,
       status: String,
-  ): SeriesComparisonPlaybookEvidenceResponse = driver.map(_.kind).getOrElse("revenueRank") match
+  ): SeriesComparisonPlaybookEvidenceView = driver.map(_.kind).getOrElse("revenueRank") match
     case "destinationRank" => evidence(
         "ginji.destinationRankContrast",
         "被害時の目的地順位差",
@@ -1433,7 +1433,7 @@ private[usecases] object SeriesComparisonReviewAggregation {
       accidentDelta: Double,
       targetCount: Int,
       status: String,
-  ): SeriesComparisonPlaybookEvidenceResponse = driver.kind match
+  ): SeriesComparisonPlaybookEvidenceView = driver.kind match
     case "destination" => evidence(
         "momentumSwitch.recoveryDestinationDriver",
         "復帰時の目的地順位差",
@@ -1494,11 +1494,11 @@ private[usecases] object SeriesComparisonReviewAggregation {
       dataReason: String,
       postMatchCheck: String,
       targetCount: Int,
-      evidence: List[SeriesComparisonPlaybookEvidenceResponse],
+      evidence: List[SeriesComparisonPlaybookEvidenceView],
       status: String,
-      anchor: SeriesComparisonPlaybookAnchorTargetResponse,
+      anchor: SeriesComparisonPlaybookAnchorTargetView,
       score: Double,
-  ): SeriesComparisonPlaybookCardResponse = SeriesComparisonPlaybookCardResponse(
+  ): SeriesComparisonPlaybookCardView = SeriesComparisonPlaybookCardView(
     id = id,
     classification = classification,
     category = category,
@@ -1622,7 +1622,7 @@ private[usecases] object SeriesComparisonReviewAggregation {
       value: String,
       targetCount: Int,
       status: String,
-  ): SeriesComparisonPlaybookEvidenceResponse = SeriesComparisonPlaybookEvidenceResponse(
+  ): SeriesComparisonPlaybookEvidenceView = SeriesComparisonPlaybookEvidenceView(
     metricId = metricId,
     label = label,
     value = value,
@@ -1646,7 +1646,7 @@ private[usecases] object SeriesComparisonReviewAggregation {
       confidenceLow: Option[Double],
       confidenceHigh: Option[Double],
       stability: Double,
-  ): SeriesComparisonPlaybookEvidenceResponse = SeriesComparisonPlaybookEvidenceResponse(
+  ): SeriesComparisonPlaybookEvidenceView = SeriesComparisonPlaybookEvidenceView(
     metricId = metricId,
     label = label,
     value = value,

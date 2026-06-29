@@ -9,14 +9,14 @@ import momo.api.domain.ids.MemberId
 import momo.api.errors.AppError
 import momo.api.repositories.SeriesComparisonReadModel
 import momo.api.usecases.seriescomparison.SeriesComparisonPresenter
-import momo.api.usecases.seriescomparison.model.SeriesComparisonDrilldownResponse
+import momo.api.usecases.seriescomparison.view.SeriesComparisonDrilldownView
 
 final class GetSeriesComparisonDrilldown[F[_]: Monad](readModel: SeriesComparisonReadModel[F]):
   def run(
       scope: SeriesComparisonScope,
       metricId: MetricIdString,
       memberId: MemberId,
-  ): F[Either[AppError, SeriesComparisonDrilldownResponse]] =
+  ): F[Either[AppError, SeriesComparisonDrilldownView]] =
     readModel.resolveScope(scope).flatMap {
       case None => Monad[F]
           .pure(Left(AppError.NotFound("series comparison scope", scopeKey(scope))))

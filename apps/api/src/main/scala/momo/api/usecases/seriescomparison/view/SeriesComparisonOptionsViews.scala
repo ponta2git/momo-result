@@ -1,6 +1,6 @@
-package momo.api.usecases.seriescomparison.model
+package momo.api.usecases.seriescomparison.view
 
-final case class SeriesComparisonOptionsResponse(
+final case class SeriesComparisonOptionsView(
     schemaVersion: Int,
     latestConfirmedGameTitleId: Option[String],
     series: List[SeriesComparisonSeriesOption],

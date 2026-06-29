@@ -1,27 +1,27 @@
-package momo.api.usecases.seriescomparison.model
+package momo.api.usecases.seriescomparison.view
 
-final case class SeriesComparisonDrilldownResponse(
+final case class SeriesComparisonDrilldownView(
     schemaVersion: Int,
     metricId: String,
-    scope: SeriesComparisonScopeResponse,
-    player: SeriesComparisonPlayerResponse,
-    rankAverageHistory: Option[SeriesComparisonRankAverageHistoryPayloadResponse],
-    playOrderRankHistory: Option[SeriesComparisonPlayOrderRankHistoryPayloadResponse],
-    dataQuality: SeriesComparisonDataQualityResponse,
+    scope: SeriesComparisonScopeView,
+    player: SeriesComparisonPlayerView,
+    rankAverageHistory: Option[SeriesComparisonRankAverageHistoryPayloadView],
+    playOrderRankHistory: Option[SeriesComparisonPlayOrderRankHistoryPayloadView],
+    dataQuality: SeriesComparisonDataQualityView,
 )
-final case class SeriesComparisonRankAverageHistoryPayloadResponse(
-    summary: SeriesComparisonRankAverageHistorySummaryResponse,
-    matchRows: List[SeriesComparisonRankAverageHistoryMatchRowResponse],
-    heldEventRows: List[SeriesComparisonRankAverageHistoryEventRowResponse],
+final case class SeriesComparisonRankAverageHistoryPayloadView(
+    summary: SeriesComparisonRankAverageHistorySummaryView,
+    matchRows: List[SeriesComparisonRankAverageHistoryMatchRowView],
+    heldEventRows: List[SeriesComparisonRankAverageHistoryEventRowView],
 )
-final case class SeriesComparisonRankAverageHistorySummaryResponse(
+final case class SeriesComparisonRankAverageHistorySummaryView(
     targetCount: Int,
     currentAverageRank: Option[Double],
     averageRankDeltaFromFirst: Option[Double],
     latestHeldEventAverageRankDelta: Option[Double],
     status: String,
 )
-final case class SeriesComparisonRankAverageHistoryMatchRowResponse(
+final case class SeriesComparisonRankAverageHistoryMatchRowView(
     matchIndex: Int,
     matchId: String,
     playedAt: String,
@@ -33,7 +33,7 @@ final case class SeriesComparisonRankAverageHistoryMatchRowResponse(
     cumulativeAverageRank: Double,
     cumulativeAverageRankDelta: Option[Double],
 )
-final case class SeriesComparisonRankAverageHistoryEventRowResponse(
+final case class SeriesComparisonRankAverageHistoryEventRowView(
     heldEventId: String,
     firstPlayedAt: String,
     matchCount: Int,
@@ -44,12 +44,12 @@ final case class SeriesComparisonRankAverageHistoryEventRowResponse(
     cumulativeAverageAfter: Double,
     cumulativeAverageDelta: Option[Double],
 )
-final case class SeriesComparisonPlayOrderRankHistoryPayloadResponse(
-    summary: SeriesComparisonPlayOrderRankHistorySummaryResponse,
-    averageTrendRows: List[SeriesComparisonPlayOrderRankHistoryTrendRowResponse],
-    playOrderRows: List[SeriesComparisonPlayOrderRankHistoryPlayOrderRowResponse],
+final case class SeriesComparisonPlayOrderRankHistoryPayloadView(
+    summary: SeriesComparisonPlayOrderRankHistorySummaryView,
+    averageTrendRows: List[SeriesComparisonPlayOrderRankHistoryTrendRowView],
+    playOrderRows: List[SeriesComparisonPlayOrderRankHistoryPlayOrderRowView],
 )
-final case class SeriesComparisonPlayOrderRankHistorySummaryResponse(
+final case class SeriesComparisonPlayOrderRankHistorySummaryView(
     targetCount: Int,
     currentAverageRank: Option[Double],
     bestPlayOrder: Option[Int],
@@ -57,11 +57,11 @@ final case class SeriesComparisonPlayOrderRankHistorySummaryResponse(
     worstPlayOrder: Option[Int],
     worstPlayOrderAverageRank: Option[Double],
     spread: Option[Double],
-    countsByPlayOrder: List[SeriesComparisonPlayOrderCountResponse],
+    countsByPlayOrder: List[SeriesComparisonPlayOrderCountView],
 )
-final case class SeriesComparisonPlayOrderCountResponse(playOrder: Int, matchCount: Int)
+final case class SeriesComparisonPlayOrderCountView(playOrder: Int, matchCount: Int)
 
-final case class SeriesComparisonPlayOrderRankHistoryTrendRowResponse(
+final case class SeriesComparisonPlayOrderRankHistoryTrendRowView(
     matchIndex: Int,
     matchId: String,
     playedAt: String,
@@ -74,11 +74,11 @@ final case class SeriesComparisonPlayOrderRankHistoryTrendRowResponse(
     previousCumulativeAverageRankByPlayOrder: Option[Double],
     cumulativeAverageRankDeltaByPlayOrder: Option[Double],
 )
-final case class SeriesComparisonPlayOrderRankHistoryPlayOrderRowResponse(
+final case class SeriesComparisonPlayOrderRankHistoryPlayOrderRowView(
     playOrder: Int,
     matchCount: Int,
     rankAverage: Option[Double],
-    rankDistribution: List[RankDistributionResponse],
+    rankDistribution: List[RankDistributionView],
     podiumCount: Int,
     podiumRate: Option[Double],
     lowerHalfCount: Int,

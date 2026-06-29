@@ -3,387 +3,387 @@ package momo.api.endpoints
 import io.circe.Codec
 import sttp.tapir.Schema
 
-import momo.api.usecases.seriescomparison.model
+import momo.api.usecases.seriescomparison.view
 
-type SeriesComparisonDrilldownResponse = model.SeriesComparisonDrilldownResponse
+type SeriesComparisonDrilldownResponse = view.SeriesComparisonDrilldownView
 given Codec.AsObject[SeriesComparisonDrilldownResponse] =
-  Codec.AsObject.derived[model.SeriesComparisonDrilldownResponse]
+  Codec.AsObject.derived[view.SeriesComparisonDrilldownView]
 given Schema[SeriesComparisonDrilldownResponse] =
-  Schema.derived[model.SeriesComparisonDrilldownResponse]
+  Schema.derived[view.SeriesComparisonDrilldownView]
 
 type SeriesComparisonRankAverageHistoryPayloadResponse =
-  model.SeriesComparisonRankAverageHistoryPayloadResponse
+  view.SeriesComparisonRankAverageHistoryPayloadView
 given Codec.AsObject[SeriesComparisonRankAverageHistoryPayloadResponse] =
-  Codec.AsObject.derived[model.SeriesComparisonRankAverageHistoryPayloadResponse]
+  Codec.AsObject.derived[view.SeriesComparisonRankAverageHistoryPayloadView]
 given Schema[SeriesComparisonRankAverageHistoryPayloadResponse] =
-  Schema.derived[model.SeriesComparisonRankAverageHistoryPayloadResponse]
+  Schema.derived[view.SeriesComparisonRankAverageHistoryPayloadView]
 
 type SeriesComparisonRankAverageHistorySummaryResponse =
-  model.SeriesComparisonRankAverageHistorySummaryResponse
+  view.SeriesComparisonRankAverageHistorySummaryView
 given Codec.AsObject[SeriesComparisonRankAverageHistorySummaryResponse] =
-  Codec.AsObject.derived[model.SeriesComparisonRankAverageHistorySummaryResponse]
+  Codec.AsObject.derived[view.SeriesComparisonRankAverageHistorySummaryView]
 given Schema[SeriesComparisonRankAverageHistorySummaryResponse] =
-  Schema.derived[model.SeriesComparisonRankAverageHistorySummaryResponse]
+  Schema.derived[view.SeriesComparisonRankAverageHistorySummaryView]
 
 type SeriesComparisonRankAverageHistoryMatchRowResponse =
-  model.SeriesComparisonRankAverageHistoryMatchRowResponse
+  view.SeriesComparisonRankAverageHistoryMatchRowView
 given Codec.AsObject[SeriesComparisonRankAverageHistoryMatchRowResponse] =
-  Codec.AsObject.derived[model.SeriesComparisonRankAverageHistoryMatchRowResponse]
+  Codec.AsObject.derived[view.SeriesComparisonRankAverageHistoryMatchRowView]
 given Schema[SeriesComparisonRankAverageHistoryMatchRowResponse] =
-  Schema.derived[model.SeriesComparisonRankAverageHistoryMatchRowResponse]
+  Schema.derived[view.SeriesComparisonRankAverageHistoryMatchRowView]
 
 type SeriesComparisonRankAverageHistoryEventRowResponse =
-  model.SeriesComparisonRankAverageHistoryEventRowResponse
+  view.SeriesComparisonRankAverageHistoryEventRowView
 given Codec.AsObject[SeriesComparisonRankAverageHistoryEventRowResponse] =
-  Codec.AsObject.derived[model.SeriesComparisonRankAverageHistoryEventRowResponse]
+  Codec.AsObject.derived[view.SeriesComparisonRankAverageHistoryEventRowView]
 given Schema[SeriesComparisonRankAverageHistoryEventRowResponse] =
-  Schema.derived[model.SeriesComparisonRankAverageHistoryEventRowResponse]
+  Schema.derived[view.SeriesComparisonRankAverageHistoryEventRowView]
 
 type SeriesComparisonPlayOrderRankHistoryPayloadResponse =
-  model.SeriesComparisonPlayOrderRankHistoryPayloadResponse
+  view.SeriesComparisonPlayOrderRankHistoryPayloadView
 given Codec.AsObject[SeriesComparisonPlayOrderRankHistoryPayloadResponse] =
-  Codec.AsObject.derived[model.SeriesComparisonPlayOrderRankHistoryPayloadResponse]
+  Codec.AsObject.derived[view.SeriesComparisonPlayOrderRankHistoryPayloadView]
 given Schema[SeriesComparisonPlayOrderRankHistoryPayloadResponse] =
-  Schema.derived[model.SeriesComparisonPlayOrderRankHistoryPayloadResponse]
+  Schema.derived[view.SeriesComparisonPlayOrderRankHistoryPayloadView]
 
 type SeriesComparisonPlayOrderRankHistorySummaryResponse =
-  model.SeriesComparisonPlayOrderRankHistorySummaryResponse
+  view.SeriesComparisonPlayOrderRankHistorySummaryView
 given Codec.AsObject[SeriesComparisonPlayOrderRankHistorySummaryResponse] =
-  Codec.AsObject.derived[model.SeriesComparisonPlayOrderRankHistorySummaryResponse]
+  Codec.AsObject.derived[view.SeriesComparisonPlayOrderRankHistorySummaryView]
 given Schema[SeriesComparisonPlayOrderRankHistorySummaryResponse] =
-  Schema.derived[model.SeriesComparisonPlayOrderRankHistorySummaryResponse]
+  Schema.derived[view.SeriesComparisonPlayOrderRankHistorySummaryView]
 
-type SeriesComparisonPlayOrderCountResponse = model.SeriesComparisonPlayOrderCountResponse
+type SeriesComparisonPlayOrderCountResponse = view.SeriesComparisonPlayOrderCountView
 given Codec.AsObject[SeriesComparisonPlayOrderCountResponse] =
-  Codec.AsObject.derived[model.SeriesComparisonPlayOrderCountResponse]
+  Codec.AsObject.derived[view.SeriesComparisonPlayOrderCountView]
 given Schema[SeriesComparisonPlayOrderCountResponse] =
-  Schema.derived[model.SeriesComparisonPlayOrderCountResponse]
+  Schema.derived[view.SeriesComparisonPlayOrderCountView]
 
 type SeriesComparisonPlayOrderRankHistoryTrendRowResponse =
-  model.SeriesComparisonPlayOrderRankHistoryTrendRowResponse
+  view.SeriesComparisonPlayOrderRankHistoryTrendRowView
 given Codec.AsObject[SeriesComparisonPlayOrderRankHistoryTrendRowResponse] =
-  Codec.AsObject.derived[model.SeriesComparisonPlayOrderRankHistoryTrendRowResponse]
+  Codec.AsObject.derived[view.SeriesComparisonPlayOrderRankHistoryTrendRowView]
 given Schema[SeriesComparisonPlayOrderRankHistoryTrendRowResponse] =
-  Schema.derived[model.SeriesComparisonPlayOrderRankHistoryTrendRowResponse]
+  Schema.derived[view.SeriesComparisonPlayOrderRankHistoryTrendRowView]
 
 type SeriesComparisonPlayOrderRankHistoryPlayOrderRowResponse =
-  model.SeriesComparisonPlayOrderRankHistoryPlayOrderRowResponse
+  view.SeriesComparisonPlayOrderRankHistoryPlayOrderRowView
 given Codec.AsObject[SeriesComparisonPlayOrderRankHistoryPlayOrderRowResponse] =
-  Codec.AsObject.derived[model.SeriesComparisonPlayOrderRankHistoryPlayOrderRowResponse]
+  Codec.AsObject.derived[view.SeriesComparisonPlayOrderRankHistoryPlayOrderRowView]
 given Schema[SeriesComparisonPlayOrderRankHistoryPlayOrderRowResponse] =
-  Schema.derived[model.SeriesComparisonPlayOrderRankHistoryPlayOrderRowResponse]
+  Schema.derived[view.SeriesComparisonPlayOrderRankHistoryPlayOrderRowView]
 
-type SeriesComparisonScopeResponse = model.SeriesComparisonScopeResponse
+type SeriesComparisonScopeResponse = view.SeriesComparisonScopeView
 given Codec.AsObject[SeriesComparisonScopeResponse] =
-  Codec.AsObject.derived[model.SeriesComparisonScopeResponse]
-given Schema[SeriesComparisonScopeResponse] = Schema.derived[model.SeriesComparisonScopeResponse]
+  Codec.AsObject.derived[view.SeriesComparisonScopeView]
+given Schema[SeriesComparisonScopeResponse] = Schema.derived[view.SeriesComparisonScopeView]
 
-type SeriesComparisonPlayerResponse = model.SeriesComparisonPlayerResponse
+type SeriesComparisonPlayerResponse = view.SeriesComparisonPlayerView
 given Codec.AsObject[SeriesComparisonPlayerResponse] =
-  Codec.AsObject.derived[model.SeriesComparisonPlayerResponse]
-given Schema[SeriesComparisonPlayerResponse] = Schema.derived[model.SeriesComparisonPlayerResponse]
+  Codec.AsObject.derived[view.SeriesComparisonPlayerView]
+given Schema[SeriesComparisonPlayerResponse] = Schema.derived[view.SeriesComparisonPlayerView]
 
-type SeriesComparisonPlayerMetricsEntry = model.SeriesComparisonPlayerMetricsEntry
+type SeriesComparisonPlayerMetricsEntry = view.SeriesComparisonPlayerMetricsEntry
 given Codec.AsObject[SeriesComparisonPlayerMetricsEntry] =
-  Codec.AsObject.derived[model.SeriesComparisonPlayerMetricsEntry]
+  Codec.AsObject.derived[view.SeriesComparisonPlayerMetricsEntry]
 given Schema[SeriesComparisonPlayerMetricsEntry] =
-  Schema.derived[model.SeriesComparisonPlayerMetricsEntry]
+  Schema.derived[view.SeriesComparisonPlayerMetricsEntry]
 
-type SeriesComparisonPlayerMetricsResponse = model.SeriesComparisonPlayerMetricsResponse
+type SeriesComparisonPlayerMetricsResponse = view.SeriesComparisonPlayerMetricsView
 given Codec.AsObject[SeriesComparisonPlayerMetricsResponse] =
-  Codec.AsObject.derived[model.SeriesComparisonPlayerMetricsResponse]
+  Codec.AsObject.derived[view.SeriesComparisonPlayerMetricsView]
 given Schema[SeriesComparisonPlayerMetricsResponse] =
-  Schema.derived[model.SeriesComparisonPlayerMetricsResponse]
+  Schema.derived[view.SeriesComparisonPlayerMetricsView]
 
-type RankMetricsResponse = model.RankMetricsResponse
-given Codec.AsObject[RankMetricsResponse] = Codec.AsObject.derived[model.RankMetricsResponse]
-given Schema[RankMetricsResponse] = Schema.derived[model.RankMetricsResponse]
+type RankMetricsResponse = view.RankMetricsView
+given Codec.AsObject[RankMetricsResponse] = Codec.AsObject.derived[view.RankMetricsView]
+given Schema[RankMetricsResponse] = Schema.derived[view.RankMetricsView]
 
-type RankDistributionResponse = model.RankDistributionResponse
+type RankDistributionResponse = view.RankDistributionView
 given Codec.AsObject[RankDistributionResponse] =
-  Codec.AsObject.derived[model.RankDistributionResponse]
-given Schema[RankDistributionResponse] = Schema.derived[model.RankDistributionResponse]
+  Codec.AsObject.derived[view.RankDistributionView]
+given Schema[RankDistributionResponse] = Schema.derived[view.RankDistributionView]
 
-type MoneyDistributionMetricsResponse = model.MoneyDistributionMetricsResponse
+type MoneyDistributionMetricsResponse = view.MoneyDistributionMetricsView
 given Codec.AsObject[MoneyDistributionMetricsResponse] =
-  Codec.AsObject.derived[model.MoneyDistributionMetricsResponse]
+  Codec.AsObject.derived[view.MoneyDistributionMetricsView]
 given Schema[MoneyDistributionMetricsResponse] =
-  Schema.derived[model.MoneyDistributionMetricsResponse]
+  Schema.derived[view.MoneyDistributionMetricsView]
 
-type RevenueDistributionMetricsResponse = model.RevenueDistributionMetricsResponse
+type RevenueDistributionMetricsResponse = view.RevenueDistributionMetricsView
 given Codec.AsObject[RevenueDistributionMetricsResponse] =
-  Codec.AsObject.derived[model.RevenueDistributionMetricsResponse]
+  Codec.AsObject.derived[view.RevenueDistributionMetricsView]
 given Schema[RevenueDistributionMetricsResponse] =
-  Schema.derived[model.RevenueDistributionMetricsResponse]
+  Schema.derived[view.RevenueDistributionMetricsView]
 
-type RateCountMetricsResponse = model.RateCountMetricsResponse
+type RateCountMetricsResponse = view.RateCountMetricsView
 given Codec.AsObject[RateCountMetricsResponse] =
-  Codec.AsObject.derived[model.RateCountMetricsResponse]
-given Schema[RateCountMetricsResponse] = Schema.derived[model.RateCountMetricsResponse]
+  Codec.AsObject.derived[view.RateCountMetricsView]
+given Schema[RateCountMetricsResponse] = Schema.derived[view.RateCountMetricsView]
 
-type PlayOrderMetricsResponse = model.PlayOrderMetricsResponse
+type PlayOrderMetricsResponse = view.PlayOrderMetricsView
 given Codec.AsObject[PlayOrderMetricsResponse] =
-  Codec.AsObject.derived[model.PlayOrderMetricsResponse]
-given Schema[PlayOrderMetricsResponse] = Schema.derived[model.PlayOrderMetricsResponse]
+  Codec.AsObject.derived[view.PlayOrderMetricsView]
+given Schema[PlayOrderMetricsResponse] = Schema.derived[view.PlayOrderMetricsView]
 
-type PlayOrderBreakdownResponse = model.PlayOrderBreakdownResponse
+type PlayOrderBreakdownResponse = view.PlayOrderBreakdownView
 given Codec.AsObject[PlayOrderBreakdownResponse] =
-  Codec.AsObject.derived[model.PlayOrderBreakdownResponse]
-given Schema[PlayOrderBreakdownResponse] = Schema.derived[model.PlayOrderBreakdownResponse]
+  Codec.AsObject.derived[view.PlayOrderBreakdownView]
+given Schema[PlayOrderBreakdownResponse] = Schema.derived[view.PlayOrderBreakdownView]
 
-type GinjiMetricsResponse = model.GinjiMetricsResponse
-given Codec.AsObject[GinjiMetricsResponse] = Codec.AsObject.derived[model.GinjiMetricsResponse]
-given Schema[GinjiMetricsResponse] = Schema.derived[model.GinjiMetricsResponse]
+type GinjiMetricsResponse = view.GinjiMetricsView
+given Codec.AsObject[GinjiMetricsResponse] = Codec.AsObject.derived[view.GinjiMetricsView]
+given Schema[GinjiMetricsResponse] = Schema.derived[view.GinjiMetricsView]
 
-type NonRevenueMetricsResponse = model.NonRevenueMetricsResponse
+type NonRevenueMetricsResponse = view.NonRevenueMetricsView
 given Codec.AsObject[NonRevenueMetricsResponse] =
-  Codec.AsObject.derived[model.NonRevenueMetricsResponse]
-given Schema[NonRevenueMetricsResponse] = Schema.derived[model.NonRevenueMetricsResponse]
+  Codec.AsObject.derived[view.NonRevenueMetricsView]
+given Schema[NonRevenueMetricsResponse] = Schema.derived[view.NonRevenueMetricsView]
 
-type DestinationMetricsResponse = model.DestinationMetricsResponse
+type DestinationMetricsResponse = view.DestinationMetricsView
 given Codec.AsObject[DestinationMetricsResponse] =
-  Codec.AsObject.derived[model.DestinationMetricsResponse]
-given Schema[DestinationMetricsResponse] = Schema.derived[model.DestinationMetricsResponse]
+  Codec.AsObject.derived[view.DestinationMetricsView]
+given Schema[DestinationMetricsResponse] = Schema.derived[view.DestinationMetricsView]
 
-type ConditionalRankOutcomeResponse = model.ConditionalRankOutcomeResponse
+type ConditionalRankOutcomeResponse = view.ConditionalRankOutcomeView
 given Codec.AsObject[ConditionalRankOutcomeResponse] =
-  Codec.AsObject.derived[model.ConditionalRankOutcomeResponse]
-given Schema[ConditionalRankOutcomeResponse] = Schema.derived[model.ConditionalRankOutcomeResponse]
+  Codec.AsObject.derived[view.ConditionalRankOutcomeView]
+given Schema[ConditionalRankOutcomeResponse] = Schema.derived[view.ConditionalRankOutcomeView]
 
-type RevenueOutcomeMetricsResponse = model.RevenueOutcomeMetricsResponse
+type RevenueOutcomeMetricsResponse = view.RevenueOutcomeMetricsView
 given Codec.AsObject[RevenueOutcomeMetricsResponse] =
-  Codec.AsObject.derived[model.RevenueOutcomeMetricsResponse]
-given Schema[RevenueOutcomeMetricsResponse] = Schema.derived[model.RevenueOutcomeMetricsResponse]
+  Codec.AsObject.derived[view.RevenueOutcomeMetricsView]
+given Schema[RevenueOutcomeMetricsResponse] = Schema.derived[view.RevenueOutcomeMetricsView]
 
-type DestinationOutcomeMetricsResponse = model.DestinationOutcomeMetricsResponse
+type DestinationOutcomeMetricsResponse = view.DestinationOutcomeMetricsView
 given Codec.AsObject[DestinationOutcomeMetricsResponse] =
-  Codec.AsObject.derived[model.DestinationOutcomeMetricsResponse]
+  Codec.AsObject.derived[view.DestinationOutcomeMetricsView]
 given Schema[DestinationOutcomeMetricsResponse] =
-  Schema.derived[model.DestinationOutcomeMetricsResponse]
+  Schema.derived[view.DestinationOutcomeMetricsView]
 
-type CardShopDestinationResponse = model.CardShopDestinationResponse
+type CardShopDestinationResponse = view.CardShopDestinationView
 given Codec.AsObject[CardShopDestinationResponse] =
-  Codec.AsObject.derived[model.CardShopDestinationResponse]
-given Schema[CardShopDestinationResponse] = Schema.derived[model.CardShopDestinationResponse]
+  Codec.AsObject.derived[view.CardShopDestinationView]
+given Schema[CardShopDestinationResponse] = Schema.derived[view.CardShopDestinationView]
 
-type CardShopDestinationPlayerResponse = model.CardShopDestinationPlayerResponse
+type CardShopDestinationPlayerResponse = view.CardShopDestinationPlayerView
 given Codec.AsObject[CardShopDestinationPlayerResponse] =
-  Codec.AsObject.derived[model.CardShopDestinationPlayerResponse]
+  Codec.AsObject.derived[view.CardShopDestinationPlayerView]
 given Schema[CardShopDestinationPlayerResponse] =
-  Schema.derived[model.CardShopDestinationPlayerResponse]
+  Schema.derived[view.CardShopDestinationPlayerView]
 
-type CardShopDestinationQuadrantResponse = model.CardShopDestinationQuadrantResponse
+type CardShopDestinationQuadrantResponse = view.CardShopDestinationQuadrantView
 given Codec.AsObject[CardShopDestinationQuadrantResponse] =
-  Codec.AsObject.derived[model.CardShopDestinationQuadrantResponse]
+  Codec.AsObject.derived[view.CardShopDestinationQuadrantView]
 given Schema[CardShopDestinationQuadrantResponse] =
-  Schema.derived[model.CardShopDestinationQuadrantResponse]
+  Schema.derived[view.CardShopDestinationQuadrantView]
 
-type StabilityMetricsResponse = model.StabilityMetricsResponse
+type StabilityMetricsResponse = view.StabilityMetricsView
 given Codec.AsObject[StabilityMetricsResponse] =
-  Codec.AsObject.derived[model.StabilityMetricsResponse]
-given Schema[StabilityMetricsResponse] = Schema.derived[model.StabilityMetricsResponse]
+  Codec.AsObject.derived[view.StabilityMetricsView]
+given Schema[StabilityMetricsResponse] = Schema.derived[view.StabilityMetricsView]
 
-type SeriesComparisonOptionsResponse = model.SeriesComparisonOptionsResponse
+type SeriesComparisonOptionsResponse = view.SeriesComparisonOptionsView
 given Codec.AsObject[SeriesComparisonOptionsResponse] =
-  Codec.AsObject.derived[model.SeriesComparisonOptionsResponse]
+  Codec.AsObject.derived[view.SeriesComparisonOptionsView]
 given Schema[SeriesComparisonOptionsResponse] =
-  Schema.derived[model.SeriesComparisonOptionsResponse]
+  Schema.derived[view.SeriesComparisonOptionsView]
 
-type SeriesComparisonSeriesOption = model.SeriesComparisonSeriesOption
+type SeriesComparisonSeriesOption = view.SeriesComparisonSeriesOption
 given Codec.AsObject[SeriesComparisonSeriesOption] =
-  Codec.AsObject.derived[model.SeriesComparisonSeriesOption]
-given Schema[SeriesComparisonSeriesOption] = Schema.derived[model.SeriesComparisonSeriesOption]
+  Codec.AsObject.derived[view.SeriesComparisonSeriesOption]
+given Schema[SeriesComparisonSeriesOption] = Schema.derived[view.SeriesComparisonSeriesOption]
 
-type SeriesComparisonScopeOption = model.SeriesComparisonScopeOption
+type SeriesComparisonScopeOption = view.SeriesComparisonScopeOption
 given Codec.AsObject[SeriesComparisonScopeOption] =
-  Codec.AsObject.derived[model.SeriesComparisonScopeOption]
-given Schema[SeriesComparisonScopeOption] = Schema.derived[model.SeriesComparisonScopeOption]
+  Codec.AsObject.derived[view.SeriesComparisonScopeOption]
+given Schema[SeriesComparisonScopeOption] = Schema.derived[view.SeriesComparisonScopeOption]
 
-type SeriesComparisonReviewBaselineResponse = model.SeriesComparisonReviewBaselineResponse
+type SeriesComparisonReviewBaselineResponse = view.SeriesComparisonReviewBaselineView
 given Codec.AsObject[SeriesComparisonReviewBaselineResponse] =
-  Codec.AsObject.derived[model.SeriesComparisonReviewBaselineResponse]
+  Codec.AsObject.derived[view.SeriesComparisonReviewBaselineView]
 given Schema[SeriesComparisonReviewBaselineResponse] =
-  Schema.derived[model.SeriesComparisonReviewBaselineResponse]
+  Schema.derived[view.SeriesComparisonReviewBaselineView]
 
-type SeriesComparisonCommonPlaybookTopicResponse = model.SeriesComparisonCommonPlaybookTopicResponse
+type SeriesComparisonCommonPlaybookTopicResponse = view.SeriesComparisonCommonPlaybookTopicView
 given Codec.AsObject[SeriesComparisonCommonPlaybookTopicResponse] =
-  Codec.AsObject.derived[model.SeriesComparisonCommonPlaybookTopicResponse]
+  Codec.AsObject.derived[view.SeriesComparisonCommonPlaybookTopicView]
 given Schema[SeriesComparisonCommonPlaybookTopicResponse] =
-  Schema.derived[model.SeriesComparisonCommonPlaybookTopicResponse]
+  Schema.derived[view.SeriesComparisonCommonPlaybookTopicView]
 
-type SeriesComparisonPlayerPlaybookResponse = model.SeriesComparisonPlayerPlaybookResponse
+type SeriesComparisonPlayerPlaybookResponse = view.SeriesComparisonPlayerPlaybookView
 given Codec.AsObject[SeriesComparisonPlayerPlaybookResponse] =
-  Codec.AsObject.derived[model.SeriesComparisonPlayerPlaybookResponse]
+  Codec.AsObject.derived[view.SeriesComparisonPlayerPlaybookView]
 given Schema[SeriesComparisonPlayerPlaybookResponse] =
-  Schema.derived[model.SeriesComparisonPlayerPlaybookResponse]
+  Schema.derived[view.SeriesComparisonPlayerPlaybookView]
 
-type SeriesComparisonPlaybookCardResponse = model.SeriesComparisonPlaybookCardResponse
+type SeriesComparisonPlaybookCardResponse = view.SeriesComparisonPlaybookCardView
 given Codec.AsObject[SeriesComparisonPlaybookCardResponse] =
-  Codec.AsObject.derived[model.SeriesComparisonPlaybookCardResponse]
+  Codec.AsObject.derived[view.SeriesComparisonPlaybookCardView]
 given Schema[SeriesComparisonPlaybookCardResponse] =
-  Schema.derived[model.SeriesComparisonPlaybookCardResponse]
+  Schema.derived[view.SeriesComparisonPlaybookCardView]
 
-type SeriesComparisonPlaybookEvidenceResponse = model.SeriesComparisonPlaybookEvidenceResponse
+type SeriesComparisonPlaybookEvidenceResponse = view.SeriesComparisonPlaybookEvidenceView
 given Codec.AsObject[SeriesComparisonPlaybookEvidenceResponse] =
-  Codec.AsObject.derived[model.SeriesComparisonPlaybookEvidenceResponse]
+  Codec.AsObject.derived[view.SeriesComparisonPlaybookEvidenceView]
 given Schema[SeriesComparisonPlaybookEvidenceResponse] =
-  Schema.derived[model.SeriesComparisonPlaybookEvidenceResponse]
+  Schema.derived[view.SeriesComparisonPlaybookEvidenceView]
 
 type SeriesComparisonPlaybookAnchorTargetResponse =
-  model.SeriesComparisonPlaybookAnchorTargetResponse
+  view.SeriesComparisonPlaybookAnchorTargetView
 given Codec.AsObject[SeriesComparisonPlaybookAnchorTargetResponse] =
-  Codec.AsObject.derived[model.SeriesComparisonPlaybookAnchorTargetResponse]
+  Codec.AsObject.derived[view.SeriesComparisonPlaybookAnchorTargetView]
 given Schema[SeriesComparisonPlaybookAnchorTargetResponse] =
-  Schema.derived[model.SeriesComparisonPlaybookAnchorTargetResponse]
+  Schema.derived[view.SeriesComparisonPlaybookAnchorTargetView]
 
-type RecentFormPlayerResponse = model.RecentFormPlayerResponse
+type RecentFormPlayerResponse = view.RecentFormPlayerView
 given Codec.AsObject[RecentFormPlayerResponse] =
-  Codec.AsObject.derived[model.RecentFormPlayerResponse]
-given Schema[RecentFormPlayerResponse] = Schema.derived[model.RecentFormPlayerResponse]
+  Codec.AsObject.derived[view.RecentFormPlayerView]
+given Schema[RecentFormPlayerResponse] = Schema.derived[view.RecentFormPlayerView]
 
-type MomentumSwitchResponse = model.MomentumSwitchResponse
-given Codec.AsObject[MomentumSwitchResponse] = Codec.AsObject.derived[model.MomentumSwitchResponse]
-given Schema[MomentumSwitchResponse] = Schema.derived[model.MomentumSwitchResponse]
+type MomentumSwitchResponse = view.MomentumSwitchView
+given Codec.AsObject[MomentumSwitchResponse] = Codec.AsObject.derived[view.MomentumSwitchView]
+given Schema[MomentumSwitchResponse] = Schema.derived[view.MomentumSwitchView]
 
-type MomentumSwitchPlayerResponse = model.MomentumSwitchPlayerResponse
+type MomentumSwitchPlayerResponse = view.MomentumSwitchPlayerView
 given Codec.AsObject[MomentumSwitchPlayerResponse] =
-  Codec.AsObject.derived[model.MomentumSwitchPlayerResponse]
-given Schema[MomentumSwitchPlayerResponse] = Schema.derived[model.MomentumSwitchPlayerResponse]
+  Codec.AsObject.derived[view.MomentumSwitchPlayerView]
+given Schema[MomentumSwitchPlayerResponse] = Schema.derived[view.MomentumSwitchPlayerView]
 
-type MomentumSwitchRateResponse = model.MomentumSwitchRateResponse
+type MomentumSwitchRateResponse = view.MomentumSwitchRateView
 given Codec.AsObject[MomentumSwitchRateResponse] =
-  Codec.AsObject.derived[model.MomentumSwitchRateResponse]
-given Schema[MomentumSwitchRateResponse] = Schema.derived[model.MomentumSwitchRateResponse]
+  Codec.AsObject.derived[view.MomentumSwitchRateView]
+given Schema[MomentumSwitchRateResponse] = Schema.derived[view.MomentumSwitchRateView]
 
-type MomentumSwitchTransitionRowResponse = model.MomentumSwitchTransitionRowResponse
+type MomentumSwitchTransitionRowResponse = view.MomentumSwitchTransitionRowView
 given Codec.AsObject[MomentumSwitchTransitionRowResponse] =
-  Codec.AsObject.derived[model.MomentumSwitchTransitionRowResponse]
+  Codec.AsObject.derived[view.MomentumSwitchTransitionRowView]
 given Schema[MomentumSwitchTransitionRowResponse] =
-  Schema.derived[model.MomentumSwitchTransitionRowResponse]
+  Schema.derived[view.MomentumSwitchTransitionRowView]
 
-type MomentumSwitchTransitionCellResponse = model.MomentumSwitchTransitionCellResponse
+type MomentumSwitchTransitionCellResponse = view.MomentumSwitchTransitionCellView
 given Codec.AsObject[MomentumSwitchTransitionCellResponse] =
-  Codec.AsObject.derived[model.MomentumSwitchTransitionCellResponse]
+  Codec.AsObject.derived[view.MomentumSwitchTransitionCellView]
 given Schema[MomentumSwitchTransitionCellResponse] =
-  Schema.derived[model.MomentumSwitchTransitionCellResponse]
+  Schema.derived[view.MomentumSwitchTransitionCellView]
 
-type PlayerPerformanceProfilesResponse = model.PlayerPerformanceProfilesResponse
+type PlayerPerformanceProfilesResponse = view.PlayerPerformanceProfilesView
 given Codec.AsObject[PlayerPerformanceProfilesResponse] =
-  Codec.AsObject.derived[model.PlayerPerformanceProfilesResponse]
+  Codec.AsObject.derived[view.PlayerPerformanceProfilesView]
 given Schema[PlayerPerformanceProfilesResponse] =
-  Schema.derived[model.PlayerPerformanceProfilesResponse]
+  Schema.derived[view.PlayerPerformanceProfilesView]
 
-type PlayerPerformanceProfileResponse = model.PlayerPerformanceProfileResponse
+type PlayerPerformanceProfileResponse = view.PlayerPerformanceProfileView
 given Codec.AsObject[PlayerPerformanceProfileResponse] =
-  Codec.AsObject.derived[model.PlayerPerformanceProfileResponse]
+  Codec.AsObject.derived[view.PlayerPerformanceProfileView]
 given Schema[PlayerPerformanceProfileResponse] =
-  Schema.derived[model.PlayerPerformanceProfileResponse]
+  Schema.derived[view.PlayerPerformanceProfileView]
 
-type AssetStyleProfilesResponse = model.AssetStyleProfilesResponse
+type AssetStyleProfilesResponse = view.AssetStyleProfilesView
 given Codec.AsObject[AssetStyleProfilesResponse] =
-  Codec.AsObject.derived[model.AssetStyleProfilesResponse]
-given Schema[AssetStyleProfilesResponse] = Schema.derived[model.AssetStyleProfilesResponse]
+  Codec.AsObject.derived[view.AssetStyleProfilesView]
+given Schema[AssetStyleProfilesResponse] = Schema.derived[view.AssetStyleProfilesView]
 
-type AssetStyleProfileResponse = model.AssetStyleProfileResponse
+type AssetStyleProfileResponse = view.AssetStyleProfileView
 given Codec.AsObject[AssetStyleProfileResponse] =
-  Codec.AsObject.derived[model.AssetStyleProfileResponse]
-given Schema[AssetStyleProfileResponse] = Schema.derived[model.AssetStyleProfileResponse]
+  Codec.AsObject.derived[view.AssetStyleProfileView]
+given Schema[AssetStyleProfileResponse] = Schema.derived[view.AssetStyleProfileView]
 
-type AssetStyleMetricsResponse = model.AssetStyleMetricsResponse
+type AssetStyleMetricsResponse = view.AssetStyleMetricsView
 given Codec.AsObject[AssetStyleMetricsResponse] =
-  Codec.AsObject.derived[model.AssetStyleMetricsResponse]
-given Schema[AssetStyleMetricsResponse] = Schema.derived[model.AssetStyleMetricsResponse]
+  Codec.AsObject.derived[view.AssetStyleMetricsView]
+given Schema[AssetStyleMetricsResponse] = Schema.derived[view.AssetStyleMetricsView]
 
-type MatchNoInEventBreakdownResponse = model.MatchNoInEventBreakdownResponse
+type MatchNoInEventBreakdownResponse = view.MatchNoInEventBreakdownView
 given Codec.AsObject[MatchNoInEventBreakdownResponse] =
-  Codec.AsObject.derived[model.MatchNoInEventBreakdownResponse]
+  Codec.AsObject.derived[view.MatchNoInEventBreakdownView]
 given Schema[MatchNoInEventBreakdownResponse] =
-  Schema.derived[model.MatchNoInEventBreakdownResponse]
+  Schema.derived[view.MatchNoInEventBreakdownView]
 
-type MatchNoInEventPlayerBreakdownResponse = model.MatchNoInEventPlayerBreakdownResponse
+type MatchNoInEventPlayerBreakdownResponse = view.MatchNoInEventPlayerBreakdownView
 given Codec.AsObject[MatchNoInEventPlayerBreakdownResponse] =
-  Codec.AsObject.derived[model.MatchNoInEventPlayerBreakdownResponse]
+  Codec.AsObject.derived[view.MatchNoInEventPlayerBreakdownView]
 given Schema[MatchNoInEventPlayerBreakdownResponse] =
-  Schema.derived[model.MatchNoInEventPlayerBreakdownResponse]
+  Schema.derived[view.MatchNoInEventPlayerBreakdownView]
 
-type MatchTimelinePointResponse = model.MatchTimelinePointResponse
+type MatchTimelinePointResponse = view.MatchTimelinePointView
 given Codec.AsObject[MatchTimelinePointResponse] =
-  Codec.AsObject.derived[model.MatchTimelinePointResponse]
-given Schema[MatchTimelinePointResponse] = Schema.derived[model.MatchTimelinePointResponse]
+  Codec.AsObject.derived[view.MatchTimelinePointView]
+given Schema[MatchTimelinePointResponse] = Schema.derived[view.MatchTimelinePointView]
 
-type PlayOrderBaselineResponse = model.PlayOrderBaselineResponse
+type PlayOrderBaselineResponse = view.PlayOrderBaselineView
 given Codec.AsObject[PlayOrderBaselineResponse] =
-  Codec.AsObject.derived[model.PlayOrderBaselineResponse]
-given Schema[PlayOrderBaselineResponse] = Schema.derived[model.PlayOrderBaselineResponse]
+  Codec.AsObject.derived[view.PlayOrderBaselineView]
+given Schema[PlayOrderBaselineResponse] = Schema.derived[view.PlayOrderBaselineView]
 
-type SeriesComparisonHighlightResponse = model.SeriesComparisonHighlightResponse
+type SeriesComparisonHighlightResponse = view.SeriesComparisonHighlightView
 given Codec.AsObject[SeriesComparisonHighlightResponse] =
-  Codec.AsObject.derived[model.SeriesComparisonHighlightResponse]
+  Codec.AsObject.derived[view.SeriesComparisonHighlightView]
 given Schema[SeriesComparisonHighlightResponse] =
-  Schema.derived[model.SeriesComparisonHighlightResponse]
+  Schema.derived[view.SeriesComparisonHighlightView]
 
-type SeriesComparisonDataQualityResponse = model.SeriesComparisonDataQualityResponse
+type SeriesComparisonDataQualityResponse = view.SeriesComparisonDataQualityView
 given Codec.AsObject[SeriesComparisonDataQualityResponse] =
-  Codec.AsObject.derived[model.SeriesComparisonDataQualityResponse]
+  Codec.AsObject.derived[view.SeriesComparisonDataQualityView]
 given Schema[SeriesComparisonDataQualityResponse] =
-  Schema.derived[model.SeriesComparisonDataQualityResponse]
+  Schema.derived[view.SeriesComparisonDataQualityView]
 
-type MetricQualityResponse = model.MetricQualityResponse
-given Codec.AsObject[MetricQualityResponse] = Codec.AsObject.derived[model.MetricQualityResponse]
-given Schema[MetricQualityResponse] = Schema.derived[model.MetricQualityResponse]
+type MetricQualityResponse = view.MetricQualityView
+given Codec.AsObject[MetricQualityResponse] = Codec.AsObject.derived[view.MetricQualityView]
+given Schema[MetricQualityResponse] = Schema.derived[view.MetricQualityView]
 
-type SeriesComparisonReviewResponse = model.SeriesComparisonReviewResponse
+type SeriesComparisonReviewResponse = view.SeriesComparisonReviewView
 given Codec.AsObject[SeriesComparisonReviewResponse] =
-  Codec.AsObject.derived[model.SeriesComparisonReviewResponse]
-given Schema[SeriesComparisonReviewResponse] = Schema.derived[model.SeriesComparisonReviewResponse]
+  Codec.AsObject.derived[view.SeriesComparisonReviewView]
+given Schema[SeriesComparisonReviewResponse] = Schema.derived[view.SeriesComparisonReviewView]
 
-type SeriesComparisonResponse = model.SeriesComparisonResponse
+type SeriesComparisonResponse = view.SeriesComparisonView
 given Codec.AsObject[SeriesComparisonResponse] =
-  Codec.AsObject.derived[model.SeriesComparisonResponse]
-given Schema[SeriesComparisonResponse] = Schema.derived[model.SeriesComparisonResponse]
+  Codec.AsObject.derived[view.SeriesComparisonView]
+given Schema[SeriesComparisonResponse] = Schema.derived[view.SeriesComparisonView]
 
-type SeriesComparisonTrendsResponse = model.SeriesComparisonTrendsResponse
+type SeriesComparisonTrendsResponse = view.SeriesComparisonTrendsView
 given Codec.AsObject[SeriesComparisonTrendsResponse] =
-  Codec.AsObject.derived[model.SeriesComparisonTrendsResponse]
-given Schema[SeriesComparisonTrendsResponse] = Schema.derived[model.SeriesComparisonTrendsResponse]
+  Codec.AsObject.derived[view.SeriesComparisonTrendsView]
+given Schema[SeriesComparisonTrendsResponse] = Schema.derived[view.SeriesComparisonTrendsView]
 
-type TrendSeriesResponse = model.TrendSeriesResponse
-given Codec.AsObject[TrendSeriesResponse] = Codec.AsObject.derived[model.TrendSeriesResponse]
-given Schema[TrendSeriesResponse] = Schema.derived[model.TrendSeriesResponse]
+type TrendSeriesResponse = view.TrendSeriesView
+given Codec.AsObject[TrendSeriesResponse] = Codec.AsObject.derived[view.TrendSeriesView]
+given Schema[TrendSeriesResponse] = Schema.derived[view.TrendSeriesView]
 
-type TrendPointResponse = model.TrendPointResponse
-given Codec.AsObject[TrendPointResponse] = Codec.AsObject.derived[model.TrendPointResponse]
-given Schema[TrendPointResponse] = Schema.derived[model.TrendPointResponse]
+type TrendPointResponse = view.TrendPointView
+given Codec.AsObject[TrendPointResponse] = Codec.AsObject.derived[view.TrendPointView]
+given Schema[TrendPointResponse] = Schema.derived[view.TrendPointView]
 
-type SeriesComparisonHistogramsResponse = model.SeriesComparisonHistogramsResponse
+type SeriesComparisonHistogramsResponse = view.SeriesComparisonHistogramsView
 given Codec.AsObject[SeriesComparisonHistogramsResponse] =
-  Codec.AsObject.derived[model.SeriesComparisonHistogramsResponse]
+  Codec.AsObject.derived[view.SeriesComparisonHistogramsView]
 given Schema[SeriesComparisonHistogramsResponse] =
-  Schema.derived[model.SeriesComparisonHistogramsResponse]
+  Schema.derived[view.SeriesComparisonHistogramsView]
 
-type HistogramResponse = model.HistogramResponse
-given Codec.AsObject[HistogramResponse] = Codec.AsObject.derived[model.HistogramResponse]
-given Schema[HistogramResponse] = Schema.derived[model.HistogramResponse]
+type HistogramResponse = view.HistogramView
+given Codec.AsObject[HistogramResponse] = Codec.AsObject.derived[view.HistogramView]
+given Schema[HistogramResponse] = Schema.derived[view.HistogramView]
 
-type HistogramBinResponse = model.HistogramBinResponse
-given Codec.AsObject[HistogramBinResponse] = Codec.AsObject.derived[model.HistogramBinResponse]
-given Schema[HistogramBinResponse] = Schema.derived[model.HistogramBinResponse]
+type HistogramBinResponse = view.HistogramBinView
+given Codec.AsObject[HistogramBinResponse] = Codec.AsObject.derived[view.HistogramBinView]
+given Schema[HistogramBinResponse] = Schema.derived[view.HistogramBinView]
 
-type HistogramSeriesResponse = model.HistogramSeriesResponse
+type HistogramSeriesResponse = view.HistogramSeriesView
 given Codec.AsObject[HistogramSeriesResponse] =
-  Codec.AsObject.derived[model.HistogramSeriesResponse]
-given Schema[HistogramSeriesResponse] = Schema.derived[model.HistogramSeriesResponse]
+  Codec.AsObject.derived[view.HistogramSeriesView]
+given Schema[HistogramSeriesResponse] = Schema.derived[view.HistogramSeriesView]
 
-type HeadToHeadResponse = model.HeadToHeadResponse
-given Codec.AsObject[HeadToHeadResponse] = Codec.AsObject.derived[model.HeadToHeadResponse]
-given Schema[HeadToHeadResponse] = Schema.derived[model.HeadToHeadResponse]
+type HeadToHeadResponse = view.HeadToHeadView
+given Codec.AsObject[HeadToHeadResponse] = Codec.AsObject.derived[view.HeadToHeadView]
+given Schema[HeadToHeadResponse] = Schema.derived[view.HeadToHeadView]
 
-type HeadToHeadEntryResponse = model.HeadToHeadEntryResponse
+type HeadToHeadEntryResponse = view.HeadToHeadEntryView
 given Codec.AsObject[HeadToHeadEntryResponse] =
-  Codec.AsObject.derived[model.HeadToHeadEntryResponse]
-given Schema[HeadToHeadEntryResponse] = Schema.derived[model.HeadToHeadEntryResponse]
+  Codec.AsObject.derived[view.HeadToHeadEntryView]
+given Schema[HeadToHeadEntryResponse] = Schema.derived[view.HeadToHeadEntryView]
 
-type MatchPlayerPointResponse = model.MatchPlayerPointResponse
+type MatchPlayerPointResponse = view.MatchPlayerPointView
 given Codec.AsObject[MatchPlayerPointResponse] =
-  Codec.AsObject.derived[model.MatchPlayerPointResponse]
-given Schema[MatchPlayerPointResponse] = Schema.derived[model.MatchPlayerPointResponse]
+  Codec.AsObject.derived[view.MatchPlayerPointView]
+given Schema[MatchPlayerPointResponse] = Schema.derived[view.MatchPlayerPointView]

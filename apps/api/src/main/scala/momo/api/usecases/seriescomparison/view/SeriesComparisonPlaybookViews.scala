@@ -1,13 +1,13 @@
-package momo.api.usecases.seriescomparison.model
+package momo.api.usecases.seriescomparison.view
 
-final case class SeriesComparisonReviewBaselineResponse(
-    scope: SeriesComparisonScopeResponse,
+final case class SeriesComparisonReviewBaselineView(
+    scope: SeriesComparisonScopeView,
     matchCount: Int,
     playerCount: Int,
     status: String,
     supplementalScopeName: Option[String],
 )
-final case class SeriesComparisonCommonPlaybookTopicResponse(
+final case class SeriesComparisonCommonPlaybookTopicView(
     id: String,
     category: String,
     title: String,
@@ -17,12 +17,12 @@ final case class SeriesComparisonCommonPlaybookTopicResponse(
     memberDisplayNames: List[String],
     status: String,
 )
-final case class SeriesComparisonPlayerPlaybookResponse(
+final case class SeriesComparisonPlayerPlaybookView(
     memberId: String,
     memberDisplayName: String,
-    cards: List[SeriesComparisonPlaybookCardResponse],
+    cards: List[SeriesComparisonPlaybookCardView],
 )
-final case class SeriesComparisonPlaybookCardResponse(
+final case class SeriesComparisonPlaybookCardView(
     id: String,
     classification: String,
     category: String,
@@ -35,12 +35,12 @@ final case class SeriesComparisonPlaybookCardResponse(
     plainReason: String,
     evidenceStrength: String,
     targetCount: Int,
-    evidence: List[SeriesComparisonPlaybookEvidenceResponse],
+    evidence: List[SeriesComparisonPlaybookEvidenceView],
     status: String,
-    anchorTarget: SeriesComparisonPlaybookAnchorTargetResponse,
+    anchorTarget: SeriesComparisonPlaybookAnchorTargetView,
     actionAdviceScore: Double,
 )
-final case class SeriesComparisonPlaybookEvidenceResponse(
+final case class SeriesComparisonPlaybookEvidenceView(
     metricId: String,
     label: String,
     value: String,
@@ -52,7 +52,7 @@ final case class SeriesComparisonPlaybookEvidenceResponse(
     confidenceHigh: Option[Double] = None,
     stability: Option[Double] = None,
 )
-final case class SeriesComparisonPlaybookAnchorTargetResponse(
+final case class SeriesComparisonPlaybookAnchorTargetView(
     view: String,
     sectionId: String,
     label: String,

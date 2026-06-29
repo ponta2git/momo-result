@@ -2,12 +2,12 @@ package momo.api.usecases.seriescomparison
 
 import momo.api.domain.SeriesComparisonMatchPlayerRow
 import momo.api.domain.ids.MemberId
-import momo.api.usecases.seriescomparison.model.SeriesComparisonPlaybookCardResponse
+import momo.api.usecases.seriescomparison.view.SeriesComparisonPlaybookCardView
 
 private[seriescomparison] final case class PlaybookCandidate(
     memberId: MemberId,
     memberDisplayName: String,
-    card: SeriesComparisonPlaybookCardResponse,
+    card: SeriesComparisonPlaybookCardView,
     peerEffectValue: Double,
     baseScore: Double,
 )

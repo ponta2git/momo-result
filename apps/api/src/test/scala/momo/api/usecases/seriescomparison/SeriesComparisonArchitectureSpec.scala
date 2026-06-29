@@ -12,7 +12,6 @@ final class SeriesComparisonArchitectureSpec extends FunSuite:
     Paths.get("src/main/scala/momo/api/usecases/seriescomparison/engine")
   private val comparisonRoot =
     Paths.get("src/main/scala/momo/api/usecases/seriescomparison")
-  private val usecaseRoot = Paths.get("src/main/scala/momo/api/usecases")
   private val endpointModels =
     Paths.get("src/main/scala/momo/api/endpoints/SeriesComparisonApiModels.scala")
 
@@ -42,12 +41,7 @@ final class SeriesComparisonArchitectureSpec extends FunSuite:
     assertEquals(violations, Nil)
 
   test("series comparison usecases are independent from endpoint DTO and codec layers"):
-    val checkedFiles = scalaFiles(comparisonRoot) ++ List(
-      usecaseRoot.resolve("GetSeriesComparison.scala"),
-      usecaseRoot.resolve("GetSeriesComparisonOptions.scala"),
-      usecaseRoot.resolve("GetSeriesComparisonReview.scala"),
-      usecaseRoot.resolve("GetSeriesComparisonDrilldown.scala"),
-    )
+    val checkedFiles = scalaFiles(comparisonRoot)
     val forbiddenImports = List(
       "momo.api.endpoints",
       "io.circe",
@@ -63,12 +57,13 @@ final class SeriesComparisonArchitectureSpec extends FunSuite:
   test("series comparison endpoint models are codec schema facade aliases"):
     val text = read(endpointModels)
 
-    assert(text.contains("type SeriesComparisonResponse = model.SeriesComparisonResponse"))
+    assert(text.contains("import momo.api.usecases.seriescomparison.view"))
+    assert(text.contains("type SeriesComparisonResponse = view.SeriesComparisonView"))
     assert(
-      text.contains("type SeriesComparisonReviewResponse = model.SeriesComparisonReviewResponse")
+      text.contains("type SeriesComparisonReviewResponse = view.SeriesComparisonReviewView")
     )
     assert(text.contains(
-      "type SeriesComparisonDrilldownResponse = model.SeriesComparisonDrilldownResponse"
+      "type SeriesComparisonDrilldownResponse = view.SeriesComparisonDrilldownView"
     ))
     assert(!text.contains("final case class SeriesComparisonResponse"))
 

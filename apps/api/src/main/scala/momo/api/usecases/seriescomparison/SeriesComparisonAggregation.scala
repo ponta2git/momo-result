@@ -7,7 +7,7 @@ import cats.syntax.all.*
 import momo.api.domain.SeriesComparisonMatchPlayerRow
 import momo.api.domain.ids.MemberId
 import momo.api.usecases.seriescomparison.engine.SeriesDataset
-import momo.api.usecases.seriescomparison.model.*
+import momo.api.usecases.seriescomparison.view.*
 
 private[usecases] object SeriesComparisonAggregation {
   private object Thresholds:
@@ -105,7 +105,7 @@ private[usecases] object SeriesComparisonAggregation {
 
   def aggregate(
       dataset: SeriesDataset
-  ): SeriesComparisonResponse =
+  ): SeriesComparisonView =
     val scope = dataset.scope
     val orderedRows = dataset.orderedRows
     val matchCount = dataset.matchCount
@@ -116,7 +116,7 @@ private[usecases] object SeriesComparisonAggregation {
     val matchIndexById = matchGroups.map(group => group.matchId -> group.matchIndex).toMap
     val players = playerOrder.map { memberId =>
       val first = rowsByPlayer(memberId).head
-      SeriesComparisonPlayerResponse(memberId.value, first.memberDisplayName)
+      SeriesComparisonPlayerView(memberId.value, first.memberDisplayName)
     }
     val revenueRanks = rankByMatch(orderedRows, _.revenueManYen.value)
     val assetsRanks = rankByMatch(orderedRows, _.totalAssetsManYen.value)
@@ -148,9 +148,9 @@ private[usecases] object SeriesComparisonAggregation {
     }.toMap
     val quality =
       dataQuality(playerOrder, rowsByPlayer, orderedRows, revenueRanks, destinationRanks)
-    SeriesComparisonResponse(
+    SeriesComparisonView(
       schemaVersion = 8,
-      scope = SeriesComparisonScopeResponse(
+      scope = SeriesComparisonScopeView(
         gameTitleId = scope.gameTitleId.value,
         gameTitleName = scope.gameTitleName,
         layoutFamily = scope.layoutFamily,
@@ -168,7 +168,7 @@ private[usecases] object SeriesComparisonAggregation {
         SeriesComparisonPlayerMetricsEntry(memberId.value, metrics(memberId.value))
       ),
       trends = trends(playerOrder, rowsByPlayer),
-      histograms = SeriesComparisonHistogramsResponse(assetsHistogram, revenueHistogram),
+      histograms = SeriesComparisonHistogramsView(assetsHistogram, revenueHistogram),
       headToHead = headToHead(playerOrder, orderedRows),
       matchPlayerPoints = matchPlayerPoints(orderedRows, matchIndexById, revenueRanks, assetsRanks),
       recentFormByPlayer = recentFormByPlayer(playerOrder, rowsByPlayer),
@@ -203,7 +203,7 @@ private[usecases] object SeriesComparisonAggregation {
       allRows: List[SeriesComparisonMatchPlayerRow],
       revenueRanks: Map[(String, String), Double],
       destinationRanks: Map[(String, String), Double],
-  ): SeriesComparisonPlayerMetricsResponse =
+  ): SeriesComparisonPlayerMetricsView =
     val denominator = rows.size
     val ranks = rows.map(_.rank.value)
     val assets = rows.map(_.totalAssetsManYen.value)
@@ -215,31 +215,31 @@ private[usecases] object SeriesComparisonAggregation {
     val destination = destinationMetrics(rows, destinationRanks)
     val revenueOutcome = revenueOutcomeMetrics(rows, allRows, revenueRanks)
     val destinationOutcome = destinationOutcomeMetrics(rows, allRows, destinationRanks)
-    SeriesComparisonPlayerMetricsResponse(
+    SeriesComparisonPlayerMetricsView(
       denominator = denominator,
-      rank = RankMetricsResponse(
+      rank = RankMetricsView(
         average = average(ranks.map(asDecimal)),
         distribution = (1 to 4).toList.map { rank =>
           val count = ranks.count(_ == rank)
-          RankDistributionResponse(rank, count, rate(count, denominator))
+          RankDistributionView(rank, count, rate(count, denominator))
         },
         standardDeviation = stddev(ranks.map(asDecimal)),
       ),
-      assets = MoneyDistributionMetricsResponse(
+      assets = MoneyDistributionMetricsView(
         max = assets.maxOption,
         min = assets.minOption,
         average = average(assets.map(asDecimal)),
         median = median(assets),
       ),
-      revenue = RevenueDistributionMetricsResponse(
+      revenue = RevenueDistributionMetricsView(
         max = revenue.maxOption,
         average = average(revenue.map(asDecimal)),
         median = median(revenue),
       ),
-      podium = RateCountMetricsResponse(podiumCount, rate(podiumCount, denominator)),
-      lowerHalf = RateCountMetricsResponse(lowerHalfCount, rate(lowerHalfCount, denominator)),
+      podium = RateCountMetricsView(podiumCount, rate(podiumCount, denominator)),
+      lowerHalf = RateCountMetricsView(lowerHalfCount, rate(lowerHalfCount, denominator)),
       playOrder = playOrderMetrics(rows, allRows),
-      ginji = GinjiMetricsResponse(
+      ginji = GinjiMetricsView(
         count = rows.map(_.incidents.suriNoGinji).sum,
         encounterMatches = ginjiRows.size,
         encounterRate = rate(ginjiRows.size, denominator),
@@ -255,13 +255,13 @@ private[usecases] object SeriesComparisonAggregation {
       destination = destination,
       revenueOutcome = revenueOutcome,
       destinationOutcome = destinationOutcome,
-      stability = StabilityMetricsResponse(stddev(ranks.map(asDecimal))),
+      stability = StabilityMetricsView(stddev(ranks.map(asDecimal))),
     )
 
   private def playOrderMetrics(
       rows: List[SeriesComparisonMatchPlayerRow],
       allRows: List[SeriesComparisonMatchPlayerRow],
-  ): PlayOrderMetricsResponse =
+  ): PlayOrderMetricsView =
     def baseline(value: SeriesComparisonMatchPlayerRow => Double): Map[Int, Double] = allRows
       .groupBy(_.playOrder.value).view.mapValues(rs => averageUnsafe(rs.map(value))).toMap
     def diff(value: SeriesComparisonMatchPlayerRow => Double): Option[Double] =
@@ -274,7 +274,7 @@ private[usecases] object SeriesComparisonAggregation {
           .map(b => value(row) / b)
       }
       if values.size == rows.size then average(values) else None
-    PlayOrderMetricsResponse(
+    PlayOrderMetricsView(
       assetsDiff = diff(row => asDecimal(row.totalAssetsManYen.value)),
       revenueDiff = diff(row => asDecimal(row.revenueManYen.value)),
       assetsIndex = index(row => asDecimal(row.totalAssetsManYen.value)),
@@ -284,9 +284,9 @@ private[usecases] object SeriesComparisonAggregation {
 
   private def playOrderBreakdown(
       rows: List[SeriesComparisonMatchPlayerRow]
-  ): List[PlayOrderBreakdownResponse] = (1 to 4).toList.map { playOrder =>
+  ): List[PlayOrderBreakdownView] = (1 to 4).toList.map { playOrder =>
     val targetRows = rows.filter(_.playOrder.value == playOrder)
-    PlayOrderBreakdownResponse(
+    PlayOrderBreakdownView(
       playOrder = playOrder,
       matchCount = targetRows.size,
       rankAverage = average(targetRows.map(row => asDecimal(row.rank.value))),
@@ -297,12 +297,12 @@ private[usecases] object SeriesComparisonAggregation {
 
   private def playOrderBaselines(
       rows: List[SeriesComparisonMatchPlayerRow]
-  ): List[PlayOrderBaselineResponse] =
+  ): List[PlayOrderBaselineView] =
     if rows.isEmpty then Nil
     else
       (1 to 4).toList.map { playOrder =>
         val targetRows = rows.filter(_.playOrder.value == playOrder)
-        PlayOrderBaselineResponse(
+        PlayOrderBaselineView(
           playOrder = playOrder,
           assetsAverage = average(targetRows.map(row => asDecimal(row.totalAssetsManYen.value))),
           revenueAverage = average(targetRows.map(row => asDecimal(row.revenueManYen.value))),
@@ -314,7 +314,7 @@ private[usecases] object SeriesComparisonAggregation {
       rows: List[SeriesComparisonMatchPlayerRow],
       allRows: List[SeriesComparisonMatchPlayerRow],
       revenueRanks: Map[(String, String), Double],
-  ): NonRevenueMetricsResponse =
+  ): NonRevenueMetricsView =
     val revenueRankValues = rows.flatMap(row => revenueRanks.get(rankKey(row)))
     val rankDelta =
       for
@@ -326,7 +326,7 @@ private[usecases] object SeriesComparisonAggregation {
     val topRows = rows
       .filter(row => maxRevenueByMatch.get(row.matchId).contains(row.revenueManYen.value))
     val noWin = topRows.count(_.rank.value != 1)
-    NonRevenueMetricsResponse(
+    NonRevenueMetricsView(
       rankDelta = rankDelta,
       highRevenueNoWinCount = noWin,
       highRevenueTopCount = topRows.size,
@@ -336,7 +336,7 @@ private[usecases] object SeriesComparisonAggregation {
   private def destinationMetrics(
       rows: List[SeriesComparisonMatchPlayerRow],
       destinationRanks: Map[(String, String), Double],
-  ): DestinationMetricsResponse =
+  ): DestinationMetricsView =
     val destinationRankValues = rows.flatMap(row => destinationRanks.get(rankKey(row)))
     val conversion =
       for
@@ -346,7 +346,7 @@ private[usecases] object SeriesComparisonAggregation {
     val rankedRows = rows.flatMap(row => destinationRanks.get(rankKey(row)).map(_ -> row))
     val upper = rankedRows.collect { case (r, row) if r < 2.5 => asDecimal(5 - row.rank.value) }
     val lower = rankedRows.collect { case (r, row) if r > 2.5 => asDecimal(5 - row.rank.value) }
-    DestinationMetricsResponse(
+    DestinationMetricsView(
       conversionDelta = conversion,
       dependenceScore = (average(upper), average(lower)).mapN(_ - _),
       upperTargetCount = upper.size,
@@ -357,13 +357,13 @@ private[usecases] object SeriesComparisonAggregation {
       rows: List[SeriesComparisonMatchPlayerRow],
       allRows: List[SeriesComparisonMatchPlayerRow],
       revenueRanks: Map[(String, String), Double],
-  ): RevenueOutcomeMetricsResponse =
+  ): RevenueOutcomeMetricsView =
     val maxRevenueByMatch = allRows.groupBy(_.matchId).view
       .mapValues(rs => rs.map(_.revenueManYen.value).max).toMap
     val topRows = rows
       .filter(row => maxRevenueByMatch.get(row.matchId).contains(row.revenueManYen.value))
     val lowRevenueRows = rows.filter(row => revenueRanks.get(rankKey(row)).exists(_ > 2.5))
-    RevenueOutcomeMetricsResponse(
+    RevenueOutcomeMetricsView(
       top = conditionalRankOutcome(topRows),
       lowRevenue = conditionalRankOutcome(lowRevenueRows),
       nonTopWinCount = rows.count(row =>
@@ -375,7 +375,7 @@ private[usecases] object SeriesComparisonAggregation {
       rows: List[SeriesComparisonMatchPlayerRow],
       allRows: List[SeriesComparisonMatchPlayerRow],
       destinationRanks: Map[(String, String), Double],
-  ): DestinationOutcomeMetricsResponse =
+  ): DestinationOutcomeMetricsView =
     val maxDestinationByMatch = allRows.groupBy(_.matchId).view
       .mapValues(rs => rs.map(_.incidents.destination).max).toMap
     val topRows = rows.filter(row =>
@@ -384,7 +384,7 @@ private[usecases] object SeriesComparisonAggregation {
     )
     val lowDestinationRows = rows.filter(row => destinationRanks.get(rankKey(row)).exists(_ > 2.5))
     val zeroDestinationRows = rows.filter(_.incidents.destination == 0)
-    DestinationOutcomeMetricsResponse(
+    DestinationOutcomeMetricsView(
       top = conditionalRankOutcome(topRows),
       lowDestination = conditionalRankOutcome(lowDestinationRows),
       zeroDestination = conditionalRankOutcome(zeroDestinationRows),
@@ -392,12 +392,12 @@ private[usecases] object SeriesComparisonAggregation {
 
   private def conditionalRankOutcome(
       rows: List[SeriesComparisonMatchPlayerRow]
-  ): ConditionalRankOutcomeResponse =
+  ): ConditionalRankOutcomeView =
     val targetCount = rows.size
     val winCount = rows.count(_.rank.value == 1)
     val podiumCount = rows.count(_.rank.value <= 2)
     val lowerHalfCount = rows.count(_.rank.value >= 3)
-    ConditionalRankOutcomeResponse(
+    ConditionalRankOutcomeView(
       targetCount = targetCount,
       winCount = winCount,
       winRate = rate(winCount, targetCount),
@@ -407,7 +407,7 @@ private[usecases] object SeriesComparisonAggregation {
       lowerHalfRate = rate(lowerHalfCount, targetCount),
       rankDistribution = (1 to 4).toList.map { rank =>
         val count = rows.count(_.rank.value == rank)
-        RankDistributionResponse(rank, count, rate(count, targetCount))
+        RankDistributionView(rank, count, rate(count, targetCount))
       },
       status = conditionalStatus(targetCount),
     )
@@ -415,8 +415,8 @@ private[usecases] object SeriesComparisonAggregation {
   private def trends(
       playerOrder: List[MemberId],
       rowsByPlayer: Map[MemberId, List[SeriesComparisonMatchPlayerRow]],
-  ): SeriesComparisonTrendsResponse =
-    def series(value: (SeriesComparisonMatchPlayerRow, Int) => Double): List[TrendSeriesResponse] =
+  ): SeriesComparisonTrendsView =
+    def series(value: (SeriesComparisonMatchPlayerRow, Int) => Double): List[TrendSeriesView] =
       playerOrder.map { memberId =>
         val rows = rowsByPlayer.getOrElse(memberId, Nil).sortBy(row =>
           (
@@ -426,10 +426,10 @@ private[usecases] object SeriesComparisonAggregation {
             row.matchId.value,
           )
         )
-        TrendSeriesResponse(
+        TrendSeriesView(
           memberId = memberId.value,
           points = rows.zipWithIndex.map { case (row, idx) =>
-            TrendPointResponse(
+            TrendPointView(
               index = idx + 1,
               matchId = row.matchId.value,
               playedAt = Formatter.format(row.playedAt),
@@ -438,7 +438,7 @@ private[usecases] object SeriesComparisonAggregation {
           },
         )
       }
-    SeriesComparisonTrendsResponse(
+    SeriesComparisonTrendsView(
       rankCumulativeAverage = series { (row, idx) =>
         val rows = rowsByPlayer(row.memberId).take(idx)
         averageUnsafe(rows.map(row => asDecimal(row.rank.value)))
@@ -463,12 +463,12 @@ private[usecases] object SeriesComparisonAggregation {
   private def headToHead(
       playerOrder: List[MemberId],
       rows: List[SeriesComparisonMatchPlayerRow],
-  ): HeadToHeadResponse =
+  ): HeadToHeadView =
     val rowsByMatchAndPlayer = rows.map(row => (row.matchId, row.memberId) -> row).toMap
-    HeadToHeadResponse(entries = playerOrder.flatMap { subjectId =>
+    HeadToHeadView(entries = playerOrder.flatMap { subjectId =>
       playerOrder.map { opponentId =>
         if subjectId == opponentId then
-          HeadToHeadEntryResponse(
+          HeadToHeadEntryView(
             subjectMemberId = subjectId.value,
             opponentMemberId = opponentId.value,
             matchCount = 0,
@@ -487,7 +487,7 @@ private[usecases] object SeriesComparisonAggregation {
           val betterRankCount = pairs.count { case (subject, opponent) =>
             subject.rank.value < opponent.rank.value
           }
-          HeadToHeadEntryResponse(
+          HeadToHeadEntryView(
             subjectMemberId = subjectId.value,
             opponentMemberId = opponentId.value,
             matchCount = matchCount,
@@ -509,8 +509,8 @@ private[usecases] object SeriesComparisonAggregation {
       matchIndexById: Map[momo.api.domain.ids.MatchId, Int],
       revenueRanks: Map[(String, String), Double],
       assetsRanks: Map[(String, String), Double],
-  ): List[MatchPlayerPointResponse] = rows.map(row =>
-    MatchPlayerPointResponse(
+  ): List[MatchPlayerPointView] = rows.map(row =>
+    MatchPlayerPointView(
       matchIndex = matchIndexById.getOrElse(row.matchId, 0),
       matchId = row.matchId.value,
       playedAt = Formatter.format(row.playedAt),
@@ -527,12 +527,12 @@ private[usecases] object SeriesComparisonAggregation {
   private def recentFormByPlayer(
       playerOrder: List[MemberId],
       rowsByPlayer: Map[MemberId, List[SeriesComparisonMatchPlayerRow]],
-  ): List[RecentFormPlayerResponse] =
+  ): List[RecentFormPlayerView] =
     val windowSize = Thresholds.RecentFormWindowSize
     playerOrder.map { memberId =>
       val rows = sortedPlayerRows(rowsByPlayer.getOrElse(memberId, Nil))
       val recent = rows.takeRight(windowSize)
-      RecentFormPlayerResponse(
+      RecentFormPlayerView(
         memberId = memberId.value,
         windowSize = windowSize,
         targetCount = recent.size,
@@ -548,12 +548,12 @@ private[usecases] object SeriesComparisonAggregation {
   private def momentumSwitchByPlayer(
       playerOrder: List[MemberId],
       rowsByPlayer: Map[MemberId, List[SeriesComparisonMatchPlayerRow]],
-  ): MomentumSwitchResponse = MomentumSwitchResponse(playerOrder.map { memberId =>
+  ): MomentumSwitchView = MomentumSwitchView(playerOrder.map { memberId =>
     val rows = sortedPlayerRows(rowsByPlayer.getOrElse(memberId, Nil))
     val transitions = rankTransitions(rows)
     val podiumBaseline = rate(rows.count(_.rank.value <= 2), rows.size)
     val lowerHalfBaseline = rate(rows.count(_.rank.value >= 3), rows.size)
-    MomentumSwitchPlayerResponse(
+    MomentumSwitchPlayerView(
       memberId = memberId.value,
       denominator = rows.size,
       transitionCount = transitions.size,
@@ -584,11 +584,11 @@ private[usecases] object SeriesComparisonAggregation {
       previousMatches: SeriesComparisonMatchPlayerRow => Boolean,
       currentMatches: SeriesComparisonMatchPlayerRow => Boolean,
       baselineRate: Option[Double],
-  ): MomentumSwitchRateResponse =
+  ): MomentumSwitchRateView =
     val targets = transitions.filter(transition => previousMatches(transition.previous))
     val successCount = targets.count(transition => currentMatches(transition.current))
     val switchRate = rate(successCount, targets.size)
-    MomentumSwitchRateResponse(
+    MomentumSwitchRateView(
       targetCount = targets.size,
       successCount = successCount,
       rate = switchRate,
@@ -599,16 +599,16 @@ private[usecases] object SeriesComparisonAggregation {
 
   private def momentumSwitchTransitionRows(
       transitions: List[RankTransition]
-  ): List[MomentumSwitchTransitionRowResponse] = (1 to 4).toList.map { previousRank =>
+  ): List[MomentumSwitchTransitionRowView] = (1 to 4).toList.map { previousRank =>
     val targets = transitions.filter(_.previous.rank.value == previousRank)
     val targetCount = targets.size
-    MomentumSwitchTransitionRowResponse(
+    MomentumSwitchTransitionRowView(
       previousRank = previousRank,
       targetCount = targetCount,
       status = momentumSwitchStatus(targetCount),
       cells = (1 to 4).toList.map { nextRank =>
         val count = targets.count(_.current.rank.value == nextRank)
-        MomentumSwitchTransitionCellResponse(
+        MomentumSwitchTransitionCellView(
           nextRank = nextRank,
           count = count,
           rate = rate(count, targetCount),
@@ -629,8 +629,8 @@ private[usecases] object SeriesComparisonAggregation {
   private def playerPerformanceProfiles(
       playerOrder: List[MemberId],
       rowsByPlayer: Map[MemberId, List[SeriesComparisonMatchPlayerRow]],
-      metrics: Map[String, SeriesComparisonPlayerMetricsResponse],
-  ): PlayerPerformanceProfilesResponse =
+      metrics: Map[String, SeriesComparisonPlayerMetricsView],
+  ): PlayerPerformanceProfilesView =
     val entriesBase = playerOrder.map { memberId =>
       val rows = rowsByPlayer.getOrElse(memberId, Nil)
       val rankScore = average(rows.map(row => asDecimal(5 - row.rank.value)))
@@ -648,7 +648,7 @@ private[usecases] object SeriesComparisonAggregation {
     val riskMedian = medianDouble(entriesBase.flatMap(_.rankStandardDeviation))
     val returnMedian = medianDouble(entriesBase.flatMap(_.averageRankScore))
     val revenueAssetRateMedian = medianDouble(entriesBase.flatMap(_.averageRevenueAssetRate))
-    PlayerPerformanceProfilesResponse(
+    PlayerPerformanceProfilesView(
       rankStandardDeviationMedian = riskMedian,
       averageRankScoreMedian = returnMedian,
       averageRevenueAssetRateMedian = revenueAssetRateMedian,
@@ -660,7 +660,7 @@ private[usecases] object SeriesComparisonAggregation {
             else if x <= xMedian && y < yMedian then "steady_chaser"
             else "swing_chaser"
           }
-        PlayerPerformanceProfileResponse(
+        PlayerPerformanceProfileView(
           memberId = entry.memberId.value,
           rankStandardDeviation = entry.rankStandardDeviation,
           podiumRate = entry.podiumRate,
@@ -686,7 +686,7 @@ private[usecases] object SeriesComparisonAggregation {
       playerOrder: List[MemberId],
       rowsByPlayer: Map[MemberId, List[SeriesComparisonMatchPlayerRow]],
       allRows: List[SeriesComparisonMatchPlayerRow],
-  ): AssetStyleProfilesResponse =
+  ): AssetStyleProfilesView =
     val matchRows = allRows.groupBy(_.matchId)
     val firstAssetsByMatch = assetsByRank(matchRows, 1)
     val secondAssetsByMatch = assetsByRank(matchRows, 2)
@@ -737,7 +737,7 @@ private[usecases] object SeriesComparisonAggregation {
       )
     }
     val medians = assetStyleMedians(bases)
-    AssetStyleProfilesResponse(
+    AssetStyleProfilesView(
       lowAssetThreshold = lowAssetThreshold.map(value => math.round(value).toInt),
       highAssetThreshold = highAssetThreshold.map(value => math.round(value).toInt),
       blowoutWinThreshold = blowoutWinThreshold.map(value => math.round(value).toInt),
@@ -746,7 +746,7 @@ private[usecases] object SeriesComparisonAggregation {
       entries = bases.map { base =>
         val shapeKind = assetStyleShapeKind(base, medians)
         val tags = assetStyleTags(base, medians, shapeKind)
-        AssetStyleProfileResponse(
+        AssetStyleProfileView(
           memberId = base.memberId.value,
           targetCount = base.targetCount,
           primaryKind = assetStylePrimaryKind(base, medians),
@@ -805,7 +805,7 @@ private[usecases] object SeriesComparisonAggregation {
     val heavyLossCount = heavyLossThreshold
       .fold(0)(threshold => lowerGaps.count(value => asDecimal(value) >= threshold))
     val destinationPositiveCount = rows.count(_.incidents.destination > 0)
-    val metrics = AssetStyleMetricsResponse(
+    val metrics = AssetStyleMetricsView(
       p10Assets = percentileDouble(assets.sorted, 0.10),
       medianAssets = median(assets),
       p90Assets = percentileDouble(assets.sorted, 0.90),
@@ -842,7 +842,7 @@ private[usecases] object SeriesComparisonAggregation {
   private final case class AssetStyleProfileBase(
       memberId: MemberId,
       targetCount: Int,
-      metrics: AssetStyleMetricsResponse,
+      metrics: AssetStyleMetricsView,
       status: String,
   )
 
@@ -861,7 +861,7 @@ private[usecases] object SeriesComparisonAggregation {
   )
 
   private def assetStyleMedians(bases: List[AssetStyleProfileBase]): AssetStyleMedians =
-    def medianOf(value: AssetStyleMetricsResponse => Option[Double]): Option[Double] =
+    def medianOf(value: AssetStyleMetricsView => Option[Double]): Option[Double] =
       medianDouble(bases.flatMap(base => value(base.metrics)))
     def medianOfBase(value: AssetStyleProfileBase => Option[Double]): Option[Double] =
       medianDouble(bases.flatMap(value))
@@ -1001,7 +1001,7 @@ private[usecases] object SeriesComparisonAggregation {
       )("close_finish"),
     ).flatten.distinct
 
-  private def blowoutWinRate(metrics: AssetStyleMetricsResponse, targetCount: Int): Option[Double] =
+  private def blowoutWinRate(metrics: AssetStyleMetricsView, targetCount: Int): Option[Double] =
     rate(metrics.blowoutWinCount, targetCount)
 
   private def above(value: Option[Double], baseline: Option[Double], delta: Double): Boolean =
@@ -1019,13 +1019,13 @@ private[usecases] object SeriesComparisonAggregation {
   private def matchNoInEventBreakdown(
       playerOrder: List[MemberId],
       rows: List[SeriesComparisonMatchPlayerRow],
-  ): List[MatchNoInEventBreakdownResponse] = rows.groupBy(_.matchNoInEvent.value).toList
+  ): List[MatchNoInEventBreakdownView] = rows.groupBy(_.matchNoInEvent.value).toList
     .sortBy(_._1).map { case (matchNoInEvent, noRows) =>
-      MatchNoInEventBreakdownResponse(
+      MatchNoInEventBreakdownView(
         matchNoInEvent = matchNoInEvent,
         playerRows = playerOrder.map { memberId =>
           val playerRows = sortedPlayerRows(noRows.filter(_.memberId == memberId))
-          MatchNoInEventPlayerBreakdownResponse(
+          MatchNoInEventPlayerBreakdownView(
             memberId = memberId.value,
             targetCount = playerRows.size,
             averageRank = average(playerRows.map(row => asDecimal(row.rank.value))),
@@ -1036,7 +1036,7 @@ private[usecases] object SeriesComparisonAggregation {
       )
     }
 
-  private def matchTimeline(matchGroups: List[MatchGroup]): List[MatchTimelinePointResponse] =
+  private def matchTimeline(matchGroups: List[MatchGroup]): List[MatchTimelinePointView] =
     val base = matchGroups.map { group =>
       val byRank = group.rows.map(row => row.rank.value -> row).toMap
       val winner = byRank.get(1)
@@ -1085,7 +1085,7 @@ private[usecases] object SeriesComparisonAggregation {
             .getOrElse(false)
         )("asset_blowout"),
       ).flatten
-      MatchTimelinePointResponse(
+      MatchTimelinePointView(
         matchIndex = item.group.matchIndex,
         matchId = item.group.matchId.value,
         playedAt = Formatter.format(item.group.playedAt),
@@ -1109,12 +1109,12 @@ private[usecases] object SeriesComparisonAggregation {
   private def cardShopDestination(
       playerOrder: List[MemberId],
       rowsByPlayer: Map[MemberId, List[SeriesComparisonMatchPlayerRow]],
-  ): CardShopDestinationResponse = CardShopDestinationResponse(playerOrder.map { memberId =>
+  ): CardShopDestinationView = CardShopDestinationView(playerOrder.map { memberId =>
     val rows = sortedPlayerRows(rowsByPlayer.getOrElse(memberId, Nil))
     val denominator = rows.size
     val cardShopRows = rows.filter(_.incidents.cardShop > 0)
     val cardShopWithoutDestinationRows = cardShopRows.filter(_.incidents.destination == 0)
-    CardShopDestinationPlayerResponse(
+    CardShopDestinationPlayerView(
       memberId = memberId.value,
       denominator = denominator,
       cardShopMatchCount = cardShopRows.size,
@@ -1130,7 +1130,7 @@ private[usecases] object SeriesComparisonAggregation {
       kind: String,
       rows: List[SeriesComparisonMatchPlayerRow],
       denominator: Int,
-  ): CardShopDestinationQuadrantResponse =
+  ): CardShopDestinationQuadrantView =
     val targetRows = rows.filter(row =>
       val hasDestination = row.incidents.destination > 0
       val hasCardShop = row.incidents.cardShop > 0
@@ -1141,7 +1141,7 @@ private[usecases] object SeriesComparisonAggregation {
         case _ => !hasDestination && !hasCardShop
     )
     val targetCount = targetRows.size
-    CardShopDestinationQuadrantResponse(
+    CardShopDestinationQuadrantView(
       kind = kind,
       targetCount = targetCount,
       rate = rate(targetCount, denominator),
@@ -1189,7 +1189,7 @@ private[usecases] object SeriesComparisonAggregation {
       allRows: List[SeriesComparisonMatchPlayerRow],
       revenueRanks: Map[(String, String), Double],
       destinationRanks: Map[(String, String), Double],
-  ): SeriesComparisonDataQualityResponse =
+  ): SeriesComparisonDataQualityView =
     val items = playerOrder.flatMap { memberId =>
       val rows = rowsByPlayer.getOrElse(memberId, Nil)
       val denominator = rows.size
@@ -1213,7 +1213,7 @@ private[usecases] object SeriesComparisonAggregation {
           rows.count(row => row.incidents.destination == 0 && row.incidents.cardShop == 0),
       )
       val normal = DenominatorMetricIds.map(metricId =>
-        MetricQualityResponse(
+        MetricQualityView(
           metricId,
           Some(memberId.value),
           denominator,
@@ -1243,7 +1243,7 @@ private[usecases] object SeriesComparisonAggregation {
       ) ++ cardShopDestinationCounts
       val conditional = ConditionalMetricIds.map { metricId =>
         val target = conditionalCounts.getOrElse(metricId, 0)
-        MetricQualityResponse(
+        MetricQualityView(
           metricId,
           Some(memberId.value),
           denominator,
@@ -1254,7 +1254,7 @@ private[usecases] object SeriesComparisonAggregation {
       }
       val momentumSwitch = MomentumSwitchMetricIds.map { metricId =>
         val target = momentumTargetCounts.getOrElse(metricId, 0)
-        MetricQualityResponse(
+        MetricQualityView(
           metricId,
           Some(memberId.value),
           denominator,
@@ -1265,7 +1265,7 @@ private[usecases] object SeriesComparisonAggregation {
       }
       normal ++ conditional ++ momentumSwitch
     }
-    SeriesComparisonDataQualityResponse(items)
+    SeriesComparisonDataQualityView(items)
 
   private def momentumSwitchTargetCounts(
       rows: List[SeriesComparisonMatchPlayerRow]
@@ -1278,8 +1278,8 @@ private[usecases] object SeriesComparisonAggregation {
     )
 
   private def highlights(
-      metrics: Map[String, SeriesComparisonPlayerMetricsResponse]
-  ): List[SeriesComparisonHighlightResponse] = List(
+      metrics: Map[String, SeriesComparisonPlayerMetricsView]
+  ): List[SeriesComparisonHighlightView] = List(
     highlightMin(
       "highlight.ginjiResilience",
       "銀次リカバリー王",
@@ -1349,34 +1349,34 @@ private[usecases] object SeriesComparisonAggregation {
       id: String,
       title: String,
       metricId: String,
-      metrics: Map[String, SeriesComparisonPlayerMetricsResponse],
-      value: SeriesComparisonPlayerMetricsResponse => Option[Double],
-      target: SeriesComparisonPlayerMetricsResponse => Int,
+      metrics: Map[String, SeriesComparisonPlayerMetricsView],
+      value: SeriesComparisonPlayerMetricsView => Option[Double],
+      target: SeriesComparisonPlayerMetricsView => Int,
       requireTarget: Int,
-  ): Option[SeriesComparisonHighlightResponse] =
+  ): Option[SeriesComparisonHighlightView] =
     highlight(id, title, metricId, metrics, value, target, requireTarget, chooseMax = true)
 
   private def highlightMin(
       id: String,
       title: String,
       metricId: String,
-      metrics: Map[String, SeriesComparisonPlayerMetricsResponse],
-      value: SeriesComparisonPlayerMetricsResponse => Option[Double],
-      target: SeriesComparisonPlayerMetricsResponse => Int,
+      metrics: Map[String, SeriesComparisonPlayerMetricsView],
+      value: SeriesComparisonPlayerMetricsView => Option[Double],
+      target: SeriesComparisonPlayerMetricsView => Int,
       requireTarget: Int,
-  ): Option[SeriesComparisonHighlightResponse] =
+  ): Option[SeriesComparisonHighlightView] =
     highlight(id, title, metricId, metrics, value, target, requireTarget, chooseMax = false)
 
   private def highlight(
       id: String,
       title: String,
       metricId: String,
-      metrics: Map[String, SeriesComparisonPlayerMetricsResponse],
-      value: SeriesComparisonPlayerMetricsResponse => Option[Double],
-      target: SeriesComparisonPlayerMetricsResponse => Int,
+      metrics: Map[String, SeriesComparisonPlayerMetricsView],
+      value: SeriesComparisonPlayerMetricsView => Option[Double],
+      target: SeriesComparisonPlayerMetricsView => Int,
       requireTarget: Int,
       chooseMax: Boolean,
-  ): Option[SeriesComparisonHighlightResponse] =
+  ): Option[SeriesComparisonHighlightView] =
     val candidates = metrics.toList.flatMap { case (memberId, m) =>
       value(m).filter(_ => target(m) >= requireTarget).map(v => (memberId, v, target(m)))
     }
@@ -1384,7 +1384,7 @@ private[usecases] object SeriesComparisonAggregation {
     else
       val bestValue = if chooseMax then candidates.map(_._2).max else candidates.map(_._2).min
       val winners = candidates.filter(_._2 == bestValue)
-      Some(SeriesComparisonHighlightResponse(
+      Some(SeriesComparisonHighlightView(
         id = id,
         title = title,
         winnerMemberIds = winners.map(_._1),

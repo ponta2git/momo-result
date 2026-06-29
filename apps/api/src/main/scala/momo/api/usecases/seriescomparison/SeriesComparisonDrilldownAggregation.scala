@@ -8,7 +8,7 @@ import momo.api.domain.constraints.RefinedTypes.MetricIdString
 import momo.api.domain.ids.{MatchId, MemberId}
 import momo.api.domain.{SeriesComparisonMatchPlayerRow, SeriesComparisonResolvedScope}
 import momo.api.usecases.seriescomparison.engine.SeriesDataset
-import momo.api.usecases.seriescomparison.model.*
+import momo.api.usecases.seriescomparison.view.*
 
 private[usecases] object SeriesComparisonDrilldownAggregation:
   private val Formatter = DateTimeFormatter.ISO_INSTANT
@@ -18,7 +18,7 @@ private[usecases] object SeriesComparisonDrilldownAggregation:
       dataset: SeriesDataset,
       metricId: MetricIdString,
       memberId: MemberId,
-  ): SeriesComparisonDrilldownResponse =
+  ): SeriesComparisonDrilldownView =
     val scope = dataset.scope
     val sortedRows = dataset.orderedRows
     val matchIndexById = dataset.matchIndexById
@@ -34,15 +34,15 @@ private[usecases] object SeriesComparisonDrilldownAggregation:
       Option.when(metricKey == "playOrder.rankHistory")(
         playOrderRankHistoryPayload(targetRows, sortedRows, matchIndexById)
       )
-    SeriesComparisonDrilldownResponse(
+    SeriesComparisonDrilldownView(
       schemaVersion = SchemaVersion,
       metricId = metricKey,
-      scope = scopeResponse(scope),
-      player = SeriesComparisonPlayerResponse(memberId = memberId.value, displayName = displayName),
+      scope = scopeView(scope),
+      player = SeriesComparisonPlayerView(memberId = memberId.value, displayName = displayName),
       rankAverageHistory = rankAverageHistory,
       playOrderRankHistory = playOrderRankHistory,
-      dataQuality = SeriesComparisonDataQualityResponse(List(
-        MetricQualityResponse(
+      dataQuality = SeriesComparisonDataQualityView(List(
+        MetricQualityView(
           metricId = metricKey,
           playerMemberId = Some(memberId.value),
           denominator = targetRows.size,
@@ -57,11 +57,11 @@ private[usecases] object SeriesComparisonDrilldownAggregation:
       targetRows: List[SeriesComparisonMatchPlayerRow],
       matchIndexById: Map[MatchId, Int],
       status: String,
-  ): SeriesComparisonRankAverageHistoryPayloadResponse =
+  ): SeriesComparisonRankAverageHistoryPayloadView =
     val matchRows = rankAverageMatchRows(targetRows, matchIndexById)
     val heldEventRows = rankAverageEventRows(matchRows)
-    SeriesComparisonRankAverageHistoryPayloadResponse(
-      summary = SeriesComparisonRankAverageHistorySummaryResponse(
+    SeriesComparisonRankAverageHistoryPayloadView(
+      summary = SeriesComparisonRankAverageHistorySummaryView(
         targetCount = targetRows.size,
         currentAverageRank = matchRows.lastOption.map(_.cumulativeAverageRank),
         averageRankDeltaFromFirst = Option.when(matchRows.size >= 2)(
@@ -79,13 +79,13 @@ private[usecases] object SeriesComparisonDrilldownAggregation:
   private def rankAverageMatchRows(
       rows: List[SeriesComparisonMatchPlayerRow],
       matchIndexById: Map[MatchId, Int],
-  ): List[SeriesComparisonRankAverageHistoryMatchRowResponse] =
+  ): List[SeriesComparisonRankAverageHistoryMatchRowView] =
     val initial = RankAverageAccumulationState(Nil, 0, 0, None, None)
     rows.zipWithIndex.foldLeft(initial) { case (state, (row, index)) =>
       val nextCount = state.count + 1
       val nextRankTotal = state.rankTotal + row.rank.value
       val currentAverage = nextRankTotal * 1.0d / nextCount
-      val response = SeriesComparisonRankAverageHistoryMatchRowResponse(
+      val response = SeriesComparisonRankAverageHistoryMatchRowView(
         matchIndex = matchIndexById.getOrElse(row.matchId, index + 1),
         matchId = row.matchId.value,
         playedAt = Formatter.format(row.playedAt),
@@ -110,7 +110,7 @@ private[usecases] object SeriesComparisonDrilldownAggregation:
       targetRows: List[SeriesComparisonMatchPlayerRow],
       allRows: List[SeriesComparisonMatchPlayerRow],
       matchIndexById: Map[MatchId, Int],
-  ): SeriesComparisonPlayOrderRankHistoryPayloadResponse =
+  ): SeriesComparisonPlayOrderRankHistoryPayloadView =
     val baselineAverageByPlayOrder = (1 to 4).map { playOrder =>
       val ranks = allRows.filter(_.playOrder.value == playOrder).map(_.rank.value)
       playOrder -> average(ranks)
@@ -121,8 +121,8 @@ private[usecases] object SeriesComparisonDrilldownAggregation:
     val best = rankedPlayOrderRows.headOption
     val worst = rankedPlayOrderRows.lastOption
     val averageTrendRows = playOrderAverageTrendRows(targetRows, matchIndexById)
-    SeriesComparisonPlayOrderRankHistoryPayloadResponse(
-      summary = SeriesComparisonPlayOrderRankHistorySummaryResponse(
+    SeriesComparisonPlayOrderRankHistoryPayloadView(
+      summary = SeriesComparisonPlayOrderRankHistorySummaryView(
         targetCount = targetRows.size,
         currentAverageRank = average(targetRows.map(_.rank.value)),
         bestPlayOrder = best.map(_.playOrder),
@@ -133,7 +133,7 @@ private[usecases] object SeriesComparisonDrilldownAggregation:
           worst.flatMap(_.rankAverage).getOrElse(0.0) - best.flatMap(_.rankAverage).getOrElse(0.0)
         ),
         countsByPlayOrder = (1 to 4).toList.map(playOrder =>
-          SeriesComparisonPlayOrderCountResponse(
+          SeriesComparisonPlayOrderCountView(
             playOrder = playOrder,
             matchCount = targetRows.count(_.playOrder.value == playOrder),
           )
@@ -146,7 +146,7 @@ private[usecases] object SeriesComparisonDrilldownAggregation:
   private def playOrderHistoryRows(
       rows: List[SeriesComparisonMatchPlayerRow],
       baselineAverageByPlayOrder: Map[Int, Option[Double]],
-  ): List[SeriesComparisonPlayOrderRankHistoryPlayOrderRowResponse] = (1 to 4).toList.map {
+  ): List[SeriesComparisonPlayOrderRankHistoryPlayOrderRowView] = (1 to 4).toList.map {
     playOrder =>
       val targetRows = rows.filter(_.playOrder.value == playOrder)
       val ranks = targetRows.map(_.rank.value)
@@ -154,13 +154,13 @@ private[usecases] object SeriesComparisonDrilldownAggregation:
       val podiumCount = ranks.count(rank => rank == 1 || rank == 2)
       val lowerHalfCount = ranks.count(rank => rank == 3 || rank == 4)
       val baseline = baselineAverageByPlayOrder.getOrElse(playOrder, None)
-      SeriesComparisonPlayOrderRankHistoryPlayOrderRowResponse(
+      SeriesComparisonPlayOrderRankHistoryPlayOrderRowView(
         playOrder = playOrder,
         matchCount = targetRows.size,
         rankAverage = rankAverage,
         rankDistribution = (1 to 4).toList.map { rank =>
           val count = ranks.count(_ == rank)
-          RankDistributionResponse(rank, count, rate(count, targetRows.size))
+          RankDistributionView(rank, count, rate(count, targetRows.size))
         },
         podiumCount = podiumCount,
         podiumRate = rate(podiumCount, targetRows.size),
@@ -174,7 +174,7 @@ private[usecases] object SeriesComparisonDrilldownAggregation:
   private def playOrderAverageTrendRows(
       rows: List[SeriesComparisonMatchPlayerRow],
       matchIndexById: Map[MatchId, Int],
-  ): List[SeriesComparisonPlayOrderRankHistoryTrendRowResponse] =
+  ): List[SeriesComparisonPlayOrderRankHistoryTrendRowView] =
     val initial = PlayOrderAverageTrendState(Nil, Map.empty, Map.empty)
     rows.zipWithIndex.foldLeft(initial) { case (state, (row, index)) =>
       val playOrder = row.playOrder.value
@@ -186,7 +186,7 @@ private[usecases] object SeriesComparisonDrilldownAggregation:
         previousRankTotal * 1.0d / previousCount
       )
       val currentAverage = currentRankTotal * 1.0d / currentCount
-      val response = SeriesComparisonPlayOrderRankHistoryTrendRowResponse(
+      val response = SeriesComparisonPlayOrderRankHistoryTrendRowView(
         matchIndex = matchIndexById.getOrElse(row.matchId, index + 1),
         matchId = row.matchId.value,
         playedAt = Formatter.format(row.playedAt),
@@ -207,8 +207,8 @@ private[usecases] object SeriesComparisonDrilldownAggregation:
     }.rows.reverse
 
   private def rankAverageEventRows(
-      rows: List[SeriesComparisonRankAverageHistoryMatchRowResponse]
-  ): List[SeriesComparisonRankAverageHistoryEventRowResponse] =
+      rows: List[SeriesComparisonRankAverageHistoryMatchRowView]
+  ): List[SeriesComparisonRankAverageHistoryEventRowView] =
     rows.groupBy(_.heldEventId).toList.sortBy { case (_, eventRows) =>
       eventRows.map(_.matchIndex).minOption.getOrElse(Int.MaxValue)
     }.map { case (heldEventId, eventRows) =>
@@ -219,7 +219,7 @@ private[usecases] object SeriesComparisonDrilldownAggregation:
       val cumulativeAverageBefore = first.cumulativeAverageRankDelta.map(delta =>
         first.cumulativeAverageRank - delta
       )
-      SeriesComparisonRankAverageHistoryEventRowResponse(
+      SeriesComparisonRankAverageHistoryEventRowView(
         heldEventId = heldEventId,
         firstPlayedAt = first.playedAt,
         matchCount = sorted.size,
@@ -245,8 +245,8 @@ private[usecases] object SeriesComparisonDrilldownAggregation:
   private def statusFor(targetCount: Int): String =
     if targetCount <= 0 then "no_target" else if targetCount < 3 then "reference" else "ok"
 
-  private def scopeResponse(scope: SeriesComparisonResolvedScope): SeriesComparisonScopeResponse =
-    SeriesComparisonScopeResponse(
+  private def scopeView(scope: SeriesComparisonResolvedScope): SeriesComparisonScopeView =
+    SeriesComparisonScopeView(
       gameTitleId = scope.gameTitleId.value,
       gameTitleName = scope.gameTitleName,
       layoutFamily = scope.layoutFamily,
@@ -260,7 +260,7 @@ private[usecases] object SeriesComparisonDrilldownAggregation:
     )
 
   private final case class RankAverageAccumulationState(
-      rows: List[SeriesComparisonRankAverageHistoryMatchRowResponse],
+      rows: List[SeriesComparisonRankAverageHistoryMatchRowView],
       count: Int,
       rankTotal: Int,
       previousRank: Option[Int],
@@ -268,7 +268,7 @@ private[usecases] object SeriesComparisonDrilldownAggregation:
   )
 
   private final case class PlayOrderAverageTrendState(
-      rows: List[SeriesComparisonPlayOrderRankHistoryTrendRowResponse],
+      rows: List[SeriesComparisonPlayOrderRankHistoryTrendRowView],
       countByPlayOrder: Map[Int, Int],
       rankTotalByPlayOrder: Map[Int, Int],
   )

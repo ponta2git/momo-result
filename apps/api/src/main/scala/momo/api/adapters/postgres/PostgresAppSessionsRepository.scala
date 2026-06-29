@@ -1,0 +1,92 @@
+package momo.api.adapters.postgres
+
+import java.time.Instant
+
+import cats.effect.MonadCancelThrow
+import cats.syntax.all.*
+import doobie.*
+import doobie.implicits.*
+import doobie.postgres.implicits.*
+
+import momo.api.db.Database
+import momo.api.domain.ids.AccountId
+import momo.api.adapters.postgres.PostgresMeta.given
+import momo.api.repositories.{AppSession, AppSessionsAlg, AppSessionsRepository}
+
+/**
+ * Postgres-backed [[AppSessionsAlg]]. The class facade preserves
+ * `new PostgresAppSessionsRepository(xa)` wiring while exposing a tx-agnostic algebra.
+ */
+object PostgresAppSessions:
+  private final case class AppSessionRow(
+      idHash: String,
+      accountId: AccountId,
+      playerMemberId: Option[momo.api.domain.ids.MemberId],
+      csrfSecretHash: String,
+      createdAt: Instant,
+      lastSeenAt: Instant,
+      expiresAt: Instant,
+  )
+
+  private val selectAll = fr"""
+    SELECT id_hash, account_id, member_id, csrf_secret_hash, created_at, last_seen_at, expires_at
+    FROM app_sessions
+  """
+
+  private def fromRow(row: AppSessionRow): AppSession = AppSession(
+    idHash = row.idHash,
+    accountId = row.accountId,
+    playerMemberId = row.playerMemberId,
+    csrfSecretHash = row.csrfSecretHash,
+    createdAt = row.createdAt,
+    lastSeenAt = row.lastSeenAt,
+    expiresAt = row.expiresAt,
+  )
+
+  val alg: AppSessionsAlg[ConnectionIO] = new AppSessionsAlg[ConnectionIO]:
+    override def find(idHash: String): ConnectionIO[Option[AppSession]] =
+      (selectAll ++ fr"WHERE id_hash = $idHash").query[AppSessionRow].option.map(_.map(fromRow))
+
+    override def upsert(session: AppSession): ConnectionIO[Unit] = sql"""
+        INSERT INTO app_sessions
+          (id_hash, account_id, member_id, csrf_secret_hash, created_at, last_seen_at, expires_at)
+        VALUES
+          (${session.idHash}, ${session.accountId}, ${session.playerMemberId}, ${session
+        .csrfSecretHash},
+           ${session.createdAt}, ${session.lastSeenAt}, ${session.expiresAt})
+        ON CONFLICT (id_hash) DO UPDATE SET
+          account_id   = EXCLUDED.account_id,
+          member_id    = EXCLUDED.member_id,
+          csrf_secret_hash = EXCLUDED.csrf_secret_hash,
+          last_seen_at = EXCLUDED.last_seen_at,
+          expires_at   = EXCLUDED.expires_at
+      """.update.run.void
+
+    override def delete(idHash: String): ConnectionIO[Unit] =
+      sql"DELETE FROM app_sessions WHERE id_hash = $idHash".update.run.void
+
+    override def deleteByAccount(accountId: AccountId): ConnectionIO[Int] =
+      sql"DELETE FROM app_sessions WHERE account_id = $accountId".update.run
+
+    override def renew(
+        idHash: String,
+        lastSeenAt: Instant,
+        expiresAt: Instant,
+    ): ConnectionIO[Unit] = sql"""
+        UPDATE app_sessions
+        SET last_seen_at = $lastSeenAt, expires_at = $expiresAt
+        WHERE id_hash = $idHash
+      """.update.run.void
+
+    override def deleteExpired(now: Instant): ConnectionIO[Int] =
+      sql"DELETE FROM app_sessions WHERE expires_at < $now".update.run
+end PostgresAppSessions
+
+/** Backwards-compatible class facade. */
+final class PostgresAppSessionsRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
+    extends AppSessionsRepository[F]:
+  private val delegate: AppSessionsRepository[F] = AppSessionsRepository
+    .fromAlg(PostgresAppSessions.alg, Database.transactK(transactor))
+
+  export delegate.*
+end PostgresAppSessionsRepository

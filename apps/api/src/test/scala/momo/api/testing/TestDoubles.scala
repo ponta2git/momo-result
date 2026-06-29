@@ -6,7 +6,7 @@ import scala.concurrent.duration.*
 import cats.Applicative
 import cats.effect.{Clock, IO, Ref}
 
-import momo.api.adapters.RedisStreamClient
+import momo.api.adapters.redis.RedisStreamClient
 import momo.api.auth.{DiscordOAuthClient, DiscordUser}
 import momo.api.domain.ids.{AccountId, ImageId, OcrDraftId, OcrJobId}
 import momo.api.domain.{OcrFailure, OcrJob, StoredImage, StoredImageLocation}

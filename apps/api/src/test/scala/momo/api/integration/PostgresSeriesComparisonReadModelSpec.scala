@@ -6,7 +6,7 @@ import cats.effect.IO
 
 import momo.api.domain.*
 import momo.api.domain.ids.*
-import momo.api.repositories.postgres.*
+import momo.api.adapters.postgres.*
 
 final class PostgresSeriesComparisonReadModelSpec extends IntegrationSuite:
 

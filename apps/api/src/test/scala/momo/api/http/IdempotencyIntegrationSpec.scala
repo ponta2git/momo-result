@@ -7,7 +7,7 @@ import org.http4s.implicits.*
 import org.http4s.{Method, Request, Status, Uri}
 
 import momo.api.MomoCatsEffectSuite
-import momo.api.adapters.InMemoryIdempotencyRepository
+import momo.api.adapters.inmemory.InMemoryIdempotencyRepository
 import momo.api.auth.{AuthenticatedAccount, LoginRateLimiter}
 import momo.api.config.ResourceLimitsConfig
 import momo.api.domain.ids.{AccountId, MemberId}

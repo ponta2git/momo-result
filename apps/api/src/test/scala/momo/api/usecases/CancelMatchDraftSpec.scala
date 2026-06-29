@@ -5,7 +5,7 @@ import cats.effect.IO
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.adapters.storage.local.LocalFsImageStore
-import momo.api.adapters.{
+import momo.api.adapters.inmemory.{
   InMemoryMatchDraftCancellationRepository,
   InMemoryMatchDraftsRepository,
   InMemoryOcrJobsRepository

@@ -10,8 +10,8 @@ import momo.api.contracts.ocrworker.OcrWorkerJobMessage
 import momo.api.domain.ids.*
 import momo.api.domain.{OcrJobHints, ScreenType, StoredImageLocation}
 import momo.api.repositories.OcrQueueOutboxStatus
-import momo.api.repositories.postgres.PostgresMeta.given
-import momo.api.repositories.postgres.PostgresOcrQueueOutboxRepository
+import momo.api.adapters.postgres.PostgresMeta.given
+import momo.api.adapters.postgres.PostgresOcrQueueOutboxRepository
 
 final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
 

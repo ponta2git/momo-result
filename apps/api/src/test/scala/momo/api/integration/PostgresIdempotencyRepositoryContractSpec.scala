@@ -4,7 +4,7 @@ import cats.effect.IO
 
 import momo.api.repositories.IdempotencyRepository
 import momo.api.repositories.contract.IdempotencyRepositoryContract
-import momo.api.repositories.postgres.PostgresIdempotencyRepository
+import momo.api.adapters.postgres.PostgresIdempotencyRepository
 
 /**
  * Drives [[IdempotencyRepositoryContract]] against the Postgres adapter.

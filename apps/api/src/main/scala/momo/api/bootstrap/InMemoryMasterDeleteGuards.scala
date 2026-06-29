@@ -3,7 +3,7 @@ package momo.api.bootstrap
 import cats.effect.Async
 import cats.syntax.all.*
 
-import momo.api.adapters.InMemoryMatchDraftsRepository
+import momo.api.adapters.inmemory.InMemoryMatchDraftsRepository
 import momo.api.domain.ids.*
 import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.{MapMastersRepository, MatchesRepository, SeasonMastersRepository}

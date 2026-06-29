@@ -4,7 +4,7 @@ import java.time.Instant
 import cats.effect.IO
 import munit.CatsEffectSuite
 
-import momo.api.adapters.InMemoryOcrJobsRepository
+import momo.api.adapters.inmemory.InMemoryOcrJobsRepository
 import momo.api.domain.ids.*
 
 final class OcrJobLifecycleSpec extends CatsEffectSuite:

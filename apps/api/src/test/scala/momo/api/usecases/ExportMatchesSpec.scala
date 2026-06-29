@@ -6,7 +6,7 @@ import cats.effect.IO
 import cats.syntax.all.*
 
 import momo.api.MomoCatsEffectSuite
-import momo.api.adapters.{
+import momo.api.adapters.inmemory.{
   InMemoryGameTitlesRepository,
   InMemoryMapMastersRepository,
   InMemoryMatchesRepository,

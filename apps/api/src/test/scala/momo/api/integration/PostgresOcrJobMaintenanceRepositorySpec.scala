@@ -6,7 +6,7 @@ import cats.effect.IO
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
-import momo.api.repositories.postgres.PostgresOcrJobMaintenanceRepository
+import momo.api.adapters.postgres.PostgresOcrJobMaintenanceRepository
 
 final class PostgresOcrJobMaintenanceRepositorySpec extends IntegrationSuite:
 

@@ -27,7 +27,7 @@ final case class OcrFailure(
  * call sites (DTO mappers, repository SQL writers) keep working unchanged. Mutation/transition
  * sites construct the appropriate case class directly.
  *
- * Mapping to/from `ocr_jobs` rows lives in [[momo.api.repositories.postgres.PostgresOcrJobsRepository]]:
+ * Mapping to/from `ocr_jobs` rows lives in [[momo.api.adapters.postgres.PostgresOcrJobsRepository]]:
  * `toJob` dispatches on the `status` column, and the SQL writer reads through the trait accessors.
  */
 sealed trait OcrJob derives CanEqual:

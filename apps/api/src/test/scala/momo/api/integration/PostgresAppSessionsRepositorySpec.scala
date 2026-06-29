@@ -9,7 +9,7 @@ import doobie.implicits.*
 import momo.api.auth.SessionTokenHash
 import momo.api.domain.ids.{AccountId, MemberId}
 import momo.api.repositories.AppSession
-import momo.api.repositories.postgres.PostgresAppSessionsRepository
+import momo.api.adapters.postgres.PostgresAppSessionsRepository
 
 final class PostgresAppSessionsRepositorySpec extends IntegrationSuite:
 

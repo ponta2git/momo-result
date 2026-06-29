@@ -8,36 +8,12 @@ import org.typelevel.log4cats.LoggerFactory
 import org.typelevel.log4cats.slf4j.Slf4jFactory
 
 import momo.api.adapters.storage.local.LocalFsImageStore
-import momo.api.adapters.{
-  InMemoryAppSessionsRepository,
-  InMemoryGameTitlesRepository,
-  InMemoryHeldEventDeletionRepository,
-  InMemoryHeldEventsRepository,
-  InMemoryIdempotencyRepository,
-  InMemoryImageReferenceRepository,
-  InMemoryIncidentMastersRepository,
-  InMemoryLoginAccountAdministrationRepository,
-  InMemoryLoginAccountsRepository,
-  InMemoryMapMastersRepository,
-  InMemoryMatchConfirmationRepository,
-  InMemoryMatchDraftCancellationRepository,
-  InMemoryMatchDraftsRepository,
-  InMemoryMatchListReadModel,
-  InMemoryMatchesRepository,
-  InMemoryMemberAliasesRepository,
-  InMemoryMembersRepository,
-  InMemoryOcrDraftsRepository,
-  InMemoryOcrJobCreationRepository,
-  InMemoryOcrJobMaintenanceRepository,
-  InMemoryOcrJobsRepository,
-  InMemorySeasonMastersRepository,
-  InMemorySeriesComparisonReadModel
-}
+import momo.api.adapters.inmemory.*
 import momo.api.auth.{CreatedSession, DiscordOAuthClient, JavaDiscordOAuthClient, MemberRoster}
 import momo.api.config.{AppConfig, ResourceLimitsConfig}
 import momo.api.db.Database
 import momo.api.domain.{LoginAccount, Member}
-import momo.api.repositories.postgres.*
+import momo.api.adapters.postgres.*
 import momo.api.repositories.{
   AppSessionsRepository,
   GameTitlesRepository,

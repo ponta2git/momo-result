@@ -9,8 +9,8 @@ import doobie.postgres.implicits.*
 import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.errors.AppError
-import momo.api.repositories.postgres.*
-import momo.api.repositories.postgres.PostgresMeta.given
+import momo.api.adapters.postgres.*
+import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.testing.AppErrorAssertions.assertAppException
 import momo.api.usecases.*
 

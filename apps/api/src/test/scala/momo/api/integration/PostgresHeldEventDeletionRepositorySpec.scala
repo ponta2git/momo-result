@@ -10,8 +10,8 @@ import doobie.postgres.implicits.*
 import momo.api.domain.HeldEvent
 import momo.api.domain.ids.HeldEventId
 import momo.api.repositories.HeldEventDeletionResult
-import momo.api.repositories.postgres.PostgresMeta.given
-import momo.api.repositories.postgres.{
+import momo.api.adapters.postgres.PostgresMeta.given
+import momo.api.adapters.postgres.{
   PostgresHeldEventDeletionRepository,
   PostgresHeldEventsRepository
 }

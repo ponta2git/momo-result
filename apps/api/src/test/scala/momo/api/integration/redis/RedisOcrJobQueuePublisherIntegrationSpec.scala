@@ -11,7 +11,7 @@ import dev.profunktor.redis4cats.data.RedisCodec
 import dev.profunktor.redis4cats.effect.Log.NoOp.*
 import io.lettuce.core.Range
 
-import momo.api.adapters.RedisOcrJobQueuePublisher
+import momo.api.adapters.redis.RedisOcrJobQueuePublisher
 import momo.api.config.RedisConfig
 import momo.api.contracts.ocrworker.OcrWorkerJobMessage
 import momo.api.domain.ids.*

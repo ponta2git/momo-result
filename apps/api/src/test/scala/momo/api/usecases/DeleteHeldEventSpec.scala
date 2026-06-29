@@ -5,7 +5,7 @@ import java.time.Instant
 import cats.effect.IO
 import munit.CatsEffectSuite
 
-import momo.api.adapters.{
+import momo.api.adapters.inmemory.{
   InMemoryHeldEventDeletionRepository,
   InMemoryHeldEventsRepository,
   InMemoryMatchDraftsRepository,

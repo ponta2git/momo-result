@@ -6,7 +6,7 @@ import cats.effect.{IO, Resource}
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.adapters.storage.local.LocalFsImageStore
-import momo.api.adapters.{
+import momo.api.adapters.inmemory.{
   InMemoryGameTitlesRepository,
   InMemoryHeldEventsRepository,
   InMemoryMapMastersRepository,

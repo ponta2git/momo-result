@@ -9,7 +9,7 @@ import doobie.postgres.implicits.*
 
 import momo.api.auth.SessionTokenHash
 import momo.api.domain.ids.{AccountId, MemberId, UserId}
-import momo.api.repositories.postgres.{
+import momo.api.adapters.postgres.{
   PostgresAppSessionsRepository,
   PostgresLoginAccountAdministrationRepository,
   PostgresLoginAccountsRepository,

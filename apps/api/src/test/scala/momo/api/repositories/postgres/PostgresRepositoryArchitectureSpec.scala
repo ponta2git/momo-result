@@ -1,4 +1,4 @@
-package momo.api.repositories.postgres
+package momo.api.adapters.postgres
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}

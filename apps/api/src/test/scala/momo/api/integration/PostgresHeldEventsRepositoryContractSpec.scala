@@ -4,7 +4,7 @@ import cats.effect.IO
 
 import momo.api.repositories.HeldEventsRepository
 import momo.api.repositories.contract.HeldEventsRepositoryContract
-import momo.api.repositories.postgres.PostgresHeldEventsRepository
+import momo.api.adapters.postgres.PostgresHeldEventsRepository
 
 /**
  * Drives [[HeldEventsRepositoryContract]] against the Postgres adapter.

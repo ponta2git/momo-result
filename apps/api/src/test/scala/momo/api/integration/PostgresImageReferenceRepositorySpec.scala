@@ -7,7 +7,7 @@ import doobie.implicits.*
 import doobie.postgres.implicits.*
 
 import momo.api.domain.ids.ImageId
-import momo.api.repositories.postgres.PostgresImageReferenceRepository
+import momo.api.adapters.postgres.PostgresImageReferenceRepository
 
 final class PostgresImageReferenceRepositorySpec extends IntegrationSuite:
 

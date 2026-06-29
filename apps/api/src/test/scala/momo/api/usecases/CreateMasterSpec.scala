@@ -5,7 +5,7 @@ import java.time.Instant
 import cats.effect.IO
 
 import momo.api.MomoCatsEffectSuite
-import momo.api.adapters.{
+import momo.api.adapters.inmemory.{
   InMemoryGameTitlesRepository,
   InMemoryMapMastersRepository,
   InMemorySeasonMastersRepository

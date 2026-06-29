@@ -3,7 +3,7 @@ package momo.api.repositories.contract
 import cats.effect.IO
 import munit.CatsEffectSuite
 
-import momo.api.adapters.InMemoryHeldEventsRepository
+import momo.api.adapters.inmemory.InMemoryHeldEventsRepository
 import momo.api.repositories.HeldEventsRepository
 
 /**

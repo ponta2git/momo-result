@@ -5,7 +5,7 @@ import java.time.Instant
 import cats.effect.IO
 
 import momo.api.MomoCatsEffectSuite
-import momo.api.adapters.InMemoryHeldEventsRepository
+import momo.api.adapters.inmemory.InMemoryHeldEventsRepository
 import momo.api.domain.ids.HeldEventId
 import momo.api.testing.AppErrorAssertions.assertAppError
 

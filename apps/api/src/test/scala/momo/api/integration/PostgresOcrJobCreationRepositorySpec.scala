@@ -10,7 +10,7 @@ import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.ports.queue.OcrJobEnqueueRequest
 import momo.api.repositories.OcrJobCreationRepository.CreateQueuedJobRejection
-import momo.api.repositories.postgres.PostgresOcrJobCreationRepository
+import momo.api.adapters.postgres.PostgresOcrJobCreationRepository
 import momo.api.repositories.{OcrJobCreationRepository, OcrJobDraftAttachment}
 import momo.api.testing.JsonSchemaAssertions
 

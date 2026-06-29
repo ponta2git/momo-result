@@ -12,7 +12,7 @@ import org.typelevel.ci.CIString
 import sttp.tapir.server.http4s.Http4sServerInterpreter
 
 import momo.api.MomoCatsEffectSuite
-import momo.api.adapters.{InMemoryAppSessionsRepository, InMemoryLoginAccountsRepository}
+import momo.api.adapters.inmemory.{InMemoryAppSessionsRepository, InMemoryLoginAccountsRepository}
 import momo.api.auth.{
   CsrfTokenService,
   DiscordOAuthClient,

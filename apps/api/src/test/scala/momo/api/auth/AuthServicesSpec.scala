@@ -16,7 +16,7 @@ import scala.concurrent.duration.*
 import cats.effect.IO
 
 import momo.api.MomoCatsEffectSuite
-import momo.api.adapters.InMemoryLoginAccountsRepository
+import momo.api.adapters.inmemory.InMemoryLoginAccountsRepository
 import momo.api.config.{AppEnv, AuthConfig}
 import momo.api.domain.LoginAccount
 import momo.api.domain.ids.{AccountId, MemberId, UserId}

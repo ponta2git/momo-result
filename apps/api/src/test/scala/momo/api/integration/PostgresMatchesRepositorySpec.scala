@@ -10,8 +10,8 @@ import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.MatchDraftConfirmation
-import momo.api.repositories.postgres.*
-import momo.api.repositories.postgres.PostgresMeta.given
+import momo.api.adapters.postgres.*
+import momo.api.adapters.postgres.PostgresMeta.given
 
 final class PostgresMatchesRepositorySpec extends IntegrationSuite:
 

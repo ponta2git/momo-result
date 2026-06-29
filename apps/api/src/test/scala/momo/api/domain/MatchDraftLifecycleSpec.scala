@@ -5,7 +5,7 @@ import java.time.Instant
 import cats.effect.IO
 import munit.CatsEffectSuite
 
-import momo.api.adapters.InMemoryMatchDraftsRepository
+import momo.api.adapters.inmemory.InMemoryMatchDraftsRepository
 import momo.api.domain.ids.*
 
 final class MatchDraftLifecycleSpec extends CatsEffectSuite:

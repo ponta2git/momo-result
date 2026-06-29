@@ -5,7 +5,7 @@ import java.time.Instant
 import cats.effect.IO
 
 import momo.api.MomoCatsEffectSuite
-import momo.api.adapters.{InMemoryLoginAccountsRepository, InMemoryMembersRepository}
+import momo.api.adapters.inmemory.{InMemoryLoginAccountsRepository, InMemoryMembersRepository}
 import momo.api.domain.ids.{AccountId, UserId}
 import momo.api.testing.AppErrorAssertions.assertAppError
 

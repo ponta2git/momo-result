@@ -8,7 +8,7 @@ import org.typelevel.log4cats.noop.NoOpFactory
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.adapters.storage.local.LocalFsImageStore
-import momo.api.adapters.{
+import momo.api.adapters.inmemory.{
   InMemoryMatchDraftsRepository,
   InMemoryMemberAliasesRepository,
   InMemoryOcrDraftsRepository,

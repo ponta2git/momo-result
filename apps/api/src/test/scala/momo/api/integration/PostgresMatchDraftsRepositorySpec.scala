@@ -9,7 +9,7 @@ import doobie.postgres.implicits.*
 import momo.api.domain.ids.{AccountId, ImageId, MatchDraftId, MemberId, OcrDraftId}
 import momo.api.domain.{MatchDraft, MatchDraftStatus, ScreenType}
 import momo.api.errors.{AppError, AppException}
-import momo.api.repositories.postgres.PostgresMatchDraftsRepository
+import momo.api.adapters.postgres.PostgresMatchDraftsRepository
 
 final class PostgresMatchDraftsRepositorySpec extends IntegrationSuite:
 

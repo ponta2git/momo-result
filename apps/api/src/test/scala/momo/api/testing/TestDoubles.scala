@@ -284,6 +284,24 @@ final case class SuccessfulDiscordOAuthClient(userId: String) extends DiscordOAu
     val _ = code
     IO.pure(Right(DiscordUser(userId)))
 
+final class RecordingDiscordOAuthClient private (
+    result: Either[AppError, DiscordUser],
+    fetchCallRef: Ref[IO, Int],
+) extends DiscordOAuthClient[IO]:
+  def fetchCalls: IO[Int] = fetchCallRef.get
+
+  override def authorizationUrl(state: String, prompt: Option[String]): IO[String] =
+    val _ = prompt
+    IO.pure(s"https://discord.example/oauth?state=$state")
+
+  override def fetchUser(code: String): IO[Either[AppError, DiscordUser]] =
+    val _ = code
+    fetchCallRef.update(_ + 1).as(result)
+
+object RecordingDiscordOAuthClient:
+  def create(result: Either[AppError, DiscordUser]): IO[RecordingDiscordOAuthClient] = Ref
+    .of[IO, Int](0).map(new RecordingDiscordOAuthClient(result, _))
+
 final case class AppSessionsSnapshot(
     sessions: Map[String, AppSession],
     renews: Int,

@@ -22,7 +22,11 @@ import momo.api.domain.LoginAccount
 import momo.api.domain.ids.{AccountId, MemberId, UserId}
 import momo.api.errors.AppError
 import momo.api.repositories.AppSession
-import momo.api.testing.RecordingAppSessionsRepository
+import momo.api.testing.{
+  RecordingAppSessionsRepository,
+  RecordingDiscordOAuthClient,
+  SuccessfulDiscordOAuthClient
+}
 
 final class AuthServicesSpec extends MomoCatsEffectSuite:
   private val config = AuthConfig.defaults(AppEnv.Test).copy(
@@ -88,6 +92,65 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
 
     codec.validate(legacy)
       .map(result => assertEquals(result, Some(codec.Payload(silent = true, redirectPath = None))))
+  }
+
+  test("CompleteOAuthLogin creates a session for an enabled allow-listed Discord account") {
+    for
+      repo <- RecordingAppSessionsRepository.create
+      accounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
+      backoff <- InMemoryOAuthProviderBackoff.create[IO](1, 60.seconds, IO.pure(instant))
+      sessions = SessionService[IO](repo, accounts, config, IO.pure(instant))
+      service = CompleteOAuthLogin[IO](
+        SuccessfulDiscordOAuthClient(account.discordUserId.value),
+        sessions,
+        accounts,
+        backoff,
+      )
+      result <- service.run("code")
+      completion <- result match
+        case Right(value) => IO.pure(value)
+        case Left(failure) =>
+          IO.raiseError(new AssertionError(s"expected completed login, got ${failure.reason}"))
+      authenticated <- sessions.authenticate(Some(completion.session.cookieValue))
+    yield
+      assertEquals(completion.accountId, account.id)
+      assertEquals(authenticated.map(_.account.accountId), Right(account.id))
+  }
+
+  test("CompleteOAuthLogin rejects Discord users without enabled login accounts") {
+    for
+      repo <- RecordingAppSessionsRepository.create
+      accounts <- InMemoryLoginAccountsRepository.create[IO](Nil)
+      backoff <- InMemoryOAuthProviderBackoff.create[IO](1, 60.seconds, IO.pure(instant))
+      sessions = SessionService[IO](repo, accounts, config, IO.pure(instant))
+      service = CompleteOAuthLogin[IO](
+        SuccessfulDiscordOAuthClient("223456789012345678"),
+        sessions,
+        accounts,
+        backoff,
+      )
+      result <- service.run("code")
+    yield result match
+      case Left(failure) if failure.reason == OAuthLoginFailure.DiscordUserNotAllowed.reason => ()
+      case other => fail(s"expected DiscordUserNotAllowed, got $other")
+  }
+
+  test("CompleteOAuthLogin opens provider backoff after dependency failures") {
+    for
+      repo <- RecordingAppSessionsRepository.create
+      accounts <- InMemoryLoginAccountsRepository.create[IO](List(account))
+      oauth <- RecordingDiscordOAuthClient
+        .create(Left(AppError.DependencyFailed("Discord OAuth provider request failed.")))
+      backoff <- InMemoryOAuthProviderBackoff.create[IO](1, 60.seconds, IO.pure(instant))
+      sessions = SessionService[IO](repo, accounts, config, IO.pure(instant))
+      service = CompleteOAuthLogin[IO](oauth, sessions, accounts, backoff)
+      first <- service.run("first")
+      second <- service.run("second")
+      fetchCalls <- oauth.fetchCalls
+    yield
+      assertProviderFailure(first, "Discord OAuth provider request failed")
+      assertProviderFailure(second, "temporarily unavailable")
+      assertEquals(fetchCalls, 1)
   }
 
   test("JavaDiscordOAuthClient maps token exchange transport failures to dependency errors") {
@@ -309,6 +372,14 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
     ))
     val signature = Base64Url.encode(mac.doFinal(payloadBytes))
     s"${Base64Url.encode(payloadBytes)}.$signature"
+
+  private def assertProviderFailure(
+      result: Either[OAuthLoginFailure, OAuthLoginCompletion],
+      detail: String,
+  ): Unit = result match
+    case Left(OAuthLoginFailure.ProviderError(error: AppError.DependencyFailed)) =>
+      assert(error.detail.contains(detail))
+    case other => fail(s"expected provider dependency failure, got $other")
 
   private final case class ThrowingHttpClient(error: RuntimeException) extends HttpClient:
     override def cookieHandler(): Optional[CookieHandler] = Optional.empty()

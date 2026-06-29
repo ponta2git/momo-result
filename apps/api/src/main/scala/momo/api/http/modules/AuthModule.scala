@@ -8,6 +8,7 @@ import sttp.tapir.server.ServerEndpoint
 
 import momo.api.auth.{
   AuthenticatedSession,
+  CompleteOAuthLogin,
   CsrfTokenService,
   DiscordOAuthClient,
   OAuthProviderBackoff,
@@ -17,7 +18,7 @@ import momo.api.auth.{
   SessionTokenHash
 }
 import momo.api.config.{AppConfig, AppEnv, RedirectPath}
-import momo.api.domain.ids.{AccountId, UserId}
+import momo.api.domain.ids.AccountId
 import momo.api.endpoints.{AuthEndpoints, AuthMeResponse, AuthPaths, ProblemDetails}
 import momo.api.errors.AppError
 import momo.api.http.{ClientIp, CsrfMiddleware}
@@ -36,49 +37,49 @@ object AuthModule:
       rateLimiter: RateLimiter[F],
       callbackStateRateLimiter: RateLimiter[F],
       providerBackoff: OAuthProviderBackoff[F],
-  ): List[ServerEndpoint[Any, F]] = List(
-    AuthEndpoints.login.serverLogic { case (silentParam, nextParam, request) =>
-      login(
-        silent = silentParam.contains("1"),
-        next = nextParam.flatMap(RedirectPath.sanitize),
-        clientKey = ClientIp.of(request),
-        config = config,
-        oauth = oauth,
-        stateCodec = stateCodec,
-        rateLimiter = rateLimiter,
-      )
-    },
-    AuthEndpoints.callback.serverLogic { case (code, state, oauthError, cookies, request) =>
-      callback(
-        code = code,
-        state = state,
-        oauthError = oauthError,
-        cookies = cookies,
-        clientKey = ClientIp.of(request),
-        config = config,
-        oauth = oauth,
-        stateCodec = stateCodec,
-        sessions = sessions,
-        accounts = accounts,
-        rateLimiter = rateLimiter,
-        callbackStateRateLimiter = callbackStateRateLimiter,
-        providerBackoff = providerBackoff,
-      )
-    },
-    AuthEndpoints.logout
-      .serverSecurityLogic { case (csrfToken, cookies) =>
-        authenticateLogout(config, sessions, csrf, csrfToken, cookies)
-      }
-      .serverLogic(authenticated =>
-        _ =>
-          sessions.delete(authenticated.session.idHash).as(Right(List(clearSessionCookie(config))))
-      ),
-    AuthEndpoints.me
-      .serverSecurityLogic { case (accountHeader, cookies) =>
-        authenticateMe(config, sessions, csrf, accounts, accountHeader, cookies)
-      }
-      .serverLogic(authMe => _ => Async[F].pure(Right(authMe))),
-  )
+  ): List[ServerEndpoint[Any, F]] =
+    val completeOAuthLogin = CompleteOAuthLogin[F](oauth, sessions, accounts, providerBackoff)
+    List(
+      AuthEndpoints.login.serverLogic { case (silentParam, nextParam, request) =>
+        login(
+          silent = silentParam.contains("1"),
+          next = nextParam.flatMap(RedirectPath.sanitize),
+          clientKey = ClientIp.of(request),
+          config = config,
+          oauth = oauth,
+          stateCodec = stateCodec,
+          rateLimiter = rateLimiter,
+        )
+      },
+      AuthEndpoints.callback.serverLogic { case (code, state, oauthError, cookies, request) =>
+        callback(
+          code = code,
+          state = state,
+          oauthError = oauthError,
+          cookies = cookies,
+          clientKey = ClientIp.of(request),
+          config = config,
+          stateCodec = stateCodec,
+          completeOAuthLogin = completeOAuthLogin,
+          rateLimiter = rateLimiter,
+          callbackStateRateLimiter = callbackStateRateLimiter,
+        )
+      },
+      AuthEndpoints.logout
+        .serverSecurityLogic { case (csrfToken, cookies) =>
+          authenticateLogout(config, sessions, csrf, csrfToken, cookies)
+        }
+        .serverLogic(authenticated =>
+          _ =>
+            sessions.delete(authenticated.session.idHash)
+              .as(Right(List(clearSessionCookie(config))))
+        ),
+      AuthEndpoints.me
+        .serverSecurityLogic { case (accountHeader, cookies) =>
+          authenticateMe(config, sessions, csrf, accounts, accountHeader, cookies)
+        }
+        .serverLogic(authMe => _ => Async[F].pure(Right(authMe))),
+    )
 
   private def login[F[_]: Async](
       silent: Boolean,
@@ -105,13 +106,10 @@ object AuthModule:
       cookies: List[SttpCookie],
       clientKey: String,
       config: AppConfig,
-      oauth: DiscordOAuthClient[F],
       stateCodec: OAuthStateCodec[F],
-      sessions: SessionService[F],
-      accounts: LoginAccountsRepository[F],
+      completeOAuthLogin: CompleteOAuthLogin[F],
       rateLimiter: RateLimiter[F],
       callbackStateRateLimiter: RateLimiter[F],
-      providerBackoff: OAuthProviderBackoff[F],
   ): F[Either[AuthEndpoints.AuthProblemResponse, AuthEndpoints.RedirectOutput]] =
     rateLimit(rateLimiter, clientKey).flatMap {
       case Left(problem) => Async[F].pure(Left(problem))
@@ -141,49 +139,16 @@ object AuthModule:
                           AppError.Forbidden("Discord OAuth was cancelled or denied."),
                         )
                       case None => code match
-                          case Some(codeValue) => fetchUserWithBackoff(
-                              oauth,
-                              providerBackoff,
-                              codeValue,
-                            ).flatMap {
-                              case Left(error) => callbackProblem(config, "provider_error", error)
-                              case Right(discordUser) => UserId.fromString(discordUser.id) match
-                                  case Left(_) => callbackProblem(
-                                      config,
-                                      "invalid_discord_user_id",
-                                      AppError
-                                        .Forbidden("This Discord user is not allowed to log in."),
-                                    )
-                                  case Right(userId) => accounts.findByDiscordUserId(userId)
-                                      .flatMap {
-                                        case None => callbackProblem(
-                                            config,
-                                            "discord_user_not_allowed",
-                                            AppError.Forbidden(
-                                              "This Discord user is not allowed to log in."
-                                            ),
-                                          )
-                                        case Some(account) if !account.loginEnabled =>
-                                          callbackProblem(
-                                            config,
-                                            "login_disabled",
-                                            AppError
-                                              .Forbidden("This account is not allowed to log in."),
-                                          )
-                                        case Some(account) => sessions.create(account)
-                                            .flatMap { session =>
-                                              val event = s"auth_login_completed accountId=${account
-                                                  .id.value}"
-                                              Async[F].delay(logger.info(event)).as(Right((
-                                                context.redirectPath
-                                                  .getOrElse(config.auth.callbackRedirectPath),
-                                                List(
-                                                  sessionCookie(config, session.cookieValue),
-                                                  clearStateCookie(config),
-                                                ),
-                                              )))
-                                            }
-                                      }
+                          case Some(codeValue) => completeOAuthLogin.run(codeValue).flatMap {
+                              case Left(failure) =>
+                                callbackProblem(config, failure.reason, failure.error)
+                              case Right(completion) => Async[F].pure(Right((
+                                  context.redirectPath.getOrElse(config.auth.callbackRedirectPath),
+                                  List(
+                                    sessionCookie(config, completion.session.cookieValue),
+                                    clearStateCookie(config),
+                                  ),
+                                )))
                             }
                           case None => callbackProblem(
                               config,
@@ -295,25 +260,6 @@ object AuthModule:
             )
           ))
       }
-    }
-
-  private def fetchUserWithBackoff[F[_]: Async](
-      oauth: DiscordOAuthClient[F],
-      providerBackoff: OAuthProviderBackoff[F],
-      code: String,
-  ): F[Either[AppError, momo.api.auth.DiscordUser]] =
-    providerBackoff.isBlocked.flatMap {
-      case true => Async[F].delay(logger.warn("auth_oauth_provider_backoff_active")) *>
-          AppError.DependencyFailed(
-            "Discord OAuth provider is temporarily unavailable. Try again later."
-          ).asLeft[momo.api.auth.DiscordUser].pure[F]
-      case false => oauth.fetchUser(code).flatTap {
-          case Left(error) => providerBackoff.recordFailure(error).flatMap { opened =>
-              if opened then Async[F].delay(logger.warn("auth_oauth_provider_backoff_opened"))
-              else Async[F].unit
-            }
-          case Right(_) => providerBackoff.recordSuccess
-        }
     }
 
   private def callbackProblem[F[_]: Async, A](

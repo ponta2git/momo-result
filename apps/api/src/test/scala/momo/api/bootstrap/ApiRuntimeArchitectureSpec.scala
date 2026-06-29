@@ -11,6 +11,10 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
     Paths.get("src/main/scala/momo/api/bootstrap/RuntimeInfrastructure.scala")
   private val useCaseWiringFile = Paths.get("src/main/scala/momo/api/bootstrap/UseCaseWiring.scala")
   private val databaseFile = Paths.get("src/main/scala/momo/api/db/Database.scala")
+  private val authModuleFile =
+    Paths.get("src/main/scala/momo/api/http/modules/AuthModule.scala")
+  private val completeOAuthLoginFile =
+    Paths.get("src/main/scala/momo/api/auth/CompleteOAuthLogin.scala")
   private val imageUploadDomainFile = Paths.get("src/main/scala/momo/api/domain/ImageUpload.scala")
   private val ocrJobDomainFile = Paths.get("src/main/scala/momo/api/domain/OcrJob.scala")
   private val localFsImageStoreFile =
@@ -100,6 +104,17 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
     assert(localFsText.contains(
       "extends ImageStorage[F], ImageStorageInspector[F], ImageOrphanCleaner[F]"
     ))
+
+  test("auth callback orchestration stays out of the HTTP module"):
+    val authModuleText = read(authModuleFile)
+    val completeOAuthLoginText = read(completeOAuthLoginFile)
+
+    assert(authModuleText.contains("CompleteOAuthLogin[F]"))
+    assert(!authModuleText.contains("findByDiscordUserId"))
+    assert(!authModuleText.contains("fetchUser("))
+    assert(!authModuleText.contains("sessions.create"))
+    assert(completeOAuthLoginText.contains("accounts.findByDiscordUserId"))
+    assert(completeOAuthLoginText.contains("sessions.create(account)"))
 
   private def read(path: Path): String = Files.readString(path, StandardCharsets.UTF_8)
 end ApiRuntimeArchitectureSpec

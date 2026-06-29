@@ -8,7 +8,7 @@ import cats.syntax.all.*
 import momo.api.domain.ids.*
 import momo.api.domain.{MatchDraft, MatchDraftStatus, ScreenType}
 import momo.api.errors.{AppError, AppException}
-import momo.api.repositories.MatchDraftsRepository
+import momo.api.repositories.*
 
 final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
     ref: Ref[F, Map[MatchDraftId, MatchDraft]]
@@ -25,14 +25,15 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
     case Left(error) => Sync[F].raiseError(error)
   }
 
-  override def update(draft: MatchDraft, updatedAt: Instant): F[Boolean] = ref.modify { current =>
-    (current.get(draft.id), draft) match
-      case (Some(existing: MatchDraft.Editable), _: MatchDraft.Editable)
-          if canApplyUserUpdate(existing, draft) =>
-        val next = draft.withCommon(_.copy(updatedAt = updatedAt))
-        (current + (draft.id -> next), true)
-      case _ => (current, false)
-  }
+  override def update(draft: MatchDraft, updatedAt: Instant): F[MatchDraftUpdateResult] =
+    ref.modify { current =>
+      (current.get(draft.id), draft) match
+        case (Some(existing: MatchDraft.Editable), _: MatchDraft.Editable)
+            if canApplyUserUpdate(existing, draft) =>
+          val next = draft.withCommon(_.copy(updatedAt = updatedAt))
+          (current + (draft.id -> next), MatchDraftUpdateResult.Updated)
+        case _ => (current, MatchDraftUpdateResult.NotEditableOrChanged)
+    }
 
   override def find(id: MatchDraftId): F[Option[MatchDraft]] = ref.get.map(_.get(id))
 
@@ -51,30 +52,36 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
       draftId: MatchDraftId,
       confirmedMatchId: MatchId,
       updatedAt: Instant,
-  ): F[Boolean] = ref.modify { current =>
+  ): F[MatchDraftMarkConfirmedResult] = ref.modify { current =>
     current.get(draftId) match
       case Some(e: MatchDraft.Editable) =>
         val next = MatchDraft.Confirmed(
           common = e.common.copy(updatedAt = updatedAt),
           confirmedMatchIdValue = confirmedMatchId,
         )
-        (current + (draftId -> next), true)
-      case _ => (current, false)
+        (current + (draftId -> next), MatchDraftMarkConfirmedResult.Confirmed)
+      case _ => (current, MatchDraftMarkConfirmedResult.NotConfirmable)
   }
 
-  override def markOcrFailed(draftId: MatchDraftId, updatedAt: Instant): F[Boolean] = ref
+  override def markOcrFailed(
+      draftId: MatchDraftId,
+      updatedAt: Instant,
+  ): F[MatchDraftOcrFailureResult] = ref
     .modify { current =>
       current.get(draftId) match
         case Some(e: MatchDraft.OcrRunning) =>
           val next = MatchDraft.OcrFailed(e.common.copy(updatedAt = updatedAt))
-          (current + (draftId -> next), true)
-        case _ => (current, false)
+          (current + (draftId -> next), MatchDraftOcrFailureResult.MarkedFailed)
+        case _ => (current, MatchDraftOcrFailureResult.NotRunning)
     }
 
-  override def cancel(draftId: MatchDraftId, updatedAt: Instant): F[Boolean] = ref.modify { current =>
+  override def cancel(
+      draftId: MatchDraftId,
+      updatedAt: Instant,
+  ): F[MatchDraftDeletionResult] = ref.modify { current =>
     current.get(draftId) match
-      case Some(_: MatchDraft.Editable) => (current - draftId, true)
-      case _ => (current, false)
+      case Some(_: MatchDraft.Editable) => (current - draftId, MatchDraftDeletionResult.Deleted)
+      case _ => (current, MatchDraftDeletionResult.NotCancellable)
   }
 
   override def attachOcrArtifacts(
@@ -83,7 +90,7 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
       sourceImageId: ImageId,
       ocrDraftId: OcrDraftId,
       updatedAt: Instant,
-  ): F[Boolean] = ref.modify { current =>
+  ): F[MatchDraftAttachmentResult] = ref.modify { current =>
     current.get(draftId) match
       case Some(e: MatchDraft.Editable) if canAttachScreenType(screenType) =>
         val withArtifacts = screenType match
@@ -96,8 +103,8 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
           case ScreenType.Auto => e.common
         val next = MatchDraft
           .OcrRunning(withArtifacts.copy(updatedAt = updatedAt, sourceImagesDeletedAt = None))
-        (current + (draftId -> next), true)
-      case _ => (current, false)
+        (current + (draftId -> next), MatchDraftAttachmentResult.Attached)
+      case _ => (current, MatchDraftAttachmentResult.NotAttachable)
   }
 
   override def markSourceImagesRetention(
@@ -105,16 +112,16 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
       retainedUntil: Option[Instant],
       deletedAt: Option[Instant],
       updatedAt: Instant,
-  ): F[Boolean] = ref.modify { current =>
+  ): F[MatchDraftSourceImageRetentionResult] = ref.modify { current =>
     current.get(draftId) match
-      case None => (current, false)
+      case None => (current, MatchDraftSourceImageRetentionResult.NotFound)
       case Some(draft) =>
         val next = draft.withCommon(_.copy(
           sourceImagesRetainedUntil = retainedUntil,
           sourceImagesDeletedAt = deletedAt,
           updatedAt = updatedAt,
         ))
-        (current + (draftId -> next), true)
+        (current + (draftId -> next), MatchDraftSourceImageRetentionResult.Updated)
   }
 
   def deleteConfirmedByMatchId(matchId: MatchId): F[Int] = ref.modify { current =>

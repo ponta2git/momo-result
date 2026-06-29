@@ -9,6 +9,12 @@ import doobie.postgres.implicits.*
 import momo.api.domain.ids.{AccountId, ImageId, MatchDraftId, MemberId, OcrDraftId}
 import momo.api.domain.{MatchDraft, MatchDraftStatus, ScreenType}
 import momo.api.errors.{AppError, AppException}
+import momo.api.repositories.{
+  MatchDraftAttachmentResult,
+  MatchDraftDeletionResult,
+  MatchDraftOcrFailureResult,
+  MatchDraftUpdateResult
+}
 import momo.api.adapters.postgres.PostgresMatchDraftsRepository
 
 final class PostgresMatchDraftsRepositorySpec extends IntegrationSuite:
@@ -38,7 +44,7 @@ final class PostgresMatchDraftsRepositorySpec extends IntegrationSuite:
       updated <- repo.update(editableDraft(draftId, MatchDraftStatus.DraftReady), updatedAt)
       status <- draftStatus(draftId.value)
     yield
-      assertEquals(updated, false)
+      assertEquals(updated, MatchDraftUpdateResult.NotEditableOrChanged)
       assertEquals(status, "cancelled")
 
   test("update refuses a draft changed after the caller snapshot"):
@@ -51,7 +57,7 @@ final class PostgresMatchDraftsRepositorySpec extends IntegrationSuite:
       status <- draftStatus(draftId.value)
       rowUpdatedAt <- draftUpdatedAt(draftId.value)
     yield
-      assertEquals(updated, false)
+      assertEquals(updated, MatchDraftUpdateResult.NotEditableOrChanged)
       assertEquals(status, "draft_ready")
       assertEquals(rowUpdatedAt, updatedAt)
 
@@ -62,7 +68,7 @@ final class PostgresMatchDraftsRepositorySpec extends IntegrationSuite:
       updated <- repo.update(editableDraft(draftId, MatchDraftStatus.DraftReady), updatedAt)
       status <- draftStatus(draftId.value)
     yield
-      assertEquals(updated, false)
+      assertEquals(updated, MatchDraftUpdateResult.NotEditableOrChanged)
       assertEquals(status, "ocr_running")
 
   test("cancel and markOcrFailed refuse terminal drafts"):
@@ -73,8 +79,8 @@ final class PostgresMatchDraftsRepositorySpec extends IntegrationSuite:
       failed <- repo.markOcrFailed(draftId, updatedAt)
       status <- draftStatus(draftId.value)
     yield
-      assertEquals(cancelled, false)
-      assertEquals(failed, false)
+      assertEquals(cancelled, MatchDraftDeletionResult.NotCancellable)
+      assertEquals(failed, MatchDraftOcrFailureResult.NotRunning)
       assertEquals(status, "cancelled")
 
   test("cancel physically removes non-terminal drafts"):
@@ -84,7 +90,7 @@ final class PostgresMatchDraftsRepositorySpec extends IntegrationSuite:
       cancelled <- repo.cancel(draftId, updatedAt)
       exists <- draftExists(draftId.value)
     yield
-      assertEquals(cancelled, true)
+      assertEquals(cancelled, MatchDraftDeletionResult.Deleted)
       assertEquals(exists, false)
 
   test("attachOcrArtifacts refuses auto screen type for existing match drafts"):
@@ -100,7 +106,7 @@ final class PostgresMatchDraftsRepositorySpec extends IntegrationSuite:
       )
       status <- draftStatus(draftId.value)
     yield
-      assertEquals(attached, false)
+      assertEquals(attached, MatchDraftAttachmentResult.NotAttachable)
       assertEquals(status, "draft_ready")
 
   test("attachOcrArtifacts refuses to overwrite a slot with an active OCR job"):
@@ -117,7 +123,7 @@ final class PostgresMatchDraftsRepositorySpec extends IntegrationSuite:
       )
       slot <- totalAssetsDraftId(draftId.value)
     yield
-      assertEquals(attached, false)
+      assertEquals(attached, MatchDraftAttachmentResult.NotAttachable)
       assertEquals(slot, Some("ocr-draft-active-slot"))
 
   test("attachOcrArtifacts allows replacing a slot after its OCR job is terminal"):
@@ -140,7 +146,7 @@ final class PostgresMatchDraftsRepositorySpec extends IntegrationSuite:
       slot <- totalAssetsDraftId(draftId.value)
       status <- draftStatus(draftId.value)
     yield
-      assertEquals(attached, true)
+      assertEquals(attached, MatchDraftAttachmentResult.Attached)
       assertEquals(slot, Some("ocr-draft-replacement-slot"))
       assertEquals(status, "ocr_running")
 

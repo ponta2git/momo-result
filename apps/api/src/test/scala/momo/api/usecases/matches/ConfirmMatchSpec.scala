@@ -18,7 +18,11 @@ import momo.api.adapters.inmemory.{
 import momo.api.domain.ids.*
 import momo.api.domain.{GameTitle, MatchRecord, PlayerResult}
 import momo.api.errors.{AppError, AppException}
-import momo.api.repositories.{MatchConfirmationRepository, MatchDraftConfirmation}
+import momo.api.repositories.{
+  MatchConfirmationRepository,
+  MatchConfirmationResult,
+  MatchDraftConfirmation
+}
 import momo.api.testing.AppErrorAssertions.assertAppError
 import momo.api.usecases.matchdrafts.PurgeSourceImages
 import momo.api.usecases.testing.MatchFixtures
@@ -241,4 +245,5 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
         record: MatchRecord,
         draft: Option[MatchDraftConfirmation],
         updatedAt: Instant,
-    ): IO[Boolean] = IO.raiseError(new AppException(AppError.Conflict("confirmation conflict")))
+    ): IO[MatchConfirmationResult] =
+      IO.raiseError(new AppException(AppError.Conflict("confirmation conflict")))

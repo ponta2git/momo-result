@@ -13,6 +13,7 @@ import momo.api.repositories.{
   GameTitlesRepository,
   HeldEventsRepository,
   MapMastersRepository,
+  MatchDraftUpdateResult,
   MatchDraftsRepository,
   SeasonMastersRepository
 }
@@ -70,9 +71,13 @@ final class UpdateMatchDraft[F[_]: MonadThrow](
         case _ => Left(AppError.Conflict(s"match draft in status=${existing.status
               .wire} cannot be edited."))
     )
-    _ <- matchDrafts.update(updated, at).ensureF(AppError.Conflict(
-      "match draft was changed to a terminal status before the update could be saved."
-    ))
+    saved <- EitherT.liftF(matchDrafts.update(updated, at))
+    _ <- EitherT.fromEither[F](saved match
+      case MatchDraftUpdateResult.Updated => Right(())
+      case MatchDraftUpdateResult.NotEditableOrChanged =>
+        Left(AppError.Conflict(
+          "match draft was changed to a terminal status before the update could be saved."
+        )))
   yield updated.withCommon(_.copy(updatedAt = at))).value
 
   private def ensureEditable(status: MatchDraftStatus): Either[AppError, Unit] = Either.cond(

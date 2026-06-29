@@ -26,10 +26,7 @@ import momo.api.domain.{
   Rank
 }
 import momo.api.errors.{AppError, AppException}
-import momo.api.adapters.postgres.PostgresMatchInsertOps.{
-  insertMatchCascade,
-  replaceMatchChildren
-}
+import momo.api.adapters.postgres.PostgresMatchInsertOps.{insertMatchCascade, replaceMatchChildren}
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.repositories.{MatchesAlg, MatchesRepository}
 

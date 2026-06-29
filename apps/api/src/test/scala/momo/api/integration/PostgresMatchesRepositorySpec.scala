@@ -9,7 +9,7 @@ import doobie.postgres.implicits.*
 import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.errors.{AppError, AppException}
-import momo.api.repositories.MatchDraftConfirmation
+import momo.api.repositories.{MatchConfirmationResult, MatchDraftConfirmation}
 import momo.api.adapters.postgres.*
 import momo.api.adapters.postgres.PostgresMeta.given
 
@@ -221,7 +221,7 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       inserted <- confirmations.confirm(rec1, None, now)
       result <- confirmations.confirm(rec2, None, now).attempt
     yield
-      assertEquals(inserted, true)
+      assertEquals(inserted, MatchConfirmationResult.Confirmed)
       result match
         case Left(error: AppException) => error.error match
             case _: AppError.Conflict => ()
@@ -245,7 +245,7 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       found <- matches.find(rec.id)
       status <- draftStatus(draftId)
     yield
-      assertEquals(confirmed, true)
+      assertEquals(confirmed, MatchConfirmationResult.Confirmed)
       assertEquals(found.map(_.id), Some(rec.id))
       assertEquals(status, (MatchDraftStatus.Confirmed, Some(rec.id)))
 
@@ -267,7 +267,7 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       found <- matches.find(rec.id)
       draftStillExists <- draftExists(draftId)
     yield
-      assertEquals(confirmed, true)
+      assertEquals(confirmed, MatchConfirmationResult.Confirmed)
       assertEquals(deleted, true)
       assertEquals(found, None)
       assertEquals(draftStillExists, false)
@@ -290,7 +290,7 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       found <- matches.find(rec.id)
       status <- draftStatus(draftId)
     yield
-      assertEquals(confirmed, false)
+      assertEquals(confirmed, MatchConfirmationResult.DraftSnapshotMismatch)
       assertEquals(found, None)
       assertEquals(status, (MatchDraftStatus.DraftReady, Option.empty[MatchId]))
 
@@ -314,8 +314,8 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       foundSecond <- matches.find(secondRecord.id)
       status <- draftStatus(draftId)
     yield
-      assertEquals(first, true)
-      assertEquals(second, false)
+      assertEquals(first, MatchConfirmationResult.Confirmed)
+      assertEquals(second, MatchConfirmationResult.DraftSnapshotMismatch)
       assertEquals(foundFirst.map(_.id), Some(firstRecord.id))
       assertEquals(foundSecond, None)
       assertEquals(status, (MatchDraftStatus.Confirmed, Some(firstRecord.id)))

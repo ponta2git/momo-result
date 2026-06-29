@@ -9,6 +9,7 @@ import doobie.postgres.implicits.*
 import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.errors.AppError
+import momo.api.repositories.MatchDraftDeletionResult
 import momo.api.adapters.postgres.*
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.testing.AppErrorAssertions.assertAppException
@@ -135,7 +136,7 @@ final class PostgresMasterRepositoriesSpec extends IntegrationSuite:
       deletedTitle <- deleteTitle.run(titleId)
     yield
       assertEquals(blocked, Left(AppError.Conflict("map master is still referenced.")))
-      assertEquals(cancelled, true)
+      assertEquals(cancelled, MatchDraftDeletionResult.Deleted)
       assertEquals(deletedMap, Right(()))
       assertEquals(deletedSeason, Right(()))
       assertEquals(deletedTitle, Right(()))

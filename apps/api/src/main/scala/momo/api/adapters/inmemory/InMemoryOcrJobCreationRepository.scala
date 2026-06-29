@@ -10,6 +10,7 @@ import momo.api.errors.{AppError, AppException}
 import momo.api.ports.queue.OcrJobEnqueueRequest
 import momo.api.repositories.OcrJobCreationRepository.CreateQueuedJobRejection
 import momo.api.repositories.{
+  MatchDraftAttachmentResult,
   MatchDraftsRepository,
   OcrDraftsRepository,
   OcrJobCreationRepository,
@@ -61,8 +62,9 @@ final class InMemoryOcrJobCreationRepository[F[_]: MonadThrow](
         ocrDraftId = a.ocrDraftId,
         updatedAt = a.updatedAt,
       ).map {
-        case true => ().asRight
-        case false => CreateQueuedJobRejection.MatchDraftAttachFailed(a.draftId).asLeft
+        case MatchDraftAttachmentResult.Attached => ().asRight
+        case MatchDraftAttachmentResult.NotAttachable =>
+          CreateQueuedJobRejection.MatchDraftAttachFailed(a.draftId).asLeft
       }
 
   private def rejectDuplicateOcrRecords(draft: OcrDraft, job: OcrJob): F[Unit] =

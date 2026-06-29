@@ -10,7 +10,9 @@ import cats.syntax.functor.*
 import momo.api.domain.{MatchDraft, MatchRecord}
 import momo.api.repositories.{
   MatchConfirmationRepository,
+  MatchConfirmationResult,
   MatchDraftConfirmation,
+  MatchDraftMarkConfirmedResult,
   MatchDraftsRepository,
   MatchesRepository
 }
@@ -23,8 +25,8 @@ final class InMemoryMatchConfirmationRepository[F[_]: Monad](
       record: MatchRecord,
       draft: Option[MatchDraftConfirmation],
       updatedAt: Instant,
-  ): F[Boolean] = draft match
-    case None => matches.create(record).as(true)
+  ): F[MatchConfirmationResult] = draft match
+    case None => matches.create(record).as(MatchConfirmationResult.Confirmed)
     case Some(expected) =>
       for
         current <- matchDrafts.find(expected.draftId)
@@ -32,11 +34,14 @@ final class InMemoryMatchConfirmationRepository[F[_]: Monad](
           if current.exists(matchesSnapshot(_, expected)) then
             matches.create(record) >>
               matchDrafts.markConfirmed(expected.draftId, record.id, updatedAt).flatTap {
-                case true => Monad[F].unit
-                case false => matches.delete(record.id).void
+                case MatchDraftMarkConfirmedResult.Confirmed => Monad[F].unit
+                case MatchDraftMarkConfirmedResult.NotConfirmable => matches.delete(record.id).void
               }
-          else false.pure[F]
-      yield updated
+          else MatchDraftMarkConfirmedResult.NotConfirmable.pure[F]
+      yield updated match
+        case MatchDraftMarkConfirmedResult.Confirmed => MatchConfirmationResult.Confirmed
+        case MatchDraftMarkConfirmedResult.NotConfirmable =>
+          MatchConfirmationResult.DraftSnapshotMismatch
 
   private def matchesSnapshot(draft: MatchDraft, expected: MatchDraftConfirmation): Boolean = draft
     .updatedAt.equals(expected.updatedAt) &&

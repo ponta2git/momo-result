@@ -17,9 +17,7 @@ import momo.api.usecases.maintenance.{
   PeriodicMaintenance,
   SourceImageOrphanReaper
 }
-import momo.api.usecases.ocr.{
-  StaleOcrJobReaper
-}
+import momo.api.usecases.ocr.StaleOcrJobReaper
 
 private[bootstrap] object RuntimeMaintenance:
   def resource[F[_]: Async: LoggerFactory](

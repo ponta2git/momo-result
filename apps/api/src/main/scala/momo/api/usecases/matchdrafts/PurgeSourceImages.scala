@@ -9,7 +9,7 @@ import org.slf4j.LoggerFactory
 import momo.api.domain.ids.{ImageId, MatchDraftId}
 import momo.api.logging.SafeLog
 import momo.api.ports.storage.ImageStorage
-import momo.api.repositories.MatchDraftsRepository
+import momo.api.repositories.{MatchDraftSourceImageRetentionResult, MatchDraftsRepository}
 
 final class PurgeSourceImages[F[_]: Sync](
     matchDrafts: MatchDraftsRepository[F],
@@ -26,7 +26,10 @@ final class PurgeSourceImages[F[_]: Sync](
           retainedUntil = Some(now),
           deletedAt = Some(now),
           updatedAt = now,
-        ).flatMap(marked => deleteSourceImages(draft).whenA(marked))
+        ).flatMap {
+          case MatchDraftSourceImageRetentionResult.Updated => deleteSourceImages(draft)
+          case MatchDraftSourceImageRetentionResult.NotFound => Sync[F].unit
+        }
       )
     yield ()
 

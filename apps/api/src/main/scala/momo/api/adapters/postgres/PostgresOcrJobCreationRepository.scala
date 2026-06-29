@@ -12,7 +12,12 @@ import momo.api.errors.{AppError, AppException}
 import momo.api.ports.queue.OcrJobEnqueueRequest
 import momo.api.repositories.OcrJobCreationRepository.CreateQueuedJobRejection
 import momo.api.adapters.postgres.PostgresMeta.given
-import momo.api.repositories.{OcrJobCreationRepository, OcrJobDraftAttachment, OcrQueueOutboxDraft}
+import momo.api.repositories.{
+  MatchDraftAttachmentResult,
+  OcrJobCreationRepository,
+  OcrJobDraftAttachment,
+  OcrQueueOutboxDraft
+}
 
 final class PostgresOcrJobCreationRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends OcrJobCreationRepository[F]:
@@ -92,8 +97,9 @@ final class PostgresOcrJobCreationRepository[F[_]: MonadCancelThrow](transactor:
       ocrDraftId = attachment.ocrDraftId,
       updatedAt = attachment.updatedAt,
     ).flatMap {
-      case true => MonadThrow[ConnectionIO].unit
-      case false => MonadThrow[ConnectionIO].raiseError(AppException(AppError.Internal(
+      case MatchDraftAttachmentResult.Attached => MonadThrow[ConnectionIO].unit
+      case MatchDraftAttachmentResult.NotAttachable =>
+        MonadThrow[ConnectionIO].raiseError(AppException(AppError.Internal(
           "match draft OCR attachment was rejected after preflight."
         )))
     }

@@ -24,19 +24,23 @@ object MatchDraftConfirmation:
     incidentLogDraftId = draft.incidentLogDraftId,
   )
 
+enum MatchConfirmationResult derives CanEqual:
+  case Confirmed
+  case DraftSnapshotMismatch
+
 trait MatchConfirmationAlg[F0[_]]:
   def confirm(
       record: MatchRecord,
       draft: Option[MatchDraftConfirmation],
       updatedAt: Instant,
-  ): F0[Boolean]
+  ): F0[MatchConfirmationResult]
 
 trait MatchConfirmationRepository[F[_]]:
   def confirm(
       record: MatchRecord,
       draft: Option[MatchDraftConfirmation],
       updatedAt: Instant,
-  ): F[Boolean]
+  ): F[MatchConfirmationResult]
 
 object MatchConfirmationRepository:
   def fromAlg[F0[_], F[_]](
@@ -47,7 +51,7 @@ object MatchConfirmationRepository:
         record: MatchRecord,
         draft: Option[MatchDraftConfirmation],
         updatedAt: Instant,
-    ): F[Boolean] = liftK(alg.confirm(record, draft, updatedAt))
+    ): F[MatchConfirmationResult] = liftK(alg.confirm(record, draft, updatedAt))
 
   def liftIdentity[F[_]](alg: MatchConfirmationAlg[F]): MatchConfirmationRepository[F] =
     new MatchConfirmationRepository[F]:

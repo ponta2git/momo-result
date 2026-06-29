@@ -11,12 +11,12 @@ import doobie.postgres.implicits.*
 import doobie.util.fragments
 
 import momo.api.db.Database
+import momo.api.domain.matchlist.MatchListProjection
 import momo.api.domain.ids.*
 import momo.api.domain.{
   MatchDraftStatus,
   MatchListItem,
   MatchListItemKind,
-  MatchListKindFilter,
   MatchListRankEntry,
   MatchListSort,
   MatchListStatusFilter,
@@ -244,11 +244,7 @@ object PostgresMatchList:
           Some(fr"d.computed_status = ${MatchDraftStatus.OcrRunning}")
         case MatchListStatusFilter.PreConfirm => Some(statusIn(
             "d.computed_status",
-            Set(
-              MatchDraftStatus.OcrFailed,
-              MatchDraftStatus.DraftReady,
-              MatchDraftStatus.NeedsReview,
-            ),
+            MatchListProjection.preConfirmStatuses,
           ))
         case MatchListStatusFilter.NeedsReview =>
           Some(fr"d.computed_status = ${MatchDraftStatus.NeedsReview}")
@@ -256,15 +252,8 @@ object PostgresMatchList:
       val draftSelect = draftBase ++
         fragments.whereAndOpt(draftConditionsCommon ++ draftStatusCondition.toList)
 
-      val includeMatches = filter.kind match
-        case MatchListKindFilter.Match => true
-        case MatchListKindFilter.MatchDraft => false
-        case MatchListKindFilter.All => filter.status == MatchListStatusFilter.All ||
-          filter.status == MatchListStatusFilter.Confirmed
-      val includeDrafts = filter.kind match
-        case MatchListKindFilter.Match => false
-        case MatchListKindFilter.MatchDraft => true
-        case MatchListKindFilter.All => filter.status != MatchListStatusFilter.Confirmed
+      val includeMatches = MatchListProjection.includeMatches(filter.kind, filter.status)
+      val includeDrafts = MatchListProjection.includeDrafts(filter.kind, filter.status)
 
       val unionSelect = (includeMatches, includeDrafts) match
         case (true, true) => Some(confirmedSelect ++ fr"UNION ALL" ++ draftSelect)
@@ -301,15 +290,14 @@ object PostgresMatchList:
         Some(fr"d.persisted_status <> ${MatchDraftStatus.Confirmed}"),
       ).flatten
       val draftSelect = draftBase ++ fragments.whereAndOpt(draftConditionsCommon)
+      val incompleteCondition =
+        statusIn("combined.status", MatchListStatusFilter.incompleteStatuses)
+      val preConfirmCondition =
+        statusIn("combined.status", MatchListProjection.preConfirmStatuses)
       val query =
-        fr"""SELECT
-          COUNT(*) FILTER (
-            WHERE combined.status IN ('ocr_running', 'ocr_failed', 'draft_ready', 'needs_review')
-          )::int AS incomplete_count,
+        fr"SELECT COUNT(*) FILTER (WHERE" ++ incompleteCondition ++ fr""")::int AS incomplete_count,
           COUNT(*) FILTER (WHERE combined.status = 'ocr_running')::int AS ocr_running_count,
-          COUNT(*) FILTER (
-            WHERE combined.status IN ('ocr_failed', 'draft_ready', 'needs_review')
-          )::int AS pre_confirm_count,
+          COUNT(*) FILTER (WHERE""" ++ preConfirmCondition ++ fr""")::int AS pre_confirm_count,
           COUNT(*) FILTER (WHERE combined.status = 'needs_review')::int AS needs_review_count
         FROM (""" ++ draftSelect ++ fr") AS combined"
       query.query[SummaryRow].unique.map(_.toSummary)

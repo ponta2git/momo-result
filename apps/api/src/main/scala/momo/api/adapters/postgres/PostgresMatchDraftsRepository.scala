@@ -15,7 +15,7 @@ import momo.api.domain.ids.*
 import momo.api.domain.{MatchDraft, MatchDraftStatus, MatchNoInEvent, ScreenType}
 import momo.api.errors.{AppError, AppException}
 import momo.api.adapters.postgres.PostgresMeta.given
-import momo.api.repositories.{MatchDraftsAlg, MatchDraftsRepository}
+import momo.api.repositories.*
 
 /**
  * Pure [[MatchDraftsAlg]] in `ConnectionIO` and a `Transactor[F]`-lifted facade. Mirrors the same
@@ -129,8 +129,12 @@ object PostgresMatchDrafts:
         appError(AppError.Conflict("match draft prerequisites changed before creation."))
     }
 
-    override def update(draft: MatchDraft, updatedAt: Instant): ConnectionIO[Boolean] =
-      if !isUserEditable(draft.status) then false.pure[ConnectionIO]
+    override def update(
+        draft: MatchDraft,
+        updatedAt: Instant,
+    ): ConnectionIO[MatchDraftUpdateResult] =
+      if !isUserEditable(draft.status) then
+        MatchDraftUpdateResult.NotEditableOrChanged.pure[ConnectionIO]
       else
         sql"""
       UPDATE match_drafts SET
@@ -160,7 +164,10 @@ object PostgresMatchDrafts:
           ${MatchDraftStatus.DraftReady},
           ${MatchDraftStatus.NeedsReview}
         )
-    """.update.run.map(_ > 0)
+    """.update.run.map {
+          case affected if affected > 0 => MatchDraftUpdateResult.Updated
+          case _ => MatchDraftUpdateResult.NotEditableOrChanged
+        }
 
     override def find(id: MatchDraftId): ConnectionIO[Option[MatchDraft]] =
       (selectAll ++ fr"WHERE id = $id").query[Row].option.flatMap(_.traverse(toDraft))
@@ -182,7 +189,7 @@ object PostgresMatchDrafts:
         draftId: MatchDraftId,
         confirmedMatchId: MatchId,
         updatedAt: Instant,
-    ): ConnectionIO[Boolean] = sql"""
+    ): ConnectionIO[MatchDraftMarkConfirmedResult] = sql"""
       UPDATE match_drafts SET
         status = ${MatchDraftStatus.Confirmed},
         confirmed_match_id = $confirmedMatchId,
@@ -190,18 +197,30 @@ object PostgresMatchDrafts:
       WHERE id = $draftId
         AND status <> ${MatchDraftStatus.Confirmed}
         AND status <> ${MatchDraftStatus.Cancelled}
-    """.update.run.map(_ > 0)
+    """.update.run.map {
+      case affected if affected > 0 => MatchDraftMarkConfirmedResult.Confirmed
+      case _ => MatchDraftMarkConfirmedResult.NotConfirmable
+    }
 
-    override def markOcrFailed(draftId: MatchDraftId, updatedAt: Instant): ConnectionIO[Boolean] =
+    override def markOcrFailed(
+        draftId: MatchDraftId,
+        updatedAt: Instant,
+    ): ConnectionIO[MatchDraftOcrFailureResult] =
       sql"""
       UPDATE match_drafts SET
         status = ${MatchDraftStatus.OcrFailed},
         updated_at = $updatedAt
       WHERE id = $draftId
         AND status = ${MatchDraftStatus.OcrRunning}
-    """.update.run.map(_ > 0)
+    """.update.run.map {
+        case affected if affected > 0 => MatchDraftOcrFailureResult.MarkedFailed
+        case _ => MatchDraftOcrFailureResult.NotRunning
+      }
 
-    override def cancel(draftId: MatchDraftId, updatedAt: Instant): ConnectionIO[Boolean] = sql"""
+    override def cancel(
+        draftId: MatchDraftId,
+        updatedAt: Instant,
+    ): ConnectionIO[MatchDraftDeletionResult] = sql"""
       DELETE FROM match_drafts
       WHERE id = $draftId
         AND status IN (
@@ -210,7 +229,10 @@ object PostgresMatchDrafts:
           ${MatchDraftStatus.DraftReady},
           ${MatchDraftStatus.NeedsReview}
         )
-    """.update.run.map(_ > 0)
+    """.update.run.map {
+      case affected if affected > 0 => MatchDraftDeletionResult.Deleted
+      case _ => MatchDraftDeletionResult.NotCancellable
+    }
 
     override def attachOcrArtifacts(
         draftId: MatchDraftId,
@@ -218,7 +240,7 @@ object PostgresMatchDrafts:
         sourceImageId: ImageId,
         ocrDraftId: OcrDraftId,
         updatedAt: Instant,
-    ): ConnectionIO[Boolean] = screenType match
+    ): ConnectionIO[MatchDraftAttachmentResult] = screenType match
       case ScreenType.TotalAssets => sql"""
           UPDATE match_drafts SET
             total_assets_image_id = $sourceImageId,
@@ -237,7 +259,10 @@ object PostgresMatchDrafts:
                   AND existing.status IN ('queued', 'running')
               )
             )
-        """.update.run.map(_ > 0)
+        """.update.run.map {
+          case affected if affected > 0 => MatchDraftAttachmentResult.Attached
+          case _ => MatchDraftAttachmentResult.NotAttachable
+        }
       case ScreenType.Revenue => sql"""
           UPDATE match_drafts SET
             revenue_image_id = $sourceImageId,
@@ -256,7 +281,10 @@ object PostgresMatchDrafts:
                   AND existing.status IN ('queued', 'running')
               )
             )
-        """.update.run.map(_ > 0)
+        """.update.run.map {
+          case affected if affected > 0 => MatchDraftAttachmentResult.Attached
+          case _ => MatchDraftAttachmentResult.NotAttachable
+        }
       case ScreenType.IncidentLog => sql"""
           UPDATE match_drafts SET
             incident_log_image_id = $sourceImageId,
@@ -275,19 +303,25 @@ object PostgresMatchDrafts:
                   AND existing.status IN ('queued', 'running')
               )
             )
-        """.update.run.map(_ > 0)
-      case ScreenType.Auto => false.pure[ConnectionIO]
+        """.update.run.map {
+          case affected if affected > 0 => MatchDraftAttachmentResult.Attached
+          case _ => MatchDraftAttachmentResult.NotAttachable
+        }
+      case ScreenType.Auto => MatchDraftAttachmentResult.NotAttachable.pure[ConnectionIO]
 
     override def markSourceImagesRetention(
         draftId: MatchDraftId,
         retainedUntil: Option[Instant],
         deletedAt: Option[Instant],
         updatedAt: Instant,
-    ): ConnectionIO[Boolean] = sql"""
+    ): ConnectionIO[MatchDraftSourceImageRetentionResult] = sql"""
       UPDATE match_drafts SET
         source_images_retained_until = $retainedUntil,
         source_images_deleted_at = $deletedAt,
         updated_at = $updatedAt
       WHERE id = $draftId
-    """.update.run.map(_ > 0)
+    """.update.run.map {
+      case affected if affected > 0 => MatchDraftSourceImageRetentionResult.Updated
+      case _ => MatchDraftSourceImageRetentionResult.NotFound
+    }
 end PostgresMatchDrafts

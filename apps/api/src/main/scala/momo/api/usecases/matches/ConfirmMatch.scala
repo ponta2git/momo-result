@@ -14,6 +14,7 @@ import momo.api.repositories.{
   HeldEventsRepository,
   MapMastersRepository,
   MatchConfirmationRepository,
+  MatchConfirmationResult,
   MatchDraftConfirmation,
   MatchDraftsRepository,
   MatchesRepository,
@@ -103,10 +104,13 @@ final class ConfirmMatch[F[_]: MonadThrow](
             EitherT.fromEither[F](validateDraftForConfirm(draft, command.draftRefs))
               .map(_ => Some(draft))
           }
-    confirmed <- confirmations
+    confirmation <- confirmations
       .confirm(record, maybeDraft.map(MatchDraftConfirmation.from), createdAt).recoverAppError
     _ <- EitherT.fromEither[F](
-      Either.cond(confirmed, (), AppError.Conflict("Failed to confirm match from the draft."))
+      confirmation match
+        case MatchConfirmationResult.Confirmed => Right(())
+        case MatchConfirmationResult.DraftSnapshotMismatch =>
+          Left(AppError.Conflict("Failed to confirm match from the draft."))
     )
     _ <- maybeDraft match
       case None => EitherT.rightT[F, AppError](())

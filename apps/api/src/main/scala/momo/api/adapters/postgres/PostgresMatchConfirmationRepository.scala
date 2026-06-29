@@ -18,7 +18,11 @@ import momo.api.domain.{MatchDraftStatus, MatchRecord}
 import momo.api.errors.{AppError, AppException}
 import momo.api.adapters.postgres.PostgresMatchInsertOps.insertMatchCascade
 import momo.api.adapters.postgres.PostgresMeta.given
-import momo.api.repositories.{MatchConfirmationRepository, MatchDraftConfirmation}
+import momo.api.repositories.{
+  MatchConfirmationRepository,
+  MatchConfirmationResult,
+  MatchDraftConfirmation
+}
 
 final class PostgresMatchConfirmationRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends MatchConfirmationRepository[F]:
@@ -32,9 +36,9 @@ final class PostgresMatchConfirmationRepository[F[_]: MonadCancelThrow](transact
       record: MatchRecord,
       draft: Option[MatchDraftConfirmation],
       updatedAt: Instant,
-  ): F[Boolean] =
+  ): F[MatchConfirmationResult] =
     val program = draft match
-      case None => insert(record, updatedAt).as(true)
+      case None => insert(record, updatedAt).as(MatchConfirmationResult.Confirmed)
       case Some(expected) =>
         for
           updated <- sql"""
@@ -52,7 +56,9 @@ final class PostgresMatchConfirmationRepository[F[_]: MonadCancelThrow](transact
           _ <-
             if updated then insert(record, updatedAt) *> attachConfirmedMatch(expected, record)
             else ().pure[ConnectionIO]
-        yield updated
+        yield
+          if updated then MatchConfirmationResult.Confirmed
+          else MatchConfirmationResult.DraftSnapshotMismatch
     program.transact(transactor)
 
   private def insert(record: MatchRecord, updatedAt: Instant): ConnectionIO[Unit] =

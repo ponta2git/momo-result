@@ -1,6 +1,4 @@
 package momo.api.adapters
-
-import java.nio.file.Paths
 import java.time.Instant
 
 import cats.effect.IO
@@ -14,7 +12,8 @@ import momo.api.domain.{
   MatchNoInEvent,
   OcrFailure,
   OcrJob,
-  ScreenType
+  ScreenType,
+  StoredImageLocation
 }
 
 final class InMemoryImageReferenceRepositorySpec extends MomoCatsEffectSuite:
@@ -67,7 +66,7 @@ final class InMemoryImageReferenceRepositorySpec extends MomoCatsEffectSuite:
     id = OcrJobId.unsafeFromString(id),
     draftId = OcrDraftId.unsafeFromString(draftId),
     imageId = imageId,
-    imagePath = Paths.get(s"/tmp/${imageId.value}.png"),
+    imageLocation = StoredImageLocation.unsafeFromString(s"/tmp/${imageId.value}.png"),
     requestedScreenType = ScreenType.TotalAssets,
     attemptCount = 0,
     createdAt = now,
@@ -78,7 +77,7 @@ final class InMemoryImageReferenceRepositorySpec extends MomoCatsEffectSuite:
     id = OcrJobId.unsafeFromString(id),
     draftId = OcrDraftId.unsafeFromString(draftId),
     imageId = imageId,
-    imagePath = Paths.get(s"/tmp/${imageId.value}.png"),
+    imageLocation = StoredImageLocation.unsafeFromString(s"/tmp/${imageId.value}.png"),
     requestedScreenType = ScreenType.TotalAssets,
     failedDetectedScreenType = None,
     attemptCount = 1,

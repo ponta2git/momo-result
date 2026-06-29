@@ -1,18 +1,17 @@
 package momo.api.ports.queue
 
-import java.nio.file.Path
 import java.time.Instant
 
 import cats.Applicative
 
 import momo.api.domain.ids.*
-import momo.api.domain.{OcrJobHints, ScreenType}
+import momo.api.domain.{OcrJobHints, ScreenType, StoredImageLocation}
 
 final case class OcrJobEnqueueRequest(
     jobId: OcrJobId,
     draftId: OcrDraftId,
     imageId: ImageId,
-    imagePath: Path,
+    imageLocation: StoredImageLocation,
     requestedScreenType: ScreenType,
     attempt: Int,
     enqueuedAt: Instant,

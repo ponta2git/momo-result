@@ -40,7 +40,9 @@ object RedisOcrJobQueuePublisher:
     RedisOcrJobQueueHealthCheck(deadLetterStream, Redis4CatsStreamClient(commands))
 
   def resource[F[_]: Async](config: RedisConfig): Resource[F, RedisOcrJobQueuePublisher[F]] =
-    Redis[F].simple(config.url, RedisCodec.Utf8).map(commands => fromCommands(config.stream, commands))
+    Redis[F].simple(config.url, RedisCodec.Utf8).map(commands =>
+      fromCommands(config.stream, commands)
+    )
 
 private final class Redis4CatsStreamClient[F[_]: Functor](
     commands: RedisCommands[F, String, String]

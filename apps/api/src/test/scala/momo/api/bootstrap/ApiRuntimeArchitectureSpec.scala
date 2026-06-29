@@ -11,6 +11,10 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
     Paths.get("src/main/scala/momo/api/bootstrap/RuntimeInfrastructure.scala")
   private val useCaseWiringFile = Paths.get("src/main/scala/momo/api/bootstrap/UseCaseWiring.scala")
   private val databaseFile = Paths.get("src/main/scala/momo/api/db/Database.scala")
+  private val imageUploadDomainFile = Paths.get("src/main/scala/momo/api/domain/ImageUpload.scala")
+  private val ocrJobDomainFile = Paths.get("src/main/scala/momo/api/domain/OcrJob.scala")
+  private val localFsImageStoreFile =
+    Paths.get("src/main/scala/momo/api/adapters/storage/local/LocalFsImageStore.scala")
   private val generatedIdUsecaseFiles = List(
     Paths.get("src/main/scala/momo/api/usecases/AdminLoginAccounts.scala"),
     Paths.get("src/main/scala/momo/api/usecases/ConfirmMatch.scala"),
@@ -81,6 +85,21 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
 
     assertEquals(missingRuntimeBindings, Nil)
     assertEquals(rawGeneratedIdViolations, Nil)
+
+  test("image storage boundary keeps filesystem details out of domain and usecase wiring"):
+    val useCaseWiringText = read(useCaseWiringFile)
+    val imageUploadText = read(imageUploadDomainFile)
+    val ocrJobText = read(ocrJobDomainFile)
+    val localFsText = read(localFsImageStoreFile)
+
+    assert(!imageUploadText.contains("java.nio.file.Path"))
+    assert(!ocrJobText.contains("java.nio.file.Path"))
+    assert(!useCaseWiringText.contains("LocalFsImageStore"))
+    assert(useCaseWiringText.contains("imageStorage: ImageStorage[F]"))
+    assert(useCaseWiringText.contains("imageStorageInspector: ImageStorageInspector[F]"))
+    assert(localFsText.contains(
+      "extends ImageStorage[F], ImageStorageInspector[F], ImageOrphanCleaner[F]"
+    ))
 
   private def read(path: Path): String = Files.readString(path, StandardCharsets.UTF_8)
 end ApiRuntimeArchitectureSpec

@@ -1,6 +1,5 @@
 package momo.api.contracts.ocrworker
 
-import java.nio.file.Path
 import java.time.Instant
 import java.time.format.DateTimeFormatter
 
@@ -10,14 +9,14 @@ import io.circe.{Json, Printer}
 
 import momo.api.codec.OcrHintsCodec.given
 import momo.api.domain.ids.*
-import momo.api.domain.{OcrJobHints, RequestId, ScreenType}
+import momo.api.domain.{OcrJobHints, RequestId, ScreenType, StoredImageLocation}
 import momo.api.ports.queue.OcrJobEnqueueRequest
 
 final case class OcrWorkerJobMessageV1(
     jobId: OcrJobId,
     draftId: OcrDraftId,
     imageId: ImageId,
-    imagePath: Path,
+    imageLocation: StoredImageLocation,
     requestedScreenType: ScreenType,
     attempt: Int,
     enqueuedAt: Instant,
@@ -31,7 +30,7 @@ final case class OcrWorkerJobMessage(value: OcrWorkerJobMessageV1):
     jobId = value.jobId,
     draftId = value.draftId,
     imageId = value.imageId,
-    imagePath = value.imagePath,
+    imageLocation = value.imageLocation,
     requestedScreenType = value.requestedScreenType,
     attempt = value.attempt,
     enqueuedAt = value.enqueuedAt,
@@ -61,7 +60,7 @@ object OcrWorkerJobMessage:
       jobId: OcrJobId,
       draftId: OcrDraftId,
       imageId: ImageId,
-      imagePath: Path,
+      imageLocation: StoredImageLocation,
       requestedScreenType: ScreenType,
       attempt: Int,
       enqueuedAt: Instant,
@@ -71,7 +70,7 @@ object OcrWorkerJobMessage:
     jobId = jobId,
     draftId = draftId,
     imageId = imageId,
-    imagePath = imagePath,
+    imageLocation = imageLocation,
     requestedScreenType = requestedScreenType,
     attempt = attempt,
     enqueuedAt = enqueuedAt,
@@ -83,7 +82,7 @@ object OcrWorkerJobMessage:
     jobId = request.jobId,
     draftId = request.draftId,
     imageId = request.imageId,
-    imagePath = request.imagePath,
+    imageLocation = request.imageLocation,
     requestedScreenType = request.requestedScreenType,
     attempt = request.attempt,
     enqueuedAt = request.enqueuedAt,
@@ -97,7 +96,7 @@ object OcrWorkerJobMessage:
       "jobId" -> value.jobId.value,
       "draftId" -> value.draftId.value,
       "imageId" -> value.imageId.value,
-      "imagePath" -> value.imagePath.toString,
+      "imagePath" -> value.imageLocation.value,
       "requestedScreenType" -> value.requestedScreenType.wire,
       "attempt" -> value.attempt.toString,
       "enqueuedAt" -> DateTimeFormatter.ISO_INSTANT.format(value.enqueuedAt),
@@ -150,6 +149,7 @@ object OcrWorkerJobMessage:
       parsedImagePath <- Either.catchNonFatal(java.nio.file.Paths.get(imagePath)).left
         .map(_ => "imagePath must be a valid path")
       _ <- Either.cond(parsedImagePath.isAbsolute, (), "imagePath must be an absolute path")
+      imageLocation <- StoredImageLocation.fromString(parsedImagePath.toString)
       requested <- required("requestedScreenType")
       screenType <- ScreenType.fromWire(requested)
         .toRight(s"unknown requestedScreenType=$requested")
@@ -174,7 +174,7 @@ object OcrWorkerJobMessage:
       jobId = parsedJobId,
       draftId = parsedDraftId,
       imageId = parsedImageId,
-      imagePath = parsedImagePath,
+      imageLocation = imageLocation,
       requestedScreenType = screenType,
       attempt = attemptValue,
       enqueuedAt = enqueuedAt,

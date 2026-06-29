@@ -13,7 +13,8 @@ import org.slf4j.LoggerFactory
 import momo.api.domain.ids.{ImageId, *}
 import momo.api.domain.{ScreenType, StoredImage}
 import momo.api.errors.AppError
-import momo.api.repositories.{ImageStore, MatchDraftsRepository}
+import momo.api.ports.storage.ImageStorage
+import momo.api.repositories.MatchDraftsRepository
 import momo.api.usecases.syntax.UseCaseSyntax.*
 
 enum MatchDraftSourceImageKind(val wire: String) derives CanEqual:
@@ -47,7 +48,7 @@ final case class MatchDraftSourceImageArchive(
 
 final class GetMatchDraftSourceImages[F[_]: Sync](
     matchDrafts: MatchDraftsRepository[F],
-    imageStore: ImageStore[F],
+    imageStore: ImageStorage[F],
     sourceImageArchiveMaxBytes: Long = GetMatchDraftSourceImages.DefaultArchiveMaxBytes,
 ):
   private val logger = LoggerFactory.getLogger("momo.api.usecases.GetMatchDraftSourceImages")

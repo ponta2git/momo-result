@@ -1,7 +1,5 @@
 package momo.api.repositories.postgres
 
-import java.nio.file.{Path, Paths}
-
 import doobie.Meta
 
 import momo.api.domain.ids.*
@@ -16,6 +14,7 @@ import momo.api.domain.{
   Rank,
   ScreenType
 }
+import momo.api.domain.StoredImageLocation
 import momo.api.repositories.OcrQueueOutboxStatus
 
 /**
@@ -38,7 +37,8 @@ object PostgresMeta:
   given Meta[IncidentMasterId] = Meta[String].imap(IncidentMasterId.unsafeFromString)(_.value)
   given Meta[UserId] = Meta[String].imap(UserId.unsafeFromString)(_.value)
 
-  given Meta[Path] = Meta[String].imap(Paths.get(_))(_.toString)
+  given Meta[StoredImageLocation] = Meta[String]
+    .tiemap(StoredImageLocation.fromString)(_.value)
 
   given Meta[MatchNoInEvent] = Meta[Int].imap(MatchNoInEvent.unsafeFromInt)(_.value)
   given Meta[PlayOrder] = Meta[Int].imap(PlayOrder.unsafeFromInt)(_.value)

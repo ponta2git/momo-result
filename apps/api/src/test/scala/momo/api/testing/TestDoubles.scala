@@ -1,6 +1,4 @@
 package momo.api.testing
-
-import java.nio.file.Path
 import java.time.Instant
 
 import scala.concurrent.duration.*
@@ -11,13 +9,13 @@ import cats.effect.{Clock, IO, Ref}
 import momo.api.adapters.RedisStreamClient
 import momo.api.auth.{DiscordOAuthClient, DiscordUser}
 import momo.api.domain.ids.{AccountId, ImageId, OcrDraftId, OcrJobId}
-import momo.api.domain.{OcrFailure, OcrJob, StoredImage}
+import momo.api.domain.{OcrFailure, OcrJob, StoredImage, StoredImageLocation}
 import momo.api.errors.AppError
 import momo.api.ports.queue.{OcrJobEnqueueRequest, OcrJobQueueHealthCheck, OcrJobQueuePublisher}
+import momo.api.ports.storage.ImageStorage
 import momo.api.repositories.{
   AppSession,
   AppSessionsRepository,
-  ImageStore,
   OcrJobsRepository,
   OcrQueueBacklogSnapshot,
   OcrQueueOutboxRecord,
@@ -70,8 +68,8 @@ final case class FailingMarkFailedOcrJobsRepository(
   override def cancelQueuedByDraftIds(draftIds: List[OcrDraftId], now: Instant): IO[Int] = delegate
     .cancelQueuedByDraftIds(draftIds, now)
 
-final case class FailingDeleteImageStore(delegate: ImageStore[IO], deleteError: Throwable)
-    extends ImageStore[IO]:
+final case class FailingDeleteImageStore(delegate: ImageStorage[IO], deleteError: Throwable)
+    extends ImageStorage[IO]:
   override def save(
       ownerAccountId: AccountId,
       fileName: Option[String],
@@ -84,7 +82,7 @@ final case class FailingDeleteImageStore(delegate: ImageStore[IO], deleteError: 
     val _ = imageId
     IO.raiseError(deleteError)
 
-final case class NoReadImageStore(image: StoredImage) extends ImageStore[IO]:
+final case class NoReadImageStore(image: StoredImage) extends ImageStorage[IO]:
   override def save(
       ownerAccountId: AccountId,
       fileName: Option[String],
@@ -102,7 +100,7 @@ final case class NoReadImageStore(image: StoredImage) extends ImageStore[IO]:
 object NoReadImageStore:
   def storedPng(imageId: ImageId, sizeBytes: Long): StoredImage = StoredImage(
     imageId = imageId,
-    path = Path.of("/tmp/not-read-source-image.png"),
+    location = StoredImageLocation.unsafeFromString("/tmp/not-read-source-image.png"),
     mediaType = "image/png",
     sizeBytes = sizeBytes,
   )

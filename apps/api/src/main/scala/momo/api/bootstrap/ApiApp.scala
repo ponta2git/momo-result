@@ -30,9 +30,9 @@ import momo.api.adapters.{
   InMemoryOcrJobMaintenanceRepository,
   InMemoryOcrJobsRepository,
   InMemorySeasonMastersRepository,
-  InMemorySeriesComparisonReadModel,
-  LocalFsImageStore
+  InMemorySeriesComparisonReadModel
 }
+import momo.api.adapters.storage.local.LocalFsImageStore
 import momo.api.auth.{CreatedSession, DiscordOAuthClient, JavaDiscordOAuthClient, MemberRoster}
 import momo.api.config.{AppConfig, ResourceLimitsConfig}
 import momo.api.db.Database
@@ -165,7 +165,8 @@ object ApiApp:
           ).evalMap { _ =>
             UseCaseWiring.assemble(
               config = config,
-              imageStore = imageStore,
+              imageStorage = imageStore,
+              imageStorageInspector = imageStore,
               imageReferences = imageReferences,
               healthDetails = health,
               ocrQueueSubmitter = OcrJobQueueSubmitter.outboxBacked[F](ocrQueueOutbox, queue),
@@ -365,7 +366,8 @@ object ApiApp:
               ).evalMap { _ =>
                 UseCaseWiring.assemble(
                   config = config,
-                  imageStore = imageStore,
+                  imageStorage = imageStore,
+                  imageStorageInspector = imageStore,
                   imageReferences = imageReferences,
                   healthDetails = health,
                   ocrQueueSubmitter = ocrQueueSubmitter,

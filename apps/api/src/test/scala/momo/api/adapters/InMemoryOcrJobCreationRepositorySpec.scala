@@ -1,13 +1,19 @@
 package momo.api.adapters
-
-import java.nio.file.Path
 import java.time.Instant
 
 import cats.effect.IO
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.domain.ids.*
-import momo.api.domain.{MatchDraft, MatchDraftStatus, OcrDraft, OcrJob, OcrJobHints, ScreenType}
+import momo.api.domain.{
+  MatchDraft,
+  MatchDraftStatus,
+  OcrDraft,
+  OcrJob,
+  OcrJobHints,
+  ScreenType,
+  StoredImageLocation
+}
 import momo.api.ports.queue.OcrJobEnqueueRequest
 import momo.api.repositories.OcrJobDraftAttachment
 import momo.api.testing.AppErrorAssertions.assertAppException
@@ -16,7 +22,8 @@ final class InMemoryOcrJobCreationRepositorySpec extends MomoCatsEffectSuite:
   private val now = Instant.parse("2026-05-15T00:00:00Z")
   private val matchDraftId = MatchDraftId.unsafeFromString("match-draft-ocr-create")
   private val imageId = ImageId.unsafeFromString("image-ocr-create")
-  private val imagePath = Path.of("/tmp/momo-result/uploads/image-ocr-create.png")
+  private val imageLocation =
+    StoredImageLocation.unsafeFromString("/tmp/momo-result/uploads/image-ocr-create.png")
 
   test("createQueuedJob rejects duplicate OCR drafts before attaching match draft artifacts"):
     for
@@ -111,7 +118,7 @@ final class InMemoryOcrJobCreationRepositorySpec extends MomoCatsEffectSuite:
     id = OcrJobId.unsafeFromString(id),
     draftId = draftId,
     imageId = imageId,
-    imagePath = imagePath,
+    imageLocation = imageLocation,
     requestedScreenType = ScreenType.TotalAssets,
     attemptCount = 0,
     createdAt = now,
@@ -131,7 +138,7 @@ final class InMemoryOcrJobCreationRepositorySpec extends MomoCatsEffectSuite:
       jobId = job.id,
       draftId = draft.id,
       imageId = job.imageId,
-      imagePath = job.imagePath,
+      imageLocation = job.imageLocation,
       requestedScreenType = job.requestedScreenType,
       attempt = 1,
       enqueuedAt = now,

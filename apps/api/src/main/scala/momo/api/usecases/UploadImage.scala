@@ -6,10 +6,10 @@ import cats.syntax.all.*
 import momo.api.domain.StoredImage
 import momo.api.domain.ids.AccountId
 import momo.api.errors.AppError
-import momo.api.repositories.ImageStore
+import momo.api.ports.storage.ImageStorage
 
 final class UploadImage[F[_]: Monad](
-    imageStore: ImageStore[F],
+    imageStore: ImageStorage[F],
     admission: ImageStorageAdmission[F],
 ):
   def run(

@@ -11,8 +11,8 @@ import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.errors.AppError
 import momo.api.ports.queue.OcrJobEnqueueRequest
+import momo.api.ports.storage.ImageStorage
 import momo.api.repositories.{
-  ImageStore,
   MatchDraftsRepository,
   MemberAliasesRepository,
   OcrJobCreationRepository,
@@ -30,7 +30,7 @@ final case class CreateOcrJobCommand(
 final case class CreatedOcrJob(job: OcrJob, draft: OcrDraft)
 
 final class CreateOcrJob[F[_]: MonadThrow](
-    imageStore: ImageStore[F],
+    imageStore: ImageStorage[F],
     creation: OcrJobCreationRepository[F],
     matchDrafts: MatchDraftsRepository[F],
     queueSubmitter: OcrJobQueueSubmitter[F],
@@ -70,12 +70,12 @@ final class CreateOcrJob[F[_]: MonadThrow](
     jobId <- EitherT.liftF(nextJobId)
     draftId <- EitherT.liftF(nextDraftId)
     draft = initialDraft(draftId, jobId, command.requestedScreenType, createdAt)
-    job = queuedJob(jobId, draftId, imageId, image.path, command.requestedScreenType, createdAt)
+    job = queuedJob(jobId, draftId, imageId, image.location, command.requestedScreenType, createdAt)
     enqueueRequest = buildEnqueueRequest(
       jobId,
       draftId,
       imageId,
-      image.path,
+      image.location,
       command.requestedScreenType,
       createdAt,
       hintsWithAliases,
@@ -175,14 +175,14 @@ object CreateOcrJob:
       jobId: OcrJobId,
       draftId: OcrDraftId,
       imageId: ImageId,
-      imagePath: java.nio.file.Path,
+      imageLocation: StoredImageLocation,
       screenType: ScreenType,
       createdAt: Instant,
   ): OcrJob = OcrJob.Queued(
     id = jobId,
     draftId = draftId,
     imageId = imageId,
-    imagePath = imagePath,
+    imageLocation = imageLocation,
     requestedScreenType = screenType,
     attemptCount = 0,
     createdAt = createdAt,
@@ -193,7 +193,7 @@ object CreateOcrJob:
       jobId: OcrJobId,
       draftId: OcrDraftId,
       imageId: ImageId,
-      imagePath: java.nio.file.Path,
+      imageLocation: StoredImageLocation,
       screenType: ScreenType,
       enqueuedAt: Instant,
       hints: OcrJobHints,
@@ -202,7 +202,7 @@ object CreateOcrJob:
     jobId = jobId,
     draftId = draftId,
     imageId = imageId,
-    imagePath = imagePath,
+    imageLocation = imageLocation,
     requestedScreenType = screenType,
     attempt = OcrJobEnqueueRequest.InitialAttempt,
     enqueuedAt = enqueuedAt,

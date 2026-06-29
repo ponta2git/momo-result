@@ -1,6 +1,4 @@
 package momo.api.usecases
-
-import java.nio.file.Path
 import java.time.Instant
 
 import cats.effect.IO
@@ -9,9 +7,9 @@ import momo.api.MomoCatsEffectSuite
 import momo.api.adapters.{
   InMemoryMatchDraftCancellationRepository,
   InMemoryMatchDraftsRepository,
-  InMemoryOcrJobsRepository,
-  LocalFsImageStore
+  InMemoryOcrJobsRepository
 }
+import momo.api.adapters.storage.local.LocalFsImageStore
 import momo.api.domain.*
 import momo.api.domain.ids.*
 
@@ -94,7 +92,7 @@ final class CancelMatchDraftSpec extends MomoCatsEffectSuite:
     id = jobId,
     draftId = ocrDraftId,
     imageId = ImageId.unsafeFromString("image-cancel-usecase"),
-    imagePath = Path.of("/tmp/image-cancel-usecase.png"),
+    imageLocation = StoredImageLocation.unsafeFromString("/tmp/image-cancel-usecase.png"),
     requestedScreenType = ScreenType.TotalAssets,
     attemptCount = 0,
     createdAt = createdAt,

@@ -7,12 +7,8 @@ import org.typelevel.log4cats.noop.NoOpFactory
 import momo.api.MomoCatsEffectSuite
 import momo.api.domain.ids.{AccountId, ImageId}
 import momo.api.errors.AppError
-import momo.api.repositories.{
-  ImageDiskUsage,
-  ImageReferenceRepository,
-  ImageStorageInspector,
-  ImageStorageUsage
-}
+import momo.api.ports.storage.{ImageDiskUsage, ImageStorageInspector, ImageStorageUsage}
+import momo.api.repositories.ImageReferenceRepository
 
 final class ImageStorageAdmissionSpec extends MomoCatsEffectSuite:
   private given LoggerFactory[IO] = NoOpFactory[IO]

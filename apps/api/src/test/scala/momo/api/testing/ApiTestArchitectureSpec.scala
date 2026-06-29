@@ -115,7 +115,7 @@ final class ApiTestArchitectureSpec extends FunSuite:
       "new OcrJobQueuePublisher[IO]",
       "new OcrQueueOutboxRepository[IO]",
       "new OcrJobsRepository[IO]",
-      "new ImageStore[IO]",
+      "new ImageStorage[IO]",
       "new RedisStreamClient[IO]",
       "new DiscordOAuthClient[IO]",
       "extends AppSessionsRepository[IO]",

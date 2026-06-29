@@ -5,7 +5,8 @@ import java.time.Instant
 import cats.effect.IO
 
 import momo.api.MomoCatsEffectSuite
-import momo.api.adapters.{InMemoryMatchDraftsRepository, LocalFsImageStore}
+import momo.api.adapters.InMemoryMatchDraftsRepository
+import momo.api.adapters.storage.local.LocalFsImageStore
 import momo.api.domain.ids.*
 import momo.api.domain.{MatchDraft, MatchDraftStatus}
 import momo.api.errors.AppError

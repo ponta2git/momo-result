@@ -1,4 +1,4 @@
-package momo.api.adapters
+package momo.api.adapters.storage.local
 
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
@@ -7,7 +7,7 @@ import scala.annotation.tailrec
 
 import momo.api.domain.ids.ImageId
 
-private[adapters] object LocalFsImageStoreSupport:
+private[storage] object LocalFsImageStoreSupport:
   val MaxBytes = 3 * 1024 * 1024
   val MaxWidth = 3840
   val MaxHeight = 2160

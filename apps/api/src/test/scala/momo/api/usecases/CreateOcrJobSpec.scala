@@ -13,9 +13,9 @@ import momo.api.adapters.{
   InMemoryOcrDraftsRepository,
   InMemoryOcrJobCreationRepository,
   InMemoryOcrJobsRepository,
-  InMemoryOcrJobQueuePublisher,
-  LocalFsImageStore
+  InMemoryOcrJobQueuePublisher
 }
+import momo.api.adapters.storage.local.LocalFsImageStore
 import momo.api.domain.ids.{
   AccountId,
   ImageId,
@@ -33,11 +33,13 @@ import momo.api.domain.{
   OcrJobHints,
   PlayerAliasHint,
   ScreenType,
-  StoredImage
+  StoredImage,
+  StoredImageLocation
 }
 import momo.api.errors.AppError
 import momo.api.ports.queue.OcrJobQueuePublisher
-import momo.api.repositories.{ImageStore, OcrJobsRepository}
+import momo.api.ports.storage.ImageStorage
+import momo.api.repositories.OcrJobsRepository
 import momo.api.testing.AppErrorAssertions.fromAppEither
 import momo.api.testing.{
   FailingMarkFailedOcrJobsRepository,
@@ -312,7 +314,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
           oldImageId,
           MatchDraftStatus.OcrRunning,
         ))
-        _ <- fixture.jobs.create(queuedJob(oldJobId, oldDraftId, oldImageId, image.path))
+        _ <- fixture.jobs.create(queuedJob(oldJobId, oldDraftId, oldImageId, image.location))
         usecase <- fixture.usecase
         result <- usecase.run(
           CreateOcrJobCommand(
@@ -352,7 +354,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         _ <- fixture.matchDrafts.create(
           draftWithTotalAssetsSlot(matchDraftId, oldDraftId, oldImageId, MatchDraftStatus.OcrFailed)
         )
-        _ <- fixture.jobs.create(queuedJob(oldJobId, oldDraftId, oldImageId, image.path))
+        _ <- fixture.jobs.create(queuedJob(oldJobId, oldDraftId, oldImageId, image.location))
         _ <- fixture.jobs.cancelQueued(oldJobId, now)
         usecase <- fixture.usecase
         created <- usecase.run(
@@ -541,12 +543,12 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
       id: OcrJobId,
       draftId: OcrDraftId,
       imageId: ImageId,
-      imagePath: java.nio.file.Path,
+      imageLocation: StoredImageLocation,
   ): OcrJob = OcrJob.Queued(
     id = id,
     draftId = draftId,
     imageId = imageId,
-    imagePath = imagePath,
+    imageLocation = imageLocation,
     requestedScreenType = ScreenType.TotalAssets,
     attemptCount = 0,
     createdAt = now,
@@ -554,7 +556,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
   )
 
   private final case class Fixture[Q <: OcrJobQueuePublisher[IO]](
-      imageStore: ImageStore[IO],
+      imageStore: ImageStorage[IO],
       jobs: OcrJobsRepository[IO],
       drafts: InMemoryOcrDraftsRepository[IO],
       matchDrafts: InMemoryMatchDraftsRepository[IO],

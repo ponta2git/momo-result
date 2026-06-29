@@ -7,7 +7,8 @@ import org.typelevel.log4cats.LoggerFactory
 import momo.api.domain.ids.AccountId
 import momo.api.errors.AppError
 import momo.api.logging.SafeLog
-import momo.api.repositories.{ImageDiskUsage, ImageReferenceRepository, ImageStorageInspector}
+import momo.api.ports.storage.{ImageDiskUsage, ImageStorageInspector}
+import momo.api.repositories.ImageReferenceRepository
 
 trait ImageStorageAdmission[F[_]]:
   def ensureCanAccept(ownerAccountId: AccountId, incomingBytes: Long): F[Either[AppError, Unit]]

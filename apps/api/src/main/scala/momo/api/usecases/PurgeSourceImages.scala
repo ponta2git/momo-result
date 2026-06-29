@@ -8,11 +8,12 @@ import org.slf4j.LoggerFactory
 
 import momo.api.domain.ids.{ImageId, MatchDraftId}
 import momo.api.logging.SafeLog
-import momo.api.repositories.{ImageStore, MatchDraftsRepository}
+import momo.api.ports.storage.ImageStorage
+import momo.api.repositories.MatchDraftsRepository
 
 final class PurgeSourceImages[F[_]: Sync](
     matchDrafts: MatchDraftsRepository[F],
-    imageStore: ImageStore[F],
+    imageStore: ImageStorage[F],
 ):
   private val logger = LoggerFactory.getLogger("momo.api.usecases.PurgeSourceImages")
 

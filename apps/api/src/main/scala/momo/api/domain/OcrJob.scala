@@ -1,6 +1,5 @@
 package momo.api.domain
 
-import java.nio.file.Path
 import java.time.Instant
 
 import momo.api.domain.ids.*
@@ -35,7 +34,7 @@ sealed trait OcrJob derives CanEqual:
   def id: OcrJobId
   def draftId: OcrDraftId
   def imageId: ImageId
-  def imagePath: Path
+  def imageLocation: StoredImageLocation
   def requestedScreenType: ScreenType
   def status: OcrJobStatus
   def attemptCount: Int
@@ -85,7 +84,7 @@ object OcrJob:
       id: OcrJobId,
       draftId: OcrDraftId,
       imageId: ImageId,
-      imagePath: Path,
+      imageLocation: StoredImageLocation,
       requestedScreenType: ScreenType,
       attemptCount: Int,
       createdAt: Instant,
@@ -98,7 +97,7 @@ object OcrJob:
       id: OcrJobId,
       draftId: OcrDraftId,
       imageId: ImageId,
-      imagePath: Path,
+      imageLocation: StoredImageLocation,
       requestedScreenType: ScreenType,
       attemptCount: Int,
       runningWorkerId: String,
@@ -113,7 +112,7 @@ object OcrJob:
       id: OcrJobId,
       draftId: OcrDraftId,
       imageId: ImageId,
-      imagePath: Path,
+      imageLocation: StoredImageLocation,
       requestedScreenType: ScreenType,
       succeededDetectedScreenType: ScreenType,
       attemptCount: Int,
@@ -131,7 +130,7 @@ object OcrJob:
       id: OcrJobId,
       draftId: OcrDraftId,
       imageId: ImageId,
-      imagePath: Path,
+      imageLocation: StoredImageLocation,
       requestedScreenType: ScreenType,
       failedDetectedScreenType: Option[ScreenType],
       attemptCount: Int,
@@ -150,7 +149,7 @@ object OcrJob:
       id: OcrJobId,
       draftId: OcrDraftId,
       imageId: ImageId,
-      imagePath: Path,
+      imageLocation: StoredImageLocation,
       requestedScreenType: ScreenType,
       attemptCount: Int,
       cancelledFinishedAt: Instant,

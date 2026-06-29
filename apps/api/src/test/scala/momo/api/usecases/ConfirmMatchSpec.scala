@@ -12,9 +12,9 @@ import momo.api.adapters.{
   InMemoryMatchConfirmationRepository,
   InMemoryMatchDraftsRepository,
   InMemoryMatchesRepository,
-  InMemorySeasonMastersRepository,
-  LocalFsImageStore
+  InMemorySeasonMastersRepository
 }
+import momo.api.adapters.storage.local.LocalFsImageStore
 import momo.api.domain.ids.*
 import momo.api.domain.{GameTitle, MatchRecord, PlayerResult}
 import momo.api.errors.{AppError, AppException}

@@ -1,6 +1,4 @@
 package momo.api.integration
-
-import java.nio.file.Path
 import java.time.Instant
 
 import cats.effect.IO
@@ -41,7 +39,7 @@ final class PostgresOcrJobCreationRepositorySpec extends IntegrationSuite with J
     id = jobId,
     draftId = draftId,
     imageId = imageId,
-    imagePath = Path.of("/tmp/image.png"),
+    imageLocation = StoredImageLocation.unsafeFromString("/tmp/image.png"),
     requestedScreenType = ScreenType.TotalAssets,
     attemptCount = 0,
     createdAt = now,
@@ -52,7 +50,7 @@ final class PostgresOcrJobCreationRepositorySpec extends IntegrationSuite with J
     jobId = jobId,
     draftId = draftId,
     imageId = imageId,
-    imagePath = Path.of("/tmp/image.png"),
+    imageLocation = StoredImageLocation.unsafeFromString("/tmp/image.png"),
     requestedScreenType = ScreenType.TotalAssets,
     attempt = 1,
     enqueuedAt = now,

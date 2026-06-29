@@ -1,6 +1,4 @@
 package momo.api.domain
-
-import java.nio.file.Paths
 import java.time.Instant
 
 import cats.effect.IO
@@ -17,7 +15,7 @@ final class OcrJobLifecycleSpec extends CatsEffectSuite:
     id = OcrJobId.unsafeFromString("job_1"),
     draftId = OcrDraftId.unsafeFromString("draft_1"),
     imageId = ImageId.unsafeFromString("img_1"),
-    imagePath = Paths.get("/tmp/img_1.png"),
+    imageLocation = StoredImageLocation.unsafeFromString("/tmp/img_1.png"),
     requestedScreenType = ScreenType.TotalAssets,
     attemptCount = 0,
     createdAt = createdAt,
@@ -35,7 +33,7 @@ final class OcrJobLifecycleSpec extends CatsEffectSuite:
       id = q.id,
       draftId = q.draftId,
       imageId = q.imageId,
-      imagePath = q.imagePath,
+      imageLocation = q.imageLocation,
       requestedScreenType = q.requestedScreenType,
       attemptCount = 1,
       runningWorkerId = "w1",
@@ -60,7 +58,7 @@ final class OcrJobLifecycleSpec extends CatsEffectSuite:
           id = queued.id,
           draftId = queued.draftId,
           imageId = queued.imageId,
-          imagePath = queued.imagePath,
+          imageLocation = queued.imageLocation,
           requestedScreenType = queued.requestedScreenType,
           attemptCount = queued.attemptCount,
           cancelledFinishedAt = laterAt,
@@ -76,7 +74,7 @@ final class OcrJobLifecycleSpec extends CatsEffectSuite:
       id = queued.id,
       draftId = queued.draftId,
       imageId = queued.imageId,
-      imagePath = queued.imagePath,
+      imageLocation = queued.imageLocation,
       requestedScreenType = queued.requestedScreenType,
       attemptCount = 1,
       runningWorkerId = "w1",

@@ -1,13 +1,11 @@
 package momo.api.contracts.ocrworker
-
-import java.nio.file.Path
 import java.time.Instant
 
 import io.circe.Json
 import munit.FunSuite
 
 import momo.api.domain.ids.*
-import momo.api.domain.{OcrJobHints, PlayerAliasHint, ScreenType}
+import momo.api.domain.{OcrJobHints, PlayerAliasHint, ScreenType, StoredImageLocation}
 import momo.api.testing.JsonSchemaAssertions
 
 final class OcrWorkerJobMessageSpec extends FunSuite with JsonSchemaAssertions:
@@ -82,7 +80,7 @@ final class OcrWorkerJobMessageSpec extends FunSuite with JsonSchemaAssertions:
       jobId = OcrJobId.unsafeFromString("job-1"),
       draftId = OcrDraftId.unsafeFromString("draft-1"),
       imageId = ImageId.unsafeFromString("image-1"),
-      imagePath = Path.of("/tmp/momo-result/uploads/image-1.png"),
+      imageLocation = StoredImageLocation.unsafeFromString("/tmp/momo-result/uploads/image-1.png"),
       requestedScreenType = ScreenType.TotalAssets,
       attempt = 1,
       enqueuedAt = Instant.parse("2026-04-29T11:40:16Z"),
@@ -111,7 +109,7 @@ final class OcrWorkerJobMessageSpec extends FunSuite with JsonSchemaAssertions:
       jobId = OcrJobId.unsafeFromString("job-2"),
       draftId = OcrDraftId.unsafeFromString("draft-2"),
       imageId = ImageId.unsafeFromString("image-2"),
-      imagePath = Path.of("/tmp/momo-result/uploads/image-2.webp"),
+      imageLocation = StoredImageLocation.unsafeFromString("/tmp/momo-result/uploads/image-2.webp"),
       requestedScreenType = ScreenType.Auto,
       attempt = 1,
       enqueuedAt = Instant.parse("2026-04-29T11:40:16Z"),
@@ -137,7 +135,7 @@ final class OcrWorkerJobMessageSpec extends FunSuite with JsonSchemaAssertions:
       jobId = OcrJobId.unsafeFromString("job-3"),
       draftId = OcrDraftId.unsafeFromString("draft-3"),
       imageId = ImageId.unsafeFromString("image-3"),
-      imagePath = Path.of("/tmp/momo-result/uploads/image-3.png"),
+      imageLocation = StoredImageLocation.unsafeFromString("/tmp/momo-result/uploads/image-3.png"),
       requestedScreenType = ScreenType.TotalAssets,
       attempt = 1,
       enqueuedAt = Instant.parse("2026-04-29T11:40:16Z"),
@@ -150,7 +148,7 @@ final class OcrWorkerJobMessageSpec extends FunSuite with JsonSchemaAssertions:
       jobId = OcrJobId.unsafeFromString("job-3"),
       draftId = OcrDraftId.unsafeFromString("draft-3"),
       imageId = ImageId.unsafeFromString("image-3"),
-      imagePath = Path.of("/tmp/momo-result/uploads/image-3.png"),
+      imageLocation = StoredImageLocation.unsafeFromString("/tmp/momo-result/uploads/image-3.png"),
       requestedScreenType = ScreenType.TotalAssets,
       attempt = 1,
       enqueuedAt = Instant.parse("2026-04-29T11:40:16Z"),
@@ -163,7 +161,7 @@ final class OcrWorkerJobMessageSpec extends FunSuite with JsonSchemaAssertions:
       jobId = OcrJobId.unsafeFromString("job-3"),
       draftId = OcrDraftId.unsafeFromString("draft-3"),
       imageId = ImageId.unsafeFromString("image-3"),
-      imagePath = Path.of("/tmp/momo-result/uploads/image-3.png"),
+      imageLocation = StoredImageLocation.unsafeFromString("/tmp/momo-result/uploads/image-3.png"),
       requestedScreenType = ScreenType.TotalAssets,
       attempt = 1,
       enqueuedAt = Instant.parse("2026-04-29T11:40:16Z"),
@@ -176,7 +174,7 @@ final class OcrWorkerJobMessageSpec extends FunSuite with JsonSchemaAssertions:
       jobId = OcrJobId.unsafeFromString("job-3"),
       draftId = OcrDraftId.unsafeFromString("draft-3"),
       imageId = ImageId.unsafeFromString("image-3"),
-      imagePath = Path.of("/tmp/momo-result/uploads/image-3.png"),
+      imageLocation = StoredImageLocation.unsafeFromString("/tmp/momo-result/uploads/image-3.png"),
       requestedScreenType = ScreenType.TotalAssets,
       attempt = 1,
       enqueuedAt = Instant.parse("2026-04-29T11:40:16Z"),
@@ -203,7 +201,10 @@ final class OcrWorkerJobMessageSpec extends FunSuite with JsonSchemaAssertions:
     val json = OcrWorkerJobMessage.fieldsAsJson(payload)
 
     assertEquals(OcrWorkerJobMessage.fromJson(json), Right(payload))
-    assertEquals(OcrWorkerJobMessage.fromJson(Json.arr()), Left("stream payload must be a JSON object"))
+    assertEquals(
+      OcrWorkerJobMessage.fromJson(Json.arr()),
+      Left("stream payload must be a JSON object")
+    )
     assertEquals(
       OcrWorkerJobMessage.fromJson(json.mapObject(_.add("attempt", Json.fromInt(1)))),
       Left("field attempt must be a string"),
@@ -229,7 +230,8 @@ final class OcrWorkerJobMessageSpec extends FunSuite with JsonSchemaAssertions:
     jobId = OcrJobId.unsafeFromString("job-schema-1"),
     draftId = OcrDraftId.unsafeFromString("draft-schema-1"),
     imageId = ImageId.unsafeFromString("image-schema-1"),
-    imagePath = Path.of("/tmp/momo-result/uploads/image-schema-1.png"),
+    imageLocation =
+      StoredImageLocation.unsafeFromString("/tmp/momo-result/uploads/image-schema-1.png"),
     requestedScreenType = ScreenType.IncidentLog,
     attempt = 1,
     enqueuedAt = Instant.parse("2026-05-09T00:00:00Z"),

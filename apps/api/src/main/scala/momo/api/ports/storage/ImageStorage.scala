@@ -1,4 +1,4 @@
-package momo.api.repositories
+package momo.api.ports.storage
 
 import java.time.Instant
 
@@ -11,7 +11,7 @@ final case class ImageStorageUsage(fileCount: Int, sizeBytes: Long)
 final case class ImageDiskUsage(totalBytes: Long, usableBytes: Long):
   def usedBytes: Long = (totalBytes - usableBytes).max(0L)
 
-trait ImageStore[F[_]]:
+trait ImageStorage[F[_]]:
   def save(
       ownerAccountId: AccountId,
       fileName: Option[String],
@@ -33,5 +33,5 @@ trait ImageStorageInspector[F[_]]:
   def unreferencedUsage(ownerAccountId: AccountId, referenced: Set[ImageId]): F[ImageStorageUsage]
   def diskUsage: F[ImageDiskUsage]
 
-trait ImageOrphanStore[F[_]]:
+trait ImageOrphanCleaner[F[_]]:
   def deleteOrphans(referenced: Set[ImageId], olderThan: Instant): F[Int]

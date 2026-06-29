@@ -8,7 +8,6 @@ import cats.effect.{Async, Clock, Sync}
 import cats.syntax.all.*
 import org.typelevel.log4cats.LoggerFactory
 
-import momo.api.adapters.LocalFsImageStore
 import momo.api.auth.{
   CsrfTokenService,
   DiscordOAuthClient,
@@ -22,6 +21,7 @@ import momo.api.config.{AppConfig, AuthConfig, ResourceLimitsConfig}
 import momo.api.domain.ids.*
 import momo.api.endpoints.HealthEndpoints.HealthDetailsResponse
 import momo.api.http.{HttpRateLimiters, HttpRoutes}
+import momo.api.ports.storage.{ImageStorage, ImageStorageInspector}
 import momo.api.repositories.*
 import momo.api.usecases.*
 
@@ -92,7 +92,8 @@ private[bootstrap] object UseCaseWiring:
 
   def assemble[F[_]: Async: SecureRandom: LoggerFactory](
       config: AppConfig,
-      imageStore: LocalFsImageStore[F],
+      imageStorage: ImageStorage[F],
+      imageStorageInspector: ImageStorageInspector[F],
       imageReferences: ImageReferenceRepository[F],
       healthDetails: F[HealthDetailsResponse],
       ocrQueueSubmitter: OcrJobQueueSubmitter[F],
@@ -128,10 +129,14 @@ private[bootstrap] object UseCaseWiring:
     val ids = RuntimeIds.fresh[F]
     val authServices = RuntimeAuthServices.from[F](appSessions, loginAccounts, config.auth, clock)
     val imageStorageAdmission = ImageStorageAdmission
-      .from[F](imageStore, imageReferences, imageStorageAdmissionConfig(config.resourceLimits))
-    val uploadImage = UploadImage[F](imageStore, imageStorageAdmission)
+      .from[F](
+        imageStorageInspector,
+        imageReferences,
+        imageStorageAdmissionConfig(config.resourceLimits),
+      )
+    val uploadImage = UploadImage[F](imageStorage, imageStorageAdmission)
     val createOcrJob = CreateOcrJob[F](
-      imageStore = imageStore,
+      imageStore = imageStorage,
       creation = ocrJobCreation,
       matchDrafts = matchDrafts,
       queueSubmitter = ocrQueueSubmitter,
@@ -148,7 +153,7 @@ private[bootstrap] object UseCaseWiring:
     val cancelOcrJob = CancelOcrJob[F](jobs, clock.now)
     val listHeldEvents = ListHeldEvents[F](heldEvents, matches)
     val createHeldEvent = CreateHeldEvent[F](heldEvents, ids.nextHeldEventId)
-    val sourceImageRetention = PurgeSourceImages[F](matchDrafts, imageStore)
+    val sourceImageRetention = PurgeSourceImages[F](matchDrafts, imageStorage)
     val createMatchDraft = CreateMatchDraft[F](
       heldEvents = heldEvents,
       gameTitles = gameTitles,
@@ -171,7 +176,7 @@ private[bootstrap] object UseCaseWiring:
       CancelMatchDraft[F](matchDraftCancellation, sourceImageRetention, clock.now)
     val getMatchDraftSourceImages = GetMatchDraftSourceImages[F](
       matchDrafts,
-      imageStore,
+      imageStorage,
       config.resourceLimits.sourceImageArchiveMaxBytes,
     )
     val confirmMatch = ConfirmMatch[F](

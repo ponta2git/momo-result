@@ -1,6 +1,4 @@
 package momo.api.endpoints
-
-import java.nio.file.Paths
 import java.time.Instant
 
 import io.circe.Json
@@ -9,7 +7,7 @@ import io.circe.syntax.*
 import munit.FunSuite
 
 import momo.api.domain.ids.*
-import momo.api.domain.{FailureCode, OcrFailure, OcrJob, ScreenType}
+import momo.api.domain.{FailureCode, OcrFailure, OcrJob, ScreenType, StoredImageLocation}
 
 /**
  * Roundtrip + golden-JSON guard for [[OcrJobResponse]].
@@ -27,7 +25,7 @@ final class OcrJobResponseRoundtripSpec extends FunSuite:
     id = OcrJobId.unsafeFromString("job_001"),
     draftId = OcrDraftId.unsafeFromString("draft_001"),
     imageId = ImageId.unsafeFromString("image_001"),
-    imagePath = Paths.get("/tmp/images/image_001.png"),
+    imageLocation = StoredImageLocation.unsafeFromString("/tmp/images/image_001.png"),
     requestedScreenType = ScreenType.TotalAssets,
     attemptCount = 0,
     createdAt = createdAt,
@@ -38,7 +36,7 @@ final class OcrJobResponseRoundtripSpec extends FunSuite:
     id = OcrJobId.unsafeFromString("job_001"),
     draftId = OcrDraftId.unsafeFromString("draft_001"),
     imageId = ImageId.unsafeFromString("image_001"),
-    imagePath = Paths.get("/tmp/images/image_001.png"),
+    imageLocation = StoredImageLocation.unsafeFromString("/tmp/images/image_001.png"),
     requestedScreenType = ScreenType.TotalAssets,
     failedDetectedScreenType = Some(ScreenType.Revenue),
     attemptCount = 2,

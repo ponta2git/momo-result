@@ -1,12 +1,14 @@
 package momo.api.adapters
 
-import java.nio.file.Files
+import java.nio.file.{Files, Path}
 import java.nio.file.attribute.FileTime
 import java.time.Instant
 
 import cats.effect.IO
 
 import momo.api.MomoCatsEffectSuite
+import momo.api.adapters.storage.local.LocalFsImageStore
+import momo.api.domain.StoredImage
 import momo.api.domain.ids.{AccountId, ImageId}
 import momo.api.errors.AppError
 import momo.api.testing.TestImages
@@ -15,12 +17,13 @@ final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:
   private val accountId = AccountId.unsafeFromString("account-1")
   private val otherAccountId = AccountId.unsafeFromString("account-2")
   private val pngBytes: Array[Byte] = TestImages.png1x1
+  private def pathOf(image: StoredImage): Path = Path.of(image.location.value)
 
   test("stores PNG images after magic byte and content type validation") {
     tempDirectory("momo-api-image-store").use { dir =>
       val store = LocalFsImageStore[IO](dir)
       store.save(accountId, Some("sample.png"), Some("image/png"), pngBytes).flatMap {
-        case Right(image) => IO.blocking(Files.exists(image.path)).assertEquals(true) *>
+        case Right(image) => IO.blocking(Files.exists(pathOf(image))).assertEquals(true) *>
             IO(assertEquals(image.mediaType, "image/png")) *>
             IO(assertEquals(image.sizeBytes, pngBytes.length.toLong))
         case Left(error) => fail(s"expected image to be stored: $error")
@@ -33,7 +36,7 @@ final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:
       val store = LocalFsImageStore[IO](dir)
       val bytes = TestImages.jpeg(width = 1280, height = 720)
       store.save(accountId, Some("sample.jpg"), Some("image/jpeg"), bytes).flatMap {
-        case Right(image) => IO.blocking(Files.exists(image.path)).assertEquals(true) *>
+        case Right(image) => IO.blocking(Files.exists(pathOf(image))).assertEquals(true) *>
             IO(assertEquals(image.mediaType, "image/jpeg")) *>
             IO(assertEquals(image.sizeBytes, bytes.length.toLong))
         case Left(error) => fail(s"expected image to be stored: $error")
@@ -46,7 +49,7 @@ final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:
       val store = LocalFsImageStore[IO](dir)
       val bytes = TestImages.webp(width = 1280, height = 720)
       store.save(accountId, Some("sample.webp"), Some("image/webp"), bytes).flatMap {
-        case Right(image) => IO.blocking(Files.exists(image.path)).assertEquals(true) *>
+        case Right(image) => IO.blocking(Files.exists(pathOf(image))).assertEquals(true) *>
             IO(assertEquals(image.mediaType, "image/webp")) *>
             IO(assertEquals(image.sizeBytes, bytes.length.toLong))
         case Left(error) => fail(s"expected image to be stored: $error")
@@ -168,7 +171,7 @@ final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:
           case Left(error) => fail(s"expected image to be stored: $error")
         }
         deleted <- store.delete(stored.imageId)
-        existsAfter <- IO.blocking(Files.exists(stored.path))
+        existsAfter <- IO.blocking(Files.exists(pathOf(stored)))
       yield
         assertEquals(deleted, true)
         assertEquals(existsAfter, false)
@@ -245,11 +248,11 @@ final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:
           case Right(image) => IO.pure(image)
           case Left(error) => fail(s"expected image to be stored: $error")
         }
-        _ <- IO.blocking(Files.setLastModifiedTime(kept.path, old))
-        _ <- IO.blocking(Files.setLastModifiedTime(orphan.path, old))
+        _ <- IO.blocking(Files.setLastModifiedTime(pathOf(kept), old))
+        _ <- IO.blocking(Files.setLastModifiedTime(pathOf(orphan), old))
         deleted <- store.deleteOrphans(Set(kept.imageId), now.minusSeconds(60))
-        keptExists <- IO.blocking(Files.exists(kept.path))
-        orphanExists <- IO.blocking(Files.exists(orphan.path))
+        keptExists <- IO.blocking(Files.exists(pathOf(kept)))
+        orphanExists <- IO.blocking(Files.exists(pathOf(orphan)))
       yield
         assertEquals(deleted, 1)
         assert(keptExists)

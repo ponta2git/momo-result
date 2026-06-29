@@ -1,6 +1,4 @@
 package momo.api.repositories.postgres
-
-import java.nio.file.Path
 import java.time.Instant
 
 import cats.effect.MonadCancelThrow
@@ -11,7 +9,15 @@ import doobie.postgres.implicits.*
 
 import momo.api.db.Database
 import momo.api.domain.ids.*
-import momo.api.domain.{FailureCode, MatchDraftStatus, OcrFailure, OcrJob, OcrJobStatus, ScreenType}
+import momo.api.domain.{
+  FailureCode,
+  MatchDraftStatus,
+  OcrFailure,
+  OcrJob,
+  OcrJobStatus,
+  ScreenType,
+  StoredImageLocation
+}
 import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.repositories.{OcrJobsAlg, OcrJobsRepository}
 
@@ -21,7 +27,7 @@ object PostgresOcrJobs:
       OcrJobId,
       OcrDraftId,
       ImageId,
-      Path,
+      StoredImageLocation,
       ScreenType,
       Option[ScreenType],
       OcrJobStatus,
@@ -43,7 +49,7 @@ object PostgresOcrJobs:
       id,
       draftId,
       imageId,
-      imagePath,
+      imageLocation,
       requestedScreenType,
       detectedScreenType,
       status,
@@ -72,7 +78,7 @@ object PostgresOcrJobs:
           id,
           draftId,
           imageId,
-          imagePath,
+          imageLocation,
           requestedScreenType,
           attemptCount,
           createdAt,
@@ -83,7 +89,7 @@ object PostgresOcrJobs:
               id,
               draftId,
               imageId,
-              imagePath,
+              imageLocation,
               requestedScreenType,
               attemptCount,
               w,
@@ -97,7 +103,7 @@ object PostgresOcrJobs:
               id,
               draftId,
               imageId,
-              imagePath,
+              imageLocation,
               requestedScreenType,
               d,
               attemptCount,
@@ -116,7 +122,7 @@ object PostgresOcrJobs:
               id,
               draftId,
               imageId,
-              imagePath,
+              imageLocation,
               requestedScreenType,
               detectedScreenType,
               attemptCount,
@@ -134,7 +140,7 @@ object PostgresOcrJobs:
               id,
               draftId,
               imageId,
-              imagePath,
+              imageLocation,
               requestedScreenType,
               attemptCount,
               f,
@@ -162,7 +168,7 @@ object PostgresOcrJobs:
           started_at, finished_at, duration_ms,
           created_at, updated_at
         ) VALUES (
-          ${job.id}, ${job.draftId}, ${job.imageId}, ${job.imagePath},
+          ${job.id}, ${job.draftId}, ${job.imageId}, ${job.imageLocation},
           ${job.requestedScreenType}, ${OcrJob.detectedScreenType(job)},
           ${job.status}, ${job.attemptCount}, ${OcrJob.workerId(job)},
           ${OcrJob.failure(job).map(_.code)}, ${OcrJob.failure(job).map(_.message)},

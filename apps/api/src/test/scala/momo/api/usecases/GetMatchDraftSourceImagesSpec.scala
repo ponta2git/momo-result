@@ -7,7 +7,8 @@ import java.util.zip.ZipInputStream
 import cats.effect.IO
 
 import momo.api.MomoCatsEffectSuite
-import momo.api.adapters.{InMemoryMatchDraftsRepository, LocalFsImageStore}
+import momo.api.adapters.InMemoryMatchDraftsRepository
+import momo.api.adapters.storage.local.LocalFsImageStore
 import momo.api.domain.ids.*
 import momo.api.domain.{MatchDraft, MatchDraftStatus, MatchNoInEvent, StoredImage}
 import momo.api.errors.AppError

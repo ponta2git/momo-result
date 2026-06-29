@@ -5,10 +5,10 @@ import cats.syntax.all.*
 import org.typelevel.log4cats.LoggerFactory
 
 import momo.api.config.AppConfig
+import momo.api.ports.storage.ImageOrphanCleaner
 import momo.api.repositories.{
   AppSessionsRepository,
   IdempotencyRepository,
-  ImageOrphanStore,
   ImageReferenceRepository,
   OcrJobMaintenanceRepository
 }
@@ -22,7 +22,7 @@ import momo.api.usecases.{
 private[bootstrap] object RuntimeMaintenance:
   def resource[F[_]: Async: LoggerFactory](
       config: AppConfig,
-      imageStore: ImageOrphanStore[F],
+      imageStore: ImageOrphanCleaner[F],
       imageReferences: ImageReferenceRepository[F],
       ocrMaintenance: OcrJobMaintenanceRepository[F],
       appSessions: AppSessionsRepository[F],

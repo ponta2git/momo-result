@@ -1,4 +1,4 @@
-package momo.api.adapters
+package momo.api.adapters.storage.local
 
 import java.nio.file.{Files, LinkOption, Path, StandardOpenOption}
 import java.time.Instant
@@ -9,19 +9,19 @@ import cats.effect.Sync
 import cats.effect.std.Random
 import cats.syntax.all.*
 
-import momo.api.domain.StoredImage
+import momo.api.domain.{StoredImage, StoredImageLocation}
 import momo.api.domain.ids.*
 import momo.api.errors.AppError
-import momo.api.repositories.{
+import momo.api.ports.storage.{
   ImageDiskUsage,
-  ImageOrphanStore,
+  ImageOrphanCleaner,
   ImageStorageInspector,
   ImageStorageUsage,
-  ImageStore
+  ImageStorage
 }
 
 final class LocalFsImageStore[F[_]: Sync: Random](root: Path)
-    extends ImageStore[F], ImageStorageInspector[F], ImageOrphanStore[F]:
+    extends ImageStorage[F], ImageStorageInspector[F], ImageOrphanCleaner[F]:
   import LocalFsImageStoreSupport.*
 
   private val rootDirectory: Path = root.toAbsolutePath.normalize()
@@ -39,17 +39,17 @@ final class LocalFsImageStore[F[_]: Sync: Random](root: Path)
       path = directory.resolve(s"${id.value}.${imageType.extension}").toAbsolutePath.normalize()
       _ <- Sync[F]
         .blocking(Files.write(path, bytes, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE))
-    yield StoredImage(id, path, imageType.mediaType, bytes.length.toLong)
+    yield StoredImage(id, locationFor(path), imageType.mediaType, bytes.length.toLong)
   }
 
   override def find(imageId: ImageId): F[Option[StoredImage]] = Sync[F].blocking {
     imagePaths(imageId).headOption.map { case (path, imageType) =>
-      StoredImage(imageId, path, imageType.mediaType, Files.size(path))
+      StoredImage(imageId, locationFor(path), imageType.mediaType, Files.size(path))
     }
   }
 
   override def readBytes(image: StoredImage): F[Array[Byte]] = Sync[F]
-    .blocking(Files.readAllBytes(image.path))
+    .blocking(Files.readAllBytes(pathFor(image.location)))
 
   override def delete(imageId: ImageId): F[Boolean] = Sync[F].blocking {
     imagePaths(imageId)
@@ -162,6 +162,11 @@ final class LocalFsImageStore[F[_]: Sync: Random](root: Path)
                 if contentType.exists(ct => normalizeMediaType(ct) != imageType.mediaType) =>
               Left(AppError.UnsupportedMediaType("Content-Type does not match the image bytes."))
             case Some(_) => Right(imageType)
+
+  private def locationFor(path: Path): StoredImageLocation = StoredImageLocation
+    .unsafeFromString(path.toAbsolutePath.normalize().toString)
+
+  private def pathFor(location: StoredImageLocation): Path = Path.of(location.value)
 
 object LocalFsImageStore:
   val MaxBytes: Int = LocalFsImageStoreSupport.MaxBytes

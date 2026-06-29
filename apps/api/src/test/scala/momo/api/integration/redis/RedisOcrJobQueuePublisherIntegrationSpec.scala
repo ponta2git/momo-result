@@ -1,6 +1,4 @@
 package momo.api.integration.redis
-
-import java.nio.file.Path
 import java.time.Instant
 import java.util
 import java.util.UUID
@@ -17,7 +15,7 @@ import momo.api.adapters.RedisOcrJobQueuePublisher
 import momo.api.config.RedisConfig
 import momo.api.contracts.ocrworker.OcrWorkerJobMessage
 import momo.api.domain.ids.*
-import momo.api.domain.{OcrJobHints, ScreenType}
+import momo.api.domain.{OcrJobHints, ScreenType, StoredImageLocation}
 import momo.api.ports.queue.OcrJobEnqueueRequest
 
 final class RedisOcrJobQueuePublisherIntegrationSpec extends RedisIntegrationSuite:
@@ -77,7 +75,7 @@ final class RedisOcrJobQueuePublisherIntegrationSpec extends RedisIntegrationSui
     jobId = OcrJobId.unsafeFromString(jobId),
     draftId = OcrDraftId.unsafeFromString(s"draft-$jobId"),
     imageId = ImageId.unsafeFromString(s"image-$jobId"),
-    imagePath = Path.of("/tmp/image.png"),
+    imageLocation = StoredImageLocation.unsafeFromString("/tmp/image.png"),
     requestedScreenType = ScreenType.TotalAssets,
     attempt = 1,
     enqueuedAt = Instant.parse("2026-04-29T10:00:00Z"),

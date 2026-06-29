@@ -7,13 +7,13 @@ import org.http4s.HttpApp as Http4sApp
 import org.typelevel.log4cats.LoggerFactory
 import org.typelevel.log4cats.slf4j.Slf4jFactory
 
-import momo.api.adapters.storage.local.LocalFsImageStore
 import momo.api.adapters.inmemory.*
+import momo.api.adapters.postgres.*
+import momo.api.adapters.storage.local.LocalFsImageStore
 import momo.api.auth.{CreatedSession, DiscordOAuthClient, JavaDiscordOAuthClient, MemberRoster}
 import momo.api.config.{AppConfig, ResourceLimitsConfig}
 import momo.api.db.Database
 import momo.api.domain.{LoginAccount, Member}
-import momo.api.adapters.postgres.*
 import momo.api.repositories.{
   AppSessionsRepository,
   GameTitlesRepository,

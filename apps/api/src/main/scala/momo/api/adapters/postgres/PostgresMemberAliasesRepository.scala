@@ -8,11 +8,11 @@ import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
+import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.db.Database
 import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.repositories.*
-import momo.api.adapters.postgres.PostgresMeta.given
 
 /**
  * Alias writes take a transaction-scoped advisory lock so the repository contract can keep OCR name

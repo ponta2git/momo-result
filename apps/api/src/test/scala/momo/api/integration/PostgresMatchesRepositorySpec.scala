@@ -6,12 +6,12 @@ import cats.effect.IO
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
+import momo.api.adapters.postgres.*
+import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.{MatchConfirmationResult, MatchDraftConfirmation}
-import momo.api.adapters.postgres.*
-import momo.api.adapters.postgres.PostgresMeta.given
 
 final class PostgresMatchesRepositorySpec extends IntegrationSuite:
 

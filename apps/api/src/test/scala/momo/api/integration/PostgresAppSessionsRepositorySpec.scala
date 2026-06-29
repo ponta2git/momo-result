@@ -6,10 +6,10 @@ import cats.effect.IO
 import cats.syntax.all.*
 import doobie.implicits.*
 
+import momo.api.adapters.postgres.PostgresAppSessionsRepository
 import momo.api.auth.SessionTokenHash
 import momo.api.domain.ids.{AccountId, MemberId}
 import momo.api.repositories.AppSession
-import momo.api.adapters.postgres.PostgresAppSessionsRepository
 
 final class PostgresAppSessionsRepositorySpec extends IntegrationSuite:
 

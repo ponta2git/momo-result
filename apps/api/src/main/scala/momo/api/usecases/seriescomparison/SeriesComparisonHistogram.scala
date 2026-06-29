@@ -6,8 +6,8 @@ import momo.api.domain.SeriesComparisonMatchPlayerRow
 import momo.api.domain.ids.MemberId
 import momo.api.usecases.seriescomparison.view.{
   HistogramBinView,
-  HistogramView,
-  HistogramSeriesView
+  HistogramSeriesView,
+  HistogramView
 }
 
 private[seriescomparison] object SeriesComparisonHistogram:

@@ -6,8 +6,8 @@ import cats.effect.IO
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
-import momo.api.domain.ids.ImageId
 import momo.api.adapters.postgres.PostgresImageReferenceRepository
+import momo.api.domain.ids.ImageId
 
 final class PostgresImageReferenceRepositorySpec extends IntegrationSuite:
 

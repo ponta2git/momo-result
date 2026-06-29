@@ -9,11 +9,11 @@ import doobie.implicits.*
 import doobie.postgres.implicits.*
 import doobie.postgres.sqlstate
 
+import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.db.Database
 import momo.api.domain.LoginAccount
 import momo.api.domain.ids.{AccountId, UserId}
 import momo.api.errors.{AppError, AppException}
-import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.repositories.{
   CreateLoginAccountData,
   LoginAccountAdministrationRepository,

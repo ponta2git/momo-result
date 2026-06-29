@@ -4,8 +4,8 @@ import cats.Monad
 import cats.syntax.all.*
 import io.circe.parser.parse
 
-import momo.api.domain.matchlist.MatchListProjection
 import momo.api.domain.ids.{GameTitleId, HeldEventId, SeasonMasterId}
+import momo.api.domain.matchlist.MatchListProjection
 import momo.api.domain.{
   MatchDraft,
   MatchDraftOcrSlot,

@@ -7,7 +7,6 @@ import org.typelevel.log4cats.LoggerFactory
 import org.typelevel.log4cats.noop.NoOpFactory
 
 import momo.api.MomoCatsEffectSuite
-import momo.api.adapters.storage.local.LocalFsImageStore
 import momo.api.adapters.inmemory.{
   InMemoryMatchDraftsRepository,
   InMemoryMemberAliasesRepository,
@@ -16,6 +15,7 @@ import momo.api.adapters.inmemory.{
   InMemoryOcrJobQueuePublisher,
   InMemoryOcrJobsRepository
 }
+import momo.api.adapters.storage.local.LocalFsImageStore
 import momo.api.domain.ids.{
   AccountId,
   ImageId,

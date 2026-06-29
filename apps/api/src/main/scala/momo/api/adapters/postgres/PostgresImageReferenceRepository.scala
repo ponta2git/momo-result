@@ -4,9 +4,9 @@ import cats.effect.MonadCancelThrow
 import doobie.*
 import doobie.implicits.*
 
+import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.ids.ImageId
 import momo.api.repositories.ImageReferenceRepository
-import momo.api.adapters.postgres.PostgresMeta.given
 
 final class PostgresImageReferenceRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends ImageReferenceRepository[F]:

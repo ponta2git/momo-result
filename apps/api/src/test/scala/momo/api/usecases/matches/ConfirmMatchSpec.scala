@@ -5,7 +5,6 @@ import java.time.Instant
 import cats.effect.{IO, Resource}
 
 import momo.api.MomoCatsEffectSuite
-import momo.api.adapters.storage.local.LocalFsImageStore
 import momo.api.adapters.inmemory.{
   InMemoryGameTitlesRepository,
   InMemoryHeldEventsRepository,
@@ -15,6 +14,7 @@ import momo.api.adapters.inmemory.{
   InMemoryMatchesRepository,
   InMemorySeasonMastersRepository
 }
+import momo.api.adapters.storage.local.LocalFsImageStore
 import momo.api.domain.ids.*
 import momo.api.domain.{GameTitle, MatchRecord, PlayerResult}
 import momo.api.errors.{AppError, AppException}

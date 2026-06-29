@@ -2,9 +2,9 @@ package momo.api.integration
 
 import cats.effect.IO
 
+import momo.api.adapters.postgres.PostgresHeldEventsRepository
 import momo.api.repositories.HeldEventsRepository
 import momo.api.repositories.contract.HeldEventsRepositoryContract
-import momo.api.adapters.postgres.PostgresHeldEventsRepository
 
 /**
  * Drives [[HeldEventsRepositoryContract]] against the Postgres adapter.

@@ -7,6 +7,7 @@ import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
+import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.db.Database
 import momo.api.domain.ids.*
 import momo.api.domain.{
@@ -18,7 +19,6 @@ import momo.api.domain.{
   ScreenType,
   StoredImageLocation
 }
-import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.repositories.{OcrJobsAlg, OcrJobsRepository}
 
 object PostgresOcrJobs:

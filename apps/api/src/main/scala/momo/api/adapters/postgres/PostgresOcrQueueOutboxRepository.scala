@@ -11,9 +11,9 @@ import doobie.postgres.circe.jsonb.implicits.*
 import doobie.postgres.implicits.*
 import io.circe.Json
 
+import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.contracts.ocrworker.OcrWorkerJobMessage
 import momo.api.domain.ids.OcrJobId
-import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.repositories.{
   OcrQueueBacklogSnapshot,
   OcrQueueOutboxDraft,

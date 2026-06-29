@@ -6,8 +6,8 @@ import cats.effect.IO
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
-import momo.api.domain.ids.{OcrDraftId, OcrJobId}
 import momo.api.adapters.postgres.PostgresOcrJobsRepository
+import momo.api.domain.ids.{OcrDraftId, OcrJobId}
 
 final class PostgresOcrJobsRepositorySpec extends IntegrationSuite:
 

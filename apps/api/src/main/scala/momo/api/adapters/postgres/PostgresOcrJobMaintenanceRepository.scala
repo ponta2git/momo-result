@@ -7,9 +7,9 @@ import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
+import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.{FailureCode, MatchDraftStatus, OcrJobStatus}
 import momo.api.repositories.OcrJobMaintenanceRepository
-import momo.api.adapters.postgres.PostgresMeta.given
 
 final class PostgresOcrJobMaintenanceRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends OcrJobMaintenanceRepository[F]:

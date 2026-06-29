@@ -11,11 +11,11 @@ import doobie.implicits.*
 import doobie.postgres.implicits.*
 import doobie.postgres.sqlstate
 
+import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.db.Database
 import momo.api.domain.ids.HeldEventId
 import momo.api.domain.{HeldEvent, MatchDraftStatus, PageRequest, PagedResult}
 import momo.api.errors.{AppError, AppException}
-import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.repositories.{
   HeldEventDeletionAlg,
   HeldEventDeletionRepository,

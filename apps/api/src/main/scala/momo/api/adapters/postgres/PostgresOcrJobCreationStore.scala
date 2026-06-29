@@ -7,10 +7,10 @@ import cats.syntax.all.*
 import doobie.*
 import doobie.implicits.*
 
+import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.{MatchDraftStatus, OcrJobStatus, ScreenType}
 import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.OcrJobCreationStore.OcrJobCreationRejection
-import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.repositories.{
   MatchDraftAttachmentResult,
   OcrJobCreationPlan,

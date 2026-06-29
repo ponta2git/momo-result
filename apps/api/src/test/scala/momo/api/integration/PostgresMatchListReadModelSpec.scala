@@ -4,10 +4,10 @@ import java.time.Instant
 
 import cats.effect.IO
 
+import momo.api.adapters.postgres.*
 import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.repositories.MatchListReadModel
-import momo.api.adapters.postgres.*
 
 final class PostgresMatchListReadModelSpec extends IntegrationSuite:
 

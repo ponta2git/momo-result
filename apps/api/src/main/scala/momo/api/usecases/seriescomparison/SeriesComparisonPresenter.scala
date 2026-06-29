@@ -6,8 +6,8 @@ import momo.api.domain.{SeriesComparisonMatchPlayerRow, SeriesComparisonResolved
 import momo.api.usecases.seriescomparison.engine.SeriesComparisonEngine
 import momo.api.usecases.seriescomparison.view.{
   SeriesComparisonDrilldownView,
-  SeriesComparisonView,
-  SeriesComparisonReviewView
+  SeriesComparisonReviewView,
+  SeriesComparisonView
 }
 
 private[usecases] object SeriesComparisonPresenter:

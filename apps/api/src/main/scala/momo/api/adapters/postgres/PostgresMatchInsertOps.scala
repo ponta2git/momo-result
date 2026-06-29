@@ -8,9 +8,9 @@ import doobie.implicits.*
 import doobie.postgres.implicits.*
 import doobie.util.update.Update
 
+import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.MatchRecord
 import momo.api.domain.ids.*
-import momo.api.adapters.postgres.PostgresMeta.given
 
 /**
  * Shared cascade INSERT into `matches` + `match_players` (4 rows) + `match_incidents` (≤24 rows)

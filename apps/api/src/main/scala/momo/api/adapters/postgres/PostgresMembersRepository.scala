@@ -7,10 +7,10 @@ import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
+import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.db.Database
 import momo.api.domain.Member
 import momo.api.domain.ids.{MemberId, UserId}
-import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.repositories.{MembersAlg, MembersRepository}
 
 object PostgresMembers:

@@ -10,9 +10,10 @@ import doobie.implicits.*
 import doobie.postgres.implicits.*
 import doobie.util.fragments
 
+import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.db.Database
-import momo.api.domain.matchlist.MatchListProjection
 import momo.api.domain.ids.*
+import momo.api.domain.matchlist.MatchListProjection
 import momo.api.domain.{
   MatchDraftStatus,
   MatchListItem,
@@ -26,7 +27,6 @@ import momo.api.domain.{
   PlayOrder,
   Rank
 }
-import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.repositories.{MatchListAlg, MatchListReadModel}
 
 /**

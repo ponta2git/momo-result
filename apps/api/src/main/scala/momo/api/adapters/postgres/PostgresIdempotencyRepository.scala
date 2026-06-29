@@ -14,9 +14,9 @@ import doobie.postgres.sqlstate
 import io.circe.Json
 import io.circe.syntax.*
 
+import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.db.Database
 import momo.api.domain.ids.AccountId
-import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.repositories.{
   IdempotencyAlg,
   IdempotencyRecord,

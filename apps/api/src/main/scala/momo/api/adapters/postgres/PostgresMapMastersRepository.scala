@@ -8,12 +8,12 @@ import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
+import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.db.Database
 import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.errors.AppError
 import momo.api.repositories.*
-import momo.api.adapters.postgres.PostgresMeta.given
 
 object PostgresMapMasters:
   private final case class MapMasterRow(

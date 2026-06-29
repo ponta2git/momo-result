@@ -13,11 +13,11 @@ import doobie.implicits.*
 import doobie.postgres.implicits.*
 import doobie.postgres.sqlstate
 
+import momo.api.adapters.postgres.PostgresMatchInsertOps.insertMatchCascade
+import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.ids.*
 import momo.api.domain.{MatchDraftStatus, MatchRecord}
 import momo.api.errors.{AppError, AppException}
-import momo.api.adapters.postgres.PostgresMatchInsertOps.insertMatchCascade
-import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.repositories.{
   MatchConfirmationRepository,
   MatchConfirmationResult,

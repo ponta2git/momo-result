@@ -6,9 +6,9 @@ import doobie.enumerated.SqlState
 import doobie.implicits.*
 import doobie.postgres.sqlstate
 
+import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.MatchDraftStatus
 import momo.api.errors.{AppError, AppException}
-import momo.api.adapters.postgres.PostgresMeta.given
 
 private[postgres] val RestrictViolationSqlState = "23001"
 

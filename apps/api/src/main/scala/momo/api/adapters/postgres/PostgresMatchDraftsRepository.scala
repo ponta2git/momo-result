@@ -11,10 +11,10 @@ import doobie.postgres.implicits.*
 import doobie.postgres.sqlstate
 import doobie.util.fragments
 
+import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.ids.*
 import momo.api.domain.{MatchDraft, MatchDraftStatus, MatchNoInEvent, ScreenType}
 import momo.api.errors.{AppError, AppException}
-import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.repositories.*
 
 /**

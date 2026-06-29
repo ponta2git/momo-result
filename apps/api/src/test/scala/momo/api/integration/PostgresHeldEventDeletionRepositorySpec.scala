@@ -7,14 +7,14 @@ import cats.syntax.all.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
-import momo.api.domain.HeldEvent
-import momo.api.domain.ids.HeldEventId
-import momo.api.repositories.HeldEventDeletionResult
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.adapters.postgres.{
   PostgresHeldEventDeletionRepository,
   PostgresHeldEventsRepository
 }
+import momo.api.domain.HeldEvent
+import momo.api.domain.ids.HeldEventId
+import momo.api.repositories.HeldEventDeletionResult
 
 final class PostgresHeldEventDeletionRepositorySpec extends IntegrationSuite:
   private val now = Instant.parse("2026-05-15T03:00:00Z")

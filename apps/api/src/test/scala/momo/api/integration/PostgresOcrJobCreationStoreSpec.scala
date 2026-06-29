@@ -6,11 +6,11 @@ import doobie.implicits.*
 import doobie.postgres.circe.jsonb.implicits.*
 import io.circe.Json
 
+import momo.api.adapters.postgres.PostgresOcrJobCreationStore
 import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.ports.queue.OcrJobEnqueueRequest
 import momo.api.repositories.OcrJobCreationStore.OcrJobCreationRejection
-import momo.api.adapters.postgres.PostgresOcrJobCreationStore
 import momo.api.repositories.{
   OcrJobCreationPlan,
   OcrJobCreationStore,

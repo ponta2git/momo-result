@@ -2,9 +2,9 @@ package momo.api.integration
 
 import cats.effect.IO
 
+import momo.api.adapters.postgres.PostgresIdempotencyRepository
 import momo.api.repositories.IdempotencyRepository
 import momo.api.repositories.contract.IdempotencyRepositoryContract
-import momo.api.adapters.postgres.PostgresIdempotencyRepository
 
 /**
  * Drives [[IdempotencyRepositoryContract]] against the Postgres adapter.

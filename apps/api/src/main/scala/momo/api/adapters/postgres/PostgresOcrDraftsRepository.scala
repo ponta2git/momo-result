@@ -10,10 +10,10 @@ import doobie.postgres.circe.jsonb.implicits.*
 import doobie.postgres.implicits.*
 import io.circe.{parser, Json}
 
+import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.db.Database
 import momo.api.domain.ids.*
 import momo.api.domain.{OcrDraft, ScreenType}
-import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.repositories.{OcrDraftsAlg, OcrDraftsRepository}
 
 object PostgresOcrDrafts:

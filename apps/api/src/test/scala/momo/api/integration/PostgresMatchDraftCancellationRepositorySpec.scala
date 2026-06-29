@@ -6,10 +6,10 @@ import cats.effect.IO
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
+import momo.api.adapters.postgres.PostgresMatchDraftCancellationRepository
 import momo.api.domain.MatchDraftStatus
 import momo.api.domain.ids.{ImageId, MatchDraftId}
 import momo.api.repositories.MatchDraftCancellationResult
-import momo.api.adapters.postgres.PostgresMatchDraftCancellationRepository
 
 final class PostgresMatchDraftCancellationRepositorySpec extends IntegrationSuite:
 

@@ -7,10 +7,10 @@ import cats.syntax.all.*
 import doobie.*
 import doobie.implicits.*
 
+import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.db.Database
 import momo.api.domain.MatchDraftStatus
 import momo.api.domain.ids.*
-import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.repositories.{MatchDraftCancellationRepository, MatchDraftCancellationResult}
 
 object PostgresMatchDraftCancellation:

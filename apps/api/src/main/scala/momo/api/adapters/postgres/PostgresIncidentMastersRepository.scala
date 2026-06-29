@@ -7,11 +7,11 @@ import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
+import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.db.Database
 import momo.api.domain.*
 import momo.api.domain.ids.IncidentMasterId
 import momo.api.repositories.*
-import momo.api.adapters.postgres.PostgresMeta.given
 
 object PostgresIncidentMasters:
   private final case class IncidentMasterRow(

@@ -6,12 +6,12 @@ import doobie.implicits.*
 import doobie.postgres.circe.jsonb.implicits.*
 import doobie.postgres.implicits.*
 
+import momo.api.adapters.postgres.PostgresMeta.given
+import momo.api.adapters.postgres.PostgresOcrQueueOutboxRepository
 import momo.api.contracts.ocrworker.OcrWorkerJobMessage
 import momo.api.domain.ids.*
 import momo.api.domain.{OcrJobHints, ScreenType, StoredImageLocation}
 import momo.api.repositories.OcrQueueOutboxStatus
-import momo.api.adapters.postgres.PostgresMeta.given
-import momo.api.adapters.postgres.PostgresOcrQueueOutboxRepository
 
 final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
 

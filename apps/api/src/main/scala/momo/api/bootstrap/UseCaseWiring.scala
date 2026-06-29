@@ -98,14 +98,13 @@ private[bootstrap] object UseCaseWiring:
   private def exportMatchLimits(limits: ResourceLimitsConfig): ExportMatches.Limits = ExportMatches
     .Limits(maxRows = limits.exportMaxRows, maxBytes = limits.exportMaxBytes)
 
-  def assemble[F[_]: Async: SecureRandom: LoggerFactory](
-      config: AppConfig,
+  final case class RuntimeStorage[F[_]](
       imageStorage: ImageStorage[F],
       imageStorageInspector: ImageStorageInspector[F],
+  )
+
+  final case class RuntimeRepositories[F[_]](
       imageReferences: ImageReferenceRepository[F],
-      healthDetails: F[HealthDetailsResponse],
-      ocrQueueSubmitter: OcrJobQueueSubmitter[F],
-      ocrAdmissionGuard: OcrAdmissionGuard[F],
       ocrJobCreation: OcrJobCreationRepository[F],
       jobs: OcrJobsRepository[F],
       drafts: OcrDraftsRepository[F],
@@ -127,12 +126,57 @@ private[bootstrap] object UseCaseWiring:
       incidentMasters: IncidentMastersRepository[F],
       memberAliases: MemberAliasesRepository[F],
       idempotency: IdempotencyRepository[F],
+  )
+
+  final case class RuntimeServices[F[_]](
+      healthDetails: F[HealthDetailsResponse],
+      ocrQueueSubmitter: OcrJobQueueSubmitter[F],
+      ocrAdmissionGuard: OcrAdmissionGuard[F],
       oauthClient: DiscordOAuthClient[F],
       loginRateLimiter: RateLimiter[F],
       authCallbackStateRateLimiter: RateLimiter[F],
       oauthProviderBackoff: OAuthProviderBackoff[F],
       rateLimiters: HttpRateLimiters[F],
+  )
+
+  def assemble[F[_]: Async: SecureRandom: LoggerFactory](
+      config: AppConfig,
+      storage: RuntimeStorage[F],
+      repositories: RuntimeRepositories[F],
+      services: RuntimeServices[F],
   ): F[ApiApp.Runtime[F]] =
+    val imageStorage = storage.imageStorage
+    val imageStorageInspector = storage.imageStorageInspector
+    val imageReferences = repositories.imageReferences
+    val ocrJobCreation = repositories.ocrJobCreation
+    val jobs = repositories.jobs
+    val drafts = repositories.drafts
+    val heldEvents = repositories.heldEvents
+    val heldEventDeletion = repositories.heldEventDeletion
+    val matches = repositories.matches
+    val matchDrafts = repositories.matchDrafts
+    val matchDraftCancellation = repositories.matchDraftCancellation
+    val matchList = repositories.matchList
+    val seriesComparison = repositories.seriesComparison
+    val matchConfirmation = repositories.matchConfirmation
+    val appSessions = repositories.appSessions
+    val members = repositories.members
+    val loginAccounts = repositories.loginAccounts
+    val loginAccountAdministration = repositories.loginAccountAdministration
+    val gameTitles = repositories.gameTitles
+    val mapMasters = repositories.mapMasters
+    val seasonMasters = repositories.seasonMasters
+    val incidentMasters = repositories.incidentMasters
+    val memberAliases = repositories.memberAliases
+    val idempotency = repositories.idempotency
+    val healthDetails = services.healthDetails
+    val ocrQueueSubmitter = services.ocrQueueSubmitter
+    val ocrAdmissionGuard = services.ocrAdmissionGuard
+    val oauthClient = services.oauthClient
+    val loginRateLimiter = services.loginRateLimiter
+    val authCallbackStateRateLimiter = services.authCallbackStateRateLimiter
+    val oauthProviderBackoff = services.oauthProviderBackoff
+    val rateLimiters = services.rateLimiters
     val clock = RuntimeClock.live[F]
     val ids = RuntimeIds.fresh[F]
     val authServices = RuntimeAuthServices.from[F](appSessions, loginAccounts, config.auth, clock)
@@ -246,57 +290,69 @@ private[bootstrap] object UseCaseWiring:
     val createLoginAccount =
       CreateLoginAccount[F](loginAccounts, members, clock.now, ids.nextLoginAccountId)
     val updateLoginAccount = UpdateLoginAccount[F](loginAccountAdministration, members, clock.now)
+    val uploadUseCases = HttpRoutes.UploadUseCases(uploadImage)
+    val ocrUseCases = HttpRoutes.OcrUseCases(
+      createOcrJob = createOcrJob,
+      getOcrJob = getOcrJob,
+      getOcrDraft = getOcrDraft,
+      getOcrDraftsBulk = getOcrDraftsBulk,
+      cancelOcrJob = cancelOcrJob,
+    )
+    val heldEventUseCases = HttpRoutes.HeldEventUseCases(
+      listHeldEvents = listHeldEvents,
+      createHeldEvent = createHeldEvent,
+      deleteHeldEvent = deleteHeldEvent,
+    )
+    val matchDraftUseCases = HttpRoutes.MatchDraftUseCases(
+      createMatchDraft = createMatchDraft,
+      getMatchDraft = getMatchDraft,
+      updateMatchDraft = updateMatchDraft,
+      cancelMatchDraft = cancelMatchDraft,
+      getMatchDraftSourceImages = getMatchDraftSourceImages,
+    )
+    val matchUseCases = HttpRoutes.MatchUseCases(
+      confirmMatch = confirmMatch,
+      listMatches = listMatches,
+      getMatch = getMatch,
+      updateMatch = updateMatch,
+      deleteMatch = deleteMatch,
+    )
+    val analyticsUseCases = HttpRoutes.AnalyticsUseCases(
+      getSeriesComparisonOptions = getSeriesComparisonOptions,
+      getSeriesComparison = getSeriesComparison,
+      getSeriesComparisonReview = getSeriesComparisonReview,
+      getSeriesComparisonDrilldown = getSeriesComparisonDrilldown,
+    )
+    val masterUseCases = HttpRoutes.MasterUseCases(
+      listGameTitles = listGameTitles,
+      listMapMasters = listMapMasters,
+      listSeasonMasters = listSeasonMasters,
+      listIncidentMasters = listIncidentMasters,
+      createGameTitle = createGameTitle,
+      createMapMaster = createMapMaster,
+      createSeasonMaster = createSeasonMaster,
+      updateGameTitle = updateGameTitle,
+      updateMapMaster = updateMapMaster,
+      updateSeasonMaster = updateSeasonMaster,
+      deleteGameTitle = deleteGameTitle,
+      deleteMapMaster = deleteMapMaster,
+      deleteSeasonMaster = deleteSeasonMaster,
+      listMemberAliases = listMemberAliases,
+      createMemberAlias = createMemberAlias,
+      updateMemberAlias = updateMemberAlias,
+      deleteMemberAlias = deleteMemberAlias,
+    )
+    val adminAccountUseCases = HttpRoutes.AdminAccountUseCases(
+      listLoginAccounts = listLoginAccounts,
+      createLoginAccount = createLoginAccount,
+      updateLoginAccount = updateLoginAccount,
+    )
 
     MemberRoster.devFromMemberIds(config.devMemberIds).leftMap(new IllegalArgumentException(_))
       .liftTo[F].map { roster =>
-        val app = HttpRoutes.routes(HttpRoutes.Dependencies(
-          config = config,
+        val authDependencies = HttpRoutes.AuthDependencies(
           roster = roster,
-          uploadImage = uploadImage,
-          createOcrJob = createOcrJob,
-          getOcrJob = getOcrJob,
-          getOcrDraft = getOcrDraft,
-          getOcrDraftsBulk = getOcrDraftsBulk,
-          cancelOcrJob = cancelOcrJob,
-          listHeldEvents = listHeldEvents,
-          createHeldEvent = createHeldEvent,
-          deleteHeldEvent = deleteHeldEvent,
-          createMatchDraft = createMatchDraft,
-          getMatchDraft = getMatchDraft,
-          updateMatchDraft = updateMatchDraft,
-          cancelMatchDraft = cancelMatchDraft,
-          getMatchDraftSourceImages = getMatchDraftSourceImages,
-          confirmMatch = confirmMatch,
-          exportMatches = exportMatches,
-          getSeriesComparisonOptions = getSeriesComparisonOptions,
-          getSeriesComparison = getSeriesComparison,
-          getSeriesComparisonReview = getSeriesComparisonReview,
-          getSeriesComparisonDrilldown = getSeriesComparisonDrilldown,
-          listMatches = listMatches,
-          getMatch = getMatch,
-          updateMatch = updateMatch,
-          deleteMatch = deleteMatch,
           loginAccounts = loginAccounts,
-          listLoginAccounts = listLoginAccounts,
-          createLoginAccount = createLoginAccount,
-          updateLoginAccount = updateLoginAccount,
-          listGameTitles = listGameTitles,
-          listMapMasters = listMapMasters,
-          listSeasonMasters = listSeasonMasters,
-          listIncidentMasters = listIncidentMasters,
-          createGameTitle = createGameTitle,
-          createMapMaster = createMapMaster,
-          createSeasonMaster = createSeasonMaster,
-          updateGameTitle = updateGameTitle,
-          updateMapMaster = updateMapMaster,
-          updateSeasonMaster = updateSeasonMaster,
-          deleteGameTitle = deleteGameTitle,
-          deleteMapMaster = deleteMapMaster,
-          deleteSeasonMaster = deleteSeasonMaster,
-          listMemberAliases = listMemberAliases,
-          createMemberAlias = createMemberAlias,
-          updateMemberAlias = updateMemberAlias,
-          deleteMemberAlias = deleteMemberAlias,
           oauthClient = oauthClient,
           sessionService = authServices.sessionService,
           csrfTokenService = authServices.csrfTokenService,
@@ -304,6 +360,19 @@ private[bootstrap] object UseCaseWiring:
           loginRateLimiter = loginRateLimiter,
           authCallbackStateRateLimiter = authCallbackStateRateLimiter,
           oauthProviderBackoff = oauthProviderBackoff,
+        )
+        val app = HttpRoutes.routes(HttpRoutes.Dependencies(
+          config = config,
+          auth = authDependencies,
+          upload = uploadUseCases,
+          ocr = ocrUseCases,
+          heldEvents = heldEventUseCases,
+          matchDrafts = matchDraftUseCases,
+          matches = matchUseCases,
+          exportMatches = exportMatches,
+          analytics = analyticsUseCases,
+          masters = masterUseCases,
+          adminAccounts = adminAccountUseCases,
           rateLimiters = rateLimiters,
           idempotency = idempotency,
           healthDetails = healthDetails,

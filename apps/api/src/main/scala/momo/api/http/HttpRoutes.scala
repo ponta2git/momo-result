@@ -42,37 +42,58 @@ import momo.api.usecases.ocr.*
 import momo.api.usecases.seriescomparison.*
 
 object HttpRoutes:
-  final case class Dependencies[F[_]](
-      config: AppConfig,
+  final case class AuthDependencies[F[_]](
       roster: MemberRoster,
-      uploadImage: UploadImage[F],
+      loginAccounts: LoginAccountsRepository[F],
+      oauthClient: DiscordOAuthClient[F],
+      sessionService: SessionService[F],
+      csrfTokenService: CsrfTokenService,
+      oauthStateCodec: OAuthStateCodec[F],
+      loginRateLimiter: RateLimiter[F],
+      authCallbackStateRateLimiter: RateLimiter[F],
+      oauthProviderBackoff: OAuthProviderBackoff[F],
+  )
+
+  final case class UploadUseCases[F[_]](uploadImage: UploadImage[F])
+
+  final case class OcrUseCases[F[_]](
       createOcrJob: CreateOcrJob[F],
       getOcrJob: GetOcrJob[F],
       getOcrDraft: GetOcrDraft[F],
       getOcrDraftsBulk: GetOcrDraftsBulk[F],
       cancelOcrJob: CancelOcrJob[F],
+  )
+
+  final case class HeldEventUseCases[F[_]](
       listHeldEvents: ListHeldEvents[F],
       createHeldEvent: CreateHeldEvent[F],
       deleteHeldEvent: DeleteHeldEvent[F],
+  )
+
+  final case class MatchDraftUseCases[F[_]](
       createMatchDraft: CreateMatchDraft[F],
       getMatchDraft: GetMatchDraft[F],
       updateMatchDraft: UpdateMatchDraft[F],
       cancelMatchDraft: CancelMatchDraft[F],
       getMatchDraftSourceImages: GetMatchDraftSourceImages[F],
+  )
+
+  final case class MatchUseCases[F[_]](
       confirmMatch: ConfirmMatch[F],
-      exportMatches: ExportMatches[F],
-      getSeriesComparisonOptions: GetSeriesComparisonOptions[F],
-      getSeriesComparison: GetSeriesComparison[F],
-      getSeriesComparisonReview: GetSeriesComparisonReview[F],
-      getSeriesComparisonDrilldown: GetSeriesComparisonDrilldown[F],
       listMatches: ListMatches[F],
       getMatch: GetMatch[F],
       updateMatch: UpdateMatch[F],
       deleteMatch: DeleteMatch[F],
-      loginAccounts: LoginAccountsRepository[F],
-      listLoginAccounts: ListLoginAccounts[F],
-      createLoginAccount: CreateLoginAccount[F],
-      updateLoginAccount: UpdateLoginAccount[F],
+  )
+
+  final case class AnalyticsUseCases[F[_]](
+      getSeriesComparisonOptions: GetSeriesComparisonOptions[F],
+      getSeriesComparison: GetSeriesComparison[F],
+      getSeriesComparisonReview: GetSeriesComparisonReview[F],
+      getSeriesComparisonDrilldown: GetSeriesComparisonDrilldown[F],
+  )
+
+  final case class MasterUseCases[F[_]](
       listGameTitles: ListGameTitles[F],
       listMapMasters: ListMapMasters[F],
       listSeasonMasters: ListSeasonMasters[F],
@@ -90,13 +111,26 @@ object HttpRoutes:
       createMemberAlias: CreateMemberAlias[F],
       updateMemberAlias: UpdateMemberAlias[F],
       deleteMemberAlias: DeleteMemberAlias[F],
-      oauthClient: DiscordOAuthClient[F],
-      sessionService: SessionService[F],
-      csrfTokenService: CsrfTokenService,
-      oauthStateCodec: OAuthStateCodec[F],
-      loginRateLimiter: RateLimiter[F],
-      authCallbackStateRateLimiter: RateLimiter[F],
-      oauthProviderBackoff: OAuthProviderBackoff[F],
+  )
+
+  final case class AdminAccountUseCases[F[_]](
+      listLoginAccounts: ListLoginAccounts[F],
+      createLoginAccount: CreateLoginAccount[F],
+      updateLoginAccount: UpdateLoginAccount[F],
+  )
+
+  final case class Dependencies[F[_]](
+      config: AppConfig,
+      auth: AuthDependencies[F],
+      upload: UploadUseCases[F],
+      ocr: OcrUseCases[F],
+      heldEvents: HeldEventUseCases[F],
+      matchDrafts: MatchDraftUseCases[F],
+      matches: MatchUseCases[F],
+      exportMatches: ExportMatches[F],
+      analytics: AnalyticsUseCases[F],
+      masters: MasterUseCases[F],
+      adminAccounts: AdminAccountUseCases[F],
       rateLimiters: HttpRateLimiters[F],
       idempotency: IdempotencyRepository[F],
       healthDetails: F[momo.api.endpoints.HealthEndpoints.HealthDetailsResponse],
@@ -104,7 +138,8 @@ object HttpRoutes:
   )
 
   def routes[F[_]: Async](deps: Dependencies[F]): Http4sApp[F] =
-    val security = EndpointSecurity[F](AuthPolicy[F](deps.config, deps.roster, deps.loginAccounts))
+    val security =
+      EndpointSecurity[F](AuthPolicy[F](deps.config, deps.auth.roster, deps.auth.loginAccounts))
     val idempotencyGuard = IdempotencyReplay.Guard(
       repository = deps.idempotency,
       mutationRateLimiter = deps.rateLimiters.mutation,
@@ -112,13 +147,13 @@ object HttpRoutes:
     )
 
     val endpoints: List[ServerEndpoint[Any, F]] = HealthModule.routes[F](deps.healthDetails) :::
-      UploadModule.routes[F](deps.uploadImage, deps.rateLimiters.upload, security) :::
+      UploadModule.routes[F](deps.upload.uploadImage, deps.rateLimiters.upload, security) :::
       OcrModule.routes[F](
-        deps.createOcrJob,
-        deps.getOcrJob,
-        deps.cancelOcrJob,
-        deps.getOcrDraft,
-        deps.getOcrDraftsBulk,
+        deps.ocr.createOcrJob,
+        deps.ocr.getOcrJob,
+        deps.ocr.cancelOcrJob,
+        deps.ocr.getOcrDraft,
+        deps.ocr.getOcrDraftsBulk,
         deps.rateLimiters.ocrJobCreate,
         deps.rateLimiters.ocrJobCreateGlobal,
         deps.rateLimiters.readApi,
@@ -126,18 +161,18 @@ object HttpRoutes:
         deps.nowF,
         security,
       ) ::: HeldEventModule.routes[F](
-        deps.listHeldEvents,
-        deps.createHeldEvent,
-        deps.deleteHeldEvent,
+        deps.heldEvents.listHeldEvents,
+        deps.heldEvents.createHeldEvent,
+        deps.heldEvents.deleteHeldEvent,
         idempotencyGuard,
         deps.nowF,
         security,
       ) ::: MatchDraftModule.routes[F](
-        deps.createMatchDraft,
-        deps.getMatchDraft,
-        deps.updateMatchDraft,
-        deps.cancelMatchDraft,
-        deps.getMatchDraftSourceImages,
+        deps.matchDrafts.createMatchDraft,
+        deps.matchDrafts.getMatchDraft,
+        deps.matchDrafts.updateMatchDraft,
+        deps.matchDrafts.cancelMatchDraft,
+        deps.matchDrafts.getMatchDraftSourceImages,
         deps.rateLimiters.sourceImageDownload,
         idempotencyGuard,
         deps.nowF,
@@ -148,47 +183,47 @@ object HttpRoutes:
         deps.rateLimiters.matchExportAll,
         security,
       ) ::: MatchModule.routes[F](
-        deps.confirmMatch,
-        deps.listMatches,
-        deps.getMatch,
-        deps.updateMatch,
-        deps.deleteMatch,
+        deps.matches.confirmMatch,
+        deps.matches.listMatches,
+        deps.matches.getMatch,
+        deps.matches.updateMatch,
+        deps.matches.deleteMatch,
         deps.rateLimiters.readApi,
         idempotencyGuard,
         deps.nowF,
         security,
       ) ::: AnalyticsModule.routes[F](
-        deps.getSeriesComparisonOptions,
-        deps.getSeriesComparison,
-        deps.getSeriesComparisonReview,
-        deps.getSeriesComparisonDrilldown,
+        deps.analytics.getSeriesComparisonOptions,
+        deps.analytics.getSeriesComparison,
+        deps.analytics.getSeriesComparisonReview,
+        deps.analytics.getSeriesComparisonDrilldown,
         deps.rateLimiters.readApi,
         security,
       ) ::: MasterModule.routes[F](
-        deps.listGameTitles,
-        deps.listMapMasters,
-        deps.listSeasonMasters,
-        deps.listIncidentMasters,
-        deps.createGameTitle,
-        deps.createMapMaster,
-        deps.createSeasonMaster,
-        deps.updateGameTitle,
-        deps.updateMapMaster,
-        deps.updateSeasonMaster,
-        deps.deleteGameTitle,
-        deps.deleteMapMaster,
-        deps.deleteSeasonMaster,
-        deps.listMemberAliases,
-        deps.createMemberAlias,
-        deps.updateMemberAlias,
-        deps.deleteMemberAlias,
+        deps.masters.listGameTitles,
+        deps.masters.listMapMasters,
+        deps.masters.listSeasonMasters,
+        deps.masters.listIncidentMasters,
+        deps.masters.createGameTitle,
+        deps.masters.createMapMaster,
+        deps.masters.createSeasonMaster,
+        deps.masters.updateGameTitle,
+        deps.masters.updateMapMaster,
+        deps.masters.updateSeasonMaster,
+        deps.masters.deleteGameTitle,
+        deps.masters.deleteMapMaster,
+        deps.masters.deleteSeasonMaster,
+        deps.masters.listMemberAliases,
+        deps.masters.createMemberAlias,
+        deps.masters.updateMemberAlias,
+        deps.masters.deleteMemberAlias,
         idempotencyGuard,
         deps.nowF,
         security,
       ) ::: AdminAccountModule.routes[F](
-        deps.listLoginAccounts,
-        deps.createLoginAccount,
-        deps.updateLoginAccount,
+        deps.adminAccounts.listLoginAccounts,
+        deps.adminAccounts.createLoginAccount,
+        deps.adminAccounts.updateLoginAccount,
         idempotencyGuard,
         deps.nowF,
         security,
@@ -198,20 +233,24 @@ object HttpRoutes:
     val tapirRoutes = interpreter.toRoutes(endpoints)
 
     val protectedRoutes =
-      ProductionSessionMiddleware[F](deps.config, deps.sessionService, deps.csrfTokenService)(
+      ProductionSessionMiddleware[F](
+        deps.config,
+        deps.auth.sessionService,
+        deps.auth.csrfTokenService,
+      )(
         tapirRoutes.orNotFound
       )
 
     val authRoutes = interpreter.toRoutes(AuthModule.routes[F](
       config = deps.config,
-      oauth = deps.oauthClient,
-      stateCodec = deps.oauthStateCodec,
-      sessions = deps.sessionService,
-      csrf = deps.csrfTokenService,
-      accounts = deps.loginAccounts,
-      rateLimiter = deps.loginRateLimiter,
-      callbackStateRateLimiter = deps.authCallbackStateRateLimiter,
-      providerBackoff = deps.oauthProviderBackoff,
+      oauth = deps.auth.oauthClient,
+      stateCodec = deps.auth.oauthStateCodec,
+      sessions = deps.auth.sessionService,
+      csrf = deps.auth.csrfTokenService,
+      accounts = deps.auth.loginAccounts,
+      rateLimiter = deps.auth.loginRateLimiter,
+      callbackStateRateLimiter = deps.auth.authCallbackStateRateLimiter,
+      providerBackoff = deps.auth.oauthProviderBackoff,
     ))
 
     RequestIdMiddleware[F](SecurityHeadersMiddleware[F](deps.config.appEnv)(HttpErrorMiddleware[F](

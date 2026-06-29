@@ -112,7 +112,7 @@ final class ApiTestArchitectureSpec extends FunSuite:
 
   test("stateful API test doubles live in typed test support"):
     val forbiddenInlineDoubles = List(
-      "new QueueProducer[IO]",
+      "new OcrJobQueuePublisher[IO]",
       "new OcrQueueOutboxRepository[IO]",
       "new OcrJobsRepository[IO]",
       "new ImageStore[IO]",

@@ -34,7 +34,9 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
 
     assert(runtimeInfrastructureText.contains("Redis[F].simple(redis.url, RedisCodec.Utf8).map"))
     assert(
-      runtimeInfrastructureText.contains("RedisQueueProducer.fromCommands(redis.stream, commands)")
+      runtimeInfrastructureText.contains(
+        "RedisOcrJobQueuePublisher.fromCommands(redis.stream, commands)"
+      )
     )
     assert(runtimeInfrastructureText.contains("healthProbeFromCommands(redis.deadLetterStream"))
     assert(runtimeInfrastructureText.contains(".fromCommands(commands, \"login\""))
@@ -42,7 +44,7 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
     assert(runtimeInfrastructureText.contains("RedisOAuthProviderBackoff.fromCommands"))
     assert(runtimeInfrastructureText.contains("\"ocr-job-create\""))
     assert(runtimeInfrastructureText.contains("\"ocr-job-create-global\""))
-    assert(!runtimeInfrastructureText.contains("RedisQueueProducer.resource[F](redis)"))
+    assert(!runtimeInfrastructureText.contains("RedisOcrJobQueuePublisher.resource[F](redis)"))
     assert(!runtimeInfrastructureText.contains("RedisRateLimiter.resource[F](redis"))
     assert(!runtimeInfrastructureText.contains("RedisOAuthProviderBackoff.resource[F](redis"))
 

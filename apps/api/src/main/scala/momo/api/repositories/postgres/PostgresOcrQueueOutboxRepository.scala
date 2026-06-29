@@ -11,6 +11,7 @@ import doobie.postgres.circe.jsonb.implicits.*
 import doobie.postgres.implicits.*
 import io.circe.Json
 
+import momo.api.contracts.ocrworker.OcrWorkerJobMessage
 import momo.api.domain.ids.OcrJobId
 import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.repositories.{
@@ -18,8 +19,7 @@ import momo.api.repositories.{
   OcrQueueOutboxDraft,
   OcrQueueOutboxRecord,
   OcrQueueOutboxRepository,
-  OcrQueueOutboxStatus,
-  OcrQueuePayload
+  OcrQueueOutboxStatus
 }
 
 object PostgresOcrQueueOutbox:
@@ -27,7 +27,9 @@ object PostgresOcrQueueOutbox:
   type Row = (String, OcrJobId, Json, Int, Instant)
 
   def insertIntent(draft: OcrQueueOutboxDraft): ConnectionIO[Unit] =
-    val payloadJson = OcrQueuePayload.fieldsAsJson(draft.payload)
+    val payloadJson = OcrWorkerJobMessage.fieldsAsJson(
+      OcrWorkerJobMessage.fromEnqueueRequest(draft.enqueueRequest)
+    )
     sql"""
       INSERT INTO ocr_queue_outbox (
         id, job_id, dedupe_key, stream_payload,
@@ -42,8 +44,9 @@ object PostgresOcrQueueOutbox:
 
   def toRecord(row: Row): ConnectionIO[OcrQueueOutboxRecord] =
     val (id, jobId, payloadJson, attemptCount, claimExpiresAt) = row
-    OcrQueuePayload.fromJson(payloadJson) match
-      case Right(payload) => OcrQueueOutboxRecord(id, jobId, payload, attemptCount, claimExpiresAt)
+    OcrWorkerJobMessage.fromJson(payloadJson) match
+      case Right(message) =>
+        OcrQueueOutboxRecord(id, jobId, message.toEnqueueRequest, attemptCount, claimExpiresAt)
           .pure[ConnectionIO]
       case Left(reason) => MonadThrow[ConnectionIO].raiseError(new IllegalStateException(
           s"ocr_queue_outbox row $id has invalid stream_payload: $reason"

@@ -1,4 +1,4 @@
-package momo.api.repositories
+package momo.api.contracts.ocrworker
 
 import java.nio.file.Path
 import java.time.Instant
@@ -10,7 +10,7 @@ import momo.api.domain.ids.*
 import momo.api.domain.{OcrJobHints, PlayerAliasHint, ScreenType}
 import momo.api.testing.JsonSchemaAssertions
 
-final class OcrQueuePayloadSpec extends FunSuite with JsonSchemaAssertions:
+final class OcrWorkerJobMessageSpec extends FunSuite with JsonSchemaAssertions:
   test("builds a JSON Schema-valid Redis Streams payload with hints and requestId") {
     val payload = canonicalPayload
 
@@ -23,11 +23,11 @@ final class OcrQueuePayloadSpec extends FunSuite with JsonSchemaAssertions:
     assertEquals(payload.fields("enqueuedAt"), "2026-05-09T00:00:00Z")
     assertEquals(payload.fields("schemaVersion"), "1")
     assertEquals(payload.fields("requestId"), "req_20260509-abc")
-    assertOcrQueuePayloadSchemaValid(payload)
+    assertOcrWorkerJobMessageSchemaValid(payload)
   }
 
   test("JSON Schema rejects invalid Redis Streams payload shape") {
-    val baseJson = OcrQueuePayload.fieldsAsJson(canonicalPayload)
+    val baseJson = OcrWorkerJobMessage.fieldsAsJson(canonicalPayload)
 
     assertJsonSchemaInvalid(
       streamPayloadSchemaPath,
@@ -47,7 +47,7 @@ final class OcrQueuePayloadSpec extends FunSuite with JsonSchemaAssertions:
     )
     assertJsonSchemaInvalid(
       streamPayloadSchemaPath,
-      baseJson.mapObject(_.add(OcrQueuePayload.HintsKey, Json.fromString("x" * 8193))).noSpaces,
+      baseJson.mapObject(_.add(OcrWorkerJobMessage.HintsKey, Json.fromString("x" * 8193))).noSpaces,
     )
   }
 
@@ -78,7 +78,7 @@ final class OcrQueuePayloadSpec extends FunSuite with JsonSchemaAssertions:
   }
 
   test("builds the exact Redis Streams payload expected by the OCR worker without hints") {
-    val payload = OcrQueuePayload.build(
+    val payload = OcrWorkerJobMessage.build(
       jobId = OcrJobId.unsafeFromString("job-1"),
       draftId = OcrDraftId.unsafeFromString("draft-1"),
       imageId = ImageId.unsafeFromString("image-1"),
@@ -103,11 +103,11 @@ final class OcrQueuePayloadSpec extends FunSuite with JsonSchemaAssertions:
         "schemaVersion" -> "1",
       ),
     )
-    assertOcrQueuePayloadSchemaValid(payload)
+    assertOcrWorkerJobMessageSchemaValid(payload)
   }
 
   test("serializes hints as compact sorted UTF-8 JSON") {
-    val payload = OcrQueuePayload.build(
+    val payload = OcrWorkerJobMessage.build(
       jobId = OcrJobId.unsafeFromString("job-2"),
       draftId = OcrDraftId.unsafeFromString("draft-2"),
       imageId = ImageId.unsafeFromString("image-2"),
@@ -126,14 +126,14 @@ final class OcrQueuePayloadSpec extends FunSuite with JsonSchemaAssertions:
     )
 
     assertEquals(
-      payload.fields(OcrQueuePayload.HintsKey),
+      payload.fields(OcrWorkerJobMessage.HintsKey),
       """{"computerPlayerAliases":["さくま","サクマ"],"gameTitle":"桃太郎電鉄ワールド","knownPlayerAliases":[{"aliases":["ぽんた","PONTA"],"memberId":"member-1"}],"layoutFamily":"world"}""",
     )
-    assertOcrQueuePayloadSchemaValid(payload)
+    assertOcrWorkerJobMessageSchemaValid(payload)
   }
 
   test("includes requestId when provided and omits it when empty/invalid/None") {
-    val basePayload = OcrQueuePayload.build(
+    val basePayload = OcrWorkerJobMessage.build(
       jobId = OcrJobId.unsafeFromString("job-3"),
       draftId = OcrDraftId.unsafeFromString("draft-3"),
       imageId = ImageId.unsafeFromString("image-3"),
@@ -144,9 +144,9 @@ final class OcrQueuePayloadSpec extends FunSuite with JsonSchemaAssertions:
       hints = OcrJobHints.empty,
       requestId = None,
     )
-    assertEquals(basePayload.fields.get(OcrQueuePayload.RequestIdKey), None)
+    assertEquals(basePayload.fields.get(OcrWorkerJobMessage.RequestIdKey), None)
 
-    val withId = OcrQueuePayload.build(
+    val withId = OcrWorkerJobMessage.build(
       jobId = OcrJobId.unsafeFromString("job-3"),
       draftId = OcrDraftId.unsafeFromString("draft-3"),
       imageId = ImageId.unsafeFromString("image-3"),
@@ -157,9 +157,9 @@ final class OcrQueuePayloadSpec extends FunSuite with JsonSchemaAssertions:
       hints = OcrJobHints.empty,
       requestId = Some("abc-123_DEF"),
     )
-    assertEquals(withId.fields.get(OcrQueuePayload.RequestIdKey), Some("abc-123_DEF"))
+    assertEquals(withId.fields.get(OcrWorkerJobMessage.RequestIdKey), Some("abc-123_DEF"))
 
-    val withEmpty = OcrQueuePayload.build(
+    val withEmpty = OcrWorkerJobMessage.build(
       jobId = OcrJobId.unsafeFromString("job-3"),
       draftId = OcrDraftId.unsafeFromString("draft-3"),
       imageId = ImageId.unsafeFromString("image-3"),
@@ -170,9 +170,9 @@ final class OcrQueuePayloadSpec extends FunSuite with JsonSchemaAssertions:
       hints = OcrJobHints.empty,
       requestId = Some(""),
     )
-    assertEquals(withEmpty.fields.get(OcrQueuePayload.RequestIdKey), None)
+    assertEquals(withEmpty.fields.get(OcrWorkerJobMessage.RequestIdKey), None)
 
-    val withInvalid = OcrQueuePayload.build(
+    val withInvalid = OcrWorkerJobMessage.build(
       jobId = OcrJobId.unsafeFromString("job-3"),
       draftId = OcrDraftId.unsafeFromString("draft-3"),
       imageId = ImageId.unsafeFromString("image-3"),
@@ -183,12 +183,12 @@ final class OcrQueuePayloadSpec extends FunSuite with JsonSchemaAssertions:
       hints = OcrJobHints.empty,
       requestId = Some("bad value"),
     )
-    assertEquals(withInvalid.fields.get(OcrQueuePayload.RequestIdKey), None)
+    assertEquals(withInvalid.fields.get(OcrWorkerJobMessage.RequestIdKey), None)
   }
 
   test("fieldsAsJson is deterministic by key order") {
     val payload = canonicalPayload
-    val json = OcrQueuePayload.fieldsAsJson(payload)
+    val json = OcrWorkerJobMessage.fieldsAsJson(payload)
 
     assertEquals(
       json,
@@ -200,32 +200,32 @@ final class OcrQueuePayloadSpec extends FunSuite with JsonSchemaAssertions:
 
   test("fromJson decodes the typed stream payload and rejects malformed objects") {
     val payload = canonicalPayload
-    val json = OcrQueuePayload.fieldsAsJson(payload)
+    val json = OcrWorkerJobMessage.fieldsAsJson(payload)
 
-    assertEquals(OcrQueuePayload.fromJson(json), Right(payload))
-    assertEquals(OcrQueuePayload.fromJson(Json.arr()), Left("stream payload must be a JSON object"))
+    assertEquals(OcrWorkerJobMessage.fromJson(json), Right(payload))
+    assertEquals(OcrWorkerJobMessage.fromJson(Json.arr()), Left("stream payload must be a JSON object"))
     assertEquals(
-      OcrQueuePayload.fromJson(json.mapObject(_.add("attempt", Json.fromInt(1)))),
+      OcrWorkerJobMessage.fromJson(json.mapObject(_.add("attempt", Json.fromInt(1)))),
       Left("field attempt must be a string"),
     )
     assertEquals(
-      OcrQueuePayload
+      OcrWorkerJobMessage
         .fromJson(json.mapObject(_.add("imagePath", Json.fromString("relative/image.png")))),
       Left("imagePath must be an absolute path"),
     )
     assertEquals(
-      OcrQueuePayload.fromJson(json.mapObject(_.add("imagePath", Json.fromString("\u0000")))),
+      OcrWorkerJobMessage.fromJson(json.mapObject(_.add("imagePath", Json.fromString("\u0000")))),
       Left("imagePath must be a valid path"),
     )
     assertEquals(
-      OcrQueuePayload.fromJson(
-        json.mapObject(_.add(OcrQueuePayload.RequestIdKey, Json.fromString("bad value")))
+      OcrWorkerJobMessage.fromJson(
+        json.mapObject(_.add(OcrWorkerJobMessage.RequestIdKey, Json.fromString("bad value")))
       ),
       Left("requestId must match ^[A-Za-z0-9_-]{1,64}$."),
     )
   }
 
-  private def canonicalPayload: OcrQueuePayload = OcrQueuePayload.build(
+  private def canonicalPayload: OcrWorkerJobMessage = OcrWorkerJobMessage.build(
     jobId = OcrJobId.unsafeFromString("job-schema-1"),
     draftId = OcrDraftId.unsafeFromString("draft-schema-1"),
     imageId = ImageId.unsafeFromString("image-schema-1"),

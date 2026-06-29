@@ -5,14 +5,10 @@ import cats.effect.MonadCancelThrow
 import doobie.*
 import doobie.implicits.*
 
+import momo.api.ports.queue.OcrJobEnqueueRequest
+import momo.api.repositories.{OcrJobCreationRepository, OcrJobDraftAttachment, OcrQueueOutboxDraft}
 import momo.api.domain.{OcrDraft, OcrJob, OcrJobStatus}
 import momo.api.repositories.postgres.PostgresMeta.given
-import momo.api.repositories.{
-  OcrJobCreationRepository,
-  OcrJobDraftAttachment,
-  OcrQueueOutboxDraft,
-  OcrQueuePayload
-}
 
 final class PostgresOcrJobCreationRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends OcrJobCreationRepository[F]:
@@ -21,10 +17,10 @@ final class PostgresOcrJobCreationRepository[F[_]: MonadCancelThrow](transactor:
       draft: OcrDraft,
       job: OcrJob,
       attachment: Option[OcrJobDraftAttachment],
-      queuePayload: OcrQueuePayload,
+      enqueueRequest: OcrJobEnqueueRequest,
       activeJobLimit: Int,
   ): F[Unit] =
-    val outbox = OcrQueueOutboxDraft.forJob(job.id, queuePayload, job.createdAt)
+    val outbox = OcrQueueOutboxDraft.forJob(job.id, enqueueRequest, job.createdAt)
     val program =
       for
         _ <- activeLimitGuard(activeJobLimit)

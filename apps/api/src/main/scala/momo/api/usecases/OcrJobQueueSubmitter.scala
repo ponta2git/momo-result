@@ -13,28 +13,27 @@ import momo.api.domain.ids.*
 import momo.api.domain.{FailureCode, OcrFailure}
 import momo.api.errors.AppError
 import momo.api.logging.SafeLog
+import momo.api.ports.queue.{OcrJobEnqueueRequest, OcrJobQueuePublisher}
 import momo.api.repositories.{
   MatchDraftsRepository,
   OcrJobsRepository,
   OcrQueueOutboxDraft,
-  OcrQueueOutboxRepository,
-  OcrQueuePayload,
-  QueueProducer
+  OcrQueueOutboxRepository
 }
 
-trait OcrQueueSubmitter[F[_]]:
-  def submit(context: OcrQueueSubmitter.Context): F[Either[AppError, Unit]]
+trait OcrJobQueueSubmitter[F[_]]:
+  def submit(context: OcrJobQueueSubmitter.Context): F[Either[AppError, Unit]]
 
-object OcrQueueSubmitter:
+object OcrJobQueueSubmitter:
   final case class Context(
-      payload: OcrQueuePayload,
+      enqueueRequest: OcrJobEnqueueRequest,
       jobId: OcrJobId,
       draftId: OcrDraftId,
       matchDraftId: Option[MatchDraftId],
       createdAt: Instant,
   )
 
-  def deferred[F[_]: Applicative]: OcrQueueSubmitter[F] = new OcrQueueSubmitter[F]:
+  def deferred[F[_]: Applicative]: OcrJobQueueSubmitter[F] = new OcrJobQueueSubmitter[F]:
     override def submit(context: Context): F[Either[AppError, Unit]] =
       val _ = context
       ().asRight[AppError].pure[F]
@@ -42,12 +41,12 @@ object OcrQueueSubmitter:
   def direct[F[_]: MonadThrow: LoggerFactory](
       jobs: OcrJobsRepository[F],
       matchDrafts: MatchDraftsRepository[F],
-      queue: QueueProducer[F],
-  ): OcrQueueSubmitter[F] = new OcrQueueSubmitter[F]:
-    private val logger = LoggerFactory[F].getLoggerFromClass(classOf[OcrQueueSubmitter[F]])
+      queue: OcrJobQueuePublisher[F],
+  ): OcrJobQueueSubmitter[F] = new OcrJobQueueSubmitter[F]:
+    private val logger = LoggerFactory[F].getLoggerFromClass(classOf[OcrJobQueueSubmitter[F]])
 
     override def submit(context: Context): F[Either[AppError, Unit]] = queue
-      .publish(context.payload).redeemWith(
+      .publish(context.enqueueRequest).redeemWith(
         error =>
           val originalErrorClasses = SafeLog.throwableClasses(error)
           val logOriginal = logger.error(s"OCR enqueue publish failed jobId=${context.jobId
@@ -80,16 +79,16 @@ object OcrQueueSubmitter:
 
   def outboxBacked[F[_]: Temporal: Clock: LoggerFactory](
       outbox: OcrQueueOutboxRepository[F],
-      queue: QueueProducer[F],
-  ): OcrQueueSubmitter[F] = outboxBacked(outbox, queue, 30.seconds, 60.seconds)
+      queue: OcrJobQueuePublisher[F],
+  ): OcrJobQueueSubmitter[F] = outboxBacked(outbox, queue, 30.seconds, 60.seconds)
 
   def outboxBacked[F[_]: Temporal: Clock: LoggerFactory](
       outbox: OcrQueueOutboxRepository[F],
-      queue: QueueProducer[F],
+      queue: OcrJobQueuePublisher[F],
       claimTtl: FiniteDuration,
       maxBackoff: FiniteDuration,
-  ): OcrQueueSubmitter[F] = new OcrQueueSubmitter[F]:
-    private val logger = LoggerFactory[F].getLoggerFromClass(classOf[OcrQueueSubmitter[F]])
+  ): OcrJobQueueSubmitter[F] = new OcrJobQueueSubmitter[F]:
+    private val logger = LoggerFactory[F].getLoggerFromClass(classOf[OcrJobQueueSubmitter[F]])
     private val publisher = OcrQueueOutboxPublisher[F](outbox, queue, maxBackoff)
 
     override def submit(context: Context): F[Either[AppError, Unit]] =

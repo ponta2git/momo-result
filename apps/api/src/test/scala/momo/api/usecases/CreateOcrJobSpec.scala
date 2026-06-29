@@ -13,10 +13,9 @@ import momo.api.adapters.{
   InMemoryOcrDraftsRepository,
   InMemoryOcrJobCreationRepository,
   InMemoryOcrJobsRepository,
-  InMemoryQueueProducer,
+  InMemoryOcrJobQueuePublisher,
   LocalFsImageStore
 }
-import momo.api.codec.OcrHintsCodec.given
 import momo.api.domain.ids.{
   AccountId,
   ImageId,
@@ -37,9 +36,14 @@ import momo.api.domain.{
   StoredImage
 }
 import momo.api.errors.AppError
-import momo.api.repositories.{ImageStore, OcrJobsRepository, QueueProducer}
+import momo.api.ports.queue.OcrJobQueuePublisher
+import momo.api.repositories.{ImageStore, OcrJobsRepository}
 import momo.api.testing.AppErrorAssertions.fromAppEither
-import momo.api.testing.{FailingMarkFailedOcrJobsRepository, FailingQueueProducer, TestImages}
+import momo.api.testing.{
+  FailingMarkFailedOcrJobsRepository,
+  FailingOcrJobQueuePublisher,
+  TestImages
+}
 import momo.api.usecases.testing.CapturingLoggerFactory
 
 final class CreateOcrJobSpec extends MomoCatsEffectSuite:
@@ -49,7 +53,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
 
   private val pngBytes: Array[Byte] = TestImages.png1x1
 
-  test("creates empty draft, queued job, and stream payload") {
+  test("creates empty draft, queued job, and enqueue request") {
     inMemoryQueueFixture(
       prefix = "momo-api-create-job",
       idSeed = List("job-1", "draft-1"),
@@ -69,10 +73,10 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
       yield
         assertEquals(foundJob.map(_.status.wire), Some("queued"))
         assertEquals(foundDraft.map(_.id), Some(created.draft.id))
-        assertEquals(published.map(_.fields("jobId")), Vector("job-1"))
-        assertEquals(published.head.fields("schemaVersion"), "1")
-        assertEquals(published.head.fields("requestedScreenType"), "total_assets")
-        assertEquals(published.head.fields.get("requestId"), Some("test-req-id"))
+        assertEquals(published.map(_.jobId.value), Vector("job-1"))
+        assertEquals(published.head.requestedScreenType, ScreenType.TotalAssets)
+        assertEquals(published.head.attempt, 1)
+        assertEquals(published.head.requestId, Some("test-req-id"))
     }
   }
 
@@ -108,13 +112,9 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
           fixture.requestId,
         ).flatMap(fromAppEither)
         published <- fixture.queue.published
-        hintsJson = published.head.fields("ocrHintsJson")
-        parsed = io.circe.parser.decode[OcrJobHints](hintsJson)
       yield assertEquals(
-        parsed.map(_.knownPlayerAliases),
-        Right(
-          List(PlayerAliasHint(MemberId.unsafeFromString("member_ponta"), List("ぽんた", "ポン太社長")))
-        ),
+        published.head.hints.knownPlayerAliases,
+        List(PlayerAliasHint(MemberId.unsafeFromString("member_ponta"), List("ぽんた", "ポン太社長"))),
       )
     }
   }
@@ -125,7 +125,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
 
     fixtureResource(
       prefix = "momo-api-create-job-fail",
-      queue = FailingQueueProducer(queueError),
+      queue = FailingOcrJobQueuePublisher(queueError),
       idSeed = List("job-1", "draft-1"),
       requestId = None,
       decorateJobs = delegate => FailingMarkFailedOcrJobsRepository(delegate, markFailedError),
@@ -149,7 +149,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
 
     fixtureResource(
       prefix = "momo-api-create-job-sanitized-failure",
-      queue = FailingQueueProducer(queueError),
+      queue = FailingOcrJobQueuePublisher(queueError),
       idSeed = List("job-1", "draft-1"),
       requestId = None,
       decorateJobs = identity[OcrJobsRepository[IO]],
@@ -370,7 +370,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         assertEquals(created.draft.id, newDraftId)
         assertEquals(found.flatMap(_.totalAssetsDraftId), Some(newDraftId))
         assertEquals(found.map(_.status), Some(MatchDraftStatus.OcrRunning))
-        assertEquals(published.map(_.fields("jobId")), Vector("job-new-slot"))
+        assertEquals(published.map(_.jobId.value), Vector("job-new-slot"))
     }
   }
 
@@ -380,7 +380,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
 
     fixtureResource(
       prefix = "momo-api-create-job-log",
-      queue = FailingQueueProducer(queueError),
+      queue = FailingOcrJobQueuePublisher(queueError),
       idSeed = List("job-log-1", "draft-log-1"),
       requestId = None,
       decorateJobs = delegate => FailingMarkFailedOcrJobsRepository(delegate, markFailedError),
@@ -430,7 +430,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
       idSeed: List[String],
       requestId: Option[String],
       activeJobLimit: Int,
-  ): Resource[IO, Fixture[InMemoryQueueProducer[IO]]] =
+  ): Resource[IO, Fixture[InMemoryOcrJobQueuePublisher[IO]]] =
     inMemoryQueueFixture(prefix, idSeed, requestId, activeJobLimit, OcrAdmissionGuard.allowAll[IO])
 
   private def inMemoryQueueFixture(
@@ -439,8 +439,8 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
       requestId: Option[String],
       activeJobLimit: Int,
       admissionGuard: OcrAdmissionGuard[IO],
-  ): Resource[IO, Fixture[InMemoryQueueProducer[IO]]] = Resource
-    .eval(InMemoryQueueProducer.create[IO]).flatMap(queue =>
+  ): Resource[IO, Fixture[InMemoryOcrJobQueuePublisher[IO]]] = Resource
+    .eval(InMemoryOcrJobQueuePublisher.create[IO]).flatMap(queue =>
       fixtureResource(
         prefix = prefix,
         queue = queue,
@@ -452,7 +452,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
       )
     )
 
-  private def fixtureResource[Q <: QueueProducer[IO]](
+  private def fixtureResource[Q <: OcrJobQueuePublisher[IO]](
       prefix: String,
       queue: Q,
       idSeed: List[String],
@@ -469,7 +469,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
     OcrAdmissionGuard.allowAll[IO],
   )
 
-  private def fixtureResource[Q <: QueueProducer[IO]](
+  private def fixtureResource[Q <: OcrJobQueuePublisher[IO]](
       prefix: String,
       queue: Q,
       idSeed: List[String],
@@ -553,7 +553,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
     updatedAt = now,
   )
 
-  private final case class Fixture[Q <: QueueProducer[IO]](
+  private final case class Fixture[Q <: OcrJobQueuePublisher[IO]](
       imageStore: ImageStore[IO],
       jobs: OcrJobsRepository[IO],
       drafts: InMemoryOcrDraftsRepository[IO],
@@ -580,7 +580,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
           creation =
             InMemoryOcrJobCreationRepository[IO](drafts, jobs, matchDrafts, activeJobForDraft),
           matchDrafts = matchDrafts,
-          queueSubmitter = OcrQueueSubmitter.direct[IO](jobs, matchDrafts, queue),
+          queueSubmitter = OcrJobQueueSubmitter.direct[IO](jobs, matchDrafts, queue),
           admissionGuard = admissionGuard,
           now = IO.pure(now),
           nextJobId = ids.modify {

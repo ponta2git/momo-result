@@ -12,19 +12,15 @@ import org.typelevel.log4cats.noop.NoOpFactory
 import momo.api.MomoCatsEffectSuite
 import momo.api.domain.ids.*
 import momo.api.domain.{OcrJobHints, ScreenType}
-import momo.api.repositories.{
-  OcrQueueOutboxRecord,
-  OcrQueueOutboxRepository,
-  OcrQueuePayload,
-  QueueProducer
-}
+import momo.api.ports.queue.{OcrJobEnqueueRequest, OcrJobQueuePublisher}
+import momo.api.repositories.{OcrQueueOutboxRecord, OcrQueueOutboxRepository}
 import momo.api.testing.{
-  FailingQueueProducer,
+  FailingOcrJobQueuePublisher,
   FixedClock,
   OutboxClaimDueCall,
   OutboxMarkDeliveredCall,
   RecordingOcrQueueOutboxRepository,
-  RecordingQueueProducer
+  RecordingOcrJobQueuePublisher
 }
 
 final class OcrQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
@@ -37,7 +33,7 @@ final class OcrQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
   private def rowAt(claimExpiresAt: Instant, id: String) = OcrQueueOutboxRecord(
     id = id,
     jobId = OcrJobId.unsafeFromString("job-1"),
-    payload = OcrQueuePayload.build(
+    enqueueRequest = OcrJobEnqueueRequest(
       jobId = OcrJobId.unsafeFromString("job-1"),
       draftId = OcrDraftId.unsafeFromString("draft-1"),
       imageId = ImageId.unsafeFromString("image-1"),
@@ -55,7 +51,7 @@ final class OcrQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
   private def dispatcherAt(
       now: Instant,
       repo: OcrQueueOutboxRepository[IO],
-      queue: QueueProducer[IO],
+      queue: OcrJobQueuePublisher[IO],
       config: OcrQueueOutboxDispatcherConfig,
   ): OcrQueueOutboxDispatcher[IO] =
     given Clock[IO] = FixedClock.at(now)
@@ -65,7 +61,7 @@ final class OcrQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
     for
       repo <- RecordingOcrQueueOutboxRepository
         .create(call => List(rowAt(call.claimUntil)), true, true)
-      queue <- RecordingQueueProducer.create
+      queue <- RecordingOcrJobQueuePublisher.create
       config = OcrQueueOutboxDispatcherConfig(batchSize = 25, claimTtl = 30.seconds)
       _ <- dispatcherAt(fixedNow, repo, queue, config).runOnce
       gotClaimed <- repo.claims
@@ -84,7 +80,7 @@ final class OcrQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
     for
       repo <- RecordingOcrQueueOutboxRepository
         .createWithRows(List(rowAt(fixedNow.plusSeconds(30))))
-      queue = FailingQueueProducer(queueError)
+      queue = FailingOcrJobQueuePublisher(queueError)
       _ <- dispatcherAt(fixedNow, repo, queue, OcrQueueOutboxDispatcherConfig()).runOnce
       got <- repo.releases
     yield
@@ -99,9 +95,9 @@ final class OcrQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
     for
       repo <- RecordingOcrQueueOutboxRepository
         .createWithClaimById(call => Some(rowAt(call.claimUntil, outboxId)))
-      queue <- RecordingQueueProducer.create
+      queue <- RecordingOcrJobQueuePublisher.create
       submitter = withFixedClock:
-        OcrQueueSubmitter.outboxBacked[IO](repo, queue)
+        OcrJobQueueSubmitter.outboxBacked[IO](repo, queue)
       result <- submitter.submit(context)
       gotClaims <- repo.claimByIds
       gotDelivered <- repo.deliveries
@@ -125,7 +121,7 @@ final class OcrQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
       repo <- RecordingOcrQueueOutboxRepository
         .createWithClaimById(call => Some(rowAt(call.claimUntil, outboxId)))
       submitter = withFixedClock:
-        OcrQueueSubmitter.outboxBacked[IO](repo, FailingQueueProducer(queueError))
+        OcrJobQueueSubmitter.outboxBacked[IO](repo, FailingOcrJobQueuePublisher(queueError))
       result <- submitter.submit(context)
       got <- repo.releases
     yield
@@ -140,8 +136,8 @@ final class OcrQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
     given Clock[IO] = FixedClock.at(fixedNow)
     body
 
-  private def context: OcrQueueSubmitter.Context = OcrQueueSubmitter.Context(
-    payload = rowAt(fixedNow.plusSeconds(30)).payload,
+  private def context: OcrJobQueueSubmitter.Context = OcrJobQueueSubmitter.Context(
+    enqueueRequest = rowAt(fixedNow.plusSeconds(30)).enqueueRequest,
     jobId = OcrJobId.unsafeFromString("job-1"),
     draftId = OcrDraftId.unsafeFromString("draft-1"),
     matchDraftId = None,

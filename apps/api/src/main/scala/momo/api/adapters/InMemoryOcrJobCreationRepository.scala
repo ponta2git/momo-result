@@ -6,13 +6,13 @@ import cats.syntax.all.*
 import momo.api.domain.ids.OcrDraftId
 import momo.api.domain.{OcrDraft, OcrJob}
 import momo.api.errors.{AppError, AppException}
+import momo.api.ports.queue.OcrJobEnqueueRequest
 import momo.api.repositories.{
   MatchDraftsRepository,
   OcrDraftsRepository,
   OcrJobCreationRepository,
   OcrJobDraftAttachment,
-  OcrJobsRepository,
-  OcrQueuePayload
+  OcrJobsRepository
 }
 
 final class InMemoryOcrJobCreationRepository[F[_]: MonadThrow](
@@ -25,10 +25,10 @@ final class InMemoryOcrJobCreationRepository[F[_]: MonadThrow](
       draft: OcrDraft,
       job: OcrJob,
       attachment: Option[OcrJobDraftAttachment],
-      queuePayload: OcrQueuePayload,
+      enqueueRequest: OcrJobEnqueueRequest,
       activeJobLimit: Int,
   ): F[Unit] =
-    val _ = queuePayload
+    val _ = enqueueRequest
     for
       active <- jobs.countActive
       _ <-

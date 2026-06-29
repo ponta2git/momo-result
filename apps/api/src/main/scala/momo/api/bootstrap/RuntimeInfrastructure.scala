@@ -6,7 +6,7 @@ import dev.profunktor.redis4cats.Redis
 import dev.profunktor.redis4cats.data.RedisCodec
 import dev.profunktor.redis4cats.effect.Log.NoOp.*
 
-import momo.api.adapters.{InMemoryQueueProducer, RedisQueueProducer}
+import momo.api.adapters.{InMemoryOcrJobQueuePublisher, RedisOcrJobQueuePublisher}
 import momo.api.auth.{
   InMemoryOAuthProviderBackoff,
   LoginRateLimiter,
@@ -17,11 +17,11 @@ import momo.api.auth.{
 }
 import momo.api.config.AppConfig
 import momo.api.http.HttpRateLimiters
-import momo.api.repositories.{QueueHealthProbe, QueueProducer}
+import momo.api.ports.queue.{OcrJobQueueHealthCheck, OcrJobQueuePublisher}
 
 private[bootstrap] final case class RuntimeInfrastructure[F[_]](
-    queue: QueueProducer[F],
-    queueHealth: QueueHealthProbe[F],
+    queue: OcrJobQueuePublisher[F],
+    queueHealth: OcrJobQueueHealthCheck[F],
     loginRateLimiter: RateLimiter[F],
     authCallbackStateRateLimiter: RateLimiter[F],
     oauthProviderBackoff: OAuthProviderBackoff[F],
@@ -34,8 +34,9 @@ private[bootstrap] object RuntimeInfrastructure:
       now: F[java.time.Instant],
   ): Resource[F, RuntimeInfrastructure[F]] = config.redis match
     case Some(redis) => Redis[F].simple(redis.url, RedisCodec.Utf8).map { commands =>
-        val queue: QueueProducer[F] = RedisQueueProducer.fromCommands(redis.stream, commands)
-        val queueHealth: QueueHealthProbe[F] = RedisQueueProducer
+        val queue: OcrJobQueuePublisher[F] =
+          RedisOcrJobQueuePublisher.fromCommands(redis.stream, commands)
+        val queueHealth: OcrJobQueueHealthCheck[F] = RedisOcrJobQueuePublisher
           .healthProbeFromCommands(redis.deadLetterStream, commands)
         val login: RateLimiter[F] = RedisRateLimiter
           .fromCommands(commands, "login", config.auth.rateLimitPerMinute, now)
@@ -104,8 +105,8 @@ private[bootstrap] object RuntimeInfrastructure:
       }
     case None => Resource.eval(
         for
-          queue <- InMemoryQueueProducer.create[F]
-          queueHealth = QueueHealthProbe.healthy[F]
+          queue <- InMemoryOcrJobQueuePublisher.create[F]
+          queueHealth = OcrJobQueueHealthCheck.healthy[F]
           login <- LoginRateLimiter.create[F](config.auth.rateLimitPerMinute, now)
           authCallbackState <- LoginRateLimiter
             .create[F](config.auth.callbackStateRateLimitPerMinute, now)

@@ -8,11 +8,12 @@ import doobie.implicits.*
 import doobie.postgres.circe.jsonb.implicits.*
 import doobie.postgres.implicits.*
 
+import momo.api.contracts.ocrworker.OcrWorkerJobMessage
 import momo.api.domain.ids.*
 import momo.api.domain.{OcrJobHints, ScreenType}
 import momo.api.repositories.postgres.PostgresMeta.given
 import momo.api.repositories.postgres.PostgresOcrQueueOutboxRepository
-import momo.api.repositories.{OcrQueueOutboxStatus, OcrQueuePayload}
+import momo.api.repositories.OcrQueueOutboxStatus
 
 final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
 
@@ -21,7 +22,7 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
 
   private def repo = PostgresOcrQueueOutboxRepository[IO](transactor)
 
-  private def payload(jobId: OcrJobId): OcrQueuePayload = OcrQueuePayload.build(
+  private def workerMessage(jobId: OcrJobId): OcrWorkerJobMessage = OcrWorkerJobMessage.build(
     jobId = jobId,
     draftId = OcrDraftId.unsafeFromString(s"draft-${jobId.value}"),
     imageId = ImageId.unsafeFromString(s"image-${jobId.value}"),
@@ -63,7 +64,7 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
       claimExpiresAt: Option[Instant],
       createdAt: Instant,
   ): IO[Unit] =
-    val payloadJson = OcrQueuePayload.fieldsAsJson(payload(jobId))
+    val payloadJson = OcrWorkerJobMessage.fieldsAsJson(workerMessage(jobId))
     sql"""
       INSERT INTO ocr_queue_outbox (
         id, job_id, dedupe_key, stream_payload,
@@ -133,7 +134,7 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
       assertEquals(claimed.map(_.id), List("outbox-expired", "outbox-pending"))
       assertEquals(claimed.map(_.attemptCount), List(2, 0))
       assertEquals(
-        claimed.map(_.payload.fields("jobId")),
+        claimed.map(_.enqueueRequest.jobId.value),
         List(expiredJobId.value, pendingJobId.value),
       )
       assertEquals(claimed.map(_.claimExpiresAt), List(claimUntil, claimUntil))
@@ -187,7 +188,7 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
       """.query[(String, String, Option[Instant])].to[List].transact(transactor)
     yield
       assertEquals(claimed.map(_.id), Some("outbox-claim-target"))
-      assertEquals(claimed.map(_.payload.fields("jobId")), Some(targetJobId.value))
+      assertEquals(claimed.map(_.enqueueRequest.jobId.value), Some(targetJobId.value))
       assertEquals(claimed.map(_.claimExpiresAt), Some(claimUntil))
       assertEquals(
         states,

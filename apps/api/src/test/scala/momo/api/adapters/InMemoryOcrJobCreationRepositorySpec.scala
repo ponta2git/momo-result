@@ -8,7 +8,8 @@ import cats.effect.IO
 import momo.api.MomoCatsEffectSuite
 import momo.api.domain.ids.*
 import momo.api.domain.{MatchDraft, MatchDraftStatus, OcrDraft, OcrJob, OcrJobHints, ScreenType}
-import momo.api.repositories.{OcrJobDraftAttachment, OcrQueuePayload}
+import momo.api.ports.queue.OcrJobEnqueueRequest
+import momo.api.repositories.OcrJobDraftAttachment
 import momo.api.testing.AppErrorAssertions.assertAppException
 
 final class InMemoryOcrJobCreationRepositorySpec extends MomoCatsEffectSuite:
@@ -28,7 +29,7 @@ final class InMemoryOcrJobCreationRepositorySpec extends MomoCatsEffectSuite:
         draft,
         job,
         Some(attachment(draft.id)),
-        payload(job, draft),
+        enqueueRequest(job, draft),
         activeJobLimit = 10,
       ).attempt
       matchDraft <- fixture.matchDrafts.find(matchDraftId)
@@ -49,7 +50,7 @@ final class InMemoryOcrJobCreationRepositorySpec extends MomoCatsEffectSuite:
         draft,
         job,
         Some(attachment(draft.id)),
-        payload(job, draft),
+        enqueueRequest(job, draft),
         activeJobLimit = 10,
       ).attempt
       matchDraft <- fixture.matchDrafts.find(matchDraftId)
@@ -125,17 +126,18 @@ final class InMemoryOcrJobCreationRepositorySpec extends MomoCatsEffectSuite:
     updatedAt = now,
   )
 
-  private def payload(job: OcrJob, draft: OcrDraft): OcrQueuePayload = OcrQueuePayload.build(
-    jobId = job.id,
-    draftId = draft.id,
-    imageId = job.imageId,
-    imagePath = job.imagePath,
-    requestedScreenType = job.requestedScreenType,
-    attempt = 1,
-    enqueuedAt = now,
-    hints = OcrJobHints.empty,
-    requestId = None,
-  )
+  private def enqueueRequest(job: OcrJob, draft: OcrDraft): OcrJobEnqueueRequest =
+    OcrJobEnqueueRequest(
+      jobId = job.id,
+      draftId = draft.id,
+      imageId = job.imageId,
+      imagePath = job.imagePath,
+      requestedScreenType = job.requestedScreenType,
+      attempt = 1,
+      enqueuedAt = now,
+      hints = OcrJobHints.empty,
+      requestId = None,
+    )
 
   private final case class Fixture(
       drafts: InMemoryOcrDraftsRepository[IO],

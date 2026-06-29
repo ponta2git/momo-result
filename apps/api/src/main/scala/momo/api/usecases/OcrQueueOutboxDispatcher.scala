@@ -10,7 +10,8 @@ import cats.syntax.all.*
 import org.typelevel.log4cats.LoggerFactory
 
 import momo.api.logging.SafeLog
-import momo.api.repositories.{OcrQueueOutboxRecord, OcrQueueOutboxRepository, QueueProducer}
+import momo.api.ports.queue.OcrJobQueuePublisher
+import momo.api.repositories.{OcrQueueOutboxRecord, OcrQueueOutboxRepository}
 
 final case class OcrQueueOutboxDispatcherConfig(
     batchSize: Int = 10,
@@ -21,7 +22,7 @@ final case class OcrQueueOutboxDispatcherConfig(
 
 final class OcrQueueOutboxDispatcher[F[_]: Temporal: Clock: LoggerFactory](
     outbox: OcrQueueOutboxRepository[F],
-    queue: QueueProducer[F],
+    queue: OcrJobQueuePublisher[F],
     config: OcrQueueOutboxDispatcherConfig,
 ):
   private val logger = LoggerFactory[F].getLoggerFromClass(classOf[OcrQueueOutboxDispatcher[F]])
@@ -47,50 +48,51 @@ final class OcrQueueOutboxDispatcher[F[_]: Temporal: Clock: LoggerFactory](
 object OcrQueueOutboxDispatcher:
   def resource[F[_]: Temporal: Clock: LoggerFactory](
       outbox: OcrQueueOutboxRepository[F],
-      queue: QueueProducer[F],
+      queue: OcrJobQueuePublisher[F],
   ): Resource[F, Unit] = resource(outbox, queue, OcrQueueOutboxDispatcherConfig())
 
   def resource[F[_]: Temporal: Clock: LoggerFactory](
       outbox: OcrQueueOutboxRepository[F],
-      queue: QueueProducer[F],
+      queue: OcrJobQueuePublisher[F],
       config: OcrQueueOutboxDispatcherConfig,
   ): Resource[F, Unit] = Resource
     .make(new OcrQueueOutboxDispatcher(outbox, queue, config).run.start)(_.cancel).void
 
 final class OcrQueueOutboxPublisher[F[_]: Temporal: Clock: LoggerFactory](
     outbox: OcrQueueOutboxRepository[F],
-    queue: QueueProducer[F],
+    queue: OcrJobQueuePublisher[F],
     maxBackoff: FiniteDuration,
 ):
   private val logger = LoggerFactory[F].getLoggerFromClass(classOf[OcrQueueOutboxPublisher[F]])
 
-  def publish(row: OcrQueueOutboxRecord): F[Unit] = queue.publish(row.payload).attempt.flatMap {
-    case Right(redisMessageId) => Clock[F].realTimeInstant.flatMap { now =>
-        outbox.markDelivered(row.id, row.claimExpiresAt, redisMessageId, now).flatMap {
-          case true => Temporal[F].unit
-          case false => logger
-              .warn(s"OCR queue outbox delivered update ignored for stale claim outboxId=${row
-                  .id} " + s"jobId=${row.jobId.value}")
+  def publish(row: OcrQueueOutboxRecord): F[Unit] = queue.publish(row.enqueueRequest).attempt
+    .flatMap {
+      case Right(redisMessageId) => Clock[F].realTimeInstant.flatMap { now =>
+          outbox.markDelivered(row.id, row.claimExpiresAt, redisMessageId, now).flatMap {
+            case true => Temporal[F].unit
+            case false => logger
+                .warn(s"OCR queue outbox delivered update ignored for stale claim outboxId=${row
+                    .id} " + s"jobId=${row.jobId.value}")
+          }
         }
-      }
-    case Left(error) =>
-      for
-        now <- Clock[F].realTimeInstant
-        nextAttemptAt = plus(now, nextBackoff(row.attemptCount + 1))
-        sanitized = sanitizeError(error)
-        errorClasses = SafeLog.throwableClasses(error)
-        _ <- logger.error(s"OCR queue outbox publish failed outboxId=${row.id} jobId=${row.jobId
-            .value} attempt=${row.attemptCount +
-            1} nextAttemptAt=$nextAttemptAt errorClasses=$errorClasses")
-        released <- outbox
-          .releaseForRetry(row.id, row.claimExpiresAt, sanitized, nextAttemptAt, now)
-        _ <-
-          if released then Temporal[F].unit
-          else
-            logger.warn(s"OCR queue outbox retry release ignored for stale claim outboxId=${row
-                .id} " + s"jobId=${row.jobId.value}")
-      yield ()
-  }
+      case Left(error) =>
+        for
+          now <- Clock[F].realTimeInstant
+          nextAttemptAt = plus(now, nextBackoff(row.attemptCount + 1))
+          sanitized = sanitizeError(error)
+          errorClasses = SafeLog.throwableClasses(error)
+          _ <- logger.error(s"OCR queue outbox publish failed outboxId=${row.id} jobId=${row.jobId
+              .value} attempt=${row.attemptCount +
+              1} nextAttemptAt=$nextAttemptAt errorClasses=$errorClasses")
+          released <- outbox
+            .releaseForRetry(row.id, row.claimExpiresAt, sanitized, nextAttemptAt, now)
+          _ <-
+            if released then Temporal[F].unit
+            else
+              logger.warn(s"OCR queue outbox retry release ignored for stale claim outboxId=${row
+                  .id} " + s"jobId=${row.jobId.value}")
+        yield ()
+    }
 
   private def nextBackoff(attempt: Int): FiniteDuration =
     val seconds = math.min(maxBackoff.toSeconds, math.max(1L, 1L << math.min(attempt, 6)))

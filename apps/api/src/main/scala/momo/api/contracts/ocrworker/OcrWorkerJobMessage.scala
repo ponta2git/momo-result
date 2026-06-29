@@ -1,4 +1,4 @@
-package momo.api.repositories
+package momo.api.contracts.ocrworker
 
 import java.nio.file.Path
 import java.time.Instant
@@ -11,8 +11,9 @@ import io.circe.{Json, Printer}
 import momo.api.codec.OcrHintsCodec.given
 import momo.api.domain.ids.*
 import momo.api.domain.{OcrJobHints, RequestId, ScreenType}
+import momo.api.ports.queue.OcrJobEnqueueRequest
 
-final case class OcrQueuePayloadV1(
+final case class OcrWorkerJobMessageV1(
     jobId: OcrJobId,
     draftId: OcrDraftId,
     imageId: ImageId,
@@ -24,10 +25,21 @@ final case class OcrQueuePayloadV1(
     requestId: Option[String],
 )
 
-final case class OcrQueuePayload(value: OcrQueuePayloadV1):
-  def fields: Map[String, String] = OcrQueuePayload.toRedisFields(value)
+final case class OcrWorkerJobMessage(value: OcrWorkerJobMessageV1):
+  def fields: Map[String, String] = OcrWorkerJobMessage.toStreamFields(value)
+  def toEnqueueRequest: OcrJobEnqueueRequest = OcrJobEnqueueRequest(
+    jobId = value.jobId,
+    draftId = value.draftId,
+    imageId = value.imageId,
+    imagePath = value.imagePath,
+    requestedScreenType = value.requestedScreenType,
+    attempt = value.attempt,
+    enqueuedAt = value.enqueuedAt,
+    hints = value.hints,
+    requestId = value.requestId,
+  )
 
-object OcrQueuePayload:
+object OcrWorkerJobMessage:
   val SchemaVersionKey = "schemaVersion"
   val SchemaVersion = "1"
   val RequiredKeys: Set[String] = Set(
@@ -55,7 +67,7 @@ object OcrQueuePayload:
       enqueuedAt: Instant,
       hints: OcrJobHints,
       requestId: Option[String],
-  ): OcrQueuePayload = OcrQueuePayload(OcrQueuePayloadV1(
+  ): OcrWorkerJobMessage = OcrWorkerJobMessage(OcrWorkerJobMessageV1(
     jobId = jobId,
     draftId = draftId,
     imageId = imageId,
@@ -67,7 +79,19 @@ object OcrQueuePayload:
     requestId = requestId,
   ))
 
-  def toRedisFields(value: OcrQueuePayloadV1): Map[String, String] =
+  def fromEnqueueRequest(request: OcrJobEnqueueRequest): OcrWorkerJobMessage = build(
+    jobId = request.jobId,
+    draftId = request.draftId,
+    imageId = request.imageId,
+    imagePath = request.imagePath,
+    requestedScreenType = request.requestedScreenType,
+    attempt = request.attempt,
+    enqueuedAt = request.enqueuedAt,
+    hints = request.hints,
+    requestId = request.requestId,
+  )
+
+  def toStreamFields(value: OcrWorkerJobMessageV1): Map[String, String] =
     val base = Map(
       SchemaVersionKey -> SchemaVersion,
       "jobId" -> value.jobId.value,
@@ -87,12 +111,12 @@ object OcrQueuePayload:
       case Some(id) => withHints + (RequestIdKey -> id)
       case None => withHints
 
-  def fieldsAsJson(payload: OcrQueuePayload): Json = Json
-    .obj(payload.fields.toSeq.sortBy(_._1).map { case (key, value) =>
+  def fieldsAsJson(message: OcrWorkerJobMessage): Json = Json
+    .obj(message.fields.toSeq.sortBy(_._1).map { case (key, value) =>
       key -> Json.fromString(value)
     }*)
 
-  def fromJson(json: Json): Either[String, OcrQueuePayload] = json.asObject
+  def fromJson(json: Json): Either[String, OcrWorkerJobMessage] = json.asObject
     .toRight("stream payload must be a JSON object").flatMap { obj =>
       val fields = obj.toMap
       val allowed = RequiredKeys + HintsKey + RequestIdKey
@@ -104,7 +128,7 @@ object OcrQueuePayload:
 
   private def parseRedisFields(
       fields: Map[String, Option[String]]
-  ): Either[String, OcrQueuePayload] =
+  ): Either[String, OcrWorkerJobMessage] =
     def required(key: String): Either[String, String] = fields.get(key).flatten
       .toRight(s"field $key must be a string")
 
@@ -146,7 +170,7 @@ object OcrQueuePayload:
       _ <- OcrJobHints.validationErrors(hints) match
         case Nil => Right(())
         case errors => Left(errors.mkString(" "))
-    yield OcrQueuePayload(OcrQueuePayloadV1(
+    yield OcrWorkerJobMessage(OcrWorkerJobMessageV1(
       jobId = parsedJobId,
       draftId = parsedDraftId,
       imageId = parsedImageId,

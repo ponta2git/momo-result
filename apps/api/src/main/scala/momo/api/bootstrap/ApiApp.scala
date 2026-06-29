@@ -168,7 +168,7 @@ object ApiApp:
               imageStore = imageStore,
               imageReferences = imageReferences,
               healthDetails = health,
-              ocrQueueSubmitter = OcrQueueSubmitter.outboxBacked[F](ocrQueueOutbox, queue),
+              ocrQueueSubmitter = OcrJobQueueSubmitter.outboxBacked[F](ocrQueueOutbox, queue),
               ocrAdmissionGuard = ocrAdmissionGuard,
               ocrJobCreation = ocrJobCreation,
               jobs = jobs,
@@ -290,7 +290,7 @@ object ApiApp:
                 matchDrafts,
                 jobs.existsActiveByDraft,
               )
-              ocrQueueSubmitter = OcrQueueSubmitter.direct[F](jobs, matchDrafts, queue)
+              ocrQueueSubmitter = OcrJobQueueSubmitter.direct[F](jobs, matchDrafts, queue)
               ocrAdmissionGuard = OcrAdmissionGuard.allowAll[F]
             yield (
               jobs,

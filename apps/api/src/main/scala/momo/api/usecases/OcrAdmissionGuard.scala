@@ -11,7 +11,8 @@ import org.typelevel.log4cats.LoggerFactory
 
 import momo.api.errors.AppError
 import momo.api.logging.SafeLog
-import momo.api.repositories.{OcrQueueBacklogSnapshot, OcrQueueOutboxRepository, QueueHealthProbe}
+import momo.api.ports.queue.OcrJobQueueHealthCheck
+import momo.api.repositories.{OcrQueueBacklogSnapshot, OcrQueueOutboxRepository}
 
 trait OcrAdmissionGuard[F[_]]:
   def ensureAvailable: F[Either[AppError, Unit]]
@@ -64,13 +65,13 @@ object OcrAdmissionGuard:
 
   def from[F[_]: MonadThrow: Clock: LoggerFactory](
       outbox: OcrQueueOutboxRepository[F],
-      queueHealth: QueueHealthProbe[F],
+      queueHealth: OcrJobQueueHealthCheck[F],
       config: Config,
   ): OcrAdmissionGuard[F] = LiveOcrAdmissionGuard(outbox, queueHealth, config)
 
 private final class LiveOcrAdmissionGuard[F[_]: MonadThrow: Clock: LoggerFactory](
     outbox: OcrQueueOutboxRepository[F],
-    queueHealth: QueueHealthProbe[F],
+    queueHealth: OcrJobQueueHealthCheck[F],
     config: OcrAdmissionGuard.Config,
 ) extends OcrAdmissionGuard[F]:
   import OcrAdmissionGuard.*

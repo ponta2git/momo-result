@@ -8,18 +8,18 @@ import com.networknt.schema.{InputFormat, SchemaRegistry, SpecificationVersion}
 import io.circe.Json
 import munit.Assertions
 
-import momo.api.repositories.OcrQueuePayload
+import momo.api.contracts.ocrworker.OcrWorkerJobMessage
 
 trait JsonSchemaAssertions extends Assertions:
-  protected def assertOcrQueuePayloadSchemaValid(payloadJson: Json): Unit =
+  protected def assertOcrWorkerJobMessageSchemaValid(payloadJson: Json): Unit =
     assertJsonSchemaValid(streamPayloadSchemaPath, payloadJson.noSpaces)
-    OcrQueuePayload.fromJson(payloadJson) match
-      case Left(reason) => fail(s"stream payload is not an OcrQueuePayload: $reason")
-      case Right(payload) => payload.fields.get(OcrQueuePayload.HintsKey)
+    OcrWorkerJobMessage.fromJson(payloadJson) match
+      case Left(reason) => fail(s"stream payload is not an OcrWorkerJobMessage: $reason")
+      case Right(payload) => payload.fields.get(OcrWorkerJobMessage.HintsKey)
           .foreach(hintsJson => assertJsonSchemaValid(ocrHintsSchemaPath, hintsJson))
 
-  protected def assertOcrQueuePayloadSchemaValid(payload: OcrQueuePayload): Unit =
-    assertOcrQueuePayloadSchemaValid(OcrQueuePayload.fieldsAsJson(payload))
+  protected def assertOcrWorkerJobMessageSchemaValid(payload: OcrWorkerJobMessage): Unit =
+    assertOcrWorkerJobMessageSchemaValid(OcrWorkerJobMessage.fieldsAsJson(payload))
 
   protected def assertJsonSchemaValid(schemaPath: Path, inputJson: String): Unit =
     val errors = jsonSchemaErrors(schemaPath, inputJson)

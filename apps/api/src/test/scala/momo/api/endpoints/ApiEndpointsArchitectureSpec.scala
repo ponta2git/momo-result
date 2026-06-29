@@ -12,8 +12,8 @@ final class ApiEndpointsArchitectureSpec extends FunSuite:
   private val httpDir = Paths.get("src/main/scala/momo/api/http")
   private val httpModulesDir = httpDir.resolve("modules")
   private val codecDir = Paths.get("src/main/scala/momo/api/codec")
-  private val redisQueuePayload = Paths
-    .get("src/main/scala/momo/api/repositories/OcrQueuePayload.scala")
+  private val ocrWorkerJobMessage = Paths
+    .get("src/main/scala/momo/api/contracts/ocrworker/OcrWorkerJobMessage.scala")
   private val authModule = Paths.get("src/main/scala/momo/api/http/modules/AuthModule.scala")
   private val commonEndpoint = endpointDir.resolve("CommonEndpoint.scala")
   private val csrfMiddleware = httpDir.resolve("CsrfMiddleware.scala")
@@ -50,7 +50,7 @@ final class ApiEndpointsArchitectureSpec extends FunSuite:
 
   test("API boundaries parse ids before constructing domain id types"):
     val boundaryFiles = scalaFiles(endpointDir) ++ scalaFiles(httpDir) ++ scalaFiles(codecDir) ++
-      List(redisQueuePayload)
+      List(ocrWorkerJobMessage)
     val violations = boundaryFiles.flatMap { path =>
       if read(path).contains("unsafeFromString") then Some(path.toString) else None
     }.sorted

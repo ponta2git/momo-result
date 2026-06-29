@@ -13,6 +13,7 @@ import momo.api.auth.{DiscordOAuthClient, DiscordUser}
 import momo.api.domain.ids.{AccountId, ImageId, OcrDraftId, OcrJobId}
 import momo.api.domain.{OcrFailure, OcrJob, StoredImage}
 import momo.api.errors.AppError
+import momo.api.ports.queue.{OcrJobEnqueueRequest, OcrJobQueueHealthCheck, OcrJobQueuePublisher}
 import momo.api.repositories.{
   AppSession,
   AppSessionsRepository,
@@ -20,10 +21,7 @@ import momo.api.repositories.{
   OcrJobsRepository,
   OcrQueueBacklogSnapshot,
   OcrQueueOutboxRecord,
-  OcrQueueOutboxRepository,
-  OcrQueuePayload,
-  QueueHealthProbe,
-  QueueProducer
+  OcrQueueOutboxRepository
 }
 
 object FixedClock:
@@ -33,29 +31,29 @@ object FixedClock:
     override def realTime: IO[FiniteDuration] = IO
       .pure(java.time.Duration.between(Instant.EPOCH, now).toNanos.nanos)
 
-final class RecordingQueueProducer private (
-    ref: Ref[IO, Vector[OcrQueuePayload]],
-    messageId: OcrQueuePayload => String,
-) extends QueueProducer[IO]:
-  override def publish(payload: OcrQueuePayload): IO[String] = ref.update(_ :+ payload)
-    .as(messageId(payload))
-  override def ping: IO[Unit] = IO.unit
+final class RecordingOcrJobQueuePublisher private (
+    ref: Ref[IO, Vector[OcrJobEnqueueRequest]],
+    messageId: OcrJobEnqueueRequest => String,
+) extends OcrJobQueuePublisher[IO]:
+  override def publish(request: OcrJobEnqueueRequest): IO[String] = ref.update(_ :+ request)
+    .as(messageId(request))
 
-  def published: IO[Vector[OcrQueuePayload]] = ref.get
+  def published: IO[Vector[OcrJobEnqueueRequest]] = ref.get
 
-object RecordingQueueProducer:
-  def create: IO[RecordingQueueProducer] =
-    createWithMessageId(payload => s"redis-${payload.fields("jobId")}")
+object RecordingOcrJobQueuePublisher:
+  def create: IO[RecordingOcrJobQueuePublisher] =
+    createWithMessageId(request => s"redis-${request.jobId.value}")
 
-  def createWithMessageId(messageId: OcrQueuePayload => String): IO[RecordingQueueProducer] = Ref
-    .of[IO, Vector[OcrQueuePayload]](Vector.empty)
-    .map(ref => new RecordingQueueProducer(ref, messageId))
+  def createWithMessageId(
+      messageId: OcrJobEnqueueRequest => String
+  ): IO[RecordingOcrJobQueuePublisher] = Ref
+    .of[IO, Vector[OcrJobEnqueueRequest]](Vector.empty)
+    .map(ref => new RecordingOcrJobQueuePublisher(ref, messageId))
 
-final case class FailingQueueProducer(error: Throwable) extends QueueProducer[IO]:
-  override def publish(payload: OcrQueuePayload): IO[String] =
-    val _ = payload
+final case class FailingOcrJobQueuePublisher(error: Throwable) extends OcrJobQueuePublisher[IO]:
+  override def publish(request: OcrJobEnqueueRequest): IO[String] =
+    val _ = request
     IO.raiseError(error)
-  override def ping: IO[Unit] = IO.unit
 
 final case class FailingMarkFailedOcrJobsRepository(
     delegate: OcrJobsRepository[IO],
@@ -264,15 +262,15 @@ object RecordingRedisStreamClient:
   def create: IO[RecordingRedisStreamClient] = Ref.of[IO, Vector[RedisXAddCall]](Vector.empty)
     .map(new RecordingRedisStreamClient(_))
 
-final case class StaticQueueHealthProbe(deadLetterLengthValue: Long = 0L)
-    extends QueueHealthProbe[IO]:
+final case class StaticOcrJobQueueHealthCheck(deadLetterLengthValue: Long = 0L)
+    extends OcrJobQueueHealthCheck[IO]:
   override def ping: IO[Unit] = IO.unit
   override def deadLetterLength: IO[Long] = IO.pure(deadLetterLengthValue)
 
-final case class FailingQueueHealthProbe(
+final case class FailingOcrJobQueueHealthCheck(
     pingError: Option[Throwable],
     deadLetterLengthError: Option[Throwable],
-) extends QueueHealthProbe[IO]:
+) extends OcrJobQueueHealthCheck[IO]:
   override def ping: IO[Unit] = pingError match
     case None => IO.unit
     case Some(error) => IO.raiseError(error)

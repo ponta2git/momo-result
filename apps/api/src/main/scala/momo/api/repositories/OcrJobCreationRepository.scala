@@ -4,6 +4,7 @@ import java.time.Instant
 
 import momo.api.domain.ids.*
 import momo.api.domain.{OcrDraft, OcrJob, ScreenType}
+import momo.api.ports.queue.OcrJobEnqueueRequest
 
 final case class OcrJobDraftAttachment(
     draftId: MatchDraftId,
@@ -18,7 +19,7 @@ trait OcrJobCreationRepository[F[_]]:
       draft: OcrDraft,
       job: OcrJob,
       attachment: Option[OcrJobDraftAttachment],
-      queuePayload: OcrQueuePayload,
+      enqueueRequest: OcrJobEnqueueRequest,
       activeJobLimit: Int,
   ): F[Unit]
 

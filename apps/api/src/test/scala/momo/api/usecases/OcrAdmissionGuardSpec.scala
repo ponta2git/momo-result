@@ -12,11 +12,11 @@ import momo.api.MomoCatsEffectSuite
 import momo.api.errors.AppError
 import momo.api.repositories.OcrQueueBacklogSnapshot
 import momo.api.testing.{
-  FailingQueueHealthProbe,
+  FailingOcrJobQueueHealthCheck,
   FixedClock,
   OutboxBacklogSnapshotCall,
   RecordingOcrQueueOutboxRepository,
-  StaticQueueHealthProbe
+  StaticOcrJobQueueHealthCheck
 }
 
 final class OcrAdmissionGuardSpec extends MomoCatsEffectSuite:
@@ -45,7 +45,7 @@ final class OcrAdmissionGuardSpec extends MomoCatsEffectSuite:
         duePendingCount = 1,
         oldestDueNextAttemptAt = Some(now.minusSeconds(60)),
       ))
-      guard = guardAt(repo, StaticQueueHealthProbe(deadLetterLengthValue = 0L), config)
+      guard = guardAt(repo, StaticOcrJobQueueHealthCheck(deadLetterLengthValue = 0L), config)
       result <- guard.ensureAvailable
       health <- guard.healthStatus
       calls <- repo.backlogSnapshots
@@ -60,7 +60,7 @@ final class OcrAdmissionGuardSpec extends MomoCatsEffectSuite:
       repo <- repoWithSnapshot(emptySnapshot)
       guard = guardAt(
         repo,
-        FailingQueueHealthProbe(Some(redisError), deadLetterLengthError = None),
+        FailingOcrJobQueueHealthCheck(Some(redisError), deadLetterLengthError = None),
         config,
       )
       result <- guard.ensureAvailable
@@ -74,7 +74,7 @@ final class OcrAdmissionGuardSpec extends MomoCatsEffectSuite:
   test("rejects when due outbox backlog exceeds the configured limit"):
     for
       repo <- repoWithSnapshot(emptySnapshot.copy(duePendingCount = 25))
-      guard = guardAt(repo, StaticQueueHealthProbe(), config)
+      guard = guardAt(repo, StaticOcrJobQueueHealthCheck(), config)
       result <- guard.ensureAvailable
       health <- guard.healthStatus
     yield
@@ -84,7 +84,7 @@ final class OcrAdmissionGuardSpec extends MomoCatsEffectSuite:
   test("rejects when active outbox backlog exceeds the configured limit"):
     for
       repo <- repoWithSnapshot(emptySnapshot.copy(pendingCount = 49))
-      guard = guardAt(repo, StaticQueueHealthProbe(), config)
+      guard = guardAt(repo, StaticOcrJobQueueHealthCheck(), config)
       result <- guard.ensureAvailable
       health <- guard.healthStatus
     yield
@@ -97,7 +97,7 @@ final class OcrAdmissionGuardSpec extends MomoCatsEffectSuite:
         emptySnapshot
           .copy(duePendingCount = 1, oldestDueNextAttemptAt = Some(now.minusSeconds(601)))
       )
-      guard = guardAt(repo, StaticQueueHealthProbe(), config)
+      guard = guardAt(repo, StaticOcrJobQueueHealthCheck(), config)
       result <- guard.ensureAvailable
       health <- guard.healthStatus
     yield
@@ -107,7 +107,7 @@ final class OcrAdmissionGuardSpec extends MomoCatsEffectSuite:
   test("rejects when dead-letter backlog exceeds the configured limit"):
     for
       repo <- repoWithSnapshot(emptySnapshot)
-      guard = guardAt(repo, StaticQueueHealthProbe(deadLetterLengthValue = 25L), config)
+      guard = guardAt(repo, StaticOcrJobQueueHealthCheck(deadLetterLengthValue = 25L), config)
       result <- guard.ensureAvailable
       health <- guard.healthStatus
     yield
@@ -116,7 +116,7 @@ final class OcrAdmissionGuardSpec extends MomoCatsEffectSuite:
 
   private def guardAt(
       repo: RecordingOcrQueueOutboxRepository,
-      queueHealth: momo.api.repositories.QueueHealthProbe[IO],
+      queueHealth: momo.api.ports.queue.OcrJobQueueHealthCheck[IO],
       config: OcrAdmissionGuard.Config,
   ): OcrAdmissionGuard[IO] =
     given Clock[IO] = FixedClock.at(now)

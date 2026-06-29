@@ -13,21 +13,23 @@ import dev.profunktor.redis4cats.data.RedisCodec
 import dev.profunktor.redis4cats.effect.Log.NoOp.*
 import io.lettuce.core.Range
 
-import momo.api.adapters.RedisQueueProducer
+import momo.api.adapters.RedisOcrJobQueuePublisher
 import momo.api.config.RedisConfig
+import momo.api.contracts.ocrworker.OcrWorkerJobMessage
 import momo.api.domain.ids.*
 import momo.api.domain.{OcrJobHints, ScreenType}
-import momo.api.repositories.OcrQueuePayload
+import momo.api.ports.queue.OcrJobEnqueueRequest
 
-final class RedisQueueProducerIntegrationSpec extends RedisIntegrationSuite:
+final class RedisOcrJobQueuePublisherIntegrationSpec extends RedisIntegrationSuite:
   private final case class RedisStreamFixture(
       redisUrl: String,
       streamName: String,
       deadLetterStreamName: String,
   )
 
-  test("publishes OCR payload fields to a Redis Streams Testcontainer"):
-    val payload = payloadFor("job-redis")
+  test("publishes OCR worker message fields to a Redis Streams Testcontainer"):
+    val request = requestFor("job-redis")
+    val expectedMessage = OcrWorkerJobMessage.fromEnqueueRequest(request)
     redisStreamFixture.use { fixture =>
       val config = RedisConfig(
         fixture.redisUrl,
@@ -35,8 +37,8 @@ final class RedisQueueProducerIntegrationSpec extends RedisIntegrationSuite:
         "momo-ocr-workers",
         fixture.deadLetterStreamName,
       )
-      RedisQueueProducer.resource[IO](config).use { producer =>
-        producer.publish(payload).flatMap { messageId =>
+      RedisOcrJobQueuePublisher.resource[IO](config).use { producer =>
+        producer.publish(request).flatMap { messageId =>
           Redis[IO].simple(fixture.redisUrl, RedisCodec.Utf8).use { commands =>
             commands.unsafe(_.xrange(fixture.streamName, Range.unbounded[String]())).map {
               messages =>
@@ -47,7 +49,7 @@ final class RedisQueueProducerIntegrationSpec extends RedisIntegrationSuite:
                 )
                 assertEquals(messageId, rows.head.getId)
                 val body: util.Map[String, String] = rows.head.getBody
-                assertEquals(body, payload.fields.asJava)
+                assertEquals(body, expectedMessage.fields.asJava)
             }
           }
         }
@@ -57,7 +59,7 @@ final class RedisQueueProducerIntegrationSpec extends RedisIntegrationSuite:
   test("health probe reports dead-letter stream length"):
     redisStreamFixture.use { fixture =>
       Redis[IO].simple(fixture.redisUrl, RedisCodec.Utf8).use { commands =>
-        val probe = RedisQueueProducer
+        val probe = RedisOcrJobQueuePublisher
           .healthProbeFromCommands[IO](fixture.deadLetterStreamName, commands)
         for
           empty <- probe.deadLetterLength
@@ -71,7 +73,7 @@ final class RedisQueueProducerIntegrationSpec extends RedisIntegrationSuite:
       }
     }
 
-  private def payloadFor(jobId: String): OcrQueuePayload = OcrQueuePayload.build(
+  private def requestFor(jobId: String): OcrJobEnqueueRequest = OcrJobEnqueueRequest(
     jobId = OcrJobId.unsafeFromString(jobId),
     draftId = OcrDraftId.unsafeFromString(s"draft-$jobId"),
     imageId = ImageId.unsafeFromString(s"image-$jobId"),
@@ -101,4 +103,4 @@ final class RedisQueueProducerIntegrationSpec extends RedisIntegrationSuite:
 
   private def deleteStream(redisUrl: String, streamName: String): IO[Unit] = Redis[IO]
     .simple(redisUrl, RedisCodec.Utf8).use(_.del(streamName).void).handleErrorWith(_ => IO.unit)
-end RedisQueueProducerIntegrationSpec
+end RedisOcrJobQueuePublisherIntegrationSpec

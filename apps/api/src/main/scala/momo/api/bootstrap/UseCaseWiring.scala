@@ -95,7 +95,7 @@ private[bootstrap] object UseCaseWiring:
       imageStore: LocalFsImageStore[F],
       imageReferences: ImageReferenceRepository[F],
       healthDetails: F[HealthDetailsResponse],
-      ocrQueueSubmitter: OcrQueueSubmitter[F],
+      ocrQueueSubmitter: OcrJobQueueSubmitter[F],
       ocrAdmissionGuard: OcrAdmissionGuard[F],
       ocrJobCreation: OcrJobCreationRepository[F],
       jobs: OcrJobsRepository[F],

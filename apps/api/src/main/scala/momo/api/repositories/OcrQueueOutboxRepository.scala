@@ -3,6 +3,7 @@ package momo.api.repositories
 import java.time.Instant
 
 import momo.api.domain.ids.OcrJobId
+import momo.api.ports.queue.OcrJobEnqueueRequest
 
 enum OcrQueueOutboxStatus(val wire: String) derives CanEqual:
   case Pending extends OcrQueueOutboxStatus("PENDING")
@@ -16,7 +17,7 @@ object OcrQueueOutboxStatus:
 final case class OcrQueueOutboxRecord(
     id: String,
     jobId: OcrJobId,
-    payload: OcrQueuePayload,
+    enqueueRequest: OcrJobEnqueueRequest,
     attemptCount: Int,
     claimExpiresAt: Instant,
 )
@@ -35,7 +36,7 @@ final case class OcrQueueOutboxDraft(
     id: String,
     jobId: OcrJobId,
     dedupeKey: String,
-    payload: OcrQueuePayload,
+    enqueueRequest: OcrJobEnqueueRequest,
     createdAt: Instant,
 )
 
@@ -43,12 +44,16 @@ object OcrQueueOutboxDraft:
   def idForJob(jobId: OcrJobId): String = s"ocr-outbox-${jobId.value}"
   def dedupeKeyForJob(jobId: OcrJobId): String = s"ocr-job:${jobId.value}"
 
-  def forJob(jobId: OcrJobId, payload: OcrQueuePayload, createdAt: Instant): OcrQueueOutboxDraft =
+  def forJob(
+      jobId: OcrJobId,
+      enqueueRequest: OcrJobEnqueueRequest,
+      createdAt: Instant,
+  ): OcrQueueOutboxDraft =
     OcrQueueOutboxDraft(
       id = idForJob(jobId),
       jobId = jobId,
       dedupeKey = dedupeKeyForJob(jobId),
-      payload = payload,
+      enqueueRequest = enqueueRequest,
       createdAt = createdAt,
     )
 

@@ -10,13 +10,13 @@ import org.typelevel.log4cats.LoggerFactory
 import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.errors.AppError
+import momo.api.ports.queue.OcrJobEnqueueRequest
 import momo.api.repositories.{
   ImageStore,
   MatchDraftsRepository,
   MemberAliasesRepository,
   OcrJobCreationRepository,
-  OcrJobDraftAttachment,
-  OcrQueuePayload
+  OcrJobDraftAttachment
 }
 import momo.api.usecases.syntax.UseCaseSyntax.*
 
@@ -27,13 +27,13 @@ final case class CreateOcrJobCommand(
     matchDraftId: Option[MatchDraftId],
 )
 
-final case class CreatedOcrJob(job: OcrJob, draft: OcrDraft, queuePayload: OcrQueuePayload)
+final case class CreatedOcrJob(job: OcrJob, draft: OcrDraft)
 
 final class CreateOcrJob[F[_]: MonadThrow](
     imageStore: ImageStore[F],
     creation: OcrJobCreationRepository[F],
     matchDrafts: MatchDraftsRepository[F],
-    queueSubmitter: OcrQueueSubmitter[F],
+    queueSubmitter: OcrJobQueueSubmitter[F],
     admissionGuard: OcrAdmissionGuard[F],
     now: F[Instant],
     nextJobId: F[OcrJobId],
@@ -71,7 +71,7 @@ final class CreateOcrJob[F[_]: MonadThrow](
     draftId <- EitherT.liftF(nextDraftId)
     draft = initialDraft(draftId, jobId, command.requestedScreenType, createdAt)
     job = queuedJob(jobId, draftId, imageId, image.path, command.requestedScreenType, createdAt)
-    payload = queuePayload(
+    enqueueRequest = buildEnqueueRequest(
       jobId,
       draftId,
       imageId,
@@ -90,32 +90,33 @@ final class CreateOcrJob[F[_]: MonadThrow](
         updatedAt = createdAt,
       )
     )
-    _ <- createDbRecords(draft, job, attachment, payload)
-    _ <- EitherT(queueSubmitter.submit(OcrQueueSubmitter.Context(
-      payload = payload,
+    _ <- createDbRecords(draft, job, attachment, enqueueRequest)
+    _ <- EitherT(queueSubmitter.submit(OcrJobQueueSubmitter.Context(
+      enqueueRequest = enqueueRequest,
       jobId = jobId,
       draftId = draftId,
       matchDraftId = command.matchDraftId,
       createdAt = createdAt,
     )))
-  yield CreatedOcrJob(job, draft, payload)).value
+  yield CreatedOcrJob(job, draft)).value
 
   private def createDbRecords(
       draft: OcrDraft,
       job: OcrJob,
       attachment: Option[OcrJobDraftAttachment],
-      payload: OcrQueuePayload,
+      enqueueRequest: OcrJobEnqueueRequest,
   ): EitherT[F, AppError, Unit] = EitherT(
-    creation.createQueuedJob(draft, job, attachment, payload, activeJobLimit).attempt.flatMap {
-      case Right(_) => ().asRight[AppError].pure[F]
-      case Left(_: OcrJobCreationRepository.ActiveJobLimitExceeded) => logger.warn(
-          s"ocr_job_create_rejected reason=active_job_limit_exceeded limit=$activeJobLimit"
-        ) >> AppError.ServiceUnavailable("OCR queue is currently full. Try again later.")
-          .asLeft[Unit].pure[F]
-      case Left(_: OcrJobCreationRepository.MatchDraftAttachFailed) => AppError
-          .Conflict("match draft could not be attached to the OCR job.").asLeft[Unit].pure[F]
-      case Left(error) => MonadThrow[F].raiseError[Either[AppError, Unit]](error)
-    }
+    creation.createQueuedJob(draft, job, attachment, enqueueRequest, activeJobLimit).attempt
+      .flatMap {
+        case Right(_) => ().asRight[AppError].pure[F]
+        case Left(_: OcrJobCreationRepository.ActiveJobLimitExceeded) => logger.warn(
+            s"ocr_job_create_rejected reason=active_job_limit_exceeded limit=$activeJobLimit"
+          ) >> AppError.ServiceUnavailable("OCR queue is currently full. Try again later.")
+            .asLeft[Unit].pure[F]
+        case Left(_: OcrJobCreationRepository.MatchDraftAttachFailed) => AppError
+            .Conflict("match draft could not be attached to the OCR job.").asLeft[Unit].pure[F]
+        case Left(error) => MonadThrow[F].raiseError[Either[AppError, Unit]](error)
+      }
   )
 
   private def mergeMemberAliases(hints: OcrJobHints): F[OcrJobHints] = memberAliases.list(None)
@@ -188,7 +189,7 @@ object CreateOcrJob:
     updatedAt = createdAt,
   )
 
-  private def queuePayload(
+  private def buildEnqueueRequest(
       jobId: OcrJobId,
       draftId: OcrDraftId,
       imageId: ImageId,
@@ -197,13 +198,13 @@ object CreateOcrJob:
       enqueuedAt: Instant,
       hints: OcrJobHints,
       requestId: Option[String],
-  ): OcrQueuePayload = OcrQueuePayload.build(
+  ): OcrJobEnqueueRequest = OcrJobEnqueueRequest(
     jobId = jobId,
     draftId = draftId,
     imageId = imageId,
     imagePath = imagePath,
     requestedScreenType = screenType,
-    attempt = 1,
+    attempt = OcrJobEnqueueRequest.InitialAttempt,
     enqueuedAt = enqueuedAt,
     hints = hints,
     requestId = requestId,

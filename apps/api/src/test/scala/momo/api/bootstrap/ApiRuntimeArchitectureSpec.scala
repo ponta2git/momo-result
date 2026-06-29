@@ -24,12 +24,12 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
   private val localFsImageStoreFile =
     Paths.get("src/main/scala/momo/api/adapters/storage/local/LocalFsImageStore.scala")
   private val generatedIdUsecaseFiles = List(
-    Paths.get("src/main/scala/momo/api/usecases/AdminLoginAccounts.scala"),
-    Paths.get("src/main/scala/momo/api/usecases/ConfirmMatch.scala"),
-    Paths.get("src/main/scala/momo/api/usecases/CreateHeldEvent.scala"),
-    Paths.get("src/main/scala/momo/api/usecases/CreateMatchDraft.scala"),
-    Paths.get("src/main/scala/momo/api/usecases/CreateOcrJob.scala"),
-    Paths.get("src/main/scala/momo/api/usecases/ManageMasters.scala"),
+    Paths.get("src/main/scala/momo/api/usecases/admin/AdminLoginAccounts.scala"),
+    Paths.get("src/main/scala/momo/api/usecases/heldevents/CreateHeldEvent.scala"),
+    Paths.get("src/main/scala/momo/api/usecases/masters/ManageMasters.scala"),
+    Paths.get("src/main/scala/momo/api/usecases/matches/ConfirmMatch.scala"),
+    Paths.get("src/main/scala/momo/api/usecases/matchdrafts/CreateMatchDraft.scala"),
+    Paths.get("src/main/scala/momo/api/usecases/ocr/CreateOcrJob.scala"),
   )
 
   test("database connection acquisition does not run on the Cats Effect compute pool"):

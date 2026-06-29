@@ -9,11 +9,11 @@ import munit.FunSuite
 
 final class PostgresRepositoryArchitectureSpec extends FunSuite:
   private val matchListReadModel =
-    Paths.get("src/main/scala/momo/api/repositories/postgres/PostgresMatchListReadModel.scala")
+    Paths.get("src/main/scala/momo/api/adapters/postgres/PostgresMatchListReadModel.scala")
   private val seriesComparisonReadModel = Paths.get(
-    "src/main/scala/momo/api/repositories/postgres/PostgresSeriesComparisonReadModel.scala"
+    "src/main/scala/momo/api/adapters/postgres/PostgresSeriesComparisonReadModel.scala"
   )
-  private val postgresDir = Paths.get("src/main/scala/momo/api/repositories/postgres")
+  private val postgresDir = Paths.get("src/main/scala/momo/api/adapters/postgres")
 
   test("match list read-model maps DB rows through named fields"):
     val text = read(matchListReadModel)

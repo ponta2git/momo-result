@@ -9,7 +9,7 @@ import momo.api.domain.ids.*
 import momo.api.domain.{IncidentCounts, PlayerResult}
 import momo.api.endpoints.{ConfirmMatchRequest, PlayerResultRequest, UpdateMatchRequest}
 import momo.api.errors.AppError
-import momo.api.usecases.matches.{ConfirmMatch, UpdateMatch}
+import momo.api.usecases.matches.{ConfirmMatchCommand, MatchDraftRefs, UpdateMatchCommand}
 
 /** DTO ↔ usecase command conversions for `MatchesEndpoints`. */
 object MatchCodec:
@@ -36,7 +36,7 @@ object MatchCodec:
       )
     }
 
-  def toConfirmCommand(request: ConfirmMatchRequest): Either[AppError, ConfirmMatch.Command] =
+  def toConfirmCommand(request: ConfirmMatchRequest): Either[AppError, ConfirmMatchCommand] =
     for
       heldEventId <- BoundaryId.required("heldEventId", request.heldEventId)(HeldEventId.fromString)
       gameTitleId <- BoundaryId.required("gameTitleId", request.gameTitleId)(GameTitleId.fromString)
@@ -55,7 +55,7 @@ object MatchCodec:
       incidentLogDraftId <- BoundaryId
         .optional("draftIds.incidentLog", request.draftIds.incidentLog)(OcrDraftId.fromString)
       players <- request.players.traverse(toPlayerResult)
-    yield ConfirmMatch.Command(
+    yield ConfirmMatchCommand(
       heldEventId = heldEventId,
       matchNoInEvent = request.matchNoInEvent,
       gameTitleId = gameTitleId,
@@ -64,7 +64,7 @@ object MatchCodec:
       mapMasterId = mapMasterId,
       playedAt = playedAt,
       matchDraftId = matchDraftId,
-      draftRefs = ConfirmMatch.DraftRefs(
+      draftRefs = MatchDraftRefs(
         totalAssets = totalAssetsDraftId,
         revenue = revenueDraftId,
         incidentLog = incidentLogDraftId,
@@ -72,7 +72,7 @@ object MatchCodec:
       players = players,
     )
 
-  def toUpdateCommand(request: UpdateMatchRequest): Either[AppError, UpdateMatch.Command] =
+  def toUpdateCommand(request: UpdateMatchRequest): Either[AppError, UpdateMatchCommand] =
     for
       heldEventId <- BoundaryId.required("heldEventId", request.heldEventId)(HeldEventId.fromString)
       gameTitleId <- BoundaryId.required("gameTitleId", request.gameTitleId)(GameTitleId.fromString)
@@ -89,7 +89,7 @@ object MatchCodec:
       incidentLogDraftId <- BoundaryId
         .optional("draftIds.incidentLog", request.draftIds.incidentLog)(OcrDraftId.fromString)
       players <- request.players.traverse(toPlayerResult)
-    yield UpdateMatch.Command(
+    yield UpdateMatchCommand(
       heldEventId = heldEventId,
       matchNoInEvent = request.matchNoInEvent,
       gameTitleId = gameTitleId,
@@ -97,7 +97,7 @@ object MatchCodec:
       ownerMemberId = ownerMemberId,
       mapMasterId = mapMasterId,
       playedAt = playedAt,
-      draftRefs = ConfirmMatch.DraftRefs(
+      draftRefs = MatchDraftRefs(
         totalAssets = totalAssetsDraftId,
         revenue = revenueDraftId,
         incidentLog = incidentLogDraftId,

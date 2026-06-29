@@ -42,7 +42,7 @@ final class UpdateMatchSpec extends MomoCatsEffectSuite:
         command(
           matchNoInEvent = 2,
           gameTitleId = titleId,
-          draftRefs = ConfirmMatch.DraftRefs(
+          draftRefs = MatchDraftRefs(
             totalAssets = None,
             revenue = Some(OcrDraftId.unsafeFromString("draft-revenue-new")),
             incidentLog = None,
@@ -115,8 +115,8 @@ final class UpdateMatchSpec extends MomoCatsEffectSuite:
   private def command(
       matchNoInEvent: Int,
       gameTitleId: GameTitleId,
-      draftRefs: ConfirmMatch.DraftRefs,
-  ): UpdateMatch.Command = UpdateMatch.Command(
+      draftRefs: MatchDraftRefs,
+  ): UpdateMatchCommand = UpdateMatchCommand(
     heldEventId = heldEventId,
     matchNoInEvent = matchNoInEvent,
     gameTitleId = gameTitleId,
@@ -128,8 +128,8 @@ final class UpdateMatchSpec extends MomoCatsEffectSuite:
     players = defaultPlayers,
   )
 
-  private def command(matchNoInEvent: Int, gameTitleId: GameTitleId): UpdateMatch.Command =
-    command(matchNoInEvent, gameTitleId, ConfirmMatch.DraftRefs(None, None, None))
+  private def command(matchNoInEvent: Int, gameTitleId: GameTitleId): UpdateMatchCommand =
+    command(matchNoInEvent, gameTitleId, MatchDraftRefs(None, None, None))
 
   private def sampleMatch(id: MatchId, matchNoInEvent: Int): MatchRecord = MatchFixtures
     .matchRecord(

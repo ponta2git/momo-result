@@ -126,23 +126,23 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
       yield assertAppError(result, "VALIDATION_FAILED", "mapMasterId")
     }
 
-  private def command(): ConfirmMatch.Command =
+  private def command(): ConfirmMatchCommand =
     commandWith(matchNoInEvent = 1, gameTitleId = titleId, players = defaultPlayers)
 
-  private def commandWithMatchNo(matchNoInEvent: Int): ConfirmMatch.Command =
+  private def commandWithMatchNo(matchNoInEvent: Int): ConfirmMatchCommand =
     commandWith(matchNoInEvent = matchNoInEvent, gameTitleId = titleId, players = defaultPlayers)
 
-  private def commandWithGameTitle(gameTitleId: GameTitleId): ConfirmMatch.Command =
+  private def commandWithGameTitle(gameTitleId: GameTitleId): ConfirmMatchCommand =
     commandWith(matchNoInEvent = 1, gameTitleId = gameTitleId, players = defaultPlayers)
 
-  private def commandWithPlayers(players: List[PlayerResult.Input]): ConfirmMatch.Command =
+  private def commandWithPlayers(players: List[PlayerResult.Input]): ConfirmMatchCommand =
     commandWith(matchNoInEvent = 1, gameTitleId = titleId, players = players)
 
   private def commandWith(
       matchNoInEvent: Int,
       gameTitleId: GameTitleId,
       players: List[PlayerResult.Input],
-  ): ConfirmMatch.Command = ConfirmMatch.Command(
+  ): ConfirmMatchCommand = ConfirmMatchCommand(
     heldEventId = heldEventId,
     matchNoInEvent = matchNoInEvent,
     gameTitleId = gameTitleId,
@@ -151,7 +151,7 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
     mapMasterId = mapId,
     playedAt = playedAt,
     matchDraftId = None,
-    draftRefs = ConfirmMatch.DraftRefs(None, None, None),
+    draftRefs = MatchDraftRefs(None, None, None),
     players = players,
   )
 

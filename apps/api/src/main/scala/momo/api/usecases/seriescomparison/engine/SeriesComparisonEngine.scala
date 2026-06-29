@@ -1,6 +1,5 @@
 package momo.api.usecases.seriescomparison.engine
 
-import momo.api.domain.constraints.RefinedTypes.MetricIdString
 import momo.api.domain.ids.{MatchId, MemberId}
 import momo.api.domain.{
   SeriesComparisonMatchPlayerRow,
@@ -21,35 +20,6 @@ final case class SeriesDataset(
   }.toMap
   val rowsByPlayer: Map[MemberId, List[SeriesComparisonMatchPlayerRow]] =
     orderedRows.groupBy(_.memberId)
-
-enum SampleStatus derives CanEqual:
-  case Ok
-  case Empty
-  case Insufficient
-  case NoDenominator
-  case Tied
-
-enum MetricDirection derives CanEqual:
-  case HigherIsBetter
-  case LowerIsBetter
-  case Neutral
-
-final case class MetricDefinition(
-    id: MetricIdString,
-    label: String,
-    formula: String,
-    direction: MetricDirection,
-    minimumSampleSize: Int,
-)
-
-final case class MetricEvidence(key: String, value: String)
-
-final case class MetricResult[A](
-    definition: MetricDefinition,
-    status: SampleStatus,
-    valuesByPlayer: Map[MemberId, A],
-    evidence: List[MetricEvidence],
-)
 
 object SeriesComparisonEngine:
   def dataset(

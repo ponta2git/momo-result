@@ -23,6 +23,25 @@ import momo.api.repositories.{
 import momo.api.usecases.matchdrafts.PurgeSourceImages
 import momo.api.usecases.syntax.UseCaseSyntax.*
 
+final case class MatchDraftRefs(
+    totalAssets: Option[OcrDraftId],
+    revenue: Option[OcrDraftId],
+    incidentLog: Option[OcrDraftId],
+)
+
+final case class ConfirmMatchCommand(
+    heldEventId: HeldEventId,
+    matchNoInEvent: Int,
+    gameTitleId: GameTitleId,
+    seasonMasterId: SeasonMasterId,
+    ownerMemberId: MemberId,
+    mapMasterId: MapMasterId,
+    playedAt: Instant,
+    matchDraftId: Option[MatchDraftId],
+    draftRefs: MatchDraftRefs,
+    players: List[PlayerResult.Input],
+)
+
 final class ConfirmMatch[F[_]: MonadThrow](
     heldEvents: HeldEventsRepository[F],
     matches: MatchesRepository[F],
@@ -39,7 +58,7 @@ final class ConfirmMatch[F[_]: MonadThrow](
   import ConfirmMatch.*
 
   def run(
-      command: Command,
+      command: ConfirmMatchCommand,
       createdBy: AccountId,
       playerMemberId: Option[MemberId],
   ): F[Either[AppError, MatchRecord]] = (for
@@ -118,25 +137,6 @@ final class ConfirmMatch[F[_]: MonadThrow](
   yield record).value
 
 object ConfirmMatch:
-  final case class DraftRefs(
-      totalAssets: Option[OcrDraftId],
-      revenue: Option[OcrDraftId],
-      incidentLog: Option[OcrDraftId],
-  )
-
-  final case class Command(
-      heldEventId: HeldEventId,
-      matchNoInEvent: Int,
-      gameTitleId: GameTitleId,
-      seasonMasterId: SeasonMasterId,
-      ownerMemberId: MemberId,
-      mapMasterId: MapMasterId,
-      playedAt: Instant,
-      matchDraftId: Option[MatchDraftId],
-      draftRefs: DraftRefs,
-      players: List[PlayerResult.Input],
-  )
-
   private def toMatchRecord(
       id: MatchId,
       createdAt: Instant,
@@ -144,7 +144,7 @@ object ConfirmMatch:
       layoutFamily: String,
       createdByAccountId: AccountId,
       createdByMemberId: Option[MemberId],
-      command: Command,
+      command: ConfirmMatchCommand,
       validated: MatchRecord.ValidatedInput,
   ): MatchRecord = MatchRecord(
     id = id,
@@ -167,7 +167,7 @@ object ConfirmMatch:
 
   private def validateDraftForConfirm(
       draft: momo.api.domain.MatchDraft,
-      draftRefs: DraftRefs,
+      draftRefs: MatchDraftRefs,
   ): Either[AppError, Unit] =
     val allowedStatuses = Set(
       momo.api.domain.MatchDraftStatus.DraftReady,

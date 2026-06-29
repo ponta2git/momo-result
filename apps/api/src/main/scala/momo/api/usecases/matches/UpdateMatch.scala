@@ -18,6 +18,18 @@ import momo.api.repositories.{
 }
 import momo.api.usecases.syntax.UseCaseSyntax.*
 
+final case class UpdateMatchCommand(
+    heldEventId: HeldEventId,
+    matchNoInEvent: Int,
+    gameTitleId: GameTitleId,
+    seasonMasterId: SeasonMasterId,
+    ownerMemberId: MemberId,
+    mapMasterId: MapMasterId,
+    playedAt: Instant,
+    draftRefs: MatchDraftRefs,
+    players: List[PlayerResult.Input],
+)
+
 final class UpdateMatch[F[_]: MonadThrow](
     heldEvents: HeldEventsRepository[F],
     matches: MatchesRepository[F],
@@ -27,9 +39,7 @@ final class UpdateMatch[F[_]: MonadThrow](
     now: F[Instant],
     allowedMemberIds: F[Set[MemberId]],
 ):
-  import UpdateMatch.*
-
-  def run(matchId: MatchId, command: Command): F[Either[AppError, MatchRecord]] = (for
+  def run(matchId: MatchId, command: UpdateMatchCommand): F[Either[AppError, MatchRecord]] = (for
     allowed <- EitherT.liftF(allowedMemberIds)
     existing <- matches.find(matchId).orNotFound("match", matchId.value)
     validated <- EitherT.fromEither[F](
@@ -92,16 +102,3 @@ final class UpdateMatch[F[_]: MonadThrow](
     )
     _ <- matches.update(record, updatedAt).recoverAppError
   yield record).value
-
-object UpdateMatch:
-  final case class Command(
-      heldEventId: HeldEventId,
-      matchNoInEvent: Int,
-      gameTitleId: GameTitleId,
-      seasonMasterId: SeasonMasterId,
-      ownerMemberId: MemberId,
-      mapMasterId: MapMasterId,
-      playedAt: Instant,
-      draftRefs: ConfirmMatch.DraftRefs,
-      players: List[PlayerResult.Input],
-  )

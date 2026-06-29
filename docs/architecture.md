@@ -35,6 +35,7 @@
 - Auth のように Tapir 定義と手書き http4s route が分かれる場合も、path / query / header の wire契約は共有定数から参照する。OpenAPI と実routeの文字列を二重管理しない。
 - HTTP endpoint、入力検証、認証/CSRF、usecase、repository を分離する。HTTP層へDB・Redis・業務分岐を直接詰め込まない。
 - composition root は `momo.api.bootstrap`。HTTP module は endpoint / middleware / routing に閉じる。
+- 外部システム境界は `momo.api.ports` と adapter で分離する。usecase は Redis、filesystem、worker wire payload を直接扱わず、application intent と domain value を port に渡す。
 - 認証付き Tapir endpoint は `securityIn` / `serverSecurityLogic` で security input と通常 input を分ける。read / mutation / admin / master-management の共通形は API 基盤 object に集約し、HTTP module は raw account header / CSRF header tuple を直接扱わない。
 - idempotency / rate limit / logging で使う HTTP operation label は `momo.api.http.HttpOperation` に集約する。label は replay scope として永続化されるため、route 変更時も互換性判断に含める。
 - path / query / body / queue payload の raw value は境界で domain/application 型へ変換する。usecase に wire表現を渡さない。
@@ -48,6 +49,7 @@ API境界の一部は `ApiEndpointsArchitectureSpec` と `ApiRuntimeArchitecture
 ### 2.2 Usecase / Repository
 
 - usecase は状態遷移、整合性、副作用を扱う。repository は SQL とDB入出力に閉じる。
+- active limit、競合、attach不可など通常制御フローとして起こり得る repository 結果は ADT で返す。`RuntimeException` / `AppException` は予期しない不整合、DB制約違反、外部I/O失敗に限る。
 - PostgreSQL repository は、SQL fragment 構築、DB row shape、domain/application 変換、公開 repository facade を分ける。Doobie query は named row case class へ decode し、`row._N` や巨大 tuple alias で domain を組み立てない。row から domain/application への変換は `fromRow` / `toItem` などの専用関数へ閉じる。
 - 部分更新は入力差分だけで判定しない。既存値と入力値をマージした保存予定の実効状態で不変条件を検証する。
 - 読み取りで検証した前提を後続更新で使う場合は、検証済みスナップショットを repository 契約に渡し、`UPDATE ... WHERE` で同時に照合する。
@@ -66,6 +68,7 @@ API境界の一部は `ApiEndpointsArchitectureSpec` と `ApiRuntimeArchitecture
 
 - エラーは業務、認証、権限、入力、外部依存を区別し、UIが扱える Problem Details に正規化する。
 - Discord OAuth session は HttpOnly Cookie と PostgreSQL `app_sessions` で管理する。
+- OAuth provider 呼び出し、account lookup、session 作成、provider backoff は auth service に閉じる。HTTP module は state cookie 検証、redirect、cookie 発行、Problem Details 変換に寄せる。
 - 認証主体は `momo_login_accounts`。試合参加者 `members` と混同しない。
 - 状態変更 API は CSRF token を要求する。dev/test 認証はローカル・テスト専用で本番経路へ混ぜない。
 - 409、413、429、503 はUIが意味を扱う可能性がある。汎用内部エラーへ潰さない。

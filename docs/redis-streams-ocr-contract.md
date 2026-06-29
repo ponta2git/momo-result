@@ -206,7 +206,7 @@ Redis contract に触れた場合:
 
 ```sh
 cd apps/api
-sbt testOnly momo.api.repositories.OcrQueuePayloadSpec
+sbt testOnly momo.api.contracts.ocrworker.OcrWorkerJobMessageSpec
 sbt testOnly momo.api.usecases.OcrQueueOutboxDispatcherSpec
 sbt apiRedisQuality
 sbt apiDbQuality

@@ -23,7 +23,7 @@ import momo.api.endpoints.{
 }
 import momo.api.errors.AppError
 import momo.api.http.{EndpointSecurity, HttpOperation, IdempotencyReplay, SecuredEndpoint}
-import momo.api.usecases.{
+import momo.api.usecases.ocr.{
   CancelOcrJob,
   CreateOcrJob,
   CreatedOcrJob,

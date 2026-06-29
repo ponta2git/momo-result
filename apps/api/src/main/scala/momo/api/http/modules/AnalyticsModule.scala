@@ -7,7 +7,7 @@ import momo.api.auth.RateLimiter
 import momo.api.endpoints.SeriesComparisonEndpoints
 import momo.api.endpoints.codec.SeriesComparisonCodec
 import momo.api.http.{EndpointSecurity, HttpOperation, SecuredEndpoint}
-import momo.api.usecases.{
+import momo.api.usecases.seriescomparison.{
   GetSeriesComparison,
   GetSeriesComparisonDrilldown,
   GetSeriesComparisonOptions,

@@ -9,7 +9,7 @@ import momo.api.domain.MatchDraftStatus
 import momo.api.domain.ids.*
 import momo.api.endpoints.{CreateMatchDraftRequest, UpdateMatchDraftRequest}
 import momo.api.errors.AppError
-import momo.api.usecases.{
+import momo.api.usecases.matchdrafts.{
   CreateMatchDraftCommand,
   MatchDraftSourceImageKind,
   UpdateMatchDraftCommand

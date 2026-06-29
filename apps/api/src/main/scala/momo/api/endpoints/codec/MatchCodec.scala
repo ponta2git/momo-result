@@ -9,7 +9,7 @@ import momo.api.domain.ids.*
 import momo.api.domain.{IncidentCounts, PlayerResult}
 import momo.api.endpoints.{ConfirmMatchRequest, PlayerResultRequest, UpdateMatchRequest}
 import momo.api.errors.AppError
-import momo.api.usecases.{ConfirmMatch, UpdateMatch}
+import momo.api.usecases.matches.{ConfirmMatch, UpdateMatch}
 
 /** DTO ↔ usecase command conversions for `MatchesEndpoints`. */
 object MatchCodec:

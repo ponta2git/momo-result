@@ -7,7 +7,7 @@ import cats.syntax.all.*
 
 import momo.api.endpoints.CreateHeldEventRequest
 import momo.api.errors.AppError
-import momo.api.usecases.CreateHeldEventCommand
+import momo.api.usecases.heldevents.CreateHeldEventCommand
 
 /** DTO ↔ usecase command conversions for `HeldEventsEndpoints`. */
 object HeldEventCodec:

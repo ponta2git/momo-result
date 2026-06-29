@@ -12,10 +12,12 @@ import momo.api.repositories.{
   ImageReferenceRepository,
   OcrJobMaintenanceRepository
 }
-import momo.api.usecases.{
+import momo.api.usecases.maintenance.{
   ExpiredSessionPruner,
   PeriodicMaintenance,
-  SourceImageOrphanReaper,
+  SourceImageOrphanReaper
+}
+import momo.api.usecases.ocr.{
   StaleOcrJobReaper
 }
 

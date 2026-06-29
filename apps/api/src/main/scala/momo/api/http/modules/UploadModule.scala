@@ -9,7 +9,7 @@ import momo.api.auth.RateLimiter
 import momo.api.endpoints.{ProblemDetails, UploadEndpoints, UploadImageResponse}
 import momo.api.errors.AppError
 import momo.api.http.{EndpointSecurity, MultipartUpload, SecuredEndpoint}
-import momo.api.usecases.UploadImage
+import momo.api.usecases.images.UploadImage
 
 object UploadModule:
   private val logger = LoggerFactory.getLogger("momo.api.http.modules.UploadModule")

@@ -3,7 +3,7 @@ package momo.api.endpoints.codec
 import momo.api.domain.ids.*
 import momo.api.domain.{MatchListKindFilter, MatchListSort, MatchListStatusFilter}
 import momo.api.errors.AppError
-import momo.api.usecases.ListMatchesCommand
+import momo.api.usecases.matches.ListMatchesCommand
 
 /** Query-parameter ↔ command conversion for `MatchesEndpoints.list`. */
 object MatchListCodec:

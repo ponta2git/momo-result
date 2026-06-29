@@ -12,7 +12,7 @@ import momo.api.errors.AppError
 import momo.api.adapters.postgres.*
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.testing.AppErrorAssertions.assertAppException
-import momo.api.usecases.*
+import momo.api.usecases.masters.*
 
 final class PostgresMasterRepositoriesSpec extends IntegrationSuite:
 

@@ -16,7 +16,7 @@ import momo.api.endpoints.{
   PaginationResponse
 }
 import momo.api.http.{EndpointSecurity, HttpOperation, IdempotencyReplay, SecuredEndpoint}
-import momo.api.usecases.{CreateHeldEvent, DeleteHeldEvent, ListHeldEvents}
+import momo.api.usecases.heldevents.{CreateHeldEvent, DeleteHeldEvent, ListHeldEvents}
 
 object HeldEventModule:
   def routes[F[_]: Async](

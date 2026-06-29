@@ -5,7 +5,7 @@ import java.time.format.DateTimeFormatter
 import io.circe.Codec
 
 import momo.api.domain.MatchDraft
-import momo.api.usecases.MatchDraftSourceImage
+import momo.api.usecases.matchdrafts.MatchDraftSourceImage
 
 final case class CreateMatchDraftRequest(
     heldEventId: Option[String],

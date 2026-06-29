@@ -12,7 +12,7 @@ import momo.api.endpoints.{
   UpdateSeasonMasterRequest
 }
 import momo.api.errors.AppError
-import momo.api.usecases.{
+import momo.api.usecases.masters.{
   CreateGameTitleCommand,
   CreateMapMasterCommand,
   CreateMemberAliasCommand,

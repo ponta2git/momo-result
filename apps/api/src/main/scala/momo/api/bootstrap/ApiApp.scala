@@ -39,7 +39,7 @@ import momo.api.repositories.{
   SeasonMastersRepository,
   SeriesComparisonReadModel
 }
-import momo.api.usecases.*
+import momo.api.usecases.ocr.*
 
 object ApiApp:
   /** Fully wired runtime. Specs use the exposed repositories to seed in-memory resources. */

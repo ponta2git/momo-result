@@ -13,7 +13,7 @@ import momo.api.endpoints.codec.ExportCodec
 import momo.api.endpoints.{ExportEndpoints, ProblemDetails}
 import momo.api.errors.AppError
 import momo.api.http.{EndpointSecurity, HttpDownloadHeaders, SecuredEndpoint}
-import momo.api.usecases.ExportMatches
+import momo.api.usecases.exports.ExportMatches
 
 object ExportModule:
   private val logger = LoggerFactory.getLogger("momo.api.http.modules.ExportModule")

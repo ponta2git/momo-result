@@ -35,7 +35,7 @@ import momo.api.endpoints.{
   UpdateSeasonMasterRequest
 }
 import momo.api.http.{EndpointSecurity, HttpOperation, IdempotencyReplay, SecuredEndpoint}
-import momo.api.usecases.{
+import momo.api.usecases.masters.{
   CreateGameTitle,
   CreateMapMaster,
   CreateMemberAlias,

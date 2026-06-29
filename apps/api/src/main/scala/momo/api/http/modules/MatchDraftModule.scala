@@ -28,7 +28,7 @@ import momo.api.http.{
   IdempotencyReplay,
   SecuredEndpoint
 }
-import momo.api.usecases.{
+import momo.api.usecases.matchdrafts.{
   CancelMatchDraft,
   CreateMatchDraft,
   GetMatchDraft,

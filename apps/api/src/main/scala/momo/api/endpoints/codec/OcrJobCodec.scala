@@ -4,7 +4,7 @@ import momo.api.domain.ids.*
 import momo.api.domain.{OcrJobHints, ScreenType}
 import momo.api.endpoints.{CreateOcrJobRequest, CreateOcrJobResponse, OcrJobHintsRequest}
 import momo.api.errors.AppError
-import momo.api.usecases.{CreateOcrJobCommand, CreatedOcrJob}
+import momo.api.usecases.ocr.{CreateOcrJobCommand, CreatedOcrJob}
 
 /** DTO ↔ usecase command conversions for `OcrJobEndpoints`. */
 object OcrJobCodec:

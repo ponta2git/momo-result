@@ -22,7 +22,7 @@ import momo.api.endpoints.{
   UpdateMatchRequest
 }
 import momo.api.http.{EndpointSecurity, HttpOperation, IdempotencyReplay, SecuredEndpoint}
-import momo.api.usecases.{ConfirmMatch, DeleteMatch, GetMatch, ListMatches, UpdateMatch}
+import momo.api.usecases.matches.{ConfirmMatch, DeleteMatch, GetMatch, ListMatches, UpdateMatch}
 
 object MatchModule:
   def routes[F[_]: Async](

@@ -31,7 +31,15 @@ import momo.api.http.modules.{
   UploadModule
 }
 import momo.api.repositories.{IdempotencyRepository, LoginAccountsRepository}
-import momo.api.usecases.*
+import momo.api.usecases.admin.*
+import momo.api.usecases.exports.*
+import momo.api.usecases.heldevents.*
+import momo.api.usecases.images.*
+import momo.api.usecases.matchdrafts.*
+import momo.api.usecases.matches.*
+import momo.api.usecases.masters.*
+import momo.api.usecases.ocr.*
+import momo.api.usecases.seriescomparison.*
 
 object HttpRoutes:
   final case class Dependencies[F[_]](

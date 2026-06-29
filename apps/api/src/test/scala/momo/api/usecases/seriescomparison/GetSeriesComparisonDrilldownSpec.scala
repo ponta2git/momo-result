@@ -5,8 +5,8 @@ import java.time.Instant
 import cats.effect.IO
 
 import momo.api.MomoCatsEffectSuite
-import momo.api.domain.constraints.BoundaryConstraints
-import momo.api.domain.constraints.BoundaryConstraints.{MetricIdString, MetricKey}
+import momo.api.domain.constraints.RefinedTypes
+import momo.api.domain.constraints.RefinedTypes.{MetricIdString, MetricKey}
 import momo.api.domain.ids.*
 import momo.api.domain.{
   ManYen,
@@ -256,8 +256,8 @@ final class GetSeriesComparisonDrilldownSpec extends MomoCatsEffectSuite:
     case None => fail(s"expected $expected, got None")
 
   private def metricId(value: String): MetricIdString =
-    BoundaryConstraints.validate[String, MetricKey]("metricId", value).fold(
-      error => fail(error.detail),
+    RefinedTypes.refine[String, MetricKey]("metricId", value).fold(
+      error => fail(error),
       identity,
     )
 

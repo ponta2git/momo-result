@@ -4,9 +4,7 @@ import cats.syntax.all.*
 import io.github.iltotore.iron.*
 import io.github.iltotore.iron.constraint.all.*
 
-import momo.api.errors.AppError
-
-object BoundaryConstraints:
+object RefinedTypes:
   type NonBlank = Not[Blank] DescribedAs "must not be blank"
   type NoControlChars = Match["^[^\\p{Cntrl}]*$"] DescribedAs
     "must not contain control characters"
@@ -35,6 +33,5 @@ object BoundaryConstraints:
   type PositiveLong = Long :| Positive
   type NonNegativeLong = Long :| NonNegative
 
-  inline def validate[A, C](field: String, value: A)(using
-      Constraint[A, C]): Either[AppError, A :| C] =
-    value.refineEither[C].leftMap(message => AppError.ValidationFailed(s"$field $message"))
+  inline def refine[A, C](field: String, value: A)(using Constraint[A, C]): Either[String, A :| C] =
+    value.refineEither[C].leftMap(message => s"$field $message")

@@ -1,10 +1,10 @@
 package momo.api.endpoints.codec
 
 import momo.api.domain.SeriesComparisonScope
-import momo.api.domain.constraints.BoundaryConstraints
-import momo.api.domain.constraints.BoundaryConstraints.{MetricIdString, MetricKey}
+import momo.api.domain.constraints.RefinedTypes.{MetricIdString, MetricKey}
 import momo.api.domain.ids.{GameTitleId, MapMasterId, MemberId, SeasonMasterId}
 import momo.api.errors.AppError
+import momo.api.validation.RefinedValidation
 
 object SeriesComparisonCodec:
   def parseAggregateQuery(
@@ -103,7 +103,7 @@ object SeriesComparisonCodec:
 
   private def parseMetricId(value: String): Either[AppError, MetricIdString] =
     val supported = Set("rank.averageHistory", "playOrder.rankHistory")
-    BoundaryConstraints.validate[String, MetricKey]("metricId", value.trim).flatMap { metricId =>
+    RefinedValidation.validate[String, MetricKey]("metricId", value.trim).flatMap { metricId =>
       if supported.contains(metricId) then Right(metricId)
       else
         Left(AppError.ValidationFailed(

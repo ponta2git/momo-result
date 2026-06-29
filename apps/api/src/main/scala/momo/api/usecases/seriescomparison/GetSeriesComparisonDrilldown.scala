@@ -4,7 +4,7 @@ import cats.Monad
 import cats.syntax.all.*
 
 import momo.api.domain.SeriesComparisonScope
-import momo.api.domain.constraints.BoundaryConstraints.MetricIdString
+import momo.api.domain.constraints.RefinedTypes.MetricIdString
 import momo.api.domain.ids.MemberId
 import momo.api.errors.AppError
 import momo.api.repositories.SeriesComparisonReadModel

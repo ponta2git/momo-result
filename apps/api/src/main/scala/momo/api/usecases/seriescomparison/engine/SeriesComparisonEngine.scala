@@ -1,6 +1,6 @@
 package momo.api.usecases.seriescomparison.engine
 
-import momo.api.domain.constraints.BoundaryConstraints.MetricIdString
+import momo.api.domain.constraints.RefinedTypes.MetricIdString
 import momo.api.domain.ids.{MatchId, MemberId}
 import momo.api.domain.{
   SeriesComparisonMatchPlayerRow,

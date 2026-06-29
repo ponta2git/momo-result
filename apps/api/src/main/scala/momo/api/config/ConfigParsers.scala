@@ -5,7 +5,7 @@ import io.github.iltotore.iron.*
 import io.github.iltotore.iron.ciris.given
 import io.github.iltotore.iron.constraint.all.*
 
-import momo.api.domain.constraints.BoundaryConstraints.{
+import momo.api.domain.constraints.RefinedTypes.{
   NonNegative,
   NonNegativeInt,
   PortNumber,

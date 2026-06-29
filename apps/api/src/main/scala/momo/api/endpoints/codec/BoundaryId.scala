@@ -2,14 +2,14 @@ package momo.api.endpoints.codec
 
 import cats.syntax.all.*
 
-import momo.api.domain.constraints.BoundaryConstraints
-import momo.api.domain.constraints.BoundaryConstraints.BoundaryText
+import momo.api.domain.constraints.RefinedTypes.BoundaryText
 import momo.api.errors.AppError
+import momo.api.validation.RefinedValidation
 
 object BoundaryId:
   def nonBlank(field: String, value: String): Either[AppError, String] =
     val trimmed = value.trim
-    BoundaryConstraints.validate[String, BoundaryText](field, trimmed).leftMap { _ =>
+    RefinedValidation.validate[String, BoundaryText](field, trimmed).leftMap { _ =>
       if trimmed.isEmpty then AppError.ValidationFailed(s"$field must not be blank.")
       else AppError.ValidationFailed(s"$field must not contain control characters.")
     }.map(value => value)

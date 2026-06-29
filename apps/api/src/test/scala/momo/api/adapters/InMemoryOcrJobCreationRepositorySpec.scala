@@ -15,8 +15,8 @@ import momo.api.domain.{
   StoredImageLocation
 }
 import momo.api.ports.queue.OcrJobEnqueueRequest
-import momo.api.repositories.{OcrJobCreationRepository, OcrJobDraftAttachment}
 import momo.api.repositories.OcrJobCreationRepository.CreateQueuedJobRejection
+import momo.api.repositories.{OcrJobCreationRepository, OcrJobDraftAttachment}
 import momo.api.testing.AppErrorAssertions.assertAppException
 
 final class InMemoryOcrJobCreationRepositorySpec extends MomoCatsEffectSuite:

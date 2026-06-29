@@ -7,12 +7,12 @@ import cats.syntax.all.*
 import doobie.*
 import doobie.implicits.*
 
+import momo.api.domain.{MatchDraftStatus, OcrDraft, OcrJob, OcrJobStatus, ScreenType}
 import momo.api.errors.{AppError, AppException}
 import momo.api.ports.queue.OcrJobEnqueueRequest
-import momo.api.repositories.{OcrJobCreationRepository, OcrJobDraftAttachment, OcrQueueOutboxDraft}
 import momo.api.repositories.OcrJobCreationRepository.CreateQueuedJobRejection
-import momo.api.domain.{MatchDraftStatus, OcrDraft, OcrJob, OcrJobStatus, ScreenType}
 import momo.api.repositories.postgres.PostgresMeta.given
+import momo.api.repositories.{OcrJobCreationRepository, OcrJobDraftAttachment, OcrQueueOutboxDraft}
 
 final class PostgresOcrJobCreationRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends OcrJobCreationRepository[F]:

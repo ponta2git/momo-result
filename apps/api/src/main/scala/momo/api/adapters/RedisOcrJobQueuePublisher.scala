@@ -9,8 +9,8 @@ import dev.profunktor.redis4cats.data.RedisCodec
 import dev.profunktor.redis4cats.effect.Log.NoOp.*
 import dev.profunktor.redis4cats.{Redis, RedisCommands}
 
-import momo.api.contracts.ocrworker.OcrWorkerJobMessage
 import momo.api.config.RedisConfig
+import momo.api.contracts.ocrworker.OcrWorkerJobMessage
 import momo.api.ports.queue.{OcrJobEnqueueRequest, OcrJobQueueHealthCheck, OcrJobQueuePublisher}
 
 trait RedisStreamClient[F[_]]:

@@ -4,12 +4,12 @@ import java.time.Instant
 import cats.effect.IO
 
 import momo.api.MomoCatsEffectSuite
+import momo.api.adapters.storage.local.LocalFsImageStore
 import momo.api.adapters.{
   InMemoryMatchDraftCancellationRepository,
   InMemoryMatchDraftsRepository,
   InMemoryOcrJobsRepository
 }
-import momo.api.adapters.storage.local.LocalFsImageStore
 import momo.api.domain.*
 import momo.api.domain.ids.*
 

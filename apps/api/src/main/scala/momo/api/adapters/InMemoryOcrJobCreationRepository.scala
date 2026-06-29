@@ -8,6 +8,7 @@ import momo.api.domain.ids.OcrDraftId
 import momo.api.domain.{OcrDraft, OcrJob}
 import momo.api.errors.{AppError, AppException}
 import momo.api.ports.queue.OcrJobEnqueueRequest
+import momo.api.repositories.OcrJobCreationRepository.CreateQueuedJobRejection
 import momo.api.repositories.{
   MatchDraftsRepository,
   OcrDraftsRepository,
@@ -15,7 +16,6 @@ import momo.api.repositories.{
   OcrJobDraftAttachment,
   OcrJobsRepository
 }
-import momo.api.repositories.OcrJobCreationRepository.CreateQueuedJobRejection
 
 final class InMemoryOcrJobCreationRepository[F[_]: MonadThrow](
     drafts: OcrDraftsRepository[F],

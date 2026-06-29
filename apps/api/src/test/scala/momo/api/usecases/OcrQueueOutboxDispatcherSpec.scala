@@ -17,8 +17,8 @@ import momo.api.testing.{
   FixedClock,
   OutboxClaimDueCall,
   OutboxMarkDeliveredCall,
-  RecordingOcrQueueOutboxRepository,
-  RecordingOcrJobQueuePublisher
+  RecordingOcrJobQueuePublisher,
+  RecordingOcrQueueOutboxRepository
 }
 
 final class OcrQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:

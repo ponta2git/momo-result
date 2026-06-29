@@ -12,13 +12,13 @@ import momo.api.domain.ids.*
 import momo.api.errors.AppError
 import momo.api.ports.queue.OcrJobEnqueueRequest
 import momo.api.ports.storage.ImageStorage
+import momo.api.repositories.OcrJobCreationRepository.CreateQueuedJobRejection
 import momo.api.repositories.{
   MatchDraftsRepository,
   MemberAliasesRepository,
   OcrJobCreationRepository,
   OcrJobDraftAttachment
 }
-import momo.api.repositories.OcrJobCreationRepository.CreateQueuedJobRejection
 import momo.api.usecases.syntax.UseCaseSyntax.*
 
 final case class CreateOcrJobCommand(

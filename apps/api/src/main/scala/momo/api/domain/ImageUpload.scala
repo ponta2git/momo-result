@@ -13,8 +13,7 @@ object StoredImageLocation:
       "image location must not be blank"
     )
 
-  def unsafeFromString(value: String): StoredImageLocation = fromString(value)
-    .fold(error => throw new IllegalArgumentException(error), identity)
+  def unsafeFromString(value: String): StoredImageLocation = StoredImageLocation(value.trim)
 
 final case class StoredImage(
     imageId: ImageId,

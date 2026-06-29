@@ -12,9 +12,9 @@ import momo.api.domain.{
   OcrJobStatus,
   PlayOrder,
   Rank,
-  ScreenType
+  ScreenType,
+  StoredImageLocation
 }
-import momo.api.domain.StoredImageLocation
 import momo.api.repositories.OcrQueueOutboxStatus
 
 /**

@@ -7,6 +7,7 @@ import org.http4s.HttpApp as Http4sApp
 import org.typelevel.log4cats.LoggerFactory
 import org.typelevel.log4cats.slf4j.Slf4jFactory
 
+import momo.api.adapters.storage.local.LocalFsImageStore
 import momo.api.adapters.{
   InMemoryAppSessionsRepository,
   InMemoryGameTitlesRepository,
@@ -32,7 +33,6 @@ import momo.api.adapters.{
   InMemorySeasonMastersRepository,
   InMemorySeriesComparisonReadModel
 }
-import momo.api.adapters.storage.local.LocalFsImageStore
 import momo.api.auth.{CreatedSession, DiscordOAuthClient, JavaDiscordOAuthClient, MemberRoster}
 import momo.api.config.{AppConfig, ResourceLimitsConfig}
 import momo.api.db.Database

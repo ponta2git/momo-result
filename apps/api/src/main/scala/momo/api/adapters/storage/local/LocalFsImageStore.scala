@@ -9,15 +9,15 @@ import cats.effect.Sync
 import cats.effect.std.Random
 import cats.syntax.all.*
 
-import momo.api.domain.{StoredImage, StoredImageLocation}
 import momo.api.domain.ids.*
+import momo.api.domain.{StoredImage, StoredImageLocation}
 import momo.api.errors.AppError
 import momo.api.ports.storage.{
   ImageDiskUsage,
   ImageOrphanCleaner,
+  ImageStorage,
   ImageStorageInspector,
-  ImageStorageUsage,
-  ImageStorage
+  ImageStorageUsage
 }
 
 final class LocalFsImageStore[F[_]: Sync: Random](root: Path)

@@ -7,7 +7,6 @@ final case class DatabaseConfig(jdbcUrl: String, user: String, password: String,
 final case class RedisConfig(
     url: String,
     stream: String,
-    group: String,
     deadLetterStream: String = RedisConfig.DefaultDeadLetterStream,
 )
 

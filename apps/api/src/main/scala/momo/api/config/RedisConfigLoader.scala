@@ -20,14 +20,11 @@ private[config] object RedisConfigLoader:
             .parseBoolean(env, "REDIS_ALLOW_PLAINTEXT_IN_PROD", default = false).load[F]
           safeUrl <- RedisUrlConfig.ensureProdRedisUrl(url, appEnv, allowPlaintext).liftTo[F]
           stream <- ConfigParsers.envOrDefault(env, "OCR_REDIS_STREAM", "momo:ocr:jobs").load[F]
-          group <- ConfigParsers
-            .envOrDefault(env, "OCR_REDIS_GROUP", "momo-ocr-workers").load[F]
           deadLetterStream <- ConfigParsers
             .envOrDefault(env, "OCR_REDIS_DEAD_LETTER_STREAM", RedisConfig.DefaultDeadLetterStream)
             .load[F]
         yield Some(RedisConfig(
           url = safeUrl,
           stream = stream,
-          group = group,
           deadLetterStream = deadLetterStream,
         ))

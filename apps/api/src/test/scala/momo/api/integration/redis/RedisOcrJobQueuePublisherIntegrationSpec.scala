@@ -32,7 +32,6 @@ final class RedisOcrJobQueuePublisherIntegrationSpec extends RedisIntegrationSui
       val config = RedisConfig(
         fixture.redisUrl,
         fixture.streamName,
-        "momo-ocr-workers",
         fixture.deadLetterStreamName,
       )
       RedisOcrJobQueuePublisher.resource[IO](config).use { producer =>

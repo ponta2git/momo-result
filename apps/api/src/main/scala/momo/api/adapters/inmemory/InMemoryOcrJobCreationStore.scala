@@ -7,36 +7,32 @@ import cats.syntax.all.*
 import momo.api.domain.ids.OcrDraftId
 import momo.api.domain.{OcrDraft, OcrJob}
 import momo.api.errors.{AppError, AppException}
-import momo.api.ports.queue.OcrJobEnqueueRequest
-import momo.api.repositories.OcrJobCreationRepository.CreateQueuedJobRejection
+import momo.api.repositories.OcrJobCreationStore.OcrJobCreationRejection
 import momo.api.repositories.{
   MatchDraftAttachmentResult,
   MatchDraftsRepository,
   OcrDraftsRepository,
-  OcrJobCreationRepository,
+  OcrJobCreationPlan,
+  OcrJobCreationStore,
   OcrJobDraftAttachment,
   OcrJobsRepository
 }
 
-final class InMemoryOcrJobCreationRepository[F[_]: MonadThrow](
+final class InMemoryOcrJobCreationStore[F[_]: MonadThrow](
     drafts: OcrDraftsRepository[F],
     jobs: OcrJobsRepository[F],
     matchDrafts: MatchDraftsRepository[F],
     activeJobForDraft: OcrDraftId => F[Boolean],
-) extends OcrJobCreationRepository[F]:
-  override def createQueuedJob(
-      draft: OcrDraft,
-      job: OcrJob,
-      attachment: Option[OcrJobDraftAttachment],
-      enqueueRequest: OcrJobEnqueueRequest,
-      activeJobLimit: Int,
-  ): F[OcrJobCreationRepository.CreateQueuedJobResult] =
-    val _ = enqueueRequest
+) extends OcrJobCreationStore[F]:
+  override def store(plan: OcrJobCreationPlan): F[OcrJobCreationStore.OcrJobCreationResult] =
+    val draft = plan.draft
+    val job = plan.job
+    val attachment = plan.matchDraftAttachment
     (for
-      _ <- EitherT(activeLimitGuard(activeJobLimit))
+      _ <- EitherT(activeLimitGuard(plan.activeJobLimit))
       _ <- EitherT.liftF(rejectDuplicateOcrRecords(draft, job))
       _ <- attachment match
-        case None => EitherT.rightT[F, CreateQueuedJobRejection](())
+        case None => EitherT.rightT[F, OcrJobCreationRejection](())
         case Some(a) => EitherT(rejectActiveSlot(a))
       _ <- EitherT(attachMatchDraft(attachment))
       _ <- EitherT.liftF(drafts.create(draft))
@@ -45,16 +41,16 @@ final class InMemoryOcrJobCreationRepository[F[_]: MonadThrow](
 
   private def activeLimitGuard(
       activeJobLimit: Int
-  ): F[Either[CreateQueuedJobRejection, Unit]] = jobs.countActive.map { active =>
+  ): F[Either[OcrJobCreationRejection, Unit]] = jobs.countActive.map { active =>
     if active >= activeJobLimit.toLong then
-      CreateQueuedJobRejection.ActiveJobLimitExceeded(activeJobLimit).asLeft
+      OcrJobCreationRejection.ActiveJobLimitExceeded(activeJobLimit).asLeft
     else ().asRight
   }
 
   private def attachMatchDraft(
       attachment: Option[OcrJobDraftAttachment]
-  ): F[Either[CreateQueuedJobRejection, Unit]] = attachment match
-    case None => ().asRight[CreateQueuedJobRejection].pure[F]
+  ): F[Either[OcrJobCreationRejection, Unit]] = attachment match
+    case None => ().asRight[OcrJobCreationRejection].pure[F]
     case Some(a) => matchDrafts.attachOcrArtifacts(
         draftId = a.draftId,
         screenType = a.screenType,
@@ -64,7 +60,7 @@ final class InMemoryOcrJobCreationRepository[F[_]: MonadThrow](
       ).map {
         case MatchDraftAttachmentResult.Attached => ().asRight
         case MatchDraftAttachmentResult.NotAttachable =>
-          CreateQueuedJobRejection.MatchDraftAttachFailed(a.draftId).asLeft
+          OcrJobCreationRejection.MatchDraftAttachmentRejected(a.draftId).asLeft
       }
 
   private def rejectDuplicateOcrRecords(draft: OcrDraft, job: OcrJob): F[Unit] =
@@ -81,9 +77,9 @@ final class InMemoryOcrJobCreationRepository[F[_]: MonadThrow](
 
   private def rejectActiveSlot(
       attachment: OcrJobDraftAttachment
-  ): F[Either[CreateQueuedJobRejection, Unit]] =
+  ): F[Either[OcrJobCreationRejection, Unit]] =
     slotHasActiveJob(attachment).map {
-      case true => CreateQueuedJobRejection.MatchDraftAttachFailed(attachment.draftId).asLeft
+      case true => OcrJobCreationRejection.MatchDraftAttachmentRejected(attachment.draftId).asLeft
       case false => ().asRight
     }
 

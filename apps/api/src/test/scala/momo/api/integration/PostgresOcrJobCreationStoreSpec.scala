@@ -9,19 +9,24 @@ import io.circe.Json
 import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.ports.queue.OcrJobEnqueueRequest
-import momo.api.repositories.OcrJobCreationRepository.CreateQueuedJobRejection
-import momo.api.adapters.postgres.PostgresOcrJobCreationRepository
-import momo.api.repositories.{OcrJobCreationRepository, OcrJobDraftAttachment}
+import momo.api.repositories.OcrJobCreationStore.OcrJobCreationRejection
+import momo.api.adapters.postgres.PostgresOcrJobCreationStore
+import momo.api.repositories.{
+  OcrJobCreationPlan,
+  OcrJobCreationStore,
+  OcrJobDraftAttachment,
+  OcrQueueDispatchIntent
+}
 import momo.api.testing.JsonSchemaAssertions
 
-final class PostgresOcrJobCreationRepositorySpec extends IntegrationSuite with JsonSchemaAssertions:
+final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSchemaAssertions:
 
   private val now = Instant.parse("2026-05-08T10:00:00Z")
   private val jobId = OcrJobId.unsafeFromString("job-outbox-1")
   private val draftId = OcrDraftId.unsafeFromString("draft-outbox-1")
   private val imageId = ImageId.unsafeFromString("img-outbox-1")
 
-  private def repo = PostgresOcrJobCreationRepository[IO](transactor)
+  private def repo = PostgresOcrJobCreationStore[IO](transactor)
 
   private def draft: OcrDraft = OcrDraft(
     id = draftId,
@@ -65,9 +70,9 @@ final class PostgresOcrJobCreationRepositorySpec extends IntegrationSuite with J
     requestId = Some("req-outbox-1"),
   )
 
-  test("createQueuedJob inserts OCR records and durable outbox intent in one transaction"):
+  test("store inserts OCR records and durable outbox intent in one transaction"):
     for
-      result <- repo.createQueuedJob(draft, job, None, enqueueRequest, activeJobLimit = 12)
+      result <- repo.store(plan(job, draft, None, activeJobLimit = 12))
       row <- sql"""
         SELECT status, attempt_count, stream_payload->>'jobId', stream_payload->>'requestId',
                stream_payload
@@ -82,9 +87,9 @@ final class PostgresOcrJobCreationRepositorySpec extends IntegrationSuite with J
       assertEquals(row._4, "req-outbox-1")
       assertOcrWorkerJobMessageSchemaValid(row._5)
 
-  test("createQueuedJob rejects over the active job limit before inserting related rows"):
+  test("store rejects over the active job limit before inserting related rows"):
     for
-      result <- repo.createQueuedJob(draft, job, None, enqueueRequest, activeJobLimit = 0)
+      result <- repo.store(plan(job, draft, None, activeJobLimit = 0))
       counts <- sql"""
         SELECT
           (SELECT count(*) FROM ocr_drafts WHERE id = ${draftId.value}),
@@ -95,7 +100,7 @@ final class PostgresOcrJobCreationRepositorySpec extends IntegrationSuite with J
       assertActiveLimit(result, 0)
       assertEquals(counts, (0L, 0L, 0L))
 
-  test("createQueuedJob rolls back OCR records when match draft attachment fails"):
+  test("store rolls back OCR records when match draft attachment fails"):
     val attachment = OcrJobDraftAttachment(
       draftId = MatchDraftId.unsafeFromString("missing-match-draft"),
       screenType = ScreenType.TotalAssets,
@@ -104,14 +109,7 @@ final class PostgresOcrJobCreationRepositorySpec extends IntegrationSuite with J
       updatedAt = now,
     )
     for
-      result <- repo.createQueuedJob(
-        draft,
-        job,
-        Some(attachment),
-        enqueueRequest,
-        activeJobLimit =
-          12
-      )
+      result <- repo.store(plan(job, draft, Some(attachment), activeJobLimit = 12))
       counts <- sql"""
         SELECT
           (SELECT count(*) FROM ocr_drafts WHERE id = ${draftId.value}),
@@ -122,11 +120,10 @@ final class PostgresOcrJobCreationRepositorySpec extends IntegrationSuite with J
       assertAttachFailed(result, attachment.draftId)
       assertEquals(counts, (0L, 0L, 0L))
 
-  test("createQueuedJob rejects invalid draft JSON before inserting related rows"):
+  test("store rejects invalid draft JSON before inserting related rows"):
     val invalidDraft = draft.copy(payloadJson = "{")
     for
-      result <-
-        repo.createQueuedJob(invalidDraft, job, None, enqueueRequest, activeJobLimit = 12).attempt
+      result <- repo.store(plan(job, invalidDraft, None, activeJobLimit = 12)).attempt
       counts <- sql"""
         SELECT
           (SELECT count(*) FROM ocr_drafts WHERE id = ${draftId.value}),
@@ -138,17 +135,38 @@ final class PostgresOcrJobCreationRepositorySpec extends IntegrationSuite with J
       assertEquals(counts, (0L, 0L, 0L))
 
   private def assertActiveLimit(
-      result: OcrJobCreationRepository.CreateQueuedJobResult,
+      result: OcrJobCreationStore.OcrJobCreationResult,
       limit: Int,
   ): Unit = result match
-    case Left(CreateQueuedJobRejection.ActiveJobLimitExceeded(actualLimit)) =>
+    case Left(OcrJobCreationRejection.ActiveJobLimitExceeded(actualLimit)) =>
       assertEquals(actualLimit, limit)
     case other => fail(s"expected active limit rejection, got $other")
 
   private def assertAttachFailed(
-      result: OcrJobCreationRepository.CreateQueuedJobResult,
+      result: OcrJobCreationStore.OcrJobCreationResult,
       draftId: MatchDraftId,
   ): Unit = result match
-    case Left(CreateQueuedJobRejection.MatchDraftAttachFailed(actualDraftId)) =>
+    case Left(OcrJobCreationRejection.MatchDraftAttachmentRejected(actualDraftId)) =>
       assertEquals(actualDraftId, draftId)
     case other => fail(s"expected match draft attachment rejection, got $other")
+
+  private def plan(
+      job: OcrJob,
+      draft: OcrDraft,
+      attachment: Option[OcrJobDraftAttachment],
+      activeJobLimit: Int,
+  ): OcrJobCreationPlan =
+    val dispatch = OcrQueueDispatchIntent(
+      enqueueRequest = enqueueRequest,
+      jobId = job.id,
+      draftId = draft.id,
+      matchDraftId = attachment.map(_.draftId),
+      createdAt = now,
+    )
+    OcrJobCreationPlan(
+      draft = draft,
+      job = job,
+      matchDraftAttachment = attachment,
+      queueDispatch = dispatch,
+      activeJobLimit = activeJobLimit,
+    )

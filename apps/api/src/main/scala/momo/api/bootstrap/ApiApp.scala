@@ -33,7 +33,7 @@ import momo.api.repositories.{
   MemberAliasesRepository,
   MembersRepository,
   OcrDraftsRepository,
-  OcrJobCreationRepository,
+  OcrJobCreationStore,
   OcrJobMaintenanceRepository,
   OcrJobsRepository,
   SeasonMastersRepository,
@@ -78,8 +78,8 @@ object ApiApp:
         val queue = infrastructure.queue
         val jobs: OcrJobsRepository[F] = PostgresOcrJobsRepository[F](transactor)
         val drafts: OcrDraftsRepository[F] = PostgresOcrDraftsRepository[F](transactor)
-        val ocrJobCreation: OcrJobCreationRepository[F] =
-          PostgresOcrJobCreationRepository[F](transactor)
+        val ocrJobCreationStore: OcrJobCreationStore[F] =
+          PostgresOcrJobCreationStore[F](transactor)
         val ocrQueueOutbox = PostgresOcrQueueOutboxRepository[F](transactor)
         val heldEvents: HeldEventsRepository[F] = PostgresHeldEventsRepository[F](transactor)
         val heldEventDeletion: HeldEventDeletionRepository[F] =
@@ -147,7 +147,7 @@ object ApiApp:
               ),
               repositories = UseCaseWiring.RuntimeRepositories(
                 imageReferences = imageReferences,
-                ocrJobCreation = ocrJobCreation,
+                ocrJobCreationStore = ocrJobCreationStore,
                 jobs = jobs,
                 drafts = drafts,
                 heldEvents = heldEvents,
@@ -267,7 +267,7 @@ object ApiApp:
               incidentMasters <- InMemoryIncidentMastersRepository.create[F]
               memberAliases <- InMemoryMemberAliasesRepository.create[F]
               idempotency <- InMemoryIdempotencyRepository.create[F]
-              ocrJobCreation = InMemoryOcrJobCreationRepository[F](
+              ocrJobCreationStore = InMemoryOcrJobCreationStore[F](
                 drafts,
                 jobs,
                 matchDrafts,
@@ -296,7 +296,7 @@ object ApiApp:
               incidentMasters,
               memberAliases,
               idempotency,
-              ocrJobCreation,
+              ocrJobCreationStore,
               ocrQueueSubmitter,
               ocrAdmissionGuard,
             )
@@ -322,7 +322,7 @@ object ApiApp:
                   incidentMasters,
                   memberAliases,
                   idempotency,
-                  ocrJobCreation,
+                  ocrJobCreationStore,
                   ocrQueueSubmitter,
                   ocrAdmissionGuard,
                 ) =>
@@ -354,7 +354,7 @@ object ApiApp:
                   ),
                   repositories = UseCaseWiring.RuntimeRepositories(
                     imageReferences = imageReferences,
-                    ocrJobCreation = ocrJobCreation,
+                    ocrJobCreationStore = ocrJobCreationStore,
                     jobs = jobs,
                     drafts = drafts,
                     heldEvents = heldEvents,

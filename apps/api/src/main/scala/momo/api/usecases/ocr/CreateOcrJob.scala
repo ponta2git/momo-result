@@ -12,12 +12,14 @@ import momo.api.domain.ids.*
 import momo.api.errors.AppError
 import momo.api.ports.queue.OcrJobEnqueueRequest
 import momo.api.ports.storage.ImageStorage
-import momo.api.repositories.OcrJobCreationRepository.CreateQueuedJobRejection
+import momo.api.repositories.OcrJobCreationStore.OcrJobCreationRejection
 import momo.api.repositories.{
   MatchDraftsRepository,
   MemberAliasesRepository,
-  OcrJobCreationRepository,
-  OcrJobDraftAttachment
+  OcrJobCreationPlan,
+  OcrJobCreationStore,
+  OcrJobDraftAttachment,
+  OcrQueueDispatchIntent
 }
 import momo.api.usecases.syntax.UseCaseSyntax.*
 
@@ -32,7 +34,7 @@ final case class CreatedOcrJob(job: OcrJob, draft: OcrDraft)
 
 final class CreateOcrJob[F[_]: MonadThrow](
     imageStore: ImageStorage[F],
-    creation: OcrJobCreationRepository[F],
+    creationStore: OcrJobCreationStore[F],
     matchDrafts: MatchDraftsRepository[F],
     queueSubmitter: OcrJobQueueSubmitter[F],
     admissionGuard: OcrAdmissionGuard[F],
@@ -91,36 +93,41 @@ final class CreateOcrJob[F[_]: MonadThrow](
         updatedAt = createdAt,
       )
     )
-    _ <- createDbRecords(draft, job, attachment, enqueueRequest)
-    _ <- EitherT(queueSubmitter.submit(OcrJobQueueSubmitter.Context(
+    queueDispatch = OcrQueueDispatchIntent(
       enqueueRequest = enqueueRequest,
       jobId = jobId,
       draftId = draftId,
       matchDraftId = command.matchDraftId,
       createdAt = createdAt,
-    )))
+    )
+    creationPlan = OcrJobCreationPlan(
+      draft = draft,
+      job = job,
+      matchDraftAttachment = attachment,
+      queueDispatch = queueDispatch,
+      activeJobLimit = activeJobLimit,
+    )
+    _ <- storeDbRecords(creationPlan)
+    _ <- EitherT(queueSubmitter.submit(queueDispatch))
   yield CreatedOcrJob(job, draft)).value
 
-  private def createDbRecords(
-      draft: OcrDraft,
-      job: OcrJob,
-      attachment: Option[OcrJobDraftAttachment],
-      enqueueRequest: OcrJobEnqueueRequest,
-  ): EitherT[F, AppError, Unit] = EitherT(creation
-    .createQueuedJob(draft, job, attachment, enqueueRequest, activeJobLimit)
+  private def storeDbRecords(
+      plan: OcrJobCreationPlan
+  ): EitherT[F, AppError, Unit] = EitherT(creationStore
+    .store(plan)
     .flatMap {
       case Right(()) => ().asRight[AppError].pure[F]
       case Left(rejection) => creationRejectionToAppError(rejection)
     })
 
   private def creationRejectionToAppError(
-      rejection: CreateQueuedJobRejection
+      rejection: OcrJobCreationRejection
   ): F[Either[AppError, Unit]] = rejection match
-    case CreateQueuedJobRejection.ActiveJobLimitExceeded(limit) => logger.warn(
+    case OcrJobCreationRejection.ActiveJobLimitExceeded(limit) => logger.warn(
         s"ocr_job_create_rejected reason=active_job_limit_exceeded limit=$limit"
       ) >> AppError.ServiceUnavailable("OCR queue is currently full. Try again later.")
         .asLeft[Unit].pure[F]
-    case CreateQueuedJobRejection.MatchDraftAttachFailed(_) => AppError
+    case OcrJobCreationRejection.MatchDraftAttachmentRejected(_) => AppError
         .Conflict("match draft could not be attached to the OCR job.").asLeft[Unit].pure[F]
 
   private def mergeMemberAliases(hints: OcrJobHints): F[OcrJobHints] = memberAliases.list(None)

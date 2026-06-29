@@ -7,37 +7,34 @@ import cats.syntax.all.*
 import doobie.*
 import doobie.implicits.*
 
-import momo.api.domain.{MatchDraftStatus, OcrDraft, OcrJob, OcrJobStatus, ScreenType}
+import momo.api.domain.{MatchDraftStatus, OcrJobStatus, ScreenType}
 import momo.api.errors.{AppError, AppException}
-import momo.api.ports.queue.OcrJobEnqueueRequest
-import momo.api.repositories.OcrJobCreationRepository.CreateQueuedJobRejection
+import momo.api.repositories.OcrJobCreationStore.OcrJobCreationRejection
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.repositories.{
   MatchDraftAttachmentResult,
-  OcrJobCreationRepository,
+  OcrJobCreationPlan,
+  OcrJobCreationStore,
   OcrJobDraftAttachment,
   OcrQueueOutboxDraft
 }
 
-final class PostgresOcrJobCreationRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
-    extends OcrJobCreationRepository[F]:
+final class PostgresOcrJobCreationStore[F[_]: MonadCancelThrow](transactor: Transactor[F])
+    extends OcrJobCreationStore[F]:
 
-  override def createQueuedJob(
-      draft: OcrDraft,
-      job: OcrJob,
-      attachment: Option[OcrJobDraftAttachment],
-      enqueueRequest: OcrJobEnqueueRequest,
-      activeJobLimit: Int,
-  ): F[OcrJobCreationRepository.CreateQueuedJobResult] =
-    val outbox = OcrQueueOutboxDraft.forJob(job.id, enqueueRequest, job.createdAt)
+  override def store(plan: OcrJobCreationPlan): F[OcrJobCreationStore.OcrJobCreationResult] =
+    val attachment = plan.matchDraftAttachment
+    val dispatch = plan.queueDispatch
+    val outbox =
+      OcrQueueOutboxDraft.forJob(dispatch.jobId, dispatch.enqueueRequest, dispatch.createdAt)
     val program =
       for
-        _ <- EitherT(activeLimitGuard(activeJobLimit))
+        _ <- EitherT(activeLimitGuard(plan.activeJobLimit))
         _ <- attachment match
-          case None => EitherT.rightT[ConnectionIO, CreateQueuedJobRejection](())
+          case None => EitherT.rightT[ConnectionIO, OcrJobCreationRejection](())
           case Some(a) => EitherT(attachmentGuard(a))
-        _ <- EitherT.liftF(PostgresOcrDrafts.alg.create(draft))
-        _ <- EitherT.liftF(PostgresOcrJobs.alg.create(job))
+        _ <- EitherT.liftF(PostgresOcrDrafts.alg.create(plan.draft))
+        _ <- EitherT.liftF(PostgresOcrJobs.alg.create(plan.job))
         _ <- EitherT.liftF(attachment.traverse_(attachMatchDraft))
         _ <- EitherT.liftF(PostgresOcrQueueOutbox.insertIntent(outbox))
       yield ()
@@ -45,7 +42,7 @@ final class PostgresOcrJobCreationRepository[F[_]: MonadCancelThrow](transactor:
 
   private def activeLimitGuard(
       activeJobLimit: Int
-  ): ConnectionIO[Either[CreateQueuedJobRejection, Unit]] = sql"""
+  ): ConnectionIO[Either[OcrJobCreationRejection, Unit]] = sql"""
         WITH active_limit_lock AS (
           SELECT pg_advisory_xact_lock(hashtext('momo:ocr_jobs:active_limit')::bigint)
         )
@@ -55,16 +52,16 @@ final class PostgresOcrJobCreationRepository[F[_]: MonadCancelThrow](transactor:
            OR status = ${OcrJobStatus.Running}
       """.query[Long].unique.flatMap { active =>
     if active >= activeJobLimit.toLong then
-      CreateQueuedJobRejection.ActiveJobLimitExceeded(activeJobLimit).asLeft.pure[ConnectionIO]
-    else ().asRight[CreateQueuedJobRejection].pure[ConnectionIO]
+      OcrJobCreationRejection.ActiveJobLimitExceeded(activeJobLimit).asLeft.pure[ConnectionIO]
+    else ().asRight[OcrJobCreationRejection].pure[ConnectionIO]
   }
 
   private def attachmentGuard(
       attachment: OcrJobDraftAttachment
-  ): ConnectionIO[Either[CreateQueuedJobRejection, Unit]] = slotDraftColumn(
+  ): ConnectionIO[Either[OcrJobCreationRejection, Unit]] = slotDraftColumn(
     attachment.screenType
   ) match
-    case None => CreateQueuedJobRejection.MatchDraftAttachFailed(attachment.draftId).asLeft
+    case None => OcrJobCreationRejection.MatchDraftAttachmentRejected(attachment.draftId).asLeft
         .pure[ConnectionIO]
     case Some(slotDraftColumn) =>
       val query =
@@ -86,7 +83,8 @@ final class PostgresOcrJobCreationRepository[F[_]: MonadCancelThrow](transactor:
       """
       query.query[Int].option.map {
         case Some(_) => ().asRight
-        case None => CreateQueuedJobRejection.MatchDraftAttachFailed(attachment.draftId).asLeft
+        case None =>
+          OcrJobCreationRejection.MatchDraftAttachmentRejected(attachment.draftId).asLeft
       }
 
   private def attachMatchDraft(attachment: OcrJobDraftAttachment): ConnectionIO[Unit] =

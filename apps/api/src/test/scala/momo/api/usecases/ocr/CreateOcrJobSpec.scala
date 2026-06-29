@@ -12,7 +12,7 @@ import momo.api.adapters.inmemory.{
   InMemoryMatchDraftsRepository,
   InMemoryMemberAliasesRepository,
   InMemoryOcrDraftsRepository,
-  InMemoryOcrJobCreationRepository,
+  InMemoryOcrJobCreationStore,
   InMemoryOcrJobQueuePublisher,
   InMemoryOcrJobsRepository
 }
@@ -579,8 +579,8 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
       IO.pure {
         CreateOcrJob[IO](
           imageStore = imageStore,
-          creation =
-            InMemoryOcrJobCreationRepository[IO](drafts, jobs, matchDrafts, activeJobForDraft),
+          creationStore =
+            InMemoryOcrJobCreationStore[IO](drafts, jobs, matchDrafts, activeJobForDraft),
           matchDrafts = matchDrafts,
           queueSubmitter = OcrJobQueueSubmitter.direct[IO](jobs, matchDrafts, queue),
           admissionGuard = admissionGuard,

@@ -105,7 +105,7 @@ private[bootstrap] object UseCaseWiring:
 
   final case class RuntimeRepositories[F[_]](
       imageReferences: ImageReferenceRepository[F],
-      ocrJobCreation: OcrJobCreationRepository[F],
+      ocrJobCreationStore: OcrJobCreationStore[F],
       jobs: OcrJobsRepository[F],
       drafts: OcrDraftsRepository[F],
       heldEvents: HeldEventsRepository[F],
@@ -148,7 +148,7 @@ private[bootstrap] object UseCaseWiring:
     val imageStorage = storage.imageStorage
     val imageStorageInspector = storage.imageStorageInspector
     val imageReferences = repositories.imageReferences
-    val ocrJobCreation = repositories.ocrJobCreation
+    val ocrJobCreationStore = repositories.ocrJobCreationStore
     val jobs = repositories.jobs
     val drafts = repositories.drafts
     val heldEvents = repositories.heldEvents
@@ -189,7 +189,7 @@ private[bootstrap] object UseCaseWiring:
     val uploadImage = UploadImage[F](imageStorage, imageStorageAdmission)
     val createOcrJob = CreateOcrJob[F](
       imageStore = imageStorage,
-      creation = ocrJobCreation,
+      creationStore = ocrJobCreationStore,
       matchDrafts = matchDrafts,
       queueSubmitter = ocrQueueSubmitter,
       admissionGuard = ocrAdmissionGuard,

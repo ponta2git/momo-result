@@ -15,9 +15,10 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
     Paths.get("src/main/scala/momo/api/http/modules/AuthModule.scala")
   private val completeOAuthLoginFile =
     Paths.get("src/main/scala/momo/api/auth/CompleteOAuthLogin.scala")
-  private val ocrJobCreationRepositoryFile =
-    Paths.get("src/main/scala/momo/api/repositories/OcrJobCreationRepository.scala")
-  private val createOcrJobFile = Paths.get("src/main/scala/momo/api/usecases/CreateOcrJob.scala")
+  private val ocrJobCreationStoreFile =
+    Paths.get("src/main/scala/momo/api/repositories/OcrJobCreationStore.scala")
+  private val createOcrJobFile =
+    Paths.get("src/main/scala/momo/api/usecases/ocr/CreateOcrJob.scala")
   private val imageUploadDomainFile = Paths.get("src/main/scala/momo/api/domain/ImageUpload.scala")
   private val ocrJobDomainFile = Paths.get("src/main/scala/momo/api/domain/OcrJob.scala")
   private val localFsImageStoreFile =
@@ -119,16 +120,19 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
     assert(completeOAuthLoginText.contains("accounts.findByDiscordUserId"))
     assert(completeOAuthLoginText.contains("sessions.create(account)"))
 
-  test("OCR job creation repository models expected rejections as values"):
-    val repositoryText = read(ocrJobCreationRepositoryFile)
+  test("OCR job creation store models creation plan and rejections as values"):
+    val repositoryText = read(ocrJobCreationStoreFile)
     val createOcrJobText = read(createOcrJobFile)
 
-    assert(repositoryText.contains("enum CreateQueuedJobRejection"))
-    assert(repositoryText.contains("type CreateQueuedJobResult = Either[CreateQueuedJobRejection"))
+    assert(repositoryText.contains("final case class OcrJobCreationPlan"))
+    assert(repositoryText.contains("final case class OcrQueueDispatchIntent"))
+    assert(repositoryText.contains("def store(plan: OcrJobCreationPlan)"))
+    assert(repositoryText.contains("enum OcrJobCreationRejection"))
+    assert(repositoryText.contains("type OcrJobCreationResult = Either[OcrJobCreationRejection"))
     assert(!repositoryText.contains("extends RuntimeException"))
-    assert(!createOcrJobText.contains(".createQueuedJob(") || !createOcrJobText.contains(
-      ".attempt"
-    ))
+    assert(createOcrJobText.contains("creationPlan = OcrJobCreationPlan"))
+    assert(createOcrJobText.contains(".store(plan)"))
+    assert(!createOcrJobText.contains(".createQueuedJob("))
 
   private def read(path: Path): String = Files.readString(path, StandardCharsets.UTF_8)
 end ApiRuntimeArchitectureSpec

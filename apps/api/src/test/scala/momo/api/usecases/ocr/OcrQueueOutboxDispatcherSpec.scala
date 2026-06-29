@@ -11,7 +11,11 @@ import momo.api.MomoCatsEffectSuite
 import momo.api.domain.ids.*
 import momo.api.domain.{OcrJobHints, ScreenType, StoredImageLocation}
 import momo.api.ports.queue.{OcrJobEnqueueRequest, OcrJobQueuePublisher}
-import momo.api.repositories.{OcrQueueOutboxRecord, OcrQueueOutboxRepository}
+import momo.api.repositories.{
+  OcrQueueDispatchIntent,
+  OcrQueueOutboxRecord,
+  OcrQueueOutboxRepository
+}
 import momo.api.testing.{
   FailingOcrJobQueuePublisher,
   FixedClock,
@@ -134,7 +138,7 @@ final class OcrQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
     given Clock[IO] = FixedClock.at(fixedNow)
     body
 
-  private def context: OcrJobQueueSubmitter.Context = OcrJobQueueSubmitter.Context(
+  private def context: OcrQueueDispatchIntent = OcrQueueDispatchIntent(
     enqueueRequest = rowAt(fixedNow.plusSeconds(30)).enqueueRequest,
     jobId = OcrJobId.unsafeFromString("job-1"),
     draftId = OcrDraftId.unsafeFromString("draft-1"),

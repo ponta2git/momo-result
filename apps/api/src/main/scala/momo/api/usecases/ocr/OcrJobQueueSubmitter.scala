@@ -1,7 +1,5 @@
 package momo.api.usecases.ocr
 
-import java.time.Instant
-
 import scala.concurrent.duration.*
 
 import cats.effect.{Clock, Temporal}
@@ -9,33 +7,25 @@ import cats.syntax.all.*
 import cats.{Applicative, MonadThrow}
 import org.typelevel.log4cats.LoggerFactory
 
-import momo.api.domain.ids.*
 import momo.api.domain.{FailureCode, OcrFailure}
 import momo.api.errors.AppError
 import momo.api.logging.SafeLog
-import momo.api.ports.queue.{OcrJobEnqueueRequest, OcrJobQueuePublisher}
+import momo.api.ports.queue.OcrJobQueuePublisher
 import momo.api.repositories.{
   MatchDraftsRepository,
   OcrJobsRepository,
+  OcrQueueDispatchIntent,
   OcrQueueOutboxDraft,
   OcrQueueOutboxRepository
 }
 
 trait OcrJobQueueSubmitter[F[_]]:
-  def submit(context: OcrJobQueueSubmitter.Context): F[Either[AppError, Unit]]
+  def submit(intent: OcrQueueDispatchIntent): F[Either[AppError, Unit]]
 
 object OcrJobQueueSubmitter:
-  final case class Context(
-      enqueueRequest: OcrJobEnqueueRequest,
-      jobId: OcrJobId,
-      draftId: OcrDraftId,
-      matchDraftId: Option[MatchDraftId],
-      createdAt: Instant,
-  )
-
   def deferred[F[_]: Applicative]: OcrJobQueueSubmitter[F] = new OcrJobQueueSubmitter[F]:
-    override def submit(context: Context): F[Either[AppError, Unit]] =
-      val _ = context
+    override def submit(intent: OcrQueueDispatchIntent): F[Either[AppError, Unit]] =
+      val _ = intent
       ().asRight[AppError].pure[F]
 
   def direct[F[_]: MonadThrow: LoggerFactory](
@@ -45,27 +35,27 @@ object OcrJobQueueSubmitter:
   ): OcrJobQueueSubmitter[F] = new OcrJobQueueSubmitter[F]:
     private val logger = LoggerFactory[F].getLoggerFromClass(classOf[OcrJobQueueSubmitter[F]])
 
-    override def submit(context: Context): F[Either[AppError, Unit]] = queue
-      .publish(context.enqueueRequest).redeemWith(
+    override def submit(intent: OcrQueueDispatchIntent): F[Either[AppError, Unit]] = queue
+      .publish(intent.enqueueRequest).redeemWith(
         error =>
           val originalErrorClasses = SafeLog.throwableClasses(error)
-          val logOriginal = logger.error(s"OCR enqueue publish failed jobId=${context.jobId
-              .value} draftId=${context.draftId.value} matchDraftId=${context.matchDraftId
+          val logOriginal = logger.error(s"OCR enqueue publish failed jobId=${intent.jobId
+              .value} draftId=${intent.draftId.value} matchDraftId=${intent.matchDraftId
               .fold("none")(_.value)} errorClasses=$originalErrorClasses")
-          val markDraftFailure = context.matchDraftId match
-            case Some(id) => matchDrafts.markOcrFailed(id, context.createdAt).void
+          val markDraftFailure = intent.matchDraftId match
+            case Some(id) => matchDrafts.markOcrFailed(id, intent.createdAt).void
             case None => MonadThrow[F].unit
           // Run compensation (mark job/draft failed) and log any secondary failure so it is not
           // silently swallowed. Logged fields are restricted to identifiers and throwable classes.
           val compensate =
-            (jobs.markFailed(context.jobId, queueFailure, context.createdAt) >> markDraftFailure)
+            (jobs.markFailed(intent.jobId, queueFailure, intent.createdAt) >> markDraftFailure)
               .attempt.flatMap {
                 case Right(_) => MonadThrow[F].unit
                 case Left(compensationError) =>
                   val compensationErrorClasses = SafeLog.throwableClasses(compensationError)
-                  val matchDraftId = context.matchDraftId.fold("none")(_.value)
+                  val matchDraftId = intent.matchDraftId.fold("none")(_.value)
                   logger.error(
-                    s"OCR enqueue compensation failed jobId=${context.jobId.value} draftId=${context
+                    s"OCR enqueue compensation failed jobId=${intent.jobId.value} draftId=${intent
                         .draftId.value} matchDraftId=$matchDraftId " +
                       s"originalErrorClasses=$originalErrorClasses " +
                       s"compensationErrorClasses=$compensationErrorClasses"
@@ -91,8 +81,8 @@ object OcrJobQueueSubmitter:
     private val logger = LoggerFactory[F].getLoggerFromClass(classOf[OcrJobQueueSubmitter[F]])
     private val publisher = OcrQueueOutboxPublisher[F](outbox, queue, maxBackoff)
 
-    override def submit(context: Context): F[Either[AppError, Unit]] =
-      val outboxId = OcrQueueOutboxDraft.idForJob(context.jobId)
+    override def submit(intent: OcrQueueDispatchIntent): F[Either[AppError, Unit]] =
+      val outboxId = OcrQueueOutboxDraft.idForJob(intent.jobId)
       val publishAttempt =
         for
           now <- Clock[F].realTimeInstant
@@ -101,7 +91,7 @@ object OcrJobQueueSubmitter:
             case Some(row) => publisher.publish(row)
             case None => logger.warn(
                 s"OCR queue outbox immediate claim skipped outboxId=$outboxId " +
-                  s"jobId=${context.jobId.value}"
+                  s"jobId=${intent.jobId.value}"
               )
         yield ()
 
@@ -110,8 +100,8 @@ object OcrJobQueueSubmitter:
         case Left(error) =>
           val errorClasses = SafeLog.throwableClasses(error)
           logger.error(
-            s"OCR queue outbox immediate publish failed outboxId=$outboxId " + s"jobId=${context
-                .jobId.value} draftId=${context.draftId.value} " + s"errorClasses=$errorClasses"
+            s"OCR queue outbox immediate publish failed outboxId=$outboxId " + s"jobId=${intent
+                .jobId.value} draftId=${intent.draftId.value} " + s"errorClasses=$errorClasses"
           ) >> ().asRight[AppError].pure[F]
       }
 

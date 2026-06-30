@@ -121,4 +121,3 @@ private[seriescomparison] trait SeriesComparisonReviewAccidentCandidate
         peerEffectValue = math.max(math.abs(rawSymptom), math.abs(driverEffect)),
       )
     }
-

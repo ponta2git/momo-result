@@ -83,7 +83,10 @@ private[seriescomparison] trait SeriesComparisonReviewStatsSupport:
       )
   }
 
-  protected final def eventStability(rows: List[SeriesComparisonMatchPlayerRow], fullEffect: Double)(
+  protected final def eventStability(
+      rows: List[SeriesComparisonMatchPlayerRow],
+      fullEffect: Double
+  )(
       compute: List[SeriesComparisonMatchPlayerRow] => Double
   ): Double =
     val events = rows.groupBy(_.heldEventId).keys.toList
@@ -237,8 +240,9 @@ private[seriescomparison] trait SeriesComparisonReviewStatsSupport:
     matchRows.map(row => rankKey(row) -> (5.0 - ranksByValue(value(row))))
   }.toMap
 
-  protected final def rankKey(row: SeriesComparisonMatchPlayerRow): (String, String) = row.matchId.value ->
-    row.memberId.value
+  protected final def rankKey(row: SeriesComparisonMatchPlayerRow): (String, String) =
+    row.matchId.value ->
+      row.memberId.value
 
   protected final def averageEventValue(
       rows: List[SeriesComparisonMatchPlayerRow]

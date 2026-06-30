@@ -115,4 +115,3 @@ private[seriescomparison] trait SeriesComparisonReviewDestinationZeroCandidate
         peerEffectValue = math.abs(rawSymptom),
       )
     }
-

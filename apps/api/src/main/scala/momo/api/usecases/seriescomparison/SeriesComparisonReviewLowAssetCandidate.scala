@@ -121,4 +121,3 @@ private[seriescomparison] trait SeriesComparisonReviewLowAssetCandidate
         peerEffectValue = math.max(0.0, lowRate - 0.10),
       )
     }
-

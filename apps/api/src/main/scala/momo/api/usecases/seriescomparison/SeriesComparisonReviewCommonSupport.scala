@@ -59,13 +59,17 @@ private[seriescomparison] trait SeriesComparisonReviewCommonSupport
       mapName = scope.mapName,
     )
 
-  protected final case class MatchGroup(matchIndex: Int, rows: List[SeriesComparisonMatchPlayerRow]):
+  protected final case class MatchGroup(
+      matchIndex: Int,
+      rows: List[SeriesComparisonMatchPlayerRow]
+  ):
     val matchId = rows.head.matchId
     val playedAt = rows.head.playedAt
     val heldEventId = rows.head.heldEventId
     val matchNoInEvent = rows.head.matchNoInEvent
 
-  protected final def matchGroupsFrom(rows: List[SeriesComparisonMatchPlayerRow]): List[MatchGroup] = rows
+  protected final def matchGroupsFrom(rows: List[SeriesComparisonMatchPlayerRow])
+      : List[MatchGroup] = rows
     .groupBy(_.matchId).values.toList.sortBy(groupSortKey).zipWithIndex.map { case (group, index) =>
       MatchGroup(index + 1, sortedRows(group))
     }
@@ -109,4 +113,3 @@ private[seriescomparison] trait SeriesComparisonReviewCommonSupport
     peerEffectValue = peerEffectValue,
     baseScore = card.actionAdviceScore,
   )
-

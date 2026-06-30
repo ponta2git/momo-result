@@ -139,4 +139,3 @@ private[seriescomparison] trait SeriesComparisonReviewRecoveryCandidate
         peerEffectValue = math.max(math.abs(rawSymptom), contrast),
       )
     }
-

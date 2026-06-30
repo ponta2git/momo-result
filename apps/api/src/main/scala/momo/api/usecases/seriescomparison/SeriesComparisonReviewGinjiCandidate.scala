@@ -117,4 +117,3 @@ private[seriescomparison] trait SeriesComparisonReviewGinjiCandidate
         peerEffectValue = math.abs(rawSymptom),
       )
     }
-

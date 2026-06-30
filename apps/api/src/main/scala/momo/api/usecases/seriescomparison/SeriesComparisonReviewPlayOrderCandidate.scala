@@ -121,4 +121,3 @@ private[seriescomparison] trait SeriesComparisonReviewPlayOrderCandidate
         peerEffectValue = rawSymptom,
       )
     }
-

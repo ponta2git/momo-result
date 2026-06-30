@@ -114,4 +114,3 @@ private[seriescomparison] trait SeriesComparisonReviewDestinationPositiveCandida
         peerEffectValue = math.max(math.abs(rawSymptom), math.abs(driverEffect)),
       )
     }
-

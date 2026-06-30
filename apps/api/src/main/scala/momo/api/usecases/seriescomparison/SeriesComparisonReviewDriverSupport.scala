@@ -26,7 +26,10 @@ private[seriescomparison] trait SeriesComparisonReviewDriverSupport
         ))
       case head :: Nil => Some(head)
 
-  protected final def actionDriverStrongEnough(driver: ActionDriverSelection, status: String): Boolean =
+  protected final def actionDriverStrongEnough(
+      driver: ActionDriverSelection,
+      status: String
+  ): Boolean =
     val minimum =
       if status == "reference" then Thresholds.ReferenceActionDriverEffect
       else Thresholds.MinimumActionDriverEffect
@@ -256,4 +259,3 @@ private[seriescomparison] trait SeriesComparisonReviewDriverSupport
         targetCount,
         status,
       )
-

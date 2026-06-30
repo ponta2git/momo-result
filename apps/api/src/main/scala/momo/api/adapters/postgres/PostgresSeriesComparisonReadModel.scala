@@ -1,7 +1,5 @@
 package momo.api.adapters.postgres
 
-import java.time.Instant
-
 import cats.effect.MonadCancelThrow
 import doobie.*
 import doobie.implicits.*
@@ -11,78 +9,15 @@ import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.db.Database
 import momo.api.domain.ids.*
 import momo.api.domain.{
-  MatchNoInEvent,
-  PlayOrder,
-  Rank,
-  SeriesComparisonIncidentCountsRow,
   SeriesComparisonMatchPlayerRow,
   SeriesComparisonOptionsData,
   SeriesComparisonResolvedScope,
   SeriesComparisonScope,
-  SeriesComparisonScopeOptionData,
   SeriesComparisonSeriesOptionData
 }
 import momo.api.repositories.{SeriesComparisonReadAlg, SeriesComparisonReadModel}
 
-object PostgresSeriesComparison:
-  private final case class SeriesRow(
-      gameTitleId: GameTitleId,
-      name: String,
-      layoutFamily: String,
-      displayOrder: Int,
-      confirmedMatchCount: Int,
-      latestConfirmedPlayedAt: Option[Instant],
-  )
-
-  private final case class ScopeOptionRow(
-      gameTitleId: GameTitleId,
-      id: String,
-      name: String,
-      displayOrder: Int,
-      confirmedMatchCount: Int,
-  )
-
-  private final case class PlayerRow(
-      matchId: MatchId,
-      playedAt: Instant,
-      heldEventId: HeldEventId,
-      matchNoInEvent: MatchNoInEvent,
-      gameTitleId: GameTitleId,
-      seasonMasterId: SeasonMasterId,
-      mapMasterId: MapMasterId,
-      memberId: MemberId,
-      memberDisplayName: String,
-      playOrder: PlayOrder,
-      rank: Rank,
-      totalAssetsManYen: Int,
-      revenueManYen: Int,
-      destinationCount: Int,
-      plusStationCount: Int,
-      minusStationCount: Int,
-      cardStationCount: Int,
-      cardShopCount: Int,
-      suriNoGinjiCount: Int,
-  )
-
-  private final case class OverallScopeRow(
-      gameTitleId: GameTitleId,
-      gameTitleName: String,
-      layoutFamily: String,
-  )
-
-  private final case class NamedScopeRow(
-      gameTitleName: String,
-      layoutFamily: String,
-      scopeName: String,
-  )
-
-  private final case class SeasonMapScopeRow(
-      gameTitleName: String,
-      layoutFamily: String,
-      seasonName: String,
-      mapName: String,
-  )
-
+object PostgresSeriesComparison extends PostgresSeriesComparisonRowSupport:
   val alg: SeriesComparisonReadAlg[ConnectionIO] = new SeriesComparisonReadAlg[ConnectionIO]:
     override def options: ConnectionIO[SeriesComparisonOptionsData] =
       val seriesQuery = sql"""
@@ -288,44 +223,6 @@ object PostgresSeriesComparison:
             mp.play_order ASC
         """
       query.query[PlayerRow].to[List].map(_.map(domainRow))
-
-  private def scopeOptionsByTitle(
-      rows: List[ScopeOptionRow]
-  ): Map[GameTitleId, List[SeriesComparisonScopeOptionData]] = rows.groupBy(_.gameTitleId).view
-    .mapValues(_.map(row =>
-      SeriesComparisonScopeOptionData(
-        id = row.id,
-        name = row.name,
-        displayOrder = row.displayOrder,
-        confirmedMatchCount = row.confirmedMatchCount,
-      )
-    )).toMap
-
-  private def domainRow(row: PlayerRow): SeriesComparisonMatchPlayerRow =
-    SeriesComparisonMatchPlayerRow(
-      matchId = row.matchId,
-      playedAt = row.playedAt,
-      heldEventId = row.heldEventId,
-      matchNoInEvent = row.matchNoInEvent,
-      gameTitleId = row.gameTitleId,
-      seasonMasterId = row.seasonMasterId,
-      mapMasterId = row.mapMasterId,
-      memberId = row.memberId,
-      memberDisplayName = row.memberDisplayName,
-      playOrder = row.playOrder,
-      rank = row.rank,
-      totalAssetsManYen = momo.api.domain.ManYen.fromInt(row.totalAssetsManYen),
-      revenueManYen = momo.api.domain.ManYen.fromInt(row.revenueManYen),
-      incidents = SeriesComparisonIncidentCountsRow(
-        destination = row.destinationCount,
-        plusStation = row.plusStationCount,
-        minusStation = row.minusStationCount,
-        cardStation = row.cardStationCount,
-        cardShop = row.cardShopCount,
-        suriNoGinji = row.suriNoGinjiCount,
-      ),
-    )
-end PostgresSeriesComparison
 
 final class PostgresSeriesComparisonReadModel[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends SeriesComparisonReadModel[F]:

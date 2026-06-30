@@ -12,8 +12,7 @@ final class SeriesComparisonArchitectureSpec extends FunSuite:
     Paths.get("src/main/scala/momo/api/usecases/seriescomparison/engine")
   private val comparisonRoot =
     Paths.get("src/main/scala/momo/api/usecases/seriescomparison")
-  private val endpointModels =
-    Paths.get("src/main/scala/momo/api/endpoints/SeriesComparisonApiModels.scala")
+  private val endpointDir = Paths.get("src/main/scala/momo/api/endpoints")
 
   test("series comparison engine is independent from HTTP, repository, and endpoint DTO layers"):
     val forbiddenImports = List(
@@ -55,7 +54,11 @@ final class SeriesComparisonArchitectureSpec extends FunSuite:
     assertEquals(violations, Nil)
 
   test("series comparison endpoint models are codec schema facade aliases"):
-    val text = read(endpointModels)
+    val text = scalaFiles(endpointDir)
+      .filter(_.getFileName.toString.startsWith("SeriesComparison"))
+      .filter(_.getFileName.toString.endsWith("ApiModels.scala"))
+      .map(read)
+      .mkString("\n")
 
     assert(text.contains("import momo.api.usecases.seriescomparison.view"))
     assert(text.contains("type SeriesComparisonResponse = view.SeriesComparisonView"))

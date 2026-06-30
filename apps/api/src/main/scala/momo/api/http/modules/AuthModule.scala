@@ -8,14 +8,16 @@ import sttp.tapir.server.ServerEndpoint
 
 import momo.api.auth.{
   AuthenticatedSession,
+  CompleteOAuthCallback,
   CompleteOAuthLogin,
   CsrfTokenService,
   DiscordOAuthClient,
   OAuthProviderBackoff,
+  OAuthCallbackDecision,
+  OAuthCallbackInput,
   OAuthStateCodec,
   RateLimiter,
-  SessionService,
-  SessionTokenHash
+  SessionService
 }
 import momo.api.config.{AppConfig, AppEnv, RedirectPath}
 import momo.api.domain.ids.AccountId
@@ -39,6 +41,12 @@ object AuthModule:
       providerBackoff: OAuthProviderBackoff[F],
   ): List[ServerEndpoint[Any, F]] =
     val completeOAuthLogin = CompleteOAuthLogin[F](oauth, sessions, accounts, providerBackoff)
+    val completeOAuthCallback = CompleteOAuthCallback[F](
+      stateCodec,
+      completeOAuthLogin,
+      callbackStateRateLimiter,
+      config.auth.callbackRedirectPath,
+    )
     List(
       AuthEndpoints.login.serverLogic { case (silentParam, nextParam, request) =>
         login(
@@ -59,10 +67,8 @@ object AuthModule:
           cookies = cookies,
           clientKey = ClientIp.of(request),
           config = config,
-          stateCodec = stateCodec,
-          completeOAuthLogin = completeOAuthLogin,
+          completeOAuthCallback = completeOAuthCallback,
           rateLimiter = rateLimiter,
-          callbackStateRateLimiter = callbackStateRateLimiter,
         )
       },
       AuthEndpoints.logout
@@ -106,64 +112,38 @@ object AuthModule:
       cookies: List[SttpCookie],
       clientKey: String,
       config: AppConfig,
-      stateCodec: OAuthStateCodec[F],
-      completeOAuthLogin: CompleteOAuthLogin[F],
+      completeOAuthCallback: CompleteOAuthCallback[F],
       rateLimiter: RateLimiter[F],
-      callbackStateRateLimiter: RateLimiter[F],
   ): F[Either[AuthEndpoints.AuthProblemResponse, AuthEndpoints.RedirectOutput]] =
     rateLimit(rateLimiter, clientKey).flatMap {
       case Left(problem) => Async[F].pure(Left(problem))
       case Right(_) =>
-        val cookieState = cookieValue(cookies, config.auth.stateCookieName)
-        (state, cookieState) match
-          case (Some(stateValue), Some(cookieValue)) if stateValue == cookieValue =>
-            rateLimitCallbackState(callbackStateRateLimiter, stateValue, config).flatMap {
-              case Left(problem) => Async[F].pure(Left(problem))
-              case Right(_) => stateCodec.validate(stateValue).flatMap {
-                  case None => callbackProblem(
-                      config,
-                      "state_invalid_or_expired",
-                      AppError.Forbidden("OAuth state is invalid or expired."),
-                    )
-                  case Some(context) => oauthError match
-                      case Some(_) if context.silent =>
-                        Async[F].delay(logger.warn(
-                          "auth_callback_rejected reason=provider_denied_silent"
-                        )) *> Async[F].pure(Right((
-                          interactiveLoginPath(context.redirectPath),
-                          List(clearStateCookie(config)),
-                        )))
-                      case Some(_) => callbackProblem(
-                          config,
-                          "provider_denied",
-                          AppError.Forbidden("Discord OAuth was cancelled or denied."),
-                        )
-                      case None => code match
-                          case Some(codeValue) => completeOAuthLogin.run(codeValue).flatMap {
-                              case Left(failure) =>
-                                callbackProblem(config, failure.reason, failure.error)
-                              case Right(completion) => Async[F].pure(Right((
-                                  context.redirectPath.getOrElse(config.auth.callbackRedirectPath),
-                                  List(
-                                    sessionCookie(config, completion.session.cookieValue),
-                                    clearStateCookie(config),
-                                  ),
-                                )))
-                            }
-                          case None => callbackProblem(
-                              config,
-                              "missing_code",
-                              AppError
-                                .Forbidden("OAuth callback is missing or has mismatched state."),
-                            )
-                }
-            }
-          case _ => callbackProblem(
-              config,
-              "state_mismatch",
-              AppError.Forbidden("OAuth callback is missing or has mismatched state."),
-            )
+        completeOAuthCallback
+          .run(OAuthCallbackInput(
+            code = code,
+            state = state,
+            cookieState = cookieValue(cookies, config.auth.stateCookieName),
+            providerError = oauthError,
+          ))
+          .flatMap(renderCallbackDecision(config, _))
     }
+
+  private def renderCallbackDecision[F[_]: Async](
+      config: AppConfig,
+      decision: OAuthCallbackDecision,
+  ): F[Either[AuthEndpoints.AuthProblemResponse, AuthEndpoints.RedirectOutput]] = decision match
+    case OAuthCallbackDecision.Completed(redirectPath, session) =>
+      Async[F].pure(Right((
+        redirectPath,
+        List(
+          sessionCookie(config, session.cookieValue),
+          clearStateCookie(config),
+        ),
+      )))
+    case OAuthCallbackDecision.ProviderDeniedSilent(next) =>
+      Async[F].pure(Right((interactiveLoginPath(next), List(clearStateCookie(config)))))
+    case OAuthCallbackDecision.Rejected(reason, error) =>
+      callbackProblem(config, reason, error)
 
   private def authenticateLogout[F[_]: Async](
       config: AppConfig,
@@ -243,23 +223,6 @@ object AuthModule:
           AppError.TooManyRequests("Too many login attempts. Try again later."),
           Nil,
         )))
-    }
-
-  private def rateLimitCallbackState[F[_]: Async](
-      rateLimiter: RateLimiter[F],
-      state: String,
-      config: AppConfig,
-  ): F[Either[AuthEndpoints.AuthProblemResponse, Unit]] = SessionTokenHash
-    .sha256[F](state).flatMap { stateHash =>
-      rateLimiter.allow(stateHash).flatMap {
-        case true => Async[F].pure(Right(()))
-        case false => Async[F].delay(logger.warn("auth_callback_state_rate_limited")).as(Left(
-            authProblem(
-              AppError.TooManyRequests("Too many OAuth callback attempts. Start login again."),
-              List(clearStateCookie(config)),
-            )
-          ))
-      }
     }
 
   private def callbackProblem[F[_]: Async, A](

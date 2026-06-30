@@ -71,7 +71,6 @@ private[postgres] trait PostgresSeriesComparisonRowSupport:
       mapName: String,
   )
 
-
   protected final def scopeOptionsByTitle(
       rows: List[ScopeOptionRow]
   ): Map[GameTitleId, List[SeriesComparisonScopeOptionData]] = rows.groupBy(_.gameTitleId).view

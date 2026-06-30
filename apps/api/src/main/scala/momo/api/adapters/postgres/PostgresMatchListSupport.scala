@@ -158,7 +158,10 @@ private[postgres] trait PostgresMatchListSupport:
         rows.groupBy(_.matchId).view.mapValues(_.map(_.toEntry)).toMap
       }
 
-  protected final def toItem(row: Row, getRanks: MatchId => List[MatchListRankEntry]): MatchListItem =
+  protected final def toItem(
+      row: Row,
+      getRanks: MatchId => List[MatchListRankEntry]
+  ): MatchListItem =
     val kind = MatchListItemKind.fromWire(row.kind).getOrElse(MatchListItemKind.Match)
     val ranks = row.matchId.map(getRanks).getOrElse(Nil)
     MatchListItem(

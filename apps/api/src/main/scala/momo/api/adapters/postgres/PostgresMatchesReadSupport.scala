@@ -95,7 +95,8 @@ private[postgres] trait PostgresMatchesReadSupport:
    * statements total, then assemble per-match `FourPlayers`. This collapses the prior N+1 (1 +
    * 2*N) into a constant-shaped 2 statements regardless of `matchIds.size`.
    */
-  protected final def loadPlayersBatch(matchIds: List[MatchId]): ConnectionIO[Map[MatchId, FourPlayers]] =
+  protected final def loadPlayersBatch(matchIds: List[MatchId])
+      : ConnectionIO[Map[MatchId, FourPlayers]] =
     if matchIds.isEmpty then Map.empty[MatchId, FourPlayers].pure[ConnectionIO]
     else
       val ids = matchIds.map(_.value).toArray

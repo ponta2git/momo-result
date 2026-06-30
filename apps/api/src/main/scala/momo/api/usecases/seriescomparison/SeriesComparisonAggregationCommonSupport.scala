@@ -100,8 +100,10 @@ private[seriescomparison] trait SeriesComparisonAggregationCommonSupport:
     targetBinCount = Thresholds.HistogramTargetBinCount,
   )
 
-
-  protected final case class MatchGroup(matchIndex: Int, rows: List[SeriesComparisonMatchPlayerRow]):
+  protected final case class MatchGroup(
+      matchIndex: Int,
+      rows: List[SeriesComparisonMatchPlayerRow]
+  ):
     val matchId: momo.api.domain.ids.MatchId = rows.head.matchId
     val playedAt: java.time.Instant = rows.head.playedAt
 
@@ -115,7 +117,6 @@ private[seriescomparison] trait SeriesComparisonAggregationCommonSupport:
       first.matchNoInEvent.value,
       first.matchId.value,
     )
-
 
   protected final def rankByMatch(
       rows: List[SeriesComparisonMatchPlayerRow],
@@ -137,7 +138,8 @@ private[seriescomparison] trait SeriesComparisonAggregationCommonSupport:
     case Nil => None
     case nonEmpty => Some(averageUnsafe(nonEmpty))
 
-  protected final def averageUnsafe(values: List[Double]): Double = values.sum / asDecimal(values.size)
+  protected final def averageUnsafe(values: List[Double]): Double = values.sum /
+    asDecimal(values.size)
 
   protected final def median(values: List[Int]): Option[Double] = values.sorted match
     case Nil => None
@@ -155,10 +157,10 @@ private[seriescomparison] trait SeriesComparisonAggregationCommonSupport:
   protected final def rate(count: Int, denominator: Int): Option[Double] = Option
     .when(denominator > 0)(asDecimal(count) / asDecimal(denominator))
 
-  protected final def revenueAssetRate(row: SeriesComparisonMatchPlayerRow): Option[Double] = Option.when(
-    row.totalAssetsManYen.value > 0
-  )(asDecimal(row.revenueManYen.value) / asDecimal(row.totalAssetsManYen.value))
-
+  protected final def revenueAssetRate(row: SeriesComparisonMatchPlayerRow): Option[Double] =
+    Option.when(
+      row.totalAssetsManYen.value > 0
+    )(asDecimal(row.revenueManYen.value) / asDecimal(row.totalAssetsManYen.value))
 
   protected final def asDecimal(value: Int): Double = java.lang.Integer.valueOf(value).doubleValue()
 

@@ -81,18 +81,30 @@ private[seriescomparison] trait SeriesComparisonAggregationAssetStyleShapeSuppor
       )("close_finish"),
     ).flatten.distinct
 
-  protected final def blowoutWinRate(metrics: AssetStyleMetricsView, targetCount: Int): Option[Double] =
+  protected final def blowoutWinRate(
+      metrics: AssetStyleMetricsView,
+      targetCount: Int
+  ): Option[Double] =
     rate(metrics.blowoutWinCount, targetCount)
 
-  protected final def above(value: Option[Double], baseline: Option[Double], delta: Double): Boolean =
+  protected final def above(
+      value: Option[Double],
+      baseline: Option[Double],
+      delta: Double
+  ): Boolean =
     (value, baseline).mapN((v, b) => v >= b + delta).getOrElse(false)
 
-  protected final def below(value: Option[Double], baseline: Option[Double], delta: Double): Boolean =
+  protected final def below(
+      value: Option[Double],
+      baseline: Option[Double],
+      delta: Double
+  ): Boolean =
     (value, baseline).mapN((v, b) => v <= b - delta).getOrElse(false)
 
-  protected final def atLeast(value: Option[Double], baseline: Option[Double]): Boolean = (value, baseline)
-    .mapN(_ >= _).getOrElse(false)
+  protected final def atLeast(value: Option[Double], baseline: Option[Double]): Boolean =
+    (value, baseline)
+      .mapN(_ >= _).getOrElse(false)
 
-  protected final def atMost(value: Option[Double], baseline: Option[Double]): Boolean = (value, baseline)
-    .mapN(_ <= _).getOrElse(false)
-
+  protected final def atMost(value: Option[Double], baseline: Option[Double]): Boolean =
+    (value, baseline)
+      .mapN(_ <= _).getOrElse(false)

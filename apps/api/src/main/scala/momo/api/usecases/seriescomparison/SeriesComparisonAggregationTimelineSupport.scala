@@ -167,7 +167,10 @@ private[seriescomparison] trait SeriesComparisonAggregationTimelineSupport
       predicate: SeriesComparisonMatchPlayerRow => Boolean,
   ): Int = rows.reverse.takeWhile(predicate).size
 
-  protected final def percentileDouble(sortedValues: List[Int], probability: Double): Option[Double] =
+  protected final def percentileDouble(
+      sortedValues: List[Int],
+      probability: Double
+  ): Option[Double] =
     StatsKernel.percentile(sortedValues, probability)
 
   protected final def medianDouble(values: List[Double]): Option[Double] = values.sorted match
@@ -176,4 +179,3 @@ private[seriescomparison] trait SeriesComparisonAggregationTimelineSupport
     case sorted =>
       val upper = sorted.size / 2
       Some((sorted(upper - 1) + sorted(upper)) / 2.0)
-

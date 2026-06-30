@@ -255,4 +255,3 @@ private[seriescomparison] trait SeriesComparisonAggregationAssetStyleCoreSupport
       else if above(metrics.secondRate, medians.secondRate, Thresholds.AssetStyleSecondRateDelta)
       then Some("upper_chaser")
       else Some("balanced")
-

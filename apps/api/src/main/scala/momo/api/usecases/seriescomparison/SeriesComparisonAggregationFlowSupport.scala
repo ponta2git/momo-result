@@ -220,7 +220,7 @@ private[seriescomparison] trait SeriesComparisonAggregationFlowSupport
       current: SeriesComparisonMatchPlayerRow,
   )
 
-  protected final def rankTransitions(rows: List[SeriesComparisonMatchPlayerRow]): List[RankTransition] =
+  protected final def rankTransitions(rows: List[SeriesComparisonMatchPlayerRow])
+      : List[RankTransition] =
     rows.sliding(2).collect { case List(previous, current) => RankTransition(previous, current) }
       .toList
-

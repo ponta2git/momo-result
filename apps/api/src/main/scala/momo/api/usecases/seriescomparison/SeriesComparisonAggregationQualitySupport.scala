@@ -218,4 +218,3 @@ private[seriescomparison] trait SeriesComparisonAggregationQualitySupport
         targetCount = winners.map(_._3).min,
         status = "ok",
       ))
-

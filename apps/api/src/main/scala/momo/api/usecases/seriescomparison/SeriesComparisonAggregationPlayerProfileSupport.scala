@@ -66,7 +66,6 @@ private[seriescomparison] trait SeriesComparisonAggregationPlayerProfileSupport
       status: String,
   )
 
-
   protected final def strategyKind(entry: ProfileBase, entries: List[ProfileBase]): Option[String] =
     val rates = entries.flatMap(_.averageRevenueAssetRate)
     for
@@ -78,4 +77,3 @@ private[seriescomparison] trait SeriesComparisonAggregationPlayerProfileSupport
       else if value <= median - Thresholds.StrategyKindMedianDeltaThreshold then "card_focused"
       else "balanced"
     }
-

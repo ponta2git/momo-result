@@ -222,4 +222,3 @@ private[seriescomparison] trait SeriesComparisonAggregationMetricsSupport
       },
       status = conditionalStatus(targetCount),
     )
-

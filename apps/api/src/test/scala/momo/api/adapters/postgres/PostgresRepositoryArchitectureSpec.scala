@@ -10,30 +10,39 @@ import munit.FunSuite
 final class PostgresRepositoryArchitectureSpec extends FunSuite:
   private val matchListReadModel =
     Paths.get("src/main/scala/momo/api/adapters/postgres/PostgresMatchListReadModel.scala")
+  private val matchListSupport =
+    Paths.get("src/main/scala/momo/api/adapters/postgres/PostgresMatchListSupport.scala")
   private val seriesComparisonReadModel = Paths.get(
     "src/main/scala/momo/api/adapters/postgres/PostgresSeriesComparisonReadModel.scala"
+  )
+  private val seriesComparisonRowSupport = Paths.get(
+    "src/main/scala/momo/api/adapters/postgres/PostgresSeriesComparisonRowSupport.scala"
   )
   private val postgresDir = Paths.get("src/main/scala/momo/api/adapters/postgres")
 
   test("match list read-model maps DB rows through named fields"):
     val text = read(matchListReadModel)
+    val supportText = read(matchListSupport)
 
-    assert(text.contains("private final case class Row("))
-    assert(!text.contains("private type Row = ("))
-    assert(!text.contains("row._"))
+    assert(text.contains("extends PostgresMatchListSupport"))
+    assert(supportText.contains("protected final case class Row("))
+    assert(!supportText.contains("private type Row = ("))
+    assert(!supportText.contains("row._"))
 
   test("series comparison read-model keeps SQL row shape out of domain mapping"):
     val text = read(seriesComparisonReadModel)
+    val supportText = read(seriesComparisonRowSupport)
 
-    assert(text.contains("private final case class SeriesRow("))
-    assert(text.contains("private final case class ScopeOptionRow("))
-    assert(text.contains("private final case class PlayerRow("))
-    assert(!text.contains("private type SeriesRow = ("))
-    assert(!text.contains("private type ScopeOptionRow = ("))
-    assert(!text.contains("private type PlayerRow = ("))
-    assert(!text.contains("Read[("))
-    assert(!text.contains(".query[("))
-    assert(!text.contains("row._"))
+    assert(text.contains("extends PostgresSeriesComparisonRowSupport"))
+    assert(supportText.contains("protected final case class SeriesRow("))
+    assert(supportText.contains("protected final case class ScopeOptionRow("))
+    assert(supportText.contains("protected final case class PlayerRow("))
+    assert(!supportText.contains("private type SeriesRow = ("))
+    assert(!supportText.contains("private type ScopeOptionRow = ("))
+    assert(!supportText.contains("private type PlayerRow = ("))
+    assert(!supportText.contains("Read[("))
+    assert(!supportText.contains(".query[("))
+    assert(!supportText.contains("row._"))
 
   test("Postgres repositories map shared domain aggregates through explicit row types"):
     val directDomainQueries = List(

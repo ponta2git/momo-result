@@ -18,30 +18,30 @@ import momo.api.repositories.{OcrDraftsAlg, OcrDraftsRepository}
 
 object PostgresOcrDrafts:
 
-  private type Row = (
-      OcrDraftId,
-      OcrJobId,
-      ScreenType,
-      Option[ScreenType],
-      Option[String],
-      Json,
-      Json,
-      Json,
-      Instant,
-      Instant,
+  private final case class Row(
+      id: OcrDraftId,
+      jobId: OcrJobId,
+      requestedScreenType: ScreenType,
+      detectedScreenType: Option[ScreenType],
+      profileId: Option[String],
+      payloadJson: Json,
+      warningsJson: Json,
+      timingsMsJson: Json,
+      createdAt: Instant,
+      updatedAt: Instant,
   )
 
   private def toDraft(r: Row): OcrDraft = OcrDraft(
-    id = r._1,
-    jobId = r._2,
-    requestedScreenType = r._3,
-    detectedScreenType = r._4,
-    profileId = r._5,
-    payloadJson = r._6.noSpaces,
-    warningsJson = r._7.noSpaces,
-    timingsMsJson = r._8.noSpaces,
-    createdAt = r._9,
-    updatedAt = r._10,
+    id = r.id,
+    jobId = r.jobId,
+    requestedScreenType = r.requestedScreenType,
+    detectedScreenType = r.detectedScreenType,
+    profileId = r.profileId,
+    payloadJson = r.payloadJson.noSpaces,
+    warningsJson = r.warningsJson.noSpaces,
+    timingsMsJson = r.timingsMsJson.noSpaces,
+    createdAt = r.createdAt,
+    updatedAt = r.updatedAt,
   )
 
   private def asJson(raw: String, fieldName: String): ConnectionIO[Json] = parser.parse(raw)

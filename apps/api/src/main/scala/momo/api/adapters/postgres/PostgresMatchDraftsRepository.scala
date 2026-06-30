@@ -97,7 +97,11 @@ object PostgresMatchDrafts:
   ).fold(
     err =>
       MonadThrow[ConnectionIO]
-        .raiseError(IllegalStateException(s"inconsistent match_drafts row: ${err.message}")),
+        .raiseError(PostgresDataIntegrityException.inconsistentRow(
+          "match_drafts",
+          row.id.value,
+          err.message,
+        )),
     MonadThrow[ConnectionIO].pure,
   )
 

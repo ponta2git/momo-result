@@ -55,14 +55,27 @@ final class PostgresRepositoryArchitectureSpec extends FunSuite:
     assertEquals(violations, Nil)
 
   test("Postgres read models avoid positional tuple read mappings"):
-    val checked = List(matchListReadModel, seriesComparisonReadModel)
-    val violations = checked.flatMap { path =>
+    val violations = scalaFiles(postgresDir).flatMap { path =>
       val text = read(path)
       List(
         Option.when(text.contains("Read[("))(s"${path.toString}: Read[("),
         Option.when(text.contains(".query[("))(s"${path.toString}: .query[("),
+        Option.when(text.contains("private type Row = ("))(
+          s"${path.toString}: private type Row = ("
+        ),
+        Option.when(text.contains("private type MatchRow = ("))(
+          s"${path.toString}: private type MatchRow = ("
+        ),
+        Option.when(raw"row\._[0-9]+".r.findFirstIn(text).isDefined)(s"${path.toString}: row._N"),
       ).flatten
     }
+
+    assertEquals(violations, Nil)
+
+  test("Postgres adapters do not build SQL identifier fragments from raw strings"):
+    val violations = scalaFiles(postgresDir).flatMap { path =>
+      Option.when(read(path).contains("Fragment.const"))(path.toString)
+    }.sorted
 
     assertEquals(violations, Nil)
 

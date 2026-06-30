@@ -23,129 +23,110 @@ import momo.api.repositories.{OcrJobsAlg, OcrJobsRepository}
 
 object PostgresOcrJobs:
 
-  private type Row = (
-      OcrJobId,
-      OcrDraftId,
-      ImageId,
-      StoredImageLocation,
-      ScreenType,
-      Option[ScreenType],
-      OcrJobStatus,
-      Int,
-      Option[String],
-      Option[FailureCode],
-      Option[String],
-      Option[Boolean],
-      Option[String],
-      Option[Instant],
-      Option[Instant],
-      Option[Int],
-      Instant,
-      Instant,
+  private final case class Row(
+      id: OcrJobId,
+      draftId: OcrDraftId,
+      imageId: ImageId,
+      imageLocation: StoredImageLocation,
+      requestedScreenType: ScreenType,
+      detectedScreenType: Option[ScreenType],
+      status: OcrJobStatus,
+      attemptCount: Int,
+      workerId: Option[String],
+      failureCode: Option[FailureCode],
+      failureMessage: Option[String],
+      failureRetryable: Option[Boolean],
+      failureUserAction: Option[String],
+      startedAt: Option[Instant],
+      finishedAt: Option[Instant],
+      durationMs: Option[Int],
+      createdAt: Instant,
+      updatedAt: Instant,
   )
 
   private def toJob(r: Row): ConnectionIO[OcrJob] =
-    val (
-      id,
-      draftId,
-      imageId,
-      imageLocation,
-      requestedScreenType,
-      detectedScreenType,
-      status,
-      attemptCount,
-      workerId,
-      failureCode,
-      failureMessage,
-      failureRetryable,
-      failureUserAction,
-      startedAt,
-      finishedAt,
-      durationMs,
-      createdAt,
-      updatedAt,
-    ) = r
-    val failure = (failureCode, failureMessage, failureRetryable) match
+    val failure = (r.failureCode, r.failureMessage, r.failureRetryable) match
       case (Some(code), Some(msg), Some(retry)) =>
-        Some(OcrFailure(code, msg, retry, failureUserAction))
+        Some(OcrFailure(code, msg, retry, r.failureUserAction))
       case _ => None
 
     def inconsistent(reason: String): ConnectionIO[OcrJob] = cats.MonadThrow[ConnectionIO]
-      .raiseError(new IllegalStateException(s"ocr_jobs row ${id.value} is inconsistent: $reason"))
+      .raiseError(PostgresDataIntegrityException.inconsistentRow("ocr_jobs", r.id.value, reason))
 
-    status match
+    r.status match
       case OcrJobStatus.Queued => OcrJob.Queued(
-          id,
-          draftId,
-          imageId,
-          imageLocation,
-          requestedScreenType,
-          attemptCount,
-          createdAt,
-          updatedAt,
+          r.id,
+          r.draftId,
+          r.imageId,
+          r.imageLocation,
+          r.requestedScreenType,
+          r.attemptCount,
+          r.createdAt,
+          r.updatedAt,
         ).pure[ConnectionIO].widen[OcrJob]
-      case OcrJobStatus.Running => (workerId, startedAt) match
+      case OcrJobStatus.Running => (r.workerId, r.startedAt) match
           case (Some(w), Some(s)) => OcrJob.Running(
-              id,
-              draftId,
-              imageId,
-              imageLocation,
-              requestedScreenType,
-              attemptCount,
+              r.id,
+              r.draftId,
+              r.imageId,
+              r.imageLocation,
+              r.requestedScreenType,
+              r.attemptCount,
               w,
               s,
-              createdAt,
-              updatedAt,
+              r.createdAt,
+              r.updatedAt,
             ).pure[ConnectionIO].widen[OcrJob]
           case _ => inconsistent("status=running requires worker_id and started_at")
-      case OcrJobStatus.Succeeded => (detectedScreenType, startedAt, finishedAt, durationMs) match
+      case OcrJobStatus.Succeeded =>
+        (r.detectedScreenType, r.startedAt, r.finishedAt, r.durationMs) match
           case (Some(d), Some(s), Some(f), Some(dm)) => OcrJob.Succeeded(
-              id,
-              draftId,
-              imageId,
-              imageLocation,
-              requestedScreenType,
+              r.id,
+              r.draftId,
+              r.imageId,
+              r.imageLocation,
+              r.requestedScreenType,
               d,
-              attemptCount,
-              workerId,
+              r.attemptCount,
+              r.workerId,
               s,
               f,
               dm,
-              createdAt,
-              updatedAt,
+              r.createdAt,
+              r.updatedAt,
             ).pure[ConnectionIO].widen[OcrJob]
           case _ => inconsistent(
               "status=succeeded requires detected_screen_type, started_at, finished_at, duration_ms"
             )
-      case OcrJobStatus.Failed => (failure, finishedAt) match
+      case OcrJobStatus.Failed => (failure, r.finishedAt) match
           case (Some(f), Some(fin)) => OcrJob.Failed(
-              id,
-              draftId,
-              imageId,
-              imageLocation,
-              requestedScreenType,
-              detectedScreenType,
-              attemptCount,
-              workerId,
+              r.id,
+              r.draftId,
+              r.imageId,
+              r.imageLocation,
+              r.requestedScreenType,
+              r.detectedScreenType,
+              r.attemptCount,
+              r.workerId,
               f,
-              startedAt,
+              r.startedAt,
               fin,
-              durationMs,
-              createdAt,
-              updatedAt,
+              r.durationMs,
+              r.createdAt,
+              r.updatedAt,
             ).pure[ConnectionIO].widen[OcrJob]
           case _ => inconsistent("status=failed requires failure_* columns and finished_at")
-      case OcrJobStatus.Cancelled => finishedAt match
+      case OcrJobStatus.Cancelled => r.finishedAt match
           case Some(f) => OcrJob.Cancelled(
-              id,
-              draftId,
-              imageId,
-              imageLocation,
-              requestedScreenType,
-              attemptCount,
+              r.id,
+              r.draftId,
+              r.imageId,
+              r.imageLocation,
+              r.requestedScreenType,
+              r.attemptCount,
               f,
-              createdAt,
-              updatedAt,
+              r.createdAt,
+              r.updatedAt,
             ).pure[ConnectionIO].widen[OcrJob]
           case None => inconsistent("status=cancelled requires finished_at")
 

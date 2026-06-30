@@ -78,6 +78,10 @@ object PostgresMatchList:
       needsReviewCount = needsReviewCount,
     )
 
+  private enum StatusColumn(val fragment: Fragment):
+    case DraftComputed extends StatusColumn(fr"d.computed_status")
+    case CombinedStatus extends StatusColumn(fr"combined.status")
+
   private val confirmedBase = fr"""SELECT
     'match' AS kind,
     m.id AS id,
@@ -191,9 +195,9 @@ object PostgresMatchList:
       ranks = ranks,
     )
 
-  private def statusIn(column: String, statuses: Set[MatchDraftStatus]): Fragment =
+  private def statusIn(column: StatusColumn, statuses: Set[MatchDraftStatus]): Fragment =
     val nonEmpty = NonEmptyList.fromListUnsafe(statuses.toList)
-    fragments.in(Fragment.const(column), nonEmpty)
+    fragments.in(column.fragment, nonEmpty)
 
   private def orderBy(sort: MatchListSort): Fragment =
     val tieBreaker = fr", combined.kind ASC, combined.id ASC"
@@ -239,11 +243,11 @@ object PostgresMatchList:
       val draftStatusCondition = filter.status match
         case MatchListStatusFilter.All => None
         case MatchListStatusFilter.Incomplete =>
-          Some(statusIn("d.computed_status", MatchListStatusFilter.incompleteStatuses))
+          Some(statusIn(StatusColumn.DraftComputed, MatchListStatusFilter.incompleteStatuses))
         case MatchListStatusFilter.OcrRunning =>
           Some(fr"d.computed_status = ${MatchDraftStatus.OcrRunning}")
         case MatchListStatusFilter.PreConfirm => Some(statusIn(
-            "d.computed_status",
+            StatusColumn.DraftComputed,
             MatchListProjection.preConfirmStatuses,
           ))
         case MatchListStatusFilter.NeedsReview =>
@@ -291,9 +295,9 @@ object PostgresMatchList:
       ).flatten
       val draftSelect = draftBase ++ fragments.whereAndOpt(draftConditionsCommon)
       val incompleteCondition =
-        statusIn("combined.status", MatchListStatusFilter.incompleteStatuses)
+        statusIn(StatusColumn.CombinedStatus, MatchListStatusFilter.incompleteStatuses)
       val preConfirmCondition =
-        statusIn("combined.status", MatchListProjection.preConfirmStatuses)
+        statusIn(StatusColumn.CombinedStatus, MatchListProjection.preConfirmStatuses)
       val query =
         fr"SELECT COUNT(*) FILTER (WHERE" ++ incompleteCondition ++ fr""")::int AS incomplete_count,
           COUNT(*) FILTER (WHERE combined.status = 'ocr_running')::int AS ocr_running_count,

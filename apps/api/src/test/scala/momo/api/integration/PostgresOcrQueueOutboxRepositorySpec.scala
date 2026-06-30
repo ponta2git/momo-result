@@ -7,6 +7,7 @@ import doobie.postgres.circe.jsonb.implicits.*
 import doobie.postgres.implicits.*
 
 import momo.api.adapters.postgres.PostgresMeta.given
+import momo.api.adapters.postgres.PostgresDataIntegrityException
 import momo.api.adapters.postgres.PostgresOcrQueueOutboxRepository
 import momo.api.contracts.ocrworker.OcrWorkerJobMessage
 import momo.api.domain.ids.*
@@ -458,7 +459,7 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
       """.query[String].unique.transact(transactor)
     yield
       result match
-        case Left(error: IllegalStateException) =>
+        case Left(error: PostgresDataIntegrityException) =>
           assert(error.getMessage.contains("invalid stream_payload"), error.getMessage)
           assert(error.getMessage.contains("field attempt must be a string"), error.getMessage)
         case other => fail(s"expected invalid payload failure, got: $other")

@@ -103,7 +103,7 @@ final class PostgresOcrJobCreationStore[F[_]: MonadCancelThrow](transactor: Tran
     }
 
   private def slotDraftColumn(screenType: ScreenType): Option[Fragment] = screenType match
-    case ScreenType.TotalAssets => Some(Fragment.const("match_drafts.total_assets_draft_id"))
-    case ScreenType.Revenue => Some(Fragment.const("match_drafts.revenue_draft_id"))
-    case ScreenType.IncidentLog => Some(Fragment.const("match_drafts.incident_log_draft_id"))
+    case ScreenType.TotalAssets => Some(fr"match_drafts.total_assets_draft_id")
+    case ScreenType.Revenue => Some(fr"match_drafts.revenue_draft_id")
+    case ScreenType.IncidentLog => Some(fr"match_drafts.incident_log_draft_id")
     case ScreenType.Auto => None

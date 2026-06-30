@@ -77,6 +77,9 @@ final class PostgresMatchConfirmationRepository[F[_]: MonadCancelThrow](transact
     """.update.run.flatMap {
     case 1 => ().pure[ConnectionIO]
     case affected => MonadThrow[ConnectionIO]
-        .raiseError[Unit](IllegalStateException(s"expected to attach confirmed match ${record
-            .id} to draft ${expected.draftId}, but updated $affected rows"))
+        .raiseError[Unit](PostgresDataIntegrityException.inconsistentRow(
+          "match_drafts",
+          expected.draftId.value,
+          s"expected to attach confirmed match ${record.id.value}, but updated $affected rows",
+        ))
   }

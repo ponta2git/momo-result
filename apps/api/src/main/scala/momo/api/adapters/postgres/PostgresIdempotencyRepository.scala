@@ -53,30 +53,30 @@ object PostgresIdempotency:
 
   private def arrayToBytes(bytes: Array[Byte]): Vector[Byte] = bytes.toVector
 
-  private type Row = (
-      String, // key
-      AccountId,
-      String, // endpoint
-      Array[Byte], // request_hash
-      Int, // response_status
-      Json, // response_headers
-      Option[Array[Byte]], // response_body
-      Instant, // created_at
-      Instant, // expires_at
+  private final case class Row(
+      key: String,
+      accountId: AccountId,
+      endpoint: String,
+      requestHash: Array[Byte],
+      responseStatus: Int,
+      responseHeaders: Json,
+      responseBody: Option[Array[Byte]],
+      createdAt: Instant,
+      expiresAt: Instant,
   )
 
   private def toRecord(row: Row): IdempotencyRecord = IdempotencyRecord(
-    key = row._1,
-    accountId = row._2,
-    endpoint = row._3,
-    requestHash = arrayToBytes(row._4),
+    key = row.key,
+    accountId = row.accountId,
+    endpoint = row.endpoint,
+    requestHash = arrayToBytes(row.requestHash),
     response = IdempotencyResponse(
-      status = row._5,
-      headers = headersFromJson(row._6),
-      body = row._7.fold(Vector.empty[Byte])(arrayToBytes),
+      status = row.responseStatus,
+      headers = headersFromJson(row.responseHeaders),
+      body = row.responseBody.fold(Vector.empty[Byte])(arrayToBytes),
     ),
-    createdAt = row._8,
-    expiresAt = row._9,
+    createdAt = row.createdAt,
+    expiresAt = row.expiresAt,
   )
 
   private def classifyExisting(

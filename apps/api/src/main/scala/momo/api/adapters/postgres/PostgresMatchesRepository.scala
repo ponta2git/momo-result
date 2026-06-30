@@ -45,23 +45,44 @@ object PostgresMatches:
   private def notFound[A](resource: String, id: String): ConnectionIO[A] = MonadThrow[ConnectionIO]
     .raiseError[A](new AppException(AppError.NotFound(resource, id)))
 
-  private type MatchRow = (
-      MatchId,
-      HeldEventId,
-      MatchNoInEvent,
-      GameTitleId,
-      String,
-      SeasonMasterId,
-      MemberId,
-      MapMasterId,
-      Instant,
-      Option[OcrDraftId],
-      Option[OcrDraftId],
-      Option[OcrDraftId],
-      AccountId,
-      Option[MemberId],
-      Instant,
-      Instant,
+  private final case class MatchRow(
+      id: MatchId,
+      heldEventId: HeldEventId,
+      matchNoInEvent: MatchNoInEvent,
+      gameTitleId: GameTitleId,
+      layoutFamily: String,
+      seasonMasterId: SeasonMasterId,
+      ownerMemberId: MemberId,
+      mapMasterId: MapMasterId,
+      playedAt: Instant,
+      totalAssetsDraftId: Option[OcrDraftId],
+      revenueDraftId: Option[OcrDraftId],
+      incidentLogDraftId: Option[OcrDraftId],
+      createdByAccountId: AccountId,
+      createdByMemberId: Option[MemberId],
+      createdAt: Instant,
+      updatedAt: Instant,
+  )
+
+  private final case class PlayerRow(
+      matchId: MatchId,
+      memberId: MemberId,
+      playOrder: PlayOrder,
+      rank: Rank,
+      totalAssets: ManYen,
+      revenue: ManYen,
+  )
+
+  private final case class IncidentRow(
+      matchId: MatchId,
+      memberId: MemberId,
+      incidentMasterId: IncidentMasterId,
+      count: Int,
+  )
+
+  private final case class HeldEventMatchCountRow(
+      heldEventId: HeldEventId,
+      count: Int,
   )
 
   private val selectMatch = fr"""SELECT
@@ -73,22 +94,22 @@ object PostgresMatches:
          FROM matches"""
 
   private def toRecord(m: MatchRow, players: FourPlayers): MatchRecord = MatchRecord(
-    id = m._1,
-    heldEventId = m._2,
-    matchNoInEvent = m._3,
-    gameTitleId = m._4,
-    layoutFamily = m._5,
-    seasonMasterId = m._6,
-    ownerMemberId = m._7,
-    mapMasterId = m._8,
-    playedAt = m._9,
-    totalAssetsDraftId = m._10,
-    revenueDraftId = m._11,
-    incidentLogDraftId = m._12,
+    id = m.id,
+    heldEventId = m.heldEventId,
+    matchNoInEvent = m.matchNoInEvent,
+    gameTitleId = m.gameTitleId,
+    layoutFamily = m.layoutFamily,
+    seasonMasterId = m.seasonMasterId,
+    ownerMemberId = m.ownerMemberId,
+    mapMasterId = m.mapMasterId,
+    playedAt = m.playedAt,
+    totalAssetsDraftId = m.totalAssetsDraftId,
+    revenueDraftId = m.revenueDraftId,
+    incidentLogDraftId = m.incidentLogDraftId,
     players = players,
-    createdByAccountId = m._13,
-    createdByMemberId = m._14,
-    createdAt = m._15,
+    createdByAccountId = m.createdByAccountId,
+    createdByMemberId = m.createdByMemberId,
+    createdAt = m.createdAt,
   )
 
   /**
@@ -105,13 +126,13 @@ object PostgresMatches:
           FROM match_players
           WHERE match_id = ANY($ids)
           ORDER BY match_id, play_order
-        """.query[(MatchId, MemberId, PlayOrder, Rank, ManYen, ManYen)].to[List]
+        """.query[PlayerRow].to[List]
 
       val incidentsIO = sql"""
           SELECT match_id, member_id, incident_master_id, count
           FROM match_incidents
           WHERE match_id = ANY($ids)
-        """.query[(MatchId, MemberId, IncidentMasterId, Int)].to[List]
+        """.query[IncidentRow].to[List]
 
       for
         playerRows <- playersIO
@@ -121,27 +142,28 @@ object PostgresMatches:
 
   private def assemble(
       matchIds: List[MatchId],
-      playerRows: List[(MatchId, MemberId, PlayOrder, Rank, ManYen, ManYen)],
-      incidentRows: List[(MatchId, MemberId, IncidentMasterId, Int)],
+      playerRows: List[PlayerRow],
+      incidentRows: List[IncidentRow],
   ): ConnectionIO[Map[MatchId, FourPlayers]] =
     val incidentsByMatch: Map[MatchId, Map[MemberId, Map[IncidentKind, Int]]] = incidentRows
-      .groupBy(_._1).view.mapValues { rows =>
-        rows.groupBy(_._2).view.mapValues { rs =>
-          rs.iterator.flatMap(r => IncidentKindMapping.kindOf(r._3).map(_ -> r._4)).toMap
+      .groupBy(_.matchId).view.mapValues { rows =>
+        rows.groupBy(_.memberId).view.mapValues { rs =>
+          rs.iterator.flatMap(r => IncidentKindMapping.kindOf(r.incidentMasterId).map(_ -> r.count))
+            .toMap
         }.toMap
       }.toMap
 
-    val playersByMatch: Map[MatchId, List[PlayerResult]] = playerRows.groupBy(_._1).view
+    val playersByMatch: Map[MatchId, List[PlayerResult]] = playerRows.groupBy(_.matchId).view
       .mapValues { rows =>
-        val byMember = incidentsByMatch.getOrElse(rows.head._1, Map.empty)
-        rows.map { case (_, memberId, playOrder, rank, totalAssets, revenue) =>
-          val ic = byMember.getOrElse(memberId, Map.empty)
+        val byMember = incidentsByMatch.getOrElse(rows.head.matchId, Map.empty)
+        rows.map { row =>
+          val ic = byMember.getOrElse(row.memberId, Map.empty)
           PlayerResult(
-            memberId = memberId,
-            playOrder = playOrder,
-            rank = rank,
-            totalAssetsManYen = totalAssets,
-            revenueManYen = revenue,
+            memberId = row.memberId,
+            playOrder = row.playOrder,
+            rank = row.rank,
+            totalAssetsManYen = row.totalAssets,
+            revenueManYen = row.revenue,
             incidents = IncidentCounts.fromKindMap(ic),
           )
         }
@@ -152,9 +174,12 @@ object PostgresMatches:
       FourPlayers.fromTrustedRow(players) match
         case Right(fp) => (mid -> fp).pure[ConnectionIO]
         case Left(errs) => MonadThrow[ConnectionIO]
-            .raiseError[(MatchId, FourPlayers)](new IllegalStateException(s"match ${mid
-                .value} has invalid match_players row(s): ${errs.toChain.toList.map(_.message)
-                .mkString("; ")}"))
+            .raiseError[(MatchId, FourPlayers)](PostgresDataIntegrityException
+              .inconsistentRow(
+                "match_players",
+                mid.value,
+                errs.toChain.toList.map(_.message).mkString("; "),
+              ))
     }.map(_.toMap)
 
   val alg: MatchesAlg[ConnectionIO] = new MatchesAlg[ConnectionIO]:
@@ -216,16 +241,16 @@ object PostgresMatches:
       for
         rows <- (selectMatch ++ where ++ fr"ORDER BY played_at DESC, created_at DESC" ++ limit)
           .query[MatchRow].to[List]
-        byMid <- loadPlayersBatch(rows.map(_._1))
-      yield rows.flatMap(r => byMid.get(r._1).map(p => toRecord(r, p)))
+        byMid <- loadPlayersBatch(rows.map(_.id))
+      yield rows.flatMap(r => byMid.get(r.id).map(p => toRecord(r, p)))
 
     override def listByHeldEvent(heldEventId: HeldEventId): ConnectionIO[List[MatchRecord]] =
       for
         rows <-
         (selectMatch ++ fr"WHERE held_event_id = $heldEventId" ++ fr"ORDER BY match_no_in_event")
           .query[MatchRow].to[List]
-        byMid <- loadPlayersBatch(rows.map(_._1))
-      yield rows.flatMap(r => byMid.get(r._1).map(p => toRecord(r, p)))
+        byMid <- loadPlayersBatch(rows.map(_.id))
+      yield rows.flatMap(r => byMid.get(r.id).map(p => toRecord(r, p)))
 
     override def existsMatchNo(
         heldEventId: HeldEventId,
@@ -266,8 +291,8 @@ object PostgresMatches:
             FROM matches
             WHERE held_event_id = ANY($ids)
             GROUP BY held_event_id
-          """.query[(HeldEventId, Int)].to[List].map { rows =>
-          val seen = rows.toMap
+          """.query[HeldEventMatchCountRow].to[List].map { rows =>
+          val seen = rows.map(row => row.heldEventId -> row.count).toMap
           heldEventIds.map(id => id -> seen.getOrElse(id, 0)).toMap
         }
 end PostgresMatches

@@ -24,7 +24,13 @@ import momo.api.repositories.{
 
 object PostgresOcrQueueOutbox:
 
-  type Row = (String, OcrJobId, Json, Int, Instant)
+  final case class Row(
+      id: String,
+      jobId: OcrJobId,
+      payloadJson: Json,
+      attemptCount: Int,
+      claimExpiresAt: Instant,
+  )
 
   def insertIntent(draft: OcrQueueOutboxDraft): ConnectionIO[Unit] =
     val payloadJson = OcrWorkerJobMessage.fieldsAsJson(
@@ -43,14 +49,38 @@ object PostgresOcrQueueOutbox:
     """.update.run.void
 
   def toRecord(row: Row): ConnectionIO[OcrQueueOutboxRecord] =
-    val (id, jobId, payloadJson, attemptCount, claimExpiresAt) = row
-    OcrWorkerJobMessage.fromJson(payloadJson) match
+    OcrWorkerJobMessage.fromJson(row.payloadJson) match
       case Right(message) =>
-        OcrQueueOutboxRecord(id, jobId, message.toEnqueueRequest, attemptCount, claimExpiresAt)
-          .pure[ConnectionIO]
-      case Left(reason) => MonadThrow[ConnectionIO].raiseError(new IllegalStateException(
-          s"ocr_queue_outbox row $id has invalid stream_payload: $reason"
-        ))
+        OcrQueueOutboxRecord(
+          row.id,
+          row.jobId,
+          message.toEnqueueRequest,
+          row.attemptCount,
+          row.claimExpiresAt,
+        ).pure[ConnectionIO]
+      case Left(reason) => MonadThrow[ConnectionIO].raiseError(
+          PostgresDataIntegrityException.invalidPayload(
+            "ocr_queue_outbox",
+            row.id,
+            "stream_payload",
+            reason,
+          )
+        )
+
+  final case class BacklogSnapshotRow(
+      pendingCount: Long,
+      inFlightCount: Long,
+      expiredInFlightCount: Long,
+      duePendingCount: Long,
+      oldestDueNextAttemptAt: Option[Instant],
+  ):
+    def toSnapshot: OcrQueueBacklogSnapshot = OcrQueueBacklogSnapshot(
+      pendingCount = pendingCount,
+      inFlightCount = inFlightCount,
+      expiredInFlightCount = expiredInFlightCount,
+      duePendingCount = duePendingCount,
+      oldestDueNextAttemptAt = oldestDueNextAttemptAt,
+    )
 
 final class PostgresOcrQueueOutboxRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends OcrQueueOutboxRepository[F]:
@@ -122,16 +152,7 @@ final class PostgresOcrQueueOutboxRepository[F[_]: MonadCancelThrow](transactor:
       FROM ocr_queue_outbox
       WHERE status = ${OcrQueueOutboxStatus.Pending}
          OR status = ${OcrQueueOutboxStatus.InFlight}
-    """.query[(Long, Long, Long, Long, Option[Instant])].unique
-    .map { case (pendingCount, inFlightCount, expiredInFlightCount, duePendingCount, oldestDue) =>
-      OcrQueueBacklogSnapshot(
-        pendingCount = pendingCount,
-        inFlightCount = inFlightCount,
-        expiredInFlightCount = expiredInFlightCount,
-        duePendingCount = duePendingCount,
-        oldestDueNextAttemptAt = oldestDue,
-      )
-    }.transact(transactor)
+    """.query[BacklogSnapshotRow].unique.map(_.toSnapshot).transact(transactor)
 
   override def markDelivered(
       id: String,

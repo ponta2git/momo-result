@@ -21,8 +21,16 @@ private[local] object ImageFormatParsers:
 
   private object PngParser:
     private val Signature =
-      Array(0x89.toByte, 0x50.toByte, 0x4e.toByte, 0x47.toByte, 0x0d.toByte, 0x0a.toByte,
-        0x1a.toByte, 0x0a.toByte)
+      Array(
+        0x89.toByte,
+        0x50.toByte,
+        0x4e.toByte,
+        0x47.toByte,
+        0x0d.toByte,
+        0x0a.toByte,
+        0x1a.toByte,
+        0x0a.toByte
+      )
     private val Ihdr = Array('I', 'H', 'D', 'R').map(_.toByte)
     private val Idat = Array('I', 'D', 'A', 'T').map(_.toByte)
     private val Iend = Array('I', 'E', 'N', 'D').map(_.toByte)
@@ -67,7 +75,8 @@ private[local] object ImageFormatParsers:
       @tailrec
       def scan(offset: Int, maybeDimensions: Option[ImageDimensions]): Option[ImageDimensions] =
         if offset + 3 >= bytes.length then None
-        else if ImageBytes.unsignedByte(bytes, offset) != 0xff then scan(offset + 1, maybeDimensions)
+        else if ImageBytes.unsignedByte(bytes, offset) != 0xff then
+          scan(offset + 1, maybeDimensions)
         else
           val markerOffset = skipFill(bytes, offset + 1)
           if markerOffset >= bytes.length then None
@@ -155,7 +164,9 @@ private[local] object ImageFormatParsers:
             losslessDimensions(bytes, dataStart)
               .map(dimensions => canvasDimensions.getOrElse(dimensions))
           else if ImageBytes.matches(bytes, offset, Vp8) && chunkSize >= 10L then
-            lossyDimensions(bytes, dataStart).map(dimensions => canvasDimensions.getOrElse(dimensions))
+            lossyDimensions(bytes, dataStart).map(dimensions =>
+              canvasDimensions.getOrElse(dimensions)
+            )
           else scan(paddedEnd.toInt, canvasDimensions)
 
       Option.when(bytes.length >= 20 && riffEnd.exists(_ == bytes.length.toLong) &&

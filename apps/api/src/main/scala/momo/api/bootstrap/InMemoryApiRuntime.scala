@@ -73,117 +73,118 @@ private[bootstrap] object InMemoryApiRuntime:
   private def createParts[F[_]: Async: LoggerFactory](
       config: AppConfig,
       queue: OcrJobQueuePublisher[F],
-  ): F[RuntimeParts[F]] = for
-    matchDrafts <- InMemoryMatchDraftsRepository.create[F]
-    jobs <- InMemoryOcrJobsRepository.createWithDraftCancelSync[F](matchDrafts)
-    matchDraftCancellation =
-      InMemoryMatchDraftCancellationRepository[F](matchDrafts, jobs)
-    drafts <- InMemoryOcrDraftsRepository.create[F]
-    heldEvents <- InMemoryHeldEventsRepository.create[F]
-    matchesBase <- InMemoryMatchesRepository.create[F]
-    matches = InMemoryMatchesRepository
-      .withConfirmedDraftCleanup[F](matchesBase, matchDrafts)
-    matchList = InMemoryMatchListReadModel[F](
-      matches,
-      matchDrafts,
-      ocrJobs = Some(jobs),
-      ocrDrafts = Some(drafts),
-    )
-    matchConfirmation = InMemoryMatchConfirmationRepository[F](matches, matchDrafts)
-    heldEventDeletion =
-      InMemoryHeldEventDeletionRepository[F](heldEvents, matches, matchDrafts)
-    appSessions <- InMemoryAppSessionsRepository.create[F]
-    devIdentities <- MemberRoster.devIdentities(config.devMemberIds)
-      .leftMap(new IllegalArgumentException(_)).liftTo[F]
-    members <- InMemoryMembersRepository.create[F](devIdentities.map(identity =>
-      Member(
-        identity.memberId,
-        identity.userId,
-        identity.displayName,
-        java.time.Instant.EPOCH,
-      )
-    ))
-    loginAccounts <- InMemoryLoginAccountsRepository
-      .create[F](devIdentities.map { identity =>
-        LoginAccount(
-          identity.accountId,
-          identity.userId,
-          identity.displayName,
-          Some(identity.memberId),
-          loginEnabled = true,
-          isAdmin = identity.isAdmin,
-          createdAt = java.time.Instant.EPOCH,
-          updatedAt = java.time.Instant.EPOCH,
-        )
-      })
-    loginAccountAdministration =
-      InMemoryLoginAccountAdministrationRepository[F](loginAccounts, appSessions)
-    mapMasters <- InMemoryMapMastersRepository.createWithDeleteGuard[F](mapMasterId =>
-      InMemoryMasterDeleteGuards.ensureMapMasterCanDelete(mapMasterId, matches, matchDrafts)
-    )
-    seasonMasters <- InMemorySeasonMastersRepository.createWithDeleteGuard[F](seasonMasterId =>
-      InMemoryMasterDeleteGuards.ensureSeasonMasterCanDelete(
-        seasonMasterId,
-        matches,
-        matchDrafts
-      )
-    )
-    gameTitles <- InMemoryGameTitlesRepository.createWithDeleteGuard[F](gameTitleId =>
-      InMemoryMasterDeleteGuards.ensureGameTitleCanDelete(
-        gameTitleId,
-        mapMasters,
-        seasonMasters,
+  ): F[RuntimeParts[F]] =
+    for
+      matchDrafts <- InMemoryMatchDraftsRepository.create[F]
+      jobs <- InMemoryOcrJobsRepository.createWithDraftCancelSync[F](matchDrafts)
+      matchDraftCancellation =
+        InMemoryMatchDraftCancellationRepository[F](matchDrafts, jobs)
+      drafts <- InMemoryOcrDraftsRepository.create[F]
+      heldEvents <- InMemoryHeldEventsRepository.create[F]
+      matchesBase <- InMemoryMatchesRepository.create[F]
+      matches = InMemoryMatchesRepository
+        .withConfirmedDraftCleanup[F](matchesBase, matchDrafts)
+      matchList = InMemoryMatchListReadModel[F](
         matches,
         matchDrafts,
+        ocrJobs = Some(jobs),
+        ocrDrafts = Some(drafts),
       )
+      matchConfirmation = InMemoryMatchConfirmationRepository[F](matches, matchDrafts)
+      heldEventDeletion =
+        InMemoryHeldEventDeletionRepository[F](heldEvents, matches, matchDrafts)
+      appSessions <- InMemoryAppSessionsRepository.create[F]
+      devIdentities <- MemberRoster.devIdentities(config.devMemberIds)
+        .leftMap(new IllegalArgumentException(_)).liftTo[F]
+      members <- InMemoryMembersRepository.create[F](devIdentities.map(identity =>
+        Member(
+          identity.memberId,
+          identity.userId,
+          identity.displayName,
+          java.time.Instant.EPOCH,
+        )
+      ))
+      loginAccounts <- InMemoryLoginAccountsRepository
+        .create[F](devIdentities.map { identity =>
+          LoginAccount(
+            identity.accountId,
+            identity.userId,
+            identity.displayName,
+            Some(identity.memberId),
+            loginEnabled = true,
+            isAdmin = identity.isAdmin,
+            createdAt = java.time.Instant.EPOCH,
+            updatedAt = java.time.Instant.EPOCH,
+          )
+        })
+      loginAccountAdministration =
+        InMemoryLoginAccountAdministrationRepository[F](loginAccounts, appSessions)
+      mapMasters <- InMemoryMapMastersRepository.createWithDeleteGuard[F](mapMasterId =>
+        InMemoryMasterDeleteGuards.ensureMapMasterCanDelete(mapMasterId, matches, matchDrafts)
+      )
+      seasonMasters <- InMemorySeasonMastersRepository.createWithDeleteGuard[F](seasonMasterId =>
+        InMemoryMasterDeleteGuards.ensureSeasonMasterCanDelete(
+          seasonMasterId,
+          matches,
+          matchDrafts
+        )
+      )
+      gameTitles <- InMemoryGameTitlesRepository.createWithDeleteGuard[F](gameTitleId =>
+        InMemoryMasterDeleteGuards.ensureGameTitleCanDelete(
+          gameTitleId,
+          mapMasters,
+          seasonMasters,
+          matches,
+          matchDrafts,
+        )
+      )
+      seriesComparison = InMemorySeriesComparisonReadModel[F](
+        gameTitles,
+        mapMasters,
+        seasonMasters,
+        members,
+        matches,
+      )
+      incidentMasters <- InMemoryIncidentMastersRepository.create[F]
+      memberAliases <- InMemoryMemberAliasesRepository.create[F]
+      idempotency <- InMemoryIdempotencyRepository.create[F]
+      ocrJobCreationStore = InMemoryOcrJobCreationStore[F](
+        drafts,
+        jobs,
+        matchDrafts,
+        jobs.existsActiveByDraft,
+      )
+      imageReferences: ImageReferenceRepository[F] =
+        InMemoryImageReferenceRepository[F](jobs, matchDrafts)
+      ocrQueueSubmitter = OcrJobQueueSubmitter.direct[F](jobs, matchDrafts, queue)
+      ocrAdmissionGuard = OcrAdmissionGuard.allowAll[F]
+      repositories = UseCaseWiring.RuntimeRepositories(
+        imageReferences = imageReferences,
+        ocrJobCreationStore = ocrJobCreationStore,
+        jobs = jobs,
+        drafts = drafts,
+        heldEvents = heldEvents,
+        heldEventDeletion = heldEventDeletion,
+        matches = matches,
+        matchDrafts = matchDrafts,
+        matchDraftCancellation = matchDraftCancellation,
+        matchList = matchList,
+        seriesComparison = seriesComparison,
+        matchConfirmation = matchConfirmation,
+        appSessions = appSessions,
+        members = members,
+        loginAccounts = loginAccounts,
+        loginAccountAdministration = loginAccountAdministration,
+        gameTitles = gameTitles,
+        mapMasters = mapMasters,
+        seasonMasters = seasonMasters,
+        incidentMasters = incidentMasters,
+        memberAliases = memberAliases,
+        idempotency = idempotency,
+      )
+    yield RuntimeParts(
+      repositories = repositories,
+      ocrQueueSubmitter = ocrQueueSubmitter,
+      ocrAdmissionGuard = ocrAdmissionGuard,
+      ocrMaintenance = new InMemoryOcrJobMaintenanceRepository[F],
     )
-    seriesComparison = InMemorySeriesComparisonReadModel[F](
-      gameTitles,
-      mapMasters,
-      seasonMasters,
-      members,
-      matches,
-    )
-    incidentMasters <- InMemoryIncidentMastersRepository.create[F]
-    memberAliases <- InMemoryMemberAliasesRepository.create[F]
-    idempotency <- InMemoryIdempotencyRepository.create[F]
-    ocrJobCreationStore = InMemoryOcrJobCreationStore[F](
-      drafts,
-      jobs,
-      matchDrafts,
-      jobs.existsActiveByDraft,
-    )
-    imageReferences: ImageReferenceRepository[F] =
-      InMemoryImageReferenceRepository[F](jobs, matchDrafts)
-    ocrQueueSubmitter = OcrJobQueueSubmitter.direct[F](jobs, matchDrafts, queue)
-    ocrAdmissionGuard = OcrAdmissionGuard.allowAll[F]
-    repositories = UseCaseWiring.RuntimeRepositories(
-      imageReferences = imageReferences,
-      ocrJobCreationStore = ocrJobCreationStore,
-      jobs = jobs,
-      drafts = drafts,
-      heldEvents = heldEvents,
-      heldEventDeletion = heldEventDeletion,
-      matches = matches,
-      matchDrafts = matchDrafts,
-      matchDraftCancellation = matchDraftCancellation,
-      matchList = matchList,
-      seriesComparison = seriesComparison,
-      matchConfirmation = matchConfirmation,
-      appSessions = appSessions,
-      members = members,
-      loginAccounts = loginAccounts,
-      loginAccountAdministration = loginAccountAdministration,
-      gameTitles = gameTitles,
-      mapMasters = mapMasters,
-      seasonMasters = seasonMasters,
-      incidentMasters = incidentMasters,
-      memberAliases = memberAliases,
-      idempotency = idempotency,
-    )
-  yield RuntimeParts(
-    repositories = repositories,
-    ocrQueueSubmitter = ocrQueueSubmitter,
-    ocrAdmissionGuard = ocrAdmissionGuard,
-    ocrMaintenance = new InMemoryOcrJobMaintenanceRepository[F],
-  )

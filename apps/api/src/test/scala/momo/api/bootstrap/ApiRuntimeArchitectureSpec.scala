@@ -3,8 +3,9 @@ package momo.api.bootstrap
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}
 
-import munit.FunSuite
 import scala.jdk.CollectionConverters.*
+
+import munit.FunSuite
 
 final class ApiRuntimeArchitectureSpec extends FunSuite:
   private val apiAppFile = Paths.get("src/main/scala/momo/api/bootstrap/ApiApp.scala")

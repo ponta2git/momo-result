@@ -7,8 +7,7 @@ import doobie.postgres.circe.jsonb.implicits.*
 import doobie.postgres.implicits.*
 
 import momo.api.adapters.postgres.PostgresMeta.given
-import momo.api.adapters.postgres.PostgresDataIntegrityException
-import momo.api.adapters.postgres.PostgresOcrQueueOutboxRepository
+import momo.api.adapters.postgres.{PostgresDataIntegrityException, PostgresOcrQueueOutboxRepository}
 import momo.api.contracts.ocrworker.OcrWorkerJobMessage
 import momo.api.domain.ids.*
 import momo.api.domain.{OcrJobHints, ScreenType, StoredImageLocation}

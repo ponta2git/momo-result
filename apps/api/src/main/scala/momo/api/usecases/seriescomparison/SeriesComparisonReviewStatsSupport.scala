@@ -2,8 +2,8 @@ package momo.api.usecases.seriescomparison
 
 import scala.util.Random
 
-import momo.api.domain.ids.MemberId
 import momo.api.domain.SeriesComparisonMatchPlayerRow
+import momo.api.domain.ids.MemberId
 import momo.api.usecases.seriescomparison.view.*
 
 private[seriescomparison] trait SeriesComparisonReviewStatsSupport:

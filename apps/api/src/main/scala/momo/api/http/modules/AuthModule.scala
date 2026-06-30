@@ -12,9 +12,9 @@ import momo.api.auth.{
   CompleteOAuthLogin,
   CsrfTokenService,
   DiscordOAuthClient,
-  OAuthProviderBackoff,
   OAuthCallbackDecision,
   OAuthCallbackInput,
+  OAuthProviderBackoff,
   OAuthStateCodec,
   RateLimiter,
   SessionService

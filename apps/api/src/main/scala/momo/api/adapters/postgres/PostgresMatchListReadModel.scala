@@ -15,7 +15,7 @@ import momo.api.domain.{
   MatchListItem,
   MatchListStatusFilter,
   MatchListSummary,
-  PagedResult,
+  PagedResult
 }
 import momo.api.repositories.{MatchListAlg, MatchListReadModel}
 

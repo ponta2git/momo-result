@@ -6,12 +6,11 @@ import cats.effect.Async
 import cats.syntax.all.*
 import sttp.tapir.server.ServerEndpoint
 
-import momo.api.domain.ids.{GameTitleId, MapMasterId, MemberAliasId, MemberId, SeasonMasterId}
+import momo.api.domain.ids.{GameTitleId, MapMasterId, SeasonMasterId}
 import momo.api.endpoints.codec.{BoundaryId, MasterCodec}
 import momo.api.endpoints.{
   CreateGameTitleRequest,
   CreateMapMasterRequest,
-  CreateMemberAliasRequest,
   CreateSeasonMasterRequest,
   DeleteMasterResponse,
   GameTitleListResponse,
@@ -23,15 +22,11 @@ import momo.api.endpoints.{
   MapMasterListResponse,
   MapMasterResponse,
   MapMastersEndpoints,
-  MemberAliasListResponse,
-  MemberAliasResponse,
-  MemberAliasesEndpoints,
   SeasonMasterListResponse,
   SeasonMasterResponse,
   SeasonMastersEndpoints,
   UpdateGameTitleRequest,
   UpdateMapMasterRequest,
-  UpdateMemberAliasRequest,
   UpdateSeasonMasterRequest
 }
 import momo.api.http.{EndpointSecurity, HttpOperation, IdempotencyReplay, SecuredEndpoint}
@@ -254,64 +249,12 @@ object MasterModule:
       listIncidentMasters.run
         .map(items => Right(IncidentMasterListResponse(items.map(IncidentMasterResponse.from))))
     },
-    SecuredEndpoint.readLogic(security, MemberAliasesEndpoints.list) { _ => memberId =>
-      security
-        .decode(BoundaryId.optional("memberId", memberId)(MemberId.fromString)) { parsedMemberId =>
-          security.respond(
-            listMemberAliases.run(parsedMemberId)
-          )(items => MemberAliasListResponse(items.map(MemberAliasResponse.from)))
-        }
-    },
-    SecuredEndpoint.masterMutationLogic(security, MemberAliasesEndpoints.create) { member =>
-      {
-        case (idemKey, request) =>
-          IdempotencyReplay.wrap[F, CreateMemberAliasRequest, MemberAliasResponse](
-            idempotency,
-            idemKey,
-            member,
-            HttpOperation.CreateMemberAlias,
-            request,
-            nowF,
-            security.decode(
-              MasterCodec.toCreateMemberAliasCommand(request)
-            )(command =>
-              security.respond(createMemberAlias.run(command))(MemberAliasResponse.from)
-            ),
-          )
-      }
-    },
-    SecuredEndpoint.masterMutationLogic(security, MemberAliasesEndpoints.update) { member =>
-      {
-        case (id, idemKey, request) =>
-          IdempotencyReplay.wrap[F, (String, UpdateMemberAliasRequest), MemberAliasResponse](
-            idempotency,
-            idemKey,
-            member,
-            HttpOperation.UpdateMemberAlias,
-            (id, request),
-            nowF,
-            security.decode(MasterCodec.toUpdateMemberAliasCommand(id, request))(command =>
-              security.respond(updateMemberAlias.run(command))(MemberAliasResponse.from)
-            ),
-          )
-      }
-    },
-    SecuredEndpoint.masterMutationLogic(security, MemberAliasesEndpoints.delete) { member =>
-      {
-        case (id, idemKey) =>
-          IdempotencyReplay.wrap[F, String, DeleteMasterResponse](
-            idempotency,
-            idemKey,
-            member,
-            HttpOperation.DeleteMemberAlias,
-            id,
-            nowF,
-            security.decode(BoundaryId.required("id", id)(MemberAliasId.fromString))(parsedId =>
-              security.respond(
-                deleteMemberAlias.run(parsedId)
-              )(_ => DeleteMasterResponse(id, deleted = true))
-            ),
-          )
-      }
-    },
+  ) ::: MasterMemberAliasRoutes.routes(
+    listMemberAliases = listMemberAliases,
+    createMemberAlias = createMemberAlias,
+    updateMemberAlias = updateMemberAlias,
+    deleteMemberAlias = deleteMemberAlias,
+    idempotency = idempotency,
+    nowF = nowF,
+    security = security,
   )

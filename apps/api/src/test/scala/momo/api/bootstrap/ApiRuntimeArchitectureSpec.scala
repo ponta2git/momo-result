@@ -4,9 +4,14 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}
 
 import munit.FunSuite
+import scala.jdk.CollectionConverters.*
 
 final class ApiRuntimeArchitectureSpec extends FunSuite:
   private val apiAppFile = Paths.get("src/main/scala/momo/api/bootstrap/ApiApp.scala")
+  private val postgresApiRuntimeFile =
+    Paths.get("src/main/scala/momo/api/bootstrap/PostgresApiRuntime.scala")
+  private val inMemoryApiRuntimeFile =
+    Paths.get("src/main/scala/momo/api/bootstrap/InMemoryApiRuntime.scala")
   private val runtimeInfrastructureFile =
     Paths.get("src/main/scala/momo/api/bootstrap/RuntimeInfrastructure.scala")
   private val useCaseWiringFile = Paths.get("src/main/scala/momo/api/bootstrap/UseCaseWiring.scala")
@@ -38,10 +43,11 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
 
   test("database connection acquisition does not run on the Cats Effect compute pool"):
     val apiAppText = read(apiAppFile)
+    val postgresRuntimeText = read(postgresApiRuntimeFile)
     val databaseText = read(databaseFile)
 
     assert(!apiAppText.contains("Async[F].executionContext"))
-    assert(apiAppText.contains("Database.transactor[F](db)"))
+    assert(postgresRuntimeText.contains("Database.transactor[F](db)"))
     assert(databaseText.contains("ExecutionContexts.fixedThreadPool[F](config.poolSize)"))
     assert(databaseText.contains("connectEC = connectExecutionContext"))
 
@@ -66,11 +72,13 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
 
   test("API runtime validates dev identities before constructing domain ids"):
     val apiAppText = read(apiAppFile)
+    val inMemoryRuntimeText = read(inMemoryApiRuntimeFile)
     val useCaseWiringText = read(useCaseWiringFile)
 
-    assert(apiAppText.contains("MemberRoster.devIdentities(config.devMemberIds)"))
+    assert(inMemoryRuntimeText.contains("MemberRoster.devIdentities(config.devMemberIds)"))
     assert(useCaseWiringText.contains("MemberRoster.devFromMemberIds(config.devMemberIds)"))
     assert(!apiAppText.contains("unsafeFromString"))
+    assert(!inMemoryRuntimeText.contains("unsafeFromString"))
     assert(!useCaseWiringText.contains("unsafeFromString"))
 
   test("API runtime wires generated ids with their domain types"):
@@ -150,6 +158,16 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
     assert(createOcrJobText.contains("creationPlan = OcrJobCreationPlan"))
     assert(createOcrJobText.contains(".store(plan)"))
     assert(!createOcrJobText.contains(".createQueuedJob("))
+
+  test("API main modules stay below the refactoring review size threshold"):
+    val oversized = Files.walk(Paths.get("src/main/scala")).iterator.asScala
+      .filter(path => Files.isRegularFile(path) && path.toString.endsWith(".scala"))
+      .map(path => path -> Files.readAllLines(path, StandardCharsets.UTF_8).size)
+      .filter { case (_, lineCount) => lineCount >= 300 }
+      .map { case (path, lineCount) => s"$path: $lineCount lines" }
+      .toList.sorted
+
+    assertEquals(oversized, Nil)
 
   private def read(path: Path): String = Files.readString(path, StandardCharsets.UTF_8)
 end ApiRuntimeArchitectureSpec

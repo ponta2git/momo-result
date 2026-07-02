@@ -25,12 +25,16 @@ def parse_count(value: str) -> int | None:
         normalized = candidate.translate(_COUNT_ALIASES)
         digits = "".join(char for char in normalized if char.isdigit())
         if digits:
-            # 先頭桁が "0" の多桁列は、罫線/区切り由来のノイズが後ろに付いたケースが
-            # ほとんど (例: "03", "01", "O71" は実際にはセルが "0")。先頭桁を真値とする。
-            if len(digits) > 1 and digits[0] == "0":
-                return 0
-            return int(digits)
+            return _parse_digits(digits)
     return None
+
+
+def _parse_digits(digits: str) -> int:
+    # 先頭桁が "0" の多桁列は、罫線/区切り由来のノイズが後ろに付いたケースが
+    # ほとんど (例: "03", "01", "O71" は実際にはセルが "0")。先頭桁を真値とする。
+    if len(digits) > 1 and digits[0] == "0":
+        return 0
+    return int(digits)
 
 
 def is_pure_pipe_noise(text: str) -> bool:

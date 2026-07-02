@@ -64,11 +64,16 @@ class PlayerAliasResolver:
                 continue
             if normalized_surface in normalized_text:
                 return PlayerAliasMatch(display_name=display_name, member_id=member_id)
-            if self.fuzzy_threshold is not None:
-                ratio = SequenceMatcher(None, normalized_surface, normalized_text).ratio()
-                if ratio > best_ratio:
-                    best_match = PlayerAliasMatch(display_name=display_name, member_id=member_id)
-                    best_ratio = ratio
+            fuzzy_match = _better_fuzzy_match(
+                normalized_surface=normalized_surface,
+                normalized_text=normalized_text,
+                display_name=display_name,
+                member_id=member_id,
+                threshold=self.fuzzy_threshold,
+                best_ratio=best_ratio,
+            )
+            if fuzzy_match is not None:
+                best_match, best_ratio = fuzzy_match
         if self.fuzzy_threshold is not None and best_ratio >= self.fuzzy_threshold:
             return best_match
         return None
@@ -95,9 +100,7 @@ def _expand_momotetsu_president_surfaces(surfaces: Sequence[str]) -> tuple[str, 
         if surface and not surface.endswith("社長"):
             candidates.append(f"{surface}社長")
         for candidate in candidates:
-            if candidate not in seen:
-                seen.add(candidate)
-                expanded.append(candidate)
+            _append_unseen_candidate(candidate, seen=seen, expanded=expanded)
     return tuple(expanded)
 
 
@@ -112,6 +115,30 @@ def alias_resolver_from_member_aliases(
         for surface in _expand_momotetsu_president_surfaces(surfaces)
     )
     return PlayerAliasResolver(pairs=pairs, fuzzy_threshold=fuzzy_threshold)
+
+
+def _better_fuzzy_match(
+    *,
+    normalized_surface: str,
+    normalized_text: str,
+    display_name: str,
+    member_id: str | None,
+    threshold: float | None,
+    best_ratio: float,
+) -> tuple[PlayerAliasMatch, float] | None:
+    if threshold is None:
+        return None
+    ratio = SequenceMatcher(None, normalized_surface, normalized_text).ratio()
+    if ratio <= best_ratio:
+        return None
+    return PlayerAliasMatch(display_name=display_name, member_id=member_id), ratio
+
+
+def _append_unseen_candidate(candidate: str, *, seen: set[str], expanded: list[str]) -> None:
+    if candidate in seen:
+        return
+    seen.add(candidate)
+    expanded.append(candidate)
 
 
 DEFAULT_ALIAS_RESOLVER = alias_resolver_from_map(DEFAULT_STATIC_ALIASES)

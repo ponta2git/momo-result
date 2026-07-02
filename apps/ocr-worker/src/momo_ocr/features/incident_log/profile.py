@@ -71,9 +71,17 @@ PROFILES = (
 
 
 def select_incident_log_profiles(layout_family_hint: str | None) -> tuple[IncidentLogProfile, ...]:
-    if layout_family_hint is not None:
-        normalized = layout_family_hint.strip().lower()
-        for profile in PROFILES:
-            if normalized in profile.layout_families:
-                return (profile,)
+    profile = _profile_for_hint(layout_family_hint)
+    if profile is not None:
+        return (profile,)
     return PROFILES
+
+
+def _profile_for_hint(layout_family_hint: str | None) -> IncidentLogProfile | None:
+    if layout_family_hint is None:
+        return None
+    normalized = layout_family_hint.strip().lower()
+    for profile in PROFILES:
+        if normalized in profile.layout_families:
+            return profile
+    return None

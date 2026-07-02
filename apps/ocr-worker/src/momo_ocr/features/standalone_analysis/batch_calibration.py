@@ -57,12 +57,18 @@ def analyze_directory(  # noqa: PLR0913 - mirrors the analyzer boundary explicit
 
 def _iter_images(input_dir: Path, evaluation_set: EvaluationSet) -> Iterator[Path]:
     if evaluation_set in {"all", "train"}:
-        for path in input_dir.iterdir():
-            if path.is_file() and path.suffix.lower() in SUPPORTED_EXTENSIONS:
-                yield path
+        yield from _iter_supported_images(input_dir)
     if evaluation_set in {"all", "holdout"}:
-        holdout_dir = input_dir / HOLDOUT_DIRECTORY_NAME
-        if holdout_dir.is_dir():
-            for path in holdout_dir.iterdir():
-                if path.is_file() and path.suffix.lower() in SUPPORTED_EXTENSIONS:
-                    yield path
+        yield from _iter_supported_images(input_dir / HOLDOUT_DIRECTORY_NAME)
+
+
+def _iter_supported_images(directory: Path) -> Iterator[Path]:
+    if not directory.is_dir():
+        return
+    for path in directory.iterdir():
+        if _is_supported_image(path):
+            yield path
+
+
+def _is_supported_image(path: Path) -> bool:
+    return path.is_file() and path.suffix.lower() in SUPPORTED_EXTENSIONS

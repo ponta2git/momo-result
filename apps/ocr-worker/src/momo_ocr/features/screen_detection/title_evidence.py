@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
 from PIL import Image, ImageOps
@@ -22,6 +23,15 @@ SUPPLEMENTAL_EVIDENCE_ROIS = (
 
 _HIRAGANA_KATAKANA_RANGE = (0x3040, 0x30FF)
 _CJK_UNIFIED_RANGE = (0x4E00, 0x9FFF)
+
+
+@dataclass(frozen=True)
+class _TitleVariantRequest:
+    variant_label: str
+    scale_factor: int
+    psm: int
+    debug_dir: Path | None
+    debug_prefix: str
 
 
 def recognize_title_evidence(
@@ -69,21 +79,13 @@ def _recognize_title_variants(
     snippets: list[str] = []
     preprocessed_variants = _title_preprocessing_variants(image)
     for variant_label, variant_image in preprocessed_variants:
-        variant_snippets: list[str] = []
-        for scale_factor, psm in TITLE_OCR_VARIANTS:
-            scaled = variant_image.resize(
-                (variant_image.width * scale_factor, variant_image.height * scale_factor),
-                Image.Resampling.LANCZOS,
-            )
-            if debug_dir is not None:
-                scaled.save(
-                    debug_dir
-                    / f"{debug_prefix}_title_{variant_label}_scale{scale_factor}_psm{psm}.png",
-                )
-            recognized = engine.recognize(scaled, field=RecognitionField.TITLE, psm=psm)
-            text = normalize_ocr_text(recognized.text)
-            if text:
-                variant_snippets.append(text)
+        variant_snippets = _recognize_title_variant_group(
+            variant_image,
+            engine,
+            variant_label=variant_label,
+            debug_dir=debug_dir,
+            debug_prefix=debug_prefix,
+        )
         snippets.extend(variant_snippets)
         # Lazy variant evaluation: if the base preprocessing already produced
         # CJK title evidence, skip the heavier OTSU/invert variants. Stylized
@@ -94,15 +96,72 @@ def _recognize_title_variants(
     return _join_unique_snippets(snippets)
 
 
+def _recognize_title_variant_group(
+    image: Image.Image,
+    engine: TextRecognitionEngine,
+    *,
+    variant_label: str,
+    debug_dir: Path | None,
+    debug_prefix: str,
+) -> list[str]:
+    snippets: list[str] = []
+    for scale_factor, psm in TITLE_OCR_VARIANTS:
+        text = _recognize_scaled_title(
+            image,
+            engine,
+            request=_TitleVariantRequest(
+                variant_label=variant_label,
+                scale_factor=scale_factor,
+                psm=psm,
+                debug_dir=debug_dir,
+                debug_prefix=debug_prefix,
+            ),
+        )
+        if text:
+            snippets.append(text)
+    return snippets
+
+
+def _recognize_scaled_title(
+    image: Image.Image,
+    engine: TextRecognitionEngine,
+    *,
+    request: _TitleVariantRequest,
+) -> str:
+    scaled = image.resize(
+        (image.width * request.scale_factor, image.height * request.scale_factor),
+        Image.Resampling.LANCZOS,
+    )
+    _save_scaled_title_debug(scaled, request=request)
+    recognized = engine.recognize(scaled, field=RecognitionField.TITLE, psm=request.psm)
+    return normalize_ocr_text(recognized.text)
+
+
+def _save_scaled_title_debug(
+    scaled: Image.Image,
+    *,
+    request: _TitleVariantRequest,
+) -> None:
+    if request.debug_dir is None:
+        return
+    scaled.save(
+        request.debug_dir
+        / (
+            f"{request.debug_prefix}_title_{request.variant_label}_"
+            f"scale{request.scale_factor}_psm{request.psm}.png"
+        ),
+    )
+
+
 def _has_cjk(snippets: list[str]) -> bool:
+    return any(_is_cjk_or_kana(char) for snippet in snippets for char in snippet)
+
+
+def _is_cjk_or_kana(char: str) -> bool:
     hira_lo, hira_hi = _HIRAGANA_KATAKANA_RANGE
     cjk_lo, cjk_hi = _CJK_UNIFIED_RANGE
-    for snippet in snippets:
-        for char in snippet:
-            code = ord(char)
-            if hira_lo <= code <= hira_hi or cjk_lo <= code <= cjk_hi:
-                return True
-    return False
+    code = ord(char)
+    return hira_lo <= code <= hira_hi or cjk_lo <= code <= cjk_hi
 
 
 def _title_preprocessing_variants(image: Image.Image) -> tuple[tuple[str, Image.Image], ...]:
@@ -130,18 +189,59 @@ def _recognize_supplemental_evidence(
 ) -> str:
     snippets: list[str] = []
     for name, roi in SUPPLEMENTAL_EVIDENCE_ROIS:
-        rect = scale_profile_rect_to_image(roi, image_size)
-        crop = crop_roi(image, rect)
-        scaled = crop.resize((crop.width * 2, crop.height * 2), Image.Resampling.LANCZOS)
-        if debug_dir is not None:
-            crop.save(debug_dir / f"supplemental_{name}.png")
-            scaled.save(debug_dir / f"supplemental_{name}_scale2.png")
-        for psm in (6, 11):
-            recognized = engine.recognize(scaled, field=RecognitionField.TITLE, psm=psm)
-            text = normalize_ocr_text(recognized.text)
-            if text:
-                snippets.append(text)
+        snippets.extend(
+            _recognize_supplemental_roi(
+                image,
+                engine,
+                name=name,
+                roi=roi,
+                image_size=image_size,
+                debug_dir=debug_dir,
+            )
+        )
     return _join_unique_snippets(snippets)
+
+
+def _recognize_supplemental_roi(
+    image: Image.Image,
+    engine: TextRecognitionEngine,
+    *,
+    name: str,
+    roi: Rect,
+    image_size: Size,
+    debug_dir: Path | None,
+) -> list[str]:
+    rect = scale_profile_rect_to_image(roi, image_size)
+    crop = crop_roi(image, rect)
+    scaled = crop.resize((crop.width * 2, crop.height * 2), Image.Resampling.LANCZOS)
+    _save_supplemental_debug(crop, scaled, name=name, debug_dir=debug_dir)
+    return _recognize_supplemental_variants(scaled, engine)
+
+
+def _save_supplemental_debug(
+    crop: Image.Image,
+    scaled: Image.Image,
+    *,
+    name: str,
+    debug_dir: Path | None,
+) -> None:
+    if debug_dir is None:
+        return
+    crop.save(debug_dir / f"supplemental_{name}.png")
+    scaled.save(debug_dir / f"supplemental_{name}_scale2.png")
+
+
+def _recognize_supplemental_variants(
+    scaled: Image.Image,
+    engine: TextRecognitionEngine,
+) -> list[str]:
+    snippets: list[str] = []
+    for psm in (6, 11):
+        recognized = engine.recognize(scaled, field=RecognitionField.TITLE, psm=psm)
+        text = normalize_ocr_text(recognized.text)
+        if text:
+            snippets.append(text)
+    return snippets
 
 
 def _join_unique_snippets(snippets: tuple[str, ...] | list[str]) -> str:

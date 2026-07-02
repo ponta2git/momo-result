@@ -31,13 +31,9 @@ proceed in parallel (each lock is independent).
 from __future__ import annotations
 
 import logging
-import os
 import threading
 from collections.abc import Mapping
-from dataclasses import dataclass, replace
-from pathlib import Path
 from types import MappingProxyType
-from typing import NoReturn, Protocol, cast
 
 from PIL import Image
 
@@ -47,88 +43,28 @@ from momo_ocr.features.text_recognition.models import (
     RecognitionField,
     RecognizedText,
 )
-from momo_ocr.features.text_recognition.postprocess import normalize_ocr_text
 from momo_ocr.features.text_recognition.tesseract import DEFAULT_FIELD_CONFIGS
+from momo_ocr.features.text_recognition.tesserocr_api import (
+    ApiCacheEntry,
+    ApiFactory,
+    TesserocrApi,
+    default_api_factory,
+    resolve_tessdata_path,
+)
+from momo_ocr.features.text_recognition.tesserocr_config import (
+    DEFAULT_OEM,
+    DEFAULT_TESSEROCR_CONFIG,
+    apply_postprocessors,
+    apply_psm,
+    merge_config,
+    raise_timeout_error,
+    timeout_milliseconds,
+)
 from momo_ocr.shared.errors import FailureCode, OcrError
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_TESSEROCR_CONFIG = RecognitionConfig(
-    language="jpn+eng",
-    oem=1,
-    timeout_seconds=30.0,
-    postprocessors=(normalize_ocr_text,),
-)
-
-_DEFAULT_OEM = 1
-
-_TESSDATA_CANDIDATES: tuple[str, ...] = (
-    "/opt/homebrew/share/tessdata",
-    "/usr/local/share/tessdata",
-    "/usr/share/tesseract-ocr/5/tessdata",
-    "/usr/share/tesseract-ocr/4.00/tessdata",
-    "/usr/share/tessdata",
-)
-
-
-class _TesserocrApi(Protocol):
-    """Small typed surface of ``tesserocr.PyTessBaseAPI`` used by this worker."""
-
-    def SetPageSegMode(self, psm: int) -> None:  # noqa: N802 - external API name
-        raise NotImplementedError
-
-    def SetVariable(self, key: str, value: str) -> None:  # noqa: N802
-        raise NotImplementedError
-
-    def SetImage(self, image: Image.Image) -> None:  # noqa: N802
-        raise NotImplementedError
-
-    def Recognize(self, timeout: int = 0) -> bool:  # noqa: N802
-        raise NotImplementedError
-
-    def GetUTF8Text(self) -> str:  # noqa: N802
-        raise NotImplementedError
-
-    def MeanTextConf(self) -> int | float:  # noqa: N802
-        raise NotImplementedError
-
-    def Clear(self) -> None:  # noqa: N802
-        raise NotImplementedError
-
-    def End(self) -> None:  # noqa: N802
-        raise NotImplementedError
-
-
-class _ApiFactory(Protocol):
-    """Factory signature for dependency-injected ``PyTessBaseAPI`` instances."""
-
-    def __call__(self, *, language: str, oem: int, tessdata_path: str | None) -> _TesserocrApi:
-        raise NotImplementedError
-
-
-def _resolve_tessdata_path() -> str | None:
-    """Return a tessdata directory path or None to let tesseract auto-detect.
-
-    Honors ``TESSDATA_PREFIX`` first, falls back to common install paths.
-    Returning ``None`` lets ``PyTessBaseAPI`` apply its own defaults, which
-    works on Linux distros where tessdata is at a standard location.
-    """
-    explicit = os.environ.get("TESSDATA_PREFIX")
-    if explicit:
-        return explicit
-    for candidate in _TESSDATA_CANDIDATES:
-        if Path(candidate).is_dir():
-            return candidate
-    return None
-
-
-@dataclass(slots=True)
-class _ApiCacheEntry:
-    """One cached PyTessBaseAPI guarded by its own lock and var tracker."""
-
-    api: _TesserocrApi
-    lock: threading.Lock
-    set_variable_keys: set[str]
+__all__ = ("DEFAULT_TESSEROCR_CONFIG", "TesserocrEngine")
 
 
 class TesserocrEngine(TextRecognitionEngine):
@@ -140,16 +76,16 @@ class TesserocrEngine(TextRecognitionEngine):
         default_config: RecognitionConfig = DEFAULT_TESSEROCR_CONFIG,
         field_configs: Mapping[RecognitionField, RecognitionConfig] = DEFAULT_FIELD_CONFIGS,
         tessdata_path: str | None = None,
-        api_factory: _ApiFactory | None = None,
+        api_factory: ApiFactory | None = None,
     ) -> None:
         self.default_config = default_config
         self.field_configs = MappingProxyType(dict(field_configs))
         if tessdata_path is not None:
             self._tessdata_path: str | None = tessdata_path
         else:
-            self._tessdata_path = _resolve_tessdata_path()
-        self._api_factory = api_factory or _default_api_factory()
-        self._cache: dict[tuple[str, int], _ApiCacheEntry] = {}
+            self._tessdata_path = resolve_tessdata_path()
+        self._api_factory = api_factory or default_api_factory()
+        self._cache: dict[tuple[str, int], ApiCacheEntry] = {}
         self._cache_lock = threading.Lock()
 
     def recognize(
@@ -162,7 +98,7 @@ class TesserocrEngine(TextRecognitionEngine):
     ) -> RecognizedText:
         effective_config = self._resolve_config(field=field, psm=psm, config=config)
         language = effective_config.language
-        oem = effective_config.oem if effective_config.oem is not None else _DEFAULT_OEM
+        oem = effective_config.oem if effective_config.oem is not None else DEFAULT_OEM
         if language is None:
             msg = "RecognitionConfig.language is required for tesserocr."
             raise OcrError(FailureCode.PARSER_FAILED, msg)
@@ -173,19 +109,14 @@ class TesserocrEngine(TextRecognitionEngine):
             image=image,
             config=effective_config,
         )
-        processed_text = _apply_postprocessors(raw_text, effective_config)
+        processed_text = apply_postprocessors(raw_text, effective_config)
         return RecognizedText(text=processed_text, confidence=confidence, raw_text=raw_text)
 
     def close(self) -> None:
         """Release every cached API. Safe to call multiple times."""
         with self._cache_lock:
             for entry in self._cache.values():
-                api_end = getattr(entry.api, "End", None)
-                if callable(api_end):
-                    try:
-                        api_end()
-                    except Exception:
-                        logger.exception("Failed to End() a cached PyTessBaseAPI; ignoring.")
+                _end_cache_entry(entry)
             self._cache.clear()
 
     def _resolve_config(
@@ -196,14 +127,12 @@ class TesserocrEngine(TextRecognitionEngine):
         config: RecognitionConfig | None,
     ) -> RecognitionConfig:
         field_config = self.field_configs.get(field, RecognitionConfig())
-        effective_config = _merge_config(self.default_config, field_config)
+        effective_config = merge_config(self.default_config, field_config)
         if config is not None:
-            effective_config = _merge_config(effective_config, config)
-        if psm is not None:
-            effective_config = replace(effective_config, psm=psm)
-        return effective_config
+            effective_config = merge_config(effective_config, config)
+        return apply_psm(effective_config, psm)
 
-    def _get_or_create_api(self, *, language: str, oem: int) -> _ApiCacheEntry:
+    def _get_or_create_api(self, *, language: str, oem: int) -> ApiCacheEntry:
         key = (language, oem)
         with self._cache_lock:
             entry = self._cache.get(key)
@@ -225,14 +154,14 @@ class TesserocrEngine(TextRecognitionEngine):
                     retryable=False,
                     user_action="Verify tesserocr installation and TESSDATA_PREFIX.",
                 ) from exc
-            entry = _ApiCacheEntry(api=api, lock=threading.Lock(), set_variable_keys=set())
+            entry = ApiCacheEntry(api=api, lock=threading.Lock(), set_variable_keys=set())
             self._cache[key] = entry
             return entry
 
     def _recognize_with_entry(
         self,
         *,
-        entry: _ApiCacheEntry,
+        entry: ApiCacheEntry,
         image: Image.Image,
         config: RecognitionConfig,
     ) -> tuple[str, float | None]:
@@ -241,24 +170,7 @@ class TesserocrEngine(TextRecognitionEngine):
             psm = config.psm if config.psm is not None else 3
             api.SetPageSegMode(psm)
             self._sync_variables(entry=entry, variables=config.variables)
-            try:
-                api.SetImage(image)
-                if not api.Recognize(timeout=_timeout_milliseconds(config)):
-                    _raise_timeout_error(config)
-                raw_text = api.GetUTF8Text()
-                confidence_raw = api.MeanTextConf()
-            except OcrError:
-                raise
-            except Exception as exc:
-                msg = "tesserocr recognition failed."
-                raise OcrError(FailureCode.PARSER_FAILED, msg, retryable=False) from exc
-            finally:
-                clear_adaptive = getattr(api, "ClearAdaptiveClassifier", None)
-                if callable(clear_adaptive):
-                    clear_adaptive()
-                clear = getattr(api, "Clear", None)
-                if callable(clear):
-                    clear()
+            raw_text, confidence_raw = _run_recognition(api, image=image, config=config)
         if confidence_raw >= 0:
             confidence: float | None = confidence_raw / 100.0
         else:
@@ -266,7 +178,7 @@ class TesserocrEngine(TextRecognitionEngine):
         return raw_text.strip(), confidence
 
     @staticmethod
-    def _sync_variables(*, entry: _ApiCacheEntry, variables: Mapping[str, str]) -> None:
+    def _sync_variables(*, entry: ApiCacheEntry, variables: Mapping[str, str]) -> None:
         api = entry.api
         # Apply incoming overrides.
         for key, value in variables.items():
@@ -282,73 +194,38 @@ class TesserocrEngine(TextRecognitionEngine):
         entry.set_variable_keys.update(variables.keys())
 
 
-def _timeout_milliseconds(config: RecognitionConfig) -> int:
-    timeout_seconds = config.timeout_seconds
-    if timeout_seconds is None or timeout_seconds <= 0:
-        raise OcrError(
-            FailureCode.PARSER_FAILED,
-            "tesserocr timeout must be a positive number of seconds.",
-        )
-    return max(1, round(timeout_seconds * 1000))
-
-
-def _raise_timeout_error(config: RecognitionConfig) -> NoReturn:
-    timeout_seconds = config.timeout_seconds
-    timeout_text = "configured" if timeout_seconds is None else f"{timeout_seconds:g} seconds"
-    raise OcrError(
-        FailureCode.OCR_TIMEOUT,
-        f"tesserocr timed out after {timeout_text}.",
-        retryable=True,
-        user_action="Try the upload again or use manual entry if OCR keeps timing out.",
-    )
-
-
-def _merge_config(base: RecognitionConfig, override: RecognitionConfig) -> RecognitionConfig:
-    return RecognitionConfig(
-        language=override.language if override.language is not None else base.language,
-        psm=override.psm if override.psm is not None else base.psm,
-        oem=override.oem if override.oem is not None else base.oem,
-        timeout_seconds=(
-            override.timeout_seconds
-            if override.timeout_seconds is not None
-            else base.timeout_seconds
-        ),
-        variables={**base.variables, **override.variables},
-        postprocessors=(*base.postprocessors, *override.postprocessors),
-    )
-
-
-def _apply_postprocessors(text: str, config: RecognitionConfig) -> str:
-    processed = text
-    for postprocessor in config.postprocessors:
-        processed = postprocessor(processed)
-    return processed
-
-
-def _default_api_factory() -> _ApiFactory:
-    """Return a factory that builds real ``PyTessBaseAPI`` instances.
-
-    Imported lazily so tests can import this module without immediately
-    initializing the native tesserocr binding.
-    """
+def _end_cache_entry(entry: ApiCacheEntry) -> None:
+    api_end = getattr(entry.api, "End", None)
+    if not callable(api_end):
+        return
     try:
-        import tesserocr  # noqa: PLC0415
-    except ImportError as exc:
-        msg = (
-            "tesserocr is not installed. "
-            "Install OCR worker dependencies with `uv sync` to use TesserocrEngine."
-        )
-        raise OcrError(
-            FailureCode.OCR_ENGINE_UNAVAILABLE,
-            msg,
-            retryable=False,
-            user_action="Install OCR worker dependencies or set MOMO_OCR_ENGINE=subprocess.",
-        ) from exc
+        api_end()
+    except Exception:
+        logger.exception("Failed to End() a cached PyTessBaseAPI; ignoring.")
 
-    def factory(*, language: str, oem: int, tessdata_path: str | None) -> _TesserocrApi:
-        kwargs: dict[str, object] = {"lang": language, "oem": oem}
-        if tessdata_path is not None:
-            kwargs["path"] = tessdata_path
-        return cast("_TesserocrApi", tesserocr.PyTessBaseAPI(**kwargs))
 
-    return factory
+def _run_recognition(
+    api: TesserocrApi,
+    *,
+    image: Image.Image,
+    config: RecognitionConfig,
+) -> tuple[str, int | float]:
+    try:
+        api.SetImage(image)
+        if not api.Recognize(timeout=timeout_milliseconds(config)):
+            raise_timeout_error(config)
+        return api.GetUTF8Text(), api.MeanTextConf()
+    except OcrError:
+        raise
+    except Exception as exc:
+        msg = "tesserocr recognition failed."
+        raise OcrError(FailureCode.PARSER_FAILED, msg, retryable=False) from exc
+    finally:
+        _clear_api_state(api)
+
+
+def _clear_api_state(api: TesserocrApi) -> None:
+    for method_name in ("ClearAdaptiveClassifier", "Clear"):
+        method = getattr(api, method_name, None)
+        if callable(method):
+            method()

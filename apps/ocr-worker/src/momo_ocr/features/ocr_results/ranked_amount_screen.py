@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal, Protocol
+
+from PIL import Image
 
 from momo_ocr.features.image_processing.geometry import Rect, Size, scale_profile_rect_to_image
 from momo_ocr.features.image_processing.roi import crop_roi
@@ -89,13 +92,12 @@ def parse_ranked_amount_screen(
                 scale_profile_rect_to_image(row_profile.row_roi, image_size),
             )
             prepared_row = prepare_ranked_row_image(row_image)
-            if debug_dir is not None:
-                save_debug_ranked_row(
-                    row_image=row_image,
-                    prepared_row=prepared_row,
-                    debug_dir=debug_dir,
-                    rank=row_profile.rank,
-                )
+            _save_debug_ranked_row_if_enabled(
+                row_image=row_image,
+                prepared_row=prepared_row,
+                debug_dir=debug_dir,
+                rank=row_profile.rank,
+            )
 
             recognized_row = recognize_ranked_row_text(
                 row_image,
@@ -158,6 +160,23 @@ def parse_ranked_amount_screen(
     finally:
         if owns_image:
             image.close()
+
+
+def _save_debug_ranked_row_if_enabled(
+    *,
+    row_image: Image.Image,
+    prepared_row: Image.Image,
+    debug_dir: Path | None,
+    rank: int,
+) -> None:
+    if debug_dir is None:
+        return
+    save_debug_ranked_row(
+        row_image=row_image,
+        prepared_row=prepared_row,
+        debug_dir=debug_dir,
+        rank=rank,
+    )
 
 
 def _duplicate_member_warnings(

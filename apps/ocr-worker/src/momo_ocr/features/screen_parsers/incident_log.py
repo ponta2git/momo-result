@@ -83,21 +83,18 @@ def _select_best_attempt(
     image_size: Size,
 ) -> IncidentParseAttempt:
     profiles = select_incident_log_profiles(context.layout_family_hint)
-    attempts: list[IncidentParseAttempt] = []
     debug_sink = _incident_debug_sink(context)
-    for profile in profiles:
-        attempts.append(
-            _parse_profile(
-                context=context,
-                image=image,
-                image_size=image_size,
-                profile=profile,
-                debug_sink=debug_sink,
-                isolate_debug=len(profiles) > 1,
-            )
+    attempts = [
+        _parse_profile(
+            context=context,
+            image=image,
+            image_size=image_size,
+            profile=profile,
+            debug_sink=debug_sink,
+            isolate_debug=len(profiles) > 1,
         )
-        if context.policy.fast_path_enabled and attempts[-1].missing_count == 0:
-            break
+        for profile in profiles
+    ]
     return min(attempts, key=lambda attempt: attempt.missing_count)
 
 

@@ -465,7 +465,6 @@ def test_worker_analyze_enforces_temp_root_and_upload_size_limit(tmp_path: Path)
         payload=make_stream_payload(image_path=image_path),
         analyze=analyze,
         temp_root=image_root,
-        fast_path_enabled=True,
         debug_dir_base=debug_dir_base,
     )
 
@@ -474,7 +473,6 @@ def test_worker_analyze_enforces_temp_root_and_upload_size_limit(tmp_path: Path)
     assert outcome.status is OcrJobStatus.SUCCEEDED
     assert analyze.last_call.image_root == image_root
     assert analyze.last_call.enforce_size_limit is True
-    assert analyze.last_call.fast_path_enabled is True
     debug_dir = analyze.last_call.debug_dir
     assert isinstance(debug_dir, Path)
     assert debug_dir == debug_dir_base / "abc__job-1"

@@ -87,7 +87,7 @@ def default_api_factory() -> ApiFactory:
             FailureCode.OCR_ENGINE_UNAVAILABLE,
             msg,
             retryable=False,
-            user_action="Install OCR worker dependencies or set MOMO_OCR_ENGINE=subprocess.",
+            user_action="Install OCR worker dependencies with `uv sync`.",
         ) from exc
 
     def factory(*, language: str, oem: int, tessdata_path: str | None) -> TesserocrApi:

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import replace
+from types import MappingProxyType
 from typing import NoReturn
 
-from momo_ocr.features.text_recognition.models import RecognitionConfig
+from momo_ocr.features.text_recognition.models import RecognitionConfig, RecognitionField
 from momo_ocr.features.text_recognition.postprocess import normalize_ocr_text
 from momo_ocr.shared.errors import FailureCode, OcrError
 
@@ -15,6 +17,20 @@ DEFAULT_TESSEROCR_CONFIG = RecognitionConfig(
 )
 
 DEFAULT_OEM = 1
+
+DEFAULT_FIELD_CONFIGS: Mapping[RecognitionField, RecognitionConfig] = MappingProxyType(
+    {
+        RecognitionField.GENERIC: RecognitionConfig(),
+        RecognitionField.TITLE: RecognitionConfig(psm=6),
+        RecognitionField.MONEY: RecognitionConfig(
+            language="eng",
+            psm=7,
+            variables={"tessedit_char_whitelist": "0123456789,-. "},
+        ),
+        RecognitionField.PLAYER_NAME: RecognitionConfig(psm=7),
+        RecognitionField.INCIDENT_LOG: RecognitionConfig(psm=6),
+    }
+)
 
 
 def merge_config(base: RecognitionConfig, override: RecognitionConfig) -> RecognitionConfig:

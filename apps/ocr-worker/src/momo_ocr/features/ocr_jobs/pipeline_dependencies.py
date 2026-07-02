@@ -35,9 +35,5 @@ class PipelineDependencies(Protocol):
         raise NotImplementedError
 
     @property
-    def fast_path_enabled(self) -> bool:
-        raise NotImplementedError
-
-    @property
     def debug_dir_base(self) -> Path | None:
         raise NotImplementedError

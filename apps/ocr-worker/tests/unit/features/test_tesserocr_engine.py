@@ -157,8 +157,8 @@ def test_clear_is_called_after_each_recognize_for_cli_parity() -> None:
 
 def test_image_is_passed_through_to_set_image_in_native_mode() -> None:
     """Phase C canary established that ``convert("L")`` regresses accuracy
-    (subprocess writes the image as PNG and lets Tesseract handle binarization).
-    The engine must therefore pass the image through in its native mode.
+    compared with letting Tesseract handle binarization.
+    The engine must therefore pass the image through in native mode.
     """
     engine, apis = _make_engine()
 

@@ -1,9 +1,7 @@
 """In-process Tesseract engine via tesserocr.
 
-This engine eliminates the per-recognize subprocess overhead of
-:class:`~momo_ocr.features.text_recognition.tesseract.TesseractEngine` by
-keeping a long-lived ``PyTessBaseAPI`` per ``(language, oem)`` and re-using
-it across calls.
+This engine keeps a long-lived ``PyTessBaseAPI`` per ``(language, oem)`` and
+re-uses it across calls.
 
 State leak prevention
 ---------------------
@@ -43,7 +41,6 @@ from momo_ocr.features.text_recognition.models import (
     RecognitionField,
     RecognizedText,
 )
-from momo_ocr.features.text_recognition.tesseract import DEFAULT_FIELD_CONFIGS
 from momo_ocr.features.text_recognition.tesserocr_api import (
     ApiCacheEntry,
     ApiFactory,
@@ -52,6 +49,7 @@ from momo_ocr.features.text_recognition.tesserocr_api import (
     resolve_tessdata_path,
 )
 from momo_ocr.features.text_recognition.tesserocr_config import (
+    DEFAULT_FIELD_CONFIGS,
     DEFAULT_OEM,
     DEFAULT_TESSEROCR_CONFIG,
     apply_postprocessors,

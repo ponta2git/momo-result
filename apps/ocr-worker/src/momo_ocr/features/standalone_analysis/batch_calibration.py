@@ -16,7 +16,7 @@ EvaluationSet = Literal["all", "train", "holdout"]
 EVALUATION_SET_CHOICES: tuple[EvaluationSet, ...] = ("all", "train", "holdout")
 
 
-def analyze_directory(  # noqa: PLR0913 - mirrors the analyzer boundary explicitly.
+def analyze_directory(
     *,
     input_dir: Path,
     expected_dir: Path | None,
@@ -24,7 +24,6 @@ def analyze_directory(  # noqa: PLR0913 - mirrors the analyzer boundary explicit
     text_engine: TextRecognitionEngine | None = None,
     include_raw_text: bool = False,
     evaluation_set: EvaluationSet = "all",
-    fast_path_enabled: bool = False,
 ) -> BatchReport:
     """Run the standalone analyzer over a folder of local samples.
 
@@ -48,7 +47,6 @@ def analyze_directory(  # noqa: PLR0913 - mirrors the analyzer boundary explicit
             include_raw_text=include_raw_text,
             text_engine=text_engine,
             layout_family_hint=detect_layout_family_from_filename(image),
-            fast_path_enabled=fast_path_enabled,
         )
         for image in images
     ]

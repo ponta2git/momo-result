@@ -190,7 +190,6 @@ class AnalyzeCall:
     alias_resolver: PlayerAliasResolver | None
     image_root: Path | None
     enforce_size_limit: bool
-    fast_path_enabled: bool
 
 
 @dataclass
@@ -216,7 +215,6 @@ class AnalyzeStub:
         alias_resolver: PlayerAliasResolver | None = None,
         image_root: Path | None = None,
         enforce_size_limit: bool = False,
-        fast_path_enabled: bool = False,
     ) -> AnalysisResult:
         self.calls.append(
             AnalyzeCall(
@@ -229,7 +227,6 @@ class AnalyzeStub:
                 alias_resolver=alias_resolver,
                 image_root=image_root,
                 enforce_size_limit=enforce_size_limit,
-                fast_path_enabled=fast_path_enabled,
             )
         )
         if self.fail_message is not None:
@@ -270,14 +267,13 @@ def max_attempts_delivery(
     )
 
 
-def make_runner_dependencies(  # noqa: PLR0913 - test helper mirrors production wiring.
+def make_runner_dependencies(
     *,
     consumer: InMemoryOcrJobConsumer,
     repository: InMemoryOcrJobRepository,
     cancellation: CancellationChecker,
     analyze: AnalyzeImageFn,
     temp_root: Path | None = None,
-    fast_path_enabled: bool = False,
     debug_dir_base: Path | None = None,
 ) -> JobRunnerDependencies:
     return JobRunnerDependencies(
@@ -287,7 +283,6 @@ def make_runner_dependencies(  # noqa: PLR0913 - test helper mirrors production 
         worker_id=WORKER_ID,
         analyze=analyze,
         temp_root=temp_root,
-        fast_path_enabled=fast_path_enabled,
         debug_dir_base=debug_dir_base,
     )
 
@@ -299,7 +294,6 @@ class RunnerHarness:
     cancellation: CancellationChecker = field(default_factory=InMemoryCancellationChecker)
     analyze: AnalyzeStub = field(default_factory=AnalyzeStub)
     temp_root: Path | None = None
-    fast_path_enabled: bool = False
     debug_dir_base: Path | None = None
 
     @classmethod
@@ -315,7 +309,6 @@ class RunnerHarness:
         cancellation: CancellationChecker | None = None,
         analyze: AnalyzeStub | None = None,
         temp_root: Path | None = None,
-        fast_path_enabled: bool = False,
         debug_dir_base: Path | None = None,
     ) -> Self:
         resolved_payload = payload or make_stream_payload()
@@ -334,7 +327,6 @@ class RunnerHarness:
             cancellation=cancellation or InMemoryCancellationChecker(),
             analyze=analyze or AnalyzeStub(),
             temp_root=temp_root,
-            fast_path_enabled=fast_path_enabled,
             debug_dir_base=debug_dir_base,
         )
 
@@ -362,7 +354,6 @@ class RunnerHarness:
             cancellation=self.cancellation,
             analyze=self.analyze,
             temp_root=self.temp_root,
-            fast_path_enabled=self.fast_path_enabled,
             debug_dir_base=self.debug_dir_base,
         )
 

@@ -25,11 +25,7 @@ from momo_ocr.features.text_recognition.engine import (
     FakeTextRecognitionEngine,
     TextRecognitionEngine,
 )
-from momo_ocr.features.text_recognition.factory import (
-    default_text_recognition_engine,
-    text_recognition_engine_from_name,
-)
-from momo_ocr.features.text_recognition.tesseract import TesseractEngine
+from momo_ocr.features.text_recognition.factory import default_text_recognition_engine
 from momo_ocr.features.text_recognition.tesserocr_engine import TesserocrEngine
 from momo_ocr.shared.errors import FailureCode, OcrError
 
@@ -66,8 +62,7 @@ def test_rejects_weak_sslmode_for_remote_host() -> None:
 
 
 def test_text_recognition_engine_default_is_tesserocr() -> None:
-    """After Phase C canary parity, the default engine flipped to tesserocr."""
-    engine = text_recognition_engine_from_name(None)
+    engine = default_text_recognition_engine()
     assert isinstance(engine, TesserocrEngine)
     engine.close()
 
@@ -75,23 +70,12 @@ def test_text_recognition_engine_default_is_tesserocr() -> None:
 def test_default_text_recognition_engine_does_not_read_environment(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("MOMO_OCR_ENGINE", "subprocess")
+    monkeypatch.setenv("UNRELATED_OCR_ENGINE", "legacy")
 
     engine = default_text_recognition_engine()
 
     assert isinstance(engine, TesserocrEngine)
     engine.close()
-
-
-def test_text_recognition_engine_subprocess_override() -> None:
-    engine = text_recognition_engine_from_name("subprocess")
-    assert isinstance(engine, TesseractEngine)
-
-
-def test_text_recognition_engine_unknown_value_raises() -> None:
-    with pytest.raises(OcrError) as excinfo:
-        text_recognition_engine_from_name("paddleocr")
-    assert excinfo.value.code is FailureCode.OCR_ENGINE_UNAVAILABLE
 
 
 def test_production_runtime_validates_queue_contract_before_opening_pool(
@@ -345,8 +329,7 @@ def test_production_runtime_closes_partial_resources_if_engine_creation_fails(
     def redis_consumer_from_config(_config: WorkerConfig) -> _RecordingConsumer:
         return consumer
 
-    def text_recognition_engine_from_name(
-        _value: str | None,
+    def default_text_recognition_engine(
         *,
         timeout_seconds: int | None = None,
     ) -> TextRecognitionEngine:
@@ -366,8 +349,8 @@ def test_production_runtime_closes_partial_resources_if_engine_creation_fails(
     )
     monkeypatch.setattr(
         composition_module,
-        "text_recognition_engine_from_name",
-        text_recognition_engine_from_name,
+        "default_text_recognition_engine",
+        default_text_recognition_engine,
     )
 
     with pytest.raises(OcrError):
@@ -395,8 +378,7 @@ def test_production_runtime_closes_engine_consumer_and_pool_if_late_assembly_fai
     def redis_consumer_from_config(_config: WorkerConfig) -> _RecordingConsumer:
         return consumer
 
-    def text_recognition_engine_from_name(
-        _value: str | None,
+    def default_text_recognition_engine(
         *,
         timeout_seconds: int | None = None,
     ) -> TextRecognitionEngine:
@@ -420,8 +402,8 @@ def test_production_runtime_closes_engine_consumer_and_pool_if_late_assembly_fai
     )
     monkeypatch.setattr(
         composition_module,
-        "text_recognition_engine_from_name",
-        text_recognition_engine_from_name,
+        "default_text_recognition_engine",
+        default_text_recognition_engine,
     )
     monkeypatch.setattr(
         composition_module,

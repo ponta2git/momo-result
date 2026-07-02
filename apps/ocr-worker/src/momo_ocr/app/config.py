@@ -7,8 +7,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from momo_ocr.features.text_recognition.fast_path import parse_fast_path_flag
-
 DEFAULT_TEMP_ROOT = Path("/tmp/momo-result/uploads")  # noqa: S108
 DEFAULT_REDIS_STREAM = "momo:ocr:jobs"
 DEFAULT_REDIS_GROUP = "momo-ocr-workers"
@@ -37,9 +35,7 @@ class WorkerConfig:
     redis_claim_idle_seconds: int = DEFAULT_REDIS_CLAIM_IDLE_SECONDS
     redis_block_seconds: int = DEFAULT_REDIS_BLOCK_SECONDS
     temp_root: Path = DEFAULT_TEMP_ROOT
-    fast_path_enabled: bool = False
     debug_dir_base: Path | None = None
-    ocr_engine: str | None = None
 
 
 def load_worker_config(env: Mapping[str, str] | None = None) -> WorkerConfig:
@@ -80,9 +76,7 @@ def load_worker_config(env: Mapping[str, str] | None = None) -> WorkerConfig:
             DEFAULT_REDIS_BLOCK_SECONDS,
         ),
         temp_root=_path_from_env(source, "IMAGE_TMP_DIR", DEFAULT_TEMP_ROOT),
-        fast_path_enabled=parse_fast_path_flag(source.get("MOMO_OCR_FAST_PATH")),
         debug_dir_base=_optional_path(source, "MOMO_OCR_DEBUG_DIR"),
-        ocr_engine=_optional_non_empty(source, "MOMO_OCR_ENGINE"),
     )
 
 

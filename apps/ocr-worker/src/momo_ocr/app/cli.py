@@ -27,12 +27,10 @@ from momo_ocr.features.text_recognition.engine import (
     TextRecognitionEngine,
     close_text_engine,
 )
-from momo_ocr.features.text_recognition.fast_path import parse_fast_path_flag
-from momo_ocr.features.text_recognition.tesseract import TesseractEngine
 from momo_ocr.features.text_recognition.tesserocr_engine import TesserocrEngine
 from momo_ocr.shared.json import write_json
 
-ENGINE_CHOICES = ("tesseract", "tesserocr", "fake")
+ENGINE_CHOICES = ("tesserocr", "fake")
 SCREEN_TYPE_CHOICES = tuple(screen_type.value for screen_type in ScreenType)
 
 
@@ -95,7 +93,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _add_engine_options(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--ocr-engine", default="tesseract", choices=ENGINE_CHOICES)
+    parser.add_argument("--ocr-engine", default="tesserocr", choices=ENGINE_CHOICES)
     parser.add_argument(
         "--fake-text",
         default="",
@@ -106,8 +104,6 @@ def _add_engine_options(parser: argparse.ArgumentParser) -> None:
 def _build_text_engine(args: argparse.Namespace) -> TextRecognitionEngine:
     if args.ocr_engine == "fake":
         return FakeTextRecognitionEngine(args.fake_text)
-    if args.ocr_engine == "tesseract":
-        return TesseractEngine()
     if args.ocr_engine == "tesserocr":
         return TesserocrEngine()
     message = f"Unhandled OCR engine: {args.ocr_engine}"
@@ -125,7 +121,6 @@ def _run_analyze(args: argparse.Namespace) -> int:
             include_raw_text=args.include_raw_text,
             text_engine=text_engine,
             layout_family_hint=detect_layout_family_from_filename(args.image),
-            fast_path_enabled=_fast_path_enabled_from_env(),
         )
         if args.output is not None:
             write_json(args.output, result)
@@ -147,7 +142,6 @@ def _run_batch(args: argparse.Namespace) -> int:
             text_engine=text_engine,
             include_raw_text=args.include_raw_text,
             evaluation_set=args.evaluation_set,
-            fast_path_enabled=_fast_path_enabled_from_env(),
         )
         if args.report is not None:
             write_json(args.report, report)
@@ -227,10 +221,6 @@ def _resolve_batch_debug_dir(explicit: Path | None) -> Path | None:
     if not base:
         return None
     return Path(base).expanduser()
-
-
-def _fast_path_enabled_from_env() -> bool:
-    return parse_fast_path_flag(os.environ.get("MOMO_OCR_FAST_PATH"))
 
 
 def _log_level_from_env() -> int:

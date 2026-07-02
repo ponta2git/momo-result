@@ -28,9 +28,7 @@ def test_load_worker_config_reads_redis_and_database_urls() -> None:
             "OCR_REDIS_CLAIM_IDLE_SECONDS": "450",
             "OCR_REDIS_BLOCK_SECONDS": "45",
             "IMAGE_TMP_DIR": "/tmp/custom-images",
-            "MOMO_OCR_FAST_PATH": "yes",
             "MOMO_OCR_DEBUG_DIR": "/tmp/ocr-debug",
-            "MOMO_OCR_ENGINE": "subprocess",
         }
     )
 
@@ -45,10 +43,8 @@ def test_load_worker_config_reads_redis_and_database_urls() -> None:
     assert config.redis_claim_idle_seconds == 450
     assert config.redis_block_seconds == 45
     assert str(config.temp_root) == "/tmp/custom-images"
-    assert config.fast_path_enabled is True
     assert config.debug_dir_base is not None
     assert str(config.debug_dir_base) == "/tmp/ocr-debug"
-    assert config.ocr_engine == "subprocess"
     assert _redis_socket_timeout_seconds(config) == 50.0
 
 

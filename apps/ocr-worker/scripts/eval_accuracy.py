@@ -21,8 +21,8 @@ For pure timing measurement (no debug artifacts, repeats per image):
         --report      apps/ocr-worker/out/eval-momo2-timing.json
 
 The script intentionally processes every selected image in a single Python
-process (no subprocess fan-out) so the AI agent can re-invoke it as a whole
-between tuning iterations. ``--repeat`` is provided for inner-loop timing
+process so the AI agent can re-invoke it as a whole between tuning
+iterations. ``--repeat`` is provided for inner-loop timing
 measurements; outer-loop "run N times and compare" is left to the caller.
 
 Filename convention (e.g. ``桃鉄2_007_20251121_西日本_01総資産_<comment>.jpg``)::

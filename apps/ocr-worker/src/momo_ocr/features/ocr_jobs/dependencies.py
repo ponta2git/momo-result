@@ -29,7 +29,6 @@ class AnalyzeImageFn(Protocol):
         alias_resolver: PlayerAliasResolver | None = None,
         image_root: Path | None = None,
         enforce_size_limit: bool = False,
-        fast_path_enabled: bool = False,
     ) -> AnalysisResult:
         raise NotImplementedError
 
@@ -57,5 +56,4 @@ class JobRunnerDependencies:
     analyze: AnalyzeImageFn = analyze_image
     text_engine: TextRecognitionEngine = field(default_factory=FakeTextRecognitionEngine)
     temp_root: Path | None = None
-    fast_path_enabled: bool = False
     debug_dir_base: Path | None = None

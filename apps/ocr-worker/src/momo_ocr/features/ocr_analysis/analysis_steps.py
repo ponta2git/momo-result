@@ -45,7 +45,6 @@ class AnalysisConfig:
     registry: ParserRegistry
     layout_family_hint: str | None
     alias_resolver: PlayerAliasResolver
-    fast_path_enabled: bool
 
 
 def build_analysis_config(  # noqa: PLR0913
@@ -57,7 +56,6 @@ def build_analysis_config(  # noqa: PLR0913
     parser_registry: ParserRegistry | None,
     layout_family_hint: str | None,
     alias_resolver: PlayerAliasResolver | None,
-    fast_path_enabled: bool,
 ) -> AnalysisConfig:
     return AnalysisConfig(
         requested_type=ScreenType(requested_screen_type),
@@ -67,7 +65,6 @@ def build_analysis_config(  # noqa: PLR0913
         registry=parser_registry if parser_registry is not None else default_parser_registry(),
         layout_family_hint=layout_family_hint,
         alias_resolver=alias_resolver if alias_resolver is not None else DEFAULT_ALIAS_RESOLVER,
-        fast_path_enabled=fast_path_enabled,
     )
 
 
@@ -147,7 +144,6 @@ def parse_detected_screen(
         ),
         policy=ParsePolicy(
             include_raw_text=config.include_raw_text,
-            fast_path_enabled=config.fast_path_enabled,
         ),
         diagnostics=ParseDiagnostics(
             debug_sink=config.debug_sink,

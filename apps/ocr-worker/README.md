@@ -73,7 +73,7 @@ The canonical contract lives in `../../docs/redis-streams-ocr-contract.md`.
 Runtime payload parsing applies the same JSON Schemas before converting the stream fields into an `OcrJobMessage`.
 The production Docker image copies those schemas to `/opt/momo-result/docs/schemas` and sets `MOMO_OCR_SCHEMA_DIR` so the installed wheel does not depend on repository-relative paths. Worker startup validates both schema files before opening Redis/Postgres resources.
 
-The production worker defaults to the in-process `tesserocr` engine for throughput. The engine passes `OCR_TIMEOUT_SECONDS` to Tesseract's native recognition timeout; set `MOMO_OCR_ENGINE=subprocess` only when a deployment needs a hard per-call process boundary more than the in-process speedup. `MOMO_OCR_FAST_PATH=1` is an opt-in canary flag for lower-latency incident-log OCR; the worker reads it at process startup and passes the boolean through the analysis context so parser code does not read process environment directly.
+The production worker uses the in-process `tesserocr` engine for throughput. The engine passes `OCR_TIMEOUT_SECONDS` to Tesseract's native recognition timeout.
 
 Redis pending recovery uses `OCR_REDIS_CLAIM_IDLE_SECONDS` (default `300`) independently from `OCR_TIMEOUT_SECONDS`. Keep claim idle at or above the API stale-job reaper threshold so a valid long-running OCR job is not reclaimed or moved to DLQ while its owning worker is still processing it. Empty queue reads block for `OCR_REDIS_BLOCK_SECONDS` (default `30`) to reduce idle Redis commands; new messages still return as soon as Redis delivers them.
 

@@ -35,7 +35,6 @@ def make_parse_context(  # noqa: PLR0913 - test factory mirrors parse context fi
     include_raw_text: bool,
     text_engine: TextRecognitionEngine,
     alias_resolver: PlayerAliasResolver = DEFAULT_ALIAS_RESOLVER,
-    fast_path_enabled: bool = False,
     warnings: tuple[OcrWarning, ...] = (),
     image: Image.Image | None = None,
     layout_family_hint: str | None = None,
@@ -55,7 +54,6 @@ def make_parse_context(  # noqa: PLR0913 - test factory mirrors parse context fi
         ),
         policy=ParsePolicy(
             include_raw_text=include_raw_text,
-            fast_path_enabled=fast_path_enabled,
         ),
         diagnostics=ParseDiagnostics(
             debug_sink=debug_sink_from_dir(debug_dir),

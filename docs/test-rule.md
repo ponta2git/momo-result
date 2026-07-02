@@ -115,7 +115,7 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
 ## 5. OCR Worker Rules
 
 - runner / parser / domain / payload validation は、実 dataclass、実 parser、in-memory repository / consumer、実状態遷移を優先する。
-- interaction verification は Redis wire adapter、subprocess / native OCR API、process composition、worker loop の停止・retry 境界に限定する。
+- interaction verification は Redis wire adapter、native OCR API、process composition、worker loop の停止・retry 境界に限定する。
 - Docker、Redis、PostgreSQL、native OCR engine、tessdata は integration marker へ分離する。
 - screen type 判定、queue payload validation、failure code mapping、ack / pending / DLQ、parser profile selection、OCR postprocess の複合条件は table-driven test にする。
 - oracle は OCR draft payload、warning / failure code、queue ack / DLQ field、DB row、画像メタデータなど外部契約に置く。

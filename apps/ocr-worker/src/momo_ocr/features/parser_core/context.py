@@ -29,7 +29,6 @@ class RecognitionServices:
 @dataclass(frozen=True)
 class ParsePolicy:
     include_raw_text: bool
-    fast_path_enabled: bool = False
 
 
 @dataclass(frozen=True)

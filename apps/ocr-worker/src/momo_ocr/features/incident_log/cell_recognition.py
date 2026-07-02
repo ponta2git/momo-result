@@ -8,7 +8,6 @@ this module remains a thin engine driver.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
@@ -21,7 +20,8 @@ from momo_ocr.features.incident_log.voting import (
     select_count_recognition,
     vote_count,
 )
-from momo_ocr.features.ocr_results.parsing import ScreenParseContext
+from momo_ocr.features.parser_core.context import ScreenParseContext
+from momo_ocr.features.parser_core.debug import NULL_DEBUG_SINK, DebugSink
 from momo_ocr.features.text_recognition.models import RecognitionConfig, RecognitionField
 from momo_ocr.features.text_recognition.postprocess import normalize_ocr_text
 
@@ -37,9 +37,9 @@ FAST_PATH_CONFIDENCE_THRESHOLD = 0.85
 
 @dataclass(frozen=True)
 class _DebugContext:
-    output_dir: Path | None
+    sink: DebugSink
     suffix: str | None
-    sink: dict[str, Any] | None
+    record: dict[str, Any] | None
 
 
 def prepare_count_cell_image(image: Image.Image) -> Image.Image:
@@ -86,9 +86,9 @@ def recognize_count_cell(
     image: Image.Image,
     *,
     incident_name: str,
-    debug_dir: Path | None = None,
+    debug_sink: DebugSink = NULL_DEBUG_SINK,
     debug_suffix: str | None = None,
-    debug_sink: dict[str, Any] | None = None,
+    debug_record: dict[str, Any] | None = None,
 ) -> CountRecognitionResult:
     """Recognise one incident-log count cell across primary + fallback variants.
 
@@ -97,12 +97,12 @@ def recognize_count_cell(
     corrected by the fallback variants. Early-return is intentionally
     avoided in the default path.
 
-    When ``context.fast_path_enabled`` is true, fallback variants are skipped
+    When ``context.policy.fast_path_enabled`` is true, fallback variants are skipped
     if the primary variant produced a plausible (≤ ``max_plausible_count``)
     digit count with confidence ≥ :data:`FAST_PATH_CONFIDENCE_THRESHOLD`.
     """
     max_count = max_plausible_cell_count(incident_name)
-    debug = _DebugContext(output_dir=debug_dir, suffix=debug_suffix, sink=debug_sink)
+    debug = _DebugContext(sink=debug_sink, suffix=debug_suffix, record=debug_record)
     primary_image = prepare_count_cell_image(image)
     fallback_images = prepare_fallback_count_cell_images(image)
     variant_specs = (
@@ -143,7 +143,7 @@ def _can_use_fast_path(
     max_count: int,
 ) -> bool:
     return (
-        context.fast_path_enabled
+        context.policy.fast_path_enabled
         and primary.count is not None
         and primary.count <= max_count
         and (primary.confidence or 0.0) >= FAST_PATH_CONFIDENCE_THRESHOLD
@@ -181,10 +181,10 @@ def _save_debug_variants(
     *,
     debug: _DebugContext,
 ) -> None:
-    if debug.output_dir is None or debug.suffix is None:
+    if not debug.sink.enabled or debug.suffix is None:
         return
     for label, variant_image in variant_specs:
-        variant_image.save(debug.output_dir / f"{debug.suffix}_{label}.png")
+        debug.sink.save_image(f"{debug.suffix}_{label}.png", variant_image)
 
 
 def _recognize_variants(
@@ -204,10 +204,10 @@ def _recognize_variant(
     variant_image: Image.Image,
     debug: _DebugContext,
 ) -> CountRecognitionResult:
-    variant_sink = _new_variant_sink(label) if debug.sink is not None else None
+    variant_sink = _new_variant_sink(label) if debug.record is not None else None
     result = _recognize_count_cell_image(context, variant_image, debug_sink=variant_sink)
-    if debug.sink is not None and variant_sink is not None:
-        debug.sink["variants"].append(variant_sink)
+    if debug.record is not None and variant_sink is not None:
+        debug.record["variants"].append(variant_sink)
     return result
 
 
@@ -225,11 +225,11 @@ def _recognize_count_cell_image(
     # 旧実装は raw_text を " | " で連結して parse_count に渡していたが、
     # parse_count は reversed で最後の候補を優先するため "0 | lo" → 10 の
     # ような後勝ち誤読が起きていた。
-    fast_path = context.fast_path_enabled
+    fast_path = context.policy.fast_path_enabled
     attempts: list[PsmAttempt] = []
     snippets: list[str] = []
     for psm in COUNT_OCR_PSMS:
-        recognized = context.text_engine.recognize(
+        recognized = context.services.text_engine.recognize(
             image,
             field=RecognitionField.INCIDENT_LOG,
             config=RecognitionConfig(

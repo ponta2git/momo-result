@@ -2,15 +2,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from momo_ocr.features.ocr_domain.models import OcrDraftPayload, ScreenType
-from momo_ocr.features.ocr_results.parsing import ScreenParseContext
-from momo_ocr.features.ocr_results.ranked_amount_screen import (
-    RankedAmountScreenSpec,
-    parse_ranked_amount_screen,
-)
+from momo_ocr.features.ocr_domain.models import ScreenType
+from momo_ocr.features.parser_core.context import ScreenParseContext
+from momo_ocr.features.result_projection.models import RankedAmountParseResult
 from momo_ocr.features.revenue.models import RevenueRow
 from momo_ocr.features.revenue.postprocess import parse_man_yen
 from momo_ocr.features.revenue.profile import ROW_PROFILES
+from momo_ocr.features.screen_parsers.ranked_amount import (
+    RankedAmountScreenSpec,
+    extract_ranked_amount_screen,
+)
 
 _REVENUE_SPEC = RankedAmountScreenSpec(
     parser_name="revenue",
@@ -27,5 +28,5 @@ _REVENUE_SPEC = RankedAmountScreenSpec(
 class RevenueParser:
     screen_type: ScreenType = ScreenType.REVENUE
 
-    def parse(self, context: ScreenParseContext) -> OcrDraftPayload:
-        return parse_ranked_amount_screen(context=context, spec=_REVENUE_SPEC)
+    def parse(self, context: ScreenParseContext) -> RankedAmountParseResult:
+        return extract_ranked_amount_screen(context=context, spec=_REVENUE_SPEC)

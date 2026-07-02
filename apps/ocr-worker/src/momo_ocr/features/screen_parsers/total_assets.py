@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from momo_ocr.features.ocr_domain.models import OcrDraftPayload, ScreenType
-from momo_ocr.features.ocr_results.parsing import ScreenParseContext
-from momo_ocr.features.ocr_results.ranked_amount_screen import (
+from momo_ocr.features.ocr_domain.models import ScreenType
+from momo_ocr.features.parser_core.context import ScreenParseContext
+from momo_ocr.features.result_projection.models import RankedAmountParseResult
+from momo_ocr.features.screen_parsers.ranked_amount import (
     RankedAmountScreenSpec,
-    parse_ranked_amount_screen,
+    extract_ranked_amount_screen,
 )
 from momo_ocr.features.total_assets.models import TotalAssetRow
 from momo_ocr.features.total_assets.postprocess import parse_man_yen
@@ -26,5 +27,5 @@ _TOTAL_ASSETS_SPEC = RankedAmountScreenSpec(
 class TotalAssetsParser:
     screen_type: ScreenType = ScreenType.TOTAL_ASSETS
 
-    def parse(self, context: ScreenParseContext) -> OcrDraftPayload:
-        return parse_ranked_amount_screen(context=context, spec=_TOTAL_ASSETS_SPEC)
+    def parse(self, context: ScreenParseContext) -> RankedAmountParseResult:
+        return extract_ranked_amount_screen(context=context, spec=_TOTAL_ASSETS_SPEC)

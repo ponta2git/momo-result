@@ -3,11 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from momo_ocr.features.ocr_domain.models import ScreenType
-from momo_ocr.features.ocr_results.parsing import ScreenParseContext
-from momo_ocr.features.ocr_results.player_aliases import alias_resolver_from_member_aliases
-from momo_ocr.features.revenue.parser import RevenueParser
+from momo_ocr.features.player_identity.aliases import alias_resolver_from_member_aliases
 from momo_ocr.features.revenue.postprocess import parse_man_yen
+from momo_ocr.features.screen_parsers.revenue import RevenueParser
 from tests.support.images import write_test_image
+from tests.support.parser_context import make_parse_context, parse_payload
 from tests.support.text_recognition import SequenceTextRecognitionEngine
 
 
@@ -43,17 +43,16 @@ def test_revenue_parser_extracts_ranked_players_and_amounts(tmp_path: Path) -> N
         ]
     )
 
-    payload = RevenueParser().parse(
-        ScreenParseContext(
-            image_path=image_path,
-            requested_screen_type=ScreenType.AUTO,
-            detected_screen_type=ScreenType.REVENUE,
-            profile_id="full-hd-revenue-v1",
-            debug_dir=debug_dir,
-            include_raw_text=True,
-            text_engine=engine,
-        )
+    context = make_parse_context(
+        image_path=image_path,
+        requested_screen_type=ScreenType.AUTO,
+        detected_screen_type=ScreenType.REVENUE,
+        profile_id="full-hd-revenue-v1",
+        debug_dir=debug_dir,
+        include_raw_text=True,
+        text_engine=engine,
     )
+    payload = parse_payload(RevenueParser(), context)
 
     assert payload.category_payload["status"] == "parsed"
     assert [player.rank.value for player in payload.players] == [1, 2, 3, 4]
@@ -79,17 +78,16 @@ def test_revenue_parser_warns_for_unreadable_row(tmp_path: Path) -> None:
     write_test_image(image_path)
     engine = SequenceTextRecognitionEngine(["unknown"] * 32)
 
-    payload = RevenueParser().parse(
-        ScreenParseContext(
-            image_path=image_path,
-            requested_screen_type=ScreenType.REVENUE,
-            detected_screen_type=ScreenType.REVENUE,
-            profile_id="full-hd-revenue-v1",
-            debug_dir=None,
-            include_raw_text=False,
-            text_engine=engine,
-        )
+    context = make_parse_context(
+        image_path=image_path,
+        requested_screen_type=ScreenType.REVENUE,
+        detected_screen_type=ScreenType.REVENUE,
+        profile_id="full-hd-revenue-v1",
+        debug_dir=None,
+        include_raw_text=False,
+        text_engine=engine,
     )
+    payload = parse_payload(RevenueParser(), context)
 
     assert payload.players[0].raw_player_name.value is None
     assert payload.players[0].revenue_man_yen.value is None
@@ -117,24 +115,23 @@ def test_revenue_parser_warns_when_multiple_rows_resolve_to_same_member(
         ]
     )
 
-    payload = RevenueParser().parse(
-        ScreenParseContext(
-            image_path=image_path,
-            requested_screen_type=ScreenType.REVENUE,
-            detected_screen_type=ScreenType.REVENUE,
-            profile_id="full-hd-revenue-v1",
-            debug_dir=None,
-            include_raw_text=False,
-            text_engine=engine,
-            alias_resolver=alias_resolver_from_member_aliases(
-                {
-                    "member-ponta": ("PONTA社長", "PONTA別名社長"),
-                    "member-otaka": ("OTAKA社長",),
-                    "member-eu": ("いーゆー社長",),
-                }
-            ),
-        )
+    context = make_parse_context(
+        image_path=image_path,
+        requested_screen_type=ScreenType.REVENUE,
+        detected_screen_type=ScreenType.REVENUE,
+        profile_id="full-hd-revenue-v1",
+        debug_dir=None,
+        include_raw_text=False,
+        text_engine=engine,
+        alias_resolver=alias_resolver_from_member_aliases(
+            {
+                "member-ponta": ("PONTA社長", "PONTA別名社長"),
+                "member-otaka": ("OTAKA社長",),
+                "member-eu": ("いーゆー社長",),
+            }
+        ),
     )
+    payload = parse_payload(RevenueParser(), context)
 
     duplicate_warnings = [
         warning for warning in payload.warnings if warning.code.value == "DUPLICATE_MEMBER_ALIAS"

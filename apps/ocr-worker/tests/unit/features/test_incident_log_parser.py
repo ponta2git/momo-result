@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from momo_ocr.features.incident_log.parser import IncidentLogParser
 from momo_ocr.features.incident_log.postprocess import is_pure_pipe_noise, parse_count
 from momo_ocr.features.ocr_domain.models import ScreenType
-from momo_ocr.features.ocr_results.parsing import ScreenParseContext
+from momo_ocr.features.screen_parsers.incident_log import IncidentLogParser
 from tests.support.images import write_test_image
+from tests.support.parser_context import make_parse_context, parse_payload
 from tests.support.text_recognition import SequenceTextRecognitionEngine
 
 PRIMARY_RECOGNITIONS_PER_CELL = 2
@@ -58,18 +58,17 @@ def test_incident_log_parser_extracts_fixed_incident_counts(tmp_path: Path) -> N
     ]
     engine = SequenceTextRecognitionEngine(_all_recognition_texts_for_counts(counts_by_incident))
 
-    payload = IncidentLogParser().parse(
-        ScreenParseContext(
-            image_path=image_path,
-            requested_screen_type=ScreenType.AUTO,
-            detected_screen_type=ScreenType.INCIDENT_LOG,
-            profile_id="full-hd-incident-log-v1",
-            debug_dir=debug_dir,
-            include_raw_text=True,
-            text_engine=engine,
-            layout_family_hint="world",
-        )
+    context = make_parse_context(
+        image_path=image_path,
+        requested_screen_type=ScreenType.AUTO,
+        detected_screen_type=ScreenType.INCIDENT_LOG,
+        profile_id="full-hd-incident-log-v1",
+        debug_dir=debug_dir,
+        include_raw_text=True,
+        text_engine=engine,
+        layout_family_hint="world",
     )
+    payload = parse_payload(IncidentLogParser(), context)
 
     assert payload.category_payload["status"] == "parsed"
     assert payload.category_payload["layout_profile_id"] == "full-hd-incident-log-v1"
@@ -91,18 +90,17 @@ def test_incident_log_parser_warns_for_unreadable_count(tmp_path: Path) -> None:
         [""] * INCIDENT_CELL_COUNT * RECOGNITIONS_PER_CELL_WITH_DIGIT_ONLY_RECOVERY
     )
 
-    payload = IncidentLogParser().parse(
-        ScreenParseContext(
-            image_path=image_path,
-            requested_screen_type=ScreenType.INCIDENT_LOG,
-            detected_screen_type=ScreenType.INCIDENT_LOG,
-            profile_id="full-hd-incident-log-v1",
-            debug_dir=None,
-            include_raw_text=False,
-            text_engine=engine,
-            layout_family_hint="world",
-        )
+    context = make_parse_context(
+        image_path=image_path,
+        requested_screen_type=ScreenType.INCIDENT_LOG,
+        detected_screen_type=ScreenType.INCIDENT_LOG,
+        profile_id="full-hd-incident-log-v1",
+        debug_dir=None,
+        include_raw_text=False,
+        text_engine=engine,
+        layout_family_hint="world",
     )
+    payload = parse_payload(IncidentLogParser(), context)
 
     assert payload.players[0].incidents["目的地"].value is None
     assert {warning.code.value for warning in payload.warnings} == {"MISSING_INCIDENT_COUNT"}
@@ -117,18 +115,17 @@ def test_incident_log_parser_recovers_visible_one_with_digit_only_fallback(
     rest = ["0"] * (INCIDENT_CELL_COUNT - 1) * RECOGNITIONS_PER_CELL_WITH_FALLBACK
     engine = SequenceTextRecognitionEngine(cell_one + rest)
 
-    payload = IncidentLogParser().parse(
-        ScreenParseContext(
-            image_path=image_path,
-            requested_screen_type=ScreenType.INCIDENT_LOG,
-            detected_screen_type=ScreenType.INCIDENT_LOG,
-            profile_id="full-hd-incident-log-v1",
-            debug_dir=None,
-            include_raw_text=False,
-            text_engine=engine,
-            layout_family_hint="world",
-        )
+    context = make_parse_context(
+        image_path=image_path,
+        requested_screen_type=ScreenType.INCIDENT_LOG,
+        detected_screen_type=ScreenType.INCIDENT_LOG,
+        profile_id="full-hd-incident-log-v1",
+        debug_dir=None,
+        include_raw_text=False,
+        text_engine=engine,
+        layout_family_hint="world",
     )
+    payload = parse_payload(IncidentLogParser(), context)
 
     assert payload.players[0].incidents["目的地"].value == 1
 
@@ -140,18 +137,17 @@ def test_incident_log_parser_uses_compact_layout_hint(tmp_path: Path) -> None:
         ["0"] * INCIDENT_CELL_COUNT * RECOGNITIONS_PER_CELL_WITH_FALLBACK
     )
 
-    payload = IncidentLogParser().parse(
-        ScreenParseContext(
-            image_path=image_path,
-            requested_screen_type=ScreenType.INCIDENT_LOG,
-            detected_screen_type=ScreenType.INCIDENT_LOG,
-            profile_id="full-hd-incident-log-v1",
-            debug_dir=None,
-            include_raw_text=False,
-            text_engine=engine,
-            layout_family_hint="momotetsu_2",
-        )
+    context = make_parse_context(
+        image_path=image_path,
+        requested_screen_type=ScreenType.INCIDENT_LOG,
+        detected_screen_type=ScreenType.INCIDENT_LOG,
+        profile_id="full-hd-incident-log-v1",
+        debug_dir=None,
+        include_raw_text=False,
+        text_engine=engine,
+        layout_family_hint="momotetsu_2",
     )
+    payload = parse_payload(IncidentLogParser(), context)
 
     assert payload.category_payload["layout_profile_id"] == "full-hd-incident-log-compact-v1"
 
@@ -164,17 +160,16 @@ def test_incident_log_parser_auto_selects_profile_with_fewer_missing_counts(tmp_
         + (["0"] * INCIDENT_CELL_COUNT * RECOGNITIONS_PER_CELL_WITH_FALLBACK)
     )
 
-    payload = IncidentLogParser().parse(
-        ScreenParseContext(
-            image_path=image_path,
-            requested_screen_type=ScreenType.INCIDENT_LOG,
-            detected_screen_type=ScreenType.INCIDENT_LOG,
-            profile_id="full-hd-incident-log-v1",
-            debug_dir=None,
-            include_raw_text=False,
-            text_engine=engine,
-        )
+    context = make_parse_context(
+        image_path=image_path,
+        requested_screen_type=ScreenType.INCIDENT_LOG,
+        detected_screen_type=ScreenType.INCIDENT_LOG,
+        profile_id="full-hd-incident-log-v1",
+        debug_dir=None,
+        include_raw_text=False,
+        text_engine=engine,
     )
+    payload = parse_payload(IncidentLogParser(), context)
 
     assert payload.category_payload["layout_profile_id"] == "full-hd-incident-log-compact-v1"
     assert {warning.code.value for warning in payload.warnings} == set()
@@ -190,18 +185,17 @@ def test_incident_log_parser_fallback_preprocessing_repairs_suspicious_digit_noi
         + (["0"] * (INCIDENT_CELL_COUNT - 1) * RECOGNITIONS_PER_CELL_WITH_FALLBACK)
     )
 
-    payload = IncidentLogParser().parse(
-        ScreenParseContext(
-            image_path=image_path,
-            requested_screen_type=ScreenType.INCIDENT_LOG,
-            detected_screen_type=ScreenType.INCIDENT_LOG,
-            profile_id="full-hd-incident-log-v1",
-            debug_dir=None,
-            include_raw_text=True,
-            text_engine=engine,
-            layout_family_hint="world",
-        )
+    context = make_parse_context(
+        image_path=image_path,
+        requested_screen_type=ScreenType.INCIDENT_LOG,
+        detected_screen_type=ScreenType.INCIDENT_LOG,
+        profile_id="full-hd-incident-log-v1",
+        debug_dir=None,
+        include_raw_text=True,
+        text_engine=engine,
+        layout_family_hint="world",
     )
+    payload = parse_payload(IncidentLogParser(), context)
 
     assert payload.players[0].incidents["目的地"].value == 2
     assert payload.raw_snippets is not None
@@ -220,18 +214,17 @@ def test_incident_log_parser_majority_vote_overrides_primary_misread(
         + (["0"] * (INCIDENT_CELL_COUNT - 1) * RECOGNITIONS_PER_CELL_WITH_FALLBACK)
     )
 
-    payload = IncidentLogParser().parse(
-        ScreenParseContext(
-            image_path=image_path,
-            requested_screen_type=ScreenType.INCIDENT_LOG,
-            detected_screen_type=ScreenType.INCIDENT_LOG,
-            profile_id="full-hd-incident-log-v1",
-            debug_dir=None,
-            include_raw_text=False,
-            text_engine=engine,
-            layout_family_hint="world",
-        )
+    context = make_parse_context(
+        image_path=image_path,
+        requested_screen_type=ScreenType.INCIDENT_LOG,
+        detected_screen_type=ScreenType.INCIDENT_LOG,
+        profile_id="full-hd-incident-log-v1",
+        debug_dir=None,
+        include_raw_text=False,
+        text_engine=engine,
+        layout_family_hint="world",
     )
+    payload = parse_payload(IncidentLogParser(), context)
 
     assert payload.players[0].incidents["目的地"].value == 0
     confidence = payload.players[0].incidents["目的地"].confidence
@@ -249,18 +242,17 @@ def test_incident_log_parser_uses_stricter_ginji_cell_fallback(tmp_path: Path) -
         + (["0"] * 3 * RECOGNITIONS_PER_CELL_WITH_FALLBACK)
     )
 
-    payload = IncidentLogParser().parse(
-        ScreenParseContext(
-            image_path=image_path,
-            requested_screen_type=ScreenType.INCIDENT_LOG,
-            detected_screen_type=ScreenType.INCIDENT_LOG,
-            profile_id="full-hd-incident-log-v1",
-            debug_dir=None,
-            include_raw_text=True,
-            text_engine=engine,
-            layout_family_hint="world",
-        )
+    context = make_parse_context(
+        image_path=image_path,
+        requested_screen_type=ScreenType.INCIDENT_LOG,
+        detected_screen_type=ScreenType.INCIDENT_LOG,
+        profile_id="full-hd-incident-log-v1",
+        debug_dir=None,
+        include_raw_text=True,
+        text_engine=engine,
+        layout_family_hint="world",
     )
+    payload = parse_payload(IncidentLogParser(), context)
 
     assert payload.players[0].incidents["スリの銀次"].value == 0
 
@@ -278,18 +270,17 @@ def test_incident_log_parser_warns_for_domain_implausible_counts(tmp_path: Path)
     ]
     engine = SequenceTextRecognitionEngine(_all_recognition_texts_for_counts(counts_by_incident))
 
-    payload = IncidentLogParser().parse(
-        ScreenParseContext(
-            image_path=image_path,
-            requested_screen_type=ScreenType.INCIDENT_LOG,
-            detected_screen_type=ScreenType.INCIDENT_LOG,
-            profile_id="full-hd-incident-log-v1",
-            debug_dir=None,
-            include_raw_text=False,
-            text_engine=engine,
-            layout_family_hint="world",
-        )
+    context = make_parse_context(
+        image_path=image_path,
+        requested_screen_type=ScreenType.INCIDENT_LOG,
+        detected_screen_type=ScreenType.INCIDENT_LOG,
+        profile_id="full-hd-incident-log-v1",
+        debug_dir=None,
+        include_raw_text=False,
+        text_engine=engine,
+        layout_family_hint="world",
     )
+    payload = parse_payload(IncidentLogParser(), context)
 
     warning_codes = [warning.code.value for warning in payload.warnings]
     assert warning_codes == ["SUSPICIOUS_INCIDENT_COUNT", "SUSPICIOUS_INCIDENT_COUNT"]
@@ -331,18 +322,17 @@ def test_incident_log_parser_prefers_digit_text_over_zero_alias_noise(
     rest = [("0", 0.9)] * (INCIDENT_CELL_COUNT - 1) * RECOGNITIONS_PER_CELL_WITH_FALLBACK
     engine = SequenceTextRecognitionEngine(cell_one + rest)
 
-    payload = IncidentLogParser().parse(
-        ScreenParseContext(
-            image_path=image_path,
-            requested_screen_type=ScreenType.INCIDENT_LOG,
-            detected_screen_type=ScreenType.INCIDENT_LOG,
-            profile_id="full-hd-incident-log-v1",
-            debug_dir=None,
-            include_raw_text=False,
-            text_engine=engine,
-            layout_family_hint="world",
-        )
+    context = make_parse_context(
+        image_path=image_path,
+        requested_screen_type=ScreenType.INCIDENT_LOG,
+        detected_screen_type=ScreenType.INCIDENT_LOG,
+        profile_id="full-hd-incident-log-v1",
+        debug_dir=None,
+        include_raw_text=False,
+        text_engine=engine,
+        layout_family_hint="world",
     )
+    payload = parse_payload(IncidentLogParser(), context)
 
     assert payload.players[0].incidents["目的地"].value == 3
 
@@ -359,19 +349,18 @@ def test_incident_log_parser_fast_path_skips_fallback_variants_and_psm(
         [("0", 0.9)] * INCIDENT_CELL_COUNT * RECOGNITIONS_PER_CELL_WITH_FALLBACK
     )
 
-    IncidentLogParser().parse(
-        ScreenParseContext(
-            image_path=image_path,
-            requested_screen_type=ScreenType.INCIDENT_LOG,
-            detected_screen_type=ScreenType.INCIDENT_LOG,
-            profile_id="full-hd-incident-log-v1",
-            debug_dir=None,
-            include_raw_text=False,
-            text_engine=engine,
-            layout_family_hint="world",
-            fast_path_enabled=True,
-        )
+    context = make_parse_context(
+        image_path=image_path,
+        requested_screen_type=ScreenType.INCIDENT_LOG,
+        detected_screen_type=ScreenType.INCIDENT_LOG,
+        profile_id="full-hd-incident-log-v1",
+        debug_dir=None,
+        include_raw_text=False,
+        text_engine=engine,
+        layout_family_hint="world",
+        fast_path_enabled=True,
     )
+    parse_payload(IncidentLogParser(), context)
     assert engine.call_count == INCIDENT_CELL_COUNT
 
 
@@ -384,18 +373,17 @@ def test_incident_log_parser_fast_path_disabled_evaluates_all_variants(
         [("0", 0.9)] * INCIDENT_CELL_COUNT * RECOGNITIONS_PER_CELL_WITH_FALLBACK
     )
 
-    IncidentLogParser().parse(
-        ScreenParseContext(
-            image_path=image_path,
-            requested_screen_type=ScreenType.INCIDENT_LOG,
-            detected_screen_type=ScreenType.INCIDENT_LOG,
-            profile_id="full-hd-incident-log-v1",
-            debug_dir=None,
-            include_raw_text=False,
-            text_engine=engine,
-            layout_family_hint="world",
-        )
+    context = make_parse_context(
+        image_path=image_path,
+        requested_screen_type=ScreenType.INCIDENT_LOG,
+        detected_screen_type=ScreenType.INCIDENT_LOG,
+        profile_id="full-hd-incident-log-v1",
+        debug_dir=None,
+        include_raw_text=False,
+        text_engine=engine,
+        layout_family_hint="world",
     )
+    parse_payload(IncidentLogParser(), context)
     assert engine.call_count == INCIDENT_CELL_COUNT * RECOGNITIONS_PER_CELL_WITH_FALLBACK
 
 
@@ -411,18 +399,17 @@ def test_incident_log_parser_fast_path_skips_subsequent_profiles_when_complete(
         [("0", 0.9)] * INCIDENT_CELL_COUNT * RECOGNITIONS_PER_CELL_WITH_FALLBACK * 2
     )
 
-    IncidentLogParser().parse(
-        ScreenParseContext(
-            image_path=image_path,
-            requested_screen_type=ScreenType.INCIDENT_LOG,
-            detected_screen_type=ScreenType.INCIDENT_LOG,
-            profile_id="full-hd-incident-log-v1",
-            debug_dir=None,
-            include_raw_text=False,
-            text_engine=engine,
-            fast_path_enabled=True,
-        )
+    context = make_parse_context(
+        image_path=image_path,
+        requested_screen_type=ScreenType.INCIDENT_LOG,
+        detected_screen_type=ScreenType.INCIDENT_LOG,
+        profile_id="full-hd-incident-log-v1",
+        debug_dir=None,
+        include_raw_text=False,
+        text_engine=engine,
+        fast_path_enabled=True,
     )
+    parse_payload(IncidentLogParser(), context)
     # Only the first profile should have been evaluated (1 OCR call per cell).
     assert engine.call_count == INCIDENT_CELL_COUNT
 
@@ -438,17 +425,16 @@ def test_incident_log_parser_fast_path_continues_on_low_confidence(
         [("0", 0.5)] * INCIDENT_CELL_COUNT * RECOGNITIONS_PER_CELL_WITH_FALLBACK
     )
 
-    IncidentLogParser().parse(
-        ScreenParseContext(
-            image_path=image_path,
-            requested_screen_type=ScreenType.INCIDENT_LOG,
-            detected_screen_type=ScreenType.INCIDENT_LOG,
-            profile_id="full-hd-incident-log-v1",
-            debug_dir=None,
-            include_raw_text=False,
-            text_engine=engine,
-            layout_family_hint="world",
-            fast_path_enabled=True,
-        )
+    context = make_parse_context(
+        image_path=image_path,
+        requested_screen_type=ScreenType.INCIDENT_LOG,
+        detected_screen_type=ScreenType.INCIDENT_LOG,
+        profile_id="full-hd-incident-log-v1",
+        debug_dir=None,
+        include_raw_text=False,
+        text_engine=engine,
+        layout_family_hint="world",
+        fast_path_enabled=True,
     )
+    parse_payload(IncidentLogParser(), context)
     assert engine.call_count == INCIDENT_CELL_COUNT * RECOGNITIONS_PER_CELL_WITH_FALLBACK

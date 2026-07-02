@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 from PIL import Image, ImageOps
 
+from momo_ocr.features.parser_core.debug import NULL_DEBUG_SINK, DebugSink
 from momo_ocr.features.player_order.name_matching import (
     remove_long_vowel_marks,
     strip_president_suffix,
@@ -22,13 +22,13 @@ def recognize_slot_name(
     image: Image.Image,
     *,
     text_engine: TextRecognitionEngine,
-    debug_dir: Path | None = None,
+    debug_sink: DebugSink = NULL_DEBUG_SINK,
     play_order: int | None = None,
 ) -> tuple[str | None, float | None]:
     candidates: list[tuple[str, float | None, float]] = []
     for variant_label, variant_image in _slot_name_variants(image):
-        if debug_dir is not None and play_order is not None and variant_label != "raw":
-            variant_image.save(debug_dir / f"order_{play_order}_name_{variant_label}.png")
+        if play_order is not None and variant_label != "raw":
+            debug_sink.save_image(f"order_{play_order}_name_{variant_label}.png", variant_image)
         candidates.extend(_recognize_variant_candidates(variant_image, text_engine))
 
     if not candidates:

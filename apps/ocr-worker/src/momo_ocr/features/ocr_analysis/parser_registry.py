@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from momo_ocr.features.incident_log.parser import IncidentLogParser
 from momo_ocr.features.ocr_domain.models import ScreenType
-from momo_ocr.features.ocr_results.parsing import ParserRegistry
-from momo_ocr.features.revenue.parser import RevenueParser
-from momo_ocr.features.total_assets.parser import TotalAssetsParser
+from momo_ocr.features.parser_core.registry import ParserRegistry
+from momo_ocr.features.screen_parsers.incident_log import IncidentLogParser
+from momo_ocr.features.screen_parsers.revenue import RevenueParser
+from momo_ocr.features.screen_parsers.total_assets import TotalAssetsParser
 
 
 def default_parser_registry() -> ParserRegistry:

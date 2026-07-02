@@ -4,13 +4,13 @@ from PIL import Image, ImageDraw
 
 from momo_ocr.features.image_processing.geometry import Size, scale_profile_rect_to_image
 from momo_ocr.features.ocr_domain.models import OcrField, PlayerResultDraft
-from momo_ocr.features.player_order.detector import (
-    apply_player_order_to_column_players,
-    apply_player_order_to_ranked_players,
-    detect_player_order,
-)
+from momo_ocr.features.player_order.detector import detect_player_order
 from momo_ocr.features.player_order.models import PlayerColor, PlayerOrderDetection, PlayerOrderSlot
 from momo_ocr.features.player_order.profile import SLOT_PROFILES
+from momo_ocr.features.result_projection.player_order import (
+    apply_player_order_to_column_players,
+    apply_player_order_to_ranked_players,
+)
 from momo_ocr.features.text_recognition.engine import TextRecognitionEngine
 from momo_ocr.features.text_recognition.models import (
     RecognitionConfig,

@@ -14,6 +14,35 @@ UNIT_ROOT = TESTS_ROOT / "unit"
 EXTERNAL_RUNTIME_IMPORT_MODULES = {"redis", "psycopg_pool"}
 MAX_SOURCE_MODULE_LINES = 299
 MAX_CONTROL_NESTING = 2
+DELETED_FEATURE_IMPORT_PREFIXES = (
+    "momo_ocr.features.ocr_results",
+    "momo_ocr.features.total_assets.parser",
+    "momo_ocr.features.revenue.parser",
+    "momo_ocr.features.incident_log.parser",
+)
+PARSER_CORE_FORBIDDEN_IMPORT_PREFIXES = (
+    "momo_ocr.features.incident_log",
+    "momo_ocr.features.ocr_analysis",
+    "momo_ocr.features.ocr_jobs",
+    "momo_ocr.features.player_order",
+    "momo_ocr.features.result_projection",
+    "momo_ocr.features.revenue",
+    "momo_ocr.features.screen_detection",
+    "momo_ocr.features.screen_parsers",
+    "momo_ocr.features.standalone_analysis",
+    "momo_ocr.features.total_assets",
+)
+SCREEN_PARSER_FORBIDDEN_IMPORT_PREFIXES = (
+    "momo_ocr.features.ocr_analysis",
+    "momo_ocr.features.ocr_jobs",
+)
+RESULT_PROJECTION_FORBIDDEN_IMPORT_PREFIXES = (
+    "momo_ocr.features.ocr_analysis",
+    "momo_ocr.features.ocr_jobs",
+    "momo_ocr.features.screen_parsers",
+)
+PLAYER_ORDER_FORBIDDEN_IMPORT_PREFIXES = ("momo_ocr.features.result_projection",)
+PLAYER_ORDER_FORBIDDEN_DOMAIN_SYMBOLS = {"OcrDraftPayload", "PlayerResultDraft"}
 
 
 def test_default_pytest_gate_excludes_external_integration_tests() -> None:
@@ -34,8 +63,6 @@ def test_coverage_gate_tracks_line_and_branch_baseline() -> None:
     assert coverage_run["branch"] is True
     assert coverage_run["omit"] == [
         "src/momo_ocr/main.py",
-        "src/momo_ocr/features/ocr_results/models.py",
-        "src/momo_ocr/features/ocr_results/ranked_rows.py",
     ]
     assert coverage_run["source"] == ["momo_ocr"]
     assert coverage_report["fail_under"] == 88.2
@@ -81,6 +108,73 @@ def test_source_control_flow_avoids_deep_nesting() -> None:
     ]
 
     assert deep_blocks == []
+
+
+def test_deleted_ocr_worker_feature_modules_are_not_imported() -> None:
+    stale_imports = [
+        _format_import_issue(path, import_name)
+        for path in _source_and_test_python_files()
+        for import_name in _module_imports(path)
+        if _matches_any_prefix(import_name, DELETED_FEATURE_IMPORT_PREFIXES)
+    ]
+
+    assert stale_imports == []
+
+
+def test_feature_modules_do_not_import_private_feature_symbols() -> None:
+    private_imports = [
+        f"{path.relative_to(OCR_WORKER_ROOT).as_posix()}: {module}.{name}"
+        for path in _source_python_files()
+        for module, name in _feature_imported_symbols(path)
+        if name.startswith("_")
+    ]
+
+    assert private_imports == []
+
+
+def test_parser_core_has_no_concrete_feature_dependencies() -> None:
+    blocked_imports = _imports_matching_prefixes(
+        SOURCE_ROOT / "features" / "parser_core",
+        PARSER_CORE_FORBIDDEN_IMPORT_PREFIXES,
+    )
+
+    assert blocked_imports == []
+
+
+def test_screen_parser_and_projection_boundaries_do_not_depend_on_orchestration() -> None:
+    blocked_imports = [
+        *_imports_matching_prefixes(
+            SOURCE_ROOT / "features" / "screen_parsers",
+            SCREEN_PARSER_FORBIDDEN_IMPORT_PREFIXES,
+        ),
+        *_imports_matching_prefixes(
+            SOURCE_ROOT / "features" / "result_projection",
+            RESULT_PROJECTION_FORBIDDEN_IMPORT_PREFIXES,
+        ),
+    ]
+
+    assert blocked_imports == []
+
+
+def test_player_order_detection_does_not_depend_on_payload_projection() -> None:
+    blocked_imports = [
+        *_imports_matching_prefixes(
+            SOURCE_ROOT / "features" / "player_order",
+            PLAYER_ORDER_FORBIDDEN_IMPORT_PREFIXES,
+        ),
+        *_forbidden_domain_symbol_imports(
+            SOURCE_ROOT / "features" / "player_order",
+            PLAYER_ORDER_FORBIDDEN_DOMAIN_SYMBOLS,
+        ),
+    ]
+
+    assert blocked_imports == []
+
+
+def test_feature_packages_have_no_import_cycles() -> None:
+    cycles = _feature_package_cycles(_feature_import_graph())
+
+    assert cycles == []
 
 
 def _pytest_addopts() -> list[str]:
@@ -147,6 +241,13 @@ def _source_python_files() -> list[Path]:
     return sorted(path for path in SOURCE_ROOT.rglob("*.py") if "__pycache__" not in path.parts)
 
 
+def _source_and_test_python_files() -> list[Path]:
+    return [
+        *(_source_python_files()),
+        *(path for path in sorted(TESTS_ROOT.rglob("*.py")) if "__pycache__" not in path.parts),
+    ]
+
+
 def _source_line_count(path: Path) -> int:
     return len(path.read_text(encoding="utf-8").splitlines())
 
@@ -156,6 +257,117 @@ def _deep_control_blocks(path: Path) -> list[tuple[int, str, int]]:
     visitor = _ControlNestingVisitor()
     visitor.visit_module(module)
     return visitor.issues
+
+
+def _module_imports(path: Path) -> list[str]:
+    module = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    imports: list[str] = []
+    for node in ast.walk(module):
+        if isinstance(node, ast.Import):
+            imports.extend(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            module_name = node.module or ""
+            imports.append(module_name)
+            imports.extend(f"{module_name}.{alias.name}" for alias in node.names)
+    return imports
+
+
+def _feature_imported_symbols(path: Path) -> list[tuple[str, str]]:
+    module = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    imports: list[tuple[str, str]] = []
+    for node in ast.walk(module):
+        if isinstance(node, ast.ImportFrom) and (node.module or "").startswith(
+            "momo_ocr.features."
+        ):
+            imports.extend((node.module or "", alias.name) for alias in node.names)
+    return imports
+
+
+def _imports_matching_prefixes(root: Path, prefixes: tuple[str, ...]) -> list[str]:
+    return [
+        _format_import_issue(path, import_name)
+        for path in _python_files_under(root)
+        for import_name in _module_imports(path)
+        if _matches_any_prefix(import_name, prefixes)
+    ]
+
+
+def _forbidden_domain_symbol_imports(root: Path, symbols: set[str]) -> list[str]:
+    return [
+        f"{path.relative_to(OCR_WORKER_ROOT).as_posix()}: {module}.{name}"
+        for path in _python_files_under(root)
+        for module, name in _feature_imported_symbols(path)
+        if module == "momo_ocr.features.ocr_domain.models" and name in symbols
+    ]
+
+
+def _python_files_under(root: Path) -> list[Path]:
+    return sorted(path for path in root.rglob("*.py") if "__pycache__" not in path.parts)
+
+
+def _matches_any_prefix(import_name: str, prefixes: tuple[str, ...]) -> bool:
+    return any(import_name == prefix or import_name.startswith(f"{prefix}.") for prefix in prefixes)
+
+
+def _format_import_issue(path: Path, import_name: str) -> str:
+    return f"{path.relative_to(OCR_WORKER_ROOT).as_posix()}: {import_name}"
+
+
+def _feature_import_graph() -> dict[str, set[str]]:
+    packages = _feature_package_names()
+    graph: dict[str, set[str]] = {package: set() for package in packages}
+    for package in packages:
+        for path in _python_files_under(SOURCE_ROOT / "features" / package):
+            graph[package].update(_feature_package_imports(path, packages) - {package})
+    return graph
+
+
+def _feature_package_names() -> set[str]:
+    features_root = SOURCE_ROOT / "features"
+    return {
+        path.name
+        for path in features_root.iterdir()
+        if path.is_dir() and not path.name.startswith("__")
+    }
+
+
+def _feature_package_imports(path: Path, packages: set[str]) -> set[str]:
+    imported_packages: set[str] = set()
+    for import_name in _module_imports(path):
+        parts = import_name.split(".")
+        if parts[:2] == ["momo_ocr", "features"] and len(parts) >= 3:
+            package = parts[2]
+            if package in packages:
+                imported_packages.add(package)
+    return imported_packages
+
+
+def _feature_package_cycles(graph: dict[str, set[str]]) -> list[str]:
+    cycles: set[tuple[str, ...]] = set()
+    for start in sorted(graph):
+        _collect_feature_cycles(graph, start, start, [], cycles)
+    return [" -> ".join(cycle) for cycle in sorted(cycles)]
+
+
+def _collect_feature_cycles(
+    graph: dict[str, set[str]],
+    start: str,
+    current: str,
+    path: list[str],
+    cycles: set[tuple[str, ...]],
+) -> None:
+    next_path = [*path, current]
+    for dependency in sorted(graph[current]):
+        if dependency == start:
+            cycles.add(_canonical_cycle([*next_path, start]))
+        elif dependency not in next_path:
+            _collect_feature_cycles(graph, start, dependency, next_path, cycles)
+
+
+def _canonical_cycle(cycle: list[str]) -> tuple[str, ...]:
+    nodes = cycle[:-1]
+    rotations = [(*nodes[index:], *nodes[:index], nodes[index]) for index in range(len(nodes))]
+    return min(rotations)
 
 
 class _ControlNestingVisitor:

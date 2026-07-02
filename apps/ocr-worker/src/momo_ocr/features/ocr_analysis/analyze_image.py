@@ -16,8 +16,8 @@ from momo_ocr.features.ocr_analysis.analysis_steps import (
 )
 from momo_ocr.features.ocr_analysis.report import AnalysisResult
 from momo_ocr.features.ocr_domain.models import OcrDraftPayload, OcrWarning
-from momo_ocr.features.ocr_results.parsing import ParserRegistry
-from momo_ocr.features.ocr_results.player_aliases import PlayerAliasResolver
+from momo_ocr.features.parser_core.registry import ParserRegistry
+from momo_ocr.features.player_identity.aliases import PlayerAliasResolver
 from momo_ocr.features.screen_detection.models import ScreenDetectionResult
 from momo_ocr.features.temp_images.models import ImageMetadata
 from momo_ocr.features.temp_images.validation import open_decoded_image
@@ -137,7 +137,7 @@ def _analyze_decoded_image(
     warnings = analysis_warnings(
         detection,
         player_order_detection,
-        debug_dir=config.debug_dir,
+        debug_sink=config.debug_sink,
     )
     parsed = parse_detected_screen(
         image=decoded_image,

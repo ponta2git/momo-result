@@ -3,14 +3,14 @@ from __future__ import annotations
 from pathlib import Path
 
 from momo_ocr.features.ocr_domain.models import ScreenType
-from momo_ocr.features.ocr_results.parsing import ScreenParseContext
-from momo_ocr.features.ocr_results.player_aliases import (
+from momo_ocr.features.player_identity.aliases import (
     alias_resolver_from_member_aliases,
     extract_player_name_candidate,
 )
-from momo_ocr.features.total_assets.parser import TotalAssetsParser
+from momo_ocr.features.screen_parsers.total_assets import TotalAssetsParser
 from momo_ocr.features.total_assets.postprocess import parse_man_yen
 from tests.support.images import write_test_image
+from tests.support.parser_context import make_parse_context, parse_payload
 from tests.support.text_recognition import SequenceTextRecognitionEngine
 
 
@@ -56,17 +56,16 @@ def test_total_assets_parser_extracts_ranked_players_and_amounts(tmp_path: Path)
         ]
     )
 
-    payload = TotalAssetsParser().parse(
-        ScreenParseContext(
-            image_path=image_path,
-            requested_screen_type=ScreenType.AUTO,
-            detected_screen_type=ScreenType.TOTAL_ASSETS,
-            profile_id="full-hd-total-assets-v1",
-            debug_dir=debug_dir,
-            include_raw_text=True,
-            text_engine=engine,
-        )
+    context = make_parse_context(
+        image_path=image_path,
+        requested_screen_type=ScreenType.AUTO,
+        detected_screen_type=ScreenType.TOTAL_ASSETS,
+        profile_id="full-hd-total-assets-v1",
+        debug_dir=debug_dir,
+        include_raw_text=True,
+        text_engine=engine,
     )
+    payload = parse_payload(TotalAssetsParser(), context)
 
     assert payload.category_payload["status"] == "parsed"
     assert [player.rank.value for player in payload.players] == [1, 2, 3, 4]
@@ -92,17 +91,16 @@ def test_total_assets_parser_warns_for_unreadable_row(tmp_path: Path) -> None:
     write_test_image(image_path)
     engine = SequenceTextRecognitionEngine(["unknown"] * 32)
 
-    payload = TotalAssetsParser().parse(
-        ScreenParseContext(
-            image_path=image_path,
-            requested_screen_type=ScreenType.TOTAL_ASSETS,
-            detected_screen_type=ScreenType.TOTAL_ASSETS,
-            profile_id="full-hd-total-assets-v1",
-            debug_dir=None,
-            include_raw_text=False,
-            text_engine=engine,
-        )
+    context = make_parse_context(
+        image_path=image_path,
+        requested_screen_type=ScreenType.TOTAL_ASSETS,
+        detected_screen_type=ScreenType.TOTAL_ASSETS,
+        profile_id="full-hd-total-assets-v1",
+        debug_dir=None,
+        include_raw_text=False,
+        text_engine=engine,
     )
+    payload = parse_payload(TotalAssetsParser(), context)
 
     assert payload.players[0].raw_player_name.value is None
     assert payload.players[0].total_assets_man_yen.value is None
@@ -117,20 +115,19 @@ def test_total_assets_parser_sets_member_id_from_alias_hint(tmp_path: Path) -> N
     write_test_image(image_path)
     engine = SequenceTextRecognitionEngine(["PONTAプレイヤー社長 1億円"] * 8)
 
-    payload = TotalAssetsParser().parse(
-        ScreenParseContext(
-            image_path=image_path,
-            requested_screen_type=ScreenType.TOTAL_ASSETS,
-            detected_screen_type=ScreenType.TOTAL_ASSETS,
-            profile_id="full-hd-total-assets-v1",
-            debug_dir=None,
-            include_raw_text=False,
-            text_engine=engine,
-            alias_resolver=alias_resolver_from_member_aliases(
-                {"member-ponta": ("PONTAプレイヤー社長",)}
-            ),
-        )
+    context = make_parse_context(
+        image_path=image_path,
+        requested_screen_type=ScreenType.TOTAL_ASSETS,
+        detected_screen_type=ScreenType.TOTAL_ASSETS,
+        profile_id="full-hd-total-assets-v1",
+        debug_dir=None,
+        include_raw_text=False,
+        text_engine=engine,
+        alias_resolver=alias_resolver_from_member_aliases(
+            {"member-ponta": ("PONTAプレイヤー社長",)}
+        ),
     )
+    payload = parse_payload(TotalAssetsParser(), context)
 
     assert payload.players[0].raw_player_name.value == "PONTAプレイヤー社長"
     assert payload.players[0].member_id == "member-ponta"

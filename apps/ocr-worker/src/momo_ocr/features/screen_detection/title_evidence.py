@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 
 from PIL import Image, ImageOps
 
@@ -9,6 +8,7 @@ from momo_ocr.features.image_processing.geometry import Rect, Size, scale_profil
 from momo_ocr.features.image_processing.preprocessing import otsu_binarize
 from momo_ocr.features.image_processing.roi import crop_roi
 from momo_ocr.features.ocr_domain.models import ScreenType
+from momo_ocr.features.parser_core.debug import NULL_DEBUG_SINK, DebugSink
 from momo_ocr.features.screen_detection.profiles import PROFILES
 from momo_ocr.features.text_recognition.engine import TextRecognitionEngine
 from momo_ocr.features.text_recognition.models import RecognitionField
@@ -30,7 +30,7 @@ class _TitleVariantRequest:
     variant_label: str
     scale_factor: int
     psm: int
-    debug_dir: Path | None
+    debug_sink: DebugSink
     debug_prefix: str
 
 
@@ -38,28 +38,25 @@ def recognize_title_evidence(
     image: Image.Image,
     engine: TextRecognitionEngine,
     *,
-    debug_dir: Path | None = None,
+    debug_sink: DebugSink = NULL_DEBUG_SINK,
 ) -> dict[ScreenType, str]:
     evidence: dict[ScreenType, str] = {}
     image_size = Size(width=image.width, height=image.height)
-    if debug_dir is not None:
-        debug_dir.mkdir(parents=True, exist_ok=True)
     for screen_type, profile in PROFILES.items():
         title_rect = scale_profile_rect_to_image(profile.title_roi, image_size)
         title_image = crop_roi(image, title_rect)
-        if debug_dir is not None:
-            title_image.save(debug_dir / f"{screen_type.value}_title.png")
+        debug_sink.save_image(f"{screen_type.value}_title.png", title_image)
         evidence[screen_type] = _recognize_title_variants(
             title_image,
             engine,
-            debug_dir=debug_dir,
+            debug_sink=debug_sink,
             debug_prefix=screen_type.value,
         )
     supplemental_evidence = _recognize_supplemental_evidence(
         image,
         engine,
         image_size=image_size,
-        debug_dir=debug_dir,
+        debug_sink=debug_sink,
     )
     if supplemental_evidence:
         evidence = {
@@ -73,7 +70,7 @@ def _recognize_title_variants(
     image: Image.Image,
     engine: TextRecognitionEngine,
     *,
-    debug_dir: Path | None,
+    debug_sink: DebugSink,
     debug_prefix: str,
 ) -> str:
     snippets: list[str] = []
@@ -83,7 +80,7 @@ def _recognize_title_variants(
             variant_image,
             engine,
             variant_label=variant_label,
-            debug_dir=debug_dir,
+            debug_sink=debug_sink,
             debug_prefix=debug_prefix,
         )
         snippets.extend(variant_snippets)
@@ -101,7 +98,7 @@ def _recognize_title_variant_group(
     engine: TextRecognitionEngine,
     *,
     variant_label: str,
-    debug_dir: Path | None,
+    debug_sink: DebugSink,
     debug_prefix: str,
 ) -> list[str]:
     snippets: list[str] = []
@@ -113,7 +110,7 @@ def _recognize_title_variant_group(
                 variant_label=variant_label,
                 scale_factor=scale_factor,
                 psm=psm,
-                debug_dir=debug_dir,
+                debug_sink=debug_sink,
                 debug_prefix=debug_prefix,
             ),
         )
@@ -142,14 +139,12 @@ def _save_scaled_title_debug(
     *,
     request: _TitleVariantRequest,
 ) -> None:
-    if request.debug_dir is None:
-        return
-    scaled.save(
-        request.debug_dir
-        / (
+    request.debug_sink.save_image(
+        (
             f"{request.debug_prefix}_title_{request.variant_label}_"
             f"scale{request.scale_factor}_psm{request.psm}.png"
         ),
+        scaled,
     )
 
 
@@ -185,7 +180,7 @@ def _recognize_supplemental_evidence(
     engine: TextRecognitionEngine,
     *,
     image_size: Size,
-    debug_dir: Path | None,
+    debug_sink: DebugSink,
 ) -> str:
     snippets: list[str] = []
     for name, roi in SUPPLEMENTAL_EVIDENCE_ROIS:
@@ -196,7 +191,7 @@ def _recognize_supplemental_evidence(
                 name=name,
                 roi=roi,
                 image_size=image_size,
-                debug_dir=debug_dir,
+                debug_sink=debug_sink,
             )
         )
     return _join_unique_snippets(snippets)
@@ -209,12 +204,12 @@ def _recognize_supplemental_roi(
     name: str,
     roi: Rect,
     image_size: Size,
-    debug_dir: Path | None,
+    debug_sink: DebugSink,
 ) -> list[str]:
     rect = scale_profile_rect_to_image(roi, image_size)
     crop = crop_roi(image, rect)
     scaled = crop.resize((crop.width * 2, crop.height * 2), Image.Resampling.LANCZOS)
-    _save_supplemental_debug(crop, scaled, name=name, debug_dir=debug_dir)
+    _save_supplemental_debug(crop, scaled, name=name, debug_sink=debug_sink)
     return _recognize_supplemental_variants(scaled, engine)
 
 
@@ -223,12 +218,10 @@ def _save_supplemental_debug(
     scaled: Image.Image,
     *,
     name: str,
-    debug_dir: Path | None,
+    debug_sink: DebugSink,
 ) -> None:
-    if debug_dir is None:
-        return
-    crop.save(debug_dir / f"supplemental_{name}.png")
-    scaled.save(debug_dir / f"supplemental_{name}_scale2.png")
+    debug_sink.save_image(f"supplemental_{name}.png", crop)
+    debug_sink.save_image(f"supplemental_{name}_scale2.png", scaled)
 
 
 def _recognize_supplemental_variants(

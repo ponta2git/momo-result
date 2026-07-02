@@ -10,12 +10,12 @@ from typing import Any
 
 from eval_lib.report import aggregate
 from eval_lib.runner import (
-    ImageEval,
     evaluate_one,
     load_answers,
     resolve_debug_dir,
     select_files,
 )
+from eval_lib.types import ImageEval
 from momo_ocr.features.text_recognition.engine import close_text_engine
 from momo_ocr.features.text_recognition.factory import default_text_recognition_engine
 

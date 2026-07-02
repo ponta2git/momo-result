@@ -1,24 +1,18 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
-from pathlib import Path
+from dataclasses import dataclass
 
 from PIL import Image
 
 from momo_ocr.features.image_processing.geometry import Size, scale_profile_rect_to_image
 from momo_ocr.features.image_processing.roi import crop_roi
-from momo_ocr.features.ocr_domain.models import (
-    OcrField,
-    OcrWarning,
-    PlayerResultDraft,
-    WarningCode,
-)
+from momo_ocr.features.ocr_domain.models import OcrWarning, WarningCode
+from momo_ocr.features.parser_core.debug import NULL_DEBUG_SINK, DebugSink
 from momo_ocr.features.player_order.color_detection import (
     MIN_COLOR_CONFIDENCE,
     detect_dominant_player_color,
 )
 from momo_ocr.features.player_order.models import PlayerOrderDetection, PlayerOrderSlot
-from momo_ocr.features.player_order.name_matching import find_matching_slot
 from momo_ocr.features.player_order.name_recognition import recognize_slot_name
 from momo_ocr.features.player_order.profile import SLOT_PROFILES, PlayerOrderSlotProfile
 from momo_ocr.features.text_recognition.engine import TextRecognitionEngine
@@ -34,22 +28,20 @@ def detect_player_order(
     image: Image.Image,
     *,
     text_engine: TextRecognitionEngine,
-    debug_dir: Path | None = None,
+    debug_sink: DebugSink = NULL_DEBUG_SINK,
 ) -> PlayerOrderDetection:
     image_size = Size(width=image.width, height=image.height)
     slots: list[PlayerOrderSlot] = []
     warnings: list[OcrWarning] = []
-    if debug_dir is not None:
-        debug_dir.mkdir(parents=True, exist_ok=True)
 
     for slot_profile in SLOT_PROFILES:
         slot_images = _crop_slot_images(image, image_size=image_size, slot_profile=slot_profile)
-        _save_slot_debug_images(slot_images, slot_profile=slot_profile, debug_dir=debug_dir)
+        _save_slot_debug_images(slot_images, slot_profile=slot_profile, debug_sink=debug_sink)
         slot = _detect_slot(
             slot_images,
             slot_profile=slot_profile,
             text_engine=text_engine,
-            debug_dir=debug_dir,
+            debug_sink=debug_sink,
         )
         warnings.extend(_slot_warnings(slot, slot_profile))
         slots.append(slot)
@@ -60,27 +52,6 @@ def detect_player_order(
         confidence=min(confidences) if confidences else 0.0,
         warnings=warnings,
     )
-
-
-def apply_player_order_to_ranked_players(
-    players: list[PlayerResultDraft],
-    detection: PlayerOrderDetection | None,
-) -> list[PlayerResultDraft]:
-    if detection is None:
-        return players
-    return [_apply_order_by_name(player, detection) for player in players]
-
-
-def apply_player_order_to_column_players(
-    players: list[PlayerResultDraft],
-    detection: PlayerOrderDetection | None,
-) -> list[PlayerResultDraft]:
-    if detection is None:
-        return players
-    return [
-        _apply_column_slot(player, detection.slots[index] if index < len(detection.slots) else None)
-        for index, player in enumerate(players)
-    ]
 
 
 def _crop_slot_images(
@@ -105,12 +76,10 @@ def _save_slot_debug_images(
     slot_images: _SlotImages,
     *,
     slot_profile: PlayerOrderSlotProfile,
-    debug_dir: Path | None,
+    debug_sink: DebugSink,
 ) -> None:
-    if debug_dir is None:
-        return
-    slot_images.indicator.save(debug_dir / f"order_{slot_profile.play_order}_indicator.png")
-    slot_images.name.save(debug_dir / f"order_{slot_profile.play_order}_name.png")
+    debug_sink.save_image(f"order_{slot_profile.play_order}_indicator.png", slot_images.indicator)
+    debug_sink.save_image(f"order_{slot_profile.play_order}_name.png", slot_images.name)
 
 
 def _detect_slot(
@@ -118,13 +87,13 @@ def _detect_slot(
     *,
     slot_profile: PlayerOrderSlotProfile,
     text_engine: TextRecognitionEngine,
-    debug_dir: Path | None,
+    debug_sink: DebugSink,
 ) -> PlayerOrderSlot:
     detected_color, color_confidence = detect_dominant_player_color(slot_images.indicator)
     raw_player_name, name_confidence = recognize_slot_name(
         slot_images.name,
         text_engine=text_engine,
-        debug_dir=debug_dir,
+        debug_sink=debug_sink,
         play_order=slot_profile.play_order,
     )
     return PlayerOrderSlot(
@@ -156,47 +125,3 @@ def _slot_warnings(
             field_path=f"player_order[{slot_profile.play_order - 1}].detected_color",
         )
     ]
-
-
-def _apply_column_slot(
-    player: PlayerResultDraft,
-    slot: PlayerOrderSlot | None,
-) -> PlayerResultDraft:
-    if slot is None:
-        return player
-    raw_player_name = player.raw_player_name
-    if raw_player_name.value is None and slot.raw_player_name is not None:
-        raw_player_name = OcrField(
-            value=slot.raw_player_name,
-            raw_text=slot.raw_player_name,
-            confidence=slot.name_confidence,
-        )
-    return replace(
-        player,
-        raw_player_name=raw_player_name,
-        play_order=OcrField(
-            value=slot.play_order,
-            raw_text=slot.expected_color.value,
-            confidence=slot.color_confidence,
-        ),
-    )
-
-
-def _apply_order_by_name(
-    player: PlayerResultDraft,
-    detection: PlayerOrderDetection,
-) -> PlayerResultDraft:
-    player_name = player.raw_player_name.value
-    if player_name is None:
-        return player
-    matched_slot = find_matching_slot(player_name, detection.slots)
-    if matched_slot is None:
-        return player
-    return replace(
-        player,
-        play_order=OcrField(
-            value=matched_slot.play_order,
-            raw_text=matched_slot.raw_player_name,
-            confidence=matched_slot.color_confidence,
-        ),
-    )

@@ -10,8 +10,8 @@ from momo_ocr.features.ocr_domain.models import (
     ScreenType,
     WarningCode,
 )
-from momo_ocr.features.ocr_results.payload_warnings import attach_warnings_to_payload
-from momo_ocr.features.ocr_results.ranked_row_ocr import recognize_ranked_row_text
+from momo_ocr.features.result_projection.payload_warnings import attach_warnings_to_payload
+from momo_ocr.features.screen_parsers.ranked_row_ocr import recognize_ranked_row_text
 from momo_ocr.shared.json import JsonValue, to_jsonable
 from tests.support.images import make_test_image
 from tests.support.text_recognition import SequenceTextRecognitionEngine

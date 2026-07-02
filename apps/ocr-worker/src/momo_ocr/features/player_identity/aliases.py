@@ -10,17 +10,8 @@ from momo_ocr.features.ocr_domain.money import MONEY_TEXT_RE
 from momo_ocr.features.text_recognition.postprocess import normalize_ocr_text
 
 MIN_NOISE_PREFIX_TOKENS = 2
-# Minimum normalized alias surface length. NFKC + lowercasing reduces
-# display names like ``NO11社長`` to 5 characters. Aliases shorter than
-# this (e.g. ``た社長``) are rejected because they are too easy to match
-# inside unrelated noisy OCR text and risk false-positive normalization.
 MIN_SAFE_ALIAS_LENGTH = 5
 
-# Conservative static defaults. These cover OCR confusions that survive
-# NFKC + ``一/-/_`` to ``ー`` normalization (see :func:`_normalize_name_for_match`),
-# which is why we do not need to enumerate every hyphen variant. Production
-# callers (job runner) should extend this with API-provided ``knownPlayerAliases``
-# rather than relying on these worker-local fallbacks.
 DEFAULT_STATIC_ALIASES: dict[str, tuple[str, ...]] = {
     "NO11社長": ("NO11社長",),
     "オータカ社長": (
@@ -59,7 +50,7 @@ class PlayerAliasResolver:
         best_match: PlayerAliasMatch | None = None
         best_ratio = 0.0
         for display_name, surface, member_id in self.pairs:
-            normalized_surface = _normalize_name_for_match(surface)
+            normalized_surface = normalize_name_for_match(surface)
             if len(normalized_surface) < MIN_SAFE_ALIAS_LENGTH:
                 continue
             if normalized_surface in normalized_text:
@@ -92,18 +83,6 @@ def alias_resolver_from_map(
     return PlayerAliasResolver(pairs=pairs, fuzzy_threshold=fuzzy_threshold)
 
 
-def _expand_momotetsu_president_surfaces(surfaces: Sequence[str]) -> tuple[str, ...]:
-    expanded: list[str] = []
-    seen: set[str] = set()
-    for surface in surfaces:
-        candidates = [surface]
-        if surface and not surface.endswith("社長"):
-            candidates.append(f"{surface}社長")
-        for candidate in candidates:
-            _append_unseen_candidate(candidate, seen=seen, expanded=expanded)
-    return tuple(expanded)
-
-
 def alias_resolver_from_member_aliases(
     aliases: Mapping[str, Sequence[str]],
     *,
@@ -115,6 +94,61 @@ def alias_resolver_from_member_aliases(
         for surface in _expand_momotetsu_president_surfaces(surfaces)
     )
     return PlayerAliasResolver(pairs=pairs, fuzzy_threshold=fuzzy_threshold)
+
+
+def extract_player_name_candidate(
+    text: str,
+    *,
+    alias_resolver: PlayerAliasResolver | None = None,
+) -> str | None:
+    return extract_player_identity(text, alias_resolver=alias_resolver).raw_player_name
+
+
+def extract_player_identity(
+    text: str,
+    *,
+    alias_resolver: PlayerAliasResolver | None = None,
+) -> ExtractedPlayerIdentity:
+    """Return a resolved or raw player display name candidate from row OCR text."""
+    resolver = alias_resolver if alias_resolver is not None else DEFAULT_ALIAS_RESOLVER
+    normalized = normalize_ocr_text(MONEY_TEXT_RE.sub(" ", text))
+    if not normalized:
+        return ExtractedPlayerIdentity(raw_player_name=None)
+    alias_match = resolver.resolve(normalize_name_for_match(normalized))
+    if alias_match is not None:
+        return ExtractedPlayerIdentity(
+            raw_player_name=alias_match.display_name,
+            member_id=alias_match.member_id,
+        )
+
+    matches = re.findall(r"((?:NO\s*1\s*1|[一-龥ぁ-んァ-ンー_]+)\s*社長)", normalized)
+    if not matches:
+        return ExtractedPlayerIdentity(raw_player_name=None)
+
+    name = normalize_ocr_text(matches[-1]).replace("_", "ー")
+    tokens = name.split()
+    if len(tokens) >= MIN_NOISE_PREFIX_TOKENS and _is_latin_noise(tokens[0]):
+        name = " ".join(tokens[1:])
+    name = re.sub(r"(?<=\d)社長", " 社長", name)
+    return ExtractedPlayerIdentity(raw_player_name=name or None)
+
+
+def normalize_name_for_match(value: str) -> str:
+    normalized = normalize("NFKC", value)
+    normalized = normalized.replace("_", "ー").replace("一", "ー").replace("-", "ー")
+    return re.sub(r"[^0-9A-Za-zぁ-んァ-ン一-龥ー]", "", normalized).lower()
+
+
+def _expand_momotetsu_president_surfaces(surfaces: Sequence[str]) -> tuple[str, ...]:
+    expanded: list[str] = []
+    seen: set[str] = set()
+    for surface in surfaces:
+        candidates = [surface]
+        if surface and not surface.endswith("社長"):
+            candidates.append(f"{surface}社長")
+        for candidate in candidates:
+            _append_unseen_candidate(candidate, seen=seen, expanded=expanded)
+    return tuple(expanded)
 
 
 def _better_fuzzy_match(
@@ -141,48 +175,6 @@ def _append_unseen_candidate(candidate: str, *, seen: set[str], expanded: list[s
     expanded.append(candidate)
 
 
-DEFAULT_ALIAS_RESOLVER = alias_resolver_from_map(DEFAULT_STATIC_ALIASES)
-
-KNOWN_PLAYER_ALIASES: Mapping[str, tuple[str, ...]] = DEFAULT_STATIC_ALIASES
-
-
-def extract_player_name_candidate(
-    text: str,
-    *,
-    alias_resolver: PlayerAliasResolver | None = None,
-) -> str | None:
-    return extract_player_identity(text, alias_resolver=alias_resolver).raw_player_name
-
-
-def extract_player_identity(
-    text: str,
-    *,
-    alias_resolver: PlayerAliasResolver | None = None,
-) -> ExtractedPlayerIdentity:
-    """Return a resolved or raw player display name candidate from row OCR text."""
-    resolver = alias_resolver if alias_resolver is not None else DEFAULT_ALIAS_RESOLVER
-    normalized = normalize_ocr_text(MONEY_TEXT_RE.sub(" ", text))
-    if not normalized:
-        return ExtractedPlayerIdentity(raw_player_name=None)
-    alias_match = resolver.resolve(_normalize_name_for_match(normalized))
-    if alias_match is not None:
-        return ExtractedPlayerIdentity(
-            raw_player_name=alias_match.display_name,
-            member_id=alias_match.member_id,
-        )
-
-    matches = re.findall(r"((?:NO\s*1\s*1|[一-龥ぁ-んァ-ンー_]+)\s*社長)", normalized)
-    if not matches:
-        return ExtractedPlayerIdentity(raw_player_name=None)
-
-    name = normalize_ocr_text(matches[-1]).replace("_", "ー")
-    tokens = name.split()
-    if len(tokens) >= MIN_NOISE_PREFIX_TOKENS and _is_latin_noise(tokens[0]):
-        name = " ".join(tokens[1:])
-    name = re.sub(r"(?<=\d)社長", " 社長", name)
-    return ExtractedPlayerIdentity(raw_player_name=name or None)
-
-
 def _display_name_from_aliases(member_id: str, surfaces: Sequence[str]) -> str:
     for surface in surfaces:
         if surface:
@@ -190,11 +182,10 @@ def _display_name_from_aliases(member_id: str, surfaces: Sequence[str]) -> str:
     return member_id
 
 
-def _normalize_name_for_match(value: str) -> str:
-    normalized = normalize("NFKC", value)
-    normalized = normalized.replace("_", "ー").replace("一", "ー").replace("-", "ー")
-    return re.sub(r"[^0-9A-Za-zぁ-んァ-ン一-龥ー]", "", normalized).lower()
-
-
 def _is_latin_noise(token: str) -> bool:
     return bool(re.fullmatch(r"[A-Za-z]{1,3}", token))
+
+
+DEFAULT_ALIAS_RESOLVER = alias_resolver_from_map(DEFAULT_STATIC_ALIASES)
+
+KNOWN_PLAYER_ALIASES: Mapping[str, tuple[str, ...]] = DEFAULT_STATIC_ALIASES

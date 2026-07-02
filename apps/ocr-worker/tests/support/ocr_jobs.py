@@ -28,7 +28,7 @@ from momo_ocr.features.ocr_jobs.models import (
 from momo_ocr.features.ocr_jobs.queue_contract import parse_job_message, to_stream_payload
 from momo_ocr.features.ocr_jobs.repository import InMemoryOcrJobRepository
 from momo_ocr.features.ocr_jobs.runner import JobRunOutcome, run_one_job
-from momo_ocr.features.ocr_results.player_aliases import PlayerAliasResolver
+from momo_ocr.features.player_identity.aliases import PlayerAliasResolver
 from momo_ocr.features.text_recognition.engine import TextRecognitionEngine
 from momo_ocr.shared.errors import FailureCode, OcrFailure
 

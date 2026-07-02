@@ -12,7 +12,7 @@ from momo_ocr.features.ocr_jobs.models import (
 )
 from momo_ocr.features.ocr_jobs.pipeline_dependencies import PipelineDependencies
 from momo_ocr.features.ocr_jobs.result_records import OcrResultRecord
-from momo_ocr.features.ocr_results.payload_warnings import attach_warnings_to_payload
+from momo_ocr.features.result_projection.payload_warnings import attach_warnings_to_payload
 from momo_ocr.shared.errors import FailureCode, OcrFailure
 
 

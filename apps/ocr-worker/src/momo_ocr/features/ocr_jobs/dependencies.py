@@ -9,7 +9,7 @@ from momo_ocr.features.ocr_analysis.report import AnalysisResult
 from momo_ocr.features.ocr_jobs.cancellation import CancellationChecker
 from momo_ocr.features.ocr_jobs.consumer import OcrJobConsumer
 from momo_ocr.features.ocr_jobs.repository import OcrJobRepository
-from momo_ocr.features.ocr_results.player_aliases import PlayerAliasResolver
+from momo_ocr.features.player_identity.aliases import PlayerAliasResolver
 from momo_ocr.features.text_recognition.engine import (
     FakeTextRecognitionEngine,
     TextRecognitionEngine,

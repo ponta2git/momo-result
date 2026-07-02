@@ -7,8 +7,10 @@ from PIL import Image
 
 import momo_ocr.features.ocr_analysis.analyze_image as analyze_module
 from momo_ocr.features.ocr_analysis.analyze_image import analyze_image
-from momo_ocr.features.ocr_domain.models import OcrDraftPayload, ScreenType
-from momo_ocr.features.ocr_results.parsing import ParserRegistry, ScreenParseContext
+from momo_ocr.features.ocr_domain.models import ScreenType
+from momo_ocr.features.parser_core.context import ScreenParseContext
+from momo_ocr.features.parser_core.registry import ParserRegistry
+from momo_ocr.features.result_projection.models import RankedAmountParseResult
 from momo_ocr.features.temp_images.validation import MAX_IMAGE_BYTES
 from momo_ocr.features.text_recognition.engine import FakeTextRecognitionEngine
 from tests.support.images import write_test_image
@@ -45,16 +47,12 @@ def test_analyze_image_closes_decoded_image_after_parse(tmp_path: Path) -> None:
         def screen_type(self) -> ScreenType:
             return ScreenType.TOTAL_ASSETS
 
-        def parse(self, context: ScreenParseContext) -> OcrDraftPayload:
-            image = context.image
+        def parse(self, context: ScreenParseContext) -> RankedAmountParseResult:
+            image = context.parse_input.image
             assert image is not None
             assert image.getbbox() is not None
             parsed_images.append(image)
-            return OcrDraftPayload(
-                requested_screen_type=context.requested_screen_type,
-                detected_screen_type=context.detected_screen_type,
-                profile_id=context.profile_id,
-            )
+            return _empty_ranked_parse_result()
 
     result = analyze_image(
         image_path=image_path,
@@ -130,13 +128,9 @@ def test_analyze_image_does_not_infer_layout_family_from_filename(tmp_path: Path
         def screen_type(self) -> ScreenType:
             return ScreenType.TOTAL_ASSETS
 
-        def parse(self, context: ScreenParseContext) -> OcrDraftPayload:
+        def parse(self, context: ScreenParseContext) -> RankedAmountParseResult:
             captured_hints.append(context.layout_family_hint)
-            return OcrDraftPayload(
-                requested_screen_type=context.requested_screen_type,
-                detected_screen_type=context.detected_screen_type,
-                profile_id=context.profile_id,
-            )
+            return _empty_ranked_parse_result()
 
     result = analyze_image(
         image_path=image_path,
@@ -161,13 +155,9 @@ def test_analyze_image_forwards_explicit_layout_family_hint(tmp_path: Path) -> N
         def screen_type(self) -> ScreenType:
             return ScreenType.TOTAL_ASSETS
 
-        def parse(self, context: ScreenParseContext) -> OcrDraftPayload:
+        def parse(self, context: ScreenParseContext) -> RankedAmountParseResult:
             captured_hints.append(context.layout_family_hint)
-            return OcrDraftPayload(
-                requested_screen_type=context.requested_screen_type,
-                detected_screen_type=context.detected_screen_type,
-                profile_id=context.profile_id,
-            )
+            return _empty_ranked_parse_result()
 
     result = analyze_image(
         image_path=image_path,
@@ -193,13 +183,9 @@ def test_analyze_image_forwards_explicit_fast_path_flag(tmp_path: Path) -> None:
         def screen_type(self) -> ScreenType:
             return ScreenType.TOTAL_ASSETS
 
-        def parse(self, context: ScreenParseContext) -> OcrDraftPayload:
-            captured_flags.append(context.fast_path_enabled)
-            return OcrDraftPayload(
-                requested_screen_type=context.requested_screen_type,
-                detected_screen_type=context.detected_screen_type,
-                profile_id=context.profile_id,
-            )
+        def parse(self, context: ScreenParseContext) -> RankedAmountParseResult:
+            captured_flags.append(context.policy.fast_path_enabled)
+            return _empty_ranked_parse_result()
 
     result = analyze_image(
         image_path=image_path,
@@ -271,3 +257,13 @@ class _ClosableFakeEngine(FakeTextRecognitionEngine):
 
     def close(self) -> None:
         self._closes.append("close")
+
+
+def _empty_ranked_parse_result() -> RankedAmountParseResult:
+    return RankedAmountParseResult(
+        parser_name="total_assets",
+        amount_field="total_assets_man_yen",
+        rows=(),
+        warnings=(),
+        raw_snippets={},
+    )

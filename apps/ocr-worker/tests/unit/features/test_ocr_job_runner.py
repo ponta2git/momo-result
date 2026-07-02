@@ -29,9 +29,9 @@ from momo_ocr.features.ocr_jobs.models import (
     PlayerAliasHint,
 )
 from momo_ocr.features.ocr_jobs.repository import InMemoryOcrJobRepository
-from momo_ocr.features.ocr_results.player_aliases import (
+from momo_ocr.features.player_identity.aliases import (
     PlayerAliasResolver,
-    _normalize_name_for_match,
+    normalize_name_for_match,
 )
 from momo_ocr.shared.errors import FailureCode, OcrError, OcrFailure
 from tests.support.ocr_jobs import (
@@ -449,7 +449,7 @@ def test_hints_are_merged_into_alias_resolver_passed_to_analyze() -> None:
     # The resolver normalizes the alias surface but expects the input text to
     # already be normalized (callers in ``player_aliases`` do that step). Mirror
     # that here so the substring match runs against comparable forms.
-    match = resolver.resolve(_normalize_name_for_match("PONTAプレイヤー"))
+    match = resolver.resolve(normalize_name_for_match("PONTAプレイヤー"))
     assert match is not None
     assert match.display_name == "PONTAプレイヤー"
     assert match.member_id == "ぽんた社長"

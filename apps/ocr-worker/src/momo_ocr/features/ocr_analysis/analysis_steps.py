@@ -5,6 +5,7 @@ from pathlib import Path
 
 from PIL import Image
 
+from momo_ocr.features.ocr_analysis.parser_registry import default_parser_registry
 from momo_ocr.features.ocr_domain.models import (
     OcrDraftPayload,
     OcrWarning,
@@ -12,14 +13,19 @@ from momo_ocr.features.ocr_domain.models import (
     WarningCode,
     WarningSeverity,
 )
-from momo_ocr.features.ocr_results.parsing import ParserRegistry, ScreenParseContext
-from momo_ocr.features.ocr_results.player_aliases import (
-    DEFAULT_ALIAS_RESOLVER,
-    PlayerAliasResolver,
+from momo_ocr.features.parser_core.context import (
+    ParseDiagnostics,
+    ParseInput,
+    ParsePolicy,
+    RecognitionServices,
+    ScreenParseContext,
 )
-from momo_ocr.features.ocr_results.registry import default_parser_registry
+from momo_ocr.features.parser_core.debug import DebugSink, debug_sink_from_dir
+from momo_ocr.features.parser_core.registry import ParserRegistry
+from momo_ocr.features.player_identity.aliases import DEFAULT_ALIAS_RESOLVER, PlayerAliasResolver
 from momo_ocr.features.player_order.detector import detect_player_order
 from momo_ocr.features.player_order.models import PlayerOrderDetection
+from momo_ocr.features.result_projection.draft_payload import project_parse_result
 from momo_ocr.features.screen_detection.classifier import classify_screen_type, detection_failure
 from momo_ocr.features.screen_detection.models import ScreenDetectionResult
 from momo_ocr.features.screen_detection.title_evidence import recognize_title_evidence
@@ -33,7 +39,7 @@ from momo_ocr.shared.errors import OcrError
 @dataclass(frozen=True)
 class AnalysisConfig:
     requested_type: ScreenType
-    debug_dir: Path | None
+    debug_sink: DebugSink
     include_raw_text: bool
     engine: TextRecognitionEngine
     registry: ParserRegistry
@@ -55,7 +61,7 @@ def build_analysis_config(  # noqa: PLR0913
 ) -> AnalysisConfig:
     return AnalysisConfig(
         requested_type=ScreenType(requested_screen_type),
-        debug_dir=debug_dir,
+        debug_sink=debug_sink_from_dir(debug_dir),
         include_raw_text=include_raw_text,
         engine=engine,
         registry=parser_registry if parser_registry is not None else default_parser_registry(),
@@ -83,7 +89,7 @@ def detect_screen(image: Image.Image, config: AnalysisConfig) -> ScreenDetection
         evidence = recognize_title_evidence(
             image,
             config.engine,
-            debug_dir=_child_debug_dir(config.debug_dir, "screen_detection"),
+            debug_sink=config.debug_sink.child("screen_detection"),
         )
         return classify_screen_type(config.requested_type, evidence)
     except OcrError as exc:
@@ -100,7 +106,7 @@ def detect_player_order_for_analysis(
     return detect_player_order(
         image,
         text_engine=config.engine,
-        debug_dir=_child_debug_dir(config.debug_dir, "player_order"),
+        debug_sink=config.debug_sink.child("player_order"),
     )
 
 
@@ -108,11 +114,10 @@ def analysis_warnings(
     detection: ScreenDetectionResult,
     player_order_detection: PlayerOrderDetection,
     *,
-    debug_dir: Path | None,
+    debug_sink: DebugSink,
 ) -> list[OcrWarning]:
     warnings = [*detection.warnings, *player_order_detection.warnings]
-    if debug_dir is not None:
-        debug_dir.mkdir(parents=True, exist_ok=True)
+    if debug_sink.enabled:
         warnings.append(_debug_output_warning())
     return warnings
 
@@ -128,28 +133,32 @@ def parse_detected_screen(
 ) -> OcrDraftPayload | None:
     if detection.detected_type is None or detection.profile_id is None:
         return None
-    parser = config.registry.get(detection.detected_type)
-    return parser.parse(
-        ScreenParseContext(
+    context = ScreenParseContext(
+        parse_input=ParseInput(
             image_path=image_path,
             requested_screen_type=config.requested_type,
             detected_screen_type=detection.detected_type,
             profile_id=detection.profile_id,
-            debug_dir=config.debug_dir,
-            include_raw_text=config.include_raw_text,
-            text_engine=config.engine,
-            player_order_detection=player_order_detection,
-            warnings=tuple(warnings),
-            layout_family_hint=config.layout_family_hint,
-            alias_resolver=config.alias_resolver,
-            fast_path_enabled=config.fast_path_enabled,
             image=image,
-        )
+        ),
+        services=RecognitionServices(
+            text_engine=config.engine,
+            alias_resolver=config.alias_resolver,
+        ),
+        policy=ParsePolicy(
+            include_raw_text=config.include_raw_text,
+            fast_path_enabled=config.fast_path_enabled,
+        ),
+        diagnostics=ParseDiagnostics(
+            debug_sink=config.debug_sink,
+            warnings=tuple(warnings),
+        ),
+        player_order_detection=player_order_detection,
+        layout_family_hint=config.layout_family_hint,
     )
-
-
-def _child_debug_dir(debug_dir: Path | None, child: str) -> Path | None:
-    return debug_dir / child if debug_dir is not None else None
+    parser = config.registry.get(detection.detected_type)
+    parse_result = parser.parse(context)
+    return project_parse_result(context, parse_result)
 
 
 def _debug_output_warning() -> OcrWarning:

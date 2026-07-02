@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-from pathlib import Path
 from typing import Any
 
 from PIL import Image
@@ -13,6 +11,7 @@ from momo_ocr.features.incident_log.profile import (
     IncidentLogProfile,
     IncidentRowProfile,
 )
+from momo_ocr.features.parser_core.debug import DebugSink
 
 
 def prepare_cell_debug(
@@ -20,15 +19,15 @@ def prepare_cell_debug(
     *,
     row_profile: IncidentRowProfile,
     player_index: int,
-    profile_debug_dir: Path | None,
+    profile_debug_sink: DebugSink,
     cell_debug_records: list[dict[str, Any]],
 ) -> dict[str, Any] | None:
-    if profile_debug_dir is None:
+    if not profile_debug_sink.enabled:
         return None
     suffix = f"{row_profile.incident_name}_player_{player_index + 1}"
     prepared_cell = prepare_count_cell_image(cell_image)
-    cell_image.save(profile_debug_dir / f"{suffix}_cell.png")
-    prepared_cell.save(profile_debug_dir / f"{suffix}_cell_prepared.png")
+    profile_debug_sink.save_image(f"{suffix}_cell.png", cell_image)
+    profile_debug_sink.save_image(f"{suffix}_cell_prepared.png", prepared_cell)
     cell_debug: dict[str, Any] = {
         "incident_name": row_profile.incident_name,
         "player_index": player_index,
@@ -41,13 +40,13 @@ def prepare_cell_debug(
 
 
 def write_cell_debug_summary(
-    profile_debug_dir: Path | None,
+    profile_debug_sink: DebugSink,
     *,
     profile: IncidentLogProfile,
     image_size: Size,
     cell_debug_records: list[dict[str, Any]],
 ) -> None:
-    if profile_debug_dir is None or not cell_debug_records:
+    if not profile_debug_sink.enabled or not cell_debug_records:
         return
     summary = {
         "profile_id": profile.id,
@@ -55,16 +54,15 @@ def write_cell_debug_summary(
         "incident_names": list(MVP_INCIDENT_NAMES),
         "cells": cell_debug_records,
     }
-    (profile_debug_dir / "cells.json").write_text(
-        json.dumps(summary, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    profile_debug_sink.write_json("cells.json", summary)
 
 
-def profile_debug_dir(
-    debug_dir: Path | None,
+def profile_debug_sink(
+    debug_sink: DebugSink,
     *,
     profile: IncidentLogProfile,
     isolate_debug: bool,
-) -> Path | None:
-    return debug_dir / profile.id if debug_dir is not None and isolate_debug else debug_dir
+) -> DebugSink:
+    if isolate_debug:
+        return debug_sink.child(profile.id)
+    return debug_sink

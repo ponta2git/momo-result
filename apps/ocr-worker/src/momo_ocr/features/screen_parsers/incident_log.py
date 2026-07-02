@@ -1,15 +1,13 @@
-"""Incident-log screen orchestration.
+"""Incident-log screen parser.
 
-This is the only module that knows about profile selection, payload
-assembly and the debug-summary side effects. Cell-level OCR lives in
-``cell_recognition`` and pure voting/plausibility helpers live in
-``voting``.
+This module selects the best incident-log layout profile and returns an
+internal parse result. Final draft payload construction lives in
+``result_projection``.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 from PIL import Image
@@ -17,17 +15,8 @@ from PIL import Image
 from momo_ocr.features.image_processing.geometry import Size, scale_profile_rect_to_image
 from momo_ocr.features.image_processing.roi import crop_roi
 from momo_ocr.features.incident_log.attempts import CountRecognitionResult, IncidentParseAttempt
-from momo_ocr.features.incident_log.cell_recognition import (
-    recognize_count_cell,
-)
+from momo_ocr.features.incident_log.cell_recognition import recognize_count_cell
 from momo_ocr.features.incident_log.models import IncidentLogRow
-from momo_ocr.features.incident_log.parser_debug import (
-    prepare_cell_debug,
-    write_cell_debug_summary,
-)
-from momo_ocr.features.incident_log.parser_debug import (
-    profile_debug_dir as resolve_profile_debug_dir,
-)
 from momo_ocr.features.incident_log.profile import (
     MVP_INCIDENT_NAMES,
     IncidentLogProfile,
@@ -36,15 +25,21 @@ from momo_ocr.features.incident_log.profile import (
 )
 from momo_ocr.features.incident_log.voting import plausibility_warnings
 from momo_ocr.features.ocr_domain.models import (
-    OcrDraftPayload,
     OcrField,
     OcrWarning,
-    PlayerResultDraft,
     ScreenType,
     WarningCode,
 )
-from momo_ocr.features.ocr_results.parsing import ScreenParseContext
-from momo_ocr.features.player_order.detector import apply_player_order_to_column_players
+from momo_ocr.features.parser_core.context import ScreenParseContext
+from momo_ocr.features.parser_core.debug import DebugSink
+from momo_ocr.features.result_projection.models import IncidentLogParseResult
+from momo_ocr.features.screen_parsers.incident_log_debug import (
+    prepare_cell_debug,
+    write_cell_debug_summary,
+)
+from momo_ocr.features.screen_parsers.incident_log_debug import (
+    profile_debug_sink as resolve_profile_debug_sink,
+)
 from momo_ocr.features.temp_images.validation import open_decoded_image
 
 PLAYER_COUNT = 4
@@ -54,26 +49,19 @@ PLAYER_COUNT = 4
 class IncidentLogParser:
     screen_type: ScreenType = ScreenType.INCIDENT_LOG
 
-    def parse(self, context: ScreenParseContext) -> OcrDraftPayload:
-        image = context.image
+    def parse(self, context: ScreenParseContext) -> IncidentLogParseResult:
+        image = context.parse_input.image
         owns_image = image is None
         if image is None:
-            image = open_decoded_image(context.image_path)
+            image = open_decoded_image(context.parse_input.image_path)
         try:
             image_size = Size(width=image.width, height=image.height)
-            debug_dir = (
-                context.debug_dir / "incident_log" if context.debug_dir is not None else None
-            )
-            if debug_dir is not None:
-                debug_dir.mkdir(parents=True, exist_ok=True)
-
             selected_attempt = _select_best_attempt(
                 context=context,
                 image=image,
                 image_size=image_size,
-                debug_dir=debug_dir,
             )
-            return _payload_from_attempt(context, selected_attempt)
+            return _parse_result_from_attempt(selected_attempt)
         finally:
             if owns_image:
                 image.close()
@@ -84,7 +72,7 @@ class _CellRecognitionContext:
     parse_context: ScreenParseContext
     image: Image.Image
     image_size: Size
-    profile_debug_dir: Path | None
+    profile_debug_sink: DebugSink
     cell_debug_records: list[dict[str, Any]]
 
 
@@ -93,10 +81,10 @@ def _select_best_attempt(
     context: ScreenParseContext,
     image: Image.Image,
     image_size: Size,
-    debug_dir: Path | None,
 ) -> IncidentParseAttempt:
     profiles = select_incident_log_profiles(context.layout_family_hint)
     attempts: list[IncidentParseAttempt] = []
+    debug_sink = _incident_debug_sink(context)
     for profile in profiles:
         attempts.append(
             _parse_profile(
@@ -104,13 +92,17 @@ def _select_best_attempt(
                 image=image,
                 image_size=image_size,
                 profile=profile,
-                debug_dir=debug_dir,
+                debug_sink=debug_sink,
                 isolate_debug=len(profiles) > 1,
             )
         )
-        if context.fast_path_enabled and attempts[-1].missing_count == 0:
+        if context.policy.fast_path_enabled and attempts[-1].missing_count == 0:
             break
     return min(attempts, key=lambda attempt: attempt.missing_count)
+
+
+def _incident_debug_sink(context: ScreenParseContext) -> DebugSink:
+    return context.diagnostics.debug_sink.child("incident_log")
 
 
 def _parse_profile(
@@ -119,14 +111,12 @@ def _parse_profile(
     image: Image.Image,
     image_size: Size,
     profile: IncidentLogProfile,
-    debug_dir: Path | None,
+    debug_sink: DebugSink,
     isolate_debug: bool,
 ) -> IncidentParseAttempt:
-    profile_debug_dir = resolve_profile_debug_dir(
-        debug_dir, profile=profile, isolate_debug=isolate_debug
+    profile_debug_sink = resolve_profile_debug_sink(
+        debug_sink, profile=profile, isolate_debug=isolate_debug
     )
-    if profile_debug_dir is not None:
-        profile_debug_dir.mkdir(parents=True, exist_ok=True)
     warnings: list[OcrWarning] = []
     raw_snippets: dict[str, str] = {}
     cell_debug_records: list[dict[str, Any]] = []
@@ -135,7 +125,7 @@ def _parse_profile(
         parse_context=context,
         image=image,
         image_size=image_size,
-        profile_debug_dir=profile_debug_dir,
+        profile_debug_sink=profile_debug_sink,
         cell_debug_records=cell_debug_records,
     )
 
@@ -149,7 +139,7 @@ def _parse_profile(
         )
 
     write_cell_debug_summary(
-        profile_debug_dir,
+        profile_debug_sink,
         profile=profile,
         image_size=image_size,
         cell_debug_records=cell_debug_records,
@@ -192,34 +182,20 @@ def _parse_profile_row(
         )
 
 
-def _payload_from_attempt(
-    context: ScreenParseContext,
+def _parse_result_from_attempt(
     selected_attempt: IncidentParseAttempt,
-) -> OcrDraftPayload:
+) -> IncidentLogParseResult:
     warnings = [
-        *context.warnings,
         *selected_attempt.warnings,
         *plausibility_warnings(selected_attempt.player_counts),
     ]
-    players = [PlayerResultDraft(incidents=counts) for counts in selected_attempt.player_counts]
-    players = apply_player_order_to_column_players(players, context.player_order_detection)
-    rows = _payload_rows(selected_attempt, warnings)
-    return OcrDraftPayload(
-        requested_screen_type=context.requested_screen_type,
-        detected_screen_type=context.detected_screen_type,
-        profile_id=context.profile_id,
-        players=players,
-        category_payload={
-            "status": "parsed",
-            "parser": "incident_log",
-            "layout_profile_id": selected_attempt.profile.id,
-            "incident_names": MVP_INCIDENT_NAMES,
-            "rows": rows,
-            "player_order": context.player_order_detection,
-            "include_raw_text": context.include_raw_text,
-        },
-        warnings=warnings,
-        raw_snippets=selected_attempt.raw_snippets if context.include_raw_text else None,
+    return IncidentLogParseResult(
+        layout_profile_id=selected_attempt.profile.id,
+        incident_names=MVP_INCIDENT_NAMES,
+        player_counts=tuple(selected_attempt.player_counts),
+        rows=tuple(_payload_rows(selected_attempt, warnings)),
+        warnings=tuple(warnings),
+        raw_snippets=selected_attempt.raw_snippets,
     )
 
 
@@ -264,16 +240,16 @@ def _recognize_profile_cell(
         cell_image,
         row_profile=row_profile,
         player_index=player_index,
-        profile_debug_dir=cell_context.profile_debug_dir,
+        profile_debug_sink=cell_context.profile_debug_sink,
         cell_debug_records=cell_context.cell_debug_records,
     )
     recognition = recognize_count_cell(
         cell_context.parse_context,
         cell_image,
         incident_name=row_profile.incident_name,
-        debug_dir=cell_context.profile_debug_dir,
+        debug_sink=cell_context.profile_debug_sink,
         debug_suffix=f"{row_profile.incident_name}_player_{player_index + 1}",
-        debug_sink=cell_debug,
+        debug_record=cell_debug,
     )
     if cell_debug is not None:
         cell_debug["final_count"] = recognition.count

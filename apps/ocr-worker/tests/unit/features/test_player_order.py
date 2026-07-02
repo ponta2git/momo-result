@@ -4,6 +4,7 @@ from PIL import Image, ImageDraw
 
 from momo_ocr.features.image_processing.geometry import Size, scale_profile_rect_to_image
 from momo_ocr.features.ocr_domain.models import OcrField, PlayerResultDraft
+from momo_ocr.features.player_order.color_detection import detect_dominant_player_color
 from momo_ocr.features.player_order.detector import detect_player_order
 from momo_ocr.features.player_order.models import PlayerColor, PlayerOrderDetection, PlayerOrderSlot
 from momo_ocr.features.player_order.name_recognition import recognize_slot_name
@@ -48,6 +49,40 @@ def test_detect_player_order_reads_four_color_slots_and_names() -> None:
     assert detection.confidence > 0.9
     assert detection.warnings == []
     assert engine.call_count == 8
+
+
+def test_detect_dominant_player_color_reads_solid_player_colors() -> None:
+    cases = [
+        ("#2878d0", PlayerColor.BLUE),
+        ("#d03030", PlayerColor.RED),
+        ("#d8a020", PlayerColor.YELLOW),
+        ("#60a020", PlayerColor.GREEN),
+    ]
+
+    for color, expected in cases:
+        detected, confidence = detect_dominant_player_color(Image.new("RGB", (20, 20), color))
+
+        assert detected is expected
+        assert confidence == 1.0
+
+
+def test_detect_dominant_player_color_ignores_unsaturated_pixels() -> None:
+    detected, confidence = detect_dominant_player_color(Image.new("RGB", (20, 20), "#808080"))
+
+    assert detected is None
+    assert confidence == 0.0
+
+
+def test_detect_dominant_player_color_reports_dominant_share() -> None:
+    image = Image.new("RGB", (10, 10), "#2878d0")
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((0, 0, 3, 9), fill="#d03030")
+    draw.rectangle((0, 0, 1, 9), fill="#808080")
+
+    detected, confidence = detect_dominant_player_color(image)
+
+    assert detected is PlayerColor.BLUE
+    assert confidence == 60 / 80
 
 
 def test_recognize_slot_name_accepts_high_score_raw_candidate() -> None:

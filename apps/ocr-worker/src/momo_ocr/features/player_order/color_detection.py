@@ -1,10 +1,6 @@
 from __future__ import annotations
 
-import colorsys
-from collections.abc import Iterable
-from typing import cast
-
-from PIL import Image
+from PIL import Image, ImageChops
 
 from momo_ocr.features.player_order.models import PlayerColor
 
@@ -25,24 +21,35 @@ COLOR_HUE_RANGES = (
     (PlayerColor.GREEN, ((GREEN_HUE_MIN, GREEN_HUE_MAX),)),
     (PlayerColor.BLUE, ((BLUE_HUE_MIN, BLUE_HUE_MAX),)),
 )
+_BYTE_MAX = 255
+_DEGREES_MAX = 360
+_SATURATION_THRESHOLD = round(MIN_SATURATION * _BYTE_MAX)
+_VALUE_THRESHOLD = round(MIN_VALUE * _BYTE_MAX)
+_SATURATION_MASK_LUT = tuple(
+    _BYTE_MAX if value >= _SATURATION_THRESHOLD else 0 for value in range(_BYTE_MAX + 1)
+)
+_VALUE_MASK_LUT = tuple(
+    _BYTE_MAX if value >= _VALUE_THRESHOLD else 0 for value in range(_BYTE_MAX + 1)
+)
 
 
 def detect_dominant_player_color(image: Image.Image) -> tuple[PlayerColor | None, float]:
-    counts = dict.fromkeys(PlayerColor, 0)
-    saturated_count = 0
-    rgb_image = image.convert("RGB")
-    pixels = cast("Iterable[tuple[int, int, int]]", rgb_image.get_flattened_data())
-    for red, green, blue in pixels:
-        hue, saturation, value = colorsys.rgb_to_hsv(red / 255, green / 255, blue / 255)
-        if saturation < MIN_SATURATION or value < MIN_VALUE:
-            continue
-        saturated_count += 1
-        color = classify_hue(hue * 360)
-        if color is not None:
-            counts[color] += 1
+    hue, saturation, value = image.convert("HSV").split()
+    saturated_mask = ImageChops.multiply(
+        saturation.point(_SATURATION_MASK_LUT, mode="L"),
+        value.point(_VALUE_MASK_LUT, mode="L"),
+    )
+    saturated_count = _white_pixel_count(saturated_mask)
 
     if saturated_count == 0:
         return None, 0.0
+
+    counts = {
+        color: _white_pixel_count(
+            ImageChops.multiply(saturated_mask, hue.point(mask_lut, mode="L"))
+        )
+        for color, mask_lut in _HUE_MASK_LUTS.items()
+    }
     detected_color, count = max(counts.items(), key=lambda item: item[1])
     return detected_color, count / saturated_count
 
@@ -52,3 +59,24 @@ def classify_hue(hue: float) -> PlayerColor | None:
         if any(start <= hue <= end for start, end in ranges):
             return color
     return None
+
+
+def _hue_byte_in_ranges(value: int, ranges: tuple[tuple[int, int], ...]) -> bool:
+    degrees = _hue_byte_to_degrees(value)
+    return any(start <= degrees <= end for start, end in ranges)
+
+
+def _hue_byte_to_degrees(value: int) -> float:
+    return value * _DEGREES_MAX / _BYTE_MAX
+
+
+def _white_pixel_count(mask: Image.Image) -> int:
+    return mask.histogram()[_BYTE_MAX]
+
+
+_HUE_MASK_LUTS = {
+    color: tuple(
+        _BYTE_MAX if _hue_byte_in_ranges(value, ranges) else 0 for value in range(_BYTE_MAX + 1)
+    )
+    for color, ranges in COLOR_HUE_RANGES
+}

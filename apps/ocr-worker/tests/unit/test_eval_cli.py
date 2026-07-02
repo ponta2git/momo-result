@@ -7,6 +7,8 @@ from typing import Protocol, cast
 
 import pytest
 
+from momo_ocr.features.ocr_analysis.report import AnalysisResult
+
 
 def test_eval_cli_closes_built_text_engine(
     tmp_path: Path,
@@ -41,8 +43,64 @@ def test_eval_cli_closes_built_text_engine(
     assert closes == ["close"]
 
 
+def test_evaluate_one_passes_filename_layout_family_hint(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    eval_runner = _import_eval_runner(monkeypatch)
+    sample_dir = tmp_path / "003_桃鉄2"
+    sample_dir.mkdir()
+    image_path = sample_dir / "桃鉄2_001_20260703_東日本_01総資産.png"
+    image_path.write_bytes(b"unused")
+    meta = eval_runner.parse_filename(image_path)
+    assert meta is not None
+    captured: dict[str, object] = {}
+
+    def analyze_image(**kwargs: object) -> AnalysisResult:
+        captured.update(kwargs)
+        return AnalysisResult(
+            input=None,
+            detection=None,
+            result=None,
+            warnings=[],
+            failure_code=None,
+            failure_message=None,
+            failure_retryable=False,
+            failure_user_action=None,
+            timings_ms={},
+        )
+
+    monkeypatch.setattr(eval_runner, "analyze_image", analyze_image)
+
+    eval_runner.evaluate_one(
+        meta=meta,
+        expected_players=None,
+        debug_dir=None,
+        repeat=1,
+        text_engine=_ClosableEngine([]),
+    )
+
+    assert captured["layout_family_hint"] == "momotetsu_2"
+
+
 class _EvalCliModule(Protocol):
     def main(self, argv: list[str] | None = None) -> int:
+        raise NotImplementedError
+
+
+class _EvalRunnerModule(Protocol):
+    def parse_filename(self, path: Path) -> object | None:
+        raise NotImplementedError
+
+    def evaluate_one(
+        self,
+        *,
+        meta: object,
+        expected_players: object | None,
+        debug_dir: Path | None,
+        repeat: int,
+        text_engine: object,
+    ) -> object:
         raise NotImplementedError
 
 
@@ -50,6 +108,12 @@ def _import_eval_cli(monkeypatch: pytest.MonkeyPatch) -> _EvalCliModule:
     ocr_worker_root = Path(__file__).resolve().parents[2]
     monkeypatch.syspath_prepend(str(ocr_worker_root / "scripts"))
     return cast("_EvalCliModule", importlib.import_module("eval_lib.cli"))
+
+
+def _import_eval_runner(monkeypatch: pytest.MonkeyPatch) -> _EvalRunnerModule:
+    ocr_worker_root = Path(__file__).resolve().parents[2]
+    monkeypatch.syspath_prepend(str(ocr_worker_root / "scripts"))
+    return cast("_EvalRunnerModule", importlib.import_module("eval_lib.runner"))
 
 
 @dataclass(frozen=True)

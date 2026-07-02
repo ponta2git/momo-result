@@ -20,6 +20,7 @@ from eval_lib.types import (
 )
 from momo_ocr.features.ocr_analysis.analyze_image import analyze_image
 from momo_ocr.features.ocr_analysis.report import AnalysisResult
+from momo_ocr.features.standalone_analysis.layout_family import detect_layout_family_from_filename
 from momo_ocr.features.text_recognition.engine import TextRecognitionEngine
 
 _FILENAME_RE = re.compile(
@@ -119,6 +120,7 @@ def evaluate_one(
             debug_dir=debug_dir,
             include_raw_text=False,
             text_engine=text_engine,
+            layout_family_hint=detect_layout_family_from_filename(meta.path),
         )
         durations.append((time.perf_counter() - started) * 1000.0)
 

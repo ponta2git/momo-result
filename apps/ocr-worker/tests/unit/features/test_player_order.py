@@ -6,6 +6,7 @@ from momo_ocr.features.image_processing.geometry import Size, scale_profile_rect
 from momo_ocr.features.ocr_domain.models import OcrField, PlayerResultDraft
 from momo_ocr.features.player_order.detector import detect_player_order
 from momo_ocr.features.player_order.models import PlayerColor, PlayerOrderDetection, PlayerOrderSlot
+from momo_ocr.features.player_order.name_recognition import recognize_slot_name
 from momo_ocr.features.player_order.profile import SLOT_PROFILES
 from momo_ocr.features.result_projection.player_order import (
     apply_player_order_to_column_players,
@@ -17,6 +18,7 @@ from momo_ocr.features.text_recognition.models import (
     RecognitionField,
     RecognizedText,
 )
+from tests.support.text_recognition import SequenceTextRecognitionEngine
 
 
 def test_detect_player_order_reads_four_color_slots_and_names() -> None:
@@ -45,6 +47,44 @@ def test_detect_player_order_reads_four_color_slots_and_names() -> None:
     ]
     assert detection.confidence > 0.9
     assert detection.warnings == []
+    assert engine.call_count == 8
+
+
+def test_recognize_slot_name_accepts_high_score_raw_candidate() -> None:
+    engine = SequenceTextRecognitionEngine(
+        [
+            ("ぽんた社長", 0.9),
+            ("ぽんた社長", 0.8),
+            ("fallback must not run", 1.0),
+        ]
+    )
+
+    name, confidence = recognize_slot_name(Image.new("RGB", (120, 32)), text_engine=engine)
+
+    assert name == "ぽんた社長"
+    assert confidence == 0.9
+    assert engine.call_count == 2
+
+
+def test_recognize_slot_name_uses_fallback_when_raw_score_is_low() -> None:
+    engine = SequenceTextRecognitionEngine(
+        [
+            ("ハーゆー社長", 0.4),
+            ("ハーゆー社長", 0.4),
+            ("いーゆー社長", 0.9),
+            ("いーゆー社長", 0.8),
+            ("いーゆー社長", 0.7),
+            ("いーゆー社長", 0.6),
+            ("いーゆー社長", 0.5),
+            ("いーゆー社長", 0.4),
+        ]
+    )
+
+    name, confidence = recognize_slot_name(Image.new("RGB", (120, 32)), text_engine=engine)
+
+    assert name == "いーゆー社長"
+    assert confidence == 0.9
+    assert engine.call_count == 8
 
 
 def test_apply_player_order_matches_ranked_player_names() -> None:
@@ -183,6 +223,10 @@ class SlotTextRecognitionEngine(TextRecognitionEngine):
         config: RecognitionConfig | None = None,
     ) -> RecognizedText:
         del image, field, psm, config
-        slot_index = min(self._calls // 8, len(self._texts) - 1)
+        slot_index = min(self._calls // 2, len(self._texts) - 1)
         self._calls += 1
         return RecognizedText(text=self._texts[slot_index], confidence=0.9)
+
+    @property
+    def call_count(self) -> int:
+        return self._calls

@@ -33,12 +33,8 @@ def test_revenue_parser_extracts_ranked_players_and_amounts(tmp_path: Path) -> N
     engine = SequenceTextRecognitionEngine(
         [
             "] 《 NO1 1社長 1億5800万円 | 6",
-            "寺w4.11 ドー | & 148580059 | NO1 1 社長 1億5800万円",
-            "ぽんた社長 9100万円",
             "ぽんた社長 9100万円",
             "に Ad おたか社長 5000万円 回",
-            "Ad おたか社長 5000万円",
-            "A いーゆー社長 0円",
             "A いーゆー社長 0円",
         ]
     )
@@ -71,6 +67,7 @@ def test_revenue_parser_extracts_ranked_players_and_amounts(tmp_path: Path) -> N
     assert payload.raw_snippets is not None
     assert payload.raw_snippets["rank_4"] == "A いーゆー社長 0円"
     assert (debug_dir / "revenue" / "rank_1_row_prepared.png").exists()
+    assert engine.call_count == 4
 
 
 def test_revenue_parser_warns_for_unreadable_row(tmp_path: Path) -> None:
@@ -105,12 +102,8 @@ def test_revenue_parser_warns_when_multiple_rows_resolve_to_same_member(
     engine = SequenceTextRecognitionEngine(
         [
             "PONTA社長 1億円",
-            "PONTA社長 1億円",
-            "PONTA別名社長 9000万円",
             "PONTA別名社長 9000万円",
             "OTAKA社長 8000万円",
-            "OTAKA社長 8000万円",
-            "いーゆー社長 7000万円",
             "いーゆー社長 7000万円",
         ]
     )

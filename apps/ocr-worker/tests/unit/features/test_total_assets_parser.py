@@ -46,10 +46,7 @@ def test_total_assets_parser_extracts_ranked_players_and_amounts(tmp_path: Path)
     engine = SequenceTextRecognitionEngine(
         [
             "| 《 NO1 1 社長 3億8480万円 | 7",
-            "| 《 NO1 1 社長 3億8480万円 | 7",
             "\\ Wee) | O® おーたか社長 3億6080万円 年",
-            "\\ Wee) | O® おーたか社長 3億6080万円 年",
-            "OW ぽんた社長 2億4460万円",
             "OW ぽんた社長 2億4460万円",
             "| Guy ei VQ ... 2190万円 |",
             "| Ad いーゆー社長 2190万円 |",
@@ -84,6 +81,7 @@ def test_total_assets_parser_extracts_ranked_players_and_amounts(tmp_path: Path)
     assert payload.raw_snippets is not None
     assert payload.raw_snippets["rank_1"] == "| 《 NO1 1 社長 3億8480万円 | 7"
     assert (debug_dir / "total_assets" / "rank_1_row_prepared.png").exists()
+    assert engine.call_count == 5
 
 
 def test_total_assets_parser_warns_for_unreadable_row(tmp_path: Path) -> None:

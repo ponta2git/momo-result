@@ -112,6 +112,8 @@ def _run_variant(
             snippets.append(text)
         if recognized.confidence is not None:
             confidences.append(recognized.confidence)
+        if _has_money_and_name(snippets):
+            return
 
 
 def _has_money_and_name(snippets: list[str]) -> bool:

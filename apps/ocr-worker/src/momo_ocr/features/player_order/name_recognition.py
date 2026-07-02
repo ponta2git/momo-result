@@ -16,6 +16,7 @@ from momo_ocr.features.text_recognition.postprocess import normalize_ocr_text
 NAME_OCR_PSMS = (6, 8)
 NAME_WHITE_THRESHOLDS = (150, 170, 190)
 NAME_VARIANT_SCALE = 2
+RAW_NAME_ACCEPT_SCORE = 0.8
 
 
 def recognize_slot_name(
@@ -25,16 +26,47 @@ def recognize_slot_name(
     debug_sink: DebugSink = NULL_DEBUG_SINK,
     play_order: int | None = None,
 ) -> tuple[str | None, float | None]:
+    variants = _slot_name_variants(image)
     candidates: list[tuple[str, float | None, float]] = []
-    for variant_label, variant_image in _slot_name_variants(image):
+
+    raw_label, raw_image = variants[0]
+    if raw_label != "raw":
+        msg = "The first slot-name OCR variant must be raw."
+        raise AssertionError(msg)
+    raw_candidates = _recognize_variant_candidates(raw_image, text_engine)
+    accepted_raw = _accepted_raw_candidate(raw_candidates)
+    if accepted_raw is not None:
+        name, confidence, _score = accepted_raw
+        return name, confidence
+    candidates.extend(raw_candidates)
+
+    for variant_label, variant_image in variants[1:]:
         if play_order is not None and variant_label != "raw":
             debug_sink.save_image(f"order_{play_order}_name_{variant_label}.png", variant_image)
         candidates.extend(_recognize_variant_candidates(variant_image, text_engine))
 
     if not candidates:
         return None, None
-    name, confidence, _score = max(candidates, key=lambda item: item[2])
+    name, confidence, _score = _best_name_candidate(candidates)
     return name, confidence
+
+
+def _accepted_raw_candidate(
+    candidates: list[tuple[str, float | None, float]],
+) -> tuple[str, float | None, float] | None:
+    named_candidates = [candidate for candidate in candidates if "社長" in candidate[0]]
+    if not named_candidates:
+        return None
+    best = _best_name_candidate(named_candidates)
+    if best[2] < RAW_NAME_ACCEPT_SCORE:
+        return None
+    return best
+
+
+def _best_name_candidate(
+    candidates: list[tuple[str, float | None, float]],
+) -> tuple[str, float | None, float]:
+    return max(candidates, key=lambda item: item[2])
 
 
 def _recognize_variant_candidates(

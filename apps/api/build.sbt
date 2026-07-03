@@ -171,6 +171,7 @@ lazy val root = (project in file("."))
     },
     dependencyOverrides ++= {
       val nettyVersion = "4.2.15.Final"
+      val jacksonVersion = "3.2.0"
 
       Seq(
         "io.netty" % "netty-buffer" % nettyVersion,
@@ -183,7 +184,8 @@ lazy val root = (project in file("."))
         "io.netty" % "netty-transport" % nettyVersion,
         "io.netty" % "netty-transport-native-unix-common" % nettyVersion,
         "org.postgresql" % "postgresql" % "42.7.11",
-        "tools.jackson.core" % "jackson-core" % "3.2.0",
+        "tools.jackson.core" % "jackson-core" % jacksonVersion,
+        "tools.jackson.core" % "jackson-databind" % jacksonVersion,
       )
     },
     apiOpenApi := {

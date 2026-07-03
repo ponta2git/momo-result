@@ -1,7 +1,8 @@
 package momo.api.endpoints
 
 import sttp.tapir.json.circe.*
-import sttp.tapir.{header, statusCode, Endpoint, EndpointInput, EndpointOutput}
+import sttp.tapir.model.ServerRequest
+import sttp.tapir.{extractFromRequest, header, statusCode, Endpoint, EndpointInput, EndpointOutput}
 
 import momo.api.auth.AuthHeaderNames
 import momo.api.endpoints.ProblemDetails.ProblemResponse
@@ -22,14 +23,17 @@ object CommonEndpoint:
   val errorOut: EndpointOutput[ProblemResponse] = statusCode.and(jsonBody[ProblemDetails])
 
   /**
-   * The session-derived account id header. In Prod, middleware injects it after validating the
-   * session cookie; in Dev/Test, local tooling may supply it directly.
+   * Dev/Test account shortcut header. Production ignores externally supplied account ids and
+   * authenticates the session cookie through the server-side request context.
    */
   val accountHeader: EndpointInput[Option[String]] =
     header[Option[String]](AuthHeaderNames.AccountId)
 
   /** CSRF token sent on every state-changing request alongside the session cookie. */
   val csrfHeader: EndpointInput[Option[String]] = header[Option[String]](AuthHeaderNames.CsrfToken)
+
+  /** Server-side request context used by auth policies; it is not part of the public wire schema. */
+  val serverRequest: EndpointInput[ServerRequest] = extractFromRequest(identity[ServerRequest])
 
   /** Correlation id validated or minted by [[momo.api.http.RequestIdMiddleware]]. */
   val requestIdHeader: EndpointInput[Option[String]] =

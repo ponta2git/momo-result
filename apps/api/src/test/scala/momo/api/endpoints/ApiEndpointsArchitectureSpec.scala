@@ -15,10 +15,11 @@ final class ApiEndpointsArchitectureSpec extends FunSuite:
   private val ocrWorkerJobMessage = Paths
     .get("src/main/scala/momo/api/contracts/ocrworker/OcrWorkerJobMessage.scala")
   private val authModule = Paths.get("src/main/scala/momo/api/http/modules/AuthModule.scala")
+  private val authPolicy = httpDir.resolve("AuthPolicy.scala")
   private val commonEndpoint = endpointDir.resolve("CommonEndpoint.scala")
   private val csrfMiddleware = httpDir.resolve("CsrfMiddleware.scala")
   private val maxBodySizeMiddleware = httpDir.resolve("MaxBodySizeMiddleware.scala")
-  private val productionSessionMiddleware = httpDir.resolve("ProductionSessionMiddleware.scala")
+  private val healthModule = httpModulesDir.resolve("HealthModule.scala")
   private val requestIdMiddleware = httpDir.resolve("RequestIdMiddleware.scala")
   private val httpOperation = Paths.get("src/main/scala/momo/api/http/HttpOperation.scala")
 
@@ -102,21 +103,28 @@ final class ApiEndpointsArchitectureSpec extends FunSuite:
     val healthEndpointText = read(endpointDir.resolve("HealthEndpoints.scala"))
     val uploadEndpointText = read(endpointDir.resolve("UploadEndpoints.scala"))
     val maxBodyText = read(maxBodySizeMiddleware)
-    val sessionText = read(productionSessionMiddleware)
+    val healthModuleText = read(healthModule)
 
     assert(healthEndpointText.contains("HealthPaths.Health"))
     assert(healthEndpointText.contains("HealthPaths.Details"))
     assert(uploadEndpointText.contains("UploadPaths.Api"))
     assert(uploadEndpointText.contains("UploadPaths.Uploads"))
     assert(uploadEndpointText.contains("UploadPaths.Images"))
-    assert(sessionText.contains("HealthPaths.HealthPath"))
-    assert(sessionText.contains("HealthPaths.DetailsPath"))
+    assert(healthModuleText.contains("HealthPaths.Health"))
+    assert(healthModuleText.contains("HealthPaths.Details"))
     assert(maxBodyText.contains("UploadPaths.ImageUploadPath"))
     assert(!healthEndpointText.contains(""".in("healthz")"""))
     assert(!healthEndpointText.contains(""""healthz" / "details""""))
     assert(!uploadEndpointText.contains(""".in("api" / "uploads" / "images")"""))
-    assert(!sessionText.contains("\"/healthz\""))
+    assert(!healthModuleText.contains("\"/healthz\""))
     assert(!maxBodyText.contains("\"/api/uploads/images\""))
+
+  test("production auth resolves sessions from server requests instead of middleware-injected ids"):
+    val text = read(authPolicy)
+
+    assert(text.contains("case AppEnv.Prod => new ProductionAuthPolicy"))
+    assert(text.contains("sessionCookie(config, context.request)"))
+    assert(!text.contains("ProductionSessionMiddleware"))
 
   test("HTTP modules use shared operation labels for cross-cutting scopes"):
     val violations = scalaFiles(httpModulesDir).flatMap { path =>

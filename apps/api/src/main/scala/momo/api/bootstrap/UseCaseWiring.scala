@@ -71,11 +71,11 @@ private[bootstrap] object UseCaseWiring:
   private[bootstrap] object RuntimeAuthServices:
     def from[F[_]: Sync: SecureRandom](
         sessions: AppSessionsRepository[F],
-        accounts: LoginAccountsRepository[F],
+        sessionAccounts: SessionAccountLookup[F],
         config: AuthConfig,
         clock: RuntimeClock[F],
     ): RuntimeAuthServices[F] = RuntimeAuthServices(
-      sessionService = SessionService[F](sessions, accounts, config, clock.now),
+      sessionService = SessionService[F](sessions, config, clock.now, sessionAccounts),
       csrfTokenService = CsrfTokenService(),
       oauthStateCodec = OAuthStateCodec[F](config, clock.now),
     )
@@ -112,6 +112,7 @@ private[bootstrap] object UseCaseWiring:
       seriesComparison: SeriesComparisonReadModel[F],
       matchConfirmation: MatchConfirmationRepository[F],
       appSessions: AppSessionsRepository[F],
+      sessionAccounts: SessionAccountLookup[F],
       members: MembersRepository[F],
       loginAccounts: LoginAccountsRepository[F],
       loginAccountAdministration: LoginAccountAdministrationRepository[F],
@@ -145,7 +146,7 @@ private[bootstrap] object UseCaseWiring:
     val authServices =
       RuntimeAuthServices.from[F](
         repositories.appSessions,
-        repositories.loginAccounts,
+        repositories.sessionAccounts,
         config.auth,
         clock,
       )

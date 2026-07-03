@@ -3,6 +3,7 @@ package momo.api.http
 import cats.effect.Async
 import cats.syntax.all.*
 import org.slf4j.LoggerFactory
+import sttp.tapir.model.ServerRequest
 
 import momo.api.auth.AuthenticatedAccount
 import momo.api.endpoints.ProblemDetails
@@ -13,33 +14,41 @@ private[http] final class EndpointSecurity[F[_]: Async](
     masterManagementPolicy: MasterManagementPolicy,
     incidentLogger: AppError => F[Unit],
 ):
-  def authorizeRead[A](accountHeader: Option[String])(
+  def authorizeRead[A](accountHeader: Option[String], request: ServerRequest)(
       authorized: AuthenticatedAccount => F[Either[ProblemDetails.ProblemResponse, A]]
-  ): F[Either[ProblemDetails.ProblemResponse, A]] = policy.authenticate(accountHeader).flatMap {
-    case Left(error) => Async[F].pure(Left(error))
-    case Right(member) => authorized(member)
-  }
-
-  def authorizeMutation[A](accountHeader: Option[String], csrfToken: Option[String])(
-      authorized: AuthenticatedAccount => F[Either[ProblemDetails.ProblemResponse, A]]
-  ): F[Either[ProblemDetails.ProblemResponse, A]] = authorizeRead(accountHeader) { member =>
-    policy.verifyCsrf(csrfToken).flatMap {
+  ): F[Either[ProblemDetails.ProblemResponse, A]] =
+    policy.authenticate(AuthRequestContext(accountHeader, None, request)).flatMap {
       case Left(error) => Async[F].pure(Left(error))
-      case Right(_) => authorized(member)
+      case Right(member) => authorized(member)
     }
-  }
 
-  def authorizeAdminMutation[A](accountHeader: Option[String], csrfToken: Option[String])(
+  def authorizeMutation[A](
+      accountHeader: Option[String],
+      csrfToken: Option[String],
+      request: ServerRequest,
+  )(
       authorized: AuthenticatedAccount => F[Either[ProblemDetails.ProblemResponse, A]]
-  ): F[Either[ProblemDetails.ProblemResponse, A]] = authorizeMutation(accountHeader, csrfToken) {
-    account =>
+  ): F[Either[ProblemDetails.ProblemResponse, A]] =
+    policy.authenticate(AuthRequestContext(accountHeader, csrfToken, request)).flatMap {
+      case Left(error) => Async[F].pure(Left(error))
+      case Right(member) => authorized(member)
+    }
+
+  def authorizeAdminMutation[A](
+      accountHeader: Option[String],
+      csrfToken: Option[String],
+      request: ServerRequest,
+  )(
+      authorized: AuthenticatedAccount => F[Either[ProblemDetails.ProblemResponse, A]]
+  ): F[Either[ProblemDetails.ProblemResponse, A]] =
+    authorizeMutation(accountHeader, csrfToken, request) { account =>
       if account.isAdmin then authorized(account)
       else Async[F].pure(Left(toProblem(AppError.Forbidden("Administrator access is required."))))
-  }
+    }
 
-  def authorizeAdminRead[A](accountHeader: Option[String])(
+  def authorizeAdminRead[A](accountHeader: Option[String], request: ServerRequest)(
       authorized: AuthenticatedAccount => F[Either[ProblemDetails.ProblemResponse, A]]
-  ): F[Either[ProblemDetails.ProblemResponse, A]] = authorizeRead(accountHeader) { account =>
+  ): F[Either[ProblemDetails.ProblemResponse, A]] = authorizeRead(accountHeader, request) { account =>
     if account.isAdmin then authorized(account)
     else Async[F].pure(Left(toProblem(AppError.Forbidden("Administrator access is required."))))
   }
@@ -47,14 +56,15 @@ private[http] final class EndpointSecurity[F[_]: Async](
   def authorizeMasterManagementMutation[A](
       accountHeader: Option[String],
       csrfToken: Option[String],
+      request: ServerRequest,
   )(
       authorized: AuthenticatedAccount => F[Either[ProblemDetails.ProblemResponse, A]]
-  ): F[Either[ProblemDetails.ProblemResponse, A]] = authorizeMutation(accountHeader, csrfToken) {
-    account =>
+  ): F[Either[ProblemDetails.ProblemResponse, A]] =
+    authorizeMutation(accountHeader, csrfToken, request) { account =>
       masterManagementPolicy.requireManage(account) match
         case Right(_) => authorized(account)
         case Left(error) => Async[F].pure(Left(toProblem(error)))
-  }
+    }
 
   def toProblem(error: AppError): ProblemDetails.ProblemResponse = ProblemDetails.from(error)
 

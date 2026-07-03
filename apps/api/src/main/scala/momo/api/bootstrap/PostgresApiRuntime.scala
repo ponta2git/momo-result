@@ -43,6 +43,7 @@ private[bootstrap] object PostgresApiRuntime:
     val matchConfirmation: MatchConfirmationRepository[F] =
       PostgresMatchConfirmationRepository[F](transactor)
     val appSessions: AppSessionsRepository[F] = PostgresAppSessionsRepository[F](transactor)
+    val sessionAccounts: SessionAccountLookup[F] = PostgresSessionAccountLookup[F](transactor)
     val members: MembersRepository[F] = PostgresMembersRepository[F](transactor)
     val loginAccounts: LoginAccountsRepository[F] =
       PostgresLoginAccountsRepository[F](transactor)
@@ -109,6 +110,7 @@ private[bootstrap] object PostgresApiRuntime:
             seriesComparison = seriesComparison,
             matchConfirmation = matchConfirmation,
             appSessions = appSessions,
+            sessionAccounts = sessionAccounts,
             members = members,
             loginAccounts = loginAccounts,
             loginAccountAdministration = loginAccountAdministration,

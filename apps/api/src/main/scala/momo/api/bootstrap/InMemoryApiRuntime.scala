@@ -12,7 +12,11 @@ import momo.api.auth.{DiscordOAuthClient, MemberRoster}
 import momo.api.config.AppConfig
 import momo.api.domain.{LoginAccount, Member}
 import momo.api.ports.queue.OcrJobQueuePublisher
-import momo.api.repositories.{ImageReferenceRepository, OcrJobMaintenanceRepository}
+import momo.api.repositories.{
+  ImageReferenceRepository,
+  OcrJobMaintenanceRepository,
+  SessionAccountLookup
+}
 import momo.api.usecases.ocr.{OcrAdmissionGuard, OcrJobQueueSubmitter}
 
 private[bootstrap] object InMemoryApiRuntime:
@@ -117,6 +121,7 @@ private[bootstrap] object InMemoryApiRuntime:
             updatedAt = java.time.Instant.EPOCH,
           )
         })
+      sessionAccounts = SessionAccountLookup.fromRepositories[F](appSessions, loginAccounts)
       loginAccountAdministration =
         InMemoryLoginAccountAdministrationRepository[F](loginAccounts, appSessions)
       mapMasters <- InMemoryMapMastersRepository.createWithDeleteGuard[F](mapMasterId =>
@@ -172,6 +177,7 @@ private[bootstrap] object InMemoryApiRuntime:
         seriesComparison = seriesComparison,
         matchConfirmation = matchConfirmation,
         appSessions = appSessions,
+        sessionAccounts = sessionAccounts,
         members = members,
         loginAccounts = loginAccounts,
         loginAccountAdministration = loginAccountAdministration,

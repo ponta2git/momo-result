@@ -34,11 +34,6 @@ final class EndpointSecuritySpec extends MomoCatsEffectSuite:
 
   private object NoopAuthPolicy extends AuthPolicy[IO]:
     override def authenticate(
-        accountHeader: Option[String]
+        context: AuthRequestContext
     ): IO[Either[ProblemDetails.ProblemResponse, AuthenticatedAccount]] = IO
-      .pure(Left(ProblemDetails.from(AppError.Unauthorized())))
-
-    override def verifyCsrf(
-        csrfToken: Option[String]
-    ): IO[Either[ProblemDetails.ProblemResponse, Unit]] = IO
       .pure(Left(ProblemDetails.from(AppError.Unauthorized())))

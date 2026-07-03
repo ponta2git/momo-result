@@ -6,7 +6,7 @@ import cats.effect.IO
 import cats.syntax.all.*
 import doobie.implicits.*
 
-import momo.api.adapters.postgres.PostgresAppSessionsRepository
+import momo.api.adapters.postgres.{PostgresAppSessionsRepository, PostgresSessionAccountLookup}
 import momo.api.auth.SessionTokenHash
 import momo.api.domain.ids.{AccountId, MemberId}
 import momo.api.repositories.AppSession
@@ -18,6 +18,7 @@ final class PostgresAppSessionsRepositorySpec extends IntegrationSuite:
   private val memberId = MemberId.unsafeFromString("member_ponta")
 
   private def repo = new PostgresAppSessionsRepository[IO](transactor)
+  private def sessionAccounts = new PostgresSessionAccountLookup[IO](transactor)
 
   private def buildSession(
       rawSessionToken: String,
@@ -70,6 +71,18 @@ final class PostgresAppSessionsRepositorySpec extends IntegrationSuite:
       assertEquals(got.createdAt, session.createdAt)
       assertEquals(got.lastSeenAt, renewedAt)
       assertEquals(got.expiresAt, renewedExpiresAt)
+
+  test("session account lookup joins session and enabled login account in one read"):
+    for
+      session <- buildSession("joined-session-token", "joined-csrf-token", now.plusSeconds(3600))
+      _ <- repo.upsert(session)
+      found <- sessionAccounts.find(session.idHash)
+    yield
+      val got = found.getOrElse(fail("session account not found"))
+      assertEquals(got.session, session)
+      assertEquals(got.account.id, accountId)
+      assert(got.account.loginEnabled)
+      assertEquals(got.account.playerMemberId, Some(memberId))
 
   test("delete, deleteByAccount, and deleteExpired remove sessions by hashed keys"):
     val program =

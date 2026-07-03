@@ -10,7 +10,12 @@ import cats.syntax.all.*
 import momo.api.config.AuthConfig
 import momo.api.domain.LoginAccount
 import momo.api.errors.AppError
-import momo.api.repositories.{AppSession, AppSessionsRepository, LoginAccountsRepository}
+import momo.api.repositories.{
+  AppSession,
+  AppSessionsRepository,
+  LoginAccountsRepository,
+  SessionAccountLookup
+}
 
 final case class CreatedSession(cookieValue: String)
 
@@ -22,10 +27,17 @@ final case class AuthenticatedSession(
 
 final class SessionService[F[_]: Sync: SecureRandom](
     sessions: AppSessionsRepository[F],
-    accounts: LoginAccountsRepository[F],
     config: AuthConfig,
     now: F[Instant],
+    sessionAccounts: SessionAccountLookup[F],
 ):
+  def this(
+      sessions: AppSessionsRepository[F],
+      accounts: LoginAccountsRepository[F],
+      config: AuthConfig,
+      now: F[Instant],
+  ) = this(sessions, config, now, SessionAccountLookup.fromRepositories(sessions, accounts))
+
   def create(account: LoginAccount): F[CreatedSession] =
     for
       current <- now
@@ -54,10 +66,11 @@ final class SessionService[F[_]: Sync: SecureRandom](
       current <- EitherT.liftF(now)
       idHash <- EitherT.liftF(SessionTokenHash.sha256[F](tokens.sessionToken))
       csrfMatches <- EitherT.liftF(SessionTokenHash.matches[F](tokens.csrfToken))
-      session <- EitherT.fromOptionF(sessions.find(idHash), AppError.Unauthorized())
+      sessionAccount <- EitherT.fromOptionF(sessionAccounts.find(idHash), AppError.Unauthorized())
+      session = sessionAccount.session
       _ <- EitherT(rejectExpired(session, current))
       _ <- EitherT.cond[F](csrfMatches(session.csrfSecretHash), (), AppError.Unauthorized())
-      account <- EitherT(loadEnabledAccount(session))
+      account <- EitherT(loadEnabledAccount(session, sessionAccount.account.some))
       authenticated <-
         EitherT.liftF(completeAuthentication(session, account, tokens.csrfToken, current))
     yield authenticated).value
@@ -68,14 +81,15 @@ final class SessionService[F[_]: Sync: SecureRandom](
     if session.expiresAt.isAfter(current) then ().asRight[AppError].pure[F]
     else sessions.delete(session.idHash).as(AppError.Unauthorized("Session has expired.").asLeft)
 
-  private def loadEnabledAccount(session: AppSession): F[Either[AppError, LoginAccount]] =
-    accounts.find(session.accountId).flatMap {
-      case None => sessions.delete(session.idHash).as(AppError.Unauthorized().asLeft)
-      case Some(account) if !account.loginEnabled =>
-        sessions.delete(session.idHash)
-          .as(AppError.Forbidden("This account is not allowed to log in.").asLeft)
-      case Some(account) => account.asRight[AppError].pure[F]
-    }
+  private def loadEnabledAccount(
+      session: AppSession,
+      loadedAccount: Option[LoginAccount],
+  ): F[Either[AppError, LoginAccount]] = loadedAccount match
+    case None => sessions.delete(session.idHash).as(AppError.Unauthorized().asLeft)
+    case Some(account) if !account.loginEnabled =>
+      sessions.delete(session.idHash)
+        .as(AppError.Forbidden("This account is not allowed to log in.").asLeft)
+    case Some(account) => account.asRight[AppError].pure[F]
 
   private def completeAuthentication(
       session: AppSession,

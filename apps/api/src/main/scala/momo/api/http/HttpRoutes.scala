@@ -3,7 +3,7 @@ package momo.api.http
 import cats.effect.Async
 import cats.syntax.all.*
 import org.http4s.server.Router
-import org.http4s.{HttpApp as Http4sApp, HttpRoutes as Http4sRoutes}
+import org.http4s.HttpApp as Http4sApp
 import sttp.tapir.server.ServerEndpoint
 import sttp.tapir.server.http4s.Http4sServerInterpreter
 
@@ -139,14 +139,21 @@ object HttpRoutes:
 
   def routes[F[_]: Async](deps: Dependencies[F]): Http4sApp[F] =
     val security =
-      EndpointSecurity[F](AuthPolicy[F](deps.config, deps.auth.roster, deps.auth.loginAccounts))
+      EndpointSecurity[F](AuthPolicy[F](
+        deps.config,
+        deps.auth.roster,
+        deps.auth.loginAccounts,
+        deps.auth.sessionService,
+        deps.auth.csrfTokenService,
+      ))
     val idempotencyGuard = IdempotencyReplay.Guard(
       repository = deps.idempotency,
       mutationRateLimiter = deps.rateLimiters.mutation,
       activeKeyLimitPerAccount = deps.config.resourceLimits.idempotencyActiveKeyLimitPerAccount,
     )
 
-    val endpoints: List[ServerEndpoint[Any, F]] = HealthModule.routes[F](deps.healthDetails) :::
+    val endpoints: List[ServerEndpoint[Any, F]] = HealthModule
+      .routes[F](deps.config, deps.healthDetails, security) :::
       UploadModule.routes[F](deps.upload.uploadImage, deps.rateLimiters.upload, security) :::
       OcrModule.routes[F](
         deps.ocr.createOcrJob,
@@ -232,15 +239,6 @@ object HttpRoutes:
     val interpreter = Http4sServerInterpreter[F]()
     val tapirRoutes = interpreter.toRoutes(endpoints)
 
-    val protectedRoutes =
-      ProductionSessionMiddleware[F](
-        deps.config,
-        deps.auth.sessionService,
-        deps.auth.csrfTokenService,
-      )(
-        tapirRoutes.orNotFound
-      )
-
     val authRoutes = interpreter.toRoutes(AuthModule.routes[F](
       config = deps.config,
       oauth = deps.auth.oauthClient,
@@ -258,7 +256,7 @@ object HttpRoutes:
         deps.config.resourceLimits.requestMaxBytes,
         deps.config.resourceLimits.uploadRequestMaxBytes,
       )(
-        Router("/" -> (authRoutes <+> Http4sRoutes.of[F](request => protectedRoutes.run(request))))
+        Router("/" -> (authRoutes <+> tapirRoutes))
           .orNotFound
       )
     )))

@@ -155,7 +155,7 @@ ENV IMAGE_TMP_DIR=/tmp/momo-result/uploads
 ENV MOMO_LOG_FORMAT=json
 ENV MOMO_LOG_LEVEL=INFO
 ENV DB_POOL_SIZE=2
-ENV JAVA_OPTS="-XX:MaxRAMPercentage=70 -Djava.security.egd=file:/dev/./urandom"
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=60 -Djava.security.egd=file:/dev/./urandom"
 ENV JAVA_HOME=/opt/java/openjdk
 ENV LD_LIBRARY_PATH="/opt/tesseract/lib"
 ENV MOMO_NGINX_OUTPUT_PATH=/tmp/momo-result/nginx/nginx.conf

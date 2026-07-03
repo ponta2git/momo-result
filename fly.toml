@@ -36,7 +36,7 @@ kill_timeout = 90
   OCR_DEAD_LETTER_BACKLOG_LIMIT = "24"
   OCR_REDIS_BLOCK_SECONDS = "30"
   STALE_OCR_JOB_REAPER_INTERVAL_SECONDS = "1800"
-  JAVA_OPTS = "-XX:MaxRAMPercentage=70 -Djava.security.egd=file:/dev/./urandom"
+  JAVA_OPTS = "-XX:MaxRAMPercentage=60 -Djava.security.egd=file:/dev/./urandom"
   TESSDATA_PREFIX = "/usr/share/tesseract-ocr/5/tessdata"
 
 [http_service]
@@ -49,8 +49,8 @@ kill_timeout = 90
 
   [http_service.concurrency]
     type = "requests"
-    soft_limit = 16
-    hard_limit = 32
+    soft_limit = 6
+    hard_limit = 12
 
   [[http_service.checks]]
     grace_period = "30s"

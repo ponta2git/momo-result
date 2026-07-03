@@ -251,7 +251,9 @@ object HttpRoutes:
       providerBackoff = deps.auth.oauthProviderBackoff,
     ))
 
-    RequestIdMiddleware[F](SecurityHeadersMiddleware[F](deps.config.appEnv)(HttpErrorMiddleware[F](
+    RequestIdMiddleware[F](RequestDurationLoggingMiddleware[F](SecurityHeadersMiddleware[F](
+      deps.config.appEnv
+    )(HttpErrorMiddleware[F](
       MaxBodySizeMiddleware.requestAndUpload[F](
         deps.config.resourceLimits.requestMaxBytes,
         deps.config.resourceLimits.uploadRequestMaxBytes,
@@ -259,5 +261,5 @@ object HttpRoutes:
         Router("/" -> (authRoutes <+> tapirRoutes))
           .orNotFound
       )
-    )))
+    ))))
 end HttpRoutes

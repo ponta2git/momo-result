@@ -170,6 +170,35 @@ final class PostgresMatchListReadModelSpec extends IntegrationSuite:
       assertEquals(items.totalItems, 3)
       assertEquals(items.totalPages, 2)
 
+  test("keeps total count on later and empty pages"):
+    for
+      _ <- seedPrereqs
+      _ <- matches.create(sampleMatch("match_middle", 1, Instant.parse("2026-04-30T02:00:00Z")))
+      _ <- drafts.create(sampleDraft(
+        "draft_latest",
+        MatchDraftStatus.DraftReady,
+        Instant.parse("2026-04-30T03:00:00Z"),
+      ))
+      _ <- drafts.create(sampleDraft(
+        "draft_old_played",
+        MatchDraftStatus.NeedsReview,
+        Instant.parse("2026-04-30T04:00:00Z"),
+        playedAt = Some(Instant.parse("2026-04-30T01:00:00Z")),
+      ))
+      secondPage <- matchList.list(
+        MatchListReadModel.Filter(page = PageRequest(page = 2, pageSize = 2))
+      )
+      emptyPage <- matchList.list(
+        MatchListReadModel.Filter(page = PageRequest(page = 3, pageSize = 2))
+      )
+    yield
+      assertEquals(secondPage.items.map(_.id), List("match_middle"))
+      assertEquals(secondPage.totalItems, 3)
+      assertEquals(secondPage.totalPages, 2)
+      assertEquals(emptyPage.items.map(_.id), Nil)
+      assertEquals(emptyPage.totalItems, 3)
+      assertEquals(emptyPage.totalPages, 2)
+
   test("summarizes active draft work independently of pagination"):
     for
       _ <- seedPrereqs

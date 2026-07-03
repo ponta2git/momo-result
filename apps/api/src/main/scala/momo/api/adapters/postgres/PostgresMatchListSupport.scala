@@ -41,6 +41,42 @@ private[postgres] trait PostgresMatchListSupport:
       heldAtSort: Instant,
   )
 
+  protected final case class PagedRow(
+      kind: String,
+      id: String,
+      matchId: Option[MatchId],
+      matchDraftId: Option[MatchDraftId],
+      status: String,
+      heldEventId: Option[HeldEventId],
+      matchNoInEvent: Option[MatchNoInEvent],
+      gameTitleId: Option[GameTitleId],
+      seasonMasterId: Option[SeasonMasterId],
+      mapMasterId: Option[MapMasterId],
+      ownerMemberId: Option[MemberId],
+      playedAt: Option[Instant],
+      createdAt: Instant,
+      updatedAt: Instant,
+      heldAtSort: Instant,
+      totalCount: Int,
+  ):
+    def row: Row = Row(
+      kind = kind,
+      id = id,
+      matchId = matchId,
+      matchDraftId = matchDraftId,
+      status = status,
+      heldEventId = heldEventId,
+      matchNoInEvent = matchNoInEvent,
+      gameTitleId = gameTitleId,
+      seasonMasterId = seasonMasterId,
+      mapMasterId = mapMasterId,
+      ownerMemberId = ownerMemberId,
+      playedAt = playedAt,
+      createdAt = createdAt,
+      updatedAt = updatedAt,
+      heldAtSort = heldAtSort,
+    )
+
   protected final case class RankRow(
       matchId: MatchId,
       memberId: MemberId,

@@ -73,12 +73,17 @@ object PostgresMatchList extends PostgresMatchListSupport:
         case None => PagedResult(List.empty[MatchListItem], filter.page, 0).pure[ConnectionIO]
         case Some(selectQuery) =>
           val pageLimit = fr"LIMIT ${filter.page.pageSize} OFFSET ${filter.page.offset}"
-          val ordered = fr"SELECT * FROM (" ++ selectQuery ++ fr""") AS combined
+          val countQuery =
+            fr"SELECT COUNT(*)::int FROM (" ++ selectQuery ++ fr") AS count_source"
+          val ordered = fr"SELECT combined.*, COUNT(*) OVER() AS total_count FROM (" ++
+            selectQuery ++ fr""") AS combined
                 """ ++ orderBy(filter.sort) ++ pageLimit
           for
-            total <- (fr"SELECT COUNT(*)::int FROM (" ++ selectQuery ++ fr") AS count_source")
-              .query[Int].unique
-            rows <- ordered.query[Row].to[List]
+            pagedRows <- ordered.query[PagedRow].to[List]
+            total <- pagedRows.headOption.fold(countQuery.query[Int].unique)(row =>
+              row.totalCount.pure[ConnectionIO]
+            )
+            rows = pagedRows.map(_.row)
             matchIds = rows.flatMap(_.matchId).distinct
             ranks <- loadRanks(matchIds)
           yield PagedResult(

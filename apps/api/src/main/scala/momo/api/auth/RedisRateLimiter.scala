@@ -2,12 +2,11 @@ package momo.api.auth
 
 import java.time.Instant
 
-import scala.concurrent.duration.DurationInt
-
 import cats.effect.{Async, Resource, Sync}
 import cats.syntax.all.*
 import dev.profunktor.redis4cats.data.RedisCodec
 import dev.profunktor.redis4cats.effect.Log.NoOp.*
+import dev.profunktor.redis4cats.effects.ScriptOutputType
 import dev.profunktor.redis4cats.{Redis, RedisCommands}
 
 import momo.api.config.RedisConfig
@@ -23,11 +22,23 @@ final class RedisRateLimiter[F[_]: Sync] private (
       current <- now
       minute = current.getEpochSecond / 60
       redisKey = s"momo:rate-limit:$namespace:$key:$minute"
-      count <- commands.incr(redisKey)
-      _ <- if count == 1L then commands.expire(redisKey, 2.minutes).void else Sync[F].unit
+      count <- commands.eval(
+        RedisRateLimiter.IncrementAndExpireScript,
+        ScriptOutputType.Integer,
+        List(redisKey),
+        List(RedisRateLimiter.ExpireSeconds),
+      )
     yield count <= maxPerMinute.toLong
 
 object RedisRateLimiter:
+  private val ExpireSeconds = "120"
+  private val IncrementAndExpireScript =
+    """local count = redis.call('INCR', KEYS[1])
+      |if count == 1 then
+      |  redis.call('EXPIRE', KEYS[1], ARGV[1])
+      |end
+      |return count""".stripMargin
+
   def fromCommands[F[_]: Sync](
       commands: RedisCommands[F, String, String],
       namespace: String,

@@ -1,13 +1,15 @@
 package momo.api.usecases.matchdrafts
 
-import java.io.ByteArrayOutputStream
+import java.nio.file.{Files, Path, StandardOpenOption}
 import java.time.format.DateTimeFormatter
 import java.time.{Instant, ZoneId}
 import java.util.zip.{ZipEntry, ZipOutputStream}
 
 import cats.data.EitherT
-import cats.effect.Sync
+import cats.effect.{Async, Resource}
 import cats.syntax.all.*
+import fs2.Stream
+import fs2.io.file.{Files as Fs2Files, Path as Fs2Path}
 import org.slf4j.LoggerFactory
 
 import momo.api.domain.ids.{ImageId, *}
@@ -37,16 +39,21 @@ final case class MatchDraftSourceImage(
     imageUrl: String,
 )
 
-final case class MatchDraftSourceImageBinary(contentType: String, bytes: Array[Byte])
+final case class MatchDraftSourceImageBinary[F[_]](
+    contentType: String,
+    bodyBytes: Long,
+    body: Stream[F, Byte],
+)
 
-final case class MatchDraftSourceImageArchive(
+final case class MatchDraftSourceImageArchive[F[_]](
     contentType: String,
     fileName: String,
-    bytes: Array[Byte],
+    body: Stream[F, Byte],
+    archiveBytes: Long,
     imageCount: Int,
 )
 
-final class GetMatchDraftSourceImages[F[_]: Sync](
+final class GetMatchDraftSourceImages[F[_]: Async](
     matchDrafts: MatchDraftsRepository[F],
     imageStore: ImageStorage[F],
     sourceImageArchiveMaxBytes: Long = GetMatchDraftSourceImages.DefaultArchiveMaxBytes,
@@ -79,7 +86,7 @@ final class GetMatchDraftSourceImages[F[_]: Sync](
   def stream(
       draftId: MatchDraftId,
       kind: MatchDraftSourceImageKind,
-  ): F[Either[AppError, MatchDraftSourceImageBinary]] = (for
+  ): F[Either[AppError, MatchDraftSourceImageBinary[F]]] = (for
     draft <- EitherT(loadDraft(draftId))
     _ <- EitherT.cond[F](
       draft.sourceImagesDeletedAt.isEmpty,
@@ -90,13 +97,16 @@ final class GetMatchDraftSourceImages[F[_]: Sync](
       AppError.NotFound("source image", s"${draftId.value}:${kind.wire}")
     ))
     image <- imageStore.find(imageId).orNotFound("source image", s"${draftId.value}:${kind.wire}")
-    bytes <- EitherT.liftF(imageStore.readBytes(image))
-  yield MatchDraftSourceImageBinary(image.mediaType, bytes)).value
+  yield MatchDraftSourceImageBinary(
+    contentType = image.mediaType,
+    bodyBytes = image.sizeBytes,
+    body = imageStore.readStream(image),
+  )).value
 
   def archive(
       draftId: MatchDraftId,
       accountId: AccountId,
-  ): F[Either[AppError, MatchDraftSourceImageArchive]] = (for
+  ): F[Either[AppError, MatchDraftSourceImageArchive[F]]] = (for
     draft <- EitherT(loadDraft(draftId))
     _ <- EitherT.cond[F](
       draft.sourceImagesDeletedAt.isEmpty,
@@ -106,7 +116,7 @@ final class GetMatchDraftSourceImages[F[_]: Sync](
     sources <- EitherT.liftF(archiveSources(draft))
     _ <- EitherT.cond[F](sources.nonEmpty, (), AppError.NotFound("source images", draftId.value))
     totalSourceBytes = sources.foldMap(_.image.sizeBytes)
-    allowed <- EitherT.liftF(Sync[F].delay {
+    allowed <- EitherT.liftF(Async[F].delay {
       val allowed = totalSourceBytes <= sourceImageArchiveMaxBytes
       if !allowed then
         logger.warn(s"source_image_archive_rejected accountId=${accountId.value} draftId=${draftId
@@ -120,18 +130,14 @@ final class GetMatchDraftSourceImages[F[_]: Sync](
       AppError
         .PayloadTooLarge("Source image archive is too large. Please download images individually."),
     )
-    entries <- EitherT.liftF(archiveEntries(sources))
-    bytes <- EitherT.liftF(makeZip(entries))
-    _ <- EitherT.cond[F](
-      bytes.length.toLong <= sourceImageArchiveMaxBytes,
-      (),
-      archiveTooLarge(accountId, draftId, bytes.length.toLong, entries.size),
-    )
+    zip <- EitherT.liftF(buildZipFile(sources))
+    _ <- rejectOversizedZip(accountId, draftId, zip, sources.size)
   yield MatchDraftSourceImageArchive(
     contentType = "application/zip",
     fileName = archiveFileName(draft),
-    bytes = bytes,
-    imageCount = entries.size,
+    body = archiveBody(zip.path),
+    archiveBytes = zip.sizeBytes,
+    imageCount = sources.size,
   )).value
 
   private def loadDraft(draftId: MatchDraftId): F[Either[AppError, momo.api.domain.MatchDraft]] =
@@ -144,7 +150,7 @@ final class GetMatchDraftSourceImages[F[_]: Sync](
   ): Option[ImageId] = draft.sourceImageId(kind.screenType)
 
   private final case class ArchiveSource(name: String, image: StoredImage)
-  private final case class ArchiveEntry(name: String, bytes: Array[Byte])
+  private final case class ZipFile(path: Path, sizeBytes: Long)
 
   private def archiveSources(draft: momo.api.domain.MatchDraft): F[List[ArchiveSource]] =
     MatchDraftSourceImageKind.values.toList.zipWithIndex.traverse { case (kind, index) =>
@@ -159,24 +165,51 @@ final class GetMatchDraftSourceImages[F[_]: Sync](
           }
     }.map(_.flatten)
 
-  private def archiveEntries(sources: List[ArchiveSource]): F[List[ArchiveEntry]] = sources
-    .traverse(source =>
-      imageStore.readBytes(source.image).map(bytes => ArchiveEntry(source.name, bytes))
-    )
+  private def buildZipFile(sources: List[ArchiveSource]): F[ZipFile] =
+    for
+      path <- Async[F].blocking(Files.createTempFile("momo-source-images-", ".zip"))
+      result <- writeZip(path, sources).attempt
+      zipFile <- result match
+        case Right(_) => Async[F].blocking(Files.size(path)).map(size => ZipFile(path, size))
+        case Left(error) => deleteTemp(path) *> Async[F].raiseError[ZipFile](error)
+    yield zipFile
 
-  private def makeZip(entries: List[ArchiveEntry]): F[Array[Byte]] = Sync[F].delay {
-    val out = ByteArrayOutputStream()
-    val zip = ZipOutputStream(out)
-    try entries.foreach { entry =>
-        val zipEntry = ZipEntry(entry.name)
-        zipEntry.setTime(0L)
-        zip.putNextEntry(zipEntry)
-        zip.write(entry.bytes)
-        zip.closeEntry()
-      }
-    finally zip.close()
-    out.toByteArray
-  }
+  private def writeZip(path: Path, sources: List[ArchiveSource]): F[Unit] = Resource
+    .make(Async[F].blocking(ZipOutputStream(Files.newOutputStream(
+      path,
+      StandardOpenOption.WRITE,
+      StandardOpenOption.TRUNCATE_EXISTING,
+    ))))(zip => Async[F].blocking(zip.close()).handleError(_ => ())).use { zip =>
+      sources.traverse_(source => writeZipEntry(zip, source))
+    }
+
+  private def writeZipEntry(zip: ZipOutputStream, source: ArchiveSource): F[Unit] =
+    Async[F].blocking {
+      val entry = ZipEntry(source.name)
+      entry.setTime(0L)
+      zip.putNextEntry(entry)
+    } >>
+      imageStore.readStream(source.image).chunks.evalMap(chunk =>
+        Async[F].blocking(zip.write(chunk.toArray))
+      ).compile.drain >>
+      Async[F].blocking(zip.closeEntry())
+
+  private def archiveBody(path: Path): Stream[F, Byte] = Fs2Files.forAsync[F]
+    .readAll(Fs2Path.fromNioPath(path))
+    .onFinalize(deleteTemp(path).handleError(_ => ()))
+
+  private def deleteTemp(path: Path): F[Unit] = Async[F].blocking(Files.deleteIfExists(path)).void
+
+  private def rejectOversizedZip(
+      accountId: AccountId,
+      draftId: MatchDraftId,
+      zip: ZipFile,
+      imageCount: Int,
+  ): EitherT[F, AppError, Unit] =
+    if zip.sizeBytes <= sourceImageArchiveMaxBytes then EitherT.rightT[F, AppError](())
+    else
+      EitherT.liftF(deleteTemp(zip.path)) *>
+        EitherT.leftT[F, Unit](archiveTooLarge(accountId, draftId, zip.sizeBytes, imageCount))
 
   private def archiveTooLarge(
       accountId: AccountId,

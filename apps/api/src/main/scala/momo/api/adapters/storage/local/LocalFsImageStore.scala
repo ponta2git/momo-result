@@ -5,9 +5,11 @@ import java.time.Instant
 
 import scala.jdk.CollectionConverters.*
 
-import cats.effect.Sync
 import cats.effect.std.Random
+import cats.effect.{Async, Sync}
 import cats.syntax.all.*
+import fs2.Stream
+import fs2.io.file.{Files as Fs2Files, Path as Fs2Path}
 
 import momo.api.domain.ids.*
 import momo.api.domain.{StoredImage, StoredImageLocation}
@@ -20,7 +22,7 @@ import momo.api.ports.storage.{
   ImageStorageUsage
 }
 
-final class LocalFsImageStore[F[_]: Sync: Random](root: Path)
+final class LocalFsImageStore[F[_]: Async: Random](root: Path)
     extends ImageStorage[F], ImageStorageInspector[F], ImageOrphanCleaner[F]:
   import LocalFsImageStoreSupport.*
 
@@ -50,6 +52,9 @@ final class LocalFsImageStore[F[_]: Sync: Random](root: Path)
 
   override def readBytes(image: StoredImage): F[Array[Byte]] = Sync[F]
     .blocking(Files.readAllBytes(pathFor(image.location)))
+
+  override def readStream(image: StoredImage): Stream[F, Byte] = Fs2Files.forAsync[F]
+    .readAll(Fs2Path.fromNioPath(pathFor(image.location)))
 
   override def delete(imageId: ImageId): F[Boolean] = Sync[F].blocking {
     imagePaths(imageId)

@@ -41,13 +41,14 @@ final class GetMatchDraftSourceImagesSpec extends MomoCatsEffectSuite:
         _ <- matchDrafts.create(draft)
         service = GetMatchDraftSourceImages[IO](matchDrafts, imageStore)
         archive <- service.archive(draft.id, accountId)
+        file <- expectArchive(archive)
+        bytes <- file.body.compile.to(Array)
       yield
-        val file = archive.getOrElse(fail("expected archive"))
         assertEquals(file.contentType, "application/zip")
         assertEquals(file.fileName, "momo-ocr-images-20260518-match-03.zip")
         assert(!file.fileName.contains(draft.id.value))
         assertEquals(file.imageCount, 3)
-        val entries = zipEntries(file.bytes)
+        val entries = zipEntries(bytes)
         assertEquals(
           entries.keySet,
           Set("01-total-assets.png", "02-revenue.jpg", "03-incident-log.webp"),
@@ -76,12 +77,13 @@ final class GetMatchDraftSourceImagesSpec extends MomoCatsEffectSuite:
         _ <- matchDrafts.create(draft)
         service = GetMatchDraftSourceImages[IO](matchDrafts, imageStore)
         archive <- service.archive(draft.id, accountId)
+        file <- expectArchive(archive)
+        bytes <- file.body.compile.to(Array)
       yield
-        val file = archive.getOrElse(fail("expected archive"))
         assertEquals(file.fileName, "momo-ocr-images-20260518.zip")
         assertEquals(file.imageCount, 2)
         assertEquals(
-          zipEntries(file.bytes).keySet,
+          zipEntries(bytes).keySet,
           Set("01-total-assets.png", "03-incident-log.webp"),
         )
     }
@@ -179,9 +181,8 @@ final class GetMatchDraftSourceImagesSpec extends MomoCatsEffectSuite:
         _ <- matchDrafts.create(draft)
         service = GetMatchDraftSourceImages[IO](matchDrafts, imageStore)
         archive <- service.archive(draft.id, otherAccountId)
-      yield
-        val file = archive.getOrElse(fail("expected archive"))
-        assertEquals(file.imageCount, 1)
+        file <- expectArchive(archive)
+      yield assertEquals(file.imageCount, 1)
     }
   }
 
@@ -242,3 +243,9 @@ final class GetMatchDraftSourceImagesSpec extends MomoCatsEffectSuite:
 
       readNext(Map.empty)
     finally zip.close()
+
+  private def expectArchive(
+      result: Either[AppError, MatchDraftSourceImageArchive[IO]]
+  ): IO[MatchDraftSourceImageArchive[IO]] = result match
+    case Right(file) => IO.pure(file)
+    case Left(error) => fail(s"expected archive: $error")

@@ -31,12 +31,12 @@ object SecuredEndpoint:
   type MutationEndpoint[I, O] =
     Endpoint[(Option[String], Option[String]), I, ProblemResponse, O, Any]
 
-  def readLogic[F[_]: Async, I, O](
+  def readLogic[F[_]: Async, I, O, R](
       security: EndpointSecurity[F],
-      endpoint: ReadEndpoint[I, O],
+      endpoint: Endpoint[Option[String], I, ProblemResponse, O, R],
   )(
       logic: AuthenticatedAccount => I => F[Either[ProblemResponse, O]]
-  ): ServerEndpoint[Any, F] = endpoint
+  ): ServerEndpoint[R, F] = endpoint
     .securityIn(CommonEndpoint.serverRequest)
     .serverSecurityLogic(accountHeader =>
       security.authorizeRead(accountHeader._1, accountHeader._2)(account =>

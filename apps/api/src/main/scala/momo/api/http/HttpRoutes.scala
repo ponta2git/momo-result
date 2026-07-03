@@ -180,7 +180,6 @@ object HttpRoutes:
         deps.matchDrafts.updateMatchDraft,
         deps.matchDrafts.cancelMatchDraft,
         deps.matchDrafts.getMatchDraftSourceImages,
-        deps.rateLimiters.sourceImageDownload,
         idempotencyGuard,
         deps.nowF,
         security,
@@ -235,9 +234,15 @@ object HttpRoutes:
         deps.nowF,
         security,
       )
+    val sourceImageEndpoints = MatchDraftModule.sourceImageRoutes[F](
+      deps.matchDrafts.getMatchDraftSourceImages,
+      deps.rateLimiters.sourceImageDownload,
+      security,
+    )
 
     val interpreter = Http4sServerInterpreter[F]()
     val tapirRoutes = interpreter.toRoutes(endpoints)
+    val sourceImageRoutes = interpreter.toRoutes(sourceImageEndpoints)
 
     val authRoutes = interpreter.toRoutes(AuthModule.routes[F](
       config = deps.config,
@@ -258,7 +263,7 @@ object HttpRoutes:
         deps.config.resourceLimits.requestMaxBytes,
         deps.config.resourceLimits.uploadRequestMaxBytes,
       )(
-        Router("/" -> (authRoutes <+> tapirRoutes))
+        Router("/" -> (authRoutes <+> tapirRoutes <+> sourceImageRoutes))
           .orNotFound
       )
     ))))

@@ -1,5 +1,6 @@
 package momo.api.endpoints
 
+import cats.effect.IO
 import sttp.tapir.AnyEndpoint
 
 object ApiEndpoints:
@@ -25,8 +26,8 @@ object ApiEndpoints:
     MatchDraftEndpoints.update,
     MatchDraftEndpoints.cancel,
     MatchDraftEndpoints.listSourceImages,
-    MatchDraftEndpoints.downloadSourceImages,
-    MatchDraftEndpoints.getSourceImage,
+    MatchDraftEndpoints.downloadSourceImagesStream[IO],
+    MatchDraftEndpoints.getSourceImageStream[IO],
     MatchesEndpoints.confirm,
     MatchesEndpoints.list,
     MatchesEndpoints.summary,

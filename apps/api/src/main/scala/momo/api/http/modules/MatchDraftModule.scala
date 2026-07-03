@@ -5,6 +5,7 @@ import java.time.Instant
 import cats.effect.Async
 import cats.syntax.all.*
 import org.slf4j.LoggerFactory
+import sttp.capabilities.fs2.Fs2Streams
 import sttp.tapir.server.ServerEndpoint
 
 import momo.api.auth.RateLimiter
@@ -45,7 +46,6 @@ object MatchDraftModule:
       updateMatchDraft: UpdateMatchDraft[F],
       cancelMatchDraft: CancelMatchDraft[F],
       getMatchDraftSourceImages: GetMatchDraftSourceImages[F],
-      sourceImageDownloadRateLimiter: RateLimiter[F],
       idempotency: IdempotencyReplay.Guard[F],
       nowF: F[Instant],
       security: EndpointSecurity[F],
@@ -125,12 +125,20 @@ object MatchDraftModule:
         )
       )
     },
-    SecuredEndpoint.readLogic(security, MatchDraftEndpoints.downloadSourceImages) {
+  )
+
+  def sourceImageRoutes[F[_]: Async](
+      getMatchDraftSourceImages: GetMatchDraftSourceImages[F],
+      sourceImageDownloadRateLimiter: RateLimiter[F],
+      security: EndpointSecurity[F],
+  ): List[ServerEndpoint[Fs2Streams[F], F]] = List(
+    SecuredEndpoint.readLogic(security, MatchDraftEndpoints.downloadSourceImagesStream[F]) {
       member => draftId =>
         security.decode(BoundaryId.required("matchDraftId", draftId)(MatchDraftId.fromString))(id =>
           sourceImageDownloadRateLimiter.allow(s"source-image-download:${member.accountId.value}")
             .flatMap {
-              case false => sourceImageRateLimited[F, MatchDraftEndpoints.SourceImageArchiveOutput](
+              case false =>
+                sourceImageRateLimited[F, MatchDraftEndpoints.SourceImageArchiveStreamOutput[F]](
                   route = "archive",
                   accountId = member.accountId.value,
                   draftId = id.value,
@@ -142,7 +150,7 @@ object MatchDraftModule:
                     val event =
                       s"source_image_archive_downloaded accountId=${member.accountId.value} " +
                         s"draftId=${id.value} imageCount=${archive.imageCount.toString} " +
-                        s"archiveBytes=${archive.bytes.length.toString}"
+                        s"archiveBytes=${archive.archiveBytes.toString}"
                     HttpDownloadHeaders.attachment(archive.fileName) match
                       case Left(error) => security.toProblemF(error).map(Left(_))
                       case Right(disposition) => Async[F].delay(logger.info(event)) *>
@@ -151,13 +159,13 @@ object MatchDraftModule:
                             disposition,
                             HttpDownloadHeaders.PrivateNoStore,
                             HttpDownloadHeaders.Nosniff,
-                            archive.bytes,
+                            archive.body,
                           )))
                 }
             }
         )
     },
-    SecuredEndpoint.readLogic(security, MatchDraftEndpoints.getSourceImage) { member =>
+    SecuredEndpoint.readLogic(security, MatchDraftEndpoints.getSourceImageStream[F]) { member =>
       {
         case (draftId, kind) =>
           val decoded =
@@ -168,7 +176,9 @@ object MatchDraftModule:
           security.decode(decoded) { case (id, parsedKind) =>
             sourceImageDownloadRateLimiter.allow(s"source-image-download:${member.accountId.value}")
               .flatMap {
-                case false => sourceImageRateLimited[F, MatchDraftEndpoints.SourceImageOutput](
+                case false => sourceImageRateLimited[F, MatchDraftEndpoints.SourceImageStreamOutput[
+                    F
+                  ]](
                     route = "image",
                     accountId = member.accountId.value,
                     draftId = id.value,
@@ -179,12 +189,12 @@ object MatchDraftModule:
                     case Right(image) =>
                       val event = s"source_image_downloaded accountId=${member.accountId.value} " +
                         s"draftId=${id.value} kind=${parsedKind.wire} " +
-                        s"bodyBytes=${image.bytes.length.toString}"
+                        s"bodyBytes=${image.bodyBytes.toString}"
                       Async[F].delay(logger.info(event)) *> Async[F].pure(Right((
                         image.contentType,
                         HttpDownloadHeaders.PrivateNoStore,
                         HttpDownloadHeaders.Nosniff,
-                        image.bytes,
+                        image.body,
                       )))
                   }
               }

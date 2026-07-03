@@ -2,6 +2,8 @@ package momo.api.ports.storage
 
 import java.time.Instant
 
+import fs2.Stream
+
 import momo.api.domain.StoredImage
 import momo.api.domain.ids.{AccountId, ImageId}
 import momo.api.errors.AppError
@@ -27,6 +29,7 @@ trait ImageStorage[F[_]]:
    * errors when the underlying file vanishes.
    */
   def readBytes(image: StoredImage): F[Array[Byte]]
+  def readStream(image: StoredImage): Stream[F, Byte]
   def delete(imageId: ImageId): F[Boolean]
 
 trait ImageStorageInspector[F[_]]:

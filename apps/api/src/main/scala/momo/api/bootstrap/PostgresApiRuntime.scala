@@ -38,7 +38,7 @@ private[bootstrap] object PostgresApiRuntime:
     val matchDraftCancellation: MatchDraftCancellationRepository[F] =
       PostgresMatchDraftCancellationRepository[F](transactor)
     val matchList: MatchListReadModel[F] = PostgresMatchListReadModel[F](transactor)
-    val seriesComparison: SeriesComparisonReadModel[F] =
+    val seriesComparison: VersionedSeriesComparisonReadModel[F] =
       PostgresSeriesComparisonReadModel[F](transactor)
     val matchConfirmation: MatchConfirmationRepository[F] =
       PostgresMatchConfirmationRepository[F](transactor)
@@ -90,48 +90,50 @@ private[bootstrap] object PostgresApiRuntime:
         idempotency = idempotency,
         now = Clock[F].realTimeInstant,
       ).evalMap { _ =>
-        UseCaseWiring.assemble(
-          config = config,
-          storage = UseCaseWiring.RuntimeStorage(
-            imageStorage = imageStore,
-            imageStorageInspector = imageStore,
-          ),
-          repositories = UseCaseWiring.RuntimeRepositories(
-            imageReferences = imageReferences,
-            ocrJobCreationStore = ocrJobCreationStore,
-            jobs = jobs,
-            drafts = drafts,
-            heldEvents = heldEvents,
-            heldEventDeletion = heldEventDeletion,
-            matches = matches,
-            matchDrafts = matchDrafts,
-            matchDraftCancellation = matchDraftCancellation,
-            matchList = matchList,
-            seriesComparison = seriesComparison,
-            matchConfirmation = matchConfirmation,
-            appSessions = appSessions,
-            sessionAccounts = sessionAccounts,
-            members = members,
-            loginAccounts = loginAccounts,
-            loginAccountAdministration = loginAccountAdministration,
-            gameTitles = gameTitles,
-            mapMasters = mapMasters,
-            seasonMasters = seasonMasters,
-            incidentMasters = incidentMasters,
-            memberAliases = memberAliases,
-            idempotency = idempotency,
-          ),
-          services = UseCaseWiring.RuntimeServices(
-            healthDetails = health,
-            ocrQueueSubmitter = OcrJobQueueSubmitter.outboxBacked[F](ocrQueueOutbox, queue),
-            ocrAdmissionGuard = ocrAdmissionGuard,
-            oauthClient = oauthClient,
-            loginRateLimiter = infrastructure.loginRateLimiter,
-            authCallbackStateRateLimiter = infrastructure.authCallbackStateRateLimiter,
-            oauthProviderBackoff = infrastructure.oauthProviderBackoff,
-            rateLimiters = infrastructure.rateLimiters,
-          ),
-        )
+        CachedSeriesComparisonReadModel.create(seriesComparison).flatMap { cachedSeriesComparison =>
+          UseCaseWiring.assemble(
+            config = config,
+            storage = UseCaseWiring.RuntimeStorage(
+              imageStorage = imageStore,
+              imageStorageInspector = imageStore,
+            ),
+            repositories = UseCaseWiring.RuntimeRepositories(
+              imageReferences = imageReferences,
+              ocrJobCreationStore = ocrJobCreationStore,
+              jobs = jobs,
+              drafts = drafts,
+              heldEvents = heldEvents,
+              heldEventDeletion = heldEventDeletion,
+              matches = matches,
+              matchDrafts = matchDrafts,
+              matchDraftCancellation = matchDraftCancellation,
+              matchList = matchList,
+              seriesComparison = cachedSeriesComparison,
+              matchConfirmation = matchConfirmation,
+              appSessions = appSessions,
+              sessionAccounts = sessionAccounts,
+              members = members,
+              loginAccounts = loginAccounts,
+              loginAccountAdministration = loginAccountAdministration,
+              gameTitles = gameTitles,
+              mapMasters = mapMasters,
+              seasonMasters = seasonMasters,
+              incidentMasters = incidentMasters,
+              memberAliases = memberAliases,
+              idempotency = idempotency,
+            ),
+            services = UseCaseWiring.RuntimeServices(
+              healthDetails = health,
+              ocrQueueSubmitter = OcrJobQueueSubmitter.outboxBacked[F](ocrQueueOutbox, queue),
+              ocrAdmissionGuard = ocrAdmissionGuard,
+              oauthClient = oauthClient,
+              loginRateLimiter = infrastructure.loginRateLimiter,
+              authCallbackStateRateLimiter = infrastructure.authCallbackStateRateLimiter,
+              oauthProviderBackoff = infrastructure.oauthProviderBackoff,
+              rateLimiters = infrastructure.rateLimiters,
+            ),
+          )
+        }
       }
     }
   }

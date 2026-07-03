@@ -16,8 +16,19 @@ import momo.api.domain.{
   SeriesComparisonSeriesOptionData
 }
 import momo.api.repositories.{SeriesComparisonReadAlg, SeriesComparisonReadModel}
+import momo.api.repositories.{SeriesComparisonDataVersion, VersionedSeriesComparisonReadModel}
 
 object PostgresSeriesComparison extends PostgresSeriesComparisonRowSupport:
+  private final case class VersionRow(
+      matchCount: Int,
+      latestMatchUpdatedAt: Option[java.time.Instant],
+  )
+
+  private def scopedCondition(scope: SeriesComparisonResolvedScope): Fragment = List(
+    scope.seasonMasterId.map(id => fr"AND m.season_master_id = $id"),
+    scope.mapMasterId.map(id => fr"AND m.map_master_id = $id"),
+  ).flatten.foldLeft(Fragment.empty)(_ ++ _)
+
   val alg: SeriesComparisonReadAlg[ConnectionIO] = new SeriesComparisonReadAlg[ConnectionIO]:
     override def options: ConnectionIO[SeriesComparisonOptionsData] =
       val seriesQuery = sql"""
@@ -176,10 +187,6 @@ object PostgresSeriesComparison extends PostgresSeriesComparisonRowSupport:
       val cardStationId = IncidentKindMapping.masterId(momo.api.domain.IncidentKind.CardStation)
       val cardShopId = IncidentKindMapping.masterId(momo.api.domain.IncidentKind.CardShop)
       val ginjiId = IncidentKindMapping.masterId(momo.api.domain.IncidentKind.SuriNoGinji)
-      val scopedCondition = List(
-        scope.seasonMasterId.map(id => fr"AND m.season_master_id = $id"),
-        scope.mapMasterId.map(id => fr"AND m.map_master_id = $id"),
-      ).flatten.foldLeft(Fragment.empty)(_ ++ _)
       val query =
         fr"""
           SELECT
@@ -209,7 +216,7 @@ object PostgresSeriesComparison extends PostgresSeriesComparisonRowSupport:
             ON mi.match_id = mp.match_id
            AND mi.member_id = mp.member_id
           WHERE m.game_title_id = ${scope.gameTitleId}
-        """ ++ scopedCondition ++ fr"""
+        """ ++ scopedCondition(scope) ++ fr"""
           GROUP BY
             m.id, m.played_at, m.held_event_id, m.match_no_in_event,
             m.game_title_id, m.season_master_id, m.map_master_id,
@@ -224,10 +231,29 @@ object PostgresSeriesComparison extends PostgresSeriesComparisonRowSupport:
         """
       query.query[PlayerRow].to[List].map(_.map(domainRow))
 
+  def dataVersion(scope: SeriesComparisonResolvedScope): ConnectionIO[SeriesComparisonDataVersion] =
+    val query =
+      fr"""
+        SELECT COUNT(*)::int, MAX(m.updated_at)
+        FROM matches m
+        WHERE m.game_title_id = ${scope.gameTitleId}
+      """ ++ scopedCondition(scope)
+    query.query[VersionRow].unique.map(row =>
+      SeriesComparisonDataVersion(
+        matchCount = row.matchCount,
+        latestMatchUpdatedAt = row.latestMatchUpdatedAt,
+      )
+    )
+
 final class PostgresSeriesComparisonReadModel[F[_]: MonadCancelThrow](transactor: Transactor[F])
-    extends SeriesComparisonReadModel[F]:
+    extends VersionedSeriesComparisonReadModel[F]:
   private val delegate: SeriesComparisonReadModel[F] = SeriesComparisonReadModel
     .fromAlg(PostgresSeriesComparison.alg, Database.transactK(transactor))
 
   export delegate.*
+
+  override def dataVersion(
+      scope: SeriesComparisonResolvedScope
+  ): F[SeriesComparisonDataVersion] =
+    PostgresSeriesComparison.dataVersion(scope).transact(transactor)
 end PostgresSeriesComparisonReadModel

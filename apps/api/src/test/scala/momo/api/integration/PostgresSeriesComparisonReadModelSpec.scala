@@ -53,6 +53,13 @@ final class PostgresSeriesComparisonReadModelSpec extends IntegrationSuite:
       seasonMapRows <- resolvedSeasonMap match
         case Some(scope) => readModel.loadRows(scope)
         case None => IO(fail("season map scope was not resolved"))
+      versionBefore <- resolvedOverall match
+        case Some(scope) => readModel.dataVersion(scope)
+        case None => IO(fail("overall scope was not resolved"))
+      _ <- matches.create(sampleMatch("match_series_comparison_4", 4))
+      versionAfter <- resolvedOverall match
+        case Some(scope) => readModel.dataVersion(scope)
+        case None => IO(fail("overall scope was not resolved"))
     yield
       val series = options.series.find(_.gameTitleId == gameTitleId)
         .getOrElse(fail(s"series option missing: ${options.series}"))
@@ -75,6 +82,9 @@ final class PostgresSeriesComparisonReadModelSpec extends IntegrationSuite:
         List("match_series_comparison_1"),
       )
       assertEquals(seasonMapRows.map(_.memberId), rows.take(4).map(_.memberId))
+      assertEquals(versionBefore.matchCount, 3)
+      assertEquals(versionAfter.matchCount, 4)
+      assert(versionAfter != versionBefore)
 
       val ponta = seasonMapRows.find(_.memberId == MemberId.unsafeFromString("member_ponta"))
         .getOrElse(fail(s"ponta row missing: $seasonMapRows"))

@@ -90,8 +90,15 @@ private[bootstrap] object PostgresApiRuntime:
         idempotency = idempotency,
         now = Clock[F].realTimeInstant,
       ).evalMap { _ =>
-        CachedSeriesComparisonReadModel.create(seriesComparison).flatMap { cachedSeriesComparison =>
-          UseCaseWiring.assemble(
+        for
+          cachedSeriesComparison <- CachedSeriesComparisonReadModel.create(seriesComparison)
+          cachedMembers <- CachedReferenceRepositories.members(members)
+          cachedGameTitles <- CachedReferenceRepositories.gameTitles(gameTitles)
+          cachedMapMasters <- CachedReferenceRepositories.mapMasters(mapMasters)
+          cachedSeasonMasters <- CachedReferenceRepositories.seasonMasters(seasonMasters)
+          cachedIncidentMasters <- CachedReferenceRepositories.incidentMasters(incidentMasters)
+          cachedMemberAliases <- CachedReferenceRepositories.memberAliases(memberAliases)
+          runtime <- UseCaseWiring.assemble(
             config = config,
             storage = UseCaseWiring.RuntimeStorage(
               imageStorage = imageStore,
@@ -112,14 +119,14 @@ private[bootstrap] object PostgresApiRuntime:
               matchConfirmation = matchConfirmation,
               appSessions = appSessions,
               sessionAccounts = sessionAccounts,
-              members = members,
+              members = cachedMembers,
               loginAccounts = loginAccounts,
               loginAccountAdministration = loginAccountAdministration,
-              gameTitles = gameTitles,
-              mapMasters = mapMasters,
-              seasonMasters = seasonMasters,
-              incidentMasters = incidentMasters,
-              memberAliases = memberAliases,
+              gameTitles = cachedGameTitles,
+              mapMasters = cachedMapMasters,
+              seasonMasters = cachedSeasonMasters,
+              incidentMasters = cachedIncidentMasters,
+              memberAliases = cachedMemberAliases,
               idempotency = idempotency,
             ),
             services = UseCaseWiring.RuntimeServices(
@@ -133,7 +140,7 @@ private[bootstrap] object PostgresApiRuntime:
               rateLimiters = infrastructure.rateLimiters,
             ),
           )
-        }
+        yield runtime
       }
     }
   }

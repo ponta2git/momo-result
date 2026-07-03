@@ -3,8 +3,8 @@ package momo.api.repositories
 import java.time.Instant
 
 import cats.effect.{Ref, Sync}
-import cats.~>
 import cats.syntax.all.*
+import cats.~>
 
 import momo.api.domain.{
   SeriesComparisonMatchPlayerRow,
@@ -67,8 +67,12 @@ object CachedSeriesComparisonReadModel:
     val empty: State = State(Map.empty, Vector.empty)
 
   def create[F[_]: Sync](
+      delegate: VersionedSeriesComparisonReadModel[F]
+  ): F[SeriesComparisonReadModel[F]] = create(delegate, maxEntries = 32)
+
+  def create[F[_]: Sync](
       delegate: VersionedSeriesComparisonReadModel[F],
-      maxEntries: Int = 32,
+      maxEntries: Int,
   ): F[SeriesComparisonReadModel[F]] = Ref
     .of[F, State](State.empty).map(ref => new Cached(delegate, ref, maxEntries.max(1)))
 

@@ -2,8 +2,8 @@ package momo.api.http.modules
 
 import cats.effect.Async
 import cats.syntax.all.*
-import sttp.tapir.generic.auto.*
 import sttp.tapir.*
+import sttp.tapir.generic.auto.*
 import sttp.tapir.json.circe.*
 import sttp.tapir.server.ServerEndpoint
 

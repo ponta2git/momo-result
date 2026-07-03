@@ -2,8 +2,8 @@ package momo.api.http
 
 import cats.effect.Async
 import cats.syntax.all.*
-import org.http4s.server.Router
 import org.http4s.HttpApp as Http4sApp
+import org.http4s.server.Router
 import sttp.tapir.server.ServerEndpoint
 import sttp.tapir.server.http4s.Http4sServerInterpreter
 

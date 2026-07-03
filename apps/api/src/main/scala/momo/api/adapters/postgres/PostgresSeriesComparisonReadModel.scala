@@ -15,8 +15,12 @@ import momo.api.domain.{
   SeriesComparisonScope,
   SeriesComparisonSeriesOptionData
 }
-import momo.api.repositories.{SeriesComparisonReadAlg, SeriesComparisonReadModel}
-import momo.api.repositories.{SeriesComparisonDataVersion, VersionedSeriesComparisonReadModel}
+import momo.api.repositories.{
+  SeriesComparisonDataVersion,
+  SeriesComparisonReadAlg,
+  SeriesComparisonReadModel,
+  VersionedSeriesComparisonReadModel
+}
 
 object PostgresSeriesComparison extends PostgresSeriesComparisonRowSupport:
   private final case class VersionRow(

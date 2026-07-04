@@ -8,25 +8,36 @@ import {
   draftIdsFromParams,
 } from "@/features/matches/workspace/workspaceDerivations";
 import { slotKinds } from "@/shared/api/enums";
-import { listHeldEvents } from "@/shared/api/heldEvents";
-import {
-  listGameTitles,
-  listMapMasters,
-  listMemberAliases,
-  listSeasonMasters,
+import type { HeldEventListResponse } from "@/shared/api/heldEvents";
+import type {
+  GameTitleListResponse,
+  MapMasterListResponse,
+  MemberAliasListResponse,
+  SeasonMasterListResponse,
 } from "@/shared/api/masters";
-import { getMatchDraftDetail, listMatchDraftSourceImages } from "@/shared/api/matchDrafts";
-import type { MatchDraftDetailResponse } from "@/shared/api/matchDrafts";
-import { getMatch } from "@/shared/api/matches";
-import { getOcrDraftsBulk } from "@/shared/api/ocrDrafts";
+import type {
+  MatchDraftDetailResponse,
+  MatchDraftSourceImageListResponse,
+} from "@/shared/api/matchDrafts";
+import type { MatchDetailResponse } from "@/shared/api/matches";
+import type { OcrDraftListResponse } from "@/shared/api/ocrDrafts";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
+import {
+  gameTitlesQueryOptions,
+  heldEventsQueryOptions,
+  mapMastersQueryOptions,
+  matchDetailQueryOptions,
+  matchDraftDetailQueryOptions,
+  matchDraftSourceImagesQueryOptions,
+  memberAliasesQueryOptions,
+  ocrDraftsBulkQueryOptions,
+  seasonMastersQueryOptions,
+} from "@/shared/api/queryOptions";
 import { shouldShowQueryError } from "@/shared/api/queryErrorState";
-import { heldEventKeys, masterKeys, matchKeys, ocrDraftKeys } from "@/shared/api/queryKeys";
 import { isOcrRunning } from "@/shared/domain/draftStatus";
 import { bySlot } from "@/shared/lib/slotMap";
 import type { SlotMap } from "@/shared/lib/slotMap";
-import { useResourceQuery } from "@/shared/lib/useResourceQuery";
 
 export type MatchWorkspaceQueriesParams = {
   gameTitleId: string;
@@ -40,17 +51,17 @@ export type MatchWorkspaceQueriesParams = {
 
 export type MatchWorkspaceQueries = {
   draftDetailQuery: UseQueryResult<MatchDraftDetailResponse, Error>;
-  gameTitlesQuery: UseSuspenseQueryResult<Awaited<ReturnType<typeof listGameTitles>>, Error>;
-  heldEventsQuery: UseSuspenseQueryResult<Awaited<ReturnType<typeof listHeldEvents>>, Error>;
+  gameTitlesQuery: UseSuspenseQueryResult<GameTitleListResponse, Error>;
+  heldEventsQuery: UseSuspenseQueryResult<HeldEventListResponse, Error>;
   legacyIds: SlotMap<string>;
-  mapMastersQuery: ReturnType<typeof useQuery<Awaited<ReturnType<typeof listMapMasters>>>>;
-  memberAliasesQuery: UseSuspenseQueryResult<Awaited<ReturnType<typeof listMemberAliases>>, Error>;
-  matchDetailQuery: UseQueryResult<Awaited<ReturnType<typeof getMatch>>, Error>;
-  ocrDraftsQuery: ReturnType<typeof useQuery<Awaited<ReturnType<typeof getOcrDraftsBulk>>>>;
+  mapMastersQuery: UseQueryResult<MapMasterListResponse, Error>;
+  memberAliasesQuery: UseSuspenseQueryResult<MemberAliasListResponse, Error>;
+  matchDetailQuery: UseQueryResult<MatchDetailResponse, Error>;
+  ocrDraftsQuery: UseQueryResult<OcrDraftListResponse, Error>;
   reviewDraftIdList: string[];
   reviewDraftIds: SlotMap<string>;
-  seasonMastersQuery: ReturnType<typeof useQuery<Awaited<ReturnType<typeof listSeasonMasters>>>>;
-  sourceImageQuery: UseQueryResult<Awaited<ReturnType<typeof listMatchDraftSourceImages>>, Error>;
+  seasonMastersQuery: UseQueryResult<SeasonMasterListResponse, Error>;
+  sourceImageQuery: UseQueryResult<MatchDraftSourceImageListResponse, Error>;
 };
 
 export type MatchWorkspaceQueriesDerived = {
@@ -79,39 +90,18 @@ export function useMatchWorkspaceQueries(
 
   const legacyIds = useMemo(() => draftIdsFromParams(searchParams), [searchParams]);
 
-  const heldEventsQuery = useSuspenseQuery({
-    queryKey: heldEventKeys.scope("workspace"),
-    queryFn: ({ signal }) => listHeldEvents("", 100, { signal }),
-  });
-
-  const gameTitlesQuery = useSuspenseQuery({
-    queryKey: masterKeys.gameTitles.list("workspace"),
-    queryFn: ({ signal }) => listGameTitles({ signal }),
-  });
-
-  const memberAliasesQuery = useSuspenseQuery({
-    queryKey: masterKeys.memberAliases.list("workspace"),
-    queryFn: ({ signal }) => listMemberAliases(undefined, { signal }),
-  });
-
-  const mapMastersQuery = useQuery({
-    queryKey: masterKeys.mapMasters.list("workspace", gameTitleId),
-    queryFn: ({ signal }) => listMapMasters(gameTitleId || undefined, { signal }),
-    enabled: Boolean(gameTitleId),
-  });
-
-  const seasonMastersQuery = useQuery({
-    queryKey: masterKeys.seasonMasters.list("workspace", gameTitleId),
-    queryFn: ({ signal }) => listSeasonMasters(gameTitleId || undefined, { signal }),
-    enabled: Boolean(gameTitleId),
-  });
-
-  const draftDetailQuery = useResourceQuery({
-    key: matchKeys.draft.detail,
-    id: matchDraftId,
-    fetcher: getMatchDraftDetail,
-    enabled: mode !== "edit" && !useSampleDrafts,
-  });
+  const heldEventsQuery = useSuspenseQuery(heldEventsQueryOptions("", 100, "workspace"));
+  const gameTitlesQuery = useSuspenseQuery(gameTitlesQueryOptions("workspace"));
+  const memberAliasesQuery = useSuspenseQuery(memberAliasesQueryOptions("workspace"));
+  const mapMastersQuery = useQuery(
+    mapMastersQueryOptions("workspace", gameTitleId, Boolean(gameTitleId)),
+  );
+  const seasonMastersQuery = useQuery(
+    seasonMastersQueryOptions("workspace", gameTitleId, Boolean(gameTitleId)),
+  );
+  const draftDetailQuery = useQuery(
+    matchDraftDetailQueryOptions(matchDraftId, mode !== "edit" && !useSampleDrafts),
+  );
 
   const reviewDraftIds = useMemo<SlotMap<string>>(() => {
     const fromDetail = draftIdsFromDetail(draftDetailQuery.data);
@@ -131,26 +121,19 @@ export function useMatchWorkspaceQueries(
     [reviewDraftIds],
   );
 
-  const matchDetailQuery = useResourceQuery({
-    key: matchKeys.detail,
-    id: matchId,
-    fetcher: getMatch,
-    enabled: mode === "edit",
-  });
-
-  const ocrDraftsQuery = useQuery({
-    queryKey: ocrDraftKeys.bulk(reviewDraftIdList),
-    queryFn: ({ signal }) => getOcrDraftsBulk(reviewDraftIdList, { signal }),
-    enabled: mode === "review" && !useSampleDrafts && reviewDraftIdList.length > 0,
-    retry: false,
-  });
-
-  const sourceImageQuery = useResourceQuery({
-    key: matchKeys.draft.sourceImages,
-    id: matchDraftSourceImagesId,
-    fetcher: listMatchDraftSourceImages,
-    enabled: mode !== "edit" && !useSampleDrafts && !isOcrRunning(draftDetailQuery.data?.status),
-  });
+  const matchDetailQuery = useQuery(matchDetailQueryOptions(matchId, mode === "edit"));
+  const ocrDraftsQuery = useQuery(
+    ocrDraftsBulkQueryOptions(
+      reviewDraftIdList,
+      mode === "review" && !useSampleDrafts && reviewDraftIdList.length > 0,
+    ),
+  );
+  const sourceImageQuery = useQuery(
+    matchDraftSourceImagesQueryOptions(
+      matchDraftSourceImagesId,
+      mode !== "edit" && !useSampleDrafts && !isOcrRunning(draftDetailQuery.data?.status),
+    ),
+  );
 
   const reviewStatus = draftDetailQuery.data?.status;
   const isOcrRunningBlocked = mode !== "edit" && isOcrRunning(reviewStatus);

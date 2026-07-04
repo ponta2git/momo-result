@@ -1,9 +1,9 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 
-import { buildExportMatchesPath } from "./exportApi";
+import { buildExportMatchesPath } from "@/shared/api/exports";
 
-describe("exportApi", () => {
+describe("exports API facade", () => {
   it("builds all match export query", () => {
     expect(buildExportMatchesPath({ format: "csv", scope: "all" })).toBe(
       "/api/exports/matches?format=csv",

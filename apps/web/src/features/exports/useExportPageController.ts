@@ -20,11 +20,12 @@ import {
   formatDateTime,
 } from "@/features/exports/exportViewModel";
 import type { ExportDownloadResultView } from "@/features/exports/exportViewModel";
-import { listHeldEvents } from "@/shared/api/heldEvents";
-import { listSeasonMasters } from "@/shared/api/masters";
-import { listMatches } from "@/shared/api/matches";
+import {
+  heldEventsQueryOptions,
+  matchExportCandidatesQueryOptions,
+  seasonMastersQueryOptions,
+} from "@/shared/api/queryOptions";
 import { shouldShowQueryError } from "@/shared/api/queryErrorState";
-import { heldEventKeys, masterKeys, matchKeys } from "@/shared/api/queryKeys";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
 export type ExportPageControllerParams = {
@@ -42,19 +43,11 @@ export function useExportPageController({
   const [downloadStartedAt, setDownloadStartedAt] = useState<number | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
 
-  const seasonsQuery = useQuery({
-    queryFn: ({ signal }) => listSeasonMasters(undefined, { signal }),
-    queryKey: masterKeys.seasonMasters.list("exports"),
-  });
-  const heldEventsQuery = useQuery({
-    queryFn: ({ signal }) => listHeldEvents("", 100, { signal }),
-    queryKey: heldEventKeys.scope("exports"),
-  });
-  const matchesQuery = useQuery({
-    queryFn: ({ signal }) =>
-      listMatches({ kind: "match", limit: 100, status: "confirmed" }, { signal }),
-    queryKey: matchKeys.exports({ kind: "match", status: "confirmed" }),
-  });
+  const seasonsQuery = useQuery(seasonMastersQueryOptions("exports", undefined));
+  const heldEventsQuery = useQuery(heldEventsQueryOptions("", 100, "exports"));
+  const matchesQuery = useQuery(
+    matchExportCandidatesQueryOptions({ kind: "match", limit: 100, status: "confirmed" }),
+  );
 
   const seasonCandidates = useMemo<ExportCandidate[]>(
     () =>

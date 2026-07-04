@@ -2,15 +2,18 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
-import { listGameTitles, listMapMasters, listSeasonMasters } from "@/shared/api/masters";
 import type {
   GameTitleResponse,
   MapMasterResponse,
   SeasonMasterResponse,
 } from "@/shared/api/masters";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
+import {
+  gameTitlesQueryOptions,
+  mapMastersQueryOptions,
+  seasonMastersQueryOptions,
+} from "@/shared/api/queryOptions";
 import { shouldShowQueryError } from "@/shared/api/queryErrorState";
-import { masterKeys } from "@/shared/api/queryKeys";
 
 type OcrSetupOptionsParams = {
   authAccountId?: string | undefined;
@@ -121,19 +124,13 @@ export function useOcrSetupOptions({
   value,
 }: OcrSetupOptionsParams) {
   const authScope = authAccountId ?? "anonymous";
-  const gameTitlesQuery = useQuery({
-    queryKey: masterKeys.gameTitles.list(authScope),
-    queryFn: ({ signal }) => listGameTitles({ signal }),
-    enabled,
-  });
+  const gameTitlesQuery = useQuery({ ...gameTitlesQueryOptions(authScope), enabled });
   const mapMastersQuery = useQuery({
-    queryKey: masterKeys.mapMasters.list(authScope, value.gameTitleId),
-    queryFn: ({ signal }) => listMapMasters(value.gameTitleId || undefined, { signal }),
+    ...mapMastersQueryOptions(authScope, value.gameTitleId, Boolean(value.gameTitleId)),
     enabled: enabled && Boolean(value.gameTitleId),
   });
   const seasonMastersQuery = useQuery({
-    queryKey: masterKeys.seasonMasters.list(authScope, value.gameTitleId),
-    queryFn: ({ signal }) => listSeasonMasters(value.gameTitleId || undefined, { signal }),
+    ...seasonMastersQueryOptions(authScope, value.gameTitleId, Boolean(value.gameTitleId)),
     enabled: enabled && Boolean(value.gameTitleId),
   });
 

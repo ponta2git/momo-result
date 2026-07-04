@@ -1,17 +1,18 @@
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
+import type {
+  ExportMatchesFormat,
+  ExportMatchesRequest,
+  ExportMatchesScope,
+} from "@/shared/api/exports";
 
-export type ExportFormat = "csv" | "tsv";
-export type ExportScope = "all" | "season" | "heldEvent" | "match";
+export type ExportFormat = ExportMatchesFormat;
+export type ExportScope = ExportMatchesScope;
+export type { ExportMatchesRequest };
 
 export type ExportScopeIds = {
   heldEventId?: string | undefined;
   matchId?: string | undefined;
   seasonMasterId?: string | undefined;
-};
-
-export type ExportMatchesRequest = ExportScopeIds & {
-  format: ExportFormat;
-  scope: ExportScope;
 };
 
 export type ExportCandidate = {

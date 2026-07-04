@@ -3,10 +3,10 @@ import type { UseQueryResult } from "@tanstack/react-query";
 import { useMemo } from "react";
 
 import type { getAuthMe } from "@/shared/api/auth";
-import { listMemberAliases } from "@/shared/api/masters";
+import type { listMemberAliases } from "@/shared/api/masters";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
-import { masterKeys } from "@/shared/api/queryKeys";
+import { memberAliasesQueryOptions } from "@/shared/api/queryOptions";
 import { authQueryOptions } from "@/shared/auth/authQueries";
 import { useDevUser } from "@/shared/auth/useDevUser";
 import { buildMemberAliasDirectory } from "@/shared/domain/memberDirectory";
@@ -37,8 +37,7 @@ export function useOcrCaptureQueries(): OcrCaptureQueries {
   const accountId = authQuery.data?.accountId;
 
   const memberAliasesQuery = useQuery({
-    queryKey: masterKeys.memberAliases.list(accountId ?? "anonymous"),
-    queryFn: ({ signal }) => listMemberAliases(undefined, { signal }),
+    ...memberAliasesQueryOptions(accountId ?? "anonymous"),
     enabled: ready,
   });
 

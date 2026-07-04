@@ -2,11 +2,11 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { PollingPausedReason } from "@/features/ocrCapture/captureState";
-import { ocrJobKeys } from "@/features/ocrCapture/queryKeys";
 import { isTerminalJobStatus } from "@/shared/api/enums";
 import { getOcrJob } from "@/shared/api/ocrJobs";
 import type { OcrJobResponse } from "@/shared/api/ocrJobs";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
+import { ocrJobKeys } from "@/shared/api/queryKeys";
 
 export const initialPollDelayMs = 4_000;
 export const maxAutoPollElapsedMs = 300_000;

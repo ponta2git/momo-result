@@ -1,4 +1,4 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useActionState, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
@@ -8,10 +8,11 @@ import {
   formatDateTime,
   toIsoFromLocal,
 } from "@/features/heldEvents/heldEventViewModel";
-import { createHeldEvent, deleteHeldEvent, listHeldEvents } from "@/shared/api/heldEvents";
+import { createHeldEvent, deleteHeldEvent } from "@/shared/api/heldEvents";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { formatApiError } from "@/shared/api/problemDetails";
+import { heldEventsQueryOptions } from "@/shared/api/queryOptions";
 import { isInitialQueryLoading, shouldShowBlockingQueryError } from "@/shared/api/queryErrorState";
 import { heldEventKeys } from "@/shared/api/queryKeys";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
@@ -60,18 +61,10 @@ export function useHeldEventsPageController() {
     [searchParams, setSearchParams],
   );
 
-  const heldEventsQuery = useQuery({
-    placeholderData: keepPreviousData,
-    queryFn: ({ signal }) =>
-      listHeldEvents({ page: paginationSearch.page, pageSize: paginationSearch.pageSize }, 10, {
-        signal,
-      }),
-    queryKey: heldEventKeys.list(paginationSearch),
-  });
-  const latestHeldEventQuery = useQuery({
-    queryFn: ({ signal }) => listHeldEvents({ page: 1, pageSize: 1 }, 10, { signal }),
-    queryKey: heldEventKeys.list({ page: 1, pageSize: 1, scope: "latest" }),
-  });
+  const heldEventsQuery = useQuery(heldEventsQueryOptions(paginationSearch));
+  const latestHeldEventQuery = useQuery(
+    heldEventsQueryOptions({ page: 1, pageSize: 1 }, 10, "latest"),
+  );
 
   const [createState, createAction] = useActionState<typeof initialCreateHeldEventState, FormData>(
     async (previous, formData) => {

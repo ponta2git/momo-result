@@ -2,18 +2,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useActionState } from "react";
 
 import { invalidateAdminAccountCaches } from "@/features/adminAccounts/adminAccountCache";
-import { adminAccountsQueryKeys } from "@/features/adminAccounts/queryKeys";
-import {
-  createLoginAccount,
-  listLoginAccounts,
-  updateLoginAccount,
-} from "@/shared/api/adminAccounts";
+import { createLoginAccount, updateLoginAccount } from "@/shared/api/adminAccounts";
 import type {
   CreateLoginAccountRequest,
   UpdateLoginAccountRequest,
 } from "@/shared/api/adminAccounts";
 import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { formatApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
+import { adminLoginAccountsQueryOptions } from "@/shared/api/queryOptions";
 import { isInitialQueryLoading, shouldShowQueryError } from "@/shared/api/queryErrorState";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 import { showToast } from "@/shared/ui/feedback/Toast";
@@ -24,10 +20,7 @@ export function useAdminAccountsPageController() {
   const queryClient = useQueryClient();
   const idempotencyKeys = useIdempotencyKeyStore();
 
-  const accountsQuery = useQuery({
-    queryKey: adminAccountsQueryKeys.all(),
-    queryFn: ({ signal }) => listLoginAccounts({ signal }),
-  });
+  const accountsQuery = useQuery(adminLoginAccountsQueryOptions());
 
   const [createState, createAction] = useActionState<typeof initialCreateAccountState, FormData>(
     async (previous, formData) => {

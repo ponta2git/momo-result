@@ -1,8 +1,8 @@
 import type { ApiDownloadResult } from "@/shared/api/client";
+import { exportMatches } from "@/shared/api/exports";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { triggerBrowserDownload } from "@/shared/browser/downloadFile";
 
-import { exportMatches } from "./exportApi";
 import type { ExportDownloadOutcome, ExportMatchesRequest } from "./exportTypes";
 
 export const DEFAULT_EXPORT_TIMEOUT_MS = 30_000;

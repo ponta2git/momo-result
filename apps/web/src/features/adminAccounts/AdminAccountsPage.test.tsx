@@ -6,7 +6,7 @@ import { http, HttpResponse } from "msw";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { AdminAccountsPage } from "@/features/adminAccounts/AdminAccountsPage";
-import { adminAccountsQueryKeys } from "@/features/adminAccounts/queryKeys";
+import { adminAccountKeys } from "@/shared/api/queryKeys";
 import { createDeferred } from "@/test/deferred";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
@@ -62,7 +62,7 @@ describe("AdminAccountsPage", () => {
   it("does not show a cached list error while refetching the account list", async () => {
     await queryClient
       .fetchQuery({
-        queryKey: adminAccountsQueryKeys.all(),
+        queryKey: adminAccountKeys.all(),
         queryFn: async () => {
           throw new Error("cached account error");
         },

@@ -1,4 +1,4 @@
-import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   useCallback,
   useDeferredValue,
@@ -14,7 +14,10 @@ import {
   confirmedDraftDestination,
   confirmedDraftMessages,
 } from "@/features/matches/confirmedDraftNavigation";
-import { fetchMatchList, fetchMatchListSummary } from "@/features/matches/list/matchListQuery";
+import {
+  buildMatchListApiQuery,
+  buildMatchListSummaryQuery,
+} from "@/features/matches/list/matchListQuery";
 import {
   buildMatchListSearchParams,
   defaultMatchListSearch,
@@ -24,15 +27,20 @@ import {
 import type { MatchListAction, MatchListSearch } from "@/features/matches/list/matchListTypes";
 import { toMatchListItemViews } from "@/features/matches/list/matchListViewModel";
 import { invalidateAfterMatchConfirmed } from "@/shared/api/cacheInvalidation";
-import { listHeldEvents } from "@/shared/api/heldEvents";
-import { listGameTitles, listMapMasters, listSeasonMasters } from "@/shared/api/masters";
-import { getMatchDraftDetail } from "@/shared/api/matchDrafts";
+import {
+  gameTitlesQueryOptions,
+  heldEventsQueryOptions,
+  mapMastersQueryOptions,
+  matchDraftDetailQueryOptions,
+  matchListQueryOptions,
+  matchListSummaryQueryOptions,
+  seasonMastersQueryOptions,
+} from "@/shared/api/queryOptions";
 import {
   isInitialQueryLoading,
   shouldShowBlockingQueryError,
   shouldShowStaleShield,
 } from "@/shared/api/queryErrorState";
-import { heldEventKeys, masterKeys, matchKeys } from "@/shared/api/queryKeys";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
 export function useMatchesListPageController() {
@@ -68,36 +76,14 @@ export function useMatchesListPageController() {
     });
   }, [setSearchParams, startFilterTransition]);
 
-  const heldEventsQuery = useQuery({
-    queryFn: ({ signal }) => listHeldEvents("", 100, { signal }),
-    queryKey: heldEventKeys.scope("matches-list"),
-  });
-  const gameTitlesQuery = useQuery({
-    queryFn: ({ signal }) => listGameTitles({ signal }),
-    queryKey: masterKeys.gameTitles.list("matches-list"),
-  });
-  const seasonsQuery = useQuery({
-    queryFn: ({ signal }) => listSeasonMasters(undefined, { signal }),
-    queryKey: masterKeys.seasonMasters.list("matches-list"),
-  });
-  const mapsQuery = useQuery({
-    queryFn: ({ signal }) => listMapMasters(undefined, { signal }),
-    queryKey: masterKeys.mapMasters.list("matches-list"),
-  });
-  const matchesQuery = useQuery({
-    placeholderData: keepPreviousData,
-    queryFn: ({ signal }) => fetchMatchList(deferredSearch, signal),
-    queryKey: matchKeys.list(deferredSearch),
-  });
-  const matchesSummaryQuery = useQuery({
-    placeholderData: keepPreviousData,
-    queryFn: ({ signal }) => fetchMatchListSummary(deferredSearch, signal),
-    queryKey: matchKeys.summary({
-      gameTitleId: deferredSearch.gameTitleId,
-      heldEventId: deferredSearch.heldEventId,
-      seasonMasterId: deferredSearch.seasonMasterId,
-    }),
-  });
+  const heldEventsQuery = useQuery(heldEventsQueryOptions("", 100, "matches-list"));
+  const gameTitlesQuery = useQuery(gameTitlesQueryOptions("matches-list"));
+  const seasonsQuery = useQuery(seasonMastersQueryOptions("matches-list", undefined));
+  const mapsQuery = useQuery(mapMastersQueryOptions("matches-list", undefined));
+  const matchesQuery = useQuery(matchListQueryOptions(buildMatchListApiQuery(deferredSearch)));
+  const matchesSummaryQuery = useQuery(
+    matchListSummaryQueryOptions(buildMatchListSummaryQuery(deferredSearch)),
+  );
 
   const lookupMaps = useMemo(() => {
     return {
@@ -224,8 +210,7 @@ export function useMatchesListPageController() {
     setDraftStatusChecking(draftId, true);
     try {
       const detail = await queryClient.fetchQuery({
-        queryKey: matchKeys.draft.detail(draftId),
-        queryFn: ({ signal }) => getMatchDraftDetail(draftId, { signal }),
+        ...matchDraftDetailQueryOptions(draftId),
         staleTime: 0,
       });
       const destination = confirmedDraftDestination(detail);

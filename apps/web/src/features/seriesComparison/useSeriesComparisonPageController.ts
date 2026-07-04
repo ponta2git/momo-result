@@ -1,4 +1,4 @@
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useCallback, useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
 import { useSearchParams } from "react-router-dom";
 
@@ -22,12 +22,11 @@ import {
   shouldShowQueryError,
   shouldShowStaleShield,
 } from "@/shared/api/queryErrorState";
-import { seriesComparisonKeys } from "@/shared/api/queryKeys";
 import {
-  getSeriesComparison,
-  getSeriesComparisonOptions,
-  getSeriesComparisonReview,
-} from "@/shared/api/seriesComparison";
+  seriesComparisonAggregateQueryOptions,
+  seriesComparisonOptionsQueryOptions,
+  seriesComparisonReviewQueryOptions,
+} from "@/shared/api/queryOptions";
 
 function scopeSignature(state: SeriesComparisonUrlState): string {
   return [state.gameTitleId ?? "", state.seasonMasterId ?? "", state.mapMasterId ?? ""].join("|");
@@ -39,10 +38,7 @@ export function useSeriesComparisonPageController() {
   const [optimisticState, setOptimisticState] = useState<SeriesComparisonUrlState | null>(null);
   const [, startStateTransition] = useTransition();
 
-  const optionsQuery = useQuery({
-    queryFn: ({ signal }) => getSeriesComparisonOptions({ signal }),
-    queryKey: seriesComparisonKeys.options(),
-  });
+  const optionsQuery = useQuery(seriesComparisonOptionsQueryOptions());
 
   const urlState = useMemo(
     () => normalizeSeriesComparisonSelection(optionsQuery.data, rawState),
@@ -91,30 +87,12 @@ export function useSeriesComparisonPageController() {
     }
   }, [normalizedStateSignature, optimisticState, urlStateSignature]);
 
-  const aggregateQuery = useQuery({
-    enabled: aggregateQueryParams !== undefined,
-    placeholderData: keepPreviousData,
-    queryFn: ({ signal }) => {
-      if (!aggregateQueryParams) {
-        throw new Error("series comparison query is not ready");
-      }
-      return getSeriesComparison(aggregateQueryParams, { signal });
-    },
-    queryKey: seriesComparisonKeys.aggregate(aggregateQueryParams),
-  });
+  const aggregateQuery = useQuery(seriesComparisonAggregateQueryOptions(aggregateQueryParams));
   const reviewEnabled =
     reviewQueryParams !== undefined && activeView === defaultSeriesComparisonView;
-  const reviewQuery = useQuery({
-    enabled: reviewEnabled,
-    placeholderData: keepPreviousData,
-    queryFn: ({ signal }) => {
-      if (!reviewQueryParams) {
-        throw new Error("series comparison review query is not ready");
-      }
-      return getSeriesComparisonReview(reviewQueryParams, { signal });
-    },
-    queryKey: seriesComparisonKeys.review(reviewQueryParams),
-  });
+  const reviewQuery = useQuery(
+    seriesComparisonReviewQueryOptions(reviewQueryParams, reviewEnabled),
+  );
 
   const selectedSeries = findSelectedSeries(optionsQuery.data, normalizedState.gameTitleId);
   const seasonOptions = selectedSeries?.seasons ?? [];

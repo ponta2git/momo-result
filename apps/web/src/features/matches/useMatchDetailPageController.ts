@@ -13,14 +13,18 @@ import type {
   MatchDetailSortState,
 } from "@/features/matches/matchDetailViewModel";
 import { invalidateAfterMatchDeleted } from "@/shared/api/cacheInvalidation";
-import { listHeldEvents } from "@/shared/api/heldEvents";
 import { runIdempotentMutation } from "@/shared/api/idempotency";
-import { listGameTitles, listMapMasters, listSeasonMasters } from "@/shared/api/masters";
-import { deleteMatch, getMatch } from "@/shared/api/matches";
+import { deleteMatch } from "@/shared/api/matches";
 import { formatApiError } from "@/shared/api/problemDetails";
+import {
+  gameTitlesQueryOptions,
+  heldEventsQueryOptions,
+  mapMastersQueryOptions,
+  matchDetailQueryOptions,
+  seasonMastersQueryOptions,
+  seriesComparisonAggregateQueryOptions,
+} from "@/shared/api/queryOptions";
 import { isInitialQueryLoading, shouldShowBlockingQueryError } from "@/shared/api/queryErrorState";
-import { heldEventKeys, masterKeys, matchKeys, seriesComparisonKeys } from "@/shared/api/queryKeys";
-import { getSeriesComparison } from "@/shared/api/seriesComparison";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 
 export function useMatchDetailPageController() {
@@ -35,28 +39,12 @@ export function useMatchDetailPageController() {
     direction: "asc",
   });
 
-  const matchQuery = useQuery({
-    enabled: matchId.trim().length > 0,
-    queryFn: ({ signal }) => getMatch(matchId, { signal }),
-    queryKey: matchKeys.detail(matchId),
-  });
+  const matchQuery = useQuery(matchDetailQueryOptions(matchId, matchId.trim().length > 0));
 
-  const heldEventsQuery = useQuery({
-    queryFn: ({ signal }) => listHeldEvents("", 100, { signal }),
-    queryKey: heldEventKeys.scope("all"),
-  });
-  const gameTitlesQuery = useQuery({
-    queryFn: ({ signal }) => listGameTitles({ signal }),
-    queryKey: masterKeys.gameTitles.list("match-detail"),
-  });
-  const seasonsQuery = useQuery({
-    queryFn: ({ signal }) => listSeasonMasters(undefined, { signal }),
-    queryKey: masterKeys.seasonMasters.list("match-detail"),
-  });
-  const mapsQuery = useQuery({
-    queryFn: ({ signal }) => listMapMasters(undefined, { signal }),
-    queryKey: masterKeys.mapMasters.list("match-detail"),
-  });
+  const heldEventsQuery = useQuery(heldEventsQueryOptions("", 100, "all"));
+  const gameTitlesQuery = useQuery(gameTitlesQueryOptions("match-detail"));
+  const seasonsQuery = useQuery(seasonMastersQueryOptions("match-detail", undefined));
+  const mapsQuery = useQuery(mapMastersQueryOptions("match-detail", undefined));
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
@@ -79,16 +67,9 @@ export function useMatchDetailPageController() {
     () => (match ? { gameTitleId: match.gameTitleId } : undefined),
     [match],
   );
-  const seriesComparisonQuery = useQuery({
-    enabled: seriesComparisonQueryParams !== undefined,
-    queryFn: ({ signal }) => {
-      if (!seriesComparisonQueryParams) {
-        throw new Error("series comparison query is not ready");
-      }
-      return getSeriesComparison(seriesComparisonQueryParams, { signal });
-    },
-    queryKey: seriesComparisonKeys.aggregate(seriesComparisonQueryParams),
-  });
+  const seriesComparisonQuery = useQuery(
+    seriesComparisonAggregateQueryOptions(seriesComparisonQueryParams),
+  );
   const heldEvent = match
     ? (heldEventsQuery.data?.items ?? []).find((event) => event.id === match.heldEventId)
     : undefined;

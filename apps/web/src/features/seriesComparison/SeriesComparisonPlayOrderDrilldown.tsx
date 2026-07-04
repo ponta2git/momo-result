@@ -1,18 +1,13 @@
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { LoaderCircle } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { DrilldownPlayerSelector } from "@/features/seriesComparison/SeriesComparisonDrilldownPrimitives";
 import type { PlayOrderTableView } from "@/features/seriesComparison/SeriesComparisonPlayOrderDrilldownTypes";
 import { PlayOrderSummary } from "@/features/seriesComparison/SeriesComparisonPlayOrderSummary";
 import { AverageTrendPanel } from "@/features/seriesComparison/SeriesComparisonPlayOrderTrendPanel";
+import { useSeriesComparisonDrilldownQuery } from "@/features/seriesComparison/useSeriesComparisonDrilldownQuery";
 import { isInitialQueryLoading, shouldShowBlockingQueryError } from "@/shared/api/queryErrorState";
-import { seriesComparisonKeys } from "@/shared/api/queryKeys";
-import { getSeriesComparisonDrilldown } from "@/shared/api/seriesComparison";
-import type {
-  SeriesComparisonDrilldownQuery,
-  SeriesComparisonResponse,
-} from "@/shared/api/seriesComparison";
+import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
 import { Dialog } from "@/shared/ui/feedback/Dialog";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
@@ -31,37 +26,11 @@ export function PlayOrderRankHistoryDrilldownDialog({
   selectedMemberId: string | null;
 }) {
   const [tableView, setTableView] = useState<PlayOrderTableView>("trendData");
-  const players = response.players ?? [];
-  const selectedPlayer =
-    players.find((player) => player.memberId === selectedMemberId) ?? players[0] ?? null;
-  const query = useMemo<SeriesComparisonDrilldownQuery | undefined>(() => {
-    if (!selectedPlayer) {
-      return undefined;
-    }
-    return {
-      gameTitleId: response.scope.gameTitleId,
-      mapMasterId: response.scope.mapMasterId,
-      memberId: selectedPlayer.memberId,
-      metricId: "playOrder.rankHistory",
-      seasonMasterId: response.scope.seasonMasterId,
-    };
-  }, [
-    response.scope.gameTitleId,
-    response.scope.mapMasterId,
-    response.scope.seasonMasterId,
-    selectedPlayer,
-  ]);
-
-  const drilldownQuery = useQuery({
-    enabled: open && query !== undefined,
-    placeholderData: keepPreviousData,
-    queryFn: ({ signal }) => {
-      if (!query) {
-        throw new Error("series comparison play order drilldown query is not ready");
-      }
-      return getSeriesComparisonDrilldown(query, { signal });
-    },
-    queryKey: seriesComparisonKeys.drilldown(query),
+  const { drilldownQuery, players, selectedPlayer } = useSeriesComparisonDrilldownQuery({
+    metricId: "playOrder.rankHistory",
+    open,
+    response,
+    selectedMemberId,
   });
   const data = drilldownQuery.data;
   const payload = data?.playOrderRankHistory;

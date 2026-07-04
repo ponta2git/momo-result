@@ -85,115 +85,119 @@ function parseNumericValue(value: string, allowSign: boolean): number | undefine
   return /^\d+$/u.test(value) ? Number(value) : undefined;
 }
 
-export type NumericInputCellProps = {
+export type NumericInputCellField = {
   allowSign: boolean;
   ariaLabel: string;
   baseClassName: string;
   cellId: string;
+  value: number;
+};
+
+export type NumericInputCellInteraction = {
   col?: number | undefined;
-  error?: boolean | undefined;
   focusImageKind?: PreferredImageKind | undefined;
-  originalValue?: number | undefined;
   registerCellRef?: RegisterCellRef | undefined;
   row: number;
-  showStateLabel?: boolean | undefined;
-  synced?: boolean | undefined;
-  value: number;
   onCommit: (value: number) => void;
   onKeyboard?: NumericKeyboardHandler | undefined;
   onPreferImageKindChange?: ((kind: PreferredImageKind) => void) | undefined;
 };
 
+export type NumericInputCellState = {
+  error?: boolean | undefined;
+  originalValue?: number | undefined;
+  showStateLabel?: boolean | undefined;
+  synced?: boolean | undefined;
+};
+
+export type NumericInputCellProps = {
+  field: NumericInputCellField;
+  interaction: NumericInputCellInteraction;
+  state?: NumericInputCellState | undefined;
+};
+
 export const NumericInputCell = memo(function NumericInputCell({
-  allowSign,
-  ariaLabel,
-  baseClassName,
-  cellId,
-  col,
-  error = false,
-  focusImageKind,
-  originalValue,
-  registerCellRef,
-  row,
-  showStateLabel = false,
-  synced = false,
-  value,
-  onCommit,
-  onKeyboard,
-  onPreferImageKindChange,
+  field,
+  interaction,
+  state,
 }: NumericInputCellProps) {
   const [draftValue, setDraftValue] = useState<string | undefined>(undefined);
   const editStartValueRef = useRef<string | null>(null);
-  const fallbackValue = Number.isFinite(value) ? String(value) : "";
+  const fallbackValue = Number.isFinite(field.value) ? String(field.value) : "";
   const inputValue = draftValue ?? fallbackValue;
   const parsedDraftValue =
-    draftValue === undefined ? undefined : parseNumericValue(draftValue, allowSign);
-  const currentValue = parsedDraftValue ?? value;
-  const viewState = showStateLabel
+    draftValue === undefined ? undefined : parseNumericValue(draftValue, field.allowSign);
+  const currentValue = parsedDraftValue ?? field.value;
+  const viewState = state?.showStateLabel
     ? cellViewState({
         currentValue,
-        error,
-        originalValue,
-        synced,
+        error: state.error ?? false,
+        originalValue: state.originalValue,
+        synced: state.synced ?? false,
       })
     : { toneClass: "" };
 
   const commitInputValue = useCallback(() => {
-    const parsed = parseNumericValue(inputValue, allowSign);
+    const parsed = parseNumericValue(inputValue, field.allowSign);
     if (parsed === undefined) {
       return;
     }
-    onCommit(parsed);
+    interaction.onCommit(parsed);
     setDraftValue(undefined);
-  }, [allowSign, inputValue, onCommit]);
+  }, [field.allowSign, inputValue, interaction]);
 
   const revertCell = useCallback(() => {
     const before = editStartValueRef.current ?? fallbackValue;
-    const parsed = parseNumericValue(before, allowSign);
+    const parsed = parseNumericValue(before, field.allowSign);
     setDraftValue(before);
     if (parsed !== undefined) {
-      onCommit(parsed);
+      interaction.onCommit(parsed);
     }
-  }, [allowSign, fallbackValue, onCommit]);
+  }, [fallbackValue, field.allowSign, interaction]);
 
   const handleChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
-      setDraftValue(normalizeNumericDraft(event.currentTarget.value, allowSign));
+      setDraftValue(normalizeNumericDraft(event.currentTarget.value, field.allowSign));
     },
-    [allowSign],
+    [field.allowSign],
   );
 
   const handleFocus = useCallback(() => {
     editStartValueRef.current = inputValue;
-    if (focusImageKind) {
-      onPreferImageKindChange?.(focusImageKind);
+    if (interaction.focusImageKind) {
+      interaction.onPreferImageKindChange?.(interaction.focusImageKind);
     }
-  }, [focusImageKind, inputValue, onPreferImageKindChange]);
+  }, [inputValue, interaction]);
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLInputElement>) => {
-      if (col === undefined || !onKeyboard) {
+      if (interaction.col === undefined || !interaction.onKeyboard) {
         return;
       }
-      onKeyboard({ col, event, onRevertCell: revertCell, row });
+      interaction.onKeyboard({
+        col: interaction.col,
+        event,
+        onRevertCell: revertCell,
+        row: interaction.row,
+      });
     },
-    [col, onKeyboard, revertCell, row],
+    [interaction, revertCell],
   );
 
   const handleRef = useCallback(
     (node: HTMLInputElement | null) => {
-      registerCellRef?.(cellId, node);
+      interaction.registerCellRef?.(field.cellId, node);
     },
-    [cellId, registerCellRef],
+    [field.cellId, interaction],
   );
 
   return (
     <>
       <input
-        ref={registerCellRef ? handleRef : undefined}
-        aria-label={ariaLabel}
-        className={`${baseClassName} ${viewState.toneClass}`}
-        id={cellId}
+        ref={interaction.registerCellRef ? handleRef : undefined}
+        aria-label={field.ariaLabel}
+        className={`${field.baseClassName} ${viewState.toneClass}`}
+        id={field.cellId}
         inputMode="numeric"
         type="text"
         value={inputValue}
@@ -203,7 +207,7 @@ export const NumericInputCell = memo(function NumericInputCell({
         onKeyDown={handleKeyDown}
       />
       <AnimatePresence initial={false}>
-        {showStateLabel && viewState.label ? (
+        {state?.showStateLabel && viewState.label ? (
           <motion.p
             key={viewState.label}
             animate={{ opacity: 1, y: 0 }}

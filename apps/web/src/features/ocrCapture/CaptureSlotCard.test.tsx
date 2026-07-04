@@ -7,16 +7,20 @@ import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
 function renderCard(slot: CaptureSlotState) {
   return render(
     <CaptureSlotCard
-      accentClass="bg-[var(--color-tray-assets)]"
-      index={0}
-      label="総資産"
-      onClear={vi.fn()}
-      onDropImage={vi.fn()}
-      onManualRefresh={vi.fn()}
-      onMoveImage={vi.fn()}
-      stationLabel="01"
+      actions={{
+        onClear: vi.fn(),
+        onDropImage: vi.fn(),
+        onManualRefresh: vi.fn(),
+        onMoveImage: vi.fn(),
+      }}
+      presentation={{
+        accentClass: "bg-[var(--color-tray-assets)]",
+        index: 0,
+        label: "総資産",
+        stationLabel: "01",
+        total: 3,
+      }}
       slot={slot}
-      total={3}
     />,
   );
 }

@@ -13,24 +13,19 @@ import {
 } from "@/features/matches/workspace/scoreGrid/ScoreGridColumns";
 import { ScoreGridNumericEditor } from "@/features/matches/workspace/scoreGrid/ScoreGridNumericEditor";
 import type {
+  ScoreGridActions,
+  ScoreGridData,
   ScoreGridNumericHandlers,
-  ScoreGridProps,
 } from "@/features/matches/workspace/scoreGrid/ScoreGridTypes";
 import { fixedMembers, memberDisplayName } from "@/shared/domain/members";
 import { momoPanelTransition } from "@/shared/ui/motion/variants";
 
-type ScoreGridMobileCardsProps = Pick<
-  ScoreGridProps,
-  | "errorPathSet"
-  | "lastSyncedPlayerIndex"
-  | "onPlayOrderChange"
-  | "onPlayerChange"
-  | "originalPlayers"
-  | "players"
-> &
+type ScoreGridMobileCardsProps = ScoreGridData &
   ScoreGridNumericHandlers & {
     expandedMobilePlayer: number;
-    onPreferImageKindChange?: ScoreGridProps["onPreferImageKindChange"] | undefined;
+    onPlayerChange: ScoreGridActions["onPlayerChange"];
+    onPlayOrderChange: ScoreGridActions["onPlayOrderChange"];
+    onPreferImageKindChange?: ScoreGridActions["onPreferImageKindChange"] | undefined;
     onTogglePlayer: (index: number) => void;
   };
 
@@ -174,7 +169,7 @@ function MobileMemberSelect({
 }: {
   index: number;
   memberId: MatchFormValues["players"][number]["memberId"];
-  onPlayerChange: ScoreGridProps["onPlayerChange"];
+  onPlayerChange: ScoreGridActions["onPlayerChange"];
 }) {
   return (
     <label className="grid gap-1 text-xs text-[var(--color-text-secondary)]">
@@ -207,8 +202,8 @@ function MobilePlayOrderSelect({
 }: {
   error: boolean;
   index: number;
-  onPlayOrderChange: ScoreGridProps["onPlayOrderChange"];
-  onPreferImageKindChange: ScoreGridProps["onPreferImageKindChange"];
+  onPlayOrderChange: ScoreGridActions["onPlayOrderChange"];
+  onPreferImageKindChange: ScoreGridActions["onPreferImageKindChange"];
   playOrder: number;
 }) {
   return (
@@ -250,7 +245,7 @@ function MobilePlayerNumericField({
   focusImageKind?: "incident_log" | "revenue" | "total_assets";
   index: number;
   onPlayerCommit: ScoreGridNumericHandlers["handlePlayerNumericCommit"];
-  onPreferImageKindChange?: ScoreGridProps["onPreferImageKindChange"];
+  onPreferImageKindChange?: ScoreGridActions["onPreferImageKindChange"];
   originalValue: number | undefined;
   player: MatchFormValues["players"][number];
 }) {

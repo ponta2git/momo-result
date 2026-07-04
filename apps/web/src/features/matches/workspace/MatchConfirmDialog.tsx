@@ -7,14 +7,22 @@ import { Button } from "@/shared/ui/actions/Button";
 import { Dialog } from "@/shared/ui/feedback/Dialog";
 
 type MatchConfirmDialogProps = {
+  actions: MatchConfirmActions;
+  summary: MatchConfirmSummaryProps;
+  validationMessage?: string | undefined;
+  values: MatchFormValues;
+};
+
+type MatchConfirmActions = {
+  confirmAction: (formData: FormData) => void | Promise<void>;
+  onCancel: () => void;
+};
+
+type MatchConfirmSummaryProps = {
   gameTitleName?: string | undefined;
   heldEvent: HeldEventResponse | undefined;
   mapName?: string | undefined;
   seasonName?: string | undefined;
-  validationMessage?: string | undefined;
-  values: MatchFormValues;
-  onCancel: () => void;
-  confirmAction: (formData: FormData) => void | Promise<void>;
 };
 
 function ConfirmActionButtons({ onCancel }: { onCancel: () => void }) {
@@ -31,15 +39,52 @@ function ConfirmActionButtons({ onCancel }: { onCancel: () => void }) {
   );
 }
 
-export function MatchConfirmDialog({
+function MatchConfirmSummary({
   gameTitleName,
   heldEvent,
   mapName,
   seasonName,
+  values,
+}: MatchConfirmSummaryProps & { values: MatchFormValues }) {
+  return (
+    <dl className="grid gap-2 text-sm text-[var(--color-text-primary)]">
+      <div className="flex justify-between gap-4">
+        <dt className="text-[var(--color-text-secondary)]">開催履歴</dt>
+        <dd>{heldEvent ? new Date(heldEvent.heldAt).toLocaleString() : "未選択"}</dd>
+      </div>
+      <div className="flex justify-between gap-4">
+        <dt className="text-[var(--color-text-secondary)]">試合番号</dt>
+        <dd>第{values.matchNoInEvent}試合</dd>
+      </div>
+      <div className="flex justify-between gap-4">
+        <dt className="text-[var(--color-text-secondary)]">作品</dt>
+        <dd>{gameTitleName ?? "未選択"}</dd>
+      </div>
+      <div className="flex justify-between gap-4">
+        <dt className="text-[var(--color-text-secondary)]">シーズン</dt>
+        <dd>{seasonName ?? "未選択"}</dd>
+      </div>
+      <div className="flex justify-between gap-4">
+        <dt className="text-[var(--color-text-secondary)]">マップ</dt>
+        <dd>{mapName ?? "未選択"}</dd>
+      </div>
+      <div className="flex justify-between gap-4">
+        <dt className="text-[var(--color-text-secondary)]">順位</dt>
+        <dd>
+          {values.players
+            .map((player) => `${player.rank}位 ${memberDisplayName(player.memberId)}`)
+            .join(" / ")}
+        </dd>
+      </div>
+    </dl>
+  );
+}
+
+export function MatchConfirmDialog({
+  actions,
+  summary,
   validationMessage,
   values,
-  onCancel,
-  confirmAction,
 }: MatchConfirmDialogProps) {
   return (
     <Dialog
@@ -48,41 +93,12 @@ export function MatchConfirmDialog({
       title="この内容で確定しますか？"
       onOpenChange={(open) => {
         if (!open) {
-          onCancel();
+          actions.onCancel();
         }
       }}
     >
-      <form action={confirmAction} className="min-w-0">
-        <dl className="grid gap-2 text-sm text-[var(--color-text-primary)]">
-          <div className="flex justify-between gap-4">
-            <dt className="text-[var(--color-text-secondary)]">開催履歴</dt>
-            <dd>{heldEvent ? new Date(heldEvent.heldAt).toLocaleString() : "未選択"}</dd>
-          </div>
-          <div className="flex justify-between gap-4">
-            <dt className="text-[var(--color-text-secondary)]">試合番号</dt>
-            <dd>第{values.matchNoInEvent}試合</dd>
-          </div>
-          <div className="flex justify-between gap-4">
-            <dt className="text-[var(--color-text-secondary)]">作品</dt>
-            <dd>{gameTitleName ?? "未選択"}</dd>
-          </div>
-          <div className="flex justify-between gap-4">
-            <dt className="text-[var(--color-text-secondary)]">シーズン</dt>
-            <dd>{seasonName ?? "未選択"}</dd>
-          </div>
-          <div className="flex justify-between gap-4">
-            <dt className="text-[var(--color-text-secondary)]">マップ</dt>
-            <dd>{mapName ?? "未選択"}</dd>
-          </div>
-          <div className="flex justify-between gap-4">
-            <dt className="text-[var(--color-text-secondary)]">順位</dt>
-            <dd>
-              {values.players
-                .map((player) => `${player.rank}位 ${memberDisplayName(player.memberId)}`)
-                .join(" / ")}
-            </dd>
-          </div>
-        </dl>
+      <form action={actions.confirmAction} className="min-w-0">
+        <MatchConfirmSummary {...summary} values={values} />
 
         {validationMessage ? (
           <div
@@ -93,7 +109,7 @@ export function MatchConfirmDialog({
           </div>
         ) : null}
 
-        <ConfirmActionButtons onCancel={onCancel} />
+        <ConfirmActionButtons onCancel={actions.onCancel} />
       </form>
     </Dialog>
   );

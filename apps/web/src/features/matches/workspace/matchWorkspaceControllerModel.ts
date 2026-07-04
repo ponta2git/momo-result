@@ -84,26 +84,34 @@ export function buildMatchWorkspaceControllerModel(args: MatchWorkspaceControlle
       : null,
     confirmDialog: args.confirmOpen
       ? {
-          confirmAction: args.confirmAction,
-          gameTitleName: viewModel.selectedGameTitle?.name,
-          heldEvent: viewModel.selectedHeldEvent,
-          mapName: viewModel.selectedMap?.name,
-          seasonName: viewModel.selectedSeason?.name,
+          actions: {
+            confirmAction: args.confirmAction,
+            onCancel: args.closeConfirm,
+          },
+          summary: {
+            gameTitleName: viewModel.selectedGameTitle?.name,
+            heldEvent: viewModel.selectedHeldEvent,
+            mapName: viewModel.selectedMap?.name,
+            seasonName: viewModel.selectedSeason?.name,
+          },
           validationMessage: args.validationMessage,
           values: state.values,
-          onCancel: args.closeConfirm,
         }
       : null,
     editor: {
       scoreGrid: {
-        errorPathSet: visibleErrorPathSet,
-        lastSyncedPlayerIndex: state.lastSyncedPlayerIndex,
-        originalPlayers: args.workspaceData?.originalPlayers,
-        players: state.values.players,
-        onIncidentChange: args.formHandlers.onIncidentChange,
-        onPlayerChange: args.formHandlers.onPlayerChange,
-        onPlayOrderChange: args.formHandlers.onPlayOrderChange,
-        onPreferImageKindChange: args.onPreferImageKindChange,
+        actions: {
+          onIncidentChange: args.formHandlers.onIncidentChange,
+          onPlayerChange: args.formHandlers.onPlayerChange,
+          onPlayOrderChange: args.formHandlers.onPlayOrderChange,
+          onPreferImageKindChange: args.onPreferImageKindChange,
+        },
+        data: {
+          errorPathSet: visibleErrorPathSet,
+          lastSyncedPlayerIndex: state.lastSyncedPlayerIndex,
+          originalPlayers: args.workspaceData?.originalPlayers,
+          players: state.values.players,
+        },
       },
       sourceImagePanel:
         viewModel.hasSourceImagePanel && viewModel.matchDraftIdForImages

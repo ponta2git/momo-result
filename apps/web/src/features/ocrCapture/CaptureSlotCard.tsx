@@ -13,32 +13,28 @@ import { parseSlotKind } from "@/shared/api/enums";
 import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
 
 type CaptureSlotCardProps = {
-  slot: CaptureSlotState;
-  label: string;
-  stationLabel: string;
-  accentClass: string;
+  actions: CaptureSlotActionsModel;
   draft?: OcrDraftResponse | undefined;
-  index: number;
-  total: number;
-  onClear: () => void;
-  onDropImage: (sourceKind: SlotKind, targetKind: SlotKind) => void;
-  onMoveImage: (direction: -1 | 1) => void;
-  onManualRefresh: () => void;
+  presentation: CaptureSlotPresentation;
+  slot: CaptureSlotState;
 };
 
-export function CaptureSlotCard({
-  slot,
-  label,
-  stationLabel,
-  accentClass,
-  draft,
-  index,
-  total,
-  onClear,
-  onDropImage,
-  onMoveImage,
-  onManualRefresh,
-}: CaptureSlotCardProps) {
+type CaptureSlotActionsModel = {
+  onClear: () => void;
+  onDropImage: (sourceKind: SlotKind, targetKind: SlotKind) => void;
+  onManualRefresh: () => void;
+  onMoveImage: (direction: -1 | 1) => void;
+};
+
+type CaptureSlotPresentation = {
+  accentClass: string;
+  index: number;
+  label: string;
+  stationLabel: string;
+  total: number;
+};
+
+export function CaptureSlotCard({ actions, draft, presentation, slot }: CaptureSlotCardProps) {
   const mismatch = slot.detectedKind && slot.detectedKind !== slot.kind;
   const hasImage = Boolean(slot.previewUrl);
   const isWorking = isWorkingStatus(slot.status);
@@ -64,14 +60,14 @@ export function CaptureSlotCard({
       event.preventDefault();
       const sourceKind = parseSlotKind(event.dataTransfer.getData("text/plain"));
       if (sourceKind) {
-        onDropImage(sourceKind, slot.kind);
+        actions.onDropImage(sourceKind, slot.kind);
       }
     },
-    [onDropImage, slot.kind],
+    [actions, slot.kind],
   );
 
-  const handleMoveBackward = useCallback(() => onMoveImage(-1), [onMoveImage]);
-  const handleMoveForward = useCallback(() => onMoveImage(1), [onMoveImage]);
+  const handleMoveBackward = useCallback(() => actions.onMoveImage(-1), [actions]);
+  const handleMoveForward = useCallback(() => actions.onMoveImage(1), [actions]);
 
   return (
     <section
@@ -79,22 +75,24 @@ export function CaptureSlotCard({
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
-      <div className={`absolute inset-x-0 top-0 h-1 ${accentClass}`} />
+      <div className={`absolute inset-x-0 top-0 h-1 ${presentation.accentClass}`} />
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-3">
             <span className="grid size-10 place-items-center rounded-full border border-[var(--color-tray-marker)]/35 bg-[var(--color-tray-marker)]/8 text-sm font-semibold text-[var(--color-tray-marker)]">
-              {stationLabel}
+              {presentation.stationLabel}
             </span>
             <div>
               <p className="text-xs font-semibold text-[var(--color-text-secondary)]">分類</p>
               <h2 className="mt-0.5 text-lg font-semibold text-[var(--color-text-primary)]">
-                {label}
+                {presentation.label}
               </h2>
             </div>
           </div>
           {hasImage ? (
-            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">読み取り分類: {label}</p>
+            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+              読み取り分類: {presentation.label}
+            </p>
           ) : null}
         </div>
         <CaptureStatusBadge status={slot.status} />
@@ -102,16 +100,16 @@ export function CaptureSlotCard({
 
       <CaptureSlotPreview
         isWorking={isWorking}
-        label={label}
+        label={presentation.label}
         slot={slot}
         onDragStartCapture={handleDragStart}
       />
 
       <CaptureSlotActions
-        canMoveBackward={hasImage && !isWorking && index > 0}
-        canMoveForward={hasImage && !isWorking && index < total - 1}
+        canMoveBackward={hasImage && !isWorking && presentation.index > 0}
+        canMoveForward={hasImage && !isWorking && presentation.index < presentation.total - 1}
         clearDisabled={slot.status === "empty" || isWorking}
-        onClear={onClear}
+        onClear={actions.onClear}
         onMoveBackward={handleMoveBackward}
         onMoveForward={handleMoveForward}
       />
@@ -119,7 +117,7 @@ export function CaptureSlotCard({
       <CaptureSlotFeedback
         mismatch={Boolean(mismatch)}
         slot={slot}
-        onManualRefresh={onManualRefresh}
+        onManualRefresh={actions.onManualRefresh}
       />
 
       <DraftPreview draft={draft} />

@@ -38,6 +38,20 @@ export function CaptureRail({
         if (!slot) {
           return null;
         }
+        const actions = {
+          onClear: () => onClear(definition.kind),
+          onDropImage,
+          onManualRefresh: () => onManualRefresh(definition.kind),
+          onMoveImage: (direction: -1 | 1) => onMoveImage(definition.kind, direction),
+        };
+        const presentation = {
+          accentClass: definition.accentClass,
+          index,
+          label: definition.label,
+          stationLabel: definition.stationLabel,
+          total: slotDefinitions.length,
+        };
+
         return (
           <motion.div
             key={definition.kind}
@@ -46,17 +60,10 @@ export function CaptureRail({
             transition={{ ...momoPanelTransition, delay: index * 0.03 }}
           >
             <CaptureSlotCard
-              slot={slot}
-              label={definition.label}
-              stationLabel={definition.stationLabel}
-              accentClass={definition.accentClass}
+              actions={actions}
               draft={drafts[definition.kind]}
-              index={index}
-              total={slotDefinitions.length}
-              onClear={() => onClear(definition.kind)}
-              onDropImage={onDropImage}
-              onMoveImage={(direction) => onMoveImage(definition.kind, direction)}
-              onManualRefresh={() => onManualRefresh(definition.kind)}
+              presentation={presentation}
+              slot={slot}
             />
           </motion.div>
         );

@@ -18,41 +18,45 @@ function ScoreGridHarness({
 
   return (
     <ScoreGrid
-      errorPathSet={new Set()}
-      lastSyncedPlayerIndex={null}
-      originalPlayers={undefined}
-      players={players}
-      onIncidentChange={(index, key, value) => {
-        setPlayers((current) =>
-          current.map((player, playerIndex) =>
-            playerIndex === index
-              ? {
-                  ...player,
-                  incidents: {
-                    ...player.incidents,
-                    [key]: value,
-                  },
-                }
-              : player,
-          ),
-        );
+      actions={{
+        onIncidentChange: (index, key, value) => {
+          setPlayers((current) =>
+            current.map((player, playerIndex) =>
+              playerIndex === index
+                ? {
+                    ...player,
+                    incidents: {
+                      ...player.incidents,
+                      [key]: value,
+                    },
+                  }
+                : player,
+            ),
+          );
+        },
+        onPlayerChange: (index, patch) => {
+          onPlayerChange(index, patch);
+          setPlayers((current) =>
+            current.map((player, playerIndex) =>
+              playerIndex === index ? { ...player, ...patch } : player,
+            ),
+          );
+        },
+        onPlayOrderChange: (index, playOrder) => {
+          setPlayers((current) =>
+            current.map((player, playerIndex) =>
+              playerIndex === index ? { ...player, playOrder } : player,
+            ),
+          );
+        },
+        onRequestSubmitFocus: () => undefined,
       }}
-      onPlayerChange={(index, patch) => {
-        onPlayerChange(index, patch);
-        setPlayers((current) =>
-          current.map((player, playerIndex) =>
-            playerIndex === index ? { ...player, ...patch } : player,
-          ),
-        );
+      data={{
+        errorPathSet: new Set(),
+        lastSyncedPlayerIndex: null,
+        originalPlayers: undefined,
+        players,
       }}
-      onPlayOrderChange={(index, playOrder) => {
-        setPlayers((current) =>
-          current.map((player, playerIndex) =>
-            playerIndex === index ? { ...player, playOrder } : player,
-          ),
-        );
-      }}
-      onRequestSubmitFocus={() => undefined}
     />
   );
 }
@@ -102,29 +106,33 @@ describe("ScoreGrid", () => {
       const [players, setPlayers] = useState(emptyPlayers());
       return (
         <ScoreGrid
-          errorPathSet={new Set()}
-          lastSyncedPlayerIndex={null}
-          originalPlayers={undefined}
-          players={players}
-          onIncidentChange={(index, key, value) => {
-            incidentChanges.push([index, key, value]);
-            setPlayers((current) =>
-              current.map((player, playerIndex) =>
-                playerIndex === index
-                  ? {
-                      ...player,
-                      incidents: {
-                        ...player.incidents,
-                        [key]: value,
-                      },
-                    }
-                  : player,
-              ),
-            );
+          actions={{
+            onIncidentChange: (index, key, value) => {
+              incidentChanges.push([index, key, value]);
+              setPlayers((current) =>
+                current.map((player, playerIndex) =>
+                  playerIndex === index
+                    ? {
+                        ...player,
+                        incidents: {
+                          ...player.incidents,
+                          [key]: value,
+                        },
+                      }
+                    : player,
+                ),
+              );
+            },
+            onPlayerChange: () => undefined,
+            onPlayOrderChange: () => undefined,
+            onRequestSubmitFocus: () => undefined,
           }}
-          onPlayerChange={() => undefined}
-          onPlayOrderChange={() => undefined}
-          onRequestSubmitFocus={() => undefined}
+          data={{
+            errorPathSet: new Set(),
+            lastSyncedPlayerIndex: null,
+            originalPlayers: undefined,
+            players,
+          }}
         />
       );
     }

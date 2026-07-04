@@ -23,9 +23,36 @@ export function MatchWorkspaceEditor({
   setup,
   onRequestSubmitFocus,
 }: MatchWorkspaceEditorProps) {
+  const setupActions = {
+    onGameTitleChange: setup.onGameTitleChange,
+    onPatchRoot: setup.onPatchRoot,
+  };
+  const setupEventCreation = {
+    draftValue: setup.eventDraftValue,
+    pending: setup.createEventPending,
+    onCreate: setup.onCreateEvent,
+    onDraftChange: setup.onEventDraftChange,
+  };
+  const setupOptions = {
+    gameTitleItems: setup.gameTitleItems,
+    heldEvents: setup.heldEvents,
+    mapItems: setup.mapItems,
+    seasonItems: setup.seasonItems,
+  };
+  const scoreGridActions = {
+    ...editor.scoreGrid.actions,
+    onRequestSubmitFocus,
+  };
+
   return (
     <>
-      <MatchSetupSection {...setup} />
+      <MatchSetupSection
+        actions={setupActions}
+        errorPathSet={setup.errorPathSet}
+        eventCreation={setupEventCreation}
+        options={setupOptions}
+        values={setup.values}
+      />
 
       {editor.warnings.length > 0 ? (
         <Card className="mt-4 border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18">
@@ -46,7 +73,7 @@ export function MatchWorkspaceEditor({
         )}
       >
         <Card className="p-4">
-          <ScoreGrid {...editor.scoreGrid} onRequestSubmitFocus={onRequestSubmitFocus} />
+          <ScoreGrid actions={scoreGridActions} data={editor.scoreGrid.data} />
         </Card>
 
         {editor.sourceImagePanel ? <SourceImagePanel {...editor.sourceImagePanel} /> : null}

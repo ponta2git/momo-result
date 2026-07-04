@@ -16,26 +16,21 @@ import {
 import type { GridColumn } from "@/features/matches/workspace/scoreGrid/ScoreGridColumns";
 import { ScoreGridNumericEditor } from "@/features/matches/workspace/scoreGrid/ScoreGridNumericEditor";
 import type {
+  ScoreGridActions,
   ScoreGridCellRegistry,
+  ScoreGridData,
   ScoreGridKeyboardHandler,
   ScoreGridNumericHandlers,
-  ScoreGridProps,
 } from "@/features/matches/workspace/scoreGrid/ScoreGridTypes";
 import { fixedMembers, memberDisplayName } from "@/shared/domain/members";
 
-type ScoreGridDesktopTableProps = Pick<
-  ScoreGridProps,
-  | "errorPathSet"
-  | "lastSyncedPlayerIndex"
-  | "onPlayOrderChange"
-  | "onPlayerChange"
-  | "originalPlayers"
-  | "players"
-> &
+type ScoreGridDesktopTableProps = ScoreGridData &
   ScoreGridCellRegistry &
   ScoreGridNumericHandlers & {
     handleKeyboard: ScoreGridKeyboardHandler;
-    onPreferImageKindChange?: ScoreGridProps["onPreferImageKindChange"] | undefined;
+    onPlayerChange: ScoreGridActions["onPlayerChange"];
+    onPlayOrderChange: ScoreGridActions["onPlayOrderChange"];
+    onPreferImageKindChange?: ScoreGridActions["onPreferImageKindChange"] | undefined;
     originalByPlayOrder: Map<number, OriginalPlayerSnapshot>;
   };
 
@@ -237,7 +232,7 @@ type PlayerNumericDesktopCellProps = ScoreGridCellRegistry &
     field: keyof typeof playerFieldLabels;
     focusImageKind?: "incident_log" | "revenue" | "total_assets";
     handleKeyboard: ScoreGridKeyboardHandler;
-    onPreferImageKindChange?: ScoreGridProps["onPreferImageKindChange"] | undefined;
+    onPreferImageKindChange?: ScoreGridActions["onPreferImageKindChange"] | undefined;
     originalValue: number | undefined;
     player: MatchFormValues["players"][number];
     rowIndex: number;

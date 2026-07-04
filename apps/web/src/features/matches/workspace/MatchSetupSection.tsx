@@ -23,19 +23,31 @@ function toLocalDateTime(value: string): string {
   return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
 }
 
-type MatchSetupSectionProps = {
-  createEventPending: boolean;
-  errorPathSet: Set<string>;
-  eventDraftValue: string;
+type MatchSetupActions = {
+  onGameTitleChange: (gameTitleId: string) => void;
+  onPatchRoot: (patch: Partial<MatchFormValues>) => void;
+};
+
+type MatchSetupEventCreation = {
+  draftValue: string;
+  pending: boolean;
+  onCreate: () => void;
+  onDraftChange: (value: string) => void;
+};
+
+type MatchSetupOptions = {
   gameTitleItems: GameTitleListResponse["items"];
   heldEvents: HeldEventResponse[];
   mapItems: MapMasterListResponse["items"];
   seasonItems: SeasonMasterListResponse["items"];
+};
+
+type MatchSetupSectionProps = {
+  actions: MatchSetupActions;
+  errorPathSet: Set<string>;
+  eventCreation: MatchSetupEventCreation;
+  options: MatchSetupOptions;
   values: MatchFormValues;
-  onCreateEvent: () => void;
-  onEventDraftChange: (value: string) => void;
-  onGameTitleChange: (gameTitleId: string) => void;
-  onPatchRoot: (patch: Partial<MatchFormValues>) => void;
 };
 
 function FieldError({ errorPathSet, path }: { errorPathSet: Set<string>; path: string }) {
@@ -45,20 +57,13 @@ function FieldError({ errorPathSet, path }: { errorPathSet: Set<string>; path: s
 }
 
 export function MatchSetupSection({
-  createEventPending,
+  actions,
   errorPathSet,
-  eventDraftValue,
-  gameTitleItems,
-  heldEvents,
-  mapItems,
-  seasonItems,
+  eventCreation,
+  options,
   values,
-  onCreateEvent,
-  onEventDraftChange,
-  onGameTitleChange,
-  onPatchRoot,
 }: MatchSetupSectionProps) {
-  const selectedHeldEvent = heldEvents.find((event) => event.id === values.heldEventId);
+  const selectedHeldEvent = options.heldEvents.find((event) => event.id === values.heldEventId);
   const errorClass = "border-[var(--color-danger)]/70 bg-[var(--color-danger)]/10";
   const inputStateClass = (path: string) =>
     cn(inputClass, errorPathSet.has(path) ? errorClass : "");
@@ -94,8 +99,10 @@ export function MatchSetupSection({
             className={inputStateClass("heldEventId")}
             value={values.heldEventId}
             onChange={(event) => {
-              const selected = heldEvents.find((candidate) => candidate.id === event.target.value);
-              onPatchRoot({
+              const selected = options.heldEvents.find(
+                (candidate) => candidate.id === event.target.value,
+              );
+              actions.onPatchRoot({
                 heldEventId: event.target.value,
                 matchNoInEvent: (selected?.matchCount ?? 0) + 1,
                 playedAt: selected?.heldAt ?? values.playedAt,
@@ -103,7 +110,7 @@ export function MatchSetupSection({
             }}
           >
             <option value="">未選択</option>
-            {heldEvents.map((event) => (
+            {options.heldEvents.map((event) => (
               <option key={event.id} value={event.id}>
                 {new Date(event.heldAt).toLocaleString()}（{event.matchCount}試合）
               </option>
@@ -122,7 +129,7 @@ export function MatchSetupSection({
             type="text"
             value={Number.isFinite(values.matchNoInEvent) ? String(values.matchNoInEvent) : ""}
             onChange={(event) =>
-              onPatchRoot({
+              actions.onPatchRoot({
                 matchNoInEvent: Number.parseInt(event.target.value.replaceAll(/\D/gu, ""), 10),
               })
             }
@@ -137,7 +144,7 @@ export function MatchSetupSection({
             className={inputStateClass("playedAt")}
             type="datetime-local"
             value={toLocalDateTime(values.playedAt)}
-            onChange={(event) => onPatchRoot({ playedAt: event.target.value })}
+            onChange={(event) => actions.onPatchRoot({ playedAt: event.target.value })}
           />
           <FieldError errorPathSet={errorPathSet} path="playedAt" />
         </label>
@@ -148,10 +155,10 @@ export function MatchSetupSection({
             aria-invalid={errorPathSet.has("gameTitleId")}
             className={inputStateClass("gameTitleId")}
             value={values.gameTitleId}
-            onChange={(event) => onGameTitleChange(event.target.value)}
+            onChange={(event) => actions.onGameTitleChange(event.target.value)}
           >
             <option value="">未選択</option>
-            {(gameTitleItems ?? []).map((gameTitle) => (
+            {(options.gameTitleItems ?? []).map((gameTitle) => (
               <option key={gameTitle.id} value={gameTitle.id}>
                 {gameTitle.name}
               </option>
@@ -167,10 +174,10 @@ export function MatchSetupSection({
             className={inputStateClass("seasonMasterId")}
             disabled={!values.gameTitleId}
             value={values.seasonMasterId}
-            onChange={(event) => onPatchRoot({ seasonMasterId: event.target.value })}
+            onChange={(event) => actions.onPatchRoot({ seasonMasterId: event.target.value })}
           >
             <option value="">未選択</option>
-            {(seasonItems ?? []).map((season) => (
+            {(options.seasonItems ?? []).map((season) => (
               <option key={season.id} value={season.id}>
                 {season.name}
               </option>
@@ -186,10 +193,10 @@ export function MatchSetupSection({
             className={inputStateClass("mapMasterId")}
             disabled={!values.gameTitleId}
             value={values.mapMasterId}
-            onChange={(event) => onPatchRoot({ mapMasterId: event.target.value })}
+            onChange={(event) => actions.onPatchRoot({ mapMasterId: event.target.value })}
           >
             <option value="">未選択</option>
-            {(mapItems ?? []).map((mapMaster) => (
+            {(options.mapItems ?? []).map((mapMaster) => (
               <option key={mapMaster.id} value={mapMaster.id}>
                 {mapMaster.name}
               </option>
@@ -205,7 +212,9 @@ export function MatchSetupSection({
             className={inputStateClass("ownerMemberId")}
             value={values.ownerMemberId}
             onChange={(event) =>
-              onPatchRoot({ ownerMemberId: event.target.value as MatchFormValues["ownerMemberId"] })
+              actions.onPatchRoot({
+                ownerMemberId: event.target.value as MatchFormValues["ownerMemberId"],
+              })
             }
           >
             {fixedMembers.map((member) => (
@@ -226,15 +235,15 @@ export function MatchSetupSection({
           <input
             className={inputClass}
             type="datetime-local"
-            value={eventDraftValue}
-            onChange={(event) => onEventDraftChange(event.target.value)}
+            value={eventCreation.draftValue}
+            onChange={(event) => eventCreation.onDraftChange(event.target.value)}
           />
           <Button
-            disabled={!eventDraftValue || createEventPending}
-            pending={createEventPending}
+            disabled={!eventCreation.draftValue || eventCreation.pending}
+            pending={eventCreation.pending}
             pendingLabel="作成中…"
             variant="secondary"
-            onClick={onCreateEvent}
+            onClick={eventCreation.onCreate}
           >
             作成して選択
           </Button>

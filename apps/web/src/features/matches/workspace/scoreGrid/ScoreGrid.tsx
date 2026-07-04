@@ -15,27 +15,17 @@ import type {
 } from "@/features/matches/workspace/scoreGrid/ScoreGridTypes";
 import { useMediaQuery } from "@/shared/lib/useMediaQuery";
 
-export function ScoreGrid({
-  errorPathSet,
-  lastSyncedPlayerIndex,
-  onIncidentChange,
-  onPlayerChange,
-  onPlayOrderChange,
-  onPreferImageKindChange,
-  onRequestSubmitFocus,
-  originalPlayers,
-  players,
-}: ScoreGridProps) {
+export function ScoreGrid({ actions, data }: ScoreGridProps) {
   const [expandedMobilePlayer, setExpandedMobilePlayer] = useState(0);
   const isNarrowViewport = useMediaQuery("(max-width: 1023px)");
   const inputRefs = useRef(new Map<string, HTMLElement>());
 
   const originalByPlayOrder = useMemo(() => {
-    if (!originalPlayers) {
+    if (!data.originalPlayers) {
       return new Map();
     }
-    return new Map(originalPlayers.map((player) => [player.playOrder, player]));
-  }, [originalPlayers]);
+    return new Map(data.originalPlayers.map((player) => [player.playOrder, player]));
+  }, [data.originalPlayers]);
 
   const getCellId = useCallback(
     (row: number, col: number) => `player-${row}-${gridColumns[col]}`,
@@ -86,23 +76,25 @@ export function ScoreGrid({
         horizontalEnterFromCol: 5,
         onFocusCell: focusCell,
         onRevertCell: args.onRevertCell,
-        onSubmitFocus: onRequestSubmitFocus,
+        onSubmitFocus: actions.onRequestSubmitFocus,
         position: { col: args.col, row: args.row },
-        rowCount: players.length,
+        rowCount: data.players.length,
       });
     },
-    [focusCell, getCellId, onRequestSubmitFocus, players.length],
+    [actions.onRequestSubmitFocus, data.players.length, focusCell, getCellId],
   );
 
   const handlePlayerNumericCommit = useCallback<PlayerNumericCommit>(
     (index, field, value) =>
-      onPlayerChange(index, { [field]: value } as Partial<MatchFormValues["players"][number]>),
-    [onPlayerChange],
+      actions.onPlayerChange(index, {
+        [field]: value,
+      } as Partial<MatchFormValues["players"][number]>),
+    [actions],
   );
 
   const handleIncidentNumericCommit = useCallback<IncidentNumericCommit>(
-    (index, key, value) => onIncidentChange(index, key, value),
-    [onIncidentChange],
+    (index, key, value) => actions.onIncidentChange(index, key, value),
+    [actions],
   );
 
   const handleToggleMobilePlayer = useCallback((index: number) => {
@@ -125,35 +117,35 @@ export function ScoreGrid({
       {isNarrowViewport ? null : (
         <div className="mt-4 overflow-x-auto pb-2">
           <ScoreGridDesktopTable
-            errorPathSet={errorPathSet}
+            errorPathSet={data.errorPathSet}
             getCellId={getCellId}
             handleIncidentNumericCommit={handleIncidentNumericCommit}
             handleKeyboard={handleKeyboard}
             handlePlayerNumericCommit={handlePlayerNumericCommit}
-            lastSyncedPlayerIndex={lastSyncedPlayerIndex}
+            lastSyncedPlayerIndex={data.lastSyncedPlayerIndex}
             originalByPlayOrder={originalByPlayOrder}
-            originalPlayers={originalPlayers}
-            players={players}
+            originalPlayers={data.originalPlayers}
+            players={data.players}
             registerCellRef={registerCellRef}
-            onPlayerChange={onPlayerChange}
-            onPlayOrderChange={onPlayOrderChange}
-            onPreferImageKindChange={onPreferImageKindChange}
+            onPlayerChange={actions.onPlayerChange}
+            onPlayOrderChange={actions.onPlayOrderChange}
+            onPreferImageKindChange={actions.onPreferImageKindChange}
           />
         </div>
       )}
 
       {isNarrowViewport ? (
         <ScoreGridMobileCards
-          errorPathSet={errorPathSet}
+          errorPathSet={data.errorPathSet}
           expandedMobilePlayer={expandedMobilePlayer}
           handleIncidentNumericCommit={handleIncidentNumericCommit}
           handlePlayerNumericCommit={handlePlayerNumericCommit}
-          lastSyncedPlayerIndex={lastSyncedPlayerIndex}
-          originalPlayers={originalPlayers}
-          players={players}
-          onPlayerChange={onPlayerChange}
-          onPlayOrderChange={onPlayOrderChange}
-          onPreferImageKindChange={onPreferImageKindChange}
+          lastSyncedPlayerIndex={data.lastSyncedPlayerIndex}
+          originalPlayers={data.originalPlayers}
+          players={data.players}
+          onPlayerChange={actions.onPlayerChange}
+          onPlayOrderChange={actions.onPlayOrderChange}
+          onPreferImageKindChange={actions.onPreferImageKindChange}
           onTogglePlayer={handleToggleMobilePlayer}
         />
       ) : null}

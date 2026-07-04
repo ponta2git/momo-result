@@ -26,7 +26,10 @@ export function useMatchWorkspaceLifecycleEffects({
   heldEvents: HeldEventResponse[];
   isInitialized: boolean;
   mode: WorkspaceMode;
-  redirectConfirmedDraft: (detail: MatchDraftDetailResponse | undefined, message: string) => boolean;
+  redirectConfirmedDraft: (
+    detail: MatchDraftDetailResponse | undefined,
+    message: string,
+  ) => boolean;
   useSampleDrafts: boolean;
 }) {
   useEffect(() => {

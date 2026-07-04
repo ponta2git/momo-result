@@ -6,15 +6,18 @@ import {
   LineChart,
   RankDistributionStackedBars,
 } from "@/features/seriesComparison/SeriesComparisonCharts";
-import { MetricRow, PlayerMetricGrid } from "@/features/seriesComparison/SeriesComparisonMetricPrimitives";
+import {
+  MetricRow,
+  PlayerMetricGrid,
+} from "@/features/seriesComparison/SeriesComparisonMetricPrimitives";
 import { MetricSection } from "@/features/seriesComparison/SeriesComparisonMetricSection";
-import { RankAverageHistoryDrilldownDialog } from "@/features/seriesComparison/SeriesComparisonRankDrilldown";
 import {
   formatDecimal,
   formatPercent,
   metricsMap,
   rankDistributionBars,
 } from "@/features/seriesComparison/seriesComparisonPresentation";
+import { RankAverageHistoryDrilldownDialog } from "@/features/seriesComparison/SeriesComparisonRankDrilldown";
 import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
 import { Button } from "@/shared/ui/actions/Button";
 

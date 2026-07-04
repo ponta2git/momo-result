@@ -1,6 +1,9 @@
 import type { ReactNode } from "react";
 
-import { EmphasisBadge, emphasisTextClass } from "@/features/seriesComparison/SeriesComparisonMetricPrimitives";
+import {
+  EmphasisBadge,
+  emphasisTextClass,
+} from "@/features/seriesComparison/SeriesComparisonMetricPrimitives";
 import type { MetricEmphasis } from "@/features/seriesComparison/seriesComparisonPresentation";
 import { cn } from "@/shared/ui/cn";
 

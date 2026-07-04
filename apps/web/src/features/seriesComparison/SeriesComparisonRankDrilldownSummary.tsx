@@ -2,8 +2,8 @@ import {
   formatLowerIsBetterDelta,
   LowerIsBetterDeltaBadge,
 } from "@/features/seriesComparison/SeriesComparisonDrilldownPrimitives";
-import type { RankAverageHistoryPayload } from "@/features/seriesComparison/SeriesComparisonRankDrilldownTypes";
 import { formatDecimal } from "@/features/seriesComparison/seriesComparisonPresentation";
+import type { RankAverageHistoryPayload } from "@/features/seriesComparison/SeriesComparisonRankDrilldownTypes";
 
 export function RankHistorySummary({ data }: { data: RankAverageHistoryPayload }) {
   const summary = data.summary;

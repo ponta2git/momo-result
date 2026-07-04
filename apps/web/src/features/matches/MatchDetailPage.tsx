@@ -1,11 +1,17 @@
 import { useCallback, useMemo } from "react";
 
 import {
+  MatchDetailLoadFailed,
+  MatchDetailLoading,
+} from "@/features/matches/MatchDetailStatusViews";
+import {
   formatMatchDetailDate,
   formatMatchDetailDateOnly,
 } from "@/features/matches/matchDetailViewModel";
-import type { MatchDetailPlayerResult, MatchDetailSortKey } from "@/features/matches/matchDetailViewModel";
-import { MatchDetailLoadFailed, MatchDetailLoading } from "@/features/matches/MatchDetailStatusViews";
+import type {
+  MatchDetailPlayerResult,
+  MatchDetailSortKey,
+} from "@/features/matches/matchDetailViewModel";
 import { MatchFeatureSection } from "@/features/matches/MatchFeatureSection";
 import { MatchResultIllustration } from "@/features/matches/MatchResultIllustration";
 import { useMatchDetailPageController } from "@/features/matches/useMatchDetailPageController";

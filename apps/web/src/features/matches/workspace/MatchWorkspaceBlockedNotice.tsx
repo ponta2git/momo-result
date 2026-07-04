@@ -28,7 +28,10 @@ export function MatchWorkspaceBlockedNotice({
         >
           状態を再確認
         </Button>
-        <Link className="text-sm font-semibold text-[var(--color-action)] hover:underline" to="/matches">
+        <Link
+          className="text-sm font-semibold text-[var(--color-action)] hover:underline"
+          to="/matches"
+        >
           試合一覧へ戻る
         </Link>
       </div>

@@ -2,7 +2,10 @@ import { motion } from "motion/react";
 
 import { PlayerLegend } from "@/features/seriesComparison/SeriesComparisonChartLegend";
 import { medianNumber } from "@/features/seriesComparison/SeriesComparisonChartScales";
-import type { Player, PlayerPerformanceProfiles } from "@/features/seriesComparison/SeriesComparisonChartTypes";
+import type {
+  Player,
+  PlayerPerformanceProfiles,
+} from "@/features/seriesComparison/SeriesComparisonChartTypes";
 import { isFiniteNumber } from "@/features/seriesComparison/SeriesComparisonChartTypes";
 import { playerColor } from "@/features/seriesComparison/SeriesComparisonPlayerVisuals";
 import { formatPercent } from "@/features/seriesComparison/seriesComparisonPresentation";

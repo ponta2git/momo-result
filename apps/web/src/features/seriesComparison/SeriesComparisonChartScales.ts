@@ -1,5 +1,3 @@
-
-
 export function medianNumber(values: number[]): number | undefined {
   const sorted = values.toSorted((a, b) => a - b);
   if (sorted.length === 0) {

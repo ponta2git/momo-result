@@ -3,11 +3,11 @@ import { LoaderCircle } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { DrilldownPlayerSelector } from "@/features/seriesComparison/SeriesComparisonDrilldownPrimitives";
+import { RankHistorySummary } from "@/features/seriesComparison/SeriesComparisonRankDrilldownSummary";
 import {
   HeldEventHistoryTable,
   MatchHistoryTable,
 } from "@/features/seriesComparison/SeriesComparisonRankDrilldownTables";
-import { RankHistorySummary } from "@/features/seriesComparison/SeriesComparisonRankDrilldownSummary";
 import type { RankDrilldownView } from "@/features/seriesComparison/SeriesComparisonRankDrilldownTypes";
 import { isInitialQueryLoading, shouldShowBlockingQueryError } from "@/shared/api/queryErrorState";
 import { seriesComparisonKeys } from "@/shared/api/queryKeys";

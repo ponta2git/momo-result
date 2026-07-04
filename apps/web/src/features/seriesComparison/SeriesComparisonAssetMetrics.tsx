@@ -1,16 +1,17 @@
 import { Coins } from "lucide-react";
 
-import { HistogramChart, StrategyProfileChart, StrategyScatterPlot } from "@/features/seriesComparison/SeriesComparisonCharts";
-import { EmphasisRuleNote } from "@/features/seriesComparison/SeriesComparisonEmphasisRuleNote";
-import { MetricRow, PlayerMetricGrid, StatusBadge } from "@/features/seriesComparison/SeriesComparisonMetricPrimitives";
-import { MetricSection } from "@/features/seriesComparison/SeriesComparisonMetricSection";
 import {
-  FactChip,
-  FactGroup,
-  IntegratedMetricPanel,
-  MiniFact,
-  OutcomeDetails,
-} from "@/features/seriesComparison/SeriesComparisonSectionPrimitives";
+  HistogramChart,
+  StrategyProfileChart,
+  StrategyScatterPlot,
+} from "@/features/seriesComparison/SeriesComparisonCharts";
+import { EmphasisRuleNote } from "@/features/seriesComparison/SeriesComparisonEmphasisRuleNote";
+import {
+  MetricRow,
+  PlayerMetricGrid,
+  StatusBadge,
+} from "@/features/seriesComparison/SeriesComparisonMetricPrimitives";
+import { MetricSection } from "@/features/seriesComparison/SeriesComparisonMetricSection";
 import type {
   AssetStyleEvidenceItem,
   AssetStyleProfileEntry,
@@ -28,6 +29,13 @@ import {
   numericExtrema,
   performanceProfileMap,
 } from "@/features/seriesComparison/seriesComparisonPresentation";
+import {
+  FactChip,
+  FactGroup,
+  IntegratedMetricPanel,
+  MiniFact,
+  OutcomeDetails,
+} from "@/features/seriesComparison/SeriesComparisonSectionPrimitives";
 import {
   assetStyleKindLabel,
   assetStyleShapeLabel,

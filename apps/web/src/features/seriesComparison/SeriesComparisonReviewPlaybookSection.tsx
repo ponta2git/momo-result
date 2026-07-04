@@ -2,17 +2,17 @@ import { ChevronDown, Target } from "lucide-react";
 
 import { MetricSection } from "@/features/seriesComparison/SeriesComparisonMetricSection";
 import { playerColor } from "@/features/seriesComparison/SeriesComparisonPlayerVisuals";
-import { ReviewPlaybookCardView } from "@/features/seriesComparison/SeriesComparisonReviewPlaybookCard";
-import type {
-  AnalysisViewChange,
-  ReviewCommonPlaybookTopic,
-} from "@/features/seriesComparison/SeriesComparisonReviewTypes";
 import type { Player } from "@/features/seriesComparison/seriesComparisonPresentation";
+import { ReviewPlaybookCardView } from "@/features/seriesComparison/SeriesComparisonReviewPlaybookCard";
 import {
   playbookCategoryLabel,
   playbookEvidenceStatusLabel,
   reviewPlaybookCardOrder,
 } from "@/features/seriesComparison/seriesComparisonReviewPresentation";
+import type {
+  AnalysisViewChange,
+  ReviewCommonPlaybookTopic,
+} from "@/features/seriesComparison/SeriesComparisonReviewTypes";
 import type { SeriesComparisonReviewResponse } from "@/shared/api/seriesComparison";
 import {
   CollapsiblePanel,

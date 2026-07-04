@@ -3,14 +3,20 @@ import { Clock3, ShieldAlert } from "lucide-react";
 import { StatusBadge } from "@/features/seriesComparison/SeriesComparisonMetricPrimitives";
 import { MetricSection } from "@/features/seriesComparison/SeriesComparisonMetricSection";
 import { playerColor } from "@/features/seriesComparison/SeriesComparisonPlayerVisuals";
-import type { MatchNoBreakdown, Player } from "@/features/seriesComparison/seriesComparisonPresentation";
+import type {
+  MatchNoBreakdown,
+  Player,
+} from "@/features/seriesComparison/seriesComparisonPresentation";
 import {
   formatDecimal,
   formatMoney,
   formatPercent,
   playerNameMap,
 } from "@/features/seriesComparison/seriesComparisonPresentation";
-import { qualitySummary, timelineFlagLabel } from "@/features/seriesComparison/seriesComparisonViewModel";
+import {
+  qualitySummary,
+  timelineFlagLabel,
+} from "@/features/seriesComparison/seriesComparisonViewModel";
 import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
 import { Notice } from "@/shared/ui/feedback/Notice";
 

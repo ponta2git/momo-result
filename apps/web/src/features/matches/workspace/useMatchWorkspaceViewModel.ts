@@ -4,12 +4,12 @@ import { confirmedDraftDestination } from "@/features/matches/confirmedDraftNavi
 import type { MatchFormValues, WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
 import { buildWorkspacePageCopy } from "@/features/matches/workspace/workspaceViewModel";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
-import type { MatchDraftDetailResponse } from "@/shared/api/matchDrafts";
 import type {
   GameTitleResponse,
   MapMasterResponse,
   SeasonMasterResponse,
 } from "@/shared/api/masters";
+import type { MatchDraftDetailResponse } from "@/shared/api/matchDrafts";
 import { isCancelableDraftStatus } from "@/shared/domain/draftStatus";
 
 export function useMatchWorkspaceViewModel({

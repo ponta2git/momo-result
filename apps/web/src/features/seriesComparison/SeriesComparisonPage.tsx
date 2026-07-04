@@ -1,7 +1,10 @@
 import { BarChart3, RefreshCw } from "lucide-react";
 
 import { SeriesComparisonContent } from "@/features/seriesComparison/SeriesComparisonContent";
-import { ComparisonSkeleton, PageSkeleton } from "@/features/seriesComparison/SeriesComparisonSkeletons";
+import {
+  ComparisonSkeleton,
+  PageSkeleton,
+} from "@/features/seriesComparison/SeriesComparisonSkeletons";
 import { useSeriesComparisonPageController } from "@/features/seriesComparison/useSeriesComparisonPageController";
 import { Button } from "@/shared/ui/actions/Button";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";

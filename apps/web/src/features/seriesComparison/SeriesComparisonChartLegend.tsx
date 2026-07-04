@@ -1,5 +1,5 @@
-import { playerColor } from "@/features/seriesComparison/SeriesComparisonPlayerVisuals";
 import type { Player } from "@/features/seriesComparison/SeriesComparisonChartTypes";
+import { playerColor } from "@/features/seriesComparison/SeriesComparisonPlayerVisuals";
 
 export function PlayerLegend({
   players,

@@ -1,8 +1,17 @@
 import { motion } from "motion/react";
 
+import {
+  buildNumberTicks,
+  formatCompactManYen,
+  niceCeil,
+} from "@/features/seriesComparison/SeriesComparisonChartScales";
+import type {
+  Histogram,
+  HistogramBin,
+  Player,
+  RankDistributionBarEntry,
+} from "@/features/seriesComparison/SeriesComparisonChartTypes";
 import { playerColor } from "@/features/seriesComparison/SeriesComparisonPlayerVisuals";
-import { buildNumberTicks, formatCompactManYen, niceCeil } from "@/features/seriesComparison/SeriesComparisonChartScales";
-import type { Histogram, HistogramBin, Player, RankDistributionBarEntry } from "@/features/seriesComparison/SeriesComparisonChartTypes";
 import { rankColor } from "@/features/seriesComparison/SeriesComparisonRankColors";
 import { cn } from "@/shared/ui/cn";
 import { momoPanelTransition } from "@/shared/ui/motion/variants";

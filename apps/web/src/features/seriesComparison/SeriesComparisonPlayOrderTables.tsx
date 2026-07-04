@@ -1,17 +1,17 @@
 import { useMemo } from "react";
 
 import {
+  compareTimestampDesc,
+  formatDrilldownDate,
+  shortDrilldownId,
+} from "@/features/seriesComparison/SeriesComparisonDrilldownFormat";
+import {
   DrilldownStickyCell,
   DrilldownTableCell,
   DrilldownTableHeader,
   DrilldownTableScroll,
   LowerIsBetterDeltaBadge,
 } from "@/features/seriesComparison/SeriesComparisonDrilldownPrimitives";
-import {
-  compareTimestampDesc,
-  formatDrilldownDate,
-  shortDrilldownId,
-} from "@/features/seriesComparison/SeriesComparisonDrilldownFormat";
 import type {
   PlayOrderRow,
   PlayOrderTrendRow,

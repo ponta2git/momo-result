@@ -1,8 +1,15 @@
-import type { HeadToHeadEntry, Player } from "@/features/seriesComparison/SeriesComparisonChartTypes";
+import type {
+  HeadToHeadEntry,
+  Player,
+} from "@/features/seriesComparison/SeriesComparisonChartTypes";
 import { isFiniteNumber } from "@/features/seriesComparison/SeriesComparisonChartTypes";
 import { playerColor } from "@/features/seriesComparison/SeriesComparisonPlayerVisuals";
+import {
+  formatPercent,
+  formatSigned,
+} from "@/features/seriesComparison/seriesComparisonPresentation";
 import { colorMix } from "@/features/seriesComparison/SeriesComparisonRankColors";
-import { formatPercent, formatSigned } from "@/features/seriesComparison/seriesComparisonPresentation";
+
 import {
   headToHeadBands,
   headToHeadRankDiffSignal,

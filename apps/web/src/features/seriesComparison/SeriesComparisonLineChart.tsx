@@ -1,7 +1,11 @@
 import { motion } from "motion/react";
 
 import { PlayerLegend } from "@/features/seriesComparison/SeriesComparisonChartLegend";
-import { buildIndexTicks, buildNumberTicks, niceCeil } from "@/features/seriesComparison/SeriesComparisonChartScales";
+import {
+  buildIndexTicks,
+  buildNumberTicks,
+  niceCeil,
+} from "@/features/seriesComparison/SeriesComparisonChartScales";
 import type { Player, TrendSeries } from "@/features/seriesComparison/SeriesComparisonChartTypes";
 import { isFiniteNumber } from "@/features/seriesComparison/SeriesComparisonChartTypes";
 import { playerColor } from "@/features/seriesComparison/SeriesComparisonPlayerVisuals";

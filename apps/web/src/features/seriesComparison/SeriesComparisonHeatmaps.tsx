@@ -1,18 +1,22 @@
 import { motion } from "motion/react";
 
-import type { Player, PlayOrderHeatmapRow, RevenueRankConversionEntry } from "@/features/seriesComparison/SeriesComparisonChartTypes";
+import type {
+  Player,
+  PlayOrderHeatmapRow,
+  RevenueRankConversionEntry,
+} from "@/features/seriesComparison/SeriesComparisonChartTypes";
 import { isFiniteNumber } from "@/features/seriesComparison/SeriesComparisonChartTypes";
 import { playerColor } from "@/features/seriesComparison/SeriesComparisonPlayerVisuals";
-import {
-  rankAverageTone,
-  rankBackgroundColor,
-  rankBorderColor,
-} from "@/features/seriesComparison/SeriesComparisonRankColors";
 import {
   formatDecimal,
   formatPercent,
   formatPlayOrderLabel,
 } from "@/features/seriesComparison/seriesComparisonPresentation";
+import {
+  rankAverageTone,
+  rankBackgroundColor,
+  rankBorderColor,
+} from "@/features/seriesComparison/SeriesComparisonRankColors";
 import { momoTransition } from "@/shared/ui/motion/variants";
 
 export function PlayOrderHeatmap({

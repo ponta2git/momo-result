@@ -1,22 +1,22 @@
 import { useMemo } from "react";
 
 import {
+  compareTimestampDesc,
+  formatDrilldownDate,
+  shortDrilldownId,
+} from "@/features/seriesComparison/SeriesComparisonDrilldownFormat";
+import {
   DrilldownStickyCell,
   DrilldownTableCell,
   DrilldownTableHeader,
   DrilldownTableScroll,
 } from "@/features/seriesComparison/SeriesComparisonDrilldownPrimitives";
-import {
-  compareTimestampDesc,
-  formatDrilldownDate,
-  shortDrilldownId,
-} from "@/features/seriesComparison/SeriesComparisonDrilldownFormat";
+import { formatDecimal, isNumber } from "@/features/seriesComparison/seriesComparisonPresentation";
 import { RankAverageDeltaBadge } from "@/features/seriesComparison/SeriesComparisonRankDrilldownSummary";
 import type {
   RankEventRow,
   RankMatchRow,
 } from "@/features/seriesComparison/SeriesComparisonRankDrilldownTypes";
-import { formatDecimal, isNumber } from "@/features/seriesComparison/seriesComparisonPresentation";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 
 export function HeldEventHistoryTable({ rows }: { rows: RankEventRow[] }) {

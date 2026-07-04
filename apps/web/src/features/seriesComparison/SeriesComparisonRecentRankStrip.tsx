@@ -1,8 +1,14 @@
 import { useEffect, useRef } from "react";
 
+import type {
+  Player,
+  RecentRankStripEntry,
+} from "@/features/seriesComparison/SeriesComparisonChartTypes";
 import { playerColor } from "@/features/seriesComparison/SeriesComparisonPlayerVisuals";
-import type { Player, RecentRankStripEntry } from "@/features/seriesComparison/SeriesComparisonChartTypes";
-import { rankColor, rankForegroundColor } from "@/features/seriesComparison/SeriesComparisonRankColors";
+import {
+  rankColor,
+  rankForegroundColor,
+} from "@/features/seriesComparison/SeriesComparisonRankColors";
 import { cn } from "@/shared/ui/cn";
 
 export function RecentRankStrip({

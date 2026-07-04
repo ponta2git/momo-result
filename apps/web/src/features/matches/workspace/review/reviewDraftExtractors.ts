@@ -12,9 +12,7 @@ import type {
   OcrField,
   OcrPlayerEntry,
 } from "@/features/matches/workspace/review/ocrDraftPayload";
-import {
-  resolveMemberIdByAlias,
-} from "@/shared/domain/memberDirectory";
+import { resolveMemberIdByAlias } from "@/shared/domain/memberDirectory";
 import type { MemberAliasDirectory } from "@/shared/domain/memberDirectory";
 
 export function emptyIncidents(): ReviewIncidentCounts {

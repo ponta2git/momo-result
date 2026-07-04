@@ -11,7 +11,10 @@ import {
 import { MetricSection } from "@/features/seriesComparison/SeriesComparisonMetricSection";
 import { MomentumTransitionMatrices } from "@/features/seriesComparison/SeriesComparisonMomentumMatrices";
 import { playerColor } from "@/features/seriesComparison/SeriesComparisonPlayerVisuals";
-import type { MomentumSwitchEntry, MomentumSwitchRateKey } from "@/features/seriesComparison/seriesComparisonPresentation";
+import type {
+  MomentumSwitchEntry,
+  MomentumSwitchRateKey,
+} from "@/features/seriesComparison/seriesComparisonPresentation";
 import {
   formatCountRate,
   formatDecimal,

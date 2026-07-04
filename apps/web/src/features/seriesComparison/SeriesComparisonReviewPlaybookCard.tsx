@@ -1,11 +1,5 @@
 import { ArrowRight, ChevronDown } from "lucide-react";
 
-import type {
-  AnalysisViewChange,
-  ReviewAnchorTarget,
-  ReviewPlaybookCard,
-  ReviewPlaybookEvidence,
-} from "@/features/seriesComparison/SeriesComparisonReviewTypes";
 import {
   evidenceStats,
   playbookCategoryLabel,
@@ -13,6 +7,12 @@ import {
   playbookEvidenceStrengthLabel,
   reviewPlaybookLane,
 } from "@/features/seriesComparison/seriesComparisonReviewPresentation";
+import type {
+  AnalysisViewChange,
+  ReviewAnchorTarget,
+  ReviewPlaybookCard,
+  ReviewPlaybookEvidence,
+} from "@/features/seriesComparison/SeriesComparisonReviewTypes";
 import {
   defaultSeriesComparisonView,
   isSeriesComparisonViewId,

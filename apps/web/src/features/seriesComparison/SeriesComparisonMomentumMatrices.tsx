@@ -1,5 +1,8 @@
 import { playerColor } from "@/features/seriesComparison/SeriesComparisonPlayerVisuals";
-import type { MomentumSwitchEntry, Player } from "@/features/seriesComparison/seriesComparisonPresentation";
+import type {
+  MomentumSwitchEntry,
+  Player,
+} from "@/features/seriesComparison/seriesComparisonPresentation";
 import { formatPercent } from "@/features/seriesComparison/seriesComparisonPresentation";
 import { cn } from "@/shared/ui/cn";
 

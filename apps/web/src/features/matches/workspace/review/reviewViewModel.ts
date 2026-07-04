@@ -3,6 +3,7 @@ import type {
   IncidentLookupEntry,
   OriginalPlayerSnapshot,
 } from "@/features/matches/workspace/matchFormTypes";
+import { incidentNames } from "@/features/matches/workspace/review/ocrDraftPayload";
 import {
   byMemberId,
   byPlayOrder,
@@ -16,10 +17,7 @@ import type {
   IncidentName,
   OcrDraftPayload,
 } from "@/features/matches/workspace/review/reviewDraftExtractors";
-import { incidentNames } from "@/features/matches/workspace/review/ocrDraftPayload";
-import {
-  defaultMemberAliasDirectory,
-} from "@/shared/domain/memberDirectory";
+import { defaultMemberAliasDirectory } from "@/shared/domain/memberDirectory";
 import type { MemberAliasDirectory } from "@/shared/domain/memberDirectory";
 import { fixedMembers } from "@/shared/domain/members";
 import { pipe } from "@/shared/lib/pipe";

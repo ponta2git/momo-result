@@ -1,8 +1,8 @@
 import { ClipboardList } from "lucide-react";
 
+import { playerNameMap } from "@/features/seriesComparison/seriesComparisonPresentation";
 import { ReviewPlaybookSection } from "@/features/seriesComparison/SeriesComparisonReviewPlaybookSection";
 import type { AnalysisViewChange } from "@/features/seriesComparison/SeriesComparisonReviewTypes";
-import { playerNameMap } from "@/features/seriesComparison/seriesComparisonPresentation";
 import type {
   SeriesComparisonResponse,
   SeriesComparisonReviewResponse,

@@ -39,6 +39,7 @@
 | テスト正本 | `docs/test-rule.md` | 変更種別ごとのテスト選択、oracle、品質ゲート判断 |
 | テスト補助 | `docs/test-architecture.md` | テストサイズ、coverage、CI artifact、段階計画 |
 | 開発正本 | `docs/dev-rule.md` | toolchain、ローカル起動、コマンド、Git運用 |
+| web補助 | `docs/web-refactor-handoff.md` | apps/web の refactor 後の責務境界、I/F互換、guard |
 | 最終確認 | `docs/post-mortem/lessons.md` | 作業完了前に該当カードだけ確認する再発防止チェック |
 | 公開運用原則 | `docs/ops/README.md` | public repo に置ける運用原則 |
 

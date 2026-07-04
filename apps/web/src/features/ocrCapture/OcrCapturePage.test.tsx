@@ -6,8 +6,8 @@ import { http, HttpResponse } from "msw";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import type { CreateOcrJobRequest } from "@/shared/api/ocrJobs";
 import { OcrCapturePage } from "@/features/ocrCapture/OcrCapturePage";
+import type { CreateOcrJobRequest } from "@/shared/api/ocrJobs";
 import { DevUserPicker } from "@/shared/auth/DevUserPicker";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";

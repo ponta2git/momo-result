@@ -1,9 +1,12 @@
 import { BadgeDollarSign, MapPinned } from "lucide-react";
 
 import { RevenueRankConversionHeatmap } from "@/features/seriesComparison/SeriesComparisonCharts";
-import { MetricRow, PlayerMetricGrid, StatusBadge } from "@/features/seriesComparison/SeriesComparisonMetricPrimitives";
+import {
+  MetricRow,
+  PlayerMetricGrid,
+  StatusBadge,
+} from "@/features/seriesComparison/SeriesComparisonMetricPrimitives";
 import { MetricSection } from "@/features/seriesComparison/SeriesComparisonMetricSection";
-import { IntegratedMetricPanel, OutcomeDetails } from "@/features/seriesComparison/SeriesComparisonSectionPrimitives";
 import type { PlayerMetrics } from "@/features/seriesComparison/seriesComparisonPresentation";
 import {
   formatCountRate,
@@ -13,6 +16,10 @@ import {
   rankOutcomeColor,
   revenueRankConversionEntries,
 } from "@/features/seriesComparison/seriesComparisonPresentation";
+import {
+  IntegratedMetricPanel,
+  OutcomeDetails,
+} from "@/features/seriesComparison/SeriesComparisonSectionPrimitives";
 import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
 
 export type RankOutcome = PlayerMetrics["revenueOutcome"]["top"];

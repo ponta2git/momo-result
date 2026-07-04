@@ -1,7 +1,13 @@
 import { motion } from "motion/react";
 
-import { formatDecimal, leaderSummary } from "@/features/seriesComparison/seriesComparisonPresentation";
-import { averageRankSpread, ginjiSummary } from "@/features/seriesComparison/seriesComparisonViewModel";
+import {
+  formatDecimal,
+  leaderSummary,
+} from "@/features/seriesComparison/seriesComparisonPresentation";
+import {
+  averageRankSpread,
+  ginjiSummary,
+} from "@/features/seriesComparison/seriesComparisonViewModel";
 import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
 import { cn } from "@/shared/ui/cn";
 import { momoPanelTransition, momoTransition } from "@/shared/ui/motion/variants";

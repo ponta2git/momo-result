@@ -1,9 +1,16 @@
 import { Store } from "lucide-react";
 
-import { MetricRow, PlayerMetricGrid, StatusBadge } from "@/features/seriesComparison/SeriesComparisonMetricPrimitives";
+import {
+  MetricRow,
+  PlayerMetricGrid,
+  StatusBadge,
+} from "@/features/seriesComparison/SeriesComparisonMetricPrimitives";
 import { MetricSection } from "@/features/seriesComparison/SeriesComparisonMetricSection";
-import { OutcomeDetails } from "@/features/seriesComparison/SeriesComparisonSectionPrimitives";
-import type { CardShopDestinationEntry, CardShopDestinationQuadrant, Player } from "@/features/seriesComparison/seriesComparisonPresentation";
+import type {
+  CardShopDestinationEntry,
+  CardShopDestinationQuadrant,
+  Player,
+} from "@/features/seriesComparison/seriesComparisonPresentation";
 import {
   cardShopDestinationDefinitions,
   cardShopQuadrantsByKind,
@@ -13,6 +20,7 @@ import {
   formatPercent,
   metricsMap,
 } from "@/features/seriesComparison/seriesComparisonPresentation";
+import { OutcomeDetails } from "@/features/seriesComparison/SeriesComparisonSectionPrimitives";
 import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
 import { cn } from "@/shared/ui/cn";
 

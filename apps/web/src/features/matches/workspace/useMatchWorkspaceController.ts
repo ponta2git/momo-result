@@ -1,8 +1,4 @@
-import {
-  useCallback,
-  useReducer,
-  useState,
-} from "react";
+import { useCallback, useReducer, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import {
@@ -10,7 +6,10 @@ import {
   matchFormReducer,
 } from "@/features/matches/workspace/matchFormReducer";
 import { createEmptyMatchForm } from "@/features/matches/workspace/matchFormTypes";
-import type { MatchWorkspaceInitialData, WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
+import type {
+  MatchWorkspaceInitialData,
+  WorkspaceMode,
+} from "@/features/matches/workspace/matchFormTypes";
 import type { SourceImageKind } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
 import { useConfirmedDraftRedirect } from "@/features/matches/workspace/useConfirmedDraftRedirect";
 import { useMasterHandoffRestore } from "@/features/matches/workspace/useMasterHandoffRestore";

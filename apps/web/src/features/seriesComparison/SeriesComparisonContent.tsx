@@ -6,7 +6,6 @@ import {
   analysisViewFor,
 } from "@/features/seriesComparison/SeriesComparisonAnalysisNavigation";
 import type { AnalysisViewChange } from "@/features/seriesComparison/SeriesComparisonAnalysisNavigation";
-import { MomentumSwitchMetrics, RecentFormMetrics } from "@/features/seriesComparison/SeriesComparisonFlowMetrics";
 import { AssetDistributionMetrics } from "@/features/seriesComparison/SeriesComparisonAssetMetrics";
 import { CardShopDestinationMetrics } from "@/features/seriesComparison/SeriesComparisonCardShopDestinationMetrics";
 import {
@@ -18,17 +17,28 @@ import {
   MatchDigestMetrics,
   MatchNoInEventMetrics,
 } from "@/features/seriesComparison/SeriesComparisonFlowDigest";
-import { BasicMetrics, HeadToHeadMetrics, RateMetrics } from "@/features/seriesComparison/SeriesComparisonOverviewMetrics";
+import {
+  MomentumSwitchMetrics,
+  RecentFormMetrics,
+} from "@/features/seriesComparison/SeriesComparisonFlowMetrics";
 import {
   DestinationOutcomeMetrics,
   RevenueOutcomeMetrics,
 } from "@/features/seriesComparison/SeriesComparisonOutcomeMetrics";
+import {
+  BasicMetrics,
+  HeadToHeadMetrics,
+  RateMetrics,
+} from "@/features/seriesComparison/SeriesComparisonOverviewMetrics";
 import { ReviewViewContent } from "@/features/seriesComparison/SeriesComparisonReviewPanel";
 import { SummaryBand } from "@/features/seriesComparison/SeriesComparisonSummary";
 import { defaultSeriesComparisonView } from "@/features/seriesComparison/seriesComparisonViewModel";
 import type { SeriesComparisonViewId } from "@/features/seriesComparison/seriesComparisonViewModel";
 import type { useSeriesComparisonPageController } from "@/features/seriesComparison/useSeriesComparisonPageController";
-import type { SeriesComparisonResponse, SeriesComparisonReviewResponse } from "@/shared/api/seriesComparison";
+import type {
+  SeriesComparisonResponse,
+  SeriesComparisonReviewResponse,
+} from "@/shared/api/seriesComparison";
 
 export function AnalysisViewContent({
   hasReviewError,

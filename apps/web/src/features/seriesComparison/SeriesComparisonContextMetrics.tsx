@@ -2,7 +2,10 @@ import { RefreshCw, ShieldAlert, Table2 } from "lucide-react";
 import { useState } from "react";
 
 import { LineChart, PlayOrderHeatmap } from "@/features/seriesComparison/SeriesComparisonCharts";
-import { MetricRow, PlayerMetricGrid } from "@/features/seriesComparison/SeriesComparisonMetricPrimitives";
+import {
+  MetricRow,
+  PlayerMetricGrid,
+} from "@/features/seriesComparison/SeriesComparisonMetricPrimitives";
 import { MetricSection } from "@/features/seriesComparison/SeriesComparisonMetricSection";
 import { PlayOrderRankHistoryDrilldownDialog } from "@/features/seriesComparison/SeriesComparisonPlayOrderDrilldown";
 import type { PlayerMetrics } from "@/features/seriesComparison/seriesComparisonPresentation";

@@ -1,23 +1,16 @@
 import { useCallback, useRef } from "react";
 
 import { MatchConfirmDialog } from "@/features/matches/workspace/MatchConfirmDialog";
-import { MatchFormActions } from "@/features/matches/workspace/MatchFormActions";
 import type { WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
-import { MatchSetupSection } from "@/features/matches/workspace/MatchSetupSection";
 import { MatchWorkspaceBlockedNotice } from "@/features/matches/workspace/MatchWorkspaceBlockedNotice";
+import { MatchWorkspaceEditor } from "@/features/matches/workspace/MatchWorkspaceEditor";
+import { MatchWorkspaceHeader } from "@/features/matches/workspace/MatchWorkspaceHeader";
 import { MatchWorkspaceLoading } from "@/features/matches/workspace/MatchWorkspaceLoading";
-import { ScoreGrid } from "@/features/matches/workspace/scoreGrid/ScoreGrid";
-import { SourceImagePanel } from "@/features/matches/workspace/sourceImages/SourceImagePanel";
 import { useMatchWorkspaceController } from "@/features/matches/workspace/useMatchWorkspaceController";
-import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
-import { cn } from "@/shared/ui/cn";
-import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { LiveRegion } from "@/shared/ui/feedback/LiveRegion";
 import { Notice } from "@/shared/ui/feedback/Notice";
-import { Card } from "@/shared/ui/layout/Card";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
-import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 type MatchWorkspacePageProps = {
   matchDraftId?: string;
@@ -39,58 +32,17 @@ export function MatchWorkspacePage({
   }, []);
   const {
     baseErrors,
-    canCancelDraft,
-    cancelDraftConfirmOpen,
-    cancelDraftMutation,
-    confirmAction,
-    confirmOpen,
-    createEventMutation,
-    editLoadFailed,
-    editLoading,
-    eventDraftValue,
-    gameTitleItems,
-    handleCancelDraftConfirmed,
-    handleNavigateToMasters,
-    hasSourceImagePanel,
-    heldEvents,
-    isNavigatingToMasters,
-    isMutating,
-    isOcrRunningBlocked,
-    mapItems,
-    matchDraftIdForImages,
-    notice,
-    onCreateEvent,
-    onGameTitleChange,
-    onIncidentChange,
-    onPatchRoot,
-    onPlayerChange,
-    onPlayOrderChange,
-    onPrimaryAction,
-    pageDescription,
-    pageTitle,
-    refreshReviewStatus,
-    refreshingReviewStatus,
-    returnTo,
-    seasonItems,
-    selectedGameTitle,
-    selectedHeldEvent,
-    selectedMap,
-    selectedSeason,
-    setCancelDraftConfirmOpen,
-    setEventDraftValue,
-    setPreferredImageKind,
-    sourceImageLoading,
-    sourceImages,
-    state,
-    useSampleDrafts,
-    validation,
-    validationMessage,
-    visibleErrorPathSet,
-    workspaceLoading,
-    workspaceData,
+    blockedNotice,
+    confirmDialog,
+    editor,
+    formActions,
+    header,
+    liveMessage,
+    loadState,
+    setup,
   } = controller;
 
-  if (editLoading) {
+  if (loadState.editLoading) {
     return (
       <MatchWorkspaceLoading
         description="保存済みの試合内容を取得しています。"
@@ -99,20 +51,16 @@ export function MatchWorkspacePage({
     );
   }
 
-  if (workspaceLoading) {
+  if (loadState.workspaceLoading) {
     return (
       <MatchWorkspaceLoading
-        description={
-          mode === "review"
-            ? "OCR結果と確定前の記録を取得しています。"
-            : "試合条件と入力フォームを準備しています。"
-        }
-        title={mode === "review" ? "OCR結果を読み込み中" : "試合作成を準備中"}
+        description={loadState.workspaceLoadingCopy.description}
+        title={loadState.workspaceLoadingCopy.title}
       />
     );
   }
 
-  if (editLoadFailed) {
+  if (loadState.editLoadFailed) {
     return (
       <PageFrame>
         <Notice tone="danger" title="試合が見つかりませんでした">
@@ -127,57 +75,9 @@ export function MatchWorkspacePage({
 
   return (
     <PageFrame className="gap-5" width="workspace">
-      <LiveRegion message={notice || validationMessage} />
+      <LiveRegion message={liveMessage} />
 
-      <PageHeader
-        description={
-          <>
-            {pageDescription}
-            {useSampleDrafts ? (
-              <span className="mt-2 block w-fit rounded-full border border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18 px-3 py-1 text-sm font-semibold text-[var(--color-text-primary)]">
-                サンプルの読み取り結果で表示中
-              </span>
-            ) : null}
-          </>
-        }
-        eyebrow="試合記録"
-        title={pageTitle}
-        actions={
-          <>
-            {canCancelDraft ? (
-              <AlertDialog
-                cancelLabel="キャンセル"
-                confirmLabel={cancelDraftMutation.isPending ? "削除中…" : "削除する"}
-                pending={cancelDraftMutation.isPending}
-                description="この確定前の記録を削除します。元に戻せません。"
-                open={cancelDraftConfirmOpen}
-                title="確定前の記録を削除しますか？"
-                trigger={
-                  <Button
-                    disabled={isMutating}
-                    variant="danger"
-                    onClick={() => setCancelDraftConfirmOpen(true)}
-                  >
-                    {cancelDraftMutation.isPending ? "削除中…" : "確定前の記録を削除"}
-                  </Button>
-                }
-                onConfirm={handleCancelDraftConfirmed}
-                onOpenChange={setCancelDraftConfirmOpen}
-              />
-            ) : null}
-            {(mode === "review" || mode === "create") && returnTo ? (
-              <Button
-                pending={isNavigatingToMasters}
-                pendingLabel="移動中…"
-                variant="secondary"
-                onClick={handleNavigateToMasters}
-              >
-                設定管理へ
-              </Button>
-            ) : null}
-          </>
-        }
-      />
+      <MatchWorkspaceHeader header={header} />
 
       {baseErrors.map((error) => (
         <Notice key={`${error.status}-${error.detail}`} tone="danger" title={error.title}>
@@ -185,103 +85,19 @@ export function MatchWorkspacePage({
         </Notice>
       ))}
 
-      {isOcrRunningBlocked ? (
-        <MatchWorkspaceBlockedNotice
-          refreshingReviewStatus={refreshingReviewStatus}
-          onRefreshReviewStatus={refreshReviewStatus}
-        />
+      {blockedNotice ? (
+        <MatchWorkspaceBlockedNotice {...blockedNotice} />
       ) : (
-        <>
-          <MatchSetupSection
-            createEventPending={createEventMutation.isPending}
-            errorPathSet={visibleErrorPathSet}
-            eventDraftValue={eventDraftValue}
-            gameTitleItems={gameTitleItems}
-            heldEvents={heldEvents}
-            mapItems={mapItems}
-            seasonItems={seasonItems}
-            values={state.values}
-            onCreateEvent={onCreateEvent}
-            onEventDraftChange={setEventDraftValue}
-            onGameTitleChange={onGameTitleChange}
-            onPatchRoot={onPatchRoot}
-          />
-
-          {workspaceData?.warnings.length ? (
-            <Card className="mt-4 border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18">
-              <ul className="list-disc pl-5 text-sm text-[var(--color-text-primary)]">
-                {workspaceData.warnings.map((warning) => (
-                  <li key={warning}>{warning}</li>
-                ))}
-              </ul>
-            </Card>
-          ) : null}
-
-          <div
-            className={cn(
-              "mt-4 grid gap-4",
-              hasSourceImagePanel
-                ? "xl:grid-cols-[minmax(0,1fr)_24rem] 2xl:grid-cols-[minmax(0,1fr)_28rem]"
-                : "",
-            )}
-          >
-            <Card className="p-4">
-              <ScoreGrid
-                errorPathSet={visibleErrorPathSet}
-                lastSyncedPlayerIndex={state.lastSyncedPlayerIndex}
-                originalPlayers={workspaceData?.originalPlayers}
-                players={state.values.players}
-                onIncidentChange={onIncidentChange}
-                onPlayerChange={onPlayerChange}
-                onPlayOrderChange={onPlayOrderChange}
-                onPreferImageKindChange={setPreferredImageKind}
-                onRequestSubmitFocus={onRequestSubmitFocus}
-              />
-            </Card>
-
-            {hasSourceImagePanel && matchDraftIdForImages ? (
-              <SourceImagePanel
-                loading={sourceImageLoading}
-                matchDraftId={matchDraftIdForImages}
-                preferredKind={controller.preferredImageKind}
-                sourceImages={sourceImages}
-              />
-            ) : null}
-          </div>
-
-          {validationMessage ? (
-            <Card className="mt-4 border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18">
-              {validationMessage}
-            </Card>
-          ) : null}
-
-          <MatchFormActions
-            actionLabel={mode === "edit" ? "保存" : "確定前の確認へ進む"}
-            disabled={workspaceLoading}
-            message={
-              validation.success
-                ? "確定前の確認へ進めます"
-                : (validation.firstMessage ?? "入力内容に不足があります")
-            }
-            pending={isMutating}
-            primaryActionRef={primaryActionRef}
-            onPrimaryAction={onPrimaryAction}
-          />
-        </>
+        <MatchWorkspaceEditor
+          editor={editor}
+          formActions={formActions}
+          primaryActionRef={primaryActionRef}
+          setup={setup}
+          onRequestSubmitFocus={onRequestSubmitFocus}
+        />
       )}
 
-      {confirmOpen ? (
-        <MatchConfirmDialog
-          gameTitleName={selectedGameTitle?.name}
-          heldEvent={selectedHeldEvent}
-          mapName={selectedMap?.name}
-          seasonName={selectedSeason?.name}
-          validationMessage={validationMessage}
-          values={state.values}
-          onCancel={controller.closeConfirm}
-          confirmAction={confirmAction}
-        />
-      ) : null}
+      {confirmDialog ? <MatchConfirmDialog {...confirmDialog} /> : null}
     </PageFrame>
   );
 }

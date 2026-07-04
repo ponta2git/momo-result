@@ -5,6 +5,10 @@ import {
   createMatchFormReducerState,
   matchFormReducer,
 } from "@/features/matches/workspace/matchFormReducer";
+import {
+  buildMatchWorkspaceControllerModel,
+} from "@/features/matches/workspace/matchWorkspaceControllerModel";
+import type { MatchWorkspaceControllerModel } from "@/features/matches/workspace/matchWorkspaceControllerModel";
 import { createEmptyMatchForm } from "@/features/matches/workspace/matchFormTypes";
 import type {
   MatchWorkspaceInitialData,
@@ -229,6 +233,7 @@ export function useMatchWorkspaceController({
   });
 
   const closeConfirm = useCallback(() => setConfirmOpen(false), []);
+  const openCancelDraftConfirm = useCallback(() => setCancelDraftConfirmOpen(true), []);
   const formHandlers = useMatchWorkspaceFormHandlers({
     createHeldEvent: createEventMutation.mutate,
     dispatch,
@@ -247,47 +252,46 @@ export function useMatchWorkspaceController({
     await Promise.all([draftDetailQuery.refetch(), ocrDraftsQuery.refetch()]);
   }, [draftDetailQuery, ocrDraftsQuery]);
 
-  return {
-    ...formHandlers,
-    ...viewModel,
+  const workspaceLoading = confirmedDraftRedirecting || confirmedDraftLoaded || !isInitialized;
+
+  return buildMatchWorkspaceControllerModel({
     baseErrors,
     cancelDraftConfirmOpen,
-    cancelDraftMutation,
+    cancelDraftPending: cancelDraftMutation.isPending,
     closeConfirm,
     confirmAction,
     confirmOpen,
-    createEventMutation,
+    createEventPending: createEventMutation.isPending,
     editLoadFailed: mode === "edit" && shouldShowBlockingQueryError(matchDetailQuery),
     editLoading: mode === "edit" && isInitialQueryLoading(matchDetailQuery),
     eventDraftValue,
-    handleCancelDraftConfirmed,
-    handleNavigateToMasters,
-    isInitialized,
-    isNavigatingToMasters,
+    formHandlers,
     isMutating,
+    isNavigatingToMasters,
     isOcrRunningBlocked,
+    mode,
     notice,
     preferredImageKind,
-    refreshReviewStatus,
     refreshingReviewStatus,
     returnTo,
-    reviewStatus,
-    setCancelDraftConfirmOpen,
-    setEventDraftValue,
-    setPreferredImageKind,
-    setShowValidationErrors,
-    setValidationMessage,
-    showValidationErrors,
     sourceImageLoading: sourceImageQuery.isLoading,
     sourceImages,
     state,
-    updateMutation,
     useSampleDrafts,
-    validation,
+    validationState: { validation, visibleErrorPathSet },
     validationMessage,
-    visibleErrorPathSet,
-    workspaceLoading: confirmedDraftRedirecting || confirmedDraftLoaded || !isInitialized,
+    viewModel,
     workspaceData,
+    workspaceLoading,
+    onCancelDraftConfirm: handleCancelDraftConfirmed,
+    onCancelDraftOpenChange: setCancelDraftConfirmOpen,
+    onCancelDraftTrigger: openCancelDraftConfirm,
+    onEventDraftChange: setEventDraftValue,
+    onNavigateToMasters: handleNavigateToMasters,
+    onPreferImageKindChange: setPreferredImageKind,
     onPrimaryAction,
-  };
+    onRefreshReviewStatus: refreshReviewStatus,
+  });
 }
+
+export type MatchWorkspaceController = MatchWorkspaceControllerModel;

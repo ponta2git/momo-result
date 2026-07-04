@@ -22,7 +22,6 @@ import {
   HeadToHeadMetrics,
   RateMetrics,
 } from "@/features/seriesComparison/metrics/SeriesComparisonOverviewMetrics";
-import { defaultSeriesComparisonView } from "@/features/seriesComparison/model/seriesComparisonViewModel";
 import type { SeriesComparisonViewId } from "@/features/seriesComparison/model/seriesComparisonViewModel";
 import {
   AnalysisTabs,
@@ -33,12 +32,21 @@ import {
 } from "@/features/seriesComparison/page/SeriesComparisonAnalysisNavigation";
 import type { AnalysisViewChange } from "@/features/seriesComparison/page/SeriesComparisonAnalysisNavigation";
 import { SummaryBand } from "@/features/seriesComparison/page/SeriesComparisonSummary";
-import type { useSeriesComparisonPageController } from "@/features/seriesComparison/page/useSeriesComparisonPageController";
 import { ReviewViewContent } from "@/features/seriesComparison/review/SeriesComparisonReviewPanel";
 import type {
   SeriesComparisonResponse,
   SeriesComparisonReviewResponse,
 } from "@/shared/api/seriesComparison";
+
+export type SeriesComparisonContentModel = {
+  activeView: SeriesComparisonViewId;
+  hasReviewError: boolean;
+  onViewChange: AnalysisViewChange;
+  response: SeriesComparisonResponse;
+  review: SeriesComparisonReviewResponse | undefined;
+  reviewLoading: boolean;
+  scopeLabel: string;
+};
 
 export function AnalysisViewContent({
   hasReviewError,
@@ -101,24 +109,14 @@ export function AnalysisViewContent({
   );
 }
 
-export function SeriesComparisonContent({
-  controller,
-}: {
-  controller: ReturnType<typeof useSeriesComparisonPageController>;
-}) {
-  if (!controller.aggregate) {
-    return null;
-  }
-  const activeView = controller.state.view ?? defaultSeriesComparisonView;
-  const activeDefinition = analysisViewFor(activeView);
+export function SeriesComparisonContent({ model }: { model: SeriesComparisonContentModel }) {
+  const activeDefinition = analysisViewFor(model.activeView);
   return (
     <>
-      <div className="text-sm text-[var(--color-text-secondary)]">
-        {controller.selectedSeries?.name}・{controller.scopeName}
-      </div>
-      <SummaryBand response={controller.aggregate} />
-      <AnalysisTabs activeView={activeView} onViewChange={controller.updateView} />
-      <DataQualityNotice response={controller.aggregate} />
+      <div className="text-sm text-[var(--color-text-secondary)]">{model.scopeLabel}</div>
+      <SummaryBand response={model.response} />
+      <AnalysisTabs activeView={model.activeView} onViewChange={model.onViewChange} />
+      <DataQualityNotice response={model.response} />
       <div
         aria-labelledby={analysisTabId(activeDefinition.id)}
         id={analysisPanelId(activeDefinition.id)}
@@ -127,12 +125,12 @@ export function SeriesComparisonContent({
         <div className="grid gap-4" id={`analysis-${activeDefinition.id}`}>
           <SectionJumpLinks items={activeDefinition.sections} />
           <AnalysisViewContent
-            hasReviewError={controller.hasReviewError}
-            response={controller.aggregate}
-            review={controller.reviewShielded ? undefined : controller.review}
-            reviewLoading={controller.reviewLoading || controller.reviewShielded}
+            hasReviewError={model.hasReviewError}
+            response={model.response}
+            review={model.review}
+            reviewLoading={model.reviewLoading}
             view={activeDefinition.id}
-            onViewChange={controller.updateView}
+            onViewChange={model.onViewChange}
           />
         </div>
       </div>

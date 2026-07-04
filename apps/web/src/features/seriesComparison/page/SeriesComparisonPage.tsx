@@ -15,42 +15,24 @@ import { PageHeader } from "@/shared/ui/layout/PageHeader";
 import { StaleShield } from "@/shared/ui/motion/StaleShield";
 
 export function SeriesComparisonPage() {
-  const controller = useSeriesComparisonPageController();
+  const page = useSeriesComparisonPageController();
+  const { aggregate, filters, options, review } = page;
 
-  if (controller.optionsLoading) {
+  if (options.loading) {
     return <PageSkeleton />;
   }
-
-  const seriesOptions = (controller.options?.series ?? []).map((series) => ({
-    label: `${series.name} (${series.confirmedMatchCount}戦)`,
-    value: series.gameTitleId,
-  }));
-  const seasonOptions = [
-    { label: "全シーズン", value: "" },
-    ...controller.seasonOptions.map((option) => ({
-      label: option.name,
-      value: option.id,
-    })),
-  ];
-  const mapOptions = [
-    { label: "全マップ", value: "" },
-    ...controller.mapOptions.map((option) => ({
-      label: option.name,
-      value: option.id,
-    })),
-  ];
 
   return (
     <PageFrame className="gap-5" width="wide">
       <PageHeader
         actions={
           <Button
-            disabled={!controller.canRefresh}
+            disabled={!aggregate.canRefresh}
             icon={<RefreshCw className="size-4" />}
-            pending={controller.aggregateRefreshing || controller.reviewRefreshing}
+            pending={aggregate.refreshing || review.refreshing}
             pendingLabel="更新中"
             variant="secondary"
-            onClick={controller.refresh}
+            onClick={page.actions.refresh}
           >
             更新
           </Button>
@@ -60,19 +42,19 @@ export function SeriesComparisonPage() {
         title="戦績比較"
       />
 
-      {controller.hasOptionsError ? (
+      {options.hasError ? (
         <Notice tone="danger" title="対象作品を読み込めません">
           通信状態を確認して、再読み込みしてください。
         </Notice>
       ) : null}
 
-      {seriesOptions.length === 0 && !controller.hasOptionsError ? (
+      {filters.seriesOptions.length === 0 && !options.hasError ? (
         <EmptyState
           icon={<BarChart3 className="size-5" />}
           title="比較できる戦績がありません"
           description="確定済みの試合が揃うと比較できます。"
         />
-      ) : seriesOptions.length > 0 ? (
+      ) : filters.seriesOptions.length > 0 ? (
         <>
           <section className="grid gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 md:grid-cols-[minmax(12rem,1fr)_minmax(12rem,1fr)_minmax(12rem,1fr)] md:items-end">
             <div className="min-w-0 md:col-span-3">
@@ -83,42 +65,52 @@ export function SeriesComparisonPage() {
             </div>
             <SelectField
               label="シーズン"
-              options={seasonOptions}
-              value={controller.state.seasonMasterId ?? ""}
-              onChange={(event) => controller.updateSeasonMasterId(event.currentTarget.value)}
+              options={filters.seasonOptions}
+              value={filters.state.seasonMasterId ?? ""}
+              onChange={(event) => filters.updateSeasonMasterId(event.currentTarget.value)}
             />
             <SelectField
               label="マップ"
-              options={mapOptions}
-              value={controller.state.mapMasterId ?? ""}
-              onChange={(event) => controller.updateMapMasterId(event.currentTarget.value)}
+              options={filters.mapOptions}
+              value={filters.state.mapMasterId ?? ""}
+              onChange={(event) => filters.updateMapMasterId(event.currentTarget.value)}
             />
             <SelectField
               label="対象作品"
-              options={seriesOptions}
-              value={controller.state.gameTitleId ?? ""}
-              onChange={(event) => controller.updateGameTitle(event.currentTarget.value)}
+              options={filters.seriesOptions}
+              value={filters.state.gameTitleId ?? ""}
+              onChange={(event) => filters.updateGameTitle(event.currentTarget.value)}
             />
           </section>
 
-          {controller.hasAggregateError ? (
+          {aggregate.hasError ? (
             <Notice tone="danger" title="戦績データを読み込めません">
               条件を変えるか、時間をおいて再読み込みしてください。
             </Notice>
           ) : (
             <StaleShield
-              active={controller.aggregateLoading || controller.aggregateShielded}
+              active={aggregate.loading || aggregate.shielded}
               contentClassName="grid gap-5"
               fallback={<ComparisonSkeleton />}
             >
-              {controller.aggregate && controller.aggregate.matchCount === 0 ? (
+              {aggregate.data && aggregate.data.matchCount === 0 ? (
                 <EmptyState
                   icon={<BarChart3 className="size-5" />}
                   title="この範囲に確定済みの試合がありません"
                   description="総合、別シーズン、別マップを選ぶと表示できる場合があります。"
                 />
-              ) : controller.aggregate ? (
-                <SeriesComparisonContent controller={controller} />
+              ) : aggregate.data ? (
+                <SeriesComparisonContent
+                  model={{
+                    activeView: filters.activeView,
+                    hasReviewError: review.hasError,
+                    onViewChange: filters.updateView,
+                    response: aggregate.data,
+                    review: review.shielded ? undefined : review.data,
+                    reviewLoading: review.loading || review.shielded,
+                    scopeLabel: filters.scopeLabel,
+                  }}
+                />
               ) : null}
             </StaleShield>
           )}

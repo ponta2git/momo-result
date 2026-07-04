@@ -97,6 +97,36 @@ export function useSeriesComparisonPageController() {
   const selectedSeries = findSelectedSeries(optionsQuery.data, normalizedState.gameTitleId);
   const seasonOptions = selectedSeries?.seasons ?? [];
   const mapOptions = selectedSeries?.maps ?? [];
+  const scopeName = scopeNameForState(optionsQuery.data, normalizedState);
+
+  const seriesSelectOptions = useMemo(
+    () =>
+      (optionsQuery.data?.series ?? []).map((series) => ({
+        label: `${series.name} (${series.confirmedMatchCount}戦)`,
+        value: series.gameTitleId,
+      })),
+    [optionsQuery.data],
+  );
+  const seasonSelectOptions = useMemo(
+    () => [
+      { label: "全シーズン", value: "" },
+      ...seasonOptions.map((option) => ({
+        label: option.name,
+        value: option.id,
+      })),
+    ],
+    [seasonOptions],
+  );
+  const mapSelectOptions = useMemo(
+    () => [
+      { label: "全マップ", value: "" },
+      ...mapOptions.map((option) => ({
+        label: option.name,
+        value: option.id,
+      })),
+    ],
+    [mapOptions],
+  );
 
   const updateState = useCallback(
     (next: typeof normalizedState, options: { replace?: boolean } = {}): void => {
@@ -109,6 +139,38 @@ export function useSeriesComparisonPageController() {
       });
     },
     [optionsQuery.data, setSearchParams, startStateTransition],
+  );
+  const updateGameTitle = useCallback(
+    (gameTitleId: string) =>
+      updateState({
+        gameTitleId,
+        mapMasterId: undefined,
+        seasonMasterId: undefined,
+        view: normalizedState.view ?? defaultSeriesComparisonView,
+      }),
+    [normalizedState.view, updateState],
+  );
+  const updateMapMasterId = useCallback(
+    (mapMasterId: string) =>
+      updateState({
+        ...normalizedState,
+        mapMasterId: mapMasterId || undefined,
+      }),
+    [normalizedState, updateState],
+  );
+  const updateSeasonMasterId = useCallback(
+    (seasonMasterId: string) =>
+      updateState({
+        ...normalizedState,
+        seasonMasterId: seasonMasterId || undefined,
+        view: normalizedState.view ?? defaultSeriesComparisonView,
+      }),
+    [normalizedState, updateState],
+  );
+  const updateView = useCallback(
+    (view: SeriesComparisonViewId, options?: { replace?: boolean }) =>
+      updateState({ ...normalizedState, view }, options),
+    [normalizedState, updateState],
   );
 
   const aggregateLoading = isInitialQueryLoading(aggregateQuery);
@@ -127,53 +189,48 @@ export function useSeriesComparisonPageController() {
       isRefreshing: reviewQuery.isFetching && reviewQuery.data !== undefined,
       isSettling: scopeSettling || reviewViewSettling,
     });
+  const refresh = useCallback(() => {
+    void optionsQuery.refetch();
+    void aggregateQuery.refetch();
+    if (reviewEnabled) {
+      void reviewQuery.refetch();
+    }
+  }, [aggregateQuery.refetch, optionsQuery.refetch, reviewEnabled, reviewQuery.refetch]);
 
   return {
-    aggregate: aggregateQuery.data,
-    aggregateLoading,
-    aggregateRefreshing: aggregateQuery.isFetching && aggregateQuery.data !== undefined,
-    aggregateShielded,
-    canRefresh: aggregateQueryParams !== undefined,
-    hasAggregateError: shouldShowBlockingQueryError(aggregateQuery),
-    hasOptionsError: shouldShowQueryError(optionsQuery),
-    hasReviewError: reviewEnabled && shouldShowBlockingQueryError(reviewQuery),
-    options: optionsQuery.data,
-    optionsLoading: isInitialQueryLoading(optionsQuery),
-    refresh: () => {
-      void optionsQuery.refetch();
-      void aggregateQuery.refetch();
-      if (reviewEnabled) {
-        void reviewQuery.refetch();
-      }
+    actions: {
+      refresh,
     },
-    review: reviewQuery.data,
-    reviewLoading,
-    reviewRefreshing: reviewEnabled && reviewQuery.isFetching && reviewQuery.data !== undefined,
-    reviewShielded,
-    mapOptions,
-    scopeName: scopeNameForState(optionsQuery.data, normalizedState),
-    seasonOptions,
-    selectedSeries,
-    state: normalizedState,
-    updateGameTitle: (gameTitleId: string) =>
-      updateState({
-        gameTitleId,
-        mapMasterId: undefined,
-        seasonMasterId: undefined,
-        view: normalizedState.view ?? defaultSeriesComparisonView,
-      }),
-    updateMapMasterId: (mapMasterId: string) =>
-      updateState({
-        ...normalizedState,
-        mapMasterId: mapMasterId || undefined,
-      }),
-    updateSeasonMasterId: (seasonMasterId: string) =>
-      updateState({
-        ...normalizedState,
-        seasonMasterId: seasonMasterId || undefined,
-        view: normalizedState.view ?? defaultSeriesComparisonView,
-      }),
-    updateView: (view: SeriesComparisonViewId, options?: { replace?: boolean }) =>
-      updateState({ ...normalizedState, view }, options),
+    aggregate: {
+      canRefresh: aggregateQueryParams !== undefined,
+      data: aggregateQuery.data,
+      hasError: shouldShowBlockingQueryError(aggregateQuery),
+      loading: aggregateLoading,
+      refreshing: aggregateQuery.isFetching && aggregateQuery.data !== undefined,
+      shielded: aggregateShielded,
+    },
+    filters: {
+      activeView,
+      mapOptions: mapSelectOptions,
+      scopeLabel: [selectedSeries?.name, scopeName].filter(Boolean).join("・"),
+      seasonOptions: seasonSelectOptions,
+      seriesOptions: seriesSelectOptions,
+      state: normalizedState,
+      updateGameTitle,
+      updateMapMasterId,
+      updateSeasonMasterId,
+      updateView,
+    },
+    options: {
+      hasError: shouldShowQueryError(optionsQuery),
+      loading: isInitialQueryLoading(optionsQuery),
+    },
+    review: {
+      data: reviewQuery.data,
+      hasError: reviewEnabled && shouldShowBlockingQueryError(reviewQuery),
+      loading: reviewLoading,
+      refreshing: reviewEnabled && reviewQuery.isFetching && reviewQuery.data !== undefined,
+      shielded: reviewShielded,
+    },
   };
 }

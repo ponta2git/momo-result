@@ -83,6 +83,7 @@ API境界の一部は `ApiEndpointsArchitectureSpec` と `ApiRuntimeArchitecture
 - `features/matches/list`、`features/matches/workspace`、試合詳細の実装詳細を相互 import しない。
 - 横断 API client、生成型、query key、共有UI、共通domain helperは `shared/` に置く。画面固有の状態・変換・UIは feature 配下に置く。
 - `*Page.tsx` は composition とページ状態に寄せ、データ取得・mutation・複雑な状態機械は hook / controller / helper へ分ける。
+- 大きい feature は `page/`、`model/`、`metrics/`、`charts/`、`drilldowns/`、`review/` のように責務名で物理分割する。1階層に page shell、可視部品、集計ロジック、drilldown、review 表示を混在させない。
 - 本番 TS/TSX module は概ね300行以内に保つ。超過する場合は page shell、section、controller hook、view model、presentation helper、型、adapter facade の混在を疑い、責務名で分割する。
 - 本番コードから `@/test/*`、`shared/api/msw/*` を import しない。
 
@@ -99,7 +100,7 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、mod
 ### 3.3 Server State
 
 - API取得と server state は TanStack Query を使う。
-- feature Page から TanStack Query を直接 import せず、use* hook / controller に寄せる。
+- feature の Page/UI component から TanStack Query を直接 import せず、use* hook / controller に寄せる。横断 resource の query option factory は `shared/api/queryOptions.ts` に置き、feature は画面固有の選択・変換だけを足す。
 - route 読み込みは `React.lazy` と route-specific Suspense skeleton を使える。mutation、フォーム保存、validation error、ユーザー操作中状態は明示的に扱う。
 - React concurrent API は TanStack Query の cache lifecycle を置き換えない。`useTransition` / `useDeferredValue` は条件変更時の表示 settling、`useActionState` は form action 境界など、既存契約を保つ範囲に限定する。
 - ページ失敗表示は `query.error` / `isError` だけで確定しない。認証、`enabled`、`isFetching` / `fetchStatus`、過去errorの再取得中状態を合わせる。

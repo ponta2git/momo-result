@@ -95,6 +95,8 @@ for (const file of walk(root)) {
   const sourceMatchesSubArea = matchesSubArea(relativePath);
   const isFeaturePage =
     productionSource && sourceLayer === "features" && relativePath.endsWith("Page.tsx");
+  const isFeatureUiComponent =
+    productionSource && sourceLayer === "features" && relativePath.endsWith(".tsx");
   const isAppRouteModule = relativePath === "app/routeModules.ts";
 
   if (productionSource && sourceLayer === "app" && !isAppRouteModule) {
@@ -160,6 +162,12 @@ for (const file of walk(root)) {
     if (isFeaturePage && specifier === "@tanstack/react-query") {
       violations.push(
         `${relativePath}: feature Page components must keep TanStack Query in use* hooks/controllers`,
+      );
+    }
+
+    if (!isFeaturePage && isFeatureUiComponent && specifier === "@tanstack/react-query") {
+      violations.push(
+        `${relativePath}: feature UI components must keep TanStack Query in use* hooks/controllers`,
       );
     }
 

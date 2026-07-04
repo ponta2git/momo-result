@@ -2,7 +2,6 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { createOcrJob, uploadImage } from "@/features/ocrCapture/api";
 import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
 import {
   ocrJobRequestForSlot,
@@ -12,6 +11,7 @@ import type { SetupFormValues } from "@/features/ocrCapture/schema";
 import { invalidateAfterOcrSubmissionStarted } from "@/shared/api/cacheInvalidation";
 import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { cancelMatchDraft, createMatchDraft } from "@/shared/api/matchDrafts";
+import { createOcrJob, uploadImage } from "@/shared/api/ocrJobs";
 import { formatApiError } from "@/shared/api/problemDetails";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 

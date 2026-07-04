@@ -1,10 +1,9 @@
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
 import { confirmMatchSchema } from "@/features/matches/workspace/review/confirmMatchFormSchema";
-import type { ConfirmMatchRequest } from "@/features/matches/workspace/review/confirmMatchFormSchema";
-import type { components } from "@/shared/api/generated";
+import type { ConfirmMatchRequest, UpdateMatchRequest } from "@/shared/api/matches";
 
 export type MatchConfirmRequest = ConfirmMatchRequest;
-export type MatchUpdateRequest = components["schemas"]["UpdateMatchRequest"];
+export type MatchUpdateRequest = UpdateMatchRequest;
 
 /**
  * フォーム値を `ConfirmMatchRequest` (= 確定 API リクエスト DTO) に変換する。

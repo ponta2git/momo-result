@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import type { components } from "@/shared/api/generated";
+import type { ConfirmMatchRequest } from "@/shared/api/matches";
 import { fixedMembers } from "@/shared/domain/members";
 
 const memberIds = fixedMembers.map((member) => member.memberId) as [string, ...string[]];
@@ -29,8 +29,6 @@ const playedAtSchema = z
   .refine((value) => !Number.isNaN(new Date(value).getTime()), {
     message: "開催日時を正しく入力してください",
   });
-
-export type ConfirmMatchRequest = components["schemas"]["ConfirmMatchRequest"];
 
 function toIsoFromLocal(value: string): string {
   const date = new Date(value);

@@ -1,6 +1,6 @@
 import type { ScreenType, SlotKind } from "@/shared/api/enums";
 import { parseSlotKind } from "@/shared/api/enums";
-import type { components } from "@/shared/api/generated";
+import type { OcrFailureResponse } from "@/shared/api/ocrJobs";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
 
 export type InputSource = "upload" | "camera";
@@ -31,7 +31,7 @@ export type CaptureSlotState = {
   detectedKind?: SlotKind | undefined;
   status: SlotStatus;
   transportError?: NormalizedApiError | undefined;
-  jobFailure?: components["schemas"]["OcrFailureResponse"] | undefined;
+  jobFailure?: OcrFailureResponse | undefined;
   pollingPausedReason?: PollingPausedReason | undefined;
   pollAttempts: number;
   pollRefreshNonce?: number | undefined;

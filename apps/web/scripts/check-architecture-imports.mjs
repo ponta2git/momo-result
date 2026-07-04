@@ -147,6 +147,16 @@ for (const file of walk(root)) {
       violations.push(`${relativePath}: production code must not import ${specifier}`);
     }
 
+    if (
+      productionSource &&
+      sourceLayer === "features" &&
+      resolvedImport === "shared/api/generated"
+    ) {
+      violations.push(
+        `${relativePath}: feature code must use shared/api resource facades instead of ${specifier}`,
+      );
+    }
+
     if (isFeaturePage && specifier === "@tanstack/react-query") {
       violations.push(
         `${relativePath}: feature Page components must keep TanStack Query in use* hooks/controllers`,

@@ -1,5 +1,5 @@
 import type { ConfirmMatchFormValues } from "@/features/matches/workspace/review/confirmMatchFormSchema";
-import type { components } from "@/shared/api/generated";
+import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
 import { emptyIncidentCountsByKey, incidentColumns } from "@/shared/domain/incidents";
 import type { IncidentKey, IncidentLabel } from "@/shared/domain/incidents";
 import { fixedMembers } from "@/shared/domain/members";
@@ -9,7 +9,7 @@ export { incidentColumns };
 export type { IncidentKey, IncidentLabel };
 export type ReviewIncidentCounts = Record<IncidentLabel, number>;
 
-export type DraftByKind = SlotMap<components["schemas"]["OcrDraftResponse"]>;
+export type DraftByKind = SlotMap<OcrDraftResponse>;
 
 export type IncidentLookupEntry = {
   confidence: Partial<Record<IncidentLabel, number | null>>;

@@ -1,23 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { MouseEvent } from "react";
-
 import { SourceImagePreviewDialog } from "@/features/matches/workspace/sourceImages/SourceImagePreviewDialog";
 import { SourceImageTabs } from "@/features/matches/workspace/sourceImages/SourceImageTabs";
-import {
-  sourceImageKindLabels,
-  sourceImageKinds,
-} from "@/features/matches/workspace/sourceImages/sourceImageTypes";
+import { sourceImageKindLabels } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
 import type {
   SourceImageItem,
   SourceImageKind,
 } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
-import { toSourceImageStates } from "@/features/matches/workspace/sourceImages/sourceImageViewModel";
-import {
-  downloadMatchDraftSourceImage,
-  downloadMatchDraftSourceImagesArchive,
-} from "@/shared/api/matchDrafts";
-import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
-import { triggerBrowserDownload } from "@/shared/browser/downloadFile";
+import { useSourceImagePanelState } from "@/features/matches/workspace/sourceImages/useSourceImagePanelState";
 import { Button } from "@/shared/ui/actions/Button";
 import { Dialog } from "@/shared/ui/feedback/Dialog";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
@@ -30,21 +18,7 @@ type SourceImagePanelProps = {
   sourceImages: SourceImageItem[] | undefined;
 };
 
-const stickyDurationMs = 15_000;
-
-type LoadedSourceImage =
-  | { status: "loading"; url: string }
-  | { objectUrl: string; status: "ready"; url: string }
-  | { status: "error"; url: string };
-
-type SourceImageCache = Record<string, LoadedSourceImage>;
-
-const archiveDownloadError =
-  "元画像を保存できませんでした。確定または削除により画像が利用できなくなった可能性があります。必要な場合は画像を再アップロードしてください。";
-const archiveRateLimitError =
-  "元画像の保存が短時間に集中しています。少し待ってから再度お試しください。";
-const archiveTooLargeError =
-  "元画像ZIPのサイズが上限を超えています。必要な画像を個別に保存してください。";
+const archivePendingLabel = "保存中…";
 
 function SourceImageLoadingFrame({ detail, label }: { detail: string; label: string }) {
   return (
@@ -61,184 +35,12 @@ export function SourceImagePanel({
   preferredKind,
   sourceImages,
 }: SourceImagePanelProps) {
-  const states = useMemo(() => toSourceImageStates(sourceImages), [sourceImages]);
-  const [activeKind, setActiveKind] = useState<SourceImageKind>(preferredKind ?? "total_assets");
-  const [previewKind, setPreviewKind] = useState<SourceImageKind | null>(null);
-  const [manualSwitchAt, setManualSwitchAt] = useState<number>(0);
-  const [imageCache, setImageCache] = useState<SourceImageCache>({});
-  const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
-  const [archiveSaving, setArchiveSaving] = useState(false);
-  const [archiveError, setArchiveError] = useState("");
-  const previewTriggerRef = useRef<HTMLElement | null>(null);
-  const imageCacheRef = useRef<SourceImageCache>({});
-  const imageObjectUrlsRef = useRef(new Map<string, string>());
-  const imageLoadControllersRef = useRef(new Map<string, AbortController>());
-
-  useEffect(() => {
-    imageCacheRef.current = imageCache;
-  }, [imageCache]);
-
-  useEffect(() => {
-    if (!preferredKind) {
-      return;
-    }
-
-    const now = Date.now();
-    if (now - manualSwitchAt <= stickyDurationMs) {
-      return;
-    }
-
-    setActiveKind(preferredKind);
-  }, [manualSwitchAt, preferredKind]);
-
-  const activeState = states.find((state) => state.kind === activeKind);
-  const activeImageUrl = activeState?.status === "available" ? activeState.url : undefined;
-  const activeImage = activeImageUrl ? imageCache[activeImageUrl] : undefined;
-  const displayUrl =
-    activeImage?.status === "ready" && activeImage.url === activeImageUrl
-      ? activeImage.objectUrl
-      : undefined;
-  const previewUrl = previewKind === activeKind ? displayUrl : undefined;
-  const availableImageCount = states.filter((state) => state.status === "available").length;
-  const expectedImageCount = sourceImageKinds.length;
-  const archiveSaveDisabled = loading || archiveSaving || availableImageCount === 0;
-  const archivePendingLabel = "保存中…";
-
-  useEffect(() => {
-    const availableUrls = new Set(
-      states.flatMap((state) => (state.status === "available" ? [state.url] : [])),
-    );
-
-    setImageCache((current) => {
-      let next = current;
-      for (const url of Object.keys(current)) {
-        if (!availableUrls.has(url)) {
-          imageLoadControllersRef.current.get(url)?.abort();
-          imageLoadControllersRef.current.delete(url);
-          const objectUrl = imageObjectUrlsRef.current.get(url);
-          if (objectUrl) {
-            URL.revokeObjectURL(objectUrl);
-            imageObjectUrlsRef.current.delete(url);
-          }
-          if (next === current) {
-            next = { ...current };
-          }
-          delete next[url];
-        }
-      }
-      return next;
-    });
-
-    for (const url of availableUrls) {
-      const cached = imageCacheRef.current[url];
-      if (cached?.status === "loading" || cached?.status === "ready") {
-        continue;
-      }
-      const controller = new AbortController();
-      imageLoadControllersRef.current.set(url, controller);
-      setImageCache((current) => {
-        const latest = current[url];
-        if (latest?.status === "loading" || latest?.status === "ready") {
-          return current;
-        }
-        return { ...current, [url]: { status: "loading", url } };
-      });
-
-      const preloadImage = async () => {
-        try {
-          const blob = await downloadMatchDraftSourceImage(url, controller.signal);
-          if (controller.signal.aborted) {
-            return;
-          }
-          const objectUrl = URL.createObjectURL(blob);
-          imageObjectUrlsRef.current.set(url, objectUrl);
-          setImageCache((current) => ({ ...current, [url]: { objectUrl, status: "ready", url } }));
-        } catch {
-          if (controller.signal.aborted) {
-            return;
-          }
-          setImageCache((current) => ({ ...current, [url]: { status: "error", url } }));
-        } finally {
-          if (imageLoadControllersRef.current.get(url) === controller) {
-            imageLoadControllersRef.current.delete(url);
-          }
-        }
-      };
-      void preloadImage();
-    }
-  }, [states]);
-
-  useEffect(
-    () => () => {
-      for (const controller of imageLoadControllersRef.current.values()) {
-        controller.abort();
-      }
-      imageLoadControllersRef.current.clear();
-      for (const objectUrl of imageObjectUrlsRef.current.values()) {
-        URL.revokeObjectURL(objectUrl);
-      }
-      imageObjectUrlsRef.current.clear();
-    },
-    [],
-  );
-
-  const saveArchive = useCallback(async () => {
-    setArchiveError("");
-    setArchiveSaving(true);
-    try {
-      const result = await downloadMatchDraftSourceImagesArchive(matchDraftId);
-      triggerBrowserDownload(result);
-    } catch (error) {
-      const normalized = normalizeUnknownApiError(error);
-      if (normalized.status === 429 || normalized.code === "TOO_MANY_REQUESTS") {
-        setArchiveError(archiveRateLimitError);
-      } else if (normalized.category === "payload_too_large") {
-        setArchiveError(archiveTooLargeError);
-      } else {
-        setArchiveError(archiveDownloadError);
-      }
-    } finally {
-      setArchiveSaving(false);
-    }
-  }, [matchDraftId]);
-
-  const handleArchiveSaveRequest = useCallback(() => {
-    setArchiveError("");
-    if (availableImageCount < expectedImageCount) {
-      setArchiveConfirmOpen(true);
-      return;
-    }
-    void saveArchive();
-  }, [availableImageCount, expectedImageCount, saveArchive]);
-
-  const handleArchiveSaveConfirmed = useCallback(() => {
-    setArchiveConfirmOpen(false);
-    void saveArchive();
-  }, [saveArchive]);
-  const handleArchiveDialogOpenChange = useCallback((open: boolean) => {
-    setArchiveConfirmOpen(open);
-  }, []);
-  const handleArchiveCancel = useCallback(() => {
-    setArchiveConfirmOpen(false);
-  }, []);
-  const handleSourceImageTabChange = useCallback((kind: SourceImageKind) => {
-    setActiveKind(kind);
-    setManualSwitchAt(Date.now());
-  }, []);
-  const handlePreviewOpen = useCallback(
-    (event: MouseEvent<HTMLElement>) => {
-      if (activeState?.status !== "available") {
-        return;
-      }
-      previewTriggerRef.current = event.currentTarget;
-      setPreviewKind(activeState.kind);
-    },
-    [activeState],
-  );
-  const handlePreviewClose = useCallback(() => {
-    setPreviewKind(null);
-    previewTriggerRef.current?.focus();
-  }, []);
+  const panel = useSourceImagePanelState({
+    loading,
+    matchDraftId,
+    preferredKind,
+    sourceImages,
+  });
 
   return (
     <Card className="h-fit p-4 lg:sticky lg:top-4 lg:w-[22rem] xl:w-[26rem]">
@@ -246,16 +48,16 @@ export function SourceImagePanel({
         <div>
           <h2 className="text-base font-semibold text-[var(--color-text-primary)]">元画像参照</h2>
           <span className="text-xs font-semibold text-[var(--color-text-secondary)]">
-            {sourceImageKindLabels[activeKind]}
+            {sourceImageKindLabels[panel.activeKind]}
           </span>
         </div>
         <Button
-          disabled={archiveSaveDisabled}
-          pending={archiveSaving}
+          disabled={panel.archiveSaveDisabled}
+          pending={panel.archiveSaving}
           pendingLabel={archivePendingLabel}
           size="sm"
           variant="secondary"
-          onClick={handleArchiveSaveRequest}
+          onClick={panel.handleArchiveSaveRequest}
         >
           元画像を保存
         </Button>
@@ -263,19 +65,22 @@ export function SourceImagePanel({
       <p className="mt-1 text-xs text-pretty text-[var(--color-text-secondary)]">
         入力中セルに応じて参照画像を切り替えます。手動で選んだタブはしばらく固定されます。
       </p>
-      {!loading && availableImageCount === 0 ? (
+      {!loading && panel.availableImageCount === 0 ? (
         <p className="mt-2 text-xs text-[var(--color-text-secondary)]">
           保存できる元画像がありません。
         </p>
       ) : null}
-      {archiveError ? (
+      {panel.archiveError ? (
         <p className="mt-2 text-sm text-[var(--color-danger)]" role="alert">
-          {archiveError}
+          {panel.archiveError}
         </p>
       ) : null}
 
       <div className="mt-3">
-        <SourceImageTabs activeKind={activeKind} onChange={handleSourceImageTabChange} />
+        <SourceImageTabs
+          activeKind={panel.activeKind}
+          onChange={panel.handleSourceImageTabChange}
+        />
       </div>
 
       <div className="mt-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
@@ -284,68 +89,72 @@ export function SourceImagePanel({
         ) : null}
 
         {!loading &&
-        activeState?.status === "available" &&
-        (!activeImage || activeImage.status === "loading") ? (
+        panel.activeState?.status === "available" &&
+        (!panel.activeImage || panel.activeImage.status === "loading") ? (
           <SourceImageLoadingFrame
             detail="元画像を読み込んでいます。"
-            label={`${sourceImageKindLabels[activeState.kind]}の元画像を読み込み中`}
+            label={`${sourceImageKindLabels[panel.activeState.kind]}の元画像を読み込み中`}
           />
         ) : null}
 
-        {!loading && activeState?.status === "available" && activeImage?.status === "error" ? (
+        {!loading &&
+        panel.activeState?.status === "available" &&
+        panel.activeImage?.status === "error" ? (
           <p className="text-sm text-[var(--color-danger)]">
             元画像を読み込めませんでした。時間をおいて再度開いてください。
           </p>
         ) : null}
 
-        {!loading && activeState?.status === "available" && displayUrl ? (
+        {!loading && panel.activeState?.status === "available" && panel.displayUrl ? (
           <>
             <img
-              alt={`${sourceImageKindLabels[activeState.kind]}の元画像`}
+              alt={`${sourceImageKindLabels[panel.activeState.kind]}の元画像`}
               className="h-[13rem] w-full rounded-[var(--radius-sm)] bg-[var(--momo-night-900)] object-contain"
-              src={displayUrl}
+              src={panel.displayUrl}
             />
             <div className="mt-2 flex items-center justify-between gap-2">
               <p className="text-xs text-[var(--color-text-secondary)]">
-                {activeState.description}
+                {panel.activeState.description}
               </p>
-              <Button variant="secondary" onClick={handlePreviewOpen}>
+              <Button variant="secondary" onClick={panel.handlePreviewOpen}>
                 拡大
               </Button>
             </div>
           </>
         ) : null}
 
-        {!loading && activeState?.status === "missing" ? (
-          <p className="text-sm text-[var(--color-text-secondary)]">{activeState.description}</p>
+        {!loading && panel.activeState?.status === "missing" ? (
+          <p className="text-sm text-[var(--color-text-secondary)]">
+            {panel.activeState.description}
+          </p>
         ) : null}
       </div>
 
-      {previewKind && previewUrl ? (
+      {panel.previewKind && panel.previewUrl ? (
         <SourceImagePreviewDialog
-          kind={previewKind}
-          url={previewUrl}
-          onClose={handlePreviewClose}
+          kind={panel.previewKind}
+          url={panel.previewUrl}
+          onClose={panel.handlePreviewClose}
         />
       ) : null}
 
-      {archiveConfirmOpen ? (
+      {panel.archiveConfirmOpen ? (
         <Dialog
           open
           title="元画像がすべてそろっていません"
-          onOpenChange={handleArchiveDialogOpenChange}
+          onOpenChange={panel.handleArchiveDialogOpenChange}
         >
           <p className="text-sm leading-6 text-pretty text-[var(--color-text-secondary)]">
-            {`保存できる元画像は${expectedImageCount}枚中${availableImageCount}枚です。不足している画像はZIPに含まれません。このまま保存しますか？`}
+            {`保存できる元画像は${panel.expectedImageCount}枚中${panel.availableImageCount}枚です。不足している画像はZIPに含まれません。このまま保存しますか？`}
           </p>
           <div className="mt-4 flex flex-wrap justify-end gap-2">
-            <Button variant="secondary" onClick={handleArchiveCancel}>
+            <Button variant="secondary" onClick={panel.handleArchiveCancel}>
               キャンセル
             </Button>
             <Button
-              pending={archiveSaving}
+              pending={panel.archiveSaving}
               pendingLabel={archivePendingLabel}
-              onClick={handleArchiveSaveConfirmed}
+              onClick={panel.handleArchiveSaveConfirmed}
             >
               保存する
             </Button>

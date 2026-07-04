@@ -1,11 +1,3 @@
-import {
-  AnalysisTabs,
-  SectionJumpLinks,
-  analysisPanelId,
-  analysisTabId,
-  analysisViewFor,
-} from "@/features/seriesComparison/page/SeriesComparisonAnalysisNavigation";
-import type { AnalysisViewChange } from "@/features/seriesComparison/page/SeriesComparisonAnalysisNavigation";
 import { AssetDistributionMetrics } from "@/features/seriesComparison/metrics/SeriesComparisonAssetMetrics";
 import { CardShopDestinationMetrics } from "@/features/seriesComparison/metrics/SeriesComparisonCardShopDestinationMetrics";
 import {
@@ -30,11 +22,19 @@ import {
   HeadToHeadMetrics,
   RateMetrics,
 } from "@/features/seriesComparison/metrics/SeriesComparisonOverviewMetrics";
-import { ReviewViewContent } from "@/features/seriesComparison/review/SeriesComparisonReviewPanel";
-import { SummaryBand } from "@/features/seriesComparison/page/SeriesComparisonSummary";
 import { defaultSeriesComparisonView } from "@/features/seriesComparison/model/seriesComparisonViewModel";
 import type { SeriesComparisonViewId } from "@/features/seriesComparison/model/seriesComparisonViewModel";
+import {
+  AnalysisTabs,
+  SectionJumpLinks,
+  analysisPanelId,
+  analysisTabId,
+  analysisViewFor,
+} from "@/features/seriesComparison/page/SeriesComparisonAnalysisNavigation";
+import type { AnalysisViewChange } from "@/features/seriesComparison/page/SeriesComparisonAnalysisNavigation";
+import { SummaryBand } from "@/features/seriesComparison/page/SeriesComparisonSummary";
 import type { useSeriesComparisonPageController } from "@/features/seriesComparison/page/useSeriesComparisonPageController";
+import { ReviewViewContent } from "@/features/seriesComparison/review/SeriesComparisonReviewPanel";
 import type {
   SeriesComparisonResponse,
   SeriesComparisonReviewResponse,

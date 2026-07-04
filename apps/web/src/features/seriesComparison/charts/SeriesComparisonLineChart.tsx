@@ -6,7 +6,10 @@ import {
   buildNumberTicks,
   niceCeil,
 } from "@/features/seriesComparison/charts/SeriesComparisonChartScales";
-import type { Player, TrendSeries } from "@/features/seriesComparison/charts/SeriesComparisonChartTypes";
+import type {
+  Player,
+  TrendSeries,
+} from "@/features/seriesComparison/charts/SeriesComparisonChartTypes";
 import { isFiniteNumber } from "@/features/seriesComparison/charts/SeriesComparisonChartTypes";
 import { playerColor } from "@/features/seriesComparison/charts/SeriesComparisonPlayerVisuals";
 import { cn } from "@/shared/ui/cn";

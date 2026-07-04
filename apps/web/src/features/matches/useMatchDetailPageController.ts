@@ -16,6 +16,7 @@ import { invalidateAfterMatchDeleted } from "@/shared/api/cacheInvalidation";
 import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { deleteMatch } from "@/shared/api/matches";
 import { formatApiError } from "@/shared/api/problemDetails";
+import { isInitialQueryLoading, shouldShowBlockingQueryError } from "@/shared/api/queryErrorState";
 import {
   gameTitlesQueryOptions,
   heldEventsQueryOptions,
@@ -24,7 +25,6 @@ import {
   seasonMastersQueryOptions,
   seriesComparisonAggregateQueryOptions,
 } from "@/shared/api/queryOptions";
-import { isInitialQueryLoading, shouldShowBlockingQueryError } from "@/shared/api/queryErrorState";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 
 export function useMatchDetailPageController() {

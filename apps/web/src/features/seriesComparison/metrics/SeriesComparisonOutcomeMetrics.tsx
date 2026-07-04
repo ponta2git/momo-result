@@ -7,6 +7,10 @@ import {
   StatusBadge,
 } from "@/features/seriesComparison/metrics/SeriesComparisonMetricPrimitives";
 import { MetricSection } from "@/features/seriesComparison/metrics/SeriesComparisonMetricSection";
+import {
+  IntegratedMetricPanel,
+  OutcomeDetails,
+} from "@/features/seriesComparison/metrics/SeriesComparisonSectionPrimitives";
 import type { PlayerMetrics } from "@/features/seriesComparison/model/seriesComparisonPresentation";
 import {
   formatCountRate,
@@ -16,10 +20,6 @@ import {
   rankOutcomeColor,
   revenueRankConversionEntries,
 } from "@/features/seriesComparison/model/seriesComparisonPresentation";
-import {
-  IntegratedMetricPanel,
-  OutcomeDetails,
-} from "@/features/seriesComparison/metrics/SeriesComparisonSectionPrimitives";
 import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
 
 export type RankOutcome = PlayerMetrics["revenueOutcome"]["top"];

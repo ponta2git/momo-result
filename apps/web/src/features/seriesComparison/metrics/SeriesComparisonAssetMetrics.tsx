@@ -12,6 +12,13 @@ import {
   StatusBadge,
 } from "@/features/seriesComparison/metrics/SeriesComparisonMetricPrimitives";
 import { MetricSection } from "@/features/seriesComparison/metrics/SeriesComparisonMetricSection";
+import {
+  FactChip,
+  FactGroup,
+  IntegratedMetricPanel,
+  MiniFact,
+  OutcomeDetails,
+} from "@/features/seriesComparison/metrics/SeriesComparisonSectionPrimitives";
 import type {
   AssetStyleEvidenceItem,
   AssetStyleProfileEntry,
@@ -29,13 +36,6 @@ import {
   numericExtrema,
   performanceProfileMap,
 } from "@/features/seriesComparison/model/seriesComparisonPresentation";
-import {
-  FactChip,
-  FactGroup,
-  IntegratedMetricPanel,
-  MiniFact,
-  OutcomeDetails,
-} from "@/features/seriesComparison/metrics/SeriesComparisonSectionPrimitives";
 import {
   assetStyleKindLabel,
   assetStyleShapeLabel,

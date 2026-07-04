@@ -8,12 +8,12 @@ import type {
   SeasonMasterResponse,
 } from "@/shared/api/masters";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
+import { shouldShowQueryError } from "@/shared/api/queryErrorState";
 import {
   gameTitlesQueryOptions,
   mapMastersQueryOptions,
   seasonMastersQueryOptions,
 } from "@/shared/api/queryOptions";
-import { shouldShowQueryError } from "@/shared/api/queryErrorState";
 
 type OcrSetupOptionsParams = {
   authAccountId?: string | undefined;

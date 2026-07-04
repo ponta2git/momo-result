@@ -6,6 +6,7 @@ import {
   LineChart,
   RankDistributionStackedBars,
 } from "@/features/seriesComparison/charts/SeriesComparisonCharts";
+import { RankAverageHistoryDrilldownDialog } from "@/features/seriesComparison/drilldowns/SeriesComparisonRankDrilldown";
 import {
   MetricRow,
   PlayerMetricGrid,
@@ -17,7 +18,6 @@ import {
   metricsMap,
   rankDistributionBars,
 } from "@/features/seriesComparison/model/seriesComparisonPresentation";
-import { RankAverageHistoryDrilldownDialog } from "@/features/seriesComparison/drilldowns/SeriesComparisonRankDrilldown";
 import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
 import { Button } from "@/shared/ui/actions/Button";
 

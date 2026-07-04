@@ -4,6 +4,7 @@ import type {
 } from "@/features/seriesComparison/charts/SeriesComparisonChartTypes";
 import { isFiniteNumber } from "@/features/seriesComparison/charts/SeriesComparisonChartTypes";
 import { playerColor } from "@/features/seriesComparison/charts/SeriesComparisonPlayerVisuals";
+import { colorMix } from "@/features/seriesComparison/charts/SeriesComparisonRankColors";
 import {
   formatPercent,
   formatSigned,
@@ -13,7 +14,6 @@ import {
   headToHeadRankDiffSignal,
   SERIES_COMPARISON_THRESHOLDS,
 } from "@/features/seriesComparison/model/seriesComparisonThresholds";
-import { colorMix } from "@/features/seriesComparison/charts/SeriesComparisonRankColors";
 
 export function HeadToHeadMatrix({
   entries,

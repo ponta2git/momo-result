@@ -28,6 +28,11 @@ import type { MatchListAction, MatchListSearch } from "@/features/matches/list/m
 import { toMatchListItemViews } from "@/features/matches/list/matchListViewModel";
 import { invalidateAfterMatchConfirmed } from "@/shared/api/cacheInvalidation";
 import {
+  isInitialQueryLoading,
+  shouldShowBlockingQueryError,
+  shouldShowStaleShield,
+} from "@/shared/api/queryErrorState";
+import {
   gameTitlesQueryOptions,
   heldEventsQueryOptions,
   mapMastersQueryOptions,
@@ -36,11 +41,6 @@ import {
   matchListSummaryQueryOptions,
   seasonMastersQueryOptions,
 } from "@/shared/api/queryOptions";
-import {
-  isInitialQueryLoading,
-  shouldShowBlockingQueryError,
-  shouldShowStaleShield,
-} from "@/shared/api/queryErrorState";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
 export function useMatchesListPageController() {

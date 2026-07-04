@@ -1,11 +1,11 @@
 import { useCallback } from "react";
 import type { DragEventHandler } from "react";
 
-import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
 import { CaptureSlotActions } from "@/features/ocrCapture/CaptureSlotActions";
 import { CaptureSlotFeedback } from "@/features/ocrCapture/CaptureSlotFeedback";
 import { CaptureSlotPreview } from "@/features/ocrCapture/CaptureSlotPreview";
 import { CaptureStatusBadge } from "@/features/ocrCapture/CaptureSlotStatus";
+import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
 import { DraftPreview } from "@/features/ocrCapture/DraftPreview";
 import { isWorkingStatus } from "@/features/ocrCapture/slotPolicy";
 import type { SlotKind } from "@/shared/api/enums";
@@ -43,26 +43,32 @@ export function CaptureSlotCard({
   const hasImage = Boolean(slot.previewUrl);
   const isWorking = isWorkingStatus(slot.status);
 
-  const handleDragStart = useCallback<DragEventHandler<HTMLDivElement>>((event) => {
-    if (!hasImage || isWorking) {
-      return;
-    }
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", slot.kind);
-  }, [hasImage, isWorking, slot.kind]);
+  const handleDragStart = useCallback<DragEventHandler<HTMLDivElement>>(
+    (event) => {
+      if (!hasImage || isWorking) {
+        return;
+      }
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", slot.kind);
+    },
+    [hasImage, isWorking, slot.kind],
+  );
 
   const handleDragOver = useCallback<DragEventHandler<HTMLElement>>((event) => {
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
   }, []);
 
-  const handleDrop = useCallback<DragEventHandler<HTMLElement>>((event) => {
-    event.preventDefault();
-    const sourceKind = parseSlotKind(event.dataTransfer.getData("text/plain"));
-    if (sourceKind) {
-      onDropImage(sourceKind, slot.kind);
-    }
-  }, [onDropImage, slot.kind]);
+  const handleDrop = useCallback<DragEventHandler<HTMLElement>>(
+    (event) => {
+      event.preventDefault();
+      const sourceKind = parseSlotKind(event.dataTransfer.getData("text/plain"));
+      if (sourceKind) {
+        onDropImage(sourceKind, slot.kind);
+      }
+    },
+    [onDropImage, slot.kind],
+  );
 
   const handleMoveBackward = useCallback(() => onMoveImage(-1), [onMoveImage]);
   const handleMoveForward = useCallback(() => onMoveImage(1), [onMoveImage]);

@@ -15,6 +15,14 @@ import { getMatch, getMatchListSummary, listMatches } from "@/shared/api/matches
 import type { ListMatchesQuery } from "@/shared/api/matches";
 import { getOcrDraftsBulk } from "@/shared/api/ocrDrafts";
 import {
+  adminAccountKeys,
+  heldEventKeys,
+  masterKeys,
+  matchKeys,
+  ocrDraftKeys,
+  seriesComparisonKeys,
+} from "@/shared/api/queryKeys";
+import {
   getSeriesComparison,
   getSeriesComparisonDrilldown,
   getSeriesComparisonOptions,
@@ -25,14 +33,6 @@ import type {
   SeriesComparisonQuery,
   SeriesComparisonReviewQuery,
 } from "@/shared/api/seriesComparison";
-import {
-  adminAccountKeys,
-  heldEventKeys,
-  masterKeys,
-  matchKeys,
-  ocrDraftKeys,
-  seriesComparisonKeys,
-} from "@/shared/api/queryKeys";
 
 export function adminLoginAccountsQueryOptions() {
   return queryOptions({
@@ -151,10 +151,7 @@ export function matchDraftDetailQueryOptions(draftId: string | undefined, enable
   });
 }
 
-export function matchDraftSourceImagesQueryOptions(
-  draftId: string | undefined,
-  enabled = true,
-) {
+export function matchDraftSourceImagesQueryOptions(draftId: string | undefined, enabled = true) {
   return queryOptions({
     queryKey: matchKeys.draft.sourceImages(draftId),
     queryFn: ({ signal }) => {
@@ -183,9 +180,7 @@ export function seriesComparisonOptionsQueryOptions() {
   });
 }
 
-export function seriesComparisonAggregateQueryOptions(
-  query: SeriesComparisonQuery | undefined,
-) {
+export function seriesComparisonAggregateQueryOptions(query: SeriesComparisonQuery | undefined) {
   return queryOptions({
     queryKey: seriesComparisonKeys.aggregate(query),
     queryFn: ({ signal }) => {

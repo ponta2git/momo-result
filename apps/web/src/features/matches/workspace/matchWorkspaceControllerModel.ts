@@ -1,10 +1,11 @@
+import type { NormalizedApiError } from "@/shared/api/problemDetails";
+
 import type { MatchFormReducerState } from "./matchFormReducer";
 import type { MatchWorkspaceInitialData, WorkspaceMode } from "./matchFormTypes";
 import type { SourceImageItem, SourceImageKind } from "./sourceImages/sourceImageTypes";
 import type { useMatchWorkspaceFormHandlers } from "./useMatchWorkspaceFormHandlers";
 import type { useMatchWorkspaceValidation } from "./useMatchWorkspaceValidation";
 import type { useMatchWorkspaceViewModel } from "./useMatchWorkspaceViewModel";
-import type { NormalizedApiError } from "@/shared/api/problemDetails";
 
 type MatchWorkspaceControllerModelArgs = {
   baseErrors: NormalizedApiError[];
@@ -104,14 +105,15 @@ export function buildMatchWorkspaceControllerModel(args: MatchWorkspaceControlle
         onPlayOrderChange: args.formHandlers.onPlayOrderChange,
         onPreferImageKindChange: args.onPreferImageKindChange,
       },
-      sourceImagePanel: viewModel.hasSourceImagePanel && viewModel.matchDraftIdForImages
-        ? {
-            loading: args.sourceImageLoading,
-            matchDraftId: viewModel.matchDraftIdForImages,
-            preferredKind: args.preferredImageKind,
-            sourceImages: args.sourceImages,
-          }
-        : null,
+      sourceImagePanel:
+        viewModel.hasSourceImagePanel && viewModel.matchDraftIdForImages
+          ? {
+              loading: args.sourceImageLoading,
+              matchDraftId: viewModel.matchDraftIdForImages,
+              preferredKind: args.preferredImageKind,
+              sourceImages: args.sourceImages,
+            }
+          : null,
       validationMessage: args.validationMessage,
       warnings: args.workspaceData?.warnings ?? [],
     },

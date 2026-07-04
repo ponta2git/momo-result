@@ -1,5 +1,5 @@
-import type { MatchListItemView, MatchListSort } from "@/features/matches/list/matchListTypes";
 import { matchListStatusPriority } from "@/features/matches/list/matchListStatusPolicy";
+import type { MatchListItemView, MatchListSort } from "@/features/matches/list/matchListTypes";
 
 function dateValue(value: string | undefined): number {
   if (!value) {

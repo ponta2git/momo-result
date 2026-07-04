@@ -25,7 +25,9 @@ export function normalizeMatchListStatus(value: string): MatchListStatus {
   return asDraftStatusOrUnknown(value);
 }
 
-export function matchListDisplayStatus(status: MatchListStatus): MatchListItemView["displayStatus"] {
+export function matchListDisplayStatus(
+  status: MatchListStatus,
+): MatchListItemView["displayStatus"] {
   if (status === "confirmed") {
     return "confirmed";
   }

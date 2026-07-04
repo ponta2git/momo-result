@@ -1,9 +1,9 @@
-import type { NormalizedApiError } from "@/shared/api/problemDetails";
 import type {
   ExportMatchesFormat,
   ExportMatchesRequest,
   ExportMatchesScope,
 } from "@/shared/api/exports";
+import type { NormalizedApiError } from "@/shared/api/problemDetails";
 
 export type ExportFormat = ExportMatchesFormat;
 export type ExportScope = ExportMatchesScope;

@@ -1,7 +1,7 @@
 import { ChevronDown, Target } from "lucide-react";
 
-import { MetricSection } from "@/features/seriesComparison/metrics/SeriesComparisonMetricSection";
 import { playerColor } from "@/features/seriesComparison/charts/SeriesComparisonPlayerVisuals";
+import { MetricSection } from "@/features/seriesComparison/metrics/SeriesComparisonMetricSection";
 import type { Player } from "@/features/seriesComparison/model/seriesComparisonPresentation";
 import { ReviewPlaybookCardView } from "@/features/seriesComparison/review/SeriesComparisonReviewPlaybookCard";
 import {

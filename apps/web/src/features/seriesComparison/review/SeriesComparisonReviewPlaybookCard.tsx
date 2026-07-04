@@ -1,6 +1,10 @@
 import { ArrowRight, ChevronDown } from "lucide-react";
 
 import {
+  defaultSeriesComparisonView,
+  isSeriesComparisonViewId,
+} from "@/features/seriesComparison/model/seriesComparisonViewModel";
+import {
   evidenceStats,
   playbookCategoryLabel,
   playbookEvidenceStatusLabel,
@@ -13,10 +17,6 @@ import type {
   ReviewPlaybookCard,
   ReviewPlaybookEvidence,
 } from "@/features/seriesComparison/review/SeriesComparisonReviewTypes";
-import {
-  defaultSeriesComparisonView,
-  isSeriesComparisonViewId,
-} from "@/features/seriesComparison/model/seriesComparisonViewModel";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import {

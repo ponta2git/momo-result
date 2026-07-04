@@ -1,8 +1,3 @@
-import type {
-  MatchListItemView,
-  MatchListLookupMaps,
-  MatchListSourceItem,
-} from "@/features/matches/list/matchListTypes";
 import {
   buildMatchListPrimaryAction,
   buildMatchListSecondaryActions,
@@ -17,6 +12,11 @@ import {
   matchListStatusLabel,
   normalizeMatchListStatus,
 } from "@/features/matches/list/matchListStatusPolicy";
+import type {
+  MatchListItemView,
+  MatchListLookupMaps,
+  MatchListSourceItem,
+} from "@/features/matches/list/matchListTypes";
 import { memberDisplayName } from "@/shared/domain/members";
 import { compact } from "@/shared/lib/compact";
 

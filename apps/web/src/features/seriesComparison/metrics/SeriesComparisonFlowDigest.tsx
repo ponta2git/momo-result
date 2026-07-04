@@ -1,8 +1,8 @@
 import { Clock3, ShieldAlert } from "lucide-react";
 
+import { playerColor } from "@/features/seriesComparison/charts/SeriesComparisonPlayerVisuals";
 import { StatusBadge } from "@/features/seriesComparison/metrics/SeriesComparisonMetricPrimitives";
 import { MetricSection } from "@/features/seriesComparison/metrics/SeriesComparisonMetricSection";
-import { playerColor } from "@/features/seriesComparison/charts/SeriesComparisonPlayerVisuals";
 import type {
   MatchNoBreakdown,
   Player,

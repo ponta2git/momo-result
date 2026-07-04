@@ -2,6 +2,7 @@ import { Activity, RefreshCw } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { RecentRankStrip } from "@/features/seriesComparison/charts/SeriesComparisonCharts";
+import { playerColor } from "@/features/seriesComparison/charts/SeriesComparisonPlayerVisuals";
 import {
   MetricRow,
   PlayerMetricGrid,
@@ -10,7 +11,6 @@ import {
 } from "@/features/seriesComparison/metrics/SeriesComparisonMetricPrimitives";
 import { MetricSection } from "@/features/seriesComparison/metrics/SeriesComparisonMetricSection";
 import { MomentumTransitionMatrices } from "@/features/seriesComparison/metrics/SeriesComparisonMomentumMatrices";
-import { playerColor } from "@/features/seriesComparison/charts/SeriesComparisonPlayerVisuals";
 import type {
   MomentumSwitchEntry,
   MomentumSwitchRateKey,

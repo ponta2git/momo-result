@@ -22,11 +22,7 @@ type CaptureSlotFeedbackProps = {
   onManualRefresh: () => void;
 };
 
-export function CaptureSlotFeedback({
-  mismatch,
-  slot,
-  onManualRefresh,
-}: CaptureSlotFeedbackProps) {
+export function CaptureSlotFeedback({ mismatch, slot, onManualRefresh }: CaptureSlotFeedbackProps) {
   return (
     <>
       {mismatch ? <CaptureMismatchAlert detectedKind={slot.detectedKind} /> : null}

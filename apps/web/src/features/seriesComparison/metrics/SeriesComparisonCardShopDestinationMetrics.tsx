@@ -6,6 +6,7 @@ import {
   StatusBadge,
 } from "@/features/seriesComparison/metrics/SeriesComparisonMetricPrimitives";
 import { MetricSection } from "@/features/seriesComparison/metrics/SeriesComparisonMetricSection";
+import { OutcomeDetails } from "@/features/seriesComparison/metrics/SeriesComparisonSectionPrimitives";
 import type {
   CardShopDestinationEntry,
   CardShopDestinationQuadrant,
@@ -20,7 +21,6 @@ import {
   formatPercent,
   metricsMap,
 } from "@/features/seriesComparison/model/seriesComparisonPresentation";
-import { OutcomeDetails } from "@/features/seriesComparison/metrics/SeriesComparisonSectionPrimitives";
 import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
 import { cn } from "@/shared/ui/cn";
 

@@ -11,12 +11,15 @@ import {
   DrilldownTableHeader,
   DrilldownTableScroll,
 } from "@/features/seriesComparison/drilldowns/SeriesComparisonDrilldownPrimitives";
-import { formatDecimal, isNumber } from "@/features/seriesComparison/model/seriesComparisonPresentation";
 import { RankAverageDeltaBadge } from "@/features/seriesComparison/drilldowns/SeriesComparisonRankDrilldownSummary";
 import type {
   RankEventRow,
   RankMatchRow,
 } from "@/features/seriesComparison/drilldowns/SeriesComparisonRankDrilldownTypes";
+import {
+  formatDecimal,
+  isNumber,
+} from "@/features/seriesComparison/model/seriesComparisonPresentation";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 
 export function HeldEventHistoryTable({ rows }: { rows: RankEventRow[] }) {

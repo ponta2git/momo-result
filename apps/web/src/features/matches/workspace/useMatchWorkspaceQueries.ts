@@ -23,6 +23,7 @@ import type { MatchDetailResponse } from "@/shared/api/matches";
 import type { OcrDraftListResponse } from "@/shared/api/ocrDrafts";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
+import { shouldShowQueryError } from "@/shared/api/queryErrorState";
 import {
   gameTitlesQueryOptions,
   heldEventsQueryOptions,
@@ -34,7 +35,6 @@ import {
   ocrDraftsBulkQueryOptions,
   seasonMastersQueryOptions,
 } from "@/shared/api/queryOptions";
-import { shouldShowQueryError } from "@/shared/api/queryErrorState";
 import { isOcrRunning } from "@/shared/domain/draftStatus";
 import { bySlot } from "@/shared/lib/slotMap";
 import type { SlotMap } from "@/shared/lib/slotMap";

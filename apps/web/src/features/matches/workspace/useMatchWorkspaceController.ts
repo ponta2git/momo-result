@@ -5,15 +5,13 @@ import {
   createMatchFormReducerState,
   matchFormReducer,
 } from "@/features/matches/workspace/matchFormReducer";
-import {
-  buildMatchWorkspaceControllerModel,
-} from "@/features/matches/workspace/matchWorkspaceControllerModel";
-import type { MatchWorkspaceControllerModel } from "@/features/matches/workspace/matchWorkspaceControllerModel";
 import { createEmptyMatchForm } from "@/features/matches/workspace/matchFormTypes";
 import type {
   MatchWorkspaceInitialData,
   WorkspaceMode,
 } from "@/features/matches/workspace/matchFormTypes";
+import { buildMatchWorkspaceControllerModel } from "@/features/matches/workspace/matchWorkspaceControllerModel";
+import type { MatchWorkspaceControllerModel } from "@/features/matches/workspace/matchWorkspaceControllerModel";
 import type { SourceImageKind } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
 import { useConfirmedDraftRedirect } from "@/features/matches/workspace/useConfirmedDraftRedirect";
 import { useMasterHandoffRestore } from "@/features/matches/workspace/useMasterHandoffRestore";

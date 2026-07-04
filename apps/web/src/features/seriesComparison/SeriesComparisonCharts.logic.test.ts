@@ -5,7 +5,7 @@ import {
   headToHeadCellTone,
   headToHeadToneLabel,
   shouldShowRankStripMatchMarker,
-} from "./SeriesComparisonCharts";
+} from "./charts/SeriesComparisonCharts";
 
 describe("headToHeadToneLabel", () => {
   it("uses early-scope battle significance thresholds", () => {

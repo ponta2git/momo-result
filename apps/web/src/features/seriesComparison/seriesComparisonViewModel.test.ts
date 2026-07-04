@@ -23,7 +23,7 @@ import {
   statusLabel,
   strategyKindLabel,
   timelineFlagLabel,
-} from "./seriesComparisonViewModel";
+} from "./model/seriesComparisonViewModel";
 
 type PlayerMetrics = NonNullable<SeriesComparisonResponse["metricsByPlayer"]>[number]["metrics"];
 type PlayOrderSignalInput = NonNullable<Parameters<typeof playOrderSignal>[0]>;

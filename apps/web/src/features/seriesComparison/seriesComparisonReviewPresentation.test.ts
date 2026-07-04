@@ -10,7 +10,7 @@ import {
   playbookEvidenceStrengthLabel,
   reviewPlaybookCardOrder,
   reviewPlaybookLane,
-} from "./seriesComparisonReviewPresentation";
+} from "./review/seriesComparisonReviewPresentation";
 
 type ReviewCard = NonNullable<
   NonNullable<SeriesComparisonReviewResponse["playbookByPlayer"]>[number]["cards"]

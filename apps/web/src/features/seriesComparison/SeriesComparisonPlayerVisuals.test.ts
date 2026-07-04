@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 
-import { playerColor, playerGridStyle } from "./SeriesComparisonPlayerVisuals";
+import { playerColor, playerGridStyle } from "./charts/SeriesComparisonPlayerVisuals";
 
 describe("SeriesComparisonPlayerVisuals", () => {
   it("cycles through the player palette", () => {

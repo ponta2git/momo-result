@@ -1,0 +1,240 @@
+import { Clock3, ShieldAlert } from "lucide-react";
+
+import { StatusBadge } from "@/features/seriesComparison/metrics/SeriesComparisonMetricPrimitives";
+import { MetricSection } from "@/features/seriesComparison/metrics/SeriesComparisonMetricSection";
+import { playerColor } from "@/features/seriesComparison/charts/SeriesComparisonPlayerVisuals";
+import type {
+  MatchNoBreakdown,
+  Player,
+} from "@/features/seriesComparison/model/seriesComparisonPresentation";
+import {
+  formatDecimal,
+  formatMoney,
+  formatPercent,
+  playerNameMap,
+} from "@/features/seriesComparison/model/seriesComparisonPresentation";
+import {
+  qualitySummary,
+  timelineFlagLabel,
+} from "@/features/seriesComparison/model/seriesComparisonViewModel";
+import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
+import { Notice } from "@/shared/ui/feedback/Notice";
+
+export function MatchDigestMetrics({ response }: { response: SeriesComparisonResponse }) {
+  return (
+    <MetricSection
+      description="選択中範囲の全試合から、接戦、大差、スリの銀次多発、物件収益トップ未勝利の発生数と該当試合を確認します。"
+      icon={<ShieldAlert className="size-5" />}
+      title="期間内の荒れ試合"
+      id="metric-match-digest"
+    >
+      <MatchResultStrip response={response} />
+    </MetricSection>
+  );
+}
+
+function MatchResultStrip({ response }: { response: SeriesComparisonResponse }) {
+  const names = playerNameMap(response.players ?? []);
+  const timeline = response.matchTimeline ?? [];
+  const flagOrder = ["close_finish", "asset_blowout", "ginji_storm", "revenue_top_no_win"];
+  const flagCounts = new Map(
+    flagOrder.map((flag) => [
+      flag,
+      timeline.filter((point) => (point.flags ?? []).includes(flag)).length,
+    ]),
+  );
+  const flaggedTimeline = timeline
+    .filter((point) => (point.flags ?? []).length > 0)
+    .toReversed()
+    .slice(0, 8)
+    .toReversed();
+  return (
+    <div className="grid gap-3">
+      <div className="grid gap-2 sm:grid-cols-4">
+        {flagOrder.map((flag) => (
+          <div
+            key={flag}
+            className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2.5 py-2"
+          >
+            <p className="text-xs text-[var(--color-text-secondary)]">{timelineFlagLabel(flag)}</p>
+            <p className="mt-0.5 text-sm font-semibold text-[var(--color-text-primary)] tabular-nums">
+              {flagCounts.get(flag) ?? 0}戦
+            </p>
+          </div>
+        ))}
+      </div>
+      {flaggedTimeline.length === 0 ? (
+        <p className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-2 text-sm text-[var(--color-text-secondary)]">
+          荒れ試合はありません。
+        </p>
+      ) : (
+        <div className="overflow-x-auto pb-1">
+          <div className="flex min-w-max gap-3">
+            {flaggedTimeline.map((point) => (
+              <article
+                key={point.matchId}
+                className="w-44 shrink-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-2.5"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-xs text-[var(--color-text-secondary)]">
+                      {point.matchIndex}戦目
+                    </p>
+                    <p className="mt-0.5 text-sm font-semibold break-words text-[var(--color-text-primary)]">
+                      {names.get(point.winnerMemberId ?? "") ?? "勝者不明"}
+                    </p>
+                  </div>
+                  <StatusBadge status={point.status} />
+                </div>
+                <div className="mt-2 grid gap-1 text-xs text-[var(--color-text-secondary)]">
+                  <div className="flex justify-between gap-2">
+                    <span>1位-2位差</span>
+                    <span className="text-[var(--color-text-primary)] tabular-nums">
+                      {formatMoney(point.assetGapFirstToSecond)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <span>1位-4位差</span>
+                    <span className="text-[var(--color-text-primary)] tabular-nums">
+                      {formatMoney(point.assetGapFirstToLast)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <span>スリの銀次</span>
+                    <span className="text-[var(--color-text-primary)] tabular-nums">
+                      {point.totalGinjiCount}回
+                    </span>
+                  </div>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {(point.flags ?? []).map((flag) => (
+                    <span
+                      key={flag}
+                      className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-1.5 py-0.5 text-[11px] font-medium text-[var(--color-text-secondary)]"
+                    >
+                      {timelineFlagLabel(flag)}
+                    </span>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </div>
+          {flaggedTimeline.length <
+          timeline.filter((point) => (point.flags ?? []).length > 0).length ? (
+            <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
+              新しい荒れ試合から8件まで表示します。
+            </p>
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function MatchNoInEventMetrics({ response }: { response: SeriesComparisonResponse }) {
+  const players = response.players ?? [];
+  const breakdown = response.matchNoInEventBreakdown ?? [];
+  const breakdownByNo = new Map(breakdown.map((item) => [item.matchNoInEvent, item]));
+  const primaryBreakdown: MatchNoBreakdown[] = [1, 2, 3, 4].map(
+    (matchNoInEvent) => breakdownByNo.get(matchNoInEvent) ?? { matchNoInEvent, playerRows: [] },
+  );
+  const extraBreakdown = breakdown.filter((item) => item.matchNoInEvent > 4);
+  return (
+    <MetricSection
+      description="選択中範囲の全開催を横断し、第1〜第4試合ごとの平均順位と入賞率を見ます。第5試合以降は折りたたみます。"
+      icon={<Clock3 className="size-5" />}
+      title="第n試合の傾向"
+      id="metric-match-no"
+    >
+      <MatchNoTable breakdown={primaryBreakdown} players={players} />
+      {extraBreakdown.length > 0 ? (
+        <details className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
+          <summary className="cursor-pointer text-sm font-semibold text-[var(--color-text-primary)]">
+            第5試合以降を表示
+          </summary>
+          <div className="mt-3">
+            <MatchNoTable breakdown={extraBreakdown} players={players} />
+          </div>
+        </details>
+      ) : null}
+    </MetricSection>
+  );
+}
+
+function MatchNoTable({
+  breakdown,
+  players,
+}: {
+  breakdown: MatchNoBreakdown[];
+  players: Player[];
+}) {
+  return (
+    <div className="overflow-x-auto pb-1">
+      <div
+        className="grid min-w-[42rem] gap-1"
+        style={{
+          gridTemplateColumns: `7rem repeat(${Math.max(1, players.length)}, minmax(8rem, 1fr))`,
+        }}
+      >
+        <div aria-hidden="true" />
+        {players.map((player, index) => (
+          <div
+            key={player.memberId}
+            className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-1.5 text-center text-xs font-semibold break-words text-[var(--color-text-primary)]"
+            style={{ borderTopColor: playerColor(index), borderTopWidth: 3 }}
+          >
+            {player.displayName}
+          </div>
+        ))}
+        {breakdown.map((item) => (
+          <MatchNoRow key={item.matchNoInEvent} item={item} players={players} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MatchNoRow({ item, players }: { item: MatchNoBreakdown; players: Player[] }) {
+  const rowsByMember = new Map((item.playerRows ?? []).map((row) => [row.memberId, row]));
+  return (
+    <>
+      <div className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-3 text-sm font-semibold text-[var(--color-text-primary)]">
+        第{item.matchNoInEvent}試合
+      </div>
+      {players.map((player) => {
+        const row = rowsByMember.get(player.memberId);
+        return (
+          <div
+            key={player.memberId}
+            className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-2"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs text-[var(--color-text-secondary)]">
+                {row?.targetCount ?? 0}戦
+              </span>
+              <StatusBadge status={row?.status} />
+            </div>
+            <div className="mt-1 text-sm font-semibold text-[var(--color-text-primary)] tabular-nums">
+              平均 {formatDecimal(row?.averageRank)}
+            </div>
+            <div className="mt-0.5 text-xs text-[var(--color-text-secondary)] tabular-nums">
+              入賞 {formatPercent(row?.podiumRate)}
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+export function DataQualityNotice({ response }: { response: SeriesComparisonResponse }) {
+  const summary = qualitySummary(response);
+  if (summary.referenceCount === 0 && summary.noTargetCount === 0) {
+    return null;
+  }
+  return (
+    <Notice tone="info" title="条件付き指標があります。">
+      スリの銀次、物件収益トップ、目的地最多・0回、切り替え力は対象条件があります。該当試合がない項目は「対象なし」、少ない項目は「参考」です。
+    </Notice>
+  );
+}

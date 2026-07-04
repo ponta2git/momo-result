@@ -25,7 +25,7 @@ import {
   rankOutcomeColor,
   recentRankStrips,
   revenueRankConversionEntries,
-} from "./seriesComparisonPresentation";
+} from "./model/seriesComparisonPresentation";
 
 type PlayerMetrics = NonNullable<SeriesComparisonResponse["metricsByPlayer"]>[number]["metrics"];
 

@@ -2,7 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import { ReviewViewContent } from "@/features/seriesComparison/SeriesComparisonReviewPanel";
+import { ReviewViewContent } from "@/features/seriesComparison/review/SeriesComparisonReviewPanel";
 import {
   makeSeriesComparisonResponse,
   makeSeriesComparisonReviewResponse,

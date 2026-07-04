@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { createElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-import { HistogramChart, RecentRankStrip } from "./SeriesComparisonCharts";
+import { HistogramChart, RecentRankStrip } from "./charts/SeriesComparisonCharts";
 
 describe("RecentRankStrip", () => {
   const players = [

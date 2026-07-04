@@ -48,7 +48,7 @@ export const loadOcrCapturePage = () =>
   }));
 
 export const loadSeriesComparisonPage = () =>
-  import("@/features/seriesComparison/SeriesComparisonPage").then((module) => ({
+  import("@/features/seriesComparison/page/SeriesComparisonPage").then((module) => ({
     default: module.SeriesComparisonPage,
   }));
 

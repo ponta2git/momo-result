@@ -138,7 +138,7 @@ function MomentumSwitchRateRow({
   label: string;
   rate: MomentumSwitchRate | undefined;
 }) {
-  const emphasis = momentumSwitchEmphasis(kind, rate?.deltaFromBaseline, rate?.status);
+  const emphasis = momentumSwitchEmphasis(rate?.momentumSwitchSignal);
   return (
     <MetricRow
       emphasis={emphasis}

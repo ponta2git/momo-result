@@ -5,7 +5,6 @@ import type {
   AssetStyleProfileEntry,
   MetricEmphasis,
   MomentumSwitchEntry,
-  MomentumSwitchRateKey,
   NullableNumber,
   NumericExtrema,
   PerformanceProfileEntry,
@@ -13,7 +12,6 @@ import type {
   PlayerMetrics,
   RecentFormEntry,
 } from "./seriesComparisonPresentationTypes";
-import { SERIES_COMPARISON_THRESHOLDS } from "./seriesComparisonThresholds";
 
 export function metricsMap(response: SeriesComparisonResponse): Map<string, PlayerMetrics> {
   return new Map((response.metricsByPlayer ?? []).map((entry) => [entry.memberId, entry.metrics]));
@@ -30,30 +28,16 @@ export function momentumSwitchMap(
 }
 
 export function momentumSwitchEmphasis(
-  kind: MomentumSwitchRateKey,
-  deltaFromBaseline: NullableNumber,
-  status: string | null | undefined,
+  signal: string | null | undefined,
 ): MetricEmphasis | undefined {
-  if (status !== "ok" || !isNumber(deltaFromBaseline)) {
-    return undefined;
-  }
-  const threshold = SERIES_COMPARISON_THRESHOLDS.momentumSwitch.deltaPointThresholds[kind];
-  if (kind === "afterPodium") {
-    if (deltaFromBaseline <= -threshold) {
+  switch (signal) {
+    case "strength":
       return { kind: "strength", label: "強み" };
-    }
-    if (deltaFromBaseline >= threshold) {
+    case "risk":
       return { kind: "risk", label: "注意" };
-    }
-    return undefined;
+    default:
+      return undefined;
   }
-  if (deltaFromBaseline >= threshold) {
-    return { kind: "strength", label: "強み" };
-  }
-  if (deltaFromBaseline <= -threshold) {
-    return { kind: "risk", label: "注意" };
-  }
-  return undefined;
 }
 
 export function performanceProfileMap(

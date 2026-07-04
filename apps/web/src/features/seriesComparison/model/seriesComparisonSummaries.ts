@@ -1,8 +1,6 @@
 import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
 import { matchFeatureLabel } from "@/shared/domain/matchFeatures";
 
-import { averageRankSpreadBands } from "./seriesComparisonThresholds";
-
 type PlayerMetrics = NonNullable<SeriesComparisonResponse["metricsByPlayer"]>[number]["metrics"];
 type PlayOrderBreakdown = NonNullable<PlayerMetrics["playOrder"]["breakdown"]>[number];
 type NullableNumber = number | null | undefined;
@@ -37,24 +35,19 @@ export function averageRankSpread(response: SeriesComparisonResponse): {
   spread: number | undefined;
   tone: "flat" | "small" | "visible" | "large";
 } {
-  const values = (response.metricsByPlayer ?? [])
-    .map((entry) => entry.metrics.rank.average)
-    .filter(isNumber);
-  if (values.length < 2) {
-    return { label: "比較材料不足", spread: undefined, tone: "flat" };
+  const signal = response.rankSpreadSignal;
+  switch (signal.signal) {
+    case "flat":
+      return { label: "横一線", spread: signal.spread ?? undefined, tone: "flat" };
+    case "small":
+      return { label: "小差", spread: signal.spread ?? undefined, tone: "small" };
+    case "visible":
+      return { label: "中差", spread: signal.spread ?? undefined, tone: "visible" };
+    case "large":
+      return { label: "はっきり差", spread: signal.spread ?? undefined, tone: "large" };
+    default:
+      return { label: "比較材料不足", spread: undefined, tone: "flat" };
   }
-  const spread = Math.max(...values) - Math.min(...values);
-  const bands = averageRankSpreadBands(response.matchCount);
-  if (spread < bands.flatBelow) {
-    return { label: "横一線", spread, tone: "flat" };
-  }
-  if (spread < bands.smallBelow) {
-    return { label: "小差", spread, tone: "small" };
-  }
-  if (spread < bands.largeFrom) {
-    return { label: "中差", spread, tone: "visible" };
-  }
-  return { label: "はっきり差", spread, tone: "large" };
 }
 
 export function playOrderSignal(metrics: DefensivePlayerMetrics | undefined): PlayOrderSignal {

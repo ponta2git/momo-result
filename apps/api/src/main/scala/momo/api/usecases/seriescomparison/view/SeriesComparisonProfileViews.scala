@@ -24,11 +24,13 @@ final case class MomentumSwitchPlayerView(
 )
 final case class MomentumSwitchRateView(
     targetCount: Int,
+    sampleMaturity: String,
     successCount: Int,
     rate: Option[Double],
     baselineRate: Option[Double],
     deltaFromBaseline: Option[Double],
     status: String,
+    momentumSwitchSignal: String,
 )
 final case class MomentumSwitchTransitionRowView(
     previousRank: Int,

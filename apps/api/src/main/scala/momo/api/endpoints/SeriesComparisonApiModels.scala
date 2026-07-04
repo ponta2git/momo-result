@@ -150,6 +150,15 @@ given Schema[SeriesComparisonReviewResponse] = Schema.derived[view.SeriesCompari
   Schema.SName("SeriesComparisonReviewResponse")
 )
 
+type SeriesComparisonRankSpreadSignalResponse =
+  view.SeriesComparisonRankSpreadSignalView
+given Codec.AsObject[SeriesComparisonRankSpreadSignalResponse] =
+  Codec.AsObject.derived[view.SeriesComparisonRankSpreadSignalView]
+given Schema[SeriesComparisonRankSpreadSignalResponse] =
+  Schema.derived[view.SeriesComparisonRankSpreadSignalView].name(
+    Schema.SName("SeriesComparisonRankSpreadSignalResponse")
+  )
+
 type SeriesComparisonResponse = view.SeriesComparisonView
 given Codec.AsObject[SeriesComparisonResponse] =
   Codec.AsObject.derived[view.SeriesComparisonView]

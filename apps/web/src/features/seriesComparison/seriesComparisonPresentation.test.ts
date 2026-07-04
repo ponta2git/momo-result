@@ -270,7 +270,9 @@ describe("seriesComparisonPresentation", () => {
           afterFourth: {
             baselineRate: 0.55,
             deltaFromBaseline: -0.12,
+            momentumSwitchSignal: "risk",
             rate: 0.43,
+            sampleMaturity: "early",
             status: "ok",
             successCount: 3,
             targetCount: 8,
@@ -278,7 +280,9 @@ describe("seriesComparisonPresentation", () => {
           afterLower: {
             baselineRate: 0.55,
             deltaFromBaseline: 0.061,
+            momentumSwitchSignal: "strength",
             rate: 0.611,
+            sampleMaturity: "early",
             status: "ok",
             successCount: 5,
             targetCount: 8,
@@ -286,7 +290,9 @@ describe("seriesComparisonPresentation", () => {
           afterPodium: {
             baselineRate: 0.45,
             deltaFromBaseline: -0.061,
+            momentumSwitchSignal: "strength",
             rate: 0.389,
+            sampleMaturity: "early",
             status: "ok",
             successCount: 3,
             targetCount: 8,
@@ -300,19 +306,15 @@ describe("seriesComparisonPresentation", () => {
     };
 
     expect(momentumSwitchMap(response).get("p0")?.transitionCount).toBe(8);
-    expect(momentumSwitchEmphasis("afterLower", 0.061, "ok")).toEqual({
+    expect(momentumSwitchEmphasis("strength")).toEqual({
       kind: "strength",
       label: "強み",
     });
-    expect(momentumSwitchEmphasis("afterFourth", -0.12, "ok")).toEqual({
+    expect(momentumSwitchEmphasis("risk")).toEqual({
       kind: "risk",
       label: "注意",
     });
-    expect(momentumSwitchEmphasis("afterPodium", -0.061, "ok")).toEqual({
-      kind: "strength",
-      label: "強み",
-    });
-    expect(momentumSwitchEmphasis("afterLower", 0.2, "reference")).toBeUndefined();
+    expect(momentumSwitchEmphasis("none")).toBeUndefined();
   });
 
   it("derives revenue-rank conversion rows and keeps tied revenue ranks", () => {
@@ -377,7 +379,11 @@ function responseWithRankAverages(
     playOrderBaselines: [],
     players: values.map(([memberId, displayName]) => ({ displayName, memberId })),
     recentFormByPlayer: [],
-    schemaVersion: 8,
+    rankSpreadSignal: {
+      signal: "insufficient",
+    },
+    sampleMaturity: "early",
+    schemaVersion: 9,
     scope: {
       gameTitleId: "title",
       gameTitleName: "桃鉄",

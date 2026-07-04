@@ -9,11 +9,6 @@ import {
   formatPercent,
   formatSigned,
 } from "@/features/seriesComparison/model/seriesComparisonPresentation";
-import {
-  headToHeadBands,
-  headToHeadRankDiffSignal,
-  SERIES_COMPARISON_THRESHOLDS,
-} from "@/features/seriesComparison/model/seriesComparisonThresholds";
 
 export function HeadToHeadMatrix({
   entries,
@@ -79,8 +74,7 @@ function MatrixRow({
       {players.map((opponent) => {
         const entry = entryByPair.get(`${subject.memberId}:${opponent.memberId}`);
         const rate = entry?.betterRankRate;
-        const matchCount = entry?.matchCount;
-        const tone = headToHeadCellTone(rate, matchCount, entry?.averageRankDiff);
+        const tone = headToHeadCellTone(entry?.headToHeadSignal, rate, entry?.averageRankDiff);
         const isSelf = subject.memberId === opponent.memberId;
         return (
           <div
@@ -101,7 +95,7 @@ function MatrixRow({
                   {formatPercent(rate)}
                 </div>
                 <div className="mt-0.5 text-[11px] font-medium text-[var(--color-text-secondary)]">
-                  {headToHeadToneLabel(rate, matchCount, entry?.averageRankDiff)}
+                  {headToHeadToneLabel(entry?.headToHeadSignal)}
                 </div>
                 <div className="mt-0.5 text-[11px] text-[var(--color-text-secondary)] tabular-nums">
                   {entry?.betterRankCount ?? 0}/{entry?.matchCount ?? 0}戦
@@ -119,103 +113,69 @@ function MatrixRow({
 }
 
 export function headToHeadCellTone(
+  signal: string | null | undefined,
   rate: number | null | undefined,
-  matchCount?: number,
   averageRankDiff?: number | null,
 ): {
   alpha: number;
   borderAlpha: number;
   color: string;
 } {
-  const bands = headToHeadBands(matchCount);
-  if (
-    matchCount != null &&
-    matchCount > 0 &&
-    matchCount <= SERIES_COMPARISON_THRESHOLDS.headToHead.referenceMaxMatchCount
-  ) {
-    return { alpha: 0.08, borderAlpha: 0.2, color: "var(--color-tray-incident)" };
+  switch (signal) {
+    case "strong_advantage":
+      return directionalHeadToHeadTone("positive", "strong", rate, averageRankDiff);
+    case "slight_advantage":
+      return directionalHeadToHeadTone("positive", "slight", rate, averageRankDiff);
+    case "strong_disadvantage":
+      return directionalHeadToHeadTone("negative", "strong", rate, averageRankDiff);
+    case "slight_disadvantage":
+      return directionalHeadToHeadTone("negative", "slight", rate, averageRankDiff);
+    case "reference":
+    case "neutral":
+      return { alpha: 0.08, borderAlpha: 0.2, color: "var(--color-tray-incident)" };
+    default:
+      return { alpha: 0, borderAlpha: 0.14, color: "var(--color-tray-incident)" };
   }
-  if (!isFiniteNumber(rate)) {
-    return { alpha: 0, borderAlpha: 0.14, color: "var(--color-tray-incident)" };
-  }
-  if (rate > bands.slightDisadvantageTo && rate < bands.slightAdvantageFrom) {
-    const rankDiffSignal = headToHeadRankDiffSignal(averageRankDiff, matchCount);
-    if (rankDiffSignal === "strong_positive" || rankDiffSignal === "slight_positive") {
-      return directionalHeadToHeadTone("positive", averageRankDiff);
-    }
-    if (rankDiffSignal === "strong_negative" || rankDiffSignal === "slight_negative") {
-      return directionalHeadToHeadTone("negative", averageRankDiff);
-    }
-    return { alpha: 0.08, borderAlpha: 0.2, color: "var(--color-tray-incident)" };
-  }
-  const distance = Math.abs(rate - 0.5);
-  const alpha = Math.min(0.46, distance < 0.001 ? 0.04 : 0.1 + distance * 0.92);
-  return rate >= 0.5
-    ? { alpha, borderAlpha: Math.min(0.66, alpha + 0.16), color: "var(--color-action)" }
-    : { alpha, borderAlpha: Math.min(0.66, alpha + 0.16), color: "var(--color-danger)" };
 }
 
 function directionalHeadToHeadTone(
   direction: "negative" | "positive",
+  strength: "slight" | "strong",
+  rate: number | null | undefined,
   averageRankDiff: number | null | undefined,
 ): {
   alpha: number;
   borderAlpha: number;
   color: string;
 } {
-  const distance = Math.min(
+  const rateDistance = isFiniteNumber(rate) ? Math.abs(rate - 0.5) : 0;
+  const rankDistance = Math.min(
     0.22,
     Math.max(0.06, Math.abs(isFiniteNumber(averageRankDiff) ? averageRankDiff : 0) * 0.42),
   );
+  const signalDistance = strength === "strong" ? 0.15 : 0.06;
+  const distance = Math.max(rateDistance, rankDistance, signalDistance);
   const alpha = Math.min(0.46, 0.1 + distance * 0.92);
   return direction === "positive"
     ? { alpha, borderAlpha: Math.min(0.66, alpha + 0.16), color: "var(--color-action)" }
     : { alpha, borderAlpha: Math.min(0.66, alpha + 0.16), color: "var(--color-danger)" };
 }
 
-export function headToHeadToneLabel(
-  rate: number | null | undefined,
-  matchCount?: number,
-  averageRankDiff?: number | null,
-): string {
-  const bands = headToHeadBands(matchCount);
-  if (
-    matchCount != null &&
-    matchCount > 0 &&
-    matchCount <= SERIES_COMPARISON_THRESHOLDS.headToHead.referenceMaxMatchCount
-  ) {
-    return "参考";
+export function headToHeadToneLabel(signal: string | null | undefined): string {
+  switch (signal) {
+    case "strong_advantage":
+      return "優勢";
+    case "slight_advantage":
+      return "やや優勢";
+    case "strong_disadvantage":
+      return "劣勢";
+    case "slight_disadvantage":
+      return "やや劣勢";
+    case "reference":
+      return "参考";
+    case "neutral":
+      return "互角";
+    default:
+      return "判定なし";
   }
-  if (matchCount === 0) {
-    return "判定なし";
-  }
-  if (!isFiniteNumber(rate)) {
-    return "判定なし";
-  }
-  if (rate >= bands.strongAdvantageFrom) {
-    return "優勢";
-  }
-  if (rate >= bands.slightAdvantageFrom) {
-    return "やや優勢";
-  }
-  if (rate <= bands.strongDisadvantageTo) {
-    return "劣勢";
-  }
-  if (rate <= bands.slightDisadvantageTo) {
-    return "やや劣勢";
-  }
-  const rankDiffSignal = headToHeadRankDiffSignal(averageRankDiff, matchCount);
-  if (rankDiffSignal === "strong_positive") {
-    return "優勢";
-  }
-  if (rankDiffSignal === "slight_positive") {
-    return "やや優勢";
-  }
-  if (rankDiffSignal === "strong_negative") {
-    return "劣勢";
-  }
-  if (rankDiffSignal === "slight_negative") {
-    return "やや劣勢";
-  }
-  return "互角";
 }

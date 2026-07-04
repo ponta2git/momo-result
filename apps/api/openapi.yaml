@@ -4428,8 +4428,10 @@
           "subjectMemberId",
           "opponentMemberId",
           "matchCount",
+          "sampleMaturity",
           "betterRankCount",
-          "status"
+          "status",
+          "headToHeadSignal"
         ],
         "properties" : {
           "subjectMemberId" : {
@@ -4441,6 +4443,9 @@
           "matchCount" : {
             "type" : "integer",
             "format" : "int32"
+          },
+          "sampleMaturity" : {
+            "type" : "string"
           },
           "betterRankCount" : {
             "type" : "integer",
@@ -4459,6 +4464,9 @@
             "format" : "double"
           },
           "status" : {
+            "type" : "string"
+          },
+          "headToHeadSignal" : {
             "type" : "string"
           }
         }
@@ -5422,13 +5430,18 @@
         "type" : "object",
         "required" : [
           "targetCount",
+          "sampleMaturity",
           "successCount",
-          "status"
+          "status",
+          "momentumSwitchSignal"
         ],
         "properties" : {
           "targetCount" : {
             "type" : "integer",
             "format" : "int32"
+          },
+          "sampleMaturity" : {
+            "type" : "string"
           },
           "successCount" : {
             "type" : "integer",
@@ -5447,6 +5460,9 @@
             "format" : "double"
           },
           "status" : {
+            "type" : "string"
+          },
+          "momentumSwitchSignal" : {
             "type" : "string"
           }
         }
@@ -6995,6 +7011,22 @@
           }
         }
       },
+      "SeriesComparisonRankSpreadSignalResponse" : {
+        "title" : "SeriesComparisonRankSpreadSignalResponse",
+        "type" : "object",
+        "required" : [
+          "signal"
+        ],
+        "properties" : {
+          "signal" : {
+            "type" : "string"
+          },
+          "spread" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        }
+      },
       "SeriesComparisonResponse" : {
         "title" : "SeriesComparisonResponse",
         "type" : "object",
@@ -7002,6 +7034,8 @@
           "schemaVersion",
           "scope",
           "matchCount",
+          "sampleMaturity",
+          "rankSpreadSignal",
           "trends",
           "histograms",
           "headToHead",
@@ -7022,6 +7056,12 @@
           "matchCount" : {
             "type" : "integer",
             "format" : "int32"
+          },
+          "sampleMaturity" : {
+            "type" : "string"
+          },
+          "rankSpreadSignal" : {
+            "$ref" : "#/components/schemas/SeriesComparisonRankSpreadSignalResponse"
           },
           "players" : {
             "type" : "array",

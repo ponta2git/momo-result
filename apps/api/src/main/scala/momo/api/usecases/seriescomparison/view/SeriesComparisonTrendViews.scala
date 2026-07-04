@@ -35,11 +35,13 @@ final case class HeadToHeadEntryView(
     subjectMemberId: String,
     opponentMemberId: String,
     matchCount: Int,
+    sampleMaturity: String,
     betterRankCount: Int,
     betterRankRate: Option[Double],
     averageRankDiff: Option[Double],
     averageAssetsDiff: Option[Double],
     status: String,
+    headToHeadSignal: String,
 )
 final case class MatchPlayerPointView(
     matchIndex: Int,

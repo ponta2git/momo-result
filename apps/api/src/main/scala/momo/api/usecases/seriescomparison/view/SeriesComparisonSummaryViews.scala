@@ -4,6 +4,8 @@ final case class SeriesComparisonView(
     schemaVersion: Int,
     scope: SeriesComparisonScopeView,
     matchCount: Int,
+    sampleMaturity: String,
+    rankSpreadSignal: SeriesComparisonRankSpreadSignalView,
     players: List[SeriesComparisonPlayerView],
     metricsByPlayer: List[SeriesComparisonPlayerMetricsEntry],
     trends: SeriesComparisonTrendsView,
@@ -20,4 +22,9 @@ final case class SeriesComparisonView(
     playOrderBaselines: List[PlayOrderBaselineView],
     highlights: List[SeriesComparisonHighlightView],
     dataQuality: SeriesComparisonDataQualityView,
+)
+
+final case class SeriesComparisonRankSpreadSignalView(
+    signal: String,
+    spread: Option[Double],
 )

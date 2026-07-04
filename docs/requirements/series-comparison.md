@@ -613,6 +613,13 @@ GET /api/analytics/series-comparison?gameTitleId=...&seasonMasterId=...&mapMaste
 - `dataQuality`: サンプル不足、対象なし、同値あり、除外行数などの表示補助。
 - `metricDefinitions`: 画面説明に必要な指標カタログ。
 
+APIは表示文言そのものではなく、UIがラベルとスタイルへ写像できる機械可読の意味判定を返す。webは判定しきい値を重複保持せず、API DTOの signal を表示用ViewModelへ変換する。`dataQuality.status` は対象数や参考値の品質を表し、signal は集計値の意味づけを表すため、同じフィールドへ混ぜない。
+
+- `sampleMaturity`: 対象スコープまたは条件対象数の成熟度。`early` / `mature` を返す。
+- `rankSpreadSignal`: 平均順位差の意味判定。`insufficient` / `flat` / `small` / `visible` / `large` と、算出できる場合の `spread` を返す。
+- `headToHead.entries[].headToHeadSignal`: 直接対決の意味判定。`self` / `no_target` / `reference` / `neutral` / `slight_advantage` / `strong_advantage` / `slight_disadvantage` / `strong_disadvantage` を返す。
+- `momentumSwitch` の各条件率: `momentumSwitchSignal` として `none` / `strength` / `risk` を返す。入賞後下位率は低いほど強み、下位後入賞率と4位後入賞率は高いほど強みとして判定する。
+
 `metricDefinitions` はAPIが返すか、web側の同一バージョン定数として持つ。どちらにする場合も、`metricId` と説明内容がテストで固定される必要がある。
 
 新しい指標を追加する場合は、原則として集計APIの `metricsByPlayer`、`trends`、`histograms`、`momentumSwitch`、`highlights`、`metricDefinitions` のいずれかへ意味単位で追加する。スコープ候補が増えない限り、選択肢取得APIは変更しない。

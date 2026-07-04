@@ -200,75 +200,42 @@ describe("seriesComparisonViewModel", () => {
 
   it.each([
     {
+      signal: "insufficient",
       expected: { label: "比較材料不足", spread: undefined, tone: "flat" },
-      values: [1.2],
+      spread: undefined,
     },
     {
+      signal: "flat",
       expected: { label: "横一線", spread: 0.10000000000000009, tone: "flat" },
-      values: [1.2, 1.3],
+      spread: 0.10000000000000009,
     },
     {
-      expected: { label: "横一線", spread: 0.19999999999999996, tone: "flat" },
-      values: [1.2, 1.4],
-    },
-    {
+      signal: "small",
       expected: { label: "小差", spread: 0.30000000000000004, tone: "small" },
-      values: [1.2, 1.5],
+      spread: 0.30000000000000004,
     },
     {
+      signal: "visible",
       expected: { label: "中差", spread: 0.40000000000000013, tone: "visible" },
-      values: [1.2, 1.6],
+      spread: 0.40000000000000013,
     },
     {
+      signal: "large",
       expected: { label: "はっきり差", spread: 1.2, tone: "large" },
-      values: [1.2, 1.5, 2.1, 2.4],
+      spread: 1.2,
     },
-  ])("classifies average rank spread for $values", ({ expected, values }) => {
-    expect(averageRankSpread(responseWithRankAverages(values))).toEqual(expected);
+  ])("maps API average rank spread signal $signal", ({ expected, signal, spread }) => {
+    expect(averageRankSpread(responseWithRankSignal(signal, spread))).toEqual(expected);
   });
 
-  it("uses the unrounded average rank spread for the 0.35 visible-difference boundary", () => {
-    const summary = averageRankSpread(responseWithRankAverages([2.3629, 2.7129]));
+  it("uses the API-provided unrounded average rank spread", () => {
+    const summary = averageRankSpread(responseWithRankSignal("visible", 0.35));
 
     expect(summary).toMatchObject({
       label: "中差",
       tone: "visible",
     });
     expect(summary.spread).toBeCloseTo(0.35);
-  });
-
-  it("uses tighter spread bands when the selected scope has enough matches", () => {
-    const summary = averageRankSpread(
-      responseWithRankAverages([2.367188, 2.445313, 2.554688, 2.632813], 128),
-    );
-
-    expect(summary).toMatchObject({
-      label: "中差",
-      tone: "visible",
-    });
-    expect(summary.spread).toBeCloseTo(0.265625);
-  });
-
-  it("ignores null rank averages from optional API fields", () => {
-    const response = responseWithRankAverages([1.2, 1.5]);
-    const rank = response.metricsByPlayer?.[1]?.metrics.rank as { average: number | null };
-    rank.average = null;
-
-    expect(averageRankSpread(response)).toMatchObject({
-      label: "比較材料不足",
-      spread: undefined,
-      tone: "flat",
-    });
-  });
-
-  it("ignores non-finite rank averages from defensive display helpers", () => {
-    const response = responseWithRankAverages([1.2, Number.NaN]);
-
-    expect(averageRankSpread(response)).toMatchObject({
-      label: "比較材料不足",
-      spread: undefined,
-      tone: "flat",
-    });
   });
 
   it("summarizes ginji counts and abnormal multi-hit matches", () => {
@@ -358,7 +325,11 @@ function responseWithRankAverages(
     playOrderBaselines: [],
     players: values.map((_, index) => ({ displayName: `P${index}`, memberId: `p${index}` })),
     recentFormByPlayer: [],
-    schemaVersion: 8,
+    rankSpreadSignal: {
+      signal: "insufficient",
+    },
+    sampleMaturity: "early",
+    schemaVersion: 9,
     scope: {
       gameTitleId: "title",
       gameTitleName: "桃鉄",
@@ -367,6 +338,17 @@ function responseWithRankAverages(
       scopeName: "総合",
     },
     trends: {},
+  };
+}
+
+function responseWithRankSignal(
+  signal: string,
+  spread: number | undefined,
+): SeriesComparisonResponse {
+  const response = responseWithRankAverages([1.2, 1.5]);
+  return {
+    ...response,
+    rankSpreadSignal: spread === undefined ? { signal } : { signal, spread },
   };
 }
 

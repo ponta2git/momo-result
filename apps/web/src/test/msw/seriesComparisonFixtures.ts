@@ -334,8 +334,10 @@ export function makeSeriesComparisonResponse(): SeriesComparisonResponse {
           subject.memberId === opponent.memberId
             ? {
                 betterRankCount: 0,
+                headToHeadSignal: "self",
                 matchCount: 0,
                 opponentMemberId: opponent.memberId,
+                sampleMaturity: "early",
                 status: "self",
                 subjectMemberId: subject.memberId,
               }
@@ -344,8 +346,10 @@ export function makeSeriesComparisonResponse(): SeriesComparisonResponse {
                 averageRankDiff: (opponentIndex - subjectIndex) * 0.35,
                 betterRankCount: Math.max(0, 8 - subjectIndex),
                 betterRankRate: Math.max(0.1, 0.72 - subjectIndex * 0.12),
+                headToHeadSignal: headToHeadSignal(Math.max(0.1, 0.72 - subjectIndex * 0.12)),
                 matchCount: 12,
                 opponentMemberId: opponent.memberId,
+                sampleMaturity: "early",
                 status: "ok",
                 subjectMemberId: subject.memberId,
               },
@@ -522,7 +526,12 @@ export function makeSeriesComparisonResponse(): SeriesComparisonResponse {
       entries: players.map((player, index) => cardShopDestinationEntry(player.memberId, index)),
     },
     players,
-    schemaVersion: 8,
+    rankSpreadSignal: {
+      signal: "large",
+      spread: Math.max(...averages) - Math.min(...averages),
+    },
+    sampleMaturity: "early",
+    schemaVersion: 9,
     recentFormByPlayer: players.map((player, index) => ({
       averageRank: (averages[index] ?? 2.5) + 0.15,
       lowerHalfStreak: index === 3 ? 2 : 0,
@@ -562,9 +571,24 @@ function momentumSwitchEntry(
   const afterFourthSuccess = [4, 3, 2, 6][index] ?? 3;
   const afterPodiumSuccess = [6, 3, 4, 5][index] ?? 4;
   return {
-    afterFourth: momentumRate(afterFourthTarget, afterFourthSuccess, 0.58 - index * 0.06),
-    afterLower: momentumRate(afterLowerTarget, afterLowerSuccess, 0.62 - index * 0.08),
-    afterPodium: momentumRate(afterPodiumTarget, afterPodiumSuccess, 0.38 + index * 0.04),
+    afterFourth: momentumRate(
+      "afterFourth",
+      afterFourthTarget,
+      afterFourthSuccess,
+      0.58 - index * 0.06,
+    ),
+    afterLower: momentumRate(
+      "afterLower",
+      afterLowerTarget,
+      afterLowerSuccess,
+      0.62 - index * 0.08,
+    ),
+    afterPodium: momentumRate(
+      "afterPodium",
+      afterPodiumTarget,
+      afterPodiumSuccess,
+      0.38 + index * 0.04,
+    ),
     denominator: 12,
     memberId,
     transitionCount: 11,
@@ -608,23 +632,70 @@ function momentumTransitionCells(previousRank: number, targetCount: number, inde
   });
 }
 
-function momentumRate(targetCount: number, successCount: number, baselineRate: number) {
+function headToHeadSignal(rate: number): string {
+  if (rate >= 0.65) {
+    return "strong_advantage";
+  }
+  if (rate >= 0.55) {
+    return "slight_advantage";
+  }
+  if (rate <= 0.35) {
+    return "strong_disadvantage";
+  }
+  if (rate <= 0.45) {
+    return "slight_disadvantage";
+  }
+  return "neutral";
+}
+
+function momentumRate(
+  kind: "afterFourth" | "afterLower" | "afterPodium",
+  targetCount: number,
+  successCount: number,
+  baselineRate: number,
+) {
   const rate = targetCount > 0 ? successCount / targetCount : undefined;
-  return rate === undefined
-    ? {
-        baselineRate,
-        status: targetCount >= 8 ? "ok" : targetCount > 0 ? "reference" : "no_target",
-        successCount,
-        targetCount,
-      }
-    : {
-        baselineRate,
-        deltaFromBaseline: rate - baselineRate,
-        rate,
-        status: targetCount >= 8 ? "ok" : targetCount > 0 ? "reference" : "no_target",
-        successCount,
-        targetCount,
-      };
+  const status = targetCount >= 8 ? "ok" : targetCount > 0 ? "reference" : "no_target";
+  if (rate === undefined) {
+    return {
+      baselineRate,
+      momentumSwitchSignal: "none",
+      sampleMaturity: "early",
+      status,
+      successCount,
+      targetCount,
+    };
+  }
+  const deltaFromBaseline = rate - baselineRate;
+  return {
+    baselineRate,
+    deltaFromBaseline,
+    momentumSwitchSignal: momentumSwitchSignal(kind, deltaFromBaseline, status),
+    rate,
+    sampleMaturity: "early",
+    status,
+    successCount,
+    targetCount,
+  };
+}
+
+function momentumSwitchSignal(
+  kind: "afterFourth" | "afterLower" | "afterPodium",
+  deltaFromBaseline: number | undefined,
+  status: string,
+): string {
+  if (status !== "ok" || deltaFromBaseline === undefined) {
+    return "none";
+  }
+  if (kind === "afterPodium") {
+    return deltaFromBaseline <= -0.06 ? "strength" : deltaFromBaseline >= 0.06 ? "risk" : "none";
+  }
+  const threshold = kind === "afterFourth" ? 0.1 : 0.06;
+  return deltaFromBaseline >= threshold
+    ? "strength"
+    : deltaFromBaseline <= -threshold
+      ? "risk"
+      : "none";
 }
 
 export function makeSeriesComparisonReviewResponse(): SeriesComparisonReviewResponse {

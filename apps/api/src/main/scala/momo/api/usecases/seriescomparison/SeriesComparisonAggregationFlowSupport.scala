@@ -70,11 +70,13 @@ private[seriescomparison] trait SeriesComparisonAggregationFlowSupport
             subjectMemberId = subjectId.value,
             opponentMemberId = opponentId.value,
             matchCount = 0,
+            sampleMaturity = sampleMaturity(0),
             betterRankCount = 0,
             betterRankRate = None,
             averageRankDiff = None,
             averageAssetsDiff = None,
             status = "self",
+            headToHeadSignal = "self",
           )
         else
           val pairs = rows.filter(_.memberId == subjectId).flatMap(subject =>
@@ -85,19 +87,30 @@ private[seriescomparison] trait SeriesComparisonAggregationFlowSupport
           val betterRankCount = pairs.count { case (subject, opponent) =>
             subject.rank.value < opponent.rank.value
           }
+          val betterRankRate = rate(betterRankCount, matchCount)
+          val averageRankDiff = average(pairs.map { case (subject, opponent) =>
+            asDecimal(opponent.rank.value - subject.rank.value)
+          })
+          val averageAssetsDiff = average(pairs.map { case (subject, opponent) =>
+            asDecimal(subject.totalAssetsManYen.value - opponent.totalAssetsManYen.value)
+          })
+          val status = normalStatus(matchCount)
           HeadToHeadEntryView(
             subjectMemberId = subjectId.value,
             opponentMemberId = opponentId.value,
             matchCount = matchCount,
+            sampleMaturity = sampleMaturity(matchCount),
             betterRankCount = betterRankCount,
-            betterRankRate = rate(betterRankCount, matchCount),
-            averageRankDiff = average(pairs.map { case (subject, opponent) =>
-              asDecimal(opponent.rank.value - subject.rank.value)
-            }),
-            averageAssetsDiff = average(pairs.map { case (subject, opponent) =>
-              asDecimal(subject.totalAssetsManYen.value - opponent.totalAssetsManYen.value)
-            }),
-            status = normalStatus(matchCount),
+            betterRankRate = betterRankRate,
+            averageRankDiff = averageRankDiff,
+            averageAssetsDiff = averageAssetsDiff,
+            status = status,
+            headToHeadSignal = headToHeadSignal(
+              matchCount,
+              betterRankRate,
+              averageRankDiff,
+              status,
+            ),
           )
       }
     })
@@ -156,19 +169,22 @@ private[seriescomparison] trait SeriesComparisonAggregationFlowSupport
       denominator = rows.size,
       transitionCount = transitions.size,
       afterLower = momentumSwitchRate(
-        transitions,
+        kind = "afterLower",
+        transitions = transitions,
         previousMatches = _.rank.value >= 3,
         currentMatches = _.rank.value <= 2,
         baselineRate = podiumBaseline,
       ),
       afterFourth = momentumSwitchRate(
-        transitions,
+        kind = "afterFourth",
+        transitions = transitions,
         previousMatches = _.rank.value == 4,
         currentMatches = _.rank.value <= 2,
         baselineRate = podiumBaseline,
       ),
       afterPodium = momentumSwitchRate(
-        transitions,
+        kind = "afterPodium",
+        transitions = transitions,
         previousMatches = _.rank.value <= 2,
         currentMatches = _.rank.value >= 3,
         baselineRate = lowerHalfBaseline,
@@ -178,6 +194,7 @@ private[seriescomparison] trait SeriesComparisonAggregationFlowSupport
   })
 
   protected final def momentumSwitchRate(
+      kind: String,
       transitions: List[RankTransition],
       previousMatches: SeriesComparisonMatchPlayerRow => Boolean,
       currentMatches: SeriesComparisonMatchPlayerRow => Boolean,
@@ -186,13 +203,17 @@ private[seriescomparison] trait SeriesComparisonAggregationFlowSupport
     val targets = transitions.filter(transition => previousMatches(transition.previous))
     val successCount = targets.count(transition => currentMatches(transition.current))
     val switchRate = rate(successCount, targets.size)
+    val deltaFromBaseline = (switchRate, baselineRate).mapN(_ - _)
+    val status = momentumSwitchStatus(targets.size)
     MomentumSwitchRateView(
       targetCount = targets.size,
+      sampleMaturity = sampleMaturity(targets.size),
       successCount = successCount,
       rate = switchRate,
       baselineRate = baselineRate,
-      deltaFromBaseline = (switchRate, baselineRate).mapN(_ - _),
-      status = momentumSwitchStatus(targets.size),
+      deltaFromBaseline = deltaFromBaseline,
+      status = status,
+      momentumSwitchSignal = momentumSwitchSignal(kind, deltaFromBaseline, status),
     )
 
   protected final def momentumSwitchTransitionRows(

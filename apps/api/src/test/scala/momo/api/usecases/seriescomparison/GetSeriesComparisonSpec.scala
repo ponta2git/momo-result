@@ -46,7 +46,10 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
     for result <- usecase.run(SeriesComparisonScope.Overall(titleId)) yield
       val response = assertRight(result)
       assertEquals(response.matchCount, 3)
-      assertEquals(response.schemaVersion, 8)
+      assertEquals(response.schemaVersion, 9)
+      assertEquals(response.sampleMaturity, "early")
+      assertEquals(response.rankSpreadSignal.signal, "large")
+      assertOptionDouble(response.rankSpreadSignal.spread, 8.0 / 3.0)
       assertEquals(response.players.map(_.memberId), List("eu", "ponta", "akane", "otaka"))
 
       val metrics = response.metricsByPlayer.map(entry => entry.memberId -> entry.metrics).toMap
@@ -120,10 +123,12 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
         .find(entry => entry.subjectMemberId == "ponta" && entry.opponentMemberId == "akane")
         .getOrElse(fail(s"ponta vs akane entry missing: ${response.headToHead.entries}"))
       assertEquals(pontaVsAkane.matchCount, 3)
+      assertEquals(pontaVsAkane.sampleMaturity, "early")
       assertEquals(pontaVsAkane.betterRankCount, 2)
       assertOptionDouble(pontaVsAkane.betterRankRate, 2.0 / 3.0)
       assertOptionDouble(pontaVsAkane.averageRankDiff, 2.0 / 3.0)
       assertOptionDouble(pontaVsAkane.averageAssetsDiff, 200.0)
+      assertEquals(pontaVsAkane.headToHeadSignal, "strong_advantage")
       assertEquals(response.matchPlayerPoints.size, 12)
       val firstPoint = response.matchPlayerPoints
         .find(point => point.matchIndex == 1 && point.memberId == "ponta")
@@ -150,11 +155,13 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
       assertEquals(pontaSwitch.afterFourth.targetCount, 0)
       assertEquals(pontaSwitch.afterFourth.status, "no_target")
       assertEquals(pontaSwitch.afterPodium.targetCount, 2)
+      assertEquals(pontaSwitch.afterPodium.sampleMaturity, "early")
       assertEquals(pontaSwitch.afterPodium.successCount, 0)
       assertOptionDouble(pontaSwitch.afterPodium.rate, 0.0)
       assertOptionDouble(pontaSwitch.afterPodium.baselineRate, 0.0)
       assertOptionDouble(pontaSwitch.afterPodium.deltaFromBaseline, 0.0)
       assertEquals(pontaSwitch.afterPodium.status, "reference")
+      assertEquals(pontaSwitch.afterPodium.momentumSwitchSignal, "none")
       val afterFirst = pontaSwitch.transitionRows.find(_.previousRank == 1)
         .getOrElse(fail(s"rank 1 row missing: $pontaSwitch"))
       assertEquals(afterFirst.targetCount, 1)
@@ -266,6 +273,9 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
     for result <- usecase.run(SeriesComparisonScope.Overall(titleId)) yield
       val response = assertRight(result)
       assertEquals(response.matchCount, 0)
+      assertEquals(response.sampleMaturity, "early")
+      assertEquals(response.rankSpreadSignal.signal, "insufficient")
+      assertEquals(response.rankSpreadSignal.spread, None)
       assertEquals(response.players, Nil)
       assertEquals(response.metricsByPlayer, Nil)
       assertEquals(response.headToHead.entries, Nil)
@@ -302,14 +312,18 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
       assertEquals(entry.memberId, "switcher")
       assertEquals(entry.transitionCount, 16)
       assertEquals(entry.afterLower.targetCount, 8)
+      assertEquals(entry.afterLower.sampleMaturity, "early")
       assertEquals(entry.afterLower.successCount, 8)
       assertOptionDouble(entry.afterLower.rate, 1.0)
       assertEquals(entry.afterLower.status, "ok")
+      assertEquals(entry.afterLower.momentumSwitchSignal, "strength")
       assertEquals(entry.afterFourth.targetCount, 8)
       assertEquals(entry.afterFourth.status, "ok")
+      assertEquals(entry.afterFourth.momentumSwitchSignal, "strength")
       assertEquals(entry.afterPodium.targetCount, 8)
       assertEquals(entry.afterPodium.successCount, 8)
       assertEquals(entry.afterPodium.status, "ok")
+      assertEquals(entry.afterPodium.momentumSwitchSignal, "risk")
       assert(response.dataQuality.items.exists(item =>
         item.metricId == "momentumSwitch.afterLowerPodiumRate" &&
           item.playerMemberId.contains("switcher") && item.targetCount == 8 && item.status == "ok"

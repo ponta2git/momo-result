@@ -19,7 +19,6 @@
 | ローカル起動 / コマンド / Git | `docs/dev-rule.md` | `docs/test-rule.md` |
 | 戦績比較ページ | `docs/requirements/series-comparison.md` | 振り返り/行動プレイブックを触る場合は `docs/requirements/series-review-playbook.md`、必要に応じて `docs/architecture.md`, `docs/test-rule.md` |
 | docs 変更 | この文書 | 変更対象の正本、`docs/post-mortem/lessons.md` |
-| 引き継ぎ | `docs/handoff/` の該当文書 | 関連する正本、実装コード |
 
 長い要求仕様は、まず目次と該当章だけ読む。既に読んだ文書は再読せず、ファイル名と要点を再利用する。
 
@@ -41,7 +40,6 @@
 | テスト補助 | `docs/test-architecture.md` | テストサイズ、coverage、CI artifact、段階計画 |
 | 開発正本 | `docs/dev-rule.md` | toolchain、ローカル起動、コマンド、Git運用 |
 | 最終確認 | `docs/post-mortem/lessons.md` | 作業完了前に該当カードだけ確認する再発防止チェック |
-| 引き継ぎ | `docs/handoff/` | すぐには直さない API / web 境界や破壊的変更候補の公開可能な引き継ぎ |
 | 公開運用原則 | `docs/ops/README.md` | public repo に置ける運用原則 |
 
 ## 3. 正本の分け方

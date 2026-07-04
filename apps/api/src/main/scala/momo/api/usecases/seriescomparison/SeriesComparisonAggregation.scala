@@ -52,7 +52,7 @@ private[usecases] object SeriesComparisonAggregation
     val quality =
       dataQuality(playerOrder, rowsByPlayer, orderedRows, revenueRanks, destinationRanks)
     SeriesComparisonView(
-      schemaVersion = 8,
+      schemaVersion = 9,
       scope = SeriesComparisonScopeView(
         gameTitleId = scope.gameTitleId.value,
         gameTitleName = scope.gameTitleName,
@@ -66,6 +66,11 @@ private[usecases] object SeriesComparisonAggregation
         mapName = scope.mapName,
       ),
       matchCount = matchCount,
+      sampleMaturity = sampleMaturity(matchCount),
+      rankSpreadSignal = rankSpreadSignal(
+        metrics.values.map(_.rank.average),
+        matchCount,
+      ),
       players = players,
       metricsByPlayer = playerOrder.map(memberId =>
         SeriesComparisonPlayerMetricsEntry(memberId.value, metrics(memberId.value))

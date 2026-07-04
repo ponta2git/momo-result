@@ -4,12 +4,34 @@ import java.time.format.DateTimeFormatter
 
 import momo.api.domain.SeriesComparisonMatchPlayerRow
 import momo.api.domain.ids.MemberId
+import momo.api.usecases.seriescomparison.view.SeriesComparisonRankSpreadSignalView
 
 private[seriescomparison] trait SeriesComparisonAggregationCommonSupport:
 
   protected object Thresholds:
     val MinimumOkSampleSize = 3
     val MomentumSwitchMinimumOkSampleSize = 8
+    val SemanticMatureSampleSize = 50
+    val HeadToHeadReferenceMaxSampleSize = 2
+    val AverageRankSpreadEarlyFlatBelow = 0.2
+    val AverageRankSpreadEarlySmallBelow = 0.35
+    val AverageRankSpreadEarlyLargeFrom = 0.6
+    val AverageRankSpreadMatureFlatBelow = 0.15
+    val AverageRankSpreadMatureSmallBelow = 0.25
+    val AverageRankSpreadMatureLargeFrom = 0.5
+    val HeadToHeadEarlySlightAdvantageFrom = 0.55
+    val HeadToHeadEarlyStrongAdvantageFrom = 0.65
+    val HeadToHeadEarlySlightDisadvantageTo = 0.45
+    val HeadToHeadEarlyStrongDisadvantageTo = 0.35
+    val HeadToHeadMatureSlightAdvantageFrom = 0.52
+    val HeadToHeadMatureStrongAdvantageFrom = 0.6
+    val HeadToHeadMatureSlightDisadvantageTo = 0.48
+    val HeadToHeadMatureStrongDisadvantageTo = 0.4
+    val HeadToHeadMatureRankDiffSlightFrom = 0.15
+    val HeadToHeadMatureRankDiffStrongFrom = 0.25
+    val MomentumSwitchAfterLowerDelta = 0.06
+    val MomentumSwitchAfterFourthDelta = 0.1
+    val MomentumSwitchAfterPodiumDelta = 0.06
     val RecentFormWindowSize = 8
     val HistogramLowerPercentile = 0.05
     val HistogramUpperPercentile = 0.95
@@ -157,12 +179,130 @@ private[seriescomparison] trait SeriesComparisonAggregationCommonSupport:
   protected final def rate(count: Int, denominator: Int): Option[Double] = Option
     .when(denominator > 0)(asDecimal(count) / asDecimal(denominator))
 
+  protected final def sampleMaturity(targetCount: Int): String =
+    if targetCount >= Thresholds.SemanticMatureSampleSize then "mature" else "early"
+
+  protected final def rankSpreadSignal(
+      averageRanks: Iterable[Option[Double]],
+      matchCount: Int,
+  ): SeriesComparisonRankSpreadSignalView =
+    val values = averageRanks.flatten.toList
+    if values.size < 2 then SeriesComparisonRankSpreadSignalView("insufficient", None)
+    else
+      val spread = values.max - values.min
+      val bands = averageRankSpreadBands(matchCount)
+      val signal =
+        if spread < bands.flatBelow then "flat"
+        else if spread < bands.smallBelow then "small"
+        else if spread < bands.largeFrom then "visible"
+        else "large"
+      SeriesComparisonRankSpreadSignalView(signal = signal, spread = Some(spread))
+
+  protected final def headToHeadSignal(
+      matchCount: Int,
+      betterRankRate: Option[Double],
+      averageRankDiff: Option[Double],
+      status: String,
+  ): String =
+    if status == "self" then "self"
+    else if matchCount == 0 then "no_target"
+    else if matchCount <= Thresholds.HeadToHeadReferenceMaxSampleSize then "reference"
+    else
+      val bands = headToHeadBands(matchCount)
+      betterRankRate match
+        case Some(value) if value >= bands.strongAdvantageFrom => "strong_advantage"
+        case Some(value) if value >= bands.slightAdvantageFrom => "slight_advantage"
+        case Some(value) if value <= bands.strongDisadvantageTo => "strong_disadvantage"
+        case Some(value) if value <= bands.slightDisadvantageTo => "slight_disadvantage"
+        case _ =>
+          headToHeadRankDiffSignal(averageRankDiff, matchCount).getOrElse("neutral")
+
+  protected final def momentumSwitchSignal(
+      kind: String,
+      deltaFromBaseline: Option[Double],
+      status: String,
+  ): String =
+    if status != "ok" then "none"
+    else
+      deltaFromBaseline match
+        case Some(delta) if kind == "afterPodium" =>
+          val threshold = Thresholds.MomentumSwitchAfterPodiumDelta
+          if delta <= -threshold then "strength"
+          else if delta >= threshold then "risk"
+          else "none"
+        case Some(delta) =>
+          val threshold =
+            if kind == "afterFourth" then Thresholds.MomentumSwitchAfterFourthDelta
+            else Thresholds.MomentumSwitchAfterLowerDelta
+          if delta >= threshold then "strength"
+          else if delta <= -threshold then "risk"
+          else "none"
+        case None => "none"
+
   protected final def revenueAssetRate(row: SeriesComparisonMatchPlayerRow): Option[Double] =
     Option.when(
       row.totalAssetsManYen.value > 0
     )(asDecimal(row.revenueManYen.value) / asDecimal(row.totalAssetsManYen.value))
 
   protected final def asDecimal(value: Int): Double = java.lang.Integer.valueOf(value).doubleValue()
+
+  private final case class AverageRankSpreadBands(
+      flatBelow: Double,
+      smallBelow: Double,
+      largeFrom: Double,
+  )
+
+  private final case class HeadToHeadBands(
+      slightAdvantageFrom: Double,
+      strongAdvantageFrom: Double,
+      slightDisadvantageTo: Double,
+      strongDisadvantageTo: Double,
+  )
+
+  private def averageRankSpreadBands(matchCount: Int): AverageRankSpreadBands =
+    if sampleMaturity(matchCount) == "mature" then
+      AverageRankSpreadBands(
+        flatBelow = Thresholds.AverageRankSpreadMatureFlatBelow,
+        smallBelow = Thresholds.AverageRankSpreadMatureSmallBelow,
+        largeFrom = Thresholds.AverageRankSpreadMatureLargeFrom,
+      )
+    else
+      AverageRankSpreadBands(
+        flatBelow = Thresholds.AverageRankSpreadEarlyFlatBelow,
+        smallBelow = Thresholds.AverageRankSpreadEarlySmallBelow,
+        largeFrom = Thresholds.AverageRankSpreadEarlyLargeFrom,
+      )
+
+  private def headToHeadBands(matchCount: Int): HeadToHeadBands =
+    if sampleMaturity(matchCount) == "mature" then
+      HeadToHeadBands(
+        slightAdvantageFrom = Thresholds.HeadToHeadMatureSlightAdvantageFrom,
+        strongAdvantageFrom = Thresholds.HeadToHeadMatureStrongAdvantageFrom,
+        slightDisadvantageTo = Thresholds.HeadToHeadMatureSlightDisadvantageTo,
+        strongDisadvantageTo = Thresholds.HeadToHeadMatureStrongDisadvantageTo,
+      )
+    else
+      HeadToHeadBands(
+        slightAdvantageFrom = Thresholds.HeadToHeadEarlySlightAdvantageFrom,
+        strongAdvantageFrom = Thresholds.HeadToHeadEarlyStrongAdvantageFrom,
+        slightDisadvantageTo = Thresholds.HeadToHeadEarlySlightDisadvantageTo,
+        strongDisadvantageTo = Thresholds.HeadToHeadEarlyStrongDisadvantageTo,
+      )
+
+  private def headToHeadRankDiffSignal(
+      averageRankDiff: Option[Double],
+      matchCount: Int,
+  ): Option[String] =
+    if sampleMaturity(matchCount) != "mature" then None
+    else
+      averageRankDiff.flatMap { value =>
+        val absoluteDiff = math.abs(value)
+        if absoluteDiff >= Thresholds.HeadToHeadMatureRankDiffStrongFrom then
+          Some(if value > 0 then "strong_advantage" else "strong_disadvantage")
+        else if absoluteDiff >= Thresholds.HeadToHeadMatureRankDiffSlightFrom then
+          Some(if value > 0 then "slight_advantage" else "slight_disadvantage")
+        else None
+      }
 
   protected final def normalStatus(denominator: Int): String =
     if denominator == 0 then "no_target"

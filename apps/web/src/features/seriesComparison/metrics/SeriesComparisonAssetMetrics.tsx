@@ -57,7 +57,7 @@ export function AssetDistributionMetrics({ response }: { response: SeriesCompari
   return (
     <MetricSection
       description="総資産の分布、物件収益、カード寄りの動きから、どう勝ちに近づいたかを見ます。"
-      icon={<Coins className="size-5" />}
+      Icon={Coins}
       title="総資産と勝ち筋"
       id="metric-money"
     >

@@ -1,17 +1,17 @@
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
 
 export function MetricSection({
   action,
   children,
   description,
-  icon,
+  Icon,
   id,
   title,
 }: {
   action?: ReactNode;
   children: ReactNode;
   description?: string;
-  icon: ReactNode;
+  Icon: ComponentType<{ className?: string }>;
   id?: string;
   title: string;
 }) {
@@ -26,7 +26,7 @@ export function MetricSection({
             aria-hidden="true"
             className="rounded-[var(--radius-sm)] bg-[var(--color-surface-subtle)] p-2 text-[var(--color-action)]"
           >
-            {icon}
+            <Icon className="size-5" />
           </div>
           <div className="min-w-0">
             <h2 className="text-base font-semibold text-[var(--color-text-primary)]">{title}</h2>

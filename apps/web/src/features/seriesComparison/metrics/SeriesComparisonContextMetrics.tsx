@@ -41,7 +41,7 @@ export function PlayOrderMetrics({ response }: { response: SeriesComparisonRespo
         </Button>
       }
       description="1P〜4Pの番手別成績です。番手差が小さいほど、席順の影響が小さい状態です。"
-      icon={<RefreshCw className="size-5" />}
+      Icon={RefreshCw}
       title="番手別成績"
       id="metric-play-order"
     >
@@ -113,7 +113,7 @@ export function GinjiMetrics({ response }: { response: SeriesComparisonResponse 
   return (
     <MetricSection
       description="スリの銀次は1回でも総資産を動かす事故です。2回以上の試合は分けて見ます。"
-      icon={<ShieldAlert className="size-5" />}
+      Icon={ShieldAlert}
       title="スリの銀次"
       id="metric-ginji"
     >

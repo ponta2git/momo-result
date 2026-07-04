@@ -164,3 +164,5 @@ export function useHeldEventsPageController() {
     },
   };
 }
+
+export type HeldEventsPageController = ReturnType<typeof useHeldEventsPageController>;

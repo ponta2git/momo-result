@@ -35,7 +35,7 @@ export function RecentFormMetrics({ response }: { response: SeriesComparisonResp
   return (
     <MetricSection
       description="直近8戦の調子指標と順位推移です。3戦未満は参考です。"
-      icon={<Activity className="size-5" />}
+      Icon={Activity}
       title="直近の調子"
       id="metric-recent-form"
     >
@@ -77,7 +77,7 @@ export function MomentumSwitchMetrics({ response }: { response: SeriesComparison
   return (
     <MetricSection
       description="前戦の順位から次戦の順位へどう動いたかを見ます。条件別率は8件未満なら参考です。"
-      icon={<RefreshCw className="size-5" />}
+      Icon={RefreshCw}
       title="切り替え力"
       id="metric-momentum-switch"
     >

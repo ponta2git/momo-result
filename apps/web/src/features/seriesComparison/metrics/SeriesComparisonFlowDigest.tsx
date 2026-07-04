@@ -24,7 +24,7 @@ export function MatchDigestMetrics({ response }: { response: SeriesComparisonRes
   return (
     <MetricSection
       description="選択中範囲の全試合から、接戦、大差、スリの銀次多発、物件収益トップ未勝利の発生数と該当試合を確認します。"
-      icon={<ShieldAlert className="size-5" />}
+      Icon={ShieldAlert}
       title="期間内の荒れ試合"
       id="metric-match-digest"
     >
@@ -142,7 +142,7 @@ export function MatchNoInEventMetrics({ response }: { response: SeriesComparison
   return (
     <MetricSection
       description="選択中範囲の全開催を横断し、第1〜第4試合ごとの平均順位と入賞率を見ます。第5試合以降は折りたたみます。"
-      icon={<Clock3 className="size-5" />}
+      Icon={Clock3}
       title="第n試合の傾向"
       id="metric-match-no"
     >

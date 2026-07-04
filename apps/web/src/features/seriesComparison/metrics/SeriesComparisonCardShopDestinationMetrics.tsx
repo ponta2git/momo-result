@@ -31,7 +31,7 @@ export function CardShopDestinationMetrics({ response }: { response: SeriesCompa
   return (
     <MetricSection
       description="目的地到着とカード売り場停車が、同じ試合にどう出ているかを見ます。行動順はDBにないため、売り場停車が寄り道か、資金・カード準備か、到着に効いたかは断定しません。"
-      icon={<Store className="size-5" />}
+      Icon={Store}
       title="カード売り場と目的地"
       id="metric-card-shop-destination"
     >

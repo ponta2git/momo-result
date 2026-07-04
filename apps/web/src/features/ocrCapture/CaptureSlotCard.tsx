@@ -1,15 +1,16 @@
-import { motion } from "motion/react";
-import type { DragEvent } from "react";
+import { useCallback } from "react";
+import type { DragEventHandler } from "react";
 
 import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
+import { CaptureSlotActions } from "@/features/ocrCapture/CaptureSlotActions";
+import { CaptureSlotFeedback } from "@/features/ocrCapture/CaptureSlotFeedback";
+import { CaptureSlotPreview } from "@/features/ocrCapture/CaptureSlotPreview";
+import { CaptureStatusBadge } from "@/features/ocrCapture/CaptureSlotStatus";
 import { DraftPreview } from "@/features/ocrCapture/DraftPreview";
 import { isWorkingStatus } from "@/features/ocrCapture/slotPolicy";
 import type { SlotKind } from "@/shared/api/enums";
 import { parseSlotKind } from "@/shared/api/enums";
 import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
-import { Button } from "@/shared/ui/actions/Button";
-import { cn } from "@/shared/ui/cn";
-import { momoPanelTransition, momoTransition } from "@/shared/ui/motion/variants";
 
 type CaptureSlotCardProps = {
   slot: CaptureSlotState;
@@ -24,75 +25,6 @@ type CaptureSlotCardProps = {
   onMoveImage: (direction: -1 | 1) => void;
   onManualRefresh: () => void;
 };
-
-const sourceLabels = {
-  camera: "撮影",
-  upload: "追加",
-};
-
-const slotKindLabels = {
-  incident_log: "事件簿",
-  revenue: "収益",
-  total_assets: "総資産",
-} as const satisfies Record<SlotKind, string>;
-
-const statusToneClass: Record<string, string> = {
-  cancelled:
-    "border-[var(--color-border)] bg-[var(--color-surface-subtle)] text-[var(--color-text-secondary)]",
-  empty:
-    "border-[var(--color-border)] bg-[var(--color-surface-subtle)] text-[var(--color-text-secondary)]",
-  failed: "border-[var(--color-danger)]/45 bg-[var(--color-danger)]/10 text-[var(--color-danger)]",
-  queued:
-    "border-[var(--color-warning)]/60 bg-[var(--color-warning)]/20 text-[var(--color-text-primary)]",
-  queueing:
-    "border-[var(--color-warning)]/60 bg-[var(--color-warning)]/20 text-[var(--color-text-primary)]",
-  running: "border-[var(--color-action)]/45 bg-[var(--color-action)]/10 text-[var(--color-action)]",
-  selected:
-    "border-[var(--color-action)]/45 bg-[var(--color-action)]/10 text-[var(--color-action)]",
-  succeeded:
-    "border-[var(--color-success)]/50 bg-[var(--color-success)]/12 text-[var(--color-text-primary)]",
-  uploaded:
-    "border-[var(--color-action)]/45 bg-[var(--color-action)]/10 text-[var(--color-action)]",
-  uploading:
-    "border-[var(--color-action)]/45 bg-[var(--color-action)]/10 text-[var(--color-action)]",
-};
-
-const statusLabel: Record<string, string> = {
-  cancelled: "キャンセル済み",
-  empty: "画像待ち",
-  failed: "要確認",
-  queued: "読み取り待ち",
-  queueing: "準備中",
-  running: "読み取り中",
-  selected: "読み取り待ち",
-  succeeded: "確認待ち",
-  uploaded: "送信済み",
-  uploading: "画像送信中",
-};
-
-const pollingPausedMessage: Record<string, string> = {
-  timeout: "読み取り処理の自動確認を停止しました。状態を確認するには手動で更新してください。",
-  transient_errors: "状態確認リクエストが混雑しています。少し待ってから手動で更新してください。",
-};
-
-function CaptureStatusBadge({ status }: { status: string }) {
-  return (
-    <motion.span
-      key={status}
-      animate={{ opacity: 1, y: 0 }}
-      className={cn(
-        "inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold",
-        "shrink-0 whitespace-nowrap",
-        statusToneClass[status] ?? statusToneClass["empty"],
-      )}
-      initial={{ opacity: 0, y: 3 }}
-      layout
-      transition={momoTransition}
-    >
-      {statusLabel[status] ?? status}
-    </motion.span>
-  );
-}
 
 export function CaptureSlotCard({
   slot,
@@ -111,29 +43,34 @@ export function CaptureSlotCard({
   const hasImage = Boolean(slot.previewUrl);
   const isWorking = isWorkingStatus(slot.status);
 
-  function handleDragStart(event: DragEvent<HTMLDivElement>) {
+  const handleDragStart = useCallback<DragEventHandler<HTMLDivElement>>((event) => {
     if (!hasImage || isWorking) {
       return;
     }
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", slot.kind);
-  }
+  }, [hasImage, isWorking, slot.kind]);
 
-  function handleDrop(event: DragEvent<HTMLDivElement>) {
+  const handleDragOver = useCallback<DragEventHandler<HTMLElement>>((event) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+  }, []);
+
+  const handleDrop = useCallback<DragEventHandler<HTMLElement>>((event) => {
     event.preventDefault();
     const sourceKind = parseSlotKind(event.dataTransfer.getData("text/plain"));
     if (sourceKind) {
       onDropImage(sourceKind, slot.kind);
     }
-  }
+  }, [onDropImage, slot.kind]);
+
+  const handleMoveBackward = useCallback(() => onMoveImage(-1), [onMoveImage]);
+  const handleMoveForward = useCallback(() => onMoveImage(1), [onMoveImage]);
 
   return (
     <section
       className="relative overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
-      onDragOver={(event) => {
-        event.preventDefault();
-        event.dataTransfer.dropEffect = "move";
-      }}
+      onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
       <div className={`absolute inset-x-0 top-0 h-1 ${accentClass}`} />
@@ -157,112 +94,27 @@ export function CaptureSlotCard({
         <CaptureStatusBadge status={slot.status} />
       </div>
 
-      {slot.previewUrl ? (
-        <motion.div
-          key={slot.previewUrl}
-          animate={{ opacity: 1, y: 0 }}
-          className={cn(
-            "mt-4 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--momo-night-900)] p-2",
-            isWorking ? "cursor-not-allowed opacity-85" : "cursor-grab active:cursor-grabbing",
-          )}
-          draggable={hasImage && !isWorking}
-          initial={{ opacity: 0, y: 4 }}
-          transition={momoPanelTransition}
-          onDragStartCapture={handleDragStart}
-        >
-          <img
-            src={slot.previewUrl}
-            alt={`${label}プレビュー`}
-            className="aspect-video w-full rounded-[var(--radius-sm)] object-contain"
-          />
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 px-1 text-xs text-white/80">
-            <span>{slot.source ? `${sourceLabels[slot.source]}した画像` : "配置済み画像"}</span>
-            <span>{isWorking ? "読み取り中は分類を固定" : "ドラッグして別の分類へ移動"}</span>
-          </div>
-        </motion.div>
-      ) : (
-        <div className="mt-4 rounded-[var(--radius-md)] border border-dashed border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-2">
-          <div className="grid aspect-video place-items-center px-4 text-center text-sm text-[var(--color-text-secondary)]">
-            <span>{label}の画像をここへ配置</span>
-          </div>
-          <div className="mt-2 flex min-h-4 items-center justify-between gap-2 px-1 text-xs text-[var(--color-text-muted)]">
-            <span>空き分類</span>
-          </div>
-        </div>
-      )}
+      <CaptureSlotPreview
+        isWorking={isWorking}
+        label={label}
+        slot={slot}
+        onDragStartCapture={handleDragStart}
+      />
 
-      <div className="mt-4 flex flex-wrap gap-2">
-        <Button
-          variant="secondary"
-          onClick={onClear}
-          disabled={slot.status === "empty" || isWorking}
-        >
-          削除
-        </Button>
-        <Button
-          variant="secondary"
-          onClick={() => onMoveImage(-1)}
-          disabled={!hasImage || isWorking || index === 0}
-        >
-          前の分類へ
-        </Button>
-        <Button
-          variant="secondary"
-          onClick={() => onMoveImage(1)}
-          disabled={!hasImage || isWorking || index === total - 1}
-        >
-          次の分類へ
-        </Button>
-      </div>
+      <CaptureSlotActions
+        canMoveBackward={hasImage && !isWorking && index > 0}
+        canMoveForward={hasImage && !isWorking && index < total - 1}
+        clearDisabled={slot.status === "empty" || isWorking}
+        onClear={onClear}
+        onMoveBackward={handleMoveBackward}
+        onMoveForward={handleMoveForward}
+      />
 
-      {mismatch ? (
-        <motion.div
-          animate={{ opacity: 1, y: 0 }}
-          className="mt-4 rounded-[var(--radius-md)] border border-[var(--color-warning)]/60 bg-[var(--color-warning)]/20 p-3 text-sm text-[var(--color-text-primary)]"
-          initial={{ opacity: 0, y: 4 }}
-          role="alert"
-          transition={momoPanelTransition}
-        >
-          OCR判定は{" "}
-          <strong>{slot.detectedKind ? slotKindLabels[slot.detectedKind] : "別の分類"}</strong>{" "}
-          でした。画像を正しい分類へ移動してから、もう一度読み取りを開始してください。
-        </motion.div>
-      ) : null}
-
-      {slot.transportError ? (
-        <motion.div
-          animate={{ opacity: 1, y: 0 }}
-          className="mt-4 rounded-[var(--radius-md)] border border-[var(--color-danger)]/45 bg-[var(--color-danger)]/10 p-3 text-sm text-[var(--color-text-primary)]"
-          initial={{ opacity: 0, y: 4 }}
-          role="alert"
-          transition={momoPanelTransition}
-        >
-          <strong>{slot.transportError.title}</strong>
-          <p className="mt-1">{slot.transportError.detail}</p>
-        </motion.div>
-      ) : null}
-
-      {slot.jobFailure ? (
-        <motion.div
-          animate={{ opacity: 1, y: 0 }}
-          className="mt-4 rounded-[var(--radius-md)] border border-[var(--color-danger)]/45 bg-[var(--color-danger)]/10 p-3 text-sm text-[var(--color-text-primary)]"
-          initial={{ opacity: 0, y: 4 }}
-          role="alert"
-          transition={momoPanelTransition}
-        >
-          <strong>{slot.jobFailure.code}</strong>
-          <p className="mt-1">{slot.jobFailure.userAction ?? slot.jobFailure.message}</p>
-        </motion.div>
-      ) : null}
-
-      {slot.pollingPausedReason && !["succeeded", "failed", "cancelled"].includes(slot.status) ? (
-        <div className="mt-4 rounded-[var(--radius-md)] border border-[var(--color-warning)]/60 bg-[var(--color-warning)]/20 p-3 text-sm text-[var(--color-text-primary)]">
-          {pollingPausedMessage[slot.pollingPausedReason]}
-          <Button className="ml-3" variant="secondary" onClick={onManualRefresh}>
-            状態を確認
-          </Button>
-        </div>
-      ) : null}
+      <CaptureSlotFeedback
+        mismatch={Boolean(mismatch)}
+        slot={slot}
+        onManualRefresh={onManualRefresh}
+      />
 
       <DraftPreview draft={draft} />
     </section>

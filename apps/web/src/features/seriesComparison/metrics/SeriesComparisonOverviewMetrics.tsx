@@ -40,7 +40,7 @@ export function BasicMetrics({ response }: { response: SeriesComparisonResponse 
         </Button>
       }
       description="平均順位は小さいほど上位です。順位ごとの回数で、勝ち切りと下位落ちを見ます。"
-      icon={<Trophy className="size-5" />}
+      Icon={Trophy}
       title="順位の地力"
       id="metric-basic"
     >
@@ -91,7 +91,7 @@ export function HeadToHeadMetrics({ response }: { response: SeriesComparisonResp
   return (
     <MetricSection
       description="行の社長が列の社長より上位だった割合です。件数が少ない相性は参考です。"
-      icon={<Swords className="size-5" />}
+      Icon={Swords}
       title="直接対決"
       id="metric-head-to-head"
     >
@@ -106,7 +106,7 @@ export function RateMetrics({ response }: { response: SeriesComparisonResponse }
   return (
     <MetricSection
       description="順位のブレ幅です。小さいほど同じ順位帯で安定しています。"
-      icon={<BarChart3 className="size-5" />}
+      Icon={BarChart3}
       title="安定性"
       id="metric-rate"
     >

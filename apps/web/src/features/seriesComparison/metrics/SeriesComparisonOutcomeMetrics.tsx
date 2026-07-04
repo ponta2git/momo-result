@@ -30,7 +30,7 @@ export function RevenueOutcomeMetrics({ response }: { response: SeriesComparison
   return (
     <MetricSection
       description="物件収益トップの試合を勝ち切れたか、トップでなくても1位に届いたかを見ます。"
-      icon={<BadgeDollarSign className="size-5" />}
+      Icon={BadgeDollarSign}
       title="物件収益トップを勝ちにできたか"
       id="metric-revenue-outcome"
     >
@@ -119,7 +119,7 @@ export function DestinationOutcomeMetrics({ response }: { response: SeriesCompar
   return (
     <MetricSection
       description="目的地に多く入った試合を勝ち切れたか、少ない試合でも上位に入れたかを見ます。事件簿に残っている目的地到着だけを数えます。"
-      icon={<MapPinned className="size-5" />}
+      Icon={MapPinned}
       title="目的地到着を勝ちにできたか"
       id="metric-destination-outcome"
     >

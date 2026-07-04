@@ -43,7 +43,7 @@ export function ReviewPlaybookSection({
   return (
     <MetricSection
       description="次回4戦で試す行動仮説を、発動条件と試合後の確認方法までまとめます。"
-      icon={<Target className="size-5" />}
+      Icon={Target}
       id="review-playbook"
       title="行動プレイブック"
     >

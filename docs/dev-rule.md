@@ -109,7 +109,7 @@ pnpm e2e
 pnpm e2e:target
 ```
 
-`format:check` は oxfmt、`lint` は oxlint と web architecture/API contract checks を実行する。`typecheck`、`lint`、`test:run`、coverage report の前には API 型生成が走る。
+`format:check` は oxfmt、`lint` は oxlint、web architecture/API contract checks、production TS/TSX module size check を実行する。`typecheck`、`lint`、`test:run`、coverage report の前には API 型生成が走る。
 
 ### API
 

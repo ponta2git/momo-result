@@ -83,9 +83,10 @@ API境界の一部は `ApiEndpointsArchitectureSpec` と `ApiRuntimeArchitecture
 - `features/matches/list`、`features/matches/workspace`、試合詳細の実装詳細を相互 import しない。
 - 横断 API client、生成型、query key、共有UI、共通domain helperは `shared/` に置く。画面固有の状態・変換・UIは feature 配下に置く。
 - `*Page.tsx` は composition とページ状態に寄せ、データ取得・mutation・複雑な状態機械は hook / controller / helper へ分ける。
+- 本番 TS/TSX module は概ね300行以内に保つ。超過する場合は page shell、section、controller hook、view model、presentation helper、型、adapter facade の混在を疑い、責務名で分割する。
 - 本番コードから `@/test/*`、`shared/api/msw/*` を import しない。
 
-web の import 境界は `apps/web/scripts/check-architecture-imports.mjs` で検査する。新しい層ルールを追加したら、可能な範囲でこの検査へ反映する。
+web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、module size は `apps/web/scripts/check-module-size.mjs` で検査する。新しい層ルールを追加したら、可能な範囲で検査へ反映する。
 
 ### 3.2 UI
 
@@ -99,7 +100,8 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs` で�
 
 - API取得と server state は TanStack Query を使う。
 - feature Page から TanStack Query を直接 import せず、use* hook / controller に寄せる。
-- route 読み込みは Suspense 可。mutation、フォーム保存、validation error、ユーザー操作中状態は明示的に扱う。
+- route 読み込みは `React.lazy` と route-specific Suspense skeleton を使える。mutation、フォーム保存、validation error、ユーザー操作中状態は明示的に扱う。
+- React concurrent API は TanStack Query の cache lifecycle を置き換えない。`useTransition` / `useDeferredValue` は条件変更時の表示 settling、`useActionState` は form action 境界など、既存契約を保つ範囲に限定する。
 - ページ失敗表示は `query.error` / `isError` だけで確定しない。認証、`enabled`、`isFetching` / `fetchStatus`、過去errorの再取得中状態を合わせる。
 - `queryKey` は cache に保存する runtime data shape を表す。同じ backend resource でも raw response と ViewModel を同じ key に置かない。
 - mutation 後に同画面で作成 resource を選択・表示する場合は、選択値だけでなく候補 list/select の cache も整合させる。
@@ -119,6 +121,7 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs` で�
 - API DTO 変更後は `apps/api/openapi.yaml` と `apps/web/src/shared/api/generated.ts` を更新する。
 - HTTP呼び出しは `shared/api/client.ts` を通す。credential、CSRF、Problem Details 正規化を feature で再実装しない。
 - 横断 resource API は `shared/api/<resource>.ts`。feature 専用変換は feature 側に置く。
+- feature から `@/shared/api/generated` を直接参照しない。generated DTO は `shared/api/*` facade で受け、feature は用途別の型・変換を介して扱う。
 - JSON mutation retry は、同じ操作・同じ payload に同じ `Idempotency-Key` を再利用する。payload が変われば新しい key を発行する。
 - 公開HTTP DTOへ内部画像path、旧OCR field名、旧dev header名を戻さない。残存検出は `apps/web/scripts/check-api-contract.mjs` へ寄せる。
 

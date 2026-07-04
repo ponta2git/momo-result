@@ -1,107 +1,19 @@
-import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useMemo, useRef, useState } from "react";
-import type { KeyboardEvent } from "react";
 
-import type {
-  MatchFormValues,
-  OriginalPlayerSnapshot,
-} from "@/features/matches/workspace/matchFormTypes";
+import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
+import { gridColumns } from "@/features/matches/workspace/scoreGrid/ScoreGridColumns";
+import { ScoreGridDesktopTable } from "@/features/matches/workspace/scoreGrid/ScoreGridDesktop";
 import { handleScoreGridKeydown } from "@/features/matches/workspace/scoreGrid/ScoreGridKeyboard";
-import { ScoreGridNumericEditor } from "@/features/matches/workspace/scoreGrid/ScoreGridNumericEditor";
+import { ScoreGridMobileCards } from "@/features/matches/workspace/scoreGrid/ScoreGridMobile";
 import type {
   IncidentNumericCommit,
   PlayerNumericCommit,
 } from "@/features/matches/workspace/scoreGrid/ScoreGridNumericEditor";
-import { incidentColumns } from "@/shared/domain/incidents";
-import type { IncidentKey, IncidentLabel } from "@/shared/domain/incidents";
-import { fixedMembers, memberDisplayName } from "@/shared/domain/members";
+import type {
+  ScoreGridKeyboardHandler,
+  ScoreGridProps,
+} from "@/features/matches/workspace/scoreGrid/ScoreGridTypes";
 import { useMediaQuery } from "@/shared/lib/useMediaQuery";
-import { momoPanelTransition } from "@/shared/ui/motion/variants";
-
-type GridColumn =
-  | "memberId"
-  | "playOrder"
-  | "rank"
-  | "totalAssetsManYen"
-  | "revenueManYen"
-  | `incident.${IncidentKey}`;
-
-type ScoreGridColumnDescriptor =
-  | {
-      column: Exclude<GridColumn, `incident.${IncidentKey}`>;
-      header: string;
-      kind: "member" | "numeric" | "select";
-      widthClass: string;
-    }
-  | {
-      column: `incident.${IncidentKey}`;
-      header: IncidentLabel;
-      incidentKey: IncidentKey;
-      kind: "incident";
-      widthClass: string;
-    };
-type IncidentScoreGridColumnDescriptor = Extract<ScoreGridColumnDescriptor, { kind: "incident" }>;
-
-function isIncidentScoreGridColumn(
-  column: ScoreGridColumnDescriptor,
-): column is IncidentScoreGridColumnDescriptor {
-  return column.kind === "incident";
-}
-
-const scoreGridColumns: ScoreGridColumnDescriptor[] = [
-  { column: "memberId", header: "メンバー", kind: "member", widthClass: "w-[10rem]" },
-  { column: "playOrder", header: "順", kind: "select", widthClass: "w-[7ch]" },
-  { column: "rank", header: "順位", kind: "numeric", widthClass: "w-[7ch]" },
-  { column: "totalAssetsManYen", header: "総資産", kind: "numeric", widthClass: "w-[12ch]" },
-  { column: "revenueManYen", header: "収益", kind: "numeric", widthClass: "w-[12ch]" },
-  ...incidentColumns.map(
-    ([incidentKey, header]): ScoreGridColumnDescriptor => ({
-      column: `incident.${incidentKey}`,
-      header,
-      incidentKey,
-      kind: "incident",
-      widthClass: "w-[7ch]",
-    }),
-  ),
-];
-
-const gridColumns = scoreGridColumns.map((column) => column.column);
-const incidentScoreGridColumns = scoreGridColumns.filter(isIncidentScoreGridColumn);
-
-function playerSlotKey(index: number): string {
-  return fixedMembers[index]?.memberId ?? `extra-player-${index}`;
-}
-
-const baseInputClass =
-  "w-full min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-2 text-sm text-[var(--color-text-primary)] transition-colors duration-150 hover:bg-[var(--color-surface-subtle)]";
-const textNumericShortClass = `${baseInputClass} min-w-[6ch] text-center tabular-nums`;
-const textNumericClass = `${baseInputClass} min-w-[12ch] text-right tabular-nums`;
-const selectShortClass = `${baseInputClass} min-w-[6ch] text-center`;
-const memberSelectClass = `${baseInputClass} min-w-[10rem]`;
-const playerFieldLabels = {
-  rank: "順位",
-  revenueManYen: "収益",
-  totalAssetsManYen: "総資産",
-} as const satisfies Record<"rank" | "revenueManYen" | "totalAssetsManYen", string>;
-
-function keyToPath(row: number, column: GridColumn): string {
-  if (column.startsWith("incident.")) {
-    return `players.${row}.incidents.${column.replace("incident.", "")}`;
-  }
-  return `players.${row}.${column}`;
-}
-
-type ScoreGridProps = {
-  errorPathSet: Set<string>;
-  lastSyncedPlayerIndex: number | null;
-  onIncidentChange: (index: number, key: IncidentKey, value: number) => void;
-  onPlayerChange: (index: number, patch: Partial<MatchFormValues["players"][number]>) => void;
-  onPlayOrderChange: (index: number, playOrder: number) => void;
-  onPreferImageKindChange?: (kind: "incident_log" | "revenue" | "total_assets") => void;
-  onRequestSubmitFocus: () => void;
-  originalPlayers: OriginalPlayerSnapshot[] | undefined;
-  players: MatchFormValues["players"];
-};
 
 export function ScoreGrid({
   errorPathSet,
@@ -120,7 +32,7 @@ export function ScoreGrid({
 
   const originalByPlayOrder = useMemo(() => {
     if (!originalPlayers) {
-      return new Map<number, OriginalPlayerSnapshot>();
+      return new Map();
     }
     return new Map(originalPlayers.map((player) => [player.playOrder, player]));
   }, [originalPlayers]);
@@ -145,13 +57,8 @@ export function ScoreGrid({
     }
   }, []);
 
-  const handleKeyboard = useCallback(
-    (args: {
-      col: number;
-      event: KeyboardEvent<HTMLElement>;
-      onRevertCell: () => void;
-      row: number;
-    }) => {
+  const handleKeyboard = useCallback<ScoreGridKeyboardHandler>(
+    (args) => {
       const target = args.event.currentTarget;
 
       if (args.event.key === "ArrowLeft" || args.event.key === "ArrowRight") {
@@ -198,218 +105,9 @@ export function ScoreGrid({
     [onIncidentChange],
   );
 
-  const grid = (
-    <table className="min-w-[64rem] table-fixed border-separate border-spacing-y-2 text-left text-sm">
-      <colgroup>
-        {scoreGridColumns.map((column) => (
-          <col key={column.column} className={column.widthClass} />
-        ))}
-      </colgroup>
-      <thead className="text-xs text-[var(--color-text-secondary)]">
-        <tr>
-          {scoreGridColumns.map((column) => (
-            <th
-              key={column.column}
-              className={
-                column.kind === "member"
-                  ? "sticky left-0 z-[var(--z-dropdown)] bg-[var(--color-surface)] px-2 py-2"
-                  : "px-2 py-2"
-              }
-            >
-              {column.header}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {players.map((player, rowIndex) => {
-          const originalRow = originalPlayers?.[rowIndex];
-          const originalByOrder = originalByPlayOrder.get(player.playOrder);
-          return (
-            <tr key={playerSlotKey(rowIndex)} className="bg-[var(--color-surface-subtle)]">
-              <td className="sticky left-0 z-[var(--z-sticky)] rounded-l-[var(--radius-md)] bg-[var(--color-surface-subtle)] px-2 py-3 align-top">
-                <select
-                  ref={(node) => {
-                    const cellId = getCellId(rowIndex, 0);
-                    if (node) {
-                      inputRefs.current.set(cellId, node);
-                    } else {
-                      inputRefs.current.delete(cellId);
-                    }
-                  }}
-                  aria-label={`${memberDisplayName(player.memberId)} メンバー`}
-                  className={memberSelectClass}
-                  value={player.memberId}
-                  onChange={(event) => {
-                    onPlayerChange(rowIndex, {
-                      memberId: event.target
-                        .value as MatchFormValues["players"][number]["memberId"],
-                    });
-                  }}
-                  onKeyDown={(event) =>
-                    handleKeyboard({
-                      col: 0,
-                      event,
-                      onRevertCell: () => undefined,
-                      row: rowIndex,
-                    })
-                  }
-                >
-                  {fixedMembers.map((member) => (
-                    <option key={member.memberId} value={member.memberId}>
-                      {member.displayName}
-                    </option>
-                  ))}
-                </select>
-              </td>
-
-              <td className="px-2 py-3 align-top">
-                {(() => {
-                  const cellId = getCellId(rowIndex, 1);
-                  return (
-                    <select
-                      ref={(node) => {
-                        if (node) {
-                          inputRefs.current.set(cellId, node);
-                        } else {
-                          inputRefs.current.delete(cellId);
-                        }
-                      }}
-                      aria-label={`${memberDisplayName(player.memberId)} プレー順`}
-                      className={`${selectShortClass} ${
-                        errorPathSet.has(keyToPath(rowIndex, "playOrder"))
-                          ? "border-[var(--color-danger)]/65 bg-[var(--color-danger)]/10"
-                          : ""
-                      }`}
-                      value={Number.isFinite(player.playOrder) ? String(player.playOrder) : ""}
-                      onChange={(event) =>
-                        onPlayOrderChange(rowIndex, Number.parseInt(event.target.value, 10))
-                      }
-                      onFocus={() => onPreferImageKindChange?.("incident_log")}
-                      onKeyDown={(event) =>
-                        handleKeyboard({
-                          col: 1,
-                          event,
-                          onRevertCell: () => undefined,
-                          row: rowIndex,
-                        })
-                      }
-                    >
-                      <option value="">-</option>
-                      {[1, 2, 3, 4].map((order) => (
-                        <option key={order} value={order}>
-                          {order}
-                        </option>
-                      ))}
-                    </select>
-                  );
-                })()}
-              </td>
-
-              <td className="px-2 py-3 align-top">
-                <ScoreGridNumericEditor
-                  allowSign={false}
-                  ariaLabel={`${memberDisplayName(player.memberId)} ${playerFieldLabels.rank}`}
-                  baseClassName={textNumericShortClass}
-                  cellId={getCellId(rowIndex, 2)}
-                  col={2}
-                  commitKind="player"
-                  error={errorPathSet.has(keyToPath(rowIndex, "rank"))}
-                  field="rank"
-                  originalValue={originalRow?.rank}
-                  registerCellRef={registerCellRef}
-                  row={rowIndex}
-                  showStateLabel
-                  value={player.rank}
-                  onKeyboard={handleKeyboard}
-                  onPlayerCommit={handlePlayerNumericCommit}
-                />
-              </td>
-
-              <td className="px-2 py-3 align-top">
-                <ScoreGridNumericEditor
-                  allowSign
-                  ariaLabel={`${memberDisplayName(player.memberId)} ${playerFieldLabels.totalAssetsManYen}`}
-                  baseClassName={textNumericClass}
-                  cellId={getCellId(rowIndex, 3)}
-                  col={3}
-                  commitKind="player"
-                  error={errorPathSet.has(keyToPath(rowIndex, "totalAssetsManYen"))}
-                  focusImageKind="total_assets"
-                  field="totalAssetsManYen"
-                  originalValue={originalRow?.totalAssetsManYen}
-                  registerCellRef={registerCellRef}
-                  row={rowIndex}
-                  showStateLabel
-                  value={player.totalAssetsManYen}
-                  onKeyboard={handleKeyboard}
-                  onPlayerCommit={handlePlayerNumericCommit}
-                  onPreferImageKindChange={onPreferImageKindChange}
-                />
-              </td>
-
-              <td className="px-2 py-3 align-top">
-                <ScoreGridNumericEditor
-                  allowSign
-                  ariaLabel={`${memberDisplayName(player.memberId)} ${playerFieldLabels.revenueManYen}`}
-                  baseClassName={textNumericClass}
-                  cellId={getCellId(rowIndex, 4)}
-                  col={4}
-                  commitKind="player"
-                  error={errorPathSet.has(keyToPath(rowIndex, "revenueManYen"))}
-                  focusImageKind="revenue"
-                  field="revenueManYen"
-                  originalValue={originalRow?.revenueManYen}
-                  registerCellRef={registerCellRef}
-                  row={rowIndex}
-                  showStateLabel
-                  value={player.revenueManYen}
-                  onKeyboard={handleKeyboard}
-                  onPlayerCommit={handlePlayerNumericCommit}
-                  onPreferImageKindChange={onPreferImageKindChange}
-                />
-              </td>
-
-              {incidentScoreGridColumns.map((column, incidentIndex) => {
-                const col = incidentIndex + 5;
-                const { incidentKey } = column;
-                const cellId = getCellId(rowIndex, col);
-                return (
-                  <td
-                    key={incidentKey}
-                    className="px-2 py-3 align-top last:rounded-r-[var(--radius-md)]"
-                  >
-                    <ScoreGridNumericEditor
-                      allowSign={false}
-                      ariaLabel={`${memberDisplayName(player.memberId)} ${column.header}`}
-                      baseClassName={textNumericShortClass}
-                      cellId={cellId}
-                      col={col}
-                      commitKind="incident"
-                      error={errorPathSet.has(
-                        keyToPath(rowIndex, `incident.${incidentKey}` as GridColumn),
-                      )}
-                      focusImageKind="incident_log"
-                      incidentKey={incidentKey}
-                      originalValue={originalByOrder?.incidents[column.header]}
-                      registerCellRef={registerCellRef}
-                      row={rowIndex}
-                      showStateLabel
-                      synced={lastSyncedPlayerIndex === rowIndex}
-                      value={player.incidents[incidentKey]}
-                      onIncidentCommit={handleIncidentNumericCommit}
-                      onKeyboard={handleKeyboard}
-                      onPreferImageKindChange={onPreferImageKindChange}
-                    />
-                  </td>
-                );
-              })}
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
-  );
+  const handleToggleMobilePlayer = useCallback((index: number) => {
+    setExpandedMobilePlayer((current) => (current === index ? -1 : index));
+  }, []);
 
   return (
     <section>
@@ -424,191 +122,40 @@ export function ScoreGrid({
         </div>
       </div>
 
-      {isNarrowViewport ? null : <div className="mt-4 overflow-x-auto pb-2">{grid}</div>}
+      {isNarrowViewport ? null : (
+        <div className="mt-4 overflow-x-auto pb-2">
+          <ScoreGridDesktopTable
+            errorPathSet={errorPathSet}
+            getCellId={getCellId}
+            handleIncidentNumericCommit={handleIncidentNumericCommit}
+            handleKeyboard={handleKeyboard}
+            handlePlayerNumericCommit={handlePlayerNumericCommit}
+            lastSyncedPlayerIndex={lastSyncedPlayerIndex}
+            originalByPlayOrder={originalByPlayOrder}
+            originalPlayers={originalPlayers}
+            players={players}
+            registerCellRef={registerCellRef}
+            onPlayerChange={onPlayerChange}
+            onPlayOrderChange={onPlayOrderChange}
+            onPreferImageKindChange={onPreferImageKindChange}
+          />
+        </div>
+      )}
 
       {isNarrowViewport ? (
-        <div className="mt-4 grid gap-3">
-          {players.map((player, index) => {
-            const originalRow = originalPlayers?.[index];
-            const originalByOrder = originalByPlayOrder.get(player.playOrder);
-            return (
-              <article
-                key={playerSlotKey(index)}
-                className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
-              >
-                <button
-                  className="flex w-full items-center justify-between text-left"
-                  aria-controls={`mobile-player-${index}-fields`}
-                  aria-expanded={expandedMobilePlayer === index}
-                  type="button"
-                  onClick={() =>
-                    setExpandedMobilePlayer((current) => (current === index ? -1 : index))
-                  }
-                >
-                  <span className="font-semibold text-[var(--color-text-primary)]">
-                    {memberDisplayName(player.memberId)}
-                  </span>
-                  <span className="text-xs text-[var(--color-text-secondary)]">
-                    {expandedMobilePlayer === index ? "閉じる" : "詳細"}
-                  </span>
-                </button>
-                <AnimatePresence initial={false}>
-                  {expandedMobilePlayer === index ? (
-                    <motion.div
-                      key="fields"
-                      animate={{ opacity: 1, y: 0 }}
-                      className="mt-3 space-y-2"
-                      exit={{ opacity: 0, y: -4 }}
-                      id={`mobile-player-${index}-fields`}
-                      initial={{ opacity: 0, y: 4 }}
-                      transition={momoPanelTransition}
-                    >
-                      <label className="grid gap-1 text-xs text-[var(--color-text-secondary)]">
-                        メンバー
-                        <select
-                          className={memberSelectClass}
-                          value={player.memberId}
-                          onChange={(event) => {
-                            onPlayerChange(index, {
-                              memberId: event.target
-                                .value as MatchFormValues["players"][number]["memberId"],
-                            });
-                          }}
-                        >
-                          {fixedMembers.map((member) => (
-                            <option key={member.memberId} value={member.memberId}>
-                              {member.displayName}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <label className="grid gap-1 text-xs text-[var(--color-text-secondary)]">
-                          プレー順
-                          <select
-                            className={`${selectShortClass} ${
-                              errorPathSet.has(keyToPath(index, "playOrder"))
-                                ? "border-[var(--color-danger)]/65 bg-[var(--color-danger)]/10"
-                                : ""
-                            }`}
-                            value={
-                              Number.isFinite(player.playOrder) ? String(player.playOrder) : ""
-                            }
-                            onChange={(event) =>
-                              onPlayOrderChange(index, Number.parseInt(event.target.value, 10))
-                            }
-                            onFocus={() => onPreferImageKindChange?.("incident_log")}
-                          >
-                            <option value="">-</option>
-                            {[1, 2, 3, 4].map((order) => (
-                              <option key={order} value={order}>
-                                {order}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label
-                          className="grid gap-1 text-xs text-[var(--color-text-secondary)]"
-                          htmlFor={`mobile-${index}-rank`}
-                        >
-                          順位
-                          <ScoreGridNumericEditor
-                            allowSign={false}
-                            ariaLabel={`${memberDisplayName(player.memberId)} ${playerFieldLabels.rank}`}
-                            baseClassName={textNumericShortClass}
-                            cellId={`mobile-${index}-rank`}
-                            commitKind="player"
-                            error={errorPathSet.has(keyToPath(index, "rank"))}
-                            field="rank"
-                            originalValue={originalRow?.rank}
-                            row={index}
-                            showStateLabel
-                            value={player.rank}
-                            onPlayerCommit={handlePlayerNumericCommit}
-                          />
-                        </label>
-                      </div>
-                      <label
-                        className="grid gap-1 text-xs text-[var(--color-text-secondary)]"
-                        htmlFor={`mobile-${index}-totalAssetsManYen`}
-                      >
-                        総資産
-                        <ScoreGridNumericEditor
-                          allowSign
-                          ariaLabel={`${memberDisplayName(player.memberId)} ${playerFieldLabels.totalAssetsManYen}`}
-                          baseClassName={textNumericClass}
-                          cellId={`mobile-${index}-totalAssetsManYen`}
-                          commitKind="player"
-                          error={errorPathSet.has(keyToPath(index, "totalAssetsManYen"))}
-                          field="totalAssetsManYen"
-                          focusImageKind="total_assets"
-                          originalValue={originalRow?.totalAssetsManYen}
-                          row={index}
-                          showStateLabel
-                          value={player.totalAssetsManYen}
-                          onPlayerCommit={handlePlayerNumericCommit}
-                          onPreferImageKindChange={onPreferImageKindChange}
-                        />
-                      </label>
-                      <label
-                        className="grid gap-1 text-xs text-[var(--color-text-secondary)]"
-                        htmlFor={`mobile-${index}-revenueManYen`}
-                      >
-                        収益
-                        <ScoreGridNumericEditor
-                          allowSign
-                          ariaLabel={`${memberDisplayName(player.memberId)} ${playerFieldLabels.revenueManYen}`}
-                          baseClassName={textNumericClass}
-                          cellId={`mobile-${index}-revenueManYen`}
-                          commitKind="player"
-                          error={errorPathSet.has(keyToPath(index, "revenueManYen"))}
-                          field="revenueManYen"
-                          focusImageKind="revenue"
-                          originalValue={originalRow?.revenueManYen}
-                          row={index}
-                          showStateLabel
-                          value={player.revenueManYen}
-                          onPlayerCommit={handlePlayerNumericCommit}
-                          onPreferImageKindChange={onPreferImageKindChange}
-                        />
-                      </label>
-                      <div className="grid grid-cols-2 gap-2">
-                        {incidentScoreGridColumns.map((column) => (
-                          <label
-                            key={column.incidentKey}
-                            className="grid gap-1 text-xs text-[var(--color-text-secondary)]"
-                            htmlFor={`mobile-${index}-${column.incidentKey}`}
-                          >
-                            {column.header}
-                            <ScoreGridNumericEditor
-                              allowSign={false}
-                              ariaLabel={`${memberDisplayName(player.memberId)} ${column.header}`}
-                              baseClassName={textNumericShortClass}
-                              cellId={`mobile-${index}-${column.incidentKey}`}
-                              commitKind="incident"
-                              error={errorPathSet.has(
-                                keyToPath(index, `incident.${column.incidentKey}`),
-                              )}
-                              focusImageKind="incident_log"
-                              incidentKey={column.incidentKey}
-                              originalValue={originalByOrder?.incidents[column.header]}
-                              row={index}
-                              showStateLabel
-                              synced={lastSyncedPlayerIndex === index}
-                              value={player.incidents[column.incidentKey]}
-                              onIncidentCommit={handleIncidentNumericCommit}
-                              onPreferImageKindChange={onPreferImageKindChange}
-                            />
-                          </label>
-                        ))}
-                      </div>
-                    </motion.div>
-                  ) : null}
-                </AnimatePresence>
-              </article>
-            );
-          })}
-        </div>
+        <ScoreGridMobileCards
+          errorPathSet={errorPathSet}
+          expandedMobilePlayer={expandedMobilePlayer}
+          handleIncidentNumericCommit={handleIncidentNumericCommit}
+          handlePlayerNumericCommit={handlePlayerNumericCommit}
+          lastSyncedPlayerIndex={lastSyncedPlayerIndex}
+          originalPlayers={originalPlayers}
+          players={players}
+          onPlayerChange={onPlayerChange}
+          onPlayOrderChange={onPlayOrderChange}
+          onPreferImageKindChange={onPreferImageKindChange}
+          onTogglePlayer={handleToggleMobilePlayer}
+        />
       ) : null}
     </section>
   );

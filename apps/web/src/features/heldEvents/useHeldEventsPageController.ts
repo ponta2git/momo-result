@@ -133,10 +133,10 @@ export function useHeldEventsPageController() {
     }
   }, [heldEventsQuery.isPlaceholderData, pagination, paginationSearch, updatePagination]);
 
-  const refresh = useCallback(() => {
+  const refresh = () => {
     void heldEventsQuery.refetch();
     void latestHeldEventQuery.refetch();
-  }, [heldEventsQuery.refetch, latestHeldEventQuery.refetch]);
+  };
   const updatePage = useCallback(
     (page: number) => {
       updatePagination({ page, pageSize: paginationSearch.pageSize });
@@ -152,12 +152,9 @@ export function useHeldEventsPageController() {
   const cancelDelete = useCallback(() => {
     setDeleteTarget(null);
   }, []);
-  const confirmDelete = useCallback(
-    async (event: HeldEventResponse) => {
-      await deleteMutation.mutateAsync(event);
-    },
-    [deleteMutation.mutateAsync],
-  );
+  const confirmDelete = async (event: HeldEventResponse) => {
+    await deleteMutation.mutateAsync(event);
+  };
 
   return {
     create: {

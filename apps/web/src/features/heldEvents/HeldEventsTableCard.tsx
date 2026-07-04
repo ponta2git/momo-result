@@ -1,12 +1,7 @@
 import { CalendarDays, Download, ListFilter, Trash2 } from "lucide-react";
 import { useMemo } from "react";
 
-import { formatDateKey, formatDateTime } from "@/features/heldEvents/heldEventViewModel";
-import type {
-  HeldEventsTableActions,
-  HeldEventsTableModel,
-} from "@/features/heldEvents/heldEventViewModel";
-import { heldEventPageSizeOptions } from "@/features/heldEvents/heldEventViewModel";
+import * as heldEventViewModel from "@/features/heldEvents/heldEventViewModel";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
@@ -19,8 +14,8 @@ import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { Card } from "@/shared/ui/layout/Card";
 
 type HeldEventsTableCardProps = {
-  actions: HeldEventsTableActions;
-  data: HeldEventsTableModel;
+  actions: heldEventViewModel.HeldEventsTableActions;
+  data: heldEventViewModel.HeldEventsTableModel;
 };
 
 export function HeldEventsTableCard({ actions, data }: HeldEventsTableCardProps) {
@@ -83,7 +78,7 @@ export function HeldEventsTableCard({ actions, data }: HeldEventsTableCardProps)
         <PaginationControls
           className="mt-3"
           disabled={data.refreshing}
-          pageSizeOptions={[...heldEventPageSizeOptions]}
+          pageSizeOptions={[...heldEventViewModel.heldEventPageSizeOptions]}
           pagination={data.pagination}
           onPageChange={actions.onPageChange}
           onPageSizeChange={actions.onPageSizeChange}
@@ -96,9 +91,9 @@ export function HeldEventsTableCard({ actions, data }: HeldEventsTableCardProps)
 function HeldEventDateCell({ event }: { event: HeldEventResponse }) {
   return (
     <div className="grid gap-1">
-      <span className="font-semibold">{formatDateTime(event.heldAt)}</span>
+      <span className="font-semibold">{heldEventViewModel.formatDateTime(event.heldAt)}</span>
       <span className="text-xs text-[var(--color-text-secondary)]">
-        {formatDateKey(event.heldAt)}
+        {heldEventViewModel.formatDateKey(event.heldAt)}
       </span>
     </div>
   );

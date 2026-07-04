@@ -95,8 +95,6 @@ export function useSeriesComparisonPageController() {
   );
 
   const selectedSeries = findSelectedSeries(optionsQuery.data, normalizedState.gameTitleId);
-  const seasonOptions = selectedSeries?.seasons ?? [];
-  const mapOptions = selectedSeries?.maps ?? [];
   const scopeName = scopeNameForState(optionsQuery.data, normalizedState);
 
   const seriesSelectOptions = useMemo(
@@ -110,22 +108,22 @@ export function useSeriesComparisonPageController() {
   const seasonSelectOptions = useMemo(
     () => [
       { label: "全シーズン", value: "" },
-      ...seasonOptions.map((option) => ({
+      ...(selectedSeries?.seasons ?? []).map((option) => ({
         label: option.name,
         value: option.id,
       })),
     ],
-    [seasonOptions],
+    [selectedSeries],
   );
   const mapSelectOptions = useMemo(
     () => [
       { label: "全マップ", value: "" },
-      ...mapOptions.map((option) => ({
+      ...(selectedSeries?.maps ?? []).map((option) => ({
         label: option.name,
         value: option.id,
       })),
     ],
-    [mapOptions],
+    [selectedSeries],
   );
 
   const updateState = useCallback(
@@ -189,13 +187,13 @@ export function useSeriesComparisonPageController() {
       isRefreshing: reviewQuery.isFetching && reviewQuery.data !== undefined,
       isSettling: scopeSettling || reviewViewSettling,
     });
-  const refresh = useCallback(() => {
+  const refresh = () => {
     void optionsQuery.refetch();
     void aggregateQuery.refetch();
     if (reviewEnabled) {
       void reviewQuery.refetch();
     }
-  }, [aggregateQuery.refetch, optionsQuery.refetch, reviewEnabled, reviewQuery.refetch]);
+  };
 
   return {
     actions: {

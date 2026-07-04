@@ -1,27 +1,19 @@
 import { memo, useCallback } from "react";
 
 import type { IncidentKey, MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
-import {
-  NumericInputCell,
-  type NumericInputCellField,
-  type NumericInputCellInteraction,
-  type NumericInputCellState,
-} from "@/features/matches/workspace/scoreGrid/ScoreGridNumericInputCell";
-import type {
-  NumericKeyboardHandler,
-  PreferredImageKind,
-  RegisterCellRef,
-} from "@/features/matches/workspace/scoreGrid/ScoreGridNumericInputCell";
+import * as NumericInput from "@/features/matches/workspace/scoreGrid/ScoreGridNumericInputCell";
 
-export type { NumericKeyboardHandler, PreferredImageKind, RegisterCellRef };
+export type NumericKeyboardHandler = NumericInput.NumericKeyboardHandler;
+export type PreferredImageKind = NumericInput.PreferredImageKind;
+export type RegisterCellRef = NumericInput.RegisterCellRef;
 
 export type NumericPlayerField = "rank" | "revenueManYen" | "totalAssetsManYen";
 export type PlayerNumericCommit = (index: number, field: NumericPlayerField, value: number) => void;
 export type IncidentNumericCommit = (index: number, key: IncidentKey, value: number) => void;
 
-type ScoreGridNumericEditorBaseProps = NumericInputCellField &
-  NumericInputCellState &
-  Omit<NumericInputCellInteraction, "onCommit">;
+type ScoreGridNumericEditorBaseProps = NumericInput.NumericInputCellField &
+  NumericInput.NumericInputCellState &
+  Omit<NumericInput.NumericInputCellInteraction, "onCommit">;
 
 type ScoreGridNumericEditorProps = ScoreGridNumericEditorBaseProps &
   (
@@ -64,12 +56,12 @@ export const ScoreGridNumericEditor = memo(function ScoreGridNumericEditor({
   row,
 }: ScoreGridNumericEditorProps) {
   const commitValue = useCallback(
-    (value: number) => {
+    (nextValue: number) => {
       if (commitKind === "player") {
-        onPlayerCommit(row, field, value);
+        onPlayerCommit(row, field, nextValue);
         return;
       }
-      onIncidentCommit(row, incidentKey, value);
+      onIncidentCommit(row, incidentKey, nextValue);
     },
     [commitKind, field, incidentKey, onIncidentCommit, onPlayerCommit, row],
   );
@@ -85,7 +77,9 @@ export const ScoreGridNumericEditor = memo(function ScoreGridNumericEditor({
   };
   const state = { error, originalValue, showStateLabel, synced };
 
-  return <NumericInputCell field={inputField} interaction={interaction} state={state} />;
+  return (
+    <NumericInput.NumericInputCell field={inputField} interaction={interaction} state={state} />
+  );
 });
 
 export type ScoreGridPlayer = MatchFormValues["players"][number];

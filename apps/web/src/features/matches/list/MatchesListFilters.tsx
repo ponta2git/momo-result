@@ -1,28 +1,23 @@
 import { useMemo } from "react";
 
 import type {
+  MatchListFilterActions,
+  MatchListFilterCandidates,
+  MatchListFilterSelectionErrors,
   MatchListSearch,
   MatchListSort,
   MatchListStatusFilter,
 } from "@/features/matches/list/matchListTypes";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
-import type { GameTitleResponse, SeasonMasterResponse } from "@/shared/api/masters";
 import { Button } from "@/shared/ui/actions/Button";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 
 type MatchesListFiltersProps = {
-  gameTitles: GameTitleResponse[];
-  heldEvents: HeldEventResponse[];
-  initialSearch: MatchListSearch;
+  actions: MatchListFilterActions;
+  candidates: MatchListFilterCandidates;
   pending?: boolean;
-  onApply: (nextSearch: MatchListSearch) => void;
-  onClear: () => void;
-  seasons: SeasonMasterResponse[];
-  selectionErrors?: {
-    gameTitles?: string;
-    heldEvents?: string;
-    seasons?: string;
-  };
+  search: MatchListSearch;
+  selectionErrors?: MatchListFilterSelectionErrors;
 };
 
 const statusOptions: Array<{ label: string; value: MatchListStatusFilter }> = [
@@ -51,35 +46,38 @@ function heldEventLabel(event: HeldEventResponse): string {
 }
 
 export function MatchesListFilters({
-  gameTitles,
-  heldEvents,
-  initialSearch,
+  actions,
+  candidates,
   pending = false,
-  onApply,
-  onClear,
-  seasons,
+  search,
   selectionErrors,
 }: MatchesListFiltersProps) {
   const seasonMasters = useMemo(
     () =>
-      seasons.filter((season) => {
-        return !initialSearch.gameTitleId || season.gameTitleId === initialSearch.gameTitleId;
+      candidates.seasons.filter((season) => {
+        return !search.gameTitleId || season.gameTitleId === search.gameTitleId;
       }),
-    [initialSearch.gameTitleId, seasons],
+    [candidates.seasons, search.gameTitleId],
   );
   const heldEventOptions = useMemo(
     () => [
       { label: "すべて", value: "" },
-      ...heldEvents.map((event) => ({ label: heldEventLabel(event), value: event.id })),
+      ...candidates.heldEvents.map((event) => ({
+        label: heldEventLabel(event),
+        value: event.id,
+      })),
     ],
-    [heldEvents],
+    [candidates.heldEvents],
   );
   const gameTitleOptions = useMemo(
     () => [
       { label: "すべて", value: "" },
-      ...gameTitles.map((gameTitle) => ({ label: gameTitle.name, value: gameTitle.id })),
+      ...candidates.gameTitles.map((gameTitle) => ({
+        label: gameTitle.name,
+        value: gameTitle.id,
+      })),
     ],
-    [gameTitles],
+    [candidates.gameTitles],
   );
   const seasonOptions = useMemo(
     () => [
@@ -97,10 +95,10 @@ export function MatchesListFilters({
   const seasonsErrorProps = selectionErrors?.seasons ? { error: selectionErrors.seasons } : {};
 
   function patchSearch(patch: Partial<MatchListSearch>) {
-    onApply({ ...initialSearch, ...patch, page: 1 });
+    actions.onApply({ ...search, ...patch, page: 1 });
   }
   const hasDetailFilters = Boolean(
-    initialSearch.heldEventId || initialSearch.gameTitleId || initialSearch.seasonMasterId,
+    search.heldEventId || search.gameTitleId || search.seasonMasterId,
   );
 
   return (
@@ -130,7 +128,7 @@ export function MatchesListFilters({
             disabled={pending}
             label="状態"
             options={statusOptions}
-            value={initialSearch.status}
+            value={search.status}
             onChange={(event) => {
               const value = event.currentTarget.value;
               patchSearch({ status: value as MatchListStatusFilter });
@@ -140,7 +138,7 @@ export function MatchesListFilters({
             disabled={pending}
             label="並び順"
             options={sortOptions}
-            value={initialSearch.sort}
+            value={search.sort}
             onChange={(event) => {
               const value = event.currentTarget.value;
               patchSearch({ sort: value as MatchListSort });
@@ -153,7 +151,7 @@ export function MatchesListFilters({
             disabled={pending}
             label="開催"
             options={heldEventOptions}
-            value={initialSearch.heldEventId}
+            value={search.heldEventId}
             {...heldEventsErrorProps}
             onChange={(event) => {
               const value = event.currentTarget.value;
@@ -164,14 +162,13 @@ export function MatchesListFilters({
             disabled={pending}
             label="作品"
             options={gameTitleOptions}
-            value={initialSearch.gameTitleId}
+            value={search.gameTitleId}
             {...gameTitlesErrorProps}
             onChange={(event) => {
               const value = event.currentTarget.value;
               patchSearch({
                 gameTitleId: value,
-                seasonMasterId:
-                  value && initialSearch.gameTitleId === value ? initialSearch.seasonMasterId : "",
+                seasonMasterId: value && search.gameTitleId === value ? search.seasonMasterId : "",
               });
             }}
           />
@@ -179,14 +176,14 @@ export function MatchesListFilters({
             disabled={pending}
             label="シーズン"
             options={seasonOptions}
-            value={initialSearch.seasonMasterId}
+            value={search.seasonMasterId}
             {...seasonsErrorProps}
             onChange={(event) => {
               const value = event.currentTarget.value;
               patchSearch({ seasonMasterId: value });
             }}
           />
-          <Button disabled={pending} onClick={onClear} type="button" variant="secondary">
+          <Button disabled={pending} onClick={actions.onClear} type="button" variant="secondary">
             条件をクリア
           </Button>
         </div>
@@ -200,7 +197,7 @@ export function MatchesListFilters({
               disabled={pending}
               label="開催"
               options={heldEventOptions}
-              value={initialSearch.heldEventId}
+              value={search.heldEventId}
               {...heldEventsErrorProps}
               onChange={(event) => {
                 const value = event.currentTarget.value;
@@ -211,16 +208,14 @@ export function MatchesListFilters({
               disabled={pending}
               label="作品"
               options={gameTitleOptions}
-              value={initialSearch.gameTitleId}
+              value={search.gameTitleId}
               {...gameTitlesErrorProps}
               onChange={(event) => {
                 const value = event.currentTarget.value;
                 patchSearch({
                   gameTitleId: value,
                   seasonMasterId:
-                    value && initialSearch.gameTitleId === value
-                      ? initialSearch.seasonMasterId
-                      : "",
+                    value && search.gameTitleId === value ? search.seasonMasterId : "",
                 });
               }}
             />
@@ -228,14 +223,14 @@ export function MatchesListFilters({
               disabled={pending}
               label="シーズン"
               options={seasonOptions}
-              value={initialSearch.seasonMasterId}
+              value={search.seasonMasterId}
               {...seasonsErrorProps}
               onChange={(event) => {
                 const value = event.currentTarget.value;
                 patchSearch({ seasonMasterId: value });
               }}
             />
-            <Button disabled={pending} onClick={onClear} type="button" variant="secondary">
+            <Button disabled={pending} onClick={actions.onClear} type="button" variant="secondary">
               条件をクリア
             </Button>
           </div>

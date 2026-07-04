@@ -67,6 +67,13 @@ export function MatchesListPage() {
     updatePage,
     updatePageSize,
   } = useMatchesListPageController();
+  const filterActions = { onApply: applySearch, onClear: clearSearch };
+  const filterCandidates = { gameTitles, heldEvents, seasons };
+  const rowActions = {
+    checkingDraftIds,
+    disabled: isStale,
+    onDraftStatusCheckAction: selectDraftAction,
+  };
 
   return (
     <PageFrame className="gap-5">
@@ -132,13 +139,10 @@ export function MatchesListPage() {
       ) : null}
 
       <MatchesListFilters
-        gameTitles={gameTitles}
-        heldEvents={heldEvents}
-        initialSearch={search}
+        actions={filterActions}
+        candidates={filterCandidates}
         pending={isStale}
-        onApply={applySearch}
-        onClear={clearSearch}
-        seasons={seasons}
+        search={search}
       />
 
       <MatchesWorkQueueSummary
@@ -191,23 +195,15 @@ export function MatchesListPage() {
             <>
               <div className="hidden lg:block">
                 <MatchesTable
-                  actionsDisabled={isStale}
-                  checkingDraftIds={checkingDraftIds}
                   items={items}
-                  onDraftStatusCheckAction={selectDraftAction}
+                  rowActions={rowActions}
                   onSortChange={(sort) => applySearch({ ...search, page: 1, sort })}
                   sort={search.sort}
                 />
               </div>
               <div className="grid gap-3 lg:hidden">
                 {items.map((item) => (
-                  <MatchMobileCard
-                    key={item.id}
-                    actionsDisabled={isStale}
-                    checkingDraftIds={checkingDraftIds}
-                    item={item}
-                    onDraftStatusCheckAction={selectDraftAction}
-                  />
+                  <MatchMobileCard key={item.id} item={item} rowActions={rowActions} />
                 ))}
               </div>
               {pagination ? (

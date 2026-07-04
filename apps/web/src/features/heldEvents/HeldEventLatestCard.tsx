@@ -1,16 +1,16 @@
 import { ListFilter, PenSquare, ScanLine } from "lucide-react";
 
 import { formatDateTime } from "@/features/heldEvents/heldEventViewModel";
-import type { HeldEventsPageController } from "@/features/heldEvents/useHeldEventsPageController";
+import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { Card } from "@/shared/ui/layout/Card";
 
 type HeldEventLatestCardProps = {
-  latestEvent: HeldEventsPageController["latestEvent"];
+  event: HeldEventResponse | undefined;
 };
 
-export function HeldEventLatestCard({ latestEvent }: HeldEventLatestCardProps) {
-  if (!latestEvent) {
+export function HeldEventLatestCard({ event }: HeldEventLatestCardProps) {
+  if (!event) {
     return null;
   }
 
@@ -19,11 +19,11 @@ export function HeldEventLatestCard({ latestEvent }: HeldEventLatestCardProps) {
       <div>
         <p className="text-xs font-semibold text-[var(--color-text-secondary)]">最新開催</p>
         <h2 className="mt-1 text-2xl font-semibold text-balance text-[var(--color-text-primary)]">
-          {formatDateTime(latestEvent.heldAt)}
+          {formatDateTime(event.heldAt)}
         </h2>
         <p className="momo-copy mt-2 text-sm text-[var(--color-text-secondary)]">
-          現在 {latestEvent.matchCount.toLocaleString()}試合。次は第
-          {(latestEvent.matchCount + 1).toLocaleString()}試合として記録します。
+          現在 {event.matchCount.toLocaleString()}試合。次は第
+          {(event.matchCount + 1).toLocaleString()}試合として記録します。
         </p>
       </div>
       <div className="flex flex-wrap gap-2 md:justify-end">
@@ -35,7 +35,7 @@ export function HeldEventLatestCard({ latestEvent }: HeldEventLatestCardProps) {
         </LinkButton>
         <LinkButton
           icon={<ListFilter className="size-4" />}
-          to={`/matches?heldEventId=${encodeURIComponent(latestEvent.id)}`}
+          to={`/matches?heldEventId=${encodeURIComponent(event.id)}`}
           variant="secondary"
         >
           この開催の試合

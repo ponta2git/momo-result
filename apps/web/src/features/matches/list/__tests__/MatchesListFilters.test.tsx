@@ -22,12 +22,9 @@ describe("MatchesListFilters", () => {
 
     render(
       <MatchesListFilters
-        gameTitles={[]}
-        heldEvents={[]}
-        initialSearch={initialSearch}
-        onApply={onApply}
-        onClear={vi.fn()}
-        seasons={[]}
+        actions={{ onApply, onClear: vi.fn() }}
+        candidates={{ gameTitles: [], heldEvents: [], seasons: [] }}
+        search={initialSearch}
       />,
     );
 

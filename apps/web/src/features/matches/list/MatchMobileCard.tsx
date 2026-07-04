@@ -4,14 +4,15 @@ import {
   formatGameSeason,
   formatMatchNo,
 } from "@/features/matches/list/matchListFormat";
-import type { MatchListItemView } from "@/features/matches/list/matchListTypes";
+import type {
+  MatchListItemView,
+  MatchListRowActions,
+} from "@/features/matches/list/matchListTypes";
 import { StatusPill } from "@/shared/ui/status/StatusPill";
 
 type MatchMobileCardProps = {
-  actionsDisabled?: boolean;
-  checkingDraftIds?: ReadonlySet<string> | undefined;
   item: MatchListItemView;
-  onDraftStatusCheckAction: (action: MatchListItemView["primaryAction"]) => void;
+  rowActions: MatchListRowActions;
 };
 
 function rankSummary(item: MatchListItemView): string {
@@ -29,12 +30,8 @@ function otherRanks(item: MatchListItemView): string {
     .join(" / ");
 }
 
-export function MatchMobileCard({
-  actionsDisabled = false,
-  checkingDraftIds,
-  item,
-  onDraftStatusCheckAction,
-}: MatchMobileCardProps) {
+export function MatchMobileCard({ item, rowActions }: MatchMobileCardProps) {
+  const actionsDisabled = rowActions.disabled ?? false;
   const ranksAside = otherRanks(item);
 
   return (
@@ -75,9 +72,9 @@ export function MatchMobileCard({
 
       <div className="mt-auto pt-4">
         <MatchListActions
-          checkingDraftIds={checkingDraftIds}
+          checkingDraftIds={rowActions.checkingDraftIds}
           disabled={actionsDisabled}
-          onDraftStatusCheckAction={onDraftStatusCheckAction}
+          onDraftStatusCheckAction={rowActions.onDraftStatusCheckAction}
           primaryAction={item.primaryAction}
           secondaryActions={item.secondaryActions}
         />

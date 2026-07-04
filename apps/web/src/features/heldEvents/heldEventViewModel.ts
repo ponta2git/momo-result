@@ -1,6 +1,37 @@
-import type { HeldEventResponse } from "@/shared/api/heldEvents";
+import type { HeldEventListResponse, HeldEventResponse } from "@/shared/api/heldEvents";
 
 export const emptyHeldEvents: HeldEventResponse[] = [];
+export const heldEventPageSizeOptions = [10, 25, 50] as const;
+
+export type HeldEventCreateFormModel = {
+  action: (formData: FormData) => void | Promise<void>;
+  heldAtDraft: string;
+  setHeldAtDraft: (value: string) => void;
+  state: { version: number };
+};
+
+export type HeldEventDeleteDialogModel = {
+  cancel: () => void;
+  confirm: (event: HeldEventResponse) => Promise<void>;
+  pending: boolean;
+  target: HeldEventResponse | null;
+};
+
+export type HeldEventsTableActions = {
+  deletePending: boolean;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
+  onRequestDelete: (event: HeldEventResponse) => void;
+};
+
+export type HeldEventsTableModel = {
+  loadFailed: boolean;
+  loading: boolean;
+  pagination: HeldEventListResponse["pagination"] | undefined;
+  refreshing: boolean;
+  rows: HeldEventResponse[];
+  totalMatches: number;
+};
 
 export function currentLocalIsoMinute(): string {
   const now = new Date();

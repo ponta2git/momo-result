@@ -5,16 +5,18 @@ import {
   formatGameSeason,
   formatMatchNo,
 } from "@/features/matches/list/matchListFormat";
-import type { MatchListItemView, MatchListSort } from "@/features/matches/list/matchListTypes";
+import type {
+  MatchListItemView,
+  MatchListRowActions,
+  MatchListSort,
+} from "@/features/matches/list/matchListTypes";
 import { DataTable } from "@/shared/ui/data/DataTable";
 import { StatusPill } from "@/shared/ui/status/StatusPill";
 
 type MatchesTableProps = {
-  actionsDisabled?: boolean;
-  checkingDraftIds?: ReadonlySet<string> | undefined;
   items: MatchListItemView[];
+  rowActions: MatchListRowActions;
   sort: MatchListSort;
-  onDraftStatusCheckAction: (action: MatchListItemView["primaryAction"]) => void;
   onSortChange: (sort: MatchListSort) => void;
 };
 
@@ -63,14 +65,8 @@ function RankSummary({ item }: { item: MatchListItemView }) {
   );
 }
 
-export function MatchesTable({
-  actionsDisabled = false,
-  checkingDraftIds,
-  items,
-  sort,
-  onDraftStatusCheckAction,
-  onSortChange,
-}: MatchesTableProps) {
+export function MatchesTable({ items, rowActions, sort, onSortChange }: MatchesTableProps) {
+  const actionsDisabled = rowActions.disabled ?? false;
   return (
     <DataTable
       columns={[
@@ -133,9 +129,9 @@ export function MatchesTable({
           minWidth: "9rem",
           renderCell: (item) => (
             <MatchListActions
-              checkingDraftIds={checkingDraftIds}
+              checkingDraftIds={rowActions.checkingDraftIds}
               disabled={actionsDisabled}
-              onDraftStatusCheckAction={onDraftStatusCheckAction}
+              onDraftStatusCheckAction={rowActions.onDraftStatusCheckAction}
               primaryAction={item.primaryAction}
               secondaryActions={item.secondaryActions}
             />

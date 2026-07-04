@@ -36,6 +36,23 @@ export type MatchListSearch = {
   status: MatchListStatusFilter;
 };
 
+export type MatchListFilterActions = {
+  onApply: (nextSearch: MatchListSearch) => void;
+  onClear: () => void;
+};
+
+export type MatchListFilterCandidates = {
+  gameTitles: GameTitleResponse[];
+  heldEvents: HeldEventResponse[];
+  seasons: SeasonMasterResponse[];
+};
+
+export type MatchListFilterSelectionErrors = {
+  gameTitles?: string;
+  heldEvents?: string;
+  seasons?: string;
+};
+
 export type MatchListAction = {
   disabled?: boolean;
   draftStatusCheck?: {
@@ -44,6 +61,12 @@ export type MatchListAction = {
   href?: string;
   label: string;
   variant?: "primary" | "quiet" | "secondary";
+};
+
+export type MatchListRowActions = {
+  checkingDraftIds?: ReadonlySet<string> | undefined;
+  disabled?: boolean;
+  onDraftStatusCheckAction: (action: MatchListAction) => void;
 };
 
 export type MatchListItemView = {

@@ -6,6 +6,7 @@ import {
   currentLocalIsoMinute,
   emptyHeldEvents,
   formatDateTime,
+  heldEventPageSizeOptions,
   toIsoFromLocal,
 } from "@/features/heldEvents/heldEventViewModel";
 import { createHeldEvent, deleteHeldEvent } from "@/shared/api/heldEvents";
@@ -21,7 +22,6 @@ import { showToast } from "@/shared/ui/feedback/Toast";
 
 const initialCreateHeldEventState = { version: 0 };
 const defaultPagination = { page: 1, pageSize: 10 };
-export const heldEventPageSizeOptions = [10, 25, 50] as const;
 const pageSizeOptions = new Set<number>(heldEventPageSizeOptions);
 
 export function useHeldEventsPageController() {
@@ -133,36 +133,71 @@ export function useHeldEventsPageController() {
     }
   }, [heldEventsQuery.isPlaceholderData, pagination, paginationSearch, updatePagination]);
 
-  const refresh = () => {
+  const refresh = useCallback(() => {
     void heldEventsQuery.refetch();
     void latestHeldEventQuery.refetch();
-  };
-
-  return {
-    createAction,
-    createState,
-    deleteMutation,
-    deleteTarget,
-    errorMessage,
-    heldAtDraft,
-    latestEvent: latestHeldEventQuery.data?.items?.[0],
-    liveMessage: notice || errorMessage,
-    loadFailed: shouldShowBlockingQueryError(heldEventsQuery),
-    loading: isInitialQueryLoading(heldEventsQuery) || pageCorrectionPending,
-    pagination,
-    refreshing: heldEventsQuery.isFetching,
-    refresh,
-    rows,
-    setDeleteTarget,
-    setHeldAtDraft,
-    totalMatches,
-    updatePage: (page: number) => {
+  }, [heldEventsQuery.refetch, latestHeldEventQuery.refetch]);
+  const updatePage = useCallback(
+    (page: number) => {
       updatePagination({ page, pageSize: paginationSearch.pageSize });
     },
-    updatePageSize: (pageSize: number) => {
+    [paginationSearch.pageSize, updatePagination],
+  );
+  const updatePageSize = useCallback(
+    (pageSize: number) => {
       updatePagination({ page: 1, pageSize });
+    },
+    [updatePagination],
+  );
+  const cancelDelete = useCallback(() => {
+    setDeleteTarget(null);
+  }, []);
+  const confirmDelete = useCallback(
+    async (event: HeldEventResponse) => {
+      await deleteMutation.mutateAsync(event);
+    },
+    [deleteMutation.mutateAsync],
+  );
+
+  return {
+    create: {
+      action: createAction,
+      heldAtDraft,
+      setHeldAtDraft,
+      state: createState,
+    },
+    deleteDialog: {
+      cancel: cancelDelete,
+      confirm: confirmDelete,
+      pending: deleteMutation.isPending,
+      target: deleteTarget,
+    },
+    feedback: {
+      errorMessage,
+      liveMessage: notice || errorMessage,
+    },
+    header: {
+      refresh,
+      refreshing: heldEventsQuery.isFetching,
+    },
+    latest: {
+      event: latestHeldEventQuery.data?.items?.[0],
+    },
+    table: {
+      actions: {
+        deletePending: deleteMutation.isPending,
+        onPageChange: updatePage,
+        onPageSizeChange: updatePageSize,
+        onRequestDelete: setDeleteTarget,
+      },
+      data: {
+        loadFailed: shouldShowBlockingQueryError(heldEventsQuery),
+        loading: isInitialQueryLoading(heldEventsQuery) || pageCorrectionPending,
+        pagination,
+        refreshing: heldEventsQuery.isFetching,
+        rows,
+        totalMatches,
+      },
     },
   };
 }
-
-export type HeldEventsPageController = ReturnType<typeof useHeldEventsPageController>;

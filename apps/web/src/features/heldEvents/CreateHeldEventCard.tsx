@@ -1,26 +1,18 @@
 import { Plus } from "lucide-react";
 import { useFormStatus } from "react-dom";
 
-import type { HeldEventsPageController } from "@/features/heldEvents/useHeldEventsPageController";
+import type { HeldEventCreateFormModel } from "@/features/heldEvents/heldEventViewModel";
 import { Button } from "@/shared/ui/actions/Button";
 import { TextField } from "@/shared/ui/forms/TextField";
 import { Card } from "@/shared/ui/layout/Card";
 
 type CreateHeldEventCardProps = {
-  createAction: HeldEventsPageController["createAction"];
-  createState: HeldEventsPageController["createState"];
-  heldAtDraft: HeldEventsPageController["heldAtDraft"];
-  setHeldAtDraft: HeldEventsPageController["setHeldAtDraft"];
+  model: HeldEventCreateFormModel;
 };
 
-export function CreateHeldEventCard({
-  createAction,
-  createState,
-  heldAtDraft,
-  setHeldAtDraft,
-}: CreateHeldEventCardProps) {
+export function CreateHeldEventCard({ model }: CreateHeldEventCardProps) {
   return (
-    <form key={createState.version} action={createAction}>
+    <form key={model.state.version} action={model.action}>
       <Card className="grid gap-4">
         <div className="grid gap-1">
           <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">開催回を追加</h2>
@@ -32,12 +24,12 @@ export function CreateHeldEventCard({
           label="開催日時"
           name="heldAt"
           type="datetime-local"
-          value={heldAtDraft}
+          value={model.heldAtDraft}
           onChange={(event) => {
-            setHeldAtDraft(event.target.value);
+            model.setHeldAtDraft(event.target.value);
           }}
         />
-        <CreateHeldEventButton disabled={!heldAtDraft} />
+        <CreateHeldEventButton disabled={!model.heldAtDraft} />
       </Card>
     </form>
   );

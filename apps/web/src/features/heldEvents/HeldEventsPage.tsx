@@ -12,40 +12,19 @@ import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 export function HeldEventsPage() {
-  const controller = useHeldEventsPageController();
-  const {
-    createAction,
-    createState,
-    deleteMutation,
-    deleteTarget,
-    errorMessage,
-    heldAtDraft,
-    latestEvent,
-    liveMessage,
-    loadFailed,
-    loading,
-    pagination,
-    refresh,
-    refreshing,
-    rows,
-    setDeleteTarget,
-    setHeldAtDraft,
-    totalMatches,
-    updatePage,
-    updatePageSize,
-  } = controller;
+  const page = useHeldEventsPageController();
 
   return (
     <PageFrame className="gap-5">
-      <LiveRegion message={liveMessage} />
+      <LiveRegion message={page.feedback.liveMessage} />
       <PageHeader
         actions={
           <Button
             icon={<RefreshCw className="size-4" />}
-            pending={refreshing}
+            pending={page.header.refreshing}
             pendingLabel="更新中…"
             variant="quiet"
-            onClick={refresh}
+            onClick={page.header.refresh}
           >
             最新情報に更新
           </Button>
@@ -55,41 +34,21 @@ export function HeldEventsPage() {
         title="開催履歴"
       />
 
-      {errorMessage ? (
+      {page.feedback.errorMessage ? (
         <Notice tone="danger" title="操作に失敗しました">
-          {errorMessage}
+          {page.feedback.errorMessage}
         </Notice>
       ) : null}
 
-      <HeldEventLatestCard latestEvent={latestEvent} />
+      <HeldEventLatestCard event={page.latest.event} />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
-        <HeldEventsTableCard
-          deleteMutation={deleteMutation}
-          loadFailed={loadFailed}
-          loading={loading}
-          pagination={pagination}
-          refreshing={refreshing}
-          rows={rows}
-          setDeleteTarget={setDeleteTarget}
-          totalMatches={totalMatches}
-          updatePage={updatePage}
-          updatePageSize={updatePageSize}
-        />
+        <HeldEventsTableCard actions={page.table.actions} data={page.table.data} />
 
-        <CreateHeldEventCard
-          createAction={createAction}
-          createState={createState}
-          heldAtDraft={heldAtDraft}
-          setHeldAtDraft={setHeldAtDraft}
-        />
+        <CreateHeldEventCard model={page.create} />
       </div>
 
-      <DeleteHeldEventDialog
-        deleteMutation={deleteMutation}
-        deleteTarget={deleteTarget}
-        setDeleteTarget={setDeleteTarget}
-      />
+      <DeleteHeldEventDialog model={page.deleteDialog} />
     </PageFrame>
   );
 }

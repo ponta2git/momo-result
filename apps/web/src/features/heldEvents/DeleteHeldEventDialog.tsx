@@ -1,36 +1,32 @@
 import { formatDateTime } from "@/features/heldEvents/heldEventViewModel";
-import type { HeldEventsPageController } from "@/features/heldEvents/useHeldEventsPageController";
+import type { HeldEventDeleteDialogModel } from "@/features/heldEvents/heldEventViewModel";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 
 type DeleteHeldEventDialogProps = {
-  deleteMutation: HeldEventsPageController["deleteMutation"];
-  deleteTarget: HeldEventsPageController["deleteTarget"];
-  setDeleteTarget: HeldEventsPageController["setDeleteTarget"];
+  model: HeldEventDeleteDialogModel;
 };
 
-export function DeleteHeldEventDialog({
-  deleteMutation,
-  deleteTarget,
-  setDeleteTarget,
-}: DeleteHeldEventDialogProps) {
-  if (!deleteTarget) {
+export function DeleteHeldEventDialog({ model }: DeleteHeldEventDialogProps) {
+  if (!model.target) {
     return null;
   }
 
   return (
     <AlertDialog
       cancelLabel="キャンセル"
-      confirmLabel={deleteMutation.isPending ? "削除中…" : "削除する"}
-      pending={deleteMutation.isPending}
-      description={`${formatDateTime(deleteTarget.heldAt)} の開催履歴を削除します。この操作は取り消せません。`}
+      confirmLabel={model.pending ? "削除中…" : "削除する"}
+      pending={model.pending}
+      description={`${formatDateTime(model.target.heldAt)} の開催履歴を削除します。この操作は取り消せません。`}
       open
       title="開催履歴を削除しますか？"
       onConfirm={async () => {
-        await deleteMutation.mutateAsync(deleteTarget);
+        if (model.target) {
+          await model.confirm(model.target);
+        }
       }}
       onOpenChange={(open) => {
         if (!open) {
-          setDeleteTarget(null);
+          model.cancel();
         }
       }}
     />

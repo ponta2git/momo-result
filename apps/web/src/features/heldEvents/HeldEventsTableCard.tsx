@@ -2,8 +2,11 @@ import { CalendarDays, Download, ListFilter, Trash2 } from "lucide-react";
 import { useMemo } from "react";
 
 import { formatDateKey, formatDateTime } from "@/features/heldEvents/heldEventViewModel";
-import { heldEventPageSizeOptions } from "@/features/heldEvents/useHeldEventsPageController";
-import type { HeldEventsPageController } from "@/features/heldEvents/useHeldEventsPageController";
+import type {
+  HeldEventsTableActions,
+  HeldEventsTableModel,
+} from "@/features/heldEvents/heldEventViewModel";
+import { heldEventPageSizeOptions } from "@/features/heldEvents/heldEventViewModel";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
@@ -16,30 +19,11 @@ import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { Card } from "@/shared/ui/layout/Card";
 
 type HeldEventsTableCardProps = {
-  deleteMutation: HeldEventsPageController["deleteMutation"];
-  loadFailed: HeldEventsPageController["loadFailed"];
-  loading: HeldEventsPageController["loading"];
-  pagination: HeldEventsPageController["pagination"];
-  refreshing: HeldEventsPageController["refreshing"];
-  rows: HeldEventsPageController["rows"];
-  setDeleteTarget: HeldEventsPageController["setDeleteTarget"];
-  totalMatches: HeldEventsPageController["totalMatches"];
-  updatePage: HeldEventsPageController["updatePage"];
-  updatePageSize: HeldEventsPageController["updatePageSize"];
+  actions: HeldEventsTableActions;
+  data: HeldEventsTableModel;
 };
 
-export function HeldEventsTableCard({
-  deleteMutation,
-  loadFailed,
-  loading,
-  pagination,
-  refreshing,
-  rows,
-  setDeleteTarget,
-  totalMatches,
-  updatePage,
-  updatePageSize,
-}: HeldEventsTableCardProps) {
+export function HeldEventsTableCard({ actions, data }: HeldEventsTableCardProps) {
   const columns = useMemo<Array<DataTableColumn<HeldEventResponse>>>(
     () => [
       {
@@ -64,26 +48,26 @@ export function HeldEventsTableCard({
         minWidth: "17rem",
         renderCell: (event) => (
           <HeldEventActions
-            deleteDisabled={deleteMutation.isPending}
+            deleteDisabled={actions.deletePending}
             event={event}
-            onDelete={setDeleteTarget}
+            onDelete={actions.onRequestDelete}
           />
         ),
       },
     ],
-    [deleteMutation.isPending, setDeleteTarget],
+    [actions.deletePending, actions.onRequestDelete],
   );
 
   return (
     <Card className="min-w-0">
       <HeldEventsTableHeader
-        eventCount={pagination?.totalItems ?? rows.length}
-        totalMatches={totalMatches}
+        eventCount={data.pagination?.totalItems ?? data.rows.length}
+        totalMatches={data.totalMatches}
       />
 
-      {loading ? (
+      {data.loading ? (
         <HeldEventsLoading />
-      ) : loadFailed ? (
+      ) : data.loadFailed ? (
         <Notice tone="danger" title="開催履歴を読み込めません">
           時間をおいて、再読み込みしてください。
         </Notice>
@@ -92,17 +76,17 @@ export function HeldEventsTableCard({
           columns={columns}
           emptyState={<HeldEventsEmptyState />}
           getRowKey={(event) => event.id}
-          rows={rows}
+          rows={data.rows}
         />
       )}
-      {pagination && pagination.totalItems > 0 && !loading && !loadFailed ? (
+      {data.pagination && data.pagination.totalItems > 0 && !data.loading && !data.loadFailed ? (
         <PaginationControls
           className="mt-3"
-          disabled={refreshing}
+          disabled={data.refreshing}
           pageSizeOptions={[...heldEventPageSizeOptions]}
-          pagination={pagination}
-          onPageChange={updatePage}
-          onPageSizeChange={updatePageSize}
+          pagination={data.pagination}
+          onPageChange={actions.onPageChange}
+          onPageSizeChange={actions.onPageSizeChange}
         />
       ) : null}
     </Card>

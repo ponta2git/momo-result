@@ -10,103 +10,89 @@ import type {
 type GameTitleListItem = GameTitleResponse & { pending?: boolean };
 type ScopedMasterListItem = (MapMasterResponse | SeasonMasterResponse) & { pending?: boolean };
 
+type MasterCreateBinding = {
+  action: (formData: FormData) => void | Promise<void>;
+  error?: string | undefined;
+  formKey?: string | number | undefined;
+};
+
+type GameTitleRelation = {
+  create: MasterCreateBinding;
+  defaultLayoutFamily: LayoutFamily;
+  items: GameTitleListItem[];
+  onDelete: (id: string) => Promise<void> | void;
+  onSelect: (id: string) => void;
+  onUpdate: (id: string, request: { name: string; layoutFamily: string }) => Promise<void>;
+  selectedId: string;
+};
+
+type ScopedMasterRelation = {
+  create: MasterCreateBinding;
+  items: ScopedMasterListItem[];
+  loading?: boolean | undefined;
+  onDelete: (id: string) => Promise<void> | void;
+  onUpdate: (id: string, request: { name: string }) => Promise<void>;
+};
+
 type MasterRelationBoardProps = {
-  gameTitleCreateAction: (formData: FormData) => void | Promise<void>;
-  gameTitleCreateError?: string | undefined;
-  gameTitleCreateFormKey?: string | number | undefined;
-  gameTitleDefaultLayoutFamily: LayoutFamily;
-  gameTitles: GameTitleListItem[];
-  onDeleteGameTitle: (id: string) => Promise<void> | void;
-  onDeleteMapMaster: (id: string) => Promise<void> | void;
-  onDeleteSeasonMaster: (id: string) => Promise<void> | void;
-  mapCreateAction: (formData: FormData) => void | Promise<void>;
-  mapCreateError?: string | undefined;
-  mapCreateFormKey?: string | number | undefined;
-  mapMastersLoading?: boolean | undefined;
-  mapMasters: ScopedMasterListItem[];
-  onSelectGameTitle: (id: string) => void;
-  onUpdateGameTitle: (id: string, request: { name: string; layoutFamily: string }) => Promise<void>;
-  onUpdateMapMaster: (id: string, request: { name: string }) => Promise<void>;
-  onUpdateSeasonMaster: (id: string, request: { name: string }) => Promise<void>;
+  gameTitle: GameTitleRelation;
+  map: ScopedMasterRelation;
   scopedDisabledReason?: string | undefined;
-  seasonCreateAction: (formData: FormData) => void | Promise<void>;
-  seasonCreateError?: string | undefined;
-  seasonCreateFormKey?: string | number | undefined;
-  seasonMastersLoading?: boolean | undefined;
-  seasonMasters: ScopedMasterListItem[];
-  selectedGameTitleId: string;
   selectedGameTitleName?: string | undefined;
+  season: ScopedMasterRelation;
+};
+
+const mapPanelLabels = {
+  title: "マップ",
+  itemLabel: "マップ",
+  emptyDescription: "この作品に紐づくマップは未登録です。",
+};
+const seasonPanelLabels = {
+  title: "シーズン",
+  itemLabel: "シーズン",
+  emptyDescription: "この作品に紐づくシーズンは未登録です。",
 };
 
 export function MasterRelationBoard({
-  gameTitleCreateAction,
-  gameTitleCreateError,
-  gameTitleCreateFormKey,
-  gameTitleDefaultLayoutFamily,
-  gameTitles,
-  onDeleteGameTitle,
-  onDeleteMapMaster,
-  onDeleteSeasonMaster,
-  mapCreateAction,
-  mapCreateError,
-  mapCreateFormKey,
-  mapMastersLoading = false,
-  mapMasters,
-  onSelectGameTitle,
-  onUpdateGameTitle,
-  onUpdateMapMaster,
-  onUpdateSeasonMaster,
+  gameTitle,
+  map,
   scopedDisabledReason,
-  seasonCreateAction,
-  seasonCreateError,
-  seasonCreateFormKey,
-  seasonMastersLoading = false,
-  seasonMasters,
-  selectedGameTitleId,
   selectedGameTitleName,
+  season,
 }: MasterRelationBoardProps) {
+  const mapActions = { onDelete: map.onDelete, onUpdate: map.onUpdate };
+  const mapList = { items: map.items, loading: map.loading };
+  const seasonActions = { onDelete: season.onDelete, onUpdate: season.onUpdate };
+  const seasonList = { items: season.items, loading: season.loading };
+
   return (
     <section className="grid gap-4 xl:grid-cols-[minmax(16rem,1fr)_minmax(18rem,1fr)_minmax(18rem,1fr)]">
       <GameTitleList
-        createAction={gameTitleCreateAction}
-        createError={gameTitleCreateError}
-        createFormKey={gameTitleCreateFormKey}
-        defaultLayoutFamily={gameTitleDefaultLayoutFamily}
-        items={gameTitles}
-        onDelete={onDeleteGameTitle}
-        onUpdate={onUpdateGameTitle}
-        onSelect={onSelectGameTitle}
-        selectedGameTitleId={selectedGameTitleId}
+        create={gameTitle.create}
+        defaultLayoutFamily={gameTitle.defaultLayoutFamily}
+        items={gameTitle.items}
+        onDelete={gameTitle.onDelete}
+        onUpdate={gameTitle.onUpdate}
+        onSelect={gameTitle.onSelect}
+        selectedGameTitleId={gameTitle.selectedId}
       />
 
       <ScopedMasterPanel
-        title="マップ"
-        itemLabel="マップ"
-        items={mapMasters}
-        onDelete={onDeleteMapMaster}
-        onUpdate={onUpdateMapMaster}
+        actions={mapActions}
+        create={map.create}
+        labels={mapPanelLabels}
+        list={mapList}
         selectedGameTitleName={selectedGameTitleName}
-        emptyDescription="この作品に紐づくマップは未登録です。"
-        createAction={mapCreateAction}
-        createError={mapCreateError}
-        createFormKey={mapCreateFormKey}
         disabledReason={scopedDisabledReason}
-        loading={mapMastersLoading}
       />
 
       <ScopedMasterPanel
-        title="シーズン"
-        itemLabel="シーズン"
-        items={seasonMasters}
-        onDelete={onDeleteSeasonMaster}
-        onUpdate={onUpdateSeasonMaster}
+        actions={seasonActions}
+        create={season.create}
+        labels={seasonPanelLabels}
+        list={seasonList}
         selectedGameTitleName={selectedGameTitleName}
-        emptyDescription="この作品に紐づくシーズンは未登録です。"
-        createAction={seasonCreateAction}
-        createError={seasonCreateError}
-        createFormKey={seasonCreateFormKey}
         disabledReason={scopedDisabledReason}
-        loading={seasonMastersLoading}
       />
     </section>
   );

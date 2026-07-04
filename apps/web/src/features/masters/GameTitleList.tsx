@@ -14,10 +14,14 @@ const labelClass = "text-xs font-semibold text-[var(--color-text-secondary)]";
 
 type GameTitleListItem = GameTitleResponse & { pending?: boolean };
 
+type MasterCreateBinding = {
+  action: (formData: FormData) => void | Promise<void>;
+  error?: string | undefined;
+  formKey?: string | number | undefined;
+};
+
 type GameTitleListProps = {
-  createAction: (formData: FormData) => void | Promise<void>;
-  createError?: string | undefined;
-  createFormKey?: string | number | undefined;
+  create: MasterCreateBinding;
   defaultLayoutFamily: LayoutFamily;
   items: GameTitleListItem[];
   onDelete: (id: string) => Promise<void> | void;
@@ -42,9 +46,7 @@ function CreateButton() {
 }
 
 export function GameTitleList({
-  createAction,
-  createError,
-  createFormKey,
+  create,
   defaultLayoutFamily,
   items,
   onDelete,
@@ -133,7 +135,7 @@ export function GameTitleList({
         </ul>
       )}
 
-      <form action={createAction} className="mt-4 grid gap-2" key={createFormKey}>
+      <form action={create.action} className="mt-4 grid gap-2" key={create.formKey}>
         <label className="grid gap-1">
           <span className={labelClass}>作品名</span>
           <input className={selectClass} name="name" placeholder="例: 桃太郎電鉄2" type="text" />
@@ -155,9 +157,9 @@ export function GameTitleList({
 
         <CreateButton />
 
-        {createError ? (
+        {create.error ? (
           <p className="text-sm text-[var(--color-danger)]" role="alert">
-            {createError}
+            {create.error}
           </p>
         ) : null}
       </form>

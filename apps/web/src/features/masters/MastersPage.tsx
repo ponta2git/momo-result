@@ -52,6 +52,41 @@ export function MastersPage() {
     updateSeasonMaster,
     viewModel,
   } = controller;
+  const gameTitleRelation = {
+    create: {
+      action: gameTitleCreateAction,
+      error: gameTitleCreateState.error,
+      formKey: gameTitleCreateState.version,
+    },
+    defaultLayoutFamily,
+    items: optimisticGameTitles,
+    onDelete: deleteGameTitle,
+    onSelect: setSelectedGameTitleId,
+    onUpdate: updateGameTitle,
+    selectedId: viewModel.selectedGameTitleId,
+  };
+  const mapRelation = {
+    create: {
+      action: mapCreateAction,
+      error: mapCreateState.error,
+      formKey: mapCreateState.version,
+    },
+    items: viewModel.selectedMapMasters,
+    loading: mapMastersLoading,
+    onDelete: deleteMapMaster,
+    onUpdate: updateMapMaster,
+  };
+  const seasonRelation = {
+    create: {
+      action: seasonCreateAction,
+      error: seasonCreateState.error,
+      formKey: seasonCreateState.version,
+    },
+    items: viewModel.selectedSeasonMasters,
+    loading: seasonMastersLoading,
+    onDelete: deleteSeasonMaster,
+    onUpdate: updateSeasonMaster,
+  };
 
   return (
     <PageFrame className={sectionClass}>
@@ -133,31 +168,11 @@ export function MastersPage() {
 
         <TabsPanel className="mt-4" keepMounted value="catalog">
           <MasterRelationBoard
-            gameTitles={optimisticGameTitles}
-            selectedGameTitleId={viewModel.selectedGameTitleId}
+            gameTitle={gameTitleRelation}
+            map={mapRelation}
             selectedGameTitleName={viewModel.selectedGameTitle?.name}
-            onSelectGameTitle={setSelectedGameTitleId}
-            onUpdateGameTitle={updateGameTitle}
-            onDeleteGameTitle={deleteGameTitle}
-            gameTitleCreateAction={gameTitleCreateAction}
-            gameTitleCreateError={gameTitleCreateState.error}
-            gameTitleCreateFormKey={gameTitleCreateState.version}
-            gameTitleDefaultLayoutFamily={defaultLayoutFamily}
-            mapMasters={viewModel.selectedMapMasters}
-            onUpdateMapMaster={updateMapMaster}
-            onDeleteMapMaster={deleteMapMaster}
-            mapCreateAction={mapCreateAction}
-            mapCreateError={mapCreateState.error}
-            mapCreateFormKey={mapCreateState.version}
-            mapMastersLoading={mapMastersLoading}
-            seasonMasters={viewModel.selectedSeasonMasters}
-            onUpdateSeasonMaster={updateSeasonMaster}
-            onDeleteSeasonMaster={deleteSeasonMaster}
-            seasonCreateAction={seasonCreateAction}
-            seasonCreateError={seasonCreateState.error}
-            seasonCreateFormKey={seasonCreateState.version}
-            seasonMastersLoading={seasonMastersLoading}
             scopedDisabledReason={viewModel.scopedDisabledReason}
+            season={seasonRelation}
           />
         </TabsPanel>
 

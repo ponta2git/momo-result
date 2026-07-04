@@ -6,42 +6,55 @@ import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 
 type ScopedMasterItem = (MapMasterResponse | SeasonMasterResponse) & { pending?: boolean };
 
-type ScopedMasterPanelProps = {
-  createAction: (formData: FormData) => void | Promise<void>;
-  createError?: string | undefined;
-  createFormKey?: string | number | undefined;
-  disabledReason?: string | undefined;
-  emptyDescription: string;
-  itemLabel: string;
-  items: ScopedMasterItem[];
-  loading?: boolean | undefined;
+type MasterCreateBinding = {
+  action: (formData: FormData) => void | Promise<void>;
+  error?: string | undefined;
+  formKey?: string | number | undefined;
+};
+
+type ScopedMasterActions = {
   onDelete: (id: string) => Promise<void> | void;
   onUpdate: (id: string, request: { name: string }) => Promise<void>;
-  selectedGameTitleName?: string | undefined;
+};
+
+type ScopedMasterLabels = {
+  emptyDescription: string;
+  itemLabel: string;
   title: string;
+};
+
+type ScopedMasterList = {
+  items: ScopedMasterItem[];
+  loading?: boolean | undefined;
+};
+
+type ScopedMasterPanelProps = {
+  actions: ScopedMasterActions;
+  create: MasterCreateBinding;
+  disabledReason?: string | undefined;
+  labels: ScopedMasterLabels;
+  list: ScopedMasterList;
+  selectedGameTitleName?: string | undefined;
 };
 
 const labelClass = "text-xs font-semibold text-[var(--color-text-secondary)]";
 
 export function ScopedMasterPanel({
-  createAction,
-  createError,
-  createFormKey,
+  actions,
+  create,
   disabledReason,
-  emptyDescription,
-  itemLabel,
-  items,
-  loading = false,
-  onDelete,
-  onUpdate,
+  labels,
+  list,
   selectedGameTitleName,
-  title,
 }: ScopedMasterPanelProps) {
+  const loading = list.loading ?? false;
   return (
     <section className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
       <header>
-        <p className={labelClass}>{itemLabel}</p>
-        <h2 className="mt-1 text-lg font-semibold text-[var(--color-text-primary)]">{title}</h2>
+        <p className={labelClass}>{labels.itemLabel}</p>
+        <h2 className="mt-1 text-lg font-semibold text-[var(--color-text-primary)]">
+          {labels.title}
+        </h2>
         <p className="mt-1 line-clamp-2 text-sm text-[var(--color-text-secondary)]">
           {selectedGameTitleName
             ? `選択中の作品: ${selectedGameTitleName}`
@@ -50,16 +63,24 @@ export function ScopedMasterPanel({
       </header>
 
       {loading ? (
-        <div aria-busy="true" aria-label={`${itemLabel}を読み込み中`} className="mt-3 grid gap-2">
+        <div
+          aria-busy="true"
+          aria-label={`${labels.itemLabel}を読み込み中`}
+          className="mt-3 grid gap-2"
+        >
           <Skeleton className="h-12 rounded-[var(--radius-sm)]" />
           <Skeleton className="h-12 rounded-[var(--radius-sm)]" />
           <Skeleton className="h-12 rounded-[var(--radius-sm)]" />
         </div>
-      ) : items.length === 0 ? (
-        <EmptyState className="mt-3" title="登録はまだありません" description={emptyDescription} />
+      ) : list.items.length === 0 ? (
+        <EmptyState
+          className="mt-3"
+          title="登録はまだありません"
+          description={labels.emptyDescription}
+        />
       ) : (
         <ul className="mt-3 grid gap-2">
-          {items.map((item) => {
+          {list.items.map((item) => {
             const isPending = item.pending === true;
             return (
               <li
@@ -83,14 +104,14 @@ export function ScopedMasterPanel({
                   <div className="flex items-center">
                     <MasterEditDialog
                       initialName={item.name}
-                      label={itemLabel}
-                      onSave={async (values) => onUpdate(item.id, { name: values.name })}
-                      title={`${itemLabel}を編集`}
+                      label={labels.itemLabel}
+                      onSave={async (values) => actions.onUpdate(item.id, { name: values.name })}
+                      title={`${labels.itemLabel}を編集`}
                     />
                     <MasterDeleteDialog
-                      label={itemLabel}
+                      label={labels.itemLabel}
                       name={item.name}
-                      onDelete={() => onDelete(item.id)}
+                      onDelete={() => actions.onDelete(item.id)}
                     />
                   </div>
                 )}
@@ -102,11 +123,11 @@ export function ScopedMasterPanel({
 
       <div className="mt-4">
         <MasterCreateForm
-          action={createAction}
+          action={create.action}
           disabled={loading || Boolean(disabledReason)}
-          disabledReason={loading ? `${itemLabel}を読み込み中です。` : disabledReason}
-          error={createError}
-          formKey={createFormKey}
+          disabledReason={loading ? `${labels.itemLabel}を読み込み中です。` : disabledReason}
+          error={create.error}
+          formKey={create.formKey}
           label="名称"
           submitLabel="追加"
         />

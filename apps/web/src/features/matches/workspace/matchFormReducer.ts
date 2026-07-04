@@ -7,7 +7,7 @@ import { emptyIncidentCountsByKey, incidentCountsByLabelToKey } from "@/shared/d
 
 type PlayerField = Exclude<keyof MatchFormValues["players"][number], "incidents">;
 
-type MatchFormAction =
+export type MatchFormAction =
   | { patch: Partial<MatchFormValues>; type: "patch_root" }
   | { index: number; patch: Partial<MatchFormValues["players"][number]>; type: "patch_player" }
   | { index: number; key: IncidentKey; type: "patch_incident"; value: number }

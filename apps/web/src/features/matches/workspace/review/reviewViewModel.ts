@@ -2,21 +2,23 @@ import type {
   DraftByKind,
   IncidentLookupEntry,
   OriginalPlayerSnapshot,
-  ReviewIncidentCounts,
 } from "@/features/matches/workspace/matchFormTypes";
 import {
-  incidentNames,
-  parseOcrDraftPayload,
-} from "@/features/matches/workspace/review/ocrDraftPayload";
+  byMemberId,
+  byPlayOrder,
+  emptyIncidents,
+  numberValue,
+  parseDraft,
+  resolveMemberIds,
+  resolvePlayOrders,
+} from "@/features/matches/workspace/review/reviewDraftExtractors";
 import type {
   IncidentName,
   OcrDraftPayload,
-  OcrField,
-  OcrPlayerEntry,
-} from "@/features/matches/workspace/review/ocrDraftPayload";
+} from "@/features/matches/workspace/review/reviewDraftExtractors";
+import { incidentNames } from "@/features/matches/workspace/review/ocrDraftPayload";
 import {
   defaultMemberAliasDirectory,
-  resolveMemberIdByAlias,
 } from "@/shared/domain/memberDirectory";
 import type { MemberAliasDirectory } from "@/shared/domain/memberDirectory";
 import { fixedMembers } from "@/shared/domain/members";
@@ -34,136 +36,6 @@ export type MergedDraftReview = {
    */
   incidentByPlayOrder: Map<number, IncidentLookupEntry>;
 };
-
-function emptyIncidents(): ReviewIncidentCounts {
-  return Object.fromEntries(incidentNames.map((name) => [name, 0])) as ReviewIncidentCounts;
-}
-
-function resolveMemberIdForRow(
-  directory: MemberAliasDirectory,
-  entry: OcrPlayerEntry | undefined,
-  fallbackIndex: number,
-): string {
-  const memberIds = directory.memberIds;
-  if (entry?.member_id && memberIds.includes(entry.member_id)) {
-    return entry.member_id;
-  }
-  return (
-    resolveMemberIdByAlias(directory, entry?.raw_player_name.value) ??
-    memberIds[fallbackIndex] ??
-    ""
-  );
-}
-
-/**
- * 各エントリから 1 件ずつ値を取り出すが、`pool` 内のユニークな値しか採用しないクレーム処理。
- * 採用されなかった行には、まだ誰にも使われていない `pool` の値を順に充当する。
- *
- * memberId / playOrder のように「重複させたくないが、欠けた行は fallback で埋めたい」共通パターン。
- */
-function claimWithoutDuplicates<T, V>(
-  entries: readonly T[],
-  pool: readonly V[],
-  claim: (entry: T) => V | undefined,
-  fallbackEmpty: V,
-): V[] {
-  const used = new Set<V>();
-  const initial: Array<V | undefined> = entries.map((entry) => {
-    const value = claim(entry);
-    if (value !== undefined && pool.includes(value) && !used.has(value)) {
-      used.add(value);
-      return value;
-    }
-    return undefined;
-  });
-  const remaining = pool.filter((value) => !used.has(value));
-  return initial.map((value) => value ?? remaining.shift() ?? fallbackEmpty);
-}
-
-/**
- * 4人分の OCR エントリからエイリアス一致 → 固定メンバー順 (fallback) の順で
- * memberId を解決し、重複が出ないように未使用メンバーで埋める。
- */
-function resolveMemberIds(
-  entries: ReadonlyArray<OcrPlayerEntry | undefined>,
-  directory: MemberAliasDirectory,
-): string[] {
-  return claimWithoutDuplicates(
-    entries,
-    directory.memberIds,
-    (entry) => {
-      if (entry?.member_id && directory.memberIds.includes(entry.member_id)) {
-        return entry.member_id;
-      }
-      return resolveMemberIdByAlias(directory, entry?.raw_player_name.value);
-    },
-    "",
-  );
-}
-
-/**
- * OCR が play_order を検出した行はその値を尊重し、未検出 (または重複) の行には
- * 未使用の play_order (1〜4) を 1 から順に割り当てる。
- */
-function resolvePlayOrders(entries: ReadonlyArray<OcrPlayerEntry | undefined>): number[] {
-  return claimWithoutDuplicates(
-    entries,
-    [1, 2, 3, 4] as const,
-    (entry) => {
-      const value = entry?.play_order?.value;
-      return typeof value === "number" && Number.isFinite(value) && value >= 1 && value <= 4
-        ? value
-        : undefined;
-    },
-    0,
-  );
-}
-
-function numberValue(field: OcrField<number> | undefined, fallback: number): number {
-  const value = field?.value;
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-}
-
-function parseDraft(draft: DraftByKind["total_assets"] | undefined): OcrDraftPayload | undefined {
-  if (!draft) {
-    return undefined;
-  }
-  return parseOcrDraftPayload(draft.payloadJson);
-}
-
-function byMemberId(
-  payload: OcrDraftPayload | undefined,
-  directory: MemberAliasDirectory,
-): { entries: Map<string, OcrPlayerEntry>; warnings: string[] } {
-  const entries = new Map<string, OcrPlayerEntry>();
-  const warnings: string[] = [];
-  payload?.players.forEach((entry, index) => {
-    const memberId = resolveMemberIdForRow(directory, entry, index);
-    if (!memberId) {
-      return;
-    }
-    if (entries.has(memberId)) {
-      warnings.push(
-        `収益の読み取り結果で ${memberId} に解決される行が複数あります。最初の行を採用しました。`,
-      );
-      return;
-    }
-    entries.set(memberId, entry);
-  });
-  return { entries, warnings };
-}
-
-function byPlayOrder(payload: OcrDraftPayload | undefined): Map<number, OcrPlayerEntry> {
-  const entries = new Map<number, OcrPlayerEntry>();
-  payload?.players.forEach((entry, index) => {
-    const declared = entry.play_order?.value;
-    const order = typeof declared === "number" && Number.isFinite(declared) ? declared : index + 1;
-    if (!entries.has(order)) {
-      entries.set(order, entry);
-    }
-  });
-  return entries;
-}
 
 // ---------- pipeline stages (pure) ----------
 

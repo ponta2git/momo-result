@@ -1,60 +1,38 @@
-import { useQueryClient } from "@tanstack/react-query";
 import {
-  useActionState,
   useCallback,
-  useDeferredValue,
-  useEffect,
-  useMemo,
   useReducer,
-  useRef,
   useState,
 } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 
-import {
-  confirmedDraftDestination,
-  confirmedDraftMessages,
-} from "@/features/matches/confirmedDraftNavigation";
 import {
   createMatchFormReducerState,
   matchFormReducer,
 } from "@/features/matches/workspace/matchFormReducer";
-import { toConfirmMatchRequest } from "@/features/matches/workspace/matchFormToRequest";
 import { createEmptyMatchForm } from "@/features/matches/workspace/matchFormTypes";
-import type {
-  IncidentKey,
-  MatchWorkspaceInitialData,
-  WorkspaceMode,
-} from "@/features/matches/workspace/matchFormTypes";
-import { validateMatchForm } from "@/features/matches/workspace/matchFormValidation";
+import type { MatchWorkspaceInitialData, WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
 import type { SourceImageKind } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
-import { toSourceImageDescriptor } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
+import { useConfirmedDraftRedirect } from "@/features/matches/workspace/useConfirmedDraftRedirect";
 import { useMasterHandoffRestore } from "@/features/matches/workspace/useMasterHandoffRestore";
+import { useMatchWorkspaceConfirmAction } from "@/features/matches/workspace/useMatchWorkspaceConfirmAction";
+import { useMatchWorkspaceFormHandlers } from "@/features/matches/workspace/useMatchWorkspaceFormHandlers";
 import { useMatchWorkspaceHandoffNavigation } from "@/features/matches/workspace/useMatchWorkspaceHandoffNavigation";
 import { useMatchWorkspaceInit } from "@/features/matches/workspace/useMatchWorkspaceInit";
+import { useMatchWorkspaceLifecycleEffects } from "@/features/matches/workspace/useMatchWorkspaceLifecycleEffects";
 import { useMatchWorkspaceMutations } from "@/features/matches/workspace/useMatchWorkspaceMutations";
 import { useMatchWorkspacePrimaryAction } from "@/features/matches/workspace/useMatchWorkspacePrimaryAction";
 import { useMatchWorkspaceQueries } from "@/features/matches/workspace/useMatchWorkspaceQueries";
+import { useMatchWorkspaceSourceImages } from "@/features/matches/workspace/useMatchWorkspaceSourceImages";
+import { useMatchWorkspaceValidation } from "@/features/matches/workspace/useMatchWorkspaceValidation";
+import { useMatchWorkspaceViewModel } from "@/features/matches/workspace/useMatchWorkspaceViewModel";
 import { useWorkspaceHeldEventCreation } from "@/features/matches/workspace/useWorkspaceHeldEventCreation";
 import { useWorkspaceNotice } from "@/features/matches/workspace/useWorkspaceNotice";
-import {
-  currentLocalIsoMinute,
-  toIsoFromLocal,
-} from "@/features/matches/workspace/workspaceDerivations";
-import {
-  buildWorkspacePageCopy,
-  latestHeldEventPatch,
-} from "@/features/matches/workspace/workspaceViewModel";
-import { invalidateAfterMatchConfirmed } from "@/shared/api/cacheInvalidation";
-import { getMatchDraftDetail } from "@/shared/api/matchDrafts";
-import type { MatchDraftDetailResponse } from "@/shared/api/matchDrafts";
+import { currentLocalIsoMinute } from "@/features/matches/workspace/workspaceDerivations";
 import {
   isInitialQueryLoading,
   shouldShowBlockingQueryError,
   shouldShowQueryError,
 } from "@/shared/api/queryErrorState";
-import { matchKeys } from "@/shared/api/queryKeys";
-import { isCancelableDraftStatus } from "@/shared/domain/draftStatus";
 
 export type MatchWorkspaceControllerParams = {
   matchDraftId?: string | undefined;
@@ -70,19 +48,15 @@ export function useMatchWorkspaceController({
   mode,
 }: MatchWorkspaceControllerParams) {
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
 
   const { notice, notify } = useWorkspaceNotice();
   const [validationMessage, setValidationMessage] = useState("");
   const [showValidationErrors, setShowValidationErrors] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [confirmedDraftRedirecting, setConfirmedDraftRedirecting] = useState(false);
   const [cancelDraftConfirmOpen, setCancelDraftConfirmOpen] = useState(false);
   const [eventDraftValue, setEventDraftValue] = useState<string>(currentLocalIsoMinute);
   const [workspaceData, setWorkspaceData] = useState<MatchWorkspaceInitialData | null>(null);
   const [preferredImageKind, setPreferredImageKind] = useState<SourceImageKind>("total_assets");
-  const redirectedConfirmedDraftRef = useRef<string | null>(null);
   const nowIsoFactory = useCallback(() => new Date().toISOString(), []);
   const emptyFormFactory = useCallback(
     () => createEmptyMatchForm(nowIsoFactory()),
@@ -95,6 +69,17 @@ export function useMatchWorkspaceController({
   const useSampleDrafts = mode === "review" && searchParams.get("sample") === "1";
   const hasHandoff = searchParams.has("handoffId");
   const handoffSessionId = matchSessionId ?? matchDraftId ?? mode;
+
+  const {
+    confirmedDraftRedirecting,
+    ensureDraftIsOpenForConfirm,
+    handleConfirmConflict,
+    redirectConfirmedDraft,
+  } = useConfirmedDraftRedirect({
+    notify,
+    setValidationMessage,
+    useSampleDrafts,
+  });
 
   const queries = useMatchWorkspaceQueries({
     gameTitleId: state.values.gameTitleId,
@@ -121,48 +106,6 @@ export function useMatchWorkspaceController({
     sourceImageQuery,
   } = queries;
 
-  const fetchLatestDraftDetail = useCallback(
-    (draftId: string) =>
-      queryClient.fetchQuery({
-        queryKey: matchKeys.draft.detail(draftId),
-        queryFn: ({ signal }) => getMatchDraftDetail(draftId, { signal }),
-        staleTime: 0,
-      }),
-    [queryClient],
-  );
-
-  const redirectConfirmedDraft = useCallback(
-    (detail: MatchDraftDetailResponse | undefined, message: string): boolean => {
-      const destination = confirmedDraftDestination(detail);
-      if (!destination) {
-        return false;
-      }
-      if (redirectedConfirmedDraftRef.current === destination.matchId) {
-        return true;
-      }
-
-      redirectedConfirmedDraftRef.current = destination.matchId;
-      setConfirmedDraftRedirecting(true);
-      void invalidateAfterMatchConfirmed(queryClient);
-      notify(message, "warning");
-      navigate(destination.path, { replace: true });
-      return true;
-    },
-    [navigate, notify, queryClient],
-  );
-
-  const handleConfirmConflict = useCallback(
-    async (draftId: string): Promise<boolean> => {
-      try {
-        const detail = await fetchLatestDraftDetail(draftId);
-        return redirectConfirmedDraft(detail, confirmedDraftMessages.confirmConflict);
-      } catch {
-        return false;
-      }
-    },
-    [fetchLatestDraftDetail, redirectConfirmedDraft],
-  );
-
   const createEventMutation = useWorkspaceHeldEventCreation({
     onError: setValidationMessage,
     onSelectCreatedEvent: (event) => {
@@ -186,34 +129,11 @@ export function useMatchWorkspaceController({
       onError: setValidationMessage,
     });
 
-  const ensureDraftIsOpenForConfirm = useCallback(
-    async (draftId: string | undefined): Promise<boolean> => {
-      if (!draftId || useSampleDrafts) {
-        return true;
-      }
-
-      setValidationMessage("");
-      try {
-        const detail = await fetchLatestDraftDetail(draftId);
-        return !redirectConfirmedDraft(detail, confirmedDraftMessages.confirmConflict);
-      } catch {
-        setValidationMessage(confirmedDraftMessages.statusCheckFailed);
-        return false;
-      }
-    },
-    [fetchLatestDraftDetail, redirectConfirmedDraft, useSampleDrafts],
-  );
-
-  const [, confirmAction] = useActionState<null, FormData>(async () => {
-    const request = toConfirmMatchRequest(state.values);
-    const canConfirm = await ensureDraftIsOpenForConfirm(request.matchDraftId);
-    if (!canConfirm) {
-      return null;
-    }
-
-    await confirmMutation.mutateAsync(request).catch(() => undefined);
-    return null;
-  }, null);
+  const confirmAction = useMatchWorkspaceConfirmAction({
+    confirmMutation,
+    ensureDraftIsOpenForConfirm,
+    values: state.values,
+  });
 
   const { isInitialized } = useMatchWorkspaceInit({
     draftDetail: draftDetailQuery.data ?? undefined,
@@ -257,65 +177,35 @@ export function useMatchWorkspaceController({
     searchParams,
   });
 
-  const deferredValuesForValidation = useDeferredValue(state.values);
-  const validation = useMemo(
-    () => validateMatchForm(deferredValuesForValidation),
-    [deferredValuesForValidation],
-  );
-  const emptyErrorPathSet = useMemo(() => new Set<string>(), []);
-  const visibleErrorPathSet =
-    showValidationErrors || mode !== "create" ? validation.pathSet : emptyErrorPathSet;
-  const heldEvents = useMemo(
-    () => heldEventsQuery.data?.items ?? [],
-    [heldEventsQuery.data?.items],
-  );
-  const gameTitleItems = gameTitlesQuery.data?.items ?? [];
-  const mapItems = mapMastersQuery.data?.items ?? [];
-  const seasonItems = seasonMastersQuery.data?.items ?? [];
-  const selectedHeldEvent = heldEvents.find((event) => event.id === state.values.heldEventId);
-  const selectedGameTitle = gameTitleItems.find((item) => item.id === state.values.gameTitleId);
-  const selectedMap = mapItems.find((item) => item.id === state.values.mapMasterId);
-  const selectedSeason = seasonItems.find((item) => item.id === state.values.seasonMasterId);
-  const matchDraftIdForImages = state.values.matchDraftId;
-  const hasSourceImagePanel = mode !== "edit" && Boolean(matchDraftIdForImages);
-  const confirmedDraftLoaded =
-    mode !== "edit" &&
-    !useSampleDrafts &&
-    Boolean(confirmedDraftDestination(draftDetailQuery.data));
+  const { validation, visibleErrorPathSet } = useMatchWorkspaceValidation({
+    mode,
+    showValidationErrors,
+    values: state.values,
+  });
+  const viewModel = useMatchWorkspaceViewModel({
+    draftDetail: draftDetailQuery.data,
+    gameTitleItems: gameTitlesQuery.data?.items,
+    heldEventItems: heldEventsQuery.data?.items,
+    mapItems: mapMastersQuery.data?.items,
+    mode,
+    reviewStatus,
+    seasonItems: seasonMastersQuery.data?.items,
+    useSampleDrafts,
+    values: state.values,
+  });
+  const { confirmedDraftLoaded, heldEvents, matchDraftIdForImages } = viewModel;
 
-  useEffect(() => {
-    if (mode === "edit" || useSampleDrafts) {
-      return;
-    }
-    redirectConfirmedDraft(draftDetailQuery.data, confirmedDraftMessages.loadRedirect);
-  }, [draftDetailQuery.data, mode, redirectConfirmedDraft, useSampleDrafts]);
-
-  useEffect(() => {
-    if (
-      !isInitialized ||
-      hasHandoff ||
-      mode === "edit" ||
-      state.values.heldEventId ||
-      heldEvents.length === 0
-    ) {
-      return;
-    }
-    const patch = latestHeldEventPatch(heldEvents);
-    if (!patch) {
-      return;
-    }
-    dispatch({
-      patch,
-      type: "patch_root",
-    });
-  }, [hasHandoff, heldEvents, isInitialized, mode, state.values.heldEventId]);
-
-  const canCancelDraft =
-    mode !== "edit" &&
-    !useSampleDrafts &&
-    Boolean(draftDetailQuery.data) &&
-    Boolean(state.values.matchDraftId) &&
-    isCancelableDraftStatus(reviewStatus);
+  useMatchWorkspaceLifecycleEffects({
+    dispatch,
+    draftDetail: draftDetailQuery.data,
+    hasHandoff,
+    heldEventId: state.values.heldEventId,
+    heldEvents,
+    isInitialized,
+    mode,
+    redirectConfirmedDraft,
+    useSampleDrafts,
+  });
 
   const handleCancelDraftConfirmed = async () => {
     const targetDraftId = state.values.matchDraftId;
@@ -334,62 +224,18 @@ export function useMatchWorkspaceController({
       values: state.values,
     });
 
-  const pageCopy = buildWorkspacePageCopy({ mode, reviewStatus });
-
-  const sourceImages =
-    matchDraftIdForImages === undefined
-      ? []
-      : (sourceImageQuery.data?.items ?? []).flatMap((item) => {
-          const descriptor = toSourceImageDescriptor(matchDraftIdForImages, item);
-          return descriptor ? [descriptor] : [];
-        });
+  const sourceImages = useMatchWorkspaceSourceImages({
+    items: sourceImageQuery.data?.items,
+    matchDraftId: matchDraftIdForImages,
+  });
 
   const closeConfirm = useCallback(() => setConfirmOpen(false), []);
-  const onCreateEvent = useCallback(() => {
-    createEventMutation.mutate({
-      heldAt: toIsoFromLocal(eventDraftValue),
-    });
-  }, [createEventMutation, eventDraftValue]);
-  const onGameTitleChange = useCallback((gameTitleId: string) => {
-    dispatch({
-      patch: {
-        gameTitleId,
-        mapMasterId: "",
-        seasonMasterId: "",
-      },
-      type: "patch_root",
-    });
-  }, []);
-  const onIncidentChange = useCallback((index: number, key: IncidentKey, value: number) => {
-    dispatch({ index, key, type: "patch_incident", value });
-  }, []);
-  const onPatchRoot = useCallback(
-    (patch: Partial<typeof state.values>) => dispatch({ patch, type: "patch_root" }),
-    [],
-  );
-  const onPlayerChange = useCallback(
-    (index: number, patch: Partial<(typeof state.values.players)[number]>) =>
-      dispatch({ index, patch, type: "patch_player" }),
-    [],
-  );
-  const onPlayOrderChange = useCallback(
-    (index: number, playOrder: number) =>
-      dispatch(
-        workspaceData?.incidentByPlayOrder
-          ? {
-              incidentByPlayOrder: workspaceData.incidentByPlayOrder,
-              index,
-              playOrder,
-              type: "sync_incidents_from_play_order",
-            }
-          : {
-              index,
-              playOrder,
-              type: "set_play_order",
-            },
-      ),
-    [workspaceData?.incidentByPlayOrder],
-  );
+  const formHandlers = useMatchWorkspaceFormHandlers({
+    createHeldEvent: createEventMutation.mutate,
+    dispatch,
+    eventDraftValue,
+    workspaceData,
+  });
   const onPrimaryAction = useMatchWorkspacePrimaryAction({
     mode,
     setConfirmOpen,
@@ -403,8 +249,9 @@ export function useMatchWorkspaceController({
   }, [draftDetailQuery, ocrDraftsQuery]);
 
   return {
+    ...formHandlers,
+    ...viewModel,
     baseErrors,
-    canCancelDraft,
     cancelDraftConfirmOpen,
     cancelDraftMutation,
     closeConfirm,
@@ -414,30 +261,18 @@ export function useMatchWorkspaceController({
     editLoadFailed: mode === "edit" && shouldShowBlockingQueryError(matchDetailQuery),
     editLoading: mode === "edit" && isInitialQueryLoading(matchDetailQuery),
     eventDraftValue,
-    gameTitleItems,
-    hasSourceImagePanel,
     handleCancelDraftConfirmed,
     handleNavigateToMasters,
     isInitialized,
     isNavigatingToMasters,
     isMutating,
     isOcrRunningBlocked,
-    heldEvents,
-    mapItems,
-    matchDraftIdForImages,
     notice,
-    pageDescription: pageCopy.description,
-    pageTitle: pageCopy.title,
     preferredImageKind,
     refreshReviewStatus,
     refreshingReviewStatus,
     returnTo,
     reviewStatus,
-    seasonItems,
-    selectedGameTitle,
-    selectedHeldEvent,
-    selectedMap,
-    selectedSeason,
     setCancelDraftConfirmOpen,
     setEventDraftValue,
     setPreferredImageKind,
@@ -454,12 +289,6 @@ export function useMatchWorkspaceController({
     visibleErrorPathSet,
     workspaceLoading: confirmedDraftRedirecting || confirmedDraftLoaded || !isInitialized,
     workspaceData,
-    onCreateEvent,
-    onGameTitleChange,
-    onIncidentChange,
-    onPatchRoot,
-    onPlayerChange,
-    onPlayOrderChange,
     onPrimaryAction,
   };
 }

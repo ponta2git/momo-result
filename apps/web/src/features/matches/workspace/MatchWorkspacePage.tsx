@@ -1,10 +1,11 @@
 import { useCallback, useRef } from "react";
-import { Link } from "react-router-dom";
 
 import { MatchConfirmDialog } from "@/features/matches/workspace/MatchConfirmDialog";
 import { MatchFormActions } from "@/features/matches/workspace/MatchFormActions";
 import type { WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
 import { MatchSetupSection } from "@/features/matches/workspace/MatchSetupSection";
+import { MatchWorkspaceBlockedNotice } from "@/features/matches/workspace/MatchWorkspaceBlockedNotice";
+import { MatchWorkspaceLoading } from "@/features/matches/workspace/MatchWorkspaceLoading";
 import { ScoreGrid } from "@/features/matches/workspace/scoreGrid/ScoreGrid";
 import { SourceImagePanel } from "@/features/matches/workspace/sourceImages/SourceImagePanel";
 import { useMatchWorkspaceController } from "@/features/matches/workspace/useMatchWorkspaceController";
@@ -14,7 +15,6 @@ import { cn } from "@/shared/ui/cn";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { LiveRegion } from "@/shared/ui/feedback/LiveRegion";
 import { Notice } from "@/shared/ui/feedback/Notice";
-import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { Card } from "@/shared/ui/layout/Card";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
@@ -25,45 +25,6 @@ type MatchWorkspacePageProps = {
   matchSessionId?: string;
   mode: WorkspaceMode;
 };
-
-function MatchWorkspaceLoading({
-  description = "試合内容を取得しています。",
-  title = "試合フォームを読み込み中",
-}: {
-  description?: string;
-  title?: string;
-}) {
-  return (
-    <PageFrame aria-busy="true" aria-label={title} className="gap-5" width="workspace">
-      <PageHeader description={description} eyebrow="試合記録" title={title} />
-
-      <Card>
-        <div className="grid gap-3 md:grid-cols-4">
-          <Skeleton className="h-10" />
-          <Skeleton className="h-10" />
-          <Skeleton className="h-10" />
-          <Skeleton className="h-10" />
-        </div>
-      </Card>
-
-      <Card className="p-4">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {["player-a", "player-b", "player-c", "player-d"].map((id) => (
-            <div
-              key={id}
-              className="grid gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] p-3"
-            >
-              <Skeleton className="h-6 w-2/3" />
-              <Skeleton className="h-10" />
-              <Skeleton className="h-10" />
-              <Skeleton className="h-10" />
-            </div>
-          ))}
-        </div>
-      </Card>
-    </PageFrame>
-  );
-}
 
 export function MatchWorkspacePage({
   matchDraftId,
@@ -225,31 +186,10 @@ export function MatchWorkspacePage({
       ))}
 
       {isOcrRunningBlocked ? (
-        <Card className="mt-5">
-          <h2 className="text-xl font-semibold text-[var(--color-text-primary)]">
-            読み取り中は編集できません
-          </h2>
-          <p className="mt-2 text-sm text-pretty text-[var(--color-text-secondary)]">
-            読み取りが終わるまで結果確認は開けません。完了後、試合一覧の「確認待ち」から開きます。
-          </p>
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            <Button
-              disabled={refreshingReviewStatus}
-              pending={refreshingReviewStatus}
-              pendingLabel="更新中…"
-              variant="secondary"
-              onClick={refreshReviewStatus}
-            >
-              状態を再確認
-            </Button>
-            <Link
-              className="text-sm font-semibold text-[var(--color-action)] hover:underline"
-              to="/matches"
-            >
-              試合一覧へ戻る
-            </Link>
-          </div>
-        </Card>
+        <MatchWorkspaceBlockedNotice
+          refreshingReviewStatus={refreshingReviewStatus}
+          onRefreshReviewStatus={refreshReviewStatus}
+        />
       ) : (
         <>
           <MatchSetupSection

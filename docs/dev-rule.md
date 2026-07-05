@@ -67,7 +67,7 @@ Web:
 pnpm web:dev
 ```
 
-ローカルの `pnpm web:e2e` は Postgres / Redis Testcontainers とE2E専用APIを起動する隔離gateであり、普段使いのローカルDB/Redisへ接続しない。既に起動済みのruntime containerやCIのruntime smoke対象へPlaywrightだけを当てる場合は `PLAYWRIGHT_BASE_URL=http://127.0.0.1:8080 pnpm web:e2e:runtime` を使い、Vite dev server ではなくruntime containerのビルド済みwebを検証する。任意の検証用targetへPlaywrightを当てる場合は `pnpm web:e2e:target` を使い、接続先のDB/Redisが検証用に隔離されていることを確認する。
+ローカルの `pnpm web:e2e` は Postgres / Redis Testcontainers とE2E専用APIを起動する隔離gateであり、普段使いのローカルDB/Redisへ接続しない。既に起動済みのruntime containerやCIのruntime smoke対象へPlaywrightだけを当てる場合は `PLAYWRIGHT_BASE_URL=http://127.0.0.1:8080 pnpm web:e2e:runtime` を使い、Vite dev server ではなくruntime containerのビルド済みwebを検証する。runtime containerをE2E用に起動する場合は `IMAGE_UPLOAD_STORAGE_MAX_USED_PERCENT=100` と `IMAGE_UPLOAD_STORAGE_MIN_FREE_BYTES=1` を `scripts/ci/start-runtime-container.sh` に渡し、ホストの一時ディスク使用率で画像upload smokeが落ちないようにする。任意の検証用targetへPlaywrightを当てる場合は `pnpm web:e2e:target` を使い、接続先のDB/Redisが検証用に隔離されていることを確認する。
 
 ## 4. Standard Commands
 

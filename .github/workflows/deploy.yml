@@ -209,6 +209,8 @@ jobs:
       - name: Start runtime container
         run: scripts/ci/start-runtime-container.sh
         env:
+          IMAGE_UPLOAD_STORAGE_MAX_USED_PERCENT: "100"
+          IMAGE_UPLOAD_STORAGE_MIN_FREE_BYTES: "1"
           MOMO_CANONICAL_HOST: momo-result.ponta.me
           MOMO_ORIGIN_LOCK_TOKEN: ${{ env.CI_DUMMY_ORIGIN_LOCK_TOKEN }}
         timeout-minutes: 3
@@ -337,6 +339,8 @@ jobs:
       - name: Start runtime container
         run: scripts/ci/start-runtime-container.sh
         env:
+          IMAGE_UPLOAD_STORAGE_MAX_USED_PERCENT: "100"
+          IMAGE_UPLOAD_STORAGE_MIN_FREE_BYTES: "1"
           MOMO_CANONICAL_HOST: momo-result.ponta.me
           MOMO_ORIGIN_LOCK_TOKEN: ${{ env.CI_DUMMY_ORIGIN_LOCK_TOKEN }}
         timeout-minutes: 3

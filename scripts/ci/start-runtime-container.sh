@@ -11,6 +11,14 @@ canonical_host="${MOMO_CANONICAL_HOST:-momo-result.ponta.me}"
 container_name="${RUNTIME_CONTAINER_NAME:-momo-result-runtime}"
 health_url="${RUNTIME_HEALTH_URL:-http://127.0.0.1:8080/healthz}"
 
+runtime_env_args=()
+if [[ -n "${IMAGE_UPLOAD_STORAGE_MIN_FREE_BYTES:-}" ]]; then
+  runtime_env_args+=(-e "IMAGE_UPLOAD_STORAGE_MIN_FREE_BYTES=${IMAGE_UPLOAD_STORAGE_MIN_FREE_BYTES}")
+fi
+if [[ -n "${IMAGE_UPLOAD_STORAGE_MAX_USED_PERCENT:-}" ]]; then
+  runtime_env_args+=(-e "IMAGE_UPLOAD_STORAGE_MAX_USED_PERCENT=${IMAGE_UPLOAD_STORAGE_MAX_USED_PERCENT}")
+fi
+
 docker run -d \
   --name "${container_name}" \
   --network host \
@@ -24,6 +32,7 @@ docker run -d \
   -e MOMO_LOG_FORMAT=json \
   -e MOMO_ORIGIN_LOCK_TOKEN="${origin_lock_token}" \
   -e REDIS_URL="${redis_url}" \
+  "${runtime_env_args[@]}" \
   "${image_ref}"
 
 for _attempt in {1..60}; do

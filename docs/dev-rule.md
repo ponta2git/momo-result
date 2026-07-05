@@ -67,7 +67,7 @@ Web:
 pnpm web:dev
 ```
 
-ローカルの `pnpm web:e2e` は Postgres / Redis Testcontainers とE2E専用APIを起動する隔離gateであり、普段使いのローカルDB/Redisへ接続しない。既に起動済みのruntime containerやCIのruntime smoke対象へPlaywrightだけを当てる場合は `pnpm web:e2e:target` を使い、接続先のDB/Redisが検証用に隔離されていることを確認する。
+ローカルの `pnpm web:e2e` は Postgres / Redis Testcontainers とE2E専用APIを起動する隔離gateであり、普段使いのローカルDB/Redisへ接続しない。既に起動済みのruntime containerやCIのruntime smoke対象へPlaywrightだけを当てる場合は `PLAYWRIGHT_BASE_URL=http://127.0.0.1:8080 pnpm web:e2e:runtime` を使い、Vite dev server ではなくruntime containerのビルド済みwebを検証する。任意の検証用targetへPlaywrightを当てる場合は `pnpm web:e2e:target` を使い、接続先のDB/Redisが検証用に隔離されていることを確認する。
 
 ## 4. Standard Commands
 
@@ -80,6 +80,7 @@ pnpm web:dev
 | web lint | `pnpm web:lint` |
 | web e2e isolated | `pnpm web:e2e` |
 | web e2e target | `pnpm web:e2e:target` |
+| web e2e runtime | `PLAYWRIGHT_BASE_URL=http://127.0.0.1:8080 pnpm web:e2e:runtime` |
 | web test | `pnpm web:test` |
 | web coverage report | `pnpm web:test:coverage:report` |
 | web typecheck | `pnpm web:typecheck` |
@@ -107,6 +108,7 @@ pnpm test:coverage:report
 pnpm build
 pnpm e2e
 pnpm e2e:target
+PLAYWRIGHT_BASE_URL=http://127.0.0.1:8080 pnpm e2e:runtime
 ```
 
 `format:check` は oxfmt、`lint` は oxlint、web architecture/API contract checks、production TS/TSX module size check を実行する。`typecheck`、`lint`、`test:run`、coverage report の前には API 型生成が走る。

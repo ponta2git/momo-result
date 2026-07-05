@@ -18,6 +18,7 @@
     "web:lint": "pnpm --filter web lint",
     "web:e2e": "pnpm --filter web e2e",
     "web:e2e:target": "pnpm --filter web e2e:target",
+    "web:e2e:runtime": "pnpm --filter web e2e:runtime",
     "web:test": "pnpm --filter web test:run",
     "web:test:coverage:report": "pnpm --filter web test:coverage:report",
     "web:typecheck": "pnpm --filter web typecheck"

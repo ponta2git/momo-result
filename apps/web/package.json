@@ -9,6 +9,7 @@
     "build": "tsc -b && vite build",
     "e2e": "node ./scripts/e2e-isolated.mjs",
     "e2e:target": "playwright test",
+    "e2e:runtime": "PLAYWRIGHT_SKIP_WEB_SERVER=1 playwright test",
     "e2e:target:ui": "playwright test --ui",
     "e2e:ui": "node ./scripts/e2e-isolated.mjs --ui",
     "preview": "vite preview",

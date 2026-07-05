@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { expect, test } from "@playwright/test";
-import type { APIRequestContext, APIResponse, Page } from "@playwright/test";
+import type { APIRequestContext, APIResponse, Page, Request, Route } from "@playwright/test";
 
 const devAccountId = "account_ponta";
 const devUserStorageKey = "momoresult.devUser";
@@ -45,6 +45,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     ([key, value]) => window.localStorage.setItem(key, value),
     [devUserStorageKey, devAccountId],
   );
+  await installE2eAuthHeaders(page);
 
   await test.step("create a held event after dev login", async () => {
     await page.goto("/held-events");
@@ -277,13 +278,13 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     const detailUrlPattern = `**/api/matches/${matchId}`;
     await page.route(detailUrlPattern, async (route) => {
       if (route.request().method() !== "GET") {
-        await route.continue();
+        await continueWithE2eAuth(route);
         return;
       }
 
       detailApiRequested = true;
       await detailHold;
-      await route.continue();
+      await continueWithE2eAuth(route);
     });
 
     await page.goto(`/matches?status=confirmed&heldEventId=${heldEventId}`);
@@ -424,6 +425,27 @@ async function expectOk(response: APIResponse, label: string): Promise<void> {
     return;
   }
   throw new Error(`${label} failed with ${response.status()}: ${await response.text()}`);
+}
+
+async function installE2eAuthHeaders(page: Page): Promise<void> {
+  // Runtime E2E exercises the built web bundle, where import.meta.env.DEV is false.
+  // Inject the dev auth contract at the browser boundary instead of relying on localStorage.
+  await page.route("**/api/**", continueWithE2eAuth);
+}
+
+async function continueWithE2eAuth(route: Route): Promise<void> {
+  await route.continue({ headers: e2eAuthHeaders(route.request()) });
+}
+
+function e2eAuthHeaders(request: Request): Record<string, string> {
+  const headers = {
+    ...request.headers(),
+    "X-Momo-Account-Id": devAccountId,
+  };
+  if (["DELETE", "PATCH", "POST", "PUT"].includes(request.method())) {
+    headers["X-CSRF-Token"] = "dev";
+  }
+  return headers;
 }
 
 function expectGeneratedId(value: string | undefined, label: string): string {

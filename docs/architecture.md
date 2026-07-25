@@ -18,9 +18,9 @@
 
 | 領域 | 場所 | 主な技術 | 責務 |
 |---|---|---|---|
-| web | `apps/web` | React 19, React Router 7, TanStack Query 5, Conform, Zod, Tailwind CSS 4, Base UI | SPA、入力、確認、CSV/TSV取得 |
+| web | `apps/web` | React 19, React Router 7, TanStack Query 5, Zod, Tailwind CSS 4, Base UI | SPA、入力、確認、CSV/TSV取得 |
 | api | `apps/api` | Scala 3, Tapir, http4s, Cats Effect, Doobie | HTTP API、認証、業務usecase、DB/Redis接続 |
-| ocr-worker | `apps/ocr-worker` | Python 3.14, uv, Tesseract, OpenCV/Pillow | OCRジョブ処理、画像解析、OCR結果保存 |
+| ocr-worker | `apps/ocr-worker` | Python 3.14, uv, Tesseract, Pillow | OCRジョブ処理、画像解析、OCR結果保存 |
 | DB | `../momo-db` | Neon PostgreSQL, drizzle | schema / migration / seed の正本 |
 | Queue | Upstash Redis Streams | Redis Streams | OCRジョブ配送 |
 | runtime | `Dockerfile`, `deploy/` | Fly.io, nginx, supervisord | 単一runtime imageで web / api / worker を起動 |
@@ -109,7 +109,7 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、mod
 
 ### 3.4 Form / React
 
-- フォームは Conform + Zod を基本にし、サーバー側でも同等の検証を行う。
+- フォーム検証は Zod を基本にし、サーバー側でも同等の検証を行う。
 - React event 由来の値は handler 内で同期的に退避する。state updater 内で event / DOM node を読まない。
 - route param、prefill、hidden state 由来の workflow identifier を request transform で落とさない。
 - `useActionState` / `useFormStatus` / `useOptimistic` / `<Activity>` は、既存経路より複雑さや不具合面を減らす場合だけ採用する。

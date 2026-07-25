@@ -162,7 +162,7 @@ uv run pytest -m integration
 | Redis Streams / OCR queue | api gate + `sbt apiRedisQuality` |
 | ocr-worker production code | `uv run ruff format --check .`, `uv run ruff check .`, `uv run mypy`, `uv run pytest` |
 | ocr-worker external runtime | ocr-worker production gate + `uv run pytest -m integration` |
-| Docker/Fly/runtime config | `pnpm public:safety:check`, `docker build`, `scripts/ci/runtime-smoke.sh`, container image scan、必要なら `pnpm web:e2e:target` |
+| Docker/Fly/runtime config | `pnpm public:safety:check`, `docker build`, `scripts/ci/runtime-smoke.sh`, container image scan、必要なら `pnpm web:e2e:runtime` |
 | coverage対象ロジック | 各領域の coverage gate |
 | docs only | `git diff --check`, `pnpm public:safety:check` |
 
@@ -178,7 +178,7 @@ uv run pytest -m integration
 | `.github/workflows/web.yml` | API型生成差分、format、lint、typecheck、Vitestまたはcoverage付きVitest、build |
 | `.github/workflows/api.yml` | format、lint、clean compile、OpenAPI check、testまたはcoverage付きtest、DB/Redis quality |
 | `.github/workflows/ocr-worker.yml` | ruff format/check、mypy、pytestまたはcoverage付きpytest、integration test |
-| `.github/workflows/deploy.yml` | runtime config check、momo-db migration適用、Docker build、image scan、runtime smoke、Playwright target smoke、Fly deploy |
+| `.github/workflows/deploy.yml` | runtime config check、momo-db migration適用、Docker build、image scan、runtime smoke、Playwright runtime E2E smoke、Fly deploy |
 
 `deploy.yml` の production deploy 経路では、サブシステム quality gate、public safety、runtime image build / scan / smoke を可能な範囲で並列に進め、`release-ready` で合流させる。サブシステム workflow の `report_coverage` はPRレビュー補助の扱いとし、production deploy から呼ぶ場合は無効にして release gate では待たない。`report_coverage` が有効な場合、同じテスト集合の通常実行は省き、coverage付きテストをその gate とする。
 

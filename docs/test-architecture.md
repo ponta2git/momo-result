@@ -126,4 +126,4 @@ coverage report はPRを落とす主目的ではなく、推移確認とレビ�
 1. report mode の baseline を hard gate へ昇格する。
 2. 重要ファイル / 重要glob の non-regression gate を追加する。
 3. OCR holdout accuracy report を nightly / release gate にする。
-4. main branch の coverage推移を長期保存する。
+4. 既定ブランチのcoverage推移を長期保存する。

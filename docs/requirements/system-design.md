@@ -50,7 +50,7 @@ apps/
 
 ### 3.2 フォーム・バリデーション
 
-- フォームは Conform + Zod を基本にする。
+- フォーム検証は Zod を基本にする。
 - React 19 の `useActionState` / `useFormStatus` / `useOptimistic` は既存フォーム経路と整合する場合だけ使う。
 - 業務バリデーションのうち、クライアントで即時判定できるものはZodで表現する。
 - サーバー側でも同等の検証を行い、クライアント検証だけに依存しない。
@@ -115,7 +115,7 @@ apps/
 ### 5.1 基本構成
 
 - OCRワーカーはPython 3.14 + uv で実装する。
-- OCRライブラリは Tesseract + OpenCV/Pillow を第一候補とする。
+- OCRライブラリは Tesseract + Pillow を使う。
 - OCR/画像解析には外部APIを使わない。
 - OCR対象画面種別ごとに独立した解析器を作り、共通前処理だけ共有する。
 - 解析器は抽出結果、信頼度、警告、失敗理由を返せるようにする。
@@ -226,7 +226,7 @@ OCRジョブのタイムアウト初期値は `OCR_TIMEOUT_SECONDS` で管理す
 
 ### 9.3 デプロイフロー
 
-- mainブランチへのmergeでGitHub ActionsからFly.ioへ自動デプロイする。
+- 既定ブランチへのmergeでGitHub ActionsからFly.ioへ自動デプロイする。
 - 本番Secretsは `fly secrets` で管理する。
 - CI SecretsはGitHub Actions secretsで管理する。
 
@@ -250,7 +250,7 @@ OCRジョブのタイムアウト初期値は `OCR_TIMEOUT_SECONDS` で管理す
 | ocr-worker | format、lint、typecheck、pytest |
 | runtime / E2E | Docker build、runtime smoke、container image scan、Playwright E2E smoke |
 
-Playwright E2E smoke はUX確定済みのログイン後主要フローに絞る。Vite dev buildで開発用認証ヘッダを使い、API / nginx / OCR worker はDocker runtime containerを実DB/Redis付きで起動して検証する。本番ビルドされたwebはdev auth headerを送らないため、runtime imageのweb検証は `/` と deep link fallback のHTTP smokeに留める。
+Playwright E2E smoke はUX確定済みのログイン後主要フローに絞る。ローカル隔離gateではVite dev serverとE2E専用API / DB / Redisを使う。deploy workflowでは単一runtime imageを実DB/Redis付きで起動し、ビルド済みwebへPlaywrightを当てる。runtime経路の開発用認証ヘッダはPlaywrightのbrowser route境界で注入し、本番bundleには埋め込まない。
 
 ### 10.2 フォーマッタ・リンタ
 

@@ -2,7 +2,7 @@
 
 Python OCR worker for Momotetsu result screenshots.
 
-The first milestone is a standalone local accuracy mode that runs without the API server, Redis, or PostgreSQL:
+For local accuracy work, the standalone commands run without the API server, Redis, or PostgreSQL:
 
 ```sh
 uv sync

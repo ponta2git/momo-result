@@ -4,11 +4,11 @@ Scala 3 / sbt / Tapir / http4s / Cats Effect による API サーバーです。
 
 ## 実装範囲
 
-- health check と OpenAPI 配信
+- health check と OpenAPI 成果物生成
 - Discord OAuth と開発用認証
 - 試合・OCR ドラフト・OCR ジョブの API
 - 画像アップロードと一時保存
-- インメモリ／PostgreSQL repository、Redis Streams publisher
+- PostgreSQL repository、Redis Streams publisher
 
 `openapi.yaml` は Tapir の endpoint 定義から生成される成果物です。手編集せず、生成後に差分を確認してください。
 

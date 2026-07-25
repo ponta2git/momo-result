@@ -42,21 +42,15 @@ jobs:
   api:
     if: github.event_name != 'pull_request'
     uses: ./.github/workflows/api.yml
-    with:
-      report_coverage: false
     secrets: inherit
 
   web:
     if: github.event_name != 'pull_request'
     uses: ./.github/workflows/web.yml
-    with:
-      report_coverage: false
 
   ocr-worker:
     if: github.event_name != 'pull_request'
     uses: ./.github/workflows/ocr-worker.yml
-    with:
-      report_coverage: false
     secrets: inherit
 
   runtime-image:
@@ -144,7 +138,6 @@ jobs:
     env:
       DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/momo_result
       DEV_MEMBER_IDS: member_ponta,member_akane_mami,member_otaka,member_eu
-      MOMO_DB_MIGRATIONS_DIR: _deps/momo-db/drizzle
       REDIS_URL: redis://127.0.0.1:6379/0
 
     steps:
@@ -162,8 +155,6 @@ jobs:
           persist-credentials: false
 
       - uses: pnpm/action-setup@v6
-        with:
-          version: 10.10.0
 
       - uses: actions/setup-node@v6
         with:
@@ -211,14 +202,12 @@ jobs:
         env:
           IMAGE_UPLOAD_STORAGE_MAX_USED_PERCENT: "100"
           IMAGE_UPLOAD_STORAGE_MIN_FREE_BYTES: "1"
-          MOMO_CANONICAL_HOST: momo-result.ponta.me
           MOMO_ORIGIN_LOCK_TOKEN: ${{ env.CI_DUMMY_ORIGIN_LOCK_TOKEN }}
         timeout-minutes: 3
 
       - name: Runtime HTTP smoke
         run: scripts/ci/runtime-smoke.sh
         env:
-          MOMO_CANONICAL_HOST: momo-result.ponta.me
           MOMO_ORIGIN_LOCK_TOKEN: ${{ env.CI_DUMMY_ORIGIN_LOCK_TOKEN }}
         timeout-minutes: 2
 
@@ -288,7 +277,6 @@ jobs:
     env:
       DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/momo_result
       DEV_MEMBER_IDS: member_ponta,member_akane_mami,member_otaka,member_eu
-      MOMO_DB_MIGRATIONS_DIR: _deps/momo-db/drizzle
       REDIS_URL: redis://127.0.0.1:6379/0
 
     steps:
@@ -306,8 +294,6 @@ jobs:
           persist-credentials: false
 
       - uses: pnpm/action-setup@v6
-        with:
-          version: 10.10.0
 
       - uses: actions/setup-node@v6
         with:
@@ -341,14 +327,12 @@ jobs:
         env:
           IMAGE_UPLOAD_STORAGE_MAX_USED_PERCENT: "100"
           IMAGE_UPLOAD_STORAGE_MIN_FREE_BYTES: "1"
-          MOMO_CANONICAL_HOST: momo-result.ponta.me
           MOMO_ORIGIN_LOCK_TOKEN: ${{ env.CI_DUMMY_ORIGIN_LOCK_TOKEN }}
         timeout-minutes: 3
 
       - name: Runtime HTTP smoke
         run: scripts/ci/runtime-smoke.sh
         env:
-          MOMO_CANONICAL_HOST: momo-result.ponta.me
           MOMO_ORIGIN_LOCK_TOKEN: ${{ env.CI_DUMMY_ORIGIN_LOCK_TOKEN }}
         timeout-minutes: 2
 
@@ -446,4 +430,4 @@ jobs:
       - name: Deploy to Fly.io
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-        run: flyctl deploy --app momo-result --image "${IMAGE_REF}" --yes
+        run: flyctl deploy --image "${IMAGE_REF}" --yes

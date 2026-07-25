@@ -2,12 +2,6 @@ name: web
 
 on:
   workflow_call:
-    inputs:
-      report_coverage:
-        description: Run non-blocking coverage report steps.
-        required: false
-        type: boolean
-        default: true
   pull_request:
     paths:
       - "apps/web/**"
@@ -29,8 +23,6 @@ jobs:
         with:
           persist-credentials: false
       - uses: pnpm/action-setup@v6
-        with:
-          version: 10.10.0
       - uses: actions/setup-node@v6
         with:
           node-version: 24
@@ -44,15 +36,15 @@ jobs:
       - run: pnpm --filter web typecheck
         timeout-minutes: 5
       - name: Test
-        if: ${{ !(github.event_name == 'pull_request' || inputs.report_coverage) }}
+        if: ${{ github.event_name != 'pull_request' }}
         run: pnpm --filter web test:run
         timeout-minutes: 5
       - name: Test with coverage report
-        if: ${{ github.event_name == 'pull_request' || inputs.report_coverage }}
+        if: ${{ github.event_name == 'pull_request' }}
         run: pnpm --filter web test:coverage:report
         timeout-minutes: 5
       - name: Summarize coverage
-        if: ${{ always() && (github.event_name == 'pull_request' || inputs.report_coverage) }}
+        if: ${{ always() && github.event_name == 'pull_request' }}
         run: |
           python3 scripts/ci/write-coverage-summary.py web \
             --root . \
@@ -61,7 +53,7 @@ jobs:
           cat coverage-summary/web/summary.md >> "${GITHUB_STEP_SUMMARY}"
         timeout-minutes: 1
       - name: Upload coverage report
-        if: ${{ always() && (github.event_name == 'pull_request' || inputs.report_coverage) }}
+        if: ${{ always() && github.event_name == 'pull_request' }}
         uses: actions/upload-artifact@v7
         with:
           name: web-coverage

@@ -12,15 +12,12 @@ from momo_ocr.app.composition import (
     redis_consumer_from_config,
 )
 from momo_ocr.app.config import WorkerConfig
-from momo_ocr.features.ocr_jobs.cancellation import InMemoryCancellationChecker
 from momo_ocr.features.ocr_jobs.consumer import (
-    InMemoryOcrJobConsumer,
     OcrJobConsumer,
     RedisConsumerRetryConfig,
 )
 from momo_ocr.features.ocr_jobs.dependencies import JobRunnerDependencies
 from momo_ocr.features.ocr_jobs.models import OcrQueueDelivery
-from momo_ocr.features.ocr_jobs.repository import InMemoryOcrJobRepository
 from momo_ocr.features.text_recognition.engine import (
     FakeTextRecognitionEngine,
     TextRecognitionEngine,
@@ -28,6 +25,11 @@ from momo_ocr.features.text_recognition.engine import (
 from momo_ocr.features.text_recognition.factory import default_text_recognition_engine
 from momo_ocr.features.text_recognition.tesserocr_engine import TesserocrEngine
 from momo_ocr.shared.errors import FailureCode, OcrError
+from tests.support.ocr_job_doubles import (
+    InMemoryCancellationChecker,
+    InMemoryOcrJobConsumer,
+    InMemoryOcrJobRepository,
+)
 
 
 def test_adds_sslmode_require_for_remote_host() -> None:

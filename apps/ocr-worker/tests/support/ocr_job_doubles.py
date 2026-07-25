@@ -1,27 +1,82 @@
 from __future__ import annotations
 
+from collections import deque
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from threading import Lock
 
 from momo_ocr.features.ocr_jobs.lifecycle import ensure_transition_allowed
 from momo_ocr.features.ocr_jobs.models import (
+    MalformedPulledJob,
     OcrJobExecutionResult,
     OcrJobRecord,
     OcrJobStatus,
+    OcrQueueDelivery,
+    PulledJob,
 )
+from momo_ocr.features.ocr_jobs.queue_contract import parse_job_message
 from momo_ocr.features.ocr_jobs.repository_contract import (
     ensure_non_success_result,
     ensure_success_result,
     ensure_terminal_result,
 )
 from momo_ocr.features.ocr_jobs.result_records import OcrResultRecord
-from momo_ocr.shared.errors import FailureCode, OcrError
+from momo_ocr.shared.errors import FailureCode, OcrError, OcrFailure
+
+
+@dataclass
+class _FakeDelivery:
+    payload: Mapping[str, str]
+    delivery_tag: str
+
+
+class InMemoryOcrJobConsumer:
+    def __init__(self) -> None:
+        self._deliveries: deque[_FakeDelivery] = deque()
+        self._lock = Lock()
+        self.acked: list[str] = []
+        self.dead_letters: list[tuple[str, Mapping[str, str], OcrFailure, int]] = []
+
+    def enqueue(self, payload: Mapping[str, str], *, delivery_tag: str) -> None:
+        with self._lock:
+            self._deliveries.append(_FakeDelivery(payload=dict(payload), delivery_tag=delivery_tag))
+
+    def pull(self) -> OcrQueueDelivery | None:
+        with self._lock:
+            if not self._deliveries:
+                return None
+            delivery = self._deliveries.popleft()
+        try:
+            message = parse_job_message(delivery.payload)
+        except OcrError as exc:
+            return MalformedPulledJob(
+                delivery_tag=delivery.delivery_tag,
+                raw_fields=dict(delivery.payload),
+                failure=exc.to_failure(),
+            )
+        return PulledJob(message=message, delivery_tag=delivery.delivery_tag)
+
+    def ack(self, delivery_tag: str) -> None:
+        self.acked.append(delivery_tag)
+
+    def dead_letter(
+        self,
+        delivery_tag: str,
+        raw_fields: Mapping[str, str],
+        *,
+        failure: OcrFailure,
+        deliveries: int,
+    ) -> None:
+        self.dead_letters.append((delivery_tag, dict(raw_fields), failure, deliveries))
+        self.ack(delivery_tag)
+
+    def pending(self) -> int:
+        with self._lock:
+            return len(self._deliveries)
 
 
 @dataclass
 class InMemoryOcrJobRepository:
-    """Test double implementing the OCR job repository contract."""
-
     records: dict[str, OcrJobRecord] = field(default_factory=dict)
     completions: dict[str, OcrJobExecutionResult] = field(default_factory=dict)
     result_records: dict[str, OcrResultRecord] = field(default_factory=dict)
@@ -105,3 +160,17 @@ class InMemoryOcrJobRepository:
             self.completions[job_id] = result
             if result_record is not None:
                 self.result_records[result_record.job_id] = result_record
+
+
+@dataclass
+class InMemoryCancellationChecker:
+    cancelled_job_ids: set[str] = field(default_factory=set)
+    _lock: Lock = field(default_factory=Lock, repr=False, compare=False)
+
+    def cancel(self, job_id: str) -> None:
+        with self._lock:
+            self.cancelled_job_ids.add(job_id)
+
+    def is_cancelled(self, job_id: str) -> bool:
+        with self._lock:
+            return job_id in self.cancelled_job_ids

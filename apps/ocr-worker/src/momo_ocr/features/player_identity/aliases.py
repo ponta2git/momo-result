@@ -83,27 +83,6 @@ def alias_resolver_from_map(
     return PlayerAliasResolver(pairs=pairs, fuzzy_threshold=fuzzy_threshold)
 
 
-def alias_resolver_from_member_aliases(
-    aliases: Mapping[str, Sequence[str]],
-    *,
-    fuzzy_threshold: float | None = None,
-) -> PlayerAliasResolver:
-    pairs = tuple(
-        (_display_name_from_aliases(member_id, surfaces), surface, member_id)
-        for member_id, surfaces in aliases.items()
-        for surface in _expand_momotetsu_president_surfaces(surfaces)
-    )
-    return PlayerAliasResolver(pairs=pairs, fuzzy_threshold=fuzzy_threshold)
-
-
-def extract_player_name_candidate(
-    text: str,
-    *,
-    alias_resolver: PlayerAliasResolver | None = None,
-) -> str | None:
-    return extract_player_identity(text, alias_resolver=alias_resolver).raw_player_name
-
-
 def extract_player_identity(
     text: str,
     *,
@@ -175,17 +154,8 @@ def _append_unseen_candidate(candidate: str, *, seen: set[str], expanded: list[s
     expanded.append(candidate)
 
 
-def _display_name_from_aliases(member_id: str, surfaces: Sequence[str]) -> str:
-    for surface in surfaces:
-        if surface:
-            return surface
-    return member_id
-
-
 def _is_latin_noise(token: str) -> bool:
     return bool(re.fullmatch(r"[A-Za-z]{1,3}", token))
 
 
 DEFAULT_ALIAS_RESOLVER = alias_resolver_from_map(DEFAULT_STATIC_ALIASES)
-
-KNOWN_PLAYER_ALIASES: Mapping[str, tuple[str, ...]] = DEFAULT_STATIC_ALIASES

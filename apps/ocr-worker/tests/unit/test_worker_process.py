@@ -6,12 +6,14 @@ import pytest
 
 from momo_ocr.app import worker_process as worker_process_module
 from momo_ocr.app.worker_process import WorkerLoopConfig, run_worker_process
-from momo_ocr.features.ocr_jobs.cancellation import InMemoryCancellationChecker
-from momo_ocr.features.ocr_jobs.consumer import InMemoryOcrJobConsumer
 from momo_ocr.features.ocr_jobs.dependencies import JobRunnerDependencies
 from momo_ocr.features.ocr_jobs.models import OcrJobStatus
-from momo_ocr.features.ocr_jobs.repository import InMemoryOcrJobRepository
 from momo_ocr.features.ocr_jobs.runner import JobRunOutcome
+from tests.support.ocr_job_doubles import (
+    InMemoryCancellationChecker,
+    InMemoryOcrJobConsumer,
+    InMemoryOcrJobRepository,
+)
 
 
 def _deps() -> JobRunnerDependencies:

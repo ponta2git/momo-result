@@ -7,9 +7,9 @@ from momo_ocr.features.ocr_jobs.models import (
     OcrJobExecutionResult,
     OcrJobStatus,
 )
-from momo_ocr.features.ocr_jobs.repository import InMemoryOcrJobRepository
 from momo_ocr.features.ocr_jobs.result_records import OcrResultRecord
 from momo_ocr.shared.errors import FailureCode, OcrError
+from tests.support.ocr_job_doubles import InMemoryOcrJobRepository
 from tests.support.ocr_jobs import make_job_record, success_draft_payload
 
 

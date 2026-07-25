@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Self
@@ -13,51 +14,27 @@ from momo_ocr.features.ocr_domain.models import (
     ScreenType,
     WarningCode,
 )
-from momo_ocr.features.ocr_jobs.cancellation import CancellationChecker, InMemoryCancellationChecker
-from momo_ocr.features.ocr_jobs.consumer import InMemoryOcrJobConsumer
+from momo_ocr.features.ocr_jobs.cancellation import CancellationChecker
 from momo_ocr.features.ocr_jobs.dependencies import AnalyzeImageFn, JobRunnerDependencies
 from momo_ocr.features.ocr_jobs.models import (
     MaxAttemptsExceededPulledJob,
-    OcrJobHints,
-    OcrJobMessage,
     OcrJobRecord,
     OcrJobStatus,
     OcrQueueDelivery,
     PlayerAliasHint,
 )
-from momo_ocr.features.ocr_jobs.queue_contract import parse_job_message, to_stream_payload
-from momo_ocr.features.ocr_jobs.repository import InMemoryOcrJobRepository
+from momo_ocr.features.ocr_jobs.queue_contract import parse_job_message
 from momo_ocr.features.ocr_jobs.runner import JobRunOutcome, run_one_job
 from momo_ocr.features.player_identity.aliases import PlayerAliasResolver
 from momo_ocr.features.text_recognition.engine import TextRecognitionEngine
 from momo_ocr.shared.errors import FailureCode, OcrFailure
+from tests.support.ocr_job_doubles import (
+    InMemoryCancellationChecker,
+    InMemoryOcrJobConsumer,
+    InMemoryOcrJobRepository,
+)
 
 WORKER_ID = "worker-test"
-
-
-def make_job_message(  # noqa: PLR0913 - factory mirrors the queue message contract.
-    *,
-    job_id: str = "job-1",
-    draft_id: str = "draft-1",
-    image_id: str = "image-1",
-    image_path: Path = Path("/tmp/momo/image.jpg"),
-    requested_screen_type: ScreenType = ScreenType.TOTAL_ASSETS,
-    attempt: int = 1,
-    enqueued_at: str = "2025-01-01T00:00:00Z",
-    hints: OcrJobHints | None = None,
-    request_id: str | None = None,
-) -> OcrJobMessage:
-    return OcrJobMessage(
-        job_id=job_id,
-        draft_id=draft_id,
-        image_id=image_id,
-        image_path=image_path,
-        requested_screen_type=requested_screen_type,
-        attempt=attempt,
-        enqueued_at=enqueued_at,
-        hints=hints or OcrJobHints(),
-        request_id=request_id,
-    )
 
 
 def make_stream_payload(  # noqa: PLR0913 - factory mirrors the stream payload contract.
@@ -69,26 +46,44 @@ def make_stream_payload(  # noqa: PLR0913 - factory mirrors the stream payload c
     requested_screen_type: ScreenType = ScreenType.TOTAL_ASSETS,
     attempt: int = 1,
     enqueued_at: str = "2025-01-01T00:00:00Z",
+    game_title: str | None = None,
     known_player_aliases: tuple[PlayerAliasHint, ...] = (),
+    computer_player_aliases: tuple[str, ...] = (),
     layout_family: str | None = None,
     request_id: str | None = None,
 ) -> dict[str, str]:
-    return to_stream_payload(
-        make_job_message(
-            job_id=job_id,
-            draft_id=draft_id,
-            image_id=image_id,
-            image_path=image_path,
-            requested_screen_type=requested_screen_type,
-            attempt=attempt,
-            enqueued_at=enqueued_at,
-            hints=OcrJobHints(
-                layout_family=layout_family,
-                known_player_aliases=known_player_aliases,
-            ),
-            request_id=request_id,
+    payload = {
+        "schemaVersion": "1",
+        "jobId": job_id,
+        "draftId": draft_id,
+        "imageId": image_id,
+        "imagePath": str(image_path),
+        "requestedScreenType": requested_screen_type.value,
+        "attempt": str(attempt),
+        "enqueuedAt": enqueued_at,
+    }
+    hints: dict[str, object] = {}
+    if game_title is not None:
+        hints["gameTitle"] = game_title
+    if layout_family is not None:
+        hints["layoutFamily"] = layout_family
+    if known_player_aliases:
+        hints["knownPlayerAliases"] = [
+            {"memberId": alias.member_id, "aliases": list(alias.aliases)}
+            for alias in known_player_aliases
+        ]
+    if computer_player_aliases:
+        hints["computerPlayerAliases"] = list(computer_player_aliases)
+    if hints:
+        payload["ocrHintsJson"] = json.dumps(
+            hints,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
         )
-    )
+    if request_id is not None:
+        payload["requestId"] = request_id
+    return payload
 
 
 def make_job_record(

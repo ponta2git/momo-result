@@ -12,14 +12,14 @@ from jsonschema.exceptions import ValidationError
 
 from momo_ocr.features.ocr_domain.models import ScreenType
 from momo_ocr.features.ocr_jobs import queue_contract as contract
-from momo_ocr.features.ocr_jobs.models import OcrJobHints, OcrJobMessage, PlayerAliasHint
+from momo_ocr.features.ocr_jobs.models import OcrJobHints, PlayerAliasHint
 from momo_ocr.features.ocr_jobs.queue_contract import (
     parse_job_message,
     reset_queue_contract_schema_cache,
-    to_stream_payload,
     validate_queue_contract_schemas,
 )
 from momo_ocr.shared.errors import OcrError
+from tests.support.ocr_jobs import make_stream_payload
 
 REPO_ROOT = Path(__file__).resolve().parents[5]
 STREAM_PAYLOAD_SCHEMA_PATH = REPO_ROOT / "docs" / "schemas" / "ocr-queue-payload-v1.schema.json"
@@ -44,9 +44,10 @@ def test_parse_job_message_uses_api_contract_keys() -> None:
     assert message.requested_screen_type == ScreenType.TOTAL_ASSETS
     assert message.attempt == 2
     assert message.hints == OcrJobHints()
+    assert message.request_id is None
 
 
-def test_schema_validates_worker_serializer_with_hints_and_request_id() -> None:
+def test_schema_valid_payload_parses_hints_and_request_id() -> None:
     payload = _schema_valid_payload()
 
     message = parse_job_message(payload)
@@ -70,76 +71,7 @@ def test_schema_validates_worker_serializer_with_hints_and_request_id() -> None:
         aliases=("オータカ", "オータカ社長"),
     )
     assert message.hints.computer_player_aliases == ("さくま", "さくま社長")
-    assert to_stream_payload(message) == payload
     _assert_valid_stream_payload(payload)
-
-
-def test_job_message_round_trips_to_api_payload_keys() -> None:
-    payload = to_stream_payload(
-        OcrJobMessage(
-            job_id="job-1",
-            draft_id="draft-1",
-            image_id="image-1",
-            image_path=Path("/tmp/sample.jpg"),
-            requested_screen_type=ScreenType.REVENUE,
-            attempt=1,
-            enqueued_at="2026-04-29T10:00:00Z",
-            hints=OcrJobHints(),
-        )
-    )
-
-    assert payload == {
-        "schemaVersion": "1",
-        "jobId": "job-1",
-        "draftId": "draft-1",
-        "imageId": "image-1",
-        "imagePath": "/tmp/sample.jpg",
-        "requestedScreenType": "revenue",
-        "attempt": "1",
-        "enqueuedAt": "2026-04-29T10:00:00Z",
-    }
-    _assert_valid_stream_payload(payload)
-    assert parse_job_message(payload).requested_screen_type == ScreenType.REVENUE
-
-
-def test_job_message_round_trips_api_ocr_hints() -> None:
-    payload = to_stream_payload(
-        OcrJobMessage(
-            job_id="job-1",
-            draft_id="draft-1",
-            image_id="image-1",
-            image_path=Path("/tmp/sample.jpg"),
-            requested_screen_type=ScreenType.INCIDENT_LOG,
-            attempt=1,
-            enqueued_at="2026-04-29T10:00:00Z",
-            hints=OcrJobHints(
-                game_title="桃鉄2",
-                layout_family="momotetsu_2",
-                known_player_aliases=(
-                    PlayerAliasHint(member_id="member-ponta", aliases=("ぽんた", "ぽんた社長")),
-                    PlayerAliasHint(member_id="member-otaka", aliases=("オータカ", "オータカ社長")),
-                ),
-                computer_player_aliases=("さくま", "さくま社長"),
-            ),
-        )
-    )
-
-    assert payload["ocrHintsJson"] == (
-        '{"computerPlayerAliases":["さくま","さくま社長"],'
-        '"gameTitle":"桃鉄2",'
-        '"knownPlayerAliases":['
-        '{"aliases":["ぽんた","ぽんた社長"],"memberId":"member-ponta"},'
-        '{"aliases":["オータカ","オータカ社長"],"memberId":"member-otaka"}'
-        "],"
-        '"layoutFamily":"momotetsu_2"}'
-    )
-    _assert_valid_stream_payload(payload)
-    parsed = parse_job_message(payload)
-    assert parsed.hints.game_title == "桃鉄2"
-    assert parsed.hints.layout_family == "momotetsu_2"
-    assert parsed.hints.known_player_aliases[0].member_id == "member-ponta"
-    assert parsed.hints.known_player_aliases[0].aliases == ("ぽんた", "ぽんた社長")
-    assert parsed.hints.computer_player_aliases == ("さくま", "さくま社長")
 
 
 def test_parse_job_message_rejects_missing_required_keys() -> None:
@@ -255,42 +187,6 @@ def test_parse_job_message_rejects_schema_invalid_hint_payloads() -> None:
             assert expected_message in error.value.message
 
 
-def test_request_id_round_trips_when_set() -> None:
-    payload = to_stream_payload(
-        OcrJobMessage(
-            job_id="job-1",
-            draft_id="draft-1",
-            image_id="image-1",
-            image_path=Path("/tmp/sample.jpg"),
-            requested_screen_type=ScreenType.TOTAL_ASSETS,
-            attempt=1,
-            enqueued_at="2026-04-29T10:00:00Z",
-            hints=OcrJobHints(),
-            request_id="abc-123_DEF",
-        )
-    )
-    assert payload["requestId"] == "abc-123_DEF"
-    _assert_valid_stream_payload(payload)
-    assert parse_job_message(payload).request_id == "abc-123_DEF"
-
-
-def test_request_id_is_omitted_when_absent() -> None:
-    payload = to_stream_payload(
-        OcrJobMessage(
-            job_id="job-1",
-            draft_id="draft-1",
-            image_id="image-1",
-            image_path=Path("/tmp/sample.jpg"),
-            requested_screen_type=ScreenType.TOTAL_ASSETS,
-            attempt=1,
-            enqueued_at="2026-04-29T10:00:00Z",
-            hints=OcrJobHints(),
-        )
-    )
-    assert "requestId" not in payload
-    assert parse_job_message(payload).request_id is None
-
-
 def test_invalid_request_id_is_rejected_by_runtime_schema_validation() -> None:
     with pytest.raises(OcrError) as error:
         parse_job_message(
@@ -386,26 +282,22 @@ def test_validate_queue_contract_schemas_fails_fast_when_configured_dir_is_missi
 
 
 def _schema_valid_payload() -> dict[str, str]:
-    return to_stream_payload(
-        OcrJobMessage(
-            job_id="job-schema-1",
-            draft_id="draft-schema-1",
-            image_id="image-schema-1",
-            image_path=Path("/tmp/momo-result/uploads/image-schema-1.png"),
-            requested_screen_type=ScreenType.INCIDENT_LOG,
-            attempt=1,
-            enqueued_at="2026-05-09T00:00:00Z",
-            hints=OcrJobHints(
-                game_title="桃鉄2",
-                layout_family="momotetsu_2",
-                known_player_aliases=(
-                    PlayerAliasHint(member_id="member-ponta", aliases=("ぽんた", "ぽんた社長")),
-                    PlayerAliasHint(member_id="member-otaka", aliases=("オータカ", "オータカ社長")),
-                ),
-                computer_player_aliases=("さくま", "さくま社長"),
-            ),
-            request_id="req_20260509-abc",
-        )
+    return make_stream_payload(
+        job_id="job-schema-1",
+        draft_id="draft-schema-1",
+        image_id="image-schema-1",
+        image_path=Path("/tmp/momo-result/uploads/image-schema-1.png"),
+        requested_screen_type=ScreenType.INCIDENT_LOG,
+        attempt=1,
+        enqueued_at="2026-05-09T00:00:00Z",
+        game_title="桃鉄2",
+        layout_family="momotetsu_2",
+        known_player_aliases=(
+            PlayerAliasHint(member_id="member-ponta", aliases=("ぽんた", "ぽんた社長")),
+            PlayerAliasHint(member_id="member-otaka", aliases=("オータカ", "オータカ社長")),
+        ),
+        computer_player_aliases=("さくま", "さくま社長"),
+        request_id="req_20260509-abc",
     )
 
 

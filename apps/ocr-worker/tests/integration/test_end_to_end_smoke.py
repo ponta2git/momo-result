@@ -14,13 +14,12 @@ from momo_ocr.features.ocr_jobs.cancellation import RepositoryCancellationChecke
 from momo_ocr.features.ocr_jobs.consumer import RedisOcrJobConsumer
 from momo_ocr.features.ocr_jobs.dependencies import JobRunnerDependencies
 from momo_ocr.features.ocr_jobs.models import OcrJobStatus
-from momo_ocr.features.ocr_jobs.queue_contract import to_stream_payload
 from momo_ocr.features.ocr_jobs.repository import PostgresOcrJobRepository
 from momo_ocr.features.ocr_jobs.runner import run_one_job
 from tests.integration.resources import OcrJobIds, RedisNames
 from tests.support.ocr_jobs import (
     AnalyzeStub,
-    make_job_message,
+    make_stream_payload,
     success_draft_payload,
     successful_analysis,
 )
@@ -36,7 +35,7 @@ def test_redis_to_worker_to_postgres_smoke(
 ) -> None:
     _insert_job(postgres_conninfo, ids=ocr_job_ids)
 
-    message = make_job_message(
+    payload = make_stream_payload(
         job_id=ocr_job_ids.job_id,
         draft_id=ocr_job_ids.draft_id,
         image_id=ocr_job_ids.image_id,
@@ -44,7 +43,7 @@ def test_redis_to_worker_to_postgres_smoke(
         requested_screen_type=ScreenType.TOTAL_ASSETS,
         enqueued_at="2026-04-29T10:00:00Z",
     )
-    stream_payload: dict[EncodableT, EncodableT] = dict(to_stream_payload(message).items())
+    stream_payload: dict[EncodableT, EncodableT] = dict(payload.items())
     redis_client.xadd(redis_names.stream, stream_payload)
 
     consumer = RedisOcrJobConsumer(

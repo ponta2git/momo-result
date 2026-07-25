@@ -20,20 +20,22 @@ from momo_ocr.features.ocr_domain.models import (
     ScreenType,
     WarningCode,
 )
-from momo_ocr.features.ocr_jobs.cancellation import InMemoryCancellationChecker
-from momo_ocr.features.ocr_jobs.consumer import InMemoryOcrJobConsumer
 from momo_ocr.features.ocr_jobs.models import (
     OcrJobExecutionResult,
     OcrJobRecord,
     OcrJobStatus,
     PlayerAliasHint,
 )
-from momo_ocr.features.ocr_jobs.repository import InMemoryOcrJobRepository
 from momo_ocr.features.player_identity.aliases import (
     PlayerAliasResolver,
     normalize_name_for_match,
 )
 from momo_ocr.shared.errors import FailureCode, OcrError, OcrFailure
+from tests.support.ocr_job_doubles import (
+    InMemoryCancellationChecker,
+    InMemoryOcrJobConsumer,
+    InMemoryOcrJobRepository,
+)
 from tests.support.ocr_jobs import (
     WORKER_ID,
     AnalyzeStub,

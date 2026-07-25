@@ -2,19 +2,13 @@ from __future__ import annotations
 
 from PIL import Image, ImageOps
 
-from momo_ocr.features.image_processing.geometry import FULL_HD, Size
+from momo_ocr.features.image_processing.geometry import Size
 from momo_ocr.shared.errors import FailureCode, OcrError
 
 MIN_RELIABLE_WIDTH = 640
 MIN_RELIABLE_HEIGHT = 360
 MAX_SUPPORTED_WIDTH = 3840
 MAX_SUPPORTED_HEIGHT = 2160
-
-
-def normalize_to_full_hd(image: Image.Image) -> Image.Image:
-    if image.size == (FULL_HD.width, FULL_HD.height):
-        return image.copy()
-    return image.resize((FULL_HD.width, FULL_HD.height), Image.Resampling.LANCZOS)
 
 
 def ensure_supported_dimensions(size: Size) -> None:

@@ -3,14 +3,15 @@ from __future__ import annotations
 from pathlib import Path
 
 from momo_ocr.features.ocr_domain.models import ScreenType
-from momo_ocr.features.player_identity.aliases import (
-    alias_resolver_from_member_aliases,
-    extract_player_name_candidate,
-)
+from momo_ocr.features.player_identity.aliases import extract_player_identity
 from momo_ocr.features.screen_parsers.total_assets import TotalAssetsParser
 from momo_ocr.features.total_assets.postprocess import parse_man_yen
 from tests.support.images import write_test_image
-from tests.support.parser_context import make_parse_context, parse_payload
+from tests.support.parser_context import (
+    alias_resolver_from_members,
+    make_parse_context,
+    parse_payload,
+)
 from tests.support.text_recognition import SequenceTextRecognitionEngine
 
 
@@ -29,14 +30,16 @@ def test_parse_man_yen_handles_oku_and_man_units() -> None:
     assert parse_man_yen("21105") == 2110
 
 
-def test_extract_player_name_candidate_normalizes_known_aliases() -> None:
+def test_extract_player_identity_normalizes_known_aliases() -> None:
     assert (
-        extract_player_name_candidate("なーーールーな Se se SE NO11 社長 148570044") == "NO11社長"
+        extract_player_identity("なーーールーな Se se SE NO11 社長 148570044").raw_player_name
+        == "NO11社長"
     )
     assert (
-        extract_player_name_candidate("アト さパ ロン オータカ社長 3億3560万円") == "オータカ社長"
+        extract_player_identity("アト さパ ロン オータカ社長 3億3560万円").raw_player_name
+        == "オータカ社長"
     )
-    assert extract_player_name_candidate("トニ ぼんた社長 2183820hFH") == "ぽんた社長"
+    assert extract_player_identity("トニ ぼんた社長 2183820hFH").raw_player_name == "ぽんた社長"
 
 
 def test_total_assets_parser_extracts_ranked_players_and_amounts(tmp_path: Path) -> None:
@@ -121,9 +124,7 @@ def test_total_assets_parser_sets_member_id_from_alias_hint(tmp_path: Path) -> N
         debug_dir=None,
         include_raw_text=False,
         text_engine=engine,
-        alias_resolver=alias_resolver_from_member_aliases(
-            {"member-ponta": ("PONTAプレイヤー社長",)}
-        ),
+        alias_resolver=alias_resolver_from_members({"member-ponta": ("PONTAプレイヤー社長",)}),
     )
     payload = parse_payload(TotalAssetsParser(), context)
 

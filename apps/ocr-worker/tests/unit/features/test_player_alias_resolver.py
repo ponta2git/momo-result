@@ -8,10 +8,9 @@ from momo_ocr.features.player_identity.aliases import (
     MIN_SAFE_ALIAS_LENGTH,
     PlayerAliasResolver,
     alias_resolver_from_map,
-    alias_resolver_from_member_aliases,
     extract_player_identity,
-    extract_player_name_candidate,
 )
+from tests.support.parser_context import alias_resolver_from_members
 
 
 def test_default_static_aliases_drop_unsafe_short_surfaces() -> None:
@@ -31,7 +30,7 @@ def test_default_resolver_does_not_match_unrelated_short_tokens() -> None:
     # only ``た社長`` must fall back to the regex extraction (raw token)
     # instead of being normalized to ``ぽんた社長``. This protects against
     # false-positive normalization for genuinely different player names.
-    assert extract_player_name_candidate('"7 た社長 6借5490万円') == "た社長"
+    assert extract_player_identity('"7 た社長 6借5490万円').raw_player_name == "た社長"
 
 
 def test_custom_alias_resolver_overrides_defaults() -> None:
@@ -39,19 +38,21 @@ def test_custom_alias_resolver_overrides_defaults() -> None:
     # callers can correct mis-pruned cases without modifying the worker.
     resolver = alias_resolver_from_map({"ハーゆー社長": ("ハーゆー社長",)})
     assert (
-        extract_player_name_candidate("noise ハーゆー社長 800万円", alias_resolver=resolver)
+        extract_player_identity(
+            "noise ハーゆー社長 800万円", alias_resolver=resolver
+        ).raw_player_name
         == "ハーゆー社長"
     )
 
 
-def test_member_alias_resolver_matches_momotetsu_president_suffix_without_seed() -> None:
-    resolver = alias_resolver_from_member_aliases({"member_akane_mami": ("NO11",)})
+def test_hint_alias_resolver_maps_member_id() -> None:
+    resolver = alias_resolver_from_members({"member_akane_mami": ("PONTA社長",)})
 
     identity = extract_player_identity(
-        "なーーールーな Se se SE NO11 社長 148570044", alias_resolver=resolver
+        "なーーールーな Se se SE PONTA社長 148570044", alias_resolver=resolver
     )
 
-    assert identity.raw_player_name == "NO11"
+    assert identity.raw_player_name == "PONTA社長"
     assert identity.member_id == "member_akane_mami"
 
 
@@ -59,7 +60,9 @@ def test_custom_alias_resolver_matches_momotetsu_president_suffix_without_seed()
     resolver = alias_resolver_from_map({"オータカ": ("オータカ",)})
 
     assert (
-        extract_player_name_candidate("noise オータカ社長 800万円", alias_resolver=resolver)
+        extract_player_identity(
+            "noise オータカ社長 800万円", alias_resolver=resolver
+        ).raw_player_name
         == "オータカ"
     )
 
@@ -69,5 +72,11 @@ def test_default_alias_resolver_is_resolver_instance() -> None:
 
 
 def test_default_alias_resolver_matches_momotetsu_2_name_noise() -> None:
-    assert extract_player_name_candidate("a と & | ローゆー社長 2億6000万円") == "いーゆー社長"
-    assert extract_player_name_candidate("のシーンいと コーツ力社長 1800万円") == "オータカ社長"
+    assert (
+        extract_player_identity("a と & | ローゆー社長 2億6000万円").raw_player_name
+        == "いーゆー社長"
+    )
+    assert (
+        extract_player_identity("のシーンいと コーツ力社長 1800万円").raw_player_name
+        == "オータカ社長"
+    )

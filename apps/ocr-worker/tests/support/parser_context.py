@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Protocol, cast
 
 from PIL import Image
 
 from momo_ocr.features.ocr_domain.models import OcrDraftPayload, OcrWarning, ScreenType
+from momo_ocr.features.ocr_jobs.aliases import alias_resolver_from_hints
+from momo_ocr.features.ocr_jobs.models import OcrJobHints, PlayerAliasHint
 from momo_ocr.features.parser_core.context import (
     ParseDiagnostics,
     ParseInput,
@@ -18,6 +21,19 @@ from momo_ocr.features.player_identity.aliases import DEFAULT_ALIAS_RESOLVER, Pl
 from momo_ocr.features.player_order.models import PlayerOrderDetection
 from momo_ocr.features.result_projection.draft_payload import project_parse_result
 from momo_ocr.features.text_recognition.engine import TextRecognitionEngine
+
+
+def alias_resolver_from_members(
+    aliases: Mapping[str, Sequence[str]],
+) -> PlayerAliasResolver:
+    return alias_resolver_from_hints(
+        OcrJobHints(
+            known_player_aliases=tuple(
+                PlayerAliasHint(member_id=member_id, aliases=tuple(surfaces))
+                for member_id, surfaces in aliases.items()
+            )
+        )
+    )
 
 
 class _ParseCallable(Protocol):

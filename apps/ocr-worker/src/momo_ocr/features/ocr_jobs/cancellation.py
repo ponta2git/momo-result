@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from threading import Lock
+from dataclasses import dataclass
 from typing import Protocol
 
 from momo_ocr.features.ocr_jobs.models import OcrJobStatus
@@ -33,19 +32,3 @@ class RepositoryCancellationChecker:
     def is_cancelled(self, job_id: str) -> bool:
         status = self.status_reader.get_status(job_id)
         return status is OcrJobStatus.CANCELLED
-
-
-@dataclass
-class InMemoryCancellationChecker:
-    """Test double implementing :class:`CancellationChecker`."""
-
-    cancelled_job_ids: set[str] = field(default_factory=set)
-    _lock: Lock = field(default_factory=Lock, repr=False, compare=False)
-
-    def cancel(self, job_id: str) -> None:
-        with self._lock:
-            self.cancelled_job_ids.add(job_id)
-
-    def is_cancelled(self, job_id: str) -> bool:
-        with self._lock:
-            return job_id in self.cancelled_job_ids

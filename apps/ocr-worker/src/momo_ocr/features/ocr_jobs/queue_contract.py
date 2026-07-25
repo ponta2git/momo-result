@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 from collections.abc import Callable, Mapping
 from functools import lru_cache
 from pathlib import Path
@@ -16,10 +15,7 @@ from momo_ocr.features.ocr_jobs.models import OcrJobHints, OcrJobMessage, Player
 from momo_ocr.shared.errors import FailureCode, OcrError
 
 OCR_HINTS_KEY = "ocrHintsJson"
-SCHEMA_VERSION_KEY = "schemaVersion"
-SCHEMA_VERSION = "1"
 REQUEST_ID_KEY = "requestId"
-REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 SCHEMA_DIR_ENV = "MOMO_OCR_SCHEMA_DIR"
 STREAM_PAYLOAD_SCHEMA_FILE = "ocr-queue-payload-v1.schema.json"
 OCR_HINTS_SCHEMA_FILE = "ocr-hints-v1.schema.json"
@@ -65,30 +61,6 @@ def parse_job_message(payload: Mapping[str, object]) -> OcrJobMessage:
         hints=_parse_hints(hints_payload),
         request_id=raw_payload.get(REQUEST_ID_KEY),
     )
-
-
-def to_stream_payload(message: OcrJobMessage) -> dict[str, str]:
-    payload = {
-        SCHEMA_VERSION_KEY: SCHEMA_VERSION,
-        "jobId": message.job_id,
-        "draftId": message.draft_id,
-        "imageId": message.image_id,
-        "imagePath": str(message.image_path),
-        "requestedScreenType": message.requested_screen_type.value,
-        "attempt": str(message.attempt),
-        "enqueuedAt": message.enqueued_at,
-    }
-    hints_payload = _hints_to_payload(message.hints)
-    if hints_payload:
-        payload[OCR_HINTS_KEY] = json.dumps(
-            hints_payload,
-            ensure_ascii=False,
-            separators=(",", ":"),
-            sort_keys=True,
-        )
-    if message.request_id and REQUEST_ID_PATTERN.match(message.request_id):
-        payload[REQUEST_ID_KEY] = message.request_id
-    return payload
 
 
 def _validate_stream_payload_schema(payload: Mapping[str, object]) -> Mapping[str, object] | None:
@@ -280,19 +252,3 @@ def _string_tuple(value: object) -> tuple[str, ...]:
     if value is None:
         return ()
     return tuple(cast("list[str]", value))
-
-
-def _hints_to_payload(hints: OcrJobHints) -> dict[str, object]:
-    payload: dict[str, object] = {}
-    if hints.game_title is not None:
-        payload["gameTitle"] = hints.game_title
-    if hints.layout_family is not None:
-        payload["layoutFamily"] = hints.layout_family
-    if hints.known_player_aliases:
-        payload["knownPlayerAliases"] = [
-            {"memberId": alias.member_id, "aliases": list(alias.aliases)}
-            for alias in hints.known_player_aliases
-        ]
-    if hints.computer_player_aliases:
-        payload["computerPlayerAliases"] = list(hints.computer_player_aliases)
-    return payload

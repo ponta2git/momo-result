@@ -3,11 +3,14 @@ from __future__ import annotations
 from pathlib import Path
 
 from momo_ocr.features.ocr_domain.models import ScreenType
-from momo_ocr.features.player_identity.aliases import alias_resolver_from_member_aliases
 from momo_ocr.features.revenue.postprocess import parse_man_yen
 from momo_ocr.features.screen_parsers.revenue import RevenueParser
 from tests.support.images import write_test_image
-from tests.support.parser_context import make_parse_context, parse_payload
+from tests.support.parser_context import (
+    alias_resolver_from_members,
+    make_parse_context,
+    parse_payload,
+)
 from tests.support.text_recognition import SequenceTextRecognitionEngine
 
 
@@ -104,7 +107,7 @@ def test_revenue_parser_warns_when_multiple_rows_resolve_to_same_member(
             "PONTA社長 1億円",
             "PONTA別名社長 9000万円",
             "OTAKA社長 8000万円",
-            "いーゆー社長 7000万円",
+            "EUROPE社長 7000万円",
         ]
     )
 
@@ -116,11 +119,11 @@ def test_revenue_parser_warns_when_multiple_rows_resolve_to_same_member(
         debug_dir=None,
         include_raw_text=False,
         text_engine=engine,
-        alias_resolver=alias_resolver_from_member_aliases(
+        alias_resolver=alias_resolver_from_members(
             {
                 "member-ponta": ("PONTA社長", "PONTA別名社長"),
                 "member-otaka": ("OTAKA社長",),
-                "member-eu": ("いーゆー社長",),
+                "member-eu": ("EUROPE社長",),
             }
         ),
     )

@@ -37,7 +37,6 @@ export default defineConfig({
     ? [["github"], ["html", { open: "never", outputFolder: "playwright-report" }]]
     : "list",
   use: {
-    acceptDownloads: true,
     baseURL,
     screenshot: "only-on-failure",
     trace: "retain-on-failure",

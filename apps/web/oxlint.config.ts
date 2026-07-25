@@ -7,9 +7,6 @@ export default defineConfig({
     suspicious: "error",
     perf: "warn",
     pedantic: "warn",
-    style: "off",
-    restriction: "off",
-    nursery: "off",
   },
   options: {
     reportUnusedDisableDirectives: "error",
@@ -32,7 +29,6 @@ export default defineConfig({
     "typescript/no-misused-promises": ["error", { checksVoidReturn: { attributes: false } }],
     "typescript/no-unsafe-type-assertion": "warn",
     "typescript/prefer-optional-chain": "warn",
-    "typescript/prefer-nullish-coalescing": "warn",
     "typescript/no-unnecessary-condition": "warn",
     "typescript/only-throw-error": "error",
 
@@ -45,10 +41,7 @@ export default defineConfig({
     "unicorn/no-useless-undefined": "off",
     "unicorn/prefer-query-selector": "off",
     "unicorn/prefer-import-meta-properties": "off",
-    "unicorn/prefer-native-coercion-functions": "warn",
-    "unicorn/prefer-string-replace-all": "warn",
     "unicorn/no-array-callback-reference": "off",
-    "react/jsx-no-useless-fragment": "warn",
 
     "import/consistent-type-specifier-style": ["error", "prefer-top-level"],
     "import/no-duplicates": "error",
@@ -56,16 +49,10 @@ export default defineConfig({
     "import/no-unassigned-import": "off",
 
     "react/react-in-jsx-scope": "off",
-    "react/exhaustive-deps": "error",
     "react/jsx-no-constructed-context-values": "error",
-    "react/no-array-index-key": "warn",
     "react/no-unstable-nested-components": ["error", { allowAsProps: true }],
     "react/button-has-type": "error",
     "jsx-a11y/prefer-tag-over-role": "off",
-
-    "unicorn/prefer-array-flat-map": "warn",
-    "unicorn/prefer-set-has": "warn",
-    "unicorn/prefer-array-find": "warn",
 
     eqeqeq: ["error", "always", { null: "ignore" }],
     "no-console": "warn",
@@ -90,7 +77,7 @@ export default defineConfig({
     browser: true,
     builtin: true,
   },
-  ignorePatterns: ["dist/**", "coverage/**", ".cache/**", "src/shared/api/generated.ts"],
+  ignorePatterns: ["dist/**", "coverage/**", "src/shared/api/generated.ts"],
   overrides: [
     {
       files: ["src/**/*.d.ts"],
@@ -99,7 +86,7 @@ export default defineConfig({
       },
     },
     {
-      files: ["src/**/*.test.ts", "src/**/*.test.tsx", "src/test/**", "src/shared/api/msw/**"],
+      files: ["src/**/*.test.ts", "src/**/*.test.tsx", "src/test/**"],
       rules: {
         "no-console": "off",
         "typescript/no-non-null-assertion": "off",

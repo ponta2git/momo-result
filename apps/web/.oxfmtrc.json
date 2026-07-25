@@ -1,21 +1,6 @@
 {
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
-  "printWidth": 100,
-  "tabWidth": 2,
-  "useTabs": false,
-  "semi": true,
-  "singleQuote": false,
-  "jsxSingleQuote": false,
-  "trailingComma": "all",
-  "bracketSpacing": true,
-  "bracketSameLine": false,
-  "arrowParens": "always",
-  "endOfLine": "lf",
-  "insertFinalNewline": true,
-  "objectWrap": "preserve",
-  "singleAttributePerLine": false,
   "sortImports": true,
-  "sortPackageJson": true,
   "sortTailwindcss": true,
   "ignorePatterns": ["src/shared/api/generated.ts"]
 }

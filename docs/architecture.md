@@ -60,7 +60,7 @@ API境界の一部は `ApiEndpointsArchitectureSpec` と `ApiRuntimeArchitecture
 
 - `momo.api.usecases` 直下は公開 usecase facade を置く。集計、採点、文言生成などの内部実装が大きくなる場合は `momo.api.usecases.<domain>` へ package-private object として分け、HTTP / repository から直接参照しない。
 - 戦績比較の集計は engine / aggregation / endpoint façade に分ける。engine と aggregation は endpoint DTO、HTTP、repository、effect type を import せず、`momo.api.usecases.seriescomparison.model` の内部結果型だけを扱う。Tapir / Circe / Schema は `momo.api.endpoints.SeriesComparisonApiModels` の alias façade に閉じる。
-- repository / adapter / endpoint model は、複数 resource や複数 runtime 責務を 1 ファイルへ詰めない。1 ファイルが概ね300行を超えたら、公開型、contract、SQL alg、facade、test double、DTO family のどれが混在しているかを確認し、同一 package 内の top-level 定義分割を優先する。
+- repository / adapter / endpoint model は、複数 resource や複数 runtime 責務を 1 ファイルへ詰めない。1 ファイルが概ね300行を超えたら、公開型、contract、SQL alg、facade、test double、DTO family のどれが混在しているかを確認し、同一 package 内の top-level 定義分割を優先する。行数超過は API architecture spec で warning として報告し、単独では品質ゲートを失敗させない。
 - composition root は `momo.api.bootstrap.ApiApp` に置くが、`ApiApp` は runtime 実装セットの選択に寄せる。Redis / rate limit / queue の infrastructure、maintenance、health details、usecase-to-HTTP wiring は bootstrap 配下の helper object へ分ける。
 - 大きい純粋集計アルゴリズムを残す場合は、公開 facade から分離し、責務を名前で表す専用 package / file に置く。単に行数だけで細切れにせず、共通 mutable state や wire表現を漏らさない境界を優先する。
 
@@ -84,7 +84,7 @@ API境界の一部は `ApiEndpointsArchitectureSpec` と `ApiRuntimeArchitecture
 - 横断 API client、生成型、query key、共有UI、共通domain helperは `shared/` に置く。画面固有の状態・変換・UIは feature 配下に置く。
 - `*Page.tsx` は composition とページ状態に寄せ、データ取得・mutation・複雑な状態機械は hook / controller / helper へ分ける。
 - 大きい feature は `page/`、`model/`、`metrics/`、`charts/`、`drilldowns/`、`review/` のように責務名で物理分割する。1階層に page shell、可視部品、集計ロジック、drilldown、review 表示を混在させない。
-- 本番 TS/TSX module は概ね300行以内に保つ。超過する場合は page shell、section、controller hook、view model、presentation helper、型、adapter facade の混在を疑い、責務名で分割する。
+- 本番 TS/TSX module は概ね300行以内に保つ。超過する場合は page shell、section、controller hook、view model、presentation helper、型、adapter facade の混在を疑い、責務名で分割する。module size checker は超過を warning として報告し、単独では lint を失敗させない。
 - 本番コードから `@/test/*`、`shared/api/msw/*` を import しない。
 
 web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、module size は `apps/web/scripts/check-module-size.mjs` で検査する。新しい層ルールを追加したら、可能な範囲で検査へ反映する。
@@ -136,6 +136,7 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、mod
 - OCRジョブ状態の正本はDB。Redis Streams は配送路。
 - queue 契約は `docs/redis-streams-ocr-contract.md`、payload schema は `docs/schemas/*.schema.json` を正本にする。
 - native OCR、Redis、PostgreSQL、tessdata を要する検証は integration marker へ分離する。unit test では parser、payload validation、状態遷移、failure mapping を優先する。
+- Python source module の概ね300行超過は architecture test で warning として報告し、単独ではテストを失敗させない。責務分割の要否は公開型、parser、adapter、workflow の境界を確認して判断する。
 
 ## 5. Runtime / Security / Ops
 

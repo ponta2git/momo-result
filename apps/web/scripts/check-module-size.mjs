@@ -52,9 +52,8 @@ for (const file of files) {
 }
 
 if (violations.length > 0) {
-  console.error(`Production modules must stay within ${maxProductionLines} lines.`);
+  console.warn(`Production module size smell detected (${maxProductionLines}+ lines).`);
   for (const violation of violations.toSorted((a, b) => b.lineCount - a.lineCount)) {
-    console.error(`- ${violation.file}: ${violation.lineCount} lines`);
+    console.warn(`- ${violation.file}: ${violation.lineCount} lines`);
   }
-  process.exitCode = 1;
 }

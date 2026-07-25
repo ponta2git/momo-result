@@ -33,17 +33,11 @@ build-backend = "hatchling.build"
 
 [tool.ruff]
 line-length = 100
-target-version = "py314"
-src = ["src", "tests", "scripts"]
 show-fixes = true
-extend-exclude = [
-  "out",
-]
 
 [tool.ruff.format]
 docstring-code-format = true
 line-ending = "lf"
-quote-style = "double"
 
 [tool.ruff.lint]
 select = ["ALL"]
@@ -63,7 +57,6 @@ ignore = [
   "RUF002",
   "RUF003",
 ]
-fixable = ["ALL"]
 unfixable = [
   # Do not remove commented-out code automatically; it may hide useful calibration notes.
   "ERA001",
@@ -81,7 +74,7 @@ unfixable = [
 "scripts/eval_accuracy.py" = ["INP001"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["eval_lib", "momo_ocr"]
+known-first-party = ["eval_lib"]
 required-imports = ["from __future__ import annotations"]
 
 [tool.ruff.lint.pylint]
@@ -90,13 +83,8 @@ max-branches = 8
 max-returns = 4
 max-statements = 40
 
-[tool.ruff.lint.flake8-annotations]
-allow-star-arg-any = false
-mypy-init-return = true
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
 addopts = [
   "--import-mode=importlib",
   "--strict-config",
@@ -124,7 +112,6 @@ show_missing = true
 skip_covered = true
 
 [tool.mypy]
-python_version = "3.14"
 strict = true
 disallow_any_unimported = true
 enable_error_code = [
@@ -134,13 +121,8 @@ enable_error_code = [
   "truthy-bool",
   "truthy-iterable",
 ]
-extra_checks = true
-local_partial_types = true
-strict_bytes = true
-strict_equality = true
 warn_unreachable = true
 warn_unused_configs = true
-show_error_codes = true
 pretty = true
 files = ["src", "tests"]
 

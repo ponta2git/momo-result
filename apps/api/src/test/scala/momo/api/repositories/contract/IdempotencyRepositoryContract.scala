@@ -36,6 +36,7 @@ trait IdempotencyRepositoryContract:
     headers = Map("Content-Type" -> "application/json"),
     body = Vector(9.toByte, 8.toByte),
   )
+  private val pendingResponse = IdempotencyResponse(0, Map.empty, Vector.empty)
 
   private def record(
       key: String,
@@ -57,21 +58,33 @@ trait IdempotencyRepositoryContract:
     record(key, draftEndpoint, defaultHash, later, defaultResponse)
 
   private def pendingRecord(key: String): IdempotencyRecord = completedRecord(key)
-    .copy(response = IdempotencyResponse(0, Map.empty, Vector.empty))
+    .copy(response = pendingResponse)
+
+  private def store(
+      repo: IdempotencyRepository[IO],
+      entry: IdempotencyRecord,
+  ): IO[Unit] = repo.reserveWithinAccountLimit(
+    entry.copy(response = pendingResponse),
+    now,
+    activeKeyLimitPerAccount = 10,
+  ).flatMap { reservation =>
+    assertEquals(reservation, IdempotencyReservation.Reserved)
+    repo.complete(entry.key, entry.accountId, entry.endpoint, entry.requestHash, entry.response)
+  }
 
   test("lookup returns None when no record exists"):
     freshRepo.flatMap(_.lookup("missing", account, draftEndpoint))
       .map(got => assertEquals(got, None))
 
-  test("record + lookup round-trips a stored entry, preserving headers and bytes"):
+  test("reserve + complete + lookup round-trips a stored entry, preserving headers and bytes"):
     val entry = completedRecord("k-roundtrip")
     for
       repo <- freshRepo
-      _ <- repo.record(entry)
+      _ <- store(repo, entry)
       got <- repo.lookup(entry.key, entry.accountId, entry.endpoint)
     yield assertEquals(got, Some(entry))
 
-  test("record with empty response body round-trips as an empty body"):
+  test("completed response with an empty body round-trips as an empty body"):
     val entry = record(
       "k-empty-body",
       draftEndpoint,
@@ -81,28 +94,17 @@ trait IdempotencyRepositoryContract:
     )
     for
       repo <- freshRepo
-      _ <- repo.record(entry)
+      _ <- store(repo, entry)
       got <- repo.lookup(entry.key, entry.accountId, entry.endpoint)
     yield assertEquals(got.map(_.response), Some(entry.response))
-
-  test("record fails when the same composite key is reused"):
-    val entry = completedRecord("k-duplicate")
-    val effect =
-      for
-        repo <- freshRepo
-        _ <- repo.record(entry)
-        _ <- repo.record(entry)
-      yield ()
-
-    effect.attempt.map(result => assert(result.isLeft, "expected duplicate insert to fail"))
 
   test("the same key on a different endpoint is treated as a different record"):
     val first = record("k-shared", draftEndpoint, defaultHash, later, defaultResponse)
     val second = record("k-shared", ocrEndpoint, defaultHash, later, defaultResponse)
     for
       repo <- freshRepo
-      _ <- repo.record(first)
-      _ <- repo.record(second)
+      _ <- store(repo, first)
+      _ <- store(repo, second)
       gotFirst <- repo.lookup(first.key, account, first.endpoint)
       gotSecond <- repo.lookup(second.key, account, second.endpoint)
     yield
@@ -116,9 +118,9 @@ trait IdempotencyRepositoryContract:
     val live = record("live", draftEndpoint, defaultHash, now.plusSeconds(60), defaultResponse)
     for
       repo <- freshRepo
-      _ <- repo.record(expired)
-      _ <- repo.record(boundary)
-      _ <- repo.record(live)
+      _ <- store(repo, expired)
+      _ <- store(repo, boundary)
+      _ <- store(repo, live)
       removed <- repo.cleanup(now)
       gotExpired <- repo.lookup(expired.key, account, expired.endpoint)
       gotBoundary <- repo.lookup(boundary.key, account, boundary.endpoint)
@@ -129,28 +131,19 @@ trait IdempotencyRepositoryContract:
       assertEquals(gotBoundary, None)
       assertEquals(gotLive, Some(live))
 
-  test("reserve, complete, replay, conflict, and abandon form the atomic lifecycle"):
+  test("abandon removes a pending reservation"):
     val pending = pendingRecord("k-reserve-lifecycle")
-    val completed = IdempotencyResponse(200, Map("Content-Type" -> "application/json"), Vector(1))
-    val abandoned = pending.copy(key = "k-abandon-lifecycle")
     for
       repo <- freshRepo
-      first <- repo.reserve(pending)
-      second <- repo.reserve(pending)
-      conflict <- repo.reserve(pending.copy(requestHash = Vector(9.toByte)))
+      reserved <- repo.reserveWithinAccountLimit(pending, now, activeKeyLimitPerAccount = 10)
       _ <- repo
-        .complete(pending.key, pending.accountId, pending.endpoint, pending.requestHash, completed)
-      replay <- repo.reserve(pending)
-      reserved <- repo.reserve(abandoned)
-      _ <- repo
-        .abandon(abandoned.key, abandoned.accountId, abandoned.endpoint, abandoned.requestHash)
-      reservedAgain <- repo.reserve(abandoned)
+        .abandon(pending.key, pending.accountId, pending.endpoint, pending.requestHash)
+      found <- repo.lookup(pending.key, pending.accountId, pending.endpoint)
+      reservedAgain <- repo
+        .reserveWithinAccountLimit(pending, now, activeKeyLimitPerAccount = 10)
     yield
-      assertEquals(first, IdempotencyReservation.Reserved)
-      assertEquals(second, IdempotencyReservation.InProgress)
-      assertEquals(conflict, IdempotencyReservation.Conflict)
-      assertEquals(replay, IdempotencyReservation.Replay(completed))
       assertEquals(reserved, IdempotencyReservation.Reserved)
+      assertEquals(found, None)
       assertEquals(reservedAgain, IdempotencyReservation.Reserved)
 
   test("reserveWithinAccountLimit blocks fresh active keys but preserves existing key semantics"):
@@ -184,7 +177,7 @@ trait IdempotencyRepositoryContract:
     val fresh = pendingRecord("k-fresh-after-expired")
     for
       repo <- freshRepo
-      _ <- repo.record(expired)
+      _ <- store(repo, expired)
       reserved <- repo.reserveWithinAccountLimit(fresh, now, activeKeyLimitPerAccount = 1)
     yield assertEquals(reserved, IdempotencyReservation.Reserved)
 end IdempotencyRepositoryContract

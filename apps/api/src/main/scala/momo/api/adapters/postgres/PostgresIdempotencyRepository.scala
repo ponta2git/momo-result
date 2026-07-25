@@ -2,15 +2,12 @@ package momo.api.adapters.postgres
 
 import java.time.Instant
 
-import cats.MonadThrow
 import cats.effect.kernel.MonadCancelThrow
 import cats.syntax.all.*
 import doobie.*
-import doobie.enumerated.SqlState
 import doobie.implicits.*
 import doobie.postgres.circe.jsonb.implicits.*
 import doobie.postgres.implicits.*
-import doobie.postgres.sqlstate
 import io.circe.Json
 import io.circe.syntax.*
 
@@ -28,21 +25,10 @@ import momo.api.repositories.{
 /**
  * Postgres-backed [[IdempotencyAlg]].
  *
- * Schema is owned by momo-db (see `apps/api/docs/proposals/idempotency-keys.md`). The actual
- * applied DDL matches the proposal: `(key, account_id, endpoint)` composite PK,
- * `request_hash bytea`, `response_status int`, `response_headers jsonb`, `response_body bytea`,
- * `created_at`/`expires_at` `timestamptz`.
- *
- * `record` translates the unique-violation that occurs when the same composite PK is inserted
- * twice into a domain-level [[IdempotencyConflict]] error so the HTTP layer can return 409.
+ * Schema is owned by momo-db. The repository uses the `(key, account_id, endpoint)` composite key
+ * and stores the request hash, response snapshot, and expiry timestamps defined by that schema.
  */
 object PostgresIdempotency:
-
-  /** Surface a composite-PK conflict to the caller without inspecting JDBC-level types. */
-  final class IdempotencyConflict(message: String) extends RuntimeException(message)
-
-  private[postgres] def isUniqueViolation(state: SqlState): Boolean = state.value ==
-    sqlstate.class23.UNIQUE_VIOLATION.value
 
   private def headersToJson(headers: Map[String, String]): Json = headers.asJson
 
@@ -138,30 +124,6 @@ object PostgresIdempotency:
         WHERE key = $key AND account_id = $accountId AND endpoint = $endpoint
       """.query[Row].option.map(_.map(toRecord))
 
-    override def record(entry: IdempotencyRecord): ConnectionIO[Unit] =
-      val hashArray = bytesToArray(entry.requestHash)
-      val bodyOpt: Option[Array[Byte]] =
-        if entry.response.body.isEmpty then None else Some(bytesToArray(entry.response.body))
-      val headersJson = headersToJson(entry.response.headers)
-      sql"""
-        INSERT INTO idempotency_keys (
-          key, account_id, endpoint, request_hash, response_status,
-          response_headers, response_body, created_at, expires_at
-        ) VALUES (
-          ${entry.key}, ${entry.accountId}, ${entry.endpoint}, $hashArray,
-          ${entry.response.status}, $headersJson, $bodyOpt,
-          ${entry.createdAt}, ${entry.expiresAt}
-        )
-      """.update.run.void.exceptSomeSqlState {
-        case state if PostgresIdempotency.isUniqueViolation(state) =>
-          MonadThrow[ConnectionIO].raiseError[Unit](new IdempotencyConflict(
-            s"idempotency record already exists for key=${entry.key} endpoint=${entry.endpoint}"
-          ))
-      }
-
-    override def reserve(entry: IdempotencyRecord): ConnectionIO[IdempotencyReservation] =
-      insertPending(entry)
-
     override def reserveWithinAccountLimit(
         entry: IdempotencyRecord,
         now: Instant,
@@ -220,10 +182,7 @@ object PostgresIdempotency:
       """.update.run
 end PostgresIdempotency
 
-/**
- * Class facade matching the Phase 3 convention: construct with a `Transactor[F]`, get an
- * `IdempotencyRepository[F]`. Each operation runs inside its own transaction.
- */
+/** Transactor-backed facade for [[IdempotencyRepository]]; each operation runs in a transaction. */
 final class PostgresIdempotencyRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends IdempotencyRepository[F]:
   private val delegate: IdempotencyRepository[F] = IdempotencyRepository

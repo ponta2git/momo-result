@@ -78,7 +78,6 @@ final case class FailingDeleteImageStore(delegate: ImageStorage[IO], deleteError
       bytes: Array[Byte],
   ): IO[Either[AppError, StoredImage]] = delegate.save(ownerAccountId, fileName, contentType, bytes)
   override def find(imageId: ImageId): IO[Option[StoredImage]] = delegate.find(imageId)
-  override def readBytes(image: StoredImage): IO[Array[Byte]] = delegate.readBytes(image)
   override def readStream(image: StoredImage): Stream[IO, Byte] = delegate.readStream(image)
   override def delete(imageId: ImageId): IO[Boolean] =
     val _ = imageId
@@ -93,7 +92,6 @@ final case class NoReadImageStore(image: StoredImage) extends ImageStorage[IO]:
   ): IO[Either[AppError, StoredImage]] = failIfCalled("save")
   override def find(imageId: ImageId): IO[Option[StoredImage]] = IO
     .pure(Option.when(imageId == image.imageId)(image))
-  override def readBytes(image: StoredImage): IO[Array[Byte]] = failIfCalled("readBytes")
   override def readStream(image: StoredImage): Stream[IO, Byte] = Stream
     .eval(failIfCalled("readStream"))
   override def delete(imageId: ImageId): IO[Boolean] = failIfCalled("delete")

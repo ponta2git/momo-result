@@ -15,11 +15,7 @@ import momo.api.repositories.{
   IdempotencyResponse
 }
 
-/**
- * In-memory adapter for [[IdempotencyRepository]]. Used by tests and local development runs.
- * Conflicts on the composite primary key are surfaced via `IllegalStateException`, mirroring what
- * the Postgres `unique_violation` raise will look like at the call site.
- */
+/** In-memory adapter for [[IdempotencyRepository]], used by tests and local development runs. */
 final class InMemoryIdempotencyRepository[F[_]: MonadThrow] private (
     ref: Ref[F, Map[InMemoryIdempotencyRepository.Key, IdempotencyRecord]]
 ) extends IdempotencyRepository[F]:
@@ -30,31 +26,6 @@ final class InMemoryIdempotencyRepository[F[_]: MonadThrow] private (
         endpoint: String,
     ): F[Option[IdempotencyRecord]] = ref.get
       .map(_.get(InMemoryIdempotencyRepository.Key(key, accountId, endpoint)))
-
-    override def record(entry: IdempotencyRecord): F[Unit] =
-      val pk = InMemoryIdempotencyRepository.Key(entry.key, entry.accountId, entry.endpoint)
-      ref.modify { state =>
-        state.get(pk) match
-          case Some(existing) => (state, Left(existing))
-          case None => (state.updated(pk, entry), Right(()))
-      }.flatMap {
-        case Right(_) => MonadThrow[F].unit
-        case Left(_) => MonadThrow[F].raiseError(new IllegalStateException(
-            s"idempotency record already exists for key=${entry.key} endpoint=${entry.endpoint}"
-          ))
-      }
-
-    override def reserve(entry: IdempotencyRecord): F[IdempotencyReservation] =
-      val pk = InMemoryIdempotencyRepository.Key(entry.key, entry.accountId, entry.endpoint)
-      ref.modify { state =>
-        state.get(pk) match
-          case None => (state.updated(pk, entry), IdempotencyReservation.Reserved)
-          case Some(existing) if existing.requestHash != entry.requestHash =>
-            (state, IdempotencyReservation.Conflict)
-          case Some(existing) if existing.response.status == 0 =>
-            (state, IdempotencyReservation.InProgress)
-          case Some(existing) => (state, IdempotencyReservation.Replay(existing.response))
-      }
 
     override def reserveWithinAccountLimit(
         entry: IdempotencyRecord,
@@ -118,9 +89,6 @@ final class InMemoryIdempotencyRepository[F[_]: MonadThrow] private (
       accountId: AccountId,
       endpoint: String,
   ): F[Option[IdempotencyRecord]] = delegate.lookup(key, accountId, endpoint)
-  override def record(entry: IdempotencyRecord): F[Unit] = delegate.record(entry)
-  override def reserve(entry: IdempotencyRecord): F[IdempotencyReservation] = delegate
-    .reserve(entry)
   override def reserveWithinAccountLimit(
       entry: IdempotencyRecord,
       now: Instant,

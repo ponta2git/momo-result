@@ -2,9 +2,9 @@ package momo.api.usecases.ocr
 
 import scala.concurrent.duration.*
 
+import cats.MonadThrow
 import cats.effect.{Clock, Temporal}
 import cats.syntax.all.*
-import cats.{Applicative, MonadThrow}
 import org.typelevel.log4cats.LoggerFactory
 
 import momo.api.domain.{FailureCode, OcrFailure}
@@ -23,11 +23,6 @@ trait OcrJobQueueSubmitter[F[_]]:
   def submit(intent: OcrQueueDispatchIntent): F[Either[AppError, Unit]]
 
 object OcrJobQueueSubmitter:
-  def deferred[F[_]: Applicative]: OcrJobQueueSubmitter[F] = new OcrJobQueueSubmitter[F]:
-    override def submit(intent: OcrQueueDispatchIntent): F[Either[AppError, Unit]] =
-      val _ = intent
-      ().asRight[AppError].pure[F]
-
   def direct[F[_]: MonadThrow: LoggerFactory](
       jobs: OcrJobsRepository[F],
       matchDrafts: MatchDraftsRepository[F],

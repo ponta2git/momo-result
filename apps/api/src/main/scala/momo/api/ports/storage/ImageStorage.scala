@@ -22,13 +22,6 @@ trait ImageStorage[F[_]]:
   ): F[Either[AppError, StoredImage]]
   def find(imageId: ImageId): F[Option[StoredImage]]
 
-  /**
-   * Read the raw bytes of a previously-stored image. Implementations are responsible for shifting
-   * any blocking I/O onto the appropriate execution context. Callers that have already verified
-   * the image exists (e.g. via [[find]]) can rely on this raising `AppError.NotFound`-equivalent
-   * errors when the underlying file vanishes.
-   */
-  def readBytes(image: StoredImage): F[Array[Byte]]
   def readStream(image: StoredImage): Stream[F, Byte]
   def delete(imageId: ImageId): F[Boolean]
 

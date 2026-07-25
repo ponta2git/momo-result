@@ -10,8 +10,8 @@ import momo.api.domain.ids.AccountId
  * Stable response snapshot kept under one idempotency key. Bytes are returned as-is so the HTTP
  * layer can replay binary payloads (CSV, etc.) without re-serialising.
  *
- * `headers` MUST NOT contain authorization, cookies or any secret material — the producer is
- * responsible for filtering before calling [[IdempotencyAlg.record]].
+ * `headers` MUST NOT contain authorization, cookies or any secret material. The producer filters
+ * those values before persisting the response.
  */
 final case class IdempotencyResponse(status: Int, headers: Map[String, String], body: Vector[Byte])
 
@@ -35,18 +35,6 @@ final case class IdempotencyRecord(
 object IdempotencyRecord:
   given CanEqual[IdempotencyRecord, IdempotencyRecord] = CanEqual.derived
 
-/** Outcome of a [[IdempotencyAlg.tryStore]] call. */
-enum IdempotencyOutcome derives CanEqual:
-
-  /** No record existed — the API may proceed to perform the side-effect. */
-  case Fresh
-
-  /** A record with the same hash existed — replay [[IdempotencyResponse]]. */
-  case Replay(response: IdempotencyResponse)
-
-  /** A record with a different hash existed — fail the request with HTTP 409. */
-  case Conflict
-
 enum IdempotencyReservation derives CanEqual:
   case Reserved
   case Replay(response: IdempotencyResponse)
@@ -65,21 +53,6 @@ trait IdempotencyAlg[F0[_]]:
 
   /** Look up a stored record by its full composite key. */
   def lookup(key: String, accountId: AccountId, endpoint: String): F0[Option[IdempotencyRecord]]
-
-  /**
-   * Persist the supplied record. Implementations MUST treat `(key, accountId, endpoint)` as the
-   * primary key and surface the conflict (e.g. via raised error or returned `false`); higher
-   * layers translate that into [[IdempotencyOutcome.Conflict]].
-   */
-  def record(entry: IdempotencyRecord): F0[Unit]
-
-  /**
-   * Atomically reserve the composite key before the API executes the side effect.
-   *
-   * A reserved row uses `response_status = 0` and an empty body. Existing rows with the same request
-   * hash and `response_status = 0` are treated as in-flight; rows with a completed response replay.
-   */
-  def reserve(entry: IdempotencyRecord): F0[IdempotencyReservation]
 
   /**
    * Atomically reserve the composite key while capping live idempotency rows per account.
@@ -118,8 +91,6 @@ end IdempotencyAlg
 /** Transactional facade over [[IdempotencyAlg]], parameterised by the user effect `F`. */
 trait IdempotencyRepository[F[_]]:
   def lookup(key: String, accountId: AccountId, endpoint: String): F[Option[IdempotencyRecord]]
-  def record(entry: IdempotencyRecord): F[Unit]
-  def reserve(entry: IdempotencyRecord): F[IdempotencyReservation]
   def reserveWithinAccountLimit(
       entry: IdempotencyRecord,
       now: Instant,
@@ -150,8 +121,6 @@ object IdempotencyRepository:
           accountId: AccountId,
           endpoint: String,
       ): F[Option[IdempotencyRecord]] = liftK(alg.lookup(key, accountId, endpoint))
-      def record(entry: IdempotencyRecord): F[Unit] = liftK(alg.record(entry))
-      def reserve(entry: IdempotencyRecord): F[IdempotencyReservation] = liftK(alg.reserve(entry))
       def reserveWithinAccountLimit(
           entry: IdempotencyRecord,
           now: Instant,

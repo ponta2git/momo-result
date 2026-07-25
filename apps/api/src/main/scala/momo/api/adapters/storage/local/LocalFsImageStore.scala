@@ -50,9 +50,6 @@ final class LocalFsImageStore[F[_]: Async: Random](root: Path)
     }
   }
 
-  override def readBytes(image: StoredImage): F[Array[Byte]] = Sync[F]
-    .blocking(Files.readAllBytes(pathFor(image.location)))
-
   override def readStream(image: StoredImage): Stream[F, Byte] = Fs2Files.forAsync[F]
     .readAll(Fs2Path.fromNioPath(pathFor(image.location)))
 

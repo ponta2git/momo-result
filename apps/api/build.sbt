@@ -101,8 +101,8 @@ lazy val root = (project in file("."))
       "momo\\.api\\.openapi\\..*",
     ).mkString(";"),
     coverageExcludedFiles := Seq(
-      ".*/momo/api/repositories/postgres/.*",
-      ".*/momo/api/adapters/RedisQueueProducer.scala",
+      ".*/momo/api/adapters/postgres/.*",
+      ".*/momo/api/adapters/redis/.*",
     ).mkString(";"),
     testcontainersDockerEnv := {
       val apiVersionEnv = Map(

@@ -1,13 +1,8 @@
 import java.nio.file.{Files, Paths}
 
-import sbt.*
-import sbt.Keys.*
-
 ThisBuild / scalaVersion := "3.8.4"
 ThisBuild / semanticdbEnabled := true
-ThisBuild / semanticdbVersion := scalafixSemanticdb.revision
 ThisBuild / evictionErrorLevel := Level.Warn
-ThisBuild / versionScheme := Some("early-semver")
 
 addCommandAlias("apiFormat", "scalafmtAll")
 addCommandAlias("apiFormatCheck", "scalafmtCheckAll")
@@ -16,14 +11,14 @@ addCommandAlias("apiFix", "scalafixAll")
 addCommandAlias("apiQuality", "apiFormatCheck; apiLint; Test / compile; apiOpenApiCheck")
 addCommandAlias("apiCheck", "apiQuality; test")
 addCommandAlias("apiFullCheck", "apiCheck; apiDbQuality; apiRedisQuality")
-addCommandAlias("apiCoverage", "clean; coverageOff; coverage; test; coverageReport; coverageOff")
+addCommandAlias("apiCoverage", "clean; coverage; test; coverageReport; coverageOff")
 addCommandAlias(
   "apiCoverageReportOnly",
-  "clean; coverageOff; set coverageFailOnMinimum := false; coverage; test; coverageReport; coverageOff",
+  "clean; set coverageFailOnMinimum := false; coverage; test; coverageReport; coverageOff",
 )
 addCommandAlias(
   "apiTestWithCoverageReportOnly",
-  "coverageOff; set coverageFailOnMinimum := false; coverage; test; coverageReport; coverageOff",
+  "set coverageFailOnMinimum := false; coverage; test; coverageReport; coverageOff",
 )
 addCommandAlias(
   "apiRedisQuality",
@@ -44,9 +39,6 @@ addCommandAlias(
 lazy val apiOpenApi = taskKey[File]("Generate OpenAPI from Tapir endpoint definitions")
 lazy val apiOpenApiCheck = taskKey[Unit]("Check that openapi.yaml matches generated Tapir output")
 
-lazy val testcontainersDockerEnv = settingKey[Map[String, String]](
-  "Docker environment variables used by forked Testcontainers-based tests"
-)
 lazy val testcontainersDockerApiVersion = "1.40"
 
 // Scalac options shared by Compile and Test.
@@ -75,36 +67,23 @@ lazy val root = (project in file("."))
     name := "momo-result-api",
     organization := "momo",
     scalacOptions ++= sharedScalacOptions,
-    // Keep the REPL usable without -Werror / -Xfatal-warnings firing on incomplete snippets.
+    // Keep the REPL usable without -Werror firing on incomplete snippets.
     Compile / console / scalacOptions ~= {
-      _.filterNot(opt => opt == "-Werror" || opt.startsWith("-Xfatal"))
+      _.filterNot(_ == "-Werror")
     },
     Test / console / scalacOptions ~= {
-      _.filterNot(opt => opt == "-Werror" || opt.startsWith("-Xfatal"))
+      _.filterNot(_ == "-Werror")
     },
     Compile / doc / sources := Seq.empty,
     Compile / packageDoc / publishArtifact := false,
     Compile / mainClass := Some("momo.api.Main"),
-    Compile / run / mainClass := Some("momo.api.Main"),
     Compile / run / fork := true,
     Compile / run / javaOptions += "-Dcats.effect.warnOnNonMainThreadDetected=false",
     Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "--exclude-tags=Integration"),
     Test / testOptions += Tests.Filter(name => !name.startsWith("momo.api.integration.")),
     Test / parallelExecution := true,
     Test / fork := false,
-    Test / envVars ++= testcontainersDockerEnv.value,
-    coverageFailOnMinimum := true,
-    coverageMinimumStmtTotal := 70,
-    coverageMinimumBranchTotal := 65,
-    coverageExcludedPackages := Seq(
-      "momo\\.api\\.Main",
-      "momo\\.api\\.openapi\\..*",
-    ).mkString(";"),
-    coverageExcludedFiles := Seq(
-      ".*/momo/api/adapters/postgres/.*",
-      ".*/momo/api/adapters/redis/.*",
-    ).mkString(";"),
-    testcontainersDockerEnv := {
+    Test / envVars ++= {
       val apiVersionEnv = Map(
         // docker-java 3.4.x defaults to API 1.32; Docker 29+ rejects it because its minimum is 1.40.
         "api.version" -> sys.env.getOrElse("api.version", testcontainersDockerApiVersion)
@@ -117,6 +96,17 @@ lazy val root = (project in file("."))
       }(dockerHost => Map("DOCKER_HOST" -> dockerHost))
       apiVersionEnv ++ dockerHostEnv
     },
+    coverageFailOnMinimum := true,
+    coverageMinimumStmtTotal := 70,
+    coverageMinimumBranchTotal := 65,
+    coverageExcludedPackages := Seq(
+      "momo\\.api\\.Main",
+      "momo\\.api\\.openapi\\..*",
+    ).mkString(";"),
+    coverageExcludedFiles := Seq(
+      ".*/momo/api/adapters/postgres/.*",
+      ".*/momo/api/adapters/redis/.*",
+    ).mkString(";"),
     libraryDependencies ++= {
       val catsEffectVersion = "3.7.0"
       val apiSpecVersion = "0.11.10"
@@ -173,7 +163,6 @@ lazy val root = (project in file("."))
 
       Seq(
         "io.netty" % "netty-buffer" % nettyVersion,
-        "io.netty" % "netty-codec" % nettyVersion,
         "io.netty" % "netty-codec-dns" % nettyVersion,
         "io.netty" % "netty-common" % nettyVersion,
         "io.netty" % "netty-handler" % nettyVersion,

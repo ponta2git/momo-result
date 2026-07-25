@@ -28,16 +28,6 @@ enum SeriesComparisonScope derives CanEqual:
     case Map(_, id) => Some(id.value)
     case SeasonMap(_, seasonId, mapId) => Some(s"${seasonId.value}:${mapId.value}")
 
-  def selectedSeasonMasterId: Option[SeasonMasterId] = this match
-    case Season(_, id) => Some(id)
-    case SeasonMap(_, id, _) => Some(id)
-    case Overall(_) | Map(_, _) => None
-
-  def selectedMapMasterId: Option[MapMasterId] = this match
-    case Map(_, id) => Some(id)
-    case SeasonMap(_, _, id) => Some(id)
-    case Overall(_) | Season(_, _) => None
-
 final case class SeriesComparisonResolvedScope(
     gameTitleId: GameTitleId,
     gameTitleName: String,

@@ -119,6 +119,7 @@ lazy val root = (project in file("."))
     },
     libraryDependencies ++= {
       val catsEffectVersion = "3.7.0"
+      val apiSpecVersion = "0.11.10"
       val circeVersion = "0.14.15"
       val cirisVersion = "3.15.0"
       val doobieVersion = "1.0.0-RC12"
@@ -141,18 +142,15 @@ lazy val root = (project in file("."))
         "is.cir" %% "ciris" % cirisVersion,
         "org.typelevel" %% "log4cats-slf4j" % log4catsVersion,
         "org.http4s" %% "http4s-ember-server" % http4sVersion,
-        "org.http4s" %% "http4s-dsl" % http4sVersion,
         "org.http4s" %% "http4s-circe" % http4sVersion,
         "com.softwaremill.sttp.tapir" %% "tapir-core" % tapirVersion,
         "com.softwaremill.sttp.tapir" %% "tapir-json-circe" % tapirVersion,
         "com.softwaremill.sttp.tapir" %% "tapir-http4s-server" % tapirVersion,
-        "com.softwaremill.sttp.tapir" %% "tapir-swagger-ui-bundle" % tapirVersion,
         "com.softwaremill.sttp.tapir" %% "tapir-openapi-docs" % tapirVersion,
+        "com.softwaremill.sttp.apispec" %% "openapi-circe" % apiSpecVersion,
         "io.circe" %% "circe-core" % circeVersion,
-        "io.circe" %% "circe-generic" % circeVersion,
         "io.circe" %% "circe-parser" % circeVersion,
         "io.github.iltotore" %% "iron" % ironVersion,
-        "io.github.iltotore" %% "iron-circe" % ironVersion,
         "io.github.iltotore" %% "iron-ciris" % ironVersion,
         "org.tpolecat" %% "doobie-core" % doobieVersion,
         "org.tpolecat" %% "doobie-postgres" % doobieVersion,

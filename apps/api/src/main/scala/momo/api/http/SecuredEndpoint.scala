@@ -118,33 +118,6 @@ object SecuredEndpoint:
       )
     }
 
-  def adminRead[F[_]: Async](security: EndpointSecurity[F]): Read[F, Unit, Unit] = endpoint
-    .securityIn(CommonEndpoint.accountHeader.and(CommonEndpoint.serverRequest))
-    .errorOut(CommonEndpoint.errorOut)
-    .serverSecurityLogic { case (accountHeader, request) =>
-      security.authorizeAdminRead(accountHeader, request)(account => Async[F].pure(Right(account)))
-    }
-
-  def adminMutation[F[_]: Async](security: EndpointSecurity[F]): Mutation[F, Unit, Unit] = endpoint
-    .securityIn(CommonEndpoint.accountHeader.and(CommonEndpoint.csrfHeader)
-      .and(CommonEndpoint.serverRequest))
-    .errorOut(CommonEndpoint.errorOut)
-    .serverSecurityLogic { case (accountHeader, csrfToken, request) =>
-      security.authorizeAdminMutation(accountHeader, csrfToken, request)(account =>
-        Async[F].pure(Right(account))
-      )
-    }
-
-  def masterMutation[F[_]: Async](security: EndpointSecurity[F]): Mutation[F, Unit, Unit] = endpoint
-    .securityIn(CommonEndpoint.accountHeader.and(CommonEndpoint.csrfHeader)
-      .and(CommonEndpoint.serverRequest))
-    .errorOut(CommonEndpoint.errorOut)
-    .serverSecurityLogic { case (accountHeader, csrfToken, request) =>
-      security.authorizeMasterManagementMutation(accountHeader, csrfToken, request)(account =>
-        Async[F].pure(Right(account))
-      )
-    }
-
   extension [F[_]](security: EndpointSecurity[F])
     def run[A](result: F[Either[AppError, A]]): F[Either[ProblemResponse, A]] =
       security.respond(result)(identity)

@@ -14,11 +14,6 @@ object MaxBodySizeMiddleware:
   final class RequestBodyTooLarge(limitBytes: Long)
       extends RuntimeException(s"request body exceeds ${limitBytes.toString} bytes")
 
-  def uploadOnly[F[_]: Async](limitBytes: Long)(http: HttpApp[F]): HttpApp[F] = Kleisli { request =>
-    if isUpload(request) then applyLimit(request, limitBytes, "Upload request", http)
-    else http.run(request)
-  }
-
   def requestAndUpload[F[_]: Async](requestLimitBytes: Long, uploadLimitBytes: Long)(
       http: HttpApp[F]
   ): HttpApp[F] = Kleisli { request =>

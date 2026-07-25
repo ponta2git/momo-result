@@ -70,8 +70,3 @@ class OcrDraftPayload:
     category_payload: dict[str, object] = field(default_factory=dict)
     warnings: list[OcrWarning] = field(default_factory=list)
     raw_snippets: dict[str, str] | None = None
-
-
-@dataclass(frozen=True)
-class StageTimings:
-    timings_ms: dict[str, float] = field(default_factory=dict)

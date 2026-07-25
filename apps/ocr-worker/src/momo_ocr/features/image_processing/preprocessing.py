@@ -11,10 +11,6 @@ MAX_SUPPORTED_WIDTH = 3840
 MAX_SUPPORTED_HEIGHT = 2160
 
 
-def to_grayscale(image: Image.Image) -> Image.Image:
-    return ImageOps.grayscale(image)
-
-
 def normalize_to_full_hd(image: Image.Image) -> Image.Image:
     if image.size == (FULL_HD.width, FULL_HD.height):
         return image.copy()

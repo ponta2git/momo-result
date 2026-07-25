@@ -54,13 +54,6 @@ def detect_dominant_player_color(image: Image.Image) -> tuple[PlayerColor | None
     return detected_color, count / saturated_count
 
 
-def classify_hue(hue: float) -> PlayerColor | None:
-    for color, ranges in COLOR_HUE_RANGES:
-        if any(start <= hue <= end for start, end in ranges):
-            return color
-    return None
-
-
 def _hue_byte_in_ranges(value: int, ranges: tuple[tuple[int, int], ...]) -> bool:
     degrees = _hue_byte_to_degrees(value)
     return any(start <= degrees <= end for start, end in ranges)

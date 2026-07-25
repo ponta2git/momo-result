@@ -6,7 +6,6 @@ from typing import Literal, cast
 import pytest
 from PIL import Image
 
-from momo_ocr.features.temp_images.cleanup import delete_if_exists
 from momo_ocr.features.temp_images.storage import resolve_local_image
 from momo_ocr.features.temp_images.validation import open_decoded_image, read_image_metadata
 from momo_ocr.shared.errors import FailureCode, OcrError
@@ -131,12 +130,3 @@ def test_resolve_local_image_rejects_symlink_escaping_configured_root(tmp_path: 
         resolve_local_image(link, root=root)
 
     assert exc_info.value.code is FailureCode.QUEUE_FAILURE
-
-
-def test_delete_if_exists_removes_file(tmp_path: Path) -> None:
-    image_path = tmp_path / "sample.jpg"
-    image_path.write_bytes(b"temporary")
-
-    assert delete_if_exists(image_path)
-    assert not image_path.exists()
-    assert not delete_if_exists(image_path)

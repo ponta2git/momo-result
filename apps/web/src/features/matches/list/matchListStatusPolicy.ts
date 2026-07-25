@@ -1,15 +1,6 @@
 import type { MatchListItemView, MatchListStatus } from "@/features/matches/list/matchListTypes";
 import { asDraftStatusOrUnknown } from "@/shared/domain/draftStatus";
 
-export const matchListStatusPriority = {
-  ocr_running: 0,
-  needs_review: 1,
-  draft_ready: 2,
-  unknown: 3,
-  ocr_failed: 4,
-  confirmed: 5,
-} as const satisfies Record<MatchListStatus, number>;
-
 const preConfirmDescription = "未対応の状態です。確認画面で内容を確認してください。";
 
 const statusDescriptions = {

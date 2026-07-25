@@ -61,17 +61,6 @@ const incidentLogCategoryPayloadSchema = z
 
 const legacyCategoryPayloadSchema = z.record(z.string(), z.unknown());
 
-export const ocrCategoryPayloadSchema = z.union([
-  z.discriminatedUnion("parser", [
-    totalAssetsCategoryPayloadSchema,
-    revenueCategoryPayloadSchema,
-    incidentLogCategoryPayloadSchema,
-  ]),
-  legacyCategoryPayloadSchema,
-]);
-
-export type OcrCategoryPayload = z.infer<typeof ocrCategoryPayloadSchema>;
-
 const baseDraftFields = {
   detected_screen_type: z.string().nullable(),
   profile_id: z.string().nullable(),

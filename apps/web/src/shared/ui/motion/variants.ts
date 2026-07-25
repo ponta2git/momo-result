@@ -1,7 +1,6 @@
 import type { Transition, Variants } from "motion/react";
 
 export const momoEaseOut = [0.16, 1, 0.3, 1] as const;
-export const momoEaseIn = [0.55, 0, 1, 0.45] as const;
 
 export const momoTransition = {
   duration: 0.18,

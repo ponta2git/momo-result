@@ -1,6 +1,6 @@
 import { memo, useCallback } from "react";
 
-import type { IncidentKey, MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
+import type { IncidentKey } from "@/features/matches/workspace/matchFormTypes";
 import * as NumericInput from "@/features/matches/workspace/scoreGrid/ScoreGridNumericInputCell";
 
 export type NumericKeyboardHandler = NumericInput.NumericKeyboardHandler;
@@ -81,5 +81,3 @@ export const ScoreGridNumericEditor = memo(function ScoreGridNumericEditor({
     <NumericInput.NumericInputCell field={inputField} interaction={interaction} state={state} />
   );
 });
-
-export type ScoreGridPlayer = MatchFormValues["players"][number];

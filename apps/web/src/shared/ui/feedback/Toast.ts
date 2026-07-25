@@ -27,7 +27,3 @@ export function showToast({
     type: tone,
   });
 }
-
-export function closeToast(id?: string) {
-  momoToastManager.close(id);
-}

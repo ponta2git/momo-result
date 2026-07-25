@@ -5,7 +5,6 @@ import { listHeldEvents } from "@/shared/api/heldEvents";
 import type { ListHeldEventsQuery } from "@/shared/api/heldEvents";
 import {
   listGameTitles,
-  listIncidentMasters,
   listMapMasters,
   listMemberAliases,
   listSeasonMasters,
@@ -83,13 +82,6 @@ export function seasonMastersQueryOptions(
     queryKey: masterKeys.seasonMasters.list(scope, gameTitleId),
     queryFn: ({ signal }) => listSeasonMasters(gameTitleId || undefined, { signal }),
     enabled,
-  });
-}
-
-export function incidentMastersQueryOptions(scope: string) {
-  return queryOptions({
-    queryKey: masterKeys.incidentMasters.adminList(scope),
-    queryFn: ({ signal }) => listIncidentMasters({ signal }),
   });
 }
 

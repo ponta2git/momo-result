@@ -93,13 +93,6 @@ export function normalizeUnknownApiError(error: unknown): NormalizedApiError {
   };
 }
 
-export function isIdempotencyConflict(error: NormalizedApiError): boolean {
-  return (
-    error.category === "idempotency_in_progress" ||
-    error.category === "idempotency_payload_mismatch"
-  );
-}
-
 function isIdempotencyConflictShape(
   problem: Pick<NormalizedApiError, "code" | "detail" | "status">,
 ): boolean {

@@ -76,6 +76,3 @@ export function toMatchListItemViews(
 ): MatchListItemView[] {
   return items.map((item) => toMatchListItemView(item, lookupMaps));
 }
-
-export { sortMatchListItems } from "@/features/matches/list/matchListSort";
-export { summarizeMatchList } from "@/features/matches/list/matchListSummary";

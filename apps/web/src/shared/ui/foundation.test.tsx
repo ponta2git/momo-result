@@ -10,11 +10,9 @@ import { PaginationControls } from "@/shared/ui/data/PaginationControls";
 import { Dialog, AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { RouteSuspenseFallback } from "@/shared/ui/feedback/RouteSuspenseFallback";
-import { NumberField } from "@/shared/ui/forms/NumberField";
 import { SegmentedControl } from "@/shared/ui/forms/SegmentedControl";
 import { StaleShield } from "@/shared/ui/motion/StaleShield";
 import { StatusPill } from "@/shared/ui/status/StatusPill";
-import { StatusRail } from "@/shared/ui/status/StatusRail";
 import { createDeferred } from "@/test/deferred";
 
 describe("ui foundation", () => {
@@ -222,13 +220,6 @@ describe("ui foundation", () => {
     expect(screen.getByText("OCR失敗")).toBeInTheDocument();
   });
 
-  it("StatusRail can fallback to compact pill", () => {
-    render(<StatusRail compact status="needs_review" />);
-
-    expect(screen.getByText("確認待ち")).toBeInTheDocument();
-    expect(screen.queryByText("処理中", { selector: "div span" })).not.toBeInTheDocument();
-  });
-
   it("SegmentedControl supports keyboard selection", async () => {
     const user = userEvent.setup();
     const onValueChange = vi.fn();
@@ -276,14 +267,5 @@ describe("ui foundation", () => {
     await user.keyboard("{Enter}");
 
     expect(onValueChange).not.toHaveBeenCalled();
-  });
-
-  it("NumberField uses text input with numeric mode and min-width contract", () => {
-    render(<NumberField label="総資産" name="totalAsset" width="money" />);
-
-    const input = screen.getByLabelText("総資産");
-    expect(input).toHaveAttribute("type", "text");
-    expect(input).toHaveAttribute("inputmode", "numeric");
-    expect(input).toHaveClass("min-w-[12ch]");
   });
 });

@@ -5,8 +5,6 @@ import type {
 } from "@/features/matches/workspace/matchFormTypes";
 import { emptyIncidentCountsByKey, incidentCountsByLabelToKey } from "@/shared/domain/incidents";
 
-type PlayerField = Exclude<keyof MatchFormValues["players"][number], "incidents">;
-
 export type MatchFormAction =
   | { patch: Partial<MatchFormValues>; type: "patch_root" }
   | { index: number; patch: Partial<MatchFormValues["players"][number]>; type: "patch_player" }
@@ -112,11 +110,4 @@ export function matchFormReducer(
       };
     }
   }
-}
-
-export function playerFieldPatch<K extends PlayerField>(
-  key: K,
-  value: MatchFormValues["players"][number][K],
-): Partial<MatchFormValues["players"][number]> {
-  return { [key]: value } as Partial<MatchFormValues["players"][number]>;
 }

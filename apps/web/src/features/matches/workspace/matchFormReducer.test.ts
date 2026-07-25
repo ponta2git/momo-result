@@ -4,7 +4,6 @@ import { describe, expect, it } from "vitest";
 import {
   createMatchFormReducerState,
   matchFormReducer,
-  playerFieldPatch,
 } from "@/features/matches/workspace/matchFormReducer";
 import { createEmptyMatchForm } from "@/features/matches/workspace/matchFormTypes";
 import type { IncidentLookupEntry } from "@/features/matches/workspace/matchFormTypes";
@@ -52,7 +51,7 @@ describe("matchFormReducer", () => {
     const next = matchFormReducer(initial, {
       type: "patch_player",
       index: 1,
-      patch: playerFieldPatch("totalAssetsManYen", 1234),
+      patch: { totalAssetsManYen: 1234 },
     });
 
     expect(next.values.players[1]!.totalAssetsManYen).toBe(1234);
@@ -200,12 +199,5 @@ describe("matchFormReducer", () => {
 
     expect(next.lastSyncedPlayerIndex).toBeNull();
     expect(next.values).toEqual(replacement);
-  });
-});
-
-describe("playerFieldPatch", () => {
-  it("returns a single-key partial for the given field", () => {
-    expect(playerFieldPatch("rank", 3)).toEqual({ rank: 3 });
-    expect(playerFieldPatch("revenueManYen", 50)).toEqual({ revenueManYen: 50 });
   });
 });

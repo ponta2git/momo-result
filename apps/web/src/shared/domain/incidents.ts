@@ -12,7 +12,6 @@ export type IncidentKey = IncidentDefinition["key"];
 export type IncidentLabel = IncidentDefinition["label"];
 export type IncidentOcrName = IncidentDefinition["ocrName"];
 export type IncidentCountsByKey = Record<IncidentKey, number>;
-export type IncidentCountsByLabel = Record<IncidentLabel, number>;
 
 export const incidentColumns = incidentDefinitions.map((definition) => [
   definition.key,
@@ -27,12 +26,6 @@ export function emptyIncidentCountsByKey(): IncidentCountsByKey {
   return Object.fromEntries(
     incidentDefinitions.map((definition) => [definition.key, 0]),
   ) as IncidentCountsByKey;
-}
-
-export function emptyIncidentCountsByLabel(): IncidentCountsByLabel {
-  return Object.fromEntries(
-    incidentDefinitions.map((definition) => [definition.label, 0]),
-  ) as IncidentCountsByLabel;
 }
 
 export function incidentCountsByLabelToKey(

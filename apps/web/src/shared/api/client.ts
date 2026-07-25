@@ -1,6 +1,5 @@
 import { getCsrfToken } from "@/shared/api/csrfTokenStore";
 import { normalizeApiErrorResponse, normalizeUnknownApiError } from "@/shared/api/problemDetails";
-import type { NormalizedApiError } from "@/shared/api/problemDetails";
 
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
@@ -28,8 +27,6 @@ export type ApiDownloadResult = {
 };
 
 const mutatingMethods = new Set<HttpMethod>(["POST", "PUT", "PATCH", "DELETE"]);
-
-export type ApiErrorLike = NormalizedApiError;
 
 export function getBuildTimeDevUser(): string | undefined {
   return import.meta.env.DEV ? import.meta.env.VITE_DEV_USER : undefined;

@@ -5,8 +5,7 @@
  * - `parseDraftStatus()` で API の生 string を narrow
  * - `isXxx()` ガードで UI 分岐を表現
  *
- * 「未知の状態」は `unknown` として扱い、列挙の追加に対して
- * `assertNever` で網羅性を担保できる。
+ * 「未知の状態」は `unknown` として扱い、UI が未知値を安全に表示できるようにする。
  */
 
 export const draftStatuses = [
@@ -41,14 +40,6 @@ export function isConfirmed(status: string | null | undefined): boolean {
   return status === "confirmed";
 }
 
-export function isOcrFailed(status: string | null | undefined): boolean {
-  return status === "ocr_failed";
-}
-
-export function isNeedsReview(status: string | null | undefined): boolean {
-  return status === "needs_review";
-}
-
 const cancelableStatuses: ReadonlySet<DraftStatus> = new Set([
   "ocr_running",
   "ocr_failed",
@@ -59,18 +50,6 @@ const cancelableStatuses: ReadonlySet<DraftStatus> = new Set([
 export function isCancelableDraftStatus(status: string | null | undefined): boolean {
   const parsed = parseDraftStatus(status);
   return parsed !== undefined && cancelableStatuses.has(parsed);
-}
-
-const preConfirmStatuses: ReadonlySet<DraftStatus> = new Set([
-  "draft_ready",
-  "needs_review",
-  "ocr_failed",
-  "ocr_running",
-]);
-
-export function isPreConfirm(status: string | null | undefined): boolean {
-  const parsed = parseDraftStatus(status);
-  return parsed !== undefined && preConfirmStatuses.has(parsed);
 }
 
 export function reviewStatusLabel(status: string | null | undefined): string {

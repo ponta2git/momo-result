@@ -5,11 +5,7 @@ import type {
   MatchListLookupMaps,
   MatchListSourceItem,
 } from "@/features/matches/list/matchListTypes";
-import {
-  sortMatchListItems,
-  summarizeMatchList,
-  toMatchListItemView,
-} from "@/features/matches/list/matchListViewModel";
+import { toMatchListItemView } from "@/features/matches/list/matchListViewModel";
 import { makeHeldEventResponse } from "@/test/factories";
 
 const lookupMaps: MatchListLookupMaps = {
@@ -98,53 +94,5 @@ describe("matchListViewModel", () => {
     expect(item.kind).toBe("match_draft");
     expect(item.primaryAction.href).toBe("/review/draft-1");
     expect(item.statusDescription).toContain("確認が必要");
-  });
-
-  it("prioritizes incomplete work in status_priority sort", () => {
-    const items = sortMatchListItems(
-      [
-        toMatchListItemView(buildItem({ id: "confirmed-1", status: "confirmed" }), lookupMaps),
-        toMatchListItemView(
-          buildDraftItem({
-            id: "draft-1",
-            matchDraftId: "draft-1",
-            status: "needs_review",
-          }),
-          lookupMaps,
-        ),
-      ],
-      "status_priority",
-    );
-
-    expect(items[0]?.status).toBe("needs_review");
-    expect(items[1]?.status).toBe("confirmed");
-  });
-
-  it("summarizes queue counts from mixed statuses", () => {
-    const summary = summarizeMatchList([
-      toMatchListItemView(
-        buildDraftItem({
-          id: "run-1",
-          matchDraftId: "run-1",
-          status: "ocr_running",
-        }),
-        lookupMaps,
-      ),
-      toMatchListItemView(
-        buildDraftItem({
-          id: "review-1",
-          matchDraftId: "review-1",
-          status: "needs_review",
-        }),
-        lookupMaps,
-      ),
-    ]);
-
-    expect(summary).toEqual({
-      incompleteCount: 2,
-      needsReviewCount: 1,
-      ocrRunningCount: 1,
-      preConfirmCount: 1,
-    });
   });
 });

@@ -1,11 +1,10 @@
 import type { ConfirmMatchFormValues } from "@/features/matches/workspace/review/confirmMatchFormSchema";
 import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
-import { emptyIncidentCountsByKey, incidentColumns } from "@/shared/domain/incidents";
+import { emptyIncidentCountsByKey } from "@/shared/domain/incidents";
 import type { IncidentKey, IncidentLabel } from "@/shared/domain/incidents";
 import { fixedMembers } from "@/shared/domain/members";
 import type { SlotMap } from "@/shared/lib/slotMap";
 
-export { incidentColumns };
 export type { IncidentKey, IncidentLabel };
 export type ReviewIncidentCounts = Record<IncidentLabel, number>;
 

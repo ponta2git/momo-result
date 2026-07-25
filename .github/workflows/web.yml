@@ -37,11 +37,6 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
         timeout-minutes: 5
-      - run: pnpm --filter web generate:api
-        timeout-minutes: 2
-      - name: Check generated API types are committed
-        run: git diff --exit-code -- apps/web/src/shared/api/generated.ts
-        timeout-minutes: 1
       - run: pnpm --filter web format:check
         timeout-minutes: 2
       - run: pnpm --filter web lint

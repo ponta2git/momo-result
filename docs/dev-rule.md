@@ -175,7 +175,7 @@ uv run pytest -m integration
 | Workflow | 実行内容 |
 |---|---|
 | `.github/workflows/public-safety.yml` | public repository safety check |
-| `.github/workflows/web.yml` | API型生成差分、format、lint、typecheck、Vitestまたはcoverage付きVitest、build |
+| `.github/workflows/web.yml` | format、API型生成を含むlint、typecheck、Vitestまたはcoverage付きVitest、build |
 | `.github/workflows/api.yml` | format、lint、clean compile、OpenAPI check、testまたはcoverage付きtest、DB/Redis quality |
 | `.github/workflows/ocr-worker.yml` | ruff format/check、mypy、pytestまたはcoverage付きpytest、integration test |
 | `.github/workflows/deploy.yml` | runtime config check、momo-db migration適用、Docker build、image scan、runtime smoke、Playwright runtime E2E smoke、Fly deploy |

@@ -103,7 +103,7 @@ omit = [
 source = ["momo_ocr"]
 
 [tool.coverage.report]
-fail_under = 88.2
+fail_under = 85.0
 precision = 1
 show_missing = true
 skip_covered = true

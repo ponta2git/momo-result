@@ -97,8 +97,8 @@ lazy val root = (project in file("."))
       apiVersionEnv ++ dockerHostEnv
     },
     coverageFailOnMinimum := true,
-    coverageMinimumStmtTotal := 70,
-    coverageMinimumBranchTotal := 65,
+    coverageMinimumStmtTotal := 80,
+    coverageMinimumBranchTotal := 70,
     coverageExcludedPackages := Seq(
       "momo\\.api\\.Main",
       "momo\\.api\\.openapi\\..*",

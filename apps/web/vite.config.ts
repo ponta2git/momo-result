@@ -28,10 +28,10 @@ const coverageThresholds = coverageReportOnly
           lines: 100,
           statements: 100,
         },
-        branches: 70,
-        functions: 77,
-        lines: 78,
-        statements: 78,
+        branches: 75,
+        functions: 85,
+        lines: 85,
+        statements: 85,
       },
     };
 const backendProxy = {

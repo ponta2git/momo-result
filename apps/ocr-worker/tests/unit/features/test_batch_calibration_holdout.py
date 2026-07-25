@@ -28,7 +28,6 @@ def test_evaluation_set_train_only_scans_top_level(tmp_path: Path) -> None:
     input_dir = _setup_input(tmp_path)
     report = analyze_directory(
         input_dir=input_dir,
-        expected_dir=None,
         debug_dir=None,
         text_engine=FakeTextRecognitionEngine(),
         evaluation_set="train",
@@ -41,7 +40,6 @@ def test_evaluation_set_holdout_only_scans_holdout_subdir(tmp_path: Path) -> Non
     input_dir = _setup_input(tmp_path)
     report = analyze_directory(
         input_dir=input_dir,
-        expected_dir=None,
         debug_dir=None,
         text_engine=FakeTextRecognitionEngine(),
         evaluation_set="holdout",
@@ -54,7 +52,6 @@ def test_evaluation_set_all_unions_train_and_holdout(tmp_path: Path) -> None:
     input_dir = _setup_input(tmp_path)
     report = analyze_directory(
         input_dir=input_dir,
-        expected_dir=None,
         debug_dir=None,
         text_engine=FakeTextRecognitionEngine(),
         evaluation_set="all",

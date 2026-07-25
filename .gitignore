@@ -8,7 +8,6 @@ ocr_samples/
 **/.coverage
 **/.coverage.*
 apps/ocr-worker/out/
-apps/ocr-worker/local-expected/
 .bloop/
 .metals/
 .scala-build/

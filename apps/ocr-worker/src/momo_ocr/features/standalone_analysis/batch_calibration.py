@@ -19,7 +19,6 @@ EVALUATION_SET_CHOICES: tuple[EvaluationSet, ...] = ("all", "train", "holdout")
 def analyze_directory(
     *,
     input_dir: Path,
-    expected_dir: Path | None,
     debug_dir: Path | None,
     text_engine: TextRecognitionEngine | None = None,
     include_raw_text: bool = False,
@@ -37,7 +36,6 @@ def analyze_directory(
     * ``holdout``: files under ``holdout/`` only.
     * ``all``: union of both, recursing one level into ``holdout/``.
     """
-    del expected_dir
     images = sorted(_iter_images(input_dir, evaluation_set))
     results = [
         analyze_image(

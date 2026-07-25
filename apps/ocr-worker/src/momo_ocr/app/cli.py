@@ -66,7 +66,6 @@ def build_parser() -> argparse.ArgumentParser:
 
     batch = subparsers.add_parser("batch", help="Analyze a directory of local images")
     batch.add_argument("--input-dir", required=True, type=Path)
-    batch.add_argument("--expected-dir", type=Path)
     batch.add_argument("--report", type=Path)
     batch.add_argument("--debug-dir", type=Path)
     batch.add_argument("--include-raw-text", action="store_true")
@@ -137,7 +136,6 @@ def _run_batch(args: argparse.Namespace) -> int:
         debug_dir = _resolve_batch_debug_dir(args.debug_dir)
         report = analyze_directory(
             input_dir=args.input_dir,
-            expected_dir=args.expected_dir,
             debug_dir=debug_dir,
             text_engine=text_engine,
             include_raw_text=args.include_raw_text,

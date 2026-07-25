@@ -191,7 +191,6 @@ RUN apt-get update \
 
 FROM runtime-base AS runtime
 ARG TESSERACT_VERSION=5.5.2
-ENV TESSERACT_VERSION=${TESSERACT_VERSION}
 COPY --from=tesseract-builder /opt/tesseract /opt/tesseract
 COPY --from=tessdata /tessdata/ ${TESSDATA_PREFIX}/
 RUN tesseract --version | grep "tesseract ${TESSERACT_VERSION}"

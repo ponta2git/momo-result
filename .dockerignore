@@ -1,9 +1,6 @@
 .git
 .github
 .agents
-.bloop
-.metals
-.scala-build
 .serena
 .vscode
 **/.DS_Store
@@ -38,8 +35,6 @@ apps/ocr-worker/htmlcov
 apps/ocr-worker/out
 apps/ocr-worker/scripts
 apps/ocr-worker/tests
-docs/frontend-rebuild
-docs/mvp-todos.md
 docs/ops
 docs/tmp
 ocr_samples

@@ -29,7 +29,6 @@ docs/tmp/
 .env
 **/.env
 **/.pnpm-store/
-.serena/cache
 .playwright-mcp
 apps/web/playwright-report/
 apps/web/test-results/

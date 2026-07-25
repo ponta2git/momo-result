@@ -16,9 +16,8 @@ object Database:
   /**
    * Natural transformation `ConnectionIO ~> F` produced by a [[Transactor]].
    *
-   * Each evaluation runs its argument inside a fresh JDBC transaction. Phase 3 repositories use
-   * this to keep `Alg[ConnectionIO]` tx-agnostic and let the repository facade decide where the tx
-   * boundary lives.
+   * Each evaluation runs its argument inside a fresh JDBC transaction. Repository algebras remain
+   * transaction-agnostic while the repository facade owns the transaction boundary.
    */
   def transactK[F[_]: MonadCancelThrow](xa: Transactor[F]): ConnectionIO ~> F =
     new (ConnectionIO ~> F):

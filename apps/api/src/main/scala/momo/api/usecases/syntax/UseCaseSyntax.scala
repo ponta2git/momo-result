@@ -10,10 +10,8 @@ import momo.api.errors.{AppError, AppException}
 /**
  * Small, opinionated combinators for usecase composition.
  *
- * Phase 4-a goal: collapse the most common `EitherT(...map(_.toRight(...)))` and
- * `EitherT.fromEither[F](Either.cond(boolean, (), error))` patterns into named extensions so
- * usecase `for` blocks read top-to-bottom without ceremonial wrappers. Behaviour is identical to
- * the desugared form — only the spelling changes.
+ * These extensions name the common conversions from repository results into the usecase error
+ * channel. Behaviour is identical to the equivalent `EitherT` expressions.
  *
  * Naming convention:
  *   - `orError(error)` / `orNotFound(resource, id)` — lift `F[Option[A]]` into `EitherT[F, AppError, A]`.

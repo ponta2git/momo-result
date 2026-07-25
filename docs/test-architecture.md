@@ -75,7 +75,7 @@ CI の report mode は、同じテスト集合を通常実行と coverage 実行
 | `endpoints`, `codec` | S / M | request / response roundtrip、OpenAPI、Problem Details。 |
 | `http` | M | auth、CSRF、routing、error mapping。HTTP app起動は境界確認に限定する。 |
 | in-memory `adapters` / repository contract | S / M | 本番adapterと共有する意味論を契約テストで固定する。 |
-| `repositories/postgres` | L | scoverage対象外でよい。SQL、transaction、DB contract、FK順序を実PostgreSQLで検証する。 |
+| `adapters/postgres` | L | scoverage対象外でよい。SQL、transaction、DB contract、FK順序を実PostgreSQLで検証する。 |
 | Redis producer / outbox | M / L | JSON Schema、payload contract、Redis wire ack / claim / retry を検証する。 |
 
 現行 coverage 設定は `apps/api/build.sbt` を正とする。PostgreSQL / Redis adapter は coverage率ではなく、`apiDbQuality` / `apiRedisQuality` の contract 成功で保証する。

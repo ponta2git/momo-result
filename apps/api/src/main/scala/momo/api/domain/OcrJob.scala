@@ -144,7 +144,7 @@ object OcrJob:
   ) extends OcrJob:
     val status: OcrJobStatus = OcrJobStatus.Failed
 
-  /** Cancelled job (only Queued jobs may transition here in current MVP). */
+  /** Cancelled job; only queued jobs may transition here. */
   final case class Cancelled(
       id: OcrJobId,
       draftId: OcrDraftId,

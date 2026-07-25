@@ -30,11 +30,7 @@ trait AppSessionsAlg[F0[_]]:
   def renew(idHash: String, lastSeenAt: Instant, expiresAt: Instant): F0[Unit]
   def deleteExpired(now: Instant): F0[Int]
 
-/**
- * Skeleton repository for the Discord OAuth session aggregate. The OAuth flow that consumes it
- * lands in a later phase. For MVP, only `find` and `upsert` are needed by tests; lifecycle (revoke,
- * prune) follows OAuth.
- */
+/** Repository for server-side Discord OAuth sessions and their lifecycle operations. */
 trait AppSessionsRepository[F[_]]:
   def find(idHash: String): F[Option[AppSession]]
   def upsert(session: AppSession): F[Unit]

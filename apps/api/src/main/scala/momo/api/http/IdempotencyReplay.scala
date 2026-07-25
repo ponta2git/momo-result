@@ -25,8 +25,6 @@ import momo.api.repositories.{
 /**
  * Wraps a mutation effect with persistent idempotency replay semantics.
  *
- * For details see `apps/api/docs/proposals/idempotency-keys.md`.
- *
  *   - When `Idempotency-Key` is absent, the wrapped effect runs unchanged.
  *   - When present and the `(key, accountId, endpoint)` row already exists with the same request
  *     hash, the stored response body is decoded and replayed without invoking the effect.

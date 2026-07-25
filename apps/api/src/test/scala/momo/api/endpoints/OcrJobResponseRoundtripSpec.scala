@@ -14,7 +14,7 @@ import momo.api.domain.{FailureCode, OcrFailure, OcrJob, ScreenType, StoredImage
  *
  * The two cases (`Queued` happy path and `Failed` with full failure detail) cover both branches of
  * the optional fields, so the golden snapshot will catch any accidental nesting / casing change in
- * `failure` when the OcrJob status is later refactored into a sealed ADT (Phase 2).
+ * `failure`.
  */
 final class OcrJobResponseRoundtripSpec extends FunSuite:
 

@@ -25,8 +25,7 @@ import momo.api.domain.{
  * Roundtrip + golden-JSON guard for [[MatchDetailResponse]] and [[MatchSummaryResponse]].
  *
  * See [[HeldEventResponseRoundtripSpec]] for the rationale: locking the wire format here lets the
- * upcoming Phase 2 ADT refactor (`MatchRecord.players` → `FourPlayers`, `MatchListItem` →
- * sealed states) be performed without silently changing the JSON the SPA depends on.
+ * domain model evolve without silently changing the JSON the SPA depends on.
  */
 final class MatchModelsRoundtripSpec extends FunSuite:
 

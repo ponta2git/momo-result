@@ -16,8 +16,7 @@ import momo.api.domain.ids.HeldEventId
  * The roundtrip part proves that the case class shape is symmetric (encode then decode yields the
  * same value). The golden part pins the wire format: any change to field names, ordering, or types
  * will fail this test, forcing a deliberate decision (and a frontend coordination) before it can
- * be merged. This is what lets later phases (state ADTs, opaque IDs) refactor freely without
- * silently breaking the API contract.
+ * be merged, preventing silent changes to the API contract.
  */
 final class HeldEventResponseRoundtripSpec extends FunSuite:
 

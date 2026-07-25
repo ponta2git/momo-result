@@ -12,8 +12,8 @@ import momo.api.endpoints.ProblemDetails.ProblemResponse
  *
  * The named header inputs centralize the wire-level header names used by the auth and
  * idempotency middleware so endpoint files don't repeat the strings. The semantics —
- * authenticated account dispatch, CSRF, idempotent replay —
- * are documented in `apps/api/docs/proposals/idempotency-keys.md` and `architecture.md`.
+ * authenticated account dispatch, CSRF, and idempotent replay — follow the API architecture and
+ * database contract in the repository-level `docs/` directory.
  */
 object CommonEndpoint:
   type SecuredRead[I, O] = Endpoint[Option[String], I, ProblemResponse, O, Any]

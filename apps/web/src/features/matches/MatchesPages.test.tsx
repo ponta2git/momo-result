@@ -58,6 +58,12 @@ describe("MatchesListPage", () => {
     expect(screen.queryByLabelText("開催の振り返り")).not.toBeInTheDocument();
     expect(await screen.findAllByText("優勝 ぽんた")).toHaveLength(2);
     expect(screen.getByRole("columnheader", { name: /開催・試合/u })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "状態・次の操作" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "順位" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "結果" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "出力" })).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "操作" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "更新" })).not.toBeInTheDocument();
     const matchInfoCell = screen.getAllByRole("cell").find((cell) => {
       const text = cell.textContent ?? "";
       return [
@@ -77,9 +83,21 @@ describe("MatchesListPage", () => {
     expect(matchInfoCell).toHaveTextContent("今シーズン");
     expect(matchInfoCell).toHaveTextContent("第1試合");
     expect(matchInfoCell).toHaveTextContent("東日本編");
-    const detailLinks = await screen.findAllByRole("link", { name: "詳細を見る" });
+    expect(matchInfoCell).toHaveClass("align-middle");
+    expect(matchInfoCell.querySelector("a")).toBeNull();
+    const detailLinks = await screen.findAllByRole("link", {
+      name: "第1試合 東日本編の試合結果を見る",
+    });
     expect(detailLinks).toHaveLength(2);
-    detailLinks.forEach((link) => expect(link).toHaveAttribute("href", "/matches/match-1"));
+    detailLinks.forEach((link) => {
+      expect(link).toHaveAttribute("href", "/matches/match-1");
+      expect(link).toHaveClass("size-11");
+    });
+    const exportLinks = await screen.findAllByRole("link", {
+      name: "第1試合をCSV/TSV出力",
+    });
+    expect(exportLinks).toHaveLength(2);
+    exportLinks.forEach((link) => expect(link).toHaveAttribute("href", "/exports?matchId=match-1"));
   });
 
   it("commits detail navigation immediately while the detail payload is loading", async () => {
@@ -113,7 +131,9 @@ describe("MatchesListPage", () => {
 
     expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
 
-    const detailLinks = await screen.findAllByRole("link", { name: "詳細を見る" });
+    const detailLinks = await screen.findAllByRole("link", {
+      name: "第1試合 東日本編の試合結果を見る",
+    });
     const detailLink = detailLinks[0];
     if (!detailLink) {
       throw new Error("expected a detail link");
@@ -150,14 +170,15 @@ describe("MatchesListPage", () => {
 
     expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
     expect(await screen.findByText("試合はまだありません")).toBeInTheDocument();
-    const filterSection = screen.getByText("表示条件").closest("section");
-    const workQueueSection = screen.getByText("未完了タスク").closest("section");
-    if (!filterSection || !workQueueSection) {
-      throw new Error("expected filter and work queue sections to be present");
+    const filterSection = screen.getByRole("region", { name: "表示条件" });
+    const emptyState = screen.getByText("試合はまだありません").closest("section");
+    if (!filterSection || !emptyState) {
+      throw new Error("expected filter and empty-list sections to be present");
     }
-    expect(filterSection.compareDocumentPosition(workQueueSection)).toBe(
+    expect(filterSection.compareDocumentPosition(emptyState)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
+    expect(screen.queryByText("未完了タスク")).not.toBeInTheDocument();
   });
 
   it("preserves selected held-event filter in URL after submitting", async () => {
@@ -279,7 +300,9 @@ describe("MatchesListPage", () => {
     await waitFor(() =>
       expect(screen.getByLabelText("current location")).toHaveTextContent("/matches"),
     );
-    const detailLinks = await screen.findAllByRole("link", { name: "詳細を見る" });
+    const detailLinks = await screen.findAllByRole("link", {
+      name: "第1試合 東日本編の試合結果を見る",
+    });
     detailLinks.forEach((link) => expect(link).toHaveAttribute("href", "/matches/match-1"));
     expect(screen.queryByText("試合はまだありません")).not.toBeInTheDocument();
   });
@@ -377,14 +400,20 @@ describe("MatchesListPage", () => {
     );
 
     expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
-    const needsReviewButton = await screen.findByRole("button", { name: /要確認/u });
+    expect(await screen.findAllByRole("button", { name: "確認事項を直す" })).not.toHaveLength(0);
+    const incompleteButton = await screen.findByRole("button", { name: /^未確定/u });
+    await user.click(incompleteButton);
+    const needsReviewButton = await screen.findByRole("button", { name: /要確認のみ/u });
+    await waitFor(() => expect(needsReviewButton).toBeEnabled());
 
     await user.click(needsReviewButton);
 
     expect(needsReviewButton).toHaveAttribute("aria-pressed", "true");
     expect(needsReviewButton).toBeDisabled();
-    expect(screen.getByText("条件を反映中")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "確認事項を直す" })).not.toBeInTheDocument();
+    expect(screen.getByText("一覧を更新中")).toBeInTheDocument();
+    screen
+      .getAllByRole("button", { name: "確認事項を直す" })
+      .forEach((button) => expect(button).toBeDisabled());
     await waitFor(() => expect(needsReviewRequested).toBe(true));
 
     responseGate.resolve();

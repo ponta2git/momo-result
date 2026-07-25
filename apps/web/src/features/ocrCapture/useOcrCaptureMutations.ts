@@ -122,7 +122,7 @@ export function useOcrCaptureMutations(hints: Record<string, unknown>): OcrCaptu
               "warning",
             );
           }
-          navigate("/matches", { replace: true });
+          navigate("/matches?status=ocr_running&sort=updated_desc", { replace: true });
           return;
         }
         if (result.status === "failed_cleanup_failed") {

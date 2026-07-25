@@ -1,15 +1,9 @@
-import {
-  AlertTriangle,
-  Download,
-  LoaderCircle,
-  PenSquare,
-  RefreshCw,
-  ScanLine,
-} from "lucide-react";
+import { AlertTriangle, Download, LoaderCircle, PenSquare, ScanLine } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 
 import { MatchesListFilters } from "@/features/matches/list/MatchesListFilters";
+import { MatchesStatusRail } from "@/features/matches/list/MatchesStatusRail";
 import { MatchesTable } from "@/features/matches/list/MatchesTable";
-import { MatchesWorkQueueSummary } from "@/features/matches/list/MatchesWorkQueueSummary";
 import { matchListPageSizeOptions } from "@/features/matches/list/matchListSearchParams";
 import { MatchMobileCard } from "@/features/matches/list/MatchMobileCard";
 import { useMatchesListPageController } from "@/features/matches/list/useMatchesListPageController";
@@ -20,8 +14,8 @@ import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
-import { PageHeader } from "@/shared/ui/layout/PageHeader";
 import { StaleShield } from "@/shared/ui/motion/StaleShield";
+import { momoTransition } from "@/shared/ui/motion/variants";
 
 function ListSkeleton() {
   return (
@@ -60,7 +54,6 @@ export function MatchesListPage() {
     selectDraftAction,
     showMatchesError,
     showMatchesLoading,
-    showStaleSkeleton,
     summaryCounts,
     summaryLoading,
     summaryMasked,
@@ -76,18 +69,20 @@ export function MatchesListPage() {
   };
 
   return (
-    <PageFrame className="gap-5">
-      <PageHeader
-        description="OCR中から確定済みまで、試合記録をまとめて管理します。開催や作品で絞り込めます。"
-        eyebrow="試合記録"
-        title="試合一覧"
-      />
-
-      <section className="grid gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
-        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+    <PageFrame>
+      <header className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="momo-heading text-lg font-semibold text-[var(--color-text-primary)]">
+          試合一覧
+        </h1>
+        <div
+          aria-label="試合を登録"
+          className="grid w-full shrink-0 grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center"
+          role="group"
+        >
           <LinkButton
-            className="col-span-2 w-full sm:col-span-1 sm:w-auto"
+            className="w-full sm:w-auto"
             icon={<ScanLine className="size-4" />}
+            size="sm"
             to="/ocr/new"
           >
             OCR取り込み
@@ -95,42 +90,14 @@ export function MatchesListPage() {
           <LinkButton
             className="w-full sm:w-auto"
             icon={<PenSquare className="size-4" />}
+            size="sm"
             to="/matches/new"
             variant="secondary"
           >
             手入力で作成
           </LinkButton>
-          <LinkButton
-            className="w-full sm:w-auto"
-            icon={<Download className="size-4" />}
-            to="/exports"
-            variant="secondary"
-          >
-            CSV/TSV出力
-          </LinkButton>
         </div>
-        <div className="flex min-w-0 flex-wrap items-center gap-2 md:justify-end">
-          {isStale ? (
-            <span className="momo-enter inline-flex items-center gap-2 rounded-full bg-[var(--color-action)]/10 px-3 py-1 text-sm font-medium text-[var(--color-text-secondary)]">
-              <LoaderCircle
-                aria-hidden="true"
-                className="size-3.5 animate-spin motion-reduce:animate-none"
-              />
-              条件を反映中
-            </span>
-          ) : null}
-          <Button
-            className="w-44"
-            icon={<RefreshCw className="size-4" />}
-            pending={isManualRefreshing}
-            pendingLabel="更新中…"
-            variant="quiet"
-            onClick={refresh}
-          >
-            最新情報に更新
-          </Button>
-        </div>
-      </section>
+      </header>
 
       {masterLoadFailed ? (
         <Notice tone="warning" title="絞り込み候補を一部読み込めません">
@@ -138,14 +105,7 @@ export function MatchesListPage() {
         </Notice>
       ) : null}
 
-      <MatchesListFilters
-        actions={filterActions}
-        candidates={filterCandidates}
-        pending={isStale}
-        search={search}
-      />
-
-      <MatchesWorkQueueSummary
+      <MatchesStatusRail
         counts={summaryCounts}
         currentStatus={search.status}
         disabled={isStale}
@@ -156,67 +116,116 @@ export function MatchesListPage() {
         }}
       />
 
-      <section aria-busy={isStale || undefined} className="relative grid min-h-[24rem] gap-4">
-        <StaleShield
-          active={showMatchesLoading || showStaleSkeleton}
-          contentClassName="grid gap-4"
-          fallback={<ListSkeleton />}
-        >
-          {showMatchesError ? (
-            <Notice tone="danger" title="試合一覧を読み込めません">
-              時間をおいて、再読み込みしてください。
-            </Notice>
-          ) : items.length === 0 ? (
-            <EmptyState
-              action={
-                hasFilters ? (
-                  <Button onClick={clearSearch} variant="secondary">
-                    条件をクリア
-                  </Button>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    <LinkButton to="/ocr/new">OCR取り込み</LinkButton>
-                    <LinkButton to="/matches/new" variant="secondary">
-                      手入力で作成
-                    </LinkButton>
-                  </div>
-                )
-              }
-              className="min-h-[18rem]"
-              description={
-                hasFilters
-                  ? "状態や開催条件を広げると、他の試合記録を確認できます。"
-                  : "OCR取り込みか手入力で、最初の試合を登録します。"
-              }
-              icon={<AlertTriangle className="size-5" />}
-              title={hasFilters ? "該当する試合はありません" : "試合はまだありません"}
-            />
+      <MatchesListFilters
+        actions={filterActions}
+        candidates={filterCandidates}
+        onRefresh={refresh}
+        pending={isStale}
+        refreshing={isManualRefreshing}
+        search={search}
+      />
+
+      <section
+        aria-busy={isStale || undefined}
+        aria-label="登録済みの試合"
+        className="relative grid min-h-[24rem] gap-4"
+      >
+        <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          {pagination ? (
+            <p className="text-sm font-medium text-[var(--color-text-secondary)] tabular-nums">
+              {pagination.totalItems.toLocaleString()}件
+            </p>
           ) : (
-            <>
-              <div className="hidden lg:block">
-                <MatchesTable
-                  items={items}
-                  rowActions={rowActions}
-                  onSortChange={(sort) => applySearch({ ...search, page: 1, sort })}
-                  sort={search.sort}
-                />
-              </div>
-              <div className="grid gap-3 lg:hidden">
-                {items.map((item) => (
-                  <MatchMobileCard key={item.id} item={item} rowActions={rowActions} />
-                ))}
-              </div>
-              {pagination ? (
-                <PaginationControls
-                  disabled={isStale}
-                  pageSizeOptions={[...matchListPageSizeOptions]}
-                  pagination={pagination}
-                  onPageChange={updatePage}
-                  onPageSizeChange={updatePageSize}
-                />
-              ) : null}
-            </>
+            <span aria-hidden="true" />
           )}
+          <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:shrink-0 sm:justify-end">
+            <AnimatePresence initial={false}>
+              {isStale ? (
+                <motion.span
+                  key="list-pending"
+                  animate={{ opacity: 1, y: 0 }}
+                  aria-live="polite"
+                  className="inline-flex shrink-0 items-center gap-2 rounded-full bg-[var(--color-action)]/10 px-3 py-1 text-xs font-semibold text-[var(--color-text-secondary)]"
+                  exit={{ opacity: 0, y: -2 }}
+                  initial={{ opacity: 0, y: 2 }}
+                  transition={momoTransition}
+                >
+                  <LoaderCircle
+                    aria-hidden="true"
+                    className="size-3.5 animate-spin motion-reduce:animate-none"
+                  />
+                  一覧を更新中
+                </motion.span>
+              ) : null}
+            </AnimatePresence>
+            <LinkButton
+              icon={<Download className="size-4" />}
+              size="sm"
+              to="/exports"
+              variant="quiet"
+            >
+              CSV/TSVをまとめて出力
+            </LinkButton>
+          </div>
+        </div>
+
+        <StaleShield active={showMatchesLoading} fallback={<ListSkeleton />}>
+          <motion.div
+            animate={{ opacity: isStale ? 0.7 : 1 }}
+            className="grid gap-4"
+            transition={momoTransition}
+          >
+            {showMatchesError ? (
+              <Notice tone="danger" title="試合一覧を読み込めません">
+                時間をおいて、再読み込みしてください。
+              </Notice>
+            ) : items.length === 0 ? (
+              <EmptyState
+                action={
+                  hasFilters ? (
+                    <Button onClick={clearSearch} variant="secondary">
+                      条件をクリア
+                    </Button>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      <LinkButton to="/ocr/new">OCR取り込み</LinkButton>
+                      <LinkButton to="/matches/new" variant="secondary">
+                        手入力で作成
+                      </LinkButton>
+                    </div>
+                  )
+                }
+                className="min-h-[18rem]"
+                description={
+                  hasFilters
+                    ? "状態や開催条件を広げると、他の試合記録を確認できます。"
+                    : "OCR取り込みか手入力で、最初の試合を登録します。"
+                }
+                icon={<AlertTriangle className="size-5" />}
+                title={hasFilters ? "該当する試合はありません" : "試合はまだありません"}
+              />
+            ) : (
+              <>
+                <div className="hidden lg:block">
+                  <MatchesTable items={items} rowActions={rowActions} />
+                </div>
+                <div className="grid gap-3 lg:hidden">
+                  {items.map((item) => (
+                    <MatchMobileCard key={item.id} item={item} rowActions={rowActions} />
+                  ))}
+                </div>
+                {pagination ? (
+                  <PaginationControls
+                    disabled={isStale}
+                    pageSizeOptions={[...matchListPageSizeOptions]}
+                    pagination={pagination}
+                    onPageChange={updatePage}
+                    onPageSizeChange={updatePageSize}
+                  />
+                ) : null}
+              </>
+            )}
+          </motion.div>
         </StaleShield>
       </section>
     </PageFrame>

@@ -1,10 +1,12 @@
 import type { MatchListAction } from "@/features/matches/list/matchListTypes";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
+import { cn } from "@/shared/ui/cn";
 
 type MatchListActionsProps = {
   disabled?: boolean;
   checkingDraftIds?: ReadonlySet<string> | undefined;
+  layout?: "inline" | "stacked";
   onDraftStatusCheckAction?: ((action: MatchListAction) => void) | undefined;
   primaryAction: MatchListAction;
   secondaryActions: MatchListAction[];
@@ -14,14 +16,20 @@ function ActionButton({
   action,
   checkingDraftIds,
   disabled = false,
+  layout,
   onDraftStatusCheckAction,
 }: {
   action: MatchListAction;
   checkingDraftIds?: ReadonlySet<string> | undefined;
   disabled?: boolean;
+  layout: "inline" | "stacked";
   onDraftStatusCheckAction?: ((action: MatchListAction) => void) | undefined;
 }) {
   const variant = action.variant ?? "primary";
+  const actionClassName = cn(
+    "justify-center",
+    layout === "stacked" ? "w-full" : "w-auto max-w-full",
+  );
   const isChecking = action.draftStatusCheck
     ? (checkingDraftIds?.has(action.draftStatusCheck.draftId) ?? false)
     : false;
@@ -35,7 +43,7 @@ function ActionButton({
   ) {
     return (
       <Button
-        className="w-full justify-center"
+        className={actionClassName}
         pending={isChecking}
         pendingLabel="確認中…"
         size="sm"
@@ -49,7 +57,7 @@ function ActionButton({
 
   if (action.href && !action.disabled && !disabled) {
     return (
-      <LinkButton className="w-full justify-center" size="sm" to={action.href} variant={variant}>
+      <LinkButton className={actionClassName} size="sm" to={action.href} variant={variant}>
         {action.label}
       </LinkButton>
     );
@@ -57,7 +65,7 @@ function ActionButton({
 
   return (
     <Button
-      className="w-full justify-center"
+      className={actionClassName}
       disabled={action.disabled || disabled}
       size="sm"
       variant={variant}
@@ -70,16 +78,23 @@ function ActionButton({
 export function MatchListActions({
   checkingDraftIds,
   disabled = false,
+  layout = "stacked",
   onDraftStatusCheckAction,
   primaryAction,
   secondaryActions,
 }: MatchListActionsProps) {
   return (
-    <div className="flex min-w-0 flex-col gap-2">
+    <div
+      className={cn(
+        "flex min-w-0 gap-2",
+        layout === "stacked" ? "flex-col" : "flex-row flex-wrap items-center",
+      )}
+    >
       <ActionButton
         action={primaryAction}
         checkingDraftIds={checkingDraftIds}
         disabled={disabled}
+        layout={layout}
         onDraftStatusCheckAction={onDraftStatusCheckAction}
       />
       {secondaryActions.map((action) => (
@@ -88,6 +103,7 @@ export function MatchListActions({
           action={action}
           checkingDraftIds={checkingDraftIds}
           disabled={disabled}
+          layout={layout}
           onDraftStatusCheckAction={onDraftStatusCheckAction}
         />
       ))}

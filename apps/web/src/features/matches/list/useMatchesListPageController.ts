@@ -251,7 +251,6 @@ export function useMatchesListPageController() {
     selectDraftAction: handleDraftStatusCheckAction,
     showMatchesError: shouldShowBlockingQueryError(matchesQuery),
     showMatchesLoading: initialMatchesLoading,
-    showStaleSkeleton: showListShield,
     summaryCounts,
     summaryLoading: matchesSummaryQuery.isLoading,
     summaryMasked: showSummaryShield,

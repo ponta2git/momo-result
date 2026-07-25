@@ -5,12 +5,14 @@ import type { CSSProperties, ReactNode } from "react";
 import { cn } from "@/shared/ui/cn";
 
 type DataTableAlign = "center" | "left" | "right";
+type DataTableVerticalAlign = "middle" | "top";
 
 export type DataTableColumn<Row> = {
   align?: DataTableAlign;
   header: ReactNode;
   key: string;
   minWidth?: string;
+  width?: string;
   renderCell: (row: Row) => ReactNode;
   sortDisabled?: boolean;
   sortDirection?: "asc" | "desc" | undefined;
@@ -23,7 +25,10 @@ export type DataTableProps<Row> = {
   columns: Array<DataTableColumn<Row>>;
   emptyState?: ReactNode;
   getRowKey: (row: Row, index: number) => string;
+  layout?: "auto" | "fixed";
+  minWidth?: string;
   rows: Row[];
+  verticalAlign?: DataTableVerticalAlign;
 };
 
 const alignClass = {
@@ -32,18 +37,28 @@ const alignClass = {
   right: "text-right",
 } as const satisfies Record<DataTableAlign, string>;
 
+const verticalAlignClass = {
+  middle: "align-middle",
+  top: "align-top",
+} as const satisfies Record<DataTableVerticalAlign, string>;
+
 export function DataTable<Row>({
   className,
   columns,
   emptyState,
   getRowKey,
+  layout = "auto",
+  minWidth,
   rows,
+  verticalAlign = "top",
 }: DataTableProps<Row>) {
   const columnStyleByKey = useMemo(() => {
     return new Map<string, CSSProperties | undefined>(
       columns.map((column) => [
         column.key,
-        column.minWidth ? { minWidth: column.minWidth } : undefined,
+        column.minWidth || column.width
+          ? { minWidth: column.minWidth, width: column.width }
+          : undefined,
       ]),
     );
   }, [columns]);
@@ -55,7 +70,18 @@ export function DataTable<Row>({
         className,
       )}
     >
-      <table className="w-full min-w-full border-separate border-spacing-0 text-sm leading-6">
+      <table
+        className={cn(
+          "w-full min-w-full border-separate border-spacing-0 text-sm leading-6",
+          layout === "fixed" ? "table-fixed" : "",
+        )}
+        style={minWidth ? { minWidth } : undefined}
+      >
+        <colgroup>
+          {columns.map((column) => (
+            <col key={column.key} style={columnStyleByKey.get(column.key)} />
+          ))}
+        </colgroup>
         <thead>
           <tr>
             {columns.map((column) => (
@@ -113,8 +139,9 @@ export function DataTable<Row>({
                 <td
                   key={column.key}
                   className={cn(
-                    "border-b border-[var(--color-border)] px-3 py-3 align-top text-[var(--color-text-primary)]",
+                    "border-b border-[var(--color-border)] px-3 py-3 text-[var(--color-text-primary)]",
                     alignClass[column.align ?? "left"],
+                    verticalAlignClass[verticalAlign],
                   )}
                   style={columnStyleByKey.get(column.key)}
                 >

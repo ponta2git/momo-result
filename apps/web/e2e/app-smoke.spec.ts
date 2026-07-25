@@ -218,9 +218,9 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
         url.searchParams.get("heldEventId") === null
       );
     });
-    const statusSelect = page.getByRole("combobox", { name: "状態" });
-    await expect(statusSelect).toBeEnabled();
-    await statusSelect.selectOption("confirmed");
+    const confirmedStatusButton = page.getByRole("button", { exact: true, name: "確定済" });
+    await expect(confirmedStatusButton).toBeEnabled();
+    await confirmedStatusButton.click();
     expect((await statusResponse).ok()).toBe(true);
     await expect(page).toHaveURL(/[?&]status=confirmed(?:&|$)/u);
 
@@ -228,6 +228,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
       const url = new URL(response.url());
       return isMatchListResponse(response) && url.searchParams.get("heldEventId") === heldEventId;
     });
+    await page.getByText("詳細条件", { exact: true }).click();
     const heldEventSelect = page.getByRole("combobox", { name: "開催" });
     await expect(heldEventSelect).toBeEnabled();
     await heldEventSelect.selectOption(heldEventId);
@@ -251,19 +252,10 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     expect((await sortResponse).ok()).toBe(true);
     await expect(page).toHaveURL(/[?&]sort=updated_desc(?:&|$)/u);
 
-    const heldSortResponse = page.waitForResponse((response) => {
-      const url = new URL(response.url());
-      return (
-        isMatchListResponse(response) &&
-        url.searchParams.get("heldEventId") === heldEventId &&
-        url.searchParams.get("sort") === "held_desc"
-      );
-    });
-    const heldSortButton = page.getByRole("button", { name: "開催・試合" });
-    await expect(heldSortButton).toBeEnabled();
-    await heldSortButton.click();
-    expect((await heldSortResponse).ok()).toBe(true);
-    await expect(page).toHaveURL(/[?&]sort=held_desc(?:&|$)/u);
+    await sortSelect.selectOption("held_desc");
+    await expect(sortSelect).toHaveValue("held_desc");
+    await expect(page).not.toHaveURL(/[?&]sort=/u);
+    await expect(confirmedMatchRow).toBeVisible();
   });
 
   await test.step("open match detail immediately with a loading shell from the list", async () => {
@@ -472,7 +464,7 @@ function isSeriesDrilldownResponse(response: APIResponse, metricId: string): boo
 }
 
 function matchDetailLink(page: Page, matchId: string) {
-  return page.locator(`a[href="/matches/${matchId}"]:visible`, { hasText: "詳細を見る" });
+  return page.locator(`a[href="/matches/${matchId}"]:visible`);
 }
 
 function matchTableRow(page: Page, matchId: string) {

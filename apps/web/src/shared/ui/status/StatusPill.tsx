@@ -54,11 +54,12 @@ const statusViewModel: Record<MatchStatus, StatusViewModel> = {
 export type StatusPillProps = {
   className?: string;
   hideIcon?: boolean;
+  label?: string;
   note?: string;
   status: MatchStatus;
 };
 
-export function StatusPill({ className, hideIcon = false, note, status }: StatusPillProps) {
+export function StatusPill({ className, hideIcon = false, label, note, status }: StatusPillProps) {
   const model = statusViewModel[status];
 
   return (
@@ -74,7 +75,7 @@ export function StatusPill({ className, hideIcon = false, note, status }: Status
           {model.icon}
         </span>
       )}
-      <span>{model.shortLabel}</span>
+      <span>{label ?? model.shortLabel}</span>
       {note ? <span className="text-[var(--color-text-secondary)]">{note}</span> : null}
     </span>
   );

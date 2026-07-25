@@ -21,6 +21,11 @@ describe("matchListSearchParams", () => {
     expect(search.pageSize).toBe(10);
   });
 
+  it("uses newest held event first as the normal list order", () => {
+    expect(defaultMatchListSearch.sort).toBe("held_desc");
+    expect(buildMatchListSearchParams(defaultMatchListSearch).toString()).toBe("");
+  });
+
   it("trims filter ids and treats blank ids as defaults", () => {
     const search = parseMatchListSearchParams(
       new URLSearchParams("gameTitleId=%20game-1%20&heldEventId=%20&seasonMasterId=%20season-1%20"),

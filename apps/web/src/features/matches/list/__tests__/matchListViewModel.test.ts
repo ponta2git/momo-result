@@ -93,6 +93,7 @@ describe("matchListViewModel", () => {
 
     expect(item.kind).toBe("match_draft");
     expect(item.primaryAction.href).toBe("/review/draft-1");
+    expect(item.statusLabel).toBe("要確認");
     expect(item.statusDescription).toContain("確認が必要");
   });
 });

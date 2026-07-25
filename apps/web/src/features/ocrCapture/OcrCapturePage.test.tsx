@@ -3,7 +3,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { OcrCapturePage } from "@/features/ocrCapture/OcrCapturePage";
@@ -32,13 +32,26 @@ type MatchDraftRequestBody = {
 let queryClient: QueryClient;
 let user: ReturnType<typeof userEvent.setup>;
 
+function LocationProbe() {
+  const location = useLocation();
+  return <output aria-label="current location">{`${location.pathname}${location.search}`}</output>;
+}
+
 function renderCaptureRoute() {
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={["/ocr/new"]}>
         <Routes>
           <Route path="/ocr/new" element={<OcrCapturePage />} />
-          <Route path="/matches" element={<p>matches-page</p>} />
+          <Route
+            path="/matches"
+            element={
+              <>
+                <LocationProbe />
+                <p>matches-page</p>
+              </>
+            }
+          />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -254,6 +267,9 @@ describe("OcrCapturePage", () => {
 
     draftGate.resolve();
     expect(await screen.findByText("matches-page")).toBeInTheDocument();
+    expect(screen.getByLabelText("current location")).toHaveTextContent(
+      "/matches?status=ocr_running&sort=updated_desc",
+    );
   });
 
   it("uses the final tray position as the OCR image type hint", async () => {

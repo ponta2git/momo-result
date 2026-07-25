@@ -1,3 +1,4 @@
+import { ChevronDown, Filter, RefreshCw } from "lucide-react";
 import { useMemo } from "react";
 
 import type {
@@ -6,34 +7,26 @@ import type {
   MatchListFilterSelectionErrors,
   MatchListSearch,
   MatchListSort,
-  MatchListStatusFilter,
 } from "@/features/matches/list/matchListTypes";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
-import { Button } from "@/shared/ui/actions/Button";
+import { IconButton } from "@/shared/ui/actions/IconButton";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 
 type MatchesListFiltersProps = {
   actions: MatchListFilterActions;
   candidates: MatchListFilterCandidates;
+  onRefresh?: () => void;
   pending?: boolean;
+  refreshing?: boolean;
   search: MatchListSearch;
   selectionErrors?: MatchListFilterSelectionErrors;
 };
 
-const statusOptions: Array<{ label: string; value: MatchListStatusFilter }> = [
-  { label: "すべて", value: "all" },
-  { label: "未完了", value: "incomplete" },
-  { label: "処理中", value: "ocr_running" },
-  { label: "確認待ち", value: "pre_confirm" },
-  { label: "要確認", value: "needs_review" },
-  { label: "確定済", value: "confirmed" },
-];
-
 const sortOptions: Array<{ label: string; value: MatchListSort }> = [
-  { label: "未完了から表示", value: "status_priority" },
-  { label: "更新が新しい順", value: "updated_desc" },
   { label: "開催が新しい順", value: "held_desc" },
   { label: "開催が古い順", value: "held_asc" },
+  { label: "更新が新しい順", value: "updated_desc" },
+  { label: "未確定を優先", value: "status_priority" },
   { label: "試合番号順", value: "match_no_asc" },
 ];
 
@@ -48,7 +41,9 @@ function heldEventLabel(event: HeldEventResponse): string {
 export function MatchesListFilters({
   actions,
   candidates,
+  onRefresh,
   pending = false,
+  refreshing = false,
   search,
   selectionErrors,
 }: MatchesListFiltersProps) {
@@ -100,99 +95,118 @@ export function MatchesListFilters({
   const hasDetailFilters = Boolean(
     search.heldEventId || search.gameTitleId || search.seasonMasterId,
   );
+  const hasResettableFilters =
+    hasDetailFilters || search.status !== "all" || search.sort !== "held_desc";
+  const selectedHeldEvent = candidates.heldEvents.find((event) => event.id === search.heldEventId);
+  const selectedGameTitle = candidates.gameTitles.find(
+    (gameTitle) => gameTitle.id === search.gameTitleId,
+  );
+  const selectedSeason = candidates.seasons.find((season) => season.id === search.seasonMasterId);
+  const activeDetailFilters = [
+    search.heldEventId
+      ? {
+          key: "held-event",
+          label: `開催 ${selectedHeldEvent ? heldEventLabel(selectedHeldEvent) : "選択中"}`,
+        }
+      : undefined,
+    search.gameTitleId
+      ? {
+          key: "game-title",
+          label: `作品 ${selectedGameTitle?.name ?? "選択中"}`,
+        }
+      : undefined,
+    search.seasonMasterId
+      ? {
+          key: "season",
+          label: `シーズン ${selectedSeason?.name ?? "選択中"}`,
+        }
+      : undefined,
+  ].filter(
+    (
+      filter,
+    ): filter is {
+      key: string;
+      label: string;
+    } => filter !== undefined,
+  );
 
   return (
     <section
       aria-busy={pending || undefined}
-      className="relative overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 lg:pr-40"
+      aria-label="表示条件"
+      className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
     >
-      <img
-        alt=""
-        aria-hidden="true"
-        className="pointer-events-none absolute top-4 right-4 hidden size-28 object-contain opacity-75 lg:block"
-        decoding="async"
-        loading="lazy"
-        src="/station.png"
-      />
-      <div className="relative z-[var(--z-base)] grid gap-4">
-        <div className="flex min-w-0 items-center justify-between gap-3">
-          <p className="text-sm font-semibold text-[var(--color-text-primary)]">表示条件</p>
-          {pending ? (
-            <span className="momo-enter rounded-full border border-[var(--color-action)]/30 bg-[var(--color-action)]/10 px-3 py-1 text-xs font-semibold text-[var(--color-text-secondary)]">
-              反映中
+      <div className="grid gap-4">
+        <div className="flex min-w-0 items-end gap-2">
+          <div className="min-w-0 flex-1 sm:w-52 sm:flex-none">
+            <SelectField
+              disabled={pending}
+              label="並び順"
+              options={sortOptions}
+              value={search.sort}
+              onChange={(event) => {
+                const value = event.currentTarget.value;
+                patchSearch({ sort: value as MatchListSort });
+              }}
+            />
+          </div>
+          <div className="ml-auto flex shrink-0 items-center gap-1">
+            {hasResettableFilters ? (
+              <button
+                aria-label="確定状況・並び順・詳細条件を初期状態に戻す"
+                className="momo-pressable inline-flex min-h-11 items-center rounded-[var(--radius-xs)] px-2 py-1 text-xs font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-subtle)] hover:text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={pending}
+                type="button"
+                onClick={actions.onClear}
+              >
+                表示条件をリセット
+              </button>
+            ) : null}
+            {onRefresh ? (
+              <IconButton
+                aria-label={refreshing ? "一覧を更新中" : "最新情報に更新"}
+                disabled={pending || refreshing}
+                icon={
+                  <RefreshCw
+                    className={refreshing ? "animate-spin motion-reduce:animate-none" : undefined}
+                  />
+                }
+                tooltip={refreshing ? "更新中…" : "最新情報に更新"}
+                variant="quiet"
+                onClick={onRefresh}
+              />
+            ) : null}
+          </div>
+        </div>
+
+        <details
+          className="group rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)]"
+          open={hasDetailFilters || undefined}
+        >
+          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-[var(--radius-sm)] px-3 py-2 text-sm font-semibold text-[var(--color-text-primary)] transition-colors duration-[var(--motion-fast)] hover:bg-[var(--color-surface-selected)] motion-reduce:transition-none [&::-webkit-details-marker]:hidden">
+            <span className="inline-flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+              <Filter aria-hidden="true" className="size-4 shrink-0" />
+              <span className="shrink-0">詳細条件</span>
+              {activeDetailFilters.length > 0 ? (
+                <span className="inline-flex min-w-0 items-center gap-1.5 overflow-hidden">
+                  {activeDetailFilters.map((filter) => (
+                    <span
+                      key={filter.key}
+                      className="max-w-40 min-w-0 truncate rounded-full bg-[var(--color-action)]/10 px-2 py-0.5 text-xs font-medium text-[var(--color-text-primary)]"
+                      title={filter.label}
+                    >
+                      {filter.label}
+                    </span>
+                  ))}
+                </span>
+              ) : null}
             </span>
-          ) : null}
-        </div>
-        <div className="grid gap-4 sm:grid-cols-[minmax(12rem,16rem)_minmax(12rem,16rem)] sm:items-end">
-          <SelectField
-            disabled={pending}
-            label="状態"
-            options={statusOptions}
-            value={search.status}
-            onChange={(event) => {
-              const value = event.currentTarget.value;
-              patchSearch({ status: value as MatchListStatusFilter });
-            }}
-          />
-          <SelectField
-            disabled={pending}
-            label="並び順"
-            options={sortOptions}
-            value={search.sort}
-            onChange={(event) => {
-              const value = event.currentTarget.value;
-              patchSearch({ sort: value as MatchListSort });
-            }}
-          />
-        </div>
-
-        <div className="hidden gap-4 md:grid md:grid-cols-[1fr_1fr_1fr_auto] md:items-end">
-          <SelectField
-            disabled={pending}
-            label="開催"
-            options={heldEventOptions}
-            value={search.heldEventId}
-            {...heldEventsErrorProps}
-            onChange={(event) => {
-              const value = event.currentTarget.value;
-              patchSearch({ heldEventId: value });
-            }}
-          />
-          <SelectField
-            disabled={pending}
-            label="作品"
-            options={gameTitleOptions}
-            value={search.gameTitleId}
-            {...gameTitlesErrorProps}
-            onChange={(event) => {
-              const value = event.currentTarget.value;
-              patchSearch({
-                gameTitleId: value,
-                seasonMasterId: value && search.gameTitleId === value ? search.seasonMasterId : "",
-              });
-            }}
-          />
-          <SelectField
-            disabled={pending}
-            label="シーズン"
-            options={seasonOptions}
-            value={search.seasonMasterId}
-            {...seasonsErrorProps}
-            onChange={(event) => {
-              const value = event.currentTarget.value;
-              patchSearch({ seasonMasterId: value });
-            }}
-          />
-          <Button disabled={pending} onClick={actions.onClear} type="button" variant="secondary">
-            条件をクリア
-          </Button>
-        </div>
-
-        <details className="md:hidden" open={hasDetailFilters || undefined}>
-          <summary className="cursor-pointer text-sm font-semibold text-[var(--color-text-primary)]">
-            詳細条件
+            <ChevronDown
+              aria-hidden="true"
+              className="size-4 shrink-0 text-[var(--color-text-secondary)] transition-transform duration-[var(--motion-base)] group-open:rotate-180 motion-reduce:transition-none"
+            />
           </summary>
-          <div className="mt-3 grid gap-4">
+          <div className="grid gap-4 border-t border-[var(--color-border)] p-3 md:grid-cols-3 md:items-end">
             <SelectField
               disabled={pending}
               label="開催"
@@ -230,9 +244,6 @@ export function MatchesListFilters({
                 patchSearch({ seasonMasterId: value });
               }}
             />
-            <Button disabled={pending} onClick={actions.onClear} type="button" variant="secondary">
-              条件をクリア
-            </Button>
           </div>
         </details>
       </div>

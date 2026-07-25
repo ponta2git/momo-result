@@ -12,7 +12,7 @@ export const defaultMatchListSearch: MatchListSearch = {
   pageSize: 10,
   seasonMasterId: "",
   status: "all",
-  sort: "status_priority",
+  sort: "held_desc",
 };
 
 const statusOptions = new Set<MatchListStatusFilter>([

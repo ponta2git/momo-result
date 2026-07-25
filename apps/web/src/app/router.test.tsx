@@ -188,17 +188,18 @@ describe("app routing", () => {
     const { router } = renderApp("/analytics/series");
 
     expect(await screen.findByRole("heading", { name: "戦績比較" })).toBeInTheDocument();
-    expect(await screen.findByText("順位差")).toBeInTheDocument();
-    expect(await screen.findByText("銀次被害")).toBeInTheDocument();
+    expect(await screen.findByText(/12戦 ・ (読み取り目安|参考)/u)).toBeInTheDocument();
+    expect(screen.queryByText("順位差")).not.toBeInTheDocument();
+    expect(screen.queryByText("銀次被害")).not.toBeInTheDocument();
     expect(screen.queryByText("集計対象")).not.toBeInTheDocument();
     expect(screen.queryByText("データ注意")).not.toBeInTheDocument();
-    expect(await screen.findByText("条件付き指標があります。")).toBeInTheDocument();
-    const reviewTab = screen.getByRole("tab", { name: "振り返り" });
+    expect(screen.queryByText("条件付き指標があります。")).not.toBeInTheDocument();
+    const reviewTab = await screen.findByRole("tab", { name: "次戦に備える" });
     expect(reviewTab).toHaveAttribute("aria-selected", "true");
-    expect(reviewTab).toHaveAttribute("aria-controls", "series-comparison-view-review");
-    expect(screen.getByRole("tabpanel", { name: "振り返り" })).toHaveAttribute(
+    expect(reviewTab).toHaveAttribute("aria-controls", "series-comparison-purpose-panel-review");
+    expect(screen.getByRole("tabpanel", { name: "次戦に備える" })).toHaveAttribute(
       "aria-labelledby",
-      "series-comparison-tab-review",
+      "series-comparison-purpose-tab-review",
     );
     expect(await screen.findByRole("heading", { name: "行動プレイブック" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "行動プレイブック" })).not.toBeInTheDocument();
@@ -280,7 +281,7 @@ describe("app routing", () => {
       await router.navigate(-1);
     });
     await waitFor(() =>
-      expect(screen.getByRole("tab", { name: "振り返り" })).toHaveAttribute(
+      expect(screen.getByRole("tab", { name: "次戦に備える" })).toHaveAttribute(
         "aria-selected",
         "true",
       ),
@@ -288,16 +289,17 @@ describe("app routing", () => {
     expect(await screen.findByRole("heading", { name: "行動プレイブック" })).toBeInTheDocument();
     expect(screen.queryByRole("img", { name: "平均順位の推移グラフ" })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("tab", { name: "順位と相性" }));
+    await user.click(screen.getByRole("tab", { name: "分析する" }));
 
     expect(await screen.findByRole("img", { name: "平均順位の推移グラフ" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "今の差" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("link", { name: "安定性" })).toHaveAttribute("href", "#metric-rate");
     expect(screen.queryByRole("heading", { name: "総資産と勝ち筋" })).not.toBeInTheDocument();
     expect(
       screen.queryByRole("heading", { name: "物件収益トップを勝ちにできたか" }),
     ).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("tab", { name: "勝ち筋" }));
+    await user.click(screen.getByRole("tab", { name: "勝因候補" }));
 
     expect(await screen.findByRole("heading", { name: "総資産と勝ち筋" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "資産と勝ち筋" })).toHaveAttribute(
@@ -327,7 +329,7 @@ describe("app routing", () => {
     );
     expect(router.state.location.search).toContain("view=drivers");
 
-    await user.click(screen.getByRole("tab", { name: "流れと勢い" }));
+    await user.click(screen.getByRole("tab", { name: "推移" }));
 
     expect(screen.getByRole("link", { name: "期間内の荒れ" })).toHaveAttribute(
       "href",
@@ -340,7 +342,7 @@ describe("app routing", () => {
     );
     expect(await screen.findByRole("heading", { name: "第n試合の傾向" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("tab", { name: "番手と出来事" }));
+    await user.click(screen.getByRole("tab", { name: "条件別" }));
 
     expect(screen.getByRole("link", { name: "番手" })).toHaveAttribute(
       "href",
@@ -369,7 +371,7 @@ describe("app routing", () => {
     renderApp("/analytics/series");
 
     await screen.findByRole("heading", { name: "戦績比較" });
-    await user.click(await screen.findByRole("tab", { name: "順位と相性" }));
+    await user.click(await screen.findByRole("tab", { name: "分析する" }));
     expect(await screen.findByRole("heading", { name: "順位の地力" })).toBeInTheDocument();
 
     expect(screen.getAllByRole("button", { name: "履歴" })).toHaveLength(1);
@@ -401,7 +403,8 @@ describe("app routing", () => {
     renderApp("/analytics/series");
 
     await screen.findByRole("heading", { name: "戦績比較" });
-    await user.click(await screen.findByRole("tab", { name: "番手と出来事" }));
+    await user.click(await screen.findByRole("tab", { name: "分析する" }));
+    await user.click(await screen.findByRole("tab", { name: "条件別" }));
     expect(await screen.findByRole("heading", { name: "番手別成績" })).toBeInTheDocument();
 
     expect(screen.getAllByRole("button", { name: "履歴" })).toHaveLength(1);

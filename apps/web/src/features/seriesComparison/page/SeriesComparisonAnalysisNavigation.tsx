@@ -1,20 +1,17 @@
-import { motion } from "motion/react";
-
 import type { SeriesComparisonViewId } from "@/features/seriesComparison/model/seriesComparisonViewModel";
-import {
-  defaultSeriesComparisonView,
-  isSeriesComparisonViewId,
-} from "@/features/seriesComparison/model/seriesComparisonViewModel";
+import { isSeriesComparisonViewId } from "@/features/seriesComparison/model/seriesComparisonViewModel";
 import { cn } from "@/shared/ui/cn";
 import { TabsList, TabsRoot, TabsTab } from "@/shared/ui/forms/Tabs";
-import { momoSpring } from "@/shared/ui/motion/variants";
+
+export type AnalysisViewId = Exclude<SeriesComparisonViewId, "review">;
 
 type AnalysisViewDefinition = {
-  description: string;
-  id: SeriesComparisonViewId;
+  id: AnalysisViewId;
   label: string;
   sections: Array<{ id: string; label: string }>;
 };
+
+type PurposeId = "analysis" | "review";
 
 export type AnalysisViewChange = (
   view: SeriesComparisonViewId,
@@ -23,15 +20,8 @@ export type AnalysisViewChange = (
 
 const analysisViews = [
   {
-    description: "次回4戦で試す行動仮説を、発動条件と根拠で絞ります。",
-    id: "review",
-    label: "振り返り",
-    sections: [{ id: "review-playbook", label: "行動プレイブック" }],
-  },
-  {
-    description: "平均順位、直接対決、順位ブレで、地力と相性を確認します。",
     id: "overview",
-    label: "順位と相性",
+    label: "今の差",
     sections: [
       { id: "metric-basic", label: "順位" },
       { id: "metric-head-to-head", label: "直接対決" },
@@ -39,9 +29,8 @@ const analysisViews = [
     ],
   },
   {
-    description: "総資産、物件収益、カード寄り、目的地到着から勝ち筋を確認します。",
     id: "drivers",
-    label: "勝ち筋",
+    label: "勝因候補",
     sections: [
       { id: "metric-money", label: "資産と勝ち筋" },
       { id: "metric-revenue-outcome", label: "物件収益と勝ち" },
@@ -49,9 +38,8 @@ const analysisViews = [
     ],
   },
   {
-    description: "荒れ試合、直近8戦、切り替え、第n試合別の傾向を確認します。",
     id: "flow",
-    label: "流れと勢い",
+    label: "推移",
     sections: [
       { id: "metric-match-digest", label: "期間内の荒れ" },
       { id: "metric-recent-form", label: "直近" },
@@ -60,9 +48,8 @@ const analysisViews = [
     ],
   },
   {
-    description: "番手、カード売り場、スリの銀次など、試合条件と出来事を確認します。",
     id: "context",
-    label: "番手と出来事",
+    label: "条件別",
     sections: [
       { id: "metric-play-order", label: "番手" },
       { id: "metric-card-shop-destination", label: "売り場×目的地" },
@@ -71,68 +58,120 @@ const analysisViews = [
   },
 ] satisfies AnalysisViewDefinition[];
 
-export function analysisViewFor(view: SeriesComparisonViewId | undefined): AnalysisViewDefinition {
-  const fallback = analysisViews.find((item) => item.id === defaultSeriesComparisonView);
-  if (!fallback) {
-    throw new Error("default series comparison view is not configured");
-  }
-  return analysisViews.find((item) => item.id === view) ?? fallback;
+export function isAnalysisView(view: SeriesComparisonViewId): view is AnalysisViewId {
+  return view !== "review";
 }
 
-export function analysisTabId(view: SeriesComparisonViewId): string {
+export function analysisViewFor(view: AnalysisViewId): AnalysisViewDefinition {
+  const definition = analysisViews.find((item) => item.id === view);
+  if (!definition) {
+    throw new Error("series comparison analysis view is not configured");
+  }
+  return definition;
+}
+
+export function purposeTabId(purpose: PurposeId): string {
+  return `series-comparison-purpose-tab-${purpose}`;
+}
+
+export function purposePanelId(purpose: PurposeId): string {
+  return `series-comparison-purpose-panel-${purpose}`;
+}
+
+export function analysisTabId(view: AnalysisViewId): string {
   return `series-comparison-tab-${view}`;
 }
 
-export function analysisPanelId(view: SeriesComparisonViewId): string {
+export function analysisPanelId(view: AnalysisViewId): string {
   return `series-comparison-view-${view}`;
 }
 
-export function AnalysisTabs({
+function tabClassName(active: boolean, emphasis: "primary" | "secondary"): string {
+  return cn(
+    "-mb-px inline-flex min-h-11 min-w-0 items-center border-b-2 px-3 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-action)]",
+    emphasis === "primary" && "sm:text-base",
+    active
+      ? "border-[var(--color-action)] text-[var(--color-text-primary)]"
+      : "border-transparent text-[var(--color-text-secondary)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-text-primary)]",
+  );
+}
+
+export function PurposeTabs({
   activeView,
   onViewChange,
 }: {
   activeView: SeriesComparisonViewId;
   onViewChange: (view: SeriesComparisonViewId) => void;
 }) {
+  const activePurpose: PurposeId = activeView === "review" ? "review" : "analysis";
   return (
     <TabsRoot
-      className="grid min-w-0 gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
+      value={activePurpose}
+      onValueChange={(value) => {
+        if (value === "review") {
+          onViewChange("review");
+        } else if (value === "analysis") {
+          onViewChange("overview");
+        }
+      }}
+    >
+      <TabsList
+        aria-label="戦績比較の目的"
+        className="flex min-w-0 border-b border-[var(--color-border)]"
+      >
+        <TabsTab
+          aria-controls={purposePanelId("review")}
+          className={tabClassName(activePurpose === "review", "primary")}
+          id={purposeTabId("review")}
+          value="review"
+        >
+          次戦に備える
+        </TabsTab>
+        <TabsTab
+          aria-controls={purposePanelId("analysis")}
+          className={tabClassName(activePurpose === "analysis", "primary")}
+          id={purposeTabId("analysis")}
+          value="analysis"
+        >
+          分析する
+        </TabsTab>
+      </TabsList>
+    </TabsRoot>
+  );
+}
+
+export function AnalysisTabs({
+  activeView,
+  onViewChange,
+}: {
+  activeView: AnalysisViewId;
+  onViewChange: (view: SeriesComparisonViewId) => void;
+}) {
+  return (
+    <TabsRoot
       value={activeView}
       onValueChange={(value) => {
-        if (typeof value === "string" && isSeriesComparisonViewId(value)) {
+        if (typeof value === "string" && isSeriesComparisonViewId(value) && value !== "review") {
           onViewChange(value);
         }
       }}
     >
-      <TabsList aria-label="分析サブページ" className="flex min-w-0 flex-wrap gap-2">
+      <TabsList
+        aria-label="分析の切り口"
+        className="flex min-w-0 overflow-x-auto border-b border-[var(--color-border)]"
+      >
         {analysisViews.map((item) => (
           <TabsTab
             aria-controls={analysisPanelId(item.id)}
-            className={cn(
-              "relative isolate inline-flex min-h-10 min-w-0 items-center gap-2 overflow-hidden rounded-[var(--radius-sm)] border px-3 py-2 text-sm font-semibold transition-colors",
-              item.id === activeView
-                ? "border-[var(--color-action)]/60 text-[var(--color-text-primary)]"
-                : "border-[var(--color-border)] bg-[var(--color-surface-subtle)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface)]",
-            )}
+            className={cn(tabClassName(item.id === activeView, "secondary"), "shrink-0")}
             id={analysisTabId(item.id)}
             key={item.id}
             value={item.id}
           >
-            {item.id === activeView ? (
-              <motion.span
-                aria-hidden="true"
-                className="absolute inset-0 z-0 rounded-[var(--radius-sm)] bg-[var(--color-action)]/12"
-                layoutId="series-analysis-tab-active"
-                transition={momoSpring}
-              />
-            ) : null}
-            <span className="relative z-[var(--z-base)]">{item.label}</span>
+            {item.label}
           </TabsTab>
         ))}
       </TabsList>
-      <p className="text-sm leading-6 text-pretty text-[var(--color-text-secondary)]">
-        {analysisViewFor(activeView).description}
-      </p>
     </TabsRoot>
   );
 }
@@ -142,18 +181,23 @@ export function SectionJumpLinks({ items }: { items: AnalysisViewDefinition["sec
     return null;
   }
   return (
-    <nav aria-label="このサブページの観点" className="min-w-0">
-      <div className="flex min-w-0 flex-wrap gap-2">
+    <nav
+      aria-label="この分析の目次"
+      className="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-2 border-l-2 border-[var(--color-border-strong)] pl-3"
+    >
+      <span className="text-xs font-semibold text-[var(--color-text-secondary)]">この分析</span>
+      <ul className="flex min-w-0 flex-wrap gap-x-4 gap-y-2">
         {items.map((item) => (
-          <a
-            className="inline-flex rounded-full border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-1.5 text-xs font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-surface)]"
-            href={`#${item.id}`}
-            key={item.id}
-          >
-            {item.label}
-          </a>
+          <li key={item.id}>
+            <a
+              className="text-sm font-medium text-[var(--color-action)] underline-offset-4 hover:underline"
+              href={`#${item.id}`}
+            >
+              {item.label}
+            </a>
+          </li>
         ))}
-      </div>
+      </ul>
     </nav>
   );
 }

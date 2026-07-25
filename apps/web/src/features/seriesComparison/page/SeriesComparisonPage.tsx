@@ -1,15 +1,14 @@
-import { BarChart3, RefreshCw } from "lucide-react";
+import { BarChart3 } from "lucide-react";
 
 import { SeriesComparisonContent } from "@/features/seriesComparison/page/SeriesComparisonContent";
+import { SeriesComparisonScopeBar } from "@/features/seriesComparison/page/SeriesComparisonScopeBar";
 import {
   ComparisonSkeleton,
   PageSkeleton,
 } from "@/features/seriesComparison/page/SeriesComparisonSkeletons";
 import { useSeriesComparisonPageController } from "@/features/seriesComparison/page/useSeriesComparisonPageController";
-import { Button } from "@/shared/ui/actions/Button";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
-import { SelectField } from "@/shared/ui/forms/SelectField";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 import { StaleShield } from "@/shared/ui/motion/StaleShield";
@@ -23,24 +22,8 @@ export function SeriesComparisonPage() {
   }
 
   return (
-    <PageFrame className="gap-5" width="wide">
-      <PageHeader
-        actions={
-          <Button
-            disabled={!aggregate.canRefresh}
-            icon={<RefreshCw className="size-4" />}
-            pending={aggregate.refreshing || review.refreshing}
-            pendingLabel="更新中"
-            variant="secondary"
-            onClick={page.actions.refresh}
-          >
-            更新
-          </Button>
-        }
-        description="確定済みの試合から、順位、総資産、物件収益、目的地到着、スリの銀次を比べます。"
-        eyebrow="分析"
-        title="戦績比較"
-      />
+    <PageFrame className="gap-4" width="wide">
+      <PageHeader title="戦績比較" />
 
       {options.hasError ? (
         <Notice tone="danger" title="対象作品を読み込めません">
@@ -56,32 +39,22 @@ export function SeriesComparisonPage() {
         />
       ) : filters.seriesOptions.length > 0 ? (
         <>
-          <section className="grid gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 md:grid-cols-[minmax(12rem,1fr)_minmax(12rem,1fr)_minmax(12rem,1fr)] md:items-end">
-            <div className="min-w-0 md:col-span-3">
-              <h2 className="text-sm font-semibold text-[var(--color-text-primary)]">表示範囲</h2>
-              <p className="mt-1 text-xs leading-5 text-pretty text-[var(--color-text-secondary)]">
-                シーズンとマップを同時に絞れます。対象作品の切り替えは過去作品を見るときに使います。
-              </p>
-            </div>
-            <SelectField
-              label="シーズン"
-              options={filters.seasonOptions}
-              value={filters.state.seasonMasterId ?? ""}
-              onChange={(event) => filters.updateSeasonMasterId(event.currentTarget.value)}
-            />
-            <SelectField
-              label="マップ"
-              options={filters.mapOptions}
-              value={filters.state.mapMasterId ?? ""}
-              onChange={(event) => filters.updateMapMasterId(event.currentTarget.value)}
-            />
-            <SelectField
-              label="対象作品"
-              options={filters.seriesOptions}
-              value={filters.state.gameTitleId ?? ""}
-              onChange={(event) => filters.updateGameTitle(event.currentTarget.value)}
-            />
-          </section>
+          <SeriesComparisonScopeBar
+            canRefresh={aggregate.canRefresh}
+            mapOptions={filters.mapOptions}
+            mapValue={filters.state.mapMasterId ?? ""}
+            refreshing={aggregate.refreshing || review.refreshing}
+            response={aggregate.data}
+            scopeLabel={filters.scopeLabel}
+            seasonOptions={filters.seasonOptions}
+            seasonValue={filters.state.seasonMasterId ?? ""}
+            seriesOptions={filters.seriesOptions}
+            seriesValue={filters.state.gameTitleId ?? ""}
+            onMapChange={filters.updateMapMasterId}
+            onRefresh={page.actions.refresh}
+            onSeasonChange={filters.updateSeasonMasterId}
+            onSeriesChange={filters.updateGameTitle}
+          />
 
           {aggregate.hasError ? (
             <Notice tone="danger" title="戦績データを読み込めません">
@@ -108,7 +81,6 @@ export function SeriesComparisonPage() {
                     response: aggregate.data,
                     review: review.shielded ? undefined : review.data,
                     reviewLoading: review.loading || review.shielded,
-                    scopeLabel: filters.scopeLabel,
                   }}
                 />
               ) : null}

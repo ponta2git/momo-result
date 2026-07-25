@@ -5,7 +5,6 @@ import {
   PlayOrderMetrics,
 } from "@/features/seriesComparison/metrics/SeriesComparisonContextMetrics";
 import {
-  DataQualityNotice,
   MatchDigestMetrics,
   MatchNoInEventMetrics,
 } from "@/features/seriesComparison/metrics/SeriesComparisonFlowDigest";
@@ -25,13 +24,15 @@ import {
 import type { SeriesComparisonViewId } from "@/features/seriesComparison/model/seriesComparisonViewModel";
 import {
   AnalysisTabs,
+  PurposeTabs,
   SectionJumpLinks,
   analysisPanelId,
   analysisTabId,
   analysisViewFor,
+  purposePanelId,
+  purposeTabId,
 } from "@/features/seriesComparison/page/SeriesComparisonAnalysisNavigation";
 import type { AnalysisViewChange } from "@/features/seriesComparison/page/SeriesComparisonAnalysisNavigation";
-import { SummaryBand } from "@/features/seriesComparison/page/SeriesComparisonSummary";
 import { ReviewViewContent } from "@/features/seriesComparison/review/SeriesComparisonReviewPanel";
 import type {
   SeriesComparisonResponse,
@@ -45,7 +46,6 @@ export type SeriesComparisonContentModel = {
   response: SeriesComparisonResponse;
   review: SeriesComparisonReviewResponse | undefined;
   reviewLoading: boolean;
-  scopeLabel: string;
 };
 
 export function AnalysisViewContent({
@@ -110,30 +110,49 @@ export function AnalysisViewContent({
 }
 
 export function SeriesComparisonContent({ model }: { model: SeriesComparisonContentModel }) {
-  const activeDefinition = analysisViewFor(model.activeView);
+  const activeDefinition =
+    model.activeView === "review" ? undefined : analysisViewFor(model.activeView);
   return (
     <>
-      <div className="text-sm text-[var(--color-text-secondary)]">{model.scopeLabel}</div>
-      <SummaryBand response={model.response} />
-      <AnalysisTabs activeView={model.activeView} onViewChange={model.onViewChange} />
-      <DataQualityNotice response={model.response} />
-      <div
-        aria-labelledby={analysisTabId(activeDefinition.id)}
-        id={analysisPanelId(activeDefinition.id)}
-        role="tabpanel"
-      >
-        <div className="grid gap-4" id={`analysis-${activeDefinition.id}`}>
-          <SectionJumpLinks items={activeDefinition.sections} />
+      <PurposeTabs activeView={model.activeView} onViewChange={model.onViewChange} />
+      {model.activeView === "review" ? (
+        <div aria-labelledby={purposeTabId("review")} id={purposePanelId("review")} role="tabpanel">
           <AnalysisViewContent
             hasReviewError={model.hasReviewError}
             response={model.response}
             review={model.review}
             reviewLoading={model.reviewLoading}
-            view={activeDefinition.id}
+            view="review"
             onViewChange={model.onViewChange}
           />
         </div>
-      </div>
+      ) : activeDefinition ? (
+        <div
+          aria-labelledby={purposeTabId("analysis")}
+          className="grid gap-4"
+          id={purposePanelId("analysis")}
+          role="tabpanel"
+        >
+          <AnalysisTabs activeView={activeDefinition.id} onViewChange={model.onViewChange} />
+          <div
+            aria-labelledby={analysisTabId(activeDefinition.id)}
+            id={analysisPanelId(activeDefinition.id)}
+            role="tabpanel"
+          >
+            <div className="grid gap-4" id={`analysis-${activeDefinition.id}`}>
+              <SectionJumpLinks items={activeDefinition.sections} />
+              <AnalysisViewContent
+                hasReviewError={model.hasReviewError}
+                response={model.response}
+                review={model.review}
+                reviewLoading={model.reviewLoading}
+                view={activeDefinition.id}
+                onViewChange={model.onViewChange}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }

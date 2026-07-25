@@ -25,11 +25,7 @@ docker run -d \
   -e APP_ENV=dev \
   -e DATABASE_URL="${database_url}" \
   -e DEV_MEMBER_IDS="${dev_member_ids}" \
-  -e HTTP_HOST=127.0.0.1 \
-  -e HTTP_PORT=8081 \
-  -e IMAGE_TMP_DIR=/tmp/momo-result/uploads \
   -e MOMO_CANONICAL_HOST="${canonical_host}" \
-  -e MOMO_LOG_FORMAT=json \
   -e MOMO_ORIGIN_LOCK_TOKEN="${origin_lock_token}" \
   -e REDIS_URL="${redis_url}" \
   "${runtime_env_args[@]}" \

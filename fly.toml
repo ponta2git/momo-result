@@ -3,49 +3,17 @@ primary_region = "nrt"
 kill_signal = "SIGTERM"
 kill_timeout = 90
 
-[build]
-  dockerfile = "Dockerfile"
-
-[build.args]
-  PYTHON_IMAGE = "python:3.14-slim-bookworm@sha256:a70519002c49552ea0a853de47599cf40479b001bd7a624f1112eaf44dcaccc7"
-  TESSERACT_VERSION = "5.5.2"
-  TESSDATA_REF = "87416418657359cb625c412a48b6e1d6d41c29bd"
-  TESSDATA_LANGS = "eng jpn"
-
 [env]
-  APP_ENV = "prod"
-  HTTP_HOST = "127.0.0.1"
-  HTTP_PORT = "8081"
-  IMAGE_TMP_DIR = "/tmp/momo-result/uploads"
-  MOMO_LOG_FORMAT = "json"
-  MOMO_LOG_LEVEL = "INFO"
   DB_POOL_SIZE = "3"
   REDIS_ALLOW_PLAINTEXT_IN_PROD = "true"
-  READ_API_RATE_LIMIT_PER_MINUTE = "120"
-  EXPORT_RATE_LIMIT_PER_MINUTE = "30"
-  EXPORT_ALL_RATE_LIMIT_PER_MINUTE = "6"
-  EXPORT_MAX_ROWS = "20000"
-  EXPORT_MAX_BYTES = "16777216"
-  OCR_OUTBOX_RECOVERY_INTERVAL_SECONDS = "1800"
   IMAGE_ORPHAN_OLDER_THAN_MINUTES = "60"
   IMAGE_ORPHAN_REAPER_INTERVAL_MINUTES = "60"
   SESSION_PRUNE_INTERVAL_MINUTES = "1440"
-  OCR_OUTBOX_DUE_BACKLOG_LIMIT = "24"
-  OCR_OUTBOX_ACTIVE_BACKLOG_LIMIT = "48"
-  OCR_OUTBOX_OLDEST_DUE_MAX_DELAY_SECONDS = "600"
-  OCR_DEAD_LETTER_BACKLOG_LIMIT = "24"
-  OCR_REDIS_BLOCK_SECONDS = "30"
-  STALE_OCR_JOB_REAPER_INTERVAL_SECONDS = "1800"
-  JAVA_OPTS = "-XX:MaxRAMPercentage=60 -Djava.security.egd=file:/dev/./urandom"
-  TESSDATA_PREFIX = "/usr/share/tesseract-ocr/5/tessdata"
 
 [http_service]
-  internal_port = 8080
   force_https = true
   auto_stop_machines = "stop"
-  auto_start_machines = true
   min_machines_running = 1
-  processes = ["app"]
 
   [http_service.concurrency]
     type = "requests"
@@ -55,7 +23,6 @@ kill_timeout = 90
   [[http_service.checks]]
     grace_period = "30s"
     interval = "30s"
-    method = "GET"
     timeout = "5s"
     path = "/healthz"
 

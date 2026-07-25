@@ -94,9 +94,6 @@ RUN curl -fsSL -o /tmp/tesseract.tar.gz "https://github.com/tesseract-ocr/tesser
 FROM tesseract-builder AS worker-deps
 ENV UV_PROJECT_ENVIRONMENT=/opt/momo-result/ocr-worker/.venv
 ENV UV_LINK_MODE=copy
-ENV LD_LIBRARY_PATH="/opt/tesseract/lib"
-ENV PATH="/opt/tesseract/bin:${PATH}"
-ENV PKG_CONFIG_PATH="/opt/tesseract/lib/pkgconfig:${PKG_CONFIG_PATH}"
 WORKDIR /workspace/apps/ocr-worker
 ARG UV_VERSION=0.11.23
 ARG TARGETARCH
@@ -151,10 +148,6 @@ FROM ${PYTHON_IMAGE} AS runtime-base
 ENV APP_ENV=prod
 ENV HTTP_HOST=127.0.0.1
 ENV HTTP_PORT=8081
-ENV IMAGE_TMP_DIR=/tmp/momo-result/uploads
-ENV MOMO_LOG_FORMAT=json
-ENV MOMO_LOG_LEVEL=INFO
-ENV DB_POOL_SIZE=2
 ENV JAVA_OPTS="-XX:MaxRAMPercentage=60 -Djava.security.egd=file:/dev/./urandom"
 ENV JAVA_HOME=/opt/java/openjdk
 ENV LD_LIBRARY_PATH="/opt/tesseract/lib"

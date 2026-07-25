@@ -10,7 +10,7 @@ pnpm --filter web generate:api
 pnpm --filter web dev
 ```
 
-Vite proxies `/api`, `/healthz`, and `/openapi.yaml` to `http://localhost:8080`, so the web app always uses relative URLs.
+Vite proxies `/api` and `/healthz` to `http://localhost:8080`, so the web app always uses relative URLs.
 
 ## OCR review flow
 

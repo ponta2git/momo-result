@@ -37,7 +37,6 @@ const coverageThresholds = coverageReportOnly
 const backendProxy = {
   "/api": apiProxyTarget,
   "/healthz": apiProxyTarget,
-  "/openapi.yaml": apiProxyTarget,
 } as const;
 
 export default defineConfig({

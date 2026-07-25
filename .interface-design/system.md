@@ -74,3 +74,15 @@
 - Use the existing fast/base motion tokens and decelerating easing.
 - Prefer color, opacity, and transform transitions; avoid layout-shifting animation.
 - Respect `prefers-reduced-motion` for every non-essential transition.
+
+### Series comparison
+
+- Treat series comparison as a path from next-match hypothesis to evidence to an individual match, not as a KPI dashboard.
+- Keep one page title, followed by a compact scope bar ordered as game title, season, then map.
+- Separate the top-level purpose into “次戦に備える” and “分析する”. Within analysis, use “今の差”, “勝因候補”, “推移”, and “条件別” as actual tabs.
+- Do not repeat a universal summary strip above every purpose. Put match count in the scope bar and keep each result in its owning analysis section.
+- In the next-match view, show one primary hypothesis per player before help text or common topics. Put secondary hypotheses and technical evidence in disclosures.
+- Style in-page section navigation as a quiet table of contents, not as tags or filter chips.
+- Chart legends must wrap outside the plot. Distinguish player series by color plus line or point treatment, and constrain any horizontal scrolling to the chart or table itself.
+- Do not animate every chart mark. If continuity benefits from motion, reveal the whole figure once on viewport entry within 200ms and disable it for reduced motion.
+- A match result links to the corresponding comparison scope, and comparison evidence links back to the source match while preserving URL state.

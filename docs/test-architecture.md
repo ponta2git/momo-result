@@ -111,7 +111,7 @@ coverage report はPRを落とす主目的ではなく、推移確認とレビ�
 |---|---|---|
 | web | `pnpm --filter web test:coverage:report` | `apps/web/coverage/`, `coverage-summary/web/` |
 | API | CI: `sbt apiTestWithCoverageReportOnly`; local standalone: `sbt apiCoverageReportOnly` | `scoverage-report/`, `coverage-report/`, `coverage-summary/api/` |
-| OCR worker | `uv run pytest --cov=momo_ocr ... --cov-fail-under=0` | `coverage.xml`, `coverage.json`, `htmlcov/`, `coverage-summary/ocr-worker/` |
+| OCR worker | `uv run pytest --cov ... --cov-fail-under=0` | `coverage.xml`, `coverage.json`, `htmlcov/`, `coverage-summary/ocr-worker/` |
 
 `scripts/ci/write-coverage-summary.py` が raw 値と丸め候補値を正規化し、次を生成する。
 

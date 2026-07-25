@@ -141,8 +141,8 @@ uv run ruff format --check .
 uv run ruff check .
 uv run mypy
 uv run pytest
-uv run pytest --cov=momo_ocr --cov-report=term-missing:skip-covered
-uv run pytest --cov=momo_ocr --cov-report=xml:coverage.xml --cov-report=json:coverage.json --cov-report=html:htmlcov --cov-fail-under=0
+uv run pytest --cov
+uv run pytest --cov --cov-report=xml:coverage.xml --cov-report=json:coverage.json --cov-report=html:htmlcov --cov-fail-under=0
 uv run pytest -m integration
 ```
 

@@ -46,19 +46,15 @@ jobs:
         run: uv python install 3.14
         timeout-minutes: 3
 
-      - name: Install OCR system dependencies
+      - name: Install OCR test data
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            libpq5 \
-            libleptonica-dev \
-            libtesseract-dev \
-            tesseract-ocr \
             tesseract-ocr-eng
         timeout-minutes: 5
 
       - name: Install dependencies
-        run: uv sync --locked --dev
+        run: uv sync --locked
         timeout-minutes: 5
 
       - name: Format check
@@ -75,19 +71,15 @@ jobs:
 
       - name: Test
         if: ${{ !(github.event_name == 'pull_request' || inputs.report_coverage) }}
-        env:
-          MOMO_DB_MIGRATIONS_DIR: ../../_deps/momo-db/drizzle
         run: uv run pytest
         timeout-minutes: 10
 
       - name: Test with coverage report
         if: ${{ github.event_name == 'pull_request' || inputs.report_coverage }}
-        env:
-          MOMO_DB_MIGRATIONS_DIR: ../../_deps/momo-db/drizzle
         run: >-
           uv run pytest
-          --cov=momo_ocr
-          --cov-report=term-missing:skip-covered
+          --cov
+          --cov-report=term
           --cov-report=xml:coverage.xml
           --cov-report=json:coverage.json
           --cov-report=html:htmlcov

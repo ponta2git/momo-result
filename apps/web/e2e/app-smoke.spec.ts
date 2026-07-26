@@ -394,6 +394,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
       expect((await restoredComparisonResponse).ok()).toBe(true);
     });
 
+    await page.setViewportSize({ height: 812, width: 375 });
     await page.getByRole("tab", { name: "条件別" }).click();
     await expect(page.getByRole("heading", { exact: true, name: "番手別成績" })).toBeVisible();
     const playOrderDrilldownResponse = page.waitForResponse((response) =>
@@ -405,11 +406,45 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     await expect(
       playOrderDialog.getByRole("img", { name: "番手別累積平均順位グラフ" }),
     ).toBeVisible();
-    await expect(playOrderDialog.getByLabel("番手別平均順位推移の実データ")).toBeVisible();
+    const playOrderChart = playOrderDialog.getByRole("img", {
+      name: "番手別累積平均順位グラフ",
+    });
+    const playOrderTrendTable = playOrderDialog.getByLabel("番手別平均順位推移の実データ");
+    await expect(playOrderTrendTable).toBeVisible();
+    const mobileChartPanelState = await playOrderChart.evaluate((chart) => {
+      const panel = chart.parentElement;
+      if (!panel) {
+        return null;
+      }
+      const chartBounds = chart.getBoundingClientRect();
+      const panelBounds = panel.getBoundingClientRect();
+      return {
+        bottomGap: panelBounds.bottom - chartBounds.bottom,
+        overflowY: window.getComputedStyle(panel).overflowY,
+      };
+    });
+    expect(mobileChartPanelState?.overflowY).toBe("hidden");
+    expect(mobileChartPanelState?.bottomGap).toBeGreaterThanOrEqual(0);
+    const mobileScrollRegion = playOrderDialog.getByRole("region", {
+      name: "番手別履歴の内容",
+    });
+    const mobileScrollState = await mobileScrollRegion.evaluate((region) => {
+      region.scrollTop = region.scrollHeight;
+      return {
+        clientHeight: region.clientHeight,
+        scrollHeight: region.scrollHeight,
+        scrollTop: region.scrollTop,
+      };
+    });
+    expect(mobileScrollState.scrollHeight).toBeGreaterThan(mobileScrollState.clientHeight);
+    expect(mobileScrollState.scrollTop).toBeGreaterThan(0);
+    await expect(playOrderDialog.getByRole("button", { name: "番手別集計" })).toBeInViewport();
+    await expect(playOrderTrendTable).toBeInViewport();
     await playOrderDialog.getByRole("button", { name: "番手別集計" }).click();
     await expect(playOrderDialog.getByLabel("番手ごとの成績履歴")).toBeVisible();
     await playOrderDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
     await expect(playOrderDialog).toBeHidden();
+    await page.setViewportSize({ height: 900, width: 1440 });
   });
 
   await test.step("filter and sort the confirmed match list", async () => {

@@ -31,8 +31,8 @@ export function AverageTrendPanel({
     return <EmptyState title="推移データがありません" description="対象試合がありません。" />;
   }
   return (
-    <div className="grid h-full min-h-0 grid-rows-[minmax(14rem,20rem)_auto_minmax(0,1fr)] gap-3">
-      <div className="min-h-0 overflow-auto rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+    <div className="grid min-h-0 grid-rows-[auto_auto_minmax(14rem,20rem)] gap-3 lg:h-full lg:grid-rows-[minmax(14rem,20rem)_auto_minmax(0,1fr)]">
+      <div className="h-[22rem] overflow-x-auto overflow-y-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 lg:h-auto lg:min-h-0 lg:overflow-auto">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">
             番手別累積平均順位
@@ -131,7 +131,7 @@ function RankChartFrame({
   return (
     <svg
       aria-label={ariaLabel}
-      className="h-full min-h-72 w-full min-w-[48rem]"
+      className="h-72 min-h-72 w-full min-w-[48rem] lg:h-full"
       role="img"
       viewBox={`0 0 ${width} ${height}`}
     >

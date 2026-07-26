@@ -48,7 +48,11 @@ export function PlayOrderRankHistoryDrilldownDialog({
       title={title}
       onOpenChange={onOpenChange}
     >
-      <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-3">
+      <div
+        aria-label="番手別履歴の内容"
+        className="grid h-full min-h-0 grid-rows-[auto_auto] gap-3 overflow-y-auto overscroll-contain lg:grid-rows-[auto_minmax(0,1fr)] lg:overflow-hidden"
+        role="region"
+      >
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)] lg:items-start">
           <DrilldownPlayerSelector
             players={players}
@@ -69,7 +73,7 @@ export function PlayOrderRankHistoryDrilldownDialog({
             番手履歴の取得に失敗しました。時間をおいて再読み込みしてください。
           </Notice>
         ) : data ? (
-          <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-3">
+          <div className="grid min-h-0 grid-rows-[auto_auto] gap-3 lg:h-full lg:grid-rows-[auto_minmax(0,1fr)]">
             {payload ? (
               <>
                 <PlayOrderSummary data={payload} />

@@ -139,7 +139,14 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
 
     expect((await jobResponse).ok()).toBe(true);
     await expect(page).toHaveURL(/\/matches(?:\?.*)?$/u);
-    await expect(page.getByRole("heading", { exact: true, name: "試合一覧" })).toBeVisible();
+    const matchesPageTitle = page.getByRole("heading", { exact: true, name: "試合一覧" });
+    await expect(matchesPageTitle).toBeVisible();
+    expect(
+      await matchesPageTitle.evaluate((element) => {
+        const style = window.getComputedStyle(element);
+        return { fontSize: style.fontSize, fontWeight: style.fontWeight };
+      }),
+    ).toEqual({ fontSize: "24px", fontWeight: "600" });
   });
 
   await test.step("confirm the sample OCR review into a match detail", async () => {

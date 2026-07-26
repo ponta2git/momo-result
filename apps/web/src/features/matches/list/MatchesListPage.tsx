@@ -14,6 +14,7 @@ import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
+import { PageHeader } from "@/shared/ui/layout/PageHeader";
 import { StaleShield } from "@/shared/ui/motion/StaleShield";
 import { momoTransition } from "@/shared/ui/motion/variants";
 
@@ -70,34 +71,34 @@ export function MatchesListPage() {
 
   return (
     <PageFrame>
-      <header className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="momo-heading text-lg font-semibold text-[var(--color-text-primary)]">
-          試合一覧
-        </h1>
-        <div
-          aria-label="試合を登録"
-          className="grid w-full shrink-0 grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center"
-          role="group"
-        >
-          <LinkButton
-            className="w-full sm:w-auto"
-            icon={<ScanLine className="size-4" />}
-            size="sm"
-            to="/ocr/new"
+      <PageHeader
+        actions={
+          <div
+            aria-label="試合を登録"
+            className="grid w-full shrink-0 grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center"
+            role="group"
           >
-            OCR取り込み
-          </LinkButton>
-          <LinkButton
-            className="w-full sm:w-auto"
-            icon={<PenSquare className="size-4" />}
-            size="sm"
-            to="/matches/new"
-            variant="secondary"
-          >
-            手入力で作成
-          </LinkButton>
-        </div>
-      </header>
+            <LinkButton
+              className="w-full sm:w-auto"
+              icon={<ScanLine className="size-4" />}
+              size="sm"
+              to="/ocr/new"
+            >
+              OCR取り込み
+            </LinkButton>
+            <LinkButton
+              className="w-full sm:w-auto"
+              icon={<PenSquare className="size-4" />}
+              size="sm"
+              to="/matches/new"
+              variant="secondary"
+            >
+              手入力で作成
+            </LinkButton>
+          </div>
+        }
+        title="試合一覧"
+      />
 
       {masterLoadFailed ? (
         <Notice tone="warning" title="絞り込み候補を一部読み込めません">

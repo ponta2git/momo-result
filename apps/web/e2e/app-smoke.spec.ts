@@ -162,6 +162,12 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
   });
 
   await test.step("inspect series comparison drilldowns for the confirmed match", async () => {
+    const desktopViewport = page.viewportSize();
+    await page.setViewportSize({ height: 844, width: 390 });
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth),
+    ).toBe(false);
+
     const comparisonLink = page.getByRole("link", { name: "戦績の中で見る" });
     await expect(comparisonLink).toHaveAttribute(
       "href",
@@ -186,6 +192,17 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
       "true",
     );
     await expect(page.getByRole("tab", { name: "推移" })).toHaveAttribute("aria-selected", "true");
+    expect(
+      await page
+        .getByRole("tablist", { name: "分析の切り口" })
+        .evaluate((element) => window.getComputedStyle(element).overflowY),
+    ).toBe("hidden");
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth),
+    ).toBe(false);
+    if (desktopViewport) {
+      await page.setViewportSize(desktopViewport);
+    }
 
     await page.getByRole("tab", { name: "今の差" }).click();
     await expect(page.getByRole("heading", { exact: true, name: "順位の地力" })).toBeVisible();

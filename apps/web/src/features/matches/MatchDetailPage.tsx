@@ -132,7 +132,7 @@ function MatchDetailReadyContent({ controller }: { controller: MatchDetailReadyC
   }, [setSortKey, sort.direction, sort.key]);
 
   return (
-    <PageFrame className="gap-5" width="wide">
+    <PageFrame className="min-w-0 gap-5" width="wide">
       <PageHeader
         description={`${formatMatchDetailDate(heldAt)} 開催。${gameTitle?.name ?? "作品未設定"} / ${
           map?.name ?? "マップ未設定"

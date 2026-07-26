@@ -158,7 +158,7 @@ export function AnalysisTabs({
     >
       <TabsList
         aria-label="分析の切り口"
-        className="flex min-w-0 overflow-x-auto border-b border-[var(--color-border)]"
+        className="flex min-w-0 overflow-x-auto overflow-y-hidden border-b border-[var(--color-border)]"
       >
         {analysisViews.map((item) => (
           <TabsTab

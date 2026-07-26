@@ -14,6 +14,7 @@ import type {
 } from "@/features/matches/matchDetailViewModel";
 import { MatchFeatureSection } from "@/features/matches/MatchFeatureSection";
 import { MatchResultIllustration } from "@/features/matches/MatchResultIllustration";
+import { MatchSeriesComparisonCta } from "@/features/matches/MatchSeriesComparisonCta";
 import { useMatchDetailPageController } from "@/features/matches/useMatchDetailPageController";
 import { incidentColumns } from "@/shared/domain/incidents";
 import { memberDisplayName } from "@/shared/domain/members";
@@ -265,6 +266,7 @@ function MatchDetailReadyContent({ controller }: { controller: MatchDetailReadyC
             ))}
           </ol>
         </div>
+        <MatchSeriesComparisonCta match={match} />
       </Card>
 
       <MatchFeatureSection badges={featureBadges} scopeLabel={featureScopeLabel} />

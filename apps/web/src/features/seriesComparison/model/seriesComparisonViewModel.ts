@@ -20,6 +20,7 @@ export {
 } from "./seriesComparisonSummaries";
 
 export type SeriesComparisonUrlState = {
+  focusMatchId?: string | undefined;
   gameTitleId?: string | undefined;
   mapMasterId?: string | undefined;
   seasonMasterId?: string | undefined;
@@ -48,9 +49,11 @@ export function parseSeriesComparisonSearchParams(
   const gameTitleId = params.get("gameTitleId")?.trim() || undefined;
   const seasonMasterId = params.get("seasonMasterId")?.trim() || undefined;
   const mapMasterId = params.get("mapMasterId")?.trim() || undefined;
+  const focusMatchId = params.get("focusMatchId")?.trim() || undefined;
   const view = normalizeView(params.get("view")?.trim());
   if (seasonMasterId || mapMasterId) {
     return {
+      focusMatchId,
       gameTitleId,
       mapMasterId,
       seasonMasterId,
@@ -62,6 +65,7 @@ export function parseSeriesComparisonSearchParams(
   const scopeKind = legacyScopeKinds.has(rawKind ?? "") ? rawKind : "overall";
   const scopeId = params.get("scopeId")?.trim() || undefined;
   return {
+    focusMatchId,
     gameTitleId,
     mapMasterId: scopeKind === "map" ? scopeId : undefined,
     seasonMasterId: scopeKind === "season" ? scopeId : undefined,
@@ -82,6 +86,9 @@ export function buildSeriesComparisonSearchParams(
   }
   if (state.mapMasterId) {
     params.set("mapMasterId", state.mapMasterId);
+  }
+  if (state.focusMatchId) {
+    params.set("focusMatchId", state.focusMatchId);
   }
   if (view !== defaultSeriesComparisonView) {
     params.set("view", view);
@@ -115,6 +122,7 @@ export function normalizeSeriesComparisonSelection(
   );
   const selectedMap = (selectedSeries.maps ?? []).find((item) => item.id === state.mapMasterId);
   return {
+    ...(state.focusMatchId ? { focusMatchId: state.focusMatchId } : {}),
     gameTitleId: selectedSeries.gameTitleId,
     mapMasterId: selectedMap?.id,
     seasonMasterId: selectedSeason?.id,

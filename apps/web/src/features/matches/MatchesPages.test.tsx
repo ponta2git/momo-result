@@ -816,6 +816,10 @@ describe("MatchDetailPage", () => {
     expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeInTheDocument();
     expect(screen.queryByText("今日の主役")).not.toBeInTheDocument();
     expect(screen.getByText("優勝")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "戦績の中で見る" })).toHaveAttribute(
+      "href",
+      "/analytics/series?gameTitleId=gt_momotetsu_2&seasonMasterId=season_current&mapMasterId=map_east&focusMatchId=match-1&view=flow",
+    );
 
     await user.click(screen.getByRole("button", { name: "削除" }));
     expect(screen.getByRole("heading", { name: "試合を削除しますか？" })).toBeInTheDocument();

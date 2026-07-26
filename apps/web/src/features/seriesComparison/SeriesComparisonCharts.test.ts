@@ -23,7 +23,7 @@ describe("PlayerLegend", () => {
     ).toEqual([null, "7 3", "2 3", "9 3 2 3"]);
     expect(
       [...container.querySelectorAll<SVGElement>("[data-player-shape]")].map(
-        (mark) => mark.dataset.playerShape,
+        (mark) => mark.dataset["playerShape"],
       ),
     ).toEqual(["circle", "square", "diamond", "triangle"]);
   });

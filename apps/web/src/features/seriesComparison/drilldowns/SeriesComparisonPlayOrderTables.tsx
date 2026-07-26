@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { Link } from "react-router-dom";
 
 import {
   compareTimestampDesc,
@@ -108,7 +109,13 @@ export function PlayOrderTrendTable({ rows }: { rows: PlayOrderTrendRow[] }) {
           {sortedRows.map((row) => (
             <tr className="group hover:bg-[var(--color-surface-subtle)]" key={row.matchId}>
               <DrilldownStickyCell>
-                <span className="font-semibold tabular-nums">{row.matchIndex}戦目</span>
+                <Link
+                  aria-label={`${row.matchIndex}戦目の試合結果を見る`}
+                  className="inline-flex min-h-11 items-center font-semibold text-[var(--color-action)] tabular-nums underline-offset-4 hover:underline"
+                  to={`/matches/${encodeURIComponent(row.matchId)}`}
+                >
+                  {row.matchIndex}戦目
+                </Link>
               </DrilldownStickyCell>
               <DrilldownTableCell>
                 <span className="block">{formatDrilldownDate(row.playedAt)}</span>

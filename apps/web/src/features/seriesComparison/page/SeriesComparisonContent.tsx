@@ -33,6 +33,7 @@ import {
   purposeTabId,
 } from "@/features/seriesComparison/page/SeriesComparisonAnalysisNavigation";
 import type { AnalysisViewChange } from "@/features/seriesComparison/page/SeriesComparisonAnalysisNavigation";
+import { SeriesComparisonFocusedMatch } from "@/features/seriesComparison/page/SeriesComparisonFocusedMatch";
 import { ReviewViewContent } from "@/features/seriesComparison/review/SeriesComparisonReviewPanel";
 import type {
   SeriesComparisonResponse,
@@ -41,7 +42,9 @@ import type {
 
 export type SeriesComparisonContentModel = {
   activeView: SeriesComparisonViewId;
+  focusMatchId: string | undefined;
   hasReviewError: boolean;
+  onClearFocusedMatch: () => void;
   onViewChange: AnalysisViewChange;
   response: SeriesComparisonResponse;
   review: SeriesComparisonReviewResponse | undefined;
@@ -114,6 +117,13 @@ export function SeriesComparisonContent({ model }: { model: SeriesComparisonCont
     model.activeView === "review" ? undefined : analysisViewFor(model.activeView);
   return (
     <>
+      {model.focusMatchId ? (
+        <SeriesComparisonFocusedMatch
+          focusMatchId={model.focusMatchId}
+          response={model.response}
+          onClear={model.onClearFocusedMatch}
+        />
+      ) : null}
       <PurposeTabs activeView={model.activeView} onViewChange={model.onViewChange} />
       {model.activeView === "review" ? (
         <div aria-labelledby={purposeTabId("review")} id={purposePanelId("review")} role="tabpanel">

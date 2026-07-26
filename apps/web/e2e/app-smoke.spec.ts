@@ -162,15 +162,32 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
   });
 
   await test.step("inspect series comparison drilldowns for the confirmed match", async () => {
-    await page.goto(
-      `/analytics/series?gameTitleId=${encodeURIComponent(gameTitleId)}&seasonMasterId=${encodeURIComponent(
-        seasonMasterId,
-      )}&mapMasterId=${encodeURIComponent(mapMasterId)}`,
+    const comparisonLink = page.getByRole("link", { name: "戦績の中で見る" });
+    await expect(comparisonLink).toHaveAttribute(
+      "href",
+      `/analytics/series?gameTitleId=${encodeURIComponent(
+        gameTitleId,
+      )}&seasonMasterId=${encodeURIComponent(seasonMasterId)}&mapMasterId=${encodeURIComponent(
+        mapMasterId,
+      )}&focusMatchId=${encodeURIComponent(matchId)}&view=flow`,
     );
+    await comparisonLink.click();
 
     await expect(page.getByRole("heading", { exact: true, name: "戦績比較" })).toBeVisible();
+    await expect(page).toHaveURL(/[?&]focusMatchId=[^&]+/u);
+    const focusedMatch = page.getByRole("region", { name: "選択中の試合" });
+    await expect(focusedMatch.getByRole("heading", { name: /1戦目/u })).toBeVisible();
+    await expect(focusedMatch.getByRole("link", { name: "この試合の結果" })).toHaveAttribute(
+      "href",
+      `/matches/${matchId}`,
+    );
+    await expect(page.getByRole("tab", { name: "分析する" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await expect(page.getByRole("tab", { name: "推移" })).toHaveAttribute("aria-selected", "true");
 
-    await page.getByRole("tab", { name: "順位と相性" }).click();
+    await page.getByRole("tab", { name: "今の差" }).click();
     await expect(page.getByRole("heading", { exact: true, name: "順位の地力" })).toBeVisible();
     const rankDrilldownResponse = page.waitForResponse((response) =>
       isSeriesDrilldownResponse(response, "rank.averageHistory"),
@@ -181,10 +198,14 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     await expect(rankDialog.getByLabel("開催ごとの順位履歴")).toBeVisible();
     await rankDialog.getByRole("button", { name: "試合ごと" }).click();
     await expect(rankDialog.getByLabel("試合ごとの順位履歴")).toBeVisible();
+    await expect(rankDialog.getByRole("link", { name: "1戦目の試合結果を見る" })).toHaveAttribute(
+      "href",
+      `/matches/${matchId}`,
+    );
     await rankDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
     await expect(rankDialog).toBeHidden();
 
-    await page.getByRole("tab", { name: "番手と出来事" }).click();
+    await page.getByRole("tab", { name: "条件別" }).click();
     await expect(page.getByRole("heading", { exact: true, name: "番手別成績" })).toBeVisible();
     const playOrderDrilldownResponse = page.waitForResponse((response) =>
       isSeriesDrilldownResponse(response, "playOrder.rankHistory"),

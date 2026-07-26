@@ -1,7 +1,10 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 
-import { buildMatchFeatureBadges } from "@/features/matches/matchDetailViewModel";
+import {
+  buildMatchFeatureBadges,
+  seriesComparisonHrefForMatch,
+} from "@/features/matches/matchDetailViewModel";
 import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
 import { makeFourPlayerResults, makeIncidents, makeMatchDetail } from "@/test/factories";
 import { makeSeriesComparisonResponse } from "@/test/msw/seriesComparisonHandlers";
@@ -25,6 +28,14 @@ function seriesWithFlags(flags: string[]): SeriesComparisonResponse {
     ],
   };
 }
+
+describe("match detail navigation", () => {
+  it("opens the matching series scope and keeps the current match as context", () => {
+    expect(seriesComparisonHrefForMatch(makeMatchDetail())).toBe(
+      "/analytics/series?gameTitleId=gt_momotetsu_2&seasonMasterId=season_current&mapMasterId=map_east&focusMatchId=match-1&view=flow",
+    );
+  });
+});
 
 describe("match detail feature badges", () => {
   it("merges relative series features and match-record features in display priority", () => {

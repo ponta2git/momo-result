@@ -332,6 +332,10 @@ describe("app routing", () => {
       "#metric-match-digest",
     );
     expect(await screen.findByRole("heading", { name: "期間内の荒れ試合" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "1戦目の試合結果を見る" })).toHaveAttribute(
+      "href",
+      "/matches/match-1",
+    );
     expect(screen.getByRole("link", { name: "第n試合傾向" })).toHaveAttribute(
       "href",
       "#metric-match-no",
@@ -362,6 +366,38 @@ describe("app routing", () => {
     expect(screen.getByRole("link", { name: "戦績比較" })).toBeInTheDocument();
   }, 10_000);
 
+  it("keeps a result-page match as context without changing the aggregate scope", async () => {
+    setDevUser();
+    const aggregateSearches: string[] = [];
+    server.use(
+      http.get("/api/analytics/series-comparison", ({ request }) => {
+        aggregateSearches.push(new URL(request.url).search);
+        return HttpResponse.json(makeSeriesComparisonResponse());
+      }),
+    );
+    const { router } = renderApp(
+      "/analytics/series?gameTitleId=gt_momotetsu_2&seasonMasterId=season_current&mapMasterId=map_east&focusMatchId=match-12&view=flow",
+    );
+
+    const focusedMatch = await screen.findByRole("region", { name: "選択中の試合" });
+    expect(within(focusedMatch).getByRole("heading", { name: /12戦目/u })).toBeInTheDocument();
+    expect(within(focusedMatch).getByRole("link", { name: "この試合の結果" })).toHaveAttribute(
+      "href",
+      "/matches/match-12",
+    );
+    expect(screen.getByRole("tab", { name: "分析する" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "推移" })).toHaveAttribute("aria-selected", "true");
+    expect(aggregateSearches).not.toHaveLength(0);
+    expect(aggregateSearches.every((search) => !search.includes("focusMatchId"))).toBe(true);
+
+    await user.click(within(focusedMatch).getByRole("button", { name: "選択解除" }));
+
+    await waitFor(() => {
+      expect(router.state.location.search).not.toContain("focusMatchId");
+      expect(screen.queryByRole("region", { name: "選択中の試合" })).not.toBeInTheDocument();
+    });
+  });
+
   it("opens rank average history drilldown from the standings overview", async () => {
     setDevUser();
     renderApp("/analytics/series");
@@ -390,6 +426,10 @@ describe("app routing", () => {
     expect(dialog).toHaveTextContent("試合後平均順位");
     expect(within(dialog).getByLabelText("試合ごとの順位履歴")).toHaveClass("overflow-auto");
     expect(within(dialog).getAllByRole("row")[1]).toHaveTextContent("4戦目");
+    expect(within(dialog).getByRole("link", { name: "4戦目の試合結果を見る" })).toHaveAttribute(
+      "href",
+      "/matches/match-4",
+    );
     expect(dialog).toHaveTextContent("2戦目");
     expect(dialog).toHaveTextContent("3位 改善");
   });
@@ -424,6 +464,10 @@ describe("app routing", () => {
       "overflow-auto",
     );
     expect(within(dialog).getAllByRole("row")[1]).toHaveTextContent("5戦目");
+    expect(within(dialog).getByRole("link", { name: "5戦目の試合結果を見る" })).toHaveAttribute(
+      "href",
+      "/matches/play-order-match-5",
+    );
     expect(within(dialog).getAllByRole("row")[1]).toHaveTextContent("2P");
     expect(within(dialog).getAllByRole("row")[1]).toHaveTextContent("2戦目");
     expect(dialog).toHaveTextContent("1.00 改善");

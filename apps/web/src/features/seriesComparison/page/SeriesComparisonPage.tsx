@@ -76,7 +76,9 @@ export function SeriesComparisonPage() {
                 <SeriesComparisonContent
                   model={{
                     activeView: filters.activeView,
+                    focusMatchId: filters.state.focusMatchId,
                     hasReviewError: review.hasError,
+                    onClearFocusedMatch: filters.clearFocusedMatch,
                     onViewChange: filters.updateView,
                     response: aggregate.data,
                     review: review.shielded ? undefined : review.data,

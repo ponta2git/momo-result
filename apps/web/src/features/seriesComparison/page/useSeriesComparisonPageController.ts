@@ -141,6 +141,7 @@ export function useSeriesComparisonPageController() {
   const updateGameTitle = useCallback(
     (gameTitleId: string) =>
       updateState({
+        focusMatchId: undefined,
         gameTitleId,
         mapMasterId: undefined,
         seasonMasterId: undefined,
@@ -152,6 +153,7 @@ export function useSeriesComparisonPageController() {
     (mapMasterId: string) =>
       updateState({
         ...normalizedState,
+        focusMatchId: undefined,
         mapMasterId: mapMasterId || undefined,
       }),
     [normalizedState, updateState],
@@ -160,6 +162,7 @@ export function useSeriesComparisonPageController() {
     (seasonMasterId: string) =>
       updateState({
         ...normalizedState,
+        focusMatchId: undefined,
         seasonMasterId: seasonMasterId || undefined,
         view: normalizedState.view ?? defaultSeriesComparisonView,
       }),
@@ -168,6 +171,10 @@ export function useSeriesComparisonPageController() {
   const updateView = useCallback(
     (view: SeriesComparisonViewId, options?: { replace?: boolean }) =>
       updateState({ ...normalizedState, view }, options),
+    [normalizedState, updateState],
+  );
+  const clearFocusedMatch = useCallback(
+    () => updateState({ ...normalizedState, focusMatchId: undefined }),
     [normalizedState, updateState],
   );
 
@@ -209,6 +216,7 @@ export function useSeriesComparisonPageController() {
     },
     filters: {
       activeView,
+      clearFocusedMatch,
       mapOptions: mapSelectOptions,
       scopeLabel: [selectedSeries?.name, scopeName].filter(Boolean).join("・"),
       seasonOptions: seasonSelectOptions,

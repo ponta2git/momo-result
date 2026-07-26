@@ -96,6 +96,33 @@ describe("seriesComparisonViewModel", () => {
     );
   });
 
+  it("keeps a focused match in the URL without adding it to the aggregate query", () => {
+    const state = normalizeSeriesComparisonSelection(
+      options,
+      parseSeriesComparisonSearchParams(
+        new URLSearchParams(
+          "gameTitleId=title-1&seasonMasterId=season-1&view=flow&focusMatchId=match-12",
+        ),
+      ),
+    );
+
+    expect(state).toEqual({
+      focusMatchId: "match-12",
+      gameTitleId: "title-1",
+      mapMasterId: undefined,
+      seasonMasterId: "season-1",
+      view: "flow",
+    });
+    expect(seriesComparisonQueryFromState(state)).toEqual({
+      gameTitleId: "title-1",
+      mapMasterId: undefined,
+      seasonMasterId: "season-1",
+    });
+    expect(buildSeriesComparisonSearchParams(state).toString()).toBe(
+      "gameTitleId=title-1&seasonMasterId=season-1&focusMatchId=match-12&view=flow",
+    );
+  });
+
   it("recognizes supported analysis view ids", () => {
     expect(isSeriesComparisonViewId("review")).toBe(true);
     expect(isSeriesComparisonViewId("drivers")).toBe(true);

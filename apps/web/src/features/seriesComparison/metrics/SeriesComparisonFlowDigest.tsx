@@ -1,4 +1,5 @@
-import { Clock3, ShieldAlert } from "lucide-react";
+import { ArrowUpRight, Clock3, ShieldAlert } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import { playerColor } from "@/features/seriesComparison/charts/SeriesComparisonPlayerVisuals";
 import { StatusBadge } from "@/features/seriesComparison/metrics/SeriesComparisonMetricPrimitives";
@@ -116,6 +117,14 @@ function MatchResultStrip({ response }: { response: SeriesComparisonResponse }) 
                     </span>
                   ))}
                 </div>
+                <Link
+                  aria-label={`${point.matchIndex}戦目の試合結果を見る`}
+                  className="mt-2 inline-flex min-h-11 items-center gap-1 text-xs font-semibold text-[var(--color-action)] underline-offset-4 hover:underline"
+                  to={`/matches/${encodeURIComponent(point.matchId)}`}
+                >
+                  試合結果を見る
+                  <ArrowUpRight aria-hidden="true" className="size-3.5" />
+                </Link>
               </article>
             ))}
           </div>

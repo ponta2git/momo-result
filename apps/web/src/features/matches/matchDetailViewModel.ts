@@ -61,6 +61,19 @@ export function formatMatchDetailDateOnly(iso: string): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+export function seriesComparisonHrefForMatch(
+  match: Pick<MatchDetailResponse, "gameTitleId" | "mapMasterId" | "matchId" | "seasonMasterId">,
+): string {
+  const params = new URLSearchParams({
+    gameTitleId: match.gameTitleId,
+    seasonMasterId: match.seasonMasterId,
+    mapMasterId: match.mapMasterId,
+    focusMatchId: match.matchId,
+    view: "flow",
+  });
+  return `/analytics/series?${params.toString()}`;
+}
+
 function sortValue(player: MatchDetailPlayerResult, key: MatchDetailSortKey): number | string {
   if (key === "member") return memberDisplayName(player.memberId);
   if (key in player.incidents) {

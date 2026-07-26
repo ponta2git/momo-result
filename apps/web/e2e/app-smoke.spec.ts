@@ -3,6 +3,8 @@ import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import type { APIRequestContext, APIResponse, Page, Request, Route } from "@playwright/test";
 
+import { makeSeriesComparisonReviewResponse } from "../src/test/msw/seriesComparisonFixtures";
+
 const devAccountId = "account_ponta";
 const devUserStorageKey = "momoresult.devUser";
 const runId = randomUUID().replaceAll("-", "");
@@ -204,6 +206,79 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
       await page.setViewportSize(desktopViewport);
     }
 
+    await test.step("verify review playbook geometry and dialogs", async () => {
+      const reviewFixture = makeSeriesComparisonReviewResponse();
+      const firstCards = reviewFixture.playbookByPlayer ?? [];
+      const secondPlayerCard = firstCards[1]?.cards?.[0];
+      const thirdPlayerCard = firstCards[2]?.cards?.[0];
+      if (!secondPlayerCard || !thirdPlayerCard) {
+        throw new Error("Review fixture must include primary cards for geometry verification.");
+      }
+      secondPlayerCard.plainReason +=
+        " 次戦では、目的地への到着だけでなく、事故後に入賞圏を維持できたかも同時に振り返ります。";
+      thirdPlayerCard.triggerCondition +=
+        " さらに終盤へ入る前に、物件収益順位が下がったままになっていないかを確認します。";
+      await page.route("**/api/analytics/series-comparison/review**", async (route) => {
+        await route.fulfill({ json: reviewFixture });
+      });
+
+      await page.setViewportSize({ height: 900, width: 1440 });
+      await page.getByRole("tab", { name: "次戦に備える" }).click();
+      const playbook = page.getByRole("region", { name: "次戦の行動仮説" });
+      await expect(playbook).toBeVisible();
+
+      const commonTopicToggle = playbook.getByRole("button", { name: "卓全体の共通論点" });
+      await expect(commonTopicToggle).toContainText("収益先行後の勝ち切り");
+      await expect(commonTopicToggle).not.toContainText("重複候補");
+      await expect(commonTopicToggle).not.toContainText("まとめて");
+
+      const primaryCards = playbook.locator("article");
+      await expect(primaryCards).toHaveCount(4);
+      const commonTopicBox = await commonTopicToggle.boundingBox();
+      const firstCardBox = await primaryCards.first().boundingBox();
+      expect(commonTopicBox).not.toBeNull();
+      expect(firstCardBox).not.toBeNull();
+      if (!commonTopicBox || !firstCardBox) {
+        throw new Error("Review playbook geometry must be measurable.");
+      }
+      expect(commonTopicBox.y).toBeLessThan(firstCardBox.y);
+
+      const primaryHeights = await primaryCards.evaluateAll((cards) =>
+        cards.map((card) => card.getBoundingClientRect().height),
+      );
+      expect(Math.max(...primaryHeights) - Math.min(...primaryHeights)).toBeLessThan(1);
+
+      await playbook.getByRole("button", { name: "分類と信頼度の読み方" }).click();
+      const guideDialog = page.getByRole("dialog", { name: "分類と信頼度の読み方" });
+      await expect(guideDialog.getByRole("heading", { exact: true, name: "分類" })).toBeVisible();
+      await expect(guideDialog.getByRole("heading", { exact: true, name: "信頼度" })).toBeVisible();
+      await guideDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
+      await expect(guideDialog).toBeHidden();
+
+      await primaryCards.first().getByRole("button", { name: "根拠・注意・試合後の確認" }).click();
+      const evidenceDialog = page.getByRole("dialog", { name: "行動仮説の根拠と確認" });
+      await expect(evidenceDialog.getByText("データ上の理由")).toBeVisible();
+      await expect(evidenceDialog.getByText("避けること")).toBeVisible();
+      await expect(evidenceDialog.getByText("試合後の検証")).toBeVisible();
+      await evidenceDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
+      await expect(evidenceDialog).toBeHidden();
+
+      const playbookXBefore = (await playbook.boundingBox())?.x;
+      const documentWidthBefore = await page.evaluate(() => document.documentElement.clientWidth);
+      await playbook.getByRole("button", { name: "ほかの仮説 1件" }).first().click();
+      await expect(primaryCards).toHaveCount(5);
+      const playbookXAfter = (await playbook.boundingBox())?.x;
+      const documentWidthAfter = await page.evaluate(() => document.documentElement.clientWidth);
+      expect(playbookXBefore).toBe(playbookXAfter);
+      expect(documentWidthBefore).toBe(documentWidthAfter);
+      expect(
+        await page.evaluate(
+          () => window.getComputedStyle(document.documentElement).scrollbarGutter,
+        ),
+      ).toBe("stable");
+    });
+
+    await page.getByRole("tab", { name: "分析する" }).click();
     await page.getByRole("tab", { name: "今の差" }).click();
     await expect(page.getByRole("heading", { exact: true, name: "順位の地力" })).toBeVisible();
     const rankDrilldownResponse = page.waitForResponse((response) =>

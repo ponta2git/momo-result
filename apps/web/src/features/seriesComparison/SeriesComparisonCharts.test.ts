@@ -210,7 +210,7 @@ describe("HistogramChart", () => {
     expect(svg).toHaveAttribute("viewBox", "0 0 320 236");
     expect(labels.length).toBeGreaterThan(0);
     for (const label of labels) {
-      expect(Number(label.getAttribute("y"))).toBeLessThanOrEqual(208);
+      expect(Number(label.getAttribute("y"))).toBeLessThanOrEqual(188);
     }
   });
 });

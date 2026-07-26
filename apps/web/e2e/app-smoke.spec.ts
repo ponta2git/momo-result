@@ -1,9 +1,19 @@
 import { randomUUID } from "node:crypto";
 
 import { expect, test } from "@playwright/test";
-import type { APIRequestContext, APIResponse, Page, Request, Route } from "@playwright/test";
+import type {
+  APIRequestContext,
+  APIResponse,
+  Locator,
+  Page,
+  Request,
+  Route,
+} from "@playwright/test";
 
-import { makeSeriesComparisonReviewResponse } from "../src/test/msw/seriesComparisonFixtures";
+import {
+  makeSeriesComparisonResponse,
+  makeSeriesComparisonReviewResponse,
+} from "../src/test/msw/seriesComparisonFixtures";
 
 const devAccountId = "account_ponta";
 const devUserStorageKey = "momoresult.devUser";
@@ -297,6 +307,86 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     await rankDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
     await expect(rankDialog).toBeHidden();
 
+    await test.step("verify asset chart spacing and label bounds", async () => {
+      const comparisonFixture = makeSeriesComparisonResponse();
+      const comparisonRoutePattern = /\/api\/analytics\/series-comparison(?:\?.*)?$/u;
+      await page.route(comparisonRoutePattern, async (route) => {
+        await route.fulfill({ json: comparisonFixture });
+      });
+
+      const comparisonResponse = page.waitForResponse((response) => {
+        const url = new URL(response.url());
+        return url.pathname === "/api/analytics/series-comparison";
+      });
+      await page.getByRole("button", { name: "更新" }).click();
+      expect((await comparisonResponse).ok()).toBe(true);
+      await page.getByRole("tab", { name: "勝因候補" }).click();
+
+      const assetSection = page.locator("#metric-money");
+      await expect(assetSection.getByRole("heading", { name: "総資産と勝ち筋" })).toBeVisible();
+      await expect(assetSection.getByText("桃鉄型（物件重視）", { exact: true })).toBeVisible();
+      await expect(assetSection.getByText("遊戯王型（カード重視）", { exact: true })).toBeVisible();
+
+      const histogramCharts = assetSection.getByRole("img", { name: /のヒストグラム$/u });
+      await expect(histogramCharts).toHaveCount(8);
+      for (let index = 0; index < (await histogramCharts.count()); index += 1) {
+        expect(await svgTextOverflow(histogramCharts.nth(index))).toEqual([]);
+      }
+
+      const profileChart = assetSection.getByRole("img", {
+        name: "桃鉄型・遊戯王型と順位スコアの4象限",
+      });
+      const profileWrapper = profileChart.locator("..");
+      const profileBox = await profileChart.boundingBox();
+      const profileWrapperBox = await profileWrapper.boundingBox();
+      if (!profileBox || !profileWrapperBox) {
+        throw new Error("Strategy profile chart geometry must be measurable.");
+      }
+      expect(
+        Math.abs(
+          profileBox.x + profileBox.width / 2 - (profileWrapperBox.x + profileWrapperBox.width / 2),
+        ),
+      ).toBeLessThan(1);
+      expect(await svgTextOverflow(profileChart)).toEqual([]);
+      expect(
+        await svgTextOverflow(
+          assetSection.getByRole("img", {
+            name: "物件収益比率と総資産の散布図",
+          }),
+        ),
+      ).toEqual([]);
+
+      const assetDetails = assetSection.locator("details").filter({
+        hasText: "総資産レンジと差",
+      });
+      const firstAssetDetails = assetDetails.first();
+      const firstPlayerCard = firstAssetDetails.locator("xpath=../../../..");
+      const playerGrid = firstPlayerCard.locator("xpath=../..");
+      const firstHistogramCard = histogramCharts.first().locator("..");
+      const detailsBox = await firstAssetDetails.boundingBox();
+      const playerCardBox = await firstPlayerCard.boundingBox();
+      const playerGridBox = await playerGrid.boundingBox();
+      const histogramCardBox = await firstHistogramCard.boundingBox();
+      if (!detailsBox || !playerCardBox || !playerGridBox || !histogramCardBox) {
+        throw new Error("Asset section spacing must be measurable.");
+      }
+      expect(
+        Math.abs(playerCardBox.y + playerCardBox.height - (detailsBox.y + detailsBox.height) - 13),
+      ).toBeLessThan(1);
+      expect(
+        Math.abs(histogramCardBox.y - (playerGridBox.y + playerGridBox.height) - 16),
+      ).toBeLessThan(1);
+
+      await page.unroute(comparisonRoutePattern);
+
+      const restoredComparisonResponse = page.waitForResponse((response) => {
+        const url = new URL(response.url());
+        return url.pathname === "/api/analytics/series-comparison";
+      });
+      await page.getByRole("button", { name: "更新" }).click();
+      expect((await restoredComparisonResponse).ok()).toBe(true);
+    });
+
     await page.getByRole("tab", { name: "条件別" }).click();
     await expect(page.getByRole("heading", { exact: true, name: "番手別成績" })).toBeVisible();
     const playOrderDrilldownResponse = page.waitForResponse((response) =>
@@ -574,6 +664,27 @@ function isSeriesDrilldownResponse(response: APIResponse, metricId: string): boo
     url.searchParams.get("metricId") === metricId &&
     response.request().method() === "GET"
   );
+}
+
+async function svgTextOverflow(locator: Locator): Promise<string[]> {
+  return locator.evaluate((element) => {
+    const svgBounds = element.getBoundingClientRect();
+    return [...element.querySelectorAll("text")].flatMap((label) => {
+      const labelBounds = label.getBoundingClientRect();
+      const tolerance = 1;
+      const fits =
+        labelBounds.left >= svgBounds.left - tolerance &&
+        labelBounds.right <= svgBounds.right + tolerance &&
+        labelBounds.top >= svgBounds.top - tolerance &&
+        labelBounds.bottom <= svgBounds.bottom + tolerance;
+      if (fits) {
+        return [];
+      }
+      return [
+        `${label.textContent ?? "(empty)"}: svg=${svgBounds.left.toFixed(1)},${svgBounds.top.toFixed(1)},${svgBounds.right.toFixed(1)},${svgBounds.bottom.toFixed(1)} label=${labelBounds.left.toFixed(1)},${labelBounds.top.toFixed(1)},${labelBounds.right.toFixed(1)},${labelBounds.bottom.toFixed(1)}`,
+      ];
+    });
+  });
 }
 
 function matchDetailLink(page: Page, matchId: string) {

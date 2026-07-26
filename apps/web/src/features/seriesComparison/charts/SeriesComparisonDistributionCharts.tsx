@@ -227,9 +227,9 @@ function SingleHistogram({
                 fill="var(--color-text-secondary)"
                 fontSize="10"
                 textAnchor="end"
-                transform={`rotate(-30 ${padding.left + binIndex * binWidth + binWidth / 2} ${height - 28})`}
+                transform={`rotate(-30 ${padding.left + binIndex * binWidth + binWidth / 2} ${height - 48})`}
                 x={padding.left + binIndex * binWidth + binWidth / 2}
-                y={height - 28}
+                y={height - 48}
               >
                 {formatHistogramBinLabel(bin)}
               </text>

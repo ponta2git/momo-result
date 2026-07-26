@@ -131,7 +131,7 @@ function MatchResultStrip({ response }: { response: SeriesComparisonResponse }) 
           {flaggedTimeline.length <
           timeline.filter((point) => (point.flags ?? []).length > 0).length ? (
             <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
-              新しい荒れ試合から8件まで表示します。
+              荒れ試合の内訳は、直近8件を対象にしています。
             </p>
           ) : null}
         </div>

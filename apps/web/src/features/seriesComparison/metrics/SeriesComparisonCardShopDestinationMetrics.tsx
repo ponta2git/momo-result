@@ -60,7 +60,7 @@ function CardShopDestinationGuide() {
   return (
     <div className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-2 text-xs leading-5 text-pretty text-[var(--color-text-secondary)]">
       <span className="font-semibold text-[var(--color-text-primary)]">読み方:</span>{" "}
-      各セルは「件数・割合」と平均順位だけを表示します。売り場ありで到着なしは資金・カード準備の候補です。到着なし・売り場なしにもカード駅や他行動は含まれます。
+      各セルの数値は「件数・割合」と平均順位です。売り場ありで到着なしは資金・カード準備の候補です。到着なし・売り場なしにもカード駅や他行動は含まれます。
     </div>
   );
 }

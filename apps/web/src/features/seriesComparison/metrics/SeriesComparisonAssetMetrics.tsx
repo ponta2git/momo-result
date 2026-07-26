@@ -64,7 +64,6 @@ export function AssetDistributionMetrics({ response }: { response: SeriesCompari
       <EmphasisRuleNote />
       <PlayerMetricGrid
         cardClassName="grid grid-rows-[auto_1fr]"
-        contentClassName="h-full"
         minColumnWidthRem={18}
         metricsByMember={metricsByMember}
         players={players}

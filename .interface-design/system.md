@@ -81,7 +81,9 @@
 - Keep one page title, followed by a compact scope bar ordered as game title, season, then map.
 - Separate the top-level purpose into “次戦に備える” and “分析する”. Within analysis, use “今の差”, “勝因候補”, “推移”, and “条件別” as actual tabs.
 - Do not repeat a universal summary strip above every purpose. Put match count in the scope bar and keep each result in its owning analysis section.
-- In the next-match view, show one primary hypothesis per player before help text or common topics. Put secondary hypotheses and technical evidence in disclosures.
+- In the next-match view, place one compact, content-led common-topic accordion before the player columns, then show one equal-height primary hypothesis per player. Put secondary hypotheses in player-level disclosures, but open card evidence and classification/reliability help in dialogs so they do not change the comparison geometry.
+- Accordion headers must preview the actual topic or active conditions. Do not spend the header on counts or interaction-obvious phrases such as “まとめて確認”.
+- Keep the page gutter stable when disclosures change the document height, so opening “ほかの仮説” does not move the comparison columns horizontally.
 - Style in-page section navigation as a quiet table of contents, not as tags or filter chips.
 - Chart legends must wrap outside the plot. Distinguish player series by color plus line or point treatment, and constrain any horizontal scrolling to the chart or table itself.
 - Do not animate every chart mark. If continuity benefits from motion, reveal the whole figure once on viewport entry within 200ms and disable it for reduced motion.

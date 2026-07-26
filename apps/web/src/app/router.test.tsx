@@ -212,12 +212,13 @@ describe("app routing", () => {
     expect(screen.queryByRole("heading", { name: "この回の見立て" })).not.toBeInTheDocument();
     expect(screen.queryByText("分析範囲")).not.toBeInTheDocument();
     expect(screen.queryByText("総合 / 12戦")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "分類と信頼度の読み方" })).toHaveAttribute(
-      "aria-expanded",
-      "false",
-    );
+    const guideButton = screen.getByRole("button", { name: "分類と信頼度の読み方" });
+    expect(guideButton).toHaveAttribute("aria-haspopup", "dialog");
     const commonTopicToggle = screen.getByRole("button", { name: "卓全体の共通論点" });
     expect(commonTopicToggle).toHaveAttribute("aria-expanded", "false");
+    expect(commonTopicToggle).toHaveTextContent("収益先行後の勝ち切り");
+    expect(commonTopicToggle).not.toHaveTextContent("重複候補");
+    expect(commonTopicToggle).not.toHaveTextContent("まとめて");
     expect(screen.queryByText("収益先行後の勝ち切りが共通論点です")).not.toBeInTheDocument();
     expect(screen.queryByText("読み取り")).not.toBeInTheDocument();
     expect(screen.queryByText("次回の確認")).not.toBeInTheDocument();
@@ -235,6 +236,17 @@ describe("app routing", () => {
     expect(screen.queryByText("play_order")).not.toBeInTheDocument();
     expect(screen.queryByText("直す")).not.toBeInTheDocument();
     expect(screen.queryByText("直近の下振れを確認する")).not.toBeInTheDocument();
+    await user.click(guideButton);
+    const guideDialog = await screen.findByRole("dialog", {
+      name: "分類と信頼度の読み方",
+    });
+    expect(within(guideDialog).getByRole("heading", { name: "分類" })).toBeInTheDocument();
+    expect(within(guideDialog).getByRole("heading", { name: "信頼度" })).toBeInTheDocument();
+    await user.click(
+      within(guideDialog).getByRole("button", {
+        name: "ダイアログを閉じる",
+      }),
+    );
     await user.click(commonTopicToggle);
     expect(commonTopicToggle).toHaveAttribute("aria-expanded", "true");
     expect(await screen.findByText("収益先行後の勝ち切りが共通論点です")).toBeInTheDocument();
@@ -248,12 +260,14 @@ describe("app routing", () => {
     const detailToggles = screen.getAllByRole("button", {
       name: "根拠・注意・試合後の確認",
     });
-    expect(detailToggles[0]).toHaveAttribute("aria-expanded", "false");
+    expect(detailToggles[0]).toHaveAttribute("aria-haspopup", "dialog");
     await user.click(detailToggles[0]!);
-    expect(detailToggles[0]).toHaveAttribute("aria-expanded", "true");
-    expect(await screen.findByText(/収益トップだから安全/u)).toBeInTheDocument();
-    expect(await screen.findByText(/物件収益トップ時の1位率は57.1%/u)).toBeInTheDocument();
-    expect(screen.getByText("物件収益トップ時の1位率")).toBeInTheDocument();
+    const detailsDialog = await screen.findByRole("dialog", {
+      name: "行動仮説の根拠と確認",
+    });
+    expect(within(detailsDialog).getByText(/収益トップだから安全/u)).toBeInTheDocument();
+    expect(within(detailsDialog).getByText(/物件収益トップ時の1位率は57.1%/u)).toBeInTheDocument();
+    expect(within(detailsDialog).getByText("物件収益トップ時の1位率")).toBeInTheDocument();
     expect(
       screen.getAllByText(
         "収益で先行した試合でも、目的地到着や事故後の立て直しで順位差が分かれています。",
@@ -262,9 +276,14 @@ describe("app routing", () => {
     expect(screen.queryByText("Cliff's delta")).not.toBeInTheDocument();
     expect(screen.queryByText("confidence interval")).not.toBeInTheDocument();
     expect(screen.queryByText("bootstrap")).not.toBeInTheDocument();
-    expect(screen.getByText("本人全体の1位率")).toBeInTheDocument();
-    expect(screen.getByText(/差の大きさ \+0.62/u)).toBeInTheDocument();
-    expect(screen.getByText(/ぶれ幅 \+0.31〜\+0.84/u)).toBeInTheDocument();
+    expect(within(detailsDialog).getByText("本人全体の1位率")).toBeInTheDocument();
+    expect(within(detailsDialog).getByText(/差の大きさ \+0.62/u)).toBeInTheDocument();
+    expect(within(detailsDialog).getByText(/ぶれ幅 \+0.31〜\+0.84/u)).toBeInTheDocument();
+    await user.click(
+      within(detailsDialog).getByRole("button", {
+        name: "ダイアログを閉じる",
+      }),
+    );
     const evidenceButtons = screen.getAllByRole("button", { name: "詳細: 物件収益と勝ちへ" });
     await user.click(evidenceButtons[0]!);
     await waitFor(() => expect(router.state.location.search).toContain("view=drivers"));

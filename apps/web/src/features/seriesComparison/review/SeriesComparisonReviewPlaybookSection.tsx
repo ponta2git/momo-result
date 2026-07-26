@@ -1,4 +1,4 @@
-import { ArrowRight, ChevronDown } from "lucide-react";
+import { ArrowRight, ChevronDown, CircleHelp } from "lucide-react";
 
 import { playerColor } from "@/features/seriesComparison/charts/SeriesComparisonPlayerVisuals";
 import type { Player } from "@/features/seriesComparison/model/seriesComparisonPresentation";
@@ -20,6 +20,7 @@ import {
   CollapsibleRoot,
   CollapsibleTrigger,
 } from "@/shared/ui/data/Collapsible";
+import { Dialog } from "@/shared/ui/feedback/Dialog";
 
 export function ReviewPlaybookSection({
   names,
@@ -43,7 +44,12 @@ export function ReviewPlaybookSection({
         }));
   return (
     <section aria-label="次戦の行動仮説" className="grid min-w-0 gap-5" id="review-playbook">
-      <div className="grid gap-x-4 gap-y-6 lg:grid-cols-4">
+      <ReviewCommonPlaybookTopics topics={review.commonPlaybookTopics ?? []} />
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+        <p className="text-xs font-semibold text-[var(--color-text-secondary)]">プレーヤー別</p>
+        <ReviewPlaybookGuide />
+      </div>
+      <div className="grid items-stretch gap-x-4 gap-y-6 lg:grid-cols-4 lg:gap-y-3">
         {orderedPlayers.map((player, index) => {
           const cards = [...(playbookByMember.get(player.memberId)?.cards ?? [])].toSorted(
             reviewPlaybookCardOrder,
@@ -58,10 +64,6 @@ export function ReviewPlaybookSection({
             />
           );
         })}
-      </div>
-      <div className="grid min-w-0 gap-3 border-t border-[var(--color-border)] pt-3">
-        <ReviewPlaybookGuide />
-        <ReviewCommonPlaybookTopics topics={review.commonPlaybookTopics ?? []} />
       </div>
     </section>
   );
@@ -82,7 +84,7 @@ function ReviewPlayerPlaybook({
   const secondaryCards = cards.slice(1);
   return (
     <section
-      className="grid min-w-0 content-start gap-3 border-t-2 border-[var(--color-border)] pt-3"
+      className="grid min-w-0 content-start gap-3 border-t-2 border-[var(--color-border)] pt-3 lg:row-span-3 lg:grid-rows-subgrid"
       style={{ borderTopColor: color }}
     >
       <div className="flex min-w-0 items-center justify-between gap-3">
@@ -135,26 +137,36 @@ function ReviewCommonPlaybookTopics({ topics }: { topics: ReviewCommonPlaybookTo
   if (topics.length === 0) {
     return null;
   }
+  const topicHeadings = topics.map((topic) => commonTopicHeading(topic.title));
   return (
-    <CollapsibleRoot className="min-w-0 border-b border-[var(--color-border)] pb-3">
+    <CollapsibleRoot className="min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)]">
       <CollapsibleTrigger
         aria-label="卓全体の共通論点"
-        className="group flex min-h-10 w-full min-w-0 items-center justify-between gap-3 rounded-[var(--radius-xs)] px-2 py-1.5 text-left hover:bg-[var(--color-surface-subtle)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-action)]"
+        className="group flex min-h-11 w-full min-w-0 items-center justify-between gap-3 rounded-[var(--radius-sm)] px-3 py-2.5 text-left hover:bg-[var(--color-surface-subtle)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-action)]"
       >
-        <span className="min-w-0">
-          <span className="block text-xs font-semibold text-[var(--color-text-primary)]">
-            卓全体の共通論点
+        <span className="grid min-w-0 gap-0.5">
+          <span className="text-[11px] font-semibold text-[var(--color-text-secondary)]">
+            卓全体で意識すること
           </span>
-          <span className="block text-xs leading-5 text-[var(--color-text-secondary)]">
-            重複候補 {topics.length}件をまとめて確認
-          </span>
+          {topicHeadings.map((heading, index) => (
+            <span
+              className={
+                index === 0
+                  ? "text-sm leading-5 font-semibold text-pretty text-[var(--color-text-primary)]"
+                  : "text-xs leading-5 text-pretty text-[var(--color-text-secondary)]"
+              }
+              key={`${topics[index]?.id ?? index}:heading`}
+            >
+              {heading}
+            </span>
+          ))}
         </span>
         <ChevronDown
           aria-hidden="true"
           className="size-4 shrink-0 text-[var(--color-text-secondary)] transition-transform group-data-[panel-open]:rotate-180 motion-reduce:transition-none"
         />
       </CollapsibleTrigger>
-      <CollapsiblePanel className="pt-2">
+      <CollapsiblePanel className="border-t border-[var(--color-border)] p-3">
         <div className="grid min-w-0 gap-2 lg:grid-cols-2">
           {topics.map((topic) => (
             <div
@@ -194,40 +206,84 @@ function ReviewCommonPlaybookTopics({ topics }: { topics: ReviewCommonPlaybookTo
 }
 
 function ReviewPlaybookGuide() {
-  const items = [
+  const classificationItems = [
     { label: "再現する", text: "うまくいっている条件を、次回も崩さない。" },
     { label: "見直す", text: "崩れやすい条件で、優先順位を変える。" },
     { label: "検証する", text: "まだ断定せず、次回4戦で試す。" },
   ];
+  const reliabilityItems = [
+    { label: "高", text: "同じ条件の試合が十分あり、次戦の判断軸として扱えます。" },
+    { label: "参考", text: "差は見えますが対象試合は少なめです。次回4戦で試す候補です。" },
+    { label: "件数少", text: "該当試合がごく少ないため、結論にせず観察を優先します。" },
+  ];
   return (
-    <CollapsibleRoot className="min-w-0">
-      <CollapsibleTrigger
-        aria-label="分類と信頼度の読み方"
-        className="group flex min-h-10 w-full items-center justify-between gap-3 rounded-[var(--radius-xs)] px-2 text-left text-xs font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-subtle)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-action)]"
-      >
-        分類と信頼度の読み方
-        <ChevronDown
-          aria-hidden="true"
-          className="size-4 shrink-0 transition-transform group-data-[panel-open]:rotate-180 motion-reduce:transition-none"
-        />
-      </CollapsibleTrigger>
-      <CollapsiblePanel className="grid min-w-0 gap-2 pt-1 sm:grid-cols-3">
-        {items.map((item) => (
-          <div
-            className="min-w-0 rounded-[var(--radius-xs)] bg-[var(--color-surface)] p-2"
-            key={item.label}
+    <Dialog
+      description="カードの分類と、根拠をどの程度強く受け取るかを説明します。"
+      title="分類と信頼度の読み方"
+      trigger={
+        <Button icon={<CircleHelp className="size-4" />} size="sm" variant="quiet">
+          分類と信頼度の読み方
+        </Button>
+      }
+    >
+      <div className="grid min-w-0 gap-5">
+        <section aria-labelledby="review-classification-guide">
+          <h3
+            className="text-sm font-semibold text-[var(--color-text-primary)]"
+            id="review-classification-guide"
           >
-            <p className="text-xs font-semibold text-[var(--color-text-primary)]">{item.label}</p>
-            <p className="mt-0.5 text-xs leading-5 text-[var(--color-text-secondary)]">
-              {item.text}
-            </p>
+            分類
+          </h3>
+          <div className="mt-2 grid min-w-0 gap-2 sm:grid-cols-3">
+            {classificationItems.map((item) => (
+              <div
+                className="min-w-0 rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3"
+                key={item.label}
+              >
+                <p className="text-xs font-semibold text-[var(--color-text-primary)]">
+                  {item.label}
+                </p>
+                <p className="mt-1 text-xs leading-5 text-[var(--color-text-secondary)]">
+                  {item.text}
+                </p>
+              </div>
+            ))}
           </div>
-        ))}
-        <p className="text-xs leading-5 text-[var(--color-text-secondary)] sm:col-span-3">
-          発動条件は試合中に自分で気づくための目印です。リアルタイム判定ではありません。
-          信頼度は、高=十分な件数、参考=少数データ、件数少=扱い注意です。
+        </section>
+        <section
+          aria-labelledby="review-reliability-guide"
+          className="border-t border-[var(--color-border)] pt-4"
+        >
+          <h3
+            className="text-sm font-semibold text-[var(--color-text-primary)]"
+            id="review-reliability-guide"
+          >
+            信頼度
+          </h3>
+          <dl className="mt-2 divide-y divide-[var(--color-border)] rounded-[var(--radius-xs)] border border-[var(--color-border)]">
+            {reliabilityItems.map((item) => (
+              <div
+                className="grid min-w-0 gap-1 p-3 sm:grid-cols-[4rem_minmax(0,1fr)] sm:gap-3"
+                key={item.label}
+              >
+                <dt className="text-xs font-semibold text-[var(--color-text-primary)]">
+                  {item.label}
+                </dt>
+                <dd className="text-xs leading-5 text-pretty text-[var(--color-text-secondary)]">
+                  {item.text}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+        <p className="rounded-[var(--radius-xs)] bg-[var(--color-surface-subtle)] p-3 text-xs leading-5 text-pretty text-[var(--color-text-secondary)]">
+          発動条件は、試合中に行動仮説を思い出すための目印です。アプリが局面をリアルタイム判定するものではありません。
         </p>
-      </CollapsiblePanel>
-    </CollapsibleRoot>
+      </div>
+    </Dialog>
   );
+}
+
+function commonTopicHeading(title: string): string {
+  return title.replace(/が共通論点です。?$/u, "");
 }

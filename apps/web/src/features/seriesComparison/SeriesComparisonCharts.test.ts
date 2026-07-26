@@ -2,7 +2,32 @@ import { render, screen } from "@testing-library/react";
 import { createElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-import { HistogramChart, RecentRankStrip } from "./charts/SeriesComparisonCharts";
+import { HistogramChart, PlayerLegend, RecentRankStrip } from "./charts/SeriesComparisonCharts";
+
+describe("PlayerLegend", () => {
+  it("matches line patterns and point shapes to the plotted player series", () => {
+    const { container } = render(
+      createElement(PlayerLegend, {
+        players: [
+          { displayName: "桃太郎", memberId: "member-1" },
+          { displayName: "夜叉姫", memberId: "member-2" },
+          { displayName: "浦島", memberId: "member-3" },
+          { displayName: "金太郎", memberId: "member-4" },
+        ],
+        variant: "line",
+      }),
+    );
+
+    expect(
+      [...container.querySelectorAll("line")].map((line) => line.getAttribute("stroke-dasharray")),
+    ).toEqual([null, "7 3", "2 3", "9 3 2 3"]);
+    expect(
+      [...container.querySelectorAll<SVGElement>("[data-player-shape]")].map(
+        (mark) => mark.dataset.playerShape,
+      ),
+    ).toEqual(["circle", "square", "diamond", "triangle"]);
+  });
+});
 
 describe("RecentRankStrip", () => {
   const players = [

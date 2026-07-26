@@ -1,6 +1,7 @@
-import { motion } from "motion/react";
-
-import { PlayerLegend } from "@/features/seriesComparison/charts/SeriesComparisonChartLegend";
+import {
+  PlayerLegend,
+  PlayerPointMark,
+} from "@/features/seriesComparison/charts/SeriesComparisonChartLegend";
 import {
   buildIndexTicks,
   buildNumberTicks,
@@ -11,9 +12,11 @@ import type {
   TrendSeries,
 } from "@/features/seriesComparison/charts/SeriesComparisonChartTypes";
 import { isFiniteNumber } from "@/features/seriesComparison/charts/SeriesComparisonChartTypes";
-import { playerColor } from "@/features/seriesComparison/charts/SeriesComparisonPlayerVisuals";
+import {
+  playerColor,
+  playerDashPattern,
+} from "@/features/seriesComparison/charts/SeriesComparisonPlayerVisuals";
 import { cn } from "@/shared/ui/cn";
-import { momoPanelTransition, momoTransition } from "@/shared/ui/motion/variants";
 
 export function LineChart({
   className,
@@ -65,11 +68,11 @@ export function LineChart({
   const xTicks = buildIndexTicks(maxIndex, 6);
 
   return (
-    <figure className={cn("grid gap-2", className)}>
-      <div className="flex overflow-x-auto pb-1 md:justify-center">
+    <figure className={cn("grid max-w-full min-w-0 gap-2", className)}>
+      <div className="flex max-w-full min-w-0 overflow-x-auto pb-1 md:justify-center">
         <svg
           aria-label={ariaLabel}
-          className="w-[760px] max-w-none shrink-0 overflow-visible rounded-[var(--radius-sm)] bg-[var(--color-surface)] md:w-full md:max-w-[980px]"
+          className="w-[760px] max-w-none shrink-0 rounded-[var(--radius-sm)] bg-[var(--color-surface)] md:w-full md:max-w-[980px]"
           role="img"
           style={{ aspectRatio: `${width} / ${height}` }}
           viewBox={`0 0 ${width} ${height}`}
@@ -163,27 +166,22 @@ export function LineChart({
             return (
               <g key={item.memberId}>
                 <title>{`${playerName ?? "社長"}、${latestLabel}`}</title>
-                <motion.path
-                  animate={{ opacity: 1, pathLength: 1 }}
+                <path
                   d={path}
                   fill="none"
-                  initial={{ opacity: 0.35, pathLength: 0 }}
                   stroke={color}
+                  strokeDasharray={playerDashPattern(seriesIndex)}
                   strokeLinecap="round"
                   strokeWidth="1.8"
-                  transition={{ ...momoPanelTransition, delay: seriesIndex * 0.035 }}
                 />
                 {points.length <= 32
                   ? points.map((point) => (
-                      <motion.circle
+                      <PlayerPointMark
                         key={`${item.memberId}-${point.index}`}
-                        animate={{ opacity: 1, scale: 1 }}
                         cx={x(point.index)}
                         cy={y(point.value)}
-                        fill={color}
-                        initial={{ opacity: 0, scale: 0.65 }}
-                        r="2.4"
-                        transition={momoTransition}
+                        index={seriesIndex}
+                        size={2.5}
                       />
                     ))
                   : null}

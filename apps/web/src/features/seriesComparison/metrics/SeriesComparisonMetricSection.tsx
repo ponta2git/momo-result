@@ -17,7 +17,7 @@ export function MetricSection({
 }) {
   return (
     <section
-      className="grid w-full max-w-full min-w-0 gap-4 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-sm"
+      className="grid w-full max-w-full min-w-0 gap-4 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 sm:p-4"
       id={id}
     >
       <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">

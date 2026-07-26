@@ -1,6 +1,7 @@
-import { motion } from "motion/react";
-
-import { PlayerLegend } from "@/features/seriesComparison/charts/SeriesComparisonChartLegend";
+import {
+  PlayerLegend,
+  PlayerPointMark,
+} from "@/features/seriesComparison/charts/SeriesComparisonChartLegend";
 import {
   buildNumberTicks,
   formatCompactManYen,
@@ -11,9 +12,7 @@ import type {
   Player,
 } from "@/features/seriesComparison/charts/SeriesComparisonChartTypes";
 import { isFiniteNumber } from "@/features/seriesComparison/charts/SeriesComparisonChartTypes";
-import { playerColor } from "@/features/seriesComparison/charts/SeriesComparisonPlayerVisuals";
 import { formatPercent } from "@/features/seriesComparison/model/seriesComparisonPresentation";
-import { momoTransition } from "@/shared/ui/motion/variants";
 
 export function StrategyScatterPlot({
   players,
@@ -46,11 +45,11 @@ export function StrategyScatterPlot({
   const yTicks = buildNumberTicks(minY, maxY, 5, 1);
 
   return (
-    <figure className="grid gap-2">
-      <div className="flex overflow-x-auto pb-1 md:justify-center">
+    <figure className="grid max-w-full min-w-0 gap-2">
+      <div className="flex max-w-full min-w-0 overflow-x-auto pb-1 md:justify-center">
         <svg
           aria-label="物件収益比率と総資産の散布図"
-          className="w-[760px] max-w-none shrink-0 overflow-visible rounded-[var(--radius-sm)] bg-[var(--color-surface)] md:w-full md:max-w-[980px]"
+          className="w-[760px] max-w-none shrink-0 rounded-[var(--radius-sm)] bg-[var(--color-surface)] md:w-full md:max-w-[980px]"
           role="img"
           style={{ aspectRatio: `${width} / ${height}` }}
           viewBox={`0 0 ${width} ${height}`}
@@ -124,22 +123,20 @@ export function StrategyScatterPlot({
             総資産
           </text>
           {plottedPoints.map((point) => {
-            const color = playerColor(playerIndex.get(point.memberId) ?? 0);
+            const index = playerIndex.get(point.memberId) ?? 0;
             return (
-              <motion.circle
+              <PlayerPointMark
                 key={`${point.matchId}-${point.memberId}`}
-                animate={{ opacity: 0.78, scale: 1 }}
                 cx={x(point.revenueAssetRate ?? 0)}
                 cy={y(point.totalAssets)}
-                fill={color}
-                initial={{ opacity: 0, scale: 0.7 }}
-                r="4"
-                transition={momoTransition}
+                index={index}
+                opacity={0.8}
+                size={4}
               >
                 <title>
                   {`${playerName.get(point.memberId) ?? point.memberId}、${point.matchIndex}戦目、物件収益比率 ${formatPercent(point.revenueAssetRate)}、総資産 ${formatCompactManYen(point.totalAssets)}、${point.rank}位`}
                 </title>
-              </motion.circle>
+              </PlayerPointMark>
             );
           })}
         </svg>

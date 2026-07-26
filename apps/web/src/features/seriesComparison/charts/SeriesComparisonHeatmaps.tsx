@@ -1,5 +1,3 @@
-import { motion } from "motion/react";
-
 import type {
   Player,
   PlayOrderHeatmapRow,
@@ -17,7 +15,6 @@ import {
   formatPercent,
   formatPlayOrderLabel,
 } from "@/features/seriesComparison/model/seriesComparisonPresentation";
-import { momoTransition } from "@/shared/ui/motion/variants";
 
 export function PlayOrderHeatmap({
   players,
@@ -209,12 +206,10 @@ function RevenueRankConversionRow({
         </div>
       </div>
       {row.finalRankCounts.map((item) => (
-        <motion.div
+        <div
           aria-label={`${player.displayName}、物件収益${formatRevenueRank(row.revenueRank)}、最終${item.rank}位 ${item.count}回 ${formatPercent(item.rate)}`}
           className="rounded-[var(--radius-xs)] border px-1 py-2 text-center"
           key={item.rank}
-          animate={{ opacity: 1 }}
-          initial={{ opacity: 0 }}
           role="img"
           style={{
             backgroundColor:
@@ -223,7 +218,6 @@ function RevenueRankConversionRow({
                 : "var(--color-surface)",
             borderColor: item.count > 0 ? rankBorderColor(item.rank) : "var(--color-border)",
           }}
-          transition={momoTransition}
         >
           <div className="text-sm font-semibold text-[var(--color-text-primary)] tabular-nums">
             {item.count}
@@ -231,7 +225,7 @@ function RevenueRankConversionRow({
           <div className="mt-0.5 text-[10px] text-[var(--color-text-secondary)] tabular-nums">
             {formatPercent(item.rate)}
           </div>
-        </motion.div>
+        </div>
       ))}
     </>
   );

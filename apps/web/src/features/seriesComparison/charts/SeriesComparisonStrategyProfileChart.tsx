@@ -1,15 +1,14 @@
-import { motion } from "motion/react";
-
-import { PlayerLegend } from "@/features/seriesComparison/charts/SeriesComparisonChartLegend";
+import {
+  PlayerLegend,
+  PlayerPointMark,
+} from "@/features/seriesComparison/charts/SeriesComparisonChartLegend";
 import { medianNumber } from "@/features/seriesComparison/charts/SeriesComparisonChartScales";
 import type {
   Player,
   PlayerPerformanceProfiles,
 } from "@/features/seriesComparison/charts/SeriesComparisonChartTypes";
 import { isFiniteNumber } from "@/features/seriesComparison/charts/SeriesComparisonChartTypes";
-import { playerColor } from "@/features/seriesComparison/charts/SeriesComparisonPlayerVisuals";
 import { formatPercent } from "@/features/seriesComparison/model/seriesComparisonPresentation";
-import { momoTransition } from "@/shared/ui/motion/variants";
 
 export function StrategyProfileChart({
   players,
@@ -40,11 +39,11 @@ export function StrategyProfileChart({
     padding.top + (1 - (value - minReturn) / (maxReturn - minReturn)) * chartHeight;
 
   return (
-    <figure className="grid gap-2">
-      <div className="flex overflow-x-auto pb-1 md:justify-center">
+    <figure className="grid max-w-full min-w-0 gap-2">
+      <div className="flex max-w-full min-w-0 overflow-x-auto pb-1 md:justify-center">
         <svg
           aria-label="物件カード軸と順位スコア"
-          className="w-[560px] max-w-none shrink-0 overflow-visible rounded-[var(--radius-sm)] bg-[var(--color-surface)]"
+          className="w-[560px] max-w-none shrink-0 rounded-[var(--radius-sm)] bg-[var(--color-surface)]"
           role="img"
           style={{ aspectRatio: `${width} / ${height}` }}
           viewBox={`0 0 ${width} ${height}`}
@@ -120,22 +119,19 @@ export function StrategyProfileChart({
             ) {
               return null;
             }
-            const color = playerColor(playerIndex.get(entry.memberId) ?? 0);
+            const index = playerIndex.get(entry.memberId) ?? 0;
             return (
               <g key={entry.memberId}>
-                <motion.circle
-                  animate={{ opacity: 1, scale: 1 }}
+                <PlayerPointMark
                   cx={x(entry.averageRevenueAssetRate)}
                   cy={y(entry.averageRankScore)}
-                  fill={color}
-                  initial={{ opacity: 0, scale: 0.7 }}
-                  r="5"
-                  transition={momoTransition}
+                  index={index}
+                  size={5}
                 >
                   <title>
                     {`${playerName.get(entry.memberId) ?? entry.memberId}、物件収益比率 ${formatPercent(entry.averageRevenueAssetRate)}、順位スコア ${entry.averageRankScore.toFixed(2)}`}
                   </title>
-                </motion.circle>
+                </PlayerPointMark>
               </g>
             );
           })}

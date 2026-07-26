@@ -1,5 +1,3 @@
-import { motion } from "motion/react";
-
 import {
   buildNumberTicks,
   formatCompactManYen,
@@ -14,7 +12,6 @@ import type {
 import { playerColor } from "@/features/seriesComparison/charts/SeriesComparisonPlayerVisuals";
 import { rankColor } from "@/features/seriesComparison/charts/SeriesComparisonRankColors";
 import { cn } from "@/shared/ui/cn";
-import { momoPanelTransition } from "@/shared/ui/motion/variants";
 
 function RankLegend() {
   return (
@@ -74,20 +71,16 @@ export function RankDistributionStackedBars({
                 {totalCount > 0 ? (
                   segments.map((segment) =>
                     segment.count > 0 ? (
-                      <motion.span
+                      <span
                         aria-hidden="true"
                         className="min-w-2"
-                        initial={{ scaleX: 0 }}
                         key={segment.rank}
-                        animate={{ scaleX: 1 }}
                         style={{
                           backgroundColor: rankColor(segment.rank),
                           flexBasis: `${(((segment.rate ?? segment.count / totalCount) || 0) * 100).toFixed(4)}%`,
                           flexGrow: 0,
                           flexShrink: 0,
-                          originX: 0,
                         }}
-                        transition={momoPanelTransition}
                         title={`${segment.rank}位 ${segment.count}回`}
                       />
                     ) : null,
@@ -179,7 +172,7 @@ function SingleHistogram({
       </div>
       <svg
         aria-label={`${player.displayName}のヒストグラム`}
-        className="h-52 w-full overflow-visible rounded-[var(--radius-sm)] bg-[var(--color-surface)]"
+        className="h-52 w-full rounded-[var(--radius-sm)] bg-[var(--color-surface)]"
         role="img"
         viewBox={`0 0 ${width} ${height}`}
       >

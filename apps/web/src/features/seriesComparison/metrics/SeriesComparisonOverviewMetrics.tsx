@@ -39,7 +39,7 @@ export function BasicMetrics({ response }: { response: SeriesComparisonResponse 
           履歴
         </Button>
       }
-      description="平均順位は小さいほど上位です。順位ごとの回数で、勝ち切りと下位落ちを見ます。"
+      description="平均順位は小さいほど上位です。順位ごとの回数は、勝ち切りと下位落ちの偏りを示します。"
       Icon={Trophy}
       title="順位の地力"
       id="metric-basic"

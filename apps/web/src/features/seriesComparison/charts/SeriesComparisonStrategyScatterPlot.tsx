@@ -22,8 +22,8 @@ export function StrategyScatterPlot({
   points: MatchPlayerPoint[];
 }) {
   const width = 760;
-  const height = 330;
-  const padding = { bottom: 64, left: 68, right: 24, top: 22 };
+  const height = 350;
+  const padding = { bottom: 68, left: 88, right: 88, top: 24 };
   const plottedPoints = points.filter(
     (point) => isFiniteNumber(point.revenueAssetRate) && isFiniteNumber(point.totalAssets),
   );
@@ -83,7 +83,7 @@ export function StrategyScatterPlot({
                 fontSize="11"
                 textAnchor="middle"
                 x={x(tick)}
-                y={height - 28}
+                y={height - padding.bottom + 20}
               >
                 {formatPercent(tick)}
               </text>
@@ -113,13 +113,20 @@ export function StrategyScatterPlot({
           <text
             fill="var(--color-text-secondary)"
             fontSize="12"
-            textAnchor="end"
-            x={width - padding.right}
-            y={height - 8}
+            textAnchor="middle"
+            x={padding.left + chartWidth / 2}
+            y={height - 12}
           >
             物件収益÷総資産
           </text>
-          <text fill="var(--color-text-secondary)" fontSize="12" x={8} y={padding.top + 2}>
+          <text
+            fill="var(--color-text-secondary)"
+            fontSize="12"
+            textAnchor="middle"
+            transform={`rotate(-90 18 ${padding.top + chartHeight / 2})`}
+            x={18}
+            y={padding.top + chartHeight / 2}
+          >
             総資産
           </text>
           {plottedPoints.map((point) => {
@@ -142,7 +149,7 @@ export function StrategyScatterPlot({
         </svg>
       </div>
       <p className="text-center text-xs leading-5 text-pretty text-[var(--color-text-secondary)]">
-        左ほどカード・臨時収入寄り、右ほど物件収益寄りです。
+        1点は、1人が1試合で残した物件収益比率と総資産です。
       </p>
       <PlayerLegend players={players} />
     </figure>

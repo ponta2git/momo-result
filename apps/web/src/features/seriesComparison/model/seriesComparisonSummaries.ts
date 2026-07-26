@@ -110,9 +110,9 @@ export function profileKindLabel(kind: string | null | undefined): string {
 export function strategyKindLabel(kind: string | null | undefined): string {
   switch (kind) {
     case "property_focused":
-      return "物件収益寄り";
+      return "桃鉄型（物件重視）";
     case "card_focused":
-      return "カード・臨時収入寄り";
+      return "遊戯王型（カード重視）";
     case "balanced":
       return "中間";
     default:

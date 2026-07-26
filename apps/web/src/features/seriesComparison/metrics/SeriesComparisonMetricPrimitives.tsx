@@ -34,7 +34,7 @@ export function PlayerMetricGrid({
     "--player-column-min": `${minColumnWidthRem}rem`,
   } as CSSProperties;
   return (
-    <div className="max-w-full min-w-0 pb-1">
+    <div className="max-w-full min-w-0">
       <div
         className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-[repeat(var(--player-count),minmax(var(--player-column-min),1fr))]"
         style={gridStyle}

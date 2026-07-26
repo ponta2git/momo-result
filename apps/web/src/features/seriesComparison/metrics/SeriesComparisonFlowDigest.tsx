@@ -24,7 +24,7 @@ import { Notice } from "@/shared/ui/feedback/Notice";
 export function MatchDigestMetrics({ response }: { response: SeriesComparisonResponse }) {
   return (
     <MetricSection
-      description="選択中範囲の全試合から、接戦、大差、スリの銀次多発、物件収益トップ未勝利の発生数と該当試合を確認します。"
+      description="接戦、大差、スリの銀次多発、物件収益トップ未勝利が、選択範囲で何度起きたかを示します。"
       Icon={ShieldAlert}
       title="期間内の荒れ試合"
       id="metric-match-digest"
@@ -150,7 +150,7 @@ export function MatchNoInEventMetrics({ response }: { response: SeriesComparison
   const extraBreakdown = breakdown.filter((item) => item.matchNoInEvent > 4);
   return (
     <MetricSection
-      description="選択中範囲の全開催を横断し、第1〜第4試合ごとの平均順位と入賞率を見ます。第5試合以降は折りたたみます。"
+      description="開催内の試合番号ごとの平均順位と入賞率から、長丁場での変化を示します。"
       Icon={Clock3}
       title="第n試合の傾向"
       id="metric-match-no"

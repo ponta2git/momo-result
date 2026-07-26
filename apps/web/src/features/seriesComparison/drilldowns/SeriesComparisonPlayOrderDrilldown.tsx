@@ -41,7 +41,7 @@ export function PlayOrderRankHistoryDrilldownDialog({
   return (
     <Dialog
       className="flex h-full min-h-0 flex-col"
-      description="番手ごとの平均順位が、試合を重ねてどう動いたかを確認します。"
+      description="番手ごとの累積平均順位から、試合を重ねても残る得意・苦手を示します。"
       open={open}
       popupClassName="max-w-[min(92rem,calc(100vw-1rem))] items-stretch p-2 sm:p-4"
       surfaceClassName="h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] !overflow-hidden p-4 sm:h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-2rem)] sm:p-5"

@@ -19,8 +19,8 @@ export function StrategyProfileChart({
 }) {
   const entries = profiles.entries ?? [];
   const width = 560;
-  const height = 300;
-  const padding = { bottom: 56, left: 58, right: 18, top: 18 };
+  const height = 320;
+  const padding = { bottom: 60, left: 52, right: 52, top: 20 };
   const rates = entries.map((entry) => entry.averageRevenueAssetRate).filter(isFiniteNumber);
   const rateMedian = profiles.averageRevenueAssetRateMedian ?? medianNumber(rates) ?? 0.25;
   const rateSpan = Math.max(0.06, ...rates.map((rate) => Math.abs(rate - rateMedian)));
@@ -40,10 +40,10 @@ export function StrategyProfileChart({
 
   return (
     <figure className="grid max-w-full min-w-0 gap-2">
-      <div className="flex max-w-full min-w-0 overflow-x-auto pb-1 md:justify-center">
+      <div className="flex max-w-full min-w-0 justify-center">
         <svg
-          aria-label="物件カード軸と順位スコア"
-          className="w-[560px] max-w-none shrink-0 rounded-[var(--radius-sm)] bg-[var(--color-surface)]"
+          aria-label="桃鉄型・遊戯王型と順位スコアの4象限"
+          className="w-[560px] max-w-full shrink-0 rounded-[var(--radius-sm)] bg-[var(--color-surface)]"
           role="img"
           style={{ aspectRatio: `${width} / ${height}` }}
           viewBox={`0 0 ${width} ${height}`}
@@ -84,7 +84,7 @@ export function StrategyProfileChart({
             x={padding.left + 8}
             y={padding.top + 16}
           >
-            カード・臨時収入寄り / 上位
+            遊戯王型 / 上位
           </text>
           <text
             fill="var(--color-text-secondary)"
@@ -93,7 +93,7 @@ export function StrategyProfileChart({
             x={width - padding.right - 8}
             y={padding.top + 16}
           >
-            物件収益寄り / 上位
+            桃鉄型 / 上位
           </text>
           <text
             fill="var(--color-text-secondary)"
@@ -101,7 +101,7 @@ export function StrategyProfileChart({
             x={padding.left + 8}
             y={height - padding.bottom - 10}
           >
-            カード・臨時収入寄り / 下位
+            遊戯王型 / 下位
           </text>
           <text
             fill="var(--color-text-secondary)"
@@ -110,7 +110,7 @@ export function StrategyProfileChart({
             x={width - padding.right - 8}
             y={height - padding.bottom - 10}
           >
-            物件収益寄り / 下位
+            桃鉄型 / 下位
           </text>
           {entries.map((entry) => {
             if (
@@ -138,13 +138,20 @@ export function StrategyProfileChart({
           <text
             fill="var(--color-text-secondary)"
             fontSize="12"
-            textAnchor="end"
-            x={width - padding.right}
-            y={height - 10}
+            textAnchor="middle"
+            x={padding.left + chartWidth / 2}
+            y={height - 12}
           >
             物件収益比率
           </text>
-          <text fill="var(--color-text-secondary)" fontSize="12" x={8} y={padding.top + 2}>
+          <text
+            fill="var(--color-text-secondary)"
+            fontSize="12"
+            textAnchor="middle"
+            transform={`rotate(-90 18 ${padding.top + chartHeight / 2})`}
+            x={18}
+            y={padding.top + chartHeight / 2}
+          >
             順位スコア
           </text>
         </svg>

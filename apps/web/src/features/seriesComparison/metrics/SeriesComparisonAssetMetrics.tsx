@@ -56,7 +56,7 @@ export function AssetDistributionMetrics({ response }: { response: SeriesCompari
   };
   return (
     <MetricSection
-      description="総資産の分布、物件収益、カード寄りの動きから、どう勝ちに近づいたかを見ます。"
+      description="総資産の広がりと稼ぎ方の比重から、各プレーヤーの勝ち方と負け幅を示します。"
       Icon={Coins}
       title="総資産と勝ち筋"
       id="metric-money"
@@ -84,7 +84,7 @@ export function AssetDistributionMetrics({ response }: { response: SeriesCompari
       </PlayerMetricGrid>
       <HistogramChart histogram={response.histograms.assets} players={players} />
       <IntegratedMetricPanel
-        description="右ほど最終資産に占める物件収益の比重が高く、左ほどカードや臨時収入などの比重が高い傾向です。"
+        description="物件収益比率と順位スコアの関係から、桃鉄型（物件重視）と遊戯王型（カード重視）の傾向を示します。"
         title="稼ぎ方の比重の根拠"
       >
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)] xl:items-start">
@@ -93,7 +93,7 @@ export function AssetDistributionMetrics({ response }: { response: SeriesCompari
         </div>
       </IntegratedMetricPanel>
       <IntegratedMetricPanel
-        description="物件収益の上振れと普段の稼ぎ方を、最高・平均・中央の分布で比べます。"
+        description="物件収益の分布幅から、一度の上振れか継続的な収益かを切り分けます。"
         title="物件収益分布"
       >
         <HistogramChart histogram={response.histograms.revenue} players={players} />

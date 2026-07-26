@@ -115,7 +115,7 @@ export function GinjiMetrics({ response }: { response: SeriesComparisonResponse 
   const metricsByMember = metricsMap(response);
   return (
     <MetricSection
-      description="スリの銀次は1回でも総資産を動かす事故です。2回以上の試合は分けて見ます。"
+      description="スリの銀次の被害0回・1回・2回以上で、順位と総資産への影響を分けます。"
       Icon={ShieldAlert}
       title="スリの銀次"
       id="metric-ginji"

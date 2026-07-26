@@ -2,7 +2,14 @@ import { render, screen } from "@testing-library/react";
 import { createElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-import { HistogramChart, PlayerLegend, RecentRankStrip } from "./charts/SeriesComparisonCharts";
+import { makeSeriesComparisonResponse } from "@/test/msw/seriesComparisonFixtures";
+
+import {
+  HistogramChart,
+  PlayerLegend,
+  RecentRankStrip,
+  StrategyProfileChart,
+} from "./charts/SeriesComparisonCharts";
 
 describe("PlayerLegend", () => {
   it("matches line patterns and point shapes to the plotted player series", () => {
@@ -187,5 +194,49 @@ describe("HistogramChart", () => {
     );
 
     expect(axisLabels).toEqual(["0", "1万〜20万"]);
+  });
+
+  it("reserves an in-bounds area for every horizontal-axis label", () => {
+    const response = makeSeriesComparisonResponse();
+    const { container } = render(
+      createElement(HistogramChart, {
+        histogram: response.histograms.assets,
+        players: response.players ?? [],
+      }),
+    );
+    const svg = container.querySelector("svg");
+    const labels = [...container.querySelectorAll("text[transform^='rotate']")];
+
+    expect(svg).toHaveAttribute("viewBox", "0 0 320 236");
+    expect(labels.length).toBeGreaterThan(0);
+    for (const label of labels) {
+      expect(Number(label.getAttribute("y"))).toBeLessThanOrEqual(208);
+    }
+  });
+});
+
+describe("StrategyProfileChart", () => {
+  it("centers the plot and keeps axis titles in dedicated in-bounds space", () => {
+    const response = makeSeriesComparisonResponse();
+    const { container } = render(
+      createElement(StrategyProfileChart, {
+        players: response.players ?? [],
+        profiles: response.playerPerformanceProfiles,
+      }),
+    );
+    const svg = screen.getByRole("img", {
+      name: "桃鉄型・遊戯王型と順位スコアの4象限",
+    });
+    const horizontalAxis = container.querySelector("svg > line");
+    const yAxisTitle = screen.getByText("順位スコア");
+    const xAxisTitle = screen.getByText("物件収益比率");
+
+    expect(svg).toHaveClass("max-w-full");
+    expect(horizontalAxis).toHaveAttribute("x1", "52");
+    expect(horizontalAxis).toHaveAttribute("x2", "508");
+    expect(yAxisTitle.getAttribute("transform")).toMatch(/^rotate\(-90 /u);
+    expect(xAxisTitle).toHaveAttribute("text-anchor", "middle");
+    expect(screen.getByText("桃鉄型 / 上位")).toBeInTheDocument();
+    expect(screen.getByText("遊戯王型 / 上位")).toBeInTheDocument();
   });
 });

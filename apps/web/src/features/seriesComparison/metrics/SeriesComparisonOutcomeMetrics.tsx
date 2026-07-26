@@ -29,7 +29,7 @@ export function RevenueOutcomeMetrics({ response }: { response: SeriesComparison
   const metricsByMember = metricsMap(response);
   return (
     <MetricSection
-      description="物件収益トップの試合を勝ち切れたか、トップでなくても1位に届いたかを見ます。"
+      description="物件収益トップ時の1位率と、トップ外からの1位回数で、収益先行を勝ちに変えられた度合いを示します。"
       Icon={BadgeDollarSign}
       title="物件収益トップを勝ちにできたか"
       id="metric-revenue-outcome"
@@ -118,7 +118,7 @@ export function DestinationOutcomeMetrics({ response }: { response: SeriesCompar
   const metricsByMember = metricsMap(response);
   return (
     <MetricSection
-      description="目的地に多く入った試合を勝ち切れたか、少ない試合でも上位に入れたかを見ます。事件簿に残っている目的地到着だけを数えます。"
+      description="目的地回数別の1位率・入賞率から、到着を順位へ変えられた度合いを示します。事件簿に残る目的地到着だけが対象です。"
       Icon={MapPinned}
       title="目的地到着を勝ちにできたか"
       id="metric-destination-outcome"

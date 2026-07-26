@@ -324,6 +324,8 @@ describe("app routing", () => {
     expect(await screen.findByRole("heading", { name: "稼ぎ方の比重の根拠" })).toBeInTheDocument();
     expect(screen.getAllByText("総資産の出方")).toHaveLength(4);
     expect(screen.getAllByText("稼ぎ方の比重")).toHaveLength(4);
+    expect(screen.getByText("桃鉄型（物件重視）")).toBeInTheDocument();
+    expect(screen.getByText("遊戯王型（カード重視）")).toBeInTheDocument();
     expect(screen.queryByText("総資産の型")).not.toBeInTheDocument();
     expect(screen.queryByText("物件/カード軸")).not.toBeInTheDocument();
     expect(screen.getByText("強調ルール")).toBeInTheDocument();
@@ -360,6 +362,7 @@ describe("app routing", () => {
       "#metric-match-no",
     );
     expect(await screen.findByRole("heading", { name: "第n試合の傾向" })).toBeInTheDocument();
+    expect(screen.queryByText(/第5試合以降は折りたたみます/u)).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "条件別" }));
 

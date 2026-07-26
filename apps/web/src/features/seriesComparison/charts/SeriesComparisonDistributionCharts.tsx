@@ -131,7 +131,7 @@ export function HistogramChart({
         ))}
       </div>
       <p className="text-xs leading-5 text-[var(--color-text-secondary)]">
-        金額の区切りと縦軸は全員共通です。
+        4人とも同じ金額区分と件数目盛りで比較しています。
       </p>
     </figure>
   );
@@ -151,8 +151,8 @@ function SingleHistogram({
   player: Player;
 }) {
   const width = 320;
-  const height = 220;
-  const padding = { bottom: 56, left: 36, right: 16, top: 18 };
+  const height = 236;
+  const padding = { bottom: 72, left: 36, right: 16, top: 18 };
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
   const binWidth = chartWidth / Math.max(1, bins.length);
@@ -172,8 +172,9 @@ function SingleHistogram({
       </div>
       <svg
         aria-label={`${player.displayName}のヒストグラム`}
-        className="h-52 w-full rounded-[var(--radius-sm)] bg-[var(--color-surface)]"
+        className="w-full rounded-[var(--radius-sm)] bg-[var(--color-surface)]"
         role="img"
+        style={{ aspectRatio: `${width} / ${height}` }}
         viewBox={`0 0 ${width} ${height}`}
       >
         <line
@@ -226,9 +227,9 @@ function SingleHistogram({
                 fill="var(--color-text-secondary)"
                 fontSize="10"
                 textAnchor="end"
-                transform={`rotate(-30 ${padding.left + binIndex * binWidth + binWidth / 2} ${height - 16})`}
+                transform={`rotate(-30 ${padding.left + binIndex * binWidth + binWidth / 2} ${height - 28})`}
                 x={padding.left + binIndex * binWidth + binWidth / 2}
-                y={height - 16}
+                y={height - 28}
               >
                 {formatHistogramBinLabel(bin)}
               </text>

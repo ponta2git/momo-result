@@ -45,7 +45,7 @@ export function RankAverageHistoryDrilldownDialog({
   return (
     <Dialog
       className="flex h-full min-h-0 flex-col"
-      description="選択範囲内の対戦順で、順位と平均順位がどう動いたかを確認します。"
+      description="各試合の順位と累積平均順位から、改善・後退の転換点を示します。"
       open={open}
       popupClassName="max-w-[min(92rem,calc(100vw-1rem))] items-stretch p-2 sm:p-4"
       surfaceClassName="h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] !overflow-hidden p-4 sm:h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-2rem)] sm:p-5"

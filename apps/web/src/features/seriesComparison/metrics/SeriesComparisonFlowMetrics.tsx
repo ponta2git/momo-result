@@ -76,7 +76,7 @@ export function MomentumSwitchMetrics({ response }: { response: SeriesComparison
   const switchByMember = momentumSwitchMap(response);
   return (
     <MetricSection
-      description="前戦の順位から次戦の順位へどう動いたかを見ます。条件別率は8件未満なら参考です。"
+      description="前戦順位から次戦順位への回復と下振れを示します。条件別率は8件未満なら参考です。"
       Icon={RefreshCw}
       title="切り替え力"
       id="metric-momentum-switch"

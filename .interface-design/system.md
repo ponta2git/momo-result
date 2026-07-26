@@ -86,5 +86,8 @@
 - Keep the page gutter stable when disclosures change the document height, so opening “ほかの仮説” does not move the comparison columns horizontally.
 - Style in-page section navigation as a quiet table of contents, not as tags or filter chips.
 - Chart legends must wrap outside the plot. Distinguish player series by color plus line or point treatment, and constrain any horizontal scrolling to the chart or table itself.
+- Keep every axis name and tick label inside its SVG/card boundary. Center quadrant plot areas with balanced left/right padding, reserving dedicated space for a vertical y-axis title.
+- Explanatory copy describes meaning, direction, comparison conditions, or data limitations. Do not narrate visible controls, disclosure behavior, or layout.
+- Preserve table-specific vocabulary when it helps recognition: use “桃鉄型（物件重視）” and “遊戯王型（カード重視）” for the earning-mix axis, while avoiding an unrelated second “〜型” label in the same card.
 - Do not animate every chart mark. If continuity benefits from motion, reveal the whole figure once on viewport entry within 200ms and disable it for reduced motion.
 - A match result links to the corresponding comparison scope, and comparison evidence links back to the source match while preserving URL state.

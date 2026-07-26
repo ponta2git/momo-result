@@ -30,7 +30,7 @@ export function CardShopDestinationMetrics({ response }: { response: SeriesCompa
   const entriesByMember = new Map(entries.map((entry) => [entry.memberId, entry]));
   return (
     <MetricSection
-      description="目的地到着とカード売り場停車が、同じ試合にどう出ているかを見ます。行動順はDBにないため、売り場停車が寄り道か、資金・カード準備か、到着に効いたかは断定しません。"
+      description="目的地到着とカード売り場停車の同時発生を示します。行動順はDBにないため、売り場停車が寄り道か、資金・カード準備か、到着に効いたかは断定しません。"
       Icon={Store}
       title="カード売り場と目的地"
       id="metric-card-shop-destination"

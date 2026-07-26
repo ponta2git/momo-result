@@ -34,7 +34,7 @@ export function ReviewPlaybookCardView({
 }) {
   const lane = reviewPlaybookLane(card);
   return (
-    <article className="grid min-w-0 content-start gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 shadow-sm">
+    <article className="grid min-w-0 content-start gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
       <header className="grid min-w-0 gap-2 border-b border-[var(--color-border)] pb-3">
         <div className="flex min-w-0 items-start gap-2.5">
           <span
@@ -60,8 +60,7 @@ export function ReviewPlaybookCardView({
         <ReviewPlaybookText label="発動条件" text={card.triggerCondition} />
         <ReviewPlaybookText label="やること" text={card.recommendedAction} tone="action" />
         <ReviewPlaybookText label="理由" text={card.plainReason} />
-        <ReviewPlaybookSupportDisclosure card={card} />
-        <ReviewPlaybookEvidenceDisclosure card={card} />
+        <ReviewPlaybookDetailsDisclosure card={card} />
       </div>
       <div className="flex min-w-0 justify-end">
         <Button
@@ -79,54 +78,33 @@ export function ReviewPlaybookCardView({
   );
 }
 
-function ReviewPlaybookSupportDisclosure({ card }: { card: ReviewPlaybookCard }) {
-  return (
-    <CollapsibleRoot className="min-w-0 rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)]">
-      <CollapsibleTrigger
-        aria-label="注意・試合後の検証"
-        className="group flex min-h-10 w-full min-w-0 items-center justify-between gap-3 rounded-[var(--radius-xs)] px-2.5 py-2 text-left hover:bg-[var(--color-surface)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-action)]"
-      >
-        <span className="text-xs font-semibold text-[var(--color-text-secondary)]">
-          注意・試合後の検証
-        </span>
-        <ChevronDown
-          aria-hidden="true"
-          className="size-4 shrink-0 text-[var(--color-text-secondary)] group-data-[panel-open]:rotate-180"
-        />
-      </CollapsibleTrigger>
-      <CollapsiblePanel className="border-t border-[var(--color-border)] px-2.5 py-2.5">
-        <div className="grid min-w-0 gap-3">
-          <ReviewPlaybookText label="避けること" text={card.avoidAction} tone="caution" />
-          <ReviewPlaybookText label="試合後の検証" text={card.postMatchCheck} />
-        </div>
-      </CollapsiblePanel>
-    </CollapsibleRoot>
-  );
-}
-
-function ReviewPlaybookEvidenceDisclosure({ card }: { card: ReviewPlaybookCard }) {
+function ReviewPlaybookDetailsDisclosure({ card }: { card: ReviewPlaybookCard }) {
   const evidence = card.evidence ?? [];
   return (
     <CollapsibleRoot className="min-w-0 rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)]">
       <CollapsibleTrigger
-        aria-label="詳しい根拠"
-        className="group flex min-h-11 w-full min-w-0 items-center justify-between gap-3 rounded-[var(--radius-xs)] px-3 py-2 text-left hover:bg-[var(--color-surface)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-action)]"
+        aria-label="根拠・注意・試合後の確認"
+        className="group flex min-h-10 w-full min-w-0 items-center justify-between gap-3 rounded-[var(--radius-xs)] px-2.5 py-2 text-left hover:bg-[var(--color-surface)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-action)]"
       >
         <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-          <span className="text-xs font-semibold text-[var(--color-text-primary)]">詳しい根拠</span>
-          <span className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--color-text-secondary)]">
+          <span className="text-xs font-semibold text-[var(--color-text-secondary)]">
+            根拠・注意・試合後の確認
+          </span>
+          <span className="text-[10px] font-medium text-[var(--color-text-secondary)]">
             指標 {evidence.length}件
           </span>
         </span>
         <ChevronDown
           aria-hidden="true"
-          className="size-4 shrink-0 text-[var(--color-text-secondary)] group-data-[panel-open]:rotate-180"
+          className="size-4 shrink-0 text-[var(--color-text-secondary)] transition-transform group-data-[panel-open]:rotate-180 motion-reduce:transition-none"
         />
       </CollapsibleTrigger>
-      <CollapsiblePanel className="border-t border-[var(--color-border)] px-3 py-3">
+      <CollapsiblePanel className="border-t border-[var(--color-border)] px-2.5 py-2.5">
         <div className="grid min-w-0 gap-3">
           <ReviewPlaybookText label="データ上の理由" text={card.dataReason} />
           <ReviewPlaybookEvidenceList evidence={evidence} />
+          <ReviewPlaybookText label="避けること" text={card.avoidAction} tone="caution" />
+          <ReviewPlaybookText label="試合後の検証" text={card.postMatchCheck} />
         </div>
       </CollapsiblePanel>
     </CollapsibleRoot>

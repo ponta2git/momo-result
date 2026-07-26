@@ -23,17 +23,30 @@ describe("SeriesComparisonReviewPanel", () => {
       />,
     );
 
-    expect(screen.getByRole("heading", { name: "行動プレイブック" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "次戦の行動仮説" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "ぽんた" })).toBeInTheDocument();
+    expect(screen.getAllByRole("article")).toHaveLength(4);
     expect(screen.getAllByText(/物件収益/u)[0]).toBeInTheDocument();
-    expect(screen.getAllByText(/下位後の戻し方/u)[0]).toBeInTheDocument();
     expect(screen.getAllByText("再現する")[0]).toBeInTheDocument();
-    expect(screen.getAllByText("見直す")[0]).toBeInTheDocument();
+    expect(screen.queryByText("見直す")).not.toBeInTheDocument();
 
-    await user.click(screen.getAllByRole("button", { name: "詳しい根拠" })[0]!);
-    expect(screen.getByText("データ上の理由")).toBeInTheDocument();
+    const pontaSection = screen.getByRole("heading", { name: "ぽんた" }).closest("section");
+    expect(pontaSection).not.toBeNull();
+    await user.click(
+      within(pontaSection as HTMLElement).getByRole("button", { name: "ほかの仮説 1件" }),
+    );
+    expect(within(pontaSection as HTMLElement).getByText("検証する")).toBeInTheDocument();
+
+    await user.click(
+      within(pontaSection as HTMLElement).getAllByRole("button", {
+        name: "根拠・注意・試合後の確認",
+      })[0]!,
+    );
+    expect(within(pontaSection as HTMLElement).getByText("データ上の理由")).toBeInTheDocument();
     expect(
-      screen.getByText("差の大きさ +0.62 / ぶれ幅 +0.31〜+0.84 / ぶれにくさ 高"),
+      within(pontaSection as HTMLElement).getByText(
+        "差の大きさ +0.62 / ぶれ幅 +0.31〜+0.84 / ぶれにくさ 高",
+      ),
     ).toBeInTheDocument();
 
     const visibleText = document.body.textContent ?? "";
@@ -65,5 +78,32 @@ describe("SeriesComparisonReviewPanel", () => {
     );
 
     expect(onViewChange).toHaveBeenCalledWith("drivers", { replace: false });
+  });
+
+  it("explains why a player has no hypothesis and offers a concrete analysis route", async () => {
+    const user = userEvent.setup();
+    const onViewChange = vi.fn();
+    const review = makeSeriesComparisonReviewResponse();
+    review.playbookByPlayer![1]!.cards = [];
+
+    render(
+      <ReviewViewContent
+        hasReviewError={false}
+        onViewChange={onViewChange}
+        response={makeSeriesComparisonResponse()}
+        review={review}
+        reviewLoading={false}
+      />,
+    );
+
+    const pontaSection = screen.getByRole("heading", { name: "ぽんた" }).closest("section");
+    expect(pontaSection).not.toBeNull();
+    expect(pontaSection).toHaveTextContent(
+      "この条件では、次回行動として出せる強い差分はありません。",
+    );
+    await user.click(
+      within(pontaSection as HTMLElement).getByRole("button", { name: "今の差を見る" }),
+    );
+    expect(onViewChange).toHaveBeenCalledWith("overview", { replace: false });
   });
 });

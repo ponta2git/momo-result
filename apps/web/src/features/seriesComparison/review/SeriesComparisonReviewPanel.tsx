@@ -26,7 +26,7 @@ export function ReviewViewContent({
 }) {
   if (hasReviewError) {
     return (
-      <Notice tone="danger" title="振り返りを読み込めません">
+      <Notice tone="danger" title="次戦の仮説を読み込めません">
         条件を変えるか、時間をおいて再読み込みしてください。
       </Notice>
     );
@@ -38,7 +38,7 @@ export function ReviewViewContent({
     return (
       <EmptyState
         icon={<ClipboardList className="size-5" />}
-        title="振り返りを表示できません"
+        title="次戦の仮説を表示できません"
         description="確定済みの開催回が揃うと表示できます。"
       />
     );

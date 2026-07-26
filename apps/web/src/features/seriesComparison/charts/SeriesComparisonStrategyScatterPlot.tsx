@@ -145,7 +145,7 @@ export function StrategyScatterPlot({
         </svg>
       </div>
       <p className="text-center text-xs leading-5 text-pretty text-[var(--color-text-secondary)]">
-        左ほど遊戯王型（カード重視）、右ほど桃鉄型（物件重視）です。
+        左ほどカード・臨時収入寄り、右ほど物件収益寄りです。
       </p>
       <PlayerLegend players={players} />
     </figure>

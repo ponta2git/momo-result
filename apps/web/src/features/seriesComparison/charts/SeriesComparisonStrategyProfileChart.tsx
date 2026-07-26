@@ -85,7 +85,7 @@ export function StrategyProfileChart({
             x={padding.left + 8}
             y={padding.top + 16}
           >
-            遊戯王型で上位
+            カード・臨時収入寄り / 上位
           </text>
           <text
             fill="var(--color-text-secondary)"
@@ -94,7 +94,7 @@ export function StrategyProfileChart({
             x={width - padding.right - 8}
             y={padding.top + 16}
           >
-            桃鉄型で上位
+            物件収益寄り / 上位
           </text>
           <text
             fill="var(--color-text-secondary)"
@@ -102,7 +102,7 @@ export function StrategyProfileChart({
             x={padding.left + 8}
             y={height - padding.bottom - 10}
           >
-            遊戯王型で下位
+            カード・臨時収入寄り / 下位
           </text>
           <text
             fill="var(--color-text-secondary)"
@@ -111,7 +111,7 @@ export function StrategyProfileChart({
             x={width - padding.right - 8}
             y={height - padding.bottom - 10}
           >
-            桃鉄型で下位
+            物件収益寄り / 下位
           </text>
           {entries.map((entry) => {
             if (

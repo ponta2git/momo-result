@@ -287,10 +287,10 @@ describe("seriesComparisonViewModel", () => {
   it("formats profile kinds, timeline flags, and reference statuses", () => {
     expect(profileKindLabel("steady_leader")).toBe("安定上位");
     expect(profileKindLabel("swing_chaser")).toBe("波あり追走");
-    expect(strategyKindLabel("property_focused")).toBe("桃鉄型（物件重視）");
-    expect(strategyKindLabel("card_focused")).toBe("遊戯王型（カード重視）");
-    expect(assetStyleKindLabel("asset_explosion")).toBe("資産爆発型");
-    expect(assetStyleKindLabel("close_collector")).toBe("接戦回収型");
+    expect(strategyKindLabel("property_focused")).toBe("物件収益寄り");
+    expect(strategyKindLabel("card_focused")).toBe("カード・臨時収入寄り");
+    expect(assetStyleKindLabel("asset_explosion")).toBe("高額側への伸びが大きい");
+    expect(assetStyleKindLabel("close_collector")).toBe("接戦で拾いやすい");
     expect(assetStyleShapeLabel("upper_side")).toBe("低資産が少なく、高資産寄り");
     expect(assetStyleTagLabel("mobility_collecting")).toBe("目的地寄り");
     expect(timelineFlagLabel("revenue_top_no_win")).toBe("物件収益ねじれ");

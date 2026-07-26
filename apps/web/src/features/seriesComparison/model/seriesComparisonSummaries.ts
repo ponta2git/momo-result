@@ -110,11 +110,11 @@ export function profileKindLabel(kind: string | null | undefined): string {
 export function strategyKindLabel(kind: string | null | undefined): string {
   switch (kind) {
     case "property_focused":
-      return "桃鉄型（物件重視）";
+      return "物件収益寄り";
     case "card_focused":
-      return "遊戯王型（カード重視）";
+      return "カード・臨時収入寄り";
     case "balanced":
-      return "バランス型";
+      return "中間";
     default:
       return "判定なし";
   }
@@ -123,17 +123,17 @@ export function strategyKindLabel(kind: string | null | undefined): string {
 export function assetStyleKindLabel(kind: string | null | undefined): string {
   switch (kind) {
     case "asset_explosion":
-      return "資産爆発型";
+      return "高額側への伸びが大きい";
     case "steady_accumulator":
-      return "堅実積み上げ型";
+      return "安定して積み上がる";
     case "high_risk_breakthrough":
-      return "ハイリスク突破型";
+      return "上下の振れが大きい";
     case "close_collector":
-      return "接戦回収型";
+      return "接戦で拾いやすい";
     case "upper_chaser":
-      return "上位追走型";
+      return "上位を追いやすい";
     case "balanced":
-      return "バランス型";
+      return "偏りが小さい";
     default:
       return "判定なし";
   }

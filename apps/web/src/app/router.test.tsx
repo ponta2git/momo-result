@@ -201,7 +201,7 @@ describe("app routing", () => {
       "aria-labelledby",
       "series-comparison-purpose-tab-review",
     );
-    expect(await screen.findByRole("heading", { name: "行動プレイブック" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "次戦の行動仮説" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "行動プレイブック" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "今回の要点" })).not.toBeInTheDocument();
     expect(screen.queryByText(/次回へ持ち越す論点/u)).not.toBeInTheDocument();
@@ -210,8 +210,8 @@ describe("app routing", () => {
     ).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "4試合の流れ" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "この回の見立て" })).not.toBeInTheDocument();
-    expect(screen.getByText("分析範囲")).toBeInTheDocument();
-    expect(screen.getByText("総合 / 12戦")).toBeInTheDocument();
+    expect(screen.queryByText("分析範囲")).not.toBeInTheDocument();
+    expect(screen.queryByText("総合 / 12戦")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "分類と信頼度の読み方" })).toHaveAttribute(
       "aria-expanded",
       "false",
@@ -245,13 +245,15 @@ describe("app routing", () => {
     ).toBeInTheDocument();
     expect(screen.queryByText("複数人に出た候補はここにまとめ")).not.toBeInTheDocument();
     expect(screen.queryByText(/収益トップだから安全/u)).not.toBeInTheDocument();
-    const supportToggles = screen.getAllByRole("button", { name: "注意・試合後の検証" });
-    expect(supportToggles[0]).toHaveAttribute("aria-expanded", "false");
-    await user.click(supportToggles[0]!);
-    expect(supportToggles[0]).toHaveAttribute("aria-expanded", "true");
+    const detailToggles = screen.getAllByRole("button", {
+      name: "根拠・注意・試合後の確認",
+    });
+    expect(detailToggles[0]).toHaveAttribute("aria-expanded", "false");
+    await user.click(detailToggles[0]!);
+    expect(detailToggles[0]).toHaveAttribute("aria-expanded", "true");
     expect(await screen.findByText(/収益トップだから安全/u)).toBeInTheDocument();
-    expect(screen.queryByText(/物件収益トップ時の1位率は57.1%/u)).not.toBeInTheDocument();
-    expect(screen.queryByText("物件収益トップ時の1位率")).not.toBeInTheDocument();
+    expect(await screen.findByText(/物件収益トップ時の1位率は57.1%/u)).toBeInTheDocument();
+    expect(screen.getByText("物件収益トップ時の1位率")).toBeInTheDocument();
     expect(
       screen.getAllByText(
         "収益で先行した試合でも、目的地到着や事故後の立て直しで順位差が分かれています。",
@@ -260,14 +262,6 @@ describe("app routing", () => {
     expect(screen.queryByText("Cliff's delta")).not.toBeInTheDocument();
     expect(screen.queryByText("confidence interval")).not.toBeInTheDocument();
     expect(screen.queryByText("bootstrap")).not.toBeInTheDocument();
-    const evidenceToggles = screen.getAllByRole("button", {
-      name: "詳しい根拠",
-    });
-    expect(evidenceToggles[0]).toHaveAttribute("aria-expanded", "false");
-    await user.click(evidenceToggles[0]!);
-    expect(evidenceToggles[0]).toHaveAttribute("aria-expanded", "true");
-    expect(await screen.findByText(/物件収益トップ時の1位率は57.1%/u)).toBeInTheDocument();
-    expect(screen.getByText("物件収益トップ時の1位率")).toBeInTheDocument();
     expect(screen.getByText("本人全体の1位率")).toBeInTheDocument();
     expect(screen.getByText(/差の大きさ \+0.62/u)).toBeInTheDocument();
     expect(screen.getByText(/ぶれ幅 \+0.31〜\+0.84/u)).toBeInTheDocument();
@@ -286,7 +280,7 @@ describe("app routing", () => {
         "true",
       ),
     );
-    expect(await screen.findByRole("heading", { name: "行動プレイブック" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "次戦の行動仮説" })).toBeInTheDocument();
     expect(screen.queryByRole("img", { name: "平均順位の推移グラフ" })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "分析する" }));
@@ -308,9 +302,11 @@ describe("app routing", () => {
     );
     expect(screen.queryByRole("link", { name: "桃鉄/遊戯王" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "物件収益額" })).not.toBeInTheDocument();
-    expect(
-      await screen.findByRole("heading", { name: "桃鉄型 / 遊戯王型の根拠" }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "稼ぎ方の比重の根拠" })).toBeInTheDocument();
+    expect(screen.getAllByText("総資産の出方")).toHaveLength(4);
+    expect(screen.getAllByText("稼ぎ方の比重")).toHaveLength(4);
+    expect(screen.queryByText("総資産の型")).not.toBeInTheDocument();
+    expect(screen.queryByText("物件/カード軸")).not.toBeInTheDocument();
     expect(screen.getByText("強調ルール")).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "物件収益分布" })).toBeInTheDocument();
     expect(

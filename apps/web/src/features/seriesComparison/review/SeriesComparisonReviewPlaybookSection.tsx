@@ -1,7 +1,6 @@
-import { ChevronDown, Target } from "lucide-react";
+import { ArrowRight, ChevronDown } from "lucide-react";
 
 import { playerColor } from "@/features/seriesComparison/charts/SeriesComparisonPlayerVisuals";
-import { MetricSection } from "@/features/seriesComparison/metrics/SeriesComparisonMetricSection";
 import type { Player } from "@/features/seriesComparison/model/seriesComparisonPresentation";
 import { ReviewPlaybookCardView } from "@/features/seriesComparison/review/SeriesComparisonReviewPlaybookCard";
 import {
@@ -12,8 +11,10 @@ import {
 import type {
   AnalysisViewChange,
   ReviewCommonPlaybookTopic,
+  ReviewPlaybookCard,
 } from "@/features/seriesComparison/review/SeriesComparisonReviewTypes";
 import type { SeriesComparisonReviewResponse } from "@/shared/api/seriesComparison";
+import { Button } from "@/shared/ui/actions/Button";
 import {
   CollapsiblePanel,
   CollapsibleRoot,
@@ -41,48 +42,92 @@ export function ReviewPlaybookSection({
           memberId: entry.memberId,
         }));
   return (
-    <MetricSection
-      description="次回4戦で試す行動仮説を、発動条件と試合後の確認方法までまとめます。"
-      Icon={Target}
-      id="review-playbook"
-      title="行動プレイブック"
-    >
-      <ReviewPlaybookGuide review={review} />
-      <ReviewCommonPlaybookTopics topics={review.commonPlaybookTopics ?? []} />
-      <div className="grid gap-5 lg:grid-cols-2 2xl:grid-cols-4">
-        {orderedPlayers.map((player, index) => (
-          <section
-            className="grid min-w-0 content-start gap-3 border-t-2 border-[var(--color-border)] pt-3"
-            key={player.memberId}
-            style={{ borderTopColor: playerColor(index) }}
-          >
-            <div className="flex min-w-0 items-start justify-between gap-3">
-              <div className="min-w-0">
-                <h3 className="text-sm font-semibold break-words text-[var(--color-text-primary)]">
-                  {player.displayName}
-                </h3>
-              </div>
-              <span className="shrink-0 rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--color-text-secondary)]">
-                {playbookByMember.get(player.memberId)?.cards?.length ?? 0}件
-              </span>
-            </div>
-            <div className="grid min-w-0 items-stretch gap-3">
-              {(playbookByMember.get(player.memberId)?.cards ?? []).length > 0 ? (
-                [...(playbookByMember.get(player.memberId)?.cards ?? [])]
-                  .toSorted(reviewPlaybookCardOrder)
-                  .map((card) => (
-                    <ReviewPlaybookCardView card={card} key={card.id} onViewChange={onViewChange} />
-                  ))
-              ) : (
-                <p className="rounded-[var(--radius-xs)] border border-dashed border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-3 text-sm leading-6 text-pretty text-[var(--color-text-secondary)]">
-                  この条件で次回に持ち帰る仮説はありません。弱い差分は採用していません。
-                </p>
-              )}
-            </div>
-          </section>
-        ))}
+    <section aria-label="次戦の行動仮説" className="grid min-w-0 gap-5" id="review-playbook">
+      <div className="grid gap-x-4 gap-y-6 lg:grid-cols-4">
+        {orderedPlayers.map((player, index) => {
+          const cards = [...(playbookByMember.get(player.memberId)?.cards ?? [])].toSorted(
+            reviewPlaybookCardOrder,
+          );
+          return (
+            <ReviewPlayerPlaybook
+              cards={cards}
+              color={playerColor(index)}
+              key={player.memberId}
+              name={player.displayName}
+              onViewChange={onViewChange}
+            />
+          );
+        })}
       </div>
-    </MetricSection>
+      <div className="grid min-w-0 gap-3 border-t border-[var(--color-border)] pt-3">
+        <ReviewPlaybookGuide />
+        <ReviewCommonPlaybookTopics topics={review.commonPlaybookTopics ?? []} />
+      </div>
+    </section>
+  );
+}
+
+function ReviewPlayerPlaybook({
+  cards,
+  color,
+  name,
+  onViewChange,
+}: {
+  cards: ReviewPlaybookCard[];
+  color: string;
+  name: string;
+  onViewChange: AnalysisViewChange;
+}) {
+  const primaryCard = cards[0];
+  const secondaryCards = cards.slice(1);
+  return (
+    <section
+      className="grid min-w-0 content-start gap-3 border-t-2 border-[var(--color-border)] pt-3"
+      style={{ borderTopColor: color }}
+    >
+      <div className="flex min-w-0 items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold break-words text-[var(--color-text-primary)]">
+          {name}
+        </h2>
+        <span className="shrink-0 text-[11px] font-medium text-[var(--color-text-secondary)]">
+          {cards.length > 0 ? `${cards.length}件` : "該当なし"}
+        </span>
+      </div>
+      {primaryCard ? (
+        <ReviewPlaybookCardView card={primaryCard} onViewChange={onViewChange} />
+      ) : (
+        <div className="grid gap-3 rounded-[var(--radius-xs)] border border-dashed border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
+          <p className="text-sm leading-6 text-pretty text-[var(--color-text-secondary)]">
+            この条件では、次回行動として出せる強い差分はありません。弱い差分は採用していません。
+          </p>
+          <Button
+            className="justify-self-start"
+            icon={<ArrowRight className="size-4" />}
+            size="sm"
+            variant="secondary"
+            onClick={() => onViewChange("overview", { replace: false })}
+          >
+            今の差を見る
+          </Button>
+        </div>
+      )}
+      {secondaryCards.length > 0 ? (
+        <CollapsibleRoot className="min-w-0">
+          <CollapsibleTrigger className="group flex min-h-10 w-full items-center justify-between gap-2 border-t border-[var(--color-border)] px-1 pt-2 text-left text-xs font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-action)]">
+            ほかの仮説 {secondaryCards.length}件
+            <ChevronDown
+              aria-hidden="true"
+              className="size-4 shrink-0 transition-transform group-data-[panel-open]:rotate-180 motion-reduce:transition-none"
+            />
+          </CollapsibleTrigger>
+          <CollapsiblePanel className="grid gap-3 pt-3">
+            {secondaryCards.map((card) => (
+              <ReviewPlaybookCardView card={card} key={card.id} onViewChange={onViewChange} />
+            ))}
+          </CollapsiblePanel>
+        </CollapsibleRoot>
+      ) : null}
+    </section>
   );
 }
 
@@ -106,7 +151,7 @@ function ReviewCommonPlaybookTopics({ topics }: { topics: ReviewCommonPlaybookTo
         </span>
         <ChevronDown
           aria-hidden="true"
-          className="size-4 shrink-0 text-[var(--color-text-secondary)] group-data-[panel-open]:rotate-180"
+          className="size-4 shrink-0 text-[var(--color-text-secondary)] transition-transform group-data-[panel-open]:rotate-180 motion-reduce:transition-none"
         />
       </CollapsibleTrigger>
       <CollapsiblePanel className="pt-2">
@@ -148,31 +193,24 @@ function ReviewCommonPlaybookTopics({ topics }: { topics: ReviewCommonPlaybookTo
   );
 }
 
-function ReviewPlaybookGuide({ review }: { review: SeriesComparisonReviewResponse }) {
-  const scopeName =
-    review.baseline.supplementalScopeName ?? review.baseline.scope.scopeName ?? "選択範囲";
+function ReviewPlaybookGuide() {
   const items = [
     { label: "再現する", text: "うまくいっている条件を、次回も崩さない。" },
     { label: "見直す", text: "崩れやすい条件で、優先順位を変える。" },
     { label: "検証する", text: "まだ断定せず、次回4戦で試す。" },
   ];
   return (
-    <CollapsibleRoot className="grid gap-2 border-y border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-2.5">
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold text-[var(--color-text-secondary)]">分析範囲</p>
-          <p className="text-sm font-semibold text-[var(--color-text-primary)]">
-            {scopeName} / {review.baseline.matchCount}戦
-          </p>
-        </div>
-        <CollapsibleTrigger
-          aria-label="分類と信頼度の読み方"
-          className="group inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-subtle)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-action)]"
-        >
-          読み方
-          <ChevronDown aria-hidden="true" className="size-3.5 group-data-[panel-open]:rotate-180" />
-        </CollapsibleTrigger>
-      </div>
+    <CollapsibleRoot className="min-w-0">
+      <CollapsibleTrigger
+        aria-label="分類と信頼度の読み方"
+        className="group flex min-h-10 w-full items-center justify-between gap-3 rounded-[var(--radius-xs)] px-2 text-left text-xs font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-subtle)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-action)]"
+      >
+        分類と信頼度の読み方
+        <ChevronDown
+          aria-hidden="true"
+          className="size-4 shrink-0 transition-transform group-data-[panel-open]:rotate-180 motion-reduce:transition-none"
+        />
+      </CollapsibleTrigger>
       <CollapsiblePanel className="grid min-w-0 gap-2 pt-1 sm:grid-cols-3">
         {items.map((item) => (
           <div

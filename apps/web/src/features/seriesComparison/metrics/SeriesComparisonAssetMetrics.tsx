@@ -84,8 +84,8 @@ export function AssetDistributionMetrics({ response }: { response: SeriesCompari
       </PlayerMetricGrid>
       <HistogramChart histogram={response.histograms.assets} players={players} />
       <IntegratedMetricPanel
-        description="右ほど物件寄り、左ほどカードや物件収益以外の動きが目立つ社長です。"
-        title="桃鉄型 / 遊戯王型の根拠"
+        description="右ほど最終資産に占める物件収益の比重が高く、左ほどカードや臨時収入などの比重が高い傾向です。"
+        title="稼ぎ方の比重の根拠"
       >
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)] xl:items-start">
           <StrategyScatterPlot players={players} points={response.matchPlayerPoints ?? []} />
@@ -136,7 +136,9 @@ function AssetStyleRows({
       <div className="grid min-h-32 gap-2 border-b border-[var(--color-border)] pb-2">
         <div className="flex min-w-0 items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-[11px] font-medium text-[var(--color-text-secondary)]">総資産の型</p>
+            <p className="text-[11px] font-medium text-[var(--color-text-secondary)]">
+              総資産の出方
+            </p>
             <p className="mt-0.5 text-sm font-semibold text-[var(--color-text-primary)]">
               {assetStyleKindLabel(profile.primaryKind)}
             </p>
@@ -280,7 +282,7 @@ function StrategyAxisSummary({
   return (
     <div className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-1.5">
       <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
-        <p className="text-[11px] font-medium text-[var(--color-text-secondary)]">物件/カード軸</p>
+        <p className="text-[11px] font-medium text-[var(--color-text-secondary)]">稼ぎ方の比重</p>
         <p className="text-xs font-semibold text-[var(--color-text-primary)]">
           {strategyKindLabel(performanceProfile?.strategyKind)}
         </p>

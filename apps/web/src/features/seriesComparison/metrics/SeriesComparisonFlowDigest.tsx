@@ -19,9 +19,16 @@ import {
   timelineFlagLabel,
 } from "@/features/seriesComparison/model/seriesComparisonViewModel";
 import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
+import { cn } from "@/shared/ui/cn";
 import { Notice } from "@/shared/ui/feedback/Notice";
 
-export function MatchDigestMetrics({ response }: { response: SeriesComparisonResponse }) {
+export function MatchDigestMetrics({
+  focusMatchId,
+  response,
+}: {
+  focusMatchId?: string | undefined;
+  response: SeriesComparisonResponse;
+}) {
   return (
     <MetricSection
       description="接戦、大差、スリの銀次多発、物件収益トップ未勝利が、選択範囲で何度起きたかを示します。"
@@ -29,12 +36,18 @@ export function MatchDigestMetrics({ response }: { response: SeriesComparisonRes
       title="期間内の荒れ試合"
       id="metric-match-digest"
     >
-      <MatchResultStrip response={response} />
+      <MatchResultStrip focusMatchId={focusMatchId} response={response} />
     </MetricSection>
   );
 }
 
-function MatchResultStrip({ response }: { response: SeriesComparisonResponse }) {
+function MatchResultStrip({
+  focusMatchId,
+  response,
+}: {
+  focusMatchId?: string | undefined;
+  response: SeriesComparisonResponse;
+}) {
   const names = playerNameMap(response.players ?? []);
   const timeline = response.matchTimeline ?? [];
   const flagOrder = ["close_finish", "asset_blowout", "ginji_storm", "revenue_top_no_win"];
@@ -74,7 +87,13 @@ function MatchResultStrip({ response }: { response: SeriesComparisonResponse }) 
             {flaggedTimeline.map((point) => (
               <article
                 key={point.matchId}
-                className="w-44 shrink-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-2.5"
+                className={cn(
+                  "w-44 shrink-0 rounded-[var(--radius-sm)] border bg-[var(--color-surface-subtle)] p-2.5",
+                  point.matchId === focusMatchId
+                    ? "momo-enter border-[var(--color-action)] ring-2 ring-[var(--color-action)]/25"
+                    : "border-[var(--color-border)]",
+                )}
+                data-focused-match={point.matchId === focusMatchId || undefined}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div>
@@ -87,6 +106,11 @@ function MatchResultStrip({ response }: { response: SeriesComparisonResponse }) 
                   </div>
                   <StatusBadge status={point.status} />
                 </div>
+                {point.matchId === focusMatchId ? (
+                  <p className="mt-1 text-[11px] font-semibold text-[var(--color-action)]">
+                    選択中
+                  </p>
+                ) : null}
                 <div className="mt-2 grid gap-1 text-xs text-[var(--color-text-secondary)]">
                   <div className="flex justify-between gap-2">
                     <span>1位-2位差</span>

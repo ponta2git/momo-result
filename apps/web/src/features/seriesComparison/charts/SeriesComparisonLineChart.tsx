@@ -22,6 +22,7 @@ export function LineChart({
   className,
   ariaLabel,
   domain,
+  focusedIndex,
   formatValue,
   lowValueAtTop = false,
   minYStep = 1,
@@ -32,6 +33,7 @@ export function LineChart({
   className?: string;
   ariaLabel: string;
   domain?: [number, number];
+  focusedIndex?: number | undefined;
   formatValue: (value: number) => string;
   lowValueAtTop?: boolean;
   minYStep?: number;
@@ -66,6 +68,10 @@ export function LineChart({
   };
   const ticks = yTicks ?? buildNumberTicks(minValue, maxValue, 5, minYStep);
   const xTicks = buildIndexTicks(maxIndex, 6);
+  const visibleFocusedIndex =
+    focusedIndex === undefined || focusedIndex < 1 || focusedIndex > maxIndex
+      ? undefined
+      : focusedIndex;
 
   return (
     <figure className={cn("grid max-w-full min-w-0 gap-2", className)}>
@@ -85,6 +91,37 @@ export function LineChart({
             y1={height - padding.bottom}
             y2={height - padding.bottom}
           />
+          {visibleFocusedIndex === undefined ? null : (
+            <g aria-label={`${visibleFocusedIndex}戦目を選択中`} className="momo-enter">
+              <rect
+                fill="var(--color-action)"
+                fillOpacity="0.08"
+                height={chartHeight}
+                width="14"
+                x={x(visibleFocusedIndex) - 7}
+                y={padding.top}
+              />
+              <line
+                stroke="var(--color-action)"
+                strokeDasharray="3 3"
+                strokeWidth="1.8"
+                x1={x(visibleFocusedIndex)}
+                x2={x(visibleFocusedIndex)}
+                y1={padding.top}
+                y2={height - padding.bottom}
+              />
+              <text
+                fill="var(--color-action)"
+                fontSize="11"
+                fontWeight="600"
+                textAnchor="middle"
+                x={x(visibleFocusedIndex)}
+                y={16}
+              >
+                選択中
+              </text>
+            </g>
+          )}
           <line
             stroke="var(--color-border)"
             strokeWidth="1"
@@ -185,6 +222,22 @@ export function LineChart({
                       />
                     ))
                   : null}
+                {visibleFocusedIndex === undefined
+                  ? null
+                  : points
+                      .filter((point) => point.index === visibleFocusedIndex)
+                      .map((point) => (
+                        <circle
+                          key={`focused-${item.memberId}-${point.index}`}
+                          className="momo-enter"
+                          cx={x(point.index)}
+                          cy={y(point.value)}
+                          fill="none"
+                          r="6"
+                          stroke="var(--color-action)"
+                          strokeWidth="2"
+                        />
+                      ))}
               </g>
             );
           })}

@@ -8,38 +8,42 @@ import { PageHeader } from "@/shared/ui/layout/PageHeader";
 export function MatchDetailLoading() {
   return (
     <PageFrame aria-busy="true" aria-label="試合詳細を読み込み中" className="gap-5" width="wide">
-      <PageHeader
-        description="試合結果、プレーヤー成績、開催情報を取得しています。"
-        eyebrow="試合記録"
-        title="試合詳細を読み込み中"
-      />
+      <PageHeader eyebrow="試合記録" title="試合結果を読み込み中" />
 
-      <Card className="overflow-hidden p-0">
-        <div className="grid gap-0 lg:grid-cols-[18rem_minmax(0,1fr)]">
-          <div className="border-b border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-5 lg:border-r lg:border-b-0">
-            <Skeleton className="h-4 w-16" />
-            <Skeleton className="mt-3 h-8 w-44" />
-            <Skeleton className="mt-4 h-8 w-24 rounded-full" />
-          </div>
-          <div className="grid gap-4 p-5 md:grid-cols-2 xl:grid-cols-3">
-            {["game", "season", "map", "owner", "played", "created"].map((id) => (
-              <div key={id} className="grid gap-2">
-                <Skeleton className="h-3 w-20" />
-                <Skeleton className="h-5 w-36" />
-              </div>
-            ))}
-          </div>
+      <Card className="grid gap-3 bg-[var(--color-surface-subtle)]">
+        <div className="flex flex-wrap gap-4">
+          {["held", "game", "season", "map"].map((id) => (
+            <div key={id} className="grid gap-2">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-5 w-32" />
+            </div>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Skeleton className="h-7 w-28 rounded-full" />
+          <Skeleton className="h-7 w-24 rounded-full" />
         </div>
       </Card>
 
-      <Card>
-        <div className="grid gap-3 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
-          <Skeleton className="h-48 rounded-[var(--radius-md)]" />
-          <div className="grid gap-2">
-            {["rank-1", "rank-2", "rank-3", "rank-4"].map((id) => (
-              <Skeleton key={id} className="h-12 rounded-[var(--radius-sm)]" />
-            ))}
-          </div>
+      <Card className="overflow-hidden p-0">
+        <div className="border-b border-[var(--color-border)] p-4">
+          <Skeleton className="h-6 w-32" />
+          <Skeleton className="mt-2 h-4 w-64" />
+        </div>
+        <div className="grid">
+          {["rank-1", "rank-2", "rank-3", "rank-4"].map((id) => (
+            <div
+              key={id}
+              className="grid grid-cols-[4rem_minmax(0,1fr)_auto] gap-3 border-b border-[var(--color-border)] p-3 last:border-b-0"
+            >
+              <Skeleton className="h-10 w-14 rounded-[var(--radius-sm)]" />
+              <div className="grid gap-2">
+                <Skeleton className="h-5 w-28" />
+                <Skeleton className="h-3 w-48 max-w-full" />
+              </div>
+              <Skeleton className="h-7 w-28" />
+            </div>
+          ))}
         </div>
       </Card>
 

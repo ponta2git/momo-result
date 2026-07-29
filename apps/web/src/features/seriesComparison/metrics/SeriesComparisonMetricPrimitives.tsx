@@ -70,21 +70,30 @@ export function PlayerMetricGrid({
 
 export function MetricRow({
   emphasis,
+  focusedMatch = false,
   help,
   label,
   status,
   value,
 }: {
   emphasis?: MetricEmphasis | undefined;
+  focusedMatch?: boolean | undefined;
   help?: ReactNode;
   label: string;
   status?: string | null | undefined;
   value: ReactNode;
 }) {
   return (
-    <div className="grid min-h-10 grid-cols-[minmax(0,1fr)_auto] items-start gap-3 border-b border-[var(--color-border)] pb-2 last:border-b-0 last:pb-0">
+    <div
+      className={cn(
+        "grid min-h-10 grid-cols-[minmax(0,1fr)_auto] items-start gap-3 border-b border-[var(--color-border)] pb-2 last:border-b-0 last:pb-0",
+        focusedMatch &&
+          "momo-enter rounded-[var(--radius-xs)] bg-[var(--color-surface-selected)] px-2 py-2 outline-1 -outline-offset-1 outline-[var(--color-action)]/55 last:pb-2",
+      )}
+    >
       <span className="inline-flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs leading-4 text-[var(--color-text-secondary)]">
         <span className="min-w-0 break-words">{label}</span>
+        {focusedMatch ? <FocusedMatchMarker /> : null}
         <StatusBadge status={status} />
         {emphasis ? <EmphasisBadge emphasis={emphasis} /> : null}
         {help ? <FormulaHelp content={help} label={label} /> : null}
@@ -98,6 +107,20 @@ export function MetricRow({
         {value}
       </span>
     </div>
+  );
+}
+
+export function FocusedMatchMarker({ className }: { className?: string }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center rounded-[var(--radius-xs)] border border-[var(--color-action)]/45 bg-[var(--color-surface)] px-1.5 py-0.5 text-[10px] leading-3 font-semibold whitespace-nowrap text-[var(--color-action)]",
+        className,
+      )}
+      data-focused-metric="true"
+    >
+      この試合
+    </span>
   );
 }
 

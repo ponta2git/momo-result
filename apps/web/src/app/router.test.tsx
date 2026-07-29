@@ -403,20 +403,38 @@ describe("app routing", () => {
 
     const focusedMatch = await screen.findByRole("region", { name: "選択中の試合" });
     expect(within(focusedMatch).getByRole("heading", { name: /12戦目/u })).toBeInTheDocument();
+    expect(
+      within(focusedMatch).getByRole("list", { name: "選択中の試合の順位と成績" }),
+    ).toBeInTheDocument();
     expect(within(focusedMatch).getByRole("link", { name: "この試合の結果" })).toHaveAttribute(
       "href",
       "/matches/match-12",
     );
     expect(screen.getByRole("tab", { name: "分析する" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("tab", { name: "推移" })).toHaveAttribute("aria-selected", "true");
+    expect(document.querySelectorAll('[data-focused-metric="true"]').length).toBeGreaterThan(0);
+    expect(screen.getAllByLabelText(/この試合に該当/u)).toHaveLength(4);
     expect(aggregateSearches).not.toHaveLength(0);
     expect(aggregateSearches.every((search) => !search.includes("focusMatchId"))).toBe(true);
+
+    await user.click(screen.getByRole("tab", { name: "勝因候補" }));
+    expect(router.state.location.search).toContain("focusMatchId=match-12");
+    await screen.findByRole("img", { name: "物件収益比率と総資産の散布図" });
+    expect(document.querySelectorAll('[data-focused-match="true"]')).toHaveLength(4);
+    expect(document.querySelectorAll('[data-focused-metric="true"]').length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("img", { name: /この試合に該当/u })).toHaveLength(4);
+
+    await user.click(screen.getByRole("tab", { name: "今の差" }));
+    expect(await screen.findByRole("heading", { name: "順位の地力" })).toBeInTheDocument();
+    expect(document.querySelectorAll('[data-focused-metric="true"]')).toHaveLength(4);
 
     await user.click(within(focusedMatch).getByRole("button", { name: "選択解除" }));
 
     await waitFor(() => {
       expect(router.state.location.search).not.toContain("focusMatchId");
       expect(screen.queryByRole("region", { name: "選択中の試合" })).not.toBeInTheDocument();
+      expect(document.querySelectorAll('[data-focused-match="true"]')).toHaveLength(0);
+      expect(document.querySelectorAll('[data-focused-metric="true"]')).toHaveLength(0);
     });
   });
 

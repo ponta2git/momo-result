@@ -148,7 +148,7 @@ describe("MatchesListPage", () => {
       "aria-busy",
       "true",
     );
-    expect(screen.getByRole("heading", { name: "試合詳細を読み込み中" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "試合結果を読み込み中" })).toBeInTheDocument();
     await waitFor(() => expect(detailRequested).toBe(true));
 
     detailGate.resolve();
@@ -816,8 +816,11 @@ describe("MatchDetailPage", () => {
 
     expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeInTheDocument();
     expect(screen.queryByText("今日の主役")).not.toBeInTheDocument();
-    expect(screen.getByText("優勝")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "戦績の中で見る" })).toHaveAttribute(
+    expect(screen.queryByText("優勝")).not.toBeInTheDocument();
+    const resultLedger = screen.getByRole("list", { name: "試合の順位と成績" });
+    expect(resultLedger).toBeInTheDocument();
+    expect(resultLedger.parentElement).toHaveClass("max-w-4xl");
+    expect(screen.getByRole("link", { name: "前後の戦績を見る" })).toHaveAttribute(
       "href",
       "/analytics/series?gameTitleId=gt_momotetsu_2&seasonMasterId=season_current&mapMasterId=map_east&focusMatchId=match-1&view=flow",
     );
@@ -836,6 +839,7 @@ describe("MatchDetailPage", () => {
 
   it("shows match feature badges from the match record and same-series comparison", async () => {
     setDevUser();
+    const comparisonSearches: string[] = [];
     server.use(
       http.get("/api/matches/:matchId", () =>
         HttpResponse.json(
@@ -859,8 +863,9 @@ describe("MatchDetailPage", () => {
           }),
         ),
       ),
-      http.get("/api/analytics/series-comparison", () =>
-        HttpResponse.json({
+      http.get("/api/analytics/series-comparison", ({ request }) => {
+        comparisonSearches.push(new URL(request.url).search);
+        return HttpResponse.json({
           ...makeSeriesComparisonResponse(),
           matchTimeline: [
             {
@@ -876,8 +881,8 @@ describe("MatchDetailPage", () => {
               winnerMemberId: "member_akane_mami",
             },
           ],
-        }),
-      ),
+        });
+      }),
     );
 
     render(
@@ -897,7 +902,11 @@ describe("MatchDetailPage", () => {
     expect(screen.getByText("借金あり")).toBeInTheDocument();
     expect(screen.getByText("目的地なし決着")).toBeInTheDocument();
     expect(screen.getByText("低収益勝ち")).toBeInTheDocument();
-    expect(screen.getByText("同作品内")).toBeInTheDocument();
+    expect(screen.getByText("同条件内")).toBeInTheDocument();
+    const comparisonParams = new URLSearchParams(comparisonSearches.at(-1));
+    expect(comparisonParams.get("gameTitleId")).toBe("gt_momotetsu_2");
+    expect(comparisonParams.get("seasonMasterId")).toBe("season_current");
+    expect(comparisonParams.get("mapMasterId")).toBe("map_east");
   });
 
   it("keeps match-record badges visible when series comparison loading fails", async () => {
@@ -932,7 +941,9 @@ describe("MatchDetailPage", () => {
 
     expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeInTheDocument();
     expect(await screen.findByText("物件収益ねじれ")).toBeInTheDocument();
-    expect(screen.getByText("試合単体の記録から判定しています")).toBeInTheDocument();
+    expect(
+      screen.getByText("比較データを利用できないため、この試合の記録から判定"),
+    ).toBeInTheDocument();
     expect(screen.queryByText("接戦")).not.toBeInTheDocument();
   });
 });

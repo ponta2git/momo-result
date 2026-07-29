@@ -110,7 +110,13 @@ function PlayOrderValue({
   );
 }
 
-export function GinjiMetrics({ response }: { response: SeriesComparisonResponse }) {
+export function GinjiMetrics({
+  focusedIndex,
+  response,
+}: {
+  focusedIndex?: number | undefined;
+  response: SeriesComparisonResponse;
+}) {
   const players = response.players ?? [];
   const metricsByMember = metricsMap(response);
   return (
@@ -150,6 +156,7 @@ export function GinjiMetrics({ response }: { response: SeriesComparisonResponse 
       </PlayerMetricGrid>
       <LineChart
         ariaLabel="スリの銀次累計回数の推移グラフ"
+        focusedIndex={focusedIndex}
         formatValue={(value) => `${value.toFixed(0)}回`}
         players={players}
         series={response.trends.ginjiCumulativeCount ?? []}

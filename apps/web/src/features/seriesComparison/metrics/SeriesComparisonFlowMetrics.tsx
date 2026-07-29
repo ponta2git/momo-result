@@ -12,6 +12,7 @@ import {
 import { MetricSection } from "@/features/seriesComparison/metrics/SeriesComparisonMetricSection";
 import { MomentumTransitionMatrices } from "@/features/seriesComparison/metrics/SeriesComparisonMomentumMatrices";
 import type {
+  FocusedMatchMetricContext,
   MomentumSwitchEntry,
   MomentumSwitchRateKey,
 } from "@/features/seriesComparison/model/seriesComparisonPresentation";
@@ -29,7 +30,13 @@ import {
 import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
 import { cn } from "@/shared/ui/cn";
 
-export function RecentFormMetrics({ response }: { response: SeriesComparisonResponse }) {
+export function RecentFormMetrics({
+  focusedMatch,
+  response,
+}: {
+  focusedMatch: FocusedMatchMetricContext;
+  response: SeriesComparisonResponse;
+}) {
   const players = response.players ?? [];
   const recentByMember = recentFormMap(response);
   return (
@@ -43,7 +50,11 @@ export function RecentFormMetrics({ response }: { response: SeriesComparisonResp
         <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">
           直近順位ストリップ
         </h3>
-        <RecentRankStrip entries={recentRankStrips(response)} players={players} />
+        <RecentRankStrip
+          entries={recentRankStrips(response)}
+          focusedMatchId={focusedMatch.matchId}
+          players={players}
+        />
       </div>
       <PlayerMetricGrid metricsByMember={metricsMap(response)} players={players}>
         {(player) => {
@@ -71,7 +82,13 @@ export function RecentFormMetrics({ response }: { response: SeriesComparisonResp
 
 type MomentumSwitchRate = MomentumSwitchEntry[MomentumSwitchRateKey];
 
-export function MomentumSwitchMetrics({ response }: { response: SeriesComparisonResponse }) {
+export function MomentumSwitchMetrics({
+  focusedMatch,
+  response,
+}: {
+  focusedMatch: FocusedMatchMetricContext;
+  response: SeriesComparisonResponse;
+}) {
   const players = response.players ?? [];
   const switchByMember = momentumSwitchMap(response);
   return (
@@ -124,7 +141,11 @@ export function MomentumSwitchMetrics({ response }: { response: SeriesComparison
           );
         })}
       </div>
-      <MomentumTransitionMatrices entriesByMember={switchByMember} players={players} />
+      <MomentumTransitionMatrices
+        entriesByMember={switchByMember}
+        focusedTransitionsByMember={focusedMatch.rankTransitionsByMember}
+        players={players}
+      />
     </MetricSection>
   );
 }

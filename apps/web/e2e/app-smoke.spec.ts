@@ -178,6 +178,24 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     await expect(page).toHaveURL(new RegExp(`/matches/${matchId}$`, "u"));
     await expect(page.getByRole("heading", { name: /第\d+試合の結果/u })).toBeVisible();
     await expect(page.getByText(gameTitleName, { exact: true })).toBeVisible();
+    await page.setViewportSize({ height: 900, width: 1440 });
+    await expect(page.getByText("同条件内 1戦目", { exact: true })).toBeVisible();
+    const resultLedgerCard = page.getByRole("list", { name: "試合の順位と成績" }).locator("..");
+    const resultLedgerCardBox = await resultLedgerCard.boundingBox();
+    if (!resultLedgerCardBox) {
+      throw new Error("Result ledger card geometry must be measurable.");
+    }
+    expect(resultLedgerCardBox.width).toBeLessThanOrEqual(896);
+    const firstLedgerRow = resultLedgerCard.getByRole("listitem").first();
+    const rankBox = await firstLedgerRow.getByText("1位", { exact: true }).boundingBox();
+    const totalAssetsBox = await firstLedgerRow
+      .getByText("総資産", { exact: true })
+      .locator("..")
+      .boundingBox();
+    if (!rankBox || !totalAssetsBox) {
+      throw new Error("Result ledger primary columns must be measurable.");
+    }
+    expect(totalAssetsBox.x - rankBox.x).toBeLessThanOrEqual(480);
   });
 
   await test.step("inspect series comparison drilldowns for the confirmed match", async () => {
@@ -187,7 +205,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
       await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth),
     ).toBe(false);
 
-    const comparisonLink = page.getByRole("link", { name: "戦績の中で見る" });
+    const comparisonLink = page.getByRole("link", { name: "前後の戦績を見る" });
     await expect(comparisonLink).toHaveAttribute(
       "href",
       `/analytics/series?gameTitleId=${encodeURIComponent(
@@ -202,6 +220,9 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     await expect(page).toHaveURL(/[?&]focusMatchId=[^&]+/u);
     const focusedMatch = page.getByRole("region", { name: "選択中の試合" });
     await expect(focusedMatch.getByRole("heading", { name: /1戦目/u })).toBeVisible();
+    await expect(
+      focusedMatch.getByRole("list", { name: "選択中の試合の順位と成績" }),
+    ).toBeVisible();
     await expect(focusedMatch.getByRole("link", { name: "この試合の結果" })).toHaveAttribute(
       "href",
       `/matches/${matchId}`,
@@ -211,6 +232,8 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
       "true",
     );
     await expect(page.getByRole("tab", { name: "推移" })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("columnheader", { name: /この試合/u })).toBeVisible();
+    expect(await page.locator('[data-focused-metric="true"]').count()).toBeGreaterThan(0);
     expect(
       await page
         .getByRole("tablist", { name: "分析の切り口" })
@@ -219,6 +242,18 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth),
     ).toBe(false);
+
+    await page.getByRole("tab", { name: "勝因候補" }).click();
+    await expect(
+      page.getByRole("heading", { exact: true, name: "物件収益トップを勝ちにできたか" }),
+    ).toBeVisible();
+    expect(await page.locator('[data-focused-metric="true"]').count()).toBeGreaterThan(0);
+
+    await page.getByRole("tab", { name: "今の差" }).click();
+    await expect(page.getByRole("heading", { exact: true, name: "順位の地力" })).toBeVisible();
+    await expect(page.locator('[data-focused-metric="true"]')).toHaveCount(4);
+
+    await page.getByRole("tab", { name: "推移" }).click();
     if (desktopViewport) {
       await page.setViewportSize(desktopViewport);
     }
@@ -535,7 +570,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     await expect(page).toHaveURL(new RegExp(`/matches/${matchId}$`, "u"));
     await expect(page.getByLabel("試合詳細を読み込み中")).toHaveAttribute("aria-busy", "true");
     await expect(
-      page.getByRole("heading", { exact: true, name: "試合詳細を読み込み中" }),
+      page.getByRole("heading", { exact: true, name: "試合結果を読み込み中" }),
     ).toBeVisible();
     await expect.poll(() => detailApiRequested).toBe(true);
 

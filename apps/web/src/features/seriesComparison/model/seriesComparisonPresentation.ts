@@ -20,6 +20,11 @@ export {
   rankOutcomeColor,
 } from "./seriesComparisonFormatters";
 export {
+  buildFocusedMatchMetricContext,
+  type FocusedMatchMetricContext,
+  type FocusedMatchRankTransition,
+} from "./seriesComparisonFocusedMatch";
+export {
   assetStyleProfileMap,
   extremumEmphasis,
   leaderSummary,

@@ -1,10 +1,6 @@
 import { Coins } from "lucide-react";
 
-import {
-  HistogramChart,
-  StrategyProfileChart,
-  StrategyScatterPlot,
-} from "@/features/seriesComparison/charts/SeriesComparisonCharts";
+import { HistogramChart } from "@/features/seriesComparison/charts/SeriesComparisonCharts";
 import { EmphasisRuleNote } from "@/features/seriesComparison/metrics/SeriesComparisonEmphasisRuleNote";
 import {
   MetricRow,
@@ -19,6 +15,7 @@ import {
   MiniFact,
   OutcomeDetails,
 } from "@/features/seriesComparison/metrics/SeriesComparisonSectionPrimitives";
+import { SeriesComparisonStrategyEvidence } from "@/features/seriesComparison/metrics/SeriesComparisonStrategyEvidence";
 import type {
   AssetStyleEvidenceItem,
   AssetStyleProfileEntry,
@@ -44,7 +41,12 @@ import {
 } from "@/features/seriesComparison/model/seriesComparisonViewModel";
 import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
 
-export function AssetDistributionMetrics({ response }: { response: SeriesComparisonResponse }) {
+type AssetMetricsProps = {
+  focusMatchId?: string | undefined;
+  response: SeriesComparisonResponse;
+};
+
+export function AssetDistributionMetrics({ focusMatchId, response }: AssetMetricsProps) {
   const players = response.players ?? [];
   const metricsByMember = metricsMap(response);
   const assetStyleByMember = assetStyleProfileMap(response);
@@ -86,10 +88,7 @@ export function AssetDistributionMetrics({ response }: { response: SeriesCompari
         description="物件収益比率と順位スコアの関係から、桃鉄型（物件重視）と遊戯王型（カード重視）の傾向を示します。"
         title="稼ぎ方の比重の根拠"
       >
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)] xl:items-start">
-          <StrategyScatterPlot players={players} points={response.matchPlayerPoints ?? []} />
-          <StrategyProfileChart players={players} profiles={response.playerPerformanceProfiles} />
-        </div>
+        <SeriesComparisonStrategyEvidence focusMatchId={focusMatchId} response={response} />
       </IntegratedMetricPanel>
       <IntegratedMetricPanel
         description="物件収益の分布幅から、一度の上振れか継続的な収益かを切り分けます。"

@@ -13,9 +13,11 @@ import { cn } from "@/shared/ui/cn";
 
 export function RecentRankStrip({
   entries,
+  focusedMatchId,
   players,
 }: {
   entries: RecentRankStripEntry[];
+  focusedMatchId?: string | undefined;
   players: Player[];
 }) {
   const entryByMember = new Map(entries.map((entry) => [entry.memberId, entry]));
@@ -65,11 +67,11 @@ export function RecentRankStrip({
         >
           <table
             aria-label="直近順位ストリップ"
-            className="min-w-full border-separate border-spacing-x-1 border-spacing-y-2"
-            style={{ width: "max-content" }}
+            className="w-max border-separate border-spacing-x-1 border-spacing-y-2"
           >
             <thead>
               <RecentRankStripMarkerRow
+                focusedMatchId={focusedMatchId}
                 pointColumnCount={pointColumnCount}
                 points={matchMarkerPoints}
               />
@@ -78,6 +80,7 @@ export function RecentRankStrip({
               {rows.map(({ entry, player }, index) => (
                 <RecentRankStripPlayerRow
                   entry={entry}
+                  focusedMatchId={focusedMatchId}
                   index={index}
                   key={player.memberId}
                   player={player}
@@ -93,9 +96,11 @@ export function RecentRankStrip({
 }
 
 function RecentRankStripMarkerRow({
+  focusedMatchId,
   pointColumnCount,
   points,
 }: {
+  focusedMatchId?: string | undefined;
   pointColumnCount: number;
   points: RecentRankStripEntry["points"];
 }) {
@@ -109,22 +114,31 @@ function RecentRankStripMarkerRow({
       </th>
       {Array.from({ length: pointColumnCount }, (_, pointIndex) => {
         const point = points[pointIndex];
+        const isFocusedMatch = point?.matchId === focusedMatchId;
         const showMarker =
-          point && shouldShowRankStripMatchMarker(point.matchIndex, pointIndex, points.length);
+          point &&
+          (isFocusedMatch ||
+            shouldShowRankStripMatchMarker(point.matchIndex, pointIndex, points.length));
         return (
           <th
-            className="w-9 min-w-9 px-0 text-center align-bottom"
+            className={cn(
+              "w-9 min-w-9 px-0 text-center align-bottom",
+              isFocusedMatch && "w-14 min-w-14",
+            )}
             key={point ? `${point.matchId}-${point.matchIndex}` : `marker-empty-${pointIndex}`}
             scope="col"
           >
             {point ? (
               <span
+                aria-label={isFocusedMatch ? `${point.matchIndex}戦目、この試合` : undefined}
                 className={cn(
                   "block h-3 whitespace-nowrap text-[0.625rem] font-medium leading-3 text-[var(--color-text-muted)] tabular-nums",
                   !showMarker && "invisible",
+                  isFocusedMatch && "momo-enter font-semibold text-[var(--color-action)]",
                 )}
+                data-focused-metric={isFocusedMatch ? "true" : undefined}
               >
-                {point.matchIndex}戦
+                {isFocusedMatch ? "この試合" : `${point.matchIndex}戦`}
               </span>
             ) : (
               <span aria-hidden="true" className="block h-3" />
@@ -138,11 +152,13 @@ function RecentRankStripMarkerRow({
 
 function RecentRankStripPlayerRow({
   entry,
+  focusedMatchId,
   index,
   player,
   pointColumnCount,
 }: {
   entry: RecentRankStripEntry | undefined;
+  focusedMatchId?: string | undefined;
   index: number;
   player: Player;
   pointColumnCount: number;
@@ -162,6 +178,7 @@ function RecentRankStripPlayerRow({
       </th>
       {Array.from({ length: pointColumnCount }, (_, pointIndex) => {
         const point = points[pointIndex];
+        const isFocusedMatch = point?.matchId === focusedMatchId;
         return (
           <td
             className="h-8 w-9 min-w-9 px-0 py-1 align-middle"
@@ -170,8 +187,13 @@ function RecentRankStripPlayerRow({
             {point ? (
               <span className="grid w-9 grid-rows-[2rem] justify-items-center">
                 <span
-                  aria-label={`${player.displayName} ${point.matchIndex}戦目 ${point.rank}位`}
-                  className="grid size-8 place-items-center rounded-[var(--radius-xs)] border text-xs font-semibold tabular-nums shadow-sm"
+                  aria-label={`${player.displayName} ${point.matchIndex}戦目 ${point.rank}位${isFocusedMatch ? " この試合" : ""}`}
+                  className={cn(
+                    "grid size-8 place-items-center rounded-[var(--radius-xs)] border text-xs font-semibold tabular-nums shadow-sm",
+                    isFocusedMatch &&
+                      "momo-enter ring-2 ring-[var(--color-action)] ring-offset-2 ring-offset-[var(--color-surface-subtle)]",
+                  )}
+                  data-focused-metric={isFocusedMatch ? "true" : undefined}
                   style={{
                     backgroundColor: rankColor(point.rank),
                     borderColor: rankColor(point.rank),

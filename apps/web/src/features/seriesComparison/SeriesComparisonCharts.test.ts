@@ -6,9 +6,11 @@ import { makeSeriesComparisonResponse } from "@/test/msw/seriesComparisonFixture
 
 import {
   HistogramChart,
+  LineChart,
   PlayerLegend,
   RecentRankStrip,
   StrategyProfileChart,
+  StrategyScatterPlot,
 } from "./charts/SeriesComparisonCharts";
 
 describe("PlayerLegend", () => {
@@ -103,6 +105,21 @@ describe("RecentRankStrip", () => {
       "scrollLeft",
       320,
     );
+  });
+
+  it("labels and outlines the selected match column", () => {
+    const { container } = render(
+      createElement(RecentRankStrip, {
+        entries,
+        focusedMatchId: "match-12",
+        players,
+      }),
+    );
+
+    expect(screen.getByRole("columnheader", { name: "12戦目、この試合" })).toBeInTheDocument();
+    expect(screen.getByLabelText("桃太郎 12戦目 1位 この試合")).toBeInTheDocument();
+    expect(screen.getByLabelText("夜叉姫 12戦目 3位 この試合")).toBeInTheDocument();
+    expect(container.querySelectorAll('[data-focused-metric="true"]')).toHaveLength(3);
   });
 
   it("shows an empty status once for the whole strip", () => {
@@ -238,5 +255,37 @@ describe("StrategyProfileChart", () => {
     expect(xAxisTitle).toHaveAttribute("text-anchor", "middle");
     expect(screen.getByText("桃鉄型 / 上位")).toBeInTheDocument();
     expect(screen.getByText("遊戯王型 / 上位")).toBeInTheDocument();
+  });
+});
+
+describe("selected match markers", () => {
+  it("marks the selected index and its player points on line charts", () => {
+    const response = makeSeriesComparisonResponse();
+    const { container } = render(
+      createElement(LineChart, {
+        ariaLabel: "選択中試合の順位推移",
+        focusedIndex: 4,
+        formatValue: (value: number) => value.toFixed(2),
+        players: response.players ?? [],
+        series: response.trends.rankCumulativeAverage ?? [],
+      }),
+    );
+
+    expect(screen.getByText("選択中")).toBeInTheDocument();
+    expect(container.querySelectorAll("circle.momo-enter")).toHaveLength(4);
+  });
+
+  it("outlines all four selected-match points on the strategy scatter plot", () => {
+    const response = makeSeriesComparisonResponse();
+    const { container } = render(
+      createElement(StrategyScatterPlot, {
+        focusedMatchId: "match-12",
+        players: response.players ?? [],
+        points: response.matchPlayerPoints ?? [],
+      }),
+    );
+
+    expect(container.querySelectorAll('[data-focused-match="true"]')).toHaveLength(4);
+    expect(screen.getByText(/縁取りは選択中の試合です/u)).toBeInTheDocument();
   });
 });

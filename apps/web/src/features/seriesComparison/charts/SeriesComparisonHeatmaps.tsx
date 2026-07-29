@@ -1,4 +1,5 @@
 import type {
+  MatchPlayerPoint,
   Player,
   PlayOrderHeatmapRow,
   RevenueRankConversionEntry,
@@ -66,9 +67,11 @@ export function PlayOrderHeatmap({
 
 export function RevenueRankConversionHeatmap({
   entries,
+  focusedPointsByMember,
   players,
 }: {
   entries: RevenueRankConversionEntry[];
+  focusedPointsByMember: ReadonlyMap<string, MatchPlayerPoint>;
   players: Player[];
 }) {
   const entryByMember = new Map(entries.map((entry) => [entry.memberId, entry]));
@@ -79,6 +82,7 @@ export function RevenueRankConversionHeatmap({
         return (
           <RevenueRankConversionPlayerMatrix
             entry={entry}
+            focusedPoint={focusedPointsByMember.get(player.memberId)}
             index={index}
             key={player.memberId}
             player={player}
@@ -145,10 +149,12 @@ function PlayOrderHeatmapPlayerRow({
 
 function RevenueRankConversionPlayerMatrix({
   entry,
+  focusedPoint,
   index,
   player,
 }: {
   entry: RevenueRankConversionEntry | undefined;
+  focusedPoint: MatchPlayerPoint | undefined;
   index: number;
   player: Player;
 }) {
@@ -181,7 +187,12 @@ function RevenueRankConversionPlayerMatrix({
               </div>
             ))}
             {rows.map((row) => (
-              <RevenueRankConversionRow key={row.revenueRank} player={player} row={row} />
+              <RevenueRankConversionRow
+                focusedPoint={focusedPoint}
+                key={row.revenueRank}
+                player={player}
+                row={row}
+              />
             ))}
           </div>
         </div>
@@ -191,9 +202,11 @@ function RevenueRankConversionPlayerMatrix({
 }
 
 function RevenueRankConversionRow({
+  focusedPoint,
   player,
   row,
 }: {
+  focusedPoint: MatchPlayerPoint | undefined;
   player: Player;
   row: RevenueRankConversionEntry["rows"][number];
 }) {
@@ -205,28 +218,42 @@ function RevenueRankConversionRow({
           {row.targetCount}戦
         </div>
       </div>
-      {row.finalRankCounts.map((item) => (
-        <div
-          aria-label={`${player.displayName}、物件収益${formatRevenueRank(row.revenueRank)}、最終${item.rank}位 ${item.count}回 ${formatPercent(item.rate)}`}
-          className="rounded-[var(--radius-xs)] border px-1 py-2 text-center"
-          key={item.rank}
-          role="img"
-          style={{
-            backgroundColor:
-              item.count > 0
-                ? rankBackgroundColor(item.rank, item.rate ?? 0)
-                : "var(--color-surface)",
-            borderColor: item.count > 0 ? rankBorderColor(item.rank) : "var(--color-border)",
-          }}
-        >
-          <div className="text-sm font-semibold text-[var(--color-text-primary)] tabular-nums">
-            {item.count}
+      {row.finalRankCounts.map((item) => {
+        const isFocusedMatch =
+          focusedPoint?.revenueRank === row.revenueRank && focusedPoint.rank === item.rank;
+        return (
+          <div
+            aria-label={`${player.displayName}、物件収益${formatRevenueRank(row.revenueRank)}、最終${item.rank}位 ${item.count}回 ${formatPercent(item.rate)}${isFocusedMatch ? "、この試合に該当" : ""}`}
+            className={`rounded-[var(--radius-xs)] border px-1 py-2 text-center ${
+              isFocusedMatch
+                ? "momo-enter ring-2 ring-[var(--color-action)] ring-offset-1 ring-offset-[var(--color-surface-subtle)]"
+                : ""
+            }`}
+            data-focused-metric={isFocusedMatch ? "true" : undefined}
+            key={item.rank}
+            role="img"
+            style={{
+              backgroundColor:
+                item.count > 0
+                  ? rankBackgroundColor(item.rank, item.rate ?? 0)
+                  : "var(--color-surface)",
+              borderColor: item.count > 0 ? rankBorderColor(item.rank) : "var(--color-border)",
+            }}
+          >
+            <div className="text-sm font-semibold text-[var(--color-text-primary)] tabular-nums">
+              {item.count}
+            </div>
+            <div className="mt-0.5 text-[10px] text-[var(--color-text-secondary)] tabular-nums">
+              {formatPercent(item.rate)}
+            </div>
+            {isFocusedMatch ? (
+              <div className="mt-0.5 text-[9px] leading-3 font-semibold whitespace-nowrap text-[var(--color-action)]">
+                この試合
+              </div>
+            ) : null}
           </div>
-          <div className="mt-0.5 text-[10px] text-[var(--color-text-secondary)] tabular-nums">
-            {formatPercent(item.rate)}
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </>
   );
 }

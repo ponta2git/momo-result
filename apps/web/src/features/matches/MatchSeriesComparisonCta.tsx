@@ -11,14 +11,14 @@ export function MatchSeriesComparisonCta({
     <div className="mt-4 flex flex-col gap-3 border-t border-[var(--color-border)] pt-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
         <p className="text-sm font-semibold text-[var(--color-text-primary)]">
-          この1戦を過去の戦績と比べる
+          この試合の前後を見る
         </p>
         <p className="mt-1 text-xs leading-5 text-pretty text-[var(--color-text-secondary)]">
-          同じ作品・シーズン・マップの推移を開き、この試合を目印として表示します。
+          同じ作品・シーズン・マップの戦績を開き、この試合を選択した状態で推移と結果を表示します。
         </p>
       </div>
       <LinkButton className="shrink-0" to={seriesComparisonHrefForMatch(match)} variant="secondary">
-        戦績の中で見る
+        前後の戦績を見る
       </LinkButton>
     </div>
   );

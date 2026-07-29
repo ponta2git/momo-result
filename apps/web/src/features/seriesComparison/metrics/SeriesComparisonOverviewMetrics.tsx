@@ -18,10 +18,19 @@ import {
   metricsMap,
   rankDistributionBars,
 } from "@/features/seriesComparison/model/seriesComparisonPresentation";
+import type { FocusedMatchMetricContext } from "@/features/seriesComparison/model/seriesComparisonPresentation";
 import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
 import { Button } from "@/shared/ui/actions/Button";
 
-export function BasicMetrics({ response }: { response: SeriesComparisonResponse }) {
+export function BasicMetrics({
+  focusedIndex,
+  focusedMatch,
+  response,
+}: {
+  focusedIndex?: number | undefined;
+  focusedMatch: FocusedMatchMetricContext;
+  response: SeriesComparisonResponse;
+}) {
   const players = response.players ?? [];
   const metricsByMember = metricsMap(response);
   const [drilldownMemberId, setDrilldownMemberId] = useState<string | null>(null);
@@ -49,22 +58,27 @@ export function BasicMetrics({ response }: { response: SeriesComparisonResponse 
         <RankDistributionStackedBars entries={rankDistributionBars(response)} players={players} />
       </div>
       <PlayerMetricGrid metricsByMember={metricsByMember} players={players}>
-        {(_, metrics) => (
-          <>
-            <MetricRow label="平均順位" value={formatDecimal(metrics?.rank.average)} />
-            {(metrics?.rank.distribution ?? []).map((item) => (
-              <MetricRow
-                key={item.rank}
-                label={`${item.rank}位`}
-                value={`${item.count}回・${formatPercent(item.rate)}`}
-              />
-            ))}
-          </>
-        )}
+        {(player, metrics) => {
+          const focusedRank = focusedMatch.pointsByMember.get(player.memberId)?.rank;
+          return (
+            <>
+              <MetricRow label="平均順位" value={formatDecimal(metrics?.rank.average)} />
+              {(metrics?.rank.distribution ?? []).map((item) => (
+                <MetricRow
+                  focusedMatch={focusedRank === item.rank}
+                  key={item.rank}
+                  label={`${item.rank}位`}
+                  value={`${item.count}回・${formatPercent(item.rate)}`}
+                />
+              ))}
+            </>
+          );
+        }}
       </PlayerMetricGrid>
       <LineChart
         ariaLabel="平均順位の推移グラフ"
         domain={[1, 4]}
+        focusedIndex={focusedIndex}
         formatValue={(value) => `${value.toFixed(0)}位`}
         lowValueAtTop
         players={players}
@@ -100,7 +114,13 @@ export function HeadToHeadMetrics({ response }: { response: SeriesComparisonResp
   );
 }
 
-export function RateMetrics({ response }: { response: SeriesComparisonResponse }) {
+export function RateMetrics({
+  focusedIndex,
+  response,
+}: {
+  focusedIndex?: number | undefined;
+  response: SeriesComparisonResponse;
+}) {
   const players = response.players ?? [];
   const metricsByMember = metricsMap(response);
   return (
@@ -121,6 +141,7 @@ export function RateMetrics({ response }: { response: SeriesComparisonResponse }
       </PlayerMetricGrid>
       <LineChart
         ariaLabel="順位ブレの推移グラフ"
+        focusedIndex={focusedIndex}
         formatValue={(value) => value.toFixed(2)}
         minYStep={0.25}
         players={players}

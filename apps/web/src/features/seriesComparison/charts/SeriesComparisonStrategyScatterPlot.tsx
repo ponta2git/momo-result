@@ -15,9 +15,11 @@ import { isFiniteNumber } from "@/features/seriesComparison/charts/SeriesCompari
 import { formatPercent } from "@/features/seriesComparison/model/seriesComparisonPresentation";
 
 export function StrategyScatterPlot({
+  focusedMatchId,
   players,
   points,
 }: {
+  focusedMatchId?: string | undefined;
   players: Player[];
   points: MatchPlayerPoint[];
 }) {
@@ -131,25 +133,44 @@ export function StrategyScatterPlot({
           </text>
           {plottedPoints.map((point) => {
             const index = playerIndex.get(point.memberId) ?? 0;
+            const focused = focusedMatchId === point.matchId;
             return (
-              <PlayerPointMark
+              <g
                 key={`${point.matchId}-${point.memberId}`}
-                cx={x(point.revenueAssetRate ?? 0)}
-                cy={y(point.totalAssets)}
-                index={index}
-                opacity={0.8}
-                size={4}
+                aria-label={focused ? `${point.matchIndex}戦目を選択中` : undefined}
+                className={focused ? "momo-enter" : undefined}
+                data-focused-match={focused || undefined}
               >
-                <title>
-                  {`${playerName.get(point.memberId) ?? point.memberId}、${point.matchIndex}戦目、物件収益比率 ${formatPercent(point.revenueAssetRate)}、総資産 ${formatCompactManYen(point.totalAssets)}、${point.rank}位`}
-                </title>
-              </PlayerPointMark>
+                {focused ? (
+                  <circle
+                    cx={x(point.revenueAssetRate ?? 0)}
+                    cy={y(point.totalAssets)}
+                    fill="var(--color-surface)"
+                    fillOpacity="0.82"
+                    r="8"
+                    stroke="var(--color-action)"
+                    strokeWidth="2"
+                  />
+                ) : null}
+                <PlayerPointMark
+                  cx={x(point.revenueAssetRate ?? 0)}
+                  cy={y(point.totalAssets)}
+                  index={index}
+                  opacity={focused ? 1 : focusedMatchId ? 0.55 : 0.8}
+                  size={focused ? 5 : 4}
+                >
+                  <title>
+                    {`${playerName.get(point.memberId) ?? point.memberId}、${point.matchIndex}戦目、物件収益比率 ${formatPercent(point.revenueAssetRate)}、総資産 ${formatCompactManYen(point.totalAssets)}、${point.rank}位${focused ? "、選択中" : ""}`}
+                  </title>
+                </PlayerPointMark>
+              </g>
             );
           })}
         </svg>
       </div>
       <p className="text-center text-xs leading-5 text-pretty text-[var(--color-text-secondary)]">
         1点は、1人が1試合で残した物件収益比率と総資産です。
+        {focusedMatchId ? " 縁取りは選択中の試合です。" : ""}
       </p>
       <PlayerLegend players={players} />
     </figure>

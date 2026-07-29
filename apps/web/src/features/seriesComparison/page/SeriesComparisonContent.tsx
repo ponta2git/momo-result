@@ -21,6 +21,7 @@ import {
   HeadToHeadMetrics,
   RateMetrics,
 } from "@/features/seriesComparison/metrics/SeriesComparisonOverviewMetrics";
+import { buildFocusedMatchMetricContext } from "@/features/seriesComparison/model/seriesComparisonPresentation";
 import type { SeriesComparisonViewId } from "@/features/seriesComparison/model/seriesComparisonViewModel";
 import {
   AnalysisTabs,
@@ -52,6 +53,7 @@ export type SeriesComparisonContentModel = {
 };
 
 export function AnalysisViewContent({
+  focusMatchId,
   hasReviewError,
   onViewChange,
   response,
@@ -59,6 +61,7 @@ export function AnalysisViewContent({
   reviewLoading,
   view,
 }: {
+  focusMatchId?: string | undefined;
   hasReviewError: boolean;
   onViewChange: AnalysisViewChange;
   response: SeriesComparisonResponse;
@@ -66,6 +69,8 @@ export function AnalysisViewContent({
   reviewLoading: boolean;
   view: SeriesComparisonViewId;
 }) {
+  const focusedMatch = buildFocusedMatchMetricContext(response, focusMatchId);
+  const focusedIndex = focusedMatch.matchIndex;
   switch (view) {
     case "review":
       return (
@@ -80,17 +85,17 @@ export function AnalysisViewContent({
     case "flow":
       return (
         <>
-          <MatchDigestMetrics response={response} />
-          <RecentFormMetrics response={response} />
-          <MomentumSwitchMetrics response={response} />
+          <MatchDigestMetrics focusMatchId={focusMatchId} response={response} />
+          <RecentFormMetrics focusedMatch={focusedMatch} response={response} />
+          <MomentumSwitchMetrics focusedMatch={focusedMatch} response={response} />
           <MatchNoInEventMetrics response={response} />
         </>
       );
     case "drivers":
       return (
         <>
-          <AssetDistributionMetrics response={response} />
-          <RevenueOutcomeMetrics response={response} />
+          <AssetDistributionMetrics focusMatchId={focusMatchId} response={response} />
+          <RevenueOutcomeMetrics focusedMatch={focusedMatch} response={response} />
           <DestinationOutcomeMetrics response={response} />
         </>
       );
@@ -99,15 +104,15 @@ export function AnalysisViewContent({
         <>
           <PlayOrderMetrics response={response} />
           <CardShopDestinationMetrics response={response} />
-          <GinjiMetrics response={response} />
+          <GinjiMetrics focusedIndex={focusedIndex} response={response} />
         </>
       );
   }
   return (
     <>
-      <BasicMetrics response={response} />
+      <BasicMetrics focusedIndex={focusedIndex} focusedMatch={focusedMatch} response={response} />
       <HeadToHeadMetrics response={response} />
-      <RateMetrics response={response} />
+      <RateMetrics focusedIndex={focusedIndex} response={response} />
     </>
   );
 }
@@ -128,6 +133,7 @@ export function SeriesComparisonContent({ model }: { model: SeriesComparisonCont
       {model.activeView === "review" ? (
         <div aria-labelledby={purposeTabId("review")} id={purposePanelId("review")} role="tabpanel">
           <AnalysisViewContent
+            focusMatchId={model.focusMatchId}
             hasReviewError={model.hasReviewError}
             response={model.response}
             review={model.review}
@@ -152,6 +158,7 @@ export function SeriesComparisonContent({ model }: { model: SeriesComparisonCont
             <div className="grid gap-4" id={`analysis-${activeDefinition.id}`}>
               <SectionJumpLinks items={activeDefinition.sections} />
               <AnalysisViewContent
+                focusMatchId={model.focusMatchId}
                 hasReviewError={model.hasReviewError}
                 response={model.response}
                 review={model.review}

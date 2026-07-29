@@ -1,5 +1,6 @@
 import { playerColor } from "@/features/seriesComparison/charts/SeriesComparisonPlayerVisuals";
 import type {
+  FocusedMatchRankTransition,
   MomentumSwitchEntry,
   Player,
 } from "@/features/seriesComparison/model/seriesComparisonPresentation";
@@ -10,9 +11,11 @@ type MomentumSwitchTransitionRow = NonNullable<MomentumSwitchEntry["transitionRo
 
 export function MomentumTransitionMatrices({
   entriesByMember,
+  focusedTransitionsByMember,
   players,
 }: {
   entriesByMember: Map<string, MomentumSwitchEntry>;
+  focusedTransitionsByMember: ReadonlyMap<string, FocusedMatchRankTransition>;
   players: Player[];
 }) {
   return (
@@ -22,6 +25,7 @@ export function MomentumTransitionMatrices({
         {players.map((player, index) => (
           <MomentumTransitionMatrix
             entry={entriesByMember.get(player.memberId)}
+            focusedTransition={focusedTransitionsByMember.get(player.memberId)}
             index={index}
             key={player.memberId}
             player={player}
@@ -34,10 +38,12 @@ export function MomentumTransitionMatrices({
 
 function MomentumTransitionMatrix({
   entry,
+  focusedTransition,
   index,
   player,
 }: {
   entry: MomentumSwitchEntry | undefined;
+  focusedTransition: FocusedMatchRankTransition | undefined;
   index: number;
   player: Player;
 }) {
@@ -71,7 +77,11 @@ function MomentumTransitionMatrix({
             </div>
           ))}
           {rows.map((row) => (
-            <MomentumTransitionMatrixRow key={row.previousRank} row={row} />
+            <MomentumTransitionMatrixRow
+              focusedTransition={focusedTransition}
+              key={row.previousRank}
+              row={row}
+            />
           ))}
         </div>
       </div>
@@ -79,7 +89,13 @@ function MomentumTransitionMatrix({
   );
 }
 
-function MomentumTransitionMatrixRow({ row }: { row: MomentumSwitchTransitionRow }) {
+function MomentumTransitionMatrixRow({
+  focusedTransition,
+  row,
+}: {
+  focusedTransition: FocusedMatchRankTransition | undefined;
+  row: MomentumSwitchTransitionRow;
+}) {
   return (
     <div className="contents">
       <div className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-1.5 py-1">
@@ -92,16 +108,28 @@ function MomentumTransitionMatrixRow({ row }: { row: MomentumSwitchTransitionRow
       </div>
       {[1, 2, 3, 4].map((nextRank) => {
         const cell = momentumTransitionCell(row, nextRank);
+        const isFocusedMatch =
+          focusedTransition?.previousRank === row.previousRank &&
+          focusedTransition.nextRank === nextRank;
         return (
           <div
+            aria-label={`${row.previousRank}位から${nextRank}位 ${cell.count}件${isFocusedMatch ? " この試合に該当" : ""}`}
             className={cn(
               "rounded-[var(--radius-xs)] border px-1.5 py-1 text-center tabular-nums",
               momentumTransitionCellClass(cell.count, cell.rate),
+              isFocusedMatch &&
+                "momo-enter ring-2 ring-[var(--color-action)] ring-offset-1 ring-offset-[var(--color-surface-subtle)]",
             )}
+            data-focused-metric={isFocusedMatch ? "true" : undefined}
             key={`cell-${row.previousRank}-${nextRank}`}
           >
             <div className="text-sm font-semibold">{cell.count}</div>
             <div className="text-[10px] leading-4">{formatPercent(cell.rate)}</div>
+            {isFocusedMatch ? (
+              <div className="mt-0.5 text-[9px] leading-3 font-semibold whitespace-nowrap text-[var(--color-action)]">
+                この試合
+              </div>
+            ) : null}
           </div>
         );
       })}

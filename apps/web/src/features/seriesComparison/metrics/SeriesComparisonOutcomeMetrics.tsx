@@ -11,7 +11,10 @@ import {
   IntegratedMetricPanel,
   OutcomeDetails,
 } from "@/features/seriesComparison/metrics/SeriesComparisonSectionPrimitives";
-import type { PlayerMetrics } from "@/features/seriesComparison/model/seriesComparisonPresentation";
+import type {
+  FocusedMatchMetricContext,
+  PlayerMetrics,
+} from "@/features/seriesComparison/model/seriesComparisonPresentation";
 import {
   formatCountRate,
   formatPercent,
@@ -24,7 +27,13 @@ import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
 
 export type RankOutcome = PlayerMetrics["revenueOutcome"]["top"];
 
-export function RevenueOutcomeMetrics({ response }: { response: SeriesComparisonResponse }) {
+export function RevenueOutcomeMetrics({
+  focusedMatch,
+  response,
+}: {
+  focusedMatch: FocusedMatchMetricContext;
+  response: SeriesComparisonResponse;
+}) {
   const players = response.players ?? [];
   const metricsByMember = metricsMap(response);
   return (
@@ -35,70 +44,79 @@ export function RevenueOutcomeMetrics({ response }: { response: SeriesComparison
       id="metric-revenue-outcome"
     >
       <PlayerMetricGrid minColumnWidthRem={17} metricsByMember={metricsByMember} players={players}>
-        {(_, metrics) => (
-          <>
-            <MetricRow
-              status={metrics?.revenueOutcome.top.status}
-              help="その試合で物件収益が全員中トップだったとき、最終1位になった割合です。同値トップは全員をトップ扱いにします。"
-              label="物件収益トップで1位"
-              value={formatCountRate({
-                count: metrics?.revenueOutcome.top.winCount,
-                rate: metrics?.revenueOutcome.top.winRate,
-                targetCount: metrics?.revenueOutcome.top.targetCount,
-              })}
-            />
-            <MetricRow
-              status={metrics?.revenueOutcome.top.status}
-              label="物件収益トップで入賞"
-              value={formatCountRate({
-                count: metrics?.revenueOutcome.top.podiumCount,
-                rate: metrics?.revenueOutcome.top.podiumRate,
-                targetCount: metrics?.revenueOutcome.top.targetCount,
-              })}
-            />
-            <MetricRow
-              status={metrics?.revenueOutcome.top.status}
-              label="物件収益トップで下位"
-              value={formatCountRate({
-                count: metrics?.revenueOutcome.top.lowerHalfCount,
-                rate: metrics?.revenueOutcome.top.lowerHalfRate,
-                targetCount: metrics?.revenueOutcome.top.targetCount,
-              })}
-            />
-            <MetricRow
-              help="物件収益トップではなかったのに最終1位だった試合数です。"
-              label="物件収益トップ外で1位"
-              value={`${metrics?.revenueOutcome.nonTopWinCount ?? 0}戦`}
-            />
-            <MetricRow
-              help="物件収益順位が下位（平均順位方式で2.5より大きい）だった試合で、1・2位に入った割合です。"
-              status={metrics?.revenueOutcome.lowRevenue.status}
-              label="物件収益下位で入賞"
-              value={formatCountRate({
-                count: metrics?.revenueOutcome.lowRevenue.podiumCount,
-                rate: metrics?.revenueOutcome.lowRevenue.podiumRate,
-                targetCount: metrics?.revenueOutcome.lowRevenue.targetCount,
-              })}
-            />
-            <RankOutcomeStrip
-              label="物件収益トップ時の順位"
-              outcome={metrics?.revenueOutcome.top}
-              status={metrics?.revenueOutcome.top.status}
-            />
-            <OutcomeDetails title="詳しい内訳">
+        {(player, metrics) => {
+          const point = focusedMatch.pointsByMember.get(player.memberId);
+          const isRevenueTop = focusedMatch.revenueTopMemberIds.has(player.memberId);
+          return (
+            <>
               <MetricRow
-                help="各試合の「物件収益順位 - 最終順位」を平均。プラスなら、物件収益順位以上の最終順位を取っています。"
-                label="物件収益順位との差"
-                value={formatSigned(metrics?.nonRevenue.rankDelta)}
+                focusedMatch={Boolean(point && isRevenueTop && point.rank === 1)}
+                status={metrics?.revenueOutcome.top.status}
+                help="その試合で物件収益が全員中トップだったとき、最終1位になった割合です。同値トップは全員をトップ扱いにします。"
+                label="物件収益トップで1位"
+                value={formatCountRate({
+                  count: metrics?.revenueOutcome.top.winCount,
+                  rate: metrics?.revenueOutcome.top.winRate,
+                  targetCount: metrics?.revenueOutcome.top.targetCount,
+                })}
               />
               <MetricRow
-                help="物件収益が全員中トップだった試合のうち、最終1位ではなかった割合です。"
-                label="物件収益トップ未勝利"
-                value={`${metrics?.nonRevenue.highRevenueNoWinCount ?? 0}/${metrics?.nonRevenue.highRevenueTopCount ?? 0}戦・${formatPercent(metrics?.nonRevenue.highRevenueNoWinRate)}`}
+                focusedMatch={Boolean(point && isRevenueTop && point.rank <= 2)}
+                status={metrics?.revenueOutcome.top.status}
+                label="物件収益トップで入賞"
+                value={formatCountRate({
+                  count: metrics?.revenueOutcome.top.podiumCount,
+                  rate: metrics?.revenueOutcome.top.podiumRate,
+                  targetCount: metrics?.revenueOutcome.top.targetCount,
+                })}
               />
-            </OutcomeDetails>
-          </>
-        )}
+              <MetricRow
+                focusedMatch={Boolean(point && isRevenueTop && point.rank >= 3)}
+                status={metrics?.revenueOutcome.top.status}
+                label="物件収益トップで下位"
+                value={formatCountRate({
+                  count: metrics?.revenueOutcome.top.lowerHalfCount,
+                  rate: metrics?.revenueOutcome.top.lowerHalfRate,
+                  targetCount: metrics?.revenueOutcome.top.targetCount,
+                })}
+              />
+              <MetricRow
+                focusedMatch={Boolean(point && !isRevenueTop && point.rank === 1)}
+                help="物件収益トップではなかったのに最終1位だった試合数です。"
+                label="物件収益トップ外で1位"
+                value={`${metrics?.revenueOutcome.nonTopWinCount ?? 0}戦`}
+              />
+              <MetricRow
+                focusedMatch={Boolean(point && point.revenueRank > 2.5 && point.rank <= 2)}
+                help="物件収益順位が下位（平均順位方式で2.5より大きい）だった試合で、1・2位に入った割合です。"
+                status={metrics?.revenueOutcome.lowRevenue.status}
+                label="物件収益下位で入賞"
+                value={formatCountRate({
+                  count: metrics?.revenueOutcome.lowRevenue.podiumCount,
+                  rate: metrics?.revenueOutcome.lowRevenue.podiumRate,
+                  targetCount: metrics?.revenueOutcome.lowRevenue.targetCount,
+                })}
+              />
+              <RankOutcomeStrip
+                label="物件収益トップ時の順位"
+                outcome={metrics?.revenueOutcome.top}
+                status={metrics?.revenueOutcome.top.status}
+              />
+              <OutcomeDetails title="詳しい内訳">
+                <MetricRow
+                  help="各試合の「物件収益順位 - 最終順位」を平均。プラスなら、物件収益順位以上の最終順位を取っています。"
+                  label="物件収益順位との差"
+                  value={formatSigned(metrics?.nonRevenue.rankDelta)}
+                />
+                <MetricRow
+                  help="物件収益が全員中トップだった試合のうち、最終1位ではなかった割合です。"
+                  label="物件収益トップ未勝利"
+                  value={`${metrics?.nonRevenue.highRevenueNoWinCount ?? 0}/${metrics?.nonRevenue.highRevenueTopCount ?? 0}戦・${formatPercent(metrics?.nonRevenue.highRevenueNoWinRate)}`}
+                />
+              </OutcomeDetails>
+            </>
+          );
+        }}
       </PlayerMetricGrid>
       <IntegratedMetricPanel
         description="行は物件収益順位、列は最終順位です。同値の物件収益順位は平均順位方式の値として分けます。"
@@ -106,6 +124,7 @@ export function RevenueOutcomeMetrics({ response }: { response: SeriesComparison
       >
         <RevenueRankConversionHeatmap
           entries={revenueRankConversionEntries(response)}
+          focusedPointsByMember={focusedMatch.pointsByMember}
           players={players}
         />
       </IntegratedMetricPanel>

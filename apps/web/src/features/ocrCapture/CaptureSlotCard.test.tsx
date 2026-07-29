@@ -12,9 +12,11 @@ function renderCard(slot: CaptureSlotState) {
         onDropImage: vi.fn(),
         onManualRefresh: vi.fn(),
         onMoveImage: vi.fn(),
+        onSelectCapture: vi.fn(),
       }}
       presentation={{
         accentClass: "bg-[var(--color-tray-assets)]",
+        captureTarget: false,
         index: 0,
         label: "総資産",
         stationLabel: "01",
@@ -36,9 +38,10 @@ describe("CaptureSlotCard", () => {
       status: "running",
     });
 
-    expect(screen.getByRole("button", { name: "削除" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "前の分類へ" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "次の分類へ" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "画像を削除" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "前の分類へ移動" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "次の分類へ移動" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "撮り直し先にする" })).toBeDisabled();
     expect(screen.getByText("読み取り中は分類を固定")).toBeInTheDocument();
   });
 });

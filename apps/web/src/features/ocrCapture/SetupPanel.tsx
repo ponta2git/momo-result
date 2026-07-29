@@ -39,8 +39,8 @@ export function SetupPanel({ value, onChange, enabled, options }: SetupPanelProp
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-4">
-      <Field label="作品（必須）" htmlFor={gameTitleId}>
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <Field label="作品" htmlFor={gameTitleId}>
         <select
           id={gameTitleId}
           value={value.gameTitleId}
@@ -71,11 +71,7 @@ export function SetupPanel({ value, onChange, enabled, options }: SetupPanelProp
         ) : null}
       </Field>
 
-      <Field
-        label="シーズン（必須）"
-        htmlFor={seasonMasterId}
-        description="読み取り結果の確認と確定に使います。"
-      >
+      <Field label="シーズン" htmlFor={seasonMasterId}>
         <select
           id={seasonMasterId}
           value={value.seasonMasterId}
@@ -100,7 +96,7 @@ export function SetupPanel({ value, onChange, enabled, options }: SetupPanelProp
         ) : null}
       </Field>
 
-      <Field label="マップ（必須）" htmlFor={mapMasterId}>
+      <Field label="マップ" htmlFor={mapMasterId}>
         <select
           id={mapMasterId}
           value={value.mapMasterId}
@@ -125,7 +121,7 @@ export function SetupPanel({ value, onChange, enabled, options }: SetupPanelProp
         ) : null}
       </Field>
 
-      <Field label="オーナー（必須）" htmlFor={ownerMemberId}>
+      <Field label="オーナー" htmlFor={ownerMemberId}>
         <select
           id={ownerMemberId}
           value={value.ownerMemberId}

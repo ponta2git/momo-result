@@ -101,9 +101,9 @@ export function useOcrCaptureMutations(hints: Record<string, unknown>): OcrCaptu
         });
 
         if (result.status === "started" || result.status === "partial_started") {
-          await invalidateAfterOcrSubmissionStarted(queryClient);
+          await invalidateAfterOcrSubmissionStarted(queryClient).catch(() => undefined);
         } else if (result.status === "failed_cleanup_failed") {
-          await invalidateAfterOcrSubmissionStarted(queryClient);
+          await invalidateAfterOcrSubmissionStarted(queryClient).catch(() => undefined);
         }
         return result;
       } finally {

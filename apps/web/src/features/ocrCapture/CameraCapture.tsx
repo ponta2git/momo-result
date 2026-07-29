@@ -1,4 +1,6 @@
+import { Camera as CameraIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
 import type { InputSource } from "@/features/ocrCapture/captureState";
 import { validateImageFile } from "@/features/ocrCapture/captureState";
@@ -6,6 +8,7 @@ import { Button } from "@/shared/ui/actions/Button";
 
 type CameraCaptureProps = {
   disabled?: boolean;
+  renderFallback?: ((prominent: boolean) => ReactNode) | undefined;
   slotLabel: string;
   onSelect: (file: File, source: InputSource) => void;
   onValidationError: (message: string) => void;
@@ -22,6 +25,7 @@ function stopStream(stream: MediaStream | null) {
 
 export function CameraCapture({
   disabled = false,
+  renderFallback,
   slotLabel,
   onSelect,
   onValidationError,
@@ -41,7 +45,9 @@ export function CameraCapture({
   const stop = useCallback(() => {
     const video = videoRef.current;
     if (video) {
-      video.pause();
+      if (video.srcObject) {
+        video.pause();
+      }
       video.srcObject = null;
     }
     stopStream(streamRef.current);
@@ -81,7 +87,7 @@ export function CameraCapture({
       return;
     }
     if (!navigator.mediaDevices?.getUserMedia) {
-      setError("このブラウザではカメラ撮影が使えません。アップロードを使ってください。");
+      setError("このブラウザではカメラ撮影を利用できません。");
       return;
     }
 
@@ -129,7 +135,11 @@ export function CameraCapture({
       stopStream(streamRef.current);
       streamRef.current = null;
       setActive(false);
-      setError(caught instanceof Error ? caught.message : "カメラを開始できませんでした。");
+      setError(
+        caught instanceof Error && caught.name === "NotAllowedError"
+          ? "カメラの利用が許可されていません。ブラウザの権限を確認してください。"
+          : "カメラを開始できませんでした。接続とブラウザの権限を確認してください。",
+      );
     } finally {
       startingRef.current = false;
       setStarting(false);
@@ -203,7 +213,15 @@ export function CameraCapture({
           </select>
         </label>
       ) : null}
-      <div className="max-w-[44rem] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--momo-night-900)]">
+      <div className="relative max-w-[44rem] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--momo-night-900)]">
+        {active ? null : (
+          <div className="pointer-events-none absolute inset-0 grid place-items-center px-6 text-center text-white/75">
+            <div>
+              <CameraIcon aria-hidden="true" className="mx-auto size-7" />
+              <p className="mt-2 text-sm font-semibold">カメラを開始して画面を撮影</p>
+            </div>
+          </div>
+        )}
         <video
           ref={videoRef}
           className="aspect-video max-h-[22rem] w-full object-contain"
@@ -213,10 +231,22 @@ export function CameraCapture({
         />
         <canvas ref={canvasRef} className="hidden" />
       </div>
-      {error ? <p className="text-sm text-[var(--color-danger)]">{error}</p> : null}
+      {error ? (
+        <div
+          className="grid gap-3 rounded-[var(--radius-sm)] border border-[var(--color-danger)]/45 bg-[var(--color-danger)]/8 p-3"
+          role="alert"
+        >
+          <div>
+            <p className="text-sm font-semibold text-[var(--color-text-primary)]">
+              カメラを利用できません
+            </p>
+            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">{error}</p>
+          </div>
+          {renderFallback?.(true)}
+        </div>
+      ) : null}
       <div className="flex flex-wrap gap-2">
         <Button
-          variant="secondary"
           pending={starting}
           pendingLabel="起動中…"
           onClick={startCamera}
@@ -232,15 +262,23 @@ export function CameraCapture({
         >
           静止画を撮影
         </Button>
-        <Button variant="secondary" onClick={stop} disabled={!active || capturing}>
+        <Button variant="quiet" onClick={stop} disabled={!active || capturing}>
           停止
         </Button>
       </div>
       <p className="text-xs text-[var(--color-text-secondary)]">
-        {disabled
-          ? "3枚すべて配置済みのため、追加の撮影はできません。"
-          : "撮影した画像は、最初の空き分類に入ります。種類が違う場合は分類を入れ替えてください。"}
+        {disabled ? "現在は撮影できません。" : `撮影すると「${slotLabel}」へ配置します。`}
       </p>
+      {!error && renderFallback ? (
+        <details className="group w-fit text-sm text-[var(--color-text-secondary)]">
+          <summary className="cursor-pointer rounded-[var(--radius-sm)] px-1 py-1 font-semibold hover:text-[var(--color-text-primary)]">
+            カメラが使えない場合
+          </summary>
+          <div className="mt-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-2">
+            {renderFallback(false)}
+          </div>
+        </details>
+      ) : null}
     </div>
   );
 }

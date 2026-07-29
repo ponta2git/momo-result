@@ -128,6 +128,31 @@ describe("CameraCapture", () => {
     expect(screen.getByRole("button", { name: "静止画を撮影" })).toBeEnabled();
   });
 
+  it("promotes the file fallback when camera permission is denied", async () => {
+    const user = userEvent.setup();
+    getUserMedia = installGetUserMediaMock(() =>
+      Promise.reject(new DOMException("blocked", "NotAllowedError")),
+    );
+
+    render(
+      <CameraCapture
+        slotLabel="総資産"
+        onSelect={vi.fn()}
+        onValidationError={vi.fn()}
+        renderFallback={(prominent) => (
+          <span>{prominent ? "ファイル追加を表示" : "ファイル追加を控えめに表示"}</span>
+        )}
+      />,
+    );
+
+    expect(screen.getByText("ファイル追加を控えめに表示")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "カメラ開始" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("カメラを利用できません");
+    expect(screen.getByText("ファイル追加を表示")).toBeInTheDocument();
+    expect(screen.queryByText("ファイル追加を控えめに表示")).not.toBeInTheDocument();
+  });
+
   it("captures and emits a file with source=camera once ready", async () => {
     const user = userEvent.setup();
     const { stream } = createMockMediaStream();

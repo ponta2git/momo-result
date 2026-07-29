@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 
 import { slotDefinitions } from "@/features/ocrCapture/captureState";
+import type { InputSource } from "@/features/ocrCapture/captureState";
 import { buildOcrHints } from "@/features/ocrCapture/hints";
 import { defaultSetupValues, setupSchema } from "@/features/ocrCapture/schema";
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
@@ -12,6 +13,7 @@ import { useOcrSetupOptions } from "@/features/ocrCapture/useOcrSetupOptions";
 import { useOcrStartFlow } from "@/features/ocrCapture/useOcrStartFlow";
 import type { OcrSubmissionPlan } from "@/features/ocrCapture/useOcrStartFlow";
 import { parseLayoutFamily } from "@/shared/api/enums";
+import type { SlotKind } from "@/shared/api/enums";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
 import { memberDisplayName } from "@/shared/domain/members";
 import { showToast } from "@/shared/ui/feedback/Toast";
@@ -19,6 +21,7 @@ import { showToast } from "@/shared/ui/feedback/Toast";
 export function useOcrCapturePageController() {
   const [setup, setSetup] = useState<SetupFormValues>(defaultSetupValues);
   const [notice, setNotice] = useState("");
+  const [captureTargetKind, setCaptureTargetKind] = useState<SlotKind>("total_assets");
 
   const { auth, memberAliasDirectory } = useOcrCaptureQueries();
   const setupOptions = useOcrSetupOptions({
@@ -51,11 +54,33 @@ export function useOcrCapturePageController() {
     notify(message);
   }
 
+  function handleSelectCaptureTarget(kind: SlotKind) {
+    const slot = flow.slots.find((candidate) => candidate.kind === kind);
+    if (slot && isWorkingStatus(slot.status)) {
+      notify("読み取り中の分類は撮影先に変更できません。", "warning");
+      return;
+    }
+    setCaptureTargetKind(kind);
+    const label = slotDefinitions.find((definition) => definition.kind === kind)?.label ?? kind;
+    setNotice(`次の撮影先を${label}に変更しました。`);
+  }
+
+  function handleImageSelected(file: File, source: InputSource) {
+    const added = flow.handleAddImage(file, source, captureTargetKind, notify);
+    if (!added) return;
+
+    const nextEmpty = flow.slots.find(
+      (slot) => slot.kind !== captureTargetKind && !slot.file && !isWorkingStatus(slot.status),
+    );
+    if (nextEmpty) {
+      setCaptureTargetKind(nextEmpty.kind);
+    }
+  }
+
   const ocrReadyCount = flow.slots.filter(
     (slot) => slot.file && ["selected", "failed", "cancelled"].includes(slot.status),
   ).length;
   const hasWorkingSlot = flow.slots.some((slot) => isWorkingStatus(slot.status));
-  const slotsFull = flow.slots.every((slot) => Boolean(slot.file));
   const setupValidation = setupSchema.safeParse(setup);
   const setupReady = setupOptions.ready && setupValidation.success;
   const setupBlockedReason = auth.ready
@@ -123,11 +148,14 @@ export function useOcrCapturePageController() {
 
   return {
     auth,
+    captureTargetKind,
     flow,
     handleCloseStartDialog: startFlow.close,
     handleConfirmStart: startFlow.confirm,
     handleDraftLoadError,
     handleStartOcr,
+    handleImageSelected,
+    handleSelectCaptureTarget,
     handleValidationError,
     handleViewMatches: startFlow.viewMatches,
     hasWorkingSlot,
@@ -141,7 +169,6 @@ export function useOcrCapturePageController() {
     setupBlockedReason,
     setupOptions,
     setupReady,
-    slotsFull,
     submission,
     submissionLocked: startFlow.locked,
   };

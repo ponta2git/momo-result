@@ -6,6 +6,7 @@ import { Button } from "@/shared/ui/actions/Button";
 
 type ImageInputProps = {
   disabled?: boolean;
+  prominent?: boolean;
   slotLabel: string;
   onSelect: (file: File, source: InputSource) => void;
   onValidationError: (message: string) => void;
@@ -13,6 +14,7 @@ type ImageInputProps = {
 
 export function ImageInput({
   disabled = false,
+  prominent = false,
   slotLabel,
   onSelect,
   onValidationError,
@@ -32,7 +34,7 @@ export function ImageInput({
     <div className="flex flex-wrap gap-2">
       <input
         ref={inputRef}
-        aria-label={`${slotLabel}の画像をアップロード`}
+        aria-label="OCRの画像をアップロード"
         className="sr-only"
         disabled={disabled}
         type="file"
@@ -55,8 +57,13 @@ export function ImageInput({
           }
         }}
       />
-      <Button disabled={disabled} variant="secondary" onClick={() => inputRef.current?.click()}>
-        単体画像を追加
+      <Button
+        disabled={disabled}
+        title={`${slotLabel}へ画像ファイルを追加`}
+        variant={prominent ? "secondary" : "quiet"}
+        onClick={() => inputRef.current?.click()}
+      >
+        ファイルから追加
       </Button>
     </div>
   );

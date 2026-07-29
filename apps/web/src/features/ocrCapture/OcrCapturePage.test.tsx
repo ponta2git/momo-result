@@ -1,6 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { createMemoryRouter, RouterProvider, useLocation } from "react-router-dom";
@@ -82,6 +82,76 @@ describe("OcrCapturePage", () => {
 
     expect(await screen.findByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "読み取りを開始" })).toBeDisabled();
+  });
+
+  it("uses the selected tray as the capture target and safely replaces its image", async () => {
+    setDevUser();
+    const objectUrls = installObjectUrlMock({
+      createObjectURL: (value) => (value instanceof File ? `blob:${value.name}` : "blob:unknown"),
+    });
+    renderCaptureRoute();
+
+    expect(await screen.findByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
+    expect(screen.getByLabelText("次の撮影先は総資産")).toBeInTheDocument();
+    const incidentCard = screen.getByRole("heading", { name: "事件簿" }).closest("section");
+    expect(incidentCard).not.toBeNull();
+
+    await user.click(within(incidentCard!).getByRole("button", { name: "撮影先にする" }));
+    expect(screen.getByLabelText("次の撮影先は事件簿")).toBeInTheDocument();
+
+    const input = screen.getByLabelText("OCRの画像をアップロード");
+    await user.upload(input, new File(["first"], "incident-first.png", { type: "image/png" }));
+    expect(screen.getByAltText("事件簿プレビュー")).toHaveAttribute(
+      "src",
+      "blob:incident-first.png",
+    );
+    expect(screen.queryByAltText("総資産プレビュー")).not.toBeInTheDocument();
+
+    await user.click(within(incidentCard!).getByRole("button", { name: "撮り直し先にする" }));
+    await user.upload(input, new File(["second"], "incident-second.png", { type: "image/png" }));
+
+    expect(screen.getByAltText("事件簿プレビュー")).toHaveAttribute(
+      "src",
+      "blob:incident-second.png",
+    );
+    expect(objectUrls.revokeObjectURL).toHaveBeenCalledWith("blob:incident-first.png");
+  });
+
+  it("keeps the mobile reading order from setup through capture, trays, and start", async () => {
+    setDevUser();
+    renderCaptureRoute();
+
+    await screen.findByRole("option", { name: "桃太郎電鉄2" });
+    const headings = ["記録先", "画面を撮影", "分類トレイ", "読み取りの準備"].map((name) =>
+      screen.getByRole("heading", { name }),
+    );
+
+    for (let index = 0; index < headings.length - 1; index += 1) {
+      expect(
+        headings[index]!.compareDocumentPosition(headings[index + 1]!) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    }
+  });
+
+  it("asks for confirmation before clearing every selected image", async () => {
+    setDevUser();
+    renderCaptureRoute();
+
+    await screen.findByRole("option", { name: "桃太郎電鉄2" });
+    await user.upload(
+      screen.getByLabelText("OCRの画像をアップロード"),
+      new File(["image"], "assets.png", { type: "image/png" }),
+    );
+
+    await user.click(screen.getByRole("button", { name: "すべて削除" }));
+    expect(
+      await screen.findByRole("alertdialog", { name: "選択画像をすべて削除しますか？" }),
+    ).toBeInTheDocument();
+    expect(screen.getByAltText("総資産プレビュー")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "1件を削除" }));
+    expect(screen.queryByAltText("総資産プレビュー")).not.toBeInTheDocument();
   });
 
   it("blocks OCR start while dependent setup choices are still loading", async () => {
@@ -327,7 +397,7 @@ describe("OcrCapturePage", () => {
     const input = await screen.findByLabelText("OCRの画像をアップロード");
     await user.upload(input, new File(["first"], "first.png", { type: "image/png" }));
     await user.upload(input, new File(["second"], "second.png", { type: "image/png" }));
-    await user.click(screen.getAllByRole("button", { name: "次の分類へ" })[0]!);
+    await user.click(screen.getAllByRole("button", { name: "収益へ移動" })[0]!);
     expect(screen.getByAltText("総資産プレビュー")).toHaveAttribute("src", "blob:second.png");
     expect(screen.getByAltText("収益プレビュー")).toHaveAttribute("src", "blob:first.png");
 

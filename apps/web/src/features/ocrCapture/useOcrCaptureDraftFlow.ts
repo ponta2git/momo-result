@@ -14,7 +14,12 @@ import type { SlotMap } from "@/shared/lib/slotMap";
 
 export type OcrCaptureDraftFlow = {
   drafts: SlotMap<OcrDraftResponse>;
-  handleAddImage: (file: File, source: InputSource, notify: (message: string) => void) => void;
+  handleAddImage: (
+    file: File,
+    source: InputSource,
+    targetKind: SlotKind,
+    notify: (message: string) => void,
+  ) => boolean;
   handleClear: (kind: SlotKind, notify: (message: string) => void) => void;
   handleDropImage: (
     sourceKind: SlotKind,
@@ -60,17 +65,20 @@ export function useOcrCaptureDraftFlow(): OcrCaptureDraftFlow {
   }, []);
 
   const handleAddImage = useCallback(
-    (file: File, source: InputSource, notify: (message: string) => void) => {
-      const targetSlot =
-        slotsRef.current.find((slot) => slot.status === "empty") ??
-        slotsRef.current.find((slot) => !slot.file && !slot.previewUrl);
+    (file: File, source: InputSource, targetKind: SlotKind, notify: (message: string) => void) => {
+      const targetSlot = slotsRef.current.find((slot) => slot.kind === targetKind);
       if (!targetSlot) {
-        notify("3枚すべて配置済みです。差し替える場合は、先に不要な画像を削除してください。");
-        return;
+        notify("撮影先を選び直してください。");
+        return false;
+      }
+      if (isWorkingStatus(targetSlot.status)) {
+        notify("読み取り中の分類には画像を配置できません。");
+        return false;
       }
       const previewUrl = URL.createObjectURL(file);
+      releaseSlotResources(targetSlot);
       const selectedSlot: CaptureSlotState = {
-        ...createInitialSlot(targetSlot.kind),
+        ...createInitialSlot(targetKind),
         source,
         file,
         previewUrl,
@@ -79,15 +87,13 @@ export function useOcrCaptureDraftFlow(): OcrCaptureDraftFlow {
       updateSlot(selectedSlot);
       setDrafts((current) => {
         const next = { ...current };
-        delete next[targetSlot.kind];
+        delete next[targetKind];
         return next;
       });
       const label =
-        slotDefinitions.find((definition) => definition.kind === targetSlot.kind)?.label ??
-        targetSlot.kind;
-      notify(
-        `${source === "camera" ? "撮影" : "追加"}した画像を「${label}」に配置しました。必要に応じて分類を入れ替えてください。`,
-      );
+        slotDefinitions.find((definition) => definition.kind === targetKind)?.label ?? targetKind;
+      notify(`${label}に${source === "camera" ? "撮影画像" : "画像"}を配置しました。`);
+      return true;
     },
     [updateSlot],
   );

@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import type { DragEventHandler } from "react";
 
 import { CaptureSlotActions } from "@/features/ocrCapture/CaptureSlotActions";
@@ -11,6 +11,7 @@ import { isWorkingStatus } from "@/features/ocrCapture/slotPolicy";
 import type { SlotKind } from "@/shared/api/enums";
 import { parseSlotKind } from "@/shared/api/enums";
 import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
+import { cn } from "@/shared/ui/cn";
 
 type CaptureSlotCardProps = {
   actions: CaptureSlotActionsModel;
@@ -24,20 +25,25 @@ type CaptureSlotActionsModel = {
   onDropImage: (sourceKind: SlotKind, targetKind: SlotKind) => void;
   onManualRefresh: () => void;
   onMoveImage: (direction: -1 | 1) => void;
+  onSelectCapture: () => void;
 };
 
 type CaptureSlotPresentation = {
   accentClass: string;
   index: number;
   label: string;
+  nextLabel?: string | undefined;
+  previousLabel?: string | undefined;
   stationLabel: string;
   total: number;
+  captureTarget: boolean;
 };
 
 export function CaptureSlotCard({ actions, draft, presentation, slot }: CaptureSlotCardProps) {
   const mismatch = slot.detectedKind && slot.detectedKind !== slot.kind;
   const hasImage = Boolean(slot.previewUrl);
   const isWorking = isWorkingStatus(slot.status);
+  const [dragOver, setDragOver] = useState(false);
 
   const handleDragStart = useCallback<DragEventHandler<HTMLDivElement>>(
     (event) => {
@@ -50,14 +56,20 @@ export function CaptureSlotCard({ actions, draft, presentation, slot }: CaptureS
     [hasImage, isWorking, slot.kind],
   );
 
-  const handleDragOver = useCallback<DragEventHandler<HTMLElement>>((event) => {
-    event.preventDefault();
-    event.dataTransfer.dropEffect = "move";
-  }, []);
+  const handleDragOver = useCallback<DragEventHandler<HTMLElement>>(
+    (event) => {
+      if (isWorking) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      setDragOver(true);
+    },
+    [isWorking],
+  );
 
   const handleDrop = useCallback<DragEventHandler<HTMLElement>>(
     (event) => {
       event.preventDefault();
+      setDragOver(false);
       const sourceKind = parseSlotKind(event.dataTransfer.getData("text/plain"));
       if (sourceKind) {
         actions.onDropImage(sourceKind, slot.kind);
@@ -71,48 +83,70 @@ export function CaptureSlotCard({ actions, draft, presentation, slot }: CaptureS
 
   return (
     <section
-      className="relative overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
+      className={cn(
+        "relative overflow-hidden rounded-[var(--radius-md)] border bg-[var(--color-surface)] p-3 transition-colors duration-150 motion-reduce:transition-none",
+        presentation.captureTarget
+          ? "border-[var(--color-action)]/55 bg-[var(--color-action)]/5"
+          : "border-[var(--color-border)]",
+        dragOver ? "border-[var(--color-action)] bg-[var(--color-action)]/10" : "",
+      )}
+      data-capture-target={presentation.captureTarget || undefined}
       onDragOver={handleDragOver}
+      onDragLeave={() => setDragOver(false)}
       onDrop={handleDrop}
     >
-      <div className={`absolute inset-x-0 top-0 h-1 ${presentation.accentClass}`} />
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="flex items-center gap-3">
-            <span className="grid size-10 place-items-center rounded-full border border-[var(--color-tray-marker)]/35 bg-[var(--color-tray-marker)]/8 text-sm font-semibold text-[var(--color-tray-marker)]">
-              {presentation.stationLabel}
-            </span>
-            <div>
-              <p className="text-xs font-semibold text-[var(--color-text-secondary)]">分類</p>
-              <h2 className="mt-0.5 text-lg font-semibold text-[var(--color-text-primary)]">
-                {presentation.label}
-              </h2>
-            </div>
-          </div>
-          {hasImage ? (
-            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-              読み取り分類: {presentation.label}
+      <div className={`absolute inset-y-0 left-0 w-1 ${presentation.accentClass}`} />
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <span
+            className={cn(
+              "relative z-[var(--z-base)] grid size-9 shrink-0 place-items-center rounded-full border text-xs font-bold",
+              presentation.captureTarget
+                ? "border-[var(--color-action)] bg-[var(--color-action)] text-white"
+                : "border-[var(--color-tray-marker)]/35 bg-[var(--color-surface)] text-[var(--color-tray-marker)]",
+            )}
+          >
+            {presentation.stationLabel}
+          </span>
+          <div className="min-w-0">
+            <h3 className="font-semibold text-[var(--color-text-primary)]">{presentation.label}</h3>
+            <p className="text-xs text-[var(--color-text-secondary)]">
+              {presentation.captureTarget
+                ? hasImage
+                  ? "次の撮影で差し替え"
+                  : "次の撮影先"
+                : hasImage
+                  ? "画像を配置済み"
+                  : "画像待ち"}
             </p>
-          ) : null}
+          </div>
         </div>
         <CaptureStatusBadge status={slot.status} />
       </div>
 
-      <CaptureSlotPreview
-        isWorking={isWorking}
-        label={presentation.label}
-        slot={slot}
-        onDragStartCapture={handleDragStart}
-      />
-
-      <CaptureSlotActions
-        canMoveBackward={hasImage && !isWorking && presentation.index > 0}
-        canMoveForward={hasImage && !isWorking && presentation.index < presentation.total - 1}
-        clearDisabled={slot.status === "empty" || isWorking}
-        onClear={actions.onClear}
-        onMoveBackward={handleMoveBackward}
-        onMoveForward={handleMoveForward}
-      />
+      <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(8rem,10rem)_minmax(0,1fr)]">
+        <CaptureSlotPreview
+          isCaptureTarget={presentation.captureTarget}
+          isWorking={isWorking}
+          label={presentation.label}
+          slot={slot}
+          onDragStartCapture={handleDragStart}
+        />
+        <CaptureSlotActions
+          captureDisabled={isWorking}
+          captureLabel={hasImage ? "撮り直し先にする" : "撮影先にする"}
+          captureSelected={presentation.captureTarget}
+          canMoveBackward={hasImage && !isWorking && presentation.index > 0}
+          canMoveForward={hasImage && !isWorking && presentation.index < presentation.total - 1}
+          clearDisabled={slot.status === "empty" || isWorking}
+          moveBackwardLabel={presentation.previousLabel}
+          moveForwardLabel={presentation.nextLabel}
+          onClear={actions.onClear}
+          onMoveBackward={handleMoveBackward}
+          onMoveForward={handleMoveForward}
+          onSelectCapture={actions.onSelectCapture}
+        />
+      </div>
 
       <CaptureSlotFeedback
         mismatch={Boolean(mismatch)}

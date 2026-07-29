@@ -31,7 +31,7 @@ const statusLabel: Record<string, string> = {
   queued: "読み取り待ち",
   queueing: "準備中",
   running: "読み取り中",
-  selected: "読み取り待ち",
+  selected: "配置済み",
   succeeded: "確認待ち",
   uploaded: "送信済み",
   uploading: "画像送信中",
@@ -41,14 +41,13 @@ export function CaptureStatusBadge({ status }: { status: string }) {
   return (
     <motion.span
       key={status}
-      animate={{ opacity: 1, y: 0 }}
+      animate={{ opacity: 1 }}
       className={cn(
         "inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold",
         "shrink-0 whitespace-nowrap",
         statusToneClass[status] ?? statusToneClass["empty"],
       )}
-      initial={{ opacity: 0, y: 3 }}
-      layout
+      initial={{ opacity: 0 }}
       transition={momoTransition}
     >
       {statusLabel[status] ?? status}

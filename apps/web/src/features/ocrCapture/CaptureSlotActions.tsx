@@ -1,33 +1,81 @@
+import { ArrowLeft, ArrowRight, Camera, Trash2 } from "lucide-react";
+
 import { Button } from "@/shared/ui/actions/Button";
 
 type CaptureSlotActionsProps = {
+  captureDisabled: boolean;
+  captureLabel: string;
+  captureSelected: boolean;
   canMoveBackward: boolean;
   canMoveForward: boolean;
   clearDisabled: boolean;
+  moveBackwardLabel?: string | undefined;
+  moveForwardLabel?: string | undefined;
   onClear: () => void;
   onMoveBackward: () => void;
   onMoveForward: () => void;
+  onSelectCapture: () => void;
 };
 
 export function CaptureSlotActions({
+  captureDisabled,
+  captureLabel,
+  captureSelected,
   canMoveBackward,
   canMoveForward,
   clearDisabled,
+  moveBackwardLabel,
+  moveForwardLabel,
   onClear,
   onMoveBackward,
   onMoveForward,
+  onSelectCapture,
 }: CaptureSlotActionsProps) {
   return (
-    <div className="mt-4 flex flex-wrap gap-2">
-      <Button variant="secondary" onClick={onClear} disabled={clearDisabled}>
-        削除
+    <div className="grid gap-2">
+      <Button
+        aria-pressed={captureSelected}
+        className="w-full"
+        disabled={captureDisabled}
+        icon={<Camera aria-hidden="true" className="size-4" />}
+        size="sm"
+        variant={captureSelected ? "quiet" : "secondary"}
+        onClick={onSelectCapture}
+      >
+        {captureSelected ? "次の撮影先" : captureLabel}
       </Button>
-      <Button variant="secondary" onClick={onMoveBackward} disabled={!canMoveBackward}>
-        前の分類へ
-      </Button>
-      <Button variant="secondary" onClick={onMoveForward} disabled={!canMoveForward}>
-        次の分類へ
-      </Button>
+      <div className="flex flex-wrap gap-1">
+        <Button
+          aria-label={moveBackwardLabel ? `${moveBackwardLabel}へ移動` : "前の分類へ移動"}
+          disabled={!canMoveBackward}
+          icon={<ArrowLeft aria-hidden="true" className="size-4" />}
+          size="sm"
+          variant="quiet"
+          onClick={onMoveBackward}
+        >
+          {moveBackwardLabel ? `${moveBackwardLabel}へ` : "前へ"}
+        </Button>
+        <Button
+          aria-label={moveForwardLabel ? `${moveForwardLabel}へ移動` : "次の分類へ移動"}
+          disabled={!canMoveForward}
+          icon={<ArrowRight aria-hidden="true" className="size-4" />}
+          size="sm"
+          variant="quiet"
+          onClick={onMoveForward}
+        >
+          {moveForwardLabel ? `${moveForwardLabel}へ` : "次へ"}
+        </Button>
+        <Button
+          aria-label="画像を削除"
+          disabled={clearDisabled}
+          icon={<Trash2 aria-hidden="true" className="size-4" />}
+          size="sm"
+          variant="quiet"
+          onClick={onClear}
+        >
+          削除
+        </Button>
+      </div>
     </div>
   );
 }

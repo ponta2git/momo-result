@@ -123,14 +123,11 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
         response.url().includes("/api/ocr-jobs") && response.request().method() === "POST",
     );
 
-    await page.getByRole("button", { name: "読み取りを開始して試合一覧へ" }).click();
-    await expect(
-      page.getByRole("heading", {
-        exact: true,
-        name: "3種類すべての画像は揃っていません。このまま進める場合は、もう一度開始ボタンを押してください。",
-      }),
-    ).toBeVisible();
-    await page.getByRole("button", { name: "このまま読み取りを開始" }).click();
+    await page.getByRole("button", { name: "読み取りを開始" }).click();
+    const startDialog = page.getByRole("dialog", { name: "読み取りを開始しますか？" });
+    await expect(startDialog).toBeVisible();
+    await expect(startDialog.getByText("1件だけで開始します")).toBeVisible();
+    await startDialog.getByRole("button", { name: "1件で読み取りを開始" }).click();
 
     const draftCreateResponse = await draftResponse;
     expect(draftCreateResponse.ok()).toBe(true);
@@ -180,7 +177,10 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     await expect(page.getByText(gameTitleName, { exact: true })).toBeVisible();
     await page.setViewportSize({ height: 900, width: 1440 });
     await expect(page.getByText("同条件内 1戦目", { exact: true })).toBeVisible();
-    const resultLedgerCard = page.getByRole("list", { name: "試合の順位と成績" }).locator("..");
+    const resultLedger = page.getByRole("list", { name: "試合の順位と成績" });
+    await expect(resultLedger).toBeVisible();
+    const resultLedgerCard = resultLedger.locator("xpath=..");
+    await expect(resultLedgerCard).toBeVisible();
     const resultLedgerCardBox = await resultLedgerCard.boundingBox();
     if (!resultLedgerCardBox) {
       throw new Error("Result ledger card geometry must be measurable.");
@@ -773,18 +773,18 @@ function matchTableRow(page: Page, matchId: string) {
 }
 
 async function selectSeedMasters(page: Page): Promise<void> {
-  const gameTitleSelect = page.getByLabel("作品（必須）");
+  const gameTitleSelect = page.getByRole("combobox", { name: /^作品/u });
   await expect(gameTitleSelect).toBeEnabled();
   await gameTitleSelect.selectOption(gameTitleId);
   await expect(gameTitleSelect).toHaveValue(gameTitleId);
 
-  const seasonSelect = page.getByLabel("シーズン（必須）");
+  const seasonSelect = page.getByRole("combobox", { name: /^シーズン/u });
   await expect(seasonSelect).toBeEnabled();
   await expect(seasonSelect.locator(`option[value="${seasonMasterId}"]`)).toHaveCount(1);
   await seasonSelect.selectOption(seasonMasterId);
   await expect(seasonSelect).toHaveValue(seasonMasterId);
 
-  const mapSelect = page.getByLabel("マップ（必須）");
+  const mapSelect = page.getByRole("combobox", { name: /^マップ/u });
   await expect(mapSelect).toBeEnabled();
   await expect(mapSelect.locator(`option[value="${mapMasterId}"]`)).toHaveCount(1);
   await mapSelect.selectOption(mapMasterId);

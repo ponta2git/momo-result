@@ -110,6 +110,34 @@ describe("ui foundation", () => {
         name: "試合を確定",
       }),
     ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "ダイアログを閉じる" }));
+    expect(screen.queryByRole("dialog", { name: "試合を確定" })).not.toBeInTheDocument();
+  });
+
+  it("Dialog can prevent dismissal while critical work is running", async () => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+
+    render(
+      <Dialog
+        busy
+        open
+        dismissible={false}
+        title="読み取りを準備しています"
+        onOpenChange={onOpenChange}
+      >
+        <p>このままお待ちください。</p>
+      </Dialog>,
+    );
+
+    const dialog = await screen.findByRole("dialog", { name: "読み取りを準備しています" });
+    expect(dialog.firstElementChild).toHaveAttribute("aria-busy", "true");
+    expect(screen.queryByRole("button", { name: "ダイアログを閉じる" })).not.toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+    expect(screen.getByRole("dialog", { name: "読み取りを準備しています" })).toBeInTheDocument();
+    expect(onOpenChange).not.toHaveBeenCalled();
   });
 
   it("AlertDialog exposes its destructive context to assistive technology", async () => {

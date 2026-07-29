@@ -4,6 +4,7 @@ import { setupSchema } from "@/features/ocrCapture/schema";
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
 import { pickOcrTargets, toUploadingSlot } from "@/features/ocrCapture/slotPolicy";
 import { parseOcrJobStatus } from "@/shared/api/enums";
+import type { SlotKind } from "@/shared/api/enums";
 import type { CreateMatchDraftRequest, MatchDraftResponse } from "@/shared/api/matchDrafts";
 import { normalizeDisplayApiError } from "@/shared/api/problemDetails";
 
@@ -14,6 +15,11 @@ export type OcrSubmissionResult =
   | { cleanupError?: undefined; status: "failed_and_cancelled" }
   | { cleanupError: unknown; matchDraftId: string; status: "failed_cleanup_failed" }
   | { createdJobCount: number; failedJobCount: number; status: "started" | "partial_started" };
+
+export type OcrSubmissionProgress =
+  | { phase: "creating_draft"; total: number }
+  | { current: number; phase: "submitting_image"; slotKind: SlotKind; total: number }
+  | { completed: number; phase: "finalizing"; total: number };
 
 export type OcrSubmissionWorkflowParams = {
   cancelDraft: (matchDraftId: string) => Promise<unknown>;
@@ -27,7 +33,7 @@ export type OcrSubmissionWorkflowParams = {
     job: { draftId?: string; jobId: string; status: string };
     upload: { imageId: string };
   }>;
-  onReady?: ((targetCount: number) => void) | undefined;
+  onProgress?: ((progress: OcrSubmissionProgress) => void) | undefined;
   selectedGameTitle: { id: string; layoutFamily?: string | null } | undefined;
   setup: SetupFormValues;
   slots: readonly CaptureSlotState[];
@@ -39,7 +45,7 @@ export async function runOcrSubmissionWorkflow({
   createDraft,
   createPlayedAtIso,
   createUploadJob,
-  onReady,
+  onProgress,
   selectedGameTitle,
   setup,
   slots,
@@ -57,7 +63,7 @@ export async function runOcrSubmissionWorkflow({
       status: "invalid",
     };
   }
-  onReady?.(targetSlots.length);
+  onProgress?.({ phase: "creating_draft", total: targetSlots.length });
 
   let matchDraftId: string | null;
   try {
@@ -80,8 +86,14 @@ export async function runOcrSubmissionWorkflow({
 
   let createdJobCount = 0;
   let failedJobCount = 0;
-  for (const slot of targetSlots) {
+  for (const [index, slot] of targetSlots.entries()) {
     if (!slot.file) continue;
+    onProgress?.({
+      current: index + 1,
+      phase: "submitting_image",
+      slotKind: slot.kind,
+      total: targetSlots.length,
+    });
     const uploadingSlot = toUploadingSlot(slot);
     updateSlot(uploadingSlot);
     try {
@@ -108,6 +120,12 @@ export async function runOcrSubmissionWorkflow({
       });
     }
   }
+
+  onProgress?.({
+    completed: createdJobCount + failedJobCount,
+    phase: "finalizing",
+    total: targetSlots.length,
+  });
 
   if (createdJobCount > 0) {
     return {

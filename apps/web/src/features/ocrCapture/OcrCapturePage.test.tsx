@@ -1,9 +1,9 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
+import { createMemoryRouter, RouterProvider, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { OcrCapturePage } from "@/features/ocrCapture/OcrCapturePage";
@@ -38,34 +38,36 @@ function LocationProbe() {
 }
 
 function renderCaptureRoute() {
-  return render(
+  const router = createMemoryRouter(
+    [
+      { element: <OcrCapturePage />, path: "/ocr/new" },
+      {
+        element: (
+          <>
+            <LocationProbe />
+            <p>matches-page</p>
+          </>
+        ),
+        path: "/matches",
+      },
+    ],
+    { initialEntries: ["/ocr/new"] },
+  );
+  const view = render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={["/ocr/new"]}>
-        <Routes>
-          <Route path="/ocr/new" element={<OcrCapturePage />} />
-          <Route
-            path="/matches"
-            element={
-              <>
-                <LocationProbe />
-                <p>matches-page</p>
-              </>
-            }
-          />
-        </Routes>
-      </MemoryRouter>
+      <RouterProvider router={router} />
     </QueryClientProvider>,
   );
+  return { ...view, router };
 }
 
 async function startOcrAllowingPartialTray() {
-  await user.click(screen.getByRole("button", { name: "読み取りを開始して試合一覧へ" }));
+  await user.click(screen.getByRole("button", { name: "読み取りを開始" }));
   expect(
-    await screen.findByText(
-      "3種類すべての画像は揃っていません。このまま進める場合は、もう一度開始ボタンを押してください。",
-    ),
+    await screen.findByRole("dialog", { name: "読み取りを開始しますか？" }),
   ).toBeInTheDocument();
-  await user.click(screen.getByRole("button", { name: "このまま読み取りを開始" }));
+  expect(screen.getByText(/件だけで開始します/u)).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: /\d件で読み取りを開始/u }));
 }
 
 describe("OcrCapturePage", () => {
@@ -79,7 +81,7 @@ describe("OcrCapturePage", () => {
     renderCaptureRoute();
 
     expect(await screen.findByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "読み取りを開始して試合一覧へ" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "読み取りを開始" })).toBeDisabled();
   });
 
   it("blocks OCR start while dependent setup choices are still loading", async () => {
@@ -126,14 +128,14 @@ describe("OcrCapturePage", () => {
     expect(await screen.findByText("試合設定の選択肢を確認しています。")).toBeInTheDocument();
     expect(screen.getByLabelText(/シーズン/u)).toBeDisabled();
     expect(screen.getByLabelText(/マップ/u)).toBeDisabled();
-    expect(screen.getByRole("button", { name: "読み取りを開始して試合一覧へ" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "読み取りを開始" })).toBeDisabled();
 
     setupGate.resolve();
     expect(await screen.findByRole("option", { name: "今シーズン" })).toBeInTheDocument();
     expect(await screen.findByRole("option", { name: "東日本編" })).toBeInTheDocument();
     await waitFor(() => {
       expect(screen.queryByText("試合設定の選択肢を確認しています。")).not.toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "読み取りを開始して試合一覧へ" })).toBeEnabled();
+      expect(screen.getByRole("button", { name: "読み取りを開始" })).toBeEnabled();
     });
   });
 
@@ -152,12 +154,20 @@ describe("OcrCapturePage", () => {
       }),
     );
 
+    const router = createMemoryRouter([
+      {
+        element: (
+          <>
+            <DevUserPicker />
+            <OcrCapturePage />
+          </>
+        ),
+        path: "/",
+      },
+    ]);
     render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
-          <DevUserPicker />
-          <OcrCapturePage />
-        </MemoryRouter>
+        <RouterProvider router={router} />
       </QueryClientProvider>,
     );
 
@@ -252,18 +262,29 @@ describe("OcrCapturePage", () => {
       }),
     );
 
-    renderCaptureRoute();
+    const { router } = renderCaptureRoute();
 
     expect(await screen.findByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
     const input = await screen.findByLabelText("OCRの画像をアップロード");
     await user.upload(input, new File(["image"], "assets.png", { type: "image/png" }));
-    await user.click(screen.getByRole("button", { name: "読み取りを開始して試合一覧へ" }));
-    await user.click(await screen.findByRole("button", { name: "このまま読み取りを開始" }));
+    await user.click(screen.getByRole("button", { name: "読み取りを開始" }));
+    await user.click(await screen.findByRole("button", { name: "1件で読み取りを開始" }));
 
-    const pendingButton = await screen.findByRole("button", { name: "読み取り開始中…" });
-    expect(pendingButton).toBeDisabled();
-    await user.click(pendingButton);
+    expect(await screen.findByRole("dialog", { name: "画像を送信しています" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "ダイアログを閉じる" })).not.toBeInTheDocument();
     expect(createdDraftCount).toBe(1);
+
+    const beforeUnloadEvent = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(beforeUnloadEvent);
+    expect(beforeUnloadEvent.defaultPrevented).toBe(true);
+
+    act(() => {
+      void router.navigate("/matches");
+    });
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe("/ocr/new");
+      expect(screen.getByRole("dialog", { name: "画像を送信しています" })).toBeInTheDocument();
+    });
 
     draftGate.resolve();
     expect(await screen.findByText("matches-page")).toBeInTheDocument();
@@ -341,6 +362,52 @@ describe("OcrCapturePage", () => {
     ]);
   });
 
+  it("keeps a partial submission result visible until the user opens the match list", async () => {
+    setDevUser();
+    let jobRequestCount = 0;
+
+    server.use(
+      http.post("/api/ocr-jobs", async () => {
+        jobRequestCount += 1;
+        if (jobRequestCount === 2) {
+          return HttpResponse.json(
+            {
+              code: "OCR_JOB_FAILED",
+              detail: "worker queue unavailable",
+              status: 500,
+              title: "OCR job creation failed",
+              type: "about:blank",
+            },
+            { status: 500 },
+          );
+        }
+        return HttpResponse.json({
+          draftId: "draft-1",
+          jobId: "job-1",
+          status: "queued",
+        });
+      }),
+    );
+
+    renderCaptureRoute();
+
+    expect(await screen.findByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
+    const input = await screen.findByLabelText("OCRの画像をアップロード");
+    await user.upload(input, new File(["first"], "first.png", { type: "image/png" }));
+    await user.upload(input, new File(["second"], "second.png", { type: "image/png" }));
+    await startOcrAllowingPartialTray();
+
+    expect(
+      await screen.findByRole("dialog", { name: "一部の読み取りを開始しました" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("1件を開始・1件は未開始")).toBeInTheDocument();
+    expect(screen.queryByText("matches-page")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "ダイアログを閉じる" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "試合一覧で確認" }));
+    expect(await screen.findByText("matches-page")).toBeInTheDocument();
+  });
+
   it("cancels the created match draft when no OCR job is created", async () => {
     setDevUser();
     const cancelledDraftIds: string[] = [];
@@ -376,6 +443,9 @@ describe("OcrCapturePage", () => {
 
     await waitFor(() => expect(cancelledDraftIds).toEqual(["draft-created-1"]));
     expect(screen.queryByText("matches-page")).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole("dialog", { name: "読み取りを開始できませんでした" }),
+    ).toBeInTheDocument();
   });
 
   it("does not expose a direct review action for OCR-running drafts", async () => {

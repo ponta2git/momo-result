@@ -1,22 +1,24 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 
 import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
 import {
   ocrJobRequestForSlot,
   runOcrSubmissionWorkflow,
 } from "@/features/ocrCapture/ocrSubmissionWorkflow";
+import type {
+  OcrSubmissionProgress,
+  OcrSubmissionResult,
+} from "@/features/ocrCapture/ocrSubmissionWorkflow";
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
 import { invalidateAfterOcrSubmissionStarted } from "@/shared/api/cacheInvalidation";
 import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { cancelMatchDraft, createMatchDraft } from "@/shared/api/matchDrafts";
 import { createOcrJob, uploadImage } from "@/shared/api/ocrJobs";
-import { formatApiError } from "@/shared/api/problemDetails";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 
 export type OcrCaptureSubmitParams = {
-  notify: (message: string, tone?: "info" | "success" | "warning") => void;
+  onProgress?: ((progress: OcrSubmissionProgress) => void) | undefined;
   selectedGameTitle: { id: string; layoutFamily?: string | null } | undefined;
   setup: SetupFormValues;
   slots: readonly CaptureSlotState[];
@@ -26,17 +28,16 @@ export type OcrCaptureSubmitParams = {
 export type OcrCaptureMutations = {
   isSubmitting: boolean;
   status: ReturnType<typeof useMutation>["status"];
-  submit: (params: OcrCaptureSubmitParams) => Promise<void>;
+  submit: (params: OcrCaptureSubmitParams) => Promise<OcrSubmissionResult | undefined>;
 };
 
 /**
- * OCR 取り込み画面の「画像アップロード → OCR ジョブ作成 → 試合一覧へ遷移」までの副作用を集約する。
+ * OCR 取り込み画面の「画像アップロード → OCR ジョブ作成」までの副作用を集約する。
  * 画像/設定の状態は呼び出し側 (Page) が引数で渡し、本フックは送信パイプラインと
- * matches キャッシュ無効化、ナビゲーションだけを担う。
+ * matches キャッシュ無効化を担う。結果に応じた案内とナビゲーションは呼び出し側が行う。
  */
 export function useOcrCaptureMutations(hints: Record<string, unknown>): OcrCaptureMutations {
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
   const idempotencyKeys = useIdempotencyKeyStore();
   const createPlayedAtIso = useCallback(() => new Date().toISOString(), []);
   const inFlightRef = useRef(false);
@@ -65,7 +66,7 @@ export function useOcrCaptureMutations(hints: Record<string, unknown>): OcrCaptu
   });
 
   const submit = useCallback(
-    async ({ notify, selectedGameTitle, setup, slots, updateSlot }: OcrCaptureSubmitParams) => {
+    async ({ onProgress, selectedGameTitle, setup, slots, updateSlot }: OcrCaptureSubmitParams) => {
       if (inFlightRef.current) {
         return;
       }
@@ -92,58 +93,25 @@ export function useOcrCaptureMutations(hints: Record<string, unknown>): OcrCaptu
           createPlayedAtIso,
           createUploadJob: ({ file, matchDraftId, slot }) =>
             uploadMutation.mutateAsync({ file, matchDraftId, slot }),
-          onReady: (targetCount) =>
-            notify(
-              `${targetCount}件の読み取りを開始します。確定前の記録を作成し、試合一覧で処理状況を確認できるようにします。`,
-            ),
+          onProgress,
           selectedGameTitle,
           setup,
           slots,
           updateSlot,
         });
 
-        if (result.status === "empty") {
-          notify("読み取る画像がありません。まず撮影または画像追加を行ってください。");
-          return;
-        }
-        if (result.status === "invalid") {
-          notify(result.message);
-          return;
-        }
-        if (result.status === "draft_create_failed") {
-          notify(formatApiError(result.error, "確定前の記録を作成できませんでした"));
-          return;
-        }
         if (result.status === "started" || result.status === "partial_started") {
           await invalidateAfterOcrSubmissionStarted(queryClient);
-          if (result.status === "partial_started") {
-            notify(
-              `${result.createdJobCount}件の読み取りを開始しました。一部の画像は開始できなかったため、確認画面で手入力してください。`,
-              "warning",
-            );
-          }
-          navigate("/matches?status=ocr_running&sort=updated_desc", { replace: true });
-          return;
-        }
-        if (result.status === "failed_cleanup_failed") {
+        } else if (result.status === "failed_cleanup_failed") {
           await invalidateAfterOcrSubmissionStarted(queryClient);
-          notify(
-            formatApiError(
-              result.cleanupError,
-              "読み取り処理を開始できず、確定前の記録の取り消しにも失敗しました。試合一覧で状態を確認してください",
-            ),
-            "warning",
-          );
-          return;
         }
-
-        notify("読み取り処理を開始できませんでした。確定前の記録は取り消しました。");
+        return result;
       } finally {
         inFlightRef.current = false;
         setIsSubmittingWorkflow(false);
       }
     },
-    [createPlayedAtIso, idempotencyKeys, navigate, queryClient, uploadMutation],
+    [createPlayedAtIso, idempotencyKeys, queryClient, uploadMutation],
   );
 
   return {

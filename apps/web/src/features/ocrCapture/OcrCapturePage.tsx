@@ -1,8 +1,8 @@
 import { CameraCapture } from "@/features/ocrCapture/CameraCapture";
 import { CaptureRail } from "@/features/ocrCapture/CaptureRail";
-import { slotDefinitions } from "@/features/ocrCapture/captureState";
 import { ImageInput } from "@/features/ocrCapture/ImageInput";
 import { OcrJobSlotWatcher } from "@/features/ocrCapture/OcrJobSlotWatcher";
+import { OcrStartDialog } from "@/features/ocrCapture/OcrStartDialog";
 import { SetupPanel } from "@/features/ocrCapture/SetupPanel";
 import { useOcrCapturePageController } from "@/features/ocrCapture/useOcrCapturePageController";
 import { AuthPanel } from "@/shared/auth/AuthPanel";
@@ -23,14 +23,17 @@ export function OcrCapturePage() {
   const {
     auth,
     flow,
+    handleCloseStartDialog,
+    handleConfirmStart,
     handleDraftLoadError,
     handleStartOcr,
     handleValidationError,
+    handleViewMatches,
     hasWorkingSlot,
     notice,
     notify,
     ocrReadyCount,
-    partialStartAcknowledged,
+    ocrStartDialog,
     selectedSlotLabels,
     setSetup,
     setup,
@@ -39,6 +42,7 @@ export function OcrCapturePage() {
     setupReady,
     slotsFull,
     submission,
+    submissionLocked,
   } = useOcrCapturePageController();
 
   return (
@@ -131,12 +135,6 @@ export function OcrCapturePage() {
                     ? `送信対象: ${selectedSlotLabels.join(" / ")}`
                     : "画像は1枚から開始できます。状況は試合一覧で追跡できます。"}
                 </p>
-                {partialStartAcknowledged && ocrReadyCount < slotDefinitions.length ? (
-                  <p className="mt-2 text-sm font-semibold text-[var(--color-review)]">
-                    画像が{ocrReadyCount}
-                    件だけ選択されています。このまま進める場合は、もう一度開始ボタンを押してください。
-                  </p>
-                ) : null}
                 {hasWorkingSlot ? (
                   <p className="mt-2 text-sm font-semibold text-[var(--color-action)]">
                     読み取り中は分類と削除を固定します。状態は試合一覧で追跡できます。
@@ -157,15 +155,11 @@ export function OcrCapturePage() {
                   disabled={
                     ocrReadyCount === 0 || hasWorkingSlot || submission.isSubmitting || !setupReady
                   }
-                  pending={submission.isSubmitting}
-                  pendingLabel="読み取り開始中…"
                 >
-                  {partialStartAcknowledged && ocrReadyCount < slotDefinitions.length
-                    ? "このまま読み取りを開始"
-                    : "読み取りを開始して試合一覧へ"}
+                  読み取りを開始
                 </Button>
                 <Button
-                  disabled={submission.isSubmitting || hasWorkingSlot}
+                  disabled={submissionLocked || hasWorkingSlot}
                   variant="secondary"
                   onClick={() => flow.handleResetAll(notify)}
                 >
@@ -194,6 +188,13 @@ export function OcrCapturePage() {
           />
         </aside>
       </section>
+
+      <OcrStartDialog
+        state={ocrStartDialog}
+        onClose={handleCloseStartDialog}
+        onConfirm={handleConfirmStart}
+        onViewMatches={handleViewMatches}
+      />
 
       {flow.slots.map((slot) => (
         <OcrJobSlotWatcher

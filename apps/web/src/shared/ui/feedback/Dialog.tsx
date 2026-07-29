@@ -22,6 +22,8 @@ type DialogBaseProps = {
 };
 
 type DialogProps = DialogBaseProps & {
+  busy?: boolean | undefined;
+  dismissible?: boolean | undefined;
   trigger?: ReactElement | undefined;
 };
 
@@ -39,8 +41,11 @@ function DialogContentFrame({
   children,
   className,
   description,
+  dismissible = true,
   title,
-}: Pick<DialogBaseProps, "children" | "className" | "description" | "title">) {
+}: Pick<DialogBaseProps, "children" | "className" | "description" | "title"> & {
+  dismissible?: boolean | undefined;
+}) {
   return (
     <div className="flex h-full max-h-full min-h-0 flex-col gap-3">
       <div className="flex items-start justify-between gap-3">
@@ -54,11 +59,13 @@ function DialogContentFrame({
             </BaseDialog.Description>
           ) : null}
         </div>
-        <BaseDialog.Close
-          render={
-            <IconButton aria-label="ダイアログを閉じる" icon={<X />} size="sm" variant="quiet" />
-          }
-        />
+        {dismissible ? (
+          <BaseDialog.Close
+            render={
+              <IconButton aria-label="ダイアログを閉じる" icon={<X />} size="sm" variant="quiet" />
+            }
+          />
+        ) : null}
       </div>
       <div className={cn("min-h-0 min-w-0 flex-1", className)}>{children}</div>
     </div>
@@ -66,10 +73,12 @@ function DialogContentFrame({
 }
 
 export function Dialog({
+  busy = false,
   children,
   backdropClassName,
   className,
   description,
+  dismissible = true,
   onOpenChange,
   open,
   popupClassName,
@@ -78,7 +87,16 @@ export function Dialog({
   trigger,
 }: DialogProps) {
   return (
-    <BaseDialog.Root onOpenChange={(nextOpen) => onOpenChange?.(nextOpen)} open={open}>
+    <BaseDialog.Root
+      onOpenChange={(nextOpen, eventDetails) => {
+        if (!dismissible && !nextOpen) {
+          eventDetails.cancel();
+          return;
+        }
+        onOpenChange?.(nextOpen);
+      }}
+      open={open}
+    >
       {trigger ? <BaseDialog.Trigger render={trigger} /> : null}
       <BaseDialog.Portal>
         <BaseDialog.Backdrop
@@ -95,6 +113,7 @@ export function Dialog({
           initialFocus={true}
         >
           <motion.div
+            aria-busy={busy || undefined}
             animate="visible"
             className={cn(
               "max-h-[calc(100dvh-2rem)] w-full overflow-y-auto rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] shadow-lg",
@@ -104,7 +123,12 @@ export function Dialog({
             transition={momoPanelTransition}
             variants={panelRevealVariants}
           >
-            <DialogContentFrame className={className} description={description} title={title}>
+            <DialogContentFrame
+              className={className}
+              description={description}
+              dismissible={dismissible}
+              title={title}
+            >
               {children}
             </DialogContentFrame>
           </motion.div>

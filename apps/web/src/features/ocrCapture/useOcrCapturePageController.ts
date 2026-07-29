@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { slotDefinitions } from "@/features/ocrCapture/captureState";
 import { buildOcrHints } from "@/features/ocrCapture/hints";
@@ -9,14 +9,16 @@ import { useOcrCaptureDraftFlow } from "@/features/ocrCapture/useOcrCaptureDraft
 import { useOcrCaptureMutations } from "@/features/ocrCapture/useOcrCaptureMutations";
 import { useOcrCaptureQueries } from "@/features/ocrCapture/useOcrCaptureQueries";
 import { useOcrSetupOptions } from "@/features/ocrCapture/useOcrSetupOptions";
+import { useOcrStartFlow } from "@/features/ocrCapture/useOcrStartFlow";
+import type { OcrSubmissionPlan } from "@/features/ocrCapture/useOcrStartFlow";
 import { parseLayoutFamily } from "@/shared/api/enums";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
+import { memberDisplayName } from "@/shared/domain/members";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
 export function useOcrCapturePageController() {
   const [setup, setSetup] = useState<SetupFormValues>(defaultSetupValues);
   const [notice, setNotice] = useState("");
-  const [partialStartAcknowledged, setPartialStartAcknowledged] = useState(false);
 
   const { auth, memberAliasDirectory } = useOcrCaptureQueries();
   const setupOptions = useOcrSetupOptions({
@@ -38,6 +40,7 @@ export function useOcrCapturePageController() {
   }, [memberAliasDirectory, setupOptions.selectedGameTitle]);
   const flow = useOcrCaptureDraftFlow();
   const submission = useOcrCaptureMutations(hints);
+  const startFlow = useOcrStartFlow({ submission, updateSlot: flow.updateSlot });
 
   function notify(message: string, tone: "info" | "success" | "warning" = "info") {
     setNotice(message);
@@ -73,30 +76,45 @@ export function useOcrCapturePageController() {
     )
     .map((definition) => definition.label);
 
-  useEffect(() => {
-    setPartialStartAcknowledged(false);
-  }, [ocrReadyCount]);
+  function createSubmissionPlan(): OcrSubmissionPlan {
+    const slots = flow.slots
+      .filter((slot) => slot.file && ["selected", "failed", "cancelled"].includes(slot.status))
+      .map((slot) => Object.assign({}, slot));
+    const selectedKinds = new Set(slots.map((slot) => slot.kind));
 
-  async function handleStartOcr() {
+    return {
+      selectedGameTitle: setupOptions.selectedGameTitle
+        ? { ...setupOptions.selectedGameTitle }
+        : undefined,
+      selectedSlotLabels: slotDefinitions
+        .filter((definition) => selectedKinds.has(definition.kind))
+        .map((definition) => definition.label),
+      setup: { ...setup },
+      setupSummary: {
+        gameTitle: setupOptions.selectedGameTitle?.name ?? setup.gameTitleId,
+        map:
+          setupOptions.mapMasters.find((item) => item.id === setup.mapMasterId)?.name ??
+          setup.mapMasterId,
+        owner: memberDisplayName(setup.ownerMemberId),
+        season:
+          setupOptions.seasonMasters.find((item) => item.id === setup.seasonMasterId)?.name ??
+          setup.seasonMasterId,
+      },
+      slots,
+    };
+  }
+
+  function handleStartOcr() {
     if (!setupReady) {
       notify(setupBlockedReason ?? "試合設定を確認してください。", "warning");
       return;
     }
-    if (ocrReadyCount < slotDefinitions.length && !partialStartAcknowledged) {
-      setPartialStartAcknowledged(true);
-      notify(
-        "3種類すべての画像は揃っていません。このまま進める場合は、もう一度開始ボタンを押してください。",
-        "warning",
-      );
+    if (ocrReadyCount === 0) {
+      notify("読み取る画像がありません。まず画像を撮影してください。", "warning");
       return;
     }
-    await submission.submit({
-      notify,
-      selectedGameTitle: setupOptions.selectedGameTitle,
-      setup,
-      slots: flow.slots,
-      updateSlot: flow.updateSlot,
-    });
+
+    startFlow.open(createSubmissionPlan());
   }
 
   function handleDraftLoadError(error: NormalizedApiError) {
@@ -106,14 +124,17 @@ export function useOcrCapturePageController() {
   return {
     auth,
     flow,
+    handleCloseStartDialog: startFlow.close,
+    handleConfirmStart: startFlow.confirm,
     handleDraftLoadError,
     handleStartOcr,
     handleValidationError,
+    handleViewMatches: startFlow.viewMatches,
     hasWorkingSlot,
     notice,
     notify,
     ocrReadyCount,
-    partialStartAcknowledged,
+    ocrStartDialog: startFlow.state,
     selectedSlotLabels,
     setSetup,
     setup,
@@ -122,5 +143,6 @@ export function useOcrCapturePageController() {
     setupReady,
     slotsFull,
     submission,
+    submissionLocked: startFlow.locked,
   };
 }

@@ -27,43 +27,49 @@ export function CaptureSlotPreview({
 }: CaptureSlotPreviewProps) {
   const hasImage = Boolean(slot.previewUrl);
 
-  if (!slot.previewUrl) {
-    return (
-      <div
-        className={cn(
-          "rounded-[var(--radius-sm)] border border-dashed bg-[var(--color-surface-subtle)] p-2",
-          isCaptureTarget ? "border-[var(--color-action)]" : "border-[var(--color-border)]",
-        )}
-      >
-        <div className="grid aspect-video place-items-center px-2 text-center text-xs text-[var(--color-text-secondary)]">
-          <span>{isCaptureTarget ? "次に撮影されます" : `${label}の画像待ち`}</span>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <motion.div
-      key={slot.previewUrl}
+      key={slot.previewUrl ?? "empty"}
+      aria-label={`${label}の16:9画像枠`}
       animate={{ opacity: 1 }}
       className={cn(
-        "rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--momo-night-900)] p-1.5",
-        isWorking ? "cursor-not-allowed opacity-85" : "cursor-grab active:cursor-grabbing",
+        "relative aspect-video w-full overflow-hidden rounded-[var(--radius-sm)] border",
+        hasImage
+          ? "border-[var(--color-border)] bg-[var(--momo-night-900)]"
+          : "border-dashed bg-[var(--color-surface-subtle)]",
+        isCaptureTarget && !hasImage
+          ? "border-[var(--color-action)]"
+          : "border-[var(--color-border)]",
+        hasImage &&
+          (isWorking ? "cursor-not-allowed opacity-85" : "cursor-grab active:cursor-grabbing"),
       )}
       draggable={hasImage && !isWorking}
       initial={{ opacity: 0 }}
+      role="group"
       transition={momoPanelTransition}
       onDragStartCapture={onDragStartCapture}
     >
-      <img
-        src={slot.previewUrl}
-        alt={`${label}プレビュー`}
-        className="aspect-video w-full rounded-[var(--radius-sm)] object-contain"
-      />
-      <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 px-1 text-[0.6875rem] text-white/80">
-        <span>{slot.source ? `${sourceLabels[slot.source]}した画像` : "配置済み画像"}</span>
-        <span>{isWorking ? "読み取り中は分類を固定" : "ドラッグして別の分類へ移動"}</span>
-      </div>
+      {slot.previewUrl ? (
+        <>
+          <img
+            src={slot.previewUrl}
+            alt={`${label}プレビュー`}
+            className="size-full object-contain"
+          />
+          {slot.source ? (
+            <span className="absolute bottom-1.5 left-1.5 rounded-[var(--radius-sm)] border border-white/15 bg-[var(--momo-night-900)]/80 px-1.5 py-0.5 text-[0.6875rem] font-semibold text-white">
+              {sourceLabels[slot.source]}
+            </span>
+          ) : null}
+          <span className="sr-only">
+            {isWorking ? "読み取り中は分類を固定" : "ドラッグして別の分類へ移動"}
+          </span>
+        </>
+      ) : (
+        <span className="absolute inset-0 grid place-items-center px-2 text-center text-xs text-pretty text-[var(--color-text-secondary)]">
+          {isCaptureTarget ? "次に撮影されます" : `${label}の画像待ち`}
+        </span>
+      )}
     </motion.div>
   );
 }

@@ -91,6 +91,7 @@
 - Make the three classification trays the signature workflow. Always show the active capture target, advance to the next empty tray after a successful capture, and let users select a tray explicitly before replacing its image.
 - Treat the camera as the primary input. Keep file selection behind a quiet fallback disclosure, then promote it only when camera startup fails.
 - Use concise local state labels such as “画像待ち”, “配置済み”, and “次の撮影先”. Do not repeat the same classification explanation in headings, cards, and help copy.
+- Keep every tray preview frame at 16:9 in empty, selected, and working states. Place source metadata inside the frame so image arrival never changes the tray geometry.
 - Snapshot the setup and selected images when the start-confirmation dialog opens. During upload and OCR-job registration, keep the dialog non-dismissible and block both in-app navigation and browser unload.
 - Navigate automatically only after every selected image is handed off. If only part of the handoff succeeds, keep the result dialog visible and require an explicit move to the match list to avoid duplicate submission.
 - Animate only status or preview replacement with the existing short opacity treatment. Do not stagger tray entry or animate tray layout.

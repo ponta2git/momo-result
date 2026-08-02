@@ -108,11 +108,26 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     await expect(page.getByRole("heading", { exact: true, name: "OCR取り込み" })).toBeVisible();
     await selectSeedMasters(page);
 
+    const totalAssetsFrame = page.getByRole("group", { name: "総資産の16:9画像枠" });
+    await expect(totalAssetsFrame).toBeVisible();
+    const emptyFrameBox = await totalAssetsFrame.boundingBox();
+    if (!emptyFrameBox) {
+      throw new Error("Empty OCR tray frame geometry must be measurable.");
+    }
+    expect(emptyFrameBox.width / emptyFrameBox.height).toBeCloseTo(16 / 9, 2);
+
     await page.getByLabel("OCRの画像をアップロード").setInputFiles({
       buffer: png1x1,
       mimeType: "image/png",
       name: "total-assets.png",
     });
+    await expect(page.getByAltText("総資産プレビュー")).toBeVisible();
+    const selectedFrameBox = await totalAssetsFrame.boundingBox();
+    if (!selectedFrameBox) {
+      throw new Error("Selected OCR tray frame geometry must be measurable.");
+    }
+    expect(selectedFrameBox.width).toBeCloseTo(emptyFrameBox.width, 1);
+    expect(selectedFrameBox.height).toBeCloseTo(emptyFrameBox.height, 1);
 
     const draftResponse = page.waitForResponse(
       (response) =>

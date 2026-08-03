@@ -96,6 +96,19 @@
 - Navigate automatically only after every selected image is handed off. If only part of the handoff succeeds, keep the result dialog visible and require an explicit move to the match list to avoid duplicate submission.
 - Animate only status or preview replacement with the existing short opacity treatment. Do not stagger tray entry or animate tray layout.
 
+### OCR result review
+
+- Keep the task sequence stable: destination and match context, global OCR notices, four-player review grid with source reference, then the primary confirmation action.
+- Collapse completed match context into one scan-friendly summary. Reopen it explicitly for changes, and force it open whenever required fields are invalid.
+- Treat the guided OCR review rail as the signature interaction. Show unresolved progress, the active field, concise evidence, source kind, and confidence; provide previous, next, and explicit acknowledgement actions.
+- Attach OCR evidence to the semantic field and player identity before any result sorting. A warning must follow its source value rather than its original display row.
+- Use one deterministic cell-state priority: invalid, OCR review, manually changed, reviewed, then synced. Reserve a stable status line so state changes do not alter row height.
+- In automatic source-image mode, the image follows the focused field. Selecting an image tab switches to fixed mode; only an explicit “自動追従” action resumes following.
+- Use a dense ledger on wide viewports and one accordion card per player on narrow viewports. Mobile review navigation expands the target player and focuses the exact field without horizontal page overflow.
+- Keep confirmation warnings as a soft gate: summarize changes and unresolved OCR items beside a rank-sorted four-player ledger, but leave the final action available.
+- Persist unfinished values and OCR acknowledgements in tab-scoped storage. Offer recovery instead of silently overwriting initialized data, and confirm before discarding dirty work during navigation or unload.
+- Animate only continuity-bearing changes such as mobile-card disclosure, dialog entry, and segmented-control selection. Keep cell feedback to quiet color transitions and respect reduced motion.
+
 ### Series comparison
 
 - Treat series comparison as a path from next-match hypothesis to evidence to an individual match, not as a KPI dashboard.

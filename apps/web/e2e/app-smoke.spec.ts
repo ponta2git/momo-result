@@ -168,6 +168,22 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
 
     await expect(page.getByRole("heading", { exact: true, name: "OCR結果の確認" })).toBeVisible();
     await expect(page.getByText("サンプルの読み取り結果で表示中")).toBeVisible();
+    const reviewRail = page.getByLabel("OCR確認レール");
+    await expect(reviewRail.getByText("未確認 2 / 2")).toBeVisible();
+    await reviewRail.getByRole("button", { name: "この値で確認済み" }).click();
+    await expect(reviewRail.getByText("未確認 1 / 2")).toBeVisible();
+
+    await page.setViewportSize({ height: 844, width: 390 });
+    await reviewRail.getByRole("button", { name: "次の要確認セルへ" }).click();
+    await expect(page.getByLabel("おーたか 順位")).toBeFocused();
+    expect(
+      await page.evaluate(() => ({
+        innerWidth: window.innerWidth,
+        scrollWidth: document.documentElement.scrollWidth,
+      })),
+    ).toEqual({ innerWidth: 390, scrollWidth: 390 });
+    await page.setViewportSize({ height: 900, width: 1440 });
+
     await page.getByLabel(/開催履歴/u).selectOption(heldEventId);
     await expect(page.getByLabel(/開催履歴/u)).toHaveValue(heldEventId);
     await selectSeedMasters(page);
@@ -180,6 +196,10 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     await expect(
       page.getByRole("heading", { exact: true, name: "この内容で確定しますか？" }),
     ).toBeVisible();
+    const confirmDialog = page.getByRole("dialog", { name: "この内容で確定しますか？" });
+    await expect(confirmDialog.getByRole("table", { name: "確定する4人分の結果" })).toBeVisible();
+    await expect(confirmDialog.getByText("確認済み 1 / 2")).toBeVisible();
+    await expect(confirmDialog.getByText(/未確認の強調項目が1件あります/u)).toBeVisible();
     await page.getByRole("button", { name: "確定する" }).click();
 
     const response = await confirmResponse;

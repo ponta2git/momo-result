@@ -32,6 +32,7 @@ type MatchWorkspaceControllerModelArgs = {
   useSampleDrafts: boolean;
   validationState: ReturnType<typeof useMatchWorkspaceValidation>;
   validationMessage: string;
+  validationFocusRequest: { path: string; sequence: number } | null;
   viewModel: ReturnType<typeof useMatchWorkspaceViewModel>;
   workspaceLoading: boolean;
   workspaceData: MatchWorkspaceInitialData | null;
@@ -136,25 +137,12 @@ export function buildMatchWorkspaceControllerModel(args: MatchWorkspaceControlle
       onPrimaryAction: args.onPrimaryAction,
     },
     header: {
-      cancelDraft: {
-        canCancel: viewModel.canCancelDraft,
-        confirmOpen: args.cancelDraftConfirmOpen,
-        confirmPending: args.cancelDraftPending,
-        disabled: args.isMutating,
-        onConfirm: args.onCancelDraftConfirm,
-        onOpenChange: args.onCancelDraftOpenChange,
-        onTrigger: args.onCancelDraftTrigger,
-      },
-      mastersNavigation: {
-        show: (args.mode === "review" || args.mode === "create") && Boolean(args.returnTo),
-        pending: args.isNavigatingToMasters,
-        onClick: args.onNavigateToMasters,
-      },
       pageDescription: viewModel.pageDescription,
       pageTitle: viewModel.pageTitle,
       useSampleDrafts: args.useSampleDrafts,
     },
     liveMessage: args.notice || args.validationMessage,
+    validationFocusRequest: args.validationFocusRequest,
     loadState: {
       editLoadFailed: args.editLoadFailed,
       editLoading: args.editLoading,
@@ -170,6 +158,22 @@ export function buildMatchWorkspaceControllerModel(args: MatchWorkspaceControlle
       mapItems: viewModel.mapItems,
       seasonItems: viewModel.seasonItems,
       values: state.values,
+      workspaceActions: {
+        cancelDraft: {
+          canCancel: viewModel.canCancelDraft,
+          confirmOpen: args.cancelDraftConfirmOpen,
+          confirmPending: args.cancelDraftPending,
+          disabled: args.isMutating,
+          onConfirm: args.onCancelDraftConfirm,
+          onOpenChange: args.onCancelDraftOpenChange,
+          onTrigger: args.onCancelDraftTrigger,
+        },
+        mastersNavigation: {
+          show: (args.mode === "review" || args.mode === "create") && Boolean(args.returnTo),
+          pending: args.isNavigatingToMasters,
+          onClick: args.onNavigateToMasters,
+        },
+      },
       onCreateEvent: args.formHandlers.onCreateEvent,
       onEventDraftChange: args.onEventDraftChange,
       onGameTitleChange: args.formHandlers.onGameTitleChange,

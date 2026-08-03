@@ -52,10 +52,11 @@ export function MatchWorkspaceEditor({
         eventCreation={setupEventCreation}
         options={setupOptions}
         values={setup.values}
+        workspaceActions={setup.workspaceActions}
       />
 
       {editor.warnings.length > 0 ? (
-        <Card className="mt-4 border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18">
+        <Card className="border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18 p-3 shadow-none">
           <ul className="list-disc pl-5 text-sm text-[var(--color-text-primary)]">
             {editor.warnings.map((warning) => (
               <li key={warning}>{warning}</li>
@@ -66,26 +67,25 @@ export function MatchWorkspaceEditor({
 
       <div
         className={cn(
-          "mt-4 grid gap-4",
-          editor.sourceImagePanel
-            ? "xl:grid-cols-[minmax(0,1fr)_24rem] 2xl:grid-cols-[minmax(0,1fr)_28rem]"
-            : "",
+          "grid gap-4",
+          editor.sourceImagePanel ? "2xl:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)]" : "",
         )}
       >
         <Card className="p-4">
           <ScoreGrid actions={scoreGridActions} data={editor.scoreGrid.data} />
         </Card>
 
-        {editor.sourceImagePanel ? <SourceImagePanel {...editor.sourceImagePanel} /> : null}
+        <aside className="grid h-fit gap-4 2xl:sticky 2xl:top-4">
+          {editor.sourceImagePanel ? <SourceImagePanel {...editor.sourceImagePanel} /> : null}
+          <MatchFormActions {...formActions} primaryActionRef={primaryActionRef} />
+        </aside>
       </div>
 
       {editor.validationMessage ? (
-        <Card className="mt-4 border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18">
+        <Card className="border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18 p-3 shadow-none">
           {editor.validationMessage}
         </Card>
       ) : null}
-
-      <MatchFormActions {...formActions} primaryActionRef={primaryActionRef} />
     </>
   );
 }

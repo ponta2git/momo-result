@@ -3,6 +3,7 @@ import { confirmMatchSchema } from "@/features/matches/workspace/review/confirmM
 
 type ValidationResult = {
   firstMessage?: string;
+  firstPath?: string;
   messages: string[];
   pathSet: Set<string>;
   success: boolean;
@@ -25,20 +26,20 @@ export function validateMatchForm(values: MatchFormValues): ValidationResult {
     };
   }
 
-  const pathSet = new Set(
-    result.error.issues.map((issue) =>
-      pathToKey(
-        issue.path.filter(
-          (segment): segment is string | number =>
-            typeof segment === "string" || typeof segment === "number",
-        ),
+  const paths = result.error.issues.map((issue) =>
+    pathToKey(
+      issue.path.filter(
+        (segment): segment is string | number =>
+          typeof segment === "string" || typeof segment === "number",
       ),
     ),
   );
+  const pathSet = new Set(paths);
   const messages = result.error.issues.map((issue) => issue.message);
 
   return {
     ...(messages[0] ? { firstMessage: messages[0] } : {}),
+    ...(paths[0] ? { firstPath: paths[0] } : {}),
     messages,
     pathSet,
     success: false,

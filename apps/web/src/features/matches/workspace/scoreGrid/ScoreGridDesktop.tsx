@@ -83,6 +83,7 @@ export function ScoreGridDesktopTable({
                   ref={(node) => registerCellRef(getCellId(rowIndex, 0), node)}
                   aria-label={`${memberDisplayName(player.memberId)} メンバー`}
                   className={memberSelectClass}
+                  data-validation-path={keyToPath(rowIndex, "memberId")}
                   value={player.memberId}
                   onChange={(event) => {
                     onPlayerChange(rowIndex, {
@@ -116,6 +117,7 @@ export function ScoreGridDesktopTable({
                       ? "border-[var(--color-danger)]/65 bg-[var(--color-danger)]/10"
                       : ""
                   }`}
+                  data-validation-path={keyToPath(rowIndex, "playOrder")}
                   value={Number.isFinite(player.playOrder) ? String(player.playOrder) : ""}
                   onChange={(event) =>
                     onPlayOrderChange(rowIndex, Number.parseInt(event.target.value, 10))
@@ -208,6 +210,7 @@ export function ScoreGridDesktopTable({
                       row={rowIndex}
                       showStateLabel
                       synced={lastSyncedPlayerIndex === rowIndex}
+                      validationPath={keyToPath(rowIndex, `incident.${incidentKey}` as GridColumn)}
                       value={player.incidents[incidentKey]}
                       onIncidentCommit={handleIncidentNumericCommit}
                       onKeyboard={handleKeyboard}
@@ -270,6 +273,7 @@ function PlayerNumericDesktopCell({
         registerCellRef={registerCellRef}
         row={rowIndex}
         showStateLabel
+        validationPath={keyToPath(rowIndex, field)}
         value={player[field]}
         onKeyboard={handleKeyboard}
         onPlayerCommit={handlePlayerNumericCommit}

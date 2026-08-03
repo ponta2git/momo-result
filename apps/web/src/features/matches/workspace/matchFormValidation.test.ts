@@ -80,6 +80,7 @@ describe("validateMatchForm", () => {
     expect(result.success).toBe(false);
     expect(result.messages).toContain("開催履歴を選択してください");
     expect(result.pathSet.has("heldEventId")).toBe(true);
+    expect(result.firstPath).toBe("heldEventId");
   });
 
   it("requires gameTitleId, mapMasterId, seasonMasterId and playedAt", () => {

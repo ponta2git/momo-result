@@ -5,20 +5,29 @@ import { validateMatchForm } from "@/features/matches/workspace/matchFormValidat
 
 export function useMatchWorkspacePrimaryAction(input: {
   mode: WorkspaceMode;
+  onValidationFailure: (path: string) => void;
   setConfirmOpen: (open: boolean) => void;
   setShowValidationErrors: (show: boolean) => void;
   setValidationMessage: (message: string) => void;
   update: (values: MatchFormValues) => void;
   values: MatchFormValues;
 }) {
-  const { mode, setConfirmOpen, setShowValidationErrors, setValidationMessage, update, values } =
-    input;
+  const {
+    mode,
+    onValidationFailure,
+    setConfirmOpen,
+    setShowValidationErrors,
+    setValidationMessage,
+    update,
+    values,
+  } = input;
 
   return useCallback(() => {
     const nextValidation = validateMatchForm(values);
     if (!nextValidation.success) {
       setShowValidationErrors(true);
       setValidationMessage(nextValidation.firstMessage ?? "入力内容に不足があります");
+      onValidationFailure(nextValidation.firstPath ?? "form");
       return;
     }
     setShowValidationErrors(false);
@@ -28,5 +37,13 @@ export function useMatchWorkspacePrimaryAction(input: {
       return;
     }
     setConfirmOpen(true);
-  }, [mode, setConfirmOpen, setShowValidationErrors, setValidationMessage, update, values]);
+  }, [
+    mode,
+    onValidationFailure,
+    setConfirmOpen,
+    setShowValidationErrors,
+    setValidationMessage,
+    update,
+    values,
+  ]);
 }

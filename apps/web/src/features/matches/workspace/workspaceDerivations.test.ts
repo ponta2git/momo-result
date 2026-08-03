@@ -5,6 +5,7 @@ import { createEmptyMatchForm } from "@/features/matches/workspace/matchFormType
 import { createSampleDraft } from "@/features/matches/workspace/review/sampleDrafts";
 import {
   currentLocalIsoMinute,
+  dedupeWorkspaceErrors,
   draftIdsFromDetail,
   draftIdsFromParams,
   draftsByKind,
@@ -153,6 +154,21 @@ describe("currentLocalIsoMinute", () => {
   it("defaults to the current Date when no argument is passed", () => {
     const result = currentLocalIsoMinute();
     expect(result).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/u);
+  });
+});
+
+describe("dedupeWorkspaceErrors", () => {
+  it("collapses identical query failures while retaining distinct details", () => {
+    const duplicate = {
+      code: "UPSTREAM_FAILURE",
+      detail: "同じ取得処理に失敗しました。",
+      kind: "api" as const,
+      status: 503,
+      title: "取得に失敗しました",
+    };
+    const distinct = { ...duplicate, detail: "別の取得処理に失敗しました。" };
+
+    expect(dedupeWorkspaceErrors([duplicate, duplicate, distinct])).toEqual([duplicate, distinct]);
   });
 });
 

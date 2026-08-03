@@ -145,6 +145,7 @@ export function ScoreGridMobileCards({
                           row={index}
                           showStateLabel
                           synced={lastSyncedPlayerIndex === index}
+                          validationPath={keyToPath(index, `incident.${column.incidentKey}`)}
                           value={player.incidents[column.incidentKey]}
                           onIncidentCommit={handleIncidentNumericCommit}
                           onPreferImageKindChange={onPreferImageKindChange}
@@ -176,6 +177,7 @@ function MobileMemberSelect({
       メンバー
       <select
         className={memberSelectClass}
+        data-validation-path={keyToPath(index, "memberId")}
         value={memberId}
         onChange={(event) => {
           onPlayerChange(index, {
@@ -213,6 +215,7 @@ function MobilePlayOrderSelect({
         className={`${selectShortClass} ${
           error ? "border-[var(--color-danger)]/65 bg-[var(--color-danger)]/10" : ""
         }`}
+        data-validation-path={keyToPath(index, "playOrder")}
         value={Number.isFinite(playOrder) ? String(playOrder) : ""}
         onChange={(event) => onPlayOrderChange(index, Number.parseInt(event.target.value, 10))}
         onFocus={() => onPreferImageKindChange?.("incident_log")}
@@ -268,6 +271,7 @@ function MobilePlayerNumericField({
         originalValue={originalValue}
         row={index}
         showStateLabel
+        validationPath={keyToPath(index, field)}
         value={player[field]}
         onPlayerCommit={onPlayerCommit}
         onPreferImageKindChange={onPreferImageKindChange}

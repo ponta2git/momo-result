@@ -102,7 +102,7 @@ export function ScoreGrid({ actions, data }: ScoreGridProps) {
   }, []);
 
   return (
-    <section>
+    <section data-validation-path="players" tabIndex={-1}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold text-[var(--color-text-primary)]">

@@ -3,8 +3,10 @@ import type {
   IncidentLookupEntry,
   OriginalPlayerSnapshot,
 } from "@/features/matches/workspace/matchFormTypes";
-import { incidentNames } from "@/features/matches/workspace/review/ocrDraftPayload";
-import { parseOcrWarningList } from "@/features/matches/workspace/review/ocrDraftPayload";
+import {
+  incidentNames,
+  parseOcrWarningList,
+} from "@/features/matches/workspace/review/ocrDraftPayload";
 import {
   byMemberId,
   byPlayOrder,
@@ -26,13 +28,13 @@ import {
   mergeFieldEvidence,
   reviewWarningMessage,
 } from "@/features/matches/workspace/review/reviewWarningModel";
-import type { ReviewFieldEvidence } from "@/features/matches/workspace/review/reviewWarningModel";
 import { defaultMemberAliasDirectory } from "@/shared/domain/memberDirectory";
 import type { MemberAliasDirectory } from "@/shared/domain/memberDirectory";
 import { fixedMembers } from "@/shared/domain/members";
 import { pipe } from "@/shared/lib/pipe";
 
 export type ReviewPlayer = OriginalPlayerSnapshot;
+type ReviewFieldEvidence = ReturnType<typeof buildFieldEvidence>;
 
 export type MergedDraftReview = {
   players: ReviewPlayer[];

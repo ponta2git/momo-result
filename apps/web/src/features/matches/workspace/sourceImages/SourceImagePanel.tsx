@@ -43,7 +43,7 @@ export function SourceImagePanel({
   });
 
   return (
-    <Card className="h-fit p-4 lg:sticky lg:top-4 lg:w-[22rem] xl:w-[26rem]">
+    <Card className="h-fit p-4 shadow-none">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold text-[var(--color-text-primary)]">元画像参照</h2>

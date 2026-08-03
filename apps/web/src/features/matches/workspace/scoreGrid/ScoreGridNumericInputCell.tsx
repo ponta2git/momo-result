@@ -90,6 +90,7 @@ export type NumericInputCellField = {
   ariaLabel: string;
   baseClassName: string;
   cellId: string;
+  validationPath?: string | undefined;
   value: number;
 };
 
@@ -197,6 +198,7 @@ export const NumericInputCell = memo(function NumericInputCell({
         ref={interaction.registerCellRef ? handleRef : undefined}
         aria-label={field.ariaLabel}
         className={`${field.baseClassName} ${viewState.toneClass}`}
+        data-validation-path={field.validationPath}
         id={field.cellId}
         inputMode="numeric"
         type="text"

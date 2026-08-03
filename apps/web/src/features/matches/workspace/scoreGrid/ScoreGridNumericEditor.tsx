@@ -48,6 +48,7 @@ export const ScoreGridNumericEditor = memo(function ScoreGridNumericEditor({
   registerCellRef,
   showStateLabel,
   synced,
+  validationPath,
   value,
   onIncidentCommit,
   onKeyboard,
@@ -65,7 +66,7 @@ export const ScoreGridNumericEditor = memo(function ScoreGridNumericEditor({
     },
     [commitKind, field, incidentKey, onIncidentCommit, onPlayerCommit, row],
   );
-  const inputField = { allowSign, ariaLabel, baseClassName, cellId, value };
+  const inputField = { allowSign, ariaLabel, baseClassName, cellId, validationPath, value };
   const interaction = {
     col,
     focusImageKind,

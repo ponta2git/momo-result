@@ -55,6 +55,10 @@ export function useMatchWorkspaceController({
   const [showValidationErrors, setShowValidationErrors] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [cancelDraftConfirmOpen, setCancelDraftConfirmOpen] = useState(false);
+  const [validationFocusRequest, setValidationFocusRequest] = useState<{
+    path: string;
+    sequence: number;
+  } | null>(null);
   const [eventDraftValue, setEventDraftValue] = useState<string>(currentLocalIsoMinute);
   const [workspaceData, setWorkspaceData] = useState<MatchWorkspaceInitialData | null>(null);
   const [preferredImageKind, setPreferredImageKind] = useState<SourceImageKind>("total_assets");
@@ -240,6 +244,11 @@ export function useMatchWorkspaceController({
   });
   const onPrimaryAction = useMatchWorkspacePrimaryAction({
     mode,
+    onValidationFailure: (path) =>
+      setValidationFocusRequest((current) => ({
+        path,
+        sequence: (current?.sequence ?? 0) + 1,
+      })),
     setConfirmOpen,
     setShowValidationErrors,
     setValidationMessage,
@@ -278,6 +287,7 @@ export function useMatchWorkspaceController({
     useSampleDrafts,
     validationState: { validation, visibleErrorPathSet },
     validationMessage,
+    validationFocusRequest,
     viewModel,
     workspaceData,
     workspaceLoading,

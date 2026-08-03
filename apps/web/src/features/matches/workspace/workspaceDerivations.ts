@@ -5,6 +5,7 @@ import type {
 import { slotKinds } from "@/shared/api/enums";
 import type { MatchDraftDetailResponse } from "@/shared/api/matchDrafts";
 import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
+import type { NormalizedApiError } from "@/shared/api/problemDetails";
 import { trimSearchParam } from "@/shared/lib/searchParams";
 import { bySlot } from "@/shared/lib/slotMap";
 import type { SlotMap } from "@/shared/lib/slotMap";
@@ -48,6 +49,17 @@ export function toIsoFromLocal(value: string): string {
 export function currentLocalIsoMinute(now: Date = new Date()): string {
   const offsetMs = now.getTimezoneOffset() * 60_000;
   return new Date(now.getTime() - offsetMs).toISOString().slice(0, 16);
+}
+
+export function dedupeWorkspaceErrors(errors: readonly NormalizedApiError[]): NormalizedApiError[] {
+  return [
+    ...new Map(
+      errors.map((error) => [
+        `${error.status}\u0000${error.code ?? ""}\u0000${error.title}\u0000${error.detail}`,
+        error,
+      ]),
+    ).values(),
+  ];
 }
 
 export function prefillFromDraftSummary(

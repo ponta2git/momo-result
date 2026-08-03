@@ -479,12 +479,38 @@ describe("DraftReviewPage", () => {
       matchSetupHeading.compareDocumentPosition(playerResultsHeading) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(screen.getByText(/保存先の開催履歴と作品情報を先に選びます/u)).toBeInTheDocument();
+    expect(screen.getByText("必須条件を設定してください")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "条件を閉じる" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
     expect(await screen.findByDisplayValue("あかねまみ")).toBeInTheDocument();
     expect(await screen.findByDisplayValue("15420")).toBeInTheDocument();
     expect(screen.queryByText("OCR読み取り状況を確認")).not.toBeInTheDocument();
     expect(screen.queryByText(/緑=高信頼OCR/u)).not.toBeInTheDocument();
     expect(screen.getByText(/Enterキーと矢印キーで移動できます/u)).toBeInTheDocument();
+  });
+
+  it("focuses the first invalid field when confirmation cannot open", async () => {
+    setDevUser();
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/review/dev-sample?sample=1"]}>
+          <Routes>
+            <Route path="/review/:matchSessionId" element={<DraftReviewPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await screen.findByText("サンプルの読み取り結果で表示中");
+    await user.click(screen.getByRole("button", { name: "確定前の確認へ進む" }));
+
+    await waitFor(() => expect(screen.getByRole("combobox", { name: /作品/u })).toHaveFocus());
+    expect(
+      screen.queryByRole("dialog", { name: "この内容で確定しますか？" }),
+    ).not.toBeInTheDocument();
   });
 
   it("allows clearing and retyping numeric result cells without prefixing zero", async () => {

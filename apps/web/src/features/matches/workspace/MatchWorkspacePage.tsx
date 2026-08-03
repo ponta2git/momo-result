@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 import { MatchConfirmDialog } from "@/features/matches/workspace/MatchConfirmDialog";
 import type { WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
@@ -40,7 +40,19 @@ export function MatchWorkspacePage({
     liveMessage,
     loadState,
     setup,
+    validationFocusRequest,
   } = controller;
+
+  useEffect(() => {
+    if (!validationFocusRequest) {
+      return;
+    }
+    const target = document.querySelector<HTMLElement>(
+      `[data-validation-path="${validationFocusRequest.path}"]`,
+    );
+    target?.scrollIntoView?.({ block: "center" });
+    target?.focus();
+  }, [validationFocusRequest]);
 
   if (loadState.editLoading) {
     return (
@@ -74,7 +86,7 @@ export function MatchWorkspacePage({
   }
 
   return (
-    <PageFrame className="gap-5" width="workspace">
+    <PageFrame width="workspace">
       <LiveRegion message={liveMessage} />
 
       <MatchWorkspaceHeader header={header} />

@@ -4,6 +4,7 @@ import { useMemo } from "react";
 
 import type { WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
 import {
+  dedupeWorkspaceErrors,
   draftIdsFromDetail,
   draftIdsFromParams,
 } from "@/features/matches/workspace/workspaceDerivations";
@@ -138,16 +139,18 @@ export function useMatchWorkspaceQueries(
   const reviewStatus = draftDetailQuery.data?.status;
   const isOcrRunningBlocked = mode !== "edit" && isOcrRunning(reviewStatus);
   const refreshingReviewStatus = draftDetailQuery.isFetching || ocrDraftsQuery.isFetching;
-  const baseErrors = [
-    mapMastersQuery,
-    seasonMastersQuery,
-    draftDetailQuery,
-    ocrDraftsQuery,
-    sourceImageQuery,
-    matchDetailQuery,
-  ]
-    .filter(shouldShowQueryError)
-    .map((query) => normalizeUnknownApiError(query.error));
+  const baseErrors = dedupeWorkspaceErrors(
+    [
+      mapMastersQuery,
+      seasonMastersQuery,
+      draftDetailQuery,
+      ocrDraftsQuery,
+      sourceImageQuery,
+      matchDetailQuery,
+    ]
+      .filter(shouldShowQueryError)
+      .map((query) => normalizeUnknownApiError(query.error)),
+  );
 
   return {
     derived: {

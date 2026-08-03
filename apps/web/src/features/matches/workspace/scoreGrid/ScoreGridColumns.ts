@@ -39,8 +39,13 @@ export const scoreGridColumns: ScoreGridColumnDescriptor[] = [
   { column: "memberId", header: "メンバー", kind: "member", widthClass: "w-[10rem]" },
   { column: "playOrder", header: "順", kind: "select", widthClass: "w-[7ch]" },
   { column: "rank", header: "順位", kind: "numeric", widthClass: "w-[7ch]" },
-  { column: "totalAssetsManYen", header: "総資産", kind: "numeric", widthClass: "w-[12ch]" },
-  { column: "revenueManYen", header: "収益", kind: "numeric", widthClass: "w-[12ch]" },
+  {
+    column: "totalAssetsManYen",
+    header: "総資産（万円）",
+    kind: "numeric",
+    widthClass: "w-[14ch]",
+  },
+  { column: "revenueManYen", header: "収益（万円）", kind: "numeric", widthClass: "w-[14ch]" },
   ...incidentColumns.map(
     ([incidentKey, header]): ScoreGridColumnDescriptor => ({
       column: `incident.${incidentKey}`,
@@ -67,8 +72,8 @@ export const selectShortClass = `${baseInputClass} min-w-[6ch] text-center`;
 export const memberSelectClass = `${baseInputClass} min-w-[10rem]`;
 export const playerFieldLabels = {
   rank: "順位",
-  revenueManYen: "収益",
-  totalAssetsManYen: "総資産",
+  revenueManYen: "収益（万円）",
+  totalAssetsManYen: "総資産（万円）",
 } as const satisfies Record<"rank" | "revenueManYen" | "totalAssetsManYen", string>;
 
 export function keyToPath(row: number, column: GridColumn): string {

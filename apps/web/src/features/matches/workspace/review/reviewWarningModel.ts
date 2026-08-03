@@ -1,6 +1,5 @@
 import type { SlotKind } from "@/shared/api/enums";
 import type { IncidentKey, IncidentLabel } from "@/shared/domain/incidents";
-import { incidentDefinitions } from "@/shared/domain/incidents";
 
 import type { OcrWarning } from "./ocrDraftPayload";
 
@@ -124,8 +123,4 @@ const warningCopyByCode: Record<string, string> = {
 
 export function reviewWarningMessage(warning: OcrWarning): string {
   return warningCopyByCode[warning.code] ?? warning.message;
-}
-
-export function incidentKeyFromLabel(label: IncidentLabel): IncidentKey {
-  return incidentDefinitions.find((definition) => definition.label === label)?.key ?? "destination";
 }

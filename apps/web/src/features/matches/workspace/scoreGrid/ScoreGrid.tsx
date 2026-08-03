@@ -1,6 +1,8 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
+import { reviewCellId } from "@/features/matches/workspace/review/reviewWarningModel";
+import type { ReviewFieldKey } from "@/features/matches/workspace/review/reviewWarningModel";
 import { gridColumns } from "@/features/matches/workspace/scoreGrid/ScoreGridColumns";
 import { ScoreGridDesktopTable } from "@/features/matches/workspace/scoreGrid/ScoreGridDesktop";
 import { handleScoreGridKeydown } from "@/features/matches/workspace/scoreGrid/ScoreGridKeyboard";
@@ -9,6 +11,7 @@ import type {
   IncidentNumericCommit,
   PlayerNumericCommit,
 } from "@/features/matches/workspace/scoreGrid/ScoreGridNumericEditor";
+import { ScoreGridReviewToolbar } from "@/features/matches/workspace/scoreGrid/ScoreGridReviewToolbar";
 import type {
   ScoreGridKeyboardHandler,
   ScoreGridProps,
@@ -17,6 +20,7 @@ import { useMediaQuery } from "@/shared/lib/useMediaQuery";
 
 export function ScoreGrid({ actions, data }: ScoreGridProps) {
   const [expandedMobilePlayer, setExpandedMobilePlayer] = useState(0);
+  const [pendingFocusCellId, setPendingFocusCellId] = useState<string | null>(null);
   const isNarrowViewport = useMediaQuery("(max-width: 1023px)");
   const inputRefs = useRef(new Map<string, HTMLElement>());
 
@@ -28,7 +32,7 @@ export function ScoreGrid({ actions, data }: ScoreGridProps) {
   }, [data.originalPlayers]);
 
   const getCellId = useCallback(
-    (row: number, col: number) => `player-${row}-${gridColumns[col]}`,
+    (row: number, col: number) => reviewCellId(row, gridColumns[col] as ReviewFieldKey),
     [],
   );
 
@@ -46,6 +50,59 @@ export function ScoreGrid({ actions, data }: ScoreGridProps) {
       next.focus();
     }
   }, []);
+
+  useEffect(() => {
+    if (!pendingFocusCellId) {
+      return;
+    }
+    const next = inputRefs.current.get(pendingFocusCellId);
+    if (!next) {
+      return;
+    }
+    next.focus();
+    setPendingFocusCellId(null);
+  }, [expandedMobilePlayer, pendingFocusCellId]);
+
+  const acknowledgedCellIdSet = useMemo(
+    () => new Set(data.review.acknowledgedCellIds),
+    [data.review.acknowledgedCellIds],
+  );
+  const unresolvedItems = data.review.items.filter(
+    (item) => !acknowledgedCellIdSet.has(item.cellId),
+  );
+  const activeItem =
+    data.review.items.find((item) => item.cellId === data.review.activeCellId) ??
+    unresolvedItems[0] ??
+    data.review.items[0];
+
+  const requestReviewItemFocus = useCallback((cellId: string, row: number) => {
+    setExpandedMobilePlayer(row);
+    setPendingFocusCellId(cellId);
+  }, []);
+
+  const navigateReviewItems = useCallback(
+    (direction: -1 | 1) => {
+      if (unresolvedItems.length === 0) {
+        return;
+      }
+      const currentIndex = unresolvedItems.findIndex(
+        (item) => item.cellId === data.review.activeCellId,
+      );
+      const startIndex = currentIndex < 0 ? (direction > 0 ? -1 : 0) : currentIndex;
+      const nextIndex = (startIndex + direction + unresolvedItems.length) % unresolvedItems.length;
+      const next = unresolvedItems[nextIndex];
+      if (next) {
+        requestReviewItemFocus(next.cellId, next.row);
+      }
+    },
+    [data.review.activeCellId, requestReviewItemFocus, unresolvedItems],
+  );
+
+  const acknowledgeActiveItem = useCallback(() => {
+    if (activeItem) {
+      actions.onAcknowledgeReviewCell(activeItem.cellId);
+    }
+  }, [actions, activeItem]);
 
   const handleKeyboard = useCallback<ScoreGridKeyboardHandler>(
     (args) => {
@@ -114,6 +171,16 @@ export function ScoreGrid({ actions, data }: ScoreGridProps) {
         </div>
       </div>
 
+      <ScoreGridReviewToolbar
+        activeItem={activeItem}
+        activeReviewed={Boolean(activeItem && acknowledgedCellIdSet.has(activeItem.cellId))}
+        remainingCount={unresolvedItems.length}
+        totalCount={data.review.items.length}
+        onAcknowledge={acknowledgeActiveItem}
+        onNext={() => navigateReviewItems(1)}
+        onPrevious={() => navigateReviewItems(-1)}
+      />
+
       {isNarrowViewport ? null : (
         <div className="mt-4 overflow-x-auto pb-2">
           <ScoreGridDesktopTable
@@ -126,10 +193,12 @@ export function ScoreGrid({ actions, data }: ScoreGridProps) {
             originalByPlayOrder={originalByPlayOrder}
             originalPlayers={data.originalPlayers}
             players={data.players}
+            review={data.review}
             registerCellRef={registerCellRef}
             onPlayerChange={actions.onPlayerChange}
             onPlayOrderChange={actions.onPlayOrderChange}
             onPreferImageKindChange={actions.onPreferImageKindChange}
+            onReviewCellFocus={actions.onReviewCellFocus}
           />
         </div>
       )}
@@ -143,9 +212,13 @@ export function ScoreGrid({ actions, data }: ScoreGridProps) {
           lastSyncedPlayerIndex={data.lastSyncedPlayerIndex}
           originalPlayers={data.originalPlayers}
           players={data.players}
+          review={data.review}
+          getCellId={getCellId}
+          registerCellRef={registerCellRef}
           onPlayerChange={actions.onPlayerChange}
           onPlayOrderChange={actions.onPlayOrderChange}
           onPreferImageKindChange={actions.onPreferImageKindChange}
+          onReviewCellFocus={actions.onReviewCellFocus}
           onTogglePlayer={handleToggleMobilePlayer}
         />
       ) : null}

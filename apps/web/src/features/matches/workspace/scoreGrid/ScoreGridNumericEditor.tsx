@@ -46,6 +46,9 @@ export const ScoreGridNumericEditor = memo(function ScoreGridNumericEditor({
   focusImageKind,
   originalValue,
   registerCellRef,
+  reviewField,
+  reviewed,
+  reviewMessage,
   showStateLabel,
   synced,
   validationPath,
@@ -53,6 +56,7 @@ export const ScoreGridNumericEditor = memo(function ScoreGridNumericEditor({
   onIncidentCommit,
   onKeyboard,
   onPreferImageKindChange,
+  onReviewCellFocus,
   onPlayerCommit,
   row,
 }: ScoreGridNumericEditorProps) {
@@ -71,12 +75,14 @@ export const ScoreGridNumericEditor = memo(function ScoreGridNumericEditor({
     col,
     focusImageKind,
     registerCellRef,
+    reviewField,
     row,
     onCommit: commitValue,
     onKeyboard,
     onPreferImageKindChange,
+    onReviewCellFocus,
   };
-  const state = { error, originalValue, showStateLabel, synced };
+  const state = { error, originalValue, reviewed, reviewMessage, showStateLabel, synced };
 
   return (
     <NumericInput.NumericInputCell field={inputField} interaction={interaction} state={state} />

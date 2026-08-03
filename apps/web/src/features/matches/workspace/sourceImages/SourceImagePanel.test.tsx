@@ -156,6 +156,49 @@ describe("SourceImagePanel", () => {
     expect(requestedKinds).toHaveLength(3);
   });
 
+  it("keeps a manually selected image fixed until automatic follow is restored", async () => {
+    const user = userEvent.setup();
+    installObjectUrlMock({
+      createObjectURL: (value) => (value instanceof Blob ? `blob:size-${value.size}` : "blob:0"),
+    });
+    server.use(
+      http.get("/api/match-drafts/:draftId/source-images/:kind", ({ params }) => {
+        const kind = String(params["kind"]);
+        const body = kind === "total_assets" ? "a" : kind === "revenue" ? "bb" : "ccc";
+        return new HttpResponse(body, {
+          headers: { "Content-Type": "image/png" },
+        });
+      }),
+    );
+
+    const view = render(
+      <SourceImagePanel
+        loading={false}
+        matchDraftId={draftId}
+        preferredKind="total_assets"
+        sourceImages={sourceImages}
+      />,
+    );
+
+    expect(await screen.findByRole("img", { name: "総資産の元画像" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "収益" }));
+    expect(screen.getByRole("button", { name: "固定" })).toHaveAttribute("aria-pressed", "true");
+    expect(await screen.findByRole("img", { name: "収益の元画像" })).toBeInTheDocument();
+
+    view.rerender(
+      <SourceImagePanel
+        loading={false}
+        matchDraftId={draftId}
+        preferredKind="incident_log"
+        sourceImages={sourceImages}
+      />,
+    );
+    expect(screen.getByRole("img", { name: "収益の元画像" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "自動追従" }));
+    expect(await screen.findByRole("img", { name: "事件簿の元画像" })).toBeInTheDocument();
+  });
+
   it("opens the source image preview in a modal dialog", async () => {
     const user = userEvent.setup();
     installObjectUrlMock({ createObjectURL: () => "blob:source-image" });

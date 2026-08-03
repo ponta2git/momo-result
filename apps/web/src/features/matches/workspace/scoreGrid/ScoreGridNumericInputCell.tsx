@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { memo, useCallback, useRef, useState } from "react";
 import type { ChangeEvent, KeyboardEvent } from "react";
 
+import type { ReviewFieldKey } from "@/features/matches/workspace/review/reviewWarningModel";
 import { momoTransition } from "@/shared/ui/motion/variants";
 
 export type PreferredImageKind = "incident_log" | "revenue" | "total_assets";
@@ -17,6 +18,7 @@ type NumericKeyboardArgs = {
 export type NumericKeyboardHandler = (args: NumericKeyboardArgs) => void;
 
 type CellViewState = {
+  description?: string;
   label?: string;
   toneClass: string;
 };
@@ -25,6 +27,8 @@ function cellViewState(args: {
   currentValue: number;
   error: boolean;
   originalValue: number | undefined;
+  reviewMessage: string | undefined;
+  reviewed: boolean;
   synced: boolean;
 }): CellViewState {
   if (args.error) {
@@ -34,10 +38,11 @@ function cellViewState(args: {
     };
   }
 
-  if (args.synced) {
+  if (args.reviewMessage && !args.reviewed) {
     return {
-      label: "同期済み",
-      toneClass: "border-[var(--color-action)]/55 bg-[var(--color-action)]/10",
+      description: args.reviewMessage,
+      label: "OCR要確認",
+      toneClass: "border-[var(--color-review)]/75 bg-[var(--color-review)]/14",
     };
   }
 
@@ -45,6 +50,21 @@ function cellViewState(args: {
     return {
       label: "手修正",
       toneClass: "border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18",
+    };
+  }
+
+  if (args.reviewMessage && args.reviewed) {
+    return {
+      description: args.reviewMessage,
+      label: "確認済み",
+      toneClass: "border-[var(--color-success)]/55 bg-[var(--color-success)]/12",
+    };
+  }
+
+  if (args.synced) {
+    return {
+      label: "同期済み",
+      toneClass: "border-[var(--color-action)]/55 bg-[var(--color-action)]/10",
     };
   }
 
@@ -102,11 +122,15 @@ export type NumericInputCellInteraction = {
   onCommit: (value: number) => void;
   onKeyboard?: NumericKeyboardHandler | undefined;
   onPreferImageKindChange?: ((kind: PreferredImageKind) => void) | undefined;
+  onReviewCellFocus?: ((row: number, field: ReviewFieldKey) => void) | undefined;
+  reviewField?: ReviewFieldKey | undefined;
 };
 
 export type NumericInputCellState = {
   error?: boolean | undefined;
   originalValue?: number | undefined;
+  reviewMessage?: string | undefined;
+  reviewed?: boolean | undefined;
   showStateLabel?: boolean | undefined;
   synced?: boolean | undefined;
 };
@@ -134,6 +158,8 @@ export const NumericInputCell = memo(function NumericInputCell({
         currentValue,
         error: state.error ?? false,
         originalValue: state.originalValue,
+        reviewMessage: state.reviewMessage,
+        reviewed: state.reviewed ?? false,
         synced: state.synced ?? false,
       })
     : { toneClass: "" };
@@ -168,6 +194,9 @@ export const NumericInputCell = memo(function NumericInputCell({
     if (interaction.focusImageKind) {
       interaction.onPreferImageKindChange?.(interaction.focusImageKind);
     }
+    if (interaction.reviewField) {
+      interaction.onReviewCellFocus?.(interaction.row, interaction.reviewField);
+    }
   }, [inputValue, interaction]);
 
   const handleKeyDown = useCallback(
@@ -197,6 +226,10 @@ export const NumericInputCell = memo(function NumericInputCell({
       <input
         ref={interaction.registerCellRef ? handleRef : undefined}
         aria-label={field.ariaLabel}
+        aria-describedby={
+          state?.showStateLabel && viewState.label ? `${field.cellId}-status` : undefined
+        }
+        aria-invalid={state?.error || undefined}
         className={`${field.baseClassName} ${viewState.toneClass}`}
         data-validation-path={field.validationPath}
         id={field.cellId}
@@ -208,20 +241,28 @@ export const NumericInputCell = memo(function NumericInputCell({
         onFocus={handleFocus}
         onKeyDown={handleKeyDown}
       />
-      <AnimatePresence initial={false}>
-        {state?.showStateLabel && viewState.label ? (
-          <motion.p
-            key={viewState.label}
-            animate={{ opacity: 1, y: 0 }}
-            className="mt-1 text-[0.68rem] text-[var(--color-text-secondary)]"
-            exit={{ opacity: 0, y: -2 }}
-            initial={{ opacity: 0, y: 2 }}
-            transition={momoTransition}
-          >
-            {viewState.label}
-          </motion.p>
-        ) : null}
-      </AnimatePresence>
+      {state?.showStateLabel ? (
+        <div className="min-h-5 pt-1">
+          <AnimatePresence initial={false}>
+            {viewState.label ? (
+              <motion.p
+                key={viewState.label}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-xs leading-4 text-[var(--color-text-secondary)]"
+                exit={{ opacity: 0, y: -2 }}
+                id={`${field.cellId}-status`}
+                initial={{ opacity: 0, y: 2 }}
+                transition={momoTransition}
+              >
+                {viewState.label}
+                {viewState.description ? (
+                  <span className="sr-only">：{viewState.description}</span>
+                ) : null}
+              </motion.p>
+            ) : null}
+          </AnimatePresence>
+        </div>
+      ) : null}
     </>
   );
 });

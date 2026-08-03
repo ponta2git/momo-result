@@ -14,7 +14,6 @@ import {
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { triggerBrowserDownload } from "@/shared/browser/downloadFile";
 
-const stickyDurationMs = 15_000;
 const archiveDownloadError =
   "元画像を保存できませんでした。確定または削除により画像が利用できなくなった可能性があります。必要な場合は画像を再アップロードしてください。";
 const archiveRateLimitError =
@@ -42,8 +41,8 @@ export function useSourceImagePanelState({
 }) {
   const states = useMemo(() => toSourceImageStates(sourceImages), [sourceImages]);
   const [activeKind, setActiveKind] = useState<SourceImageKind>(preferredKind ?? "total_assets");
+  const [followMode, setFollowMode] = useState<"auto" | "fixed">("auto");
   const [previewKind, setPreviewKind] = useState<SourceImageKind | null>(null);
-  const [manualSwitchAt, setManualSwitchAt] = useState<number>(0);
   const [imageCache, setImageCache] = useState<SourceImageCache>({});
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
   const [archiveSaving, setArchiveSaving] = useState(false);
@@ -58,14 +57,11 @@ export function useSourceImagePanelState({
   }, [imageCache]);
 
   useEffect(() => {
-    if (!preferredKind) {
-      return;
-    }
-    if (Date.now() - manualSwitchAt <= stickyDurationMs) {
+    if (!preferredKind || followMode === "fixed") {
       return;
     }
     setActiveKind(preferredKind);
-  }, [manualSwitchAt, preferredKind]);
+  }, [followMode, preferredKind]);
 
   const activeState = states.find((state) => state.kind === activeKind);
   const activeImageUrl = activeState?.status === "available" ? activeState.url : undefined;
@@ -193,8 +189,19 @@ export function useSourceImagePanelState({
 
   const handleSourceImageTabChange = useCallback((kind: SourceImageKind) => {
     setActiveKind(kind);
-    setManualSwitchAt(Date.now());
+    setFollowMode("fixed");
   }, []);
+
+  const handleFollowModeChange = useCallback(
+    (nextMode: string) => {
+      const normalizedMode = nextMode === "fixed" ? "fixed" : "auto";
+      setFollowMode(normalizedMode);
+      if (normalizedMode === "auto" && preferredKind) {
+        setActiveKind(preferredKind);
+      }
+    },
+    [preferredKind],
+  );
 
   const handlePreviewOpen = useCallback(
     (event: MouseEvent<HTMLElement>) => {
@@ -223,10 +230,12 @@ export function useSourceImagePanelState({
     availableImageCount,
     displayUrl,
     expectedImageCount,
+    followMode,
     handleArchiveCancel: () => setArchiveConfirmOpen(false),
     handleArchiveDialogOpenChange: setArchiveConfirmOpen,
     handleArchiveSaveConfirmed,
     handleArchiveSaveRequest,
+    handleFollowModeChange,
     handlePreviewClose,
     handlePreviewOpen,
     handleSourceImageTabChange,

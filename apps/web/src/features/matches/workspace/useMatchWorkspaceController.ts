@@ -23,6 +23,7 @@ import { useMatchWorkspaceLifecycleEffects } from "@/features/matches/workspace/
 import { useMatchWorkspaceMutations } from "@/features/matches/workspace/useMatchWorkspaceMutations";
 import { useMatchWorkspacePrimaryAction } from "@/features/matches/workspace/useMatchWorkspacePrimaryAction";
 import { useMatchWorkspaceQueries } from "@/features/matches/workspace/useMatchWorkspaceQueries";
+import { useMatchWorkspaceReviewState } from "@/features/matches/workspace/useMatchWorkspaceReviewState";
 import { useMatchWorkspaceSourceImages } from "@/features/matches/workspace/useMatchWorkspaceSourceImages";
 import { useMatchWorkspaceValidation } from "@/features/matches/workspace/useMatchWorkspaceValidation";
 import { useMatchWorkspaceViewModel } from "@/features/matches/workspace/useMatchWorkspaceViewModel";
@@ -236,10 +237,17 @@ export function useMatchWorkspaceController({
 
   const closeConfirm = useCallback(() => setConfirmOpen(false), []);
   const openCancelDraftConfirm = useCallback(() => setCancelDraftConfirmOpen(true), []);
+  const reviewState = useMatchWorkspaceReviewState({
+    reviewKey: handoffSessionId,
+    values: state.values,
+    workspaceData,
+  });
   const formHandlers = useMatchWorkspaceFormHandlers({
     createHeldEvent: createEventMutation.mutate,
     dispatch,
     eventDraftValue,
+    onReviewFieldChange: reviewState.markFieldChanged,
+    onReviewPlayOrderChange: reviewState.markPlayOrderChanged,
     workspaceData,
   });
   const onPrimaryAction = useMatchWorkspacePrimaryAction({
@@ -281,6 +289,7 @@ export function useMatchWorkspaceController({
     preferredImageKind,
     refreshingReviewStatus,
     returnTo,
+    reviewState,
     sourceImageLoading: sourceImageQuery.isLoading,
     sourceImages,
     state,

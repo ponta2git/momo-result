@@ -4,6 +4,7 @@ import type { MatchFormReducerState } from "./matchFormReducer";
 import type { MatchWorkspaceInitialData, WorkspaceMode } from "./matchFormTypes";
 import type { SourceImageItem, SourceImageKind } from "./sourceImages/sourceImageTypes";
 import type { useMatchWorkspaceFormHandlers } from "./useMatchWorkspaceFormHandlers";
+import type { useMatchWorkspaceReviewState } from "./useMatchWorkspaceReviewState";
 import type { useMatchWorkspaceValidation } from "./useMatchWorkspaceValidation";
 import type { useMatchWorkspaceViewModel } from "./useMatchWorkspaceViewModel";
 
@@ -26,6 +27,7 @@ type MatchWorkspaceControllerModelArgs = {
   notice: string;
   preferredImageKind: SourceImageKind;
   returnTo: string | null | undefined;
+  reviewState: ReturnType<typeof useMatchWorkspaceReviewState>;
   sourceImageLoading: boolean;
   sourceImages: SourceImageItem[] | undefined;
   state: MatchFormReducerState;
@@ -106,12 +108,19 @@ export function buildMatchWorkspaceControllerModel(args: MatchWorkspaceControlle
           onPlayerChange: args.formHandlers.onPlayerChange,
           onPlayOrderChange: args.formHandlers.onPlayOrderChange,
           onPreferImageKindChange: args.onPreferImageKindChange,
+          onAcknowledgeReviewCell: args.reviewState.acknowledgeCell,
+          onReviewCellFocus: args.reviewState.focusCell,
         },
         data: {
           errorPathSet: visibleErrorPathSet,
           lastSyncedPlayerIndex: state.lastSyncedPlayerIndex,
           originalPlayers: args.workspaceData?.originalPlayers,
           players: state.values.players,
+          review: {
+            acknowledgedCellIds: args.reviewState.acknowledgedCellIds,
+            activeCellId: args.reviewState.activeCellId,
+            items: args.reviewState.items,
+          },
         },
       },
       sourceImagePanel:

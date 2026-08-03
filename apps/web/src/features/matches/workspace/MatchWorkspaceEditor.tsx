@@ -71,13 +71,19 @@ export function MatchWorkspaceEditor({
           editor.sourceImagePanel ? "2xl:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)]" : "",
         )}
       >
-        <Card className="p-4">
+        <Card className="order-2 p-4 2xl:order-none">
           <ScoreGrid actions={scoreGridActions} data={editor.scoreGrid.data} />
         </Card>
 
-        <aside className="grid h-fit gap-4 2xl:sticky 2xl:top-4">
-          {editor.sourceImagePanel ? <SourceImagePanel {...editor.sourceImagePanel} /> : null}
-          <MatchFormActions {...formActions} primaryActionRef={primaryActionRef} />
+        <aside className="contents 2xl:sticky 2xl:top-4 2xl:grid 2xl:h-fit 2xl:gap-4">
+          {editor.sourceImagePanel ? (
+            <div className="order-1 2xl:order-none">
+              <SourceImagePanel {...editor.sourceImagePanel} />
+            </div>
+          ) : null}
+          <div className="order-3 2xl:order-none">
+            <MatchFormActions {...formActions} primaryActionRef={primaryActionRef} />
+          </div>
         </aside>
       </div>
 

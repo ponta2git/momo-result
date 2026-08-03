@@ -9,6 +9,7 @@ import { useSourceImagePanelState } from "@/features/matches/workspace/sourceIma
 import { Button } from "@/shared/ui/actions/Button";
 import { Dialog } from "@/shared/ui/feedback/Dialog";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
+import { SegmentedControl } from "@/shared/ui/forms/SegmentedControl";
 import { Card } from "@/shared/ui/layout/Card";
 
 type SourceImagePanelProps = {
@@ -19,6 +20,10 @@ type SourceImagePanelProps = {
 };
 
 const archivePendingLabel = "保存中…";
+const followModeOptions = [
+  { label: "自動追従", value: "auto" },
+  { label: "固定", value: "fixed" },
+];
 
 function SourceImageLoadingFrame({ detail, label }: { detail: string; label: string }) {
   return (
@@ -63,7 +68,7 @@ export function SourceImagePanel({
         </Button>
       </div>
       <p className="mt-1 text-xs text-pretty text-[var(--color-text-secondary)]">
-        入力中セルに応じて参照画像を切り替えます。手動で選んだタブはしばらく固定されます。
+        自動追従では、選択中の入力セルに対応する画像を表示します。
       </p>
       {!loading && panel.availableImageCount === 0 ? (
         <p className="mt-2 text-xs text-[var(--color-text-secondary)]">
@@ -76,7 +81,14 @@ export function SourceImagePanel({
         </p>
       ) : null}
 
-      <div className="mt-3">
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <SegmentedControl
+          className="shrink-0"
+          label="元画像の追従方法"
+          options={followModeOptions}
+          value={panel.followMode}
+          onValueChange={panel.handleFollowModeChange}
+        />
         <SourceImageTabs
           activeKind={panel.activeKind}
           onChange={panel.handleSourceImageTabChange}

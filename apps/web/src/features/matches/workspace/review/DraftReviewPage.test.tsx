@@ -537,6 +537,47 @@ describe("DraftReviewPage", () => {
     expect(screen.getByText("手修正")).toBeInTheDocument();
   });
 
+  it("offers to restore a tab-scoped draft after the review page is reopened", async () => {
+    setDevUser();
+
+    const firstView = render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/review/dev-sample?sample=1"]}>
+          <Routes>
+            <Route path="/review/:matchSessionId" element={<DraftReviewPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await screen.findByText("サンプルの読み取り結果で表示中");
+    const rankInput = screen.getByLabelText("ぽんた 順位");
+    await user.clear(rankInput);
+    await user.type(rankInput, "4");
+    await user.tab();
+    await waitFor(() => expect(window.sessionStorage.length).toBeGreaterThan(0));
+    firstView.unmount();
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/review/dev-sample?sample=1"]}>
+          <Routes>
+            <Route path="/review/:matchSessionId" element={<DraftReviewPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("前回の一時保存があります")).toBeInTheDocument();
+    expect(screen.getByLabelText("ぽんた 順位")).not.toHaveValue("4");
+    await user.click(screen.getByRole("button", { name: "一時保存を復元" }));
+
+    expect(screen.getByLabelText("ぽんた 順位")).toHaveValue("4");
+    expect(
+      screen.getByText("一時保存した入力内容とOCR確認状況を復元しました。"),
+    ).toBeInTheDocument();
+  });
+
   it("restores form values after returning from master management with handoffId", async () => {
     setDevUser();
 

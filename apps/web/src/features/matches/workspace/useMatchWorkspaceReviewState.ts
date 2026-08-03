@@ -60,6 +60,14 @@ export function useMatchWorkspaceReviewState({
     );
   }, []);
 
+  const restoreAcknowledgedCellIds = useCallback(
+    (cellIds: readonly string[]) => {
+      const knownCellIds = new Set(items.map((item) => item.cellId));
+      setAcknowledgedCellIds([...new Set(cellIds.filter((cellId) => knownCellIds.has(cellId)))]);
+    },
+    [items],
+  );
+
   const markFieldChanged = useCallback((row: number, field: ReviewFieldKey) => {
     const cellId = reviewCellId(row, field);
     setActiveCellId(cellId);
@@ -89,6 +97,7 @@ export function useMatchWorkspaceReviewState({
     items,
     markFieldChanged,
     markPlayOrderChanged,
+    restoreAcknowledgedCellIds,
     unresolvedCount: unresolvedItems.length,
   };
 }

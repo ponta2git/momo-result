@@ -6,6 +6,7 @@ import { MatchWorkspaceBlockedNotice } from "@/features/matches/workspace/MatchW
 import { MatchWorkspaceEditor } from "@/features/matches/workspace/MatchWorkspaceEditor";
 import { MatchWorkspaceHeader } from "@/features/matches/workspace/MatchWorkspaceHeader";
 import { MatchWorkspaceLoading } from "@/features/matches/workspace/MatchWorkspaceLoading";
+import { MatchWorkspaceNavigationGuard } from "@/features/matches/workspace/MatchWorkspaceNavigationGuard";
 import { useMatchWorkspaceController } from "@/features/matches/workspace/useMatchWorkspaceController";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { LiveRegion } from "@/shared/ui/feedback/LiveRegion";
@@ -39,6 +40,7 @@ export function MatchWorkspacePage({
     header,
     liveMessage,
     loadState,
+    navigationGuard,
     setup,
     validationFocusRequest,
   } = controller;
@@ -110,6 +112,7 @@ export function MatchWorkspacePage({
       )}
 
       {confirmDialog ? <MatchConfirmDialog {...confirmDialog} /> : null}
+      <MatchWorkspaceNavigationGuard {...navigationGuard} />
     </PageFrame>
   );
 }

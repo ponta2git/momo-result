@@ -5,6 +5,7 @@ import type { MatchWorkspaceInitialData, WorkspaceMode } from "./matchFormTypes"
 import type { SourceImageItem, SourceImageKind } from "./sourceImages/sourceImageTypes";
 import type { useMatchWorkspaceFormHandlers } from "./useMatchWorkspaceFormHandlers";
 import type { useMatchWorkspaceReviewState } from "./useMatchWorkspaceReviewState";
+import type { useMatchWorkspaceSessionDraft } from "./useMatchWorkspaceSessionDraft";
 import type { useMatchWorkspaceValidation } from "./useMatchWorkspaceValidation";
 import type { useMatchWorkspaceViewModel } from "./useMatchWorkspaceViewModel";
 
@@ -28,6 +29,7 @@ type MatchWorkspaceControllerModelArgs = {
   preferredImageKind: SourceImageKind;
   returnTo: string | null | undefined;
   reviewState: ReturnType<typeof useMatchWorkspaceReviewState>;
+  sessionDraft: ReturnType<typeof useMatchWorkspaceSessionDraft>;
   sourceImageLoading: boolean;
   sourceImages: SourceImageItem[] | undefined;
   state: MatchFormReducerState;
@@ -97,6 +99,11 @@ export function buildMatchWorkspaceControllerModel(args: MatchWorkspaceControlle
             mapName: viewModel.selectedMap?.name,
             seasonName: viewModel.selectedSeason?.name,
           },
+          reviewSummary: {
+            changedCount: args.reviewState.changedCount,
+            totalCount: args.reviewState.items.length,
+            unresolvedCount: args.reviewState.unresolvedCount,
+          },
           validationMessage: args.validationMessage,
           values: state.values,
         }
@@ -132,6 +139,13 @@ export function buildMatchWorkspaceControllerModel(args: MatchWorkspaceControlle
               sourceImages: args.sourceImages,
             }
           : null,
+      sessionRecovery: args.sessionDraft.recovery
+        ? {
+            savedAt: args.sessionDraft.recovery.savedAt,
+            onDiscard: args.sessionDraft.discardRecovery,
+            onRestore: args.sessionDraft.restoreRecovery,
+          }
+        : null,
       validationMessage: args.validationMessage,
       warnings: args.workspaceData?.warnings ?? [],
     },
@@ -149,6 +163,11 @@ export function buildMatchWorkspaceControllerModel(args: MatchWorkspaceControlle
       pageDescription: viewModel.pageDescription,
       pageTitle: viewModel.pageTitle,
       useSampleDrafts: args.useSampleDrafts,
+    },
+    navigationGuard: {
+      dirty: args.sessionDraft.dirty,
+      navigationAllowedRef: args.sessionDraft.navigationAllowedRef,
+      onDiscard: args.sessionDraft.markCommitted,
     },
     liveMessage: args.notice || args.validationMessage,
     validationFocusRequest: args.validationFocusRequest,

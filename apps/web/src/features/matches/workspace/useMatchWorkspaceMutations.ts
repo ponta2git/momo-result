@@ -20,6 +20,7 @@ export type MatchWorkspaceMutationsParams = {
   onConfirmConflict?: (matchDraftId: string) => Promise<boolean>;
   onConfirmSuccess: () => void;
   onError: (message: string) => void;
+  onPersistedSuccess: () => void;
 };
 
 function isConflict(error: unknown): boolean {
@@ -37,6 +38,7 @@ export function useMatchWorkspaceMutations({
   onConfirmConflict,
   onConfirmSuccess,
   onError,
+  onPersistedSuccess,
 }: MatchWorkspaceMutationsParams) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -54,6 +56,7 @@ export function useMatchWorkspaceMutations({
     onSuccess: async (response) => {
       await invalidateAfterMatchConfirmed(queryClient);
       onConfirmSuccess();
+      onPersistedSuccess();
       navigate(`/matches/${encodeURIComponent(response.matchId)}`);
     },
     onError: async (error, request) => {
@@ -82,6 +85,7 @@ export function useMatchWorkspaceMutations({
     onSuccess: async (response) => {
       assertDefined(matchId, "matchId");
       await invalidateAfterMatchUpdated(queryClient, matchId);
+      onPersistedSuccess();
       navigate(`/matches/${encodeURIComponent(response.matchId)}`);
     },
     onError: (error) => {
@@ -101,6 +105,7 @@ export function useMatchWorkspaceMutations({
     },
     onSuccess: async () => {
       await invalidateAfterDraftCancelled(queryClient);
+      onPersistedSuccess();
       navigate("/matches", { replace: true });
     },
     onError: (error) => {

@@ -1,4 +1,4 @@
-import { useCallback, useReducer, useState } from "react";
+import { useCallback, useReducer, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import {
@@ -12,6 +12,7 @@ import type {
 } from "@/features/matches/workspace/matchFormTypes";
 import { buildMatchWorkspaceControllerModel } from "@/features/matches/workspace/matchWorkspaceControllerModel";
 import type { MatchWorkspaceControllerModel } from "@/features/matches/workspace/matchWorkspaceControllerModel";
+import type { MatchWorkspaceSessionDraft } from "@/features/matches/workspace/matchWorkspaceSessionDraft";
 import type { SourceImageKind } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
 import { useConfirmedDraftRedirect } from "@/features/matches/workspace/useConfirmedDraftRedirect";
 import { useMasterHandoffRestore } from "@/features/matches/workspace/useMasterHandoffRestore";
@@ -24,6 +25,7 @@ import { useMatchWorkspaceMutations } from "@/features/matches/workspace/useMatc
 import { useMatchWorkspacePrimaryAction } from "@/features/matches/workspace/useMatchWorkspacePrimaryAction";
 import { useMatchWorkspaceQueries } from "@/features/matches/workspace/useMatchWorkspaceQueries";
 import { useMatchWorkspaceReviewState } from "@/features/matches/workspace/useMatchWorkspaceReviewState";
+import { useMatchWorkspaceSessionDraft } from "@/features/matches/workspace/useMatchWorkspaceSessionDraft";
 import { useMatchWorkspaceSourceImages } from "@/features/matches/workspace/useMatchWorkspaceSourceImages";
 import { useMatchWorkspaceValidation } from "@/features/matches/workspace/useMatchWorkspaceValidation";
 import { useMatchWorkspaceViewModel } from "@/features/matches/workspace/useMatchWorkspaceViewModel";
@@ -71,6 +73,22 @@ export function useMatchWorkspaceController({
   const [state, dispatch] = useReducer(matchFormReducer, null, () =>
     createMatchFormReducerState(emptyFormFactory()),
   );
+  const sessionNavigationActionsRef = useRef<{
+    allowNavigation: () => void;
+    markCommitted: () => void;
+  }>({
+    allowNavigation: () => undefined,
+    markCommitted: () => undefined,
+  });
+  const handleBeforeConfirmedDraftRedirect = useCallback(() => {
+    sessionNavigationActionsRef.current.markCommitted();
+  }, []);
+  const handlePersistedSuccess = useCallback(() => {
+    sessionNavigationActionsRef.current.markCommitted();
+  }, []);
+  const handleBeforeHandoffNavigation = useCallback(() => {
+    sessionNavigationActionsRef.current.allowNavigation();
+  }, []);
 
   const useSampleDrafts = mode === "review" && searchParams.get("sample") === "1";
   const hasHandoff = searchParams.has("handoffId");
@@ -83,6 +101,7 @@ export function useMatchWorkspaceController({
     redirectConfirmedDraft,
   } = useConfirmedDraftRedirect({
     notify,
+    onBeforeRedirect: handleBeforeConfirmedDraftRedirect,
     setValidationMessage,
     useSampleDrafts,
   });
@@ -133,6 +152,7 @@ export function useMatchWorkspaceController({
       onConfirmConflict: handleConfirmConflict,
       onConfirmSuccess: () => setConfirmOpen(false),
       onError: setValidationMessage,
+      onPersistedSuccess: handlePersistedSuccess,
     });
 
   const confirmAction = useMatchWorkspaceConfirmAction({
@@ -226,6 +246,7 @@ export function useMatchWorkspaceController({
     useMatchWorkspaceHandoffNavigation({
       handoffSessionId,
       notify,
+      onBeforeNavigate: handleBeforeHandoffNavigation,
       returnTo,
       values: state.values,
     });
@@ -242,6 +263,34 @@ export function useMatchWorkspaceController({
     values: state.values,
     workspaceData,
   });
+  const { restoreAcknowledgedCellIds } = reviewState;
+  const handleSessionDraftRestore = useCallback(
+    (draft: MatchWorkspaceSessionDraft) => {
+      dispatch({
+        payload: {
+          ...draft.values,
+          ...(state.values.matchDraftId ? { matchDraftId: state.values.matchDraftId } : {}),
+        },
+        type: "replace",
+      });
+      restoreAcknowledgedCellIds(draft.acknowledgedCellIds);
+      notify("一時保存した入力内容とOCR確認状況を復元しました。", "success");
+    },
+    [notify, restoreAcknowledgedCellIds, state.values.matchDraftId],
+  );
+  const sessionDraft = useMatchWorkspaceSessionDraft({
+    acknowledgedCellIds: reviewState.acknowledgedCellIds,
+    enabled: isInitialized && !confirmedDraftLoaded && !confirmedDraftRedirecting,
+    mode,
+    onRestore: handleSessionDraftRestore,
+    values: state.values,
+    workspaceKey: handoffSessionId,
+  });
+  const { allowNavigation, markCommitted } = sessionDraft;
+  sessionNavigationActionsRef.current = {
+    allowNavigation,
+    markCommitted,
+  };
   const formHandlers = useMatchWorkspaceFormHandlers({
     createHeldEvent: createEventMutation.mutate,
     dispatch,
@@ -290,6 +339,7 @@ export function useMatchWorkspaceController({
     refreshingReviewStatus,
     returnTo,
     reviewState,
+    sessionDraft,
     sourceImageLoading: sourceImageQuery.isLoading,
     sourceImages,
     state,

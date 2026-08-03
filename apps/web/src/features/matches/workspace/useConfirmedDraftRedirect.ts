@@ -14,10 +14,12 @@ import { matchKeys } from "@/shared/api/queryKeys";
 
 export function useConfirmedDraftRedirect({
   notify,
+  onBeforeRedirect,
   setValidationMessage,
   useSampleDrafts,
 }: {
   notify: (message: string, tone?: WorkspaceNoticeTone) => void;
+  onBeforeRedirect?: () => void;
   setValidationMessage: (message: string) => void;
   useSampleDrafts: boolean;
 }) {
@@ -50,10 +52,11 @@ export function useConfirmedDraftRedirect({
       setConfirmedDraftRedirecting(true);
       void invalidateAfterMatchConfirmed(queryClient);
       notify(message, "warning");
+      onBeforeRedirect?.();
       navigate(destination.path, { replace: true });
       return true;
     },
-    [navigate, notify, queryClient],
+    [navigate, notify, onBeforeRedirect, queryClient],
   );
 
   const handleConfirmConflict = useCallback(

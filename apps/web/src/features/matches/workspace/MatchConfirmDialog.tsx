@@ -1,3 +1,4 @@
+import { AlertTriangle, Check } from "lucide-react";
 import { useFormStatus } from "react-dom";
 
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
@@ -8,6 +9,7 @@ import { Dialog } from "@/shared/ui/feedback/Dialog";
 
 type MatchConfirmDialogProps = {
   actions: MatchConfirmActions;
+  reviewSummary: MatchConfirmReviewSummary;
   summary: MatchConfirmSummaryProps;
   validationMessage?: string | undefined;
   values: MatchFormValues;
@@ -23,6 +25,12 @@ type MatchConfirmSummaryProps = {
   heldEvent: HeldEventResponse | undefined;
   mapName?: string | undefined;
   seasonName?: string | undefined;
+};
+
+type MatchConfirmReviewSummary = {
+  changedCount: number;
+  totalCount: number;
+  unresolvedCount: number;
 };
 
 function ConfirmActionButtons({ onCancel }: { onCancel: () => void }) {
@@ -68,20 +76,85 @@ function MatchConfirmSummary({
         <dt className="text-[var(--color-text-secondary)]">マップ</dt>
         <dd>{mapName ?? "未選択"}</dd>
       </div>
-      <div className="flex justify-between gap-4">
-        <dt className="text-[var(--color-text-secondary)]">順位</dt>
-        <dd>
-          {values.players
-            .map((player) => `${player.rank}位 ${memberDisplayName(player.memberId)}`)
-            .join(" / ")}
-        </dd>
-      </div>
     </dl>
+  );
+}
+
+function PlayerLedger({ values }: { values: MatchFormValues }) {
+  const playersByRank = [...values.players].toSorted((left, right) => left.rank - right.rank);
+  return (
+    <div className="mt-4 overflow-x-auto rounded-[var(--radius-sm)] border border-[var(--color-border)]">
+      <table className="w-full min-w-[29rem] text-left text-sm">
+        <caption className="sr-only">確定する4人分の結果</caption>
+        <thead className="bg-[var(--color-surface-subtle)] text-xs text-[var(--color-text-secondary)]">
+          <tr>
+            <th className="px-3 py-2 font-medium">順位</th>
+            <th className="px-3 py-2 font-medium">メンバー</th>
+            <th className="px-3 py-2 text-right font-medium">総資産（万円）</th>
+            <th className="px-3 py-2 text-right font-medium">収益（万円）</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-[var(--color-border)]">
+          {playersByRank.map((player) => (
+            <tr key={player.memberId}>
+              <td className="px-3 py-2 font-semibold tabular-nums">{player.rank}位</td>
+              <td className="px-3 py-2">{memberDisplayName(player.memberId)}</td>
+              <td className="px-3 py-2 text-right tabular-nums">
+                {player.totalAssetsManYen.toLocaleString()}
+              </td>
+              <td className="px-3 py-2 text-right tabular-nums">
+                {player.revenueManYen.toLocaleString()}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function OcrReviewSummary({
+  changedCount,
+  totalCount,
+  unresolvedCount,
+}: MatchConfirmReviewSummary) {
+  if (totalCount === 0 && changedCount === 0) {
+    return null;
+  }
+  const reviewedCount = totalCount - unresolvedCount;
+  return (
+    <div className="mt-4 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm tabular-nums">
+        <span className="font-semibold text-[var(--color-text-primary)]">OCR確認状況</span>
+        <span className="text-[var(--color-text-secondary)]">修正 {changedCount}件</span>
+        <span className="text-[var(--color-text-secondary)]">
+          確認済み {reviewedCount} / {totalCount}
+        </span>
+      </div>
+      {unresolvedCount > 0 ? (
+        <p className="mt-2 flex gap-2 text-sm leading-5 text-[var(--color-text-primary)]">
+          <AlertTriangle
+            aria-hidden="true"
+            className="mt-0.5 size-4 shrink-0 text-[var(--color-warning)]"
+          />
+          <span>
+            未確認の強調項目が{unresolvedCount}
+            件あります。このまま確定できますが、元画像との照合を推奨します。
+          </span>
+        </p>
+      ) : (
+        <p className="mt-2 flex items-center gap-2 text-sm text-[var(--color-success)]">
+          <Check aria-hidden="true" className="size-4" />
+          強調された項目はすべて確認済みです
+        </p>
+      )}
+    </div>
   );
 }
 
 export function MatchConfirmDialog({
   actions,
+  reviewSummary,
   summary,
   validationMessage,
   values,
@@ -99,6 +172,8 @@ export function MatchConfirmDialog({
     >
       <form action={actions.confirmAction} className="min-w-0">
         <MatchConfirmSummary {...summary} values={values} />
+        <PlayerLedger values={values} />
+        <OcrReviewSummary {...reviewSummary} />
 
         {validationMessage ? (
           <div

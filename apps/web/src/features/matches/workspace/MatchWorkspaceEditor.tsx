@@ -2,6 +2,7 @@ import type { Ref } from "react";
 
 import { MatchFormActions } from "@/features/matches/workspace/MatchFormActions";
 import { MatchSetupSection } from "@/features/matches/workspace/MatchSetupSection";
+import { MatchWorkspaceRecoveryNotice } from "@/features/matches/workspace/MatchWorkspaceRecoveryNotice";
 import { ScoreGrid } from "@/features/matches/workspace/scoreGrid/ScoreGrid";
 import { SourceImagePanel } from "@/features/matches/workspace/sourceImages/SourceImagePanel";
 import type { MatchWorkspaceController } from "@/features/matches/workspace/useMatchWorkspaceController";
@@ -54,6 +55,8 @@ export function MatchWorkspaceEditor({
         values={setup.values}
         workspaceActions={setup.workspaceActions}
       />
+
+      {editor.sessionRecovery ? <MatchWorkspaceRecoveryNotice {...editor.sessionRecovery} /> : null}
 
       {editor.warnings.length > 0 ? (
         <Card className="border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18 p-3 shadow-none">

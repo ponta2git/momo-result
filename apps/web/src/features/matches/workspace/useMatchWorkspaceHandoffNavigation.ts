@@ -7,12 +7,13 @@ import { prepareMatchWorkspaceMasterHandoffRoute } from "@/shared/workflows/matc
 export function useMatchWorkspaceHandoffNavigation(input: {
   handoffSessionId: string;
   notify: (message: string, tone?: "info" | "success" | "warning") => void;
+  onBeforeNavigate?: () => void;
   returnTo: string | undefined;
   values: MatchFormValues;
 }) {
   const navigate = useNavigate();
   const [isPending, startMastersTransition] = useTransition();
-  const { handoffSessionId, notify, returnTo, values } = input;
+  const { handoffSessionId, notify, onBeforeNavigate, returnTo, values } = input;
 
   const navigateToMasters = useCallback(() => {
     if (!returnTo) {
@@ -30,10 +31,19 @@ export function useMatchWorkspaceHandoffNavigation(input: {
       );
       return;
     }
+    onBeforeNavigate?.();
     startMastersTransition(() => {
       navigate(route.route);
     });
-  }, [handoffSessionId, navigate, notify, returnTo, startMastersTransition, values]);
+  }, [
+    handoffSessionId,
+    navigate,
+    notify,
+    onBeforeNavigate,
+    returnTo,
+    startMastersTransition,
+    values,
+  ]);
 
   return { isPending, navigateToMasters };
 }

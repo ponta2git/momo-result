@@ -1,4 +1,4 @@
-import { useCallback, useReducer, useRef, useState } from "react";
+import { useCallback, useReducer, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import {
@@ -12,21 +12,17 @@ import type {
 } from "@/features/matches/workspace/matchFormTypes";
 import { buildMatchWorkspaceControllerModel } from "@/features/matches/workspace/matchWorkspaceControllerModel";
 import type { MatchWorkspaceControllerModel } from "@/features/matches/workspace/matchWorkspaceControllerModel";
-import type { MatchWorkspaceSessionDraft } from "@/features/matches/workspace/matchWorkspaceSessionDraft";
 import type { SourceImageKind } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
-import { useConfirmedDraftRedirect } from "@/features/matches/workspace/useConfirmedDraftRedirect";
 import { useMasterHandoffRestore } from "@/features/matches/workspace/useMasterHandoffRestore";
-import { useMatchWorkspaceConfirmAction } from "@/features/matches/workspace/useMatchWorkspaceConfirmAction";
 import { useMatchWorkspaceFormHandlers } from "@/features/matches/workspace/useMatchWorkspaceFormHandlers";
 import { useMatchWorkspaceHandoffNavigation } from "@/features/matches/workspace/useMatchWorkspaceHandoffNavigation";
 import { useMatchWorkspaceInit } from "@/features/matches/workspace/useMatchWorkspaceInit";
 import { useMatchWorkspaceLifecycleEffects } from "@/features/matches/workspace/useMatchWorkspaceLifecycleEffects";
-import { useMatchWorkspaceMutations } from "@/features/matches/workspace/useMatchWorkspaceMutations";
 import { useMatchWorkspacePrimaryAction } from "@/features/matches/workspace/useMatchWorkspacePrimaryAction";
 import { useMatchWorkspaceQueries } from "@/features/matches/workspace/useMatchWorkspaceQueries";
-import { useMatchWorkspaceReviewState } from "@/features/matches/workspace/useMatchWorkspaceReviewState";
-import { useMatchWorkspaceSessionDraft } from "@/features/matches/workspace/useMatchWorkspaceSessionDraft";
+import { useMatchWorkspaceReviewSession } from "@/features/matches/workspace/useMatchWorkspaceReviewSession";
 import { useMatchWorkspaceSourceImages } from "@/features/matches/workspace/useMatchWorkspaceSourceImages";
+import { useMatchWorkspaceSubmitFlow } from "@/features/matches/workspace/useMatchWorkspaceSubmitFlow";
 import { useMatchWorkspaceValidation } from "@/features/matches/workspace/useMatchWorkspaceValidation";
 import { useMatchWorkspaceViewModel } from "@/features/matches/workspace/useMatchWorkspaceViewModel";
 import { useWorkspaceHeldEventCreation } from "@/features/matches/workspace/useWorkspaceHeldEventCreation";
@@ -73,38 +69,10 @@ export function useMatchWorkspaceController({
   const [state, dispatch] = useReducer(matchFormReducer, null, () =>
     createMatchFormReducerState(emptyFormFactory()),
   );
-  const sessionNavigationActionsRef = useRef<{
-    allowNavigation: () => void;
-    markCommitted: () => void;
-  }>({
-    allowNavigation: () => undefined,
-    markCommitted: () => undefined,
-  });
-  const handleBeforeConfirmedDraftRedirect = useCallback(() => {
-    sessionNavigationActionsRef.current.markCommitted();
-  }, []);
-  const handlePersistedSuccess = useCallback(() => {
-    sessionNavigationActionsRef.current.markCommitted();
-  }, []);
-  const handleBeforeHandoffNavigation = useCallback(() => {
-    sessionNavigationActionsRef.current.allowNavigation();
-  }, []);
 
   const useSampleDrafts = mode === "review" && searchParams.get("sample") === "1";
   const hasHandoff = searchParams.has("handoffId");
   const handoffSessionId = matchSessionId ?? matchDraftId ?? mode;
-
-  const {
-    confirmedDraftRedirecting,
-    ensureDraftIsOpenForConfirm,
-    handleConfirmConflict,
-    redirectConfirmedDraft,
-  } = useConfirmedDraftRedirect({
-    notify,
-    onBeforeRedirect: handleBeforeConfirmedDraftRedirect,
-    setValidationMessage,
-    useSampleDrafts,
-  });
 
   const queries = useMatchWorkspaceQueries({
     gameTitleId: state.values.gameTitleId,
@@ -144,21 +112,6 @@ export function useMatchWorkspaceController({
       });
     },
     onSuccessNotice: (message) => notify(message, "success"),
-  });
-
-  const { cancelDraftMutation, confirmMutation, isMutating, updateMutation } =
-    useMatchWorkspaceMutations({
-      matchId,
-      onConfirmConflict: handleConfirmConflict,
-      onConfirmSuccess: () => setConfirmOpen(false),
-      onError: setValidationMessage,
-      onPersistedSuccess: handlePersistedSuccess,
-    });
-
-  const confirmAction = useMatchWorkspaceConfirmAction({
-    confirmMutation,
-    ensureDraftIsOpenForConfirm,
-    values: state.values,
   });
 
   const { isInitialized } = useMatchWorkspaceInit({
@@ -221,6 +174,31 @@ export function useMatchWorkspaceController({
   });
   const { confirmedDraftLoaded, heldEvents, matchDraftIdForImages } = viewModel;
 
+  const { reviewState, sessionDraft } = useMatchWorkspaceReviewSession({
+    confirmedDraftLoaded,
+    dispatch,
+    isInitialized,
+    mode,
+    notify,
+    reviewKey: handoffSessionId,
+    values: state.values,
+    workspaceData,
+  });
+  const {
+    cancelDraftConfirmed: handleCancelDraftConfirmed,
+    confirmAction,
+    confirmedDraft: { confirmedDraftRedirecting, redirectConfirmedDraft },
+    mutations: { cancelDraftMutation, isMutating, updateMutation },
+  } = useMatchWorkspaceSubmitFlow({
+    matchId,
+    notify,
+    onPersistedSuccess: sessionDraft.markCommitted,
+    setConfirmOpen,
+    setValidationMessage,
+    useSampleDrafts,
+    values: state.values,
+  });
+
   useMatchWorkspaceLifecycleEffects({
     dispatch,
     draftDetail: draftDetailQuery.data,
@@ -233,20 +211,11 @@ export function useMatchWorkspaceController({
     useSampleDrafts,
   });
 
-  const handleCancelDraftConfirmed = async () => {
-    const targetDraftId = state.values.matchDraftId;
-    if (!targetDraftId) {
-      return;
-    }
-    setValidationMessage("");
-    await cancelDraftMutation.mutateAsync(targetDraftId);
-  };
-
   const { isPending: isNavigatingToMasters, navigateToMasters: handleNavigateToMasters } =
     useMatchWorkspaceHandoffNavigation({
       handoffSessionId,
       notify,
-      onBeforeNavigate: handleBeforeHandoffNavigation,
+      onBeforeNavigate: sessionDraft.allowNavigation,
       returnTo,
       values: state.values,
     });
@@ -256,41 +225,6 @@ export function useMatchWorkspaceController({
     matchDraftId: matchDraftIdForImages,
   });
 
-  const closeConfirm = useCallback(() => setConfirmOpen(false), []);
-  const openCancelDraftConfirm = useCallback(() => setCancelDraftConfirmOpen(true), []);
-  const reviewState = useMatchWorkspaceReviewState({
-    reviewKey: handoffSessionId,
-    values: state.values,
-    workspaceData,
-  });
-  const { restoreAcknowledgedCellIds } = reviewState;
-  const handleSessionDraftRestore = useCallback(
-    (draft: MatchWorkspaceSessionDraft) => {
-      dispatch({
-        payload: {
-          ...draft.values,
-          ...(state.values.matchDraftId ? { matchDraftId: state.values.matchDraftId } : {}),
-        },
-        type: "replace",
-      });
-      restoreAcknowledgedCellIds(draft.acknowledgedCellIds);
-      notify("一時保存した入力内容とOCR確認状況を復元しました。", "success");
-    },
-    [notify, restoreAcknowledgedCellIds, state.values.matchDraftId],
-  );
-  const sessionDraft = useMatchWorkspaceSessionDraft({
-    acknowledgedCellIds: reviewState.acknowledgedCellIds,
-    enabled: isInitialized && !confirmedDraftLoaded && !confirmedDraftRedirecting,
-    mode,
-    onRestore: handleSessionDraftRestore,
-    values: state.values,
-    workspaceKey: handoffSessionId,
-  });
-  const { allowNavigation, markCommitted } = sessionDraft;
-  sessionNavigationActionsRef.current = {
-    allowNavigation,
-    markCommitted,
-  };
   const formHandlers = useMatchWorkspaceFormHandlers({
     createHeldEvent: createEventMutation.mutate,
     dispatch,
@@ -322,7 +256,7 @@ export function useMatchWorkspaceController({
     baseErrors,
     cancelDraftConfirmOpen,
     cancelDraftPending: cancelDraftMutation.isPending,
-    closeConfirm,
+    closeConfirm: () => setConfirmOpen(false),
     confirmAction,
     confirmOpen,
     createEventPending: createEventMutation.isPending,
@@ -352,7 +286,7 @@ export function useMatchWorkspaceController({
     workspaceLoading,
     onCancelDraftConfirm: handleCancelDraftConfirmed,
     onCancelDraftOpenChange: setCancelDraftConfirmOpen,
-    onCancelDraftTrigger: openCancelDraftConfirm,
+    onCancelDraftTrigger: () => setCancelDraftConfirmOpen(true),
     onEventDraftChange: setEventDraftValue,
     onNavigateToMasters: handleNavigateToMasters,
     onPreferImageKindChange: setPreferredImageKind,

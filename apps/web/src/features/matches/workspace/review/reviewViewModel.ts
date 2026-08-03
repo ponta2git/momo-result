@@ -8,24 +8,20 @@ import {
   parseOcrWarningList,
 } from "@/features/matches/workspace/review/ocrDraftPayload";
 import {
-  byMemberId,
   byPlayOrder,
   emptyIncidents,
   numberValue,
   parseDraft,
-  resolveMemberIds,
-  resolvePlayOrders,
 } from "@/features/matches/workspace/review/reviewDraftExtractors";
 import type {
   IncidentName,
   OcrDraftPayload,
-  OcrField,
   OcrWarning,
 } from "@/features/matches/workspace/review/reviewDraftExtractors";
+import { buildReviewPlayers } from "@/features/matches/workspace/review/reviewPlayerBuilder";
 import {
   buildFieldEvidence,
   dedupeOcrWarnings,
-  mergeFieldEvidence,
   reviewWarningMessage,
 } from "@/features/matches/workspace/review/reviewWarningModel";
 import { defaultMemberAliasDirectory } from "@/shared/domain/memberDirectory";
@@ -120,146 +116,6 @@ function buildIncidentLookup(
   return lookup;
 }
 
-function evidenceForField<T>(args: {
-  attachedWarnings: Set<OcrWarning>;
-  draft: ParsedReviewDraft | undefined;
-  field: OcrField<T> | undefined;
-  fieldNames: readonly string[];
-  playerIndex: number;
-  sourceKind: "revenue" | "total_assets";
-}): ReviewFieldEvidence | undefined {
-  if (!args.draft || args.playerIndex < 0) {
-    return undefined;
-  }
-  return buildFieldEvidence({
-    attachedWarnings: args.attachedWarnings,
-    confidence: args.field?.confidence,
-    embeddedWarnings: args.field?.warnings,
-    fieldNames: args.fieldNames,
-    playerIndex: args.playerIndex,
-    sourceKind: args.sourceKind,
-    warnings: args.draft.warnings,
-  });
-}
-
-function buildPlayers(
-  parsed: ParsedDrafts,
-  incidentByPlayOrder: Map<number, IncidentLookupEntry>,
-  directory: MemberAliasDirectory,
-  attachedWarnings: Set<OcrWarning>,
-): { players: ReviewPlayer[]; warnings: string[] } {
-  const memberIds = directory.memberIds;
-  const sourcePlayers = parsed.totalAssets?.payload.players.length
-    ? parsed.totalAssets.payload.players
-    : fixedMembers.map(() => undefined);
-  const trimmedSources = sourcePlayers.slice(0, 4);
-  const resolvedMemberIds = resolveMemberIds(trimmedSources, directory);
-  const resolvedPlayOrders = resolvePlayOrders(trimmedSources);
-  const revenueByMember = byMemberId(parsed.revenue?.payload, directory);
-
-  const players = trimmedSources.map((entry, index) => {
-    const memberId = resolvedMemberIds[index] ?? memberIds[index] ?? "";
-    const revenueEntry = revenueByMember.entries.get(memberId);
-    const revenueIndex = revenueEntry
-      ? (parsed.revenue?.payload.players.indexOf(revenueEntry) ?? -1)
-      : -1;
-    const playOrder = resolvedPlayOrders[index] ?? index + 1;
-    const incidentLookup = incidentByPlayOrder.get(playOrder);
-    const incidents = incidentLookup ? { ...incidentLookup.counts } : emptyIncidents();
-    const incidentConfidence: Partial<Record<IncidentName, number | null>> = incidentLookup
-      ? { ...incidentLookup.confidence }
-      : {};
-    const rawNameEvidence = evidenceForField({
-      attachedWarnings,
-      draft: parsed.totalAssets,
-      field: entry?.raw_player_name,
-      fieldNames: ["raw_player_name"],
-      playerIndex: index,
-      sourceKind: "total_assets",
-    });
-    const memberIdEvidence = evidenceForField({
-      attachedWarnings,
-      draft: parsed.totalAssets,
-      field: entry?.raw_player_name,
-      fieldNames: ["member_id"],
-      playerIndex: index,
-      sourceKind: "total_assets",
-    });
-    const memberEvidence =
-      rawNameEvidence && memberIdEvidence
-        ? mergeFieldEvidence("total_assets", [rawNameEvidence, memberIdEvidence])
-        : (rawNameEvidence ?? memberIdEvidence);
-    const playOrderEvidence = evidenceForField({
-      attachedWarnings,
-      draft: parsed.totalAssets,
-      field: entry?.play_order,
-      fieldNames: ["play_order"],
-      playerIndex: index,
-      sourceKind: "total_assets",
-    });
-    const rankEvidence = evidenceForField({
-      attachedWarnings,
-      draft: parsed.totalAssets,
-      field: entry?.rank,
-      fieldNames: ["rank"],
-      playerIndex: index,
-      sourceKind: "total_assets",
-    });
-    const totalAssetsEvidence = evidenceForField({
-      attachedWarnings,
-      draft: parsed.totalAssets,
-      field: entry?.total_assets_man_yen,
-      fieldNames: ["total_assets_man_yen"],
-      playerIndex: index,
-      sourceKind: "total_assets",
-    });
-    const revenueEvidence = evidenceForField({
-      attachedWarnings,
-      draft: parsed.revenue,
-      field: revenueEntry?.revenue_man_yen,
-      fieldNames: ["revenue_man_yen"],
-      playerIndex: revenueIndex,
-      sourceKind: "revenue",
-    });
-    const playerWarnings = [
-      ...(memberEvidence?.warnings ?? []),
-      ...(playOrderEvidence?.warnings ?? []),
-      ...(rankEvidence?.warnings ?? []),
-      ...(totalAssetsEvidence?.warnings ?? []),
-      ...(revenueEvidence?.warnings ?? []),
-      ...Object.values(incidentLookup?.evidence ?? {}).flatMap(
-        (fieldEvidence) => fieldEvidence?.warnings ?? [],
-      ),
-    ].map(reviewWarningMessage);
-
-    return {
-      memberId,
-      playOrder,
-      rank: numberValue(entry?.rank, index + 1),
-      totalAssetsManYen: numberValue(entry?.total_assets_man_yen, 0),
-      revenueManYen: numberValue(revenueEntry?.revenue_man_yen, 0),
-      incidents,
-      rawPlayerName: entry?.raw_player_name.value ?? undefined,
-      warnings: playerWarnings,
-      evidence: {
-        incidents: incidentLookup ? { ...incidentLookup.evidence } : {},
-        member: memberEvidence,
-        playOrder: playOrderEvidence,
-        rank: rankEvidence,
-        revenue: revenueEvidence,
-        totalAssets: totalAssetsEvidence,
-      },
-      confidence: {
-        rank: entry?.rank.confidence ?? null,
-        totalAssets: entry?.total_assets_man_yen.confidence ?? null,
-        revenue: revenueEntry?.revenue_man_yen.confidence ?? null,
-        incidents: incidentConfidence,
-      },
-    };
-  });
-  return { players, warnings: revenueByMember.warnings };
-}
-
 function padToFour(players: readonly ReviewPlayer[]): ReviewPlayer[] {
   if (players.length >= 4) {
     return [...players];
@@ -322,7 +178,12 @@ export function mergeDrafts(
   const parsed = parseAll(drafts);
   const attachedWarnings = new Set<OcrWarning>();
   const incidentByPlayOrder = buildIncidentLookup(parsed.incidentLog, attachedWarnings);
-  const builtPlayers = buildPlayers(parsed, incidentByPlayOrder, memberDirectory, attachedWarnings);
+  const builtPlayers = buildReviewPlayers(
+    parsed,
+    incidentByPlayOrder,
+    memberDirectory,
+    attachedWarnings,
+  );
   const players = pipe(builtPlayers.players, padToFour, sortByAssetsDesc);
   const unattachedWarnings = [parsed.totalAssets, parsed.revenue, parsed.incidentLog]
     .flatMap((draft) => draft?.warnings ?? [])

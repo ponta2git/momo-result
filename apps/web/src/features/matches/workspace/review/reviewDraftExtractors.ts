@@ -11,6 +11,7 @@ import type {
   OcrDraftPayload,
   OcrField,
   OcrPlayerEntry,
+  OcrWarning,
 } from "@/features/matches/workspace/review/ocrDraftPayload";
 import { resolveMemberIdByAlias } from "@/shared/domain/memberDirectory";
 import type { MemberAliasDirectory } from "@/shared/domain/memberDirectory";
@@ -133,4 +134,4 @@ export function byPlayOrder(payload: OcrDraftPayload | undefined): Map<number, O
   return entries;
 }
 
-export type { IncidentName, OcrDraftPayload };
+export type { IncidentName, OcrDraftPayload, OcrField, OcrWarning };

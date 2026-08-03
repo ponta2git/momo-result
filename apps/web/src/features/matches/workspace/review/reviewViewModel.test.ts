@@ -66,6 +66,77 @@ describe("mergeDrafts", () => {
     expect(merged.players[0]?.incidents["カード駅"]).toBe(0);
   });
 
+  it("keeps a structured OCR warning on its source player after result sorting", () => {
+    const totalAssetsDraft = draft("total_assets");
+    const payload = totalAssetsDraft.payloadJson as {
+      players: Array<Record<string, unknown>>;
+    };
+    payload.players.push({
+      ...payload.players[0],
+      raw_player_name: field("ぽんた"),
+      member_id: "member_ponta",
+      play_order: field(1),
+      rank: field(2),
+      total_assets_man_yen: field(5000),
+    });
+    totalAssetsDraft.warningsJson = [
+      {
+        code: "LOW_CONFIDENCE",
+        field_path: "players[0].total_assets_man_yen",
+        message: "Low confidence in total assets row 1.",
+        severity: "warning",
+      },
+    ];
+
+    const merged = mergeDrafts({ total_assets: totalAssetsDraft });
+    const warnedPlayer = merged.players.find((player) => player.memberId === "member_akane_mami");
+
+    expect(merged.players[0]?.memberId).toBe("member_ponta");
+    expect(warnedPlayer?.evidence.totalAssets?.warnings).toMatchObject([
+      { code: "LOW_CONFIDENCE", field_path: "players[0].total_assets_man_yen" },
+    ]);
+    expect(merged.warnings).not.toContain("Low confidence in total assets row 1.");
+  });
+
+  it("maps quoted incident warning paths through play order", () => {
+    const totalAssetsDraft = draft("total_assets");
+    const incidentDraft = draft("incident_log");
+    incidentDraft.warningsJson = [
+      {
+        code: "SUSPICIOUS_INCIDENT_COUNT",
+        field_path: "players[0].incidents['目的地']",
+        message: "Destination count is suspicious.",
+        severity: "warning",
+      },
+    ];
+
+    const merged = mergeDrafts({
+      total_assets: totalAssetsDraft,
+      incident_log: incidentDraft,
+    });
+
+    expect(merged.players[0]?.playOrder).toBe(2);
+    expect(merged.players[0]?.evidence.incidents["目的地"]?.warnings).toMatchObject([
+      { code: "SUSPICIOUS_INCIDENT_COUNT" },
+    ]);
+  });
+
+  it("keeps unknown and non-field warnings in the global review notice", () => {
+    const totalAssetsDraft = draft("total_assets");
+    totalAssetsDraft.warningsJson = [
+      {
+        code: "FUTURE_WARNING",
+        field_path: null,
+        message: "A future warning that the web does not know yet.",
+        severity: "warning",
+      },
+    ];
+
+    const merged = mergeDrafts({ total_assets: totalAssetsDraft });
+
+    expect(merged.warnings).toContain("A future warning that the web does not know yet.");
+  });
+
   it("keeps the first revenue row and reports a warning when member matching is duplicated", () => {
     const revenueDraft = draft("revenue");
     const payload = revenueDraft.payloadJson as {

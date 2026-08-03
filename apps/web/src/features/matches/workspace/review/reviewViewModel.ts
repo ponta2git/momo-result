@@ -4,6 +4,7 @@ import type {
   OriginalPlayerSnapshot,
 } from "@/features/matches/workspace/matchFormTypes";
 import { incidentNames } from "@/features/matches/workspace/review/ocrDraftPayload";
+import { parseOcrWarningList } from "@/features/matches/workspace/review/ocrDraftPayload";
 import {
   byMemberId,
   byPlayOrder,
@@ -16,7 +17,16 @@ import {
 import type {
   IncidentName,
   OcrDraftPayload,
+  OcrField,
+  OcrWarning,
 } from "@/features/matches/workspace/review/reviewDraftExtractors";
+import {
+  buildFieldEvidence,
+  dedupeOcrWarnings,
+  mergeFieldEvidence,
+  reviewWarningMessage,
+} from "@/features/matches/workspace/review/reviewWarningModel";
+import type { ReviewFieldEvidence } from "@/features/matches/workspace/review/reviewWarningModel";
 import { defaultMemberAliasDirectory } from "@/shared/domain/memberDirectory";
 import type { MemberAliasDirectory } from "@/shared/domain/memberDirectory";
 import { fixedMembers } from "@/shared/domain/members";
@@ -38,16 +48,32 @@ export type MergedDraftReview = {
 // ---------- pipeline stages (pure) ----------
 
 type ParsedDrafts = {
-  totalAssets: OcrDraftPayload | undefined;
-  revenue: OcrDraftPayload | undefined;
-  incidentLog: OcrDraftPayload | undefined;
+  totalAssets: ParsedReviewDraft | undefined;
+  revenue: ParsedReviewDraft | undefined;
+  incidentLog: ParsedReviewDraft | undefined;
 };
+
+type ParsedReviewDraft = {
+  payload: OcrDraftPayload;
+  warnings: OcrWarning[];
+};
+
+function parseReviewDraft(draft: DraftByKind[keyof DraftByKind]): ParsedReviewDraft | undefined {
+  const payload = parseDraft(draft);
+  if (!draft || !payload) {
+    return undefined;
+  }
+  return {
+    payload,
+    warnings: dedupeOcrWarnings([...payload.warnings, ...parseOcrWarningList(draft.warningsJson)]),
+  };
+}
 
 function parseAll(drafts: DraftByKind): ParsedDrafts {
   return {
-    totalAssets: parseDraft(drafts.total_assets),
-    revenue: parseDraft(drafts.revenue),
-    incidentLog: parseDraft(drafts.incident_log),
+    totalAssets: parseReviewDraft(drafts.total_assets),
+    revenue: parseReviewDraft(drafts.revenue),
+    incidentLog: parseReviewDraft(drafts.incident_log),
   };
 }
 
@@ -62,52 +88,147 @@ function collectWarnings(parsed: ParsedDrafts): string[] {
 }
 
 function buildIncidentLookup(
-  incidentLog: OcrDraftPayload | undefined,
+  incidentLog: ParsedReviewDraft | undefined,
+  attachedWarnings: Set<OcrWarning>,
 ): Map<number, IncidentLookupEntry> {
   const lookup = new Map<number, IncidentLookupEntry>();
-  for (const [order, entry] of byPlayOrder(incidentLog)) {
+  for (const [order, entry] of byPlayOrder(incidentLog?.payload)) {
     const counts = emptyIncidents();
     const confidence: Partial<Record<IncidentName, number | null>> = {};
+    const evidence: Partial<Record<IncidentName, ReviewFieldEvidence>> = {};
+    const playerIndex = incidentLog?.payload.players.indexOf(entry) ?? -1;
     for (const name of incidentNames) {
       const field = entry.incidents[name];
       counts[name] = numberValue(field, 0);
       confidence[name] = field?.confidence ?? null;
+      if (incidentLog && playerIndex >= 0) {
+        evidence[name] = buildFieldEvidence({
+          attachedWarnings,
+          confidence: field?.confidence,
+          embeddedWarnings: field?.warnings,
+          fieldNames: [`incidents.${name}`],
+          playerIndex,
+          sourceKind: "incident_log",
+          warnings: incidentLog.warnings,
+        });
+      }
     }
-    lookup.set(order, { counts, confidence });
+    lookup.set(order, { counts, confidence, evidence });
   }
   return lookup;
+}
+
+function evidenceForField<T>(args: {
+  attachedWarnings: Set<OcrWarning>;
+  draft: ParsedReviewDraft | undefined;
+  field: OcrField<T> | undefined;
+  fieldNames: readonly string[];
+  playerIndex: number;
+  sourceKind: "revenue" | "total_assets";
+}): ReviewFieldEvidence | undefined {
+  if (!args.draft || args.playerIndex < 0) {
+    return undefined;
+  }
+  return buildFieldEvidence({
+    attachedWarnings: args.attachedWarnings,
+    confidence: args.field?.confidence,
+    embeddedWarnings: args.field?.warnings,
+    fieldNames: args.fieldNames,
+    playerIndex: args.playerIndex,
+    sourceKind: args.sourceKind,
+    warnings: args.draft.warnings,
+  });
 }
 
 function buildPlayers(
   parsed: ParsedDrafts,
   incidentByPlayOrder: Map<number, IncidentLookupEntry>,
   directory: MemberAliasDirectory,
+  attachedWarnings: Set<OcrWarning>,
 ): { players: ReviewPlayer[]; warnings: string[] } {
   const memberIds = directory.memberIds;
-  const sourcePlayers = parsed.totalAssets?.players.length
-    ? parsed.totalAssets.players
+  const sourcePlayers = parsed.totalAssets?.payload.players.length
+    ? parsed.totalAssets.payload.players
     : fixedMembers.map(() => undefined);
   const trimmedSources = sourcePlayers.slice(0, 4);
   const resolvedMemberIds = resolveMemberIds(trimmedSources, directory);
   const resolvedPlayOrders = resolvePlayOrders(trimmedSources);
-  const revenueByMember = byMemberId(parsed.revenue, directory);
+  const revenueByMember = byMemberId(parsed.revenue?.payload, directory);
 
   const players = trimmedSources.map((entry, index) => {
     const memberId = resolvedMemberIds[index] ?? memberIds[index] ?? "";
     const revenueEntry = revenueByMember.entries.get(memberId);
+    const revenueIndex = revenueEntry
+      ? (parsed.revenue?.payload.players.indexOf(revenueEntry) ?? -1)
+      : -1;
     const playOrder = resolvedPlayOrders[index] ?? index + 1;
     const incidentLookup = incidentByPlayOrder.get(playOrder);
     const incidents = incidentLookup ? { ...incidentLookup.counts } : emptyIncidents();
     const incidentConfidence: Partial<Record<IncidentName, number | null>> = incidentLookup
       ? { ...incidentLookup.confidence }
       : {};
-
+    const rawNameEvidence = evidenceForField({
+      attachedWarnings,
+      draft: parsed.totalAssets,
+      field: entry?.raw_player_name,
+      fieldNames: ["raw_player_name"],
+      playerIndex: index,
+      sourceKind: "total_assets",
+    });
+    const memberIdEvidence = evidenceForField({
+      attachedWarnings,
+      draft: parsed.totalAssets,
+      field: entry?.raw_player_name,
+      fieldNames: ["member_id"],
+      playerIndex: index,
+      sourceKind: "total_assets",
+    });
+    const memberEvidence =
+      rawNameEvidence && memberIdEvidence
+        ? mergeFieldEvidence("total_assets", [rawNameEvidence, memberIdEvidence])
+        : (rawNameEvidence ?? memberIdEvidence);
+    const playOrderEvidence = evidenceForField({
+      attachedWarnings,
+      draft: parsed.totalAssets,
+      field: entry?.play_order,
+      fieldNames: ["play_order"],
+      playerIndex: index,
+      sourceKind: "total_assets",
+    });
+    const rankEvidence = evidenceForField({
+      attachedWarnings,
+      draft: parsed.totalAssets,
+      field: entry?.rank,
+      fieldNames: ["rank"],
+      playerIndex: index,
+      sourceKind: "total_assets",
+    });
+    const totalAssetsEvidence = evidenceForField({
+      attachedWarnings,
+      draft: parsed.totalAssets,
+      field: entry?.total_assets_man_yen,
+      fieldNames: ["total_assets_man_yen"],
+      playerIndex: index,
+      sourceKind: "total_assets",
+    });
+    const revenueEvidence = evidenceForField({
+      attachedWarnings,
+      draft: parsed.revenue,
+      field: revenueEntry?.revenue_man_yen,
+      fieldNames: ["revenue_man_yen"],
+      playerIndex: revenueIndex,
+      sourceKind: "revenue",
+    });
     const playerWarnings = [
-      ...(entry?.raw_player_name.warnings ?? []),
-      ...(entry?.rank.warnings ?? []),
-      ...(entry?.total_assets_man_yen.warnings ?? []),
-      ...(revenueEntry?.revenue_man_yen.warnings ?? []),
-    ];
+      ...(memberEvidence?.warnings ?? []),
+      ...(playOrderEvidence?.warnings ?? []),
+      ...(rankEvidence?.warnings ?? []),
+      ...(totalAssetsEvidence?.warnings ?? []),
+      ...(revenueEvidence?.warnings ?? []),
+      ...Object.values(incidentLookup?.evidence ?? {}).flatMap(
+        (fieldEvidence) => fieldEvidence?.warnings ?? [],
+      ),
+    ].map(reviewWarningMessage);
 
     return {
       memberId,
@@ -118,6 +239,14 @@ function buildPlayers(
       incidents,
       rawPlayerName: entry?.raw_player_name.value ?? undefined,
       warnings: playerWarnings,
+      evidence: {
+        incidents: incidentLookup ? { ...incidentLookup.evidence } : {},
+        member: memberEvidence,
+        playOrder: playOrderEvidence,
+        rank: rankEvidence,
+        revenue: revenueEvidence,
+        totalAssets: totalAssetsEvidence,
+      },
       confidence: {
         rank: entry?.rank.confidence ?? null,
         totalAssets: entry?.total_assets_man_yen.confidence ?? null,
@@ -153,6 +282,7 @@ function padToFour(players: readonly ReviewPlayer[]): ReviewPlayer[] {
       incidents: emptyIncidents(),
       rawPlayerName: undefined,
       warnings: [],
+      evidence: { incidents: {} },
       confidence: { rank: null, totalAssets: null, revenue: null, incidents: {} },
     });
   }
@@ -188,12 +318,19 @@ export function mergeDrafts(
   memberDirectory: MemberAliasDirectory = defaultMemberAliasDirectory,
 ): MergedDraftReview {
   const parsed = parseAll(drafts);
-  const incidentByPlayOrder = buildIncidentLookup(parsed.incidentLog);
-  const builtPlayers = buildPlayers(parsed, incidentByPlayOrder, memberDirectory);
+  const attachedWarnings = new Set<OcrWarning>();
+  const incidentByPlayOrder = buildIncidentLookup(parsed.incidentLog, attachedWarnings);
+  const builtPlayers = buildPlayers(parsed, incidentByPlayOrder, memberDirectory, attachedWarnings);
   const players = pipe(builtPlayers.players, padToFour, sortByAssetsDesc);
+  const unattachedWarnings = [parsed.totalAssets, parsed.revenue, parsed.incidentLog]
+    .flatMap((draft) => draft?.warnings ?? [])
+    .filter((warning) => !attachedWarnings.has(warning))
+    .map(reviewWarningMessage);
   return {
     players,
-    warnings: [...collectWarnings(parsed), ...builtPlayers.warnings],
+    warnings: [
+      ...new Set([...collectWarnings(parsed), ...builtPlayers.warnings, ...unattachedWarnings]),
+    ],
     incidentByPlayOrder,
   };
 }

@@ -107,7 +107,7 @@ describe("draftToMatchForm", () => {
 
     expect(initialData.originalPlayers).toHaveLength(4);
     expect(initialData.incidentByPlayOrder.size).toBe(4);
-    expect(initialData.warnings).toEqual([]);
+    expect(initialData.warnings).toEqual(["いーゆーの収益が低信頼度"]);
     expect(initialData.draftByKind.total_assets?.draftId).toBe("sample-total_assets");
   });
 

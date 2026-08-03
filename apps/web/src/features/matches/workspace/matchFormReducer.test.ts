@@ -22,6 +22,7 @@ function entry(counts: Partial<IncidentLookupEntry["counts"]>): IncidentLookupEn
       ...counts,
     },
     confidence: {},
+    evidence: {},
   };
 }
 

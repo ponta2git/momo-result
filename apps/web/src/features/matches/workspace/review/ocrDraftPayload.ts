@@ -3,12 +3,29 @@ import { z } from "zod";
 import { incidentOcrNames } from "@/shared/domain/incidents";
 import type { IncidentOcrName } from "@/shared/domain/incidents";
 
+const structuredOcrWarningSchema = z.object({
+  code: z.string(),
+  field_path: z.string().nullable().default(null),
+  message: z.string(),
+  severity: z.string().default("warning"),
+});
+
+export const ocrWarningSchema = z.union([
+  structuredOcrWarningSchema,
+  z.string().transform((message) => ({
+    code: "LEGACY_WARNING",
+    field_path: null,
+    message,
+    severity: "warning",
+  })),
+]);
+
 const ocrFieldSchema = <T extends z.ZodType>(valueSchema: T) =>
   z.object({
     value: valueSchema.nullable(),
     raw_text: z.string().nullable(),
     confidence: z.number().nullable(),
-    warnings: z.array(z.string()).default([]),
+    warnings: z.array(ocrWarningSchema).default([]),
   });
 
 export const ocrNumberFieldSchema = ocrFieldSchema(z.number());
@@ -65,7 +82,7 @@ const baseDraftFields = {
   detected_screen_type: z.string().nullable(),
   profile_id: z.string().nullable(),
   players: z.array(ocrPlayerEntrySchema).default([]),
-  warnings: z.array(z.unknown()).default([]),
+  warnings: z.array(ocrWarningSchema).default([]),
   raw_snippets: z.unknown(),
 } as const;
 
@@ -102,11 +119,22 @@ export type OcrField<T> = {
   value: T | null;
   raw_text: string | null;
   confidence: number | null;
-  warnings: string[];
+  warnings: OcrWarning[];
 };
+export type OcrWarning = z.infer<typeof ocrWarningSchema>;
 export type OcrDraftPayload = z.infer<typeof ocrDraftPayloadSchema>;
 export type OcrPlayerEntry = z.infer<typeof ocrPlayerEntrySchema>;
 
 export function parseOcrDraftPayload(value: unknown): OcrDraftPayload {
   return ocrDraftPayloadSchema.parse(value);
+}
+
+export function parseOcrWarningList(value: unknown): OcrWarning[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((item) => {
+    const parsed = ocrWarningSchema.safeParse(item);
+    return parsed.success ? [parsed.data] : [];
+  });
 }

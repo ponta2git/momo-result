@@ -1,4 +1,8 @@
 import type { ConfirmMatchFormValues } from "@/features/matches/workspace/review/confirmMatchFormSchema";
+import type {
+  ReviewFieldEvidence,
+  ReviewPlayerEvidence,
+} from "@/features/matches/workspace/review/reviewWarningModel";
 import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
 import { emptyIncidentCountsByKey } from "@/shared/domain/incidents";
 import type { IncidentKey, IncidentLabel } from "@/shared/domain/incidents";
@@ -13,6 +17,7 @@ export type DraftByKind = SlotMap<OcrDraftResponse>;
 export type IncidentLookupEntry = {
   confidence: Partial<Record<IncidentLabel, number | null>>;
   counts: ReviewIncidentCounts;
+  evidence: Partial<Record<IncidentLabel, ReviewFieldEvidence>>;
 };
 
 export type OriginalPlayerSnapshot = {
@@ -30,6 +35,7 @@ export type OriginalPlayerSnapshot = {
   revenueManYen: number;
   totalAssetsManYen: number;
   warnings: string[];
+  evidence: ReviewPlayerEvidence;
 };
 
 export type MatchDraftSummary = {

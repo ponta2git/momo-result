@@ -1,5 +1,5 @@
 import { ArrowRight, CalendarDays, Download, ListFilter, Plus, Trash2 } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
+import { motion } from "motion/react";
 import { Link } from "react-router-dom";
 
 import * as heldEventViewModel from "@/features/heldEvents/heldEventViewModel";
@@ -23,54 +23,65 @@ export function HeldEventsListCard({
   onCreate: () => void;
 }) {
   return (
-    <Card aria-label="開催履歴" className="min-w-0 overflow-hidden p-0" role="region">
+    <Card
+      aria-busy={data.refreshing || undefined}
+      aria-label="開催履歴"
+      className="min-w-0 overflow-hidden p-0"
+      role="region"
+    >
       {data.loading ? (
         <HeldEventsLoading />
-      ) : data.loadFailed ? (
-        <div className="p-4">
-          <Notice tone="danger" title="開催履歴を読み込めません">
-            時間をおいて、再読み込みしてください。
-          </Notice>
-        </div>
-      ) : data.rows.length === 0 ? (
-        <div className="p-4">
-          <EmptyState
-            description="開催を作ると、同じ日に行った試合を番号順にまとめられます。"
-            icon={<CalendarDays className="size-5" />}
-            title="開催履歴はまだありません"
-            action={
-              <Button icon={<Plus aria-hidden="true" className="size-4" />} onClick={onCreate}>
-                最初の開催を作成
-              </Button>
-            }
-          />
-        </div>
       ) : (
-        <ol>
-          <AnimatePresence initial={false}>
-            {data.rows.map((event, index) => (
-              <HeldEventRow
-                key={event.id}
-                deleteDisabled={actions.deletePending}
-                event={event}
-                latest={data.page === 1 && index === 0}
-                onDelete={actions.onRequestDelete}
+        <motion.div
+          animate={{ opacity: data.refreshing ? 0.7 : 1 }}
+          className="min-w-0"
+          transition={momoTransition}
+        >
+          {data.loadFailed ? (
+            <div className="p-4">
+              <Notice tone="danger" title="開催履歴を読み込めません">
+                時間をおいて、再読み込みしてください。
+              </Notice>
+            </div>
+          ) : data.rows.length === 0 ? (
+            <div className="p-4">
+              <EmptyState
+                description="開催を作ると、同じ日に行った試合を番号順にまとめられます。"
+                icon={<CalendarDays className="size-5" />}
+                title="開催履歴はまだありません"
+                action={
+                  <Button icon={<Plus aria-hidden="true" className="size-4" />} onClick={onCreate}>
+                    最初の開催を作成
+                  </Button>
+                }
               />
-            ))}
-          </AnimatePresence>
-        </ol>
-      )}
+            </div>
+          ) : (
+            <ol>
+              {data.rows.map((event, index) => (
+                <HeldEventRow
+                  key={event.id}
+                  deleteDisabled={actions.deletePending}
+                  event={event}
+                  latest={data.page === 1 && index === 0}
+                  onDelete={actions.onRequestDelete}
+                />
+              ))}
+            </ol>
+          )}
 
-      {data.pagination && data.pagination.totalItems > 0 && !data.loading && !data.loadFailed ? (
-        <PaginationControls
-          className="border-t border-[var(--color-border)] px-4 py-3"
-          disabled={data.refreshing}
-          pageSizeOptions={[...heldEventViewModel.heldEventPageSizeOptions]}
-          pagination={data.pagination}
-          onPageChange={actions.onPageChange}
-          onPageSizeChange={actions.onPageSizeChange}
-        />
-      ) : null}
+          {data.pagination && data.pagination.totalItems > 0 && !data.loadFailed ? (
+            <PaginationControls
+              className="border-t border-[var(--color-border)] px-4 py-3"
+              disabled={data.refreshing}
+              pageSizeOptions={[...heldEventViewModel.heldEventPageSizeOptions]}
+              pagination={data.pagination}
+              onPageChange={actions.onPageChange}
+              onPageSizeChange={actions.onPageSizeChange}
+            />
+          ) : null}
+        </motion.div>
+      )}
     </Card>
   );
 }
@@ -89,12 +100,7 @@ function HeldEventRow({
   const encodedId = encodeURIComponent(event.id);
   const canDelete = event.matchCount === 0 && event.draftCount === 0;
   return (
-    <motion.li
-      layout="position"
-      className="border-b border-[var(--color-border)] last:border-b-0"
-      exit={{ opacity: 0, y: -4 }}
-      transition={momoTransition}
-    >
+    <li className="border-b border-[var(--color-border)] last:border-b-0">
       <article className="grid gap-3 px-4 py-3 lg:grid-cols-[minmax(15rem,1fr)_minmax(12rem,16rem)_auto] lg:items-center">
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           {latest ? (
@@ -160,7 +166,7 @@ function HeldEventRow({
           ) : null}
         </div>
       </article>
-    </motion.li>
+    </li>
   );
 }
 

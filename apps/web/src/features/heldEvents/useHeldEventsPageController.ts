@@ -202,7 +202,7 @@ export function useHeldEventsPageController() {
       data: {
         loadFailed: shouldShowBlockingQueryError(heldEventsQuery),
         loading: isInitialQueryLoading(heldEventsQuery) || pageCorrectionPending,
-        page: paginationSearch.page,
+        page: pagination?.page ?? paginationSearch.page,
         pagination,
         refreshing: heldEventsQuery.isFetching,
         rows,

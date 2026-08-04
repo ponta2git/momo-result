@@ -51,6 +51,7 @@ export function heldEventsQueryOptions(
         ? heldEventKeys.scope(scope)
         : heldEventKeys.list({ ...query, scope }),
     queryFn: ({ signal }) => listHeldEvents(query, limit, { signal }),
+    placeholderData: keepPreviousData,
   });
 }
 

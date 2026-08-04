@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { HeldEventsPage } from "@/features/heldEvents/HeldEventsPage";
 import { setDevUser } from "@/test/auth";
+import { createDeferred } from "@/test/deferred";
 import { makeHeldEventResponse } from "@/test/factories";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
@@ -175,6 +176,67 @@ describe("HeldEventsPage", () => {
     await waitFor(() =>
       expect(screen.getByLabelText("current location")).toHaveTextContent("pageSize=25"),
     );
+  });
+
+  it("keeps the current list and pager stable while the next page loads", async () => {
+    const secondPageGate = createDeferred();
+    const firstPageEvent = makeHeldEventResponse({
+      heldAt: "2026-01-02T03:04:00.000Z",
+      id: "held-page-1",
+    });
+    const secondPageEvent = makeHeldEventResponse({
+      heldAt: "2025-12-02T03:04:00.000Z",
+      id: "held-page-2",
+    });
+    server.use(
+      http.get("/api/held-events", async ({ request }) => {
+        const page = Number(new URL(request.url).searchParams.get("page") ?? "1");
+        if (page === 2) {
+          await secondPageGate.promise;
+        }
+        return HttpResponse.json({
+          items: [page === 2 ? secondPageEvent : firstPageEvent],
+          pagination: {
+            hasNextPage: page === 1,
+            hasPreviousPage: page === 2,
+            page,
+            pageSize: 10,
+            totalItems: 11,
+            totalPages: 2,
+          },
+          totalMatchCount: 0,
+        });
+      }),
+    );
+
+    renderPage();
+
+    const firstPageLink = await screen.findByRole("link", { name: /の開催詳細$/u });
+    expect(firstPageLink).toHaveAttribute("href", "/held-events/held-page-1");
+    await user.click(screen.getByRole("button", { name: "次のページへ" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("region", { name: "開催履歴" })).toHaveAttribute("aria-busy", "true"),
+    );
+    expect(screen.getByRole("link", { name: /の開催詳細$/u })).toHaveAttribute(
+      "href",
+      "/held-events/held-page-1",
+    );
+    expect(screen.getByText("最新")).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "ページネーション" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "次のページへ" })).toBeDisabled();
+
+    secondPageGate.resolve();
+
+    await waitFor(() =>
+      expect(screen.getByRole("link", { name: /の開催詳細$/u })).toHaveAttribute(
+        "href",
+        "/held-events/held-page-2",
+      ),
+    );
+    expect(screen.getByRole("region", { name: "開催履歴" })).not.toHaveAttribute("aria-busy");
+    expect(screen.queryByText("最新")).not.toBeInTheDocument();
+    expect(screen.getByText("2 / 2")).toBeInTheDocument();
   });
 
   it("creates a held event in a dialog and continues to its detail page", async () => {

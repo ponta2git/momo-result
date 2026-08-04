@@ -68,14 +68,28 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
       (response) =>
         response.url().includes("/api/held-events") && response.request().method() === "POST",
     );
-    await page.getByLabel("開催日時").fill(uniqueLocalDateTime());
-    await page.getByRole("button", { name: "開催履歴を作成" }).click();
+    await page.getByRole("button", { exact: true, name: "開催を作成" }).click();
+    const createDialog = page.getByRole("dialog", { name: "新しい開催を作成" });
+    await expect(createDialog).toBeVisible();
+    await createDialog.getByLabel("開催日時").fill(uniqueLocalDateTime());
+    await createDialog.getByRole("button", { exact: true, name: "開催を作成" }).click();
 
     const response = await createResponse;
     expect(response.ok()).toBe(true);
     const body = (await response.json()) as { id?: string };
     heldEventId = expectGeneratedId(body.id, "held event ID");
-    await expect(page.getByText(/開催履歴（.+）を作成しました。/u)).toBeVisible();
+    await expect(page).toHaveURL(`/held-events/${heldEventId}`);
+    await expect(page.getByText("確定 0試合・未完了 0件。次は第1試合です。")).toBeVisible();
+    const manualLinks = await page.getByRole("link", { exact: true, name: "手入力" }).all();
+    expect(manualLinks).toHaveLength(2);
+    for (const manualLink of manualLinks) {
+      await expect(manualLink).toHaveAttribute("href", `/matches/new?heldEventId=${heldEventId}`);
+    }
+    const ocrLinks = await page.getByRole("link", { exact: true, name: "OCR取り込み" }).all();
+    expect(ocrLinks).toHaveLength(2);
+    for (const ocrLink of ocrLinks) {
+      await expect(ocrLink).toHaveAttribute("href", `/ocr/new?heldEventId=${heldEventId}`);
+    }
   });
 
   await test.step("create a member alias through the admin UI", async () => {
@@ -176,12 +190,12 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     await page.setViewportSize({ height: 844, width: 390 });
     await reviewRail.getByRole("button", { name: "次の要確認セルへ" }).click();
     await expect(page.getByLabel("おーたか 順位")).toBeFocused();
-    expect(
-      await page.evaluate(() => ({
-        innerWidth: window.innerWidth,
-        scrollWidth: document.documentElement.scrollWidth,
-      })),
-    ).toEqual({ innerWidth: 390, scrollWidth: 390 });
+    const mobileReviewGeometry = await page.evaluate(() => ({
+      innerWidth: window.innerWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+    }));
+    expect(mobileReviewGeometry.innerWidth).toBe(390);
+    expect(mobileReviewGeometry.scrollWidth).toBeLessThanOrEqual(mobileReviewGeometry.innerWidth);
     await page.setViewportSize({ height: 900, width: 1440 });
 
     await page.getByLabel(/開催履歴/u).selectOption(heldEventId);
@@ -231,6 +245,15 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
       throw new Error("Result ledger primary columns must be measurable.");
     }
     expect(totalAssetsBox.x - rankBox.x).toBeLessThanOrEqual(480);
+
+    await page.getByRole("link", { name: "この開催へ戻る" }).click();
+    await expect(page).toHaveURL(`/held-events/${heldEventId}`);
+    await expect(page.getByRole("heading", { exact: true, name: "この開催の戦績" })).toBeVisible();
+    const eventMatchLink = page.getByRole("link", { name: /第\d+試合の結果を見る/u });
+    await expect(eventMatchLink).toHaveAttribute("href", `/matches/${matchId}`);
+    await expect(page.getByRole("link", { name: /第\d+試合を戦績比較で見る/u })).toBeVisible();
+    await eventMatchLink.click();
+    await expect(page).toHaveURL(`/matches/${matchId}`);
   });
 
   await test.step("inspect series comparison drilldowns for the confirmed match", async () => {

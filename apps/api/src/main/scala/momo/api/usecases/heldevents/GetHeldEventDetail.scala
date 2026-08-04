@@ -22,7 +22,8 @@ final class GetHeldEventDetail[F[_]: Monad](
 ):
   def run(heldEventId: HeldEventId): F[Either[AppError, HeldEventDetail]] = events
     .find(heldEventId).flatMap {
-      case None => AppError.NotFound("held event", heldEventId.value).asLeft[HeldEventDetail].pure[F]
+      case None =>
+        AppError.NotFound("held event", heldEventId.value).asLeft[HeldEventDetail].pure[F]
       case Some(event) =>
         for
           confirmed <- matches.listByHeldEvent(heldEventId)

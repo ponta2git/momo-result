@@ -78,6 +78,17 @@
 - Keep the full sortable incident table after the result ledger. Put owner, played/confirmed timestamps, and destructive actions in a final record-information surface.
 - Fetch same-game, same-season, same-map comparison context without blocking the primary match result. Loading, stale placeholder, failure, and a missing target match must not replace the result ledger.
 
+### Held event hub
+
+- Treat the held-event list as a chronological ledger, not as a card dashboard. Lead each entry with the exact held date and time, then keep confirmed count, active-draft count, and next match number in one compact reading path.
+- Create a held event in a focused dialog and navigate directly to its detail after success. Keep creation separate from list scanning so form expansion never moves the ledger unexpectedly.
+- Treat the event detail as the hub for one session: identity and counts, next-match actions, active drafts, deterministic player recap, match-number timeline, then export and management.
+- Use the match-number timeline as the signature event visual. Mark it up as an ordered list, keep the number axis stable, and place result and scoped-comparison actions beside the corresponding match.
+- Derive wins, average rank, and rank sequence only from saved results, and always retain sample-size context. Do not infer causes, confidence, or recommendations at event scope.
+- Preserve `heldEventId` through manual entry, OCR capture, match search, export, match detail, and return navigation. Use the server-provided next match number rather than deriving it from counts in the browser.
+- Offer event deletion only when both confirmed matches and active drafts are absent, and keep the destructive confirmation explicit.
+- Use final-shape skeletons and distinct empty states for a new event, draft-only event, result-only event, and mixed event. Do not collapse these states into a generic “no data” message.
+
 ### Motion
 
 - Motion should communicate state continuity, not decorate the interface.

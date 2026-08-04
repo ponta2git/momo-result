@@ -23,12 +23,13 @@ final class GetHeldEventDetailSpec extends CatsEffectSuite:
   private val seasonId = SeasonMasterId.unsafeFromString("season-spring")
   private val mapId = MapMasterId.unsafeFromString("map-east")
 
-  private def fixture = for
-    events <- InMemoryHeldEventsRepository.create[IO]
-    matches <- InMemoryMatchesRepository.create[IO]
-    drafts <- InMemoryMatchDraftsRepository.create[IO]
-    matchList = InMemoryMatchListReadModel[IO](matches, drafts)
-  yield (events, matches, drafts, GetHeldEventDetail[IO](events, matches, matchList))
+  private def fixture =
+    for
+      events <- InMemoryHeldEventsRepository.create[IO]
+      matches <- InMemoryMatchesRepository.create[IO]
+      drafts <- InMemoryMatchDraftsRepository.create[IO]
+      matchList = InMemoryMatchListReadModel[IO](matches, drafts)
+    yield (events, matches, drafts, GetHeldEventDetail[IO](events, matches, matchList))
 
   private def matchRecord(id: String, matchNo: Int) = MatchFixtures.matchRecord(
     id = MatchId.unsafeFromString(id),

@@ -220,4 +220,28 @@ final class PostgresMatchListReadModelSpec extends IntegrationSuite:
       assertEquals(summary.preConfirmCount, 2)
       assertEquals(summary.needsReviewCount, 1)
 
+  test("lists all active drafts for one held event in match-number order"):
+    val fourth = sampleDraft(
+      "draft_fourth",
+      MatchDraftStatus.NeedsReview,
+      Instant.parse("2026-04-30T04:00:00Z"),
+    ).withCommon(_.copy(matchNoInEvent = Some(MatchNoInEvent.unsafeFromInt(4))))
+    for
+      _ <- seedPrereqs
+      _ <- drafts.create(fourth)
+      _ <- drafts.create(sampleDraft(
+        "draft_second",
+        MatchDraftStatus.DraftReady,
+        Instant.parse("2026-04-30T02:00:00Z"),
+      ))
+      _ <- drafts.create(sampleDraft(
+        "draft_cancelled",
+        MatchDraftStatus.Cancelled,
+        Instant.parse("2026-04-30T01:00:00Z"),
+      ))
+      items <- matchList.listDraftsByHeldEvent(heldEventId)
+    yield
+      assertEquals(items.map(_.id), List("draft_second", "draft_fourth"))
+      assertEquals(items.map(_.matchNoInEvent.map(_.value)), List(Some(2), Some(4)))
+
 end PostgresMatchListReadModelSpec

@@ -13,6 +13,7 @@ import momo.api.domain.matchlist.MatchListProjection
 import momo.api.domain.{
   MatchDraftStatus,
   MatchListItem,
+  MatchListSort,
   MatchListStatusFilter,
   MatchListSummary,
   PagedResult
@@ -91,6 +92,17 @@ object PostgresMatchList extends PostgresMatchListSupport:
             filter.page,
             total,
           )
+
+    override def listDraftsByHeldEvent(heldEventId: momo.api.domain.ids.HeldEventId)
+        : ConnectionIO[List[MatchListItem]] =
+      val selected = draftBase ++ fragments.whereAnd(
+        fr"d.held_event_id = $heldEventId",
+        fr"d.persisted_status <> ${MatchDraftStatus.Cancelled}",
+        fr"d.persisted_status <> ${MatchDraftStatus.Confirmed}",
+      )
+      (fr"SELECT combined.* FROM (" ++ selected ++ fr") AS combined" ++ orderBy(
+        MatchListSort.MatchNoAsc
+      )).query[Row].to[List].map(_.map(row => toItem(row, _ => Nil)))
 
     override def summarize(
         filter: MatchListReadModel.SummaryFilter

@@ -10,17 +10,24 @@ import momo.api.endpoints.codec.{BoundaryId, HeldEventCodec}
 import momo.api.endpoints.{
   CreateHeldEventRequest,
   DeleteHeldEventResponse,
+  HeldEventDetailResponse,
   HeldEventListResponse,
   HeldEventResponse,
   HeldEventsEndpoints,
   PaginationResponse
 }
 import momo.api.http.{EndpointSecurity, HttpOperation, IdempotencyReplay, SecuredEndpoint}
-import momo.api.usecases.heldevents.{CreateHeldEvent, DeleteHeldEvent, ListHeldEvents}
+import momo.api.usecases.heldevents.{
+  CreateHeldEvent,
+  DeleteHeldEvent,
+  GetHeldEventDetail,
+  ListHeldEvents
+}
 
 object HeldEventModule:
   def routes[F[_]: Async](
       listHeldEvents: ListHeldEvents[F],
+      getHeldEventDetail: GetHeldEventDetail[F],
       createHeldEvent: CreateHeldEvent[F],
       deleteHeldEvent: DeleteHeldEvent[F],
       idempotency: IdempotencyReplay.Guard[F],
@@ -32,12 +39,27 @@ object HeldEventModule:
         case (q, limit, page, pageSize) =>
           security.respond(listHeldEvents.run(q, limit, page, pageSize))(result =>
             HeldEventListResponse(
-              items = result.items.map((e, c) => HeldEventResponse.from(e, c)),
+              items = result.items.map(item =>
+                HeldEventResponse.from(
+                  item.event,
+                  item.matchCount,
+                  item.draftCount,
+                  item.nextMatchNo,
+                )
+              ),
               pagination = PaginationResponse.from(result.pagination),
               totalMatchCount = result.totalMatchCount,
             )
           )
       }
+    },
+    SecuredEndpoint.readLogic(security, HeldEventsEndpoints.get) { _ => heldEventId =>
+      security.decode(BoundaryId.required(
+        "heldEventId",
+        heldEventId,
+      )(HeldEventId.fromString))(id =>
+        security.respond(getHeldEventDetail.run(id))(HeldEventDetailResponse.from)
+      )
     },
     SecuredEndpoint.mutationLogic(security, HeldEventsEndpoints.create) { member =>
       {
@@ -51,7 +73,9 @@ object HeldEventModule:
             nowF,
             security.decode(HeldEventCodec.toCreateCommand(request))(command =>
               security
-                .respond(createHeldEvent.run(command))(event => HeldEventResponse.from(event, 0))
+                .respond(createHeldEvent.run(command))(event =>
+                  HeldEventResponse.from(event, matchCount = 0, draftCount = 0, nextMatchNo = 1)
+                )
             ),
           )
       }

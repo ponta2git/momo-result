@@ -135,18 +135,30 @@ object PostgresMatches extends PostgresMatchesReadSupport:
 
     override def countByHeldEvents(
         heldEventIds: List[HeldEventId]
-    ): ConnectionIO[Map[HeldEventId, Int]] =
-      if heldEventIds.isEmpty then Map.empty[HeldEventId, Int].pure[ConnectionIO]
+    ): ConnectionIO[Map[HeldEventId, Int]] = statsByHeldEvents(heldEventIds).map(_.view
+      .mapValues(_.matchCount).toMap)
+
+    override def statsByHeldEvents(
+        heldEventIds: List[HeldEventId]
+    ): ConnectionIO[Map[HeldEventId, MatchesRepository.HeldEventStats]] =
+      if heldEventIds.isEmpty then
+        Map.empty[HeldEventId, MatchesRepository.HeldEventStats].pure[ConnectionIO]
       else
         val ids = heldEventIds.map(_.value).toArray
         sql"""
-            SELECT held_event_id, COUNT(*)::int
+            SELECT held_event_id, COUNT(*)::int, COALESCE(MAX(match_no_in_event), 0)::int
             FROM matches
             WHERE held_event_id = ANY($ids)
             GROUP BY held_event_id
-          """.query[HeldEventMatchCountRow].to[List].map { rows =>
-          val seen = rows.map(row => row.heldEventId -> row.count).toMap
-          heldEventIds.map(id => id -> seen.getOrElse(id, 0)).toMap
+          """.query[HeldEventMatchStatsRow].to[List].map { rows =>
+          val seen = rows.map(row =>
+            row.heldEventId -> MatchesRepository.HeldEventStats(
+              matchCount = row.count,
+              maxMatchNo = row.maxMatchNo,
+            )
+          ).toMap
+          heldEventIds.map(id => id -> seen.getOrElse(id, MatchesRepository.HeldEventStats(0, 0)))
+            .toMap
         }
 end PostgresMatches
 

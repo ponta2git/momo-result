@@ -84,7 +84,8 @@ private[bootstrap] object UseCaseRouteBundles:
     val getOcrDraft = GetOcrDraft[F](drafts)
     val getOcrDraftsBulk = GetOcrDraftsBulk[F](drafts)
     val cancelOcrJob = CancelOcrJob[F](jobs, clock.now)
-    val listHeldEvents = ListHeldEvents[F](heldEvents, matches)
+    val listHeldEvents = ListHeldEvents[F](heldEvents, matches, matchDrafts)
+    val getHeldEventDetail = GetHeldEventDetail[F](heldEvents, matches, matchList)
     val createHeldEvent = CreateHeldEvent[F](heldEvents, ids.nextHeldEventId)
     val sourceImageRetention = PurgeSourceImages[F](matchDrafts, imageStorage)
     val createMatchDraft = CreateMatchDraft[F](
@@ -183,6 +184,7 @@ private[bootstrap] object UseCaseRouteBundles:
       ),
       heldEvents = HttpRoutes.HeldEventUseCases(
         listHeldEvents = listHeldEvents,
+        getHeldEventDetail = getHeldEventDetail,
         createHeldEvent = createHeldEvent,
         deleteHeldEvent = deleteHeldEvent,
       ),

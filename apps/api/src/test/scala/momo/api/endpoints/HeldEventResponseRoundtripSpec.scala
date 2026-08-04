@@ -24,7 +24,12 @@ final class HeldEventResponseRoundtripSpec extends FunSuite:
     HeldEventId.unsafeFromString("held_2026_04_30"),
     Instant.parse("2026-04-30T12:00:00Z"),
   )
-  private val response = HeldEventResponse.from(held, matchCount = 3)
+  private val response = HeldEventResponse.from(
+    held,
+    matchCount = 3,
+    draftCount = 1,
+    nextMatchNo = 5,
+  )
 
   test("HeldEventResponse: encode → decode is identity"):
     val decoded = response.asJson.as[HeldEventResponse]
@@ -35,7 +40,9 @@ final class HeldEventResponseRoundtripSpec extends FunSuite:
       {
         "id": "held_2026_04_30",
         "heldAt": "2026-04-30T12:00:00Z",
-        "matchCount": 3
+        "matchCount": 3,
+        "draftCount": 1,
+        "nextMatchNo": 5
       }
     """).getOrElse(Json.Null)
     assertEquals(response.asJson, golden)

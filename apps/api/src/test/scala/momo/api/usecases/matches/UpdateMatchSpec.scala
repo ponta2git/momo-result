@@ -222,6 +222,10 @@ final class UpdateMatchSpec extends MomoCatsEffectSuite:
     override def maxMatchNo(heldEventId: HeldEventId): IO[Int] = delegate.maxMatchNo(heldEventId)
     override def countByHeldEvents(heldEventIds: List[HeldEventId]): IO[Map[HeldEventId, Int]] =
       delegate.countByHeldEvents(heldEventIds)
+    override def statsByHeldEvents(
+        heldEventIds: List[HeldEventId]
+    ): IO[Map[HeldEventId, MatchesRepository.HeldEventStats]] =
+      delegate.statsByHeldEvents(heldEventIds)
 
   private object MatchesRepositoryWithUpdateConflict:
     def apply(delegate: MatchesRepository[IO]): MatchesRepositoryWithUpdateConflict =

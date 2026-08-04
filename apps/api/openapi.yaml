@@ -981,6 +981,52 @@
       }
     },
     "/api/held-events/{heldEventId}" : {
+      "get" : {
+        "tags" : [
+          "held-events"
+        ],
+        "operationId" : "getApiHeld-eventsHeldeventid",
+        "parameters" : [
+          {
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "heldEventId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HeldEventDetailResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
       "delete" : {
         "tags" : [
           "held-events"
@@ -4519,6 +4565,85 @@
           }
         }
       },
+      "HeldEventDetailResponse" : {
+        "title" : "HeldEventDetailResponse",
+        "type" : "object",
+        "required" : [
+          "id",
+          "heldAt",
+          "matchCount",
+          "draftCount",
+          "nextMatchNo"
+        ],
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "heldAt" : {
+            "type" : "string"
+          },
+          "matchCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "draftCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "nextMatchNo" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "matches" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/HeldEventMatchResponse"
+            }
+          },
+          "drafts" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/HeldEventDraftResponse"
+            }
+          }
+        }
+      },
+      "HeldEventDraftResponse" : {
+        "title" : "HeldEventDraftResponse",
+        "type" : "object",
+        "required" : [
+          "matchDraftId",
+          "status",
+          "updatedAt"
+        ],
+        "properties" : {
+          "matchDraftId" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "matchNoInEvent" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "gameTitleId" : {
+            "type" : "string"
+          },
+          "seasonMasterId" : {
+            "type" : "string"
+          },
+          "mapMasterId" : {
+            "type" : "string"
+          },
+          "playedAt" : {
+            "type" : "string"
+          },
+          "updatedAt" : {
+            "type" : "string"
+          }
+        }
+      },
       "HeldEventListResponse" : {
         "title" : "HeldEventListResponse",
         "type" : "object",
@@ -4542,13 +4667,90 @@
           }
         }
       },
+      "HeldEventMatchResponse" : {
+        "title" : "HeldEventMatchResponse",
+        "type" : "object",
+        "required" : [
+          "matchId",
+          "matchNoInEvent",
+          "gameTitleId",
+          "seasonMasterId",
+          "ownerMemberId",
+          "mapMasterId",
+          "playedAt"
+        ],
+        "properties" : {
+          "matchId" : {
+            "type" : "string"
+          },
+          "matchNoInEvent" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "gameTitleId" : {
+            "type" : "string"
+          },
+          "seasonMasterId" : {
+            "type" : "string"
+          },
+          "ownerMemberId" : {
+            "type" : "string"
+          },
+          "mapMasterId" : {
+            "type" : "string"
+          },
+          "playedAt" : {
+            "type" : "string"
+          },
+          "players" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/HeldEventPlayerResultResponse"
+            }
+          }
+        }
+      },
+      "HeldEventPlayerResultResponse" : {
+        "title" : "HeldEventPlayerResultResponse",
+        "type" : "object",
+        "required" : [
+          "memberId",
+          "playOrder",
+          "rank",
+          "totalAssetsManYen",
+          "revenueManYen"
+        ],
+        "properties" : {
+          "memberId" : {
+            "type" : "string"
+          },
+          "playOrder" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "rank" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "totalAssetsManYen" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "revenueManYen" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
       "HeldEventResponse" : {
         "title" : "HeldEventResponse",
         "type" : "object",
         "required" : [
           "id",
           "heldAt",
-          "matchCount"
+          "matchCount",
+          "draftCount",
+          "nextMatchNo"
         ],
         "properties" : {
           "id" : {
@@ -4558,6 +4760,14 @@
             "type" : "string"
           },
           "matchCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "draftCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "nextMatchNo" : {
             "type" : "integer",
             "format" : "int32"
           }

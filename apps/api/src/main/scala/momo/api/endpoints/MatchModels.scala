@@ -26,14 +26,26 @@ object PaginationResponse:
     hasNextPage = result.hasNextPage,
   )
 
-final case class HeldEventResponse(id: String, heldAt: String, matchCount: Int)
-    derives Codec.AsObject
+final case class HeldEventResponse(
+    id: String,
+    heldAt: String,
+    matchCount: Int,
+    draftCount: Int,
+    nextMatchNo: Int,
+) derives Codec.AsObject
 
 object HeldEventResponse:
-  def from(e: HeldEvent, matchCount: Int): HeldEventResponse = HeldEventResponse(
+  def from(
+      e: HeldEvent,
+      matchCount: Int,
+      draftCount: Int,
+      nextMatchNo: Int,
+  ): HeldEventResponse = HeldEventResponse(
     id = e.id.value,
     heldAt = DateTimeFormatter.ISO_INSTANT.format(e.heldAt),
     matchCount = matchCount,
+    draftCount = draftCount,
+    nextMatchNo = nextMatchNo,
   )
 
 final case class HeldEventListResponse(

@@ -66,6 +66,21 @@ final class InMemoryMatchesRepository[F[_]: Sync] private (ref: Ref[F, Map[Match
       heldEventIds.map(id => id -> counts.getOrElse(id, 0)).toMap
     }
 
+  override def statsByHeldEvents(
+      heldEventIds: List[HeldEventId]
+  ): F[Map[HeldEventId, MatchesRepository.HeldEventStats]] = ref.get.map { records =>
+    val ids = heldEventIds.toSet
+    val grouped = records.values.filter(record => ids.contains(record.heldEventId)).toList
+      .groupBy(_.heldEventId)
+    heldEventIds.map { id =>
+      val scoped = grouped.getOrElse(id, Nil)
+      id -> MatchesRepository.HeldEventStats(
+        matchCount = scoped.size,
+        maxMatchNo = scoped.map(_.matchNoInEvent.value).maxOption.getOrElse(0),
+      )
+    }.toMap
+  }
+
   private def containsMatchNo(
       current: Map[MatchId, MatchRecord],
       record: MatchRecord,
@@ -127,3 +142,8 @@ object InMemoryMatchesRepository:
 
     override def countByHeldEvents(heldEventIds: List[HeldEventId]): F[Map[HeldEventId, Int]] =
       matches.countByHeldEvents(heldEventIds)
+
+    override def statsByHeldEvents(
+        heldEventIds: List[HeldEventId]
+    ): F[Map[HeldEventId, MatchesRepository.HeldEventStats]] =
+      matches.statsByHeldEvents(heldEventIds)

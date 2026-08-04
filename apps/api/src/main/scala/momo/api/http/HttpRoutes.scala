@@ -66,6 +66,7 @@ object HttpRoutes:
 
   final case class HeldEventUseCases[F[_]](
       listHeldEvents: ListHeldEvents[F],
+      getHeldEventDetail: GetHeldEventDetail[F],
       createHeldEvent: CreateHeldEvent[F],
       deleteHeldEvent: DeleteHeldEvent[F],
   )
@@ -169,6 +170,7 @@ object HttpRoutes:
         security,
       ) ::: HeldEventModule.routes[F](
         deps.heldEvents.listHeldEvents,
+        deps.heldEvents.getHeldEventDetail,
         deps.heldEvents.createHeldEvent,
         deps.heldEvents.deleteHeldEvent,
         idempotencyGuard,

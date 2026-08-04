@@ -201,6 +201,19 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
   test("countByHeldEvents short-circuits on empty input"):
     matches.countByHeldEvents(Nil).map(m => assertEquals(m, Map.empty[HeldEventId, Int]))
 
+  test("statsByHeldEvents returns count and maximum match number including gaps"):
+    val missing = HeldEventId.unsafeFromString("missing_event")
+    for
+      _ <- seedPrereqs
+      _ <- matches.create(sampleMatch("match_stats_001", 1))
+      _ <- matches.create(sampleMatch("match_stats_004", 4))
+      stats <- matches.statsByHeldEvents(List(heldEventId, missing))
+    yield
+      assertEquals(stats(heldEventId).matchCount, 2)
+      assertEquals(stats(heldEventId).maxMatchNo, 4)
+      assertEquals(stats(missing).matchCount, 0)
+      assertEquals(stats(missing).maxMatchNo, 0)
+
   test("duplicate match_no_in_event for same held_event raises"):
     val rec1 = sampleMatch("match_001", 1)
     val rec2 = sampleMatch("match_002", 1)

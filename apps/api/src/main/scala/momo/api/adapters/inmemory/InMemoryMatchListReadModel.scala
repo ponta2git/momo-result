@@ -15,6 +15,7 @@ import momo.api.domain.{
   MatchListItemKind,
   MatchListKindFilter,
   MatchListRankEntry,
+  MatchListSort,
   MatchListStatusFilter,
   MatchListSummary,
   OcrDraft,
@@ -59,6 +60,14 @@ final class InMemoryMatchListReadModel[F[_]: Monad](
       MatchDraftStatus.fromWire(item.status)
     ))
   )
+
+  override def listDraftsByHeldEvent(heldEventId: HeldEventId): F[List[MatchListItem]] = listItems(
+    heldEventId = Some(heldEventId),
+    gameTitleId = None,
+    seasonMasterId = None,
+    statusFilter = MatchListStatusFilter.All,
+    kind = MatchListKindFilter.MatchDraft,
+  ).map(items => MatchListProjection.sortItems(items, MatchListSort.MatchNoAsc))
 
   private def listItems(
       heldEventId: Option[HeldEventId],

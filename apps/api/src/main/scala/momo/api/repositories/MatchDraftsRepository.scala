@@ -12,6 +12,9 @@ trait MatchDraftsAlg[F0[_]]:
   def update(draft: MatchDraft, updatedAt: Instant): F0[MatchDraftUpdateResult]
   def find(id: MatchDraftId): F0[Option[MatchDraft]]
   def list(filter: MatchDraftsRepository.ListFilter): F0[List[MatchDraft]]
+  def statsByHeldEvents(
+      heldEventIds: List[HeldEventId]
+  ): F0[Map[HeldEventId, MatchDraftsRepository.HeldEventStats]]
   def markConfirmed(
       draftId: MatchDraftId,
       confirmedMatchId: MatchId,
@@ -40,6 +43,9 @@ trait MatchDraftsRepository[F[_]]:
   def update(draft: MatchDraft, updatedAt: Instant): F[MatchDraftUpdateResult]
   def find(id: MatchDraftId): F[Option[MatchDraft]]
   def list(filter: MatchDraftsRepository.ListFilter): F[List[MatchDraft]]
+  def statsByHeldEvents(
+      heldEventIds: List[HeldEventId]
+  ): F[Map[HeldEventId, MatchDraftsRepository.HeldEventStats]]
   def markConfirmed(
       draftId: MatchDraftId,
       confirmedMatchId: MatchId,
@@ -99,6 +105,8 @@ trait MatchDraftCancellationRepository[F[_]]:
   ): F[MatchDraftCancellationResult]
 
 object MatchDraftsRepository:
+  final case class HeldEventStats(draftCount: Int, maxMatchNo: Int)
+
   final case class ListFilter(
       heldEventId: Option[HeldEventId] = None,
       gameTitleId: Option[GameTitleId] = None,
@@ -114,6 +122,9 @@ object MatchDraftsRepository:
         liftK(alg.update(draft, updatedAt))
       def find(id: MatchDraftId): F[Option[MatchDraft]] = liftK(alg.find(id))
       def list(filter: ListFilter): F[List[MatchDraft]] = liftK(alg.list(filter))
+      def statsByHeldEvents(
+          heldEventIds: List[HeldEventId]
+      ): F[Map[HeldEventId, HeldEventStats]] = liftK(alg.statsByHeldEvents(heldEventIds))
       def markConfirmed(
           draftId: MatchDraftId,
           confirmedMatchId: MatchId,

@@ -15,10 +15,12 @@ import momo.api.domain.{
 
 trait MatchListAlg[F0[_]]:
   def list(filter: MatchListReadModel.Filter): F0[PagedResult[MatchListItem]]
+  def listDraftsByHeldEvent(heldEventId: HeldEventId): F0[List[MatchListItem]]
   def summarize(filter: MatchListReadModel.SummaryFilter): F0[MatchListSummary]
 
 trait MatchListReadModel[F[_]]:
   def list(filter: MatchListReadModel.Filter): F[PagedResult[MatchListItem]]
+  def listDraftsByHeldEvent(heldEventId: HeldEventId): F[List[MatchListItem]]
   def summarize(filter: MatchListReadModel.SummaryFilter): F[MatchListSummary]
 
 object MatchListReadModel:
@@ -41,6 +43,8 @@ object MatchListReadModel:
   def fromAlg[F0[_], F[_]](alg: MatchListAlg[F0], liftK: F0 ~> F): MatchListReadModel[F] =
     new MatchListReadModel[F]:
       def list(filter: Filter): F[PagedResult[MatchListItem]] = liftK(alg.list(filter))
+      def listDraftsByHeldEvent(heldEventId: HeldEventId): F[List[MatchListItem]] =
+        liftK(alg.listDraftsByHeldEvent(heldEventId))
       def summarize(filter: SummaryFilter): F[MatchListSummary] = liftK(alg.summarize(filter))
 
   def liftIdentity[F[_]](alg: MatchListAlg[F]): MatchListReadModel[F] = new MatchListReadModel[F]:

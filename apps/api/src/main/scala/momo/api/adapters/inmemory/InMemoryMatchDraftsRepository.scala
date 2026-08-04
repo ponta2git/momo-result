@@ -48,6 +48,23 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
       filter.limit.fold(filtered)(filtered.take)
     }
 
+  override def statsByHeldEvents(
+      heldEventIds: List[HeldEventId]
+  ): F[Map[HeldEventId, MatchDraftsRepository.HeldEventStats]] = ref.get.map { drafts =>
+    val ids = heldEventIds.toSet
+    val grouped = drafts.values.filter { draft =>
+      draft.heldEventId.exists(ids.contains) &&
+      draft.status != MatchDraftStatus.Cancelled && draft.status != MatchDraftStatus.Confirmed
+    }.toList.groupBy(_.heldEventId.get)
+    heldEventIds.map { id =>
+      val scoped = grouped.getOrElse(id, Nil)
+      id -> MatchDraftsRepository.HeldEventStats(
+        draftCount = scoped.size,
+        maxMatchNo = scoped.flatMap(_.matchNoInEvent.map(_.value)).maxOption.getOrElse(0),
+      )
+    }.toMap
+  }
+
   override def markConfirmed(
       draftId: MatchDraftId,
       confirmedMatchId: MatchId,

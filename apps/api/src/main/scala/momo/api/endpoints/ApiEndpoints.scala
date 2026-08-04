@@ -19,6 +19,7 @@ object ApiEndpoints:
     OcrDraftEndpoints.listByIds,
     ExportEndpoints.matches,
     HeldEventsEndpoints.list,
+    HeldEventsEndpoints.get,
     HeldEventsEndpoints.create,
     HeldEventsEndpoints.delete,
     MatchDraftEndpoints.create,

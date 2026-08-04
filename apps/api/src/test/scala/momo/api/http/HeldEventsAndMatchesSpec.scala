@@ -61,8 +61,45 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
       listBody <- listRes.as[Json]
       items = jsonField[List[Json]](listBody, "items")
     yield items match
-      case item :: Nil => assertEquals(jsonField[String](item, "id"), id)
+      case item :: Nil =>
+        assertEquals(jsonField[String](item, "id"), id)
+        assertEquals(jsonField[Int](item, "draftCount"), 0)
+        assertEquals(jsonField[Int](item, "nextMatchNo"), 1)
       case other => fail(s"expected exactly 1 held event, got: ${other.map(_.noSpaces)}")
+  }
+
+  app.test("GET /api/held-events/:id returns ordered matches, drafts, and next match number") {
+    httpApp =>
+      for
+        heldEventId <- createEvent(httpApp)
+        matchRes <- httpApp.run(writePost(uri"/api/matches", confirmBody(heldEventId, 3)))
+        _ = assertEquals(matchRes.status, Status.Ok)
+        draftRes <- httpApp.run(writePost(
+          uri"/api/match-drafts",
+          HttpRequestBodies.Matches.matchDraftForHeldEvent(heldEventId).deepMerge(
+            Json.obj("matchNoInEvent" -> Json.fromInt(5))
+          ),
+        ))
+        _ = assertEquals(draftRes.status, Status.Ok)
+        res <- httpApp.run(readGet(Uri.unsafeFromString(s"/api/held-events/$heldEventId")))
+        body <- res.as[Json]
+        matches = jsonField[List[Json]](body, "matches")
+        drafts = jsonField[List[Json]](body, "drafts")
+      yield
+        assertEquals(res.status, Status.Ok)
+        assertEquals(jsonField[Int](body, "matchCount"), 1)
+        assertEquals(jsonField[Int](body, "draftCount"), 1)
+        assertEquals(jsonField[Int](body, "nextMatchNo"), 6)
+        assertEquals(matches.map(jsonField[Int](_, "matchNoInEvent")), List(3))
+        assertEquals(jsonField[List[Json]](matches.head, "players").size, 4)
+        assertEquals(drafts.map(jsonField[Int](_, "matchNoInEvent")), List(5))
+        assertEquals(drafts.map(jsonField[String](_, "status")), List("draft_ready"))
+  }
+
+  app.test("GET /api/held-events/:id returns 404 for a missing event") { httpApp =>
+    httpApp.run(readGet(uri"/api/held-events/missing-held-event")).flatMap { res =>
+      assertProblem(res, Status.NotFound, "NOT_FOUND", "held event was not found")
+    }
   }
 
   app.test("POST /api/held-events with invalid heldAt returns 422") { httpApp =>

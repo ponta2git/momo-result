@@ -5,6 +5,8 @@ import sttp.tapir.generic.auto.*
 import sttp.tapir.json.circe.*
 
 object HeldEventsEndpoints:
+  type GetInput = String
+
   val list: CommonEndpoint.SecuredRead[
     (Option[String], Option[Int], Option[Int], Option[Int]),
     HeldEventListResponse,
@@ -18,6 +20,14 @@ object HeldEventsEndpoints:
     .in(query[Option[Int]]("pageSize").description("1..100; overrides limit when present."))
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[HeldEventListResponse])
+    .tag("held-events")
+
+  val get: CommonEndpoint.SecuredRead[GetInput, HeldEventDetailResponse] = endpoint
+    .get
+    .in("api" / "held-events" / path[String]("heldEventId"))
+    .securityIn(CommonEndpoint.accountHeader)
+    .errorOut(CommonEndpoint.errorOut)
+    .out(jsonBody[HeldEventDetailResponse])
     .tag("held-events")
 
   type CreateInput = (Option[String], CreateHeldEventRequest)

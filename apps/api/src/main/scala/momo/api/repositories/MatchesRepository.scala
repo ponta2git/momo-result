@@ -20,6 +20,9 @@ trait MatchesAlg[F0[_]]:
   ): F0[Boolean]
   def maxMatchNo(heldEventId: HeldEventId): F0[Int]
   def countByHeldEvents(heldEventIds: List[HeldEventId]): F0[Map[HeldEventId, Int]]
+  def statsByHeldEvents(
+      heldEventIds: List[HeldEventId]
+  ): F0[Map[HeldEventId, MatchesRepository.HeldEventStats]]
 
 trait MatchesRepository[F[_]]:
   def create(record: MatchRecord): F[Unit]
@@ -36,8 +39,13 @@ trait MatchesRepository[F[_]]:
   ): F[Boolean]
   def maxMatchNo(heldEventId: HeldEventId): F[Int]
   def countByHeldEvents(heldEventIds: List[HeldEventId]): F[Map[HeldEventId, Int]]
+  def statsByHeldEvents(
+      heldEventIds: List[HeldEventId]
+  ): F[Map[HeldEventId, MatchesRepository.HeldEventStats]]
 
 object MatchesRepository:
+  final case class HeldEventStats(matchCount: Int, maxMatchNo: Int)
+
   final case class ListFilter(
       heldEventId: Option[HeldEventId] = None,
       gameTitleId: Option[GameTitleId] = None,
@@ -66,6 +74,9 @@ object MatchesRepository:
       def maxMatchNo(heldEventId: HeldEventId): F[Int] = liftK(alg.maxMatchNo(heldEventId))
       def countByHeldEvents(heldEventIds: List[HeldEventId]): F[Map[HeldEventId, Int]] =
         liftK(alg.countByHeldEvents(heldEventIds))
+      def statsByHeldEvents(
+          heldEventIds: List[HeldEventId]
+      ): F[Map[HeldEventId, HeldEventStats]] = liftK(alg.statsByHeldEvents(heldEventIds))
 
   def liftIdentity[F[_]](alg: MatchesAlg[F]): MatchesRepository[F] = new MatchesRepository[F]:
     export alg.*

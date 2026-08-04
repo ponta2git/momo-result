@@ -23,6 +23,12 @@ import momo.api.repositories.*
  * single style.
  */
 object PostgresMatchDrafts extends PostgresMatchDraftsRowSupport:
+  private final case class HeldEventDraftStatsRow(
+      heldEventId: HeldEventId,
+      count: Int,
+      maxMatchNo: Int,
+  )
+
   private def isUniqueViolation(state: SqlState): Boolean = state.value ==
     sqlstate.class23.UNIQUE_VIOLATION.value
 
@@ -118,6 +124,35 @@ object PostgresMatchDrafts extends PostgresMatchDraftsRowSupport:
       val limit = filter.limit.map(v => fr"LIMIT $v").getOrElse(Fragment.empty)
       (selectAll ++ where ++ fr"ORDER BY updated_at DESC, created_at DESC" ++ limit).query[Row]
         .to[List].flatMap(_.traverse(toDraft))
+
+    override def statsByHeldEvents(
+        heldEventIds: List[HeldEventId]
+    ): ConnectionIO[Map[HeldEventId, MatchDraftsRepository.HeldEventStats]] =
+      if heldEventIds.isEmpty then
+        Map.empty[HeldEventId, MatchDraftsRepository.HeldEventStats].pure[ConnectionIO]
+      else
+        val ids = heldEventIds.map(_.value).toArray
+        sql"""
+          SELECT held_event_id, COUNT(*)::int, COALESCE(MAX(match_no_in_event), 0)::int
+          FROM match_drafts
+          WHERE held_event_id = ANY($ids)
+            AND status <> ${MatchDraftStatus.Cancelled}
+            AND status <> ${MatchDraftStatus.Confirmed}
+          GROUP BY held_event_id
+        """.query[HeldEventDraftStatsRow].to[List].map { rows =>
+          val seen = rows.map(row =>
+            row.heldEventId -> MatchDraftsRepository.HeldEventStats(
+              draftCount = row.count,
+              maxMatchNo = row.maxMatchNo,
+            )
+          ).toMap
+          heldEventIds.map(id =>
+            id -> seen.getOrElse(
+              id,
+              MatchDraftsRepository.HeldEventStats(0, 0),
+            )
+          ).toMap
+        }
 
     override def markConfirmed(
         draftId: MatchDraftId,

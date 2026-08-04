@@ -46,15 +46,20 @@ describe("HeldEventsPage", () => {
     user = userEvent.setup();
   });
 
-  it("renders held events as result hubs with progress and related links", async () => {
+  it("renders held events as a concise ledger with status and related links", async () => {
     renderPage();
 
     expect(await screen.findByRole("heading", { name: "開催履歴" })).toBeInTheDocument();
     expect(await screen.findByText("最新")).toBeInTheDocument();
-    expect(screen.getByText("第1試合")).toBeInTheDocument();
+    expect(screen.getByText("確定済み")).toBeInTheDocument();
     expect(screen.getByText("0件")).toBeInTheDocument();
+    expect(screen.queryByText("次の番号")).not.toBeInTheDocument();
+    expect(screen.queryByText("第1試合")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "開催回一覧" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/開催を開くと/u)).not.toBeInTheDocument();
+    expect(screen.queryByText(/開催ごとに試合順/u)).not.toBeInTheDocument();
     expect(screen.queryByText("held-1")).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "詳細を見る" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /の開催詳細$/u })).toHaveAttribute(
       "href",
       "/held-events/held-1",
     );
@@ -120,7 +125,7 @@ describe("HeldEventsPage", () => {
     await waitFor(() =>
       expect(screen.getByLabelText("current location")).toHaveTextContent("/held-events"),
     );
-    expect(await screen.findByRole("link", { name: "詳細を見る" })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: /の開催詳細$/u })).toBeInTheDocument();
     expect(screen.queryByText("開催履歴はまだありません")).not.toBeInTheDocument();
   });
 
@@ -149,7 +154,7 @@ describe("HeldEventsPage", () => {
 
     renderPage("/held-events?page=2abc&pageSize=50x");
 
-    expect(await screen.findByRole("link", { name: "詳細を見る" })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: /の開催詳細$/u })).toBeInTheDocument();
     expect(captured?.searchParams.get("page")).toBe("1");
     expect(captured?.searchParams.get("pageSize")).toBe("10");
   });
@@ -188,7 +193,7 @@ describe("HeldEventsPage", () => {
 
     renderPage();
 
-    expect(await screen.findByRole("link", { name: "詳細を見る" })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: /の開催詳細$/u })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "開催を作成" }));
     const dialog = screen.getByRole("dialog", { name: "新しい開催を作成" });
     await user.clear(within(dialog).getByLabelText(/開催日時/u));
@@ -211,7 +216,7 @@ describe("HeldEventsPage", () => {
   it("keeps creation secondary until requested and allows cancelling", async () => {
     renderPage();
 
-    expect(await screen.findByRole("link", { name: "詳細を見る" })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: /の開催詳細$/u })).toBeInTheDocument();
     expect(screen.queryByLabelText("開催日時")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "開催を作成" }));
     expect(screen.getByRole("dialog", { name: "新しい開催を作成" })).toBeInTheDocument();
@@ -244,7 +249,7 @@ describe("HeldEventsPage", () => {
     await user.click(screen.getByRole("button", { name: "削除する" }));
 
     await screen.findByText("開催履歴はまだありません");
-    expect(screen.getByText("0開催 / 0試合")).toBeInTheDocument();
+    expect(screen.queryByRole("list")).not.toBeInTheDocument();
     expect(screen.getByText("開催履歴を削除しました。")).toBeInTheDocument();
   });
 
@@ -262,7 +267,7 @@ describe("HeldEventsPage", () => {
     expect(await screen.findByText("2試合")).toBeInTheDocument();
     expect(screen.queryByText("held-used")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /を削除$/u })).not.toBeInTheDocument();
-    expect(screen.getByText("第3試合")).toBeInTheDocument();
+    expect(screen.queryByText("第3試合")).not.toBeInTheDocument();
   });
 
   it("keeps deletion unavailable while an active draft references the event", async () => {

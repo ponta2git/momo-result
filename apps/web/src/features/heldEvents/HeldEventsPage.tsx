@@ -14,7 +14,7 @@ export function HeldEventsPage() {
   const page = useHeldEventsPageController();
 
   return (
-    <PageFrame className="gap-5">
+    <PageFrame>
       <LiveRegion message={page.feedback.liveMessage} />
       <PageHeader
         actions={
@@ -37,8 +37,6 @@ export function HeldEventsPage() {
             </Button>
           </>
         }
-        description="開催ごとに試合順の結果、参加者の戦績、未完了の確認作業をまとめて見渡せます。"
-        eyebrow="開催"
         title="開催履歴"
       />
 

@@ -122,7 +122,6 @@ export function useHeldEventsPageController() {
 
   const rows = heldEventsQuery.data?.items ?? emptyHeldEvents;
   const pagination = heldEventsQuery.data?.pagination;
-  const totalMatches = heldEventsQuery.data?.totalMatchCount ?? 0;
   const pageCorrectionPending = Boolean(
     pagination &&
     !heldEventsQuery.isPlaceholderData &&
@@ -207,7 +206,6 @@ export function useHeldEventsPageController() {
         pagination,
         refreshing: heldEventsQuery.isFetching,
         rows,
-        totalMatches,
       },
     },
   };

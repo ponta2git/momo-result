@@ -22,21 +22,8 @@ export function HeldEventsListCard({
   data: heldEventViewModel.HeldEventsListModel;
   onCreate: () => void;
 }) {
-  const eventCount = data.pagination?.totalItems ?? data.rows.length;
   return (
-    <Card className="min-w-0 overflow-hidden p-0">
-      <div className="flex min-w-0 flex-wrap items-start justify-between gap-3 border-b border-[var(--color-border)] px-4 py-3">
-        <div>
-          <h2 className="momo-heading text-lg font-semibold">開催回一覧</h2>
-          <p className="momo-copy mt-1 text-sm text-[var(--color-text-secondary)]">
-            開催を開くと、試合順の結果・この回の戦績・未完了作業をまとめて確認できます。
-          </p>
-        </div>
-        <p className="shrink-0 rounded-[var(--radius-xs)] bg-[var(--color-surface-subtle)] px-2.5 py-1.5 text-sm font-semibold tabular-nums">
-          {eventCount.toLocaleString()}開催 / {data.totalMatches.toLocaleString()}試合
-        </p>
-      </div>
-
+    <Card aria-label="開催履歴" className="min-w-0 overflow-hidden p-0" role="region">
       {data.loading ? (
         <HeldEventsLoading />
       ) : data.loadFailed ? (
@@ -108,51 +95,39 @@ function HeldEventRow({
       exit={{ opacity: 0, y: -4 }}
       transition={momoTransition}
     >
-      <article className="grid gap-4 px-4 py-4 lg:grid-cols-[minmax(15rem,1fr)_minmax(18rem,1.2fr)_auto] lg:items-center">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            {latest ? (
-              <span className="rounded-[var(--radius-xs)] border border-[var(--color-border-strong)] px-2 py-0.5 text-xs font-semibold text-[var(--color-text-secondary)]">
-                最新
-              </span>
-            ) : null}
-            <span className="text-xs text-[var(--color-text-secondary)] tabular-nums">
-              {heldEventViewModel.formatDateKey(event.heldAt)}
+      <article className="grid gap-3 px-4 py-3 lg:grid-cols-[minmax(15rem,1fr)_minmax(12rem,16rem)_auto] lg:items-center">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+          {latest ? (
+            <span className="rounded-[var(--radius-xs)] border border-[var(--color-border-strong)] px-2 py-0.5 text-xs font-semibold text-[var(--color-text-secondary)]">
+              最新
             </span>
-          </div>
-          <h3 className="mt-1 min-w-0">
+          ) : null}
+          <h3 className="min-w-0">
             <Link
-              className="momo-heading text-base font-semibold text-[var(--color-text-primary)] underline-offset-4 hover:underline"
+              aria-label={`${heldEventViewModel.formatDateTime(event.heldAt)}の開催詳細`}
+              className="momo-heading inline-flex min-h-11 min-w-0 items-center gap-2 text-base font-semibold text-[var(--color-text-primary)] underline-offset-4 hover:underline"
               to={`/held-events/${encodedId}`}
             >
-              {heldEventViewModel.formatDateTime(event.heldAt)}
+              <span className="truncate tabular-nums">
+                {heldEventViewModel.formatDateTime(event.heldAt)}
+              </span>
+              <ArrowRight aria-hidden="true" className="size-4 shrink-0" />
             </Link>
           </h3>
         </div>
 
-        <dl className="grid grid-cols-3 gap-3 rounded-[var(--radius-sm)] bg-[var(--color-surface-subtle)] px-3 py-2.5">
-          <div>
-            <dt className="momo-label text-[var(--color-text-secondary)]">確定</dt>
+        <dl className="grid grid-cols-2 divide-x divide-[var(--color-border)] overflow-hidden rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)]">
+          <div className="min-w-0 px-3 py-2">
+            <dt className="momo-label text-[var(--color-text-secondary)]">確定済み</dt>
             <dd className="mt-1 text-sm font-semibold tabular-nums">{event.matchCount}試合</dd>
           </div>
-          <div>
+          <div className="min-w-0 px-3 py-2">
             <dt className="momo-label text-[var(--color-text-secondary)]">未完了</dt>
             <dd className="mt-1 text-sm font-semibold tabular-nums">{event.draftCount}件</dd>
-          </div>
-          <div>
-            <dt className="momo-label text-[var(--color-text-secondary)]">次の番号</dt>
-            <dd className="mt-1 text-sm font-semibold tabular-nums">第{event.nextMatchNo}試合</dd>
           </div>
         </dl>
 
         <div className="flex min-w-0 flex-wrap items-center gap-2 lg:justify-end">
-          <LinkButton
-            icon={<ArrowRight aria-hidden="true" className="size-4" />}
-            size="sm"
-            to={`/held-events/${encodedId}`}
-          >
-            詳細を見る
-          </LinkButton>
           <LinkButton
             aria-label={`${heldEventViewModel.formatDateTime(event.heldAt)}の試合を検索`}
             icon={<ListFilter aria-hidden="true" className="size-4" />}
@@ -195,10 +170,10 @@ function HeldEventsLoading() {
       {["first", "second", "third"].map((id) => (
         <div
           key={id}
-          className="grid gap-3 border-b border-[var(--color-border)] p-4 last:border-b-0 lg:grid-cols-3"
+          className="grid gap-3 border-b border-[var(--color-border)] p-4 last:border-b-0 lg:grid-cols-[minmax(15rem,1fr)_minmax(12rem,16rem)_auto]"
         >
-          <Skeleton className="h-12" />
-          <Skeleton className="h-14" />
+          <Skeleton className="h-11" />
+          <Skeleton className="h-13" />
           <Skeleton className="h-10" />
         </div>
       ))}

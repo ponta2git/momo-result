@@ -80,7 +80,7 @@
 
 ### Held event hub
 
-- Treat the held-event list as a chronological ledger, not as a card dashboard. Lead each entry with the exact held date and time, then keep confirmed count, active-draft count, and next match number in one compact reading path.
+- Treat the held-event list as a chronological ledger, not as a card dashboard. Lead each entry with the exact held date and time, then keep only confirmed and active-draft counts in one compact reading path. Reserve the next match number for event detail and record-start flows.
 - Create a held event in a focused dialog and navigate directly to its detail after success. Keep creation separate from list scanning so form expansion never moves the ledger unexpectedly.
 - Treat the event detail as the hub for one session: identity and counts, next-match actions, active drafts, deterministic player recap, match-number timeline, then export and management.
 - Use the match-number timeline as the signature event visual. Mark it up as an ordered list, keep the number axis stable, and place result and scoped-comparison actions beside the corresponding match.

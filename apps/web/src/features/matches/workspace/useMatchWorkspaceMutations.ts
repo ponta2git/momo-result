@@ -16,6 +16,7 @@ import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 import { assertDefined } from "@/shared/lib/invariant";
 
 export type MatchWorkspaceMutationsParams = {
+  heldEventId: string;
   matchId: string | undefined;
   onConfirmConflict?: (matchDraftId: string) => Promise<boolean>;
   onConfirmSuccess: () => void;
@@ -34,6 +35,7 @@ function isConflict(error: unknown): boolean {
  * 成功時のナビゲーションも内部で完結させる。
  */
 export function useMatchWorkspaceMutations({
+  heldEventId,
   matchId,
   onConfirmConflict,
   onConfirmSuccess,
@@ -106,7 +108,9 @@ export function useMatchWorkspaceMutations({
     onSuccess: async () => {
       await invalidateAfterDraftCancelled(queryClient);
       onPersistedSuccess();
-      navigate("/matches", { replace: true });
+      navigate(heldEventId ? `/held-events/${encodeURIComponent(heldEventId)}` : "/matches", {
+        replace: true,
+      });
     },
     onError: (error) => {
       onError(formatApiError(error, "確定前の記録を削除できませんでした"));

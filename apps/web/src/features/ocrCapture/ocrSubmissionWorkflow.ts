@@ -35,6 +35,7 @@ export type OcrSubmissionWorkflowParams = {
   }>;
   onProgress?: ((progress: OcrSubmissionProgress) => void) | undefined;
   selectedGameTitle: { id: string; layoutFamily?: string | null } | undefined;
+  selectedHeldEvent?: { heldAt: string; id: string } | undefined;
   setup: SetupFormValues;
   slots: readonly CaptureSlotState[];
   updateSlot: (slot: CaptureSlotState) => void;
@@ -47,6 +48,7 @@ export async function runOcrSubmissionWorkflow({
   createUploadJob,
   onProgress,
   selectedGameTitle,
+  selectedHeldEvent,
   setup,
   slots,
   updateSlot,
@@ -63,16 +65,22 @@ export async function runOcrSubmissionWorkflow({
       status: "invalid",
     };
   }
+  if (setup.heldEventId && selectedHeldEvent?.id !== setup.heldEventId) {
+    return { message: "選択した開催を確認してください。", status: "invalid" };
+  }
   onProgress?.({ phase: "creating_draft", total: targetSlots.length });
 
   let matchDraftId: string | null;
   try {
     const matchDraft = await createDraft({
       gameTitleId: setup.gameTitleId,
+      ...(setup.heldEventId && setup.matchNoInEvent
+        ? { heldEventId: setup.heldEventId, matchNoInEvent: setup.matchNoInEvent }
+        : {}),
       ...(selectedGameTitle?.layoutFamily ? { layoutFamily: selectedGameTitle.layoutFamily } : {}),
       mapMasterId: setup.mapMasterId,
       ownerMemberId: setup.ownerMemberId,
-      playedAt: createPlayedAtIso(),
+      playedAt: selectedHeldEvent?.heldAt ?? createPlayedAtIso(),
       seasonMasterId: setup.seasonMasterId,
       status: "ocr_running",
     });

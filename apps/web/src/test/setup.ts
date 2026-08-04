@@ -35,6 +35,9 @@ function formatConsoleArgs(args: unknown[]): string {
 }
 
 beforeEach(() => {
+  if (hasDom) {
+    vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
+  }
   if (hasDom && !window.localStorage) {
     vi.stubGlobal("localStorage", createMemoryStorage());
   }

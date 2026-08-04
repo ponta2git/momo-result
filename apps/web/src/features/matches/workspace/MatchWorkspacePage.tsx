@@ -18,6 +18,7 @@ type MatchWorkspacePageProps = {
   matchId?: string;
   matchSessionId?: string;
   mode: WorkspaceMode;
+  preferredHeldEventId?: string;
 };
 
 export function MatchWorkspacePage({
@@ -25,8 +26,15 @@ export function MatchWorkspacePage({
   matchId,
   matchSessionId,
   mode,
+  preferredHeldEventId,
 }: MatchWorkspacePageProps) {
-  const controller = useMatchWorkspaceController({ matchDraftId, matchId, matchSessionId, mode });
+  const controller = useMatchWorkspaceController({
+    matchDraftId,
+    matchId,
+    matchSessionId,
+    mode,
+    preferredHeldEventId,
+  });
   const primaryActionRef = useRef<HTMLButtonElement>(null);
   const onRequestSubmitFocus = useCallback(() => {
     primaryActionRef.current?.focus();

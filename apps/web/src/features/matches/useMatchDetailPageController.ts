@@ -58,8 +58,11 @@ export function useMatchDetailPageController() {
       setErrorMessage(formatApiError(error, "削除に失敗しました"));
     },
     onSuccess: async () => {
+      const heldEventId = matchQuery.data?.heldEventId;
       await invalidateAfterMatchDeleted(queryClient);
-      navigate("/matches", { replace: true });
+      navigate(heldEventId ? `/held-events/${encodeURIComponent(heldEventId)}` : "/matches", {
+        replace: true,
+      });
     },
   });
 

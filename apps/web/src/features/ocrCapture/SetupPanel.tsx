@@ -21,6 +21,9 @@ export function SetupPanel({ value, onChange, enabled, options }: SetupPanelProp
     gameTitles,
     gameTitlesError,
     gameTitlesPlaceholder,
+    heldEvents,
+    heldEventsError,
+    heldEventsPlaceholder,
     mapMasters,
     mapMastersError,
     mapMastersPlaceholder,
@@ -30,6 +33,8 @@ export function SetupPanel({ value, onChange, enabled, options }: SetupPanelProp
   } = options;
 
   const gameTitleId = `${fieldIdPrefix}-game-title`;
+  const heldEventId = `${fieldIdPrefix}-held-event`;
+  const matchNoInEventId = `${fieldIdPrefix}-match-no-in-event`;
   const seasonMasterId = `${fieldIdPrefix}-season-master`;
   const mapMasterId = `${fieldIdPrefix}-map-master`;
   const ownerMemberId = `${fieldIdPrefix}-owner-member`;
@@ -39,8 +44,58 @@ export function SetupPanel({ value, onChange, enabled, options }: SetupPanelProp
   }
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <Field label="作品" htmlFor={gameTitleId}>
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+      <Field className="xl:col-span-3" label="開催（任意）" htmlFor={heldEventId}>
+        <select
+          id={heldEventId}
+          value={value.heldEventId ?? ""}
+          onChange={(event) => {
+            const selected = heldEvents.find((item) => item.id === event.target.value);
+            patchValue({
+              heldEventId: event.target.value,
+              matchNoInEvent: selected?.nextMatchNo,
+            });
+          }}
+          className={selectClass}
+          disabled={!enabled}
+        >
+          <option value="">
+            {heldEvents.length === 0 ? heldEventsPlaceholder : "開催を選ばず取り込む"}
+          </option>
+          {heldEvents.map((heldEvent) => (
+            <option key={heldEvent.id} value={heldEvent.id}>
+              {new Date(heldEvent.heldAt).toLocaleString()}（確定{heldEvent.matchCount}・未完了
+              {heldEvent.draftCount}）
+            </option>
+          ))}
+        </select>
+        {heldEventsError ? (
+          <p className="mt-1 text-sm text-[var(--color-danger)]" role="alert">
+            {heldEventsError}
+          </p>
+        ) : null}
+      </Field>
+
+      <Field className="xl:col-span-1" label="試合番号" htmlFor={matchNoInEventId}>
+        <input
+          id={matchNoInEventId}
+          className={selectClass}
+          disabled={!enabled || !value.heldEventId}
+          inputMode="numeric"
+          min={1}
+          type="number"
+          value={value.matchNoInEvent ?? ""}
+          onChange={(event) =>
+            patchValue({
+              matchNoInEvent: event.target.value
+                ? Number.parseInt(event.target.value, 10)
+                : undefined,
+            })
+          }
+        />
+      </Field>
+
+      <Field className="xl:col-span-2" label="作品" htmlFor={gameTitleId}>
         <select
           id={gameTitleId}
           value={value.gameTitleId}
@@ -71,7 +126,7 @@ export function SetupPanel({ value, onChange, enabled, options }: SetupPanelProp
         ) : null}
       </Field>
 
-      <Field label="シーズン" htmlFor={seasonMasterId}>
+      <Field className="xl:col-span-2" label="シーズン" htmlFor={seasonMasterId}>
         <select
           id={seasonMasterId}
           value={value.seasonMasterId}
@@ -96,7 +151,7 @@ export function SetupPanel({ value, onChange, enabled, options }: SetupPanelProp
         ) : null}
       </Field>
 
-      <Field label="マップ" htmlFor={mapMasterId}>
+      <Field className="xl:col-span-2" label="マップ" htmlFor={mapMasterId}>
         <select
           id={mapMasterId}
           value={value.mapMasterId}
@@ -121,7 +176,7 @@ export function SetupPanel({ value, onChange, enabled, options }: SetupPanelProp
         ) : null}
       </Field>
 
-      <Field label="オーナー" htmlFor={ownerMemberId}>
+      <Field className="xl:col-span-2" label="オーナー" htmlFor={ownerMemberId}>
         <select
           id={ownerMemberId}
           value={value.ownerMemberId}

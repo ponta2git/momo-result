@@ -60,6 +60,16 @@ function MatchDetailReadyContent({ controller }: { controller: MatchDetailReadyC
 
   return (
     <PageFrame className="min-w-0 gap-5" width="wide">
+      <div>
+        <LinkButton
+          icon={<ArrowLeft aria-hidden="true" className="size-4" />}
+          size="sm"
+          to={`/held-events/${encodeURIComponent(match.heldEventId)}`}
+          variant="quiet"
+        >
+          この開催へ戻る
+        </LinkButton>
+      </div>
       <PageHeader
         eyebrow="試合記録"
         title={`第${match.matchNoInEvent}試合の結果`}
@@ -134,3 +144,4 @@ function MatchDetailReadyContent({ controller }: { controller: MatchDetailReadyC
     </PageFrame>
   );
 }
+import { ArrowLeft } from "lucide-react";

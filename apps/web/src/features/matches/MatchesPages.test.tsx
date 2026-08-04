@@ -610,6 +610,52 @@ describe("MatchesListPage", () => {
     expect(screen.getByLabelText("current location")).toHaveTextContent("handoffId=");
   });
 
+  it("prefills the requested held event with its server-supplied next match number", async () => {
+    setDevUser();
+    server.use(
+      http.get("/api/held-events", () =>
+        HttpResponse.json({
+          items: [
+            {
+              draftCount: 0,
+              heldAt: "2026-02-01T00:00:00.000Z",
+              id: "held-latest",
+              matchCount: 1,
+              nextMatchNo: 2,
+            },
+          ],
+        }),
+      ),
+      http.get("/api/held-events/:heldEventId", ({ params }) =>
+        HttpResponse.json({
+          draftCount: 2,
+          drafts: [],
+          heldAt: "2026-01-01T00:00:00.000Z",
+          id: String(params["heldEventId"]),
+          matchCount: 3,
+          matches: [],
+          nextMatchNo: 8,
+        }),
+      ),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches/new?heldEventId=%20held-requested%20"]}>
+          <Routes>
+            <Route path="/matches/new" element={<MatchCreatePage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "試合の新規作成" })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByLabelText(/開催履歴/u)).toHaveValue("held-requested");
+      expect(screen.getByLabelText("試合番号")).toHaveValue("8");
+    });
+  });
+
   it("trims match draft deep link ids before loading draft details", async () => {
     setDevUser();
     let requestedDraftId = "";
@@ -824,6 +870,10 @@ describe("MatchDetailPage", () => {
       "href",
       "/analytics/series?gameTitleId=gt_momotetsu_2&seasonMasterId=season_current&mapMasterId=map_east&focusMatchId=match-1&view=flow",
     );
+    expect(screen.getByRole("link", { name: "この開催へ戻る" })).toHaveAttribute(
+      "href",
+      "/held-events/held-1",
+    );
 
     await user.click(screen.getByRole("button", { name: "削除" }));
     expect(screen.getByRole("heading", { name: "試合を削除しますか？" })).toBeInTheDocument();
@@ -835,6 +885,31 @@ describe("MatchDetailPage", () => {
         screen.queryByRole("heading", { name: "試合を削除しますか？" }),
       ).not.toBeInTheDocument(),
     );
+  });
+
+  it("returns to the held event after deleting a match", async () => {
+    setDevUser();
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches/match-1"]}>
+          <LocationProbe />
+          <Routes>
+            <Route path="/matches/:matchId" element={<MatchDetailPage />} />
+            <Route path="/held-events/:heldEventId" element={<p>held-event-page</p>} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "削除" }));
+    await user.click(screen.getByRole("button", { name: "削除する" }));
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("current location")).toHaveTextContent("/held-events/held-1"),
+    );
+    expect(screen.getByText("held-event-page")).toBeInTheDocument();
   });
 
   it("shows match feature badges from the match record and same-series comparison", async () => {

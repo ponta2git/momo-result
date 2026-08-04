@@ -9,7 +9,8 @@ import {
   draftIdsFromParams,
 } from "@/features/matches/workspace/workspaceDerivations";
 import { slotKinds } from "@/shared/api/enums";
-import type { HeldEventListResponse } from "@/shared/api/heldEvents";
+import { mergeHeldEventItems } from "@/shared/api/heldEventCache";
+import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import type {
   GameTitleListResponse,
   MapMasterListResponse,
@@ -27,6 +28,7 @@ import type { NormalizedApiError } from "@/shared/api/problemDetails";
 import { shouldShowQueryError } from "@/shared/api/queryErrorState";
 import {
   gameTitlesQueryOptions,
+  heldEventDetailQueryOptions,
   heldEventsQueryOptions,
   mapMastersQueryOptions,
   matchDetailQueryOptions,
@@ -46,6 +48,7 @@ export type MatchWorkspaceQueriesParams = {
   matchDraftSourceImagesId: string | undefined;
   matchId: string | undefined;
   mode: WorkspaceMode;
+  preferredHeldEventId: string | undefined;
   searchParams: URLSearchParams;
   useSampleDrafts: boolean;
 };
@@ -53,12 +56,13 @@ export type MatchWorkspaceQueriesParams = {
 export type MatchWorkspaceQueries = {
   draftDetailQuery: UseQueryResult<MatchDraftDetailResponse, Error>;
   gameTitlesQuery: UseSuspenseQueryResult<GameTitleListResponse, Error>;
-  heldEventsQuery: UseSuspenseQueryResult<HeldEventListResponse, Error>;
+  heldEventItems: HeldEventResponse[];
   legacyIds: SlotMap<string>;
   mapMastersQuery: UseQueryResult<MapMasterListResponse, Error>;
   memberAliasesQuery: UseSuspenseQueryResult<MemberAliasListResponse, Error>;
   matchDetailQuery: UseQueryResult<MatchDetailResponse, Error>;
   ocrDraftsQuery: UseQueryResult<OcrDraftListResponse, Error>;
+  preferredHeldEventPending: boolean;
   reviewDraftIdList: string[];
   reviewDraftIds: SlotMap<string>;
   seasonMastersQuery: UseQueryResult<SeasonMasterListResponse, Error>;
@@ -73,7 +77,7 @@ export type MatchWorkspaceQueriesDerived = {
 };
 
 /**
- * MatchWorkspacePage が必要とする 8 種類のクエリと、その派生表示状態を一括で返す。
+ * MatchWorkspacePage が必要とするクエリと、その派生表示状態を一括で返す。
  * 純粋なクエリ宣言の集合体であり副作用は QueryClient へ閉じ込めている。
  */
 export function useMatchWorkspaceQueries(
@@ -85,6 +89,7 @@ export function useMatchWorkspaceQueries(
     matchDraftSourceImagesId,
     matchId,
     mode,
+    preferredHeldEventId,
     searchParams,
     useSampleDrafts,
   } = params;
@@ -92,6 +97,13 @@ export function useMatchWorkspaceQueries(
   const legacyIds = useMemo(() => draftIdsFromParams(searchParams), [searchParams]);
 
   const heldEventsQuery = useSuspenseQuery(heldEventsQueryOptions("", 100, "workspace"));
+  const preferredHeldEventQuery = useQuery(
+    heldEventDetailQueryOptions(preferredHeldEventId, Boolean(preferredHeldEventId)),
+  );
+  const heldEventItems = mergeHeldEventItems(
+    heldEventsQuery.data?.items ?? [],
+    preferredHeldEventQuery.data,
+  );
   const gameTitlesQuery = useSuspenseQuery(gameTitlesQueryOptions("workspace"));
   const memberAliasesQuery = useSuspenseQuery(memberAliasesQueryOptions("workspace"));
   const mapMastersQuery = useQuery(
@@ -147,6 +159,7 @@ export function useMatchWorkspaceQueries(
       ocrDraftsQuery,
       sourceImageQuery,
       matchDetailQuery,
+      preferredHeldEventQuery,
     ]
       .filter(shouldShowQueryError)
       .map((query) => normalizeUnknownApiError(query.error)),
@@ -161,12 +174,15 @@ export function useMatchWorkspaceQueries(
     },
     draftDetailQuery,
     gameTitlesQuery,
-    heldEventsQuery,
+    heldEventItems,
     legacyIds,
     mapMastersQuery,
     memberAliasesQuery,
     matchDetailQuery,
     ocrDraftsQuery,
+    preferredHeldEventPending: Boolean(
+      preferredHeldEventId && !preferredHeldEventQuery.data && preferredHeldEventQuery.isFetching,
+    ),
     reviewDraftIdList,
     reviewDraftIds,
     seasonMastersQuery,

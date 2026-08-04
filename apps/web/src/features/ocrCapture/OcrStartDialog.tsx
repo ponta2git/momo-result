@@ -15,6 +15,8 @@ type OcrStartDialogProps = {
 
 function SetupSummary({ plan }: { plan: OcrSubmissionPlan }) {
   const items = [
+    ["開催", plan.setupSummary.heldEvent],
+    ["試合番号", plan.setupSummary.matchNo],
     ["作品", plan.setupSummary.gameTitle],
     ["シーズン", plan.setupSummary.season],
     ["マップ", plan.setupSummary.map],
@@ -22,7 +24,7 @@ function SetupSummary({ plan }: { plan: OcrSubmissionPlan }) {
   ];
 
   return (
-    <dl className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3 text-sm sm:grid-cols-4">
+    <dl className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3 text-sm sm:grid-cols-3">
       {items.map(([label, value]) => (
         <div key={label} className="min-w-0">
           <dt className="text-xs font-semibold text-[var(--color-text-muted)]">{label}</dt>
@@ -36,6 +38,10 @@ function SetupSummary({ plan }: { plan: OcrSubmissionPlan }) {
       ))}
     </dl>
   );
+}
+
+function resultDestinationLabel(plan: OcrSubmissionPlan): string {
+  return plan.setup.heldEventId ? "開催詳細で確認" : "試合一覧で確認";
 }
 
 function TraySummary({ plan }: { plan: OcrSubmissionPlan }) {
@@ -172,7 +178,7 @@ export function OcrStartDialog({ onClose, onConfirm, onViewMatches, state }: Ocr
             <p>未開始の分類は、読み取り完了後の確認画面で手入力できます。</p>
           </Notice>
           <div className="flex justify-end">
-            <Button onClick={onViewMatches}>試合一覧で確認</Button>
+            <Button onClick={onViewMatches}>{resultDestinationLabel(state.plan)}</Button>
           </div>
         </div>
       </Dialog>
@@ -192,7 +198,7 @@ export function OcrStartDialog({ onClose, onConfirm, onViewMatches, state }: Ocr
             <p>{state.message}</p>
           </Notice>
           <div className="flex justify-end">
-            <Button onClick={onViewMatches}>試合一覧で確認</Button>
+            <Button onClick={onViewMatches}>{resultDestinationLabel(state.plan)}</Button>
           </div>
         </div>
       </Dialog>

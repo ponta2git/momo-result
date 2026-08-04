@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import { slotDefinitions } from "@/features/ocrCapture/captureState";
 import type { InputSource } from "@/features/ocrCapture/captureState";
@@ -16,10 +17,16 @@ import { parseLayoutFamily } from "@/shared/api/enums";
 import type { SlotKind } from "@/shared/api/enums";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
 import { memberDisplayName } from "@/shared/domain/members";
+import { trimSearchParam } from "@/shared/lib/searchParams";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
 export function useOcrCapturePageController() {
-  const [setup, setSetup] = useState<SetupFormValues>(defaultSetupValues);
+  const [searchParams] = useSearchParams();
+  const requestedHeldEventId = trimSearchParam(searchParams.get("heldEventId"));
+  const [setup, setSetup] = useState<SetupFormValues>(() => ({
+    ...defaultSetupValues,
+    ...(requestedHeldEventId ? { heldEventId: requestedHeldEventId } : {}),
+  }));
   const [notice, setNotice] = useState("");
   const [captureTargetKind, setCaptureTargetKind] = useState<SlotKind>("total_assets");
 
@@ -111,16 +118,23 @@ export function useOcrCapturePageController() {
       selectedGameTitle: setupOptions.selectedGameTitle
         ? { ...setupOptions.selectedGameTitle }
         : undefined,
+      selectedHeldEvent: setupOptions.selectedHeldEvent
+        ? { ...setupOptions.selectedHeldEvent }
+        : undefined,
       selectedSlotLabels: slotDefinitions
         .filter((definition) => selectedKinds.has(definition.kind))
         .map((definition) => definition.label),
       setup: { ...setup },
       setupSummary: {
+        heldEvent: setupOptions.selectedHeldEvent
+          ? new Date(setupOptions.selectedHeldEvent.heldAt).toLocaleString()
+          : "紐づけなし",
         gameTitle: setupOptions.selectedGameTitle?.name ?? setup.gameTitleId,
         map:
           setupOptions.mapMasters.find((item) => item.id === setup.mapMasterId)?.name ??
           setup.mapMasterId,
         owner: memberDisplayName(setup.ownerMemberId),
+        matchNo: setup.matchNoInEvent ? `第${setup.matchNoInEvent}試合` : "確定時に設定",
         season:
           setupOptions.seasonMasters.find((item) => item.id === setup.seasonMasterId)?.name ??
           setup.seasonMasterId,

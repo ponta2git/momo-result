@@ -22,9 +22,12 @@ type OcrJobRequestBody = CreateOcrJobRequest;
 
 type MatchDraftRequestBody = {
   gameTitleId?: string;
+  heldEventId?: string;
   layoutFamily?: string;
   mapMasterId?: string;
+  matchNoInEvent?: number;
   ownerMemberId?: string;
+  playedAt?: string;
   seasonMasterId?: string;
   status?: string;
 };
@@ -37,7 +40,7 @@ function LocationProbe() {
   return <output aria-label="current location">{`${location.pathname}${location.search}`}</output>;
 }
 
-function renderCaptureRoute() {
+function renderCaptureRoute(initialEntry = "/ocr/new") {
   const router = createMemoryRouter(
     [
       { element: <OcrCapturePage />, path: "/ocr/new" },
@@ -50,8 +53,17 @@ function renderCaptureRoute() {
         ),
         path: "/matches",
       },
+      {
+        element: (
+          <>
+            <LocationProbe />
+            <p>held-event-page</p>
+          </>
+        ),
+        path: "/held-events/:heldEventId",
+      },
     ],
-    { initialEntries: ["/ocr/new"] },
+    { initialEntries: [initialEntry] },
   );
   const view = render(
     <QueryClientProvider client={queryClient}>
@@ -242,7 +254,7 @@ describe("OcrCapturePage", () => {
     );
 
     expect(await screen.findAllByRole("option", { name: "ログイン後に読み込みます" })).toHaveLength(
-      3,
+      4,
     );
     expect(screen.getByLabelText(/作品/u)).toBeDisabled();
     expect(authRequests).toBe(0);
@@ -310,6 +322,69 @@ describe("OcrCapturePage", () => {
         imageId: "image-1",
         matchDraftId: "draft-created-1",
         requestedScreenType: "total_assets",
+      }),
+    ]);
+  });
+
+  it("inherits held-event context and returns to that event after starting OCR", async () => {
+    setDevUser();
+    const createdDrafts: MatchDraftRequestBody[] = [];
+    server.use(
+      http.get("/api/held-events", () =>
+        HttpResponse.json({
+          items: [
+            {
+              draftCount: 0,
+              heldAt: "2026-03-03T04:05:06.000Z",
+              id: "held-latest",
+              matchCount: 1,
+              nextMatchNo: 2,
+            },
+          ],
+        }),
+      ),
+      http.get("/api/held-events/:heldEventId", ({ params }) =>
+        HttpResponse.json({
+          draftCount: 1,
+          drafts: [],
+          heldAt: "2026-02-03T04:05:06.000Z",
+          id: String(params["heldEventId"]),
+          matchCount: 3,
+          matches: [],
+          nextMatchNo: 7,
+        }),
+      ),
+      http.post("/api/match-drafts", async ({ request }) => {
+        createdDrafts.push((await request.json()) as MatchDraftRequestBody);
+        return HttpResponse.json({
+          createdAt: "2026-02-03T04:05:06.000Z",
+          matchDraftId: "draft-held-scoped",
+          status: "ocr_running",
+          updatedAt: "2026-02-03T04:05:06.000Z",
+        });
+      }),
+    );
+
+    renderCaptureRoute("/ocr/new?heldEventId=%20held-scoped%20");
+
+    expect(await screen.findByRole("option", { name: /確定3・未完了1/u })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByLabelText(/開催（任意）/u)).toHaveValue("held-scoped");
+      expect(screen.getByLabelText("試合番号")).toHaveValue(7);
+    });
+    await user.upload(
+      screen.getByLabelText("OCRの画像をアップロード"),
+      new File(["image"], "assets.png", { type: "image/png" }),
+    );
+    await startOcrAllowingPartialTray();
+
+    expect(await screen.findByText("held-event-page")).toBeInTheDocument();
+    expect(screen.getByLabelText("current location")).toHaveTextContent("/held-events/held-scoped");
+    expect(createdDrafts).toEqual([
+      expect.objectContaining({
+        heldEventId: "held-scoped",
+        matchNoInEvent: 7,
+        playedAt: "2026-02-03T04:05:06.000Z",
       }),
     ]);
   });

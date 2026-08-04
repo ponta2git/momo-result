@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
 import { useOcrSetupOptions } from "@/features/ocrCapture/useOcrSetupOptions";
-import { masterKeys } from "@/shared/api/queryKeys";
+import { heldEventKeys, masterKeys } from "@/shared/api/queryKeys";
 import { createTestQueryClient } from "@/test/queryClient";
 
 const gameTitle = {
@@ -61,6 +61,7 @@ describe("useOcrSetupOptions", () => {
     queryClient.setQueryData(masterKeys.seasonMasters.list("account_ponta", gameTitle.id), {
       items: [seasonMaster],
     });
+    queryClient.setQueryData(heldEventKeys.scope("ocr-capture"), { items: [] });
 
     render(
       <QueryClientProvider client={queryClient}>
@@ -81,6 +82,50 @@ describe("useOcrSetupOptions", () => {
         mapMasterId: mapMaster.id,
         ownerMemberId: "member_ponta",
         seasonMasterId: seasonMaster.id,
+      }),
+    );
+  });
+
+  it("fills the server-supplied next number for a requested held event", async () => {
+    const queryClient = createTestQueryClient();
+    queryClient.setQueryDefaults(["masters"], { staleTime: Number.POSITIVE_INFINITY });
+    queryClient.setQueryData(masterKeys.gameTitles.list("account_ponta"), { items: [gameTitle] });
+    queryClient.setQueryData(masterKeys.mapMasters.list("account_ponta", gameTitle.id), {
+      items: [mapMaster],
+    });
+    queryClient.setQueryData(masterKeys.seasonMasters.list("account_ponta", gameTitle.id), {
+      items: [seasonMaster],
+    });
+    queryClient.setQueryData(heldEventKeys.scope("ocr-capture"), {
+      items: [
+        {
+          draftCount: 2,
+          heldAt: "2026-01-02T00:00:00.000Z",
+          id: "held-requested",
+          matchCount: 3,
+          nextMatchNo: 8,
+        },
+      ],
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <SetupOptionsHarness
+          initialValue={{
+            gameTitleId: gameTitle.id,
+            heldEventId: "held-requested",
+            mapMasterId: mapMaster.id,
+            ownerMemberId: "member_ponta",
+            seasonMasterId: seasonMaster.id,
+          }}
+        />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() =>
+      expect(readSetupValue()).toMatchObject({
+        heldEventId: "held-requested",
+        matchNoInEvent: 8,
       }),
     );
   });

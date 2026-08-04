@@ -31,6 +31,7 @@ export function useMatchWorkspaceSubmitFlow({
     useSampleDrafts,
   });
   const mutations = useMatchWorkspaceMutations({
+    heldEventId: values.heldEventId,
     matchId,
     onConfirmConflict: confirmedDraft.handleConfirmConflict,
     onConfirmSuccess: () => setConfirmOpen(false),

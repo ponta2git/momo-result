@@ -2,8 +2,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  invalidateAfterDraftCancelled,
   invalidateAfterMatchConfirmed,
   invalidateAfterMatchUpdated,
+  invalidateAfterOcrSubmissionStarted,
 } from "@/shared/api/cacheInvalidation";
 import {
   heldEventKeys,
@@ -56,6 +58,18 @@ describe("shared query keys", () => {
       queryClient.getQueryState(seriesComparisonKeys.aggregate({ gameTitleId: "gt-1" }))
         ?.isInvalidated,
     ).toBe(true);
+  });
+
+  it("invalidates held event details when OCR drafts start or are cancelled", async () => {
+    const queryClient = createTestQueryClient();
+    queryClient.setQueryData(heldEventKeys.detail("held-1"), { id: "held-1" });
+
+    await invalidateAfterOcrSubmissionStarted(queryClient);
+    expect(queryClient.getQueryState(heldEventKeys.detail("held-1"))?.isInvalidated).toBe(true);
+
+    queryClient.setQueryData(heldEventKeys.detail("held-1"), { id: "held-1" });
+    await invalidateAfterDraftCancelled(queryClient);
+    expect(queryClient.getQueryState(heldEventKeys.detail("held-1"))?.isInvalidated).toBe(true);
   });
 
   it("preserves OCR draft id boundaries in bulk keys", () => {

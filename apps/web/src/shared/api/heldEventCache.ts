@@ -3,6 +3,15 @@ import type { QueryClient } from "@tanstack/react-query";
 import type { HeldEventListResponse, HeldEventResponse } from "@/shared/api/heldEvents";
 import { heldEventKeys } from "@/shared/api/queryKeys";
 
+export function mergeHeldEventItems(
+  heldEvents: HeldEventResponse[],
+  preferred: HeldEventResponse | undefined,
+): HeldEventResponse[] {
+  return preferred && !heldEvents.some((event) => event.id === preferred.id)
+    ? [preferred, ...heldEvents]
+    : heldEvents;
+}
+
 export function upsertHeldEventList(
   current: Partial<HeldEventListResponse> | undefined,
   event: HeldEventResponse,

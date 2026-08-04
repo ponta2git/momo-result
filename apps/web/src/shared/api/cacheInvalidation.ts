@@ -31,11 +31,17 @@ export async function invalidateAfterMatchDeleted(queryClient: QueryClient): Pro
 }
 
 export async function invalidateAfterDraftCancelled(queryClient: QueryClient): Promise<void> {
-  await invalidateMatchCollections(queryClient);
+  await Promise.all([
+    invalidateMatchCollections(queryClient),
+    queryClient.invalidateQueries({ queryKey: heldEventKeys.all() }),
+  ]);
 }
 
 export async function invalidateAfterOcrSubmissionStarted(queryClient: QueryClient): Promise<void> {
-  await invalidateMatchCollections(queryClient);
+  await Promise.all([
+    invalidateMatchCollections(queryClient),
+    queryClient.invalidateQueries({ queryKey: heldEventKeys.all() }),
+  ]);
 }
 
 export async function invalidateAfterMatchUpdated(

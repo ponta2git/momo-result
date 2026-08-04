@@ -8,6 +8,7 @@ import type {
 } from "@/features/ocrCapture/ocrSubmissionWorkflow";
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
 import type { OcrCaptureMutations } from "@/features/ocrCapture/useOcrCaptureMutations";
+import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { formatApiError } from "@/shared/api/problemDetails";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
@@ -19,11 +20,14 @@ type SelectedGameTitle = {
 
 export type OcrSubmissionPlan = {
   selectedGameTitle: SelectedGameTitle | undefined;
+  selectedHeldEvent: HeldEventResponse | undefined;
   selectedSlotLabels: string[];
   setup: SetupFormValues;
   setupSummary: {
     gameTitle: string;
+    heldEvent: string;
     map: string;
+    matchNo: string;
     owner: string;
     season: string;
   };
@@ -48,6 +52,12 @@ export type OcrStartDialogState =
   | { message: string; plan: OcrSubmissionPlan; status: "handoff_required" };
 
 const matchesOcrRunningUrl = "/matches?status=ocr_running&sort=updated_desc";
+
+function ocrResultDestination(plan: OcrSubmissionPlan): string {
+  return plan.setup.heldEventId
+    ? `/held-events/${encodeURIComponent(plan.setup.heldEventId)}`
+    : matchesOcrRunningUrl;
+}
 
 export function useOcrStartFlow({
   submission,
@@ -97,6 +107,7 @@ export function useOcrStartFlow({
           );
         },
         selectedGameTitle: plan.selectedGameTitle,
+        selectedHeldEvent: plan.selectedHeldEvent,
         setup: plan.setup,
         slots: plan.slots,
         updateSlot,
@@ -125,7 +136,7 @@ export function useOcrStartFlow({
         title: `${result.createdJobCount}件の読み取りを開始しました。`,
         tone: "success",
       });
-      navigate(matchesOcrRunningUrl, { replace: true });
+      navigate(ocrResultDestination(plan), { replace: true });
       return;
     }
     if (result.status === "partial_started") {
@@ -176,8 +187,9 @@ export function useOcrStartFlow({
     if (blocker.state === "blocked") {
       blocker.reset();
     }
+    const destination = "plan" in state ? ocrResultDestination(state.plan) : matchesOcrRunningUrl;
     setState({ status: "closed" });
-    navigate(matchesOcrRunningUrl, { replace: true });
+    navigate(destination, { replace: true });
   }
 
   return {

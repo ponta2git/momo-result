@@ -33,9 +33,28 @@ export function latestHeldEventPatch(
   if (!latest) {
     return undefined;
   }
+  return heldEventPatch(latest);
+}
+
+export function heldEventPatchById(
+  heldEvents: readonly HeldEventResponse[],
+  heldEventId: string | undefined,
+): { heldEventId: string; matchNoInEvent: number; playedAt: string } | undefined {
+  if (!heldEventId) {
+    return undefined;
+  }
+  const heldEvent = heldEvents.find((event) => event.id === heldEventId);
+  return heldEvent ? heldEventPatch(heldEvent) : undefined;
+}
+
+function heldEventPatch(heldEvent: HeldEventResponse): {
+  heldEventId: string;
+  matchNoInEvent: number;
+  playedAt: string;
+} {
   return {
-    heldEventId: latest.id,
-    matchNoInEvent: latest.matchCount + 1,
-    playedAt: latest.heldAt,
+    heldEventId: heldEvent.id,
+    matchNoInEvent: heldEvent.nextMatchNo,
+    playedAt: heldEvent.heldAt,
   };
 }

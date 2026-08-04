@@ -6,6 +6,13 @@ import { trimSearchParam } from "@/shared/lib/searchParams";
 export function MatchCreatePage() {
   const [searchParams] = useSearchParams();
   const matchDraftId = trimSearchParam(searchParams.get("matchDraftId"));
+  const preferredHeldEventId = trimSearchParam(searchParams.get("heldEventId"));
 
-  return <MatchWorkspacePage mode="create" {...(matchDraftId ? { matchDraftId } : {})} />;
+  return (
+    <MatchWorkspacePage
+      mode="create"
+      {...(matchDraftId ? { matchDraftId } : {})}
+      {...(preferredHeldEventId ? { preferredHeldEventId } : {})}
+    />
+  );
 }

@@ -55,7 +55,7 @@ export function MatchSetupFields({
             );
             actions.onPatchRoot({
               heldEventId: event.target.value,
-              matchNoInEvent: (selected?.matchCount ?? 0) + 1,
+              matchNoInEvent: selected?.nextMatchNo ?? 1,
               playedAt: selected?.heldAt ?? values.playedAt,
             });
           }}

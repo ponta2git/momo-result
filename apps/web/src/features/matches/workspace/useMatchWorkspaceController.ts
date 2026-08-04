@@ -39,6 +39,7 @@ export type MatchWorkspaceControllerParams = {
   matchId?: string | undefined;
   matchSessionId?: string | undefined;
   mode: WorkspaceMode;
+  preferredHeldEventId?: string | undefined;
 };
 
 export function useMatchWorkspaceController({
@@ -46,9 +47,9 @@ export function useMatchWorkspaceController({
   matchId,
   matchSessionId,
   mode,
+  preferredHeldEventId,
 }: MatchWorkspaceControllerParams) {
   const [searchParams] = useSearchParams();
-
   const { notice, notify } = useWorkspaceNotice();
   const [validationMessage, setValidationMessage] = useState("");
   const [showValidationErrors, setShowValidationErrors] = useState(false);
@@ -69,43 +70,41 @@ export function useMatchWorkspaceController({
   const [state, dispatch] = useReducer(matchFormReducer, null, () =>
     createMatchFormReducerState(emptyFormFactory()),
   );
-
   const useSampleDrafts = mode === "review" && searchParams.get("sample") === "1";
   const hasHandoff = searchParams.has("handoffId");
   const handoffSessionId = matchSessionId ?? matchDraftId ?? mode;
-
   const queries = useMatchWorkspaceQueries({
     gameTitleId: state.values.gameTitleId,
     matchDraftId,
     matchDraftSourceImagesId: state.values.matchDraftId,
     matchId,
     mode,
+    preferredHeldEventId,
     searchParams,
     useSampleDrafts,
   });
-
   const {
     derived: { baseErrors, isOcrRunningBlocked, refreshingReviewStatus, reviewStatus },
     draftDetailQuery,
     gameTitlesQuery,
-    heldEventsQuery,
+    heldEventItems,
     mapMastersQuery,
     memberAliasesQuery,
     matchDetailQuery,
     ocrDraftsQuery,
+    preferredHeldEventPending,
     reviewDraftIdList,
     reviewDraftIds,
     seasonMastersQuery,
     sourceImageQuery,
   } = queries;
-
   const createEventMutation = useWorkspaceHeldEventCreation({
     onError: setValidationMessage,
     onSelectCreatedEvent: (event) => {
       dispatch({
         patch: {
           heldEventId: event.id,
-          matchNoInEvent: event.matchCount + 1,
+          matchNoInEvent: event.nextMatchNo,
           playedAt: event.heldAt,
         },
         type: "patch_root",
@@ -155,7 +154,6 @@ export function useMatchWorkspaceController({
     },
     searchParams,
   });
-
   const { validation, visibleErrorPathSet } = useMatchWorkspaceValidation({
     mode,
     showValidationErrors,
@@ -164,7 +162,7 @@ export function useMatchWorkspaceController({
   const viewModel = useMatchWorkspaceViewModel({
     draftDetail: draftDetailQuery.data,
     gameTitleItems: gameTitlesQuery.data?.items,
-    heldEventItems: heldEventsQuery.data?.items,
+    heldEventItems,
     mapItems: mapMastersQuery.data?.items,
     mode,
     reviewStatus,
@@ -207,6 +205,8 @@ export function useMatchWorkspaceController({
     heldEvents,
     isInitialized,
     mode,
+    preferredHeldEventId,
+    preferredHeldEventPending,
     redirectConfirmedDraft,
     useSampleDrafts,
   });

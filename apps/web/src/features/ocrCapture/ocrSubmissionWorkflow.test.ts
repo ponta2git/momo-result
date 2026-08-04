@@ -86,6 +86,46 @@ describe("runOcrSubmissionWorkflow", () => {
     expect(result).toEqual({ createdJobCount: 1, failedJobCount: 0, status: "started" });
   });
 
+  it("creates the draft inside the selected held event using its suggested match number", async () => {
+    const createDraft = vi.fn(async () => ({
+      createdAt: "2026-02-03T04:05:06.000Z",
+      matchDraftId: "draft-held-1",
+      status: "ocr_running",
+      updatedAt: "2026-02-03T04:05:06.000Z",
+    }));
+
+    const result = await runOcrSubmissionWorkflow({
+      cancelDraft: vi.fn(),
+      createDraft,
+      createPlayedAtIso: () => "2026-09-09T09:09:09.000Z",
+      createUploadJob: async () => ({
+        job: { draftId: "ocr-draft-1", jobId: "job-1", status: "queued" },
+        upload: { imageId: "image-1" },
+      }),
+      selectedGameTitle: { id: "gt_momotetsu_2" },
+      selectedHeldEvent: {
+        heldAt: "2026-02-03T04:05:06.000Z",
+        id: "held-1",
+      },
+      setup: {
+        ...validSetup,
+        heldEventId: "held-1",
+        matchNoInEvent: 7,
+      },
+      slots: [selectedSlot()],
+      updateSlot: vi.fn(),
+    });
+
+    expect(createDraft).toHaveBeenCalledWith(
+      expect.objectContaining({
+        heldEventId: "held-1",
+        matchNoInEvent: 7,
+        playedAt: "2026-02-03T04:05:06.000Z",
+      }),
+    );
+    expect(result).toEqual({ createdJobCount: 1, failedJobCount: 0, status: "started" });
+  });
+
   it("reports ordered progress and a partial result when one image cannot be registered", async () => {
     const updates: CaptureSlotState[] = [];
     const progress = vi.fn();

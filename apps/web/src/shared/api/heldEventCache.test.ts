@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  mergeHeldEventItems,
   syncHeldEventCreatedCache,
   syncHeldEventDeletedCache,
   upsertHeldEventList,
@@ -27,6 +28,13 @@ const newerEvent: HeldEventResponse = {
 };
 
 describe("held event cache contract", () => {
+  it("prepends an individually loaded event only when the list does not contain it", () => {
+    expect(mergeHeldEventItems([newerEvent], olderEvent)).toEqual([olderEvent, newerEvent]);
+    expect(mergeHeldEventItems([newerEvent], { ...newerEvent, matchCount: 9 })).toEqual([
+      newerEvent,
+    ]);
+  });
+
   it("upserts held events in newest-first order without duplicates", () => {
     const result = upsertHeldEventList(
       { items: [olderEvent, { ...newerEvent, matchCount: 2 }] },

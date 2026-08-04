@@ -4,7 +4,10 @@ import type { Dispatch } from "react";
 import { confirmedDraftMessages } from "@/features/matches/confirmedDraftNavigation";
 import type { MatchFormAction } from "@/features/matches/workspace/matchFormReducer";
 import type { WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
-import { latestHeldEventPatch } from "@/features/matches/workspace/workspaceViewModel";
+import {
+  heldEventPatchById,
+  latestHeldEventPatch,
+} from "@/features/matches/workspace/workspaceViewModel";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import type { MatchDraftDetailResponse } from "@/shared/api/matchDrafts";
 
@@ -16,6 +19,8 @@ export function useMatchWorkspaceLifecycleEffects({
   heldEvents,
   isInitialized,
   mode,
+  preferredHeldEventId,
+  preferredHeldEventPending,
   redirectConfirmedDraft,
   useSampleDrafts,
 }: {
@@ -26,6 +31,8 @@ export function useMatchWorkspaceLifecycleEffects({
   heldEvents: HeldEventResponse[];
   isInitialized: boolean;
   mode: WorkspaceMode;
+  preferredHeldEventId: string | undefined;
+  preferredHeldEventPending: boolean;
   redirectConfirmedDraft: (
     detail: MatchDraftDetailResponse | undefined,
     message: string,
@@ -40,10 +47,18 @@ export function useMatchWorkspaceLifecycleEffects({
   }, [draftDetail, mode, redirectConfirmedDraft, useSampleDrafts]);
 
   useEffect(() => {
-    if (!isInitialized || hasHandoff || mode === "edit" || heldEventId || heldEvents.length === 0) {
+    if (
+      !isInitialized ||
+      hasHandoff ||
+      mode === "edit" ||
+      heldEventId ||
+      heldEvents.length === 0 ||
+      preferredHeldEventPending
+    ) {
       return;
     }
-    const patch = latestHeldEventPatch(heldEvents);
+    const patch =
+      heldEventPatchById(heldEvents, preferredHeldEventId) ?? latestHeldEventPatch(heldEvents);
     if (!patch) {
       return;
     }
@@ -51,5 +66,14 @@ export function useMatchWorkspaceLifecycleEffects({
       patch,
       type: "patch_root",
     });
-  }, [dispatch, hasHandoff, heldEventId, heldEvents, isInitialized, mode]);
+  }, [
+    dispatch,
+    hasHandoff,
+    heldEventId,
+    heldEvents,
+    isInitialized,
+    mode,
+    preferredHeldEventId,
+    preferredHeldEventPending,
+  ]);
 }

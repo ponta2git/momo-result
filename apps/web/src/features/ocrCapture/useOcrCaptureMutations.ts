@@ -12,6 +12,7 @@ import type {
 } from "@/features/ocrCapture/ocrSubmissionWorkflow";
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
 import { invalidateAfterOcrSubmissionStarted } from "@/shared/api/cacheInvalidation";
+import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { cancelMatchDraft, createMatchDraft } from "@/shared/api/matchDrafts";
 import { createOcrJob, uploadImage } from "@/shared/api/ocrJobs";
@@ -20,6 +21,7 @@ import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 export type OcrCaptureSubmitParams = {
   onProgress?: ((progress: OcrSubmissionProgress) => void) | undefined;
   selectedGameTitle: { id: string; layoutFamily?: string | null } | undefined;
+  selectedHeldEvent?: HeldEventResponse | undefined;
   setup: SetupFormValues;
   slots: readonly CaptureSlotState[];
   updateSlot: (slot: CaptureSlotState) => void;
@@ -66,7 +68,14 @@ export function useOcrCaptureMutations(hints: Record<string, unknown>): OcrCaptu
   });
 
   const submit = useCallback(
-    async ({ onProgress, selectedGameTitle, setup, slots, updateSlot }: OcrCaptureSubmitParams) => {
+    async ({
+      onProgress,
+      selectedGameTitle,
+      selectedHeldEvent,
+      setup,
+      slots,
+      updateSlot,
+    }: OcrCaptureSubmitParams) => {
       if (inFlightRef.current) {
         return;
       }
@@ -95,6 +104,7 @@ export function useOcrCaptureMutations(hints: Record<string, unknown>): OcrCaptu
             uploadMutation.mutateAsync({ file, matchDraftId, slot }),
           onProgress,
           selectedGameTitle,
+          selectedHeldEvent,
           setup,
           slots,
           updateSlot,

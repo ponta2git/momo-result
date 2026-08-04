@@ -19,6 +19,11 @@ export const loadHeldEventsPage = () =>
     default: module.HeldEventsPage,
   }));
 
+export const loadHeldEventDetailPage = () =>
+  import("@/features/heldEvents/HeldEventDetailPage").then((module) => ({
+    default: module.HeldEventDetailPage,
+  }));
+
 export const loadMastersPage = () =>
   import("@/features/masters/MastersPage").then((module) => ({ default: module.MastersPage }));
 
@@ -59,6 +64,10 @@ const routePreloaders: Array<{
   { matches: (pathname) => pathname === "/login", preload: loadLoginPage },
   { matches: (pathname) => pathname === "/matches", preload: loadMatchesListPage },
   { matches: (pathname) => pathname === "/held-events", preload: loadHeldEventsPage },
+  {
+    matches: (pathname) => /^\/held-events\/[^/]+$/u.test(pathname),
+    preload: loadHeldEventDetailPage,
+  },
   { matches: (pathname) => pathname === "/matches/new", preload: loadMatchCreatePage },
   { matches: (pathname) => /^\/matches\/[^/]+\/edit$/u.test(pathname), preload: loadMatchEditPage },
   { matches: (pathname) => /^\/matches\/[^/]+$/u.test(pathname), preload: loadMatchDetailPage },

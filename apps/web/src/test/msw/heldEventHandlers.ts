@@ -1,6 +1,6 @@
 import { http, HttpResponse } from "msw";
 
-import { makeHeldEventResponse } from "@/test/factories/heldEvents";
+import { makeHeldEventDetailResponse, makeHeldEventResponse } from "@/test/factories/heldEvents";
 import { now } from "@/test/msw/fixtures";
 
 function pagination(page: number, pageSize: number, totalItems: number) {
@@ -32,6 +32,14 @@ export const heldEventHandlers = [
   }),
   http.post("/api/held-events", async () =>
     HttpResponse.json(makeHeldEventResponse({ heldAt: now, id: "held-created" })),
+  ),
+  http.get("/api/held-events/:heldEventId", ({ params }) =>
+    HttpResponse.json(
+      makeHeldEventDetailResponse({
+        heldAt: now,
+        id: String(params["heldEventId"]),
+      }),
+    ),
   ),
   http.delete("/api/held-events/:heldEventId", ({ params }) =>
     HttpResponse.json({

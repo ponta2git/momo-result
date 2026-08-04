@@ -11,15 +11,19 @@ import { heldEventKeys } from "@/shared/api/queryKeys";
 import { createTestQueryClient } from "@/test/queryClient";
 
 const olderEvent: HeldEventResponse = {
+  draftCount: 0,
   id: "held-old",
   heldAt: "2026-01-01T00:00:00.000Z",
   matchCount: 1,
+  nextMatchNo: 2,
 };
 
 const newerEvent: HeldEventResponse = {
+  draftCount: 0,
   id: "held-new",
   heldAt: "2026-01-02T00:00:00.000Z",
   matchCount: 0,
+  nextMatchNo: 1,
 };
 
 describe("held event cache contract", () => {

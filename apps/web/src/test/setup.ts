@@ -3,6 +3,20 @@ import { afterEach, beforeEach, vi } from "vitest";
 
 const hasDom = typeof window !== "undefined";
 
+function createMemoryStorage(): Storage {
+  const values = new Map<string, string>();
+  return {
+    get length() {
+      return values.size;
+    },
+    clear: () => values.clear(),
+    getItem: (key) => values.get(key) ?? null,
+    key: (index) => [...values.keys()][index] ?? null,
+    removeItem: (key) => values.delete(key),
+    setItem: (key, value) => values.set(key, String(value)),
+  };
+}
+
 if (hasDom) {
   if (!URL.createObjectURL) {
     URL.createObjectURL = () => "blob:test";
@@ -21,6 +35,12 @@ function formatConsoleArgs(args: unknown[]): string {
 }
 
 beforeEach(() => {
+  if (hasDom && !window.localStorage) {
+    vi.stubGlobal("localStorage", createMemoryStorage());
+  }
+  if (hasDom && !window.sessionStorage) {
+    vi.stubGlobal("sessionStorage", createMemoryStorage());
+  }
   unexpectedConsoleMessages = [];
   vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
     unexpectedConsoleMessages.push(`console.error: ${formatConsoleArgs(args)}`);

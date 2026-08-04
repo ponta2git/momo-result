@@ -1,7 +1,7 @@
 import { keepPreviousData, queryOptions } from "@tanstack/react-query";
 
 import { listLoginAccounts } from "@/shared/api/adminAccounts";
-import { listHeldEvents } from "@/shared/api/heldEvents";
+import { getHeldEventDetail, listHeldEvents } from "@/shared/api/heldEvents";
 import type { ListHeldEventsQuery } from "@/shared/api/heldEvents";
 import {
   listGameTitles,
@@ -51,6 +51,19 @@ export function heldEventsQueryOptions(
         ? heldEventKeys.scope(scope)
         : heldEventKeys.list({ ...query, scope }),
     queryFn: ({ signal }) => listHeldEvents(query, limit, { signal }),
+  });
+}
+
+export function heldEventDetailQueryOptions(heldEventId: string | undefined, enabled = true) {
+  return queryOptions({
+    queryKey: heldEventKeys.detail(heldEventId),
+    queryFn: ({ signal }) => {
+      if (!heldEventId) {
+        throw new Error("held event detail query is not ready");
+      }
+      return getHeldEventDetail(heldEventId, { signal });
+    },
+    enabled: enabled && Boolean(heldEventId),
   });
 }
 

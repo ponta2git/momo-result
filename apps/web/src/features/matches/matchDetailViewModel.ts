@@ -13,6 +13,7 @@ import type {
   MatchFeatureSource,
 } from "@/shared/domain/matchFeatures";
 import { memberDisplayName } from "@/shared/domain/members";
+export { seriesComparisonHrefForMatch } from "@/shared/navigation/matchLinks";
 
 export type MatchDetailPlayerResult = NonNullable<MatchDetailResponse["players"]>[number];
 export type MatchFeatureBadge = MatchFeatureDefinition & {
@@ -59,19 +60,6 @@ export function formatMatchDetailDateOnly(iso: string): string {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
-}
-
-export function seriesComparisonHrefForMatch(
-  match: Pick<MatchDetailResponse, "gameTitleId" | "mapMasterId" | "matchId" | "seasonMasterId">,
-): string {
-  const params = new URLSearchParams({
-    gameTitleId: match.gameTitleId,
-    seasonMasterId: match.seasonMasterId,
-    mapMasterId: match.mapMasterId,
-    focusMatchId: match.matchId,
-    view: "flow",
-  });
-  return `/analytics/series?${params.toString()}`;
 }
 
 function sortValue(player: MatchDetailPlayerResult, key: MatchDetailSortKey): number | string {

@@ -9,6 +9,7 @@ import {
   loadAdminAccountsPage,
   loadDraftReviewPage,
   loadExportPage,
+  loadHeldEventDetailPage,
   loadHeldEventsPage,
   loadLoginPage,
   loadMastersPage,
@@ -24,6 +25,7 @@ const AdminAccountsPage = lazy(loadAdminAccountsPage);
 const LoginPage = lazy(loadLoginPage);
 const DraftReviewPage = lazy(loadDraftReviewPage);
 const ExportPage = lazy(loadExportPage);
+const HeldEventDetailPage = lazy(loadHeldEventDetailPage);
 const HeldEventsPage = lazy(loadHeldEventsPage);
 const MastersPage = lazy(loadMastersPage);
 const MatchCreatePage = lazy(loadMatchCreatePage);
@@ -64,6 +66,10 @@ export const appRoutes: RouteObject[] = [
           {
             path: "held-events",
             element: <HeldEventsPage />,
+          },
+          {
+            path: "held-events/:heldEventId",
+            element: <HeldEventDetailPage />,
           },
           {
             path: "matches/new",

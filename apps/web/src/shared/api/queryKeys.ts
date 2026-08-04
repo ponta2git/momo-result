@@ -10,6 +10,8 @@ export const heldEventKeys = {
   all: () => ["held-events"] as const,
   list: (params: unknown) => ["held-events", "list-response", params] as const,
   scope: (_scope: string) => ["held-events", "list-response"] as const,
+  detailRoot: () => ["held-events", "detail"] as const,
+  detail: (heldEventId: string | undefined) => ["held-events", "detail", heldEventId] as const,
 };
 
 export const adminAccountKeys = {

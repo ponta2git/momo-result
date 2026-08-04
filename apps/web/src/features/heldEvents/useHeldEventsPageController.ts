@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useActionState, useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import {
   currentLocalIsoMinute,
@@ -26,6 +26,7 @@ const pageSizeOptions = new Set<number>(heldEventPageSizeOptions);
 
 export function useHeldEventsPageController() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const paginationSearch = useMemo(() => {
     const pageSize = parsePositiveIntSearchParam(
@@ -40,6 +41,7 @@ export function useHeldEventsPageController() {
   const [heldAtDraft, setHeldAtDraft] = useState(currentLocalIsoMinute);
   const [notice, setNotice] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<HeldEventResponse | null>(null);
   const idempotencyKeys = useIdempotencyKeyStore();
 
@@ -62,9 +64,6 @@ export function useHeldEventsPageController() {
   );
 
   const heldEventsQuery = useQuery(heldEventsQueryOptions(paginationSearch));
-  const latestHeldEventQuery = useQuery(
-    heldEventsQueryOptions({ page: 1, pageSize: 1 }, 10, "latest"),
-  );
 
   const [createState, createAction] = useActionState<typeof initialCreateHeldEventState, FormData>(
     async (previous, formData) => {
@@ -85,10 +84,17 @@ export function useHeldEventsPageController() {
         );
         updatePagination({ page: 1, pageSize: paginationSearch.pageSize });
         await queryClient.invalidateQueries({ queryKey: heldEventKeys.all() });
+        queryClient.setQueryData(heldEventKeys.detail(event.id), {
+          ...event,
+          drafts: [],
+          matches: [],
+        });
         setHeldAtDraft(currentLocalIsoMinute());
         setErrorMessage("");
         setNotice(`開催履歴（${formatDateTime(event.heldAt)}）を作成しました。`);
+        setCreateOpen(false);
         showToast({ title: "開催履歴を作成しました。", tone: "success" });
+        navigate(`/held-events/${encodeURIComponent(event.id)}`);
         return { version: previous.version + 1 };
       } catch (error) {
         setNotice("");
@@ -135,8 +141,14 @@ export function useHeldEventsPageController() {
 
   const refresh = () => {
     void heldEventsQuery.refetch();
-    void latestHeldEventQuery.refetch();
   };
+  const updateCreateOpen = useCallback((open: boolean) => {
+    setCreateOpen(open);
+    if (open) {
+      setErrorMessage("");
+      setNotice("");
+    }
+  }, []);
   const updatePage = useCallback(
     (page: number) => {
       updatePagination({ page, pageSize: paginationSearch.pageSize });
@@ -159,8 +171,11 @@ export function useHeldEventsPageController() {
   return {
     create: {
       action: createAction,
+      errorMessage,
       heldAtDraft,
+      open: createOpen,
       setHeldAtDraft,
+      setOpen: updateCreateOpen,
       state: createState,
     },
     deleteDialog: {
@@ -174,11 +189,9 @@ export function useHeldEventsPageController() {
       liveMessage: notice || errorMessage,
     },
     header: {
+      openCreate: () => updateCreateOpen(true),
       refresh,
       refreshing: heldEventsQuery.isFetching,
-    },
-    latest: {
-      event: latestHeldEventQuery.data?.items?.[0],
     },
     table: {
       actions: {
@@ -190,6 +203,7 @@ export function useHeldEventsPageController() {
       data: {
         loadFailed: shouldShowBlockingQueryError(heldEventsQuery),
         loading: isInitialQueryLoading(heldEventsQuery) || pageCorrectionPending,
+        page: paginationSearch.page,
         pagination,
         refreshing: heldEventsQuery.isFetching,
         rows,

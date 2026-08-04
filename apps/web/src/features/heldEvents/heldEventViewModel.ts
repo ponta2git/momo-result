@@ -5,8 +5,11 @@ export const heldEventPageSizeOptions = [10, 25, 50] as const;
 
 export type HeldEventCreateFormModel = {
   action: (formData: FormData) => void | Promise<void>;
+  errorMessage: string;
   heldAtDraft: string;
+  open: boolean;
   setHeldAtDraft: (value: string) => void;
+  setOpen: (open: boolean) => void;
   state: { version: number };
 };
 
@@ -17,16 +20,17 @@ export type HeldEventDeleteDialogModel = {
   target: HeldEventResponse | null;
 };
 
-export type HeldEventsTableActions = {
+export type HeldEventsListActions = {
   deletePending: boolean;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
   onRequestDelete: (event: HeldEventResponse) => void;
 };
 
-export type HeldEventsTableModel = {
+export type HeldEventsListModel = {
   loadFailed: boolean;
   loading: boolean;
+  page: number;
   pagination: HeldEventListResponse["pagination"] | undefined;
   refreshing: boolean;
   rows: HeldEventResponse[];

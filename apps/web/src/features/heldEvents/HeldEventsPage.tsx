@@ -1,9 +1,8 @@
-import { RefreshCw } from "lucide-react";
+import { CalendarPlus, RefreshCw } from "lucide-react";
 
-import { CreateHeldEventCard } from "@/features/heldEvents/CreateHeldEventCard";
+import { CreateHeldEventDialog } from "@/features/heldEvents/CreateHeldEventDialog";
 import { DeleteHeldEventDialog } from "@/features/heldEvents/DeleteHeldEventDialog";
-import { HeldEventLatestCard } from "@/features/heldEvents/HeldEventLatestCard";
-import { HeldEventsTableCard } from "@/features/heldEvents/HeldEventsTableCard";
+import { HeldEventsListCard } from "@/features/heldEvents/HeldEventsListCard";
 import { useHeldEventsPageController } from "@/features/heldEvents/useHeldEventsPageController";
 import { Button } from "@/shared/ui/actions/Button";
 import { LiveRegion } from "@/shared/ui/feedback/LiveRegion";
@@ -19,35 +18,43 @@ export function HeldEventsPage() {
       <LiveRegion message={page.feedback.liveMessage} />
       <PageHeader
         actions={
-          <Button
-            icon={<RefreshCw className="size-4" />}
-            pending={page.header.refreshing}
-            pendingLabel="更新中…"
-            variant="quiet"
-            onClick={page.header.refresh}
-          >
-            最新情報に更新
-          </Button>
+          <>
+            <Button
+              icon={<RefreshCw aria-hidden="true" className="size-4" />}
+              pending={page.header.refreshing}
+              pendingLabel="更新中…"
+              size="sm"
+              variant="quiet"
+              onClick={page.header.refresh}
+            >
+              更新
+            </Button>
+            <Button
+              icon={<CalendarPlus aria-hidden="true" className="size-4" />}
+              onClick={page.header.openCreate}
+            >
+              開催を作成
+            </Button>
+          </>
         }
-        description="開催回を作り、試合一覧と出力範囲の基準にします。"
+        description="開催ごとに試合順の結果、参加者の戦績、未完了の確認作業をまとめて見渡せます。"
         eyebrow="開催"
         title="開催履歴"
       />
 
-      {page.feedback.errorMessage ? (
+      {page.feedback.errorMessage && !page.create.open ? (
         <Notice tone="danger" title="操作に失敗しました">
           {page.feedback.errorMessage}
         </Notice>
       ) : null}
 
-      <HeldEventLatestCard event={page.latest.event} />
+      <HeldEventsListCard
+        actions={page.table.actions}
+        data={page.table.data}
+        onCreate={page.header.openCreate}
+      />
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
-        <HeldEventsTableCard actions={page.table.actions} data={page.table.data} />
-
-        <CreateHeldEventCard model={page.create} />
-      </div>
-
+      <CreateHeldEventDialog model={page.create} />
       <DeleteHeldEventDialog model={page.deleteDialog} />
     </PageFrame>
   );

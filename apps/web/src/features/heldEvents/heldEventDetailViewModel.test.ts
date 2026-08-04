@@ -92,7 +92,6 @@ describe("held event detail view model", () => {
       heldEventDraftScopeLabel(
         {
           gameTitleId: "game-1",
-          mapMasterId: undefined,
           seasonMasterId: "season-1",
         },
         names,

@@ -3,6 +3,8 @@
   "private": true,
   "packageManager": "pnpm@10.10.0",
   "scripts": {
+    "dev": "node scripts/dev-local.mjs",
+    "dev:launcher:test": "node --test scripts/dev-local.test.mjs",
     "api:format": "cd apps/api && sbt apiFormat",
     "api:format:check": "cd apps/api && sbt apiFormatCheck",
     "api:lint": "cd apps/api && sbt apiLint",

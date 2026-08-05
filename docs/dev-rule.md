@@ -32,6 +32,7 @@
 - ローカル secret は `.env` に置き、コミットしない。
 - 必要なキー名は `.env.example` を参照する。
 - Scala API と Python worker は root `.env` を自動読み込みしない。起動前に shell へ読み込む。
+- root の `pnpm dev` は API 起動用に root `.env` を読み込む。
 - Web の `VITE_*` も、root `.env` を使う場合は同じ shell で読み込んでから起動する。
 - 本番 secret は `fly secrets`、CI secret は GitHub Actions secrets で管理する。
 - `MOMO_LOG_FORMAT=json` は本番向け1行JSON、`MOMO_LOG_FORMAT=text` はローカル向け。
@@ -46,6 +47,14 @@ docker compose up -d
 pnpm --dir ../momo-db db:up
 pnpm --dir ../momo-db db:migrate
 ```
+
+API + Web（推奨）:
+
+```sh
+pnpm dev
+```
+
+`pnpm dev` は shell / root `.env` の `DATABASE_URL` を優先し、未設定時は sibling `momo-db/.env.local` の `DIRECT_URL` をローカルDB設定として利用する。永続DB設定が見つからない場合や、API health が database `ok` にならない場合は Web を起動せず終了する。これにより、DB未接続の空状態を登録データ0件として誤表示しない。
 
 API:
 
@@ -75,6 +84,8 @@ pnpm web:dev
 
 | 目的 | コマンド |
 |---|---|
+| API + Web dev | `pnpm dev` |
+| local dev launcher test | `pnpm dev:launcher:test` |
 | web dev | `pnpm web:dev` |
 | web build | `pnpm web:build` |
 | web lint | `pnpm web:lint` |

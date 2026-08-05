@@ -60,8 +60,10 @@ export function ExportCandidatePickerDialog({
         </p>
         <Dialog
           busy={refreshing}
+          className="flex min-h-0 flex-col"
           open={open}
-          surfaceClassName="sm:p-5"
+          popupClassName="overflow-y-hidden"
+          surfaceClassName="flex flex-col overflow-y-hidden sm:p-5"
           title={`${label}を選択`}
           trigger={
             <Button
@@ -76,10 +78,10 @@ export function ExportCandidatePickerDialog({
           }
           onOpenChange={setOpen}
         >
-          <div className="grid gap-3">
+          <div className="flex min-h-0 flex-1 flex-col gap-3">
             <fieldset
               aria-label={`${label}候補`}
-              className="max-h-[min(24rem,55dvh)] min-w-0 overflow-y-auto rounded-[var(--radius-sm)] border border-[var(--color-border)]"
+              className="max-h-[min(24rem,55dvh)] min-h-0 min-w-0 overflow-y-auto overscroll-contain rounded-[var(--radius-sm)] border border-[var(--color-border)]"
             >
               <legend className="sr-only">{label}候補</legend>
               {view.candidates.length === 0 ? (
@@ -128,7 +130,7 @@ export function ExportCandidatePickerDialog({
             {pagination && pagination.totalPages > 1 ? (
               <nav
                 aria-label={`${label}候補のページネーション`}
-                className="flex min-w-0 items-center justify-between gap-3"
+                className="flex min-w-0 shrink-0 items-center justify-between gap-3"
               >
                 <p className="min-w-0 text-sm font-semibold text-[var(--color-text-secondary)] tabular-nums">
                   {range}

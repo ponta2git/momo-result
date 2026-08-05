@@ -45,6 +45,18 @@ function renderPage({ downloadTimeoutMs, path = "/exports", slowThresholdMs }: R
   );
 }
 
+function expectSingleCandidateScrollRegion(label: "開催" | "試合") {
+  const dialog = screen.getByRole("dialog", { name: `${label}を選択` });
+  expect(dialog).toHaveClass("overflow-y-hidden");
+  expect(dialog).not.toHaveClass("overflow-y-auto");
+  expect(dialog.firstElementChild).toHaveClass("overflow-y-hidden");
+  expect(dialog.firstElementChild).not.toHaveClass("overflow-y-auto");
+  expect(screen.getByRole("group", { name: `${label}候補` })).toHaveClass(
+    "overflow-y-auto",
+    "overscroll-contain",
+  );
+}
+
 describe("ExportPage", () => {
   beforeEach(() => {
     queryClient = createTestQueryClient();
@@ -185,6 +197,7 @@ describe("ExportPage", () => {
 
     await user.click(await screen.findByRole("button", { name: "開催を変更" }));
     expect(screen.getByRole("dialog", { name: "開催を選択" })).toBeInTheDocument();
+    expectSingleCandidateScrollRegion("開催");
     expect(screen.getByText("1-20件 / 全21件")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "次の候補ページへ" }));
@@ -251,6 +264,7 @@ describe("ExportPage", () => {
     expect(screen.queryByText("指定された対象: match-21")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "試合を変更" }));
+    expectSingleCandidateScrollRegion("試合");
     await user.click(screen.getByRole("button", { name: "次の候補ページへ" }));
     expect(await screen.findByRole("radio", { name: /第21試合/u })).toBeChecked();
   });

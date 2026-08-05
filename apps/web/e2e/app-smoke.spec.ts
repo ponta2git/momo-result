@@ -644,6 +644,36 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
 
     await expect(page.getByRole("heading", { exact: true, name: "CSV/TSV出力" })).toBeVisible();
     await expect(page.getByRole("button", { name: "試合を変更" })).toBeVisible();
+    await expect(page.getByText(/第1試合.*TSVで書き出します。/u)).toBeVisible();
+
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.setViewportSize({ height: 812, width: 375 });
+    const mobileExportGeometry = await page.evaluate(() => ({
+      innerWidth: window.innerWidth,
+      reducedMotion: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+      scrollWidth: document.documentElement.scrollWidth,
+    }));
+    expect(mobileExportGeometry.innerWidth).toBe(375);
+    expect(mobileExportGeometry.reducedMotion).toBe(true);
+    expect(mobileExportGeometry.scrollWidth).toBeLessThanOrEqual(mobileExportGeometry.innerWidth);
+    expect(
+      await page
+        .getByRole("button", { name: "試合を変更" })
+        .evaluate((element) => window.getComputedStyle(element).transitionDuration),
+    ).toBe("0s");
+
+    await page.getByRole("button", { name: "試合を変更" }).click();
+    const candidateDialog = page.getByRole("dialog", { name: "試合を選択" });
+    await expect(candidateDialog).toBeVisible();
+    await expect(candidateDialog.getByRole("radio", { name: /第1試合/u })).toBeChecked();
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+    await candidateDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
+    await expect(candidateDialog).toBeHidden();
+
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.setViewportSize({ height: 900, width: 1440 });
 
     const exportResponse = page.waitForResponse(
       (response) =>

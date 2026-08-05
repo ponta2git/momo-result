@@ -89,6 +89,16 @@
 - Offer event deletion only when both confirmed matches and active drafts are absent, and keep the destructive confirmation explicit.
 - Use final-shape skeletons and distinct empty states for a new event, draft-only event, result-only event, and mixed event. Do not collapse these states into a generic “no data” message.
 
+### CSV/TSV export
+
+- Treat export as one short decision flow in stable visual and DOM order: scope, scoped target when required, file format, generated summary, then the primary download action.
+- Use one concise page title and one bordered task surface. Do not repeat the same conditions in a second ticket, overview card, decorative illustration, or interaction-obvious explanatory paragraph.
+- State the selected target and format in a sentence immediately before the action. Name the action with both its scope and format, such as “この試合をTSVでダウンロード”.
+- Keep invariant file facts in one quiet line: confirmed matches only, one player per row, and monetary values in ten-thousand-yen units.
+- Use a native select for short master lists. For long held-event and match lists, use a focused selection dialog with bounded scrolling and server-backed pagination; preserve the current selection while paging and resolve page-external deep links to human-readable labels.
+- Keep loading, refreshing, empty, invalid-URL, download progress, success, timeout, and failure feedback beside the control or action that owns it. Provide a local retry or reset action and never duplicate the same outcome in both a toast and inline notice.
+- Animate only selection continuity and the entry of newly relevant status feedback. Keep geometry stable, avoid looping progress decoration, and honor reduced motion.
+
 ### Motion
 
 - Motion should communicate state continuity, not decorate the interface.

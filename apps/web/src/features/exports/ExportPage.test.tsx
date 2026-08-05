@@ -134,7 +134,8 @@ describe("ExportPage", () => {
 
     renderPage({ path: "/exports?matchId=match-1&format=tsv" });
     await screen.findByRole("heading", { name: "CSV/TSV出力" });
-    expect(await screen.findByLabelText("試合")).toHaveValue("match-1");
+    expect(await screen.findByRole("button", { name: "試合を変更" })).toBeInTheDocument();
+    expect(screen.getAllByText(/第1試合/u)).not.toHaveLength(0);
     expect(screen.queryByText("draft-1")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "この試合をTSVでダウンロード" }));
@@ -143,7 +144,115 @@ describe("ExportPage", () => {
     expect(capturedExport?.searchParams.get("matchId")).toBe("match-1");
     expect(capturedMatchList?.searchParams.get("status")).toBe("confirmed");
     expect(capturedMatchList?.searchParams.get("kind")).toBe("match");
+    expect(capturedMatchList?.searchParams.get("page")).toBe("1");
+    expect(capturedMatchList?.searchParams.get("pageSize")).toBe("20");
+    expect(capturedMatchList?.searchParams.get("sort")).toBe("held_desc");
     expect(anchorClick.clickedAnchors[0]?.download).toBe("momo-results-match-match-1.tsv");
+  });
+
+  it("pages through held-event candidates in a selection dialog", async () => {
+    const requestedPages: number[] = [];
+    const allEvents = Array.from({ length: 21 }, (_, index) => ({
+      draftCount: 0,
+      heldAt: new Date(Date.UTC(2026, 0, index + 1)).toISOString(),
+      id: `held-${index + 1}`,
+      matchCount: index + 1,
+      nextMatchNo: index + 2,
+    }));
+    server.use(
+      http.get("/api/held-events", ({ request }) => {
+        const url = new URL(request.url);
+        const page = Number(url.searchParams.get("page") ?? "1");
+        const pageSize = Number(url.searchParams.get("pageSize") ?? "20");
+        const offset = (page - 1) * pageSize;
+        requestedPages.push(page);
+        return HttpResponse.json({
+          items: allEvents.slice(offset, offset + pageSize),
+          pagination: {
+            hasNextPage: page * pageSize < allEvents.length,
+            hasPreviousPage: page > 1,
+            page,
+            pageSize,
+            totalItems: allEvents.length,
+            totalPages: Math.ceil(allEvents.length / pageSize),
+          },
+          totalMatchCount: allEvents.reduce((sum, event) => sum + event.matchCount, 0),
+        });
+      }),
+    );
+
+    renderPage({ path: "/exports?heldEventId=held-1&format=csv" });
+
+    await user.click(await screen.findByRole("button", { name: "開催を変更" }));
+    expect(screen.getByRole("dialog", { name: "開催を選択" })).toBeInTheDocument();
+    expect(screen.getByText("1-20件 / 全21件")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "次の候補ページへ" }));
+    const lastEvent = await screen.findByRole("radio", { name: /21試合/u });
+    expect(requestedPages).toEqual([1, 2]);
+    expect(screen.getByText("21-21件 / 全21件")).toBeInTheDocument();
+
+    await user.click(lastEvent);
+    expect(screen.queryByRole("dialog", { name: "開催を選択" })).not.toBeInTheDocument();
+    expect(screen.getByText(/21試合をCSVで書き出します。/u)).toBeInTheDocument();
+  });
+
+  it("resolves a match deep link outside the current candidate page", async () => {
+    server.use(
+      http.get("/api/matches", ({ request }) => {
+        const url = new URL(request.url);
+        const page = Number(url.searchParams.get("page") ?? "1");
+        const pageSize = Number(url.searchParams.get("pageSize") ?? "20");
+        const allMatches = Array.from({ length: 21 }, (_, index) => ({
+          createdAt: "2026-01-01T00:00:00.000Z",
+          heldEventId: "held-1",
+          id: `match-${index + 1}`,
+          kind: "match",
+          matchId: `match-${index + 1}`,
+          matchNoInEvent: index + 1,
+          playedAt: "2026-01-01T00:00:00.000Z",
+          seasonMasterId: "season_default",
+          status: "confirmed",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        }));
+        const offset = (page - 1) * pageSize;
+        return HttpResponse.json({
+          items: allMatches.slice(offset, offset + pageSize),
+          pagination: {
+            hasNextPage: page * pageSize < allMatches.length,
+            hasPreviousPage: page > 1,
+            page,
+            pageSize,
+            totalItems: allMatches.length,
+            totalPages: Math.ceil(allMatches.length / pageSize),
+          },
+        });
+      }),
+      http.get("/api/matches/match-21", () =>
+        HttpResponse.json({
+          createdAt: "2026-01-01T00:00:00.000Z",
+          createdByAccountId: "account-1",
+          gameTitleId: "gt_momotetsu_2",
+          heldEventId: "held-1",
+          layoutFamily: "momotetsu_2",
+          mapMasterId: "map_east",
+          matchId: "match-21",
+          matchNoInEvent: 21,
+          ownerMemberId: "member_ponta",
+          playedAt: "2026-01-21T00:00:00.000Z",
+          seasonMasterId: "season_default",
+        }),
+      ),
+    );
+
+    renderPage({ path: "/exports?matchId=match-21&format=tsv" });
+
+    expect(await screen.findByText(/第21試合.*TSVで書き出します。/u)).toBeInTheDocument();
+    expect(screen.queryByText("指定された対象: match-21")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "試合を変更" }));
+    await user.click(screen.getByRole("button", { name: "次の候補ページへ" }));
+    expect(await screen.findByRole("radio", { name: /第21試合/u })).toBeChecked();
   });
 
   it("syncs scope changes to one URL scope and shows empty actions", async () => {
@@ -262,7 +371,7 @@ describe("ExportPage", () => {
     );
 
     renderPage({ path: "/exports?matchId=match-1&format=csv" });
-    expect(await screen.findByLabelText("試合")).toHaveValue("match-1");
+    expect(await screen.findByRole("button", { name: "試合を変更" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "この試合をCSVでダウンロード" })).toBeEnabled();
 
     holdMatchRefetch = true;
@@ -271,7 +380,7 @@ describe("ExportPage", () => {
     });
 
     expect(await screen.findByText("出力対象を確認しています。")).toBeInTheDocument();
-    expect(screen.getByLabelText("試合")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "試合を変更" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "この試合をCSVでダウンロード" })).toBeDisabled();
 
     refetchGate.resolve();

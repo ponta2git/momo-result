@@ -118,6 +118,7 @@ export function matchExportCandidatesQueryOptions(query: ListMatchesQuery) {
   return queryOptions({
     queryKey: matchKeys.exports(query),
     queryFn: ({ signal }) => listMatches(query, { signal }),
+    placeholderData: keepPreviousData,
   });
 }
 

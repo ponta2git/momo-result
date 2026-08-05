@@ -643,7 +643,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     await page.goto(`/exports?matchId=${encodeURIComponent(matchId)}&format=tsv`);
 
     await expect(page.getByRole("heading", { exact: true, name: "CSV/TSV出力" })).toBeVisible();
-    await expect(page.getByRole("combobox", { name: "試合" })).toHaveValue(matchId);
+    await expect(page.getByRole("button", { name: "試合を変更" })).toBeVisible();
 
     const exportResponse = page.waitForResponse(
       (response) =>

@@ -21,6 +21,7 @@ export function ExportPage({
       isPending={controller.isPending}
       view={controller.view}
       onCandidateChange={controller.onCandidateChange}
+      onCandidatePageChange={controller.onCandidatePageChange}
       onCandidateRetry={controller.onCandidateRetry}
       onDownload={controller.onDownload}
       onFormatChange={controller.onFormatChange}

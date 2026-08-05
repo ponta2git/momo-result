@@ -1,5 +1,5 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import {
@@ -7,25 +7,15 @@ import {
   DEFAULT_EXPORT_SLOW_THRESHOLD_MS,
   downloadExportMatches,
 } from "@/features/exports/exportDownload";
-import type { ExportCandidate, ExportFormat, ExportScope } from "@/features/exports/exportTypes";
+import type { ExportFormat, ExportScope } from "@/features/exports/exportTypes";
 import {
   buildExportSearchParams,
   parseExportSearchParams,
   selectedIdForScope,
 } from "@/features/exports/exportUrlState";
-import {
-  buildCandidateView,
-  buildExportViewModel,
-  failedResultView,
-  formatDateTime,
-} from "@/features/exports/exportViewModel";
+import { buildExportViewModel, failedResultView } from "@/features/exports/exportViewModel";
 import type { ExportDownloadResultView } from "@/features/exports/exportViewModel";
-import { shouldShowQueryError } from "@/shared/api/queryErrorState";
-import {
-  heldEventsQueryOptions,
-  matchExportCandidatesQueryOptions,
-  seasonMastersQueryOptions,
-} from "@/shared/api/queryOptions";
+import { useExportCandidates } from "@/features/exports/useExportCandidates";
 
 export type ExportPageControllerParams = {
   downloadTimeoutMs?: number | undefined;
@@ -41,93 +31,9 @@ export function useExportPageController({
   const [lastResult, setLastResult] = useState<ExportDownloadResultView | undefined>();
   const [downloadStartedAt, setDownloadStartedAt] = useState<number | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
-
-  const seasonsQuery = useQuery(seasonMastersQueryOptions("exports", undefined));
-  const heldEventsQuery = useQuery(heldEventsQueryOptions("", 100, "exports"));
-  const matchesQuery = useQuery(
-    matchExportCandidatesQueryOptions({ kind: "match", limit: 100, status: "confirmed" }),
-  );
-
-  const seasonCandidates = useMemo<ExportCandidate[]>(
-    () =>
-      (seasonsQuery.data?.items ?? []).map((season) => ({
-        label: season.name,
-        value: season.id,
-      })),
-    [seasonsQuery.data],
-  );
-  const heldEventCandidates = useMemo<ExportCandidate[]>(
-    () =>
-      (heldEventsQuery.data?.items ?? []).map((event) => ({
-        description: `${event.matchCount}試合`,
-        label: formatDateTime(event.heldAt),
-        value: event.id,
-      })),
-    [heldEventsQuery.data],
-  );
-  const matchCandidates = useMemo<ExportCandidate[]>(() => {
-    const heldEventsById = new Map(
-      (heldEventsQuery.data?.items ?? []).map((event) => [event.id, event]),
-    );
-    const seasonsById = new Map(
-      (seasonsQuery.data?.items ?? []).map((season) => [season.id, season]),
-    );
-    return (matchesQuery.data?.items ?? [])
-      .filter((match) => match.kind === "match" && match.status === "confirmed" && match.matchId)
-      .map((match) => {
-        const heldAt = match.heldEventId
-          ? heldEventsById.get(match.heldEventId)?.heldAt
-          : undefined;
-        return {
-          description: seasonsById.get(match.seasonMasterId ?? "")?.name ?? "シーズン未設定",
-          label: `${heldAt ? formatDateTime(heldAt) : "開催未設定"} / 第${match.matchNoInEvent ?? "-"}試合`,
-          value: match.matchId ?? "",
-        };
-      });
-  }, [heldEventsQuery.data, matchesQuery.data, seasonsQuery.data]);
-
-  const candidates =
-    urlState.scope === "season"
-      ? seasonCandidates
-      : urlState.scope === "heldEvent"
-        ? heldEventCandidates
-        : urlState.scope === "match"
-          ? matchCandidates
-          : [];
-  const candidateLoading =
-    urlState.scope === "season"
-      ? seasonsQuery.isLoading
-      : urlState.scope === "heldEvent"
-        ? heldEventsQuery.isLoading
-        : urlState.scope === "match"
-          ? seasonsQuery.isLoading || heldEventsQuery.isLoading || matchesQuery.isLoading
-          : false;
-  const candidateRefreshing =
-    urlState.scope === "season"
-      ? seasonsQuery.isFetching && !seasonsQuery.isLoading
-      : urlState.scope === "heldEvent"
-        ? heldEventsQuery.isFetching && !heldEventsQuery.isLoading
-        : urlState.scope === "match"
-          ? [seasonsQuery, heldEventsQuery, matchesQuery].some(
-              (query) => query.isFetching && !query.isLoading,
-            )
-          : false;
-  const candidateError =
-    urlState.scope === "season"
-      ? shouldShowQueryError(seasonsQuery)
-      : urlState.scope === "heldEvent"
-        ? shouldShowQueryError(heldEventsQuery)
-        : urlState.scope === "match"
-          ? [seasonsQuery, heldEventsQuery, matchesQuery].some(shouldShowQueryError)
-          : false;
-
-  const candidateView = buildCandidateView({
-    candidates,
-    error: candidateError,
-    loading: candidateLoading,
-    scope: urlState.scope,
-    selectedId: selectedIdForScope(urlState, urlState.scope),
-  });
+  const selectedId = selectedIdForScope(urlState, urlState.scope);
+  const candidates = useExportCandidates({ scope: urlState.scope, selectedId });
+  const candidateView = candidates.view;
 
   useEffect(() => {
     if (
@@ -199,14 +105,20 @@ export function useExportPageController({
     },
   });
 
-  const updateSearch = (format: ExportFormat, scope: ExportScope, selectedId?: string): void => {
+  const updateSearch = (
+    format: ExportFormat,
+    scope: ExportScope,
+    nextSelectedId?: string,
+  ): void => {
     setLastResult(undefined);
-    setSearchParams(buildExportSearchParams({ format, scope, selectedId }), { replace: true });
+    setSearchParams(buildExportSearchParams({ format, scope, selectedId: nextSelectedId }), {
+      replace: true,
+    });
   };
 
   const view = buildExportViewModel({
     candidate: candidateView,
-    candidateRefreshing,
+    candidateRefreshing: candidates.refreshing,
     elapsedMs,
     isPending: mutation.isPending,
     lastResult,
@@ -216,32 +128,23 @@ export function useExportPageController({
 
   return {
     isPending: mutation.isPending,
-    onCandidateChange: (selectedId: string) => {
-      if (candidateRefreshing) return;
-      updateSearch(urlState.format, urlState.scope, selectedId);
+    onCandidateChange: (nextSelectedId: string) => {
+      if (!candidates.selectCandidate(nextSelectedId)) return;
+      updateSearch(urlState.format, urlState.scope, nextSelectedId);
     },
-    onCandidateRetry: () => {
-      if (urlState.scope === "season") {
-        void seasonsQuery.refetch();
-        return;
-      }
-      if (urlState.scope === "heldEvent") {
-        void heldEventsQuery.refetch();
-        return;
-      }
-      if (urlState.scope === "match") {
-        void Promise.all([
-          seasonsQuery.refetch(),
-          heldEventsQuery.refetch(),
-          matchesQuery.refetch(),
-        ]);
-      }
-    },
+    onCandidatePageChange: candidates.setPage,
+    onCandidateRetry: candidates.retry,
     onDownload: () => mutation.mutate(),
     onFormatChange: (nextFormat: ExportFormat) =>
-      updateSearch(nextFormat, urlState.scope, selectedIdForScope(urlState, urlState.scope)),
-    onResetConditions: () => updateSearch("csv", "all"),
-    onScopeChange: (nextScope: ExportScope) => updateSearch(urlState.format, nextScope),
+      updateSearch(nextFormat, urlState.scope, selectedId),
+    onResetConditions: () => {
+      candidates.reset();
+      updateSearch("csv", "all");
+    },
+    onScopeChange: (nextScope: ExportScope) => {
+      candidates.reset();
+      updateSearch(urlState.format, nextScope);
+    },
     view,
   };
 }

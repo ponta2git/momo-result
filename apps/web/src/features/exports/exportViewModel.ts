@@ -1,4 +1,5 @@
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
+import type { PaginationState } from "@/shared/ui/data/PaginationControls";
 
 import type { ExportCandidate, ExportFormat, ExportScope } from "./exportTypes";
 import type { ExportUrlState } from "./exportUrlState";
@@ -23,8 +24,10 @@ export type ExportCandidateView =
   | {
       candidates: ExportCandidate[];
       kind: "ready";
+      pagination?: PaginationState | undefined;
       selectedId: string;
       selectedLabel: string;
+      selectedResolving?: boolean | undefined;
       selectedUnknown: boolean;
     };
 
@@ -63,6 +66,9 @@ export function buildCandidateView(input: {
   candidates: ExportCandidate[];
   error?: boolean;
   loading: boolean;
+  pagination?: PaginationState | undefined;
+  resolvedCandidate?: ExportCandidate | undefined;
+  resolvingSelected?: boolean | undefined;
   scope: ExportScope;
   selectedId: string;
 }): ExportCandidateView {
@@ -71,12 +77,26 @@ export function buildCandidateView(input: {
   if (input.loading) return { kind: "loading" };
 
   if (input.candidates.length === 0 && input.selectedId) {
+    if (input.resolvedCandidate?.value === input.selectedId) {
+      return {
+        candidates: [],
+        kind: "ready",
+        pagination: input.pagination,
+        selectedId: input.selectedId,
+        selectedLabel: candidateDisplayLabel(input.resolvedCandidate),
+        selectedUnknown: false,
+      };
+    }
     return {
       candidates: [],
       kind: "ready",
+      pagination: input.pagination,
       selectedId: input.selectedId,
-      selectedLabel: `指定された対象: ${input.selectedId}`,
-      selectedUnknown: true,
+      selectedLabel: input.resolvingSelected
+        ? "出力対象を確認しています"
+        : `指定された対象: ${input.selectedId}`,
+      selectedResolving: input.resolvingSelected,
+      selectedUnknown: !input.resolvingSelected,
     };
   }
 
@@ -107,8 +127,20 @@ export function buildCandidateView(input: {
     return {
       candidates: input.candidates,
       kind: "ready",
+      pagination: input.pagination,
       selectedId: input.selectedId,
       selectedLabel: candidateDisplayLabel(selected),
+      selectedUnknown: false,
+    };
+  }
+
+  if (input.resolvedCandidate?.value === input.selectedId) {
+    return {
+      candidates: input.candidates,
+      kind: "ready",
+      pagination: input.pagination,
+      selectedId: input.selectedId,
+      selectedLabel: candidateDisplayLabel(input.resolvedCandidate),
       selectedUnknown: false,
     };
   }
@@ -117,9 +149,13 @@ export function buildCandidateView(input: {
     return {
       candidates: input.candidates,
       kind: "ready",
+      pagination: input.pagination,
       selectedId: input.selectedId,
-      selectedLabel: `指定された対象: ${input.selectedId}`,
-      selectedUnknown: true,
+      selectedLabel: input.resolvingSelected
+        ? "出力対象を確認しています"
+        : `指定された対象: ${input.selectedId}`,
+      selectedResolving: input.resolvingSelected,
+      selectedUnknown: !input.resolvingSelected,
     };
   }
 
@@ -127,6 +163,7 @@ export function buildCandidateView(input: {
   return {
     candidates: input.candidates,
     kind: "ready",
+    pagination: input.pagination,
     selectedId: first?.value ?? "",
     selectedLabel: first ? candidateDisplayLabel(first) : "",
     selectedUnknown: false,

@@ -5,6 +5,7 @@ import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 
+import { ExportCandidatePickerDialog } from "./ExportCandidatePickerDialog";
 import type { ExportScope } from "./exportTypes";
 import { candidateDisplayLabel } from "./exportViewModel";
 import type { ExportCandidateView } from "./exportViewModel";
@@ -12,6 +13,7 @@ import type { ExportCandidateView } from "./exportViewModel";
 type ExportCandidateSelectProps = {
   disabled?: boolean;
   onChange: (value: string) => void;
+  onPageChange: (page: number) => void;
   onRetry: () => void;
   refreshing?: boolean;
   scope: ExportScope;
@@ -28,6 +30,7 @@ function labelForScope(scope: ExportScope): string {
 export function ExportCandidateSelect({
   disabled,
   onChange,
+  onPageChange,
   onRetry,
   refreshing = false,
   scope,
@@ -86,9 +89,17 @@ export function ExportCandidateSelect({
   const options = view.selectedUnknown
     ? [{ label: view.selectedLabel, value: view.selectedId }, ...view.candidates]
     : view.candidates;
-
-  return (
-    <div className="grid gap-2">
+  const selector =
+    scope === "heldEvent" || scope === "match" ? (
+      <ExportCandidatePickerDialog
+        disabled={disabled}
+        refreshing={refreshing}
+        scope={scope}
+        view={view}
+        onChange={onChange}
+        onPageChange={onPageChange}
+      />
+    ) : (
       <SelectField
         disabled={disabled}
         label={labelForScope(scope)}
@@ -100,12 +111,17 @@ export function ExportCandidateSelect({
         value={view.selectedId}
         onChange={(event) => onChange(event.currentTarget.value)}
       />
+    );
+
+  return (
+    <div className="grid gap-2">
+      {selector}
       {refreshing ? (
         <p className="text-sm text-[var(--color-text-secondary)]" role="status">
           出力対象を確認しています。
         </p>
       ) : null}
-      {view.selectedUnknown ? (
+      {view.selectedResolving ? null : view.selectedUnknown ? (
         <Notice tone="warning" title="一覧にない対象が指定されています">
           指定された対象が存在する場合は、このまま出力できます。別の対象を選ぶこともできます。
         </Notice>

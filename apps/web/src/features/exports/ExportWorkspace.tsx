@@ -11,6 +11,7 @@ import type { ExportViewModel } from "./exportViewModel";
 type ExportWorkspaceProps = {
   isPending: boolean;
   onCandidateChange: (value: string) => void;
+  onCandidatePageChange: (page: number) => void;
   onCandidateRetry: () => void;
   onDownload: () => void;
   onFormatChange: (format: ExportFormat) => void;
@@ -22,6 +23,7 @@ type ExportWorkspaceProps = {
 export function ExportWorkspace({
   isPending,
   onCandidateChange,
+  onCandidatePageChange,
   onCandidateRetry,
   onDownload,
   onFormatChange,
@@ -48,6 +50,7 @@ export function ExportWorkspace({
           scope={view.scope}
           view={view.candidate}
           onChange={onCandidateChange}
+          onPageChange={onCandidatePageChange}
           onRetry={onCandidateRetry}
         />
 

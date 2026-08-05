@@ -26,7 +26,6 @@ import {
   matchExportCandidatesQueryOptions,
   seasonMastersQueryOptions,
 } from "@/shared/api/queryOptions";
-import { showToast } from "@/shared/ui/feedback/Toast";
 
 export type ExportPageControllerParams = {
   downloadTimeoutMs?: number | undefined;
@@ -185,11 +184,6 @@ export function useExportPageController({
           kind: "success",
           startedAt: outcome.startedAt,
         });
-        showToast({
-          description: outcome.fileName,
-          title: "ダウンロードを開始しました",
-          tone: "success",
-        });
         return;
       }
       if (outcome.kind === "timeout") {
@@ -198,16 +192,10 @@ export function useExportPageController({
           kind: "timeout",
           title: outcome.title,
         });
-        showToast({ title: outcome.title, tone: "warning" });
         return;
       }
       const failed = failedResultView(outcome.error);
       setLastResult(failed);
-      showToast({
-        description: failed.detail,
-        title: failed.title,
-        tone: "danger",
-      });
     },
   });
 
@@ -228,14 +216,31 @@ export function useExportPageController({
 
   return {
     isPending: mutation.isPending,
-    liveMessage: lastResult?.kind === "success" ? "ダウンロードを開始しました" : "",
     onCandidateChange: (selectedId: string) => {
       if (candidateRefreshing) return;
       updateSearch(urlState.format, urlState.scope, selectedId);
     },
+    onCandidateRetry: () => {
+      if (urlState.scope === "season") {
+        void seasonsQuery.refetch();
+        return;
+      }
+      if (urlState.scope === "heldEvent") {
+        void heldEventsQuery.refetch();
+        return;
+      }
+      if (urlState.scope === "match") {
+        void Promise.all([
+          seasonsQuery.refetch(),
+          heldEventsQuery.refetch(),
+          matchesQuery.refetch(),
+        ]);
+      }
+    },
     onDownload: () => mutation.mutate(),
     onFormatChange: (nextFormat: ExportFormat) =>
       updateSearch(nextFormat, urlState.scope, selectedIdForScope(urlState, urlState.scope)),
+    onResetConditions: () => updateSearch("csv", "all"),
     onScopeChange: (nextScope: ExportScope) => updateSearch(urlState.format, nextScope),
     view,
   };

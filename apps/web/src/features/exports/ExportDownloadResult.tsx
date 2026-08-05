@@ -11,7 +11,13 @@ type ExportDownloadResultProps = {
 export function ExportDownloadResult({ onRetry, result }: ExportDownloadResultProps) {
   if (!result) return null;
 
-  if (result.kind === "success") return null;
+  if (result.kind === "success") {
+    return (
+      <Notice className="momo-enter" tone="success" title="ダウンロードを開始しました">
+        {result.fileName}
+      </Notice>
+    );
+  }
 
   if (result.kind === "timeout") {
     return (
@@ -23,6 +29,7 @@ export function ExportDownloadResult({ onRetry, result }: ExportDownloadResultPr
             </Button>
           ) : undefined
         }
+        className="momo-enter"
         tone="warning"
         title={result.title}
       >
@@ -40,6 +47,7 @@ export function ExportDownloadResult({ onRetry, result }: ExportDownloadResultPr
           </Button>
         ) : undefined
       }
+      className="momo-enter"
       tone="danger"
       title={result.title}
     >

@@ -1,3 +1,4 @@
+import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
@@ -5,11 +6,14 @@ import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 
 import type { ExportScope } from "./exportTypes";
+import { candidateDisplayLabel } from "./exportViewModel";
 import type { ExportCandidateView } from "./exportViewModel";
 
 type ExportCandidateSelectProps = {
   disabled?: boolean;
   onChange: (value: string) => void;
+  onRetry: () => void;
+  refreshing?: boolean;
   scope: ExportScope;
   view: ExportCandidateView;
 };
@@ -24,6 +28,8 @@ function labelForScope(scope: ExportScope): string {
 export function ExportCandidateSelect({
   disabled,
   onChange,
+  onRetry,
+  refreshing = false,
   scope,
   view,
 }: ExportCandidateSelectProps) {
@@ -31,8 +37,15 @@ export function ExportCandidateSelect({
 
   if (view.kind === "loading") {
     return (
-      <div aria-busy="true" aria-label={`${labelForScope(scope)}候補を読み込み中`}>
-        <Skeleton className="h-10 min-w-64" />
+      <div
+        aria-busy="true"
+        aria-label={`${labelForScope(scope)}候補を読み込み中`}
+        className="momo-enter grid gap-1.5"
+      >
+        <p className="text-sm leading-5 font-semibold text-[var(--color-text-primary)]">
+          {labelForScope(scope)}
+        </p>
+        <Skeleton className="h-11 w-full" />
         <p className="mt-2 text-sm text-[var(--color-text-secondary)]">候補を読み込んでいます。</p>
       </div>
     );
@@ -40,8 +53,17 @@ export function ExportCandidateSelect({
 
   if (view.kind === "error") {
     return (
-      <Notice tone="danger" title={view.message}>
-        しばらくしてから再読み込みしてください。
+      <Notice
+        action={
+          <Button size="sm" variant="secondary" onClick={onRetry}>
+            再読み込み
+          </Button>
+        }
+        className="momo-enter"
+        tone="danger"
+        title={view.message}
+      >
+        通信状態を確認して、もう一度お試しください。
       </Notice>
     );
   }
@@ -54,7 +76,7 @@ export function ExportCandidateSelect({
             {view.actionLabel}
           </LinkButton>
         }
-        className="min-h-52"
+        className="momo-enter"
         description={view.message}
         title={view.title}
       />
@@ -70,11 +92,19 @@ export function ExportCandidateSelect({
       <SelectField
         disabled={disabled}
         label={labelForScope(scope)}
-        options={options}
-        selectClassName="min-w-64"
+        options={options.map((option) => ({
+          label: candidateDisplayLabel(option),
+          value: option.value,
+        }))}
+        selectClassName="min-h-11"
         value={view.selectedId}
         onChange={(event) => onChange(event.currentTarget.value)}
       />
+      {refreshing ? (
+        <p className="text-sm text-[var(--color-text-secondary)]" role="status">
+          出力対象を確認しています。
+        </p>
+      ) : null}
       {view.selectedUnknown ? (
         <Notice tone="warning" title="一覧にない対象が指定されています">
           指定された対象が存在する場合は、このまま出力できます。別の対象を選ぶこともできます。

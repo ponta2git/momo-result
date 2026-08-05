@@ -38,17 +38,14 @@ export type ExportViewModel = {
   candidate: ExportCandidateView;
   candidateRefreshing: boolean;
   canDownload: boolean;
-  disableReason?: string | undefined;
   errors: string[];
   format: ExportFormat;
   formatLabel: string;
   isSlow: boolean;
   result?: ExportDownloadResultView | undefined;
   scope: ExportScope;
-  scopeDescription: string;
-  scopeLabel: string;
   selectedId: string;
-  ticketRows: Array<{ label: string; value: string }>;
+  summaryText: string;
 };
 
 export function formatDateTime(iso: string): string {
@@ -111,7 +108,7 @@ export function buildCandidateView(input: {
       candidates: input.candidates,
       kind: "ready",
       selectedId: input.selectedId,
-      selectedLabel: selected.label,
+      selectedLabel: candidateDisplayLabel(selected),
       selectedUnknown: false,
     };
   }
@@ -131,33 +128,63 @@ export function buildCandidateView(input: {
     candidates: input.candidates,
     kind: "ready",
     selectedId: first?.value ?? "",
-    selectedLabel: first?.label ?? "",
+    selectedLabel: first ? candidateDisplayLabel(first) : "",
     selectedUnknown: false,
   };
+}
+
+export function candidateDisplayLabel(candidate: ExportCandidate): string {
+  return candidate.description ? `${candidate.label} — ${candidate.description}` : candidate.label;
 }
 
 function scopeLabel(scope: ExportScope): string {
   return exportScopes.find((item) => item.value === scope)?.label ?? "全試合";
 }
 
-function scopeDescription(scope: ExportScope): string {
-  return (
-    exportScopes.find((item) => item.value === scope)?.description ??
-    "確定済みの全試合を書き出します。"
-  );
+function actionSubject(scope: ExportScope): string {
+  if (scope === "season") return "このシーズン";
+  if (scope === "heldEvent") return "この開催";
+  if (scope === "match") return "この試合";
+  return "全試合";
 }
 
-function errorDetail(error: NormalizedApiError): string {
+function localizedDownloadError(error: NormalizedApiError): { detail: string; title: string } {
   if (error.status === 401 || error.status === 403) {
-    return "ログイン状態または利用権限を確認してください。";
+    return {
+      detail: "ログイン状態または利用権限を確認してください。",
+      title: "ダウンロードできません",
+    };
   }
-  if (error.status === 422) {
-    return error.detail || "出力条件に問題があります。";
+  if (error.status === 422 || error.code === "VALIDATION_FAILED") {
+    return {
+      detail: "出力条件に問題があります。条件を確認して、もう一度お試しください。",
+      title: "出力条件を確認してください",
+    };
   }
   if (error.status === 404) {
-    return error.detail || "選択した対象が見つかりませんでした。";
+    return {
+      detail: "選択した対象が削除された可能性があります。対象を選び直してください。",
+      title: "出力対象が見つかりません",
+    };
   }
-  return error.detail || error.title;
+  return {
+    detail: "通信状態を確認し、時間をおいてもう一度お試しください。",
+    title: "ダウンロードに失敗しました",
+  };
+}
+
+function summaryText(
+  scope: ExportScope,
+  candidate: ExportCandidateView,
+  formatLabel: string,
+): string {
+  if (scope === "all") {
+    return `すべての確定済み試合を${formatLabel}で書き出します。`;
+  }
+  if (candidate.kind === "ready" && candidate.selectedLabel) {
+    return `${candidate.selectedLabel}を${formatLabel}で書き出します。`;
+  }
+  return `${scopeLabel(scope)}の出力対象を選択してください。`;
 }
 
 export function buildExportViewModel(input: {
@@ -170,51 +197,38 @@ export function buildExportViewModel(input: {
   urlState: ExportUrlState;
 }): ExportViewModel {
   const formatLabel = input.urlState.format.toUpperCase();
-  const candidateNeedsSelection =
-    input.urlState.scope !== "all" &&
-    (input.candidate.kind !== "ready" || input.candidate.selectedId.length === 0);
-  const disableReason =
-    input.urlState.errors[0] ??
-    (input.candidate.kind === "error" ? input.candidate.message : undefined) ??
-    (input.candidateRefreshing ? "出力対象の候補を確認中です。" : undefined) ??
-    (candidateNeedsSelection ? "書き出す対象が未選択です。" : undefined);
-  const selectedLabel =
-    input.urlState.scope === "all"
-      ? "すべての確定済み試合"
-      : input.candidate.kind === "ready"
-        ? input.candidate.selectedLabel
-        : "未選択";
+  const candidateReady =
+    input.urlState.scope === "all" ||
+    (input.candidate.kind === "ready" && input.candidate.selectedId.length > 0);
   const isSlow = input.isPending && input.elapsedMs >= input.slowThresholdMs;
 
   return {
-    actionLabel: `${formatLabel}をダウンロード`,
+    actionLabel: `${actionSubject(input.urlState.scope)}を${formatLabel}でダウンロード`,
     candidate: input.candidate,
     candidateRefreshing: input.candidateRefreshing === true,
-    canDownload: !input.isPending && !disableReason,
-    disableReason,
+    canDownload:
+      !input.isPending &&
+      !input.candidateRefreshing &&
+      input.urlState.errors.length === 0 &&
+      candidateReady,
     errors: input.urlState.errors,
     format: input.urlState.format,
     formatLabel,
     isSlow,
     result: input.lastResult,
     scope: input.urlState.scope,
-    scopeDescription: scopeDescription(input.urlState.scope),
-    scopeLabel: scopeLabel(input.urlState.scope),
     selectedId: input.candidate.kind === "ready" ? input.candidate.selectedId : "",
-    ticketRows: [
-      { label: "形式", value: formatLabel },
-      { label: "範囲", value: scopeLabel(input.urlState.scope) },
-      { label: "対象", value: selectedLabel },
-    ],
+    summaryText: summaryText(input.urlState.scope, input.candidate, formatLabel),
   };
 }
 
 export function failedResultView(
   error: NormalizedApiError,
 ): Extract<ExportDownloadResultView, { kind: "failed" }> {
+  const localized = localizedDownloadError(error);
   return {
-    detail: errorDetail(error),
+    detail: localized.detail,
     kind: "failed",
-    title: error.title,
+    title: localized.title,
   };
 }

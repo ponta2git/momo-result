@@ -649,7 +649,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
       (response) =>
         response.url().includes("/api/exports/matches") && response.request().method() === "GET",
     );
-    await page.getByRole("button", { name: "TSVをダウンロード" }).click();
+    await page.getByRole("button", { name: "この試合をTSVでダウンロード" }).click();
 
     const response = await exportResponse;
     expect(response.ok()).toBe(true);

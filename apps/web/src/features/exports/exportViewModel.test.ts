@@ -55,7 +55,8 @@ describe("exportViewModel", () => {
     });
 
     expect(view.canDownload).toBe(false);
-    expect(view.disableReason).toBe("書き出す対象が未選択です。");
+    expect(view.actionLabel).toBe("このシーズンをCSVでダウンロード");
+    expect(view.summaryText).toBe("シーズンの出力対象を選択してください。");
   });
 
   it("disables download while scoped candidates are refreshing", () => {
@@ -80,8 +81,29 @@ describe("exportViewModel", () => {
     });
 
     expect(view.canDownload).toBe(false);
-    expect(view.disableReason).toBe("出力対象の候補を確認中です。");
     expect(view.candidateRefreshing).toBe(true);
+    expect(view.actionLabel).toBe("この試合をCSVでダウンロード");
+    expect(view.summaryText).toBe("2026-01-01 / #1をCSVで書き出します。");
+  });
+
+  it("includes candidate metadata in the selected label", () => {
+    const candidate = buildCandidateView({
+      candidates: [
+        {
+          description: "3年決戦",
+          label: "2026-01-01 09:00 / 第1試合",
+          value: "match-1",
+        },
+      ],
+      loading: false,
+      scope: "match",
+      selectedId: "match-1",
+    });
+
+    expect(candidate).toMatchObject({
+      kind: "ready",
+      selectedLabel: "2026-01-01 09:00 / 第1試合 — 3年決戦",
+    });
   });
 
   it("shows slow state while a download is pending past threshold", () => {
@@ -100,15 +122,16 @@ describe("exportViewModel", () => {
   it("maps API errors to user-facing failed results", () => {
     expect(
       failedResultView({
+        code: "VALIDATION_FAILED",
         detail: "Specify at most one export scope.",
         kind: "api",
         status: 422,
         title: "Validation Failed",
       }),
     ).toEqual({
-      detail: "Specify at most one export scope.",
+      detail: "出力条件に問題があります。条件を確認して、もう一度お試しください。",
       kind: "failed",
-      title: "Validation Failed",
+      title: "出力条件を確認してください",
     });
   });
 });

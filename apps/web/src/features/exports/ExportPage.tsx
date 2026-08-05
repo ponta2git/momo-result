@@ -4,7 +4,6 @@ import {
 } from "@/features/exports/exportDownload";
 import { ExportWorkspace } from "@/features/exports/ExportWorkspace";
 import { useExportPageController } from "@/features/exports/useExportPageController";
-import { LiveRegion } from "@/shared/ui/feedback/LiveRegion";
 
 type ExportPageProps = {
   downloadTimeoutMs?: number | undefined;
@@ -18,16 +17,15 @@ export function ExportPage({
   const controller = useExportPageController({ downloadTimeoutMs, slowThresholdMs });
 
   return (
-    <>
-      <LiveRegion message={controller.liveMessage} />
-      <ExportWorkspace
-        isPending={controller.isPending}
-        view={controller.view}
-        onCandidateChange={controller.onCandidateChange}
-        onDownload={controller.onDownload}
-        onFormatChange={controller.onFormatChange}
-        onScopeChange={controller.onScopeChange}
-      />
-    </>
+    <ExportWorkspace
+      isPending={controller.isPending}
+      view={controller.view}
+      onCandidateChange={controller.onCandidateChange}
+      onCandidateRetry={controller.onCandidateRetry}
+      onDownload={controller.onDownload}
+      onFormatChange={controller.onFormatChange}
+      onResetConditions={controller.onResetConditions}
+      onScopeChange={controller.onScopeChange}
+    />
   );
 }

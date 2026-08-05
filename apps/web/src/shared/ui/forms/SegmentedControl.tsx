@@ -4,7 +4,7 @@ import type { ChangeEvent } from "react";
 
 import { cn } from "@/shared/ui/cn";
 import { SelectField } from "@/shared/ui/forms/SelectField";
-import { momoSpring } from "@/shared/ui/motion/variants";
+import { momoTransition } from "@/shared/ui/motion/variants";
 
 type SegmentedOption = {
   disabled?: boolean;
@@ -18,6 +18,7 @@ export type SegmentedControlProps = {
   disabled?: boolean | undefined;
   label?: string;
   onValueChange: (value: string) => void;
+  optionClassName?: string;
   options: SegmentedOption[];
   value: string;
 };
@@ -28,6 +29,7 @@ export function SegmentedControl({
   disabled = false,
   label = "選択",
   onValueChange,
+  optionClassName,
   options,
   value,
 }: SegmentedControlProps) {
@@ -75,6 +77,7 @@ export function SegmentedControl({
             key={option.value}
             indicatorId={`${id}-indicator`}
             option={option}
+            className={optionClassName}
             disabled={disabled || option.disabled}
             selected={option.value === value}
             onValueChange={onValueChange}
@@ -86,12 +89,14 @@ export function SegmentedControl({
 }
 
 function SegmentedButton({
+  className,
   disabled,
   indicatorId,
   option,
   selected,
   onValueChange,
 }: {
+  className?: string | undefined;
   disabled: boolean | undefined;
   indicatorId: string;
   option: SegmentedOption;
@@ -109,6 +114,7 @@ function SegmentedButton({
         "relative isolate min-h-9 min-w-[5ch] overflow-hidden rounded-[var(--radius-xs)] px-3 py-1.5 text-sm font-medium text-[var(--color-text-secondary)] transition-colors duration-150",
         selected ? "text-[var(--color-text-primary)]" : "",
         "disabled:cursor-not-allowed disabled:opacity-50",
+        className,
       )}
       disabled={disabled}
       type="button"
@@ -119,7 +125,7 @@ function SegmentedButton({
           aria-hidden="true"
           className="absolute inset-0 z-0 rounded-[var(--radius-xs)] bg-[var(--color-surface-selected)]"
           layoutId={indicatorId}
-          transition={momoSpring}
+          transition={momoTransition}
         />
       ) : null}
       <span className="relative z-[var(--z-base)]">{option.label}</span>

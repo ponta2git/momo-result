@@ -11,18 +11,14 @@ type ExportScopeSelectorProps = {
 
 export function ExportScopeSelector({ disabled, onChange, scope }: ExportScopeSelectorProps) {
   return (
-    <div>
-      <SegmentedControl
-        className="w-full"
-        disabled={disabled}
-        label="出力範囲"
-        options={exportScopes.map((item) => ({ label: item.label, value: item.value }))}
-        value={scope}
-        onValueChange={(value) => onChange(value as ExportScope)}
-      />
-      <p className="mt-2 text-sm leading-6 text-[var(--color-text-secondary)]">
-        {exportScopes.find((item) => item.value === scope)?.description}
-      </p>
-    </div>
+    <SegmentedControl
+      className="grid w-full grid-cols-2 sm:grid-cols-4"
+      disabled={disabled}
+      label="出力範囲"
+      optionClassName="min-h-11"
+      options={exportScopes.map((item) => ({ label: item.label, value: item.value }))}
+      value={scope}
+      onValueChange={(value) => onChange(value as ExportScope)}
+    />
   );
 }

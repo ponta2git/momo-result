@@ -68,12 +68,27 @@ describe("ExportPage", () => {
 
     renderPage();
     await screen.findByRole("heading", { name: "CSV/TSV出力" });
-    await user.click(screen.getByRole("button", { name: "CSVをダウンロード" }));
+    await user.click(screen.getByRole("button", { name: "全試合をCSVでダウンロード" }));
 
     await waitFor(() => expect(captured?.searchParams.get("format")).toBe("csv"));
     expect(captured?.searchParams.has("matchId")).toBe(false);
     expect(await screen.findByText("ダウンロードを開始しました")).toBeInTheDocument();
+    expect(screen.getByText("momo-results-all.csv")).toBeInTheDocument();
     expect(anchorClick.clickedAnchors[0]?.download).toBe("momo-results-all.csv");
+  });
+
+  it("keeps one concise heading and orders the task from scope to format", async () => {
+    renderPage();
+
+    await screen.findByRole("heading", { name: "CSV/TSV出力" });
+    const scope = screen.getByRole("group", { name: "出力範囲" });
+    const format = screen.getByRole("group", { name: "ファイル形式" });
+
+    expect(screen.queryByText("出力条件")).not.toBeInTheDocument();
+    expect(screen.queryByText("書き出し内容")).not.toBeInTheDocument();
+    expect(screen.queryByText(/条件はURLに保存/u)).not.toBeInTheDocument();
+    expect(scope.compareDocumentPosition(format) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText("すべての確定済み試合をCSVで書き出します。")).toBeInTheDocument();
   });
 
   it("prefills match scope from deep link and downloads TSV for a single match", async () => {
@@ -122,7 +137,7 @@ describe("ExportPage", () => {
     expect(await screen.findByLabelText("試合")).toHaveValue("match-1");
     expect(screen.queryByText("draft-1")).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "TSVをダウンロード" }));
+    await user.click(screen.getByRole("button", { name: "この試合をTSVでダウンロード" }));
 
     await waitFor(() => expect(capturedExport?.searchParams.get("format")).toBe("tsv"));
     expect(capturedExport?.searchParams.get("matchId")).toBe("match-1");
@@ -143,7 +158,47 @@ describe("ExportPage", () => {
       "href",
       "/admin/masters",
     );
-    expect(screen.getByRole("button", { name: "CSVをダウンロード" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "このシーズンをCSVでダウンロード" })).toBeDisabled();
+  });
+
+  it("retries only the candidate area after a candidate request fails", async () => {
+    let requests = 0;
+    server.use(
+      http.get("/api/season-masters", () => {
+        requests += 1;
+        if (requests === 1) {
+          return HttpResponse.json({ title: "Unavailable" }, { status: 503 });
+        }
+        return HttpResponse.json({ items: [{ id: "season-1", name: "3年決戦" }] });
+      }),
+    );
+
+    renderPage({ path: "/exports?seasonMasterId=season-1&format=csv" });
+
+    expect(await screen.findByText("候補を読み込めませんでした。")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "再読み込み" }));
+
+    expect(await screen.findByLabelText("シーズン")).toHaveValue("season-1");
+    expect(requests).toBe(2);
+  });
+
+  it("resets invalid deep-link conditions from the inline error", async () => {
+    renderPage({
+      path: "/exports?format=invalid&seasonMasterId=season-1&matchId=match-1",
+    });
+
+    expect(await screen.findByText("出力条件を確認")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "format は csv または tsv を指定してください。 出力範囲は1つだけ指定してください。",
+      ),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "初期条件へ戻す" }));
+
+    expect(screen.queryByText("出力条件を確認")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "全試合" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "全試合をCSVでダウンロード" })).toBeEnabled();
   });
 
   it("shows API errors from failed downloads near the action", async () => {
@@ -164,10 +219,14 @@ describe("ExportPage", () => {
 
     renderPage();
     await screen.findByRole("heading", { name: "CSV/TSV出力" });
-    await user.click(screen.getByRole("button", { name: "CSVをダウンロード" }));
+    await user.click(screen.getByRole("button", { name: "全試合をCSVでダウンロード" }));
 
-    expect(await screen.findByText("Validation Failed")).toBeInTheDocument();
-    expect(screen.getByText("Specify at most one export scope.")).toBeInTheDocument();
+    expect(await screen.findByText("出力条件を確認してください")).toBeInTheDocument();
+    expect(
+      screen.getByText("出力条件に問題があります。条件を確認して、もう一度お試しください。"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Validation Failed")).not.toBeInTheDocument();
+    expect(screen.queryByText("Specify at most one export scope.")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "もう一度試す" })).toBeInTheDocument();
   });
 
@@ -204,20 +263,20 @@ describe("ExportPage", () => {
 
     renderPage({ path: "/exports?matchId=match-1&format=csv" });
     expect(await screen.findByLabelText("試合")).toHaveValue("match-1");
-    expect(screen.getByRole("button", { name: "CSVをダウンロード" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "この試合をCSVでダウンロード" })).toBeEnabled();
 
     holdMatchRefetch = true;
     void queryClient.invalidateQueries({
       queryKey: matchKeys.exports({ kind: "match", status: "confirmed" }),
     });
 
-    expect(await screen.findByText("出力対象の候補を確認中です。")).toBeInTheDocument();
+    expect(await screen.findByText("出力対象を確認しています。")).toBeInTheDocument();
     expect(screen.getByLabelText("試合")).toBeDisabled();
-    expect(screen.getByRole("button", { name: "CSVをダウンロード" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "この試合をCSVでダウンロード" })).toBeDisabled();
 
     refetchGate.resolve();
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "CSVをダウンロード" })).toBeEnabled();
+      expect(screen.getByRole("button", { name: "この試合をCSVでダウンロード" })).toBeEnabled();
     });
   });
 
@@ -239,7 +298,7 @@ describe("ExportPage", () => {
 
     renderPage();
     await screen.findByRole("heading", { name: "CSV/TSV出力" });
-    await user.click(screen.getByRole("button", { name: "CSVをダウンロード" }));
+    await user.click(screen.getByRole("button", { name: "全試合をCSVでダウンロード" }));
 
     expect(screen.getByRole("button", { name: "作成中…" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "CSV" })).toBeDisabled();
@@ -271,7 +330,7 @@ describe("ExportPage", () => {
 
     renderPage();
     await screen.findByRole("heading", { name: "CSV/TSV出力" });
-    await user.click(screen.getByRole("button", { name: "CSVをダウンロード" }));
+    await user.click(screen.getByRole("button", { name: "全試合をCSVでダウンロード" }));
 
     expect(await screen.findByText("出力が完了しませんでした")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "作成中…" })).not.toBeInTheDocument();

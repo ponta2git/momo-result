@@ -8,7 +8,7 @@ import { useMasterOptimisticCatalog } from "@/features/masters/useMasterOptimist
 import { useMasterResourceQueries } from "@/features/masters/useMasterResourceQueries";
 import { useMasterReturnRoute } from "@/features/masters/useMasterReturnRoute";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
-import { shouldShowQueryError } from "@/shared/api/queryErrorState";
+import { isInitialQueryLoading, shouldShowQueryError } from "@/shared/api/queryErrorState";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 import { useAuth } from "@/shared/auth/useAuth";
 
@@ -133,18 +133,22 @@ export function useMastersPageController() {
     hasPendingMutation,
     incidentMasters: resourceQueries.incidentMasters,
     isReturnNavigationPending,
-    mapMastersLoading: resourceQueries.mapMastersQuery.isLoading,
+    mapMastersLoading: isInitialQueryLoading(resourceQueries.mapMastersQuery),
     mapMastersLoadError: shouldShowQueryError(resourceQueries.mapMastersQuery)
       ? errorMessage(resourceQueries.mapMastersQuery.error)
       : undefined,
+    mapMastersRefreshing: resourceQueries.mapMastersQuery.isFetching,
+    retryMapMasters: () => void resourceQueries.mapMastersQuery.refetch(),
     memberAliases: resourceQueries.memberAliases,
     navigateWithTransition,
     operationError,
     optimisticGameTitles: optimisticCatalog.optimisticGameTitles,
-    seasonMastersLoading: resourceQueries.seasonMastersQuery.isLoading,
+    retrySeasonMasters: () => void resourceQueries.seasonMastersQuery.refetch(),
+    seasonMastersLoading: isInitialQueryLoading(resourceQueries.seasonMastersQuery),
     seasonMastersLoadError: shouldShowQueryError(resourceQueries.seasonMastersQuery)
       ? errorMessage(resourceQueries.seasonMastersQuery.error)
       : undefined,
+    seasonMastersRefreshing: resourceQueries.seasonMastersQuery.isFetching,
     selectedGameTitleId,
     setActiveTab,
     setSelectedGameTitleId,

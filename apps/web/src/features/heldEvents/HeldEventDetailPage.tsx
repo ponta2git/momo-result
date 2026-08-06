@@ -31,7 +31,13 @@ export function HeldEventDetailPage() {
     return <HeldEventDetailUnavailable backHref={controller.backHref} notFound />;
   }
   if (controller.status === "loadFailed") {
-    return <HeldEventDetailUnavailable backHref={controller.backHref} />;
+    return (
+      <HeldEventDetailUnavailable
+        backHref={controller.backHref}
+        retrying={controller.refreshing}
+        onRetry={controller.refresh}
+      />
+    );
   }
 
   return <HeldEventDetailReadyContent controller={controller} />;

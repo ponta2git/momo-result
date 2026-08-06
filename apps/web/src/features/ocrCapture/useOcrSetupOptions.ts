@@ -199,6 +199,21 @@ export function useOcrSetupOptions({
     !mapMastersLoadFailed &&
     !seasonMastersLoadFailed &&
     Boolean(selectedGameTitle && value.mapMasterId && value.seasonMasterId && value.ownerMemberId);
+  const hasError =
+    gameTitlesLoadFailed ||
+    heldEventsLoadFailed ||
+    heldEventContextUnavailable ||
+    mapMastersLoadFailed ||
+    seasonMastersLoadFailed;
+  const retry = () => {
+    void Promise.all([
+      gameTitlesQuery.refetch(),
+      heldEventsQuery.refetch(),
+      preferredHeldEventQuery.refetch(),
+      mapMastersQuery.refetch(),
+      seasonMastersQuery.refetch(),
+    ]);
+  };
 
   useEffect(() => {
     const next = deriveValidSetupValue({
@@ -232,6 +247,7 @@ export function useOcrSetupOptions({
       loading: gameTitlesQuery.isLoading,
     }),
     heldEvents,
+    hasError,
     heldEventsError: heldEventContextUnavailable
       ? (queryErrorMessage(preferredHeldEventQuery.error ?? heldEventsQuery.error) ??
         "選択した開催を読み込めません。")
@@ -263,6 +279,7 @@ export function useOcrSetupOptions({
     }),
     selectedGameTitle,
     selectedHeldEvent,
+    retry,
     ready,
     refreshing,
     loading,

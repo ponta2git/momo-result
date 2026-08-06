@@ -6,6 +6,7 @@ import type { getAuthMe } from "@/shared/api/auth";
 import type { listMemberAliases } from "@/shared/api/masters";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
+import { shouldShowQueryError } from "@/shared/api/queryErrorState";
 import { memberAliasesQueryOptions } from "@/shared/api/queryOptions";
 import { authQueryOptions } from "@/shared/auth/authQueries";
 import { useDevUser } from "@/shared/auth/useDevUser";
@@ -18,12 +19,16 @@ export type OcrCaptureAuthSlice = {
   data: AuthMe | undefined;
   error: NormalizedApiError | undefined;
   ready: boolean;
+  retry: () => void;
+  retrying: boolean;
 };
 
 export type OcrCaptureQueries = {
   auth: OcrCaptureAuthSlice;
   memberAliasDirectory: ReturnType<typeof buildMemberAliasDirectory>;
+  memberAliasesError: NormalizedApiError | undefined;
   memberAliasesQuery: UseQueryResult<Awaited<ReturnType<typeof listMemberAliases>>>;
+  retryMemberAliases: () => void;
 };
 
 /**
@@ -52,8 +57,14 @@ export function useOcrCaptureQueries(): OcrCaptureQueries {
       data: authQuery.data,
       error: authQuery.error ? normalizeUnknownApiError(authQuery.error) : undefined,
       ready,
+      retry: () => void authQuery.refetch(),
+      retrying: authQuery.isFetching,
     },
     memberAliasDirectory,
+    memberAliasesError: shouldShowQueryError(memberAliasesQuery)
+      ? normalizeUnknownApiError(memberAliasesQuery.error)
+      : undefined,
     memberAliasesQuery,
+    retryMemberAliases: () => void memberAliasesQuery.refetch(),
   };
 }

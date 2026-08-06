@@ -1,6 +1,7 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -28,10 +29,12 @@ function renderPage() {
 }
 
 let queryClient: QueryClient;
+let user: ReturnType<typeof userEvent.setup>;
 
 describe("HeldEventDetailPage", () => {
   beforeEach(() => {
     queryClient = createTestQueryClient();
+    user = userEvent.setup();
   });
 
   it("connects one held event to its draft, player recap, results, and comparison", async () => {
@@ -150,5 +153,28 @@ describe("HeldEventDetailPage", () => {
       "href",
       "/held-events",
     );
+    expect(screen.queryByRole("button", { name: "開催詳細を再読み込み" })).not.toBeInTheDocument();
+  });
+
+  it("retries a transient held-event detail failure in place", async () => {
+    let attempts = 0;
+    server.use(
+      http.get("/api/held-events/:heldEventId", () => {
+        attempts += 1;
+        return attempts === 1
+          ? HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 })
+          : HttpResponse.json(makeHeldEventDetailResponse());
+      }),
+    );
+
+    renderPage();
+
+    expect(await screen.findByText("開催詳細を読み込めませんでした")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "開催詳細を再読み込み" }));
+
+    expect(
+      await screen.findByRole("heading", { name: "確定済みの試合はまだありません" }),
+    ).toBeInTheDocument();
+    expect(attempts).toBe(2);
   });
 });

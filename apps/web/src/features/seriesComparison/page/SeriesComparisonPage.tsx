@@ -7,6 +7,7 @@ import {
   PageSkeleton,
 } from "@/features/seriesComparison/page/SeriesComparisonSkeletons";
 import { useSeriesComparisonPageController } from "@/features/seriesComparison/page/useSeriesComparisonPageController";
+import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
@@ -41,8 +42,28 @@ export function SeriesComparisonPage() {
       />
 
       {options.hasError ? (
-        <Notice tone="danger" title="対象作品を読み込めません">
-          通信状態を確認して、再読み込みしてください。
+        <Notice
+          tone={options.hasVisibleData ? "warning" : "danger"}
+          title={
+            options.hasVisibleData ? "最新の比較対象を取得できません" : "対象作品を読み込めません"
+          }
+        >
+          <p>
+            {options.hasVisibleData
+              ? "直前に取得した対象を表示しています。"
+              : "通信状態を確認して、もう一度お試しください。"}
+          </p>
+          <div className="mt-3">
+            <Button
+              pending={options.refreshing}
+              pendingLabel="再読み込み中"
+              size="sm"
+              variant="secondary"
+              onClick={page.actions.refresh}
+            >
+              比較対象を再読み込み
+            </Button>
+          </div>
         </Notice>
       ) : null}
 
@@ -51,6 +72,7 @@ export function SeriesComparisonPage() {
           icon={<BarChart3 className="size-5" />}
           title="比較できる戦績がありません"
           description="確定済みの試合が揃うと比較できます。"
+          action={<LinkButton to="/matches">試合一覧を開く</LinkButton>}
         />
       ) : filters.seriesOptions.length > 0 ? (
         <>
@@ -71,37 +93,72 @@ export function SeriesComparisonPage() {
             onSeriesChange={filters.updateGameTitle}
           />
 
-          {aggregate.hasError ? (
+          {aggregate.hasError && !aggregate.data ? (
             <Notice tone="danger" title="戦績データを読み込めません">
-              条件を変えるか、時間をおいて再読み込みしてください。
+              <p>通信状態を確認して、もう一度お試しください。</p>
+              <div className="mt-3">
+                <Button
+                  pending={aggregate.refreshing}
+                  pendingLabel="再読み込み中"
+                  size="sm"
+                  variant="secondary"
+                  onClick={page.actions.refresh}
+                >
+                  戦績データを再読み込み
+                </Button>
+              </div>
             </Notice>
           ) : (
-            <StaleShield
-              active={aggregate.loading || aggregate.shielded}
-              contentClassName="grid gap-5"
-              fallback={<ComparisonSkeleton />}
-            >
-              {aggregate.data && aggregate.data.matchCount === 0 ? (
-                <EmptyState
-                  icon={<BarChart3 className="size-5" />}
-                  title="この範囲に確定済みの試合がありません"
-                  description="総合、別シーズン、別マップを選ぶと表示できる場合があります。"
-                />
-              ) : aggregate.data ? (
-                <SeriesComparisonContent
-                  model={{
-                    activeView: filters.activeView,
-                    focusMatchId: filters.state.focusMatchId,
-                    hasReviewError: review.hasError,
-                    onClearFocusedMatch: filters.clearFocusedMatch,
-                    onViewChange: filters.updateView,
-                    response: aggregate.data,
-                    review: review.shielded ? undefined : review.data,
-                    reviewLoading: review.loading || review.shielded,
-                  }}
-                />
+            <div className="grid gap-3">
+              {aggregate.hasError && aggregate.data ? (
+                <Notice tone="warning" title="最新の戦績データを取得できません">
+                  <p>直前に取得した内容を表示しています。</p>
+                  <div className="mt-3">
+                    <Button size="sm" variant="secondary" onClick={page.actions.refresh}>
+                      最新情報を再読み込み
+                    </Button>
+                  </div>
+                </Notice>
               ) : null}
-            </StaleShield>
+              <StaleShield
+                active={aggregate.loading || aggregate.shielded || review.shielded}
+                busyLabel="比較条件を更新中"
+                contentClassName="grid gap-5"
+                fallback={<ComparisonSkeleton />}
+                preserveContent={Boolean(aggregate.data) && !aggregate.loading}
+              >
+                {aggregate.data && aggregate.data.matchCount === 0 ? (
+                  <EmptyState
+                    action={
+                      filters.state.mapMasterId || filters.state.seasonMasterId ? (
+                        <Button variant="secondary" onClick={filters.clearScope}>
+                          総合に戻す
+                        </Button>
+                      ) : (
+                        <LinkButton to="/matches">試合一覧を開く</LinkButton>
+                      )
+                    }
+                    icon={<BarChart3 className="size-5" />}
+                    title="この範囲に確定済みの試合がありません"
+                    description="総合、別シーズン、別マップを選ぶと表示できる場合があります。"
+                  />
+                ) : aggregate.data ? (
+                  <SeriesComparisonContent
+                    model={{
+                      activeView: filters.activeView,
+                      focusMatchId: filters.state.focusMatchId,
+                      hasReviewError: review.hasError,
+                      onClearFocusedMatch: filters.clearFocusedMatch,
+                      onRetryReview: review.retry,
+                      onViewChange: filters.updateView,
+                      response: aggregate.data,
+                      review: review.data,
+                      reviewLoading: review.loading && !review.data,
+                    }}
+                  />
+                ) : null}
+              </StaleShield>
+            </div>
           )}
         </>
       ) : null}

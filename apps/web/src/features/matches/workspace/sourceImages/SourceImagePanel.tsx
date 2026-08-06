@@ -112,9 +112,14 @@ export function SourceImagePanel({
         {!loading &&
         panel.activeState?.status === "available" &&
         panel.activeImage?.status === "error" ? (
-          <p className="text-sm text-[var(--color-danger)]">
-            元画像を読み込めませんでした。時間をおいて再度開いてください。
-          </p>
+          <div className="grid justify-items-start gap-3">
+            <p className="text-sm text-[var(--color-danger)]" role="alert">
+              元画像を読み込めませんでした。
+            </p>
+            <Button size="sm" variant="secondary" onClick={panel.handleActiveImageRetry}>
+              元画像を再読み込み
+            </Button>
+          </div>
         ) : null}
 
         {!loading && panel.activeState?.status === "available" && panel.displayUrl ? (

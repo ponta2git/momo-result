@@ -36,7 +36,8 @@ export function useOcrCapturePageController() {
   }));
   const [captureTargetKind, setCaptureTargetKind] = useState<SlotKind>("total_assets");
 
-  const { auth, memberAliasDirectory } = useOcrCaptureQueries();
+  const { auth, memberAliasDirectory, memberAliasesError, memberAliasesQuery, retryMemberAliases } =
+    useOcrCaptureQueries();
   const setupOptions = useOcrSetupOptions({
     authAccountId: auth.accountId,
     enabled: auth.ready,
@@ -175,6 +176,11 @@ export function useOcrCapturePageController() {
     handleViewMatches: startFlow.viewMatches,
     hasWorkingSlot,
     notify,
+    memberAliasesFeedback: {
+      error: memberAliasesError,
+      retry: retryMemberAliases,
+      retrying: memberAliasesQuery.isFetching,
+    },
     ocrReadyCount,
     returnTo,
     ocrStartDialog: startFlow.state,

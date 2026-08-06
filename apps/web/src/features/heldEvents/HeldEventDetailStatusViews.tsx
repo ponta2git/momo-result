@@ -1,5 +1,6 @@
 import { ArrowLeft } from "lucide-react";
 
+import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
@@ -49,9 +50,13 @@ export function HeldEventDetailLoading() {
 export function HeldEventDetailUnavailable({
   backHref = "/held-events",
   notFound = false,
+  onRetry,
+  retrying = false,
 }: {
   backHref?: string;
   notFound?: boolean;
+  onRetry?: (() => void) | undefined;
+  retrying?: boolean;
 }) {
   return (
     <PageFrame className="gap-4" width="wide">
@@ -59,9 +64,24 @@ export function HeldEventDetailUnavailable({
         tone={notFound ? "warning" : "danger"}
         title={notFound ? "開催履歴が見つかりません" : "開催詳細を読み込めませんでした"}
       >
-        {notFound
-          ? "削除されたか、URLが正しくない可能性があります。"
-          : "開催履歴へ戻って、対象を選び直してください。"}
+        <p>
+          {notFound
+            ? "削除されたか、URLが正しくない可能性があります。"
+            : "通信状態を確認して、もう一度お試しください。"}
+        </p>
+        {!notFound && onRetry ? (
+          <div className="mt-3">
+            <Button
+              pending={retrying}
+              pendingLabel="再読み込み中"
+              size="sm"
+              variant="secondary"
+              onClick={onRetry}
+            >
+              開催詳細を再読み込み
+            </Button>
+          </div>
+        ) : null}
       </Notice>
       <LinkButton
         icon={<ArrowLeft aria-hidden="true" className="size-4" />}

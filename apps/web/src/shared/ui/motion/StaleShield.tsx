@@ -1,5 +1,5 @@
-import { AnimatePresence, motion } from "motion/react";
 import { LoaderCircle } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 import type { ReactNode } from "react";
 
 import { cn } from "@/shared/ui/cn";

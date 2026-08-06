@@ -1,3 +1,4 @@
+import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
@@ -63,11 +64,41 @@ export function MatchDetailLoading() {
   );
 }
 
-export function MatchDetailLoadFailed({ backHref = "/matches" }: { backHref?: string }) {
+export function MatchDetailLoadFailed({
+  backHref = "/matches",
+  notFound = false,
+  onRetry,
+  retrying = false,
+}: {
+  backHref?: string;
+  notFound?: boolean;
+  onRetry?: (() => void) | undefined;
+  retrying?: boolean;
+}) {
   return (
     <PageFrame className="gap-4" width="wide">
-      <Notice tone="danger" title="試合詳細を読み込めませんでした">
-        一覧に戻って、対象の試合を選び直してください。
+      <Notice
+        tone={notFound ? "warning" : "danger"}
+        title={notFound ? "試合が見つかりません" : "試合詳細を読み込めませんでした"}
+      >
+        <p>
+          {notFound
+            ? "削除されたか、URLが正しくない可能性があります。"
+            : "通信状態を確認して、もう一度お試しください。"}
+        </p>
+        {!notFound && onRetry ? (
+          <div className="mt-3">
+            <Button
+              pending={retrying}
+              pendingLabel="再読み込み中"
+              size="sm"
+              variant="secondary"
+              onClick={onRetry}
+            >
+              試合詳細を再読み込み
+            </Button>
+          </div>
+        ) : null}
       </Notice>
       <LinkButton to={backHref} variant="secondary">
         前の画面へ戻る

@@ -64,6 +64,11 @@ export function useHeldEventDetailPageController() {
       mapsQuery.refetch(),
     ]);
   }, [detailQuery, gameTitlesQuery, mapsQuery, seasonsQuery]);
+  const refreshing =
+    detailQuery.isFetching ||
+    gameTitlesQuery.isFetching ||
+    seasonsQuery.isFetching ||
+    mapsQuery.isFetching;
 
   if (isInitialQueryLoading(detailQuery)) {
     return { backHref, status: "loading" as const };
@@ -74,11 +79,11 @@ export function useHeldEventDetailPageController() {
     if (error.status === 404) {
       return { backHref, status: "notFound" as const };
     }
-    return { backHref, status: "loadFailed" as const };
+    return { backHref, refresh, refreshing, status: "loadFailed" as const };
   }
 
   if (!detail || heldEventId.trim().length === 0) {
-    return { backHref, status: "loadFailed" as const };
+    return { backHref, refresh, refreshing, status: "loadFailed" as const };
   }
 
   return {
@@ -90,11 +95,7 @@ export function useHeldEventDetailPageController() {
     playerRecaps,
     refresh,
     returnTo,
-    refreshing:
-      detailQuery.isFetching ||
-      gameTitlesQuery.isFetching ||
-      seasonsQuery.isFetching ||
-      mapsQuery.isFetching,
+    refreshing,
     status: "ready" as const,
   };
 }

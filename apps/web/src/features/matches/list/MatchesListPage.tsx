@@ -122,7 +122,18 @@ export function MatchesListPage() {
 
       {masterLoadFailed ? (
         <Notice tone="warning" title="絞り込み候補を一部読み込めません">
-          試合一覧は表示できます。開催、作品、シーズンの候補は再読み込み後に選べます。
+          <p>試合一覧は表示できます。開催、作品、シーズンの候補を再取得できます。</p>
+          <div className="mt-3">
+            <Button
+              pending={isManualRefreshing}
+              pendingLabel="再読み込み中"
+              size="sm"
+              variant="secondary"
+              onClick={() => void refresh()}
+            >
+              候補を再読み込み
+            </Button>
+          </div>
         </Notice>
       ) : null}
 
@@ -198,7 +209,18 @@ export function MatchesListPage() {
           >
             {showMatchesError ? (
               <Notice tone="danger" title="試合一覧を読み込めません">
-                時間をおいて、再読み込みしてください。
+                <p>通信状態を確認して、もう一度お試しください。</p>
+                <div className="mt-3">
+                  <Button
+                    pending={isManualRefreshing}
+                    pendingLabel="再読み込み中"
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => void refresh()}
+                  >
+                    一覧を再読み込み
+                  </Button>
+                </div>
               </Notice>
             ) : items.length === 0 ? (
               <EmptyState

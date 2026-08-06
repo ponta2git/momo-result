@@ -96,6 +96,37 @@ describe("OcrCapturePage", () => {
     expect(screen.getByRole("button", { name: "読み取りを開始" })).toBeDisabled();
   });
 
+  it("offers an in-place retry when setup choices fail to load", async () => {
+    setDevUser();
+    let attempts = 0;
+    server.use(
+      http.get("/api/game-titles", () => {
+        attempts += 1;
+        return attempts === 1
+          ? HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 })
+          : HttpResponse.json({
+              items: [
+                {
+                  createdAt: "2026-01-01T00:00:00.000Z",
+                  displayOrder: 1,
+                  id: "gt_momotetsu_2",
+                  layoutFamily: "momotetsu_2",
+                  name: "桃太郎電鉄2",
+                },
+              ],
+            });
+      }),
+    );
+
+    renderCaptureRoute();
+
+    expect(await screen.findByRole("button", { name: "選択肢を再読み込み" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "選択肢を再読み込み" }));
+
+    expect(await screen.findByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
+    expect(attempts).toBe(2);
+  });
+
   it("offers a contextual way to stop the capture flow", async () => {
     setDevUser();
     renderCaptureRoute("/ocr/new?returnTo=%2Fheld-events%2Fheld-1");

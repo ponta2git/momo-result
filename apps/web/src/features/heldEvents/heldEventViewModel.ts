@@ -29,6 +29,7 @@ export type HeldEventsListActions = {
   deletePending: boolean;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
+  onRetry: () => void;
   onRequestDelete: (event: HeldEventResponse) => void;
 };
 

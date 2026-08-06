@@ -194,7 +194,14 @@ export function useMatchesListPageController() {
     }
     setIsManualRefreshing(true);
     try {
-      await Promise.all([matchesQuery.refetch(), matchesSummaryQuery.refetch()]);
+      await Promise.all([
+        matchesQuery.refetch(),
+        matchesSummaryQuery.refetch(),
+        heldEventsQuery.refetch(),
+        gameTitlesQuery.refetch(),
+        seasonsQuery.refetch(),
+        mapsQuery.refetch(),
+      ]);
     } finally {
       setIsManualRefreshing(false);
     }

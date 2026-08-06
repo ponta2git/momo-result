@@ -27,8 +27,18 @@ export function MatchDetailPage() {
     return <MatchDetailLoading />;
   }
 
+  if (controller.status === "notFound") {
+    return <MatchDetailLoadFailed backHref={controller.backHref} notFound />;
+  }
+
   if (controller.status === "loadFailed") {
-    return <MatchDetailLoadFailed backHref={controller.backHref} />;
+    return (
+      <MatchDetailLoadFailed
+        backHref={controller.backHref}
+        retrying={controller.refreshing}
+        onRetry={controller.refresh}
+      />
+    );
   }
 
   return <MatchDetailReadyContent controller={controller} />;

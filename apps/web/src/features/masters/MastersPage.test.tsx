@@ -88,6 +88,32 @@ describe("MastersPage", () => {
     expect(screen.queryByLabelText("シーズンを読み込み中")).not.toBeInTheDocument();
   });
 
+  it("keeps a scoped master failure out of the empty state and retries locally", async () => {
+    setDevUser();
+    let attempts = 0;
+    let shouldFail = true;
+    server.use(
+      http.get("/api/map-masters", () => {
+        attempts += 1;
+        return shouldFail
+          ? HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 })
+          : HttpResponse.json({ items: [] });
+      }),
+    );
+
+    renderPage();
+
+    expect(await screen.findByText("マップを読み込めません")).toBeInTheDocument();
+    shouldFail = false;
+    await user.click(screen.getByRole("button", { name: "マップを再読み込み" }));
+
+    await waitFor(() =>
+      expect(screen.queryByText("マップを読み込めません")).not.toBeInTheDocument(),
+    );
+    expect(screen.getAllByText("登録はまだありません").length).toBeGreaterThan(0);
+    expect(attempts).toBeGreaterThanOrEqual(2);
+  });
+
   it("creates a new game title and selects it", async () => {
     setDevUser();
     renderPage();

@@ -16,7 +16,7 @@ import type {
 import { invalidateAfterMatchDeleted } from "@/shared/api/cacheInvalidation";
 import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { deleteMatch } from "@/shared/api/matches";
-import { formatApiError } from "@/shared/api/problemDetails";
+import { formatApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { isInitialQueryLoading, shouldShowBlockingQueryError } from "@/shared/api/queryErrorState";
 import {
   gameTitlesQueryOptions,
@@ -184,13 +184,40 @@ export function useMatchDetailPageController() {
     shouldShowBlockingQueryError(gameTitlesQuery) ||
     shouldShowBlockingQueryError(seasonsQuery) ||
     shouldShowBlockingQueryError(mapsQuery);
+  const matchNotFound =
+    shouldShowBlockingQueryError(matchQuery) &&
+    normalizeUnknownApiError(matchQuery.error).status === 404;
+  const refresh = useCallback(() => {
+    void Promise.all([
+      matchQuery.refetch(),
+      heldEventsQuery.refetch(),
+      gameTitlesQuery.refetch(),
+      seasonsQuery.refetch(),
+      mapsQuery.refetch(),
+    ]);
+  }, [gameTitlesQuery, heldEventsQuery, mapsQuery, matchQuery, seasonsQuery]);
+  const refreshing =
+    matchQuery.isFetching ||
+    heldEventsQuery.isFetching ||
+    gameTitlesQuery.isFetching ||
+    seasonsQuery.isFetching ||
+    mapsQuery.isFetching;
 
   if (detailLoading) {
     return { backHref: contextualReturnTo ?? "/matches", status: "loading" as const };
   }
 
+  if (matchNotFound) {
+    return { backHref: contextualReturnTo ?? "/matches", status: "notFound" as const };
+  }
+
   if (detailLoadFailed || !match) {
-    return { backHref: contextualReturnTo ?? "/matches", status: "loadFailed" as const };
+    return {
+      backHref: contextualReturnTo ?? "/matches",
+      refresh,
+      refreshing,
+      status: "loadFailed" as const,
+    };
   }
 
   const fallbackBackHref = `/held-events/${encodeURIComponent(match.heldEventId)}`;

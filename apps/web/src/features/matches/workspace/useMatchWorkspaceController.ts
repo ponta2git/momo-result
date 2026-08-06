@@ -28,11 +28,7 @@ import { useMatchWorkspaceViewModel } from "@/features/matches/workspace/useMatc
 import { useWorkspaceHeldEventCreation } from "@/features/matches/workspace/useWorkspaceHeldEventCreation";
 import { useWorkspaceNotice } from "@/features/matches/workspace/useWorkspaceNotice";
 import { currentLocalIsoMinute } from "@/features/matches/workspace/workspaceDerivations";
-import {
-  isInitialQueryLoading,
-  shouldShowBlockingQueryError,
-  shouldShowQueryError,
-} from "@/shared/api/queryErrorState";
+import { isInitialQueryLoading, shouldShowQueryError } from "@/shared/api/queryErrorState";
 import { sanitizeReturnTo } from "@/shared/navigation/returnTo";
 
 export type MatchWorkspaceControllerParams = {
@@ -86,7 +82,16 @@ export function useMatchWorkspaceController({
     useSampleDrafts,
   });
   const {
-    derived: { baseErrors, isOcrRunningBlocked, refreshingReviewStatus, reviewStatus },
+    derived: {
+      baseErrors,
+      editLoadFailureKind,
+      isOcrRunningBlocked,
+      retryBaseQueries,
+      retryEdit,
+      retryingBaseQueries,
+      refreshingReviewStatus,
+      reviewStatus,
+    },
     draftDetailQuery,
     gameTitlesQuery,
     heldEventItems,
@@ -273,7 +278,7 @@ export function useMatchWorkspaceController({
     confirmAction,
     confirmOpen,
     createEventPending: createEventMutation.isPending,
-    editLoadFailed: mode === "edit" && shouldShowBlockingQueryError(matchDetailQuery),
+    editLoadFailureKind,
     editLoading: mode === "edit" && isInitialQueryLoading(matchDetailQuery),
     eventDraftValue,
     formHandlers,
@@ -303,7 +308,11 @@ export function useMatchWorkspaceController({
     onNavigateToMasters: handleNavigateToMasters,
     onPreferImageKindChange: setPreferredImageKind,
     onPrimaryAction,
+    onRetryBaseErrors: retryBaseQueries,
+    onRetryEdit: retryEdit,
     onRefreshReviewStatus: refreshReviewStatus,
+    retryingBaseErrors: retryingBaseQueries,
+    retryingEdit: matchDetailQuery.isFetching,
   });
 }
 

@@ -549,15 +549,53 @@ describe("app routing", () => {
 
   it("does not show an empty standings state when comparison options fail to load", async () => {
     setDevUser();
+    let attempts = 0;
     server.use(
-      http.get("/api/analytics/series-comparison/options", () =>
-        HttpResponse.json({ detail: "failed" }, { status: 500 }),
-      ),
+      http.get("/api/analytics/series-comparison/options", () => {
+        attempts += 1;
+        return attempts === 1
+          ? HttpResponse.json({ detail: "failed" }, { status: 500 })
+          : HttpResponse.json({
+              latestConfirmedGameTitleId: "gt_momotetsu_2",
+              schemaVersion: 1,
+              series: [
+                {
+                  confirmedMatchCount: 12,
+                  displayOrder: 1,
+                  gameTitleId: "gt_momotetsu_2",
+                  latestConfirmedPlayedAt: "2026-05-10T12:00:00.000Z",
+                  layoutFamily: "momotetsu_2",
+                  maps: [
+                    {
+                      confirmedMatchCount: 12,
+                      displayOrder: 1,
+                      id: "map_east",
+                      name: "東日本編",
+                    },
+                  ],
+                  name: "桃太郎電鉄2",
+                  seasons: [
+                    {
+                      confirmedMatchCount: 12,
+                      displayOrder: 1,
+                      id: "season_current",
+                      name: "今シーズン",
+                    },
+                  ],
+                },
+              ],
+            });
+      }),
     );
 
     renderApp("/analytics/series");
 
     expect(await screen.findByText("対象作品を読み込めません")).toBeInTheDocument();
     expect(screen.queryByText("比較できる戦績がありません")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "比較対象を再読み込み" }));
+
+    expect(await screen.findByRole("combobox", { name: "対象作品" })).toBeInTheDocument();
+    expect(attempts).toBe(2);
   });
 });

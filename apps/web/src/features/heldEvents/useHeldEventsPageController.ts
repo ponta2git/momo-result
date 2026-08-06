@@ -191,6 +191,7 @@ export function useHeldEventsPageController() {
         deletePending: deleteMutation.isPending,
         onPageChange: updatePage,
         onPageSizeChange: updatePageSize,
+        onRetry: refresh,
         onRequestDelete: setDeleteTarget,
       },
       data: {

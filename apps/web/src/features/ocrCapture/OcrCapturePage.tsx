@@ -37,6 +37,7 @@ export function OcrCapturePage() {
     handleValidationError,
     handleViewMatches,
     hasWorkingSlot,
+    memberAliasesFeedback,
     notify,
     ocrReadyCount,
     ocrStartDialog,
@@ -82,9 +83,39 @@ export function OcrCapturePage() {
                 ? "この操作用アカウントでは利用できません。管理者に確認してください。"
                 : auth.error.detail}
             </p>
+            {auth.error.status === 403 ? null : (
+              <div className="mt-3">
+                <Button
+                  pending={auth.retrying}
+                  pendingLabel="確認中"
+                  size="sm"
+                  variant="secondary"
+                  onClick={auth.retry}
+                >
+                  ログイン状態を再確認
+                </Button>
+              </div>
+            )}
           </Notice>
           <AuthPanel auth={auth.data} embedded forceDevPicker={auth.error.status === 401} />
         </div>
+      ) : null}
+
+      {memberAliasesFeedback.error ? (
+        <Notice tone="warning" title="プレーヤー名の読み替えを取得できません">
+          <p>OCR取り込みは続けられますが、登録済みの別名を読み取り候補に反映できません。</p>
+          <div className="mt-3">
+            <Button
+              pending={memberAliasesFeedback.retrying}
+              pendingLabel="再読み込み中"
+              size="sm"
+              variant="secondary"
+              onClick={memberAliasesFeedback.retry}
+            >
+              読み替え設定を再読み込み
+            </Button>
+          </div>
+        </Notice>
       ) : null}
 
       <section className={panelClass} aria-labelledby="ocr-record-destination">
@@ -94,6 +125,22 @@ export function OcrCapturePage() {
           </h2>
           <p className="text-xs text-[var(--color-text-muted)]">読み取り結果に引き継ぐ試合設定</p>
         </div>
+        {setupOptions.hasError ? (
+          <Notice className="mb-3" tone="warning" title="試合設定の選択肢を読み込めません">
+            <p>読み込めなかった選択肢を再取得できます。</p>
+            <div className="mt-3">
+              <Button
+                pending={setupOptions.refreshing}
+                pendingLabel="再読み込み中"
+                size="sm"
+                variant="secondary"
+                onClick={setupOptions.retry}
+              >
+                選択肢を再読み込み
+              </Button>
+            </div>
+          </Notice>
+        ) : null}
         <SetupPanel value={setup} onChange={setSetup} enabled={auth.ready} options={setupOptions} />
       </section>
 

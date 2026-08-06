@@ -1,8 +1,8 @@
+import { QueryErrorResetBoundary } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "motion/react";
 import { Suspense, useCallback } from "react";
 import type { FocusEvent, MouseEvent, PointerEvent } from "react";
 import { Outlet, useLocation } from "react-router-dom";
-import { QueryErrorResetBoundary } from "@tanstack/react-query";
 
 import { preloadRouteForPath } from "@/app/routeModules";
 import { useAuth } from "@/shared/auth/useAuth";

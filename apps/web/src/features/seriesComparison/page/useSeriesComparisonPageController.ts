@@ -19,7 +19,6 @@ import type {
 } from "@/features/seriesComparison/model/seriesComparisonViewModel";
 import {
   isInitialQueryLoading,
-  shouldShowBlockingQueryError,
   shouldShowQueryError,
   shouldShowStaleShield,
 } from "@/shared/api/queryErrorState";
@@ -189,6 +188,16 @@ export function useSeriesComparisonPageController() {
     () => updateState({ ...normalizedState, focusMatchId: undefined }),
     [normalizedState, updateState],
   );
+  const clearScope = useCallback(
+    () =>
+      updateState({
+        ...normalizedState,
+        focusMatchId: undefined,
+        mapMasterId: undefined,
+        seasonMasterId: undefined,
+      }),
+    [normalizedState, updateState],
+  );
 
   const aggregateLoading = isInitialQueryLoading(aggregateQuery);
   const aggregateShielded = shouldShowStaleShield({
@@ -213,6 +222,9 @@ export function useSeriesComparisonPageController() {
       void reviewQuery.refetch();
     }
   };
+  const retryReview = () => {
+    void reviewQuery.refetch();
+  };
 
   return {
     actions: {
@@ -221,13 +233,14 @@ export function useSeriesComparisonPageController() {
     aggregate: {
       canRefresh: aggregateQueryParams !== undefined,
       data: aggregateQuery.data,
-      hasError: shouldShowBlockingQueryError(aggregateQuery),
+      hasError: shouldShowQueryError(aggregateQuery),
       loading: aggregateLoading,
       refreshing: aggregateQuery.isFetching && aggregateQuery.data !== undefined,
       shielded: aggregateShielded,
     },
     filters: {
       activeView,
+      clearScope,
       clearFocusedMatch,
       mapOptions: mapSelectOptions,
       scopeLabel: [selectedSeries?.name, scopeName].filter(Boolean).join("・"),
@@ -241,12 +254,15 @@ export function useSeriesComparisonPageController() {
     },
     options: {
       hasError: shouldShowQueryError(optionsQuery),
+      hasVisibleData: optionsQuery.data !== undefined,
       loading: isInitialQueryLoading(optionsQuery),
+      refreshing: optionsQuery.isFetching,
     },
     review: {
       data: reviewQuery.data,
-      hasError: reviewEnabled && shouldShowBlockingQueryError(reviewQuery),
+      hasError: reviewEnabled && shouldShowQueryError(reviewQuery),
       loading: reviewLoading,
+      retry: retryReview,
       refreshing: reviewEnabled && reviewQuery.isFetching && reviewQuery.data !== undefined,
       shielded: reviewShielded,
     },

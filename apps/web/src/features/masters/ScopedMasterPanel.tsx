@@ -1,7 +1,9 @@
 import { MasterDeleteDialog, MasterEditDialog } from "@/features/masters/MasterActionDialogs";
 import { MasterCreateForm } from "@/features/masters/MasterCreateForm";
 import type { MapMasterResponse, SeasonMasterResponse } from "@/shared/api/masters";
+import { Button } from "@/shared/ui/actions/Button";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
+import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 
 type ScopedMasterItem = (MapMasterResponse | SeasonMasterResponse) & { pending?: boolean };
@@ -24,8 +26,11 @@ type ScopedMasterLabels = {
 };
 
 type ScopedMasterList = {
+  error?: string | undefined;
   items: ScopedMasterItem[];
   loading?: boolean | undefined;
+  onRetry: () => void;
+  retrying?: boolean | undefined;
 };
 
 type ScopedMasterPanelProps = {
@@ -48,6 +53,18 @@ export function ScopedMasterPanel({
   selectedGameTitleName,
 }: ScopedMasterPanelProps) {
   const loading = list.loading ?? false;
+  const loadBlocked = Boolean(list.error && list.items.length === 0);
+  const retryAction = (
+    <Button
+      pending={Boolean(list.retrying)}
+      pendingLabel="再読み込み中"
+      size="sm"
+      variant="secondary"
+      onClick={list.onRetry}
+    >
+      {labels.itemLabel}を再読み込み
+    </Button>
+  );
   return (
     <section className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
       <header>
@@ -72,6 +89,11 @@ export function ScopedMasterPanel({
           <Skeleton className="h-12 rounded-[var(--radius-sm)]" />
           <Skeleton className="h-12 rounded-[var(--radius-sm)]" />
         </div>
+      ) : loadBlocked ? (
+        <Notice className="mt-3" tone="danger" title={`${labels.itemLabel}を読み込めません`}>
+          <p>{list.error}</p>
+          <div className="mt-3">{retryAction}</div>
+        </Notice>
       ) : list.items.length === 0 ? (
         <EmptyState
           className="mt-3"
@@ -79,53 +101,67 @@ export function ScopedMasterPanel({
           description={labels.emptyDescription}
         />
       ) : (
-        <ul className="mt-3 grid gap-2">
-          {list.items.map((item) => {
-            const isPending = item.pending === true;
-            return (
-              <li
-                key={item.id}
-                className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-2 ${
-                  isPending ? "opacity-60" : ""
-                }`}
-                aria-busy={isPending || undefined}
-              >
-                <div className="min-w-0">
-                  <p className="line-clamp-2 text-sm font-semibold text-[var(--color-text-primary)]">
-                    {item.name}
-                    {isPending ? (
-                      <span className="ml-2 text-xs font-normal text-[var(--color-text-secondary)]">
-                        (追加中…)
-                      </span>
-                    ) : null}
-                  </p>
-                </div>
-                {isPending ? null : (
-                  <div className="flex items-center">
-                    <MasterEditDialog
-                      initialName={item.name}
-                      label={labels.itemLabel}
-                      onSave={async (values) => actions.onUpdate(item.id, { name: values.name })}
-                      title={`${labels.itemLabel}を編集`}
-                    />
-                    <MasterDeleteDialog
-                      label={labels.itemLabel}
-                      name={item.name}
-                      onDelete={() => actions.onDelete(item.id)}
-                    />
+        <div className="mt-3 grid gap-3">
+          {list.error ? (
+            <Notice tone="warning" title={`最新の${labels.itemLabel}を取得できません`}>
+              <p>直前に取得した内容を表示しています。</p>
+              <div className="mt-3">{retryAction}</div>
+            </Notice>
+          ) : null}
+          <ul className="grid gap-2">
+            {list.items.map((item) => {
+              const isPending = item.pending === true;
+              return (
+                <li
+                  key={item.id}
+                  className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-2 ${
+                    isPending ? "opacity-60" : ""
+                  }`}
+                  aria-busy={isPending || undefined}
+                >
+                  <div className="min-w-0">
+                    <p className="line-clamp-2 text-sm font-semibold text-[var(--color-text-primary)]">
+                      {item.name}
+                      {isPending ? (
+                        <span className="ml-2 text-xs font-normal text-[var(--color-text-secondary)]">
+                          (追加中…)
+                        </span>
+                      ) : null}
+                    </p>
                   </div>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+                  {isPending ? null : (
+                    <div className="flex items-center">
+                      <MasterEditDialog
+                        initialName={item.name}
+                        label={labels.itemLabel}
+                        onSave={async (values) => actions.onUpdate(item.id, { name: values.name })}
+                        title={`${labels.itemLabel}を編集`}
+                      />
+                      <MasterDeleteDialog
+                        label={labels.itemLabel}
+                        name={item.name}
+                        onDelete={() => actions.onDelete(item.id)}
+                      />
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       )}
 
       <div className="mt-4">
         <MasterCreateForm
           action={create.action}
-          disabled={loading || Boolean(disabledReason)}
-          disabledReason={loading ? `${labels.itemLabel}を読み込み中です。` : disabledReason}
+          disabled={loading || loadBlocked || Boolean(disabledReason)}
+          disabledReason={
+            loading
+              ? `${labels.itemLabel}を読み込み中です。`
+              : loadBlocked
+                ? `${labels.itemLabel}を読み込んでから追加できます。`
+                : disabledReason
+          }
           error={create.error}
           formKey={create.formKey}
           label="名称"

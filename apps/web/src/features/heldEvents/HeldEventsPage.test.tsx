@@ -100,6 +100,28 @@ describe("HeldEventsPage", () => {
     expect(screen.queryByRole("navigation", { name: "ページネーション" })).not.toBeInTheDocument();
   });
 
+  it("retries a failed held-event list without showing an empty state", async () => {
+    let attempts = 0;
+    server.use(
+      http.get("/api/held-events", () => {
+        attempts += 1;
+        return attempts === 1
+          ? HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 })
+          : HttpResponse.json({ items: [makeHeldEventResponse()] });
+      }),
+    );
+
+    renderPage();
+
+    expect(await screen.findByText("開催履歴を読み込めません")).toBeInTheDocument();
+    expect(screen.queryByText("開催履歴はまだありません")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "開催履歴を再読み込み" }));
+
+    expect(await screen.findByRole("link", { name: /の開催詳細$/u })).toBeInTheDocument();
+    expect(attempts).toBe(2);
+  });
+
   it("corrects an out-of-range page before showing an empty-list state", async () => {
     const heldEvents = [makeHeldEventResponse()];
     server.use(

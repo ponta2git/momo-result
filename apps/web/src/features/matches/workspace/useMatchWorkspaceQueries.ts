@@ -1,6 +1,6 @@
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import type { UseQueryResult, UseSuspenseQueryResult } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 
 import type { WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
 import {
@@ -25,7 +25,7 @@ import type { MatchDetailResponse } from "@/shared/api/matches";
 import type { OcrDraftListResponse } from "@/shared/api/ocrDrafts";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
-import { shouldShowQueryError } from "@/shared/api/queryErrorState";
+import { shouldShowBlockingQueryError, shouldShowQueryError } from "@/shared/api/queryErrorState";
 import {
   gameTitlesQueryOptions,
   heldEventDetailQueryOptions,
@@ -71,7 +71,11 @@ export type MatchWorkspaceQueries = {
 
 export type MatchWorkspaceQueriesDerived = {
   baseErrors: NormalizedApiError[];
+  editLoadFailureKind: "notFound" | "transient" | null;
   isOcrRunningBlocked: boolean;
+  retryBaseQueries: () => Promise<void>;
+  retryEdit: () => void;
+  retryingBaseQueries: boolean;
   refreshingReviewStatus: boolean;
   reviewStatus: string | undefined;
 };
@@ -164,11 +168,47 @@ export function useMatchWorkspaceQueries(
       .filter(shouldShowQueryError)
       .map((query) => normalizeUnknownApiError(query.error)),
   );
+  const retryBaseQueries = useCallback(async () => {
+    const retries: Array<Promise<unknown>> = [];
+    if (mapMastersQuery.error) retries.push(mapMastersQuery.refetch());
+    if (seasonMastersQuery.error) retries.push(seasonMastersQuery.refetch());
+    if (draftDetailQuery.error) retries.push(draftDetailQuery.refetch());
+    if (ocrDraftsQuery.error) retries.push(ocrDraftsQuery.refetch());
+    if (sourceImageQuery.error) retries.push(sourceImageQuery.refetch());
+    if (preferredHeldEventQuery.error) retries.push(preferredHeldEventQuery.refetch());
+    await Promise.all(retries);
+  }, [
+    draftDetailQuery,
+    mapMastersQuery,
+    ocrDraftsQuery,
+    preferredHeldEventQuery,
+    seasonMastersQuery,
+    sourceImageQuery,
+  ]);
+  const retryEdit = useCallback(() => {
+    void matchDetailQuery.refetch();
+  }, [matchDetailQuery]);
+  const editLoadFailureKind =
+    mode === "edit" && shouldShowBlockingQueryError(matchDetailQuery)
+      ? normalizeUnknownApiError(matchDetailQuery.error).status === 404
+        ? ("notFound" as const)
+        : ("transient" as const)
+      : null;
 
   return {
     derived: {
       baseErrors,
+      editLoadFailureKind,
       isOcrRunningBlocked,
+      retryBaseQueries,
+      retryEdit,
+      retryingBaseQueries:
+        mapMastersQuery.isFetching ||
+        seasonMastersQuery.isFetching ||
+        draftDetailQuery.isFetching ||
+        ocrDraftsQuery.isFetching ||
+        sourceImageQuery.isFetching ||
+        preferredHeldEventQuery.isFetching,
       refreshingReviewStatus,
       reviewStatus,
     },

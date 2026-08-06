@@ -1,15 +1,21 @@
-import { LoaderCircle } from "lucide-react";
-
-import { DrilldownPlayerSelector } from "@/features/seriesComparison/drilldowns/SeriesComparisonDrilldownPrimitives";
+import {
+  DrilldownContentSkeleton,
+  DrilldownLoadNotice,
+  DrilldownPlayerSelector,
+} from "@/features/seriesComparison/drilldowns/SeriesComparisonDrilldownPrimitives";
 import type { PlayOrderTableView } from "@/features/seriesComparison/drilldowns/SeriesComparisonPlayOrderDrilldownTypes";
 import { PlayOrderSummary } from "@/features/seriesComparison/drilldowns/SeriesComparisonPlayOrderSummary";
 import { AverageTrendPanel } from "@/features/seriesComparison/drilldowns/SeriesComparisonPlayOrderTrendPanel";
 import { useSeriesComparisonDrilldownQuery } from "@/features/seriesComparison/drilldowns/useSeriesComparisonDrilldownQuery";
-import { isInitialQueryLoading, shouldShowBlockingQueryError } from "@/shared/api/queryErrorState";
+import {
+  isInitialQueryLoading,
+  shouldShowBlockingQueryError,
+  shouldShowQueryError,
+} from "@/shared/api/queryErrorState";
 import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
 import { Dialog } from "@/shared/ui/feedback/Dialog";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
-import { Notice } from "@/shared/ui/feedback/Notice";
+import { StaleShield } from "@/shared/ui/motion/StaleShield";
 
 export function PlayOrderRankHistoryDrilldownDialog({
   onMemberChange,
@@ -38,6 +44,8 @@ export function PlayOrderRankHistoryDrilldownDialog({
   const payload = data?.playOrderRankHistory;
   const loading = open && isInitialQueryLoading(drilldownQuery);
   const showError = shouldShowBlockingQueryError(drilldownQuery);
+  const showCachedError = Boolean(data && shouldShowQueryError(drilldownQuery));
+  const retry = () => void drilldownQuery.refetch();
   const title = selectedPlayer ? `番手別成績: ${selectedPlayer.displayName}` : "番手別成績";
 
   return (
@@ -63,34 +71,50 @@ export function PlayOrderRankHistoryDrilldownDialog({
           />
         </div>
         {loading ? (
-          <div className="flex min-h-48 items-center justify-center rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] text-sm font-medium text-[var(--color-text-secondary)]">
-            <LoaderCircle
-              aria-hidden="true"
-              className="mr-2 size-4 animate-spin motion-reduce:animate-none"
-            />
-            番手履歴を読み込み中
-          </div>
+          <DrilldownContentSkeleton label="番手履歴を読み込み中" />
         ) : showError ? (
-          <Notice title="番手履歴を表示できません" tone="danger">
-            番手履歴の取得に失敗しました。時間をおいて再読み込みしてください。
-          </Notice>
+          <DrilldownLoadNotice
+            description="番手履歴の取得に失敗しました。通信状態を確認して、もう一度お試しください。"
+            pending={drilldownQuery.isFetching}
+            title="番手履歴を表示できません"
+            onRetry={retry}
+          />
         ) : data ? (
-          <div className="grid min-h-0 grid-rows-[auto_auto] gap-3 lg:h-full lg:grid-rows-[auto_minmax(0,1fr)]">
-            {payload ? (
-              <>
-                <PlayOrderSummary data={payload} />
-                <AverageTrendPanel
-                  payload={payload}
-                  tableView={tableView}
-                  onTableViewChange={onTableViewChange}
+          <StaleShield
+            active={drilldownQuery.isFetching}
+            busyLabel="番手履歴を更新中"
+            className="h-full min-h-0"
+            contentClassName="h-full min-h-0"
+            fallback={<DrilldownContentSkeleton label="番手履歴を読み込み中" />}
+            preserveContent
+          >
+            <div className="grid h-full min-h-0 gap-3">
+              {showCachedError ? (
+                <DrilldownLoadNotice
+                  description="直前に取得した番手履歴を表示しています。"
+                  title="最新の番手履歴を取得できません"
+                  tone="warning"
+                  onRetry={retry}
                 />
-              </>
-            ) : (
-              <Notice title="番手履歴を表示できません" tone="danger">
-                番手履歴の形式が想定と異なります。再読み込みしてください。
-              </Notice>
-            )}
-          </div>
+              ) : null}
+              {payload ? (
+                <div className="grid min-h-0 grid-rows-[auto_auto] gap-3 lg:h-full lg:grid-rows-[auto_minmax(0,1fr)]">
+                  <PlayOrderSummary data={payload} />
+                  <AverageTrendPanel
+                    payload={payload}
+                    tableView={tableView}
+                    onTableViewChange={onTableViewChange}
+                  />
+                </div>
+              ) : (
+                <DrilldownLoadNotice
+                  description="番手履歴の形式が想定と異なります。"
+                  title="番手履歴を表示できません"
+                  onRetry={retry}
+                />
+              )}
+            </div>
+          </StaleShield>
         ) : (
           <EmptyState
             title="番手履歴がありません"

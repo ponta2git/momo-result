@@ -18,8 +18,17 @@ import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 export function AdminAccountsPage() {
-  const { accounts, accountsLoading, createAction, createState, normalizedError, updateMutation } =
-    useAdminAccountsPageController();
+  const {
+    accounts,
+    accountsError,
+    accountsLoadFailed,
+    accountsLoading,
+    accountsRefreshing,
+    createAction,
+    createState,
+    retryAccounts,
+    updateMutation,
+  } = useAdminAccountsPageController();
 
   return (
     <PageFrame className="gap-5">
@@ -29,9 +38,9 @@ export function AdminAccountsPage() {
         description="Discordでログインできるアカウントと管理者権限を管理します。試合参加者とは別に扱います。"
       />
 
-      {createState.error || normalizedError ? (
-        <Notice tone="danger" title={normalizedError?.title ?? "操作に失敗しました"}>
-          {createState.error || normalizedError?.detail}
+      {createState.error ? (
+        <Notice tone="danger" title="アカウントを追加できません">
+          {createState.error}
         </Notice>
       ) : null}
 
@@ -93,6 +102,23 @@ export function AdminAccountsPage() {
             <Skeleton className="min-h-16" />
             <Skeleton className="min-h-16" />
           </div>
+        ) : accountsLoadFailed ? (
+          <div className="p-4">
+            <Notice tone="danger" title={accountsError?.title ?? "アカウントを読み込めません"}>
+              <p>{accountsError?.detail ?? "通信状態を確認して、もう一度お試しください。"}</p>
+              <div className="mt-3">
+                <Button
+                  pending={accountsRefreshing}
+                  pendingLabel="再読み込み中"
+                  size="sm"
+                  variant="secondary"
+                  onClick={retryAccounts}
+                >
+                  アカウントを再読み込み
+                </Button>
+              </div>
+            </Notice>
+          </div>
         ) : accounts.length === 0 ? (
           <EmptyState
             className="border-0"
@@ -101,39 +127,61 @@ export function AdminAccountsPage() {
             title="ログイン可能なアカウントはまだありません"
           />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[44rem] text-left text-sm">
-              <thead className="bg-[var(--color-surface-subtle)] text-[var(--color-text-secondary)]">
-                <tr>
-                  <th className="px-3 py-2">表示名</th>
-                  <th className="px-3 py-2">DiscordユーザーID</th>
-                  <th className="px-3 py-2">プレーヤー</th>
-                  <th className="px-3 py-2">権限</th>
-                  <th className="px-3 py-2">操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {accounts.map((account) => {
-                  const rowPending =
-                    updateMutation.isPending &&
-                    updateMutation.variables?.accountId === account.accountId;
-                  return (
-                    <AccountRow
-                      account={account}
-                      isPending={updateMutation.isPending}
-                      key={account.accountId}
-                      pendingRequest={rowPending ? updateMutation.variables?.request : undefined}
-                      onPatch={async (request) => {
-                        await updateMutation.mutateAsync({
-                          accountId: account.accountId,
-                          request,
-                        });
-                      }}
-                    />
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="grid">
+            {accountsError ? (
+              <Notice
+                className="m-4 mb-0"
+                tone="warning"
+                title="最新のアカウント情報を取得できません"
+              >
+                <p>直前に取得した内容を表示しています。</p>
+                <div className="mt-3">
+                  <Button
+                    pending={accountsRefreshing}
+                    pendingLabel="再読み込み中"
+                    size="sm"
+                    variant="secondary"
+                    onClick={retryAccounts}
+                  >
+                    最新情報を再読み込み
+                  </Button>
+                </div>
+              </Notice>
+            ) : null}
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[44rem] text-left text-sm">
+                <thead className="bg-[var(--color-surface-subtle)] text-[var(--color-text-secondary)]">
+                  <tr>
+                    <th className="px-3 py-2">表示名</th>
+                    <th className="px-3 py-2">DiscordユーザーID</th>
+                    <th className="px-3 py-2">プレーヤー</th>
+                    <th className="px-3 py-2">権限</th>
+                    <th className="px-3 py-2">操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {accounts.map((account) => {
+                    const rowPending =
+                      updateMutation.isPending &&
+                      updateMutation.variables?.accountId === account.accountId;
+                    return (
+                      <AccountRow
+                        account={account}
+                        isPending={updateMutation.isPending}
+                        key={account.accountId}
+                        pendingRequest={rowPending ? updateMutation.variables?.request : undefined}
+                        onPatch={async (request) => {
+                          await updateMutation.mutateAsync({
+                            accountId: account.accountId,
+                            request,
+                          });
+                        }}
+                      />
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </section>

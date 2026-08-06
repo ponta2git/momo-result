@@ -41,7 +41,18 @@ export function HeldEventsListCard({
           {data.loadFailed ? (
             <div className="p-4">
               <Notice tone="danger" title="開催履歴を読み込めません">
-                時間をおいて、再読み込みしてください。
+                <p>通信状態を確認して、もう一度お試しください。</p>
+                <div className="mt-3">
+                  <Button
+                    pending={data.refreshing}
+                    pendingLabel="再読み込み中"
+                    size="sm"
+                    variant="secondary"
+                    onClick={actions.onRetry}
+                  >
+                    開催履歴を再読み込み
+                  </Button>
+                </div>
               </Notice>
             </div>
           ) : data.rows.length === 0 ? (

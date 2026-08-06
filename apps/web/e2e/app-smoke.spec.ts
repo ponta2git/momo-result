@@ -10,6 +10,7 @@ import type {
   Route,
 } from "@playwright/test";
 
+import { withReturnTo } from "../src/shared/navigation/returnTo";
 import {
   makeSeriesComparisonResponse,
   makeSeriesComparisonReviewResponse,
@@ -78,17 +79,24 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     expect(response.ok()).toBe(true);
     const body = (await response.json()) as { id?: string };
     heldEventId = expectGeneratedId(body.id, "held event ID");
-    await expect(page).toHaveURL(`/held-events/${heldEventId}`);
+    const heldEventDetailHref = withReturnTo(`/held-events/${heldEventId}`, "/held-events");
+    await expect(page).toHaveURL(heldEventDetailHref);
     await expect(page.getByText("確定 0試合・未完了 0件。次は第1試合です。")).toBeVisible();
     const manualLinks = await page.getByRole("link", { exact: true, name: "手入力" }).all();
     expect(manualLinks).toHaveLength(2);
     for (const manualLink of manualLinks) {
-      await expect(manualLink).toHaveAttribute("href", `/matches/new?heldEventId=${heldEventId}`);
+      await expect(manualLink).toHaveAttribute(
+        "href",
+        withReturnTo(`/matches/new?heldEventId=${heldEventId}`, currentPagePath(page)),
+      );
     }
     const ocrLinks = await page.getByRole("link", { exact: true, name: "OCR取り込み" }).all();
     expect(ocrLinks).toHaveLength(2);
     for (const ocrLink of ocrLinks) {
-      await expect(ocrLink).toHaveAttribute("href", `/ocr/new?heldEventId=${heldEventId}`);
+      await expect(ocrLink).toHaveAttribute(
+        "href",
+        withReturnTo(`/ocr/new?heldEventId=${heldEventId}`, currentPagePath(page)),
+      );
     }
   });
 
@@ -250,10 +258,11 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     await expect(page).toHaveURL(`/held-events/${heldEventId}`);
     await expect(page.getByRole("heading", { exact: true, name: "この開催の戦績" })).toBeVisible();
     const eventMatchLink = page.getByRole("link", { name: /第\d+試合の結果を見る/u });
-    await expect(eventMatchLink).toHaveAttribute("href", `/matches/${matchId}`);
+    const matchFromHeldEventHref = withReturnTo(`/matches/${matchId}`, currentPagePath(page));
+    await expect(eventMatchLink).toHaveAttribute("href", matchFromHeldEventHref);
     await expect(page.getByRole("link", { name: /第\d+試合を戦績比較で見る/u })).toBeVisible();
     await eventMatchLink.click();
-    await expect(page).toHaveURL(`/matches/${matchId}`);
+    await expect(page).toHaveURL(matchFromHeldEventHref);
   });
 
   await test.step("inspect series comparison drilldowns for the confirmed match", async () => {
@@ -264,14 +273,15 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     ).toBe(false);
 
     const comparisonLink = page.getByRole("link", { name: "前後の戦績を見る" });
-    await expect(comparisonLink).toHaveAttribute(
-      "href",
+    const comparisonHref = withReturnTo(
       `/analytics/series?gameTitleId=${encodeURIComponent(
         gameTitleId,
       )}&seasonMasterId=${encodeURIComponent(seasonMasterId)}&mapMasterId=${encodeURIComponent(
         mapMasterId,
       )}&focusMatchId=${encodeURIComponent(matchId)}&view=flow`,
+      currentPagePath(page),
     );
+    await expect(comparisonLink).toHaveAttribute("href", comparisonHref);
     await comparisonLink.click();
 
     await expect(page.getByRole("heading", { exact: true, name: "戦績比較" })).toBeVisible();
@@ -283,7 +293,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     ).toBeVisible();
     await expect(focusedMatch.getByRole("link", { name: "この試合の結果" })).toHaveAttribute(
       "href",
-      `/matches/${matchId}`,
+      withReturnTo(`/matches/${matchId}`, currentPagePath(page)),
     );
     await expect(page.getByRole("tab", { name: "分析する" })).toHaveAttribute(
       "aria-selected",
@@ -292,14 +302,16 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     await expect(page.getByRole("tab", { name: "推移" })).toHaveAttribute("aria-selected", "true");
     await expect(page.getByRole("columnheader", { name: /この試合/u })).toBeVisible();
     expect(await page.locator('[data-focused-metric="true"]').count()).toBeGreaterThan(0);
-    expect(
-      await page
-        .getByRole("tablist", { name: "分析の切り口" })
-        .evaluate((element) => window.getComputedStyle(element).overflowY),
-    ).toBe("hidden");
-    expect(
-      await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth),
-    ).toBe(false);
+    const analysisTabsVerticalGeometry = await page
+      .getByRole("tablist", { name: "分析の切り口" })
+      .evaluate((element) => ({
+        clientHeight: element.clientHeight,
+        scrollHeight: element.scrollHeight,
+      }));
+    expect(analysisTabsVerticalGeometry.scrollHeight).toBeLessThanOrEqual(
+      analysisTabsVerticalGeometry.clientHeight + 1,
+    );
+    await expectNoHorizontalPageOverflow(page);
 
     await page.getByRole("tab", { name: "勝因候補" }).click();
     await expect(
@@ -402,7 +414,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     await expect(rankDialog.getByLabel("試合ごとの順位履歴")).toBeVisible();
     await expect(rankDialog.getByRole("link", { name: "1戦目の試合結果を見る" })).toHaveAttribute(
       "href",
-      `/matches/${matchId}`,
+      withReturnTo(`/matches/${matchId}`, currentPagePath(page)),
     );
     await rankDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
     await expect(rankDialog).toBeHidden();
@@ -456,22 +468,24 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
         ),
       ).toEqual([]);
 
-      const assetDetails = assetSection.locator("details").filter({
-        hasText: "総資産レンジと差",
-      });
-      const firstAssetDetails = assetDetails.first();
-      const firstPlayerCard = firstAssetDetails.locator("xpath=../../../..");
+      const firstAssetDisclosure = assetSection
+        .getByRole("button", { exact: true, name: "総資産レンジと差" })
+        .first()
+        .locator("..");
+      const firstPlayerCard = firstAssetDisclosure.locator("xpath=../../../..");
       const playerGrid = firstPlayerCard.locator("xpath=../..");
       const firstHistogramCard = histogramCharts.first().locator("..");
-      const detailsBox = await firstAssetDetails.boundingBox();
+      const disclosureBox = await firstAssetDisclosure.boundingBox();
       const playerCardBox = await firstPlayerCard.boundingBox();
       const playerGridBox = await playerGrid.boundingBox();
       const histogramCardBox = await firstHistogramCard.boundingBox();
-      if (!detailsBox || !playerCardBox || !playerGridBox || !histogramCardBox) {
+      if (!disclosureBox || !playerCardBox || !playerGridBox || !histogramCardBox) {
         throw new Error("Asset section spacing must be measurable.");
       }
       expect(
-        Math.abs(playerCardBox.y + playerCardBox.height - (detailsBox.y + detailsBox.height) - 13),
+        Math.abs(
+          playerCardBox.y + playerCardBox.height - (disclosureBox.y + disclosureBox.height) - 13,
+        ),
       ).toBeLessThan(1);
       expect(
         Math.abs(histogramCardBox.y - (playerGridBox.y + playerGridBox.height) - 16),
@@ -623,9 +637,11 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     const detailLink = matchDetailLink(page, matchId);
     await expect(detailLink).toHaveCount(1);
     await expect(detailLink).toBeVisible();
+    const matchFromListHref = withReturnTo(`/matches/${matchId}`, currentPagePath(page));
+    await expect(detailLink).toHaveAttribute("href", matchFromListHref);
     await detailLink.click();
 
-    await expect(page).toHaveURL(new RegExp(`/matches/${matchId}$`, "u"));
+    await expect(page).toHaveURL(matchFromListHref);
     await expect(page.getByLabel("試合詳細を読み込み中")).toHaveAttribute("aria-busy", "true");
     await expect(
       page.getByRole("heading", { exact: true, name: "試合結果を読み込み中" }),
@@ -666,9 +682,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     const candidateDialog = page.getByRole("dialog", { name: "試合を選択" });
     await expect(candidateDialog).toBeVisible();
     await expect(candidateDialog.getByRole("radio", { name: /第1試合/u })).toBeChecked();
-    expect(
-      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
-    ).toBe(true);
+    await expectNoHorizontalPageOverflow(page);
     await candidateDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
     await expect(candidateDialog).toBeHidden();
 
@@ -852,8 +866,88 @@ async function svgTextOverflow(locator: Locator): Promise<string[]> {
   });
 }
 
+function currentPagePath(page: Page): string {
+  const url = new URL(page.url());
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
+async function expectNoHorizontalPageOverflow(page: Page): Promise<void> {
+  const geometry = await page.evaluate(() => {
+    const viewportWidth = document.documentElement.clientWidth;
+    const isClippedByAncestor = (element: Element) => {
+      let ancestor = element.parentElement;
+      while (ancestor && ancestor !== document.body) {
+        const overflowX = window.getComputedStyle(ancestor).overflowX;
+        const ancestorRect = ancestor.getBoundingClientRect();
+        const clipsWithinViewport =
+          ancestorRect.left >= -1 && ancestorRect.right <= viewportWidth + 1;
+        if (clipsWithinViewport && ["auto", "clip", "hidden", "scroll"].includes(overflowX)) {
+          return true;
+        }
+        ancestor = ancestor.parentElement;
+      }
+      return false;
+    };
+    const offenders = [...document.body.querySelectorAll("*")]
+      .flatMap((element) => {
+        const rect = element.getBoundingClientRect();
+        if (
+          rect.width <= 0 ||
+          (rect.left >= -1 && rect.right <= viewportWidth + 1) ||
+          isClippedByAncestor(element)
+        ) {
+          return [];
+        }
+        const ancestry = [];
+        let current: Element | null = element;
+        while (current && ancestry.length < 12) {
+          const currentRect = current.getBoundingClientRect();
+          const style = window.getComputedStyle(current);
+          ancestry.push({
+            className: current.getAttribute("class")?.slice(0, 120) ?? "",
+            clientWidth: current.clientWidth,
+            display: style.display,
+            left: Math.round(currentRect.left),
+            overflowX: style.overflowX,
+            right: Math.round(currentRect.right),
+            scrollWidth: current.scrollWidth,
+            tag: current.tagName.toLowerCase(),
+            width: Math.round(currentRect.width),
+          });
+          current = current.parentElement;
+        }
+        return [
+          {
+            ancestry,
+            className: element.getAttribute("class")?.slice(0, 160) ?? "",
+            depth: ancestry.length,
+            left: Math.round(rect.left),
+            right: Math.round(rect.right),
+            tag: element.tagName.toLowerCase(),
+            text: element.textContent?.trim().replaceAll(/\s+/gu, " ").slice(0, 100) ?? "",
+            width: Math.round(rect.width),
+          },
+        ];
+      })
+      .toSorted((left, right) => right.depth - left.depth || right.right - left.right)
+      .slice(0, 1);
+    return {
+      offenders,
+      scrollWidth: document.documentElement.scrollWidth,
+      viewportWidth,
+    };
+  });
+
+  expect(
+    geometry.scrollWidth,
+    `horizontal overflow: ${JSON.stringify(geometry.offenders)}`,
+  ).toBeLessThanOrEqual(geometry.viewportWidth);
+}
+
 function matchDetailLink(page: Page, matchId: string) {
-  return page.locator(`a[href="/matches/${matchId}"]:visible`);
+  return page.locator(
+    `a[href="/matches/${matchId}"]:visible, a[href^="/matches/${matchId}?"]:visible`,
+  );
 }
 
 function matchTableRow(page: Page, matchId: string) {

@@ -66,8 +66,7 @@ export function useAdminAccountsPageController() {
     },
   });
 
-  const error =
-    updateMutation.error ?? (shouldShowQueryError(accountsQuery) ? accountsQuery.error : undefined);
+  const error = shouldShowQueryError(accountsQuery) ? accountsQuery.error : undefined;
   const normalizedError = error ? normalizeUnknownApiError(error) : undefined;
 
   return {

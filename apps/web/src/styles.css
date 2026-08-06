@@ -195,6 +195,19 @@ samp {
   bottom: max(calc(env(safe-area-inset-bottom) + 1rem), 1rem);
 }
 
+.momo-dialog-popup {
+  padding-top: max(env(safe-area-inset-top), 1rem);
+  padding-right: max(env(safe-area-inset-right), 1rem);
+  padding-bottom: max(env(safe-area-inset-bottom), 1rem);
+  padding-left: max(env(safe-area-inset-left), 1rem);
+}
+
+.momo-dialog-surface {
+  max-height: calc(
+    100dvh - max(env(safe-area-inset-top), 1rem) - max(env(safe-area-inset-bottom), 1rem)
+  );
+}
+
 @utility momo-copy {
   line-height: 1.75;
   text-wrap: pretty;

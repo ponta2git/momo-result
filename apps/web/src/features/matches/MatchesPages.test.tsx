@@ -11,6 +11,7 @@ import { MatchCreatePage } from "@/features/matches/MatchCreatePage";
 import { MatchDetailPage } from "@/features/matches/MatchDetailPage";
 import { MatchEditPage } from "@/features/matches/MatchEditPage";
 import { MatchesListPage } from "@/features/matches/MatchesListPage";
+import { ToastHost } from "@/shared/ui/feedback/ToastHost";
 import {
   createMatchWorkspaceMasterHandoffPayload,
   saveMasterHandoff,
@@ -712,6 +713,7 @@ describe("MatchesListPage", () => {
               }
             />
           </Routes>
+          <ToastHost />
         </MemoryRouter>
       </QueryClientProvider>,
     );

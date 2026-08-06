@@ -7,6 +7,7 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { HeldEventsPage } from "@/features/heldEvents/HeldEventsPage";
+import { ToastHost } from "@/shared/ui/feedback/ToastHost";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { makeHeldEventResponse } from "@/test/factories";
@@ -33,6 +34,7 @@ function renderPage(path = "/held-events") {
           <Route element={<p>matches</p>} path="/matches" />
           <Route element={<p>exports</p>} path="/exports" />
         </Routes>
+        <ToastHost />
       </MemoryRouter>
     </QueryClientProvider>,
   );

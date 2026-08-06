@@ -140,6 +140,22 @@ describe("ui foundation", () => {
     expect(onOpenChange).not.toHaveBeenCalled();
   });
 
+  it("Dialog treats busy work as non-dismissible without extra caller flags", async () => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+
+    render(
+      <Dialog busy open title="保存しています" onOpenChange={onOpenChange}>
+        <p>このままお待ちください。</p>
+      </Dialog>,
+    );
+
+    expect(screen.queryByRole("button", { name: "ダイアログを閉じる" })).not.toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    expect(screen.getByRole("dialog", { name: "保存しています" })).toBeInTheDocument();
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
   it("AlertDialog exposes its destructive context to assistive technology", async () => {
     const user = userEvent.setup();
 
@@ -202,10 +218,58 @@ describe("ui foundation", () => {
     expect(confirmButton).toBeDisabled();
     expect(confirmButton.querySelector("svg")).not.toBeNull();
 
+    await user.keyboard("{Escape}");
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+
     deferred.resolve();
     await waitFor(() => {
       expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     });
+  });
+
+  it("AlertDialog keeps failed operations open and exposes a local retryable error", async () => {
+    const user = userEvent.setup();
+    const onConfirm = vi
+      .fn<() => Promise<void>>()
+      .mockRejectedValueOnce(new Error("削除先を確認できませんでした。"))
+      .mockResolvedValueOnce();
+
+    render(
+      <AlertDialog
+        description="一覧から削除します。"
+        title="開催履歴を削除しますか？"
+        trigger={<Button>削除</Button>}
+        onConfirm={onConfirm}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "削除" }));
+    await user.click(await screen.findByRole("button", { name: "実行" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("削除先を確認できませんでした。");
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "実行" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    expect(onConfirm).toHaveBeenCalledTimes(2);
+  });
+
+  it("AlertDialog supports a non-destructive primary action tone", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <AlertDialog
+        tone="primary"
+        title="ログインを有効にしますか？"
+        trigger={<Button>変更</Button>}
+        onConfirm={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "変更" }));
+    expect(await screen.findByRole("button", { name: "実行" })).toHaveClass(
+      "bg-[var(--color-action)]",
+    );
   });
 
   it("RouteSuspenseFallback can provide the root main landmark", () => {

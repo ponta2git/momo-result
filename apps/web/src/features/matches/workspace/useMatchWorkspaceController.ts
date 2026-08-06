@@ -50,7 +50,7 @@ export function useMatchWorkspaceController({
   preferredHeldEventId,
 }: MatchWorkspaceControllerParams) {
   const [searchParams] = useSearchParams();
-  const { notice, notify } = useWorkspaceNotice();
+  const { notify } = useWorkspaceNotice();
   const [validationMessage, setValidationMessage] = useState("");
   const [showValidationErrors, setShowValidationErrors] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -268,7 +268,6 @@ export function useMatchWorkspaceController({
     isNavigatingToMasters,
     isOcrRunningBlocked,
     mode,
-    notice,
     preferredImageKind,
     refreshingReviewStatus,
     returnTo,

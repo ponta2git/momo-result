@@ -25,7 +25,6 @@ type MatchWorkspaceControllerModelArgs = {
   isNavigatingToMasters: boolean;
   isOcrRunningBlocked: boolean;
   mode: WorkspaceMode;
-  notice: string;
   preferredImageKind: SourceImageKind;
   returnTo: string | null | undefined;
   reviewState: ReturnType<typeof useMatchWorkspaceReviewState>;
@@ -169,7 +168,7 @@ export function buildMatchWorkspaceControllerModel(args: MatchWorkspaceControlle
       navigationAllowedRef: args.sessionDraft.navigationAllowedRef,
       onDiscard: args.sessionDraft.markCommitted,
     },
-    liveMessage: args.notice || args.validationMessage,
+    liveMessage: args.validationMessage,
     validationFocusRequest: args.validationFocusRequest,
     loadState: {
       editLoadFailed: args.editLoadFailed,

@@ -11,7 +11,6 @@ import { useOcrCapturePageController } from "@/features/ocrCapture/useOcrCapture
 import { AuthPanel } from "@/shared/auth/AuthPanel";
 import { Button } from "@/shared/ui/actions/Button";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
-import { LiveRegion } from "@/shared/ui/feedback/LiveRegion";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
@@ -37,7 +36,6 @@ export function OcrCapturePage() {
     handleValidationError,
     handleViewMatches,
     hasWorkingSlot,
-    notice,
     notify,
     ocrReadyCount,
     ocrStartDialog,
@@ -58,7 +56,6 @@ export function OcrCapturePage() {
 
   return (
     <PageFrame className="gap-4" width="workspace">
-      <LiveRegion message={notice} />
       <PageHeader title="OCR取り込み" />
 
       {auth.error ? (

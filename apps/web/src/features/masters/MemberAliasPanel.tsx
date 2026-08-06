@@ -103,6 +103,7 @@ export function MemberAliasPanel({
                         title="別名を削除しますか？"
                         description={`${memberDisplayName(alias.memberId)} の ${alias.alias} を削除します。`}
                         confirmLabel="削除"
+                        formatError={(error) => formatApiError(error, "別名の削除に失敗しました")}
                         onConfirm={() => onDelete(alias.id)}
                         trigger={
                           <IconButton

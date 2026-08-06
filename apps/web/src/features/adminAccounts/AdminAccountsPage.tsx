@@ -3,6 +3,7 @@ import { useFormStatus } from "react-dom";
 
 import { useAdminAccountsPageController } from "@/features/adminAccounts/useAdminAccountsPageController";
 import type { LoginAccountResponse, UpdateLoginAccountRequest } from "@/shared/api/adminAccounts";
+import { formatApiError } from "@/shared/api/problemDetails";
 import { fixedMembers, memberDisplayName } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
@@ -227,6 +228,8 @@ function AccountActionConfirm({
       confirmLabel={confirmLabel}
       description={description}
       pending={pending}
+      formatError={(error) => formatApiError(error, "アカウント設定の更新に失敗しました")}
+      tone="primary"
       title={title}
       trigger={
         <Button disabled={disabled} size="sm" variant="secondary">

@@ -5,7 +5,6 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   currentLocalIsoMinute,
   emptyHeldEvents,
-  formatDateTime,
   heldEventPageSizeOptions,
   toIsoFromLocal,
 } from "@/features/heldEvents/heldEventViewModel";
@@ -39,7 +38,6 @@ export function useHeldEventsPageController() {
     };
   }, [searchParams]);
   const [heldAtDraft, setHeldAtDraft] = useState(currentLocalIsoMinute);
-  const [notice, setNotice] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<HeldEventResponse | null>(null);
@@ -69,7 +67,6 @@ export function useHeldEventsPageController() {
     async (previous, formData) => {
       const heldAt = String(formData.get("heldAt") ?? "");
       if (!heldAt) {
-        setNotice("");
         setErrorMessage("開催日時を入力してください。");
         return previous;
       }
@@ -91,13 +88,11 @@ export function useHeldEventsPageController() {
         });
         setHeldAtDraft(currentLocalIsoMinute());
         setErrorMessage("");
-        setNotice(`開催履歴（${formatDateTime(event.heldAt)}）を作成しました。`);
         setCreateOpen(false);
         showToast({ title: "開催履歴を作成しました。", tone: "success" });
         navigate(`/held-events/${encodeURIComponent(event.id)}`);
         return { version: previous.version + 1 };
       } catch (error) {
-        setNotice("");
         setErrorMessage(formatApiError(error, "開催履歴の作成に失敗しました"));
         return previous;
       }
@@ -111,11 +106,9 @@ export function useHeldEventsPageController() {
       await queryClient.invalidateQueries({ queryKey: heldEventKeys.all() });
       setDeleteTarget(null);
       setErrorMessage("");
-      setNotice("開催履歴を削除しました。");
       showToast({ title: "開催履歴を削除しました。", tone: "success" });
     },
     onError: (error) => {
-      setNotice("");
       setErrorMessage(formatApiError(error, "開催履歴の削除に失敗しました"));
     },
   });
@@ -145,7 +138,6 @@ export function useHeldEventsPageController() {
     setCreateOpen(open);
     if (open) {
       setErrorMessage("");
-      setNotice("");
     }
   }, []);
   const updatePage = useCallback(
@@ -185,7 +177,6 @@ export function useHeldEventsPageController() {
     },
     feedback: {
       errorMessage,
-      liveMessage: notice || errorMessage,
     },
     header: {
       openCreate: () => updateCreateOpen(true),

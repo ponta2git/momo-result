@@ -112,6 +112,7 @@ export function MasterDeleteDialog({ label, name, onDelete }: MasterDeleteDialog
       title={`${label}を削除しますか？`}
       description={`${name} を削除します。試合や確定前の記録から参照されている場合は削除できません。`}
       confirmLabel="削除"
+      formatError={(error) => formatApiError(error, `${label}の削除に失敗しました`)}
       onConfirm={onDelete}
       trigger={
         <IconButton

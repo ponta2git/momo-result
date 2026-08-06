@@ -20,6 +20,10 @@ import { memberDisplayName } from "@/shared/domain/members";
 import { trimSearchParam } from "@/shared/lib/searchParams";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
+function notify(message: string, tone: "info" | "success" | "warning" = "info") {
+  showToast({ title: message, tone });
+}
+
 export function useOcrCapturePageController() {
   const [searchParams] = useSearchParams();
   const requestedHeldEventId = trimSearchParam(searchParams.get("heldEventId"));
@@ -27,7 +31,6 @@ export function useOcrCapturePageController() {
     ...defaultSetupValues,
     ...(requestedHeldEventId ? { heldEventId: requestedHeldEventId } : {}),
   }));
-  const [notice, setNotice] = useState("");
   const [captureTargetKind, setCaptureTargetKind] = useState<SlotKind>("total_assets");
 
   const { auth, memberAliasDirectory } = useOcrCaptureQueries();
@@ -52,11 +55,6 @@ export function useOcrCapturePageController() {
   const submission = useOcrCaptureMutations(hints);
   const startFlow = useOcrStartFlow({ submission, updateSlot: flow.updateSlot });
 
-  function notify(message: string, tone: "info" | "success" | "warning" = "info") {
-    setNotice(message);
-    showToast({ title: message, tone });
-  }
-
   function handleValidationError(message: string) {
     notify(message);
   }
@@ -69,7 +67,7 @@ export function useOcrCapturePageController() {
     }
     setCaptureTargetKind(kind);
     const label = slotDefinitions.find((definition) => definition.kind === kind)?.label ?? kind;
-    setNotice(`次の撮影先を${label}に変更しました。`);
+    showToast({ title: `次の撮影先を${label}に変更しました。`, tone: "info" });
   }
 
   function handleImageSelected(file: File, source: InputSource) {
@@ -173,7 +171,6 @@ export function useOcrCapturePageController() {
     handleValidationError,
     handleViewMatches: startFlow.viewMatches,
     hasWorkingSlot,
-    notice,
     notify,
     ocrReadyCount,
     ocrStartDialog: startFlow.state,

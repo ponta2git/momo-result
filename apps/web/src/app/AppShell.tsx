@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { Suspense, useCallback } from "react";
 import type { FocusEvent, MouseEvent, PointerEvent } from "react";
 import { Outlet, useLocation } from "react-router-dom";
+import { QueryErrorResetBoundary } from "@tanstack/react-query";
 
 import { preloadRouteForPath } from "@/app/routeModules";
 import { useAuth } from "@/shared/auth/useAuth";
@@ -105,22 +106,26 @@ export function AppShell() {
         onFocusCapture={handlePreloadIntent}
         onPointerOverCapture={handlePreloadIntent}
       >
-        <RouteErrorBoundary resetKey={routeResetKey}>
-          <Suspense fallback={<RouteSuspenseFallback pathname={location.pathname} />}>
-            <AnimatePresence initial={false} mode="wait">
-              <motion.div
-                key={routeTransitionKey}
-                animate={{ opacity: 1, y: 0 }}
-                className="grid min-w-0"
-                exit={{ opacity: 0, y: -4 }}
-                initial={{ opacity: 0, y: 4 }}
-                transition={routeTransition}
-              >
-                <Outlet />
-              </motion.div>
-            </AnimatePresence>
-          </Suspense>
-        </RouteErrorBoundary>
+        <QueryErrorResetBoundary>
+          {({ reset }) => (
+            <RouteErrorBoundary onReset={reset} resetKey={routeResetKey}>
+              <Suspense fallback={<RouteSuspenseFallback pathname={location.pathname} />}>
+                <AnimatePresence initial={false} mode="wait">
+                  <motion.div
+                    key={routeTransitionKey}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="grid min-w-0"
+                    exit={{ opacity: 0, y: -4 }}
+                    initial={{ opacity: 0, y: 4 }}
+                    transition={routeTransition}
+                  >
+                    <Outlet />
+                  </motion.div>
+                </AnimatePresence>
+              </Suspense>
+            </RouteErrorBoundary>
+          )}
+        </QueryErrorResetBoundary>
       </main>
       <ToastHost />
     </MotionProvider>

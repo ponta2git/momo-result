@@ -8,6 +8,7 @@ import { PageFrame } from "@/shared/ui/layout/PageFrame";
 
 type RouteErrorBoundaryProps = {
   children: ReactNode;
+  onReset?: (() => void) | undefined;
   resetKey?: string;
 };
 
@@ -44,6 +45,7 @@ export class RouteErrorBoundary extends Component<
   }
 
   private readonly handleReset = () => {
+    this.props.onReset?.();
     this.setState({ error: null });
   };
 

@@ -309,6 +309,17 @@ describe("ui foundation", () => {
     expect(screen.getByTestId("route-suspense-fallback")).toHaveClass("max-w-[90rem]");
   });
 
+  it.each([
+    ["/held-events/event-1", "max-w-[82rem]"],
+    ["/analytics/series", "max-w-[82rem]"],
+    ["/exports", "max-w-[48rem]"],
+    ["/admin/masters", "max-w-[75rem]"],
+  ])("RouteSuspenseFallback matches %s page width", (pathname, widthClass) => {
+    render(<RouteSuspenseFallback pathname={pathname} />);
+
+    expect(screen.getByTestId("route-suspense-fallback")).toHaveClass(widthClass);
+  });
+
   it("StaleShield removes shielded content from the readable tree", () => {
     render(
       <StaleShield active fallback={<div>読み込み中</div>}>
@@ -318,6 +329,26 @@ describe("ui foundation", () => {
 
     expect(screen.getByText("読み込み中")).toBeInTheDocument();
     expect(screen.queryByText("表示中の集計値")).not.toBeInTheDocument();
+  });
+
+  it("StaleShield can preserve cached content while marking it as stale", () => {
+    render(
+      <StaleShield
+        active
+        preserveContent
+        busyLabel="比較条件を更新中"
+        fallback={<div>読み込み中</div>}
+      >
+        <button type="button">表示中の集計値</button>
+      </StaleShield>,
+    );
+
+    expect(screen.getByText("表示中の集計値")).toBeInTheDocument();
+    expect(screen.queryByText("読み込み中")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("比較条件を更新中");
+    expect(screen.getByRole("button", { name: "表示中の集計値" }).parentElement).toHaveAttribute(
+      "inert",
+    );
   });
 
   it("StatusPill maps internal status to user-facing labels", () => {

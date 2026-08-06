@@ -94,6 +94,8 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、mod
 - Tailwind CSS を使う。
 - Base UI は a11y primitive として `shared/ui` に閉じる。feature から Base UI を直接 import しない。
 - 共有UIは `shared/ui/{actions,data,feedback,forms,layout,status}` に置く。
+- 色、順位、状態、余白、階層、motion、開示、loading / empty / error、画面遷移の視覚・操作契約は `docs/ui-rule.md` を正本とする。
+- semantic token と共有UIから外れる raw style や小さい操作領域は `apps/web/scripts/check-ui-consistency.mjs` で検査する。
 - keyboard、label、focus、contrast は WCAG AA 相当を目標にする。
 - 画像アップロードとCSV/TSV出力はPC主対象。通常操作はスマホでも破綻させない。
 

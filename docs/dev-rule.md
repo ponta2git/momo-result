@@ -122,7 +122,7 @@ pnpm e2e:target
 PLAYWRIGHT_BASE_URL=http://127.0.0.1:8080 pnpm e2e:runtime
 ```
 
-`format:check` は oxfmt、`lint` は oxlint、web architecture/API contract checks、production TS/TSX module size check を実行する。`typecheck`、`lint`、`test:run`、coverage report の前には API 型生成が走る。
+`format:check` は oxfmt、`lint` は oxlint、web architecture/API/UI consistency checks、production TS/TSX module size check を実行する。`typecheck`、`lint`、`test:run`、coverage report の前には API 型生成が走る。
 
 `pnpm --filter web lint:react-perf` は React props / JSX 生成の探索用 signal として使う。現時点では CI gate に入れず、警告数の削減自体を目的にしない。警告が集中する page、table、card、metric section は、責務分割、stable handler、presentational component 境界の見直し候補として扱う。
 

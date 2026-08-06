@@ -11,6 +11,7 @@
 | 業務要件 / CSV / TSV | `docs/requirements/base.md` | `docs/domain-rule.md` |
 | 技術構成 / 非機能 | `docs/requirements/system-design.md` | `docs/architecture.md`, `docs/ops/README.md` |
 | web | `docs/architecture.md` の Web | `docs/test-rule.md`, `docs/dev-rule.md` |
+| Web UI / UX / デザインシステム | `docs/ui-rule.md` | `docs/architecture.md` の Web、`docs/test-rule.md`, 対象画面の要求正本 |
 | API / usecase | `docs/architecture.md` の API | `docs/domain-rule.md`, `docs/test-rule.md`, `docs/dev-rule.md` |
 | DB / repository | `docs/db-rule.md` | `docs/test-rule.md`, `docs/dev-rule.md` |
 | Redis / OCR queue | `docs/redis-streams-ocr-contract.md` | `docs/schemas/*.schema.json`, `docs/test-rule.md` |
@@ -34,6 +35,7 @@
 | 要求正本 | `docs/requirements/series-review-playbook.md` | 戦績比較ページ内の振り返り、行動プレイブック要求 |
 | 要求正本 | `docs/requirements/held-event-detail.md` | 開催一覧、開催詳細、試合記録・戦績比較への導線 |
 | 実装正本 | `docs/architecture.md` | API / web / OCR worker の構造、依存方向、実装規約 |
+| UI正本 | `docs/ui-rule.md` | Web の意味表現、余白、操作、motion、状態表示、画面遷移の一貫性 |
 | ドメイン正本 | `docs/domain-rule.md` | 用語、状態遷移、不変条件、認証主体と試合参加者の区別 |
 | DB正本 | `docs/db-rule.md` | 共有DB所有権、migration前提、consumer contract |
 | Queue正本 | `docs/redis-streams-ocr-contract.md` | Redis Streams、outbox、payload、ack / retry 契約 |

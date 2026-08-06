@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import type { InputSource } from "@/features/ocrCapture/captureState";
 import { validateImageFile } from "@/features/ocrCapture/captureState";
 import { Button } from "@/shared/ui/actions/Button";
+import { Disclosure } from "@/shared/ui/data/Collapsible";
 
 type CameraCaptureProps = {
   disabled?: boolean;
@@ -270,14 +271,15 @@ export function CameraCapture({
         {disabled ? "現在は撮影できません。" : `撮影すると「${slotLabel}」へ配置します。`}
       </p>
       {!error && renderFallback ? (
-        <details className="group w-fit text-sm text-[var(--color-text-secondary)]">
-          <summary className="cursor-pointer rounded-[var(--radius-sm)] px-1 py-1 font-semibold hover:text-[var(--color-text-primary)]">
-            カメラが使えない場合
-          </summary>
-          <div className="mt-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-2">
-            {renderFallback(false)}
-          </div>
-        </details>
+        <Disclosure
+          className="w-full text-sm text-[var(--color-text-secondary)] sm:w-fit"
+          keepMounted
+          panelClassName="mt-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-2"
+          summary="カメラが使えない場合"
+          triggerClassName="w-full sm:w-auto"
+        >
+          {renderFallback(false)}
+        </Disclosure>
       ) : null}
     </div>
   );

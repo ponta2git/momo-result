@@ -1,4 +1,5 @@
 import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
+import { Disclosure } from "@/shared/ui/data/Collapsible";
 
 type DraftPreviewProps = {
   draft?: OcrDraftResponse | undefined;
@@ -38,11 +39,12 @@ export function DraftPreview({ draft }: DraftPreviewProps) {
   }
 
   return (
-    <details className="mt-4 rounded-[var(--radius-md)] border border-[var(--color-success)]/45 bg-[var(--color-success)]/10 p-3">
-      <summary className="cursor-pointer text-sm font-semibold text-[var(--color-text-primary)]">
-        読み取り結果の詳細を表示
-      </summary>
-      <dl className="mt-3 grid gap-2 text-sm text-[var(--color-text-primary)]">
+    <Disclosure
+      className="mt-4 rounded-[var(--radius-md)] border border-[var(--color-success)]/45 bg-[var(--color-success)]/10"
+      panelClassName="border-t border-[var(--color-success)]/30 px-3 py-3"
+      summary="読み取り結果の詳細"
+    >
+      <dl className="grid gap-2 text-sm text-[var(--color-text-primary)]">
         <div className="flex justify-between gap-4">
           <dt className="text-[var(--color-text-secondary)]">読み取り画面</dt>
           <dd>{screenTypeLabel(draft.detectedScreenType)}</dd>
@@ -52,6 +54,6 @@ export function DraftPreview({ draft }: DraftPreviewProps) {
           <dd className="text-right">{warningSummary(draft.warningsJson)}</dd>
         </div>
       </dl>
-    </details>
+    </Disclosure>
   );
 }

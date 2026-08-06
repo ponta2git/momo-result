@@ -1,4 +1,3 @@
-import { ChevronDown } from "lucide-react";
 import type { ReactNode } from "react";
 
 import {
@@ -7,6 +6,7 @@ import {
 } from "@/features/seriesComparison/metrics/SeriesComparisonMetricPrimitives";
 import type { MetricEmphasis } from "@/features/seriesComparison/model/seriesComparisonPresentation";
 import { cn } from "@/shared/ui/cn";
+import { Disclosure } from "@/shared/ui/data/Collapsible";
 
 export function IntegratedMetricPanel({
   children,
@@ -90,15 +90,13 @@ export function MiniFact({ label, value }: { label: string; value: string }) {
 
 export function OutcomeDetails({ children, title }: { children: ReactNode; title: string }) {
   return (
-    <details className="group rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2">
-      <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 text-xs font-semibold text-[var(--color-text-secondary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-action)] [&::-webkit-details-marker]:hidden">
-        <span>{title}</span>
-        <ChevronDown
-          aria-hidden="true"
-          className="size-4 shrink-0 transition-transform group-open:rotate-180 motion-reduce:transition-none"
-        />
-      </summary>
-      <div className="grid gap-2 border-t border-[var(--color-border)] py-2">{children}</div>
-    </details>
+    <Disclosure
+      className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)]"
+      panelClassName="grid gap-2 border-t border-[var(--color-border)] px-2 py-2"
+      summary={title}
+      triggerClassName="text-xs text-[var(--color-text-secondary)]"
+    >
+      {children}
+    </Disclosure>
   );
 }

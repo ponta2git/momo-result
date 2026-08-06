@@ -403,7 +403,12 @@ describe("MatchesListPage", () => {
 
     expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
     expect(await screen.findAllByRole("button", { name: "確認事項を直す" })).not.toHaveLength(0);
-    const incompleteButton = await screen.findByRole("button", { name: /^未確定/u });
+    const incompleteButton = (await screen.findAllByRole("button", { name: /^未確定/u })).find(
+      (button) => !button.textContent?.includes("すべて"),
+    );
+    if (!incompleteButton) {
+      throw new Error("expected the main incomplete status button");
+    }
     await user.click(incompleteButton);
     const needsReviewButton = await screen.findByRole("button", { name: /要確認のみ/u });
     await waitFor(() => expect(needsReviewButton).toBeEnabled());

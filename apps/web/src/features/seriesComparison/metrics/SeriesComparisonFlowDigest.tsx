@@ -20,6 +20,7 @@ import {
 } from "@/features/seriesComparison/model/seriesComparisonViewModel";
 import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
 import { cn } from "@/shared/ui/cn";
+import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { Notice } from "@/shared/ui/feedback/Notice";
 
 export function MatchDigestMetrics({
@@ -181,14 +182,13 @@ export function MatchNoInEventMetrics({ response }: { response: SeriesComparison
     >
       <MatchNoTable breakdown={primaryBreakdown} players={players} />
       {extraBreakdown.length > 0 ? (
-        <details className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
-          <summary className="cursor-pointer text-sm font-semibold text-[var(--color-text-primary)]">
-            第5試合以降を表示
-          </summary>
-          <div className="mt-3">
-            <MatchNoTable breakdown={extraBreakdown} players={players} />
-          </div>
-        </details>
+        <Disclosure
+          className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)]"
+          panelClassName="border-t border-[var(--color-border)] p-3"
+          summary="第5試合以降"
+        >
+          <MatchNoTable breakdown={extraBreakdown} players={players} />
+        </Disclosure>
       ) : null}
     </MetricSection>
   );

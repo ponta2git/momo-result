@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";
+import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { PaginationControls } from "@/shared/ui/data/PaginationControls";
 import { Dialog, AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
@@ -81,6 +82,26 @@ describe("ui foundation", () => {
     expect(onPageChange).toHaveBeenNthCalledWith(1, 1);
     expect(onPageChange).toHaveBeenNthCalledWith(2, 3);
     expect(onPageSizeChange).toHaveBeenCalledWith(50);
+  });
+
+  it("Disclosure uses one accessible trigger contract without layout animation", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <Disclosure summary="詳細条件">
+        <p>追加条件</p>
+      </Disclosure>,
+    );
+
+    const trigger = screen.getByRole("button", { name: "詳細条件" });
+    expect(trigger).toHaveClass("min-h-11");
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(trigger.querySelector(".lucide-chevron-down")).not.toBeNull();
+    expect(screen.queryByText("追加条件")).not.toBeInTheDocument();
+
+    await user.click(trigger);
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("追加条件")).toBeInTheDocument();
   });
 
   it("danger Notice defaults role=alert", () => {

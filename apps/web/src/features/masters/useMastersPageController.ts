@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState, useTransition } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { useMasterCreateActions } from "@/features/masters/useMasterCreateActions";
 import { useMasterEditCommands } from "@/features/masters/useMasterEditCommands";
@@ -20,6 +20,10 @@ export const masterTabs = [
 
 export type MasterTabId = (typeof masterTabs)[number]["id"];
 
+function isMasterTabId(value: string | null): value is MasterTabId {
+  return masterTabs.some((tab) => tab.id === value);
+}
+
 export function errorMessage(error: unknown): string | undefined {
   if (!error) {
     return undefined;
@@ -34,6 +38,7 @@ export function useMastersPageController() {
   const queryClient = useQueryClient();
   const idempotencyKeys = useIdempotencyKeyStore();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const nowIsoFactory = useCallback(() => new Date().toISOString(), []);
   const [isReturnNavigationPending, startReturnTransition] = useTransition();
   const navigateWithTransition = (to: string) => {
@@ -43,9 +48,31 @@ export function useMastersPageController() {
   };
 
   const [selectedGameTitleId, setSelectedGameTitleId] = useState("");
-  const [activeTab, setActiveTab] = useState<MasterTabId>("catalog");
+  const rawTab = searchParams.get("tab");
+  const activeTab: MasterTabId = isMasterTabId(rawTab) ? rawTab : "catalog";
+  const setActiveTab = useCallback(
+    (nextTab: MasterTabId) => {
+      const next = new URLSearchParams(searchParams);
+      if (nextTab === "catalog") {
+        next.delete("tab");
+      } else {
+        next.set("tab", nextTab);
+      }
+      setSearchParams(next, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
   const [operationError, setOperationError] = useState<string>();
   const returnRoute = useMasterReturnRoute();
+
+  useEffect(() => {
+    if (!rawTab || isMasterTabId(rawTab)) {
+      return;
+    }
+    const next = new URLSearchParams(searchParams);
+    next.delete("tab");
+    setSearchParams(next, { replace: true });
+  }, [rawTab, searchParams, setSearchParams]);
 
   const resourceQueries = useMasterResourceQueries(authScope, selectedGameTitleId);
   const { gameTitles, mapMasters, seasonMasters } = resourceQueries;

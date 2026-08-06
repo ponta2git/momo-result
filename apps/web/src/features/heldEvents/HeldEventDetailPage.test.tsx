@@ -91,22 +91,22 @@ describe("HeldEventDetailPage", () => {
     expect(await screen.findAllByText("桃太郎電鉄2 / 今シーズン / 東日本編")).toHaveLength(2);
     expect(screen.getByRole("link", { name: "確認事項を直す" })).toHaveAttribute(
       "href",
-      "/review/draft-review-1",
+      "/review/draft-review-1?returnTo=%2Fheld-events%2Fheld-1",
     );
     expect(screen.getByRole("region", { name: "ぽんたの開催戦績" })).toHaveTextContent("1勝");
     const results = screen.getByRole("list", { name: "第1試合の順位と総資産" });
     expect(within(results).getByText("1億2345万円")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "第1試合の結果を見る" })).toHaveAttribute(
       "href",
-      "/matches/match-1",
+      "/matches/match-1?returnTo=%2Fheld-events%2Fheld-1",
     );
     expect(screen.getByRole("link", { name: "第1試合を戦績比較で見る" })).toHaveAttribute(
       "href",
-      "/analytics/series?gameTitleId=gt_momotetsu_2&seasonMasterId=season_current&mapMasterId=map_east&focusMatchId=match-1&view=flow",
+      "/analytics/series?gameTitleId=gt_momotetsu_2&seasonMasterId=season_current&mapMasterId=map_east&focusMatchId=match-1&view=flow&returnTo=%2Fheld-events%2Fheld-1",
     );
     expect(screen.getByRole("link", { name: "試合検索で見る" })).toHaveAttribute(
       "href",
-      "/matches?heldEventId=held-1&sort=match_no_asc",
+      "/matches?heldEventId=held-1&sort=match_no_asc&returnTo=%2Fheld-events%2Fheld-1",
     );
     expect(screen.getByText("第3試合")).toBeInTheDocument();
   });
@@ -119,11 +119,11 @@ describe("HeldEventDetailPage", () => {
     ).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "OCR取り込み" })[0]).toHaveAttribute(
       "href",
-      "/ocr/new?heldEventId=held-1",
+      "/ocr/new?heldEventId=held-1&returnTo=%2Fheld-events%2Fheld-1",
     );
     expect(screen.getAllByRole("link", { name: "手入力" })[0]).toHaveAttribute(
       "href",
-      "/matches/new?heldEventId=held-1",
+      "/matches/new?heldEventId=held-1&returnTo=%2Fheld-events%2Fheld-1",
     );
   });
 

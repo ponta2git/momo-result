@@ -13,6 +13,8 @@ type MatchWorkspaceControllerModelArgs = {
   baseErrors: NormalizedApiError[];
   cancelDraftConfirmOpen: boolean;
   cancelDraftPending: boolean;
+  cancelHref: string;
+  cancelLabel: string;
   closeConfirm: () => void;
   confirmAction: (formData: FormData) => void | Promise<void>;
   confirmOpen: boolean;
@@ -159,6 +161,8 @@ export function buildMatchWorkspaceControllerModel(args: MatchWorkspaceControlle
       onPrimaryAction: args.onPrimaryAction,
     },
     header: {
+      cancelHref: args.cancelHref,
+      cancelLabel: args.cancelLabel,
       pageDescription: viewModel.pageDescription,
       pageTitle: viewModel.pageTitle,
       useSampleDrafts: args.useSampleDrafts,

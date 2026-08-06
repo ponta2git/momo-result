@@ -1,3 +1,6 @@
+import { ArrowLeft } from "lucide-react";
+
+import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
@@ -17,6 +20,7 @@ type ExportWorkspaceProps = {
   onFormatChange: (format: ExportFormat) => void;
   onResetConditions: () => void;
   onScopeChange: (scope: ExportScope) => void;
+  returnTo?: string | undefined;
   view: ExportViewModel;
 };
 
@@ -29,10 +33,23 @@ export function ExportWorkspace({
   onFormatChange,
   onResetConditions,
   onScopeChange,
+  returnTo,
   view,
 }: ExportWorkspaceProps) {
   return (
     <PageFrame width="narrow">
+      {returnTo ? (
+        <div>
+          <LinkButton
+            icon={<ArrowLeft aria-hidden="true" className="size-4" />}
+            size="sm"
+            to={returnTo}
+            variant="quiet"
+          >
+            前の画面へ戻る
+          </LinkButton>
+        </div>
+      ) : null}
       <PageHeader title="CSV/TSV出力" />
 
       <section

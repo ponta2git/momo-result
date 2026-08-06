@@ -103,6 +103,19 @@ describe("ExportPage", () => {
     expect(screen.getByText("すべての確定済み試合をCSVで書き出します。")).toBeInTheDocument();
   });
 
+  it("keeps the source-page return link while export conditions change", async () => {
+    renderPage({
+      path: "/exports?returnTo=%2Fmatches%3Fstatus%3Dconfirmed%26page%3D2",
+    });
+
+    await screen.findByRole("heading", { name: "CSV/TSV出力" });
+    const backLink = screen.getByRole("link", { name: "前の画面へ戻る" });
+    expect(backLink).toHaveAttribute("href", "/matches?status=confirmed&page=2");
+
+    await user.click(screen.getByRole("button", { name: "TSV" }));
+    expect(backLink).toHaveAttribute("href", "/matches?status=confirmed&page=2");
+  });
+
   it("prefills match scope from deep link and downloads TSV for a single match", async () => {
     let capturedExport: URL | undefined;
     let capturedMatchList: URL | undefined;

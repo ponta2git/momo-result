@@ -46,7 +46,13 @@ export function HeldEventDetailLoading() {
   );
 }
 
-export function HeldEventDetailUnavailable({ notFound = false }: { notFound?: boolean }) {
+export function HeldEventDetailUnavailable({
+  backHref = "/held-events",
+  notFound = false,
+}: {
+  backHref?: string;
+  notFound?: boolean;
+}) {
   return (
     <PageFrame className="gap-4" width="wide">
       <Notice
@@ -59,7 +65,7 @@ export function HeldEventDetailUnavailable({ notFound = false }: { notFound?: bo
       </Notice>
       <LinkButton
         icon={<ArrowLeft aria-hidden="true" className="size-4" />}
-        to="/held-events"
+        to={backHref}
         variant="secondary"
       >
         開催履歴へ戻る

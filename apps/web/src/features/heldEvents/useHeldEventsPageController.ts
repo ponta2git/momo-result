@@ -17,6 +17,7 @@ import { heldEventKeys } from "@/shared/api/queryKeys";
 import { heldEventsQueryOptions } from "@/shared/api/queryOptions";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 import { parsePositiveIntSearchParam } from "@/shared/lib/searchParams";
+import { withReturnTo } from "@/shared/navigation/returnTo";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
 const initialCreateHeldEventState = { version: 0 };
@@ -27,6 +28,8 @@ export function useHeldEventsPageController() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const rawSearch = searchParams.toString();
+  const listReturnTo = `/held-events${rawSearch ? `?${rawSearch}` : ""}`;
   const paginationSearch = useMemo(() => {
     const pageSize = parsePositiveIntSearchParam(
       searchParams.get("pageSize"),
@@ -90,7 +93,7 @@ export function useHeldEventsPageController() {
         setErrorMessage("");
         setCreateOpen(false);
         showToast({ title: "開催履歴を作成しました。", tone: "success" });
-        navigate(`/held-events/${encodeURIComponent(event.id)}`);
+        navigate(withReturnTo(`/held-events/${encodeURIComponent(event.id)}`, listReturnTo));
         return { version: previous.version + 1 };
       } catch (error) {
         setErrorMessage(formatApiError(error, "開催履歴の作成に失敗しました"));
@@ -196,6 +199,7 @@ export function useHeldEventsPageController() {
         page: pagination?.page ?? paginationSearch.page,
         pagination,
         refreshing: heldEventsQuery.isFetching,
+        returnTo: listReturnTo,
         rows,
       },
     },

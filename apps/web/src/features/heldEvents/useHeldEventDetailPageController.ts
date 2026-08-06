@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
-import { useParams } from "react-router-dom";
+import { useLocation, useParams, useSearchParams } from "react-router-dom";
 
 import { buildHeldEventPlayerRecaps } from "@/features/heldEvents/heldEventDetailViewModel";
 import type { HeldEventMasterNames } from "@/features/heldEvents/heldEventDetailViewModel";
@@ -12,6 +12,7 @@ import {
   mapMastersQueryOptions,
   seasonMastersQueryOptions,
 } from "@/shared/api/queryOptions";
+import { currentInternalLocation, sanitizeReturnTo } from "@/shared/navigation/returnTo";
 
 function nameMap(items: ReadonlyArray<{ id: string; name: string }> | undefined) {
   return new Map((items ?? []).map((item) => [item.id, item.name]));
@@ -19,6 +20,10 @@ function nameMap(items: ReadonlyArray<{ id: string; name: string }> | undefined)
 
 export function useHeldEventDetailPageController() {
   const { heldEventId = "" } = useParams<{ heldEventId: string }>();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const returnTo = currentInternalLocation(location);
+  const backHref = sanitizeReturnTo(searchParams.get("returnTo")) ?? "/held-events";
   const detailQuery = useQuery(
     heldEventDetailQueryOptions(heldEventId, heldEventId.trim().length > 0),
   );
@@ -61,28 +66,30 @@ export function useHeldEventDetailPageController() {
   }, [detailQuery, gameTitlesQuery, mapsQuery, seasonsQuery]);
 
   if (isInitialQueryLoading(detailQuery)) {
-    return { status: "loading" as const };
+    return { backHref, status: "loading" as const };
   }
 
   if (shouldShowBlockingQueryError(detailQuery)) {
     const error = normalizeUnknownApiError(detailQuery.error);
     if (error.status === 404) {
-      return { status: "notFound" as const };
+      return { backHref, status: "notFound" as const };
     }
-    return { status: "loadFailed" as const };
+    return { backHref, status: "loadFailed" as const };
   }
 
   if (!detail || heldEventId.trim().length === 0) {
-    return { status: "loadFailed" as const };
+    return { backHref, status: "loadFailed" as const };
   }
 
   return {
     detail,
+    backHref,
     drafts,
     masterNames,
     matches,
     playerRecaps,
     refresh,
+    returnTo,
     refreshing:
       detailQuery.isFetching ||
       gameTitlesQuery.isFetching ||

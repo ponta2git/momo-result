@@ -1,4 +1,4 @@
-import { Trash2 } from "lucide-react";
+import { ArrowLeft, Trash2 } from "lucide-react";
 
 import { CameraCapture } from "@/features/ocrCapture/CameraCapture";
 import { CaptureRail } from "@/features/ocrCapture/CaptureRail";
@@ -10,6 +10,7 @@ import { SetupPanel } from "@/features/ocrCapture/SetupPanel";
 import { useOcrCapturePageController } from "@/features/ocrCapture/useOcrCapturePageController";
 import { AuthPanel } from "@/shared/auth/AuthPanel";
 import { Button } from "@/shared/ui/actions/Button";
+import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
@@ -39,6 +40,7 @@ export function OcrCapturePage() {
     notify,
     ocrReadyCount,
     ocrStartDialog,
+    returnTo,
     selectedSlotLabels,
     setSetup,
     setup,
@@ -56,7 +58,21 @@ export function OcrCapturePage() {
 
   return (
     <PageFrame className="gap-4" width="workspace">
-      <PageHeader title="OCR取り込み" />
+      <PageHeader
+        actions={
+          returnTo ? (
+            <LinkButton
+              icon={<ArrowLeft aria-hidden="true" className="size-4" />}
+              size="sm"
+              to={returnTo}
+              variant="quiet"
+            >
+              取り込みをやめる
+            </LinkButton>
+          ) : null
+        }
+        title="OCR取り込み"
+      />
 
       {auth.error ? (
         <div className="grid gap-3 rounded-[var(--radius-md)] border border-[var(--color-danger)]/50 bg-[var(--color-danger)]/8 p-4 md:grid-cols-[1fr_18rem] md:items-center">

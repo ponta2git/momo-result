@@ -96,6 +96,16 @@ describe("OcrCapturePage", () => {
     expect(screen.getByRole("button", { name: "読み取りを開始" })).toBeDisabled();
   });
 
+  it("offers a contextual way to stop the capture flow", async () => {
+    setDevUser();
+    renderCaptureRoute("/ocr/new?returnTo=%2Fheld-events%2Fheld-1");
+
+    expect(await screen.findByRole("link", { name: "取り込みをやめる" })).toHaveAttribute(
+      "href",
+      "/held-events/held-1",
+    );
+  });
+
   it("uses the selected tray as the capture target and safely replaces its image", async () => {
     setDevUser();
     const objectUrls = installObjectUrlMock({

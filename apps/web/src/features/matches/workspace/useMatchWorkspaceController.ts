@@ -33,6 +33,7 @@ import {
   shouldShowBlockingQueryError,
   shouldShowQueryError,
 } from "@/shared/api/queryErrorState";
+import { sanitizeReturnTo } from "@/shared/navigation/returnTo";
 
 export type MatchWorkspaceControllerParams = {
   matchDraftId?: string | undefined;
@@ -50,6 +51,7 @@ export function useMatchWorkspaceController({
   preferredHeldEventId,
 }: MatchWorkspaceControllerParams) {
   const [searchParams] = useSearchParams();
+  const contextualReturnTo = sanitizeReturnTo(searchParams.get("returnTo"));
   const { notify } = useWorkspaceNotice();
   const [validationMessage, setValidationMessage] = useState("");
   const [showValidationErrors, setShowValidationErrors] = useState(false);
@@ -134,7 +136,7 @@ export function useMatchWorkspaceController({
     useSampleDrafts,
   });
 
-  const { returnTo } = useMasterHandoffRestore({
+  const { returnTo: masterReturnTo } = useMasterHandoffRestore({
     handoffSessionId,
     isInitialized,
     mode,
@@ -189,10 +191,12 @@ export function useMatchWorkspaceController({
     mutations: { cancelDraftMutation, isMutating, updateMutation },
   } = useMatchWorkspaceSubmitFlow({
     matchId,
+    mode,
     notify,
     onPersistedSuccess: sessionDraft.markCommitted,
     setConfirmOpen,
     setValidationMessage,
+    returnTo: contextualReturnTo,
     useSampleDrafts,
     values: state.values,
   });
@@ -216,7 +220,7 @@ export function useMatchWorkspaceController({
       handoffSessionId,
       notify,
       onBeforeNavigate: sessionDraft.allowNavigation,
-      returnTo,
+      returnTo: masterReturnTo,
       values: state.values,
     });
 
@@ -251,11 +255,20 @@ export function useMatchWorkspaceController({
   }, [draftDetailQuery, ocrDraftsQuery]);
 
   const workspaceLoading = confirmedDraftRedirecting || confirmedDraftLoaded || !isInitialized;
+  const cancelHref =
+    contextualReturnTo ??
+    (mode === "edit" && matchId
+      ? `/matches/${encodeURIComponent(matchId)}`
+      : state.values.heldEventId
+        ? `/held-events/${encodeURIComponent(state.values.heldEventId)}`
+        : "/matches");
 
   return buildMatchWorkspaceControllerModel({
     baseErrors,
     cancelDraftConfirmOpen,
     cancelDraftPending: cancelDraftMutation.isPending,
+    cancelHref,
+    cancelLabel: mode === "edit" ? "編集をやめる" : "入力をやめる",
     closeConfirm: () => setConfirmOpen(false),
     confirmAction,
     confirmOpen,
@@ -270,7 +283,7 @@ export function useMatchWorkspaceController({
     mode,
     preferredImageKind,
     refreshingReviewStatus,
-    returnTo,
+    returnTo: masterReturnTo,
     reviewState,
     sessionDraft,
     sourceImageLoading: sourceImageQuery.isLoading,

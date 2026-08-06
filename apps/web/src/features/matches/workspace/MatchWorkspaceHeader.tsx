@@ -1,4 +1,5 @@
 import type { MatchWorkspaceController } from "@/features/matches/workspace/useMatchWorkspaceController";
+import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 type MatchWorkspaceHeaderProps = {
@@ -8,6 +9,11 @@ type MatchWorkspaceHeaderProps = {
 export function MatchWorkspaceHeader({ header }: MatchWorkspaceHeaderProps) {
   return (
     <PageHeader
+      actions={
+        <LinkButton size="sm" to={header.cancelHref} variant="quiet">
+          {header.cancelLabel}
+        </LinkButton>
+      }
       description={
         <>
           {header.pageDescription}

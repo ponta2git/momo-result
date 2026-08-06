@@ -38,6 +38,7 @@ export type HeldEventsListModel = {
   page: number;
   pagination: HeldEventListResponse["pagination"] | undefined;
   refreshing: boolean;
+  returnTo: string;
   rows: HeldEventResponse[];
 };
 

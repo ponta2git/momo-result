@@ -1,5 +1,4 @@
 import { LoaderCircle } from "lucide-react";
-import { useState } from "react";
 
 import { DrilldownPlayerSelector } from "@/features/seriesComparison/drilldowns/SeriesComparisonDrilldownPrimitives";
 import { RankHistorySummary } from "@/features/seriesComparison/drilldowns/SeriesComparisonRankDrilldownSummary";
@@ -22,14 +21,17 @@ export function RankAverageHistoryDrilldownDialog({
   open,
   response,
   selectedMemberId,
+  view,
+  onViewChange,
 }: {
   onMemberChange: (memberId: string) => void;
   onOpenChange: (open: boolean) => void;
   open: boolean;
   response: SeriesComparisonResponse;
   selectedMemberId: string | null;
+  view: RankDrilldownView;
+  onViewChange: (view: RankDrilldownView) => void;
 }) {
-  const [view, setView] = useState<RankDrilldownView>("events");
   const { drilldownQuery, players, selectedPlayer } = useSeriesComparisonDrilldownQuery({
     metricId: "rank.averageHistory",
     open,
@@ -66,7 +68,7 @@ export function RankAverageHistoryDrilldownDialog({
               { label: "試合ごと", value: "matches" },
             ]}
             value={view}
-            onValueChange={(next) => setView(next as RankDrilldownView)}
+            onValueChange={(next) => onViewChange(next as RankDrilldownView)}
           />
         </div>
         {loading ? (

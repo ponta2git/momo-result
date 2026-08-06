@@ -1,5 +1,4 @@
 import { BarChart3, Swords, Table2, Trophy } from "lucide-react";
-import { useState } from "react";
 
 import {
   HeadToHeadMatrix,
@@ -7,6 +6,7 @@ import {
   RankDistributionStackedBars,
 } from "@/features/seriesComparison/charts/SeriesComparisonCharts";
 import { RankAverageHistoryDrilldownDialog } from "@/features/seriesComparison/drilldowns/SeriesComparisonRankDrilldown";
+import { useSeriesComparisonDrilldownUrlState } from "@/features/seriesComparison/drilldowns/useSeriesComparisonDrilldownUrlState";
 import {
   MetricRow,
   PlayerMetricGrid,
@@ -34,7 +34,11 @@ export function BasicMetrics({
 }) {
   const players = response.players ?? [];
   const metricsByMember = metricsMap(response);
-  const [drilldownMemberId, setDrilldownMemberId] = useState<string | null>(null);
+  const drilldown = useSeriesComparisonDrilldownUrlState({
+    defaultView: "events",
+    isView: (value): value is "events" | "matches" => value === "events" || value === "matches",
+    kind: "rank",
+  });
   return (
     <MetricSection
       action={
@@ -44,7 +48,7 @@ export function BasicMetrics({
           icon={<Table2 className="size-3.5" />}
           size="sm"
           variant="secondary"
-          onClick={() => setDrilldownMemberId(players[0]?.memberId ?? null)}
+          onClick={() => drilldown.open(players[0]?.memberId)}
         >
           履歴
         </Button>
@@ -94,15 +98,15 @@ export function BasicMetrics({
         yTicks={[1, 2, 3, 4]}
       />
       <RankAverageHistoryDrilldownDialog
-        open={drilldownMemberId !== null}
+        open={drilldown.selectedMemberId !== null}
         response={response}
-        selectedMemberId={drilldownMemberId}
-        onMemberChange={setDrilldownMemberId}
+        selectedMemberId={drilldown.selectedMemberId}
+        view={drilldown.view}
+        onMemberChange={drilldown.setMemberId}
         onOpenChange={(open) => {
-          if (!open) {
-            setDrilldownMemberId(null);
-          }
+          if (!open) drilldown.close();
         }}
+        onViewChange={drilldown.setView}
       />
     </MetricSection>
   );

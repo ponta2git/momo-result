@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useCallback, useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
 import { useSearchParams } from "react-router-dom";
 
+import { preserveSeriesComparisonDrilldownParams } from "@/features/seriesComparison/drilldowns/useSeriesComparisonDrilldownUrlState";
 import {
   buildSeriesComparisonSearchParams,
   defaultSeriesComparisonView,
@@ -27,6 +28,7 @@ import {
   seriesComparisonOptionsQueryOptions,
   seriesComparisonReviewQueryOptions,
 } from "@/shared/api/queryOptions";
+import { sanitizeReturnTo } from "@/shared/navigation/returnTo";
 
 function scopeSignature(state: SeriesComparisonUrlState): string {
   return [state.gameTitleId ?? "", state.seasonMasterId ?? "", state.mapMasterId ?? ""].join("|");
@@ -34,6 +36,7 @@ function scopeSignature(state: SeriesComparisonUrlState): string {
 
 export function useSeriesComparisonPageController() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const returnTo = sanitizeReturnTo(searchParams.get("returnTo"));
   const rawState = useMemo(() => parseSeriesComparisonSearchParams(searchParams), [searchParams]);
   const [optimisticState, setOptimisticState] = useState<SeriesComparisonUrlState | null>(null);
   const [, startStateTransition] = useTransition();
@@ -75,11 +78,15 @@ export function useSeriesComparisonPageController() {
     if (!optionsQuery.data || optimisticState) {
       return;
     }
-    const next = buildSeriesComparisonSearchParams(urlState);
+    const next = preserveSeriesComparisonDrilldownParams(
+      searchParams,
+      buildSeriesComparisonSearchParams(urlState),
+    );
+    if (returnTo) next.set("returnTo", returnTo);
     if (next.toString() !== searchParams.toString()) {
       setSearchParams(next, { replace: true });
     }
-  }, [optimisticState, optionsQuery.data, searchParams, setSearchParams, urlState]);
+  }, [optimisticState, optionsQuery.data, returnTo, searchParams, setSearchParams, urlState]);
 
   useEffect(() => {
     if (optimisticState && urlStateSignature === normalizedStateSignature) {
@@ -131,12 +138,17 @@ export function useSeriesComparisonPageController() {
       const nextState = normalizeSeriesComparisonSelection(optionsQuery.data, next);
       setOptimisticState(nextState);
       startStateTransition(() => {
-        setSearchParams(buildSeriesComparisonSearchParams(nextState), {
+        const nextParams = preserveSeriesComparisonDrilldownParams(
+          searchParams,
+          buildSeriesComparisonSearchParams(nextState),
+        );
+        if (returnTo) nextParams.set("returnTo", returnTo);
+        setSearchParams(nextParams, {
           replace: options.replace ?? true,
         });
       });
     },
-    [optionsQuery.data, setSearchParams, startStateTransition],
+    [optionsQuery.data, returnTo, searchParams, setSearchParams, startStateTransition],
   );
   const updateGameTitle = useCallback(
     (gameTitleId: string) =>
@@ -238,5 +250,6 @@ export function useSeriesComparisonPageController() {
       refreshing: reviewEnabled && reviewQuery.isFetching && reviewQuery.data !== undefined,
       shielded: reviewShielded,
     },
+    returnTo,
   };
 }

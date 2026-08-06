@@ -64,15 +64,15 @@ describe("HeldEventsPage", () => {
     expect(screen.queryByText("held-1")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /の開催詳細$/u })).toHaveAttribute(
       "href",
-      "/held-events/held-1",
+      "/held-events/held-1?returnTo=%2Fheld-events",
     );
     expect(screen.getByRole("link", { name: /の試合を検索$/u })).toHaveAttribute(
       "href",
-      "/matches?heldEventId=held-1",
+      "/matches?heldEventId=held-1&sort=match_no_asc&returnTo=%2Fheld-events",
     );
     expect(screen.getByRole("link", { name: /をCSV出力$/u })).toHaveAttribute(
       "href",
-      "/exports?heldEventId=held-1&format=csv",
+      "/exports?heldEventId=held-1&format=csv&returnTo=%2Fheld-events",
     );
   });
 
@@ -214,7 +214,10 @@ describe("HeldEventsPage", () => {
     renderPage();
 
     const firstPageLink = await screen.findByRole("link", { name: /の開催詳細$/u });
-    expect(firstPageLink).toHaveAttribute("href", "/held-events/held-page-1");
+    expect(firstPageLink).toHaveAttribute(
+      "href",
+      "/held-events/held-page-1?returnTo=%2Fheld-events",
+    );
     await user.click(screen.getByRole("button", { name: "次のページへ" }));
 
     await waitFor(() =>
@@ -222,7 +225,7 @@ describe("HeldEventsPage", () => {
     );
     expect(screen.getByRole("link", { name: /の開催詳細$/u })).toHaveAttribute(
       "href",
-      "/held-events/held-page-1",
+      "/held-events/held-page-1?returnTo=%2Fheld-events%3Fpage%3D2",
     );
     expect(screen.getByText("最新")).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "ページネーション" })).toBeInTheDocument();
@@ -233,7 +236,7 @@ describe("HeldEventsPage", () => {
     await waitFor(() =>
       expect(screen.getByRole("link", { name: /の開催詳細$/u })).toHaveAttribute(
         "href",
-        "/held-events/held-page-2",
+        "/held-events/held-page-2?returnTo=%2Fheld-events%3Fpage%3D2",
       ),
     );
     expect(screen.getByRole("region", { name: "開催履歴" })).not.toHaveAttribute("aria-busy");

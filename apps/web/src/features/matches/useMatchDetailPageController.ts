@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import {
   buildMatchFeatureBadges,
   nextMatchDetailSort,
   rankMatchDetailPlayers,
+  seriesComparisonHrefForMatch,
   sortMatchDetailPlayers,
 } from "@/features/matches/matchDetailViewModel";
 import type {
@@ -27,10 +28,19 @@ import {
 } from "@/shared/api/queryOptions";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 import { buildMatchPerformanceContext } from "@/shared/domain/matchPerformanceContext";
+import {
+  currentInternalLocation,
+  sanitizeReturnTo,
+  withReturnTo,
+} from "@/shared/navigation/returnTo";
 
 export function useMatchDetailPageController() {
   const { matchId = "" } = useParams<{ matchId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const contextualReturnTo = sanitizeReturnTo(searchParams.get("returnTo"));
+  const detailReturnTo = currentInternalLocation(location);
   const queryClient = useQueryClient();
   const idempotencyKeys = useIdempotencyKeyStore();
   const [showConfirm, setShowConfirm] = useState(false);
@@ -60,9 +70,11 @@ export function useMatchDetailPageController() {
     onSuccess: async () => {
       const heldEventId = matchQuery.data?.heldEventId;
       await invalidateAfterMatchDeleted(queryClient);
-      navigate(heldEventId ? `/held-events/${encodeURIComponent(heldEventId)}` : "/matches", {
-        replace: true,
-      });
+      navigate(
+        contextualReturnTo ??
+          (heldEventId ? `/held-events/${encodeURIComponent(heldEventId)}` : "/matches"),
+        { replace: true },
+      );
     },
   });
 
@@ -174,15 +186,24 @@ export function useMatchDetailPageController() {
     shouldShowBlockingQueryError(mapsQuery);
 
   if (detailLoading) {
-    return { status: "loading" as const };
+    return { backHref: contextualReturnTo ?? "/matches", status: "loading" as const };
   }
 
   if (detailLoadFailed || !match) {
-    return { status: "loadFailed" as const };
+    return { backHref: contextualReturnTo ?? "/matches", status: "loadFailed" as const };
   }
+
+  const fallbackBackHref = `/held-events/${encodeURIComponent(match.heldEventId)}`;
+  const backHref = contextualReturnTo ?? fallbackBackHref;
 
   return {
     confirmDelete,
+    backHref,
+    backLabel: contextualReturnTo?.startsWith("/analytics/series")
+      ? "戦績比較へ戻る"
+      : contextualReturnTo?.startsWith("/matches")
+        ? "試合一覧へ戻る"
+        : "この開催へ戻る",
     comparisonContextStatus,
     errorMessage,
     featureBadges,
@@ -190,6 +211,12 @@ export function useMatchDetailPageController() {
     gameTitle,
     heldAt,
     isDeletePending: deleteMutation.isPending,
+    editHref: withReturnTo(`/matches/${encodeURIComponent(match.matchId)}/edit`, detailReturnTo),
+    exportHref: withReturnTo(
+      `/exports?matchId=${encodeURIComponent(match.matchId)}`,
+      detailReturnTo,
+    ),
+    comparisonHref: withReturnTo(seriesComparisonHrefForMatch(match), detailReturnTo),
     map,
     match,
     players,

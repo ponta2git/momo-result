@@ -19,6 +19,7 @@ import type { NormalizedApiError } from "@/shared/api/problemDetails";
 import { memberDisplayName } from "@/shared/domain/members";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { trimSearchParam } from "@/shared/lib/searchParams";
+import { sanitizeReturnTo } from "@/shared/navigation/returnTo";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
 function notify(message: string, tone: "info" | "success" | "warning" = "info") {
@@ -28,6 +29,7 @@ function notify(message: string, tone: "info" | "success" | "warning" = "info") 
 export function useOcrCapturePageController() {
   const [searchParams] = useSearchParams();
   const requestedHeldEventId = trimSearchParam(searchParams.get("heldEventId"));
+  const returnTo = sanitizeReturnTo(searchParams.get("returnTo"));
   const [setup, setSetup] = useState<SetupFormValues>(() => ({
     ...defaultSetupValues,
     ...(requestedHeldEventId ? { heldEventId: requestedHeldEventId } : {}),
@@ -174,6 +176,7 @@ export function useOcrCapturePageController() {
     hasWorkingSlot,
     notify,
     ocrReadyCount,
+    returnTo,
     ocrStartDialog: startFlow.state,
     selectedSlotLabels,
     setSetup,

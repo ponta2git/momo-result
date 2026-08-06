@@ -88,8 +88,8 @@ export function MatchWorkspacePage({
         <Notice tone="danger" title="試合が見つかりませんでした">
           一覧に戻って、対象の試合を選び直してください。
         </Notice>
-        <LinkButton to="/matches" variant="secondary">
-          試合一覧へ戻る
+        <LinkButton to={header.cancelHref} variant="secondary">
+          前の画面へ戻る
         </LinkButton>
       </PageFrame>
     );

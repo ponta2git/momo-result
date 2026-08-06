@@ -63,14 +63,14 @@ export function MatchDetailLoading() {
   );
 }
 
-export function MatchDetailLoadFailed() {
+export function MatchDetailLoadFailed({ backHref = "/matches" }: { backHref?: string }) {
   return (
     <PageFrame className="gap-4" width="wide">
       <Notice tone="danger" title="試合詳細を読み込めませんでした">
         一覧に戻って、対象の試合を選び直してください。
       </Notice>
-      <LinkButton to="/matches" variant="secondary">
-        試合一覧へ戻る
+      <LinkButton to={backHref} variant="secondary">
+        前の画面へ戻る
       </LinkButton>
     </PageFrame>
   );

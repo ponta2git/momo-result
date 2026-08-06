@@ -21,6 +21,8 @@ import {
   formatDecimal,
   isNumber,
 } from "@/features/seriesComparison/model/seriesComparisonPresentation";
+import { withReturnTo } from "@/shared/navigation/returnTo";
+import { useCurrentLocationPath } from "@/shared/navigation/useCurrentLocationPath";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { RankBadge, RankTrail } from "@/shared/ui/rank/RankBadge";
 
@@ -88,6 +90,7 @@ export function HeldEventHistoryTable({ rows }: { rows: RankEventRow[] }) {
 }
 
 export function MatchHistoryTable({ rows }: { rows: RankMatchRow[] }) {
+  const returnTo = useCurrentLocationPath();
   const sortedRows = useMemo(() => rows.toSorted(compareMatchRowDesc), [rows]);
   if (rows.length === 0) {
     return <EmptyState title="試合ごとの履歴がありません" description="対象試合がありません。" />;
@@ -116,7 +119,7 @@ export function MatchHistoryTable({ rows }: { rows: RankMatchRow[] }) {
                 <Link
                   aria-label={`${row.matchIndex}戦目の試合結果を見る`}
                   className="inline-flex min-h-11 items-center font-semibold text-[var(--color-action)] tabular-nums underline-offset-4 hover:underline"
-                  to={`/matches/${encodeURIComponent(row.matchId)}`}
+                  to={withReturnTo(`/matches/${encodeURIComponent(row.matchId)}`, returnTo)}
                 >
                   {row.matchIndex}戦目
                 </Link>

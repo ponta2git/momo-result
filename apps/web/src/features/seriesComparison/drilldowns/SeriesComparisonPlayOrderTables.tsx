@@ -23,6 +23,8 @@ import {
   formatPlayOrderLabel,
   playOrderColor,
 } from "@/features/seriesComparison/model/seriesComparisonPresentation";
+import { withReturnTo } from "@/shared/navigation/returnTo";
+import { useCurrentLocationPath } from "@/shared/navigation/useCurrentLocationPath";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { RankBadge } from "@/shared/ui/rank/RankBadge";
 
@@ -85,6 +87,7 @@ export function PlayOrderBreakdownTable({ rows }: { rows: PlayOrderRow[] }) {
 }
 
 export function PlayOrderTrendTable({ rows }: { rows: PlayOrderTrendRow[] }) {
+  const returnTo = useCurrentLocationPath();
   const sortedRows = useMemo(() => rows.toSorted(compareTrendRowDesc), [rows]);
   if (rows.length === 0) {
     return <EmptyState title="推移データがありません" description="対象試合がありません。" />;
@@ -113,7 +116,7 @@ export function PlayOrderTrendTable({ rows }: { rows: PlayOrderTrendRow[] }) {
                 <Link
                   aria-label={`${row.matchIndex}戦目の試合結果を見る`}
                   className="inline-flex min-h-11 items-center font-semibold text-[var(--color-action)] tabular-nums underline-offset-4 hover:underline"
-                  to={`/matches/${encodeURIComponent(row.matchId)}`}
+                  to={withReturnTo(`/matches/${encodeURIComponent(row.matchId)}`, returnTo)}
                 >
                   {row.matchIndex}戦目
                 </Link>

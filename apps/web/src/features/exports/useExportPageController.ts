@@ -16,6 +16,7 @@ import {
 import { buildExportViewModel, failedResultView } from "@/features/exports/exportViewModel";
 import type { ExportDownloadResultView } from "@/features/exports/exportViewModel";
 import { useExportCandidates } from "@/features/exports/useExportCandidates";
+import { sanitizeReturnTo } from "@/shared/navigation/returnTo";
 
 export type ExportPageControllerParams = {
   downloadTimeoutMs?: number | undefined;
@@ -27,6 +28,7 @@ export function useExportPageController({
   slowThresholdMs = DEFAULT_EXPORT_SLOW_THRESHOLD_MS,
 }: ExportPageControllerParams) {
   const [searchParams, setSearchParams] = useSearchParams();
+  const returnTo = sanitizeReturnTo(searchParams.get("returnTo"));
   const urlState = parseExportSearchParams(searchParams);
   const [lastResult, setLastResult] = useState<ExportDownloadResultView | undefined>();
   const [downloadStartedAt, setDownloadStartedAt] = useState<number | null>(null);
@@ -43,16 +45,15 @@ export function useExportPageController({
       candidateView.kind === "ready" &&
       candidateView.selectedId
     ) {
-      setSearchParams(
-        buildExportSearchParams({
-          format: urlState.format,
-          scope: urlState.scope,
-          selectedId: candidateView.selectedId,
-        }),
-        { replace: true },
-      );
+      const nextParams = buildExportSearchParams({
+        format: urlState.format,
+        scope: urlState.scope,
+        selectedId: candidateView.selectedId,
+      });
+      if (returnTo) nextParams.set("returnTo", returnTo);
+      setSearchParams(nextParams, { replace: true });
     }
-  }, [candidateView, setSearchParams, urlState]);
+  }, [candidateView, returnTo, setSearchParams, urlState]);
 
   useEffect(() => {
     if (downloadStartedAt === null) {
@@ -111,9 +112,9 @@ export function useExportPageController({
     nextSelectedId?: string,
   ): void => {
     setLastResult(undefined);
-    setSearchParams(buildExportSearchParams({ format, scope, selectedId: nextSelectedId }), {
-      replace: true,
-    });
+    const nextParams = buildExportSearchParams({ format, scope, selectedId: nextSelectedId });
+    if (returnTo) nextParams.set("returnTo", returnTo);
+    setSearchParams(nextParams, { replace: true });
   };
 
   const view = buildExportViewModel({
@@ -128,6 +129,7 @@ export function useExportPageController({
 
   return {
     isPending: mutation.isPending,
+    returnTo,
     onCandidateChange: (nextSelectedId: string) => {
       if (!candidates.selectCandidate(nextSelectedId)) return;
       updateSearch(urlState.format, urlState.scope, nextSelectedId);

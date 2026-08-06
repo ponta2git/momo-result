@@ -9,6 +9,7 @@ import type { HeldEventMatchResponse } from "@/shared/api/heldEvents";
 import { memberDisplayName } from "@/shared/domain/members";
 import { formatManYen } from "@/shared/lib/formatters";
 import { seriesComparisonHrefForMatch } from "@/shared/navigation/matchLinks";
+import { withReturnTo } from "@/shared/navigation/returnTo";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Card } from "@/shared/ui/layout/Card";
@@ -19,11 +20,13 @@ export function HeldEventMatchTimeline({
   masterNames,
   matches,
   nextMatchNo,
+  returnTo,
 }: {
   heldEventId: string;
   masterNames: HeldEventMasterNames;
   matches: HeldEventMatchResponse[];
   nextMatchNo: number;
+  returnTo: string;
 }) {
   return (
     <section aria-labelledby="held-event-timeline-heading" className="grid gap-3">
@@ -52,13 +55,19 @@ export function HeldEventMatchTimeline({
             <div className="flex flex-wrap gap-2">
               <LinkButton
                 icon={<Camera aria-hidden="true" className="size-4" />}
-                to={`/ocr/new?heldEventId=${encodeURIComponent(heldEventId)}`}
+                to={withReturnTo(
+                  `/ocr/new?heldEventId=${encodeURIComponent(heldEventId)}`,
+                  returnTo,
+                )}
               >
                 OCR取り込み
               </LinkButton>
               <LinkButton
                 icon={<Keyboard aria-hidden="true" className="size-4" />}
-                to={`/matches/new?heldEventId=${encodeURIComponent(heldEventId)}`}
+                to={withReturnTo(
+                  `/matches/new?heldEventId=${encodeURIComponent(heldEventId)}`,
+                  returnTo,
+                )}
                 variant="secondary"
               >
                 手入力
@@ -100,7 +109,7 @@ export function HeldEventMatchTimeline({
                       <LinkButton
                         aria-label={`第${match.matchNoInEvent}試合の結果を見る`}
                         size="sm"
-                        to={`/matches/${encodeURIComponent(match.matchId)}`}
+                        to={withReturnTo(`/matches/${encodeURIComponent(match.matchId)}`, returnTo)}
                         variant="secondary"
                       >
                         結果を見る
@@ -109,7 +118,7 @@ export function HeldEventMatchTimeline({
                         aria-label={`第${match.matchNoInEvent}試合を戦績比較で見る`}
                         icon={<BarChart3 aria-hidden="true" className="size-4" />}
                         size="sm"
-                        to={seriesComparisonHrefForMatch(match)}
+                        to={withReturnTo(seriesComparisonHrefForMatch(match), returnTo)}
                         variant="quiet"
                       >
                         比較する

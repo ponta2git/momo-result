@@ -19,6 +19,8 @@ import {
   timelineFlagLabel,
 } from "@/features/seriesComparison/model/seriesComparisonViewModel";
 import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
+import { withReturnTo } from "@/shared/navigation/returnTo";
+import { useCurrentLocationPath } from "@/shared/navigation/useCurrentLocationPath";
 import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { Notice } from "@/shared/ui/feedback/Notice";
@@ -49,6 +51,7 @@ function MatchResultStrip({
   focusMatchId?: string | undefined;
   response: SeriesComparisonResponse;
 }) {
+  const returnTo = useCurrentLocationPath();
   const names = playerNameMap(response.players ?? []);
   const timeline = response.matchTimeline ?? [];
   const flagOrder = ["close_finish", "asset_blowout", "ginji_storm", "revenue_top_no_win"];
@@ -145,7 +148,7 @@ function MatchResultStrip({
                 <Link
                   aria-label={`${point.matchIndex}戦目の試合結果を見る`}
                   className="mt-2 inline-flex min-h-11 items-center gap-1 text-xs font-semibold text-[var(--color-action)] underline-offset-4 hover:underline"
-                  to={`/matches/${encodeURIComponent(point.matchId)}`}
+                  to={withReturnTo(`/matches/${encodeURIComponent(point.matchId)}`, returnTo)}
                 >
                   試合結果を見る
                   <ArrowUpRight aria-hidden="true" className="size-3.5" />

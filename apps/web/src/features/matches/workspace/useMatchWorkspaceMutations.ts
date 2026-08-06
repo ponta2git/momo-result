@@ -14,14 +14,17 @@ import { confirmMatch, updateMatch } from "@/shared/api/matches";
 import { formatApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 import { assertDefined } from "@/shared/lib/invariant";
+import { withReturnTo } from "@/shared/navigation/returnTo";
 
 export type MatchWorkspaceMutationsParams = {
   heldEventId: string;
   matchId: string | undefined;
+  mode: "create" | "edit" | "review";
   onConfirmConflict?: (matchDraftId: string) => Promise<boolean>;
   onConfirmSuccess: () => void;
   onError: (message: string) => void;
   onPersistedSuccess: () => void;
+  returnTo?: string | undefined;
 };
 
 function isConflict(error: unknown): boolean {
@@ -37,10 +40,12 @@ function isConflict(error: unknown): boolean {
 export function useMatchWorkspaceMutations({
   heldEventId,
   matchId,
+  mode,
   onConfirmConflict,
   onConfirmSuccess,
   onError,
   onPersistedSuccess,
+  returnTo,
 }: MatchWorkspaceMutationsParams) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -59,7 +64,7 @@ export function useMatchWorkspaceMutations({
       await invalidateAfterMatchConfirmed(queryClient);
       onConfirmSuccess();
       onPersistedSuccess();
-      navigate(`/matches/${encodeURIComponent(response.matchId)}`);
+      navigate(matchSuccessDestination(response.matchId, mode, returnTo));
     },
     onError: async (error, request) => {
       if (request.matchDraftId && isConflict(error)) {
@@ -88,7 +93,7 @@ export function useMatchWorkspaceMutations({
       assertDefined(matchId, "matchId");
       await invalidateAfterMatchUpdated(queryClient, matchId);
       onPersistedSuccess();
-      navigate(`/matches/${encodeURIComponent(response.matchId)}`);
+      navigate(matchSuccessDestination(response.matchId, mode, returnTo));
     },
     onError: (error) => {
       onError(formatApiError(error, "更新に失敗しました"));
@@ -108,9 +113,10 @@ export function useMatchWorkspaceMutations({
     onSuccess: async () => {
       await invalidateAfterDraftCancelled(queryClient);
       onPersistedSuccess();
-      navigate(heldEventId ? `/held-events/${encodeURIComponent(heldEventId)}` : "/matches", {
-        replace: true,
-      });
+      navigate(
+        returnTo ?? (heldEventId ? `/held-events/${encodeURIComponent(heldEventId)}` : "/matches"),
+        { replace: true },
+      );
     },
     onError: (error) => {
       onError(formatApiError(error, "確定前の記録を削除できませんでした"));
@@ -126,4 +132,19 @@ export function useMatchWorkspaceMutations({
     isMutating,
     updateMutation,
   };
+}
+
+function matchSuccessDestination(
+  matchId: string,
+  mode: "create" | "edit" | "review",
+  returnTo: string | undefined,
+): string {
+  const detailPath = `/matches/${encodeURIComponent(matchId)}`;
+  if (mode === "edit" && returnTo) {
+    const parsed = new URL(returnTo, "https://momo-result.local");
+    if (parsed.pathname === detailPath) {
+      return returnTo;
+    }
+  }
+  return withReturnTo(detailPath, returnTo);
 }

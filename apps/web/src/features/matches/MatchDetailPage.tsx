@@ -28,7 +28,7 @@ export function MatchDetailPage() {
   }
 
   if (controller.status === "loadFailed") {
-    return <MatchDetailLoadFailed />;
+    return <MatchDetailLoadFailed backHref={controller.backHref} />;
   }
 
   return <MatchDetailReadyContent controller={controller} />;
@@ -37,8 +37,13 @@ export function MatchDetailPage() {
 function MatchDetailReadyContent({ controller }: { controller: MatchDetailReadyController }) {
   const {
     comparisonContextStatus,
+    comparisonHref,
+    backHref,
+    backLabel,
     confirmDelete,
     errorMessage,
+    editHref,
+    exportHref,
     featureBadges,
     featureScopeLabel,
     gameTitle,
@@ -64,10 +69,10 @@ function MatchDetailReadyContent({ controller }: { controller: MatchDetailReadyC
         <LinkButton
           icon={<ArrowLeft aria-hidden="true" className="size-4" />}
           size="sm"
-          to={`/held-events/${encodeURIComponent(match.heldEventId)}`}
+          to={backHref}
           variant="quiet"
         >
-          この開催へ戻る
+          {backLabel}
         </LinkButton>
       </div>
       <PageHeader
@@ -75,13 +80,10 @@ function MatchDetailReadyContent({ controller }: { controller: MatchDetailReadyC
         title={`第${match.matchNoInEvent}試合の結果`}
         actions={
           <>
-            <LinkButton
-              to={`/exports?matchId=${encodeURIComponent(match.matchId)}`}
-              variant="secondary"
-            >
+            <LinkButton to={exportHref} variant="secondary">
               この試合を出力
             </LinkButton>
-            <LinkButton to={`/matches/${encodeURIComponent(match.matchId)}/edit`}>編集</LinkButton>
+            <LinkButton to={editHref}>編集</LinkButton>
           </>
         }
       />
@@ -119,7 +121,7 @@ function MatchDetailReadyContent({ controller }: { controller: MatchDetailReadyC
           rows={ledgerRows}
         />
         <div className="px-4 pb-4">
-          <MatchSeriesComparisonCta match={match} />
+          <MatchSeriesComparisonCta href={comparisonHref} />
         </div>
       </Card>
 

@@ -4,6 +4,8 @@ import { playerNameMap } from "@/features/seriesComparison/model/seriesCompariso
 import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
 import { buildMatchPerformanceContext } from "@/shared/domain/matchPerformanceContext";
 import { formatDateOnly } from "@/shared/lib/dateTime";
+import { withReturnTo } from "@/shared/navigation/returnTo";
+import { useCurrentLocationPath } from "@/shared/navigation/useCurrentLocationPath";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { MatchResultLedger } from "@/shared/ui/data/MatchResultLedger";
@@ -28,6 +30,7 @@ export function SeriesComparisonFocusedMatch({
   onClear: () => void;
   response: SeriesComparisonResponse;
 }) {
+  const returnTo = useCurrentLocationPath();
   const points = (response.matchPlayerPoints ?? [])
     .filter((point) => point.matchId === focusMatchId)
     .toSorted((left, right) => left.rank - right.rank);
@@ -73,7 +76,7 @@ export function SeriesComparisonFocusedMatch({
           <LinkButton
             icon={<ArrowUpRight className="size-4" />}
             size="sm"
-            to={`/matches/${encodeURIComponent(focusMatchId)}`}
+            to={withReturnTo(`/matches/${encodeURIComponent(focusMatchId)}`, returnTo)}
             variant="secondary"
           >
             この試合の結果

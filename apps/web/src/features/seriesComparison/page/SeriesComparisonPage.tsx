@@ -1,4 +1,4 @@
-import { BarChart3 } from "lucide-react";
+import { ArrowLeft, BarChart3 } from "lucide-react";
 
 import { SeriesComparisonContent } from "@/features/seriesComparison/page/SeriesComparisonContent";
 import { SeriesComparisonScopeBar } from "@/features/seriesComparison/page/SeriesComparisonScopeBar";
@@ -7,6 +7,7 @@ import {
   PageSkeleton,
 } from "@/features/seriesComparison/page/SeriesComparisonSkeletons";
 import { useSeriesComparisonPageController } from "@/features/seriesComparison/page/useSeriesComparisonPageController";
+import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
@@ -23,7 +24,21 @@ export function SeriesComparisonPage() {
 
   return (
     <PageFrame className="gap-4" width="wide">
-      <PageHeader title="戦績比較" />
+      <PageHeader
+        actions={
+          page.returnTo ? (
+            <LinkButton
+              icon={<ArrowLeft aria-hidden="true" className="size-4" />}
+              size="sm"
+              to={page.returnTo}
+              variant="quiet"
+            >
+              前の画面へ戻る
+            </LinkButton>
+          ) : null
+        }
+        title="戦績比較"
+      />
 
       {options.hasError ? (
         <Notice tone="danger" title="対象作品を読み込めません">

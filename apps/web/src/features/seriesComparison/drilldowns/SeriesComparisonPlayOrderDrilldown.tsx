@@ -1,5 +1,4 @@
 import { LoaderCircle } from "lucide-react";
-import { useState } from "react";
 
 import { DrilldownPlayerSelector } from "@/features/seriesComparison/drilldowns/SeriesComparisonDrilldownPrimitives";
 import type { PlayOrderTableView } from "@/features/seriesComparison/drilldowns/SeriesComparisonPlayOrderDrilldownTypes";
@@ -18,14 +17,17 @@ export function PlayOrderRankHistoryDrilldownDialog({
   open,
   response,
   selectedMemberId,
+  tableView,
+  onTableViewChange,
 }: {
   onMemberChange: (memberId: string) => void;
   onOpenChange: (open: boolean) => void;
   open: boolean;
   response: SeriesComparisonResponse;
   selectedMemberId: string | null;
+  tableView: PlayOrderTableView;
+  onTableViewChange: (view: PlayOrderTableView) => void;
 }) {
-  const [tableView, setTableView] = useState<PlayOrderTableView>("trendData");
   const { drilldownQuery, players, selectedPlayer } = useSeriesComparisonDrilldownQuery({
     metricId: "playOrder.rankHistory",
     open,
@@ -80,7 +82,7 @@ export function PlayOrderRankHistoryDrilldownDialog({
                 <AverageTrendPanel
                   payload={payload}
                   tableView={tableView}
-                  onTableViewChange={setTableView}
+                  onTableViewChange={onTableViewChange}
                 />
               </>
             ) : (

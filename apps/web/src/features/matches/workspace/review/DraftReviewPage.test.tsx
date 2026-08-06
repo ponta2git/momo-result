@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { confirmedDraftMessages } from "@/features/matches/confirmedDraftNavigation";
 import { DraftReviewPage } from "@/features/matches/workspace/DraftReviewPage";
+import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { ToastHost } from "@/shared/ui/feedback/ToastHost";
 import {
   createMatchWorkspaceMasterHandoffPayload,
@@ -412,7 +413,7 @@ describe("DraftReviewPage", () => {
     );
 
     expect(await screen.findByText("一覧にない開催履歴を追加する")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "作成して選択" })).not.toBeVisible();
+    expect(screen.getByRole("button", { hidden: true, name: "作成して選択" })).not.toBeVisible();
 
     await user.click(screen.getByText("一覧にない開催履歴を追加する"));
     expect(screen.getByRole("button", { name: "作成して選択" })).toBeVisible();
@@ -439,6 +440,7 @@ describe("DraftReviewPage", () => {
           <Routes>
             <Route path="/review/:matchSessionId" element={<DraftReviewPage />} />
           </Routes>
+          <ToastHost />
         </MemoryRouter>
       </QueryClientProvider>,
     );
@@ -447,12 +449,14 @@ describe("DraftReviewPage", () => {
     await user.click(screen.getByText("一覧にない開催履歴を追加する"));
     await user.click(screen.getByRole("button", { name: "作成して選択" }));
 
-    const heldEventSelect = screen.getByLabelText(/開催履歴/u) as HTMLSelectElement;
+    const heldEventSelect = screen.getByRole("combobox", {
+      name: /開催履歴/u,
+    }) as HTMLSelectElement;
     await waitFor(() => expect(heldEventSelect).toHaveValue("held-created"));
     expect([...heldEventSelect.options].map((option) => option.value)).toContain("held-created");
     expect(
       screen.getByText(
-        `開催履歴（${new Date(createdHeldEvent.heldAt).toLocaleString()}）を作成して選択しました。`,
+        `開催履歴（${formatDateTimeLong(createdHeldEvent.heldAt)}）を作成して選択しました。`,
       ),
     ).toBeInTheDocument();
   });
@@ -564,6 +568,7 @@ describe("DraftReviewPage", () => {
           <Routes>
             <Route path="/review/:matchSessionId" element={<DraftReviewPage />} />
           </Routes>
+          <ToastHost />
         </MemoryRouter>
       </QueryClientProvider>,
     );
@@ -618,6 +623,7 @@ describe("DraftReviewPage", () => {
           <Routes>
             <Route path="/review/:matchSessionId" element={<DraftReviewPage />} />
           </Routes>
+          <ToastHost />
         </MemoryRouter>
       </QueryClientProvider>,
     );

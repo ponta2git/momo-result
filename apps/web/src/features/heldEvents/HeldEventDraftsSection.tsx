@@ -8,6 +8,7 @@ import {
 import type { HeldEventMasterNames } from "@/features/heldEvents/heldEventDetailViewModel";
 import type { HeldEventDraftResponse } from "@/shared/api/heldEvents";
 import { asDraftStatusOrUnknown, reviewStatusLabel } from "@/shared/domain/draftStatus";
+import { withReturnTo } from "@/shared/navigation/returnTo";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { Card } from "@/shared/ui/layout/Card";
@@ -16,9 +17,11 @@ import { StatusPill } from "@/shared/ui/status/StatusPill";
 export function HeldEventDraftsSection({
   drafts,
   masterNames,
+  returnTo,
 }: {
   drafts: HeldEventDraftResponse[];
   masterNames: HeldEventMasterNames;
+  returnTo: string;
 }) {
   if (drafts.length === 0) {
     return null;
@@ -72,7 +75,7 @@ export function HeldEventDraftsSection({
                 ) : null}
               </div>
               {action.href ? (
-                <LinkButton className="shrink-0" size="sm" to={action.href}>
+                <LinkButton className="shrink-0" size="sm" to={withReturnTo(action.href, returnTo)}>
                   {action.label}
                 </LinkButton>
               ) : (

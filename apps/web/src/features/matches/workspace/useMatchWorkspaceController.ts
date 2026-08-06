@@ -1,23 +1,15 @@
-import { useCallback, useReducer, useState } from "react";
+import { useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 
-import {
-  createMatchFormReducerState,
-  matchFormReducer,
-} from "@/features/matches/workspace/matchFormReducer";
-import { createEmptyMatchForm } from "@/features/matches/workspace/matchFormTypes";
-import type {
-  MatchWorkspaceInitialData,
-  WorkspaceMode,
-} from "@/features/matches/workspace/matchFormTypes";
+import type { WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
 import { buildMatchWorkspaceControllerModel } from "@/features/matches/workspace/matchWorkspaceControllerModel";
 import type { MatchWorkspaceControllerModel } from "@/features/matches/workspace/matchWorkspaceControllerModel";
-import type { SourceImageKind } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
 import { useMasterHandoffRestore } from "@/features/matches/workspace/useMasterHandoffRestore";
 import { useMatchWorkspaceFormHandlers } from "@/features/matches/workspace/useMatchWorkspaceFormHandlers";
 import { useMatchWorkspaceHandoffNavigation } from "@/features/matches/workspace/useMatchWorkspaceHandoffNavigation";
 import { useMatchWorkspaceInit } from "@/features/matches/workspace/useMatchWorkspaceInit";
 import { useMatchWorkspaceLifecycleEffects } from "@/features/matches/workspace/useMatchWorkspaceLifecycleEffects";
+import { useMatchWorkspaceLocalState } from "@/features/matches/workspace/useMatchWorkspaceLocalState";
 import { useMatchWorkspacePrimaryAction } from "@/features/matches/workspace/useMatchWorkspacePrimaryAction";
 import { useMatchWorkspaceQueries } from "@/features/matches/workspace/useMatchWorkspaceQueries";
 import { useMatchWorkspaceReviewSession } from "@/features/matches/workspace/useMatchWorkspaceReviewSession";
@@ -27,7 +19,6 @@ import { useMatchWorkspaceValidation } from "@/features/matches/workspace/useMat
 import { useMatchWorkspaceViewModel } from "@/features/matches/workspace/useMatchWorkspaceViewModel";
 import { useWorkspaceHeldEventCreation } from "@/features/matches/workspace/useWorkspaceHeldEventCreation";
 import { useWorkspaceNotice } from "@/features/matches/workspace/useWorkspaceNotice";
-import { currentLocalIsoMinute } from "@/features/matches/workspace/workspaceDerivations";
 import { isInitialQueryLoading, shouldShowQueryError } from "@/shared/api/queryErrorState";
 import { sanitizeReturnTo } from "@/shared/navigation/returnTo";
 
@@ -49,25 +40,8 @@ export function useMatchWorkspaceController({
   const [searchParams] = useSearchParams();
   const contextualReturnTo = sanitizeReturnTo(searchParams.get("returnTo"));
   const { notify } = useWorkspaceNotice();
-  const [validationMessage, setValidationMessage] = useState("");
-  const [showValidationErrors, setShowValidationErrors] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [cancelDraftConfirmOpen, setCancelDraftConfirmOpen] = useState(false);
-  const [validationFocusRequest, setValidationFocusRequest] = useState<{
-    path: string;
-    sequence: number;
-  } | null>(null);
-  const [eventDraftValue, setEventDraftValue] = useState<string>(currentLocalIsoMinute);
-  const [workspaceData, setWorkspaceData] = useState<MatchWorkspaceInitialData | null>(null);
-  const [preferredImageKind, setPreferredImageKind] = useState<SourceImageKind>("total_assets");
-  const nowIsoFactory = useCallback(() => new Date().toISOString(), []);
-  const emptyFormFactory = useCallback(
-    () => createEmptyMatchForm(nowIsoFactory()),
-    [nowIsoFactory],
-  );
-  const [state, dispatch] = useReducer(matchFormReducer, null, () =>
-    createMatchFormReducerState(emptyFormFactory()),
-  );
+  const local = useMatchWorkspaceLocalState();
+  const { dispatch, state } = local;
   const useSampleDrafts = mode === "review" && searchParams.get("sample") === "1";
   const hasHandoff = searchParams.has("handoffId");
   const handoffSessionId = matchSessionId ?? matchDraftId ?? mode;
@@ -106,7 +80,7 @@ export function useMatchWorkspaceController({
     sourceImageQuery,
   } = queries;
   const createEventMutation = useWorkspaceHeldEventCreation({
-    onError: setValidationMessage,
+    onError: local.setValidationMessage,
     onSelectCreatedEvent: (event) => {
       dispatch({
         patch: {
@@ -123,7 +97,7 @@ export function useMatchWorkspaceController({
   const { isInitialized } = useMatchWorkspaceInit({
     draftDetail: draftDetailQuery.data ?? undefined,
     draftDetailLoading: draftDetailQuery.isLoading,
-    emptyFormFactory,
+    emptyFormFactory: local.emptyFormFactory,
     matchDetail: matchDetailQuery.data ?? undefined,
     matchDraftId,
     matchId,
@@ -133,9 +107,9 @@ export function useMatchWorkspaceController({
     ocrDraftsError: shouldShowQueryError(ocrDraftsQuery),
     onInitialize: (values, workspaceInitial) => {
       dispatch({ payload: values, type: "replace" });
-      setWorkspaceData(workspaceInitial);
+      local.setWorkspaceData(workspaceInitial);
     },
-    nowIsoFactory,
+    nowIsoFactory: local.nowIsoFactory,
     reviewDraftIdList,
     reviewDraftIds,
     useSampleDrafts,
@@ -163,7 +137,7 @@ export function useMatchWorkspaceController({
   });
   const { validation, visibleErrorPathSet } = useMatchWorkspaceValidation({
     mode,
-    showValidationErrors,
+    showValidationErrors: local.showValidationErrors,
     values: state.values,
   });
   const viewModel = useMatchWorkspaceViewModel({
@@ -187,7 +161,7 @@ export function useMatchWorkspaceController({
     notify,
     reviewKey: handoffSessionId,
     values: state.values,
-    workspaceData,
+    workspaceData: local.workspaceData,
   });
   const {
     cancelDraftConfirmed: handleCancelDraftConfirmed,
@@ -199,8 +173,8 @@ export function useMatchWorkspaceController({
     mode,
     notify,
     onPersistedSuccess: sessionDraft.markCommitted,
-    setConfirmOpen,
-    setValidationMessage,
+    setConfirmOpen: local.setConfirmOpen,
+    setValidationMessage: local.setValidationMessage,
     returnTo: contextualReturnTo,
     useSampleDrafts,
     values: state.values,
@@ -237,21 +211,21 @@ export function useMatchWorkspaceController({
   const formHandlers = useMatchWorkspaceFormHandlers({
     createHeldEvent: createEventMutation.mutate,
     dispatch,
-    eventDraftValue,
+    eventDraftValue: local.eventDraftValue,
     onReviewFieldChange: reviewState.markFieldChanged,
     onReviewPlayOrderChange: reviewState.markPlayOrderChanged,
-    workspaceData,
+    workspaceData: local.workspaceData,
   });
   const onPrimaryAction = useMatchWorkspacePrimaryAction({
     mode,
     onValidationFailure: (path) =>
-      setValidationFocusRequest((current) => ({
+      local.setValidationFocusRequest((current) => ({
         path,
         sequence: (current?.sequence ?? 0) + 1,
       })),
-    setConfirmOpen,
-    setShowValidationErrors,
-    setValidationMessage,
+    setConfirmOpen: local.setConfirmOpen,
+    setShowValidationErrors: local.setShowValidationErrors,
+    setValidationMessage: local.setValidationMessage,
     update: updateMutation.mutate,
     values: state.values,
   });
@@ -270,23 +244,23 @@ export function useMatchWorkspaceController({
 
   return buildMatchWorkspaceControllerModel({
     baseErrors,
-    cancelDraftConfirmOpen,
+    cancelDraftConfirmOpen: local.cancelDraftConfirmOpen,
     cancelDraftPending: cancelDraftMutation.isPending,
     cancelHref,
     cancelLabel: mode === "edit" ? "編集をやめる" : "入力をやめる",
-    closeConfirm: () => setConfirmOpen(false),
+    closeConfirm: () => local.setConfirmOpen(false),
     confirmAction,
-    confirmOpen,
+    confirmOpen: local.confirmOpen,
     createEventPending: createEventMutation.isPending,
     editLoadFailureKind,
     editLoading: mode === "edit" && isInitialQueryLoading(matchDetailQuery),
-    eventDraftValue,
+    eventDraftValue: local.eventDraftValue,
     formHandlers,
     isMutating,
     isNavigatingToMasters,
     isOcrRunningBlocked,
     mode,
-    preferredImageKind,
+    preferredImageKind: local.preferredImageKind,
     refreshingReviewStatus,
     returnTo: masterReturnTo,
     reviewState,
@@ -296,17 +270,17 @@ export function useMatchWorkspaceController({
     state,
     useSampleDrafts,
     validationState: { validation, visibleErrorPathSet },
-    validationMessage,
-    validationFocusRequest,
+    validationMessage: local.validationMessage,
+    validationFocusRequest: local.validationFocusRequest,
     viewModel,
-    workspaceData,
+    workspaceData: local.workspaceData,
     workspaceLoading,
     onCancelDraftConfirm: handleCancelDraftConfirmed,
-    onCancelDraftOpenChange: setCancelDraftConfirmOpen,
-    onCancelDraftTrigger: () => setCancelDraftConfirmOpen(true),
-    onEventDraftChange: setEventDraftValue,
+    onCancelDraftOpenChange: local.setCancelDraftConfirmOpen,
+    onCancelDraftTrigger: () => local.setCancelDraftConfirmOpen(true),
+    onEventDraftChange: local.setEventDraftValue,
     onNavigateToMasters: handleNavigateToMasters,
-    onPreferImageKindChange: setPreferredImageKind,
+    onPreferImageKindChange: local.setPreferredImageKind,
     onPrimaryAction,
     onRetryBaseErrors: retryBaseQueries,
     onRetryEdit: retryEdit,

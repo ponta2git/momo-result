@@ -9,11 +9,11 @@ import {
   keyToPath,
   memberSelectClass,
   playerSlotKey,
-  scoreGridColumns,
   selectShortClass,
   textNumericShortClass,
 } from "@/features/matches/workspace/scoreGrid/ScoreGridColumns";
 import type { GridColumn } from "@/features/matches/workspace/scoreGrid/ScoreGridColumns";
+import { ScoreGridDesktopHeader } from "@/features/matches/workspace/scoreGrid/ScoreGridDesktopHeader";
 import { PlayerNumericDesktopCell } from "@/features/matches/workspace/scoreGrid/ScoreGridDesktopNumericCell";
 import { ScoreGridNumericEditor } from "@/features/matches/workspace/scoreGrid/ScoreGridNumericEditor";
 import {
@@ -62,27 +62,7 @@ export function ScoreGridDesktopTable({
   const reviewedCellIds = new Set(review.acknowledgedCellIds);
   return (
     <table className="min-w-[64rem] table-fixed border-separate border-spacing-y-2 text-left text-sm">
-      <colgroup>
-        {scoreGridColumns.map((column) => (
-          <col key={column.column} className={column.widthClass} />
-        ))}
-      </colgroup>
-      <thead className="text-xs text-[var(--color-text-secondary)]">
-        <tr>
-          {scoreGridColumns.map((column) => (
-            <th
-              key={column.column}
-              className={
-                column.kind === "member"
-                  ? "sticky left-0 z-[var(--z-sticky-raised)] bg-[var(--color-surface)] px-2 py-2"
-                  : "px-2 py-2"
-              }
-            >
-              {column.header}
-            </th>
-          ))}
-        </tr>
-      </thead>
+      <ScoreGridDesktopHeader />
       <tbody>
         {players.map((player, rowIndex) => {
           const originalRow = originalPlayers?.[rowIndex];

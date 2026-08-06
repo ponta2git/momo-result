@@ -25,6 +25,18 @@ function stopStream(stream: MediaStream | null) {
   }
 }
 
+function selectableVideoDevices(items: MediaDeviceInfo[]): MediaDeviceInfo[] {
+  const seenDeviceIds = new Set<string>();
+  return items.filter((item) => {
+    const deviceId = item.deviceId.trim();
+    if (item.kind !== "videoinput" || !deviceId || seenDeviceIds.has(deviceId)) {
+      return false;
+    }
+    seenDeviceIds.add(deviceId);
+    return true;
+  });
+}
+
 export function CameraCapture({
   disabled = false,
   renderFallback,
@@ -64,7 +76,7 @@ export function CameraCapture({
     void (async () => {
       try {
         const items = await navigator.mediaDevices.enumerateDevices();
-        setDevices(items.filter((item) => item.kind === "videoinput"));
+        setDevices(selectableVideoDevices(items));
       } catch {
         setDevices([]);
       }
@@ -107,7 +119,7 @@ export function CameraCapture({
       if (navigator.mediaDevices.enumerateDevices) {
         try {
           const items = await navigator.mediaDevices.enumerateDevices();
-          setDevices(items.filter((item) => item.kind === "videoinput"));
+          setDevices(selectableVideoDevices(items));
         } catch {
           setDevices([]);
         }

@@ -19,9 +19,9 @@ export function MomentumTransitionMatrices({
   players: Player[];
 }) {
   return (
-    <div className="grid gap-2">
+    <div className="grid w-full max-w-full min-w-0 gap-2">
       <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">順位遷移</h3>
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid w-full max-w-full min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-4">
         {players.map((player, index) => (
           <MomentumTransitionMatrix
             entry={entriesByMember.get(player.memberId)}

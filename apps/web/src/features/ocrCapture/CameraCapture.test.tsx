@@ -128,6 +128,26 @@ describe("CameraCapture", () => {
     expect(screen.getByRole("button", { name: "静止画を撮影" })).toBeEnabled();
   });
 
+  it("omits cameras without a selectable id and de-duplicates device options", async () => {
+    getUserMedia = installGetUserMediaMock(() => Promise.resolve(createMockMediaStream().stream));
+    Object.assign(navigator.mediaDevices, {
+      enumerateDevices: vi
+        .fn()
+        .mockResolvedValue([
+          mediaDevice({ deviceId: "", label: "権限付与前のカメラ" }),
+          mediaDevice({ deviceId: "camera-1", label: "カメラ 1" }),
+          mediaDevice({ deviceId: "camera-1", label: "重複したカメラ" }),
+        ]),
+    });
+
+    render(<CameraCapture slotLabel="総資産" onSelect={vi.fn()} onValidationError={vi.fn()} />);
+
+    expect(await screen.findByRole("combobox", { name: "カメラ" })).toBeInTheDocument();
+    expect(screen.getAllByRole("option")).toHaveLength(2);
+    expect(screen.getByRole("option", { name: "ブラウザの既定カメラ" })).toHaveValue("");
+    expect(screen.getByRole("option", { name: "カメラ 1" })).toHaveValue("camera-1");
+  });
+
   it("promotes the file fallback when camera permission is denied", async () => {
     const user = userEvent.setup();
     getUserMedia = installGetUserMediaMock(() =>
@@ -170,3 +190,13 @@ describe("CameraCapture", () => {
     expect(source).toBe("camera");
   });
 });
+
+function mediaDevice({ deviceId, label }: { deviceId: string; label: string }): MediaDeviceInfo {
+  return {
+    deviceId,
+    groupId: "group-1",
+    kind: "videoinput",
+    label,
+    toJSON: () => ({}),
+  };
+}

@@ -55,6 +55,7 @@ pnpm dev
 ```
 
 `pnpm dev` は shell / root `.env` の `DATABASE_URL` を優先し、未設定時は sibling `momo-db/.env.local` の `DIRECT_URL` をローカルDB設定として利用する。永続DB設定が見つからない場合や、API health が database `ok` にならない場合は Web を起動せず終了する。これにより、DB未接続の空状態を登録データ0件として誤表示しない。
+設定済みDBへ接続できない場合は、ランチャーが待機を続けず `momo-db` の起動・migrationコマンドを案内する。
 
 API:
 

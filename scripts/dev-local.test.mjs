@@ -80,3 +80,16 @@ test("rejects an API that reports persistent database access as disabled", async
     /API started without persistent database access/u,
   );
 });
+
+test("reports the local recovery commands when the configured database is unavailable", async () => {
+  const fetchImpl = async () =>
+    new Response(JSON.stringify({ database: "unavailable" }), {
+      headers: { "Content-Type": "application/json" },
+      status: 200,
+    });
+
+  await assert.rejects(
+    () => waitForPersistentApi({ result: undefined }, {}, { fetchImpl, timeoutMs: 100 }),
+    /pnpm --dir \.\.\/momo-db db:up.*pnpm --dir \.\.\/momo-db db:migrate/u,
+  );
+});

@@ -6,6 +6,7 @@ import type { InputSource } from "@/features/ocrCapture/captureState";
 import { validateImageFile } from "@/features/ocrCapture/captureState";
 import { Button } from "@/shared/ui/actions/Button";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
+import { SelectField } from "@/shared/ui/forms/SelectField";
 
 type CameraCaptureProps = {
   disabled?: boolean;
@@ -197,22 +198,20 @@ export function CameraCapture({
   return (
     <div className="space-y-3">
       {devices.length > 0 ? (
-        <label className="grid max-w-[28rem] gap-1 text-xs font-semibold text-[var(--color-text-secondary)]">
-          カメラ
-          <select
-            className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={disabled || active || starting}
-            value={deviceId}
-            onChange={(event) => setDeviceId(event.target.value)}
-          >
-            <option value="">ブラウザの既定カメラ</option>
-            {devices.map((device, index) => (
-              <option key={device.deviceId || index} value={device.deviceId}>
-                {device.label || `カメラ ${index + 1}`}
-              </option>
-            ))}
-          </select>
-        </label>
+        <SelectField
+          disabled={disabled || active || starting}
+          fieldClassName="max-w-[28rem]"
+          label="カメラ"
+          options={[
+            { label: "ブラウザの既定カメラ", value: "" },
+            ...devices.map((device, index) => ({
+              label: device.label || `カメラ ${index + 1}`,
+              value: device.deviceId,
+            })),
+          ]}
+          value={deviceId}
+          onChange={(event) => setDeviceId(event.currentTarget.value)}
+        />
       ) : null}
       <div className="relative max-w-[44rem] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--momo-night-900)]">
         {active ? null : (

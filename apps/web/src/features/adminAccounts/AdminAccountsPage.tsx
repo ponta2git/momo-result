@@ -10,12 +10,12 @@ import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
-import { Field } from "@/shared/ui/forms/Field";
+import { checkboxInputClass, checkboxLabelClass } from "@/shared/ui/forms/controlStyles";
+import { Fieldset } from "@/shared/ui/forms/Fieldset";
+import { SelectField } from "@/shared/ui/forms/SelectField";
+import { TextField } from "@/shared/ui/forms/TextField";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
-
-const inputClass =
-  "w-full rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)]";
 
 export function AdminAccountsPage() {
   const { accounts, accountsLoading, createAction, createState, normalizedError, updateMutation } =
@@ -45,45 +45,41 @@ export function AdminAccountsPage() {
           action={createAction}
           className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_16rem_auto]"
         >
-          <Field label="DiscordユーザーID">
-            <input
-              className={inputClass}
-              inputMode="numeric"
-              name="discordUserId"
-              placeholder="例: 523484457705930752"
-              required
-            />
-          </Field>
-          <Field label="表示名">
-            <input
-              className={inputClass}
-              name="displayName"
-              placeholder="例: 代理入力者"
-              required
-            />
-          </Field>
-          <Field label="紐づくプレーヤー">
-            <select className={inputClass} name="playerMemberId" defaultValue="">
-              <option value="">試合参加者に紐づけない</option>
-              {fixedMembers.map((member) => (
-                <option key={member.memberId} value={member.memberId}>
-                  {member.displayName}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="権限">
-            <div className="flex min-h-10 flex-wrap items-center gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
-              <label className="inline-flex items-center gap-2 text-sm">
-                <input defaultChecked name="loginEnabled" type="checkbox" />
-                ログイン許可
-              </label>
-              <label className="inline-flex items-center gap-2 text-sm">
-                <input name="isAdmin" type="checkbox" />
-                管理者
-              </label>
-            </div>
-          </Field>
+          <TextField
+            inputMode="numeric"
+            label="DiscordユーザーID"
+            name="discordUserId"
+            placeholder="例: 523484457705930752"
+            required
+          />
+          <TextField label="表示名" name="displayName" placeholder="例: 代理入力者" required />
+          <SelectField
+            defaultValue=""
+            label="紐づくプレーヤー"
+            name="playerMemberId"
+            options={[
+              { label: "試合参加者に紐づけない", value: "" },
+              ...fixedMembers.map((member) => ({
+                label: member.displayName,
+                value: member.memberId,
+              })),
+            ]}
+          />
+          <Fieldset legend="権限">
+            <label className={checkboxLabelClass}>
+              <input
+                className={checkboxInputClass}
+                defaultChecked
+                name="loginEnabled"
+                type="checkbox"
+              />
+              ログイン許可
+            </label>
+            <label className={checkboxLabelClass}>
+              <input className={checkboxInputClass} name="isAdmin" type="checkbox" />
+              管理者
+            </label>
+          </Fieldset>
           <div className="flex items-end">
             <CreateAccountSubmitButton />
           </div>

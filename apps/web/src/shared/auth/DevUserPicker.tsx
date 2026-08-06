@@ -1,9 +1,9 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useId } from "react";
 
 import { useDevUser } from "@/shared/auth/useDevUser";
 import { fixedMembers } from "@/shared/domain/members";
 import { cn } from "@/shared/ui/cn";
+import { SelectField } from "@/shared/ui/forms/SelectField";
 
 type DevUserPickerProps = {
   embedded?: boolean;
@@ -11,7 +11,6 @@ type DevUserPickerProps = {
 };
 
 export function DevUserPicker({ embedded = false, force = false }: DevUserPickerProps) {
-  const id = useId();
   const queryClient = useQueryClient();
   const { devUser, setDevUser, lockedByEnv } = useDevUser();
 
@@ -32,36 +31,25 @@ export function DevUserPicker({ embedded = false, force = false }: DevUserPicker
           : "rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3",
       )}
     >
-      <label
-        htmlFor={id}
-        className="block text-xs font-semibold text-[var(--color-text-secondary)]"
-      >
-        操作用アカウント
-      </label>
-      <select
-        id={id}
+      <SelectField
+        description={lockedByEnv ? "ローカル設定で固定されています。" : undefined}
+        disabled={lockedByEnv}
+        label="操作用アカウント"
+        options={[
+          { label: "未選択", value: "" },
+          ...devAccounts.map((account) => ({
+            label: `${account.displayName} (${account.accountId})`,
+            value: account.accountId,
+          })),
+        ]}
         value={devUser}
         onChange={(event) => {
-          const next = event.target.value;
+          const next = event.currentTarget.value;
           if (next === devUser) return;
           setDevUser(next);
           void queryClient.invalidateQueries();
         }}
-        disabled={lockedByEnv}
-        className="mt-2 w-full rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)]"
-      >
-        <option value="">未選択</option>
-        {devAccounts.map((account) => (
-          <option key={account.accountId} value={account.accountId}>
-            {account.displayName} ({account.accountId})
-          </option>
-        ))}
-      </select>
-      {lockedByEnv ? (
-        <p className="mt-2 text-xs text-[var(--color-text-secondary)]">
-          ローカル設定で固定されています。
-        </p>
-      ) : null}
+      />
     </div>
   );
 }

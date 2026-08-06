@@ -1,6 +1,7 @@
 import { incidentColumns } from "@/shared/domain/incidents";
 import type { IncidentKey, IncidentLabel } from "@/shared/domain/incidents";
 import { fixedMembers } from "@/shared/domain/members";
+import { fieldControlClass } from "@/shared/ui/forms/controlStyles";
 
 export type GridColumn =
   | "memberId"
@@ -64,8 +65,7 @@ export function playerSlotKey(index: number): string {
   return fixedMembers[index]?.memberId ?? `extra-player-${index}`;
 }
 
-export const baseInputClass =
-  "w-full min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-2 text-sm text-[var(--color-text-primary)] transition-colors duration-150 hover:bg-[var(--color-surface-subtle)]";
+export const baseInputClass = `${fieldControlClass} px-2`;
 export const textNumericShortClass = `${baseInputClass} min-w-[6ch] text-center tabular-nums`;
 export const textNumericClass = `${baseInputClass} min-w-[12ch] text-right tabular-nums`;
 export const selectShortClass = `${baseInputClass} min-w-[6ch] text-center`;

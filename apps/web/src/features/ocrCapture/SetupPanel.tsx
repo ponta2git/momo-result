@@ -1,9 +1,8 @@
-import { useId } from "react";
-
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
 import type { OcrSetupOptions } from "@/features/ocrCapture/useOcrSetupOptions";
 import { fixedMembers } from "@/shared/domain/members";
-import { Field } from "@/shared/ui/forms/Field";
+import { SelectField } from "@/shared/ui/forms/SelectField";
+import { TextField } from "@/shared/ui/forms/TextField";
 
 type SetupPanelProps = {
   value: SetupFormValues;
@@ -12,11 +11,7 @@ type SetupPanelProps = {
   options: OcrSetupOptions;
 };
 
-const selectClass =
-  "w-full rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] transition hover:bg-[var(--color-surface-subtle)] disabled:cursor-not-allowed disabled:bg-[var(--color-surface-subtle)] disabled:text-[var(--color-text-muted)] disabled:opacity-70";
-
 export function SetupPanel({ value, onChange, enabled, options }: SetupPanelProps) {
-  const fieldIdPrefix = useId();
   const {
     gameTitles,
     gameTitlesError,
@@ -32,164 +27,112 @@ export function SetupPanel({ value, onChange, enabled, options }: SetupPanelProp
     seasonMastersPlaceholder,
   } = options;
 
-  const gameTitleId = `${fieldIdPrefix}-game-title`;
-  const heldEventId = `${fieldIdPrefix}-held-event`;
-  const matchNoInEventId = `${fieldIdPrefix}-match-no-in-event`;
-  const seasonMasterId = `${fieldIdPrefix}-season-master`;
-  const mapMasterId = `${fieldIdPrefix}-map-master`;
-  const ownerMemberId = `${fieldIdPrefix}-owner-member`;
-
   function patchValue(patch: Partial<SetupFormValues>) {
     onChange({ ...value, ...patch });
   }
 
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-      <Field className="xl:col-span-3" label="開催（任意）" htmlFor={heldEventId}>
-        <select
-          id={heldEventId}
-          value={value.heldEventId ?? ""}
-          onChange={(event) => {
-            const selected = heldEvents.find((item) => item.id === event.target.value);
-            patchValue({
-              heldEventId: event.target.value,
-              matchNoInEvent: selected?.nextMatchNo,
-            });
-          }}
-          className={selectClass}
-          disabled={!enabled}
-        >
-          <option value="">
-            {heldEvents.length === 0 ? heldEventsPlaceholder : "開催を選ばず取り込む"}
-          </option>
-          {heldEvents.map((heldEvent) => (
-            <option key={heldEvent.id} value={heldEvent.id}>
-              {new Date(heldEvent.heldAt).toLocaleString()}（確定{heldEvent.matchCount}・未完了
-              {heldEvent.draftCount}）
-            </option>
-          ))}
-        </select>
-        {heldEventsError ? (
-          <p className="mt-1 text-sm text-[var(--color-danger)]" role="alert">
-            {heldEventsError}
-          </p>
-        ) : null}
-      </Field>
+      <SelectField
+        disabled={!enabled}
+        error={heldEventsError}
+        fieldClassName="xl:col-span-3"
+        label="開催（任意）"
+        options={[
+          {
+            label: heldEvents.length === 0 ? heldEventsPlaceholder : "開催を選ばず取り込む",
+            value: "",
+          },
+          ...heldEvents.map((heldEvent) => ({
+            label: `${new Date(heldEvent.heldAt).toLocaleString()}（確定${heldEvent.matchCount}・未完了${heldEvent.draftCount}）`,
+            value: heldEvent.id,
+          })),
+        ]}
+        value={value.heldEventId ?? ""}
+        onChange={(event) => {
+          const selected = heldEvents.find((item) => item.id === event.currentTarget.value);
+          patchValue({
+            heldEventId: event.currentTarget.value,
+            matchNoInEvent: selected?.nextMatchNo,
+          });
+        }}
+      />
 
-      <Field className="xl:col-span-1" label="試合番号" htmlFor={matchNoInEventId}>
-        <input
-          id={matchNoInEventId}
-          className={selectClass}
-          disabled={!enabled || !value.heldEventId}
-          inputMode="numeric"
-          min={1}
-          type="number"
-          value={value.matchNoInEvent ?? ""}
-          onChange={(event) =>
-            patchValue({
-              matchNoInEvent: event.target.value
-                ? Number.parseInt(event.target.value, 10)
-                : undefined,
-            })
-          }
-        />
-      </Field>
+      <TextField
+        disabled={!enabled || !value.heldEventId}
+        fieldClassName="xl:col-span-1"
+        inputMode="numeric"
+        label="試合番号"
+        min={1}
+        type="number"
+        value={value.matchNoInEvent ?? ""}
+        onChange={(event) =>
+          patchValue({
+            matchNoInEvent: event.currentTarget.value
+              ? Number.parseInt(event.currentTarget.value, 10)
+              : undefined,
+          })
+        }
+      />
 
-      <Field className="xl:col-span-2" label="作品" htmlFor={gameTitleId}>
-        <select
-          id={gameTitleId}
-          value={value.gameTitleId}
-          onChange={(event) =>
-            patchValue({
-              gameTitleId: event.target.value,
-              mapMasterId: "",
-              seasonMasterId: "",
-            })
-          }
-          className={selectClass}
-          disabled={!enabled || gameTitles.length === 0}
-        >
-          {gameTitles.length === 0 ? (
-            <option value="">{gameTitlesPlaceholder}</option>
-          ) : (
-            gameTitles.map((gameTitle) => (
-              <option key={gameTitle.id} value={gameTitle.id}>
-                {gameTitle.name}
-              </option>
-            ))
-          )}
-        </select>
-        {gameTitlesError ? (
-          <p className="mt-1 text-sm text-[var(--color-danger)]" role="alert">
-            {gameTitlesError}
-          </p>
-        ) : null}
-      </Field>
+      <SelectField
+        disabled={!enabled || gameTitles.length === 0}
+        error={gameTitlesError}
+        fieldClassName="xl:col-span-2"
+        label="作品"
+        options={
+          gameTitles.length === 0
+            ? [{ label: gameTitlesPlaceholder, value: "" }]
+            : gameTitles.map((gameTitle) => ({ label: gameTitle.name, value: gameTitle.id }))
+        }
+        value={value.gameTitleId}
+        onChange={(event) =>
+          patchValue({
+            gameTitleId: event.currentTarget.value,
+            mapMasterId: "",
+            seasonMasterId: "",
+          })
+        }
+      />
 
-      <Field className="xl:col-span-2" label="シーズン" htmlFor={seasonMasterId}>
-        <select
-          id={seasonMasterId}
-          value={value.seasonMasterId}
-          onChange={(event) => patchValue({ seasonMasterId: event.target.value })}
-          className={selectClass}
-          disabled={!enabled || seasonMasters.length === 0}
-        >
-          {seasonMasters.length === 0 ? (
-            <option value="">{seasonMastersPlaceholder}</option>
-          ) : (
-            seasonMasters.map((season) => (
-              <option key={season.id} value={season.id}>
-                {season.name}
-              </option>
-            ))
-          )}
-        </select>
-        {seasonMastersError ? (
-          <p className="mt-1 text-sm text-[var(--color-danger)]" role="alert">
-            {seasonMastersError}
-          </p>
-        ) : null}
-      </Field>
+      <SelectField
+        disabled={!enabled || seasonMasters.length === 0}
+        error={seasonMastersError}
+        fieldClassName="xl:col-span-2"
+        label="シーズン"
+        options={
+          seasonMasters.length === 0
+            ? [{ label: seasonMastersPlaceholder, value: "" }]
+            : seasonMasters.map((season) => ({ label: season.name, value: season.id }))
+        }
+        value={value.seasonMasterId}
+        onChange={(event) => patchValue({ seasonMasterId: event.currentTarget.value })}
+      />
 
-      <Field className="xl:col-span-2" label="マップ" htmlFor={mapMasterId}>
-        <select
-          id={mapMasterId}
-          value={value.mapMasterId}
-          onChange={(event) => patchValue({ mapMasterId: event.target.value })}
-          className={selectClass}
-          disabled={!enabled || mapMasters.length === 0}
-        >
-          {mapMasters.length === 0 ? (
-            <option value="">{mapMastersPlaceholder}</option>
-          ) : (
-            mapMasters.map((mapMaster) => (
-              <option key={mapMaster.id} value={mapMaster.id}>
-                {mapMaster.name}
-              </option>
-            ))
-          )}
-        </select>
-        {mapMastersError ? (
-          <p className="mt-1 text-sm text-[var(--color-danger)]" role="alert">
-            {mapMastersError}
-          </p>
-        ) : null}
-      </Field>
+      <SelectField
+        disabled={!enabled || mapMasters.length === 0}
+        error={mapMastersError}
+        fieldClassName="xl:col-span-2"
+        label="マップ"
+        options={
+          mapMasters.length === 0
+            ? [{ label: mapMastersPlaceholder, value: "" }]
+            : mapMasters.map((mapMaster) => ({ label: mapMaster.name, value: mapMaster.id }))
+        }
+        value={value.mapMasterId}
+        onChange={(event) => patchValue({ mapMasterId: event.currentTarget.value })}
+      />
 
-      <Field className="xl:col-span-2" label="オーナー" htmlFor={ownerMemberId}>
-        <select
-          id={ownerMemberId}
-          value={value.ownerMemberId}
-          onChange={(event) => patchValue({ ownerMemberId: event.target.value })}
-          className={selectClass}
-        >
-          {fixedMembers.map((member) => (
-            <option key={member.memberId} value={member.memberId}>
-              {member.displayName}
-            </option>
-          ))}
-        </select>
-      </Field>
+      <SelectField
+        fieldClassName="xl:col-span-2"
+        label="オーナー"
+        options={fixedMembers.map((member) => ({
+          label: member.displayName,
+          value: member.memberId,
+        }))}
+        value={value.ownerMemberId}
+        onChange={(event) => patchValue({ ownerMemberId: event.currentTarget.value })}
+      />
     </div>
   );
 }

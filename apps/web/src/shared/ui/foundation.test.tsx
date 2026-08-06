@@ -12,6 +12,8 @@ import { Dialog, AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { RouteSuspenseFallback } from "@/shared/ui/feedback/RouteSuspenseFallback";
 import { SegmentedControl } from "@/shared/ui/forms/SegmentedControl";
+import { SelectField } from "@/shared/ui/forms/SelectField";
+import { TextField } from "@/shared/ui/forms/TextField";
 import { StaleShield } from "@/shared/ui/motion/StaleShield";
 import { StatusPill } from "@/shared/ui/status/StatusPill";
 import { createDeferred } from "@/test/deferred";
@@ -354,6 +356,28 @@ describe("ui foundation", () => {
     await user.keyboard("{Enter}");
 
     expect(onValueChange).toHaveBeenCalled();
+  });
+
+  it("form fields associate labels, help, and errors with mobile-safe controls", () => {
+    render(
+      <>
+        <TextField description="半角数字で入力" error="入力を確認してください" label="試合番号" />
+        <SelectField
+          error="選択してください"
+          label="作品"
+          options={[{ label: "未選択", value: "" }]}
+        />
+      </>,
+    );
+
+    const input = screen.getByLabelText("試合番号");
+    const select = screen.getByLabelText("作品");
+    expect(input).toHaveClass("min-h-11", "text-base", "sm:min-h-10", "sm:text-sm");
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(input.getAttribute("aria-describedby")?.split(" ")).toHaveLength(2);
+    expect(select).toHaveAttribute("aria-invalid", "true");
+    expect(select.getAttribute("aria-describedby")).toBeTruthy();
+    expect(screen.getAllByRole("alert")).toHaveLength(2);
   });
 
   it("SegmentedControl disables keyboard and pointer changes", async () => {

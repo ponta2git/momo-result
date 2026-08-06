@@ -91,6 +91,7 @@ export function ScoreGridDesktopTable({
           const memberReviewItem = reviewItemByCellId.get(memberCellId);
           const playOrderCellId = getCellId(rowIndex, 1);
           const playOrderReviewItem = reviewItemByCellId.get(playOrderCellId);
+          const playOrderError = errorPathSet.has(keyToPath(rowIndex, "playOrder"));
           return (
             <tr
               key={playerSlotKey(rowIndex)}
@@ -149,14 +150,17 @@ export function ScoreGridDesktopTable({
                 <select
                   ref={(node) => registerCellRef(playOrderCellId, node)}
                   aria-describedby={
-                    playOrderReviewItem ? `${playOrderCellId}-review-status` : undefined
+                    playOrderError || playOrderReviewItem
+                      ? `${playOrderCellId}-review-status`
+                      : undefined
                   }
+                  aria-invalid={playOrderError || undefined}
                   aria-label={`${memberDisplayName(player.memberId)} プレー順`}
                   className={cn(
                     selectShortClass,
                     selectCellTone({
                       changed: Boolean(originalRow && originalRow.playOrder !== player.playOrder),
-                      error: errorPathSet.has(keyToPath(rowIndex, "playOrder")),
+                      error: playOrderError,
                       reviewItem: playOrderReviewItem,
                       reviewed: reviewedCellIds.has(playOrderCellId),
                     }),
@@ -189,6 +193,7 @@ export function ScoreGridDesktopTable({
                 <ScoreGridSelectStatus
                   cellId={playOrderCellId}
                   changed={Boolean(originalRow && originalRow.playOrder !== player.playOrder)}
+                  error={playOrderError}
                   reviewItem={playOrderReviewItem}
                   reviewed={reviewedCellIds.has(playOrderCellId)}
                   synced={lastSyncedPlayerIndex === rowIndex}

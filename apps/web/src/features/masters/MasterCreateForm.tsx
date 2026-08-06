@@ -1,6 +1,7 @@
 import { useFormStatus } from "react-dom";
 
 import { Button } from "@/shared/ui/actions/Button";
+import { TextField } from "@/shared/ui/forms/TextField";
 
 type MasterCreateFormProps = {
   action: (formData: FormData) => void | Promise<void>;
@@ -14,10 +15,6 @@ type MasterCreateFormProps = {
   placeholder?: string;
   submitLabel?: string;
 };
-
-const inputClass =
-  "w-full min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)]";
-const labelClass = "text-xs font-semibold text-[var(--color-text-secondary)]";
 
 function SubmitButton({
   disabled,
@@ -59,25 +56,16 @@ export function MasterCreateForm({
 
   return (
     <form action={action} className="grid gap-2 md:grid-cols-[1fr_auto] md:items-end" key={formKey}>
-      <label className="grid gap-1">
-        <span className={labelClass}>{label}</span>
-        <input
-          className={inputClass}
-          disabled={disabled}
-          name={inputName}
-          placeholder={placeholder}
-          type="text"
-        />
-      </label>
+      <TextField
+        description={error ? undefined : disabledReason}
+        disabled={disabled}
+        error={error}
+        label={label}
+        name={inputName}
+        placeholder={placeholder}
+        type="text"
+      />
       <SubmitButton disabled={disabled} label={buttonLabel} pendingLabel={pendingLabel} />
-      {error ? (
-        <p className="text-sm text-[var(--color-danger)] md:col-span-2" role="alert">
-          {error}
-        </p>
-      ) : null}
-      {!error && disabledReason ? (
-        <p className="text-sm text-[var(--color-text-secondary)] md:col-span-2">{disabledReason}</p>
-      ) : null}
     </form>
   );
 }

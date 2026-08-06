@@ -7,9 +7,9 @@ import type { GameTitleResponse } from "@/shared/api/masters";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
+import { SelectField } from "@/shared/ui/forms/SelectField";
+import { TextField } from "@/shared/ui/forms/TextField";
 
-const selectClass =
-  "w-full min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)]";
 const labelClass = "text-xs font-semibold text-[var(--color-text-secondary)]";
 
 type GameTitleListItem = GameTitleResponse & { pending?: boolean };
@@ -136,32 +136,26 @@ export function GameTitleList({
       )}
 
       <form action={create.action} className="mt-4 grid gap-2" key={create.formKey}>
-        <label className="grid gap-1">
-          <span className={labelClass}>作品名</span>
-          <input className={selectClass} name="name" placeholder="例: 桃太郎電鉄2" type="text" />
-        </label>
+        <TextField
+          error={create.error}
+          label="作品名"
+          name="name"
+          placeholder="例: 桃太郎電鉄2"
+          type="text"
+        />
 
-        <label className="grid gap-1">
-          <span className={labelClass}>読み取り方式</span>
-          <select className={selectClass} defaultValue={defaultLayoutFamily} name="layoutFamily">
-            {layoutFamilies.map((family) => (
-              <option key={family} value={family}>
-                {layoutFamilyLabels[family]}
-              </option>
-            ))}
-          </select>
-          <p className="text-xs text-[var(--color-text-secondary)]">
-            作品ごとの画面構造に合わせて、読み取り方を切り替えます。
-          </p>
-        </label>
+        <SelectField
+          defaultValue={defaultLayoutFamily}
+          description="作品ごとの画面構造に合わせて、読み取り方を切り替えます。"
+          label="読み取り方式"
+          name="layoutFamily"
+          options={layoutFamilies.map((family) => ({
+            label: layoutFamilyLabels[family],
+            value: family,
+          }))}
+        />
 
         <CreateButton />
-
-        {create.error ? (
-          <p className="text-sm text-[var(--color-danger)]" role="alert">
-            {create.error}
-          </p>
-        ) : null}
       </form>
     </section>
   );

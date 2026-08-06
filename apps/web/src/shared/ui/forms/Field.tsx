@@ -10,7 +10,7 @@ export type FieldProps = {
   descriptionId?: string | undefined;
   error?: ReactNode | undefined;
   errorId?: string | undefined;
-  htmlFor?: string | undefined;
+  htmlFor: string;
   label: ReactNode;
   labelClassName?: string | undefined;
   required?: boolean | undefined;

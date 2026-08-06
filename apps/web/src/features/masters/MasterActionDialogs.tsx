@@ -7,10 +7,8 @@ import { formatApiError } from "@/shared/api/problemDetails";
 import { Button } from "@/shared/ui/actions/Button";
 import { IconButton } from "@/shared/ui/actions/IconButton";
 import { AlertDialog, Dialog } from "@/shared/ui/feedback/Dialog";
-import { Field } from "@/shared/ui/forms/Field";
-
-const inputClass =
-  "w-full min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)]";
+import { SelectField } from "@/shared/ui/forms/SelectField";
+import { TextField } from "@/shared/ui/forms/TextField";
 
 type MasterEditDialogProps = {
   initialLayoutFamily?: LayoutFamily | string | undefined;
@@ -70,28 +68,25 @@ export function MasterEditDialog({
           }
         }}
       >
-        <Field label={`${label}名`}>
-          <input className={inputClass} defaultValue={initialName} name="name" required />
-        </Field>
+        <TextField
+          defaultValue={initialName}
+          error={error}
+          label={`${label}名`}
+          name="name"
+          required
+        />
         {showLayoutFamily ? (
-          <Field
+          <SelectField
             label="読み取り方式"
             description="作品ごとの画面構造に合わせて、読み取り方を切り替えます。"
-          >
-            <select
-              className={inputClass}
-              defaultValue={initialLayoutFamily ?? layoutFamilies[0]}
-              name="layoutFamily"
-            >
-              {layoutFamilies.map((family) => (
-                <option key={family} value={family}>
-                  {layoutFamilyLabels[family]}
-                </option>
-              ))}
-            </select>
-          </Field>
+            defaultValue={initialLayoutFamily ?? layoutFamilies[0]}
+            name="layoutFamily"
+            options={layoutFamilies.map((family) => ({
+              label: layoutFamilyLabels[family],
+              value: family,
+            }))}
+          />
         ) : null}
-        {error ? <p className="text-sm text-[var(--color-danger)]">{error}</p> : null}
         <Button disabled={pending} pending={pending} pendingLabel="保存中" type="submit">
           保存
         </Button>

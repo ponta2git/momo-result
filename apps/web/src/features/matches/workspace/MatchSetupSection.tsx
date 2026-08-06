@@ -2,10 +2,7 @@ import { Settings2, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
-import {
-  MatchSetupFields,
-  matchSetupInputClass,
-} from "@/features/matches/workspace/MatchSetupFields";
+import { MatchSetupFields } from "@/features/matches/workspace/MatchSetupFields";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import type {
   GameTitleListResponse,
@@ -16,6 +13,7 @@ import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
+import { TextField } from "@/shared/ui/forms/TextField";
 import { Card } from "@/shared/ui/layout/Card";
 
 export type MatchSetupActions = {
@@ -141,11 +139,11 @@ export function MatchSetupSection({
           triggerClassName="px-2 text-xs text-[var(--color-text-secondary)]"
         >
           <div className="grid gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3 md:grid-cols-[1fr_auto] md:items-end">
-            <input
-              className={matchSetupInputClass}
+            <TextField
+              label="開催日時"
               type="datetime-local"
               value={eventCreation.draftValue}
-              onChange={(event) => eventCreation.onDraftChange(event.target.value)}
+              onChange={(event) => eventCreation.onDraftChange(event.currentTarget.value)}
             />
             <Button
               disabled={!eventCreation.draftValue || eventCreation.pending}

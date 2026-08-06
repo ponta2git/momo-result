@@ -113,7 +113,8 @@ export function MobilePlayOrderSelect({
       プレー順
       <select
         ref={(node) => registerCellRef(cellId, node)}
-        aria-describedby={reviewItem ? `${cellId}-review-status` : undefined}
+        aria-describedby={error || reviewItem ? `${cellId}-review-status` : undefined}
+        aria-invalid={error || undefined}
         className={cn(selectShortClass, selectCellTone({ changed, error, reviewItem, reviewed }))}
         data-validation-path={keyToPath(index, "playOrder")}
         value={Number.isFinite(playOrder) ? String(playOrder) : ""}
@@ -133,6 +134,7 @@ export function MobilePlayOrderSelect({
       <ScoreGridSelectStatus
         cellId={cellId}
         changed={changed}
+        error={error}
         reviewItem={reviewItem}
         reviewed={reviewed}
         synced={synced}

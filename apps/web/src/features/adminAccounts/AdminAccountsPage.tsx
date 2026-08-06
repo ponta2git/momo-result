@@ -31,7 +31,7 @@ export function AdminAccountsPage() {
   } = useAdminAccountsPageController();
 
   return (
-    <PageFrame className="gap-5">
+    <PageFrame className="gap-4">
       <PageHeader
         eyebrow="管理"
         title="ログインアカウント"

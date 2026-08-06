@@ -99,7 +99,7 @@ function CardShopDestinationLegend() {
   return (
     <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-[var(--color-text-secondary)]">
       {cardShopDestinationDefinitions.map((definition) => (
-        <span key={definition.kind} className="inline-flex items-center gap-1.5">
+        <span key={definition.kind} className="inline-flex items-center gap-2">
           <span
             aria-hidden="true"
             className="size-2.5 rounded-full"
@@ -266,7 +266,7 @@ function CardShopDestinationCell({
       )}
     >
       <div className="flex min-w-0 items-start justify-between gap-2">
-        <span className="inline-flex min-w-0 items-center gap-1.5">
+        <span className="inline-flex min-w-0 items-center gap-2">
           <span
             aria-hidden="true"
             className="size-2 shrink-0 rounded-full"

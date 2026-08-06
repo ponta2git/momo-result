@@ -72,7 +72,7 @@ function MatchResultStrip({
         {flagOrder.map((flag) => (
           <div
             key={flag}
-            className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2.5 py-2"
+            className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-2"
           >
             <p className="text-xs text-[var(--color-text-secondary)]">{timelineFlagLabel(flag)}</p>
             <p className="mt-0.5 text-sm font-semibold text-[var(--color-text-primary)] tabular-nums">
@@ -92,7 +92,7 @@ function MatchResultStrip({
               <article
                 key={point.matchId}
                 className={cn(
-                  "w-44 shrink-0 rounded-[var(--radius-sm)] border bg-[var(--color-surface-subtle)] p-2.5",
+                  "w-44 shrink-0 rounded-[var(--radius-sm)] border bg-[var(--color-surface-subtle)] p-3",
                   point.matchId === focusMatchId
                     ? "momo-enter border-[var(--color-action)] ring-2 ring-[var(--color-action)]/25"
                     : "border-[var(--color-border)]",
@@ -139,7 +139,7 @@ function MatchResultStrip({
                   {(point.flags ?? []).map((flag) => (
                     <span
                       key={flag}
-                      className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-1.5 py-0.5 text-[11px] font-medium text-[var(--color-text-secondary)]"
+                      className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-text-secondary)]"
                     >
                       {timelineFlagLabel(flag)}
                     </span>
@@ -216,7 +216,7 @@ function MatchNoTable({
         {players.map((player, index) => (
           <div
             key={player.memberId}
-            className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-1.5 text-center text-xs font-semibold break-words text-[var(--color-text-primary)]"
+            className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-2 text-center text-xs font-semibold break-words text-[var(--color-text-primary)]"
             style={{ borderTopColor: playerColor(index), borderTopWidth: 3 }}
           >
             {player.displayName}

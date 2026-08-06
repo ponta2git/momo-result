@@ -55,7 +55,7 @@ export class RouteErrorBoundary extends Component<
       const detail = normalized.detail || normalized.title || this.state.error.message;
       return (
         <PageFrame className="py-8 sm:py-12" width="narrow">
-          <Notice className="p-5" role="alert" tone="danger" title="画面の読み込みに失敗しました">
+          <Notice className="p-4" role="alert" tone="danger" title="画面の読み込みに失敗しました">
             <p className="text-sm">{detail}</p>
             <div className="mt-3">
               <Button onClick={this.handleReset} variant="secondary">

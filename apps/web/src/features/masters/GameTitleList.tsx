@@ -79,7 +79,7 @@ export function GameTitleList({
               <li key={item.id}>
                 <div
                   className={cn(
-                    "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-[var(--radius-sm)] border px-3 py-2 transition-colors",
+                    "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-[var(--radius-sm)] border px-3 py-2 transition-colors duration-[var(--motion-fast)] motion-reduce:transition-none",
                     isSelected
                       ? "border-[var(--color-action)]/60 bg-[var(--color-action)]/12"
                       : "border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-surface-subtle)]",
@@ -88,7 +88,7 @@ export function GameTitleList({
                   aria-busy={isPending || undefined}
                 >
                   <button
-                    className="min-w-0 text-left"
+                    className="min-h-11 min-w-0 text-left"
                     type="button"
                     disabled={isPending}
                     onClick={() => onSelect(item.id)}

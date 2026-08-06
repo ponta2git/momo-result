@@ -14,7 +14,7 @@ export function EmptyState({ action, className, description, icon, title }: Empt
   return (
     <section
       className={cn(
-        "rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-5",
+        "rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4",
         className,
       )}
     >

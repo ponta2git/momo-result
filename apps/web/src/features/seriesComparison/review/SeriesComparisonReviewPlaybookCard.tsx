@@ -32,10 +32,10 @@ export function ReviewPlaybookCardView({
   return (
     <article className="grid h-full min-w-0 grid-rows-[auto_1fr_auto] gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
       <header className="grid min-w-0 gap-2 border-b border-[var(--color-border)] pb-3">
-        <div className="flex min-w-0 items-start gap-2.5">
+        <div className="flex min-w-0 items-start gap-3">
           <span
             className={cn(
-              "shrink-0 rounded-[var(--radius-xs)] border px-1.5 py-0.5 text-[11px] font-semibold",
+              "shrink-0 rounded-[var(--radius-xs)] border px-2 py-0.5 text-[11px] font-semibold",
               lane.className,
             )}
           >
@@ -52,7 +52,7 @@ export function ReviewPlaybookCardView({
           </div>
         </div>
       </header>
-      <div className="grid min-w-0 content-start gap-2.5">
+      <div className="grid min-w-0 content-start gap-3">
         <ReviewPlaybookText label="発動条件" text={card.triggerCondition} />
         <ReviewPlaybookText label="やること" text={card.recommendedAction} tone="action" />
         <ReviewPlaybookText label="理由" text={card.plainReason} />
@@ -107,7 +107,7 @@ function ReviewPlaybookDetailsDialog({ card }: { card: ReviewPlaybookCard }) {
 function ReviewPlaybookEvidenceList({ evidence }: { evidence: ReviewPlaybookEvidence[] }) {
   if (evidence.length === 0) {
     return (
-      <div className="min-w-0 rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-2">
+      <div className="min-w-0 rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
         <p className="text-[11px] font-semibold text-[var(--color-text-secondary)]">主要指標</p>
         <p className="mt-1 text-sm leading-6 text-pretty text-[var(--color-text-secondary)]">
           主要指標はありません。
@@ -118,14 +118,14 @@ function ReviewPlaybookEvidenceList({ evidence }: { evidence: ReviewPlaybookEvid
   return (
     <div className="min-w-0">
       <p className="text-[11px] font-semibold text-[var(--color-text-secondary)]">詳しい指標</p>
-      <div className="mt-1.5 grid min-w-0 divide-y divide-[var(--color-border)] rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)]">
+      <div className="mt-2 grid min-w-0 divide-y divide-[var(--color-border)] rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)]">
         {evidence.map((item) => (
           <div className="grid min-w-0 gap-1 p-2" key={`${item.metricId}:${item.label}`}>
             <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
               <p className="min-w-0 text-xs leading-5 text-[var(--color-text-secondary)]">
                 {item.label}
               </p>
-              <span className="shrink-0 rounded-[var(--radius-xs)] border border-[var(--color-border)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--color-text-secondary)]">
+              <span className="shrink-0 rounded-[var(--radius-xs)] border border-[var(--color-border)] px-2 py-0.5 text-[10px] font-semibold text-[var(--color-text-secondary)]">
                 {playbookEvidenceStatusLabel(item.status)}
               </span>
             </div>
@@ -171,9 +171,9 @@ function ReviewPlaybookText({
       className={cn(
         "min-w-0",
         tone === "action"
-          ? "border-l-2 border-[var(--color-success)] pl-2.5"
+          ? "border-l-2 border-[var(--color-success)] pl-3"
           : tone === "caution"
-            ? "border-l-2 border-[var(--color-review)] pl-2.5"
+            ? "border-l-2 border-[var(--color-review)] pl-3"
             : "",
       )}
     >

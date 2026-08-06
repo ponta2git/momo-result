@@ -38,7 +38,7 @@ export function MasterReturnNotice({
             元の入力画面へ戻る
           </Button>
           <Link
-            className="text-sm text-[var(--color-text-secondary)] underline hover:text-[var(--color-text-primary)]"
+            className="inline-flex min-h-11 items-center text-sm text-[var(--color-text-secondary)] underline hover:text-[var(--color-text-primary)]"
             to={destination}
           >
             戻り先を確認

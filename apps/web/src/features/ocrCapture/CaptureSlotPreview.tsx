@@ -57,7 +57,7 @@ export function CaptureSlotPreview({
             className="size-full object-contain"
           />
           {slot.source ? (
-            <span className="absolute bottom-1.5 left-1.5 rounded-[var(--radius-sm)] border border-white/15 bg-[var(--momo-night-900)]/80 px-1.5 py-0.5 text-[0.6875rem] font-semibold text-white">
+            <span className="absolute bottom-2 left-2 rounded-[var(--radius-sm)] border border-white/15 bg-[var(--momo-night-900)]/80 px-2 py-0.5 text-[0.6875rem] font-semibold text-white">
               {sourceLabels[slot.source]}
             </span>
           ) : null}

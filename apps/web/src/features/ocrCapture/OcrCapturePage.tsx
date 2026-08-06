@@ -154,7 +154,7 @@ export function OcrCapturePage() {
               <p className={panelLeadClass}>ゲーム画面全体が入るようにカメラを合わせます。</p>
             </div>
             <div
-              className="flex items-center gap-2 rounded-full border border-[var(--color-action)]/35 bg-[var(--color-action)]/8 py-1.5 pr-3 pl-1.5 text-sm"
+              className="flex items-center gap-2 rounded-full border border-[var(--color-action)]/35 bg-[var(--color-action)]/8 py-2 pr-3 pl-2 text-sm"
               aria-label={`次の撮影先は${captureTarget.label}`}
             >
               <span
@@ -227,7 +227,7 @@ export function OcrCapturePage() {
             <h2 id="ocr-start-title" className={panelTitleClass}>
               読み取りの準備
             </h2>
-            <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2.5 py-1 text-xs font-semibold text-[var(--color-text-primary)]">
+            <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-1 text-xs font-semibold text-[var(--color-text-primary)]">
               {ocrReadyCount === 0 ? "画像未選択" : `${ocrReadyCount}件を送信`}
             </span>
           </div>

@@ -36,7 +36,7 @@ export function Field({
   const resolvedErrorId = error ? (errorId ?? `${fallbackId}-error`) : undefined;
 
   return (
-    <div className={cn("flex min-w-0 flex-col gap-1.5", className)} {...props}>
+    <div className={cn("flex min-w-0 flex-col gap-2", className)} {...props}>
       <label
         className={cn(
           "text-sm leading-5 font-semibold text-[var(--color-text-primary)]",

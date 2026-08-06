@@ -147,7 +147,7 @@ export function DrilldownTableCell({
   return (
     <td
       className={cn(
-        "border-b border-[var(--color-border)] px-3 py-2.5 align-top text-[var(--color-text-primary)] tabular-nums group-last:border-b-0",
+        "border-b border-[var(--color-border)] px-3 py-3 align-top text-[var(--color-text-primary)] tabular-nums group-last:border-b-0",
         align === "right" ? "text-right" : "text-left",
       )}
     >
@@ -158,7 +158,7 @@ export function DrilldownTableCell({
 
 export function DrilldownStickyCell({ children }: { children: ReactNode }) {
   return (
-    <td className="sticky left-0 z-[var(--z-base)] border-b border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 align-top text-[var(--color-text-primary)] tabular-nums group-last:border-b-0 group-hover:bg-[var(--color-surface-subtle)]">
+    <td className="sticky left-0 z-[var(--z-base)] border-b border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-3 align-top text-[var(--color-text-primary)] tabular-nums group-last:border-b-0 group-hover:bg-[var(--color-surface-subtle)]">
       {children}
     </td>
   );

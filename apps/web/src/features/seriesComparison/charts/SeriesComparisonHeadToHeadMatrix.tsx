@@ -33,7 +33,7 @@ export function HeadToHeadMatrix({
         {players.map((player) => (
           <div
             key={player.memberId}
-            className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-1.5 text-center text-xs font-semibold break-words text-[var(--color-text-primary)]"
+            className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-2 text-center text-xs font-semibold break-words text-[var(--color-text-primary)]"
           >
             vs {player.displayName}
           </div>

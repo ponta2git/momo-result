@@ -59,7 +59,7 @@ export function StatusPill({ className, hideIcon = false, label, note, status }:
   return (
     <span
       className={cn(
-        "inline-flex min-h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[var(--radius-xs)] border px-2 py-1 text-xs font-semibold leading-5",
+        "inline-flex min-h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-[var(--radius-xs)] border px-2 py-1 text-xs font-semibold leading-5",
         model.toneClass,
         className,
       )}

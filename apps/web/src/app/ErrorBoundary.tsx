@@ -25,7 +25,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       return (
         <main className="px-4 py-10 sm:py-16">
           <PageFrame width="narrow">
-            <Notice className="p-5" role="alert" tone="danger" title="画面を表示できません">
+            <Notice className="p-4" role="alert" tone="danger" title="画面を表示できません">
               <p>
                 予期しない問題が発生しました。再表示しても直らない場合は、時間をおいてから開き直してください。
               </p>

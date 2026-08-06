@@ -11,7 +11,7 @@ export function MatchWorkspaceBlockedNotice({
   refreshingReviewStatus: boolean;
 }) {
   return (
-    <Card className="mt-5">
+    <Card className="mt-4">
       <h2 className="text-xl font-semibold text-[var(--color-text-primary)]">
         読み取り中は編集できません
       </h2>
@@ -29,7 +29,7 @@ export function MatchWorkspaceBlockedNotice({
           状態を再確認
         </Button>
         <Link
-          className="text-sm font-semibold text-[var(--color-action)] hover:underline"
+          className="inline-flex min-h-11 items-center text-sm font-semibold text-[var(--color-action)] hover:underline"
           to="/matches"
         >
           試合一覧へ戻る

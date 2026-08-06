@@ -153,7 +153,7 @@ export function MastersPage() {
             <TabsTab
               key={tab.id}
               className={cn(
-                "min-h-9 rounded-[var(--radius-sm)] px-3 py-1.5 text-sm font-semibold transition-colors duration-150",
+                "min-h-11 rounded-[var(--radius-sm)] px-3 py-2 text-sm font-semibold transition-colors duration-[var(--motion-fast)] motion-reduce:transition-none sm:min-h-9 sm:py-2",
                 activeTab === tab.id
                   ? "bg-[var(--color-surface-selected)] text-[var(--color-text-primary)]"
                   : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-subtle)]",

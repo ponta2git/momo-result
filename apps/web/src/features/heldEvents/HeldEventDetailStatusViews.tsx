@@ -10,7 +10,7 @@ import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 export function HeldEventDetailLoading() {
   return (
-    <PageFrame aria-busy="true" aria-label="開催詳細を読み込み中" className="gap-5" width="wide">
+    <PageFrame aria-busy="true" aria-label="開催詳細を読み込み中" className="gap-4" width="wide">
       <PageHeader eyebrow="開催記録" title="開催の記録を読み込み中" />
       <Card className="grid grid-cols-3 gap-3 bg-[var(--color-surface-subtle)]">
         {["matches", "drafts", "next"].map((id) => (

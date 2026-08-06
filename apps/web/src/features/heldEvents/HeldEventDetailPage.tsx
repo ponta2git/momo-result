@@ -62,7 +62,7 @@ function HeldEventDetailReadyContent({
   const encodedHeldEventId = encodeURIComponent(detail.id);
 
   return (
-    <PageFrame className="min-w-0 gap-5" width="wide">
+    <PageFrame className="min-w-0 gap-4" width="wide">
       <div>
         <LinkButton
           icon={<ArrowLeft aria-hidden="true" className="size-4" />}
@@ -109,7 +109,7 @@ function HeldEventDetailReadyContent({
       />
 
       <Card className="flex flex-col gap-4 bg-[var(--color-surface-subtle)] p-4 md:flex-row md:items-center md:justify-between">
-        <dl className="grid min-w-0 grid-cols-3 gap-5">
+        <dl className="grid min-w-0 grid-cols-3 gap-4">
           <div>
             <dt className="momo-label text-[var(--color-text-secondary)]">確定済み</dt>
             <dd className="mt-1 text-xl font-semibold tabular-nums">{detail.matchCount}試合</dd>

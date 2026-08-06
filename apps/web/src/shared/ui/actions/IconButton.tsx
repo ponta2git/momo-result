@@ -7,7 +7,7 @@ type IconButtonSize = "sm" | "md" | "lg";
 type IconButtonVariant = "secondary" | "quiet" | "danger";
 
 const sizeClass = {
-  sm: "size-10",
+  sm: "size-11 sm:size-10",
   md: "size-11",
   lg: "size-12",
 } as const satisfies Record<IconButtonSize, string>;

@@ -43,7 +43,7 @@ export function BasicMetrics({
     <MetricSection
       action={
         <Button
-          className="min-h-8 px-2.5 py-1 text-xs"
+          className="text-xs"
           disabled={players.length === 0}
           icon={<Table2 className="size-3.5" />}
           size="sm"
@@ -74,7 +74,7 @@ export function BasicMetrics({
                   key={item.rank}
                   label={`${item.rank}位`}
                   value={
-                    <span className="inline-flex items-center gap-1.5">
+                    <span className="inline-flex items-center gap-2">
                       <RankBadge rank={item.rank} />
                       <span>
                         {item.count}回・{formatPercent(item.rate)}

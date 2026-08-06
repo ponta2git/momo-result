@@ -73,7 +73,7 @@ export function PlayerLegend({
   return (
     <div className="flex w-full max-w-full min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--color-text-secondary)]">
       {players.map((player, index) => (
-        <span key={player.memberId} className="inline-flex min-w-0 items-center gap-1.5">
+        <span key={player.memberId} className="inline-flex min-w-0 items-center gap-2">
           {variant === "line" ? (
             <svg aria-hidden="true" className="h-3 w-7 shrink-0" viewBox="0 0 28 12">
               <line

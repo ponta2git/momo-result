@@ -111,7 +111,7 @@ function AverageRankChange({
       </strong>
       <span
         className={cn(
-          "rounded-[var(--radius-xs)] border px-1.5 py-0.5 font-semibold",
+          "rounded-[var(--radius-xs)] border px-2 py-0.5 font-semibold",
           trendTone(row.trend),
         )}
       >

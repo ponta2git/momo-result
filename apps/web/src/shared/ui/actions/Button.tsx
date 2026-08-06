@@ -19,9 +19,9 @@ const variantClass = {
 } as const satisfies Record<ButtonVariant, string>;
 
 const sizeClass = {
-  sm: "min-h-9 px-3 py-1.5 text-sm",
-  md: "min-h-10 px-4 py-2 text-sm",
-  lg: "min-h-11 px-5 py-2.5 text-base",
+  sm: "min-h-11 px-3 py-2 text-sm sm:min-h-9 sm:py-2",
+  md: "min-h-11 px-4 py-2 text-sm sm:min-h-10",
+  lg: "min-h-11 px-5 py-3 text-base",
 } as const satisfies Record<ButtonSize, string>;
 
 export function buttonClassName({

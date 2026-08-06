@@ -91,7 +91,7 @@ export function MetricRow({
           "momo-enter rounded-[var(--radius-xs)] bg-[var(--color-surface-selected)] px-2 py-2 outline-1 -outline-offset-1 outline-[var(--color-action)]/55 last:pb-2",
       )}
     >
-      <span className="inline-flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs leading-4 text-[var(--color-text-secondary)]">
+      <span className="inline-flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs leading-4 text-[var(--color-text-secondary)]">
         <span className="min-w-0 break-words">{label}</span>
         {focusedMatch ? <FocusedMatchMarker /> : null}
         <StatusBadge status={status} />
@@ -114,7 +114,7 @@ export function FocusedMatchMarker({ className }: { className?: string }) {
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center rounded-[var(--radius-xs)] border border-[var(--color-action)]/45 bg-[var(--color-surface)] px-1.5 py-0.5 text-[10px] leading-3 font-semibold whitespace-nowrap text-[var(--color-action)]",
+        "inline-flex shrink-0 items-center rounded-[var(--radius-xs)] border border-[var(--color-action)]/45 bg-[var(--color-surface)] px-2 py-0.5 text-[10px] leading-3 font-semibold whitespace-nowrap text-[var(--color-action)]",
         className,
       )}
       data-focused-metric="true"
@@ -167,7 +167,7 @@ function FormulaHelp({ content, label }: { content: ReactNode; label: string }) 
     <Tooltip content={content}>
       <button
         aria-label={`「${label}」の計算式を表示`}
-        className="inline-flex size-5 shrink-0 items-center justify-center rounded-full text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text-secondary)]"
+        className="momo-pressable inline-flex size-11 shrink-0 items-center justify-center rounded-full text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text-secondary)] sm:size-9"
         type="button"
       >
         <HelpCircle aria-hidden="true" className="size-3.5" />
@@ -182,7 +182,7 @@ export function StatusBadge({ status }: { status: string | null | undefined }) {
     return null;
   }
   return (
-    <span className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-1.5 py-0.5 text-[11px] font-medium text-[var(--color-text-secondary)]">
+    <span className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-text-secondary)]">
       {label}
     </span>
   );

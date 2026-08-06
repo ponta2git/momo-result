@@ -14,7 +14,7 @@ export function MatchListStatusSummary({ item }: MatchListStatusSummaryProps) {
       <motion.div
         key={item.status}
         animate={{ opacity: 1, y: 0 }}
-        className="grid justify-items-start gap-1.5"
+        className="grid justify-items-start gap-2"
         exit={{ opacity: 0, y: -2 }}
         initial={{ opacity: 0, y: 2 }}
         transition={momoTransition}

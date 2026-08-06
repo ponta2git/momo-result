@@ -74,7 +74,7 @@ function MatchDetailReadyContent({ controller }: { controller: MatchDetailReadyC
   );
 
   return (
-    <PageFrame className="min-w-0 gap-5" width="wide">
+    <PageFrame className="min-w-0 gap-4" width="wide">
       <div>
         <LinkButton
           icon={<ArrowLeft aria-hidden="true" className="size-4" />}

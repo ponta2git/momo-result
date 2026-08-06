@@ -76,7 +76,7 @@ export function ScoreGridMobileCards({
                     <span className="block truncate font-semibold text-[var(--color-text-primary)]">
                       {memberDisplayName(player.memberId)}
                     </span>
-                    <span className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-[var(--color-text-secondary)] tabular-nums">
+                    <span className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--color-text-secondary)] tabular-nums">
                       <RankBadge rank={player.rank} />
                       <span>総資産 {player.totalAssetsManYen.toLocaleString()}万円</span>
                       {unresolvedCount > 0 ? <span>・ 未確認 {unresolvedCount}</span> : null}

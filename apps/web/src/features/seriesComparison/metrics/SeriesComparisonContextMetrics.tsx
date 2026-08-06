@@ -38,7 +38,7 @@ export function PlayOrderMetrics({ response }: { response: SeriesComparisonRespo
     <MetricSection
       action={
         <Button
-          className="min-h-8 px-2.5 py-1 text-xs"
+          className="text-xs"
           disabled={players.length === 0}
           icon={<Table2 className="size-3.5" />}
           size="sm"
@@ -99,7 +99,7 @@ function PlayOrderValue({
   item: NonNullable<PlayerMetrics["playOrder"]["breakdown"]>[number];
 }) {
   return (
-    <span className="inline-flex flex-wrap justify-end gap-x-1.5 gap-y-0.5">
+    <span className="inline-flex flex-wrap justify-end gap-x-2 gap-y-0.5">
       <span className="inline-flex items-center gap-1">
         <span
           aria-hidden="true"

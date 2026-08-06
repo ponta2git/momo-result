@@ -12,7 +12,7 @@ type RouteSuspenseFallbackProps = {
  */
 export function RouteSuspenseFallback({ asMain = false, pathname }: RouteSuspenseFallbackProps) {
   const kind = routeSkeletonKind(pathname ?? "");
-  const className = `mx-auto flex w-full ${routeSkeletonWidthClass(kind)} flex-col gap-5 px-4 py-8`;
+  const className = `mx-auto flex w-full ${routeSkeletonWidthClass(kind)} flex-col gap-4 px-4 py-8`;
   const content = <RouteSkeleton kind={kind} />;
 
   if (asMain) {

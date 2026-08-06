@@ -37,7 +37,7 @@ export function PlayOrderBreakdownTable({ rows }: { rows: PlayOrderRow[] }) {
       <table className="w-full min-w-[72rem] border-separate border-spacing-0 text-sm">
         <thead>
           <tr>
-            <DrilldownTableHeader className="sticky left-0 z-[calc(var(--z-sticky)+1)]">
+            <DrilldownTableHeader className="sticky left-0 z-[var(--z-sticky-raised)]">
               番手
             </DrilldownTableHeader>
             <DrilldownTableHeader align="right">対象戦数</DrilldownTableHeader>
@@ -97,7 +97,7 @@ export function PlayOrderTrendTable({ rows }: { rows: PlayOrderTrendRow[] }) {
       <table className="w-full min-w-[78rem] border-separate border-spacing-0 text-sm">
         <thead>
           <tr>
-            <DrilldownTableHeader className="sticky left-0 z-[calc(var(--z-sticky)+1)]">
+            <DrilldownTableHeader className="sticky left-0 z-[var(--z-sticky-raised)]">
               対戦順
             </DrilldownTableHeader>
             <DrilldownTableHeader>開催</DrilldownTableHeader>
@@ -153,7 +153,7 @@ export function PlayOrderTrendTable({ rows }: { rows: PlayOrderTrendRow[] }) {
 
 export function PlayOrderPill({ playOrder }: { playOrder: number }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-0.5 text-xs font-semibold">
+    <span className="inline-flex items-center gap-2 rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-0.5 text-xs font-semibold">
       <span
         aria-hidden="true"
         className="size-2 rounded-full"

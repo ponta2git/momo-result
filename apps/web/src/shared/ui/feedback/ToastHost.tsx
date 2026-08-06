@@ -42,7 +42,7 @@ function ToastRenderer() {
             >
               <Toast.Root
                 className={cn(
-                  "rounded-[var(--radius-lg)] border p-3 shadow-sm",
+                  "rounded-[var(--radius-lg)] border p-3 shadow-[var(--shadow-raised)]",
                   toneClass[toast.type ?? "info"] ?? toneClass["info"],
                 )}
                 toast={toast}

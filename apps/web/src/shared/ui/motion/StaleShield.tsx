@@ -50,7 +50,7 @@ export function StaleShield({
               transition={momoPanelTransition}
             >
               <span
-                className="inline-flex min-h-8 items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-xs font-semibold text-[var(--color-text-muted)] shadow-[var(--shadow-sm)]"
+                className="inline-flex min-h-8 items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-xs font-semibold text-[var(--color-text-muted)] shadow-[var(--shadow-raised)]"
                 role="status"
               >
                 <LoaderCircle

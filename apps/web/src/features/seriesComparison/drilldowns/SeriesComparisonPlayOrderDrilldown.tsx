@@ -54,7 +54,7 @@ export function PlayOrderRankHistoryDrilldownDialog({
       description="番手ごとの累積平均順位から、試合を重ねても残る得意・苦手を示します。"
       open={open}
       popupClassName="max-w-[min(92rem,calc(100vw-1rem))] items-stretch p-2 sm:p-4"
-      surfaceClassName="h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] !overflow-hidden p-4 sm:h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-2rem)] sm:p-5"
+      surfaceClassName="h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] !overflow-hidden p-4 sm:h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-2rem)]"
       title={title}
       onOpenChange={onOpenChange}
     >

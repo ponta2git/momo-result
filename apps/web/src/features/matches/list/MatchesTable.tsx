@@ -32,7 +32,7 @@ export function MatchesTable({ items, rowActions }: MatchesTableProps) {
           key: "status",
           minWidth: "12rem",
           renderCell: (item) => (
-            <div className="grid gap-2.5">
+            <div className="grid gap-3">
               <MatchListStatusSummary item={item} />
               <MatchListStatusAction item={item} rowActions={rowActions} />
             </div>

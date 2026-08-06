@@ -36,7 +36,7 @@ export function HeldEventHistoryTable({ rows }: { rows: RankEventRow[] }) {
       <table className="w-full min-w-[62rem] border-separate border-spacing-0 text-sm">
         <thead>
           <tr>
-            <DrilldownTableHeader className="sticky left-0 z-[calc(var(--z-sticky)+1)]">
+            <DrilldownTableHeader className="sticky left-0 z-[var(--z-sticky-raised)]">
               開催
             </DrilldownTableHeader>
             <DrilldownTableHeader align="right">試合数</DrilldownTableHeader>
@@ -100,7 +100,7 @@ export function MatchHistoryTable({ rows }: { rows: RankMatchRow[] }) {
       <table className="w-full min-w-[64rem] border-separate border-spacing-0 text-sm">
         <thead>
           <tr>
-            <DrilldownTableHeader className="sticky left-0 z-[calc(var(--z-sticky)+1)]">
+            <DrilldownTableHeader className="sticky left-0 z-[var(--z-sticky-raised)]">
               対戦順
             </DrilldownTableHeader>
             <DrilldownTableHeader>開催</DrilldownTableHeader>

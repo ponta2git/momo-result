@@ -53,7 +53,7 @@ function NavItemLink({ item }: { item: NavItem }) {
       aria-label={item.label}
       className={({ isActive }) =>
         cn(
-          "relative isolate inline-flex min-h-8 shrink-0 items-center gap-2 overflow-hidden rounded-[var(--radius-sm)] border px-2.5 py-1 text-sm font-semibold transition-colors duration-150 lg:min-h-9 lg:px-3 lg:py-1.5",
+          "relative isolate inline-flex min-h-11 shrink-0 items-center gap-2 overflow-hidden rounded-[var(--radius-sm)] border px-3 py-2 text-sm font-semibold transition-colors duration-[var(--motion-fast)] motion-reduce:transition-none lg:min-h-9 lg:py-2",
           isActive
             ? "border-[var(--color-action)]/60 text-[var(--color-text-primary)]"
             : "border-transparent text-[var(--color-text-secondary)] hover:border-[var(--color-border)] hover:bg-[var(--color-surface-subtle)]",
@@ -65,7 +65,7 @@ function NavItemLink({ item }: { item: NavItem }) {
           {isActive ? (
             <motion.span
               aria-hidden="true"
-              className="absolute inset-0 z-0 rounded-[var(--radius-sm)] bg-[var(--color-action)]/12"
+              className="absolute inset-0 z-[var(--z-base)] rounded-[var(--radius-sm)] bg-[var(--color-action)]/12"
               layoutId="global-nav-active"
               transition={momoSpring}
             />
@@ -101,11 +101,11 @@ export function GlobalNav({
         className,
       )}
     >
-      <div className="mx-auto grid w-full max-w-[75rem] min-w-0 grid-cols-1 gap-1.5 px-3 py-1.5 sm:px-4 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center lg:gap-2 lg:py-2">
+      <div className="mx-auto grid w-full max-w-[75rem] min-w-0 grid-cols-1 gap-2 px-3 py-2 sm:px-4 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center lg:py-2">
         <div className="flex min-w-0 items-center justify-between gap-2 lg:contents">
           <div className="flex min-w-0 items-center gap-2 lg:col-start-1 lg:row-start-1">
             <Link
-              className="rounded-[var(--radius-xs)] bg-[var(--color-surface-subtle)] px-2 py-1 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-surface-selected)]"
+              className="momo-pressable inline-flex min-h-11 items-center rounded-[var(--radius-xs)] bg-[var(--color-surface-subtle)] px-2 py-1 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-surface-selected)] lg:min-h-9"
               to={isAuthenticated ? "/matches" : "/login"}
             >
               momo-result
@@ -134,12 +134,12 @@ export function GlobalNav({
             </div>
           ) : null}
         </div>
-        <div className="-mx-3 flex min-w-0 [scrollbar-width:none] items-center gap-1.5 overflow-x-auto px-3 pb-1 lg:col-start-2 lg:row-start-1 lg:mx-0 lg:flex-wrap lg:justify-center lg:overflow-visible lg:px-0 lg:pb-0 [&::-webkit-scrollbar]:hidden">
+        <div className="-mx-3 flex min-w-0 [scrollbar-width:none] items-center gap-2 overflow-x-auto px-3 pb-1 lg:col-start-2 lg:row-start-1 lg:mx-0 lg:flex-wrap lg:justify-center lg:overflow-visible lg:px-0 lg:pb-0 [&::-webkit-scrollbar]:hidden">
           {primaryItems.map((item) => (
             <NavItemLink key={item.to} item={item} />
           ))}
           {managementItems.length > 0 ? (
-            <div className="ml-1 flex min-w-0 shrink-0 items-center gap-1.5 border-l border-[var(--color-border)] pl-2">
+            <div className="ml-1 flex min-w-0 shrink-0 items-center gap-2 border-l border-[var(--color-border)] pl-2">
               {managementItems.map((item) => (
                 <NavItemLink key={item.to} item={item} />
               ))}

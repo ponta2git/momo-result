@@ -54,7 +54,7 @@ export function ExportWorkspace({
 
       <section
         aria-label="出力条件"
-        className="grid gap-4 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] sm:p-5"
+        className="grid gap-4 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)]"
       >
         <div className="grid gap-2">
           <p className="text-sm font-semibold text-[var(--color-text-primary)]">出力範囲</p>

@@ -11,7 +11,7 @@ export function MatchListRankSummary({ item }: { item: MatchListItemView }) {
   }
 
   return (
-    <div className="grid gap-1.5">
+    <div className="grid gap-2">
       <p className="flex min-w-0 items-center gap-2">
         <RankBadge rank={winner.rank} />
         <span className="truncate text-sm font-semibold text-[var(--color-text-primary)]">
@@ -21,7 +21,7 @@ export function MatchListRankSummary({ item }: { item: MatchListItemView }) {
       {others.length > 0 ? (
         <ul className="flex flex-wrap gap-x-3 gap-y-1" aria-label="2位以下の順位">
           {others.map((rank) => (
-            <li key={rank.memberId} className="inline-flex min-w-0 items-center gap-1.5">
+            <li key={rank.memberId} className="inline-flex min-w-0 items-center gap-2">
               <RankBadge rank={rank.rank} />
               <span className="max-w-28 truncate text-xs text-[var(--color-text-secondary)]">
                 {rank.displayName}

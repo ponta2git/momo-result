@@ -186,7 +186,7 @@ function RecentRankStripPlayerRow({
                 <span
                   aria-label={`${player.displayName} ${point.matchIndex}戦目 ${point.rank}位${isFocusedMatch ? " この試合" : ""}`}
                   className={cn(
-                    "grid size-8 place-items-center rounded-[var(--radius-xs)] border text-xs font-semibold tabular-nums shadow-sm",
+                    "grid size-8 place-items-center rounded-[var(--radius-xs)] border text-xs font-semibold tabular-nums",
                     isFocusedMatch &&
                       "momo-enter ring-2 ring-[var(--color-action)] ring-offset-2 ring-offset-[var(--color-surface-subtle)]",
                   )}

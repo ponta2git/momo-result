@@ -17,7 +17,7 @@ export function RankBadge({
     <span
       className={cn(
         "inline-flex shrink-0 items-center justify-center rounded-[var(--radius-xs)] border font-semibold text-[var(--color-text-primary)] tabular-nums",
-        size === "md" ? "min-h-10 min-w-14 px-2 text-lg" : "min-h-6 min-w-9 px-1.5 text-xs",
+        size === "md" ? "min-h-10 min-w-14 px-2 text-lg" : "min-h-6 min-w-9 px-2 text-xs",
         className,
       )}
       style={
@@ -35,9 +35,9 @@ export function RankBadge({
 export function RankTrail({ ariaLabel, ranks }: { ariaLabel: string; ranks: readonly number[] }) {
   const entries = rankTrailEntries(ranks);
   return (
-    <span aria-label={ariaLabel} className="inline-flex max-w-full flex-wrap items-center gap-1.5">
+    <span aria-label={ariaLabel} className="inline-flex max-w-full flex-wrap items-center gap-2">
       {entries.map((entry) => (
-        <span key={entry.key} className="inline-flex items-center gap-1.5">
+        <span key={entry.key} className="inline-flex items-center gap-2">
           {entry.first ? null : (
             <span aria-hidden="true" className="text-[var(--color-text-muted)]">
               {" → "}

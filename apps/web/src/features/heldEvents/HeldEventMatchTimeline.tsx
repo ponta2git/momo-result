@@ -85,7 +85,7 @@ export function HeldEventMatchTimeline({
               >
                 <div aria-hidden="true" className="relative flex justify-center pt-4">
                   {index < matches.length - 1 ? (
-                    <span className="absolute top-11 bottom-[-1px] w-px bg-[var(--color-border-strong)]" />
+                    <span className="absolute top-11 -bottom-px w-px bg-[var(--color-border-strong)]" />
                   ) : null}
                   <span className="relative flex size-8 items-center justify-center rounded-full border border-[var(--color-border-strong)] bg-[var(--color-surface)] text-xs font-semibold tabular-nums">
                     {match.matchNoInEvent}
@@ -135,7 +135,7 @@ export function HeldEventMatchTimeline({
                       .map((player) => (
                         <li
                           key={player.memberId}
-                          className="flex min-w-0 items-center gap-3 bg-[var(--color-surface-subtle)] px-3 py-2.5"
+                          className="flex min-w-0 items-center gap-3 bg-[var(--color-surface-subtle)] px-3 py-3"
                         >
                           <RankBadge rank={player.rank} />
                           <div className="min-w-0">

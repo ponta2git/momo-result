@@ -39,7 +39,7 @@ export function ReviewPlaybookSection({
           memberId: entry.memberId,
         }));
   return (
-    <section aria-label="次戦の行動仮説" className="grid min-w-0 gap-5" id="review-playbook">
+    <section aria-label="次戦の行動仮説" className="grid min-w-0 gap-4" id="review-playbook">
       <ReviewCommonPlaybookTopics topics={review.commonPlaybookTopics ?? []} />
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
         <p className="text-xs font-semibold text-[var(--color-text-secondary)]">プレーヤー別</p>
@@ -158,7 +158,7 @@ function ReviewCommonPlaybookTopics({ topics }: { topics: ReviewCommonPlaybookTo
       <div className="grid min-w-0 gap-2 lg:grid-cols-2">
         {topics.map((topic) => (
           <div
-            className="grid min-w-0 gap-2 rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-2.5"
+            className="grid min-w-0 gap-2 rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3"
             key={topic.id}
           >
             <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
@@ -213,7 +213,7 @@ function ReviewPlaybookGuide() {
         </Button>
       }
     >
-      <div className="grid min-w-0 gap-5">
+      <div className="grid min-w-0 gap-4">
         <section aria-labelledby="review-classification-guide">
           <h3
             className="text-sm font-semibold text-[var(--color-text-primary)]"

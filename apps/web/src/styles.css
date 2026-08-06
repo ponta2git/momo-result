@@ -71,12 +71,13 @@
   --shadow-dialog: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
   --motion-fast: 120ms;
   --motion-base: 180ms;
-  --motion-panel: 240ms;
+  --motion-panel: 200ms;
   --ease-momo-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-momo-in: cubic-bezier(0.55, 0, 1, 0.45);
 
   --z-base: 0;
   --z-sticky: 20;
+  --z-sticky-raised: 30;
   --z-dropdown: 40;
   --z-toast: 60;
   --z-dialog: 80;

@@ -123,7 +123,7 @@ export function SeriesComparisonPage() {
               <StaleShield
                 active={aggregate.loading || aggregate.shielded || review.shielded}
                 busyLabel="比較条件を更新中"
-                contentClassName="grid gap-5"
+                contentClassName="grid gap-4"
                 fallback={<ComparisonSkeleton />}
                 preserveContent={Boolean(aggregate.data) && !aggregate.loading}
               >

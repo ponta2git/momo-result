@@ -1,17 +1,11 @@
 import { RotateCcw } from "lucide-react";
 
+import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
 
 function savedAtLabel(savedAt: string): string {
-  const date = new Date(savedAt);
-  if (Number.isNaN(date.getTime())) {
-    return "前回";
-  }
-  return new Intl.DateTimeFormat("ja-JP", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
+  return formatDateTimeLong(savedAt, "前回");
 }
 
 export function MatchWorkspaceRecoveryNotice({

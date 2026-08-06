@@ -9,6 +9,7 @@ import type {
   MatchListSort,
 } from "@/features/matches/list/matchListTypes";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
+import { formatDateOnly } from "@/shared/lib/dateTime";
 import { IconButton } from "@/shared/ui/actions/IconButton";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { SelectField } from "@/shared/ui/forms/SelectField";
@@ -32,11 +33,7 @@ const sortOptions: Array<{ label: string; value: MatchListSort }> = [
 ];
 
 function heldEventLabel(event: HeldEventResponse): string {
-  return new Intl.DateTimeFormat("ja-JP", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(new Date(event.heldAt));
+  return formatDateOnly(event.heldAt);
 }
 
 export function MatchesListFilters({

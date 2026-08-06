@@ -330,7 +330,7 @@ describe("ui foundation", () => {
     );
 
     expect(screen.getByText("処理中")).toBeInTheDocument();
-    expect(screen.getByText("確認待ち")).toBeInTheDocument();
+    expect(screen.getByText("読み取り失敗")).toBeInTheDocument();
     expect(screen.getByText("確定済")).toBeInTheDocument();
     expect(screen.getByText("OCR失敗")).toBeInTheDocument();
   });

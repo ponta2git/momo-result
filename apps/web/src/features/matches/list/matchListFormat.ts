@@ -1,38 +1,11 @@
+import { formatDateTimeCompact, formatDateTimeLong } from "@/shared/lib/dateTime";
+
 export function formatDateTime(iso: string | undefined): string {
-  if (!iso) {
-    return "未設定";
-  }
-
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) {
-    return iso;
-  }
-
-  return new Intl.DateTimeFormat("ja-JP", {
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(date);
+  return formatDateTimeLong(iso, "未設定");
 }
 
 export function formatCompactDateTime(iso: string | undefined): string {
-  if (!iso) {
-    return "日時未設定";
-  }
-
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) {
-    return iso;
-  }
-
-  return new Intl.DateTimeFormat("ja-JP", {
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    month: "2-digit",
-  }).format(date);
+  return formatDateTimeCompact(iso);
 }
 
 export function formatMatchNo(matchNoInEvent: number | undefined): string {

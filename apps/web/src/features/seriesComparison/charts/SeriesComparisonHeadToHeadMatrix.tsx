@@ -4,11 +4,11 @@ import type {
 } from "@/features/seriesComparison/charts/SeriesComparisonChartTypes";
 import { isFiniteNumber } from "@/features/seriesComparison/charts/SeriesComparisonChartTypes";
 import { playerColor } from "@/features/seriesComparison/charts/SeriesComparisonPlayerVisuals";
-import { colorMix } from "@/features/seriesComparison/charts/SeriesComparisonRankColors";
 import {
   formatPercent,
   formatSigned,
 } from "@/features/seriesComparison/model/seriesComparisonPresentation";
+import { colorMix } from "@/shared/ui/rank/rankPresentation";
 
 export function HeadToHeadMatrix({
   entries,

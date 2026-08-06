@@ -21,6 +21,7 @@ import {
 import type { FocusedMatchMetricContext } from "@/features/seriesComparison/model/seriesComparisonPresentation";
 import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
 import { Button } from "@/shared/ui/actions/Button";
+import { RankBadge } from "@/shared/ui/rank/RankBadge";
 
 export function BasicMetrics({
   focusedIndex,
@@ -68,7 +69,14 @@ export function BasicMetrics({
                   focusedMatch={focusedRank === item.rank}
                   key={item.rank}
                   label={`${item.rank}位`}
-                  value={`${item.count}回・${formatPercent(item.rate)}`}
+                  value={
+                    <span className="inline-flex items-center gap-1.5">
+                      <RankBadge rank={item.rank} />
+                      <span>
+                        {item.count}回・{formatPercent(item.rate)}
+                      </span>
+                    </span>
+                  }
                 />
               ))}
             </>

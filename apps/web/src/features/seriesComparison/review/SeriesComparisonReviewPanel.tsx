@@ -39,7 +39,7 @@ export function ReviewViewContent({
       <EmptyState
         icon={<ClipboardList className="size-5" />}
         title="次戦の仮説を表示できません"
-        description="確定済みの開催回が揃うと表示できます。"
+        description="確定済みの開催が揃うと表示できます。"
       />
     );
   }

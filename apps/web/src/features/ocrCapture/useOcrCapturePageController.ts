@@ -17,6 +17,7 @@ import { parseLayoutFamily } from "@/shared/api/enums";
 import type { SlotKind } from "@/shared/api/enums";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
 import { memberDisplayName } from "@/shared/domain/members";
+import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { trimSearchParam } from "@/shared/lib/searchParams";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
@@ -125,7 +126,7 @@ export function useOcrCapturePageController() {
       setup: { ...setup },
       setupSummary: {
         heldEvent: setupOptions.selectedHeldEvent
-          ? new Date(setupOptions.selectedHeldEvent.heldAt).toLocaleString()
+          ? formatDateTimeLong(setupOptions.selectedHeldEvent.heldAt)
           : "紐づけなし",
         gameTitle: setupOptions.selectedGameTitle?.name ?? setup.gameTitleId,
         map:

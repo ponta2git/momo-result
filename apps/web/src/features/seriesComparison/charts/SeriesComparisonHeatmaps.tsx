@@ -7,15 +7,15 @@ import type {
 import { isFiniteNumber } from "@/features/seriesComparison/charts/SeriesComparisonChartTypes";
 import { playerColor } from "@/features/seriesComparison/charts/SeriesComparisonPlayerVisuals";
 import {
-  rankAverageTone,
-  rankBackgroundColor,
-  rankBorderColor,
-} from "@/features/seriesComparison/charts/SeriesComparisonRankColors";
-import {
   formatDecimal,
   formatPercent,
   formatPlayOrderLabel,
 } from "@/features/seriesComparison/model/seriesComparisonPresentation";
+import {
+  rankAverageTone,
+  rankBackgroundColor,
+  rankBorderColor,
+} from "@/shared/ui/rank/rankPresentation";
 
 export function PlayOrderHeatmap({
   players,

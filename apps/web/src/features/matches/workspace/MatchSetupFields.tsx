@@ -4,17 +4,9 @@ import type {
   MatchSetupOptions,
 } from "@/features/matches/workspace/MatchSetupSection";
 import { fixedMembers } from "@/shared/domain/members";
+import { formatDateTimeLong, toLocalDateTimeInputValue } from "@/shared/lib/dateTime";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TextField } from "@/shared/ui/forms/TextField";
-
-function toLocalDateTime(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-  const offsetMs = date.getTimezoneOffset() * 60_000;
-  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
-}
 
 export function MatchSetupFields({
   actions,
@@ -39,7 +31,7 @@ export function MatchSetupFields({
         options={[
           { label: "未選択", value: "" },
           ...options.heldEvents.map((event) => ({
-            label: `${new Date(event.heldAt).toLocaleString()}（${event.matchCount}試合）`,
+            label: `${formatDateTimeLong(event.heldAt)}（${event.matchCount}試合）`,
             value: event.id,
           })),
         ]}
@@ -78,7 +70,7 @@ export function MatchSetupFields({
         fieldClassName="lg:col-span-5"
         label="開催日時（必須）"
         type="datetime-local"
-        value={toLocalDateTime(values.playedAt)}
+        value={toLocalDateTimeInputValue(values.playedAt)}
         onChange={(event) => actions.onPatchRoot({ playedAt: event.currentTarget.value })}
       />
 

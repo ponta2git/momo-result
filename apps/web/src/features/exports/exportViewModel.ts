@@ -12,7 +12,7 @@ export const exportFormats = [
 export const exportScopes = [
   { description: "確定済みの全試合を書き出します。", label: "全試合", value: "all" },
   { description: "シーズンを選んで書き出します。", label: "シーズン", value: "season" },
-  { description: "開催回を選んで書き出します。", label: "開催", value: "heldEvent" },
+  { description: "開催を選んで書き出します。", label: "開催", value: "heldEvent" },
   { description: "1試合だけ選んで書き出します。", label: "試合", value: "match" },
 ] as const;
 

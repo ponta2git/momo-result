@@ -10,8 +10,8 @@ import type {
   RankDistributionBarEntry,
 } from "@/features/seriesComparison/charts/SeriesComparisonChartTypes";
 import { playerColor } from "@/features/seriesComparison/charts/SeriesComparisonPlayerVisuals";
-import { rankColor } from "@/features/seriesComparison/charts/SeriesComparisonRankColors";
 import { cn } from "@/shared/ui/cn";
+import { rankColor } from "@/shared/ui/rank/rankPresentation";
 
 function RankLegend() {
   return (

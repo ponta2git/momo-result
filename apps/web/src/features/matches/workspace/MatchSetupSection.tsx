@@ -9,6 +9,7 @@ import type {
   MapMasterListResponse,
   SeasonMasterListResponse,
 } from "@/shared/api/masters";
+import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
@@ -83,7 +84,7 @@ export function MatchSetupSection({
   }, [hasErrors]);
   const contextSummary = contextComplete
     ? [
-        selectedHeldEvent ? new Date(selectedHeldEvent.heldAt).toLocaleString() : null,
+        selectedHeldEvent ? formatDateTimeLong(selectedHeldEvent.heldAt) : null,
         `第${values.matchNoInEvent}試合`,
         selectedGameTitle?.name,
         selectedSeason?.name,
@@ -94,6 +95,7 @@ export function MatchSetupSection({
     : "必須条件を設定してください";
   return (
     <Card className="p-0 shadow-none">
+      <h2 className="sr-only">保存先と試合条件</h2>
       <Disclosure
         ariaLabel={editorOpen ? "条件を閉じる" : "条件を変更"}
         keepMounted
@@ -134,8 +136,9 @@ export function MatchSetupSection({
 
         <Disclosure
           className="mt-4 border-t border-[var(--color-border)] pt-1"
+          keepMounted
           panelClassName="pt-2"
-          summary="一覧にない開催履歴を追加"
+          summary="一覧にない開催履歴を追加する"
           triggerClassName="px-2 text-xs text-[var(--color-text-secondary)]"
         >
           <div className="grid gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3 md:grid-cols-[1fr_auto] md:items-end">

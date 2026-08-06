@@ -5,7 +5,7 @@ import type {
   SeasonMasterResponse,
 } from "@/shared/api/masters";
 import type { MatchSummaryResponse } from "@/shared/api/matches";
-import type { DraftStatusOrUnknown } from "@/shared/domain/draftStatus";
+import type { DraftStatusLabel, DraftStatusOrUnknown } from "@/shared/domain/draftStatus";
 
 export type MatchListStatus = DraftStatusOrUnknown;
 
@@ -95,7 +95,7 @@ export type MatchListItemView = {
   seasonName?: string;
   status: MatchListStatus;
   statusDescription?: string;
-  statusLabel: "処理中" | "確認待ち" | "要確認" | "読取失敗" | "確定済" | "状態不明";
+  statusLabel: DraftStatusLabel;
   updatedAt: string;
 };
 

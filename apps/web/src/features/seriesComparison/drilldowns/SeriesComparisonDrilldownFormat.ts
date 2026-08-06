@@ -1,3 +1,5 @@
+import { formatDateTimeCompact } from "@/shared/lib/dateTime";
+
 export function compareTimestampDesc(left: string, right: string): number {
   const leftTime = Date.parse(left);
   const rightTime = Date.parse(right);
@@ -8,16 +10,7 @@ export function compareTimestampDesc(left: string, right: string): number {
 }
 
 export function formatDrilldownDate(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-  return new Intl.DateTimeFormat("ja-JP", {
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    month: "2-digit",
-  }).format(date);
+  return formatDateTimeCompact(value);
 }
 
 export function shortDrilldownId(value: string): string {

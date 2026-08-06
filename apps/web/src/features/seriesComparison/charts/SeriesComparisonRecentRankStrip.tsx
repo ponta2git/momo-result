@@ -5,11 +5,8 @@ import type {
   RecentRankStripEntry,
 } from "@/features/seriesComparison/charts/SeriesComparisonChartTypes";
 import { playerColor } from "@/features/seriesComparison/charts/SeriesComparisonPlayerVisuals";
-import {
-  rankColor,
-  rankForegroundColor,
-} from "@/features/seriesComparison/charts/SeriesComparisonRankColors";
 import { cn } from "@/shared/ui/cn";
+import { rankColor, rankForegroundColor } from "@/shared/ui/rank/rankPresentation";
 
 export function RecentRankStrip({
   entries,

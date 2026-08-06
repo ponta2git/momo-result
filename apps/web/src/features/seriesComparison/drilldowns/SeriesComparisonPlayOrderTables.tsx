@@ -24,6 +24,7 @@ import {
   playOrderColor,
 } from "@/features/seriesComparison/model/seriesComparisonPresentation";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
+import { RankBadge } from "@/shared/ui/rank/RankBadge";
 
 export function PlayOrderBreakdownTable({ rows }: { rows: PlayOrderRow[] }) {
   if (rows.length === 0) {
@@ -130,7 +131,9 @@ export function PlayOrderTrendTable({ rows }: { rows: PlayOrderTrendRow[] }) {
               <DrilldownTableCell align="right">
                 {row.playOrderOccurrenceIndex}戦目
               </DrilldownTableCell>
-              <DrilldownTableCell align="right">{row.rank}位</DrilldownTableCell>
+              <DrilldownTableCell align="right">
+                <RankBadge rank={row.rank} />
+              </DrilldownTableCell>
               <DrilldownTableCell align="right">
                 {formatDecimal(row.cumulativeAverageRankByPlayOrder)}
               </DrilldownTableCell>

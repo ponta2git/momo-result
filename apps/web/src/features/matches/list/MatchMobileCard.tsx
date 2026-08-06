@@ -1,5 +1,6 @@
 import { MatchListExportLink } from "@/features/matches/list/MatchListExportLink";
 import { MatchListMatchIdentity } from "@/features/matches/list/MatchListMatchIdentity";
+import { MatchListRankSummary } from "@/features/matches/list/MatchListRankSummary";
 import { MatchListResultLink } from "@/features/matches/list/MatchListResultLink";
 import { MatchListStatusAction } from "@/features/matches/list/MatchListStatusAction";
 import { MatchListStatusSummary } from "@/features/matches/list/MatchListStatusSummary";
@@ -13,24 +14,8 @@ type MatchMobileCardProps = {
   rowActions: MatchListRowActions;
 };
 
-function rankSummary(item: MatchListItemView): string {
-  const winner = item.ranks.find((rank) => rank.rank === 1);
-  if (!winner) {
-    return "順位はまだ確定していません";
-  }
-  return `優勝 ${winner.displayName}`;
-}
-
-function otherRanks(item: MatchListItemView): string {
-  return item.ranks
-    .filter((rank) => rank.rank !== 1)
-    .map((rank) => `${rank.rank}位 ${rank.displayName}`)
-    .join(" / ");
-}
-
 export function MatchMobileCard({ item, rowActions }: MatchMobileCardProps) {
   const actionsDisabled = rowActions.disabled ?? false;
-  const ranksAside = otherRanks(item);
 
   return (
     <article className="momo-enter flex min-h-48 flex-col rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
@@ -50,14 +35,7 @@ export function MatchMobileCard({ item, rowActions }: MatchMobileCardProps) {
 
       <div className="mt-3">
         <div className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-2">
-          <p className="text-sm font-semibold text-[var(--color-text-primary)]">
-            {rankSummary(item)}
-          </p>
-          {ranksAside ? (
-            <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-[var(--color-text-secondary)]">
-              {ranksAside}
-            </p>
-          ) : null}
+          <MatchListRankSummary item={item} />
         </div>
       </div>
 

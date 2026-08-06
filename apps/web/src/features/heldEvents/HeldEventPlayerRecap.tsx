@@ -1,6 +1,7 @@
 import type { HeldEventPlayerRecap as PlayerRecap } from "@/features/heldEvents/heldEventDetailViewModel";
 import { formatAverageRank } from "@/features/heldEvents/heldEventDetailViewModel";
 import { Card } from "@/shared/ui/layout/Card";
+import { RankTrail } from "@/shared/ui/rank/RankBadge";
 
 export function HeldEventPlayerRecap({ recaps }: { recaps: PlayerRecap[] }) {
   if (recaps.length === 0) {
@@ -44,12 +45,12 @@ export function HeldEventPlayerRecap({ recaps }: { recaps: PlayerRecap[] }) {
             </dl>
             <div className="mt-3 border-t border-[var(--color-border)] pt-2">
               <p className="momo-label text-[var(--color-text-secondary)]">順位推移</p>
-              <p
-                aria-label={`${recap.displayName}の順位推移 ${recap.ranks.map((rank) => `${rank}位`).join("、")}`}
-                className="mt-1 overflow-hidden text-sm font-semibold text-ellipsis whitespace-nowrap tabular-nums"
-              >
-                {recap.ranks.map((rank) => `${rank}位`).join(" → ")}
-              </p>
+              <div className="mt-1 overflow-x-auto pb-1">
+                <RankTrail
+                  ariaLabel={`${recap.displayName}の順位推移 ${recap.ranks.map((rank) => `${rank}位`).join("、")}`}
+                  ranks={recap.ranks}
+                />
+              </div>
             </div>
           </section>
         ))}

@@ -1,5 +1,6 @@
 import type { HeldEventDraftResponse, HeldEventMatchResponse } from "@/shared/api/heldEvents";
 import { fixedMembers, memberDisplayName } from "@/shared/domain/members";
+import { formatDateTimeCompact, formatDateTimeLong } from "@/shared/lib/dateTime";
 
 export type HeldEventPlayerRecap = {
   averageRank: number;
@@ -103,31 +104,12 @@ export function formatAverageRank(averageRank: number): string {
 }
 
 export function formatHeldEventDateTime(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-  return new Intl.DateTimeFormat("ja-JP", {
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    month: "long",
-    year: "numeric",
-  }).format(date);
+  return formatDateTimeLong(value);
 }
 
 export function formatHeldEventShortDateTime(value: string | undefined): string | undefined {
   if (!value) {
     return undefined;
   }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-  return new Intl.DateTimeFormat("ja-JP", {
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    month: "numeric",
-  }).format(date);
+  return formatDateTimeCompact(value);
 }

@@ -12,6 +12,7 @@ import { seriesComparisonHrefForMatch } from "@/shared/navigation/matchLinks";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Card } from "@/shared/ui/layout/Card";
+import { RankBadge } from "@/shared/ui/rank/RankBadge";
 
 export function HeldEventMatchTimeline({
   heldEventId,
@@ -127,9 +128,7 @@ export function HeldEventMatchTimeline({
                           key={player.memberId}
                           className="flex min-w-0 items-center gap-3 bg-[var(--color-surface-subtle)] px-3 py-2.5"
                         >
-                          <span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-xs)] bg-[var(--color-surface-selected)] text-sm font-semibold tabular-nums">
-                            {player.rank}位
-                          </span>
+                          <RankBadge rank={player.rank} />
                           <div className="min-w-0">
                             <p className="truncate text-sm font-semibold">
                               {memberDisplayName(player.memberId)}

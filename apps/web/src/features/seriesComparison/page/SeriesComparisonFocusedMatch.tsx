@@ -3,6 +3,7 @@ import { ArrowUpRight, X } from "lucide-react";
 import { playerNameMap } from "@/features/seriesComparison/model/seriesComparisonPresentation";
 import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
 import { buildMatchPerformanceContext } from "@/shared/domain/matchPerformanceContext";
+import { formatDateOnly } from "@/shared/lib/dateTime";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { MatchResultLedger } from "@/shared/ui/data/MatchResultLedger";
@@ -11,15 +12,11 @@ function formatFocusedMatchDate(value: string | undefined): string | undefined {
   if (!value) {
     return undefined;
   }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
+  if (!Number.isFinite(Date.parse(value))) {
     return undefined;
   }
-  return new Intl.DateTimeFormat("ja-JP", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(date);
+  const formatted = formatDateOnly(value, "");
+  return formatted || undefined;
 }
 
 export function SeriesComparisonFocusedMatch({

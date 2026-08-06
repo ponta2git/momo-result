@@ -1,6 +1,7 @@
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
 import type { OcrSetupOptions } from "@/features/ocrCapture/useOcrSetupOptions";
 import { fixedMembers } from "@/shared/domain/members";
+import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TextField } from "@/shared/ui/forms/TextField";
 
@@ -44,7 +45,7 @@ export function SetupPanel({ value, onChange, enabled, options }: SetupPanelProp
             value: "",
           },
           ...heldEvents.map((heldEvent) => ({
-            label: `${new Date(heldEvent.heldAt).toLocaleString()}（確定${heldEvent.matchCount}・未完了${heldEvent.draftCount}）`,
+            label: `${formatDateTimeLong(heldEvent.heldAt)}（確定${heldEvent.matchCount}・未完了${heldEvent.draftCount}）`,
             value: heldEvent.id,
           })),
         ]}

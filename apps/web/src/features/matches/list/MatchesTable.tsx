@@ -1,5 +1,6 @@
 import { MatchListExportLink } from "@/features/matches/list/MatchListExportLink";
 import { MatchListMatchIdentity } from "@/features/matches/list/MatchListMatchIdentity";
+import { MatchListRankSummary } from "@/features/matches/list/MatchListRankSummary";
 import { MatchListResultLink } from "@/features/matches/list/MatchListResultLink";
 import { MatchListStatusAction } from "@/features/matches/list/MatchListStatusAction";
 import { MatchListStatusSummary } from "@/features/matches/list/MatchListStatusSummary";
@@ -13,28 +14,6 @@ type MatchesTableProps = {
   items: MatchListItemView[];
   rowActions: MatchListRowActions;
 };
-
-function RankSummary({ item }: { item: MatchListItemView }) {
-  const winner = item.ranks.find((rank) => rank.rank === 1);
-  const others = item.ranks.filter((rank) => rank.rank !== 1);
-
-  if (!winner) {
-    return <p className="text-sm text-[var(--color-text-secondary)]">順位はまだ確定していません</p>;
-  }
-
-  return (
-    <div className="grid gap-1">
-      <p className="text-sm font-semibold text-[var(--color-text-primary)]">
-        優勝 {winner.displayName}
-      </p>
-      {others.length > 0 ? (
-        <p className="line-clamp-2 text-xs leading-5 text-[var(--color-text-secondary)]">
-          {others.map((rank) => `${rank.rank}位 ${rank.displayName}`).join(" / ")}
-        </p>
-      ) : null}
-    </div>
-  );
-}
 
 export function MatchesTable({ items, rowActions }: MatchesTableProps) {
   const actionsDisabled = rowActions.disabled ?? false;
@@ -64,7 +43,7 @@ export function MatchesTable({ items, rowActions }: MatchesTableProps) {
           header: "順位",
           key: "ranks",
           minWidth: "13rem",
-          renderCell: (item) => <RankSummary item={item} />,
+          renderCell: (item) => <MatchListRankSummary item={item} />,
         },
         {
           align: "center",

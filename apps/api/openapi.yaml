@@ -6578,6 +6578,12 @@
           "playOrderRankHistory" : {
             "$ref" : "#/components/schemas/SeriesComparisonPlayOrderRankHistoryPayloadResponse"
           },
+          "rankSignals" : {
+            "$ref" : "#/components/schemas/SeriesComparisonRankSignalsDrilldownPayloadResponse"
+          },
+          "unexpectedWins" : {
+            "$ref" : "#/components/schemas/SeriesComparisonUnexpectedWinsDrilldownPayloadResponse"
+          },
           "dataQuality" : {
             "$ref" : "#/components/schemas/SeriesComparisonDataQualityResponse"
           }
@@ -7432,6 +7438,65 @@
           }
         }
       },
+      "SeriesComparisonRankSignalDetailResponse" : {
+        "title" : "SeriesComparisonRankSignalDetailResponse",
+        "type" : "object",
+        "required" : [
+          "signal",
+          "direction",
+          "importance",
+          "stable"
+        ],
+        "properties" : {
+          "signal" : {
+            "type" : "string"
+          },
+          "direction" : {
+            "type" : "string"
+          },
+          "importance" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "stable" : {
+            "type" : "boolean"
+          },
+          "foldRows" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/SeriesComparisonRankSignalFoldRowResponse"
+            }
+          }
+        }
+      },
+      "SeriesComparisonRankSignalFoldRowResponse" : {
+        "title" : "SeriesComparisonRankSignalFoldRowResponse",
+        "type" : "object",
+        "required" : [
+          "fold",
+          "heldEventCount",
+          "comparisonCount",
+          "importance"
+        ],
+        "properties" : {
+          "fold" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "heldEventCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "comparisonCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "importance" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        }
+      },
       "SeriesComparisonRankSignalResponse" : {
         "title" : "SeriesComparisonRankSignalResponse",
         "type" : "object",
@@ -7454,6 +7519,45 @@
           },
           "stable" : {
             "type" : "boolean"
+          }
+        }
+      },
+      "SeriesComparisonRankSignalsDrilldownPayloadResponse" : {
+        "title" : "SeriesComparisonRankSignalsDrilldownPayloadResponse",
+        "type" : "object",
+        "required" : [
+          "status",
+          "heldEventCount",
+          "matchCount",
+          "improvedFoldCount"
+        ],
+        "properties" : {
+          "status" : {
+            "type" : "string"
+          },
+          "reasonCodes" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "heldEventCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "matchCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "improvedFoldCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "signals" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/SeriesComparisonRankSignalDetailResponse"
+            }
           }
         }
       },
@@ -7799,6 +7903,50 @@
           }
         }
       },
+      "SeriesComparisonUnexpectedWinDrilldownRowResponse" : {
+        "title" : "SeriesComparisonUnexpectedWinDrilldownRowResponse",
+        "type" : "object",
+        "required" : [
+          "matchIndex",
+          "matchId",
+          "heldEventId",
+          "matchNoInEvent",
+          "playedAt",
+          "expectedRank",
+          "actualRank",
+          "evidence"
+        ],
+        "properties" : {
+          "matchIndex" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "matchId" : {
+            "type" : "string"
+          },
+          "heldEventId" : {
+            "type" : "string"
+          },
+          "matchNoInEvent" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "playedAt" : {
+            "type" : "string"
+          },
+          "expectedRank" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "actualRank" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "evidence" : {
+            "$ref" : "#/components/schemas/SeriesComparisonUnexpectedWinEvidenceResponse"
+          }
+        }
+      },
       "SeriesComparisonUnexpectedWinEvidenceResponse" : {
         "title" : "SeriesComparisonUnexpectedWinEvidenceResponse",
         "type" : "object",
@@ -7878,6 +8026,50 @@
           },
           "evidence" : {
             "$ref" : "#/components/schemas/SeriesComparisonUnexpectedWinEvidenceResponse"
+          }
+        }
+      },
+      "SeriesComparisonUnexpectedWinsDrilldownPayloadResponse" : {
+        "title" : "SeriesComparisonUnexpectedWinsDrilldownPayloadResponse",
+        "type" : "object",
+        "required" : [
+          "status",
+          "heldEventCount",
+          "matchCount",
+          "totalWinCount",
+          "unexpectedWinCount"
+        ],
+        "properties" : {
+          "status" : {
+            "type" : "string"
+          },
+          "reasonCodes" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "heldEventCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "matchCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "totalWinCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "unexpectedWinCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "rows" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/SeriesComparisonUnexpectedWinDrilldownRowResponse"
+            }
           }
         }
       },

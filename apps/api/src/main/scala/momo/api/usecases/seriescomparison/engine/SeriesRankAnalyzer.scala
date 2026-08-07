@@ -8,6 +8,9 @@ private[seriescomparison] object SeriesRankAnalyzer:
   def analyze(dataset: SeriesDataset): RankAnalysisResult =
     analyze(dataset, RankAnalysisConfig.production)
 
+  def analyzeForDrilldown(dataset: SeriesDataset): RankAnalysisResult =
+    analyze(dataset, RankAnalysisConfig.production.copy(bootstrapIterations = 0))
+
   def analyze(
       dataset: SeriesDataset,
       config: RankAnalysisConfig,
@@ -32,11 +35,7 @@ private[seriescomparison] object SeriesRankAnalyzer:
             config,
           )
           expectedRanks <- RankCrossValidation.expectedRanks(evaluations)
-          crown <- RankBlockBootstrap.crownCertainty(
-            events,
-            dataset.playerOrder.toVector,
-            config,
-          )
+          crown <- crownCertainty(events, dataset.playerOrder.toVector, config)
         yield buildResult(
           dataset,
           heldEventCount,
@@ -55,6 +54,20 @@ private[seriescomparison] object SeriesRankAnalyzer:
           ),
         identity,
       )
+
+  private def crownCertainty(
+      events: Vector[EncodedRankEvent],
+      playerOrder: Vector[MemberId],
+      config: RankAnalysisConfig,
+  ): Either[RankAnalysisReason, CrownCertainty] =
+    if config.bootstrapIterations <= 0 then
+      Right(CrownCertainty(
+        bootstrapIterations = 0,
+        successfulIterations = 0,
+        leaderChangeCount = 0,
+        shares = playerOrder.map(memberId => CrownShare(memberId, 0.0)),
+      ))
+    else RankBlockBootstrap.crownCertainty(events, playerOrder, config)
 
   private def buildResult(
       dataset: SeriesDataset,

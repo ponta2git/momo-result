@@ -7,6 +7,8 @@ final case class SeriesComparisonDrilldownView(
     player: SeriesComparisonPlayerView,
     rankAverageHistory: Option[SeriesComparisonRankAverageHistoryPayloadView],
     playOrderRankHistory: Option[SeriesComparisonPlayOrderRankHistoryPayloadView],
+    rankSignals: Option[SeriesComparisonRankSignalsDrilldownPayloadView],
+    unexpectedWins: Option[SeriesComparisonUnexpectedWinsDrilldownPayloadView],
     dataQuality: SeriesComparisonDataQualityView,
 )
 final case class SeriesComparisonRankAverageHistoryPayloadView(
@@ -85,4 +87,46 @@ final case class SeriesComparisonPlayOrderRankHistoryPlayOrderRowView(
     lowerHalfRate: Option[Double],
     baselineRankAverage: Option[Double],
     baselineDelta: Option[Double],
+)
+
+final case class SeriesComparisonRankSignalsDrilldownPayloadView(
+    status: String,
+    reasonCodes: List[String],
+    heldEventCount: Int,
+    matchCount: Int,
+    improvedFoldCount: Int,
+    signals: List[SeriesComparisonRankSignalDetailView],
+)
+final case class SeriesComparisonRankSignalDetailView(
+    signal: String,
+    direction: String,
+    importance: Double,
+    stable: Boolean,
+    foldRows: List[SeriesComparisonRankSignalFoldRowView],
+)
+final case class SeriesComparisonRankSignalFoldRowView(
+    fold: Int,
+    heldEventCount: Int,
+    comparisonCount: Int,
+    importance: Double,
+)
+
+final case class SeriesComparisonUnexpectedWinsDrilldownPayloadView(
+    status: String,
+    reasonCodes: List[String],
+    heldEventCount: Int,
+    matchCount: Int,
+    totalWinCount: Int,
+    unexpectedWinCount: Int,
+    rows: List[SeriesComparisonUnexpectedWinDrilldownRowView],
+)
+final case class SeriesComparisonUnexpectedWinDrilldownRowView(
+    matchIndex: Int,
+    matchId: String,
+    heldEventId: String,
+    matchNoInEvent: Int,
+    playedAt: String,
+    expectedRank: Double,
+    actualRank: Int,
+    evidence: SeriesComparisonUnexpectedWinEvidenceView,
 )

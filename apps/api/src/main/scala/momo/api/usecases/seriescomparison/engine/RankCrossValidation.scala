@@ -158,6 +158,9 @@ private[seriescomparison] object RankCrossValidation:
     }
     foldImportances.map { importances =>
       val coefficients = evaluations.map(_.fullFit.coefficients(signalIndex))
+      val foldComparisonCounts = evaluations.map(_.testPairs.count { pair =>
+        pair.left.source.memberId == memberId || pair.right.source.memberId == memberId
+      })
       val positiveDirections = coefficients.count(_ > 0.0)
       val negativeDirections = coefficients.count(_ < 0.0)
       val direction =
@@ -167,7 +170,14 @@ private[seriescomparison] object RankCrossValidation:
       val importance = importances.sum / (importances.size * 1.0)
       val stable = directionAgreement >= 4 && importances.count(_ > 0.0) >= 3 &&
         importance >= config.minimumImportance
-      PlayerRankSignal(kind, direction, importance, importances, stable)
+      PlayerRankSignal(
+        kind,
+        direction,
+        importance,
+        importances,
+        foldComparisonCounts,
+        stable,
+      )
     }
 
   private def expectedRanksForFold(

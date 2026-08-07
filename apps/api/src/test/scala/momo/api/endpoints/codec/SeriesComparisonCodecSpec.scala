@@ -77,6 +77,15 @@ final class SeriesComparisonCodecSpec extends MomoCatsEffectSuite:
         assertEquals(memberId.value, "member_ponta")
       case other => fail(s"expected drilldown scope and metric id, got $other")
 
+    val advanced = SeriesComparisonCodec.parseDrilldownQuery(
+      "title_momotetsu_2",
+      "rankAnalysis.unexpectedWins",
+      "member_ponta",
+      None,
+      None,
+    )
+    assertEquals(advanced.map(_._2.toString), Right("rankAnalysis.unexpectedWins"))
+
   test("rejects malformed and unsupported drilldown metric ids at the endpoint boundary"):
     val malformed = SeriesComparisonCodec.parseDrilldownQuery(
       "title_momotetsu_2",
@@ -94,7 +103,7 @@ final class SeriesComparisonCodecSpec extends MomoCatsEffectSuite:
     )
 
     assertValidationError(malformed, "metricId")
-    assertValidationError(unsupported, "rank.averageHistory or playOrder.rankHistory")
+    assertValidationError(unsupported, "rankAnalysis.unexpectedWins")
 
   test("rejects mixed legacy and filter scope query"):
     val mixed = SeriesComparisonCodec.parseAggregateQuery(

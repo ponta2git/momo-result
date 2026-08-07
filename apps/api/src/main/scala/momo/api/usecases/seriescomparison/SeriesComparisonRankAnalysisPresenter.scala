@@ -125,7 +125,7 @@ private[seriescomparison] object SeriesComparisonRankAnalysisPresenter:
       ),
     )
 
-  private def signalStatus(
+  private[seriescomparison] def signalStatus(
       quality: RankAnalysisQuality,
       player: PlayerRankSignals,
   ): String =
@@ -133,7 +133,7 @@ private[seriescomparison] object SeriesComparisonRankAnalysisPresenter:
     else if quality == RankAnalysisQuality.Ok && player.signals.exists(_.stable) then "ok"
     else "reference"
 
-  private def unexpectedWinStatus(
+  private[seriescomparison] def unexpectedWinStatus(
       quality: RankAnalysisQuality,
       totalWinCount: Int,
   ): String =
@@ -141,12 +141,12 @@ private[seriescomparison] object SeriesComparisonRankAnalysisPresenter:
     else if totalWinCount < 10 then "reference"
     else qualityWire(quality)
 
-  private def qualityWire(quality: RankAnalysisQuality): String = quality match
+  private[seriescomparison] def qualityWire(quality: RankAnalysisQuality): String = quality match
     case RankAnalysisQuality.Ok => "ok"
     case RankAnalysisQuality.Reference => "reference"
     case RankAnalysisQuality.NoTarget => "no_target"
 
-  private def reasonWire(reason: RankAnalysisReason): String = reason match
+  private[seriescomparison] def reasonWire(reason: RankAnalysisReason): String = reason match
     case RankAnalysisReason.InsufficientEvents => "insufficient_events"
     case RankAnalysisReason.InsufficientMatches => "insufficient_matches"
     case RankAnalysisReason.InvalidDataset => "invalid_dataset"
@@ -154,7 +154,7 @@ private[seriescomparison] object SeriesComparisonRankAnalysisPresenter:
     case RankAnalysisReason.ModelNotBetter => "model_not_better"
     case RankAnalysisReason.UnstableSignals => "unstable_signals"
 
-  private def signalWire(signal: RankSignalKind): String = signal match
+  private[seriescomparison] def signalWire(signal: RankSignalKind): String = signal match
     case RankSignalKind.Revenue => "revenue"
     case RankSignalKind.Destination => "destination"
     case RankSignalKind.PlusStation => "plus_station"
@@ -163,8 +163,9 @@ private[seriescomparison] object SeriesComparisonRankAnalysisPresenter:
     case RankSignalKind.CardShop => "card_shop"
     case RankSignalKind.Ginji => "ginji"
 
-  private def directionWire(direction: RankSignalDirection): String = direction match
-    case RankSignalDirection.MoreIsHigher => "more_is_higher"
-    case RankSignalDirection.LessIsHigher => "less_is_higher"
+  private[seriescomparison] def directionWire(direction: RankSignalDirection): String =
+    direction match
+      case RankSignalDirection.MoreIsHigher => "more_is_higher"
+      case RankSignalDirection.LessIsHigher => "less_is_higher"
 
 end SeriesComparisonRankAnalysisPresenter

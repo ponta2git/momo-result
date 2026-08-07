@@ -56,6 +56,7 @@ private[seriescomparison] final case class PlayerRankSignal(
     direction: RankSignalDirection,
     importance: Double,
     foldImportances: Vector[Double],
+    foldComparisonCounts: Vector[Int],
     stable: Boolean,
 )
 

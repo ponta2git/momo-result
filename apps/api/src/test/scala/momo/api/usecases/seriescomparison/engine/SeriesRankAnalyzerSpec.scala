@@ -60,6 +60,15 @@ final class SeriesRankAnalyzerSpec extends FunSuite:
     assertEquals(evaluatedIds.size, 10)
     assertEquals(evaluations.map(_.testEvents.size), Vector(2, 2, 2, 2, 2))
 
+  test("skips crown resampling while preserving drilldown evidence"):
+    val result = SeriesRankAnalyzer.analyzeForDrilldown(dataset(syntheticRows(20, 2)))
+
+    assertEquals(result.quality, RankAnalysisQuality.Ok)
+    assert(result.rankSignals.exists(_.signals.exists(_.stable)))
+    assert(result.unexpectedWins.flatMap(_.wins).nonEmpty)
+    assertEquals(result.crownCertainty.bootstrapIterations, 0)
+    assertEquals(result.crownCertainty.successfulIterations, 0)
+
   test("excludes total assets and uses tie-aware within-match signal ranks"):
     val originalRows = syntheticRows(1, 1)
     val changedAssets = originalRows.map(row =>

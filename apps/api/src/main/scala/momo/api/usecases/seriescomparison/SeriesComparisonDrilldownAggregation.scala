@@ -12,7 +12,7 @@ import momo.api.usecases.seriescomparison.view.*
 
 private[usecases] object SeriesComparisonDrilldownAggregation:
   private val Formatter = DateTimeFormatter.ISO_INSTANT
-  private val SchemaVersion = 1
+  private val SchemaVersion = 2
 
   def aggregate(
       dataset: SeriesDataset,
@@ -34,6 +34,20 @@ private[usecases] object SeriesComparisonDrilldownAggregation:
       Option.when(metricKey == "playOrder.rankHistory")(
         playOrderRankHistoryPayload(targetRows, sortedRows, matchIndexById)
       )
+    val rankAnalysis = Option.when(
+      metricKey == "rankAnalysis.rankSignals" || metricKey == "rankAnalysis.unexpectedWins"
+    )(SeriesComparisonRankAnalysisDrilldownPresenter.analyze(dataset, memberId))
+    val rankSignals = Option.when(metricKey == "rankAnalysis.rankSignals")(
+      rankAnalysis.map(_.rankSignals)
+    ).flatten
+    val unexpectedWins = Option.when(metricKey == "rankAnalysis.unexpectedWins")(
+      rankAnalysis.map(_.unexpectedWins)
+    ).flatten
+    val quality = rankSignals.map(payload =>
+      (payload.matchCount, payload.matchCount, payload.status)
+    ).orElse(unexpectedWins.map(payload =>
+      (payload.totalWinCount, payload.totalWinCount, payload.status)
+    )).getOrElse((targetRows.size, targetRows.size, status))
     SeriesComparisonDrilldownView(
       schemaVersion = SchemaVersion,
       metricId = metricKey,
@@ -41,13 +55,15 @@ private[usecases] object SeriesComparisonDrilldownAggregation:
       player = SeriesComparisonPlayerView(memberId = memberId.value, displayName = displayName),
       rankAverageHistory = rankAverageHistory,
       playOrderRankHistory = playOrderRankHistory,
+      rankSignals = rankSignals,
+      unexpectedWins = unexpectedWins,
       dataQuality = SeriesComparisonDataQualityView(List(
         MetricQualityView(
           metricId = metricKey,
           playerMemberId = Some(memberId.value),
-          denominator = targetRows.size,
-          targetCount = targetRows.size,
-          status = status,
+          denominator = quality._1,
+          targetCount = quality._2,
+          status = quality._3,
           hasTies = false,
         )
       )),

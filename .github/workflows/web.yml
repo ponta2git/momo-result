@@ -7,6 +7,7 @@ on:
       - "apps/web/**"
       - "apps/api/openapi.yaml"
       - "package.json"
+      - "mise.toml"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
       - ".github/workflows/web.yml"

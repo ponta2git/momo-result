@@ -1,7 +1,7 @@
 {
   "name": "momo-result",
   "private": true,
-  "packageManager": "pnpm@10.10.0",
+  "packageManager": "pnpm@10.34.5",
   "scripts": {
     "dev": "node scripts/dev-local.mjs",
     "dev:launcher:test": "node --test scripts/dev-local.test.mjs",

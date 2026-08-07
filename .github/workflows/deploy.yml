@@ -13,6 +13,7 @@ on:
       - ".dockerignore"
       - "fly.toml"
       - "package.json"
+      - "mise.toml"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
       - ".github/workflows/deploy.yml"

@@ -19,7 +19,7 @@
 
 | 領域 | ツール |
 |---|---|
-| web | Node.js 24, pnpm 10.10.0 |
+| web | Node.js 24, pnpm 10.34.5 |
 | api | Java 25, sbt 1.12 系 |
 | ocr-worker | Python 3.14, uv |
 | integration | Docker / Testcontainers |

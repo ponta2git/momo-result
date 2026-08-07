@@ -20,6 +20,7 @@ final case class SeriesComparisonView(
     matchTimeline: List[MatchTimelinePointView],
     cardShopDestination: CardShopDestinationView,
     playOrderBaselines: List[PlayOrderBaselineView],
+    rankAnalysis: SeriesComparisonRankAnalysisView,
     highlights: List[SeriesComparisonHighlightView],
     dataQuality: SeriesComparisonDataQualityView,
 )

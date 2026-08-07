@@ -22,35 +22,37 @@ private[seriescomparison] object SeriesRankAnalyzer:
     if initialAssessment._1 == RankAnalysisQuality.NoTarget then
       emptyResult(dataset, heldEventCount, initialAssessment._1, initialAssessment._2)
     else
-      val analysis = for
-        events <- RankFeatureEncoder.encode(dataset)
-        evaluations <- RankCrossValidation.evaluate(events, config)
-        rankSignals <- RankCrossValidation.rankSignals(
-          evaluations,
-          dataset.playerOrder.toVector,
-          config,
-        )
-        expectedRanks <- RankCrossValidation.expectedRanks(evaluations)
-        crown <- RankBlockBootstrap.crownCertainty(
-          events,
-          dataset.playerOrder.toVector,
-          config,
-        )
-      yield buildResult(
-        dataset,
-        heldEventCount,
-        evaluations,
-        rankSignals,
-        expectedRanks,
-        crown,
-      )
-      analysis.fold(
-        reason => emptyResult(
+      val analysis =
+        for
+          events <- RankFeatureEncoder.encode(dataset)
+          evaluations <- RankCrossValidation.evaluate(events, config)
+          rankSignals <- RankCrossValidation.rankSignals(
+            evaluations,
+            dataset.playerOrder.toVector,
+            config,
+          )
+          expectedRanks <- RankCrossValidation.expectedRanks(evaluations)
+          crown <- RankBlockBootstrap.crownCertainty(
+            events,
+            dataset.playerOrder.toVector,
+            config,
+          )
+        yield buildResult(
           dataset,
           heldEventCount,
-          RankAnalysisQuality.NoTarget,
-          Vector(reason),
-        ),
+          evaluations,
+          rankSignals,
+          expectedRanks,
+          crown,
+        )
+      analysis.fold(
+        reason =>
+          emptyResult(
+            dataset,
+            heldEventCount,
+            RankAnalysisQuality.NoTarget,
+            Vector(reason),
+          ),
         identity,
       )
 
@@ -121,7 +123,8 @@ private[seriescomparison] object SeriesRankAnalyzer:
     matchCount = dataset.matchCount,
     improvedFoldCount = 0,
     foldScores = Vector.empty,
-    rankSignals = dataset.playerOrder.toVector.map(memberId => PlayerRankSignals(memberId, Vector.empty)),
+    rankSignals =
+      dataset.playerOrder.toVector.map(memberId => PlayerRankSignals(memberId, Vector.empty)),
     unexpectedWins = dataset.playerOrder.toVector.map(memberId =>
       PlayerUnexpectedWins(memberId, totalWinCount(dataset, memberId), Vector.empty)
     ),

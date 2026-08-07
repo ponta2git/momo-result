@@ -382,8 +382,26 @@ function responseWithRankAverages(
     rankSpreadSignal: {
       signal: "insufficient",
     },
+    rankAnalysis: {
+      crownCertainty: {
+        bootstrapIterations: 0,
+        leaderChangeCount: 0,
+        shares: [],
+        status: "no_target",
+        successfulIterations: 0,
+      },
+      foldScores: [],
+      heldEventCount: 0,
+      improvedFoldCount: 0,
+      matchCount: values.length,
+      modelVersion: "rank-bt-v1",
+      rankSignalsByPlayer: [],
+      reasonCodes: ["insufficient_matches", "insufficient_events"],
+      status: "no_target",
+      unexpectedWinsByPlayer: [],
+    },
     sampleMaturity: "early",
-    schemaVersion: 9,
+    schemaVersion: 10,
     scope: {
       gameTitleId: "title",
       gameTitleName: "桃鉄",

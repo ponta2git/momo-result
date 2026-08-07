@@ -35,15 +35,14 @@ private[seriescomparison] object RankCrossValidation:
   def evaluate(
       events: Vector[EncodedRankEvent],
       config: RankAnalysisConfig,
-  ): Either[RankAnalysisReason, Vector[FoldRankEvaluation]] =
-    (0 until config.foldCount).foldLeft[
-      Either[RankAnalysisReason, Vector[FoldRankEvaluation]]
-    ](Right(Vector.empty)) { (accumulated, fold) =>
-      for
-        evaluations <- accumulated
-        evaluation <- evaluateFold(events, fold, config)
-      yield evaluations :+ evaluation
-    }
+  ): Either[RankAnalysisReason, Vector[FoldRankEvaluation]] = (0 until config.foldCount).foldLeft[
+    Either[RankAnalysisReason, Vector[FoldRankEvaluation]]
+  ](Right(Vector.empty)) { (accumulated, fold) =>
+    for
+      evaluations <- accumulated
+      evaluation <- evaluateFold(events, fold, config)
+    yield evaluations :+ evaluation
+  }
 
   def rankSignals(
       evaluations: Vector[FoldRankEvaluation],

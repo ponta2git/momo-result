@@ -71,10 +71,12 @@ private[seriescomparison] object RankFeatureEncoder:
         event.copy(matches = event.matches.map { rankMatch =>
           rankMatch.copy(rows = rankMatch.rows.map { row =>
             if row.source.memberId == memberId then
-              row.copy(signalFeatures = row.signalFeatures.updated(
-                signalIndex,
-                replacementByMatch.getOrElse(rankMatch.matchId, row.signalFeatures(signalIndex)),
-              ))
+              row.copy(signalFeatures =
+                row.signalFeatures.updated(
+                  signalIndex,
+                  replacementByMatch.getOrElse(rankMatch.matchId, row.signalFeatures(signalIndex)),
+                )
+              )
             else row
           })
         })

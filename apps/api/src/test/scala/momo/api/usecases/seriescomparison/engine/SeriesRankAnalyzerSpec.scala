@@ -123,35 +123,34 @@ final class SeriesRankAnalyzerSpec extends FunSuite:
   private def syntheticRows(
       heldEventCount: Int,
       matchesPerEvent: Int,
-  ): List[SeriesComparisonMatchPlayerRow] =
-    (0 until heldEventCount).toList.flatMap { eventIndex =>
-      (0 until matchesPerEvent).toList.flatMap { matchIndex =>
-        val sequence = eventIndex * matchesPerEvent + matchIndex
-        val revenueOrder = playerIds.indices.sortBy(playerIndex =>
-          -revenueFor(sequence, playerIndex)
-        )
-        val normalRankByPlayer = revenueOrder.zipWithIndex.map { case (playerIndex, rankIndex) =>
-          playerIndex -> (rankIndex + 1)
+  ): List[SeriesComparisonMatchPlayerRow] = (0 until heldEventCount).toList.flatMap { eventIndex =>
+    (0 until matchesPerEvent).toList.flatMap { matchIndex =>
+      val sequence = eventIndex * matchesPerEvent + matchIndex
+      val revenueOrder = playerIds.indices.sortBy(playerIndex =>
+        -revenueFor(sequence, playerIndex)
+      )
+      val normalRankByPlayer = revenueOrder.zipWithIndex.map { case (playerIndex, rankIndex) =>
+        playerIndex -> (rankIndex + 1)
+      }.toMap
+      val surpriseWinner = if sequence % 10 == 9 then Some(revenueOrder.last) else None
+      val rankByPlayer = surpriseWinner.fold(normalRankByPlayer) { winnerIndex =>
+        val withoutWinner = revenueOrder.filterNot(_ == winnerIndex)
+        (Vector(winnerIndex) ++ withoutWinner).zipWithIndex.map {
+          case (playerIndex, rankIndex) => playerIndex -> (rankIndex + 1)
         }.toMap
-        val surpriseWinner = if sequence % 10 == 9 then Some(revenueOrder.last) else None
-        val rankByPlayer = surpriseWinner.fold(normalRankByPlayer) { winnerIndex =>
-          val withoutWinner = revenueOrder.filterNot(_ == winnerIndex)
-          (Vector(winnerIndex) ++ withoutWinner).zipWithIndex.map {
-            case (playerIndex, rankIndex) => playerIndex -> (rankIndex + 1)
-          }.toMap
-        }
-        playerIds.indices.map { playerIndex =>
-          row(
-            eventIndex,
-            matchIndex,
-            sequence,
-            playerIndex,
-            rankByPlayer(playerIndex),
-            revenueFor(sequence, playerIndex),
-          )
-        }
+      }
+      playerIds.indices.map { playerIndex =>
+        row(
+          eventIndex,
+          matchIndex,
+          sequence,
+          playerIndex,
+          rankByPlayer(playerIndex),
+          revenueFor(sequence, playerIndex),
+        )
       }
     }
+  }
 
   private def revenueFor(sequence: Int, playerIndex: Int): Int =
     val relative = (playerIndex + sequence) % 4

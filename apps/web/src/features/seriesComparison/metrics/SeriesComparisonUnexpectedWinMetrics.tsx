@@ -1,5 +1,7 @@
-import { Sparkles } from "lucide-react";
+import { Sparkles, Table2 } from "lucide-react";
 
+import { UnexpectedWinsDrilldownDialog } from "@/features/seriesComparison/drilldowns/SeriesComparisonUnexpectedWinsDrilldown";
+import { useSeriesComparisonDrilldownUrlState } from "@/features/seriesComparison/drilldowns/useSeriesComparisonDrilldownUrlState";
 import { PlayerMetricGrid } from "@/features/seriesComparison/metrics/SeriesComparisonMetricPrimitives";
 import { MetricSection } from "@/features/seriesComparison/metrics/SeriesComparisonMetricSection";
 import {
@@ -12,6 +14,7 @@ import {
   metricsMap,
 } from "@/features/seriesComparison/model/seriesComparisonPresentation";
 import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
+import { Button } from "@/shared/ui/actions/Button";
 
 export function UnexpectedWinMetrics({ response }: { response: SeriesComparisonResponse }) {
   const analysis = response.rankAnalysis;
@@ -19,8 +22,28 @@ export function UnexpectedWinMetrics({ response }: { response: SeriesComparisonR
   const byMember = new Map(
     (analysis.unexpectedWinsByPlayer ?? []).map((entry) => [entry.memberId, entry]),
   );
+  const firstMemberId = (analysis.unexpectedWinsByPlayer ?? []).find(
+    (entry) => entry.hasDetails,
+  )?.memberId;
+  const drilldown = useSeriesComparisonDrilldownUrlState({
+    defaultView: "details",
+    isView: (value): value is "details" => value === "details",
+    kind: "unexpectedWins",
+  });
   return (
     <MetricSection
+      action={
+        <Button
+          className="text-xs"
+          disabled={!firstMemberId}
+          icon={<Table2 className="size-3.5" />}
+          size="sm"
+          variant="secondary"
+          onClick={() => drilldown.open(firstMemberId)}
+        >
+          詳細
+        </Button>
+      }
       description="保存済み記録だけでは下位寄りに見えたのに、実際は1位だった試合です。運や隠れた実力を判定する指標ではありません。"
       Icon={Sparkles}
       id="metric-unexpected-wins"
@@ -66,6 +89,17 @@ export function UnexpectedWinMetrics({ response }: { response: SeriesComparisonR
           }}
         </PlayerMetricGrid>
       )}
+      {drilldown.selectedMemberId ? (
+        <UnexpectedWinsDrilldownDialog
+          open
+          response={response}
+          selectedMemberId={drilldown.selectedMemberId}
+          onMemberChange={drilldown.setMemberId}
+          onOpenChange={(open) => {
+            if (!open) drilldown.close();
+          }}
+        />
+      ) : null}
     </MetricSection>
   );
 }

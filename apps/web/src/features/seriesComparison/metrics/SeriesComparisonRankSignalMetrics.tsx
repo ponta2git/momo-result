@@ -1,5 +1,7 @@
-import { ListChecks } from "lucide-react";
+import { ListChecks, Table2 } from "lucide-react";
 
+import { RankSignalsDrilldownDialog } from "@/features/seriesComparison/drilldowns/SeriesComparisonRankSignalsDrilldown";
+import { useSeriesComparisonDrilldownUrlState } from "@/features/seriesComparison/drilldowns/useSeriesComparisonDrilldownUrlState";
 import { PlayerMetricGrid } from "@/features/seriesComparison/metrics/SeriesComparisonMetricPrimitives";
 import { MetricSection } from "@/features/seriesComparison/metrics/SeriesComparisonMetricSection";
 import {
@@ -14,6 +16,7 @@ import {
   stableRankSignals,
 } from "@/features/seriesComparison/model/seriesComparisonRankAnalysis";
 import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
+import { Button } from "@/shared/ui/actions/Button";
 
 export function RankSignalMetrics({ response }: { response: SeriesComparisonResponse }) {
   const analysis = response.rankAnalysis;
@@ -21,8 +24,28 @@ export function RankSignalMetrics({ response }: { response: SeriesComparisonResp
   const byMember = new Map(
     (analysis.rankSignalsByPlayer ?? []).map((entry) => [entry.memberId, entry]),
   );
+  const firstMemberId = (analysis.rankSignalsByPlayer ?? []).find(
+    (entry) => stableRankSignals(entry.signals).length > 0,
+  )?.memberId;
+  const drilldown = useSeriesComparisonDrilldownUrlState({
+    defaultView: "details",
+    isView: (value): value is "details" => value === "details",
+    kind: "rankSignals",
+  });
   return (
     <MetricSection
+      action={
+        <Button
+          className="text-xs"
+          disabled={!firstMemberId}
+          icon={<Table2 className="size-3.5" />}
+          size="sm"
+          variant="secondary"
+          onClick={() => drilldown.open(firstMemberId)}
+        >
+          詳細
+        </Button>
+      }
       description="総資産を使わず、保存済み記録と期間内順位の安定した結びつきを開催回ごとに確かめます。勝因や次戦予測ではありません。"
       Icon={ListChecks}
       id="metric-rank-signals"
@@ -74,6 +97,17 @@ export function RankSignalMetrics({ response }: { response: SeriesComparisonResp
           </PlayerMetricGrid>
         </>
       )}
+      {drilldown.selectedMemberId ? (
+        <RankSignalsDrilldownDialog
+          open
+          response={response}
+          selectedMemberId={drilldown.selectedMemberId}
+          onMemberChange={drilldown.setMemberId}
+          onOpenChange={(open) => {
+            if (!open) drilldown.close();
+          }}
+        />
+      ) : null}
     </MetricSection>
   );
 }

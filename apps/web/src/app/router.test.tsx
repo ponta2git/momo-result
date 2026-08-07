@@ -12,7 +12,10 @@ import { setDevUser, testDevUserStorageKey } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { makeFourPlayerResults, makeMatchDetail } from "@/test/factories";
 import { setupMsw } from "@/test/msw/lifecycle";
-import { makeSeriesComparisonResponse } from "@/test/msw/seriesComparisonHandlers";
+import {
+  makeSeriesComparisonRankAnalysisResponse,
+  makeSeriesComparisonResponse,
+} from "@/test/msw/seriesComparisonHandlers";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
 
@@ -487,6 +490,58 @@ describe("app routing", () => {
     );
     expect(dialog).toHaveTextContent("2戦目");
     expect(dialog).toHaveTextContent("3位 改善");
+  });
+
+  it("opens rank insight evidence and preserves the return route to a match", async () => {
+    setDevUser();
+    server.use(
+      http.get("/api/analytics/series-comparison", () =>
+        HttpResponse.json(makeSeriesComparisonRankAnalysisResponse()),
+      ),
+    );
+    const { router } = renderApp("/analytics/series?gameTitleId=gt_momotetsu_2&view=drivers");
+
+    const signalsSection = (
+      await screen.findByRole("heading", {
+        name: "順位を読む手掛かり",
+      })
+    ).closest("section");
+    expect(signalsSection).not.toBeNull();
+    await user.click(within(signalsSection as HTMLElement).getByRole("button", { name: "詳細" }));
+
+    const signalsDialog = await screen.findByRole("dialog", {
+      name: "順位を読む手掛かり: いーゆー",
+    });
+    expect(signalsDialog).toHaveTextContent("5分割中5回");
+    expect(signalsDialog).toHaveTextContent("評価1");
+    expect(signalsDialog).toHaveTextContent("24組");
+    expect(signalsDialog).toHaveTextContent("物件収益が多い試合ほど上位寄り");
+    expect(signalsDialog).not.toHaveTextContent("more_is_higher");
+    expect(router.state.location.search).toContain("drilldown=rankSignals");
+
+    await user.click(within(signalsDialog).getByRole("button", { name: "ダイアログを閉じる" }));
+    await user.click(screen.getByRole("tab", { name: "推移" }));
+    const unexpectedSection = (
+      await screen.findByRole("heading", {
+        name: "記録外の一撃",
+      })
+    ).closest("section");
+    expect(unexpectedSection).not.toBeNull();
+    await user.click(
+      within(unexpectedSection as HTMLElement).getByRole("button", { name: "詳細" }),
+    );
+
+    const unexpectedDialog = await screen.findByRole("dialog", {
+      name: "記録外の一撃: いーゆー",
+    });
+    expect(unexpectedDialog).toHaveTextContent("2回 / 14勝");
+    expect(unexpectedDialog).toHaveTextContent("推定3.1位 → 実際1位");
+    expect(unexpectedDialog).toHaveTextContent("物件収益");
+    expect(unexpectedDialog).not.toHaveTextContent("held_2026_05_17");
+    expect(router.state.location.search).toContain("drilldown=unexpectedWins");
+    expect(
+      within(unexpectedDialog).getAllByRole("link", { name: "この試合の結果" })[0],
+    ).toHaveAttribute("href", expect.stringContaining("returnTo=%2Fanalytics%2Fseries"));
   });
 
   it("opens play order rank history drilldown from play order metrics", async () => {

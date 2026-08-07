@@ -36,7 +36,9 @@ export function stableRankSignals(signals: RankSignal[] | undefined): RankSignal
   return (signals ?? []).filter((signal) => signal.stable).slice(0, 3);
 }
 
-export function rankAnalysisAvailabilityText(analysis: RankAnalysis): string {
+export function rankAnalysisAvailabilityText(
+  analysis: Pick<RankAnalysis, "heldEventCount" | "matchCount" | "reasonCodes">,
+): string {
   const reasons = new Set(analysis.reasonCodes ?? []);
   if (reasons.has("calculation_failed") || reasons.has("invalid_dataset")) {
     return "この条件では補助分析を計算できませんでした。ほかの戦績指標はそのまま確認できます。";

@@ -3,15 +3,20 @@ import { http, HttpResponse } from "msw";
 import {
   makeSeriesComparisonDrilldownResponse,
   makeSeriesComparisonPlayOrderDrilldownResponse,
+  makeSeriesComparisonRankSignalsDrilldownResponse,
   makeSeriesComparisonResponse,
   makeSeriesComparisonReviewResponse,
+  makeSeriesComparisonUnexpectedWinsDrilldownResponse,
 } from "@/test/msw/seriesComparisonFixtures";
 
 export {
   makeSeriesComparisonDrilldownResponse,
   makeSeriesComparisonPlayOrderDrilldownResponse,
+  makeSeriesComparisonRankAnalysisResponse,
+  makeSeriesComparisonRankSignalsDrilldownResponse,
   makeSeriesComparisonResponse,
   makeSeriesComparisonReviewResponse,
+  makeSeriesComparisonUnexpectedWinsDrilldownResponse,
 } from "@/test/msw/seriesComparisonFixtures";
 
 export const seriesComparisonHandlers = [
@@ -45,7 +50,11 @@ export const seriesComparisonHandlers = [
     return HttpResponse.json(
       metricId === "playOrder.rankHistory"
         ? makeSeriesComparisonPlayOrderDrilldownResponse(memberId)
-        : makeSeriesComparisonDrilldownResponse(memberId),
+        : metricId === "rankAnalysis.rankSignals"
+          ? makeSeriesComparisonRankSignalsDrilldownResponse(memberId)
+          : metricId === "rankAnalysis.unexpectedWins"
+            ? makeSeriesComparisonUnexpectedWinsDrilldownResponse(memberId)
+            : makeSeriesComparisonDrilldownResponse(memberId),
     );
   }),
   http.get("/api/analytics/series-comparison/review", () =>

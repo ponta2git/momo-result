@@ -7,7 +7,7 @@ export const seriesComparisonDrilldownParamNames = [
   "drilldownView",
 ] as const;
 
-type DrilldownKind = "playOrder" | "rank";
+type DrilldownKind = "playOrder" | "rank" | "rankSignals" | "unexpectedWins";
 
 export function preserveSeriesComparisonDrilldownParams(
   source: URLSearchParams,

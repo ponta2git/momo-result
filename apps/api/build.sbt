@@ -170,7 +170,7 @@ lazy val root = (project in file("."))
         "io.netty" % "netty-resolver-dns" % nettyVersion,
         "io.netty" % "netty-transport" % nettyVersion,
         "io.netty" % "netty-transport-native-unix-common" % nettyVersion,
-        "org.postgresql" % "postgresql" % "42.7.11",
+        "org.postgresql" % "postgresql" % "42.7.12",
         "tools.jackson.core" % "jackson-core" % jacksonVersion,
         "tools.jackson.core" % "jackson-databind" % jacksonVersion,
       )

@@ -24,6 +24,7 @@ const analysisViews = [
     label: "今の差",
     sections: [
       { id: "metric-basic", label: "順位" },
+      { id: "metric-crown-certainty", label: "王座の確からしさ" },
       { id: "metric-head-to-head", label: "直接対決" },
       { id: "metric-rate", label: "安定性" },
     ],
@@ -32,6 +33,7 @@ const analysisViews = [
     id: "drivers",
     label: "勝因候補",
     sections: [
+      { id: "metric-rank-signals", label: "順位の手掛かり" },
       { id: "metric-money", label: "資産と勝ち筋" },
       { id: "metric-revenue-outcome", label: "物件収益と勝ち" },
       { id: "metric-destination-outcome", label: "目的地と勝ち" },
@@ -42,6 +44,7 @@ const analysisViews = [
     label: "推移",
     sections: [
       { id: "metric-match-digest", label: "期間内の荒れ" },
+      { id: "metric-unexpected-wins", label: "記録外の一撃" },
       { id: "metric-recent-form", label: "直近" },
       { id: "metric-momentum-switch", label: "切り替え" },
       { id: "metric-match-no", label: "第n試合傾向" },

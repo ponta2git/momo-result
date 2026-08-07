@@ -4,6 +4,7 @@ import {
   GinjiMetrics,
   PlayOrderMetrics,
 } from "@/features/seriesComparison/metrics/SeriesComparisonContextMetrics";
+import { CrownCertaintyMetrics } from "@/features/seriesComparison/metrics/SeriesComparisonCrownCertaintyMetrics";
 import {
   MatchDigestMetrics,
   MatchNoInEventMetrics,
@@ -21,6 +22,8 @@ import {
   HeadToHeadMetrics,
   RateMetrics,
 } from "@/features/seriesComparison/metrics/SeriesComparisonOverviewMetrics";
+import { RankSignalMetrics } from "@/features/seriesComparison/metrics/SeriesComparisonRankSignalMetrics";
+import { UnexpectedWinMetrics } from "@/features/seriesComparison/metrics/SeriesComparisonUnexpectedWinMetrics";
 import { buildFocusedMatchMetricContext } from "@/features/seriesComparison/model/seriesComparisonPresentation";
 import type { SeriesComparisonViewId } from "@/features/seriesComparison/model/seriesComparisonViewModel";
 import {
@@ -90,6 +93,7 @@ export function AnalysisViewContent({
       return (
         <>
           <MatchDigestMetrics focusMatchId={focusMatchId} response={response} />
+          <UnexpectedWinMetrics response={response} />
           <RecentFormMetrics focusedMatch={focusedMatch} response={response} />
           <MomentumSwitchMetrics focusedMatch={focusedMatch} response={response} />
           <MatchNoInEventMetrics response={response} />
@@ -98,6 +102,7 @@ export function AnalysisViewContent({
     case "drivers":
       return (
         <>
+          <RankSignalMetrics response={response} />
           <AssetDistributionMetrics focusMatchId={focusMatchId} response={response} />
           <RevenueOutcomeMetrics focusedMatch={focusedMatch} response={response} />
           <DestinationOutcomeMetrics response={response} />
@@ -115,6 +120,7 @@ export function AnalysisViewContent({
   return (
     <>
       <BasicMetrics focusedIndex={focusedIndex} focusedMatch={focusedMatch} response={response} />
+      <CrownCertaintyMetrics response={response} />
       <HeadToHeadMetrics response={response} />
       <RateMetrics focusedIndex={focusedIndex} response={response} />
     </>

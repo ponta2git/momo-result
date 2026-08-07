@@ -306,6 +306,11 @@ describe("app routing", () => {
 
     expect(await screen.findByRole("img", { name: "平均順位の推移グラフ" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "今の差" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("link", { name: "王座の確からしさ" })).toHaveAttribute(
+      "href",
+      "#metric-crown-certainty",
+    );
+    expect(await screen.findByRole("heading", { name: "王座の確からしさ" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "安定性" })).toHaveAttribute("href", "#metric-rate");
     expect(screen.queryByRole("heading", { name: "総資産と勝ち筋" })).not.toBeInTheDocument();
     expect(
@@ -314,6 +319,11 @@ describe("app routing", () => {
 
     await user.click(screen.getByRole("tab", { name: "勝因候補" }));
 
+    expect(screen.getByRole("link", { name: "順位の手掛かり" })).toHaveAttribute(
+      "href",
+      "#metric-rank-signals",
+    );
+    expect(await screen.findByRole("heading", { name: "順位を読む手掛かり" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "総資産と勝ち筋" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "資産と勝ち筋" })).toHaveAttribute(
       "href",
@@ -352,6 +362,11 @@ describe("app routing", () => {
       "href",
       "#metric-match-digest",
     );
+    expect(screen.getByRole("link", { name: "記録外の一撃" })).toHaveAttribute(
+      "href",
+      "#metric-unexpected-wins",
+    );
+    expect(await screen.findByRole("heading", { name: "記録外の一撃" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "期間内の荒れ試合" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "1戦目の試合結果を見る" })).toHaveAttribute(
       "href",

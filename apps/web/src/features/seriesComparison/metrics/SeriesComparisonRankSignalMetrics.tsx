@@ -10,9 +10,10 @@ import {
 } from "@/features/seriesComparison/metrics/SeriesComparisonRankAnalysisPrimitives";
 import { metricsMap } from "@/features/seriesComparison/model/seriesComparisonPresentation";
 import {
+  rankSignalCandidateShares,
   rankSignalDirectionLabel,
   rankSignalLabel,
-  rankSignalStrengthLabel,
+  rankSignalPriorityLabel,
   stableRankSignals,
 } from "@/features/seriesComparison/model/seriesComparisonRankAnalysis";
 import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
@@ -46,7 +47,7 @@ export function RankSignalMetrics({ response }: { response: SeriesComparisonResp
           詳細
         </Button>
       }
-      description="総資産を使わず、保存済み記録と期間内順位の安定した結びつきを開催回ごとに確かめます。勝因や次戦予測ではありません。"
+      description="開催を分けて確かめても繰り返し現れた、保存済み記録と期間内順位の関係です。勝因や次戦予測ではありません。"
       Icon={ListChecks}
       id="metric-rank-signals"
       title="順位を読む手掛かり"
@@ -56,12 +57,13 @@ export function RankSignalMetrics({ response }: { response: SeriesComparisonResp
       ) : (
         <>
           <RankAnalysisMeta analysis={analysis}>
-            <span>開催を外した5回中{analysis.improvedFoldCount}回で読み取り改善</span>
+            <span>別開催テスト 5組中{analysis.improvedFoldCount}組で読み取り改善</span>
           </RankAnalysisMeta>
           <PlayerMetricGrid metricsByMember={metricsMap(response)} players={players}>
             {(player) => {
               const entry = byMember.get(player.memberId);
               const signals = stableRankSignals(entry?.signals);
+              const candidateShares = rankSignalCandidateShares(signals);
               return (
                 <>
                   <RankAnalysisMeta analysis={analysis} status={entry?.status} />
@@ -81,12 +83,18 @@ export function RankSignalMetrics({ response }: { response: SeriesComparisonResp
                               {rankSignalLabel(signal.signal)}
                             </span>
                             <span className="text-[11px] font-medium text-[var(--color-text-muted)]">
-                              {rankSignalStrengthLabel(index)}
+                              {rankSignalPriorityLabel(index, signals.length)}
                             </span>
                           </div>
                           <p className="mt-1 text-xs leading-5 text-pretty text-[var(--color-text-secondary)]">
                             {rankSignalDirectionLabel(signal)}
                           </p>
+                          {signals.length > 1 ? (
+                            <CandidateShareBar
+                              label={rankSignalLabel(signal.signal)}
+                              share={candidateShares[index] ?? 0}
+                            />
+                          ) : null}
                         </li>
                       ))}
                     </ol>
@@ -109,5 +117,27 @@ export function RankSignalMetrics({ response }: { response: SeriesComparisonResp
         />
       ) : null}
     </MetricSection>
+  );
+}
+
+function CandidateShareBar({ label, share }: { label: string; share: number }) {
+  return (
+    <div
+      aria-label={`${label}の候補内の比重 ${share}%`}
+      aria-valuemax={100}
+      aria-valuemin={0}
+      aria-valuenow={share}
+      aria-valuetext={`${share}%、このプレーヤーの候補内で比較`}
+      className="mt-2 grid gap-1"
+      role="meter"
+    >
+      <div className="flex items-center justify-between gap-2 text-[10px] text-[var(--color-text-muted)]">
+        <span>候補内の比重</span>
+        <span className="font-semibold tabular-nums">{share}%</span>
+      </div>
+      <div aria-hidden="true" className="h-1 overflow-hidden bg-[var(--color-surface-selected)]">
+        <div className="h-full bg-[var(--color-text-secondary)]" style={{ width: `${share}%` }} />
+      </div>
+    </div>
   );
 }

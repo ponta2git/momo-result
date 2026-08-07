@@ -19,9 +19,10 @@ describe("series comparison rank analysis metrics", () => {
     );
 
     expect(screen.getByRole("heading", { name: "順位を読む手掛かり" })).toBeInTheDocument();
-    expect(screen.getByText("開催を外した5回中5回で読み取り改善")).toBeInTheDocument();
+    expect(screen.getByText("別開催テスト 5組中5組で読み取り改善")).toBeInTheDocument();
     expect(screen.getByText("物件収益が多い試合ほど上位寄り")).toBeInTheDocument();
-    expect(screen.getAllByText("最も強い")).toHaveLength(4);
+    expect(screen.getAllByText("この1件")).toHaveLength(4);
+    expect(screen.queryByText("最も強い")).not.toBeInTheDocument();
     expect(screen.queryByText("スリの銀次が少ない試合ほど上位寄り")).not.toBeInTheDocument();
     expect(document.body).not.toHaveTextContent("rank-bt-v1");
     expect(document.body).not.toHaveTextContent("more_is_higher");

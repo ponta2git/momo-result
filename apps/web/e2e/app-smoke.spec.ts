@@ -470,17 +470,57 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
       expect((await rankSignalsResponse).ok()).toBe(true);
       const rankSignalsDialog = page.getByRole("dialog", { name: /順位を読む手掛かり:/u });
       await expect(rankSignalsDialog.getByText("20開催・40戦")).toBeVisible();
-      await expect(rankSignalsDialog.getByLabel("確認1から5の読み方")).toContainText(
-        "毎回1組を手掛かりの計算から外し",
-      );
-      await expect(rankSignalsDialog.getByRole("columnheader", { name: "確認回" })).toHaveCount(2);
-      await expect(rankSignalsDialog.getByRole("columnheader", { name: "外した開催" })).toHaveCount(
-        2,
-      );
       await expect(
-        rankSignalsDialog.getByRole("columnheader", { name: "順位の組比較" }),
-      ).toHaveCount(2);
-      await expect(rankSignalsDialog.getByRole("cell", { name: "確認1" })).toHaveCount(2);
+        rankSignalsDialog.getByRole("region", { name: "開催を5組に分けた別開催テスト" }),
+      ).toContainText("A〜Eは評価の段階ではなく、重ならない開催グループです");
+      await expect(rankSignalsDialog.getByText("5組中3組以上が支持")).toBeVisible();
+      await expect(
+        rankSignalsDialog.getByRole("meter", { name: "物件収益の候補内の比重 80%" }),
+      ).toBeVisible();
+      await expect(
+        rankSignalsDialog.getByRole("group", {
+          name: "マイナス駅の別開催テスト、5組中4組が支持",
+        }),
+      ).toBeVisible();
+      await rankSignalsDialog.getByText("5組の数値を見る").first().click();
+      const revenueSignalTable = rankSignalsDialog.getByRole("table", {
+        name: "物件収益の別開催テストAからEの数値",
+      });
+      await expect(
+        revenueSignalTable.getByRole("columnheader", { name: "別開催テスト" }),
+      ).toBeVisible();
+      await expect(
+        revenueSignalTable.getByRole("columnheader", { name: "確認に使った開催" }),
+      ).toBeVisible();
+      await expect(
+        revenueSignalTable.getByRole("columnheader", { name: "順位の2人組" }),
+      ).toBeVisible();
+      await expect(revenueSignalTable.getByRole("cell", { name: "開催A" })).toBeVisible();
+      await expect(
+        revenueSignalTable.getByRole("cell").filter({ hasText: /支持\s*\+0\.061/u }),
+      ).toBeVisible();
+
+      await page.setViewportSize({ height: 844, width: 390 });
+      await expect(
+        rankSignalsDialog.getByRole("region", { name: "開催を5組に分けた別開催テスト" }),
+      ).toBeVisible();
+      const mobileRankSignalsLayout = await rankSignalsDialog.evaluate((dialog) => {
+        const bounds = dialog.getBoundingClientRect();
+        return {
+          bodyScrollWidth: document.documentElement.scrollWidth,
+          dialogLeft: bounds.left,
+          dialogRight: bounds.right,
+          viewportWidth: window.innerWidth,
+        };
+      });
+      expect(mobileRankSignalsLayout.dialogLeft).toBeGreaterThanOrEqual(0);
+      expect(mobileRankSignalsLayout.dialogRight).toBeLessThanOrEqual(
+        mobileRankSignalsLayout.viewportWidth,
+      );
+      expect(mobileRankSignalsLayout.bodyScrollWidth).toBeLessThanOrEqual(
+        mobileRankSignalsLayout.viewportWidth,
+      );
+      await page.setViewportSize({ height: 900, width: 1440 });
       await rankSignalsDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
       await expect(rankSignalsDialog).toBeHidden();
 

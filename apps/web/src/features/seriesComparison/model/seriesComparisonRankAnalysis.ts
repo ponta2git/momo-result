@@ -15,6 +15,8 @@ const signalLabels: Record<string, string> = {
   revenue: "物件収益",
 };
 
+export const rankSignalFoldLabels = ["A", "B", "C", "D", "E"] as const;
+
 export function rankSignalLabel(signal: string): string {
   return signalLabels[signal] ?? "保存済み記録";
 }
@@ -26,10 +28,38 @@ export function rankSignalDirectionLabel(signal: RankSignal): string {
     : `${subject}が多い試合ほど上位寄り`;
 }
 
-export function rankSignalStrengthLabel(index: number): string {
-  if (index === 0) return "最も強い";
-  if (index === 1) return "次に強い";
-  return "補助的";
+export function rankSignalPriorityLabel(index: number, signalCount: number): string {
+  if (signalCount <= 1) return "この1件";
+  if (index === 0) return "第一候補";
+  if (index === 1) return "第二候補";
+  return "補助候補";
+}
+
+export function rankSignalFoldLabel(fold: number): string {
+  return rankSignalFoldLabels[fold] ?? String(fold + 1);
+}
+
+export function rankSignalCandidateShares(
+  signals: ReadonlyArray<{ importance: number }>,
+): number[] {
+  const importances = signals.map(({ importance }) =>
+    Number.isFinite(importance) && importance > 0 ? importance : 0,
+  );
+  const total = importances.reduce((sum, importance) => sum + importance, 0);
+  if (total <= 0) return importances.map(() => 0);
+
+  const exactShares = importances.map((importance) => (importance / total) * 100);
+  const roundedShares = exactShares.map(Math.floor);
+  const remainingPoints = 100 - roundedShares.reduce((sum, share) => sum + share, 0);
+  const priority = exactShares
+    .map((share, index) => ({ index, remainder: share - Math.floor(share) }))
+    .toSorted((left, right) => right.remainder - left.remainder || left.index - right.index);
+
+  for (let offset = 0; offset < remainingPoints; offset += 1) {
+    const entry = priority[offset % priority.length];
+    if (entry) roundedShares[entry.index] = (roundedShares[entry.index] ?? 0) + 1;
+  }
+  return roundedShares;
 }
 
 export function stableRankSignals(signals: RankSignal[] | undefined): RankSignal[] {

@@ -337,13 +337,13 @@ export function makeSeriesComparisonRankSignalsDrilldownResponse(
         },
         {
           direction: "less_is_higher",
-          foldRows: [0, 1, 2, 3, 4].map((fold) => ({
+          foldRows: [0.021, 0.023, 0.025, 0.027, -0.005].map((importance, fold) => ({
             comparisonCount: 24,
             fold,
             heldEventCount: 4,
-            importance: 0.021 + fold * 0.002,
+            importance,
           })),
-          importance: 0.025,
+          importance: 0.0182,
           signal: "minus_station",
           stable: true,
         },

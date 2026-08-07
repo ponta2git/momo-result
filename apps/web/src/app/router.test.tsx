@@ -512,14 +512,53 @@ describe("app routing", () => {
     const signalsDialog = await screen.findByRole("dialog", {
       name: "順位を読む手掛かり: いーゆー",
     });
-    expect(signalsDialog).toHaveTextContent("5回中5回");
-    expect(signalsDialog).toHaveTextContent("確認1〜5とは");
-    expect(signalsDialog).toHaveTextContent("毎回1組を手掛かりの計算から外し");
-    expect(signalsDialog).toHaveTextContent("確認1");
-    expect(signalsDialog).toHaveTextContent("24組");
-    expect(within(signalsDialog).getAllByRole("columnheader", { name: "外した開催" })).toHaveLength(
-      2,
-    );
+    expect(signalsDialog).toHaveTextContent("別開催5組中5組で改善");
+    expect(
+      within(signalsDialog).getByRole("region", {
+        name: "開催を5組に分けた別開催テスト",
+      }),
+    ).toHaveTextContent("A〜Eは評価の段階ではなく、重ならない開催グループです");
+    expect(signalsDialog).toHaveTextContent("B〜Eで読み方を作る");
+    expect(signalsDialog).toHaveTextContent("Aだけで確かめる");
+    expect(signalsDialog).toHaveTextContent("手掛かり候補として載る基準");
+    expect(signalsDialog).toHaveTextContent("5組中3組以上が支持");
+    expect(
+      within(signalsDialog).getByRole("meter", {
+        name: "物件収益の候補内の比重 80%",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(signalsDialog).getByRole("meter", {
+        name: "マイナス駅の候補内の比重 20%",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(signalsDialog).getByRole("group", {
+        name: "物件収益の別開催テスト、5組中5組が支持",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(signalsDialog).getByRole("group", {
+        name: "マイナス駅の別開催テスト、5組中4組が支持",
+      }),
+    ).toBeInTheDocument();
+    const signalValueDisclosures = within(signalsDialog).getAllByText("5組の数値を見る");
+    await user.click(signalValueDisclosures[0]!);
+    const revenueTable = within(signalsDialog).getByRole("table", {
+      name: "物件収益の別開催テストAからEの数値",
+    });
+    expect(within(revenueTable).getByRole("columnheader", { name: "別開催テスト" })).toBeVisible();
+    expect(
+      within(revenueTable).getByRole("columnheader", { name: "確認に使った開催" }),
+    ).toBeVisible();
+    expect(within(revenueTable).getByRole("columnheader", { name: "順位の2人組" })).toBeVisible();
+    expect(within(revenueTable).getByRole("cell", { name: "開催A" })).toBeVisible();
+    expect(revenueTable).toHaveTextContent("支持+0.061");
+    await user.click(signalValueDisclosures[1]!);
+    const minusStationTable = within(signalsDialog).getByRole("table", {
+      name: "マイナス駅の別開催テストAからEの数値",
+    });
+    expect(minusStationTable).toHaveTextContent("支持なし-0.005");
     expect(signalsDialog).toHaveTextContent("物件収益が多い試合ほど上位寄り");
     expect(signalsDialog).not.toHaveTextContent("more_is_higher");
     expect(router.state.location.search).toContain("drilldown=rankSignals");

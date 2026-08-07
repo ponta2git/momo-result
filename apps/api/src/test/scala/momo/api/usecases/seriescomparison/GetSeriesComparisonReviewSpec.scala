@@ -41,7 +41,7 @@ final class GetSeriesComparisonReviewSpec extends MomoCatsEffectSuite:
 
     for result <- usecase.run(SeriesComparisonScope.Overall(titleId)) yield
       val response = assertRight(result)
-      assertEquals(response.schemaVersion, 4)
+      assertEquals(response.schemaVersion, 5)
       assertEquals(response.baseline.matchCount, 6)
       assertEquals(response.baseline.playerCount, 4)
       assert(response.commonPlaybookTopics.size <= 2)

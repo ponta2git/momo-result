@@ -1005,7 +1005,7 @@ export function makeSeriesComparisonReviewResponse(): SeriesComparisonReviewResp
       memberDisplayName: player.displayName,
       memberId: player.memberId,
     })),
-    schemaVersion: 4,
+    schemaVersion: 5,
   };
 }
 

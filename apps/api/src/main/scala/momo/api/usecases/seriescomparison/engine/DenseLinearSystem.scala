@@ -18,9 +18,7 @@ private[seriescomparison] object DenseLinearSystem:
       val augmented = Array.tabulate(dimension, dimension + 1) { (row, column) =>
         if column == dimension then rightHandSide(row) else matrix(row)(column)
       }
-      eliminate(augmented, dimension, 0).flatMap { _ =>
-        substitute(augmented, dimension)
-      }
+      eliminate(augmented, dimension, 0).flatMap(_ => substitute(augmented, dimension))
 
   @tailrec
   private def eliminate(

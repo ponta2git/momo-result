@@ -53,7 +53,7 @@ private[seriescomparison] object RegularizedBradleyTerry:
       coefficients: Vector[Double],
   ): Either[BradleyTerryFailure, Double] =
     if features.isEmpty || features.size != coefficients.size ||
-        !features.forall(_.isFinite) || !coefficients.forall(_.isFinite)
+      !features.forall(_.isFinite) || !coefficients.forall(_.isFinite)
     then Left(BradleyTerryFailure.InvalidInput)
     else
       val linearPredictor = dot(features, coefficients)
@@ -170,7 +170,7 @@ private[seriescomparison] object RegularizedBradleyTerry:
     val gradientVector = gradient.toVector
     val hessianVector = hessian.map(_.toVector).toVector
     if !penalizedLoss.isFinite || !gradientVector.forall(_.isFinite) ||
-        !hessianVector.forall(_.forall(_.isFinite))
+      !hessianVector.forall(_.forall(_.isFinite))
     then Left(BradleyTerryFailure.NumericalFailure)
     else Right((penalizedLoss, gradientVector, hessianVector))
 
@@ -181,8 +181,9 @@ private[seriescomparison] object RegularizedBradleyTerry:
   ): Either[BradleyTerryFailure, Double] =
     val loss = observations.foldLeft(0.0) { (total, observation) =>
       val probability = clampProbability(sigmoid(dot(observation.features, coefficients)))
-      total - (observation.outcome * math.log(probability) +
-        (1.0 - observation.outcome) * math.log(1.0 - probability))
+      total -
+        (observation.outcome * math.log(probability) +
+          (1.0 - observation.outcome) * math.log(1.0 - probability))
     }
     val penalty = 0.5 * l2Penalty * coefficients.map(value => value * value).sum
     val result = loss + penalty

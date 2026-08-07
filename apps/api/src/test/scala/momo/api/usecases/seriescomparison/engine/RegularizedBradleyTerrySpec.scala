@@ -16,8 +16,10 @@ final class RegularizedBradleyTerrySpec extends FunSuite:
     val fit = fitOrFail(observations)
     val lowerProbability = probabilityOrFail(Vector(-2.0, 1.0), fit.coefficients)
     val upperProbability = probabilityOrFail(Vector(2.0, 1.0), fit.coefficients)
-    val fittedLogLoss = metricOrFail(RegularizedBradleyTerry.logLoss(observations, fit.coefficients))
-    val fittedBrier = metricOrFail(RegularizedBradleyTerry.brierScore(observations, fit.coefficients))
+    val fittedLogLoss =
+      metricOrFail(RegularizedBradleyTerry.logLoss(observations, fit.coefficients))
+    val fittedBrier =
+      metricOrFail(RegularizedBradleyTerry.brierScore(observations, fit.coefficients))
 
     assert(fit.iterations > 0)
     assert(fit.objective.isFinite)

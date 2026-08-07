@@ -46,11 +46,30 @@ final class GetSeriesComparisonSpec extends MomoCatsEffectSuite:
     for result <- usecase.run(SeriesComparisonScope.Overall(titleId)) yield
       val response = assertRight(result)
       assertEquals(response.matchCount, 3)
-      assertEquals(response.schemaVersion, 9)
+      assertEquals(response.schemaVersion, 10)
       assertEquals(response.sampleMaturity, "early")
       assertEquals(response.rankSpreadSignal.signal, "large")
       assertOptionDouble(response.rankSpreadSignal.spread, 8.0 / 3.0)
       assertEquals(response.players.map(_.memberId), List("eu", "ponta", "akane", "otaka"))
+      assertEquals(response.rankAnalysis.modelVersion, "rank-bt-v1")
+      assertEquals(response.rankAnalysis.status, "no_target")
+      assertEquals(
+        response.rankAnalysis.reasonCodes,
+        List("insufficient_matches", "insufficient_events"),
+      )
+      assertEquals(response.rankAnalysis.heldEventCount, 1)
+      assertEquals(response.rankAnalysis.matchCount, 3)
+      assertEquals(response.rankAnalysis.foldScores, Nil)
+      assertEquals(
+        response.rankAnalysis.rankSignalsByPlayer.map(_.memberId),
+        response.players.map(_.memberId),
+      )
+      assert(response.rankAnalysis.rankSignalsByPlayer.forall(_.status == "no_target"))
+      assertEquals(
+        response.rankAnalysis.unexpectedWinsByPlayer.map(_.memberId),
+        response.players.map(_.memberId),
+      )
+      assertEquals(response.rankAnalysis.crownCertainty.bootstrapIterations, 0)
 
       val metrics = response.metricsByPlayer.map(entry => entry.memberId -> entry.metrics).toMap
       val ponta = metrics("ponta")

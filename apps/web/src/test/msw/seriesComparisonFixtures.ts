@@ -114,7 +114,7 @@ export function makeSeriesComparisonDrilldownResponse(
         targetCount: 4,
       },
     },
-    schemaVersion: 1,
+    schemaVersion: 2,
     scope: {
       gameTitleId: "gt_momotetsu_2",
       gameTitleName: "桃太郎電鉄2",
@@ -287,13 +287,152 @@ export function makeSeriesComparisonPlayOrderDrilldownResponse(
       },
     },
     player,
-    schemaVersion: 1,
+    schemaVersion: 2,
     scope: {
       gameTitleId: "gt_momotetsu_2",
       gameTitleName: "桃太郎電鉄2",
       layoutFamily: "momotetsu_2",
       scopeKind: "overall",
       scopeName: "総合",
+    },
+  };
+}
+
+export function makeSeriesComparisonRankSignalsDrilldownResponse(
+  memberId = "member_eu",
+): SeriesComparisonDrilldownResponse {
+  const player = players.find((item) => item.memberId === memberId) ?? players[0]!;
+  return {
+    dataQuality: {
+      items: [
+        {
+          denominator: 40,
+          hasTies: false,
+          metricId: "rankAnalysis.rankSignals",
+          playerMemberId: player.memberId,
+          status: "ok",
+          targetCount: 40,
+        },
+      ],
+    },
+    metricId: "rankAnalysis.rankSignals",
+    player,
+    rankSignals: {
+      heldEventCount: 20,
+      improvedFoldCount: 5,
+      matchCount: 40,
+      reasonCodes: [],
+      signals: [
+        {
+          direction: "more_is_higher",
+          foldRows: [0, 1, 2, 3, 4].map((fold) => ({
+            comparisonCount: 24,
+            fold,
+            heldEventCount: 4,
+            importance: 0.061 + fold * 0.004,
+          })),
+          importance: 0.071,
+          signal: "revenue",
+          stable: true,
+        },
+        {
+          direction: "less_is_higher",
+          foldRows: [0.021, 0.023, 0.025, 0.027, -0.005].map((importance, fold) => ({
+            comparisonCount: 24,
+            fold,
+            heldEventCount: 4,
+            importance,
+          })),
+          importance: 0.0182,
+          signal: "minus_station",
+          stable: true,
+        },
+      ],
+      status: "ok",
+    },
+    schemaVersion: 2,
+    scope: {
+      gameTitleId: "gt_momotetsu_2",
+      gameTitleName: "桃太郎電鉄2",
+      layoutFamily: "momotetsu_2",
+      scopeKind: "overall",
+      scopeName: "総合",
+    },
+  };
+}
+
+export function makeSeriesComparisonUnexpectedWinsDrilldownResponse(
+  memberId = "member_eu",
+): SeriesComparisonDrilldownResponse {
+  const player = players.find((item) => item.memberId === memberId) ?? players[0]!;
+  return {
+    dataQuality: {
+      items: [
+        {
+          denominator: 14,
+          hasTies: false,
+          metricId: "rankAnalysis.unexpectedWins",
+          playerMemberId: player.memberId,
+          status: "ok",
+          targetCount: 14,
+        },
+      ],
+    },
+    metricId: "rankAnalysis.unexpectedWins",
+    player,
+    schemaVersion: 2,
+    scope: {
+      gameTitleId: "gt_momotetsu_2",
+      gameTitleName: "桃太郎電鉄2",
+      layoutFamily: "momotetsu_2",
+      scopeKind: "overall",
+      scopeName: "総合",
+    },
+    unexpectedWins: {
+      heldEventCount: 20,
+      matchCount: 40,
+      reasonCodes: [],
+      rows: [
+        {
+          actualRank: 1,
+          evidence: {
+            cardShopCount: 1,
+            cardStationCount: 2,
+            destinationCount: 0,
+            ginjiCount: 0,
+            minusStationCount: 1,
+            plusStationCount: 3,
+            revenueManYen: 420,
+          },
+          expectedRank: 3.08,
+          heldEventId: "held_2026_05_17",
+          matchId: "match-12",
+          matchIndex: 12,
+          matchNoInEvent: 4,
+          playedAt: "2026-05-17T14:00:00.000Z",
+        },
+        {
+          actualRank: 1,
+          evidence: {
+            cardShopCount: 0,
+            cardStationCount: 1,
+            destinationCount: 1,
+            ginjiCount: 1,
+            minusStationCount: 2,
+            plusStationCount: 1,
+            revenueManYen: 280,
+          },
+          expectedRank: 2.72,
+          heldEventId: "held_2026_04_26",
+          matchId: "match-8",
+          matchIndex: 8,
+          matchNoInEvent: 4,
+          playedAt: "2026-04-26T14:00:00.000Z",
+        },
+      ],
+      status: "ok",
+      totalWinCount: 14,
+      unexpectedWinCount: 2,
     },
   };
 }
@@ -530,8 +669,39 @@ export function makeSeriesComparisonResponse(): SeriesComparisonResponse {
       signal: "large",
       spread: Math.max(...averages) - Math.min(...averages),
     },
+    rankAnalysis: {
+      crownCertainty: {
+        bootstrapIterations: 0,
+        leaderChangeCount: 0,
+        shares: players.map((player) => ({
+          memberId: player.memberId,
+          share: 0,
+        })),
+        status: "no_target",
+        successfulIterations: 0,
+      },
+      foldScores: [],
+      heldEventCount: 3,
+      improvedFoldCount: 0,
+      matchCount: 12,
+      modelVersion: "rank-bt-v1",
+      rankSignalsByPlayer: players.map((player) => ({
+        memberId: player.memberId,
+        signals: [],
+        status: "no_target",
+      })),
+      reasonCodes: ["insufficient_matches", "insufficient_events"],
+      status: "no_target",
+      unexpectedWinsByPlayer: players.map((player) => ({
+        hasDetails: false,
+        memberId: player.memberId,
+        status: "no_target",
+        totalWinCount: 3,
+        unexpectedWinCount: 0,
+      })),
+    },
     sampleMaturity: "early",
-    schemaVersion: 9,
+    schemaVersion: 10,
     recentFormByPlayer: players.map((player, index) => ({
       averageRank: (averages[index] ?? 2.5) + 0.15,
       lowerHalfStreak: index === 3 ? 2 : 0,
@@ -558,6 +728,95 @@ export function makeSeriesComparisonResponse(): SeriesComparisonResponse {
       rankCumulativeStandardDeviation: trend([0, 0.5, 0.75, 0.68]),
     },
   };
+}
+
+export function makeSeriesComparisonRankAnalysisResponse(): SeriesComparisonResponse {
+  const response = makeSeriesComparisonResponse();
+  const responsePlayers = response.players ?? [];
+  response.matchCount = 40;
+  response.rankAnalysis = {
+    crownCertainty: {
+      bootstrapIterations: 128,
+      leaderChangeCount: 31,
+      shares: responsePlayers.map((player, index) => ({
+        memberId: player.memberId,
+        share: [0.46, 0.34, 0.14, 0.06][index] ?? 0,
+      })),
+      status: "ok",
+      successfulIterations: 128,
+    },
+    foldScores: [],
+    heldEventCount: 20,
+    improvedFoldCount: 5,
+    matchCount: 40,
+    modelVersion: "rank-bt-v1",
+    rankSignalsByPlayer: responsePlayers.map((player, index) => ({
+      memberId: player.memberId,
+      signals:
+        index === 0
+          ? [
+              {
+                direction: "more_is_higher",
+                importance: 0.08,
+                signal: "revenue",
+                stable: true,
+              },
+              {
+                direction: "less_is_higher",
+                importance: 0.03,
+                signal: "ginji",
+                stable: false,
+              },
+            ]
+          : [
+              {
+                direction: index === 2 ? "less_is_higher" : "more_is_higher",
+                importance: 0.06 - index * 0.01,
+                signal: ["destination", "minus_station", "card_shop"][index - 1] ?? "destination",
+                stable: true,
+              },
+            ],
+      status: "ok",
+    })),
+    reasonCodes: [],
+    status: "ok",
+    unexpectedWinsByPlayer: responsePlayers.map((player, index) => {
+      if (index === 0) {
+        return {
+          hasDetails: true,
+          latest: {
+            actualRank: 1,
+            evidence: {
+              cardShopCount: 1,
+              cardStationCount: 2,
+              destinationCount: 0,
+              ginjiCount: 0,
+              minusStationCount: 1,
+              plusStationCount: 3,
+              revenueManYen: 420,
+            },
+            expectedRank: 3.08,
+            heldEventId: "held_2026_05_17",
+            matchId: "match-12",
+            matchNoInEvent: 4,
+            playedAt: "2026-05-17T14:00:00.000Z",
+          },
+          memberId: player.memberId,
+          status: "ok",
+          totalWinCount: 14,
+          unexpectedWinCount: 3,
+        };
+      }
+      return {
+        hasDetails: false,
+        memberId: player.memberId,
+        status: index === 3 ? "reference" : "ok",
+        totalWinCount: [11, 10, 5][index - 1] ?? 0,
+        unexpectedWinCount: [2, 1, 0][index - 1] ?? 0,
+      };
+    }),
+  };
+  return response;
 }
 
 function momentumSwitchEntry(
@@ -746,7 +1005,7 @@ export function makeSeriesComparisonReviewResponse(): SeriesComparisonReviewResp
       memberDisplayName: player.displayName,
       memberId: player.memberId,
     })),
-    schemaVersion: 4,
+    schemaVersion: 5,
   };
 }
 

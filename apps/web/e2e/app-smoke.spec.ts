@@ -12,8 +12,11 @@ import type {
 
 import { withReturnTo } from "../src/shared/navigation/returnTo";
 import {
+  makeSeriesComparisonRankAnalysisResponse,
+  makeSeriesComparisonRankSignalsDrilldownResponse,
   makeSeriesComparisonResponse,
   makeSeriesComparisonReviewResponse,
+  makeSeriesComparisonUnexpectedWinsDrilldownResponse,
 } from "../src/test/msw/seriesComparisonFixtures";
 
 const devAccountId = "account_ponta";
@@ -418,6 +421,158 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     );
     await rankDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
     await expect(rankDialog).toBeHidden();
+
+    await test.step("verify advanced rank insights and evidence dialogs", async () => {
+      const comparisonRoutePattern = /\/api\/analytics\/series-comparison(?:\?.*)?$/u;
+      const drilldownRoutePattern = /\/api\/analytics\/series-comparison\/drilldown(?:\?.*)?$/u;
+      await page.route(comparisonRoutePattern, async (route) => {
+        await route.fulfill({ json: makeSeriesComparisonRankAnalysisResponse() });
+      });
+      await page.route(drilldownRoutePattern, async (route) => {
+        const url = new URL(route.request().url());
+        const memberId = url.searchParams.get("memberId") ?? "member_eu";
+        const metricId = url.searchParams.get("metricId");
+        if (metricId === "rankAnalysis.rankSignals") {
+          await route.fulfill({ json: makeSeriesComparisonRankSignalsDrilldownResponse(memberId) });
+          return;
+        }
+        if (metricId === "rankAnalysis.unexpectedWins") {
+          await route.fulfill({
+            json: makeSeriesComparisonUnexpectedWinsDrilldownResponse(memberId),
+          });
+          return;
+        }
+        await route.fallback();
+      });
+
+      const comparisonResponse = page.waitForResponse((response) => {
+        const url = new URL(response.url());
+        return url.pathname === "/api/analytics/series-comparison";
+      });
+      await page.getByRole("button", { name: "更新" }).click();
+      expect((await comparisonResponse).ok()).toBe(true);
+
+      const crownSection = page.locator("#metric-crown-certainty");
+      await expect(crownSection.getByRole("heading", { name: "王座の確からしさ" })).toBeVisible();
+      await expect(crownSection.getByRole("img", { name: "王座支持の構成比" })).toBeVisible();
+      await expect(crownSection.getByText("128/128回を比較")).toBeVisible();
+
+      await page.getByRole("tab", { name: "勝因候補" }).click();
+      const rankSignalsSection = page.locator("#metric-rank-signals");
+      await expect(
+        rankSignalsSection.getByRole("heading", { name: "順位を読む手掛かり" }),
+      ).toBeVisible();
+      await expect(rankSignalsSection.getByText("物件収益", { exact: true }).first()).toBeVisible();
+      const rankSignalsResponse = page.waitForResponse((response) =>
+        isSeriesDrilldownResponse(response, "rankAnalysis.rankSignals"),
+      );
+      await rankSignalsSection.getByRole("button", { name: "詳細" }).click();
+      expect((await rankSignalsResponse).ok()).toBe(true);
+      const rankSignalsDialog = page.getByRole("dialog", { name: /順位を読む手掛かり:/u });
+      await expect(rankSignalsDialog.getByText("20開催・40戦")).toBeVisible();
+      await expect(
+        rankSignalsDialog.getByRole("region", { name: "開催を5組に分けた別開催テスト" }),
+      ).toContainText("A〜Eは評価の段階ではなく、重ならない開催グループです");
+      await expect(rankSignalsDialog.getByText("5組中3組以上が支持")).toBeVisible();
+      await expect(
+        rankSignalsDialog.getByRole("meter", { name: "物件収益の候補内の比重 80%" }),
+      ).toBeVisible();
+      await expect(
+        rankSignalsDialog.getByRole("group", {
+          name: "マイナス駅の別開催テスト、5組中4組が支持",
+        }),
+      ).toBeVisible();
+      await rankSignalsDialog.getByText("5組の数値を見る").first().click();
+      const revenueSignalTable = rankSignalsDialog.getByRole("table", {
+        name: "物件収益の別開催テストAからEの数値",
+      });
+      await expect(
+        revenueSignalTable.getByRole("columnheader", { name: "別開催テスト" }),
+      ).toBeVisible();
+      await expect(
+        revenueSignalTable.getByRole("columnheader", { name: "確認に使った開催" }),
+      ).toBeVisible();
+      await expect(
+        revenueSignalTable.getByRole("columnheader", { name: "順位の2人組" }),
+      ).toBeVisible();
+      await expect(revenueSignalTable.getByRole("cell", { name: "開催A" })).toBeVisible();
+      await expect(
+        revenueSignalTable.getByRole("cell").filter({ hasText: /支持\s*\+0\.061/u }),
+      ).toBeVisible();
+
+      await page.setViewportSize({ height: 844, width: 390 });
+      await expect(
+        rankSignalsDialog.getByRole("region", { name: "開催を5組に分けた別開催テスト" }),
+      ).toBeVisible();
+      const mobileRankSignalsLayout = await rankSignalsDialog.evaluate((dialog) => {
+        const bounds = dialog.getBoundingClientRect();
+        return {
+          bodyScrollWidth: document.documentElement.scrollWidth,
+          dialogLeft: bounds.left,
+          dialogRight: bounds.right,
+          viewportWidth: window.innerWidth,
+        };
+      });
+      expect(mobileRankSignalsLayout.dialogLeft).toBeGreaterThanOrEqual(0);
+      expect(mobileRankSignalsLayout.dialogRight).toBeLessThanOrEqual(
+        mobileRankSignalsLayout.viewportWidth,
+      );
+      expect(mobileRankSignalsLayout.bodyScrollWidth).toBeLessThanOrEqual(
+        mobileRankSignalsLayout.viewportWidth,
+      );
+      await page.setViewportSize({ height: 900, width: 1440 });
+      await rankSignalsDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
+      await expect(rankSignalsDialog).toBeHidden();
+
+      await page.getByRole("tab", { name: "推移" }).click();
+      const unexpectedWinsSection = page.locator("#metric-unexpected-wins");
+      await expect(
+        unexpectedWinsSection.getByRole("heading", { name: "記録外の一撃" }),
+      ).toBeVisible();
+      await expect(unexpectedWinsSection.getByText("推定3.1位 → 実際1位")).toBeVisible();
+      const unexpectedWinsResponse = page.waitForResponse((response) =>
+        isSeriesDrilldownResponse(response, "rankAnalysis.unexpectedWins"),
+      );
+      await unexpectedWinsSection.getByRole("button", { name: "詳細" }).click();
+      expect((await unexpectedWinsResponse).ok()).toBe(true);
+      const unexpectedWinsDialog = page.getByRole("dialog", { name: /記録外の一撃:/u });
+      await expect(
+        unexpectedWinsDialog.getByRole("list", { name: "記録外の一撃の対戦履歴" }),
+      ).toBeVisible();
+      const unexpectedWinsDetails = unexpectedWinsDialog.getByRole("region", {
+        name: "記録外の一撃の詳細",
+      });
+      const unexpectedWinsLayout = await unexpectedWinsDetails.evaluate((details) => {
+        const history = details.querySelector("ol");
+        return {
+          detailsAlignContent: window.getComputedStyle(details).alignContent,
+          historyAlignContent: history ? window.getComputedStyle(history).alignContent : null,
+        };
+      });
+      expect(unexpectedWinsLayout).toEqual({
+        detailsAlignContent: "flex-start",
+        historyAlignContent: "flex-start",
+      });
+      const unexpectedWinLinks = unexpectedWinsDialog.getByRole("link", {
+        name: "この試合の結果",
+      });
+      const unexpectedWinsReturnTo = currentPagePath(page);
+      await expect(unexpectedWinLinks).toHaveCount(2);
+      await expect(unexpectedWinLinks.nth(0)).toHaveAttribute(
+        "href",
+        withReturnTo("/matches/match-8", unexpectedWinsReturnTo),
+      );
+      await expect(unexpectedWinLinks.nth(1)).toHaveAttribute(
+        "href",
+        withReturnTo("/matches/match-12", unexpectedWinsReturnTo),
+      );
+      await unexpectedWinsDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
+      await expect(unexpectedWinsDialog).toBeHidden();
+      await expectNoHorizontalPageOverflow(page);
+
+      await page.unroute(comparisonRoutePattern);
+      await page.unroute(drilldownRoutePattern);
+    });
 
     await test.step("verify asset chart spacing and label bounds", async () => {
       const comparisonFixture = makeSeriesComparisonResponse();

@@ -24,6 +24,7 @@ import momo.api.testing.AppErrorAssertions.{assertAppError, assertRight}
 
 final class GetSeriesComparisonDrilldownSpec extends MomoCatsEffectSuite:
   private val now = Instant.parse("2026-05-10T12:00:00Z")
+  private val rankPlayerIds = Vector("alpha", "bravo", "charlie", "delta")
   private val titleId = GameTitleId.unsafeFromString("title_momotetsu_2")
   private val seasonId = SeasonMasterId.unsafeFromString("season_2026_spring")
   private val mapId = MapMasterId.unsafeFromString("map_japan")
@@ -38,6 +39,8 @@ final class GetSeriesComparisonDrilldownSpec extends MomoCatsEffectSuite:
   )
   private val rankAverageHistory = metricId("rank.averageHistory")
   private val playOrderRankHistory = metricId("playOrder.rankHistory")
+  private val rankSignals = metricId("rankAnalysis.rankSignals")
+  private val unexpectedWins = metricId("rankAnalysis.unexpectedWins")
   private val DoubleDelta = 0.0001
 
   test("builds rank average history drilldown by match and held event"):
@@ -50,7 +53,7 @@ final class GetSeriesComparisonDrilldownSpec extends MomoCatsEffectSuite:
       )
     yield
       val response = assertRight(result)
-      assertEquals(response.schemaVersion, 1)
+      assertEquals(response.schemaVersion, 2)
       assertEquals(response.metricId, "rank.averageHistory")
       assertEquals(response.player.displayName, "ぽんた")
       assertEquals(response.playOrderRankHistory, None)
@@ -161,6 +164,63 @@ final class GetSeriesComparisonDrilldownSpec extends MomoCatsEffectSuite:
       assertEquals(payload.heldEventRows, Nil)
       assertEquals(response.dataQuality.items.head.status, "no_target")
 
+  test("builds rank signal details with fold-specific held-out evidence"):
+    val usecase = GetSeriesComparisonDrilldown[IO](
+      StaticReadModel(Some(resolvedScope), rankAnalysisRows)
+    )
+
+    for result <- usecase.run(
+        SeriesComparisonScope.Overall(titleId),
+        rankSignals,
+        MemberId.unsafeFromString("alpha"),
+      )
+    yield
+      val response = assertRight(result)
+      assertEquals(response.schemaVersion, 2)
+      assertEquals(response.rankAverageHistory, None)
+      assertEquals(response.playOrderRankHistory, None)
+      assertEquals(response.unexpectedWins, None)
+      val payload = response.rankSignals.getOrElse(fail("expected rank signal payload"))
+      assertEquals(payload.status, "ok")
+      assertEquals(payload.heldEventCount, 20)
+      assertEquals(payload.matchCount, 40)
+      assert(payload.improvedFoldCount >= 4)
+      val revenue = payload.signals.find(_.signal == "revenue")
+        .getOrElse(fail("expected revenue signal"))
+      assertEquals(revenue.direction, "more_is_higher")
+      assert(revenue.stable)
+      assertEquals(revenue.foldRows.map(_.fold), List(0, 1, 2, 3, 4))
+      assertEquals(revenue.foldRows.map(_.heldEventCount), List.fill(5)(4))
+      assertEquals(revenue.foldRows.map(_.comparisonCount), List.fill(5)(24))
+      assert(revenue.foldRows.forall(_.importance.isFinite))
+      assertEquals(response.dataQuality.items.head.denominator, 40)
+      assertEquals(response.dataQuality.items.head.status, "ok")
+
+  test("builds every unexpected win in match order with saved evidence"):
+    val usecase = GetSeriesComparisonDrilldown[IO](
+      StaticReadModel(Some(resolvedScope), rankAnalysisRows)
+    )
+
+    for result <- usecase.run(
+        SeriesComparisonScope.Overall(titleId),
+        unexpectedWins,
+        MemberId.unsafeFromString("alpha"),
+      )
+    yield
+      val response = assertRight(result)
+      assertEquals(response.rankSignals, None)
+      val payload = response.unexpectedWins.getOrElse(fail("expected unexpected win payload"))
+      assertEquals(payload.status, "ok")
+      assertEquals(payload.totalWinCount, 12)
+      assertEquals(payload.unexpectedWinCount, 2)
+      assertEquals(payload.rows.map(_.matchIndex), List(20, 40))
+      assert(payload.rows.forall(_.actualRank == 1))
+      assert(payload.rows.forall(_.expectedRank >= 2.5))
+      assertEquals(payload.rows.map(_.evidence.revenueManYen), List(1000, 1000))
+      assertEquals(payload.rows.map(_.matchNoInEvent), List(2, 2))
+      assertEquals(response.dataQuality.items.head.denominator, 12)
+      assertEquals(response.dataQuality.items.head.status, "ok")
+
   test("returns not found when scope cannot be resolved"):
     val usecase = GetSeriesComparisonDrilldown[IO](StaticReadModel(None, Nil))
 
@@ -192,6 +252,52 @@ final class GetSeriesComparisonDrilldownSpec extends MomoCatsEffectSuite:
     rowWithPlayOrder(5, "held_c", 1, "ponta", "ぽんた", 2, 2, 1300, 130),
     rowWithPlayOrder(5, "held_c", 1, "akane", "あかね", 1, 3, 1500, 150),
   )
+
+  private def rankAnalysisRows: List[SeriesComparisonMatchPlayerRow] = (0 until 20).toList.flatMap {
+    eventIndex =>
+      (0 until 2).toList.flatMap { matchIndex =>
+        val sequence = eventIndex * 2 + matchIndex
+        val revenueOrder = rankPlayerIds.indices.sortBy(playerIndex =>
+          -rankRevenue(sequence, playerIndex)
+        )
+        val normalRankByPlayer = revenueOrder.zipWithIndex.map { case (playerIndex, rankIndex) =>
+          playerIndex -> (rankIndex + 1)
+        }.toMap
+        val rankByPlayer = Option.when(sequence % 10 == 9)(revenueOrder.last)
+          .fold(normalRankByPlayer) { winnerIndex =>
+            val withoutWinner = revenueOrder.filterNot(_ == winnerIndex)
+            (Vector(winnerIndex) ++ withoutWinner).zipWithIndex.map {
+              case (playerIndex, rankIndex) => playerIndex -> (rankIndex + 1)
+            }.toMap
+          }
+        rankPlayerIds.indices.map { playerIndex =>
+          rowWithPlayOrder(
+            matchNo = sequence + 1,
+            heldEventId = s"rank-event-$eventIndex",
+            matchNoInEvent = matchIndex + 1,
+            memberId = rankPlayerIds(playerIndex),
+            displayName = rankPlayerIds(playerIndex),
+            rank = rankByPlayer(playerIndex),
+            playOrder = (playerIndex + sequence) % 4 + 1,
+            assets = 5000 - rankByPlayer(playerIndex) * 500,
+            revenue = rankRevenue(sequence, playerIndex),
+          ).copy(incidents =
+            SeriesComparisonIncidentCountsRow(
+              destination = 0,
+              plusStation = (sequence + playerIndex) % 3,
+              minusStation = 0,
+              cardStation = 0,
+              cardShop = 0,
+              suriNoGinji = 0,
+            )
+          )
+        }
+      }
+  }
+
+  private def rankRevenue(sequence: Int, playerIndex: Int): Int =
+    val relative = (playerIndex + sequence) % 4
+    4000 - relative * 1000
 
   private def row(
       matchNo: Int,

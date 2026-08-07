@@ -51,8 +51,9 @@ private[usecases] object SeriesComparisonAggregation
     }.toMap
     val quality =
       dataQuality(playerOrder, rowsByPlayer, orderedRows, revenueRanks, destinationRanks)
+    val rankAnalysis = SeriesComparisonRankAnalysisPresenter.analyze(dataset)
     SeriesComparisonView(
-      schemaVersion = 9,
+      schemaVersion = 10,
       scope = SeriesComparisonScopeView(
         gameTitleId = scope.gameTitleId.value,
         gameTitleName = scope.gameTitleName,
@@ -87,6 +88,7 @@ private[usecases] object SeriesComparisonAggregation
       matchTimeline = matchTimeline(matchGroups),
       cardShopDestination = cardShopDestination(playerOrder, rowsByPlayer),
       playOrderBaselines = playOrderBaselines(orderedRows),
+      rankAnalysis = rankAnalysis,
       highlights = highlights(metrics),
       dataQuality = quality,
     )

@@ -12,7 +12,10 @@ import { setDevUser, testDevUserStorageKey } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { makeFourPlayerResults, makeMatchDetail } from "@/test/factories";
 import { setupMsw } from "@/test/msw/lifecycle";
-import { makeSeriesComparisonResponse } from "@/test/msw/seriesComparisonHandlers";
+import {
+  makeSeriesComparisonRankAnalysisResponse,
+  makeSeriesComparisonResponse,
+} from "@/test/msw/seriesComparisonHandlers";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
 
@@ -306,6 +309,11 @@ describe("app routing", () => {
 
     expect(await screen.findByRole("img", { name: "平均順位の推移グラフ" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "今の差" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("link", { name: "王座の確からしさ" })).toHaveAttribute(
+      "href",
+      "#metric-crown-certainty",
+    );
+    expect(await screen.findByRole("heading", { name: "王座の確からしさ" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "安定性" })).toHaveAttribute("href", "#metric-rate");
     expect(screen.queryByRole("heading", { name: "総資産と勝ち筋" })).not.toBeInTheDocument();
     expect(
@@ -314,6 +322,11 @@ describe("app routing", () => {
 
     await user.click(screen.getByRole("tab", { name: "勝因候補" }));
 
+    expect(screen.getByRole("link", { name: "順位の手掛かり" })).toHaveAttribute(
+      "href",
+      "#metric-rank-signals",
+    );
+    expect(await screen.findByRole("heading", { name: "順位を読む手掛かり" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "総資産と勝ち筋" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "資産と勝ち筋" })).toHaveAttribute(
       "href",
@@ -352,6 +365,11 @@ describe("app routing", () => {
       "href",
       "#metric-match-digest",
     );
+    expect(screen.getByRole("link", { name: "記録外の一撃" })).toHaveAttribute(
+      "href",
+      "#metric-unexpected-wins",
+    );
+    expect(await screen.findByRole("heading", { name: "記録外の一撃" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "期間内の荒れ試合" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "1戦目の試合結果を見る" })).toHaveAttribute(
       "href",
@@ -472,6 +490,105 @@ describe("app routing", () => {
     );
     expect(dialog).toHaveTextContent("2戦目");
     expect(dialog).toHaveTextContent("3位 改善");
+  });
+
+  it("opens rank insight evidence and preserves the return route to a match", async () => {
+    setDevUser();
+    server.use(
+      http.get("/api/analytics/series-comparison", () =>
+        HttpResponse.json(makeSeriesComparisonRankAnalysisResponse()),
+      ),
+    );
+    const { router } = renderApp("/analytics/series?gameTitleId=gt_momotetsu_2&view=drivers");
+
+    const signalsSection = (
+      await screen.findByRole("heading", {
+        name: "順位を読む手掛かり",
+      })
+    ).closest("section");
+    expect(signalsSection).not.toBeNull();
+    await user.click(within(signalsSection as HTMLElement).getByRole("button", { name: "詳細" }));
+
+    const signalsDialog = await screen.findByRole("dialog", {
+      name: "順位を読む手掛かり: いーゆー",
+    });
+    expect(signalsDialog).toHaveTextContent("別開催5組中5組で改善");
+    expect(
+      within(signalsDialog).getByRole("region", {
+        name: "開催を5組に分けた別開催テスト",
+      }),
+    ).toHaveTextContent("A〜Eは評価の段階ではなく、重ならない開催グループです");
+    expect(signalsDialog).toHaveTextContent("B〜Eで読み方を作る");
+    expect(signalsDialog).toHaveTextContent("Aだけで確かめる");
+    expect(signalsDialog).toHaveTextContent("手掛かり候補として載る基準");
+    expect(signalsDialog).toHaveTextContent("5組中3組以上が支持");
+    expect(
+      within(signalsDialog).getByRole("meter", {
+        name: "物件収益の候補内の比重 80%",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(signalsDialog).getByRole("meter", {
+        name: "マイナス駅の候補内の比重 20%",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(signalsDialog).getByRole("group", {
+        name: "物件収益の別開催テスト、5組中5組が支持",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(signalsDialog).getByRole("group", {
+        name: "マイナス駅の別開催テスト、5組中4組が支持",
+      }),
+    ).toBeInTheDocument();
+    const signalValueDisclosures = within(signalsDialog).getAllByText("5組の数値を見る");
+    await user.click(signalValueDisclosures[0]!);
+    const revenueTable = within(signalsDialog).getByRole("table", {
+      name: "物件収益の別開催テストAからEの数値",
+    });
+    expect(within(revenueTable).getByRole("columnheader", { name: "別開催テスト" })).toBeVisible();
+    expect(
+      within(revenueTable).getByRole("columnheader", { name: "確認に使った開催" }),
+    ).toBeVisible();
+    expect(within(revenueTable).getByRole("columnheader", { name: "順位の2人組" })).toBeVisible();
+    expect(within(revenueTable).getByRole("cell", { name: "開催A" })).toBeVisible();
+    expect(revenueTable).toHaveTextContent("支持+0.061");
+    await user.click(signalValueDisclosures[1]!);
+    const minusStationTable = within(signalsDialog).getByRole("table", {
+      name: "マイナス駅の別開催テストAからEの数値",
+    });
+    expect(minusStationTable).toHaveTextContent("支持なし-0.005");
+    expect(signalsDialog).toHaveTextContent("物件収益が多い試合ほど上位寄り");
+    expect(signalsDialog).not.toHaveTextContent("more_is_higher");
+    expect(router.state.location.search).toContain("drilldown=rankSignals");
+
+    await user.click(within(signalsDialog).getByRole("button", { name: "ダイアログを閉じる" }));
+    await user.click(screen.getByRole("tab", { name: "推移" }));
+    const unexpectedSection = (
+      await screen.findByRole("heading", {
+        name: "記録外の一撃",
+      })
+    ).closest("section");
+    expect(unexpectedSection).not.toBeNull();
+    await user.click(
+      within(unexpectedSection as HTMLElement).getByRole("button", { name: "詳細" }),
+    );
+
+    const unexpectedDialog = await screen.findByRole("dialog", {
+      name: "記録外の一撃: いーゆー",
+    });
+    expect(
+      within(unexpectedDialog).getByRole("region", { name: "記録外の一撃の詳細" }),
+    ).toBeInTheDocument();
+    expect(unexpectedDialog).toHaveTextContent("2回 / 14勝");
+    expect(unexpectedDialog).toHaveTextContent("推定3.1位 → 実際1位");
+    expect(unexpectedDialog).toHaveTextContent("物件収益");
+    expect(unexpectedDialog).not.toHaveTextContent("held_2026_05_17");
+    expect(router.state.location.search).toContain("drilldown=unexpectedWins");
+    expect(
+      within(unexpectedDialog).getAllByRole("link", { name: "この試合の結果" })[0],
+    ).toHaveAttribute("href", expect.stringContaining("returnTo=%2Fanalytics%2Fseries"));
   });
 
   it("opens play order rank history drilldown from play order metrics", async () => {

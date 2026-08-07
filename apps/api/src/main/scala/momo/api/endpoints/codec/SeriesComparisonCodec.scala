@@ -102,12 +102,18 @@ object SeriesComparisonCodec:
     else Left(AppError.ValidationFailed("scopeKind must be overall, season, or map."))
 
   private def parseMetricId(value: String): Either[AppError, MetricIdString] =
-    val supported = Set("rank.averageHistory", "playOrder.rankHistory")
+    val supported = Set(
+      "rank.averageHistory",
+      "playOrder.rankHistory",
+      "rankAnalysis.rankSignals",
+      "rankAnalysis.unexpectedWins",
+    )
     RefinedValidation.validate[String, MetricKey]("metricId", value.trim).flatMap { metricId =>
       if supported.contains(metricId) then Right(metricId)
       else
         Left(AppError.ValidationFailed(
-          "metricId must be rank.averageHistory or playOrder.rankHistory."
+          "metricId must be rank.averageHistory, playOrder.rankHistory, " +
+            "rankAnalysis.rankSignals, or rankAnalysis.unexpectedWins."
         ))
     }
 

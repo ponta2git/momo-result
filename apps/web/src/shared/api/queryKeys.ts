@@ -83,7 +83,7 @@ export const matchKeys = {
 export const seriesComparisonKeys = {
   all: () => ["series-comparison"] as const,
   options: () => ["series-comparison", "options"] as const,
-  aggregate: (params: unknown) => ["series-comparison", "aggregate", "v7", params] as const,
-  review: (params: unknown) => ["series-comparison", "review", "v2", params] as const,
-  drilldown: (params: unknown) => ["series-comparison", "drilldown", "v3", params] as const,
+  aggregate: (params: unknown) => ["series-comparison", "aggregate", "v8", params] as const,
+  review: (params: unknown) => ["series-comparison", "review", "v3", params] as const,
+  drilldown: (params: unknown) => ["series-comparison", "drilldown", "v4", params] as const,
 };

@@ -92,3 +92,46 @@ given Schema[SeriesComparisonPlayOrderRankHistoryPlayOrderRowResponse] =
   Schema.derived[view.SeriesComparisonPlayOrderRankHistoryPlayOrderRowView].name(
     Schema.SName("SeriesComparisonPlayOrderRankHistoryPlayOrderRowResponse")
   )
+
+type SeriesComparisonRankSignalsDrilldownPayloadResponse =
+  view.SeriesComparisonRankSignalsDrilldownPayloadView
+given Codec.AsObject[SeriesComparisonRankSignalsDrilldownPayloadResponse] =
+  Codec.AsObject.derived[view.SeriesComparisonRankSignalsDrilldownPayloadView]
+given Schema[SeriesComparisonRankSignalsDrilldownPayloadResponse] =
+  Schema.derived[view.SeriesComparisonRankSignalsDrilldownPayloadView].name(
+    Schema.SName("SeriesComparisonRankSignalsDrilldownPayloadResponse")
+  )
+
+type SeriesComparisonRankSignalDetailResponse = view.SeriesComparisonRankSignalDetailView
+given Codec.AsObject[SeriesComparisonRankSignalDetailResponse] =
+  Codec.AsObject.derived[view.SeriesComparisonRankSignalDetailView]
+given Schema[SeriesComparisonRankSignalDetailResponse] =
+  Schema.derived[view.SeriesComparisonRankSignalDetailView].name(
+    Schema.SName("SeriesComparisonRankSignalDetailResponse")
+  )
+
+type SeriesComparisonRankSignalFoldRowResponse = view.SeriesComparisonRankSignalFoldRowView
+given Codec.AsObject[SeriesComparisonRankSignalFoldRowResponse] =
+  Codec.AsObject.derived[view.SeriesComparisonRankSignalFoldRowView]
+given Schema[SeriesComparisonRankSignalFoldRowResponse] =
+  Schema.derived[view.SeriesComparisonRankSignalFoldRowView].name(
+    Schema.SName("SeriesComparisonRankSignalFoldRowResponse")
+  )
+
+type SeriesComparisonUnexpectedWinsDrilldownPayloadResponse =
+  view.SeriesComparisonUnexpectedWinsDrilldownPayloadView
+given Codec.AsObject[SeriesComparisonUnexpectedWinsDrilldownPayloadResponse] =
+  Codec.AsObject.derived[view.SeriesComparisonUnexpectedWinsDrilldownPayloadView]
+given Schema[SeriesComparisonUnexpectedWinsDrilldownPayloadResponse] =
+  Schema.derived[view.SeriesComparisonUnexpectedWinsDrilldownPayloadView].name(
+    Schema.SName("SeriesComparisonUnexpectedWinsDrilldownPayloadResponse")
+  )
+
+type SeriesComparisonUnexpectedWinDrilldownRowResponse =
+  view.SeriesComparisonUnexpectedWinDrilldownRowView
+given Codec.AsObject[SeriesComparisonUnexpectedWinDrilldownRowResponse] =
+  Codec.AsObject.derived[view.SeriesComparisonUnexpectedWinDrilldownRowView]
+given Schema[SeriesComparisonUnexpectedWinDrilldownRowResponse] =
+  Schema.derived[view.SeriesComparisonUnexpectedWinDrilldownRowView].name(
+    Schema.SName("SeriesComparisonUnexpectedWinDrilldownRowResponse")
+  )

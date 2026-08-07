@@ -103,6 +103,35 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     }
   });
 
+  await test.step("open OCR for the latest held event from held-event history", async () => {
+    expectGeneratedId(heldEventId, "held event ID");
+
+    await page.goto("/held-events");
+    await expect(page.getByRole("heading", { exact: true, name: "開催履歴" })).toBeVisible();
+
+    const latestOcrLink = page.getByRole("link", { name: /の開催にOCR取り込み$/u });
+    const expectedOcrHref = withReturnTo(`/ocr/new?heldEventId=${heldEventId}`, "/held-events");
+    await expect(latestOcrLink).toHaveCount(1);
+    await expect(latestOcrLink).toBeVisible();
+    await expect(latestOcrLink).toHaveAttribute("href", expectedOcrHref);
+
+    await page.setViewportSize({ height: 844, width: 390 });
+    await expect(latestOcrLink).toBeVisible();
+    await expectNoHorizontalPageOverflow(page);
+    await latestOcrLink.click();
+
+    await expect(page).toHaveURL(expectedOcrHref);
+    await expect(page.getByRole("heading", { exact: true, name: "OCR取り込み" })).toBeVisible();
+    await expect(page.getByRole("combobox", { name: /開催（任意）/u })).toHaveValue(heldEventId);
+    await expect(page.getByLabel("試合番号")).toHaveValue("1");
+
+    const cancelOcrLink = page.getByRole("link", { exact: true, name: "取り込みをやめる" });
+    await expect(cancelOcrLink).toHaveAttribute("href", "/held-events");
+    await cancelOcrLink.click();
+    await expect(page).toHaveURL("/held-events");
+    await page.setViewportSize({ height: 900, width: 1440 });
+  });
+
   await test.step("create a member alias through the admin UI", async () => {
     await page.goto("/admin/masters");
 

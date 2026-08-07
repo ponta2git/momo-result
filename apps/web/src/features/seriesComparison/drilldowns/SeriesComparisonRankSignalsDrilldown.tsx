@@ -88,7 +88,7 @@ export function RankSignalsDrilldownDialog({
             fallback={<DrilldownContentSkeleton label="順位の手掛かりを読み込み中" />}
             preserveContent
           >
-            <div className="grid h-full min-h-0 gap-3 overflow-y-auto overscroll-contain pr-1">
+            <div className="grid h-full min-h-0 content-start gap-3 overflow-y-auto overscroll-contain pr-1">
               {showCachedError ? (
                 <DrilldownLoadNotice
                   description="直前に取得した詳細を表示しています。"
@@ -131,7 +131,7 @@ function RankSignalsDetails({ payload }: { payload: RankSignalsDrilldownPayload 
           label="分析範囲"
           value={`${payload.heldEventCount}開催・${payload.matchCount}戦`}
         />
-        <DetailFact label="読み取り改善" value={`5分割中${payload.improvedFoldCount}回`} />
+        <DetailFact label="読み取り改善" value={`5回中${payload.improvedFoldCount}回`} />
         <div className="grid gap-1">
           <span className="text-xs text-[var(--color-text-secondary)]">品質</span>
           <div className="flex min-h-6 items-center gap-2">
@@ -141,6 +141,15 @@ function RankSignalsDetails({ payload }: { payload: RankSignalsDrilldownPayload 
             ) : null}
           </div>
         </div>
+      </div>
+      <div
+        aria-label="確認1から5の読み方"
+        className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2"
+      >
+        <p className="text-xs font-semibold text-[var(--color-text-primary)]">確認1〜5とは</p>
+        <p className="mt-1 text-xs leading-5 text-pretty text-[var(--color-text-secondary)]">
+          対象開催を重ならない5組に分け、毎回1組を手掛かりの計算から外し、外した開催でも同じ読み方が通用するか確かめた5回です。表では、その回に外した開催数と、そこで確かめた2人組の数を示します。
+        </p>
       </div>
       {signals.length === 0 ? (
         <EmptyState
@@ -172,18 +181,21 @@ function RankSignalsDetails({ payload }: { payload: RankSignalsDrilldownPayload 
               </div>
               <div className="overflow-x-auto rounded-[var(--radius-xs)] border border-[var(--color-border)]">
                 <table className="w-full min-w-[34rem] border-collapse text-sm">
+                  <caption className="sr-only">
+                    {rankSignalLabel(signal.signal)}の確認1から5
+                  </caption>
                   <thead>
                     <tr>
-                      <DrilldownTableHeader>評価区分</DrilldownTableHeader>
-                      <DrilldownTableHeader align="right">対象開催</DrilldownTableHeader>
-                      <DrilldownTableHeader align="right">対象比較</DrilldownTableHeader>
+                      <DrilldownTableHeader>確認回</DrilldownTableHeader>
+                      <DrilldownTableHeader align="right">外した開催</DrilldownTableHeader>
+                      <DrilldownTableHeader align="right">順位の組比較</DrilldownTableHeader>
                       <DrilldownTableHeader align="right">結びつき</DrilldownTableHeader>
                     </tr>
                   </thead>
                   <tbody>
                     {(signal.foldRows ?? []).map((row) => (
                       <tr className="group hover:bg-[var(--color-surface-subtle)]" key={row.fold}>
-                        <DrilldownTableCell>評価{row.fold + 1}</DrilldownTableCell>
+                        <DrilldownTableCell>確認{row.fold + 1}</DrilldownTableCell>
                         <DrilldownTableCell align="right">
                           {row.heldEventCount}開催
                         </DrilldownTableCell>

@@ -92,7 +92,7 @@ export function UnexpectedWinsDrilldownDialog({
             fallback={<DrilldownContentSkeleton label="記録外の一撃を読み込み中" />}
             preserveContent
           >
-            <div className="grid h-full min-h-0 gap-3 overflow-y-auto overscroll-contain pr-1">
+            <div className="grid h-full min-h-0 content-start gap-3 overflow-y-auto overscroll-contain pr-1">
               {showCachedError ? (
                 <DrilldownLoadNotice
                   description="直前に取得した詳細を表示しています。"
@@ -129,7 +129,7 @@ function UnexpectedWinsDetails({ payload }: { payload: UnexpectedWinsDrilldownPa
     );
   }
   return (
-    <>
+    <section aria-label="記録外の一撃の詳細" className="grid min-w-0 content-start gap-3">
       <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
         <StatusBadge status={payload.status} />
         <p className="text-sm text-[var(--color-text-secondary)] tabular-nums">
@@ -149,7 +149,7 @@ function UnexpectedWinsDetails({ payload }: { payload: UnexpectedWinsDrilldownPa
           title="該当試合なし"
         />
       ) : (
-        <ol className="grid gap-3" aria-label="記録外の一撃の対戦履歴">
+        <ol className="grid content-start gap-3" aria-label="記録外の一撃の対戦履歴">
           {rows.map((row) => (
             <UnexpectedWinCard key={row.matchId} row={row} />
           ))}
@@ -158,7 +158,7 @@ function UnexpectedWinsDetails({ payload }: { payload: UnexpectedWinsDrilldownPa
       <p className="text-xs leading-5 text-pretty text-[var(--color-text-muted)]">
         推定順位はその開催回を学習に含めず計算しています。運や隠れた実力の判定ではありません。
       </p>
-    </>
+    </section>
   );
 }
 

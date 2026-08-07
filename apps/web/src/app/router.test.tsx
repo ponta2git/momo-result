@@ -512,9 +512,14 @@ describe("app routing", () => {
     const signalsDialog = await screen.findByRole("dialog", {
       name: "順位を読む手掛かり: いーゆー",
     });
-    expect(signalsDialog).toHaveTextContent("5分割中5回");
-    expect(signalsDialog).toHaveTextContent("評価1");
+    expect(signalsDialog).toHaveTextContent("5回中5回");
+    expect(signalsDialog).toHaveTextContent("確認1〜5とは");
+    expect(signalsDialog).toHaveTextContent("毎回1組を手掛かりの計算から外し");
+    expect(signalsDialog).toHaveTextContent("確認1");
     expect(signalsDialog).toHaveTextContent("24組");
+    expect(within(signalsDialog).getAllByRole("columnheader", { name: "外した開催" })).toHaveLength(
+      2,
+    );
     expect(signalsDialog).toHaveTextContent("物件収益が多い試合ほど上位寄り");
     expect(signalsDialog).not.toHaveTextContent("more_is_higher");
     expect(router.state.location.search).toContain("drilldown=rankSignals");
@@ -534,6 +539,9 @@ describe("app routing", () => {
     const unexpectedDialog = await screen.findByRole("dialog", {
       name: "記録外の一撃: いーゆー",
     });
+    expect(
+      within(unexpectedDialog).getByRole("region", { name: "記録外の一撃の詳細" }),
+    ).toBeInTheDocument();
     expect(unexpectedDialog).toHaveTextContent("2回 / 14勝");
     expect(unexpectedDialog).toHaveTextContent("推定3.1位 → 実際1位");
     expect(unexpectedDialog).toHaveTextContent("物件収益");

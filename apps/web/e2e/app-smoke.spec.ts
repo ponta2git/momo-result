@@ -470,12 +470,17 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
       expect((await rankSignalsResponse).ok()).toBe(true);
       const rankSignalsDialog = page.getByRole("dialog", { name: /順位を読む手掛かり:/u });
       await expect(rankSignalsDialog.getByText("20開催・40戦")).toBeVisible();
-      await expect(rankSignalsDialog.getByRole("columnheader", { name: "対象開催" })).toHaveCount(
+      await expect(rankSignalsDialog.getByLabel("確認1から5の読み方")).toContainText(
+        "毎回1組を手掛かりの計算から外し",
+      );
+      await expect(rankSignalsDialog.getByRole("columnheader", { name: "確認回" })).toHaveCount(2);
+      await expect(rankSignalsDialog.getByRole("columnheader", { name: "外した開催" })).toHaveCount(
         2,
       );
-      await expect(rankSignalsDialog.getByRole("columnheader", { name: "対象比較" })).toHaveCount(
-        2,
-      );
+      await expect(
+        rankSignalsDialog.getByRole("columnheader", { name: "順位の組比較" }),
+      ).toHaveCount(2);
+      await expect(rankSignalsDialog.getByRole("cell", { name: "確認1" })).toHaveCount(2);
       await rankSignalsDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
       await expect(rankSignalsDialog).toBeHidden();
 
@@ -494,6 +499,20 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
       await expect(
         unexpectedWinsDialog.getByRole("list", { name: "記録外の一撃の対戦履歴" }),
       ).toBeVisible();
+      const unexpectedWinsDetails = unexpectedWinsDialog.getByRole("region", {
+        name: "記録外の一撃の詳細",
+      });
+      const unexpectedWinsLayout = await unexpectedWinsDetails.evaluate((details) => {
+        const history = details.querySelector("ol");
+        return {
+          detailsAlignContent: window.getComputedStyle(details).alignContent,
+          historyAlignContent: history ? window.getComputedStyle(history).alignContent : null,
+        };
+      });
+      expect(unexpectedWinsLayout).toEqual({
+        detailsAlignContent: "flex-start",
+        historyAlignContent: "flex-start",
+      });
       const unexpectedWinLinks = unexpectedWinsDialog.getByRole("link", {
         name: "この試合の結果",
       });

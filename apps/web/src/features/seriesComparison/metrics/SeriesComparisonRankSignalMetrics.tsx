@@ -56,7 +56,7 @@ export function RankSignalMetrics({ response }: { response: SeriesComparisonResp
       ) : (
         <>
           <RankAnalysisMeta analysis={analysis}>
-            <span>5分割中{analysis.improvedFoldCount}回で読み取り改善</span>
+            <span>開催を外した5回中{analysis.improvedFoldCount}回で読み取り改善</span>
           </RankAnalysisMeta>
           <PlayerMetricGrid metricsByMember={metricsMap(response)} players={players}>
             {(player) => {

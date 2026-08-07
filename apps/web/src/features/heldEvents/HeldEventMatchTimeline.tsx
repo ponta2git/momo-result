@@ -5,6 +5,7 @@ import {
   heldEventScopeLabel,
 } from "@/features/heldEvents/heldEventDetailViewModel";
 import type { HeldEventMasterNames } from "@/features/heldEvents/heldEventDetailViewModel";
+import { heldEventOcrCaptureHref } from "@/features/heldEvents/heldEventNavigation";
 import type { HeldEventMatchResponse } from "@/shared/api/heldEvents";
 import { memberDisplayName } from "@/shared/domain/members";
 import { formatManYen } from "@/shared/lib/formatters";
@@ -55,10 +56,7 @@ export function HeldEventMatchTimeline({
             <div className="flex flex-wrap gap-2">
               <LinkButton
                 icon={<Camera aria-hidden="true" className="size-4" />}
-                to={withReturnTo(
-                  `/ocr/new?heldEventId=${encodeURIComponent(heldEventId)}`,
-                  returnTo,
-                )}
+                to={heldEventOcrCaptureHref(heldEventId, returnTo)}
               >
                 OCR取り込み
               </LinkButton>

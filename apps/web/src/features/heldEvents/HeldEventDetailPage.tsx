@@ -5,6 +5,7 @@ import {
   HeldEventDetailUnavailable,
 } from "@/features/heldEvents/HeldEventDetailStatusViews";
 import { formatHeldEventDateTime } from "@/features/heldEvents/heldEventDetailViewModel";
+import { heldEventOcrCaptureHref } from "@/features/heldEvents/heldEventNavigation";
 import { HeldEventDraftsSection } from "@/features/heldEvents/HeldEventDraftsSection";
 import { HeldEventMatchTimeline } from "@/features/heldEvents/HeldEventMatchTimeline";
 import { HeldEventPlayerRecap } from "@/features/heldEvents/HeldEventPlayerRecap";
@@ -100,7 +101,7 @@ function HeldEventDetailReadyContent({
             </LinkButton>
             <LinkButton
               icon={<Camera aria-hidden="true" className="size-4" />}
-              to={withReturnTo(`/ocr/new?heldEventId=${encodedHeldEventId}`, returnTo)}
+              to={heldEventOcrCaptureHref(detail.id, returnTo)}
             >
               OCR取り込み
             </LinkButton>

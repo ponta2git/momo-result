@@ -1,7 +1,8 @@
-import { ArrowRight, CalendarDays, Download, ListFilter, Plus, Trash2 } from "lucide-react";
+import { ArrowRight, CalendarDays, Camera, Download, ListFilter, Plus, Trash2 } from "lucide-react";
 import { motion } from "motion/react";
 import { Link } from "react-router-dom";
 
+import { heldEventOcrCaptureHref } from "@/features/heldEvents/heldEventNavigation";
 import * as heldEventViewModel from "@/features/heldEvents/heldEventViewModel";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { withReturnTo } from "@/shared/navigation/returnTo";
@@ -149,6 +150,17 @@ function HeldEventRow({
         </dl>
 
         <div className="flex min-w-0 flex-wrap items-center gap-2 lg:justify-end">
+          {latest ? (
+            <LinkButton
+              aria-label={`${heldEventViewModel.formatDateTime(event.heldAt)}の開催にOCR取り込み`}
+              icon={<Camera aria-hidden="true" className="size-4" />}
+              size="sm"
+              to={heldEventOcrCaptureHref(event.id, returnTo)}
+              variant="secondary"
+            >
+              OCR取り込み
+            </LinkButton>
+          ) : null}
           <LinkButton
             aria-label={`${heldEventViewModel.formatDateTime(event.heldAt)}の試合を検索`}
             icon={<ListFilter aria-hidden="true" className="size-4" />}

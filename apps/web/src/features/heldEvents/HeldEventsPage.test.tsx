@@ -32,6 +32,7 @@ function renderPage(path = "/held-events") {
           <Route element={<HeldEventsPage />} path="/held-events" />
           <Route element={<p>held event detail</p>} path="/held-events/:heldEventId" />
           <Route element={<p>matches</p>} path="/matches" />
+          <Route element={<p>ocr capture</p>} path="/ocr/new" />
           <Route element={<p>exports</p>} path="/exports" />
         </Routes>
         <ToastHost />
@@ -76,6 +77,40 @@ describe("HeldEventsPage", () => {
     );
   });
 
+  it("starts OCR from only the latest held event and preserves the list location", async () => {
+    server.use(
+      http.get("/api/held-events", () =>
+        HttpResponse.json({
+          items: [
+            makeHeldEventResponse({
+              heldAt: "2026-02-02T03:04:00.000Z",
+              id: "held-newest",
+            }),
+            makeHeldEventResponse({
+              heldAt: "2026-01-02T03:04:00.000Z",
+              id: "held-older",
+            }),
+          ],
+        }),
+      ),
+    );
+
+    renderPage("/held-events?pageSize=25");
+
+    const ocrLink = await screen.findByRole("link", { name: /の開催にOCR取り込み$/u });
+    expect(ocrLink).toHaveAttribute(
+      "href",
+      "/ocr/new?heldEventId=held-newest&returnTo=%2Fheld-events%3FpageSize%3D25",
+    );
+
+    await user.click(ocrLink);
+
+    expect(screen.getByLabelText("current location")).toHaveTextContent(
+      "/ocr/new?heldEventId=held-newest&returnTo=%2Fheld-events%3FpageSize%3D25",
+    );
+    expect(screen.getByText("ocr capture")).toBeInTheDocument();
+  });
+
   it("hides pagination controls when the list is empty", async () => {
     server.use(
       http.get("/api/held-events", () =>
@@ -97,6 +132,7 @@ describe("HeldEventsPage", () => {
     renderPage();
 
     expect(await screen.findByText("開催履歴はまだありません")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /の開催にOCR取り込み$/u })).not.toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "ページネーション" })).not.toBeInTheDocument();
   });
 
@@ -263,6 +299,7 @@ describe("HeldEventsPage", () => {
     );
     expect(screen.getByRole("region", { name: "開催履歴" })).not.toHaveAttribute("aria-busy");
     expect(screen.queryByText("最新")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /の開催にOCR取り込み$/u })).not.toBeInTheDocument();
     expect(screen.getByText("2 / 2")).toBeInTheDocument();
   });
 

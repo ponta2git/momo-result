@@ -11,16 +11,19 @@ import { invalidateAfterMatchConfirmed } from "@/shared/api/cacheInvalidation";
 import { getMatchDraftDetail } from "@/shared/api/matchDrafts";
 import type { MatchDraftDetailResponse } from "@/shared/api/matchDrafts";
 import { matchKeys } from "@/shared/api/queryKeys";
+import { withReturnTo } from "@/shared/navigation/returnTo";
 
 export function useConfirmedDraftRedirect({
   notify,
   onBeforeRedirect,
   setValidationMessage,
+  returnTo,
   useSampleDrafts,
 }: {
   notify: (message: string, tone?: WorkspaceNoticeTone) => void;
   onBeforeRedirect?: () => void;
   setValidationMessage: (message: string) => void;
+  returnTo?: string | undefined;
   useSampleDrafts: boolean;
 }) {
   const navigate = useNavigate();
@@ -53,10 +56,10 @@ export function useConfirmedDraftRedirect({
       void invalidateAfterMatchConfirmed(queryClient);
       notify(message, "warning");
       onBeforeRedirect?.();
-      navigate(destination.path, { replace: true });
+      navigate(withReturnTo(destination.path, returnTo), { replace: true });
       return true;
     },
-    [navigate, notify, onBeforeRedirect, queryClient],
+    [navigate, notify, onBeforeRedirect, queryClient, returnTo],
   );
 
   const handleConfirmConflict = useCallback(

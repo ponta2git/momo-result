@@ -12,7 +12,7 @@ type RouteSuspenseFallbackProps = {
  */
 export function RouteSuspenseFallback({ asMain = false, pathname }: RouteSuspenseFallbackProps) {
   const kind = routeSkeletonKind(pathname ?? "");
-  const className = `mx-auto flex w-full ${routeSkeletonWidthClass(kind)} flex-col gap-5 px-4 py-8`;
+  const className = `mx-auto flex w-full ${routeSkeletonWidthClass(kind)} flex-col gap-4 px-4 py-8`;
   const content = <RouteSkeleton kind={kind} />;
 
   if (asMain) {
@@ -91,6 +91,24 @@ function RouteSkeleton({ kind }: { kind: RouteSkeletonKind }) {
     );
   }
 
+  if (kind === "comparison") {
+    return (
+      <>
+        <HeaderSkeleton />
+        <Skeleton className="h-28 rounded-[var(--radius-md)]" />
+        <Skeleton className="h-12 rounded-[var(--radius-md)]" />
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Skeleton className="h-24 rounded-[var(--radius-md)]" />
+          <Skeleton className="h-24 rounded-[var(--radius-md)]" />
+          <Skeleton className="h-24 rounded-[var(--radius-md)]" />
+          <Skeleton className="h-24 rounded-[var(--radius-md)]" />
+        </div>
+        <Skeleton className="h-80 rounded-[var(--radius-md)]" />
+        <span className="sr-only">比較画面を読み込んでいます…</span>
+      </>
+    );
+  }
+
   if (kind === "masters") {
     return (
       <>
@@ -151,8 +169,11 @@ function routeSkeletonKind(pathname: string): RouteSkeletonKind {
   ) {
     return "workspace";
   }
-  if (/^\/matches\/[^/]+$/u.test(pathname)) {
+  if (/^\/(?:matches|held-events)\/[^/]+$/u.test(pathname)) {
     return "detail";
+  }
+  if (pathname === "/analytics/series") {
+    return "comparison";
   }
   if (pathname === "/admin/masters") {
     return "masters";
@@ -163,14 +184,24 @@ function routeSkeletonKind(pathname: string): RouteSkeletonKind {
   return "generic";
 }
 
-type RouteSkeletonKind = "detail" | "export" | "generic" | "list" | "masters" | "workspace";
+type RouteSkeletonKind =
+  | "comparison"
+  | "detail"
+  | "export"
+  | "generic"
+  | "list"
+  | "masters"
+  | "workspace";
 
 function routeSkeletonWidthClass(kind: RouteSkeletonKind): string {
-  if (kind === "workspace" || kind === "masters") {
+  if (kind === "workspace") {
     return pageFrameWidthClass.workspace;
   }
-  if (kind === "export") {
+  if (kind === "comparison" || kind === "detail") {
     return pageFrameWidthClass.wide;
+  }
+  if (kind === "export") {
+    return pageFrameWidthClass.narrow;
   }
   return pageFrameWidthClass.standard;
 }

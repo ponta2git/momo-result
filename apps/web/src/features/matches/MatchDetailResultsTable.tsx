@@ -10,6 +10,7 @@ import { memberDisplayName } from "@/shared/domain/members";
 import { formatManYen } from "@/shared/lib/formatters";
 import { DataTable } from "@/shared/ui/data/DataTable";
 import type { DataTableColumn } from "@/shared/ui/data/DataTable";
+import { RankBadge } from "@/shared/ui/rank/RankBadge";
 
 const matchDetailPlayerRowKey = (player: MatchDetailPlayerResult) => player.memberId;
 
@@ -49,7 +50,7 @@ export function MatchDetailResultsTable({
         align: "right",
         header: "順位",
         minWidth: "5rem",
-        renderCell: (player) => player.rank,
+        renderCell: (player) => <RankBadge rank={player.rank} />,
       }),
       sortable("totalAssetsManYen", {
         align: "right",

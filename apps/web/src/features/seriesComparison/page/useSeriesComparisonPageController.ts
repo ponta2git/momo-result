@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useCallback, useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
 import { useSearchParams } from "react-router-dom";
 
+import { preserveSeriesComparisonDrilldownParams } from "@/features/seriesComparison/drilldowns/useSeriesComparisonDrilldownUrlState";
 import {
   buildSeriesComparisonSearchParams,
   defaultSeriesComparisonView,
@@ -18,7 +19,6 @@ import type {
 } from "@/features/seriesComparison/model/seriesComparisonViewModel";
 import {
   isInitialQueryLoading,
-  shouldShowBlockingQueryError,
   shouldShowQueryError,
   shouldShowStaleShield,
 } from "@/shared/api/queryErrorState";
@@ -27,6 +27,7 @@ import {
   seriesComparisonOptionsQueryOptions,
   seriesComparisonReviewQueryOptions,
 } from "@/shared/api/queryOptions";
+import { sanitizeReturnTo } from "@/shared/navigation/returnTo";
 
 function scopeSignature(state: SeriesComparisonUrlState): string {
   return [state.gameTitleId ?? "", state.seasonMasterId ?? "", state.mapMasterId ?? ""].join("|");
@@ -34,6 +35,7 @@ function scopeSignature(state: SeriesComparisonUrlState): string {
 
 export function useSeriesComparisonPageController() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const returnTo = sanitizeReturnTo(searchParams.get("returnTo"));
   const rawState = useMemo(() => parseSeriesComparisonSearchParams(searchParams), [searchParams]);
   const [optimisticState, setOptimisticState] = useState<SeriesComparisonUrlState | null>(null);
   const [, startStateTransition] = useTransition();
@@ -75,11 +77,15 @@ export function useSeriesComparisonPageController() {
     if (!optionsQuery.data || optimisticState) {
       return;
     }
-    const next = buildSeriesComparisonSearchParams(urlState);
+    const next = preserveSeriesComparisonDrilldownParams(
+      searchParams,
+      buildSeriesComparisonSearchParams(urlState),
+    );
+    if (returnTo) next.set("returnTo", returnTo);
     if (next.toString() !== searchParams.toString()) {
       setSearchParams(next, { replace: true });
     }
-  }, [optimisticState, optionsQuery.data, searchParams, setSearchParams, urlState]);
+  }, [optimisticState, optionsQuery.data, returnTo, searchParams, setSearchParams, urlState]);
 
   useEffect(() => {
     if (optimisticState && urlStateSignature === normalizedStateSignature) {
@@ -131,12 +137,17 @@ export function useSeriesComparisonPageController() {
       const nextState = normalizeSeriesComparisonSelection(optionsQuery.data, next);
       setOptimisticState(nextState);
       startStateTransition(() => {
-        setSearchParams(buildSeriesComparisonSearchParams(nextState), {
+        const nextParams = preserveSeriesComparisonDrilldownParams(
+          searchParams,
+          buildSeriesComparisonSearchParams(nextState),
+        );
+        if (returnTo) nextParams.set("returnTo", returnTo);
+        setSearchParams(nextParams, {
           replace: options.replace ?? true,
         });
       });
     },
-    [optionsQuery.data, setSearchParams, startStateTransition],
+    [optionsQuery.data, returnTo, searchParams, setSearchParams, startStateTransition],
   );
   const updateGameTitle = useCallback(
     (gameTitleId: string) =>
@@ -177,6 +188,16 @@ export function useSeriesComparisonPageController() {
     () => updateState({ ...normalizedState, focusMatchId: undefined }),
     [normalizedState, updateState],
   );
+  const clearScope = useCallback(
+    () =>
+      updateState({
+        ...normalizedState,
+        focusMatchId: undefined,
+        mapMasterId: undefined,
+        seasonMasterId: undefined,
+      }),
+    [normalizedState, updateState],
+  );
 
   const aggregateLoading = isInitialQueryLoading(aggregateQuery);
   const aggregateShielded = shouldShowStaleShield({
@@ -201,6 +222,9 @@ export function useSeriesComparisonPageController() {
       void reviewQuery.refetch();
     }
   };
+  const retryReview = () => {
+    void reviewQuery.refetch();
+  };
 
   return {
     actions: {
@@ -209,13 +233,14 @@ export function useSeriesComparisonPageController() {
     aggregate: {
       canRefresh: aggregateQueryParams !== undefined,
       data: aggregateQuery.data,
-      hasError: shouldShowBlockingQueryError(aggregateQuery),
+      hasError: shouldShowQueryError(aggregateQuery),
       loading: aggregateLoading,
       refreshing: aggregateQuery.isFetching && aggregateQuery.data !== undefined,
       shielded: aggregateShielded,
     },
     filters: {
       activeView,
+      clearScope,
       clearFocusedMatch,
       mapOptions: mapSelectOptions,
       scopeLabel: [selectedSeries?.name, scopeName].filter(Boolean).join("・"),
@@ -229,14 +254,18 @@ export function useSeriesComparisonPageController() {
     },
     options: {
       hasError: shouldShowQueryError(optionsQuery),
+      hasVisibleData: optionsQuery.data !== undefined,
       loading: isInitialQueryLoading(optionsQuery),
+      refreshing: optionsQuery.isFetching,
     },
     review: {
       data: reviewQuery.data,
-      hasError: reviewEnabled && shouldShowBlockingQueryError(reviewQuery),
+      hasError: reviewEnabled && shouldShowQueryError(reviewQuery),
       loading: reviewLoading,
+      retry: retryReview,
       refreshing: reviewEnabled && reviewQuery.isFetching && reviewQuery.data !== undefined,
       shielded: reviewShielded,
     },
+    returnTo,
   };
 }

@@ -52,7 +52,7 @@ export function ExportCandidatePickerDialog({
   };
 
   return (
-    <div className="grid gap-1.5">
+    <div className="grid gap-2">
       <p className="text-sm leading-5 font-semibold text-[var(--color-text-primary)]">{label}</p>
       <div className="flex min-h-11 min-w-0 items-center gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2 pl-3">
         <p className="min-w-0 flex-1 text-sm leading-5 font-medium text-pretty text-[var(--color-text-primary)]">
@@ -63,7 +63,7 @@ export function ExportCandidatePickerDialog({
           className="flex min-h-0 flex-col"
           open={open}
           popupClassName="overflow-y-hidden"
-          surfaceClassName="flex flex-col overflow-y-hidden sm:p-5"
+          surfaceClassName="flex flex-col overflow-y-hidden"
           title={`${label}を選択`}
           trigger={
             <Button

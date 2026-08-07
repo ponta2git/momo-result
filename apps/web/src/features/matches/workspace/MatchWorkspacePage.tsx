@@ -8,6 +8,7 @@ import { MatchWorkspaceHeader } from "@/features/matches/workspace/MatchWorkspac
 import { MatchWorkspaceLoading } from "@/features/matches/workspace/MatchWorkspaceLoading";
 import { MatchWorkspaceNavigationGuard } from "@/features/matches/workspace/MatchWorkspaceNavigationGuard";
 import { useMatchWorkspaceController } from "@/features/matches/workspace/useMatchWorkspaceController";
+import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { LiveRegion } from "@/shared/ui/feedback/LiveRegion";
 import { Notice } from "@/shared/ui/feedback/Notice";
@@ -41,6 +42,7 @@ export function MatchWorkspacePage({
   }, []);
   const {
     baseErrors,
+    baseErrorActions,
     blockedNotice,
     confirmDialog,
     editor,
@@ -82,14 +84,35 @@ export function MatchWorkspacePage({
     );
   }
 
-  if (loadState.editLoadFailed) {
+  if (loadState.editLoadFailureKind) {
+    const notFound = loadState.editLoadFailureKind === "notFound";
     return (
       <PageFrame>
-        <Notice tone="danger" title="試合が見つかりませんでした">
-          一覧に戻って、対象の試合を選び直してください。
+        <Notice
+          tone={notFound ? "warning" : "danger"}
+          title={notFound ? "試合が見つかりませんでした" : "試合編集を読み込めませんでした"}
+        >
+          <p>
+            {notFound
+              ? "削除されたか、URLが正しくない可能性があります。"
+              : "通信状態を確認して、もう一度お試しください。"}
+          </p>
+          {notFound ? null : (
+            <div className="mt-3">
+              <Button
+                pending={loadState.retryingEdit}
+                pendingLabel="再読み込み中"
+                size="sm"
+                variant="secondary"
+                onClick={loadState.onRetryEdit}
+              >
+                試合編集を再読み込み
+              </Button>
+            </div>
+          )}
         </Notice>
-        <LinkButton to="/matches" variant="secondary">
-          試合一覧へ戻る
+        <LinkButton to={header.cancelHref} variant="secondary">
+          前の画面へ戻る
         </LinkButton>
       </PageFrame>
     );
@@ -101,11 +124,28 @@ export function MatchWorkspacePage({
 
       <MatchWorkspaceHeader header={header} />
 
-      {baseErrors.map((error) => (
-        <Notice key={`${error.status}-${error.detail}`} tone="danger" title={error.title}>
-          {error.detail}
+      {baseErrors.length > 0 ? (
+        <Notice tone="danger" title="画面データを読み込めません">
+          <ul className="grid list-disc gap-1 pl-5 text-sm">
+            {baseErrors.map((error) => (
+              <li key={`${error.status}-${error.detail}`}>
+                <span className="font-semibold">{error.title}</span>：{error.detail}
+              </li>
+            ))}
+          </ul>
+          <div className="mt-3">
+            <Button
+              pending={baseErrorActions.retrying}
+              pendingLabel="再読み込み中"
+              size="sm"
+              variant="secondary"
+              onClick={() => void baseErrorActions.onRetry()}
+            >
+              失敗したデータを再読み込み
+            </Button>
+          </div>
         </Notice>
-      ))}
+      ) : null}
 
       {blockedNotice ? (
         <MatchWorkspaceBlockedNotice {...blockedNotice} />

@@ -6,6 +6,7 @@ import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { formatApiError } from "@/shared/api/problemDetails";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
+import { formatDateTimeLong } from "@/shared/lib/dateTime";
 
 export function useWorkspaceHeldEventCreation(args: {
   onError: (message: string) => void;
@@ -28,7 +29,7 @@ export function useWorkspaceHeldEventCreation(args: {
       await syncHeldEventCreatedCache(queryClient, "workspace", event);
       args.onSelectCreatedEvent(event);
       args.onSuccessNotice(
-        `開催履歴（${new Date(event.heldAt).toLocaleString()}）を作成して選択しました。`,
+        `開催履歴（${formatDateTimeLong(event.heldAt)}）を作成して選択しました。`,
       );
     },
     onError: (error) => {

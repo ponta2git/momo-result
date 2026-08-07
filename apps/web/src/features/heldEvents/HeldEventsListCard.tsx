@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 
 import * as heldEventViewModel from "@/features/heldEvents/heldEventViewModel";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
+import { withReturnTo } from "@/shared/navigation/returnTo";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { PaginationControls } from "@/shared/ui/data/PaginationControls";
@@ -40,7 +41,18 @@ export function HeldEventsListCard({
           {data.loadFailed ? (
             <div className="p-4">
               <Notice tone="danger" title="開催履歴を読み込めません">
-                時間をおいて、再読み込みしてください。
+                <p>通信状態を確認して、もう一度お試しください。</p>
+                <div className="mt-3">
+                  <Button
+                    pending={data.refreshing}
+                    pendingLabel="再読み込み中"
+                    size="sm"
+                    variant="secondary"
+                    onClick={actions.onRetry}
+                  >
+                    開催履歴を再読み込み
+                  </Button>
+                </div>
               </Notice>
             </div>
           ) : data.rows.length === 0 ? (
@@ -64,6 +76,7 @@ export function HeldEventsListCard({
                   deleteDisabled={actions.deletePending}
                   event={event}
                   latest={data.page === 1 && index === 0}
+                  returnTo={data.returnTo}
                   onDelete={actions.onRequestDelete}
                 />
               ))}
@@ -91,11 +104,13 @@ function HeldEventRow({
   event,
   latest,
   onDelete,
+  returnTo,
 }: {
   deleteDisabled: boolean;
   event: HeldEventResponse;
   latest: boolean;
   onDelete: (event: HeldEventResponse) => void;
+  returnTo: string;
 }) {
   const encodedId = encodeURIComponent(event.id);
   const canDelete = event.matchCount === 0 && event.draftCount === 0;
@@ -112,7 +127,7 @@ function HeldEventRow({
             <Link
               aria-label={`${heldEventViewModel.formatDateTime(event.heldAt)}の開催詳細`}
               className="momo-heading inline-flex min-h-11 min-w-0 items-center gap-2 text-base font-semibold text-[var(--color-text-primary)] underline-offset-4 hover:underline"
-              to={`/held-events/${encodedId}`}
+              to={withReturnTo(`/held-events/${encodedId}`, returnTo)}
             >
               <span className="truncate tabular-nums">
                 {heldEventViewModel.formatDateTime(event.heldAt)}
@@ -138,7 +153,7 @@ function HeldEventRow({
             aria-label={`${heldEventViewModel.formatDateTime(event.heldAt)}の試合を検索`}
             icon={<ListFilter aria-hidden="true" className="size-4" />}
             size="sm"
-            to={`/matches?heldEventId=${encodedId}`}
+            to={withReturnTo(`/matches?heldEventId=${encodedId}&sort=match_no_asc`, returnTo)}
             variant="quiet"
           >
             試合検索
@@ -147,7 +162,7 @@ function HeldEventRow({
             aria-label={`${heldEventViewModel.formatDateTime(event.heldAt)}をCSV出力`}
             icon={<Download aria-hidden="true" className="size-4" />}
             size="sm"
-            to={`/exports?heldEventId=${encodedId}&format=csv`}
+            to={withReturnTo(`/exports?heldEventId=${encodedId}&format=csv`, returnTo)}
             variant="quiet"
           >
             出力

@@ -355,7 +355,7 @@ describe("app routing", () => {
     expect(await screen.findByRole("heading", { name: "期間内の荒れ試合" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "1戦目の試合結果を見る" })).toHaveAttribute(
       "href",
-      "/matches/match-1",
+      "/matches/match-1?returnTo=%2Fanalytics%2Fseries%3FgameTitleId%3Dgt_momotetsu_2%26view%3Dflow",
     );
     expect(screen.getByRole("link", { name: "第n試合傾向" })).toHaveAttribute(
       "href",
@@ -408,7 +408,7 @@ describe("app routing", () => {
     ).toBeInTheDocument();
     expect(within(focusedMatch).getByRole("link", { name: "この試合の結果" })).toHaveAttribute(
       "href",
-      "/matches/match-12",
+      "/matches/match-12?returnTo=%2Fanalytics%2Fseries%3FgameTitleId%3Dgt_momotetsu_2%26seasonMasterId%3Dseason_current%26mapMasterId%3Dmap_east%26focusMatchId%3Dmatch-12%26view%3Dflow",
     );
     expect(screen.getByRole("tab", { name: "分析する" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("tab", { name: "推移" })).toHaveAttribute("aria-selected", "true");
@@ -468,7 +468,7 @@ describe("app routing", () => {
     expect(within(dialog).getAllByRole("row")[1]).toHaveTextContent("4戦目");
     expect(within(dialog).getByRole("link", { name: "4戦目の試合結果を見る" })).toHaveAttribute(
       "href",
-      "/matches/match-4",
+      "/matches/match-4?returnTo=%2Fanalytics%2Fseries%3FgameTitleId%3Dgt_momotetsu_2%26view%3Doverview%26drilldown%3Drank%26drilldownMemberId%3Dmember_eu%26drilldownView%3Dmatches",
     );
     expect(dialog).toHaveTextContent("2戦目");
     expect(dialog).toHaveTextContent("3位 改善");
@@ -506,7 +506,7 @@ describe("app routing", () => {
     expect(within(dialog).getAllByRole("row")[1]).toHaveTextContent("5戦目");
     expect(within(dialog).getByRole("link", { name: "5戦目の試合結果を見る" })).toHaveAttribute(
       "href",
-      "/matches/play-order-match-5",
+      "/matches/play-order-match-5?returnTo=%2Fanalytics%2Fseries%3FgameTitleId%3Dgt_momotetsu_2%26view%3Dcontext%26drilldown%3DplayOrder%26drilldownMemberId%3Dmember_eu",
     );
     expect(within(dialog).getAllByRole("row")[1]).toHaveTextContent("2P");
     expect(within(dialog).getAllByRole("row")[1]).toHaveTextContent("2戦目");
@@ -549,15 +549,53 @@ describe("app routing", () => {
 
   it("does not show an empty standings state when comparison options fail to load", async () => {
     setDevUser();
+    let attempts = 0;
     server.use(
-      http.get("/api/analytics/series-comparison/options", () =>
-        HttpResponse.json({ detail: "failed" }, { status: 500 }),
-      ),
+      http.get("/api/analytics/series-comparison/options", () => {
+        attempts += 1;
+        return attempts === 1
+          ? HttpResponse.json({ detail: "failed" }, { status: 500 })
+          : HttpResponse.json({
+              latestConfirmedGameTitleId: "gt_momotetsu_2",
+              schemaVersion: 1,
+              series: [
+                {
+                  confirmedMatchCount: 12,
+                  displayOrder: 1,
+                  gameTitleId: "gt_momotetsu_2",
+                  latestConfirmedPlayedAt: "2026-05-10T12:00:00.000Z",
+                  layoutFamily: "momotetsu_2",
+                  maps: [
+                    {
+                      confirmedMatchCount: 12,
+                      displayOrder: 1,
+                      id: "map_east",
+                      name: "東日本編",
+                    },
+                  ],
+                  name: "桃太郎電鉄2",
+                  seasons: [
+                    {
+                      confirmedMatchCount: 12,
+                      displayOrder: 1,
+                      id: "season_current",
+                      name: "今シーズン",
+                    },
+                  ],
+                },
+              ],
+            });
+      }),
     );
 
     renderApp("/analytics/series");
 
     expect(await screen.findByText("対象作品を読み込めません")).toBeInTheDocument();
     expect(screen.queryByText("比較できる戦績がありません")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "比較対象を再読み込み" }));
+
+    expect(await screen.findByRole("combobox", { name: "対象作品" })).toBeInTheDocument();
+    expect(attempts).toBe(2);
   });
 });

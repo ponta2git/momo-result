@@ -23,7 +23,10 @@ import {
   formatPlayOrderLabel,
   playOrderColor,
 } from "@/features/seriesComparison/model/seriesComparisonPresentation";
+import { withReturnTo } from "@/shared/navigation/returnTo";
+import { useCurrentLocationPath } from "@/shared/navigation/useCurrentLocationPath";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
+import { RankBadge } from "@/shared/ui/rank/RankBadge";
 
 export function PlayOrderBreakdownTable({ rows }: { rows: PlayOrderRow[] }) {
   if (rows.length === 0) {
@@ -34,7 +37,7 @@ export function PlayOrderBreakdownTable({ rows }: { rows: PlayOrderRow[] }) {
       <table className="w-full min-w-[72rem] border-separate border-spacing-0 text-sm">
         <thead>
           <tr>
-            <DrilldownTableHeader className="sticky left-0 z-[calc(var(--z-sticky)+1)]">
+            <DrilldownTableHeader className="sticky left-0 z-[var(--z-sticky-raised)]">
               番手
             </DrilldownTableHeader>
             <DrilldownTableHeader align="right">対象戦数</DrilldownTableHeader>
@@ -84,6 +87,7 @@ export function PlayOrderBreakdownTable({ rows }: { rows: PlayOrderRow[] }) {
 }
 
 export function PlayOrderTrendTable({ rows }: { rows: PlayOrderTrendRow[] }) {
+  const returnTo = useCurrentLocationPath();
   const sortedRows = useMemo(() => rows.toSorted(compareTrendRowDesc), [rows]);
   if (rows.length === 0) {
     return <EmptyState title="推移データがありません" description="対象試合がありません。" />;
@@ -93,7 +97,7 @@ export function PlayOrderTrendTable({ rows }: { rows: PlayOrderTrendRow[] }) {
       <table className="w-full min-w-[78rem] border-separate border-spacing-0 text-sm">
         <thead>
           <tr>
-            <DrilldownTableHeader className="sticky left-0 z-[calc(var(--z-sticky)+1)]">
+            <DrilldownTableHeader className="sticky left-0 z-[var(--z-sticky-raised)]">
               対戦順
             </DrilldownTableHeader>
             <DrilldownTableHeader>開催</DrilldownTableHeader>
@@ -112,7 +116,7 @@ export function PlayOrderTrendTable({ rows }: { rows: PlayOrderTrendRow[] }) {
                 <Link
                   aria-label={`${row.matchIndex}戦目の試合結果を見る`}
                   className="inline-flex min-h-11 items-center font-semibold text-[var(--color-action)] tabular-nums underline-offset-4 hover:underline"
-                  to={`/matches/${encodeURIComponent(row.matchId)}`}
+                  to={withReturnTo(`/matches/${encodeURIComponent(row.matchId)}`, returnTo)}
                 >
                   {row.matchIndex}戦目
                 </Link>
@@ -130,7 +134,9 @@ export function PlayOrderTrendTable({ rows }: { rows: PlayOrderTrendRow[] }) {
               <DrilldownTableCell align="right">
                 {row.playOrderOccurrenceIndex}戦目
               </DrilldownTableCell>
-              <DrilldownTableCell align="right">{row.rank}位</DrilldownTableCell>
+              <DrilldownTableCell align="right">
+                <RankBadge rank={row.rank} />
+              </DrilldownTableCell>
               <DrilldownTableCell align="right">
                 {formatDecimal(row.cumulativeAverageRankByPlayOrder)}
               </DrilldownTableCell>
@@ -147,7 +153,7 @@ export function PlayOrderTrendTable({ rows }: { rows: PlayOrderTrendRow[] }) {
 
 export function PlayOrderPill({ playOrder }: { playOrder: number }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-0.5 text-xs font-semibold">
+    <span className="inline-flex items-center gap-2 rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-0.5 text-xs font-semibold">
       <span
         aria-hidden="true"
         className="size-2 rounded-full"

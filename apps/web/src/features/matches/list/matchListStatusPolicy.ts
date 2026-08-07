@@ -1,5 +1,5 @@
 import type { MatchListItemView, MatchListStatus } from "@/features/matches/list/matchListTypes";
-import { asDraftStatusOrUnknown } from "@/shared/domain/draftStatus";
+import { asDraftStatusOrUnknown, draftStatusLabels } from "@/shared/domain/draftStatus";
 
 const preConfirmDescription = "状態を確認して、確定までの対応を続けてください。";
 
@@ -11,15 +11,6 @@ const statusDescriptions = {
   ocr_running: "読み取り完了後に内容を確認できます。",
   unknown: preConfirmDescription,
 } as const satisfies Record<MatchListStatus, string | undefined>;
-
-const statusLabels = {
-  confirmed: "確定済",
-  draft_ready: "確認待ち",
-  needs_review: "要確認",
-  ocr_failed: "読取失敗",
-  ocr_running: "処理中",
-  unknown: "状態不明",
-} as const satisfies Record<MatchListStatus, MatchListItemView["statusLabel"]>;
 
 export function normalizeMatchListStatus(value: string): MatchListStatus {
   return asDraftStatusOrUnknown(value);
@@ -36,7 +27,7 @@ export function matchListDisplayStatus(
 }
 
 export function matchListStatusLabel(status: MatchListStatus): MatchListItemView["statusLabel"] {
-  return statusLabels[status];
+  return draftStatusLabels[status];
 }
 
 export function hasMatchListWarnings(status: MatchListStatus): boolean {

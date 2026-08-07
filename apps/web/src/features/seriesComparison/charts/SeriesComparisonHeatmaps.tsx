@@ -7,15 +7,15 @@ import type {
 import { isFiniteNumber } from "@/features/seriesComparison/charts/SeriesComparisonChartTypes";
 import { playerColor } from "@/features/seriesComparison/charts/SeriesComparisonPlayerVisuals";
 import {
-  rankAverageTone,
-  rankBackgroundColor,
-  rankBorderColor,
-} from "@/features/seriesComparison/charts/SeriesComparisonRankColors";
-import {
   formatDecimal,
   formatPercent,
   formatPlayOrderLabel,
 } from "@/features/seriesComparison/model/seriesComparisonPresentation";
+import {
+  rankAverageTone,
+  rankBackgroundColor,
+  rankBorderColor,
+} from "@/shared/ui/rank/rankPresentation";
 
 export function PlayOrderHeatmap({
   players,
@@ -41,7 +41,7 @@ export function PlayOrderHeatmap({
         <div aria-hidden="true" />
         {[1, 2, 3, 4].map((playOrder) => (
           <div
-            className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-1.5 text-center text-xs font-semibold text-[var(--color-text-primary)]"
+            className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-2 text-center text-xs font-semibold text-[var(--color-text-primary)]"
             key={playOrder}
           >
             {formatPlayOrderLabel(playOrder)}

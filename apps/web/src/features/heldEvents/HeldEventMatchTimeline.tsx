@@ -9,20 +9,24 @@ import type { HeldEventMatchResponse } from "@/shared/api/heldEvents";
 import { memberDisplayName } from "@/shared/domain/members";
 import { formatManYen } from "@/shared/lib/formatters";
 import { seriesComparisonHrefForMatch } from "@/shared/navigation/matchLinks";
+import { withReturnTo } from "@/shared/navigation/returnTo";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Card } from "@/shared/ui/layout/Card";
+import { RankBadge } from "@/shared/ui/rank/RankBadge";
 
 export function HeldEventMatchTimeline({
   heldEventId,
   masterNames,
   matches,
   nextMatchNo,
+  returnTo,
 }: {
   heldEventId: string;
   masterNames: HeldEventMasterNames;
   matches: HeldEventMatchResponse[];
   nextMatchNo: number;
+  returnTo: string;
 }) {
   return (
     <section aria-labelledby="held-event-timeline-heading" className="grid gap-3">
@@ -51,13 +55,19 @@ export function HeldEventMatchTimeline({
             <div className="flex flex-wrap gap-2">
               <LinkButton
                 icon={<Camera aria-hidden="true" className="size-4" />}
-                to={`/ocr/new?heldEventId=${encodeURIComponent(heldEventId)}`}
+                to={withReturnTo(
+                  `/ocr/new?heldEventId=${encodeURIComponent(heldEventId)}`,
+                  returnTo,
+                )}
               >
                 OCR取り込み
               </LinkButton>
               <LinkButton
                 icon={<Keyboard aria-hidden="true" className="size-4" />}
-                to={`/matches/new?heldEventId=${encodeURIComponent(heldEventId)}`}
+                to={withReturnTo(
+                  `/matches/new?heldEventId=${encodeURIComponent(heldEventId)}`,
+                  returnTo,
+                )}
                 variant="secondary"
               >
                 手入力
@@ -75,7 +85,7 @@ export function HeldEventMatchTimeline({
               >
                 <div aria-hidden="true" className="relative flex justify-center pt-4">
                   {index < matches.length - 1 ? (
-                    <span className="absolute top-11 bottom-[-1px] w-px bg-[var(--color-border-strong)]" />
+                    <span className="absolute top-11 -bottom-px w-px bg-[var(--color-border-strong)]" />
                   ) : null}
                   <span className="relative flex size-8 items-center justify-center rounded-full border border-[var(--color-border-strong)] bg-[var(--color-surface)] text-xs font-semibold tabular-nums">
                     {match.matchNoInEvent}
@@ -99,7 +109,7 @@ export function HeldEventMatchTimeline({
                       <LinkButton
                         aria-label={`第${match.matchNoInEvent}試合の結果を見る`}
                         size="sm"
-                        to={`/matches/${encodeURIComponent(match.matchId)}`}
+                        to={withReturnTo(`/matches/${encodeURIComponent(match.matchId)}`, returnTo)}
                         variant="secondary"
                       >
                         結果を見る
@@ -108,7 +118,7 @@ export function HeldEventMatchTimeline({
                         aria-label={`第${match.matchNoInEvent}試合を戦績比較で見る`}
                         icon={<BarChart3 aria-hidden="true" className="size-4" />}
                         size="sm"
-                        to={seriesComparisonHrefForMatch(match)}
+                        to={withReturnTo(seriesComparisonHrefForMatch(match), returnTo)}
                         variant="quiet"
                       >
                         比較する
@@ -125,11 +135,9 @@ export function HeldEventMatchTimeline({
                       .map((player) => (
                         <li
                           key={player.memberId}
-                          className="flex min-w-0 items-center gap-3 bg-[var(--color-surface-subtle)] px-3 py-2.5"
+                          className="flex min-w-0 items-center gap-3 bg-[var(--color-surface-subtle)] px-3 py-3"
                         >
-                          <span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-xs)] bg-[var(--color-surface-selected)] text-sm font-semibold tabular-nums">
-                            {player.rank}位
-                          </span>
+                          <RankBadge rank={player.rank} />
                           <div className="min-w-0">
                             <p className="truncate text-sm font-semibold">
                               {memberDisplayName(player.memberId)}

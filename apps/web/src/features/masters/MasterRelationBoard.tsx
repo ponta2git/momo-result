@@ -28,10 +28,13 @@ type GameTitleRelation = {
 
 type ScopedMasterRelation = {
   create: MasterCreateBinding;
+  error?: string | undefined;
   items: ScopedMasterListItem[];
   loading?: boolean | undefined;
+  onRetry: () => void;
   onDelete: (id: string) => Promise<void> | void;
   onUpdate: (id: string, request: { name: string }) => Promise<void>;
+  retrying?: boolean | undefined;
 };
 
 type MasterRelationBoardProps = {
@@ -61,9 +64,21 @@ export function MasterRelationBoard({
   season,
 }: MasterRelationBoardProps) {
   const mapActions = { onDelete: map.onDelete, onUpdate: map.onUpdate };
-  const mapList = { items: map.items, loading: map.loading };
+  const mapList = {
+    error: map.error,
+    items: map.items,
+    loading: map.loading,
+    onRetry: map.onRetry,
+    retrying: map.retrying,
+  };
   const seasonActions = { onDelete: season.onDelete, onUpdate: season.onUpdate };
-  const seasonList = { items: season.items, loading: season.loading };
+  const seasonList = {
+    error: season.error,
+    items: season.items,
+    loading: season.loading,
+    onRetry: season.onRetry,
+    retrying: season.retrying,
+  };
 
   return (
     <section className="grid gap-4 xl:grid-cols-[minmax(16rem,1fr)_minmax(18rem,1fr)_minmax(18rem,1fr)]">

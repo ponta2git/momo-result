@@ -6,6 +6,7 @@ import { slotKinds } from "@/shared/api/enums";
 import type { MatchDraftDetailResponse } from "@/shared/api/matchDrafts";
 import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
+import { toIsoFromLocalDateTime, toLocalDateTimeInputValue } from "@/shared/lib/dateTime";
 import { trimSearchParam } from "@/shared/lib/searchParams";
 import { bySlot } from "@/shared/lib/slotMap";
 import type { SlotMap } from "@/shared/lib/slotMap";
@@ -38,8 +39,7 @@ export function draftIdsFromDetail(detail: MatchDraftDetailResponse | undefined)
 }
 
 export function toIsoFromLocal(value: string): string {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toISOString();
+  return toIsoFromLocalDateTime(value);
 }
 
 /**
@@ -47,8 +47,7 @@ export function toIsoFromLocal(value: string): string {
  * `useEffect` で初期化しないで済むよう、純粋関数として分離。
  */
 export function currentLocalIsoMinute(now: Date = new Date()): string {
-  const offsetMs = now.getTimezoneOffset() * 60_000;
-  return new Date(now.getTime() - offsetMs).toISOString().slice(0, 16);
+  return toLocalDateTimeInputValue(now);
 }
 
 export function dedupeWorkspaceErrors(errors: readonly NormalizedApiError[]): NormalizedApiError[] {

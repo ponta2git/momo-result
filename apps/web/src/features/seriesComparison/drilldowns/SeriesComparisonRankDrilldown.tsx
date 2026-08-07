@@ -1,7 +1,8 @@
-import { LoaderCircle } from "lucide-react";
-import { useState } from "react";
-
-import { DrilldownPlayerSelector } from "@/features/seriesComparison/drilldowns/SeriesComparisonDrilldownPrimitives";
+import {
+  DrilldownContentSkeleton,
+  DrilldownLoadNotice,
+  DrilldownPlayerSelector,
+} from "@/features/seriesComparison/drilldowns/SeriesComparisonDrilldownPrimitives";
 import { RankHistorySummary } from "@/features/seriesComparison/drilldowns/SeriesComparisonRankDrilldownSummary";
 import {
   HeldEventHistoryTable,
@@ -9,12 +10,16 @@ import {
 } from "@/features/seriesComparison/drilldowns/SeriesComparisonRankDrilldownTables";
 import type { RankDrilldownView } from "@/features/seriesComparison/drilldowns/SeriesComparisonRankDrilldownTypes";
 import { useSeriesComparisonDrilldownQuery } from "@/features/seriesComparison/drilldowns/useSeriesComparisonDrilldownQuery";
-import { isInitialQueryLoading, shouldShowBlockingQueryError } from "@/shared/api/queryErrorState";
+import {
+  isInitialQueryLoading,
+  shouldShowBlockingQueryError,
+  shouldShowQueryError,
+} from "@/shared/api/queryErrorState";
 import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
 import { Dialog } from "@/shared/ui/feedback/Dialog";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
-import { Notice } from "@/shared/ui/feedback/Notice";
 import { SegmentedControl } from "@/shared/ui/forms/SegmentedControl";
+import { StaleShield } from "@/shared/ui/motion/StaleShield";
 
 export function RankAverageHistoryDrilldownDialog({
   onMemberChange,
@@ -22,14 +27,17 @@ export function RankAverageHistoryDrilldownDialog({
   open,
   response,
   selectedMemberId,
+  view,
+  onViewChange,
 }: {
   onMemberChange: (memberId: string) => void;
   onOpenChange: (open: boolean) => void;
   open: boolean;
   response: SeriesComparisonResponse;
   selectedMemberId: string | null;
+  view: RankDrilldownView;
+  onViewChange: (view: RankDrilldownView) => void;
 }) {
-  const [view, setView] = useState<RankDrilldownView>("events");
   const { drilldownQuery, players, selectedPlayer } = useSeriesComparisonDrilldownQuery({
     metricId: "rank.averageHistory",
     open,
@@ -40,6 +48,8 @@ export function RankAverageHistoryDrilldownDialog({
   const payload = data?.rankAverageHistory;
   const loading = open && isInitialQueryLoading(drilldownQuery);
   const showError = shouldShowBlockingQueryError(drilldownQuery);
+  const showCachedError = Boolean(data && shouldShowQueryError(drilldownQuery));
+  const retry = () => void drilldownQuery.refetch();
   const title = selectedPlayer ? `順位の地力: ${selectedPlayer.displayName}` : "順位の地力";
 
   return (
@@ -48,7 +58,7 @@ export function RankAverageHistoryDrilldownDialog({
       description="各試合の順位と累積平均順位から、改善・後退の転換点を示します。"
       open={open}
       popupClassName="max-w-[min(92rem,calc(100vw-1rem))] items-stretch p-2 sm:p-4"
-      surfaceClassName="h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] !overflow-hidden p-4 sm:h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-2rem)] sm:p-5"
+      surfaceClassName="h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] !overflow-hidden p-4 sm:h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-2rem)]"
       title={title}
       onOpenChange={onOpenChange}
     >
@@ -66,38 +76,54 @@ export function RankAverageHistoryDrilldownDialog({
               { label: "試合ごと", value: "matches" },
             ]}
             value={view}
-            onValueChange={(next) => setView(next as RankDrilldownView)}
+            onValueChange={(next) => onViewChange(next as RankDrilldownView)}
           />
         </div>
         {loading ? (
-          <div className="flex min-h-48 items-center justify-center rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] text-sm font-medium text-[var(--color-text-secondary)]">
-            <LoaderCircle
-              aria-hidden="true"
-              className="mr-2 size-4 animate-spin motion-reduce:animate-none"
-            />
-            履歴を読み込み中
-          </div>
+          <DrilldownContentSkeleton label="順位履歴を読み込み中" />
         ) : showError ? (
-          <Notice title="履歴を表示できません" tone="danger">
-            順位履歴の取得に失敗しました。時間をおいて再読み込みしてください。
-          </Notice>
+          <DrilldownLoadNotice
+            description="順位履歴の取得に失敗しました。通信状態を確認して、もう一度お試しください。"
+            pending={drilldownQuery.isFetching}
+            title="履歴を表示できません"
+            onRetry={retry}
+          />
         ) : data ? (
-          <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-3">
-            {payload ? (
-              <>
-                <RankHistorySummary data={payload} />
-                {view === "events" ? (
-                  <HeldEventHistoryTable rows={payload.heldEventRows ?? []} />
-                ) : (
-                  <MatchHistoryTable rows={payload.matchRows ?? []} />
-                )}
-              </>
-            ) : (
-              <Notice title="履歴を表示できません" tone="danger">
-                順位履歴の形式が想定と異なります。再読み込みしてください。
-              </Notice>
-            )}
-          </div>
+          <StaleShield
+            active={drilldownQuery.isFetching}
+            busyLabel="順位履歴を更新中"
+            className="h-full min-h-0"
+            contentClassName="h-full min-h-0"
+            fallback={<DrilldownContentSkeleton label="順位履歴を読み込み中" />}
+            preserveContent
+          >
+            <div className="grid h-full min-h-0 gap-3">
+              {showCachedError ? (
+                <DrilldownLoadNotice
+                  description="直前に取得した順位履歴を表示しています。"
+                  title="最新の順位履歴を取得できません"
+                  tone="warning"
+                  onRetry={retry}
+                />
+              ) : null}
+              {payload ? (
+                <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-3">
+                  <RankHistorySummary data={payload} />
+                  {view === "events" ? (
+                    <HeldEventHistoryTable rows={payload.heldEventRows ?? []} />
+                  ) : (
+                    <MatchHistoryTable rows={payload.matchRows ?? []} />
+                  )}
+                </div>
+              ) : (
+                <DrilldownLoadNotice
+                  description="順位履歴の形式が想定と異なります。"
+                  title="履歴を表示できません"
+                  onRetry={retry}
+                />
+              )}
+            </div>
+          </StaleShield>
         ) : (
           <EmptyState
             title="履歴がありません"

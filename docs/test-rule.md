@@ -64,6 +64,7 @@ form、filter、select、input、button、Zod schema、request transform、mutat
 - optional field が mode discriminator なら、各 mode の payload と副作用を検証する。
 - PC用とモバイル用でUIが二重なら、検証した経路を明示する。
 - UI表示や操作経路を変える refactor では、対象画面の Testing Library test または E2E smoke を追加・更新する。見た目だけの分割でも、ユーザー可視の loading、empty、error、success 状態が変わるなら oracle を置く。
+- UI の semantic token、余白、motion、z-index、touch target を変えた場合は `pnpm --filter web lint` で UI consistency check を通し、PC / mobile で主要操作が隠れたり重なったりしないことを Playwright で確認する。
 
 ### Test Foundation / Doubles
 

@@ -1,4 +1,4 @@
-import { Trash2 } from "lucide-react";
+import { ArrowLeft, Trash2 } from "lucide-react";
 
 import { CameraCapture } from "@/features/ocrCapture/CameraCapture";
 import { CaptureRail } from "@/features/ocrCapture/CaptureRail";
@@ -10,8 +10,8 @@ import { SetupPanel } from "@/features/ocrCapture/SetupPanel";
 import { useOcrCapturePageController } from "@/features/ocrCapture/useOcrCapturePageController";
 import { AuthPanel } from "@/shared/auth/AuthPanel";
 import { Button } from "@/shared/ui/actions/Button";
+import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
-import { LiveRegion } from "@/shared/ui/feedback/LiveRegion";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
@@ -37,10 +37,11 @@ export function OcrCapturePage() {
     handleValidationError,
     handleViewMatches,
     hasWorkingSlot,
-    notice,
+    memberAliasesFeedback,
     notify,
     ocrReadyCount,
     ocrStartDialog,
+    returnTo,
     selectedSlotLabels,
     setSetup,
     setup,
@@ -58,8 +59,21 @@ export function OcrCapturePage() {
 
   return (
     <PageFrame className="gap-4" width="workspace">
-      <LiveRegion message={notice} />
-      <PageHeader title="OCR取り込み" />
+      <PageHeader
+        actions={
+          returnTo ? (
+            <LinkButton
+              icon={<ArrowLeft aria-hidden="true" className="size-4" />}
+              size="sm"
+              to={returnTo}
+              variant="quiet"
+            >
+              取り込みをやめる
+            </LinkButton>
+          ) : null
+        }
+        title="OCR取り込み"
+      />
 
       {auth.error ? (
         <div className="grid gap-3 rounded-[var(--radius-md)] border border-[var(--color-danger)]/50 bg-[var(--color-danger)]/8 p-4 md:grid-cols-[1fr_18rem] md:items-center">
@@ -69,9 +83,39 @@ export function OcrCapturePage() {
                 ? "この操作用アカウントでは利用できません。管理者に確認してください。"
                 : auth.error.detail}
             </p>
+            {auth.error.status === 403 ? null : (
+              <div className="mt-3">
+                <Button
+                  pending={auth.retrying}
+                  pendingLabel="確認中"
+                  size="sm"
+                  variant="secondary"
+                  onClick={auth.retry}
+                >
+                  ログイン状態を再確認
+                </Button>
+              </div>
+            )}
           </Notice>
           <AuthPanel auth={auth.data} embedded forceDevPicker={auth.error.status === 401} />
         </div>
+      ) : null}
+
+      {memberAliasesFeedback.error ? (
+        <Notice tone="warning" title="プレーヤー名の読み替えを取得できません">
+          <p>OCR取り込みは続けられますが、登録済みの別名を読み取り候補に反映できません。</p>
+          <div className="mt-3">
+            <Button
+              pending={memberAliasesFeedback.retrying}
+              pendingLabel="再読み込み中"
+              size="sm"
+              variant="secondary"
+              onClick={memberAliasesFeedback.retry}
+            >
+              読み替え設定を再読み込み
+            </Button>
+          </div>
+        </Notice>
       ) : null}
 
       <section className={panelClass} aria-labelledby="ocr-record-destination">
@@ -81,6 +125,22 @@ export function OcrCapturePage() {
           </h2>
           <p className="text-xs text-[var(--color-text-muted)]">読み取り結果に引き継ぐ試合設定</p>
         </div>
+        {setupOptions.hasError ? (
+          <Notice className="mb-3" tone="warning" title="試合設定の選択肢を読み込めません">
+            <p>読み込めなかった選択肢を再取得できます。</p>
+            <div className="mt-3">
+              <Button
+                pending={setupOptions.refreshing}
+                pendingLabel="再読み込み中"
+                size="sm"
+                variant="secondary"
+                onClick={setupOptions.retry}
+              >
+                選択肢を再読み込み
+              </Button>
+            </div>
+          </Notice>
+        ) : null}
         <SetupPanel value={setup} onChange={setSetup} enabled={auth.ready} options={setupOptions} />
       </section>
 
@@ -94,7 +154,7 @@ export function OcrCapturePage() {
               <p className={panelLeadClass}>ゲーム画面全体が入るようにカメラを合わせます。</p>
             </div>
             <div
-              className="flex items-center gap-2 rounded-full border border-[var(--color-action)]/35 bg-[var(--color-action)]/8 py-1.5 pr-3 pl-1.5 text-sm"
+              className="flex items-center gap-2 rounded-full border border-[var(--color-action)]/35 bg-[var(--color-action)]/8 py-2 pr-3 pl-2 text-sm"
               aria-label={`次の撮影先は${captureTarget.label}`}
             >
               <span
@@ -167,7 +227,7 @@ export function OcrCapturePage() {
             <h2 id="ocr-start-title" className={panelTitleClass}>
               読み取りの準備
             </h2>
-            <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2.5 py-1 text-xs font-semibold text-[var(--color-text-primary)]">
+            <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-1 text-xs font-semibold text-[var(--color-text-primary)]">
               {ocrReadyCount === 0 ? "画像未選択" : `${ocrReadyCount}件を送信`}
             </span>
           </div>

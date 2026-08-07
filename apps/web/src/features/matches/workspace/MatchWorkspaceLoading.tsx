@@ -11,7 +11,7 @@ export function MatchWorkspaceLoading({
   title?: string;
 }) {
   return (
-    <PageFrame aria-busy="true" aria-label={title} className="gap-5" width="workspace">
+    <PageFrame aria-busy="true" aria-label={title} className="gap-4" width="workspace">
       <PageHeader description={description} eyebrow="試合記録" title={title} />
 
       <Card>

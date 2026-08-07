@@ -20,6 +20,17 @@ export type DraftStatus = (typeof draftStatuses)[number];
 
 export type DraftStatusOrUnknown = DraftStatus | "unknown";
 
+export const draftStatusLabels = {
+  confirmed: "確定済",
+  draft_ready: "確認待ち",
+  needs_review: "要確認",
+  ocr_failed: "読み取り失敗",
+  ocr_running: "処理中",
+  unknown: "状態不明",
+} as const satisfies Record<DraftStatusOrUnknown, string>;
+
+export type DraftStatusLabel = (typeof draftStatusLabels)[DraftStatusOrUnknown];
+
 export function isDraftStatus(value: string | null | undefined): value is DraftStatus {
   return typeof value === "string" && (draftStatuses as readonly string[]).includes(value);
 }
@@ -53,15 +64,5 @@ export function isCancelableDraftStatus(status: string | null | undefined): bool
 }
 
 export function reviewStatusLabel(status: string | null | undefined): string {
-  switch (asDraftStatusOrUnknown(status)) {
-    case "ocr_running":
-      return "処理中";
-    case "confirmed":
-      return "確定済み";
-    case "needs_review":
-    case "ocr_failed":
-    case "draft_ready":
-    case "unknown":
-      return "確認待ち";
-  }
+  return draftStatusLabels[asDraftStatusOrUnknown(status)];
 }

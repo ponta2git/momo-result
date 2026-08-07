@@ -1,4 +1,11 @@
-import { AlertTriangle, Download, LoaderCircle, PenSquare, ScanLine } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Download,
+  LoaderCircle,
+  PenSquare,
+  ScanLine,
+} from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 
 import { MatchesListFilters } from "@/features/matches/list/MatchesListFilters";
@@ -48,6 +55,7 @@ export function MatchesListPage() {
     isStale,
     items,
     masterLoadFailed,
+    navigation,
     pagination,
     refresh,
     search,
@@ -71,6 +79,18 @@ export function MatchesListPage() {
 
   return (
     <PageFrame>
+      {navigation.backHref ? (
+        <div>
+          <LinkButton
+            icon={<ArrowLeft aria-hidden="true" className="size-4" />}
+            size="sm"
+            to={navigation.backHref}
+            variant="quiet"
+          >
+            前の画面へ戻る
+          </LinkButton>
+        </div>
+      ) : null}
       <PageHeader
         actions={
           <div
@@ -82,7 +102,7 @@ export function MatchesListPage() {
               className="w-full sm:w-auto"
               icon={<ScanLine className="size-4" />}
               size="sm"
-              to="/ocr/new"
+              to={navigation.ocrHref}
             >
               OCR取り込み
             </LinkButton>
@@ -90,7 +110,7 @@ export function MatchesListPage() {
               className="w-full sm:w-auto"
               icon={<PenSquare className="size-4" />}
               size="sm"
-              to="/matches/new"
+              to={navigation.manualCreateHref}
               variant="secondary"
             >
               手入力で作成
@@ -102,7 +122,18 @@ export function MatchesListPage() {
 
       {masterLoadFailed ? (
         <Notice tone="warning" title="絞り込み候補を一部読み込めません">
-          試合一覧は表示できます。開催、作品、シーズンの候補は再読み込み後に選べます。
+          <p>試合一覧は表示できます。開催、作品、シーズンの候補を再取得できます。</p>
+          <div className="mt-3">
+            <Button
+              pending={isManualRefreshing}
+              pendingLabel="再読み込み中"
+              size="sm"
+              variant="secondary"
+              onClick={() => void refresh()}
+            >
+              候補を再読み込み
+            </Button>
+          </div>
         </Notice>
       ) : null}
 
@@ -162,7 +193,7 @@ export function MatchesListPage() {
             <LinkButton
               icon={<Download className="size-4" />}
               size="sm"
-              to="/exports"
+              to={navigation.exportHref}
               variant="quiet"
             >
               CSV/TSVをまとめて出力
@@ -178,7 +209,18 @@ export function MatchesListPage() {
           >
             {showMatchesError ? (
               <Notice tone="danger" title="試合一覧を読み込めません">
-                時間をおいて、再読み込みしてください。
+                <p>通信状態を確認して、もう一度お試しください。</p>
+                <div className="mt-3">
+                  <Button
+                    pending={isManualRefreshing}
+                    pendingLabel="再読み込み中"
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => void refresh()}
+                  >
+                    一覧を再読み込み
+                  </Button>
+                </div>
               </Notice>
             ) : items.length === 0 ? (
               <EmptyState
@@ -189,8 +231,8 @@ export function MatchesListPage() {
                     </Button>
                   ) : (
                     <div className="flex flex-wrap gap-2">
-                      <LinkButton to="/ocr/new">OCR取り込み</LinkButton>
-                      <LinkButton to="/matches/new" variant="secondary">
+                      <LinkButton to={navigation.ocrHref}>OCR取り込み</LinkButton>
+                      <LinkButton to={navigation.manualCreateHref} variant="secondary">
                         手入力で作成
                       </LinkButton>
                     </div>

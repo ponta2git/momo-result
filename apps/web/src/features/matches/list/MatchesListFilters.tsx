@@ -1,5 +1,5 @@
-import { ChevronDown, Filter, RefreshCw } from "lucide-react";
-import { useMemo } from "react";
+import { Filter, RefreshCw } from "lucide-react";
+import { useMemo, useState } from "react";
 
 import type {
   MatchListFilterActions,
@@ -9,7 +9,9 @@ import type {
   MatchListSort,
 } from "@/features/matches/list/matchListTypes";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
+import { formatDateOnly } from "@/shared/lib/dateTime";
 import { IconButton } from "@/shared/ui/actions/IconButton";
+import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 
 type MatchesListFiltersProps = {
@@ -31,11 +33,7 @@ const sortOptions: Array<{ label: string; value: MatchListSort }> = [
 ];
 
 function heldEventLabel(event: HeldEventResponse): string {
-  return new Intl.DateTimeFormat("ja-JP", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(new Date(event.heldAt));
+  return formatDateOnly(event.heldAt);
 }
 
 export function MatchesListFilters({
@@ -97,6 +95,7 @@ export function MatchesListFilters({
   );
   const hasResettableFilters =
     hasDetailFilters || search.status !== "all" || search.sort !== "held_desc";
+  const [detailOpen, setDetailOpen] = useState(hasDetailFilters);
   const selectedHeldEvent = candidates.heldEvents.find((event) => event.id === search.heldEventId);
   const selectedGameTitle = candidates.gameTitles.find(
     (gameTitle) => gameTitle.id === search.gameTitleId,
@@ -179,16 +178,17 @@ export function MatchesListFilters({
           </div>
         </div>
 
-        <details
+        <Disclosure
           className="group rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)]"
-          open={hasDetailFilters || undefined}
-        >
-          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-[var(--radius-sm)] px-3 py-2 text-sm font-semibold text-[var(--color-text-primary)] transition-colors duration-[var(--motion-fast)] hover:bg-[var(--color-surface-selected)] motion-reduce:transition-none [&::-webkit-details-marker]:hidden">
-            <span className="inline-flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+          keepMounted
+          open={detailOpen}
+          panelClassName="grid gap-4 border-t border-[var(--color-border)] p-3 md:grid-cols-3 md:items-end"
+          summary={
+            <span className="inline-flex min-w-0 items-center gap-2 overflow-hidden">
               <Filter aria-hidden="true" className="size-4 shrink-0" />
               <span className="shrink-0">詳細条件</span>
               {activeDetailFilters.length > 0 ? (
-                <span className="inline-flex min-w-0 items-center gap-1.5 overflow-hidden">
+                <span className="inline-flex min-w-0 items-center gap-1 overflow-hidden">
                   {activeDetailFilters.map((filter) => (
                     <span
                       key={filter.key}
@@ -201,51 +201,47 @@ export function MatchesListFilters({
                 </span>
               ) : null}
             </span>
-            <ChevronDown
-              aria-hidden="true"
-              className="size-4 shrink-0 text-[var(--color-text-secondary)] transition-transform duration-[var(--motion-base)] group-open:rotate-180 motion-reduce:transition-none"
-            />
-          </summary>
-          <div className="grid gap-4 border-t border-[var(--color-border)] p-3 md:grid-cols-3 md:items-end">
-            <SelectField
-              disabled={pending}
-              label="開催"
-              options={heldEventOptions}
-              value={search.heldEventId}
-              {...heldEventsErrorProps}
-              onChange={(event) => {
-                const value = event.currentTarget.value;
-                patchSearch({ heldEventId: value });
-              }}
-            />
-            <SelectField
-              disabled={pending}
-              label="作品"
-              options={gameTitleOptions}
-              value={search.gameTitleId}
-              {...gameTitlesErrorProps}
-              onChange={(event) => {
-                const value = event.currentTarget.value;
-                patchSearch({
-                  gameTitleId: value,
-                  seasonMasterId:
-                    value && search.gameTitleId === value ? search.seasonMasterId : "",
-                });
-              }}
-            />
-            <SelectField
-              disabled={pending}
-              label="シーズン"
-              options={seasonOptions}
-              value={search.seasonMasterId}
-              {...seasonsErrorProps}
-              onChange={(event) => {
-                const value = event.currentTarget.value;
-                patchSearch({ seasonMasterId: value });
-              }}
-            />
-          </div>
-        </details>
+          }
+          triggerClassName="hover:bg-[var(--color-surface-selected)]"
+          onOpenChange={setDetailOpen}
+        >
+          <SelectField
+            disabled={pending}
+            label="開催"
+            options={heldEventOptions}
+            value={search.heldEventId}
+            {...heldEventsErrorProps}
+            onChange={(event) => {
+              const value = event.currentTarget.value;
+              patchSearch({ heldEventId: value });
+            }}
+          />
+          <SelectField
+            disabled={pending}
+            label="作品"
+            options={gameTitleOptions}
+            value={search.gameTitleId}
+            {...gameTitlesErrorProps}
+            onChange={(event) => {
+              const value = event.currentTarget.value;
+              patchSearch({
+                gameTitleId: value,
+                seasonMasterId: value && search.gameTitleId === value ? search.seasonMasterId : "",
+              });
+            }}
+          />
+          <SelectField
+            disabled={pending}
+            label="シーズン"
+            options={seasonOptions}
+            value={search.seasonMasterId}
+            {...seasonsErrorProps}
+            onChange={(event) => {
+              const value = event.currentTarget.value;
+              patchSearch({ seasonMasterId: value });
+            }}
+          />
+        </Disclosure>
       </div>
     </section>
   );

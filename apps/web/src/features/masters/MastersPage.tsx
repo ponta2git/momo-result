@@ -35,15 +35,19 @@ export function MastersPage() {
     mapCreateState,
     mapMastersLoading,
     mapMastersLoadError,
+    mapMastersRefreshing,
     memberAliases,
     navigateWithTransition,
     operationError,
     optimisticGameTitles,
+    retryMapMasters,
+    retrySeasonMasters,
     returnDestination,
     seasonCreateAction,
     seasonCreateState,
     seasonMastersLoading,
     seasonMastersLoadError,
+    seasonMastersRefreshing,
     setActiveTab,
     setSelectedGameTitleId,
     updateGameTitle,
@@ -71,10 +75,13 @@ export function MastersPage() {
       error: mapCreateState.error,
       formKey: mapCreateState.version,
     },
+    error: mapMastersLoadError,
     items: viewModel.selectedMapMasters,
     loading: mapMastersLoading,
     onDelete: deleteMapMaster,
+    onRetry: retryMapMasters,
     onUpdate: updateMapMaster,
+    retrying: mapMastersRefreshing,
   };
   const seasonRelation = {
     create: {
@@ -82,10 +89,13 @@ export function MastersPage() {
       error: seasonCreateState.error,
       formKey: seasonCreateState.version,
     },
+    error: seasonMastersLoadError,
     items: viewModel.selectedSeasonMasters,
     loading: seasonMastersLoading,
     onDelete: deleteSeasonMaster,
+    onRetry: retrySeasonMasters,
     onUpdate: updateSeasonMaster,
+    retrying: seasonMastersRefreshing,
   };
 
   return (
@@ -130,17 +140,6 @@ export function MastersPage() {
         />
       ) : null}
 
-      {auth.isAuthenticated && mapMastersLoadError ? (
-        <Notice tone="danger" title="マップを読み込めませんでした">
-          {mapMastersLoadError}
-        </Notice>
-      ) : null}
-      {auth.isAuthenticated && seasonMastersLoadError ? (
-        <Notice tone="danger" title="シーズンを読み込めませんでした">
-          {seasonMastersLoadError}
-        </Notice>
-      ) : null}
-
       <TabsRoot
         value={activeTab}
         onValueChange={(value) => setActiveTab(value as typeof activeTab)}
@@ -154,7 +153,7 @@ export function MastersPage() {
             <TabsTab
               key={tab.id}
               className={cn(
-                "min-h-9 rounded-[var(--radius-sm)] px-3 py-1.5 text-sm font-semibold transition-colors duration-150",
+                "min-h-11 rounded-[var(--radius-sm)] px-3 py-2 text-sm font-semibold transition-colors duration-[var(--motion-fast)] motion-reduce:transition-none sm:min-h-9 sm:py-2",
                 activeTab === tab.id
                   ? "bg-[var(--color-surface-selected)] text-[var(--color-text-primary)]"
                   : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-subtle)]",

@@ -2,6 +2,7 @@ import { useId } from "react";
 import type { SelectHTMLAttributes } from "react";
 
 import { cn } from "@/shared/ui/cn";
+import { fieldControlClass, fieldErrorControlClass } from "@/shared/ui/forms/controlStyles";
 import { buildFieldDescribedBy, Field } from "@/shared/ui/forms/Field";
 
 type SelectOption = {
@@ -12,17 +13,19 @@ type SelectOption = {
 
 export type SelectFieldProps = {
   "aria-describedby"?: string | undefined;
-  description?: string;
-  error?: string;
+  description?: string | undefined;
+  error?: string | undefined;
+  fieldClassName?: string | undefined;
   label: string;
   options: SelectOption[];
-  selectClassName?: string;
+  selectClassName?: string | undefined;
 } & Omit<SelectHTMLAttributes<HTMLSelectElement>, "aria-describedby" | "children">;
 
 export function SelectField({
   "aria-describedby": ariaDescribedBy,
   description,
   error,
+  fieldClassName,
   id,
   label,
   options,
@@ -41,19 +44,17 @@ export function SelectField({
       descriptionId={descriptionId}
       error={error}
       errorId={errorId}
+      className={fieldClassName}
       htmlFor={fieldId}
       label={label}
       required={required}
     >
       <select
         {...props}
-        className={cn(
-          "min-h-10 w-full min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 leading-6 text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:bg-[var(--color-surface-subtle)] disabled:text-[var(--color-text-muted)] disabled:opacity-70",
-          error ? "border-[var(--color-danger)]" : "",
-          selectClassName,
-        )}
+        className={cn(fieldControlClass, error ? fieldErrorControlClass : "", selectClassName)}
         id={fieldId}
         required={required}
+        aria-invalid={error ? true : undefined}
         aria-describedby={buildFieldDescribedBy(descriptionId, errorId, ariaDescribedBy)}
       >
         {options.map((option) => (

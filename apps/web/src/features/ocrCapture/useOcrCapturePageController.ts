@@ -17,20 +17,27 @@ import { parseLayoutFamily } from "@/shared/api/enums";
 import type { SlotKind } from "@/shared/api/enums";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
 import { memberDisplayName } from "@/shared/domain/members";
+import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { trimSearchParam } from "@/shared/lib/searchParams";
+import { sanitizeReturnTo } from "@/shared/navigation/returnTo";
 import { showToast } from "@/shared/ui/feedback/Toast";
+
+function notify(message: string, tone: "info" | "success" | "warning" = "info") {
+  showToast({ title: message, tone });
+}
 
 export function useOcrCapturePageController() {
   const [searchParams] = useSearchParams();
   const requestedHeldEventId = trimSearchParam(searchParams.get("heldEventId"));
+  const returnTo = sanitizeReturnTo(searchParams.get("returnTo"));
   const [setup, setSetup] = useState<SetupFormValues>(() => ({
     ...defaultSetupValues,
     ...(requestedHeldEventId ? { heldEventId: requestedHeldEventId } : {}),
   }));
-  const [notice, setNotice] = useState("");
   const [captureTargetKind, setCaptureTargetKind] = useState<SlotKind>("total_assets");
 
-  const { auth, memberAliasDirectory } = useOcrCaptureQueries();
+  const { auth, memberAliasDirectory, memberAliasesError, memberAliasesQuery, retryMemberAliases } =
+    useOcrCaptureQueries();
   const setupOptions = useOcrSetupOptions({
     authAccountId: auth.accountId,
     enabled: auth.ready,
@@ -52,11 +59,6 @@ export function useOcrCapturePageController() {
   const submission = useOcrCaptureMutations(hints);
   const startFlow = useOcrStartFlow({ submission, updateSlot: flow.updateSlot });
 
-  function notify(message: string, tone: "info" | "success" | "warning" = "info") {
-    setNotice(message);
-    showToast({ title: message, tone });
-  }
-
   function handleValidationError(message: string) {
     notify(message);
   }
@@ -69,7 +71,7 @@ export function useOcrCapturePageController() {
     }
     setCaptureTargetKind(kind);
     const label = slotDefinitions.find((definition) => definition.kind === kind)?.label ?? kind;
-    setNotice(`次の撮影先を${label}に変更しました。`);
+    showToast({ title: `次の撮影先を${label}に変更しました。`, tone: "info" });
   }
 
   function handleImageSelected(file: File, source: InputSource) {
@@ -127,7 +129,7 @@ export function useOcrCapturePageController() {
       setup: { ...setup },
       setupSummary: {
         heldEvent: setupOptions.selectedHeldEvent
-          ? new Date(setupOptions.selectedHeldEvent.heldAt).toLocaleString()
+          ? formatDateTimeLong(setupOptions.selectedHeldEvent.heldAt)
           : "紐づけなし",
         gameTitle: setupOptions.selectedGameTitle?.name ?? setup.gameTitleId,
         map:
@@ -173,9 +175,14 @@ export function useOcrCapturePageController() {
     handleValidationError,
     handleViewMatches: startFlow.viewMatches,
     hasWorkingSlot,
-    notice,
     notify,
+    memberAliasesFeedback: {
+      error: memberAliasesError,
+      retry: retryMemberAliases,
+      retrying: memberAliasesQuery.isFetching,
+    },
     ocrReadyCount,
+    returnTo,
     ocrStartDialog: startFlow.state,
     selectedSlotLabels,
     setSetup,

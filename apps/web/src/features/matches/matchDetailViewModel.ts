@@ -13,6 +13,7 @@ import type {
   MatchFeatureSource,
 } from "@/shared/domain/matchFeatures";
 import { memberDisplayName } from "@/shared/domain/members";
+import { formatDateOnly, formatDateTimeLong } from "@/shared/lib/dateTime";
 export { seriesComparisonHrefForMatch } from "@/shared/navigation/matchLinks";
 
 export type MatchDetailPlayerResult = NonNullable<MatchDetailResponse["players"]>[number];
@@ -43,23 +44,11 @@ type MatchFeatureCandidate = {
 };
 
 export function formatMatchDetailDate(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mi = String(d.getMinutes()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
+  return formatDateTimeLong(iso);
 }
 
 export function formatMatchDetailDateOnly(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
+  return formatDateOnly(iso);
 }
 
 function sortValue(player: MatchDetailPlayerResult, key: MatchDetailSortKey): number | string {

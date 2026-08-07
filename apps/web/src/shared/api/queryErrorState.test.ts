@@ -167,8 +167,13 @@ describe("queryErrorState", () => {
     },
     {
       expected: true,
-      name: "shields placeholder data",
-      state: { isPlaceholderData: true },
+      name: "shields placeholder data while its replacement is loading",
+      state: { isPlaceholderData: true, isRefreshing: true },
+    },
+    {
+      expected: false,
+      name: "does not leave settled placeholder data behind a busy shield",
+      state: { isPlaceholderData: true, isRefreshing: false },
     },
     {
       expected: true,

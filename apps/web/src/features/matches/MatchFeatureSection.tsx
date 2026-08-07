@@ -9,13 +9,13 @@ export function MatchFeatureSection({
   scopeLabel: string;
 }) {
   return (
-    <section aria-label="試合の特徴" className="grid gap-1.5">
+    <section aria-label="試合の特徴" className="grid gap-2">
       <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
         <h2 className="text-xs font-semibold text-[var(--color-text-primary)]">試合の特徴</h2>
         <p className="text-[11px] font-medium text-[var(--color-text-secondary)]">{scopeLabel}</p>
       </div>
       {badges.length > 0 ? (
-        <ul className="flex flex-wrap gap-1.5">
+        <ul className="flex flex-wrap gap-2">
           {badges.map((badge) => (
             <li
               key={badge.id}
@@ -24,7 +24,7 @@ export function MatchFeatureSection({
               }から判定`}
               title={badge.description}
               className={cn(
-                "inline-flex min-h-7 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold text-[var(--color-text-primary)]",
+                "inline-flex min-h-7 items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold text-[var(--color-text-primary)]",
                 matchFeatureBadgeClass(badge),
               )}
             >

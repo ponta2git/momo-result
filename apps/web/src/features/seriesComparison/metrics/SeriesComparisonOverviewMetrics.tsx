@@ -1,5 +1,4 @@
 import { BarChart3, Swords, Table2, Trophy } from "lucide-react";
-import { useState } from "react";
 
 import {
   HeadToHeadMatrix,
@@ -7,6 +6,7 @@ import {
   RankDistributionStackedBars,
 } from "@/features/seriesComparison/charts/SeriesComparisonCharts";
 import { RankAverageHistoryDrilldownDialog } from "@/features/seriesComparison/drilldowns/SeriesComparisonRankDrilldown";
+import { useSeriesComparisonDrilldownUrlState } from "@/features/seriesComparison/drilldowns/useSeriesComparisonDrilldownUrlState";
 import {
   MetricRow,
   PlayerMetricGrid,
@@ -21,6 +21,7 @@ import {
 import type { FocusedMatchMetricContext } from "@/features/seriesComparison/model/seriesComparisonPresentation";
 import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
 import { Button } from "@/shared/ui/actions/Button";
+import { RankBadge } from "@/shared/ui/rank/RankBadge";
 
 export function BasicMetrics({
   focusedIndex,
@@ -33,17 +34,21 @@ export function BasicMetrics({
 }) {
   const players = response.players ?? [];
   const metricsByMember = metricsMap(response);
-  const [drilldownMemberId, setDrilldownMemberId] = useState<string | null>(null);
+  const drilldown = useSeriesComparisonDrilldownUrlState({
+    defaultView: "events",
+    isView: (value): value is "events" | "matches" => value === "events" || value === "matches",
+    kind: "rank",
+  });
   return (
     <MetricSection
       action={
         <Button
-          className="min-h-8 px-2.5 py-1 text-xs"
+          className="text-xs"
           disabled={players.length === 0}
           icon={<Table2 className="size-3.5" />}
           size="sm"
           variant="secondary"
-          onClick={() => setDrilldownMemberId(players[0]?.memberId ?? null)}
+          onClick={() => drilldown.open(players[0]?.memberId)}
         >
           履歴
         </Button>
@@ -68,7 +73,14 @@ export function BasicMetrics({
                   focusedMatch={focusedRank === item.rank}
                   key={item.rank}
                   label={`${item.rank}位`}
-                  value={`${item.count}回・${formatPercent(item.rate)}`}
+                  value={
+                    <span className="inline-flex items-center gap-2">
+                      <RankBadge rank={item.rank} />
+                      <span>
+                        {item.count}回・{formatPercent(item.rate)}
+                      </span>
+                    </span>
+                  }
                 />
               ))}
             </>
@@ -86,15 +98,15 @@ export function BasicMetrics({
         yTicks={[1, 2, 3, 4]}
       />
       <RankAverageHistoryDrilldownDialog
-        open={drilldownMemberId !== null}
+        open={drilldown.selectedMemberId !== null}
         response={response}
-        selectedMemberId={drilldownMemberId}
-        onMemberChange={setDrilldownMemberId}
+        selectedMemberId={drilldown.selectedMemberId}
+        view={drilldown.view}
+        onMemberChange={drilldown.setMemberId}
         onOpenChange={(open) => {
-          if (!open) {
-            setDrilldownMemberId(null);
-          }
+          if (!open) drilldown.close();
         }}
+        onViewChange={drilldown.setView}
       />
     </MetricSection>
   );

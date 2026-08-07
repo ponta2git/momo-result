@@ -19,7 +19,7 @@ export function RankHistorySummary({ data }: { data: RankAverageHistoryPayload }
     <div className="grid gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3 sm:grid-cols-3">
       {facts.map((fact) => (
         <div
-          className="min-w-0 rounded-[var(--radius-xs)] bg-[var(--color-surface)] px-2.5 py-2"
+          className="min-w-0 rounded-[var(--radius-xs)] bg-[var(--color-surface)] px-3 py-2"
           key={fact.label}
         >
           <p className="text-[11px] leading-4 text-[var(--color-text-secondary)]">{fact.label}</p>

@@ -116,9 +116,20 @@ export async function waitForPersistentApi(
             "API started without persistent database access. Stop any existing API and rerun pnpm dev.",
           );
         }
+        if (health.database === "unavailable") {
+          throw new Error(
+            "API cannot reach the configured database. Start the standard local database with `pnpm --dir ../momo-db db:up`, run `pnpm --dir ../momo-db db:migrate`, and rerun `pnpm dev`; otherwise verify DATABASE_URL.",
+          );
+        }
       }
     } catch (error) {
-      if (error instanceof Error && error.message.startsWith("API started without")) throw error;
+      if (
+        error instanceof Error &&
+        (error.message.startsWith("API started without") ||
+          error.message.startsWith("API cannot reach"))
+      ) {
+        throw error;
+      }
     }
     await delay(500);
   }

@@ -46,6 +46,7 @@ export type SeriesComparisonContentModel = {
   focusMatchId: string | undefined;
   hasReviewError: boolean;
   onClearFocusedMatch: () => void;
+  onRetryReview: () => void;
   onViewChange: AnalysisViewChange;
   response: SeriesComparisonResponse;
   review: SeriesComparisonReviewResponse | undefined;
@@ -56,6 +57,7 @@ export function AnalysisViewContent({
   focusMatchId,
   hasReviewError,
   onViewChange,
+  onRetryReview,
   response,
   review,
   reviewLoading,
@@ -64,6 +66,7 @@ export function AnalysisViewContent({
   focusMatchId?: string | undefined;
   hasReviewError: boolean;
   onViewChange: AnalysisViewChange;
+  onRetryReview: () => void;
   response: SeriesComparisonResponse;
   review: SeriesComparisonReviewResponse | undefined;
   reviewLoading: boolean;
@@ -79,6 +82,7 @@ export function AnalysisViewContent({
           response={response}
           review={review}
           reviewLoading={reviewLoading}
+          onRetry={onRetryReview}
           onViewChange={onViewChange}
         />
       );
@@ -139,6 +143,7 @@ export function SeriesComparisonContent({ model }: { model: SeriesComparisonCont
             review={model.review}
             reviewLoading={model.reviewLoading}
             view="review"
+            onRetryReview={model.onRetryReview}
             onViewChange={model.onViewChange}
           />
         </div>
@@ -164,6 +169,7 @@ export function SeriesComparisonContent({ model }: { model: SeriesComparisonCont
                 review={model.review}
                 reviewLoading={model.reviewLoading}
                 view={activeDefinition.id}
+                onRetryReview={model.onRetryReview}
                 onViewChange={model.onViewChange}
               />
             </div>

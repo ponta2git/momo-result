@@ -1,4 +1,5 @@
 import { formatManYen } from "@/shared/lib/formatters";
+export { rankColor as rankOutcomeColor } from "@/shared/ui/rank/rankPresentation";
 
 import type { NullableNumber } from "./seriesComparisonPresentationTypes";
 
@@ -66,11 +67,4 @@ export function playOrderColor(playOrder: NullableNumber): string {
   return isNumber(playOrder)
     ? (colors[playOrder - 1] ?? "var(--color-text-muted)")
     : "var(--color-text-muted)";
-}
-
-export function rankOutcomeColor(rank: number): string {
-  if (rank === 1) return "var(--color-rank-1)";
-  if (rank === 2) return "var(--color-rank-2)";
-  if (rank === 3) return "var(--color-rank-3)";
-  return "var(--color-rank-4)";
 }

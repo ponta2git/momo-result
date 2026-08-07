@@ -19,6 +19,7 @@ export function ExportPage({
   return (
     <ExportWorkspace
       isPending={controller.isPending}
+      returnTo={controller.returnTo}
       view={controller.view}
       onCandidateChange={controller.onCandidateChange}
       onCandidatePageChange={controller.onCandidatePageChange}

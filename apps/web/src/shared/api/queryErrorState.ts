@@ -35,6 +35,8 @@ export function isInitialQueryLoading(query: InitialQueryLoadingState): boolean 
 
 export function shouldShowStaleShield(state: StaleShieldState): boolean {
   return Boolean(
-    state.isSettling || state.isPlaceholderData || (state.hasVisibleData && state.isRefreshing),
+    state.isSettling ||
+    (state.isPlaceholderData && state.isRefreshing) ||
+    (state.hasVisibleData && state.isRefreshing),
   );
 }

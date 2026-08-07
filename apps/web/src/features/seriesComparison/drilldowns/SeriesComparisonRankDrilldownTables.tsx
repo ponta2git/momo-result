@@ -21,7 +21,10 @@ import {
   formatDecimal,
   isNumber,
 } from "@/features/seriesComparison/model/seriesComparisonPresentation";
+import { withReturnTo } from "@/shared/navigation/returnTo";
+import { useCurrentLocationPath } from "@/shared/navigation/useCurrentLocationPath";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
+import { RankBadge, RankTrail } from "@/shared/ui/rank/RankBadge";
 
 export function HeldEventHistoryTable({ rows }: { rows: RankEventRow[] }) {
   const sortedRows = useMemo(() => rows.toSorted(compareEventRowDesc), [rows]);
@@ -33,7 +36,7 @@ export function HeldEventHistoryTable({ rows }: { rows: RankEventRow[] }) {
       <table className="w-full min-w-[62rem] border-separate border-spacing-0 text-sm">
         <thead>
           <tr>
-            <DrilldownTableHeader className="sticky left-0 z-[calc(var(--z-sticky)+1)]">
+            <DrilldownTableHeader className="sticky left-0 z-[var(--z-sticky-raised)]">
               開催
             </DrilldownTableHeader>
             <DrilldownTableHeader align="right">試合数</DrilldownTableHeader>
@@ -58,7 +61,10 @@ export function HeldEventHistoryTable({ rows }: { rows: RankEventRow[] }) {
               </DrilldownStickyCell>
               <DrilldownTableCell align="right">{row.matchCount}戦</DrilldownTableCell>
               <DrilldownTableCell>
-                {(row.ranks ?? []).map((rank) => `${rank}位`).join(" → ")}
+                <RankTrail
+                  ariaLabel={(row.ranks ?? []).map((rank) => `${rank}位`).join("、")}
+                  ranks={row.ranks ?? []}
+                />
               </DrilldownTableCell>
               <DrilldownTableCell align="right">
                 {formatDecimal(row.eventAverageRank)}
@@ -84,6 +90,7 @@ export function HeldEventHistoryTable({ rows }: { rows: RankEventRow[] }) {
 }
 
 export function MatchHistoryTable({ rows }: { rows: RankMatchRow[] }) {
+  const returnTo = useCurrentLocationPath();
   const sortedRows = useMemo(() => rows.toSorted(compareMatchRowDesc), [rows]);
   if (rows.length === 0) {
     return <EmptyState title="試合ごとの履歴がありません" description="対象試合がありません。" />;
@@ -93,7 +100,7 @@ export function MatchHistoryTable({ rows }: { rows: RankMatchRow[] }) {
       <table className="w-full min-w-[64rem] border-separate border-spacing-0 text-sm">
         <thead>
           <tr>
-            <DrilldownTableHeader className="sticky left-0 z-[calc(var(--z-sticky)+1)]">
+            <DrilldownTableHeader className="sticky left-0 z-[var(--z-sticky-raised)]">
               対戦順
             </DrilldownTableHeader>
             <DrilldownTableHeader>開催</DrilldownTableHeader>
@@ -112,7 +119,7 @@ export function MatchHistoryTable({ rows }: { rows: RankMatchRow[] }) {
                 <Link
                   aria-label={`${row.matchIndex}戦目の試合結果を見る`}
                   className="inline-flex min-h-11 items-center font-semibold text-[var(--color-action)] tabular-nums underline-offset-4 hover:underline"
-                  to={`/matches/${encodeURIComponent(row.matchId)}`}
+                  to={withReturnTo(`/matches/${encodeURIComponent(row.matchId)}`, returnTo)}
                 >
                   {row.matchIndex}戦目
                 </Link>
@@ -124,7 +131,9 @@ export function MatchHistoryTable({ rows }: { rows: RankMatchRow[] }) {
                 </span>
               </DrilldownTableCell>
               <DrilldownTableCell align="right">第{row.matchNoInEvent}試合</DrilldownTableCell>
-              <DrilldownTableCell align="right">{row.rank}位</DrilldownTableCell>
+              <DrilldownTableCell align="right">
+                <RankBadge rank={row.rank} />
+              </DrilldownTableCell>
               <DrilldownTableCell align="right">
                 {isNumber(row.previousRank) ? `${row.previousRank}位` : "初戦"}
               </DrilldownTableCell>

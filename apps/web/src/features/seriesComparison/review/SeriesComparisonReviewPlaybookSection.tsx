@@ -1,4 +1,4 @@
-import { ArrowRight, ChevronDown, CircleHelp } from "lucide-react";
+import { ArrowRight, CircleHelp } from "lucide-react";
 
 import { playerColor } from "@/features/seriesComparison/charts/SeriesComparisonPlayerVisuals";
 import type { Player } from "@/features/seriesComparison/model/seriesComparisonPresentation";
@@ -15,11 +15,7 @@ import type {
 } from "@/features/seriesComparison/review/SeriesComparisonReviewTypes";
 import type { SeriesComparisonReviewResponse } from "@/shared/api/seriesComparison";
 import { Button } from "@/shared/ui/actions/Button";
-import {
-  CollapsiblePanel,
-  CollapsibleRoot,
-  CollapsibleTrigger,
-} from "@/shared/ui/data/Collapsible";
+import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { Dialog } from "@/shared/ui/feedback/Dialog";
 
 export function ReviewPlaybookSection({
@@ -43,7 +39,7 @@ export function ReviewPlaybookSection({
           memberId: entry.memberId,
         }));
   return (
-    <section aria-label="次戦の行動仮説" className="grid min-w-0 gap-5" id="review-playbook">
+    <section aria-label="次戦の行動仮説" className="grid min-w-0 gap-4" id="review-playbook">
       <ReviewCommonPlaybookTopics topics={review.commonPlaybookTopics ?? []} />
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
         <p className="text-xs font-semibold text-[var(--color-text-secondary)]">プレーヤー別</p>
@@ -114,20 +110,16 @@ function ReviewPlayerPlaybook({
         </div>
       )}
       {secondaryCards.length > 0 ? (
-        <CollapsibleRoot className="min-w-0">
-          <CollapsibleTrigger className="group flex min-h-10 w-full items-center justify-between gap-2 border-t border-[var(--color-border)] px-1 pt-2 text-left text-xs font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-action)]">
-            ほかの仮説 {secondaryCards.length}件
-            <ChevronDown
-              aria-hidden="true"
-              className="size-4 shrink-0 transition-transform group-data-[panel-open]:rotate-180 motion-reduce:transition-none"
-            />
-          </CollapsibleTrigger>
-          <CollapsiblePanel className="grid gap-3 pt-3">
-            {secondaryCards.map((card) => (
-              <ReviewPlaybookCardView card={card} key={card.id} onViewChange={onViewChange} />
-            ))}
-          </CollapsiblePanel>
-        </CollapsibleRoot>
+        <Disclosure
+          className="min-w-0"
+          panelClassName="grid gap-3 pt-3"
+          summary={`ほかの仮説 ${secondaryCards.length}件`}
+          triggerClassName="border-t border-[var(--color-border)] px-1 pt-2 text-xs text-[var(--color-text-secondary)]"
+        >
+          {secondaryCards.map((card) => (
+            <ReviewPlaybookCardView card={card} key={card.id} onViewChange={onViewChange} />
+          ))}
+        </Disclosure>
       ) : null}
     </section>
   );
@@ -139,11 +131,11 @@ function ReviewCommonPlaybookTopics({ topics }: { topics: ReviewCommonPlaybookTo
   }
   const topicHeadings = topics.map((topic) => commonTopicHeading(topic.title));
   return (
-    <CollapsibleRoot className="min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)]">
-      <CollapsibleTrigger
-        aria-label="卓全体の共通論点"
-        className="group flex min-h-11 w-full min-w-0 items-center justify-between gap-3 rounded-[var(--radius-sm)] px-3 py-2.5 text-left hover:bg-[var(--color-surface-subtle)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-action)]"
-      >
+    <Disclosure
+      ariaLabel="卓全体の共通論点"
+      className="min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)]"
+      panelClassName="border-t border-[var(--color-border)] p-3"
+      summary={
         <span className="grid min-w-0 gap-0.5">
           <span className="text-[11px] font-semibold text-[var(--color-text-secondary)]">
             卓全体で意識すること
@@ -161,47 +153,42 @@ function ReviewCommonPlaybookTopics({ topics }: { topics: ReviewCommonPlaybookTo
             </span>
           ))}
         </span>
-        <ChevronDown
-          aria-hidden="true"
-          className="size-4 shrink-0 text-[var(--color-text-secondary)] transition-transform group-data-[panel-open]:rotate-180 motion-reduce:transition-none"
-        />
-      </CollapsibleTrigger>
-      <CollapsiblePanel className="border-t border-[var(--color-border)] p-3">
-        <div className="grid min-w-0 gap-2 lg:grid-cols-2">
-          {topics.map((topic) => (
-            <div
-              className="grid min-w-0 gap-2 rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-2.5"
-              key={topic.id}
-            >
-              <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                <span className="text-[11px] font-semibold text-[var(--color-text-secondary)]">
-                  {playbookCategoryLabel(topic.category)}
-                </span>
-                <span className="text-[11px] text-[var(--color-text-secondary)]">
-                  該当 {topic.affectedPlayerCount}人
-                </span>
-                <span className="text-[11px] text-[var(--color-text-secondary)]">
-                  信頼度 {playbookEvidenceStatusLabel(topic.status)}
-                </span>
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm leading-6 font-semibold text-balance text-[var(--color-text-primary)]">
-                  {topic.title}
-                </p>
-                <p className="mt-1 text-sm leading-6 text-pretty break-words text-[var(--color-text-primary)]">
-                  {topic.actionHint}
-                </p>
-                {(topic.memberDisplayNames ?? []).length > 0 ? (
-                  <p className="mt-1 text-xs leading-5 text-pretty text-[var(--color-text-secondary)]">
-                    対象: {(topic.memberDisplayNames ?? []).join("、")}
-                  </p>
-                ) : null}
-              </div>
+      }
+    >
+      <div className="grid min-w-0 gap-2 lg:grid-cols-2">
+        {topics.map((topic) => (
+          <div
+            className="grid min-w-0 gap-2 rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3"
+            key={topic.id}
+          >
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="text-[11px] font-semibold text-[var(--color-text-secondary)]">
+                {playbookCategoryLabel(topic.category)}
+              </span>
+              <span className="text-[11px] text-[var(--color-text-secondary)]">
+                該当 {topic.affectedPlayerCount}人
+              </span>
+              <span className="text-[11px] text-[var(--color-text-secondary)]">
+                信頼度 {playbookEvidenceStatusLabel(topic.status)}
+              </span>
             </div>
-          ))}
-        </div>
-      </CollapsiblePanel>
-    </CollapsibleRoot>
+            <div className="min-w-0">
+              <p className="text-sm leading-6 font-semibold text-balance text-[var(--color-text-primary)]">
+                {topic.title}
+              </p>
+              <p className="mt-1 text-sm leading-6 text-pretty break-words text-[var(--color-text-primary)]">
+                {topic.actionHint}
+              </p>
+              {(topic.memberDisplayNames ?? []).length > 0 ? (
+                <p className="mt-1 text-xs leading-5 text-pretty text-[var(--color-text-secondary)]">
+                  対象: {(topic.memberDisplayNames ?? []).join("、")}
+                </p>
+              ) : null}
+            </div>
+          </div>
+        ))}
+      </div>
+    </Disclosure>
   );
 }
 
@@ -226,7 +213,7 @@ function ReviewPlaybookGuide() {
         </Button>
       }
     >
-      <div className="grid min-w-0 gap-5">
+      <div className="grid min-w-0 gap-4">
         <section aria-labelledby="review-classification-guide">
           <h3
             className="text-sm font-semibold text-[var(--color-text-primary)]"

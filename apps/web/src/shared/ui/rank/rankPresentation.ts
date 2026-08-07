@@ -1,10 +1,9 @@
-import { isFiniteNumber } from "@/features/seriesComparison/charts/SeriesComparisonChartTypes";
-
 export function rankColor(rank: number): string {
   if (rank === 1) return "var(--color-rank-1)";
   if (rank === 2) return "var(--color-rank-2)";
   if (rank === 3) return "var(--color-rank-3)";
-  return "var(--color-rank-4)";
+  if (rank === 4) return "var(--color-rank-4)";
+  return "var(--color-text-muted)";
 }
 
 export function rankForegroundColor(rank: number): string {
@@ -29,7 +28,13 @@ export function rankAverageTone(
   minValue: number | undefined,
   maxValue: number | undefined,
 ): string {
-  if (!isFiniteNumber(minValue) || !isFiniteNumber(maxValue) || maxValue === minValue) {
+  if (
+    minValue === undefined ||
+    maxValue === undefined ||
+    !Number.isFinite(minValue) ||
+    !Number.isFinite(maxValue) ||
+    maxValue === minValue
+  ) {
     return colorMix("var(--color-tray-incident)", 0.1);
   }
   const ratio = (value - minValue) / (maxValue - minValue);

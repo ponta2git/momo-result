@@ -10,14 +10,14 @@ import type {
   RankDistributionBarEntry,
 } from "@/features/seriesComparison/charts/SeriesComparisonChartTypes";
 import { playerColor } from "@/features/seriesComparison/charts/SeriesComparisonPlayerVisuals";
-import { rankColor } from "@/features/seriesComparison/charts/SeriesComparisonRankColors";
 import { cn } from "@/shared/ui/cn";
+import { rankColor } from "@/shared/ui/rank/rankPresentation";
 
 function RankLegend() {
   return (
     <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-[var(--color-text-secondary)]">
       {[1, 2, 3, 4].map((rank) => (
-        <span className="inline-flex items-center gap-1.5" key={rank}>
+        <span className="inline-flex items-center gap-2" key={rank}>
           <span
             aria-hidden="true"
             className="size-2.5 rounded-full"

@@ -19,9 +19,9 @@ export function MomentumTransitionMatrices({
   players: Player[];
 }) {
   return (
-    <div className="grid gap-2">
+    <div className="grid w-full max-w-full min-w-0 gap-2">
       <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">順位遷移</h3>
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid w-full max-w-full min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-4">
         {players.map((player, index) => (
           <MomentumTransitionMatrix
             entry={entriesByMember.get(player.memberId)}
@@ -70,7 +70,7 @@ function MomentumTransitionMatrix({
           <div aria-hidden="true" />
           {[1, 2, 3, 4].map((rank) => (
             <div
-              className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-1.5 py-1 text-center text-[11px] font-semibold text-[var(--color-text-secondary)]"
+              className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-center text-[11px] font-semibold text-[var(--color-text-secondary)]"
               key={`next-${rank}`}
             >
               次{rank}位
@@ -98,7 +98,7 @@ function MomentumTransitionMatrixRow({
 }) {
   return (
     <div className="contents">
-      <div className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-1.5 py-1">
+      <div className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1">
         <div className="text-xs font-semibold text-[var(--color-text-primary)]">
           前{row.previousRank}位
         </div>
@@ -115,7 +115,7 @@ function MomentumTransitionMatrixRow({
           <div
             aria-label={`${row.previousRank}位から${nextRank}位 ${cell.count}件${isFocusedMatch ? " この試合に該当" : ""}`}
             className={cn(
-              "rounded-[var(--radius-xs)] border px-1.5 py-1 text-center tabular-nums",
+              "rounded-[var(--radius-xs)] border px-2 py-1 text-center tabular-nums",
               momentumTransitionCellClass(cell.count, cell.rate),
               isFocusedMatch &&
                 "momo-enter ring-2 ring-[var(--color-action)] ring-offset-1 ring-offset-[var(--color-surface-subtle)]",

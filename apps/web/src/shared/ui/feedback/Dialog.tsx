@@ -5,6 +5,7 @@ import { motion } from "motion/react";
 import type { ReactElement, ReactNode } from "react";
 import { useState } from "react";
 
+import { buttonClassName } from "@/shared/ui/actions/Button";
 import { IconButton } from "@/shared/ui/actions/IconButton";
 import { cn } from "@/shared/ui/cn";
 import { momoPanelTransition, panelRevealVariants } from "@/shared/ui/motion/variants";
@@ -32,10 +33,19 @@ type AlertDialogProps = DialogBaseProps & {
   closeOnSuccess?: boolean | undefined;
   confirmDisabled?: boolean | undefined;
   confirmLabel?: ReactNode | undefined;
+  formatError?: ((error: unknown) => string) | undefined;
   onConfirm: () => Promise<void> | void;
   pending?: boolean | undefined;
+  tone?: "danger" | "primary" | undefined;
   trigger?: ReactElement | undefined;
 };
+
+function defaultAlertErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+  return "操作を完了できませんでした。時間をおいて、もう一度お試しください。";
+}
 
 function DialogContentFrame({
   children,
@@ -86,10 +96,12 @@ export function Dialog({
   title,
   trigger,
 }: DialogProps) {
+  const canDismiss = dismissible && !busy;
+
   return (
     <BaseDialog.Root
       onOpenChange={(nextOpen, eventDetails) => {
-        if (!dismissible && !nextOpen) {
+        if (!canDismiss && !nextOpen) {
           eventDetails.cancel();
           return;
         }
@@ -107,7 +119,7 @@ export function Dialog({
         />
         <BaseDialog.Popup
           className={cn(
-            "fixed inset-0 z-[var(--z-dialog)] mx-auto flex w-full max-w-[40rem] items-center justify-center overflow-y-auto p-4",
+            "momo-dialog-popup fixed inset-0 z-[var(--z-dialog)] mx-auto flex w-full max-w-[40rem] items-center justify-center overflow-y-auto",
             popupClassName,
           )}
           initialFocus={true}
@@ -116,7 +128,7 @@ export function Dialog({
             aria-busy={busy || undefined}
             animate="visible"
             className={cn(
-              "max-h-[calc(100dvh-2rem)] w-full overflow-y-auto rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] shadow-lg",
+              "momo-dialog-surface w-full overflow-y-auto rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] shadow-[var(--shadow-dialog)]",
               surfaceClassName,
             )}
             initial="hidden"
@@ -126,7 +138,7 @@ export function Dialog({
             <DialogContentFrame
               className={className}
               description={description}
-              dismissible={dismissible}
+              dismissible={canDismiss}
               title={title}
             >
               {children}
@@ -146,47 +158,65 @@ export function AlertDialog({
   confirmDisabled = false,
   confirmLabel = "実行",
   description,
+  formatError = defaultAlertErrorMessage,
   onConfirm,
   onOpenChange,
   open,
   pending = false,
+  tone = "danger",
   title,
   trigger,
 }: AlertDialogProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const [internalPending, setInternalPending] = useState(false);
+  const [internalError, setInternalError] = useState("");
   const controlled = open !== undefined;
   const actualOpen = controlled ? open : internalOpen;
   const actualPending = pending || internalPending;
   const setOpen = (nextOpen: boolean) => {
+    if (!nextOpen && actualPending) {
+      return;
+    }
+    setInternalError("");
     if (!controlled) {
       setInternalOpen(nextOpen);
     }
     onOpenChange?.(nextOpen);
   };
   const handleConfirm = async () => {
+    setInternalError("");
     setInternalPending(true);
     try {
       await onConfirm();
       if (closeOnSuccess) {
         setOpen(false);
       }
-    } catch {
-      // Keep the dialog open. Callers surface operation errors in their own UI.
+    } catch (error) {
+      setInternalError(formatError(error));
     } finally {
       setInternalPending(false);
     }
   };
 
   return (
-    <BaseAlertDialog.Root onOpenChange={setOpen} open={actualOpen}>
+    <BaseAlertDialog.Root
+      open={actualOpen}
+      onOpenChange={(nextOpen, eventDetails) => {
+        if (!nextOpen && actualPending) {
+          eventDetails.cancel();
+          return;
+        }
+        setOpen(nextOpen);
+      }}
+    >
       {trigger ? <BaseAlertDialog.Trigger render={trigger} /> : null}
       <BaseAlertDialog.Portal>
         <BaseAlertDialog.Backdrop className="fixed inset-0 z-[var(--z-dialog)] bg-[var(--momo-night-900)]/35" />
-        <BaseAlertDialog.Popup className="fixed inset-0 z-[var(--z-dialog)] mx-auto flex w-full max-w-[40rem] items-center justify-center overflow-y-auto p-4">
+        <BaseAlertDialog.Popup className="momo-dialog-popup fixed inset-0 z-[var(--z-dialog)] mx-auto flex w-full max-w-[40rem] items-center justify-center overflow-y-auto">
           <motion.div
+            aria-busy={actualPending || undefined}
             animate="visible"
-            className="max-h-[calc(100dvh-2rem)] w-full overflow-y-auto rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] shadow-lg"
+            className="momo-dialog-surface w-full overflow-y-auto rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] shadow-[var(--shadow-dialog)]"
             initial="hidden"
             transition={momoPanelTransition}
             variants={panelRevealVariants}
@@ -201,12 +231,20 @@ export function AlertDialog({
                 </BaseAlertDialog.Description>
               ) : null}
               <div className={cn("min-w-0", className)}>{children}</div>
+              {internalError ? (
+                <p
+                  className="rounded-[var(--radius-sm)] border border-[var(--color-danger)]/50 bg-[var(--color-danger)]/8 px-3 py-2 text-sm font-medium text-[var(--color-danger)]"
+                  role="alert"
+                >
+                  {internalError}
+                </p>
+              ) : null}
               <div className="flex flex-wrap justify-end gap-2">
                 <BaseAlertDialog.Close
                   render={
                     <button
                       aria-label={typeof cancelLabel === "string" ? cancelLabel : "キャンセル"}
-                      className="inline-flex min-h-10 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-sm font-semibold text-[var(--color-text-primary)]"
+                      className={buttonClassName({ variant: "secondary" })}
                       disabled={actualPending}
                       type="button"
                     />
@@ -216,7 +254,7 @@ export function AlertDialog({
                 </BaseAlertDialog.Close>
                 <button
                   aria-busy={actualPending}
-                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-danger)] bg-[var(--color-danger)] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                  className={buttonClassName({ variant: tone === "danger" ? "danger" : "primary" })}
                   disabled={actualPending || confirmDisabled}
                   type="button"
                   onClick={handleConfirm}

@@ -4,11 +4,11 @@ import type {
 } from "@/features/seriesComparison/charts/SeriesComparisonChartTypes";
 import { isFiniteNumber } from "@/features/seriesComparison/charts/SeriesComparisonChartTypes";
 import { playerColor } from "@/features/seriesComparison/charts/SeriesComparisonPlayerVisuals";
-import { colorMix } from "@/features/seriesComparison/charts/SeriesComparisonRankColors";
 import {
   formatPercent,
   formatSigned,
 } from "@/features/seriesComparison/model/seriesComparisonPresentation";
+import { colorMix } from "@/shared/ui/rank/rankPresentation";
 
 export function HeadToHeadMatrix({
   entries,
@@ -33,7 +33,7 @@ export function HeadToHeadMatrix({
         {players.map((player) => (
           <div
             key={player.memberId}
-            className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-1.5 text-center text-xs font-semibold break-words text-[var(--color-text-primary)]"
+            className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-2 text-center text-xs font-semibold break-words text-[var(--color-text-primary)]"
           >
             vs {player.displayName}
           </div>

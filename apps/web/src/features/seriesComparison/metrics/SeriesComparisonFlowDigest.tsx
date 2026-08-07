@@ -19,7 +19,10 @@ import {
   timelineFlagLabel,
 } from "@/features/seriesComparison/model/seriesComparisonViewModel";
 import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
+import { withReturnTo } from "@/shared/navigation/returnTo";
+import { useCurrentLocationPath } from "@/shared/navigation/useCurrentLocationPath";
 import { cn } from "@/shared/ui/cn";
+import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { Notice } from "@/shared/ui/feedback/Notice";
 
 export function MatchDigestMetrics({
@@ -48,6 +51,7 @@ function MatchResultStrip({
   focusMatchId?: string | undefined;
   response: SeriesComparisonResponse;
 }) {
+  const returnTo = useCurrentLocationPath();
   const names = playerNameMap(response.players ?? []);
   const timeline = response.matchTimeline ?? [];
   const flagOrder = ["close_finish", "asset_blowout", "ginji_storm", "revenue_top_no_win"];
@@ -68,7 +72,7 @@ function MatchResultStrip({
         {flagOrder.map((flag) => (
           <div
             key={flag}
-            className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2.5 py-2"
+            className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-2"
           >
             <p className="text-xs text-[var(--color-text-secondary)]">{timelineFlagLabel(flag)}</p>
             <p className="mt-0.5 text-sm font-semibold text-[var(--color-text-primary)] tabular-nums">
@@ -88,7 +92,7 @@ function MatchResultStrip({
               <article
                 key={point.matchId}
                 className={cn(
-                  "w-44 shrink-0 rounded-[var(--radius-sm)] border bg-[var(--color-surface-subtle)] p-2.5",
+                  "w-44 shrink-0 rounded-[var(--radius-sm)] border bg-[var(--color-surface-subtle)] p-3",
                   point.matchId === focusMatchId
                     ? "momo-enter border-[var(--color-action)] ring-2 ring-[var(--color-action)]/25"
                     : "border-[var(--color-border)]",
@@ -135,7 +139,7 @@ function MatchResultStrip({
                   {(point.flags ?? []).map((flag) => (
                     <span
                       key={flag}
-                      className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-1.5 py-0.5 text-[11px] font-medium text-[var(--color-text-secondary)]"
+                      className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-text-secondary)]"
                     >
                       {timelineFlagLabel(flag)}
                     </span>
@@ -144,7 +148,7 @@ function MatchResultStrip({
                 <Link
                   aria-label={`${point.matchIndex}戦目の試合結果を見る`}
                   className="mt-2 inline-flex min-h-11 items-center gap-1 text-xs font-semibold text-[var(--color-action)] underline-offset-4 hover:underline"
-                  to={`/matches/${encodeURIComponent(point.matchId)}`}
+                  to={withReturnTo(`/matches/${encodeURIComponent(point.matchId)}`, returnTo)}
                 >
                   試合結果を見る
                   <ArrowUpRight aria-hidden="true" className="size-3.5" />
@@ -181,14 +185,13 @@ export function MatchNoInEventMetrics({ response }: { response: SeriesComparison
     >
       <MatchNoTable breakdown={primaryBreakdown} players={players} />
       {extraBreakdown.length > 0 ? (
-        <details className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
-          <summary className="cursor-pointer text-sm font-semibold text-[var(--color-text-primary)]">
-            第5試合以降を表示
-          </summary>
-          <div className="mt-3">
-            <MatchNoTable breakdown={extraBreakdown} players={players} />
-          </div>
-        </details>
+        <Disclosure
+          className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)]"
+          panelClassName="border-t border-[var(--color-border)] p-3"
+          summary="第5試合以降"
+        >
+          <MatchNoTable breakdown={extraBreakdown} players={players} />
+        </Disclosure>
       ) : null}
     </MetricSection>
   );
@@ -213,7 +216,7 @@ function MatchNoTable({
         {players.map((player, index) => (
           <div
             key={player.memberId}
-            className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-1.5 text-center text-xs font-semibold break-words text-[var(--color-text-primary)]"
+            className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-2 text-center text-xs font-semibold break-words text-[var(--color-text-primary)]"
             style={{ borderTopColor: playerColor(index), borderTopWidth: 3 }}
           >
             {player.displayName}

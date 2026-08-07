@@ -1,6 +1,8 @@
 import type { MatchPerformanceContextRow } from "@/shared/domain/matchPerformanceContext";
 import { formatManYen } from "@/shared/lib/formatters";
 import { cn } from "@/shared/ui/cn";
+import { RankBadge } from "@/shared/ui/rank/RankBadge";
+import { colorMix, rankColor } from "@/shared/ui/rank/rankPresentation";
 
 export type MatchResultLedgerRow = MatchPerformanceContextRow & {
   displayName: string;
@@ -30,22 +32,11 @@ export function MatchResultLedger({
       {rows.map((row) => (
         <li
           key={row.memberId}
-          className={cn(
-            "grid min-w-0 gap-3 border-b border-[var(--color-border)] p-3 last:border-b-0 sm:grid-cols-[4rem_minmax(9rem,16rem)_minmax(10rem,12rem)] sm:items-center sm:justify-center",
-            row.rank === 1 ? "bg-[var(--color-warning)]/14" : "bg-[var(--color-surface)]",
-          )}
+          className="grid min-w-0 gap-3 border-b border-[var(--color-border)] p-3 last:border-b-0 sm:grid-cols-[4rem_minmax(9rem,16rem)_minmax(10rem,12rem)] sm:items-center sm:justify-center"
+          style={{ backgroundColor: colorMix(rankColor(row.rank), 0.05) }}
         >
           <div className="flex items-center gap-3 sm:block">
-            <span
-              className={cn(
-                "inline-flex min-h-10 min-w-14 items-center justify-center rounded-[var(--radius-sm)] border px-2 text-lg font-semibold tabular-nums",
-                row.rank === 1
-                  ? "border-[var(--color-warning)]/75 bg-[var(--color-warning)]/24"
-                  : "border-[var(--color-border)] bg-[var(--color-surface-subtle)]",
-              )}
-            >
-              {row.rank}位
-            </span>
+            <RankBadge rank={row.rank} size="md" />
             <span className="font-semibold text-[var(--color-text-primary)] sm:hidden">
               {row.displayName}
             </span>
@@ -120,7 +111,7 @@ function AverageRankChange({
       </strong>
       <span
         className={cn(
-          "rounded-[var(--radius-xs)] border px-1.5 py-0.5 font-semibold",
+          "rounded-[var(--radius-xs)] border px-2 py-0.5 font-semibold",
           trendTone(row.trend),
         )}
       >

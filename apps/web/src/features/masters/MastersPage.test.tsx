@@ -3,7 +3,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { masterQueryKeys } from "@/features/masters/masterQueries";
@@ -22,6 +22,11 @@ import { createTestQueryClient } from "@/test/queryClient";
 
 setupMsw();
 
+function LocationProbe() {
+  const location = useLocation();
+  return <output aria-label="current location">{`${location.pathname}${location.search}`}</output>;
+}
+
 let queryClient: QueryClient;
 let user: ReturnType<typeof userEvent.setup>;
 
@@ -30,6 +35,7 @@ function renderPage(entry = "/admin/masters") {
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[entry]}>
         <MastersPage />
+        <LocationProbe />
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -80,6 +86,32 @@ describe("MastersPage", () => {
       expect(screen.queryByLabelText("マップを読み込み中")).not.toBeInTheDocument(),
     );
     expect(screen.queryByLabelText("シーズンを読み込み中")).not.toBeInTheDocument();
+  });
+
+  it("keeps a scoped master failure out of the empty state and retries locally", async () => {
+    setDevUser();
+    let attempts = 0;
+    let shouldFail = true;
+    server.use(
+      http.get("/api/map-masters", () => {
+        attempts += 1;
+        return shouldFail
+          ? HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 })
+          : HttpResponse.json({ items: [] });
+      }),
+    );
+
+    renderPage();
+
+    expect(await screen.findByText("マップを読み込めません")).toBeInTheDocument();
+    shouldFail = false;
+    await user.click(screen.getByRole("button", { name: "マップを再読み込み" }));
+
+    await waitFor(() =>
+      expect(screen.queryByText("マップを読み込めません")).not.toBeInTheDocument(),
+    );
+    expect(screen.getAllByText("登録はまだありません").length).toBeGreaterThan(0);
+    expect(attempts).toBeGreaterThanOrEqual(2);
   });
 
   it("creates a new game title and selects it", async () => {
@@ -157,6 +189,24 @@ describe("MastersPage", () => {
     expect(screen.getByText("カード駅")).toBeInTheDocument();
     expect(screen.getByText("カード売り場")).toBeInTheDocument();
     expect(screen.getByText("スリの銀次")).toBeInTheDocument();
+  });
+
+  it("restores the selected tab from the URL and preserves return context", async () => {
+    setDevUser();
+    renderPage("/admin/masters?tab=aliases&returnTo=%2Fmatches%3Fpage%3D2");
+
+    expect(await screen.findByRole("heading", { name: "プレーヤー名の別名" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "メンバー名寄せ" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+
+    await user.click(screen.getByRole("tab", { name: "事件簿" }));
+    await waitFor(() =>
+      expect(screen.getByLabelText("current location")).toHaveTextContent(
+        "/admin/masters?tab=incidents&returnTo=%2Fmatches%3Fpage%3D2",
+      ),
+    );
   });
 
   it("updates a game title from the admin controls", async () => {

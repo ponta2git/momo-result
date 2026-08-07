@@ -14,6 +14,7 @@ import {
   confirmedDraftDestination,
   confirmedDraftMessages,
 } from "@/features/matches/confirmedDraftNavigation";
+import { addMatchListReturnTo } from "@/features/matches/list/matchListNavigation";
 import {
   buildMatchListApiQuery,
   buildMatchListSummaryQuery,
@@ -41,6 +42,7 @@ import {
   matchListSummaryQueryOptions,
   seasonMastersQueryOptions,
 } from "@/shared/api/queryOptions";
+import { sanitizeReturnTo, withReturnTo } from "@/shared/navigation/returnTo";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
 export function useMatchesListPageController() {
@@ -48,6 +50,8 @@ export function useMatchesListPageController() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const rawSearchSignature = searchParams.toString();
+  const parentReturnTo = sanitizeReturnTo(searchParams.get("returnTo"));
+  const listReturnTo = `/matches${rawSearchSignature ? `?${rawSearchSignature}` : ""}`;
   const search = useMemo(
     () => parseMatchListSearchParams(new URLSearchParams(rawSearchSignature)),
     [rawSearchSignature],
@@ -64,17 +68,21 @@ export function useMatchesListPageController() {
     (nextSearch: MatchListSearch) => {
       setOptimisticSearch(nextSearch);
       startFilterTransition(() => {
-        setSearchParams(buildMatchListSearchParams(nextSearch));
+        const nextParams = buildMatchListSearchParams(nextSearch);
+        if (parentReturnTo) nextParams.set("returnTo", parentReturnTo);
+        setSearchParams(nextParams);
       });
     },
-    [setSearchParams, startFilterTransition],
+    [parentReturnTo, setSearchParams, startFilterTransition],
   );
   const clearSearch = useCallback(() => {
     setOptimisticSearch(defaultMatchListSearch);
     startFilterTransition(() => {
-      setSearchParams(new URLSearchParams());
+      const nextParams = new URLSearchParams();
+      if (parentReturnTo) nextParams.set("returnTo", parentReturnTo);
+      setSearchParams(nextParams);
     });
-  }, [setSearchParams, startFilterTransition]);
+  }, [parentReturnTo, setSearchParams, startFilterTransition]);
 
   const heldEventsQuery = useQuery(heldEventsQueryOptions("", 100, "matches-list"));
   const gameTitlesQuery = useQuery(gameTitlesQueryOptions("matches-list"));
@@ -95,8 +103,10 @@ export function useMatchesListPageController() {
   }, [gameTitlesQuery.data, heldEventsQuery.data, mapsQuery.data, seasonsQuery.data]);
 
   const items = useMemo(() => {
-    return toMatchListItemViews(matchesQuery.data?.items ?? [], lookupMaps);
-  }, [lookupMaps, matchesQuery.data]);
+    return toMatchListItemViews(matchesQuery.data?.items ?? [], lookupMaps).map((item) =>
+      addMatchListReturnTo(item, listReturnTo),
+    );
+  }, [listReturnTo, lookupMaps, matchesQuery.data]);
 
   const summaryCounts = matchesSummaryQuery.data ?? {
     incompleteCount: 0,
@@ -184,7 +194,14 @@ export function useMatchesListPageController() {
     }
     setIsManualRefreshing(true);
     try {
-      await Promise.all([matchesQuery.refetch(), matchesSummaryQuery.refetch()]);
+      await Promise.all([
+        matchesQuery.refetch(),
+        matchesSummaryQuery.refetch(),
+        heldEventsQuery.refetch(),
+        gameTitlesQuery.refetch(),
+        seasonsQuery.refetch(),
+        mapsQuery.refetch(),
+      ]);
     } finally {
       setIsManualRefreshing(false);
     }
@@ -218,7 +235,7 @@ export function useMatchesListPageController() {
       if (destination) {
         void invalidateAfterMatchConfirmed(queryClient);
         showToast({ title: confirmedDraftMessages.listRedirect, tone: "warning" });
-        navigate(destination.path);
+        navigate(withReturnTo(destination.path, listReturnTo));
         return;
       }
 
@@ -245,6 +262,12 @@ export function useMatchesListPageController() {
       shouldShowBlockingQueryError(seasonsQuery) ||
       shouldShowBlockingQueryError(mapsQuery),
     pagination,
+    navigation: {
+      backHref: parentReturnTo,
+      exportHref: withReturnTo("/exports", listReturnTo),
+      manualCreateHref: withReturnTo("/matches/new", listReturnTo),
+      ocrHref: withReturnTo("/ocr/new", listReturnTo),
+    },
     refresh: handleManualRefresh,
     search: activeSearch,
     seasons: seasonsQuery.data?.items ?? [],

@@ -8,13 +8,13 @@ export const momoTransition = {
 } satisfies Transition;
 
 export const momoPanelTransition = {
-  duration: 0.24,
+  duration: 0.2,
   ease: momoEaseOut,
 } satisfies Transition;
 
 export const momoSpring = {
   bounce: 0,
-  duration: 0.26,
+  duration: 0.2,
   type: "spring",
 } satisfies Transition;
 

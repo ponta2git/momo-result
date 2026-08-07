@@ -1,11 +1,11 @@
 import { RefreshCw, ShieldAlert, Table2 } from "lucide-react";
-import { useState } from "react";
 
 import {
   LineChart,
   PlayOrderHeatmap,
 } from "@/features/seriesComparison/charts/SeriesComparisonCharts";
 import { PlayOrderRankHistoryDrilldownDialog } from "@/features/seriesComparison/drilldowns/SeriesComparisonPlayOrderDrilldown";
+import { useSeriesComparisonDrilldownUrlState } from "@/features/seriesComparison/drilldowns/useSeriesComparisonDrilldownUrlState";
 import {
   MetricRow,
   PlayerMetricGrid,
@@ -28,17 +28,22 @@ import { Button } from "@/shared/ui/actions/Button";
 export function PlayOrderMetrics({ response }: { response: SeriesComparisonResponse }) {
   const players = response.players ?? [];
   const metricsByMember = metricsMap(response);
-  const [drilldownMemberId, setDrilldownMemberId] = useState<string | null>(null);
+  const drilldown = useSeriesComparisonDrilldownUrlState({
+    defaultView: "trendData",
+    isView: (value): value is "breakdown" | "trendData" =>
+      value === "breakdown" || value === "trendData",
+    kind: "playOrder",
+  });
   return (
     <MetricSection
       action={
         <Button
-          className="min-h-8 px-2.5 py-1 text-xs"
+          className="text-xs"
           disabled={players.length === 0}
           icon={<Table2 className="size-3.5" />}
           size="sm"
           variant="secondary"
-          onClick={() => setDrilldownMemberId(players[0]?.memberId ?? null)}
+          onClick={() => drilldown.open(players[0]?.memberId)}
         >
           履歴
         </Button>
@@ -56,15 +61,15 @@ export function PlayOrderMetrics({ response }: { response: SeriesComparisonRespo
         {(_, metrics) => <PlayOrderSignalRows metrics={metrics} />}
       </PlayerMetricGrid>
       <PlayOrderRankHistoryDrilldownDialog
-        open={drilldownMemberId !== null}
+        open={drilldown.selectedMemberId !== null}
         response={response}
-        selectedMemberId={drilldownMemberId}
-        onMemberChange={setDrilldownMemberId}
+        selectedMemberId={drilldown.selectedMemberId}
+        tableView={drilldown.view}
+        onMemberChange={drilldown.setMemberId}
         onOpenChange={(open) => {
-          if (!open) {
-            setDrilldownMemberId(null);
-          }
+          if (!open) drilldown.close();
         }}
+        onTableViewChange={drilldown.setView}
       />
     </MetricSection>
   );
@@ -94,7 +99,7 @@ function PlayOrderValue({
   item: NonNullable<PlayerMetrics["playOrder"]["breakdown"]>[number];
 }) {
   return (
-    <span className="inline-flex flex-wrap justify-end gap-x-1.5 gap-y-0.5">
+    <span className="inline-flex flex-wrap justify-end gap-x-2 gap-y-0.5">
       <span className="inline-flex items-center gap-1">
         <span
           aria-hidden="true"

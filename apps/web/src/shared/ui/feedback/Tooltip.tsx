@@ -20,7 +20,7 @@ export function Tooltip({ children, className, content, delay = 250, side = "top
           <BaseTooltip.Positioner className="z-[var(--z-tooltip)]" side={side} sideOffset={8}>
             <BaseTooltip.Popup
               className={cn(
-                "max-w-[22rem] rounded-[var(--radius-sm)] border border-[var(--color-border-strong)] bg-[var(--momo-night-900)] px-2.5 py-1.5 text-xs leading-5 text-white shadow-sm",
+                "max-w-[22rem] rounded-[var(--radius-sm)] border border-[var(--color-border-strong)] bg-[var(--momo-night-900)] px-3 py-2 text-xs leading-5 text-white shadow-[var(--shadow-raised)]",
                 className,
               )}
             >

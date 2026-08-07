@@ -22,7 +22,7 @@ export function LoginPage() {
       <GlobalNav isAuthenticated={false} />
       <main id="main-content">
         <PageFrame className="px-3 py-4 sm:px-4 sm:py-6">
-          <section className="mx-auto w-full max-w-[34rem] space-y-4 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5 text-[var(--color-text-primary)]">
+          <section className="mx-auto w-full max-w-[34rem] space-y-4 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)]">
             <header>
               <h1 className="text-2xl font-semibold text-[var(--color-text-primary)]">ログイン</h1>
               <p className="momo-copy mt-2 text-sm text-[var(--color-text-secondary)]">

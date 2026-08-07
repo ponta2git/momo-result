@@ -5,6 +5,8 @@ import type { ReactNode } from "react";
 import type { InputSource } from "@/features/ocrCapture/captureState";
 import { validateImageFile } from "@/features/ocrCapture/captureState";
 import { Button } from "@/shared/ui/actions/Button";
+import { Disclosure } from "@/shared/ui/data/Collapsible";
+import { SelectField } from "@/shared/ui/forms/SelectField";
 
 type CameraCaptureProps = {
   disabled?: boolean;
@@ -21,6 +23,18 @@ function stopStream(stream: MediaStream | null) {
   for (const track of stream.getTracks()) {
     track.stop();
   }
+}
+
+function selectableVideoDevices(items: MediaDeviceInfo[]): MediaDeviceInfo[] {
+  const seenDeviceIds = new Set<string>();
+  return items.filter((item) => {
+    const deviceId = item.deviceId.trim();
+    if (item.kind !== "videoinput" || !deviceId || seenDeviceIds.has(deviceId)) {
+      return false;
+    }
+    seenDeviceIds.add(deviceId);
+    return true;
+  });
 }
 
 export function CameraCapture({
@@ -62,7 +76,7 @@ export function CameraCapture({
     void (async () => {
       try {
         const items = await navigator.mediaDevices.enumerateDevices();
-        setDevices(items.filter((item) => item.kind === "videoinput"));
+        setDevices(selectableVideoDevices(items));
       } catch {
         setDevices([]);
       }
@@ -105,7 +119,7 @@ export function CameraCapture({
       if (navigator.mediaDevices.enumerateDevices) {
         try {
           const items = await navigator.mediaDevices.enumerateDevices();
-          setDevices(items.filter((item) => item.kind === "videoinput"));
+          setDevices(selectableVideoDevices(items));
         } catch {
           setDevices([]);
         }
@@ -196,22 +210,20 @@ export function CameraCapture({
   return (
     <div className="space-y-3">
       {devices.length > 0 ? (
-        <label className="grid max-w-[28rem] gap-1 text-xs font-semibold text-[var(--color-text-secondary)]">
-          カメラ
-          <select
-            className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={disabled || active || starting}
-            value={deviceId}
-            onChange={(event) => setDeviceId(event.target.value)}
-          >
-            <option value="">ブラウザの既定カメラ</option>
-            {devices.map((device, index) => (
-              <option key={device.deviceId || index} value={device.deviceId}>
-                {device.label || `カメラ ${index + 1}`}
-              </option>
-            ))}
-          </select>
-        </label>
+        <SelectField
+          disabled={disabled || active || starting}
+          fieldClassName="max-w-[28rem]"
+          label="カメラ"
+          options={[
+            { label: "ブラウザの既定カメラ", value: "" },
+            ...devices.map((device, index) => ({
+              label: device.label || `カメラ ${index + 1}`,
+              value: device.deviceId,
+            })),
+          ]}
+          value={deviceId}
+          onChange={(event) => setDeviceId(event.currentTarget.value)}
+        />
       ) : null}
       <div className="relative max-w-[44rem] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--momo-night-900)]">
         {active ? null : (
@@ -270,14 +282,15 @@ export function CameraCapture({
         {disabled ? "現在は撮影できません。" : `撮影すると「${slotLabel}」へ配置します。`}
       </p>
       {!error && renderFallback ? (
-        <details className="group w-fit text-sm text-[var(--color-text-secondary)]">
-          <summary className="cursor-pointer rounded-[var(--radius-sm)] px-1 py-1 font-semibold hover:text-[var(--color-text-primary)]">
-            カメラが使えない場合
-          </summary>
-          <div className="mt-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-2">
-            {renderFallback(false)}
-          </div>
-        </details>
+        <Disclosure
+          className="w-full text-sm text-[var(--color-text-secondary)] sm:w-fit"
+          keepMounted
+          panelClassName="mt-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-2"
+          summary="カメラが使えない場合"
+          triggerClassName="w-full sm:w-auto"
+        >
+          {renderFallback(false)}
+        </Disclosure>
       ) : null}
     </div>
   );

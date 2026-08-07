@@ -40,10 +40,11 @@ describe("MatchesStatusRail", () => {
     expect(onSelectStatus).toHaveBeenCalledWith("ocr_running");
   });
 
-  it("keeps subfilters hidden until unfinished records are selected", () => {
+  it("keeps subfilters in a stable layout for direct access", () => {
     render(<MatchesStatusRail counts={counts} currentStatus="all" onSelectStatus={vi.fn()} />);
 
     expect(screen.getByRole("button", { name: "すべて" })).toBeDisabled();
-    expect(screen.queryByRole("group", { name: "未確定の内訳" })).not.toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "未確定の内訳" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /処理中3件/u })).toBeEnabled();
   });
 });

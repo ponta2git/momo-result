@@ -9,7 +9,11 @@ import type {
 } from "@/shared/api/adminAccounts";
 import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { formatApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
-import { isInitialQueryLoading, shouldShowQueryError } from "@/shared/api/queryErrorState";
+import {
+  isInitialQueryLoading,
+  shouldShowBlockingQueryError,
+  shouldShowQueryError,
+} from "@/shared/api/queryErrorState";
 import { adminLoginAccountsQueryOptions } from "@/shared/api/queryOptions";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 import { showToast } from "@/shared/ui/feedback/Toast";
@@ -66,16 +70,18 @@ export function useAdminAccountsPageController() {
     },
   });
 
-  const error =
-    updateMutation.error ?? (shouldShowQueryError(accountsQuery) ? accountsQuery.error : undefined);
+  const error = shouldShowQueryError(accountsQuery) ? accountsQuery.error : undefined;
   const normalizedError = error ? normalizeUnknownApiError(error) : undefined;
 
   return {
     accounts: accountsQuery.data?.items ?? [],
+    accountsError: normalizedError,
+    accountsLoadFailed: shouldShowBlockingQueryError(accountsQuery),
     accountsLoading: isInitialQueryLoading(accountsQuery),
+    accountsRefreshing: accountsQuery.isFetching,
     createAction,
     createState,
-    normalizedError,
+    retryAccounts: () => void accountsQuery.refetch(),
     updateMutation,
   };
 }

@@ -2,6 +2,7 @@ import { useCallback } from "react";
 
 import { formatMatchDetailDate } from "@/features/matches/matchDetailViewModel";
 import type { MatchDetailResponse } from "@/shared/api/matches";
+import { formatApiError } from "@/shared/api/problemDetails";
 import { memberDisplayName } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
@@ -32,7 +33,7 @@ export function MatchRecordMetadata({
 
   return (
     <Card className="grid gap-4">
-      {errorMessage ? (
+      {errorMessage && !showConfirm ? (
         <Notice tone="danger" title="削除に失敗しました">
           {errorMessage}
         </Notice>
@@ -47,6 +48,7 @@ export function MatchRecordMetadata({
         <AlertDialog
           cancelLabel="キャンセル"
           confirmLabel={isDeletePending ? "削除中…" : "削除する"}
+          formatError={(error) => formatApiError(error, "削除に失敗しました")}
           pending={isDeletePending}
           description={`第${match.matchNoInEvent}試合を完全に削除します。この操作は取り消せません。`}
           open={showConfirm}

@@ -7,6 +7,7 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { HeldEventsPage } from "@/features/heldEvents/HeldEventsPage";
+import { ToastHost } from "@/shared/ui/feedback/ToastHost";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { makeHeldEventResponse } from "@/test/factories";
@@ -33,6 +34,7 @@ function renderPage(path = "/held-events") {
           <Route element={<p>matches</p>} path="/matches" />
           <Route element={<p>exports</p>} path="/exports" />
         </Routes>
+        <ToastHost />
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -62,15 +64,15 @@ describe("HeldEventsPage", () => {
     expect(screen.queryByText("held-1")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /の開催詳細$/u })).toHaveAttribute(
       "href",
-      "/held-events/held-1",
+      "/held-events/held-1?returnTo=%2Fheld-events",
     );
     expect(screen.getByRole("link", { name: /の試合を検索$/u })).toHaveAttribute(
       "href",
-      "/matches?heldEventId=held-1",
+      "/matches?heldEventId=held-1&sort=match_no_asc&returnTo=%2Fheld-events",
     );
     expect(screen.getByRole("link", { name: /をCSV出力$/u })).toHaveAttribute(
       "href",
-      "/exports?heldEventId=held-1&format=csv",
+      "/exports?heldEventId=held-1&format=csv&returnTo=%2Fheld-events",
     );
   });
 
@@ -96,6 +98,28 @@ describe("HeldEventsPage", () => {
 
     expect(await screen.findByText("開催履歴はまだありません")).toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "ページネーション" })).not.toBeInTheDocument();
+  });
+
+  it("retries a failed held-event list without showing an empty state", async () => {
+    let attempts = 0;
+    server.use(
+      http.get("/api/held-events", () => {
+        attempts += 1;
+        return attempts === 1
+          ? HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 })
+          : HttpResponse.json({ items: [makeHeldEventResponse()] });
+      }),
+    );
+
+    renderPage();
+
+    expect(await screen.findByText("開催履歴を読み込めません")).toBeInTheDocument();
+    expect(screen.queryByText("開催履歴はまだありません")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "開催履歴を再読み込み" }));
+
+    expect(await screen.findByRole("link", { name: /の開催詳細$/u })).toBeInTheDocument();
+    expect(attempts).toBe(2);
   });
 
   it("corrects an out-of-range page before showing an empty-list state", async () => {
@@ -212,7 +236,10 @@ describe("HeldEventsPage", () => {
     renderPage();
 
     const firstPageLink = await screen.findByRole("link", { name: /の開催詳細$/u });
-    expect(firstPageLink).toHaveAttribute("href", "/held-events/held-page-1");
+    expect(firstPageLink).toHaveAttribute(
+      "href",
+      "/held-events/held-page-1?returnTo=%2Fheld-events",
+    );
     await user.click(screen.getByRole("button", { name: "次のページへ" }));
 
     await waitFor(() =>
@@ -220,7 +247,7 @@ describe("HeldEventsPage", () => {
     );
     expect(screen.getByRole("link", { name: /の開催詳細$/u })).toHaveAttribute(
       "href",
-      "/held-events/held-page-1",
+      "/held-events/held-page-1?returnTo=%2Fheld-events%3Fpage%3D2",
     );
     expect(screen.getByText("最新")).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "ページネーション" })).toBeInTheDocument();
@@ -231,7 +258,7 @@ describe("HeldEventsPage", () => {
     await waitFor(() =>
       expect(screen.getByRole("link", { name: /の開催詳細$/u })).toHaveAttribute(
         "href",
-        "/held-events/held-page-2",
+        "/held-events/held-page-2?returnTo=%2Fheld-events%3Fpage%3D2",
       ),
     );
     expect(screen.getByRole("region", { name: "開催履歴" })).not.toHaveAttribute("aria-busy");

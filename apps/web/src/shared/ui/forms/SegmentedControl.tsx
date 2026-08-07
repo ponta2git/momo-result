@@ -111,7 +111,7 @@ function SegmentedButton({
     <button
       aria-pressed={selected}
       className={cn(
-        "relative isolate min-h-9 min-w-[5ch] overflow-hidden rounded-[var(--radius-xs)] px-3 py-1.5 text-sm font-medium text-[var(--color-text-secondary)] transition-colors duration-150",
+        "relative isolate min-h-11 min-w-[5ch] overflow-hidden rounded-[var(--radius-xs)] px-3 py-2 text-sm font-medium text-[var(--color-text-secondary)] transition-colors duration-[var(--motion-fast)] motion-reduce:transition-none sm:min-h-9 sm:py-2",
         selected ? "text-[var(--color-text-primary)]" : "",
         "disabled:cursor-not-allowed disabled:opacity-50",
         className,
@@ -123,7 +123,7 @@ function SegmentedButton({
       {selected ? (
         <motion.span
           aria-hidden="true"
-          className="absolute inset-0 z-0 rounded-[var(--radius-xs)] bg-[var(--color-surface-selected)]"
+          className="absolute inset-0 z-[var(--z-base)] rounded-[var(--radius-xs)] bg-[var(--color-surface-selected)]"
           layoutId={indicatorId}
           transition={momoTransition}
         />

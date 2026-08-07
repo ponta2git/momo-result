@@ -1,3 +1,4 @@
+import { sanitizeReturnTo } from "@/shared/navigation/returnTo";
 import {
   browserSessionStorage,
   createMatchWorkspaceMasterHandoffPayload,
@@ -30,21 +31,7 @@ export type HandoffInspectResult =
   | { status: "invalid" }
   | { status: "missing" };
 
-export function sanitizeReturnTo(value: string | null | undefined): string | undefined {
-  if (!value || !value.startsWith("/") || value.startsWith("//")) {
-    return undefined;
-  }
-
-  try {
-    const parsed = new URL(value, "https://momo-result.local");
-    if (parsed.origin !== "https://momo-result.local") {
-      return undefined;
-    }
-    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
-  } catch {
-    return undefined;
-  }
-}
+export { sanitizeReturnTo } from "@/shared/navigation/returnTo";
 
 export function buildMasterRoute(returnTo: string, handoffId?: string): string {
   const params = new URLSearchParams();

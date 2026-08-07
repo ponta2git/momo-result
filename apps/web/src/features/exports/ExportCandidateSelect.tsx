@@ -43,7 +43,7 @@ export function ExportCandidateSelect({
       <div
         aria-busy="true"
         aria-label={`${labelForScope(scope)}候補を読み込み中`}
-        className="momo-enter grid gap-1.5"
+        className="momo-enter grid gap-2"
       >
         <p className="text-sm leading-5 font-semibold text-[var(--color-text-primary)]">
           {labelForScope(scope)}

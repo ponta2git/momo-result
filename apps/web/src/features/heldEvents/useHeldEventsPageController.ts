@@ -5,7 +5,6 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   currentLocalIsoMinute,
   emptyHeldEvents,
-  formatDateTime,
   heldEventPageSizeOptions,
   toIsoFromLocal,
 } from "@/features/heldEvents/heldEventViewModel";
@@ -18,6 +17,7 @@ import { heldEventKeys } from "@/shared/api/queryKeys";
 import { heldEventsQueryOptions } from "@/shared/api/queryOptions";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 import { parsePositiveIntSearchParam } from "@/shared/lib/searchParams";
+import { withReturnTo } from "@/shared/navigation/returnTo";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
 const initialCreateHeldEventState = { version: 0 };
@@ -28,6 +28,8 @@ export function useHeldEventsPageController() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const rawSearch = searchParams.toString();
+  const listReturnTo = `/held-events${rawSearch ? `?${rawSearch}` : ""}`;
   const paginationSearch = useMemo(() => {
     const pageSize = parsePositiveIntSearchParam(
       searchParams.get("pageSize"),
@@ -39,7 +41,6 @@ export function useHeldEventsPageController() {
     };
   }, [searchParams]);
   const [heldAtDraft, setHeldAtDraft] = useState(currentLocalIsoMinute);
-  const [notice, setNotice] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<HeldEventResponse | null>(null);
@@ -69,7 +70,6 @@ export function useHeldEventsPageController() {
     async (previous, formData) => {
       const heldAt = String(formData.get("heldAt") ?? "");
       if (!heldAt) {
-        setNotice("");
         setErrorMessage("開催日時を入力してください。");
         return previous;
       }
@@ -91,13 +91,11 @@ export function useHeldEventsPageController() {
         });
         setHeldAtDraft(currentLocalIsoMinute());
         setErrorMessage("");
-        setNotice(`開催履歴（${formatDateTime(event.heldAt)}）を作成しました。`);
         setCreateOpen(false);
         showToast({ title: "開催履歴を作成しました。", tone: "success" });
-        navigate(`/held-events/${encodeURIComponent(event.id)}`);
+        navigate(withReturnTo(`/held-events/${encodeURIComponent(event.id)}`, listReturnTo));
         return { version: previous.version + 1 };
       } catch (error) {
-        setNotice("");
         setErrorMessage(formatApiError(error, "開催履歴の作成に失敗しました"));
         return previous;
       }
@@ -111,11 +109,9 @@ export function useHeldEventsPageController() {
       await queryClient.invalidateQueries({ queryKey: heldEventKeys.all() });
       setDeleteTarget(null);
       setErrorMessage("");
-      setNotice("開催履歴を削除しました。");
       showToast({ title: "開催履歴を削除しました。", tone: "success" });
     },
     onError: (error) => {
-      setNotice("");
       setErrorMessage(formatApiError(error, "開催履歴の削除に失敗しました"));
     },
   });
@@ -145,7 +141,6 @@ export function useHeldEventsPageController() {
     setCreateOpen(open);
     if (open) {
       setErrorMessage("");
-      setNotice("");
     }
   }, []);
   const updatePage = useCallback(
@@ -185,7 +180,6 @@ export function useHeldEventsPageController() {
     },
     feedback: {
       errorMessage,
-      liveMessage: notice || errorMessage,
     },
     header: {
       openCreate: () => updateCreateOpen(true),
@@ -197,6 +191,7 @@ export function useHeldEventsPageController() {
         deletePending: deleteMutation.isPending,
         onPageChange: updatePage,
         onPageSizeChange: updatePageSize,
+        onRetry: refresh,
         onRequestDelete: setDeleteTarget,
       },
       data: {
@@ -205,6 +200,7 @@ export function useHeldEventsPageController() {
         page: pagination?.page ?? paginationSearch.page,
         pagination,
         refreshing: heldEventsQuery.isFetching,
+        returnTo: listReturnTo,
         rows,
       },
     },

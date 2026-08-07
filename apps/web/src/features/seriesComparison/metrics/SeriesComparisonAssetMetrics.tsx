@@ -175,7 +175,7 @@ function TagStack({ tags }: { tags: string[] }) {
   if (tags.length === 0) {
     return (
       <div className="flex min-h-12 items-start">
-        <span className="rounded-[var(--radius-xs)] border border-dashed border-[var(--color-border)] px-1.5 py-0.5 text-[11px] font-medium text-[var(--color-text-muted)]">
+        <span className="rounded-[var(--radius-xs)] border border-dashed border-[var(--color-border)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-text-muted)]">
           特徴タグなし
         </span>
       </div>
@@ -186,7 +186,7 @@ function TagStack({ tags }: { tags: string[] }) {
       {tags.map((tag) => (
         <span
           key={tag}
-          className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-1.5 py-0.5 text-[11px] font-medium text-[var(--color-text-secondary)]"
+          className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-text-secondary)]"
         >
           {assetStyleTagLabel(tag)}
         </span>
@@ -278,7 +278,7 @@ function StrategyAxisSummary({
       ? rate - revenueAssetRateMedian
       : undefined;
   return (
-    <div className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-1.5">
+    <div className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-2">
       <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
         <p className="text-[11px] font-medium text-[var(--color-text-secondary)]">稼ぎ方の比重</p>
         <p className="text-xs font-semibold text-[var(--color-text-primary)]">

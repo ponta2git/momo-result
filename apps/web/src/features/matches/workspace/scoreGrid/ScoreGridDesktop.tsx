@@ -9,11 +9,11 @@ import {
   keyToPath,
   memberSelectClass,
   playerSlotKey,
-  scoreGridColumns,
   selectShortClass,
   textNumericShortClass,
 } from "@/features/matches/workspace/scoreGrid/ScoreGridColumns";
 import type { GridColumn } from "@/features/matches/workspace/scoreGrid/ScoreGridColumns";
+import { ScoreGridDesktopHeader } from "@/features/matches/workspace/scoreGrid/ScoreGridDesktopHeader";
 import { PlayerNumericDesktopCell } from "@/features/matches/workspace/scoreGrid/ScoreGridDesktopNumericCell";
 import { ScoreGridNumericEditor } from "@/features/matches/workspace/scoreGrid/ScoreGridNumericEditor";
 import {
@@ -62,27 +62,7 @@ export function ScoreGridDesktopTable({
   const reviewedCellIds = new Set(review.acknowledgedCellIds);
   return (
     <table className="min-w-[64rem] table-fixed border-separate border-spacing-y-2 text-left text-sm">
-      <colgroup>
-        {scoreGridColumns.map((column) => (
-          <col key={column.column} className={column.widthClass} />
-        ))}
-      </colgroup>
-      <thead className="text-xs text-[var(--color-text-secondary)]">
-        <tr>
-          {scoreGridColumns.map((column) => (
-            <th
-              key={column.column}
-              className={
-                column.kind === "member"
-                  ? "sticky left-0 z-[var(--z-dropdown)] bg-[var(--color-surface)] px-2 py-2"
-                  : "px-2 py-2"
-              }
-            >
-              {column.header}
-            </th>
-          ))}
-        </tr>
-      </thead>
+      <ScoreGridDesktopHeader />
       <tbody>
         {players.map((player, rowIndex) => {
           const originalRow = originalPlayers?.[rowIndex];
@@ -91,6 +71,7 @@ export function ScoreGridDesktopTable({
           const memberReviewItem = reviewItemByCellId.get(memberCellId);
           const playOrderCellId = getCellId(rowIndex, 1);
           const playOrderReviewItem = reviewItemByCellId.get(playOrderCellId);
+          const playOrderError = errorPathSet.has(keyToPath(rowIndex, "playOrder"));
           return (
             <tr
               key={playerSlotKey(rowIndex)}
@@ -149,14 +130,17 @@ export function ScoreGridDesktopTable({
                 <select
                   ref={(node) => registerCellRef(playOrderCellId, node)}
                   aria-describedby={
-                    playOrderReviewItem ? `${playOrderCellId}-review-status` : undefined
+                    playOrderError || playOrderReviewItem
+                      ? `${playOrderCellId}-review-status`
+                      : undefined
                   }
+                  aria-invalid={playOrderError || undefined}
                   aria-label={`${memberDisplayName(player.memberId)} プレー順`}
                   className={cn(
                     selectShortClass,
                     selectCellTone({
                       changed: Boolean(originalRow && originalRow.playOrder !== player.playOrder),
-                      error: errorPathSet.has(keyToPath(rowIndex, "playOrder")),
+                      error: playOrderError,
                       reviewItem: playOrderReviewItem,
                       reviewed: reviewedCellIds.has(playOrderCellId),
                     }),
@@ -189,6 +173,7 @@ export function ScoreGridDesktopTable({
                 <ScoreGridSelectStatus
                   cellId={playOrderCellId}
                   changed={Boolean(originalRow && originalRow.playOrder !== player.playOrder)}
+                  error={playOrderError}
                   reviewItem={playOrderReviewItem}
                   reviewed={reviewedCellIds.has(playOrderCellId)}
                   synced={lastSyncedPlayerIndex === rowIndex}

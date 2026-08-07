@@ -9,10 +9,9 @@ import { Button } from "@/shared/ui/actions/Button";
 import { IconButton } from "@/shared/ui/actions/IconButton";
 import { AlertDialog, Dialog } from "@/shared/ui/feedback/Dialog";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
-import { Field } from "@/shared/ui/forms/Field";
+import { SelectField } from "@/shared/ui/forms/SelectField";
+import { TextField } from "@/shared/ui/forms/TextField";
 
-const inputClass =
-  "w-full min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)]";
 const labelClass = "text-xs font-semibold text-[var(--color-text-secondary)]";
 
 type MemberAliasPanelProps = {
@@ -54,26 +53,24 @@ export function MemberAliasPanel({
         className="mt-4 grid gap-3 md:grid-cols-[minmax(12rem,0.35fr)_minmax(12rem,1fr)_auto]"
         key={createFormKey}
       >
-        <Field label="プレーヤー">
-          <select className={inputClass} name="memberId">
-            {fixedMembers.map((member) => (
-              <option key={member.memberId} value={member.memberId}>
-                {member.displayName}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="別名">
-          <input className={inputClass} name="alias" placeholder="例: NO11社長" required />
-        </Field>
+        <SelectField
+          label="プレーヤー"
+          name="memberId"
+          options={fixedMembers.map((member) => ({
+            label: member.displayName,
+            value: member.memberId,
+          }))}
+        />
+        <TextField
+          error={createError}
+          label="別名"
+          name="alias"
+          placeholder="例: NO11社長"
+          required
+        />
         <div className="flex items-end">
           <MemberAliasCreateButton />
         </div>
-        {createError ? (
-          <p className="text-sm text-[var(--color-danger)] md:col-span-3" role="alert">
-            {createError}
-          </p>
-        ) : null}
       </form>
 
       <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -103,6 +100,7 @@ export function MemberAliasPanel({
                         title="別名を削除しますか？"
                         description={`${memberDisplayName(alias.memberId)} の ${alias.alias} を削除します。`}
                         confirmLabel="削除"
+                        formatError={(error) => formatApiError(error, "別名の削除に失敗しました")}
                         onConfirm={() => onDelete(alias.id)}
                         trigger={
                           <IconButton
@@ -181,19 +179,16 @@ function AliasEditDialog({
           }
         }}
       >
-        <Field label="プレーヤー">
-          <select className={inputClass} defaultValue={alias.memberId} name="memberId">
-            {fixedMembers.map((member) => (
-              <option key={member.memberId} value={member.memberId}>
-                {member.displayName}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="別名">
-          <input className={inputClass} defaultValue={alias.alias} name="alias" required />
-        </Field>
-        {error ? <p className="text-sm text-[var(--color-danger)]">{error}</p> : null}
+        <SelectField
+          defaultValue={alias.memberId}
+          label="プレーヤー"
+          name="memberId"
+          options={fixedMembers.map((member) => ({
+            label: member.displayName,
+            value: member.memberId,
+          }))}
+        />
+        <TextField defaultValue={alias.alias} error={error} label="別名" name="alias" required />
         <Button disabled={pending} pending={pending} pendingLabel="保存中" type="submit">
           保存
         </Button>

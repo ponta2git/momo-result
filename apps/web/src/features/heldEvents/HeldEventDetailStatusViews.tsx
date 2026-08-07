@@ -1,5 +1,6 @@
 import { ArrowLeft } from "lucide-react";
 
+import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
@@ -9,7 +10,7 @@ import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 export function HeldEventDetailLoading() {
   return (
-    <PageFrame aria-busy="true" aria-label="開催詳細を読み込み中" className="gap-5" width="wide">
+    <PageFrame aria-busy="true" aria-label="開催詳細を読み込み中" className="gap-4" width="wide">
       <PageHeader eyebrow="開催記録" title="開催の記録を読み込み中" />
       <Card className="grid grid-cols-3 gap-3 bg-[var(--color-surface-subtle)]">
         {["matches", "drafts", "next"].map((id) => (
@@ -46,20 +47,45 @@ export function HeldEventDetailLoading() {
   );
 }
 
-export function HeldEventDetailUnavailable({ notFound = false }: { notFound?: boolean }) {
+export function HeldEventDetailUnavailable({
+  backHref = "/held-events",
+  notFound = false,
+  onRetry,
+  retrying = false,
+}: {
+  backHref?: string;
+  notFound?: boolean;
+  onRetry?: (() => void) | undefined;
+  retrying?: boolean;
+}) {
   return (
     <PageFrame className="gap-4" width="wide">
       <Notice
         tone={notFound ? "warning" : "danger"}
         title={notFound ? "開催履歴が見つかりません" : "開催詳細を読み込めませんでした"}
       >
-        {notFound
-          ? "削除されたか、URLが正しくない可能性があります。"
-          : "開催履歴へ戻って、対象を選び直してください。"}
+        <p>
+          {notFound
+            ? "削除されたか、URLが正しくない可能性があります。"
+            : "通信状態を確認して、もう一度お試しください。"}
+        </p>
+        {!notFound && onRetry ? (
+          <div className="mt-3">
+            <Button
+              pending={retrying}
+              pendingLabel="再読み込み中"
+              size="sm"
+              variant="secondary"
+              onClick={onRetry}
+            >
+              開催詳細を再読み込み
+            </Button>
+          </div>
+        ) : null}
       </Notice>
       <LinkButton
         icon={<ArrowLeft aria-hidden="true" className="size-4" />}
-        to="/held-events"
+        to={backHref}
         variant="secondary"
       >
         開催履歴へ戻る

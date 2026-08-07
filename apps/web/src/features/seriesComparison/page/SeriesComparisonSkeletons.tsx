@@ -3,7 +3,7 @@ import { PageFrame } from "@/shared/ui/layout/PageFrame";
 
 export function PageSkeleton() {
   return (
-    <PageFrame className="gap-5" width="wide">
+    <PageFrame className="gap-4" width="wide">
       <Skeleton className="min-h-24 rounded-[var(--radius-md)]" />
       <Skeleton className="min-h-24 rounded-[var(--radius-md)]" />
       <ComparisonSkeleton />

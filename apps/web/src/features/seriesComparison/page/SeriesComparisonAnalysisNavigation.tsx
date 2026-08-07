@@ -88,7 +88,7 @@ export function analysisPanelId(view: AnalysisViewId): string {
 
 function tabClassName(active: boolean, emphasis: "primary" | "secondary"): string {
   return cn(
-    "-mb-px inline-flex min-h-11 min-w-0 items-center border-b-2 px-3 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-action)]",
+    "-mb-px inline-flex min-h-11 min-w-0 items-center border-b-2 px-3 text-sm font-semibold transition-colors duration-[var(--motion-fast)] motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-action)]",
     emphasis === "primary" && "sm:text-base",
     active
       ? "border-[var(--color-action)] text-[var(--color-text-primary)]"
@@ -190,7 +190,7 @@ export function SectionJumpLinks({ items }: { items: AnalysisViewDefinition["sec
         {items.map((item) => (
           <li key={item.id}>
             <a
-              className="text-sm font-medium text-[var(--color-action)] underline-offset-4 hover:underline"
+              className="inline-flex min-h-11 items-center text-sm font-medium text-[var(--color-action)] underline-offset-4 hover:underline"
               href={`#${item.id}`}
             >
               {item.label}

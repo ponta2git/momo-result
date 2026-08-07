@@ -6,11 +6,14 @@ import { describe, expect, it, vi } from "vitest";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";
+import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { PaginationControls } from "@/shared/ui/data/PaginationControls";
 import { Dialog, AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { RouteSuspenseFallback } from "@/shared/ui/feedback/RouteSuspenseFallback";
 import { SegmentedControl } from "@/shared/ui/forms/SegmentedControl";
+import { SelectField } from "@/shared/ui/forms/SelectField";
+import { TextField } from "@/shared/ui/forms/TextField";
 import { StaleShield } from "@/shared/ui/motion/StaleShield";
 import { StatusPill } from "@/shared/ui/status/StatusPill";
 import { createDeferred } from "@/test/deferred";
@@ -83,6 +86,26 @@ describe("ui foundation", () => {
     expect(onPageSizeChange).toHaveBeenCalledWith(50);
   });
 
+  it("Disclosure uses one accessible trigger contract without layout animation", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <Disclosure summary="詳細条件">
+        <p>追加条件</p>
+      </Disclosure>,
+    );
+
+    const trigger = screen.getByRole("button", { name: "詳細条件" });
+    expect(trigger).toHaveClass("min-h-11");
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(trigger.querySelector(".lucide-chevron-down")).not.toBeNull();
+    expect(screen.queryByText("追加条件")).not.toBeInTheDocument();
+
+    await user.click(trigger);
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("追加条件")).toBeInTheDocument();
+  });
+
   it("danger Notice defaults role=alert", () => {
     render(<Notice tone="danger">失敗</Notice>);
 
@@ -137,6 +160,22 @@ describe("ui foundation", () => {
 
     await user.keyboard("{Escape}");
     expect(screen.getByRole("dialog", { name: "読み取りを準備しています" })).toBeInTheDocument();
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it("Dialog treats busy work as non-dismissible without extra caller flags", async () => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+
+    render(
+      <Dialog busy open title="保存しています" onOpenChange={onOpenChange}>
+        <p>このままお待ちください。</p>
+      </Dialog>,
+    );
+
+    expect(screen.queryByRole("button", { name: "ダイアログを閉じる" })).not.toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    expect(screen.getByRole("dialog", { name: "保存しています" })).toBeInTheDocument();
     expect(onOpenChange).not.toHaveBeenCalled();
   });
 
@@ -202,10 +241,58 @@ describe("ui foundation", () => {
     expect(confirmButton).toBeDisabled();
     expect(confirmButton.querySelector("svg")).not.toBeNull();
 
+    await user.keyboard("{Escape}");
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+
     deferred.resolve();
     await waitFor(() => {
       expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     });
+  });
+
+  it("AlertDialog keeps failed operations open and exposes a local retryable error", async () => {
+    const user = userEvent.setup();
+    const onConfirm = vi
+      .fn<() => Promise<void>>()
+      .mockRejectedValueOnce(new Error("削除先を確認できませんでした。"))
+      .mockResolvedValueOnce();
+
+    render(
+      <AlertDialog
+        description="一覧から削除します。"
+        title="開催履歴を削除しますか？"
+        trigger={<Button>削除</Button>}
+        onConfirm={onConfirm}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "削除" }));
+    await user.click(await screen.findByRole("button", { name: "実行" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("削除先を確認できませんでした。");
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "実行" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    expect(onConfirm).toHaveBeenCalledTimes(2);
+  });
+
+  it("AlertDialog supports a non-destructive primary action tone", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <AlertDialog
+        tone="primary"
+        title="ログインを有効にしますか？"
+        trigger={<Button>変更</Button>}
+        onConfirm={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "変更" }));
+    expect(await screen.findByRole("button", { name: "実行" })).toHaveClass(
+      "bg-[var(--color-action)]",
+    );
   });
 
   it("RouteSuspenseFallback can provide the root main landmark", () => {
@@ -222,6 +309,17 @@ describe("ui foundation", () => {
     expect(screen.getByTestId("route-suspense-fallback")).toHaveClass("max-w-[90rem]");
   });
 
+  it.each([
+    ["/held-events/event-1", "max-w-[82rem]"],
+    ["/analytics/series", "max-w-[82rem]"],
+    ["/exports", "max-w-[48rem]"],
+    ["/admin/masters", "max-w-[75rem]"],
+  ])("RouteSuspenseFallback matches %s page width", (pathname, widthClass) => {
+    render(<RouteSuspenseFallback pathname={pathname} />);
+
+    expect(screen.getByTestId("route-suspense-fallback")).toHaveClass(widthClass);
+  });
+
   it("StaleShield removes shielded content from the readable tree", () => {
     render(
       <StaleShield active fallback={<div>読み込み中</div>}>
@@ -231,6 +329,26 @@ describe("ui foundation", () => {
 
     expect(screen.getByText("読み込み中")).toBeInTheDocument();
     expect(screen.queryByText("表示中の集計値")).not.toBeInTheDocument();
+  });
+
+  it("StaleShield can preserve cached content while marking it as stale", () => {
+    render(
+      <StaleShield
+        active
+        preserveContent
+        busyLabel="比較条件を更新中"
+        fallback={<div>読み込み中</div>}
+      >
+        <button type="button">表示中の集計値</button>
+      </StaleShield>,
+    );
+
+    expect(screen.getByText("表示中の集計値")).toBeInTheDocument();
+    expect(screen.queryByText("読み込み中")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("比較条件を更新中");
+    expect(screen.getByRole("button", { name: "表示中の集計値" }).parentElement).toHaveAttribute(
+      "inert",
+    );
   });
 
   it("StatusPill maps internal status to user-facing labels", () => {
@@ -243,7 +361,7 @@ describe("ui foundation", () => {
     );
 
     expect(screen.getByText("処理中")).toBeInTheDocument();
-    expect(screen.getByText("確認待ち")).toBeInTheDocument();
+    expect(screen.getByText("読み取り失敗")).toBeInTheDocument();
     expect(screen.getByText("確定済")).toBeInTheDocument();
     expect(screen.getByText("OCR失敗")).toBeInTheDocument();
   });
@@ -269,6 +387,28 @@ describe("ui foundation", () => {
     await user.keyboard("{Enter}");
 
     expect(onValueChange).toHaveBeenCalled();
+  });
+
+  it("form fields associate labels, help, and errors with mobile-safe controls", () => {
+    render(
+      <>
+        <TextField description="半角数字で入力" error="入力を確認してください" label="試合番号" />
+        <SelectField
+          error="選択してください"
+          label="作品"
+          options={[{ label: "未選択", value: "" }]}
+        />
+      </>,
+    );
+
+    const input = screen.getByLabelText("試合番号");
+    const select = screen.getByLabelText("作品");
+    expect(input).toHaveClass("min-h-11", "text-base", "sm:min-h-10", "sm:text-sm");
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(input.getAttribute("aria-describedby")?.split(" ")).toHaveLength(2);
+    expect(select).toHaveAttribute("aria-invalid", "true");
+    expect(select.getAttribute("aria-describedby")).toBeTruthy();
+    expect(screen.getAllByRole("alert")).toHaveLength(2);
   });
 
   it("SegmentedControl disables keyboard and pointer changes", async () => {

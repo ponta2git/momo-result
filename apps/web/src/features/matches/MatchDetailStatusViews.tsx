@@ -1,3 +1,4 @@
+import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
@@ -7,7 +8,7 @@ import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 export function MatchDetailLoading() {
   return (
-    <PageFrame aria-busy="true" aria-label="試合詳細を読み込み中" className="gap-5" width="wide">
+    <PageFrame aria-busy="true" aria-label="試合詳細を読み込み中" className="gap-4" width="wide">
       <PageHeader eyebrow="試合記録" title="試合結果を読み込み中" />
 
       <Card className="grid gap-3 bg-[var(--color-surface-subtle)]">
@@ -63,14 +64,44 @@ export function MatchDetailLoading() {
   );
 }
 
-export function MatchDetailLoadFailed() {
+export function MatchDetailLoadFailed({
+  backHref = "/matches",
+  notFound = false,
+  onRetry,
+  retrying = false,
+}: {
+  backHref?: string;
+  notFound?: boolean;
+  onRetry?: (() => void) | undefined;
+  retrying?: boolean;
+}) {
   return (
     <PageFrame className="gap-4" width="wide">
-      <Notice tone="danger" title="試合詳細を読み込めませんでした">
-        一覧に戻って、対象の試合を選び直してください。
+      <Notice
+        tone={notFound ? "warning" : "danger"}
+        title={notFound ? "試合が見つかりません" : "試合詳細を読み込めませんでした"}
+      >
+        <p>
+          {notFound
+            ? "削除されたか、URLが正しくない可能性があります。"
+            : "通信状態を確認して、もう一度お試しください。"}
+        </p>
+        {!notFound && onRetry ? (
+          <div className="mt-3">
+            <Button
+              pending={retrying}
+              pendingLabel="再読み込み中"
+              size="sm"
+              variant="secondary"
+              onClick={onRetry}
+            >
+              試合詳細を再読み込み
+            </Button>
+          </div>
+        ) : null}
       </Notice>
-      <LinkButton to="/matches" variant="secondary">
-        試合一覧へ戻る
+      <LinkButton to={backHref} variant="secondary">
+        前の画面へ戻る
       </LinkButton>
     </PageFrame>
   );

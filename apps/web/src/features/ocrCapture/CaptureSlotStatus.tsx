@@ -43,7 +43,7 @@ export function CaptureStatusBadge({ status }: { status: string }) {
       key={status}
       animate={{ opacity: 1 }}
       className={cn(
-        "inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold",
+        "inline-flex rounded-full border px-3 py-1 text-xs font-semibold",
         "shrink-0 whitespace-nowrap",
         statusToneClass[status] ?? statusToneClass["empty"],
       )}

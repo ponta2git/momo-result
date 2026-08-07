@@ -13,11 +13,13 @@ type MatchWorkspaceControllerModelArgs = {
   baseErrors: NormalizedApiError[];
   cancelDraftConfirmOpen: boolean;
   cancelDraftPending: boolean;
+  cancelHref: string;
+  cancelLabel: string;
   closeConfirm: () => void;
   confirmAction: (formData: FormData) => void | Promise<void>;
   confirmOpen: boolean;
   createEventPending: boolean;
-  editLoadFailed: boolean;
+  editLoadFailureKind: "notFound" | "transient" | null;
   editLoading: boolean;
   eventDraftValue: string;
   formHandlers: ReturnType<typeof useMatchWorkspaceFormHandlers>;
@@ -25,7 +27,6 @@ type MatchWorkspaceControllerModelArgs = {
   isNavigatingToMasters: boolean;
   isOcrRunningBlocked: boolean;
   mode: WorkspaceMode;
-  notice: string;
   preferredImageKind: SourceImageKind;
   returnTo: string | null | undefined;
   reviewState: ReturnType<typeof useMatchWorkspaceReviewState>;
@@ -47,7 +48,11 @@ type MatchWorkspaceControllerModelArgs = {
   onNavigateToMasters: () => void;
   onPreferImageKindChange: (kind: SourceImageKind) => void;
   onPrimaryAction: () => void;
+  onRetryBaseErrors: () => Promise<void>;
+  onRetryEdit: () => void;
   onRefreshReviewStatus: () => Promise<void>;
+  retryingBaseErrors: boolean;
+  retryingEdit: boolean;
   refreshingReviewStatus: boolean;
 };
 
@@ -81,6 +86,10 @@ export function buildMatchWorkspaceControllerModel(args: MatchWorkspaceControlle
 
   return {
     baseErrors: args.baseErrors,
+    baseErrorActions: {
+      onRetry: args.onRetryBaseErrors,
+      retrying: args.retryingBaseErrors,
+    },
     blockedNotice: args.isOcrRunningBlocked
       ? {
           onRefreshReviewStatus: args.onRefreshReviewStatus,
@@ -160,6 +169,8 @@ export function buildMatchWorkspaceControllerModel(args: MatchWorkspaceControlle
       onPrimaryAction: args.onPrimaryAction,
     },
     header: {
+      cancelHref: args.cancelHref,
+      cancelLabel: args.cancelLabel,
       pageDescription: viewModel.pageDescription,
       pageTitle: viewModel.pageTitle,
       useSampleDrafts: args.useSampleDrafts,
@@ -169,11 +180,13 @@ export function buildMatchWorkspaceControllerModel(args: MatchWorkspaceControlle
       navigationAllowedRef: args.sessionDraft.navigationAllowedRef,
       onDiscard: args.sessionDraft.markCommitted,
     },
-    liveMessage: args.notice || args.validationMessage,
+    liveMessage: args.validationMessage,
     validationFocusRequest: args.validationFocusRequest,
     loadState: {
-      editLoadFailed: args.editLoadFailed,
+      editLoadFailureKind: args.editLoadFailureKind,
       editLoading: args.editLoading,
+      onRetryEdit: args.onRetryEdit,
+      retryingEdit: args.retryingEdit,
       workspaceLoading: args.workspaceLoading,
       workspaceLoadingCopy: workspaceLoadingCopy(args.mode),
     },

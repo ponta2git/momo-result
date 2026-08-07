@@ -4,8 +4,10 @@ import { useFormStatus } from "react-dom";
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { memberDisplayName } from "@/shared/domain/members";
+import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { Button } from "@/shared/ui/actions/Button";
 import { Dialog } from "@/shared/ui/feedback/Dialog";
+import { RankBadge } from "@/shared/ui/rank/RankBadge";
 
 type MatchConfirmDialogProps = {
   actions: MatchConfirmActions;
@@ -58,7 +60,7 @@ function MatchConfirmSummary({
     <dl className="grid gap-2 text-sm text-[var(--color-text-primary)]">
       <div className="flex justify-between gap-4">
         <dt className="text-[var(--color-text-secondary)]">開催履歴</dt>
-        <dd>{heldEvent ? new Date(heldEvent.heldAt).toLocaleString() : "未選択"}</dd>
+        <dd>{heldEvent ? formatDateTimeLong(heldEvent.heldAt) : "未選択"}</dd>
       </div>
       <div className="flex justify-between gap-4">
         <dt className="text-[var(--color-text-secondary)]">試合番号</dt>
@@ -97,7 +99,9 @@ function PlayerLedger({ values }: { values: MatchFormValues }) {
         <tbody className="divide-y divide-[var(--color-border)]">
           {playersByRank.map((player) => (
             <tr key={player.memberId}>
-              <td className="px-3 py-2 font-semibold tabular-nums">{player.rank}位</td>
+              <td className="px-3 py-2">
+                <RankBadge rank={player.rank} />
+              </td>
               <td className="px-3 py-2">{memberDisplayName(player.memberId)}</td>
               <td className="px-3 py-2 text-right tabular-nums">
                 {player.totalAssetsManYen.toLocaleString()}

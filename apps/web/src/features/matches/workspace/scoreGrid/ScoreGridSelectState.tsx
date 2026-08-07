@@ -22,18 +22,21 @@ export function selectCellTone({
 export function ScoreGridSelectStatus({
   cellId,
   changed,
+  error = false,
   reviewItem,
   reviewed,
   synced = false,
 }: {
   cellId: string;
   changed: boolean;
+  error?: boolean;
   reviewItem: ReviewItem | undefined;
   reviewed: boolean;
   synced?: boolean;
 }) {
-  const label =
-    reviewItem && !reviewed
+  const label = error
+    ? "入力を確認してください"
+    : reviewItem && !reviewed
       ? "OCR要確認"
       : changed
         ? "手修正"

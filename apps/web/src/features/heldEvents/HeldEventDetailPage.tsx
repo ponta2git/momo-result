@@ -9,6 +9,7 @@ import { HeldEventDraftsSection } from "@/features/heldEvents/HeldEventDraftsSec
 import { HeldEventMatchTimeline } from "@/features/heldEvents/HeldEventMatchTimeline";
 import { HeldEventPlayerRecap } from "@/features/heldEvents/HeldEventPlayerRecap";
 import { useHeldEventDetailPageController } from "@/features/heldEvents/useHeldEventDetailPageController";
+import { withReturnTo } from "@/shared/navigation/returnTo";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { Card } from "@/shared/ui/layout/Card";
@@ -27,10 +28,16 @@ export function HeldEventDetailPage() {
     return <HeldEventDetailLoading />;
   }
   if (controller.status === "notFound") {
-    return <HeldEventDetailUnavailable notFound />;
+    return <HeldEventDetailUnavailable backHref={controller.backHref} notFound />;
   }
   if (controller.status === "loadFailed") {
-    return <HeldEventDetailUnavailable />;
+    return (
+      <HeldEventDetailUnavailable
+        backHref={controller.backHref}
+        retrying={controller.refreshing}
+        onRetry={controller.refresh}
+      />
+    );
   }
 
   return <HeldEventDetailReadyContent controller={controller} />;
@@ -41,16 +48,26 @@ function HeldEventDetailReadyContent({
 }: {
   controller: HeldEventDetailReadyController;
 }) {
-  const { detail, drafts, masterNames, matches, playerRecaps, refresh, refreshing } = controller;
+  const {
+    backHref,
+    detail,
+    drafts,
+    masterNames,
+    matches,
+    playerRecaps,
+    refresh,
+    refreshing,
+    returnTo,
+  } = controller;
   const encodedHeldEventId = encodeURIComponent(detail.id);
 
   return (
-    <PageFrame className="min-w-0 gap-5" width="wide">
+    <PageFrame className="min-w-0 gap-4" width="wide">
       <div>
         <LinkButton
           icon={<ArrowLeft aria-hidden="true" className="size-4" />}
           size="sm"
-          to="/held-events"
+          to={backHref}
           variant="quiet"
         >
           開催履歴へ戻る
@@ -76,14 +93,14 @@ function HeldEventDetailReadyContent({
             </Button>
             <LinkButton
               icon={<Keyboard aria-hidden="true" className="size-4" />}
-              to={`/matches/new?heldEventId=${encodedHeldEventId}`}
+              to={withReturnTo(`/matches/new?heldEventId=${encodedHeldEventId}`, returnTo)}
               variant="secondary"
             >
               手入力
             </LinkButton>
             <LinkButton
               icon={<Camera aria-hidden="true" className="size-4" />}
-              to={`/ocr/new?heldEventId=${encodedHeldEventId}`}
+              to={withReturnTo(`/ocr/new?heldEventId=${encodedHeldEventId}`, returnTo)}
             >
               OCR取り込み
             </LinkButton>
@@ -92,7 +109,7 @@ function HeldEventDetailReadyContent({
       />
 
       <Card className="flex flex-col gap-4 bg-[var(--color-surface-subtle)] p-4 md:flex-row md:items-center md:justify-between">
-        <dl className="grid min-w-0 grid-cols-3 gap-5">
+        <dl className="grid min-w-0 grid-cols-3 gap-4">
           <div>
             <dt className="momo-label text-[var(--color-text-secondary)]">確定済み</dt>
             <dd className="mt-1 text-xl font-semibold tabular-nums">{detail.matchCount}試合</dd>
@@ -110,7 +127,10 @@ function HeldEventDetailReadyContent({
           <LinkButton
             icon={<ListFilter aria-hidden="true" className="size-4" />}
             size="sm"
-            to={`/matches?heldEventId=${encodedHeldEventId}&sort=match_no_asc`}
+            to={withReturnTo(
+              `/matches?heldEventId=${encodedHeldEventId}&sort=match_no_asc`,
+              returnTo,
+            )}
             variant="quiet"
           >
             試合検索で見る
@@ -118,7 +138,7 @@ function HeldEventDetailReadyContent({
           <LinkButton
             icon={<Download aria-hidden="true" className="size-4" />}
             size="sm"
-            to={`/exports?heldEventId=${encodedHeldEventId}&format=csv`}
+            to={withReturnTo(`/exports?heldEventId=${encodedHeldEventId}&format=csv`, returnTo)}
             variant="quiet"
           >
             CSV出力
@@ -126,13 +146,14 @@ function HeldEventDetailReadyContent({
         </nav>
       </Card>
 
-      <HeldEventDraftsSection drafts={drafts} masterNames={masterNames} />
+      <HeldEventDraftsSection drafts={drafts} masterNames={masterNames} returnTo={returnTo} />
       <HeldEventPlayerRecap recaps={playerRecaps} />
       <HeldEventMatchTimeline
         heldEventId={detail.id}
         masterNames={masterNames}
         matches={matches}
         nextMatchNo={detail.nextMatchNo}
+        returnTo={returnTo}
       />
     </PageFrame>
   );

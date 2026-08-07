@@ -105,7 +105,7 @@ export function DataTable<Row>({
                 {column.sortable ? (
                   <button
                     className={cn(
-                      "momo-pressable inline-flex min-h-9 items-center gap-1 rounded-[var(--radius-xs)] px-1 py-1 text-left text-inherit",
+                      "momo-pressable inline-flex min-h-11 items-center gap-1 rounded-[var(--radius-xs)] px-1 py-1 text-left text-inherit sm:min-h-9",
                       "hover:bg-[var(--color-surface-subtle)] disabled:cursor-not-allowed disabled:opacity-60",
                       column.sortDirection
                         ? "bg-[var(--color-action)]/10 text-[var(--color-text-primary)]"
@@ -133,7 +133,7 @@ export function DataTable<Row>({
           {rows.map((row, rowIndex) => (
             <tr
               key={getRowKey(row, rowIndex)}
-              className="group transition-colors duration-150 hover:bg-[var(--color-surface-subtle)] last:[&_td]:border-b-0"
+              className="group transition-colors duration-[var(--motion-fast)] hover:bg-[var(--color-surface-subtle)] motion-reduce:transition-none last:[&_td]:border-b-0"
             >
               {columns.map((column) => (
                 <td

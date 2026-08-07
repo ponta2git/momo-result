@@ -100,4 +100,38 @@ describe("AdminAccountsPage", () => {
     responseGate.resolve();
     expect(await screen.findByText("復旧ユーザー")).toBeInTheDocument();
   });
+
+  it("separates a list failure from the empty state and offers retry", async () => {
+    let attempts = 0;
+    server.use(
+      http.get("/api/admin/login-accounts", () => {
+        attempts += 1;
+        return attempts === 1
+          ? HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 })
+          : HttpResponse.json({
+              items: [
+                {
+                  accountId: "account-recovered",
+                  createdAt: "2026-01-01T00:00:00.000Z",
+                  discordUserId: "888000111222333444",
+                  displayName: "復旧ユーザー",
+                  isAdmin: false,
+                  loginEnabled: true,
+                  updatedAt: "2026-01-01T00:00:00.000Z",
+                },
+              ],
+            });
+      }),
+    );
+
+    renderPage();
+
+    expect(await screen.findByRole("button", { name: "アカウントを再読み込み" })).toBeVisible();
+    expect(screen.queryByText("ログイン可能なアカウントはまだありません")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "アカウントを再読み込み" }));
+
+    expect(await screen.findByText("復旧ユーザー")).toBeInTheDocument();
+    expect(attempts).toBe(2);
+  });
 });

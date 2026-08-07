@@ -84,7 +84,7 @@ export function CaptureSlotCard({ actions, draft, presentation, slot }: CaptureS
   return (
     <section
       className={cn(
-        "relative overflow-hidden rounded-[var(--radius-md)] border bg-[var(--color-surface)] p-3 transition-colors duration-150 motion-reduce:transition-none",
+        "relative overflow-hidden rounded-[var(--radius-md)] border bg-[var(--color-surface)] p-3 transition-colors duration-[var(--motion-fast)] motion-reduce:transition-none",
         presentation.captureTarget
           ? "border-[var(--color-action)]/55 bg-[var(--color-action)]/5"
           : "border-[var(--color-border)]",

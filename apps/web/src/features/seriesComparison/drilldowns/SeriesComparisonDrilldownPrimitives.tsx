@@ -5,6 +5,8 @@ import type { Player } from "@/features/seriesComparison/model/seriesComparisonP
 import { isNumber } from "@/features/seriesComparison/model/seriesComparisonPresentation";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
+import { Notice } from "@/shared/ui/feedback/Notice";
+import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 
 type DeltaValueKind = "decimal" | "rank";
 type LowerIsBetterDeltaLabels = {
@@ -12,6 +14,55 @@ type LowerIsBetterDeltaLabels = {
   positive: string;
   zero: string;
 };
+
+export function DrilldownContentSkeleton({ label }: { label: string }) {
+  return (
+    <div aria-busy="true" aria-label={label} className="grid min-h-48 gap-3" role="status">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {["summary-1", "summary-2", "summary-3", "summary-4"].map((id) => (
+          <Skeleton key={id} className="h-20 rounded-[var(--radius-sm)]" />
+        ))}
+      </div>
+      <div className="grid gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] p-3">
+        <Skeleton className="h-10" />
+        <Skeleton className="h-12" />
+        <Skeleton className="h-12" />
+        <Skeleton className="h-12" />
+      </div>
+    </div>
+  );
+}
+
+export function DrilldownLoadNotice({
+  description,
+  onRetry,
+  pending = false,
+  title,
+  tone = "danger",
+}: {
+  description: string;
+  onRetry: () => void;
+  pending?: boolean;
+  title: string;
+  tone?: "danger" | "warning";
+}) {
+  return (
+    <Notice title={title} tone={tone}>
+      <p>{description}</p>
+      <div className="mt-3">
+        <Button
+          pending={pending}
+          pendingLabel="再読み込み中"
+          size="sm"
+          variant="secondary"
+          onClick={onRetry}
+        >
+          履歴を再読み込み
+        </Button>
+      </div>
+    </Notice>
+  );
+}
 
 export function DrilldownPlayerSelector({
   players,
@@ -96,7 +147,7 @@ export function DrilldownTableCell({
   return (
     <td
       className={cn(
-        "border-b border-[var(--color-border)] px-3 py-2.5 align-top text-[var(--color-text-primary)] tabular-nums group-last:border-b-0",
+        "border-b border-[var(--color-border)] px-3 py-3 align-top text-[var(--color-text-primary)] tabular-nums group-last:border-b-0",
         align === "right" ? "text-right" : "text-left",
       )}
     >
@@ -107,7 +158,7 @@ export function DrilldownTableCell({
 
 export function DrilldownStickyCell({ children }: { children: ReactNode }) {
   return (
-    <td className="sticky left-0 z-[var(--z-base)] border-b border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 align-top text-[var(--color-text-primary)] tabular-nums group-last:border-b-0 group-hover:bg-[var(--color-surface-subtle)]">
+    <td className="sticky left-0 z-[var(--z-base)] border-b border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-3 align-top text-[var(--color-text-primary)] tabular-nums group-last:border-b-0 group-hover:bg-[var(--color-surface-subtle)]">
       {children}
     </td>
   );

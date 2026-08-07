@@ -234,9 +234,9 @@ function RankOutcomeStrip({
   const targetCount = outcome?.targetCount ?? 0;
   const distribution = outcome?.rankDistribution ?? [];
   return (
-    <div className="grid gap-1.5 rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2">
+    <div className="grid gap-2 rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2">
       <div className="flex items-center justify-between gap-2">
-        <div className="inline-flex min-w-0 items-center gap-1.5">
+        <div className="inline-flex min-w-0 items-center gap-2">
           <span className="text-xs font-medium text-[var(--color-text-secondary)]">{label}</span>
           <StatusBadge status={status} />
         </div>

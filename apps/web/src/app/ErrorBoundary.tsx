@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 import { Component } from "react";
 
 import { Button } from "@/shared/ui/actions/Button";
+import { Notice } from "@/shared/ui/feedback/Notice";
+import { PageFrame } from "@/shared/ui/layout/PageFrame";
 
 type ErrorBoundaryProps = {
   children: ReactNode;
@@ -21,17 +23,19 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   override render() {
     if (this.state.error) {
       return (
-        <main className="mx-auto max-w-3xl px-6 py-16">
-          <div className="rounded-[var(--radius-md)] border border-[var(--color-danger)]/50 bg-[var(--color-danger)]/10 p-8 shadow-sm">
-            <p className="text-sm font-semibold text-[var(--color-danger)]">予期しないエラー</p>
-            <h1 className="momo-heading mt-3 text-2xl font-bold">画面を表示できません</h1>
-            <p className="momo-copy mt-3 text-sm text-[var(--color-text-secondary)]">
-              再表示しても直らない場合は、時間をおいてから開き直してください。
-            </p>
-            <Button className="mt-6" onClick={() => this.setState({ error: null })}>
-              再表示
-            </Button>
-          </div>
+        <main className="px-4 py-10 sm:py-16">
+          <PageFrame width="narrow">
+            <Notice className="p-4" role="alert" tone="danger" title="画面を表示できません">
+              <p>
+                予期しない問題が発生しました。再表示しても直らない場合は、時間をおいてから開き直してください。
+              </p>
+              <div className="mt-3">
+                <Button variant="secondary" onClick={() => this.setState({ error: null })}>
+                  画面を再表示
+                </Button>
+              </div>
+            </Notice>
+          </PageFrame>
         </main>
       );
     }

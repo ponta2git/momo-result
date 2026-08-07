@@ -1,11 +1,11 @@
-import { AnimatePresence, LayoutGroup, motion } from "motion/react";
+import { LayoutGroup, motion } from "motion/react";
 
 import type {
   MatchListStatusFilter,
   MatchListSummaryCounts,
 } from "@/features/matches/list/matchListTypes";
 import { cn } from "@/shared/ui/cn";
-import { momoPanelTransition, momoTransition } from "@/shared/ui/motion/variants";
+import { momoTransition } from "@/shared/ui/motion/variants";
 
 type MatchesStatusRailProps = {
   counts: MatchListSummaryCounts;
@@ -94,7 +94,7 @@ function CountBadge({ count, loading }: { count: number | undefined; loading: bo
   }
 
   return (
-    <span className="min-w-7 rounded-full bg-[var(--color-surface-subtle)] px-1.5 py-0.5 text-center text-xs font-semibold tabular-nums">
+    <span className="min-w-7 rounded-full bg-[var(--color-surface-subtle)] px-2 py-0.5 text-center text-xs font-semibold tabular-nums">
       {count.toLocaleString()}件
     </span>
   );
@@ -115,7 +115,7 @@ export function MatchesStatusRail({
       aria-busy={loading || masked || undefined}
       aria-label="確定状況"
       className={cn(
-        "rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 transition-opacity duration-[var(--motion-base)]",
+        "rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 transition-opacity duration-[var(--motion-base)] motion-reduce:transition-none",
         masked ? "opacity-70" : "opacity-100",
       )}
     >
@@ -132,7 +132,7 @@ export function MatchesStatusRail({
                 key={option.status}
                 aria-pressed={selected}
                 className={cn(
-                  "momo-pressable relative flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-[calc(var(--radius-sm)-0.25rem)] px-2 py-2 text-sm font-semibold text-[var(--color-text-secondary)]",
+                  "momo-pressable relative flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-[calc(var(--radius-sm)-0.25rem)] px-2 py-2 text-sm font-semibold text-[var(--color-text-secondary)]",
                   selected
                     ? "cursor-default"
                     : "hover:text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-60",
@@ -143,7 +143,7 @@ export function MatchesStatusRail({
               >
                 {selected ? (
                   <motion.span
-                    className="absolute inset-0 rounded-[calc(var(--radius-sm)-0.25rem)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-sm"
+                    className="absolute inset-0 rounded-[calc(var(--radius-sm)-0.25rem)] border border-[var(--color-border)] bg-[var(--color-surface)]"
                     layoutId="active-main-status"
                     transition={momoTransition}
                   />
@@ -169,60 +169,47 @@ export function MatchesStatusRail({
         </div>
       </LayoutGroup>
 
-      <AnimatePresence initial={false}>
-        {unfinishedSelected ? (
-          <motion.div
-            key="unfinished-statuses"
-            animate={{ height: "auto", opacity: 1 }}
-            className="overflow-hidden"
-            exit={{ height: 0, opacity: 0 }}
-            initial={{ height: 0, opacity: 0 }}
-            transition={momoPanelTransition}
-          >
-            <div
-              aria-label="未確定の内訳"
-              className="flex min-w-0 flex-wrap items-center gap-1.5 pt-3"
-              role="group"
-            >
-              <LayoutGroup id="matches-unfinished-status">
-                {unfinishedOptions.map((option) => {
-                  const selected = currentStatus === option.status;
-                  return (
-                    <button
-                      key={option.status}
-                      aria-pressed={selected}
-                      className={cn(
-                        "momo-pressable relative inline-flex min-h-9 items-center gap-1.5 rounded-full border border-[var(--color-border)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-secondary)]",
-                        selected
-                          ? "cursor-default"
-                          : "hover:bg-[var(--color-surface-subtle)] hover:text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-60",
-                      )}
-                      disabled={disabled || selected}
-                      type="button"
-                      onClick={() => onSelectStatus(option.status)}
-                    >
-                      {selected ? (
-                        <motion.span
-                          className="absolute inset-0 rounded-full border border-[var(--color-action)]/50 bg-[var(--color-action)]/10"
-                          layoutId="active-unfinished-status"
-                          transition={momoTransition}
-                        />
-                      ) : null}
-                      <span className="relative z-[var(--z-base)]">{option.label}</span>
-                      <span className="relative z-[var(--z-base)] inline-flex">
-                        <CountBadge
-                          count={counts[option.countKey ?? "incompleteCount"]}
-                          loading={loading}
-                        />
-                      </span>
-                    </button>
-                  );
-                })}
-              </LayoutGroup>
-            </div>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
+      <div
+        aria-label="未確定の内訳"
+        className="flex min-w-0 flex-wrap items-center gap-1 pt-3"
+        role="group"
+      >
+        <LayoutGroup id="matches-unfinished-status">
+          {unfinishedOptions.map((option) => {
+            const selected = currentStatus === option.status;
+            return (
+              <button
+                key={option.status}
+                aria-pressed={selected}
+                className={cn(
+                  "momo-pressable relative inline-flex min-h-11 items-center gap-1 rounded-full border border-[var(--color-border)] px-3 py-2 text-xs font-semibold text-[var(--color-text-secondary)]",
+                  selected
+                    ? "cursor-default"
+                    : "hover:bg-[var(--color-surface-subtle)] hover:text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-60",
+                )}
+                disabled={disabled || selected}
+                type="button"
+                onClick={() => onSelectStatus(option.status)}
+              >
+                {selected ? (
+                  <motion.span
+                    className="absolute inset-0 rounded-full border border-[var(--color-action)]/50 bg-[var(--color-action)]/10"
+                    layoutId="active-unfinished-status"
+                    transition={momoTransition}
+                  />
+                ) : null}
+                <span className="relative z-[var(--z-base)]">{option.label}</span>
+                <span className="relative z-[var(--z-base)] inline-flex">
+                  <CountBadge
+                    count={counts[option.countKey ?? "incompleteCount"]}
+                    loading={loading}
+                  />
+                </span>
+              </button>
+            );
+          })}
+        </LayoutGroup>
+      </div>
     </section>
   );
 }

@@ -1,12 +1,6 @@
-import { seriesComparisonHrefForMatch } from "@/features/matches/matchDetailViewModel";
-import type { MatchDetailResponse } from "@/shared/api/matches";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 
-export function MatchSeriesComparisonCta({
-  match,
-}: {
-  match: Pick<MatchDetailResponse, "gameTitleId" | "mapMasterId" | "matchId" | "seasonMasterId">;
-}) {
+export function MatchSeriesComparisonCta({ href }: { href: string }) {
   return (
     <div className="mt-4 flex flex-col gap-3 border-t border-[var(--color-border)] pt-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
@@ -17,7 +11,7 @@ export function MatchSeriesComparisonCta({
           同じ作品・シーズン・マップの戦績を開き、この試合を選択した状態で推移と結果を表示します。
         </p>
       </div>
-      <LinkButton className="shrink-0" to={seriesComparisonHrefForMatch(match)} variant="secondary">
+      <LinkButton className="shrink-0" to={href} variant="secondary">
         前後の戦績を見る
       </LinkButton>
     </div>

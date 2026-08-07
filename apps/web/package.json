@@ -20,7 +20,7 @@
     "pretest:run": "pnpm run generate:api",
     "test:run": "vitest run",
     "prelint": "pnpm run generate:api",
-    "lint": "oxlint . && node ./scripts/check-architecture-imports.mjs && node ./scripts/check-api-contract.mjs && node ./scripts/check-module-size.mjs",
+    "lint": "oxlint . && node ./scripts/check-architecture-imports.mjs && node ./scripts/check-api-contract.mjs && node ./scripts/check-ui-consistency.mjs && node ./scripts/check-module-size.mjs",
     "lint:fix": "oxlint . --fix",
     "lint:react-perf": "oxlint --react-perf-plugin src --ignore-pattern \"**/*.test.*\" --ignore-pattern \"**/__tests__/**\"",
     "format": "oxfmt --write .",

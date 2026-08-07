@@ -71,10 +71,10 @@ describe("MatchesListFilters", () => {
 
     expect(screen.queryByLabelText("状態")).not.toBeInTheDocument();
     const accordionLabel = screen.getByText("詳細条件");
-    const summary = accordionLabel.closest("summary");
-    expect(summary).toHaveTextContent("作品 桃太郎電鉄2");
-    expect(summary).toHaveTextContent("シーズン 今シーズン");
-    expect(summary).not.toHaveTextContent("2件");
+    const trigger = accordionLabel.closest("button");
+    expect(trigger).toHaveTextContent("作品 桃太郎電鉄2");
+    expect(trigger).toHaveTextContent("シーズン 今シーズン");
+    expect(trigger).not.toHaveTextContent("2件");
     expect(screen.queryByRole("button", { name: /条件を解除/u })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "詳細条件をクリア" })).not.toBeInTheDocument();
   });
@@ -92,17 +92,16 @@ describe("MatchesListFilters", () => {
     );
 
     const accordionLabel = screen.getByText("詳細条件");
-    const summary = accordionLabel.closest("summary");
-    const details = accordionLabel.closest("details");
-    if (!summary || !details) {
+    const trigger = accordionLabel.closest("button");
+    if (!trigger) {
       throw new Error("expected the detail filters accordion");
     }
-    expect(summary.querySelector(".lucide-chevron-down")).not.toBeNull();
-    expect(summary).not.toHaveClass("momo-pressable");
-    expect(details).not.toHaveAttribute("open");
+    expect(trigger.querySelector(".lucide-chevron-down")).not.toBeNull();
+    expect(trigger).not.toHaveClass("momo-pressable");
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
 
-    await user.click(summary);
-    expect(details).toHaveAttribute("open");
+    await user.click(trigger);
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
 
     const resetButton = screen.getByRole("button", {
       name: "確定状況・並び順・詳細条件を初期状態に戻す",

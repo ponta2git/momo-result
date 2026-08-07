@@ -44,6 +44,7 @@ export function useSourceImagePanelState({
   const [followMode, setFollowMode] = useState<"auto" | "fixed">("auto");
   const [previewKind, setPreviewKind] = useState<SourceImageKind | null>(null);
   const [imageCache, setImageCache] = useState<SourceImageCache>({});
+  const [imageRetrySequence, setImageRetrySequence] = useState(0);
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
   const [archiveSaving, setArchiveSaving] = useState(false);
   const [archiveError, setArchiveError] = useState("");
@@ -137,7 +138,7 @@ export function useSourceImagePanelState({
       };
       void preloadImage();
     }
-  }, [states]);
+  }, [imageRetrySequence, states]);
 
   useEffect(
     () => () => {
@@ -218,6 +219,22 @@ export function useSourceImagePanelState({
     setPreviewKind(null);
     previewTriggerRef.current?.focus();
   }, []);
+  const handleActiveImageRetry = useCallback(() => {
+    if (!activeImageUrl) {
+      return;
+    }
+    imageLoadControllersRef.current.get(activeImageUrl)?.abort();
+    imageLoadControllersRef.current.delete(activeImageUrl);
+    setImageCache((current) => {
+      if (!current[activeImageUrl]) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[activeImageUrl];
+      return next;
+    });
+    setImageRetrySequence((current) => current + 1);
+  }, [activeImageUrl]);
 
   return {
     activeImage,
@@ -235,6 +252,7 @@ export function useSourceImagePanelState({
     handleArchiveDialogOpenChange: setArchiveConfirmOpen,
     handleArchiveSaveConfirmed,
     handleArchiveSaveRequest,
+    handleActiveImageRetry,
     handleFollowModeChange,
     handlePreviewClose,
     handlePreviewOpen,

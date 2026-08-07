@@ -3,6 +3,9 @@ import { ArrowUpRight, X } from "lucide-react";
 import { playerNameMap } from "@/features/seriesComparison/model/seriesComparisonPresentation";
 import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
 import { buildMatchPerformanceContext } from "@/shared/domain/matchPerformanceContext";
+import { formatDateOnly } from "@/shared/lib/dateTime";
+import { withReturnTo } from "@/shared/navigation/returnTo";
+import { useCurrentLocationPath } from "@/shared/navigation/useCurrentLocationPath";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { MatchResultLedger } from "@/shared/ui/data/MatchResultLedger";
@@ -11,15 +14,11 @@ function formatFocusedMatchDate(value: string | undefined): string | undefined {
   if (!value) {
     return undefined;
   }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
+  if (!Number.isFinite(Date.parse(value))) {
     return undefined;
   }
-  return new Intl.DateTimeFormat("ja-JP", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(date);
+  const formatted = formatDateOnly(value, "");
+  return formatted || undefined;
 }
 
 export function SeriesComparisonFocusedMatch({
@@ -31,6 +30,7 @@ export function SeriesComparisonFocusedMatch({
   onClear: () => void;
   response: SeriesComparisonResponse;
 }) {
+  const returnTo = useCurrentLocationPath();
   const points = (response.matchPlayerPoints ?? [])
     .filter((point) => point.matchId === focusMatchId)
     .toSorted((left, right) => left.rank - right.rank);
@@ -76,7 +76,7 @@ export function SeriesComparisonFocusedMatch({
           <LinkButton
             icon={<ArrowUpRight className="size-4" />}
             size="sm"
-            to={`/matches/${encodeURIComponent(focusMatchId)}`}
+            to={withReturnTo(`/matches/${encodeURIComponent(focusMatchId)}`, returnTo)}
             variant="secondary"
           >
             この試合の結果

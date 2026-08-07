@@ -3,34 +3,44 @@ import { useFormStatus } from "react-dom";
 
 import { useAdminAccountsPageController } from "@/features/adminAccounts/useAdminAccountsPageController";
 import type { LoginAccountResponse, UpdateLoginAccountRequest } from "@/shared/api/adminAccounts";
+import { formatApiError } from "@/shared/api/problemDetails";
 import { fixedMembers, memberDisplayName } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
-import { Field } from "@/shared/ui/forms/Field";
+import { checkboxInputClass, checkboxLabelClass } from "@/shared/ui/forms/controlStyles";
+import { Fieldset } from "@/shared/ui/forms/Fieldset";
+import { SelectField } from "@/shared/ui/forms/SelectField";
+import { TextField } from "@/shared/ui/forms/TextField";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
-const inputClass =
-  "w-full rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)]";
-
 export function AdminAccountsPage() {
-  const { accounts, accountsLoading, createAction, createState, normalizedError, updateMutation } =
-    useAdminAccountsPageController();
+  const {
+    accounts,
+    accountsError,
+    accountsLoadFailed,
+    accountsLoading,
+    accountsRefreshing,
+    createAction,
+    createState,
+    retryAccounts,
+    updateMutation,
+  } = useAdminAccountsPageController();
 
   return (
-    <PageFrame className="gap-5">
+    <PageFrame className="gap-4">
       <PageHeader
         eyebrow="管理"
         title="ログインアカウント"
         description="Discordでログインできるアカウントと管理者権限を管理します。試合参加者とは別に扱います。"
       />
 
-      {createState.error || normalizedError ? (
-        <Notice tone="danger" title={normalizedError?.title ?? "操作に失敗しました"}>
-          {createState.error || normalizedError?.detail}
+      {createState.error ? (
+        <Notice tone="danger" title="アカウントを追加できません">
+          {createState.error}
         </Notice>
       ) : null}
 
@@ -44,45 +54,41 @@ export function AdminAccountsPage() {
           action={createAction}
           className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_16rem_auto]"
         >
-          <Field label="DiscordユーザーID">
-            <input
-              className={inputClass}
-              inputMode="numeric"
-              name="discordUserId"
-              placeholder="例: 523484457705930752"
-              required
-            />
-          </Field>
-          <Field label="表示名">
-            <input
-              className={inputClass}
-              name="displayName"
-              placeholder="例: 代理入力者"
-              required
-            />
-          </Field>
-          <Field label="紐づくプレーヤー">
-            <select className={inputClass} name="playerMemberId" defaultValue="">
-              <option value="">試合参加者に紐づけない</option>
-              {fixedMembers.map((member) => (
-                <option key={member.memberId} value={member.memberId}>
-                  {member.displayName}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="権限">
-            <div className="flex min-h-10 flex-wrap items-center gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
-              <label className="inline-flex items-center gap-2 text-sm">
-                <input defaultChecked name="loginEnabled" type="checkbox" />
-                ログイン許可
-              </label>
-              <label className="inline-flex items-center gap-2 text-sm">
-                <input name="isAdmin" type="checkbox" />
-                管理者
-              </label>
-            </div>
-          </Field>
+          <TextField
+            inputMode="numeric"
+            label="DiscordユーザーID"
+            name="discordUserId"
+            placeholder="例: 523484457705930752"
+            required
+          />
+          <TextField label="表示名" name="displayName" placeholder="例: 代理入力者" required />
+          <SelectField
+            defaultValue=""
+            label="紐づくプレーヤー"
+            name="playerMemberId"
+            options={[
+              { label: "試合参加者に紐づけない", value: "" },
+              ...fixedMembers.map((member) => ({
+                label: member.displayName,
+                value: member.memberId,
+              })),
+            ]}
+          />
+          <Fieldset legend="権限">
+            <label className={checkboxLabelClass}>
+              <input
+                className={checkboxInputClass}
+                defaultChecked
+                name="loginEnabled"
+                type="checkbox"
+              />
+              ログイン許可
+            </label>
+            <label className={checkboxLabelClass}>
+              <input className={checkboxInputClass} name="isAdmin" type="checkbox" />
+              管理者
+            </label>
+          </Fieldset>
           <div className="flex items-end">
             <CreateAccountSubmitButton />
           </div>
@@ -96,6 +102,23 @@ export function AdminAccountsPage() {
             <Skeleton className="min-h-16" />
             <Skeleton className="min-h-16" />
           </div>
+        ) : accountsLoadFailed ? (
+          <div className="p-4">
+            <Notice tone="danger" title={accountsError?.title ?? "アカウントを読み込めません"}>
+              <p>{accountsError?.detail ?? "通信状態を確認して、もう一度お試しください。"}</p>
+              <div className="mt-3">
+                <Button
+                  pending={accountsRefreshing}
+                  pendingLabel="再読み込み中"
+                  size="sm"
+                  variant="secondary"
+                  onClick={retryAccounts}
+                >
+                  アカウントを再読み込み
+                </Button>
+              </div>
+            </Notice>
+          </div>
         ) : accounts.length === 0 ? (
           <EmptyState
             className="border-0"
@@ -104,39 +127,61 @@ export function AdminAccountsPage() {
             title="ログイン可能なアカウントはまだありません"
           />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[44rem] text-left text-sm">
-              <thead className="bg-[var(--color-surface-subtle)] text-[var(--color-text-secondary)]">
-                <tr>
-                  <th className="px-3 py-2">表示名</th>
-                  <th className="px-3 py-2">DiscordユーザーID</th>
-                  <th className="px-3 py-2">プレーヤー</th>
-                  <th className="px-3 py-2">権限</th>
-                  <th className="px-3 py-2">操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {accounts.map((account) => {
-                  const rowPending =
-                    updateMutation.isPending &&
-                    updateMutation.variables?.accountId === account.accountId;
-                  return (
-                    <AccountRow
-                      account={account}
-                      isPending={updateMutation.isPending}
-                      key={account.accountId}
-                      pendingRequest={rowPending ? updateMutation.variables?.request : undefined}
-                      onPatch={async (request) => {
-                        await updateMutation.mutateAsync({
-                          accountId: account.accountId,
-                          request,
-                        });
-                      }}
-                    />
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="grid">
+            {accountsError ? (
+              <Notice
+                className="m-4 mb-0"
+                tone="warning"
+                title="最新のアカウント情報を取得できません"
+              >
+                <p>直前に取得した内容を表示しています。</p>
+                <div className="mt-3">
+                  <Button
+                    pending={accountsRefreshing}
+                    pendingLabel="再読み込み中"
+                    size="sm"
+                    variant="secondary"
+                    onClick={retryAccounts}
+                  >
+                    最新情報を再読み込み
+                  </Button>
+                </div>
+              </Notice>
+            ) : null}
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[44rem] text-left text-sm">
+                <thead className="bg-[var(--color-surface-subtle)] text-[var(--color-text-secondary)]">
+                  <tr>
+                    <th className="px-3 py-2">表示名</th>
+                    <th className="px-3 py-2">DiscordユーザーID</th>
+                    <th className="px-3 py-2">プレーヤー</th>
+                    <th className="px-3 py-2">権限</th>
+                    <th className="px-3 py-2">操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {accounts.map((account) => {
+                    const rowPending =
+                      updateMutation.isPending &&
+                      updateMutation.variables?.accountId === account.accountId;
+                    return (
+                      <AccountRow
+                        account={account}
+                        isPending={updateMutation.isPending}
+                        key={account.accountId}
+                        pendingRequest={rowPending ? updateMutation.variables?.request : undefined}
+                        onPatch={async (request) => {
+                          await updateMutation.mutateAsync({
+                            accountId: account.accountId,
+                            request,
+                          });
+                        }}
+                      />
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </section>
@@ -227,6 +272,8 @@ function AccountActionConfirm({
       confirmLabel={confirmLabel}
       description={description}
       pending={pending}
+      formatError={(error) => formatApiError(error, "アカウント設定の更新に失敗しました")}
+      tone="primary"
       title={title}
       trigger={
         <Button disabled={disabled} size="sm" variant="secondary">

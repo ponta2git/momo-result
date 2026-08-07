@@ -5,9 +5,9 @@ import {
   HeldEventDetailUnavailable,
 } from "@/features/heldEvents/HeldEventDetailStatusViews";
 import { formatHeldEventDateTime } from "@/features/heldEvents/heldEventDetailViewModel";
-import { heldEventOcrCaptureHref } from "@/features/heldEvents/heldEventNavigation";
 import { HeldEventDraftsSection } from "@/features/heldEvents/HeldEventDraftsSection";
 import { HeldEventMatchTimeline } from "@/features/heldEvents/HeldEventMatchTimeline";
+import { heldEventOcrCaptureHref } from "@/features/heldEvents/heldEventNavigation";
 import { HeldEventPlayerRecap } from "@/features/heldEvents/HeldEventPlayerRecap";
 import { useHeldEventDetailPageController } from "@/features/heldEvents/useHeldEventDetailPageController";
 import { withReturnTo } from "@/shared/navigation/returnTo";

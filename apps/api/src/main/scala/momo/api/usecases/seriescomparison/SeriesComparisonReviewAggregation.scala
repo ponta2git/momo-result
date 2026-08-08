@@ -1,8 +1,6 @@
 package momo.api.usecases.seriescomparison
 
-import scala.util.Try
-
-import momo.api.usecases.seriescomparison.engine.{SeriesDataset, SeriesRankAnalyzer}
+import momo.api.usecases.seriescomparison.engine.SeriesDataset
 import momo.api.usecases.seriescomparison.view.*
 
 private[usecases] object SeriesComparisonReviewAggregation
@@ -14,7 +12,7 @@ private[usecases] object SeriesComparisonReviewAggregation
     with SeriesComparisonReviewPlayOrderCandidate
     with SeriesComparisonReviewRecoveryCandidate
     with SeriesComparisonReviewGinjiCandidate:
-  private val SchemaVersion = 5
+  private val SchemaVersion = 4
 
   def aggregate(
       dataset: SeriesDataset
@@ -30,26 +28,12 @@ private[usecases] object SeriesComparisonReviewAggregation
       .flatMap(memberId => playbookCandidates(statsByPlayer(memberId), orderedRows))
     val scoredCandidates = SeriesComparisonPlaybookScoring.score(allCandidates)
     val commonTopics = SeriesComparisonPlaybookScoring.commonTopics(scoredCandidates)
-    val directCardsByPlayer = playerOrder.map(memberId =>
-      memberId -> SeriesComparisonPlaybookScoring.cardsFor(memberId, scoredCandidates)
-    ).toMap
-    val canUseSecondaryRankSignal = directCardsByPlayer.values.exists(cards =>
-      cards.nonEmpty && cards.size < 3
-    )
-    val rankAnalysis = Option.when(canUseSecondaryRankSignal)(
-      Try(SeriesRankAnalyzer.analyzeForDrilldown(dataset)).toOption
-    ).flatten
     val playbook = playerOrder.map(memberId =>
       val stats = statsByPlayer(memberId)
-      val directCards = directCardsByPlayer.getOrElse(memberId, Nil)
       SeriesComparisonPlayerPlaybookView(
         memberId = memberId.value,
         memberDisplayName = stats.displayName,
-        cards = SeriesComparisonRankSignalReviewSupport.appendSecondaryCard(
-          memberId,
-          directCards,
-          rankAnalysis,
-        ),
+        cards = SeriesComparisonPlaybookScoring.cardsFor(memberId, scoredCandidates),
       )
     )
     SeriesComparisonReviewView(

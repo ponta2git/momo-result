@@ -1,16 +1,17 @@
 # 桃鉄結果記録・集計アプリ 技術構成・非機能要件
 
-本書は `docs/requirements/base.md` で定めた業務要求を実現するための技術構成、運用方針、非機能要件を定める。実装者向けの詳細規約は `docs/architecture.md`、DB所有権は `docs/db-rule.md`、Redis Streams / OCR queue 契約は `docs/redis-streams-ocr-contract.md` を正とする。
+本書は `docs/requirements/base.md` で定めた業務要求を実現するための技術構成、運用方針、非機能要件を定める。実装者向けの詳細規約は `docs/architecture.md`、DB所有権は `docs/db-rule.md`、Redis Streams / OCR queue 契約は `docs/redis-streams-ocr-contract.md`、戦績分析jobと成果物は `docs/requirements/series-analysis-batch.md` を正とする。
 
 ---
 
 ## 1. 全体方針
 
 - 本アプリはこのリポジトリ内のモノレポとして管理する。
-- フロントエンド、APIサーバー、OCRワーカーは論理的に分離する。
-- 本番では低コスト運用を優先し、同一Fly.ioアプリ、同一ドメイン、同一VM内で稼働させる。
+- フロントエンド、APIサーバー、OCRワーカー、戦績分析ワーカーは論理的に分離する。
+- 本番のweb、API、現行OCRは低コストな統合runtimeで運用する。戦績分析ワーカーは高負荷計算が
+  APIやOCRを巻き込まない独立runtimeへ分離する。
 - DBは summit アプリと共有する Neon PostgreSQL を利用する。
-- OCRジョブ配送には Upstash Redis Streams を利用する。
+- OCRジョブと戦績分析ジョブの配送にはRedis Streamsを利用し、状態の正本はDBに置く。
 - 本番 Redis 接続は原則 TLS を使う。Fly private network 内の Upstash Redis のように provider が
   TLS 非対応の内部接続として案内している場合は、明示設定付きで `redis://` を許可する。
 - DB schema / migration は本リポジトリで直接所有せず、`../momo-db` を正本とする。
@@ -26,6 +27,7 @@ apps/
   web/         React/Vite SPA
   api/         Scala API server
   ocr-worker/ Python OCR worker
+  analysis-worker/ Rust series analysis worker
 ```
 
 パッケージ/ビルド管理は言語ごとに分ける。
@@ -35,6 +37,7 @@ apps/
 | web | pnpm |
 | api | sbt |
 | ocr-worker | uv |
+| analysis-worker | Cargo |
 
 ---
 
@@ -150,7 +153,23 @@ OCRジョブのタイムアウト初期値は `OCR_TIMEOUT_SECONDS` で管理す
 
 ---
 
-## 6. 画像アップロード・一時ファイル
+## 6. 戦績分析ワーカー
+
+- 戦績比較、振り返り、ドリルダウンに必要な値はRust製の専用workerで作品単位に事前計算する。
+- APIはjob受付、成果物と状態の読み取り、認証・認可を担当し、分析計算を実行しない。
+- DBをjob、再計算intent、成果物、状態の正本とし、Redis Streamsは配送路として使う。
+- workerの同時実行数は1とし、1作品の全有効スコープを1つの入力snapshotから計算する。
+- 計算本体は停止可能な子プロセス境界に置き、timeout、異常終了、将来のOCRによるpreemptionで
+  部分成果物を公開しない。
+- 初回リリースからハードタイムアウト機構を持つ。値は本番同等runtimeで実測後に設定し、
+  未設定のまま公開しない。
+- 成果物の入力version、algorithm version、artifact schema versionを分離して記録する。
+- 詳細要件は `docs/requirements/series-analysis-batch.md` を正本とする。
+- provider固有の配置、resource値、実測値、費用はprivate運用要件で管理する。
+
+---
+
+## 7. 画像アップロード・一時ファイル
 
 - アップロード可能な画像形式は PNG/JPEG/WebP とする。
 - 画像ファイルは1枚3MBまでに制限する。
@@ -170,9 +189,9 @@ OCRジョブのタイムアウト初期値は `OCR_TIMEOUT_SECONDS` で管理す
 
 ---
 
-## 7. DB・スキーマ管理
+## 8. DB・スキーマ管理
 
-### 7.1 DB
+### 8.1 DB
 
 - DBは Neon PostgreSQL を使い、summit アプリと共有する。
 - DBスキーマの正本は momo-db リポジトリに集約する。
@@ -181,10 +200,11 @@ OCRジョブのタイムアウト初期値は `OCR_TIMEOUT_SECONDS` で管理す
 - 本アプリ専用・共有の主要テーブルは以下を含む。
   - 試合結果: `match_drafts`, `matches`, `match_players`, `match_incidents`
   - OCR: `ocr_drafts`, `ocr_jobs`, `ocr_queue_outbox`
+  - 戦績分析: job、再計算intent / outbox、version付き成果物を管理するtable
   - マスタ: `game_titles`, `map_masters`, `season_masters`, `incident_masters`, `member_aliases`
   - 冪等性: `idempotency_keys`
 
-### 7.2 マイグレーション
+### 8.2 マイグレーション
 
 - DBマイグレーションの所有権は momo-db に集約する。
 - schema 定義は `../momo-db/src/schema.ts`、migration SQL は `../momo-db/drizzle/` を参照する。
@@ -192,7 +212,7 @@ OCRジョブのタイムアウト初期値は `OCR_TIMEOUT_SECONDS` で管理す
 - 消費プロジェクト（本アプリ・summit）の deploy 前に momo-db の migration が適用済みであることを確認する。
 - 後方互換でない schema 変更は、migration と consumer deploy を分割する。
 
-### 7.3 DB契約テスト
+### 8.3 DB契約テスト
 
 - DB-backed API を触る場合は、Testcontainers PostgreSQL に momo-db migration を適用して検証する。
 - DB contract test は、API が前提にする table / column / seed / nullable / default を確認する。
@@ -201,66 +221,72 @@ OCRジョブのタイムアウト初期値は `OCR_TIMEOUT_SECONDS` で管理す
 
 ---
 
-## 8. ローカル開発
+## 9. ローカル開発
 
 - ローカル開発では Docker Compose でDB/Redisだけを起動する。
-- web/api/ocr-workerは各言語のdevコマンドで起動する。
+- web/api/ocr-worker/analysis-workerは各言語のdevコマンドで起動する。
 - ローカルの環境変数は `.env` で管理する。
 - 詳細な起動順序と検証コマンドは `docs/dev-rule.md` を正とする。
 
 ---
 
-## 9. 本番デプロイ
+## 10. 本番デプロイ
 
-### 9.1 Fly.io構成
+### 10.1 Fly.io構成
 
-- 本番は同一Fly.ioアプリ、同一ドメインで運用する。
+- web、API、現行OCRは同一Fly.ioアプリ、同一ドメインで運用する。
 - nginx がweb SPAの静的ファイル配信とAPI reverse proxyを担当する。
 - APIサーバーとOCRワーカーはnginxと同一VM内の別プロセスとして動かす。
 - 同一VM内の複数プロセス管理には supervisord を使う。
+- 戦績分析ワーカーは利用者向けHTTP入口を持たない独立runtimeで、実行枠を1に制限する。
+- 戦績分析ワーカーのprovider固有のapp名、region、台数、resource classはprivate運用要件を正本とする。
 
-### 9.2 Dockerイメージ
+### 10.2 Dockerイメージ
 
 - マルチステージDockerfileで web/api/ocr-worker/nginx をビルドする。
-- 本番では単一ランタイムイメージにまとめる。
+- web/API/OCRは単一runtime imageにまとめ、戦績分析ワーカーはRustの独立runtime imageとしてビルドする。
 
-### 9.3 デプロイフロー
+### 10.3 デプロイフロー
 
 - 既定ブランチへのmergeでGitHub ActionsからFly.ioへ自動デプロイする。
+- APIとworkerで互換なartifact schema versionを確認し、DB migration、API、workerの順序を明示する。
 - 本番Secretsは `fly secrets` で管理する。
 - CI SecretsはGitHub Actions secretsで管理する。
 
-### 9.4 環境
+### 10.4 環境
 
 - MVPではローカル + 本番のみを用意する。
 - 必要に応じてPRごとにNeon branchで検証する。
 
 ---
 
-## 10. CI・品質管理
+## 11. CI・品質管理
 
-### 10.1 CI必須チェック
+### 11.1 CI必須チェック
 
-現行CIでは対象領域ごとに以下を実行する。
+対象領域ごとに以下を実行する。analysis-worker行は移行実装と同じ変更で追加する必須gateであり、
+現時点のCIに存在するという意味ではない。
 
 | 対象 | 必須チェック |
 |---|---|
 | web | OpenAPI型生成、format、lint、typecheck、Vitest、build |
 | api | format、lint、clean compile、unit / non-integration test、DB quality gate、Redis quality gate、OpenAPI生成チェック |
 | ocr-worker | format、lint、typecheck、pytest |
+| analysis-worker（移行時に追加） | format、lint、unit / integration test、release build |
 | runtime / E2E | Docker build、runtime smoke、container image scan、Playwright E2E smoke |
 
-Playwright E2E smoke はUX確定済みのログイン後主要フローに絞る。ローカル隔離gateではVite dev serverとE2E専用API / DB / Redisを使う。deploy workflowでは単一runtime imageを実DB/Redis付きで起動し、ビルド済みwebへPlaywrightを当てる。runtime経路の開発用認証ヘッダはPlaywrightのbrowser route境界で注入し、本番bundleには埋め込まない。
+Playwright E2E smoke はUX確定済みのログイン後主要フローに絞る。ローカル隔離gateではVite dev serverとE2E専用API / DB / Redisを使う。deploy workflowではweb/API/OCR runtime imageを実DB/Redis付きで起動し、ビルド済みwebへPlaywrightを当てる。分析worker追加時は別途worker runtime smokeを起動し、成果物を介したE2Eと結合する。runtime経路の開発用認証ヘッダはPlaywrightのbrowser route境界で注入し、本番bundleには埋め込まない。
 
-### 10.2 フォーマッタ・リンタ
+### 11.2 フォーマッタ・リンタ
 
 | 対象 | ツール |
 |---|---|
 | web | oxlint + oxfmt |
 | api | scalafmt + scalafix |
 | ocr-worker | ruff |
+| analysis-worker | rustfmt + Clippy |
 
-### 10.3 テスト
+### 11.3 テスト
 
 | 対象 | ツール |
 |---|---|
@@ -268,10 +294,11 @@ Playwright E2E smoke はUX確定済みのログイン後主要フローに絞る
 | api | MUnit |
 | api DB/Redis integration | Testcontainers + MUnit |
 | ocr-worker | pytest |
+| analysis-worker | Cargo test + PostgreSQL / Redis integration |
 
 ---
 
-## 11. セキュリティ
+## 12. セキュリティ
 
 - ログイン可能なユーザーは `momo_login_accounts` で許可した Discord ID に限定する。
 - Discord OAuth後のセッションはHttpOnly Secure Cookieで管理する。
@@ -291,21 +318,25 @@ Playwright E2E smoke はUX確定済みのログイン後主要フローに絞る
 
 ---
 
-## 12. 可観測性・運用
+## 13. 可観測性・運用
 
-### 12.1 ログ
+### 13.1 ログ
 
 - アプリケーションログは本番で1行JSONログとする。
 - MVPではFly.ioログ確認を主な運用手段とする。
 - 例外ログは秘密情報や個人情報を含めず、必要な相関IDと例外クラス中心に記録する。
+- 戦績分析はjob id、対象作品、version、状態、処理時間、peak memory、安全な失敗codeを記録し、
+  成果物本文や内部例外messageをログに出さない。
 
-### 12.2 ヘルスチェック
+### 13.2 ヘルスチェック
 
 - `/healthz` はAPIプロセスの生存のみ確認する。
 - DB/Redis接続は `/healthz/details` で確認する。
 - dev/prod startup 時のDB contract不一致を fail-fast にするか health warning にするかは未決の運用設計事項とし、詳細な follow-up tracking は private postmortem 側で扱う。
+- 公開HTTPを持たない戦績分析ワーカーは、process生存、最終heartbeat、queue待機時間、job状態を
+  runtimeとDBから観測する。
 
-### 12.3 費用・攻撃観測
+### 13.3 費用・攻撃観測
 
 MVPでは外部監視基盤を必須にせず、Fly.io logs と `/healthz/details` を主な観測手段にする。公開 `/healthz/details` は攻撃者へ内部件数を渡しすぎないため、DB/Redis/OCR admission の粗い status と reason に留める。件数や容量は安全なログイベント、DB/Redis確認、Fly.ioメトリクスで見る。
 
@@ -324,7 +355,7 @@ MVPでは外部監視基盤を必須にせず、Fly.io logs と `/healthz/detail
 
 継続的な `rate_limited`、`rejected`、`degraded:*`、DLQ増加、source image / export の bytes 急増を見つけた場合は、対象機能の受付を一時的に絞る、該当env上限を下げる、または provider / Fly.io 側の設定変更要否を人間が判断する。外部監視基盤、WAF、provider plan 変更はこの文書だけでは実行しない。
 
-### 12.4 バックアップ・復旧
+### 13.4 バックアップ・復旧
 
 - DBバックアップ/復旧はNeonのPITR/バックアップ機能に依存する。
 - アプリ側では削除前確認を徹底する。
@@ -332,18 +363,23 @@ MVPでは外部監視基盤を必須にせず、Fly.io logs と `/healthz/detail
 
 ---
 
-## 13. 性能要件
+## 14. 性能要件
 
 - 通常画面/APIは体感1秒以内を目標とする。
 - CSV/TSV出力は数秒以内を目標とする。
 - OCRは非同期処理とし、ユーザーが待てればよい。
 - OCR処理時間は実測し、タイムアウトやリトライ方針の判断材料にする。
+- 戦績比較の表示は保存済み成果物の読み取りに限定し、HTTP経路で分析しない。
+- 戦績分析は現在データ量の2倍かつ最低500試合/作品、固定4名、全有効スコープのfixtureで、
+  連続実行、peak memory、処理時間を本番同等runtime上で測定する。
+- 戦績分析のtimeout値は候補版の実測後に決め、resource/performance gateとともに
+  `docs/requirements/series-analysis-batch.md` の受け入れ条件を満たす。
 
 ---
 
-## 14. 対応環境・アクセシビリティ
+## 15. 対応環境・アクセシビリティ
 
-### 14.1 ブラウザ
+### 15.1 ブラウザ
 
 対象ブラウザは以下の最新安定版とする。
 
@@ -352,21 +388,23 @@ MVPでは外部監視基盤を必須にせず、Fly.io logs と `/healthz/detail
 - Safari
 - Edge
 
-### 14.2 画面サイズ
+### 15.2 画面サイズ
 
 - 画像アップロード/CSV出力系はPC主対象とする。
 - 画像アップロード/CSV出力系のスマホ対応は軽微操作までとする。
 - その他の機能はスマホでも快適に操作できることを目指す。
 
-### 14.3 アクセシビリティ
+### 15.3 アクセシビリティ
 
 - キーボード操作、ラベル、フォーカス、コントラストなど、基本的なWCAG AA相当を目指す。
 
 ---
 
-## 15. 運用チューニング事項
+## 16. 運用チューニング事項
 
 - OCRジョブのタイムアウト初期値は30秒とし、`OCR_TIMEOUT_SECONDS` で変更可能にする。
 - OCRジョブのRedis配送上限初期値は1回とし、`OCR_MAX_ATTEMPTS` で変更可能にする。
 - Redis PEL claim idle は `OCR_REDIS_CLAIM_IDLE_SECONDS` で変更可能にする。
 - 実測に応じて timeout / retry / DLQ の値を調整する。
+- 戦績分析のハードタイムアウトは設定可能にするが、初期値を推測で固定しない。本番同等runtimeで
+  通常、上限、cold start、連続実行を測定してから設定する。

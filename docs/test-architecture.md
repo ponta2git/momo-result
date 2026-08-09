@@ -14,6 +14,7 @@
 - 検証コマンド: `docs/dev-rule.md`
 - DB契約: `docs/db-rule.md`
 - Redis/OCR queue契約: `docs/redis-streams-ocr-contract.md`
+- 戦績分析job / 成果物契約: `docs/requirements/series-analysis-batch.md`
 
 ## 1. Test Size
 
@@ -21,8 +22,8 @@
 |---|---|---|---|
 | S | プロセス内、外部I/Oなし | pure function、domain、parser、codec、view model | 通常PRで常時 |
 | M | プロセス内または軽量境界、test doubleあり | HTTP app、usecase、web component/page、MSW、in-memory adapter | 通常PRで常時 |
-| L | 外部runtimeあり | PostgreSQL、Redis、native OCR、Testcontainers | 関連PRとCI quality gate |
-| XL | runtime image / browser / 複数プロセス | runtime smoke、Playwright E2E、deploy前確認 | deploy workflow / main / 重要PR |
+| L | 外部runtimeまたは実processあり | PostgreSQL、Redis、native OCR、分析子process、Testcontainers | 関連PRとCI quality gate |
+| XL | runtime image / browser / 複数process / resource計測 | runtime smoke、Playwright E2E、分析worker連続実行、deploy前確認 | deploy workflow / main / 重要PR |
 
 サイズは実行時間ではなく、失敗時に疑う境界と依存範囲で決める。近いサイズの成功を、変更した経路そのものの検証として代用しない。
 
@@ -44,6 +45,7 @@ CI の report mode は、同じテスト集合を通常実行と coverage 実行
 | web | `apps/web/vite.config.ts` | global threshold と重要ファイル別 threshold。`COVERAGE_REPORT_ONLY=1` では閾値を外す。`.tsx` と生成型は集計対象外。 |
 | api | `apps/api/build.sbt` | statement / branch threshold。CI report mode の `apiTestWithCoverageReportOnly` は `coverageFailOnMinimum := false`。PostgreSQL / Redis adapter は coverage率でなくintegration contractで保証。 |
 | ocr-worker | `apps/ocr-worker/pyproject.toml` | branch coverage 有効、`fail_under` あり。CI report command は `--cov-fail-under=0` でartifact生成を優先。 |
+| analysis-worker | 実装時にCargo coverage設定を追加 | pure calculationとjob state machineはbranchを重視する。DB / Redis / process境界はcoverage率でなくintegration contractで保証。 |
 
 丸めルール:
 
@@ -62,7 +64,7 @@ CI の report mode は、同じテスト集合を通常実行と coverage 実行
 | `src/shared/auth`, `src/shared/lib`, `src/shared/domain` | S | pure logic とブラウザ境界。分岐の独立因子をtable化する。 |
 | `src/features/*/*ViewModel`, request transform, Zod schema | S | mode discriminator、optional field、payload shape を decision table で固定する。 |
 | `src/features/**/*.tsx` page/component | M | line coverageより scenario coverage を優先する。loading / error / success / mutation / cache反映を検証する。 |
-| `e2e/app-smoke.spec.ts` | XL | 開催作成、OCR開始、レビュー確定、一覧、詳細、export、master管理を狭く通す。 |
+| `e2e/app-smoke.spec.ts` | XL | 開催作成、OCR開始、レビュー確定、一覧、詳細、export、master管理、戦績分析状態と管理操作を狭く通す。 |
 
 現行 coverage 設定は `apps/web/vite.config.ts` を正とする。`.tsx` は集計対象外にし、UIは scenario coverage と Playwright smoke で管理する。
 
@@ -77,6 +79,7 @@ CI の report mode は、同じテスト集合を通常実行と coverage 実行
 | in-memory `adapters` / repository contract | S / M | 本番adapterと共有する意味論を契約テストで固定する。 |
 | `adapters/postgres` | L | scoverage対象外でよい。SQL、transaction、DB contract、FK順序を実PostgreSQLで検証する。 |
 | Redis producer / outbox | M / L | JSON Schema、payload contract、Redis wire ack / claim / retry を検証する。 |
+| 戦績分析job / artifact repository | M / L | mutationとintentのtransaction、lease、coalescing、version、原子的成果物公開を検証する。 |
 
 現行 coverage 設定は `apps/api/build.sbt` を正とする。PostgreSQL / Redis adapter は coverage率ではなく、`apiDbQuality` / `apiRedisQuality` の contract 成功で保証する。
 
@@ -93,17 +96,33 @@ CI の report mode は、同じテスト集合を通常実行と coverage 実行
 
 現行 coverage 設定は `apps/ocr-worker/pyproject.toml` を正とする。OCR精度劣化は code coverage では検知しにくいため、accuracy report のartifact化は別枠で扱う。
 
-## 6. Cross-System
+## 6. apps/analysis-worker
+
+| 対象範囲 | 主テストサイズ | 確保するcoverage / oracle |
+|---|---|---|
+| pure calculation / statistics | S | 数式、分母、同値、丸め、seed、入力順独立性、品質状態。golden、高精度参照値、propertyを使う。 |
+| scope / artifact assembly | S / M | 全有効スコープ、計算再利用、安定した並び順、schema / algorithm version、部分成果物禁止。 |
+| job state machine | S / M | queued / running / terminal、最大3回のtransient retry、timeout非retry、coalescing、preemption。 |
+| PostgreSQL / Redis adapters | L | lease、outbox、publish、pending / claim / ack、冪等性、terminal write before ackを実サービスで検証する。 |
+| parent / child process | L | 正常終了、異常終了、hard timeout、signal、zombie防止、atomic publish。 |
+| release resource gate | XL / 別枠 | 固定4名、全scope、現在の2倍かつ最低500試合、100回連続実行のpeak memoryと処理時間。provider実測はprivateに保存する。 |
+
+Rust移植では現行Scalaとの差分を記録するが、Scala値だけを正しさのoracleにしない。より正確な差異は
+高精度参照値、要求から導いたgolden、または性質テストで証明し、algorithm versionを更新する。
+
+## 7. Cross-System
 
 | 契約 | 主テストサイズ | 管理方法 |
 |---|---|---|
 | API -> web OpenAPI / generated types | M | `apiOpenApiCheck`、`generate:api`、生成差分ゼロ。 |
-| API -> worker Redis queue payload | M / L | JSON Schema、Scala/Python contract tests、Redis wire integration。 |
+| API -> OCR worker Redis queue payload | M / L | JSON Schema、Scala/Python contract tests、Redis wire integration。 |
+| API -> analysis worker job / queue | M / L | DB consumer contract、Scala/Rust contract tests、Redis wire integration。 |
+| analysis worker -> API / web artifact | M / L | artifact schema fixture、version不一致拒否、同一version読取、API内分析なし。 |
 | DB consumer contract | L | `DbContractSpec`、repository integration、momo-db migration適用済みTestcontainers。 |
-| runtime image | XL | nginx設定、実行ファイル、healthz、cache header、origin lock、container logs。 |
+| runtime images | XL | nginx設定、実行ファイル、healthz / worker heartbeat、cache header、origin lock、container logs。 |
 | logged-in UX | XL | Playwright E2E smoke。coverage率ではなく経路リストで管理する。 |
 
-## 7. CI Artifacts
+## 8. CI Artifacts
 
 coverage report はPRを落とす主目的ではなく、推移確認とレビュー補助のために保存する。
 
@@ -112,6 +131,7 @@ coverage report はPRを落とす主目的ではなく、推移確認とレビ�
 | web | `pnpm --filter web test:coverage:report` | `apps/web/coverage/`, `coverage-summary/web/` |
 | API | CI: `sbt apiTestWithCoverageReportOnly`; local standalone: `sbt apiCoverageReportOnly` | `scoverage-report/`, `coverage-report/`, `coverage-summary/api/` |
 | OCR worker | `uv run pytest --cov ... --cov-fail-under=0` | `coverage.xml`, `coverage.json`, `htmlcov/`, `coverage-summary/ocr-worker/` |
+| analysis worker | 実装時にCargo coverage commandを追加 | coverage report、`coverage-summary/analysis-worker/` |
 
 `scripts/ci/write-coverage-summary.py` が raw 値と丸め候補値を正規化し、次を生成する。
 
@@ -119,7 +139,9 @@ coverage report はPRを落とす主目的ではなく、推移確認とレビ�
 - `rounded-baseline.json`
 - `summary.md`
 
-## 8. Later Phases
+resource class、費用、実測memory / timingは公開CI artifactへ含めず、privateのrelease evidenceへ保存する。
+
+## 9. Later Phases
 
 別PRで判断する項目:
 

@@ -1,11 +1,11 @@
 # アーキテクチャ規約
 
-目的: API / web / OCR worker の構造、依存方向、実装境界を判断するための正本。
+目的: API / web / OCR worker / 戦績分析workerの構造、依存方向、実装境界を判断するための正本。
 
 読む条件:
 
 - 新しい module / package / feature を作る。
-- API / web / OCR worker の境界、依存方向、wire契約を変える。
+- API / web / OCR worker / 戦績分析workerの境界、依存方向、wire契約を変える。
 - 認証、エラー、画像、server state、外部I/O、runtime構成を触る。
 
 役割:
@@ -21,11 +21,16 @@
 | web | `apps/web` | React 19, React Router 7, TanStack Query 5, Zod, Tailwind CSS 4, Base UI | SPA、入力、確認、CSV/TSV取得 |
 | api | `apps/api` | Scala 3, Tapir, http4s, Cats Effect, Doobie | HTTP API、認証、業務usecase、DB/Redis接続 |
 | ocr-worker | `apps/ocr-worker` | Python 3.14, uv, Tesseract, Pillow | OCRジョブ処理、画像解析、OCR結果保存 |
+| analysis-worker（移行先） | `apps/analysis-worker` | Rust, Cargo | 作品単位の戦績分析、version付き成果物の原子的公開 |
 | DB | `../momo-db` | Neon PostgreSQL, drizzle | schema / migration / seed の正本 |
-| Queue | Upstash Redis Streams | Redis Streams | OCRジョブ配送 |
-| runtime | `Dockerfile`, `deploy/` | Fly.io, nginx, supervisord | 単一runtime imageで web / api / worker を起動 |
+| Queue | Upstash Redis Streams | Redis Streams | OCR・戦績分析ジョブの配送。状態の正本にはしない |
+| current runtime | `Dockerfile`, `deploy/` | Fly.io, nginx, supervisord | 単一runtime imageで web / api / OCR worker を起動 |
+| analysis runtime（移行先） | 実装時に追加 | Rust process supervisor | 公開HTTPを持たず、単一実行枠で分析子プロセスを管理 |
 
-本番は同一 Fly.io アプリ、同一ドメイン、単一 runtime image で運用する。nginx は web 静的配信と API reverse proxy を担い、api と worker は supervisord 管理の別プロセスにする。provider固有の詳細手順、secret、攻撃対策の手順は public docs に置かない。
+現行本番は同一 Fly.io アプリ、同一ドメイン、単一runtime imageでweb、API、OCRを運用する。
+承認済みの移行先では、戦績分析だけをresource分離したruntimeへ移す。nginxはweb静的配信とAPI
+reverse proxyを担い、分析runtimeは公開HTTPを持たない。provider固有の配置、resource値、詳細手順、
+secret、攻撃対策の手順はpublic docsに置かない。
 
 ## 2. API
 
@@ -55,11 +60,18 @@ API境界の一部は `ApiEndpointsArchitectureSpec` と `ApiRuntimeArchitecture
 - 読み取りで検証した前提を後続更新で使う場合は、検証済みスナップショットを repository 契約に渡し、`UPDATE ... WHERE` で同時に照合する。
 - usecase / HTTP test で使う in-memory adapter は、DB adapter の状態遷移 guard と同じ契約を表現する。DB側の guard が複数 table にまたがる場合は、対応する composite adapter 側で等価の判定を持つ。
 - PostgreSQL repository / migration 前提に触れたら `docs/db-rule.md` と `docs/test-rule.md` の DB-backed API ルールに従う。
+- 試合確定・確定済み試合更新・削除は、対象作品の戦績分析再計算intentを同じtransactionへ書く。
+  Redis publishをtransaction成功条件にせず、DB outboxから配送する。
+- 戦績比較の読み取りusecaseはversion付き成果物とjob状態を取得するだけにし、ScalaまたはRustの
+  分析engineをHTTP request内で呼ばない。
 
 ### 2.3 Module Layout
 
 - `momo.api.usecases` 直下は公開 usecase facade を置く。集計、採点、文言生成などの内部実装が大きくなる場合は `momo.api.usecases.<domain>` へ package-private object として分け、HTTP / repository から直接参照しない。
-- 戦績比較の集計は engine / aggregation / endpoint façade に分ける。engine と aggregation は endpoint DTO、HTTP、repository、effect type を import せず、`momo.api.usecases.seriescomparison.model` の内部結果型だけを扱う。Tapir / Circe / Schema は `momo.api.endpoints.SeriesComparisonApiModels` の alias façade に閉じる。
+- 現行の戦績比較engine / aggregationは、Rust移行中の比較oracleとしてのみ利用できる。移行完了時は
+  endpoint / usecase / runtime compositionから到達不能にし、本番fallbackとして残さない。
+- 戦績比較endpoint DTOは `momo.api.endpoints.SeriesComparisonApiModels` のalias façadeに閉じ、
+  保存成果物のdomain型、DB row、Tapir / Circe / Schemaを相互に漏らさない。
 - repository / adapter / endpoint model は、複数 resource や複数 runtime 責務を 1 ファイルへ詰めない。1 ファイルが概ね300行を超えたら、公開型、contract、SQL alg、facade、test double、DTO family のどれが混在しているかを確認し、同一 package 内の top-level 定義分割を優先する。行数超過は API architecture spec で warning として報告し、単独では品質ゲートを失敗させない。
 - composition root は `momo.api.bootstrap.ApiApp` に置くが、`ApiApp` は runtime 実装セットの選択に寄せる。Redis / rate limit / queue の infrastructure、maintenance、health details、usecase-to-HTTP wiring は bootstrap 配下の helper object へ分ける。
 - 大きい純粋集計アルゴリズムを残す場合は、公開 facade から分離し、責務を名前で表す専用 package / file に置く。単に行数だけで細切れにせず、共通 mutable state や wire表現を漏らさない境界を優先する。
@@ -108,6 +120,9 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、mod
 - ページ失敗表示は `query.error` / `isError` だけで確定しない。認証、`enabled`、`isFetching` / `fetchStatus`、過去errorの再取得中状態を合わせる。
 - `queryKey` は cache に保存する runtime data shape を表す。同じ backend resource でも raw response と ViewModel を同じ key に置かない。
 - mutation 後に同画面で作成 resource を選択・表示する場合は、選択値だけでなく候補 list/select の cache も整合させる。
+- 戦績分析状態は成果物queryと分離して管理する。`queued` / `running` の間だけ5秒間隔でpollingし、
+  成功時に該当成果物queryを更新し、terminal状態でpollingを停止する。
+- stale成果物を持つ計算中・失敗状態と、成果物が一度もない計算中・失敗状態を別のViewModelで扱う。
 
 ### 3.4 Form / React
 
@@ -140,9 +155,36 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、mod
 - native OCR、Redis、PostgreSQL、tessdata を要する検証は integration marker へ分離する。unit test では parser、payload validation、状態遷移、failure mapping を優先する。
 - Python source module の概ね300行超過は architecture test で warning として報告し、単独ではテストを失敗させない。責務分割の要否は公開型、parser、adapter、workflow の境界を確認して判断する。
 
-## 5. Runtime / Security / Ops
+## 5. Analysis Worker
 
-- Secrets、session ID、OAuth token、CSRF token、Redis URL、DB URL、画像内容、OCR raw text 全文をログに出さない。
+- workerはRust + Cargoで管理し、`apps/analysis-worker` に置く。
+- 起動・設定・logging、job lease / queue、入力snapshot、純粋計算、成果物encoding、DB/Redis adapterを
+  module境界で分ける。純粋計算へDB row、Redis payload、HTTP DTOを渡さない。
+- 親processはdelivery受信、DB lease、timeout、signal、子process回収を担当する。1作品の計算は
+  停止可能な子processで実行し、子processから現行成果物を直接更新しない。
+- job、再計算intent、成果物、状態はDBを正本とし、Redis Streamsは配送路に限定する。
+- terminal DB writeに成功してからdeliveryをackする。lease切れ、pending delivery、重複deliveryを
+  冪等に回収し、同じversionの二重公開を防ぐ。
+- 入力snapshotは作品単位で一貫させ、全有効スコープを計算してから1transactionで成果物を公開する。
+  timeout、異常終了、予期しない計算失敗、preemptionでは部分成果物を公開しない。
+- 入力version、algorithm version、artifact schema versionを別の型として扱う。文字列比較や時刻の
+  偶然の大小で鮮度を決めない。
+- 対象なし、件数不足、定義済みのモデル非採用はtypedな品質状態として返す。予期しない例外を
+  正常な `no_target` に変換しない。
+- 計算は同じ入力とalgorithm versionで決定論的にする。seed、入力順、浮動小数点の正規化・丸め、
+  同値処理を明示する。
+- 初回からハードタイムアウトを設定可能にする。設定値がない本番起動またはjob受付はfail closedにし、
+  値自体は本番同等runtimeでの実測後に確定する。
+- 将来OCRを同居させる場合も実行枠は1とする。OCRだけが分析子processをpreemptでき、分析はOCRを
+  preemptできない。preemptされた分析は失敗回数へ加算せず最新版へ集約して再度 `queued` にする。
+- 将来のOCR同居前に、ローカル絶対pathを含むOCR配送契約を、認可された共有storageの論理IDへ移す。
+- 要求、状態、保持、再試行、正確性、性能の正本は
+  `docs/requirements/series-analysis-batch.md` とする。
+
+## 6. Runtime / Security / Ops
+
+- Secrets、session ID、OAuth token、CSRF token、Redis URL、DB URL、画像内容、OCR raw text全文、
+  戦績分析成果物本文をログに出さない。
 - 例外ログは throwable の message / stack trace を直接出さず、例外クラス列などの安全な情報に絞る。
 - 本番 `REDIS_URL` は原則 `rediss://` を必須にする。provider が TLS 非対応の内部接続として案内している場合だけ、明示設定付きで `redis://` を許可する。
 - アップロード画像は PNG/JPEG/WebP、1枚3MBまで、OCR処理は最大4Kまで。形式、サイズ、寸法、実体を検証する。
@@ -150,7 +192,11 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、mod
 - ログイン、OAuth callback state、画像アップロード、JSON mutation、CSV/TSV出力にはレート制限を入れる。
 - JSON mutation の retry replay は rate limit / key数上限で潰さず、新規 mutation だけ account 別 rate limit と未期限切れ `Idempotency-Key` 件数上限を適用する。上限値は `AppConfig` / env で管理する。
 - Discord OAuth provider の `429` / `5xx` / transport error が続く場合は短期 backoff で provider 呼び出しを抑制し、UIが扱える Problem Details と安全なログイベントへ正規化する。
-- `/healthz` はAPIプロセスの生存確認。DB/Redis接続確認は詳細ヘルスとして分ける。
+- `/healthz` はAPIプロセスの生存確認。DB/Redis接続確認は詳細ヘルスとして分ける。公開HTTPを持たない
+  分析workerはprocess生存、DB heartbeat、queue待機時間、job状態で観測する。
 - 本番ログは1行JSONにする。
 
-runtime / deploy 変更では `Dockerfile`、`deploy/`、`.github/workflows/deploy.yml`、`scripts/ci/runtime-smoke.sh` を実装の現在状態として確認する。公開文書には判断ルールだけを残し、provider設定や攻撃面の詳細を写さない。
+runtime / deploy 変更では `Dockerfile`、`deploy/`、`.github/workflows/deploy.yml`、
+`scripts/ci/runtime-smoke.sh` を実装の現在状態として確認する。分析worker追加後はそのDockerfile、
+deploy workflow、runtime smokeも確認する。公開文書には判断ルールだけを残し、provider設定や
+攻撃面の詳細を写さない。

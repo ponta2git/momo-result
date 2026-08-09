@@ -8,7 +8,7 @@ public repository に置くため、具体的な障害位置、再現手順、en
 恒久ルールは次へ置く。
 
 - 業務要件・CSV/TSV: `docs/requirements/base.md`
-- 技術構成・API/Web/OCR実装規約: `docs/architecture.md`
+- 技術構成・API/Web/OCR/戦績分析worker実装規約: `docs/architecture.md`
 - ドメイン用語・状態遷移: `docs/domain-rule.md`
 - DB共有・migration: `docs/db-rule.md`
 - Redis Streams / OCR queue 契約: `docs/redis-streams-ocr-contract.md`
@@ -176,12 +176,14 @@ public repository に置くため、具体的な障害位置、再現手順、en
 
 - 集計、推薦、モデル計算、ドリルダウンなど、1つの画面表示から複数の読み取り経路が動く。
 - 高度な分析や派生カードを、通常の表示経路へ追加・接続する。
+- 非同期成果物、job状態、計算version、resource上限、timeoutを変更する。
 
 **確認**
 
-- 追加したレスポンス項目が、どのAPI・usecase・engineを毎回実行させるかを確認したか。
-- 初期表示で同時に有効になる読み取り経路と、重い計算の重複実行を確認したか。
-- 代表データ量・同時実行数・応答時間・CPUの予算と、通常指標を守る縮退経路を定義したか。
+- 読み取りAPIが保存済み成果物だけを読み、HTTP request内で分析engineを実行しないことを確認したか。
+- 1作品の全スコープ、通常集計、振り返り、ドリルダウン間で重い計算を再利用しているか。
+- 計算中・失敗時に部分成果物を公開せず、直前成功成果物と状態を表示できるか。
+- 代表データ量、連続実行、処理時間、peak memory、timeoutの予算を本番同等runtimeで測定したか。
 - pipeline成功、health check、機能応答、CPU / latency観測を別々の証拠として扱ったか。
 - 性能観測ができない状態なら、配置成功までを確認済み、性能回復は未検証として報告したか。
 - rollback時は表示名ではなく、影響を受けた全実行経路を覆う差分か確認したか。
@@ -189,6 +191,7 @@ public repository に置くため、具体的な障害位置、再現手順、en
 **参照先**
 
 - `docs/requirements/series-comparison.md` の性能要求
+- `docs/requirements/series-analysis-batch.md` のresource・性能・timeout要求
 - `docs/requirements/series-review-playbook.md` の実装境界
 - `docs/test-rule.md` の Performance-sensitive analytics
 - `docs/dev-rule.md` の Production rollback verification

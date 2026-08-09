@@ -4,7 +4,7 @@
 
 読む条件:
 
-- 試合、下書き、OCR、認証主体、マスタ、開催回を触る。
+- 試合、下書き、OCR、戦績分析、認証主体、マスタ、開催回を触る。
 - API request / response、DB row、UI state の意味を判断する。
 - optional field の有無で mode や副作用が変わる実装を変更する。
 
@@ -14,6 +14,7 @@
 - 実装境界: `docs/architecture.md`
 - DB所有権: `docs/db-rule.md`
 - Redis/OCR queue: `docs/redis-streams-ocr-contract.md`
+- 戦績分析job / 成果物: `docs/requirements/series-analysis-batch.md`
 
 ## 1. Terms
 
@@ -25,6 +26,8 @@
 | 下書き | `match_drafts` | OCRまたは手入力から確定前に編集する作業単位。 |
 | OCRドラフト | `ocr_drafts` | 画像1枚のOCR解析結果。 |
 | OCRジョブ | `ocr_jobs` | 画像アップロードからOCR完了/失敗までの非同期ジョブ。 |
+| 戦績分析ジョブ | DBの分析job | 1作品の全有効スコープと全表示用途を再計算する非同期ジョブ。 |
+| 戦績分析成果物 | DBのversion付きartifact | 戦績比較、振り返り、ドリルダウンが共通利用する事前計算結果。 |
 | 試合参加者 | `match_players` | 1試合における1名の結果。 |
 | 事件記録 | `match_incidents` | 1試合・1プレーヤー・1事件マスタの回数。 |
 | プレーヤー | `members` | summit と共有する固定4名。 |
@@ -136,7 +139,29 @@ OCR下書き確定時は、request の `draftIds.totalAssets` / `draftIds.revenu
 - successful completion は、報告した draft payload と保存した payload が一致しなければならない。
 - non-success completion は failure metadata を持ち、draft payload を持たない。
 
-## 7. Masters / Held Events
+## 7. Series Analysis Job Lifecycle
+
+| 状態 | 意味 | 終端 |
+|---|---|---:|
+| `queued` | 実行待ち、またはpreemption後の再実行待ち | No |
+| `running` | workerがDB leaseを取得し、作品の分析子processを実行中 | No |
+| `succeeded` | 対象versionの作品成果物を原子的に公開済み | Yes |
+| `failed` | 自動再試行しない失敗、またはtransient failureの再試行上限到達 | Yes |
+| `timed_out` | hard timeoutにより分析子processを終了 | Yes |
+
+- job状態、再計算intent、成果物の正本はDB。Redis Streamsは配送路。
+- 試合確定・確定済み試合更新・削除は、対象作品の再計算intentを同じtransactionで作成する。
+- 1jobは1作品の全有効スコープを同じ入力snapshotから計算し、部分成果物を公開しない。
+- 対象なし、分母0、件数不足、定義済みのモデル非採用は品質状態を持つ正常成功とする。
+  予期しない1スコープの失敗は作品job全体を失敗させる。
+- `failed` / `timed_out` は直前成功成果物を変更しない。job状態と表示可能な成功成果物の有無を
+  同じbooleanへ潰さない。
+- 将来OCRが分析をpreemptした場合だけ `running -> queued` を許可する。preemptionは失敗または
+  自動再試行として数えず、分析からOCRへのpreemptionは許可しない。
+- 入力versionは作品単位の単調増加revisionとする。入力version、algorithm version、artifact schema
+  versionは別概念とし、変換または比較時に混同しない。
+
+## 8. Masters / Held Events
 
 - マスタは `momo-db` 管理。変更には `momo-db` の schema / migration / seed 変更が必要。
 - 対象マスタ: `game_titles`, `map_masters`, `season_masters`, `incident_masters`, `member_aliases`

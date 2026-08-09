@@ -170,6 +170,29 @@ public repository に置くため、具体的な障害位置、再現手順、en
 - `docs/redis-streams-ocr-contract.md`
 - `docs/test-rule.md`
 
+### L8 高負荷分析は通常経路のコストと観測を先に固定する
+
+**該当条件**
+
+- 集計、推薦、モデル計算、ドリルダウンなど、1つの画面表示から複数の読み取り経路が動く。
+- 高度な分析や派生カードを、通常の表示経路へ追加・接続する。
+
+**確認**
+
+- 追加したレスポンス項目が、どのAPI・usecase・engineを毎回実行させるかを確認したか。
+- 初期表示で同時に有効になる読み取り経路と、重い計算の重複実行を確認したか。
+- 代表データ量・同時実行数・応答時間・CPUの予算と、通常指標を守る縮退経路を定義したか。
+- pipeline成功、health check、機能応答、CPU / latency観測を別々の証拠として扱ったか。
+- 性能観測ができない状態なら、配置成功までを確認済み、性能回復は未検証として報告したか。
+- rollback時は表示名ではなく、影響を受けた全実行経路を覆う差分か確認したか。
+
+**参照先**
+
+- `docs/requirements/series-comparison.md` の性能要求
+- `docs/requirements/series-review-playbook.md` の実装境界
+- `docs/test-rule.md` の Performance-sensitive analytics
+- `docs/dev-rule.md` の Production rollback verification
+
 ## 更新ルール
 
 - 新しい教訓を追加する前に、恒久ルールとして移すべき内容がないか確認する。

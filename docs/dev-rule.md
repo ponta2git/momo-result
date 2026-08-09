@@ -196,6 +196,16 @@ uv run pytest -m integration
 
 CIの詳細なtimeout、サービス、artifact path は workflow を正とする。docs へ値を写す場合は、判断に必要な粒度だけに留める。
 
+## 6.1 Production rollback verification
+
+本番コードのrollbackでは、pipelineの成功とincident mitigationの完了を同じ意味で扱わない。
+
+- rollback対象のcommitと、実際に稼働するartifactのidentityを記録・照合する。
+- 対象機能をユーザーが触る経路と、その経路が呼ぶAPI / usecase / engineを先に列挙し、rollback差分が全経路を覆うことを確認する。
+- deploy後はprocess healthだけでなく、変更対象の代表的な画面・APIの応答とログを確認する。
+- 高負荷・性能障害では、deploy success、health check、機能応答、CPU / latencyなどの外部観測を別々の証拠として扱う。取得できない観測は未検証と報告する。
+- machineが停止・suspend中でruntime観測ができない場合、コードの配置成功までは確認できても、性能回復やincident解消とは判定しない。
+
 ## 7. Git
 
 - branch: `<type>/<short-description>`

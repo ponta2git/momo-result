@@ -105,6 +105,17 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
 - 新しい table に書き込む integration test を追加したら cleanup 対象も更新する。
 - SQL shape と domain 変換を分けた場合、row mapping の成功 path と不正 DB 値の扱いを repository unit または integration test で確認する。tuple mapping を named row へ変えた場合も、対象 query を実PostgreSQLで実行し、必要なら repository architecture spec へ禁止パターンを追加する。
 
+### Performance-sensitive analytics
+
+集計API、推薦API、ドリルダウン、モデル計算など、純粋計算の追加・変更でCPUまたは応答時間が増える可能性がある場合:
+
+- 画面名や変更ファイルではなく、実際に同時実行されるAPI・usecase・engineの経路を特定する。
+- 代表的なデータ量と同時実行条件を固定した決定論的なfixtureを用意し、通常のcorrectness testとは別に応答時間・計算回数・必要なら割り当て量の予算を検証する。
+- 同じ初期表示で複数APIが有効になる場合、同一の高負荷計算が重複していないことを直接検証する。片方のunit testやレスポンスshape testの成功で代用しない。
+- 高負荷部分が失敗・縮退しても通常指標が利用できる契約を、API/usecase testとユーザー可視のpage testで固定する。
+- runtime smoke / E2Eが機能成功だけを確認している場合、CPU回復や性能予算を検証したとは報告しない。外部メトリクスが未取得・未実行なら未検証として明記する。
+- rollbackでは、対象commitのartifact identityだけでなく、削除対象のユーザー経路とサーバー実行経路が消えたことを直接確認できる回帰ケースを用意する。
+
 実DB実行が特に必要なSQL:
 
 - `UNION` / `INTERSECT` / `EXCEPT`
@@ -154,3 +165,4 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
 - Redis Streams / OCR queue 契約を変えたら `docs/redis-streams-ocr-contract.md` の Required Tests を実行する。
 - DB schema 前提を変えたら `docs/db-rule.md` の Consumer Contract を満たす。
 - `docs/post-mortem/lessons.md` に該当するカードがあれば、テスト選択と最終報告に反映する。
+- 性能事故・高負荷計算の変更では、機能テストの成功と性能回復の証拠を分けて報告する。

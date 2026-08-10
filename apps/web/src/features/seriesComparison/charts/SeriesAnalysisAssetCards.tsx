@@ -81,7 +81,7 @@ export function AssetComparisonCards({ response }: { response: SeriesComparisonA
               <h4 className="text-[11px] font-semibold text-[var(--color-text-secondary)]">
                 総資産レンジ
               </h4>
-              <div className="mt-2 grid grid-cols-3 gap-1">
+              <div className="mt-2 grid grid-cols-3 items-start gap-1">
                 <AssetFact
                   label="低め"
                   subLabel="下位10%"
@@ -99,11 +99,11 @@ export function AssetComparisonCards({ response }: { response: SeriesComparisonA
                 />
               </div>
             </section>
-            <section className="mt-auto pt-3">
+            <section className="pt-3">
               <h4 className="text-[11px] font-semibold text-[var(--color-text-secondary)]">
                 物件収益額
               </h4>
-              <div className="mt-2 grid grid-cols-3 gap-1">
+              <div className="mt-2 grid grid-cols-3 items-start gap-1">
                 <AssetFact label="最高" value={formatManYen(metrics?.revenue.max)} />
                 <AssetFact
                   badge={revenueLeaders?.includes(entry.memberId) ? "4人内最高" : undefined}
@@ -161,7 +161,7 @@ function AssetFact({
   value: string;
 }) {
   return (
-    <div className="min-w-0 rounded-[var(--radius-xs)] bg-[var(--color-surface-subtle)] p-2 text-center">
+    <div className="min-w-0 self-start rounded-[var(--radius-xs)] bg-[var(--color-surface-subtle)] p-2 text-center">
       <p className="text-[10px] font-semibold text-[var(--color-text-secondary)]">{label}</p>
       {subLabel ? <p className="text-[9px] text-[var(--color-text-muted)]">{subLabel}</p> : null}
       <p className="mt-1 text-xs font-semibold break-words tabular-nums">{value}</p>

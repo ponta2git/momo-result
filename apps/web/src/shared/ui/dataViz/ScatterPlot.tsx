@@ -3,6 +3,7 @@ import type { DataVizSeriesIdentity } from "@/shared/ui/dataViz/playerSeries";
 import { finiteNumber, niceCeil, numberTicks } from "@/shared/ui/dataViz/scales";
 
 export type DataVizScatterPoint = {
+  href?: string | undefined;
   itemId: string;
   label: string;
   seriesId: string;
@@ -125,18 +126,36 @@ export function DataVizScatterPlot({
           ))}
           {plotted.map((point) => {
             const focused = focusItemIds.includes(point.itemId);
-            return (
+            const mark = (
               <DataVizPointMark
                 cx={x(point.x)}
                 cy={y(point.y)}
                 index={identityIndex.get(point.seriesId) ?? 0}
-                key={point.itemId}
                 opacity={focused ? 1 : focusItemIds.length > 0 ? 0.48 : 0.78}
                 outlined={focused}
                 size={focused ? 5 : 3.5}
               >
                 <title>{`${point.label}${focused ? "、この試合" : ""}`}</title>
               </DataVizPointMark>
+            );
+            return point.href ? (
+              <a
+                aria-label={`${point.label}の試合結果を見る`}
+                className="min-h-11 min-w-11"
+                href={point.href}
+                key={point.itemId}
+              >
+                <circle
+                  aria-hidden="true"
+                  cx={x(point.x)}
+                  cy={y(point.y)}
+                  fill="transparent"
+                  r="22"
+                />
+                {mark}
+              </a>
+            ) : (
+              <g key={point.itemId}>{mark}</g>
             );
           })}
           <text

@@ -4,11 +4,10 @@ import {
   formatDecimal,
   formatPercent,
   headToHeadSignalLabel,
-  intensityClassName,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
-import type { SeriesComparisonAggregateV2 } from "@/shared/api/seriesAnalysis";
+import type { RelativeIntensity, SeriesComparisonAggregateV2 } from "@/shared/api/seriesAnalysis";
 import { dataVizSeriesColor } from "@/shared/ui/dataViz/playerSeries";
-import { rankColor } from "@/shared/ui/rank/rankPresentation";
+import { colorMix, rankColor } from "@/shared/ui/rank/rankPresentation";
 
 type OverviewChartProps = {
   focusedItemIds: readonly string[];
@@ -151,8 +150,16 @@ export function HeadToHeadMatrix({ response }: { response: SeriesComparisonAggre
               const self = subject.memberId === opponent.memberId;
               return (
                 <div
-                  className={`min-h-20 rounded-[var(--radius-xs)] border border-[var(--color-border)] px-2 py-2 text-center ${self ? "bg-[var(--color-surface-subtle)]" : intensityClassName(entry?.relativeIntensity ?? "none")}`}
+                  className="min-h-20 rounded-[var(--radius-xs)] border px-2 py-2 text-center"
                   key={opponent.memberId}
+                  style={
+                    self
+                      ? {
+                          backgroundColor: "var(--color-surface-subtle)",
+                          borderColor: "var(--color-border)",
+                        }
+                      : headToHeadCellStyle(entry?.signal, entry?.relativeIntensity ?? "none")
+                  }
                 >
                   {self ? (
                     <span className="text-xs text-[var(--color-text-muted)]">—</span>
@@ -178,4 +185,34 @@ export function HeadToHeadMatrix({ response }: { response: SeriesComparisonAggre
       </div>
     </div>
   );
+}
+
+export function headToHeadCellStyle(
+  signal: string | undefined,
+  intensity: RelativeIntensity,
+): { backgroundColor: string; borderColor: string } {
+  const alpha = intensityAlpha(intensity);
+  const color = signal?.includes("disadvantage")
+    ? "var(--color-danger)"
+    : signal?.includes("advantage")
+      ? "var(--color-action)"
+      : "var(--color-tray-incident)";
+  const borderAlpha = alpha + 0.18 > 0.62 ? 0.62 : alpha + 0.18;
+  return {
+    backgroundColor: colorMix(color, alpha),
+    borderColor: colorMix(color, borderAlpha),
+  };
+}
+
+function intensityAlpha(intensity: RelativeIntensity): number {
+  switch (intensity) {
+    case "high":
+      return 0.32;
+    case "medium":
+      return 0.2;
+    case "low":
+      return 0.11;
+    case "none":
+      return 0.06;
+  }
 }

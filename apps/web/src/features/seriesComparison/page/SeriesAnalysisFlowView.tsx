@@ -1,24 +1,15 @@
-import { Search } from "lucide-react";
-
 import {
   CumulativeFormCharts,
   MomentumMatrices,
-  RecentRankStrips,
 } from "@/features/seriesComparison/charts/SeriesAnalysisFlowCharts";
-import {
-  formatDateTime,
-  formatDecimal,
-  formatManYen,
-  formatPercent,
-  qualityLabel,
-  timelineFlagLabel,
-} from "@/features/seriesComparison/model/seriesAnalysisPresentation";
+import { MatchDigestStrip } from "@/features/seriesComparison/charts/SeriesAnalysisMatchDigest";
+import { MatchNoInEventMatrix } from "@/features/seriesComparison/charts/SeriesAnalysisMatchNoMatrix";
+import { RecentRankStrips } from "@/features/seriesComparison/charts/SeriesAnalysisRecentRankStrip";
+import { qualityLabel } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { AnalysisViewProps } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
 import {
   AnalysisSection,
   playerName,
-  TableCell,
-  TableHead,
 } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
 import {
   analysisPanelId,
@@ -46,58 +37,11 @@ export function FlowView({
         id="metric-match-digest"
         title="最近の試合と荒れ方"
       >
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[58rem] text-left text-sm">
-            <thead>
-              <tr>
-                <TableHead>試合</TableHead>
-                <TableHead>日時</TableHead>
-                <TableHead>勝者</TableHead>
-                <TableHead>1–2位資産差</TableHead>
-                <TableHead>銀次</TableHead>
-                <TableHead>特徴</TableHead>
-                <TableHead>選択</TableHead>
-              </tr>
-            </thead>
-            <tbody>
-              {response.matchDigest.recent.map((row) => {
-                const focused = focusedItemIds.includes(row.itemId);
-                return (
-                  <tr
-                    className={`border-t border-[var(--color-border)] ${focused ? "bg-[var(--color-surface-selected)]" : ""}`}
-                    data-focused-metric={focused ? "true" : undefined}
-                    key={row.itemId}
-                  >
-                    <TableCell>
-                      第{row.matchIndex}戦{focused ? "・この試合" : ""}
-                    </TableCell>
-                    <TableCell>{formatDateTime(row.playedAt)}</TableCell>
-                    <TableCell>
-                      {row.winnerMemberId ? playerName(response.players, row.winnerMemberId) : "—"}
-                    </TableCell>
-                    <TableCell>{formatManYen(row.assetGapFirstToSecond)}</TableCell>
-                    <TableCell>{row.totalGinjiCount}回</TableCell>
-                    <TableCell>
-                      {row.flags.length === 0
-                        ? "大きな特徴なし"
-                        : row.flags.map(timelineFlagLabel).join(" / ")}
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        icon={<Search aria-hidden="true" className="size-4" />}
-                        size="sm"
-                        variant="quiet"
-                        onClick={() => onFocusMatch(row.matchId)}
-                      >
-                        比較する
-                      </Button>
-                    </TableCell>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <MatchDigestStrip
+          focusedItemIds={focusedItemIds}
+          response={response}
+          onFocusMatch={onFocusMatch}
+        />
       </AnalysisSection>
       <AnalysisSection
         description="分析時点の事前予測より上位で終えた勝利です。再現可能な勝因とは限らないため、試合内容を確認します。"
@@ -156,37 +100,7 @@ export function FlowView({
         id="metric-match-no"
         title="開催内の第n試合傾向"
       >
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[48rem] text-left text-sm">
-            <thead>
-              <tr>
-                <TableHead>区分</TableHead>
-                <TableHead>試合番号</TableHead>
-                <TableHead>プレーヤー</TableHead>
-                <TableHead>対象</TableHead>
-                <TableHead>平均順位</TableHead>
-                <TableHead>入賞率</TableHead>
-              </tr>
-            </thead>
-            <tbody>
-              {response.matchNoInEvent.entries.map((entry) =>
-                entry.players.map((player) => (
-                  <tr
-                    className="border-t border-[var(--color-border)]"
-                    key={`${entry.matchNoInEvent}:${player.memberId}`}
-                  >
-                    <TableCell>{entry.category === "regular" ? "通常" : "追加"}</TableCell>
-                    <TableCell>第{entry.matchNoInEvent}戦</TableCell>
-                    <TableCell>{player.displayName}</TableCell>
-                    <TableCell>{player.targetCount}戦</TableCell>
-                    <TableCell>{formatDecimal(player.averageRank)}位</TableCell>
-                    <TableCell>{formatPercent(player.podiumRate)}</TableCell>
-                  </tr>
-                )),
-              )}
-            </tbody>
-          </table>
-        </div>
+        <MatchNoInEventMatrix response={response} />
       </AnalysisSection>
     </div>
   );

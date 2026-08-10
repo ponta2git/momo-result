@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { Fragment } from "react";
 
 import {
@@ -5,10 +6,10 @@ import {
   formatDecimal,
   formatManYen,
   formatPercent,
-  intensityClassName,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
-import type { SeriesComparisonAggregateV2 } from "@/shared/api/seriesAnalysis";
+import type { RelativeIntensity, SeriesComparisonAggregateV2 } from "@/shared/api/seriesAnalysis";
 import { dataVizSeriesColor } from "@/shared/ui/dataViz/playerSeries";
+import { colorMix } from "@/shared/ui/rank/rankPresentation";
 
 export function PlayOrderMatrix({
   focusedItemIds,
@@ -42,13 +43,21 @@ export function PlayOrderMatrix({
             </div>
             {entry.cells.map((cell) => {
               const focused = focusedItemIds.includes(cell.itemId);
+              const presentation = playOrderCellPresentation({
+                bestPlayOrder: entry.bestPlayOrder,
+                playOrder: cell.playOrder,
+                relativeIntensity: cell.relativeIntensity,
+                targetCount: cell.targetCount,
+                worstPlayOrder: entry.worstPlayOrder,
+              });
               return (
                 <div
-                  aria-label={`${entry.displayName}、${cell.playOrder}番手、平均${formatDecimal(cell.rankAverage)}位、${cell.targetCount}戦${focused ? "、この試合" : ""}`}
-                  className={`rounded-[var(--radius-xs)] border border-[var(--color-border)] px-2 py-2 text-center ${intensityClassName(cell.relativeIntensity)} ${focused ? "momo-enter ring-2 ring-[var(--color-action)] ring-offset-1 ring-offset-[var(--color-surface)]" : ""}`}
+                  aria-label={`${entry.displayName}、${cell.playOrder}番手、平均${formatDecimal(cell.rankAverage)}位、${cell.targetCount}戦${presentation.label ? `、${presentation.label}` : ""}${focused ? "、この試合" : ""}`}
+                  className={`rounded-[var(--radius-xs)] border px-2 py-2 text-center ${focused ? "momo-enter ring-2 ring-[var(--color-action)] ring-offset-1 ring-offset-[var(--color-surface)]" : ""}`}
                   data-focused-metric={focused ? "true" : undefined}
                   key={cell.itemId}
                   role="img"
+                  style={presentation.style}
                 >
                   <strong className="text-sm tabular-nums">
                     {formatDecimal(cell.rankAverage)}位
@@ -56,6 +65,14 @@ export function PlayOrderMatrix({
                   <p className="mt-0.5 text-[11px] text-[var(--color-text-secondary)] tabular-nums">
                     {cell.targetCount}戦・入賞{formatPercent(cell.podiumRate)}
                   </p>
+                  {presentation.label ? (
+                    <p
+                      className="mt-1 text-[10px] font-semibold"
+                      style={{ color: presentation.accentColor }}
+                    >
+                      {presentation.label}
+                    </p>
+                  ) : null}
                 </div>
               );
             })}
@@ -64,6 +81,64 @@ export function PlayOrderMatrix({
       </div>
     </div>
   );
+}
+
+function playOrderCellPresentation({
+  bestPlayOrder,
+  playOrder,
+  relativeIntensity,
+  targetCount,
+  worstPlayOrder,
+}: {
+  bestPlayOrder: number | null;
+  playOrder: number;
+  relativeIntensity: RelativeIntensity;
+  targetCount: number;
+  worstPlayOrder: number | null;
+}): { accentColor: string; label: string | null; style: CSSProperties } {
+  if (targetCount === 0) {
+    return {
+      accentColor: "var(--color-text-muted)",
+      label: null,
+      style: {
+        backgroundColor: "var(--color-surface)",
+        borderColor: "var(--color-border)",
+      },
+    };
+  }
+
+  const isBest = playOrder === bestPlayOrder;
+  const isWorst = playOrder === worstPlayOrder;
+  const alpha = relativeIntensityAlpha(relativeIntensity);
+  const accentColor =
+    isBest && isWorst
+      ? "var(--color-tray-incident)"
+      : isBest
+        ? "var(--color-action)"
+        : isWorst
+          ? "var(--color-danger)"
+          : "var(--color-tray-incident)";
+  return {
+    accentColor,
+    label: isBest && isWorst ? "同等" : isBest ? "得意" : isWorst ? "苦手" : null,
+    style: {
+      backgroundColor: colorMix(accentColor, alpha),
+      borderColor: colorMix(accentColor, alpha + 0.12 < 0.28 ? 0.28 : alpha + 0.12),
+    },
+  };
+}
+
+function relativeIntensityAlpha(intensity: RelativeIntensity): number {
+  switch (intensity) {
+    case "high":
+      return 0.22;
+    case "medium":
+      return 0.14;
+    case "low":
+      return 0.08;
+    case "none":
+      return 0.06;
+  }
 }
 
 export function CardShopDestinationQuadrants({

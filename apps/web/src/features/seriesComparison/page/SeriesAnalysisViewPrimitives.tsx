@@ -121,7 +121,7 @@ function metricUnitDescription(unit: string): string {
     case "rate":
       return " 割合で表示します。";
     case "man_yen":
-      return " 金額は万円単位です。";
+      return " 金額は兆・億・万円を組み合わせて表示します。";
     default:
       return "";
   }

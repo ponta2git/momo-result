@@ -3,8 +3,10 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
+import { headToHeadCellStyle } from "@/features/seriesComparison/charts/SeriesAnalysisOverviewCharts";
 import { ContextView } from "@/features/seriesComparison/page/SeriesAnalysisContextView";
 import { DriversView } from "@/features/seriesComparison/page/SeriesAnalysisDriversView";
+import { FlowView } from "@/features/seriesComparison/page/SeriesAnalysisFlowView";
 import { OverviewView } from "@/features/seriesComparison/page/SeriesAnalysisOverviewView";
 import { SeriesAnalysisSelectedMatch } from "@/features/seriesComparison/page/SeriesAnalysisSelectedMatch";
 import {
@@ -34,12 +36,15 @@ describe("rich series analysis views", () => {
   });
 
   it("places observed outcomes before advanced rank signals", () => {
+    const response = makeSeriesAnalysisAggregate();
     render(
-      <DriversView
-        focusedItemIds={["revenue-rank:member_ponta:1:1"]}
-        response={makeSeriesAnalysisAggregate()}
-        onDrilldown={vi.fn()}
-      />,
+      <MemoryRouter initialEntries={["/analytics/series?view=drivers"]}>
+        <DriversView
+          focusedItemIds={["revenue-rank:member_ponta:1:1"]}
+          response={response}
+          onDrilldown={vi.fn()}
+        />
+      </MemoryRouter>,
     );
 
     expect(
@@ -60,6 +65,14 @@ describe("rich series analysis views", () => {
     expect(screen.getByText("主要根拠")).toBeInTheDocument();
     expect(screen.getByText("総資産レンジ")).toBeInTheDocument();
     expect(screen.getByText("物件収益額")).toBeInTheDocument();
+    expect(screen.getByText("4億5000万円")).toBeInTheDocument();
+    expect(screen.getByText("0万円〜9999万円")).toBeInTheDocument();
+    expect(screen.queryByText("0〜9999")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("link", {
+        name: /12戦目、12%、21億円、1位の試合結果を見る/u,
+      }),
+    ).toHaveAttribute("href", expect.stringContaining("/matches/match-12?returnTo="));
     expect(screen.getByText(/因果関係や次戦の結果を保証するものではありません/u)).toBeVisible();
   });
 
@@ -75,6 +88,40 @@ describe("rich series analysis views", () => {
     expect(screen.getByText("目的地あり・売り場あり・この試合")).toBeInTheDocument();
     expect(document.querySelector('[data-focused-metric="true"]')).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent("destination_with_shop");
+    expect(screen.getByText("得意")).toBeInTheDocument();
+  });
+
+  it("restores match-axis strips and the event-position matrix with result links", () => {
+    render(
+      <MemoryRouter initialEntries={["/analytics/series?view=flow"]}>
+        <FlowView
+          focusedItemIds={["match:match-12", "recent-rank:member_ponta:match-12"]}
+          response={makeSeriesAnalysisAggregate()}
+          onDrilldown={vi.fn()}
+          onFocusMatch={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("table", { name: "直近順位ストリップ" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", {
+        name: /ぽんた、第12戦、1位、この試合。試合結果を見る/u,
+      }),
+    ).toHaveAttribute("href", expect.stringContaining("/matches/match-12?returnTo="));
+    expect(screen.getByText("第1試合")).toBeInTheDocument();
+    expect(screen.getByText("第2試合")).toBeInTheDocument();
+    expect(screen.getByText("第4試合")).toBeInTheDocument();
+    expect(screen.getByText("1位–4位差")).toBeInTheDocument();
+  });
+
+  it("assigns disadvantage and advantage to different semantic colors", () => {
+    expect(headToHeadCellStyle("strong_advantage", "high").backgroundColor).toContain(
+      "--color-action",
+    );
+    expect(headToHeadCellStyle("strong_disadvantage", "high").backgroundColor).toContain(
+      "--color-danger",
+    );
   });
 
   it("keeps the selected match inline with its ledger and an explicit clear action", async () => {
@@ -88,6 +135,9 @@ describe("rich series analysis views", () => {
 
     const selectedMatch = screen.getByRole("region", { name: "選択中の試合" });
     expect(within(selectedMatch).getByRole("heading", { name: /第12戦/u })).toBeInTheDocument();
+    expect(
+      within(selectedMatch).getByRole("link", { name: "第12戦の試合結果を見る" }),
+    ).toHaveAttribute("href", expect.stringContaining("/matches/match-12?returnTo="));
     expect(
       within(selectedMatch).getByRole("list", { name: "選択中の試合の順位と成績" }),
     ).toBeInTheDocument();

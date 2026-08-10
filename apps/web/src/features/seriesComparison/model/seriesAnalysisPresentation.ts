@@ -6,6 +6,7 @@ import type {
   SeriesAnalysisPlaybookClassification,
   SeriesAnalysisPlaybookEvidenceStrength,
 } from "@/shared/api/seriesAnalysis";
+import { formatManYen as formatStoredManYen } from "@/shared/lib/formatters";
 
 const numberFormatter = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 2 });
 const integerFormatter = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 0 });
@@ -27,7 +28,19 @@ export function formatInteger(value: number | null | undefined): string {
 }
 
 export function formatManYen(value: number | null | undefined): string {
-  return value === null || value === undefined ? "—" : `${integerFormatter.format(value)}万円`;
+  return value === null || value === undefined ? "—" : formatStoredManYen(value);
+}
+
+export function formatHistogramManYenBin({
+  lowerInclusive,
+  upperExclusive,
+}: {
+  lowerInclusive: number;
+  upperExclusive: number | null;
+}): string {
+  if (lowerInclusive === 0 && upperExclusive === 1) return "0円";
+  if (upperExclusive === null) return `${formatStoredManYen(lowerInclusive)}以上`;
+  return `${formatStoredManYen(lowerInclusive)}〜${formatStoredManYen(upperExclusive - 1)}`;
 }
 
 export function formatPercent(value: number | null | undefined): string {
@@ -67,11 +80,11 @@ export function directionLabel(direction: ChangeDirection): string {
     case "improved":
       return "改善";
     case "declined":
-      return "低下";
+      return "後退";
     case "unchanged":
-      return "変化なし";
+      return "維持";
     case "first_observation":
-      return "初回";
+      return "初戦";
     case "unavailable":
       return "比較不可";
   }

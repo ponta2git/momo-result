@@ -7,60 +7,7 @@ import {
 import type { SeriesComparisonAggregateV2 } from "@/shared/api/seriesAnalysis";
 import { DataVizLineChart } from "@/shared/ui/dataViz/LineChart";
 import { dataVizSeriesColor } from "@/shared/ui/dataViz/playerSeries";
-import { rankColor } from "@/shared/ui/rank/rankPresentation";
-
-export function RecentRankStrips({
-  focusedItemIds,
-  response,
-}: {
-  focusedItemIds: readonly string[];
-  response: SeriesComparisonAggregateV2;
-}) {
-  return (
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-      {response.recentRanks.map((entry, index) => (
-        <article
-          className="rounded-[var(--radius-sm)] border border-[var(--color-border)] p-3"
-          key={entry.memberId}
-        >
-          <h3
-            className="font-semibold"
-            style={{
-              borderLeftColor: dataVizSeriesColor(index),
-              borderLeftWidth: 3,
-              paddingLeft: 8,
-            }}
-          >
-            {entry.displayName}
-          </h3>
-          <p className="mt-1 text-xs text-[var(--color-text-secondary)] tabular-nums">
-            直近{entry.targetCount}戦・平均{formatDecimal(entry.averageRank)}位・入賞
-            {formatPercent(entry.podiumRate)}
-          </p>
-          <ol aria-label={`${entry.displayName}の直近順位`} className="mt-3 flex flex-wrap gap-1">
-            {entry.rows.map((row) => {
-              const focused = focusedItemIds.includes(row.itemId);
-              return (
-                <li
-                  aria-label={`${row.rank}位${focused ? "、この試合" : ""}`}
-                  className={`inline-flex min-h-9 min-w-9 items-center justify-center rounded-[var(--radius-xs)] border text-sm font-semibold tabular-nums ${focused ? "momo-enter ring-2 ring-[var(--color-action)] ring-offset-1 ring-offset-[var(--color-surface)]" : ""}`}
-                  data-focused-metric={focused ? "true" : undefined}
-                  key={row.itemId}
-                  style={{
-                    backgroundColor: `color-mix(in srgb, ${rankColor(row.rank)} 14%, var(--color-surface))`,
-                    borderColor: `color-mix(in srgb, ${rankColor(row.rank)} 36%, var(--color-border))`,
-                  }}
-                >
-                  {row.rank}
-                </li>
-              );
-            })}
-          </ol>
-        </article>
-      ))}
-    </div>
-  );
-}
+import { rankBackgroundColor, rankBorderColor } from "@/shared/ui/rank/rankPresentation";
 
 export function RankTrendCharts({
   focusedItemIds,
@@ -205,6 +152,7 @@ export function MomentumMatrices({
                 <div
                   className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-1 text-center text-[11px] font-semibold"
                   key={rank}
+                  style={{ borderTopColor: rankBorderColor(rank), borderTopWidth: 3 }}
                 >
                   次{rank}位
                 </div>
@@ -220,9 +168,20 @@ export function MomentumMatrices({
                     ) : null}
                     <div
                       aria-label={`${cell.previousRank}位から${cell.nextRank}位、${cell.count}戦、${formatPercent(cell.rate)}${focused ? "、この試合" : ""}`}
-                      className={`rounded-[var(--radius-xs)] border border-[var(--color-border)] px-1 py-2 text-center ${momentumTone(cell.relativeIntensity)} ${focused ? "momo-enter ring-2 ring-[var(--color-action)] ring-offset-1 ring-offset-[var(--color-surface-subtle)]" : ""}`}
+                      className={`rounded-[var(--radius-xs)] border px-1 py-2 text-center ${focused ? "momo-enter ring-2 ring-[var(--color-action)] ring-offset-1 ring-offset-[var(--color-surface-subtle)]" : ""}`}
                       data-focused-metric={focused ? "true" : undefined}
                       role="img"
+                      style={
+                        cell.count === 0
+                          ? {
+                              backgroundColor: "var(--color-surface)",
+                              borderColor: "var(--color-border)",
+                            }
+                          : {
+                              backgroundColor: rankBackgroundColor(cell.nextRank, cell.rate ?? 0),
+                              borderColor: rankBorderColor(cell.nextRank),
+                            }
+                      }
                     >
                       <strong className="text-sm tabular-nums">{cell.count}</strong>
                       <p className="text-[10px] text-[var(--color-text-secondary)] tabular-nums">
@@ -251,17 +210,4 @@ function trendSeries(response: SeriesComparisonAggregateV2, kind: string) {
         value: point.value,
       })),
     }));
-}
-
-function momentumTone(intensity: "high" | "low" | "medium" | "none"): string {
-  switch (intensity) {
-    case "high":
-      return "bg-[var(--color-action)]/22";
-    case "medium":
-      return "bg-[var(--color-action)]/14";
-    case "low":
-      return "bg-[var(--color-action)]/8";
-    case "none":
-      return "bg-[var(--color-surface)]";
-  }
 }

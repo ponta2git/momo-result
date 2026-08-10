@@ -1,13 +1,17 @@
 import { Fragment } from "react";
+import { useLocation } from "react-router-dom";
 
 import {
+  formatHistogramManYenBin,
   formatManYen,
   formatPercent,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { SeriesComparisonAggregateV2 } from "@/shared/api/seriesAnalysis";
+import { currentInternalLocation, withReturnTo } from "@/shared/navigation/returnTo";
 import { DataVizHistogramChart } from "@/shared/ui/dataViz/HistogramChart";
 import { dataVizSeriesColor } from "@/shared/ui/dataViz/playerSeries";
 import { DataVizScatterPlot } from "@/shared/ui/dataViz/ScatterPlot";
+import { rankBackgroundColor, rankBorderColor } from "@/shared/ui/rank/rankPresentation";
 
 export function AssetRevenueHistograms({ response }: { response: SeriesComparisonAggregateV2 }) {
   const seriesIdentity = response.players.map((player) => ({
@@ -22,7 +26,7 @@ export function AssetRevenueHistograms({ response }: { response: SeriesCompariso
           ariaLabel="4人の総資産分布"
           bins={response.histograms.assets.bins.map((bin) => ({
             id: bin.index,
-            label: bin.label,
+            label: formatHistogramManYenBin(bin),
           }))}
           series={response.histograms.assets.series.map((series) => ({
             counts: series.counts,
@@ -37,7 +41,7 @@ export function AssetRevenueHistograms({ response }: { response: SeriesCompariso
           ariaLabel="4人の物件収益分布"
           bins={response.histograms.revenue.bins.map((bin) => ({
             id: bin.index,
-            label: bin.label,
+            label: formatHistogramManYenBin(bin),
           }))}
           series={response.histograms.revenue.series.map((series) => ({
             counts: series.counts,
@@ -81,6 +85,7 @@ export function RevenueConversionMatrices({
                 <div
                   className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-1 text-center text-[11px] font-semibold"
                   key={rank}
+                  style={{ borderTopColor: rankBorderColor(rank), borderTopWidth: 3 }}
                 >
                   最終{rank}位
                 </div>
@@ -94,9 +99,20 @@ export function RevenueConversionMatrices({
                   ) : null}
                   <div
                     aria-label={`収益${cell.revenueRank}位から最終${cell.finalRank}位、${cell.count}戦、${formatPercent(cell.rate)}${focusedItemIds.includes(cell.itemId) ? "、この試合" : ""}`}
-                    className={`rounded-[var(--radius-xs)] border px-1 py-2 text-center ${conversionTone(cell.relativeIntensity)} ${focusedItemIds.includes(cell.itemId) ? "momo-enter ring-2 ring-[var(--color-action)] ring-offset-1 ring-offset-[var(--color-surface-subtle)]" : ""}`}
+                    className={`rounded-[var(--radius-xs)] border px-1 py-2 text-center ${focusedItemIds.includes(cell.itemId) ? "momo-enter ring-2 ring-[var(--color-action)] ring-offset-1 ring-offset-[var(--color-surface-subtle)]" : ""}`}
                     data-focused-metric={focusedItemIds.includes(cell.itemId) ? "true" : undefined}
                     role="img"
+                    style={
+                      cell.count === 0
+                        ? {
+                            backgroundColor: "var(--color-surface)",
+                            borderColor: "var(--color-border)",
+                          }
+                        : {
+                            backgroundColor: rankBackgroundColor(cell.finalRank, cell.rate ?? 0),
+                            borderColor: rankBorderColor(cell.finalRank),
+                          }
+                    }
                   >
                     <strong className="text-sm tabular-nums">{cell.count}</strong>
                     <p className="text-[10px] text-[var(--color-text-secondary)] tabular-nums">
@@ -125,6 +141,7 @@ export function StrategyScatter({
   focusedItemIds: readonly string[];
   response: SeriesComparisonAggregateV2;
 }) {
+  const returnTo = currentInternalLocation(useLocation());
   return (
     <DataVizScatterPlot
       ariaLabel="物件収益比率と総資産の散布図"
@@ -136,6 +153,7 @@ export function StrategyScatter({
           ? []
           : [
               {
+                href: withReturnTo(`/matches/${encodeURIComponent(point.matchId)}`, returnTo),
                 itemId: point.itemId,
                 label: `${point.matchIndex}戦目、${formatPercent(point.revenueAssetRate)}、${formatManYen(point.totalAssetsManYen)}、${point.rank}位`,
                 seriesId: point.memberId,
@@ -154,17 +172,4 @@ export function StrategyScatter({
       yMinimumStep={1}
     />
   );
-}
-
-function conversionTone(intensity: "high" | "low" | "medium" | "none"): string {
-  switch (intensity) {
-    case "high":
-      return "border-[var(--color-action)]/45 bg-[var(--color-action)]/22";
-    case "medium":
-      return "border-[var(--color-action)]/35 bg-[var(--color-action)]/14";
-    case "low":
-      return "border-[var(--color-action)]/25 bg-[var(--color-action)]/8";
-    case "none":
-      return "border-[var(--color-border)] bg-[var(--color-surface)]";
-  }
 }

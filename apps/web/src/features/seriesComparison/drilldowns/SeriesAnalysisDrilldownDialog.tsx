@@ -4,17 +4,20 @@ import {
   TableCell,
   TableHead,
 } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownPrimitives";
+import {
+  PlayOrderHistoryDrilldown,
+  RankHistoryDrilldown,
+} from "@/features/seriesComparison/drilldowns/SeriesAnalysisHistoryDrilldowns";
 import { useSeriesAnalysisDrilldown } from "@/features/seriesComparison/drilldowns/useSeriesAnalysisDrilldown";
 import {
-  directionLabel,
   evidenceStrengthLabel,
   formatDateTime,
   formatDecimal,
   formatManYen,
-  formatPercent,
   qualityLabel,
   rankSignalLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
+import { SeriesAnalysisMatchLink } from "@/features/seriesComparison/navigation/SeriesAnalysisMatchLink";
 import type {
   SeriesAnalysisDrilldownMetricId,
   SeriesAnalysisDrilldownV2,
@@ -79,96 +82,10 @@ function DrilldownBody({ response }: { response: SeriesAnalysisDrilldownV2 }) {
   const payload = response.payload;
   switch (payload.kind) {
     case "rank_average_history":
-      return (
-        <div className="grid gap-4">
-          <SummaryLine
-            items={[
-              `対象 ${payload.summary.targetCount}戦`,
-              `現在 ${formatDecimal(payload.summary.currentAverageRank)}位`,
-              qualityLabel(payload.summary.qualityStatus),
-            ]}
-          />
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[42rem] text-left text-sm">
-              <thead>
-                <tr>
-                  <TableHead>試合</TableHead>
-                  <TableHead>日時</TableHead>
-                  <TableHead>順位</TableHead>
-                  <TableHead>通算平均</TableHead>
-                  <TableHead>変化</TableHead>
-                </tr>
-              </thead>
-              <tbody>
-                {payload.matchRows.map((row) => (
-                  <tr className="border-t border-[var(--color-border)]" key={row.itemId}>
-                    <TableCell>第{row.matchIndex}戦</TableCell>
-                    <TableCell>{formatDateTime(row.playedAt)}</TableCell>
-                    <TableCell>{row.rank}位</TableCell>
-                    <TableCell>{formatDecimal(row.cumulativeAverageRank)}位</TableCell>
-                    <TableCell>{directionLabel(row.changeDirection)}</TableCell>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      );
+      return <RankHistoryDrilldown payload={payload} playerName={response.player.displayName} />;
     case "play_order_rank_history":
       return (
-        <div className="grid gap-4">
-          <SummaryLine
-            items={[
-              `対象 ${payload.summary.targetCount}戦`,
-              `現在 ${formatDecimal(payload.summary.currentAverageRank)}位`,
-              qualityLabel(payload.summary.qualityStatus),
-            ]}
-          />
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {payload.rows.map((row) => (
-              <div
-                className="rounded-[var(--radius-sm)] border border-[var(--color-border)] p-3"
-                key={row.playOrder}
-              >
-                <p className="text-xs text-[var(--color-text-secondary)]">
-                  {row.playOrder}番手・{row.targetCount}戦
-                </p>
-                <p className="mt-1 text-lg font-semibold tabular-nums">
-                  {formatDecimal(row.rankAverage)}位
-                </p>
-                <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
-                  入賞 {formatPercent(row.podiumRate)} / 下位 {formatPercent(row.lowerHalfRate)}
-                </p>
-              </div>
-            ))}
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[42rem] text-left text-sm">
-              <thead>
-                <tr>
-                  <TableHead>試合</TableHead>
-                  <TableHead>日時</TableHead>
-                  <TableHead>番手</TableHead>
-                  <TableHead>順位</TableHead>
-                  <TableHead>番手別通算</TableHead>
-                  <TableHead>変化</TableHead>
-                </tr>
-              </thead>
-              <tbody>
-                {payload.seriesByPlayOrder.map((row) => (
-                  <tr className="border-t border-[var(--color-border)]" key={row.itemId}>
-                    <TableCell>第{row.matchIndex}戦</TableCell>
-                    <TableCell>{formatDateTime(row.playedAt)}</TableCell>
-                    <TableCell>{row.playOrder}番手</TableCell>
-                    <TableCell>{row.rank}位</TableCell>
-                    <TableCell>{formatDecimal(row.cumulativeAverageRank)}位</TableCell>
-                    <TableCell>{directionLabel(row.changeDirection)}</TableCell>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <PlayOrderHistoryDrilldown payload={payload} playerName={response.player.displayName} />
       );
     case "rank_signals":
       return (
@@ -243,7 +160,14 @@ function DrilldownBody({ response }: { response: SeriesAnalysisDrilldownV2 }) {
                 <tbody>
                   {payload.rows.map((row) => (
                     <tr className="border-t border-[var(--color-border)]" key={row.matchId}>
-                      <TableCell>第{row.matchIndex}戦</TableCell>
+                      <TableCell>
+                        <SeriesAnalysisMatchLink
+                          ariaLabel={`第${row.matchIndex}戦の試合結果を見る`}
+                          matchId={row.matchId}
+                        >
+                          第{row.matchIndex}戦
+                        </SeriesAnalysisMatchLink>
+                      </TableCell>
                       <TableCell>{formatDateTime(row.playedAt)}</TableCell>
                       <TableCell>{formatDecimal(row.expectedRank)}位</TableCell>
                       <TableCell>{row.actualRank}位</TableCell>

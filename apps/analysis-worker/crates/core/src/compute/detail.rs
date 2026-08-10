@@ -339,10 +339,8 @@ pub(super) fn match_context(
                     row.member_id, row.rank
                 ));
             }
-            let card_shop_kind = match (
-                row.incidents.destination > 0,
-                row.incidents.card_shop > 0,
-            ) {
+            let card_shop_kind = match (row.incidents.destination > 0, row.incidents.card_shop > 0)
+            {
                 (true, true) => "destination_with_shop",
                 (true, false) => "destination_without_shop",
                 (false, true) => "no_destination_with_shop",

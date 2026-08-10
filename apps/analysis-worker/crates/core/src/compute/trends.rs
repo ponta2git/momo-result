@@ -197,10 +197,7 @@ fn fixed_histogram_bins(values: &[i32]) -> Option<Vec<HistogramBin>> {
     Some(bins)
 }
 
-fn bins_with_isolated_zero(
-    bins: Vec<HistogramBin>,
-    nonzero_values: &[i32],
-) -> Vec<HistogramBin> {
+fn bins_with_isolated_zero(bins: Vec<HistogramBin>, nonzero_values: &[i32]) -> Vec<HistogramBin> {
     let has_negative = nonzero_values.iter().any(|candidate| *candidate < 0);
     let has_positive = nonzero_values.iter().any(|candidate| *candidate > 0);
     let mut negative = Vec::with_capacity(bins.len());
@@ -293,9 +290,7 @@ impl HistogramBin {
 
     fn contains(self, candidate: i64) -> bool {
         candidate >= self.lower_inclusive
-            && self
-                .upper_exclusive
-                .is_none_or(|upper| candidate < upper)
+            && self.upper_exclusive.is_none_or(|upper| candidate < upper)
     }
 
     fn label(self) -> String {

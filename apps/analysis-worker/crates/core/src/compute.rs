@@ -351,15 +351,14 @@ mod tests {
         };
         let resources = compute_all(&input);
         let aggregate = resources.iter().find(|resource| {
-            resource.scope == ScopeRef::Overall
-                && resource.kind == ComputedResourceKind::Aggregate
+            resource.scope == ScopeRef::Overall && resource.kind == ComputedResourceKind::Aggregate
         });
         assert!(aggregate.is_some(), "overall aggregate missing");
         let Some(aggregate) = aggregate else {
             return;
         };
         let context = resources.iter().find(|resource| {
-                resource.scope == ScopeRef::Overall
+            resource.scope == ScopeRef::Overall
                 && resource.kind
                     == ComputedResourceKind::MatchContext {
                         match_id: String::from("match-2"),
@@ -388,7 +387,11 @@ mod tests {
             focused_ids.len(),
             "focused IDs must be unique"
         );
-        assert_eq!(focused.len(), 49, "four players use the complete focus bound");
+        assert_eq!(
+            focused.len(),
+            49,
+            "four players use the complete focus bound"
+        );
         assert!(
             crate::payload::validate_computed(context).is_ok(),
             "the complete focus set must pass staging validation"
@@ -501,7 +504,11 @@ mod tests {
                     && bin.get("upperExclusive").and_then(Value::as_i64) == Some(1)
             })
             .collect::<Vec<_>>();
-        assert_eq!(zero_bins.len(), 1, "zero must have exactly one dedicated bin");
+        assert_eq!(
+            zero_bins.len(),
+            1,
+            "zero must have exactly one dedicated bin"
+        );
         assert!(bins.len() <= 8, "histogram must stay within the bin limit");
         for pair in bins.windows(2) {
             let [left, right] = pair else {
@@ -510,7 +517,9 @@ mod tests {
             let left_upper = left.get("upperExclusive").and_then(Value::as_i64);
             let right_lower = right.get("lowerInclusive").and_then(Value::as_i64);
             assert!(
-                left_upper.zip(right_lower).is_some_and(|(upper, lower)| upper <= lower),
+                left_upper
+                    .zip(right_lower)
+                    .is_some_and(|(upper, lower)| upper <= lower),
                 "revenue histogram bins must be non-overlapping and ordered"
             );
         }
@@ -539,7 +548,8 @@ mod tests {
                 .and_then(Value::as_u64);
             let expected = u64::from(member_id == Some("member-2"));
             assert_eq!(
-                zero_count, Some(expected),
+                zero_count,
+                Some(expected),
                 "zero revenue must only count in the dedicated player bin"
             );
         }
@@ -582,6 +592,9 @@ mod tests {
             .flatten()
             .filter_map(|series| series.get("counts"))
             .collect::<Vec<_>>();
-        assert_eq!(counts, vec![&json!([1]), &json!([1]), &json!([1]), &json!([1])]);
+        assert_eq!(
+            counts,
+            vec![&json!([1]), &json!([1]), &json!([1]), &json!([1])]
+        );
     }
 }

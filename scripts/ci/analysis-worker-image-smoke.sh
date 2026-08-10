@@ -55,17 +55,24 @@ fi
 
 docker run --rm --entrypoint sh "${image_ref}" -c '
   set -eu
-  test "$(id -u)" = 10001
-  test "$(id -g)" = 10001
-  test -r /etc/ssl/certs/ca-certificates.crt
-  test -w /var/lib/momo-analysis
-  test "$(stat -c %a /var/lib/momo-analysis)" = 700
+
+  fail() {
+    echo "analysis worker runtime probe failed: $1" >&2
+    exit 1
+  }
+
+  test "$(id -u)" = 10001 || fail "unexpected uid"
+  test "$(id -g)" = 10001 || fail "unexpected gid"
+  test -r /etc/ssl/certs/ca-certificates.crt || fail "CA bundle is unreadable"
+  test -w /var/lib/momo-analysis || fail "state directory is not writable"
+  test "$(stat -c %a /var/lib/momo-analysis)" = 700 \
+    || fail "state directory permissions are not 0700"
 
   for tool in \
     sh ps free pgrep top pmap ip netstat nc getent openssl \
     df du find stat cat grep sed awk tail head date sha256sum
   do
-    command -v "${tool}" >/dev/null
+    command -v "${tool}" >/dev/null || fail "required tool is missing: ${tool}"
   done
 
   for excluded in \
@@ -78,7 +85,10 @@ docker run --rm --entrypoint sh "${image_ref}" -c '
     fi
   done
 
-  test "$(stat -c %i /momo-toolbox/sh)" != "$(stat -c %i /momo-toolbox/.momo-tool)"
+  shell_checksum="$(sha256sum /momo-toolbox/sh | awk "{print \$1}")"
+  toolbox_checksum="$(sha256sum /momo-toolbox/.momo-tool | awk "{print \$1}")"
+  test "${shell_checksum}" != "${toolbox_checksum}" \
+    || fail "runtime shell must be distinct from the BusyBox toolbox"
   if /momo-toolbox/.momo-tool dpkg >/dev/null 2>&1; then
     hidden_applet_status=0
   else
@@ -98,33 +108,37 @@ docker run --rm --entrypoint sh "${image_ref}" -c '
     exit 1
   fi
 
-  getent hosts localhost >/dev/null
-  openssl version >/dev/null
-  ps -o pid,ppid,rss,vsz,stat,comm,args >/dev/null
-  free >/dev/null
-  top -b -n 1 >/dev/null
-  pmap $$ >/dev/null
-  ip addr show >/dev/null
-  ip route show >/dev/null
-  netstat -lnt >/dev/null
-  df -P /var/lib/momo-analysis >/dev/null
-  du -s /var/lib/momo-analysis >/dev/null
-  test -r /proc/1/status
-  test -r /proc/1/limits
+  getent hosts localhost >/dev/null || fail "localhost lookup failed"
+  openssl version >/dev/null || fail "OpenSSL probe failed"
+  ps -o pid,ppid,rss,vsz,stat,comm,args >/dev/null || fail "ps probe failed"
+  free >/dev/null || fail "free probe failed"
+  top -b -n 1 >/dev/null || fail "top probe failed"
+  pmap $$ >/dev/null || fail "pmap probe failed"
+  ip addr show >/dev/null || fail "IP address probe failed"
+  ip route show >/dev/null || fail "IP route probe failed"
+  netstat -lnt >/dev/null || fail "socket probe failed"
+  df -P /var/lib/momo-analysis >/dev/null || fail "filesystem probe failed"
+  du -s /var/lib/momo-analysis >/dev/null || fail "disk usage probe failed"
+  test -r /proc/1/status || fail "/proc/1/status is unreadable"
+  test -r /proc/1/limits || fail "/proc/1/limits is unreadable"
   if test -r /sys/fs/cgroup/memory.current; then
-    cat /sys/fs/cgroup/memory.current >/dev/null
-    cat /sys/fs/cgroup/memory.events >/dev/null
+    cat /sys/fs/cgroup/memory.current >/dev/null || fail "memory.current is unreadable"
+    cat /sys/fs/cgroup/memory.events >/dev/null || fail "memory.events is unreadable"
   elif test -r /sys/fs/cgroup/memory/memory.usage_in_bytes; then
-    cat /sys/fs/cgroup/memory/memory.usage_in_bytes >/dev/null
+    cat /sys/fs/cgroup/memory/memory.usage_in_bytes >/dev/null \
+      || fail "memory.usage_in_bytes is unreadable"
   else
     echo "container memory accounting is unavailable" >&2
     exit 1
   fi
 '
 
-special_mode_files="$(docker run --rm --user 0:0 --entrypoint sh "${image_ref}" -c '
+if ! special_mode_files="$(docker run --rm --user 0:0 --entrypoint sh "${image_ref}" -c '
   find / -xdev -type f -perm /6000 -print 2>/dev/null
-')"
+')"; then
+  echo "analysis worker special-mode file scan failed" >&2
+  exit 1
+fi
 if [[ -n "${special_mode_files}" ]]; then
   echo "analysis worker image contains setuid or setgid executables" >&2
   exit 1

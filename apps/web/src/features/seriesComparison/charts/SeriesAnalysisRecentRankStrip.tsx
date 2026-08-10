@@ -78,20 +78,20 @@ export function RecentRankStrips({
                   shouldShowRankStripMatchMarker(matchIndex, pointIndex, axisRows.length);
                 return (
                   <th
-                    className={`w-9 min-w-9 px-0 text-center align-bottom ${focused ? "w-14 min-w-14" : ""}`}
+                    className={`w-11 min-w-11 px-0 text-center align-bottom ${focused ? "w-14 min-w-14" : ""}`}
                     key={row.matchId}
                     scope="col"
                   >
                     {showMarker ? (
                       <SeriesAnalysisMatchLink
                         ariaLabel={`第${matchIndex}戦の試合結果を見る${focused ? "、この試合" : ""}`}
-                        className={`!min-h-4 text-[10px] whitespace-nowrap ${focused ? "momo-enter" : "text-[var(--color-text-muted)]"}`}
+                        className={`justify-center text-[10px] whitespace-nowrap ${focused ? "momo-enter" : "text-[var(--color-text-muted)]"}`}
                         matchId={row.matchId}
                       >
                         {focused ? "この試合" : `第${matchIndex}戦`}
                       </SeriesAnalysisMatchLink>
                     ) : (
-                      <span aria-hidden="true" className="block h-4" />
+                      <span aria-hidden="true" className="block h-11" />
                     )}
                   </th>
                 );
@@ -126,11 +126,11 @@ export function RecentRankStrips({
                     const matchIndex = matchIndexById.get(axisRow.matchId) ?? pointIndex + 1;
                     const focused = row ? focusedItemIds.includes(row.itemId) : false;
                     return (
-                      <td className="h-9 w-9 min-w-9 px-0 py-1 align-middle" key={axisRow.matchId}>
+                      <td className="h-11 w-11 min-w-11 px-0 align-middle" key={axisRow.matchId}>
                         {row ? (
                           <SeriesAnalysisMatchLink
                             ariaLabel={`${player.displayName}、第${matchIndex}戦、${row.rank}位${focused ? "、この試合" : ""}。試合結果を見る`}
-                            className={`!min-h-8 w-8 justify-center rounded-[var(--radius-xs)] border text-xs tabular-nums no-underline hover:no-underline ${focused ? "momo-enter ring-2 ring-[var(--color-action)] ring-offset-2 ring-offset-[var(--color-surface-subtle)]" : ""}`}
+                            className={`w-11 justify-center rounded-[var(--radius-xs)] border text-xs tabular-nums no-underline hover:no-underline ${focused ? "momo-enter ring-2 ring-[var(--color-action)] ring-offset-2 ring-offset-[var(--color-surface-subtle)]" : ""}`}
                             matchId={row.matchId}
                             title={`第${matchIndex}戦 ${row.rank}位`}
                           >
@@ -147,7 +147,7 @@ export function RecentRankStrips({
                             </span>
                           </SeriesAnalysisMatchLink>
                         ) : (
-                          <span aria-hidden="true" className="block size-8" />
+                          <span aria-hidden="true" className="block size-11" />
                         )}
                       </td>
                     );

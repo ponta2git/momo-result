@@ -37,7 +37,6 @@ export function SeriesAnalysisSelectedMatch({
           <h2 className="mt-0.5 text-base font-semibold text-[var(--color-text-primary)]">
             <SeriesAnalysisMatchLink
               ariaLabel={`第${context.match.matchIndex}戦の試合結果を見る`}
-              className="min-h-0"
               matchId={context.matchId}
             >
               第{context.match.matchIndex}戦・{formatDateTime(context.match.playedAt)}

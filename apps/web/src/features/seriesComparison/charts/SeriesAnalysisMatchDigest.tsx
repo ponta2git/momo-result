@@ -56,7 +56,7 @@ export function MatchDigestStrip({
                     <div className="min-w-0">
                       <SeriesAnalysisMatchLink
                         ariaLabel={`第${match.matchIndex}戦の試合結果を見る`}
-                        className="!min-h-6 gap-1 text-xs"
+                        className="gap-1 text-xs"
                         matchId={match.matchId}
                       >
                         第{match.matchIndex}戦

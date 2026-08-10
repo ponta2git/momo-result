@@ -432,6 +432,13 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
             row.matchIndex = 1;
             row.matchNoInEvent = 1;
           }
+        } else if (fixture.payload.kind === "play_order_rank_history") {
+          for (const row of fixture.payload.seriesByPlayOrder) {
+            row.itemId = `play-order-history:${matchId}`;
+            row.matchId = matchId;
+            row.matchIndex = 1;
+            row.matchNoInEvent = 1;
+          }
         }
         await route.fulfill({ json: fixture });
       },
@@ -459,12 +466,20 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     await expect(page.getByText(/更新のデータを表示します/u)).toBeVisible();
     const selectedMatch = page.getByRole("region", { name: "選択中の試合" });
     await expect(selectedMatch.getByRole("heading", { name: /第1戦/u })).toBeVisible();
+    const selectedMatchHref = withReturnTo(
+      `/matches/${encodeURIComponent(matchId)}`,
+      currentPagePath(page),
+    );
+    await expect(
+      selectedMatch.getByRole("link", { name: "第1戦の試合結果を見る" }),
+    ).toHaveAttribute("href", selectedMatchHref);
     await expect(selectedMatch.getByRole("list", { name: "この試合の注目点" })).toBeVisible();
     await expect(
       selectedMatch.getByRole("list", { name: "選択中の試合の順位と成績" }),
     ).toContainText("ぽんた");
     await expect(page.locator('[data-focused-metric="true"]').first()).toBeVisible();
     await expect(page.getByRole("heading", { name: "最近の試合と荒れ方" })).toBeVisible();
+    await expect(page.getByRole("table", { name: "直近順位ストリップ" })).toBeVisible();
     await expectNoHorizontalPageOverflow(page);
 
     await page.getByRole("tab", { name: "今の差" }).click();
@@ -474,8 +489,40 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     await expect(page).toHaveURL(new RegExp(`focusMatchId=${encodeURIComponent(matchId)}`, "u"));
     await page.getByRole("button", { name: "詳細" }).first().click();
     const rankDialog = page.getByRole("dialog", { name: "平均順位の推移" });
+    await expect(rankDialog.getByRole("img", { name: "ぽんたの累積平均順位の推移" })).toBeVisible();
     await expect(rankDialog.getByRole("cell", { name: "第1戦" })).toBeVisible();
+    await expect(rankDialog.getByText("0.05 改善")).toBeVisible();
+    const rankHistoryMatchHref = withReturnTo(
+      `/matches/${encodeURIComponent(matchId)}`,
+      currentPagePath(page),
+    );
+    await expect(rankDialog.getByRole("link", { name: "第1戦の試合結果を見る" })).toHaveAttribute(
+      "href",
+      rankHistoryMatchHref,
+    );
     await rankDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
+
+    await page.getByRole("tab", { name: "条件別" }).click();
+    await expect(page.getByRole("heading", { name: "番手比較" })).toBeVisible();
+    await expect(page.getByText("得意")).toBeVisible();
+    await page.getByRole("button", { name: "ぽんたの番手別推移" }).click();
+    const playOrderDialog = page.getByRole("dialog", { name: "番手別順位の推移" });
+    await expect(
+      playOrderDialog.getByRole("img", { name: "ぽんたの番手別累積平均順位の推移" }),
+    ).toBeVisible();
+    await expect(playOrderDialog.getByText(/2位 → 1.5位/u)).toBeVisible();
+    await expect(playOrderDialog.getByText("改善")).toBeVisible();
+    await playOrderDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
+
+    await page.getByRole("tab", { name: "勝因候補" }).click();
+    await expect(page.getByText("0円", { exact: true })).toBeVisible();
+    const scatterMatchHref = withReturnTo(
+      `/matches/${encodeURIComponent(matchId)}`,
+      currentPagePath(page),
+    );
+    await expect(
+      page.getByRole("link", { name: /1戦目、12%、21億円、1位の試合結果を見る/u }),
+    ).toHaveAttribute("href", scatterMatchHref);
 
     await page.setViewportSize({ height: 900, width: 1440 });
     await page.getByRole("tab", { name: "次戦に備える" }).click();

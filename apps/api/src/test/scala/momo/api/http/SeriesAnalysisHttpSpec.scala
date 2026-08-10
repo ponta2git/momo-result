@@ -62,6 +62,10 @@ final class SeriesAnalysisHttpSpec extends MomoCatsEffectSuite with HttpAppTestF
       assertEquals(jsonField[Int](statusBody, "schemaVersion"), 1)
       assertEquals(jsonField[String](statusBody, "gameTitleId"), titleId.value)
       assertEquals(jsonField[String](statusBody, "artifactFreshness"), "unavailable")
+      assertEquals(
+        statusBody.hcursor.downField("desired").get[String]("algorithmVersion"),
+        Right("series-analysis-v3"),
+      )
   }
 
   app.test("artifact endpoint never falls back to synchronous analysis") { httpApp =>

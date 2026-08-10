@@ -1,0 +1,279 @@
+name: Analysis production operation
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Production analysis operation
+        required: true
+        type: choice
+        options:
+          - deploy-disabled
+          - deploy-enabled
+          - backfill-dry-run
+          - backfill-apply
+          - audit
+      operation_key:
+        description: Required for initial backfill dry-run and apply
+        required: false
+        type: string
+      require_current:
+        description: Require current artifacts during audit
+        required: false
+        default: false
+        type: boolean
+      require_quiescent:
+        description: Require no active or pending work during audit
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+env:
+  ANALYSIS_APP: momo-result-analysis
+  ANALYSIS_IMAGE_ARTIFACT_NAME: analysis-worker-image
+  ANALYSIS_IMAGE_REF: registry.fly.io/momo-result-analysis:${{ github.sha }}
+
+concurrency:
+  group: production-analysis-operation
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Validate immutable operation inputs
+        env:
+          OPERATION: ${{ inputs.operation }}
+          OPERATION_KEY: ${{ inputs.operation_key }}
+        run: |
+          if [[ "${GITHUB_REF}" != "refs/heads/master" ]]; then
+            echo "Production analysis operations must run from master." >&2
+            exit 1
+          fi
+          case "${OPERATION}" in
+            backfill-dry-run|backfill-apply)
+              if [[ ! "${OPERATION_KEY}" =~ ^[A-Za-z0-9._:-]{8,128}$ ]]; then
+                echo "A safe 8-128 character operation key is required for backfill." >&2
+                exit 1
+              fi
+              ;;
+            deploy-disabled|deploy-enabled|audit)
+              if [[ -n "${OPERATION_KEY}" ]]; then
+                echo "operation_key is only accepted for backfill operations." >&2
+                exit 1
+              fi
+              ;;
+            *)
+              echo "Unsupported production analysis operation." >&2
+              exit 1
+              ;;
+          esac
+
+  prepare-disabled:
+    needs: validate
+    if: inputs.operation == 'deploy-disabled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Build exact analysis worker image
+        run: docker build --file apps/analysis-worker/Dockerfile --tag "${ANALYSIS_IMAGE_REF}" .
+        timeout-minutes: 30
+
+      - name: Smoke test exact analysis worker image
+        run: scripts/ci/analysis-worker-image-smoke.sh "${ANALYSIS_IMAGE_REF}"
+        timeout-minutes: 10
+
+      - name: Scan exact analysis worker image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          image-ref: ${{ env.ANALYSIS_IMAGE_REF }}
+          version: v0.73.0
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: table
+          exit-code: "1"
+        env:
+          TRIVY_DISABLE_VEX_NOTICE: "true"
+
+      - name: Record exact analysis worker image metadata
+        run: |
+          mkdir -p "${ANALYSIS_IMAGE_ARTIFACT_NAME}"
+          printf '%s\n' "${ANALYSIS_IMAGE_REF}" \
+            > "${ANALYSIS_IMAGE_ARTIFACT_NAME}/image-ref.txt"
+          docker image inspect "${ANALYSIS_IMAGE_REF}" --format '{{.Id}}' \
+            > "${ANALYSIS_IMAGE_ARTIFACT_NAME}/image-id.txt"
+
+      - name: Save exact analysis worker image
+        run: >-
+          docker save "${ANALYSIS_IMAGE_REF}" |
+          gzip -1 > "${ANALYSIS_IMAGE_ARTIFACT_NAME}/analysis-worker-image.tar.gz"
+        timeout-minutes: 10
+
+      - name: Upload exact analysis worker image
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.ANALYSIS_IMAGE_ARTIFACT_NAME }}
+          path: ${{ env.ANALYSIS_IMAGE_ARTIFACT_NAME }}/
+          if-no-files-found: error
+          retention-days: 3
+
+  operate:
+    needs:
+      - validate
+      - prepare-disabled
+    if: >-
+      ${{ always() && needs.validate.result == 'success' &&
+          (inputs.operation != 'deploy-disabled' ||
+           needs.prepare-disabled.result == 'success') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment:
+      name: production
+      url: https://momo-result.ponta.me
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Download scanned analysis worker image
+        if: inputs.operation == 'deploy-disabled'
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ env.ANALYSIS_IMAGE_ARTIFACT_NAME }}
+          path: ${{ env.ANALYSIS_IMAGE_ARTIFACT_NAME }}
+
+      - name: Load and verify scanned analysis worker image
+        if: inputs.operation == 'deploy-disabled'
+        run: |
+          gzip -dc "${ANALYSIS_IMAGE_ARTIFACT_NAME}/analysis-worker-image.tar.gz" | docker load
+          expected_ref="$(sed -n '1p' "${ANALYSIS_IMAGE_ARTIFACT_NAME}/image-ref.txt")"
+          expected_id="$(sed -n '1p' "${ANALYSIS_IMAGE_ARTIFACT_NAME}/image-id.txt")"
+          actual_id="$(docker image inspect "${ANALYSIS_IMAGE_REF}" --format '{{.Id}}')"
+          if [[ "${expected_ref}" != "${ANALYSIS_IMAGE_REF}" ]]; then
+            echo "The prepared image reference does not match this workflow SHA." >&2
+            exit 1
+          fi
+          if [[ "${expected_id}" != "${actual_id}" ]]; then
+            echo "The loaded image ID does not match the scanned image ID." >&2
+            exit 1
+          fi
+        timeout-minutes: 10
+
+      - name: Setup flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
+
+      - name: Authenticate Docker to Fly registry
+        if: inputs.operation == 'deploy-disabled' || inputs.operation == 'deploy-enabled'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl auth docker
+
+      - name: Push scanned analysis worker image
+        if: inputs.operation == 'deploy-disabled'
+        run: |
+          mkdir -p analysis-production-artifact
+          docker push "${ANALYSIS_IMAGE_REF}"
+          docker manifest inspect "${ANALYSIS_IMAGE_REF}" \
+            > analysis-production-artifact/registry-manifest.json
+        timeout-minutes: 10
+
+      - name: Verify previously scanned analysis worker image
+        if: inputs.operation == 'deploy-enabled'
+        run: |
+          mkdir -p analysis-production-artifact
+          docker manifest inspect "${ANALYSIS_IMAGE_REF}" \
+            > analysis-production-artifact/registry-manifest.json
+
+      - name: Deploy analysis worker with publication disabled
+        if: inputs.operation == 'deploy-disabled'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: >-
+          flyctl deploy
+          --config fly.analysis.toml
+          --image "${ANALYSIS_IMAGE_REF}"
+          --env MOMO_ANALYSIS_PUBLICATION_MODE=disabled
+          --yes
+        timeout-minutes: 15
+
+      - name: Deploy analysis worker with publication enabled
+        if: inputs.operation == 'deploy-enabled'
+        env:
+          ANALYSIS_CONFIG_VERSION: series-analysis-v1-${{ github.sha }}
+          ANALYSIS_WORKER_ID: worker-${{ github.run_id }}-${{ github.run_attempt }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: >-
+          flyctl deploy
+          --config fly.analysis.toml
+          --image "${ANALYSIS_IMAGE_REF}"
+          --env MOMO_ANALYSIS_PUBLICATION_MODE=enabled
+          --env MOMO_ANALYSIS_CONFIG_VERSION="${ANALYSIS_CONFIG_VERSION}"
+          --env MOMO_ANALYSIS_WORKER_ID="${ANALYSIS_WORKER_ID}"
+          --yes
+        timeout-minutes: 15
+
+      - name: Run release audit
+        if: inputs.operation == 'audit'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          REQUIRE_CURRENT: ${{ inputs.require_current }}
+          REQUIRE_QUIESCENT: ${{ inputs.require_quiescent }}
+        run: |
+          command="/usr/local/bin/momo-analysis release-audit"
+          if [[ "${REQUIRE_CURRENT}" == "true" ]]; then
+            command="${command} --require-current"
+          fi
+          if [[ "${REQUIRE_QUIESCENT}" == "true" ]]; then
+            command="${command} --require-quiescent"
+          fi
+          flyctl ssh console --app "${ANALYSIS_APP}" --pty=false --quiet \
+            --command "${command}" > analysis-operation.json
+
+      - name: Dry-run initial backfill
+        if: inputs.operation == 'backfill-dry-run'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          OPERATION_KEY: ${{ inputs.operation_key }}
+        run: >-
+          flyctl ssh console
+          --app "${ANALYSIS_APP}"
+          --pty=false
+          --quiet
+          --command "/usr/local/bin/momo-analysis release-promote --trigger initial-backfill --operation-key ${OPERATION_KEY}"
+          > analysis-operation.json
+
+      - name: Apply initial backfill
+        if: inputs.operation == 'backfill-apply'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          OPERATION_KEY: ${{ inputs.operation_key }}
+        run: >-
+          flyctl ssh console
+          --app "${ANALYSIS_APP}"
+          --pty=false
+          --quiet
+          --command "/usr/local/bin/momo-analysis release-promote --trigger initial-backfill --operation-key ${OPERATION_KEY} --apply"
+          > analysis-operation.json
+
+      - name: Show release operation report
+        if: inputs.operation == 'audit' || startsWith(inputs.operation, 'backfill-')
+        run: jq . analysis-operation.json
+
+      - name: Upload production operation evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: analysis-production-${{ inputs.operation }}-${{ github.sha }}
+          path: |
+            analysis-production-artifact/
+            analysis-operation.json
+          if-no-files-found: ignore
+          retention-days: 7

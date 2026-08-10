@@ -29,6 +29,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: ${{ github.repository_owner }}/momo-db
+          ref: c6a657ed5005f512e8e3ed39e73cffd041c54e31
           path: _deps/momo-db
           token: ${{ secrets.MOMO_DB_READ_TOKEN || github.token }}
           sparse-checkout: drizzle

@@ -20,6 +20,7 @@ on:
       - "pnpm-workspace.yaml"
       - "rust-toolchain.toml"
       - ".github/workflows/deploy.yml"
+      - ".github/workflows/analysis-production.yml"
   push:
     branches:
       - master
@@ -33,6 +34,7 @@ env:
   CI_DUMMY_ORIGIN_LOCK_TOKEN: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
   IMAGE_ARTIFACT_NAME: runtime-image
   IMAGE_REF: registry.fly.io/momo-result:${{ github.sha }}
+  MOMO_DB_REF: c6a657ed5005f512e8e3ed39e73cffd041c54e31
 
 concurrency:
   group: ${{ github.event_name == 'pull_request' && format('runtime-smoke-pr-{0}', github.event.pull_request.number) || 'fly-deploy-production' }}
@@ -61,6 +63,23 @@ jobs:
     if: github.event_name != 'pull_request'
     uses: ./.github/workflows/analysis-worker.yml
 
+  dockerfile-lint:
+    name: Lint Dockerfiles
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Install pinned Trivy
+        uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514
+        with:
+          version: v0.73.0
+
+      - name: Report and gate Dockerfile findings
+        run: scripts/ci/dockerfile-lint.sh
+
   runtime-image:
     name: Build, scan, and package runtime image
     runs-on: ubuntu-latest
@@ -80,9 +99,10 @@ jobs:
         timeout-minutes: 45
 
       - name: Scan runtime image
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           image-ref: ${{ env.IMAGE_REF }}
+          version: v0.73.0
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           format: table
@@ -157,6 +177,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: ${{ github.repository_owner }}/momo-db
+          ref: ${{ env.MOMO_DB_REF }}
           path: _deps/momo-db
           token: ${{ secrets.MOMO_DB_READ_TOKEN || github.token }}
           sparse-checkout: drizzle
@@ -190,9 +211,10 @@ jobs:
         timeout-minutes: 45
 
       - name: Scan runtime image
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           image-ref: ${{ env.IMAGE_REF }}
+          version: v0.73.0
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           format: table
@@ -296,6 +318,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: ${{ github.repository_owner }}/momo-db
+          ref: ${{ env.MOMO_DB_REF }}
           path: _deps/momo-db
           token: ${{ secrets.MOMO_DB_READ_TOKEN || github.token }}
           sparse-checkout: drizzle
@@ -384,6 +407,8 @@ jobs:
       - api
       - web
       - ocr-worker
+      - analysis-worker
+      - dockerfile-lint
       - runtime-smoke
     if: github.event_name != 'pull_request'
     steps:

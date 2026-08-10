@@ -2,20 +2,26 @@ import type { ReactNode } from "react";
 
 import type { SeriesAnalysisDrilldownMetricId } from "@/shared/api/seriesAnalysis";
 
-export function SummaryLine({ items }: { items: string[] }) {
-  return <p className="text-sm text-[var(--color-text-secondary)]">{items.join(" ・ ")}</p>;
-}
-
-export function TableHead({ children }: { children: ReactNode }) {
+export function DrilldownFacts({
+  ariaLabel,
+  items,
+}: {
+  ariaLabel: string;
+  items: ReadonlyArray<{ id: string; label: string; value: ReactNode }>;
+}) {
   return (
-    <th className="bg-[var(--color-surface-subtle)] px-3 py-2 font-semibold text-[var(--color-text-secondary)]">
-      {children}
-    </th>
+    <dl
+      aria-label={ariaLabel}
+      className="grid gap-px overflow-hidden rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-border)] sm:grid-cols-2 lg:grid-cols-4"
+    >
+      {items.map((item) => (
+        <div className="bg-[var(--color-surface-subtle)] px-3 py-2" key={item.id}>
+          <dt className="text-[11px] text-[var(--color-text-secondary)]">{item.label}</dt>
+          <dd className="mt-0.5 text-sm font-semibold tabular-nums">{item.value}</dd>
+        </div>
+      ))}
+    </dl>
   );
-}
-
-export function TableCell({ children }: { children: ReactNode }) {
-  return <td className="px-3 py-2 tabular-nums">{children}</td>;
 }
 
 export function drilldownTitle(metricId: SeriesAnalysisDrilldownMetricId): string {

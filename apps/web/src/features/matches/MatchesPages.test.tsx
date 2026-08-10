@@ -930,7 +930,9 @@ describe("MatchDetailPage", () => {
     expect(screen.queryByText("優勝")).not.toBeInTheDocument();
     const resultLedger = screen.getByRole("list", { name: "試合の順位と成績" });
     expect(resultLedger).toBeInTheDocument();
-    expect(resultLedger.parentElement).toHaveClass("max-w-4xl");
+    const resultLedgerRegion = screen.getByRole("region", { name: "順位・総資産" });
+    expect(resultLedgerRegion).toHaveClass("max-w-4xl");
+    expect(resultLedgerRegion).toContainElement(resultLedger);
     expect(screen.getByRole("link", { name: "前後の戦績を見る" })).toHaveAttribute(
       "href",
       "/analytics/series?gameTitleId=gt_momotetsu_2&seasonMasterId=season_current&mapMasterId=map_east&focusMatchId=match-1&view=flow&returnTo=%2Fmatches%2Fmatch-1",

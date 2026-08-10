@@ -20,6 +20,9 @@ describe("series analysis history drilldowns", () => {
     );
 
     expect(screen.getByRole("img", { name: "ぽんたの累積平均順位の推移" })).toBeInTheDocument();
+    expect(screen.getByLabelText("ぽんたの平均順位推移の要約")).toHaveTextContent(
+      "対象12戦現在1.75位読み取り十分",
+    );
     expect(screen.getByText("0.05 改善")).toBeInTheDocument();
     expect(screen.getByText("順位 1位・改善")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "第12戦の試合結果を見る" })).toHaveAttribute(
@@ -46,6 +49,7 @@ describe("series analysis history drilldowns", () => {
     expect(
       screen.getByRole("img", { name: "ぽんたの番手別累積平均順位の推移" }),
     ).toBeInTheDocument();
+    expect(screen.getByLabelText("ぽんたの番手別順位推移の要約")).toBeInTheDocument();
     expect(screen.getByText(/2位 → 1.5位/u)).toBeInTheDocument();
     expect(screen.getByText("改善")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "第12戦の試合結果を見る" })).toBeInTheDocument();

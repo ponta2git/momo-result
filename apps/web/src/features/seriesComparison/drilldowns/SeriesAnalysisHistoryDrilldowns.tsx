@@ -1,4 +1,8 @@
 import {
+  AnalysisTableCell as TableCell,
+  AnalysisTableHead as TableHead,
+} from "@/features/seriesComparison/charts/SeriesAnalysisMatrix";
+import {
   directionLabel,
   formatDateTime,
   formatDecimal,
@@ -10,7 +14,7 @@ import type { SeriesAnalysisDrilldownV2 } from "@/shared/api/seriesAnalysis";
 import { DataVizLineChart } from "@/shared/ui/dataViz/LineChart";
 import { RankBadge } from "@/shared/ui/rank/RankBadge";
 
-import { SummaryLine, TableCell, TableHead } from "./SeriesAnalysisDrilldownPrimitives";
+import { DrilldownFacts } from "./SeriesAnalysisDrilldownPrimitives";
 
 type RankHistoryPayload = Extract<
   SeriesAnalysisDrilldownV2["payload"],
@@ -30,11 +34,20 @@ export function RankHistoryDrilldown({
 }) {
   return (
     <div className="grid gap-4">
-      <SummaryLine
+      <DrilldownFacts
+        ariaLabel={`${playerName}の平均順位推移の要約`}
         items={[
-          `対象 ${payload.summary.targetCount}戦`,
-          `現在 ${formatDecimal(payload.summary.currentAverageRank)}位`,
-          qualityLabel(payload.summary.qualityStatus),
+          { id: "target", label: "対象", value: `${payload.summary.targetCount}戦` },
+          {
+            id: "current",
+            label: "現在",
+            value: `${formatDecimal(payload.summary.currentAverageRank)}位`,
+          },
+          {
+            id: "quality",
+            label: "読み取り",
+            value: qualityLabel(payload.summary.qualityStatus),
+          },
         ]}
       />
       <DataVizLineChart
@@ -116,11 +129,20 @@ export function PlayOrderHistoryDrilldown({
 }) {
   return (
     <div className="grid gap-4">
-      <SummaryLine
+      <DrilldownFacts
+        ariaLabel={`${playerName}の番手別順位推移の要約`}
         items={[
-          `対象 ${payload.summary.targetCount}戦`,
-          `現在 ${formatDecimal(payload.summary.currentAverageRank)}位`,
-          qualityLabel(payload.summary.qualityStatus),
+          { id: "target", label: "対象", value: `${payload.summary.targetCount}戦` },
+          {
+            id: "current",
+            label: "現在",
+            value: `${formatDecimal(payload.summary.currentAverageRank)}位`,
+          },
+          {
+            id: "quality",
+            label: "読み取り",
+            value: qualityLabel(payload.summary.qualityStatus),
+          },
         ]}
       />
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

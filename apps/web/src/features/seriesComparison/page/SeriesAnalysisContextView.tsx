@@ -79,7 +79,7 @@ export function ContextView({ focusedItemIds, response, onDrilldown }: AnalysisV
           ))}
         </div>
         <div className="mt-5 border-t border-[var(--color-border)] pt-4">
-          <AnalysisSubsection title="累計遭遇回数">
+          <AnalysisSubsection id="metric-ginji-cumulative" title="累計遭遇回数">
             <GinjiCumulativeChart focusedItemIds={focusedItemIds} response={response} />
           </AnalysisSubsection>
         </div>

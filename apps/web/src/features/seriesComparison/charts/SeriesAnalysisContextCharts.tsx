@@ -1,6 +1,12 @@
 import type { CSSProperties } from "react";
-import { Fragment } from "react";
 
+import {
+  AnalysisMatrix,
+  MatrixAxisHeader,
+  MatrixCell,
+  MatrixColumnHeader,
+  MatrixRowHeader,
+} from "@/features/seriesComparison/charts/SeriesAnalysisMatrix";
 import {
   cardShopKindLabel,
   formatDecimal,
@@ -11,6 +17,8 @@ import type { RelativeIntensity, SeriesComparisonAggregateV2 } from "@/shared/ap
 import { dataVizSeriesColor } from "@/shared/ui/dataViz/playerSeries";
 import { colorMix } from "@/shared/ui/rank/rankPresentation";
 
+const PLAY_ORDERS = [1, 2, 3, 4] as const;
+
 export function PlayOrderMatrix({
   focusedItemIds,
   response,
@@ -19,70 +27,79 @@ export function PlayOrderMatrix({
   response: SeriesComparisonAggregateV2;
 }) {
   return (
-    <div className="overflow-x-auto pb-1">
-      <div className="grid min-w-[42rem] grid-cols-[8rem_repeat(4,minmax(7.5rem,1fr))] gap-1">
-        <div className="grid content-center rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-1 text-[10px] font-semibold text-[var(--color-text-secondary)]">
-          <span>行: プレーヤー</span>
-          <span>列: 番手</span>
-        </div>
-        {[1, 2, 3, 4].map((playOrder) => (
-          <div
-            className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-2 text-center text-xs font-semibold"
-            key={playOrder}
-          >
-            {playOrder}番手
-          </div>
-        ))}
-        {response.playOrderComparison.map((entry, index) => (
-          <Fragment key={entry.memberId}>
-            <div
-              className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-2 text-sm font-semibold break-words"
-              style={{
-                borderLeftColor: dataVizSeriesColor(index),
-                borderLeftWidth: 3,
-              }}
-            >
-              {entry.displayName}
-            </div>
-            {entry.cells.map((cell) => {
-              const focused = focusedItemIds.includes(cell.itemId);
-              const presentation = playOrderCellPresentation({
-                bestPlayOrder: entry.bestPlayOrder,
-                playOrder: cell.playOrder,
-                relativeIntensity: cell.relativeIntensity,
-                targetCount: cell.targetCount,
-                worstPlayOrder: entry.worstPlayOrder,
-              });
-              return (
-                <div
-                  aria-label={`${entry.displayName}、${cell.playOrder}番手、平均${formatDecimal(cell.rankAverage)}位、${cell.targetCount}戦${presentation.label ? `、${presentation.label}` : ""}${focused ? "、この試合" : ""}`}
-                  className={`rounded-[var(--radius-xs)] border px-2 py-2 text-center ${focused ? "momo-enter ring-2 ring-[var(--color-action)] ring-offset-1 ring-offset-[var(--color-surface)]" : ""}`}
-                  data-focused-metric={focused ? "true" : undefined}
-                  key={cell.itemId}
-                  role="img"
-                  style={presentation.style}
-                >
-                  <strong className="text-sm tabular-nums">
-                    {formatDecimal(cell.rankAverage)}位
-                  </strong>
-                  <p className="mt-0.5 text-[11px] text-[var(--color-text-secondary)] tabular-nums">
-                    {cell.targetCount}戦・入賞{formatPercent(cell.podiumRate)}
-                  </p>
-                  {presentation.label ? (
-                    <p
-                      className="mt-1 text-[10px] font-semibold"
-                      style={{ color: presentation.accentColor }}
+    <AnalysisMatrix ariaLabel="番手別成績" className="min-w-[42rem] table-fixed">
+      <thead>
+        <tr>
+          <MatrixAxisHeader className="w-32" columnLabel="番手" rowLabel="プレーヤー" />
+          {PLAY_ORDERS.map((playOrder) => (
+            <MatrixColumnHeader key={playOrder}>{playOrder}番手</MatrixColumnHeader>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {response.playOrderComparison.map((entry, index) => {
+          const cellByPlayOrder = new Map(entry.cells.map((cell) => [cell.playOrder, cell]));
+          return (
+            <tr key={entry.memberId}>
+              <MatrixRowHeader
+                style={{
+                  borderLeftColor: dataVizSeriesColor(index),
+                  borderLeftWidth: 3,
+                }}
+              >
+                {entry.displayName}
+              </MatrixRowHeader>
+              {PLAY_ORDERS.map((playOrder) => {
+                const cell = cellByPlayOrder.get(playOrder);
+                if (!cell) {
+                  return (
+                    <MatrixCell
+                      aria-label={`${entry.displayName}、${playOrder}番手、対象なし`}
+                      className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-2 text-center"
+                      key={playOrder}
                     >
-                      {presentation.label}
+                      —
+                    </MatrixCell>
+                  );
+                }
+                const focused = focusedItemIds.includes(cell.itemId);
+                const presentation = playOrderCellPresentation({
+                  bestPlayOrder: entry.bestPlayOrder,
+                  playOrder: cell.playOrder,
+                  relativeIntensity: cell.relativeIntensity,
+                  targetCount: cell.targetCount,
+                  worstPlayOrder: entry.worstPlayOrder,
+                });
+                return (
+                  <MatrixCell
+                    aria-label={`${entry.displayName}、${cell.playOrder}番手、平均${formatDecimal(cell.rankAverage)}位、${cell.targetCount}戦${presentation.label ? `、${presentation.label}` : ""}${focused ? "、この試合" : ""}`}
+                    className={`rounded-[var(--radius-xs)] border px-2 py-2 text-center ${focused ? "momo-enter ring-2 ring-[var(--color-action)] ring-offset-1 ring-offset-[var(--color-surface)]" : ""}`}
+                    data-focused-metric={focused ? "true" : undefined}
+                    key={playOrder}
+                    style={presentation.style}
+                  >
+                    <strong className="text-sm tabular-nums">
+                      {formatDecimal(cell.rankAverage)}位
+                    </strong>
+                    <p className="mt-0.5 text-[11px] text-[var(--color-text-secondary)] tabular-nums">
+                      {cell.targetCount}戦・入賞{formatPercent(cell.podiumRate)}
                     </p>
-                  ) : null}
-                </div>
-              );
-            })}
-          </Fragment>
-        ))}
-      </div>
-    </div>
+                    {presentation.label ? (
+                      <p
+                        className="mt-1 text-[11px] font-semibold"
+                        style={{ color: presentation.accentColor }}
+                      >
+                        {presentation.label}
+                      </p>
+                    ) : null}
+                  </MatrixCell>
+                );
+              })}
+            </tr>
+          );
+        })}
+      </tbody>
+    </AnalysisMatrix>
   );
 }
 

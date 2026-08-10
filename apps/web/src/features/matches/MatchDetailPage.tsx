@@ -116,10 +116,17 @@ function MatchDetailReadyContent({ controller }: { controller: MatchDetailReadyC
         <MatchFeatureSection badges={featureBadges} scopeLabel={featureScopeLabel} />
       </div>
 
-      <Card className="w-full max-w-4xl self-center overflow-hidden p-0">
+      <Card
+        aria-labelledby="match-result-ledger-heading"
+        className="w-full max-w-4xl self-center overflow-hidden p-0"
+        role="region"
+      >
         <div className="flex flex-col gap-1 border-b border-[var(--color-border)] px-4 py-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
+            <h2
+              className="text-base font-semibold text-[var(--color-text-primary)]"
+              id="match-result-ledger-heading"
+            >
               順位・総資産
             </h2>
             <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">

@@ -162,11 +162,11 @@ function AssetFact({
 }) {
   return (
     <div className="min-w-0 self-start rounded-[var(--radius-xs)] bg-[var(--color-surface-subtle)] p-2 text-center">
-      <p className="text-[10px] font-semibold text-[var(--color-text-secondary)]">{label}</p>
-      {subLabel ? <p className="text-[9px] text-[var(--color-text-muted)]">{subLabel}</p> : null}
+      <p className="text-[11px] font-semibold text-[var(--color-text-secondary)]">{label}</p>
+      {subLabel ? <p className="text-[11px] text-[var(--color-text-muted)]">{subLabel}</p> : null}
       <p className="mt-1 text-xs font-semibold break-words tabular-nums">{value}</p>
       {badge ? (
-        <span className="mt-1 inline-flex rounded-full border border-[var(--color-action)]/45 bg-[var(--color-action)]/10 px-2 py-1 text-[9px] font-semibold text-[var(--color-action)]">
+        <span className="mt-1 inline-flex rounded-full border border-[var(--color-action)]/45 bg-[var(--color-action)]/10 px-2 py-1 text-[11px] font-semibold text-[var(--color-action)]">
           {badge}
         </span>
       ) : null}

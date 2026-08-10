@@ -85,7 +85,7 @@ export function RecentRankStrips({
                     {showMarker ? (
                       <SeriesAnalysisMatchLink
                         ariaLabel={`第${matchIndex}戦の試合結果を見る${focused ? "、この試合" : ""}`}
-                        className={`justify-center text-[10px] whitespace-nowrap ${focused ? "momo-enter" : "text-[var(--color-text-muted)]"}`}
+                        className={`justify-center text-[11px] whitespace-nowrap ${focused ? "momo-enter" : "text-[var(--color-text-muted)]"}`}
                         matchId={row.matchId}
                       >
                         {focused ? "この試合" : `第${matchIndex}戦`}
@@ -115,7 +115,7 @@ export function RecentRankStrips({
                     <span className="block text-sm leading-5 font-semibold break-words">
                       {player.displayName}
                     </span>
-                    <span className="block text-[10px] font-normal text-[var(--color-text-secondary)] tabular-nums">
+                    <span className="block text-[11px] font-normal text-[var(--color-text-secondary)] tabular-nums">
                       平均{formatDecimal(entry?.averageRank)}位・入賞
                       {formatPercent(entry?.podiumRate)}・
                       {qualityLabel(entry?.qualityStatus ?? "no_target")}
@@ -142,7 +142,6 @@ export function RecentRankStrips({
                             <span
                               className="grid size-full place-items-center rounded-[calc(var(--radius-xs)-1px)]"
                               data-focused-metric={focused ? "true" : undefined}
-                              data-rank-tile-fill="true"
                             >
                               {row.rank}
                             </span>

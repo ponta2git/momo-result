@@ -1,6 +1,14 @@
-import { Fragment } from "react";
 import { useLocation } from "react-router-dom";
 
+import {
+  AnalysisMatrix,
+  MatrixAxisHeader,
+  MatrixCell,
+  MatrixColumnHeader,
+  MatrixRowHeader,
+  MatrixValueLegend,
+  SERIES_RANKS,
+} from "@/features/seriesComparison/charts/SeriesAnalysisMatrix";
 import {
   formatHistogramManYenBin,
   formatManYen,
@@ -62,77 +70,121 @@ export function RevenueConversionMatrices({
   response: SeriesComparisonAggregateV2;
 }) {
   return (
-    <div className="grid gap-3 lg:grid-cols-2">
-      {response.revenueRankConversion.map((entry, playerIndex) => (
-        <article
-          className="min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3"
-          key={entry.memberId}
-        >
-          <h3
-            className="mb-3 text-sm font-semibold"
-            style={{
-              borderLeftColor: dataVizSeriesColor(playerIndex),
-              borderLeftWidth: 3,
-              paddingLeft: 8,
-            }}
-          >
-            {entry.displayName}
-          </h3>
-          <div className="overflow-x-auto pb-1">
-            <div className="grid min-w-[25rem] grid-cols-[4.5rem_repeat(4,minmax(4.5rem,1fr))] gap-1">
-              <div className="grid content-center rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-1 text-[9px] font-semibold text-[var(--color-text-secondary)]">
-                <span>行: 収益順位</span>
-                <span>列: 最終順位</span>
-              </div>
-              {[1, 2, 3, 4].map((rank) => (
-                <div
-                  className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-1 text-center text-[11px] font-semibold"
-                  key={rank}
-                  style={{ borderTopColor: rankBorderColor(rank), borderTopWidth: 3 }}
-                >
-                  最終{rank}位
-                </div>
-              ))}
-              {entry.cells.map((cell) => (
-                <Fragment key={cell.itemId}>
-                  {cell.finalRank === 1 ? (
-                    <div className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-2 text-[11px] font-semibold">
-                      収益{cell.revenueRank}位
-                    </div>
-                  ) : null}
-                  <div
-                    aria-label={`収益${cell.revenueRank}位から最終${cell.finalRank}位、${cell.count}戦、${formatPercent(cell.rate)}${focusedItemIds.includes(cell.itemId) ? "、この試合" : ""}`}
-                    className={`rounded-[var(--radius-xs)] border px-1 py-2 text-center ${focusedItemIds.includes(cell.itemId) ? "momo-enter ring-2 ring-[var(--color-action)] ring-offset-1 ring-offset-[var(--color-surface-subtle)]" : ""}`}
-                    data-focused-metric={focusedItemIds.includes(cell.itemId) ? "true" : undefined}
-                    role="img"
-                    style={
-                      cell.count === 0
-                        ? {
-                            backgroundColor: "var(--color-surface)",
-                            borderColor: "var(--color-border)",
-                          }
-                        : {
-                            backgroundColor: rankBackgroundColor(cell.finalRank, cell.rate ?? 0),
-                            borderColor: rankBorderColor(cell.finalRank),
-                          }
-                    }
-                  >
-                    <strong className="text-sm tabular-nums">{cell.count}</strong>
-                    <p className="text-[10px] text-[var(--color-text-secondary)] tabular-nums">
-                      {formatPercent(cell.rate)}
-                    </p>
-                    {focusedItemIds.includes(cell.itemId) ? (
-                      <p className="mt-0.5 text-[9px] font-semibold text-[var(--color-action)]">
-                        この試合
-                      </p>
-                    ) : null}
-                  </div>
-                </Fragment>
-              ))}
-            </div>
-          </div>
-        </article>
-      ))}
+    <div className="grid gap-2">
+      <MatrixValueLegend
+        ariaLabel="物件収益と最終順位のセルの読み方"
+        items={[
+          { id: "count", label: "上段", value: "試合数" },
+          {
+            id: "rate",
+            label: "下段",
+            value: "同じ物件収益順位の中で、その最終順位になった割合",
+          },
+        ]}
+      />
+      <div className="grid gap-3 lg:grid-cols-2">
+        {response.revenueRankConversion.map((entry, playerIndex) => {
+          const cellByRanks = new Map(
+            entry.cells.map((cell) => [`${cell.revenueRank}:${cell.finalRank}`, cell]),
+          );
+          return (
+            <article
+              className="min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3"
+              key={entry.memberId}
+            >
+              <h3
+                className="mb-3 text-sm font-semibold"
+                style={{
+                  borderLeftColor: dataVizSeriesColor(playerIndex),
+                  borderLeftWidth: 3,
+                  paddingLeft: 8,
+                }}
+              >
+                {entry.displayName}
+              </h3>
+              <AnalysisMatrix
+                ariaLabel={`${entry.displayName}の物件収益順位と最終順位`}
+                className="min-w-[25rem] table-fixed"
+              >
+                <thead>
+                  <tr>
+                    <MatrixAxisHeader
+                      className="w-[4.5rem] bg-[var(--color-surface)] px-1"
+                      columnLabel="最終順位"
+                      rowLabel="収益順位"
+                    />
+                    {SERIES_RANKS.map((rank) => (
+                      <MatrixColumnHeader
+                        className="bg-[var(--color-surface)] px-1 py-1 text-[11px]"
+                        key={rank}
+                        style={{ borderTopColor: rankBorderColor(rank), borderTopWidth: 3 }}
+                      >
+                        最終{rank}位
+                      </MatrixColumnHeader>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {SERIES_RANKS.map((revenueRank) => (
+                    <tr key={revenueRank}>
+                      <MatrixRowHeader className="bg-[var(--color-surface)] px-1 text-[11px]">
+                        収益{revenueRank}位
+                      </MatrixRowHeader>
+                      {SERIES_RANKS.map((finalRank) => {
+                        const cell = cellByRanks.get(`${revenueRank}:${finalRank}`);
+                        if (!cell) {
+                          return (
+                            <MatrixCell
+                              aria-label={`収益${revenueRank}位から最終${finalRank}位、対象なし`}
+                              className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-2 text-center"
+                              key={finalRank}
+                            >
+                              —
+                            </MatrixCell>
+                          );
+                        }
+                        const focused = focusedItemIds.includes(cell.itemId);
+                        return (
+                          <MatrixCell
+                            aria-label={`収益${cell.revenueRank}位から最終${cell.finalRank}位、${cell.count}戦、${formatPercent(cell.rate)}${focused ? "、この試合" : ""}`}
+                            className={`rounded-[var(--radius-xs)] border px-1 py-2 text-center ${focused ? "momo-enter ring-2 ring-[var(--color-action)] ring-offset-1 ring-offset-[var(--color-surface-subtle)]" : ""}`}
+                            data-focused-metric={focused ? "true" : undefined}
+                            key={finalRank}
+                            style={
+                              cell.count === 0
+                                ? {
+                                    backgroundColor: "var(--color-surface)",
+                                    borderColor: "var(--color-border)",
+                                  }
+                                : {
+                                    backgroundColor: rankBackgroundColor(
+                                      cell.finalRank,
+                                      cell.rate ?? 0,
+                                    ),
+                                    borderColor: rankBorderColor(cell.finalRank),
+                                  }
+                            }
+                          >
+                            <strong className="text-sm tabular-nums">{cell.count}</strong>
+                            <p className="text-[11px] text-[var(--color-text-secondary)] tabular-nums">
+                              {formatPercent(cell.rate)}
+                            </p>
+                            {focused ? (
+                              <p className="mt-0.5 text-[11px] font-semibold text-[var(--color-action)]">
+                                この試合
+                              </p>
+                            ) : null}
+                          </MatrixCell>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </AnalysisMatrix>
+            </article>
+          );
+        })}
+      </div>
     </div>
   );
 }

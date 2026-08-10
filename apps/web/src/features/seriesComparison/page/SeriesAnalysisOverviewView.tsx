@@ -1,5 +1,9 @@
 import { RankTrendCharts } from "@/features/seriesComparison/charts/SeriesAnalysisFlowCharts";
 import {
+  AnalysisTableCell,
+  AnalysisTableHead,
+} from "@/features/seriesComparison/charts/SeriesAnalysisMatrix";
+import {
   CrownShareBars,
   HeadToHeadMatrix,
   RankDistributionBars,
@@ -8,14 +12,14 @@ import {
   formatDecimal,
   formatManYen,
   formatPercent,
+  qualityLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { AnalysisViewProps } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
 import {
   AnalysisFacts,
+  AnalysisReadingGuide,
   AnalysisSection,
   memberNames,
-  TableCell,
-  TableHead,
 } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
 import {
   analysisPanelId,
@@ -38,10 +42,12 @@ export function OverviewView({ focusedItemIds, response, onDrilldown }: Analysis
           ariaLabel="現在の順位差"
           items={[
             {
+              id: "leader",
               label: "平均順位の先頭",
               value: memberNames(response.players, response.summary.leaderMemberIds),
             },
             {
+              id: "spread",
               label: "先頭と最後尾の平均順位差",
               value: `${formatDecimal(response.summary.averageRankSpread)}位`,
             },
@@ -51,29 +57,31 @@ export function OverviewView({ focusedItemIds, response, onDrilldown }: Analysis
           <table className="w-full min-w-[52rem] text-left text-sm">
             <thead>
               <tr>
-                <TableHead>プレーヤー</TableHead>
-                <TableHead>平均順位</TableHead>
-                <TableHead>順位のぶれ</TableHead>
-                <TableHead>入賞率</TableHead>
-                <TableHead>下位率</TableHead>
-                <TableHead>平均総資産</TableHead>
-                <TableHead>平均物件収益</TableHead>
-                <TableHead>推移</TableHead>
+                <AnalysisTableHead>プレーヤー</AnalysisTableHead>
+                <AnalysisTableHead>平均順位</AnalysisTableHead>
+                <AnalysisTableHead>順位のぶれ</AnalysisTableHead>
+                <AnalysisTableHead>入賞率</AnalysisTableHead>
+                <AnalysisTableHead>下位率</AnalysisTableHead>
+                <AnalysisTableHead>平均総資産</AnalysisTableHead>
+                <AnalysisTableHead>平均物件収益</AnalysisTableHead>
+                <AnalysisTableHead>推移</AnalysisTableHead>
               </tr>
             </thead>
             <tbody>
               {response.metricsByPlayer.map((metric) => (
                 <tr className="border-t border-[var(--color-border)]" key={metric.memberId}>
-                  <TableCell>
+                  <AnalysisTableCell>
                     <strong>{metric.displayName}</strong>
-                  </TableCell>
-                  <TableCell>{formatDecimal(metric.rank.average)}位</TableCell>
-                  <TableCell>{formatDecimal(metric.rank.standardDeviation)}</TableCell>
-                  <TableCell>{formatPercent(metric.podium.rate)}</TableCell>
-                  <TableCell>{formatPercent(metric.lowerHalf.rate)}</TableCell>
-                  <TableCell>{formatManYen(metric.assets.average)}</TableCell>
-                  <TableCell>{formatManYen(metric.revenue.average)}</TableCell>
-                  <TableCell>
+                  </AnalysisTableCell>
+                  <AnalysisTableCell>{formatDecimal(metric.rank.average)}位</AnalysisTableCell>
+                  <AnalysisTableCell>
+                    {formatDecimal(metric.rank.standardDeviation)}
+                  </AnalysisTableCell>
+                  <AnalysisTableCell>{formatPercent(metric.podium.rate)}</AnalysisTableCell>
+                  <AnalysisTableCell>{formatPercent(metric.lowerHalf.rate)}</AnalysisTableCell>
+                  <AnalysisTableCell>{formatManYen(metric.assets.average)}</AnalysisTableCell>
+                  <AnalysisTableCell>{formatManYen(metric.revenue.average)}</AnalysisTableCell>
+                  <AnalysisTableCell>
                     <Button
                       size="sm"
                       variant="quiet"
@@ -83,7 +91,7 @@ export function OverviewView({ focusedItemIds, response, onDrilldown }: Analysis
                     >
                       詳細
                     </Button>
-                  </TableCell>
+                  </AnalysisTableCell>
                 </tr>
               ))}
             </tbody>
@@ -94,7 +102,54 @@ export function OverviewView({ focusedItemIds, response, onDrilldown }: Analysis
         </div>
       </AnalysisSection>
       <AnalysisSection id="metric-crown-certainty" title="平均順位首位の確からしさ">
+        <AnalysisFacts
+          ariaLabel="平均順位首位の確からしさの判断材料"
+          items={[
+            {
+              id: "comparison",
+              label: "比較する場所",
+              value: "先頭と次点の比率差",
+            },
+            {
+              id: "scope",
+              label: "根拠の範囲",
+              value: `${response.rankAnalysis.matchCount}戦・${response.rankAnalysis.heldEventCount}開催・${qualityLabel(response.rankAnalysis.crownCertainty.status)}`,
+            },
+          ]}
+        />
         <CrownShareBars response={response} />
+        <div className="mt-4">
+          <AnalysisReadingGuide
+            ariaLabel="平均順位首位の確からしさの読み方"
+            items={[
+              {
+                id: "meaning",
+                label: "示すもの",
+                value: "開催の組み合わせを変えても、期間内の平均順位首位に残った割合",
+              },
+              {
+                id: "decision",
+                label: "判断",
+                value: "先頭と次点の差が広いほど、現在の首位は開催条件の偏りに左右されにくい",
+              },
+              {
+                id: "next",
+                label: "次に見る",
+                value: "差が小さいときは「直接対決」と「順位の安定性」で並びを確かめる",
+              },
+              {
+                id: "not-for",
+                label: "使わない場面",
+                value: "次戦の勝率や最終順位の予測には使わない",
+              },
+              {
+                id: "validation",
+                label: "検証条件",
+                value: `再標本化 ${response.rankAnalysis.crownCertainty.successfulIterations}/${response.rankAnalysis.crownCertainty.bootstrapIterations}回成立・首位交代 ${response.rankAnalysis.crownCertainty.leaderChangeCount}回`,
+              },
+            ]}
+          />
+        </div>
       </AnalysisSection>
       <AnalysisSection id="metric-head-to-head" title="直接対決">
         <HeadToHeadMatrix response={response} />

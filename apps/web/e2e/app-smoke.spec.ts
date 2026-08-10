@@ -1,7 +1,14 @@
 import { randomUUID } from "node:crypto";
 
 import { expect, test } from "@playwright/test";
-import type { APIRequestContext, APIResponse, Page, Request, Route } from "@playwright/test";
+import type {
+  APIRequestContext,
+  APIResponse,
+  Locator,
+  Page,
+  Request,
+  Route,
+} from "@playwright/test";
 
 import { withReturnTo } from "../src/shared/navigation/returnTo";
 import {
@@ -159,10 +166,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
 
     const totalAssetsFrame = page.getByRole("group", { name: "総資産の16:9画像枠" });
     await expect(totalAssetsFrame).toBeVisible();
-    const emptyFrameBox = await totalAssetsFrame.boundingBox();
-    if (!emptyFrameBox) {
-      throw new Error("Empty OCR tray frame geometry must be measurable.");
-    }
+    const emptyFrameBox = await measureElement(totalAssetsFrame, "Empty OCR tray frame");
     expect(emptyFrameBox.width / emptyFrameBox.height).toBeCloseTo(16 / 9, 2);
 
     await page.getByLabel("OCRの画像をアップロード").setInputFiles({
@@ -171,10 +175,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
       name: "total-assets.png",
     });
     await expect(page.getByAltText("総資産プレビュー")).toBeVisible();
-    const selectedFrameBox = await totalAssetsFrame.boundingBox();
-    if (!selectedFrameBox) {
-      throw new Error("Selected OCR tray frame geometry must be measurable.");
-    }
+    const selectedFrameBox = await measureElement(totalAssetsFrame, "Selected OCR tray frame");
     expect(selectedFrameBox.width).toBeCloseTo(emptyFrameBox.width, 1);
     expect(selectedFrameBox.height).toBeCloseTo(emptyFrameBox.height, 1);
 
@@ -261,24 +262,21 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     await expect(page.getByText(gameTitleName, { exact: true })).toBeVisible();
     await page.setViewportSize({ height: 900, width: 1440 });
     await expect(page.getByText("比較データを読み込み中", { exact: true }).first()).toBeVisible();
-    const resultLedger = page.getByRole("list", { name: "試合の順位と成績" });
-    await expect(resultLedger).toBeVisible();
-    const resultLedgerCard = resultLedger.locator("xpath=..");
+    const resultLedgerCard = page.getByRole("region", { name: "順位・総資産" });
     await expect(resultLedgerCard).toBeVisible();
-    const resultLedgerCardBox = await resultLedgerCard.boundingBox();
-    if (!resultLedgerCardBox) {
-      throw new Error("Result ledger card geometry must be measurable.");
-    }
+    const resultLedger = resultLedgerCard.getByRole("list", { name: "試合の順位と成績" });
+    await expect(resultLedger).toBeVisible();
+    const resultLedgerCardBox = await measureElement(resultLedgerCard, "Result ledger card");
     expect(resultLedgerCardBox.width).toBeLessThanOrEqual(896);
     const firstLedgerRow = resultLedgerCard.getByRole("listitem").first();
-    const rankBox = await firstLedgerRow.getByText("1位", { exact: true }).boundingBox();
-    const totalAssetsBox = await firstLedgerRow
-      .getByText("総資産", { exact: true })
-      .locator("..")
-      .boundingBox();
-    if (!rankBox || !totalAssetsBox) {
-      throw new Error("Result ledger primary columns must be measurable.");
-    }
+    const rankBox = await measureElement(
+      firstLedgerRow.getByText("1位", { exact: true }),
+      "Result ledger rank",
+    );
+    const totalAssetsBox = await measureElement(
+      firstLedgerRow.getByText("総資産", { exact: true }).locator(".."),
+      "Result ledger total assets",
+    );
     expect(totalAssetsBox.x - rankBox.x).toBeLessThanOrEqual(480);
 
     await page.getByRole("link", { name: "この開催へ戻る" }).click();
@@ -489,6 +487,12 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
 
     await page.getByRole("tab", { name: "今の差" }).click();
     await expect(page.getByRole("heading", { name: "順位と基礎比較" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "順位と基礎比較" })).toBeVisible();
+    const crownRegion = page.getByRole("region", { name: "平均順位首位の確からしさ" });
+    await expect(crownRegion.getByRole("img", { name: /平均順位首位に残った比率/u })).toBeVisible();
+    await crownRegion.getByRole("button", { name: "平均順位首位の確からしさの読み方" }).click();
+    await expect(crownRegion.getByText(/直接対決.*順位の安定性/u)).toBeVisible();
+    await expect(crownRegion.getByText(/次戦の勝率や最終順位/u)).toBeVisible();
     await expect(selectedMatch).toBeVisible();
     await expect(page.locator('[data-focused-metric="true"]').first()).toBeVisible();
     await expect(page).toHaveURL(new RegExp(`focusMatchId=${encodeURIComponent(matchId)}`, "u"));
@@ -509,6 +513,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
 
     await page.getByRole("tab", { name: "条件別" }).click();
     await expect(page.getByRole("heading", { name: "番手比較" })).toBeVisible();
+    await expect(page.getByRole("table", { name: "番手別成績" })).toBeVisible();
     await expect(page.getByText("得意")).toBeVisible();
     await page.getByRole("button", { name: "ぽんたの番手別推移" }).click();
     const playOrderDialog = page.getByRole("dialog", { name: "番手別順位の推移" });
@@ -521,6 +526,10 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
 
     await page.getByRole("tab", { name: "勝因候補" }).click();
     await expect(page.getByText("0円", { exact: true })).toBeVisible();
+    await expect(page.getByRole("table", { name: "ぽんたの物件収益順位と最終順位" })).toBeVisible();
+    await expect(page.getByLabel("物件収益と最終順位のセルの読み方")).toContainText(
+      "同じ物件収益順位の中で、その最終順位になった割合",
+    );
     const scatterMatchHref = withReturnTo(
       `/matches/${encodeURIComponent(matchId)}`,
       currentPagePath(page),
@@ -528,6 +537,18 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     await expect(
       page.getByRole("link", { name: /1戦目、12%、21億円、1位の試合結果を見る/u }),
     ).toHaveAttribute("href", scatterMatchHref);
+    await page.getByRole("button", { name: "検証範囲を見る" }).click();
+    const rankSignalDialog = page.getByRole("dialog", { name: "順位を読む手掛かり" });
+    await expect(rankSignalDialog.getByLabel("順位を読む手掛かりの使い方")).toContainText(
+      "試合後に同じ傾向が続いたか確認",
+    );
+    await expect(rankSignalDialog.getByText("候補はこの1件")).toBeVisible();
+    await expect(
+      rankSignalDialog.getByRole("list", { name: "物件収益の別開催での支持" }),
+    ).toBeVisible();
+    await rankSignalDialog.getByRole("button", { name: "別開催テストと採用基準" }).click();
+    await expect(rankSignalDialog.getByText("4組で候補を作る")).toBeVisible();
+    await rankSignalDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
 
     await page.setViewportSize({ height: 900, width: 1440 });
     await page.getByRole("tab", { name: "次戦に備える" }).click();
@@ -998,4 +1019,17 @@ async function selectSeedMasters(page: Page): Promise<void> {
   await expect(mapSelect.locator(`option[value="${mapMasterId}"]`)).toHaveCount(1);
   await mapSelect.selectOption(mapMasterId);
   await expect(mapSelect).toHaveValue(mapMasterId);
+}
+
+async function measureElement(locator: Locator, label: string) {
+  await expect(locator, `${label} must be visible before measuring.`).toBeVisible();
+  return locator.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return {
+      height: rect.height,
+      width: rect.width,
+      x: rect.x,
+      y: rect.y,
+    };
+  });
 }

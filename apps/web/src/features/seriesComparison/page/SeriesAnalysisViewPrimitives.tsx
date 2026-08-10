@@ -29,8 +29,7 @@ export function MetricDefinitions({ response }: { response: SeriesComparisonAggr
           >
             <dt className="text-sm font-semibold">{definition.label}</dt>
             <dd className="mt-1 text-xs text-[var(--color-text-secondary)]">
-              {metricDirectionDescription(definition.preferredDirection)}
-              {metricUnitDescription(definition.unit)}
+              {metricReadingCue(definition)}
             </dd>
           </div>
         ))}
@@ -54,25 +53,35 @@ export function AnalysisSection({
   id: string;
   title: string;
 }) {
+  const headingId = `${id}-heading`;
   return (
     <section
+      aria-labelledby={headingId}
       className="min-w-0 scroll-mt-24 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 sm:p-4"
       id={id}
     >
       <div className="mb-3">
-        <h2 className="text-base font-semibold">{title}</h2>
+        <h2 className="text-base font-semibold" id={headingId}>
+          {title}
+        </h2>
       </div>
       {children}
     </section>
   );
 }
 
+export type AnalysisFact = {
+  id: string;
+  label: string;
+  value: ReactNode;
+};
+
 export function AnalysisFacts({
   ariaLabel,
   items,
 }: {
   ariaLabel: string;
-  items: ReadonlyArray<{ label: string; value: ReactNode }>;
+  items: readonly AnalysisFact[];
 }) {
   return (
     <dl
@@ -80,7 +89,7 @@ export function AnalysisFacts({
       className="mb-4 grid gap-px overflow-hidden rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-border)] sm:grid-cols-2"
     >
       {items.map((item) => (
-        <div className="bg-[var(--color-surface-subtle)] px-3 py-2" key={item.label}>
+        <div className="bg-[var(--color-surface-subtle)] px-3 py-2" key={item.id}>
           <dt className="text-[11px] font-semibold text-[var(--color-text-secondary)]">
             {item.label}
           </dt>
@@ -93,23 +102,61 @@ export function AnalysisFacts({
 
 export function AnalysisSubsection({
   children,
+  id,
   meta,
   title,
 }: {
   children: ReactNode;
+  id: string;
   meta?: ReactNode | undefined;
   title: string;
 }) {
+  const headingId = `${id}-heading`;
   return (
-    <div>
+    <section aria-labelledby={headingId} id={id}>
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-sm font-semibold">{title}</h3>
+        <h3 className="text-sm font-semibold" id={headingId}>
+          {title}
+        </h3>
         {meta ? (
           <span className="text-xs text-[var(--color-text-secondary)] tabular-nums">{meta}</span>
         ) : null}
       </div>
       {children}
-    </div>
+    </section>
+  );
+}
+
+export function AnalysisReadingGuide({
+  ariaLabel,
+  items,
+  summary = "読み方と使いどころ",
+}: {
+  ariaLabel: string;
+  items: readonly AnalysisFact[];
+  summary?: string | undefined;
+}) {
+  return (
+    <Disclosure
+      ariaLabel={ariaLabel}
+      className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)]"
+      panelClassName="border-t border-[var(--color-border)] p-3"
+      summary={
+        <span className="inline-flex items-center gap-2">
+          <BookOpenText aria-hidden="true" className="size-4" />
+          {summary}
+        </span>
+      }
+    >
+      <dl className="grid gap-2 text-sm">
+        {items.map((item) => (
+          <div className="grid gap-0.5 sm:grid-cols-[7rem_1fr]" key={item.id}>
+            <dt className="font-semibold">{item.label}</dt>
+            <dd className="text-[var(--color-text-secondary)]">{item.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </Disclosure>
   );
 }
 
@@ -122,18 +169,6 @@ export function MetricValue({ label, value }: { label: string; value: string }) 
   );
 }
 
-export function TableHead({ children }: { children: ReactNode }) {
-  return (
-    <th className="bg-[var(--color-surface-subtle)] px-3 py-2 font-semibold text-[var(--color-text-secondary)]">
-      {children}
-    </th>
-  );
-}
-
-export function TableCell({ children }: { children: ReactNode }) {
-  return <td className="px-3 py-2 tabular-nums">{children}</td>;
-}
-
 export function playerName(players: SeriesAnalysisPlayer[], memberId: string): string {
   return players.find((player) => player.memberId === memberId)?.displayName ?? "名前不明";
 }
@@ -142,28 +177,28 @@ export function memberNames(players: SeriesAnalysisPlayer[], memberIds: string[]
   return memberIds.map((memberId) => playerName(players, memberId)).join("、") || "—";
 }
 
-function metricDirectionDescription(
-  direction: SeriesComparisonAggregateV2["metricDefinitions"][number]["preferredDirection"],
+function metricReadingCue(
+  definition: SeriesComparisonAggregateV2["metricDefinitions"][number],
 ): string {
-  switch (direction) {
+  const cue = metricReadingCues[definition.metricId];
+  if (cue) return cue;
+  switch (definition.preferredDirection) {
     case "higher":
-      return "値が大きいほど強く表れる指標です。";
+      return "対象件数を確認し、他のプレーヤーより大きいかを比べます。";
     case "lower":
-      return "値が小さいほど良い指標です。";
+      return "対象件数を確認し、他のプレーヤーより小さいかを比べます。";
     case "contextual":
-      return "条件や他の指標と合わせて読みます。";
+      return "単独で良し悪しを決めず、同じ区画の分布や条件差と合わせて見ます。";
   }
 }
 
-function metricUnitDescription(unit: string): string {
-  switch (unit) {
-    case "rank":
-      return " 順位は1位に近いほど上位です。";
-    case "rate":
-      return " 割合で表示します。";
-    case "man_yen":
-      return " 金額は兆・億・万円を組み合わせて表示します。";
-    default:
-      return "";
-  }
-}
+const metricReadingCues: Readonly<Partial<Record<string, string>>> = {
+  "assets.average": "4人の金額差と分布を比べ、資産をどの水準で残したかを確認します。",
+  "destination.conversionDelta":
+    "目的地順位と最終順位のずれを比べ、到着回数が順位へつながったかを確認します。",
+  "ginji.encounterRate": "低さだけで決めず、遭遇した試合の平均順位と平均資産も合わせて確認します。",
+  "podium.rate": "1〜2位で終えた割合です。対象戦数と下位率を一緒に比べます。",
+  "rank.average": "1位に近いほど上位です。順位分布と合わせ、平均に隠れた波を確認します。",
+  "rank.distribution": "1〜4位の内訳から、平均順位だけでは見えない安定と波を確認します。",
+  "revenue.average": "物件収益順位と最終順位を一緒に見て、収益額の大きさだけで勝因を決めません。",
+};

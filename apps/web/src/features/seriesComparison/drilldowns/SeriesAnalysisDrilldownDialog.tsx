@@ -1,21 +1,22 @@
 import {
+  AnalysisTableCell as TableCell,
+  AnalysisTableHead as TableHead,
+} from "@/features/seriesComparison/charts/SeriesAnalysisMatrix";
+import {
+  DrilldownFacts,
   drilldownTitle,
-  SummaryLine,
-  TableCell,
-  TableHead,
 } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownPrimitives";
 import {
   PlayOrderHistoryDrilldown,
   RankHistoryDrilldown,
 } from "@/features/seriesComparison/drilldowns/SeriesAnalysisHistoryDrilldowns";
+import { RankSignalDrilldown } from "@/features/seriesComparison/drilldowns/SeriesAnalysisRankSignalDrilldown";
 import { useSeriesAnalysisDrilldown } from "@/features/seriesComparison/drilldowns/useSeriesAnalysisDrilldown";
 import {
-  evidenceStrengthLabel,
   formatDateTime,
   formatDecimal,
   formatManYen,
   qualityLabel,
-  rankSignalLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import { SeriesAnalysisMatchLink } from "@/features/seriesComparison/navigation/SeriesAnalysisMatchLink";
 import type {
@@ -88,56 +89,28 @@ function DrilldownBody({ response }: { response: SeriesAnalysisDrilldownV2 }) {
         <PlayOrderHistoryDrilldown payload={payload} playerName={response.player.displayName} />
       );
     case "rank_signals":
-      return (
-        <div className="grid gap-4">
-          <SummaryLine
-            items={[
-              qualityLabel(payload.status),
-              `${payload.matchCount}戦`,
-              `${payload.heldEventCount}開催`,
-            ]}
-          />
-          <p className="text-sm leading-6 text-[var(--color-text-secondary)]">
-            同じプレーヤー内で残った候補だけを比べています。候補内の比重であり、順位への因果や次戦の結果を示す値ではありません。
-          </p>
-          {payload.candidates.length === 0 ? (
-            <Notice tone="info" title="採用できる手掛かりはありません">
-              複数の開催に分けて確認しても残る候補がありませんでした。
-            </Notice>
-          ) : (
-            <div className="grid gap-3">
-              {payload.candidates.map((candidate) => (
-                <article
-                  className="rounded-[var(--radius-sm)] border border-[var(--color-border)] p-3"
-                  key={candidate.signal}
-                >
-                  <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <h3 className="font-semibold">{rankSignalLabel(candidate.signal)}</h3>
-                    <span className="text-xs text-[var(--color-text-secondary)]">
-                      {candidate.supportCount}区分で支持・安定性
-                      {evidenceStrengthLabel(candidate.stabilityBand)}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-sm tabular-nums">
-                    候補内の比重{" "}
-                    {candidate.candidateSharePercent === null
-                      ? "—"
-                      : `${candidate.candidateSharePercent}%`}
-                  </p>
-                </article>
-              ))}
-            </div>
-          )}
-        </div>
-      );
+      return <RankSignalDrilldown payload={payload} />;
     case "unexpected_wins":
       return (
         <div className="grid gap-4">
-          <SummaryLine
+          <DrilldownFacts
+            ariaLabel="予測より上位だった勝利の要約"
             items={[
-              qualityLabel(payload.summary.status),
-              `勝利 ${payload.summary.totalWinCount}戦`,
-              `対象 ${payload.summary.unexpectedWinCount}戦`,
+              {
+                id: "wins",
+                label: "勝利",
+                value: `${payload.summary.totalWinCount}戦`,
+              },
+              {
+                id: "targets",
+                label: "確認対象",
+                value: `${payload.summary.unexpectedWinCount}戦`,
+              },
+              {
+                id: "quality",
+                label: "読み取り",
+                value: qualityLabel(payload.summary.status),
+              },
             ]}
           />
           {payload.rows.length === 0 ? (

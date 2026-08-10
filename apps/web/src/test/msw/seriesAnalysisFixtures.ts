@@ -650,15 +650,13 @@ export function makeSeriesAnalysisDrilldown(metricId: string): SeriesAnalysisDri
           {
             candidateSharePercent: 100,
             direction: "more_is_higher",
-            foldRows: [
-              {
-                comparisonCount: 24,
-                fold: 1,
-                heldEventCount: 2,
-                importance: 0.12,
-                supported: true,
-              },
-            ],
+            foldRows: Array.from({ length: 5 }, (_, fold) => ({
+              comparisonCount: 24,
+              fold,
+              heldEventCount: fold < 3 ? 2 : 1,
+              importance: 0.12 - fold * 0.01,
+              supported: true,
+            })),
             importance: 0.12,
             signal: "revenue",
             stabilityBand: "high",

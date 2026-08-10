@@ -68,11 +68,11 @@ export function MatchDigestStrip({
                           : "勝者不明"}
                       </p>
                     </div>
-                    <span className="text-[10px] text-[var(--color-text-secondary)]">
+                    <span className="text-[11px] text-[var(--color-text-secondary)]">
                       {qualityLabel(match.qualityStatus)}
                     </span>
                   </div>
-                  <p className="mt-1 text-[10px] text-[var(--color-text-muted)]">
+                  <p className="mt-1 text-[11px] text-[var(--color-text-muted)]">
                     {formatDateTime(match.playedAt)}
                   </p>
                   {focused ? (
@@ -93,13 +93,13 @@ export function MatchDigestStrip({
                   </dl>
                   <div className="mt-2 flex min-h-6 flex-wrap gap-1">
                     {match.flags.length === 0 ? (
-                      <span className="text-[10px] text-[var(--color-text-muted)]">
+                      <span className="text-[11px] text-[var(--color-text-muted)]">
                         大きな特徴なし
                       </span>
                     ) : (
                       match.flags.map((flag) => (
                         <span
-                          className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-[10px] text-[var(--color-text-secondary)]"
+                          className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-[11px] text-[var(--color-text-secondary)]"
                           key={flag}
                         >
                           {timelineFlagLabel(flag)}

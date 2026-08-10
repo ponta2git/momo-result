@@ -26,7 +26,8 @@ export function FlowView({
   onDrilldown,
   onFocusMatch,
 }: AnalysisViewProps & { onFocusMatch: (matchId: string) => void }) {
-  const recentWindowSize = response.recentRanks[0]?.windowSize ?? 20;
+  const recentWindowSize = response.recentRanks[0]?.windowSize;
+  const recentWindowTitle = recentWindowSize ? `直近${recentWindowSize}戦` : "直近順位";
   return (
     <div
       aria-labelledby={analysisTabId("flow")}
@@ -39,8 +40,16 @@ export function FlowView({
         <AnalysisFacts
           ariaLabel="最近の試合の対象範囲"
           items={[
-            { label: "この欄", value: `直近${response.matchDigest.shownCount}戦` },
-            { label: "分析対象", value: `全${response.matchDigest.totalCount}戦` },
+            {
+              id: "shown",
+              label: "カード表示",
+              value: `直近${response.matchDigest.shownCount}戦`,
+            },
+            {
+              id: "total",
+              label: "期間内",
+              value: `全${response.matchDigest.totalCount}戦`,
+            },
           ]}
         />
         <MatchDigestStrip
@@ -81,11 +90,15 @@ export function FlowView({
         </div>
       </AnalysisSection>
       <AnalysisSection id="metric-recent-form" title="直近順位と累積推移">
-        <AnalysisSubsection title={`直近${recentWindowSize}戦`}>
+        <AnalysisSubsection id="metric-recent-form-recent" title={recentWindowTitle}>
           <RecentRankStrips focusedItemIds={focusedItemIds} response={response} />
         </AnalysisSubsection>
         <div className="mt-6 border-t border-[var(--color-border)] pt-4">
-          <AnalysisSubsection meta={`${response.scope.matchCount}戦`} title="全試合の累積">
+          <AnalysisSubsection
+            id="metric-recent-form-cumulative"
+            meta={`${response.scope.matchCount}戦`}
+            title="全試合の累積"
+          >
             <CumulativeFormCharts focusedItemIds={focusedItemIds} response={response} />
           </AnalysisSubsection>
         </div>

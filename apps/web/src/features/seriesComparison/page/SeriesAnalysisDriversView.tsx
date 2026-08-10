@@ -12,10 +12,14 @@ import {
   formatPercent,
   highlightMetricLabel,
   qualityLabel,
-  rankSignalLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
+import {
+  rankSignalCandidateShareLabel,
+  rankSignalLabel,
+} from "@/features/seriesComparison/model/seriesAnalysisRankPresentation";
 import type { AnalysisViewProps } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
 import {
+  AnalysisReadingGuide,
   AnalysisSection,
   memberNames,
   MetricValue,
@@ -156,13 +160,11 @@ export function DriversView({ focusedItemIds, response, onDrilldown }: AnalysisV
                     <li className="grid gap-0.5 text-sm" key={candidate.signal}>
                       <span className="font-medium">{rankSignalLabel(candidate.signal)}</span>
                       <span className="text-xs text-[var(--color-text-secondary)] tabular-nums">
-                        候補内の比重{" "}
-                        {formatPercent(
-                          candidate.candidateSharePercent === null
-                            ? null
-                            : candidate.candidateSharePercent / 100,
+                        {rankSignalCandidateShareLabel(
+                          candidate.candidateSharePercent,
+                          entry.candidates.length,
                         )}
-                        ・支持 {candidate.supportCount}開催
+                        ・別開催で支持 {candidate.supportCount}組
                       </span>
                     </li>
                   ))}
@@ -181,6 +183,28 @@ export function DriversView({ focusedItemIds, response, onDrilldown }: AnalysisV
               </Button>
             </article>
           ))}
+        </div>
+        <div className="mt-4">
+          <AnalysisReadingGuide
+            ariaLabel="順位を読む追加の手掛かりの読み方"
+            items={[
+              {
+                id: "decision",
+                label: "候補の選び方",
+                value: "候補内の比重と、別開催でも残った支持数を一緒に比べる",
+              },
+              {
+                id: "next",
+                label: "次に見る",
+                value: "気になる候補の「検証範囲を見る」から、開催別の残り方と根拠試合を確かめる",
+              },
+              {
+                id: "not-for",
+                label: "使わない場面",
+                value: "候補内の比重を、次戦の順位確率としては使わない",
+              },
+            ]}
+          />
         </div>
       </AnalysisSection>
     </div>

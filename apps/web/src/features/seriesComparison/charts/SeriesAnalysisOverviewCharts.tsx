@@ -1,5 +1,10 @@
-import { Fragment } from "react";
-
+import {
+  AnalysisMatrix,
+  MatrixAxisHeader,
+  MatrixCell,
+  MatrixColumnHeader,
+  MatrixRowHeader,
+} from "@/features/seriesComparison/charts/SeriesAnalysisMatrix";
 import {
   formatDecimal,
   formatPercent,
@@ -52,13 +57,14 @@ export function RankDistributionBars({ focusedItemIds, response }: OverviewChart
               <div
                 aria-label={`${player.displayName}の順位分布`}
                 className="flex h-9 overflow-hidden rounded-[var(--radius-xs)] bg-[var(--color-surface)]"
-                role="img"
+                role="group"
               >
                 {entry?.cells.map((cell) => (
                   <span
                     aria-label={`${cell.rank}位 ${cell.count}回 ${formatPercent(cell.rate)}${focusedItemIds.includes(cell.itemId) ? "、この試合" : ""}`}
                     data-focused-metric={focusedItemIds.includes(cell.itemId) ? "true" : undefined}
                     key={cell.itemId}
+                    role="img"
                     style={{
                       backgroundColor: rankColor(cell.rank),
                       flexBasis: `${(cell.rate ?? 0) * 100}%`,
@@ -84,66 +90,90 @@ export function RankDistributionBars({ focusedItemIds, response }: OverviewChart
 }
 
 export function CrownShareBars({ response }: { response: SeriesComparisonAggregateV2 }) {
+  const shareByMemberId = new Map(
+    response.rankAnalysis.crownCertainty.shares.map((entry) => [entry.memberId, entry.share]),
+  );
+  const chartLabel = response.players
+    .map((player) => `${player.displayName} ${formatPercent(shareByMemberId.get(player.memberId))}`)
+    .join("、");
   return (
-    <div className="grid gap-2">
-      {response.players.map((player, index) => {
-        const share = response.rankAnalysis.crownCertainty.shares.find(
-          (candidate) => candidate.memberId === player.memberId,
-        )?.share;
-        return (
-          <div
-            className="grid grid-cols-[8rem_minmax(0,1fr)_4.5rem] items-center gap-2"
-            key={player.memberId}
-          >
-            <span className="text-sm font-semibold break-words">{player.displayName}</span>
-            <span className="h-2 overflow-hidden rounded-full bg-[var(--color-surface-subtle)]">
-              <span
-                className="block h-full rounded-full"
-                style={{
-                  backgroundColor: dataVizSeriesColor(index),
-                  width: `${(share ?? 0) * 100}%`,
-                }}
-              />
-            </span>
-            <strong className="text-right text-sm tabular-nums">{formatPercent(share)}</strong>
-          </div>
-        );
-      })}
+    <div className="grid gap-3">
+      <div
+        aria-label={`平均順位首位に残った比率。${chartLabel}`}
+        className="flex h-3 overflow-hidden rounded-full bg-[var(--color-surface-subtle)]"
+        role="img"
+      >
+        {response.players.map((player, index) => {
+          const share = shareByMemberId.get(player.memberId) ?? 0;
+          return (
+            <span
+              aria-hidden="true"
+              className="block h-full"
+              key={player.memberId}
+              style={{
+                backgroundColor: dataVizSeriesColor(index),
+                flexBasis: `${share * 100}%`,
+                flexGrow: 0,
+                flexShrink: 0,
+              }}
+            />
+          );
+        })}
+      </div>
+      <dl className="grid gap-px overflow-hidden rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-border)] sm:grid-cols-2 xl:grid-cols-4">
+        {response.players.map((player, index) => {
+          const share = shareByMemberId.get(player.memberId);
+          return (
+            <div
+              className="flex items-center justify-between gap-2 bg-[var(--color-surface-subtle)] px-3 py-2"
+              key={player.memberId}
+              style={{
+                borderLeftColor: dataVizSeriesColor(index),
+                borderLeftWidth: 3,
+              }}
+            >
+              <dt className="text-sm font-semibold break-words">{player.displayName}</dt>
+              <dd className="text-right text-sm font-semibold tabular-nums">
+                {formatPercent(share)}
+              </dd>
+            </div>
+          );
+        })}
+      </dl>
     </div>
   );
 }
 
 export function HeadToHeadMatrix({ response }: { response: SeriesComparisonAggregateV2 }) {
-  const columnCount = response.players.length === 0 ? 1 : response.players.length;
   return (
-    <div className="overflow-x-auto pb-1">
-      <div
-        className="grid min-w-[42rem] gap-1"
-        style={{ gridTemplateColumns: `9rem repeat(${columnCount}, minmax(7rem, 1fr))` }}
-      >
-        <div className="grid content-center rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-[10px] font-semibold text-[var(--color-text-secondary)]">
-          <span>行: 本人</span>
-          <span>列: 相手</span>
-        </div>
-        {response.players.map((player) => (
-          <div
-            className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-2 text-center text-xs font-semibold break-words"
-            key={player.memberId}
-          >
-            vs {player.displayName}
-          </div>
-        ))}
+    <AnalysisMatrix ariaLabel="直接対決" className="min-w-[42rem] table-fixed">
+      <thead>
+        <tr>
+          <MatrixAxisHeader className="w-36" columnLabel="相手" rowLabel="本人" />
+          {response.players.map((player, playerIndex) => (
+            <MatrixColumnHeader
+              key={player.memberId}
+              style={{
+                borderTopColor: dataVizSeriesColor(playerIndex),
+                borderTopWidth: 3,
+              }}
+            >
+              vs {player.displayName}
+            </MatrixColumnHeader>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
         {response.players.map((subject, subjectIndex) => (
-          <Fragment key={subject.memberId}>
-            <div
-              className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-2 text-sm font-semibold break-words"
+          <tr key={subject.memberId}>
+            <MatrixRowHeader
               style={{
                 borderLeftColor: dataVizSeriesColor(subjectIndex),
                 borderLeftWidth: 3,
               }}
             >
               {subject.displayName}
-            </div>
+            </MatrixRowHeader>
             {response.players.map((opponent) => {
               const entry = response.headToHead.entries.find(
                 (candidate) =>
@@ -152,8 +182,13 @@ export function HeadToHeadMatrix({ response }: { response: SeriesComparisonAggre
               );
               const self = subject.memberId === opponent.memberId;
               return (
-                <div
-                  className="min-h-20 rounded-[var(--radius-xs)] border px-2 py-2 text-center"
+                <MatrixCell
+                  aria-label={
+                    self
+                      ? `${subject.displayName}本人`
+                      : `${subject.displayName}対${opponent.displayName}、上位率${formatPercent(entry?.betterRankRate)}、${headToHeadSignalLabel(entry?.signal)}、${entry?.matchCount ?? 0}戦中${entry?.betterRankCount ?? 0}戦上位、平均順位差${formatDecimal(entry?.averageRankDiff)}`
+                  }
+                  className="h-20 rounded-[var(--radius-xs)] border px-2 py-2 text-center"
                   key={opponent.memberId}
                   style={
                     self
@@ -180,13 +215,13 @@ export function HeadToHeadMatrix({ response }: { response: SeriesComparisonAggre
                       </p>
                     </>
                   )}
-                </div>
+                </MatrixCell>
               );
             })}
-          </Fragment>
+          </tr>
         ))}
-      </div>
-    </div>
+      </tbody>
+    </AnalysisMatrix>
   );
 }
 

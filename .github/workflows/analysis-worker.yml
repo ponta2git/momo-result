@@ -18,7 +18,7 @@ permissions:
   contents: read
 
 env:
-  MOMO_DB_REF: c6a657ed5005f512e8e3ed39e73cffd041c54e31
+  MOMO_DB_REF: c6a657e6eb7e9024fabb0ce85aaf0f22d4148f7b
 
 jobs:
   analysis-worker:

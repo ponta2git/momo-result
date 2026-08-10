@@ -34,7 +34,7 @@ env:
   CI_DUMMY_ORIGIN_LOCK_TOKEN: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
   IMAGE_ARTIFACT_NAME: runtime-image
   IMAGE_REF: registry.fly.io/momo-result:${{ github.sha }}
-  MOMO_DB_REF: c6a657ed5005f512e8e3ed39e73cffd041c54e31
+  MOMO_DB_REF: c6a657e6eb7e9024fabb0ce85aaf0f22d4148f7b
 
 concurrency:
   group: ${{ github.event_name == 'pull_request' && format('runtime-smoke-pr-{0}', github.event.pull_request.number) || 'fly-deploy-production' }}

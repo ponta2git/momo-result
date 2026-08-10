@@ -143,7 +143,9 @@
 - Chart legends must wrap outside the plot. Distinguish player series by color plus line or point treatment, and constrain any horizontal scrolling to the chart or table itself.
 - On mobile drilldowns, keep one vertical scroll region for the dialog body so controls and evidence tables remain reachable below charts. Constrain chart overflow to the horizontal axis so vertical swipes continue through the dialog.
 - Keep every axis name and tick label inside its SVG/card boundary. Center quadrant plot areas with balanced left/right padding, reserving dedicated space for a vertical y-axis title.
-- Explanatory copy describes meaning, direction, comparison conditions, or data limitations. Do not narrate visible controls, disclosure behavior, or layout.
+- Establish meaning with section grouping, direct result facts, matrix corner labels, axis names, and sample-size metadata before adding explanatory copy. Do not repeat those visible relationships in a paragraph.
+- Explanatory copy describes meaning, direction, comparison conditions, or an actionable limitation. Do not narrate calculations, visible controls, disclosure behavior, layout, or implementation excuses without telling the reader how to use the result.
+- Separate recent rank and all-match cumulative evidence with explicit subsection headings. The recent-rank ledger uses the worker-selected latest 20 matches; every colored rank tile is the same 44px square as its result link so the visible fill and hit target are one surface.
 - Preserve table-specific vocabulary when it helps recognition: use “桃鉄型（物件重視）” and “遊戯王型（カード重視）” for the earning-mix axis, while avoiding an unrelated second “〜型” label in the same card.
 - Do not animate every chart mark. If continuity benefits from motion, reveal the whole figure once on viewport entry within 200ms and disable it for reduced motion.
 - A match result links to the corresponding comparison scope, and comparison evidence links back to the source match while preserving URL state.

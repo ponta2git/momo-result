@@ -33,10 +33,14 @@ object SeriesAnalysisModule:
       )
     },
     SecuredEndpoint.readLogic(security, SeriesAnalysisEndpoints.status) { member => rawTitleId =>
-      read(readRateLimiter, member.accountId.value, HttpOperation.GetSeriesAnalysisStatus,
+      read(
+        readRateLimiter,
+        member.accountId.value,
+        HttpOperation.GetSeriesAnalysisStatus,
         security.decode(SeriesAnalysisCodec.gameTitleId(rawTitleId))(titleId =>
           security.respond(getStatus.run(titleId))(SeriesAnalysisStatusResponse.from)
-        ))
+        )
+      )
     },
     SecuredEndpoint.readLogic(security, SeriesAnalysisEndpoints.aggregate) { member => input =>
       val (titleId, artifactId, seasonId, mapId) = input
@@ -120,10 +124,16 @@ object SeriesAnalysisModule:
     },
     SecuredEndpoint.adminReadLogic(security, SeriesAnalysisEndpoints.adminOverview) {
       member => rawTitleId =>
-        read(readRateLimiter, member.accountId.value, HttpOperation.GetSeriesAnalysisAdminOverview,
+        read(
+          readRateLimiter,
+          member.accountId.value,
+          HttpOperation.GetSeriesAnalysisAdminOverview,
           security.decode(SeriesAnalysisCodec.optionalGameTitleId(rawTitleId))(titleId =>
-            security.respond(getAdminOverview.run(titleId))(SeriesAnalysisAdminOverviewResponse.from)
-          ))
+            security.respond(
+              getAdminOverview.run(titleId)
+            )(SeriesAnalysisAdminOverviewResponse.from)
+          )
+        )
     },
     SecuredEndpoint.adminMutationLogic(security, SeriesAnalysisEndpoints.recalculateTitle) {
       account => input =>

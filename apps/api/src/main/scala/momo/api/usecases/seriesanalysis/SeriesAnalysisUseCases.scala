@@ -16,8 +16,9 @@ final class GetSeriesAnalysisStatus[F[_]](repository: SeriesAnalysisRepository[F
     .status(gameTitleId)
 
 final class GetSeriesAnalysisChunk[F[_]](repository: SeriesAnalysisRepository[F]):
-  def run(request: SeriesAnalysisChunkRequest): F[Either[AppError, SeriesAnalysisChunk]] = repository
-    .chunk(request)
+  def run(request: SeriesAnalysisChunkRequest): F[Either[AppError, SeriesAnalysisChunk]] =
+    repository
+      .chunk(request)
 
 final class GetSeriesAnalysisAdminOverview[F[_]](repository: SeriesAnalysisRepository[F]):
   def run(

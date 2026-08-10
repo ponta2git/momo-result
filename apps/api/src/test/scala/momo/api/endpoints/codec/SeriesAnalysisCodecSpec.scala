@@ -3,11 +3,7 @@ package momo.api.endpoints.codec
 import munit.FunSuite
 
 import momo.api.domain.ids.{GameTitleId, MapMasterId, MatchId, MemberId, SeasonMasterId}
-import momo.api.domain.{
-  SeriesAnalysisChunkKind,
-  SeriesAnalysisDrilldownMetric,
-  SeriesAnalysisScope
-}
+import momo.api.domain.{SeriesAnalysisChunkKind, SeriesAnalysisDrilldownMetric, SeriesAnalysisScope}
 import momo.api.errors.AppError
 
 final class SeriesAnalysisCodecSpec extends FunSuite:
@@ -62,17 +58,22 @@ final class SeriesAnalysisCodecSpec extends FunSuite:
         metricId = Some(expected.id),
       ))
 
-      assertEquals(result.map(value => (
-        value.gameTitleId,
-        value.artifactId,
-        value.memberId,
-        value.metric,
-      )), Right((
-        gameTitleId,
-        artifactId,
-        Some(MemberId.unsafeFromString("member-ponta")),
-        Some(expected),
-      )))
+      assertEquals(
+        result.map(value =>
+          (
+            value.gameTitleId,
+            value.artifactId,
+            value.memberId,
+            value.metric,
+          )
+        ),
+        Right((
+          gameTitleId,
+          artifactId,
+          Some(MemberId.unsafeFromString("member-ponta")),
+          Some(expected),
+        ))
+      )
     }
 
   test("maps match context identity and rejects fields belonging to another resource kind"):

@@ -72,21 +72,27 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
           checksum == sha256(payload)
       Either.cond(metadataValid, (), AppError.Internal("Invalid analysis artifact metadata."))
         .flatMap(_ => decodeUtf8(payload))
-        .flatMap(value => Either.cond(
-          jsonTextDepthWithin(value, config.maxNestingDepth),
-          value,
-          AppError.Internal("Analysis artifact exceeds the JSON nesting bound."),
-        ))
-        .flatMap(value => parse(value)
-          .leftMap(_ => AppError.Internal("Invalid analysis artifact payload.")))
-        .flatMap(json => validateDecodedJson(
-          json,
-          request,
-          itemCount,
-          sourceMatchRevision,
-          depth,
-          config,
-        ).as(SeriesAnalysisChunk(artifact, request.scope, json)))
+        .flatMap(value =>
+          Either.cond(
+            jsonTextDepthWithin(value, config.maxNestingDepth),
+            value,
+            AppError.Internal("Analysis artifact exceeds the JSON nesting bound."),
+          )
+        )
+        .flatMap(value =>
+          parse(value)
+            .leftMap(_ => AppError.Internal("Invalid analysis artifact payload."))
+        )
+        .flatMap(json =>
+          validateDecodedJson(
+            json,
+            request,
+            itemCount,
+            sourceMatchRevision,
+            depth,
+            config,
+          ).as(SeriesAnalysisChunk(artifact, request.scope, json))
+        )
     }
 
   def memberIds(json: Json): Either[AppError, List[String]] =
@@ -145,13 +151,15 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
   def includedContext(
       chunk: SeriesAnalysisChunk,
       sourceMatchRevision: Long,
-  ): SeriesAnalysisChunk = chunk.copy(payload = chunk.payload.mapObject(_.add(
-    "inclusion",
-    Json.obj(
-      "status" -> Json.fromString("included"),
-      "sourceMatchRevision" -> Json.fromString(sourceMatchRevision.toString),
-    ),
-  )))
+  ): SeriesAnalysisChunk = chunk.copy(payload =
+    chunk.payload.mapObject(_.add(
+      "inclusion",
+      Json.obj(
+        "status" -> Json.fromString("included"),
+        "sourceMatchRevision" -> Json.fromString(sourceMatchRevision.toString),
+      ),
+    ))
+  )
 
   def excludedContext(
       artifact: SeriesAnalysisArtifactRef,

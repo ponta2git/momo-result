@@ -9,7 +9,10 @@ import doobie.postgres.implicits.*
 import doobie.util.update.Update
 
 import momo.api.adapters.postgres.PostgresMeta.given
-import momo.api.adapters.postgres.PostgresSeriesAnalysisRequestSupport.{existingOperation, OperationRow}
+import momo.api.adapters.postgres.PostgresSeriesAnalysisRequestSupport.{
+  existingOperation,
+  OperationRow
+}
 import momo.api.domain.ids.{AccountId, GameTitleId}
 import momo.api.domain.{SeriesAnalysisAcceptedCampaign, SeriesAnalysisRecalculationAccepted}
 import momo.api.errors.AppError
@@ -115,14 +118,16 @@ private[postgres] object PostgresSeriesAnalysisCampaignRequestOps:
           $artifactSchemaVersion, 'expanding', ${targets.size}, $acceptedAt
         )
       """.update.run.void
-      snapshots = targets.map(target => CampaignTargetSnapshot(
-        campaignId,
-        target.gameTitleId,
-        target.inputRevision,
-        target.algorithmVersion,
-        target.artifactSchemaVersion,
-        acceptedAt,
-      ))
+      snapshots = targets.map(target =>
+        CampaignTargetSnapshot(
+          campaignId,
+          target.gameTitleId,
+          target.inputRevision,
+          target.algorithmVersion,
+          target.artifactSchemaVersion,
+          acceptedAt,
+        )
+      )
       _ <- Update[CampaignTargetSnapshot](
         """INSERT INTO series_analysis_campaign_targets (
           campaign_id, game_title_id, input_revision, algorithm_version,

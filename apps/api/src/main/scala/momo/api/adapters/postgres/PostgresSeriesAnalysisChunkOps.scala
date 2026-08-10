@@ -47,7 +47,8 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
       scopeExists <- PostgresSeriesAnalysisScopeOps.exists(request.gameTitleId, request.scope)
       row <- selectChunk(request)
       decoded = if !scopeExists then AppError.AnalysisScopeNotFound().asLeft
-        else row match
+      else
+        row match
           case None => AppError.AnalysisArtifactExpired().asLeft
           case Some(value) => PostgresSeriesAnalysisChunkCodec.decode(value, request, config, None)
       result <- decoded match
@@ -237,8 +238,10 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
         .displayName(chunk.artifact.gameTitleId, chunk.scope)
     yield
       val metadataComplete = names.keySet == memberIds.toSet
-      val hydrated = chunk.copy(payload = PostgresSeriesAnalysisChunkCodec
-        .hydratePayload(chunk, names, scopeName.getOrElse("")))
+      val hydrated = chunk.copy(payload =
+        PostgresSeriesAnalysisChunkCodec
+          .hydratePayload(chunk, names, scopeName.getOrElse(""))
+      )
       val responseBytes = PostgresSeriesAnalysisChunkCodec
         .jsonUtf8BytesUpperBound(hydrated.payload)
       if !metadataComplete || scopeName.isEmpty then

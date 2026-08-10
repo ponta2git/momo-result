@@ -87,7 +87,8 @@ private[postgres] object PostgresSeriesAnalysisMutationOps:
               'match_mutation'
             )
           """.update.run.void
-        case Some(job) if job.status == "queued" => sql"""
+        case Some(job) if job.status == "queued" =>
+          sql"""
             UPDATE series_analysis_jobs
             SET input_revision = ${desired.inputRevision},
                 algorithm_version = ${desired.algorithmVersion},

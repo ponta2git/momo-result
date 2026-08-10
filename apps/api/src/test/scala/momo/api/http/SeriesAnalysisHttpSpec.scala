@@ -23,15 +23,16 @@ final class SeriesAnalysisHttpSpec extends MomoCatsEffectSuite with HttpAppTestF
   private val titleId = GameTitleId.unsafeFromString("title-http-analysis")
   private val app = ResourceFunFixture(seededWiredHttpAppResource(
     "momo-series-analysis-http",
-    runtime => runtime.gameTitles.create(
-      GameTitle(
-        titleId,
-        "分析HTTP作品",
-        "momotetsu2",
-        1,
-        Instant.parse("2026-08-09T00:00:00Z"),
-      )
-    ),
+    runtime =>
+      runtime.gameTitles.create(
+        GameTitle(
+          titleId,
+          "分析HTTP作品",
+          "momotetsu2",
+          1,
+          Instant.parse("2026-08-09T00:00:00Z"),
+        )
+      ),
   ))
 
   app.test("v2 options and status are lightweight no-store reads") { httpApp =>

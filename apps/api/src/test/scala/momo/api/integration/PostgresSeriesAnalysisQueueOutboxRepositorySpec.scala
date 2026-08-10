@@ -161,7 +161,9 @@ final class PostgresSeriesAnalysisQueueOutboxRepositorySpec extends IntegrationS
           artifact_schema_version, status, trigger, requested_at, available_at, finished_at
         ) VALUES
           ('analysis-job-old-terminal', $titleId, 0, 'series-analysis-v1', 1,
-           'failed', 'manual', ${cutoff.minusSeconds(60)}, ${cutoff.minusSeconds(60)}, ${cutoff.minusSeconds(1)}),
+           'failed', 'manual', ${cutoff.minusSeconds(60)}, ${cutoff.minusSeconds(
+          60
+        )}, ${cutoff.minusSeconds(1)}),
           ('analysis-job-fresh-terminal', $titleId, 0, 'series-analysis-v1', 1,
            'failed', 'manual', $cutoff, $cutoff, ${cutoff.plusSeconds(1)}),
           ('analysis-job-active', $titleId, 0, 'series-analysis-v1', 1,

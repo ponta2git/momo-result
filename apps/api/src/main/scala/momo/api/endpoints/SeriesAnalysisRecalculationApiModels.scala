@@ -32,7 +32,9 @@ object SeriesAnalysisRecalculationAcceptedResponse:
     value.requestId,
     DateTimeFormatter.ISO_INSTANT.format(value.acceptedAt),
     value.targetCount,
-    value.campaign.map(value => SeriesAnalysisAcceptedCampaignResponse(value.campaignId, value.status)),
+    value.campaign.map(value =>
+      SeriesAnalysisAcceptedCampaignResponse(value.campaignId, value.status)
+    ),
     value.target.map(value =>
       SeriesAnalysisAcceptedTargetResponse(
         value.gameTitleId.value,

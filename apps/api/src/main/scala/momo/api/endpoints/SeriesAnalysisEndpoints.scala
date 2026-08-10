@@ -99,17 +99,18 @@ object SeriesAnalysisEndpoints:
       .tag("admin-analysis")
 
   val recalculateAll
-      : SecuredMutation[AllRecalculationInput, SeriesAnalysisRecalculationAcceptedResponse] = endpoint
-    .securityIn(CommonEndpoint.accountHeader.and(CommonEndpoint.csrfHeader))
-    .post
-    .in("api" / "admin" / "series-analysis" / "recalculations" / "all")
-    .in(header[Option[String]]("Idempotency-Key"))
-    .in(jsonBody[SeriesAnalysisAllRecalculationRequest])
-    .errorOut(CommonEndpoint.errorOut)
-    .out(statusCode(StatusCode.Accepted))
-    .out(jsonBody[SeriesAnalysisRecalculationAcceptedResponse])
-    .out(noStore)
-    .tag("admin-analysis")
+      : SecuredMutation[AllRecalculationInput, SeriesAnalysisRecalculationAcceptedResponse] =
+    endpoint
+      .securityIn(CommonEndpoint.accountHeader.and(CommonEndpoint.csrfHeader))
+      .post
+      .in("api" / "admin" / "series-analysis" / "recalculations" / "all")
+      .in(header[Option[String]]("Idempotency-Key"))
+      .in(jsonBody[SeriesAnalysisAllRecalculationRequest])
+      .errorOut(CommonEndpoint.errorOut)
+      .out(statusCode(StatusCode.Accepted))
+      .out(jsonBody[SeriesAnalysisRecalculationAcceptedResponse])
+      .out(noStore)
+      .tag("admin-analysis")
 
   private def artifactEndpoint(path: String): SecuredRead[ScopedArtifactInput, Json] = endpoint
     .securityIn(CommonEndpoint.accountHeader)

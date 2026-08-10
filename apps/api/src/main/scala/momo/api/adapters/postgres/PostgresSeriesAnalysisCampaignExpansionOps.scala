@@ -195,7 +195,8 @@ private[postgres] object PostgresSeriesAnalysisCampaignExpansionOps:
       """.update.run.as(Assignment(None, None, "pending", "expanded", None))
 
   private def canJoinRunning(job: ActiveJobRow, acceptedAt: Instant): Boolean =
-    job.status == "running" && job.attemptId.nonEmpty && job.startedAt.exists(!_.isBefore(acceptedAt))
+    job.status == "running" && job.attemptId.nonEmpty &&
+      job.startedAt.exists(!_.isBefore(acceptedAt))
 
   private def insertRequest(
       target: TargetRow,

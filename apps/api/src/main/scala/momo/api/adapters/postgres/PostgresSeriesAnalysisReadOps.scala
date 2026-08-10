@@ -241,5 +241,4 @@ private[postgres] object PostgresSeriesAnalysisReadOps:
       AppError.AnalysisStateUnavailable(),
     )
 
-
 end PostgresSeriesAnalysisReadOps

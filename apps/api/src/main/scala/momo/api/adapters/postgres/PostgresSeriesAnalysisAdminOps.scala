@@ -98,14 +98,16 @@ private[postgres] object PostgresSeriesAnalysisAdminOps:
               for
                 statusResult <- PostgresSeriesAnalysisReadOps.status(id)
                 pending <- pendingManualCio(id)
-              yield statusResult.map(status => SeriesAnalysisAdminOverview(
-                options.titles,
-                option.map(value =>
-                  SeriesAnalysisSelectedTitle(id, value.displayName, status, pending)
-                ),
-                global.copy(latestActiveCampaign = latestCampaign),
-                summaries,
-              ))
+              yield statusResult.map(status =>
+                SeriesAnalysisAdminOverview(
+                  options.titles,
+                  option.map(value =>
+                    SeriesAnalysisSelectedTitle(id, value.displayName, status, pending)
+                  ),
+                  global.copy(latestActiveCampaign = latestCampaign),
+                  summaries,
+                )
+              )
     yield result
 
   private def globalCio: ConnectionIO[SeriesAnalysisGlobalExecution] = sql"""

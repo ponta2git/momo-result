@@ -85,11 +85,13 @@ object SeriesAnalysisCodec:
   private val OpaqueIdPattern = "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$".r
 
   private def metric(value: String): Either[AppError, SeriesAnalysisDrilldownMetric] =
-    opaqueId("metricId", value).flatMap(id => SeriesAnalysisDrilldownMetric.fromId(id).toRight(
-      AppError.ValidationFailed(
-        s"metricId must be one of: ${SeriesAnalysisDrilldownMetric.supportedIds.mkString(", ")}."
+    opaqueId("metricId", value).flatMap(id =>
+      SeriesAnalysisDrilldownMetric.fromId(id).toRight(
+        AppError.ValidationFailed(
+          s"metricId must be one of: ${SeriesAnalysisDrilldownMetric.supportedIds.mkString(", ")}."
+        )
       )
-    ))
+    )
 
   private def opaqueId(field: String, value: String): Either[AppError, String] = BoundaryId
     .nonBlank(field, value).flatMap { id =>

@@ -11,10 +11,7 @@ import org.typelevel.log4cats.LoggerFactory
 
 import momo.api.logging.SafeLog
 import momo.api.ports.queue.SeriesAnalysisQueuePublisher
-import momo.api.repositories.{
-  SeriesAnalysisQueueOutboxRecord,
-  SeriesAnalysisQueueOutboxRepository
-}
+import momo.api.repositories.{SeriesAnalysisQueueOutboxRecord, SeriesAnalysisQueueOutboxRepository}
 
 final case class SeriesAnalysisQueueDispatcherConfig(
     batchSize: Int = 10,
@@ -40,10 +37,11 @@ private[seriesanalysis] final class SeriesAnalysisQueueOutboxDispatcher[
     classOf[SeriesAnalysisQueueOutboxDispatcher[F]]
   )
 
-  def run: F[Unit] = (runOnce.handleErrorWith(error =>
-    logger.error(s"Analysis queue dispatcher tick failed errorClasses=${SafeLog
-        .throwableClasses(error)}")
-  ) >> Temporal[F].sleep(config.pollInterval)).foreverM
+  def run: F[Unit] =
+    (runOnce.handleErrorWith(error =>
+      logger.error(s"Analysis queue dispatcher tick failed errorClasses=${SafeLog
+          .throwableClasses(error)}")
+    ) >> Temporal[F].sleep(config.pollInterval)).foreverM
 
   def runOnce: F[Unit] =
     for
@@ -82,11 +80,13 @@ private[seriesanalysis] final class SeriesAnalysisQueueOutboxDispatcher[
             error.getClass.getName,
             now,
           )
-          _ <- if released then logger.warn(
+          _ <- if released then
+            logger.warn(
               s"Analysis queue publish failed outboxId=${row.id} attempt=${row.attemptCount + 1} errorClasses=${SafeLog
                   .throwableClasses(error)}"
             )
-            else logger.warn(
+          else
+            logger.warn(
               s"Analysis outbox retry ignored for stale claim outboxId=${row.id}"
             )
         yield ()

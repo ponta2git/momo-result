@@ -4,7 +4,11 @@ import java.time.format.DateTimeFormatter
 
 import io.circe.Codec
 
-import momo.api.domain.{SeriesAnalysisAdminOverview, SeriesAnalysisGlobalExecution, SeriesAnalysisJobSummary}
+import momo.api.domain.{
+  SeriesAnalysisAdminOverview,
+  SeriesAnalysisGlobalExecution,
+  SeriesAnalysisJobSummary
+}
 
 final case class SeriesAnalysisAdminTitleOptionResponse(
     gameTitleId: String,

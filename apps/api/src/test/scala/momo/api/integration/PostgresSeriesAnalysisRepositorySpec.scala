@@ -17,7 +17,12 @@ import momo.api.adapters.postgres.{
 }
 import momo.api.config.SeriesAnalysisReadConfig
 import momo.api.domain.ids.{AccountId, GameTitleId}
-import momo.api.domain.{GameTitle, SeriesAnalysisChunkKind, SeriesAnalysisChunkRequest, SeriesAnalysisScope}
+import momo.api.domain.{
+  GameTitle,
+  SeriesAnalysisChunkKind,
+  SeriesAnalysisChunkRequest,
+  SeriesAnalysisScope
+}
 import momo.api.errors.AppError
 
 final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite:

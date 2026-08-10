@@ -31,14 +31,21 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite:
 
     assertInternal(
       PostgresSeriesAnalysisChunkCodec
-        .decode(stored(payload, nestingDepth = 3), request, SeriesAnalysisReadConfig.defaults, None),
+        .decode(
+          stored(payload, nestingDepth = 3),
+          request,
+          SeriesAnalysisReadConfig.defaults,
+          None
+        ),
       "Invalid UTF-8 analysis artifact payload.",
     )
 
   test("rejects more than four distinct member identifiers before building a SQL IN clause"):
-    val json = Json.arr((1 to 5).map(index => Json.obj(
-      "memberId" -> Json.fromString(s"member-$index")
-    ))*)
+    val json = Json.arr((1 to 5).map(index =>
+      Json.obj(
+        "memberId" -> Json.fromString(s"member-$index")
+      )
+    )*)
 
     assertInternal(
       PostgresSeriesAnalysisChunkCodec.memberIds(json),
@@ -68,7 +75,12 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite:
 
     assertInternal(
       PostgresSeriesAnalysisChunkCodec
-        .decode(stored(payload, nestingDepth = 3), request, SeriesAnalysisReadConfig.defaults, None),
+        .decode(
+          stored(payload, nestingDepth = 3),
+          request,
+          SeriesAnalysisReadConfig.defaults,
+          None
+        ),
       "Analysis artifact schema validation failed.",
     )
 

@@ -173,21 +173,22 @@ private[postgres] object SeriesAnalysisPayloadValidator:
         "play_order_rank_history" -> Set("kind", "summary", "seriesByPlayOrder", "rows")
       case SeriesAnalysisDrilldownMetric.RankSignals =>
         "rank_signals" -> Set(
-            "kind",
-            "method",
-            "status",
-            "reasonCodes",
-            "heldEventCount",
-            "matchCount",
-            "improvedFoldCount",
-            "candidates",
-          )
+          "kind",
+          "method",
+          "status",
+          "reasonCodes",
+          "heldEventCount",
+          "matchCount",
+          "improvedFoldCount",
+          "candidates",
+        )
       case SeriesAnalysisDrilldownMetric.UnexpectedWins =>
         "unexpected_wins" -> Set("kind", "summary", "rows")
     }
     schemaAndScope(value, 2, request.scope) && playerMatches && expected.exists {
       case (kind, keys) => detail.exists(detailValue =>
-          detailValue.keys.toSet == keys && detailValue("kind").flatMap(_.asString).contains(kind) &&
+          detailValue.keys.toSet == keys &&
+            detailValue("kind").flatMap(_.asString).contains(kind) &&
             historyCountMatches(detailValue, kind, itemCount)
         )
     }

@@ -98,9 +98,11 @@ final class SeriesAnalysisQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
       .update(value => value.copy(expansions = value.expansions :+ (now -> limit))).as(0)
 
     override def reconcileQueued(now: Instant, redeliverBefore: Instant, limit: Int): IO[Int] =
-      calls.update(value => value.copy(
-        reconciliations = value.reconciliations :+ ((now, redeliverBefore, limit))
-      )).as(0)
+      calls.update(value =>
+        value.copy(
+          reconciliations = value.reconciliations :+ ((now, redeliverBefore, limit))
+        )
+      ).as(0)
 
     override def claimDue(
         limit: Int,
@@ -115,9 +117,11 @@ final class SeriesAnalysisQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
         claimExpiresAt: Instant,
         redisMessageId: String,
         now: Instant,
-    ): IO[Boolean] = calls.update(value => value.copy(
-      deliveries = value.deliveries :+ ((id, claimExpiresAt, redisMessageId, now))
-    )).as(true)
+    ): IO[Boolean] = calls.update(value =>
+      value.copy(
+        deliveries = value.deliveries :+ ((id, claimExpiresAt, redisMessageId, now))
+      )
+    ).as(true)
 
     override def releaseForRetry(
         id: String,
@@ -125,15 +129,18 @@ final class SeriesAnalysisQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
         nextAttemptAt: Instant,
         safeErrorClass: String,
         now: Instant,
-    ): IO[Boolean] = calls.update(value => value.copy(
-      releases = value.releases :+ ((
-        id,
-        claimExpiresAt,
-        nextAttemptAt,
-        safeErrorClass,
-        now,
-      ))
-    )).as(true)
+    ): IO[Boolean] = calls.update(value =>
+      value.copy(
+        releases = value.releases :+
+          ((
+            id,
+            claimExpiresAt,
+            nextAttemptAt,
+            safeErrorClass,
+            now,
+          ))
+      )
+    ).as(true)
 
     override def cleanupHistory(
         terminalBefore: Instant,

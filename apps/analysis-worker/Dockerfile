@@ -37,8 +37,10 @@ COPY --from=diagnostics /momo-toolbox /momo-toolbox
 # BusyBox `sh` can rewrite argv[0] and dispatch hidden applets. A separate POSIX shell keeps the
 # supported toolbox surface enforceable while still allowing `fly ssh console` access.
 COPY --from=builder --chmod=0755 /bin/dash /momo-toolbox/sh
-COPY --from=builder --chown=10001:10001 --chmod=0700 \
-  /tmp/runtime-root/var/lib/momo-analysis /var/lib/momo-analysis
+# Copy the parent so the prepared child directory remains an archive entry whose 0700 mode is
+# preserved. Copying the empty directory's contents directly produced builder-dependent destination
+# permissions because the destination directory itself had to be created during the copy.
+COPY --from=builder --chown=10001:10001 /tmp/runtime-root/var/lib /var/lib
 COPY --from=builder --chmod=0755 /usr/bin/getent /usr/bin/openssl /usr/bin/
 COPY --from=builder --chmod=0755 /tmp/momo-analysis /usr/local/bin/momo-analysis
 USER 10001:10001

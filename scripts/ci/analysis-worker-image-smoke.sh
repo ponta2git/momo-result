@@ -65,8 +65,9 @@ docker run --rm --entrypoint sh "${image_ref}" -c '
   test "$(id -g)" = 10001 || fail "unexpected gid"
   test -r /etc/ssl/certs/ca-certificates.crt || fail "CA bundle is unreadable"
   test -w /var/lib/momo-analysis || fail "state directory is not writable"
-  test "$(stat -c %a /var/lib/momo-analysis)" = 700 \
-    || fail "state directory permissions are not 0700"
+  state_directory_mode="$(stat -c %a /var/lib/momo-analysis)"
+  test "${state_directory_mode}" = 700 \
+    || fail "state directory permissions are ${state_directory_mode}; expected 0700"
 
   for tool in \
     sh ps free pgrep top pmap ip netstat nc getent openssl \
@@ -131,6 +132,13 @@ docker run --rm --entrypoint sh "${image_ref}" -c '
     echo "container memory accounting is unavailable" >&2
     exit 1
   fi
+'
+
+docker run --rm --user 10002:10002 --entrypoint sh "${image_ref}" -c '
+  set -eu
+  test ! -r /var/lib/momo-analysis
+  test ! -w /var/lib/momo-analysis
+  test ! -x /var/lib/momo-analysis
 '
 
 if ! special_mode_files="$(docker run --rm --user 0:0 --entrypoint sh "${image_ref}" -c '

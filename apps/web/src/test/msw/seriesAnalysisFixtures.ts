@@ -10,7 +10,7 @@ import type {
 } from "@/shared/api/seriesAnalysis";
 
 export const analysisArtifact = {
-  algorithmVersion: "rust-v1",
+  algorithmVersion: "series-analysis-v3",
   artifactId: "artifact-current",
   artifactSchemaVersion: 1,
   gameTitleId: "gt_momotetsu_2",
@@ -171,8 +171,11 @@ export function makeSeriesAnalysisAggregate(
         series: [{ counts: [3], memberId: player.memberId }],
       },
       revenue: {
-        bins: [{ index: 0, label: "0〜9999", lowerInclusive: 0, upperExclusive: 10_000 }],
-        series: [{ counts: [2], memberId: player.memberId }],
+        bins: [
+          { index: 0, label: "0〜0", lowerInclusive: 0, upperExclusive: 1 },
+          { index: 1, label: "1〜9999", lowerInclusive: 1, upperExclusive: 10_000 },
+        ],
+        series: [{ counts: [1, 1], memberId: player.memberId }],
       },
     },
     matchDigest: {
@@ -813,7 +816,7 @@ export function makeSeriesAnalysisAdminOverview(): SeriesAnalysisAdminOverview {
     },
     recentJobs: [
       {
-        algorithmVersion: "rust-v1",
+        algorithmVersion: "series-analysis-v3",
         attemptCount: 1,
         coalescedTriggers: [],
         elapsedMilliseconds: 1234,

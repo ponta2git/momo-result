@@ -4,7 +4,7 @@ use thiserror::Error;
 
 use crate::database::DatabaseError;
 
-pub(crate) const ALGORITHM_VERSION: &str = "series-analysis-v2";
+pub(crate) const ALGORITHM_VERSION: &str = "series-analysis-v3";
 
 mod capability;
 mod claim;

@@ -250,6 +250,14 @@ mod tests {
         }
     }
 
+    fn overall_aggregate(resources: &[ComputedResource]) -> Option<&Value> {
+        resources.iter().find_map(|resource| {
+            (resource.scope == ScopeRef::Overall
+                && resource.kind == ComputedResourceKind::Aggregate)
+                .then_some(&resource.payload)
+        })
+    }
+
     #[test]
     fn empty_title_still_produces_overall_aggregate_and_review() {
         let input = AnalysisInput {
@@ -453,5 +461,127 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["event-z", "event-a"]
         );
+    }
+
+    #[test]
+    fn revenue_histogram_isolates_zero_between_negative_and_positive_bins() {
+        let rows = (1..=4)
+            .map(|player| {
+                let mut value = row(1, player);
+                value.revenue_man_yen = match player {
+                    1 => -5,
+                    2 => 0,
+                    3 => 1,
+                    _ => 5,
+                };
+                value
+            })
+            .collect();
+        let resources = compute_all(&AnalysisInput {
+            game_title_id: String::from("title-1"),
+            input_revision: 1,
+            rows,
+        });
+        let aggregate = overall_aggregate(&resources);
+        assert!(aggregate.is_some(), "overall aggregate missing");
+        let Some(aggregate) = aggregate else {
+            return;
+        };
+        let bins = aggregate
+            .pointer("/histograms/revenue/bins")
+            .and_then(Value::as_array);
+        assert!(bins.is_some(), "revenue histogram bins missing");
+        let Some(bins) = bins else {
+            return;
+        };
+        let zero_bins = bins
+            .iter()
+            .filter(|bin| {
+                bin.get("lowerInclusive").and_then(Value::as_i64) == Some(0)
+                    && bin.get("upperExclusive").and_then(Value::as_i64) == Some(1)
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(zero_bins.len(), 1, "zero must have exactly one dedicated bin");
+        assert!(bins.len() <= 8, "histogram must stay within the bin limit");
+        for pair in bins.windows(2) {
+            let [left, right] = pair else {
+                continue;
+            };
+            let left_upper = left.get("upperExclusive").and_then(Value::as_i64);
+            let right_lower = right.get("lowerInclusive").and_then(Value::as_i64);
+            assert!(
+                left_upper.zip(right_lower).is_some_and(|(upper, lower)| upper <= lower),
+                "revenue histogram bins must be non-overlapping and ordered"
+            );
+        }
+        let zero_index = zero_bins
+            .first()
+            .and_then(|bin| bin.get("index"))
+            .and_then(Value::as_u64)
+            .and_then(|index| usize::try_from(index).ok());
+        assert!(zero_index.is_some(), "zero bin index missing");
+        let Some(zero_index) = zero_index else {
+            return;
+        };
+        let series = aggregate
+            .pointer("/histograms/revenue/series")
+            .and_then(Value::as_array);
+        assert!(series.is_some(), "revenue histogram series missing");
+        let Some(series) = series else {
+            return;
+        };
+        for player_series in series {
+            let member_id = player_series.get("memberId").and_then(Value::as_str);
+            let zero_count = player_series
+                .get("counts")
+                .and_then(Value::as_array)
+                .and_then(|counts| counts.get(zero_index))
+                .and_then(Value::as_u64);
+            let expected = u64::from(member_id == Some("member-2"));
+            assert_eq!(
+                zero_count, Some(expected),
+                "zero revenue must only count in the dedicated player bin"
+            );
+        }
+    }
+
+    #[test]
+    fn all_zero_revenue_produces_only_the_dedicated_bin() {
+        let rows = (1..=4)
+            .map(|player| {
+                let mut value = row(1, player);
+                value.revenue_man_yen = 0;
+                value
+            })
+            .collect();
+        let resources = compute_all(&AnalysisInput {
+            game_title_id: String::from("title-1"),
+            input_revision: 1,
+            rows,
+        });
+        let aggregate = overall_aggregate(&resources);
+        assert!(aggregate.is_some(), "overall aggregate missing");
+        let Some(aggregate) = aggregate else {
+            return;
+        };
+
+        assert_eq!(
+            aggregate.pointer("/histograms/revenue/bins"),
+            Some(&json!([{
+                "index": 0,
+                "lowerInclusive": 0,
+                "upperExclusive": 1,
+                "label": "0〜0",
+            }])),
+            "all-zero revenue must not generate empty surrounding bins"
+        );
+        let counts = aggregate
+            .pointer("/histograms/revenue/series")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|series| series.get("counts"))
+            .collect::<Vec<_>>();
+        assert_eq!(counts, vec![&json!([1]), &json!([1]), &json!([1]), &json!([1])]);
     }
 }

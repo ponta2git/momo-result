@@ -136,26 +136,115 @@ pub(super) fn histogram(
     players: &[String],
     value: impl Fn(&MatchPlayerRow) -> i32 + Copy,
 ) -> Value {
+    histogram_with_zero_handling(rows, players, value, ZeroHandling::SharedBin)
+}
+
+pub(super) fn revenue_histogram(
+    rows: &[&MatchPlayerRow],
+    players: &[String],
+    value: impl Fn(&MatchPlayerRow) -> i32 + Copy,
+) -> Value {
+    histogram_with_zero_handling(rows, players, value, ZeroHandling::Isolated)
+}
+
+fn histogram_with_zero_handling(
+    rows: &[&MatchPlayerRow],
+    players: &[String],
+    value: impl Fn(&MatchPlayerRow) -> i32 + Copy,
+    zero_handling: ZeroHandling,
+) -> Value {
     let all_values = rows.iter().map(|row| value(row)).collect::<Vec<_>>();
     if all_values.is_empty() {
         return json!({ "bins": [], "series": [] });
     }
-    let Some(lower) = percentile_i32(&all_values, 0.05).and_then(floor_i64) else {
+    let values_for_boundaries = match zero_handling {
+        ZeroHandling::Isolated => all_values
+            .iter()
+            .copied()
+            .filter(|candidate| *candidate != 0)
+            .collect::<Vec<_>>(),
+        ZeroHandling::SharedBin => all_values.clone(),
+    };
+    let Some(base_bins) = fixed_histogram_bins(&values_for_boundaries) else {
+        if zero_handling == ZeroHandling::Isolated && all_values.contains(&0) {
+            return histogram_json(rows, players, value, &[HistogramBin::zero()]);
+        }
         return json!({ "bins": [], "series": [] });
     };
-    let Some(upper) = percentile_i32(&all_values, 0.95).and_then(ceil_i64) else {
-        return json!({ "bins": [], "series": [] });
+    let bins = match zero_handling {
+        ZeroHandling::Isolated if all_values.contains(&0) => {
+            bins_with_isolated_zero(base_bins, &values_for_boundaries)
+        }
+        ZeroHandling::Isolated | ZeroHandling::SharedBin => base_bins,
     };
+    histogram_json(rows, players, value, &bins)
+}
+
+fn fixed_histogram_bins(values: &[i32]) -> Option<Vec<HistogramBin>> {
+    const BIN_COUNT: i64 = 6;
+    let lower = percentile_i32(values, 0.05).and_then(floor_i64)?;
+    let upper = percentile_i32(values, 0.95).and_then(ceil_i64)?;
     let width = ((upper - lower).max(1) + 5) / 6;
-    let bins = (0..6)
+    let bins = (0..BIN_COUNT)
         .map(|index| {
             let from = lower + index * width;
-            let to = (index < 5).then_some(from + width);
+            HistogramBin {
+                lower_inclusive: from,
+                upper_exclusive: (index < BIN_COUNT - 1).then_some(from + width),
+            }
+        })
+        .collect();
+    Some(bins)
+}
+
+fn bins_with_isolated_zero(
+    bins: Vec<HistogramBin>,
+    nonzero_values: &[i32],
+) -> Vec<HistogramBin> {
+    let has_negative = nonzero_values.iter().any(|candidate| *candidate < 0);
+    let has_positive = nonzero_values.iter().any(|candidate| *candidate > 0);
+    let mut negative = Vec::with_capacity(bins.len());
+    let mut positive = Vec::with_capacity(bins.len());
+    for bin in bins {
+        if bin.upper_exclusive.is_some_and(|upper| upper <= 0) {
+            negative.push(bin);
+        } else if bin.lower_inclusive >= 1 {
+            positive.push(bin);
+        } else {
+            if has_negative && bin.lower_inclusive < 0 {
+                negative.push(HistogramBin {
+                    lower_inclusive: bin.lower_inclusive,
+                    upper_exclusive: Some(0),
+                });
+            }
+            if has_positive && bin.upper_exclusive.is_none_or(|upper| upper > 1) {
+                positive.push(HistogramBin {
+                    lower_inclusive: 1,
+                    upper_exclusive: bin.upper_exclusive,
+                });
+            }
+        }
+    }
+    negative.push(HistogramBin::zero());
+    negative.extend(positive);
+    negative
+}
+
+fn histogram_json(
+    rows: &[&MatchPlayerRow],
+    players: &[String],
+    value: impl Fn(&MatchPlayerRow) -> i32 + Copy,
+    bins: &[HistogramBin],
+) -> Value {
+    let bin_rows = bins
+        .iter()
+        .enumerate()
+        .map(|(index, bin)| {
             json!({
                 "index": index,
-                "lowerInclusive": from,
-                "upperExclusive": to,
-                "label": to.map_or_else(|| format!("{from}以上"), |to| format!("{from}〜{}", to - 1)),
+                "lowerInclusive": bin.lower_inclusive,
+                "upperExclusive": bin.upper_exclusive,
+                "label": bin.label(),
             })
         })
         .collect::<Vec<_>>();
@@ -167,26 +256,54 @@ pub(super) fn histogram(
                 .filter(|row| row.member_id == *member_id)
                 .map(|row| value(row))
                 .collect::<Vec<_>>();
-            let counts = (0..6)
-                .map(|index| {
-                    let from = lower + index * width;
-                    let to = from + width;
+            let counts = bins
+                .iter()
+                .map(|bin| {
                     player_values
                         .iter()
-                        .filter(|candidate| {
-                            if index == 5 {
-                                i64::from(**candidate) >= from
-                            } else {
-                                i64::from(**candidate) >= from && i64::from(**candidate) < to
-                            }
-                        })
+                        .filter(|candidate| bin.contains(i64::from(**candidate)))
                         .count()
                 })
                 .collect::<Vec<_>>();
             json!({ "memberId": member_id, "counts": counts })
         })
         .collect::<Vec<_>>();
-    json!({ "bins": bins, "series": series })
+    json!({ "bins": bin_rows, "series": series })
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum ZeroHandling {
+    SharedBin,
+    Isolated,
+}
+
+#[derive(Clone, Copy)]
+struct HistogramBin {
+    lower_inclusive: i64,
+    upper_exclusive: Option<i64>,
+}
+
+impl HistogramBin {
+    const fn zero() -> Self {
+        Self {
+            lower_inclusive: 0,
+            upper_exclusive: Some(1),
+        }
+    }
+
+    fn contains(self, candidate: i64) -> bool {
+        candidate >= self.lower_inclusive
+            && self
+                .upper_exclusive
+                .is_none_or(|upper| candidate < upper)
+    }
+
+    fn label(self) -> String {
+        self.upper_exclusive.map_or_else(
+            || format!("{}以上", self.lower_inclusive),
+            |upper| format!("{}〜{}", self.lower_inclusive, upper - 1),
+        )
+    }
 }
 
 pub(super) fn match_digest(groups: &[MatchGroup<'_>]) -> Value {

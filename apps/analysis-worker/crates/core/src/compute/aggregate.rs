@@ -17,7 +17,7 @@ use super::{
     },
     quality::{data_quality, highlights, metric_definitions, quality_summary},
     support::{MatchGroup, player_json, rank_spread_signal, scope_json},
-    trends::{histogram, match_digest, match_no_in_event, trends},
+    trends::{histogram, match_digest, match_no_in_event, revenue_histogram, trends},
 };
 
 pub(super) fn aggregate(
@@ -71,7 +71,7 @@ pub(super) fn aggregate(
         "trends": trends,
         "histograms": {
             "assets": histogram(rows, players, |row| row.total_assets_man_yen),
-            "revenue": histogram(rows, players, |row| row.revenue_man_yen),
+            "revenue": revenue_histogram(rows, players, |row| row.revenue_man_yen),
         },
         "headToHead": head_to_head,
         "momentumSwitch": momentum,

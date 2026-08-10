@@ -66,7 +66,8 @@ describe("rich series analysis views", () => {
     expect(screen.getByText("総資産レンジ")).toBeInTheDocument();
     expect(screen.getByText("物件収益額")).toBeInTheDocument();
     expect(screen.getByText("4億5000万円")).toBeInTheDocument();
-    expect(screen.getByText("0万円〜9999万円")).toBeInTheDocument();
+    expect(screen.getByText("0円")).toBeInTheDocument();
+    expect(screen.getByText("1万円〜9999万円")).toBeInTheDocument();
     expect(screen.queryByText("0〜9999")).not.toBeInTheDocument();
     expect(
       screen.getByRole("link", {

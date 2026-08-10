@@ -116,6 +116,7 @@ export function SeriesAnalysisScopeBar({
 function formatDateTime(value: string): string {
   return new Intl.DateTimeFormat("ja-JP", {
     dateStyle: "medium",
+    timeZone: "Asia/Tokyo",
     timeStyle: "short",
   }).format(new Date(value));
 }

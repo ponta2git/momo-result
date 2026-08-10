@@ -335,12 +335,14 @@ describe("MatchesListPage", () => {
     await waitFor(() =>
       expect(screen.getByLabelText("current location")).toHaveTextContent("/matches"),
     );
-    const detailLinks = await screen.findAllByRole("link", {
-      name: "第1試合 東日本編の試合結果を見る",
+    await waitFor(() => {
+      const detailLinks = screen.getAllByRole("link", {
+        name: "第1試合 東日本編の試合結果を見る",
+      });
+      detailLinks.forEach((link) =>
+        expect(link).toHaveAttribute("href", "/matches/match-1?returnTo=%2Fmatches"),
+      );
     });
-    detailLinks.forEach((link) =>
-      expect(link).toHaveAttribute("href", "/matches/match-1?returnTo=%2Fmatches"),
-    );
     expect(screen.queryByText("試合はまだありません")).not.toBeInTheDocument();
   });
 

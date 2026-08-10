@@ -9,12 +9,12 @@ import {
 } from "@/shared/lib/dateTime";
 
 describe("shared date-time formatting", () => {
-  const localDate = new Date(2026, 0, 2, 3, 4);
+  it("uses one long, compact, and date-only Japanese format in Japan time", () => {
+    const absoluteDate = new Date("2026-01-01T18:04:00.000Z");
 
-  it("uses one long, compact, and date-only Japanese format", () => {
-    expect(formatDateTimeLong(localDate)).toBe("2026/01/02 03:04");
-    expect(formatDateTimeCompact(localDate)).toBe("01/02 03:04");
-    expect(formatDateOnly(localDate)).toBe("2026/01/02");
+    expect(formatDateTimeLong(absoluteDate)).toBe("2026/01/02 03:04");
+    expect(formatDateTimeCompact(absoluteDate)).toBe("01/02 03:04");
+    expect(formatDateOnly(absoluteDate)).toBe("2026/01/02");
   });
 
   it("preserves invalid API values and uses a fallback for missing values", () => {
@@ -23,6 +23,8 @@ describe("shared date-time formatting", () => {
   });
 
   it("converts datetime-local values without applying the timezone twice", () => {
+    const localDate = new Date(2026, 0, 2, 3, 4);
+
     expect(toLocalDateTimeInputValue(localDate)).toBe("2026-01-02T03:04");
     expect(toIsoFromLocalDateTime("invalid-date")).toBe("invalid-date");
   });

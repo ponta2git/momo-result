@@ -6,6 +6,7 @@ const longDateTimeFormatter = new Intl.DateTimeFormat("ja-JP", {
   hour12: false,
   minute: "2-digit",
   month: "2-digit",
+  timeZone: "Asia/Tokyo",
   year: "numeric",
 });
 
@@ -15,11 +16,13 @@ const compactDateTimeFormatter = new Intl.DateTimeFormat("ja-JP", {
   hour12: false,
   minute: "2-digit",
   month: "2-digit",
+  timeZone: "Asia/Tokyo",
 });
 
 const dateFormatter = new Intl.DateTimeFormat("ja-JP", {
   day: "2-digit",
   month: "2-digit",
+  timeZone: "Asia/Tokyo",
   year: "numeric",
 });
 

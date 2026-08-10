@@ -16,6 +16,7 @@ const percentFormatter = new Intl.NumberFormat("ja-JP", {
 });
 const dateTimeFormatter = new Intl.DateTimeFormat("ja-JP", {
   dateStyle: "medium",
+  timeZone: "Asia/Tokyo",
   timeStyle: "short",
 });
 

@@ -239,6 +239,7 @@ function formatDuration(value: number | null): string {
 
 const adminDateTimeFormatter = new Intl.DateTimeFormat("ja-JP", {
   dateStyle: "medium",
+  timeZone: "Asia/Tokyo",
   timeStyle: "short",
 });
 const adminIntegerFormatter = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 0 });

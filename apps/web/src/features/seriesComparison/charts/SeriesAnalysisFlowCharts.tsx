@@ -147,7 +147,10 @@ export function MomentumMatrices({
           </h3>
           <div className="overflow-x-auto pb-1">
             <div className="grid min-w-[24rem] grid-cols-[4rem_repeat(4,minmax(4rem,1fr))] gap-1">
-              <div aria-hidden="true" />
+              <div className="grid content-center rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-1 text-[9px] font-semibold text-[var(--color-text-secondary)]">
+                <span>行: 前戦</span>
+                <span>列: 次戦</span>
+              </div>
               {[1, 2, 3, 4].map((rank) => (
                 <div
                   className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-1 text-center text-[11px] font-semibold"

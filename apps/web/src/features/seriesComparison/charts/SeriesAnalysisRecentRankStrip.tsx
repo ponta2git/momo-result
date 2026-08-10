@@ -130,18 +130,19 @@ export function RecentRankStrips({
                         {row ? (
                           <SeriesAnalysisMatchLink
                             ariaLabel={`${player.displayName}、第${matchIndex}戦、${row.rank}位${focused ? "、この試合" : ""}。試合結果を見る`}
-                            className={`w-11 justify-center rounded-[var(--radius-xs)] border text-xs tabular-nums no-underline hover:no-underline ${focused ? "momo-enter ring-2 ring-[var(--color-action)] ring-offset-2 ring-offset-[var(--color-surface-subtle)]" : ""}`}
+                            className={`size-11 justify-center overflow-hidden rounded-[var(--radius-xs)] border p-0 text-xs tabular-nums no-underline hover:no-underline ${focused ? "momo-enter ring-2 ring-[var(--color-action)] ring-offset-2 ring-offset-[var(--color-surface-subtle)]" : ""}`}
                             matchId={row.matchId}
+                            style={{
+                              backgroundColor: rankColor(row.rank),
+                              borderColor: rankColor(row.rank),
+                              color: rankForegroundColor(row.rank),
+                            }}
                             title={`第${matchIndex}戦 ${row.rank}位`}
                           >
                             <span
                               className="grid size-full place-items-center rounded-[calc(var(--radius-xs)-1px)]"
                               data-focused-metric={focused ? "true" : undefined}
-                              style={{
-                                backgroundColor: rankColor(row.rank),
-                                borderColor: rankColor(row.rank),
-                                color: rankForegroundColor(row.rank),
-                              }}
+                              data-rank-tile-fill="true"
                             >
                               {row.rank}
                             </span>

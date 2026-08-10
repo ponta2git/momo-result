@@ -43,6 +43,10 @@ describe("ReviewView", () => {
       />,
     );
 
+    const usage = screen.getByLabelText("行動仮説の使い方");
+    expect(within(usage).getByText("対象")).toBeInTheDocument();
+    expect(within(usage).getByText("次の4戦")).toBeInTheDocument();
+    expect(within(usage).getByText("使う場面")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "卓全体で出やすい論点" })).toHaveTextContent(
       "収益先行後の詰め方",
     );
@@ -54,7 +58,7 @@ describe("ReviewView", () => {
     await user.click(screen.getByRole("button", { name: "分類と信頼度の読み方" }));
     const helpDialog = await screen.findByRole("dialog");
     expect(within(helpDialog).getByText("再現する")).toBeInTheDocument();
-    expect(within(helpDialog).getByText(/自分で思い出す/u)).toBeInTheDocument();
+    expect(within(helpDialog).getByText(/「やること」を行動候補にします/u)).toBeInTheDocument();
     await user.click(within(helpDialog).getByRole("button", { name: "ダイアログを閉じる" }));
 
     await user.click(screen.getAllByRole("button", { name: "根拠・注意・試合後の確認" })[0]!);

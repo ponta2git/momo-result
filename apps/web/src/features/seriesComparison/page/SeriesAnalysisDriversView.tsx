@@ -37,30 +37,19 @@ export function DriversView({ focusedItemIds, response, onDrilldown }: AnalysisV
       role="tabpanel"
     >
       <AnalysisTableOfContents view="drivers" />
-      <AnalysisSection
-        description="各人の資産帯と、低資産・高資産になった試合での残り方を比べます。金額の大きさだけで勝因とは決めません。"
-        id="metric-money"
-        title="資産の残し方"
-      >
+      <AnalysisSection id="metric-money" title="資産の残し方">
         <AssetComparisonCards response={response} />
         <div className="mt-5">
           <AssetRevenueHistograms response={response} />
         </div>
         <div className="mt-5 rounded-[var(--radius-sm)] border border-[var(--color-border)] p-3">
-          <h3 className="text-sm font-semibold">稼ぎ方の比重の根拠</h3>
-          <p className="mt-1 text-xs leading-5 text-[var(--color-text-secondary)]">
-            物件収益比率と順位スコアを4人の中央値で区切ります。近い点は同程度として扱います。
-          </p>
+          <h3 className="text-sm font-semibold">資産タイプの位置</h3>
           <div className="mt-3">
             <StrategyProfileQuadrant response={response} />
           </div>
         </div>
       </AnalysisSection>
-      <AnalysisSection
-        description="物件収益順位から最終順位へどう移ったかを件数と行内割合で示します。強い色は、その収益順位の中で多かった着地です。"
-        id="metric-revenue-outcome"
-        title="物件収益と最終順位"
-      >
+      <AnalysisSection id="metric-revenue-outcome" title="物件収益と最終順位">
         <RevenueConversionMatrices focusedItemIds={focusedItemIds} response={response} />
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           {response.metricsByPlayer.map((metric) => (
@@ -91,11 +80,7 @@ export function DriversView({ focusedItemIds, response, onDrilldown }: AnalysisV
           ))}
         </div>
       </AnalysisSection>
-      <AnalysisSection
-        description="目的地到着が多い試合・少ない試合・0回の試合で、勝率と入賞率がどう違うかを比べます。各枠の対象戦数を必ず併記します。"
-        id="metric-destination-outcome"
-        title="目的地到着と順位"
-      >
+      <AnalysisSection id="metric-destination-outcome" title="目的地到着と順位">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           {response.metricsByPlayer.map((metric) => (
             <article
@@ -127,11 +112,7 @@ export function DriversView({ focusedItemIds, response, onDrilldown }: AnalysisV
           ))}
         </div>
       </AnalysisSection>
-      <AnalysisSection
-        description="1点は1人の1試合です。右ほど総資産に占める物件収益が大きく、上ほど総資産が大きい試合です。"
-        id="metric-strategy-scatter"
-        title="試合ごとの資産と収益"
-      >
+      <AnalysisSection id="metric-strategy-scatter" title="試合ごとの資産と収益">
         <StrategyScatter focusedItemIds={focusedItemIds} response={response} />
         <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           {response.highlights.map((highlight) => (
@@ -152,11 +133,7 @@ export function DriversView({ focusedItemIds, response, onDrilldown }: AnalysisV
           ))}
         </div>
       </AnalysisSection>
-      <AnalysisSection
-        description="開催単位で分けた検証でも残った順位との関連候補です。因果関係や次戦の結果を保証するものではありません。"
-        id="metric-rank-signals"
-        title="順位を読む追加の手掛かり"
-      >
+      <AnalysisSection id="metric-rank-signals" title="順位を読む追加の手掛かり">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           {response.rankAnalysis.rankSignalsByPlayer.map((entry) => (
             <article

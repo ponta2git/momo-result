@@ -121,7 +121,10 @@ export function HeadToHeadMatrix({ response }: { response: SeriesComparisonAggre
         className="grid min-w-[42rem] gap-1"
         style={{ gridTemplateColumns: `9rem repeat(${columnCount}, minmax(7rem, 1fr))` }}
       >
-        <div aria-hidden="true" />
+        <div className="grid content-center rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-[10px] font-semibold text-[var(--color-text-secondary)]">
+          <span>行: 本人</span>
+          <span>列: 相手</span>
+        </div>
         {response.players.map((player) => (
           <div
             className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-2 text-center text-xs font-semibold break-words"

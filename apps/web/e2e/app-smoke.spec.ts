@@ -480,6 +480,11 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     await expect(page.locator('[data-focused-metric="true"]').first()).toBeVisible();
     await expect(page.getByRole("heading", { name: "最近の試合と荒れ方" })).toBeVisible();
     await expect(page.getByRole("table", { name: "直近順位ストリップ" })).toBeVisible();
+    const recentRankTile = page.getByRole("link", {
+      name: /ぽんた、第1戦、1位、この試合。試合結果を見る/u,
+    });
+    await expect(recentRankTile).toHaveCSS("height", "44px");
+    await expect(recentRankTile).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
     await expectNoHorizontalPageOverflow(page);
 
     await page.getByRole("tab", { name: "今の差" }).click();
@@ -526,7 +531,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
 
     await page.setViewportSize({ height: 900, width: 1440 });
     await page.getByRole("tab", { name: "次戦に備える" }).click();
-    await expect(page.getByText(/次の4戦で/u)).toBeVisible();
+    await expect(page.getByLabel("行動仮説の使い方").getByText("次の4戦")).toBeVisible();
     await expect(selectedMatch).toBeVisible();
     await page.getByRole("button", { name: "根拠・注意・試合後の確認" }).click();
     const evidenceDialog = page.getByRole("dialog", { name: "根拠・注意・試合後の確認" });

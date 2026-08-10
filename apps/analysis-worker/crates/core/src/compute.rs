@@ -250,6 +250,41 @@ mod tests {
         }
     }
 
+    #[test]
+    fn recent_rank_window_keeps_the_latest_twenty_matches_in_order() {
+        let owned_rows = (1..=24)
+            .map(|match_index| row(match_index, 1))
+            .collect::<Vec<_>>();
+        let rows = owned_rows.iter().collect::<Vec<_>>();
+        let players = vec![String::from("member-1")];
+        let grouped_rows = rows_by_player(&rows, &players);
+
+        let recent = metrics::recent_ranks(&players, &grouped_rows);
+        let entry = recent.first();
+        assert!(entry.is_some(), "recent rank entry missing");
+        let Some(entry) = entry else {
+            return;
+        };
+        assert_eq!(entry.get("windowSize").and_then(Value::as_u64), Some(20));
+        assert_eq!(entry.get("targetCount").and_then(Value::as_u64), Some(20));
+        assert_eq!(
+            entry.get("usedFallback").and_then(Value::as_bool),
+            Some(false)
+        );
+        let recent_rows = entry.get("rows").and_then(Value::as_array);
+        assert!(recent_rows.is_some(), "recent rank rows missing");
+        let Some(recent_rows) = recent_rows else {
+            return;
+        };
+        let match_ids = recent_rows
+            .iter()
+            .filter_map(|value| value.get("matchId").and_then(Value::as_str))
+            .collect::<Vec<_>>();
+        assert_eq!(match_ids.len(), 20);
+        assert_eq!(match_ids.first(), Some(&"match-5"));
+        assert_eq!(match_ids.last(), Some(&"match-24"));
+    }
+
     fn overall_aggregate(resources: &[ComputedResource]) -> Option<&Value> {
         resources.iter().find_map(|resource| {
             (resource.scope == ScopeRef::Overall

@@ -10,7 +10,7 @@ import type {
 } from "@/shared/api/seriesAnalysis";
 
 export const analysisArtifact = {
-  algorithmVersion: "series-analysis-v3",
+  algorithmVersion: "series-analysis-v4",
   artifactId: "artifact-current",
   artifactSchemaVersion: 1,
   gameTitleId: "gt_momotetsu_2",
@@ -433,9 +433,9 @@ export function makeSeriesAnalysisAggregate(
             rank: 1,
           },
         ],
-        targetCount: 8,
-        usedFallback: false,
-        windowSize: 8,
+        targetCount: 1,
+        usedFallback: true,
+        windowSize: 20,
         winStreak: 1,
       },
     ],
@@ -816,7 +816,7 @@ export function makeSeriesAnalysisAdminOverview(): SeriesAnalysisAdminOverview {
     },
     recentJobs: [
       {
-        algorithmVersion: "series-analysis-v3",
+        algorithmVersion: "series-analysis-v4",
         attemptCount: 1,
         coalescedTriggers: [],
         elapsedMilliseconds: 1234,

@@ -77,11 +77,18 @@ export function ReviewView({
         </Disclosure>
       ) : null}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-[var(--color-text-secondary)]">
-          次の4戦で、発動条件に気づいたときだけ試す行動仮説です。
-        </p>
+        <dl aria-label="行動仮説の使い方" className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+          <div className="flex items-baseline gap-2">
+            <dt className="text-xs font-semibold text-[var(--color-text-secondary)]">対象</dt>
+            <dd className="font-semibold">次の4戦</dd>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <dt className="text-xs font-semibold text-[var(--color-text-secondary)]">使う場面</dt>
+            <dd className="font-semibold">発動条件に当てはまるとき</dd>
+          </div>
+        </dl>
         <Dialog
-          description="カードに繰り返さず、ここで共通の読み方を説明します。"
+          description="分類は行動の扱い方、信頼度は根拠の確かさを示します。"
           title="分類と信頼度の読み方"
           trigger={
             <Button icon={<CircleHelp className="size-4" />} size="sm" variant="quiet">
@@ -113,9 +120,12 @@ export function ReviewView({
                 対象件数と差のぶれにくさを合わせた読み取り目安です。低い候補は結論ではなく、試す価値のある仮説として扱います。
               </p>
             </section>
-            <p className="rounded-[var(--radius-sm)] bg-[var(--color-surface-subtle)] p-3 text-[var(--color-text-secondary)]">
-              発動条件はアプリが試合中に判定するものではありません。次の試合中に自分で思い出すための目安です。
-            </p>
+            <dl className="rounded-[var(--radius-sm)] bg-[var(--color-surface-subtle)] p-3">
+              <HelpItem
+                label="試合中"
+                value="「発動条件」に当てはまったら、「やること」を行動候補にします。"
+              />
+            </dl>
           </div>
         </Dialog>
       </div>
@@ -133,7 +143,7 @@ export function ReviewView({
             ) : (
               <div className="mt-3 flex h-full flex-col justify-between gap-3 rounded-[var(--radius-sm)] bg-[var(--color-surface-subtle)] p-3">
                 <p className="text-sm text-[var(--color-text-secondary)]">
-                  この条件では、次回行動として出せる強い差分はありません。
+                  今回は無理に作戦を変えず、現在の差を確認します。
                 </p>
                 <Button size="sm" variant="secondary" onClick={() => onViewChange("overview")}>
                   今の差を見る

@@ -56,7 +56,10 @@ function MatchNoMatrix({
           gridTemplateColumns: `7rem repeat(${response.players.length === 0 ? 1 : response.players.length}, minmax(8rem, 1fr))`,
         }}
       >
-        <div aria-hidden="true" />
+        <div className="grid content-center rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-1 text-[10px] font-semibold text-[var(--color-text-secondary)]">
+          <span>行: 試合順</span>
+          <span>列: プレーヤー</span>
+        </div>
         {response.players.map((player, playerIndex) => (
           <div
             className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-2 text-center text-xs font-semibold break-words"

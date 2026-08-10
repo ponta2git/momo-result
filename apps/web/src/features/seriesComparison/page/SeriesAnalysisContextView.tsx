@@ -11,6 +11,7 @@ import {
 import type { AnalysisViewProps } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
 import {
   AnalysisSection,
+  AnalysisSubsection,
   MetricValue,
 } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
 import {
@@ -29,11 +30,7 @@ export function ContextView({ focusedItemIds, response, onDrilldown }: AnalysisV
       role="tabpanel"
     >
       <AnalysisTableOfContents view="context" />
-      <AnalysisSection
-        description="手番ごとの平均順位と入賞率です。色は各人の中で最も良い手番との差を示し、手番そのものの有利不利を断定しません。"
-        id="metric-play-order"
-        title="番手比較"
-      >
+      <AnalysisSection id="metric-play-order" title="番手比較">
         <PlayOrderMatrix focusedItemIds={focusedItemIds} response={response} />
         <div className="mt-3 flex flex-wrap gap-2">
           {response.playOrderComparison.map((entry) => (
@@ -50,18 +47,10 @@ export function ContextView({ focusedItemIds, response, onDrilldown }: AnalysisV
           ))}
         </div>
       </AnalysisSection>
-      <AnalysisSection
-        description="目的地到着とカード売り場立ち寄りの組み合わせごとに、順位・勝率・資産を比べます。対象件数が少ない枠は参考値です。"
-        id="metric-card-shop-destination"
-        title="カード売り場と目的地"
-      >
+      <AnalysisSection id="metric-card-shop-destination" title="カード売り場と目的地">
         <CardShopDestinationQuadrants focusedItemIds={focusedItemIds} response={response} />
       </AnalysisSection>
-      <AnalysisSection
-        description="スリの銀次に遭遇した試合数と、その試合で残した順位・資産です。遭遇率の高さを強さとは扱いません。"
-        id="metric-ginji"
-        title="スリの銀次"
-      >
+      <AnalysisSection id="metric-ginji" title="スリの銀次">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           {response.metricsByPlayer.map((metric) => (
             <article
@@ -89,8 +78,10 @@ export function ContextView({ focusedItemIds, response, onDrilldown }: AnalysisV
             </article>
           ))}
         </div>
-        <div className="mt-5">
-          <GinjiCumulativeChart focusedItemIds={focusedItemIds} response={response} />
+        <div className="mt-5 border-t border-[var(--color-border)] pt-4">
+          <AnalysisSubsection title="累計遭遇回数">
+            <GinjiCumulativeChart focusedItemIds={focusedItemIds} response={response} />
+          </AnalysisSubsection>
         </div>
       </AnalysisSection>
     </div>

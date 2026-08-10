@@ -27,7 +27,10 @@ describe("rich series analysis views", () => {
 
     expect(
       screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent),
-    ).toEqual(["順位と基礎比較", "王座の確からしさ", "直接対決", "順位の安定性"]);
+    ).toEqual(["順位と基礎比較", "平均順位首位の確からしさ", "直接対決", "順位の安定性"]);
+    const currentDifference = screen.getByLabelText("現在の順位差");
+    expect(within(currentDifference).getByText("平均順位の先頭")).toBeInTheDocument();
+    expect(within(currentDifference).getByText("先頭と最後尾の平均順位差")).toBeInTheDocument();
     expect(document.querySelector('[data-focused-metric="true"]')).toHaveAttribute(
       "aria-label",
       expect.stringMatching(/1位 6回 50%、この試合/u),
@@ -74,7 +77,9 @@ describe("rich series analysis views", () => {
         name: /12戦目、12%、21億円、1位の試合結果を見る/u,
       }),
     ).toHaveAttribute("href", expect.stringContaining("/matches/match-12?returnTo="));
-    expect(screen.getByText(/因果関係や次戦の結果を保証するものではありません/u)).toBeVisible();
+    expect(
+      screen.queryByText(/因果関係や次戦の結果を保証するものではありません/u),
+    ).not.toBeInTheDocument();
   });
 
   it("uses readable condition names for focused contextual evidence", () => {
@@ -93,11 +98,25 @@ describe("rich series analysis views", () => {
   });
 
   it("restores match-axis strips and the event-position matrix with result links", () => {
+    const response = makeSeriesAnalysisAggregate();
+    const recent = response.recentRanks[0];
+    if (!recent) throw new Error("recent rank fixture is required");
+    recent.rows = Array.from({ length: 20 }, (_, index) => {
+      const matchIndex = index + 1;
+      return {
+        itemId: `recent-rank:member_ponta:match-${matchIndex}`,
+        matchId: `match-${matchIndex}`,
+        playedAt: `2026-07-${String(matchIndex).padStart(2, "0")}T12:00:00.000Z`,
+        rank: ((index % 4) + 1) as 1 | 2 | 3 | 4,
+      };
+    });
+    recent.targetCount = 20;
+    recent.usedFallback = false;
     render(
       <MemoryRouter initialEntries={["/analytics/series?view=flow"]}>
         <FlowView
           focusedItemIds={["match:match-12", "recent-rank:member_ponta:match-12"]}
-          response={makeSeriesAnalysisAggregate()}
+          response={response}
           onDrilldown={vi.fn()}
           onFocusMatch={vi.fn()}
         />
@@ -105,15 +124,26 @@ describe("rich series analysis views", () => {
     );
 
     expect(screen.getByRole("table", { name: "直近順位ストリップ" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 3, name: "直近20戦" })).toBeInTheDocument();
+    const selectedRankLink = screen.getByRole("link", {
+      name: /ぽんた、第12戦、4位、この試合。試合結果を見る/u,
+    });
+    expect(selectedRankLink).toHaveAttribute(
+      "href",
+      expect.stringContaining("/matches/match-12?returnTo="),
+    );
+    expect(selectedRankLink).toHaveClass("size-11");
+    expect(within(selectedRankLink).getByText("4")).toHaveAttribute("data-rank-tile-fill", "true");
     expect(
-      screen.getByRole("link", {
-        name: /ぽんた、第12戦、1位、この試合。試合結果を見る/u,
-      }),
-    ).toHaveAttribute("href", expect.stringContaining("/matches/match-12?returnTo="));
+      screen.getAllByRole("link", { name: /ぽんた、第\d+戦、\d位.*試合結果を見る/u }),
+    ).toHaveLength(20);
+    expect(screen.getByText("行: 前戦")).toBeInTheDocument();
+    expect(screen.getByText("列: 次戦")).toBeInTheDocument();
     expect(screen.getByText("第1試合")).toBeInTheDocument();
     expect(screen.getByText("第2試合")).toBeInTheDocument();
     expect(screen.getByText("第4試合")).toBeInTheDocument();
     expect(screen.getByText("1位–4位差")).toBeInTheDocument();
+    expect(screen.queryByText(/前の試合の順位から次の順位へ移った件数/u)).not.toBeInTheDocument();
   });
 
   it("assigns disadvantage and advantage to different semantic colors", () => {

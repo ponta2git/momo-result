@@ -19,7 +19,7 @@ const analysisViews = [
     label: "今の差",
     sections: [
       { id: "metric-basic", label: "順位" },
-      { id: "metric-crown-certainty", label: "王座の確からしさ" },
+      { id: "metric-crown-certainty", label: "首位の確からしさ" },
       { id: "metric-head-to-head", label: "直接対決" },
       { id: "metric-rate", label: "安定性" },
     ],

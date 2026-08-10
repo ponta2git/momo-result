@@ -47,12 +47,10 @@ export type AnalysisViewProps = {
 
 export function AnalysisSection({
   children,
-  description,
   id,
   title,
 }: {
   children: ReactNode;
-  description?: string | undefined;
   id: string;
   title: string;
 }) {
@@ -63,12 +61,55 @@ export function AnalysisSection({
     >
       <div className="mb-3">
         <h2 className="text-base font-semibold">{title}</h2>
-        {description ? (
-          <p className="mt-1 text-sm text-[var(--color-text-secondary)]">{description}</p>
-        ) : null}
       </div>
       {children}
     </section>
+  );
+}
+
+export function AnalysisFacts({
+  ariaLabel,
+  items,
+}: {
+  ariaLabel: string;
+  items: ReadonlyArray<{ label: string; value: ReactNode }>;
+}) {
+  return (
+    <dl
+      aria-label={ariaLabel}
+      className="mb-4 grid gap-px overflow-hidden rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-border)] sm:grid-cols-2"
+    >
+      {items.map((item) => (
+        <div className="bg-[var(--color-surface-subtle)] px-3 py-2" key={item.label}>
+          <dt className="text-[11px] font-semibold text-[var(--color-text-secondary)]">
+            {item.label}
+          </dt>
+          <dd className="mt-0.5 text-sm font-semibold tabular-nums">{item.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+export function AnalysisSubsection({
+  children,
+  meta,
+  title,
+}: {
+  children: ReactNode;
+  meta?: ReactNode | undefined;
+  title: string;
+}) {
+  return (
+    <div>
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="text-sm font-semibold">{title}</h3>
+        {meta ? (
+          <span className="text-xs text-[var(--color-text-secondary)] tabular-nums">{meta}</span>
+        ) : null}
+      </div>
+      {children}
+    </div>
   );
 }
 

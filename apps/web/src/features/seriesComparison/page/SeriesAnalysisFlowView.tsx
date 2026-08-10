@@ -8,7 +8,9 @@ import { RecentRankStrips } from "@/features/seriesComparison/charts/SeriesAnaly
 import { qualityLabel } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { AnalysisViewProps } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
 import {
+  AnalysisFacts,
   AnalysisSection,
+  AnalysisSubsection,
   playerName,
 } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
 import {
@@ -24,6 +26,7 @@ export function FlowView({
   onDrilldown,
   onFocusMatch,
 }: AnalysisViewProps & { onFocusMatch: (matchId: string) => void }) {
+  const recentWindowSize = response.recentRanks[0]?.windowSize ?? 20;
   return (
     <div
       aria-labelledby={analysisTabId("flow")}
@@ -32,22 +35,21 @@ export function FlowView({
       role="tabpanel"
     >
       <AnalysisTableOfContents view="flow" />
-      <AnalysisSection
-        description={`最近${response.matchDigest.shownCount}戦を表示しています。全${response.matchDigest.totalCount}戦のうち、それ以前の${response.matchDigest.hiddenCount}戦は累積推移に含まれます。`}
-        id="metric-match-digest"
-        title="最近の試合と荒れ方"
-      >
+      <AnalysisSection id="metric-match-digest" title="最近の試合と荒れ方">
+        <AnalysisFacts
+          ariaLabel="最近の試合の対象範囲"
+          items={[
+            { label: "この欄", value: `直近${response.matchDigest.shownCount}戦` },
+            { label: "分析対象", value: `全${response.matchDigest.totalCount}戦` },
+          ]}
+        />
         <MatchDigestStrip
           focusedItemIds={focusedItemIds}
           response={response}
           onFocusMatch={onFocusMatch}
         />
       </AnalysisSection>
-      <AnalysisSection
-        description="分析時点の事前予測より上位で終えた勝利です。再現可能な勝因とは限らないため、試合内容を確認します。"
-        id="metric-unexpected-wins"
-        title="予測より上位だった勝利"
-      >
+      <AnalysisSection id="metric-unexpected-wins" title="事前予測より上位で終えた勝利">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           {response.rankAnalysis.unexpectedWinsByPlayer.map((entry) => (
             <article
@@ -78,28 +80,20 @@ export function FlowView({
           ))}
         </div>
       </AnalysisSection>
-      <AnalysisSection
-        description="直近の順位列と、全試合を古い順に積み上げた平均順位・入賞率です。短期の偏りと長期の変化を分けて読みます。"
-        id="metric-recent-form"
-        title="直近と累積推移"
-      >
-        <RecentRankStrips focusedItemIds={focusedItemIds} response={response} />
-        <div className="mt-6">
-          <CumulativeFormCharts focusedItemIds={focusedItemIds} response={response} />
+      <AnalysisSection id="metric-recent-form" title="直近順位と累積推移">
+        <AnalysisSubsection title={`直近${recentWindowSize}戦`}>
+          <RecentRankStrips focusedItemIds={focusedItemIds} response={response} />
+        </AnalysisSubsection>
+        <div className="mt-6 border-t border-[var(--color-border)] pt-4">
+          <AnalysisSubsection meta={`${response.scope.matchCount}戦`} title="全試合の累積">
+            <CumulativeFormCharts focusedItemIds={focusedItemIds} response={response} />
+          </AnalysisSubsection>
         </div>
       </AnalysisSection>
-      <AnalysisSection
-        description="前の試合の順位から次の順位へ移った件数と割合です。割合は同じ前順位を母数にしています。"
-        id="metric-momentum-switch"
-        title="順位の切り替わり"
-      >
+      <AnalysisSection id="metric-momentum-switch" title="順位の切り替わり">
         <MomentumMatrices focusedItemIds={focusedItemIds} response={response} />
       </AnalysisSection>
-      <AnalysisSection
-        description="開催内の試合番号ごとに、平均順位と入賞率を比べます。追加戦は通常4戦と分けて表示します。"
-        id="metric-match-no"
-        title="開催内の第n試合傾向"
-      >
+      <AnalysisSection id="metric-match-no" title="開催内の第n試合傾向">
         <MatchNoInEventMatrix response={response} />
       </AnalysisSection>
     </div>

@@ -21,7 +21,10 @@ export function PlayOrderMatrix({
   return (
     <div className="overflow-x-auto pb-1">
       <div className="grid min-w-[42rem] grid-cols-[8rem_repeat(4,minmax(7.5rem,1fr))] gap-1">
-        <div aria-hidden="true" />
+        <div className="grid content-center rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-1 text-[10px] font-semibold text-[var(--color-text-secondary)]">
+          <span>行: プレーヤー</span>
+          <span>列: 番手</span>
+        </div>
         {[1, 2, 3, 4].map((playOrder) => (
           <div
             className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-2 text-center text-xs font-semibold"

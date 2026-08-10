@@ -12,7 +12,7 @@ use super::support::{
     MatchGroup, distribution, maxima_by_match, relative_intensity, revenue_asset_rate, suffix_count,
 };
 
-const RECENT_WINDOW: usize = 8;
+const RECENT_WINDOW: usize = 20;
 
 pub(super) fn leader_summary(
     players: &[String],

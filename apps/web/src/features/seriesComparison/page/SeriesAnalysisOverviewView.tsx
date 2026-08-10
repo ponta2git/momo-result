@@ -11,6 +11,7 @@ import {
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { AnalysisViewProps } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
 import {
+  AnalysisFacts,
   AnalysisSection,
   memberNames,
   TableCell,
@@ -32,11 +33,20 @@ export function OverviewView({ focusedItemIds, response, onDrilldown }: Analysis
       role="tabpanel"
     >
       <AnalysisTableOfContents view="overview" />
-      <AnalysisSection
-        description={`現在の先頭は${memberNames(response.players, response.summary.leaderMemberIds)}。平均順位の最大差は${formatDecimal(response.summary.averageRankSpread)}です。`}
-        id="metric-basic"
-        title="順位と基礎比較"
-      >
+      <AnalysisSection id="metric-basic" title="順位と基礎比較">
+        <AnalysisFacts
+          ariaLabel="現在の順位差"
+          items={[
+            {
+              label: "平均順位の先頭",
+              value: memberNames(response.players, response.summary.leaderMemberIds),
+            },
+            {
+              label: "先頭と最後尾の平均順位差",
+              value: `${formatDecimal(response.summary.averageRankSpread)}位`,
+            },
+          ]}
+        />
         <div className="overflow-x-auto">
           <table className="w-full min-w-[52rem] text-left text-sm">
             <thead>
@@ -83,29 +93,13 @@ export function OverviewView({ focusedItemIds, response, onDrilldown }: Analysis
           <RankDistributionBars focusedItemIds={focusedItemIds} response={response} />
         </div>
       </AnalysisSection>
-      <AnalysisSection
-        description="登録済み試合を反復抽出したとき、各プレーヤーが平均順位首位になる割合です。僅差なら首位は固定と見ません。"
-        id="metric-crown-certainty"
-        title="王座の確からしさ"
-      >
+      <AnalysisSection id="metric-crown-certainty" title="平均順位首位の確からしさ">
         <CrownShareBars response={response} />
-        <p className="mt-3 text-xs text-[var(--color-text-secondary)] tabular-nums">
-          有効反復 {response.rankAnalysis.crownCertainty.successfulIterations}/
-          {response.rankAnalysis.crownCertainty.bootstrapIterations}回
-        </p>
       </AnalysisSection>
-      <AnalysisSection
-        description="同じ試合で相手より上位だった割合です。色の濃さは分析結果が示す差の強さです。"
-        id="metric-head-to-head"
-        title="直接対決"
-      >
+      <AnalysisSection id="metric-head-to-head" title="直接対決">
         <HeadToHeadMatrix response={response} />
       </AnalysisSection>
-      <AnalysisSection
-        description="全試合を古い順に積み上げた平均順位と順位のぶれです。平均順位は1位が上になる向きで示します。"
-        id="metric-rate"
-        title="順位の安定性"
-      >
+      <AnalysisSection id="metric-rate" title="順位の安定性">
         <RankTrendCharts focusedItemIds={focusedItemIds} response={response} />
       </AnalysisSection>
     </div>

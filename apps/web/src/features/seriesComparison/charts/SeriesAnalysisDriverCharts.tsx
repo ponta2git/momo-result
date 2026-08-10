@@ -80,7 +80,10 @@ export function RevenueConversionMatrices({
           </h3>
           <div className="overflow-x-auto pb-1">
             <div className="grid min-w-[25rem] grid-cols-[4.5rem_repeat(4,minmax(4.5rem,1fr))] gap-1">
-              <div aria-hidden="true" />
+              <div className="grid content-center rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-1 text-[9px] font-semibold text-[var(--color-text-secondary)]">
+                <span>行: 収益順位</span>
+                <span>列: 最終順位</span>
+              </div>
               {[1, 2, 3, 4].map((rank) => (
                 <div
                   className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-1 text-center text-[11px] font-semibold"

@@ -171,7 +171,7 @@ const fn map_database_failure(error: &DatabaseError) -> ChildFailure {
         DatabaseError::TitleNotFound | DatabaseError::InputContract(_) => {
             ChildFailure::InputInvalid
         }
-        DatabaseError::InvalidConfiguration(_) | DatabaseError::NoRootCertificates => {
+        DatabaseError::InvalidConfiguration(_) | DatabaseError::TlsConfiguration(_) => {
             ChildFailure::CalculationFailed
         }
         DatabaseError::Postgres(_) => ChildFailure::DependencyFailed,

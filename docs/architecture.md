@@ -219,6 +219,9 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、mod
   戦績分析成果物本文をログに出さない。
 - 例外ログは throwable の message / stack trace を直接出さず、例外クラス列などの安全な情報に絞る。
 - 本番 `REDIS_URL` は原則 `rediss://` を必須にする。provider が TLS 非対応の内部接続として案内している場合だけ、明示設定付きで `redis://` を許可する。
+- 本番PostgreSQL接続はCAとhostnameを検証し、接続文字列が要求するTLS channel bindingを維持する。
+  接続成功のために認証要件を暗黙に弱めず、対応connectorとpublication有効化前のdependency probeで保証する。
+  probeは更新用DBがread-write、分析参照用DBがread-onlyであることとRedisの疎通を検証する。
 - アップロード画像は PNG/JPEG/WebP、1枚3MBまで、OCR処理は最大4Kまで。形式、サイズ、寸法、実体を検証する。
 - OCR元画像は下書き確定または下書き削除まで保持し、その後削除する。DBに画像実体、内部path、長寿命URLを保存・公開しない。
 - ログイン、OAuth callback state、画像アップロード、JSON mutation、CSV/TSV出力にはレート制限を入れる。

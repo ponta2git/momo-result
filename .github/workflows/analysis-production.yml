@@ -205,6 +205,36 @@ jobs:
           --yes
         timeout-minutes: 15
 
+      - name: Probe production dependencies before publication
+        if: inputs.operation == 'deploy-disabled' || inputs.operation == 'deploy-enabled'
+        env:
+          FLY_API_TOKEN: ${{ secrets.ANALYSIS_FLY_API_TOKEN }}
+        run: |
+          mkdir -p analysis-production-artifact
+          flyctl machine list --app "${ANALYSIS_APP}" --json |
+            jq -e --arg image "${ANALYSIS_IMAGE_REF}" '
+              {
+                singleStartedExactDisabledImage: (
+                  length == 1 and
+                  all(.[];
+                    .state == "started" and
+                    .config.image == $image and
+                    .config.env.MOMO_ANALYSIS_PUBLICATION_MODE == "disabled"
+                  )
+                )
+              } |
+              select(.singleStartedExactDisabledImage)
+            ' > analysis-production-artifact/deployment-state.json
+          flyctl ssh console --app "${ANALYSIS_APP}" --pty=false --quiet \
+            --command "/usr/local/bin/momo-analysis release-dependency-probe" \
+            > analysis-production-artifact/dependency-probe.json
+          jq -e '
+            .controlReadOnly == false and
+            .readerReadOnly == true and
+            .redisPong == true
+          ' analysis-production-artifact/dependency-probe.json
+        timeout-minutes: 2
+
       - name: Deploy analysis worker with publication enabled
         if: inputs.operation == 'deploy-enabled'
         env:

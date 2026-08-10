@@ -64,6 +64,68 @@ fn postgres_rows_are_decoded_without_panicking_getters() {
 }
 
 #[test]
+fn database_tls_preserves_peer_verification_and_channel_binding() {
+    let manifest = include_str!("../Cargo.toml");
+    let adapter = include_str!("database.rs");
+    assert!(
+        manifest.contains("postgres-openssl ="),
+        "database transport must use the channel-binding-capable official OpenSSL adapter"
+    );
+    assert!(
+        adapter.contains("postgres_openssl::MakeTlsConnector"),
+        "database adapter must construct the reviewed TLS connector"
+    );
+    for forbidden in [
+        "set_verify_hostname(false)",
+        "verify_hostname(false)",
+        "SslVerifyMode::NONE",
+    ] {
+        assert!(
+            !adapter.contains(forbidden),
+            "database adapter disables TLS peer identity verification with {forbidden}"
+        );
+    }
+}
+
+#[test]
+fn production_workflow_probes_the_exact_disabled_image_before_publication() {
+    let workflow = include_str!("../../../.github/workflows/analysis-production.yml");
+    let missing = workflow.len();
+    let probe = workflow
+        .find("- name: Probe production dependencies before publication")
+        .unwrap_or(missing);
+    let enable = workflow
+        .find("- name: Deploy analysis worker with publication enabled")
+        .unwrap_or(missing);
+    assert_ne!(
+        probe, missing,
+        "production workflow must contain the dependency probe"
+    );
+    assert_ne!(
+        enable, missing,
+        "production workflow must contain the publication step"
+    );
+    assert!(
+        probe < enable,
+        "production dependencies must be probed before publication is enabled"
+    );
+    for required in [
+        "length == 1",
+        ".config.image == $image",
+        ".config.env.MOMO_ANALYSIS_PUBLICATION_MODE == \"disabled\"",
+        "release-dependency-probe",
+        ".controlReadOnly == false",
+        ".readerReadOnly == true",
+        ".redisPong == true",
+    ] {
+        assert!(
+            workflow.contains(required),
+            "production dependency gate is missing {required}"
+        );
+    }
+}
+
+#[test]
 fn runtime_does_not_flatten_or_reexport_the_kernel_api() {
     let facade = include_str!("lib.rs");
     assert!(

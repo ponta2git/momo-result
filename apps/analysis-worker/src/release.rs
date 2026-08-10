@@ -1,4 +1,4 @@
-use std::env;
+use std::{env, time::Duration};
 
 use clap::ValueEnum;
 use momo_analysis_core::{canonical, contract::ARTIFACT_SCHEMA_VERSION};
@@ -14,6 +14,7 @@ use crate::{
 };
 
 const CAPABILITY_FRESH_SECONDS: i64 = 60;
+const DEPENDENCY_PROBE_TIMEOUT: Duration = Duration::from_secs(10);
 const RELEASE_TRANSACTION_LIMITS: &str = "SET LOCAL lock_timeout = '5s'; SET LOCAL statement_timeout = '30s'; \
      SET LOCAL idle_in_transaction_session_timeout = '30s'";
 const RELEASE_READ_LIMITS: &str = "SET lock_timeout = '5s'; SET statement_timeout = '30s'; \
@@ -78,6 +79,44 @@ pub struct CompletenessViolation {
     pub code: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub game_title_id: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DependencyProbeReport {
+    pub control_read_only: bool,
+    pub reader_read_only: bool,
+    pub redis_pong: bool,
+}
+
+#[derive(Debug, Error)]
+pub enum DependencyProbeError {
+    #[error("{name} must be set for the release dependency probe")]
+    MissingEnvironment { name: &'static str },
+    #[error("control database connection probe failed")]
+    ControlDatabase(#[source] DatabaseError),
+    #[error("control database access-mode probe failed")]
+    ControlDatabaseMode(#[source] tokio_postgres::Error),
+    #[error("control database unexpectedly enforces read-only transactions")]
+    ControlDatabaseReadOnly,
+    #[error("analysis reader database connection probe failed")]
+    ReaderDatabase(#[source] DatabaseError),
+    #[error("analysis reader database access-mode probe failed")]
+    ReaderDatabaseMode(#[source] tokio_postgres::Error),
+    #[error("analysis reader database does not enforce read-only transactions")]
+    ReaderDatabaseWritable,
+    #[error("Redis connection configuration probe failed")]
+    RedisConfiguration(#[source] redis::RedisError),
+    #[error("Redis connection probe timed out")]
+    RedisConnectionTimeout,
+    #[error("Redis connection probe failed")]
+    RedisConnection(#[source] redis::RedisError),
+    #[error("Redis PING probe timed out")]
+    RedisPingTimeout,
+    #[error("Redis PING probe failed")]
+    RedisPing(#[source] redis::RedisError),
+    #[error("Redis PING returned an unexpected response")]
+    RedisUnexpectedResponse,
 }
 
 #[derive(Debug, Error)]
@@ -156,6 +195,66 @@ struct TitleAuditRow {
     actual_drilldown_count: i64,
     actual_context_count: i64,
     invalid_chunk_count: i64,
+}
+
+/// Verifies every production dependency while publication remains disabled.
+///
+/// The report contains only access-mode and reachability booleans. Connection strings, provider
+/// topology, and response details are deliberately excluded from both success and error output.
+///
+/// # Errors
+///
+/// Returns a safe error when a dependency is unavailable or a database role has unsafe access.
+pub async fn probe_dependencies() -> Result<DependencyProbeReport, DependencyProbeError> {
+    let control_url = dependency_environment("DATABASE_URL")?;
+    let reader_url = dependency_environment("MOMO_ANALYSIS_READ_DATABASE_URL")?;
+    let redis_url = dependency_environment("REDIS_URL")?;
+
+    let control = connect(&control_url)
+        .await
+        .map_err(DependencyProbeError::ControlDatabase)?;
+    let control_read_only = transaction_read_only(&control)
+        .await
+        .map_err(DependencyProbeError::ControlDatabaseMode)?;
+    if control_read_only {
+        return Err(DependencyProbeError::ControlDatabaseReadOnly);
+    }
+
+    let reader = connect(&reader_url)
+        .await
+        .map_err(DependencyProbeError::ReaderDatabase)?;
+    let reader_read_only = transaction_read_only(&reader)
+        .await
+        .map_err(DependencyProbeError::ReaderDatabaseMode)?;
+    if !reader_read_only {
+        return Err(DependencyProbeError::ReaderDatabaseWritable);
+    }
+
+    let redis_client =
+        redis::Client::open(redis_url).map_err(DependencyProbeError::RedisConfiguration)?;
+    let mut redis = tokio::time::timeout(
+        DEPENDENCY_PROBE_TIMEOUT,
+        redis_client.get_connection_manager(),
+    )
+    .await
+    .map_err(|_elapsed| DependencyProbeError::RedisConnectionTimeout)?
+    .map_err(DependencyProbeError::RedisConnection)?;
+    let pong: String = tokio::time::timeout(
+        DEPENDENCY_PROBE_TIMEOUT,
+        redis::cmd("PING").query_async(&mut redis),
+    )
+    .await
+    .map_err(|_elapsed| DependencyProbeError::RedisPingTimeout)?
+    .map_err(DependencyProbeError::RedisPing)?;
+    if pong != "PONG" {
+        return Err(DependencyProbeError::RedisUnexpectedResponse);
+    }
+
+    Ok(DependencyProbeReport {
+        control_read_only,
+        reader_read_only,
+        redis_pong: true,
+    })
 }
 
 /// Creates a version/backfill campaign only when all fresh readers and workers support it.
@@ -670,6 +769,23 @@ fn database_url() -> Result<String, ReleaseError> {
         .ok()
         .filter(|value| !value.trim().is_empty())
         .ok_or(ReleaseError::MissingDatabaseUrl)
+}
+
+fn dependency_environment(name: &'static str) -> Result<String, DependencyProbeError> {
+    env::var(name)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .ok_or(DependencyProbeError::MissingEnvironment { name })
+}
+
+async fn transaction_read_only(client: &Client) -> Result<bool, tokio_postgres::Error> {
+    client
+        .query_one(
+            "SELECT current_setting('transaction_read_only') = 'on'",
+            &[],
+        )
+        .await?
+        .try_get(0)
 }
 
 fn validate_operation_key(value: &str) -> Result<(), ReleaseError> {

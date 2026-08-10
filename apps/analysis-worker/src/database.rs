@@ -1,13 +1,16 @@
-use std::{sync::OnceLock, time::Duration};
+use std::time::Duration;
 
 use futures_util::TryStreamExt;
 use momo_analysis_core::model::{
     AnalysisInput, IncidentCounts, MatchPlayerRow, NormalizedAnalysisInput,
 };
-use rustls::{ClientConfig, RootCertStore};
+use openssl::{
+    error::ErrorStack,
+    ssl::{SslConnector, SslMethod},
+};
+use postgres_openssl::MakeTlsConnector;
 use thiserror::Error;
 use tokio_postgres::{Client, Config, IsolationLevel, Row};
-use tokio_postgres_rustls::MakeRustlsConnect;
 use tracing::error;
 
 // This is deliberately well above the release resource fixture (500 matches / 2,000 rows).
@@ -17,7 +20,8 @@ const MAXIMUM_INPUT_ROWS: usize = 100_000;
 const MAXIMUM_INPUT_ID_BYTES: usize = 128;
 const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const DEFAULT_TCP_USER_TIMEOUT: Duration = Duration::from_secs(30);
-static TLS_CONFIG: OnceLock<Option<ClientConfig>> = OnceLock::new();
+#[cfg(target_os = "linux")]
+const SYSTEM_CA_BUNDLE: &str = "/etc/ssl/certs/ca-certificates.crt";
 const ANALYSIS_INPUT_QUERY: &str = r#"SELECT
        m.id, m.analysis_revision,
        to_char(m.played_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
@@ -46,8 +50,8 @@ const ANALYSIS_INPUT_QUERY: &str = r#"SELECT
 pub enum DatabaseError {
     #[error("invalid PostgreSQL connection configuration")]
     InvalidConfiguration(#[source] tokio_postgres::Error),
-    #[error("no trusted root certificates are available")]
-    NoRootCertificates,
+    #[error("PostgreSQL TLS configuration failed")]
+    TlsConfiguration(#[source] ErrorStack),
     #[error("PostgreSQL operation failed")]
     Postgres(#[from] tokio_postgres::Error),
     #[error("analysis title does not exist")]
@@ -63,7 +67,7 @@ impl DatabaseError {
     pub(crate) const fn kind(&self) -> &'static str {
         match self {
             Self::InvalidConfiguration(_) => "postgres_configuration",
-            Self::NoRootCertificates => "postgres_trust_roots",
+            Self::TlsConfiguration(_) => "postgres_tls_configuration",
             Self::Postgres(_) => "postgres_operation",
             Self::TitleNotFound => "analysis_title_missing",
             Self::Superseded => "input_revision_superseded",
@@ -87,8 +91,7 @@ pub(crate) async fn connect(database_url: &str) -> Result<Client, DatabaseError>
     if config.get_tcp_user_timeout().is_none() {
         config.tcp_user_timeout(DEFAULT_TCP_USER_TIMEOUT);
     }
-    let tls_config = native_tls_config()?;
-    let (client, connection) = config.connect(MakeRustlsConnect::new(tls_config)).await?;
+    let (client, connection) = config.connect(native_tls_connector()?).await?;
     tokio::spawn(async move {
         if let Err(_connection_error) = connection.await {
             error!(
@@ -102,20 +105,21 @@ pub(crate) async fn connect(database_url: &str) -> Result<Client, DatabaseError>
     Ok(client)
 }
 
-fn native_tls_config() -> Result<ClientConfig, DatabaseError> {
-    TLS_CONFIG
-        .get_or_init(|| {
-            let native = rustls_native_certs::load_native_certs();
-            let mut roots = RootCertStore::empty();
-            let (added, _) = roots.add_parsable_certificates(native.certs);
-            (added > 0).then(|| {
-                ClientConfig::builder()
-                    .with_root_certificates(roots)
-                    .with_no_client_auth()
-            })
-        })
-        .clone()
-        .ok_or(DatabaseError::NoRootCertificates)
+fn native_tls_connector() -> Result<MakeTlsConnector, DatabaseError> {
+    // Production connection strings can require RFC 5929 channel binding. The official
+    // postgres-openssl adapter derives tls-server-end-point from OpenSSL's parsed peer
+    // certificate while SslConnector keeps CA and hostname verification enabled.
+    let builder =
+        SslConnector::builder(SslMethod::tls()).map_err(DatabaseError::TlsConfiguration)?;
+    #[cfg(target_os = "linux")]
+    let builder = {
+        let mut builder = builder;
+        builder
+            .set_ca_file(SYSTEM_CA_BUNDLE)
+            .map_err(DatabaseError::TlsConfiguration)?;
+        builder
+    };
+    Ok(MakeTlsConnector::new(builder.build()))
 }
 
 /// Loads all calculation input from one repeatable-read, read-only snapshot.

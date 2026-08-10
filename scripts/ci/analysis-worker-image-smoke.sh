@@ -42,8 +42,14 @@ fi
 docker run --rm --entrypoint /usr/local/bin/momo-analysis "${image_ref}" --version
 
 configured_user="$(docker inspect --format '{{.Config.User}}' "${image_ref}")"
-if [[ "${configured_user}" != "10001:10001" ]]; then
-  echo "analysis worker image must run as 10001:10001" >&2
+if [[ "${configured_user}" != "momo:momo" ]]; then
+  echo "analysis worker image must run as the registered momo service identity" >&2
+  exit 1
+fi
+
+configured_working_directory="$(docker inspect --format '{{.Config.WorkingDir}}' "${image_ref}")"
+if [[ "${configured_working_directory}" != "/var/lib/momo-analysis" ]]; then
+  echo "analysis worker image must start in its private state directory" >&2
   exit 1
 fi
 
@@ -63,6 +69,15 @@ docker run --rm --entrypoint sh "${image_ref}" -c '
 
   test "$(id -u)" = 10001 || fail "unexpected uid"
   test "$(id -g)" = 10001 || fail "unexpected gid"
+  test "$(id -un)" = momo || fail "unexpected user name"
+  test "$(id -gn)" = momo || fail "unexpected group name"
+  test "$(pwd)" = /var/lib/momo-analysis || fail "unexpected working directory"
+  test "$(getent passwd 10001)" = "momo:x:10001:10001::/nonexistent:/sbin/nologin" \
+    || fail "service passwd entry is missing or malformed"
+  test "$(getent group 10001)" = "momo:x:10001:" \
+    || fail "service group entry is missing or malformed"
+  getent passwd nonroot >/dev/null || fail "base nonroot passwd entry is missing"
+  getent group nonroot >/dev/null || fail "base nonroot group entry is missing"
   test -r /etc/ssl/certs/ca-certificates.crt || fail "CA bundle is unreadable"
   test -w /var/lib/momo-analysis || fail "state directory is not writable"
   state_directory_mode="$(stat -c %a /var/lib/momo-analysis)"

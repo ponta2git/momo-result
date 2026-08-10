@@ -16,7 +16,11 @@ RUN mkdir -p /momo-toolbox \
     df du find stat ls cat grep sed awk sort cut tr wc xargs \
     tail head date sha256sum id hostname uname env printenv \
     readlink realpath timeout uptime sleep \
-  ; do ln /momo-toolbox/.momo-tool "/momo-toolbox/${tool}"; done
+  ; do ln /momo-toolbox/.momo-tool "/momo-toolbox/${tool}"; done \
+  && ! /busybox/grep -Eq '(^momo:|^[^:]*:[^:]*:10001:)' /etc/passwd \
+  && ! /busybox/grep -Eq '(^momo:|^[^:]*:[^:]*:10001:)' /etc/group \
+  && printf '%s\n' 'momo:x:10001:10001::/nonexistent:/sbin/nologin' >> /etc/passwd \
+  && printf '%s\n' 'momo:x:10001:' >> /etc/group
 
 FROM ${RUST_IMAGE} AS builder
 WORKDIR /workspace/apps/analysis-worker
@@ -34,14 +38,18 @@ RUN --mount=type=cache,id=analysis-cargo-registry,target=/usr/local/cargo/regist
 FROM ${RUNTIME_IMAGE} AS runtime
 ENV PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/momo-toolbox"
 COPY --from=diagnostics /momo-toolbox /momo-toolbox
+# Keep the service identity resolvable by runtimes that launch the OCI user by name.
+COPY --from=diagnostics /etc/passwd /etc/passwd
+COPY --from=diagnostics /etc/group /etc/group
 # BusyBox `sh` can rewrite argv[0] and dispatch hidden applets. A separate POSIX shell keeps the
 # supported toolbox surface enforceable while still allowing `fly ssh console` access.
 COPY --from=builder --chmod=0755 /bin/dash /momo-toolbox/sh
 # Copy the parent so the prepared child directory remains an archive entry whose 0700 mode is
 # preserved. Copying the empty directory's contents directly produced builder-dependent destination
 # permissions because the destination directory itself had to be created during the copy.
-COPY --from=builder --chown=10001:10001 /tmp/runtime-root/var/lib /var/lib
+COPY --from=builder --chown=momo:momo /tmp/runtime-root/var/lib /var/lib
 COPY --from=builder --chmod=0755 /usr/bin/getent /usr/bin/openssl /usr/bin/
 COPY --from=builder --chmod=0755 /tmp/momo-analysis /usr/local/bin/momo-analysis
-USER 10001:10001
+WORKDIR /var/lib/momo-analysis
+USER momo:momo
 CMD ["/usr/local/bin/momo-analysis", "worker"]

@@ -103,6 +103,43 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite:
       false,
     )
 
+  test("accepts bounded variable focus IDs and rejects duplicates"):
+    val expanded = matchContext.hcursor
+      .downField("match")
+      .withFocus(_.mapObject(_.add(
+        "focusedItemIds",
+        Json.arr((1 to 11).map(index => Json.fromString(s"item-$index"))*),
+      )))
+      .top
+      .getOrElse(fail("failed to expand focusedItemIds"))
+    assertEquals(
+      validate(
+        expanded,
+        request(SeriesAnalysisChunkKind.MatchContext, None, None, Some("match-1")),
+        1,
+        Some(7),
+      ),
+      true,
+    )
+
+    val duplicated = matchContext.hcursor
+      .downField("match")
+      .withFocus(_.mapObject(_.add(
+        "focusedItemIds",
+        Json.arr(Json.fromString("same"), Json.fromString("same")),
+      )))
+      .top
+      .getOrElse(fail("failed to duplicate focusedItemIds"))
+    assertEquals(
+      validate(
+        duplicated,
+        request(SeriesAnalysisChunkKind.MatchContext, None, None, Some("match-1")),
+        1,
+        Some(7),
+      ),
+      false,
+    )
+
   private def request(
       kind: SeriesAnalysisChunkKind,
       memberId: Option[String],

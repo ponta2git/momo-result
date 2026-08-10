@@ -379,10 +379,24 @@ fn validate_match_context(
         ],
     )?;
     let players = array(match_value.get("players"))?;
+    let focused = array(match_value.get("focusedItemIds"))?;
+    let focused_ids = focused
+        .iter()
+        .map(|item_id| {
+            item_id
+                .as_str()
+                .filter(|value| !value.is_empty())
+                .ok_or(PayloadError::InvalidSchema)
+        })
+        .collect::<Result<BTreeSet<_>, _>>()?;
+    let minimum_focused_count = players.len().saturating_mul(2);
+    let maximum_focused_count = players.len().saturating_mul(11).saturating_add(1);
     if players.len() > 4
         || u64::try_from(players.len())? != item_count
         || array(match_value.get("features"))?.len() > 6
-        || array(match_value.get("focusedItemIds"))?.len() != players.len() * 3
+        || focused.len() < minimum_focused_count
+        || focused.len() > maximum_focused_count
+        || focused_ids.len() != focused.len()
     {
         return Err(PayloadError::ItemCountMismatch);
     }

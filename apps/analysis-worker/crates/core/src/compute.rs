@@ -24,7 +24,7 @@ mod trends;
 use aggregate::aggregate;
 #[cfg(test)]
 use detail::event_rank_rows;
-use detail::{MatchContextIndex, drilldown, match_context, review};
+use detail::{AggregateItemIds, MatchContextIndex, drilldown, match_context, review};
 use support::{MatchGroup, match_groups};
 
 #[cfg(test)]
@@ -131,6 +131,7 @@ pub fn try_for_each_resource<E>(
             &facts.groups,
             &facts.rank_analysis,
         );
+        let aggregate_item_ids = AggregateItemIds::from_aggregate(&aggregate);
         let review_data_quality = aggregate.get("dataQuality").cloned();
         consume(ComputedResource {
             scope: scope.clone(),
@@ -190,6 +191,7 @@ pub fn try_for_each_resource<E>(
                     &scope,
                     &group.rows,
                     &context_index,
+                    &aggregate_item_ids,
                     group.match_id,
                     group_offset + 1,
                 ),
@@ -204,8 +206,31 @@ pub fn try_for_each_resource<E>(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+
     use super::*;
     use crate::model::IncidentCounts;
+
+    fn item_ids(value: &Value) -> BTreeSet<String> {
+        let mut result = BTreeSet::new();
+        match value {
+            Value::Array(values) => {
+                for value in values {
+                    result.extend(item_ids(value));
+                }
+            }
+            Value::Object(object) => {
+                if let Some(item_id) = object.get("itemId").and_then(Value::as_str) {
+                    result.insert(String::from(item_id));
+                }
+                for value in object.values() {
+                    result.extend(item_ids(value));
+                }
+            }
+            Value::Bool(_) | Value::Null | Value::Number(_) | Value::String(_) => {}
+        }
+        result
+    }
 
     fn row(match_index: i32, player: i32) -> MatchPlayerRow {
         MatchPlayerRow {
@@ -305,6 +330,61 @@ mod tests {
                 ),
             ]
         );
+    }
+
+    #[test]
+    fn match_context_focus_references_only_items_in_the_same_aggregate() {
+        let input = AnalysisInput {
+            game_title_id: String::from("title-1"),
+            input_revision: 1,
+            rows: (1..=2)
+                .flat_map(|match_index| (1..=4).map(move |player| row(match_index, player)))
+                .collect(),
+        };
+        let resources = compute_all(&input);
+        let aggregate = resources
+            .iter()
+            .find(|resource| {
+                resource.scope == ScopeRef::Overall
+                    && resource.kind == ComputedResourceKind::Aggregate
+            })
+            .unwrap_or_else(|| panic!("overall aggregate missing"));
+        let context = resources
+            .iter()
+            .find(|resource| {
+                resource.scope == ScopeRef::Overall
+                    && resource.kind
+                        == ComputedResourceKind::MatchContext {
+                            match_id: String::from("match-2"),
+                        }
+            })
+            .unwrap_or_else(|| panic!("overall match context missing"));
+        let aggregate_ids = item_ids(&aggregate.payload);
+        let focused = context
+            .payload
+            .pointer("/match/focusedItemIds")
+            .and_then(Value::as_array)
+            .unwrap_or_else(|| panic!("focused item ids missing"));
+        let focused_ids = focused
+            .iter()
+            .filter_map(Value::as_str)
+            .collect::<BTreeSet<_>>();
+
+        assert_eq!(
+            focused.len(),
+            focused_ids.len(),
+            "focused IDs must be unique"
+        );
+        assert!(
+            focused_ids
+                .iter()
+                .all(|item_id| aggregate_ids.contains(*item_id))
+        );
+        assert!(focused_ids.contains("strategy-point:match-2:member-1"));
+        assert!(focused_ids.contains("revenue-rank:member-1:4:1"));
+        assert!(focused_ids.contains("momentum:member-1:1:1"));
+        assert!(focused_ids.contains("trend:rank_cumulative_average:member-1:match-2"));
+        assert!(focused_ids.contains("match:match-2"));
     }
 
     #[test]

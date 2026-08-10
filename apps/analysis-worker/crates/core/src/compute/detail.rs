@@ -204,6 +204,39 @@ pub(super) struct MatchContextIndex<'a> {
     player_history: BTreeMap<(&'a str, &'a str), PlayerMatchHistory>,
 }
 
+pub(super) struct AggregateItemIds(BTreeSet<String>);
+
+impl AggregateItemIds {
+    pub(super) fn from_aggregate(aggregate: &Value) -> Self {
+        let mut item_ids = BTreeSet::new();
+        collect_item_ids(aggregate, &mut item_ids);
+        Self(item_ids)
+    }
+
+    fn contains(&self, item_id: &str) -> bool {
+        self.0.contains(item_id)
+    }
+}
+
+fn collect_item_ids(value: &Value, item_ids: &mut BTreeSet<String>) {
+    match value {
+        Value::Array(values) => {
+            for value in values {
+                collect_item_ids(value, item_ids);
+            }
+        }
+        Value::Object(object) => {
+            if let Some(item_id) = object.get("itemId").and_then(Value::as_str) {
+                item_ids.insert(String::from(item_id));
+            }
+            for value in object.values() {
+                collect_item_ids(value, item_ids);
+            }
+        }
+        Value::Bool(_) | Value::Null | Value::Number(_) | Value::String(_) => {}
+    }
+}
+
 impl<'a> MatchContextIndex<'a> {
     pub(super) fn new(rows: &[&'a MatchPlayerRow]) -> Self {
         let mut match_ids = BTreeSet::new();
@@ -239,6 +272,7 @@ pub(super) fn match_context(
     scope: &Scope,
     group: &[&MatchPlayerRow],
     index: &MatchContextIndex<'_>,
+    aggregate_item_ids: &AggregateItemIds,
     match_id: &str,
     match_index: usize,
 ) -> Value {
@@ -275,12 +309,42 @@ pub(super) fn match_context(
     let focused = group
         .iter()
         .flat_map(|row| {
-            [
+            let history = index
+                .player_history
+                .get(&(row.match_id.as_str(), row.member_id.as_str()));
+            let revenue_rank = rank_value(&revenue_ranks, row)
+                .and_then(|value| (1..=4).find(|expected| value.round() == f64::from(*expected)));
+            let mut item_ids = vec![
                 format!("rank-distribution:{}:{}", row.member_id, row.rank),
                 format!("play-order:{}:{}", row.member_id, row.play_order),
                 format!("recent-rank:{}:{}", row.member_id, row.match_id),
-            ]
+                format!("strategy-point:{}:{}", row.match_id, row.member_id),
+            ];
+            if let Some(revenue_rank) = revenue_rank {
+                item_ids.push(format!(
+                    "revenue-rank:{}:{revenue_rank}:{}",
+                    row.member_id, row.rank
+                ));
+            }
+            if let Some(previous_rank) = history.and_then(|value| value.previous_rank) {
+                item_ids.push(format!(
+                    "momentum:{}:{previous_rank}:{}",
+                    row.member_id, row.rank
+                ));
+            }
+            for kind in [
+                "rank_cumulative_average",
+                "rank_cumulative_standard_deviation",
+                "podium_cumulative_rate",
+                "lower_half_cumulative_rate",
+                "ginji_cumulative_count",
+            ] {
+                item_ids.push(format!("trend:{kind}:{}:{}", row.member_id, row.match_id));
+            }
+            item_ids
         })
+        .chain(std::iter::once(format!("match:{match_id}")))
+        .filter(|item_id| aggregate_item_ids.contains(item_id))
         .collect::<Vec<_>>();
     json!({
         "schemaVersion": 1,

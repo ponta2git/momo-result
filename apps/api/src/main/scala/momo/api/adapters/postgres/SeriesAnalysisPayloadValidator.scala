@@ -211,12 +211,15 @@ private[postgres] object SeriesAnalysisPayloadValidator:
     ))
     val players = matchValue.flatMap(_("players")).flatMap(_.asArray).getOrElse(Vector.empty)
     val focused = matchValue.flatMap(_("focusedItemIds")).flatMap(_.asArray).getOrElse(Vector.empty)
+    val focusedIds = focused.flatMap(_.asString).filter(_.nonEmpty)
     val features = matchValue.flatMap(_("features")).flatMap(_.asArray).getOrElse(Vector.empty)
     schemaAndScope(value, 1, request.scope) &&
     request.matchId.exists(id => value("matchId").flatMap(_.asString).contains(id.value)) &&
     sourceMatchRevision.exists(revision =>
       value("sourceMatchRevision").flatMap(_.asString).contains(revision.toString)
-    ) && players.size == itemCount && players.size <= 4 && focused.size == players.size * 3 &&
+    ) && players.size == itemCount && players.size <= 4 &&
+    focused.size >= players.size * 2 && focused.size <= players.size * 11 + 1 &&
+    focusedIds.size == focused.size && focusedIds.distinct.size == focusedIds.size &&
     features.size <= 6 && players.forall(validateContextPlayer) &&
     features.forall(validateContextFeature)
   }
